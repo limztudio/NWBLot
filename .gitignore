@@ -31,6 +31,8 @@ bld/
 [Oo]bj/
 [Ll]og/
 [Ll]ogs/
+__build_obj/
+__exec/
 
 # Visual Studio 2015/2017 cache/options directory
 .vs/

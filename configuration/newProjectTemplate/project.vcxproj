@@ -45,6 +45,7 @@
     <Import Project="..\configuration\dbgCodeGen.props" />
     <Import Project="..\configuration\simdAVX2.props" />
     <Import Project="..\configuration\unicodeChar.props" />
+    <Import Project="..\configuration\basicInclude.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='opt|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
@@ -52,6 +53,7 @@
     <Import Project="..\configuration\optCodeGen.props" />
     <Import Project="..\configuration\simdAVX2.props" />
     <Import Project="..\configuration\unicodeChar.props" />
+    <Import Project="..\configuration\basicInclude.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='fin|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
@@ -59,6 +61,7 @@
     <Import Project="..\configuration\finCodeGen.props" />
     <Import Project="..\configuration\simdAVX2.props" />
     <Import Project="..\configuration\unicodeChar.props" />
+    <Import Project="..\configuration\basicInclude.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='dbg|x64'">

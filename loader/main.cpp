@@ -4,11 +4,17 @@
 
 #include <global.h>
 
+#include <core/frame/frame.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 static NWB_INLINE int entry_point(isize argc, tchar** argv, void* inst){
+    NWB::Core::Frame frame(inst);
+
+
+
     return 0;
 }
 

@@ -8,6 +8,7 @@
   </PropertyGroup>
   <ItemDefinitionGroup>
     <ClCompile>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <WarningLevel>Level4</WarningLevel>

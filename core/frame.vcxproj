@@ -76,6 +76,11 @@
   <ItemGroup>
     <ClCompile Include="frame\frame_win.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\logger\logclient.vcxproj">
+      <Project>{5bde19c4-41a9-4c6c-847e-1c978d315aa1}</Project>
+    </ProjectReference>
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

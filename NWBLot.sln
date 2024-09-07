@@ -15,6 +15,10 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "zlib", "3rd_parties\zlib\zl
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libcurl", "3rd_parties\curl\libcurl.vcxproj", "{9BF92DF1-144D-4120-9728-DEBC803749CB}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "logger", "logger", "{CFE39472-2E21-4B67-9107-BF6DB86A9606}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "logclient", "logger\logclient.vcxproj", "{5BDE19C4-41A9-4C6C-847E-1C978D315AA1}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		dbg|x64 = dbg|x64
@@ -46,6 +50,12 @@ Global
 		{9BF92DF1-144D-4120-9728-DEBC803749CB}.fin|x64.Build.0 = fin|x64
 		{9BF92DF1-144D-4120-9728-DEBC803749CB}.opt|x64.ActiveCfg = opt|x64
 		{9BF92DF1-144D-4120-9728-DEBC803749CB}.opt|x64.Build.0 = opt|x64
+		{5BDE19C4-41A9-4C6C-847E-1C978D315AA1}.dbg|x64.ActiveCfg = dbg|x64
+		{5BDE19C4-41A9-4C6C-847E-1C978D315AA1}.dbg|x64.Build.0 = dbg|x64
+		{5BDE19C4-41A9-4C6C-847E-1C978D315AA1}.fin|x64.ActiveCfg = fin|x64
+		{5BDE19C4-41A9-4C6C-847E-1C978D315AA1}.fin|x64.Build.0 = fin|x64
+		{5BDE19C4-41A9-4C6C-847E-1C978D315AA1}.opt|x64.ActiveCfg = opt|x64
+		{5BDE19C4-41A9-4C6C-847E-1C978D315AA1}.opt|x64.Build.0 = opt|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -54,6 +64,7 @@ Global
 		{7BC9137C-EAA2-4FE2-B4AD-C03C173AA73B} = {027298CC-1FD1-4E7A-AD78-8F251DB56C6E}
 		{89BEB9C3-1C95-4C71-9FC6-FEEDDC5DEBDD} = {64BAECF7-F9F4-4DE8-B4FE-0F3123038189}
 		{9BF92DF1-144D-4120-9728-DEBC803749CB} = {64BAECF7-F9F4-4DE8-B4FE-0F3123038189}
+		{5BDE19C4-41A9-4C6C-847E-1C978D315AA1} = {CFE39472-2E21-4B67-9107-BF6DB86A9606}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {379F8795-FF4F-4779-BCAC-25452D9B0E5D}

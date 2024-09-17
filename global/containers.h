@@ -17,16 +17,16 @@
 
 
 template <typename T, usize MAX_BLOCK_SIZE = 512>
-using serial_queue = moodycamel::ReaderWriterQueue<T, static_cast<size_t>(MAX_BLOCK_SIZE)>;
+using SerialQueue = moodycamel::ReaderWriterQueue<T, static_cast<size_t>(MAX_BLOCK_SIZE)>;
 
 template <typename T>
-using serial_circularbuffer = moodycamel::BlockingReaderWriterCircularBuffer<T>;
+using SerialCircularBuffer = moodycamel::BlockingReaderWriterCircularBuffer<T>;
 
 template <typename T>
-using parallel_queue = moodycamel::ConcurrentQueue<T>;
+using ParallelQueue = moodycamel::ConcurrentQueue<T>;
 
 template <typename T>
-using parallel_blockqueue = moodycamel::BlockingConcurrentQueue<T>;
+using ParallelBlockQueue = moodycamel::BlockingConcurrentQueue<T>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

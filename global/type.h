@@ -7,6 +7,14 @@
 
 #include <type_traits>
 
+#include <string>
+#include <string_view>
+
+#include <cassert>
+
+#include "compile.h"
+#include "platform.h"
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -44,6 +52,45 @@ typedef uchar tchar;
 #else
 typedef char tchar;
 #endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifdef NWB_PLATFORM_WINDOWS
+#include <windows.h>
+#endif
+template <typename In, typename Out>
+void NWB_INLINE convert(In src, std::basic_string<Out>& dst){ dst = src; }
+template <>
+void NWB_INLINE convert(std::basic_string_view<wchar_t> src, std::basic_string<char>& dst){
+    if(src.empty()){
+        dst.clear();
+        return;
+    }
+#ifdef NWB_PLATFORM_WINDOWS
+    const auto len = WideCharToMultiByte(CP_ACP, 0, src.data(), static_cast<int>(src.length()), nullptr, 0, nullptr, nullptr);
+    assert(len != 0);
+    dst.resize(len, 0);
+    WideCharToMultiByte(CP_ACP, 0, src.data(), static_cast<int>(src.length()), dst.data(), len, nullptr, nullptr);
+#endif
+}
+template <>
+void NWB_INLINE convert(const wchar_t* src, std::basic_string<char>& dst){ return convert(std::basic_string_view<wchar_t>(src), dst); }
+template <>
+void NWB_INLINE convert(std::basic_string_view<char> src, std::basic_string<wchar_t>& dst){
+    if (src.empty()){
+        dst.clear();
+        return;
+    }
+#ifdef NWB_PLATFORM_WINDOWS
+    const auto len = MultiByteToWideChar(CP_UTF8, 0, src.data(), static_cast<int>(src.length()), nullptr, 0);
+    assert(len != 0);
+    MultiByteToWideChar(CP_UTF8, 0, src.data(), static_cast<int>(src.length()), dst.data(), len);
+#endif
+}
+template <>
+void NWB_INLINE convert(const char* src, std::basic_string<wchar_t>& dst){ return convert(std::basic_string_view<char>(src), dst); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

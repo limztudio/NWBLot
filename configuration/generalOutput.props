@@ -4,8 +4,8 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup>
     <IntDir>$(SolutionDir)__build_obj\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-    <OutDir>$(SolutionDir)__exec\$(Platform)\</OutDir>
-    <TargetName>$(ProjectName)_$(Configuration)</TargetName>
+    <OutDir>$(SolutionDir)__exec\$(Platform)\$(Configuration)\</OutDir>
+    <TargetName>$(ProjectName)</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup />
   <ItemGroup />

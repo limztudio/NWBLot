@@ -15,7 +15,6 @@
       <ConformanceMode>true</ConformanceMode>
       <SDLCheck>true</SDLCheck>
       <RuntimeTypeInfo>false</RuntimeTypeInfo>
-      <ExceptionHandling>false</ExceptionHandling>
       <PreprocessorDefinitions>NDEBUG;PROP_FIN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <DebugInformationFormat>None</DebugInformationFormat>
       <Optimization>Full</Optimization>

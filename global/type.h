@@ -61,9 +61,9 @@ typedef char tchar;
 #include <windows.h>
 #endif
 template <typename In, typename Out>
-void NWB_INLINE convert(In src, std::basic_string<Out>& dst){ dst = src; }
+inline void convert(In src, std::basic_string<Out>& dst){ dst = src; }
 template <>
-void NWB_INLINE convert(std::basic_string_view<wchar_t> src, std::basic_string<char>& dst){
+inline void convert(std::basic_string_view<wchar_t> src, std::basic_string<char>& dst){
     if(src.empty()){
         dst.clear();
         return;
@@ -76,9 +76,9 @@ void NWB_INLINE convert(std::basic_string_view<wchar_t> src, std::basic_string<c
 #endif
 }
 template <>
-void NWB_INLINE convert(const wchar_t* src, std::basic_string<char>& dst){ return convert(std::basic_string_view<wchar_t>(src), dst); }
+inline void convert(const wchar_t* src, std::basic_string<char>& dst){ return convert(std::basic_string_view<wchar_t>(src), dst); }
 template <>
-void NWB_INLINE convert(std::basic_string_view<char> src, std::basic_string<wchar_t>& dst){
+inline void convert(std::basic_string_view<char> src, std::basic_string<wchar_t>& dst){
     if (src.empty()){
         dst.clear();
         return;
@@ -90,7 +90,7 @@ void NWB_INLINE convert(std::basic_string_view<char> src, std::basic_string<wcha
 #endif
 }
 template <>
-void NWB_INLINE convert(const char* src, std::basic_string<wchar_t>& dst){ return convert(std::basic_string_view<char>(src), dst); }
+inline void convert(const char* src, std::basic_string<wchar_t>& dst){ return convert(std::basic_string_view<char>(src), dst); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

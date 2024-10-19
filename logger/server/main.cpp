@@ -12,10 +12,13 @@
 
 static NWB_INLINE int entry_point(isize argc, tchar** argv){
     std::string address = g_defaultURL;
-    if (argc > 1)
-        convert(argv[1], address);
+    if(argc > 1)
+        convert(static_cast<const tchar*>(argv[1]), address);
 
+    NWB::Log::Server server;
 
+    if(!server.init())
+        return -1;
 
     return 0;
 }

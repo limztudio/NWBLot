@@ -10,10 +10,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static NWB_INLINE int entry_point(isize argc, tchar** argv){
+static NWB_INLINE int mainLogic(isize argc, tchar** argv){
     std::string address = g_defaultURL;
     if(argc > 1)
-		address = convert(argv[1]);
+        address = convert(argv[1]);
 
     NWB::Log::Server server;
 
@@ -25,6 +25,19 @@ static NWB_INLINE int entry_point(isize argc, tchar** argv){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static NWB_INLINE int entry_point(isize argc, tchar** argv){
+    int ret;
+    try{
+        ret = mainLogic(argc, argv);
+    }
+    catch(...){
+        return -1;
+    }
+
+    return ret;
+}
 
 
 #ifdef NWB_PLATFORM_WINDOWS

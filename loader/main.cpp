@@ -10,7 +10,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static NWB_INLINE int entry_point(isize argc, tchar** argv, void* inst){
+static NWB_INLINE int mainLogic(isize argc, tchar** argv, void* inst){
     NWB::Core::Frame frame(inst);
 
 
@@ -20,6 +20,19 @@ static NWB_INLINE int entry_point(isize argc, tchar** argv, void* inst){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static NWB_INLINE int entry_point(isize argc, tchar** argv, void* inst){
+    int ret;
+    try{
+        ret = mainLogic(argc, argv, inst);
+    }
+    catch(...){
+        return -1;
+    }
+
+    return ret;
+}
 
 
 #ifdef NWB_PLATFORM_WINDOWS

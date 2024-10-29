@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include <chrono>
+
 #include <logger/global.h>
 
 #include <curl/curl.h>
@@ -25,12 +27,24 @@ public:
     ~Server();
 
 
+private:
+    static bool globalInit();
 public:
     bool init();
 
 
 private:
+    void enqueue(std::basic_string<tchar>&& str);
+    void enqueue(const std::basic_string<tchar>& str);
+
+
+private:
     CURL* m_curl;
+    ParallelQueue<std::tuple<std::chrono::system_clock::time_point, std::basic_string<tchar>>> m_msgQueue;
+
+
+private:
+    static bool m_globalInit;
 };
 
 

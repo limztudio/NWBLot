@@ -20,6 +20,9 @@ NWB_LOG_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+bool Server::m_globalInit = false;
+
+
 Server::Server()
     : m_curl(nullptr)
 {}
@@ -30,13 +33,35 @@ Server::~Server(){
     }
 }
 
+bool Server::globalInit(){
+    CURLcode ret;
+
+    ret = curl_global_init(CURL_GLOBAL_ALL);
+    if(ret != CURLE_OK)
+        return false;
+
+    return true;
+}
 bool Server::init(){
+    if(!m_globalInit){
+        if(!globalInit()){
+            enqueue(NWB_TEXT("Failed to global initialization on Server"));
+            return false;
+        }
+        m_globalInit = true;
+    }
+
     m_curl = curl_easy_init();
     if(!m_curl){
+        enqueue(NWB_TEXT("Failed to initialize CURL on Server"));
         return false;
     }
     return true;
 }
+
+
+void Server::enqueue(std::basic_string<tchar>&& str){ m_msgQueue.enqueue(std::make_tuple(std::chrono::system_clock::now(), std::move(str))); }
+void Server::enqueue(const std::basic_string<tchar>& str){ m_msgQueue.enqueue(std::make_tuple(std::chrono::system_clock::now(), str)); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

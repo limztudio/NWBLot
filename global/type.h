@@ -57,6 +57,17 @@ typedef char tchar;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#ifdef NWB_UNICODE
+#define __NWB_TEXT(x) L ## x
+#else
+#define __NWB_TEXT(x) x
+#endif
+#define NWB_TEXT(x) __NWB_TEXT(x)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #ifdef NWB_PLATFORM_WINDOWS
 #include <windows.h>
 #endif
@@ -65,12 +76,12 @@ namespace __hidden_type_convert{
     template <typename In>
     concept FromChar = requires(In src){ std::basic_string_view<char>(src); };
     template <typename In>
-    concept FromWchar = requires(In src){ std::basic_string_view<wchar_t>(src); };
+    concept FromWchar = requires(In src){ std::basic_string_view<uchar>(src); };
 };
 
 template <typename In> requires __hidden_type_convert::FromWchar<In>
 inline std::basic_string<char> convert(In& raw){
-    std::basic_string_view<wchar_t> src(raw);
+    std::basic_string_view<uchar> src(raw);
     if(src.empty())
         return std::basic_string<char>();
 #ifdef NWB_PLATFORM_WINDOWS
@@ -85,20 +96,20 @@ template <typename In>
 inline std::basic_string<char> convert(In& src){ return src; }
 
 template <typename In> requires __hidden_type_convert::FromChar<In>
-inline std::basic_string<wchar_t> convert(In& raw){
+inline std::basic_string<uchar> convert(In& raw){
     std::basic_string_view<char> src(raw);
     if(src.empty())
-        return std::basic_string<wchar_t>();
+        return std::basic_string<uchar>();
 #ifdef NWB_PLATFORM_WINDOWS
     const auto len = MultiByteToWideChar(CP_UTF8, 0, src.data(), static_cast<int>(src.length()), nullptr, 0);
     assert(len != 0);
-    std::basic_string<wchar_t> dst(len, 0);
+    std::basic_string<uchar> dst(len, 0);
     MultiByteToWideChar(CP_UTF8, 0, src.data(), static_cast<int>(src.length()), dst.data(), len);
     return dst;
 #endif
 }
 template <typename In>
-inline std::basic_string<wchar_t> convert(In& src){ return src; }
+inline std::basic_string<uchar> convert(In& src){ return src; }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

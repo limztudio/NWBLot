@@ -4,6 +4,8 @@
 
 #include <global.h>
 
+#include <thread>
+
 #include "server.h"
 
 
@@ -17,8 +19,15 @@ static NWB_INLINE int mainLogic(isize argc, tchar** argv){
 
     NWB::Log::Server server;
 
-    if(!server.init())
+    if(!server.init(address.c_str()))
         return -1;
+
+    std::thread loop([&](){
+        for(;;){
+            
+        }
+    });
+    loop.join();
 
     return 0;
 }

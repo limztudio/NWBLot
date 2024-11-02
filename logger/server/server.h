@@ -22,6 +22,14 @@ NWB_LOG_BEGIN
 
 
 class Server{
+private:
+    using MessageType = std::tuple<std::chrono::system_clock::time_point, std::basic_string<tchar>>;
+
+
+private:
+    constexpr static u64 RenewIntervalMS = 100;
+
+
 public:
     Server();
     ~Server();
@@ -30,7 +38,9 @@ public:
 private:
     static bool globalInit();
 public:
-    bool init();
+    bool init(const char* url);
+
+    bool update();
 
 
 private:
@@ -40,7 +50,7 @@ private:
 
 private:
     CURL* m_curl;
-    ParallelQueue<std::tuple<std::chrono::system_clock::time_point, std::basic_string<tchar>>> m_msgQueue;
+    ParallelQueue<MessageType> m_msgQueue;
 
 
 private:

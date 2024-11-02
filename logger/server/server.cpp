@@ -42,7 +42,7 @@ bool Server::globalInit(){
 
     return true;
 }
-bool Server::init(){
+bool Server::init(const char* url){
     if(!m_globalInit){
         if(!globalInit()){
             enqueue(NWB_TEXT("Failed to global initialization on Server"));
@@ -56,6 +56,29 @@ bool Server::init(){
         enqueue(NWB_TEXT("Failed to initialize CURL on Server"));
         return false;
     }
+
+    CURLcode ret;
+
+    ret = curl_easy_setopt(m_curl, CURLOPT_URL, url);
+    if(ret != CURLE_OK){
+        enqueue(convert(std::format("Failed to set URL on Server: {}", curl_easy_strerror(ret))));
+        return false;
+    }
+
+
+
+    return true;
+}
+
+bool Server::update(){
+    for(;; std::this_thread::sleep_for(std::chrono::milliseconds(RenewIntervalMS))){
+        MessageType msg;
+        if (!m_msgQueue.try_dequeue(msg))
+            continue;
+
+
+    }
+
     return true;
 }
 

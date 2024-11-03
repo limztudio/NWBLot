@@ -46,9 +46,9 @@ typedef float f32;
 typedef double f64;
 
 //typedef char char;
-typedef wchar_t uchar;
+typedef wchar_t wchar;
 #ifdef NWB_UNICODE
-typedef uchar tchar;
+typedef wchar tchar;
 #else
 typedef char tchar;
 #endif
@@ -74,14 +74,15 @@ typedef char tchar;
 
 namespace __hidden_type_convert{
     template <typename In>
-    concept FromWcharView = requires(In src){ std::basic_string_view<uchar>(src); };
+    concept FromWcharView = std::is_convertible_v<In, std::basic_string_view<wchar>>;
 
     template <typename In>
-    concept FromCharView = requires(In src){ std::basic_string_view<char>(src); };
+    concept FromCharView = std::is_convertible_v<In, std::basic_string_view<char>>;
 };
 
 template <typename In> requires __hidden_type_convert::FromWcharView<In>
-inline std::basic_string<char> convert(const In& src){
+inline std::basic_string<char> convert(const In& raw){
+    std::basic_string_view<wchar> src(raw);
     if(src.empty())
         return std::basic_string<char>();
 #ifdef NWB_PLATFORM_WINDOWS
@@ -93,7 +94,8 @@ inline std::basic_string<char> convert(const In& src){
 #endif
 }
 template <typename In> requires __hidden_type_convert::FromWcharView<In>
-inline std::basic_string<char> convert(In&& src){
+inline std::basic_string<char> convert(In&& raw){
+    std::basic_string_view<wchar> src(std::move(raw));
     if(src.empty())
         return std::basic_string<char>();
 #ifdef NWB_PLATFORM_WINDOWS
@@ -110,33 +112,35 @@ template <typename In>
 inline std::basic_string<char> convert(In&& src){ return src; }
 
 template <typename In> requires __hidden_type_convert::FromCharView<In>
-inline std::basic_string<uchar> convert(const In& src){
+inline std::basic_string<wchar> convert(const In& raw){
+    std::basic_string_view<char> src(raw);
     if(src.empty())
-        return std::basic_string<uchar>();
+        return std::basic_string<wchar>();
 #ifdef NWB_PLATFORM_WINDOWS
     const auto len = MultiByteToWideChar(CP_UTF8, 0, src.data(), static_cast<int>(src.length()), nullptr, 0);
     assert(len != 0);
-    std::basic_string<uchar> dst(len, 0);
+    std::basic_string<wchar> dst(len, 0);
     MultiByteToWideChar(CP_UTF8, 0, src.data(), static_cast<int>(src.length()), dst.data(), len);
     return dst;
 #endif
 }
 template <typename In> requires __hidden_type_convert::FromCharView<In>
-inline std::basic_string<uchar> convert(In&& src){
+inline std::basic_string<wchar> convert(In&& raw){
+    std::basic_string_view<char> src(std::move(raw));
     if(src.empty())
-        return std::basic_string<uchar>();
+        return std::basic_string<wchar>();
 #ifdef NWB_PLATFORM_WINDOWS
     const auto len = MultiByteToWideChar(CP_UTF8, 0, src.data(), static_cast<int>(src.length()), nullptr, 0);
     assert(len != 0);
-    std::basic_string<uchar> dst(len, 0);
+    std::basic_string<wchar> dst(len, 0);
     MultiByteToWideChar(CP_UTF8, 0, src.data(), static_cast<int>(src.length()), dst.data(), len);
     return dst;
 #endif
 }
 template <typename In>
-inline std::basic_string<uchar> convert(const In& src){ return src; }
+inline std::basic_string<wchar> convert(const In& src){ return src; }
 template <typename In>
-inline std::basic_string<uchar> convert(In&& src){ return src; }
+inline std::basic_string<wchar> convert(In&& src){ return src; }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

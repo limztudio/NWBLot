@@ -21,6 +21,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "logclient", "logger\logclie
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "logserver", "logger\logserver.vcxproj", "{EE0A4F19-9788-4A04-8945-C78C8231BD49}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "common", "core\common.vcxproj", "{89FA56D0-3DDA-4AF6-8970-2DFBF76D4B47}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		dbg|x64 = dbg|x64
@@ -64,6 +66,12 @@ Global
 		{EE0A4F19-9788-4A04-8945-C78C8231BD49}.fin|x64.Build.0 = fin|x64
 		{EE0A4F19-9788-4A04-8945-C78C8231BD49}.opt|x64.ActiveCfg = opt|x64
 		{EE0A4F19-9788-4A04-8945-C78C8231BD49}.opt|x64.Build.0 = opt|x64
+		{89FA56D0-3DDA-4AF6-8970-2DFBF76D4B47}.dbg|x64.ActiveCfg = dbg|x64
+		{89FA56D0-3DDA-4AF6-8970-2DFBF76D4B47}.dbg|x64.Build.0 = dbg|x64
+		{89FA56D0-3DDA-4AF6-8970-2DFBF76D4B47}.fin|x64.ActiveCfg = fin|x64
+		{89FA56D0-3DDA-4AF6-8970-2DFBF76D4B47}.fin|x64.Build.0 = fin|x64
+		{89FA56D0-3DDA-4AF6-8970-2DFBF76D4B47}.opt|x64.ActiveCfg = opt|x64
+		{89FA56D0-3DDA-4AF6-8970-2DFBF76D4B47}.opt|x64.Build.0 = opt|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -74,6 +82,7 @@ Global
 		{9BF92DF1-144D-4120-9728-DEBC803749CB} = {64BAECF7-F9F4-4DE8-B4FE-0F3123038189}
 		{5BDE19C4-41A9-4C6C-847E-1C978D315AA1} = {CFE39472-2E21-4B67-9107-BF6DB86A9606}
 		{EE0A4F19-9788-4A04-8945-C78C8231BD49} = {CFE39472-2E21-4B67-9107-BF6DB86A9606}
+		{89FA56D0-3DDA-4AF6-8970-2DFBF76D4B47} = {027298CC-1FD1-4E7A-AD78-8F251DB56C6E}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {379F8795-FF4F-4779-BCAC-25452D9B0E5D}

@@ -36,7 +36,7 @@ private:
 
 
 private:
-    constexpr static u64 RenewIntervalMS = 100;
+    constexpr static u64 RenewIntervalMS = 30;
 
 
 private:

@@ -22,7 +22,11 @@ NWB_COMMON_BEGIN
 
 template <typename T>
 inline std::unordered_map<std::basic_string<T>, std::basic_string<T>> parseCommandLine(std::basic_string_view<T> input){
-    std::basic_regex<T> regex(NWB_TEXT("(\\w+)\\s*=\\s*(?:\"([^\"]*)\"|(\\S+))"));
+    std::basic_regex<T> regex(
+        std::is_same_v<T, wchar>
+        ? L"(\\w+)\\s*=\\s*(?:\"([^\"]*)\"|(\\S+))"
+        :  "(\\w+)\\s*=\\s*(?:\"([^\"]*)\"|(\\S+))"
+    );
 
     std::unordered_map<std::basic_string<T>, std::basic_string<T>> output;
     std::match_results<typename std::basic_string<T>::const_terator> match;

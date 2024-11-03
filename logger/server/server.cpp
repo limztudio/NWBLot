@@ -32,9 +32,28 @@ bool Server::globalInit(){
 
     return true;
 }
-size_t Server::receiveCallback(void* contents, size_t size, size_t nmemb, Server* _this){
-    std::basic_string<tchar> str(reinterpret_cast<tchar>(contents), (size * nmemb) / sizeof(tchar));
-    _this->enqueue(std::move(str));
+usize Server::receiveCallback(void* contents, usize size, usize nmemb, Server* _this){
+    auto* ptr = reinterpret_cast<u8*>(contents);
+    auto sizeLeft = static_cast<isize>(size * nmemb);
+
+    std::chrono::system_clock::time_point time;
+    {
+        NWB_MEMCPY(&time, sizeof(decltype(time)), ptr, sizeLeft);
+        ptr += sizeof(decltype(time));
+        sizeLeft -= sizeof(decltype(time));
+    }
+
+    Type type;
+    {
+        NWB_MEMCPY(&type, sizeof(decltype(type)), ptr, sizeLeft);
+        ptr += sizeof(decltype(type));
+        sizeLeft -= sizeof(decltype(type));
+    }
+
+    assert(sizeLeft > 0);
+    std::basic_string<tchar> strMsg(reinterpret_cast<tchar>(ptr), static_cast<usize>(sizeLeft) / sizeof(tchar));
+
+    _this->m_msgQueue.enqueue(std::make_tuple(std::move(time), type, std::move(strMsg)));
 }
 
 
@@ -105,8 +124,8 @@ bool Server::update(){
 }
 
 
-void Server::enqueue(std::basic_string<tchar>&& str){ m_msgQueue.enqueue(std::make_tuple(std::chrono::system_clock::now(), std::move(str))); }
-void Server::enqueue(const std::basic_string<tchar>& str){ m_msgQueue.enqueue(std::make_tuple(std::chrono::system_clock::now(), str)); }
+void Server::enqueue(std::basic_string<tchar>&& str, Type type){ m_msgQueue.enqueue(std::make_tuple(std::chrono::system_clock::now(), type, std::move(str))); }
+void Server::enqueue(const std::basic_string<tchar>& str, Type type){ m_msgQueue.enqueue(std::make_tuple(std::chrono::system_clock::now(), type, str)); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -22,8 +22,16 @@ NWB_LOG_BEGIN
 
 
 class Server{
+public:
+    enum class Type : u8{
+        Info,
+        Warning,
+        Error,
+        Fatal,
+    };
+
 private:
-    using MessageType = std::tuple<std::chrono::system_clock::time_point, std::basic_string<tchar>>;
+    using MessageType = std::tuple<std::chrono::system_clock::time_point, Type, std::basic_string<tchar>>;
     using MessageQueue = ParallelQueue<MessageType>;
 
 
@@ -33,7 +41,7 @@ private:
 
 private:
     static bool globalInit();
-    static size_t receiveCallback(void* contents, size_t size, size_t nmemb, Server* _this);
+    static usize receiveCallback(void* contents, usize size, usize nmemb, Server* _this);
 
 
 public:
@@ -48,8 +56,8 @@ public:
 
 
 private:
-    void enqueue(std::basic_string<tchar>&& str);
-    void enqueue(const std::basic_string<tchar>& str);
+    void enqueue(std::basic_string<tchar>&& str, Type type = Type::Info);
+    void enqueue(const std::basic_string<tchar>& str, Type type = Type::Info);
 
 
 private:

@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <iostream>
+
 #include "server.h"
 
 
@@ -9,6 +11,17 @@
 
 
 NWB_LOG_BEGIN
+
+
+#ifdef NWB_UNICODE
+#define _COUT std::wcout
+#define _CIN std::wcin
+#define _CERR std::wcerr
+#else
+#define _COUT std::cout
+#define _CIN std::cin
+#define _CERR std::cerr
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -102,16 +115,27 @@ bool Server::init(const char* url){
 bool Server::update(){
     CURLcode ret;
 
-    for(;; std::this_thread::sleep_for(std::chrono::milliseconds(RenewIntervalMS))){
-        ret = curl_easy_perform(m_curl);
-        if(ret != CURLE_OK)
-            enqueue(convert(std::format("Failed to bring message: {}", curl_easy_strerror(ret))));
+    ret = curl_easy_perform(m_curl);
+    if(ret != CURLE_OK)
+        enqueue(convert(std::format("Failed to bring message: {}", curl_easy_strerror(ret))));
 
-        MessageType msg;
-        if (!m_msgQueue.try_dequeue(msg))
-            continue;
-
-
+    MessageType msg;
+    while(m_msgQueue.try_dequeue(msg)){
+        const auto& [time, type, str] = msg;
+        switch(type){
+        case Type::Info:
+            _COUT << std::format(NWB_TEXT("{} [INFO]: {}"), std::chrono::system_clock::to_time_t(time), str) << std::endl;
+            break;
+        case Type::Warning:
+            _COUT << std::format(NWB_TEXT("{} [WARNING]: {}"), std::chrono::system_clock::to_time_t(time), str) << std::endl;
+            break;
+        case Type::Error:
+            _COUT << std::format(NWB_TEXT("{} [ERROR]: {}"), std::chrono::system_clock::to_time_t(time), str) << std::endl;
+            break;
+        case Type::Fatal:
+            _COUT << std::format(NWB_TEXT("{} [FATAL]: {}"), std::chrono::system_clock::to_time_t(time), str) << std::endl;
+            break;
+        }
     }
 
     return true;
@@ -123,6 +147,11 @@ void Server::enqueue(const std::basic_string<tchar>& str, Type type){ m_msgQueue
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#undef _COUT
+#undef _CIN
+#undef _CERR
 
 
 NWB_LOG_END

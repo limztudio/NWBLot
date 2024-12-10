@@ -36,10 +36,6 @@ private:
 
 
 private:
-    constexpr static u64 RenewIntervalMS = 30;
-
-
-private:
     static bool globalInit();
     static usize receiveCallback(void* contents, usize size, usize nmemb, Server* _this);
 

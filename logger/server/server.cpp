@@ -93,19 +93,19 @@ bool Server::init(const char* url){
 
     ret = curl_easy_setopt(m_curl, CURLOPT_URL, url);
     if(ret != CURLE_OK){
-        enqueue(convert(std::format("Failed to set URL on Server: {}", curl_easy_strerror(ret))));
+        enqueue(std::format(NWB_TEXT("Failed to set URL on Server: {}"), convert(curl_easy_strerror(ret))));
         return false;
     }
 
     ret = curl_easy_setopt(m_curl, CURLOPT_WRITEFUNCTION, receiveCallback);
     if(ret != CURLE_OK){
-        enqueue(convert(std::format("Failed to set write callback: {}", curl_easy_strerror(ret))));
+        enqueue(std::format(NWB_TEXT("Failed to set write callback: {}"), convert(curl_easy_strerror(ret))));
         return false;
     }
 
     ret = curl_easy_setopt(m_curl, CURLOPT_WRITEDATA, this);
     if(ret != CURLE_OK){
-        enqueue(convert(std::format("Failed to set write data: {}", curl_easy_strerror(ret))));
+        enqueue(std::format(NWB_TEXT("Failed to set write data: {}"), convert(curl_easy_strerror(ret))));
         return false;
     }
 

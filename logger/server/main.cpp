@@ -18,7 +18,7 @@
 
 
 static NWB_INLINE int mainLogic(isize argc, tchar** argv){
-    std::string address = g_defaultURL;
+    std::string address = NWB::Log::g_defaultURL;
     if(argc > 1)
         address = convert(argv[1]);
 

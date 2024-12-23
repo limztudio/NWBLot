@@ -5,9 +5,7 @@
 #pragma once
 
 
-#include <chrono>
-
-#include <logger/global.h>
+#include <logger/common.h>
 
 #include <curl/curl.h>
 
@@ -22,19 +20,6 @@ NWB_LOG_BEGIN
 
 
 class Server{
-public:
-    enum class Type : u8{
-        Info,
-        Warning,
-        Error,
-        Fatal,
-    };
-
-private:
-    using MessageType = std::tuple<std::chrono::system_clock::time_point, Type, std::basic_string<tchar>>;
-    using MessageQueue = ParallelQueue<MessageType>;
-
-
 private:
     static bool globalInit();
     static usize receiveCallback(void* contents, usize size, usize nmemb, Server* _this);

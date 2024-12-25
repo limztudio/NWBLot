@@ -14,42 +14,69 @@ NWB_LOG_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Client::m_globalInit = false;
+usize Client::sendCallback(void* contents, usize size, usize nmemb, Client* _this){
+    MessageType msg;
+    if(!_this->try_dequeue(msg))
+        return 0;
 
+    auto* ptr = reinterpret_cast<u8*>(contents);
 
-bool Client::globalInit(){
-    CURLcode ret;
+    const auto& [time, type, str] = msg;
+    {
+        NWB_MEMCPY(ptr, sizeof(decltype(time)), &time, sizeof(decltype(time)));
+        ptr += static_cast<isize>(sizeof(decltype(time)));
+    }
+    {
+        NWB_MEMCPY(ptr, sizeof(decltype(type)), &type, sizeof(decltype(type)));
+        ptr += static_cast<isize>(sizeof(decltype(type)));
+    }
+    {
+        NWB_MEMCPY(ptr, str.size() * sizeof(tchar), str.c_str(), str.size() * sizeof(tchar));
+        ptr += static_cast<isize>(str.size() * sizeof(tchar));
+    }
 
-    ret = curl_global_init(CURL_GLOBAL_ALL);
-    if(ret != CURLE_OK)
-        return false;
-
-    return true;
+    auto sizeWritten = static_cast<usize>(ptr - reinterpret_cast<u8*>(contents));
+    return sizeWritten;
 }
 
 
 Client::Client()
-    : m_curl(nullptr)
+    : m_msgCount(0)
 {}
-Client::~Client(){
-    if(m_curl){
-        curl_easy_cleanup(m_curl);
-        m_curl = nullptr;
+
+bool Client::update(){
+    if(!m_msgCount.load(std::memory_order_acquire))
+        return true;
+
+    CURLcode ret;
+
+    ret = curl_easy_perform(m_curl);
+    if(ret != CURLE_OK){
+        enqueue(std::format(NWB_TEXT("Failed to perform on {}: {}"), CLIENT_NAME, convert(curl_easy_strerror(ret))));
+        return false;
     }
+
+    return true;
 }
 
-bool Client::init(const char* url){
-    if(!m_globalInit){
-        if(!globalInit()){
-            enqueue(NWB_TEXT("Failed to global initialization on Server"));
-            return false;
-        }
-        m_globalInit = true;
+bool Client::internalInit(const char* url){
+    CURLcode ret;
+
+    ret = curl_easy_setopt(m_curl, CURLOPT_URL, url);
+    if(ret != CURLE_OK){
+        enqueue(std::format(NWB_TEXT("Failed to set URL on {}: {}"), CLIENT_NAME, convert(curl_easy_strerror(ret))));
+        return false;
     }
 
-    m_curl = curl_easy_init();
-    if(!m_curl){
-        enqueue(NWB_TEXT("Failed to initialize CURL on Server"));
+    ret = curl_easy_setopt(m_curl, CURLOPT_READFUNCTION, sendCallback);
+    if(ret != CURLE_OK){
+        enqueue(std::format(NWB_TEXT("Failed to set read callback on {}: {}"), CLIENT_NAME, convert(curl_easy_strerror(ret))));
+        return false;
+    }
+
+    ret = curl_easy_setopt(m_curl, CURLOPT_READDATA, this);
+    if(ret != CURLE_OK){
+        enqueue(std::format(NWB_TEXT("Failed to set read data on {}: {}"), CLIENT_NAME, convert(curl_easy_strerror(ret))));
         return false;
     }
 

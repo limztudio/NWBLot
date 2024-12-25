@@ -27,21 +27,13 @@ NWB_LOG_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Server::m_globalInit = false;
-
-
-bool Server::globalInit(){
-    CURLcode ret;
-
-    ret = curl_global_init(CURL_GLOBAL_ALL);
-    if(ret != CURLE_OK)
-        return false;
-
-    return true;
-}
 usize Server::receiveCallback(void* contents, usize size, usize nmemb, Server* _this){
+    auto totalSize = size * nmemb;
+    if(!totalSize)
+        return 0;
+
     auto* ptr = reinterpret_cast<u8*>(contents);
-    auto sizeLeft = static_cast<isize>(size * nmemb);
+    auto sizeLeft = static_cast<isize>(totalSize);
 
     std::chrono::system_clock::time_point time;
     {
@@ -61,66 +53,21 @@ usize Server::receiveCallback(void* contents, usize size, usize nmemb, Server* _
     std::basic_string<tchar> strMsg(reinterpret_cast<tchar>(ptr), static_cast<usize>(sizeLeft) / sizeof(tchar));
 
     _this->m_msgQueue.enqueue(std::make_tuple(std::move(time), type, std::move(strMsg)));
+    return totalSize;
 }
 
 
-Server::Server()
-    : m_curl(nullptr)
-{}
-Server::~Server(){
-    if(m_curl){
-        curl_easy_cleanup(m_curl);
-        m_curl = nullptr;
-    }
-}
-
-bool Server::init(const char* url){
-    if(!m_globalInit){
-        if(!globalInit()){
-            enqueue(NWB_TEXT("Failed to global initialization on Server"));
-            return false;
-        }
-        m_globalInit = true;
-    }
-
-    m_curl = curl_easy_init();
-    if(!m_curl){
-        enqueue(NWB_TEXT("Failed to initialize CURL on Server"));
-        return false;
-    }
-
-    CURLcode ret;
-
-    ret = curl_easy_setopt(m_curl, CURLOPT_URL, url);
-    if(ret != CURLE_OK){
-        enqueue(std::format(NWB_TEXT("Failed to set URL on Server: {}"), convert(curl_easy_strerror(ret))));
-        return false;
-    }
-
-    ret = curl_easy_setopt(m_curl, CURLOPT_WRITEFUNCTION, receiveCallback);
-    if(ret != CURLE_OK){
-        enqueue(std::format(NWB_TEXT("Failed to set write callback: {}"), convert(curl_easy_strerror(ret))));
-        return false;
-    }
-
-    ret = curl_easy_setopt(m_curl, CURLOPT_WRITEDATA, this);
-    if(ret != CURLE_OK){
-        enqueue(std::format(NWB_TEXT("Failed to set write data: {}"), convert(curl_easy_strerror(ret))));
-        return false;
-    }
-
-    return true;
-}
+Server::Server(){}
 
 bool Server::update(){
     CURLcode ret;
 
     ret = curl_easy_perform(m_curl);
     if(ret != CURLE_OK)
-        enqueue(convert(std::format("Failed to bring message: {}", curl_easy_strerror(ret))));
+        enqueue(std::format(NWB_TEXT("Failed to bring message on {}: {}"), SERVER_NAME, convert(curl_easy_strerror(ret))));
 
     MessageType msg;
-    while(m_msgQueue.try_dequeue(msg)){
+    while(try_dequeue(msg)){
         const auto& [time, type, str] = msg;
         switch(type){
         case Type::Info:
@@ -141,9 +88,29 @@ bool Server::update(){
     return true;
 }
 
+bool Server::internalInit(const char* url){
+    CURLcode ret;
 
-void Server::enqueue(std::basic_string<tchar>&& str, Type type){ m_msgQueue.enqueue(std::make_tuple(std::chrono::system_clock::now(), type, std::move(str))); }
-void Server::enqueue(const std::basic_string<tchar>& str, Type type){ m_msgQueue.enqueue(std::make_tuple(std::chrono::system_clock::now(), type, str)); }
+    ret = curl_easy_setopt(m_curl, CURLOPT_URL, url);
+    if(ret != CURLE_OK){
+        enqueue(std::format(NWB_TEXT("Failed to set URL on {}: {}"), SERVER_NAME, convert(curl_easy_strerror(ret))));
+        return false;
+    }
+
+    ret = curl_easy_setopt(m_curl, CURLOPT_WRITEFUNCTION, receiveCallback);
+    if(ret != CURLE_OK){
+        enqueue(std::format(NWB_TEXT("Failed to set write callback on {}: {}"), SERVER_NAME, convert(curl_easy_strerror(ret))));
+        return false;
+    }
+
+    ret = curl_easy_setopt(m_curl, CURLOPT_WRITEDATA, this);
+    if(ret != CURLE_OK){
+        enqueue(std::format(NWB_TEXT("Failed to set write data on {}: {}"), SERVER_NAME, convert(curl_easy_strerror(ret))));
+        return false;
+    }
+
+    return true;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

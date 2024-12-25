@@ -7,8 +7,6 @@
 
 #include <logger/common.h>
 
-#include <curl/curl.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -19,35 +17,22 @@ NWB_LOG_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class Server{
+constexpr tchar SERVER_NAME[] = NWB_TEXT("Server");
+class Server : public Base<Server, SERVER_NAME>{
 private:
-    static bool globalInit();
     static usize receiveCallback(void* contents, usize size, usize nmemb, Server* _this);
 
 
 public:
     Server();
-    ~Server();
 
 
 public:
-    bool init(const char* url);
-
     bool update();
 
 
-private:
-    void enqueue(std::basic_string<tchar>&& str, Type type = Type::Info);
-    void enqueue(const std::basic_string<tchar>& str, Type type = Type::Info);
-
-
-private:
-    CURL* m_curl;
-    MessageQueue m_msgQueue;
-
-
-private:
-    static bool m_globalInit;
+protected:
+    virtual bool internalInit(const char* url) override;
 };
 
 

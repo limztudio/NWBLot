@@ -19,6 +19,8 @@ NWB_LOG_BEGIN
 
 constexpr tchar SERVER_NAME[] = NWB_TEXT("Server");
 class Server : public Base<Server, SERVER_NAME>{
+    friend class Base;
+
 private:
     static usize receiveCallback(void* contents, usize size, usize nmemb, Server* _this);
 
@@ -27,12 +29,9 @@ public:
     Server();
 
 
-public:
-    bool update();
-
-
 protected:
-    virtual bool internalInit(const char* url) override;
+    bool internalInit(const char* url);
+    bool internalUpdate();
 };
 
 

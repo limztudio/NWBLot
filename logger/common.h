@@ -7,6 +7,9 @@
 
 #include "global.h"
 
+#include <thread>
+#include <semaphore>
+#include <atomic>
 #include <chrono>
 
 #include <curl/curl.h>
@@ -53,13 +56,26 @@ private:
 
         return true;
     }
+    static void globalUpdate(T* _this){
+        for(;;){
+            _this->m_semaphore.acquire();
+            if(_this->internalUpdate() && _this->m_exit.load(std::memory_order_acquire))
+                break;
+        }
+    }
 
 
 public:
     Base()
         : m_curl(nullptr)
+        , m_semaphore(0)
+        , m_exit(false)
     {}
     virtual ~Base(){
+        m_exit.store(true, std::memory_order_release);
+        if(m_thread.joinable())
+            m_thread.join();
+
         if(m_curl){
             curl_easy_cleanup(m_curl);
             m_curl = nullptr;
@@ -83,20 +99,37 @@ public:
             return false;
         }
 
-        return internalInit(url);
+        auto ret = static_cast<T*>(this)->internalInit(url);
+        if (ret)
+            m_thread = std::thread(globalUpdate, static_cast<T*>(this));
+
+        return ret;
     }
 
 
 protected:
-    virtual bool internalInit(const char* url) = 0;
+    bool internalInit(const char* url){ return true; }
+    bool internalUpdate(){ return true; }
 
 
 protected:
+    inline bool enqueue(MessageType&& data){
+        auto ret = m_msgQueue.enqueue(std::move(data));
+        if (ret)
+            m_semaphore.release();
+        return ret;
+    }
+    inline bool enqueue(const MessageType& data){
+        auto ret = m_msgQueue.enqueue(data);
+        if(ret)
+            m_semaphore.release();
+        return ret;
+    }
     inline bool enqueue(std::basic_string<tchar>&& str, Type type = Type::Info){
-        return m_msgQueue.enqueue(std::make_tuple(std::chrono::system_clock::now(), type, std::move(str)));
+        return static_cast<T*>(this)->enqueue(std::make_tuple(std::chrono::system_clock::now(), type, std::move(str)));
     }
     inline bool enqueue(const std::basic_string<tchar>& str, Type type = Type::Info){
-        return m_msgQueue.enqueue(std::make_tuple(std::chrono::system_clock::now(), type, str));
+        return static_cast<T*>(this)->enqueue(std::make_tuple(std::chrono::system_clock::now(), type, str));
     }
     inline bool try_dequeue(MessageType& msg){
         return m_msgQueue.try_dequeue(msg);
@@ -106,6 +139,12 @@ protected:
 protected:
     CURL* m_curl;
     MessageQueue m_msgQueue;
+
+
+private:
+    std::thread m_thread;
+    std::counting_semaphore<INT_MAX> m_semaphore;
+    std::atomic<bool> m_exit;
 
 
 private:

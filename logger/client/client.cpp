@@ -15,6 +15,9 @@ NWB_LOG_BEGIN
 
 
 usize Client::sendCallback(void* contents, usize size, usize nmemb, Client* _this){
+    (void)size;
+    (void)nmemb;
+
     MessageType msg;
     if(!_this->try_dequeue(msg))
         return 0;
@@ -44,7 +47,30 @@ Client::Client()
     : m_msgCount(0)
 {}
 
-bool Client::update(){
+bool Client::internalInit(const char* url){
+    CURLcode ret;
+
+    ret = curl_easy_setopt(m_curl, CURLOPT_URL, url);
+    if(ret != CURLE_OK){
+        Base::enqueue(std::format(NWB_TEXT("Failed to set URL on {}: {}"), CLIENT_NAME, convert(curl_easy_strerror(ret))));
+        return false;
+    }
+
+    ret = curl_easy_setopt(m_curl, CURLOPT_READFUNCTION, sendCallback);
+    if(ret != CURLE_OK){
+        Base::enqueue(std::format(NWB_TEXT("Failed to set read callback on {}: {}"), CLIENT_NAME, convert(curl_easy_strerror(ret))));
+        return false;
+    }
+
+    ret = curl_easy_setopt(m_curl, CURLOPT_READDATA, this);
+    if(ret != CURLE_OK){
+        Base::enqueue(std::format(NWB_TEXT("Failed to set read data on {}: {}"), CLIENT_NAME, convert(curl_easy_strerror(ret))));
+        return false;
+    }
+
+    return true;
+}
+bool Client::internalUpdate(){
     if(!m_msgCount.load(std::memory_order_acquire))
         return true;
 
@@ -52,31 +78,7 @@ bool Client::update(){
 
     ret = curl_easy_perform(m_curl);
     if(ret != CURLE_OK){
-        enqueue(std::format(NWB_TEXT("Failed to perform on {}: {}"), CLIENT_NAME, convert(curl_easy_strerror(ret))));
-        return false;
-    }
-
-    return true;
-}
-
-bool Client::internalInit(const char* url){
-    CURLcode ret;
-
-    ret = curl_easy_setopt(m_curl, CURLOPT_URL, url);
-    if(ret != CURLE_OK){
-        enqueue(std::format(NWB_TEXT("Failed to set URL on {}: {}"), CLIENT_NAME, convert(curl_easy_strerror(ret))));
-        return false;
-    }
-
-    ret = curl_easy_setopt(m_curl, CURLOPT_READFUNCTION, sendCallback);
-    if(ret != CURLE_OK){
-        enqueue(std::format(NWB_TEXT("Failed to set read callback on {}: {}"), CLIENT_NAME, convert(curl_easy_strerror(ret))));
-        return false;
-    }
-
-    ret = curl_easy_setopt(m_curl, CURLOPT_READDATA, this);
-    if(ret != CURLE_OK){
-        enqueue(std::format(NWB_TEXT("Failed to set read data on {}: {}"), CLIENT_NAME, convert(curl_easy_strerror(ret))));
+        Base::enqueue(std::format(NWB_TEXT("Failed to perform on {}: {}"), CLIENT_NAME, convert(curl_easy_strerror(ret))));
         return false;
     }
 

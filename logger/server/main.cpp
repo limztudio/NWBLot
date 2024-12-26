@@ -4,9 +4,6 @@
 
 #include "server.h"
 
-#include <thread>
-#include <atomic>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -17,31 +14,37 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static u8 g_running = 0x00;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static NWB_INLINE int mainLogic(isize argc, tchar** argv){
+    g_running = 0x00;
+
     std::string address = NWB::Log::g_defaultURL;
     if(argc > 1)
         address = convert(argv[1]);
 
-    NWB::Log::Server server;
+    {
+        NWB::Log::Server server;
 
-    if(!server.init(address.c_str()))
-        return -1;
+        if(!server.init(address.c_str()))
+            return -1;
 
-    std::atomic_bool running = true;
-    std::thread loop([&](){
-        for(; running.load(std::memory_order_acquire); std::this_thread::sleep_for(std::chrono::milliseconds(REFRESH_INTERVAL_MS))){
-            if(!server.update())
-                break;
-        }
-    });
-    running.store(false, std::memory_order_release);
-    loop.join();
+        while(g_running == 0x00)
+            std::this_thread::sleep_for(std::chrono::milliseconds(REFRESH_INTERVAL_MS));
+    }
 
+    g_running = 0x02;
     return 0;
 }
 
 static NWB_INLINE void mainCleanup(){
-    
+    g_running = 0x01;
+
+    while(g_running == 0x01){}
 }
 
 

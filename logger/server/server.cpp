@@ -64,19 +64,19 @@ bool Server::internalInit(const char* url){
 
     ret = curl_easy_setopt(m_curl, CURLOPT_URL, url);
     if(ret != CURLE_OK){
-        enqueue(std::format(NWB_TEXT("Failed to set URL on {}: {}"), SERVER_NAME, convert(curl_easy_strerror(ret))));
+        enqueue(std::format(NWB_TEXT("Failed to set URL on {}: {}"), SERVER_NAME, convert(curl_easy_strerror(ret))), Type::Fatal);
         return false;
     }
 
     ret = curl_easy_setopt(m_curl, CURLOPT_WRITEFUNCTION, receiveCallback);
     if(ret != CURLE_OK){
-        enqueue(std::format(NWB_TEXT("Failed to set write callback on {}: {}"), SERVER_NAME, convert(curl_easy_strerror(ret))));
+        enqueue(std::format(NWB_TEXT("Failed to set write callback on {}: {}"), SERVER_NAME, convert(curl_easy_strerror(ret))), Type::Fatal);
         return false;
     }
 
     ret = curl_easy_setopt(m_curl, CURLOPT_WRITEDATA, this);
     if(ret != CURLE_OK){
-        enqueue(std::format(NWB_TEXT("Failed to set write data on {}: {}"), SERVER_NAME, convert(curl_easy_strerror(ret))));
+        enqueue(std::format(NWB_TEXT("Failed to set write data on {}: {}"), SERVER_NAME, convert(curl_easy_strerror(ret))), Type::Fatal);
         return false;
     }
 
@@ -87,7 +87,7 @@ bool Server::internalUpdate(){
 
     ret = curl_easy_perform(m_curl);
     if(ret != CURLE_OK)
-        enqueue(std::format(NWB_TEXT("Failed to bring message on {}: {}"), SERVER_NAME, convert(curl_easy_strerror(ret))));
+        enqueue(std::format(NWB_TEXT("Failed to bring message on {}: {}"), SERVER_NAME, convert(curl_easy_strerror(ret))), Type::Error);
 
     MessageType msg;
     while(try_dequeue(msg)){

@@ -4,6 +4,7 @@
 
 #include <global.h>
 
+#include <logger/client/logger.h>
 #include <core/frame/frame.h>
 
 
@@ -11,9 +12,19 @@
 
 
 static NWB_INLINE int mainLogic(isize argc, tchar** argv, void* inst){
-    NWB::Core::Frame frame(inst);
+    std::string logAddress = NWB::Log::g_defaultURL;
+    if(argc > 1)
+        logAddress = convert(argv[1]);
 
+    {
+        NWB::Log::Client logger;
+        if(!logger.init(logAddress.c_str()))
+            return -1;
+        NWB_LOGGER_REGISTER(&logger);
 
+        NWB::Core::Frame frame(inst);
+    }
+    NWB_LOGGER_REGISTER(nullptr);
 
     return 0;
 }

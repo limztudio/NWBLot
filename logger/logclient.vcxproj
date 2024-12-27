@@ -21,9 +21,11 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="client\client.h" />
+    <ClInclude Include="client\logger.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="client\client.cpp" />
+    <ClCompile Include="client\logger.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>

@@ -106,6 +106,14 @@ public:
         return ret;
     }
 
+public:
+    inline bool enqueue(std::basic_string<tchar>&& str, Type type = Type::Info){
+        return static_cast<T*>(this)->enqueue(std::make_tuple(std::chrono::system_clock::now(), type, std::move(str)));
+    }
+    inline bool enqueue(const std::basic_string<tchar>& str, Type type = Type::Info){
+        return static_cast<T*>(this)->enqueue(std::make_tuple(std::chrono::system_clock::now(), type, str));
+    }
+
 
 protected:
     bool internalInit(const char* url){ return true; }
@@ -125,12 +133,7 @@ protected:
             m_semaphore.release();
         return ret;
     }
-    inline bool enqueue(std::basic_string<tchar>&& str, Type type = Type::Info){
-        return static_cast<T*>(this)->enqueue(std::make_tuple(std::chrono::system_clock::now(), type, std::move(str)));
-    }
-    inline bool enqueue(const std::basic_string<tchar>& str, Type type = Type::Info){
-        return static_cast<T*>(this)->enqueue(std::make_tuple(std::chrono::system_clock::now(), type, str));
-    }
+
     inline bool try_dequeue(MessageType& msg){
         return m_msgQueue.try_dequeue(msg);
     }

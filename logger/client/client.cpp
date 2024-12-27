@@ -52,19 +52,19 @@ bool Client::internalInit(const char* url){
 
     ret = curl_easy_setopt(m_curl, CURLOPT_URL, url);
     if(ret != CURLE_OK){
-        Base::enqueue(std::format(NWB_TEXT("Failed to set URL on {}: {}"), CLIENT_NAME, convert(curl_easy_strerror(ret))));
+        enqueue(std::format(NWB_TEXT("Failed to set URL on {}: {}"), CLIENT_NAME, convert(curl_easy_strerror(ret))), Type::Fatal);
         return false;
     }
 
     ret = curl_easy_setopt(m_curl, CURLOPT_READFUNCTION, sendCallback);
     if(ret != CURLE_OK){
-        Base::enqueue(std::format(NWB_TEXT("Failed to set read callback on {}: {}"), CLIENT_NAME, convert(curl_easy_strerror(ret))));
+        enqueue(std::format(NWB_TEXT("Failed to set read callback on {}: {}"), CLIENT_NAME, convert(curl_easy_strerror(ret))), Type::Fatal);
         return false;
     }
 
     ret = curl_easy_setopt(m_curl, CURLOPT_READDATA, this);
     if(ret != CURLE_OK){
-        Base::enqueue(std::format(NWB_TEXT("Failed to set read data on {}: {}"), CLIENT_NAME, convert(curl_easy_strerror(ret))));
+        enqueue(std::format(NWB_TEXT("Failed to set read data on {}: {}"), CLIENT_NAME, convert(curl_easy_strerror(ret))), Type::Fatal);
         return false;
     }
 
@@ -78,7 +78,7 @@ bool Client::internalUpdate(){
 
     ret = curl_easy_perform(m_curl);
     if(ret != CURLE_OK){
-        Base::enqueue(std::format(NWB_TEXT("Failed to perform on {}: {}"), CLIENT_NAME, convert(curl_easy_strerror(ret))));
+        enqueue(std::format(NWB_TEXT("Failed to perform on {}: {}"), CLIENT_NAME, convert(curl_easy_strerror(ret))), Type::Error);
         return false;
     }
 

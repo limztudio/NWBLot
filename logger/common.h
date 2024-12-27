@@ -87,7 +87,7 @@ public:
     inline bool init(const char* url){
         if(!m_globalInit){
             if(!globalInit()){
-                static_cast<T*>(this)->enqueue(std::format(NWB_TEXT("Failed to global initialization on {}"), NAME));
+                static_cast<T*>(this)->enqueue(std::format(NWB_TEXT("Failed to global initialization on {}"), NAME), Type::Fatal);
                 return false;
             }
             m_globalInit = true;
@@ -95,7 +95,7 @@ public:
 
         m_curl = curl_easy_init();
         if(!m_curl){
-            static_cast<T*>(this)->enqueue(std::format(NWB_TEXT("Failed to initialize CURL on {}"), NAME));
+            static_cast<T*>(this)->enqueue(std::format(NWB_TEXT("Failed to initialize CURL on {}"), NAME), Type::Fatal);
             return false;
         }
 

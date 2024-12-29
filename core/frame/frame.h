@@ -60,7 +60,7 @@ public:
 
 public:
     template<typename T>
-    inline T& data()const{ return static_cast<T&>(m_data); }
+    inline T& data(){ return static_cast<T&>(m_data); }
 
 public:
     bool update(float delta);

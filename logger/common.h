@@ -73,6 +73,7 @@ public:
     {}
     virtual ~Base(){
         m_exit.store(true, std::memory_order_release);
+        m_semaphore.release();
         if(m_thread.joinable())
             m_thread.join();
 

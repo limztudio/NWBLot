@@ -2,26 +2,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <iostream>
-
 #include "server.h"
+
+#include "frame.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_LOG_BEGIN
-
-
-#ifdef NWB_UNICODE
-#define _COUT std::wcout
-#define _CIN std::wcin
-#define _CERR std::wcerr
-#else
-#define _COUT std::cout
-#define _CIN std::cin
-#define _CERR std::cerr
-#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -94,16 +83,16 @@ bool Server::internalUpdate(){
         const auto& [time, type, str] = msg;
         switch(type){
         case Type::Info:
-            _COUT << std::format(NWB_TEXT("{} [INFO]: {}"), std::chrono::system_clock::to_time_t(time), str) << std::endl;
+            Frame::print(std::format(NWB_TEXT("{} [INFO]:\n{}"), std::chrono::system_clock::to_time_t(time), str));
             break;
         case Type::Warning:
-            _COUT << std::format(NWB_TEXT("{} [WARNING]: {}"), std::chrono::system_clock::to_time_t(time), str) << std::endl;
+            Frame::print(std::format(NWB_TEXT("{} [WARNING]:\n{}"), std::chrono::system_clock::to_time_t(time), str));
             break;
         case Type::Error:
-            _COUT << std::format(NWB_TEXT("{} [ERROR]: {}"), std::chrono::system_clock::to_time_t(time), str) << std::endl;
+            Frame::print(std::format(NWB_TEXT("{} [ERROR]:\n{}"), std::chrono::system_clock::to_time_t(time), str));
             break;
         case Type::Fatal:
-            _COUT << std::format(NWB_TEXT("{} [FATAL]: {}"), std::chrono::system_clock::to_time_t(time), str) << std::endl;
+            Frame::print(std::format(NWB_TEXT("{} [FATAL]:\n{}"), std::chrono::system_clock::to_time_t(time), str));
             break;
         }
     }
@@ -113,11 +102,6 @@ bool Server::internalUpdate(){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#undef _COUT
-#undef _CIN
-#undef _CERR
 
 
 NWB_LOG_END

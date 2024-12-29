@@ -15,10 +15,13 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="server\frame.cpp" />
+    <ClCompile Include="server\frame_win.cpp" />
     <ClCompile Include="server\main.cpp" />
     <ClCompile Include="server\server.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="server\frame.h" />
     <ClInclude Include="server\server.h" />
   </ItemGroup>
   <ItemGroup>
@@ -84,17 +87,17 @@
   <PropertyGroup Label="UserMacros" />
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='dbg|x64'">
     <Link>
-      <SubSystem>Console</SubSystem>
+      <SubSystem>Windows</SubSystem>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='opt|x64'">
     <Link>
-      <SubSystem>Console</SubSystem>
+      <SubSystem>Windows</SubSystem>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='fin|x64'">
     <Link>
-      <SubSystem>Console</SubSystem>
+      <SubSystem>Windows</SubSystem>
     </Link>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

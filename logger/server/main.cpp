@@ -6,58 +6,44 @@
 #include <windows.h>
 
 #include "server.h"
+#include "frame.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#define REFRESH_INTERVAL_MS 30
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static std::atomic<u8> g_running(0x00);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static NWB_INLINE int mainLogic(isize argc, tchar** argv){
-    g_running.store(0x00, std::memory_order_release);
-
-    std::string address = NWB::Log::g_defaultURL;
+static NWB_INLINE int mainLogic(isize argc, tchar** argv, void* inst){
+    std::string logAddress = NWB::Log::g_defaultURL;
     if(argc > 1)
-        address = convert(argv[1]);
+        logAddress = convert(argv[1]);
 
     {
-        NWB::Log::Server server;
-
-        if(!server.init(address.c_str()))
+        NWB::Log::Server logger;
+        if(!logger.init(logAddress.c_str()))
             return -1;
 
-        while(g_running.load(std::memory_order_acquire) == 0x00)
-            std::this_thread::sleep_for(std::chrono::milliseconds(REFRESH_INTERVAL_MS));
+        NWB::Log::Frame frame(inst);
+        if(!frame.init())
+            return -1;
+
+        if(!frame.showFrame())
+            return -1;
+
+        if(!frame.mainLoop())
+            return -1;
     }
 
-    g_running.store(0x02, std::memory_order_release);
     return 0;
 }
 
-static NWB_INLINE void mainCleanup(){
-    g_running.store(0x01, std::memory_order_release);
-
-    while(g_running.load(std::memory_order_acquire) == 0x01){}
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static NWB_INLINE int entry_point(isize argc, tchar** argv){
+static NWB_INLINE int entry_point(isize argc, tchar** argv, void* inst){
     int ret;
     try{
-        ret = mainLogic(argc, argv);
+        ret = mainLogic(argc, argv, inst);
     }
     catch(...){
         return -1;
@@ -66,51 +52,24 @@ static NWB_INLINE int entry_point(isize argc, tchar** argv){
     return ret;
 }
 
-
 #ifdef NWB_PLATFORM_WINDOWS
-namespace __hidden_main{
-    static HANDLE g_cleanupEvent = nullptr;
-};
-
-BOOL WINAPI console_handler(DWORD eventCode){
-    switch(eventCode){
-    case CTRL_C_EVENT:
-    case CTRL_CLOSE_EVENT:
-        mainCleanup();
-        SetEvent(__hidden_main::g_cleanupEvent);
-        return TRUE;
-    }
-    return FALSE;
-}
+#include <windows.h>
 #ifdef NWB_UNICODE
-int wmain(int argc, wchar_t* argv[]){
+int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nCmdShow){
+    (void)hPrevInstance;
+    (void)lpCmdLine;
+    (void)nCmdShow;
+    return entry_point(__argc, __wargv, hInstance);
+}
 #else
-int main(int argc, char* argv[]){
-#endif
-    __hidden_main::g_cleanupEvent = CreateEvent(nullptr, TRUE, FALSE, nullptr);
-    if(!__hidden_main::g_cleanupEvent)
-        return -1;
-
-    if(!SetConsoleCtrlHandler(console_handler, TRUE))
-    {
-        CloseHandle(__hidden_main::g_cleanupEvent);
-        return -1;
-    }
-
-    auto ret = entry_point(argc, argv);
-
-    WaitForSingleObject(__hidden_main::g_cleanupEvent, INFINITE);
-    CloseHandle(__hidden_main::g_cleanupEvent);
-
-    return ret;
+int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nCmdShow){
+    (void)hPrevInstance;
+    (void)lpCmdLine;
+    (void)nCmdShow;
+    return entry_point(__argc, __argv, hInstance);
 }
 #endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#undef REFRESH_INTERVAL_MS
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

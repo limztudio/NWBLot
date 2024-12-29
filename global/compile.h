@@ -44,6 +44,30 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#if defined(NWB_DEBUG)
+#ifdef _MSC_VER
+#define NWB_HARDBREAK __debugbreak()
+#define NWB_SOFTBREAK __debugbreak()
+#else
+#define NWB_HARDBREAK
+#define NWB_SOFTBREAK
+#endif
+#elif defined(NWB_OPTIMIZE)
+#define NWB_HARDBREAK
+#ifdef _MSC_VER
+#define NWB_SOFTBREAK __debugbreak()
+#else
+#define NWB_SOFTBREAK
+#endif
+#else
+#define NWB_HARDBREAK
+#define NWB_SOFTBREAK
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #ifdef _MSC_VER
 #define NWB_MEMCPY(dest, destSize, src, srcSize) memcpy_s(dest, destSize, src, srcSize)
 #define NWB_WMEMCPY(dest, destSize, src, srcSize) wmemcpy_s(dest, destSize, src, srcSize)

@@ -17,14 +17,58 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_frame{
+    union FrameParam{
+        void* ptr[3];
+        u64 u64[3];
+        u32 u32[6];
+        u16 u16[12];
+        u8 u8[24];
+    };
+    class FrameData{
+    public:
+        inline FrameData() : m_data{ nullptr, }{}
+
+
+    public:
+        inline u16& width(){ return m_data.u16[0]; }
+        inline const u16& width()const{ return m_data.u16[0]; }
+
+        inline u16& height(){ return m_data.u16[1]; }
+        inline const u16& height()const{ return m_data.u16[2]; }
+
+
+    protected:
+        FrameParam m_data;
+    };
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class Frame{
 public:
-    Frame(void* inst);
+    Frame(void* inst, u16 width, u16 height);
     ~Frame();
 
 
+public:
+    bool init();
+    bool showFrame();
+    bool mainLoop();
+
+public:
+    template<typename T>
+    inline T& data(){ return static_cast<T&>(m_data); }
+
+public:
+    bool update(float delta);
+    bool render();
+
+
 private:
-    void* m_inst;
+    __hidden_frame::FrameData m_data;
 };
 
 

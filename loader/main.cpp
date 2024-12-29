@@ -22,7 +22,15 @@ static NWB_INLINE int mainLogic(isize argc, tchar** argv, void* inst){
             return -1;
         NWB_LOGGER_REGISTER(&logger);
 
-        NWB::Core::Frame frame(inst);
+        NWB::Core::Frame frame(inst, 800, 600);
+        if(!frame.init())
+            return -1;
+
+        if(!frame.showFrame())
+            return -1;
+
+        if(!frame.mainLoop())
+            return -1;
     }
     NWB_LOGGER_REGISTER(nullptr);
 

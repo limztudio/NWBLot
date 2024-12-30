@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <exception>
+
 #include <global.h>
 
 #include <logger/client/logger.h>
@@ -22,17 +24,24 @@ static NWB_INLINE int mainLogic(isize argc, tchar** argv, void* inst){
             return -1;
         NWB_LOGGER_REGISTER(&logger);
 
-        NWB::Core::Frame frame(inst, 800, 600);
-        if(!frame.init())
-            return -1;
+        try{
+            NWB::Core::Frame frame(inst, 800, 600);
+            if(!frame.init())
+                return -1;
 
-        if(!frame.showFrame())
-            return -1;
+            if(!frame.showFrame())
+                return -1;
 
-        if(!frame.mainLoop())
+            if(!frame.mainLoop())
+                return -1;
+        }
+        catch(const std::exception& e){
+            NWB_LOGGER_FATAL("Exception: {}", convert(e.what()));
+            NWB_LOGGER_REGISTER(nullptr);
             return -1;
+        }
+        NWB_LOGGER_REGISTER(nullptr);
     }
-    NWB_LOGGER_REGISTER(nullptr);
 
     return 0;
 }

@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <exception>
 #include <atomic>
 #include <windows.h>
 
@@ -22,15 +23,21 @@ static NWB_INLINE int mainLogic(isize argc, tchar** argv, void* inst){
         if(!logger.init(logAddress.c_str()))
             return -1;
 
-        NWB::Log::Frame frame(inst);
-        if(!frame.init())
-            return -1;
+        try{
+            NWB::Log::Frame frame(inst);
+            if(!frame.init())
+                return -1;
 
-        if(!frame.showFrame())
-            return -1;
+            if(!frame.showFrame())
+                return -1;
 
-        if(!frame.mainLoop())
+            if(!frame.mainLoop())
+                return -1;
+        }
+        catch(const std::exception& e){
+            logger.enqueue(std::format(NWB_TEXT("Exception: {}"), convert(e.what())), NWB::Log::Type::Fatal);
             return -1;
+        }
     }
 
     return 0;

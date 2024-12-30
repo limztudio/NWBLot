@@ -17,8 +17,8 @@
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
-    <ProjectGuid>{7BC9137C-EAA2-4FE2-B4AD-C03C173AA73B}</ProjectGuid>
-    <RootNamespace>frame</RootNamespace>
+    <ProjectGuid>{CFF12A98-C588-4586-9837-683F6BA8DC0F}</ProjectGuid>
+    <RootNamespace>graphics</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -74,22 +74,18 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='fin|x64'">
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="frame\frame.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="frame\frame.cpp" />
-    <ClCompile Include="frame\frame_win.cpp" />
-  </ItemGroup>
-  <ItemGroup>
     <ProjectReference Include="..\logger\logclient.vcxproj">
       <Project>{5bde19c4-41a9-4c6c-847e-1c978d315aa1}</Project>
     </ProjectReference>
     <ProjectReference Include="common.vcxproj">
       <Project>{89fa56d0-3dda-4af6-8970-2dfbf76d4b47}</Project>
     </ProjectReference>
-    <ProjectReference Include="graphics.vcxproj">
-      <Project>{cff12a98-c588-4586-9837-683f6ba8dc0f}</Project>
-    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="graphics\graphics.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="graphics\graphics.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

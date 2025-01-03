@@ -5,4 +5,9 @@
     <IncludePath>$(VULKAN_SDK)\include;$(IncludePath)</IncludePath>
     <LibraryPath>$(VULKAN_SDK)\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
+  <ItemDefinitionGroup>
+    <Link>
+      <AdditionalDependencies>vulkan-1.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
 </Project>

@@ -7,6 +7,8 @@
 
 #include <core/global.h>
 
+#include <core/graphics/graphics.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -63,12 +65,17 @@ public:
     inline T& data(){ return static_cast<T&>(m_data); }
 
 public:
+    bool startup();
+    void cleanup();
     bool update(float delta);
     bool render();
 
 
 private:
     __hidden_frame::FrameData m_data;
+
+private:
+    Graphics m_graphics;
 };
 
 

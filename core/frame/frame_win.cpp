@@ -104,7 +104,10 @@ Frame::Frame(void* inst, u16 width, u16 height){
     data<__hidden_frame::WinFrame>().isActive() = false;
     data<__hidden_frame::WinFrame>().instance() = reinterpret_cast<HINSTANCE>(inst);
 }
-Frame::~Frame(){}
+Frame::~Frame(){
+    cleanup();
+    __hidden_frame::g_frame = nullptr;
+}
 
 bool Frame::init(){
     constexpr tchar ClassName[] = NWB_TEXT("NWB_FRAME");
@@ -123,7 +126,7 @@ bool Frame::init(){
         wc.lpszClassName = ClassName;
     }
     if(!RegisterClassEx(&wc)){
-        NWB_LOGGER_FATAL("Frame window registration failed");
+        NWB_LOGGER_FATAL(NWB_TEXT("Frame window registration failed"));
         return false;
     }
 
@@ -144,14 +147,14 @@ bool Frame::init(){
         nullptr
     );
     if(!data<__hidden_frame::WinFrame>().hwnd()){
-        NWB_LOGGER_FATAL("Frame window creation failed");
+        NWB_LOGGER_FATAL(NWB_TEXT("Frame window creation failed"));
         return false;
     }
 
     {
         if(!AdjustWindowRectEx(&rc, Style, FALSE, StyleEx)){
             data<__hidden_frame::WinFrame>().hwnd() = nullptr;
-            NWB_LOGGER_FATAL("Frame window adjustment failed");
+            NWB_LOGGER_FATAL(NWB_TEXT("Frame window adjustment failed"));
             return false;
         }
 
@@ -162,10 +165,13 @@ bool Frame::init(){
 
         if(!MoveWindow(data<__hidden_frame::WinFrame>().hwnd(), x, y, actualWidth, actualHeight, false)){
             data<__hidden_frame::WinFrame>().hwnd() = nullptr;
-            NWB_LOGGER_FATAL("Frame window moving failed");
+            NWB_LOGGER_FATAL(NWB_TEXT("Frame window moving failed"));
             return false;
         }
     }
+
+    if(!startup())
+        return false;
 
     return true;
 }

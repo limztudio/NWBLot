@@ -36,7 +36,7 @@ static NWB_INLINE int mainLogic(isize argc, tchar** argv, void* inst){
                 return -1;
         }
         catch(const std::exception& e){
-            NWB_LOGGER_FATAL("Exception: {}", convert(e.what()));
+            NWB_LOGGER_FATAL(NWB_TEXT("Exception: {}"), convert(e.what()));
             NWB_LOGGER_REGISTER(nullptr);
             return -1;
         }

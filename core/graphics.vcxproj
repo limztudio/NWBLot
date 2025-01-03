@@ -86,9 +86,11 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="graphics\graphics.cpp" />
+    <ClCompile Include="graphics\vulkan\helper.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="graphics\graphics.h" />
+    <ClInclude Include="graphics\vulkan\helper.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

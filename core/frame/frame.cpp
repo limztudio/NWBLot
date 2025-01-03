@@ -14,6 +14,15 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+bool Frame::startup(){
+    if(!m_graphics.init(data<__hidden_frame::FrameData>().width(), data<__hidden_frame::FrameData>().height()))
+        return false;
+
+    return true;
+}
+void Frame::cleanup(){
+    m_graphics.destroy();
+}
 bool Frame::update(float delta){
     return true;
 }

@@ -70,12 +70,6 @@
     <Import Project="..\configuration\vulkaninclude.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='dbg|x64'">
-  </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='opt|x64'">
-  </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='fin|x64'">
-  </ItemDefinitionGroup>
   <ItemGroup>
     <ProjectReference Include="..\logger\logclient.vcxproj">
       <Project>{5bde19c4-41a9-4c6c-847e-1c978d315aa1}</Project>
@@ -86,10 +80,12 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="graphics\graphics.cpp" />
+    <ClCompile Include="graphics\vulkan\engine.cpp" />
     <ClCompile Include="graphics\vulkan\helper.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="graphics\graphics.h" />
+    <ClInclude Include="graphics\vulkan\engine.h" />
     <ClInclude Include="graphics\vulkan\helper.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

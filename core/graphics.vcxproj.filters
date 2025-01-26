@@ -5,10 +5,16 @@
     <ClCompile Include="graphics\vulkan\helper.cpp">
       <Filter>vulkan</Filter>
     </ClCompile>
+    <ClCompile Include="graphics\vulkan\engine.cpp">
+      <Filter>vulkan</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="graphics\graphics.h" />
     <ClInclude Include="graphics\vulkan\helper.h">
+      <Filter>vulkan</Filter>
+    </ClInclude>
+    <ClInclude Include="graphics\vulkan\engine.h">
       <Filter>vulkan</Filter>
     </ClInclude>
   </ItemGroup>

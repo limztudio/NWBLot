@@ -7,10 +7,10 @@
 
 #include "type.h"
 
-#include "../3rd_parties/cameron314_queue/readerwriterqueue.h"
-#include "../3rd_parties/cameron314_queue/readerwritercircularbuffer.h"
-#include "../3rd_parties/cameron314_queue/concurrentqueue.h"
-#include "../3rd_parties/cameron314_queue/blockingconcurrentqueue.h"
+#include <readerwriterqueue.h>
+#include <readerwritercircularbuffer.h>
+#include <concurrentqueue.h>
+#include <blockingconcurrentqueue.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

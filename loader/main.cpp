@@ -4,6 +4,8 @@
 
 #include <exception>
 
+#include <CLI.hpp>
+
 #include <global.h>
 
 #include <logger/client/logger.h>
@@ -52,6 +54,21 @@ static NWB_INLINE int mainLogic(isize argc, tchar** argv, void* inst){
 
 static NWB_INLINE int entry_point(isize argc, tchar** argv, void* inst){
     int ret;
+
+    {
+        CLI::App app{ "loader" };
+
+        app.add_option();
+
+        try{
+            app.parse(argc, argv);
+        }
+        catch(const CLI::ParseError& e){
+            app.exit(e, std::cout, std::cerr);
+            return -1;
+        }
+    }
+
     try{
         ret = mainLogic(argc, argv, inst);
     }

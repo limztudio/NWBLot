@@ -6,6 +6,8 @@
 #include <atomic>
 #include <windows.h>
 
+#include <CLI.hpp>
+
 #include "server.h"
 #include "frame.h"
 
@@ -49,6 +51,21 @@ static NWB_INLINE int mainLogic(isize argc, tchar** argv, void* inst){
 
 static NWB_INLINE int entry_point(isize argc, tchar** argv, void* inst){
     int ret;
+
+    {
+        CLI::App app{ "logserver" };
+
+        app.add_option();
+
+        try{
+            app.parse(argc, argv);
+        }
+        catch(const CLI::ParseError& e){
+            app.exit(e, std::cout, std::cerr);
+            return -1;
+        }
+    }
+
     try{
         ret = mainLogic(argc, argv, inst);
     }

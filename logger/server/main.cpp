@@ -8,6 +8,7 @@
 
 #include <CLI.hpp>
 
+#include <command.h>
 #include "server.h"
 #include "frame.h"
 
@@ -15,14 +16,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static NWB_INLINE int mainLogic(isize argc, tchar** argv, void* inst){
-    std::string logAddress = NWB::Log::g_defaultURL;
-    if(argc > 1)
-        logAddress = convert(argv[1]);
-
+static NWB_INLINE int mainLogic(const char* logAddress, void* inst){
     {
         NWB::Log::Server logger;
-        if(!logger.init(logAddress.c_str()))
+        if(!logger.init(logAddress))
             return -1;
 
         try{
@@ -52,13 +49,14 @@ static NWB_INLINE int mainLogic(isize argc, tchar** argv, void* inst){
 static NWB_INLINE int entry_point(isize argc, tchar** argv, void* inst){
     int ret;
 
+    std::string logAddress;
     {
         CLI::App app{ "logserver" };
 
-        app.add_option();
+        NWB::argAddOption<NWB::ArgCommand::LogServer>(app, logAddress);
 
         try{
-            app.parse(argc, argv);
+            app.parse(static_cast<int>(argc), argv);
         }
         catch(const CLI::ParseError& e){
             app.exit(e, std::cout, std::cerr);
@@ -67,7 +65,7 @@ static NWB_INLINE int entry_point(isize argc, tchar** argv, void* inst){
     }
 
     try{
-        ret = mainLogic(argc, argv, inst);
+        ret = mainLogic(logAddress.c_str(), inst);
     }
     catch(...){
         return -1;

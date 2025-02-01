@@ -38,6 +38,38 @@ bool VulkanEngine::init(u16 width, u16 height){
 
     VkResult err;
 
+#if defined(VULKAN_VALIDATE)
+    u32 layerCount = 0;
+    std::unique_ptr<VkLayerProperties[]> layerProps;
+    {
+        err = vkEnumerateInstanceLayerProperties(reinterpret_cast<uint32_t*>(&layerCount), nullptr);
+        if(err != VK_SUCCESS){
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to get required instance layers: %s"), convert(helperGetVulkanResultString(err)));
+            return false;
+        }
+
+        layerProps = std::make_unique<VkLayerProperties[]>(layerCount);
+        err = vkEnumerateInstanceLayerProperties(reinterpret_cast<uint32_t*>(&layerCount), layerProps.get());
+        if(err != VK_SUCCESS){
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to get required instance layers: %s"), convert(helperGetVulkanResultString(err)));
+            return false;
+        }
+    }
+    for(usize i = 0; i < std::size(s_validationLayerName); ++i){
+        bool bFound = false;
+        for(auto j = decltype(layerCount){ 0 }; j < layerCount; ++j){
+            if(strcmp(layerProps[i].layerName, s_validationLayerName[i]) == 0){
+                bFound = true;
+                break;
+            }
+        }
+        if(!bFound){
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to find required instance layer: %s"), convert(s_validationLayerName[i]));
+            return false;
+        }
+    }
+#endif
+
     VkApplicationInfo appInfo{};
     {
         appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -76,7 +108,13 @@ bool VulkanEngine::init(u16 width, u16 height){
         createInfo.pApplicationInfo = &appInfo;
         createInfo.enabledExtensionCount = static_cast<decltype(createInfo.enabledExtensionCount)>(extCount);
         createInfo.ppEnabledExtensionNames = extNames.get();
-        createInfo.enabledLayerCount;
+#if defined(VULKAN_VALIDATE)
+        createInfo.enabledLayerCount = std::size(s_validationLayerName);
+        createInfo.ppEnabledLayerNames = s_validationLayerName;
+#else
+        createInfo.enabledLayerCount = 0;
+        createInfo.ppEnabledLayerNames = nullptr;
+#endif
     }
 
     return true;

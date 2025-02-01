@@ -13,6 +13,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#ifndef VULKAN_VALIDATE
+#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
+#define VULKAN_VALIDATE
+#endif
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_CORE_BEGIN
 
 
@@ -33,6 +43,14 @@ public:
 private:
     VkPhysicalDevice m_physDev;
     VkInstance m_inst;
+
+
+#if defined(VULKAN_VALIDATE)
+private:
+    static constexpr const char* s_validationLayerName[] = {
+        "VK_LAYER_KHRONOS_Validation"
+    };
+#endif
 };
 
 

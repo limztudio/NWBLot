@@ -117,6 +117,15 @@ bool VulkanEngine::init(u16 width, u16 height){
 #endif
     }
 
+    VkInstance instance = nullptr;
+    {
+        err = vkCreateInstance(&createInfo, nullptr, &instance);
+        if(err != VK_SUCCESS){
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to create Vulkan instance: %s"), convert(helperGetVulkanResultString(err)));
+            return false;
+        }
+    }
+
     return true;
 }
 void VulkanEngine::destroy(){

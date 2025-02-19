@@ -18,6 +18,9 @@
     <ProjectReference Include="..\3rd_parties\curl\libcurl.vcxproj">
       <Project>{9bf92df1-144d-4120-9728-debc803749cb}</Project>
     </ProjectReference>
+    <ProjectReference Include="..\core\alloc_proxy.vcxproj">
+      <Project>{f67ad323-6b29-4aff-b4d1-4f310dc3d430}</Project>
+    </ProjectReference>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="client\client.h" />
@@ -60,7 +63,7 @@
     <Import Project="..\configuration\unicodeChar.props" />
     <Import Project="..\configuration\basicInclude.props" />
     <Import Project="..\configuration\libcurlInclude.props" />
-    <Import Project="..\configuration\cameron314QueueInclude.props" />
+    <Import Project="..\configuration\3rdPartyContainerInclude.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='opt|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
@@ -70,7 +73,7 @@
     <Import Project="..\configuration\unicodeChar.props" />
     <Import Project="..\configuration\basicInclude.props" />
     <Import Project="..\configuration\libcurlInclude.props" />
-    <Import Project="..\configuration\cameron314QueueInclude.props" />
+    <Import Project="..\configuration\3rdPartyContainerInclude.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='fin|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
@@ -80,7 +83,7 @@
     <Import Project="..\configuration\unicodeChar.props" />
     <Import Project="..\configuration\basicInclude.props" />
     <Import Project="..\configuration\libcurlInclude.props" />
-    <Import Project="..\configuration\cameron314QueueInclude.props" />
+    <Import Project="..\configuration\3rdPartyContainerInclude.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

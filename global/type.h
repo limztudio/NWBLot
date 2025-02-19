@@ -64,6 +64,28 @@ typedef char tchar;
 #endif
 #define NWB_TEXT(x) __NWB_TEXT(x)
 
+#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(_MSC_VER)
+#define NWB_DLL_EXPORT __declspec(dllexport)
+#define NWB_DLL_IMPORT __declspec(dllimport)
+#else
+#define NWB_DLL_EXPORT __attribute__((dllexport))
+#define NWB_DLL_IMPORT __attribute__((dllimport))
+#endif
+#elif (defined(NWB_PLATFORM_UNIX) || defined(NWB_PLATFORM_APPLE))
+#define NWB_DLL_EXPORT __attribute__((visibility("default")))
+#define NWB_DLL_IMPORT
+#else
+#define NWB_DLL_EXPORT
+#define NWB_DLL_IMPORT
+#endif
+
+#if defined(NWB_EXPORT_DLL)
+#define NWB_DLL_API NWB_DLL_EXPORT
+#else
+#define NWB_DLL_API NWB_DLL_IMPORT
+#endif
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -73,14 +95,14 @@ typedef char tchar;
 #endif
 
 namespace __hidden_type_convert{
-    template <typename In>
+    template<typename In>
     concept FromWcharView = std::is_convertible_v<In, std::basic_string_view<wchar>>;
 
-    template <typename In>
+    template<typename In>
     concept FromCharView = std::is_convertible_v<In, std::basic_string_view<char>>;
 };
 
-template <typename In> requires __hidden_type_convert::FromWcharView<In>
+template<typename In> requires __hidden_type_convert::FromWcharView<In>
 inline std::basic_string<char> convert(const In& raw){
     std::basic_string_view<wchar> src(raw);
     if(src.empty())
@@ -93,7 +115,7 @@ inline std::basic_string<char> convert(const In& raw){
     return dst;
 #endif
 }
-template <typename In> requires __hidden_type_convert::FromWcharView<In>
+template<typename In> requires __hidden_type_convert::FromWcharView<In>
 inline std::basic_string<char> convert(In&& raw){
     std::basic_string_view<wchar> src(std::move(raw));
     if(src.empty())
@@ -106,12 +128,12 @@ inline std::basic_string<char> convert(In&& raw){
     return dst;
 #endif
 }
-template <typename In>
+template<typename In>
 inline std::basic_string<char> convert(const In& src){ return src; }
-template <typename In>
+template<typename In>
 inline std::basic_string<char> convert(In&& src){ return src; }
 
-template <typename In> requires __hidden_type_convert::FromCharView<In>
+template<typename In> requires __hidden_type_convert::FromCharView<In>
 inline std::basic_string<wchar> convert(const In& raw){
     std::basic_string_view<char> src(raw);
     if(src.empty())
@@ -124,7 +146,7 @@ inline std::basic_string<wchar> convert(const In& raw){
     return dst;
 #endif
 }
-template <typename In> requires __hidden_type_convert::FromCharView<In>
+template<typename In> requires __hidden_type_convert::FromCharView<In>
 inline std::basic_string<wchar> convert(In&& raw){
     std::basic_string_view<char> src(std::move(raw));
     if(src.empty())
@@ -137,9 +159,9 @@ inline std::basic_string<wchar> convert(In&& raw){
     return dst;
 #endif
 }
-template <typename In>
+template<typename In>
 inline std::basic_string<wchar> convert(const In& src){ return src; }
-template <typename In>
+template<typename In>
 inline std::basic_string<wchar> convert(In&& src){ return src; }
 
 

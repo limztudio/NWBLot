@@ -73,15 +73,23 @@
 #define NWB_WMEMCPY(dest, destSize, src, srcSize) wmemcpy_s(dest, destSize, src, srcSize)
 #define NWB_STRCPY(dest, destSize, src) strcpy_s(dest, destSize, src)
 #define NWB_WSTRCPY(dest, destSize, src) wcscpy_s(dest, destSize, src)
+#define NWB_STRNCPY(dest, destSize, src, count) strncpy_s(dest, destSize, src, count)
+#define NWB_WSTRNCPY(dest, destSize, src, count) wcsncpy_s(dest, destSize, src, count)
 #define NWB_STRCAT(dest, destSize, src) strcat_s(dest, destSize, src)
 #define NWB_WSTRCAT(dest, destSize, src) wcscat_s(dest, destSize, src)
+#define NWB_SPRINTF(format, formatSize, ...) sprintf_s(format, formatSize, __VA_ARGS__)
+#define NWB_WSPRINTF(format, formatSize, ...) swprintf_s(format, formatSize, __VA_ARGS__)
 #else
 #define NWB_MEMCPY(dest, destSize, src, srcSize) memcpy(dest, src, srcSize)
 #define NWB_WMEMCPY(dest, destSize, src, srcSize) wmemcpy(dest, src, srcSize)
 #define NWB_STRCPY(dest, destSize, src) strcpy(dest, src)
 #define NWB_WSTRCPY(dest, destSize, src) wcscpy(dest, src)
+#define NWB_STRNCPY(dest, destSize, src, count) strncpy(dest, src, count)
+#define NWB_WSTRNCPY(dest, destSize, src, count) wcsncpy(dest, src, count)
 #define NWB_STRCAT(dest, destSize, src) strcat(dest, src)
 #define NWB_WSTRCAT(dest, destSize, src) wcscat(dest, src)
+#define NWB_SPRINTF(format, formatSize, ...) sprintf(format, __VA_ARGS__)
+#define NWB_WSPRINTF(format, formatSize, ...) swprintf(format, __VA_ARGS__)
 #endif
 
 

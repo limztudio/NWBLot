@@ -58,7 +58,7 @@ bool VulkanEngine::init(u16 width, u16 height){
     for(usize i = 0; i < std::size(s_validationLayerName); ++i){
         bool bFound = false;
         for(auto j = decltype(layerCount){ 0 }; j < layerCount; ++j){
-            if(strcmp(layerProps[i].layerName, s_validationLayerName[i]) == 0){
+            if(strcmp(layerProps[j].layerName, s_validationLayerName[i]) == 0){
                 bFound = true;
                 break;
             }

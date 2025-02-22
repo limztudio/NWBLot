@@ -48,7 +48,7 @@ private:
 #if defined(VULKAN_VALIDATE)
 private:
     static constexpr const char* s_validationLayerName[] = {
-        "VK_LAYER_KHRONOS_Validation"
+        "VK_LAYER_KHRONOS_validation"
     };
 #endif
 };

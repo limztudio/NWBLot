@@ -92,6 +92,20 @@
 #define NWB_WSPRINTF(format, formatSize, ...) swprintf(format, __VA_ARGS__)
 #endif
 
+#ifdef NWB_UNICODE
+#define NWB_TMEMCPY(dest, destSize, src, srcSize) NWB_WMEMCPY(dest, destSize, src, srcSize)
+#define NWB_TSTRCPY(dest, destSize, src) NWB_WSTRCPY(dest, destSize, src)
+#define NWB_TSTRNCPY(dest, destSize, src, count) NWB_WSTRNCPY(dest, destSize, src, count)
+#define NWB_TSTRCAT(dest, destSize, src) NWB_WSTRCAT(dest, destSize, src)
+#define NWB_TSPRINTF(format, formatSize, ...) NWB_WSPRINTF(format, formatSize, __VA_ARGS__)
+#else
+#define NWB_TMEMCPY(dest, destSize, src, srcSize) NWB_MEMCPY(dest, destSize, src, srcSize)
+#define NWB_TSTRCPY(dest, destSize, src) NWB_STRCPY(dest, destSize, src)
+#define NWB_TSTRNCPY(dest, destSize, src, count) NWB_STRNCPY(dest, destSize, src, count)
+#define NWB_TSTRCAT(dest, destSize, src) NWB_STRCAT(dest, destSize, src)
+#define NWB_TSPRINTF(format, formatSize, ...) NWB_SPRINTF(format, formatSize, __VA_ARGS__)
+#endif
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -18,10 +18,16 @@
     <ClCompile Include="server\frame.cpp" />
     <ClCompile Include="server\frame_win.cpp" />
     <ClCompile Include="server\main.cpp" />
+    <ClCompile Include="server\pch.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='dbg|x64'">Create</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='fin|x64'">Create</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='opt|x64'">Create</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="server\server.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="server\frame.h" />
+    <ClInclude Include="server\pch.h" />
     <ClInclude Include="server\server.h" />
   </ItemGroup>
   <ItemGroup>
@@ -70,6 +76,7 @@
     <Import Project="..\configuration\libcurlInclude.props" />
     <Import Project="..\configuration\3rdPartyContainerInclude.props" />
     <Import Project="..\configuration\CLI11Include.props" />
+    <Import Project="..\configuration\execGeneral.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='opt|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
@@ -81,6 +88,7 @@
     <Import Project="..\configuration\libcurlInclude.props" />
     <Import Project="..\configuration\3rdPartyContainerInclude.props" />
     <Import Project="..\configuration\CLI11Include.props" />
+    <Import Project="..\configuration\execGeneral.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='fin|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
@@ -92,22 +100,41 @@
     <Import Project="..\configuration\libcurlInclude.props" />
     <Import Project="..\configuration\3rdPartyContainerInclude.props" />
     <Import Project="..\configuration\CLI11Include.props" />
+    <Import Project="..\configuration\execGeneral.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='dbg|x64'">
     <Link>
       <SubSystem>Windows</SubSystem>
     </Link>
+    <ClCompile>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+    </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='opt|x64'">
     <Link>
       <SubSystem>Windows</SubSystem>
     </Link>
+    <ClCompile>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+    </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='fin|x64'">
     <Link>
       <SubSystem>Windows</SubSystem>
     </Link>
+    <ClCompile>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+    </ClCompile>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

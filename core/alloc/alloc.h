@@ -25,12 +25,3 @@ NWB_ALLOC_END
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-extern NWB_DLL_API void* __nwb_core_alloc_memAlloc(usize align, usize len, const char* where);
-extern NWB_DLL_API void* __nwb_core_alloc_memRealloc(void* memblock, usize align, usize len, const char* where);
-extern NWB_DLL_API void __nwb_core_alloc_memFree(void* ptr, usize len, const char* where)noexcept;
-extern NWB_DLL_API usize __nwb_core_msize(void* ptr)noexcept;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

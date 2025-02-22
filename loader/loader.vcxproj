@@ -49,7 +49,6 @@
     <Import Project="..\configuration\libcurlInclude.props" />
     <Import Project="..\configuration\3rdPartyContainerInclude.props" />
     <Import Project="..\configuration\CLI11Include.props" />
-    <Import Project="..\configuration\allocProxyInclude.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='opt|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
@@ -61,7 +60,6 @@
     <Import Project="..\configuration\libcurlInclude.props" />
     <Import Project="..\configuration\3rdPartyContainerInclude.props" />
     <Import Project="..\configuration\CLI11Include.props" />
-    <Import Project="..\configuration\allocProxyInclude.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='fin|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
@@ -73,7 +71,6 @@
     <Import Project="..\configuration\libcurlInclude.props" />
     <Import Project="..\configuration\3rdPartyContainerInclude.props" />
     <Import Project="..\configuration\CLI11Include.props" />
-    <Import Project="..\configuration\allocProxyInclude.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='dbg|x64'">
@@ -92,8 +89,8 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ProjectReference Include="..\core\alloc_proxy.vcxproj">
-      <Project>{f67ad323-6b29-4aff-b4d1-4f310dc3d430}</Project>
+    <ProjectReference Include="..\core\alloc.vcxproj">
+      <Project>{eaeb21b7-2cd6-4ee0-9d26-f607bcd7c5d3}</Project>
     </ProjectReference>
     <ProjectReference Include="..\core\frame.vcxproj">
       <Project>{7bc9137c-eaa2-4fe2-b4ad-c03c173aa73b}</Project>

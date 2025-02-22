@@ -3,9 +3,9 @@
   <ImportGroup Label="PropertySheets" />
   <PropertyGroup Label="UserMacros" />
   <ItemDefinitionGroup>
-    <Link>
-      <AdditionalOptions>$(SolutionDir)__exec\$(Platform)\$(Configuration)\alloc_proxy.lib /INCLUDE:"__NWB_malloc_proxy" %(AdditionalOptions)</AdditionalOptions>
-    </Link>
+    <ClCompile>
+      <AdditionalIncludeDirectories>$(SolutionDir)3rd_parties\mimalloc;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
   </ItemDefinitionGroup>
   <ItemGroup />
 </Project>

@@ -47,6 +47,8 @@ public:
     constexpr ~GeneralAllocator() = default;
     constexpr GeneralAllocator& operator=(const GeneralAllocator&) = default;
 
+
+public:
     constexpr void deallocate(T* const buffer, const usize count)noexcept{
         assert((buffer != nullptr || count == 0) && "null pointer cannot point to a block of non-zero size");
 

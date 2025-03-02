@@ -16,9 +16,11 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="alloc\alloc.cpp" />
+    <ClCompile Include="alloc\scratch.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="alloc\alloc.h" />
+    <ClInclude Include="alloc\scratch.h" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\3rd_parties\mimalloc\mimalloc.vcxproj">

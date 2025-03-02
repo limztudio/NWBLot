@@ -7,6 +7,8 @@
 
 #include "global.h"
 
+#include "scratch.h"
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -17,25 +19,8 @@ NWB_ALLOC_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template <usize size>
-constexpr inline usize getSizeOf(usize count){
-    constexpr auto overflowIsPossible = size > 1;
-
-    if constexpr(overflowIsPossible){
-        constexpr auto maxPossible = static_cast<usize>(-1) / size;
-        if(count > maxPossible)
-            throw std::bad_array_new_length{};
-    }
-
-    return count * size;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 template <typename T>
-class allocator{
+class GeneralAllocator{
 public:
     static_assert(!std::is_const_v<T>, "The C++ Standard forbids containers of const elements because allocator<const T> is ill-formed.");
     static_assert(!std::is_function_v<T>, "The C++ Standard forbids allocators for function elements because of [allocator.requirements].");
@@ -43,7 +28,7 @@ public:
 
 
 public:
-    using _From_primary = allocator;
+    using _From_primary = GeneralAllocator;
     using value_type = T;
 
     using size_type = usize;
@@ -54,13 +39,13 @@ public:
 
 
 public:
-    constexpr allocator()noexcept{}
-    constexpr allocator(const allocator&)noexcept = default;
+    constexpr GeneralAllocator()noexcept{}
+    constexpr GeneralAllocator(const GeneralAllocator&)noexcept = default;
     template <class F>
-    constexpr allocator(const allocator<F>&)noexcept{}
+    constexpr GeneralAllocator(const GeneralAllocator<F>&)noexcept{}
 
-    constexpr ~allocator() = default;
-    constexpr allocator& operator=(const allocator&) = default;
+    constexpr ~GeneralAllocator() = default;
+    constexpr GeneralAllocator& operator=(const GeneralAllocator&) = default;
 
     constexpr void deallocate(T* const buffer, const usize count)noexcept{
         assert((buffer != nullptr || count == 0) && "null pointer cannot point to a block of non-zero size");
@@ -102,7 +87,7 @@ public:
 #endif
 };
 template <typename T, typename F>
-inline bool operator==(const allocator<T>&, const allocator<F>&)noexcept{ return true; }
+inline bool operator==(const GeneralAllocator<T>&, const GeneralAllocator<F>&)noexcept{ return true; }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

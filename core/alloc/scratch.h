@@ -67,6 +67,7 @@ public:
     ScratchArena(usize initSize = 1024)
         : m_head(new Chunk(initSize))
         , m_last(m_head)
+        , m_size(initSize)
     {
     }
     ~ScratchArena(){
@@ -82,7 +83,10 @@ public:
     template <typename T>
     inline T* allocate(usize size){
         if(size > m_last->remaining()){
-            m_last->add(new Chunk(size));
+            if(size > m_size)
+                m_size = size;
+
+            m_last->add(new Chunk(m_size));
             m_last = m_last->next();
         }
         return reinterpret_cast<T*>(m_last->allocate(size));
@@ -92,6 +96,8 @@ public:
 private:
     Chunk* m_head;
     Chunk* m_last;
+
+    usize m_size;
 };
 
 

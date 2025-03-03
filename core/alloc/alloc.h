@@ -53,6 +53,7 @@ public:
         assert((buffer != nullptr || count == 0) && "null pointer cannot point to a block of non-zero size");
 
         const usize bytes = sizeof(T) * count;
+        (void)bytes;
 
         if(std::is_constant_evaluated()){
             mi_free(buffer);

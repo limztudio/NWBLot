@@ -5,18 +5,13 @@
 #pragma once
 
 
-#include "compile.h"
-#include "platform.h"
-#include "type.h"
-#include "containers.h"
-#include "simplemath.h"
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#define NWB_BEGIN namespace NWB {
-#define NWB_END };
+template <typename T>
+constexpr inline T floorlog2(T x){ return (x == 1) ? 0 : (1 + floorlog2<T>(x >> 1)); }
+template <typename T>
+constexpr inline T ceillog2(T x){ return (x == 1) ? 0 : (floorlog2<T>(x - 1) + 1); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -11,6 +11,7 @@
 #include <global/platform.h>
 #include <global/type.h>
 #include <global/generic.h>
+#include <global/simplemath.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -40,6 +41,10 @@ constexpr inline usize getSizeOf(usize count){
     }
 
     return count * size;
+}
+
+constexpr inline usize getAlignment(usize align, usize size){
+    return (size + align - 1) & ~(align - 1);
 }
 
 

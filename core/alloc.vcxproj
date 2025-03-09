@@ -16,10 +16,12 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="alloc\alloc.cpp" />
-    <ClCompile Include="alloc\scratch.cpp" />
+    <ClCompile Include="alloc\core.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="alloc\alloc.h" />
+    <ClInclude Include="alloc\core.h" />
+    <ClInclude Include="alloc\general.h" />
     <ClInclude Include="alloc\scratch.h" />
   </ItemGroup>
   <ItemGroup>

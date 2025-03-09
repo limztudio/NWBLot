@@ -8,7 +8,9 @@
 #include "compile.h"
 #include "platform.h"
 #include "type.h"
+#include "call_traits.h"
 #include "containers.h"
+#include "unique_ptr.h"
 #include "simplemath.h"
 
 

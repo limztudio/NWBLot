@@ -12,6 +12,9 @@
 
 #include <cassert>
 
+#include "type_borrow.h"
+#include "type_properties.h"
+
 #include "compile.h"
 #include "platform.h"
 
@@ -96,10 +99,10 @@ typedef char tchar;
 
 namespace __hidden_type_convert{
     template<typename In>
-    concept FromWcharView = std::is_convertible_v<In, std::basic_string_view<wchar>>;
+    concept FromWcharView = IsConvertible_V<In, std::basic_string_view<wchar>>;
 
     template<typename In>
-    concept FromCharView = std::is_convertible_v<In, std::basic_string_view<char>>;
+    concept FromCharView = IsConvertible_V<In, std::basic_string_view<char>>;
 };
 
 template<typename In> requires __hidden_type_convert::FromWcharView<In>

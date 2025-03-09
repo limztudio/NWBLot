@@ -35,7 +35,7 @@ public:
 
 
 private:
-    std::unique_ptr<VulkanEngine> m_engine;
+    UniquePtr<VulkanEngine> m_engine;
 };
 
 

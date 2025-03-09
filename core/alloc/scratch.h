@@ -6,6 +6,7 @@
 
 
 #include "global.h"
+#include "core.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -23,15 +24,13 @@ private:
     class Chunk{
     public:
         inline Chunk(usize align, usize size)
-            : m_buffer(nullptr)
+            : m_buffer(coreAllocAligned(m_remaining, align, "NWB::Core::Alloc::ScratchArena::Chunk::constructor"))
             , m_next(nullptr)
-            , m_available(nullptr)
+            , m_available(m_buffer)
             , m_remaining(getAlignment(align, size))
-        {
-            m_buffer = mi_aligned_alloc(align, m_remaining);
-        }
+        {}
         ~Chunk(){
-            mi_free(m_buffer);
+            coreFree(m_buffer, "NWB::Core::Alloc::ScratchArena::Chunk::destructor");
         }
 
 
@@ -75,7 +74,7 @@ public:
             auto& bucket = m_bucket[i];
             bucket.head = nullptr;
             bucket.last = nullptr;
-            bucket.size = getAlignment(1 << i, initSize);
+            bucket.size = getAlignment(static_cast<usize>(1) << i, initSize);
         }
     }
     ~ScratchArena(){
@@ -95,7 +94,7 @@ public:
 
         size = getAlignment(align, size);
         if(size > bucket.size)
-            bucket.size = size;
+            bucket.size = size << 1;
 
         if(!bucket.head){
             bucket.head = new Chunk(align, bucket.size);
@@ -120,9 +119,9 @@ private:
 template <typename T, usize maxAlignSize>
 class ScratchAllocator{
 public:
-    static_assert(!std::is_const_v<T>, "The C++ Standard forbids containers of const elements because allocator<const T> is ill-formed.");
-    static_assert(!std::is_function_v<T>, "The C++ Standard forbids allocators for function elements because of [allocator.requirements].");
-    static_assert(!std::is_reference_v<T>, "The C++ Standard forbids allocators for reference elements because of [allocator.requirements].");
+    static_assert(IsConst_V<T>, "The C++ Standard forbids containers of const elements because allocator<const T> is ill-formed.");
+    static_assert(!IsFunction_V<T>, "The C++ Standard forbids allocators for function elements because of [allocator.requirements].");
+    static_assert(!IsReference_V<T>, "The C++ Standard forbids allocators for reference elements because of [allocator.requirements].");
 
 
 public:
@@ -132,8 +131,8 @@ public:
     using size_type = usize;
     using difference_type = isize;
 
-    using propagate_on_container_move_assignment = std::true_type;
-    using is_always_equal = std::true_type;
+    using propagate_on_container_move_assignment = TrueType;
+    using is_always_equal = TrueType;
 
 
 public:
@@ -162,7 +161,7 @@ public:
         const usize bytes = getSizeOf<sizeof(T)>(count);
 
         if(bytes){
-            if(std::is_constant_evaluated()){
+            if(IsConstantEvaluated()){
                 output = reinterpret_cast<T*>(m_arena.allocate(1, bytes));
             }
             else{
@@ -175,7 +174,7 @@ public:
         return output;
     }
 #if _HAS_CXX23
-    constexpr std::allocation_result<T*> allocate_at_least(const usize count){ return { allocate(count), count }; }
+    constexpr AllocationResult<T*> allocate_at_least(const usize count){ return { allocate(count), count }; }
 #endif
 
 

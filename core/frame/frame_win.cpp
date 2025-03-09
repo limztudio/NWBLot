@@ -110,8 +110,8 @@ Frame::~Frame(){
 }
 
 bool Frame::init(){
-    constexpr tchar ClassName[] = NWB_TEXT("NWB_FRAME");
-    constexpr tchar AppName[] = NWB_TEXT("NWBLoader");
+    const tchar* ClassName = NWB_TEXT("NWB_FRAME");
+    const tchar* AppName = NWB_TEXT("NWBLoader");
     constexpr DWORD StyleEx = 0;
     constexpr DWORD Style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX;
 

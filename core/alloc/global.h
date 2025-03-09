@@ -5,8 +5,6 @@
 #pragma once
 
 
-#include "mimalloc.h"
-
 #include <global/compile.h>
 #include <global/platform.h>
 #include <global/type.h>

@@ -19,7 +19,7 @@ NWB_CORE_BEGIN
 
 
 Graphics::Graphics()
-    : m_engine(std::make_unique<VulkanEngine>())
+    : m_engine(makeUnique<VulkanEngine>())
 {}
 Graphics::~Graphics(){}
 

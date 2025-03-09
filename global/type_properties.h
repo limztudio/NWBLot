@@ -1,0 +1,51 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include "type_borrow.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template <class... T>
+using Void_T = void;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template <bool Val>
+using BoolConstant = IntegralConstant<bool, Val>;
+
+using TrueType = BoolConstant<true>;
+using FalseType = BoolConstant<false>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename T, typename = void>
+struct IsCompleteType : public FalseType{};
+template<typename T>
+struct IsCompleteType<T, Void_T<decltype(sizeof(T) != 0)>> : public TrueType{};
+template<>
+struct IsCompleteType<const volatile void> : public FalseType{};
+template<>
+struct IsCompleteType<const void> : public FalseType{};
+template<>
+struct IsCompleteType<volatile void> : public FalseType{};
+template<>
+struct IsCompleteType<void> : public FalseType{};
+template<typename T>
+struct IsCompleteType<T, EnableIf_T<IsFunction_V<T>>> : public TrueType{};
+
+template <typename T>
+inline constexpr bool IsCompleteType_V = IsCompleteType<T, void>::value;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

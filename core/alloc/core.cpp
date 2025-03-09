@@ -2,15 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#pragma once
-
-
-#include "global.h"
-
 #include "core.h"
 
-#include "general.h"
-#include "scratch.h"
+#include "mimalloc.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -20,6 +14,33 @@ NWB_ALLOC_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void* coreAlloc(usize size, const char* log){
+    (void)log;
+    return mi_malloc(size);
+}
+void* coreAllocAligned(usize size, usize align, const char* log){
+    (void)log;
+    return mi_aligned_alloc(align, size);
+}
+
+void coreFree(void* ptr, const char* log)noexcept{
+    (void)log;
+    mi_free(ptr);
+}
+void coreFreeSize(void* ptr, usize size, const char* log)noexcept{
+    (void)log;
+    mi_free_size(ptr, size);
+}
+void coreFreeAligned(void* ptr, usize align, const char* log)noexcept{
+    (void)log;
+    mi_free_aligned(ptr, align);
+}
+void coreFreeSizeAligned(void* ptr, usize size, usize align, const char* log)noexcept{
+    (void)log;
+    mi_free_size_aligned(ptr, size, align);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

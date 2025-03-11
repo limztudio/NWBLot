@@ -184,13 +184,6 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template <typename T>
-using ScratchUniquePtr = UniquePtr<T, EmptyDeleter<T>>;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 template <typename T, typename... Args>
 inline typename EnableIf<!IsArray<T>::value, UniquePtr<T>>::type makeUnique(Args&&... args){
 	return UniquePtr<T>(new T(std::forward<Args>(args)...));
@@ -203,21 +196,6 @@ inline typename EnableIf<IsUnboundedArray<T>::value, UniquePtr<T>>::type makeUni
 template <typename T, typename... Args>
 typename EnableIf<IsBoundedArray<T>::value>::type
 makeUnique(Args&&...) = delete;
-
-template <typename T, typename Arena, typename... Args>
-inline typename EnableIf<!IsArray<T>::value, ScratchUniquePtr<T>>::type scratchUnique(Arena& arena, Args&&... args){
-    auto* output = IsConstantEvaluated() ? reinterpret_cast<T*>(arena.allocate(1, sizeof(T))) : reinterpret_cast<T*>(arena.allocate(alignof(T), sizeof(T)));
-	return ScratchUniquePtr<T>(new(output) T(std::forward<Args>(args)...));
-}
-template <typename T, typename Arena>
-inline typename EnableIf<IsUnboundedArray<T>::value, ScratchUniquePtr<T>>::type scratchUnique(Arena& arena, size_t n){
-	typedef typename RemoveExtent<T>::type TBase;
-	auto* output = IsConstantEvaluated() ? reinterpret_cast<TBase*>(arena.allocate(1, sizeof(TBase) * n)) : reinterpret_cast<TBase*>(arena.allocate(alignof(TBase), sizeof(TBase) * n));
-	return ScratchUniquePtr<T>(new(output) TBase[n], EmptyDeleter<T>(n));
-}
-template <typename T, typename Arena, typename... Args>
-typename EnableIf<IsBoundedArray<T>::value>::type
-scratchUnique(Args&&...) = delete;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

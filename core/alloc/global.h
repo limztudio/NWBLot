@@ -8,6 +8,9 @@
 #include <global/compile.h>
 #include <global/platform.h>
 #include <global/type.h>
+#include <global/call_traits.h>
+#include <global/unique_ptr.h>
+#include <global/containers.h>
 #include <global/generic.h>
 #include <global/simplemath.h>
 

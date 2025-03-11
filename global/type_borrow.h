@@ -219,6 +219,9 @@ using IntegralConstant = std::integral_constant<T, Val>;
 template <class T>
 using PointerTraits = std::pointer_traits<T>;
 
+template <class T>
+using AllocatorTraits = std::allocator_traits<T>;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

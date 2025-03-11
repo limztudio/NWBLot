@@ -51,7 +51,7 @@ bool VulkanEngine::init(u16 width, u16 height){
                 return false;
             }
 
-            layerProps = scratchUnique<VkLayerProperties[]>(tmpArena, layerCount);
+            layerProps = makeScratchUnique<VkLayerProperties[]>(tmpArena, layerCount);
             err = vkEnumerateInstanceLayerProperties(reinterpret_cast<uint32_t*>(&layerCount), layerProps.get());
             if(err != VK_SUCCESS){
                 NWB_LOGGER_ERROR(NWB_TEXT("Failed to get required instance layers: %s"), convert(helperGetVulkanResultString(err)));
@@ -94,14 +94,14 @@ bool VulkanEngine::init(u16 width, u16 height){
             return false;
         }
 
-        extProps = scratchUnique<VkExtensionProperties[]>(tmpArena, extCount);
+        extProps = makeScratchUnique<VkExtensionProperties[]>(tmpArena, extCount);
         err = vkEnumerateInstanceExtensionProperties(nullptr, reinterpret_cast<uint32_t*>(&extCount), extProps.get());
         if(err != VK_SUCCESS){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to get required instance extensions: %s"), convert(helperGetVulkanResultString(err)));
             return false;
         }
 
-        extNames = scratchUnique<char*[]>(tmpArena, extCount);
+        extNames = makeScratchUnique<char*[]>(tmpArena, extCount);
         for(auto i = decltype(extCount){ 0 }; i < extCount; ++i)
             extNames[i] = extProps[i].extensionName;
     }

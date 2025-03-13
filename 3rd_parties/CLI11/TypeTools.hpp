@@ -387,7 +387,7 @@ inline std::string to_string(T &&) {
 /// convert a readable container to a string
 template <typename T,
           enable_if_t<!std::is_convertible<T, std::string>::value && !std::is_constructible<std::string, T>::value &&
-                          !is_ostreamable<T>::value && is_readable_container<T>::value,
+                          !is_ostreamable<T>::value && is_readable_container<T>::value && !is_tuple_like<T>::value,
                       detail::enabler> = detail::dummy>
 inline std::string to_string(T &&variable) {
     auto cval = variable.begin();
@@ -968,6 +968,9 @@ bool integral_conversion(const std::string &input, T &output) noexcept {
         nstring.erase(std::remove(nstring.begin(), nstring.end(), '\''), nstring.end());
         return integral_conversion(nstring, output);
     }
+    if(std::isspace(static_cast<unsigned char>(input.back()))) {
+        return integral_conversion(trim_copy(input), output);
+    }
     if(input.compare(0, 2, "0o") == 0 || input.compare(0, 2, "0O") == 0) {
         val = nullptr;
         errno = 0;
@@ -1016,12 +1019,15 @@ bool integral_conversion(const std::string &input, T &output) noexcept {
         output = static_cast<T>(1);
         return true;
     }
-    // remove separators
+    // remove separators and trailing spaces
     if(input.find_first_of("_'") != std::string::npos) {
         std::string nstring = input;
         nstring.erase(std::remove(nstring.begin(), nstring.end(), '_'), nstring.end());
         nstring.erase(std::remove(nstring.begin(), nstring.end(), '\''), nstring.end());
         return integral_conversion(nstring, output);
+    }
+    if(std::isspace(static_cast<unsigned char>(input.back()))) {
+        return integral_conversion(trim_copy(input), output);
     }
     if(input.compare(0, 2, "0o") == 0 || input.compare(0, 2, "0O") == 0) {
         val = nullptr;
@@ -1147,6 +1153,13 @@ bool lexical_cast(const std::string &input, T &output) {
     if(val == (input.c_str() + input.size())) {
         return true;
     }
+    while(std::isspace(static_cast<unsigned char>(*val))) {
+        ++val;
+        if(val == (input.c_str() + input.size())) {
+            return true;
+        }
+    }
+
     // remove separators
     if(input.find_first_of("_'") != std::string::npos) {
         std::string nstring = input;
@@ -1484,7 +1497,7 @@ bool lexical_conversion(const std::vector<std ::string> &strings, AssignTo &outp
     using FirstType = typename std::remove_const<typename std::tuple_element<0, ConvertTo>::type>::type;
     using SecondType = typename std::tuple_element<1, ConvertTo>::type;
     FirstType v1;
-    SecondType v2;
+    SecondType v2{};
     bool retval = lexical_assign<FirstType, FirstType>(strings[0], v1);
     retval = retval && lexical_assign<SecondType, SecondType>((strings.size() > 1) ? strings[1] : std::string{}, v2);
     if(retval) {

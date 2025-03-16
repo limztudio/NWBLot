@@ -5,12 +5,24 @@
 #pragma once
 
 
+#include <compare>
+#include <memory>
+#include <iterator>
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 using PartialOrdering = std::partial_ordering;
 using WeakOrdering = std::weak_ordering;
 using StrongOrdering = std::strong_ordering;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template <typename Key>
+using Hasher = std::hash<Key>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -151,33 +163,34 @@ inline constexpr bool IsAssignable_V = std::is_assignable_v<To, From>;
 
 
 template <class T>
+using Decay = std::decay<T>;
+template <class T>
+using Decay_T = typename Decay<T>::type;
+
+template <class T>
 using AddConst = std::add_const<T>;
 template <class T>
-using AddConst_V = typename AddConst<T>::type;
+using AddConst_T = typename AddConst<T>::type;
 
 template <class T>
 using AddVolatile = std::add_volatile<T>;
 template <class T>
-using AddVolatile_V = typename AddVolatile<T>::type;
+using AddVolatile_T = typename AddVolatile<T>::type;
 
 template <class T>
 using AddCV = std::add_cv<T>;
 template <class T>
-using AddCV_V = typename AddCV<T>::type;
+using AddCV_T = typename AddCV<T>::type;
 
 template <class T>
 using AddLValueReference = std::add_lvalue_reference<T>;
 template <class T>
-using AddLValueReference_V = typename AddLValueReference<T>::type;
+using AddLValueReference_T = typename AddLValueReference<T>::type;
 
 template <class T>
 using AddRValueReference = std::add_rvalue_reference<T>;
 template <class T>
-using AddRValueReference_V = typename AddRValueReference<T>::type;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
+using AddRValueReference_T = typename AddRValueReference<T>::type;
 
 template <class T>
 using RemoveConst = std::remove_const<T>;
@@ -213,14 +226,25 @@ using RemoveExtent_T = typename RemoveExtent<T>::type;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template <class T, T Val>
-using IntegralConstant = std::integral_constant<T, Val>;
+template <class Container>
+using BackInsertIterator = std::back_insert_iterator<Container>;
+template <class Container>
+using FrontInsertIterator = std::front_insert_iterator<Container>;
+
+template <typename T>
+using ReferenceWrapper = std::reference_wrapper<T>;
 
 template <class T>
 using PointerTraits = std::pointer_traits<T>;
 
 template <class T>
+using CharTraits = std::char_traits<T>;
+
+template <class T>
 using AllocatorTraits = std::allocator_traits<T>;
+
+template <class T, T Val>
+using IntegralConstant = std::integral_constant<T, Val>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -235,6 +259,25 @@ template <bool Test, class T, class F>
 using Conditional = std::conditional<Test, T, F>;
 template <bool Test, class T, class F>
 using Conditional_T = typename Conditional<Test, T, F>::type;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template <class T = void>
+using EqualTo = std::equal_to<T>;
+template <class T = void>
+using NotEqualTo = std::not_equal_to<T>;
+
+template <class T = void>
+using GreaterThan = std::greater<T>;
+template <class T = void>
+using LessThan = std::less<T>;
+
+template <class T = void>
+using GreaterThanEqualTo = std::greater_equal<T>;
+template <class T = void>
+using LessThanEqualTo = std::less_equal<T>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -262,7 +305,17 @@ using CommonType_T = typename CommonType<T...>::type;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr inline bool IsConstantEvaluated()noexcept{ return std::is_constant_evaluated(); }
+template <class T, class F>
+concept SameAs = std::same_as<T, F>;
+
+template <class Derived, class Base>
+concept DerivedFrom = std::derived_from<Derived, Base>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+constexpr auto IsConstantEvaluated()noexcept{ return std::is_constant_evaluated(); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

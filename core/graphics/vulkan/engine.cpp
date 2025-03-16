@@ -47,18 +47,18 @@ bool VulkanEngine::init(u16 width, u16 height){
         {
             err = vkEnumerateInstanceLayerProperties(reinterpret_cast<uint32_t*>(&layerCount), nullptr);
             if(err != VK_SUCCESS){
-                NWB_LOGGER_ERROR(NWB_TEXT("Failed to get required instance layers: %s"), convert(helperGetVulkanResultString(err)));
+                NWB_LOGGER_ERROR(NWB_TEXT("Failed to get required instance layers: %s"), stringConvert(helperGetVulkanResultString(err)));
                 return false;
             }
 
             layerProps = makeScratchUnique<VkLayerProperties[]>(tmpArena, layerCount);
             err = vkEnumerateInstanceLayerProperties(reinterpret_cast<uint32_t*>(&layerCount), layerProps.get());
             if(err != VK_SUCCESS){
-                NWB_LOGGER_ERROR(NWB_TEXT("Failed to get required instance layers: %s"), convert(helperGetVulkanResultString(err)));
+                NWB_LOGGER_ERROR(NWB_TEXT("Failed to get required instance layers: %s"), stringConvert(helperGetVulkanResultString(err)));
                 return false;
             }
         }
-        for(usize i = 0; i < std::size(s_validationLayerName); ++i){
+        for(usize i = 0; i < LengthOf(s_validationLayerName); ++i){
             bool bFound = false;
             for(auto j = decltype(layerCount){ 0 }; j < layerCount; ++j){
                 if(strcmp(layerProps[j].layerName, s_validationLayerName[i]) == 0){
@@ -67,7 +67,7 @@ bool VulkanEngine::init(u16 width, u16 height){
                 }
             }
             if(!bFound){
-                NWB_LOGGER_ERROR(NWB_TEXT("Failed to find required instance layer: %s"), convert(s_validationLayerName[i]));
+                NWB_LOGGER_ERROR(NWB_TEXT("Failed to find required instance layer: %s"), stringConvert(s_validationLayerName[i]));
                 return false;
             }
         }
@@ -90,14 +90,14 @@ bool VulkanEngine::init(u16 width, u16 height){
     {
         err = vkEnumerateInstanceExtensionProperties(nullptr, reinterpret_cast<uint32_t*>(&extCount), nullptr);
         if(err != VK_SUCCESS){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to get required instance extensions: %s"), convert(helperGetVulkanResultString(err)));
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to get required instance extensions: %s"), stringConvert(helperGetVulkanResultString(err)));
             return false;
         }
 
         extProps = makeScratchUnique<VkExtensionProperties[]>(tmpArena, extCount);
         err = vkEnumerateInstanceExtensionProperties(nullptr, reinterpret_cast<uint32_t*>(&extCount), extProps.get());
         if(err != VK_SUCCESS){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to get required instance extensions: %s"), convert(helperGetVulkanResultString(err)));
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to get required instance extensions: %s"), stringConvert(helperGetVulkanResultString(err)));
             return false;
         }
 
@@ -113,7 +113,7 @@ bool VulkanEngine::init(u16 width, u16 height){
         createInfo.enabledExtensionCount = static_cast<decltype(createInfo.enabledExtensionCount)>(extCount);
         createInfo.ppEnabledExtensionNames = extNames.get();
 #if defined(VULKAN_VALIDATE)
-        createInfo.enabledLayerCount = std::size(s_validationLayerName);
+        createInfo.enabledLayerCount = static_cast<decltype(createInfo.enabledLayerCount)>(LengthOf(s_validationLayerName));
         createInfo.ppEnabledLayerNames = s_validationLayerName;
 #else
         createInfo.enabledLayerCount = 0;
@@ -125,7 +125,7 @@ bool VulkanEngine::init(u16 width, u16 height){
     {
         err = vkCreateInstance(&createInfo, nullptr, &instance);
         if(err != VK_SUCCESS){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to create Vulkan instance: %s"), convert(helperGetVulkanResultString(err)));
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to create Vulkan instance: %s"), stringConvert(helperGetVulkanResultString(err)));
             return false;
         }
     }

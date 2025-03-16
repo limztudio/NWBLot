@@ -20,17 +20,17 @@ NWB_COMMON_BEGIN
 
 
 template <typename T>
-inline HashMap<std::basic_string<T>, std::basic_string<T>> parseCommandLine(std::basic_string_view<T> input){
+inline HashMap<BasicString<T>, BasicString<T>> parseCommandLine(BasicStringView<T> input){
     std::basic_regex<T> regex(
         IsSame_V<T, wchar>
         ? L"(\\w+)\\s*=\\s*(?:\"([^\"]*)\"|(\\S+))"
         :  "(\\w+)\\s*=\\s*(?:\"([^\"]*)\"|(\\S+))"
     );
 
-    HashMap<std::basic_string<T>, std::basic_string<T>> output;
-    std::match_results<typename std::basic_string<T>::const_terator> match;
+    HashMap<BasicString<T>, BasicString<T>> output;
+    std::match_results<typename BasicString<T>::const_iterator> match;
 
-    typename std::basic_string<T>::const_terator itrSearch(input.cbegin());
+    typename BasicString<T>::const_iterator itrSearch(input.cbegin());
     while(std::regex_search(itrSearch, input.cend(), match, regex)){
         output[match[1].str()] = match[2].matched ? match[2].str() : match[3].str();
         itrSearch = match.suffix().first;

@@ -162,7 +162,7 @@ private:
             backoff.pause();
     }
     bool try_lock(){ return (!m_flag.test_and_set()); }
-    void unlock(){ m_flag.clear(std::memory_order_release); }
+    void unlock(){ m_flag.clear(MemoryOrder::memory_order_release); }
 
 
 private:

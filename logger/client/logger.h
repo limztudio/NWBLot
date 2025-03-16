@@ -35,10 +35,10 @@ NWB_LOG_END
 
 #define NWB_LOGGER_REGISTER(inst) NWB::Log::__hidden_logger::g_logger = inst
 
-#define NWB_LOGGER_INFO(...) assert(NWB::Log::__hidden_logger::g_logger != nullptr); NWB::Log::__hidden_logger::g_logger->enqueue(std::format(__VA_ARGS__), NWB::Log::Type::Info);
-#define NWB_LOGGER_WARNING(...) assert(NWB::Log::__hidden_logger::g_logger != nullptr); NWB::Log::__hidden_logger::g_logger->enqueue(std::format(__VA_ARGS__), NWB::Log::Type::Warning);
-#define NWB_LOGGER_ERROR(...) assert(NWB::Log::__hidden_logger::g_logger != nullptr); NWB::Log::__hidden_logger::g_logger->enqueue(std::format(__VA_ARGS__), NWB::Log::Type::Error); NWB_SOFTBREAK;
-#define NWB_LOGGER_FATAL(...) assert(NWB::Log::__hidden_logger::g_logger != nullptr); NWB::Log::__hidden_logger::g_logger->enqueue(std::format(__VA_ARGS__), NWB::Log::Type::Fatal); NWB_HARDBREAK;
+#define NWB_LOGGER_INFO(...) assert(NWB::Log::__hidden_logger::g_logger != nullptr); NWB::Log::__hidden_logger::g_logger->enqueue(stringFormat(__VA_ARGS__), NWB::Log::Type::Info);
+#define NWB_LOGGER_WARNING(...) assert(NWB::Log::__hidden_logger::g_logger != nullptr); NWB::Log::__hidden_logger::g_logger->enqueue(stringFormat(__VA_ARGS__), NWB::Log::Type::Warning);
+#define NWB_LOGGER_ERROR(...) assert(NWB::Log::__hidden_logger::g_logger != nullptr); NWB::Log::__hidden_logger::g_logger->enqueue(stringFormat(__VA_ARGS__), NWB::Log::Type::Error); NWB_SOFTBREAK;
+#define NWB_LOGGER_FATAL(...) assert(NWB::Log::__hidden_logger::g_logger != nullptr); NWB::Log::__hidden_logger::g_logger->enqueue(stringFormat(__VA_ARGS__), NWB::Log::Type::Fatal); NWB_HARDBREAK;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

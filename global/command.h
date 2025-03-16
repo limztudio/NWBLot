@@ -7,9 +7,6 @@
 
 #include "global.h"
 
-#include <string>
-#include <tuple>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -28,7 +25,7 @@ enum class ArgCommand : u8{
 constexpr const char* g_argCmd[] = {
     "-l,--logserver",
 };
-const std::tuple<
+const Tuple<
     std::string
 > g_argDefault = {
     "http://localhost:7117",

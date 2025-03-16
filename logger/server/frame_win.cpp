@@ -160,7 +160,7 @@ bool Frame::mainLoop(){
     return true;
 }
 
-void Frame::print(std::basic_string_view<tchar> str){
+void Frame::print(BasicStringView<tchar> str){
     std::unique_lock lock(__hidden_frame::g_listMutex);
 
     SendMessage(__hidden_frame::g_listHwnd, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(str.data()));

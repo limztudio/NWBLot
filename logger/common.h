@@ -9,7 +9,6 @@
 
 #include <thread>
 #include <semaphore>
-#include <atomic>
 #include <chrono>
 
 #include <curl/curl.h>
@@ -31,7 +30,7 @@ enum class Type : u8{
     Fatal,
 };
 
-using MessageType = std::tuple<std::chrono::system_clock::time_point, Type, std::basic_string<tchar>>;
+using MessageType = Tuple<std::chrono::system_clock::time_point, Type, TString>;
 using MessageQueue = ParallelQueue<MessageType>;
 
 
@@ -53,7 +52,7 @@ private:
     static void globalUpdate(T* _this){
         for(;;){
             _this->m_semaphore.acquire();
-            if(_this->internalUpdate() && _this->m_exit.load(std::memory_order_acquire))
+            if(_this->internalUpdate() && _this->m_exit.load(MemoryOrder::memory_order_acquire))
                 break;
         }
     }
@@ -66,7 +65,7 @@ public:
         , m_exit(false)
     {}
     virtual ~Base(){
-        m_exit.store(true, std::memory_order_release);
+        m_exit.store(true, MemoryOrder::memory_order_release);
         m_semaphore.release();
         if(m_thread.joinable())
             m_thread.join();
@@ -82,7 +81,7 @@ public:
     inline bool init(const char* url){
         if(!m_globalInit){
             if(!globalInit()){
-                static_cast<T*>(this)->enqueue(std::format(NWB_TEXT("Failed to global initialization on {}"), NAME), Type::Fatal);
+                static_cast<T*>(this)->enqueue(stringFormat(NWB_TEXT("Failed to global initialization on {}"), NAME), Type::Fatal);
                 return false;
             }
             m_globalInit = true;
@@ -90,7 +89,7 @@ public:
 
         m_curl = curl_easy_init();
         if(!m_curl){
-            static_cast<T*>(this)->enqueue(std::format(NWB_TEXT("Failed to initialize CURL on {}"), NAME), Type::Fatal);
+            static_cast<T*>(this)->enqueue(stringFormat(NWB_TEXT("Failed to initialize CURL on {}"), NAME), Type::Fatal);
             return false;
         }
 
@@ -102,11 +101,11 @@ public:
     }
 
 public:
-    inline bool enqueue(std::basic_string<tchar>&& str, Type type = Type::Info){
-        return static_cast<T*>(this)->enqueue(std::make_tuple(std::chrono::system_clock::now(), type, std::move(str)));
+    inline bool enqueue(TString&& str, Type type = Type::Info){
+        return static_cast<T*>(this)->enqueue(MakeTuple(std::chrono::system_clock::now(), type, Move(str)));
     }
-    inline bool enqueue(const std::basic_string<tchar>& str, Type type = Type::Info){
-        return static_cast<T*>(this)->enqueue(std::make_tuple(std::chrono::system_clock::now(), type, str));
+    inline bool enqueue(const TString& str, Type type = Type::Info){
+        return static_cast<T*>(this)->enqueue(MakeTuple(std::chrono::system_clock::now(), type, str));
     }
 
 
@@ -117,7 +116,7 @@ protected:
 
 protected:
     inline bool enqueue(MessageType&& data){
-        auto ret = m_msgQueue.enqueue(std::move(data));
+        auto ret = m_msgQueue.enqueue(Move(data));
         if (ret)
             m_semaphore.release();
         return ret;
@@ -142,7 +141,7 @@ protected:
 private:
     std::thread m_thread;
     std::counting_semaphore<INT_MAX> m_semaphore;
-    std::atomic<bool> m_exit;
+    Atomic<bool> m_exit;
 
 
 private:

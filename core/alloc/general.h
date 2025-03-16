@@ -53,7 +53,7 @@ public:
         const usize bytes = sizeof(T) * count;
 
         if(IsConstantEvaluated()){
-            mi_free(buffer);
+            coreFreeSize(buffer, bytes, "NWB::Core::Alloc::GeneralAllocator::deallocate");
         }
         else{
             constexpr usize alignSize = alignof(T);

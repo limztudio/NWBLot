@@ -74,7 +74,7 @@ private:
 public:
     ScratchArena(usize initSize = 1024)
     {
-        for(usize i = 0; i < std::size(m_bucket); ++i){
+        for(usize i = 0; i < LengthOf(m_bucket); ++i){
             auto& bucket = m_bucket[i];
             bucket.head = nullptr;
             bucket.last = nullptr;
@@ -202,7 +202,7 @@ using ScratchUniquePtr = UniquePtr<T, EmptyDeleter<T>>;
 
 template <typename T, usize maxAlignSize = NWB::Core::Alloc::s_maxAlignSize, typename... Args>
 inline typename EnableIf<!IsArray<T>::value, ScratchUniquePtr<T>>::type makeScratchUnique(NWB::Core::Alloc::ScratchArena<maxAlignSize>& arena, Args&&... args){
-    return ScratchUniquePtr<T>(new(arena.allocate<T>(1)) T(std::forward<Args>(args)...));
+    return ScratchUniquePtr<T>(new(arena.allocate<T>(1)) T(Forward<Args>(args)...));
 }
 template <typename T, usize maxAlignSize = NWB::Core::Alloc::s_maxAlignSize>
 inline typename EnableIf<IsUnboundedArray<T>::value, ScratchUniquePtr<T>>::type makeScratchUnique(NWB::Core::Alloc::ScratchArena<maxAlignSize>& arena, size_t n){

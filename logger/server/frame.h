@@ -5,8 +5,6 @@
 #pragma once
 
 
-#include <string_view>
-
 #include <logger/common.h>
 
 
@@ -58,7 +56,7 @@ public:
 
 
 public:
-    static void print(std::basic_string_view<tchar> str);
+    static void print(BasicStringView<tchar> str);
 
 
 private:

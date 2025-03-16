@@ -33,12 +33,12 @@ public:
 		static_assert(!IsPointer<deleter_type>::value, "UniquePtr deleter default-constructed with null pointer. Use a different constructor or change your deleter to a class.");
 	}
 	UniquePtr(pointer pValue, typename Conditional<IsLValueReference<deleter_type>::value, deleter_type, typename AddLValueReference<const deleter_type>::type>::type deleter)noexcept : mPair(pValue, deleter){}
-	UniquePtr(pointer pValue, typename RemoveReference<deleter_type>::type&& deleter)noexcept : mPair(pValue, std::move(deleter)){
+	UniquePtr(pointer pValue, typename RemoveReference<deleter_type>::type&& deleter)noexcept : mPair(pValue, Move(deleter)){
 		static_assert(!IsLValueReference<deleter_type>::value, "deleter_type reference refers to an rvalue deleter. The reference will probably become invalid before used. Change the deleter_type to not be a reference or construct with permanent deleter.");
 	}
-	UniquePtr(this_type&& x)noexcept : mPair(x.release(), std::forward<deleter_type>(x.get_deleter())){}
+	UniquePtr(this_type&& x)noexcept : mPair(x.release(), Forward<deleter_type>(x.get_deleter())){}
 	template <typename U, typename E>
-	UniquePtr(UniquePtr<U, E>&& u, typename EnableIf<!IsArray<U>::value&& IsConvertible<typename UniquePtr<U, E>::pointer, pointer>::value&& IsConvertible<E, deleter_type>::value && (IsSame<deleter_type, E>::value || !IsLValueReference<deleter_type>::value)>::type* = 0)noexcept : mPair(u.release(), std::forward<E>(u.get_deleter())){}
+	UniquePtr(UniquePtr<U, E>&& u, typename EnableIf<!IsArray<U>::value&& IsConvertible<typename UniquePtr<U, E>::pointer, pointer>::value&& IsConvertible<E, deleter_type>::value && (IsSame<deleter_type, E>::value || !IsLValueReference<deleter_type>::value)>::type* = 0)noexcept : mPair(u.release(), Forward<E>(u.get_deleter())){}
 	UniquePtr(const this_type&) = delete;
 	UniquePtr& operator=(const this_type&) = delete;
 	UniquePtr& operator=(pointer pValue) = delete;
@@ -49,13 +49,13 @@ public:
 public:
 	this_type& operator=(this_type&& x)noexcept{
 		reset(x.release());
-		mPair.second() = std::move(std::forward<deleter_type>(x.get_deleter()));
+		mPair.second() = Move(Forward<deleter_type>(x.get_deleter()));
 		return *this;
 	}
 	template <typename U, typename E>
 	typename EnableIf<!IsArray<U>::value&& IsConvertible<typename UniquePtr<U, E>::pointer, pointer>::value&& IsAssignable<deleter_type&, E&&>::value, this_type&>::type operator=(UniquePtr<U, E>&& u)noexcept{
 		reset(u.release());
-		mPair.second() = std::move(std::forward<E>(u.get_deleter()));
+		mPair.second() = Move(Forward<E>(u.get_deleter()));
 		return *this;
 	}
 	this_type& operator=(std::nullptr_t)noexcept{
@@ -118,12 +118,12 @@ public:
 	template <typename P>
 	UniquePtr(P pArray, typename Conditional<IsLValueReference<deleter_type>::value, deleter_type, typename AddLValueReference<const deleter_type>::type>::type deleter, typename EnableIf<__hidden_smart_ptr::IsArrayCvConvertible<P, pointer>::value>::type* = 0)noexcept : mPair(pArray, deleter){}
 	template <typename P>
-	UniquePtr(P pArray, typename RemoveReference<deleter_type>::type&& deleter, EnableIf_T<__hidden_smart_ptr::IsArrayCvConvertible<P, pointer>::value>* = 0)noexcept : mPair(pArray, std::move(deleter)){
+	UniquePtr(P pArray, typename RemoveReference<deleter_type>::type&& deleter, EnableIf_T<__hidden_smart_ptr::IsArrayCvConvertible<P, pointer>::value>* = 0)noexcept : mPair(pArray, Move(deleter)){
 		static_assert(!IsLValueReference<deleter_type>::value, "deleter_type reference refers to an rvalue deleter. The reference will probably become invalid before used. Change the deleter_type to not be a reference or construct with permanent deleter.");
 	}
-	UniquePtr(this_type&& x)noexcept : mPair(x.release(), std::forward<deleter_type>(x.get_deleter())) {}
+	UniquePtr(this_type&& x)noexcept : mPair(x.release(), Forward<deleter_type>(x.get_deleter())) {}
 	template <typename U, typename E>
-	UniquePtr(UniquePtr<U, E>&& u, typename EnableIf<__hidden_smart_ptr::IsSafeArrayConversion<T, pointer, U, typename UniquePtr<U, E>::pointer>::value && IsConvertible<E, deleter_type>::value && (!IsLValueReference<deleter_type>::value || IsSame<E, deleter_type>::value)>::type* = 0)noexcept : mPair(u.release(), std::forward<E>(u.get_deleter())){}
+	UniquePtr(UniquePtr<U, E>&& u, typename EnableIf<__hidden_smart_ptr::IsSafeArrayConversion<T, pointer, U, typename UniquePtr<U, E>::pointer>::value && IsConvertible<E, deleter_type>::value && (!IsLValueReference<deleter_type>::value || IsSame<E, deleter_type>::value)>::type* = 0)noexcept : mPair(u.release(), Forward<E>(u.get_deleter())){}
 	UniquePtr(const this_type&) = delete;
 	UniquePtr& operator=(const this_type&) = delete;
 	UniquePtr& operator=(pointer pArray) = delete;
@@ -134,13 +134,13 @@ public:
 public:
 	this_type& operator=(this_type&& x)noexcept{
 		reset(x.release());
-		mPair.second() = std::move(std::forward<deleter_type>(x.get_deleter()));
+		mPair.second() = Move(Forward<deleter_type>(x.get_deleter()));
 		return *this;
 	}
 	template <typename U, typename E>
 	typename EnableIf<__hidden_smart_ptr::IsSafeArrayConversion<T, pointer, U, typename UniquePtr<U, E>::pointer>::value&& IsAssignable<deleter_type&, E&&>::value, this_type&>::type operator=(UniquePtr<U, E>&& u)noexcept{
 		reset(u.release());
-		mPair.second() = std::move(std::forward<E>(u.get_deleter()));
+		mPair.second() = Move(Forward<E>(u.get_deleter()));
 		return *this;
 	}
 	this_type& operator=(std::nullptr_t)noexcept{
@@ -186,7 +186,7 @@ protected:
 
 template <typename T, typename... Args>
 inline typename EnableIf<!IsArray<T>::value, UniquePtr<T>>::type makeUnique(Args&&... args){
-	return UniquePtr<T>(new T(std::forward<Args>(args)...));
+	return UniquePtr<T>(new T(Forward<Args>(args)...));
 }
 template <typename T>
 inline typename EnableIf<IsUnboundedArray<T>::value, UniquePtr<T>>::type makeUnique(size_t n){

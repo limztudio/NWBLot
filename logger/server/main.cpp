@@ -9,7 +9,6 @@
 
 
 #include <exception>
-#include <atomic>
 #include <windows.h>
 
 #include <CLI.hpp>
@@ -40,7 +39,7 @@ static NWB_INLINE int mainLogic(const char* logAddress, void* inst){
                 return -1;
         }
         catch(const std::exception& e){
-            logger.enqueue(std::format(NWB_TEXT("Exception: {}"), convert(e.what())), NWB::Log::Type::Fatal);
+            logger.enqueue(stringFormat(NWB_TEXT("Exception: {}"), stringConvert(e.what())), NWB::Log::Type::Fatal);
             return -1;
         }
     }
@@ -55,7 +54,7 @@ static NWB_INLINE int mainLogic(const char* logAddress, void* inst){
 static NWB_INLINE int entry_point(isize argc, tchar** argv, void* inst){
     int ret;
 
-    std::string logAddress;
+    AString logAddress;
     {
         CLI::App app{ "logserver" };
 

@@ -45,9 +45,9 @@ usize Server::receiveCallback(void* contents, usize size, usize nmemb, Server* _
     }
 
     assert(sizeLeft > 0);
-    std::basic_string<tchar> strMsg(reinterpret_cast<tchar*>(ptr), static_cast<usize>(sizeLeft) / sizeof(tchar));
+    TString strMsg(reinterpret_cast<tchar*>(ptr), static_cast<usize>(sizeLeft) / sizeof(tchar));
 
-    _this->enqueue(std::make_tuple(std::move(time), type, std::move(strMsg)));
+    _this->enqueue(MakeTuple(Move(time), type, Move(strMsg)));
     return totalSize;
 }
 
@@ -59,19 +59,19 @@ bool Server::internalInit(const char* url){
 
     ret = curl_easy_setopt(m_curl, CURLOPT_URL, url);
     if(ret != CURLE_OK){
-        enqueue(std::format(NWB_TEXT("Failed to set URL on {}: {}"), SERVER_NAME, convert(curl_easy_strerror(ret))), Type::Fatal);
+        enqueue(stringFormat(NWB_TEXT("Failed to set URL on {}: {}"), SERVER_NAME, stringConvert(curl_easy_strerror(ret))), Type::Fatal);
         return false;
     }
 
     ret = curl_easy_setopt(m_curl, CURLOPT_WRITEFUNCTION, receiveCallback);
     if(ret != CURLE_OK){
-        enqueue(std::format(NWB_TEXT("Failed to set write callback on {}: {}"), SERVER_NAME, convert(curl_easy_strerror(ret))), Type::Fatal);
+        enqueue(stringFormat(NWB_TEXT("Failed to set write callback on {}: {}"), SERVER_NAME, stringConvert(curl_easy_strerror(ret))), Type::Fatal);
         return false;
     }
 
     ret = curl_easy_setopt(m_curl, CURLOPT_WRITEDATA, this);
     if(ret != CURLE_OK){
-        enqueue(std::format(NWB_TEXT("Failed to set write data on {}: {}"), SERVER_NAME, convert(curl_easy_strerror(ret))), Type::Fatal);
+        enqueue(stringFormat(NWB_TEXT("Failed to set write data on {}: {}"), SERVER_NAME, stringConvert(curl_easy_strerror(ret))), Type::Fatal);
         return false;
     }
 
@@ -82,23 +82,23 @@ bool Server::internalUpdate(){
 
     ret = curl_easy_perform(m_curl);
     if(ret != CURLE_OK)
-        enqueue(std::format(NWB_TEXT("Failed to bring message on {}: {}"), SERVER_NAME, convert(curl_easy_strerror(ret))), Type::Error);
+        enqueue(stringFormat(NWB_TEXT("Failed to bring message on {}: {}"), SERVER_NAME, stringConvert(curl_easy_strerror(ret))), Type::Error);
 
     MessageType msg;
     while(try_dequeue(msg)){
         const auto& [time, type, str] = msg;
         switch(type){
         case Type::Info:
-            Frame::print(std::format(NWB_TEXT("{} [INFO]:\n{}"), std::chrono::system_clock::to_time_t(time), str));
+            Frame::print(stringFormat(NWB_TEXT("{} [INFO]:\n{}"), std::chrono::system_clock::to_time_t(time), str));
             break;
         case Type::Warning:
-            Frame::print(std::format(NWB_TEXT("{} [WARNING]:\n{}"), std::chrono::system_clock::to_time_t(time), str));
+            Frame::print(stringFormat(NWB_TEXT("{} [WARNING]:\n{}"), std::chrono::system_clock::to_time_t(time), str));
             break;
         case Type::Error:
-            Frame::print(std::format(NWB_TEXT("{} [ERROR]:\n{}"), std::chrono::system_clock::to_time_t(time), str));
+            Frame::print(stringFormat(NWB_TEXT("{} [ERROR]:\n{}"), std::chrono::system_clock::to_time_t(time), str));
             break;
         case Type::Fatal:
-            Frame::print(std::format(NWB_TEXT("{} [FATAL]:\n{}"), std::chrono::system_clock::to_time_t(time), str));
+            Frame::print(stringFormat(NWB_TEXT("{} [FATAL]:\n{}"), std::chrono::system_clock::to_time_t(time), str));
             break;
         }
     }

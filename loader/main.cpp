@@ -41,7 +41,7 @@ static NWB_INLINE int mainLogic(const char* logAddress, void* inst){
                 return -1;
         }
         catch(const std::exception& e){
-            NWB_LOGGER_FATAL(NWB_TEXT("Exception: {}"), convert(e.what()));
+            NWB_LOGGER_FATAL(NWB_TEXT("Exception: {}"), stringConvert(e.what()));
             NWB_LOGGER_REGISTER(nullptr);
             return -1;
         }
@@ -58,7 +58,7 @@ static NWB_INLINE int mainLogic(const char* logAddress, void* inst){
 static NWB_INLINE int entry_point(isize argc, tchar** argv, void* inst){
     int ret;
 
-    std::string logAddress;
+    AString logAddress;
     {
         CLI::App app{ "loader" };
 

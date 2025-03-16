@@ -39,8 +39,8 @@ typedef unsigned long u32;
 typedef long long i64;
 typedef unsigned long long u64;
 
-using isize = std::conditional_t<sizeof(void*) == 8, __int64, int>;
-using usize = std::conditional_t<sizeof(void*) == 8, unsigned __int64, unsigned int>;
+using isize = Conditional_T<sizeof(void*) == 8, __int64, int>;
+using usize = Conditional_T<sizeof(void*) == 8, unsigned __int64, unsigned int>;
 
 typedef float f32;
 typedef double f64;

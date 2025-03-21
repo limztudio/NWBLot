@@ -30,7 +30,7 @@ usize Server::receiveCallback(void* contents, usize size, usize nmemb, Server* _
     auto* ptr = reinterpret_cast<u8*>(contents);
     auto sizeLeft = static_cast<isize>(totalSize);
 
-    std::chrono::system_clock::time_point time;
+    Timer time;
     {
         NWB_MEMCPY(&time, sizeof(decltype(time)), ptr, sizeLeft);
         ptr += sizeof(decltype(time));
@@ -89,16 +89,16 @@ bool Server::internalUpdate(){
         const auto& [time, type, str] = msg;
         switch(type){
         case Type::Info:
-            Frame::print(stringFormat(NWB_TEXT("{} [INFO]:\n{}"), std::chrono::system_clock::to_time_t(time), str));
+            Frame::print(stringFormat(NWB_TEXT("{} [INFO]:\n{}"), durationInTimeDelta(time), str));
             break;
         case Type::Warning:
-            Frame::print(stringFormat(NWB_TEXT("{} [WARNING]:\n{}"), std::chrono::system_clock::to_time_t(time), str));
+            Frame::print(stringFormat(NWB_TEXT("{} [WARNING]:\n{}"), durationInTimeDelta(time), str));
             break;
         case Type::Error:
-            Frame::print(stringFormat(NWB_TEXT("{} [ERROR]:\n{}"), std::chrono::system_clock::to_time_t(time), str));
+            Frame::print(stringFormat(NWB_TEXT("{} [ERROR]:\n{}"), durationInTimeDelta(time), str));
             break;
         case Type::Fatal:
-            Frame::print(stringFormat(NWB_TEXT("{} [FATAL]:\n{}"), std::chrono::system_clock::to_time_t(time), str));
+            Frame::print(stringFormat(NWB_TEXT("{} [FATAL]:\n{}"), durationInTimeDelta(time), str));
             break;
         }
     }

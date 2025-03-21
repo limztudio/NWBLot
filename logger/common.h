@@ -7,8 +7,6 @@
 
 #include "global.h"
 
-#include <thread>
-#include <semaphore>
 #include <chrono>
 
 #include <curl/curl.h>
@@ -30,7 +28,7 @@ enum class Type : u8{
     Fatal,
 };
 
-using MessageType = Tuple<std::chrono::system_clock::time_point, Type, TString>;
+using MessageType = Tuple<Timer, Type, TString>;
 using MessageQueue = ParallelQueue<MessageType>;
 
 
@@ -95,17 +93,17 @@ public:
 
         auto ret = static_cast<T*>(this)->internalInit(url);
         if (ret)
-            m_thread = std::thread(globalUpdate, static_cast<T*>(this));
+            m_thread = Thread(globalUpdate, static_cast<T*>(this));
 
         return ret;
     }
 
 public:
     inline bool enqueue(TString&& str, Type type = Type::Info){
-        return static_cast<T*>(this)->enqueue(MakeTuple(std::chrono::system_clock::now(), type, Move(str)));
+        return static_cast<T*>(this)->enqueue(MakeTuple(timerNow(), type, Move(str)));
     }
     inline bool enqueue(const TString& str, Type type = Type::Info){
-        return static_cast<T*>(this)->enqueue(MakeTuple(std::chrono::system_clock::now(), type, str));
+        return static_cast<T*>(this)->enqueue(MakeTuple(timerNow(), type, str));
     }
 
 
@@ -139,8 +137,8 @@ protected:
 
 
 private:
-    std::thread m_thread;
-    std::counting_semaphore<INT_MAX> m_semaphore;
+    Thread m_thread;
+    Semaphore<INT_MAX> m_semaphore;
     Atomic<bool> m_exit;
 
 

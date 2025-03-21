@@ -20,7 +20,6 @@
 
 #include "compressed_pair.h"
 #include "basic_string.h"
-#include "atomic.h"
 #include "sync.h"
 
 

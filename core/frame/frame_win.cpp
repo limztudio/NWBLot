@@ -182,7 +182,7 @@ bool Frame::showFrame(){
 bool Frame::mainLoop(){
     MSG message = {};
 
-    std::chrono::steady_clock::time_point lateTime(std::chrono::steady_clock::now());
+    Timer lateTime(timerNow());
 
     for(;;){
         for(;;){
@@ -200,11 +200,11 @@ bool Frame::mainLoop(){
             DispatchMessage(&message);
         }
 
-        std::chrono::steady_clock::time_point currentTime(std::chrono::steady_clock::now());
-        std::chrono::duration<float, std::chrono::seconds::period> timeDifference(currentTime - lateTime);
+        Timer currentTime(timerNow());
+        auto timeDifference = durationInSeconds<float>(currentTime, lateTime);
         lateTime = currentTime;
 
-        if(!update(timeDifference.count()))
+        if(!update(timeDifference))
             break;
     }
     return false;

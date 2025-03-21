@@ -7,8 +7,6 @@
 
 #include "global.h"
 
-#include <chrono>
-
 #include <curl/curl.h>
 
 

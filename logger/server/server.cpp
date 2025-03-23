@@ -22,6 +22,14 @@ NWB_LOG_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_logger{
+    Server* g_logger = nullptr;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 usize Server::receiveCallback(void* contents, usize size, usize nmemb, Server* _this){
     auto totalSize = size * nmemb;
     if(!totalSize)
@@ -59,19 +67,19 @@ bool Server::internalInit(const char* url){
 
     ret = curl_easy_setopt(m_curl, CURLOPT_URL, url);
     if(ret != CURLE_OK){
-        enqueue(stringFormat(NWB_TEXT("Failed to set URL on {}: {}"), SERVER_NAME, stringConvert(curl_easy_strerror(ret))), Type::Fatal);
+        Base::enqueue(stringFormat(NWB_TEXT("Failed to set URL on {}: {}"), SERVER_NAME, stringConvert(curl_easy_strerror(ret))), Type::Fatal);
         return false;
     }
 
-    ret = curl_easy_setopt(m_curl, CURLOPT_WRITEFUNCTION, receiveCallback);
+    ret = curl_easy_setopt(m_curl, CURLOPT_READFUNCTION, receiveCallback);
     if(ret != CURLE_OK){
-        enqueue(stringFormat(NWB_TEXT("Failed to set write callback on {}: {}"), SERVER_NAME, stringConvert(curl_easy_strerror(ret))), Type::Fatal);
+        Base::enqueue(stringFormat(NWB_TEXT("Failed to set read callback on {}: {}"), SERVER_NAME, stringConvert(curl_easy_strerror(ret))), Type::Fatal);
         return false;
     }
 
-    ret = curl_easy_setopt(m_curl, CURLOPT_WRITEDATA, this);
+    ret = curl_easy_setopt(m_curl, CURLOPT_READDATA, this);
     if(ret != CURLE_OK){
-        enqueue(stringFormat(NWB_TEXT("Failed to set write data on {}: {}"), SERVER_NAME, stringConvert(curl_easy_strerror(ret))), Type::Fatal);
+        Base::enqueue(stringFormat(NWB_TEXT("Failed to set read data on {}: {}"), SERVER_NAME, stringConvert(curl_easy_strerror(ret))), Type::Fatal);
         return false;
     }
 
@@ -82,7 +90,7 @@ bool Server::internalUpdate(){
 
     ret = curl_easy_perform(m_curl);
     if(ret != CURLE_OK)
-        enqueue(stringFormat(NWB_TEXT("Failed to bring message on {}: {}"), SERVER_NAME, stringConvert(curl_easy_strerror(ret))), Type::Error);
+        Base::enqueue(stringFormat(NWB_TEXT("Failed to bring message on {}: {}"), SERVER_NAME, stringConvert(curl_easy_strerror(ret))), Type::Error);
 
     MessageType msg;
     while(try_dequeue(msg)){

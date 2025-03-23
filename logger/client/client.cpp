@@ -56,15 +56,15 @@ bool Client::internalInit(const char* url){
         return false;
     }
 
-    ret = curl_easy_setopt(m_curl, CURLOPT_READFUNCTION, sendCallback);
+    ret = curl_easy_setopt(m_curl, CURLOPT_WRITEFUNCTION, sendCallback);
     if(ret != CURLE_OK){
-        enqueue(stringFormat(NWB_TEXT("Failed to set read callback on {}: {}"), CLIENT_NAME, stringConvert(curl_easy_strerror(ret))), Type::Fatal);
+        enqueue(stringFormat(NWB_TEXT("Failed to set write callback on {}: {}"), CLIENT_NAME, stringConvert(curl_easy_strerror(ret))), Type::Fatal);
         return false;
     }
 
-    ret = curl_easy_setopt(m_curl, CURLOPT_READDATA, this);
+    ret = curl_easy_setopt(m_curl, CURLOPT_WRITEDATA, this);
     if(ret != CURLE_OK){
-        enqueue(stringFormat(NWB_TEXT("Failed to set read data on {}: {}"), CLIENT_NAME, stringConvert(curl_easy_strerror(ret))), Type::Fatal);
+        enqueue(stringFormat(NWB_TEXT("Failed to set write data on {}: {}"), CLIENT_NAME, stringConvert(curl_easy_strerror(ret))), Type::Fatal);
         return false;
     }
 

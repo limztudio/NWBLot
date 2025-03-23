@@ -185,27 +185,32 @@ bool Frame::mainLoop(){
     Timer lateTime(timerNow());
 
     for(;;){
-        for(;;){
-            if(data<__hidden_frame::WinFrame>().isActive()){
-                if(!PeekMessage(&message, nullptr, 0, 0, PM_REMOVE))
-                    break;
-            }
-            else
-                GetMessage(&message, nullptr, 0, 0);
+        if(data<__hidden_frame::WinFrame>().isActive()){
+            while(PeekMessage(&message, nullptr, 0, 0, PM_REMOVE)){
+                if(message.message == WM_QUIT)
+                    return true;
 
-            if(message.message == WM_QUIT)
+                TranslateMessage(&message);
+                DispatchMessage(&message);
+            }
+        }
+        else{
+            if(GetMessage(&message, nullptr, 0, 0) <= 0)
                 return true;
 
             TranslateMessage(&message);
             DispatchMessage(&message);
+            continue;
         }
 
-        Timer currentTime(timerNow());
-        auto timeDifference = durationInSeconds<float>(currentTime, lateTime);
-        lateTime = currentTime;
+        {
+            Timer currentTime(timerNow());
+            auto timeDifference = durationInSeconds<float>(currentTime, lateTime);
+            lateTime = currentTime;
 
-        if(!update(timeDifference))
-            break;
+            if(!update(timeDifference))
+                break;
+        }
     }
     return false;
 }

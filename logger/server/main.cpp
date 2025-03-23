@@ -26,6 +26,7 @@ static NWB_INLINE int mainLogic(const char* logAddress, void* inst){
         NWB::Log::Server logger;
         if(!logger.init(logAddress))
             return -1;
+        NWB_LOGGER_REGISTER(&logger);
 
         try{
             NWB::Log::Frame frame(inst);
@@ -39,9 +40,11 @@ static NWB_INLINE int mainLogic(const char* logAddress, void* inst){
                 return -1;
         }
         catch(const std::exception& e){
-            logger.enqueue(stringFormat(NWB_TEXT("Exception: {}"), stringConvert(e.what())), NWB::Log::Type::Fatal);
+            NWB_LOGGER.enqueue(stringFormat(NWB_TEXT("Exception: {}"), stringConvert(e.what())), NWB::Log::Type::Fatal);
+            NWB_LOGGER_REGISTER(nullptr);
             return -1;
         }
+        NWB_LOGGER_REGISTER(nullptr);
     }
 
     return 0;

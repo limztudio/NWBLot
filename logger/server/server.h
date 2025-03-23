@@ -18,8 +18,10 @@ NWB_LOG_BEGIN
 
 
 constexpr tchar SERVER_NAME[] = NWB_TEXT("Server");
-class Server : public Base<Server, SERVER_NAME>{
+class Server : public BaseUpdateOrdinary<Server, 0.1f, SERVER_NAME>{
     friend class Base;
+    friend class BaseUpdateOrdinary;
+
 
 private:
     static usize receiveCallback(void* contents, usize size, usize nmemb, Server* _this);
@@ -29,9 +31,28 @@ public:
     Server();
 
 
+public:
+    inline bool enqueue(TString&& str, Type type = Type::Info){ return Base::enqueue(Move(str), type); }
+    inline bool enqueue(const TString& str, Type type = Type::Info){ return Base::enqueue(str, type); }
+
+
 protected:
     bool internalInit(const char* url);
     bool internalUpdate();
+
+protected:
+    inline bool enqueue(MessageType&& data){ return BaseUpdateOrdinary::enqueue(Move(data)); }
+    inline bool enqueue(const MessageType& data){ return BaseUpdateOrdinary::enqueue(data); }
+
+    inline bool try_dequeue(MessageType& msg){ return BaseUpdateOrdinary::try_dequeue(msg); }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_logger{
+    extern Server* g_logger;
 };
 
 
@@ -39,6 +60,14 @@ protected:
 
 
 NWB_LOG_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#define NWB_LOGGER_REGISTER(inst) NWB::Log::__hidden_logger::g_logger = inst
+
+#define NWB_LOGGER assert(NWB::Log::__hidden_logger::g_logger != nullptr);(*NWB::Log::__hidden_logger::g_logger)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

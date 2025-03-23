@@ -54,6 +54,11 @@ public:
     template<typename T>
     inline T& data(){ return static_cast<T&>(m_data); }
 
+public:
+    bool startup();
+    void cleanup();
+    bool update(float delta);
+
 
 public:
     static void print(BasicStringView<tchar> str);

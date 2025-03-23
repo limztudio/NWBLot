@@ -38,6 +38,9 @@ NWB_LOG_BEGIN
 namespace __hidden_frame{
     class WinFrame : public FrameData{
     public:
+        inline bool& isActive(){ return reinterpret_cast<bool&>(m_data.u8[4]); }
+        inline const bool& isActive()const{ return reinterpret_cast<const bool&>(m_data.u8[4]); }
+
         inline HINSTANCE& instance(){ return reinterpret_cast<HINSTANCE&>(m_data.ptr[0]); }
         inline const HINSTANCE& instance()const{ return reinterpret_cast<const HINSTANCE&>(m_data.ptr[0]); }
 
@@ -85,6 +88,19 @@ namespace __hidden_frame{
             }
             return 0;
 
+            case WM_ACTIVATE:
+            {
+                switch(LOWORD(wParam)){
+                case WA_INACTIVE:
+                    _this->data<WinFrame>().isActive() = false;
+                    break;
+                default:
+                    _this->data<WinFrame>().isActive() = true;
+                    break;
+                }
+            }
+            return 0;
+
             case WM_SIZE:
             {
                 RECT clientRect;
@@ -107,7 +123,10 @@ Frame::Frame(void* inst){
 
     data<__hidden_frame::WinFrame>().instance() = reinterpret_cast<HINSTANCE>(inst);
 }
-Frame::~Frame(){}
+Frame::~Frame(){
+    cleanup();
+    __hidden_frame::g_frame = nullptr;
+}
 
 bool Frame::init(){
     const tchar* ClassName = NWB_TEXT("NWB_LOGGER");
@@ -145,6 +164,9 @@ bool Frame::init(){
     if(!data<__hidden_frame::WinFrame>().hwnd())
         return false;
 
+    if(!startup())
+        return false;
+
     return true;
 }
 bool Frame::showFrame(){
@@ -153,11 +175,38 @@ bool Frame::showFrame(){
 }
 bool Frame::mainLoop(){
     MSG message = {};
-    while(GetMessage(&message, nullptr, 0, 0)){
-        TranslateMessage(&message);
-        DispatchMessage(&message);
+
+    Timer lateTime(timerNow());
+
+    for(;;){
+        if(data<__hidden_frame::WinFrame>().isActive()){
+            while(PeekMessage(&message, nullptr, 0, 0, PM_REMOVE)){
+                if(message.message == WM_QUIT)
+                    return true;
+
+                TranslateMessage(&message);
+                DispatchMessage(&message);
+            }
+        }
+        else{
+            if(GetMessage(&message, nullptr, 0, 0) <= 0)
+                return true;
+
+            TranslateMessage(&message);
+            DispatchMessage(&message);
+            continue;
+        }
+
+        {
+            Timer currentTime(timerNow());
+            auto timeDifference = durationInSeconds<float>(currentTime, lateTime);
+            lateTime = currentTime;
+
+            if(!update(timeDifference))
+                break;
+        }
     }
-    return true;
+    return false;
 }
 
 void Frame::print(BasicStringView<tchar> str){

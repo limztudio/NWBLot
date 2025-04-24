@@ -34,6 +34,9 @@
     <ProjectReference Include="..\3rd_parties\curl\libcurl.vcxproj">
       <Project>{9bf92df1-144d-4120-9728-debc803749cb}</Project>
     </ProjectReference>
+    <ProjectReference Include="..\3rd_parties\libmicrohttpd\libmicrohttpd.vcxproj">
+      <Project>{65455489-e6b0-4b92-a6ef-97dfd394b52b}</Project>
+    </ProjectReference>
     <ProjectReference Include="..\core\alloc.vcxproj">
       <Project>{eaeb21b7-2cd6-4ee0-9d26-f607bcd7c5d3}</Project>
     </ProjectReference>
@@ -77,6 +80,7 @@
     <Import Project="..\configuration\3rdPartyContainerInclude.props" />
     <Import Project="..\configuration\CLI11Include.props" />
     <Import Project="..\configuration\execGeneral.props" />
+    <Import Project="..\configuration\libmicrohttpdInclude.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='opt|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
@@ -89,6 +93,7 @@
     <Import Project="..\configuration\3rdPartyContainerInclude.props" />
     <Import Project="..\configuration\CLI11Include.props" />
     <Import Project="..\configuration\execGeneral.props" />
+    <Import Project="..\configuration\libmicrohttpdInclude.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='fin|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
@@ -101,6 +106,7 @@
     <Import Project="..\configuration\3rdPartyContainerInclude.props" />
     <Import Project="..\configuration\CLI11Include.props" />
     <Import Project="..\configuration\execGeneral.props" />
+    <Import Project="..\configuration\libmicrohttpdInclude.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='dbg|x64'">

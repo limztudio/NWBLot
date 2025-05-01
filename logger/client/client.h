@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include <curl/curl.h>
+
 #include <logger/common.h>
 
 
@@ -23,11 +25,13 @@ class Client : public BaseUpdateIfQueued<Client, CLIENT_NAME>{
     friend class BaseUpdateIfQueued;
 
 private:
+    static bool globalInit();
     static usize sendCallback(void* contents, usize size, usize nmemb, Client* _this);
 
 
 public:
     Client();
+    virtual ~Client()override;
 
 
 public:
@@ -54,12 +58,15 @@ protected:
     }
 
     inline bool try_dequeue(MessageType& msg){
-        auto ret = BaseUpdateIfQueued::try_dequeue(msg);
+        auto ret = BaseUpdateIfQueued::tryDequeue(msg);
         if(ret)
             m_msgCount.fetch_sub(1, MemoryOrder::memory_order_acq_rel);
         return ret;
     }
 
+
+private:
+    CURL* m_curl;
 
 private:
     Atomic<i32> m_msgCount;

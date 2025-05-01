@@ -18,7 +18,9 @@ NWB_ALLOC_BEGIN
 
 
 extern void* coreAlloc(usize size, const char* log);
+extern void* coreRealloc(void* p, usize size, const char* log);
 extern void* coreAllocAligned(usize size, usize align, const char* log);
+extern void* coreReallocAligned(void* p, usize size, usize align, const char* log);
 
 extern void coreFree(void* ptr, const char* log)noexcept;
 extern void coreFreeSize(void* ptr, usize size, const char* log)noexcept;

@@ -68,7 +68,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#define NWB_STRLEN(src) strlen(src)
+#define NWB_WSTRLEN(src) wcslen(src)
+#define NWB_MEMCMP(lhs, rhs, size) memcmp(lhs, rhs, size)
+#define NWB_STRCMP(lhs, rhs) strcmp(lhs, rhs)
+#define NWB_WSTRCMP(lhs, rhs) wcscmp(lhs, rhs)
 #ifdef _MSC_VER
+#define NWB_STRNLEN(src, count) strnlen_s(src, count)
+#define NWB_WSTRNLEN(src, count) wcsnlen_s(src, count)
 #define NWB_MEMCPY(dest, destSize, src, srcSize) memcpy_s(dest, destSize, src, srcSize)
 #define NWB_WMEMCPY(dest, destSize, src, srcSize) wmemcpy_s(dest, destSize, src, srcSize)
 #define NWB_STRCPY(dest, destSize, src) strcpy_s(dest, destSize, src)
@@ -80,6 +87,9 @@
 #define NWB_SPRINTF(format, formatSize, ...) sprintf_s(format, formatSize, __VA_ARGS__)
 #define NWB_WSPRINTF(format, formatSize, ...) swprintf_s(format, formatSize, __VA_ARGS__)
 #else
+#define NWB_STRNLEN(src, count) strnlen(src, count)
+#define NWB_WSTRNLEN(src, count) wcsnlen(src, count)
+#define NWB_MEMCMP(lhs, rhs, size) memcmp(lhs, rhs, size)
 #define NWB_MEMCPY(dest, destSize, src, srcSize) memcpy(dest, src, srcSize)
 #define NWB_WMEMCPY(dest, destSize, src, srcSize) wmemcpy(dest, src, srcSize)
 #define NWB_STRCPY(dest, destSize, src) strcpy(dest, src)
@@ -93,12 +103,18 @@
 #endif
 
 #ifdef NWB_UNICODE
+#define NWB_TSTRLEN(src) NWB_WSTRLEN(src)
+#define NWB_TSTRNLEN(src, count) NWB_WSTRNLEN(src, count)
+#define NWB_TSTRCMP(lhs, rhs) NWB_WSTRCMP(lhs, rhs)
 #define NWB_TMEMCPY(dest, destSize, src, srcSize) NWB_WMEMCPY(dest, destSize, src, srcSize)
 #define NWB_TSTRCPY(dest, destSize, src) NWB_WSTRCPY(dest, destSize, src)
 #define NWB_TSTRNCPY(dest, destSize, src, count) NWB_WSTRNCPY(dest, destSize, src, count)
 #define NWB_TSTRCAT(dest, destSize, src) NWB_WSTRCAT(dest, destSize, src)
 #define NWB_TSPRINTF(format, formatSize, ...) NWB_WSPRINTF(format, formatSize, __VA_ARGS__)
 #else
+#define NWB_TSTRLEN(src) NWB_STRLEN(src)
+#define NWB_TSTRNLEN(src, count) NWB_STRNLEN(src, count)
+#define NWB_TSTRCMP(lhs, rhs) NWB_STRCMP(lhs, rhs)
 #define NWB_TMEMCPY(dest, destSize, src, srcSize) NWB_MEMCPY(dest, destSize, src, srcSize)
 #define NWB_TSTRCPY(dest, destSize, src) NWB_STRCPY(dest, destSize, src)
 #define NWB_TSTRNCPY(dest, destSize, src, count) NWB_STRNCPY(dest, destSize, src, count)

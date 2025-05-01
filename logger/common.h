@@ -7,8 +7,6 @@
 
 #include "global.h"
 
-#include <curl/curl.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -36,46 +34,34 @@ using MessageQueue = ParallelQueue<MessageType>;
 template <typename T, const tchar* NAME>
 class Base{
 protected:
-    static inline bool globalInit(){
-        CURLcode ret;
-
-        ret = curl_global_init(CURL_GLOBAL_ALL);
-        if(ret != CURLE_OK)
-            return false;
-
-        return true;
-    }
+    static inline bool globalInit(){}
 
 
 public:
     Base()
-        : m_curl(nullptr)
-        , m_exit(false)
+        :  m_exit(false)
     {}
     virtual ~Base(){
         m_exit.store(true, MemoryOrder::memory_order_release);
         static_cast<T*>(this)->internalDestroy();
         if(m_thread.joinable())
             m_thread.join();
-
-        if(m_curl){
-            curl_easy_cleanup(m_curl);
-            m_curl = nullptr;
-        }
     }
 
 
 protected:
-    bool internalInit(const char* url){ return true; }
-    void internalDestroy(){}
-    bool internalUpdate(){ return true; }
+    template <typename... ARGS>
+    inline bool internalInit(ARGS&&... args){ return true; }
+    inline void internalDestroy(){}
+    inline bool internalUpdate(){ return true; }
 
 protected:
-    inline bool try_dequeue(MessageType& msg){ return m_msgQueue.try_dequeue(msg); }
+    inline bool tryDequeue(MessageType& msg){ return m_msgQueue.try_dequeue(msg); }
 
 
 public:
-    inline bool init(const char* url){
+    template <typename... ARGS>
+    inline bool init(ARGS&&... args){
         if(!static_cast<T*>(this)->m_globalInit){
             if(!static_cast<T*>(this)->globalInit()){
                 static_cast<T*>(this)->enqueue(stringFormat(NWB_TEXT("Failed to global initialization on {}"), NAME), Type::Fatal);
@@ -84,15 +70,8 @@ public:
             static_cast<T*>(this)->m_globalInit = true;
         }
 
-        m_curl = curl_easy_init();
-        if(!m_curl){
-            static_cast<T*>(this)->enqueue(stringFormat(NWB_TEXT("Failed to initialize CURL on {}"), NAME), Type::Fatal);
-            return false;
-        }
-
-        auto ret = static_cast<T*>(this)->internalInit(url);
-        if (ret)
-            m_thread = Thread(T::globalUpdate, static_cast<T*>(this));
+        auto ret = static_cast<T*>(this)->internalInit(Forward<ARGS>(args)...);
+        m_thread = Thread(T::globalUpdate, static_cast<T*>(this));
 
         return ret;
     }
@@ -103,12 +82,14 @@ public:
 
 
 protected:
-    CURL* m_curl;
     MessageQueue m_msgQueue;
 
 protected:
     Thread m_thread;
     Atomic<bool> m_exit;
+
+private:
+    static bool m_globalInit;
 };
 
 template <typename T, float UPDATE_INTERVAL, const tchar* NAME>

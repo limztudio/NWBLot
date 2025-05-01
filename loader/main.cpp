@@ -62,7 +62,14 @@ static NWB_INLINE int entry_point(isize argc, tchar** argv, void* inst){
     {
         CLI::App app{ "loader" };
 
-        NWB::argAddOption<NWB::ArgCommand::LogServer>(app, logAddress);
+        {
+            AString address;
+            NWB::argAddOption<NWB::ArgCommand::LogAddress>(app, address);
+            u16 port;
+            NWB::argAddOption<NWB::ArgCommand::LogPort>(app, port);
+
+            logAddress = stringFormat("{}:{}", address, port);
+        }
 
         try{
             app.parse(static_cast<int>(argc), argv);

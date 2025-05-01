@@ -23,6 +23,11 @@ NWB_LOG_BEGIN
 
 
 namespace __hidden_logger{
+    struct ConnectionInfo{
+        u8* buffer;
+        usize size;
+    };
+
     Server* g_logger = nullptr;
 };
 
@@ -30,70 +35,96 @@ namespace __hidden_logger{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-usize Server::receiveCallback(void* contents, usize size, usize nmemb, Server* _this){
-    auto totalSize = size * nmemb;
-    if(!totalSize)
-        return 0;
+MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const char* url, const char* method, const char* version, const char* upload_data, size_t* upload_data_size, void** con_cls){
+    if(NWB_STRCMP(method, "POST") != 0)
+        return MHD_NO;
 
-    auto* ptr = reinterpret_cast<u8*>(contents);
-    auto sizeLeft = static_cast<isize>(totalSize);
+    Server* _this = static_cast<Server*>(cls);
 
-    Timer time;
-    {
-        NWB_MEMCPY(&time, sizeof(decltype(time)), ptr, sizeLeft);
-        ptr += sizeof(decltype(time));
-        sizeLeft -= sizeof(decltype(time));
+    auto receivedCallback = [_this](const void* contents, usize totalSize){
+        auto* ptr = reinterpret_cast<const u8*>(contents);
+        auto sizeLeft = static_cast<isize>(totalSize);
+
+        Timer time;
+        {
+            NWB_MEMCPY(&time, sizeof(decltype(time)), ptr, sizeLeft);
+            ptr += sizeof(decltype(time));
+            sizeLeft -= sizeof(decltype(time));
+        }
+
+        Type type;
+        {
+            NWB_MEMCPY(&type, sizeof(decltype(type)), ptr, sizeLeft);
+            ptr += sizeof(decltype(type));
+            sizeLeft -= sizeof(decltype(type));
+        }
+
+        assert(sizeLeft > 0);
+        TString strMsg(reinterpret_cast<const tchar*>(ptr), static_cast<usize>(sizeLeft) / sizeof(tchar));
+
+        _this->enqueue(MakeTuple(Move(time), type, Move(strMsg)));
+    };
+
+    if(!(*con_cls)){
+        auto* info = reinterpret_cast<__hidden_logger::ConnectionInfo*>(Core::Alloc::coreAlloc(sizeof(__hidden_logger::ConnectionInfo), "ConnectionInfo allocated at Server::requestCallback"));
+        if(!info){
+            _this->enqueue(stringFormat(NWB_TEXT("Failed to allocate on {}"), SERVER_NAME), Type::Fatal);
+            return MHD_NO;
+        }
+        info->buffer = nullptr;
+        info->size = 0;
+
+        (*con_cls) = info;
+        return MHD_YES;
     }
 
-    Type type;
-    {
-        NWB_MEMCPY(&type, sizeof(decltype(type)), ptr, sizeLeft);
-        ptr += sizeof(decltype(type));
-        sizeLeft -= sizeof(decltype(type));
+    auto* info = reinterpret_cast<__hidden_logger::ConnectionInfo*>(*con_cls);
+
+    if(*upload_data_size){
+        info->buffer = reinterpret_cast<u8*>(Core::Alloc::coreRealloc(info->buffer, info->size + (*upload_data_size), "ConnectionInfo buffer reallocated at Server::requestCallback"));
+        if(!info->buffer){
+            _this->enqueue(stringFormat(NWB_TEXT("Failed to reallocate a buffer on {}"), SERVER_NAME), Type::Fatal);
+            return MHD_NO;
+        }
+
+        NWB_MEMCPY(info->buffer + info->size, *upload_data_size, upload_data, *upload_data_size);
+        info->size += *upload_data_size;
+        *upload_data_size = 0;
+        return MHD_YES;
     }
+    else{
+        receivedCallback(info->buffer, info->size);
 
-    assert(sizeLeft > 0);
-    TString strMsg(reinterpret_cast<tchar*>(ptr), static_cast<usize>(sizeLeft) / sizeof(tchar));
+        auto* response = MHD_create_response_from_buffer(0, "", MHD_RESPMEM_PERSISTENT);
+        auto ret = MHD_queue_response(connection, MHD_HTTP_OK, response);
+        MHD_destroy_response(response);
 
-    _this->enqueue(MakeTuple(Move(time), type, Move(strMsg)));
-    return totalSize;
+        Core::Alloc::coreFree(info->buffer, "ConnectionInfo buffer freed at Server::requestCallback");
+        Core::Alloc::coreFree(info, "ConnectionInfo freed at Server::requestCallback");
+
+        return ret;
+    }
 }
 
 
-Server::Server(){}
-
-bool Server::internalInit(const char* url){
-    CURLcode ret;
-
-    ret = curl_easy_setopt(m_curl, CURLOPT_URL, url);
-    if(ret != CURLE_OK){
-        Base::enqueue(stringFormat(NWB_TEXT("Failed to set URL on {}: {}"), SERVER_NAME, stringConvert(curl_easy_strerror(ret))), Type::Fatal);
-        return false;
+Server::Server()
+    : m_daemon(nullptr)
+{}
+Server::~Server(){
+    if(m_daemon){
+        MHD_stop_daemon(m_daemon);
+        m_daemon = nullptr;
     }
+}
 
-    ret = curl_easy_setopt(m_curl, CURLOPT_READFUNCTION, receiveCallback);
-    if(ret != CURLE_OK){
-        Base::enqueue(stringFormat(NWB_TEXT("Failed to set read callback on {}: {}"), SERVER_NAME, stringConvert(curl_easy_strerror(ret))), Type::Fatal);
-        return false;
-    }
-
-    ret = curl_easy_setopt(m_curl, CURLOPT_READDATA, this);
-    if(ret != CURLE_OK){
-        Base::enqueue(stringFormat(NWB_TEXT("Failed to set read data on {}: {}"), SERVER_NAME, stringConvert(curl_easy_strerror(ret))), Type::Fatal);
-        return false;
-    }
+bool Server::internalInit(u16 port){
+    m_daemon = MHD_start_daemon(MHD_USE_INTERNAL_POLLING_THREAD, port, nullptr, nullptr, &Server::requestCallback, this, MHD_OPTION_END);
 
     return true;
 }
 bool Server::internalUpdate(){
-    CURLcode ret;
-
-    ret = curl_easy_perform(m_curl);
-    if(ret != CURLE_OK)
-        Base::enqueue(stringFormat(NWB_TEXT("Failed to bring message on {}: {}"), SERVER_NAME, stringConvert(curl_easy_strerror(ret))), Type::Error);
-
     MessageType msg;
-    while(try_dequeue(msg)){
+    while(tryDequeue(msg)){
         const auto& [time, type, str] = msg;
         switch(type){
         case Type::Info:

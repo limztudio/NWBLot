@@ -18,20 +18,25 @@ NWB_BEGIN
 
 
 enum class ArgCommand : u8{
-    LogServer,
+    LogAddress,
+    LogPort,
 
     iNumArg,
 };
 constexpr const char* g_argCmd[] = {
-    "-l,--logserver",
+    "-la,--logaddress",
+    "-lp,--logport",
 };
 const Tuple<
     std::string
+    , u16
 > g_argDefault = {
-    "http://localhost:7117",
+    "http://localhost",
+    7117,
 };
 constexpr const char* g_argDesc[] = {
     "Log server address",
+    "Log server port",
 };
 
 template <ArgCommand i, typename CLI, typename T>

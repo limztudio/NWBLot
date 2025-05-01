@@ -21,10 +21,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static NWB_INLINE int mainLogic(const char* logAddress, void* inst){
+static NWB_INLINE int mainLogic(u16 logPort, void* inst){
     {
         NWB::Log::Server logger;
-        if(!logger.init(logAddress))
+        if(!logger.init(logPort))
             return -1;
         NWB_LOGGER_REGISTER(&logger);
 
@@ -57,11 +57,11 @@ static NWB_INLINE int mainLogic(const char* logAddress, void* inst){
 static NWB_INLINE int entry_point(isize argc, tchar** argv, void* inst){
     int ret;
 
-    AString logAddress;
+    u16 logPort;
     {
         CLI::App app{ "logserver" };
 
-        NWB::argAddOption<NWB::ArgCommand::LogServer>(app, logAddress);
+        NWB::argAddOption<NWB::ArgCommand::LogPort>(app, logPort);
 
         try{
             app.parse(static_cast<int>(argc), argv);
@@ -73,7 +73,7 @@ static NWB_INLINE int entry_point(isize argc, tchar** argv, void* inst){
     }
 
     try{
-        ret = mainLogic(logAddress.c_str(), inst);
+        ret = mainLogic(logPort, inst);
     }
     catch(...){
         return -1;

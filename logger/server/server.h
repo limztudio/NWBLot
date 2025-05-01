@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include <microhttpd.h>
+
 #include <logger/common.h>
 
 
@@ -24,11 +26,12 @@ class Server : public BaseUpdateOrdinary<Server, 0.1f, SERVER_NAME>{
 
 
 private:
-    static usize receiveCallback(void* contents, usize size, usize nmemb, Server* _this);
+    static MHD_Result requestCallback(void* cls, MHD_Connection* connection, const char* url, const char* method, const char* version, const char* upload_data, size_t* upload_data_size, void** con_cls);
 
 
 public:
     Server();
+    virtual ~Server()override;
 
 
 public:
@@ -37,14 +40,18 @@ public:
 
 
 protected:
-    bool internalInit(const char* url);
+    bool internalInit(u16 port);
     bool internalUpdate();
 
 protected:
     inline bool enqueue(MessageType&& data){ return BaseUpdateOrdinary::enqueue(Move(data)); }
     inline bool enqueue(const MessageType& data){ return BaseUpdateOrdinary::enqueue(data); }
 
-    inline bool try_dequeue(MessageType& msg){ return BaseUpdateOrdinary::try_dequeue(msg); }
+    inline bool tryDequeue(MessageType& msg){ return BaseUpdateOrdinary::tryDequeue(msg); }
+
+
+private:
+    MHD_Daemon* m_daemon;
 };
 
 

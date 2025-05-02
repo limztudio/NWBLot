@@ -45,25 +45,25 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
     Server* _this = static_cast<Server*>(cls);
 
     auto receivedCallback = [_this](const void* contents, usize totalSize){
-        auto* ptr = reinterpret_cast<const u8*>(contents);
+        const auto* ptr = reinterpret_cast<const u8*>(contents);
         auto sizeLeft = static_cast<isize>(totalSize);
 
         Timer time;
         {
-            NWB_MEMCPY(&time, sizeof(decltype(time)), ptr, sizeLeft);
+            NWB_MEMCPY(&time, sizeof(decltype(time)), ptr, sizeof(decltype(time)));
             ptr += sizeof(decltype(time));
             sizeLeft -= sizeof(decltype(time));
         }
 
         Type type;
         {
-            NWB_MEMCPY(&type, sizeof(decltype(type)), ptr, sizeLeft);
+            NWB_MEMCPY(&type, sizeof(decltype(type)), ptr, sizeof(decltype(type)));
             ptr += sizeof(decltype(type));
             sizeLeft -= sizeof(decltype(type));
         }
 
         assert(sizeLeft > 0);
-        TString strMsg(reinterpret_cast<const tchar*>(ptr), static_cast<usize>(sizeLeft) / sizeof(tchar));
+        TString strMsg(reinterpret_cast<const tchar*>(ptr));
 
         _this->enqueue(MakeTuple(Move(time), type, Move(strMsg)));
     };
@@ -92,7 +92,7 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
 
         NWB_MEMCPY(info->buffer + info->size, *upload_data_size, upload_data, *upload_data_size);
         info->size += *upload_data_size;
-        *upload_data_size = 0;
+        (*upload_data_size) = 0;
         return MHD_YES;
     }
     else{

@@ -45,6 +45,9 @@ usize Client::sendCallback(void* contents, usize size, usize nmemb, Client* _thi
     {
         NWB_MEMCPY(ptr, str.size() * sizeof(tchar), str.c_str(), str.size() * sizeof(tchar));
         ptr += static_cast<isize>(str.size() * sizeof(tchar));
+
+        (*reinterpret_cast<tchar*>(ptr)) = 0;
+        ptr += sizeof(tchar);
     }
 
     auto sizeWritten = static_cast<usize>(ptr - reinterpret_cast<u8*>(contents));
@@ -90,13 +93,13 @@ bool Client::internalInit(const char* url){
         return false;
     }
 
-    ret = curl_easy_setopt(m_curl, CURLOPT_UPLOAD, 1);
+    ret = curl_easy_setopt(m_curl, CURLOPT_POST, 1);
     if(ret != CURLE_OK){
-        enqueue(stringFormat(NWB_TEXT("Failed to set upload on {}: {}"), CLIENT_NAME, stringConvert(curl_easy_strerror(ret))), Type::Fatal);
+        enqueue(stringFormat(NWB_TEXT("Failed to set post on {}: {}"), CLIENT_NAME, stringConvert(curl_easy_strerror(ret))), Type::Fatal);
         return false;
     }
 
-    ret = curl_easy_setopt(m_curl, CURLOPT_INFILESIZE_LARGE, -1);
+    ret = curl_easy_setopt(m_curl, CURLOPT_POSTFIELDSIZE, -1);
     if(ret != CURLE_OK){
         enqueue(stringFormat(NWB_TEXT("Failed to set file size on {}: {}"), CLIENT_NAME, stringConvert(curl_easy_strerror(ret))), Type::Fatal);
         return false;

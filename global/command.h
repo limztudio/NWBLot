@@ -24,8 +24,8 @@ enum class ArgCommand : u8{
     iNumArg,
 };
 constexpr const char* g_argCmd[] = {
-    "-la,--logaddress",
-    "-lp,--logport",
+    "-a,--logaddress",
+    "-p,--logport",
 };
 const Tuple<
     std::string

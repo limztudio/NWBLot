@@ -31,9 +31,6 @@
     <ClInclude Include="server\server.h" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\3rd_parties\curl\libcurl.vcxproj">
-      <Project>{9bf92df1-144d-4120-9728-debc803749cb}</Project>
-    </ProjectReference>
     <ProjectReference Include="..\3rd_parties\libmicrohttpd\libmicrohttpd.vcxproj">
       <Project>{65455489-e6b0-4b92-a6ef-97dfd394b52b}</Project>
     </ProjectReference>

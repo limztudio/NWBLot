@@ -36,6 +36,9 @@ namespace __hidden_logger{
 
 
 MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const char* url, const char* method, const char* version, const char* upload_data, size_t* upload_data_size, void** con_cls){
+    (void)url;
+    (void)version;
+
     if(NWB_STRCMP(method, "POST") != 0)
         return MHD_NO;
 
@@ -95,7 +98,8 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
     else{
         receivedCallback(info->buffer, info->size);
 
-        auto* response = MHD_create_response_from_buffer(0, "", MHD_RESPMEM_PERSISTENT);
+        char nullStr[] = "";
+        auto* response = MHD_create_response_from_buffer(0, nullStr, MHD_RESPMEM_PERSISTENT);
         auto ret = MHD_queue_response(connection, MHD_HTTP_OK, response);
         MHD_destroy_response(response);
 

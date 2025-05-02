@@ -34,7 +34,7 @@ using MessageQueue = ParallelQueue<MessageType>;
 template <typename T, const tchar* NAME>
 class Base{
 protected:
-    static inline bool globalInit(){}
+    static inline bool globalInit(){ return true; }
 
 
 public:

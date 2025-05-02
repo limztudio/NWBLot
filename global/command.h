@@ -32,7 +32,7 @@ const Tuple<
     , u16
 > g_argDefault = {
     "http://localhost",
-    7117,
+    static_cast<u16>(7117),
 };
 constexpr const char* g_argDesc[] = {
     "Log server address",

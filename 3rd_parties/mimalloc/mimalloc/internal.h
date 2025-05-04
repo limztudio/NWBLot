@@ -127,6 +127,7 @@ bool        _mi_os_has_virtual_reserve(void);
 
 bool        _mi_os_reset(void* addr, size_t size);
 bool        _mi_os_commit(void* p, size_t size, bool* is_zero);
+bool        _mi_os_commit_ex(void* addr, size_t size, bool* is_zero, size_t stat_size);
 bool        _mi_os_decommit(void* addr, size_t size);
 bool        _mi_os_protect(void* addr, size_t size);
 bool        _mi_os_unprotect(void* addr, size_t size);
@@ -139,8 +140,10 @@ void*       _mi_os_alloc_aligned_at_offset(size_t size, size_t alignment, size_t
 void*       _mi_os_get_aligned_hint(size_t try_alignment, size_t size);
 bool        _mi_os_use_large_page(size_t size, size_t alignment);
 size_t      _mi_os_large_page_size(void);
-
 void*       _mi_os_alloc_huge_os_pages(size_t pages, int numa_node, mi_msecs_t max_secs, size_t* pages_reserved, size_t* psize, mi_memid_t* memid);
+
+int         _mi_os_numa_node_count(void);
+int         _mi_os_numa_node(void);
 
 // arena.c
 mi_arena_id_t _mi_arena_id_none(void);
@@ -812,24 +815,6 @@ static inline uintptr_t _mi_random_shuffle(uintptr_t x) {
   return x;
 }
 
-// -------------------------------------------------------------------
-// Optimize numa node access for the common case (= one node)
-// -------------------------------------------------------------------
-
-int    _mi_os_numa_node_get(void);
-size_t _mi_os_numa_node_count_get(void);
-
-extern mi_decl_hidden _Atomic(size_t) _mi_numa_node_count;
-static inline int _mi_os_numa_node(void) {
-  if mi_likely(mi_atomic_load_relaxed(&_mi_numa_node_count) == 1) { return 0; }
-  else return _mi_os_numa_node_get();
-}
-static inline size_t _mi_os_numa_node_count(void) {
-  const size_t count = mi_atomic_load_relaxed(&_mi_numa_node_count);
-  if mi_likely(count > 0) { return count; }
-  else return _mi_os_numa_node_count_get();
-}
-
 
 
 // -----------------------------------------------------------------------
@@ -870,7 +855,7 @@ static inline size_t mi_clz(size_t x) {
   #else
     _BitScanReverse64(&idx, x);
   #endif
-  return ((MI_SIZE_BITS - 1) - idx);
+  return ((MI_SIZE_BITS - 1) - (size_t)idx);
 }
 static inline size_t mi_ctz(size_t x) {
   if (x==0) return MI_SIZE_BITS;
@@ -880,7 +865,7 @@ static inline size_t mi_ctz(size_t x) {
   #else
     _BitScanForward64(&idx, x);
   #endif
-  return idx;
+  return (size_t)idx;
 }
 
 #else
@@ -947,6 +932,21 @@ static inline size_t mi_bsr(size_t x) {
   return (x==0 ? MI_SIZE_BITS : MI_SIZE_BITS - 1 - mi_clz(x));
 }
 
+size_t _mi_popcount_generic(size_t x);
+
+static inline size_t mi_popcount(size_t x) {
+  if (x<=1) return x;
+  if (x==SIZE_MAX) return MI_SIZE_BITS;
+  #if defined(__GNUC__)
+    #if (SIZE_MAX == ULONG_MAX)
+      return __builtin_popcountl(x);
+    #else
+      return __builtin_popcountll(x);
+    #endif
+  #else
+    return _mi_popcount_generic(x);
+  #endif
+}
 
 // ---------------------------------------------------------------------------------
 // Provide our own `_mi_memcpy` for potential performance optimizations.

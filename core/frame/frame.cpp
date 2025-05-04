@@ -32,7 +32,7 @@ void Frame::cleanup(){
     m_graphics.destroy();
 }
 bool Frame::update(float delta){
-    {
+    { // test
 		auto now = timerNow();
 		if (durationInSeconds<float>(now, g_testTimer) > 0.5f)
 		{

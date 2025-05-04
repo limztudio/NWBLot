@@ -38,11 +38,15 @@ private:
     VkAllocationCallbacks* m_allocCallbacks;
 
 private:
+    VkInstance m_inst;
+
     VkPhysicalDevice m_physDev;
     VkPhysicalDeviceProperties m_physDevProps;
     u32 m_queueFamilly;
+
     VkSurfaceKHR m_windowSurface;
-    VkInstance m_inst;
+
+    f32 m_timestampFrequency;
 
 
 private:

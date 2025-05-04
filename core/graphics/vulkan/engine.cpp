@@ -21,10 +21,11 @@ NWB_CORE_BEGIN
 
 VulkanEngine::VulkanEngine()
 : m_allocCallbacks(nullptr)
+, m_inst(VK_NULL_HANDLE)
 , m_physDev(nullptr)
 , m_queueFamilly(0)
 , m_windowSurface(VK_NULL_HANDLE)
-, m_inst(VK_NULL_HANDLE)
+, m_timestampFrequency(0)
 {}
 VulkanEngine::~VulkanEngine(){ destroy(); }
 
@@ -225,6 +226,7 @@ bool VulkanEngine::init(const Common::FrameData& data){
         }
 
         vkGetPhysicalDeviceProperties(m_physDev, &m_physDevProps);
+        m_timestampFrequency = m_physDevProps.limits.timestampPeriod / (1000 * 1000);
 
         NWB_LOGGER_INFO(NWB_TEXT("GPU selected: {}"), stringConvert(m_physDevProps.deviceName));
     }

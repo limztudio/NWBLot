@@ -7,6 +7,7 @@
 
 #include <core/global.h>
 
+#include <core/common/common.h>
 #include <core/graphics/graphics.h>
 
 
@@ -14,36 +15,6 @@
 
 
 NWB_CORE_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_frame{
-    union FrameParam{
-        void* ptr[3];
-        u64 u64[3];
-        u32 u32[6];
-        u16 u16[12];
-        u8 u8[24];
-    };
-    class FrameData{
-    public:
-        inline FrameData() : m_data{ nullptr, }{}
-
-
-    public:
-        inline u16& width(){ return m_data.u16[0]; }
-        inline const u16& width()const{ return m_data.u16[0]; }
-
-        inline u16& height(){ return m_data.u16[1]; }
-        inline const u16& height()const{ return m_data.u16[2]; }
-
-
-    protected:
-        FrameParam m_data;
-    };
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -72,7 +43,7 @@ public:
 
 
 private:
-    __hidden_frame::FrameData m_data;
+    Common::FrameData m_data;
 
 private:
     Graphics m_graphics;

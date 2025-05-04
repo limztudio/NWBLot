@@ -7,6 +7,8 @@
 
 #include <core/global.h>
 
+#include <core/common/common.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -30,7 +32,7 @@ public:
 
 
 public:
-    bool init(u16 width, u16 height);
+    bool init(const Common::FrameData& data);
     void destroy();
 
 

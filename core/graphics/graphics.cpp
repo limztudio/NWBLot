@@ -23,7 +23,7 @@ Graphics::Graphics()
 {}
 Graphics::~Graphics(){}
 
-bool Graphics::init(u16 width, u16 height){ return m_engine->init(width, height); }
+bool Graphics::init(const Common::FrameData& data){ return m_engine->init(data); }
 void Graphics::destroy(){ m_engine.release(); }
 
 

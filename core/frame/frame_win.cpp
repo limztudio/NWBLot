@@ -31,19 +31,6 @@ NWB_CORE_BEGIN
 
 
 namespace __hidden_frame{
-    class WinFrame : public FrameData{
-    public:
-        inline bool& isActive(){ return reinterpret_cast<bool&>(m_data.u8[4]); }
-        inline const bool& isActive()const{ return reinterpret_cast<const bool&>(m_data.u8[4]); }
-
-        inline HINSTANCE& instance(){ return reinterpret_cast<HINSTANCE&>(m_data.ptr[1]); }
-        inline const HINSTANCE& instance()const{ return reinterpret_cast<const HINSTANCE&>(m_data.ptr[1]); }
-
-        inline HWND& hwnd(){ return reinterpret_cast<HWND&>(m_data.ptr[2]); }
-        inline const HWND& hwnd()const{ return reinterpret_cast<const HWND&>(m_data.ptr[2]); }
-    };
-
-
     // in windows, the frame is a singleton
     static Frame* g_frame = nullptr;
     static LRESULT CALLBACK winProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
@@ -66,10 +53,10 @@ namespace __hidden_frame{
             {
                 switch(LOWORD(wParam)){
                 case WA_INACTIVE:
-                    _this->data<WinFrame>().isActive() = false;
+                    _this->data<Common::WinFrame>().isActive() = false;
                     break;
                 default:
-                    _this->data<WinFrame>().isActive() = true;
+                    _this->data<Common::WinFrame>().isActive() = true;
                     break;
                 }
             }
@@ -99,10 +86,10 @@ namespace __hidden_frame{
 Frame::Frame(void* inst, u16 width, u16 height){
     __hidden_frame::g_frame = this;
 
-    data<__hidden_frame::WinFrame>().width() = width;
-    data<__hidden_frame::WinFrame>().height() = height;
-    data<__hidden_frame::WinFrame>().isActive() = false;
-    data<__hidden_frame::WinFrame>().instance() = reinterpret_cast<HINSTANCE>(inst);
+    data<Common::WinFrame>().width() = width;
+    data<Common::WinFrame>().height() = height;
+    data<Common::WinFrame>().isActive() = false;
+    data<Common::WinFrame>().instance() = reinterpret_cast<HINSTANCE>(inst);
 }
 Frame::~Frame(){
     cleanup();
@@ -120,7 +107,7 @@ bool Frame::init(){
         wc.cbSize = sizeof(WNDCLASSEX);
         wc.style = CS_HREDRAW | CS_VREDRAW;
         wc.lpfnWndProc = __hidden_frame::winProc;
-        wc.hInstance = data<__hidden_frame::WinFrame>().instance();
+        wc.hInstance = data<Common::WinFrame>().instance();
         wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
         wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW);
         wc.lpszClassName = ClassName;
@@ -130,9 +117,9 @@ bool Frame::init(){
         return false;
     }
 
-    RECT rc = { 0, 0, static_cast<i32>(data<__hidden_frame::WinFrame>().width()), static_cast<i32>(data<__hidden_frame::WinFrame>().height()) };
+    RECT rc = { 0, 0, static_cast<i32>(data<Common::WinFrame>().width()), static_cast<i32>(data<Common::WinFrame>().height()) };
 
-    data<__hidden_frame::WinFrame>().hwnd() = CreateWindowEx(
+    data<Common::WinFrame>().hwnd() = CreateWindowEx(
         StyleEx,
         wc.lpszClassName,
         AppName,
@@ -146,14 +133,14 @@ bool Frame::init(){
         wc.hInstance,
         nullptr
     );
-    if(!data<__hidden_frame::WinFrame>().hwnd()){
+    if(!data<Common::WinFrame>().hwnd()){
         NWB_LOGGER_FATAL(NWB_TEXT("Frame window creation failed"));
         return false;
     }
 
     {
         if(!AdjustWindowRectEx(&rc, Style, FALSE, StyleEx)){
-            data<__hidden_frame::WinFrame>().hwnd() = nullptr;
+            data<Common::WinFrame>().hwnd() = nullptr;
             NWB_LOGGER_FATAL(NWB_TEXT("Frame window adjustment failed"));
             return false;
         }
@@ -163,8 +150,8 @@ bool Frame::init(){
         const auto x = (GetSystemMetrics(SM_CXSCREEN) - actualWidth) >> 1;
         const auto y = (GetSystemMetrics(SM_CYSCREEN) - actualHeight) >> 1;
 
-        if(!MoveWindow(data<__hidden_frame::WinFrame>().hwnd(), x, y, actualWidth, actualHeight, false)){
-            data<__hidden_frame::WinFrame>().hwnd() = nullptr;
+        if(!MoveWindow(data<Common::WinFrame>().hwnd(), x, y, actualWidth, actualHeight, false)){
+            data<Common::WinFrame>().hwnd() = nullptr;
             NWB_LOGGER_FATAL(NWB_TEXT("Frame window moving failed"));
             return false;
         }
@@ -176,7 +163,7 @@ bool Frame::init(){
     return true;
 }
 bool Frame::showFrame(){
-    ShowWindow(data<__hidden_frame::WinFrame>().hwnd(), SW_SHOW);
+    ShowWindow(data<Common::WinFrame>().hwnd(), SW_SHOW);
     return true;
 }
 bool Frame::mainLoop(){
@@ -185,7 +172,7 @@ bool Frame::mainLoop(){
     Timer lateTime(timerNow());
 
     for(;;){
-        if(data<__hidden_frame::WinFrame>().isActive()){
+        if(data<Common::WinFrame>().isActive()){
             while(PeekMessage(&message, nullptr, 0, 0, PM_REMOVE)){
                 if(message.message == WM_QUIT)
                     return true;

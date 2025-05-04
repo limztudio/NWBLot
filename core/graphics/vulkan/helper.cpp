@@ -49,6 +49,32 @@ VkDebugUtilsMessengerCreateInfoEXT createDebugMessengerInfo(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#if defined(NWB_PLATFORM_WINDOWS)
+#include <vulkan/vulkan_win32.h>
+#endif
+VkSurfaceKHR createSurface(VkInstance inst, const Common::FrameData& data){
+    VkSurfaceKHR output = VK_NULL_HANDLE;
+    
+    VkResult err = VK_SUCCESS;
+#if defined(NWB_PLATFORM_WINDOWS)
+    VkWin32SurfaceCreateInfoKHR createInfo{ VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR };
+    {
+        createInfo.hwnd = static_cast<const Common::WinFrame&>(data).hwnd();
+        createInfo.hinstance = static_cast<const Common::WinFrame&>(data).instance();
+    }
+    err = vkCreateWin32SurfaceKHR(inst, &createInfo, nullptr, &output);
+    if(err != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to create Vulkan surface: {}"), stringConvert(helperGetVulkanResultString(err)));
+        return VK_NULL_HANDLE;
+    }
+#else
+    static_assert(false, "Unsupported platform");
+#endif
+
+    return output;
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

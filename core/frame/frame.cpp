@@ -23,7 +23,7 @@ static Timer g_testTimer = timerNow();
 
 
 bool Frame::startup(){
-    if(!m_graphics.init(data<__hidden_frame::FrameData>().width(), data<__hidden_frame::FrameData>().height()))
+    if(!m_graphics.init(data<Common::FrameData>()))
         return false;
 
     return true;

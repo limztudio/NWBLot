@@ -22,11 +22,12 @@ NWB_CORE_BEGIN
 VulkanEngine::VulkanEngine()
 : m_allocCallbacks(nullptr)
 , m_physDev(nullptr)
+, m_windowSurface(VK_NULL_HANDLE)
 , m_inst(VK_NULL_HANDLE)
 {}
 VulkanEngine::~VulkanEngine(){ destroy(); }
 
-bool VulkanEngine::init(u16 width, u16 height){
+bool VulkanEngine::init(const Common::FrameData& data){
     const char* EngineName = "NWB";
     const char* AppName = "NWBLoader";
 
@@ -153,6 +154,12 @@ bool VulkanEngine::init(u16 width, u16 height){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to get physical devices: {}"), stringConvert(helperGetVulkanResultString(err)));
             return false;
         }
+    }
+
+    m_windowSurface = createSurface(instance, data);
+    if(m_windowSurface == VK_NULL_HANDLE){
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to create Vulkan surface"));
+        return false;
     }
 
     return true;

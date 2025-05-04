@@ -64,7 +64,7 @@ public:
     inline bool init(ARGS&&... args){
         if(!static_cast<T*>(this)->m_globalInit){
             if(!static_cast<T*>(this)->globalInit()){
-                static_cast<T*>(this)->enqueue(stringFormat(NWB_TEXT("Failed to global initialization on {}"), NAME), Type::Fatal);
+                static_cast<T*>(this)->T::enqueue(stringFormat(NWB_TEXT("Failed to global initialization on {}"), NAME), Type::Fatal);
                 return false;
             }
             static_cast<T*>(this)->m_globalInit = true;
@@ -77,8 +77,8 @@ public:
     }
 
 public:
-    inline bool enqueue(TString&& str, Type type = Type::Info){ return static_cast<T*>(this)->enqueue(MakeTuple(timerNow(), type, Move(str))); }
-    inline bool enqueue(const TString& str, Type type = Type::Info){ return static_cast<T*>(this)->enqueue(MakeTuple(timerNow(), type, str)); }
+    inline bool enqueue(TString&& str, Type type = Type::Info){ return static_cast<T*>(this)->T::enqueue(MakeTuple(timerNow(), type, Move(str))); }
+    inline bool enqueue(const TString& str, Type type = Type::Info){ return static_cast<T*>(this)->T::enqueue(MakeTuple(timerNow(), type, str)); }
 
 
 protected:

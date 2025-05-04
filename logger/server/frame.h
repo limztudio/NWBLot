@@ -61,7 +61,7 @@ public:
 
 
 public:
-    static void print(BasicStringView<tchar> str);
+    static void print(BasicStringView<tchar> str, Log::Type type);
 
 
 private:

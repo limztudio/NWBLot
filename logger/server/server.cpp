@@ -81,7 +81,7 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
         return MHD_YES;
     }
 
-    auto* info = reinterpret_cast<__hidden_logger::ConnectionInfo*>(*con_cls);
+    auto*& info = reinterpret_cast<__hidden_logger::ConnectionInfo*&>(*con_cls);
 
     if(*upload_data_size){
         info->buffer = reinterpret_cast<u8*>(Core::Alloc::coreRealloc(info->buffer, info->size + (*upload_data_size), "ConnectionInfo buffer reallocated at Server::requestCallback"));
@@ -105,6 +105,7 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
 
         Core::Alloc::coreFree(info->buffer, "ConnectionInfo buffer freed at Server::requestCallback");
         Core::Alloc::coreFree(info, "ConnectionInfo freed at Server::requestCallback");
+        info = nullptr;
 
         return ret;
     }
@@ -132,16 +133,16 @@ bool Server::internalUpdate(){
         const auto& [time, type, str] = msg;
         switch(type){
         case Type::Info:
-            Frame::print(stringFormat(NWB_TEXT("{} [INFO]:\n{}"), durationInTimeDelta(time), str));
+            Frame::print(stringFormat(NWB_TEXT("{} [INFO]:\n{}"), durationInTimeDelta(time), str), type);
             break;
         case Type::Warning:
-            Frame::print(stringFormat(NWB_TEXT("{} [WARNING]:\n{}"), durationInTimeDelta(time), str));
+            Frame::print(stringFormat(NWB_TEXT("{} [WARNING]:\n{}"), durationInTimeDelta(time), str), type);
             break;
         case Type::Error:
-            Frame::print(stringFormat(NWB_TEXT("{} [ERROR]:\n{}"), durationInTimeDelta(time), str));
+            Frame::print(stringFormat(NWB_TEXT("{} [ERROR]:\n{}"), durationInTimeDelta(time), str), type);
             break;
         case Type::Fatal:
-            Frame::print(stringFormat(NWB_TEXT("{} [FATAL]:\n{}"), durationInTimeDelta(time), str));
+            Frame::print(stringFormat(NWB_TEXT("{} [FATAL]:\n{}"), durationInTimeDelta(time), str), type);
             break;
         }
     }

@@ -39,6 +39,8 @@ private:
 
 private:
     VkPhysicalDevice m_physDev;
+    VkPhysicalDeviceProperties m_physDevProps;
+    u32 m_queueFamilly;
     VkSurfaceKHR m_windowSurface;
     VkInstance m_inst;
 

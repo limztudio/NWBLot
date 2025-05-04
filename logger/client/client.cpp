@@ -14,6 +14,9 @@ NWB_LOG_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+bool Client::s_sendSwitch = false;
+
+
 bool Client::globalInit(){
     CURLcode ret;
 
@@ -26,6 +29,11 @@ bool Client::globalInit(){
 usize Client::sendCallback(void* contents, usize size, usize nmemb, Client* _this){
     (void)size;
     (void)nmemb;
+
+    if(s_sendSwitch){
+        s_sendSwitch = false;
+        return 0;
+    }
 
     MessageType msg;
     if(!_this->try_dequeue(msg))
@@ -51,6 +59,8 @@ usize Client::sendCallback(void* contents, usize size, usize nmemb, Client* _thi
     }
 
     auto sizeWritten = static_cast<usize>(ptr - reinterpret_cast<u8*>(contents));
+
+    s_sendSwitch = true;
     return sizeWritten;
 }
 

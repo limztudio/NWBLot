@@ -29,6 +29,10 @@ private:
     static usize sendCallback(void* contents, usize size, usize nmemb, Client* _this);
 
 
+private:
+    static bool s_sendSwitch;
+
+
 public:
     Client();
     virtual ~Client()override;

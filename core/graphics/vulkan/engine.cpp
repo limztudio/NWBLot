@@ -22,6 +22,7 @@ NWB_CORE_BEGIN
 VulkanEngine::VulkanEngine()
 : m_allocCallbacks(nullptr)
 , m_physDev(nullptr)
+, m_queueFamilly(0)
 , m_windowSurface(VK_NULL_HANDLE)
 , m_inst(VK_NULL_HANDLE)
 {}
@@ -55,7 +56,7 @@ bool VulkanEngine::init(const Common::FrameData& data){
         for(usize i = 0; i < LengthOf(s_validationLayerName); ++i){
             bool bFound = false;
             for(auto j = decltype(layerCount){ 0 }; j < layerCount; ++j){
-                if(strcmp(layerProps[j].layerName, s_validationLayerName[i]) == 0){
+                if(NWB_STRCMP(layerProps[j].layerName, s_validationLayerName[i]) == 0){
                     bFound = true;
                     break;
                 }
@@ -160,6 +161,72 @@ bool VulkanEngine::init(const Common::FrameData& data){
     if(m_windowSurface == VK_NULL_HANDLE){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to create Vulkan surface"));
         return false;
+    }
+
+    VkPhysicalDevice discreteGPU = VK_NULL_HANDLE;
+    u32 discreteQueueFamilly = 0;
+    VkPhysicalDevice integratedGPU = VK_NULL_HANDLE;
+    u32 integratedQueueFamilly = 0;
+    {
+        auto famillyQueue = [this, &tmpArena](VkPhysicalDevice physDev, u32& queueFamily){
+            u32 queueFamilyCount = 0;
+            ScratchUniquePtr<VkQueueFamilyProperties[]> queueFamilies;
+
+            vkGetPhysicalDeviceQueueFamilyProperties(physDev, reinterpret_cast<uint32_t*>(&queueFamilyCount), nullptr);
+            queueFamilies = makeScratchUnique<VkQueueFamilyProperties[]>(tmpArena, queueFamilyCount);
+
+            vkGetPhysicalDeviceQueueFamilyProperties(physDev, reinterpret_cast<uint32_t*>(&queueFamilyCount), queueFamilies.get());
+
+            VkBool32 output = 0;
+            for(auto i = decltype(queueFamilyCount){ 0 }; i < queueFamilyCount; ++i){
+                if(queueFamilies[i].queueCount > 0 && queueFamilies[i].queueFlags & (VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT)){
+                    vkGetPhysicalDeviceSurfaceSupportKHR(physDev, i, m_windowSurface, &output);
+                    if(output){
+                        queueFamily = i;
+                        break;
+                    }
+                }
+            }
+            return output;
+        };
+
+        for(auto i = decltype(physDevCount){ 0 }; i < physDevCount; ++i){
+            VkPhysicalDeviceProperties props;
+            vkGetPhysicalDeviceProperties(physDevs[i], &props);
+
+            u32 queueFamily = 0;
+            if(props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU){
+                if(famillyQueue(physDevs[i], queueFamily)){
+                    discreteGPU = physDevs[i];
+                    discreteQueueFamilly = queueFamily;
+                    break;
+                }
+            }
+            else if(props.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU){
+                if(famillyQueue(physDevs[i], queueFamily)){
+                    integratedGPU = physDevs[i];
+                    integratedQueueFamilly = queueFamily;
+                    break;
+                }
+            }
+        }
+
+        if(discreteGPU != VK_NULL_HANDLE){
+            m_physDev = discreteGPU;
+            m_queueFamilly = discreteQueueFamilly;
+        }
+        else if(integratedGPU != VK_NULL_HANDLE){
+            m_physDev = integratedGPU;
+            m_queueFamilly = integratedQueueFamilly;
+        }
+        else{
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to find suitable physical device"));
+            return false;
+        }
+
+        vkGetPhysicalDeviceProperties(m_physDev, &m_physDevProps);
+
+        NWB_LOGGER_INFO(NWB_TEXT("GPU selected: {}"), stringConvert(m_physDevProps.deviceName));
     }
 
     return true;

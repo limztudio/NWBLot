@@ -53,7 +53,7 @@ namespace __hidden_frame{
     static Frame* g_frame = nullptr;
     static HFONT g_font = nullptr;
     static HWND g_listHwnd = nullptr;
-    static Deque<BasicString<tchar>> g_messages;
+    static Deque<Pair<BasicString<tchar>, Log::Type>> g_messages;
 
     static std::mutex g_listMutex;
 
@@ -94,8 +94,8 @@ namespace __hidden_frame{
                 );
                 if(!g_listHwnd)
                     PostQuitMessage(0);
-
-                SendMessage(g_listHwnd, WM_SETFONT, reinterpret_cast<WPARAM>(g_font), TRUE);
+                else
+                    SendMessage(g_listHwnd, WM_SETFONT, reinterpret_cast<WPARAM>(g_font), TRUE);
             }
             return 0;
 
@@ -135,6 +135,17 @@ namespace __hidden_frame{
             }
             return 0;
 
+            case WM_EXITSIZEMOVE:
+            {
+                SendMessage(g_listHwnd, WM_SETREDRAW, FALSE, 0);
+                SendMessage(g_listHwnd, LB_RESETCONTENT, 0, 0);
+                for(auto& str : g_messages)
+                    SendMessage(g_listHwnd, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(str.first().c_str()));
+                SendMessage(g_listHwnd, WM_SETREDRAW, TRUE, 0);
+                InvalidateRect(g_listHwnd, nullptr, TRUE);
+            }
+            return 0;
+
             case WM_MEASUREITEM:
             {
                 auto* mis = reinterpret_cast<LPMEASUREITEMSTRUCT>(lParam);
@@ -150,7 +161,7 @@ namespace __hidden_frame{
                     auto* hFont = reinterpret_cast<HFONT>(SendMessage(g_listHwnd, WM_GETFONT, 0, 0));
                     auto* hOldFont = reinterpret_cast<HFONT>(SelectObject(hdc, hFont));
 
-                    DrawText(hdc, curStr.c_str(), -1, &rect, DT_WORDBREAK | DT_LEFT | DT_CALCRECT);
+                    DrawText(hdc, curStr.first().c_str(), -1, &rect, DT_WORDBREAK | DT_LEFT | DT_CALCRECT);
 
                     mis->itemHeight = rect.bottom - rect.top;
 
@@ -164,13 +175,35 @@ namespace __hidden_frame{
             {
                 auto* dis = reinterpret_cast<LPDRAWITEMSTRUCT>(lParam);
                 if(dis->itemID >= 0 && dis->itemID < static_cast<decltype(dis->itemID)>(g_messages.size())){
-                    const auto& curStr = g_messages[static_cast<u32>(dis->itemID)];
+                    const auto& curData = g_messages[static_cast<u32>(dis->itemID)];
 
                     HDC hdc = dis->hDC;
                     RECT rect = dis->rcItem;
 
-                    COLORREF bgColor = (dis->itemID & 1) ? RGB(255, 255, 255) : RGB(230, 230, 250);
-                    COLORREF textColor = RGB(0, 0, 0);
+                    COLORREF textColor;
+                    COLORREF bgColor;
+                    switch(curData.second()){
+                    case Log::Type::Info:
+                        textColor = (dis->itemID & 1) ? RGB(80, 80, 80) : RGB(0, 0, 0);
+                        bgColor = RGB(230, 230, 230);
+                        break;
+                    case Log::Type::Warning:
+                        textColor = (dis->itemID & 1) ? RGB(60, 60, 60) : RGB(0, 0, 0);
+                        bgColor = RGB(200, 200, 0);
+                        break;
+                    case Log::Type::Error:
+                        textColor = (dis->itemID & 1) ? RGB(200, 200, 200) : RGB(255, 255, 255);
+                        bgColor = RGB(200, 0, 0);
+                        break;
+                    case Log::Type::Fatal:
+                        textColor = (dis->itemID & 1) ? RGB(200, 200, 200) : RGB(255, 255, 255);
+                        bgColor = RGB(255, 0, 0);
+                        break;
+                    default:
+                        textColor = (dis->itemID & 1) ? RGB(100, 100, 100) : RGB(0, 0, 0);
+                        bgColor = RGB(255, 255, 255);
+                        break;
+                    }
 
                     HBRUSH hBrush = CreateSolidBrush(bgColor);
                     FillRect(hdc, &rect, hBrush);
@@ -178,7 +211,7 @@ namespace __hidden_frame{
 
                     SetTextColor(hdc, textColor);
                     SetBkMode(hdc, TRANSPARENT);
-                    DrawText(hdc, curStr.c_str(), -1, &rect, DT_WORDBREAK | DT_LEFT);
+                    DrawText(hdc, curData.first().c_str(), -1, &rect, DT_WORDBREAK | DT_LEFT);
                 }
             }
             return TRUE;
@@ -285,11 +318,11 @@ bool Frame::mainLoop(){
     return false;
 }
 
-void Frame::print(BasicStringView<tchar> str){
+void Frame::print(BasicStringView<tchar> str, Log::Type type){
     std::unique_lock lock(__hidden_frame::g_listMutex);
 
-    __hidden_frame::g_messages.emplace_back(str);
-    SendMessage(__hidden_frame::g_listHwnd, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(__hidden_frame::g_messages[__hidden_frame::g_messages.size() - 1].c_str()));
+    __hidden_frame::g_messages.emplace_back(BasicString<tchar>(str), type);
+    SendMessage(__hidden_frame::g_listHwnd, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(__hidden_frame::g_messages[__hidden_frame::g_messages.size() - 1].first().c_str()));
 
     auto numItem = SendMessage(__hidden_frame::g_listHwnd, LB_GETCOUNT, 0, 0);
     if(numItem > 0)

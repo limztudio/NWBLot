@@ -51,18 +51,38 @@ namespace __hidden_frame{
 
     // in windows, the frame is a singleton
     static Frame* g_frame = nullptr;
+    static HFONT g_font = nullptr;
     static HWND g_listHwnd = nullptr;
+    static Deque<BasicString<tchar>> g_messages;
+
     static std::mutex g_listMutex;
+
     static LRESULT CALLBACK winProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
         if(auto* _this = g_frame){
             switch(uMsg){
             case WM_CREATE:
             {
+                g_font = CreateFont(
+                    10,
+                    0,
+                    0, 0,
+                    FW_NORMAL,
+                    FALSE,
+                    FALSE,
+                    FALSE,
+                    DEFAULT_CHARSET,
+                    OUT_DEFAULT_PRECIS,
+                    CLIP_DEFAULT_PRECIS,
+                    DEFAULT_QUALITY,
+                    DEFAULT_PITCH | FF_SWISS,
+                    NWB_TEXT("Terminal")
+                );
+
                 g_listHwnd = CreateWindowEx(
                     0,
                     NWB_TEXT("LISTBOX"),
                     nullptr,
-                    WS_CHILD | WS_VISIBLE | WS_VSCROLL | LBS_NOTIFY,
+                    WS_CHILD | WS_VISIBLE | LBS_OWNERDRAWVARIABLE | WS_VSCROLL | LBS_NOTIFY,
                     0,
                     0,
                     0,
@@ -74,11 +94,17 @@ namespace __hidden_frame{
                 );
                 if(!g_listHwnd)
                     PostQuitMessage(0);
+
+                SendMessage(g_listHwnd, WM_SETFONT, reinterpret_cast<WPARAM>(g_font), TRUE);
             }
             return 0;
 
             case WM_DESTROY:
             {
+                if(g_font){
+                    DeleteObject(g_font);
+                    g_font = nullptr;
+                }
                 PostQuitMessage(0);
             }
             return 0;
@@ -108,6 +134,54 @@ namespace __hidden_frame{
                 MoveWindow(g_listHwnd, clientRect.left, clientRect.top, clientRect.right - clientRect.left, clientRect.bottom - clientRect.top, TRUE);
             }
             return 0;
+
+            case WM_MEASUREITEM:
+            {
+                auto* mis = reinterpret_cast<LPMEASUREITEMSTRUCT>(lParam);
+                if(mis->itemID >= 0 && mis->itemID < static_cast<decltype(mis->itemID)>(g_messages.size())){
+                    const auto& curStr = g_messages[static_cast<u32>(mis->itemID)];
+
+                    RECT rect;
+                    GetClientRect(hwnd, &rect);
+                    rect.right -= rect.left;
+                    rect.left = rect.top = rect.bottom = 0;
+
+                    HDC hdc = GetDC(g_listHwnd);
+                    auto* hFont = reinterpret_cast<HFONT>(SendMessage(g_listHwnd, WM_GETFONT, 0, 0));
+                    auto* hOldFont = reinterpret_cast<HFONT>(SelectObject(hdc, hFont));
+
+                    DrawText(hdc, curStr.c_str(), -1, &rect, DT_WORDBREAK | DT_LEFT | DT_CALCRECT);
+
+                    mis->itemHeight = rect.bottom - rect.top;
+
+                    SelectObject(hdc, hOldFont);
+                    ReleaseDC(g_listHwnd, hdc);
+                }
+            }
+            return TRUE;
+
+            case WM_DRAWITEM:
+            {
+                auto* dis = reinterpret_cast<LPDRAWITEMSTRUCT>(lParam);
+                if(dis->itemID >= 0 && dis->itemID < static_cast<decltype(dis->itemID)>(g_messages.size())){
+                    const auto& curStr = g_messages[static_cast<u32>(dis->itemID)];
+
+                    HDC hdc = dis->hDC;
+                    RECT rect = dis->rcItem;
+
+                    COLORREF bgColor = (dis->itemID & 1) ? RGB(255, 255, 255) : RGB(230, 230, 250);
+                    COLORREF textColor = RGB(0, 0, 0);
+
+                    HBRUSH hBrush = CreateSolidBrush(bgColor);
+                    FillRect(hdc, &rect, hBrush);
+                    DeleteObject(hBrush);
+
+                    SetTextColor(hdc, textColor);
+                    SetBkMode(hdc, TRANSPARENT);
+                    DrawText(hdc, curStr.c_str(), -1, &rect, DT_WORDBREAK | DT_LEFT);
+                }
+            }
+            return TRUE;
             }
         }
         return DefWindowProc(hwnd, uMsg, wParam, lParam);
@@ -125,6 +199,8 @@ Frame::Frame(void* inst){
 }
 Frame::~Frame(){
     cleanup();
+
+    __hidden_frame::g_messages.clear();
     __hidden_frame::g_frame = nullptr;
 }
 
@@ -212,7 +288,8 @@ bool Frame::mainLoop(){
 void Frame::print(BasicStringView<tchar> str){
     std::unique_lock lock(__hidden_frame::g_listMutex);
 
-    SendMessage(__hidden_frame::g_listHwnd, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(str.data()));
+    __hidden_frame::g_messages.emplace_back(str);
+    SendMessage(__hidden_frame::g_listHwnd, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(__hidden_frame::g_messages[__hidden_frame::g_messages.size() - 1].c_str()));
 
     auto numItem = SendMessage(__hidden_frame::g_listHwnd, LB_GETCOUNT, 0, 0);
     if(numItem > 0)

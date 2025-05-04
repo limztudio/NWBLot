@@ -9,15 +9,7 @@
 
 #include <core/global.h>
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#ifndef VULKAN_VALIDATE
-#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
-#define VULKAN_VALIDATE
-#endif
-#endif
+#include "config.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -41,14 +33,24 @@ public:
 
 
 private:
+    VkAllocationCallbacks* m_allocCallbacks;
+
+private:
     VkPhysicalDevice m_physDev;
     VkInstance m_inst;
 
 
-#if defined(VULKAN_VALIDATE)
 private:
+#if defined(VULKAN_VALIDATE)
     static constexpr const char* s_validationLayerName[] = {
         "VK_LAYER_KHRONOS_validation"
+    };
+#endif
+#if defined(VULKAN_SYNC_VALIDATE)
+    static constexpr const VkValidationFeatureEnableEXT s_validationFeaturesRequested[] = {
+        VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
+        VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT,
+        //VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT,
     };
 #endif
 };

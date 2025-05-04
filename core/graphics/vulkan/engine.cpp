@@ -19,16 +19,9 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#define ENGINE_VERSION VK_MAKE_VERSION(1, 0, 0)
-#define APP_VERSION VK_MAKE_VERSION(1, 0, 0)
-#define API_VERSION VK_API_VERSION_1_3
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 VulkanEngine::VulkanEngine()
-: m_physDev(nullptr)
+: m_allocCallbacks(nullptr)
+, m_physDev(nullptr)
 , m_inst(VK_NULL_HANDLE)
 {}
 VulkanEngine::~VulkanEngine(){ destroy(); }
@@ -47,14 +40,14 @@ bool VulkanEngine::init(u16 width, u16 height){
         {
             err = vkEnumerateInstanceLayerProperties(reinterpret_cast<uint32_t*>(&layerCount), nullptr);
             if(err != VK_SUCCESS){
-                NWB_LOGGER_ERROR(NWB_TEXT("Failed to get required instance layers: %s"), stringConvert(helperGetVulkanResultString(err)));
+                NWB_LOGGER_ERROR(NWB_TEXT("Failed to get required instance layers: {}"), stringConvert(helperGetVulkanResultString(err)));
                 return false;
             }
 
             layerProps = makeScratchUnique<VkLayerProperties[]>(tmpArena, layerCount);
             err = vkEnumerateInstanceLayerProperties(reinterpret_cast<uint32_t*>(&layerCount), layerProps.get());
             if(err != VK_SUCCESS){
-                NWB_LOGGER_ERROR(NWB_TEXT("Failed to get required instance layers: %s"), stringConvert(helperGetVulkanResultString(err)));
+                NWB_LOGGER_ERROR(NWB_TEXT("Failed to get required instance layers: {}"), stringConvert(helperGetVulkanResultString(err)));
                 return false;
             }
         }
@@ -67,7 +60,7 @@ bool VulkanEngine::init(u16 width, u16 height){
                 }
             }
             if(!bFound){
-                NWB_LOGGER_ERROR(NWB_TEXT("Failed to find required instance layer: %s"), stringConvert(s_validationLayerName[i]));
+                NWB_LOGGER_ERROR(NWB_TEXT("Failed to find required instance layer: {}"), stringConvert(s_validationLayerName[i]));
                 return false;
             }
         }
@@ -90,14 +83,14 @@ bool VulkanEngine::init(u16 width, u16 height){
     {
         err = vkEnumerateInstanceExtensionProperties(nullptr, reinterpret_cast<uint32_t*>(&extCount), nullptr);
         if(err != VK_SUCCESS){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to get required instance extensions: %s"), stringConvert(helperGetVulkanResultString(err)));
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to get required instance extensions: {}"), stringConvert(helperGetVulkanResultString(err)));
             return false;
         }
 
         extProps = makeScratchUnique<VkExtensionProperties[]>(tmpArena, extCount);
         err = vkEnumerateInstanceExtensionProperties(nullptr, reinterpret_cast<uint32_t*>(&extCount), extProps.get());
         if(err != VK_SUCCESS){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to get required instance extensions: %s"), stringConvert(helperGetVulkanResultString(err)));
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to get required instance extensions: {}"), stringConvert(helperGetVulkanResultString(err)));
             return false;
         }
 
@@ -120,12 +113,44 @@ bool VulkanEngine::init(u16 width, u16 height){
         createInfo.ppEnabledLayerNames = nullptr;
 #endif
     }
+#if defined(VULKAN_VALIDATE)
+    const VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo = createDebugMessengerInfo();
+#if defined(VULKAN_SYNC_VALIDATE)
+    VkValidationFeaturesEXT features{};
+    {
+        features.sType = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT;
+        features.pNext = &debugCreateInfo;
+        features.enabledValidationFeatureCount = static_cast<decltype(features.enabledValidationFeatureCount)>(LengthOf(s_validationFeaturesRequested));
+        features.pEnabledValidationFeatures = s_validationFeaturesRequested;
+    }
+    createInfo.pNext = &features;
+#else
+    createInfo.pNext = &debugCreateInfo;
+#endif
+#endif
 
     VkInstance instance = nullptr;
     {
-        err = vkCreateInstance(&createInfo, nullptr, &instance);
+        err = vkCreateInstance(&createInfo, m_allocCallbacks, &instance);
         if(err != VK_SUCCESS){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to create Vulkan instance: %s"), stringConvert(helperGetVulkanResultString(err)));
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to create Vulkan instance: {}"), stringConvert(helperGetVulkanResultString(err)));
+            return false;
+        }
+    }
+
+    u32 physDevCount = 0;
+    ScratchUniquePtr<VkPhysicalDevice[]> physDevs;
+    {
+        err = vkEnumeratePhysicalDevices(instance, reinterpret_cast<uint32_t*>(&physDevCount), nullptr);
+        if(err != VK_SUCCESS){
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to get physical devices: {}"), stringConvert(helperGetVulkanResultString(err)));
+            return false;
+        }
+
+        physDevs = makeScratchUnique<VkPhysicalDevice[]>(tmpArena, physDevCount);
+        err = vkEnumeratePhysicalDevices(instance, reinterpret_cast<uint32_t*>(&physDevCount), physDevs.get());
+        if(err != VK_SUCCESS){
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to get physical devices: {}"), stringConvert(helperGetVulkanResultString(err)));
             return false;
         }
     }
@@ -138,14 +163,6 @@ void VulkanEngine::destroy(){
         m_inst = nullptr;
     }
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#undef ENGINE_VERSION
-#undef APP_VERSION
-#undef API_VERSION
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

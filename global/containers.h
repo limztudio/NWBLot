@@ -9,6 +9,10 @@
 #include "type.h"
 
 #include <tuple>
+#include <forward_list>
+#include <list>
+#include <vector>
+#include <deque>
 
 #include <readerwriterqueue.h>
 #include <readerwritercircularbuffer.h>
@@ -78,6 +82,18 @@ using HashSet = tsl::robin_set<T, Hash, Equal, Alloc>;
 
 template<typename T, typename V, typename Hash = Hasher<T>, typename Equal = EqualTo<T>, typename Alloc = NWB::Core::Alloc::GeneralAllocator<Pair<T, V>>>
 using HashMap = tsl::robin_map<T, V, Hash, Equal, Alloc>;
+
+template<typename T, typename Alloc = NWB::Core::Alloc::GeneralAllocator<T>>
+using ForwardList = std::forward_list<T, Alloc>;
+
+template<typename T, typename Alloc = NWB::Core::Alloc::GeneralAllocator<T>>
+using List = std::list<T, Alloc>;
+
+template<typename T, typename Alloc = NWB::Core::Alloc::GeneralAllocator<T>>
+using Vector = std::vector<T, Alloc>;
+
+template<typename T, typename Alloc = NWB::Core::Alloc::GeneralAllocator<T>>
+using Deque = std::deque<T, Alloc>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

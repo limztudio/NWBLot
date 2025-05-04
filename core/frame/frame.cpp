@@ -32,15 +32,6 @@ void Frame::cleanup(){
     m_graphics.destroy();
 }
 bool Frame::update(float delta){
-    { // test
-		auto now = timerNow();
-		if (durationInSeconds<float>(now, g_testTimer) > 0.5f)
-		{
-			g_testTimer = now;
-			NWB_LOGGER_INFO(NWB_TEXT("delta: {}"), delta);
-		}
-    }
-
     return true;
 }
 bool Frame::render(){

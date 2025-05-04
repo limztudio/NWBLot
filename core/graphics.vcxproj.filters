@@ -8,6 +8,9 @@
     <ClCompile Include="graphics\vulkan\engine.cpp">
       <Filter>vulkan</Filter>
     </ClCompile>
+    <ClCompile Include="graphics\vulkan\config.cpp">
+      <Filter>vulkan</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="graphics\graphics.h" />
@@ -15,6 +18,9 @@
       <Filter>vulkan</Filter>
     </ClInclude>
     <ClInclude Include="graphics\vulkan\engine.h">
+      <Filter>vulkan</Filter>
+    </ClInclude>
+    <ClInclude Include="graphics\vulkan\config.h">
       <Filter>vulkan</Filter>
     </ClInclude>
   </ItemGroup>

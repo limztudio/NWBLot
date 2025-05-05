@@ -24,7 +24,7 @@ Graphics::Graphics()
 Graphics::~Graphics(){}
 
 bool Graphics::init(const Common::FrameData& data){ return m_engine->init(data); }
-void Graphics::destroy(){ m_engine.release(); }
+void Graphics::destroy(){ m_engine.reset(); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

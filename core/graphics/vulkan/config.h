@@ -11,13 +11,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#ifndef VULKAN_VALIDATE
+#if !defined(VULKAN_VALIDATE)
 #if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
 #define VULKAN_VALIDATE
 #endif
 #endif
 
-#ifndef VULKAN_SYNC_VALIDATE
+#if !defined(VULKAN_SYNC_VALIDATE)
 #if defined(NWB_DEBUG)
 #define VULKAN_SYNC_VALIDATE
 #endif

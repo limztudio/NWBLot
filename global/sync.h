@@ -5,7 +5,7 @@
 #pragma once
 
 
-#ifdef _MSC_VER
+#if defined(_MSC_VER)
 #pragma intrinsic(__rdtsc)
 
 #include <immintrin.h>

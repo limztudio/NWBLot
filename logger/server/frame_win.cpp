@@ -14,7 +14,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#ifdef NWB_PLATFORM_WINDOWS
+#if defined(NWB_PLATFORM_WINDOWS)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -184,24 +184,54 @@ namespace __hidden_frame{
                     COLORREF bgColor;
                     switch(curData.second()){
                     case Log::Type::Info:
-                        textColor = (dis->itemID & 1) ? RGB(80, 80, 80) : RGB(0, 0, 0);
-                        bgColor = RGB(230, 230, 230);
+                        if(dis->itemID & 1){
+                            textColor = RGB(80, 80, 80);
+                            bgColor = RGB(255, 255, 255);
+                        }
+                        else{
+                            textColor = RGB(0, 0, 0);
+                            bgColor = RGB(230, 230, 230);
+                        }
                         break;
                     case Log::Type::Warning:
-                        textColor = (dis->itemID & 1) ? RGB(60, 60, 60) : RGB(0, 0, 0);
-                        bgColor = RGB(200, 200, 0);
+                        if(dis->itemID & 1){
+                            textColor = RGB(60, 60, 60);
+                            bgColor = RGB(200, 200, 0);
+                        }
+                        else{
+                            textColor = RGB(0, 0, 0);
+                            bgColor = RGB(170, 170, 0);
+                        }
                         break;
                     case Log::Type::Error:
-                        textColor = (dis->itemID & 1) ? RGB(200, 200, 200) : RGB(255, 255, 255);
-                        bgColor = RGB(200, 0, 0);
+                        if(dis->itemID & 1){
+                            textColor = RGB(255, 255, 255);
+                            bgColor = RGB(200, 0, 0);
+                        }
+                        else{
+                            textColor = RGB(200, 200, 200);
+                            bgColor = RGB(170, 0, 0);
+                        }
                         break;
                     case Log::Type::Fatal:
-                        textColor = (dis->itemID & 1) ? RGB(200, 200, 200) : RGB(255, 255, 255);
-                        bgColor = RGB(255, 0, 0);
+                        if(dis->itemID & 1){
+                            textColor = RGB(255, 255, 0);
+                            bgColor = RGB(250, 0, 0);
+                        }
+                        else{
+                            textColor = RGB(200, 200, 0);
+                            bgColor = RGB(220, 0, 0);
+                        }
                         break;
                     default:
-                        textColor = (dis->itemID & 1) ? RGB(100, 100, 100) : RGB(0, 0, 0);
-                        bgColor = RGB(255, 255, 255);
+                        if(dis->itemID & 1){
+                            textColor = RGB(80, 80, 80);
+                            bgColor = RGB(255, 255, 255);
+                        }
+                        else{
+                            textColor = RGB(0, 0, 0);
+                            bgColor = RGB(230, 230, 230);
+                        }
                         break;
                     }
 

@@ -47,7 +47,7 @@ typedef double f64;
 
 //typedef char char;
 typedef wchar_t wchar;
-#ifdef NWB_UNICODE
+#if defined(NWB_UNICODE)
 typedef wchar tchar;
 #else
 typedef char tchar;
@@ -57,7 +57,7 @@ typedef char tchar;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#ifdef NWB_UNICODE
+#if defined(NWB_UNICODE)
 #define __NWB_TEXT(x) L ## x
 #else
 #define __NWB_TEXT(x) x

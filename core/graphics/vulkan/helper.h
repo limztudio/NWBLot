@@ -31,6 +31,7 @@ extern VkDebugUtilsMessengerCreateInfoEXT createDebugMessengerInfo();
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+extern const char* surfaceInstanceName();
 extern VkSurfaceKHR createSurface(VkInstance inst, const Common::FrameData& data);
 
 

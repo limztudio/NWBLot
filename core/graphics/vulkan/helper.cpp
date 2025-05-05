@@ -25,7 +25,7 @@ namespace __hidden_vulkan{
         (void)types;
         (void)userData;
 
-        NWB_LOGGER_INFO(NWB_TEXT("Vulkan\nMessageID: {}({:x})\nMessage: {}"), stringConvert(callbackData->pMessageIdName), callbackData->messageIdNumber, stringConvert(callbackData->pMessage));
+        NWB_LOGGER_INFO(NWB_TEXT("Vulkan\nMessageID: {}(0x{:x})\nMessage: {}"), stringConvert(callbackData->pMessageIdName), callbackData->messageIdNumber, stringConvert(callbackData->pMessage));
 
         if(severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT){
             //NWB_SOFTBREAK;
@@ -52,6 +52,15 @@ VkDebugUtilsMessengerCreateInfoEXT createDebugMessengerInfo(){
 #if defined(NWB_PLATFORM_WINDOWS)
 #include <vulkan/vulkan_win32.h>
 #endif
+
+const char* surfaceInstanceName(){
+#if defined(NWB_PLATFORM_WINDOWS)
+    return "VK_KHR_win32_surface";
+#else defined(NWB_PLATFORM_ANDROID)
+    return "VK_KHR_android_surface";
+#endif
+}
+
 VkSurfaceKHR createSurface(VkInstance inst, const Common::FrameData& data){
     VkSurfaceKHR output = VK_NULL_HANDLE;
     

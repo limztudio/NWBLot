@@ -82,9 +82,9 @@ static NWB_INLINE int entry_point(isize argc, tchar** argv, void* inst){
     return ret;
 }
 
-#ifdef NWB_PLATFORM_WINDOWS
+#if defined(NWB_PLATFORM_WINDOWS)
 #include <windows.h>
-#ifdef NWB_UNICODE
+#if defined(NWB_UNICODE)
 int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nCmdShow){
     (void)hPrevInstance;
     (void)lpCmdLine;

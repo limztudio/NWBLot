@@ -7,8 +7,6 @@
 #include <logger/client/logger.h>
 #include <core/alloc/alloc.h>
 
-#include "helper.h"
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -19,13 +17,37 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const char* VulkanEngine::s_requestedExtensions[] = {
+    VK_KHR_SURFACE_EXTENSION_NAME,
+    surfaceInstanceName(),
+#if defined(VULKAN_VALIDATE)
+    VK_EXT_DEBUG_REPORT_EXTENSION_NAME,
+    VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
+#endif
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 VulkanEngine::VulkanEngine()
 : m_allocCallbacks(nullptr)
 , m_inst(VK_NULL_HANDLE)
 , m_physDev(nullptr)
+, m_physDevProps{}
+, m_logiDev(VK_NULL_HANDLE)
 , m_queueFamilly(0)
 , m_windowSurface(VK_NULL_HANDLE)
 , m_timestampFrequency(0)
+, m_uboAlignment(256)
+, m_ssboAlignment(256)
+#if defined(VULKAN_VALIDATE)
+, m_debugUtilsExtensionPresents(false)
+, m_debugMessenger(VK_NULL_HANDLE)
+, fnSetDebugUtilsObjectNameEXT(nullptr)
+, fnCmdBeginDebugUtilsLabelEXT(nullptr)
+, fnCmdEndDebugUtilsLabelEXT(nullptr)
+#endif
 {}
 VulkanEngine::~VulkanEngine(){ destroy(); }
 
@@ -70,9 +92,8 @@ bool VulkanEngine::init(const Common::FrameData& data){
     }
 #endif
 
-    VkApplicationInfo appInfo{};
+    VkApplicationInfo appInfo{ VK_STRUCTURE_TYPE_APPLICATION_INFO };
     {
-        appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
         appInfo.pApplicationName = AppName;
         appInfo.applicationVersion = APP_VERSION;
         appInfo.pEngineName = EngineName;
@@ -80,10 +101,47 @@ bool VulkanEngine::init(const Common::FrameData& data){
         appInfo.apiVersion = API_VERSION;
     }
 
-    u32 extCount = 0;
-    ScratchUniquePtr<VkExtensionProperties[]> extProps;
-    ScratchUniquePtr<char*[]> extNames;
+    VkInstanceCreateInfo createInfo{ VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO };
     {
+        createInfo.pApplicationInfo = &appInfo;
+        createInfo.enabledExtensionCount = static_cast<decltype(createInfo.enabledExtensionCount)>(LengthOf(s_requestedExtensions));
+        createInfo.ppEnabledExtensionNames = s_requestedExtensions;
+#if defined(VULKAN_VALIDATE)
+        createInfo.enabledLayerCount = static_cast<decltype(createInfo.enabledLayerCount)>(LengthOf(s_validationLayerName));
+        createInfo.ppEnabledLayerNames = s_validationLayerName;
+#else
+        createInfo.enabledLayerCount = 0;
+        createInfo.ppEnabledLayerNames = nullptr;
+#endif
+    }
+#if defined(VULKAN_VALIDATE)
+    const VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo = createDebugMessengerInfo();
+#if defined(VULKAN_SYNC_VALIDATE)
+    VkValidationFeaturesEXT features{ VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT };
+    {
+        features.pNext = &debugCreateInfo;
+        features.enabledValidationFeatureCount = static_cast<decltype(features.enabledValidationFeatureCount)>(LengthOf(s_validationFeaturesRequested));
+        features.pEnabledValidationFeatures = s_validationFeaturesRequested;
+    }
+    createInfo.pNext = &features;
+#else
+    createInfo.pNext = &debugCreateInfo;
+#endif
+#endif
+
+    { // create vulkan instance
+        err = vkCreateInstance(&createInfo, m_allocCallbacks, &m_inst);
+        if(err != VK_SUCCESS){
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to create Vulkan instance: {}"), stringConvert(helperGetVulkanResultString(err)));
+            return false;
+        }
+    }
+
+#if defined(VULKAN_VALIDATE)
+    { // choose extension
+        u32 extCount = 0;
+        ScratchUniquePtr<VkExtensionProperties[]> extProps;
+
         err = vkEnumerateInstanceExtensionProperties(nullptr, reinterpret_cast<uint32_t*>(&extCount), nullptr);
         if(err != VK_SUCCESS){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to get required instance extensions: {}"), stringConvert(helperGetVulkanResultString(err)));
@@ -97,78 +155,62 @@ bool VulkanEngine::init(const Common::FrameData& data){
             return false;
         }
 
-        extNames = makeScratchUnique<char*[]>(tmpArena, extCount);
-        for(auto i = decltype(extCount){ 0 }; i < extCount; ++i)
-            extNames[i] = extProps[i].extensionName;
-    }
+        constexpr const char* debugUtilsExtensionName = "VK_EXT_debug_utils";
 
-    VkInstanceCreateInfo createInfo{};
-    {
-        createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-        createInfo.pApplicationInfo = &appInfo;
-        createInfo.enabledExtensionCount = static_cast<decltype(createInfo.enabledExtensionCount)>(extCount);
-        createInfo.ppEnabledExtensionNames = extNames.get();
-#if defined(VULKAN_VALIDATE)
-        createInfo.enabledLayerCount = static_cast<decltype(createInfo.enabledLayerCount)>(LengthOf(s_validationLayerName));
-        createInfo.ppEnabledLayerNames = s_validationLayerName;
-#else
-        createInfo.enabledLayerCount = 0;
-        createInfo.ppEnabledLayerNames = nullptr;
-#endif
-    }
-#if defined(VULKAN_VALIDATE)
-    const VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo = createDebugMessengerInfo();
-#if defined(VULKAN_SYNC_VALIDATE)
-    VkValidationFeaturesEXT features{};
-    {
-        features.sType = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT;
-        features.pNext = &debugCreateInfo;
-        features.enabledValidationFeatureCount = static_cast<decltype(features.enabledValidationFeatureCount)>(LengthOf(s_validationFeaturesRequested));
-        features.pEnabledValidationFeatures = s_validationFeaturesRequested;
-    }
-    createInfo.pNext = &features;
-#else
-    createInfo.pNext = &debugCreateInfo;
-#endif
-#endif
-
-    VkInstance instance = nullptr;
-    {
-        err = vkCreateInstance(&createInfo, m_allocCallbacks, &instance);
-        if(err != VK_SUCCESS){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to create Vulkan instance: {}"), stringConvert(helperGetVulkanResultString(err)));
-            return false;
+        for(auto i = decltype(extCount){ 0 }; i < extCount; ++i){
+            if(NWB_STRCMP(extProps[i].extensionName, debugUtilsExtensionName) == 0){
+                m_debugUtilsExtensionPresents = true;
+                break;
+            }
         }
+
+        if(m_debugUtilsExtensionPresents){
+            PFN_vkCreateDebugUtilsMessengerEXT vkCreateDebugUtilsMessengerEXT = reinterpret_cast<decltype(vkCreateDebugUtilsMessengerEXT)>(vkGetInstanceProcAddr(m_inst, "vkCreateDebugUtilsMessengerEXT"));
+            if(vkCreateDebugUtilsMessengerEXT){
+                VkDebugUtilsMessengerCreateInfoEXT debugUtilCreateInfo = createDebugMessengerInfo();
+
+                err = vkCreateDebugUtilsMessengerEXT(m_inst, &debugUtilCreateInfo, m_allocCallbacks, &m_debugMessenger);
+                if(err != VK_SUCCESS){
+                    NWB_LOGGER_ERROR(NWB_TEXT("Failed to create debug messenger: {}"), stringConvert(helperGetVulkanResultString(err)));
+                    return false;
+                }
+            }
+            else{
+                NWB_LOGGER_WARNING(NWB_TEXT("Failed to get vkCreateDebugUtilsMessengerEXT function pointer"));
+                m_debugUtilsExtensionPresents = false;
+            }
+        }
+        else
+            NWB_LOGGER_WARNING(NWB_TEXT("Failed to find required instance extension: {}"), stringConvert(debugUtilsExtensionName));
     }
+#endif
 
     u32 physDevCount = 0;
     ScratchUniquePtr<VkPhysicalDevice[]> physDevs;
     {
-        err = vkEnumeratePhysicalDevices(instance, reinterpret_cast<uint32_t*>(&physDevCount), nullptr);
+        err = vkEnumeratePhysicalDevices(m_inst, reinterpret_cast<uint32_t*>(&physDevCount), nullptr);
         if(err != VK_SUCCESS){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to get physical devices: {}"), stringConvert(helperGetVulkanResultString(err)));
             return false;
         }
 
         physDevs = makeScratchUnique<VkPhysicalDevice[]>(tmpArena, physDevCount);
-        err = vkEnumeratePhysicalDevices(instance, reinterpret_cast<uint32_t*>(&physDevCount), physDevs.get());
+        err = vkEnumeratePhysicalDevices(m_inst, reinterpret_cast<uint32_t*>(&physDevCount), physDevs.get());
         if(err != VK_SUCCESS){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to get physical devices: {}"), stringConvert(helperGetVulkanResultString(err)));
             return false;
         }
     }
 
-    m_windowSurface = createSurface(instance, data);
-    if(m_windowSurface == VK_NULL_HANDLE){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to create Vulkan surface"));
-        return false;
+    { // create window surface
+        m_windowSurface = createSurface(m_inst, data);
+        if(m_windowSurface == VK_NULL_HANDLE){
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to create Vulkan surface"));
+            return false;
+        }
     }
 
-    VkPhysicalDevice discreteGPU = VK_NULL_HANDLE;
-    u32 discreteQueueFamilly = 0;
-    VkPhysicalDevice integratedGPU = VK_NULL_HANDLE;
-    u32 integratedQueueFamilly = 0;
-    {
+    { // choose physical device
         auto famillyQueue = [this, &tmpArena](VkPhysicalDevice physDev, u32& queueFamily){
             u32 queueFamilyCount = 0;
             ScratchUniquePtr<VkQueueFamilyProperties[]> queueFamilies;
@@ -181,7 +223,13 @@ bool VulkanEngine::init(const Common::FrameData& data){
             VkBool32 output = 0;
             for(auto i = decltype(queueFamilyCount){ 0 }; i < queueFamilyCount; ++i){
                 if(queueFamilies[i].queueCount > 0 && queueFamilies[i].queueFlags & (VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT)){
-                    vkGetPhysicalDeviceSurfaceSupportKHR(physDev, i, m_windowSurface, &output);
+                    auto err = vkGetPhysicalDeviceSurfaceSupportKHR(physDev, i, m_windowSurface, &output);
+                    if(err != VK_SUCCESS){
+                        output = 0;
+                        NWB_LOGGER_WARNING(NWB_TEXT("Failed to get physical device surface support: {}"), stringConvert(helperGetVulkanResultString(err)));
+                        continue;
+                    }
+
                     if(output){
                         queueFamily = i;
                         break;
@@ -190,6 +238,11 @@ bool VulkanEngine::init(const Common::FrameData& data){
             }
             return output;
         };
+
+        VkPhysicalDevice discreteGPU = VK_NULL_HANDLE;
+        u32 discreteQueueFamilly = 0;
+        VkPhysicalDevice integratedGPU = VK_NULL_HANDLE;
+        u32 integratedQueueFamilly = 0;
 
         for(auto i = decltype(physDevCount){ 0 }; i < physDevCount; ++i){
             VkPhysicalDeviceProperties props;
@@ -228,14 +281,82 @@ bool VulkanEngine::init(const Common::FrameData& data){
         vkGetPhysicalDeviceProperties(m_physDev, &m_physDevProps);
         m_timestampFrequency = m_physDevProps.limits.timestampPeriod / (1000 * 1000);
 
+        m_uboAlignment = static_cast<decltype(m_uboAlignment)>(m_physDevProps.limits.minUniformBufferOffsetAlignment);
+        m_ssboAlignment = static_cast<decltype(m_ssboAlignment)>(m_physDevProps.limits.minStorageBufferOffsetAlignment);
+
         NWB_LOGGER_INFO(NWB_TEXT("GPU selected: {}"), stringConvert(m_physDevProps.deviceName));
+    }
+
+    { // create logical device
+        VkDeviceQueueCreateInfo queueInfo[1] = {};
+        {
+            queueInfo[0].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+            queueInfo[0].queueFamilyIndex = m_queueFamilly;
+            queueInfo[0].queueCount = static_cast<decltype(VkDeviceQueueCreateInfo::queueCount)>(LengthOf(s_queuePriorities));
+            queueInfo[0].pQueuePriorities = s_queuePriorities;
+        }
+
+        VkPhysicalDeviceFeatures2 physDevFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
+        vkGetPhysicalDeviceFeatures2(m_physDev, &physDevFeatures);
+
+        VkDeviceCreateInfo deviceInfo{ VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO };
+        {
+            deviceInfo.queueCreateInfoCount = static_cast<decltype(deviceInfo.queueCreateInfoCount)>(LengthOf(queueInfo));
+            deviceInfo.pQueueCreateInfos = queueInfo;
+            deviceInfo.enabledExtensionCount = static_cast<decltype(deviceInfo.enabledExtensionCount)>(LengthOf(s_deviceExtensions));
+            deviceInfo.ppEnabledExtensionNames = s_deviceExtensions;
+            deviceInfo.pNext = &physDevFeatures;
+        }
+
+        err = vkCreateDevice(m_physDev, &deviceInfo, m_allocCallbacks, &m_logiDev);
+        if(err != VK_SUCCESS){
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to create logical device: {}"), stringConvert(helperGetVulkanResultString(err)));
+            return false;
+        }
+    }
+
+#if defined(VULKAN_VALIDATE)
+    if(m_debugUtilsExtensionPresents){
+        fnSetDebugUtilsObjectNameEXT = reinterpret_cast<decltype(fnSetDebugUtilsObjectNameEXT)>(vkGetInstanceProcAddr(m_inst, "vkSetDebugUtilsObjectNameEXT"));
+        fnCmdBeginDebugUtilsLabelEXT = reinterpret_cast<decltype(fnCmdBeginDebugUtilsLabelEXT)>(vkGetInstanceProcAddr(m_inst, "vkCmdBeginDebugUtilsLabelEXT"));
+        fnCmdEndDebugUtilsLabelEXT = reinterpret_cast<decltype(fnCmdEndDebugUtilsLabelEXT)>(vkGetInstanceProcAddr(m_inst, "vkCmdEndDebugUtilsLabelEXT"));
+    }
+#endif
+
+    { // choose surface
+
     }
 
     return true;
 }
 void VulkanEngine::destroy(){
+    if(m_logiDev)
+        vkDeviceWaitIdle(m_logiDev);
+
+    if(m_windowSurface && m_inst){
+        vkDestroySurfaceKHR(m_inst, m_windowSurface, m_allocCallbacks);
+        m_windowSurface = VK_NULL_HANDLE;
+    }
+
+#if defined(VULKAN_VALIDATE)
+    if(m_debugMessenger && m_inst){
+        PFN_vkDestroyDebugUtilsMessengerEXT vkDestroyDebugUtilsMessengerEXT = reinterpret_cast<decltype(vkDestroyDebugUtilsMessengerEXT)>(vkGetInstanceProcAddr(m_inst, "vkDestroyDebugUtilsMessengerEXT"));
+        if(vkDestroyDebugUtilsMessengerEXT){
+            vkDestroyDebugUtilsMessengerEXT(m_inst, m_debugMessenger, m_allocCallbacks);
+            m_debugMessenger = VK_NULL_HANDLE;
+        }
+        else
+            NWB_LOGGER_WARNING(NWB_TEXT("Failed to get vkDestroyDebugUtilsMessengerEXT function pointer"));
+    }
+#endif
+
+    if(m_logiDev){
+        vkDestroyDevice(m_logiDev, m_allocCallbacks);
+        m_logiDev = VK_NULL_HANDLE;
+    }
+
     if(m_inst){
-        vkDestroyInstance(m_inst, nullptr);
+        vkDestroyInstance(m_inst, m_allocCallbacks);
         m_inst = nullptr;
     }
 }

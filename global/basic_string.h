@@ -12,7 +12,7 @@
 #include "generic.h"
 #include "type.h"
 
-#ifdef NWB_PLATFORM_WINDOWS
+#if defined(NWB_PLATFORM_WINDOWS)
 #include <windows.h>
 #endif
 
@@ -70,7 +70,7 @@ inline AString stringConvert(const In& raw){
     WStringView src(raw);
     if(src.empty())
         return AString();
-#ifdef NWB_PLATFORM_WINDOWS
+#if defined(NWB_PLATFORM_WINDOWS)
     const auto len = WideCharToMultiByte(CP_ACP, 0, src.data(), static_cast<int>(src.length()), nullptr, 0, nullptr, nullptr);
     assert(len != 0);
     AString dst(len, 0);
@@ -83,7 +83,7 @@ inline AString stringConvert(In&& raw){
     WStringView src(Move(raw));
     if(src.empty())
         return AString();
-#ifdef NWB_PLATFORM_WINDOWS
+#if defined(NWB_PLATFORM_WINDOWS)
     const auto len = WideCharToMultiByte(CP_ACP, 0, src.data(), static_cast<int>(src.length()), nullptr, 0, nullptr, nullptr);
     assert(len != 0);
     AString dst(len, 0);
@@ -101,7 +101,7 @@ inline WString stringConvert(const In& raw){
     AStringView src(raw);
     if(src.empty())
         return WString();
-#ifdef NWB_PLATFORM_WINDOWS
+#if defined(NWB_PLATFORM_WINDOWS)
     const auto len = MultiByteToWideChar(CP_UTF8, 0, src.data(), static_cast<int>(src.length()), nullptr, 0);
     assert(len != 0);
     WString dst(len, 0);
@@ -114,7 +114,7 @@ inline WString stringConvert(In&& raw){
     AStringView src(Move(raw));
     if(src.empty())
         return WString();
-#ifdef NWB_PLATFORM_WINDOWS
+#if defined(NWB_PLATFORM_WINDOWS)
     const auto len = MultiByteToWideChar(CP_UTF8, 0, src.data(), static_cast<int>(src.length()), nullptr, 0);
     assert(len != 0);
     WString dst(len, 0);

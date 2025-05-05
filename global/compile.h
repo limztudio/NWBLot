@@ -27,14 +27,14 @@
 #if defined(NWB_DEBUG)
 #define NWB_INLINE
 #elif defined(NWB_OPTIMIZE) || defined(NWB_FINAL)
-#ifdef _MSC_VER
+#if defined(_MSC_VER)
 #define NWB_INLINE __forceinline
 #else
 #define NWB_INLINE inline
 #endif
 #endif
 
-#ifdef _MSC_VER
+#if defined(_MSC_VER)
 #define NWB_VECTORCALL __vectorcall
 #else
 #define NWB_VECTORCALL
@@ -45,7 +45,7 @@
 
 
 #if defined(NWB_DEBUG)
-#ifdef _MSC_VER
+#if defined(_MSC_VER)
 #define NWB_HARDBREAK __debugbreak()
 #define NWB_SOFTBREAK __debugbreak()
 #else
@@ -54,7 +54,7 @@
 #endif
 #elif defined(NWB_OPTIMIZE)
 #define NWB_HARDBREAK
-#ifdef _MSC_VER
+#if defined(_MSC_VER)
 #define NWB_SOFTBREAK __debugbreak()
 #else
 #define NWB_SOFTBREAK
@@ -73,7 +73,7 @@
 #define NWB_MEMCMP(lhs, rhs, size) memcmp(lhs, rhs, size)
 #define NWB_STRCMP(lhs, rhs) strcmp(lhs, rhs)
 #define NWB_WSTRCMP(lhs, rhs) wcscmp(lhs, rhs)
-#ifdef _MSC_VER
+#if defined(_MSC_VER)
 #define NWB_STRNLEN(src, count) strnlen_s(src, count)
 #define NWB_WSTRNLEN(src, count) wcsnlen_s(src, count)
 #define NWB_MEMCPY(dest, destSize, src, srcSize) memcpy_s(dest, destSize, src, srcSize)
@@ -102,7 +102,7 @@
 #define NWB_WSPRINTF(format, formatSize, ...) swprintf(format, __VA_ARGS__)
 #endif
 
-#ifdef NWB_UNICODE
+#if defined(NWB_UNICODE)
 #define NWB_TSTRLEN(src) NWB_WSTRLEN(src)
 #define NWB_TSTRNLEN(src, count) NWB_WSTRNLEN(src, count)
 #define NWB_TSTRCMP(lhs, rhs) NWB_WSTRCMP(lhs, rhs)

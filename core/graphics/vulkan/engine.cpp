@@ -33,11 +33,13 @@ const char* VulkanEngine::s_requestedExtensions[] = {
 VulkanEngine::VulkanEngine()
 : m_allocCallbacks(nullptr)
 , m_inst(VK_NULL_HANDLE)
-, m_physDev(nullptr)
+, m_physDev(VK_NULL_HANDLE)
 , m_physDevProps{}
 , m_logiDev(VK_NULL_HANDLE)
+, m_queue(VK_NULL_HANDLE)
 , m_queueFamilly(0)
-, m_windowSurface(VK_NULL_HANDLE)
+, m_winSurf(VK_NULL_HANDLE)
+, m_winSurfFormat(VK_FORMAT_UNDEFINED)
 , m_timestampFrequency(0)
 , m_uboAlignment(256)
 , m_ssboAlignment(256)
@@ -203,8 +205,8 @@ bool VulkanEngine::init(const Common::FrameData& data){
     }
 
     { // create window surface
-        m_windowSurface = createSurface(m_inst, data);
-        if(m_windowSurface == VK_NULL_HANDLE){
+        m_winSurf = createSurface(m_inst, data);
+        if(m_winSurf == VK_NULL_HANDLE){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to create Vulkan surface"));
             return false;
         }
@@ -223,7 +225,7 @@ bool VulkanEngine::init(const Common::FrameData& data){
             VkBool32 output = 0;
             for(auto i = decltype(queueFamilyCount){ 0 }; i < queueFamilyCount; ++i){
                 if(queueFamilies[i].queueCount > 0 && queueFamilies[i].queueFlags & (VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT)){
-                    auto err = vkGetPhysicalDeviceSurfaceSupportKHR(physDev, i, m_windowSurface, &output);
+                    auto err = vkGetPhysicalDeviceSurfaceSupportKHR(physDev, i, m_winSurf, &output);
                     if(err != VK_SUCCESS){
                         output = 0;
                         NWB_LOGGER_WARNING(NWB_TEXT("Failed to get physical device surface support: {}"), stringConvert(helperGetVulkanResultString(err)));
@@ -323,8 +325,54 @@ bool VulkanEngine::init(const Common::FrameData& data){
     }
 #endif
 
-    { // choose surface
+    vkGetDeviceQueue(m_logiDev, m_queueFamilly, 0, &m_queue);
 
+    { // choose surface
+        u32 supportedCount = 0;
+        ScratchUniquePtr<VkSurfaceFormatKHR[]> supportedFormats;
+
+        err = vkGetPhysicalDeviceSurfaceFormatsKHR(m_physDev, m_winSurf, reinterpret_cast<uint32_t*>(&supportedCount), nullptr);
+        if(err != VK_SUCCESS){
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to get physical device surface formats: {}"), stringConvert(helperGetVulkanResultString(err)));
+            return false;
+        }
+
+        supportedFormats = makeScratchUnique<VkSurfaceFormatKHR[]>(tmpArena, supportedCount);
+        err = vkGetPhysicalDeviceSurfaceFormatsKHR(m_physDev, m_winSurf, reinterpret_cast<uint32_t*>(&supportedCount), supportedFormats.get());
+        if(err != VK_SUCCESS){
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to get physical device surface formats: {}"), stringConvert(helperGetVulkanResultString(err)));
+            return false;
+        }
+
+        bool bFound = false;
+        for(auto i = decltype(supportedCount){ 0 }; i < supportedCount; ++i){
+            const auto& supportFormat = supportedFormats[i];
+
+            for(usize j = 0; j < LengthOf(s_surfaceFormats); ++j){
+                if(supportFormat.format != s_surfaceFormats[j])
+                    continue;
+
+                for(usize k = 0; k < LengthOf(s_surfaceColorSpaces); ++k){
+                    if(supportFormat.colorSpace != s_surfaceColorSpaces[k])
+                        continue;
+
+                    m_winSurfFormat = supportFormat;
+                    bFound = true;
+                    break;
+                }
+
+                if(bFound)
+                    break;
+            }
+
+            if(bFound)
+                break;
+        }
+
+        if(!bFound){
+            m_winSurfFormat = supportedFormats[0];
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to find suitable surface format, using default"));
+        }
     }
 
     return true;
@@ -333,9 +381,9 @@ void VulkanEngine::destroy(){
     if(m_logiDev)
         vkDeviceWaitIdle(m_logiDev);
 
-    if(m_windowSurface && m_inst){
-        vkDestroySurfaceKHR(m_inst, m_windowSurface, m_allocCallbacks);
-        m_windowSurface = VK_NULL_HANDLE;
+    if(m_winSurf && m_inst){
+        vkDestroySurfaceKHR(m_inst, m_winSurf, m_allocCallbacks);
+        m_winSurf = VK_NULL_HANDLE;
     }
 
 #if defined(VULKAN_VALIDATE)

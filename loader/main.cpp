@@ -30,7 +30,7 @@ static NWB_INLINE int mainLogic(const char* logAddress, void* inst){
         NWB_LOGGER_REGISTER(&logger);
 
         try{
-            NWB::Core::Frame frame(inst, 800, 600);
+            NWB::Core::Frame frame(inst, 1280, 900);
             if(!frame.init())
                 return -1;
 

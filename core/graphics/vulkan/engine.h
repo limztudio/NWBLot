@@ -42,12 +42,25 @@ private:
         //VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT,
     };
 #endif
+
     static const char* s_requestedExtensions[];
+
     static constexpr const f32 s_queuePriorities[] = {
         1.f,
     };
+
     static constexpr const char* s_deviceExtensions[] = {
         "VK_KHR_swapchain",
+    };
+
+    static constexpr const VkFormat s_surfaceFormats[] = {
+        VK_FORMAT_B8G8R8A8_UNORM,
+        VK_FORMAT_R8G8B8A8_UNORM,
+        VK_FORMAT_B8G8R8_UNORM,
+        VK_FORMAT_R8G8B8_UNORM,
+    };
+    static constexpr const VkColorSpaceKHR s_surfaceColorSpaces[] = {
+        VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
     };
 
 
@@ -72,9 +85,11 @@ private:
 
     VkDevice m_logiDev;
 
+    VkQueue m_queue;
     u32 m_queueFamilly;
 
-    VkSurfaceKHR m_windowSurface;
+    VkSurfaceKHR m_winSurf;
+    VkSurfaceFormatKHR m_winSurfFormat;
 
     f32 m_timestampFrequency;
     u64 m_uboAlignment;

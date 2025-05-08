@@ -2,7 +2,7 @@
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <ClCompile Include="graphics\graphics.cpp" />
-    <ClCompile Include="graphics\vulkan\helper.cpp">
+    <ClCompile Include="graphics\vulkan\utility.cpp">
       <Filter>vulkan</Filter>
     </ClCompile>
     <ClCompile Include="graphics\vulkan\engine.cpp">
@@ -11,10 +11,11 @@
     <ClCompile Include="graphics\vulkan\config.cpp">
       <Filter>vulkan</Filter>
     </ClCompile>
+    <ClCompile Include="graphics\constants.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="graphics\graphics.h" />
-    <ClInclude Include="graphics\vulkan\helper.h">
+    <ClInclude Include="graphics\vulkan\utility.h">
       <Filter>vulkan</Filter>
     </ClInclude>
     <ClInclude Include="graphics\vulkan\engine.h">
@@ -23,6 +24,7 @@
     <ClInclude Include="graphics\vulkan\config.h">
       <Filter>vulkan</Filter>
     </ClInclude>
+    <ClInclude Include="graphics\constants.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="vulkan">

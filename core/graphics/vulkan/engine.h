@@ -11,8 +11,8 @@
 
 #include <core/common/common.h>
 
-#include "helper.h"
 #include "config.h"
+#include "utility.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -73,6 +73,9 @@ public:
     bool init(const Common::FrameData& data);
     void destroy();
 
+
+private:
+    VulkanRenderPassOutput m_swapchainOutput;
 
 private:
     VkAllocationCallbacks* m_allocCallbacks;

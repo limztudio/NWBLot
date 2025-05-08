@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "helper.h"
+#include "utility.h"
 
 #include <logger/client/logger.h>
 
@@ -14,6 +14,19 @@
 
 
 NWB_CORE_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VulkanRenderPassOutput::addColor(VkFormat format){
+    if(numColors >= LengthOf(formatColors)){
+        NWB_LOGGER_ERROR(NWB_TEXT("VulkanRenderPassOutput::addColor: Too many color attachments"));
+        return;
+    }
+
+    formatColors[numColors++] = format;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

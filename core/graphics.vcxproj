@@ -82,16 +82,18 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="graphics\constants.cpp" />
     <ClCompile Include="graphics\graphics.cpp" />
     <ClCompile Include="graphics\vulkan\config.cpp" />
     <ClCompile Include="graphics\vulkan\engine.cpp" />
-    <ClCompile Include="graphics\vulkan\helper.cpp" />
+    <ClCompile Include="graphics\vulkan\utility.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="graphics\constants.h" />
     <ClInclude Include="graphics\graphics.h" />
     <ClInclude Include="graphics\vulkan\config.h" />
     <ClInclude Include="graphics\vulkan\engine.h" />
-    <ClInclude Include="graphics\vulkan\helper.h" />
+    <ClInclude Include="graphics\vulkan\utility.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -13,11 +13,58 @@
 
 #include "config.h"
 
+#include "../constants.h"
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_CORE_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+enum class VulkanRenderPassOperation : u8{
+    Auto,
+    Load,
+    Clear,
+
+    kCount,
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class VulkanRenderPassOutput{
+public:
+    inline void reset(){
+        for(auto& i : formatColors)
+            i = VK_FORMAT_UNDEFINED;
+        formatDepthStencil = VK_FORMAT_UNDEFINED;
+
+        numColors = 0;
+
+        opColor = VulkanRenderPassOperation::Auto;
+        opDepth = VulkanRenderPassOperation::Auto;
+        opStencil = VulkanRenderPassOperation::Auto;
+    }
+
+    void addColor(VkFormat format);
+
+
+public:
+    VkFormat formatColors[s_maxRenderTargets]{ VK_FORMAT_UNDEFINED, };
+    VkFormat formatDepthStencil{ VK_FORMAT_UNDEFINED };
+
+    u8 numColors{ 0 };
+
+public:
+    VulkanRenderPassOperation opColor{ VulkanRenderPassOperation::Auto };
+    VulkanRenderPassOperation opDepth{ VulkanRenderPassOperation::Auto };
+    VulkanRenderPassOperation opStencil{ VulkanRenderPassOperation::Auto };
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

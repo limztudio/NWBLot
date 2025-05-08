@@ -344,6 +344,8 @@ bool VulkanEngine::init(const Common::FrameData& data){
             return false;
         }
 
+        m_swapchainOutput.reset();
+
         bool bFound = false;
         for(auto i = decltype(supportedCount){ 0 }; i < supportedCount; ++i){
             const auto& supportFormat = supportedFormats[i];
@@ -373,6 +375,8 @@ bool VulkanEngine::init(const Common::FrameData& data){
             m_winSurfFormat = supportedFormats[0];
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to find suitable surface format, using default"));
         }
+
+        m_swapchainOutput.addColor(m_winSurfFormat.format);
     }
 
     return true;

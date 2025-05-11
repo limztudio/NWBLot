@@ -39,6 +39,8 @@ public:
 private:
     RenderPassOutput m_swapchainOutput;
 
+    PresentMode m_presentMode;
+
 private:
     UniquePtr<VulkanEngine> m_engine;
 };

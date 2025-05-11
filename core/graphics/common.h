@@ -19,12 +19,21 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+enum class PresentMode : u8{
+    Immediate,
+    VSync,
+    VSyncFast,
+    VSyncRelaxed,
+
+    kCount
+};
+
 enum class RenderPassOperation : u8{
     Auto,
     Load,
     Clear,
 
-    kCount,
+    kCount
 };
 
 enum class TextureFormat : u16{
@@ -299,7 +308,7 @@ enum class TextureFormat : u16{
     A4R4G4B4_UNORM_PACK16_EXT,
     A4B4G4R4_UNORM_PACK16_EXT,
 
-    kCount,
+    kCount
 };
 
 

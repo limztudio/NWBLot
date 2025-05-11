@@ -95,6 +95,9 @@
     <ClInclude Include="graphics\vulkan\engine.h" />
     <ClInclude Include="graphics\vulkan\utility.h" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="graphics\vulkan\convert.inl" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

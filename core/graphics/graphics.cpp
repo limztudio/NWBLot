@@ -18,7 +18,9 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Graphics::Graphics(){
+Graphics::Graphics()
+    : m_presentMode(PresentMode::VSync)
+{
     m_engine = makeUnique<VulkanEngine>(this);
 }
 Graphics::~Graphics(){}

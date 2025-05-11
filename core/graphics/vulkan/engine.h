@@ -5,8 +5,6 @@
 #pragma once
 
 
-#include <vulkan/vulkan.h>
-
 #include "../common.h"
 #include "../graphics.h"
 
@@ -121,6 +119,8 @@ private:
     VkSurfaceFormatKHR m_winSurfFormat;
     VkPresentModeKHR m_presentMode;
     VkSwapchainKHR m_swapchain;
+
+    VmaAllocator m_allocator;
 
     f32 m_timestampFrequency;
     u64 m_uboAlignment;

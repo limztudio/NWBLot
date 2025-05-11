@@ -12,6 +12,9 @@
       <Filter>vulkan</Filter>
     </ClCompile>
     <ClCompile Include="graphics\common.cpp" />
+    <ClCompile Include="graphics\vulkan\VmaUsage.cpp">
+      <Filter>vulkan</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="graphics\graphics.h" />
@@ -25,6 +28,12 @@
       <Filter>vulkan</Filter>
     </ClInclude>
     <ClInclude Include="graphics\common.h" />
+    <ClInclude Include="graphics\vulkan\vk_mem_alloc.h">
+      <Filter>vulkan</Filter>
+    </ClInclude>
+    <ClInclude Include="graphics\vulkan\VmaUsage.h">
+      <Filter>vulkan</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="vulkan">

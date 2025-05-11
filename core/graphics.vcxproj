@@ -87,6 +87,7 @@
     <ClCompile Include="graphics\vulkan\config.cpp" />
     <ClCompile Include="graphics\vulkan\engine.cpp" />
     <ClCompile Include="graphics\vulkan\utility.cpp" />
+    <ClCompile Include="graphics\vulkan\VmaUsage.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="graphics\common.h" />
@@ -94,6 +95,8 @@
     <ClInclude Include="graphics\vulkan\config.h" />
     <ClInclude Include="graphics\vulkan\engine.h" />
     <ClInclude Include="graphics\vulkan\utility.h" />
+    <ClInclude Include="graphics\vulkan\vk_mem_alloc.h" />
+    <ClInclude Include="graphics\vulkan\VmaUsage.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="graphics\vulkan\convert.inl" />

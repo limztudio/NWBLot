@@ -46,6 +46,7 @@ VulkanEngine::VulkanEngine(Graphics* parent)
     , m_winSurfFormat(VK_FORMAT_UNDEFINED)
     , m_presentMode(VK_PRESENT_MODE_FIFO_KHR)
     , m_swapchain(VK_NULL_HANDLE)
+    , m_allocator(VK_NULL_HANDLE)
     , m_timestampFrequency(0)
     , m_uboAlignment(256)
     , m_ssboAlignment(256)
@@ -100,48 +101,50 @@ bool VulkanEngine::init(const Common::FrameData& data){
     }
 #endif
 
-    VkApplicationInfo appInfo{ VK_STRUCTURE_TYPE_APPLICATION_INFO };
     {
-        appInfo.pApplicationName = AppName;
-        appInfo.applicationVersion = APP_VERSION;
-        appInfo.pEngineName = EngineName;
-        appInfo.engineVersion = ENGINE_VERSION;
-        appInfo.apiVersion = API_VERSION;
-    }
+        VkApplicationInfo appInfo{ VK_STRUCTURE_TYPE_APPLICATION_INFO };
+        {
+            appInfo.pApplicationName = AppName;
+            appInfo.applicationVersion = APP_VERSION;
+            appInfo.pEngineName = EngineName;
+            appInfo.engineVersion = ENGINE_VERSION;
+            appInfo.apiVersion = API_VERSION;
+        }
 
-    VkInstanceCreateInfo createInfo{ VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO };
-    {
-        createInfo.pApplicationInfo = &appInfo;
-        createInfo.enabledExtensionCount = static_cast<decltype(createInfo.enabledExtensionCount)>(LengthOf(s_requestedExtensions));
-        createInfo.ppEnabledExtensionNames = s_requestedExtensions;
-#if defined(VULKAN_VALIDATE)
-        createInfo.enabledLayerCount = static_cast<decltype(createInfo.enabledLayerCount)>(LengthOf(s_validationLayerName));
-        createInfo.ppEnabledLayerNames = s_validationLayerName;
-#else
-        createInfo.enabledLayerCount = 0;
-        createInfo.ppEnabledLayerNames = nullptr;
-#endif
-    }
-#if defined(VULKAN_VALIDATE)
-    const VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo = createDebugMessengerInfo();
-#if defined(VULKAN_SYNC_VALIDATE)
-    VkValidationFeaturesEXT features{ VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT };
-    {
-        features.pNext = &debugCreateInfo;
-        features.enabledValidationFeatureCount = static_cast<decltype(features.enabledValidationFeatureCount)>(LengthOf(s_validationFeaturesRequested));
-        features.pEnabledValidationFeatures = s_validationFeaturesRequested;
-    }
-    createInfo.pNext = &features;
-#else
-    createInfo.pNext = &debugCreateInfo;
-#endif
-#endif
+        VkInstanceCreateInfo createInfo{ VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO };
+        {
+            createInfo.pApplicationInfo = &appInfo;
+            createInfo.enabledExtensionCount = static_cast<decltype(createInfo.enabledExtensionCount)>(LengthOf(s_requestedExtensions));
+            createInfo.ppEnabledExtensionNames = s_requestedExtensions;
+    #if defined(VULKAN_VALIDATE)
+            createInfo.enabledLayerCount = static_cast<decltype(createInfo.enabledLayerCount)>(LengthOf(s_validationLayerName));
+            createInfo.ppEnabledLayerNames = s_validationLayerName;
+    #else
+            createInfo.enabledLayerCount = 0;
+            createInfo.ppEnabledLayerNames = nullptr;
+    #endif
+        }
+    #if defined(VULKAN_VALIDATE)
+        const VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo = createDebugMessengerInfo();
+    #if defined(VULKAN_SYNC_VALIDATE)
+        VkValidationFeaturesEXT features{ VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT };
+        {
+            features.pNext = &debugCreateInfo;
+            features.enabledValidationFeatureCount = static_cast<decltype(features.enabledValidationFeatureCount)>(LengthOf(s_validationFeaturesRequested));
+            features.pEnabledValidationFeatures = s_validationFeaturesRequested;
+        }
+        createInfo.pNext = &features;
+    #else
+        createInfo.pNext = &debugCreateInfo;
+    #endif
+    #endif
 
-    { // create vulkan instance
-        err = vkCreateInstance(&createInfo, m_allocCallbacks, &m_inst);
-        if(err != VK_SUCCESS){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to create Vulkan instance: {}"), stringConvert(getVulkanResultString(err)));
-            return false;
+        { // create vulkan instance
+            err = vkCreateInstance(&createInfo, m_allocCallbacks, &m_inst);
+            if(err != VK_SUCCESS){
+                NWB_LOGGER_ERROR(NWB_TEXT("Failed to create Vulkan instance: {}"), stringConvert(getVulkanResultString(err)));
+                return false;
+            }
         }
     }
 
@@ -392,6 +395,21 @@ bool VulkanEngine::init(const Common::FrameData& data){
             return false;
     }
 
+    { // create VMA
+        VmaAllocatorCreateInfo createInfo{};
+        {
+            createInfo.physicalDevice = m_physDev;
+            createInfo.device = m_logiDev;
+            createInfo.instance = m_inst;
+        }
+
+        err = vmaCreateAllocator(&createInfo, &m_allocator);
+        if(err != VK_SUCCESS){
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to create VMA allocator: {}"), stringConvert(getVulkanResultString(err)));
+            return false;
+        }
+    }
+
     return true;
 }
 void VulkanEngine::destroy(){
@@ -402,6 +420,11 @@ void VulkanEngine::destroy(){
     if(m_winSurf && m_inst){
         vkDestroySurfaceKHR(m_inst, m_winSurf, m_allocCallbacks);
         m_winSurf = VK_NULL_HANDLE;
+    }
+
+    if(m_allocator){
+        vmaDestroyAllocator(m_allocator);
+        m_allocator = VK_NULL_HANDLE;
     }
 
 #if defined(VULKAN_VALIDATE)

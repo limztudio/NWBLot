@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include <vulkan/vulkan.h>
+#include "VmaUsage.h"
 
 #include "../common.h"
 

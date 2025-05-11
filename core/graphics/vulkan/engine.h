@@ -21,6 +21,20 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_vulkan{
+    struct VkInstanceDeleter{
+        constexpr VkInstanceDeleter()noexcept = default;
+        constexpr VkInstanceDeleter(const VkAllocationCallbacks* _callback)noexcept : callback(_callback){}
+        void operator()(VkInstance p)const noexcept{ vkDestroyInstance(p, callback); }
+        const VkAllocationCallbacks* callback = nullptr;
+    };
+    using VkInstancePtr = UniquePtr<VkInstance_T, VkInstanceDeleter>;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class VulkanEngine{
 private:
 #if defined(VULKAN_VALIDATE)
@@ -101,7 +115,7 @@ private:
     VkAllocationCallbacks* m_allocCallbacks;
 
 private:
-    VkInstance m_inst;
+    __hidden_vulkan::VkInstancePtr m_inst;
 
     VkPhysicalDevice m_physDev;
     VkPhysicalDeviceProperties m_physDevProps;

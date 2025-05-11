@@ -33,7 +33,7 @@ const char* VulkanEngine::s_requestedExtensions[] = {
 VulkanEngine::VulkanEngine(Graphics* parent)
     : m_parent(*parent)
     , m_allocCallbacks(nullptr)
-    , m_inst(VK_NULL_HANDLE)
+    , m_inst(VK_NULL_HANDLE, __hidden_vulkan::VkInstanceDeleter(m_allocCallbacks))
     , m_physDev(VK_NULL_HANDLE)
     , m_physDevProps{}
     , m_logiDev(VK_NULL_HANDLE)
@@ -140,11 +140,13 @@ bool VulkanEngine::init(const Common::FrameData& data){
     #endif
 
         { // create vulkan instance
-            err = vkCreateInstance(&createInfo, m_allocCallbacks, &m_inst);
+            VkInstance object = VK_NULL_HANDLE;
+            err = vkCreateInstance(&createInfo, m_allocCallbacks, &object);
             if(err != VK_SUCCESS){
                 NWB_LOGGER_ERROR(NWB_TEXT("Failed to create Vulkan instance: {}"), stringConvert(getVulkanResultString(err)));
                 return false;
             }
+            m_inst.reset(object);
         }
     }
 
@@ -176,11 +178,11 @@ bool VulkanEngine::init(const Common::FrameData& data){
         }
 
         if(m_debugUtilsExtensionPresents){
-            PFN_vkCreateDebugUtilsMessengerEXT vkCreateDebugUtilsMessengerEXT = reinterpret_cast<decltype(vkCreateDebugUtilsMessengerEXT)>(vkGetInstanceProcAddr(m_inst, "vkCreateDebugUtilsMessengerEXT"));
+            PFN_vkCreateDebugUtilsMessengerEXT vkCreateDebugUtilsMessengerEXT = reinterpret_cast<decltype(vkCreateDebugUtilsMessengerEXT)>(vkGetInstanceProcAddr(m_inst.get(), "vkCreateDebugUtilsMessengerEXT"));
             if(vkCreateDebugUtilsMessengerEXT){
                 VkDebugUtilsMessengerCreateInfoEXT debugUtilCreateInfo = createDebugMessengerInfo();
 
-                err = vkCreateDebugUtilsMessengerEXT(m_inst, &debugUtilCreateInfo, m_allocCallbacks, &m_debugMessenger);
+                err = vkCreateDebugUtilsMessengerEXT(m_inst.get(), &debugUtilCreateInfo, m_allocCallbacks, &m_debugMessenger);
                 if(err != VK_SUCCESS){
                     NWB_LOGGER_ERROR(NWB_TEXT("Failed to create debug messenger: {}"), stringConvert(getVulkanResultString(err)));
                     return false;
@@ -199,14 +201,14 @@ bool VulkanEngine::init(const Common::FrameData& data){
     u32 physDevCount = 0;
     ScratchUniquePtr<VkPhysicalDevice[]> physDevs;
     {
-        err = vkEnumeratePhysicalDevices(m_inst, reinterpret_cast<uint32_t*>(&physDevCount), nullptr);
+        err = vkEnumeratePhysicalDevices(m_inst.get(), reinterpret_cast<uint32_t*>(&physDevCount), nullptr);
         if(err != VK_SUCCESS){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to get physical devices: {}"), stringConvert(getVulkanResultString(err)));
             return false;
         }
 
         physDevs = makeScratchUnique<VkPhysicalDevice[]>(tmpArena, physDevCount);
-        err = vkEnumeratePhysicalDevices(m_inst, reinterpret_cast<uint32_t*>(&physDevCount), physDevs.get());
+        err = vkEnumeratePhysicalDevices(m_inst.get(), reinterpret_cast<uint32_t*>(&physDevCount), physDevs.get());
         if(err != VK_SUCCESS){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to get physical devices: {}"), stringConvert(getVulkanResultString(err)));
             return false;
@@ -214,7 +216,7 @@ bool VulkanEngine::init(const Common::FrameData& data){
     }
 
     { // create window surface
-        m_winSurf = createSurface(m_inst, data);
+        m_winSurf = createSurface(m_inst.get(), data);
         if(m_winSurf == VK_NULL_HANDLE){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to create Vulkan surface"));
             return false;
@@ -328,9 +330,9 @@ bool VulkanEngine::init(const Common::FrameData& data){
 
 #if defined(VULKAN_VALIDATE)
     if(m_debugUtilsExtensionPresents){
-        fnSetDebugUtilsObjectNameEXT = reinterpret_cast<decltype(fnSetDebugUtilsObjectNameEXT)>(vkGetInstanceProcAddr(m_inst, "vkSetDebugUtilsObjectNameEXT"));
-        fnCmdBeginDebugUtilsLabelEXT = reinterpret_cast<decltype(fnCmdBeginDebugUtilsLabelEXT)>(vkGetInstanceProcAddr(m_inst, "vkCmdBeginDebugUtilsLabelEXT"));
-        fnCmdEndDebugUtilsLabelEXT = reinterpret_cast<decltype(fnCmdEndDebugUtilsLabelEXT)>(vkGetInstanceProcAddr(m_inst, "vkCmdEndDebugUtilsLabelEXT"));
+        fnSetDebugUtilsObjectNameEXT = reinterpret_cast<decltype(fnSetDebugUtilsObjectNameEXT)>(vkGetInstanceProcAddr(m_inst.get(), "vkSetDebugUtilsObjectNameEXT"));
+        fnCmdBeginDebugUtilsLabelEXT = reinterpret_cast<decltype(fnCmdBeginDebugUtilsLabelEXT)>(vkGetInstanceProcAddr(m_inst.get(), "vkCmdBeginDebugUtilsLabelEXT"));
+        fnCmdEndDebugUtilsLabelEXT = reinterpret_cast<decltype(fnCmdEndDebugUtilsLabelEXT)>(vkGetInstanceProcAddr(m_inst.get(), "vkCmdEndDebugUtilsLabelEXT"));
     }
 #endif
 
@@ -400,7 +402,7 @@ bool VulkanEngine::init(const Common::FrameData& data){
         {
             createInfo.physicalDevice = m_physDev;
             createInfo.device = m_logiDev;
-            createInfo.instance = m_inst;
+            createInfo.instance = m_inst.get();
         }
 
         err = vmaCreateAllocator(&createInfo, &m_allocator);
@@ -418,7 +420,7 @@ void VulkanEngine::destroy(){
 
     destroySwapchain();
     if(m_winSurf && m_inst){
-        vkDestroySurfaceKHR(m_inst, m_winSurf, m_allocCallbacks);
+        vkDestroySurfaceKHR(m_inst.get(), m_winSurf, m_allocCallbacks);
         m_winSurf = VK_NULL_HANDLE;
     }
 
@@ -429,9 +431,9 @@ void VulkanEngine::destroy(){
 
 #if defined(VULKAN_VALIDATE)
     if(m_debugMessenger && m_inst){
-        PFN_vkDestroyDebugUtilsMessengerEXT vkDestroyDebugUtilsMessengerEXT = reinterpret_cast<decltype(vkDestroyDebugUtilsMessengerEXT)>(vkGetInstanceProcAddr(m_inst, "vkDestroyDebugUtilsMessengerEXT"));
+        PFN_vkDestroyDebugUtilsMessengerEXT vkDestroyDebugUtilsMessengerEXT = reinterpret_cast<decltype(vkDestroyDebugUtilsMessengerEXT)>(vkGetInstanceProcAddr(m_inst.get(), "vkDestroyDebugUtilsMessengerEXT"));
         if(vkDestroyDebugUtilsMessengerEXT){
-            vkDestroyDebugUtilsMessengerEXT(m_inst, m_debugMessenger, m_allocCallbacks);
+            vkDestroyDebugUtilsMessengerEXT(m_inst.get(), m_debugMessenger, m_allocCallbacks);
             m_debugMessenger = VK_NULL_HANDLE;
         }
         else
@@ -444,10 +446,7 @@ void VulkanEngine::destroy(){
         m_logiDev = VK_NULL_HANDLE;
     }
 
-    if(m_inst){
-        vkDestroyInstance(m_inst, m_allocCallbacks);
-        m_inst = nullptr;
-    }
+    m_inst.reset();
 }
 
 

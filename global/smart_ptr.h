@@ -89,7 +89,7 @@ struct EmptyDeleter{
 template <typename T>
 struct EmptyDeleter<T[]>{
     constexpr EmptyDeleter()noexcept = default;
-    constexpr EmptyDeleter(usize size)noexcept :  mSize(size){}
+    constexpr EmptyDeleter(usize size)noexcept : mSize(size){}
     template <typename U>
     EmptyDeleter(const EmptyDeleter<U[]>&, typename EnableIf<__hidden_smart_ptr::IsArrayCvConvertible<U*, T*>::value>::type* = 0)noexcept{}
 

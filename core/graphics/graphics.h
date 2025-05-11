@@ -38,6 +38,9 @@ public:
 
 private:
     RenderPassOutput m_swapchainOutput;
+    u16 m_swapchainWidth;
+    u16 m_swapchainHeight;
+    u8 m_swapchainImageCount;
 
     PresentMode m_presentMode;
 

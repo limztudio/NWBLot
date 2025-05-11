@@ -39,13 +39,16 @@ VulkanEngine::VulkanEngine(Graphics* parent)
     , m_logiDev(VK_NULL_HANDLE)
     , m_queue(VK_NULL_HANDLE)
     , m_queueFamilly(0)
+    , m_swapchainImages{ VK_NULL_HANDLE, }
+    , m_swapchainImageViews{ VK_NULL_HANDLE, }
+    , m_swapchainFrameBuffers{ VK_NULL_HANDLE, }
     , m_winSurf(VK_NULL_HANDLE)
     , m_winSurfFormat(VK_FORMAT_UNDEFINED)
+    , m_presentMode(VK_PRESENT_MODE_FIFO_KHR)
+    , m_swapchain(VK_NULL_HANDLE)
     , m_timestampFrequency(0)
     , m_uboAlignment(256)
     , m_ssboAlignment(256)
-    , m_presentMode(VK_PRESENT_MODE_FIFO_KHR)
-    , m_swapchainImageCount(0)
 #if defined(VULKAN_VALIDATE)
     , m_debugUtilsExtensionPresents(false)
     , m_debugMessenger(VK_NULL_HANDLE)
@@ -384,6 +387,9 @@ bool VulkanEngine::init(const Common::FrameData& data){
 
     { // create swapchain
         updatePresentMode(m_parent.m_presentMode);
+
+        if(!createSwapchain())
+            return false;
     }
 
     return true;
@@ -392,6 +398,7 @@ void VulkanEngine::destroy(){
     if(m_logiDev)
         vkDeviceWaitIdle(m_logiDev);
 
+    destroySwapchain();
     if(m_winSurf && m_inst){
         vkDestroySurfaceKHR(m_inst, m_winSurf, m_allocCallbacks);
         m_winSurf = VK_NULL_HANDLE;
@@ -419,6 +426,7 @@ void VulkanEngine::destroy(){
         m_inst = nullptr;
     }
 }
+
 
 void VulkanEngine::updatePresentMode(PresentMode mode){
     VkResult err;
@@ -454,7 +462,25 @@ void VulkanEngine::updatePresentMode(PresentMode mode){
         m_presentMode = VK_PRESENT_MODE_FIFO_KHR;
         m_parent.m_presentMode = PresentMode::VSync;
     }
-    m_swapchainImageCount = (m_presentMode == VK_PRESENT_MODE_IMMEDIATE_KHR) ? 2 : 3;
+    m_parent.m_swapchainImageCount = (m_presentMode == VK_PRESENT_MODE_IMMEDIATE_KHR) ? 2 : 3;
+}
+
+void VulkanEngine::destroySwapchain(){
+    for(auto i = decltype(m_parent.m_swapchainImageCount){ 0 }; i < m_parent.m_swapchainImageCount; ++i){
+        if(m_swapchainImageViews[i]){
+            vkDestroyImageView(m_logiDev, m_swapchainImageViews[i], m_allocCallbacks);
+            m_swapchainImageViews[i] = VK_NULL_HANDLE;
+        }
+
+        if(m_swapchainFrameBuffers[i]){
+            vkDestroyFramebuffer(m_logiDev, m_swapchainFrameBuffers[i], m_allocCallbacks);
+            m_swapchainFrameBuffers[i] = VK_NULL_HANDLE;
+        }
+    }
+    if(m_swapchain){
+        vkDestroySwapchainKHR(m_logiDev, m_swapchain, m_allocCallbacks);
+        m_swapchain = VK_NULL_HANDLE;
+    }
 }
 
 

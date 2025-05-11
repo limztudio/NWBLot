@@ -89,6 +89,22 @@ extern VkDebugUtilsMessengerCreateInfoEXT createDebugMessengerInfo();
 extern const char* surfaceInstanceName();
 extern VkSurfaceKHR createSurface(VkInstance inst, const Common::FrameData& data);
 
+extern bool createSwapchain(
+    VkAllocationCallbacks* allocCallbacks,
+    VkPhysicalDevice physDev,
+    VkDevice logiDev,
+    u32 queueFamilly,
+    VkSurfaceKHR winSurf,
+    VkFormat format,
+    VkPresentModeKHR presentMode,
+    u16* width,
+    u16* height,
+    u8* imageCount,
+    VkSwapchainKHR* swapchain,
+    VkImage (*swapchainImages)[s_maxSwapchainImages],
+    VkImageView (*swapchainImageViews)[s_maxSwapchainImages]
+    );
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

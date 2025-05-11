@@ -76,6 +76,25 @@ public:
 private:
     void updatePresentMode(PresentMode mode);
 
+    inline bool createSwapchain(){
+        return Core::createSwapchain(
+            m_allocCallbacks,
+            m_physDev,
+            m_logiDev,
+            m_queueFamilly,
+            m_winSurf,
+            m_winSurfFormat.format,
+            m_presentMode,
+            &m_parent.m_swapchainWidth,
+            &m_parent.m_swapchainHeight,
+            &m_parent.m_swapchainImageCount,
+            &m_swapchain,
+            &m_swapchainImages,
+            &m_swapchainImageViews
+        );
+    }
+    void destroySwapchain();
+
 
 private:
     Graphics& m_parent;
@@ -94,15 +113,18 @@ private:
     VkQueue m_queue;
     u32 m_queueFamilly;
 
+    VkImage m_swapchainImages[s_maxSwapchainImages];
+    VkImageView m_swapchainImageViews[s_maxSwapchainImages];
+    VkFramebuffer m_swapchainFrameBuffers[s_maxSwapchainImages];
+
     VkSurfaceKHR m_winSurf;
     VkSurfaceFormatKHR m_winSurfFormat;
+    VkPresentModeKHR m_presentMode;
+    VkSwapchainKHR m_swapchain;
 
     f32 m_timestampFrequency;
     u64 m_uboAlignment;
     u64 m_ssboAlignment;
-
-    VkPresentModeKHR m_presentMode;
-    u8 m_swapchainImageCount;
 
 private:
 #if defined(VULKAN_VALIDATE)

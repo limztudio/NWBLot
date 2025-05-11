@@ -7,9 +7,8 @@
 
 #include <vulkan/vulkan.h>
 
-#include <core/global.h>
-
-#include <core/common/common.h>
+#include "../common.h"
+#include "../graphics.h"
 
 #include "config.h"
 #include "utility.h"
@@ -65,7 +64,7 @@ private:
 
 
 public:
-    VulkanEngine();
+    VulkanEngine(Graphics* parent);
     ~VulkanEngine();
 
 
@@ -75,7 +74,7 @@ public:
 
 
 private:
-    VulkanRenderPassOutput m_swapchainOutput;
+    Graphics& m_parent;
 
 private:
     VkAllocationCallbacks* m_allocCallbacks;

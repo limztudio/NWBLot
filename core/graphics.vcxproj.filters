@@ -11,7 +11,7 @@
     <ClCompile Include="graphics\vulkan\config.cpp">
       <Filter>vulkan</Filter>
     </ClCompile>
-    <ClCompile Include="graphics\constants.cpp" />
+    <ClCompile Include="graphics\common.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="graphics\graphics.h" />
@@ -24,7 +24,7 @@
     <ClInclude Include="graphics\vulkan\config.h">
       <Filter>vulkan</Filter>
     </ClInclude>
-    <ClInclude Include="graphics\constants.h" />
+    <ClInclude Include="graphics\common.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="vulkan">

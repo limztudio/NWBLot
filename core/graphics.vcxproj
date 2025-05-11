@@ -82,14 +82,14 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="graphics\constants.cpp" />
+    <ClCompile Include="graphics\common.cpp" />
     <ClCompile Include="graphics\graphics.cpp" />
     <ClCompile Include="graphics\vulkan\config.cpp" />
     <ClCompile Include="graphics\vulkan\engine.cpp" />
     <ClCompile Include="graphics\vulkan\utility.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="graphics\constants.h" />
+    <ClInclude Include="graphics\common.h" />
     <ClInclude Include="graphics\graphics.h" />
     <ClInclude Include="graphics\vulkan\config.h" />
     <ClInclude Include="graphics\vulkan\engine.h" />

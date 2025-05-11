@@ -30,25 +30,26 @@ const char* VulkanEngine::s_requestedExtensions[] = {
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-VulkanEngine::VulkanEngine()
-: m_allocCallbacks(nullptr)
-, m_inst(VK_NULL_HANDLE)
-, m_physDev(VK_NULL_HANDLE)
-, m_physDevProps{}
-, m_logiDev(VK_NULL_HANDLE)
-, m_queue(VK_NULL_HANDLE)
-, m_queueFamilly(0)
-, m_winSurf(VK_NULL_HANDLE)
-, m_winSurfFormat(VK_FORMAT_UNDEFINED)
-, m_timestampFrequency(0)
-, m_uboAlignment(256)
-, m_ssboAlignment(256)
+VulkanEngine::VulkanEngine(Graphics* parent)
+    : m_parent(*parent)
+    , m_allocCallbacks(nullptr)
+    , m_inst(VK_NULL_HANDLE)
+    , m_physDev(VK_NULL_HANDLE)
+    , m_physDevProps{}
+    , m_logiDev(VK_NULL_HANDLE)
+    , m_queue(VK_NULL_HANDLE)
+    , m_queueFamilly(0)
+    , m_winSurf(VK_NULL_HANDLE)
+    , m_winSurfFormat(VK_FORMAT_UNDEFINED)
+    , m_timestampFrequency(0)
+    , m_uboAlignment(256)
+    , m_ssboAlignment(256)
 #if defined(VULKAN_VALIDATE)
-, m_debugUtilsExtensionPresents(false)
-, m_debugMessenger(VK_NULL_HANDLE)
-, fnSetDebugUtilsObjectNameEXT(nullptr)
-, fnCmdBeginDebugUtilsLabelEXT(nullptr)
-, fnCmdEndDebugUtilsLabelEXT(nullptr)
+    , m_debugUtilsExtensionPresents(false)
+    , m_debugMessenger(VK_NULL_HANDLE)
+    , fnSetDebugUtilsObjectNameEXT(nullptr)
+    , fnCmdBeginDebugUtilsLabelEXT(nullptr)
+    , fnCmdEndDebugUtilsLabelEXT(nullptr)
 #endif
 {}
 VulkanEngine::~VulkanEngine(){ destroy(); }
@@ -67,14 +68,14 @@ bool VulkanEngine::init(const Common::FrameData& data){
         {
             err = vkEnumerateInstanceLayerProperties(reinterpret_cast<uint32_t*>(&layerCount), nullptr);
             if(err != VK_SUCCESS){
-                NWB_LOGGER_ERROR(NWB_TEXT("Failed to get required instance layers: {}"), stringConvert(helperGetVulkanResultString(err)));
+                NWB_LOGGER_ERROR(NWB_TEXT("Failed to get required instance layers: {}"), stringConvert(getVulkanResultString(err)));
                 return false;
             }
 
             layerProps = makeScratchUnique<VkLayerProperties[]>(tmpArena, layerCount);
             err = vkEnumerateInstanceLayerProperties(reinterpret_cast<uint32_t*>(&layerCount), layerProps.get());
             if(err != VK_SUCCESS){
-                NWB_LOGGER_ERROR(NWB_TEXT("Failed to get required instance layers: {}"), stringConvert(helperGetVulkanResultString(err)));
+                NWB_LOGGER_ERROR(NWB_TEXT("Failed to get required instance layers: {}"), stringConvert(getVulkanResultString(err)));
                 return false;
             }
         }
@@ -134,7 +135,7 @@ bool VulkanEngine::init(const Common::FrameData& data){
     { // create vulkan instance
         err = vkCreateInstance(&createInfo, m_allocCallbacks, &m_inst);
         if(err != VK_SUCCESS){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to create Vulkan instance: {}"), stringConvert(helperGetVulkanResultString(err)));
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to create Vulkan instance: {}"), stringConvert(getVulkanResultString(err)));
             return false;
         }
     }
@@ -146,14 +147,14 @@ bool VulkanEngine::init(const Common::FrameData& data){
 
         err = vkEnumerateInstanceExtensionProperties(nullptr, reinterpret_cast<uint32_t*>(&extCount), nullptr);
         if(err != VK_SUCCESS){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to get required instance extensions: {}"), stringConvert(helperGetVulkanResultString(err)));
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to get required instance extensions: {}"), stringConvert(getVulkanResultString(err)));
             return false;
         }
 
         extProps = makeScratchUnique<VkExtensionProperties[]>(tmpArena, extCount);
         err = vkEnumerateInstanceExtensionProperties(nullptr, reinterpret_cast<uint32_t*>(&extCount), extProps.get());
         if(err != VK_SUCCESS){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to get required instance extensions: {}"), stringConvert(helperGetVulkanResultString(err)));
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to get required instance extensions: {}"), stringConvert(getVulkanResultString(err)));
             return false;
         }
 
@@ -173,7 +174,7 @@ bool VulkanEngine::init(const Common::FrameData& data){
 
                 err = vkCreateDebugUtilsMessengerEXT(m_inst, &debugUtilCreateInfo, m_allocCallbacks, &m_debugMessenger);
                 if(err != VK_SUCCESS){
-                    NWB_LOGGER_ERROR(NWB_TEXT("Failed to create debug messenger: {}"), stringConvert(helperGetVulkanResultString(err)));
+                    NWB_LOGGER_ERROR(NWB_TEXT("Failed to create debug messenger: {}"), stringConvert(getVulkanResultString(err)));
                     return false;
                 }
             }
@@ -192,14 +193,14 @@ bool VulkanEngine::init(const Common::FrameData& data){
     {
         err = vkEnumeratePhysicalDevices(m_inst, reinterpret_cast<uint32_t*>(&physDevCount), nullptr);
         if(err != VK_SUCCESS){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to get physical devices: {}"), stringConvert(helperGetVulkanResultString(err)));
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to get physical devices: {}"), stringConvert(getVulkanResultString(err)));
             return false;
         }
 
         physDevs = makeScratchUnique<VkPhysicalDevice[]>(tmpArena, physDevCount);
         err = vkEnumeratePhysicalDevices(m_inst, reinterpret_cast<uint32_t*>(&physDevCount), physDevs.get());
         if(err != VK_SUCCESS){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to get physical devices: {}"), stringConvert(helperGetVulkanResultString(err)));
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to get physical devices: {}"), stringConvert(getVulkanResultString(err)));
             return false;
         }
     }
@@ -228,7 +229,7 @@ bool VulkanEngine::init(const Common::FrameData& data){
                     auto err = vkGetPhysicalDeviceSurfaceSupportKHR(physDev, i, m_winSurf, &output);
                     if(err != VK_SUCCESS){
                         output = 0;
-                        NWB_LOGGER_WARNING(NWB_TEXT("Failed to get physical device surface support: {}"), stringConvert(helperGetVulkanResultString(err)));
+                        NWB_LOGGER_WARNING(NWB_TEXT("Failed to get physical device surface support: {}"), stringConvert(getVulkanResultString(err)));
                         continue;
                     }
 
@@ -312,7 +313,7 @@ bool VulkanEngine::init(const Common::FrameData& data){
 
         err = vkCreateDevice(m_physDev, &deviceInfo, m_allocCallbacks, &m_logiDev);
         if(err != VK_SUCCESS){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to create logical device: {}"), stringConvert(helperGetVulkanResultString(err)));
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to create logical device: {}"), stringConvert(getVulkanResultString(err)));
             return false;
         }
     }
@@ -333,18 +334,18 @@ bool VulkanEngine::init(const Common::FrameData& data){
 
         err = vkGetPhysicalDeviceSurfaceFormatsKHR(m_physDev, m_winSurf, reinterpret_cast<uint32_t*>(&supportedCount), nullptr);
         if(err != VK_SUCCESS){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to get physical device surface formats: {}"), stringConvert(helperGetVulkanResultString(err)));
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to get physical device surface formats: {}"), stringConvert(getVulkanResultString(err)));
             return false;
         }
 
         supportedFormats = makeScratchUnique<VkSurfaceFormatKHR[]>(tmpArena, supportedCount);
         err = vkGetPhysicalDeviceSurfaceFormatsKHR(m_physDev, m_winSurf, reinterpret_cast<uint32_t*>(&supportedCount), supportedFormats.get());
         if(err != VK_SUCCESS){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to get physical device surface formats: {}"), stringConvert(helperGetVulkanResultString(err)));
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to get physical device surface formats: {}"), stringConvert(getVulkanResultString(err)));
             return false;
         }
 
-        m_swapchainOutput.reset();
+        m_parent.m_swapchainOutput.reset();
 
         bool bFound = false;
         for(auto i = decltype(supportedCount){ 0 }; i < supportedCount; ++i){
@@ -376,7 +377,7 @@ bool VulkanEngine::init(const Common::FrameData& data){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to find suitable surface format, using default"));
         }
 
-        m_swapchainOutput.addColor(m_winSurfFormat.format);
+        m_parent.m_swapchainOutput.addColor(convert(m_winSurfFormat.format));
     }
 
     return true;

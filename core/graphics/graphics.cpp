@@ -18,9 +18,9 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Graphics::Graphics()
-    : m_engine(makeUnique<VulkanEngine>())
-{}
+Graphics::Graphics(){
+    m_engine = makeUnique<VulkanEngine>(this);
+}
 Graphics::~Graphics(){}
 
 bool Graphics::init(const Common::FrameData& data){ return m_engine->init(data); }

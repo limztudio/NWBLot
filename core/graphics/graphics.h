@@ -5,9 +5,7 @@
 #pragma once
 
 
-#include <core/global.h>
-
-#include <core/common/common.h>
+#include "common.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -26,6 +24,8 @@ class VulkanEngine;
 
 
 class Graphics{
+    friend VulkanEngine;
+
 public:
     Graphics();
     ~Graphics();
@@ -35,6 +35,9 @@ public:
     bool init(const Common::FrameData& data);
     void destroy();
 
+
+private:
+    RenderPassOutput m_swapchainOutput;
 
 private:
     UniquePtr<VulkanEngine> m_engine;

@@ -17,19 +17,6 @@ NWB_CORE_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void VulkanRenderPassOutput::addColor(VkFormat format){
-    if(numColors >= LengthOf(formatColors)){
-        NWB_LOGGER_ERROR(NWB_TEXT("VulkanRenderPassOutput::addColor: Too many color attachments"));
-        return;
-    }
-
-    formatColors[numColors++] = format;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 #if defined(VULKAN_VALIDATE)
 
 
@@ -86,7 +73,7 @@ VkSurfaceKHR createSurface(VkInstance inst, const Common::FrameData& data){
     }
     err = vkCreateWin32SurfaceKHR(inst, &createInfo, nullptr, &output);
     if(err != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to create Vulkan surface: {}"), stringConvert(helperGetVulkanResultString(err)));
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to create Vulkan surface: {}"), stringConvert(getVulkanResultString(err)));
         return VK_NULL_HANDLE;
     }
 #else

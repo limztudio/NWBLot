@@ -44,6 +44,8 @@ VulkanEngine::VulkanEngine(Graphics* parent)
     , m_timestampFrequency(0)
     , m_uboAlignment(256)
     , m_ssboAlignment(256)
+    , m_presentMode(VK_PRESENT_MODE_FIFO_KHR)
+    , m_swapchainImageCount(0)
 #if defined(VULKAN_VALIDATE)
     , m_debugUtilsExtensionPresents(false)
     , m_debugMessenger(VK_NULL_HANDLE)
@@ -380,6 +382,10 @@ bool VulkanEngine::init(const Common::FrameData& data){
         m_parent.m_swapchainOutput.addColor(convert(m_winSurfFormat.format));
     }
 
+    { // create swapchain
+        updatePresentMode(m_parent.m_presentMode);
+    }
+
     return true;
 }
 void VulkanEngine::destroy(){
@@ -412,6 +418,43 @@ void VulkanEngine::destroy(){
         vkDestroyInstance(m_inst, m_allocCallbacks);
         m_inst = nullptr;
     }
+}
+
+void VulkanEngine::updatePresentMode(PresentMode mode){
+    VkResult err;
+
+    u32 supportedCount = 0;
+    static VkPresentModeKHR supportedModes[8];
+    {
+        err = vkGetPhysicalDeviceSurfacePresentModesKHR(m_physDev, m_winSurf, reinterpret_cast<uint32_t*>(&supportedCount), nullptr);
+        if(err != VK_SUCCESS)
+            NWB_LOGGER_WARNING(NWB_TEXT("Failed to get physical device surface present modes: {}"), stringConvert(getVulkanResultString(err)));
+
+        assert(supportedCount < LengthOf(supportedModes));
+
+        err = vkGetPhysicalDeviceSurfacePresentModesKHR(m_physDev, m_winSurf, reinterpret_cast<uint32_t*>(&supportedCount), supportedModes);
+        if(err != VK_SUCCESS)
+            NWB_LOGGER_WARNING(NWB_TEXT("Failed to get physical device surface present modes: {}"), stringConvert(getVulkanResultString(err)));
+    }
+
+    bool bFound = false;
+    auto requestedMode = convert(mode);
+    for(auto i = decltype(supportedCount){ 0 }; i < supportedCount; ++i){
+        if(requestedMode == supportedModes[i]){
+            bFound = true;
+            break;
+        }
+    }
+
+    if(bFound){
+        m_presentMode = requestedMode;
+        m_parent.m_presentMode = mode;
+    }
+    else{
+        m_presentMode = VK_PRESENT_MODE_FIFO_KHR;
+        m_parent.m_presentMode = PresentMode::VSync;
+    }
+    m_swapchainImageCount = (m_presentMode == VK_PRESENT_MODE_IMMEDIATE_KHR) ? 2 : 3;
 }
 
 

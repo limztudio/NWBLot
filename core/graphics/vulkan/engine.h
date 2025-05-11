@@ -74,6 +74,10 @@ public:
 
 
 private:
+    void updatePresentMode(PresentMode mode);
+
+
+private:
     Graphics& m_parent;
 
 private:
@@ -96,6 +100,9 @@ private:
     f32 m_timestampFrequency;
     u64 m_uboAlignment;
     u64 m_ssboAlignment;
+
+    VkPresentModeKHR m_presentMode;
+    u8 m_swapchainImageCount;
 
 private:
 #if defined(VULKAN_VALIDATE)

@@ -33,20 +33,17 @@ const char* VulkanEngine::s_requestedExtensions[] = {
 VulkanEngine::VulkanEngine(Graphics* parent)
     : m_parent(*parent)
     , m_allocCallbacks(nullptr)
-    , m_inst(VK_NULL_HANDLE, __hidden_vulkan::VkInstanceDeleter(m_allocCallbacks))
-    , m_physDev(VK_NULL_HANDLE)
+    , m_inst(VK_NULL_HANDLE, __hidden_vulkan::VkInstanceDeleter(&m_allocCallbacks))
+    , m_physDev(VK_NULL_HANDLE, __hidden_vulkan::VkPhysicalDeviceRefDeleter())
     , m_physDevProps{}
-    , m_logiDev(VK_NULL_HANDLE)
-    , m_queue(VK_NULL_HANDLE)
+    , m_logiDev(VK_NULL_HANDLE, __hidden_vulkan::VkLogicalDeviceDeleter(&m_allocCallbacks))
+    , m_queue(VK_NULL_HANDLE, __hidden_vulkan::VkQueueRefDeleter())
     , m_queueFamilly(0)
-    , m_swapchainImages{ VK_NULL_HANDLE, }
-    , m_swapchainImageViews{ VK_NULL_HANDLE, }
-    , m_swapchainFrameBuffers{ VK_NULL_HANDLE, }
-    , m_winSurf(VK_NULL_HANDLE)
+    , m_winSurf(VK_NULL_HANDLE, __hidden_vulkan::VkSurfaceDeleter(&m_allocCallbacks, &m_inst))
     , m_winSurfFormat(VK_FORMAT_UNDEFINED)
     , m_presentMode(VK_PRESENT_MODE_FIFO_KHR)
-    , m_swapchain(VK_NULL_HANDLE)
-    , m_allocator(VK_NULL_HANDLE)
+    , m_swapchain(VK_NULL_HANDLE, __hidden_vulkan::VkSwapchainDeleter(&m_allocCallbacks, &m_logiDev))
+    , m_allocator(VK_NULL_HANDLE, __hidden_vulkan::VmaAllocatorDeleter())
     , m_timestampFrequency(0)
     , m_uboAlignment(256)
     , m_ssboAlignment(256)
@@ -57,7 +54,13 @@ VulkanEngine::VulkanEngine(Graphics* parent)
     , fnCmdBeginDebugUtilsLabelEXT(nullptr)
     , fnCmdEndDebugUtilsLabelEXT(nullptr)
 #endif
-{}
+{
+    for(usize i = 0; i < s_maxSwapchainImages; ++i){
+        m_swapchainImages[i] = __hidden_vulkan::VkImageRef(VK_NULL_HANDLE, __hidden_vulkan::VkImageRefDeleter());
+        m_swapchainImageViews[i] = __hidden_vulkan::VkImageViewPtr(VK_NULL_HANDLE, __hidden_vulkan::VkImageViewDeleter(&m_allocCallbacks, &m_logiDev));
+        m_swapchainFrameBuffers[i] = __hidden_vulkan::VkFramebufferPtr(VK_NULL_HANDLE, __hidden_vulkan::VkFramebufferDeleter(&m_allocCallbacks, &m_logiDev));
+    }
+}
 VulkanEngine::~VulkanEngine(){ destroy(); }
 
 bool VulkanEngine::init(const Common::FrameData& data){
@@ -216,11 +219,12 @@ bool VulkanEngine::init(const Common::FrameData& data){
     }
 
     { // create window surface
-        m_winSurf = createSurface(m_inst.get(), data);
-        if(m_winSurf == VK_NULL_HANDLE){
+        auto* object = createSurface(m_inst.get(), data);
+        if(object == VK_NULL_HANDLE){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to create Vulkan surface"));
             return false;
         }
+        m_winSurf.reset(object);
     }
 
     { // choose physical device
@@ -236,7 +240,7 @@ bool VulkanEngine::init(const Common::FrameData& data){
             VkBool32 output = 0;
             for(auto i = decltype(queueFamilyCount){ 0 }; i < queueFamilyCount; ++i){
                 if(queueFamilies[i].queueCount > 0 && queueFamilies[i].queueFlags & (VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT)){
-                    auto err = vkGetPhysicalDeviceSurfaceSupportKHR(physDev, i, m_winSurf, &output);
+                    auto err = vkGetPhysicalDeviceSurfaceSupportKHR(physDev, i, m_winSurf.get(), &output);
                     if(err != VK_SUCCESS){
                         output = 0;
                         NWB_LOGGER_WARNING(NWB_TEXT("Failed to get physical device surface support: {}"), stringConvert(getVulkanResultString(err)));
@@ -279,11 +283,11 @@ bool VulkanEngine::init(const Common::FrameData& data){
         }
 
         if(discreteGPU != VK_NULL_HANDLE){
-            m_physDev = discreteGPU;
+            m_physDev.reset(discreteGPU);
             m_queueFamilly = discreteQueueFamilly;
         }
         else if(integratedGPU != VK_NULL_HANDLE){
-            m_physDev = integratedGPU;
+            m_physDev.reset(integratedGPU);
             m_queueFamilly = integratedQueueFamilly;
         }
         else{
@@ -291,7 +295,7 @@ bool VulkanEngine::init(const Common::FrameData& data){
             return false;
         }
 
-        vkGetPhysicalDeviceProperties(m_physDev, &m_physDevProps);
+        vkGetPhysicalDeviceProperties(m_physDev.get(), &m_physDevProps);
         m_timestampFrequency = m_physDevProps.limits.timestampPeriod / (1000 * 1000);
 
         m_uboAlignment = static_cast<decltype(m_uboAlignment)>(m_physDevProps.limits.minUniformBufferOffsetAlignment);
@@ -310,7 +314,7 @@ bool VulkanEngine::init(const Common::FrameData& data){
         }
 
         VkPhysicalDeviceFeatures2 physDevFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
-        vkGetPhysicalDeviceFeatures2(m_physDev, &physDevFeatures);
+        vkGetPhysicalDeviceFeatures2(m_physDev.get(), &physDevFeatures);
 
         VkDeviceCreateInfo deviceInfo{ VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO };
         {
@@ -321,11 +325,13 @@ bool VulkanEngine::init(const Common::FrameData& data){
             deviceInfo.pNext = &physDevFeatures;
         }
 
-        err = vkCreateDevice(m_physDev, &deviceInfo, m_allocCallbacks, &m_logiDev);
+        VkDevice object = VK_NULL_HANDLE;
+        err = vkCreateDevice(m_physDev.get(), &deviceInfo, m_allocCallbacks, &object);
         if(err != VK_SUCCESS){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to create logical device: {}"), stringConvert(getVulkanResultString(err)));
             return false;
         }
+        m_logiDev.reset(object);
     }
 
 #if defined(VULKAN_VALIDATE)
@@ -336,20 +342,24 @@ bool VulkanEngine::init(const Common::FrameData& data){
     }
 #endif
 
-    vkGetDeviceQueue(m_logiDev, m_queueFamilly, 0, &m_queue);
+    {
+        VkQueue object = VK_NULL_HANDLE;
+        vkGetDeviceQueue(m_logiDev.get(), m_queueFamilly, 0, &object);
+        m_queue.reset(object);
+    }
 
     { // choose surface
         u32 supportedCount = 0;
         ScratchUniquePtr<VkSurfaceFormatKHR[]> supportedFormats;
 
-        err = vkGetPhysicalDeviceSurfaceFormatsKHR(m_physDev, m_winSurf, reinterpret_cast<uint32_t*>(&supportedCount), nullptr);
+        err = vkGetPhysicalDeviceSurfaceFormatsKHR(m_physDev.get(), m_winSurf.get(), reinterpret_cast<uint32_t*>(&supportedCount), nullptr);
         if(err != VK_SUCCESS){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to get physical device surface formats: {}"), stringConvert(getVulkanResultString(err)));
             return false;
         }
 
         supportedFormats = makeScratchUnique<VkSurfaceFormatKHR[]>(tmpArena, supportedCount);
-        err = vkGetPhysicalDeviceSurfaceFormatsKHR(m_physDev, m_winSurf, reinterpret_cast<uint32_t*>(&supportedCount), supportedFormats.get());
+        err = vkGetPhysicalDeviceSurfaceFormatsKHR(m_physDev.get(), m_winSurf.get(), reinterpret_cast<uint32_t*>(&supportedCount), supportedFormats.get());
         if(err != VK_SUCCESS){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to get physical device surface formats: {}"), stringConvert(getVulkanResultString(err)));
             return false;
@@ -400,34 +410,30 @@ bool VulkanEngine::init(const Common::FrameData& data){
     { // create VMA
         VmaAllocatorCreateInfo createInfo{};
         {
-            createInfo.physicalDevice = m_physDev;
-            createInfo.device = m_logiDev;
+            createInfo.physicalDevice = m_physDev.get();
+            createInfo.device = m_logiDev.get();
             createInfo.instance = m_inst.get();
         }
 
-        err = vmaCreateAllocator(&createInfo, &m_allocator);
+        VmaAllocator object = VK_NULL_HANDLE;
+        err = vmaCreateAllocator(&createInfo, &object);
         if(err != VK_SUCCESS){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to create VMA allocator: {}"), stringConvert(getVulkanResultString(err)));
             return false;
         }
+        m_allocator.reset(object);
     }
 
     return true;
 }
 void VulkanEngine::destroy(){
     if(m_logiDev)
-        vkDeviceWaitIdle(m_logiDev);
+        vkDeviceWaitIdle(m_logiDev.get());
 
     destroySwapchain();
-    if(m_winSurf && m_inst){
-        vkDestroySurfaceKHR(m_inst.get(), m_winSurf, m_allocCallbacks);
-        m_winSurf = VK_NULL_HANDLE;
-    }
+    m_winSurf.reset();
 
-    if(m_allocator){
-        vmaDestroyAllocator(m_allocator);
-        m_allocator = VK_NULL_HANDLE;
-    }
+    m_allocator.reset();
 
 #if defined(VULKAN_VALIDATE)
     if(m_debugMessenger && m_inst){
@@ -441,11 +447,9 @@ void VulkanEngine::destroy(){
     }
 #endif
 
-    if(m_logiDev){
-        vkDestroyDevice(m_logiDev, m_allocCallbacks);
-        m_logiDev = VK_NULL_HANDLE;
-    }
-
+    m_queue.reset();
+    m_logiDev.reset();
+    m_physDev.reset();
     m_inst.reset();
 }
 
@@ -456,13 +460,13 @@ void VulkanEngine::updatePresentMode(PresentMode mode){
     u32 supportedCount = 0;
     static VkPresentModeKHR supportedModes[8];
     {
-        err = vkGetPhysicalDeviceSurfacePresentModesKHR(m_physDev, m_winSurf, reinterpret_cast<uint32_t*>(&supportedCount), nullptr);
+        err = vkGetPhysicalDeviceSurfacePresentModesKHR(m_physDev.get(), m_winSurf.get(), reinterpret_cast<uint32_t*>(&supportedCount), nullptr);
         if(err != VK_SUCCESS)
             NWB_LOGGER_WARNING(NWB_TEXT("Failed to get physical device surface present modes: {}"), stringConvert(getVulkanResultString(err)));
 
         assert(supportedCount < LengthOf(supportedModes));
 
-        err = vkGetPhysicalDeviceSurfacePresentModesKHR(m_physDev, m_winSurf, reinterpret_cast<uint32_t*>(&supportedCount), supportedModes);
+        err = vkGetPhysicalDeviceSurfacePresentModesKHR(m_physDev.get(), m_winSurf.get(), reinterpret_cast<uint32_t*>(&supportedCount), supportedModes);
         if(err != VK_SUCCESS)
             NWB_LOGGER_WARNING(NWB_TEXT("Failed to get physical device surface present modes: {}"), stringConvert(getVulkanResultString(err)));
     }
@@ -489,20 +493,11 @@ void VulkanEngine::updatePresentMode(PresentMode mode){
 
 void VulkanEngine::destroySwapchain(){
     for(auto i = decltype(m_parent.m_swapchainImageCount){ 0 }; i < m_parent.m_swapchainImageCount; ++i){
-        if(m_swapchainImageViews[i]){
-            vkDestroyImageView(m_logiDev, m_swapchainImageViews[i], m_allocCallbacks);
-            m_swapchainImageViews[i] = VK_NULL_HANDLE;
-        }
-
-        if(m_swapchainFrameBuffers[i]){
-            vkDestroyFramebuffer(m_logiDev, m_swapchainFrameBuffers[i], m_allocCallbacks);
-            m_swapchainFrameBuffers[i] = VK_NULL_HANDLE;
-        }
+        m_swapchainImageViews[i].reset();
+        m_swapchainFrameBuffers[i].reset();
+        m_swapchainImages[i].reset();
     }
-    if(m_swapchain){
-        vkDestroySwapchainKHR(m_logiDev, m_swapchain, m_allocCallbacks);
-        m_swapchain = VK_NULL_HANDLE;
-    }
+    m_swapchain.reset();
 }
 
 

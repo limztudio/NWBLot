@@ -4,7 +4,6 @@
 
 #include "engine.h"
 
-#include <logger/client/logger.h>
 #include <core/alloc/alloc.h>
 
 
@@ -49,7 +48,7 @@ VulkanEngine::VulkanEngine(Graphics* parent)
     , m_ssboAlignment(256)
 #if defined(VULKAN_VALIDATE)
     , m_debugUtilsExtensionPresents(false)
-    , m_debugMessenger(VK_NULL_HANDLE)
+    , m_debugMessenger(VK_NULL_HANDLE, __hidden_vulkan::VkDebugUtilsMessengerDeleter(&m_allocCallbacks, &m_inst))
     , fnSetDebugUtilsObjectNameEXT(nullptr)
     , fnCmdBeginDebugUtilsLabelEXT(nullptr)
     , fnCmdEndDebugUtilsLabelEXT(nullptr)
@@ -181,15 +180,17 @@ bool VulkanEngine::init(const Common::FrameData& data){
         }
 
         if(m_debugUtilsExtensionPresents){
-            PFN_vkCreateDebugUtilsMessengerEXT vkCreateDebugUtilsMessengerEXT = reinterpret_cast<decltype(vkCreateDebugUtilsMessengerEXT)>(vkGetInstanceProcAddr(m_inst.get(), "vkCreateDebugUtilsMessengerEXT"));
+            auto* vkCreateDebugUtilsMessengerEXT = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(m_inst.get(), "vkCreateDebugUtilsMessengerEXT"));
             if(vkCreateDebugUtilsMessengerEXT){
                 VkDebugUtilsMessengerCreateInfoEXT debugUtilCreateInfo = createDebugMessengerInfo();
 
-                err = vkCreateDebugUtilsMessengerEXT(m_inst.get(), &debugUtilCreateInfo, m_allocCallbacks, &m_debugMessenger);
+                VkDebugUtilsMessengerEXT object = VK_NULL_HANDLE;
+                err = vkCreateDebugUtilsMessengerEXT(m_inst.get(), &debugUtilCreateInfo, m_allocCallbacks, &object);
                 if(err != VK_SUCCESS){
                     NWB_LOGGER_ERROR(NWB_TEXT("Failed to create debug messenger: {}"), stringConvert(getVulkanResultString(err)));
                     return false;
                 }
+                m_debugMessenger.reset(object);
             }
             else{
                 NWB_LOGGER_WARNING(NWB_TEXT("Failed to get vkCreateDebugUtilsMessengerEXT function pointer"));
@@ -436,15 +437,7 @@ void VulkanEngine::destroy(){
     m_allocator.reset();
 
 #if defined(VULKAN_VALIDATE)
-    if(m_debugMessenger && m_inst){
-        PFN_vkDestroyDebugUtilsMessengerEXT vkDestroyDebugUtilsMessengerEXT = reinterpret_cast<decltype(vkDestroyDebugUtilsMessengerEXT)>(vkGetInstanceProcAddr(m_inst.get(), "vkDestroyDebugUtilsMessengerEXT"));
-        if(vkDestroyDebugUtilsMessengerEXT){
-            vkDestroyDebugUtilsMessengerEXT(m_inst.get(), m_debugMessenger, m_allocCallbacks);
-            m_debugMessenger = VK_NULL_HANDLE;
-        }
-        else
-            NWB_LOGGER_WARNING(NWB_TEXT("Failed to get vkDestroyDebugUtilsMessengerEXT function pointer"));
-    }
+    m_debugMessenger.reset();
 #endif
 
     m_queue.reset();

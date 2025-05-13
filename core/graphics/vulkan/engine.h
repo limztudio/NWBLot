@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include <logger/client/logger.h>
+
 #include "../common.h"
 #include "../graphics.h"
 
@@ -97,6 +99,23 @@ namespace __hidden_vulkan{
         VkLogicalDevicePtr* logiDev = nullptr;
     };
     using VkFramebufferPtr = UniquePtr<VkFramebuffer_T, VkFramebufferDeleter>;
+
+#if defined(VULKAN_VALIDATE)
+    struct VkDebugUtilsMessengerDeleter{
+        constexpr VkDebugUtilsMessengerDeleter()noexcept = default;
+        constexpr VkDebugUtilsMessengerDeleter(VkAllocationCallbacks** _callback, VkInstancePtr* _inst)noexcept : callback(_callback), inst(_inst){}
+        void operator()(VkDebugUtilsMessengerEXT p)const noexcept{
+            auto* vkDestroyDebugUtilsMessengerEXT = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(inst->get(), "vkDestroyDebugUtilsMessengerEXT"));
+            if(vkDestroyDebugUtilsMessengerEXT)
+                vkDestroyDebugUtilsMessengerEXT(inst->get(), p, *callback);
+            else
+                NWB_LOGGER_WARNING(NWB_TEXT("Failed to get vkDestroyDebugUtilsMessengerEXT function pointer"));
+        }
+        VkAllocationCallbacks** callback = nullptr;
+        VkInstancePtr* inst = nullptr;
+    };
+    using VkDebugUtilsMessengerPtr = UniquePtr<VkDebugUtilsMessengerEXT_T, VkDebugUtilsMessengerDeleter>;
+#endif
 };
 
 
@@ -220,7 +239,7 @@ private:
 private:
 #if defined(VULKAN_VALIDATE)
     bool m_debugUtilsExtensionPresents;
-    VkDebugUtilsMessengerEXT m_debugMessenger;
+    __hidden_vulkan::VkDebugUtilsMessengerPtr m_debugMessenger;
 
     PFN_vkSetDebugUtilsObjectNameEXT fnSetDebugUtilsObjectNameEXT;
     PFN_vkCmdBeginDebugUtilsLabelEXT fnCmdBeginDebugUtilsLabelEXT;

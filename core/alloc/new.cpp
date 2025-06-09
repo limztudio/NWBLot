@@ -3,7 +3,7 @@
 
 
 #include <new>
-#include "mimalloc.h"
+#include <tbb/scalable_allocator.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -34,35 +34,87 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void operator delete(void* p)noexcept{ mi_free(p); };
-void operator delete[](void* p)noexcept{ mi_free(p); };
+static inline void* InternalOperatorNew(size_t sz){
+    void* res = scalable_malloc(sz);
+#if TBB_USE_EXCEPTIONS
+    while (!res){
+        std::new_handler handler;
+#if __TBB_CPP11_GET_NEW_HANDLER_PRESENT
+        handler = std::get_new_handler();
+#else
+        {
+            ProxyMutex::scoped_lock lock(new_lock);
+            handler = std::set_new_handler(0);
+            std::set_new_handler(handler);
+        }
+#endif
+        if (handler)
+            (*handler)();
+        else
+            throw std::bad_alloc();
+        res = scalable_malloc(sz);
+}
+#endif
+    return res;
+}
 
-void operator delete(void* p, const std::nothrow_t&)noexcept{ mi_free(p); }
-void operator delete[](void* p, const std::nothrow_t&)noexcept{ mi_free(p); }
+static inline void* InternalOperatorNew(size_t sz, size_t align){
+    void* res = scalable_aligned_malloc(sz, align);
+#if TBB_USE_EXCEPTIONS
+    while (!res){
+        std::new_handler handler;
+#if __TBB_CPP11_GET_NEW_HANDLER_PRESENT
+        handler = std::get_new_handler();
+#else
+        {
+            ProxyMutex::scoped_lock lock(new_lock);
+            handler = std::set_new_handler(0);
+            std::set_new_handler(handler);
+        }
+#endif
+        if (handler)
+            (*handler)();
+        else
+            throw std::bad_alloc();
+        res = scalable_aligned_malloc(sz, align);
+    }
+#endif
+    return res;
+}
 
-__nwb__decl_new(n) void* operator new(std::size_t n)noexcept(false){ return mi_new(n); }
-__nwb__decl_new(n) void* operator new[](std::size_t n)noexcept(false){ return mi_new(n); }
 
-__nwb__decl_new_nothrow(n) void* operator new(std::size_t n, const std::nothrow_t& tag)noexcept{ (void)(tag); return mi_new_nothrow(n); }
-__nwb__decl_new_nothrow(n) void* operator new[](std::size_t n, const std::nothrow_t& tag)noexcept{ (void)(tag); return mi_new_nothrow(n); }
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void operator delete(void* p)noexcept{ scalable_free(p); };
+void operator delete[](void* p)noexcept{ scalable_free(p); };
+
+void operator delete(void* p, const std::nothrow_t&)noexcept{ scalable_free(p); }
+void operator delete[](void* p, const std::nothrow_t&)noexcept{ scalable_free(p); }
+
+__nwb__decl_new(n) void* operator new(std::size_t n)noexcept(false){ return InternalOperatorNew(n); }
+__nwb__decl_new(n) void* operator new[](std::size_t n)noexcept(false){ return InternalOperatorNew(n); }
+
+__nwb__decl_new_nothrow(n) void* operator new(std::size_t n, const std::nothrow_t& tag)noexcept{ (void)(tag); return scalable_malloc(n); }
+__nwb__decl_new_nothrow(n) void* operator new[](std::size_t n, const std::nothrow_t& tag)noexcept{ (void)(tag); return scalable_malloc(n); }
 
 #if (__cplusplus >= 201402L || _MSC_VER >= 1916)
-void operator delete(void* p, std::size_t n)noexcept{ mi_free_size(p, n); };
-void operator delete[](void* p, std::size_t n)noexcept{ mi_free_size(p, n); };
+void operator delete(void* p, std::size_t n)noexcept{ (void)n; scalable_free(p); };
+void operator delete[](void* p, std::size_t n)noexcept{ (void)n; scalable_free(p); };
 #endif
 
 #if (__cplusplus > 201402L || defined(__cpp_aligned_new))
-void operator delete(void* p, std::align_val_t al)noexcept{ mi_free_aligned(p, static_cast<size_t>(al)); }
-void operator delete[](void* p, std::align_val_t al)noexcept{ mi_free_aligned(p, static_cast<size_t>(al)); }
-void operator delete(void* p, std::size_t n, std::align_val_t al)noexcept{ mi_free_size_aligned(p, n, static_cast<size_t>(al)); };
-void operator delete[](void* p, std::size_t n, std::align_val_t al)noexcept{ mi_free_size_aligned(p, n, static_cast<size_t>(al)); };
-void operator delete(void* p, std::align_val_t al, const std::nothrow_t&)noexcept{ mi_free_aligned(p, static_cast<size_t>(al)); }
-void operator delete[](void* p, std::align_val_t al, const std::nothrow_t&)noexcept{ mi_free_aligned(p, static_cast<size_t>(al)); }
+void operator delete(void* p, std::align_val_t al)noexcept{ (void)al; scalable_free(p); }
+void operator delete[](void* p, std::align_val_t al)noexcept{ (void)al; scalable_free(p); }
+void operator delete(void* p, std::size_t n, std::align_val_t al)noexcept{ (void)n; (void)al; scalable_free(p); };
+void operator delete[](void* p, std::size_t n, std::align_val_t al)noexcept{ (void)n; (void)al; scalable_free(p); };
+void operator delete(void* p, std::align_val_t al, const std::nothrow_t&)noexcept{ (void)al; scalable_free(p); }
+void operator delete[](void* p, std::align_val_t al, const std::nothrow_t&)noexcept{ (void)al; scalable_free(p); }
 
-void* operator new(std::size_t n, std::align_val_t al)noexcept(false){ return mi_new_aligned(n, static_cast<size_t>(al)); }
-void* operator new[](std::size_t n, std::align_val_t al)noexcept(false){ return mi_new_aligned(n, static_cast<size_t>(al)); }
-void* operator new(std::size_t n, std::align_val_t al, const std::nothrow_t&)noexcept{ return mi_new_aligned_nothrow(n, static_cast<size_t>(al)); }
-void* operator new[](std::size_t n, std::align_val_t al, const std::nothrow_t&)noexcept{ return mi_new_aligned_nothrow(n, static_cast<size_t>(al)); }
+void* operator new(std::size_t n, std::align_val_t al)noexcept(false){ return InternalOperatorNew(n, static_cast<size_t>(al)); }
+void* operator new[](std::size_t n, std::align_val_t al)noexcept(false){ return InternalOperatorNew(n, static_cast<size_t>(al)); }
+void* operator new(std::size_t n, std::align_val_t al, const std::nothrow_t&)noexcept{ return scalable_aligned_malloc(n, static_cast<size_t>(al)); }
+void* operator new[](std::size_t n, std::align_val_t al, const std::nothrow_t&)noexcept{ return scalable_aligned_malloc(n, static_cast<size_t>(al)); }
 #endif
 
 

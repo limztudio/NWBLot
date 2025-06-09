@@ -25,8 +25,11 @@
     <ClInclude Include="alloc\scratch.h" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\3rd_parties\mimalloc\mimalloc.vcxproj">
-      <Project>{24c00b6b-4814-4078-bf4a-76fe33e1befa}</Project>
+    <ProjectReference Include="..\3rd_parties\oneTBB\tbbmalloc.vcxproj">
+      <Project>{96975c53-dc45-40f6-b189-3338fa76a567}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\3rd_parties\oneTBB\tbbmalloc_proxy.vcxproj">
+      <Project>{9c021dae-0cc5-45d6-a4ea-92de0e21d600}</Project>
     </ProjectReference>
   </ItemGroup>
   <PropertyGroup Label="Globals">
@@ -61,8 +64,8 @@
     <Import Project="..\configuration\simdAVX2.props" />
     <Import Project="..\configuration\unicodeChar.props" />
     <Import Project="..\configuration\basicInclude.props" />
+    <Import Project="..\configuration\tbbInclude.props" />
     <Import Project="..\configuration\3rdPartyContainerInclude.props" />
-    <Import Project="..\configuration\mimallocInclude.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='opt|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
@@ -71,8 +74,8 @@
     <Import Project="..\configuration\simdAVX2.props" />
     <Import Project="..\configuration\unicodeChar.props" />
     <Import Project="..\configuration\basicInclude.props" />
+    <Import Project="..\configuration\tbbInclude.props" />
     <Import Project="..\configuration\3rdPartyContainerInclude.props" />
-    <Import Project="..\configuration\mimallocInclude.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='fin|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
@@ -81,8 +84,8 @@
     <Import Project="..\configuration\simdAVX2.props" />
     <Import Project="..\configuration\unicodeChar.props" />
     <Import Project="..\configuration\basicInclude.props" />
+    <Import Project="..\configuration\tbbInclude.props" />
     <Import Project="..\configuration\3rdPartyContainerInclude.props" />
-    <Import Project="..\configuration\mimallocInclude.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

@@ -18,6 +18,9 @@
     <ProjectReference Include="..\3rd_parties\curl\libcurl.vcxproj">
       <Project>{9bf92df1-144d-4120-9728-debc803749cb}</Project>
     </ProjectReference>
+    <ProjectReference Include="..\3rd_parties\oneTBB\tbb.vcxproj">
+      <Project>{7d934963-c0d2-4c5a-a3ef-ca1ac3fb7832}</Project>
+    </ProjectReference>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="common\common.cpp" />

@@ -39,8 +39,8 @@ public:
 
 
 public:
-    inline bool enqueue(TString&& str, Type type = Type::Info){ return Base::enqueue(Move(str), type); }
-    inline bool enqueue(const TString& str, Type type = Type::Info){ return Base::enqueue(str, type); }
+    inline void enqueue(TString&& str, Type type = Type::Info){ return Base::enqueue(Move(str), type); }
+    inline void enqueue(const TString& str, Type type = Type::Info){ return Base::enqueue(str, type); }
 
 
 protected:
@@ -48,17 +48,13 @@ protected:
     bool internalUpdate();
 
 protected:
-    inline bool enqueue(MessageType&& data){
-        auto ret = BaseUpdateIfQueued::enqueue(Move(data));
-        if(ret)
-            m_msgCount.fetch_add(1, MemoryOrder::memory_order_acq_rel);
-        return ret;
+    inline void enqueue(MessageType&& data){
+        BaseUpdateIfQueued::enqueue(Move(data));
+        m_msgCount.fetch_add(1, MemoryOrder::memory_order_acq_rel);
     }
-    inline bool enqueue(const MessageType& data){
-        auto ret = BaseUpdateIfQueued::enqueue(data);
-        if(ret)
-            m_msgCount.fetch_add(1, MemoryOrder::memory_order_acq_rel);
-        return ret;
+    inline void enqueue(const MessageType& data){
+        BaseUpdateIfQueued::enqueue(data);
+        m_msgCount.fetch_add(1, MemoryOrder::memory_order_acq_rel);
     }
 
     inline bool try_dequeue(MessageType& msg){

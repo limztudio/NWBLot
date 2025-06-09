@@ -35,8 +35,8 @@ public:
 
 
 public:
-    inline bool enqueue(TString&& str, Type type = Type::Info){ return Base::enqueue(Move(str), type); }
-    inline bool enqueue(const TString& str, Type type = Type::Info){ return Base::enqueue(str, type); }
+    inline void enqueue(TString&& str, Type type = Type::Info){ return Base::enqueue(Move(str), type); }
+    inline void enqueue(const TString& str, Type type = Type::Info){ return Base::enqueue(str, type); }
 
 
 protected:
@@ -44,8 +44,8 @@ protected:
     bool internalUpdate();
 
 protected:
-    inline bool enqueue(MessageType&& data){ return BaseUpdateOrdinary::enqueue(Move(data)); }
-    inline bool enqueue(const MessageType& data){ return BaseUpdateOrdinary::enqueue(data); }
+    inline void enqueue(MessageType&& data){ return BaseUpdateOrdinary::enqueue(Move(data)); }
+    inline void enqueue(const MessageType& data){ return BaseUpdateOrdinary::enqueue(data); }
 
     inline bool tryDequeue(MessageType& msg){ return BaseUpdateOrdinary::tryDequeue(msg); }
 

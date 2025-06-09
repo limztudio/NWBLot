@@ -12,8 +12,12 @@
 #include <float.h>
 #endif
 
+#include <tbb/mutex.h>
+#include <tbb/spin_mutex.h>
+#include <tbb/queuing_mutex.h>
+#include <tbb/spin_rw_mutex.h>
+#include <tbb/queuing_rw_mutex.h>
 #include <mutex>
-#include <shared_mutex>
 
 #include <semaphore>
 
@@ -52,9 +56,12 @@ static inline void machine_pause(std::int32_t delay){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using Mutex = std::mutex;
+using Mutex = tbb::mutex;
 using RecursiveMutex = std::recursive_mutex;
-using SharedMutex = std::shared_mutex;
+using SpinMutex = tbb::spin_mutex;
+using QueuingMutex = tbb::queuing_mutex;
+using SharedMutex = tbb::spin_rw_mutex;
+using SharedQueuingMutex = tbb::queuing_rw_mutex;
 
 template <isize LeastMaxValue = PTRDIFF_MAX>
 using Semaphore = std::counting_semaphore<LeastMaxValue>;

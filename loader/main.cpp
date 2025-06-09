@@ -16,6 +16,7 @@
 
 #include <command.h>
 #include <logger/client/logger.h>
+#include <core/common/common.h>
 #include <core/frame/frame.h>
 
 
@@ -81,7 +82,9 @@ static NWB_INLINE int entry_point(isize argc, tchar** argv, void* inst){
     }
 
     try{
+        NWB::Core::Common::Initializer::instance().initialize();
         ret = mainLogic(logAddress.c_str(), inst);
+        NWB::Core::Common::Initializer::instance().finalize();
     }
     catch(...){
         return -1;

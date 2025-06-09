@@ -4,7 +4,9 @@
 
 #include "core.h"
 
-#include "mimalloc.h"
+#include <tbb/tbbmalloc_proxy.h>
+#include <tbb/scalable_allocator.h>
+#include <tbb/cache_aligned_allocator.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -18,36 +20,40 @@ NWB_ALLOC_BEGIN
 
 void* coreAlloc(usize size, const char* log){
     (void)log;
-    return mi_malloc(size);
+    return scalable_malloc(size);
 }
 void* coreRealloc(void* p, usize size, const char* log){
     (void)log;
-    return mi_realloc(p, size);
+    return scalable_realloc(p, size);
 }
 void* coreAllocAligned(usize size, usize align, const char* log){
     (void)log;
-    return mi_aligned_alloc(align, size);
+    return scalable_aligned_malloc(size, align);
 }
 void* coreReallocAligned(void* p, usize size, usize align, const char* log){
     (void)log;
-    return mi_aligned_recalloc(p, 1, size, align);
+    return scalable_aligned_realloc(p, size, align);
 }
 
 void coreFree(void* ptr, const char* log)noexcept{
     (void)log;
-    mi_free(ptr);
+    scalable_free(ptr);
 }
 void coreFreeSize(void* ptr, usize size, const char* log)noexcept{
+    (void)size;
     (void)log;
-    mi_free_size(ptr, size);
+    scalable_free(ptr);
 }
 void coreFreeAligned(void* ptr, usize align, const char* log)noexcept{
+    (void)align;
     (void)log;
-    mi_free_aligned(ptr, align);
+    scalable_aligned_free(ptr);
 }
 void coreFreeSizeAligned(void* ptr, usize size, usize align, const char* log)noexcept{
+    (void)size;
+    (void)align;
     (void)log;
-    mi_free_size_aligned(ptr, size, align);
+    scalable_aligned_free(ptr);
 }
 
 

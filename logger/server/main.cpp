@@ -14,6 +14,7 @@
 #include <CLI.hpp>
 
 #include <command.h>
+#include <core/common/common.h>
 #include "server.h"
 #include "frame.h"
 
@@ -73,7 +74,9 @@ static NWB_INLINE int entry_point(isize argc, tchar** argv, void* inst){
     }
 
     try{
+        NWB::Core::Common::Initializer::instance().initialize();
         ret = mainLogic(logPort, inst);
+        NWB::Core::Common::Initializer::instance().finalize();
     }
     catch(...){
         return -1;

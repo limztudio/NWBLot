@@ -56,7 +56,7 @@ protected:
     inline bool internalUpdate(){ return true; }
 
 protected:
-    inline bool tryDequeue(MessageType& msg){ return m_msgQueue.try_dequeue(msg); }
+    inline bool tryDequeue(MessageType& msg){ return m_msgQueue.try_pop(msg); }
 
 
 public:
@@ -77,8 +77,8 @@ public:
     }
 
 public:
-    inline bool enqueue(TString&& str, Type type = Type::Info){ return static_cast<T*>(this)->T::enqueue(MakeTuple(timerNow(), type, Move(str))); }
-    inline bool enqueue(const TString& str, Type type = Type::Info){ return static_cast<T*>(this)->T::enqueue(MakeTuple(timerNow(), type, str)); }
+    inline void enqueue(TString&& str, Type type = Type::Info){ return static_cast<T*>(this)->T::enqueue(MakeTuple(timerNow(), type, Move(str))); }
+    inline void enqueue(const TString& str, Type type = Type::Info){ return static_cast<T*>(this)->T::enqueue(MakeTuple(timerNow(), type, str)); }
 
 
 protected:
@@ -118,8 +118,8 @@ public:
 
 
 protected:
-    inline bool enqueue(MessageType&& data){ return Base<T, NAME>::m_msgQueue.enqueue(Move(data)); }
-    inline bool enqueue(const MessageType& data){ return Base<T, NAME>::m_msgQueue.enqueue(data); }
+    inline void enqueue(MessageType&& data){ return Base<T, NAME>::m_msgQueue.emplace(Move(data)); }
+    inline void enqueue(const MessageType& data){ return Base<T, NAME>::m_msgQueue.emplace(data); }
 
 
 private:
@@ -140,7 +140,14 @@ private:
     static void globalUpdate(T* _this){
         for(;;){
             _this->m_semaphore.acquire();
-            if(_this->internalUpdate() && _this->m_exit.load(MemoryOrder::memory_order_acquire))
+
+            if(!_this->internalUpdate())
+                _this->m_exit.store(true, MemoryOrder::memory_order_release);
+
+            const bool exit = _this->m_exit.load(MemoryOrder::memory_order_acquire);
+            _this->m_semaphore.release();
+
+            if(exit)
                 break;
         }
     }
@@ -148,7 +155,7 @@ private:
 
 public:
     BaseUpdateIfQueued()
-        : m_semaphore(0)
+        : m_semaphore(1)
     {}
 
 
@@ -156,18 +163,8 @@ protected:
     void internalDestroy(){ m_semaphore.release(); }
 
 protected:
-    inline bool enqueue(MessageType&& data){
-        auto ret = Base<T, NAME>::m_msgQueue.enqueue(Move(data));
-        if (ret)
-            m_semaphore.release();
-        return ret;
-    }
-    inline bool enqueue(const MessageType& data){
-        auto ret = Base<T, NAME>::m_msgQueue.enqueue(data);
-        if(ret)
-            m_semaphore.release();
-        return ret;
-    }
+    inline void enqueue(MessageType&& data){ return Base<T, NAME>::m_msgQueue.emplace(Move(data)); }
+    inline void enqueue(const MessageType& data){ return Base<T, NAME>::m_msgQueue.emplace(data); }
 
 
 protected:

@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="dbg|x64">
+      <Configuration>dbg</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="fin|x64">
+      <Configuration>fin</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="opt|x64">
+      <Configuration>opt</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="src\tbbmalloc\backend.cpp" />
+    <ClCompile Include="src\tbbmalloc\backref.cpp" />
+    <ClCompile Include="src\tbbmalloc\frontend.cpp" />
+    <ClCompile Include="src\tbbmalloc\large_objects.cpp" />
+    <ClCompile Include="src\tbbmalloc\tbbmalloc.cpp" />
+    <ClCompile Include="src\tbb\itt_notify.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="src\tbbmalloc\tbbmalloc.rc" />
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>17.0</VCProjectVersion>
+    <Keyword>Win32Proj</Keyword>
+    <ProjectGuid>{96975C53-DC45-40F6-B189-3338FA76A567}</ProjectGuid>
+    <RootNamespace>tbbmalloc</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='dbg|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='opt|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='fin|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='dbg|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\..\configuration\generalOutput.props" />
+    <Import Project="..\..\configuration\dbgCodeGen.props" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='opt|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\..\configuration\generalOutput.props" />
+    <Import Project="..\..\configuration\optCodeGen.props" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='fin|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\..\configuration\generalOutput.props" />
+    <Import Project="..\..\configuration\finCodeGen.props" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='dbg|x64'">
+    <TargetName>$(ProjectName)_debug</TargetName>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='dbg|x64'">
+    <ClCompile>
+      <PreprocessorDefinitions>__TBBMALLOC_BUILD;__TBB_USE_ITT_NOTIFY;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(ProjectDir)include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <UseFullPaths>false</UseFullPaths>
+      <DisableSpecificWarnings>4324;4267;4244;4245;4458</DisableSpecificWarnings>
+      <AdditionalOptions>%(AdditionalOptions) /volatile:iso /FS</AdditionalOptions>
+    </ClCompile>
+    <Link>
+      <ModuleDefinitionFile>$(ProjectDir)src/tbbmalloc/def/win64-tbbmalloc.def</ModuleDefinitionFile>
+    </Link>
+    <ProjectReference>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='opt|x64'">
+    <ClCompile>
+      <PreprocessorDefinitions>__TBBMALLOC_BUILD;__TBB_USE_ITT_NOTIFY;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(ProjectDir)include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <Optimization>MaxSpeed</Optimization>
+      <UseFullPaths>false</UseFullPaths>
+      <DisableSpecificWarnings>4324;4267;4244;4245;4458</DisableSpecificWarnings>
+      <AdditionalOptions>%(AdditionalOptions) /volatile:iso /FS</AdditionalOptions>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+    </ClCompile>
+    <Link>
+      <ModuleDefinitionFile>$(ProjectDir)src/tbbmalloc/def/win64-tbbmalloc.def</ModuleDefinitionFile>
+    </Link>
+    <ProjectReference>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='fin|x64'">
+    <ClCompile>
+      <PreprocessorDefinitions>__TBBMALLOC_BUILD;__TBB_USE_ITT_NOTIFY;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(ProjectDir)include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <Optimization>MaxSpeed</Optimization>
+      <UseFullPaths>false</UseFullPaths>
+      <DisableSpecificWarnings>4324;4267;4244;4245;4458</DisableSpecificWarnings>
+      <AdditionalOptions>%(AdditionalOptions) /volatile:iso /FS</AdditionalOptions>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+    </ClCompile>
+    <Link>
+      <ModuleDefinitionFile>$(ProjectDir)src/tbbmalloc/def/win64-tbbmalloc.def</ModuleDefinitionFile>
+    </Link>
+    <ProjectReference>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

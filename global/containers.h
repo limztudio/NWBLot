@@ -8,16 +8,16 @@
 #include "generic.h"
 #include "type.h"
 
+#include <functional>
+
 #include <tuple>
 #include <forward_list>
 #include <list>
 #include <vector>
 #include <deque>
+#include <queue>
 
-#include <readerwriterqueue.h>
-#include <readerwritercircularbuffer.h>
-#include <concurrentqueue.h>
-#include <blockingconcurrentqueue.h>
+#include <tbb/concurrent_queue.h>
 
 #include <robin_set.h>
 #include <robin_map.h>
@@ -35,9 +35,19 @@ namespace NWB{
         namespace Alloc{
             template<typename T>
             class GeneralAllocator;
+
+            template<typename T>
+            class CacheAlignedAllocator;
         };
     };
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template <typename FUNC>
+using Function = std::function<FUNC>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -61,17 +71,14 @@ constexpr auto MakeTuple(Args&&... args){ return std::make_tuple(Forward<Args>(a
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename T, usize MAX_BLOCK_SIZE = 512>
-using SerialQueue = moodycamel::ReaderWriterQueue<T, static_cast<size_t>(MAX_BLOCK_SIZE)>;
+template<typename T, typename Alloc = NWB::Core::Alloc::GeneralAllocator<T>>
+using SerialQueue = std::queue<T, Alloc>;
 
-template<typename T>
-using SerialCircularBuffer = moodycamel::BlockingReaderWriterCircularBuffer<T>;
+template<typename T, typename Alloc = NWB::Core::Alloc::CacheAlignedAllocator<T>>
+using ParallelQueue = tbb::concurrent_queue<T, Alloc>;
 
-template<typename T>
-using ParallelQueue = moodycamel::ConcurrentQueue<T>;
-
-template<typename T>
-using ParallelBlockQueue = moodycamel::BlockingConcurrentQueue<T>;
+template<typename T, typename Alloc = NWB::Core::Alloc::CacheAlignedAllocator<T>>
+using ParallelBlockQueue = tbb::concurrent_bounded_queue<T>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

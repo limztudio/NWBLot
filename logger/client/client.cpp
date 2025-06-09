@@ -126,7 +126,7 @@ bool Client::internalUpdate(){
     ret = curl_easy_perform(m_curl);
     if(ret != CURLE_OK){
         enqueue(stringFormat(NWB_TEXT("Failed to perform on {}: {}"), CLIENT_NAME, stringConvert(curl_easy_strerror(ret))), Type::Error);
-        return false;
+        return true;
     }
 
     return true;

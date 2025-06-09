@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="dbg|x64">
+      <Configuration>dbg</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="fin|x64">
+      <Configuration>fin</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="opt|x64">
+      <Configuration>opt</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="src\tbb\address_waiter.cpp" />
+    <ClCompile Include="src\tbb\allocator.cpp" />
+    <ClCompile Include="src\tbb\arena.cpp" />
+    <ClCompile Include="src\tbb\arena_slot.cpp" />
+    <ClCompile Include="src\tbb\concurrent_bounded_queue.cpp" />
+    <ClCompile Include="src\tbb\dynamic_link.cpp" />
+    <ClCompile Include="src\tbb\exception.cpp" />
+    <ClCompile Include="src\tbb\global_control.cpp" />
+    <ClCompile Include="src\tbb\governor.cpp" />
+    <ClCompile Include="src\tbb\itt_notify.cpp" />
+    <ClCompile Include="src\tbb\main.cpp" />
+    <ClCompile Include="src\tbb\market.cpp" />
+    <ClCompile Include="src\tbb\misc.cpp" />
+    <ClCompile Include="src\tbb\misc_ex.cpp" />
+    <ClCompile Include="src\tbb\observer_proxy.cpp" />
+    <ClCompile Include="src\tbb\parallel_pipeline.cpp" />
+    <ClCompile Include="src\tbb\private_server.cpp" />
+    <ClCompile Include="src\tbb\profiling.cpp" />
+    <ClCompile Include="src\tbb\queuing_rw_mutex.cpp" />
+    <ClCompile Include="src\tbb\rml_tbb.cpp" />
+    <ClCompile Include="src\tbb\rtm_mutex.cpp" />
+    <ClCompile Include="src\tbb\rtm_rw_mutex.cpp" />
+    <ClCompile Include="src\tbb\semaphore.cpp" />
+    <ClCompile Include="src\tbb\small_object_pool.cpp" />
+    <ClCompile Include="src\tbb\task.cpp" />
+    <ClCompile Include="src\tbb\task_dispatcher.cpp" />
+    <ClCompile Include="src\tbb\task_group_context.cpp" />
+    <ClCompile Include="src\tbb\tcm_adaptor.cpp" />
+    <ClCompile Include="src\tbb\threading_control.cpp" />
+    <ClCompile Include="src\tbb\thread_dispatcher.cpp" />
+    <ClCompile Include="src\tbb\thread_request_serializer.cpp" />
+    <ClCompile Include="src\tbb\version.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="src\tbb\tbb.rc" />
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>17.0</VCProjectVersion>
+    <Keyword>Win32Proj</Keyword>
+    <ProjectGuid>{7D934963-C0D2-4C5A-A3EF-CA1AC3FB7832}</ProjectGuid>
+    <RootNamespace>tbb</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='dbg|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='opt|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='fin|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='dbg|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\..\configuration\generalOutput.props" />
+    <Import Project="..\..\configuration\dbgCodeGen.props" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='opt|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\..\configuration\generalOutput.props" />
+    <Import Project="..\..\configuration\optCodeGen.props" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='fin|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\..\configuration\generalOutput.props" />
+    <Import Project="..\..\configuration\finCodeGen.props" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='dbg|x64'">
+    <TargetName>$(ProjectName)12_debug</TargetName>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='fin|x64'">
+    <TargetName>$(ProjectName)12</TargetName>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='opt|x64'">
+    <TargetName>$(ProjectName)12</TargetName>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='dbg|x64'">
+    <ClCompile>
+      <PreprocessorDefinitions>__TBB_BUILD;__TBB_SKIP_DEPENDENCY_SIGNATURE_VERIFICATION=1;__TBB_USE_ITT_NOTIFY;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(ProjectDir)include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <UseFullPaths>false</UseFullPaths>
+      <DisableSpecificWarnings>4324</DisableSpecificWarnings>
+    </ClCompile>
+    <Link>
+      <ModuleDefinitionFile>$(ProjectDir)src/tbb/def/win64-tbb.def</ModuleDefinitionFile>
+    </Link>
+    <ProjectReference>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='opt|x64'">
+    <ClCompile>
+      <PreprocessorDefinitions>__TBB_BUILD;__TBB_SKIP_DEPENDENCY_SIGNATURE_VERIFICATION=1;__TBB_USE_ITT_NOTIFY;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(ProjectDir)include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <Optimization>MaxSpeed</Optimization>
+      <UseFullPaths>false</UseFullPaths>
+      <DisableSpecificWarnings>4324</DisableSpecificWarnings>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+    </ClCompile>
+    <Link>
+      <ModuleDefinitionFile>$(ProjectDir)src/tbb/def/win64-tbb.def</ModuleDefinitionFile>
+    </Link>
+    <ProjectReference>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='fin|x64'">
+    <ClCompile>
+      <PreprocessorDefinitions>__TBB_BUILD;__TBB_SKIP_DEPENDENCY_SIGNATURE_VERIFICATION=1;__TBB_USE_ITT_NOTIFY;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(ProjectDir)include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <Optimization>MaxSpeed</Optimization>
+      <UseFullPaths>false</UseFullPaths>
+      <DisableSpecificWarnings>4324</DisableSpecificWarnings>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+    </ClCompile>
+    <Link>
+      <ModuleDefinitionFile>$(ProjectDir)src/tbb/def/win64-tbb.def</ModuleDefinitionFile>
+    </Link>
+    <ProjectReference>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

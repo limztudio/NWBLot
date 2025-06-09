@@ -84,7 +84,7 @@
       <AdditionalIncludeDirectories>./;./include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <UseFullPaths>false</UseFullPaths>
-      <DisableSpecificWarnings>4127</DisableSpecificWarnings>
+      <DisableSpecificWarnings>4127;5287</DisableSpecificWarnings>
     </ClCompile>
     <Lib>
       <AdditionalDependencies>Ws2_32.lib</AdditionalDependencies>
@@ -97,7 +97,7 @@
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <Optimization>MaxSpeed</Optimization>
       <UseFullPaths>false</UseFullPaths>
-      <DisableSpecificWarnings>4127</DisableSpecificWarnings>
+      <DisableSpecificWarnings>4127;5287</DisableSpecificWarnings>
     </ClCompile>
     <Lib>
       <AdditionalDependencies>Ws2_32.lib</AdditionalDependencies>
@@ -109,7 +109,7 @@
       <AdditionalIncludeDirectories>./;./include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <Optimization>MaxSpeed</Optimization>
       <UseFullPaths>false</UseFullPaths>
-      <DisableSpecificWarnings>4127</DisableSpecificWarnings>
+      <DisableSpecificWarnings>4127;5287</DisableSpecificWarnings>
     </ClCompile>
     <Lib>
       <AdditionalDependencies>Ws2_32.lib</AdditionalDependencies>

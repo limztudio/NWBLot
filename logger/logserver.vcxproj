@@ -74,10 +74,10 @@
     <Import Project="..\configuration\unicodeChar.props" />
     <Import Project="..\configuration\basicInclude.props" />
     <Import Project="..\configuration\libcurlInclude.props" />
-    <Import Project="..\configuration\3rdPartyContainerInclude.props" />
     <Import Project="..\configuration\CLI11Include.props" />
-    <Import Project="..\configuration\execGeneral.props" />
     <Import Project="..\configuration\libmicrohttpdInclude.props" />
+    <Import Project="..\configuration\tbbInclude.props" />
+    <Import Project="..\configuration\3rdPartyContainerInclude.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='opt|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
@@ -87,10 +87,10 @@
     <Import Project="..\configuration\unicodeChar.props" />
     <Import Project="..\configuration\basicInclude.props" />
     <Import Project="..\configuration\libcurlInclude.props" />
-    <Import Project="..\configuration\3rdPartyContainerInclude.props" />
     <Import Project="..\configuration\CLI11Include.props" />
-    <Import Project="..\configuration\execGeneral.props" />
     <Import Project="..\configuration\libmicrohttpdInclude.props" />
+    <Import Project="..\configuration\tbbInclude.props" />
+    <Import Project="..\configuration\3rdPartyContainerInclude.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='fin|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
@@ -100,10 +100,10 @@
     <Import Project="..\configuration\unicodeChar.props" />
     <Import Project="..\configuration\basicInclude.props" />
     <Import Project="..\configuration\libcurlInclude.props" />
-    <Import Project="..\configuration\3rdPartyContainerInclude.props" />
     <Import Project="..\configuration\CLI11Include.props" />
-    <Import Project="..\configuration\execGeneral.props" />
     <Import Project="..\configuration\libmicrohttpdInclude.props" />
+    <Import Project="..\configuration\tbbInclude.props" />
+    <Import Project="..\configuration\3rdPartyContainerInclude.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='dbg|x64'">

@@ -6,6 +6,7 @@
 
 
 #include "global.h"
+#include <core/alloc/general.h>
 
 #include <regex>
 
@@ -14,6 +15,83 @@
 
 
 NWB_COMMON_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_common{
+    class BaseInitializerable{
+    public:
+        virtual ~BaseInitializerable() = default;
+
+
+    public:
+        virtual bool initialize() = 0;
+        virtual void finalize() = 0;
+    };
+    class FunctionalInitializerable : public BaseInitializerable{
+    public:
+        template<typename INIT, typename FIN>
+        FunctionalInitializerable(INIT&& init, FIN&& fin)
+            : m_init(Forward(init), Forward(fin))
+        {}
+
+
+    public:
+        inline bool initialize()override{ return m_init ? m_init() : true; }
+        inline void finalize()override{ if(m_fin) m_fin(); }
+
+
+    private:
+        Function<bool()> m_init;
+        Function<void()> m_fin;
+    };
+};
+class Initializerable : public __hidden_common::BaseInitializerable{
+public:
+    Initializerable();
+};
+class Initializer{
+public:
+    static Initializer& instance();
+
+
+private:
+    Initializer()
+        : m_cursor(m_items.before_begin())
+    {}
+    ~Initializer(){
+        for(auto& cur : m_items){
+            if(cur.second())
+                delete cur.first();
+        }
+    }
+
+
+public:
+    inline bool initialize(){
+        for(auto& cur : m_items){
+            if(!cur.first()->initialize())
+                return false;
+        }
+        return true;
+    }
+    inline void finalize(){
+        for(auto& cur : m_items)
+            cur.first()->finalize();
+    }
+
+public:
+    inline void enqueue(Initializerable* item){ m_cursor = m_items.emplace_after(m_cursor, item, false); }
+    template<typename INITIALIZE, typename FINALIZE>
+    inline void enqueue(INITIALIZE&& initialize, FINALIZE&& finalize){ m_cursor = m_items.emplace_after(m_cursor, new __hidden_common::FunctionalInitializerable(Forward(initialize), Forward(finalize)), true); }
+
+
+private:
+    ForwardList<Pair<__hidden_common::BaseInitializerable*, bool>> m_items;
+    decltype(m_items)::iterator m_cursor;
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

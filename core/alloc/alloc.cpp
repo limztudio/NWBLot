@@ -29,21 +29,33 @@ namespace __hidden_alloc{
             DWORD bufferSize = 0;
             GetLogicalProcessorInformation(nullptr, &bufferSize);
 
-            Vector<uint8_t> buffer(bufferSize);
-            SYSTEM_LOGICAL_PROCESSOR_INFORMATION* info = reinterpret_cast<SYSTEM_LOGICAL_PROCESSOR_INFORMATION*>(buffer.data());
+            UniquePtr<u8[]> buffer(new u8[bufferSize]);
+            SYSTEM_LOGICAL_PROCESSOR_INFORMATION* info = reinterpret_cast<SYSTEM_LOGICAL_PROCESSOR_INFORMATION*>(buffer.get());
 
             if(GetLogicalProcessorInformation(info, &bufferSize)){
-                for(DWORD i = 0; i < bufferSize / sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION); ++i){
-                    if(info[i].Relationship == RelationCache && info[i].Cache.Level == 1){
-                        size = static_cast<usize>(info[i].Cache.LineSize);
-                        break;
-                    }
+                for(DWORD i = 0, e = bufferSize / sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION); i < e; ++i){
+                    if(info[i].Relationship != RelationCache)
+                        continue;
+
+                    const auto cur = static_cast<usize>(info[i].Cache.LineSize);
+                    if(size < cur)
+                        size = cur;
                 }
             }
 #elif defined(_SC_LEVEL1_DCACHE_LINESIZE)
-            const auto lineSize = sysconf(_SC_LEVEL1_DCACHE_LINESIZE);
-            if(lineSize > 0)
-                size = static_cast<usize>(lineSize);
+            auto lineSizes[] = {
+                sysconf(_SC_LEVEL1_DCACHE_LINESIZE),
+                sysconf(_SC_LEVEL2_DCACHE_LINESIZE),
+                sysconf(_SC_LEVEL3_DCACHE_LINESIZE),
+            };
+            for(auto lineSize : lineSizes){
+                if(lineSize <= 0)
+                    continue;
+
+                const auto cur = static_cast<usize>(lineSize);
+                if(size < cur)
+                    size = cur;
+            }
 #endif
             return true;
         }

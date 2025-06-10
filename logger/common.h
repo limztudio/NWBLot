@@ -139,15 +139,18 @@ class BaseUpdateIfQueued : public Base<T, NAME>{
 private:
     static void globalUpdate(T* _this){
         for(;;){
-            _this->m_semaphore.acquire();
+            bool updateSucceeded;
+            {
+                ScopedLock _(_this->m_semaphore);
+                updateSucceeded = _this->internalUpdate();
+            }
 
-            if(!_this->internalUpdate())
+            if (!updateSucceeded){
                 _this->m_exit.store(true, MemoryOrder::memory_order_release);
+                break;
+            }
 
-            const bool exit = _this->m_exit.load(MemoryOrder::memory_order_acquire);
-            _this->m_semaphore.release();
-
-            if(exit)
+            if(_this->m_exit.load(MemoryOrder::memory_order_acquire))
                 break;
         }
     }
@@ -168,7 +171,7 @@ protected:
 
 
 protected:
-    Semaphore<INT_MAX> m_semaphore;
+    BinarySemaphore m_semaphore;
 
 
 protected:

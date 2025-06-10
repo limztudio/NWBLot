@@ -65,7 +65,7 @@ using SharedQueuingMutex = tbb::queuing_rw_mutex;
 
 template <isize LeastMaxValue = PTRDIFF_MAX>
 using Semaphore = std::counting_semaphore<LeastMaxValue>;
-using BinarySemaphore = std::binary_semaphore;
+using BinarySemaphore = Semaphore<1>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -190,6 +190,49 @@ private:
 
 private:
     AtomicFlag m_flag = {};
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename T>
+class ScopedLock : NoCopy{
+public:
+    ScopedLock(ScopedLock& other) = delete;
+    ScopedLock& operator=(ScopedLock&) = delete;
+
+    ScopedLock(T& obj) : m_obj(obj){ m_obj.lock(); }
+    ~ScopedLock(){ m_obj.unlock(); }
+
+
+private:
+    T& m_obj;
+};
+template<>
+class ScopedLock<MallocMutex> : NoCopy{
+public:
+    ScopedLock(ScopedLock& other) = delete;
+    ScopedLock& operator=(ScopedLock&) = delete;
+
+    ScopedLock(MallocMutex& obj) : lock(obj){}
+
+
+private:
+    MallocMutex::scoped_lock lock;
+};
+template<isize LeastMaxValue>
+class ScopedLock<Semaphore<LeastMaxValue>> : NoCopy{
+public:
+    ScopedLock(ScopedLock& other) = delete;
+    ScopedLock& operator=(ScopedLock&) = delete;
+
+    ScopedLock(Semaphore<LeastMaxValue>& obj) : m_obj(obj){ m_obj.acquire(); }
+    ~ScopedLock(){ m_obj.release(); }
+
+
+private:
+    Semaphore<LeastMaxValue>& m_obj;
 };
 
 

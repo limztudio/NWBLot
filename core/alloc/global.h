@@ -32,7 +32,7 @@ NWB_ALLOC_BEGIN
 
 
 template <usize size>
-constexpr inline usize getSizeOf(usize count){
+constexpr inline usize SizeOf(usize count){
     constexpr auto overflowIsPossible = size > 1;
 
     if constexpr(overflowIsPossible){
@@ -44,7 +44,7 @@ constexpr inline usize getSizeOf(usize count){
     return count * size;
 }
 
-constexpr inline usize getAlignment(usize align, usize size){
+constexpr inline usize Alignment(usize align, usize size){
     return (size + align - 1) & ~(align - 1);
 }
 

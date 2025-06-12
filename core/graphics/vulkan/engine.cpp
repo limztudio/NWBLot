@@ -18,7 +18,7 @@ NWB_CORE_BEGIN
 
 const char* VulkanEngine::s_requestedExtensions[] = {
     VK_KHR_SURFACE_EXTENSION_NAME,
-    surfaceInstanceName(),
+    SurfaceInstanceName(),
 #if defined(VULKAN_VALIDATE)
     VK_EXT_DEBUG_REPORT_EXTENSION_NAME,
     VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
@@ -76,14 +76,14 @@ bool VulkanEngine::init(const Common::FrameData& data){
         {
             err = vkEnumerateInstanceLayerProperties(reinterpret_cast<uint32_t*>(&layerCount), nullptr);
             if(err != VK_SUCCESS){
-                NWB_LOGGER_ERROR(NWB_TEXT("Failed to get required instance layers: {}"), stringConvert(getVulkanResultString(err)));
+                NWB_LOGGER_ERROR(NWB_TEXT("Failed to get required instance layers: {}"), StringConvert(VulkanResultString(err)));
                 return false;
             }
 
             layerProps = makeScratchUnique<VkLayerProperties[]>(tmpArena, layerCount);
             err = vkEnumerateInstanceLayerProperties(reinterpret_cast<uint32_t*>(&layerCount), layerProps.get());
             if(err != VK_SUCCESS){
-                NWB_LOGGER_ERROR(NWB_TEXT("Failed to get required instance layers: {}"), stringConvert(getVulkanResultString(err)));
+                NWB_LOGGER_ERROR(NWB_TEXT("Failed to get required instance layers: {}"), StringConvert(VulkanResultString(err)));
                 return false;
             }
         }
@@ -96,7 +96,7 @@ bool VulkanEngine::init(const Common::FrameData& data){
                 }
             }
             if(!bFound){
-                NWB_LOGGER_ERROR(NWB_TEXT("Failed to find required instance layer: {}"), stringConvert(s_validationLayerName[i]));
+                NWB_LOGGER_ERROR(NWB_TEXT("Failed to find required instance layer: {}"), StringConvert(s_validationLayerName[i]));
                 return false;
             }
         }
@@ -127,7 +127,7 @@ bool VulkanEngine::init(const Common::FrameData& data){
     #endif
         }
     #if defined(VULKAN_VALIDATE)
-        const VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo = createDebugMessengerInfo();
+        const VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo = CreateDebugMessengerInfo();
     #if defined(VULKAN_SYNC_VALIDATE)
         VkValidationFeaturesEXT features{ VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT };
         {
@@ -145,7 +145,7 @@ bool VulkanEngine::init(const Common::FrameData& data){
             VkInstance object = VK_NULL_HANDLE;
             err = vkCreateInstance(&createInfo, m_allocCallbacks, &object);
             if(err != VK_SUCCESS){
-                NWB_LOGGER_ERROR(NWB_TEXT("Failed to create Vulkan instance: {}"), stringConvert(getVulkanResultString(err)));
+                NWB_LOGGER_ERROR(NWB_TEXT("Failed to create Vulkan instance: {}"), StringConvert(VulkanResultString(err)));
                 return false;
             }
             m_inst.reset(object);
@@ -159,14 +159,14 @@ bool VulkanEngine::init(const Common::FrameData& data){
 
         err = vkEnumerateInstanceExtensionProperties(nullptr, reinterpret_cast<uint32_t*>(&extCount), nullptr);
         if(err != VK_SUCCESS){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to get required instance extensions: {}"), stringConvert(getVulkanResultString(err)));
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to get required instance extensions: {}"), StringConvert(VulkanResultString(err)));
             return false;
         }
 
         extProps = makeScratchUnique<VkExtensionProperties[]>(tmpArena, extCount);
         err = vkEnumerateInstanceExtensionProperties(nullptr, reinterpret_cast<uint32_t*>(&extCount), extProps.get());
         if(err != VK_SUCCESS){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to get required instance extensions: {}"), stringConvert(getVulkanResultString(err)));
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to get required instance extensions: {}"), StringConvert(VulkanResultString(err)));
             return false;
         }
 
@@ -182,12 +182,12 @@ bool VulkanEngine::init(const Common::FrameData& data){
         if(m_debugUtilsExtensionPresents){
             auto* vkCreateDebugUtilsMessengerEXT = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(m_inst.get(), "vkCreateDebugUtilsMessengerEXT"));
             if(vkCreateDebugUtilsMessengerEXT){
-                VkDebugUtilsMessengerCreateInfoEXT debugUtilCreateInfo = createDebugMessengerInfo();
+                VkDebugUtilsMessengerCreateInfoEXT debugUtilCreateInfo = CreateDebugMessengerInfo();
 
                 VkDebugUtilsMessengerEXT object = VK_NULL_HANDLE;
                 err = vkCreateDebugUtilsMessengerEXT(m_inst.get(), &debugUtilCreateInfo, m_allocCallbacks, &object);
                 if(err != VK_SUCCESS){
-                    NWB_LOGGER_ERROR(NWB_TEXT("Failed to create debug messenger: {}"), stringConvert(getVulkanResultString(err)));
+                    NWB_LOGGER_ERROR(NWB_TEXT("Failed to create debug messenger: {}"), StringConvert(VulkanResultString(err)));
                     return false;
                 }
                 m_debugMessenger.reset(object);
@@ -198,7 +198,7 @@ bool VulkanEngine::init(const Common::FrameData& data){
             }
         }
         else
-            NWB_LOGGER_WARNING(NWB_TEXT("Failed to find required instance extension: {}"), stringConvert(debugUtilsExtensionName));
+            NWB_LOGGER_WARNING(NWB_TEXT("Failed to find required instance extension: {}"), StringConvert(debugUtilsExtensionName));
     }
 #endif
 
@@ -207,20 +207,20 @@ bool VulkanEngine::init(const Common::FrameData& data){
     {
         err = vkEnumeratePhysicalDevices(m_inst.get(), reinterpret_cast<uint32_t*>(&physDevCount), nullptr);
         if(err != VK_SUCCESS){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to get physical devices: {}"), stringConvert(getVulkanResultString(err)));
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to get physical devices: {}"), StringConvert(VulkanResultString(err)));
             return false;
         }
 
         physDevs = makeScratchUnique<VkPhysicalDevice[]>(tmpArena, physDevCount);
         err = vkEnumeratePhysicalDevices(m_inst.get(), reinterpret_cast<uint32_t*>(&physDevCount), physDevs.get());
         if(err != VK_SUCCESS){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to get physical devices: {}"), stringConvert(getVulkanResultString(err)));
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to get physical devices: {}"), StringConvert(VulkanResultString(err)));
             return false;
         }
     }
 
     { // create window surface
-        auto* object = createSurface(m_inst.get(), data);
+        auto* object = CreateSurface(m_inst.get(), data);
         if(object == VK_NULL_HANDLE){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to create Vulkan surface"));
             return false;
@@ -244,7 +244,7 @@ bool VulkanEngine::init(const Common::FrameData& data){
                     auto err = vkGetPhysicalDeviceSurfaceSupportKHR(physDev, i, m_winSurf.get(), &output);
                     if(err != VK_SUCCESS){
                         output = 0;
-                        NWB_LOGGER_WARNING(NWB_TEXT("Failed to get physical device surface support: {}"), stringConvert(getVulkanResultString(err)));
+                        NWB_LOGGER_WARNING(NWB_TEXT("Failed to get physical device surface support: {}"), StringConvert(VulkanResultString(err)));
                         continue;
                     }
 
@@ -302,7 +302,7 @@ bool VulkanEngine::init(const Common::FrameData& data){
         m_uboAlignment = static_cast<decltype(m_uboAlignment)>(m_physDevProps.limits.minUniformBufferOffsetAlignment);
         m_ssboAlignment = static_cast<decltype(m_ssboAlignment)>(m_physDevProps.limits.minStorageBufferOffsetAlignment);
 
-        NWB_LOGGER_INFO(NWB_TEXT("GPU selected: {}"), stringConvert(m_physDevProps.deviceName));
+        NWB_LOGGER_INFO(NWB_TEXT("GPU selected: {}"), StringConvert(m_physDevProps.deviceName));
     }
 
     { // create logical device
@@ -329,7 +329,7 @@ bool VulkanEngine::init(const Common::FrameData& data){
         VkDevice object = VK_NULL_HANDLE;
         err = vkCreateDevice(m_physDev.get(), &deviceInfo, m_allocCallbacks, &object);
         if(err != VK_SUCCESS){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to create logical device: {}"), stringConvert(getVulkanResultString(err)));
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to create logical device: {}"), StringConvert(VulkanResultString(err)));
             return false;
         }
         m_logiDev.reset(object);
@@ -355,14 +355,14 @@ bool VulkanEngine::init(const Common::FrameData& data){
 
         err = vkGetPhysicalDeviceSurfaceFormatsKHR(m_physDev.get(), m_winSurf.get(), reinterpret_cast<uint32_t*>(&supportedCount), nullptr);
         if(err != VK_SUCCESS){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to get physical device surface formats: {}"), stringConvert(getVulkanResultString(err)));
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to get physical device surface formats: {}"), StringConvert(VulkanResultString(err)));
             return false;
         }
 
         supportedFormats = makeScratchUnique<VkSurfaceFormatKHR[]>(tmpArena, supportedCount);
         err = vkGetPhysicalDeviceSurfaceFormatsKHR(m_physDev.get(), m_winSurf.get(), reinterpret_cast<uint32_t*>(&supportedCount), supportedFormats.get());
         if(err != VK_SUCCESS){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to get physical device surface formats: {}"), stringConvert(getVulkanResultString(err)));
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to get physical device surface formats: {}"), StringConvert(VulkanResultString(err)));
             return false;
         }
 
@@ -398,13 +398,13 @@ bool VulkanEngine::init(const Common::FrameData& data){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to find suitable surface format, using default"));
         }
 
-        m_parent.m_swapchainOutput.addColor(convert(m_winSurfFormat.format));
+        m_parent.m_swapchainOutput.addColor(Convert(m_winSurfFormat.format));
     }
 
     { // create swapchain
         updatePresentMode(m_parent.m_presentMode);
 
-        if(!createSwapchain())
+        if(!CreateSwapchain())
             return false;
     }
 
@@ -419,7 +419,7 @@ bool VulkanEngine::init(const Common::FrameData& data){
         VmaAllocator object = VK_NULL_HANDLE;
         err = vmaCreateAllocator(&createInfo, &object);
         if(err != VK_SUCCESS){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to create VMA allocator: {}"), stringConvert(getVulkanResultString(err)));
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to create VMA allocator: {}"), StringConvert(VulkanResultString(err)));
             return false;
         }
         m_allocator.reset(object);
@@ -455,17 +455,17 @@ void VulkanEngine::updatePresentMode(PresentMode mode){
     {
         err = vkGetPhysicalDeviceSurfacePresentModesKHR(m_physDev.get(), m_winSurf.get(), reinterpret_cast<uint32_t*>(&supportedCount), nullptr);
         if(err != VK_SUCCESS)
-            NWB_LOGGER_WARNING(NWB_TEXT("Failed to get physical device surface present modes: {}"), stringConvert(getVulkanResultString(err)));
+            NWB_LOGGER_WARNING(NWB_TEXT("Failed to get physical device surface present modes: {}"), StringConvert(VulkanResultString(err)));
 
         assert(supportedCount < LengthOf(supportedModes));
 
         err = vkGetPhysicalDeviceSurfacePresentModesKHR(m_physDev.get(), m_winSurf.get(), reinterpret_cast<uint32_t*>(&supportedCount), supportedModes);
         if(err != VK_SUCCESS)
-            NWB_LOGGER_WARNING(NWB_TEXT("Failed to get physical device surface present modes: {}"), stringConvert(getVulkanResultString(err)));
+            NWB_LOGGER_WARNING(NWB_TEXT("Failed to get physical device surface present modes: {}"), StringConvert(VulkanResultString(err)));
     }
 
     bool bFound = false;
-    auto requestedMode = convert(mode);
+    auto requestedMode = Convert(mode);
     for(auto i = decltype(supportedCount){ 0 }; i < supportedCount; ++i){
         if(requestedMode == supportedModes[i]){
             bFound = true;

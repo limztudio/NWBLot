@@ -22,7 +22,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr inline const char* getVulkanResultString(VkResult result){
+constexpr inline const char* VulkanResultString(VkResult result){
     switch(result){
     case VK_SUCCESS:
         return "Success";
@@ -79,17 +79,17 @@ constexpr inline const char* getVulkanResultString(VkResult result){
 #if defined(VULKAN_VALIDATE)
 
 
-extern VkDebugUtilsMessengerCreateInfoEXT createDebugMessengerInfo();
+extern VkDebugUtilsMessengerCreateInfoEXT CreateDebugMessengerInfo();
 
 
 #endif
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-extern const char* surfaceInstanceName();
-extern VkSurfaceKHR createSurface(VkInstance inst, const Common::FrameData& data);
+extern const char* SurfaceInstanceName();
+extern VkSurfaceKHR CreateSurface(VkInstance inst, const Common::FrameData& data);
 
-extern bool createSwapchain(
+extern bool CreateSwapchain(
     VkAllocationCallbacks* allocCallbacks,
     VkPhysicalDevice physDev,
     VkDevice logiDev,

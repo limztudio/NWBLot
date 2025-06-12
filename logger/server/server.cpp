@@ -69,9 +69,9 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
     };
 
     if(!(*con_cls)){
-        auto* info = reinterpret_cast<__hidden_logger::ConnectionInfo*>(Core::Alloc::coreAlloc(sizeof(__hidden_logger::ConnectionInfo), "ConnectionInfo allocated at Server::requestCallback"));
+        auto* info = reinterpret_cast<__hidden_logger::ConnectionInfo*>(Core::Alloc::CoreAlloc(sizeof(__hidden_logger::ConnectionInfo), "ConnectionInfo allocated at Server::requestCallback"));
         if(!info){
-            _this->enqueue(stringFormat(NWB_TEXT("Failed to allocate on {}"), SERVER_NAME), Type::Fatal);
+            _this->enqueue(StringFormat(NWB_TEXT("Failed to allocate on {}"), SERVER_NAME), Type::Fatal);
             return MHD_NO;
         }
         info->buffer = nullptr;
@@ -84,9 +84,9 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
     auto*& info = reinterpret_cast<__hidden_logger::ConnectionInfo*&>(*con_cls);
 
     if(*upload_data_size){
-        info->buffer = reinterpret_cast<u8*>(Core::Alloc::coreRealloc(info->buffer, info->size + (*upload_data_size), "ConnectionInfo buffer reallocated at Server::requestCallback"));
+        info->buffer = reinterpret_cast<u8*>(Core::Alloc::CoreRealloc(info->buffer, info->size + (*upload_data_size), "ConnectionInfo buffer reallocated at Server::requestCallback"));
         if(!info->buffer){
-            _this->enqueue(stringFormat(NWB_TEXT("Failed to reallocate a buffer on {}"), SERVER_NAME), Type::Fatal);
+            _this->enqueue(StringFormat(NWB_TEXT("Failed to reallocate a buffer on {}"), SERVER_NAME), Type::Fatal);
             return MHD_NO;
         }
 
@@ -103,8 +103,8 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
         auto ret = MHD_queue_response(connection, MHD_HTTP_OK, response);
         MHD_destroy_response(response);
 
-        Core::Alloc::coreFree(info->buffer, "ConnectionInfo buffer freed at Server::requestCallback");
-        Core::Alloc::coreFree(info, "ConnectionInfo freed at Server::requestCallback");
+        Core::Alloc::CoreFree(info->buffer, "ConnectionInfo buffer freed at Server::requestCallback");
+        Core::Alloc::CoreFree(info, "ConnectionInfo freed at Server::requestCallback");
         info = nullptr;
 
         return ret;
@@ -133,16 +133,16 @@ bool Server::internalUpdate(){
         const auto& [time, type, str] = msg;
         switch(type){
         case Type::Info:
-            Frame::print(stringFormat(NWB_TEXT("{} [INFO]:\n{}"), durationInTimeDelta(time), str), type);
+            Frame::print(StringFormat(NWB_TEXT("{} [INFO]:\n{}"), DurationInTimeDelta(time), str), type);
             break;
         case Type::Warning:
-            Frame::print(stringFormat(NWB_TEXT("{} [WARNING]:\n{}"), durationInTimeDelta(time), str), type);
+            Frame::print(StringFormat(NWB_TEXT("{} [WARNING]:\n{}"), DurationInTimeDelta(time), str), type);
             break;
         case Type::Error:
-            Frame::print(stringFormat(NWB_TEXT("{} [ERROR]:\n{}"), durationInTimeDelta(time), str), type);
+            Frame::print(StringFormat(NWB_TEXT("{} [ERROR]:\n{}"), DurationInTimeDelta(time), str), type);
             break;
         case Type::Fatal:
-            Frame::print(stringFormat(NWB_TEXT("{} [FATAL]:\n{}"), durationInTimeDelta(time), str), type);
+            Frame::print(StringFormat(NWB_TEXT("{} [FATAL]:\n{}"), DurationInTimeDelta(time), str), type);
             break;
         }
     }

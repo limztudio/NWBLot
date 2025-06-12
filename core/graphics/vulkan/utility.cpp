@@ -29,7 +29,7 @@ namespace __hidden_vulkan{
         (void)types;
         (void)userData;
 
-        NWB_LOGGER_INFO(NWB_TEXT("Vulkan\nMessageID: {}(0x{:x})\nMessage: {}"), stringConvert(callbackData->pMessageIdName), callbackData->messageIdNumber, stringConvert(callbackData->pMessage));
+        NWB_LOGGER_INFO(NWB_TEXT("Vulkan\nMessageID: {}(0x{:x})\nMessage: {}"), StringConvert(callbackData->pMessageIdName), callbackData->messageIdNumber, StringConvert(callbackData->pMessage));
 
         if(severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT){
             //NWB_SOFTBREAK;
@@ -40,7 +40,7 @@ namespace __hidden_vulkan{
 };
 
 
-VkDebugUtilsMessengerCreateInfoEXT createDebugMessengerInfo(){
+VkDebugUtilsMessengerCreateInfoEXT CreateDebugMessengerInfo(){
     VkDebugUtilsMessengerCreateInfoEXT info{ VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT };
     info.pfnUserCallback = __hidden_vulkan::debugMessengerCallback;
     info.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT;
@@ -53,7 +53,7 @@ VkDebugUtilsMessengerCreateInfoEXT createDebugMessengerInfo(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const char* surfaceInstanceName(){
+const char* SurfaceInstanceName(){
 #if defined(NWB_PLATFORM_WINDOWS)
     return "VK_KHR_win32_surface";
 #else defined(NWB_PLATFORM_ANDROID)
@@ -61,7 +61,7 @@ const char* surfaceInstanceName(){
 #endif
 }
 
-VkSurfaceKHR createSurface(VkInstance inst, const Common::FrameData& data){
+VkSurfaceKHR CreateSurface(VkInstance inst, const Common::FrameData& data){
     VkSurfaceKHR output = VK_NULL_HANDLE;
     
     VkResult err = VK_SUCCESS;
@@ -73,7 +73,7 @@ VkSurfaceKHR createSurface(VkInstance inst, const Common::FrameData& data){
     }
     err = vkCreateWin32SurfaceKHR(inst, &createInfo, nullptr, &output);
     if(err != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to create Vulkan surface: {}"), stringConvert(getVulkanResultString(err)));
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to create Vulkan surface: {}"), StringConvert(VulkanResultString(err)));
         return VK_NULL_HANDLE;
     }
 #else
@@ -83,7 +83,7 @@ VkSurfaceKHR createSurface(VkInstance inst, const Common::FrameData& data){
     return output;
 }
 
-bool createSwapchain(
+bool CreateSwapchain(
     VkAllocationCallbacks* allocCallbacks,
     VkPhysicalDevice physDev,
     VkDevice logiDev,
@@ -105,7 +105,7 @@ bool createSwapchain(
     {
         err = vkGetPhysicalDeviceSurfaceSupportKHR(physDev, queueFamilly, winSurf, &isSupported);
         if(err != VK_SUCCESS){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to get physical device surface support: {}"), stringConvert(getVulkanResultString(err)));
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to get physical device surface support: {}"), StringConvert(VulkanResultString(err)));
             return false;
         }
         if(isSupported != VK_TRUE)
@@ -116,7 +116,7 @@ bool createSwapchain(
     {
         err = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physDev, winSurf, &surfaceCapabilities);
         if(err != VK_SUCCESS){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to get physical device surface capabilities: {}"), stringConvert(getVulkanResultString(err)));
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to get physical device surface capabilities: {}"), StringConvert(VulkanResultString(err)));
             return false;
         }
     }
@@ -150,7 +150,7 @@ bool createSwapchain(
 
         err = vkCreateSwapchainKHR(logiDev, &createInfo, 0, swapchain);
         if(err != VK_SUCCESS){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to create swapchain: {}"), stringConvert(getVulkanResultString(err)));
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to create swapchain: {}"), StringConvert(VulkanResultString(err)));
             return false;
         }
     }
@@ -159,7 +159,7 @@ bool createSwapchain(
         uint32_t supportedImageCount = 0;
         err = vkGetSwapchainImagesKHR(logiDev, *swapchain, &supportedImageCount, nullptr);
         if(err != VK_SUCCESS){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to get swapchain images: {}"), stringConvert(getVulkanResultString(err)));
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to get swapchain images: {}"), StringConvert(VulkanResultString(err)));
             return false;
         }
 
@@ -167,7 +167,7 @@ bool createSwapchain(
 
         err = vkGetSwapchainImagesKHR(logiDev, *swapchain, &supportedImageCount, *swapchainImages);
         if(err != VK_SUCCESS){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to get swapchain images: {}"), stringConvert(getVulkanResultString(err)));
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to get swapchain images: {}"), StringConvert(VulkanResultString(err)));
             return false;
         }
 
@@ -188,7 +188,7 @@ bool createSwapchain(
 
             err = vkCreateImageView(logiDev, &createInfo, allocCallbacks, &(*swapchainImageViews)[i]);
             if(err != VK_SUCCESS){
-                NWB_LOGGER_ERROR(NWB_TEXT("Failed to create swapchain image view: {}"), stringConvert(getVulkanResultString(err)));
+                NWB_LOGGER_ERROR(NWB_TEXT("Failed to create swapchain image view: {}"), StringConvert(VulkanResultString(err)));
                 return false;
             }
         }

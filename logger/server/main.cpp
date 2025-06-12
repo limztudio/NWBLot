@@ -22,7 +22,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static NWB_INLINE int mainLogic(u16 logPort, void* inst){
+static int mainLogic(u16 logPort, void* inst){
     {
         NWB::Log::Server logger;
         if(!logger.init(logPort))
@@ -41,7 +41,7 @@ static NWB_INLINE int mainLogic(u16 logPort, void* inst){
                 return -1;
         }
         catch(const std::exception& e){
-            NWB_LOGGER.enqueue(stringFormat(NWB_TEXT("Exception: {}"), stringConvert(e.what())), NWB::Log::Type::Fatal);
+            NWB_LOGGER.enqueue(StringFormat(NWB_TEXT("Exception: {}"), StringConvert(e.what())), NWB::Log::Type::Fatal);
             NWB_LOGGER_REGISTER(nullptr);
             return -1;
         }
@@ -55,14 +55,14 @@ static NWB_INLINE int mainLogic(u16 logPort, void* inst){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static NWB_INLINE int entry_point(isize argc, tchar** argv, void* inst){
+static int entry_point(isize argc, tchar** argv, void* inst){
     int ret;
 
     u16 logPort;
     {
         CLI::App app{ "logserver" };
 
-        NWB::argAddOption<NWB::ArgCommand::LogPort>(app, logPort);
+        NWB::ArgAddOption<NWB::ArgCommand::LogPort>(app, logPort);
 
         try{
             app.parse(static_cast<int>(argc), argv);

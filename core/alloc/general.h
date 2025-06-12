@@ -17,7 +17,7 @@ NWB_ALLOC_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-extern usize getCachelineSize();
+extern usize CachelineSize();
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -59,12 +59,12 @@ public:
         const usize bytes = sizeof(T) * count;
 
         if(IsConstantEvaluated()){
-            coreFreeSize(buffer, bytes, "NWB::Core::Alloc::GeneralAllocator::deallocate");
+            CoreFreeSize(buffer, bytes, "NWB::Core::Alloc::GeneralAllocator::deallocate");
         }
         else{
             constexpr usize alignSize = alignof(T);
 
-            coreFreeSizeAligned(buffer, bytes, alignSize, "NWB::Core::Alloc::GeneralAllocator::deallocate");
+            CoreFreeSizeAligned(buffer, bytes, alignSize, "NWB::Core::Alloc::GeneralAllocator::deallocate");
         }
     }
 
@@ -73,16 +73,16 @@ public:
 
         T* output = nullptr;
 
-        const usize bytes = getSizeOf<sizeof(T)>(count);
+        const usize bytes = SizeOf<sizeof(T)>(count);
 
         if(bytes){
             if(IsConstantEvaluated()){
-                output = reinterpret_cast<T*>(coreAlloc(bytes, "NWB::Core::Alloc::GeneralAllocator::allocate"));
+                output = reinterpret_cast<T*>(CoreAlloc(bytes, "NWB::Core::Alloc::GeneralAllocator::allocate"));
             }
             else{
                 constexpr usize alignSize = alignof(T);
 
-                output = reinterpret_cast<T*>(coreAllocAligned(bytes, alignSize, "NWB::Core::Alloc::GeneralAllocator::allocate"));
+                output = reinterpret_cast<T*>(CoreAllocAligned(bytes, alignSize, "NWB::Core::Alloc::GeneralAllocator::allocate"));
             }
         }
 
@@ -130,25 +130,25 @@ public:
 
 public:
     usize max_size() const noexcept{
-        return (~usize(0) - getCachelineSize()) / sizeof(value_type);
+        return (~usize(0) - CachelineSize()) / sizeof(value_type);
     }
 
     constexpr void deallocate(T* const buffer, const usize count)noexcept{
         assert((buffer != nullptr || count == 0) && "null pointer cannot point to a block of non-zero size");
 
         const usize bytes = sizeof(T) * count;
-        const usize alignSize = getCachelineSize();
+        const usize alignSize = CachelineSize();
 
-        coreFreeSizeAligned(buffer, bytes, alignSize, "NWB::Core::Alloc::CacheAlignedAllocator::deallocate");
+        CoreFreeSizeAligned(buffer, bytes, alignSize, "NWB::Core::Alloc::CacheAlignedAllocator::deallocate");
     }
 
     constexpr __declspec(allocator) T* allocate(const usize count){
         static_assert(sizeof(T) > 0, "value_type must be complete before calling allocate.");
 
-        const usize bytes = getSizeOf<sizeof(T)>(count);
-        const usize alignSize = getCachelineSize();
+        const usize bytes = SizeOf<sizeof(T)>(count);
+        const usize alignSize = CachelineSize();
 
-        return reinterpret_cast<T*>(coreAllocAligned(bytes, alignSize, "NWB::Core::Alloc::CacheAlignedAllocator::allocate"));
+        return reinterpret_cast<T*>(CoreAllocAligned(bytes, alignSize, "NWB::Core::Alloc::CacheAlignedAllocator::allocate"));
     }
 #if _HAS_CXX23
     constexpr AllocationResult<T*> allocate_at_least(const usize count){ return { allocate(count), count }; }

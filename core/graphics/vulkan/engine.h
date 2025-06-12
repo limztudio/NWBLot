@@ -175,11 +175,11 @@ public:
 private:
     void updatePresentMode(PresentMode mode);
 
-    inline bool createSwapchain(){
+    inline bool CreateSwapchain(){
         VkSwapchainKHR swapchain = VK_NULL_HANDLE;
         VkImage swapchainImages[s_maxSwapchainImages] = { VK_NULL_HANDLE };
         VkImageView swapchainImagesViews[s_maxSwapchainImages] = { VK_NULL_HANDLE };
-        bool bRet = Core::createSwapchain(
+        bool bRet = Core::CreateSwapchain(
             m_allocCallbacks,
             m_physDev.get(),
             m_logiDev.get(),

@@ -9,9 +9,9 @@
 
 
 template <typename T>
-constexpr inline T floorlog2(T x){ return (x == 1) ? 0 : (1 + floorlog2<T>(x >> 1)); }
+constexpr inline T FloorLog2(T x){ return (x == 1) ? 0 : (1 + FloorLog2<T>(x >> 1)); }
 template <typename T>
-constexpr inline T ceillog2(T x){ return (x == 1) ? 0 : (floorlog2<T>(x - 1) + 1); }
+constexpr inline T CeilLog2(T x){ return (x == 1) ? 0 : (FloorLog2<T>(x - 1) + 1); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

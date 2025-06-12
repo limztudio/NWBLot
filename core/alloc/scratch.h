@@ -30,13 +30,13 @@ private:
     class Chunk{
     public:
         inline Chunk(usize align, usize size)
-            : m_remaining(getAlignment(align, size))
+            : m_remaining(Alignment(align, size))
             , m_next(nullptr)
-            , m_buffer(coreAllocAligned(m_remaining, align, "NWB::Core::Alloc::ScratchArena::Chunk::constructor"))
+            , m_buffer(CoreAllocAligned(m_remaining, align, "NWB::Core::Alloc::ScratchArena::Chunk::constructor"))
             , m_available(m_buffer)
         {}
         ~Chunk(){
-            coreFree(m_buffer, "NWB::Core::Alloc::ScratchArena::Chunk::destructor");
+            CoreFree(m_buffer, "NWB::Core::Alloc::ScratchArena::Chunk::destructor");
         }
 
 
@@ -78,7 +78,7 @@ public:
             auto& bucket = m_bucket[i];
             bucket.head = nullptr;
             bucket.last = nullptr;
-            bucket.size = getAlignment(static_cast<usize>(1) << i, initSize);
+            bucket.size = Alignment(static_cast<usize>(1) << i, initSize);
         }
     }
     ~ScratchArena(){
@@ -94,9 +94,9 @@ public:
 
 public:
     inline void* allocate(usize align, usize size){
-        auto& bucket = m_bucket[floorlog2(align)];
+        auto& bucket = m_bucket[FloorLog2(align)];
 
-        size = getAlignment(align, size);
+        size = Alignment(align, size);
         if(size > bucket.size)
             bucket.size = size << 1;
 
@@ -113,7 +113,7 @@ public:
     template <typename T>
     inline T* allocate(usize count){
         static_assert(sizeof(T) > 0, "value_type must be complete before calling allocate.");
-        const usize bytes = getSizeOf<sizeof(T)>(count);
+        const usize bytes = SizeOf<sizeof(T)>(count);
 
         T* output = nullptr;
         if(bytes){
@@ -129,7 +129,7 @@ public:
 
 
 private:
-    ChunkWrapper m_bucket[floorlog2(maxAlignSize) + 1];
+    ChunkWrapper m_bucket[FloorLog2(maxAlignSize) + 1];
 };
 
 

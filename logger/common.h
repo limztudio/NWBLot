@@ -64,7 +64,7 @@ public:
     inline bool init(ARGS&&... args){
         if(!static_cast<T*>(this)->m_globalInit){
             if(!static_cast<T*>(this)->globalInit()){
-                static_cast<T*>(this)->T::enqueue(stringFormat(NWB_TEXT("Failed to global initialization on {}"), NAME), Type::Fatal);
+                static_cast<T*>(this)->T::enqueue(StringFormat(NWB_TEXT("Failed to global initialization on {}"), NAME), Type::Fatal);
                 return false;
             }
             static_cast<T*>(this)->m_globalInit = true;
@@ -77,8 +77,8 @@ public:
     }
 
 public:
-    inline void enqueue(TString&& str, Type type = Type::Info){ return static_cast<T*>(this)->T::enqueue(MakeTuple(timerNow(), type, Move(str))); }
-    inline void enqueue(const TString& str, Type type = Type::Info){ return static_cast<T*>(this)->T::enqueue(MakeTuple(timerNow(), type, str)); }
+    inline void enqueue(TString&& str, Type type = Type::Info){ return static_cast<T*>(this)->T::enqueue(MakeTuple(TimerNow(), type, Move(str))); }
+    inline void enqueue(const TString& str, Type type = Type::Info){ return static_cast<T*>(this)->T::enqueue(MakeTuple(TimerNow(), type, str)); }
 
 
 protected:
@@ -99,8 +99,8 @@ class BaseUpdateOrdinary : public Base<T, NAME>{
 private:
     static void globalUpdate(T* _this){
         for(;;){
-            auto curTime = timerNow();
-            if(durationInSeconds<float>(curTime, _this->m_lastTime) < UPDATE_INTERVAL)
+            auto curTime = TimerNow();
+            if(DurationInSeconds<float>(curTime, _this->m_lastTime) < UPDATE_INTERVAL)
                 continue;
 
             _this->m_lastTime = curTime;
@@ -113,7 +113,7 @@ private:
 
 public:
     BaseUpdateOrdinary()
-        : m_lastTime(timerNow())
+        : m_lastTime(TimerNow())
     {}
 
 

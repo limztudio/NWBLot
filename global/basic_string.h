@@ -66,7 +66,7 @@ namespace __hidden_basic_string{
 
 
 template<typename In> requires __hidden_basic_string::FromWcharView<In>
-inline AString stringConvert(const In& raw){
+inline AString StringConvert(const In& raw){
     WStringView src(raw);
     if(src.empty())
         return AString();
@@ -79,7 +79,7 @@ inline AString stringConvert(const In& raw){
 #endif
 }
 template<typename In> requires __hidden_basic_string::FromWcharView<In>
-inline AString stringConvert(In&& raw){
+inline AString StringConvert(In&& raw){
     WStringView src(Move(raw));
     if(src.empty())
         return AString();
@@ -92,12 +92,12 @@ inline AString stringConvert(In&& raw){
 #endif
 }
 template<typename In>
-inline AString stringConvert(const In& src){ return src; }
+inline AString StringConvert(const In& src){ return src; }
 template<typename In>
-inline AString stringConvert(In&& src){ return src; }
+inline AString StringConvert(In&& src){ return src; }
 
 template<typename In> requires __hidden_basic_string::FromCharView<In>
-inline WString stringConvert(const In& raw){
+inline WString StringConvert(const In& raw){
     AStringView src(raw);
     if(src.empty())
         return WString();
@@ -110,7 +110,7 @@ inline WString stringConvert(const In& raw){
 #endif
 }
 template<typename In> requires __hidden_basic_string::FromCharView<In>
-inline WString stringConvert(In&& raw){
+inline WString StringConvert(In&& raw){
     AStringView src(Move(raw));
     if(src.empty())
         return WString();
@@ -123,20 +123,20 @@ inline WString stringConvert(In&& raw){
 #endif
 }
 template<typename In>
-inline WString stringConvert(const In& src){ return src; }
+inline WString StringConvert(const In& src){ return src; }
 template<typename In>
-inline WString stringConvert(In&& src){ return src; }
+inline WString StringConvert(In&& src){ return src; }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 template <typename... T>
-inline AString stringFormat(AFormatString<T...> fmt, T&&... args){
+inline AString StringFormat(AFormatString<T...> fmt, T&&... args){
     return std::vformat(fmt.get(), std::make_format_args<AFormatContext>(args...));
 }
 template <typename... T>
-inline WString stringFormat(WFormatString<T...> fmt, T&&... args){
+inline WString StringFormat(WFormatString<T...> fmt, T&&... args){
     return std::vformat(fmt.get(), std::make_format_args<WFormatContext>(args...));
 }
 

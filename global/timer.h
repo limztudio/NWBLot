@@ -74,14 +74,14 @@ namespace std{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline Timer timerNow()noexcept{ return std::chrono::steady_clock::now(); }
+inline Timer TimerNow()noexcept{ return std::chrono::steady_clock::now(); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 namespace __hidden_timer{
-    static inline Timer s_veryBegining = timerNow();
+    static inline Timer s_veryBegining = TimerNow();
 };
 
 
@@ -89,19 +89,19 @@ namespace __hidden_timer{
 
 
 template <typename T>
-inline T durationInSeconds(const Timer& current, const Timer& late = __hidden_timer::s_veryBegining)noexcept{
+inline T DurationInSeconds(const Timer& current, const Timer& late = __hidden_timer::s_veryBegining)noexcept{
     return std::chrono::duration_cast<std::chrono::duration<T, std::ratio<1, 1>>>(current - late).count();
 }
 template <typename T>
-inline T durationInMS(const Timer& current, const Timer& late = __hidden_timer::s_veryBegining)noexcept{
+inline T DurationInMS(const Timer& current, const Timer& late = __hidden_timer::s_veryBegining)noexcept{
     return std::chrono::duration_cast<std::chrono::duration<T, std::ratio<1, 1000>>>(current - late).count();
 }
 template <typename T>
-inline T durationInNS(const Timer& current, const Timer& late = __hidden_timer::s_veryBegining)noexcept{
+inline T DurationInNS(const Timer& current, const Timer& late = __hidden_timer::s_veryBegining)noexcept{
     return std::chrono::duration_cast<std::chrono::duration<T, std::ratio<1, 1000000000>>>(current - late).count();
 }
-inline TimerDelta durationInTimeDelta(const Timer& current, const Timer& late = __hidden_timer::s_veryBegining)noexcept{
-    return TimerDelta(durationInMS<i64>(current, late));
+inline TimerDelta DurationInTimeDelta(const Timer& current, const Timer& late = __hidden_timer::s_veryBegining)noexcept{
+    return TimerDelta(DurationInMS<i64>(current, late));
 }
 
 

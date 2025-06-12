@@ -23,7 +23,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static NWB_INLINE int mainLogic(const char* logAddress, void* inst){
+static int mainLogic(const char* logAddress, void* inst){
     {
         NWB::Log::Client logger;
         if(!logger.init(logAddress))
@@ -42,7 +42,7 @@ static NWB_INLINE int mainLogic(const char* logAddress, void* inst){
                 return -1;
         }
         catch(const std::exception& e){
-            NWB_LOGGER_FATAL(NWB_TEXT("Exception: {}"), stringConvert(e.what()));
+            NWB_LOGGER_FATAL(NWB_TEXT("Exception: {}"), StringConvert(e.what()));
             NWB_LOGGER_REGISTER(nullptr);
             return -1;
         }
@@ -56,7 +56,7 @@ static NWB_INLINE int mainLogic(const char* logAddress, void* inst){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static NWB_INLINE int entry_point(isize argc, tchar** argv, void* inst){
+static int entry_point(isize argc, tchar** argv, void* inst){
     int ret;
 
     AString logAddress;
@@ -65,11 +65,11 @@ static NWB_INLINE int entry_point(isize argc, tchar** argv, void* inst){
 
         {
             AString address;
-            NWB::argAddOption<NWB::ArgCommand::LogAddress>(app, address);
+            NWB::ArgAddOption<NWB::ArgCommand::LogAddress>(app, address);
             u16 port;
-            NWB::argAddOption<NWB::ArgCommand::LogPort>(app, port);
+            NWB::ArgAddOption<NWB::ArgCommand::LogPort>(app, port);
 
-            logAddress = stringFormat("{}:{}", address, port);
+            logAddress = StringFormat("{}:{}", address, port);
         }
 
         try{

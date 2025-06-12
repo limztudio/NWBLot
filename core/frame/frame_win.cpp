@@ -169,7 +169,7 @@ bool Frame::showFrame(){
 bool Frame::mainLoop(){
     MSG message = {};
 
-    Timer lateTime(timerNow());
+    Timer lateTime(TimerNow());
 
     for(;;){
         if(data<Common::WinFrame>().isActive()){
@@ -191,8 +191,8 @@ bool Frame::mainLoop(){
         }
 
         {
-            Timer currentTime(timerNow());
-            auto timeDifference = durationInSeconds<float>(currentTime, lateTime);
+            Timer currentTime(TimerNow());
+            auto timeDifference = DurationInSeconds<float>(currentTime, lateTime);
             lateTime = currentTime;
 
             if(!update(timeDifference))

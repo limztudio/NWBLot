@@ -19,7 +19,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr inline VkPresentModeKHR convert(PresentMode mode){
+constexpr inline VkPresentModeKHR Convert(PresentMode mode){
     switch(mode){
     case PresentMode::Immediate:
         return VK_PRESENT_MODE_IMMEDIATE_KHR;
@@ -33,7 +33,7 @@ constexpr inline VkPresentModeKHR convert(PresentMode mode){
     return VK_PRESENT_MODE_MAX_ENUM_KHR;
 }
 
-constexpr inline PresentMode convert(VkPresentModeKHR mode){
+constexpr inline PresentMode Convert(VkPresentModeKHR mode){
     switch(mode){
     case VK_PRESENT_MODE_IMMEDIATE_KHR:
         return PresentMode::Immediate;
@@ -51,7 +51,7 @@ constexpr inline PresentMode convert(VkPresentModeKHR mode){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr inline VkFormat convert(TextureFormat format){
+constexpr inline VkFormat Convert(TextureFormat format){
     switch(format){
     case TextureFormat::UNDEFINED:
         return VK_FORMAT_UNDEFINED;
@@ -597,7 +597,7 @@ constexpr inline VkFormat convert(TextureFormat format){
     return VK_FORMAT_MAX_ENUM;
 }
 
-constexpr inline TextureFormat convert(VkFormat format){
+constexpr inline TextureFormat Convert(VkFormat format){
     switch(format){
     case VK_FORMAT_UNDEFINED:
         return TextureFormat::UNDEFINED;

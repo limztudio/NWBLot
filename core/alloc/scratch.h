@@ -36,7 +36,7 @@ private:
             , m_available(m_buffer)
         {}
         ~Chunk(){
-            CoreFree(m_buffer, "NWB::Core::Alloc::ScratchArena::Chunk::destructor");
+            CoreFreeAligned(m_buffer, "NWB::Core::Alloc::ScratchArena::Chunk::destructor");
         }
 
 

@@ -61,11 +61,8 @@ public:
         if(IsConstantEvaluated()){
             CoreFreeSize(buffer, bytes, "NWB::Core::Alloc::GeneralAllocator::deallocate");
         }
-        else{
-            constexpr usize alignSize = alignof(T);
-
-            CoreFreeSizeAligned(buffer, bytes, alignSize, "NWB::Core::Alloc::GeneralAllocator::deallocate");
-        }
+        else
+            CoreFreeSizeAligned(buffer, bytes, "NWB::Core::Alloc::GeneralAllocator::deallocate");
     }
 
     constexpr __declspec(allocator) T* allocate(const usize count){
@@ -137,9 +134,8 @@ public:
         assert((buffer != nullptr || count == 0) && "null pointer cannot point to a block of non-zero size");
 
         const usize bytes = sizeof(T) * count;
-        const usize alignSize = CachelineSize();
 
-        CoreFreeSizeAligned(buffer, bytes, alignSize, "NWB::Core::Alloc::CacheAlignedAllocator::deallocate");
+        CoreFreeSizeAligned(buffer, bytes, "NWB::Core::Alloc::CacheAlignedAllocator::deallocate");
     }
 
     constexpr __declspec(allocator) T* allocate(const usize count){

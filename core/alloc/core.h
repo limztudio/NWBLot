@@ -20,12 +20,11 @@ NWB_ALLOC_BEGIN
 extern void* CoreAlloc(usize size, const char* log);
 extern void* CoreRealloc(void* p, usize size, const char* log);
 extern void* CoreAllocAligned(usize size, usize align, const char* log);
-extern void* CoreReallocAligned(void* p, usize size, usize align, const char* log);
 
 extern void CoreFree(void* ptr, const char* log)noexcept;
 extern void CoreFreeSize(void* ptr, usize size, const char* log)noexcept;
-extern void CoreFreeAligned(void* ptr, usize align, const char* log)noexcept;
-extern void CoreFreeSizeAligned(void* ptr, usize size, usize align, const char* log)noexcept;
+extern void CoreFreeAligned(void* ptr, const char* log)noexcept;
+extern void CoreFreeSizeAligned(void* ptr, usize size, const char* log)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

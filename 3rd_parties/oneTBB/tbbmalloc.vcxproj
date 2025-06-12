@@ -9,10 +9,6 @@
       <Configuration>fin</Configuration>
       <Platform>x64</Platform>
     </ProjectConfiguration>
-    <ProjectConfiguration Include="opt|x64">
-      <Configuration>opt</Configuration>
-      <Platform>x64</Platform>
-    </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\tbbmalloc\backend.cpp" />
@@ -37,10 +33,6 @@
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <PlatformToolset>v143</PlatformToolset>
   </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='opt|x64'" Label="Configuration">
-    <ConfigurationType>DynamicLibrary</ConfigurationType>
-    <PlatformToolset>v143</PlatformToolset>
-  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='fin|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <PlatformToolset>v143</PlatformToolset>
@@ -54,11 +46,6 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
     <Import Project="..\..\configuration\generalOutput.props" />
     <Import Project="..\..\configuration\dbgCodeGen.props" />
-  </ImportGroup>
-  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='opt|x64'">
-    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-    <Import Project="..\..\configuration\generalOutput.props" />
-    <Import Project="..\..\configuration\optCodeGen.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='fin|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
@@ -77,24 +64,6 @@
       <UseFullPaths>false</UseFullPaths>
       <DisableSpecificWarnings>4324;4267;4244;4245;4458</DisableSpecificWarnings>
       <AdditionalOptions>%(AdditionalOptions) /volatile:iso /FS</AdditionalOptions>
-    </ClCompile>
-    <Link>
-      <ModuleDefinitionFile>$(ProjectDir)src/tbbmalloc/def/win64-tbbmalloc.def</ModuleDefinitionFile>
-    </Link>
-    <ProjectReference>
-      <LinkLibraryDependencies>false</LinkLibraryDependencies>
-    </ProjectReference>
-  </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='opt|x64'">
-    <ClCompile>
-      <PreprocessorDefinitions>__TBBMALLOC_BUILD;__TBB_USE_ITT_NOTIFY;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
-      <Optimization>MaxSpeed</Optimization>
-      <UseFullPaths>false</UseFullPaths>
-      <DisableSpecificWarnings>4324;4267;4244;4245;4458</DisableSpecificWarnings>
-      <AdditionalOptions>%(AdditionalOptions) /volatile:iso /FS</AdditionalOptions>
-      <FunctionLevelLinking>true</FunctionLevelLinking>
     </ClCompile>
     <Link>
       <ModuleDefinitionFile>$(ProjectDir)src/tbbmalloc/def/win64-tbbmalloc.def</ModuleDefinitionFile>

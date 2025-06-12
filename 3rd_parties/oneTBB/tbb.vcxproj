@@ -9,10 +9,6 @@
       <Configuration>fin</Configuration>
       <Platform>x64</Platform>
     </ProjectConfiguration>
-    <ProjectConfiguration Include="opt|x64">
-      <Configuration>opt</Configuration>
-      <Platform>x64</Platform>
-    </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\tbb\address_waiter.cpp" />
@@ -63,10 +59,6 @@
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <PlatformToolset>v143</PlatformToolset>
   </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='opt|x64'" Label="Configuration">
-    <ConfigurationType>DynamicLibrary</ConfigurationType>
-    <PlatformToolset>v143</PlatformToolset>
-  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='fin|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <PlatformToolset>v143</PlatformToolset>
@@ -81,11 +73,6 @@
     <Import Project="..\..\configuration\generalOutput.props" />
     <Import Project="..\..\configuration\dbgCodeGen.props" />
   </ImportGroup>
-  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='opt|x64'">
-    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-    <Import Project="..\..\configuration\generalOutput.props" />
-    <Import Project="..\..\configuration\optCodeGen.props" />
-  </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='fin|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
     <Import Project="..\..\configuration\generalOutput.props" />
@@ -98,9 +85,6 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='fin|x64'">
     <TargetName>$(ProjectName)12</TargetName>
   </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='opt|x64'">
-    <TargetName>$(ProjectName)12</TargetName>
-  </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='dbg|x64'">
     <ClCompile>
       <PreprocessorDefinitions>__TBB_BUILD;__TBB_SKIP_DEPENDENCY_SIGNATURE_VERIFICATION=1;__TBB_USE_ITT_NOTIFY;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -108,23 +92,6 @@
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <UseFullPaths>false</UseFullPaths>
       <DisableSpecificWarnings>4324</DisableSpecificWarnings>
-    </ClCompile>
-    <Link>
-      <ModuleDefinitionFile>$(ProjectDir)src/tbb/def/win64-tbb.def</ModuleDefinitionFile>
-    </Link>
-    <ProjectReference>
-      <LinkLibraryDependencies>false</LinkLibraryDependencies>
-    </ProjectReference>
-  </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='opt|x64'">
-    <ClCompile>
-      <PreprocessorDefinitions>__TBB_BUILD;__TBB_SKIP_DEPENDENCY_SIGNATURE_VERIFICATION=1;__TBB_USE_ITT_NOTIFY;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
-      <Optimization>MaxSpeed</Optimization>
-      <UseFullPaths>false</UseFullPaths>
-      <DisableSpecificWarnings>4324</DisableSpecificWarnings>
-      <FunctionLevelLinking>true</FunctionLevelLinking>
     </ClCompile>
     <Link>
       <ModuleDefinitionFile>$(ProjectDir)src/tbb/def/win64-tbb.def</ModuleDefinitionFile>

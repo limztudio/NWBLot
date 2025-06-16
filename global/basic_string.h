@@ -7,6 +7,7 @@
 
 #include <string_view>
 #include <string>
+#include <sstream>
 #include <format>
 
 #include "generic.h"
@@ -32,6 +33,12 @@ using AString = BasicString<char>;
 using WString = BasicString<wchar>;
 using TString = BasicString<tchar>;
 
+template <typename T>
+using BasicStringStream = std::basic_stringstream<T>;
+using AStringStream = BasicStringStream<char>;
+using WStringStream = BasicStringStream<wchar>;
+using TStringStream = BasicStringStream<tchar>;
+
 using AFormatContext = std::format_context;
 using WFormatContext = std::wformat_context;
 template <typename T>
@@ -48,6 +55,44 @@ template <typename... T>
 using AFormatString = std::format_string<T...>;
 template <typename... T>
 using WFormatString = std::wformat_string<T...>;
+
+template <usize N>
+struct ConstString{
+    char data[N];
+    constexpr ConstString(const char(&str)[N]){
+        for(usize i = 0; i < N; ++i)
+            data[i] = str[i];
+    }
+    constexpr operator const char*()const{ return data; }
+    constexpr const char* c_str()const{ return data; }
+};
+template <usize N>
+struct ConstWString{
+    wchar data[N];
+    constexpr ConstWString(const wchar(&str)[N]){
+        for(usize i = 0; i < N; ++i)
+            data[i] = str[i];
+    }
+    constexpr operator const wchar*()const{ return data; }
+    constexpr const wchar* c_str()const{ return data; }
+};
+#if defined(NWB_UNICODE)
+template <usize N>
+using ConstTString = ConstWString<N>;
+#else
+template <usize N>
+using ConstTString = ConstString<N>;
+#endif
+
+template <usize N>
+constexpr auto MakeConstString(const char(&str)[N]){ return ConstString<N>(str); }
+template <usize N>
+constexpr auto MakeConstWString(const wchar(&str)[N]){ return ConstWString<N>(str); }
+#if defined(NWB_UNICODE)
+#define MakeConstTString MakeConstWString
+#else
+#define MakeConstTString MakeConstString
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -72,7 +117,7 @@ inline AString StringConvert(const In& raw){
         return AString();
 #if defined(NWB_PLATFORM_WINDOWS)
     const auto len = WideCharToMultiByte(CP_ACP, 0, src.data(), static_cast<int>(src.length()), nullptr, 0, nullptr, nullptr);
-    assert(len != 0);
+    NWB_ASSERT(len != 0);
     AString dst(len, 0);
     WideCharToMultiByte(CP_ACP, 0, src.data(), static_cast<int>(src.length()), dst.data(), len, nullptr, nullptr);
     return dst;
@@ -85,7 +130,7 @@ inline AString StringConvert(In&& raw){
         return AString();
 #if defined(NWB_PLATFORM_WINDOWS)
     const auto len = WideCharToMultiByte(CP_ACP, 0, src.data(), static_cast<int>(src.length()), nullptr, 0, nullptr, nullptr);
-    assert(len != 0);
+    NWB_ASSERT(len != 0);
     AString dst(len, 0);
     WideCharToMultiByte(CP_ACP, 0, src.data(), static_cast<int>(src.length()), dst.data(), len, nullptr, nullptr);
     return dst;
@@ -103,7 +148,7 @@ inline WString StringConvert(const In& raw){
         return WString();
 #if defined(NWB_PLATFORM_WINDOWS)
     const auto len = MultiByteToWideChar(CP_UTF8, 0, src.data(), static_cast<int>(src.length()), nullptr, 0);
-    assert(len != 0);
+    NWB_ASSERT(len != 0);
     WString dst(len, 0);
     MultiByteToWideChar(CP_UTF8, 0, src.data(), static_cast<int>(src.length()), dst.data(), len);
     return dst;
@@ -116,7 +161,7 @@ inline WString StringConvert(In&& raw){
         return WString();
 #if defined(NWB_PLATFORM_WINDOWS)
     const auto len = MultiByteToWideChar(CP_UTF8, 0, src.data(), static_cast<int>(src.length()), nullptr, 0);
-    assert(len != 0);
+    NWB_ASSERT(len != 0);
     WString dst(len, 0);
     MultiByteToWideChar(CP_UTF8, 0, src.data(), static_cast<int>(src.length()), dst.data(), len);
     return dst;

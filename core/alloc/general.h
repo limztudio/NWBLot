@@ -35,11 +35,27 @@ public:
     using _From_primary = GeneralAllocator;
     using value_type = T;
 
+    using pointer = T*;
+    using const_pointer = const T*;
+
+    using void_pointer = void*;
+    using const_void_pointer = const void*;
+
+    using reference = T&;
+    using const_reference = const T&;
+
     using size_type = usize;
     using difference_type = isize;
 
     using propagate_on_container_move_assignment = TrueType;
     using is_always_equal = TrueType;
+
+
+public:
+    template<typename F>
+    struct rebind{
+        using other = GeneralAllocator<F>;
+    };
 
 
 public:
@@ -54,7 +70,7 @@ public:
 
 public:
     constexpr void deallocate(T* const buffer, const usize count)noexcept{
-        assert((buffer != nullptr || count == 0) && "null pointer cannot point to a block of non-zero size");
+        NWB_ASSERT_MSG((buffer != nullptr || count == 0), NWB_TEXT("null pointer cannot point to a block of non-zero size"));
 
         const usize bytes = sizeof(T) * count;
 
@@ -91,6 +107,8 @@ public:
 };
 template <typename T, typename F>
 inline bool operator==(const GeneralAllocator<T>&, const GeneralAllocator<F>&)noexcept{ return true; }
+template <typename T, typename F>
+inline bool operator!=(const GeneralAllocator<T>&, const GeneralAllocator<F>&)noexcept{ return false; }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -108,11 +126,27 @@ public:
     using _From_primary = CacheAlignedAllocator;
     using value_type = T;
 
+    using pointer = T*;
+    using const_pointer = const T*;
+
+    using void_pointer = void*;
+    using const_void_pointer = const void*;
+
+    using reference = T&;
+    using const_reference = const T&;
+
     using size_type = usize;
     using difference_type = isize;
 
     using propagate_on_container_move_assignment = TrueType;
     using is_always_equal = TrueType;
+
+
+public:
+    template<typename F>
+    struct rebind{
+        using other = CacheAlignedAllocator<F>;
+    };
 
 
 public:
@@ -131,7 +165,7 @@ public:
     }
 
     constexpr void deallocate(T* const buffer, const usize count)noexcept{
-        assert((buffer != nullptr || count == 0) && "null pointer cannot point to a block of non-zero size");
+        NWB_ASSERT_MSG((buffer != nullptr || count == 0), NWB_TEXT("null pointer cannot point to a block of non-zero size"));
 
         const usize bytes = sizeof(T) * count;
 
@@ -152,6 +186,8 @@ public:
 };
 template <typename T, typename F>
 inline bool operator==(const CacheAlignedAllocator<T>&, const CacheAlignedAllocator<F>&)noexcept{ return true; }
+template <typename T, typename F>
+inline bool operator!=(const CacheAlignedAllocator<T>&, const CacheAlignedAllocator<F>&)noexcept{ return false; }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -457,7 +457,7 @@ void VulkanEngine::updatePresentMode(PresentMode mode){
         if(err != VK_SUCCESS)
             NWB_LOGGER_WARNING(NWB_TEXT("Failed to get physical device surface present modes: {}"), StringConvert(VulkanResultString(err)));
 
-        assert(supportedCount < LengthOf(supportedModes));
+        NWB_ASSERT(supportedCount < LengthOf(supportedModes));
 
         err = vkGetPhysicalDeviceSurfacePresentModesKHR(m_physDev.get(), m_winSurf.get(), reinterpret_cast<uint32_t*>(&supportedCount), supportedModes);
         if(err != VK_SUCCESS)

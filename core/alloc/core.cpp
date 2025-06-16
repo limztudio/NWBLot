@@ -12,6 +12,8 @@
 #include <stdlib.h>
 #endif
 
+#include "general.h"
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -24,22 +26,24 @@ NWB_ALLOC_BEGIN
 
 void* CoreAlloc(usize size, const char* log){
     (void)log;
-    return malloc(size);
+    void* cur = malloc(size);
+    return cur;
 }
 void* CoreRealloc(void* p, usize size, const char* log){
     (void)log;
-    return realloc(p, size);
+    void* cur = realloc(p, size);
+    return cur;
 }
 void* CoreAllocAligned(usize size, usize align, const char* log){
     (void)log;
 #if defined(NWB_PLATFORM_WINDOWS)
-    return _aligned_malloc(size, align);
+    void* cur = _aligned_malloc(size, align);
 #else
     void* cur = nullptr;
-    if(posix_memalign(&cur, align, size) == 0)
-        return cur;
-    return nullptr;
+    if(posix_memalign(&cur, align, size) != 0)
+        cur = nullptr;
 #endif
+    return cur;
 }
 
 void CoreFree(void* ptr, const char* log)noexcept{

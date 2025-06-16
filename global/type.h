@@ -7,8 +7,6 @@
 
 #include <type_traits>
 
-#include <cassert>
-
 #include "type_borrow.h"
 #include "type_properties.h"
 

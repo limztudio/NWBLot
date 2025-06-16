@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include "assert.h"
 #include "compile.h"
 #include "platform.h"
 #include "type.h"

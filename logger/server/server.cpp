@@ -62,7 +62,7 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
             sizeLeft -= sizeof(decltype(type));
         }
 
-        assert(sizeLeft > 0);
+        NWB_ASSERT(sizeLeft > 0);
         TString strMsg(reinterpret_cast<const tchar*>(ptr));
 
         _this->enqueue(MakeTuple(Move(time), type, Move(strMsg)));

@@ -68,6 +68,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#define NWB_COUT std::cout
+#define NWB_WCOUT std::wcout
+#define NWB_CERR std::cerr
+#define NWB_WCERR std::wcerr
 #define NWB_STRLEN(src) strlen(src)
 #define NWB_WSTRLEN(src) wcslen(src)
 #define NWB_MEMCMP(lhs, rhs, size) memcmp(lhs, rhs, size)
@@ -102,7 +106,9 @@
 #define NWB_WSPRINTF(format, formatSize, ...) swprintf(format, __VA_ARGS__)
 #endif
 
-#if defined(NWB_UNICODE)
+#if defined(UNICODE) || defined(_UNICODE)
+#define NWB_TCOUT NWB_WCOUT
+#define NWB_TCERR NWB_WCERR
 #define NWB_TSTRLEN(src) NWB_WSTRLEN(src)
 #define NWB_TSTRNLEN(src, count) NWB_WSTRNLEN(src, count)
 #define NWB_TSTRCMP(lhs, rhs) NWB_WSTRCMP(lhs, rhs)
@@ -112,6 +118,8 @@
 #define NWB_TSTRCAT(dest, destSize, src) NWB_WSTRCAT(dest, destSize, src)
 #define NWB_TSPRINTF(format, formatSize, ...) NWB_WSPRINTF(format, formatSize, __VA_ARGS__)
 #else
+#define NWB_TCOUT NWB_COUT
+#define NWB_TCERR NWB_CERR
 #define NWB_TSTRLEN(src) NWB_STRLEN(src)
 #define NWB_TSTRNLEN(src, count) NWB_STRNLEN(src, count)
 #define NWB_TSTRCMP(lhs, rhs) NWB_STRCMP(lhs, rhs)

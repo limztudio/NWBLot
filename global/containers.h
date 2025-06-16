@@ -17,6 +17,11 @@
 #include <deque>
 #include <queue>
 
+#include <memory>
+
+#include <tbb/concurrent_unordered_set.h>
+#include <tbb/concurrent_unordered_map.h>
+#include <tbb/concurrent_vector.h>
 #include <tbb/concurrent_queue.h>
 
 #include <robin_set.h>
@@ -71,8 +76,14 @@ constexpr auto MakeTuple(Args&&... args){ return std::make_tuple(Forward<Args>(a
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename T, typename Alloc = NWB::Core::Alloc::GeneralAllocator<T>>
-using SerialQueue = std::queue<T, Alloc>;
+template<typename T, typename Hash = Hasher<T>, typename Equal = EqualTo<T>, typename Alloc = NWB::Core::Alloc::GeneralAllocator<T>>
+using ParallelHashSet = tbb::concurrent_unordered_set<T, Hash, Equal, Alloc>;
+
+template<typename T, typename V, typename Hash = Hasher<T>, typename Equal = EqualTo<T>, typename Alloc = NWB::Core::Alloc::GeneralAllocator<Pair<const T, V>>>
+using ParallelHashMap = tbb::concurrent_unordered_map<T, V, Hash, Equal, Alloc>;
+
+template<typename T, typename Alloc = NWB::Core::Alloc::CacheAlignedAllocator<T>>
+using ParallelVector = tbb::concurrent_vector<T, Alloc>;
 
 template<typename T, typename Alloc = NWB::Core::Alloc::CacheAlignedAllocator<T>>
 using ParallelQueue = tbb::concurrent_queue<T, Alloc>;
@@ -87,7 +98,7 @@ using ParallelBlockQueue = tbb::concurrent_bounded_queue<T>;
 template<typename T, typename Hash = Hasher<T>, typename Equal = EqualTo<T>, typename Alloc = NWB::Core::Alloc::GeneralAllocator<T>>
 using HashSet = tsl::robin_set<T, Hash, Equal, Alloc>;
 
-template<typename T, typename V, typename Hash = Hasher<T>, typename Equal = EqualTo<T>, typename Alloc = NWB::Core::Alloc::GeneralAllocator<Pair<T, V>>>
+template<typename T, typename V, typename Hash = Hasher<T>, typename Equal = EqualTo<T>, typename Alloc = NWB::Core::Alloc::GeneralAllocator<Pair<const T, V>>>
 using HashMap = tsl::robin_map<T, V, Hash, Equal, Alloc>;
 
 template<typename T, typename Alloc = NWB::Core::Alloc::GeneralAllocator<T>>
@@ -100,7 +111,17 @@ template<typename T, typename Alloc = NWB::Core::Alloc::GeneralAllocator<T>>
 using Vector = std::vector<T, Alloc>;
 
 template<typename T, typename Alloc = NWB::Core::Alloc::GeneralAllocator<T>>
+using Queue = std::queue<T, Alloc>;
+
+template<typename T, typename Alloc = NWB::Core::Alloc::GeneralAllocator<T>>
 using Deque = std::deque<T, Alloc>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template <typename T>
+using SharedPtr = std::shared_ptr<T>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

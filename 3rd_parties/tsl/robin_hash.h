@@ -321,7 +321,8 @@ class bucket_entry : public bucket_entry_hash<StoreHash> {
  private:
   distance_type m_dist_from_ideal_bucket;
   bool m_last_bucket;
-  alignas(value_type) unsigned char m_value[sizeof(value_type)];
+  //alignas(value_type) unsigned char m_value[sizeof(value_type)];
+  typename std::aligned_storage<sizeof(value_type), alignof(value_type)>::type m_value;
 };
 
 /**
@@ -405,10 +406,10 @@ class robin_hash : private Hash, private KeyEqual, private GrowthPolicy {
    * to check that the truncated_hash_type didn't truncated more bytes.
    */
   static bool USE_STORED_HASH_ON_REHASH(size_type bucket_count) {
-    if (STORE_HASH && sizeof(std::size_t) == sizeof(truncated_hash_type)) {
+    if constexpr (STORE_HASH && sizeof(std::size_t) == sizeof(truncated_hash_type)) {
       TSL_RH_UNUSED(bucket_count);
       return true;
-    } else if (STORE_HASH && is_power_of_two_policy<GrowthPolicy>::value) {
+    } else if constexpr (STORE_HASH && is_power_of_two_policy<GrowthPolicy>::value) {
       return bucket_count == 0 ||
              (bucket_count - 1) <=
                  std::numeric_limits<truncated_hash_type>::max();

@@ -2991,7 +2991,7 @@ remove them if not needed.
    #ifdef NDEBUG
        #define VMA_ASSERT(expr)
    #else
-       #define VMA_ASSERT(expr)         assert(expr)
+       #define VMA_ASSERT(expr)         NWB_ASSERT(expr)
    #endif
 #endif
 

@@ -74,7 +74,7 @@ NWB_LOG_END
 
 #define NWB_LOGGER_REGISTER(inst) NWB::Log::__hidden_logger::g_logger = inst
 
-#define NWB_LOGGER assert(NWB::Log::__hidden_logger::g_logger != nullptr);(*NWB::Log::__hidden_logger::g_logger)
+#define NWB_LOGGER NWB_ASSERT(NWB::Log::__hidden_logger::g_logger != nullptr);(*NWB::Log::__hidden_logger::g_logger)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

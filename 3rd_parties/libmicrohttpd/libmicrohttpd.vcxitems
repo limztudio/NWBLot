@@ -1,0 +1,39 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup Label="Globals">
+    <MSBuildAllProjects Condition="'$(MSBuildVersion)' == '' Or '$(MSBuildVersion)' &lt; '16.0'">$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <ItemsProjectGuid>{FDD30BF4-F2AE-4FBD-B63A-7ABBD5B51924}</ItemsProjectGuid>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories);$(MSBuildThisFileDirectory)</AdditionalIncludeDirectories>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ProjectCapability Include="SourceItemsFromImports" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="$(MSBuildThisFileDirectory)microhttpd\basicauth.c" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)microhttpd\connection.c" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)microhttpd\daemon.c" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)microhttpd\digestauth.c" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)microhttpd\gen_auth.c" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)microhttpd\internal.c" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)microhttpd\md5.c" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)microhttpd\memorypool.c" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)microhttpd\mhd_mono_clock.c" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)microhttpd\mhd_panic.c" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)microhttpd\mhd_send.c" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)microhttpd\mhd_sockets.c" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)microhttpd\mhd_str.c" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)microhttpd\mhd_threads.c" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)microhttpd\postprocessor.c" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)microhttpd\reason_phrase.c" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)microhttpd\response.c" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)microhttpd\sha256.c" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)microhttpd\sha512_256.c" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)microhttpd\sysfdsetsize.c" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)microhttpd\tsearch.c" />
+  </ItemGroup>
+</Project>

@@ -1,18 +1,18 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <ClCompile Include="main.cpp" />
-    <ClCompile Include="pch.cpp">
+    <ClCompile Include="$(MSBuildThisFileDirectory)main.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)pch.cpp">
       <Filter>pch</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="pch">
-      <UniqueIdentifier>{ca428270-9a07-4428-a567-1e033cf4e4d8}</UniqueIdentifier>
+      <UniqueIdentifier>{4645d4b6-a533-4d4f-a207-8d6ef01e6130}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="pch.h">
+    <ClInclude Include="$(MSBuildThisFileDirectory)pch.h">
       <Filter>pch</Filter>
     </ClInclude>
   </ItemGroup>

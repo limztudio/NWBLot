@@ -1,0 +1,24 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup Label="Globals">
+    <MSBuildAllProjects Condition="'$(MSBuildVersion)' == '' Or '$(MSBuildVersion)' &lt; '16.0'">$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <ItemsProjectGuid>{7AE0AF6F-CEE5-4650-A206-E23694E7B314}</ItemsProjectGuid>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories);$(MSBuildThisFileDirectory)</AdditionalIncludeDirectories>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ProjectCapability Include="SourceItemsFromImports" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\tbbmalloc\backend.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\tbbmalloc\backref.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\tbbmalloc\frontend.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\tbbmalloc\large_objects.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\tbbmalloc\tbbmalloc.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\tbb\itt_notify.cpp" />
+  </ItemGroup>
+</Project>

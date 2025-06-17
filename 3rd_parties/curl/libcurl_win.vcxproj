@@ -10,34 +10,11 @@
       <Platform>x64</Platform>
     </ProjectConfiguration>
   </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="microhttpd\basicauth.c" />
-    <ClCompile Include="microhttpd\connection.c" />
-    <ClCompile Include="microhttpd\daemon.c" />
-    <ClCompile Include="microhttpd\digestauth.c" />
-    <ClCompile Include="microhttpd\gen_auth.c" />
-    <ClCompile Include="microhttpd\internal.c" />
-    <ClCompile Include="microhttpd\md5.c" />
-    <ClCompile Include="microhttpd\memorypool.c" />
-    <ClCompile Include="microhttpd\mhd_mono_clock.c" />
-    <ClCompile Include="microhttpd\mhd_panic.c" />
-    <ClCompile Include="microhttpd\mhd_send.c" />
-    <ClCompile Include="microhttpd\mhd_sockets.c" />
-    <ClCompile Include="microhttpd\mhd_str.c" />
-    <ClCompile Include="microhttpd\mhd_threads.c" />
-    <ClCompile Include="microhttpd\postprocessor.c" />
-    <ClCompile Include="microhttpd\reason_phrase.c" />
-    <ClCompile Include="microhttpd\response.c" />
-    <ClCompile Include="microhttpd\sha256.c" />
-    <ClCompile Include="microhttpd\sha512_256.c" />
-    <ClCompile Include="microhttpd\sysfdsetsize.c" />
-    <ClCompile Include="microhttpd\tsearch.c" />
-  </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
-    <ProjectGuid>{65455489-E6B0-4B92-A6EF-97DFD394B52B}</ProjectGuid>
-    <RootNamespace>libmicrohttpd</RootNamespace>
+    <ProjectGuid>{9BF92DF1-144D-4120-9728-DEBC803749CB}</ProjectGuid>
+    <RootNamespace>libcurl_win</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -53,6 +30,7 @@
   <ImportGroup Label="ExtensionSettings">
   </ImportGroup>
   <ImportGroup Label="Shared">
+    <Import Project="libcurl.vcxitems" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='dbg|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
@@ -65,29 +43,23 @@
     <Import Project="..\..\configuration\finCodeGen.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='dbg|x64'">
+    <TargetName>libcurl</TargetName>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='fin|x64'">
+    <TargetName>libcurl</TargetName>
+  </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='dbg|x64'">
     <ClCompile>
-      <PreprocessorDefinitions>_LIB;MHD_W32LIB;_CRT_SECURE_NO_DEPRECATE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>./;./include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <UseFullPaths>false</UseFullPaths>
-      <DisableSpecificWarnings>4127;5287</DisableSpecificWarnings>
+      <AdditionalIncludeDirectories>./;./lib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>CURL_STATICLIB;CURL_HIDDEN_SYMBOLS;HAVE_CONFIG_H;BUILDING_LIBCURL;_CRT_SECURE_NO_DEPRECATE;_CRT_NONSTDC_NO_DEPRECATE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
-    <Lib>
-      <AdditionalDependencies>Ws2_32.lib</AdditionalDependencies>
-    </Lib>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='fin|x64'">
     <ClCompile>
-      <PreprocessorDefinitions>_LIB;MHD_W32LIB;_CRT_SECURE_NO_DEPRECATE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>./;./include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <Optimization>MaxSpeed</Optimization>
-      <UseFullPaths>false</UseFullPaths>
-      <DisableSpecificWarnings>4127;5287</DisableSpecificWarnings>
+      <AdditionalIncludeDirectories>./;./lib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>CURL_STATICLIB;CURL_HIDDEN_SYMBOLS;HAVE_CONFIG_H;BUILDING_LIBCURL;_CRT_SECURE_NO_DEPRECATE;_CRT_NONSTDC_NO_DEPRECATE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
-    <Lib>
-      <AdditionalDependencies>Ws2_32.lib</AdditionalDependencies>
-    </Lib>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

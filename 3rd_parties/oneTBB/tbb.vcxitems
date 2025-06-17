@@ -1,0 +1,50 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup Label="Globals">
+    <MSBuildAllProjects Condition="'$(MSBuildVersion)' == '' Or '$(MSBuildVersion)' &lt; '16.0'">$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <ItemsProjectGuid>{A1D51C79-244E-467C-961F-1593399F3CCB}</ItemsProjectGuid>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories);$(MSBuildThisFileDirectory)</AdditionalIncludeDirectories>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ProjectCapability Include="SourceItemsFromImports" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\tbb\address_waiter.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\tbb\allocator.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\tbb\arena.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\tbb\arena_slot.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\tbb\concurrent_bounded_queue.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\tbb\dynamic_link.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\tbb\exception.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\tbb\global_control.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\tbb\governor.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\tbb\itt_notify.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\tbb\main.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\tbb\market.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\tbb\misc.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\tbb\misc_ex.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\tbb\observer_proxy.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\tbb\parallel_pipeline.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\tbb\private_server.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\tbb\profiling.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\tbb\queuing_rw_mutex.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\tbb\rml_tbb.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\tbb\rtm_mutex.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\tbb\rtm_rw_mutex.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\tbb\semaphore.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\tbb\small_object_pool.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\tbb\task.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\tbb\task_dispatcher.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\tbb\task_group_context.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\tbb\tcm_adaptor.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\tbb\threading_control.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\tbb\thread_dispatcher.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\tbb\thread_request_serializer.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\tbb\version.cpp" />
+  </ItemGroup>
+</Project>

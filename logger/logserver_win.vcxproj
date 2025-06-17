@@ -14,30 +14,42 @@
       <Platform>x64</Platform>
     </ProjectConfiguration>
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\3rd_parties\libmicrohttpd\libmicrohttpd_win.vcxproj">
+      <Project>{65455489-e6b0-4b92-a6ef-97dfd394b52b}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\core\alloc_win.vcxproj">
+      <Project>{eaeb21b7-2cd6-4ee0-9d26-f607bcd7c5d3}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\core\common_win.vcxproj">
+      <Project>{89fa56d0-3dda-4af6-8970-2dfbf76d4b47}</Project>
+    </ProjectReference>
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
-    <ProjectGuid>{CFF12A98-C588-4586-9837-683F6BA8DC0F}</ProjectGuid>
-    <RootNamespace>graphics</RootNamespace>
+    <ProjectGuid>{EE0A4F19-9788-4A04-8945-C78C8231BD49}</ProjectGuid>
+    <RootNamespace>logserver_win</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='dbg|x64'" Label="Configuration">
-    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <ConfigurationType>Application</ConfigurationType>
     <PlatformToolset>v143</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='opt|x64'" Label="Configuration">
-    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <ConfigurationType>Application</ConfigurationType>
     <PlatformToolset>v143</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='fin|x64'" Label="Configuration">
-    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <ConfigurationType>Application</ConfigurationType>
     <PlatformToolset>v143</PlatformToolset>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
   </ImportGroup>
   <ImportGroup Label="Shared">
+    <Import Project="logserver.vcxitems" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='dbg|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
@@ -47,7 +59,9 @@
     <Import Project="..\configuration\unicodeChar.props" />
     <Import Project="..\configuration\basicInclude.props" />
     <Import Project="..\configuration\libcurlInclude.props" />
-    <Import Project="..\configuration\vulkaninclude.props" />
+    <Import Project="..\configuration\CLI11Include.props" />
+    <Import Project="..\configuration\libmicrohttpdInclude.props" />
+    <Import Project="..\configuration\tbbInclude.props" />
     <Import Project="..\configuration\3rdPartyContainerInclude.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='opt|x64'">
@@ -58,7 +72,9 @@
     <Import Project="..\configuration\unicodeChar.props" />
     <Import Project="..\configuration\basicInclude.props" />
     <Import Project="..\configuration\libcurlInclude.props" />
-    <Import Project="..\configuration\vulkaninclude.props" />
+    <Import Project="..\configuration\CLI11Include.props" />
+    <Import Project="..\configuration\libmicrohttpdInclude.props" />
+    <Import Project="..\configuration\tbbInclude.props" />
     <Import Project="..\configuration\3rdPartyContainerInclude.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='fin|x64'">
@@ -69,38 +85,54 @@
     <Import Project="..\configuration\unicodeChar.props" />
     <Import Project="..\configuration\basicInclude.props" />
     <Import Project="..\configuration\libcurlInclude.props" />
-    <Import Project="..\configuration\vulkaninclude.props" />
+    <Import Project="..\configuration\CLI11Include.props" />
+    <Import Project="..\configuration\libmicrohttpdInclude.props" />
+    <Import Project="..\configuration\tbbInclude.props" />
     <Import Project="..\configuration\3rdPartyContainerInclude.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
-  <ItemGroup>
-    <ProjectReference Include="..\logger\logclient.vcxproj">
-      <Project>{5bde19c4-41a9-4c6c-847e-1c978d315aa1}</Project>
-    </ProjectReference>
-    <ProjectReference Include="common.vcxproj">
-      <Project>{89fa56d0-3dda-4af6-8970-2dfbf76d4b47}</Project>
-    </ProjectReference>
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="graphics\common.cpp" />
-    <ClCompile Include="graphics\graphics.cpp" />
-    <ClCompile Include="graphics\vulkan\config.cpp" />
-    <ClCompile Include="graphics\vulkan\engine.cpp" />
-    <ClCompile Include="graphics\vulkan\utility.cpp" />
-    <ClCompile Include="graphics\vulkan\VmaUsage.cpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="graphics\common.h" />
-    <ClInclude Include="graphics\graphics.h" />
-    <ClInclude Include="graphics\vulkan\config.h" />
-    <ClInclude Include="graphics\vulkan\engine.h" />
-    <ClInclude Include="graphics\vulkan\utility.h" />
-    <ClInclude Include="graphics\vulkan\vk_mem_alloc.h" />
-    <ClInclude Include="graphics\vulkan\VmaUsage.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="graphics\vulkan\convert.inl" />
-  </ItemGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='dbg|x64'">
+    <TargetName>logserver</TargetName>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='opt|x64'">
+    <TargetName>logserver</TargetName>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='fin|x64'">
+    <TargetName>logserver</TargetName>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='dbg|x64'">
+    <Link>
+      <SubSystem>Windows</SubSystem>
+    </Link>
+    <ClCompile>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='opt|x64'">
+    <Link>
+      <SubSystem>Windows</SubSystem>
+    </Link>
+    <ClCompile>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='fin|x64'">
+    <Link>
+      <SubSystem>Windows</SubSystem>
+    </Link>
+    <ClCompile>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+    </ClCompile>
+  </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

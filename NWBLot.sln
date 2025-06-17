@@ -3,37 +3,63 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.10.35122.118
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "loader", "loader\loader.vcxproj", "{444BDA19-1C4C-46A3-A9AC-944369FCCD6D}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "loader_win", "loader\loader_win.vcxproj", "{444BDA19-1C4C-46A3-A9AC-944369FCCD6D}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "frame", "core\frame.vcxproj", "{7BC9137C-EAA2-4FE2-B4AD-C03C173AA73B}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "frame_win", "core\frame_win.vcxproj", "{7BC9137C-EAA2-4FE2-B4AD-C03C173AA73B}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "core", "core", "{027298CC-1FD1-4E7A-AD78-8F251DB56C6E}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "core_win", "core_win", "{027298CC-1FD1-4E7A-AD78-8F251DB56C6E}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "3rd_parties", "3rd_parties", "{64BAECF7-F9F4-4DE8-B4FE-0F3123038189}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "zlib", "3rd_parties\zlib\zlib.vcxproj", "{89BEB9C3-1C95-4C71-9FC6-FEEDDC5DEBDD}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "zlib_win", "3rd_parties\zlib\zlib_win.vcxproj", "{89BEB9C3-1C95-4C71-9FC6-FEEDDC5DEBDD}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libcurl", "3rd_parties\curl\libcurl.vcxproj", "{9BF92DF1-144D-4120-9728-DEBC803749CB}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libcurl_win", "3rd_parties\curl\libcurl_win.vcxproj", "{9BF92DF1-144D-4120-9728-DEBC803749CB}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "logger", "logger", "{CFE39472-2E21-4B67-9107-BF6DB86A9606}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "logger_win", "logger_win", "{CFE39472-2E21-4B67-9107-BF6DB86A9606}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "logclient", "logger\logclient.vcxproj", "{5BDE19C4-41A9-4C6C-847E-1C978D315AA1}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "logclient_win", "logger\logclient_win.vcxproj", "{5BDE19C4-41A9-4C6C-847E-1C978D315AA1}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "logserver", "logger\logserver.vcxproj", "{EE0A4F19-9788-4A04-8945-C78C8231BD49}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "logserver_win", "logger\logserver_win.vcxproj", "{EE0A4F19-9788-4A04-8945-C78C8231BD49}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "common", "core\common.vcxproj", "{89FA56D0-3DDA-4AF6-8970-2DFBF76D4B47}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "common_win", "core\common_win.vcxproj", "{89FA56D0-3DDA-4AF6-8970-2DFBF76D4B47}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "graphics", "core\graphics.vcxproj", "{CFF12A98-C588-4586-9837-683F6BA8DC0F}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "graphics_win", "core\graphics_win.vcxproj", "{CFF12A98-C588-4586-9837-683F6BA8DC0F}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "alloc", "core\alloc.vcxproj", "{EAEB21B7-2CD6-4EE0-9D26-F607BCD7C5D3}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "alloc_win", "core\alloc_win.vcxproj", "{EAEB21B7-2CD6-4EE0-9D26-F607BCD7C5D3}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libmicrohttpd", "3rd_parties\libmicrohttpd\libmicrohttpd.vcxproj", "{65455489-E6B0-4B92-A6EF-97DFD394B52B}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libmicrohttpd_win", "3rd_parties\libmicrohttpd\libmicrohttpd_win.vcxproj", "{65455489-E6B0-4B92-A6EF-97DFD394B52B}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "tbb", "3rd_parties\oneTBB\tbb.vcxproj", "{7D934963-C0D2-4C5A-A3EF-CA1AC3FB7832}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "tbb_win", "3rd_parties\oneTBB\tbb_win.vcxproj", "{7D934963-C0D2-4C5A-A3EF-CA1AC3FB7832}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "tbbmalloc", "3rd_parties\oneTBB\tbbmalloc.vcxproj", "{96975C53-DC45-40F6-B189-3338FA76A567}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "tbbmalloc_win", "3rd_parties\oneTBB\tbbmalloc_win.vcxproj", "{96975C53-DC45-40F6-B189-3338FA76A567}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "tbbmalloc_proxy", "3rd_parties\oneTBB\tbbmalloc_proxy.vcxproj", "{9C021DAE-0CC5-45D6-A4EA-92DE0E21D600}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "tbbmalloc_proxy_win", "3rd_parties\oneTBB\tbbmalloc_proxy_win.vcxproj", "{9C021DAE-0CC5-45D6-A4EA-92DE0E21D600}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libcurl", "3rd_parties\curl\libcurl.vcxitems", "{A7178B56-71D1-4320-A79F-244F7FE29EE7}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libmicrohttpd", "3rd_parties\libmicrohttpd\libmicrohttpd.vcxitems", "{FDD30BF4-F2AE-4FBD-B63A-7ABBD5B51924}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "zlib", "3rd_parties\zlib\zlib.vcxitems", "{1ED031DA-9452-435B-B7C9-D89AEE47BCD7}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "tbb", "3rd_parties\oneTBB\tbb.vcxitems", "{A1D51C79-244E-467C-961F-1593399F3CCB}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "tbbmalloc", "3rd_parties\oneTBB\tbbmalloc.vcxitems", "{7AE0AF6F-CEE5-4650-A206-E23694E7B314}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "tbbmalloc_proxy", "3rd_parties\oneTBB\tbbmalloc_proxy.vcxitems", "{C3D76B63-19FB-469C-A56B-C6896FDA5D61}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "alloc", "core\alloc.vcxitems", "{5F6307E9-F396-45C0-826C-75C2C88EAB43}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "common", "core\common.vcxitems", "{5291CEF8-BB6B-4BD0-95DB-82FECEC16155}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "frame", "core\frame.vcxitems", "{0FA0971D-B23D-4638-8741-6D9B3AB64C98}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "graphics", "core\graphics.vcxitems", "{713BF724-160E-49F0-9984-93754300A238}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "logclient", "logger\logclient.vcxitems", "{008C5CA9-C302-476D-9522-82996B0688DE}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "logserver", "logger\logserver.vcxitems", "{55BED694-9B31-4D8A-B7DB-A9C394F6FCD0}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "loader", "loader\loader.vcxitems", "{E4255DA4-E58C-46C4-AA34-37454F0D36A3}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -137,6 +163,18 @@ Global
 		{7D934963-C0D2-4C5A-A3EF-CA1AC3FB7832} = {64BAECF7-F9F4-4DE8-B4FE-0F3123038189}
 		{96975C53-DC45-40F6-B189-3338FA76A567} = {64BAECF7-F9F4-4DE8-B4FE-0F3123038189}
 		{9C021DAE-0CC5-45D6-A4EA-92DE0E21D600} = {64BAECF7-F9F4-4DE8-B4FE-0F3123038189}
+		{A7178B56-71D1-4320-A79F-244F7FE29EE7} = {64BAECF7-F9F4-4DE8-B4FE-0F3123038189}
+		{FDD30BF4-F2AE-4FBD-B63A-7ABBD5B51924} = {64BAECF7-F9F4-4DE8-B4FE-0F3123038189}
+		{1ED031DA-9452-435B-B7C9-D89AEE47BCD7} = {64BAECF7-F9F4-4DE8-B4FE-0F3123038189}
+		{A1D51C79-244E-467C-961F-1593399F3CCB} = {64BAECF7-F9F4-4DE8-B4FE-0F3123038189}
+		{7AE0AF6F-CEE5-4650-A206-E23694E7B314} = {64BAECF7-F9F4-4DE8-B4FE-0F3123038189}
+		{C3D76B63-19FB-469C-A56B-C6896FDA5D61} = {64BAECF7-F9F4-4DE8-B4FE-0F3123038189}
+		{5F6307E9-F396-45C0-826C-75C2C88EAB43} = {027298CC-1FD1-4E7A-AD78-8F251DB56C6E}
+		{5291CEF8-BB6B-4BD0-95DB-82FECEC16155} = {027298CC-1FD1-4E7A-AD78-8F251DB56C6E}
+		{0FA0971D-B23D-4638-8741-6D9B3AB64C98} = {027298CC-1FD1-4E7A-AD78-8F251DB56C6E}
+		{713BF724-160E-49F0-9984-93754300A238} = {027298CC-1FD1-4E7A-AD78-8F251DB56C6E}
+		{008C5CA9-C302-476D-9522-82996B0688DE} = {CFE39472-2E21-4B67-9107-BF6DB86A9606}
+		{55BED694-9B31-4D8A-B7DB-A9C394F6FCD0} = {CFE39472-2E21-4B67-9107-BF6DB86A9606}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {379F8795-FF4F-4779-BCAC-25452D9B0E5D}

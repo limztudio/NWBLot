@@ -18,7 +18,7 @@
     <VCProjectVersion>17.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
     <ProjectGuid>{7BC9137C-EAA2-4FE2-B4AD-C03C173AA73B}</ProjectGuid>
-    <RootNamespace>frame</RootNamespace>
+    <RootNamespace>frame_win</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -38,6 +38,7 @@
   <ImportGroup Label="ExtensionSettings">
   </ImportGroup>
   <ImportGroup Label="Shared">
+    <Import Project="frame.vcxitems" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='dbg|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
@@ -70,6 +71,15 @@
     <Import Project="..\configuration\3rdPartyContainerInclude.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='dbg|x64'">
+    <TargetName>frame</TargetName>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='opt|x64'">
+    <TargetName>frame</TargetName>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='fin|x64'">
+    <TargetName>frame</TargetName>
+  </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='dbg|x64'">
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='opt|x64'">
@@ -77,20 +87,13 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='fin|x64'">
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="frame\frame.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="frame\frame.cpp" />
-    <ClCompile Include="frame\frame_win.cpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\logger\logclient.vcxproj">
+    <ProjectReference Include="..\logger\logclient_win.vcxproj">
       <Project>{5bde19c4-41a9-4c6c-847e-1c978d315aa1}</Project>
     </ProjectReference>
-    <ProjectReference Include="common.vcxproj">
+    <ProjectReference Include="common_win.vcxproj">
       <Project>{89fa56d0-3dda-4af6-8970-2dfbf76d4b47}</Project>
     </ProjectReference>
-    <ProjectReference Include="graphics.vcxproj">
+    <ProjectReference Include="graphics_win.vcxproj">
       <Project>{cff12a98-c588-4586-9837-683f6ba8dc0f}</Project>
     </ProjectReference>
   </ItemGroup>

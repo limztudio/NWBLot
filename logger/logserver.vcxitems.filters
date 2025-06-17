@@ -1,0 +1,24 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="$(MSBuildThisFileDirectory)server\frame.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)server\frame_win.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)server\main.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)server\server.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)server\pch.cpp">
+      <Filter>pch</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="$(MSBuildThisFileDirectory)server\frame.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)server\server.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)server\pch.h">
+      <Filter>pch</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="pch">
+      <UniqueIdentifier>{9af7502b-4cb2-491e-9765-e326844f6794}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

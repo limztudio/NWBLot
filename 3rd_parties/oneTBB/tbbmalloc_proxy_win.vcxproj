@@ -11,14 +11,10 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="src\tbbmalloc_proxy\function_replacement.cpp" />
-    <ClCompile Include="src\tbbmalloc_proxy\proxy.cpp" />
-  </ItemGroup>
-  <ItemGroup>
     <ResourceCompile Include="src\tbbmalloc_proxy\tbbmalloc_proxy.rc" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="tbbmalloc.vcxproj">
+    <ProjectReference Include="tbbmalloc_win.vcxproj">
       <Project>{96975c53-dc45-40f6-b189-3338fa76a567}</Project>
     </ProjectReference>
   </ItemGroup>
@@ -26,7 +22,7 @@
     <VCProjectVersion>17.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
     <ProjectGuid>{9C021DAE-0CC5-45D6-A4EA-92DE0E21D600}</ProjectGuid>
-    <RootNamespace>tbbmalloc_proxy</RootNamespace>
+    <RootNamespace>tbbmalloc_proxy_win</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -42,6 +38,7 @@
   <ImportGroup Label="ExtensionSettings">
   </ImportGroup>
   <ImportGroup Label="Shared">
+    <Import Project="tbbmalloc_proxy.vcxitems" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='dbg|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
@@ -55,7 +52,10 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='dbg|x64'">
-    <TargetName>$(ProjectName)_debug</TargetName>
+    <TargetName>tbbmalloc_proxy_debug</TargetName>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='fin|x64'">
+    <TargetName>tbbmalloc_proxy</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='dbg|x64'">
     <ClCompile>

@@ -5,7 +5,6 @@
   <ItemDefinitionGroup>
     <ClCompile>
       <AdditionalIncludeDirectories>$(SolutionDir)3rd_parties/oneTBB/include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <AdditionalOptions>%(AdditionalOptions) /d1trimfile:$(SolutionDir)3rd_parties/oneTBB /d1trimfile:$(SolutionDir)3rd_parties/oneTBB /volatile:iso /FS</AdditionalOptions>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemGroup />

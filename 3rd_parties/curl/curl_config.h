@@ -21,69 +21,69 @@
  * SPDX-License-Identifier: curl
  *
  ***************************************************************************/
-/* lib/curl_config.h.in. Generated somehow by cmake.  */
+ /* lib/curl_config.h.in. Generated somehow by cmake.  */
 
-/* Location of default ca bundle */
-/* #undef CURL_CA_BUNDLE */
+ /* Location of default ca bundle */
+ /* #undef CURL_CA_BUNDLE */
 
-/* define "1" to use built-in ca store of TLS backend */
-/* #undef CURL_CA_FALLBACK */
+ /* define "1" to use built-in ca store of TLS backend */
+ /* #undef CURL_CA_FALLBACK */
 
-/* Location of default ca path */
-/* #undef CURL_CA_PATH */
+ /* Location of default ca path */
+ /* #undef CURL_CA_PATH */
 
-/* Default SSL backend */
-/* #undef CURL_DEFAULT_SSL_BACKEND */
+ /* Default SSL backend */
+ /* #undef CURL_DEFAULT_SSL_BACKEND */
 
-/* disables alt-svc */
-/* #undef CURL_DISABLE_ALTSVC */
+ /* disables alt-svc */
+ /* #undef CURL_DISABLE_ALTSVC */
 
-/* disables cookies support */
-/* #undef CURL_DISABLE_COOKIES */
+ /* disables cookies support */
+ /* #undef CURL_DISABLE_COOKIES */
 
-/* disables Basic authentication */
-/* #undef CURL_DISABLE_BASIC_AUTH */
+ /* disables Basic authentication */
+ /* #undef CURL_DISABLE_BASIC_AUTH */
 
-/* disables Bearer authentication */
-/* #undef CURL_DISABLE_BEARER_AUTH */
+ /* disables Bearer authentication */
+ /* #undef CURL_DISABLE_BEARER_AUTH */
 
-/* disables Digest authentication */
-/* #undef CURL_DISABLE_DIGEST_AUTH */
+ /* disables Digest authentication */
+ /* #undef CURL_DISABLE_DIGEST_AUTH */
 
-/* disables Kerberos authentication */
-/* #undef CURL_DISABLE_KERBEROS_AUTH */
+ /* disables Kerberos authentication */
+ /* #undef CURL_DISABLE_KERBEROS_AUTH */
 
-/* disables negotiate authentication */
-/* #undef CURL_DISABLE_NEGOTIATE_AUTH */
+ /* disables negotiate authentication */
+ /* #undef CURL_DISABLE_NEGOTIATE_AUTH */
 
-/* disables AWS-SIG4 */
-/* #undef CURL_DISABLE_AWS */
+ /* disables AWS-SIG4 */
+ /* #undef CURL_DISABLE_AWS */
 
-/* disables DICT */
-/* #undef CURL_DISABLE_DICT */
+ /* disables DICT */
+ /* #undef CURL_DISABLE_DICT */
 
-/* disables DNS-over-HTTPS */
-/* #undef CURL_DISABLE_DOH */
+ /* disables DNS-over-HTTPS */
+ /* #undef CURL_DISABLE_DOH */
 
-/* disables FILE */
-/* #undef CURL_DISABLE_FILE */
+ /* disables FILE */
+ /* #undef CURL_DISABLE_FILE */
 
-/* disables form api */
-/* #undef CURL_DISABLE_FORM_API */
+ /* disables form api */
+ /* #undef CURL_DISABLE_FORM_API */
 
-/* disables FTP */
-/* #undef CURL_DISABLE_FTP */
+ /* disables FTP */
+ /* #undef CURL_DISABLE_FTP */
 
-/* disables curl_easy_options API for existing options to curl_easy_setopt */
-/* #undef CURL_DISABLE_GETOPTIONS */
+ /* disables curl_easy_options API for existing options to curl_easy_setopt */
+ /* #undef CURL_DISABLE_GETOPTIONS */
 
-/* disables GOPHER */
-/* #undef CURL_DISABLE_GOPHER */
+ /* disables GOPHER */
+ /* #undef CURL_DISABLE_GOPHER */
 
-/* disables headers-api support */
-/* #undef CURL_DISABLE_HEADERS_API */
+ /* disables headers-api support */
+ /* #undef CURL_DISABLE_HEADERS_API */
 
-/* disables HSTS support */
+ /* disables HSTS support */
 #define CURL_DISABLE_HSTS 1
 
 /* disables HTTP */
@@ -203,9 +203,9 @@
 
 /* Define to 1 if you have the clock_gettime function and raw monotonic timer.
    */
-/* #undef HAVE_CLOCK_GETTIME_MONOTONIC_RAW */
+   /* #undef HAVE_CLOCK_GETTIME_MONOTONIC_RAW */
 
-/* Define to 1 if you have the `closesocket' function. */
+   /* Define to 1 if you have the `closesocket' function. */
 #define HAVE_CLOSESOCKET 1
 
 /* Define to 1 if you have the <dirent.h> header file. */
@@ -336,9 +336,9 @@
 
 /* Define to 1 if you have a working IoctlSocket camel case FIONBIO function.
    */
-/* #undef HAVE_IOCTLSOCKET_CAMEL_FIONBIO */
+   /* #undef HAVE_IOCTLSOCKET_CAMEL_FIONBIO */
 
-/* Define to 1 if you have a working ioctlsocket FIONBIO function. */
+   /* Define to 1 if you have a working ioctlsocket FIONBIO function. */
 #define HAVE_IOCTLSOCKET_FIONBIO 1
 
 /* Define to 1 if you have a working ioctl FIONBIO function. */
@@ -651,16 +651,16 @@
 */
 
 /* The size of `int', as computed by sizeof. */
-#define SIZEOF_INT sizeof(int)
+#define SIZEOF_INT 4
 
 /* The size of `long', as computed by sizeof. */
-#define SIZEOF_LONG sizeof(long)
+#define SIZEOF_LONG 4
 
 /* The size of `long long', as computed by sizeof. */
-#define SIZEOF_LONG_LONG sizeof(long long)
+#define SIZEOF_LONG_LONG 8
 
 /* The size of `off_t', as computed by sizeof. */
-#define SIZEOF_OFF_T sizeof(std::off_t)
+#define SIZEOF_OFF_T 4
 
 /* The size of `curl_off_t', as computed by sizeof. */
 #define SIZEOF_CURL_OFF_T 8
@@ -669,10 +669,10 @@
 #define SIZEOF_CURL_SOCKET_T 8
 
 /* The size of `size_t', as computed by sizeof. */
-#define SIZEOF_SIZE_T sizeof(std::size_t)
+#define SIZEOF_SIZE_T 8
 
 /* The size of `time_t', as computed by sizeof. */
-#define SIZEOF_TIME_T sizeof(std::time_t)
+#define SIZEOF_TIME_T 8
 
 /* Define to 1 if you have the ANSI C header files. */
 #define STDC_HEADERS 1
@@ -742,30 +742,30 @@
 
 /* Define to 1 if you do not want the OpenSSL configuration to be loaded
    automatically */
-/* #undef CURL_DISABLE_OPENSSL_AUTO_LOAD_CONFIG */
+   /* #undef CURL_DISABLE_OPENSSL_AUTO_LOAD_CONFIG */
 
-/* to enable NGHTTP2  */
-/* #undef USE_NGHTTP2 */
+   /* to enable NGHTTP2  */
+   /* #undef USE_NGHTTP2 */
 
-/* to enable NGTCP2 */
-/* #undef USE_NGTCP2 */
+   /* to enable NGTCP2 */
+   /* #undef USE_NGTCP2 */
 
-/* to enable NGHTTP3  */
-/* #undef USE_NGHTTP3 */
+   /* to enable NGHTTP3  */
+   /* #undef USE_NGHTTP3 */
 
-/* to enable quiche */
-/* #undef USE_QUICHE */
+   /* to enable quiche */
+   /* #undef USE_QUICHE */
 
-/* to enable openssl + nghttp3 */
-/* #undef USE_OPENSSL_QUIC */
+   /* to enable openssl + nghttp3 */
+   /* #undef USE_OPENSSL_QUIC */
 
-/* Define to 1 if you have the quiche_conn_set_qlog_fd function. */
-/* #undef HAVE_QUICHE_CONN_SET_QLOG_FD */
+   /* Define to 1 if you have the quiche_conn_set_qlog_fd function. */
+   /* #undef HAVE_QUICHE_CONN_SET_QLOG_FD */
 
-/* to enable msh3 */
-/* #undef USE_MSH3 */
+   /* to enable msh3 */
+   /* #undef USE_MSH3 */
 
-/* if Unix domain sockets are enabled  */
+   /* if Unix domain sockets are enabled  */
 #define USE_UNIX_SOCKETS 1
 
 /* Define to 1 if you are building a Windows target with large file support. */

@@ -651,16 +651,16 @@
 */
 
 /* The size of `int', as computed by sizeof. */
-#define SIZEOF_INT 4
+#define SIZEOF_INT sizeof(int)
 
 /* The size of `long', as computed by sizeof. */
-#define SIZEOF_LONG 4
+#define SIZEOF_LONG sizeof(long)
 
 /* The size of `long long', as computed by sizeof. */
-#define SIZEOF_LONG_LONG 8
+#define SIZEOF_LONG_LONG sizeof(long long)
 
 /* The size of `off_t', as computed by sizeof. */
-#define SIZEOF_OFF_T 4
+#define SIZEOF_OFF_T sizeof(std::off_t)
 
 /* The size of `curl_off_t', as computed by sizeof. */
 #define SIZEOF_CURL_OFF_T 8
@@ -669,10 +669,10 @@
 #define SIZEOF_CURL_SOCKET_T 8
 
 /* The size of `size_t', as computed by sizeof. */
-#define SIZEOF_SIZE_T 8
+#define SIZEOF_SIZE_T sizeof(std::size_t)
 
 /* The size of `time_t', as computed by sizeof. */
-#define SIZEOF_TIME_T 8
+#define SIZEOF_TIME_T sizeof(std::time_t)
 
 /* Define to 1 if you have the ANSI C header files. */
 #define STDC_HEADERS 1

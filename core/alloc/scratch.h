@@ -30,9 +30,10 @@ private:
     class Chunk{
     public:
         inline Chunk(usize align, usize size)
-            : m_remaining(Alignment(align, size))
+            : m_size(Alignment(align, size))
+            , m_remaining(m_size)
             , m_next(nullptr)
-            , m_buffer(CoreAllocAligned(m_remaining, align, "NWB::Core::Alloc::ScratchArena::Chunk::constructor"))
+            , m_buffer(CoreAllocAligned(m_size, align, "NWB::Core::Alloc::ScratchArena::Chunk::constructor"))
             , m_available(m_buffer)
         {}
         ~Chunk(){
@@ -47,9 +48,19 @@ private:
 
         inline void* allocate(usize size){
             auto* ret = m_available;
-            m_available = reinterpret_cast<u8*>(m_available) + size;
+            m_available = reinterpret_cast<u8*>(m_available) + static_cast<isize>(size);
             m_remaining -= size;
             return ret;
+        }
+        inline bool deallocate(usize size){
+            const bool isValidRequest = (m_remaining + size) <= m_size;
+            NWB_ASSERT(isValidRequest);
+            if(!isValidRequest)
+                return false;
+
+            m_available = reinterpret_cast<u8*>(m_available) - static_cast<isize>(size);
+            m_remaining += size;
+            return true;
         }
 
         inline void add(Chunk* next){
@@ -58,6 +69,7 @@ private:
 
 
     private:
+        const usize m_size;
         usize m_remaining;
         Chunk* m_next;
 
@@ -127,6 +139,28 @@ public:
         return output;
     }
 
+    inline void deallocate(usize align, usize size){
+        auto& bucket = m_bucket[FloorLog2(align)];
+        NWB_ASSERT_MSG(bucket.last != nullptr, NWB_TEXT("Attempted to deallocate before allocating"));
+
+        size = Alignment(align, size);
+        bucket.last->deallocate(size);
+    }
+    template <typename T>
+    inline void deallocate(usize count){
+        static_assert(sizeof(T) > 0, "value_type must be complete before calling allocate.");
+        const usize bytes = SizeOf<sizeof(T)>(count);
+
+        if(bytes){
+            if(IsConstantEvaluated())
+                deallocate(1, bytes);
+            else{
+                constexpr usize alignSize = alignof(T);
+                deallocate(alignSize, bytes);
+            }
+        }
+    }
+
 
 private:
     ChunkWrapper m_bucket[FloorLog2(maxAlignSize) + 1];
@@ -139,9 +173,9 @@ private:
 template <typename T, usize maxAlignSize = s_maxAlignSize>
 class ScratchAllocator{
 public:
-    static_assert(IsConst_V<T>, "The C++ Standard forbids containers of const elements because allocator<const T> is ill-formed.");
-    static_assert(!IsFunction_V<T>, "The C++ Standard forbids allocators for function elements because of [allocator.requirements].");
-    static_assert(!IsReference_V<T>, "The C++ Standard forbids allocators for reference elements because of [allocator.requirements].");
+    static_assert(IsConst_V<T>, "NWB::Core::Alloc::ScratchAllocator forbids containers of const elements because allocator<const T> is ill-formed.");
+    static_assert(!IsFunction_V<T>, "NWB::Core::Alloc::ScratchAllocator forbids allocators for function elements because of [allocator.requirements].");
+    static_assert(!IsReference_V<T>, "NWB::Core::Alloc::ScratchAllocator forbids allocators for reference elements because of [allocator.requirements].");
 
 
 public:
@@ -197,21 +231,36 @@ NWB_ALLOC_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+template <typename T, usize maxAlignSize = NWB::Core::Alloc::s_maxAlignSize>
+using ScratchUniquePtr = UniquePtr<T, ArenaDeleter<T, NWB::Core::Alloc::ScratchArena<maxAlignSize>>>;
 template <typename T>
-using ScratchUniquePtr = UniquePtr<T, EmptyDeleter<T>>;
+using StackonlyUniquePtr = UniquePtr<T, EmptyDeleter<T>>;
 
 template <typename T, usize maxAlignSize = NWB::Core::Alloc::s_maxAlignSize, typename... Args>
-inline typename EnableIf<!IsArray<T>::value, ScratchUniquePtr<T>>::type makeScratchUnique(NWB::Core::Alloc::ScratchArena<maxAlignSize>& arena, Args&&... args){
-    return ScratchUniquePtr<T>(new(arena.allocate<T>(1)) T(Forward<Args>(args)...));
+inline typename EnableIf<!IsArray<T>::value, ScratchUniquePtr<T, maxAlignSize>>::type makeScratchUnique(NWB::Core::Alloc::ScratchArena<maxAlignSize>& arena, Args&&... args){
+    return ScratchUniquePtr<T, maxAlignSize>(new(arena.allocate<T>(1)) T(Forward<Args>(args)...), ScratchUniquePtr<T, maxAlignSize>::deleter_type(arena));
 }
 template <typename T, usize maxAlignSize = NWB::Core::Alloc::s_maxAlignSize>
-inline typename EnableIf<IsUnboundedArray<T>::value, ScratchUniquePtr<T>>::type makeScratchUnique(NWB::Core::Alloc::ScratchArena<maxAlignSize>& arena, size_t n){
+inline typename EnableIf<IsUnboundedArray<T>::value, ScratchUniquePtr<T, maxAlignSize>>::type makeScratchUnique(NWB::Core::Alloc::ScratchArena<maxAlignSize>& arena, size_t n){
     typedef typename RemoveExtent<T>::type TBase;
-    return ScratchUniquePtr<T>(new(arena.allocate<TBase>(n)) TBase[n]);
+    return ScratchUniquePtr<T, maxAlignSize>(new(arena.allocate<TBase>(n)) TBase[n], ScratchUniquePtr<T, maxAlignSize>::deleter_type(arena, n));
 }
 template <typename T, typename... Args>
 typename EnableIf<IsBoundedArray<T>::value>::type
 makeScratchUnique(Args&&...) = delete;
+
+template <typename T, usize maxAlignSize = NWB::Core::Alloc::s_maxAlignSize, typename... Args>
+inline typename EnableIf<!IsArray<T>::value, StackonlyUniquePtr<T>>::type makeStackonlyUnique(NWB::Core::Alloc::ScratchArena<maxAlignSize>& arena, Args&&... args){
+    return StackonlyUniquePtr<T>(new(arena.allocate<T>(1)) T(Forward<Args>(args)...));
+}
+template <typename T, usize maxAlignSize = NWB::Core::Alloc::s_maxAlignSize>
+inline typename EnableIf<IsUnboundedArray<T>::value, StackonlyUniquePtr<T>>::type makeStackonlyUnique(NWB::Core::Alloc::ScratchArena<maxAlignSize>& arena, size_t n){
+    typedef typename RemoveExtent<T>::type TBase;
+    return StackonlyUniquePtr<T>(new(arena.allocate<TBase>(n)) TBase[n]);
+}
+template <typename T, typename... Args>
+typename EnableIf<IsBoundedArray<T>::value>::type
+makeStackonlyUnique(Args&&...) = delete;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

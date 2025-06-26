@@ -46,6 +46,7 @@ VulkanEngine::VulkanEngine(Graphics* parent)
     , m_timestampFrequency(0)
     , m_uboAlignment(256)
     , m_ssboAlignment(256)
+    , m_supportBindless(false)
 #if defined(VULKAN_VALIDATE)
     , m_debugUtilsExtensionPresents(false)
     , m_debugMessenger(VK_NULL_HANDLE, __hidden_vulkan::VkDebugUtilsMessengerDeleter(&m_allocCallbacks, &m_inst))
@@ -204,7 +205,7 @@ bool VulkanEngine::init(const Common::FrameData& data){
 
     u32 physDevCount = 0;
     ScratchUniquePtr<VkPhysicalDevice[]> physDevs;
-    {
+    { // choose physical device
         err = vkEnumeratePhysicalDevices(m_inst.get(), reinterpret_cast<uint32_t*>(&physDevCount), nullptr);
         if(err != VK_SUCCESS){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to get physical devices: {}"), StringConvert(VulkanResultString(err)));
@@ -314,8 +315,14 @@ bool VulkanEngine::init(const Common::FrameData& data){
             queueInfo[0].pQueuePriorities = s_queuePriorities;
         }
 
-        VkPhysicalDeviceFeatures2 physDevFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
+        VkPhysicalDeviceDescriptorIndexingFeatures indexingFeatures{
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES,
+            nullptr
+        };
+        VkPhysicalDeviceFeatures2 physDevFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2, &indexingFeatures };
         vkGetPhysicalDeviceFeatures2(m_physDev.get(), &physDevFeatures);
+
+        m_supportBindless = indexingFeatures.descriptorBindingPartiallyBound && indexingFeatures.runtimeDescriptorArray;
 
         VkDeviceCreateInfo deviceInfo{ VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO };
         {

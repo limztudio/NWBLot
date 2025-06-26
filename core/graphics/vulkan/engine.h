@@ -236,6 +236,8 @@ private:
     u64 m_uboAlignment;
     u64 m_ssboAlignment;
 
+    bool m_supportBindless;
+
 private:
 #if defined(VULKAN_VALIDATE)
     bool m_debugUtilsExtensionPresents;

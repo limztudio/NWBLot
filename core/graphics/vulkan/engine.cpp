@@ -38,6 +38,7 @@ VulkanEngine::VulkanEngine(Graphics* parent)
     , m_logiDev(VK_NULL_HANDLE, __hidden_vulkan::VkLogicalDeviceDeleter(&m_allocCallbacks))
     , m_queue(VK_NULL_HANDLE, __hidden_vulkan::VkQueueRefDeleter())
     , m_queueFamilly(0)
+    , m_bindlessDescriptorSet(VK_NULL_HANDLE)
     , m_winSurf(VK_NULL_HANDLE, __hidden_vulkan::VkSurfaceDeleter(&m_allocCallbacks, &m_inst))
     , m_winSurfFormat(VK_FORMAT_UNDEFINED)
     , m_presentMode(VK_PRESENT_MODE_FIFO_KHR)
@@ -60,6 +61,11 @@ VulkanEngine::VulkanEngine(Graphics* parent)
         m_swapchainImageViews[i] = __hidden_vulkan::VkImageViewPtr(VK_NULL_HANDLE, __hidden_vulkan::VkImageViewDeleter(&m_allocCallbacks, &m_logiDev));
         m_swapchainFrameBuffers[i] = __hidden_vulkan::VkFramebufferPtr(VK_NULL_HANDLE, __hidden_vulkan::VkFramebufferDeleter(&m_allocCallbacks, &m_logiDev));
     }
+
+    m_descriptorPool = __hidden_vulkan::VkDescriptorPoolPtr(nullptr, __hidden_vulkan::VkDescriptorPoolDeleter(&m_allocCallbacks, &m_logiDev));
+
+    m_bindlessDescriptorPool = __hidden_vulkan::VkDescriptorPoolPtr(nullptr, __hidden_vulkan::VkDescriptorPoolDeleter(&m_allocCallbacks, &m_logiDev));
+    m_bindlessDescriptorSetLayout = __hidden_vulkan::VkDescriptorSetLayoutPtr(nullptr, __hidden_vulkan::VkDescriptorSetLayoutDeleter(&m_allocCallbacks, &m_logiDev));
 }
 VulkanEngine::~VulkanEngine(){ destroy(); }
 
@@ -333,6 +339,13 @@ bool VulkanEngine::init(const Common::FrameData& data){
             deviceInfo.pNext = &physDevFeatures;
         }
 
+        if(m_supportBindless){
+            indexingFeatures.descriptorBindingPartiallyBound = VK_TRUE;
+            indexingFeatures.runtimeDescriptorArray = VK_TRUE;
+
+            physDevFeatures.pNext = &indexingFeatures;
+        }
+
         VkDevice object = VK_NULL_HANDLE;
         err = vkCreateDevice(m_physDev.get(), &deviceInfo, m_allocCallbacks, &object);
         if(err != VK_SUCCESS){
@@ -411,7 +424,7 @@ bool VulkanEngine::init(const Common::FrameData& data){
     { // create swapchain
         updatePresentMode(m_parent.m_presentMode);
 
-        if(!CreateSwapchain())
+        if(!createSwapchain())
             return false;
     }
 
@@ -432,6 +445,123 @@ bool VulkanEngine::init(const Common::FrameData& data){
         m_allocator.reset(object);
     }
 
+    { // Create descriptor pool
+        VkDescriptorPoolCreateInfo createInfo{ VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };
+        {
+            createInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+            createInfo.maxSets = static_cast<decltype(createInfo.maxSets)>(s_maxGlobalPoolElement * LengthOf(s_globalPoolSizes));
+            createInfo.poolSizeCount = static_cast<decltype(createInfo.poolSizeCount)>(LengthOf(s_globalPoolSizes));
+            createInfo.pPoolSizes = s_globalPoolSizes;
+        }
+
+        VkDescriptorPool object = VK_NULL_HANDLE;
+        err = vkCreateDescriptorPool(m_logiDev.get(), &createInfo, m_allocCallbacks, &object);
+        if(err != VK_SUCCESS){
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to create descriptor pool: {}"), StringConvert(VulkanResultString(err)));
+            return false;
+        }
+        m_descriptorPool.reset(object);
+    }
+
+    if(m_supportBindless){
+        const u32 poolCount = static_cast<decltype(poolCount)>(LengthOf(s_bindlessSizes));
+
+        {
+            VkDescriptorPoolCreateInfo createInfo{ VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };
+            {
+                createInfo.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT_EXT;
+                createInfo.maxSets = static_cast<decltype(createInfo.maxSets)>(s_maxBindlessRes * poolCount);
+                createInfo.poolSizeCount = static_cast<decltype(createInfo.poolSizeCount)>(poolCount);
+                createInfo.pPoolSizes = s_bindlessSizes;
+            }
+
+            VkDescriptorPool object = VK_NULL_HANDLE;
+            err = vkCreateDescriptorPool(m_logiDev.get(), &createInfo, m_allocCallbacks, &object);
+            if(err != VK_SUCCESS){
+                NWB_LOGGER_ERROR(NWB_TEXT("Failed to create bindless descriptor pool: {}"), StringConvert(VulkanResultString(err)));
+                return false;
+            }
+            m_bindlessDescriptorPool.reset(object);
+        }
+
+        {
+            VkDescriptorSetLayoutBinding bindings[s_numBinding];
+
+            VkDescriptorSetLayoutBinding& bindSampler = bindings[0];
+            {
+                bindSampler.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
+                bindSampler.descriptorCount = s_maxBindlessRes;
+                bindSampler.binding = s_maxBindlessTex;
+                bindSampler.stageFlags = VK_SHADER_STAGE_ALL;
+                bindSampler.pImmutableSamplers = nullptr;
+            }
+
+            VkDescriptorSetLayoutBinding& bindImage = bindings[1];
+            {
+                bindImage.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+                bindImage.descriptorCount = s_maxBindlessRes;
+                bindImage.binding = s_maxBindlessTex + 1;
+                bindImage.stageFlags = VK_SHADER_STAGE_ALL;
+                bindImage.pImmutableSamplers = nullptr;
+            }
+
+            VkDescriptorSetLayoutCreateInfo createInfo{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
+            {
+                createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT_EXT;
+                createInfo.bindingCount = static_cast<decltype(createInfo.bindingCount)>(poolCount);
+                createInfo.pBindings = bindings;
+            }
+
+            VkDescriptorBindingFlags bindngFlags[s_numBinding];
+            {
+                bindngFlags[0] = s_flagBindless;
+                bindngFlags[1] = s_flagBindless;
+            }
+
+            VkDescriptorSetLayoutBindingFlagsCreateInfoEXT extendedInfo{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO_EXT, nullptr };
+            {
+                extendedInfo.bindingCount = static_cast<decltype(extendedInfo.bindingCount)>(poolCount);
+                extendedInfo.pBindingFlags = bindngFlags;
+
+                createInfo.pNext = &extendedInfo;
+            }
+
+            VkDescriptorSetLayout object = VK_NULL_HANDLE;
+            err = vkCreateDescriptorSetLayout(m_logiDev.get(), &createInfo, m_allocCallbacks, &object);
+            if(err != VK_SUCCESS){
+                NWB_LOGGER_ERROR(NWB_TEXT("Failed to create bindless descriptor set layout: {}"), StringConvert(VulkanResultString(err)));
+                return false;
+            }
+            m_bindlessDescriptorSetLayout.reset(object);
+        }
+
+        {
+            uint32_t maxBinding = static_cast<decltype(maxBinding)>(s_maxBindlessRes - 1);
+            auto* bindlessDescriptorSetLayout = m_bindlessDescriptorSetLayout.get();
+
+            VkDescriptorSetAllocateInfo allocInfo{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO };
+            {
+                allocInfo.descriptorPool = m_bindlessDescriptorPool.get();
+                allocInfo.descriptorSetCount = 1;
+                allocInfo.pSetLayouts = &bindlessDescriptorSetLayout;
+            }
+
+            VkDescriptorSetVariableDescriptorCountAllocateInfoEXT extendedInfo{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO_EXT };
+            {
+                extendedInfo.descriptorSetCount = 1;
+                extendedInfo.pDescriptorCounts = &maxBinding;
+
+                //allocInfo.pNext = &extendedInfo;
+            }
+
+            err = vkAllocateDescriptorSets(m_logiDev.get(), &allocInfo, &m_bindlessDescriptorSet);
+            if(err != VK_SUCCESS){
+                NWB_LOGGER_ERROR(NWB_TEXT("Failed to allocate bindless descriptor set: {}"), StringConvert(VulkanResultString(err)));
+                return false;
+            }
+        }
+    }
+
     return true;
 }
 void VulkanEngine::destroy(){
@@ -446,6 +576,11 @@ void VulkanEngine::destroy(){
 #if defined(VULKAN_VALIDATE)
     m_debugMessenger.reset();
 #endif
+
+    m_bindlessDescriptorPool.reset();
+    m_bindlessDescriptorSetLayout.reset();
+
+    m_descriptorPool.reset();
 
     m_queue.reset();
     m_logiDev.reset();

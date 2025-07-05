@@ -33,7 +33,7 @@ namespace __hidden_vulkan{
     struct VkInstanceDeleter{
         constexpr VkInstanceDeleter()noexcept = default;
         constexpr VkInstanceDeleter(VkAllocationCallbacks** _callback)noexcept : callback(_callback){}
-        void operator()(VkInstance p)const noexcept{ vkDestroyInstance(p, *callback); }
+        void operator()(VkInstance p)const noexcept{ vkDestroyInstance(p, callback ? *callback : nullptr); }
         VkAllocationCallbacks** callback = nullptr;
     };
     using VkInstancePtr = UniquePtr<VkInstance_T, VkInstanceDeleter>;
@@ -47,7 +47,7 @@ namespace __hidden_vulkan{
     struct VkLogicalDeviceDeleter{
         constexpr VkLogicalDeviceDeleter()noexcept = default;
         constexpr VkLogicalDeviceDeleter(VkAllocationCallbacks** _callback)noexcept : callback(_callback){}
-        void operator()(VkDevice p)const noexcept{ vkDestroyDevice(p, *callback); }
+        void operator()(VkDevice p)const noexcept{ vkDestroyDevice(p, callback ? *callback : nullptr); }
         VkAllocationCallbacks** callback = nullptr;
     };
     using VkLogicalDevicePtr = UniquePtr<VkDevice_T, VkLogicalDeviceDeleter>;
@@ -61,7 +61,7 @@ namespace __hidden_vulkan{
     struct VkSurfaceDeleter{
         constexpr VkSurfaceDeleter()noexcept = default;
         constexpr VkSurfaceDeleter(VkAllocationCallbacks** _callback, VkInstancePtr* _inst)noexcept : callback(_callback), inst(_inst){}
-        void operator()(VkSurfaceKHR p)const noexcept{ vkDestroySurfaceKHR(inst->get(), p, *callback); }
+        void operator()(VkSurfaceKHR p)const noexcept{ vkDestroySurfaceKHR(inst->get(), p, callback ? *callback : nullptr); }
         VkAllocationCallbacks** callback = nullptr;
         VkInstancePtr* inst = nullptr;
     };
@@ -70,7 +70,7 @@ namespace __hidden_vulkan{
     struct VkSwapchainDeleter{
         constexpr VkSwapchainDeleter()noexcept = default;
         constexpr VkSwapchainDeleter(VkAllocationCallbacks** _callback, VkLogicalDevicePtr* _logiDev)noexcept : callback(_callback), logiDev(_logiDev){}
-        void operator()(VkSwapchainKHR p)const noexcept{ vkDestroySwapchainKHR(logiDev->get(), p, *callback); }
+        void operator()(VkSwapchainKHR p)const noexcept{ vkDestroySwapchainKHR(logiDev->get(), p, callback ? *callback : nullptr); }
         VkAllocationCallbacks** callback = nullptr;
         VkLogicalDevicePtr* logiDev = nullptr;
     };
@@ -85,7 +85,7 @@ namespace __hidden_vulkan{
     struct VkImageViewDeleter{
         constexpr VkImageViewDeleter()noexcept = default;
         constexpr VkImageViewDeleter(VkAllocationCallbacks** _callback, VkLogicalDevicePtr* _logiDev)noexcept : callback(_callback), logiDev(_logiDev){}
-        void operator()(VkImageView p)const noexcept{ vkDestroyImageView(logiDev->get(), p, *callback); }
+        void operator()(VkImageView p)const noexcept{ vkDestroyImageView(logiDev->get(), p, callback ? *callback : nullptr); }
         VkAllocationCallbacks** callback = nullptr;
         VkLogicalDevicePtr* logiDev = nullptr;
     };
@@ -94,11 +94,29 @@ namespace __hidden_vulkan{
     struct VkFramebufferDeleter{
         constexpr VkFramebufferDeleter()noexcept = default;
         constexpr VkFramebufferDeleter(VkAllocationCallbacks** _callback, VkLogicalDevicePtr* _logiDev)noexcept : callback(_callback), logiDev(_logiDev){}
-        void operator()(VkFramebuffer p)const noexcept{ vkDestroyFramebuffer(logiDev->get(), p, *callback); }
+        void operator()(VkFramebuffer p)const noexcept{ vkDestroyFramebuffer(logiDev->get(), p, callback ? *callback : nullptr); }
         VkAllocationCallbacks** callback = nullptr;
         VkLogicalDevicePtr* logiDev = nullptr;
     };
     using VkFramebufferPtr = UniquePtr<VkFramebuffer_T, VkFramebufferDeleter>;
+
+    struct VkDescriptorPoolDeleter{
+        constexpr VkDescriptorPoolDeleter()noexcept = default;
+        constexpr VkDescriptorPoolDeleter(VkAllocationCallbacks** _callback, VkLogicalDevicePtr* _logiDev)noexcept : callback(_callback), logiDev(_logiDev){}
+        void operator()(VkDescriptorPool p)const noexcept{ vkDestroyDescriptorPool(logiDev->get(), p, callback ? *callback : nullptr); }
+        VkAllocationCallbacks** callback = nullptr;
+        VkLogicalDevicePtr* logiDev = nullptr;
+    };
+    using VkDescriptorPoolPtr = UniquePtr<VkDescriptorPool_T, VkDescriptorPoolDeleter>;
+
+    struct VkDescriptorSetLayoutDeleter{
+        constexpr VkDescriptorSetLayoutDeleter()noexcept = default;
+        constexpr VkDescriptorSetLayoutDeleter(VkAllocationCallbacks** _callback, VkLogicalDevicePtr* _logiDev)noexcept : callback(_callback), logiDev(_logiDev){}
+        void operator()(VkDescriptorSetLayout p)const noexcept{ vkDestroyDescriptorSetLayout(logiDev->get(), p, callback ? *callback : nullptr); }
+        VkAllocationCallbacks** callback = nullptr;
+        VkLogicalDevicePtr* logiDev = nullptr;
+    };
+    using VkDescriptorSetLayoutPtr = UniquePtr<VkDescriptorSetLayout_T, VkDescriptorSetLayoutDeleter>;
 
 #if defined(VULKAN_VALIDATE)
     struct VkDebugUtilsMessengerDeleter{
@@ -107,7 +125,7 @@ namespace __hidden_vulkan{
         void operator()(VkDebugUtilsMessengerEXT p)const noexcept{
             auto* vkDestroyDebugUtilsMessengerEXT = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(inst->get(), "vkDestroyDebugUtilsMessengerEXT"));
             if(vkDestroyDebugUtilsMessengerEXT)
-                vkDestroyDebugUtilsMessengerEXT(inst->get(), p, *callback);
+                vkDestroyDebugUtilsMessengerEXT(inst->get(), p, callback ? *callback : nullptr);
             else
                 NWB_LOGGER_WARNING(NWB_TEXT("Failed to get vkDestroyDebugUtilsMessengerEXT function pointer"));
         }
@@ -161,6 +179,33 @@ private:
         VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
     };
 
+    static constexpr const u32 s_maxGlobalPoolElement = 128;
+    static constexpr const VkDescriptorPoolSize s_globalPoolSizes[] = {
+        { VK_DESCRIPTOR_TYPE_SAMPLER, s_maxGlobalPoolElement },
+        { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, s_maxGlobalPoolElement },
+        { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, s_maxGlobalPoolElement },
+        { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, s_maxGlobalPoolElement },
+        { VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, s_maxGlobalPoolElement },
+        { VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, s_maxGlobalPoolElement },
+        { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, s_maxGlobalPoolElement },
+        { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, s_maxGlobalPoolElement },
+        { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, s_maxGlobalPoolElement },
+        { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, s_maxGlobalPoolElement },
+        { VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, s_maxGlobalPoolElement }
+    };
+
+    static constexpr const u32 s_maxBindlessRes = 1024;
+    static constexpr const u32 s_maxBindlessTex = 10;
+    static constexpr const VkDescriptorPoolSize s_bindlessSizes[] = {
+        { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, s_maxBindlessRes }, // isn't this suppossed be VK_DESCRIPTOR_TYPE_SAMPLER?
+        { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, s_maxBindlessRes },
+    };
+    static constexpr const u32 s_numBinding = 4;
+    static constexpr const VkDescriptorBindingFlags s_flagBindless = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT_EXT
+        //| VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT_EXT
+        | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT_EXT
+        ;
+
 
 public:
     VulkanEngine(Graphics* parent);
@@ -175,7 +220,7 @@ public:
 private:
     void updatePresentMode(PresentMode mode);
 
-    inline bool CreateSwapchain(){
+    inline bool createSwapchain(){
         VkSwapchainKHR swapchain = VK_NULL_HANDLE;
         VkImage swapchainImages[s_maxSwapchainImages] = { VK_NULL_HANDLE };
         VkImageView swapchainImagesViews[s_maxSwapchainImages] = { VK_NULL_HANDLE };
@@ -211,15 +256,14 @@ private:
     VkAllocationCallbacks* m_allocCallbacks;
 
 private:
-    __hidden_vulkan::VkInstancePtr m_inst;
-
-    __hidden_vulkan::VkPhysicalDeviceRef m_physDev;
-    VkPhysicalDeviceProperties m_physDevProps;
-
-    __hidden_vulkan::VkLogicalDevicePtr m_logiDev;
-
     __hidden_vulkan::VkQueueRef m_queue;
     u32 m_queueFamilly;
+
+    __hidden_vulkan::VkDescriptorPoolPtr m_descriptorPool;
+
+    __hidden_vulkan::VkDescriptorSetLayoutPtr m_bindlessDescriptorSetLayout;
+    VkDescriptorSet m_bindlessDescriptorSet;
+    __hidden_vulkan::VkDescriptorPoolPtr m_bindlessDescriptorPool;
 
     __hidden_vulkan::VkImageRef m_swapchainImages[s_maxSwapchainImages];
     __hidden_vulkan::VkImageViewPtr m_swapchainImageViews[s_maxSwapchainImages];
@@ -229,6 +273,13 @@ private:
     VkSurfaceFormatKHR m_winSurfFormat;
     VkPresentModeKHR m_presentMode;
     __hidden_vulkan::VkSwapchainPtr m_swapchain;
+
+    __hidden_vulkan::VkLogicalDevicePtr m_logiDev;
+
+    __hidden_vulkan::VkPhysicalDeviceRef m_physDev;
+    VkPhysicalDeviceProperties m_physDevProps;
+
+    __hidden_vulkan::VkInstancePtr m_inst;
 
     __hidden_vulkan::VmaAllocatorPtr m_allocator;
 

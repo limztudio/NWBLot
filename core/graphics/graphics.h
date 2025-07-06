@@ -7,6 +7,8 @@
 
 #include "common.h"
 
+#include <core/alloc/alloc.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -26,6 +28,11 @@ class VulkanEngine;
 class Graphics{
     friend VulkanEngine;
 
+
+public:
+    static constexpr const u32 s_maxDynamicAllocSize = 64 * 1024 * 1024;
+
+
 public:
     Graphics();
     ~Graphics();
@@ -35,6 +42,9 @@ public:
     bool init(const Common::FrameData& data);
     void destroy();
 
+
+private:
+    Alloc::MemoryArena m_memArena;
 
 private:
     RenderPassOutput m_swapchainOutput;

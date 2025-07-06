@@ -22,7 +22,7 @@ NWB_ALLOC_BEGIN
 
 class MemoryArena : NoCopy{
 public:
-    MemoryArena(usize maxSize = 1024)
+    MemoryArena(usize maxSize)
         : m_bucket(CoreAlloc(maxSize, "NWB::Core::Alloc::MemoryArena::constructor"))
         , m_maxSize(maxSize)
         , m_handle(tlsf_create_with_pool(m_bucket, m_maxSize))

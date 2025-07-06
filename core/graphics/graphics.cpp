@@ -19,7 +19,8 @@ NWB_CORE_BEGIN
 
 
 Graphics::Graphics()
-    : m_swapchainWidth(0)
+    : m_memArena(s_maxDynamicAllocSize)
+    , m_swapchainWidth(0)
     , m_swapchainHeight(0)
     , m_swapchainImageCount(0)
     , m_presentMode(PresentMode::VSync)

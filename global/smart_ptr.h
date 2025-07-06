@@ -85,7 +85,7 @@ struct ArenaDeleter{
     void operator()(T* p)const noexcept{
         static_assert(IsCompleteType_V<T>, "Attempting to call the destructor of an incomplete type");
         p->~T();
-        mPool->template deallocate<T>(1);
+        mPool->template deallocate<T>(p, 1);
     }
 
     POOL* mPool = nullptr;
@@ -100,7 +100,7 @@ struct ArenaDeleter<T[], POOL>{
     void operator()(T* p)const noexcept{
         for(usize i = 0; i < mSize; ++i)
             p[i].~T();
-        mPool->template deallocate<T>(mSize);
+        mPool->template deallocate<T>(p, mSize);
     }
 
     POOL* mPool = nullptr;

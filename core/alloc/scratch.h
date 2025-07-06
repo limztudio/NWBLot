@@ -139,7 +139,9 @@ public:
         return output;
     }
 
-    inline void deallocate(usize align, usize size){
+    inline void deallocate(void* p, usize align, usize size){
+        (void)p;
+
         auto& bucket = m_bucket[FloorLog2(align)];
         NWB_ASSERT_MSG(bucket.last != nullptr, NWB_TEXT("Attempted to deallocate before allocating"));
 
@@ -147,16 +149,16 @@ public:
         bucket.last->deallocate(size);
     }
     template <typename T>
-    inline void deallocate(usize count){
+    inline void deallocate(void* p, usize count){
         static_assert(sizeof(T) > 0, "value_type must be complete before calling allocate.");
         const usize bytes = SizeOf<sizeof(T)>(count);
 
         if(bytes){
             if(IsConstantEvaluated())
-                deallocate(1, bytes);
+                deallocate(p, 1, bytes);
             else{
                 constexpr usize alignSize = alignof(T);
-                deallocate(alignSize, bytes);
+                deallocate(p, alignSize, bytes);
             }
         }
     }

@@ -118,6 +118,15 @@ namespace __hidden_vulkan{
     };
     using VkDescriptorSetLayoutPtr = UniquePtr<VkDescriptorSetLayout_T, VkDescriptorSetLayoutDeleter>;
 
+    struct VkQueryPoolDeleter{
+        constexpr VkQueryPoolDeleter()noexcept = default;
+        constexpr VkQueryPoolDeleter(VkAllocationCallbacks** _callback, VkLogicalDevicePtr* _logiDev)noexcept : callback(_callback), logiDev(_logiDev){}
+        void operator()(VkQueryPool p)const noexcept{ vkDestroyQueryPool(logiDev->get(), p, callback ? *callback : nullptr); }
+        VkAllocationCallbacks** callback = nullptr;
+        VkLogicalDevicePtr* logiDev = nullptr;
+    };
+    using VkQueryPoolPtr = UniquePtr<VkQueryPool_T, VkQueryPoolDeleter>;
+
 #if defined(VULKAN_VALIDATE)
     struct VkDebugUtilsMessengerDeleter{
         constexpr VkDebugUtilsMessengerDeleter()noexcept = default;
@@ -206,6 +215,9 @@ private:
         | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT_EXT
         ;
 
+    static constexpr const u32 s_maxFrame = 3;
+    static constexpr const u32 s_timeQueryPerFrame = 32;
+
 
 public:
     VulkanEngine(Graphics* parent);
@@ -256,6 +268,13 @@ private:
     VkAllocationCallbacks* m_allocCallbacks;
 
 private:
+    __hidden_vulkan::VkInstancePtr m_inst;
+
+    __hidden_vulkan::VkPhysicalDeviceRef m_physDev;
+    VkPhysicalDeviceProperties m_physDevProps;
+
+    __hidden_vulkan::VkLogicalDevicePtr m_logiDev;
+
     __hidden_vulkan::VkQueueRef m_queue;
     u32 m_queueFamilly;
 
@@ -265,6 +284,8 @@ private:
     VkDescriptorSet m_bindlessDescriptorSet;
     __hidden_vulkan::VkDescriptorPoolPtr m_bindlessDescriptorPool;
 
+    __hidden_vulkan::VkQueryPoolPtr m_timestampQueryPool;
+
     __hidden_vulkan::VkImageRef m_swapchainImages[s_maxSwapchainImages];
     __hidden_vulkan::VkImageViewPtr m_swapchainImageViews[s_maxSwapchainImages];
     __hidden_vulkan::VkFramebufferPtr m_swapchainFrameBuffers[s_maxSwapchainImages];
@@ -273,13 +294,6 @@ private:
     VkSurfaceFormatKHR m_winSurfFormat;
     VkPresentModeKHR m_presentMode;
     __hidden_vulkan::VkSwapchainPtr m_swapchain;
-
-    __hidden_vulkan::VkLogicalDevicePtr m_logiDev;
-
-    __hidden_vulkan::VkPhysicalDeviceRef m_physDev;
-    VkPhysicalDeviceProperties m_physDevProps;
-
-    __hidden_vulkan::VkInstancePtr m_inst;
 
     __hidden_vulkan::VmaAllocatorPtr m_allocator;
 

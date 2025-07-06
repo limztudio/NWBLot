@@ -38,7 +38,11 @@ VulkanEngine::VulkanEngine(Graphics* parent)
     , m_logiDev(VK_NULL_HANDLE, __hidden_vulkan::VkLogicalDeviceDeleter(&m_allocCallbacks))
     , m_queue(VK_NULL_HANDLE, __hidden_vulkan::VkQueueRefDeleter())
     , m_queueFamilly(0)
+    , m_descriptorPool(__hidden_vulkan::VkDescriptorPoolPtr(nullptr, __hidden_vulkan::VkDescriptorPoolDeleter(&m_allocCallbacks, &m_logiDev)))
+    , m_bindlessDescriptorSetLayout(__hidden_vulkan::VkDescriptorSetLayoutPtr(nullptr, __hidden_vulkan::VkDescriptorSetLayoutDeleter(&m_allocCallbacks, &m_logiDev)))
     , m_bindlessDescriptorSet(VK_NULL_HANDLE)
+    , m_bindlessDescriptorPool(__hidden_vulkan::VkDescriptorPoolPtr(nullptr, __hidden_vulkan::VkDescriptorPoolDeleter(&m_allocCallbacks, &m_logiDev)))
+    , m_timestampQueryPool(__hidden_vulkan::VkQueryPoolPtr(nullptr, __hidden_vulkan::VkQueryPoolDeleter(&m_allocCallbacks, &m_logiDev)))
     , m_winSurf(VK_NULL_HANDLE, __hidden_vulkan::VkSurfaceDeleter(&m_allocCallbacks, &m_inst))
     , m_winSurfFormat(VK_FORMAT_UNDEFINED)
     , m_presentMode(VK_PRESENT_MODE_FIFO_KHR)
@@ -61,11 +65,6 @@ VulkanEngine::VulkanEngine(Graphics* parent)
         m_swapchainImageViews[i] = __hidden_vulkan::VkImageViewPtr(VK_NULL_HANDLE, __hidden_vulkan::VkImageViewDeleter(&m_allocCallbacks, &m_logiDev));
         m_swapchainFrameBuffers[i] = __hidden_vulkan::VkFramebufferPtr(VK_NULL_HANDLE, __hidden_vulkan::VkFramebufferDeleter(&m_allocCallbacks, &m_logiDev));
     }
-
-    m_descriptorPool = __hidden_vulkan::VkDescriptorPoolPtr(nullptr, __hidden_vulkan::VkDescriptorPoolDeleter(&m_allocCallbacks, &m_logiDev));
-
-    m_bindlessDescriptorPool = __hidden_vulkan::VkDescriptorPoolPtr(nullptr, __hidden_vulkan::VkDescriptorPoolDeleter(&m_allocCallbacks, &m_logiDev));
-    m_bindlessDescriptorSetLayout = __hidden_vulkan::VkDescriptorSetLayoutPtr(nullptr, __hidden_vulkan::VkDescriptorSetLayoutDeleter(&m_allocCallbacks, &m_logiDev));
 }
 VulkanEngine::~VulkanEngine(){ destroy(); }
 
@@ -518,7 +517,7 @@ bool VulkanEngine::init(const Common::FrameData& data){
                 bindngFlags[1] = s_flagBindless;
             }
 
-            VkDescriptorSetLayoutBindingFlagsCreateInfoEXT extendedInfo{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO_EXT, nullptr };
+            VkDescriptorSetLayoutBindingFlagsCreateInfoEXT extendedInfo{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO_EXT };
             {
                 extendedInfo.bindingCount = static_cast<decltype(extendedInfo.bindingCount)>(poolCount);
                 extendedInfo.pBindingFlags = bindngFlags;
@@ -562,6 +561,25 @@ bool VulkanEngine::init(const Common::FrameData& data){
         }
     }
 
+    { // create timestamp query pool
+        VkQueryPoolCreateInfo createInfo{ VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO };
+        {
+            createInfo.queryType = VK_QUERY_TYPE_TIMESTAMP;
+            createInfo.flags = 0;
+            createInfo.queryCount = s_timeQueryPerFrame * 2 * s_maxFrame;
+            createInfo.pipelineStatistics = 0;
+            createInfo.pNext = nullptr;
+        }
+
+        VkQueryPool object = VK_NULL_HANDLE;
+        err = vkCreateQueryPool(m_logiDev.get(), &createInfo, m_allocCallbacks, &object);
+        if(err != VK_SUCCESS){
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to create timestamp query pool: {}"), StringConvert(VulkanResultString(err)));
+            return false;
+        }
+        m_timestampQueryPool.reset(object);
+    }
+
     return true;
 }
 void VulkanEngine::destroy(){
@@ -581,6 +599,8 @@ void VulkanEngine::destroy(){
     m_bindlessDescriptorSetLayout.reset();
 
     m_descriptorPool.reset();
+
+    m_timestampQueryPool.reset();
 
     m_queue.reset();
     m_logiDev.reset();

@@ -77,6 +77,7 @@
 #define NWB_MEMCMP(lhs, rhs, size) memcmp(lhs, rhs, size)
 #define NWB_STRCMP(lhs, rhs) strcmp(lhs, rhs)
 #define NWB_WSTRCMP(lhs, rhs) wcscmp(lhs, rhs)
+#define NWB_MEMSET(dest, value, size) memset(dest, value, size)
 #if defined(_MSC_VER)
 #define NWB_STRNLEN(src, count) strnlen_s(src, count)
 #define NWB_WSTRNLEN(src, count) wcsnlen_s(src, count)

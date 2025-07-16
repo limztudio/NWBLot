@@ -49,9 +49,7 @@ public:
 
 
 public:
-    void init(u32 poolSize){
-        m_poolSize = poolSize;
-
+    void init(){
         m_data = reinterpret_cast<T*>(m_dataAllocator.allocate(m_poolSize));
         m_freeList = reinterpret_cast<u32*>(m_indexAllocator.allocate(m_poolSize));
 
@@ -62,7 +60,10 @@ public:
             m_freeList[i] = i;
         m_usedCount = 0;
     }
-    void init(){ return init(m_poolSize); }
+    void init(u32 poolSize){
+        m_poolSize = poolSize;
+        init();
+    }
 
     void cleanup(){
         if(!m_data)

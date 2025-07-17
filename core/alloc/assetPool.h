@@ -18,11 +18,58 @@ NWB_ALLOC_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class AssetHandle{
+    template <typename T, template <typename> typename Allocator>
+    friend class AssetPool;
+
+    friend bool operator==(const AssetHandle&, const AssetHandle&)noexcept;
+    friend bool operator!=(const AssetHandle&, const AssetHandle&)noexcept;
+
+
+private:
+    static constexpr const u32 s_invalidHandle = static_cast<u32>(-1);
+
+
+public:
+    AssetHandle()noexcept : m_value(s_invalidHandle){}
+    AssetHandle(u32 value)noexcept : m_value(value){}
+
+    AssetHandle(const AssetHandle& rhs)noexcept : m_value(rhs.m_value){}
+    AssetHandle(AssetHandle&& rhs)noexcept : m_value(rhs.m_value){ rhs.m_value = s_invalidHandle; }
+
+    ~AssetHandle(){ m_value = s_invalidHandle; }
+
+
+public:
+    AssetHandle& operator=(const AssetHandle& rhs)noexcept{
+        if(this != &rhs)
+            m_value = rhs.m_value;
+        return *this;
+    }
+    AssetHandle& operator=(AssetHandle&& rhs)noexcept{
+        if(this != &rhs){
+            m_value = rhs.m_value;
+            rhs.m_value = s_invalidHandle;
+        }
+        return *this;
+    }
+
+public:
+    operator bool()const noexcept{ return m_value != s_invalidHandle; }
+    bool isValid()const noexcept{ return m_value != s_invalidHandle; }
+
+
+private:
+    u32 m_value;
+};
+inline bool operator==(const AssetHandle& lhs, const AssetHandle& rhs)noexcept{ return lhs.m_value == rhs.m_value; }
+inline bool operator!=(const AssetHandle& lhs, const AssetHandle& rhs)noexcept{ return lhs.m_value != rhs.m_value; }
+
+
 template <typename T, template <typename> typename Allocator>
 class AssetPool{
 private:
     static constexpr const u32 s_defaultPoolSize = 16;
-    static constexpr const u32 s_invalidHandle = static_cast<u32>(-1);
 
 
 public:
@@ -51,13 +98,13 @@ public:
 public:
     void init(){
         m_data = reinterpret_cast<T*>(m_dataAllocator.allocate(m_poolSize));
-        m_freeList = reinterpret_cast<u32*>(m_indexAllocator.allocate(m_poolSize));
+        m_freeList = reinterpret_cast<AssetHandle*>(m_indexAllocator.allocate(m_poolSize));
 
         NWB_MEMSET(m_data, 0, m_poolSize * sizeof(T));
         m_freeListHead = 0;
 
         for(u32 i = 0; i < m_poolSize; ++i)
-            m_freeList[i] = i;
+            m_freeList[i].m_value = i;
         m_usedCount = 0;
     }
     void init(u32 poolSize){
@@ -70,20 +117,22 @@ public:
             return;
 
         if(m_freeListHead != 0){
-            TStringStream ss;
             {
-                ss << m_freeList[0];
-            }
-            for(u32 i = 1; i < m_freeListHead; ++i){
-                ss << NWB_TEXT(", ") << m_freeList[i];
-            }
+                TStringStream ss;
+                {
+                    ss << m_freeList[0].m_value;
+                }
+                for(u32 i = 1; i < m_freeListHead; ++i){
+                    ss << NWB_TEXT(", ") << m_freeList[i].m_value;
+                }
 
-            NWB_LOGGER_ERROR(NWB_TEXT("Resource pool is not empty after cleanup. {} resources are still in use: {}"), m_freeListHead, ss.str());
+                NWB_LOGGER_ERROR(NWB_TEXT("Resource pool is not empty after cleanup. {} resources are still in use: {}"), m_freeListHead, ss.str());
+            }
 
             for(u32 i = 0; i < m_freeListHead; ++i){
-                u32 handle = m_freeList[i];
+                const auto handleValue = m_freeList[i].m_value;
 
-                m_data[handle].~T();
+                m_data[handleValue].~T();
             }
         }
         NWB_ASSERT(m_freeListHead == 0);
@@ -103,55 +152,55 @@ public:
         m_usedCount = 0;
 
         for(u32 i = 0; i < m_freeListHead; ++i){
-            u32 handle = m_freeList[i];
+            const auto handleValue = m_freeList[i].m_value;
 
-            m_data[handle].~T();
+            m_data[handleValue].~T();
         }
 
         for(u32 i = 0; i < m_poolSize; ++i)
-            m_freeList[i] = i;
+            m_freeList[i].m_value = i;
     }
-    void release(u32 handle){
-        NWB_ASSERT(handle != s_invalidHandle);
+    void release(AssetHandle handle){
+        NWB_ASSERT(handle.isValid());
         NWB_ASSERT(m_freeListHead > 0);
         NWB_ASSERT(m_usedCount > 0);
 
-        m_data[handle].~T();
+        m_data[handle.m_value].~T();
 
         m_freeList[--m_freeListHead] = handle;
         --m_usedCount;
     }
 
-    u32 assign(){
+    AssetHandle assign(){
+        AssetHandle handle;
+
         if(m_freeListHead < m_poolSize){
-            const u32 handle = m_freeList[m_freeListHead++];
+            handle = m_freeList[m_freeListHead++];
             ++m_usedCount;
 
-            new (&m_data[handle]) T();
-            return handle;
+            new (&m_data[handle.m_value]) T();
         }
-
         NWB_ASSERT(m_freeListHead < m_poolSize);
-        return s_invalidHandle;
+        return handle;
     }
 
-    T& operator[](u32 handle){
-        NWB_ASSERT(handle != s_invalidHandle);
-        return m_data[handle];
+    T& operator[](AssetHandle handle){
+        NWB_ASSERT(handle.isValid());
+        return m_data[handle.m_value];
     }
-    const T& operator[](u32 handle)const{
-        NWB_ASSERT(handle != s_invalidHandle);
-        return m_data[handle];
+    const T& operator[](AssetHandle handle)const{
+        NWB_ASSERT(handle.isValid());
+        return m_data[handle.m_value];
     }
 
 
 private:
     Allocator<T> m_dataAllocator;
-    Allocator<u32> m_indexAllocator;
+    Allocator<AssetHandle> m_indexAllocator;
 
 private:
     T* m_data;
-    u32* m_freeList;
+    AssetHandle* m_freeList;
 
 private:
     u32 m_freeListHead;

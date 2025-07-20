@@ -44,7 +44,7 @@ VulkanEngine::VulkanEngine(Graphics* parent)
     , m_bindlessDescriptorPool(__hidden_vulkan::VkDescriptorPoolPtr(nullptr, __hidden_vulkan::VkDescriptorPoolDeleter(&m_allocCallbacks, &m_logiDev)))
     , m_timestampQueryPool(__hidden_vulkan::VkQueryPoolPtr(nullptr, __hidden_vulkan::VkQueryPoolDeleter(&m_allocCallbacks, &m_logiDev)))
     , m_winSurf(VK_NULL_HANDLE, __hidden_vulkan::VkSurfaceDeleter(&m_allocCallbacks, &m_inst))
-    , m_winSurfFormat(VK_FORMAT_UNDEFINED)
+    , m_winSurfFormat{ VK_FORMAT_UNDEFINED, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR }
     , m_presentMode(VK_PRESENT_MODE_FIFO_KHR)
     , m_swapchain(VK_NULL_HANDLE, __hidden_vulkan::VkSwapchainDeleter(&m_allocCallbacks, &m_logiDev))
     , m_allocator(VK_NULL_HANDLE, __hidden_vulkan::VmaAllocatorDeleter())
@@ -235,7 +235,7 @@ bool VulkanEngine::init(const Common::FrameData& data){
     }
 
     { // choose physical device
-        auto famillyQueue = [this, &tmpArena](VkPhysicalDevice physDev, u32& queueFamily){
+        auto familyQueue = [this, &tmpArena](VkPhysicalDevice physDev, u32& queueFamily){
             u32 queueFamilyCount = 0;
             ScratchUniquePtr<VkQueueFamilyProperties[]> queueFamilies;
 
@@ -264,9 +264,9 @@ bool VulkanEngine::init(const Common::FrameData& data){
         };
 
         VkPhysicalDevice discreteGPU = VK_NULL_HANDLE;
-        u32 discreteQueueFamilly = 0;
+        u32 discreteQueueFamily = 0;
         VkPhysicalDevice integratedGPU = VK_NULL_HANDLE;
-        u32 integratedQueueFamilly = 0;
+        u32 integratedQueueFamily = 0;
 
         for(auto i = decltype(physDevCount){ 0 }; i < physDevCount; ++i){
             VkPhysicalDeviceProperties props;
@@ -274,16 +274,16 @@ bool VulkanEngine::init(const Common::FrameData& data){
 
             u32 queueFamily = 0;
             if(props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU){
-                if(famillyQueue(physDevs[i], queueFamily)){
+                if(familyQueue(physDevs[i], queueFamily)){
                     discreteGPU = physDevs[i];
-                    discreteQueueFamilly = queueFamily;
+                    discreteQueueFamily = queueFamily;
                     break;
                 }
             }
             else if(props.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU){
-                if(famillyQueue(physDevs[i], queueFamily)){
+                if(familyQueue(physDevs[i], queueFamily)){
                     integratedGPU = physDevs[i];
-                    integratedQueueFamilly = queueFamily;
+                    integratedQueueFamily = queueFamily;
                     break;
                 }
             }
@@ -291,11 +291,11 @@ bool VulkanEngine::init(const Common::FrameData& data){
 
         if(discreteGPU != VK_NULL_HANDLE){
             m_physDev.reset(discreteGPU);
-            m_queueFamilly = discreteQueueFamilly;
+            m_queueFamilly = discreteQueueFamily;
         }
         else if(integratedGPU != VK_NULL_HANDLE){
             m_physDev.reset(integratedGPU);
-            m_queueFamilly = integratedQueueFamilly;
+            m_queueFamilly = integratedQueueFamily;
         }
         else{
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to find suitable physical device"));
@@ -463,7 +463,7 @@ bool VulkanEngine::init(const Common::FrameData& data){
     }
 
     if(m_supportBindless){
-        const u32 poolCount = static_cast<decltype(poolCount)>(LengthOf(s_bindlessSizes));
+        constexpr u32 poolCount = static_cast<decltype(poolCount)>(LengthOf(s_bindlessSizes));
 
         {
             VkDescriptorPoolCreateInfo createInfo{ VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };

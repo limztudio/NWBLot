@@ -26,6 +26,8 @@
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\graphics.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\config.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\engine.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\primitiveAssets.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\resources.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\utility.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\vk_mem_alloc.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\VmaUsage.h" />

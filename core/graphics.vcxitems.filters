@@ -34,6 +34,12 @@
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\config.h">
       <Filter>vulkan</Filter>
     </ClInclude>
+    <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\primitiveAssets.h">
+      <Filter>vulkan</Filter>
+    </ClInclude>
+    <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\resources.h">
+      <Filter>vulkan</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="vulkan">

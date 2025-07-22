@@ -7,6 +7,8 @@
 #include "../common.h"
 #include "config.h"
 
+#include <core/alloc/assetPool.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -277,6 +279,38 @@ namespace RenderPassOperation{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct Rect2D{
+    f32 x = 0;
+    f32 y = 0;
+    f32 width = 0;
+    f32 height = 0;
+};
+
+struct Rect2DInt{
+    i16 x = 0;
+    i16 y = 0;
+    u16 width = 0;
+    u16 height = 0;
+};
+
+struct Viewport{
+    Rect2DInt rect;
+    f32 minDepth = 0;
+    f32 maxDepth = 0;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct ViewportState{
+    u32 numViewports = 0;
+    u32 numScissors = 0;
+
+    Viewport* viewports = nullptr;
+    Rect2DInt* scissors = nullptr;
+};
+
 struct StencilOperationState{
     VkStencilOp failOp = VK_STENCIL_OP_KEEP;
     VkStencilOp passOp = VK_STENCIL_OP_KEEP;
@@ -286,6 +320,27 @@ struct StencilOperationState{
     u32 compareMask = 0xff;
     u32 writeMask = 0xff;
     u32 reference = 0xff;
+};
+
+struct DepthStencilState{
+    StencilOperationState front;
+    StencilOperationState back;
+    VkCompareOp depthComarison = VK_COMPARE_OP_ALWAYS;
+
+    u8 depthEnabled : 1;
+    u8 depthWriteEnabled : 1;
+    u8 stencilEnabled : 1;
+    u8 reserved : 5;
+
+
+    DepthStencilState() : depthEnabled(0), depthWriteEnabled(0), stencilEnabled(0) {}
+
+    DepthStencilState& setDepth(bool write, VkCompareOp comparisonTest){
+        depthWriteEnabled = write ? 1 : 0;
+        depthComarison = comparisonTest;
+        depthEnabled = 1;
+        return *this;
+    }
 };
 
 struct BlendState{
@@ -305,6 +360,49 @@ struct BlendState{
 
 
     BlendState() : blendEnabled(0), separateBlend(0) {}
+
+    BlendState& setColor(VkBlendFactor src, VkBlendFactor dst, VkBlendOp op){
+        srcColorFactor = src;
+        dstColorFactor = dst;
+        colorOp = op;
+        blendEnabled = 1;
+        return *this;
+    }
+    BlendState& setAlpha(VkBlendFactor src, VkBlendFactor dst, VkBlendOp op){
+        srcAlphaFactor = src;
+        dstAlphaFactor = dst;
+        alphaOp = op;
+        blendEnabled = 1;
+        return *this;
+    }
+    BlendState& setColorWriteMask(ColorWrite::Mask mask){
+        colorWriteMask = mask;
+        return *this;
+    }
+};
+
+struct ShaderStage{
+    const char* code = nullptr;
+    u32 codeSize = 0;
+    VkShaderStageFlagBits type = VK_SHADER_STAGE_FLAG_BITS_MAX_ENUM;
+};
+
+struct DescriptorSetUpdate{
+    AssetHandle descriptorSet;
+    u32 frameIssued = 0;
+};
+
+struct VertexAttribute{
+    u16 location = 0;
+    u16 binding = 0;
+    u32 offset = 0;
+    VertexComponentType::Enum format = VertexComponentType::kCount;
+};
+
+struct VertexStream{
+    u16 binding = 0;
+    u16 stride = 0;
+    VertexInputRate::Enum inputRate = VertexInputRate::kCount;
 };
 
 

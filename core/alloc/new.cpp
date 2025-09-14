@@ -38,16 +38,7 @@ static inline void* InternalOperatorNew(std::size_t sz, const char* log){
     void* res = NWB::Core::Alloc::CoreAlloc(static_cast<usize>(sz), log);
 #if TBB_USE_EXCEPTIONS
     while(!res){
-        std::new_handler handler;
-#if __TBB_CPP11_GET_NEW_HANDLER_PRESENT
-        handler = std::get_new_handler();
-#else
-        {
-            ProxyMutex::scoped_lock lock(new_lock);
-            handler = std::set_new_handler(0);
-            std::set_new_handler(handler);
-        }
-#endif
+        std::new_handler handler = std::get_new_handler();
         if(handler)
             (*handler)();
         else
@@ -62,16 +53,7 @@ static inline void* InternalOperatorNew(std::size_t sz, std::size_t align, const
     void* res = NWB::Core::Alloc::CoreAllocAligned(static_cast<usize>(sz), static_cast<usize>(align), log);
 #if TBB_USE_EXCEPTIONS
     while(!res){
-        std::new_handler handler;
-#if __TBB_CPP11_GET_NEW_HANDLER_PRESENT
-        handler = std::get_new_handler();
-#else
-        {
-            ProxyMutex::scoped_lock lock(new_lock);
-            handler = std::set_new_handler(0);
-            std::set_new_handler(handler);
-        }
-#endif
+        std::new_handler handler = std::get_new_handler();
         if(handler)
             (*handler)();
         else
@@ -113,8 +95,8 @@ void operator delete[](void* p, std::align_val_t, const std::nothrow_t&)noexcept
 
 void* operator new(std::size_t n, std::align_val_t al)noexcept(false){ return InternalOperatorNew(n, static_cast<size_t>(al), "new(std::size_t, std::align_val_t)"); }
 void* operator new[](std::size_t n, std::align_val_t al)noexcept(false){ return InternalOperatorNew(n, static_cast<size_t>(al), "new[](std::size_t, std::align_val_t)"); }
-void* operator new(std::size_t n, std::align_val_t al, const std::nothrow_t&)noexcept{ return NWB::Core::Alloc::CoreAllocAligned(static_cast<usize>(n), static_cast<usize>(al), "new(std::size_t, std::align_val_t, const std::nothrow_t&)"); }
-void* operator new[](std::size_t n, std::align_val_t al, const std::nothrow_t&)noexcept{ return NWB::Core::Alloc::CoreAllocAligned(static_cast<usize>(n), static_cast<usize>(al), "new[](std::size_t, std::align_val_t, const std::nothrow_t&)");
+void* operator new(std::size_t n, std::align_val_t al, std::nothrow_t const&)noexcept{ return NWB::Core::Alloc::CoreAllocAligned(static_cast<usize>(n), static_cast<usize>(al), "new(std::size_t, std::align_val_t, const std::nothrow_t&)"); }
+void* operator new[](std::size_t n, std::align_val_t al, std::nothrow_t const&)noexcept{ return NWB::Core::Alloc::CoreAllocAligned(static_cast<usize>(n), static_cast<usize>(al), "new[](std::size_t, std::align_val_t, const std::nothrow_t&)");
 }
 #endif
 

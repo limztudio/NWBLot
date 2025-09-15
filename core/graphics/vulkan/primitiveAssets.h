@@ -23,6 +23,7 @@ NWB_CORE_BEGIN
 
 
 constexpr u8 s_maxShaderStages = 5;
+constexpr u8 s_maxDescriptorSetLayouts = 8;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -39,8 +40,8 @@ struct Buffer{
     u32 size = 0;
     u32 globalOffset = 0;
 
-    Alloc::AssetHandle handle;
-    Alloc::AssetHandle presentHandle;
+    Alloc::AssetHandle<Buffer> handle;
+    Alloc::AssetHandle<Buffer> presentHandle;
 
     const char* name = nullptr;
 };
@@ -74,7 +75,7 @@ struct Texture{
     u8 mipLevels = 1;
     u8 flags = 0;
 
-    Alloc::AssetHandle handle;
+    Alloc::AssetHandle<Texture> handle;
     TextureType::Enum type = TextureType::TEX2D;
 
     Sampler* sampler = nullptr;
@@ -113,15 +114,15 @@ struct DescriptorSetLayout{
     u16 numBindings = 0;
     u16 setIndex = 0;
 
-    Alloc::AssetHandle handle;
+    Alloc::AssetHandle<DescriptorSetLayout> handle;
 };
 
 
 struct DescriptorSet{
     VkDescriptorSet descSet;
     
-    Alloc::AssetHandle* resources = nullptr;
-    Alloc::AssetHandle* samplers = nullptr;
+    Alloc::AssetHandleAny* resources = nullptr;
+    Alloc::AssetHandle<Sampler>* samplers = nullptr;
     u16* bindings = nullptr;
 
     const DescriptorSetLayout* layout = nullptr;
@@ -135,9 +136,13 @@ struct Pipeline{
 
     VkPipelineBindPoint bindPoint;
 
-    Alloc::AssetHandle shaderState;
+    Alloc::AssetHandle<ShaderState> shaderState;
 
+    const DescriptorSetLayout* descriptorSet[s_maxDescriptorSetLayouts];
+    Alloc::AssetHandle<DescriptorSetLayout> descriptorSetLayoutHandle[s_maxDescriptorSetLayouts];
+    u32 numActiveLayouts = 0;
 
+    
 };
 
 

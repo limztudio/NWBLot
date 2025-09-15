@@ -393,8 +393,10 @@ struct ShaderStage{
     VkShaderStageFlagBits type = VK_SHADER_STAGE_FLAG_BITS_MAX_ENUM;
 };
 
+struct DescriptorSet; // just phantom
+
 struct DescriptorSetUpdate{
-    Alloc::AssetHandle descriptorSet;
+    Alloc::AssetHandle<DescriptorSet> descriptorSet;
     u32 frameIssued = 0;
 };
 

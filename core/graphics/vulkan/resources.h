@@ -19,6 +19,12 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr u8 s_maxImageOutputs = 8;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace ColorWrite{
     enum Enum : u8{
         R,
@@ -44,6 +50,30 @@ namespace CullMode{
         NONE,
         FRONT,
         BACK,
+
+        kCount
+    };
+};
+
+namespace DepthWrite{
+    enum Enum : u8{
+        ZERO,
+        ALL,
+
+        kCount
+    };
+
+    enum Mask : u8{
+        MASK_ZERO = 0x1,
+        MASK_ALL = 0x2,
+    };
+};
+
+namespace FillMode{
+    enum Enum : u8{
+        WIREFRAME,
+        SOLID,
+        POINT,
 
         kCount
     };
@@ -207,10 +237,6 @@ namespace CommandType{
     };
 };
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 namespace TextureFlag{
     enum Enum : u8{
         DEFAULT,
@@ -328,27 +354,6 @@ struct StencilOperationState{
     u32 reference = 0xff;
 };
 
-struct DepthStencilState{
-    StencilOperationState front;
-    StencilOperationState back;
-    VkCompareOp depthComarison = VK_COMPARE_OP_ALWAYS;
-
-    u8 depthEnabled : 1;
-    u8 depthWriteEnabled : 1;
-    u8 stencilEnabled : 1;
-    u8 reserved : 5;
-
-
-    DepthStencilState() : depthEnabled(0), depthWriteEnabled(0), stencilEnabled(0) {}
-
-    DepthStencilState& setDepth(bool write, VkCompareOp comparisonTest){
-        depthWriteEnabled = write ? 1 : 0;
-        depthComarison = comparisonTest;
-        depthEnabled = 1;
-        return *this;
-    }
-};
-
 struct BlendState{
     VkBlendFactor srcColorFactor = VK_BLEND_FACTOR_ONE;
     VkBlendFactor dstColorFactor = VK_BLEND_FACTOR_ZERO;
@@ -411,6 +416,56 @@ struct VertexStream{
     u16 binding = 0;
     u16 stride = 0;
     VertexInputRate::Enum inputRate = VertexInputRate::kCount;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct DepthStencilStateCreation{
+    StencilOperationState front;
+    StencilOperationState back;
+    VkCompareOp depthComarison = VK_COMPARE_OP_ALWAYS;
+
+    u8 depthEnabled : 1;
+    u8 depthWriteEnabled : 1;
+    u8 stencilEnabled : 1;
+    u8 reserved : 5;
+
+
+    DepthStencilStateCreation() : depthEnabled(0), depthWriteEnabled(0), stencilEnabled(0) {}
+
+    DepthStencilStateCreation& setDepth(bool write, VkCompareOp comparisonTest){
+        depthWriteEnabled = write ? 1 : 0;
+        depthComarison = comparisonTest;
+        depthEnabled = 1;
+        return *this;
+    }
+};
+
+struct BlendStateCreation{
+    BlendState blendStates[s_maxImageOutputs];
+    u32 activeStates = 0;
+
+
+    BlendStateCreation& reset(){
+        activeStates = 0;
+        return *this;
+    }
+    BlendState& addBlendState(){
+        NWB_ASSERT(activeStates < LengthOf(blendStates));
+        return blendStates[activeStates++];
+    }
+};
+
+struct RasterizationCreation{
+    VkCullModeFlagBits cullMode = VK_CULL_MODE_NONE;
+    VkFrontFace front = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    FillMode::Enum fill = FillMode::SOLID;
+};
+
+struct BufferCreation{
+
 };
 
 

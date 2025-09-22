@@ -68,10 +68,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#define NWB_COUT std::cout
-#define NWB_WCOUT std::wcout
-#define NWB_CERR std::cerr
-#define NWB_WCERR std::wcerr
+#define NWB_COUT ::std::cout
+#define NWB_WCOUT ::std::wcout
+#define NWB_CERR ::std::cerr
+#define NWB_WCERR ::std::wcerr
 #define NWB_STRLEN(src) strlen(src)
 #define NWB_WSTRLEN(src) wcslen(src)
 #define NWB_MEMCMP(lhs, rhs, size) memcmp(lhs, rhs, size)

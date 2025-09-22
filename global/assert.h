@@ -21,15 +21,15 @@
 {                                                                                                              \
     if(!(condition)){                                                                                          \
         NWB_TCERR << NWB_TEXT("ASSERT ") << NWB_TEXT(__FILE__) << NWB_TEXT(":") << __LINE__ << NWB_TEXT("\n"); \
-        std::abort();                                                                                          \
+        ::std::abort();                                                                                          \
     }                                                                                                          \
 }
 #define NWB_ASSERT_MSG(condition, ...)                                                                                                  \
 {                                                                                                                                       \
     if(!(condition)){                                                                                                                   \
-        const auto msg = std::format(__VA_ARGS__);                                                                                      \
+        const auto msg = ::std::format(__VA_ARGS__);                                                                                      \
         NWB_TCERR << NWB_TEXT("ASSERT ") << NWB_TEXT(__FILE__) << NWB_TEXT(":") << __LINE__ << NWB_TEXT("\n") << msg << NWB_TEXT("\n"); \
-        std::abort();                                                                                                                   \
+        ::std::abort();                                                                                                                   \
     }                                                                                                                                   \
 }
 #else

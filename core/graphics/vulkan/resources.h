@@ -20,6 +20,8 @@ NWB_CORE_BEGIN
 
 
 constexpr u8 s_maxImageOutputs = 8;
+constexpr u8 s_maxShaderStages = 5;
+constexpr u8 s_maxDescriptorsPerSet = 16;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -465,7 +467,186 @@ struct RasterizationCreation{
 };
 
 struct BufferCreation{
+    VkBufferUsageFlags flags = 0;
+    ResourceUsageType::Enum usage = ResourceUsageType::IMMUTABLE;
+    u32 size = 0;
+    void* initialData = nullptr;
 
+    const char* name = nullptr;
+
+
+    BufferCreation& reset(){
+        size = 0;
+        initialData = nullptr;
+        return *this;
+    }
+    BufferCreation& set(VkBufferUsageFlags _flags, ResourceUsageType::Enum _usage, u32 _size){
+        flags = _flags;
+        usage = _usage;
+        size = _size;
+        return *this;
+    }
+    BufferCreation& setData(void* data){
+        initialData = data;
+        return *this;
+    }
+    BufferCreation& setName(const char* _name){
+        name = _name;
+        return *this;
+};
+
+struct TextureCreation{
+    void* initialData = nullptr;
+    u16 width = 1;
+    u16 height = 1;
+    u16 depth = 1;
+    u8 mipmaps = 1;
+    u8 flags = 0; // TextureFlags bitmasks
+
+    VkFormat format = VK_FORMAT_UNDEFINED;
+    TextureType::Enum type = TextureType::TEX2D;
+
+    const char* name = nullptr;
+
+
+    TextureCreation& setSize(u16 _width, u16 _height, u16 _depth){
+        width = _width;
+        height = _height;
+        depth = _depth;
+        return *this;
+    }
+    TextureCreation& setFlags(u8 _mipmaps, u8 _flags){
+        mipmaps = _mipmaps;
+        flags = _flags;
+        return *this;
+    }
+    TextureCreation& setFormat(VkFormat _format, TextureType::Enum _type){
+        format = _format;
+        type = _type;
+        return *this;
+    }
+    TextureCreation& setName(const char* _name){
+        name = _name;
+        return *this;
+    }
+    TextureCreation& setData(void* data){
+        initialData = data;
+        return *this;
+    }
+};
+
+struct SamplerCreation{
+    VkFilter minFilter = VK_FILTER_NEAREST;
+    VkFilter magFilter = VK_FILTER_NEAREST;
+    VkSamplerMipmapMode mipFilter = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+
+    VkSamplerAddressMode addressU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    VkSamplerAddressMode addressV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    VkSamplerAddressMode addressW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+
+    const char* name = nullptr;
+
+
+    SamplerCreation& setMinMagMip(VkFilter min, VkFilter mag, VkSamplerMipmapMode mip){
+        minFilter = min;
+        magFilter = mag;
+        mipFilter = mip;
+        return *this;
+    }
+    SamplerCreation& setAddressU(VkSamplerAddressMode u){
+        addressU = u;
+        return *this;
+    }
+    SamplerCreation& setAddressUV(VkSamplerAddressMode u, VkSamplerAddressMode v){
+        addressU = u;
+        addressV = v;
+        return *this;
+    }
+    SamplerCreation& setAddressUVW(VkSamplerAddressMode u, VkSamplerAddressMode v, VkSamplerAddressMode w){
+        addressU = u;
+        addressV = v;
+        addressW = w;
+        return *this;
+    }
+    SamplerCreation& setName(const char* _name){
+        name = _name;
+        return *this;
+};
+
+struct ShaderStateCreation{
+    ShaderStage stages[s_maxShaderStages];
+
+    const char* name = nullptr;
+
+    u32 stagesCount = 0;
+    u32 spvInput = 0;
+
+
+    ShaderStateCreation& reset(){
+        stagesCount = 0;
+        return *this;
+    }
+    ShaderStateCreation& setName(const char* _name){
+        name = _name;
+        return *this;
+    }
+    ShaderStateCreation& addStage(const char* code, u32 codeSize, VkShaderStageFlagBits type){
+        NWB_ASSERT(stagesCount < LengthOf(stages));
+        stages[stagesCount].code = code;
+        stages[stagesCount].codeSize = codeSize;
+        stages[stagesCount].type = type;
+        ++stagesCount;
+        return *this;
+    }
+    ShaderStateCreation& setSPVInput(u32 input){
+        spvInput = input;
+        return *this;
+    }
+};
+
+struct DescriptorSetLayoutCreation{
+    struct Binding{
+        VkDescriptorType type = VK_DESCRIPTOR_TYPE_MAX_ENUM;
+        u16 start = 0;
+        u16 count = 0;
+        const char* name = nullptr;
+    };
+
+    Binding bindings[s_maxDescriptorsPerSet];
+    u32 numBindings = 0;
+    u32 setIndex = 0;
+
+    const char* name = nullptr;
+
+
+    DescriptorSetLayoutCreation& reset(){
+        numBindings = 0;
+        setIndex = 0;
+        return *this;
+    }
+    DescriptorSetLayoutCreation& addBinding(const Binding& binding){
+        NWB_ASSERT(numBindings < LengthOf(bindings));
+        bindings[numBindings++] = binding;
+        return *this;
+    }
+    DescriptorSetLayoutCreation& addBindingAtIndex(const Binding& binding, u32 index){
+        NWB_ASSERT(index < LengthOf(bindings));
+        if((index + 1) > numBindings)
+            numBindings = index + 1;
+        return *this;
+    }
+    DescriptorSetLayoutCreation& setName(const char* _name){
+        name = _name;
+        return *this;
+    }
+    DescriptorSetLayoutCreation& setIndex(u32 index){
+        setIndex = index;
+        return *this;
+    }
+};
+
+struct DescriptorSetCreation{
+    
 };
 
 

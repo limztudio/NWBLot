@@ -20,11 +20,17 @@ NWB_ALLOC_BEGIN
 
 class AssetHandleAny{
 public:
-    typedef u32 HandleSize;
+    union HandleType{
+        u32 raw;
+        struct{
+            u32 index : 24;
+            u32 type : 8;
+        };
+    };
 
 
 protected:
-    static constexpr const HandleSize s_invalidHandle = static_cast<HandleSize>(-1);
+    static constexpr const HandleType s_invalidHandle = { static_cast<u32>(-1) };
 
 
 protected:
@@ -32,11 +38,11 @@ protected:
 
 
 public:
-    bool isValid()const noexcept{ return m_value != s_invalidHandle; }
+    bool isValid()const noexcept{ return m_value.raw != s_invalidHandle.raw; }
 
 
 protected:
-    HandleSize m_value;
+    HandleType m_value;
 };
 
 template <typename T>

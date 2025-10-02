@@ -23,8 +23,12 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr u8 s_maxShaderStages = 5;
+constexpr u8 s_maxImageOutputs = 8;
 constexpr u8 s_maxDescriptorSetLayouts = 8;
+constexpr u8 s_maxShaderStages = 5;
+constexpr u8 s_maxDescriptorsPerSet = 16;
+constexpr u8 s_maxVertexStreams = 16;
+constexpr u8 s_maxVertexAttributes = 16;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -359,7 +363,167 @@ struct DescriptorSetLayoutCreation{
 };
 
 struct DescriptorSetCreation{
-    
+    Alloc::AssetHandleFlexible resources[s_maxDescriptorsPerSet];
+    SamplerHandle samplers[s_maxDescriptorsPerSet];
+    u16 bindings[s_maxDescriptorsPerSet];
+
+    DescriptorSetLayoutHandle layout;
+    u32 numResources = 0;
+
+    const char* name = nullptr;
+
+
+    DescriptorSetCreation& reset(){
+        numResources = 0;
+        return *this;
+    }
+    DescriptorSetCreation& setLayout(DescriptorSetLayoutHandle _layout){
+        layout = _layout;
+        return *this;
+    }
+    DescriptorSetCreation& addTexture(TextureHandle texture, u16 binding){
+        NWB_ASSERT(numResources < LengthOf(resources));
+        resources[numResources] = texture;
+        samplers[numResources] = SamplerHandle();
+        bindings[numResources] = binding;
+        ++numResources;
+        return *this;
+    }
+    DescriptorSetCreation& addBuffer(BufferHandle buffer, u16 binding){
+        NWB_ASSERT(numResources < LengthOf(resources));
+        resources[numResources] = buffer;
+        samplers[numResources] = SamplerHandle();
+        bindings[numResources] = binding;
+        ++numResources;
+        return *this;
+    }
+    DescriptorSetCreation& addTextureSampler(TextureHandle texture, SamplerHandle sampler, u16 binding){
+        NWB_ASSERT(numResources < LengthOf(resources));
+        resources[numResources] = texture;
+        samplers[numResources] = sampler;
+        bindings[numResources] = binding;
+        ++numResources;
+        return *this;
+    }
+    DescriptorSetCreation& setName(const char* _name){
+        name = _name;
+        return *this;
+    }
+};
+
+struct VertexInputCreation{
+    u32 numVertexStreams = 0;
+    u32 numVertexAttributes = 0;
+
+    VertexStream vertexStreams[s_maxVertexStreams];
+    VertexAttribute vertexAttributes[s_maxVertexAttributes];
+
+
+    VertexInputCreation& reset(){
+        numVertexStreams = 0;
+        numVertexAttributes = 0;
+        return *this;
+    }
+    VertexInputCreation& addVertexStream(const VertexStream& stream){
+        NWB_ASSERT(numVertexStreams < LengthOf(vertexStreams));
+        vertexStreams[numVertexStreams] = stream;
+        ++numVertexStreams;
+        return *this;
+    }
+    VertexInputCreation& addVertexAttribute(const VertexAttribute& attribute){
+        NWB_ASSERT(numVertexAttributes < LengthOf(vertexAttributes));
+        vertexAttributes[numVertexAttributes] = attribute;
+        ++numVertexAttributes;
+        return *this;
+    }
+};
+
+struct RenderPassCreation{
+    u16 numRenderTargets = 0;
+    RenderPassType::Enum type = RenderPassType::GEOMETRY;
+
+    TextureHandle outputTextures[s_maxImageOutputs];
+    TextureHandle depthStencilTexture;
+
+    f32 scaleX = 1;
+    f32 scaleY = 1;
+    u8 resize = 1;
+
+    RenderPassOperation::Enum colorOp = RenderPassOperation::DONT_CARE;
+    RenderPassOperation::Enum depthOp = RenderPassOperation::DONT_CARE;
+    RenderPassOperation::Enum stencilOp = RenderPassOperation::DONT_CARE;
+
+    const char* name = nullptr;
+
+
+    RenderPassCreation& reset(){
+        numRenderTargets = 0;
+        depthStencilTexture = TextureHandle();
+        scaleX = 1;
+        scaleY = 1;
+        resize = 0;
+        colorOp = RenderPassOperation::DONT_CARE;
+        depthOp = RenderPassOperation::DONT_CARE;
+        stencilOp = RenderPassOperation::DONT_CARE;
+        return *this;
+    }
+    RenderPassCreation& addRenderTexture(TextureHandle texture){
+        NWB_ASSERT(numRenderTargets < LengthOf(outputTextures));
+        outputTextures[numRenderTargets] = texture;
+        ++numRenderTargets;
+        return *this;
+    }
+    RenderPassCreation& setScale(f32 _scaleX, f32 _scaleY, u8 _resize){
+        scaleX = _scaleX;
+        scaleY = _scaleY;
+        resize = _resize;
+        return *this;
+    }
+    RenderPassCreation& setDepthStencilTexture(TextureHandle texture){
+        depthStencilTexture = texture;
+        return *this;
+    }
+    RenderPassCreation& setType(RenderPassType::Enum _type){
+        type = _type;
+        return *this;
+    }
+    RenderPassCreation& setOperations(RenderPassOperation::Enum color, RenderPassOperation::Enum depth, RenderPassOperation::Enum stencil){
+        colorOp = color;
+        depthOp = depth;
+        stencilOp = stencil;
+        return *this;
+    }
+    RenderPassCreation& setName(const char* _name){
+        name = _name;
+        return *this;
+    }
+};
+
+struct PipelineCreation{
+    RasterizationCreation rasterization;
+    DepthStencilStateCreation depthStencil;
+    BlendStateCreation blendState;
+    VertexInputCreation vertexInput;
+    ShaderStateCreation shaderState;
+
+    RenderPassOutput renderPass;
+    DescriptorSetLayoutHandle descriptorSetLayout[s_maxDescriptorSetLayouts];
+    const ViewportState* viewport = nullptr;
+
+    u32 numActiveLayouts = 0;
+
+    const char* name = nullptr;
+
+
+    PipelineCreation& addDescriptorSetLayout(DescriptorSetLayoutHandle layout){
+        NWB_ASSERT(numActiveLayouts < LengthOf(descriptorSetLayout));
+        descriptorSetLayout[numActiveLayouts] = layout;
+        ++numActiveLayouts;
+        return *this;
+    }
+    RenderPassOutput& getRenderPassOutput(){
+        return renderPass;
+    }
 };
 
 

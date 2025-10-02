@@ -50,25 +50,33 @@ protected:
 
 public:
     u8 getType()const noexcept{ return static_cast<u8>(m_value.type); }
-    bool isValid()const noexcept{ return m_value.index != s_invalidHandle.index; }
+    bool isValid()const noexcept{ return (m_value.index != s_invalidHandle.index) && (m_value.type != s_invalidHandle.type); }
 
 
 protected:
     HandleType m_value;
 };
 
+class AssetHandleFlexible;
+
 template <typename T>
 class AssetHandle : public AssetHandleAny{
+    friend AssetHandleFlexible;
     template <typename _T, template <typename> typename Allocator>
     friend class AssetPool;
 
     friend bool operator==(const AssetHandle&, const AssetHandle&)noexcept;
     friend bool operator!=(const AssetHandle&, const AssetHandle&)noexcept;
 
+    friend bool operator==(const AssetHandle&, const AssetHandleFlexible&)noexcept;
+    friend bool operator!=(const AssetHandle&, const AssetHandleFlexible&)noexcept;
+    friend bool operator==(const AssetHandleFlexible&, const AssetHandle&)noexcept;
+    friend bool operator!=(const AssetHandleFlexible&, const AssetHandle&)noexcept;
+
 
 public:
     AssetHandle()noexcept{ m_value.type = AssetTypeIndex(AssetTypeTag<T>{}); }
-    AssetHandle(u32 value)noexcept : m_value(value){
+    AssetHandle(u32 value)noexcept{
         NWB_ASSERT(value <= s_indexMax);
         m_value.type = AssetTypeIndex(AssetTypeTag<T>{});
         m_value.index = value;
@@ -109,6 +117,84 @@ template <typename T>
 inline bool operator==(const AssetHandle<T>& lhs, const AssetHandle<T>& rhs)noexcept{ return lhs.m_value.raw == rhs.m_value.raw; }
 template <typename T>
 inline bool operator!=(const AssetHandle<T>& lhs, const AssetHandle<T>& rhs)noexcept{ return lhs.m_value.raw != rhs.m_value.raw; }
+
+class AssetHandleFlexible : public AssetHandleAny{
+    friend bool operator==(const AssetHandleFlexible&, const AssetHandleFlexible&)noexcept;
+    friend bool operator!=(const AssetHandleFlexible&, const AssetHandleFlexible&)noexcept;
+
+    template <typename T>
+    friend bool operator==(const AssetHandle<T>&, const AssetHandleFlexible&)noexcept;
+    template <typename T>
+    friend bool operator!=(const AssetHandle<T>&, const AssetHandleFlexible&)noexcept;
+    template <typename T>
+    friend bool operator==(const AssetHandleFlexible&, const AssetHandle<T>&)noexcept;
+    template <typename T>
+    friend bool operator!=(const AssetHandleFlexible&, const AssetHandle<T>&)noexcept;
+
+
+public:
+    AssetHandleFlexible()noexcept{}
+
+    AssetHandleFlexible(const AssetHandleFlexible& rhs)noexcept{
+        m_value.raw = rhs.m_value.raw;
+    }
+    AssetHandleFlexible(AssetHandleFlexible&& rhs)noexcept{
+        m_value.raw = rhs.m_value.raw;
+        rhs.m_value.index = s_invalidHandle.index;
+    }
+    template <typename T>
+    AssetHandleFlexible(const AssetHandle<T>& rhs)noexcept{
+        m_value.raw = rhs.m_value.raw;
+    }
+    template <typename T>
+    AssetHandleFlexible(AssetHandle<T>&& rhs)noexcept{
+        m_value.raw = rhs.m_value.raw;
+        rhs.m_value.index = s_invalidHandle.index;
+    }
+
+
+public:
+    AssetHandleFlexible& operator=(const AssetHandleFlexible& rhs)noexcept{
+        if(this != &rhs)
+            m_value.raw = rhs.m_value.raw;
+        return *this;
+    }
+    AssetHandleFlexible& operator=(AssetHandleFlexible&& rhs)noexcept{
+        if(this != &rhs){
+            m_value.raw = rhs.m_value.raw;
+            rhs.m_value = s_invalidHandle;
+        }
+        return *this;
+    }
+    template <typename T>
+    AssetHandleFlexible& operator=(const AssetHandle<T>& rhs)noexcept{
+        if(this != &rhs)
+            m_value.raw = rhs.m_value.raw;
+        return *this;
+    }
+    template <typename T>
+    AssetHandleFlexible& operator=(AssetHandle<T>&& rhs)noexcept{
+        if(this != &rhs){
+            m_value.raw = rhs.m_value.raw;
+            rhs.m_value = s_invalidHandle;
+        }
+        return *this;
+    }
+
+public:
+    operator bool()const noexcept{ return isValid(); }
+};
+inline bool operator==(const AssetHandleFlexible& lhs, const AssetHandleFlexible& rhs)noexcept{ return lhs.m_value.raw == rhs.m_value.raw; }
+inline bool operator!=(const AssetHandleFlexible& lhs, const AssetHandleFlexible& rhs)noexcept{ return lhs.m_value.raw != rhs.m_value.raw; }
+
+template <typename T>
+inline bool operator==(const AssetHandle<T>& lhs, const AssetHandleFlexible& rhs)noexcept{ return lhs.m_value.raw == rhs.m_value.raw; }
+template <typename T>
+inline bool operator!=(const AssetHandle<T>& lhs, const AssetHandleFlexible& rhs)noexcept{ return lhs.m_value.raw != rhs.m_value.raw; }
+template <typename T>
+inline bool operator==(const AssetHandleFlexible& lhs, const AssetHandle<T>& rhs)noexcept{ return lhs.m_value.raw == rhs.m_value.raw; }
+template <typename T>
+inline bool operator!=(const AssetHandleFlexible& lhs, const AssetHandle<T>& rhs)noexcept{ return lhs.m_value.raw != rhs.m_value.raw; }
 
 
 template <typename T, template <typename> typename Allocator>

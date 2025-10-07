@@ -12,6 +12,7 @@
 
 #include "config.h"
 #include "utility.h"
+#include "primitiveAssets.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -263,6 +264,31 @@ private:
 
 private:
     Graphics& m_parent;
+
+private:
+    BufferPool<Alloc::MemoryAllocator> m_buffers;
+    TexturePool<Alloc::MemoryAllocator> m_textures;
+    PipelinePool<Alloc::MemoryAllocator> m_pipelines;
+    SamplerPool<Alloc::MemoryAllocator> m_samplers;
+    DescriptorSetLayoutPool<Alloc::MemoryAllocator> m_descriptorSetLayouts;
+    DescriptorSetPool<Alloc::MemoryAllocator> m_descriptorSets;
+    RenderPassPool<Alloc::MemoryAllocator> m_renderPasses;
+    BufferPool<Alloc::MemoryAllocator> m_commandBuffers;
+    ShaderStatePool<Alloc::MemoryAllocator> m_shaderStates;
+
+private:
+    BufferHandle m_fullscreenVertexBuffer;
+    RenderPassHandle m_swapchainPass;
+    SamplerHandle m_defaultSampler;
+
+    TextureHandle m_dummyTexture;
+    BufferHandle m_dummyConstantBuffer;
+
+private:
+    RenderPassOutput m_swapchainOutput;
+
+private:
+    Alloc::MemoryArena m_persistentArena;
 
 private:
     VkAllocationCallbacks* m_allocCallbacks;

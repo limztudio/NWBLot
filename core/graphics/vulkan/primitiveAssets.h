@@ -36,6 +36,8 @@ constexpr u8 s_maxVertexAttributes = 16;
 
 #define NWB_DEFINE_ASSET_TYPE(T, INDEX) \
     struct T; \
+    template <template <typename> typename Allocator> \
+    using T##Pool = Alloc::AssetPool<T, Allocator>; \
     using T##Handle = Alloc::AssetHandle<T>; \
     namespace Alloc{ constexpr u8 AssetTypeIndex(Alloc::AssetTypeTag<T>)noexcept{ return static_cast<u8>(INDEX); } };
 
@@ -547,7 +549,6 @@ struct Buffer{
     const char* name = nullptr;
 };
 
-
 struct Sampler{
     VkSampler sampler;
 
@@ -561,7 +562,6 @@ struct Sampler{
 
     const char* name = nullptr;
 };
-
 
 struct Texture{
     VkImage image;
@@ -584,7 +584,6 @@ struct Texture{
     const char* name = nullptr;
 };
 
-
 struct ShaderState{
     VkPipelineShaderStageCreateInfo stageInfo[s_maxShaderStages];
 
@@ -596,7 +595,6 @@ struct ShaderState{
     spirVResult;
 };
 
-
 struct DescriptorBinding{
     VkDescriptorType type;
     u16 start = 0;
@@ -605,7 +603,6 @@ struct DescriptorBinding{
 
     const char* name = nullptr;
 };
-
 
 struct DescriptorSetLayout{
     VkDescriptorSetLayout descLayout;
@@ -618,7 +615,6 @@ struct DescriptorSetLayout{
     DescriptorSetLayoutHandle handle;
 };
 
-
 struct DescriptorSet{
     VkDescriptorSet descSet;
     
@@ -629,7 +625,6 @@ struct DescriptorSet{
     const DescriptorSetLayout* layout = nullptr;
     u32 numResources = 0;
 };
-
 
 struct Pipeline{
     VkPipeline pipeline;
@@ -643,7 +638,37 @@ struct Pipeline{
     DescriptorSetLayoutHandle descriptorSetLayoutHandle[s_maxDescriptorSetLayouts];
     u32 numActiveLayouts = 0;
 
-    
+    DepthStencilStateCreation depthStencil;
+    BlendStateCreation blendState;
+    RasterizationCreation rasterization;
+
+    PipelineHandle handle;
+    bool graphicsPipeline = true;
+};
+
+struct RenderPass{
+    VkRenderPass renderPass;
+    VkFramebuffer frameBuffer;
+
+    RenderPassOutput output;
+
+    TextureHandle outputTextures[s_maxImageOutputs];
+    TextureHandle outputDepthStencil;
+
+    RenderPassType::Enum type;
+
+    f32 scaleX = 1;
+    f32 scaleY = 1;
+    u16 width = 0;
+    u16 height = 0;
+    u16 dispatchX = 0;
+    u16 dispatchY = 0;
+    u16 dispatchZ = 0;
+
+    u8 resize = 0;
+    u8 numRenderTargets = 0;
+
+    const char* name = nullptr;
 };
 
 

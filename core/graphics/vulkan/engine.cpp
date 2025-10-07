@@ -580,6 +580,10 @@ bool VulkanEngine::init(const Common::FrameData& data){
         m_timestampQueryPool.reset(object);
     }
 
+    { // init pools
+
+    }
+
     return true;
 }
 void VulkanEngine::destroy(){

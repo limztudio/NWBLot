@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include <logger/client/logger.h>
+
 #include "global.h"
 #include "core.h"
 
@@ -168,13 +170,13 @@ public:
     }
     template <typename T>
     AssetHandleFlexible& operator=(const AssetHandle<T>& rhs)noexcept{
-        if(this != &rhs)
+        if(reinterpret_cast<const void*>(this) != &rhs)
             m_value.raw = rhs.m_value.raw;
         return *this;
     }
     template <typename T>
     AssetHandleFlexible& operator=(AssetHandle<T>&& rhs)noexcept{
-        if(this != &rhs){
+        if(reinterpret_cast<const void*>(this) != &rhs){
             m_value.raw = rhs.m_value.raw;
             rhs.m_value = s_invalidHandle;
         }
@@ -223,7 +225,7 @@ public:
         , m_poolSize(s_defaultPoolSize)
     {}
 
-    virtual ~RawResPool(){ cleanup(); }
+    virtual ~AssetPool(){ cleanup(); }
 
 
 public:

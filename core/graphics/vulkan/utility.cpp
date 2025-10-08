@@ -95,8 +95,9 @@ bool CreateSwapchain(
     u16* height,
     u8* imageCount,
     VkSwapchainKHR* swapchain,
-    VkImage (*swapchainImages)[s_maxSwapchainImages],
-    VkImageView (*swapchainImageViews)[s_maxSwapchainImages]
+    usize maxSwapchainImages,
+    VkImage** swapchainImages,
+    VkImageView** swapchainImageViews
 )
 {
     VkResult err;
@@ -162,6 +163,9 @@ bool CreateSwapchain(
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to get swapchain images: {}"), StringConvert(VulkanResultString(err)));
             return false;
         }
+
+        if(supportedImageCount > maxSwapchainImages)
+            supportedImageCount = static_cast<uint32_t>(maxSwapchainImages);
 
         (*imageCount) = static_cast<u8>(supportedImageCount);
 

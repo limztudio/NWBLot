@@ -22,6 +22,10 @@ NWB_ALLOC_BEGIN
 
 class MemoryArena : NoCopy{
 public:
+    constexpr static usize StructureAlignedSize(usize byte)noexcept{ return byte + static_cast<usize>(tlsf_size() + 8); }
+
+
+public:
     MemoryArena(usize maxSize)
         : m_bucket(CoreAlloc(maxSize, "NWB::Core::Alloc::MemoryArena::constructor"))
         , m_maxSize(maxSize)
@@ -72,10 +76,10 @@ public:
 
         if(bytes){
             if(IsConstantEvaluated())
-                deallocate(1, bytes);
+                deallocate(p, 1, bytes);
             else{
                 constexpr usize alignSize = alignof(T);
-                deallocate(alignSize, bytes);
+                deallocate(p, alignSize, bytes);
             }
         }
     }
@@ -94,8 +98,12 @@ private:
 
 template <typename T>
 class MemoryAllocator{
+    template <typename F>
+    friend class MemoryAllocator;
+
+
 public:
-    static_assert(IsConst_V<T>, "NWB::Core::Alloc::MemoryAllocator forbids containers of const elements because allocator<const T> is ill-formed.");
+    static_assert(!IsConst_V<T>, "NWB::Core::Alloc::MemoryAllocator forbids containers of const elements because allocator<const T> is ill-formed.");
     static_assert(!IsFunction_V<T>, "NWB::Core::Alloc::MemoryAllocator forbids allocators for function elements because of [allocator.requirements].");
     static_assert(!IsReference_V<T>, "NWB::Core::Alloc::MemoryAllocator forbids allocators for reference elements because of [allocator.requirements].");
 
@@ -115,7 +123,7 @@ public:
     constexpr MemoryAllocator(MemoryArena& arena)noexcept : m_arena(arena){}
     constexpr MemoryAllocator(const MemoryAllocator&)noexcept = default;
     template <class F>
-    constexpr MemoryAllocator(const MemoryAllocator<F>&)noexcept{}
+    constexpr MemoryAllocator(const MemoryAllocator<F>& rhs)noexcept : m_arena(rhs.m_arena){}
 
     constexpr ~MemoryAllocator() = default;
     constexpr MemoryAllocator& operator=(const MemoryAllocator&) = default;
@@ -123,9 +131,9 @@ public:
 
 public:
     constexpr void deallocate(T* const buffer, const usize count)noexcept{
-        assert((buffer != nullptr || count == 0) && "null pointer cannot point to a block of non-zero size");
+        NWB_ASSERT((buffer != nullptr || count == 0) && "null pointer cannot point to a block of non-zero size");
 
-        m_arena.deallocate(buffer);
+        m_arena.deallocate<T>(buffer, count);
     }
 
     constexpr __declspec(allocator) T* allocate(const usize count){

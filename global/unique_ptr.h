@@ -121,7 +121,7 @@ public:
 	UniquePtr(P pArray, typename RemoveReference<deleter_type>::type&& deleter, EnableIf_T<__hidden_smart_ptr::IsArrayCvConvertible<P, pointer>::value>* = 0)noexcept : mPair(pArray, Move(deleter)){
 		static_assert(!IsLValueReference<deleter_type>::value, "deleter_type reference refers to an rvalue deleter. The reference will probably become invalid before used. Change the deleter_type to not be a reference or construct with permanent deleter.");
 	}
-	UniquePtr(this_type&& x)noexcept : mPair(x.release(), Forward<deleter_type>(x.get_deleter())) {}
+	UniquePtr(this_type&& x)noexcept : mPair(x.release(), Forward<deleter_type>(x.get_deleter())){}
 	template <typename U, typename E>
 	UniquePtr(UniquePtr<U, E>&& u, typename EnableIf<__hidden_smart_ptr::IsSafeArrayConversion<T, pointer, U, typename UniquePtr<U, E>::pointer>::value && IsConvertible<E, deleter_type>::value && (!IsLValueReference<deleter_type>::value || IsSame<E, deleter_type>::value)>::type* = 0)noexcept : mPair(u.release(), Forward<E>(u.get_deleter())){}
 	UniquePtr(const this_type&) = delete;

@@ -19,30 +19,30 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr inline VkPresentModeKHR Convert(PresentMode mode){
+constexpr inline VkPresentModeKHR Convert(PresentMode::Enum mode){
     switch(mode){
-    case PresentMode::Immediate:
+    case PresentMode::IMMEDIATE:
         return VK_PRESENT_MODE_IMMEDIATE_KHR;
-    case PresentMode::VSync:
+    case PresentMode::V_SYNC:
         return VK_PRESENT_MODE_FIFO_KHR;
-    case PresentMode::VSyncFast:
+    case PresentMode::V_SYNC_FAST:
         return VK_PRESENT_MODE_MAILBOX_KHR;
-    case PresentMode::VSyncRelaxed:
+    case PresentMode::V_SYNC_RELAXED:
         return VK_PRESENT_MODE_FIFO_RELAXED_KHR;
     }
     return VK_PRESENT_MODE_MAX_ENUM_KHR;
 }
 
-constexpr inline PresentMode Convert(VkPresentModeKHR mode){
+constexpr inline PresentMode::Enum Convert(VkPresentModeKHR mode){
     switch(mode){
     case VK_PRESENT_MODE_IMMEDIATE_KHR:
-        return PresentMode::Immediate;
+        return PresentMode::IMMEDIATE;
     case VK_PRESENT_MODE_FIFO_KHR:
-        return PresentMode::VSync;
+        return PresentMode::V_SYNC;
     case VK_PRESENT_MODE_MAILBOX_KHR:
-        return PresentMode::VSyncFast;
+        return PresentMode::V_SYNC_FAST;
     case VK_PRESENT_MODE_FIFO_RELAXED_KHR:
-        return PresentMode::VSyncRelaxed;
+        return PresentMode::V_SYNC_RELAXED;
     }
     return PresentMode::kCount;
 }
@@ -51,7 +51,7 @@ constexpr inline PresentMode Convert(VkPresentModeKHR mode){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr inline VkFormat Convert(TextureFormat format){
+constexpr inline VkFormat Convert(TextureFormat::Enum format){
     switch(format){
     case TextureFormat::UNDEFINED:
         return VK_FORMAT_UNDEFINED;
@@ -597,7 +597,7 @@ constexpr inline VkFormat Convert(TextureFormat format){
     return VK_FORMAT_MAX_ENUM;
 }
 
-constexpr inline TextureFormat Convert(VkFormat format){
+constexpr inline TextureFormat::Enum Convert(VkFormat format){
     switch(format){
     case VK_FORMAT_UNDEFINED:
         return TextureFormat::UNDEFINED;

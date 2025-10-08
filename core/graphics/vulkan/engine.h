@@ -152,6 +152,9 @@ namespace __hidden_vulkan{
 
 class VulkanEngine{
 private:
+    static constexpr usize s_maxMemoryAllocSize = 32 * 1024 * 1024;
+
+private:
 #if defined(VULKAN_VALIDATE)
     static constexpr const char* s_validationLayerName[] = {
         "VK_LAYER_KHRONOS_validation",
@@ -219,6 +222,8 @@ private:
     static constexpr const u32 s_maxFrame = 3;
     static constexpr const u32 s_timeQueryPerFrame = 32;
 
+    static constexpr const u8 s_maxSwapchainImages = 3;
+
 
 public:
     VulkanEngine(Graphics* parent);
@@ -231,7 +236,7 @@ public:
 
 
 private:
-    void updatePresentMode(PresentMode mode);
+    void updatePresentMode(PresentMode::Enum mode);
 
     inline bool createSwapchain(){
         VkSwapchainKHR swapchain = VK_NULL_HANDLE;
@@ -249,8 +254,9 @@ private:
             &m_parent.m_swapchainHeight,
             &m_parent.m_swapchainImageCount,
             &swapchain,
-            &swapchainImages,
-            &swapchainImagesViews
+            static_cast<usize>(s_maxSwapchainImages),
+            reinterpret_cast<VkImage**>(&swapchainImages),
+            reinterpret_cast<VkImageView**>(&swapchainImagesViews)
         );
         m_swapchain.reset(swapchain);
         for(usize i = 0; i < s_maxSwapchainImages; ++i){

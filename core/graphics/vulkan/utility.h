@@ -101,8 +101,9 @@ extern bool CreateSwapchain(
     u16* height,
     u8* imageCount,
     VkSwapchainKHR* swapchain,
-    VkImage (*swapchainImages)[s_maxSwapchainImages],
-    VkImageView (*swapchainImageViews)[s_maxSwapchainImages]
+    usize maxSwapchainImages,
+    VkImage** swapchainImages,
+    VkImageView** swapchainImageViews
     );
 
 

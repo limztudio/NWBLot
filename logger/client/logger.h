@@ -31,12 +31,12 @@ NWB_LOG_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#define NWB_LOGGER_REGISTER(inst) NWB::Log::__hidden_logger::g_logger = inst
+#define NWB_LOGGER_REGISTER(inst) ::NWB::Log::__hidden_logger::g_logger = inst
 
-#define NWB_LOGGER_INFO(...) { NWB_ASSERT(NWB::Log::__hidden_logger::g_logger != nullptr); NWB::Log::__hidden_logger::g_logger->enqueue(StringFormat(__VA_ARGS__), NWB::Log::Type::Info); }
-#define NWB_LOGGER_WARNING(...) { NWB_ASSERT(NWB::Log::__hidden_logger::g_logger != nullptr); NWB::Log::__hidden_logger::g_logger->enqueue(StringFormat(__VA_ARGS__), NWB::Log::Type::Warning); }
-#define NWB_LOGGER_ERROR(...) { NWB_ASSERT(NWB::Log::__hidden_logger::g_logger != nullptr); NWB::Log::__hidden_logger::g_logger->enqueue(StringFormat(__VA_ARGS__), NWB::Log::Type::Error); NWB_SOFTBREAK; }
-#define NWB_LOGGER_FATAL(...) { NWB_ASSERT(NWB::Log::__hidden_logger::g_logger != nullptr); NWB::Log::__hidden_logger::g_logger->enqueue(StringFormat(__VA_ARGS__), NWB::Log::Type::Fatal); NWB_HARDBREAK; }
+#define NWB_LOGGER_INFO(...) { NWB_ASSERT(::NWB::Log::__hidden_logger::g_logger != nullptr); ::NWB::Log::__hidden_logger::g_logger->enqueue(StringFormat(__VA_ARGS__), ::NWB::Log::Type::Info); }
+#define NWB_LOGGER_WARNING(...) { NWB_ASSERT(::NWB::Log::__hidden_logger::g_logger != nullptr); ::NWB::Log::__hidden_logger::g_logger->enqueue(StringFormat(__VA_ARGS__), ::NWB::Log::Type::Warning); }
+#define NWB_LOGGER_ERROR(...) { NWB_ASSERT(::NWB::Log::__hidden_logger::g_logger != nullptr); ::NWB::Log::__hidden_logger::g_logger->enqueue(StringFormat(__VA_ARGS__), ::NWB::Log::Type::Error); NWB_SOFTBREAK; }
+#define NWB_LOGGER_FATAL(...) { NWB_ASSERT(::NWB::Log::__hidden_logger::g_logger != nullptr); ::NWB::Log::__hidden_logger::g_logger->enqueue(StringFormat(__VA_ARGS__), ::NWB::Log::Type::Fatal); NWB_HARDBREAK; }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

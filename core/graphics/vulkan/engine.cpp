@@ -31,6 +31,16 @@ const char* VulkanEngine::s_requestedExtensions[] = {
 
 VulkanEngine::VulkanEngine(Graphics* parent)
     : m_parent(*parent)
+    , m_buffers(Alloc::MemoryAllocator<Buffer>(m_persistentArena), Alloc::MemoryAllocator<u32>(m_persistentArena))
+    , m_textures(Alloc::MemoryAllocator<Texture>(m_persistentArena), Alloc::MemoryAllocator<u32>(m_persistentArena))
+    , m_pipelines(Alloc::MemoryAllocator<Pipeline>(m_persistentArena), Alloc::MemoryAllocator<u32>(m_persistentArena))
+    , m_samplers(Alloc::MemoryAllocator<Sampler>(m_persistentArena), Alloc::MemoryAllocator<u32>(m_persistentArena))
+    , m_descriptorSetLayouts(Alloc::MemoryAllocator<DescriptorSetLayout>(m_persistentArena), Alloc::MemoryAllocator<u32>(m_persistentArena))
+    , m_descriptorSets(Alloc::MemoryAllocator<DescriptorSet>(m_persistentArena), Alloc::MemoryAllocator<u32>(m_persistentArena))
+    , m_renderPasses(Alloc::MemoryAllocator<RenderPass>(m_persistentArena), Alloc::MemoryAllocator<u32>(m_persistentArena))
+    , m_commandBuffers(Alloc::MemoryAllocator<Buffer>(m_persistentArena), Alloc::MemoryAllocator<u32>(m_persistentArena))
+    , m_shaderStates(Alloc::MemoryAllocator<ShaderState>(m_persistentArena), Alloc::MemoryAllocator<u32>(m_persistentArena))
+    , m_persistentArena(Alloc::MemoryArena::StructureAlignedSize(s_maxMemoryAllocSize))
     , m_allocCallbacks(nullptr)
     , m_inst(VK_NULL_HANDLE, __hidden_vulkan::VkInstanceDeleter(&m_allocCallbacks))
     , m_physDev(VK_NULL_HANDLE, __hidden_vulkan::VkPhysicalDeviceRefDeleter())
@@ -385,7 +395,7 @@ bool VulkanEngine::init(const Common::FrameData& data){
             return false;
         }
 
-        m_parent.m_swapchainOutput.reset();
+        m_swapchainOutput.reset();
 
         bool bFound = false;
         for(auto i = decltype(supportedCount){ 0 }; i < supportedCount; ++i){
@@ -417,7 +427,7 @@ bool VulkanEngine::init(const Common::FrameData& data){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to find suitable surface format, using default"));
         }
 
-        m_parent.m_swapchainOutput.addColor(Convert(m_winSurfFormat.format));
+        m_swapchainOutput.addColor(m_winSurfFormat.format);
     }
 
     { // create swapchain
@@ -613,7 +623,7 @@ void VulkanEngine::destroy(){
 }
 
 
-void VulkanEngine::updatePresentMode(PresentMode mode){
+void VulkanEngine::updatePresentMode(PresentMode::Enum mode){
     VkResult err;
 
     u32 supportedCount = 0;
@@ -645,7 +655,7 @@ void VulkanEngine::updatePresentMode(PresentMode mode){
     }
     else{
         m_presentMode = VK_PRESENT_MODE_FIFO_KHR;
-        m_parent.m_presentMode = PresentMode::VSync;
+        m_parent.m_presentMode = PresentMode::V_SYNC;
     }
     m_parent.m_swapchainImageCount = (m_presentMode == VK_PRESENT_MODE_IMMEDIATE_KHR) ? 2 : 3;
 }

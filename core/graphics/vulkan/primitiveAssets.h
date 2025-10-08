@@ -9,8 +9,6 @@
 
 #include <core/alloc/assetPool.h>
 
-#include "resources.h"
-
 #include "vk_mem_alloc.h"
 
 
@@ -23,12 +21,12 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr u8 s_maxImageOutputs = 8;
-constexpr u8 s_maxDescriptorSetLayouts = 8;
-constexpr u8 s_maxShaderStages = 5;
-constexpr u8 s_maxDescriptorsPerSet = 16;
-constexpr u8 s_maxVertexStreams = 16;
-constexpr u8 s_maxVertexAttributes = 16;
+static constexpr const u8 s_maxImageOutputs = 8;
+static constexpr const u8 s_maxDescriptorSetLayouts = 8;
+static constexpr const u8 s_maxShaderStages = 5;
+static constexpr const u8 s_maxDescriptorsPerSet = 16;
+static constexpr const u8 s_maxVertexStreams = 16;
+static constexpr const u8 s_maxVertexAttributes = 16;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -95,21 +93,21 @@ struct BlendState{
 
     BlendState() : blendEnabled(0), separateBlend(0) {}
 
-    BlendState& setColor(VkBlendFactor src, VkBlendFactor dst, VkBlendOp op){
+    inline BlendState& setColor(VkBlendFactor src, VkBlendFactor dst, VkBlendOp op){
         srcColorFactor = src;
         dstColorFactor = dst;
         colorOp = op;
         blendEnabled = 1;
         return *this;
     }
-    BlendState& setAlpha(VkBlendFactor src, VkBlendFactor dst, VkBlendOp op){
+    inline BlendState& setAlpha(VkBlendFactor src, VkBlendFactor dst, VkBlendOp op){
         srcAlphaFactor = src;
         dstAlphaFactor = dst;
         alphaOp = op;
         blendEnabled = 1;
         return *this;
     }
-    BlendState& setColorWriteMask(ColorWrite::Mask mask){
+    inline BlendState& setColorWriteMask(ColorWrite::Mask mask){
         colorWriteMask = mask;
         return *this;
     }
@@ -139,6 +137,44 @@ struct VertexStream{
     VertexInputRate::Enum inputRate = VertexInputRate::kCount;
 };
 
+struct RenderPassOutput{
+    VkFormat colorFormats[s_maxImageOutputs];
+    VkFormat depthStencilFormat;
+    u32 numColorFormats = 0;
+
+    RenderPassOperation::Enum colorOP = RenderPassOperation::DONT_CARE;
+    RenderPassOperation::Enum depthOP = RenderPassOperation::DONT_CARE;
+    RenderPassOperation::Enum stencilOP = RenderPassOperation::DONT_CARE;
+
+
+    inline RenderPassOutput& reset(){
+        numColorFormats = 0;
+        for(auto& cur : colorFormats)
+            cur = VK_FORMAT_UNDEFINED;
+        depthStencilFormat = VK_FORMAT_UNDEFINED;
+        colorOP = RenderPassOperation::DONT_CARE;
+        depthOP = RenderPassOperation::DONT_CARE;
+        stencilOP = RenderPassOperation::DONT_CARE;
+        return *this;
+    }
+    inline RenderPassOutput& addColor(VkFormat format){
+        NWB_ASSERT(numColorFormats < LengthOf(colorFormats));
+        colorFormats[numColorFormats] = format;
+        ++numColorFormats;
+        return *this;
+    }
+    inline RenderPassOutput& setDepthStencil(VkFormat format){
+        depthStencilFormat = format;
+        return *this;
+    }
+    inline RenderPassOutput& setOperations(RenderPassOperation::Enum color, RenderPassOperation::Enum depth, RenderPassOperation::Enum stencil){
+        colorOP = color;
+        depthOP = depth;
+        stencilOP = stencil;
+        return *this;
+    }
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -156,7 +192,7 @@ struct DepthStencilStateCreation{
 
     DepthStencilStateCreation() : depthEnabled(0), depthWriteEnabled(0), stencilEnabled(0) {}
 
-    DepthStencilStateCreation& setDepth(bool write, VkCompareOp comparisonTest){
+    inline DepthStencilStateCreation& setDepth(bool write, VkCompareOp comparisonTest){
         depthWriteEnabled = write ? 1 : 0;
         depthComarison = comparisonTest;
         depthEnabled = 1;
@@ -169,11 +205,11 @@ struct BlendStateCreation{
     u32 activeStates = 0;
 
 
-    BlendStateCreation& reset(){
+    inline BlendStateCreation& reset(){
         activeStates = 0;
         return *this;
     }
-    BlendState& addBlendState(){
+    inline BlendState& addBlendState(){
         NWB_ASSERT(activeStates < LengthOf(blendStates));
         return blendStates[activeStates++];
     }
@@ -194,24 +230,25 @@ struct BufferCreation{
     const char* name = nullptr;
 
 
-    BufferCreation& reset(){
+    inline BufferCreation& reset(){
         size = 0;
         initialData = nullptr;
         return *this;
     }
-    BufferCreation& set(VkBufferUsageFlags _flags, ResourceUsageType::Enum _usage, u32 _size){
+    inline BufferCreation& set(VkBufferUsageFlags _flags, ResourceUsageType::Enum _usage, u32 _size){
         flags = _flags;
         usage = _usage;
         size = _size;
         return *this;
     }
-    BufferCreation& setData(void* data){
+    inline BufferCreation& setData(void* data){
         initialData = data;
         return *this;
     }
-    BufferCreation& setName(const char* _name){
+    inline BufferCreation& setName(const char* _name){
         name = _name;
         return *this;
+    }
 };
 
 struct TextureCreation{
@@ -228,27 +265,27 @@ struct TextureCreation{
     const char* name = nullptr;
 
 
-    TextureCreation& setSize(u16 _width, u16 _height, u16 _depth){
+    inline TextureCreation& setSize(u16 _width, u16 _height, u16 _depth){
         width = _width;
         height = _height;
         depth = _depth;
         return *this;
     }
-    TextureCreation& setFlags(u8 _mipmaps, u8 _flags){
+    inline TextureCreation& setFlags(u8 _mipmaps, u8 _flags){
         mipmaps = _mipmaps;
         flags = _flags;
         return *this;
     }
-    TextureCreation& setFormat(VkFormat _format, TextureType::Enum _type){
+    inline TextureCreation& setFormat(VkFormat _format, TextureType::Enum _type){
         format = _format;
         type = _type;
         return *this;
     }
-    TextureCreation& setName(const char* _name){
+    inline TextureCreation& setName(const char* _name){
         name = _name;
         return *this;
     }
-    TextureCreation& setData(void* data){
+    inline TextureCreation& setData(void* data){
         initialData = data;
         return *this;
     }
@@ -266,30 +303,31 @@ struct SamplerCreation{
     const char* name = nullptr;
 
 
-    SamplerCreation& setMinMagMip(VkFilter min, VkFilter mag, VkSamplerMipmapMode mip){
+    inline SamplerCreation& setMinMagMip(VkFilter min, VkFilter mag, VkSamplerMipmapMode mip){
         minFilter = min;
         magFilter = mag;
         mipFilter = mip;
         return *this;
     }
-    SamplerCreation& setAddressU(VkSamplerAddressMode u){
+    inline SamplerCreation& setAddressU(VkSamplerAddressMode u){
         addressU = u;
         return *this;
     }
-    SamplerCreation& setAddressUV(VkSamplerAddressMode u, VkSamplerAddressMode v){
+    inline SamplerCreation& setAddressUV(VkSamplerAddressMode u, VkSamplerAddressMode v){
         addressU = u;
         addressV = v;
         return *this;
     }
-    SamplerCreation& setAddressUVW(VkSamplerAddressMode u, VkSamplerAddressMode v, VkSamplerAddressMode w){
+    inline SamplerCreation& setAddressUVW(VkSamplerAddressMode u, VkSamplerAddressMode v, VkSamplerAddressMode w){
         addressU = u;
         addressV = v;
         addressW = w;
         return *this;
     }
-    SamplerCreation& setName(const char* _name){
+    inline SamplerCreation& setName(const char* _name){
         name = _name;
         return *this;
+    }
 };
 
 struct ShaderStateCreation{
@@ -301,15 +339,15 @@ struct ShaderStateCreation{
     u32 spvInput = 0;
 
 
-    ShaderStateCreation& reset(){
+    inline ShaderStateCreation& reset(){
         stagesCount = 0;
         return *this;
     }
-    ShaderStateCreation& setName(const char* _name){
+    inline ShaderStateCreation& setName(const char* _name){
         name = _name;
         return *this;
     }
-    ShaderStateCreation& addStage(const char* code, u32 codeSize, VkShaderStageFlagBits type){
+    inline ShaderStateCreation& addStage(const char* code, u32 codeSize, VkShaderStageFlagBits type){
         NWB_ASSERT(stagesCount < LengthOf(stages));
         stages[stagesCount].code = code;
         stages[stagesCount].codeSize = codeSize;
@@ -317,7 +355,7 @@ struct ShaderStateCreation{
         ++stagesCount;
         return *this;
     }
-    ShaderStateCreation& setSPVInput(u32 input){
+    inline ShaderStateCreation& setSPVInput(u32 input){
         spvInput = input;
         return *this;
     }
@@ -326,40 +364,48 @@ struct ShaderStateCreation{
 struct DescriptorSetLayoutCreation{
     struct Binding{
         VkDescriptorType type = VK_DESCRIPTOR_TYPE_MAX_ENUM;
-        u16 start = 0;
+        u16 index = 0;
         u16 count = 0;
         const char* name = nullptr;
     };
 
     Binding bindings[s_maxDescriptorsPerSet];
     u32 numBindings = 0;
-    u32 setIndex = 0;
+    u32 curIndex = 0;
 
     const char* name = nullptr;
 
 
-    DescriptorSetLayoutCreation& reset(){
+    inline DescriptorSetLayoutCreation& reset(){
         numBindings = 0;
-        setIndex = 0;
+        curIndex = 0;
         return *this;
     }
-    DescriptorSetLayoutCreation& addBinding(const Binding& binding){
+    inline DescriptorSetLayoutCreation& addBinding(const Binding& binding){
         NWB_ASSERT(numBindings < LengthOf(bindings));
-        bindings[numBindings++] = binding;
+        bindings[numBindings] = binding;
+        ++numBindings;
         return *this;
     }
-    DescriptorSetLayoutCreation& addBindingAtIndex(const Binding& binding, u32 index){
+    inline DescriptorSetLayoutCreation& addBinding(VkDescriptorType type, u16 index, u16 count, const char* _name){
+        NWB_ASSERT(numBindings < LengthOf(bindings));
+        bindings[numBindings] = { type, index, count, _name };
+        ++numBindings;
+        return *this;
+    }
+    inline DescriptorSetLayoutCreation& addBindingAtIndex(const Binding& binding, u32 index){
         NWB_ASSERT(index < LengthOf(bindings));
+        bindings[index] = binding;
         if((index + 1) > numBindings)
             numBindings = index + 1;
         return *this;
     }
-    DescriptorSetLayoutCreation& setName(const char* _name){
+    inline DescriptorSetLayoutCreation& setName(const char* _name){
         name = _name;
         return *this;
     }
-    DescriptorSetLayoutCreation& setIndex(u32 index){
-        setIndex = index;
+    inline DescriptorSetLayoutCreation& setIndex(u32 index){
+        curIndex = index;
         return *this;
     }
 };
@@ -375,15 +421,15 @@ struct DescriptorSetCreation{
     const char* name = nullptr;
 
 
-    DescriptorSetCreation& reset(){
+    inline DescriptorSetCreation& reset(){
         numResources = 0;
         return *this;
     }
-    DescriptorSetCreation& setLayout(DescriptorSetLayoutHandle _layout){
+    inline DescriptorSetCreation& setLayout(DescriptorSetLayoutHandle _layout){
         layout = _layout;
         return *this;
     }
-    DescriptorSetCreation& addTexture(TextureHandle texture, u16 binding){
+    inline DescriptorSetCreation& addTexture(TextureHandle texture, u16 binding){
         NWB_ASSERT(numResources < LengthOf(resources));
         resources[numResources] = texture;
         samplers[numResources] = SamplerHandle();
@@ -391,7 +437,7 @@ struct DescriptorSetCreation{
         ++numResources;
         return *this;
     }
-    DescriptorSetCreation& addBuffer(BufferHandle buffer, u16 binding){
+    inline DescriptorSetCreation& addBuffer(BufferHandle buffer, u16 binding){
         NWB_ASSERT(numResources < LengthOf(resources));
         resources[numResources] = buffer;
         samplers[numResources] = SamplerHandle();
@@ -399,7 +445,7 @@ struct DescriptorSetCreation{
         ++numResources;
         return *this;
     }
-    DescriptorSetCreation& addTextureSampler(TextureHandle texture, SamplerHandle sampler, u16 binding){
+    inline DescriptorSetCreation& addTextureSampler(TextureHandle texture, SamplerHandle sampler, u16 binding){
         NWB_ASSERT(numResources < LengthOf(resources));
         resources[numResources] = texture;
         samplers[numResources] = sampler;
@@ -407,7 +453,7 @@ struct DescriptorSetCreation{
         ++numResources;
         return *this;
     }
-    DescriptorSetCreation& setName(const char* _name){
+    inline DescriptorSetCreation& setName(const char* _name){
         name = _name;
         return *this;
     }
@@ -421,18 +467,18 @@ struct VertexInputCreation{
     VertexAttribute vertexAttributes[s_maxVertexAttributes];
 
 
-    VertexInputCreation& reset(){
+    inline VertexInputCreation& reset(){
         numVertexStreams = 0;
         numVertexAttributes = 0;
         return *this;
     }
-    VertexInputCreation& addVertexStream(const VertexStream& stream){
+    inline VertexInputCreation& addVertexStream(const VertexStream& stream){
         NWB_ASSERT(numVertexStreams < LengthOf(vertexStreams));
         vertexStreams[numVertexStreams] = stream;
         ++numVertexStreams;
         return *this;
     }
-    VertexInputCreation& addVertexAttribute(const VertexAttribute& attribute){
+    inline VertexInputCreation& addVertexAttribute(const VertexAttribute& attribute){
         NWB_ASSERT(numVertexAttributes < LengthOf(vertexAttributes));
         vertexAttributes[numVertexAttributes] = attribute;
         ++numVertexAttributes;
@@ -458,7 +504,7 @@ struct RenderPassCreation{
     const char* name = nullptr;
 
 
-    RenderPassCreation& reset(){
+    inline RenderPassCreation& reset(){
         numRenderTargets = 0;
         depthStencilTexture = TextureHandle();
         scaleX = 1;
@@ -469,33 +515,33 @@ struct RenderPassCreation{
         stencilOp = RenderPassOperation::DONT_CARE;
         return *this;
     }
-    RenderPassCreation& addRenderTexture(TextureHandle texture){
+    inline RenderPassCreation& addRenderTexture(TextureHandle texture){
         NWB_ASSERT(numRenderTargets < LengthOf(outputTextures));
         outputTextures[numRenderTargets] = texture;
         ++numRenderTargets;
         return *this;
     }
-    RenderPassCreation& setScale(f32 _scaleX, f32 _scaleY, u8 _resize){
+    inline RenderPassCreation& setScale(f32 _scaleX, f32 _scaleY, u8 _resize){
         scaleX = _scaleX;
         scaleY = _scaleY;
         resize = _resize;
         return *this;
     }
-    RenderPassCreation& setDepthStencilTexture(TextureHandle texture){
+    inline RenderPassCreation& setDepthStencilTexture(TextureHandle texture){
         depthStencilTexture = texture;
         return *this;
     }
-    RenderPassCreation& setType(RenderPassType::Enum _type){
+    inline RenderPassCreation& setType(RenderPassType::Enum _type){
         type = _type;
         return *this;
     }
-    RenderPassCreation& setOperations(RenderPassOperation::Enum color, RenderPassOperation::Enum depth, RenderPassOperation::Enum stencil){
+    inline RenderPassCreation& setOperations(RenderPassOperation::Enum color, RenderPassOperation::Enum depth, RenderPassOperation::Enum stencil){
         colorOp = color;
         depthOp = depth;
         stencilOp = stencil;
         return *this;
     }
-    RenderPassCreation& setName(const char* _name){
+    inline RenderPassCreation& setName(const char* _name){
         name = _name;
         return *this;
     }
@@ -517,13 +563,13 @@ struct PipelineCreation{
     const char* name = nullptr;
 
 
-    PipelineCreation& addDescriptorSetLayout(DescriptorSetLayoutHandle layout){
+    inline PipelineCreation& addDescriptorSetLayout(DescriptorSetLayoutHandle layout){
         NWB_ASSERT(numActiveLayouts < LengthOf(descriptorSetLayout));
         descriptorSetLayout[numActiveLayouts] = layout;
         ++numActiveLayouts;
         return *this;
     }
-    RenderPassOutput& getRenderPassOutput(){
+    inline RenderPassOutput& getRenderPassOutput(){
         return renderPass;
     }
 };

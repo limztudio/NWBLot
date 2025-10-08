@@ -175,7 +175,7 @@ private:
 template <typename T, usize maxAlignSize = s_maxAlignSize>
 class ScratchAllocator{
 public:
-    static_assert(IsConst_V<T>, "NWB::Core::Alloc::ScratchAllocator forbids containers of const elements because allocator<const T> is ill-formed.");
+    static_assert(!IsConst_V<T>, "NWB::Core::Alloc::ScratchAllocator forbids containers of const elements because allocator<const T> is ill-formed.");
     static_assert(!IsFunction_V<T>, "NWB::Core::Alloc::ScratchAllocator forbids allocators for function elements because of [allocator.requirements].");
     static_assert(!IsReference_V<T>, "NWB::Core::Alloc::ScratchAllocator forbids allocators for reference elements because of [allocator.requirements].");
 

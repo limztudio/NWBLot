@@ -23,7 +23,7 @@ Graphics::Graphics()
     , m_swapchainWidth(0)
     , m_swapchainHeight(0)
     , m_swapchainImageCount(0)
-    , m_presentMode(PresentMode::VSync)
+    , m_presentMode(PresentMode::V_SYNC)
 {
     m_engine = makeUnique<VulkanEngine>(this);
 }

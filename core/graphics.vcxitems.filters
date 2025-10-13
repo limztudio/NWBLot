@@ -15,6 +15,9 @@
     <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\config.cpp">
       <Filter>vulkan</Filter>
     </ClCompile>
+    <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\primitiveAssets.cpp">
+      <Filter>vulkan</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\common.h" />

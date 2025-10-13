@@ -18,6 +18,7 @@
     <ClCompile Include="$(MSBuildThisFileDirectory)graphics\graphics.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\config.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\engine.cpp" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\primitiveAssets.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\utility.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\VmaUsage.cpp" />
   </ItemGroup>

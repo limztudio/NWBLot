@@ -28,6 +28,8 @@ static constexpr const u8 s_maxDescriptorsPerSet = 16;
 static constexpr const u8 s_maxVertexStreams = 16;
 static constexpr const u8 s_maxVertexAttributes = 16;
 
+static constexpr const u8 s_maxSpirVSets = 32;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -578,6 +580,15 @@ struct PipelineCreation{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct SpirVParseResult{
+    u32 numSets = 0;
+    DescriptorSetLayoutCreation sets[s_maxSpirVSets];
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 struct Buffer{
     VkBuffer buffer;
     VmaAllocation allocation;
@@ -638,7 +649,7 @@ struct ShaderState{
     u32 activeShaderCount = 0;
     bool graphicsPipeline = false;
 
-    spirVResult;
+    SpirVParseResult parseResult;
 };
 
 struct DescriptorBinding{

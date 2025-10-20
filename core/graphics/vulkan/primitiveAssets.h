@@ -583,6 +583,9 @@ struct PipelineCreation{
 struct SpirVParseResult{
     u32 numSets = 0;
     DescriptorSetLayoutCreation sets[s_maxSpirVSets];
+
+
+    bool parse(const void* data, usize size, Alloc::CustomArena& arena);
 };
 
 

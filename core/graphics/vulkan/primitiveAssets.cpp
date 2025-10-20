@@ -14,5 +14,68 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+NWB_CORE_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct SpirVMember{
+    u32 idIndex = 0;
+    u32 offset = 0;
+
+    AStringView name;
+};
+
+struct SpirVId{
+    SpvOp op = SpvOpNop;
+    u32 set = 0;
+    u32 binding = 0;
+
+    // for integer, float
+    u8 width = 0;
+    u8 sign = 0;
+
+    // for arrays, vectors, matrices
+    u32 typeIndex = 0;
+    u32 count = 0;
+
+    // for variables
+    SpvStorageClass storageClass = SpvStorageClassUniformConstant;
+
+    // for constants
+    u32 value = 0;
+
+    // for structs
+    AStringView name;
+    CustomUniquePtr<SpirVMember[]> members;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool SpirVParseResult::parse(const void* raw, usize size, Alloc::CustomArena& arena){
+    NWB_ASSERT(!(size % 4));
+
+    u32 numWord = static_cast<u32>(size / 4);
+    const u32* data = static_cast<const u32*>(raw);
+
+    NWB_ASSERT(data[0] == 0x07230203);
+
+    const u32 idBound = data[3];
+
+    CustomUniquePtr<SpirVId[]> ids = makeCustomUnique<SpirVId[]>(arena, idBound);
+    
+    VkShaderStageFlags stage;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_END
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

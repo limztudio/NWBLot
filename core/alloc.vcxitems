@@ -23,6 +23,7 @@
     <ClInclude Include="$(MSBuildThisFileDirectory)alloc\assetPool.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)alloc\core.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)alloc\general.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)alloc\custom.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)alloc\memory.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)alloc\scratch.h" />
   </ItemGroup>

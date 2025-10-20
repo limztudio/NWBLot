@@ -10,6 +10,7 @@
 #include "core.h"
 
 #include "general.h"
+#include "custom.h"
 #include "scratch.h"
 #include "memory.h"
 

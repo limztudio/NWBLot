@@ -591,7 +591,19 @@ bool VulkanEngine::init(const Common::FrameData& data){
     }
 
     { // init pools
+        m_buffers.init(1024);
+        m_textures.init(512);
+        m_renderPasses.init(256);
+        m_descriptorSetLayouts.init(128);
+        m_pipelines.init(128);
+        m_shaderStates.init(128);
+        m_descriptorSets.init(256);
+        m_samplers.init(32);
+        //m_commandBuffers.init(128);
+    }
 
+    { // init timestamp manager
+        m_persistentArena.allocate(sizeof(TimestampManager), alignof(TimestampManager));
     }
 
     return true;

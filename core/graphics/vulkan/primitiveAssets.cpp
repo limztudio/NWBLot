@@ -203,8 +203,8 @@ bool SpirVParseResult::parse(const void* raw, usize size, Alloc::CustomArena& ar
 
             SpirVId& id = ids[idIndex];
             id.op = op;
-            id.width = static_cast<u8>(data[wordIndex + 2]);
-            id.sign = static_cast<u8>(data[wordIndex + 3]);
+            id.width = static_cast<decltype(id.width)>(data[wordIndex + 2]);
+            id.sign = static_cast<decltype(id.sign)>(data[wordIndex + 3]);
         }
         break;
 
@@ -217,7 +217,7 @@ bool SpirVParseResult::parse(const void* raw, usize size, Alloc::CustomArena& ar
 
             SpirVId& id = ids[idIndex];
             id.op = op;
-            id.width = static_cast<u8>(data[wordIndex + 2]);
+            id.width = static_cast<decltype(id.width)>(data[wordIndex + 2]);
         }
         break;
 

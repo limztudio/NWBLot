@@ -378,15 +378,54 @@ bool SpirVParseResult::parse(const void* raw, usize size, Alloc::CustomArena& ar
             case SpvStorageClassUniformConstant:
             {
                 if(
-                (id.set == 1)
+                    (id.set == 1)
+                    && ((id.binding == s_spirBindlessTextureBinding) || (id.binding == s_spirBindlessTextureBinding + 1))
+                    )
+                {
+                    // these are managed by the GPU
+                    continue;
+                }
+
+                SpirVId& uniformType = ids[ids[id.typeIndex].typeIndex];
+
+                DescriptorSetLayoutCreation& setLayout = sets[id.set];
+                setLayout.setIndex(id.set);
+
+                DescriptorSetLayoutCreation::Binding binding{};
+                {
+                    binding.index = static_cast<decltype(binding.index)>(id.binding);
+                    binding.count = 1;
+                }
+
+                switch(uniformType.op){
+                case SpvOpTypeStruct:
+                {
+                    binding.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+                    binding.name = uniformType.name.data();
+                }
+                break;
+
+                case SpvOpTypeSampledImage:
+                {
+                    binding.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+                    binding.name = uniformType.name.data();
+                }
+                break;
+                }
+
+                setLayout.addBindingAtIndex(binding, binding.index);
                 
-                )
-                continue;
+                if(numSets < id.set + 1)
+                    numSets = id.set + 1;
             }
             break;
             }
         }
+
+        id.members.release();
     }
+
+    ids.release();
 }
 
 

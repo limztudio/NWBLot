@@ -30,6 +30,8 @@ static constexpr const u8 s_maxVertexAttributes = 16;
 
 static constexpr const u8 s_maxSpirVSets = 32;
 
+static constexpr const u32 s_spirBindlessTextureBinding = 10;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -206,23 +206,10 @@ private:
 
 
 public:
-    AssetPool()
-        : m_dataAllocator()
-        , m_indexAllocator()
-        , m_data(nullptr)
-        , m_freeList(nullptr)
-        , m_freeListHead(0)
-        , m_usedCount(0)
-        , m_poolSize(s_defaultPoolSize)
-    {}
-    AssetPool(const Allocator<T>& dataAllocator, const Allocator<u32>& indexAllocator)
-        : m_dataAllocator(dataAllocator)
-        , m_indexAllocator(indexAllocator)
-        , m_data(nullptr)
-        , m_freeList(nullptr)
-        , m_freeListHead(0)
-        , m_usedCount(0)
-        , m_poolSize(s_defaultPoolSize)
+    AssetPool(){}
+    AssetPool(Allocator<T> dataAllocator, Allocator<u32> indexAllocator)
+        : m_dataAllocator(Move(dataAllocator))
+        , m_indexAllocator(Move(indexAllocator))
     {}
 
     virtual ~AssetPool(){ cleanup(); }
@@ -336,13 +323,13 @@ private:
     Allocator<AssetHandle<T>> m_indexAllocator;
 
 private:
-    T* m_data;
-    AssetHandle<T>* m_freeList;
+    T* m_data = nullptr;
+    AssetHandle<T>* m_freeList = nullptr;
 
 private:
-    u32 m_freeListHead;
-    u32 m_usedCount;
-    u32 m_poolSize;
+    u32 m_freeListHead = 0;
+    u32 m_usedCount = 0;
+    u32 m_poolSize = s_defaultPoolSize;
 };
 
 

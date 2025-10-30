@@ -13,6 +13,7 @@
 #include "config.h"
 #include "utility.h"
 #include "primitiveAssets.h"
+#include "timestamp.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -150,14 +151,6 @@ namespace __hidden_vulkan{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct GPUTimestamp{
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class VulkanEngine{
 private:
     static constexpr usize s_maxMemoryAllocSize = 32 * 1024 * 1024;
@@ -280,15 +273,17 @@ private:
     Graphics& m_parent;
 
 private:
-    BufferPool<Alloc::MemoryAllocator> m_buffers;
-    TexturePool<Alloc::MemoryAllocator> m_textures;
-    PipelinePool<Alloc::MemoryAllocator> m_pipelines;
-    SamplerPool<Alloc::MemoryAllocator> m_samplers;
-    DescriptorSetLayoutPool<Alloc::MemoryAllocator> m_descriptorSetLayouts;
-    DescriptorSetPool<Alloc::MemoryAllocator> m_descriptorSets;
-    RenderPassPool<Alloc::MemoryAllocator> m_renderPasses;
-    BufferPool<Alloc::MemoryAllocator> m_commandBuffers;
-    ShaderStatePool<Alloc::MemoryAllocator> m_shaderStates;
+    GPUTimestampPool<Graphics::PersistentAllocator> m_gpuTimestamps;
+
+    BufferPool<Graphics::PersistentAllocator> m_buffers;
+    TexturePool<Graphics::PersistentAllocator> m_textures;
+    PipelinePool<Graphics::PersistentAllocator> m_pipelines;
+    SamplerPool<Graphics::PersistentAllocator> m_samplers;
+    DescriptorSetLayoutPool<Graphics::PersistentAllocator> m_descriptorSetLayouts;
+    DescriptorSetPool<Graphics::PersistentAllocator> m_descriptorSets;
+    RenderPassPool<Graphics::PersistentAllocator> m_renderPasses;
+    BufferPool<Graphics::PersistentAllocator> m_commandBuffers;
+    ShaderStatePool<Graphics::PersistentAllocator> m_shaderStates;
 
 private:
     BufferHandle m_fullscreenVertexBuffer;
@@ -300,9 +295,6 @@ private:
 
 private:
     RenderPassOutput m_swapchainOutput;
-
-private:
-    Alloc::MemoryArena m_persistentArena;
 
 private:
     VkAllocationCallbacks* m_allocCallbacks;
@@ -343,8 +335,8 @@ private:
 
     bool m_supportBindless;
 
-private:
 #if defined(VULKAN_VALIDATE)
+private:
     bool m_debugUtilsExtensionPresents;
     __hidden_vulkan::VkDebugUtilsMessengerPtr m_debugMessenger;
 

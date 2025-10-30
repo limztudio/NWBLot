@@ -29,6 +29,12 @@ class Graphics{
     friend VulkanEngine;
 
 
+private:
+    template <typename T>
+    using PersistentAllocator = Alloc::MemoryAllocator<T>;
+    using PersistentArena = Alloc::MemoryArena;
+
+
 public:
     static constexpr const u32 s_maxDynamicAllocSize = 64 * 1024 * 1024;
 
@@ -44,7 +50,7 @@ public:
 
 
 private:
-    Alloc::MemoryArena m_memArena;
+    PersistentArena m_persistentArena;
 
 private:
     u16 m_swapchainWidth;

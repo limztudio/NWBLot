@@ -31,16 +31,16 @@ const char* VulkanEngine::s_requestedExtensions[] = {
 
 VulkanEngine::VulkanEngine(Graphics* parent)
     : m_parent(*parent)
-    , m_buffers(Alloc::MemoryAllocator<Buffer>(m_persistentArena), Alloc::MemoryAllocator<u32>(m_persistentArena))
-    , m_textures(Alloc::MemoryAllocator<Texture>(m_persistentArena), Alloc::MemoryAllocator<u32>(m_persistentArena))
-    , m_pipelines(Alloc::MemoryAllocator<Pipeline>(m_persistentArena), Alloc::MemoryAllocator<u32>(m_persistentArena))
-    , m_samplers(Alloc::MemoryAllocator<Sampler>(m_persistentArena), Alloc::MemoryAllocator<u32>(m_persistentArena))
-    , m_descriptorSetLayouts(Alloc::MemoryAllocator<DescriptorSetLayout>(m_persistentArena), Alloc::MemoryAllocator<u32>(m_persistentArena))
-    , m_descriptorSets(Alloc::MemoryAllocator<DescriptorSet>(m_persistentArena), Alloc::MemoryAllocator<u32>(m_persistentArena))
-    , m_renderPasses(Alloc::MemoryAllocator<RenderPass>(m_persistentArena), Alloc::MemoryAllocator<u32>(m_persistentArena))
-    , m_commandBuffers(Alloc::MemoryAllocator<Buffer>(m_persistentArena), Alloc::MemoryAllocator<u32>(m_persistentArena))
-    , m_shaderStates(Alloc::MemoryAllocator<ShaderState>(m_persistentArena), Alloc::MemoryAllocator<u32>(m_persistentArena))
-    , m_persistentArena(Alloc::MemoryArena::StructureAlignedSize(s_maxMemoryAllocSize))
+    , m_gpuTimestamps(Graphics::PersistentAllocator<u8>(parent->m_persistentArena))
+    , m_buffers(Graphics::PersistentAllocator<Buffer>(parent->m_persistentArena), Graphics::PersistentAllocator<u32>(parent->m_persistentArena))
+    , m_textures(Graphics::PersistentAllocator<Texture>(parent->m_persistentArena), Graphics::PersistentAllocator<u32>(parent->m_persistentArena))
+    , m_pipelines(Graphics::PersistentAllocator<Pipeline>(parent->m_persistentArena), Graphics::PersistentAllocator<u32>(parent->m_persistentArena))
+    , m_samplers(Graphics::PersistentAllocator<Sampler>(parent->m_persistentArena), Graphics::PersistentAllocator<u32>(parent->m_persistentArena))
+    , m_descriptorSetLayouts(Graphics::PersistentAllocator<DescriptorSetLayout>(parent->m_persistentArena), Graphics::PersistentAllocator<u32>(parent->m_persistentArena))
+    , m_descriptorSets(Graphics::PersistentAllocator<DescriptorSet>(parent->m_persistentArena), Graphics::PersistentAllocator<u32>(parent->m_persistentArena))
+    , m_renderPasses(Graphics::PersistentAllocator<RenderPass>(parent->m_persistentArena), Graphics::PersistentAllocator<u32>(parent->m_persistentArena))
+    , m_commandBuffers(Graphics::PersistentAllocator<Buffer>(parent->m_persistentArena), Graphics::PersistentAllocator<u32>(parent->m_persistentArena))
+    , m_shaderStates(Graphics::PersistentAllocator<ShaderState>(parent->m_persistentArena), Graphics::PersistentAllocator<u32>(parent->m_persistentArena))
     , m_allocCallbacks(nullptr)
     , m_inst(VK_NULL_HANDLE, __hidden_vulkan::VkInstanceDeleter(&m_allocCallbacks))
     , m_physDev(VK_NULL_HANDLE, __hidden_vulkan::VkPhysicalDeviceRefDeleter())
@@ -603,7 +603,7 @@ bool VulkanEngine::init(const Common::FrameData& data){
     }
 
     { // init timestamp manager
-        m_persistentArena.allocate(sizeof(TimestampManager), alignof(TimestampManager));
+        m_gpuTimestamps.init();
     }
 
     return true;

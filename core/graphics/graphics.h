@@ -53,11 +53,14 @@ private:
     PersistentArena m_persistentArena;
 
 private:
-    u16 m_swapchainWidth;
-    u16 m_swapchainHeight;
-    u8 m_swapchainImageCount;
+    u16 m_swapchainWidth = 0;
+    u16 m_swapchainHeight = 0;
+    u8 m_swapchainImageCount = 0;
 
-    PresentMode::Enum m_presentMode;
+    PresentMode::Enum m_presentMode = PresentMode::V_SYNC;
+
+    u16 m_gpuTimeQueriesPerFrame = 32;
+    bool m_gpuTimeQueriesEnabled = false;
 
 private:
     UniquePtr<VulkanEngine> m_engine;

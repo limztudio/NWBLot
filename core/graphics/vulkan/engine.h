@@ -129,6 +129,24 @@ namespace __hidden_vulkan{
     };
     using VkQueryPoolPtr = UniquePtr<VkQueryPool_T, VkQueryPoolDeleter>;
 
+    struct VkSemaphoreDeleter{
+        constexpr VkSemaphoreDeleter()noexcept = default;
+        constexpr VkSemaphoreDeleter(VkAllocationCallbacks** _callback, VkLogicalDevicePtr* _logiDev)noexcept : callback(_callback), logiDev(_logiDev){}
+        void operator()(VkSemaphore p)const noexcept{ vkDestroySemaphore(logiDev->get(), p, callback ? *callback : nullptr); }
+        VkAllocationCallbacks** callback = nullptr;
+        VkLogicalDevicePtr* logiDev = nullptr;
+    };
+    using VkSemaphorePtr = UniquePtr<VkSemaphore_T, VkSemaphoreDeleter>;
+
+    struct VkFenceDeleter{
+        constexpr VkFenceDeleter()noexcept = default;
+        constexpr VkFenceDeleter(VkAllocationCallbacks** _callback, VkLogicalDevicePtr* _logiDev)noexcept : callback(_callback), logiDev(_logiDev){}
+        void operator()(VkFence p)const noexcept{ vkDestroyFence(logiDev->get(), p, callback ? *callback : nullptr); }
+        VkAllocationCallbacks** callback = nullptr;
+        VkLogicalDevicePtr* logiDev = nullptr;
+    };
+    using VkFencePtr = UniquePtr<VkFence_T, VkFenceDeleter>;
+
 #if defined(VULKAN_VALIDATE)
     struct VkDebugUtilsMessengerDeleter{
         constexpr VkDebugUtilsMessengerDeleter()noexcept = default;
@@ -152,9 +170,6 @@ namespace __hidden_vulkan{
 
 
 class VulkanEngine{
-private:
-    static constexpr usize s_maxMemoryAllocSize = 32 * 1024 * 1024;
-
 private:
 #if defined(VULKAN_VALIDATE)
     static constexpr const char* s_validationLayerName[] = {
@@ -211,7 +226,7 @@ private:
     static constexpr const u32 s_maxBindlessRes = 1024;
     static constexpr const u32 s_maxBindlessTex = 10;
     static constexpr const VkDescriptorPoolSize s_bindlessSizes[] = {
-        { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, s_maxBindlessRes }, // isn't this suppossed be VK_DESCRIPTOR_TYPE_SAMPLER?
+        { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, s_maxBindlessRes }, // isn't this supposed be VK_DESCRIPTOR_TYPE_SAMPLER?
         { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, s_maxBindlessRes },
     };
     static constexpr const u32 s_numBinding = 4;
@@ -221,7 +236,6 @@ private:
         ;
 
     static constexpr const u32 s_maxFrame = 3;
-    static constexpr const u32 s_timeQueryPerFrame = 32;
 
     static constexpr const u8 s_maxSwapchainImages = 3;
 
@@ -297,52 +311,56 @@ private:
     RenderPassOutput m_swapchainOutput;
 
 private:
-    VkAllocationCallbacks* m_allocCallbacks;
+    VkAllocationCallbacks* m_allocCallbacks = nullptr;
 
 private:
     __hidden_vulkan::VkInstancePtr m_inst;
 
     __hidden_vulkan::VkPhysicalDeviceRef m_physDev;
-    VkPhysicalDeviceProperties m_physDevProps;
+    VkPhysicalDeviceProperties m_physDevProps{};
 
     __hidden_vulkan::VkLogicalDevicePtr m_logiDev;
 
     __hidden_vulkan::VkQueueRef m_queue;
-    u32 m_queueFamilly;
+    u32 m_queueFamilly = 0;
 
     __hidden_vulkan::VkDescriptorPoolPtr m_descriptorPool;
 
     __hidden_vulkan::VkDescriptorSetLayoutPtr m_bindlessDescriptorSetLayout;
-    VkDescriptorSet m_bindlessDescriptorSet;
+    VkDescriptorSet m_bindlessDescriptorSet = VK_NULL_HANDLE;
     __hidden_vulkan::VkDescriptorPoolPtr m_bindlessDescriptorPool;
-
-    __hidden_vulkan::VkQueryPoolPtr m_timestampQueryPool;
 
     __hidden_vulkan::VkImageRef m_swapchainImages[s_maxSwapchainImages];
     __hidden_vulkan::VkImageViewPtr m_swapchainImageViews[s_maxSwapchainImages];
     __hidden_vulkan::VkFramebufferPtr m_swapchainFrameBuffers[s_maxSwapchainImages];
 
+    __hidden_vulkan::VkQueryPoolPtr m_timestampQueryPool;
+
+    __hidden_vulkan::VkSemaphorePtr m_semphoreRenderComplete[s_maxSwapchainImages];
+    __hidden_vulkan::VkSemaphorePtr m_semphoreImageAcquire[s_maxSwapchainImages];
+    __hidden_vulkan::VkFencePtr m_fenceCommandBufferExecuted[s_maxSwapchainImages];
+
     __hidden_vulkan::VkSurfacePtr m_winSurf;
-    VkSurfaceFormatKHR m_winSurfFormat;
-    VkPresentModeKHR m_presentMode;
+    VkSurfaceFormatKHR m_winSurfFormat{ VK_FORMAT_UNDEFINED, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR };
+    VkPresentModeKHR m_presentMode = VK_PRESENT_MODE_FIFO_KHR;
     __hidden_vulkan::VkSwapchainPtr m_swapchain;
 
     __hidden_vulkan::VmaAllocatorPtr m_allocator;
 
-    f32 m_timestampFrequency;
-    u64 m_uboAlignment;
-    u64 m_ssboAlignment;
+    f32 m_timestampFrequency = 0;
+    u64 m_uboAlignment = 256;
+    u64 m_ssboAlignment = 256;
 
-    bool m_supportBindless;
+    bool m_supportBindless = false;
 
 #if defined(VULKAN_VALIDATE)
 private:
-    bool m_debugUtilsExtensionPresents;
+    bool m_debugUtilsExtensionPresents = false;
     __hidden_vulkan::VkDebugUtilsMessengerPtr m_debugMessenger;
 
-    PFN_vkSetDebugUtilsObjectNameEXT fnSetDebugUtilsObjectNameEXT;
-    PFN_vkCmdBeginDebugUtilsLabelEXT fnCmdBeginDebugUtilsLabelEXT;
-    PFN_vkCmdEndDebugUtilsLabelEXT fnCmdEndDebugUtilsLabelEXT;
+    PFN_vkSetDebugUtilsObjectNameEXT fnSetDebugUtilsObjectNameEXT = nullptr;
+    PFN_vkCmdBeginDebugUtilsLabelEXT fnCmdBeginDebugUtilsLabelEXT = nullptr;
+    PFN_vkCmdEndDebugUtilsLabelEXT fnCmdEndDebugUtilsLabelEXT = nullptr;
 #endif
 };
 

@@ -20,13 +20,8 @@ NWB_CORE_BEGIN
 
 Graphics::Graphics()
     : m_persistentArena(s_maxDynamicAllocSize)
-    , m_swapchainWidth(0)
-    , m_swapchainHeight(0)
-    , m_swapchainImageCount(0)
-    , m_presentMode(PresentMode::V_SYNC)
-{
-    m_engine = makeUnique<VulkanEngine>(this);
-}
+    , m_engine(makeUnique<VulkanEngine>(this))
+{}
 Graphics::~Graphics(){}
 
 bool Graphics::init(const Common::FrameData& data){ return m_engine->init(data); }

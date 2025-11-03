@@ -41,39 +41,29 @@ VulkanEngine::VulkanEngine(Graphics* parent)
     , m_renderPasses(Graphics::PersistentAllocator<RenderPass>(parent->m_persistentArena), Graphics::PersistentAllocator<u32>(parent->m_persistentArena))
     , m_commandBuffers(Graphics::PersistentAllocator<Buffer>(parent->m_persistentArena), Graphics::PersistentAllocator<u32>(parent->m_persistentArena))
     , m_shaderStates(Graphics::PersistentAllocator<ShaderState>(parent->m_persistentArena), Graphics::PersistentAllocator<u32>(parent->m_persistentArena))
-    , m_allocCallbacks(nullptr)
     , m_inst(VK_NULL_HANDLE, __hidden_vulkan::VkInstanceDeleter(&m_allocCallbacks))
     , m_physDev(VK_NULL_HANDLE, __hidden_vulkan::VkPhysicalDeviceRefDeleter())
-    , m_physDevProps{}
     , m_logiDev(VK_NULL_HANDLE, __hidden_vulkan::VkLogicalDeviceDeleter(&m_allocCallbacks))
     , m_queue(VK_NULL_HANDLE, __hidden_vulkan::VkQueueRefDeleter())
-    , m_queueFamilly(0)
     , m_descriptorPool(__hidden_vulkan::VkDescriptorPoolPtr(nullptr, __hidden_vulkan::VkDescriptorPoolDeleter(&m_allocCallbacks, &m_logiDev)))
     , m_bindlessDescriptorSetLayout(__hidden_vulkan::VkDescriptorSetLayoutPtr(nullptr, __hidden_vulkan::VkDescriptorSetLayoutDeleter(&m_allocCallbacks, &m_logiDev)))
-    , m_bindlessDescriptorSet(VK_NULL_HANDLE)
     , m_bindlessDescriptorPool(__hidden_vulkan::VkDescriptorPoolPtr(nullptr, __hidden_vulkan::VkDescriptorPoolDeleter(&m_allocCallbacks, &m_logiDev)))
     , m_timestampQueryPool(__hidden_vulkan::VkQueryPoolPtr(nullptr, __hidden_vulkan::VkQueryPoolDeleter(&m_allocCallbacks, &m_logiDev)))
     , m_winSurf(VK_NULL_HANDLE, __hidden_vulkan::VkSurfaceDeleter(&m_allocCallbacks, &m_inst))
-    , m_winSurfFormat{ VK_FORMAT_UNDEFINED, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR }
-    , m_presentMode(VK_PRESENT_MODE_FIFO_KHR)
     , m_swapchain(VK_NULL_HANDLE, __hidden_vulkan::VkSwapchainDeleter(&m_allocCallbacks, &m_logiDev))
     , m_allocator(VK_NULL_HANDLE, __hidden_vulkan::VmaAllocatorDeleter())
-    , m_timestampFrequency(0)
-    , m_uboAlignment(256)
-    , m_ssboAlignment(256)
-    , m_supportBindless(false)
 #if defined(VULKAN_VALIDATE)
-    , m_debugUtilsExtensionPresents(false)
     , m_debugMessenger(VK_NULL_HANDLE, __hidden_vulkan::VkDebugUtilsMessengerDeleter(&m_allocCallbacks, &m_inst))
-    , fnSetDebugUtilsObjectNameEXT(nullptr)
-    , fnCmdBeginDebugUtilsLabelEXT(nullptr)
-    , fnCmdEndDebugUtilsLabelEXT(nullptr)
 #endif
 {
     for(usize i = 0; i < s_maxSwapchainImages; ++i){
         m_swapchainImages[i] = __hidden_vulkan::VkImageRef(VK_NULL_HANDLE, __hidden_vulkan::VkImageRefDeleter());
         m_swapchainImageViews[i] = __hidden_vulkan::VkImageViewPtr(VK_NULL_HANDLE, __hidden_vulkan::VkImageViewDeleter(&m_allocCallbacks, &m_logiDev));
         m_swapchainFrameBuffers[i] = __hidden_vulkan::VkFramebufferPtr(VK_NULL_HANDLE, __hidden_vulkan::VkFramebufferDeleter(&m_allocCallbacks, &m_logiDev));
+
+        m_semphoreRenderComplete[i] = __hidden_vulkan::VkSemaphorePtr(VK_NULL_HANDLE, __hidden_vulkan::VkSemaphoreDeleter(&m_allocCallbacks, &m_logiDev));
+        m_semphoreImageAcquire[i] = __hidden_vulkan::VkSemaphorePtr(VK_NULL_HANDLE, __hidden_vulkan::VkSemaphoreDeleter(&m_allocCallbacks, &m_logiDev));
+        m_fenceCommandBufferExecuted[i] = __hidden_vulkan::VkFencePtr(VK_NULL_HANDLE, __hidden_vulkan::VkFenceDeleter(&m_allocCallbacks, &m_logiDev));
     }
 }
 VulkanEngine::~VulkanEngine(){ destroy(); }
@@ -576,7 +566,7 @@ bool VulkanEngine::init(const Common::FrameData& data){
         {
             createInfo.queryType = VK_QUERY_TYPE_TIMESTAMP;
             createInfo.flags = 0;
-            createInfo.queryCount = s_timeQueryPerFrame * 2 * s_maxFrame;
+            createInfo.queryCount = m_parent.m_gpuTimeQueriesPerFrame * 2 * s_maxFrame;
             createInfo.pipelineStatistics = 0;
             createInfo.pNext = nullptr;
         }
@@ -602,8 +592,44 @@ bool VulkanEngine::init(const Common::FrameData& data){
         //m_commandBuffers.init(128);
     }
 
-    { // init timestamp manager
-        m_gpuTimestamps.init();
+    {
+        for(usize i = 0; i < s_maxSwapchainImages; ++i){
+            {
+                VkSemaphoreCreateInfo createInfo{ VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
+                
+                VkSemaphore object = VK_NULL_HANDLE;
+                err = vkCreateSemaphore(m_logiDev.get(), &createInfo, m_allocCallbacks, &object);
+                if(err != VK_SUCCESS){
+                    NWB_LOGGER_ERROR(NWB_TEXT("Failed to create render complete semaphore: {}"), StringConvert(VulkanResultString(err)));
+                    return false;
+                }
+                m_semphoreRenderComplete[i].reset(object);
+            
+                object = VK_NULL_HANDLE;
+                err = vkCreateSemaphore(m_logiDev.get(), &createInfo, m_allocCallbacks, &object);
+                if(err != VK_SUCCESS){
+                    NWB_LOGGER_ERROR(NWB_TEXT("Failed to create image acquire semaphore: {}"), StringConvert(VulkanResultString(err)));
+                    return false;
+                }
+                m_semphoreImageAcquire[i].reset(object);
+            }
+            {
+                VkFenceCreateInfo fenceCreateInfo{ VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
+                {
+                    fenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+                }
+
+                VkFence object = VK_NULL_HANDLE;
+                err = vkCreateFence(m_logiDev.get(), &fenceCreateInfo, m_allocCallbacks, &object);
+                if(err != VK_SUCCESS){
+                    NWB_LOGGER_ERROR(NWB_TEXT("Failed to create command buffer executed fence: {}"), StringConvert(VulkanResultString(err)));
+                    return false;
+                }
+                m_fenceCommandBufferExecuted[i].reset(object);
+            }
+        }
+
+        m_gpuTimestamps.init(m_parent.m_gpuTimeQueriesPerFrame, s_maxFrame);
     }
 
     return true;

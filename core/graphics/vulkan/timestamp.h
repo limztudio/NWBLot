@@ -39,10 +39,15 @@ struct GPUTimestamp{
 
 template <template <typename> typename Allocator>
 class GPUTimestampPool{
+private:
+    static constexpr const u32 s_DataPerQuery = 2;
+
+    
 public:
-    GPUTimestampPool(){}
-    GPUTimestampPool(Allocator<u8> allocator)
-        : m_allocator(Move(allocator))
+    GPUTimestampPool() = default;
+    GPUTimestampPool(Allocator<GPUTimestamp> timestampAllocator, Allocator<u64> dataAllocator)
+        : m_timestampAllocator(Move(timestampAllocator))
+        , m_dataAllocator(Move(dataAllocator))
     {}
 
     virtual ~GPUTimestampPool(){ cleanup(); }
@@ -51,28 +56,23 @@ public:
 public:
     void init(u16 queriesPerFrame, u16 maxFrames){
         m_queriesPerFrame = queriesPerFrame;
-
-        constexpr u32 DataperQuery = 2;
+        m_maxFrames = maxFrames;
 
         NWB_ASSERT(!m_timestamps && !m_data);
-        m_timestamps = m_allocator.allocate<GPUTimestamp>(maxFrames * m_queriesPerFrame);
-        m_data = m_allocator.allocate<u64>(maxFrames * m_queriesPerFrame * DataperQuery);
+        m_timestamps = m_timestampAllocator.allocate(m_maxFrames * m_queriesPerFrame);
+        m_data = m_dataAllocator.allocate(m_maxFrames * m_queriesPerFrame * s_DataPerQuery);
         NWB_ASSERT(m_timestamps && m_data);
-
-#if defined(NWB_DEBUG)
-        m_maxQueriesPerFrame = queriesPerFrame;
-#endif
 
         reset();
     }
 
     void cleanup(){
         if(m_timestamps){
-            m_allocator.deallocate(m_timestamps, m_queriesPerFrame * Config::MaxFrames);
+            m_timestampAllocator.deallocate(m_timestamps, m_maxFrames * m_queriesPerFrame);
             m_timestamps = nullptr;
         }
         if(m_data){
-            m_allocator.deallocate(m_data, m_queriesPerFrame * Config::MaxFrames * 2);
+            m_dataAllocator.deallocate(m_data, m_maxFrames * m_queriesPerFrame * s_DataPerQuery);
             m_data = nullptr;
         }
     }
@@ -87,15 +87,15 @@ public:
     bool hasValidQueries()const{ return (m_currentQuery > 0) && (m_depth == 0); }
 
     u32 resolve(u32 currentFrame, GPUTimestamp* outTimeStamp)const{
-        NWB_ASSERT(currentFrame < m_maxQueriesPerFrame);
-        MWB_MEMCPY(outTimeStamp, &m_timestamps[currentFrame * m_queriesPerFrame], sizeof(GPUTimestamp) * m_currentQuery);
+        NWB_ASSERT(currentFrame < m_maxFrames);
+        NWB_MEMCPY(outTimeStamp, sizeof(GPUTimestamp) * m_currentQuery, &m_timestamps[currentFrame * m_queriesPerFrame], sizeof(GPUTimestamp) * m_currentQuery);
         return m_currentQuery;
     }
 
     u32 push(u32 currentFrame, const char* name){
         const u32 queryIndex = (currentFrame * m_queriesPerFrame) + m_currentQuery;
 
-        NWB_ASSERT(queryIndex < (m_maxQueriesPerFrame * m_queriesPerFrame));
+        NWB_ASSERT(queryIndex < (m_maxFrames * m_queriesPerFrame));
         GPUTimestamp& timestamp = m_timestamps[queryIndex];
         {
             timestamp.parentIndex = static_cast<decltype(timestamp.parentIndex)>(m_parentIndex);
@@ -112,7 +112,7 @@ public:
     u32 pop(u32 currentFrame){
         const u32 queryIndex = (currentFrame * m_queriesPerFrame) + m_parentIndex;
 
-        NWB_ASSERT(queryIndex < (m_maxQueriesPerFrame * m_queriesPerFrame));
+        NWB_ASSERT(queryIndex < (m_maxFrames * m_queriesPerFrame));
         const GPUTimestamp& timestamp = m_timestamps[queryIndex];
 
         --m_depth;
@@ -123,19 +123,16 @@ public:
 
 
 private:
-    Allocator<u8> m_allocator;
+    Allocator<GPUTimestamp> m_timestampAllocator;
+    Allocator<u64> m_dataAllocator;
 
 private:
     GPUTimestamp* m_timestamps = nullptr;
     u64* m_data = nullptr;
 
-#if defined(NWB_DEBUG)
-private:
-    u16 m_maxQueriesPerFrame = 0;
-#endif
-
 private:
     u32 m_queriesPerFrame = 0;
+    u32 m_maxFrames = 0;
     u32 m_currentQuery = 0;
     u32 m_parentIndex = 0;
     u32 m_depth = 0;

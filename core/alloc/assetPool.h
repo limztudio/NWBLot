@@ -206,7 +206,7 @@ private:
 
 
 public:
-    AssetPool(){}
+    AssetPool() = default;
     AssetPool(Allocator<T> dataAllocator, Allocator<u32> indexAllocator)
         : m_dataAllocator(Move(dataAllocator))
         , m_indexAllocator(Move(indexAllocator))

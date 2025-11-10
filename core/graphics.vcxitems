@@ -20,6 +20,8 @@
     <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\engine.cpp" />
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\primitiveAssets.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\timestamp.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\dataStructures.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\commandBuffer.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\utility.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\VmaUsage.cpp" />
   </ItemGroup>
@@ -30,6 +32,8 @@
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\engine.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\primitiveAssets.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\timestamp.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\dataStructures.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\commandBuffer.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\utility.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\vk_mem_alloc.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\VmaUsage.h" />

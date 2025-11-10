@@ -12,6 +12,12 @@
     <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\timestamp.cpp">
       <Filter>vulkan</Filter>
     </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\dataStructures.cpp">
+      <Filter>vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\commandBuffer.cpp">
+      <Filter>vulkan</Filter>
+    </ClCompile>
     <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\utility.cpp">
       <Filter>vulkan</Filter>
     </ClCompile>
@@ -35,6 +41,12 @@
       <Filter>vulkan</Filter>
     </ClInclude>
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\timestamp.h">
+      <Filter>vulkan</Filter>
+    </ClInclude>
+    <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\dataStructures.h">
+      <Filter>vulkan</Filter>
+    </ClInclude>
+    <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\commandBuffer.h">
       <Filter>vulkan</Filter>
     </ClInclude>
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\utility.h">

@@ -64,7 +64,7 @@ bool SpirVParseResult::parse(const void* raw, usize size, Alloc::CustomArena& ar
     NWB_ASSERT(data[0] == 0x07230203);
 
     const u32 idBound = data[3];
-    CustomUniquePtr<SpirVId[]> ids = makeCustomUnique<SpirVId[]>(arena, idBound);
+    CustomUniquePtr<SpirVId[]> ids = MakeCustomUnique<SpirVId[]>(arena, idBound);
     
     VkShaderStageFlags stage = 0;
 
@@ -130,7 +130,7 @@ bool SpirVParseResult::parse(const void* raw, usize size, Alloc::CustomArena& ar
             u32 memberIndex = data[wordIndex + 2];
 
             if(!id.members)
-                id.members = makeCustomUnique<SpirVMember[]>(arena, 64);
+                id.members = MakeCustomUnique<SpirVMember[]>(arena, 64);
 
             SpirVMember& member = id.members[memberIndex];
 
@@ -177,7 +177,7 @@ bool SpirVParseResult::parse(const void* raw, usize size, Alloc::CustomArena& ar
             u32 memberIndex = data[wordIndex + 2];
 
             if(!id.members)
-                id.members = makeCustomUnique<SpirVMember[]>(arena, 64);
+                id.members = MakeCustomUnique<SpirVMember[]>(arena, 64);
 
             SpirVMember& member = id.members[memberIndex];
 

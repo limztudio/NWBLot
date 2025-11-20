@@ -169,17 +169,17 @@ template <typename T>
 using CustomUniquePtr = UniquePtr<T, ArenaDeleter<T, NWB::Core::Alloc::CustomArena>>;
 
 template <typename T, typename... Args>
-inline typename EnableIf<!IsArray<T>::value, CustomUniquePtr<T>>::type makeCustomUnique(NWB::Core::Alloc::CustomArena& arena, Args&&... args){
+inline typename EnableIf<!IsArray<T>::value, CustomUniquePtr<T>>::type MakeCustomUnique(NWB::Core::Alloc::CustomArena& arena, Args&&... args){
     return CustomUniquePtr<T>(new(arena.allocate<T>(1)) T(Forward<Args>(args)...), CustomUniquePtr<T>::deleter_type(arena));
 }
 template <typename T>
-inline typename EnableIf<IsUnboundedArray<T>::value, CustomUniquePtr<T>>::type makeCustomUnique(NWB::Core::Alloc::CustomArena& arena, size_t n){
+inline typename EnableIf<IsUnboundedArray<T>::value, CustomUniquePtr<T>>::type MakeCustomUnique(NWB::Core::Alloc::CustomArena& arena, size_t n){
     typedef typename RemoveExtent<T>::type TBase;
     return CustomUniquePtr<T>(new(arena.allocate<TBase>(n)) TBase[n], CustomUniquePtr<T>::deleter_type(arena, n));
 }
 template <typename T, typename... Args>
 typename EnableIf<IsBoundedArray<T>::value>::type
-makeCustomUnique(Args&&...) = delete;
+MakeCustomUnique(Args&&...) = delete;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

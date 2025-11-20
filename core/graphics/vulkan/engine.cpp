@@ -86,7 +86,7 @@ bool VulkanEngine::init(const Common::FrameData& data){
                 return false;
             }
 
-            layerProps = makeScratchUnique<VkLayerProperties[]>(tmpArena, layerCount);
+            layerProps = MakeScratchUnique<VkLayerProperties[]>(tmpArena, layerCount);
             err = vkEnumerateInstanceLayerProperties(reinterpret_cast<uint32_t*>(&layerCount), layerProps.get());
             if(err != VK_SUCCESS){
                 NWB_LOGGER_ERROR(NWB_TEXT("Failed to get required instance layers: {}"), StringConvert(VulkanResultString(err)));
@@ -169,7 +169,7 @@ bool VulkanEngine::init(const Common::FrameData& data){
             return false;
         }
 
-        extProps = makeScratchUnique<VkExtensionProperties[]>(tmpArena, extCount);
+        extProps = MakeScratchUnique<VkExtensionProperties[]>(tmpArena, extCount);
         err = vkEnumerateInstanceExtensionProperties(nullptr, reinterpret_cast<uint32_t*>(&extCount), extProps.get());
         if(err != VK_SUCCESS){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to get required instance extensions: {}"), StringConvert(VulkanResultString(err)));
@@ -217,7 +217,7 @@ bool VulkanEngine::init(const Common::FrameData& data){
             return false;
         }
 
-        physDevs = makeScratchUnique<VkPhysicalDevice[]>(tmpArena, physDevCount);
+        physDevs = MakeScratchUnique<VkPhysicalDevice[]>(tmpArena, physDevCount);
         err = vkEnumeratePhysicalDevices(m_inst.get(), reinterpret_cast<uint32_t*>(&physDevCount), physDevs.get());
         if(err != VK_SUCCESS){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to get physical devices: {}"), StringConvert(VulkanResultString(err)));
@@ -240,7 +240,7 @@ bool VulkanEngine::init(const Common::FrameData& data){
             ScratchUniquePtr<VkQueueFamilyProperties[]> queueFamilies;
 
             vkGetPhysicalDeviceQueueFamilyProperties(physDev, reinterpret_cast<uint32_t*>(&queueFamilyCount), nullptr);
-            queueFamilies = makeScratchUnique<VkQueueFamilyProperties[]>(tmpArena, queueFamilyCount);
+            queueFamilies = MakeScratchUnique<VkQueueFamilyProperties[]>(tmpArena, queueFamilyCount);
 
             vkGetPhysicalDeviceQueueFamilyProperties(physDev, reinterpret_cast<uint32_t*>(&queueFamilyCount), queueFamilies.get());
 
@@ -378,7 +378,7 @@ bool VulkanEngine::init(const Common::FrameData& data){
             return false;
         }
 
-        supportedFormats = makeScratchUnique<VkSurfaceFormatKHR[]>(tmpArena, supportedCount);
+        supportedFormats = MakeScratchUnique<VkSurfaceFormatKHR[]>(tmpArena, supportedCount);
         err = vkGetPhysicalDeviceSurfaceFormatsKHR(m_physDev.get(), m_winSurf.get(), reinterpret_cast<uint32_t*>(&supportedCount), supportedFormats.get());
         if(err != VK_SUCCESS){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to get physical device surface formats: {}"), StringConvert(VulkanResultString(err)));

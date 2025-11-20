@@ -239,17 +239,17 @@ template <typename T>
 using StackonlyUniquePtr = UniquePtr<T, EmptyDeleter<T>>;
 
 template <typename T, usize maxAlignSize = NWB::Core::Alloc::s_maxAlignSize, typename... Args>
-inline typename EnableIf<!IsArray<T>::value, ScratchUniquePtr<T, maxAlignSize>>::type makeScratchUnique(NWB::Core::Alloc::ScratchArena<maxAlignSize>& arena, Args&&... args){
+inline typename EnableIf<!IsArray<T>::value, ScratchUniquePtr<T, maxAlignSize>>::type MakeScratchUnique(NWB::Core::Alloc::ScratchArena<maxAlignSize>& arena, Args&&... args){
     return ScratchUniquePtr<T, maxAlignSize>(new(arena.allocate<T>(1)) T(Forward<Args>(args)...), ScratchUniquePtr<T, maxAlignSize>::deleter_type(arena));
 }
 template <typename T, usize maxAlignSize = NWB::Core::Alloc::s_maxAlignSize>
-inline typename EnableIf<IsUnboundedArray<T>::value, ScratchUniquePtr<T, maxAlignSize>>::type makeScratchUnique(NWB::Core::Alloc::ScratchArena<maxAlignSize>& arena, size_t n){
+inline typename EnableIf<IsUnboundedArray<T>::value, ScratchUniquePtr<T, maxAlignSize>>::type MakeScratchUnique(NWB::Core::Alloc::ScratchArena<maxAlignSize>& arena, size_t n){
     typedef typename RemoveExtent<T>::type TBase;
     return ScratchUniquePtr<T, maxAlignSize>(new(arena.allocate<TBase>(n)) TBase[n], ScratchUniquePtr<T, maxAlignSize>::deleter_type(arena, n));
 }
 template <typename T, typename... Args>
 typename EnableIf<IsBoundedArray<T>::value>::type
-makeScratchUnique(Args&&...) = delete;
+MakeScratchUnique(Args&&...) = delete;
 
 template <typename T, usize maxAlignSize = NWB::Core::Alloc::s_maxAlignSize, typename... Args>
 inline typename EnableIf<!IsArray<T>::value, StackonlyUniquePtr<T>>::type makeStackonlyUnique(NWB::Core::Alloc::ScratchArena<maxAlignSize>& arena, Args&&... args){

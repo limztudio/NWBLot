@@ -20,7 +20,7 @@ NWB_CORE_BEGIN
 
 Graphics::Graphics()
     : m_persistentArena(s_maxDynamicAllocSize)
-    , m_engine(makeUnique<VulkanEngine>(this))
+    , m_engine(MakeUnique<VulkanEngine>(this))
 {}
 Graphics::~Graphics(){}
 

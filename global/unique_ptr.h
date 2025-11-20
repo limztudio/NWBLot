@@ -185,17 +185,17 @@ protected:
 
 
 template <typename T, typename... Args>
-inline typename EnableIf<!IsArray<T>::value, UniquePtr<T>>::type makeUnique(Args&&... args){
+inline typename EnableIf<!IsArray<T>::value, UniquePtr<T>>::type MakeUnique(Args&&... args){
 	return UniquePtr<T>(new T(Forward<Args>(args)...));
 }
 template <typename T>
-inline typename EnableIf<IsUnboundedArray<T>::value, UniquePtr<T>>::type makeUnique(size_t n){
+inline typename EnableIf<IsUnboundedArray<T>::value, UniquePtr<T>>::type MakeUnique(size_t n){
 	typedef typename RemoveExtent<T>::type TBase;
 	return UniquePtr<T>(new TBase[n]);
 }
 template <typename T, typename... Args>
 typename EnableIf<IsBoundedArray<T>::value>::type
-makeUnique(Args&&...) = delete;
+MakeUnique(Args&&...) = delete;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

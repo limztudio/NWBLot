@@ -31,7 +31,7 @@ const char* VulkanEngine::s_requestedExtensions[] = {
 
 VulkanEngine::VulkanEngine(Graphics* parent)
     : m_parent(*parent)
-    , m_gpuTimestamps(Graphics::PersistentAllocator<u8>(parent->m_persistentArena))
+    , m_gpuTimestamps(Graphics::PersistentAllocator<GPUTimestamp>(parent->m_persistentArena), Graphics::PersistentAllocator<u64>(parent->m_persistentArena))
     , m_buffers(Graphics::PersistentAllocator<Buffer>(parent->m_persistentArena), Graphics::PersistentAllocator<u32>(parent->m_persistentArena))
     , m_textures(Graphics::PersistentAllocator<Texture>(parent->m_persistentArena), Graphics::PersistentAllocator<u32>(parent->m_persistentArena))
     , m_pipelines(Graphics::PersistentAllocator<Pipeline>(parent->m_persistentArena), Graphics::PersistentAllocator<u32>(parent->m_persistentArena))

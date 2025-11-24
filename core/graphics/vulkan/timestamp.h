@@ -37,17 +37,15 @@ struct GPUTimestamp{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template <template <typename> typename Allocator>
+template <typename Arena>
 class GPUTimestampPool{
 private:
     static constexpr const u32 s_DataPerQuery = 2;
 
     
 public:
-    GPUTimestampPool() = default;
-    GPUTimestampPool(Allocator<GPUTimestamp> timestampAllocator, Allocator<u64> dataAllocator)
-        : m_timestampAllocator(Move(timestampAllocator))
-        , m_dataAllocator(Move(dataAllocator))
+    GPUTimestampPool(Arena& arena)
+        : m_arena(arena)
     {}
 
     virtual ~GPUTimestampPool(){ cleanup(); }
@@ -59,8 +57,8 @@ public:
         m_maxFrames = maxFrames;
 
         NWB_ASSERT(!m_timestamps && !m_data);
-        m_timestamps = m_timestampAllocator.allocate(m_maxFrames * m_queriesPerFrame);
-        m_data = m_dataAllocator.allocate(m_maxFrames * m_queriesPerFrame * s_DataPerQuery);
+        m_timestamps = m_arena.template allocate<GPUTimestamp>(m_maxFrames * m_queriesPerFrame);
+        m_data = m_arena.template allocate<u64>(m_maxFrames * m_queriesPerFrame * s_DataPerQuery);
         NWB_ASSERT(m_timestamps && m_data);
 
         reset();
@@ -68,11 +66,11 @@ public:
 
     void cleanup(){
         if(m_timestamps){
-            m_timestampAllocator.deallocate(m_timestamps, m_maxFrames * m_queriesPerFrame);
+            m_arena.template deallocate<GPUTimestamp>(m_timestamps, m_maxFrames * m_queriesPerFrame);
             m_timestamps = nullptr;
         }
         if(m_data){
-            m_dataAllocator.deallocate(m_data, m_maxFrames * m_queriesPerFrame * s_DataPerQuery);
+            m_arena.template deallocate<u64>(m_data, m_maxFrames * m_queriesPerFrame * s_DataPerQuery);
             m_data = nullptr;
         }
     }
@@ -123,8 +121,7 @@ public:
 
 
 private:
-    Allocator<GPUTimestamp> m_timestampAllocator;
-    Allocator<u64> m_dataAllocator;
+    Arena& m_arena;
 
 private:
     GPUTimestamp* m_timestamps = nullptr;

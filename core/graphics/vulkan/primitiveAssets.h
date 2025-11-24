@@ -38,8 +38,8 @@ static constexpr const u32 s_spirBindlessTextureBinding = 10;
 
 #define NWB_DEFINE_ASSET_TYPE(T, INDEX) \
     struct T; \
-    template <template <typename> typename Allocator> \
-    using T##Pool = Alloc::AssetPool<T, Allocator>; \
+    template <typename Arena> \
+    using T##Pool = Alloc::AssetPool<T, Arena>; \
     using T##Handle = Alloc::AssetHandle<T>; \
     namespace Alloc{ constexpr u8 AssetTypeIndex(Alloc::AssetTypeTag<T>)noexcept{ return static_cast<u8>(INDEX); } };
 

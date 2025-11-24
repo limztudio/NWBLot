@@ -45,6 +45,8 @@
 
 
 #if defined(NWB_DEBUG)
+#define NWB_OCCUR_ASSERT true
+#define NWB_OCCUR_WARNING true
 #if defined(_MSC_VER)
 #define NWB_HARDBREAK __debugbreak()
 #define NWB_SOFTBREAK __debugbreak()
@@ -53,6 +55,8 @@
 #define NWB_SOFTBREAK
 #endif
 #elif defined(NWB_OPTIMIZE)
+#define NWB_OCCUR_ASSERT false
+#define NWB_OCCUR_WARNING true
 #define NWB_HARDBREAK
 #if defined(_MSC_VER)
 #define NWB_SOFTBREAK __debugbreak()
@@ -60,6 +64,8 @@
 #define NWB_SOFTBREAK
 #endif
 #else
+#define NWB_OCCUR_ASSERT false
+#define NWB_OCCUR_WARNING false
 #define NWB_HARDBREAK
 #define NWB_SOFTBREAK
 #endif

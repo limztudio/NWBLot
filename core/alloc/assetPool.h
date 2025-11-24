@@ -199,17 +199,15 @@ template <typename T>
 inline bool operator!=(const AssetHandleFlexible& lhs, const AssetHandle<T>& rhs)noexcept{ return lhs.m_value.raw != rhs.m_value.raw; }
 
 
-template <typename T, template <typename> typename Allocator>
+template <typename T, typename Arena>
 class AssetPool{
 private:
     static constexpr const u32 s_defaultPoolSize = 16;
 
 
 public:
-    AssetPool() = default;
-    AssetPool(Allocator<T> dataAllocator, Allocator<u32> indexAllocator)
-        : m_dataAllocator(Move(dataAllocator))
-        , m_indexAllocator(Move(indexAllocator))
+    AssetPool(Arena& arena)
+        : m_arena(arena)
     {}
 
     virtual ~AssetPool(){ cleanup(); }
@@ -219,8 +217,8 @@ public:
     void init(){
         NWB_ASSERT(m_poolSize <= AssetHandleAny::s_indexMax);
 
-        m_data = reinterpret_cast<T*>(m_dataAllocator.allocate(m_poolSize));
-        m_freeList = reinterpret_cast<AssetHandle<T>*>(m_indexAllocator.allocate(m_poolSize));
+        m_data = m_arena.template allocate<T>(m_poolSize);
+        m_freeList = m_arena.template allocate<AssetHandle<T>>(m_poolSize);
 
         NWB_MEMSET(m_data, 0, m_poolSize * sizeof(T));
         m_freeListHead = 0;
@@ -261,8 +259,8 @@ public:
         }
         NWB_ASSERT(m_freeListHead == 0);
 
-        m_dataAllocator.deallocate(m_data, m_poolSize);
-        m_indexAllocator.deallocate(m_freeList, m_poolSize);
+        m_arena.template deallocate<T>(m_data, m_poolSize);
+        m_arena.template deallocate<AssetHandle<T>>(m_freeList, m_poolSize);
 
         m_data = nullptr;
         m_freeList = nullptr;
@@ -319,8 +317,7 @@ public:
 
 
 private:
-    Allocator<T> m_dataAllocator;
-    Allocator<AssetHandle<T>> m_indexAllocator;
+    Arena& m_arena;
 
 private:
     T* m_data = nullptr;

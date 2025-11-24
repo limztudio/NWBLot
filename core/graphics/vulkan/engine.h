@@ -287,17 +287,17 @@ private:
     Graphics& m_parent;
 
 private:
-    GPUTimestampPool<Graphics::PersistentAllocator> m_gpuTimestamps;
+    GPUTimestampPool<Graphics::PersistentArena> m_gpuTimestamps;
 
-    BufferPool<Graphics::PersistentAllocator> m_buffers;
-    TexturePool<Graphics::PersistentAllocator> m_textures;
-    PipelinePool<Graphics::PersistentAllocator> m_pipelines;
-    SamplerPool<Graphics::PersistentAllocator> m_samplers;
-    DescriptorSetLayoutPool<Graphics::PersistentAllocator> m_descriptorSetLayouts;
-    DescriptorSetPool<Graphics::PersistentAllocator> m_descriptorSets;
-    RenderPassPool<Graphics::PersistentAllocator> m_renderPasses;
-    BufferPool<Graphics::PersistentAllocator> m_commandBuffers;
-    ShaderStatePool<Graphics::PersistentAllocator> m_shaderStates;
+    BufferPool<Graphics::PersistentArena> m_buffers;
+    TexturePool<Graphics::PersistentArena> m_textures;
+    PipelinePool<Graphics::PersistentArena> m_pipelines;
+    SamplerPool<Graphics::PersistentArena> m_samplers;
+    DescriptorSetLayoutPool<Graphics::PersistentArena> m_descriptorSetLayouts;
+    DescriptorSetPool<Graphics::PersistentArena> m_descriptorSets;
+    RenderPassPool<Graphics::PersistentArena> m_renderPasses;
+    BufferPool<Graphics::PersistentArena> m_commandBuffers;
+    ShaderStatePool<Graphics::PersistentArena> m_shaderStates;
 
 private:
     BufferHandle m_fullscreenVertexBuffer;

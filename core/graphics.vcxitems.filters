@@ -49,6 +49,9 @@
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\commandBuffer.h">
       <Filter>vulkan</Filter>
     </ClInclude>
+    <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\commandBuffer.hpp">
+      <Filter>vulkan</Filter>
+    </ClInclude>
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\utility.h">
       <Filter>vulkan</Filter>
     </ClInclude>

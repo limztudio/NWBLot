@@ -34,6 +34,7 @@
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\timestamp.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\dataStructures.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\commandBuffer.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\commandBuffer.hpp" />
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\utility.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\vk_mem_alloc.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\VmaUsage.h" />

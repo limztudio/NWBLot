@@ -55,11 +55,11 @@ struct SpirVId{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool SpirVParseResult::parse(const void* raw, usize size, Alloc::CustomArena& arena){
+bool SpirVParseResult::parse(const void* rawData, usize size, Alloc::CustomArena& arena){
     NWB_ASSERT(!(size % 4));
 
     u32 numWord = static_cast<u32>(size / 4);
-    const u32* data = static_cast<const u32*>(raw);
+    const u32* data = static_cast<const u32*>(rawData);
 
     NWB_ASSERT(data[0] == 0x07230203);
 
@@ -426,6 +426,7 @@ bool SpirVParseResult::parse(const void* raw, usize size, Alloc::CustomArena& ar
     }
 
     ids.release();
+    return true;
 }
 
 

@@ -9,6 +9,7 @@
 #include "config.h"
 
 #include "dataStructures.h"
+#include "primitiveAssets.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -21,11 +22,28 @@ NWB_CORE_BEGIN
 
 
 template <typename PoolArena>
-struct CommandBuffer{
-    VkCommandBuffer commandBuffer;
+class CommandBuffer{
+private:
+    VkCommandBuffer m_vkCommandBuffer;
 
-    VkDescriptorPool descriptorPool;
-    ResourcePoolAny<PoolArena> descriptorSets;
+    VkDescriptorPool m_vkDescriptorPool;
+    ResourcePoolAny<PoolArena> m_descriptorSets;
+    
+    VkDescriptorSet m_vkDescriptorSets[16];
+    
+    RenderPass* m_currentRenderPass = nullptr;
+    Pipeline* m_currentPipeline = nullptr;
+    VkClearValue m_vkClears[2]; // 0 = color, 1 = depthStencil
+    bool m_isRecording = false;
+    
+    u32 m_handle;
+    
+    u32 m_currentCommand;
+    Alloc::AssetHandleFlexible m_resourceHandle;
+    QueueType::Enum m_type = QueueType::GRAPHICS;
+    u32 m_bufferSize = 0;
+    
+    bool m_baked = false;
 };
 
 

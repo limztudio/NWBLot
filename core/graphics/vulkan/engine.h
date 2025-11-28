@@ -258,13 +258,13 @@ private:
         VkImage swapchainImages[s_maxSwapchainImages] = { VK_NULL_HANDLE };
         VkImageView swapchainImagesViews[s_maxSwapchainImages] = { VK_NULL_HANDLE };
         bool bRet = Core::CreateSwapchain(
-            m_allocCallbacks,
-            m_physDev.get(),
-            m_logiDev.get(),
-            m_queueFamilly,
-            m_winSurf.get(),
-            m_winSurfFormat.format,
-            m_presentMode,
+            m_vkAllocCallbacks,
+            m_vkPhysicalDevice.get(),
+            m_vkLogicalDevice.get(),
+            m_queueFamily,
+            m_vkWinSurface.get(),
+            m_vkWinSurfaceFormat.format,
+            m_vkPresentMode,
             &m_parent.m_swapchainWidth,
             &m_parent.m_swapchainHeight,
             &m_parent.m_swapchainImageCount,
@@ -273,10 +273,10 @@ private:
             reinterpret_cast<VkImage**>(&swapchainImages),
             reinterpret_cast<VkImageView**>(&swapchainImagesViews)
         );
-        m_swapchain.reset(swapchain);
+        m_vkSwapchain.reset(swapchain);
         for(usize i = 0; i < s_maxSwapchainImages; ++i){
-            m_swapchainImages[i].reset(swapchainImages[i]);
-            m_swapchainImageViews[i].reset(swapchainImagesViews[i]);
+            m_vkSwapchainImages[i].reset(swapchainImages[i]);
+            m_vkSwapchainImageViews[i].reset(swapchainImagesViews[i]);
         }
         return bRet;
     }
@@ -311,41 +311,41 @@ private:
     RenderPassOutput m_swapchainOutput;
 
 private:
-    VkAllocationCallbacks* m_allocCallbacks = nullptr;
+    VkAllocationCallbacks* m_vkAllocCallbacks = nullptr;
 
 private:
-    __hidden_vulkan::VkInstancePtr m_inst;
+    __hidden_vulkan::VkInstancePtr m_vkInstance;
 
-    __hidden_vulkan::VkPhysicalDeviceRef m_physDev;
-    VkPhysicalDeviceProperties m_physDevProps{};
+    __hidden_vulkan::VkPhysicalDeviceRef m_vkPhysicalDevice;
+    VkPhysicalDeviceProperties m_vkPhysicalDeviceProperties{};
 
-    __hidden_vulkan::VkLogicalDevicePtr m_logiDev;
+    __hidden_vulkan::VkLogicalDevicePtr m_vkLogicalDevice;
 
-    __hidden_vulkan::VkQueueRef m_queue;
-    u32 m_queueFamilly = 0;
+    __hidden_vulkan::VkQueueRef m_vkQueue;
+    u32 m_queueFamily = 0;
 
-    __hidden_vulkan::VkDescriptorPoolPtr m_descriptorPool;
+    __hidden_vulkan::VkDescriptorPoolPtr m_vkDescriptorPool;
 
-    __hidden_vulkan::VkDescriptorSetLayoutPtr m_bindlessDescriptorSetLayout;
-    VkDescriptorSet m_bindlessDescriptorSet = VK_NULL_HANDLE;
-    __hidden_vulkan::VkDescriptorPoolPtr m_bindlessDescriptorPool;
+    __hidden_vulkan::VkDescriptorSetLayoutPtr m_vkBindlessDescriptorSetLayout;
+    VkDescriptorSet m_vkBindlessDescriptorSet = VK_NULL_HANDLE;
+    __hidden_vulkan::VkDescriptorPoolPtr m_vkBindlessDescriptorPool;
 
-    __hidden_vulkan::VkImageRef m_swapchainImages[s_maxSwapchainImages];
-    __hidden_vulkan::VkImageViewPtr m_swapchainImageViews[s_maxSwapchainImages];
-    __hidden_vulkan::VkFramebufferPtr m_swapchainFrameBuffers[s_maxSwapchainImages];
+    __hidden_vulkan::VkImageRef m_vkSwapchainImages[s_maxSwapchainImages];
+    __hidden_vulkan::VkImageViewPtr m_vkSwapchainImageViews[s_maxSwapchainImages];
+    __hidden_vulkan::VkFramebufferPtr m_vkSwapchainFrameBuffers[s_maxSwapchainImages];
 
-    __hidden_vulkan::VkQueryPoolPtr m_timestampQueryPool;
+    __hidden_vulkan::VkQueryPoolPtr m_vkTimestampQueryPool;
 
-    __hidden_vulkan::VkSemaphorePtr m_semphoreRenderComplete[s_maxSwapchainImages];
-    __hidden_vulkan::VkSemaphorePtr m_semphoreImageAcquire[s_maxSwapchainImages];
-    __hidden_vulkan::VkFencePtr m_fenceCommandBufferExecuted[s_maxSwapchainImages];
+    __hidden_vulkan::VkSemaphorePtr m_vkSemaphoreRenderComplete[s_maxSwapchainImages];
+    __hidden_vulkan::VkSemaphorePtr m_vkSemaphoreImageAcquire[s_maxSwapchainImages];
+    __hidden_vulkan::VkFencePtr m_vkFenceCommandBufferExecuted[s_maxSwapchainImages];
 
-    __hidden_vulkan::VkSurfacePtr m_winSurf;
-    VkSurfaceFormatKHR m_winSurfFormat{ VK_FORMAT_UNDEFINED, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR };
-    VkPresentModeKHR m_presentMode = VK_PRESENT_MODE_FIFO_KHR;
-    __hidden_vulkan::VkSwapchainPtr m_swapchain;
+    __hidden_vulkan::VkSurfacePtr m_vkWinSurface;
+    VkSurfaceFormatKHR m_vkWinSurfaceFormat{ VK_FORMAT_UNDEFINED, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR };
+    VkPresentModeKHR m_vkPresentMode = VK_PRESENT_MODE_FIFO_KHR;
+    __hidden_vulkan::VkSwapchainPtr m_vkSwapchain;
 
-    __hidden_vulkan::VmaAllocatorPtr m_allocator;
+    __hidden_vulkan::VmaAllocatorPtr m_vkAllocator;
 
     f32 m_timestampFrequency = 0;
     u64 m_uboAlignment = 256;
@@ -356,11 +356,11 @@ private:
 #if defined(VULKAN_VALIDATE)
 private:
     bool m_debugUtilsExtensionPresents = false;
-    __hidden_vulkan::VkDebugUtilsMessengerPtr m_debugMessenger;
+    __hidden_vulkan::VkDebugUtilsMessengerPtr m_vkDebugMessenger;
 
-    PFN_vkSetDebugUtilsObjectNameEXT fnSetDebugUtilsObjectNameEXT = nullptr;
-    PFN_vkCmdBeginDebugUtilsLabelEXT fnCmdBeginDebugUtilsLabelEXT = nullptr;
-    PFN_vkCmdEndDebugUtilsLabelEXT fnCmdEndDebugUtilsLabelEXT = nullptr;
+    PFN_vkSetDebugUtilsObjectNameEXT vkFuncSetDebugUtilsObjectNameEXT = nullptr;
+    PFN_vkCmdBeginDebugUtilsLabelEXT vkFuncCmdBeginDebugUtilsLabelEXT = nullptr;
+    PFN_vkCmdEndDebugUtilsLabelEXT vkFuncCmdEndDebugUtilsLabelEXT = nullptr;
 #endif
 };
 

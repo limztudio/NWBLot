@@ -69,10 +69,10 @@ struct ViewportState{
 };
 
 struct StencilOperationState{
-    VkStencilOp failOp = VK_STENCIL_OP_KEEP;
-    VkStencilOp passOp = VK_STENCIL_OP_KEEP;
-    VkStencilOp depthFailOp = VK_STENCIL_OP_KEEP;
-    VkCompareOp compareOp = VK_COMPARE_OP_ALWAYS;
+    VkStencilOp vkFailOp = VK_STENCIL_OP_KEEP;
+    VkStencilOp vkPassOp = VK_STENCIL_OP_KEEP;
+    VkStencilOp vkDepthFailOp = VK_STENCIL_OP_KEEP;
+    VkCompareOp vkCompareOp = VK_COMPARE_OP_ALWAYS;
 
     u32 compareMask = 0xff;
     u32 writeMask = 0xff;
@@ -80,13 +80,13 @@ struct StencilOperationState{
 };
 
 struct BlendState{
-    VkBlendFactor srcColorFactor = VK_BLEND_FACTOR_ONE;
-    VkBlendFactor dstColorFactor = VK_BLEND_FACTOR_ZERO;
-    VkBlendOp colorOp = VK_BLEND_OP_ADD;
+    VkBlendFactor vkSrcColorFactor = VK_BLEND_FACTOR_ONE;
+    VkBlendFactor vkDstColorFactor = VK_BLEND_FACTOR_ZERO;
+    VkBlendOp vkColorOp = VK_BLEND_OP_ADD;
 
-    VkBlendFactor srcAlphaFactor = VK_BLEND_FACTOR_ONE;
-    VkBlendFactor dstAlphaFactor = VK_BLEND_FACTOR_ZERO;
-    VkBlendOp alphaOp = VK_BLEND_OP_ADD;
+    VkBlendFactor vkSrcAlphaFactor = VK_BLEND_FACTOR_ONE;
+    VkBlendFactor vkDstAlphaFactor = VK_BLEND_FACTOR_ZERO;
+    VkBlendOp vkAlphaOp = VK_BLEND_OP_ADD;
 
     ColorWrite::Mask colorWriteMask = ColorWrite::Mask::MASK_ALL;
 
@@ -98,16 +98,16 @@ struct BlendState{
     BlendState() : blendEnabled(0), separateBlend(0) {}
 
     inline BlendState& setColor(VkBlendFactor src, VkBlendFactor dst, VkBlendOp op){
-        srcColorFactor = src;
-        dstColorFactor = dst;
-        colorOp = op;
+        vkSrcColorFactor = src;
+        vkDstColorFactor = dst;
+        vkColorOp = op;
         blendEnabled = 1;
         return *this;
     }
     inline BlendState& setAlpha(VkBlendFactor src, VkBlendFactor dst, VkBlendOp op){
-        srcAlphaFactor = src;
-        dstAlphaFactor = dst;
-        alphaOp = op;
+        vkSrcAlphaFactor = src;
+        vkDstAlphaFactor = dst;
+        vkAlphaOp = op;
         blendEnabled = 1;
         return *this;
     }
@@ -120,7 +120,7 @@ struct BlendState{
 struct ShaderStage{
     const char* code = nullptr;
     u32 codeSize = 0;
-    VkShaderStageFlagBits type = VK_SHADER_STAGE_FLAG_BITS_MAX_ENUM;
+    VkShaderStageFlagBits vkType = VK_SHADER_STAGE_FLAG_BITS_MAX_ENUM;
 };
 
 struct DescriptorSetUpdate{
@@ -142,8 +142,8 @@ struct VertexStream{
 };
 
 struct RenderPassOutput{
-    VkFormat colorFormats[s_maxImageOutputs];
-    VkFormat depthStencilFormat;
+    VkFormat vkColorFormats[s_maxImageOutputs];
+    VkFormat vkDepthStencilFormat;
     u32 numColorFormats = 0;
 
     RenderPassOperation::Enum colorOP = RenderPassOperation::DONT_CARE;
@@ -153,22 +153,22 @@ struct RenderPassOutput{
 
     inline RenderPassOutput& reset(){
         numColorFormats = 0;
-        for(auto& cur : colorFormats)
+        for(auto& cur : vkColorFormats)
             cur = VK_FORMAT_UNDEFINED;
-        depthStencilFormat = VK_FORMAT_UNDEFINED;
+        vkDepthStencilFormat = VK_FORMAT_UNDEFINED;
         colorOP = RenderPassOperation::DONT_CARE;
         depthOP = RenderPassOperation::DONT_CARE;
         stencilOP = RenderPassOperation::DONT_CARE;
         return *this;
     }
     inline RenderPassOutput& addColor(VkFormat format){
-        NWB_ASSERT(numColorFormats < LengthOf(colorFormats));
-        colorFormats[numColorFormats] = format;
+        NWB_ASSERT(numColorFormats < LengthOf(vkColorFormats));
+        vkColorFormats[numColorFormats] = format;
         ++numColorFormats;
         return *this;
     }
     inline RenderPassOutput& setDepthStencil(VkFormat format){
-        depthStencilFormat = format;
+        vkDepthStencilFormat = format;
         return *this;
     }
     inline RenderPassOutput& setOperations(RenderPassOperation::Enum color, RenderPassOperation::Enum depth, RenderPassOperation::Enum stencil){
@@ -186,7 +186,7 @@ struct RenderPassOutput{
 struct DepthStencilStateCreation{
     StencilOperationState front;
     StencilOperationState back;
-    VkCompareOp depthComarison = VK_COMPARE_OP_ALWAYS;
+    VkCompareOp vkDepthComparison = VK_COMPARE_OP_ALWAYS;
 
     u8 depthEnabled : 1;
     u8 depthWriteEnabled : 1;
@@ -198,7 +198,7 @@ struct DepthStencilStateCreation{
 
     inline DepthStencilStateCreation& setDepth(bool write, VkCompareOp comparisonTest){
         depthWriteEnabled = write ? 1 : 0;
-        depthComarison = comparisonTest;
+        vkDepthComparison = comparisonTest;
         depthEnabled = 1;
         return *this;
     }
@@ -220,13 +220,13 @@ struct BlendStateCreation{
 };
 
 struct RasterizationCreation{
-    VkCullModeFlagBits cullMode = VK_CULL_MODE_NONE;
-    VkFrontFace front = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    VkCullModeFlagBits vkCullMode = VK_CULL_MODE_NONE;
+    VkFrontFace vkFront = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     FillMode::Enum fill = FillMode::SOLID;
 };
 
 struct BufferCreation{
-    VkBufferUsageFlags flags = 0;
+    VkBufferUsageFlags vkFlags = 0;
     ResourceUsageType::Enum usage = ResourceUsageType::IMMUTABLE;
     u32 size = 0;
     void* initialData = nullptr;
@@ -240,7 +240,7 @@ struct BufferCreation{
         return *this;
     }
     inline BufferCreation& set(VkBufferUsageFlags _flags, ResourceUsageType::Enum _usage, u32 _size){
-        flags = _flags;
+        vkFlags = _flags;
         usage = _usage;
         size = _size;
         return *this;
@@ -263,7 +263,7 @@ struct TextureCreation{
     u8 mipmaps = 1;
     u8 flags = 0; // TextureFlags bitmasks
 
-    VkFormat format = VK_FORMAT_UNDEFINED;
+    VkFormat vkFormat = VK_FORMAT_UNDEFINED;
     TextureType::Enum type = TextureType::TEX2D;
 
     const char* name = nullptr;
@@ -281,7 +281,7 @@ struct TextureCreation{
         return *this;
     }
     inline TextureCreation& setFormat(VkFormat _format, TextureType::Enum _type){
-        format = _format;
+        vkFormat = _format;
         type = _type;
         return *this;
     }
@@ -296,36 +296,36 @@ struct TextureCreation{
 };
 
 struct SamplerCreation{
-    VkFilter minFilter = VK_FILTER_NEAREST;
-    VkFilter magFilter = VK_FILTER_NEAREST;
-    VkSamplerMipmapMode mipFilter = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+    VkFilter vkMinFilter = VK_FILTER_NEAREST;
+    VkFilter vkMagFilter = VK_FILTER_NEAREST;
+    VkSamplerMipmapMode vkMipFilter = VK_SAMPLER_MIPMAP_MODE_NEAREST;
 
-    VkSamplerAddressMode addressU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    VkSamplerAddressMode addressV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    VkSamplerAddressMode addressW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    VkSamplerAddressMode vkAddressU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    VkSamplerAddressMode vkAddressV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    VkSamplerAddressMode vkAddressW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
 
     const char* name = nullptr;
 
 
     inline SamplerCreation& setMinMagMip(VkFilter min, VkFilter mag, VkSamplerMipmapMode mip){
-        minFilter = min;
-        magFilter = mag;
-        mipFilter = mip;
+        vkMinFilter = min;
+        vkMagFilter = mag;
+        vkMipFilter = mip;
         return *this;
     }
     inline SamplerCreation& setAddressU(VkSamplerAddressMode u){
-        addressU = u;
+        vkAddressU = u;
         return *this;
     }
     inline SamplerCreation& setAddressUV(VkSamplerAddressMode u, VkSamplerAddressMode v){
-        addressU = u;
-        addressV = v;
+        vkAddressU = u;
+        vkAddressV = v;
         return *this;
     }
     inline SamplerCreation& setAddressUVW(VkSamplerAddressMode u, VkSamplerAddressMode v, VkSamplerAddressMode w){
-        addressU = u;
-        addressV = v;
-        addressW = w;
+        vkAddressU = u;
+        vkAddressV = v;
+        vkAddressW = w;
         return *this;
     }
     inline SamplerCreation& setName(const char* _name){
@@ -355,7 +355,7 @@ struct ShaderStateCreation{
         NWB_ASSERT(stagesCount < LengthOf(stages));
         stages[stagesCount].code = code;
         stages[stagesCount].codeSize = codeSize;
-        stages[stagesCount].type = type;
+        stages[stagesCount].vkType = type;
         ++stagesCount;
         return *this;
     }
@@ -595,12 +595,12 @@ struct SpirVParseResult{
 
 
 struct Buffer{
-    VkBuffer buffer;
-    VmaAllocation allocation;
-    VkDeviceMemory deviceMemory;
-    VkDeviceSize deviceSize;
+    VkBuffer vkBuffer;
+    VmaAllocation vkAllocation;
+    VkDeviceMemory vkDeviceMemory;
+    VkDeviceSize vkDeviceSize;
 
-    VkBufferUsageFlags typeFlags = 0;
+    VkBufferUsageFlags vkTypeFlags = 0;
     ResourceUsageType::Enum usage = ResourceUsageType::IMMUTABLE;
     u32 size = 0;
     u32 globalOffset = 0;
@@ -612,25 +612,25 @@ struct Buffer{
 };
 
 struct Sampler{
-    VkSampler sampler;
+    VkSampler vkSampler;
 
-    VkFilter minFilter = VK_FILTER_NEAREST;
-    VkFilter magFilter = VK_FILTER_NEAREST;
-    VkSamplerMipmapMode mipFilter = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+    VkFilter vkMinFilter = VK_FILTER_NEAREST;
+    VkFilter vkMagFilter = VK_FILTER_NEAREST;
+    VkSamplerMipmapMode vkMipFilter = VK_SAMPLER_MIPMAP_MODE_NEAREST;
 
-    VkSamplerAddressMode addressU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    VkSamplerAddressMode addressV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    VkSamplerAddressMode addressW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    VkSamplerAddressMode vkAddressU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    VkSamplerAddressMode vkAddressV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    VkSamplerAddressMode vkAddressW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
 
     const char* name = nullptr;
 };
 
 struct Texture{
-    VkImage image;
-    VkImageView imageView;
-    VkFormat format;
-    VkImageLayout layout;
-    VmaAllocation allocation;
+    VkImage vkImage;
+    VkImageView vkImageView;
+    VkFormat vkFormat;
+    VkImageLayout vkLayout;
+    VmaAllocation vkAllocation;
 
     u16 width = 1;
     u16 height = 1;
@@ -647,7 +647,7 @@ struct Texture{
 };
 
 struct ShaderState{
-    VkPipelineShaderStageCreateInfo stageInfo[s_maxShaderStages];
+    VkPipelineShaderStageCreateInfo vkStageInfo[s_maxShaderStages];
 
     const char* name = nullptr;
 
@@ -658,7 +658,7 @@ struct ShaderState{
 };
 
 struct DescriptorBinding{
-    VkDescriptorType type;
+    VkDescriptorType vkType;
     u16 start = 0;
     u16 count = 0;
     u16 set = 0;
@@ -667,9 +667,9 @@ struct DescriptorBinding{
 };
 
 struct DescriptorSetLayout{
-    VkDescriptorSetLayout descLayout;
+    VkDescriptorSetLayout vkDescLayout;
 
-    VkDescriptorSetLayoutBinding* binding = nullptr;
+    VkDescriptorSetLayoutBinding* vkBinding = nullptr;
     DescriptorBinding* bindings = nullptr;
     u16 numBindings = 0;
     u16 setIndex = 0;
@@ -678,7 +678,7 @@ struct DescriptorSetLayout{
 };
 
 struct DescriptorSet{
-    VkDescriptorSet descSet;
+    VkDescriptorSet vkDescSet;
     
     Alloc::AssetHandleAny* resources = nullptr;
     SamplerHandle* samplers = nullptr;
@@ -689,10 +689,10 @@ struct DescriptorSet{
 };
 
 struct Pipeline{
-    VkPipeline pipeline;
-    VkPipelineLayout pipeLayout;
+    VkPipeline vkPipeline;
+    VkPipelineLayout vkPipeLayout;
 
-    VkPipelineBindPoint bindPoint;
+    VkPipelineBindPoint vkBindPoint;
 
     ShaderStateHandle shaderState;
 
@@ -709,8 +709,8 @@ struct Pipeline{
 };
 
 struct RenderPass{
-    VkRenderPass renderPass;
-    VkFramebuffer frameBuffer;
+    VkRenderPass vkRenderPass;
+    VkFramebuffer vkFrameBuffer;
 
     RenderPassOutput output;
 

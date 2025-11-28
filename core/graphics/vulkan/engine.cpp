@@ -41,29 +41,29 @@ VulkanEngine::VulkanEngine(Graphics* parent)
     , m_renderPasses(parent->m_persistentArena)
     , m_commandBuffers(parent->m_persistentArena)
     , m_shaderStates(parent->m_persistentArena)
-    , m_inst(VK_NULL_HANDLE, __hidden_vulkan::VkInstanceDeleter(&m_allocCallbacks))
-    , m_physDev(VK_NULL_HANDLE, __hidden_vulkan::VkPhysicalDeviceRefDeleter())
-    , m_logiDev(VK_NULL_HANDLE, __hidden_vulkan::VkLogicalDeviceDeleter(&m_allocCallbacks))
-    , m_queue(VK_NULL_HANDLE, __hidden_vulkan::VkQueueRefDeleter())
-    , m_descriptorPool(__hidden_vulkan::VkDescriptorPoolPtr(nullptr, __hidden_vulkan::VkDescriptorPoolDeleter(&m_allocCallbacks, &m_logiDev)))
-    , m_bindlessDescriptorSetLayout(__hidden_vulkan::VkDescriptorSetLayoutPtr(nullptr, __hidden_vulkan::VkDescriptorSetLayoutDeleter(&m_allocCallbacks, &m_logiDev)))
-    , m_bindlessDescriptorPool(__hidden_vulkan::VkDescriptorPoolPtr(nullptr, __hidden_vulkan::VkDescriptorPoolDeleter(&m_allocCallbacks, &m_logiDev)))
-    , m_timestampQueryPool(__hidden_vulkan::VkQueryPoolPtr(nullptr, __hidden_vulkan::VkQueryPoolDeleter(&m_allocCallbacks, &m_logiDev)))
-    , m_winSurf(VK_NULL_HANDLE, __hidden_vulkan::VkSurfaceDeleter(&m_allocCallbacks, &m_inst))
-    , m_swapchain(VK_NULL_HANDLE, __hidden_vulkan::VkSwapchainDeleter(&m_allocCallbacks, &m_logiDev))
-    , m_allocator(VK_NULL_HANDLE, __hidden_vulkan::VmaAllocatorDeleter())
+    , m_vkInstance(VK_NULL_HANDLE, __hidden_vulkan::VkInstanceDeleter(&m_vkAllocCallbacks))
+    , m_vkPhysicalDevice(VK_NULL_HANDLE, __hidden_vulkan::VkPhysicalDeviceRefDeleter())
+    , m_vkLogicalDevice(VK_NULL_HANDLE, __hidden_vulkan::VkLogicalDeviceDeleter(&m_vkAllocCallbacks))
+    , m_vkQueue(VK_NULL_HANDLE, __hidden_vulkan::VkQueueRefDeleter())
+    , m_vkDescriptorPool(__hidden_vulkan::VkDescriptorPoolPtr(nullptr, __hidden_vulkan::VkDescriptorPoolDeleter(&m_vkAllocCallbacks, &m_vkLogicalDevice)))
+    , m_vkBindlessDescriptorSetLayout(__hidden_vulkan::VkDescriptorSetLayoutPtr(nullptr, __hidden_vulkan::VkDescriptorSetLayoutDeleter(&m_vkAllocCallbacks, &m_vkLogicalDevice)))
+    , m_vkBindlessDescriptorPool(__hidden_vulkan::VkDescriptorPoolPtr(nullptr, __hidden_vulkan::VkDescriptorPoolDeleter(&m_vkAllocCallbacks, &m_vkLogicalDevice)))
+    , m_vkTimestampQueryPool(__hidden_vulkan::VkQueryPoolPtr(nullptr, __hidden_vulkan::VkQueryPoolDeleter(&m_vkAllocCallbacks, &m_vkLogicalDevice)))
+    , m_vkWinSurface(VK_NULL_HANDLE, __hidden_vulkan::VkSurfaceDeleter(&m_vkAllocCallbacks, &m_vkInstance))
+    , m_vkSwapchain(VK_NULL_HANDLE, __hidden_vulkan::VkSwapchainDeleter(&m_vkAllocCallbacks, &m_vkLogicalDevice))
+    , m_vkAllocator(VK_NULL_HANDLE, __hidden_vulkan::VmaAllocatorDeleter())
 #if defined(VULKAN_VALIDATE)
-    , m_debugMessenger(VK_NULL_HANDLE, __hidden_vulkan::VkDebugUtilsMessengerDeleter(&m_allocCallbacks, &m_inst))
+    , m_vkDebugMessenger(VK_NULL_HANDLE, __hidden_vulkan::VkDebugUtilsMessengerDeleter(&m_vkAllocCallbacks, &m_vkInstance))
 #endif
 {
     for(usize i = 0; i < s_maxSwapchainImages; ++i){
-        m_swapchainImages[i] = __hidden_vulkan::VkImageRef(VK_NULL_HANDLE, __hidden_vulkan::VkImageRefDeleter());
-        m_swapchainImageViews[i] = __hidden_vulkan::VkImageViewPtr(VK_NULL_HANDLE, __hidden_vulkan::VkImageViewDeleter(&m_allocCallbacks, &m_logiDev));
-        m_swapchainFrameBuffers[i] = __hidden_vulkan::VkFramebufferPtr(VK_NULL_HANDLE, __hidden_vulkan::VkFramebufferDeleter(&m_allocCallbacks, &m_logiDev));
+        m_vkSwapchainImages[i] = __hidden_vulkan::VkImageRef(VK_NULL_HANDLE, __hidden_vulkan::VkImageRefDeleter());
+        m_vkSwapchainImageViews[i] = __hidden_vulkan::VkImageViewPtr(VK_NULL_HANDLE, __hidden_vulkan::VkImageViewDeleter(&m_vkAllocCallbacks, &m_vkLogicalDevice));
+        m_vkSwapchainFrameBuffers[i] = __hidden_vulkan::VkFramebufferPtr(VK_NULL_HANDLE, __hidden_vulkan::VkFramebufferDeleter(&m_vkAllocCallbacks, &m_vkLogicalDevice));
 
-        m_semphoreRenderComplete[i] = __hidden_vulkan::VkSemaphorePtr(VK_NULL_HANDLE, __hidden_vulkan::VkSemaphoreDeleter(&m_allocCallbacks, &m_logiDev));
-        m_semphoreImageAcquire[i] = __hidden_vulkan::VkSemaphorePtr(VK_NULL_HANDLE, __hidden_vulkan::VkSemaphoreDeleter(&m_allocCallbacks, &m_logiDev));
-        m_fenceCommandBufferExecuted[i] = __hidden_vulkan::VkFencePtr(VK_NULL_HANDLE, __hidden_vulkan::VkFenceDeleter(&m_allocCallbacks, &m_logiDev));
+        m_vkSemaphoreRenderComplete[i] = __hidden_vulkan::VkSemaphorePtr(VK_NULL_HANDLE, __hidden_vulkan::VkSemaphoreDeleter(&m_vkAllocCallbacks, &m_vkLogicalDevice));
+        m_vkSemaphoreImageAcquire[i] = __hidden_vulkan::VkSemaphorePtr(VK_NULL_HANDLE, __hidden_vulkan::VkSemaphoreDeleter(&m_vkAllocCallbacks, &m_vkLogicalDevice));
+        m_vkFenceCommandBufferExecuted[i] = __hidden_vulkan::VkFencePtr(VK_NULL_HANDLE, __hidden_vulkan::VkFenceDeleter(&m_vkAllocCallbacks, &m_vkLogicalDevice));
     }
 }
 VulkanEngine::~VulkanEngine(){ destroy(); }
@@ -149,12 +149,12 @@ bool VulkanEngine::init(const Common::FrameData& data){
 
         { // create vulkan instance
             VkInstance object = VK_NULL_HANDLE;
-            err = vkCreateInstance(&createInfo, m_allocCallbacks, &object);
+            err = vkCreateInstance(&createInfo, m_vkAllocCallbacks, &object);
             if(err != VK_SUCCESS){
                 NWB_LOGGER_ERROR(NWB_TEXT("Failed to create Vulkan instance: {}"), StringConvert(VulkanResultString(err)));
                 return false;
             }
-            m_inst.reset(object);
+            m_vkInstance.reset(object);
         }
     }
 
@@ -186,17 +186,17 @@ bool VulkanEngine::init(const Common::FrameData& data){
         }
 
         if(m_debugUtilsExtensionPresents){
-            auto* vkCreateDebugUtilsMessengerEXT = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(m_inst.get(), "vkCreateDebugUtilsMessengerEXT"));
+            auto* vkCreateDebugUtilsMessengerEXT = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(m_vkInstance.get(), "vkCreateDebugUtilsMessengerEXT"));
             if(vkCreateDebugUtilsMessengerEXT){
                 VkDebugUtilsMessengerCreateInfoEXT debugUtilCreateInfo = CreateDebugMessengerInfo();
 
                 VkDebugUtilsMessengerEXT object = VK_NULL_HANDLE;
-                err = vkCreateDebugUtilsMessengerEXT(m_inst.get(), &debugUtilCreateInfo, m_allocCallbacks, &object);
+                err = vkCreateDebugUtilsMessengerEXT(m_vkInstance.get(), &debugUtilCreateInfo, m_vkAllocCallbacks, &object);
                 if(err != VK_SUCCESS){
                     NWB_LOGGER_ERROR(NWB_TEXT("Failed to create debug messenger: {}"), StringConvert(VulkanResultString(err)));
                     return false;
                 }
-                m_debugMessenger.reset(object);
+                m_vkDebugMessenger.reset(object);
             }
             else{
                 NWB_LOGGER_WARNING(NWB_TEXT("Failed to get vkCreateDebugUtilsMessengerEXT function pointer"));
@@ -211,14 +211,14 @@ bool VulkanEngine::init(const Common::FrameData& data){
     u32 physDevCount = 0;
     ScratchUniquePtr<VkPhysicalDevice[]> physDevs;
     { // choose physical device
-        err = vkEnumeratePhysicalDevices(m_inst.get(), reinterpret_cast<uint32_t*>(&physDevCount), nullptr);
+        err = vkEnumeratePhysicalDevices(m_vkInstance.get(), reinterpret_cast<uint32_t*>(&physDevCount), nullptr);
         if(err != VK_SUCCESS){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to get physical devices: {}"), StringConvert(VulkanResultString(err)));
             return false;
         }
 
         physDevs = MakeScratchUnique<VkPhysicalDevice[]>(tmpArena, physDevCount);
-        err = vkEnumeratePhysicalDevices(m_inst.get(), reinterpret_cast<uint32_t*>(&physDevCount), physDevs.get());
+        err = vkEnumeratePhysicalDevices(m_vkInstance.get(), reinterpret_cast<uint32_t*>(&physDevCount), physDevs.get());
         if(err != VK_SUCCESS){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to get physical devices: {}"), StringConvert(VulkanResultString(err)));
             return false;
@@ -226,12 +226,12 @@ bool VulkanEngine::init(const Common::FrameData& data){
     }
 
     { // create window surface
-        auto* object = CreateSurface(m_inst.get(), data);
+        auto* object = CreateSurface(m_vkInstance.get(), data);
         if(object == VK_NULL_HANDLE){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to create Vulkan surface"));
             return false;
         }
-        m_winSurf.reset(object);
+        m_vkWinSurface.reset(object);
     }
 
     { // choose physical device
@@ -247,7 +247,7 @@ bool VulkanEngine::init(const Common::FrameData& data){
             VkBool32 output = 0;
             for(auto i = decltype(queueFamilyCount){ 0 }; i < queueFamilyCount; ++i){
                 if(queueFamilies[i].queueCount > 0 && queueFamilies[i].queueFlags & (VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT)){
-                    auto err = vkGetPhysicalDeviceSurfaceSupportKHR(physDev, i, m_winSurf.get(), &output);
+                    auto err = vkGetPhysicalDeviceSurfaceSupportKHR(physDev, i, m_vkWinSurface.get(), &output);
                     if(err != VK_SUCCESS){
                         output = 0;
                         NWB_LOGGER_WARNING(NWB_TEXT("Failed to get physical device surface support: {}"), StringConvert(VulkanResultString(err)));
@@ -290,32 +290,32 @@ bool VulkanEngine::init(const Common::FrameData& data){
         }
 
         if(discreteGPU != VK_NULL_HANDLE){
-            m_physDev.reset(discreteGPU);
-            m_queueFamilly = discreteQueueFamily;
+            m_vkPhysicalDevice.reset(discreteGPU);
+            m_queueFamily = discreteQueueFamily;
         }
         else if(integratedGPU != VK_NULL_HANDLE){
-            m_physDev.reset(integratedGPU);
-            m_queueFamilly = integratedQueueFamily;
+            m_vkPhysicalDevice.reset(integratedGPU);
+            m_queueFamily = integratedQueueFamily;
         }
         else{
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to find suitable physical device"));
             return false;
         }
 
-        vkGetPhysicalDeviceProperties(m_physDev.get(), &m_physDevProps);
-        m_timestampFrequency = m_physDevProps.limits.timestampPeriod / (1000 * 1000);
+        vkGetPhysicalDeviceProperties(m_vkPhysicalDevice.get(), &m_vkPhysicalDeviceProperties);
+        m_timestampFrequency = m_vkPhysicalDeviceProperties.limits.timestampPeriod / (1000 * 1000);
 
-        m_uboAlignment = static_cast<decltype(m_uboAlignment)>(m_physDevProps.limits.minUniformBufferOffsetAlignment);
-        m_ssboAlignment = static_cast<decltype(m_ssboAlignment)>(m_physDevProps.limits.minStorageBufferOffsetAlignment);
+        m_uboAlignment = static_cast<decltype(m_uboAlignment)>(m_vkPhysicalDeviceProperties.limits.minUniformBufferOffsetAlignment);
+        m_ssboAlignment = static_cast<decltype(m_ssboAlignment)>(m_vkPhysicalDeviceProperties.limits.minStorageBufferOffsetAlignment);
 
-        NWB_LOGGER_INFO(NWB_TEXT("GPU selected: {}"), StringConvert(m_physDevProps.deviceName));
+        NWB_LOGGER_INFO(NWB_TEXT("GPU selected: {}"), StringConvert(m_vkPhysicalDeviceProperties.deviceName));
     }
 
     { // create logical device
         VkDeviceQueueCreateInfo queueInfo[1] = {};
         {
             queueInfo[0].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-            queueInfo[0].queueFamilyIndex = m_queueFamilly;
+            queueInfo[0].queueFamilyIndex = m_queueFamily;
             queueInfo[0].queueCount = static_cast<decltype(VkDeviceQueueCreateInfo::queueCount)>(LengthOf(s_queuePriorities));
             queueInfo[0].pQueuePriorities = s_queuePriorities;
         }
@@ -325,7 +325,7 @@ bool VulkanEngine::init(const Common::FrameData& data){
             nullptr
         };
         VkPhysicalDeviceFeatures2 physDevFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2, &indexingFeatures };
-        vkGetPhysicalDeviceFeatures2(m_physDev.get(), &physDevFeatures);
+        vkGetPhysicalDeviceFeatures2(m_vkPhysicalDevice.get(), &physDevFeatures);
 
         m_supportBindless = indexingFeatures.descriptorBindingPartiallyBound && indexingFeatures.runtimeDescriptorArray;
 
@@ -346,40 +346,40 @@ bool VulkanEngine::init(const Common::FrameData& data){
         }
 
         VkDevice object = VK_NULL_HANDLE;
-        err = vkCreateDevice(m_physDev.get(), &deviceInfo, m_allocCallbacks, &object);
+        err = vkCreateDevice(m_vkPhysicalDevice.get(), &deviceInfo, m_vkAllocCallbacks, &object);
         if(err != VK_SUCCESS){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to create logical device: {}"), StringConvert(VulkanResultString(err)));
             return false;
         }
-        m_logiDev.reset(object);
+        m_vkLogicalDevice.reset(object);
     }
 
 #if defined(VULKAN_VALIDATE)
     if(m_debugUtilsExtensionPresents){
-        fnSetDebugUtilsObjectNameEXT = reinterpret_cast<decltype(fnSetDebugUtilsObjectNameEXT)>(vkGetInstanceProcAddr(m_inst.get(), "vkSetDebugUtilsObjectNameEXT"));
-        fnCmdBeginDebugUtilsLabelEXT = reinterpret_cast<decltype(fnCmdBeginDebugUtilsLabelEXT)>(vkGetInstanceProcAddr(m_inst.get(), "vkCmdBeginDebugUtilsLabelEXT"));
-        fnCmdEndDebugUtilsLabelEXT = reinterpret_cast<decltype(fnCmdEndDebugUtilsLabelEXT)>(vkGetInstanceProcAddr(m_inst.get(), "vkCmdEndDebugUtilsLabelEXT"));
+        vkFuncSetDebugUtilsObjectNameEXT = reinterpret_cast<decltype(vkFuncSetDebugUtilsObjectNameEXT)>(vkGetInstanceProcAddr(m_vkInstance.get(), "vkSetDebugUtilsObjectNameEXT"));
+        vkFuncCmdBeginDebugUtilsLabelEXT = reinterpret_cast<decltype(vkFuncCmdBeginDebugUtilsLabelEXT)>(vkGetInstanceProcAddr(m_vkInstance.get(), "vkCmdBeginDebugUtilsLabelEXT"));
+        vkFuncCmdEndDebugUtilsLabelEXT = reinterpret_cast<decltype(vkFuncCmdEndDebugUtilsLabelEXT)>(vkGetInstanceProcAddr(m_vkInstance.get(), "vkCmdEndDebugUtilsLabelEXT"));
     }
 #endif
 
     {
         VkQueue object = VK_NULL_HANDLE;
-        vkGetDeviceQueue(m_logiDev.get(), m_queueFamilly, 0, &object);
-        m_queue.reset(object);
+        vkGetDeviceQueue(m_vkLogicalDevice.get(), m_queueFamily, 0, &object);
+        m_vkQueue.reset(object);
     }
 
     { // choose surface
         u32 supportedCount = 0;
         ScratchUniquePtr<VkSurfaceFormatKHR[]> supportedFormats;
 
-        err = vkGetPhysicalDeviceSurfaceFormatsKHR(m_physDev.get(), m_winSurf.get(), reinterpret_cast<uint32_t*>(&supportedCount), nullptr);
+        err = vkGetPhysicalDeviceSurfaceFormatsKHR(m_vkPhysicalDevice.get(), m_vkWinSurface.get(), reinterpret_cast<uint32_t*>(&supportedCount), nullptr);
         if(err != VK_SUCCESS){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to get physical device surface formats: {}"), StringConvert(VulkanResultString(err)));
             return false;
         }
 
         supportedFormats = MakeScratchUnique<VkSurfaceFormatKHR[]>(tmpArena, supportedCount);
-        err = vkGetPhysicalDeviceSurfaceFormatsKHR(m_physDev.get(), m_winSurf.get(), reinterpret_cast<uint32_t*>(&supportedCount), supportedFormats.get());
+        err = vkGetPhysicalDeviceSurfaceFormatsKHR(m_vkPhysicalDevice.get(), m_vkWinSurface.get(), reinterpret_cast<uint32_t*>(&supportedCount), supportedFormats.get());
         if(err != VK_SUCCESS){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to get physical device surface formats: {}"), StringConvert(VulkanResultString(err)));
             return false;
@@ -399,7 +399,7 @@ bool VulkanEngine::init(const Common::FrameData& data){
                     if(supportFormat.colorSpace != s_surfaceColorSpaces[k])
                         continue;
 
-                    m_winSurfFormat = supportFormat;
+                    m_vkWinSurfaceFormat = supportFormat;
                     bFound = true;
                     break;
                 }
@@ -413,11 +413,11 @@ bool VulkanEngine::init(const Common::FrameData& data){
         }
 
         if(!bFound){
-            m_winSurfFormat = supportedFormats[0];
+            m_vkWinSurfaceFormat = supportedFormats[0];
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to find suitable surface format, using default"));
         }
 
-        m_swapchainOutput.addColor(m_winSurfFormat.format);
+        m_swapchainOutput.addColor(m_vkWinSurfaceFormat.format);
     }
 
     { // create swapchain
@@ -430,9 +430,9 @@ bool VulkanEngine::init(const Common::FrameData& data){
     { // create VMA
         VmaAllocatorCreateInfo createInfo{};
         {
-            createInfo.physicalDevice = m_physDev.get();
-            createInfo.device = m_logiDev.get();
-            createInfo.instance = m_inst.get();
+            createInfo.physicalDevice = m_vkPhysicalDevice.get();
+            createInfo.device = m_vkLogicalDevice.get();
+            createInfo.instance = m_vkInstance.get();
         }
 
         VmaAllocator object = VK_NULL_HANDLE;
@@ -441,7 +441,7 @@ bool VulkanEngine::init(const Common::FrameData& data){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to create VMA allocator: {}"), StringConvert(VulkanResultString(err)));
             return false;
         }
-        m_allocator.reset(object);
+        m_vkAllocator.reset(object);
     }
 
     { // Create descriptor pool
@@ -454,12 +454,12 @@ bool VulkanEngine::init(const Common::FrameData& data){
         }
 
         VkDescriptorPool object = VK_NULL_HANDLE;
-        err = vkCreateDescriptorPool(m_logiDev.get(), &createInfo, m_allocCallbacks, &object);
+        err = vkCreateDescriptorPool(m_vkLogicalDevice.get(), &createInfo, m_vkAllocCallbacks, &object);
         if(err != VK_SUCCESS){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to create descriptor pool: {}"), StringConvert(VulkanResultString(err)));
             return false;
         }
-        m_descriptorPool.reset(object);
+        m_vkDescriptorPool.reset(object);
     }
 
     if(m_supportBindless){
@@ -475,12 +475,12 @@ bool VulkanEngine::init(const Common::FrameData& data){
             }
 
             VkDescriptorPool object = VK_NULL_HANDLE;
-            err = vkCreateDescriptorPool(m_logiDev.get(), &createInfo, m_allocCallbacks, &object);
+            err = vkCreateDescriptorPool(m_vkLogicalDevice.get(), &createInfo, m_vkAllocCallbacks, &object);
             if(err != VK_SUCCESS){
                 NWB_LOGGER_ERROR(NWB_TEXT("Failed to create bindless descriptor pool: {}"), StringConvert(VulkanResultString(err)));
                 return false;
             }
-            m_bindlessDescriptorPool.reset(object);
+            m_vkBindlessDescriptorPool.reset(object);
         }
 
         {
@@ -526,21 +526,21 @@ bool VulkanEngine::init(const Common::FrameData& data){
             }
 
             VkDescriptorSetLayout object = VK_NULL_HANDLE;
-            err = vkCreateDescriptorSetLayout(m_logiDev.get(), &createInfo, m_allocCallbacks, &object);
+            err = vkCreateDescriptorSetLayout(m_vkLogicalDevice.get(), &createInfo, m_vkAllocCallbacks, &object);
             if(err != VK_SUCCESS){
                 NWB_LOGGER_ERROR(NWB_TEXT("Failed to create bindless descriptor set layout: {}"), StringConvert(VulkanResultString(err)));
                 return false;
             }
-            m_bindlessDescriptorSetLayout.reset(object);
+            m_vkBindlessDescriptorSetLayout.reset(object);
         }
 
         {
             uint32_t maxBinding = static_cast<decltype(maxBinding)>(s_maxBindlessRes - 1);
-            auto* bindlessDescriptorSetLayout = m_bindlessDescriptorSetLayout.get();
+            auto* bindlessDescriptorSetLayout = m_vkBindlessDescriptorSetLayout.get();
 
             VkDescriptorSetAllocateInfo allocInfo{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO };
             {
-                allocInfo.descriptorPool = m_bindlessDescriptorPool.get();
+                allocInfo.descriptorPool = m_vkBindlessDescriptorPool.get();
                 allocInfo.descriptorSetCount = 1;
                 allocInfo.pSetLayouts = &bindlessDescriptorSetLayout;
             }
@@ -553,7 +553,7 @@ bool VulkanEngine::init(const Common::FrameData& data){
                 //allocInfo.pNext = &extendedInfo;
             }
 
-            err = vkAllocateDescriptorSets(m_logiDev.get(), &allocInfo, &m_bindlessDescriptorSet);
+            err = vkAllocateDescriptorSets(m_vkLogicalDevice.get(), &allocInfo, &m_vkBindlessDescriptorSet);
             if(err != VK_SUCCESS){
                 NWB_LOGGER_ERROR(NWB_TEXT("Failed to allocate bindless descriptor set: {}"), StringConvert(VulkanResultString(err)));
                 return false;
@@ -572,12 +572,12 @@ bool VulkanEngine::init(const Common::FrameData& data){
         }
 
         VkQueryPool object = VK_NULL_HANDLE;
-        err = vkCreateQueryPool(m_logiDev.get(), &createInfo, m_allocCallbacks, &object);
+        err = vkCreateQueryPool(m_vkLogicalDevice.get(), &createInfo, m_vkAllocCallbacks, &object);
         if(err != VK_SUCCESS){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to create timestamp query pool: {}"), StringConvert(VulkanResultString(err)));
             return false;
         }
-        m_timestampQueryPool.reset(object);
+        m_vkTimestampQueryPool.reset(object);
     }
 
     { // init pools
@@ -598,20 +598,20 @@ bool VulkanEngine::init(const Common::FrameData& data){
                 VkSemaphoreCreateInfo createInfo{ VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
                 
                 VkSemaphore object = VK_NULL_HANDLE;
-                err = vkCreateSemaphore(m_logiDev.get(), &createInfo, m_allocCallbacks, &object);
+                err = vkCreateSemaphore(m_vkLogicalDevice.get(), &createInfo, m_vkAllocCallbacks, &object);
                 if(err != VK_SUCCESS){
                     NWB_LOGGER_ERROR(NWB_TEXT("Failed to create render complete semaphore: {}"), StringConvert(VulkanResultString(err)));
                     return false;
                 }
-                m_semphoreRenderComplete[i].reset(object);
+                m_vkSemaphoreRenderComplete[i].reset(object);
             
                 object = VK_NULL_HANDLE;
-                err = vkCreateSemaphore(m_logiDev.get(), &createInfo, m_allocCallbacks, &object);
+                err = vkCreateSemaphore(m_vkLogicalDevice.get(), &createInfo, m_vkAllocCallbacks, &object);
                 if(err != VK_SUCCESS){
                     NWB_LOGGER_ERROR(NWB_TEXT("Failed to create image acquire semaphore: {}"), StringConvert(VulkanResultString(err)));
                     return false;
                 }
-                m_semphoreImageAcquire[i].reset(object);
+                m_vkSemaphoreImageAcquire[i].reset(object);
             }
             {
                 VkFenceCreateInfo fenceCreateInfo{ VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
@@ -620,12 +620,12 @@ bool VulkanEngine::init(const Common::FrameData& data){
                 }
 
                 VkFence object = VK_NULL_HANDLE;
-                err = vkCreateFence(m_logiDev.get(), &fenceCreateInfo, m_allocCallbacks, &object);
+                err = vkCreateFence(m_vkLogicalDevice.get(), &fenceCreateInfo, m_vkAllocCallbacks, &object);
                 if(err != VK_SUCCESS){
                     NWB_LOGGER_ERROR(NWB_TEXT("Failed to create command buffer executed fence: {}"), StringConvert(VulkanResultString(err)));
                     return false;
                 }
-                m_fenceCommandBufferExecuted[i].reset(object);
+                m_vkFenceCommandBufferExecuted[i].reset(object);
             }
         }
 
@@ -635,29 +635,29 @@ bool VulkanEngine::init(const Common::FrameData& data){
     return true;
 }
 void VulkanEngine::destroy(){
-    if(m_logiDev)
-        vkDeviceWaitIdle(m_logiDev.get());
+    if(m_vkLogicalDevice)
+        vkDeviceWaitIdle(m_vkLogicalDevice.get());
 
     destroySwapchain();
-    m_winSurf.reset();
+    m_vkWinSurface.reset();
 
-    m_allocator.reset();
+    m_vkAllocator.reset();
 
 #if defined(VULKAN_VALIDATE)
-    m_debugMessenger.reset();
+    m_vkDebugMessenger.reset();
 #endif
 
-    m_bindlessDescriptorPool.reset();
-    m_bindlessDescriptorSetLayout.reset();
+    m_vkBindlessDescriptorPool.reset();
+    m_vkBindlessDescriptorSetLayout.reset();
 
-    m_descriptorPool.reset();
+    m_vkDescriptorPool.reset();
 
-    m_timestampQueryPool.reset();
+    m_vkTimestampQueryPool.reset();
 
-    m_queue.reset();
-    m_logiDev.reset();
-    m_physDev.reset();
-    m_inst.reset();
+    m_vkQueue.reset();
+    m_vkLogicalDevice.reset();
+    m_vkPhysicalDevice.reset();
+    m_vkInstance.reset();
 }
 
 
@@ -667,13 +667,13 @@ void VulkanEngine::updatePresentMode(PresentMode::Enum mode){
     u32 supportedCount = 0;
     static VkPresentModeKHR supportedModes[8];
     {
-        err = vkGetPhysicalDeviceSurfacePresentModesKHR(m_physDev.get(), m_winSurf.get(), reinterpret_cast<uint32_t*>(&supportedCount), nullptr);
+        err = vkGetPhysicalDeviceSurfacePresentModesKHR(m_vkPhysicalDevice.get(), m_vkWinSurface.get(), reinterpret_cast<uint32_t*>(&supportedCount), nullptr);
         if(err != VK_SUCCESS)
             NWB_LOGGER_WARNING(NWB_TEXT("Failed to get physical device surface present modes: {}"), StringConvert(VulkanResultString(err)));
 
         NWB_ASSERT(supportedCount < LengthOf(supportedModes));
 
-        err = vkGetPhysicalDeviceSurfacePresentModesKHR(m_physDev.get(), m_winSurf.get(), reinterpret_cast<uint32_t*>(&supportedCount), supportedModes);
+        err = vkGetPhysicalDeviceSurfacePresentModesKHR(m_vkPhysicalDevice.get(), m_vkWinSurface.get(), reinterpret_cast<uint32_t*>(&supportedCount), supportedModes);
         if(err != VK_SUCCESS)
             NWB_LOGGER_WARNING(NWB_TEXT("Failed to get physical device surface present modes: {}"), StringConvert(VulkanResultString(err)));
     }
@@ -688,23 +688,23 @@ void VulkanEngine::updatePresentMode(PresentMode::Enum mode){
     }
 
     if(bFound){
-        m_presentMode = requestedMode;
+        m_vkPresentMode = requestedMode;
         m_parent.m_presentMode = mode;
     }
     else{
-        m_presentMode = VK_PRESENT_MODE_FIFO_KHR;
+        m_vkPresentMode = VK_PRESENT_MODE_FIFO_KHR;
         m_parent.m_presentMode = PresentMode::V_SYNC;
     }
-    m_parent.m_swapchainImageCount = (m_presentMode == VK_PRESENT_MODE_IMMEDIATE_KHR) ? 2 : 3;
+    m_parent.m_swapchainImageCount = (m_vkPresentMode == VK_PRESENT_MODE_IMMEDIATE_KHR) ? 2 : 3;
 }
 
 void VulkanEngine::destroySwapchain(){
     for(auto i = decltype(m_parent.m_swapchainImageCount){ 0 }; i < m_parent.m_swapchainImageCount; ++i){
-        m_swapchainImageViews[i].reset();
-        m_swapchainFrameBuffers[i].reset();
-        m_swapchainImages[i].reset();
+        m_vkSwapchainImageViews[i].reset();
+        m_vkSwapchainFrameBuffers[i].reset();
+        m_vkSwapchainImages[i].reset();
     }
-    m_swapchain.reset();
+    m_vkSwapchain.reset();
 }
 
 

@@ -20,6 +20,97 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static constexpr u32 s_maxRenderTargets = 8;
+static constexpr u32 s_maxViewports = 16;
+static constexpr u32 s_maxVertexAttributes = 16;
+static constexpr u32 s_maxBindingLayouts = 8;
+static constexpr u32 s_maxBindlessRegisterSpaces = 16;
+static constexpr u32 s_maxVolatileConstantBuffersPerLayout = 6;
+static constexpr u32 s_maxVolatileConstantBuffers = 32;
+static constexpr u32 s_maxPushConstantSize = 128;
+static constexpr u32 s_constantBufferOffsetSizeAlignment = 256;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct Color{
+    f32 r, g, b, a;
+    
+    constexpr Color()noexcept : r(0), g(0), b(0), a(0) {}
+    constexpr Color(f32 c)noexcept : r(c), g(c), b(c), a(c) {}
+    constexpr Color(f32 _r, f32 _g, f32 _b, f32 _a)noexcept : r(_r), g(_g), b(_b), a(_a) {}
+};
+inline bool operator==(const Color& lhs, const Color& rhs)noexcept{
+    return (lhs.r == rhs.r)
+    && (lhs.g == rhs.g)
+    && (lhs.b == rhs.b)
+    && (lhs.a == rhs.a)
+    ;
+}
+inline bool operator!=(const Color& lhs, const Color& rhs)noexcept{ return !(lhs == rhs); }
+
+
+struct Viewport{
+    f32 minX, maxX;
+    f32 minY, maxY;
+    f32 minZ, maxZ;
+    
+    constexpr Viewport()noexcept : minX(0), maxX(0), minY(0), maxY(0), minZ(0), maxZ(0) {}
+    constexpr Viewport(f32 width, f32 height)noexcept : minX(0), maxX(width), minY(0), maxY(height), minZ(0), maxZ(1) {}
+    constexpr Viewport(f32 _minX, f32 _maxX, f32 _minY, f32 _maxY, f32 _minZ, f32 _maxZ)noexcept : minX(_minX), maxX(_maxX), minY(_minY), maxY(_maxY), minZ(_minZ), maxZ(_maxZ) {}
+    
+    constexpr f32 width()const noexcept{ return maxX - minX; }
+    constexpr f32 height()const noexcept{ return maxY - minY; }
+};
+inline bool operator==(const Viewport& lhs, const Viewport& rhs)noexcept{
+    return (lhs.minX == rhs.minX) && (lhs.maxX == rhs.maxX)
+    && (lhs.minY == rhs.minY) && (lhs.maxY == rhs.maxY)
+    && (lhs.minZ == rhs.minZ) && (lhs.maxZ == rhs.maxZ)
+    ;
+}
+inline bool operator!=(const Viewport& lhs, const Viewport& rhs)noexcept{ return !(lhs == rhs); }
+
+
+struct Rect{
+    i32 minX, maxX;
+    i32 minY, maxY;
+    
+    constexpr Rect()noexcept : minX(0), maxX(0), minY(0), maxY(0) {}
+    constexpr Rect(i32 width, i32 height)noexcept : minX(0), maxX(width), minY(0), maxY(height) {}
+    constexpr Rect(i32 _minX, i32 _maxX, i32 _minY, i32 _maxY)noexcept : minX(_minX), maxX(_maxX), minY(_minY), maxY(_maxY) {}
+    constexpr explicit Rect(const Viewport& viewport)noexcept : minX(static_cast<i32>(floor(viewport.minX))), maxX(static_cast<i32>(ceil(viewport.maxX))), minY(static_cast<i32>(floor(viewport.minY))), maxY(static_cast<i32>(ceil(viewport.maxY))) {}
+    
+    constexpr i32 width()const noexcept{ return maxX - minX; }
+    constexpr i32 height()const noexcept{ return maxY - minY; }
+};
+inline bool operator==(const Rect& lhs, const Rect& rhs)noexcept{
+    return (lhs.minX == rhs.minX) && (lhs.maxX == rhs.maxX)
+    && (lhs.minY == rhs.minY) && (lhs.maxY == rhs.maxY)
+    ;
+}
+inline bool operator!=(const Rect& lhs, const Rect& rhs)noexcept{ return !(lhs == rhs); }
+
+
+
+struct Rect2D{
+    f32 x = 0;
+    f32 y = 0;
+    f32 width = 0;
+    f32 height = 0;
+};
+
+struct Rect2DInt{
+    i16 x = 0;
+    i16 y = 0;
+    u16 width = 0;
+    u16 height = 0;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace TextureFormat{
     enum Enum : u16{
         UNDEFINED,
@@ -577,30 +668,6 @@ namespace RenderPassOperation{
 
         kCount
     };
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct Rect2D{
-    f32 x = 0;
-    f32 y = 0;
-    f32 width = 0;
-    f32 height = 0;
-};
-
-struct Rect2DInt{
-    i16 x = 0;
-    i16 y = 0;
-    u16 width = 0;
-    u16 height = 0;
-};
-
-struct Viewport{
-    Rect2DInt rect;
-    f32 minDepth = 0;
-    f32 maxDepth = 0;
 };
 
 

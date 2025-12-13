@@ -229,7 +229,7 @@ inline bool operator<(const UniquePtr<T1, D1>& a, const UniquePtr<T2, D2>& b){
 	typedef typename CommonType<P1, P2>::type PCommon;
 	PCommon pT1 = a.get();
 	PCommon pT2 = b.get();
-	return std::less<PCommon>()(pT1, pT2);
+	return LessThan<PCommon>()(pT1, pT2);
 }
 template <typename T1, typename D1, typename T2, typename D2>
 inline bool operator>(const UniquePtr<T1, D1>& a, const UniquePtr<T2, D2>& b){ return (b < a); }
@@ -247,13 +247,13 @@ inline CompareThreeWayResult_T<typename UniquePtr<T, D>::pointer, std::nullptr_t
 template <typename T, typename D>
 inline bool operator<(const UniquePtr<T, D>& a, std::nullptr_t){
 	typedef typename UniquePtr<T, D>::pointer pointer;
-	return std::less<pointer>()(a.get(), nullptr);
+	return LessThan<pointer>()(a.get(), nullptr);
 }
 template <typename T, typename D>
 inline bool operator<(std::nullptr_t, const UniquePtr<T, D>& b){
 	typedef typename UniquePtr<T, D>::pointer pointer;
 	pointer pT = b.get();
-	return std::less<pointer>()(nullptr, pT);
+	return LessThan<pointer>()(nullptr, pT);
 }
 template <typename T, typename D>
 inline bool operator>(const UniquePtr<T, D>& a, std::nullptr_t){ return (nullptr < a); }

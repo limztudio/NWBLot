@@ -10,6 +10,8 @@
 #include <core/common/common.h>
 #include <core/alloc/assetPool.h>
 
+#include "basic.h"
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -292,6 +294,88 @@ struct HeapDesc{
     AString debugName;
 #endif
 };
+
+class IHeap : public IResource{
+public:
+    virtual const HeapDesc& getDescription() = 0;
+};
+
+template <typename Deleter = DefaultDeleter<IHeap>>
+using HeapHandle = RefCountPtr<IHeap, Deleter>;
+
+struct MemoryRequirements{
+    u64 size = 0;
+    u64 alignment = 0;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Texture
+
+
+namespace TextureDiumension{
+    enum Enum : u8{
+        Unknown,
+        Texture1D,
+        Texture1DArray,
+        Texture2D,
+        Texture2DArray,
+        TextureCube,
+        TextureCubeArray,
+        Texture2DMS,
+        Texture2DMSArray,
+        Texture3D,
+    };
+};
+
+namespace CpuAccessMode{
+    enum Enum : u8{
+        None,
+        Read,
+        Write,
+    };
+};
+
+namespace ResourceStates{
+    enum Mask : u32{
+        Unknown = 0,
+        Common = 1 << 0,
+        ConstantBuffer = 1 << 1,
+        VertexBuffer = 1 << 2,
+        IndexBuffer = 1 << 3,
+        IndirectArgument = 1 << 4,
+        ShaderResource = 1 << 5,
+        UnorderedAccess = 1 << 6,
+        RenderTarget = 1 << 7,
+        DepthWrite = 1 << 8,
+        DepthRead = 1 << 9,
+        StreamOut = 1 << 10,
+        CopyDest = 1 << 11,
+        CopySource = 1 << 12,
+        ResolveDest = 1 << 13,
+        ResolveSource = 1 << 14,
+        Present = 1 << 15,
+        AccelStructRead = 1 << 16,
+        AccelStructWrite = 1 << 17,
+        AccelStructBuildInput = 1 << 18,
+        AccelStructBuildBlas = 1 << 19,
+        ShadingRateSurface = 1 << 20,
+        OpacityMicromapWrite = 1 << 21,
+        OpacityMicromapBuildInput = 1 << 22,
+        ConvertCoopVecMatrixInput = 1 << 23,
+        ConvertCoopVecMatrixOutput = 1 << 24,
+    };
+    
+    inline Mask operator|(Mask lhs, Mask rhs) noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
+    inline Mask operator&(Mask lhs, Mask rhs) noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
+    inline Mask operator~(Mask value) noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
+    inline bool operator!(Mask value) noexcept{ return static_cast<u32>(value) == 0; }
+    inline bool operator==(Mask lhs, Mask rhs) noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
+    inline bool operator!=(Mask lhs, Mask rhs) noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
+};
+
+typedef u32 MipLevel;
+typedef u32 ArraySlice;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -14,6 +14,7 @@
     <ProjectCapability Include="SourceItemsFromImports" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="$(MSBuildThisFileDirectory)graphics\basic.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)graphics\common.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)graphics\graphics.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\config.cpp" />
@@ -26,6 +27,7 @@
     <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\VmaUsage.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="$(MSBuildThisFileDirectory)graphics\basic.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\common.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\graphics.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\config.h" />

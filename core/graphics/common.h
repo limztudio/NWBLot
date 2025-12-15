@@ -403,6 +403,27 @@ namespace SharedResourceFlags{
     inline bool operator!=(Mask lhs, Mask rhs) noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
 };
 
+struct TextureDesc{
+    u32 width = 1;
+    u32 height = 1;
+    u32 depth = 1;
+    u32 arraySize = 1;
+    u32 mipLevels = 1;
+    u32 sampleCount = 1;
+    u32 sampleQuality = 0;
+    Format::Enum format = Format::UNKNOWN;
+    TextureDiumension::Enum direction = TextureDiumension::Enum::Texture2D;
+#ifdef NWB_DEBUG
+    AString debugName;
+#endif
+    
+    bool isShaderResource = true;
+    bool isRenderTarget = false;
+    bool isUAV = false;
+    bool isTypeless = false;
+    bool isShadingRateSurface = false;
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

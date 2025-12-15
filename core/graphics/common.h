@@ -377,6 +377,32 @@ namespace ResourceStates{
 typedef u32 MipLevel;
 typedef u32 ArraySlice;
 
+namespace SharedResourceFlags{
+    enum Mask : u32{
+        None                = 0,
+
+        // D3D11: adds D3D11_RESOURCE_MISC_SHARED
+        // D3D12: adds D3D12_HEAP_FLAG_SHARED
+        // Vulkan: adds vk::ExternalMemoryImageCreateInfo and vk::ExportMemoryAllocateInfo/vk::ExternalMemoryBufferCreateInfo
+        Shared              = 0x01,
+
+        // D3D11: adds (D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX | D3D11_RESOURCE_MISC_SHARED_NTHANDLE)
+        // D3D12, Vulkan: ignored
+        Shared_NTHandle     = 0x02,
+
+        // D3D12: adds D3D12_RESOURCE_FLAG_ALLOW_CROSS_ADAPTER and D3D12_HEAP_FLAG_SHARED_CROSS_ADAPTER
+        // D3D11, Vulkan: ignored
+        Shared_CrossAdapter = 0x04,
+    };
+    
+    inline Mask operator|(Mask lhs, Mask rhs) noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
+    inline Mask operator&(Mask lhs, Mask rhs) noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
+    inline Mask operator~(Mask value) noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
+    inline bool operator!(Mask value) noexcept{ return static_cast<u32>(value) == 0; }
+    inline bool operator==(Mask lhs, Mask rhs) noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
+    inline bool operator!=(Mask lhs, Mask rhs) noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

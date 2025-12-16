@@ -103,8 +103,19 @@ TextureSlice TextureSlice::resolve(const TextureDesc& desc)const{
     NWB_ASSERT(mipLevel < desc.mipLevels);
     
     if(width == static_cast<u32>(-1))
-        ret.width = desc.width >> mipLevel;
+        ret.width = Max(desc.width >> mipLevel, static_cast<u32>(1));
+    if(height == static_cast<u32>(-1))
+        ret.height = Max(desc.height >> mipLevel, static_cast<u32>(1));
+    
+    if(depth == static_cast<u32>(-1)){
+        if(desc.dimension == TextureDimension::Texture3D)
+            ret.depth = Max(desc.depth >> mipLevel, static_cast<u32>(1));
+        else{
+            ret.depth = 1;
+        }
+    }
 
+    return ret;
 }
 
 

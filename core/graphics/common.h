@@ -313,7 +313,7 @@ struct MemoryRequirements{
 // Texture
 
 
-namespace TextureDiumension{
+namespace TextureDimension{
     enum Enum : u8{
         Unknown,
         Texture1D,
@@ -412,7 +412,7 @@ struct TextureDesc{
     u32 sampleCount = 1;
     u32 sampleQuality = 0;
     Format::Enum format = Format::UNKNOWN;
-    TextureDiumension::Enum direction = TextureDiumension::Enum::Texture2D;
+    TextureDimension::Enum dimension = TextureDimension::Enum::Texture2D;
 #ifdef NWB_DEBUG
     AString debugName;
 #endif
@@ -448,7 +448,7 @@ struct TextureDesc{
     constexpr TextureDesc& setMipLevels(u32 v)noexcept{ mipLevels = v; return *this; }
     constexpr TextureDesc& setSampleCount(u32 v)noexcept{ sampleCount = v; return *this; }
     constexpr TextureDesc& setFormat(Format::Enum v)noexcept{ format = v; return *this; }
-    constexpr TextureDesc& setDirection(TextureDiumension::Enum v)noexcept{ direction = v; return *this; }
+    constexpr TextureDesc& setDimension(TextureDimension::Enum v)noexcept{ dimension = v; return *this; }
 #ifdef NWB_DEBUG
     TextureDesc& setDebugName(const AString& v)noexcept{ debugName = v; return *this; }
 #endif
@@ -459,7 +459,7 @@ struct TextureDesc{
     constexpr TextureDesc& setUseClearValue(bool v)noexcept{ useClearValue = v; return *this; }
     constexpr TextureDesc& setInitialState(ResourceStates::Mask v)noexcept{ initialState = v; return *this; }
     constexpr TextureDesc& setKeepInitialState(bool v)noexcept{ keepInitialState = v; return *this; }
-    constexpr TextureDesc&  setSharedResourceFlags(SharedResourceFlags::Mask v)noexcept{ sharedResourceFlags = v; return *this; }
+    constexpr TextureDesc& setSharedResourceFlags(SharedResourceFlags::Mask v)noexcept{ sharedResourceFlags = v; return *this; }
 };
 
 struct TextureSlice{

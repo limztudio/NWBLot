@@ -417,11 +417,66 @@ struct TextureDesc{
     AString debugName;
 #endif
     
-    bool isShaderResource = true;
+    bool isShaderResource = true; // Thi is initialised to 'true' for backward compatibility
     bool isRenderTarget = false;
     bool isUAV = false;
     bool isTypeless = false;
     bool isShadingRateSurface = false;
+    
+    SharedResourceFlags::Mask sharedResourceFlags = SharedResourceFlags::None;
+    
+    // Indicates that the texture is created with no backing memory,
+    // and memory is bound to the texture later using bindTextureMemory.
+    // On DX12, the texture resource is created at the time of memory binding.
+    bool isVirtual = false;
+    bool isTiled = false;
+    
+    Color clearValue;
+    bool useClearValue = false;
+    
+    ResourceStates::Mask initialState = ResourceStates::Unknown;
+    
+    // If keepInitialState is true, command lists that use the texture will automatically
+    // begin tracking the texture from the initial state and transition it to the initial state 
+    // on command list close.
+    bool keepInitialState = false;
+    
+    constexpr TextureDesc& setWidth(u32 v)noexcept{ width = v; return *this; }
+    constexpr TextureDesc& setHeight(u32 v)noexcept{ height = v; return *this; }
+    constexpr TextureDesc& setDepth(u32 v)noexcept{ depth = v; return *this; }
+    constexpr TextureDesc& setArraySize(u32 v)noexcept{ arraySize = v; return *this; }
+    constexpr TextureDesc& setMipLevels(u32 v)noexcept{ mipLevels = v; return *this; }
+    constexpr TextureDesc& setSampleCount(u32 v)noexcept{ sampleCount = v; return *this; }
+    constexpr TextureDesc& setFormat(Format::Enum v)noexcept{ format = v; return *this; }
+    constexpr TextureDesc& setDirection(TextureDiumension::Enum v)noexcept{ direction = v; return *this; }
+#ifdef NWB_DEBUG
+    TextureDesc& setDebugName(const AString& v)noexcept{ debugName = v; return *this; }
+#endif
+    constexpr TextureDesc& setInRenderTarget(bool v)noexcept{ isRenderTarget = v; return *this; }
+    constexpr TextureDesc& setInUAV(bool v)noexcept{ isUAV = v; return *this; }
+    constexpr TextureDesc& setInTypeless(bool v)noexcept{ isTypeless = v; return *this; }
+    constexpr TextureDesc& setClearValue(const Color& v)noexcept{ clearValue = v; useClearValue = true; return *this; }
+    constexpr TextureDesc& setUseClearValue(bool v)noexcept{ useClearValue = v; return *this; }
+    constexpr TextureDesc& setInitialState(ResourceStates::Mask v)noexcept{ initialState = v; return *this; }
+    constexpr TextureDesc& setKeepInitialState(bool v)noexcept{ keepInitialState = v; return *this; }
+    constexpr TextureDesc&  setSharedResourceFlags(SharedResourceFlags::Mask v)noexcept{ sharedResourceFlags = v; return *this; }
+};
+
+struct TextureSlice{
+    u32 x = 0;
+    u32 y = 0;
+    u32 z = 0;
+    
+    // -1 means the entire dimension is part of the region
+    // resolve() will translate these values into actual dimensions
+    auto width = static_cast<u32>(-1);
+    auto height = static_cast<u32>(-1);
+    auto depth = static_cast<u32>(-1);
+    
+    MipLevel mipLevel = 0;
+    ArraySlice arraySlice = 0;
+    
+    [[nodiscard]] TextureSlice resolve(const TextureDesc& desc)const;
 };
 
 

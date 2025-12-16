@@ -98,6 +98,16 @@ const FormatInfo& GetFormatInfo(Format::Enum format)noexcept{
 }
 
 
+TextureSlice TextureSlice::resolve(const TextureDesc& desc)const{
+    TextureSlice ret(*this);
+    NWB_ASSERT(mipLevel < desc.mipLevels);
+    
+    if(width == static_cast<u32>(-1))
+        ret.width = desc.width >> mipLevel;
+
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

@@ -477,6 +477,37 @@ struct TextureSlice{
     ArraySlice arraySlice = 0;
     
     [[nodiscard]] TextureSlice resolve(const TextureDesc& desc)const;
+    
+    constexpr TextureSlice& setOrigin(u32 vx = 0, u32 vy = 0, u32 vz = 0){ x = vx; y = vy; z = vz; return *this; }
+    constexpr TextureSlice& setWidth(u32 value){ width = value; return *this; }
+    constexpr TextureSlice& setHeight(u32 value){ height = value; return *this; }
+    constexpr TextureSlice& setDepth(u32 value){ depth = value; return *this; }
+    constexpr TextureSlice& setSize(u32 vx = static_cast<u32>(-1), u32 vy = static_cast<u32>(-1), u32 vz = static_cast<u32>(-1)){ width = vx; height = vy; depth = vz; return *this; }
+    constexpr TextureSlice& setMipLevel(MipLevel level){ mipLevel = level; return *this; }
+    constexpr TextureSlice& setArraySlice(ArraySlice slice){ arraySlice = slice; return *this; }
+};
+
+struct TextureSubresourceSet{
+    static constexpr auto AllMipLevels = static_cast<MipLevel>(-1);
+    static constexpr auto AllArraySlices = static_cast<ArraySlice>(-1);
+    
+    MipLevel baseMipLevel = 0;
+    MipLevel numMipLevels = 1;
+    ArraySlice baseArraySlice = 0;
+    ArraySlice numArraySlices = 1;
+    
+    [[nodiscard]] TextureSubresourceSet resolve(const TextureDesc& desc, bool singleMipLevel)const;
+    [[nodiscard]] bool isEntireTexture(const TextureDesc& desc)const;
+    
+    TextureSubresourceSet() = default;
+    TextureSubresourceSet(MipLevel _baseMipLevel, MipLevel _numMipLevels, ArraySlice _baseArraySlice, ArraySlice _numArraySlices)
+    : baseMipLevel(_baseMipLevel)
+    , numMipLevels(_numMipLevels)
+    , baseArraySlice(_baseArraySlice)
+    , numArraySlices(_numArraySlices)
+    {}
+    
+    
 };
 
 

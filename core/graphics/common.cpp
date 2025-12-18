@@ -119,6 +119,42 @@ TextureSlice TextureSlice::resolve(const TextureDesc& desc)const{
 }
 
 
+TextureSubresourceSet TextureSubresourceSet::resolve(const TextureDesc& desc, bool singleMipLevel)const{
+    TextureSubresourceSet ret;
+    ret.baseMipLevel = baseMipLevel;
+
+    if(singleMipLevel)
+        ret.numMipLevels = 1;
+    else{
+        auto lastMipLevelPlusOne = Min(baseMipLevel + numMipLevels, desc.mipLevels);
+        ret.numMipLevels = static_cast<MipLevel>(Max(static_cast<u32>(0), lastMipLevelPlusOne - baseMipLevel));
+    }
+
+    switch(desc.dimension){
+    case TextureDimension::Texture1DArray:
+    case TextureDimension::Texture2DArray:
+    case TextureDimension::TextureCube:
+    case TextureDimension::TextureCubeArray:
+    case TextureDimension::Texture2DMSArray:
+    {
+        ret.baseArraySlice = baseArraySlice;
+        auto lastArraySlicePlusOne = static_cast<i32>(Min(baseArraySlice + numArraySlices, desc.arraySize));
+        ret.numArraySlices = static_cast<ArraySlice>(Max(static_cast<i32>(0), lastArraySlicePlusOne - static_cast<i32>(baseArraySlice)));
+        break;
+    }
+    default: 
+        ret.baseArraySlice = 0;
+        ret.numArraySlices = 1;
+        break;
+    }
+
+    return ret;
+}
+bool TextureSubresourceSet::isEntireTexture(const TextureDesc& desc)const{
+    
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

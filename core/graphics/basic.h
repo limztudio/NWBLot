@@ -19,8 +19,10 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+typedef u32 ObjectType;
+
 namespace ObjectTypes{
-    enum Enum : u32{
+    enum Enum : ObjectType{
         SharedHandle = 0x00000001,
         
         VK_Device = 0x00010001,
@@ -87,8 +89,7 @@ public:
     
 public:
     virtual u32 addReference()noexcept = 0;
-    virtual u32 releaseReference()noexcept = 0;
-    virtual u32 getReferenceCount()const noexcept = 0;
+    virtual u32 release()noexcept = 0;
     
     virtual Object getNativeHandle(ObjectTypes::Enum type){ (void)type; return nullptr; }
 };

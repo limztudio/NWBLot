@@ -297,11 +297,9 @@ struct HeapDesc{
 
 class IHeap : public IResource{
 public:
-    virtual const HeapDesc& getDescription() = 0;
+    [[nodiscard]] virtual const HeapDesc& getDescription()const = 0;
 };
-
-template <typename Deleter = DefaultDeleter<IHeap>>
-using HeapHandle = RefCountPtr<IHeap, Deleter>;
+typedef RefCountPtr<IHeap, BlankDeleter<IHeap>> HeapHandle;
 
 struct MemoryRequirements{
     u64 size = 0;
@@ -499,16 +497,117 @@ struct TextureSubresourceSet{
     [[nodiscard]] TextureSubresourceSet resolve(const TextureDesc& desc, bool singleMipLevel)const;
     [[nodiscard]] bool isEntireTexture(const TextureDesc& desc)const;
     
-    TextureSubresourceSet() = default;
-    TextureSubresourceSet(MipLevel _baseMipLevel, MipLevel _numMipLevels, ArraySlice _baseArraySlice, ArraySlice _numArraySlices)
+    constexpr TextureSubresourceSet() = default;
+    constexpr TextureSubresourceSet(MipLevel _baseMipLevel, MipLevel _numMipLevels, ArraySlice _baseArraySlice, ArraySlice _numArraySlices)
     : baseMipLevel(_baseMipLevel)
     , numMipLevels(_numMipLevels)
     , baseArraySlice(_baseArraySlice)
     , numArraySlices(_numArraySlices)
     {}
     
-    
+    constexpr TextureSubresourceSet& setBaseMipLevel(MipLevel value){ baseMipLevel = value; return *this; }
+    constexpr TextureSubresourceSet& setNumMipLevels(MipLevel value){ numMipLevels = value; return *this; }
+    constexpr TextureSubresourceSet& setMipLevels(MipLevel base, MipLevel num){ baseMipLevel = base; numMipLevels = num; return *this; }
+    constexpr TextureSubresourceSet& setBaseArraySlice(ArraySlice value){ baseArraySlice = value; return *this; }
+    constexpr TextureSubresourceSet& setNumArraySlices(ArraySlice value){ numArraySlices = value; return *this; }
+    constexpr TextureSubresourceSet& setArraySlices(ArraySlice base, ArraySlice num){ baseArraySlice = base; numArraySlices = num; return *this; }
+
 };
+inline bool operator==(const TextureSubresourceSet& lhs, const TextureSubresourceSet& rhs)noexcept{
+    return lhs.baseMipLevel == rhs.baseMipLevel
+        && lhs.numMipLevels == rhs.numMipLevels
+        && lhs.baseArraySlice == rhs.baseArraySlice
+        && lhs.numArraySlices == rhs.numArraySlices
+        ;
+}
+inline bool operator!=(const TextureSubresourceSet& lhs, const TextureSubresourceSet& rhs)noexcept{ return !(lhs == rhs); }
+
+static constexpr auto s_allSubresources = TextureSubresourceSet(0, TextureSubresourceSet::AllMipLevels, 0, TextureSubresourceSet::AllArraySlices);
+
+class ITexture : public IResource{
+public:
+    [[nodiscard]] virtual const TextureDesc& getDescription()const = 0;
+    
+    // Similar to getNativeObject, returns a native view for a specified set of subresources. Returns nullptr if unavailable.
+    virtual Object getNativeView(ObjectType objectType, Format::Enum format = Format::UNKNOWN, TextureSubresourceSet subresources = s_allSubresources, TextureDimension::Enum dimension = TextureDimension::Unknown, bool isReadOnlyDSV = false) = 0;
+};
+typedef RefCountPtr<ITexture, BlankDeleter<ITexture>> TextureHandle;
+
+class IStagingTexture : public IResource{
+public:
+    [[nodiscard]] virtual const TextureDesc& getDescription()const = 0;
+};
+typedef RefCountPtr<IStagingTexture, BlankDeleter<IStagingTexture>> StagingTextureHandle;
+
+struct TiledTextureCoordinate{
+    u16 mipLevel = 0;
+    u16 arrayLevel = 0;
+    u32 x = 0;
+    u32 y = 0;
+    u32 z = 0;
+};
+struct TiledTextureRegion{
+    u32 tilesNum = 0;
+    u32 width = 0;
+    u32 height = 0;
+    u32 depth = 0;
+};
+
+struct TextureTilesMapping{
+    TiledTextureCoordinate* tiledTextureCoordinates = nullptr;
+    TiledTextureRegion* tiledTextureRegions = nullptr;
+    u64* byteOffsets = nullptr;
+    u32 numTextureRegions = 0;
+    IHeap* heap = nullptr;
+};
+
+struct PackedMipDesc{
+    u32 numStandardMips = 0;
+    u32 numPackedMips = 0;
+    u32 numTilesForPackedMips = 0;
+    u32 startTileIndexInOverallResource = 0;
+};
+
+struct TileShape{
+    u32 widthInTexels = 0;
+    u32 heightInTexels = 0;
+    u32 depthInTexels = 0;
+};
+
+struct SubresourceTiling{
+    u32 widthInTiles = 0;
+    u32 heightInTiles = 0;
+    u32 depthInTiles = 0;
+    u32 startTileIndexInOverallResource = 0;
+};
+
+namespace SamplerFeedbackFormat{
+    enum Enum : u8{
+        MinMipOpaque = 0x0,
+        MipRegionUsedOpaque = 0x1,
+    };
+};
+
+struct SamplerFeedbackTextureDesc{
+    SamplerFeedbackFormat::Enum samplerFeedbackFormat = SamplerFeedbackFormat::MinMipOpaque;
+    u32 samplerFeedbackMipRegionX = 0;
+    u32 samplerFeedbackMipRegionY = 0;
+    u32 samplerFeedbackMipRegionZ = 0;
+    ResourceStates::Mask initialState = ResourceStates::Unknown;
+    bool keepInitialState = false;
+};
+
+class ISamplerFeedbackTexture : public IResource{
+public:
+    [[nodiscard]] virtual const SamplerFeedbackTextureDesc& getDescription()const = 0;
+    
+    virtual TextureHandle getPairedTexture() = 0;
+};
+typedef RefCountPtr<ISamplerFeedbackTexture, BlankDeleter<ISamplerFeedbackTexture>> SamplerFeedbackTextureHandle;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Input Layout
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

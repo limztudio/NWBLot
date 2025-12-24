@@ -133,6 +133,26 @@ struct EmptyDeleter<T[]>{
     usize mSize = 0;
 };
 
+template <typename T>
+struct BlankDeleter{
+    constexpr BlankDeleter()noexcept = default;
+    template <typename U>
+    BlankDeleter(const BlankDeleter<U>&, typename EnableIf<IsConvertible<U*, T*>::value>::type* = 0)noexcept{}
+
+    void operator()(T* p)const noexcept{
+        static_assert(IsCompleteType_V<T>, "Attempting to call the destructor of an incomplete type");
+    }
+};
+template <typename T>
+struct BlankDeleter<T[]>{
+    constexpr BlankDeleter()noexcept = default;
+    constexpr BlankDeleter(usize size)noexcept{}
+    template <typename U>
+    BlankDeleter(const BlankDeleter<U[]>&, typename EnableIf<__hidden_smart_ptr::IsArrayCvConvertible<U*, T*>::value>::type* = 0)noexcept{}
+
+    void operator()(T* p)const noexcept{}
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -151,7 +151,20 @@ TextureSubresourceSet TextureSubresourceSet::resolve(const TextureDesc& desc, bo
     return ret;
 }
 bool TextureSubresourceSet::isEntireTexture(const TextureDesc& desc)const{
+    if(baseMipLevel > 0u || baseMipLevel + numMipLevels < desc.mipLevels)
+        return false;
+
+    switch(desc.dimension){
+    case TextureDimension::Texture1DArray:
+    case TextureDimension::Texture2DArray:
+    case TextureDimension::TextureCube:
+    case TextureDimension::TextureCubeArray:
+    case TextureDimension::Texture2DMSArray: 
+        if(baseArraySlice > 0u || baseArraySlice + numArraySlices < desc.arraySize)
+            return false;
+    }
     
+    return true;
 }
 
 

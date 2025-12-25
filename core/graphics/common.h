@@ -411,8 +411,8 @@ struct TextureDesc{
     u32 sampleQuality = 0;
     Format::Enum format = Format::UNKNOWN;
     TextureDimension::Enum dimension = TextureDimension::Enum::Texture2D;
-#ifdef NWB_DEBUG
-    AString debugName;
+#ifdef NWB_GRAPHICS_DEBUGGABLE
+    AString name;
 #endif
     
     bool isShaderResource = true; // Thi is initialised to 'true' for backward compatibility
@@ -447,8 +447,8 @@ struct TextureDesc{
     constexpr TextureDesc& setSampleCount(u32 v)noexcept{ sampleCount = v; return *this; }
     constexpr TextureDesc& setFormat(Format::Enum v)noexcept{ format = v; return *this; }
     constexpr TextureDesc& setDimension(TextureDimension::Enum v)noexcept{ dimension = v; return *this; }
-#ifdef NWB_DEBUG
-    TextureDesc& setDebugName(const AString& v)noexcept{ debugName = v; return *this; }
+#ifdef NWB_GRAPHICS_DEBUGGABLE
+    TextureDesc& setName(const AString& v)noexcept{ name = v; return *this; }
 #endif
     constexpr TextureDesc& setInRenderTarget(bool v)noexcept{ isRenderTarget = v; return *this; }
     constexpr TextureDesc& setInUAV(bool v)noexcept{ isUAV = v; return *this; }
@@ -608,6 +608,29 @@ typedef RefCountPtr<ISamplerFeedbackTexture, BlankDeleter<ISamplerFeedbackTextur
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Input Layout
+
+
+struct VertexAttributeDesc{
+    Format::Enum format = Format::UNKNOWN;
+    u32 arraySize = 1;
+    u32 bufferIndex = 0;
+    u32 offset = 0;
+    u32 elementStride = 0;
+#ifdef NWB_GRAPHICS_DEBUGGABLE
+    AString name;
+#endif
+    bool isInstanced = false;
+    
+    constexpr VertexAttributeDesc& setFormat(Format::Enum value){ format = value; return *this; }
+    constexpr VertexAttributeDesc& setArraySize(u32 value){ arraySize = value; return *this; }
+    constexpr VertexAttributeDesc& setBufferIndex(u32 value){ bufferIndex = value; return *this; }
+    constexpr VertexAttributeDesc& setOffset(u32 value){ offset = value; return *this; }
+    constexpr VertexAttributeDesc& setElementStride(u32 value){ elementStride = value; return *this; }
+    constexpr VertexAttributeDesc& setIsInstanced(bool value){ isInstanced = value; return *this; }
+#ifdef NWB_GRAPHICS_DEBUGGABLE
+    VertexAttributeDesc& setName(const AString& value){ name = value; return *this; }
+#endif
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

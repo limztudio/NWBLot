@@ -17,6 +17,7 @@
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\basic.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)graphics\common.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)graphics\graphics.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\shader.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\config.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\engine.cpp" />
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\primitiveAssets.cpp" />
@@ -30,6 +31,7 @@
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\basic.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\common.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\graphics.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)graphics\shader.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\config.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\engine.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\primitiveAssets.h" />

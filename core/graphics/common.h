@@ -11,6 +11,7 @@
 #include <core/alloc/assetPool.h>
 
 #include "basic.h"
+#include "shader.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -382,15 +383,15 @@ namespace SharedResourceFlags{
         // D3D11: adds D3D11_RESOURCE_MISC_SHARED
         // D3D12: adds D3D12_HEAP_FLAG_SHARED
         // Vulkan: adds vk::ExternalMemoryImageCreateInfo and vk::ExportMemoryAllocateInfo/vk::ExternalMemoryBufferCreateInfo
-        Shared              = 0x01,
+        Shared              = 1 << 0,
 
         // D3D11: adds (D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX | D3D11_RESOURCE_MISC_SHARED_NTHANDLE)
         // D3D12, Vulkan: ignored
-        Shared_NTHandle     = 0x02,
+        Shared_NTHandle     = 1 << 1,
 
         // D3D12: adds D3D12_RESOURCE_FLAG_ALLOW_CROSS_ADAPTER and D3D12_HEAP_FLAG_SHARED_CROSS_ADAPTER
         // D3D11, Vulkan: ignored
-        Shared_CrossAdapter = 0x04,
+        Shared_CrossAdapter = 1 << 2,
     };
     
     inline Mask operator|(Mask lhs, Mask rhs) noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
@@ -630,6 +631,168 @@ struct VertexAttributeDesc{
 #ifdef NWB_GRAPHICS_DEBUGGABLE
     VertexAttributeDesc& setName(const AString& value){ name = value; return *this; }
 #endif
+};
+
+class IInputLayout : public IResource{
+public:
+    [[nodiscard]] virtual const VertexAttributeDesc* getAttributeDescription(u32 index)const = 0;
+    [[nodiscard]] virtual u32 getNumAttributes()const = 0;
+};
+typedef RefCountPtr<IInputLayout, BlankDeleter<IInputLayout>> InputLayoutHandle;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Buffer
+
+
+struct BufferDesc{
+    u64 byteSize = 0;
+    u32 structStride = 0; // if non-zero it's structured
+    u32 maxVersions = 0; // only valid and required to be nonzero for volatile buffers on Vulkan
+    Format::Enum format = Format::UNKNOWN; // for typed buffer views
+#ifdef NWB_GRAPHICS_DEBUGGABLE
+    AString debugName;
+#endif
+    bool canHaveUAVs = false;
+    bool canHaveTypedViews = false;
+    bool canHaveRawViews = false;
+    bool isVertexBuffer = false;
+    bool isIndexBuffer = false;
+    bool isConstantBuffer = false;
+    bool isDrawIndirectArgs = false;
+    bool isAccelStructBuildInput = false;
+    bool isAccelStructStorage = false;
+    bool isShaderBindingTable = false;
+
+    // A dynamic/upload buffer whose contents only live in the current command list
+    bool isVolatile = false;
+
+    // Indicates that the buffer is created with no backing memory,
+    // and memory is bound to the buffer later using bindBufferMemory.
+    bool isVirtual = false;
+
+    ResourceStates::Mask initialState = ResourceStates::Common;
+
+    // see TextureDesc::keepInitialState
+    bool keepInitialState = false;
+
+    CpuAccessMode::Enum cpuAccess = CpuAccessMode::None;
+
+    SharedResourceFlags::Mask sharedResourceFlags = SharedResourceFlags::None;
+    
+    constexpr BufferDesc& setByteSize(u64 value){ byteSize = value; return *this; }
+    constexpr BufferDesc& setStructStride(u32 value){ structStride = value; return *this; }
+    constexpr BufferDesc& setMaxVersions(u32 value){ maxVersions = value; return *this; }
+    constexpr BufferDesc& setFormat(Format::Enum value){ format = value; return *this; }
+    constexpr BufferDesc& setCanHaveUAVs(bool value){ canHaveUAVs = value; return *this; }
+    constexpr BufferDesc& setCanHaveTypedViews(bool value){ canHaveTypedViews = value; return *this; }
+    constexpr BufferDesc& setCanHaveRawViews(bool value){ canHaveRawViews = value; return *this; }
+    constexpr BufferDesc& setIsVertexBuffer(bool value){ isVertexBuffer = value; return *this; }
+    constexpr BufferDesc& setIsIndexBuffer(bool value){ isIndexBuffer = value; return *this; }
+    constexpr BufferDesc& setIsConstantBuffer(bool value){ isConstantBuffer = value; return *this; }
+    constexpr BufferDesc& setIsDrawIndirectArgs(bool value){ isDrawIndirectArgs = value; return *this; }
+    constexpr BufferDesc& setIsAccelStructBuildInput(bool value){ isAccelStructBuildInput = value; return *this; }
+    constexpr BufferDesc& setIsAccelStructStorage(bool value){ isAccelStructStorage = value; return *this; }
+    constexpr BufferDesc& setIsShaderBindingTable(bool value){ isShaderBindingTable = value; return *this; }
+    constexpr BufferDesc& setIsVolatile(bool value){ isVolatile = value; return *this; }
+    constexpr BufferDesc& setIsVirtual(bool value){ isVirtual = value; return *this; }
+    constexpr BufferDesc& setInitialState(ResourceStates::Mask value){ initialState = value; return *this; }
+    constexpr BufferDesc& setKeepInitialState(bool value){ keepInitialState = value; return *this; }
+    constexpr BufferDesc& setCpuAccess(CpuAccessMode::Enum value){ cpuAccess = value; return *this; }
+
+    // Equivalent to .setInitialState(_initialState).setKeepInitialState(true)
+    constexpr BufferDesc& enableAutomaticStateTracking(ResourceStates::Mask _initialState){
+        initialState = _initialState;
+        keepInitialState = true;
+        return *this;
+    }
+    
+#ifdef NWB_GRAPHICS_DEBUGGABLE
+    BufferDesc& setDebugName(const AString& value){ debugName = value; return *this; }
+#endif
+};
+
+struct BufferRange{
+    u64 byteOffset = 0;
+    u64 byteSize = 0;
+        
+    BufferRange() = default;
+    constexpr BufferRange(u64 _byteOffset, u64 _byteSize)
+        : byteOffset(_byteOffset)
+        , byteSize(_byteSize)
+    {}
+
+    [[nodiscard]] BufferRange resolve(const BufferDesc& desc)const;
+    [[nodiscard]] constexpr bool isEntireBuffer(const BufferDesc& desc)const{ return (!byteOffset) && (byteSize == static_cast<u64>(-1) || byteSize == desc.byteSize); }
+    constexpr bool operator==(const BufferRange& other)const{ return byteOffset == other.byteOffset && byteSize == other.byteSize; }
+
+    constexpr BufferRange& setByteOffset(uint64_t value){ byteOffset = value; return *this; }
+    constexpr BufferRange& setByteSize(uint64_t value){ byteSize = value; return *this; }
+};
+
+static constexpr BufferRange s_entireBuffer = BufferRange(0, static_cast<u64>(-1));
+
+class IBuffer : public IResource{
+public:
+    [[nodiscard]] virtual const BufferDesc& getDescription()const = 0;
+    
+    [[nodiscard]] virtual GpuVirtualAddress getGpuVirtualAddress()const = 0;
+};
+typedef RefCountPtr<IBuffer, BlankDeleter<IBuffer>> BufferHandle;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Shader
+
+
+namespace ShdaerType{
+    enum Mask : u16{
+        None            = 0x0000,
+        
+        Compute         = 0x0020,
+
+        Vertex          = 0x0001,
+        Hull            = 0x0002,
+        Domain          = 0x0004,
+        Geometry        = 0x0008,
+        Pixel           = 0x0010,
+        Amplification   = 0x0040,
+        Mesh            = 0x0080,
+        AllGraphics     = 0x00DF,
+
+        RayGeneration   = 0x0100,
+        AnyHit          = 0x0200,
+        ClosestHit      = 0x0400,
+        Miss            = 0x0800,
+        Intersection    = 0x1000,
+        Callable        = 0x2000,
+        AllRayTracing   = 0x3F00,
+
+        All             = 0x3FFF,
+    };
+    
+    inline Mask operator|(Mask lhs, Mask rhs) noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
+    inline Mask operator&(Mask lhs, Mask rhs) noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
+    inline Mask operator~(Mask value) noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
+    inline bool operator!(Mask value) noexcept{ return static_cast<u32>(value) == 0; }
+    inline bool operator==(Mask lhs, Mask rhs) noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
+    inline bool operator!=(Mask lhs, Mask rhs) noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
+};
+
+namespace FastGeometryShaderFlags{
+    enum Mask : u8{
+        ForceFastGS                      = 1 << 0,
+        UseViewportMask                  = 1 << 1,
+        OffsetTargetIndexByViewportIndex = 1 << 2,
+        StrictApiOrder                   = 1 << 3,
+    };
+    
+    inline Mask operator|(Mask lhs, Mask rhs) noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
+    inline Mask operator&(Mask lhs, Mask rhs) noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
+    inline Mask operator~(Mask value) noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
+    inline bool operator!(Mask value) noexcept{ return static_cast<u32>(value) == 0; }
+    inline bool operator==(Mask lhs, Mask rhs) noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
+    inline bool operator!=(Mask lhs, Mask rhs) noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
 };
 
 

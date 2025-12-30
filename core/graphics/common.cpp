@@ -168,6 +168,19 @@ bool TextureSubresourceSet::isEntireTexture(const TextureDesc& desc)const{
 }
 
 
+BufferRange BufferRange::resolve(const BufferDesc& desc)const{
+    BufferRange ret;
+    ret.byteOffset = Min(byteOffset, desc.byteSize);
+    
+    if(!byteSize)
+        ret.byteSize = desc.byteSize - ret.byteOffset;
+    else
+        ret.byteSize = Min(byteSize, desc.byteSize - ret.byteOffset);
+
+    return ret;
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

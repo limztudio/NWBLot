@@ -745,7 +745,7 @@ typedef RefCountPtr<IBuffer, BlankDeleter<IBuffer>> BufferHandle;
 // Shader
 
 
-namespace ShdaerType{
+namespace ShaderType{
     enum Mask : u16{
         None            = 0x0000,
         
@@ -781,10 +781,169 @@ namespace ShdaerType{
 
 namespace FastGeometryShaderFlags{
     enum Mask : u8{
+        None                             = 0,
+
         ForceFastGS                      = 1 << 0,
         UseViewportMask                  = 1 << 1,
         OffsetTargetIndexByViewportIndex = 1 << 2,
         StrictApiOrder                   = 1 << 3,
+    };
+    
+    inline Mask operator|(Mask lhs, Mask rhs) noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
+    inline Mask operator&(Mask lhs, Mask rhs) noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
+    inline Mask operator~(Mask value) noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
+    inline bool operator!(Mask value) noexcept{ return static_cast<u32>(value) == 0; }
+    inline bool operator==(Mask lhs, Mask rhs) noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
+    inline bool operator!=(Mask lhs, Mask rhs) noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
+};
+
+struct CustomSemantic{
+    enum Enum : u8{
+        Undefined = 0,
+        XRight = 1,
+        ViewportMask = 2,
+    };
+
+    Enum type;
+    AString name;
+        
+    constexpr CustomSemantic& setType(Enum value){ type = value; return *this; }
+    CustomSemantic& setName(const AString& value){ name = value; return *this; }
+};
+
+struct ShaderDesc{
+    ShaderType::Mask shaderType = ShaderType::None;
+#ifdef NWB_GRAPHICS_DEBUGGABLE
+    AString debugName;
+#endif
+    AString entryName = "main";
+
+    i32 hlslExtensionsUAV = -1;
+
+    bool useSpecificShaderExt = false;
+    u32 numCustomSemantics = 0;
+    CustomSemantic* pCustomSemantics = nullptr;
+
+    FastGeometryShaderFlags::Mask fastGSFlags = FastGeometryShaderFlags::None;
+    u32* pCoordinateSwizzling = nullptr;
+
+    constexpr ShaderDesc& setShaderType(ShaderType::Mask value){ shaderType = value; return *this; }
+    constexpr ShaderDesc& setHlslExtensionsUAV(i32 value){ hlslExtensionsUAV = value; return *this; }
+    constexpr ShaderDesc& setUseSpecificShaderExt(bool value){ useSpecificShaderExt = value; return *this; }
+    constexpr ShaderDesc& setCustomSemantics(u32 count, CustomSemantic* data){ numCustomSemantics = count; pCustomSemantics = data; return *this; }
+    constexpr ShaderDesc& setFastGSFlags(FastGeometryShaderFlags::Mask value){ fastGSFlags = value; return *this; }
+    constexpr ShaderDesc& setCoordinateSwizzling(u32* value){ pCoordinateSwizzling = value; return *this; }
+    
+    ShaderDesc& setEntryName(const AString& value){ entryName = value; return *this; }
+#ifdef NWB_GRAPHICS_DEBUGGABLE
+    ShaderDesc& setDebugName(const AString& value){ debugName = value; return *this; }
+#endif
+};
+
+struct ShaderSpecialization{
+    u32 constantID = 0;
+    union{
+        u32 u = 0;
+        i32 i;
+        f32 f;
+    } value;
+
+    static constexpr ShaderSpecialization U32(u32 constantID, u32 u){
+        ShaderSpecialization s;
+        s.constantID = constantID;
+        s.value.u = u;
+        return s;
+    }
+    static constexpr ShaderSpecialization I32(u32 constantID, i32 i){
+        ShaderSpecialization s;
+        s.constantID = constantID;
+        s.value.i = i;
+        return s;
+    }
+    static constexpr ShaderSpecialization F32(u32 constantID, f32 f){
+        ShaderSpecialization s;
+        s.constantID = constantID;
+        s.value.f = f;
+        return s;
+    }
+};
+
+class IShader : public IResource{
+public:
+    [[nodiscard]] virtual const ShaderDesc& getDescription()const = 0;
+
+    virtual void getBytecode(const void** ppBytecode, usize* pSize)const = 0;
+};
+typedef RefCountPtr<IShader, BlankDeleter<IShader>> ShaderHandle;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Shader Library
+
+
+class IShaderLibrary : public IResource{
+public:
+    virtual void getBytecode(const void** ppBytecode, usize* pSize)const = 0;
+    virtual ShaderHandle getShader(const char* entryName, ShaderType::Mask shaderType) = 0;
+};
+typedef RefCountPtr<IShaderLibrary, BlankDeleter<IShaderLibrary>> ShaderLibraryHandle;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Blend State
+
+
+namespace BlendFactor{
+    enum Enum : u8{
+        Zero = 1,
+        One = 2,
+        SrcColor = 3,
+        InvSrcColor = 4,
+        SrcAlpha = 5,
+        InvSrcAlpha = 6,
+        DstAlpha  = 7,
+        InvDstAlpha = 8,
+        DstColor = 9,
+        InvDstColor = 10,
+        SrcAlphaSaturate = 11,
+        ConstantColor = 14,
+        InvConstantColor = 15,
+        Src1Color = 16,
+        InvSrc1Color = 17,
+        Src1Alpha = 18,
+        InvSrc1Alpha = 19,
+
+        // Vulkan names
+        OneMinusSrcColor = InvSrcColor,
+        OneMinusSrcAlpha = InvSrcAlpha,
+        OneMinusDstAlpha = InvDstAlpha,
+        OneMinusDstColor = InvDstColor,
+        OneMinusConstantColor = InvConstantColor,
+        OneMinusSrc1Color = InvSrc1Color,
+        OneMinusSrc1Alpha = InvSrc1Alpha,
+    };
+};
+
+namespace BlendOp{
+    enum Enum : u8{
+        Add = 1,
+       Subtract = 2,
+       ReverseSubtract = 3,
+       Min = 4,
+       Max = 5,
+    };
+};
+
+namespace ColorMask{
+    enum Mask : u8{
+        None = 0,
+
+        Red = 1 << 0,
+        Green = 1 << 1,
+        Blue = 1 << 2,
+        Alpha = 1 << 3,
+
+        All = 0xF,
     };
     
     inline Mask operator|(Mask lhs, Mask rhs) noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }

@@ -181,6 +181,25 @@ BufferRange BufferRange::resolve(const BufferDesc& desc)const{
 }
 
 
+bool BlendState::RenderTarget::usesConstantColor()const{
+    return 
+        srcBlend == BlendFactor::ConstantColor || srcBlend == BlendFactor::OneMinusConstantColor
+        || destBlend == BlendFactor::ConstantColor || destBlend == BlendFactor::OneMinusConstantColor
+        || srcBlendAlpha == BlendFactor::ConstantColor || srcBlendAlpha == BlendFactor::OneMinusConstantColor
+        || destBlendAlpha == BlendFactor::ConstantColor || destBlendAlpha == BlendFactor::OneMinusConstantColor
+        ;
+}
+
+bool BlendState::usesConstantColor(u32 numTargets)const{
+    for(u32 rt = 0; rt < numTargets; ++rt){
+        if(targets[rt].usesConstantColor())
+            return true;
+    }
+
+    return false;
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

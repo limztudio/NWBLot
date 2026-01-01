@@ -28,6 +28,7 @@
 #include <robin_map.h>
 
 #include "compressed_pair.h"
+#include "fixed_vector.h"
 #include "basic_string.h"
 #include "sync.h"
 
@@ -115,13 +116,6 @@ using Queue = std::queue<T, Alloc>;
 
 template<typename T, typename Alloc = NWB::Core::Alloc::GeneralAllocator<T>>
 using Deque = std::deque<T, Alloc>;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template <typename T>
-using SharedPtr = std::shared_ptr<T>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

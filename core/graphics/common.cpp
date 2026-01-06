@@ -200,6 +200,43 @@ bool BlendState::usesConstantColor(u32 numTargets)const{
 }
 
 
+FramebufferInfo::FramebufferInfo(const FramebufferDesc& desc){
+    for(usize i = 0; i < desc.colorAttachments.size(); ++i){
+        const FramebufferAttachment& attachment = desc.colorAttachments[i];
+        colorFormats.push_back(attachment.format == Format::UNKNOWN && attachment.texture ? attachment.texture->getDescription().format : attachment.format);
+    }
+
+    if(desc.depthAttachment.valid()){
+        const TextureDesc& textureDesc = desc.depthAttachment.texture->getDescription();
+        depthFormat = textureDesc.format;
+        sampleCount = textureDesc.sampleCount;
+        sampleQuality = textureDesc.sampleQuality;
+    }
+    else if(!desc.colorAttachments.empty() && desc.colorAttachments[0].valid()){
+        const TextureDesc& textureDesc = desc.colorAttachments[0].texture->getDescription();
+        sampleCount = textureDesc.sampleCount;
+        sampleQuality = textureDesc.sampleQuality;
+    }
+}
+
+FramebufferInfoEx::FramebufferInfoEx(const FramebufferDesc& desc) : FramebufferInfo(desc){
+    if(desc.depthAttachment.valid()){
+        const TextureDesc& textureDesc = desc.depthAttachment.texture->getDescription();
+        TextureSubresourceSet const subresources = desc.depthAttachment.subresources.resolve(textureDesc, true);
+        width = Max(textureDesc.width >> subresources.baseMipLevel, static_cast<u32>(1));
+        height = Max(textureDesc.height >> subresources.baseMipLevel, static_cast<u32>(1));
+        arraySize = subresources.numArraySlices;
+    }
+    else if(!desc.colorAttachments.empty() && desc.colorAttachments[0].valid()){
+        const TextureDesc& textureDesc = desc.colorAttachments[0].texture->getDescription();
+        TextureSubresourceSet const subresources = desc.colorAttachments[0].subresources.resolve(textureDesc, true);
+        width = Max(textureDesc.width >> subresources.baseMipLevel, static_cast<u32>(1));
+        height = Max(textureDesc.height >> subresources.baseMipLevel, static_cast<u32>(1));
+        arraySize = subresources.numArraySlices;
+    }
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

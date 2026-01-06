@@ -267,12 +267,12 @@ namespace FormatSupport{
         ShaderAtomicCounter = 1 << 11,
     };
     
-    inline Mask operator|(Mask lhs, Mask rhs) noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
-    inline Mask operator&(Mask lhs, Mask rhs) noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
-    inline Mask operator~(Mask value) noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
-    inline bool operator!(Mask value) noexcept{ return static_cast<u32>(value) == 0; }
-    inline bool operator==(Mask lhs, Mask rhs) noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
-    inline bool operator!=(Mask lhs, Mask rhs) noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
+    inline Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
+    inline Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
+    inline Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
+    inline bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
+    inline bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
+    inline bool operator!=(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
 };
 
 
@@ -365,12 +365,12 @@ namespace ResourceStates{
         ConvertCoopVecMatrixOutput = 1 << 24,
     };
     
-    inline Mask operator|(Mask lhs, Mask rhs) noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
-    inline Mask operator&(Mask lhs, Mask rhs) noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
-    inline Mask operator~(Mask value) noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
-    inline bool operator!(Mask value) noexcept{ return static_cast<u32>(value) == 0; }
-    inline bool operator==(Mask lhs, Mask rhs) noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
-    inline bool operator!=(Mask lhs, Mask rhs) noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
+    inline Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
+    inline Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
+    inline Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
+    inline bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
+    inline bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
+    inline bool operator!=(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
 };
 
 typedef u32 MipLevel;
@@ -394,12 +394,12 @@ namespace SharedResourceFlags{
         Shared_CrossAdapter = 1 << 2,
     };
     
-    inline Mask operator|(Mask lhs, Mask rhs) noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
-    inline Mask operator&(Mask lhs, Mask rhs) noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
-    inline Mask operator~(Mask value) noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
-    inline bool operator!(Mask value) noexcept{ return static_cast<u32>(value) == 0; }
-    inline bool operator==(Mask lhs, Mask rhs) noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
-    inline bool operator!=(Mask lhs, Mask rhs) noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
+    inline Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
+    inline Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
+    inline Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
+    inline bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
+    inline bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
+    inline bool operator!=(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
 };
 
 struct TextureDesc{
@@ -771,12 +771,12 @@ namespace ShaderType{
         All             = 0x3FFF,
     };
     
-    inline Mask operator|(Mask lhs, Mask rhs) noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
-    inline Mask operator&(Mask lhs, Mask rhs) noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
-    inline Mask operator~(Mask value) noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
-    inline bool operator!(Mask value) noexcept{ return static_cast<u32>(value) == 0; }
-    inline bool operator==(Mask lhs, Mask rhs) noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
-    inline bool operator!=(Mask lhs, Mask rhs) noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
+    inline Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
+    inline Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
+    inline Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
+    inline bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
+    inline bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
+    inline bool operator!=(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
 };
 
 namespace FastGeometryShaderFlags{
@@ -789,12 +789,12 @@ namespace FastGeometryShaderFlags{
         StrictApiOrder                   = 1 << 3,
     };
     
-    inline Mask operator|(Mask lhs, Mask rhs) noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
-    inline Mask operator&(Mask lhs, Mask rhs) noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
-    inline Mask operator~(Mask value) noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
-    inline bool operator!(Mask value) noexcept{ return static_cast<u32>(value) == 0; }
-    inline bool operator==(Mask lhs, Mask rhs) noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
-    inline bool operator!=(Mask lhs, Mask rhs) noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
+    inline Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
+    inline Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
+    inline Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
+    inline bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
+    inline bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
+    inline bool operator!=(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
 };
 
 struct CustomSemantic{
@@ -946,12 +946,12 @@ namespace ColorMask{
         All = 0xF,
     };
     
-    inline Mask operator|(Mask lhs, Mask rhs) noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
-    inline Mask operator&(Mask lhs, Mask rhs) noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
-    inline Mask operator~(Mask value) noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
-    inline bool operator!(Mask value) noexcept{ return static_cast<u32>(value) == 0; }
-    inline bool operator==(Mask lhs, Mask rhs) noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
-    inline bool operator!=(Mask lhs, Mask rhs) noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
+    inline Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
+    inline Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
+    inline Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
+    inline bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
+    inline bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
+    inline bool operator!=(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
 };
 
     struct BlendState{
@@ -1191,7 +1191,705 @@ struct ViewportState{
 // Sampler
 
 
+namespace SamplerAddressMode{
+    enum Enum : u8{
+        Clamp,
+        Wrap,
+        Border,
+        Mirror,
+        MirrorOnce,
 
+        // Vulkan names
+        ClampToEdge = Clamp,
+        Repeat = Wrap,
+        ClampToBorder = Border,
+        MirroredRepeat = Mirror,
+        MirrorClampToEdge = MirrorOnce,
+    };
+};
+
+namespace SamplerReductionType{
+    enum Enum : u8{
+        Standard,
+        Comparison,
+        Minimum,
+        Maximum,
+    };
+};
+
+struct SamplerDesc{
+    Color borderColor = 1.f;
+    f32 maxAnisotropy = 1.f;
+    f32 mipBias = 0.f;
+
+    bool minFilter = true;
+    bool magFilter = true;
+    bool mipFilter = true;
+    SamplerAddressMode::Enum addressU = SamplerAddressMode::Clamp;
+    SamplerAddressMode::Enum addressV = SamplerAddressMode::Clamp;
+    SamplerAddressMode::Enum addressW = SamplerAddressMode::Clamp;
+    SamplerReductionType::Enum reductionType = SamplerReductionType::Standard;
+
+    SamplerDesc& setBorderColor(const Color& color){ borderColor = color; return *this; }
+    SamplerDesc& setMaxAnisotropy(f32 value){ maxAnisotropy = value; return *this; }
+    SamplerDesc& setMipBias(f32 value){ mipBias = value; return *this; }
+    SamplerDesc& setMinFilter(bool enable){ minFilter = enable; return *this; }
+    SamplerDesc& setMagFilter(bool enable){ magFilter = enable; return *this; }
+    SamplerDesc& setMipFilter(bool enable){ mipFilter = enable; return *this; }
+    SamplerDesc& setAllFilters(bool enable){ minFilter = magFilter = mipFilter = enable; return *this; }
+    SamplerDesc& setAddressU(SamplerAddressMode::Enum mode){ addressU = mode; return *this; }
+    SamplerDesc& setAddressV(SamplerAddressMode::Enum mode){ addressV = mode; return *this; }
+    SamplerDesc& setAddressW(SamplerAddressMode::Enum mode){ addressW = mode; return *this; }
+    SamplerDesc& setAllAddressModes(SamplerAddressMode::Enum mode){ addressU = addressV = addressW = mode; return *this; }
+    SamplerDesc& setReductionType(SamplerReductionType::Enum type){ reductionType = type; return *this; }
+};
+
+class ISampler : public IResource{
+public:
+    [[nodiscard]] virtual const SamplerDesc& getDescription()const = 0;
+};
+typedef RefCountPtr<ISampler, BlankDeleter<ISampler>> SamplerHandle;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Frame buffer
+
+
+struct FramebufferAttachment{
+    ITexture* texture = nullptr;
+    TextureSubresourceSet subresources = TextureSubresourceSet(0, 1, 0, 1);
+    Format::Enum format = Format::UNKNOWN;
+    bool isReadOnly = false;
+        
+    constexpr FramebufferAttachment& setTexture(ITexture* t){ texture = t; return *this; }
+    constexpr FramebufferAttachment& setSubresources(TextureSubresourceSet value){ subresources = value; return *this; }
+    constexpr FramebufferAttachment& setArraySlice(ArraySlice index){ subresources.baseArraySlice = index; subresources.numArraySlices = 1; return *this; }
+    constexpr FramebufferAttachment& setArraySliceRange(ArraySlice index, ArraySlice count){ subresources.baseArraySlice = index; subresources.numArraySlices = count; return *this; }
+    constexpr FramebufferAttachment& setMipLevel(MipLevel level){ subresources.baseMipLevel = level; subresources.numMipLevels = 1; return *this; }
+    constexpr FramebufferAttachment& setFormat(Format::Enum f){ format = f; return *this; }
+    constexpr FramebufferAttachment& setReadOnly(bool val){ isReadOnly = val; return *this; }
+
+    [[nodiscard]] bool valid()const{ return texture != nullptr; }
+};
+
+struct FramebufferDesc{
+    FixedVector<FramebufferAttachment, s_maxRenderTargets> colorAttachments;
+    FramebufferAttachment depthAttachment;
+    FramebufferAttachment shadingRateAttachment;
+
+    FramebufferDesc& addColorAttachment(const FramebufferAttachment& a){ colorAttachments.push_back(a); return *this; }
+    FramebufferDesc& addColorAttachment(ITexture* texture){ colorAttachments.push_back(FramebufferAttachment().setTexture(texture)); return *this; }
+    FramebufferDesc& addColorAttachment(ITexture* texture, TextureSubresourceSet subresources){ colorAttachments.push_back(FramebufferAttachment().setTexture(texture).setSubresources(subresources)); return *this; }
+    FramebufferDesc& setDepthAttachment(const FramebufferAttachment& d){ depthAttachment = d; return *this; }
+    FramebufferDesc& setDepthAttachment(ITexture* texture){ depthAttachment = FramebufferAttachment().setTexture(texture); return *this; }
+    FramebufferDesc& setDepthAttachment(ITexture* texture, TextureSubresourceSet subresources){ depthAttachment = FramebufferAttachment().setTexture(texture).setSubresources(subresources); return *this; }
+    FramebufferDesc& setShadingRateAttachment(const FramebufferAttachment& d){ shadingRateAttachment = d; return *this; }
+    FramebufferDesc& setShadingRateAttachment(ITexture* texture){ shadingRateAttachment = FramebufferAttachment().setTexture(texture); return *this; }
+    FramebufferDesc& setShadingRateAttachment(ITexture* texture, TextureSubresourceSet subresources){ shadingRateAttachment = FramebufferAttachment().setTexture(texture).setSubresources(subresources); return *this; }
+};
+
+struct FramebufferInfo{
+    FixedVector<Format::Enum, s_maxRenderTargets> colorFormats;
+    Format::Enum depthFormat = Format::UNKNOWN;
+    u32 sampleCount = 1;
+    u32 sampleQuality = 0;
+
+    FramebufferInfo() = default;
+    FramebufferInfo(const FramebufferDesc& desc);
+
+    FramebufferInfo& addColorFormat(Format::Enum format){ colorFormats.push_back(format); return *this; }
+    FramebufferInfo& setDepthFormat(Format::Enum format){ depthFormat = format; return *this; }
+    FramebufferInfo& setSampleCount(u32 count){ sampleCount = count; return *this; }
+    FramebufferInfo& setSampleQuality(u32 quality){ sampleQuality = quality; return *this; }
+};
+inline bool operator==(const FramebufferInfo& lhs, const FramebufferInfo& rhs){
+    if(lhs.sampleQuality != rhs.sampleQuality)
+        return false;
+    if(lhs.sampleCount != rhs.sampleCount)
+        return false;
+    if(lhs.depthFormat != rhs.depthFormat)
+        return false;
+    if(lhs.colorFormats.size() != rhs.colorFormats.size())
+        return false;
+    for(usize i = 0; i < lhs.colorFormats.size(); ++i){
+        if(lhs.colorFormats[i] != rhs.colorFormats[i])
+            return false;
+    }
+    return true;
+}
+inline bool operator!=(const FramebufferInfo& lhs, const FramebufferInfo& rhs){ return !(lhs == rhs); }
+
+struct FramebufferInfoEx : FramebufferInfo{
+    u32 width = 0;
+    u32 height = 0;
+    u32 arraySize = 1;
+
+    FramebufferInfoEx() = default;
+    FramebufferInfoEx(const FramebufferDesc& desc);
+
+    FramebufferInfoEx& setWidth(u32 value){ width = value; return *this; }
+    FramebufferInfoEx& setHeight(u32 value){ height = value; return *this; }
+    FramebufferInfoEx& setArraySize(u32 value){ arraySize = value; return *this; }
+
+    [[nodiscard]] Viewport getViewport(f32 minZ = 0.f, f32 maxZ = 1.f)const{ return Viewport(0, static_cast<f32>(width), 0, static_cast<f32>(height), minZ, maxZ); }
+};
+
+class IFramebuffer : public IResource{
+public:
+    [[nodiscard]] virtual const FramebufferDesc& getDescription()const = 0;
+    [[nodiscard]] virtual const FramebufferInfoEx& getFramebufferInfo()const = 0;
+};
+typedef RefCountPtr<IFramebuffer, BlankDeleter<IFramebuffer>> FramebufferHandle;
+
+namespace OpacityMicromapFormat{
+    enum Enum : u8{
+        OC1_2_State = 1,
+        OC1_4_State = 2,
+    };
+};
+
+namespace OpacityMicromapBuildFlags{
+    enum Mask : u8{
+        None = 0,
+        
+        FastTrace = 1 << 0,
+        FastBuild = 1 << 1,
+        AllowCompaction = 1 << 2,
+    };
+    
+    inline Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
+    inline Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
+    inline Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
+    inline bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
+    inline bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
+    inline bool operator!=(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
+};
+
+struct OpacityMicromapUsageCount{
+    // Number of OMMs with the specified subdivision level and format.
+    u32 count;
+    // Micro triangle count is 4^N, where N is the subdivision level.
+    u32 subdivisionLevel;
+    // OMM input sub format.
+    OpacityMicromapFormat::Enum format;
+};
+
+struct OpacityMicromapDesc{
+#ifdef NWB_GRAPHICS_DEBUGGABLE
+    AString debugName;
+#endif
+    bool trackLiveness = true;
+
+    // OMM flags. Applies to all OMMs in array.
+    OpacityMicromapBuildFlags::Mask flags;
+    // OMM counts for each subdivision level and format combination in the inputs.
+    Vector<OpacityMicromapUsageCount> counts;
+
+    // Base pointer for raw OMM input data.
+    // Individual OMMs must be 1B aligned, though natural alignment is recommended.
+    // It's also recommended to try to organize OMMs together that are expected to be used spatially close together.
+    IBuffer* inputBuffer = nullptr;
+    u64 inputBufferOffset = 0;
+
+    // One NVAPI_D3D12_RAYTRACING_OPACITY_MICROMAP_DESC entry per OMM.
+    IBuffer* perOmmDescs = nullptr;
+    u64 perOmmDescsOffset = 0;
+    
+    OpacityMicromapDesc& setTrackLiveness(bool value){ trackLiveness = value; return *this; }
+    OpacityMicromapDesc& setFlags(OpacityMicromapBuildFlags::Mask value){ flags = value; return *this; }
+    OpacityMicromapDesc& setCounts(const Vector<OpacityMicromapUsageCount>& value){ counts = value; return *this; }
+    OpacityMicromapDesc& setInputBuffer(IBuffer* value){ inputBuffer = value; return *this; }
+    OpacityMicromapDesc& setInputBufferOffset(u64 value){ inputBufferOffset = value; return *this; }
+    OpacityMicromapDesc& setPerOmmDescs(IBuffer* value){ perOmmDescs = value; return *this; }
+    OpacityMicromapDesc& setPerOmmDescsOffset(u64 value){ perOmmDescsOffset = value; return *this; }
+
+#ifdef NWB_GRAPHICS_DEBUGGABLE
+    OpacityMicromapDesc& setDebugName(const AString& value){ debugName = value; return *this; }
+#endif
+};
+
+class IOpacityMicromap : public IResource{
+public:
+    [[nodiscard]] virtual const OpacityMicromapDesc& getDescription()const = 0;
+    [[nodiscard]] virtual bool isCompacted()const = 0;
+    [[nodiscard]] virtual u64 getDeviceAddress()const = 0;
+};
+typedef RefCountPtr<IOpacityMicromap, BlankDeleter<IOpacityMicromap>> OpacityMicromapHandle;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// AccelStruct
+
+
+class IAccelStruct;
+
+typedef f32 AffineTransform[12];
+
+constexpr AffineTransform s_identityTransform = {
+    1.f, 0.f, 0.f, 0.f,
+    0.f, 1.f, 0.f, 0.f,
+    0.f, 0.f, 1.f, 0.f
+};
+
+namespace GeometryFlags{
+    enum Mask : u8{
+        None = 0,
+
+        Opaque = 1 << 0,
+        NoDuplicateAnyHitInvocation = 1 << 1,
+    };
+    
+    inline Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
+    inline Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
+    inline Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
+    inline bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
+    inline bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
+    inline bool operator!=(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
+};
+
+namespace GeometryType{
+    enum Enum : u8{
+        Triangles = 0,
+        AABBs = 1,
+        Spheres = 2,
+        Lss = 3,
+    };
+};
+
+struct GeometryAABB{
+    f32 minX;
+    f32 minY;
+    f32 minZ;
+    f32 maxX;
+    f32 maxY;
+    f32 maxZ;
+};
+
+struct GeometryTriangles{
+    IBuffer* indexBuffer = nullptr;   // make sure the first 2 fields in all Geometry 
+    IBuffer* vertexBuffer = nullptr;  // structs are IBuffer* for easier debugging
+    Format::Enum indexFormat = Format::UNKNOWN;
+    Format::Enum vertexFormat = Format::UNKNOWN;
+    u64 indexOffset = 0;
+    u64 vertexOffset = 0;
+    u32 indexCount = 0;
+    u32 vertexCount = 0;
+    u32 vertexStride = 0;
+
+    IOpacityMicromap* opacityMicromap = nullptr;
+    IBuffer* ommIndexBuffer = nullptr;
+    u64 ommIndexBufferOffset = 0;
+    Format::Enum ommIndexFormat = Format::UNKNOWN;
+    const OpacityMicromapUsageCount* pOmmUsageCounts = nullptr;
+    u32 numOmmUsageCounts = 0;
+
+    GeometryTriangles& setIndexBuffer(IBuffer* value){ indexBuffer = value; return *this; }
+    GeometryTriangles& setVertexBuffer(IBuffer* value){ vertexBuffer = value; return *this; }
+    GeometryTriangles& setIndexFormat(Format::Enum value){ indexFormat = value; return *this; }
+    GeometryTriangles& setVertexFormat(Format::Enum value){ vertexFormat = value; return *this; }
+    GeometryTriangles& setIndexOffset(u64 value){ indexOffset = value; return *this; }
+    GeometryTriangles& setVertexOffset(u64 value){ vertexOffset = value; return *this; }
+    GeometryTriangles& setIndexCount(u32 value){ indexCount = value; return *this; }
+    GeometryTriangles& setVertexCount(u32 value){ vertexCount = value; return *this; }
+    GeometryTriangles& setVertexStride(u32 value){ vertexStride = value; return *this; }
+    GeometryTriangles& setOpacityMicromap(IOpacityMicromap* value){ opacityMicromap = value; return *this; }
+    GeometryTriangles& setOmmIndexBuffer(IBuffer* value){ ommIndexBuffer = value; return *this; }
+    GeometryTriangles& setOmmIndexBufferOffset(u64 value){ ommIndexBufferOffset = value; return *this; }
+    GeometryTriangles& setOmmIndexFormat(Format::Enum value){ ommIndexFormat = value; return *this; }
+    GeometryTriangles& setPOmmUsageCounts(const OpacityMicromapUsageCount* value){ pOmmUsageCounts = value; return *this; }
+    GeometryTriangles& setNumOmmUsageCounts(u32 value){ numOmmUsageCounts = value; return *this; }
+};
+
+struct GeometryAABBs{
+    IBuffer* buffer = nullptr;
+    IBuffer* unused = nullptr;
+    u64 offset = 0;
+    u32 count = 0;
+    u32 stride = 0;
+
+    GeometryAABBs& setBuffer(IBuffer* value){ buffer = value; return *this; }
+    GeometryAABBs& setOffset(u64 value){ offset = value; return *this; }
+    GeometryAABBs& setCount(u32 value){ count = value; return *this; }
+    GeometryAABBs& setStride(u32 value){ stride = value; return *this; }
+};
+
+struct GeometrySpheres{
+    IBuffer* indexBuffer = nullptr;
+    IBuffer* vertexBuffer = nullptr;
+    Format::Enum indexFormat = Format::UNKNOWN;
+    Format::Enum vertexPositionFormat = Format::UNKNOWN;
+    Format::Enum vertexRadiusFormat = Format::UNKNOWN;
+    u64 indexOffset = 0;
+    u64 vertexPositionOffset = 0;
+    u64 vertexRadiusOffset = 0;
+    u32 indexCount = 0;
+    u32 vertexCount = 0;
+    u32 indexStride = 0;
+    u32 vertexPositionStride = 0;
+    u32 vertexRadiusStride = 0;
+
+    GeometrySpheres& setIndexBuffer(IBuffer* value){ indexBuffer = value; return *this; }
+    GeometrySpheres& setVertexBuffer(IBuffer* value){ vertexBuffer = value; return *this; }
+    GeometrySpheres& setIndexFormat(Format::Enum value){ indexFormat = value; return *this; }
+    GeometrySpheres& setVertexPositionFormat(Format::Enum value){ vertexPositionFormat = value; return *this; }
+    GeometrySpheres& setVertexRadiusFormat(Format::Enum value){ vertexRadiusFormat = value; return *this; }
+    GeometrySpheres& setIndexOffset(u64 value){ indexOffset = value; return *this; }
+    GeometrySpheres& setVertexPositionOffset(u64 value){ vertexPositionOffset = value; return *this; }
+    GeometrySpheres& setVertexRadiusOffset(u64 value){ vertexRadiusOffset = value; return *this; }
+    GeometrySpheres& setIndexCount(u32 value){ indexCount = value; return *this; }
+    GeometrySpheres& setVertexCount(u32 value){ vertexCount = value; return *this; }
+    GeometrySpheres& setIndexStride(u32 value){ indexStride = value; return *this; }
+    GeometrySpheres& setVertexPositionStride(u32 value){ vertexPositionStride = value; return *this; }
+    GeometrySpheres& setVertexRadiusStride(u32 value){ vertexRadiusStride = value; return *this; }
+};
+
+namespace GeometryLssPrimitiveFormat{
+    enum Enum : u8{
+        List = 0,
+        SuccessiveImplicit = 1,
+    };
+};
+
+namespace GeometryLssEndcapMode{
+    enum Enum : u8{
+        None = 0,
+        Chained = 1,
+    };
+};
+
+struct GeometryLss{
+    IBuffer* indexBuffer = nullptr;
+    IBuffer* vertexBuffer = nullptr;
+    Format::Enum indexFormat = Format::UNKNOWN;
+    Format::Enum vertexPositionFormat = Format::UNKNOWN;
+    Format::Enum vertexRadiusFormat = Format::UNKNOWN;
+    u64 indexOffset = 0;
+    u64 vertexPositionOffset = 0;
+    u64 vertexRadiusOffset = 0;
+    u32 indexCount = 0;
+    u32 primitiveCount = 0;
+    u32 vertexCount = 0;
+    u32 indexStride = 0;
+    u32 vertexPositionStride = 0;
+    u32 vertexRadiusStride = 0;
+    GeometryLssPrimitiveFormat::Enum primitiveFormat = GeometryLssPrimitiveFormat::List;
+    GeometryLssEndcapMode::Enum endcapMode = GeometryLssEndcapMode::None;
+
+    GeometryLss& setIndexBuffer(IBuffer* value){ indexBuffer = value; return *this; }
+    GeometryLss& setVertexBuffer(IBuffer* value){ vertexBuffer = value; return *this; }
+    GeometryLss& setIndexFormat(Format::Enum value){ indexFormat = value; return *this; }
+    GeometryLss& setVertexPositionFormat(Format::Enum value){ vertexPositionFormat = value; return *this; }
+    GeometryLss& setVertexRadiusFormat(Format::Enum value){ vertexRadiusFormat = value; return *this; }
+    GeometryLss& setIndexOffset(u64 value){ indexOffset = value; return *this; }
+    GeometryLss& setVertexPositionOffset(u64 value){ vertexPositionOffset = value; return *this; }
+    GeometryLss& setVertexRadiusOffset(u64 value){ vertexRadiusOffset = value; return *this; }
+    GeometryLss& setIndexCount(u32 value){ indexCount = value; return *this; }
+    GeometryLss& setPrimitiveCount(u32 value){ primitiveCount = value; return *this; }
+    GeometryLss& setVertexCount(u32 value){ vertexCount = value; return *this; }
+    GeometryLss& setIndexStride(u32 value){ indexStride = value; return *this; }
+    GeometryLss& setVertexPositionStride(u32 value){ vertexPositionStride = value; return *this; }
+    GeometryLss& setVertexRadiusStride(u32 value){ vertexRadiusStride = value; return *this; }
+    GeometryLss& setPrimitiveFormat(GeometryLssPrimitiveFormat::Enum value){ primitiveFormat = value; return *this; }
+    GeometryLss& setEndcapMode(GeometryLssEndcapMode::Enum value){ endcapMode = value; return *this; }
+};
+
+struct GeometryDesc{
+    union GeomTypeUnion{
+        GeometryTriangles triangles;
+        GeometryAABBs aabbs;
+        GeometrySpheres spheres;
+        GeometryLss lss;
+    } geometryData;
+
+    bool useTransform = false;
+    AffineTransform transform{};
+    GeometryFlags::Mask flags = GeometryFlags::None;
+    GeometryType::Enum geometryType = GeometryType::Triangles;
+
+    GeometryDesc() : geometryData{} {}
+
+    GeometryDesc& setTransform(const AffineTransform& value){ NWB_MEMCPY(&transform, sizeof(transform), &value, sizeof(AffineTransform)); useTransform = true; return *this; }
+    GeometryDesc& setFlags(GeometryFlags::Mask value){ flags = value; return *this; }
+    GeometryDesc& setTriangles(const GeometryTriangles& value){ geometryData.triangles = value; geometryType = GeometryType::Triangles; return *this; }
+    GeometryDesc& setAABBs(const GeometryAABBs& value){ geometryData.aabbs = value; geometryType = GeometryType::AABBs; return *this; }
+    GeometryDesc& setSpheres(const GeometrySpheres& value){ geometryData.spheres = value; geometryType = GeometryType::Spheres; return *this; }
+    GeometryDesc& setLss(const GeometryLss& value){ geometryData.lss = value; geometryType = GeometryType::Lss; return *this; }
+};
+
+namespace InstanceFlags{
+    enum Mask : u32{
+        None = 0,
+
+        TriangleCullDisable = 1 << 0,
+        TriangleFrontCounterclockwise = 1 << 1,
+        ForceOpaque = 1 << 2,
+        ForceNonOpaque = 1 << 3,
+        ForceOMM2State = 1 << 4,
+        DisableOMMs = 1 << 5,
+    };
+    
+    inline Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
+    inline Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
+    inline Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
+    inline bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
+    inline bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
+    inline bool operator!=(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
+};
+
+struct InstanceDesc{
+    AffineTransform transform;
+    u32 instanceID : 24;
+    u32 instanceMask : 8;
+    u32 instanceContributionToHitGroupIndex : 24;
+    InstanceFlags::Mask flags : 8;
+    union{
+        IAccelStruct* bottomLevelAS; // for buildTopLevelAccelStruct
+        u64 blasDeviceAddress;       // for buildTopLevelAccelStructFromBuffer - use IAccelStruct::getDeviceAddress()
+    };
+
+    InstanceDesc()
+        : instanceID(0)
+        , instanceMask(0)
+        , instanceContributionToHitGroupIndex(0)
+        , flags(InstanceFlags::None)
+        , bottomLevelAS(nullptr)
+    {
+        setTransform(s_identityTransform);
+    }
+
+    InstanceDesc& setInstanceID(u32 value){ instanceID = value; return *this; }
+    InstanceDesc& setInstanceContributionToHitGroupIndex(u32 value){ instanceContributionToHitGroupIndex = value; return *this; }
+    InstanceDesc& setInstanceMask(u32 value){ instanceMask = value; return *this; }
+    InstanceDesc& setTransform(const AffineTransform& value){ NWB_MEMCPY(&transform, sizeof(transform), &value, sizeof(AffineTransform)); return *this; }
+    InstanceDesc& setFlags(InstanceFlags::Mask value){ flags = value; return *this; }
+    InstanceDesc& setBLAS(IAccelStruct* value){ bottomLevelAS = value; return *this; }
+};
+static_assert(sizeof(InstanceDesc) == 64, "sizeof(InstanceDesc) is supposed to be 64 bytes");
+static_assert(sizeof(IndirectInstanceDesc) == sizeof(InstanceDesc));
+
+namespace AccelStructBuildFlags{
+    enum Mask : u8{
+        None = 0,
+
+        AllowUpdate = 1 << 0,
+        AllowCompaction = 1 << 1,
+        PreferFastTrace = 1 << 2,
+        PreferFastBuild = 1 << 3,
+        MinimizeMemory = 0x10,
+        PerformUpdate = 0x20,
+
+        // Removes the errors or warnings that NVRHI validation layer issues when a TLAS
+        // includes an instance that points at a NULL BLAS or has a zero instance mask.
+        // Only affects the validation layer, doesn't translate to Vk/DX12 AS build flags.
+        AllowEmptyInstances = 0x80,
+    };
+    
+    inline Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
+    inline Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
+    inline Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
+    inline bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
+    inline bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
+    inline bool operator!=(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
+};
+
+struct AccelStructDesc{
+    usize topLevelMaxInstances = 0; // only applies when isTopLevel = true
+    Vector<GeometryDesc> bottomLevelGeometries; // only applies when isTopLevel = false
+    AccelStructBuildFlags::Mask buildFlags = AccelStructBuildFlags::None;
+#ifdef NWB_GRAPHICS_DEBUGGABLE
+    AString debugName;
+#endif
+    bool trackLiveness = true;
+    bool isTopLevel = false;
+    bool isVirtual = false;
+
+    AccelStructDesc& setTopLevelMaxInstances(usize value){ topLevelMaxInstances = value; isTopLevel = true; return *this; }
+    AccelStructDesc& addBottomLevelGeometry(const GeometryDesc& value){ bottomLevelGeometries.push_back(value); isTopLevel = false; return *this; }
+    AccelStructDesc& setBuildFlags(AccelStructBuildFlags::Mask value){ buildFlags = value; return *this; }
+    AccelStructDesc& setTrackLiveness(bool value){ trackLiveness = value; return *this; }
+    AccelStructDesc& setIsTopLevel(bool value){ isTopLevel = value; return *this; }
+    AccelStructDesc& setIsVirtual(bool value){ isVirtual = value; return *this; }
+    
+#ifdef NWB_GRAPHICS_DEBUGGABLE
+    AccelStructDesc& setDebugName(const AString& value){ debugName = value; return *this; }
+#endif
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// AccelStruct
+
+
+class IAccelStruct : public IResource{
+public:
+    [[nodiscard]] virtual const AccelStructDesc& getDescription()const = 0;
+    [[nodiscard]] virtual bool isCompacted()const = 0;
+    [[nodiscard]] virtual uint64_t getDeviceAddress()const = 0;
+};
+typedef RefCountPtr<IAccelStruct, BlankDeleter<IAccelStruct>> AccelStructHandle;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Clusters
+
+
+namespace ClusterOperationType{
+    enum Enum : u8{
+        Move,                       // Moves CLAS, CLAS Templates, or Cluster BLAS
+        ClasBuild,                  // Builds CLAS from clusters of triangles
+        ClasBuildTemplates,         // Builds CLAS templates from triangles
+        ClasInstantiateTemplates,   // Instantiates CLAS templates
+        BlasBuild,                  // Builds Cluster BLAS from CLAS
+    };
+};
+
+namespace ClusterOperationMoveType{
+    enum Enum : u8{
+        BottomLevel,                // Moved objects are Clustered BLAS
+        ClusterLevel,               // Moved objects are CLAS
+        Template,                   // Moved objects are Cluster Templates
+    };
+};
+
+namespace ClusterOperationMode{
+    enum Enum : u8{
+        ImplicitDestinations,       // Provide total buffer space, driver places results within, returns VAs and actual sizes
+        ExplicitDestinations,       // Provide individual target VAs, driver places them there, returns actual sizes
+        GetSizes,                   // Get minimum size per element
+    };
+};
+
+namespace ClusterOperationFlags{
+    enum Mask : u8{
+        None = 0,
+
+        FastTrace = 1 << 0,
+        FastBuild = 1 << 1,
+        NoOverlap = 1 << 2,
+        AllowOMM = 1 << 3,
+    };
+    
+    inline Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
+    inline Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
+    inline Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
+    inline bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
+    inline bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
+    inline bool operator!=(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
+};
+
+namespace ClusterOperationIndexFormat{
+    enum Enum : u8{
+        IndexFormat8bit = 1,
+        IndexFormat16bit = 2,
+        IndexFormat32bit = 4,
+    };
+};
+
+struct ClusterOperationSizeInfo{
+    u64 resultMaxSizeInBytes = 0;
+    u64 scratchSizeInBytes = 0;
+};
+
+struct ClusterOperationMoveParams{
+    ClusterOperationMoveType::Enum type;
+    u32 maxBytes = 0;
+};
+
+struct ClusterOperationClasBuildParams{
+    // See D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC for accepted formats and how they are interpreted
+    Format::Enum vertexFormat = Format::RGB32_FLOAT;
+
+    // Index of the last geometry in a single CLAS
+    u32 maxGeometryIndex = 0;
+
+    // Maximum number of unique geometries in a single CLAS
+    u32 maxUniqueGeometryCount = 1;
+
+    // Maximum number of triangles in a single CLAS
+    u32 maxTriangleCount = 0;
+
+    // Maximum number of vertices in a single CLAS
+    u32 maxVertexCount = 0;
+
+    // Maximum number of triangles summed over all CLAS (in the current cluster operation)
+    u32 maxTotalTriangleCount = 0;
+
+    // Maximum number of vertices summed over all CLAS (in the current cluster operation)
+    u32 maxTotalVertexCount = 0;
+
+    // Minimum number of bits to be truncated in vertex positions across all CLAS (in the current cluster operation)
+    u32 minPositionTruncateBitCount = 0;
+};
+
+struct ClusterOperationBlasBuildParams{
+    // Maximum number of CLAS references in a single BLAS
+    u32 maxClasPerBlasCount = 0;
+
+    // Maximum number of CLAS references summed over all BLAS (in the current cluster operation)
+    u32 maxTotalClasCount = 0;
+};
+
+struct ClusterOperationParams{
+    // Maximum number of acceleration structures (or templates) to build/instantiate/move
+    u32 maxArgCount = 0;
+
+    ClusterOperationType::Enum type;
+    ClusterOperationMode::Enum mode;
+    ClusterOperationFlags::Mask flags;
+
+    ClusterOperationMoveParams move;
+    ClusterOperationClasBuildParams clas;
+    ClusterOperationBlasBuildParams blas;
+};
+
+struct ClusterOperationDesc{
+    ClusterOperationParams params;
+
+    u64 scratchSizeInBytes = 0;                             // Size of scratch resource returned by getClusterOperationSizeInfo() scratchSizeInBytes 
+
+    // Input Resources
+    IBuffer* inIndirectArgCountBuffer = nullptr;            // Buffer containing the number of AS to build, instantiate, or move
+    u64 inIndirectArgCountOffsetInBytes = 0;                // Offset (in bytes) to where the count is in the inIndirectArgCountBuffer 
+    IBuffer* inIndirectArgsBuffer = nullptr;                // Buffer of descriptor array of format IndirectTriangleClasArgs, IndirectTriangleTemplateArgs, IndirectInstantiateTemplateArgs
+    u64 inIndirectArgsOffsetInBytes = 0;                    // Offset (in bytes) to where the descriptor array starts inIndirectArgsBuffer
+
+    // In/Out Resources
+    IBuffer* inOutAddressesBuffer = nullptr;                // Array of addresseses of CLAS, CLAS Templates, or BLAS
+    u64 inOutAddressesOffsetInBytes = 0;                    // Offset (in bytes) to where the addresses array starts in inOutAddressesBuffer
+
+    // Output Resources
+    IBuffer* outSizesBuffer = nullptr;                      // Sizes (in bytes) of CLAS, CLAS Templates, or BLAS
+    u64 outSizesOffsetInBytes = 0;                          // Offset (in bytes) to where the output sizes array starts in outSizesBuffer
+    IBuffer* outAccelerationStructuresBuffer = nullptr;     // Destination buffer for CLAS, CLAS Template, or BLAS data. Size must be calculated with getOperationSizeInfo or with the outSizesBuffer result of OperationMode::GetSizes
+    u64 outAccelerationStructuresOffsetInBytes = 0;         // Offset (in bytes) to where the output acceleration structures starts in outAccelerationStructuresBuffer
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Binding Layouts
+
+
+namespace ResourceType{
+    enum Enum : u8{
+        None,
+        Texture_SRV,
+        Texture_UAV,
+        TypedBuffer_SRV,
+        TypedBuffer_UAV,
+        StructuredBuffer_SRV,
+        StructuredBuffer_UAV,
+        RawBuffer_SRV,
+        RawBuffer_UAV,
+        ConstantBuffer,
+        VolatileConstantBuffer,
+        Sampler,
+        RayTracingAccelStruct,
+        PushConstants,
+        SamplerFeedbackTexture_UAV,
+
+        kCount
+    };
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

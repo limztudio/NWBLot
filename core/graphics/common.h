@@ -45,7 +45,8 @@ struct Color{
     constexpr Color(f32 _r, f32 _g, f32 _b, f32 _a)noexcept : r(_r), g(_g), b(_b), a(_a) {}
 };
 inline bool operator==(const Color& lhs, const Color& rhs)noexcept{
-    return (lhs.r == rhs.r)
+    return 
+    (lhs.r == rhs.r)
     && (lhs.g == rhs.g)
     && (lhs.b == rhs.b)
     && (lhs.a == rhs.a)
@@ -67,7 +68,8 @@ struct Viewport{
     [[nodiscard]] constexpr f32 height()const noexcept{ return maxY - minY; }
 };
 inline bool operator==(const Viewport& lhs, const Viewport& rhs)noexcept{
-    return (lhs.minX == rhs.minX) && (lhs.maxX == rhs.maxX)
+    return 
+    (lhs.minX == rhs.minX) && (lhs.maxX == rhs.maxX)
     && (lhs.minY == rhs.minY) && (lhs.maxY == rhs.maxY)
     && (lhs.minZ == rhs.minZ) && (lhs.maxZ == rhs.maxZ)
     ;
@@ -88,7 +90,8 @@ struct Rect{
     [[nodiscard]] constexpr i32 height()const noexcept{ return maxY - minY; }
 };
 inline bool operator==(const Rect& lhs, const Rect& rhs)noexcept{
-    return (lhs.minX == rhs.minX) && (lhs.maxX == rhs.maxX)
+    return 
+    (lhs.minX == rhs.minX) && (lhs.maxX == rhs.maxX)
     && (lhs.minY == rhs.minY) && (lhs.maxY == rhs.maxY)
     ;
 }
@@ -267,12 +270,12 @@ namespace FormatSupport{
         ShaderAtomicCounter = 1 << 11,
     };
     
-    inline Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
-    inline Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
-    inline Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
-    inline bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
-    inline bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
-    inline bool operator!=(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
+    constexpr Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
+    constexpr Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
+    constexpr Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
+    constexpr bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
+    constexpr bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
+    constexpr bool operator!=(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
 };
 
 
@@ -365,12 +368,12 @@ namespace ResourceStates{
         ConvertCoopVecMatrixOutput = 1 << 24,
     };
     
-    inline Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
-    inline Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
-    inline Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
-    inline bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
-    inline bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
-    inline bool operator!=(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
+    constexpr Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
+    constexpr Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
+    constexpr Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
+    constexpr bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
+    constexpr bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
+    constexpr bool operator!=(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
 };
 
 typedef u32 MipLevel;
@@ -394,12 +397,12 @@ namespace SharedResourceFlags{
         Shared_CrossAdapter = 1 << 2,
     };
     
-    inline Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
-    inline Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
-    inline Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
-    inline bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
-    inline bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
-    inline bool operator!=(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
+    constexpr Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
+    constexpr Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
+    constexpr Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
+    constexpr bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
+    constexpr bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
+    constexpr bool operator!=(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
 };
 
 struct TextureDesc{
@@ -449,7 +452,7 @@ struct TextureDesc{
     constexpr TextureDesc& setFormat(Format::Enum v)noexcept{ format = v; return *this; }
     constexpr TextureDesc& setDimension(TextureDimension::Enum v)noexcept{ dimension = v; return *this; }
 #ifdef NWB_GRAPHICS_DEBUGGABLE
-    TextureDesc& setName(const AString& v)noexcept{ name = v; return *this; }
+    constexpr TextureDesc& setName(const AString& v)noexcept{ name = v; return *this; }
 #endif
     constexpr TextureDesc& setInRenderTarget(bool v)noexcept{ isRenderTarget = v; return *this; }
     constexpr TextureDesc& setInUAV(bool v)noexcept{ isUAV = v; return *this; }
@@ -629,7 +632,7 @@ struct VertexAttributeDesc{
     constexpr VertexAttributeDesc& setElementStride(u32 value){ elementStride = value; return *this; }
     constexpr VertexAttributeDesc& setIsInstanced(bool value){ isInstanced = value; return *this; }
 #ifdef NWB_GRAPHICS_DEBUGGABLE
-    VertexAttributeDesc& setName(const AString& value){ name = value; return *this; }
+    constexpr VertexAttributeDesc& setName(const AString& value){ name = value; return *this; }
 #endif
 };
 
@@ -708,7 +711,7 @@ struct BufferDesc{
     }
     
 #ifdef NWB_GRAPHICS_DEBUGGABLE
-    BufferDesc& setDebugName(const AString& value){ debugName = value; return *this; }
+    constexpr BufferDesc& setDebugName(const AString& value){ debugName = value; return *this; }
 #endif
 };
 
@@ -771,12 +774,12 @@ namespace ShaderType{
         All             = 0x3FFF,
     };
     
-    inline Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
-    inline Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
-    inline Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
-    inline bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
-    inline bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
-    inline bool operator!=(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
+    constexpr Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
+    constexpr Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
+    constexpr Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
+    constexpr bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
+    constexpr bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
+    constexpr bool operator!=(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
 };
 
 namespace FastGeometryShaderFlags{
@@ -789,12 +792,12 @@ namespace FastGeometryShaderFlags{
         StrictApiOrder                   = 1 << 3,
     };
     
-    inline Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
-    inline Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
-    inline Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
-    inline bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
-    inline bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
-    inline bool operator!=(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
+    constexpr Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
+    constexpr Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
+    constexpr Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
+    constexpr bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
+    constexpr bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
+    constexpr bool operator!=(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
 };
 
 struct CustomSemantic{
@@ -808,7 +811,7 @@ struct CustomSemantic{
     AString name;
         
     constexpr CustomSemantic& setType(Enum value){ type = value; return *this; }
-    CustomSemantic& setName(const AString& value){ name = value; return *this; }
+    constexpr CustomSemantic& setName(const AString& value){ name = value; return *this; }
 };
 
 struct ShaderDesc{
@@ -834,9 +837,9 @@ struct ShaderDesc{
     constexpr ShaderDesc& setFastGSFlags(FastGeometryShaderFlags::Mask value){ fastGSFlags = value; return *this; }
     constexpr ShaderDesc& setCoordinateSwizzling(u32* value){ pCoordinateSwizzling = value; return *this; }
     
-    ShaderDesc& setEntryName(const AString& value){ entryName = value; return *this; }
+    constexpr ShaderDesc& setEntryName(const AString& value){ entryName = value; return *this; }
 #ifdef NWB_GRAPHICS_DEBUGGABLE
-    ShaderDesc& setDebugName(const AString& value){ debugName = value; return *this; }
+    constexpr ShaderDesc& setDebugName(const AString& value){ debugName = value; return *this; }
 #endif
 };
 
@@ -946,12 +949,12 @@ namespace ColorMask{
         All = 0xF,
     };
     
-    inline Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
-    inline Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
-    inline Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
-    inline bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
-    inline bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
-    inline bool operator!=(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
+    constexpr Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
+    constexpr Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
+    constexpr Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
+    constexpr bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
+    constexpr bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
+    constexpr bool operator!=(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
 };
 
     struct BlendState{
@@ -1181,9 +1184,9 @@ struct ViewportState{
     FixedVector<Viewport, s_maxViewports> viewports;
     FixedVector<Rect, s_maxViewports> scissorRects;
 
-    ViewportState& addViewport(const Viewport& v){ viewports.push_back(v); return *this; }
-    ViewportState& addScissorRect(const Rect& r){ scissorRects.push_back(r); return *this; }
-    ViewportState& addViewportAndScissorRect(const Viewport& v){ return addViewport(v).addScissorRect(Rect(v)); }
+    constexpr ViewportState& addViewport(const Viewport& v){ viewports.push_back(v); return *this; }
+    constexpr ViewportState& addScissorRect(const Rect& r){ scissorRects.push_back(r); return *this; }
+    constexpr ViewportState& addViewportAndScissorRect(const Viewport& v){ return addViewport(v).addScissorRect(Rect(v)); }
 };
 
 
@@ -1230,18 +1233,18 @@ struct SamplerDesc{
     SamplerAddressMode::Enum addressW = SamplerAddressMode::Clamp;
     SamplerReductionType::Enum reductionType = SamplerReductionType::Standard;
 
-    SamplerDesc& setBorderColor(const Color& color){ borderColor = color; return *this; }
-    SamplerDesc& setMaxAnisotropy(f32 value){ maxAnisotropy = value; return *this; }
-    SamplerDesc& setMipBias(f32 value){ mipBias = value; return *this; }
-    SamplerDesc& setMinFilter(bool enable){ minFilter = enable; return *this; }
-    SamplerDesc& setMagFilter(bool enable){ magFilter = enable; return *this; }
-    SamplerDesc& setMipFilter(bool enable){ mipFilter = enable; return *this; }
-    SamplerDesc& setAllFilters(bool enable){ minFilter = magFilter = mipFilter = enable; return *this; }
-    SamplerDesc& setAddressU(SamplerAddressMode::Enum mode){ addressU = mode; return *this; }
-    SamplerDesc& setAddressV(SamplerAddressMode::Enum mode){ addressV = mode; return *this; }
-    SamplerDesc& setAddressW(SamplerAddressMode::Enum mode){ addressW = mode; return *this; }
-    SamplerDesc& setAllAddressModes(SamplerAddressMode::Enum mode){ addressU = addressV = addressW = mode; return *this; }
-    SamplerDesc& setReductionType(SamplerReductionType::Enum type){ reductionType = type; return *this; }
+    constexpr SamplerDesc& setBorderColor(const Color& color){ borderColor = color; return *this; }
+    constexpr SamplerDesc& setMaxAnisotropy(f32 value){ maxAnisotropy = value; return *this; }
+    constexpr SamplerDesc& setMipBias(f32 value){ mipBias = value; return *this; }
+    constexpr SamplerDesc& setMinFilter(bool enable){ minFilter = enable; return *this; }
+    constexpr SamplerDesc& setMagFilter(bool enable){ magFilter = enable; return *this; }
+    constexpr SamplerDesc& setMipFilter(bool enable){ mipFilter = enable; return *this; }
+    constexpr SamplerDesc& setAllFilters(bool enable){ minFilter = magFilter = mipFilter = enable; return *this; }
+    constexpr SamplerDesc& setAddressU(SamplerAddressMode::Enum mode){ addressU = mode; return *this; }
+    constexpr SamplerDesc& setAddressV(SamplerAddressMode::Enum mode){ addressV = mode; return *this; }
+    constexpr SamplerDesc& setAddressW(SamplerAddressMode::Enum mode){ addressW = mode; return *this; }
+    constexpr SamplerDesc& setAllAddressModes(SamplerAddressMode::Enum mode){ addressU = addressV = addressW = mode; return *this; }
+    constexpr SamplerDesc& setReductionType(SamplerReductionType::Enum type){ reductionType = type; return *this; }
 };
 
 class ISampler : public IResource{
@@ -1269,7 +1272,7 @@ struct FramebufferAttachment{
     constexpr FramebufferAttachment& setFormat(Format::Enum f){ format = f; return *this; }
     constexpr FramebufferAttachment& setReadOnly(bool val){ isReadOnly = val; return *this; }
 
-    [[nodiscard]] bool valid()const{ return texture != nullptr; }
+    [[nodiscard]] constexpr bool valid()const{ return texture != nullptr; }
 };
 
 struct FramebufferDesc{
@@ -1277,15 +1280,15 @@ struct FramebufferDesc{
     FramebufferAttachment depthAttachment;
     FramebufferAttachment shadingRateAttachment;
 
-    FramebufferDesc& addColorAttachment(const FramebufferAttachment& a){ colorAttachments.push_back(a); return *this; }
-    FramebufferDesc& addColorAttachment(ITexture* texture){ colorAttachments.push_back(FramebufferAttachment().setTexture(texture)); return *this; }
-    FramebufferDesc& addColorAttachment(ITexture* texture, TextureSubresourceSet subresources){ colorAttachments.push_back(FramebufferAttachment().setTexture(texture).setSubresources(subresources)); return *this; }
-    FramebufferDesc& setDepthAttachment(const FramebufferAttachment& d){ depthAttachment = d; return *this; }
-    FramebufferDesc& setDepthAttachment(ITexture* texture){ depthAttachment = FramebufferAttachment().setTexture(texture); return *this; }
-    FramebufferDesc& setDepthAttachment(ITexture* texture, TextureSubresourceSet subresources){ depthAttachment = FramebufferAttachment().setTexture(texture).setSubresources(subresources); return *this; }
-    FramebufferDesc& setShadingRateAttachment(const FramebufferAttachment& d){ shadingRateAttachment = d; return *this; }
-    FramebufferDesc& setShadingRateAttachment(ITexture* texture){ shadingRateAttachment = FramebufferAttachment().setTexture(texture); return *this; }
-    FramebufferDesc& setShadingRateAttachment(ITexture* texture, TextureSubresourceSet subresources){ shadingRateAttachment = FramebufferAttachment().setTexture(texture).setSubresources(subresources); return *this; }
+    constexpr FramebufferDesc& addColorAttachment(const FramebufferAttachment& a){ colorAttachments.push_back(a); return *this; }
+    constexpr FramebufferDesc& addColorAttachment(ITexture* texture){ colorAttachments.push_back(FramebufferAttachment().setTexture(texture)); return *this; }
+    constexpr FramebufferDesc& addColorAttachment(ITexture* texture, TextureSubresourceSet subresources){ colorAttachments.push_back(FramebufferAttachment().setTexture(texture).setSubresources(subresources)); return *this; }
+    constexpr FramebufferDesc& setDepthAttachment(const FramebufferAttachment& d){ depthAttachment = d; return *this; }
+    constexpr FramebufferDesc& setDepthAttachment(ITexture* texture){ depthAttachment = FramebufferAttachment().setTexture(texture); return *this; }
+    constexpr FramebufferDesc& setDepthAttachment(ITexture* texture, TextureSubresourceSet subresources){ depthAttachment = FramebufferAttachment().setTexture(texture).setSubresources(subresources); return *this; }
+    constexpr FramebufferDesc& setShadingRateAttachment(const FramebufferAttachment& d){ shadingRateAttachment = d; return *this; }
+    constexpr FramebufferDesc& setShadingRateAttachment(ITexture* texture){ shadingRateAttachment = FramebufferAttachment().setTexture(texture); return *this; }
+    constexpr FramebufferDesc& setShadingRateAttachment(ITexture* texture, TextureSubresourceSet subresources){ shadingRateAttachment = FramebufferAttachment().setTexture(texture).setSubresources(subresources); return *this; }
 };
 
 struct FramebufferInfo{
@@ -1297,10 +1300,10 @@ struct FramebufferInfo{
     FramebufferInfo() = default;
     FramebufferInfo(const FramebufferDesc& desc);
 
-    FramebufferInfo& addColorFormat(Format::Enum format){ colorFormats.push_back(format); return *this; }
-    FramebufferInfo& setDepthFormat(Format::Enum format){ depthFormat = format; return *this; }
-    FramebufferInfo& setSampleCount(u32 count){ sampleCount = count; return *this; }
-    FramebufferInfo& setSampleQuality(u32 quality){ sampleQuality = quality; return *this; }
+    constexpr FramebufferInfo& addColorFormat(Format::Enum format){ colorFormats.push_back(format); return *this; }
+    constexpr FramebufferInfo& setDepthFormat(Format::Enum format){ depthFormat = format; return *this; }
+    constexpr FramebufferInfo& setSampleCount(u32 count){ sampleCount = count; return *this; }
+    constexpr FramebufferInfo& setSampleQuality(u32 quality){ sampleQuality = quality; return *this; }
 };
 inline bool operator==(const FramebufferInfo& lhs, const FramebufferInfo& rhs){
     if(lhs.sampleQuality != rhs.sampleQuality)
@@ -1327,11 +1330,11 @@ struct FramebufferInfoEx : FramebufferInfo{
     FramebufferInfoEx() = default;
     FramebufferInfoEx(const FramebufferDesc& desc);
 
-    FramebufferInfoEx& setWidth(u32 value){ width = value; return *this; }
-    FramebufferInfoEx& setHeight(u32 value){ height = value; return *this; }
-    FramebufferInfoEx& setArraySize(u32 value){ arraySize = value; return *this; }
+    constexpr FramebufferInfoEx& setWidth(u32 value){ width = value; return *this; }
+    constexpr FramebufferInfoEx& setHeight(u32 value){ height = value; return *this; }
+    constexpr FramebufferInfoEx& setArraySize(u32 value){ arraySize = value; return *this; }
 
-    [[nodiscard]] Viewport getViewport(f32 minZ = 0.f, f32 maxZ = 1.f)const{ return Viewport(0, static_cast<f32>(width), 0, static_cast<f32>(height), minZ, maxZ); }
+    [[nodiscard]] constexpr Viewport getViewport(f32 minZ = 0.f, f32 maxZ = 1.f)const{ return Viewport(0, static_cast<f32>(width), 0, static_cast<f32>(height), minZ, maxZ); }
 };
 
 class IFramebuffer : public IResource{
@@ -1357,12 +1360,12 @@ namespace OpacityMicromapBuildFlags{
         AllowCompaction = 1 << 2,
     };
     
-    inline Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
-    inline Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
-    inline Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
-    inline bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
-    inline bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
-    inline bool operator!=(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
+    constexpr Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
+    constexpr Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
+    constexpr Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
+    constexpr bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
+    constexpr bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
+    constexpr bool operator!=(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
 };
 
 struct OpacityMicromapUsageCount{
@@ -1395,16 +1398,16 @@ struct OpacityMicromapDesc{
     IBuffer* perOmmDescs = nullptr;
     u64 perOmmDescsOffset = 0;
     
-    OpacityMicromapDesc& setTrackLiveness(bool value){ trackLiveness = value; return *this; }
-    OpacityMicromapDesc& setFlags(OpacityMicromapBuildFlags::Mask value){ flags = value; return *this; }
-    OpacityMicromapDesc& setCounts(const Vector<OpacityMicromapUsageCount>& value){ counts = value; return *this; }
-    OpacityMicromapDesc& setInputBuffer(IBuffer* value){ inputBuffer = value; return *this; }
-    OpacityMicromapDesc& setInputBufferOffset(u64 value){ inputBufferOffset = value; return *this; }
-    OpacityMicromapDesc& setPerOmmDescs(IBuffer* value){ perOmmDescs = value; return *this; }
-    OpacityMicromapDesc& setPerOmmDescsOffset(u64 value){ perOmmDescsOffset = value; return *this; }
+    constexpr OpacityMicromapDesc& setTrackLiveness(bool value){ trackLiveness = value; return *this; }
+    constexpr OpacityMicromapDesc& setFlags(OpacityMicromapBuildFlags::Mask value){ flags = value; return *this; }
+    constexpr OpacityMicromapDesc& setCounts(const Vector<OpacityMicromapUsageCount>& value){ counts = value; return *this; }
+    constexpr OpacityMicromapDesc& setInputBuffer(IBuffer* value){ inputBuffer = value; return *this; }
+    constexpr OpacityMicromapDesc& setInputBufferOffset(u64 value){ inputBufferOffset = value; return *this; }
+    constexpr OpacityMicromapDesc& setPerOmmDescs(IBuffer* value){ perOmmDescs = value; return *this; }
+    constexpr OpacityMicromapDesc& setPerOmmDescsOffset(u64 value){ perOmmDescsOffset = value; return *this; }
 
 #ifdef NWB_GRAPHICS_DEBUGGABLE
-    OpacityMicromapDesc& setDebugName(const AString& value){ debugName = value; return *this; }
+    constexpr OpacityMicromapDesc& setDebugName(const AString& value){ debugName = value; return *this; }
 #endif
 };
 
@@ -1439,12 +1442,12 @@ namespace GeometryFlags{
         NoDuplicateAnyHitInvocation = 1 << 1,
     };
     
-    inline Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
-    inline Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
-    inline Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
-    inline bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
-    inline bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
-    inline bool operator!=(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
+    constexpr Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
+    constexpr Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
+    constexpr Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
+    constexpr bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
+    constexpr bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
+    constexpr bool operator!=(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
 };
 
 namespace GeometryType{
@@ -1483,21 +1486,21 @@ struct GeometryTriangles{
     const OpacityMicromapUsageCount* pOmmUsageCounts = nullptr;
     u32 numOmmUsageCounts = 0;
 
-    GeometryTriangles& setIndexBuffer(IBuffer* value){ indexBuffer = value; return *this; }
-    GeometryTriangles& setVertexBuffer(IBuffer* value){ vertexBuffer = value; return *this; }
-    GeometryTriangles& setIndexFormat(Format::Enum value){ indexFormat = value; return *this; }
-    GeometryTriangles& setVertexFormat(Format::Enum value){ vertexFormat = value; return *this; }
-    GeometryTriangles& setIndexOffset(u64 value){ indexOffset = value; return *this; }
-    GeometryTriangles& setVertexOffset(u64 value){ vertexOffset = value; return *this; }
-    GeometryTriangles& setIndexCount(u32 value){ indexCount = value; return *this; }
-    GeometryTriangles& setVertexCount(u32 value){ vertexCount = value; return *this; }
-    GeometryTriangles& setVertexStride(u32 value){ vertexStride = value; return *this; }
-    GeometryTriangles& setOpacityMicromap(IOpacityMicromap* value){ opacityMicromap = value; return *this; }
-    GeometryTriangles& setOmmIndexBuffer(IBuffer* value){ ommIndexBuffer = value; return *this; }
-    GeometryTriangles& setOmmIndexBufferOffset(u64 value){ ommIndexBufferOffset = value; return *this; }
-    GeometryTriangles& setOmmIndexFormat(Format::Enum value){ ommIndexFormat = value; return *this; }
-    GeometryTriangles& setPOmmUsageCounts(const OpacityMicromapUsageCount* value){ pOmmUsageCounts = value; return *this; }
-    GeometryTriangles& setNumOmmUsageCounts(u32 value){ numOmmUsageCounts = value; return *this; }
+    constexpr GeometryTriangles& setIndexBuffer(IBuffer* value){ indexBuffer = value; return *this; }
+    constexpr GeometryTriangles& setVertexBuffer(IBuffer* value){ vertexBuffer = value; return *this; }
+    constexpr GeometryTriangles& setIndexFormat(Format::Enum value){ indexFormat = value; return *this; }
+    constexpr GeometryTriangles& setVertexFormat(Format::Enum value){ vertexFormat = value; return *this; }
+    constexpr GeometryTriangles& setIndexOffset(u64 value){ indexOffset = value; return *this; }
+    constexpr GeometryTriangles& setVertexOffset(u64 value){ vertexOffset = value; return *this; }
+    constexpr GeometryTriangles& setIndexCount(u32 value){ indexCount = value; return *this; }
+    constexpr GeometryTriangles& setVertexCount(u32 value){ vertexCount = value; return *this; }
+    constexpr GeometryTriangles& setVertexStride(u32 value){ vertexStride = value; return *this; }
+    constexpr GeometryTriangles& setOpacityMicromap(IOpacityMicromap* value){ opacityMicromap = value; return *this; }
+    constexpr GeometryTriangles& setOmmIndexBuffer(IBuffer* value){ ommIndexBuffer = value; return *this; }
+    constexpr GeometryTriangles& setOmmIndexBufferOffset(u64 value){ ommIndexBufferOffset = value; return *this; }
+    constexpr GeometryTriangles& setOmmIndexFormat(Format::Enum value){ ommIndexFormat = value; return *this; }
+    constexpr GeometryTriangles& setPOmmUsageCounts(const OpacityMicromapUsageCount* value){ pOmmUsageCounts = value; return *this; }
+    constexpr GeometryTriangles& setNumOmmUsageCounts(u32 value){ numOmmUsageCounts = value; return *this; }
 };
 
 struct GeometryAABBs{
@@ -1507,10 +1510,10 @@ struct GeometryAABBs{
     u32 count = 0;
     u32 stride = 0;
 
-    GeometryAABBs& setBuffer(IBuffer* value){ buffer = value; return *this; }
-    GeometryAABBs& setOffset(u64 value){ offset = value; return *this; }
-    GeometryAABBs& setCount(u32 value){ count = value; return *this; }
-    GeometryAABBs& setStride(u32 value){ stride = value; return *this; }
+    constexpr GeometryAABBs& setBuffer(IBuffer* value){ buffer = value; return *this; }
+    constexpr GeometryAABBs& setOffset(u64 value){ offset = value; return *this; }
+    constexpr GeometryAABBs& setCount(u32 value){ count = value; return *this; }
+    constexpr GeometryAABBs& setStride(u32 value){ stride = value; return *this; }
 };
 
 struct GeometrySpheres{
@@ -1528,19 +1531,19 @@ struct GeometrySpheres{
     u32 vertexPositionStride = 0;
     u32 vertexRadiusStride = 0;
 
-    GeometrySpheres& setIndexBuffer(IBuffer* value){ indexBuffer = value; return *this; }
-    GeometrySpheres& setVertexBuffer(IBuffer* value){ vertexBuffer = value; return *this; }
-    GeometrySpheres& setIndexFormat(Format::Enum value){ indexFormat = value; return *this; }
-    GeometrySpheres& setVertexPositionFormat(Format::Enum value){ vertexPositionFormat = value; return *this; }
-    GeometrySpheres& setVertexRadiusFormat(Format::Enum value){ vertexRadiusFormat = value; return *this; }
-    GeometrySpheres& setIndexOffset(u64 value){ indexOffset = value; return *this; }
-    GeometrySpheres& setVertexPositionOffset(u64 value){ vertexPositionOffset = value; return *this; }
-    GeometrySpheres& setVertexRadiusOffset(u64 value){ vertexRadiusOffset = value; return *this; }
-    GeometrySpheres& setIndexCount(u32 value){ indexCount = value; return *this; }
-    GeometrySpheres& setVertexCount(u32 value){ vertexCount = value; return *this; }
-    GeometrySpheres& setIndexStride(u32 value){ indexStride = value; return *this; }
-    GeometrySpheres& setVertexPositionStride(u32 value){ vertexPositionStride = value; return *this; }
-    GeometrySpheres& setVertexRadiusStride(u32 value){ vertexRadiusStride = value; return *this; }
+    constexpr GeometrySpheres& setIndexBuffer(IBuffer* value){ indexBuffer = value; return *this; }
+    constexpr GeometrySpheres& setVertexBuffer(IBuffer* value){ vertexBuffer = value; return *this; }
+    constexpr GeometrySpheres& setIndexFormat(Format::Enum value){ indexFormat = value; return *this; }
+    constexpr GeometrySpheres& setVertexPositionFormat(Format::Enum value){ vertexPositionFormat = value; return *this; }
+    constexpr GeometrySpheres& setVertexRadiusFormat(Format::Enum value){ vertexRadiusFormat = value; return *this; }
+    constexpr GeometrySpheres& setIndexOffset(u64 value){ indexOffset = value; return *this; }
+    constexpr GeometrySpheres& setVertexPositionOffset(u64 value){ vertexPositionOffset = value; return *this; }
+    constexpr GeometrySpheres& setVertexRadiusOffset(u64 value){ vertexRadiusOffset = value; return *this; }
+    constexpr GeometrySpheres& setIndexCount(u32 value){ indexCount = value; return *this; }
+    constexpr GeometrySpheres& setVertexCount(u32 value){ vertexCount = value; return *this; }
+    constexpr GeometrySpheres& setIndexStride(u32 value){ indexStride = value; return *this; }
+    constexpr GeometrySpheres& setVertexPositionStride(u32 value){ vertexPositionStride = value; return *this; }
+    constexpr GeometrySpheres& setVertexRadiusStride(u32 value){ vertexRadiusStride = value; return *this; }
 };
 
 namespace GeometryLssPrimitiveFormat{
@@ -1575,22 +1578,22 @@ struct GeometryLss{
     GeometryLssPrimitiveFormat::Enum primitiveFormat = GeometryLssPrimitiveFormat::List;
     GeometryLssEndcapMode::Enum endcapMode = GeometryLssEndcapMode::None;
 
-    GeometryLss& setIndexBuffer(IBuffer* value){ indexBuffer = value; return *this; }
-    GeometryLss& setVertexBuffer(IBuffer* value){ vertexBuffer = value; return *this; }
-    GeometryLss& setIndexFormat(Format::Enum value){ indexFormat = value; return *this; }
-    GeometryLss& setVertexPositionFormat(Format::Enum value){ vertexPositionFormat = value; return *this; }
-    GeometryLss& setVertexRadiusFormat(Format::Enum value){ vertexRadiusFormat = value; return *this; }
-    GeometryLss& setIndexOffset(u64 value){ indexOffset = value; return *this; }
-    GeometryLss& setVertexPositionOffset(u64 value){ vertexPositionOffset = value; return *this; }
-    GeometryLss& setVertexRadiusOffset(u64 value){ vertexRadiusOffset = value; return *this; }
-    GeometryLss& setIndexCount(u32 value){ indexCount = value; return *this; }
-    GeometryLss& setPrimitiveCount(u32 value){ primitiveCount = value; return *this; }
-    GeometryLss& setVertexCount(u32 value){ vertexCount = value; return *this; }
-    GeometryLss& setIndexStride(u32 value){ indexStride = value; return *this; }
-    GeometryLss& setVertexPositionStride(u32 value){ vertexPositionStride = value; return *this; }
-    GeometryLss& setVertexRadiusStride(u32 value){ vertexRadiusStride = value; return *this; }
-    GeometryLss& setPrimitiveFormat(GeometryLssPrimitiveFormat::Enum value){ primitiveFormat = value; return *this; }
-    GeometryLss& setEndcapMode(GeometryLssEndcapMode::Enum value){ endcapMode = value; return *this; }
+    constexpr GeometryLss& setIndexBuffer(IBuffer* value){ indexBuffer = value; return *this; }
+    constexpr GeometryLss& setVertexBuffer(IBuffer* value){ vertexBuffer = value; return *this; }
+    constexpr GeometryLss& setIndexFormat(Format::Enum value){ indexFormat = value; return *this; }
+    constexpr GeometryLss& setVertexPositionFormat(Format::Enum value){ vertexPositionFormat = value; return *this; }
+    constexpr GeometryLss& setVertexRadiusFormat(Format::Enum value){ vertexRadiusFormat = value; return *this; }
+    constexpr GeometryLss& setIndexOffset(u64 value){ indexOffset = value; return *this; }
+    constexpr GeometryLss& setVertexPositionOffset(u64 value){ vertexPositionOffset = value; return *this; }
+    constexpr GeometryLss& setVertexRadiusOffset(u64 value){ vertexRadiusOffset = value; return *this; }
+    constexpr GeometryLss& setIndexCount(u32 value){ indexCount = value; return *this; }
+    constexpr GeometryLss& setPrimitiveCount(u32 value){ primitiveCount = value; return *this; }
+    constexpr GeometryLss& setVertexCount(u32 value){ vertexCount = value; return *this; }
+    constexpr GeometryLss& setIndexStride(u32 value){ indexStride = value; return *this; }
+    constexpr GeometryLss& setVertexPositionStride(u32 value){ vertexPositionStride = value; return *this; }
+    constexpr GeometryLss& setVertexRadiusStride(u32 value){ vertexRadiusStride = value; return *this; }
+    constexpr GeometryLss& setPrimitiveFormat(GeometryLssPrimitiveFormat::Enum value){ primitiveFormat = value; return *this; }
+    constexpr GeometryLss& setEndcapMode(GeometryLssEndcapMode::Enum value){ endcapMode = value; return *this; }
 };
 
 struct GeometryDesc{
@@ -1608,12 +1611,12 @@ struct GeometryDesc{
 
     GeometryDesc() : geometryData{} {}
 
-    GeometryDesc& setTransform(const AffineTransform& value){ NWB_MEMCPY(&transform, sizeof(transform), &value, sizeof(AffineTransform)); useTransform = true; return *this; }
-    GeometryDesc& setFlags(GeometryFlags::Mask value){ flags = value; return *this; }
-    GeometryDesc& setTriangles(const GeometryTriangles& value){ geometryData.triangles = value; geometryType = GeometryType::Triangles; return *this; }
-    GeometryDesc& setAABBs(const GeometryAABBs& value){ geometryData.aabbs = value; geometryType = GeometryType::AABBs; return *this; }
-    GeometryDesc& setSpheres(const GeometrySpheres& value){ geometryData.spheres = value; geometryType = GeometryType::Spheres; return *this; }
-    GeometryDesc& setLss(const GeometryLss& value){ geometryData.lss = value; geometryType = GeometryType::Lss; return *this; }
+    constexpr GeometryDesc& setTransform(const AffineTransform& value){ NWB_MEMCPY(&transform, sizeof(transform), &value, sizeof(AffineTransform)); useTransform = true; return *this; }
+    constexpr GeometryDesc& setFlags(GeometryFlags::Mask value){ flags = value; return *this; }
+    constexpr GeometryDesc& setTriangles(const GeometryTriangles& value){ geometryData.triangles = value; geometryType = GeometryType::Triangles; return *this; }
+    constexpr GeometryDesc& setAABBs(const GeometryAABBs& value){ geometryData.aabbs = value; geometryType = GeometryType::AABBs; return *this; }
+    constexpr GeometryDesc& setSpheres(const GeometrySpheres& value){ geometryData.spheres = value; geometryType = GeometryType::Spheres; return *this; }
+    constexpr GeometryDesc& setLss(const GeometryLss& value){ geometryData.lss = value; geometryType = GeometryType::Lss; return *this; }
 };
 
 namespace InstanceFlags{
@@ -1628,12 +1631,12 @@ namespace InstanceFlags{
         DisableOMMs = 1 << 5,
     };
     
-    inline Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
-    inline Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
-    inline Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
-    inline bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
-    inline bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
-    inline bool operator!=(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
+    constexpr Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
+    constexpr Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
+    constexpr Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
+    constexpr bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
+    constexpr bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
+    constexpr bool operator!=(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
 };
 
 struct InstanceDesc{
@@ -1657,12 +1660,12 @@ struct InstanceDesc{
         setTransform(s_identityTransform);
     }
 
-    InstanceDesc& setInstanceID(u32 value){ instanceID = value; return *this; }
-    InstanceDesc& setInstanceContributionToHitGroupIndex(u32 value){ instanceContributionToHitGroupIndex = value; return *this; }
-    InstanceDesc& setInstanceMask(u32 value){ instanceMask = value; return *this; }
-    InstanceDesc& setTransform(const AffineTransform& value){ NWB_MEMCPY(&transform, sizeof(transform), &value, sizeof(AffineTransform)); return *this; }
-    InstanceDesc& setFlags(InstanceFlags::Mask value){ flags = value; return *this; }
-    InstanceDesc& setBLAS(IAccelStruct* value){ bottomLevelAS = value; return *this; }
+    constexpr InstanceDesc& setInstanceID(u32 value){ instanceID = value; return *this; }
+    constexpr InstanceDesc& setInstanceContributionToHitGroupIndex(u32 value){ instanceContributionToHitGroupIndex = value; return *this; }
+    constexpr InstanceDesc& setInstanceMask(u32 value){ instanceMask = value; return *this; }
+    constexpr InstanceDesc& setTransform(const AffineTransform& value){ NWB_MEMCPY(&transform, sizeof(transform), &value, sizeof(AffineTransform)); return *this; }
+    constexpr InstanceDesc& setFlags(InstanceFlags::Mask value){ flags = value; return *this; }
+    constexpr InstanceDesc& setBLAS(IAccelStruct* value){ bottomLevelAS = value; return *this; }
 };
 static_assert(sizeof(InstanceDesc) == 64, "sizeof(InstanceDesc) is supposed to be 64 bytes");
 static_assert(sizeof(IndirectInstanceDesc) == sizeof(InstanceDesc));
@@ -1684,12 +1687,12 @@ namespace AccelStructBuildFlags{
         AllowEmptyInstances = 0x80,
     };
     
-    inline Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
-    inline Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
-    inline Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
-    inline bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
-    inline bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
-    inline bool operator!=(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
+    constexpr Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
+    constexpr Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
+    constexpr Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
+    constexpr bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
+    constexpr bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
+    constexpr bool operator!=(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
 };
 
 struct AccelStructDesc{
@@ -1703,15 +1706,15 @@ struct AccelStructDesc{
     bool isTopLevel = false;
     bool isVirtual = false;
 
-    AccelStructDesc& setTopLevelMaxInstances(usize value){ topLevelMaxInstances = value; isTopLevel = true; return *this; }
-    AccelStructDesc& addBottomLevelGeometry(const GeometryDesc& value){ bottomLevelGeometries.push_back(value); isTopLevel = false; return *this; }
-    AccelStructDesc& setBuildFlags(AccelStructBuildFlags::Mask value){ buildFlags = value; return *this; }
-    AccelStructDesc& setTrackLiveness(bool value){ trackLiveness = value; return *this; }
-    AccelStructDesc& setIsTopLevel(bool value){ isTopLevel = value; return *this; }
-    AccelStructDesc& setIsVirtual(bool value){ isVirtual = value; return *this; }
+    constexpr AccelStructDesc& setTopLevelMaxInstances(usize value){ topLevelMaxInstances = value; isTopLevel = true; return *this; }
+    constexpr AccelStructDesc& addBottomLevelGeometry(const GeometryDesc& value){ bottomLevelGeometries.push_back(value); isTopLevel = false; return *this; }
+    constexpr AccelStructDesc& setBuildFlags(AccelStructBuildFlags::Mask value){ buildFlags = value; return *this; }
+    constexpr AccelStructDesc& setTrackLiveness(bool value){ trackLiveness = value; return *this; }
+    constexpr AccelStructDesc& setIsTopLevel(bool value){ isTopLevel = value; return *this; }
+    constexpr AccelStructDesc& setIsVirtual(bool value){ isVirtual = value; return *this; }
     
 #ifdef NWB_GRAPHICS_DEBUGGABLE
-    AccelStructDesc& setDebugName(const AString& value){ debugName = value; return *this; }
+    constexpr AccelStructDesc& setDebugName(const AString& value){ debugName = value; return *this; }
 #endif
 };
 
@@ -1769,12 +1772,12 @@ namespace ClusterOperationFlags{
         AllowOMM = 1 << 3,
     };
     
-    inline Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
-    inline Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
-    inline Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
-    inline bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
-    inline bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
-    inline bool operator!=(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
+    constexpr Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
+    constexpr Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
+    constexpr Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
+    constexpr bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
+    constexpr bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
+    constexpr bool operator!=(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
 };
 
 namespace ClusterOperationIndexFormat{
@@ -1872,6 +1875,7 @@ struct ClusterOperationDesc{
 namespace ResourceType{
     enum Enum : u8{
         None,
+
         Texture_SRV,
         Texture_UAV,
         TypedBuffer_SRV,
@@ -1888,6 +1892,466 @@ namespace ResourceType{
         SamplerFeedbackTexture_UAV,
 
         kCount
+    };
+};
+
+struct BindingLayoutItem{
+    u32 slot;
+    
+    ResourceType::Enum type : 8;
+    u8 unused : 8;
+    // Push constant byte size when (type == PushConstants)
+    // Descriptor array size (1 or more) for all other resource types
+    // Must be 1 for VolatileConstantBuffer
+    u16 size : 16;
+    
+    constexpr BindingLayoutItem& setSlot(u32 value){ slot = value; return *this; }
+    constexpr BindingLayoutItem& setType(ResourceType::Enum value){ type = value; return *this; }
+    constexpr BindingLayoutItem& setSize(u32 value){ size = static_cast<u16>(value); return *this; }
+    
+    constexpr u32 getArraySize()const{ return (type == ResourceType::PushConstants) ? 1 : size; }
+    
+#define NWB_BINDING_LAYOUT_ITEM_INITIALIZER(TYPE_ENUM) \
+    static constexpr BindingLayoutItem TYPE_ENUM(const u32 slot, const usize size){ \
+        BindingLayoutItem ret{}; \
+        ret.slot = slot; \
+        ret.type = ResourceType::TYPE_ENUM; \
+        ret.size = 1; \
+        return ret; \
+    }
+    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(Texture_SRV)
+    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(Texture_UAV)
+    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(TypedBuffer_SRV)
+    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(TypedBuffer_UAV)
+    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(StructuredBuffer_SRV)
+    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(StructuredBuffer_UAV)
+    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(RawBuffer_SRV)
+    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(RawBuffer_UAV)
+    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(ConstantBuffer)
+    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(VolatileConstantBuffer)
+    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(Sampler)
+    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(RayTracingAccelStruct)
+    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(SamplerFeedbackTexture_UAV)
+    static constexpr BindingLayoutItem PushConstants(const u32 slot, const usize size){
+        BindingLayoutItem ret{};
+        ret.slot = slot;
+        ret.type = ResourceType::PushConstants;
+        ret.size = static_cast<u16>(size);
+        return ret;
+    }
+#undef NWB_BINDING_LAYOUT_ITEM_INITIALIZER
+};
+inline bool operator==(const BindingLayoutItem& lhs, const BindingLayoutItem& rhs){
+    return 
+        lhs.slot == rhs.slot
+        && lhs.type == rhs.type
+        && lhs.size == rhs.size
+    ;
+}
+inline bool operator!=(const BindingLayoutItem& lhs, const BindingLayoutItem& rhs){ return !(lhs == rhs); }
+static_assert(sizeof(BindingLayoutItem) == 8, "sizeof(BindingLayoutItem) is supposed to be 8 bytes");
+
+struct VulkanBindingOffsets{
+    u32 shaderResource = 0;
+    u32 sampler = 128;
+    u32 constantBuffer = 256;
+    u32 unorderedAccess = 384;
+
+    constexpr VulkanBindingOffsets& setShaderResourceOffset(u32 value){ shaderResource = value; return *this; }
+    constexpr VulkanBindingOffsets& setSamplerOffset(u32 value){ sampler = value; return *this; }
+    constexpr VulkanBindingOffsets& setConstantBufferOffset(u32 value){ constantBuffer = value; return *this; }
+    constexpr VulkanBindingOffsets& setUnorderedAccessViewOffset(u32 value){ unorderedAccess = value; return *this; }
+};
+
+struct BindingLayoutDesc{
+    ShaderType::Mask visibility = ShaderType::None;
+
+    // On DX11, the registerSpace is ignored, and all bindings are placed in the same space.
+    // On DX12, it controls the register space of the bindings.
+    // On Vulkan, DXC maps register spaces to descriptor sets by default, so this can be used to
+    // determine the descriptor set index for the binding layout.
+    // In order to use this behavior, you must set `registerSpaceIsDescriptorSet` to true. See below.
+    u32 registerSpace = 0;
+
+    // This flag controls the behavior for pipelines that use multiple binding layouts.
+    // It must be set to the same value for _all_ of the binding layouts in a pipeline.
+    // - When it's set to `false`, the `registerSpace` parameter only affects the DX12 implementation,
+    //   and the validation layer will report an error when non-zero `registerSpace` is used with other APIs.
+    // - When it's set to `true` the parameter also affects the Vulkan implementation, allowing any
+    //   layout to occupy any register space or descriptor set, regardless of their order in the pipeline.
+    //   However, a consequence of DXC mapping the descriptor set index to register space is that you may
+    //   not have more than one `BindingLayout` using the same `registerSpace` value in the same pipeline.
+    // - When it's set to different values for the layouts in a pipeline, the validation layer will report
+    //   an error.
+    bool registerSpaceIsDescriptorSet = false;
+
+    Vector<BindingLayoutItem> bindings;
+    VulkanBindingOffsets bindingOffsets;
+
+    constexpr BindingLayoutDesc& setVisibility(ShaderType::Mask value){ visibility = value; return *this; }
+    constexpr BindingLayoutDesc& setRegisterSpace(u32 value){ registerSpace = value; return *this; }
+    constexpr BindingLayoutDesc& setRegisterSpaceIsDescriptorSet(bool value){ registerSpaceIsDescriptorSet = value; return *this; }
+    // Shortcut for .setRegisterSpace(value).setRegisterSpaceIsDescriptorSet(true)
+    constexpr BindingLayoutDesc& setRegisterSpaceAndDescriptorSet(u32 value){ registerSpace = value; registerSpaceIsDescriptorSet = true; return *this; }
+    constexpr BindingLayoutDesc& addItem(const BindingLayoutItem& value){ bindings.push_back(value); return *this; }
+    constexpr BindingLayoutDesc& setBindingOffsets(const VulkanBindingOffsets& value){ bindingOffsets = value; return *this; }
+};
+
+// BindlessDescriptorType bridges the DX12 and Vulkan in supporting HLSL ResourceDescriptorHeap and SamplerDescriptorHeap
+// For DX12: 
+// - MutableSrvUavCbv, MutableCounters will enable D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED for the Root Signature
+// - MutableSampler will enable D3D12_ROOT_SIGNATURE_FLAG_SAMPLER_HEAP_DIRECTLY_INDEXED for the Root Signature
+// - The BindingLayout will be ignored in terms of setting a descriptor set. DescriptorIndexing should use GetDescriptorIndexInHeap()
+// For Vulkan:
+// - The type corresponds to the SPIRV bindings which map to ResourceDescriptorHeap and SamplerDescriptorHeap
+// - The shader needs to be compiled with the same descriptor set index as is passed into setState
+// https://github.com/microsoft/DirectXShaderCompiler/blob/main/docs/SPIR-V.rst#resourcedescriptorheaps-samplerdescriptorheaps
+namespace BindlessLayoutType{
+    enum Enum : u8{
+        Immutable = 0,      // Must use registerSpaces to define a fixed descriptor type
+
+        MutableSrvUavCbv,   // Corresponds to SPIRV binding -fvk-bind-resource-heap (Counter resources ResourceDescriptorHeap)
+                            // Valid descriptor types: Texture_SRV, Texture_UAV, TypedBuffer_SRV, TypedBuffer_UAV,
+                            // StructuredBuffer_SRV, StructuredBuffer_UAV, RawBuffer_SRV, RawBuffer_UAV, ConstantBuffer
+
+        MutableCounters,    // Corresponds to SPIRV binding -fvk-bind-counter-heap (Counter resources accessed via ResourceDescriptorHeap)
+                            // Valid descriptor types: StructuredBuffer_UAV
+
+        MutableSampler,     // Corresponds to SPIRV binding -fvk-bind-sampler-heap (SamplerDescriptorHeap)
+                            // Valid descriptor types: Sampler
+    };
+};
+
+// Bindless layouts allow applications to attach a descriptor table to an unbounded
+// resource array in the shader. The size of the array is not known ahead of time.
+// The same table can be bound to multiple register spaces on DX12, in order to 
+// access different types of resources stored in the table through different arrays.
+// The `registerSpaces` vector specifies which spaces will the table be bound to,
+// with the table type (SRV or UAV) derived from the resource type assigned to each space.
+struct BindlessLayoutDesc{
+    ShaderType::Mask visibility = ShaderType::None;
+    u32 firstSlot = 0;
+    u32 maxCapacity = 0;
+    FixedVector<BindingLayoutItem, s_maxBindlessRegisterSpaces> registerSpaces;
+
+    BindlessLayoutType::Enum layoutType = BindlessLayoutType::Immutable;
+
+    constexpr BindlessLayoutDesc& setVisibility(ShaderType::Mask value){ visibility = value; return *this; }
+    constexpr BindlessLayoutDesc& setFirstSlot(u32 value){ firstSlot = value; return *this; }
+    constexpr BindlessLayoutDesc& setMaxCapacity(u32 value){ maxCapacity = value; return *this; }
+    constexpr BindlessLayoutDesc& addRegisterSpace(const BindingLayoutItem& value){ registerSpaces.push_back(value); return *this; }
+    constexpr BindlessLayoutDesc& setLayoutType(BindlessLayoutType::Enum value){ layoutType = value; return *this; }
+};
+
+class IBindingLayout : public IResource{
+public:
+    [[nodiscard]] virtual const BindingLayoutDesc* getDescription()const = 0;    // returns nullptr for bindless layouts
+    [[nodiscard]] virtual const BindlessLayoutDesc* getBindlessDesc()const = 0;  // returns nullptr for regular layouts
+};
+typedef RefCountPtr<IBindingLayout, BlankDeleter<IBindingLayout>> BindingLayoutHandle;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Binding Sets
+
+
+struct BindingSetItem{
+    IResource* resourceHandle;
+
+    u32 slot;
+
+    // Specifies the index in a binding array.
+    // Must be less than the 'size' property of the matching BindingLayoutItem.
+    // - DX11/12: Effective binding slot index is calculated as (slot + arrayElement), i.e. arrays are flattened
+    // - Vulkan: Descriptor arrays are used.
+    // This behavior matches the behavior of HLSL resource array declarations when compiled with DXC.
+    u32 arrayElement;
+
+    ResourceType::Enum type          : 8;
+    TextureDimension::Enum dimension : 8; // valid for Texture_SRV, Texture_UAV
+    Format::Enum format              : 8; // valid for Texture_SRV, Texture_UAV, Buffer_SRV, Buffer_UAV
+    u8 unused                        : 8;
+
+    u32 unused2;
+
+    union{
+        TextureSubresourceSet subresources; // valid for Texture_SRV, Texture_UAV
+        BufferRange range; // valid for Buffer_SRV, Buffer_UAV, ConstantBuffer
+        u16 rawData[2];
+    };
+    static_assert(sizeof(TextureSubresourceSet) == 16, "sizeof(TextureSubresourceSet) is supposed to be 16 bytes");
+    static_assert(sizeof(BufferRange) == 16, "sizeof(BufferRange) is supposed to be 16 bytes");
+
+    // Default constructor that doesn't initialize anything for performance:
+    // BindingSetItem's are stored in large statically sized arrays.
+    BindingSetItem(){}
+    
+    constexpr BindingSetItem& setArrayElement(uint32_t value){ arrayElement = value; return *this; }
+    constexpr BindingSetItem& setFormat(Format::Enum value){ format = value; return *this; }
+    constexpr BindingSetItem& setDimension(TextureDimension::Enum value){ dimension = value; return *this; }
+    constexpr BindingSetItem& setSubresources(TextureSubresourceSet value){ subresources = value; return *this; }
+    constexpr BindingSetItem& setRange(BufferRange value){ range = value; return *this; }
+    
+    static constexpr BindingSetItem None(u32 slot = 0){
+        BindingSetItem result;
+        result.slot = slot;
+        result.arrayElement = 0;
+        result.type = ResourceType::None;
+        result.resourceHandle = nullptr;
+        result.format = Format::UNKNOWN;
+        result.dimension = TextureDimension::Unknown;
+        result.rawData[0] = 0;
+        result.rawData[1] = 0;
+        result.unused = 0;
+        result.unused2 = 0;
+        return result;
+    }
+    static constexpr BindingSetItem Texture_SRV(u32 slot, ITexture* texture, Format::Enum format = Format::UNKNOWN, TextureSubresourceSet subresources = s_allSubresources, TextureDimension::Enum dimension = TextureDimension::Unknown){
+        BindingSetItem result;
+        result.slot = slot;
+        result.arrayElement = 0;
+        result.type = ResourceType::Texture_SRV;
+        result.resourceHandle = texture;
+        result.format = format;
+        result.dimension = dimension;
+        result.subresources = subresources;
+        result.unused = 0;
+        result.unused2 = 0;
+        return result;
+    }
+    static constexpr BindingSetItem Texture_UAV(u32 slot, ITexture* texture, Format::Enum format = Format::UNKNOWN, TextureSubresourceSet subresources = TextureSubresourceSet(0, 1, 0, TextureSubresourceSet::AllArraySlices), TextureDimension::Enum dimension = TextureDimension::Unknown){
+        BindingSetItem result;
+        result.slot = slot;
+        result.arrayElement = 0;
+        result.type = ResourceType::Texture_UAV;
+        result.resourceHandle = texture;
+        result.format = format;
+        result.dimension = dimension;
+        result.subresources = subresources;
+        result.unused = 0;
+        result.unused2 = 0;
+        return result;
+    }
+    static constexpr BindingSetItem TypedBuffer_SRV(u32 slot, IBuffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_entireBuffer){
+        BindingSetItem result;
+        result.slot = slot;
+        result.arrayElement = 0;
+        result.type = ResourceType::TypedBuffer_SRV;
+        result.resourceHandle = buffer;
+        result.format = format;
+        result.dimension = TextureDimension::Unknown;
+        result.range = range;
+        result.unused = 0;
+        result.unused2 = 0;
+        return result;
+    }
+    static constexpr BindingSetItem TypedBuffer_UAV(u32 slot, IBuffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_entireBuffer){
+        BindingSetItem result;
+        result.slot = slot;
+        result.arrayElement = 0;
+        result.type = ResourceType::TypedBuffer_UAV;
+        result.resourceHandle = buffer;
+        result.format = format;
+        result.dimension = TextureDimension::Unknown;
+        result.range = range;
+        result.unused = 0;
+        result.unused2 = 0;
+        return result;
+    }
+    static constexpr BindingSetItem ConstantBuffer(u32 slot, IBuffer* buffer, BufferRange range = s_entireBuffer){
+        bool isVolatile = buffer && buffer->getDescription().isVolatile;
+
+        BindingSetItem result;
+        result.slot = slot;
+        result.arrayElement = 0;
+        result.type = isVolatile ? ResourceType::VolatileConstantBuffer : ResourceType::ConstantBuffer;
+        result.resourceHandle = buffer;
+        result.format = Format::UNKNOWN;
+        result.dimension = TextureDimension::Unknown;
+        result.range = range;
+        result.unused = 0;
+        result.unused2 = 0;
+        return result;
+    }
+    static constexpr BindingSetItem Sampler(u32 slot, ISampler* sampler){
+        BindingSetItem result;
+        result.slot = slot;
+        result.arrayElement = 0;
+        result.type = ResourceType::Sampler;
+        result.resourceHandle = sampler;
+        result.format = Format::UNKNOWN;
+        result.dimension = TextureDimension::Unknown;
+        result.rawData[0] = 0;
+        result.rawData[1] = 0;
+        result.unused = 0;
+        result.unused2 = 0;
+        return result;
+    }
+    static constexpr BindingSetItem RayTracingAccelStruct(u32 slot, IAccelStruct* as){
+        BindingSetItem result;
+        result.slot = slot;
+        result.arrayElement = 0;
+        result.type = ResourceType::RayTracingAccelStruct;
+        result.resourceHandle = as;
+        result.format = Format::UNKNOWN;
+        result.dimension = TextureDimension::Unknown;
+        result.rawData[0] = 0;
+        result.rawData[1] = 0;
+        result.unused = 0;
+        result.unused2 = 0;
+        return result;
+    }
+    static constexpr BindingSetItem StructuredBuffer_SRV(u32 slot, IBuffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_entireBuffer){
+        BindingSetItem result;
+        result.slot = slot;
+        result.arrayElement = 0;
+        result.type = ResourceType::StructuredBuffer_SRV;
+        result.resourceHandle = buffer;
+        result.format = format;
+        result.dimension = TextureDimension::Unknown;
+        result.range = range;
+        result.unused = 0;
+        result.unused2 = 0;
+        return result;
+    }
+    static constexpr BindingSetItem StructuredBuffer_UAV(u32 slot, IBuffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_entireBuffer){
+        BindingSetItem result;
+        result.slot = slot;
+        result.arrayElement = 0;
+        result.type = ResourceType::StructuredBuffer_UAV;
+        result.resourceHandle = buffer;
+        result.format = format;
+        result.dimension = TextureDimension::Unknown;
+        result.range = range;
+        result.unused = 0;
+        result.unused2 = 0;
+        return result;
+    }
+    static constexpr BindingSetItem RawBuffer_SRV(u32 slot, IBuffer* buffer, BufferRange range = s_entireBuffer){
+        BindingSetItem result;
+        result.slot = slot;
+        result.arrayElement = 0;
+        result.type = ResourceType::RawBuffer_SRV;
+        result.resourceHandle = buffer;
+        result.format = Format::UNKNOWN;
+        result.dimension = TextureDimension::Unknown;
+        result.range = range;
+        result.unused = 0;
+        result.unused2 = 0;
+        return result;
+    }
+    static constexpr BindingSetItem RawBuffer_UAV(u32 slot, IBuffer* buffer, BufferRange range = s_entireBuffer){
+        BindingSetItem result;
+        result.slot = slot;
+        result.arrayElement = 0;
+        result.type = ResourceType::RawBuffer_UAV;
+        result.resourceHandle = buffer;
+        result.format = Format::UNKNOWN;
+        result.dimension = TextureDimension::Unknown;
+        result.range = range;
+        result.unused = 0;
+        result.unused2 = 0;
+        return result;
+    }
+    static constexpr BindingSetItem PushConstants(u32 slot, u32 byteSize){
+        BindingSetItem result;
+        result.slot = slot;
+        result.arrayElement = 0;
+        result.type = ResourceType::PushConstants;
+        result.resourceHandle = nullptr;
+        result.format = Format::UNKNOWN;
+        result.dimension = TextureDimension::Unknown;
+        result.range.byteOffset = 0;
+        result.range.byteSize = byteSize;
+        result.unused = 0;
+        result.unused2 = 0;
+        return result;
+    }
+    static constexpr BindingSetItem SamplerFeedbackTexture_UAV(u32 slot, ISamplerFeedbackTexture* texture){
+        BindingSetItem result;
+        result.slot = slot;
+        result.arrayElement = 0;
+        result.type = ResourceType::SamplerFeedbackTexture_UAV;
+        result.resourceHandle = texture;
+        result.format = Format::UNKNOWN;
+        result.dimension = TextureDimension::Unknown;
+        result.subresources = s_allSubresources;
+        result.unused = 0;
+        result.unused2 = 0;
+        return result;
+    }
+};
+inline bool operator==(const BindingSetItem& lhs, const BindingSetItem& rhs){
+    return
+        lhs.resourceHandle == rhs.resourceHandle
+        && lhs.slot == rhs.slot
+        && lhs.type == rhs.type
+        && lhs.dimension == rhs.dimension
+        && lhs.format == rhs.format
+        && lhs.rawData[0] == rhs.rawData[0]
+        && lhs.rawData[1] == rhs.rawData[1]
+    ;
+}
+inline bool operator!=(const BindingSetItem& lhs, const BindingSetItem& rhs){ return !(lhs == rhs); }
+static_assert(sizeof(BindingSetItem) == 40, "sizeof(BindingSetItem) is supposed to be 40 bytes");
+
+struct BindingSetDesc{
+    Vector<BindingSetItem> bindings;
+       
+    // Enables automatic liveness tracking of this binding set by nvrhi command lists.
+    // By setting trackLiveness to false, you take the responsibility of not releasing it 
+    // until all rendering commands using the binding set are finished.
+    bool trackLiveness = true;
+
+    constexpr BindingSetDesc& addItem(const BindingSetItem& value){ bindings.push_back(value); return *this; }
+    constexpr BindingSetDesc& setTrackLiveness(bool value){ trackLiveness = value; return *this; }
+};
+inline bool operator==(const BindingSetDesc& lhs, const BindingSetDesc& rhs){
+    if(lhs.bindings.size() != rhs.bindings.size())
+        return false;
+    for(usize i = 0; i < lhs.bindings.size(); ++i){
+        if(lhs.bindings[i] != rhs.bindings[i])
+            return false;
+    }
+    return true;
+}
+inline bool operator!=(const BindingSetDesc& lhs, const BindingSetDesc& rhs){ return !(lhs == rhs); }
+
+class IBindingSet : public IResource{
+public:
+    [[nodiscard]] virtual const BindingSetDesc* getDescription()const = 0;  // returns nullptr for descriptor tables
+    [[nodiscard]] virtual IBindingLayout* getLayout()const = 0;
+};
+typedef RefCountPtr<IBindingSet, BlankDeleter<IBindingSet>> BindingSetHandle;
+
+// Descriptor tables are bare, without extra mappings, state, or liveness tracking.
+// Unlike binding sets, descriptor tables are mutable - moreover, modification is the only way to populate them.
+// They can be grown or shrunk, and they are not tied to any binding layout.
+// All tracking is off, so applications should use descriptor tables with great care.
+// IDescriptorTable is derived from IBindingSet to allow mixing them in the binding arrays.
+class IDescriptorTable : public IBindingSet{
+public:
+    [[nodiscard]] virtual uint32_t getCapacity()const = 0;
+    [[nodiscard]] virtual uint32_t getFirstDescriptorIndexInHeap()const = 0;
+};
+typedef RefCountPtr<IDescriptorTable, BlankDeleter<IDescriptorTable>> DescriptorTableHandle;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Draw State
+
+
+namespace PrimitiveType{
+    enum Enum : u8{
+        PointList,
+        LineList,
+        LineStrip,
+        TriangleList,
+        TriangleStrip,
+        TriangleFan,
+        TriangleListWithAdjacency,
+        TriangleStripWithAdjacency,
+        PatchList,
     };
 };
 

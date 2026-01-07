@@ -52,12 +52,12 @@ public:
     using base::at;
 
 public:
-    reference operator[](size_type pos){
+    constexpr reference operator[](size_type pos){
         NWB_ASSERT(pos < current_size);
         return base::operator[](pos);
     }
 
-    const_reference operator[](size_type pos)const{
+    constexpr const_reference operator[](size_type pos)const{
         NWB_ASSERT(pos < current_size);
         return base::operator[](pos);
     }
@@ -66,8 +66,8 @@ public:
     using base::front;
 
 public:
-    reference back()noexcept{ auto tmp =  end(); --tmp; return *tmp; }
-    const_reference back()const noexcept{ auto tmp = cend(); --tmp; return *tmp; }
+    constexpr reference back()noexcept{ auto tmp =  end(); --tmp; return *tmp; }
+    constexpr const_reference back()const noexcept{ auto tmp = cend(); --tmp; return *tmp; }
 
 public:
     using base::data;
@@ -75,42 +75,42 @@ public:
     using base::cbegin;
 
 public:
-    iterator end()noexcept{ return iterator(begin()) + current_size; }
-    const_iterator end()const noexcept{ return cend(); }
-    const_iterator cend()const noexcept{ return const_iterator(cbegin()) + current_size; }
+    constexpr iterator end()noexcept{ return iterator(begin()) + current_size; }
+    constexpr const_iterator end()const noexcept{ return cend(); }
+    constexpr const_iterator cend()const noexcept{ return const_iterator(cbegin()) + current_size; }
 
-    bool empty()const noexcept{ return current_size == 0; }
-    size_type size()const noexcept{ return current_size; }
+    constexpr bool empty()const noexcept{ return current_size == 0; }
+    constexpr size_type size()const noexcept{ return current_size; }
     constexpr size_type max_size()const noexcept{ return max_elements; }
 
-    void fill(const T& value)noexcept{
+    constexpr void fill(const T& value)noexcept{
         base::fill(value);
         current_size = max_elements;
     }
 
-    void swap(static_vector& other)noexcept{
+    constexpr void swap(static_vector& other)noexcept{
         base::swap(*this);
         std::swap(current_size, other.current_size);
     }
 
-    void push_back(const T& value)noexcept{
+    constexpr void push_back(const T& value)noexcept{
         NWB_ASSERT(current_size < max_elements);
         *(data() + current_size) = value;
         current_size++;
     }
 
-    void push_back(T&& value)noexcept{
+    constexpr void push_back(T&& value)noexcept{
         NWB_ASSERT(current_size < max_elements);
         *(data() + current_size) = Move(value);
         current_size++;
     }
 
-    void pop_back()noexcept{
+    constexpr void pop_back()noexcept{
         NWB_ASSERT(current_size > 0);
         current_size--;
     }
 
-    void resize(size_type new_size)noexcept{
+    constexpr void resize(size_type new_size)noexcept{
         NWB_ASSERT(new_size <= max_elements);
 
         if(current_size > new_size){
@@ -125,7 +125,7 @@ public:
         current_size = new_size;
     }
 
-    reference emplace_back()noexcept{
+    constexpr reference emplace_back()noexcept{
         NWB_ASSERT(current_size < max_elements);
         ++current_size;
         back() = T{};

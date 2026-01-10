@@ -2355,6 +2355,342 @@ namespace PrimitiveType{
     };
 };
 
+struct SinglePassStereoState{
+    u8 renderTargetIndexOffset = 0;
+    bool enabled = false;
+    bool independentViewportMask = false;
+    
+    constexpr SinglePassStereoState& setEnabled(bool value){ enabled = value; return *this; }
+    constexpr SinglePassStereoState& setIndependentViewportMask(bool value){ independentViewportMask = value; return *this; }
+    constexpr SinglePassStereoState& setRenderTargetIndexOffset(u16 value){ renderTargetIndexOffset = value; return *this; }
+};
+inline bool operator==(const SinglePassStereoState& lhs, const SinglePassStereoState& rhs){
+    return 
+        lhs.enabled == rhs.enabled
+        && lhs.independentViewportMask == rhs.independentViewportMask
+        && lhs.renderTargetIndexOffset == rhs.renderTargetIndexOffset
+    ;
+}
+inline bool operator!=(const SinglePassStereoState& lhs, const SinglePassStereoState& rhs){ return !(lhs == rhs); }
+
+struct RenderState{
+    BlendState blendState;
+    DepthStencilState depthStencilState;
+    RasterState rasterState;
+    SinglePassStereoState singlePassStereo;
+
+    constexpr RenderState& setBlendState(const BlendState& value){ blendState = value; return *this; }
+    constexpr RenderState& setDepthStencilState(const DepthStencilState& value){ depthStencilState = value; return *this; }
+    constexpr RenderState& setRasterState(const RasterState& value){ rasterState = value; return *this; }
+    constexpr RenderState& setSinglePassStereoState(const SinglePassStereoState& value){ singlePassStereo = value; return *this; }
+};
+
+namespace VariableShadingRate{
+    enum Enum : u8{
+        e1x1,
+        e1x2,
+        e2x1,
+        e2x2,
+        e2x4,
+        e4x2,
+        e4x4,
+    };
+};
+
+namespace ShadingRateCombiner{
+    enum Enum : u8{
+        Passthrough,
+        Override,
+        Min,
+        Max,
+        ApplyRelative,
+    };
+};
+
+struct VariableRateShadingState{
+    VariableShadingRate::Enum shadingRate = VariableShadingRate::e1x1;
+    ShadingRateCombiner::Enum pipelinePrimitiveCombiner = ShadingRateCombiner::Passthrough;
+    ShadingRateCombiner::Enum imageCombiner = ShadingRateCombiner::Passthrough;
+    bool enabled = false;
+
+    constexpr VariableRateShadingState& setEnabled(bool value){ enabled = value; return *this; }
+    constexpr VariableRateShadingState& setShadingRate(VariableShadingRate::Enum value){ shadingRate = value; return *this; }
+    constexpr VariableRateShadingState& setPipelinePrimitiveCombiner(ShadingRateCombiner::Enum value){ pipelinePrimitiveCombiner = value; return *this; }
+    constexpr VariableRateShadingState& setImageCombiner(ShadingRateCombiner::Enum value){ imageCombiner = value; return *this; }
+};
+inline bool operator==(const VariableRateShadingState& lhs, const VariableRateShadingState& rhs){
+    return 
+        lhs.enabled == rhs.enabled
+        && lhs.shadingRate == rhs.shadingRate
+        && lhs.pipelinePrimitiveCombiner == rhs.pipelinePrimitiveCombiner
+        && lhs.imageCombiner == rhs.imageCombiner
+    ;
+}
+inline bool operator!=(const VariableRateShadingState& lhs, const VariableRateShadingState& rhs){ return !(lhs == rhs); }
+
+typedef FixedVector<BindingLayoutHandle, s_maxBindingLayouts> BindingLayoutVector;
+
+struct GraphicsPipelineDesc{
+    PrimitiveType::Enum primType = PrimitiveType::TriangleList;
+    u32 patchControlPoints = 0;
+    InputLayoutHandle inputLayout;
+
+    ShaderHandle VS;
+    ShaderHandle HS;
+    ShaderHandle DS;
+    ShaderHandle GS;
+    ShaderHandle PS;
+
+    RenderState renderState;
+    VariableRateShadingState shadingRateState;
+
+    BindingLayoutVector bindingLayouts;
+        
+    constexpr GraphicsPipelineDesc& setPrimType(PrimitiveType::Enum value){ primType = value; return *this; }
+    constexpr GraphicsPipelineDesc& setPatchControlPoints(u32 value){ patchControlPoints = value; return *this; }
+    GraphicsPipelineDesc& setInputLayout(IInputLayout* value){ inputLayout = value; return *this; }
+    GraphicsPipelineDesc& setVertexShader(IShader* value){ VS = value; return *this; }
+    GraphicsPipelineDesc& setHullShader(IShader* value){ HS = value; return *this; }
+    GraphicsPipelineDesc& setTessellationControlShader(IShader* value){ HS = value; return *this; }
+    GraphicsPipelineDesc& setDomainShader(IShader* value){ DS = value; return *this; }
+    GraphicsPipelineDesc& setTessellationEvaluationShader(IShader* value){ DS = value; return *this; }
+    GraphicsPipelineDesc& setGeometryShader(IShader* value){ GS = value; return *this; }
+    GraphicsPipelineDesc& setPixelShader(IShader* value){ PS = value; return *this; }
+    GraphicsPipelineDesc& setFragmentShader(IShader* value){ PS = value; return *this; }
+    constexpr GraphicsPipelineDesc& setRenderState(const RenderState& value){ renderState = value; return *this; }
+    constexpr GraphicsPipelineDesc& setVariableRateShadingState(const VariableRateShadingState& value){ shadingRateState = value; return *this; }
+    GraphicsPipelineDesc& addBindingLayout(IBindingLayout* layout){ bindingLayouts.push_back(layout); return *this; }
+};
+
+class IGraphicsPipeline : public IResource{
+public:
+    [[nodiscard]] virtual const GraphicsPipelineDesc& getDescription()const = 0;
+    [[nodiscard]] virtual const FramebufferInfo& getFramebufferInfo()const = 0;
+};
+typedef RefCountPtr<IGraphicsPipeline, BlankDeleter<IGraphicsPipeline>> GraphicsPipelineHandle;
+
+struct ComputePipelineDesc{
+    ShaderHandle CS;
+
+    BindingLayoutVector bindingLayouts;
+
+    ComputePipelineDesc& setComputeShader(IShader* value){ CS = value; return *this; }
+    ComputePipelineDesc& addBindingLayout(IBindingLayout* layout){ bindingLayouts.push_back(layout); return *this; }
+};
+
+class IComputePipeline : public IResource{
+public:
+    [[nodiscard]] virtual const ComputePipelineDesc& getDescription()const = 0;
+};
+typedef RefCountPtr<IComputePipeline, BlankDeleter<IComputePipeline>> ComputePipelineHandle;
+
+struct MeshletPipelineDesc{
+    PrimitiveType::Enum primType = PrimitiveType::TriangleList;
+        
+    ShaderHandle AS;
+    ShaderHandle MS;
+    ShaderHandle PS;
+
+    RenderState renderState;
+
+    BindingLayoutVector bindingLayouts;
+        
+    constexpr MeshletPipelineDesc& setPrimType(PrimitiveType::Enum value){ primType = value; return *this; }
+    MeshletPipelineDesc& setTaskShader(IShader* value){ AS = value; return *this; }
+    MeshletPipelineDesc& setAmplificationShader(IShader* value){ AS = value; return *this; }
+    MeshletPipelineDesc& setMeshShader(IShader* value){ MS = value; return *this; }
+    MeshletPipelineDesc& setPixelShader(IShader* value){ PS = value; return *this; }
+    MeshletPipelineDesc& setFragmentShader(IShader* value){ PS = value; return *this; }
+    constexpr MeshletPipelineDesc& setRenderState(const RenderState& value){ renderState = value; return *this; }
+    MeshletPipelineDesc& addBindingLayout(IBindingLayout* layout){ bindingLayouts.push_back(layout); return *this; }
+};
+
+class IMeshletPipeline : public IResource{
+public:
+    [[nodiscard]] virtual const MeshletPipelineDesc& getDescription()const = 0;
+    [[nodiscard]] virtual const FramebufferInfo& getFramebufferInfo()const = 0;
+};
+typedef RefCountPtr<IMeshletPipeline, BlankDeleter<IMeshletPipeline>> MeshletPipelineHandle;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Draw and Dispatch
+
+
+class IEventQuery : public IResource{};
+typedef RefCountPtr<IEventQuery, BlankDeleter<IEventQuery>> EventQueryHandle;
+
+class ITimerQuery : public IResource{};
+typedef RefCountPtr<ITimerQuery, BlankDeleter<ITimerQuery>> TimerQueryHandle;
+
+struct VertexBufferBinding{
+    IBuffer* buffer = nullptr;
+    u64 offset;
+    u32 slot;
+    
+    constexpr VertexBufferBinding& setBuffer(IBuffer* value){ buffer = value; return *this; }
+    constexpr VertexBufferBinding& setSlot(u32 value){ slot = value; return *this; }
+    constexpr VertexBufferBinding& setOffset(u64 value){ offset = value; return *this; }
+};
+inline bool operator==(const VertexBufferBinding& lhs, const VertexBufferBinding& rhs)noexcept{
+    return 
+        lhs.buffer == rhs.buffer
+        && lhs.offset == rhs.offset
+        && lhs.slot == rhs.slot
+    ;
+}
+inline bool operator!=(const VertexBufferBinding& lhs, const VertexBufferBinding& rhs)noexcept{ return !(lhs == rhs); }
+
+struct IndexBufferBinding{
+    IBuffer* buffer = nullptr;
+    u32 offset;
+    Format::Enum format;
+    
+    constexpr IndexBufferBinding& setBuffer(IBuffer* value){ buffer = value; return *this; }
+    constexpr IndexBufferBinding& setFormat(Format::Enum value){ format = value; return *this; }
+    constexpr IndexBufferBinding& setOffset(u32 value){ offset = value; return *this; }
+};
+inline bool operator==(const IndexBufferBinding& lhs, const IndexBufferBinding& rhs)noexcept{
+    return 
+        lhs.buffer == rhs.buffer
+        && lhs.offset == rhs.offset
+        && lhs.format == rhs.format
+    ;
+}
+inline bool operator!=(const IndexBufferBinding& lhs, const IndexBufferBinding& rhs)noexcept{ return !(lhs == rhs); }
+
+typedef FixedVector<IBindingSet*, s_maxBindingLayouts> BindingSetVector;
+
+struct GraphicsState{
+    IGraphicsPipeline* pipeline = nullptr;
+    IFramebuffer* framebuffer = nullptr;
+    ViewportState viewport;
+    VariableRateShadingState shadingRateState;
+    Color blendConstantColor{};
+    u8 dynamicStencilRefValue = 0;
+
+    BindingSetVector bindings;
+
+    FixedVector<VertexBufferBinding, s_maxVertexAttributes> vertexBuffers;
+    IndexBufferBinding indexBuffer;
+
+    IBuffer* indirectParams = nullptr;
+
+    constexpr GraphicsState& setPipeline(IGraphicsPipeline* value){ pipeline = value; return *this; }
+    constexpr GraphicsState& setFramebuffer(IFramebuffer* value){ framebuffer = value; return *this; }
+    constexpr GraphicsState& setViewport(const ViewportState& value){ viewport = value; return *this; }
+    constexpr GraphicsState& setShadingRateState(const VariableRateShadingState& value){ shadingRateState = value; return *this; }
+    constexpr GraphicsState& setBlendColor(const Color& value){ blendConstantColor = value; return *this; }
+    constexpr GraphicsState& setDynamicStencilRefValue(u8 value){ dynamicStencilRefValue = value; return *this; }
+    GraphicsState& addBindingSet(IBindingSet* value){ bindings.push_back(value); return *this; }
+    GraphicsState& addVertexBuffer(const VertexBufferBinding& value){ vertexBuffers.push_back(value); return *this; }
+    constexpr GraphicsState& setIndexBuffer(const IndexBufferBinding& value){ indexBuffer = value; return *this; }
+    constexpr GraphicsState& setIndirectParams(IBuffer* value){ indirectParams = value; return *this; }
+};
+
+struct DrawArguments{
+    u32 vertexCount = 0;
+    u32 instanceCount = 1;
+    u32 startIndexLocation = 0;
+    u32 startVertexLocation = 0;
+    u32 startInstanceLocation = 0;
+
+    constexpr DrawArguments& setVertexCount(u32 value){ vertexCount = value; return *this; }
+    constexpr DrawArguments& setInstanceCount(u32 value){ instanceCount = value; return *this; }
+    constexpr DrawArguments& setStartIndexLocation(u32 value){ startIndexLocation = value; return *this; }
+    constexpr DrawArguments& setStartVertexLocation(u32 value){ startVertexLocation = value; return *this; }
+    constexpr DrawArguments& setStartInstanceLocation(u32 value){ startInstanceLocation = value; return *this; }
+};
+
+struct DrawIndirectArguments{
+    u32 vertexCount = 0;
+    u32 instanceCount = 1;
+    u32 startVertexLocation = 0;
+    u32 startInstanceLocation = 0;
+
+    constexpr DrawIndirectArguments& setVertexCount(u32 value){ vertexCount = value; return *this; }
+    constexpr DrawIndirectArguments& setInstanceCount(u32 value){ instanceCount = value; return *this; }
+    constexpr DrawIndirectArguments& setStartVertexLocation(u32 value){ startVertexLocation = value; return *this; }
+    constexpr DrawIndirectArguments& setStartInstanceLocation(u32 value){ startInstanceLocation = value; return *this; }
+};
+
+struct DrawIndexedIndirectArguments{
+    u32 indexCount = 0;
+    u32 instanceCount = 1;
+    u32 startIndexLocation = 0;
+    i32  baseVertexLocation = 0;
+    u32 startInstanceLocation = 0;
+
+    constexpr DrawIndexedIndirectArguments& setIndexCount(u32 value){ indexCount = value; return *this; }
+    constexpr DrawIndexedIndirectArguments& setInstanceCount(u32 value){ instanceCount = value; return *this; }
+    constexpr DrawIndexedIndirectArguments& setStartIndexLocation(u32 value){ startIndexLocation = value; return *this; }
+    constexpr DrawIndexedIndirectArguments& setBaseVertexLocation(i32 value){ baseVertexLocation = value; return *this; }
+    constexpr DrawIndexedIndirectArguments& setStartInstanceLocation(u32 value){ startInstanceLocation = value; return *this; }
+};
+
+struct ComputeState{
+    IComputePipeline* pipeline = nullptr;
+
+    BindingSetVector bindings;
+
+    IBuffer* indirectParams = nullptr;
+
+    constexpr ComputeState& setPipeline(IComputePipeline* value){ pipeline = value; return *this; }
+    ComputeState& addBindingSet(IBindingSet* value){ bindings.push_back(value); return *this; }
+    constexpr ComputeState& setIndirectParams(IBuffer* value){ indirectParams = value; return *this; }
+};
+
+struct DispatchIndirectArguments{
+    u32 groupsX = 1;
+    u32 groupsY = 1;
+    u32 groupsZ = 1;
+
+    constexpr DispatchIndirectArguments& setGroupsX(u32 value){ groupsX = value; return *this; }
+    constexpr DispatchIndirectArguments& setGroupsY(u32 value){ groupsY = value; return *this; }
+    constexpr DispatchIndirectArguments& setGroupsZ(u32 value){ groupsZ = value; return *this; }
+    constexpr DispatchIndirectArguments& setGroups2D(u32 x, u32 y){ groupsX = x; groupsY = y; return *this; }
+    constexpr DispatchIndirectArguments& setGroups3D(u32 x, u32 y, u32 z){ groupsX = x; groupsY = y; groupsZ = z; return *this; }
+};
+
+struct MeshletState{
+    IMeshletPipeline* pipeline = nullptr;
+    IFramebuffer* framebuffer = nullptr;
+    ViewportState viewport;
+    Color blendConstantColor{};
+    u8 dynamicStencilRefValue = 0;
+
+    BindingSetVector bindings;
+
+    IBuffer* indirectParams = nullptr;
+
+    constexpr MeshletState& setPipeline(IMeshletPipeline* value){ pipeline = value; return *this; }
+    constexpr MeshletState& setFramebuffer(IFramebuffer* value){ framebuffer = value; return *this; }
+    constexpr MeshletState& setViewport(const ViewportState& value){ viewport = value; return *this; }
+    constexpr MeshletState& setBlendColor(const Color& value){ blendConstantColor = value; return *this; }
+    MeshletState& addBindingSet(IBindingSet* value){ bindings.push_back(value); return *this; }
+    constexpr MeshletState& setIndirectParams(IBuffer* value){ indirectParams = value; return *this; }
+    constexpr MeshletState& setDynamicStencilRefValue(u8 value){ dynamicStencilRefValue = value; return *this; }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Ray Tracing
+
+
+struct RayTracingPipelineShaderDesc{
+    ShaderHandle shader;
+    BindingLayoutHandle bindingLayout;
+#ifdef NWB_GRAPHICS_DEBUGGABLE
+    AString exportName;
+#endif
+    
+    constexpr RayTracingPipelineShaderDesc& setShader(IShader* value){ shader = value; return *this; }
+    constexpr RayTracingPipelineShaderDesc& setBindingLayout(IBindingLayout* value){ bindingLayout = value; return *this; }
+#ifdef NWB_GRAPHICS_DEBUGGABLE
+    constexpr RayTracingPipelineShaderDesc& setExportName(const AString& value){ exportName = value; return *this; }
+#endif
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

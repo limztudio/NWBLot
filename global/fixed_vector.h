@@ -96,29 +96,29 @@ public:
     constexpr void push_back(const T& value)noexcept{
         NWB_ASSERT(current_size < max_elements);
         *(data() + current_size) = value;
-        current_size++;
+        ++current_size;
     }
 
     constexpr void push_back(T&& value)noexcept{
         NWB_ASSERT(current_size < max_elements);
         *(data() + current_size) = Move(value);
-        current_size++;
+        ++current_size;
     }
 
     constexpr void pop_back()noexcept{
         NWB_ASSERT(current_size > 0);
-        current_size--;
+        --current_size;
     }
 
     constexpr void resize(size_type new_size)noexcept{
         NWB_ASSERT(new_size <= max_elements);
 
         if(current_size > new_size){
-            for(size_type i = new_size; i < current_size; i++)
+            for(size_type i = new_size; i < current_size; ++i)
                 *(data() + i) = T{};
         }
         else{
-            for(size_type i = current_size; i < new_size; i++)
+            for(size_type i = current_size; i < new_size; ++i)
                 *(data() + i) = T{};
         }
 

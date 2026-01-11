@@ -2691,6 +2691,68 @@ struct RayTracingPipelineShaderDesc{
 #endif
 };
 
+struct RayTracingPipelineHitGroupDesc{
+    ShaderHandle closestHitShader;
+    ShaderHandle anyHitShader;
+    ShaderHandle intersectionShader;
+    BindingLayoutHandle bindingLayout;
+#ifdef NWB_GRAPHICS_DEBUGGABLE
+    AString exportName;
+#endif
+    bool isProceduralPrimitive = false;
+    
+    constexpr RayTracingPipelineHitGroupDesc& setClosestHitShader(IShader* value){ closestHitShader = value; return *this; }
+    constexpr RayTracingPipelineHitGroupDesc& setAnyHitShader(IShader* value){ anyHitShader = value; return *this; }
+    constexpr RayTracingPipelineHitGroupDesc& setIntersectionShader(IShader* value){ intersectionShader = value; return *this; }
+    constexpr RayTracingPipelineHitGroupDesc& setBindingLayout(IBindingLayout* value){ bindingLayout = value; return *this; }
+    constexpr RayTracingPipelineHitGroupDesc& setIsProceduralPrimitive(bool value){ isProceduralPrimitive = value; return *this; }
+#ifdef NWB_GRAPHICS_DEBUGGABLE
+    constexpr RayTracingPipelineHitGroupDesc& setExportName(const AString& value){ exportName = value; return *this; }
+#endif
+};
+
+struct RayTracingPipelineDesc{
+    Vector<RayTracingPipelineShaderDesc> shaders;
+    Vector<RayTracingPipelineHitGroupDesc> hitGroups;
+    BindingLayoutVector globalBindingLayouts;
+    u32 maxPayloadSize = 0;
+    u32 maxAttributeSize = sizeof(f32) * 2; // typical case: float2 uv;
+    u32 maxRecursionDepth = 1;
+    i32 hlslExtensionsUAV = -1;
+    bool allowOpacityMicromaps = false;
+
+    constexpr RayTracingPipelineDesc& addShader(const RayTracingPipelineShaderDesc& value){ shaders.push_back(value); return *this; }
+    constexpr RayTracingPipelineDesc& addHitGroup(const RayTracingPipelineHitGroupDesc& value){ hitGroups.push_back(value); return *this; }
+    RayTracingPipelineDesc& addBindingLayout(IBindingLayout* value){ globalBindingLayouts.push_back(value); return *this; }
+    constexpr RayTracingPipelineDesc& setMaxPayloadSize(u32 value){ maxPayloadSize = value; return *this; }
+    constexpr RayTracingPipelineDesc& setMaxAttributeSize(u32 value){ maxAttributeSize = value; return *this; }
+    constexpr RayTracingPipelineDesc& setMaxRecursionDepth(u32 value){ maxRecursionDepth = value; return *this; }
+    constexpr RayTracingPipelineDesc& setHlslExtensionsUAV(i32 value){ hlslExtensionsUAV = value; return *this; }
+    constexpr RayTracingPipelineDesc& setAllowOpacityMicromaps(bool value){ allowOpacityMicromaps = value; return *this; }
+};
+
+class IRayTracingPipeline;
+
+class IRayTracingShaderTable : public IResource{
+public:
+    virtual void setRayGenerationShader(const char* exportName, IBindingSet* bindings = nullptr) = 0;
+    virtual int addMissShader(const char* exportName, IBindingSet* bindings = nullptr) = 0;
+    virtual int addHitGroup(const char* exportName, IBindingSet* bindings = nullptr) = 0;
+    virtual int addCallableShader(const char* exportName, IBindingSet* bindings = nullptr) = 0;
+    virtual void clearMissShaders() = 0;
+    virtual void clearHitShaders() = 0;
+    virtual void clearCallableShaders() = 0;
+    virtual IRayTracingPipeline* getPipeline() = 0;
+};
+typedef RefCountPtr<IRayTracingShaderTable, BlankDeleter<IRayTracingShaderTable>> RayTracingShaderTableHandle;
+
+class IRayTracingPipeline : public IResource{
+public:
+    [[nodiscard]] virtual const RayTracingPipelineDesc& getDescription()const = 0;
+    virtual RayTracingShaderTableHandle createShaderTable() = 0;
+};
+typedef RefCountPtr<IRayTracingPipeline, BlankDeleter<IRayTracingPipeline>> RayTracingPipelineHandle;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

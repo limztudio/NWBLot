@@ -292,11 +292,9 @@ namespace HeapType{
 };
 
 struct HeapDesc{
-    u64 capacity  = 0;
+    u64 capacity = 0;
     HeapType::Enum type;
-#if defined(NWB_DEBUG)
-    AString debugName;
-#endif
+    Name debugName;
 };
 
 class IHeap : public IResource{
@@ -415,9 +413,7 @@ struct TextureDesc{
     u32 sampleQuality = 0;
     Format::Enum format = Format::UNKNOWN;
     TextureDimension::Enum dimension = TextureDimension::Enum::Texture2D;
-#ifdef NWB_GRAPHICS_DEBUGGABLE
-    AString name;
-#endif
+    Name name;
     
     bool isShaderResource = true; // Thi is initialised to 'true' for backward compatibility
     bool isRenderTarget = false;
@@ -451,9 +447,7 @@ struct TextureDesc{
     constexpr TextureDesc& setSampleCount(u32 v)noexcept{ sampleCount = v; return *this; }
     constexpr TextureDesc& setFormat(Format::Enum v)noexcept{ format = v; return *this; }
     constexpr TextureDesc& setDimension(TextureDimension::Enum v)noexcept{ dimension = v; return *this; }
-#ifdef NWB_GRAPHICS_DEBUGGABLE
-    constexpr TextureDesc& setName(const AString& v)noexcept{ name = v; return *this; }
-#endif
+    constexpr TextureDesc& setName(const Name& v)noexcept{ name = v; return *this; }
     constexpr TextureDesc& setInRenderTarget(bool v)noexcept{ isRenderTarget = v; return *this; }
     constexpr TextureDesc& setInUAV(bool v)noexcept{ isUAV = v; return *this; }
     constexpr TextureDesc& setInTypeless(bool v)noexcept{ isTypeless = v; return *this; }
@@ -620,9 +614,7 @@ struct VertexAttributeDesc{
     u32 bufferIndex = 0;
     u32 offset = 0;
     u32 elementStride = 0;
-#ifdef NWB_GRAPHICS_DEBUGGABLE
-    AString name;
-#endif
+    Name name;
     bool isInstanced = false;
     
     constexpr VertexAttributeDesc& setFormat(Format::Enum value){ format = value; return *this; }
@@ -630,10 +622,8 @@ struct VertexAttributeDesc{
     constexpr VertexAttributeDesc& setBufferIndex(u32 value){ bufferIndex = value; return *this; }
     constexpr VertexAttributeDesc& setOffset(u32 value){ offset = value; return *this; }
     constexpr VertexAttributeDesc& setElementStride(u32 value){ elementStride = value; return *this; }
+    constexpr VertexAttributeDesc& setName(const Name& value){ name = value; return *this; }
     constexpr VertexAttributeDesc& setIsInstanced(bool value){ isInstanced = value; return *this; }
-#ifdef NWB_GRAPHICS_DEBUGGABLE
-    constexpr VertexAttributeDesc& setName(const AString& value){ name = value; return *this; }
-#endif
 };
 
 class IInputLayout : public IResource{
@@ -653,9 +643,7 @@ struct BufferDesc{
     u32 structStride = 0; // if non-zero it's structured
     u32 maxVersions = 0; // only valid and required to be nonzero for volatile buffers on Vulkan
     Format::Enum format = Format::UNKNOWN; // for typed buffer views
-#ifdef NWB_GRAPHICS_DEBUGGABLE
-    AString debugName;
-#endif
+    Name debugName;
     bool canHaveUAVs = false;
     bool canHaveTypedViews = false;
     bool canHaveRawViews = false;
@@ -687,6 +675,7 @@ struct BufferDesc{
     constexpr BufferDesc& setStructStride(u32 value){ structStride = value; return *this; }
     constexpr BufferDesc& setMaxVersions(u32 value){ maxVersions = value; return *this; }
     constexpr BufferDesc& setFormat(Format::Enum value){ format = value; return *this; }
+    constexpr BufferDesc& setDebugName(const Name& value){ debugName = value; return *this; }
     constexpr BufferDesc& setCanHaveUAVs(bool value){ canHaveUAVs = value; return *this; }
     constexpr BufferDesc& setCanHaveTypedViews(bool value){ canHaveTypedViews = value; return *this; }
     constexpr BufferDesc& setCanHaveRawViews(bool value){ canHaveRawViews = value; return *this; }
@@ -709,10 +698,6 @@ struct BufferDesc{
         keepInitialState = true;
         return *this;
     }
-    
-#ifdef NWB_GRAPHICS_DEBUGGABLE
-    constexpr BufferDesc& setDebugName(const AString& value){ debugName = value; return *this; }
-#endif
 };
 
 struct BufferRange{
@@ -808,18 +793,16 @@ struct CustomSemantic{
     };
 
     Enum type;
-    AString name;
+    Name name;
         
     constexpr CustomSemantic& setType(Enum value){ type = value; return *this; }
-    constexpr CustomSemantic& setName(const AString& value){ name = value; return *this; }
+    constexpr CustomSemantic& setName(const Name& value){ name = value; return *this; }
 };
 
 struct ShaderDesc{
     ShaderType::Mask shaderType = ShaderType::None;
-#ifdef NWB_GRAPHICS_DEBUGGABLE
-    AString debugName;
-#endif
-    AString entryName = "main";
+    Name debugName;
+    Name entryName = "main";
 
     i32 hlslExtensionsUAV = -1;
 
@@ -831,16 +814,13 @@ struct ShaderDesc{
     u32* pCoordinateSwizzling = nullptr;
 
     constexpr ShaderDesc& setShaderType(ShaderType::Mask value){ shaderType = value; return *this; }
+    constexpr ShaderDesc& setDebugName(const Name& value){ debugName = value; return *this; }
+    constexpr ShaderDesc& setEntryName(const Name& value){ entryName = value; return *this; }
     constexpr ShaderDesc& setHlslExtensionsUAV(i32 value){ hlslExtensionsUAV = value; return *this; }
     constexpr ShaderDesc& setUseSpecificShaderExt(bool value){ useSpecificShaderExt = value; return *this; }
     constexpr ShaderDesc& setCustomSemantics(u32 count, CustomSemantic* data){ numCustomSemantics = count; pCustomSemantics = data; return *this; }
     constexpr ShaderDesc& setFastGSFlags(FastGeometryShaderFlags::Mask value){ fastGSFlags = value; return *this; }
     constexpr ShaderDesc& setCoordinateSwizzling(u32* value){ pCoordinateSwizzling = value; return *this; }
-    
-    constexpr ShaderDesc& setEntryName(const AString& value){ entryName = value; return *this; }
-#ifdef NWB_GRAPHICS_DEBUGGABLE
-    constexpr ShaderDesc& setDebugName(const AString& value){ debugName = value; return *this; }
-#endif
 };
 
 struct ShaderSpecialization{
@@ -887,7 +867,7 @@ typedef RefCountPtr<IShader, BlankDeleter<IShader>> ShaderHandle;
 class IShaderLibrary : public IResource{
 public:
     virtual void getBytecode(const void** ppBytecode, usize* pSize)const = 0;
-    virtual ShaderHandle getShader(const char* entryName, ShaderType::Mask shaderType) = 0;
+    virtual ShaderHandle getShader(const Name& entryName, ShaderType::Mask shaderType) = 0;
 };
 typedef RefCountPtr<IShaderLibrary, BlankDeleter<IShaderLibrary>> ShaderLibraryHandle;
 
@@ -1378,9 +1358,7 @@ struct OpacityMicromapUsageCount{
 };
 
 struct OpacityMicromapDesc{
-#ifdef NWB_GRAPHICS_DEBUGGABLE
-    AString debugName;
-#endif
+    Name debugName;
     bool trackLiveness = true;
 
     // OMM flags. Applies to all OMMs in array.
@@ -1398,6 +1376,7 @@ struct OpacityMicromapDesc{
     IBuffer* perOmmDescs = nullptr;
     u64 perOmmDescsOffset = 0;
     
+    constexpr OpacityMicromapDesc& setDebugName(const Name& value){ debugName = value; return *this; }
     constexpr OpacityMicromapDesc& setTrackLiveness(bool value){ trackLiveness = value; return *this; }
     constexpr OpacityMicromapDesc& setFlags(OpacityMicromapBuildFlags::Mask value){ flags = value; return *this; }
     constexpr OpacityMicromapDesc& setCounts(const Vector<OpacityMicromapUsageCount>& value){ counts = value; return *this; }
@@ -1405,10 +1384,6 @@ struct OpacityMicromapDesc{
     constexpr OpacityMicromapDesc& setInputBufferOffset(u64 value){ inputBufferOffset = value; return *this; }
     constexpr OpacityMicromapDesc& setPerOmmDescs(IBuffer* value){ perOmmDescs = value; return *this; }
     constexpr OpacityMicromapDesc& setPerOmmDescsOffset(u64 value){ perOmmDescsOffset = value; return *this; }
-
-#ifdef NWB_GRAPHICS_DEBUGGABLE
-    constexpr OpacityMicromapDesc& setDebugName(const AString& value){ debugName = value; return *this; }
-#endif
 };
 
 class IOpacityMicromap : public IResource{
@@ -1699,9 +1674,7 @@ struct AccelStructDesc{
     usize topLevelMaxInstances = 0; // only applies when isTopLevel = true
     Vector<GeometryDesc> bottomLevelGeometries; // only applies when isTopLevel = false
     AccelStructBuildFlags::Mask buildFlags = AccelStructBuildFlags::None;
-#ifdef NWB_GRAPHICS_DEBUGGABLE
-    AString debugName;
-#endif
+    Name debugName;
     bool trackLiveness = true;
     bool isTopLevel = false;
     bool isVirtual = false;
@@ -1709,13 +1682,10 @@ struct AccelStructDesc{
     constexpr AccelStructDesc& setTopLevelMaxInstances(usize value){ topLevelMaxInstances = value; isTopLevel = true; return *this; }
     constexpr AccelStructDesc& addBottomLevelGeometry(const GeometryDesc& value){ bottomLevelGeometries.push_back(value); isTopLevel = false; return *this; }
     constexpr AccelStructDesc& setBuildFlags(AccelStructBuildFlags::Mask value){ buildFlags = value; return *this; }
+    constexpr AccelStructDesc& setDebugName(const Name& value){ debugName = value; return *this; }
     constexpr AccelStructDesc& setTrackLiveness(bool value){ trackLiveness = value; return *this; }
     constexpr AccelStructDesc& setIsTopLevel(bool value){ isTopLevel = value; return *this; }
     constexpr AccelStructDesc& setIsVirtual(bool value){ isVirtual = value; return *this; }
-    
-#ifdef NWB_GRAPHICS_DEBUGGABLE
-    constexpr AccelStructDesc& setDebugName(const AString& value){ debugName = value; return *this; }
-#endif
 };
 
 
@@ -2680,15 +2650,11 @@ struct MeshletState{
 struct RayTracingPipelineShaderDesc{
     ShaderHandle shader;
     BindingLayoutHandle bindingLayout;
-#ifdef NWB_GRAPHICS_DEBUGGABLE
-    AString exportName;
-#endif
+    Name exportName;
     
     constexpr RayTracingPipelineShaderDesc& setShader(IShader* value){ shader = value; return *this; }
     constexpr RayTracingPipelineShaderDesc& setBindingLayout(IBindingLayout* value){ bindingLayout = value; return *this; }
-#ifdef NWB_GRAPHICS_DEBUGGABLE
-    constexpr RayTracingPipelineShaderDesc& setExportName(const AString& value){ exportName = value; return *this; }
-#endif
+    constexpr RayTracingPipelineShaderDesc& setExportName(const Name& value){ exportName = value; return *this; }
 };
 
 struct RayTracingPipelineHitGroupDesc{
@@ -2696,19 +2662,15 @@ struct RayTracingPipelineHitGroupDesc{
     ShaderHandle anyHitShader;
     ShaderHandle intersectionShader;
     BindingLayoutHandle bindingLayout;
-#ifdef NWB_GRAPHICS_DEBUGGABLE
-    AString exportName;
-#endif
+    Name exportName;
     bool isProceduralPrimitive = false;
     
     constexpr RayTracingPipelineHitGroupDesc& setClosestHitShader(IShader* value){ closestHitShader = value; return *this; }
     constexpr RayTracingPipelineHitGroupDesc& setAnyHitShader(IShader* value){ anyHitShader = value; return *this; }
     constexpr RayTracingPipelineHitGroupDesc& setIntersectionShader(IShader* value){ intersectionShader = value; return *this; }
     constexpr RayTracingPipelineHitGroupDesc& setBindingLayout(IBindingLayout* value){ bindingLayout = value; return *this; }
+    constexpr RayTracingPipelineHitGroupDesc& setExportName(const Name& value){ exportName = value; return *this; }
     constexpr RayTracingPipelineHitGroupDesc& setIsProceduralPrimitive(bool value){ isProceduralPrimitive = value; return *this; }
-#ifdef NWB_GRAPHICS_DEBUGGABLE
-    constexpr RayTracingPipelineHitGroupDesc& setExportName(const AString& value){ exportName = value; return *this; }
-#endif
 };
 
 struct RayTracingPipelineDesc{
@@ -2735,10 +2697,10 @@ class IRayTracingPipeline;
 
 class IRayTracingShaderTable : public IResource{
 public:
-    virtual void setRayGenerationShader(const char* exportName, IBindingSet* bindings = nullptr) = 0;
-    virtual int addMissShader(const char* exportName, IBindingSet* bindings = nullptr) = 0;
-    virtual int addHitGroup(const char* exportName, IBindingSet* bindings = nullptr) = 0;
-    virtual int addCallableShader(const char* exportName, IBindingSet* bindings = nullptr) = 0;
+    virtual void setRayGenerationShader(const Name& exportName, IBindingSet* bindings = nullptr) = 0;
+    virtual int addMissShader(const Name& exportName, IBindingSet* bindings = nullptr) = 0;
+    virtual int addHitGroup(const Name& exportName, IBindingSet* bindings = nullptr) = 0;
+    virtual int addCallableShader(const Name& exportName, IBindingSet* bindings = nullptr) = 0;
     virtual void clearMissShaders() = 0;
     virtual void clearHitShaders() = 0;
     virtual void clearCallableShaders() = 0;

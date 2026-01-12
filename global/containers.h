@@ -30,6 +30,7 @@
 #include "compressed_pair.h"
 #include "fixed_vector.h"
 #include "basic_string.h"
+#include "name.h"
 #include "sync.h"
 
 

@@ -237,6 +237,53 @@ FramebufferInfoEx::FramebufferInfoEx(const FramebufferDesc& desc) : FramebufferI
 }
 
 
+constexpr usize GetCooperativeVectorDataTypeSize(CooperativeVectorDataType::Enum type){
+    switch(type){
+    case CooperativeVectorDataType::UInt8:
+    case CooperativeVectorDataType::SInt8:
+        return 1;
+    case CooperativeVectorDataType::UInt8Packed:
+    case CooperativeVectorDataType::SInt8Packed:
+        // Not sure if this is correct or even relevant because packed types
+        // cannot be used in matrices accessible from the host side.
+        return 1;
+    case CooperativeVectorDataType::UInt16:
+    case CooperativeVectorDataType::SInt16:
+        return 2;
+    case CooperativeVectorDataType::UInt32:
+    case CooperativeVectorDataType::SInt32:
+        return 4;
+    case CooperativeVectorDataType::UInt64:
+    case CooperativeVectorDataType::SInt64:
+        return 8;
+    case CooperativeVectorDataType::FloatE4M3:
+    case CooperativeVectorDataType::FloatE5M2:
+        return 1;
+    case CooperativeVectorDataType::Float16:
+    case CooperativeVectorDataType::BFloat16:
+        return 2;
+    case CooperativeVectorDataType::Float32:
+        return 4;
+    case CooperativeVectorDataType::Float64:
+        return 8;
+    }
+    NWB_ASSERT_MSG(false, NWB_TEXT("Unknown CooperativeVectorDataType::Enum value"));
+    return 0;
+}
+
+constexpr usize GetCooperativeVectorOptimalMatrixStride(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, u32 rows, u32 columns){
+    const usize dataTypeSize = GetCooperativeVectorDataTypeSize(type);
+        
+    switch(layout){
+    case CooperativeVectorMatrixLayout::RowMajor:
+        return dataTypeSize * columns;
+    case CooperativeVectorMatrixLayout::ColumnMajor:
+        return dataTypeSize * rows;
+    }
+    return 0;
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

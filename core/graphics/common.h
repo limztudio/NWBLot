@@ -723,7 +723,6 @@ static constexpr BufferRange s_entireBuffer = BufferRange(0, static_cast<u64>(-1
 class IBuffer : public IResource{
 public:
     [[nodiscard]] virtual const BufferDesc& getDescription()const = 0;
-    
     [[nodiscard]] virtual GpuVirtualAddress getGpuVirtualAddress()const = 0;
 };
 typedef RefCountPtr<IBuffer, BlankDeleter<IBuffer>> BufferHandle;
@@ -2714,6 +2713,162 @@ public:
     virtual RayTracingShaderTableHandle createShaderTable() = 0;
 };
 typedef RefCountPtr<IRayTracingPipeline, BlankDeleter<IRayTracingPipeline>> RayTracingPipelineHandle;
+
+struct RayTracingState{
+    IRayTracingShaderTable* shaderTable = nullptr;
+
+    BindingSetVector bindings;
+
+    constexpr RayTracingState& setShaderTable(IRayTracingShaderTable* value){ shaderTable = value; return *this; }
+    RayTracingState& addBindingSet(IBindingSet* value){ bindings.push_back(value); return *this; }
+};
+
+struct RayTracingDispatchRaysArguments{
+    u32 width = 1;
+    u32 height = 1;
+    u32 depth = 1;
+
+    constexpr RayTracingDispatchRaysArguments& setWidth(u32 value){ width = value; return *this; }
+    constexpr RayTracingDispatchRaysArguments& setHeight(u32 value){ height = value; return *this; }
+    constexpr RayTracingDispatchRaysArguments& setDepth(u32 value){ depth = value; return *this; }
+    constexpr RayTracingDispatchRaysArguments& setDimensions(u32 w, u32 h = 1, u32 d = 1){ width = w; height = h; depth = d; return *this; }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Linear Algebra / Cooperative Vectors
+
+
+namespace CooperativeVectorDataType{
+    enum Enum : u8{
+        UInt8,
+        SInt8,
+        UInt8Packed,
+        SInt8Packed,
+        UInt16,
+        SInt16,
+        UInt32,
+        SInt32,
+        UInt64,
+        SInt64,
+        FloatE4M3,
+        FloatE5M2,
+        Float16,
+        BFloat16,
+        Float32,
+        Float64,
+    };
+};
+
+namespace CooperativeVectorMatrixLayout{
+    enum Enum : u8{
+        RowMajor,
+        ColumnMajor,
+        InferencingOptimal,
+        TrainingOptimal,
+    };
+};
+
+// Describes a combination of input and output data types for matrix multiplication with Cooperative Vectors.
+// - DX12: Maps from D3D12_COOPERATIVE_VECTOR_PROPERTIES_MUL.
+// - Vulkan: Maps from VkCooperativeVectorPropertiesNV.
+struct CooperativeVectorMatMulFormatCombo{
+    CooperativeVectorDataType::Enum inputType;
+    CooperativeVectorDataType::Enum inputInterpretation;
+    CooperativeVectorDataType::Enum matrixInterpretation;
+    CooperativeVectorDataType::Enum biasInterpretation;
+    CooperativeVectorDataType::Enum outputType;
+    bool transposeSupported;
+};
+
+struct CooperativeVectorDeviceFeatures{
+    // Format combinations supported by the device for matrix multiplication with Cooperative Vectors.
+    Vector<CooperativeVectorMatMulFormatCombo> matMulFormats;
+
+    // - DX12: True if FLOAT16 is supported as accumulation format for both outer product accumulation
+    //         and vector accumulation.
+    // - Vulkan: True if cooperativeVectorTrainingFloat16Accumulation is supported.
+    bool trainingFloat16 = false;
+
+    // - DX12: True if FLOAT32 is supported as accumulation format for both outer product accumulation
+    //         and vector accumulation.
+    // - Vulkan: True if cooperativeVectorTrainingFloat32Accumulation is supported.
+    bool trainingFloat32 = false;
+};
+
+struct CooperativeVectorMatrixLayoutDesc{
+    // Buffer where the matrix is stored.
+    IBuffer* buffer = nullptr;
+
+    // Offset in bytes from the start of the buffer where the matrix starts.
+    u64 offset = 0;
+
+    // Data type of the matrix elements.
+    CooperativeVectorDataType::Enum type = CooperativeVectorDataType::UInt8;
+
+    // Layout of the matrix in memory.
+    CooperativeVectorMatrixLayout::Enum layout = CooperativeVectorMatrixLayout::RowMajor;
+
+    // Size in bytes of the matrix.
+    usize size = 0;
+
+    // Stride in bytes between rows or coumns, depending on the layout.
+    // For RowMajor and ColumnMajor layouts, stride may be zero, in which case it is computed automatically.
+    // For InferencingOptimal and TrainingOptimal layouts, stride does not matter and should be zero.
+    usize stride = 0;
+};
+
+// Describes a single matrix layout conversion operation.
+// Used by ICommandList::convertCoopVecMatrices(...)
+struct CooperativeVectorConvertMatrixLayoutDesc{
+    CooperativeVectorMatrixLayoutDesc src;
+    CooperativeVectorMatrixLayoutDesc dst;
+
+    u32 numRows = 0;
+    u32 numColumns = 0;
+};
+
+// Returns the size in bytes of a given data type.
+extern constexpr usize GetCooperativeVectorDataTypeSize(CooperativeVectorDataType::Enum type);
+
+// Returns the stride for a given matrix if it's stored in a RowMajor or ColumnMajor layout.
+// For other layouts, returns 0.
+extern constexpr usize GetCooperativeVectorOptimalMatrixStride(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, u32 rows, u32 columns);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Miscellaneous
+
+
+namespace Feature{
+    enum Enum : u8{
+        ComputeQueue,
+        ConservativeRasterization,
+        ConstantBufferRanges,
+        CopyQueue,
+        DeferredCommandLists,
+        FastGeometryShader,
+        HeapDirectlyIndexed,
+        HlslExtensionUAV,
+        LinearSweptSpheres,
+        Meshlets,
+        RayQuery,
+        RayTracingAccelStruct,
+        RayTracingClusters,
+        RayTracingOpacityMicromap,
+        RayTracingPipeline,
+        SamplerFeedback,
+        ShaderExecutionReordering,
+        ShaderSpecializations,
+        SinglePassStereo,
+        Spheres,
+        VariableRateShading,
+        VirtualResources,
+        WaveLaneCountMinMax,
+        CooperativeVectorInferencing,
+        CooperativeVectorTraining,
+    };
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

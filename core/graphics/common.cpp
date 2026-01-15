@@ -284,6 +284,20 @@ constexpr usize GetCooperativeVectorOptimalMatrixStride(CooperativeVectorDataTyp
 }
 
 
+void ICommandList::setResourceStatesForFramebuffer(IFramebuffer* framebuffer){
+    const FramebufferDesc& desc = framebuffer->getDescription();
+
+    for(const auto& attachment : desc.colorAttachments)
+        setTextureState(attachment.texture, attachment.subresources, ResourceStates::RenderTarget);
+
+    if(desc.depthAttachment.valid())
+        setTextureState(desc.depthAttachment.texture, desc.depthAttachment.subresources, desc.depthAttachment.isReadOnly ? ResourceStates::DepthRead : ResourceStates::DepthWrite);
+        
+    if(desc.shadingRateAttachment.valid())
+        setTextureState(desc.shadingRateAttachment.texture, desc.shadingRateAttachment.subresources, ResourceStates::ShadingRateSurface);
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

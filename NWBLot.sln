@@ -7,7 +7,7 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "loader_win", "loader\loader
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "frame_win", "core\frame_win.vcxproj", "{7BC9137C-EAA2-4FE2-B4AD-C03C173AA73B}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "core_win", "core_win", "{027298CC-1FD1-4E7A-AD78-8F251DB56C6E}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "core", "core", "{027298CC-1FD1-4E7A-AD78-8F251DB56C6E}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "3rd_parties", "3rd_parties", "{64BAECF7-F9F4-4DE8-B4FE-0F3123038189}"
 EndProject
@@ -15,7 +15,7 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "zlib_win", "3rd_parties\zli
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libcurl_win", "3rd_parties\curl\libcurl_win.vcxproj", "{9BF92DF1-144D-4120-9728-DEBC803749CB}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "logger_win", "logger_win", "{CFE39472-2E21-4B67-9107-BF6DB86A9606}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "logger", "logger", "{CFE39472-2E21-4B67-9107-BF6DB86A9606}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "logclient_win", "logger\logclient_win.vcxproj", "{5BDE19C4-41A9-4C6C-847E-1C978D315AA1}"
 EndProject

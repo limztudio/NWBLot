@@ -8,7 +8,6 @@
 #include <core/global.h>
 
 #include <core/common/common.h>
-#include <core/alloc/assetPool.h>
 
 #include "basic.h"
 #include "shader.h"

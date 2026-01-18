@@ -20,7 +20,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="$(MSBuildThisFileDirectory)alloc\alloc.h" />
-    <ClInclude Include="$(MSBuildThisFileDirectory)alloc\assetPool.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)alloc\core.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)alloc\general.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)alloc\custom.h" />

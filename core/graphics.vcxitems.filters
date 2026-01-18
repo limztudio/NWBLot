@@ -5,64 +5,19 @@
     <ClCompile Include="$(MSBuildThisFileDirectory)graphics\common.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)graphics\graphics.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)graphics\shader.cpp" />
-    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\VmaUsage.cpp">
+    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_device.cpp">
       <Filter>vulkan</Filter>
     </ClCompile>
-    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\engine.cpp">
-      <Filter>vulkan</Filter>
-    </ClCompile>
-    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\timestamp.cpp">
-      <Filter>vulkan</Filter>
-    </ClCompile>
-    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\dataStructures.cpp">
-      <Filter>vulkan</Filter>
-    </ClCompile>
-    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\commandBuffer.cpp">
-      <Filter>vulkan</Filter>
-    </ClCompile>
-    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\utility.cpp">
-      <Filter>vulkan</Filter>
-    </ClCompile>
-    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\config.cpp">
-      <Filter>vulkan</Filter>
-    </ClCompile>
-    <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\primitiveAssets.cpp">
-      <Filter>vulkan</Filter>
-    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\basic.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\common.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\graphics.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\shader.h" />
-    <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\vk_mem_alloc.h">
+    <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\global.h">
       <Filter>vulkan</Filter>
     </ClInclude>
-    <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\VmaUsage.h">
-      <Filter>vulkan</Filter>
-    </ClInclude>
-    <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\engine.h">
-      <Filter>vulkan</Filter>
-    </ClInclude>
-    <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\timestamp.h">
-      <Filter>vulkan</Filter>
-    </ClInclude>
-    <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\dataStructures.h">
-      <Filter>vulkan</Filter>
-    </ClInclude>
-    <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\commandBuffer.h">
-      <Filter>vulkan</Filter>
-    </ClInclude>
-    <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\commandBuffer.hpp">
-      <Filter>vulkan</Filter>
-    </ClInclude>
-    <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\utility.h">
-      <Filter>vulkan</Filter>
-    </ClInclude>
-    <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\config.h">
-      <Filter>vulkan</Filter>
-    </ClInclude>
-    <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\primitiveAssets.h">
+    <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan.h">
       <Filter>vulkan</Filter>
     </ClInclude>
   </ItemGroup>
@@ -70,10 +25,5 @@
     <Filter Include="vulkan">
       <UniqueIdentifier>{8e9ace50-a9d6-4101-9c90-f631c93e066f}</UniqueIdentifier>
     </Filter>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="$(MSBuildThisFileDirectory)graphics\vulkan\convert.inl">
-      <Filter>vulkan</Filter>
-    </None>
   </ItemGroup>
 </Project>

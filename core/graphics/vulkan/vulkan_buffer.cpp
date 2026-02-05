@@ -1,0 +1,209 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "vulkan_backend.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_VULKAN_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Buffer::Buffer(const VulkanContext& context, VulkanAllocator& allocator)
+    : m_Context(context)
+    , m_Allocator(allocator)
+{}
+
+Buffer::~Buffer(){
+    if(buffer != VK_NULL_HANDLE){
+        vkDestroyBuffer(m_Context.device, buffer, m_Context.allocationCallbacks);
+        buffer = VK_NULL_HANDLE;
+    }
+    
+    m_Allocator.freeBufferMemory(this);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Device - Buffer Implementation
+
+
+BufferHandle Device::createBuffer(const BufferDesc& d){
+    Buffer* buffer = new Buffer(m_Context, m_Allocator);
+    buffer->desc = d;
+    
+    // Build usage flags
+    VkBufferUsageFlags usageFlags = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    
+    if(d.isVertexBuffer)
+        usageFlags |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+    if(d.isIndexBuffer)
+        usageFlags |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+    if(d.isConstantBuffer)
+        usageFlags |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+    if(d.structStride != 0 || d.canHaveUAVs)
+        usageFlags |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+    if(d.isDrawIndirectArgs)
+        usageFlags |= VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
+    if(d.isAccelStructBuildInput)
+        usageFlags |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
+    if(d.isAccelStructStorage)
+        usageFlags |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR;
+    if(m_Context.extensions.buffer_device_address)
+        usageFlags |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+    
+    u64 size = d.byteSize;
+    
+    // Handle volatile buffers (for frequently updated CBs)
+    if(d.isVolatile && d.maxVersions > 0){
+        u64 alignment = m_Context.physicalDeviceProperties.limits.minUniformBufferOffsetAlignment;
+        size = (size + alignment - 1) & ~(alignment - 1);
+        size *= d.maxVersions;
+        
+        buffer->versionTracking.resize(d.maxVersions);
+        std::fill(buffer->versionTracking.begin(), buffer->versionTracking.end(), 0);
+    }
+    
+    VkBufferCreateInfo bufferInfo{};
+    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufferInfo.size = size;
+    bufferInfo.usage = usageFlags;
+    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    
+    VkResult res = vkCreateBuffer(m_Context.device, &bufferInfo, m_Context.allocationCallbacks, &buffer->buffer);
+    assert(res == VK_SUCCESS);
+    
+    // Allocate memory if not virtual
+    if(!d.isVirtual){
+        VkResult res = m_Allocator.allocateBufferMemory(buffer, m_Context.extensions.buffer_device_address && (usageFlags & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT));
+        assert(res == VK_SUCCESS);
+        
+        // Map memory for volatile or CPU-accessible buffers
+        if(d.isVolatile || d.cpuAccess != CpuAccessMode::None){
+            VkResult res = vkMapMemory(m_Context.device, buffer->memory, 0, size, 0, &buffer->mappedMemory);
+            assert(res == VK_SUCCESS);
+        }
+        
+        // Get device address
+        if(m_Context.extensions.buffer_device_address){
+            VkBufferDeviceAddressInfo addressInfo{};
+            addressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+            addressInfo.buffer = buffer->buffer;
+            buffer->deviceAddress = vkGetBufferDeviceAddress(m_Context.device, &addressInfo);
+        }
+    }
+    
+    return MakeRefCountPtr<IBuffer, BlankDeleter<IBuffer>>(buffer);
+}
+
+void* Device::mapBuffer(IBuffer* _buffer, CpuAccessMode::Enum cpuAccess){
+    Buffer* buffer = static_cast<Buffer*>(_buffer);
+    
+    if(buffer->mappedMemory)
+        return buffer->mappedMemory;
+    
+    void* data = nullptr;
+    VkResult res = vkMapMemory(m_Context.device, buffer->memory, 0, VK_WHOLE_SIZE, 0, &data);
+    assert(res == VK_SUCCESS);
+    
+    buffer->mappedMemory = data;
+    return data;
+}
+
+void Device::unmapBuffer(IBuffer* _buffer){
+    Buffer* buffer = static_cast<Buffer*>(_buffer);
+    
+    if(buffer->mappedMemory && !buffer->desc.isVolatile && buffer->desc.cpuAccess == CpuAccessMode::None){
+        vkUnmapMemory(m_Context.device, buffer->memory);
+        buffer->mappedMemory = nullptr;
+    }
+}
+
+MemoryRequirements Device::getBufferMemoryRequirements(IBuffer* _buffer){
+    Buffer* buffer = static_cast<Buffer*>(_buffer);
+    
+    VkMemoryRequirements memRequirements;
+    vkGetBufferMemoryRequirements(m_Context.device, buffer->buffer, &memRequirements);
+    
+    MemoryRequirements result;
+    result.size = memRequirements.size;
+    result.alignment = memRequirements.alignment;
+    return result;
+}
+
+bool Device::bindBufferMemory(IBuffer* _buffer, IHeap* heap, u64 offset){
+    // TODO: Implement heap binding
+    return false;
+}
+
+BufferHandle Device::createHandleForNativeBuffer(ObjectType objectType, Object buffer, const BufferDesc& desc){
+    // TODO: Implement native buffer wrapping
+    return nullptr;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// CommandList - Buffer operations
+
+
+void CommandList::writeBuffer(IBuffer* _buffer, const void* data, usize dataSize, u64 destOffsetBytes){
+    Buffer* buffer = checked_cast<Buffer*>(_buffer);
+    const VulkanContext& vk = *m_Context;
+    
+    // Allocate staging buffer
+    UploadManager* uploadMgr = m_Device->getUploadManager();
+    BufferChunk chunk = uploadMgr->allocate(dataSize);
+    
+    // Copy data to staging
+    memcpy(chunk.mappedPtr, data, dataSize);
+    
+    // Copy staging to destination
+    VkBufferCopy region{};
+    region.srcOffset = chunk.offset;
+    region.dstOffset = destOffsetBytes;
+    region.size = dataSize;
+    
+    vk.vkCmdCopyBuffer(currentCmdBuf->cmdBuf, chunk.buffer, buffer->buffer, 1, &region);
+    
+    currentCmdBuf->referencedResources.push_back(_buffer);
+    currentCmdBuf->referencedStagingBuffers.push_back(chunk.bufferRef);
+}
+
+void CommandList::clearBufferUInt(IBuffer* _buffer, const u32& clearValue){
+    Buffer* buffer = checked_cast<Buffer*>(_buffer);
+    const VulkanContext& vk = *m_Context;
+    
+    vk.vkCmdFillBuffer(currentCmdBuf->cmdBuf, buffer->buffer, 0, VK_WHOLE_SIZE, clearValue);
+    currentCmdBuf->referencedResources.push_back(_buffer);
+}
+
+void CommandList::copyBuffer(IBuffer* _dest, u64 destOffsetBytes, IBuffer* _src, u64 srcOffsetBytes, u64 dataSizeBytes){
+    Buffer* dest = checked_cast<Buffer*>(_dest);
+    Buffer* src = checked_cast<Buffer*>(_src);
+    
+    const VulkanContext& vk = *m_Context;
+    
+    VkBufferCopy region{};
+    region.srcOffset = srcOffsetBytes;
+    region.dstOffset = destOffsetBytes;
+    region.size = dataSizeBytes;
+    
+    vk.vkCmdCopyBuffer(currentCmdBuf->cmdBuf, src->buffer, dest->buffer, 1, &region);
+    
+    currentCmdBuf->referencedResources.push_back(_src);
+    currentCmdBuf->referencedResources.push_back(_dest);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_VULKAN_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

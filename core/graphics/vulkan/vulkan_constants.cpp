@@ -112,15 +112,6 @@ static const usize g_NumFormatMappings = sizeof(g_FormatMappings) / sizeof(g_For
 // Format query functions
 //-----------------------------------------------------------------------------
 
-static VkFormat convertFormat(Format format){
-    for(usize i = 0; i < g_NumFormatMappings; ++i){
-        if(g_FormatMappings[i].format == format)
-            return g_FormatMappings[i].vkFormat;
-    }
-    
-    // Unsupported format
-    return VK_FORMAT_UNDEFINED;
-}
 
 VkFormat ConvertFormat(Format::Enum format){
     for(usize i = 0; i < g_NumFormatMappings; ++i){
@@ -130,15 +121,6 @@ VkFormat ConvertFormat(Format::Enum format){
     
     // Unsupported format
     return VK_FORMAT_UNDEFINED;
-}
-
-Format convertFormat(VkFormat vkFormat){
-    for(usize i = 0; i < g_NumFormatMappings; ++i){
-        if(g_FormatMappings[i].vkFormat == vkFormat)
-            return g_FormatMappings[i].format;
-    }
-    
-    return Format::UNKNOWN;
 }
 
 const FormatInfo& GetFormatInfo(Format format){

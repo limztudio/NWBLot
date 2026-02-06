@@ -62,7 +62,6 @@
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\common.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\graphics.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\shader.h" />
-    <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\global.h">
       <Filter>vulkan</Filter>
     </ClInclude>
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan.h">

@@ -98,7 +98,7 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
         }
     }
     
-    return MakeRefCountPtr<IBuffer, BlankDeleter<IBuffer>>(buffer);
+    return RefCountPtr<IBuffer, BlankDeleter<IBuffer>>(buffer, AdoptRef);
 }
 
 void* Device::mapBuffer(IBuffer* _buffer, CpuAccessMode::Enum cpuAccess){
@@ -153,32 +153,37 @@ BufferHandle Device::createHandleForNativeBuffer(ObjectType objectType, Object b
 
 void CommandList::writeBuffer(IBuffer* _buffer, const void* data, usize dataSize, u64 destOffsetBytes){
     Buffer* buffer = checked_cast<Buffer*>(_buffer);
-    const VulkanContext& vk = *m_Context;
     
     // Allocate staging buffer
     UploadManager* uploadMgr = m_Device->getUploadManager();
-    BufferChunk chunk = uploadMgr->allocate(dataSize);
+    Buffer* stagingBuffer = nullptr;
+    u64 stagingOffset = 0;
+    void* cpuVA = nullptr;
+    
+    if(!uploadMgr->suballocateBuffer(dataSize, &stagingBuffer, &stagingOffset, &cpuVA, 0)){
+        NWB_ASSERT(false && "Failed to suballocate staging buffer for writeBuffer");
+        return;
+    }
     
     // Copy data to staging
-    memcpy(chunk.mappedPtr, data, dataSize);
+    memcpy(cpuVA, data, dataSize);
     
     // Copy staging to destination
     VkBufferCopy region{};
-    region.srcOffset = chunk.offset;
+    region.srcOffset = stagingOffset;
     region.dstOffset = destOffsetBytes;
     region.size = dataSize;
     
-    vk.vkCmdCopyBuffer(currentCmdBuf->cmdBuf, chunk.buffer, buffer->buffer, 1, &region);
+    vkCmdCopyBuffer(currentCmdBuf->cmdBuf, stagingBuffer->buffer, buffer->buffer, 1, &region);
     
     currentCmdBuf->referencedResources.push_back(_buffer);
-    currentCmdBuf->referencedStagingBuffers.push_back(chunk.bufferRef);
+    currentCmdBuf->referencedResources.push_back(stagingBuffer);
 }
 
-void CommandList::clearBufferUInt(IBuffer* _buffer, const u32& clearValue){
+void CommandList::clearBufferUInt(IBuffer* _buffer, u32 clearValue){
     Buffer* buffer = checked_cast<Buffer*>(_buffer);
-    const VulkanContext& vk = *m_Context;
     
-    vk.vkCmdFillBuffer(currentCmdBuf->cmdBuf, buffer->buffer, 0, VK_WHOLE_SIZE, clearValue);
+    vkCmdFillBuffer(currentCmdBuf->cmdBuf, buffer->buffer, 0, VK_WHOLE_SIZE, clearValue);
     currentCmdBuf->referencedResources.push_back(_buffer);
 }
 
@@ -186,14 +191,12 @@ void CommandList::copyBuffer(IBuffer* _dest, u64 destOffsetBytes, IBuffer* _src,
     Buffer* dest = checked_cast<Buffer*>(_dest);
     Buffer* src = checked_cast<Buffer*>(_src);
     
-    const VulkanContext& vk = *m_Context;
-    
     VkBufferCopy region{};
     region.srcOffset = srcOffsetBytes;
     region.dstOffset = destOffsetBytes;
     region.size = dataSizeBytes;
     
-    vk.vkCmdCopyBuffer(currentCmdBuf->cmdBuf, src->buffer, dest->buffer, 1, &region);
+    vkCmdCopyBuffer(currentCmdBuf->cmdBuf, src->buffer, dest->buffer, 1, &region);
     
     currentCmdBuf->referencedResources.push_back(_src);
     currentCmdBuf->referencedResources.push_back(_dest);

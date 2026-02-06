@@ -34,12 +34,11 @@ void CommandList::commitBarriers(){
     // This would be used if barriers were deferred to batch them
 }
 
-void CommandList::setTextureState(ITexture* _texture, TextureSubresourceSet subresources, ResourceStates stateBits){
+void CommandList::setTextureState(ITexture* _texture, TextureSubresourceSet subresources, ResourceStates::Mask stateBits){
     if(!_texture)
         return;
     
     Texture* texture = checked_cast<Texture*>(_texture);
-    const VulkanContext& vk = *m_Context;
     
     VkImageMemoryBarrier2 barrier = { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2 };
     barrier.srcStageMask = getVkPipelineStageFlags(ResourceStates::Common);
@@ -59,15 +58,14 @@ void CommandList::setTextureState(ITexture* _texture, TextureSubresourceSet subr
     depInfo.imageMemoryBarrierCount = 1;
     depInfo.pImageMemoryBarriers = &barrier;
     
-    vk.vkCmdPipelineBarrier2(currentCmdBuf->cmdBuf, &depInfo);
+    vkCmdPipelineBarrier2(currentCmdBuf->cmdBuf, &depInfo);
 }
 
-void CommandList::setBufferState(IBuffer* _buffer, ResourceStates stateBits){
+void CommandList::setBufferState(IBuffer* _buffer, ResourceStates::Mask stateBits){
     if(!_buffer)
         return;
     
     Buffer* buffer = checked_cast<Buffer*>(_buffer);
-    const VulkanContext& vk = *m_Context;
     
     VkBufferMemoryBarrier2 barrier = { VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2 };
     barrier.srcStageMask = getVkPipelineStageFlags(ResourceStates::Common);
@@ -82,10 +80,10 @@ void CommandList::setBufferState(IBuffer* _buffer, ResourceStates stateBits){
     depInfo.bufferMemoryBarrierCount = 1;
     depInfo.pBufferMemoryBarriers = &barrier;
     
-    vk.vkCmdPipelineBarrier2(currentCmdBuf->cmdBuf, &depInfo);
+    vkCmdPipelineBarrier2(currentCmdBuf->cmdBuf, &depInfo);
 }
 
-void CommandList::setAccelStructState(IRayTracingAccelStruct* _as, ResourceStates stateBits){
+void CommandList::setAccelStructState(IRayTracingAccelStruct* _as, ResourceStates::Mask stateBits){
     if(!_as)
         return;
     
@@ -93,12 +91,12 @@ void CommandList::setAccelStructState(IRayTracingAccelStruct* _as, ResourceState
     // Full implementation would cast to AccelStruct and barrier the backing buffer
 }
 
-void CommandList::setPermanentTextureState(ITexture* texture, ResourceStates stateBits){
+void CommandList::setPermanentTextureState(ITexture* texture, ResourceStates::Mask stateBits){
     // Marks texture as permanently in this state (no further transitions)
     stateTracker->setPermanentTextureState(texture, stateBits);
 }
 
-void CommandList::setPermanentBufferState(IBuffer* buffer, ResourceStates stateBits){
+void CommandList::setPermanentBufferState(IBuffer* buffer, ResourceStates::Mask stateBits){
     // Marks buffer as permanently in this state
     stateTracker->setPermanentBufferState(buffer, stateBits);
 }
@@ -121,13 +119,13 @@ void StateTracker::reset(){
     rayTracingState = {};
 }
 
-void StateTracker::setPermanentTextureState(ITexture* texture, ResourceStates state){
+void StateTracker::setPermanentTextureState(ITexture* texture, ResourceStates::Mask state){
     // Mark texture as always in this state
     // Used for swapchain images or external resources
     // TODO: Store permanent state in hash map for automatic barrier handling
 }
 
-void StateTracker::setPermanentBufferState(IBuffer* buffer, ResourceStates state){
+void StateTracker::setPermanentBufferState(IBuffer* buffer, ResourceStates::Mask state){
     // Mark buffer as always in this state
     // TODO: Store permanent state in hash map for automatic barrier handling
 }

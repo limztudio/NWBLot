@@ -19,14 +19,13 @@ NWB_VULKAN_BEGIN
 
 GraphicsPipeline::~GraphicsPipeline(){
     if(pipeline){
-        const VulkanContext& vk = *m_Context;
-        vk.vkDestroyPipeline(vk.device, pipeline, nullptr);
+        vkDestroyPipeline(m_Context.device, pipeline, nullptr);
         pipeline = VK_NULL_HANDLE;
     }
 }
 
-Object GraphicsPipeline::getNativeObject(ObjectType objectType){
-    if(objectType == ObjectType::VK_Pipeline)
+Object GraphicsPipeline::getNativeHandle(ObjectType objectType){
+    if(objectType == ObjectTypes::VK_Pipeline)
         return Object(pipeline);
     return Object(nullptr);
 }
@@ -39,15 +38,13 @@ FramebufferHandle Device::createFramebuffer(const FramebufferDesc& desc){
     Framebuffer* fb = new Framebuffer(m_Context);
     fb->desc = desc;
     
-    // Calculate framebuffer info
-    fb->framebufferInfo.width = desc.width;
-    fb->framebufferInfo.height = desc.height;
+    // Calculate framebuffer info from attachments
     
     // Store color attachments
-    for(u32 i = 0; i < desc.numColorAttachments; i++){
+    for(u32 i = 0; i < static_cast<u32>(desc.colorAttachments.size()); i++){
         if(desc.colorAttachments[i].texture){
             fb->resources.push_back(desc.colorAttachments[i].texture);
-            Texture* tex = checked_cast<Texture*>(desc.colorAttachments[i].texture.Get());
+            Texture* tex = checked_cast<Texture*>(desc.colorAttachments[i].texture);
             fb->framebufferInfo.colorFormats.push_back(tex->desc.format);
             
             if(fb->framebufferInfo.width == 0)
@@ -60,7 +57,7 @@ FramebufferHandle Device::createFramebuffer(const FramebufferDesc& desc){
     // Store depth attachment
     if(desc.depthAttachment.texture){
         fb->resources.push_back(desc.depthAttachment.texture);
-        Texture* depthTex = checked_cast<Texture*>(desc.depthAttachment.texture.Get());
+        Texture* depthTex = checked_cast<Texture*>(desc.depthAttachment.texture);
         fb->framebufferInfo.depthFormat = depthTex->desc.format;
         
         if(fb->framebufferInfo.width == 0)
@@ -71,11 +68,11 @@ FramebufferHandle Device::createFramebuffer(const FramebufferDesc& desc){
     
     // Get sample count from first valid attachment
     if(!fb->resources.empty()){
-        Texture* tex = checked_cast<Texture*>(fb->resources[0].Get());
+        Texture* tex = checked_cast<Texture*>(fb->resources[0].get());
         fb->framebufferInfo.sampleCount = tex->desc.sampleCount;
     }
     
-    return FramebufferHandle::Create(fb);
+    return FramebufferHandle(fb, AdoptRef);
 }
 
 //-----------------------------------------------------------------------------
@@ -97,18 +94,15 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     // 10. Pipeline layout
     // 11. Render pass or dynamic rendering
     
-    GraphicsPipeline* pso = new GraphicsPipeline();
-    pso->m_Context = &m_Context;
-    pso->m_Desc = desc;
-    
-    const VulkanContext& vk = m_Context;
+    GraphicsPipeline* pso = new GraphicsPipeline(m_Context);
+    pso->desc = desc;
     
     // Step 1: Collect shader stages
     Vector<VkPipelineShaderStageCreateInfo> shaderStages;
     shaderStages.reserve(5);
     
     if(desc.VS){
-        Shader* vs = checked_cast<Shader*>(desc.VS.Get());
+        Shader* vs = checked_cast<Shader*>(desc.VS.get());
         VkPipelineShaderStageCreateInfo stageInfo = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
         stageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
         stageInfo.module = vs->shaderModule;
@@ -117,7 +111,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     }
     
     if(desc.HS){
-        Shader* hs = checked_cast<Shader*>(desc.HS.Get());
+        Shader* hs = checked_cast<Shader*>(desc.HS.get());
         VkPipelineShaderStageCreateInfo stageInfo = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
         stageInfo.stage = VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;
         stageInfo.module = hs->shaderModule;
@@ -126,7 +120,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     }
     
     if(desc.DS){
-        Shader* ds = checked_cast<Shader*>(desc.DS.Get());
+        Shader* ds = checked_cast<Shader*>(desc.DS.get());
         VkPipelineShaderStageCreateInfo stageInfo = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
         stageInfo.stage = VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;
         stageInfo.module = ds->shaderModule;
@@ -135,7 +129,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     }
     
     if(desc.GS){
-        Shader* gs = checked_cast<Shader*>(desc.GS.Get());
+        Shader* gs = checked_cast<Shader*>(desc.GS.get());
         VkPipelineShaderStageCreateInfo stageInfo = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
         stageInfo.stage = VK_SHADER_STAGE_GEOMETRY_BIT;
         stageInfo.module = gs->shaderModule;
@@ -144,7 +138,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     }
     
     if(desc.PS){
-        Shader* ps = checked_cast<Shader*>(desc.PS.Get());
+        Shader* ps = checked_cast<Shader*>(desc.PS.get());
         VkPipelineShaderStageCreateInfo stageInfo = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
         stageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
         stageInfo.module = ps->shaderModule;
@@ -158,7 +152,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     Vector<VkVertexInputAttributeDescription> attributes;
     
     if(desc.inputLayout){
-        InputLayout* layout = checked_cast<InputLayout*>(desc.inputLayout.Get());
+        InputLayout* layout = checked_cast<InputLayout*>(desc.inputLayout.get());
         bindings = layout->bindings;
         attributes = layout->vkAttributes;
     }
@@ -185,10 +179,10 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     rasterizer.polygonMode = VK_POLYGON_MODE_FILL; // TODO: Convert from desc.renderState.fillMode
     rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;   // TODO: Convert from desc.renderState.cullMode
     rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-    rasterizer.depthBiasEnable = desc.renderState.depthBias != 0 ? VK_TRUE : VK_FALSE;
-    rasterizer.depthBiasConstantFactor = (f32)desc.renderState.depthBias;
-    rasterizer.depthBiasClamp = desc.renderState.depthBiasClamp;
-    rasterizer.depthBiasSlopeFactor = desc.renderState.slopeScaledDepthBias;
+    rasterizer.depthBiasEnable = desc.renderState.rasterState.depthBias != 0 ? VK_TRUE : VK_FALSE;
+    rasterizer.depthBiasConstantFactor = (f32)desc.renderState.rasterState.depthBias;
+    rasterizer.depthBiasClamp = desc.renderState.rasterState.depthBiasClamp;
+    rasterizer.depthBiasSlopeFactor = desc.renderState.rasterState.slopeScaledDepthBias;
     rasterizer.lineWidth = 1.0f;
     
     // Step 6: Multisample state
@@ -198,11 +192,11 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     
     // Step 7: Depth/stencil state
     VkPipelineDepthStencilStateCreateInfo depthStencil = { VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO };
-    depthStencil.depthTestEnable = desc.renderState.depthTestEnable ? VK_TRUE : VK_FALSE;
-    depthStencil.depthWriteEnable = desc.renderState.depthWriteEnable ? VK_TRUE : VK_FALSE;
+    depthStencil.depthTestEnable = desc.renderState.depthStencilState.depthTestEnable ? VK_TRUE : VK_FALSE;
+    depthStencil.depthWriteEnable = desc.renderState.depthStencilState.depthWriteEnable ? VK_TRUE : VK_FALSE;
     depthStencil.depthCompareOp = VK_COMPARE_OP_LESS; // TODO: Convert from desc.renderState.depthFunc
     depthStencil.depthBoundsTestEnable = VK_FALSE;
-    depthStencil.stencilTestEnable = desc.renderState.stencilEnable ? VK_TRUE : VK_FALSE;
+    depthStencil.stencilTestEnable = desc.renderState.depthStencilState.stencilEnable ? VK_TRUE : VK_FALSE;
     // TODO: Fill front and back stencil ops
     
     // Step 8: Color blend state
@@ -253,34 +247,45 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     pipelineInfo.renderPass = VK_NULL_HANDLE; // Using dynamic rendering
     pipelineInfo.subpass = 0;
     
-    VkResult res = vk.vkCreateGraphicsPipelines(vk.device, vk.pipelineCache, 1, &pipelineInfo, vk.allocationCallbacks, &pso->pipeline);
+    VkResult res = vkCreateGraphicsPipelines(m_Context.device, m_Context.pipelineCache, 1, &pipelineInfo, m_Context.allocationCallbacks, &pso->pipeline);
     
     if(res != VK_SUCCESS){
         delete pso;
         return nullptr;
     }
     
-    return GraphicsPipelineHandle::Create(pso);
+    return GraphicsPipelineHandle(pso, AdoptRef);
 }
 
 //-----------------------------------------------------------------------------
 // CommandList - Graphics
 //-----------------------------------------------------------------------------
 
+struct RenderPassParameters{
+    bool clearColorTargets = false;
+    Color colorClearValues[8]{};
+    u8 colorClearMask = 0xff;
+    bool clearDepthTarget = false;
+    f32 depthClearValue = 1.0f;
+    bool clearStencilTarget = false;
+    u8 stencilClearValue = 0;
+    
+    [[nodiscard]] bool clearColorTarget(u32 index)const{ return (colorClearMask & (1u << index)) != 0; }
+};
+
 void CommandList::beginRenderPass(IFramebuffer* _framebuffer, const RenderPassParameters& params){
     Framebuffer* fb = checked_cast<Framebuffer*>(_framebuffer);
     const FramebufferDesc& fbDesc = fb->desc;
-    const VulkanContext& vk = *m_Context;
     
     // Dynamic rendering (VK_KHR_dynamic_rendering)
     VkRenderingAttachmentInfo colorAttachments[8] = {};
     u32 numColorAttachments = 0;
     
-    for(u32 i = 0; i < fbDesc.numColorAttachments; i++){
+    for(u32 i = 0; i < static_cast<u32>(fbDesc.colorAttachments.size()); i++){
         if(fbDesc.colorAttachments[i].texture){
             Texture* tex = checked_cast<Texture*>(fbDesc.colorAttachments[i].texture);
             
-            VkImageView view = tex->getView(fbDesc.colorAttachments[i].subresources, Format::UNKNOWN, TextureBindFlags::RenderTarget);
+            VkImageView view = tex->getView(fbDesc.colorAttachments[i].subresources, TextureDimension::Texture2D, Format::UNKNOWN);
             
             colorAttachments[numColorAttachments].sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
             colorAttachments[numColorAttachments].imageView = view;
@@ -306,10 +311,10 @@ void CommandList::beginRenderPass(IFramebuffer* _framebuffer, const RenderPassPa
     
     if(fbDesc.depthAttachment.texture){
         Texture* depthTex = checked_cast<Texture*>(fbDesc.depthAttachment.texture);
-        VkImageView depthView = depthTex->getView(fbDesc.depthAttachment.subresources, Format::UNKNOWN, TextureBindFlags::DepthStencil);
+        VkImageView depthView = depthTex->getView(fbDesc.depthAttachment.subresources, TextureDimension::Texture2D, Format::UNKNOWN, true);
         
-        const FormatInfo* formatInfo = GetFormatInfo(depthTex->desc.format);
-        if(formatInfo->hasDepth){
+        const FormatInfo& formatInfo = GetFormatInfo(depthTex->desc.format);
+        if(formatInfo.hasDepth){
             depthAttachment.imageView = depthView;
             depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
             depthAttachment.loadOp = params.clearDepthTarget ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
@@ -317,7 +322,7 @@ void CommandList::beginRenderPass(IFramebuffer* _framebuffer, const RenderPassPa
             depthAttachment.clearValue.depthStencil.depth = params.depthClearValue;
             hasDepth = true;
         }
-        if(formatInfo->hasStencil){
+        if(formatInfo.hasStencil){
             stencilAttachment.imageView = depthView;
             stencilAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
             stencilAttachment.loadOp = params.clearStencilTarget ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
@@ -329,7 +334,7 @@ void CommandList::beginRenderPass(IFramebuffer* _framebuffer, const RenderPassPa
     
     VkRenderingInfo renderingInfo = { VK_STRUCTURE_TYPE_RENDERING_INFO };
     renderingInfo.renderArea.offset = { 0, 0 };
-    renderingInfo.renderArea.extent = { fbDesc.width, fbDesc.height };
+    renderingInfo.renderArea.extent = { fb->framebufferInfo.width, fb->framebufferInfo.height };
     renderingInfo.layerCount = 1;
     renderingInfo.colorAttachmentCount = numColorAttachments;
     renderingInfo.pColorAttachments = colorAttachments;
@@ -338,96 +343,97 @@ void CommandList::beginRenderPass(IFramebuffer* _framebuffer, const RenderPassPa
     if(hasStencil)
         renderingInfo.pStencilAttachment = &stencilAttachment;
     
-    vk.vkCmdBeginRendering(currentCmdBuf->cmdBuf, &renderingInfo);
+    vkCmdBeginRendering(currentCmdBuf->cmdBuf, &renderingInfo);
 }
 
 void CommandList::endRenderPass(){
-    const VulkanContext& vk = *m_Context;
-    vk.vkCmdEndRendering(currentCmdBuf->cmdBuf);
-}
-
-GraphicsState& CommandList::getGraphicsState(){
-    return stateTracker->graphicsState;
+    vkCmdEndRendering(currentCmdBuf->cmdBuf);
 }
 
 void CommandList::setGraphicsState(const GraphicsState& state){
-    stateTracker->graphicsState = state;
+    currentGraphicsState = state;
     
-    GraphicsPipeline* pipeline = checked_cast<GraphicsPipeline*>(state.pipeline.Get());
-    const VulkanContext& vk = *m_Context;
+    GraphicsPipeline* pipeline = checked_cast<GraphicsPipeline*>(state.pipeline);
     
     if(pipeline)
-        vk.vkCmdBindPipeline(currentCmdBuf->cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->pipeline);
+        vkCmdBindPipeline(currentCmdBuf->cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->pipeline);
     
     // Bind descriptor sets
     if(state.bindings.size() > 0){
         for(usize i = 0; i < state.bindings.size(); i++){
-            if(state.bindings[i].bindings){
-                BindingSet* bindingSet = checked_cast<BindingSet*>(state.bindings[i].bindings.Get());
-                if(bindingSet->descriptorSet != VK_NULL_HANDLE)
-                    vk.vkCmdBindDescriptorSets(currentCmdBuf->cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                        pipeline->pipelineLayout, static_cast<u32>(i), 1, &bindingSet->descriptorSet, 0, nullptr);
+            if(state.bindings[i]){
+                BindingSet* bindingSet = checked_cast<BindingSet*>(state.bindings[i]);
+                if(!bindingSet->descriptorSets.empty())
+                    vkCmdBindDescriptorSets(currentCmdBuf->cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                        pipeline->pipelineLayout, static_cast<u32>(i),
+                        static_cast<u32>(bindingSet->descriptorSets.size()),
+                        bindingSet->descriptorSets.data(), 0, nullptr);
             }
         }
     }
     
     // Set viewport and scissor
-    if(state.viewport.width > 0 && state.viewport.height > 0){
+    if(!state.viewport.viewports.empty()){
+        const auto& vp = state.viewport.viewports[0];
         VkViewport viewport{};
-        viewport.x = state.viewport.minX;
-        viewport.y = state.viewport.minY;
-        viewport.width = state.viewport.maxX - state.viewport.minX;
-        viewport.height = state.viewport.maxY - state.viewport.minY;
-        viewport.minDepth = state.viewport.minZ;
-        viewport.maxDepth = state.viewport.maxZ;
-        vk.vkCmdSetViewport(currentCmdBuf->cmdBuf, 0, 1, &viewport);
+        viewport.x = vp.minX;
+        viewport.y = vp.minY;
+        viewport.width = vp.maxX - vp.minX;
+        viewport.height = vp.maxY - vp.minY;
+        viewport.minDepth = vp.minZ;
+        viewport.maxDepth = vp.maxZ;
+        vkCmdSetViewport(currentCmdBuf->cmdBuf, 0, 1, &viewport);
         
         VkRect2D scissor{};
-        scissor.offset = { (i32)state.viewport.minX, (i32)state.viewport.minY };
-        scissor.extent = { (u32)(state.viewport.maxX - state.viewport.minX), (u32)(state.viewport.maxY - state.viewport.minY) };
-        vk.vkCmdSetScissor(currentCmdBuf->cmdBuf, 0, 1, &scissor);
+        if(!state.viewport.scissorRects.empty()){
+            const auto& sr = state.viewport.scissorRects[0];
+            scissor.offset = { sr.minX, sr.minY };
+            scissor.extent = { static_cast<u32>(sr.maxX - sr.minX), static_cast<u32>(sr.maxY - sr.minY) };
+        }
+        else{
+            scissor.offset = { (i32)vp.minX, (i32)vp.minY };
+            scissor.extent = { (u32)(vp.maxX - vp.minX), (u32)(vp.maxY - vp.minY) };
+        }
+        vkCmdSetScissor(currentCmdBuf->cmdBuf, 0, 1, &scissor);
     }
     
     // Bind vertex buffers
-    if(state.vertexBufferCount > 0){
+    if(!state.vertexBuffers.empty()){
         VkBuffer vertexBuffers[16];
         VkDeviceSize offsets[16];
-        for(u32 i = 0; i < state.vertexBufferCount; i++){
-            Buffer* vb = checked_cast<Buffer*>(state.vertexBuffers[i].buffer.Get());
+        u32 count = static_cast<u32>(state.vertexBuffers.size());
+        for(u32 i = 0; i < count; i++){
+            Buffer* vb = checked_cast<Buffer*>(state.vertexBuffers[i].buffer);
             vertexBuffers[i] = vb->buffer;
             offsets[i] = state.vertexBuffers[i].offset;
         }
-        vk.vkCmdBindVertexBuffers(currentCmdBuf->cmdBuf, 0, state.vertexBufferCount, vertexBuffers, offsets);
+        vkCmdBindVertexBuffers(currentCmdBuf->cmdBuf, 0, count, vertexBuffers, offsets);
     }
     
     // Bind index buffer
     if(state.indexBuffer.buffer){
-        Buffer* ib = checked_cast<Buffer*>(state.indexBuffer.buffer.Get());
+        Buffer* ib = checked_cast<Buffer*>(state.indexBuffer.buffer);
         VkIndexType indexType = (state.indexBuffer.format == Format::R16_UINT) ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32;
-        vk.vkCmdBindIndexBuffer(currentCmdBuf->cmdBuf, ib->buffer, state.indexBuffer.offset, indexType);
+        vkCmdBindIndexBuffer(currentCmdBuf->cmdBuf, ib->buffer, state.indexBuffer.offset, indexType);
     }
 }
 
 void CommandList::draw(const DrawArguments& args){
-    const VulkanContext& vk = *m_Context;
-    vk.vkCmdDraw(currentCmdBuf->cmdBuf, args.vertexCount, args.instanceCount, args.startVertexLocation, args.startInstanceLocation);
+    vkCmdDraw(currentCmdBuf->cmdBuf, args.vertexCount, args.instanceCount, args.startVertexLocation, args.startInstanceLocation);
 }
 
 void CommandList::drawIndexed(const DrawArguments& args){
-    const VulkanContext& vk = *m_Context;
-    vk.vkCmdDrawIndexed(currentCmdBuf->cmdBuf, args.vertexCount, args.instanceCount, args.startIndexLocation, args.startVertexLocation, args.startInstanceLocation);
+    vkCmdDrawIndexed(currentCmdBuf->cmdBuf, args.vertexCount, args.instanceCount, args.startIndexLocation, args.startVertexLocation, args.startInstanceLocation);
 }
 
-void CommandList::drawIndirect(const DrawIndirectArguments& args){
-    Buffer* indirectBuffer = checked_cast<Buffer*>(args.buffer.Get());
-    const VulkanContext& vk = *m_Context;
-    
-    if(args.indexed)
-        vk.vkCmdDrawIndexedIndirect(currentCmdBuf->cmdBuf, indirectBuffer->buffer, args.offsetBytes, args.drawCount, sizeof(DrawIndexedIndirectArguments));
-    else
-        vk.vkCmdDrawIndirect(currentCmdBuf->cmdBuf, indirectBuffer->buffer, args.offsetBytes, args.drawCount, sizeof(DrawIndirectArguments));
-    
-    currentCmdBuf->referencedResources.push_back(args.buffer.Get());
+void CommandList::drawIndirect(u32 offsetBytes, u32 drawCount){
+    if(!currentGraphicsState.indirectParams){
+        NWB_ASSERT(false && "No indirect buffer bound for drawIndirect");
+        return;
+    }
+    Buffer* indirectBuffer = checked_cast<Buffer*>(currentGraphicsState.indirectParams);
+    vkCmdDrawIndirect(currentCmdBuf->cmdBuf, indirectBuffer->buffer, offsetBytes, drawCount, sizeof(DrawIndirectArguments));
+    currentCmdBuf->referencedResources.push_back(currentGraphicsState.indirectParams);
 }
 
 //-----------------------------------------------------------------------------
@@ -527,7 +533,7 @@ static VkBlendOp convertBlendOp(BlendOp::Enum blendOp){
     }
 }
 
-static VkStencilOpState convertStencilOpState(const DepthStencilState& dsState, const StencilOpDesc& stencilDesc){
+static VkStencilOpState convertStencilOpState(const DepthStencilState& dsState, const DepthStencilState::StencilOpDesc& stencilDesc){
     VkStencilOpState state = {};
     state.failOp = convertStencilOp(stencilDesc.failOp);
     state.passOp = convertStencilOp(stencilDesc.passOp);

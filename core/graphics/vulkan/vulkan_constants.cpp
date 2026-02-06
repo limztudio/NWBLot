@@ -18,7 +18,7 @@ NWB_VULKAN_BEGIN
 //-----------------------------------------------------------------------------
 
 struct FormatMapping{
-    Format format;
+    Format::Enum format;
     VkFormat vkFormat;
     u32 bytesPerPixel;
     bool hasDepth;
@@ -113,7 +113,7 @@ static const usize g_NumFormatMappings = sizeof(g_FormatMappings) / sizeof(g_For
 //-----------------------------------------------------------------------------
 
 
-VkFormat ConvertFormat(Format::Enum format){
+VkFormat convertFormat(Format::Enum format){
     for(usize i = 0; i < g_NumFormatMappings; ++i){
         if(g_FormatMappings[i].format == format)
             return g_FormatMappings[i].vkFormat;
@@ -123,50 +123,15 @@ VkFormat ConvertFormat(Format::Enum format){
     return VK_FORMAT_UNDEFINED;
 }
 
-const FormatInfo& GetFormatInfo(Format format){
-    static FormatInfo s_FormatInfo[g_NumFormatMappings + 1];
-    static bool s_Initialized = false;
-    
-    if(!s_Initialized){
-        for(usize i = 0; i < g_NumFormatMappings; ++i){            const FormatMapping& mapping = g_FormatMappings[i];
-            FormatInfo& info = s_FormatInfo[i];
-            
-            info.format = mapping.format;
-            info.bytesPerPixel = mapping.bytesPerPixel;
-            info.hasDepth = mapping.hasDepth;
-            info.hasStencil = mapping.hasStencil;
-            info.isCompressed = mapping.isCompressed;
-            
-            // Determine aspects
-            if(mapping.hasDepth && mapping.hasStencil)
-                info.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
-            else if(mapping.hasDepth)
-                info.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-            else if(mapping.hasStencil)
-                info.aspectMask = VK_IMAGE_ASPECT_STENCIL_BIT;
-            else
-                info.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        }
-        
-        // Unknown format
-        s_FormatInfo[g_NumFormatMappings] = {};
-        
-        s_Initialized = true;
-    }
-    
-    for(usize i = 0; i < g_NumFormatMappings; ++i){
-        if(s_FormatInfo[i].format == format)
-            return s_FormatInfo[i];
-    }
-    
-    return s_FormatInfo[g_NumFormatMappings];
+VkFormat ConvertFormat(Format::Enum format){
+    return convertFormat(format);
 }
 
 //-----------------------------------------------------------------------------
 // Resource state conversion
 //-----------------------------------------------------------------------------
 
-VkAccessFlags2 getVkAccessFlags(ResourceStates states){
+VkAccessFlags2 getVkAccessFlags(ResourceStates::Mask states){
     VkAccessFlags2 flags = 0;
     
     if(states & ResourceStates::VertexBuffer)
@@ -213,7 +178,7 @@ VkAccessFlags2 getVkAccessFlags(ResourceStates states){
     return flags;
 }
 
-VkPipelineStageFlags2 getVkPipelineStageFlags(ResourceStates states){
+VkPipelineStageFlags2 getVkPipelineStageFlags(ResourceStates::Mask states){
     VkPipelineStageFlags2 flags = 0;
     
     if(states & ResourceStates::VertexBuffer)
@@ -243,7 +208,7 @@ VkPipelineStageFlags2 getVkPipelineStageFlags(ResourceStates states){
     return flags;
 }
 
-VkImageLayout getVkImageLayout(ResourceStates states){
+VkImageLayout getVkImageLayout(ResourceStates::Mask states){
     // Return the most appropriate layout for the given state
     // Priority: specific states first, general states last
     
@@ -289,19 +254,6 @@ VkSampleCountFlagBits getSampleCountFlagBits(u32 sampleCount){
     default: return VK_SAMPLE_COUNT_1_BIT;
     }
 }
-
-//-----------------------------------------------------------------------------
-// Color constants
-//-----------------------------------------------------------------------------
-
-const Color Color::Black   = { 0.0f, 0.0f, 0.0f, 1.0f };
-const Color Color::White   = { 1.0f, 1.0f, 1.0f, 1.0f };
-const Color Color::Red     = { 1.0f, 0.0f, 0.0f, 1.0f };
-const Color Color::Green   = { 0.0f, 1.0f, 0.0f, 1.0f };
-const Color Color::Blue    = { 0.0f, 0.0f, 1.0f, 1.0f };
-const Color Color::Yellow  = { 1.0f, 1.0f, 0.0f, 1.0f };
-const Color Color::Cyan    = { 0.0f, 1.0f, 1.0f, 1.0f };
-const Color Color::Magenta = { 1.0f, 0.0f, 1.0f, 1.0f };
 
 //-----------------------------------------------------------------------------
 // VkResult to string conversion

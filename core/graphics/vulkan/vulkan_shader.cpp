@@ -61,7 +61,7 @@ void ShaderLibrary::getBytecode(const void** ppBytecode, usize* pSize)const{
 ShaderHandle ShaderLibrary::getShader(const Name& entryName, ShaderType::Mask shaderType){
     auto it = shaders.find(entryName);
     if(it != shaders.end())
-        return ShaderHandle::Create(it->second.Get());
+        return ShaderHandle(it->second.get());
     return nullptr;
 }
 
@@ -83,7 +83,7 @@ ShaderHandle Device::createShader(const ShaderDesc& d, const void* binary, usize
     VkResult res = vkCreateShaderModule(m_Context.device, &createInfo, m_Context.allocationCallbacks, &shader->shaderModule);
     assert(res == VK_SUCCESS);
     
-    return MakeRefCountPtr<IShader, BlankDeleter<IShader>>(shader);
+    return RefCountPtr<IShader, BlankDeleter<IShader>>(shader, AdoptRef);
 }
 
 ShaderHandle Device::createShaderSpecialization(IShader* baseShader, const ShaderSpecialization* constants, u32 numConstants){
@@ -96,25 +96,6 @@ ShaderLibraryHandle Device::createShaderLibrary(const void* binary, usize binary
     return nullptr;
 }
 
-static VkFormat convertFormat(Format::Enum format){
-    switch(format){
-        case Format::RGBA8_UNORM: return VK_FORMAT_R8G8B8A8_UNORM;
-        case Format::RGBA16_FLOAT: return VK_FORMAT_R16G16B16A16_SFLOAT;
-        case Format::RGBA32_FLOAT: return VK_FORMAT_R32G32B32A32_SFLOAT;
-        case Format::D24S8: return VK_FORMAT_D24_UNORM_S8_UINT;
-        case Format::D32: return VK_FORMAT_D32_SFLOAT;
-        case Format::R8_UNORM: return VK_FORMAT_R8_UNORM;
-        case Format::RG8_UNORM: return VK_FORMAT_R8G8_UNORM;
-        case Format::R16_FLOAT: return VK_FORMAT_R16_SFLOAT;
-        case Format::RG16_FLOAT: return VK_FORMAT_R16G16_SFLOAT;
-        case Format::R32_FLOAT: return VK_FORMAT_R32_SFLOAT;
-        case Format::RG32_FLOAT: return VK_FORMAT_R32G32_SFLOAT;
-        case Format::BGRA8_UNORM: return VK_FORMAT_B8G8R8A8_UNORM;
-        case Format::SRGBA8_UNORM: return VK_FORMAT_R8G8B8A8_SRGB;
-        case Format::SBGRA8_UNORM: return VK_FORMAT_B8G8R8A8_SRGB;
-        default: return VK_FORMAT_UNDEFINED;
-    }
-}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Device - Input Layout Implementation
@@ -161,7 +142,7 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
         layout->vkAttributes.push_back(vkAttr);
     }
     
-    return MakeRefCountPtr<IInputLayout, BlankDeleter<IInputLayout>>(layout);
+    return RefCountPtr<IInputLayout, BlankDeleter<IInputLayout>>(layout, AdoptRef);
 }
 
 

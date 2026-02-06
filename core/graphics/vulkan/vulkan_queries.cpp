@@ -17,7 +17,7 @@ NWB_VULKAN_BEGIN
 
 EventQueryHandle Device::createEventQuery(){
     EventQuery* query = new EventQuery(m_Context);
-    return MakeRefCountPtr<IEventQuery, BlankDeleter<IEventQuery>>(query);
+    return RefCountPtr<IEventQuery, BlankDeleter<IEventQuery>>(query, AdoptRef);
 }
 
 void Device::setEventQuery(IEventQuery* _query, CommandQueue::Enum queue){
@@ -54,7 +54,7 @@ void Device::resetEventQuery(IEventQuery* _query){
 
 TimerQueryHandle Device::createTimerQuery(){
     TimerQuery* query = new TimerQuery(m_Context);
-    return MakeRefCountPtr<ITimerQuery, BlankDeleter<ITimerQuery>>(query);
+    return RefCountPtr<ITimerQuery, BlankDeleter<ITimerQuery>>(query, AdoptRef);
 }
 
 bool Device::pollTimerQuery(ITimerQuery* _query){
@@ -93,64 +93,54 @@ void Device::resetTimerQuery(ITimerQuery* _query){
 
 void CommandList::beginTimerQuery(ITimerQuery* _query){
     TimerQuery* query = checked_cast<TimerQuery*>(_query);
-    const VulkanContext& vk = *m_Context;
     
-    vk.vkCmdWriteTimestamp(currentCmdBuf->cmdBuf, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, query->queryPool, 0);
+    vkCmdWriteTimestamp(currentCmdBuf->cmdBuf, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, query->queryPool, 0);
     query->started = true;
 }
 
 void CommandList::endTimerQuery(ITimerQuery* _query){
     TimerQuery* query = checked_cast<TimerQuery*>(_query);
-    const VulkanContext& vk = *m_Context;
     
-    vk.vkCmdWriteTimestamp(currentCmdBuf->cmdBuf, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, query->queryPool, 1);
+    vkCmdWriteTimestamp(currentCmdBuf->cmdBuf, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, query->queryPool, 1);
     query->resolved = true;
 }
 
-void CommandList::beginMarker(const char* name){
-    const VulkanContext& vk = *m_Context;
-    
-    if(vk.extensions.EXT_debug_utils){
+void CommandList::beginMarker(const Name& name){
+    if(m_Context->extensions.EXT_debug_utils){
         VkDebugUtilsLabelEXT label = { VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT };
-        label.pLabelName = name;
-        vk.vkCmdBeginDebugUtilsLabelEXT(currentCmdBuf->cmdBuf, &label);
+        label.pLabelName = "marker"; // TODO: extract string from Name when Name class has accessors
+        vkCmdBeginDebugUtilsLabelEXT(currentCmdBuf->cmdBuf, &label);
     }
 }
 
 void CommandList::endMarker(){
-    const VulkanContext& vk = *m_Context;
-    
-    if(vk.extensions.EXT_debug_utils)
-        vk.vkCmdEndDebugUtilsLabelEXT(currentCmdBuf->cmdBuf);
+    if(m_Context->extensions.EXT_debug_utils)
+        vkCmdEndDebugUtilsLabelEXT(currentCmdBuf->cmdBuf);
 }
 
 void CommandList::setEventQuery(IEventQuery* _query, CommandQueue::Enum waitQueue){
     EventQuery* query = checked_cast<EventQuery*>(_query);
-    const VulkanContext& vk = *m_Context;
     
     // Set fence at the end of command buffer
-    VkFence fence = query->fence;
     // Note: Actual fence signaling happens at queue submit time
     query->started = true;
 }
 
 void CommandList::resetEventQuery(IEventQuery* _query){
     EventQuery* query = checked_cast<EventQuery*>(_query);
-    const VulkanContext& vk = *m_Context;
     
     if(query->fence != VK_NULL_HANDLE)
-        vk.vkResetFences(vk.device, 1, &query->fence);
+        vkResetFences(m_Context->device, 1, &query->fence);
     
     query->started = false;
 }
 
 void CommandList::waitEventQuery(IEventQuery* _query){
     EventQuery* query = checked_cast<EventQuery*>(_query);
-    const VulkanContext& vk = *m_Context;
     
     // Wait for fence
     if(query->fence != VK_NULL_HANDLE)
-        vk.vkWaitForFences(vk.device, 1, &query->fence, VK_TRUE, UINT64_MAX);
+        vkWaitForFences(m_Context->device, 1, &query->fence, VK_TRUE, UINT64_MAX);
 }
 
 

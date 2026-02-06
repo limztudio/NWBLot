@@ -23,6 +23,14 @@ public:
     constexpr Name(){}
     constexpr Name(const char* str){}
     
+    // Returns a C string for debug/display purposes
+    [[nodiscard]] const char* c_str()const{
+#if defined(NWB_DEBUG)
+        return m_debugName;
+#else
+        return "";
+#endif
+    }
     
 private:
     NameHash m_hash;

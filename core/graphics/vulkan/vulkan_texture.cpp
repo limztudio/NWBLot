@@ -15,26 +15,6 @@ NWB_VULKAN_BEGIN
 // Helper functions for format conversion
 
 
-static VkFormat convertFormat(Format::Enum format){
-    switch(format){
-        case Format::RGBA8_UNORM: return VK_FORMAT_R8G8B8A8_UNORM;
-        case Format::RGBA16_FLOAT: return VK_FORMAT_R16G16B16A16_SFLOAT;
-        case Format::RGBA32_FLOAT: return VK_FORMAT_R32G32B32A32_SFLOAT;
-        case Format::D24S8: return VK_FORMAT_D24_UNORM_S8_UINT;
-        case Format::D32: return VK_FORMAT_D32_SFLOAT;
-        case Format::R8_UNORM: return VK_FORMAT_R8_UNORM;
-        case Format::RG8_UNORM: return VK_FORMAT_R8G8_UNORM;
-        case Format::R16_FLOAT: return VK_FORMAT_R16_SFLOAT;
-        case Format::RG16_FLOAT: return VK_FORMAT_R16G16_SFLOAT;
-        case Format::R32_FLOAT: return VK_FORMAT_R32_SFLOAT;
-        case Format::RG32_FLOAT: return VK_FORMAT_R32G32_SFLOAT;
-        case Format::BGRA8_UNORM: return VK_FORMAT_B8G8R8A8_UNORM;
-        case Format::SRGBA8_UNORM: return VK_FORMAT_R8G8B8A8_SRGB;
-        case Format::SBGRA8_UNORM: return VK_FORMAT_B8G8R8A8_SRGB;
-        default: return VK_FORMAT_UNDEFINED;
-    }
-}
-
 static VkImageType textureDimensionToImageType(TextureDimension::Enum dimension){
     switch(dimension){
         case TextureDimension::Texture1D:
@@ -277,7 +257,7 @@ TextureHandle Device::createTexture(const TextureDesc& d){
         assert(res == VK_SUCCESS);
     }
     
-    return MakeRefCountPtr<ITexture, BlankDeleter<ITexture>>(texture);
+    return RefCountPtr<ITexture, BlankDeleter<ITexture>>(texture, AdoptRef);
 }
 
 MemoryRequirements Device::getTextureMemoryRequirements(ITexture* _texture){
@@ -346,7 +326,7 @@ SamplerHandle Device::createSampler(const SamplerDesc& d){
     VkResult res = vkCreateSampler(m_Context.device, &samplerInfo, m_Context.allocationCallbacks, &sampler->sampler);
     assert(res == VK_SUCCESS);
     
-    return MakeRefCountPtr<ISampler, BlankDeleter<ISampler>>(sampler);
+    return RefCountPtr<ISampler, BlankDeleter<ISampler>>(sampler, AdoptRef);
 }
 
 
@@ -356,7 +336,6 @@ SamplerHandle Device::createSampler(const SamplerDesc& d){
 
 void CommandList::clearTextureFloat(ITexture* _texture, TextureSubresourceSet subresources, const Color& clearColor){
     Texture* texture = checked_cast<Texture*>(_texture);
-    const VulkanContext& vk = *m_Context;
     
     VkClearColorValue clearValue;
     clearValue.float32[0] = clearColor.r;
@@ -371,13 +350,12 @@ void CommandList::clearTextureFloat(ITexture* _texture, TextureSubresourceSet su
     range.baseArrayLayer = subresources.baseArraySlice;
     range.layerCount = subresources.numArraySlices;
     
-    vk.vkCmdClearColorImage(currentCmdBuf->cmdBuf, texture->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearValue, 1, &range);
+    vkCmdClearColorImage(currentCmdBuf->cmdBuf, texture->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearValue, 1, &range);
     currentCmdBuf->referencedResources.push_back(_texture);
 }
 
 void CommandList::clearDepthStencilTexture(ITexture* _texture, TextureSubresourceSet subresources, bool clearDepth, f32 depth, bool clearStencil, u8 stencil){
     Texture* texture = checked_cast<Texture*>(_texture);
-    const VulkanContext& vk = *m_Context;
     
     VkClearDepthStencilValue clearValue{};
     clearValue.depth = depth;
@@ -394,13 +372,12 @@ void CommandList::clearDepthStencilTexture(ITexture* _texture, TextureSubresourc
     range.baseArrayLayer = subresources.baseArraySlice;
     range.layerCount = subresources.numArraySlices;
     
-    vk.vkCmdClearDepthStencilImage(currentCmdBuf->cmdBuf, texture->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearValue, 1, &range);
+    vkCmdClearDepthStencilImage(currentCmdBuf->cmdBuf, texture->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearValue, 1, &range);
     currentCmdBuf->referencedResources.push_back(_texture);
 }
 
 void CommandList::clearTextureUInt(ITexture* _texture, TextureSubresourceSet subresources, u32 clearColor){
     Texture* texture = checked_cast<Texture*>(_texture);
-    const VulkanContext& vk = *m_Context;
     
     VkClearColorValue clearValue;
     clearValue.uint32[0] = clearColor;
@@ -415,14 +392,13 @@ void CommandList::clearTextureUInt(ITexture* _texture, TextureSubresourceSet sub
     range.baseArrayLayer = subresources.baseArraySlice;
     range.layerCount = subresources.numArraySlices;
     
-    vk.vkCmdClearColorImage(currentCmdBuf->cmdBuf, texture->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearValue, 1, &range);
+    vkCmdClearColorImage(currentCmdBuf->cmdBuf, texture->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearValue, 1, &range);
     currentCmdBuf->referencedResources.push_back(_texture);
 }
 
 void CommandList::copyTexture(ITexture* _dest, const TextureSlice& destSlice, ITexture* _src, const TextureSlice& srcSlice){
     Texture* dest = checked_cast<Texture*>(_dest);
     Texture* src = checked_cast<Texture*>(_src);
-    const VulkanContext& vk = *m_Context;
     
     VkImageCopy region{};
     region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -437,8 +413,8 @@ void CommandList::copyTexture(ITexture* _dest, const TextureSlice& destSlice, IT
     region.dstOffset = { destSlice.x, destSlice.y, destSlice.z };
     region.extent = { destSlice.width, destSlice.height, destSlice.depth };
     
-    vk.vkCmdCopyImage(currentCmdBuf->cmdBuf, src->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                      dest->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+    vkCmdCopyImage(currentCmdBuf->cmdBuf, src->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                   dest->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
     
     currentCmdBuf->referencedResources.push_back(_src);
     currentCmdBuf->referencedResources.push_back(_dest);
@@ -447,22 +423,28 @@ void CommandList::copyTexture(ITexture* _dest, const TextureSlice& destSlice, IT
 void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, const void* data, usize rowPitch, usize depthPitch){
     Texture* dest = checked_cast<Texture*>(_dest);
     const TextureDesc& desc = dest->desc;
-    const VulkanContext& vk = *m_Context;
     
     // Calculate required staging buffer size
     u32 width = max(1u, desc.width >> mipLevel);
     u32 height = max(1u, desc.height >> mipLevel);
     u32 depth = max(1u, desc.depth >> mipLevel);
     
-    const FormatInfo* formatInfo = GetFormatInfo(desc.format);
+    const FormatInfo& formatInfo = GetFormatInfo(desc.format);
     u64 dataSize = u64(rowPitch) * height * depth;
     
     // Allocate staging buffer
     UploadManager* uploadMgr = m_Device->getUploadManager();
-    BufferChunk chunk = uploadMgr->allocate(dataSize);
+    Buffer* stagingBuffer = nullptr;
+    u64 stagingOffset = 0;
+    void* cpuVA = nullptr;
+    
+    if(!uploadMgr->suballocateBuffer(dataSize, &stagingBuffer, &stagingOffset, &cpuVA, 0)){
+        NWB_ASSERT(false && "Failed to suballocate staging buffer for writeTexture");
+        return;
+    }
     
     // Copy data to staging
-    memcpy(chunk.mappedPtr, data, dataSize);
+    memcpy(cpuVA, data, dataSize);
     
     // Transition image to TRANSFER_DST
     VkImageMemoryBarrier2 barrier = { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2 };
@@ -482,11 +464,11 @@ void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, co
     VkDependencyInfo depInfo = { VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
     depInfo.imageMemoryBarrierCount = 1;
     depInfo.pImageMemoryBarriers = &barrier;
-    vk.vkCmdPipelineBarrier2(currentCmdBuf->cmdBuf, &depInfo);
+    vkCmdPipelineBarrier2(currentCmdBuf->cmdBuf, &depInfo);
     
     // Copy buffer to image
     VkBufferImageCopy region{};
-    region.bufferOffset = chunk.offset;
+    region.bufferOffset = stagingOffset;
     region.bufferRowLength = 0; // tightly packed
     region.bufferImageHeight = 0;
     region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -495,16 +477,15 @@ void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, co
     region.imageSubresource.layerCount = 1;
     region.imageExtent = { width, height, depth };
     
-    vk.vkCmdCopyBufferToImage(currentCmdBuf->cmdBuf, chunk.buffer, dest->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+    vkCmdCopyBufferToImage(currentCmdBuf->cmdBuf, stagingBuffer->buffer, dest->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
     
     currentCmdBuf->referencedResources.push_back(_dest);
-    currentCmdBuf->referencedStagingBuffers.push_back(chunk.bufferRef);
+    currentCmdBuf->referencedStagingBuffers.push_back(stagingBuffer);
 }
 
 void CommandList::resolveTexture(ITexture* _dest, const TextureSubresourceSet& dstSubresources, ITexture* _src, const TextureSubresourceSet& srcSubresources){
     Texture* dest = checked_cast<Texture*>(_dest);
     Texture* src = checked_cast<Texture*>(_src);
-    const VulkanContext& vk = *m_Context;
     
     VkImageResolve region{};
     region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -520,8 +501,8 @@ void CommandList::resolveTexture(ITexture* _dest, const TextureSubresourceSet& d
     region.extent = { max(1u, src->desc.width >> srcSubresources.baseMipLevel),
                       max(1u, src->desc.height >> srcSubresources.baseMipLevel), 1 };
     
-    vk.vkCmdResolveImage(currentCmdBuf->cmdBuf, src->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                         dest->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+    vkCmdResolveImage(currentCmdBuf->cmdBuf, src->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                      dest->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
     
     currentCmdBuf->referencedResources.push_back(_src);
     currentCmdBuf->referencedResources.push_back(_dest);

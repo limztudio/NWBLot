@@ -17,14 +17,13 @@ NWB_VULKAN_BEGIN
 
 MeshletPipeline::~MeshletPipeline(){
     if(pipeline){
-        const VulkanContext& vk = *m_Context;
-        vk.vkDestroyPipeline(vk.device, pipeline, nullptr);
+        vkDestroyPipeline(m_Context.device, pipeline, nullptr);
         pipeline = VK_NULL_HANDLE;
     }
 }
 
-Object MeshletPipeline::getNativeObject(ObjectType objectType){
-    if(objectType == ObjectType::VK_Pipeline)
+Object MeshletPipeline::getNativeHandle(ObjectType objectType){
+    if(objectType == ObjectTypes::VK_Pipeline)
         return Object(pipeline);
     return Object(nullptr);
 }
@@ -40,15 +39,13 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     MeshletPipeline* pso = new MeshletPipeline(m_Context);
     pso->desc = desc;
     
-    const VulkanContext& vk = m_Context;
-    
     // Collect shader stages
     Vector<VkPipelineShaderStageCreateInfo> shaderStages;
     shaderStages.reserve(3); // Task (optional), Mesh, Fragment
     
     // Task shader (optional - amplification)
     if(desc.AS){
-        Shader* as = checked_cast<Shader*>(desc.AS.Get());
+        Shader* as = checked_cast<Shader*>(desc.AS.get());
         VkPipelineShaderStageCreateInfo stageInfo = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
         stageInfo.stage = VK_SHADER_STAGE_TASK_BIT_EXT;
         stageInfo.module = as->shaderModule;
@@ -58,7 +55,7 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     
     // Mesh shader (required)
     if(desc.MS){
-        Shader* ms = checked_cast<Shader*>(desc.MS.Get());
+        Shader* ms = checked_cast<Shader*>(desc.MS.get());
         VkPipelineShaderStageCreateInfo stageInfo = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
         stageInfo.stage = VK_SHADER_STAGE_MESH_BIT_EXT;
         stageInfo.module = ms->shaderModule;
@@ -72,7 +69,7 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     
     // Fragment shader (optional)
     if(desc.PS){
-        Shader* ps = checked_cast<Shader*>(desc.PS.Get());
+        Shader* ps = checked_cast<Shader*>(desc.PS.get());
         VkPipelineShaderStageCreateInfo stageInfo = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
         stageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
         stageInfo.module = ps->shaderModule;
@@ -83,7 +80,7 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     // Get pipeline layout from binding layouts
     VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
     if(!desc.bindingLayouts.empty() && desc.bindingLayouts[0]){
-        BindingLayout* layout = checked_cast<BindingLayout*>(desc.bindingLayouts[0].Get());
+        BindingLayout* layout = checked_cast<BindingLayout*>(desc.bindingLayouts[0].get());
         pipelineLayout = layout->pipelineLayout;
         pso->pipelineLayout = pipelineLayout;
     }
@@ -179,49 +176,45 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     pipelineInfo.layout = pipelineLayout;
     pipelineInfo.renderPass = VK_NULL_HANDLE;
     
-    VkResult res = vkCreateGraphicsPipelines(vk.device, vk.pipelineCache, 1, &pipelineInfo, vk.allocationCallbacks, &pso->pipeline);
+    VkResult res = vkCreateGraphicsPipelines(m_Context.device, m_Context.pipelineCache, 1, &pipelineInfo, m_Context.allocationCallbacks, &pso->pipeline);
     
     if(res != VK_SUCCESS){
         delete pso;
         return nullptr;
     }
     
-    return MeshletPipelineHandle::Create(pso);
+    return MeshletPipelineHandle(pso, AdoptRef);
 }
 
 //-----------------------------------------------------------------------------
 // CommandList - Meshlet
 //-----------------------------------------------------------------------------
 
-MeshletState& CommandList::getMeshletState(){
-    return stateTracker->meshletState;
-}
-
 void CommandList::setMeshletState(const MeshletState& state){
-    stateTracker->meshletState = state;
+    currentMeshletState = state;
     
-    MeshletPipeline* pipeline = checked_cast<MeshletPipeline*>(state.pipeline.Get());
-    const VulkanContext& vk = *m_Context;
+    MeshletPipeline* pipeline = checked_cast<MeshletPipeline*>(state.pipeline);
     
     if(pipeline)
-        vk.vkCmdBindPipeline(currentCmdBuf->cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->pipeline);
+        vkCmdBindPipeline(currentCmdBuf->cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->pipeline);
     
     // Bind descriptor sets
     if(state.bindings.size() > 0){
         for(usize i = 0; i < state.bindings.size(); i++){
-            if(state.bindings[i].bindings){
-                BindingSet* bindingSet = checked_cast<BindingSet*>(state.bindings[i].bindings.Get());
-                if(bindingSet->descriptorSet != VK_NULL_HANDLE)
-                    vk.vkCmdBindDescriptorSets(currentCmdBuf->cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                        pipeline->pipelineLayout, static_cast<u32>(i), 1, &bindingSet->descriptorSet, 0, nullptr);
+            if(state.bindings[i]){
+                BindingSet* bindingSet = checked_cast<BindingSet*>(state.bindings[i]);
+                if(!bindingSet->descriptorSets.empty())
+                    vkCmdBindDescriptorSets(currentCmdBuf->cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                        pipeline->pipelineLayout, static_cast<u32>(i),
+                        static_cast<u32>(bindingSet->descriptorSets.size()),
+                        bindingSet->descriptorSets.data(), 0, nullptr);
             }
         }
     }
 }
 
 void CommandList::dispatchMesh(u32 groupsX, u32 groupsY, u32 groupsZ){
-    const VulkanContext& vk = *m_Context;
-    vk.vkCmdDrawMeshTasksEXT(currentCmdBuf->cmdBuf, groupsX, groupsY, groupsZ);
+    vkCmdDrawMeshTasksEXT(currentCmdBuf->cmdBuf, groupsX, groupsY, groupsZ);
 }
 
 

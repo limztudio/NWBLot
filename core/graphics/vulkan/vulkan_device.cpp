@@ -128,7 +128,7 @@ Queue* Device::getQueue(CommandQueue::Enum queueType)const{
 
 CommandListHandle Device::createCommandList(const CommandListParameters& params){
     CommandList* cmdList = new CommandList(this, params);
-    return CommandListHandle::Create(cmdList);
+    return CommandListHandle(cmdList, AdoptRef);
 }
 
 u64 Device::executeCommandLists(ICommandList* const* pCommandLists, usize numCommandLists, CommandQueue::Enum executionQueue){
@@ -177,12 +177,10 @@ bool Device::queryFeatureSupport(Feature::Enum feature, void* pInfo, usize infoS
         return m_Context.extensions.KHR_ray_tracing_pipeline;
     case Feature::ShaderExecutionReordering:
         return false; // Would need NV extension check
-    case Feature::MeshShaders:
+    case Feature::Meshlets:
         return true; // Assume VK_EXT_mesh_shader is available
     case Feature::VariableRateShading:
         return true; // Assume VK_KHR_fragment_shading_rate is available
-    case Feature::Bindless:
-        return true; // Assume descriptor indexing is available
     case Feature::VirtualResources:
         return true;
     case Feature::ComputeQueue:
@@ -216,7 +214,7 @@ FormatSupport::Mask Device::queryFormatSupport(Format::Enum format){
     if(features & VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT)
         support |= FormatSupport::RenderTarget;
     if(features & VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT)
-        support |= FormatSupport::ShaderUAV;
+        support |= FormatSupport::ShaderUavStore;
     if(features & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT)
         support |= FormatSupport::ShaderSample;
     
@@ -248,12 +246,36 @@ HeapHandle Device::createHeap(const HeapDesc& d){
 }
 
 //-----------------------------------------------------------------------------
+// Device - Cooperative Vector stubs
+//-----------------------------------------------------------------------------
+
+CooperativeVectorDeviceFeatures Device::queryCoopVecFeatures(){
+    // Cooperative vectors are not yet supported in this Vulkan backend
+    return CooperativeVectorDeviceFeatures{};
+}
+
+usize Device::getCoopVecMatrixSize(CooperativeVectorDataType::Enum /*type*/, CooperativeVectorMatrixLayout::Enum /*layout*/, int /*rows*/, int /*columns*/){
+    // Cooperative vectors are not yet supported in this Vulkan backend
+    return 0;
+}
+
+//-----------------------------------------------------------------------------
+// Device - Aftermath stub
+//-----------------------------------------------------------------------------
+
+AftermathCrashDumpHelper& Device::getAftermathCrashDumpHelper(){
+    NWB_ASSERT(!"Aftermath is not enabled in the Vulkan backend");
+    // This should never be called; isAftermathEnabled() returns false.
+    return *static_cast<AftermathCrashDumpHelper*>(nullptr);
+}
+
+//-----------------------------------------------------------------------------
 // CreateDevice - Factory function
 //-----------------------------------------------------------------------------
 
 DeviceHandle CreateDevice(const DeviceDesc& desc){
     Device* device = new Device(desc);
-    return DeviceHandle::Create(device);
+    return DeviceHandle(device, AdoptRef);
 }
 
 

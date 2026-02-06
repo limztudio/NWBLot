@@ -10,6 +10,7 @@
 
 NWB_VULKAN_BEGIN
 
+using __hidden::checked_cast;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // MeshletPipeline - Mesh shading pipeline state object
@@ -17,7 +18,7 @@ NWB_VULKAN_BEGIN
 
 MeshletPipeline::~MeshletPipeline(){
     if(pipeline){
-        vkDestroyPipeline(m_Context.device, pipeline, nullptr);
+        vkDestroyPipeline(m_context.device, pipeline, nullptr);
         pipeline = VK_NULL_HANDLE;
     }
 }
@@ -36,7 +37,7 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     // Meshlet pipeline uses mesh and task shaders (VK_EXT_mesh_shader)
     // Similar to graphics pipeline but with different shader stages
     
-    MeshletPipeline* pso = new MeshletPipeline(m_Context);
+    MeshletPipeline* pso = new MeshletPipeline(m_context);
     pso->desc = desc;
     
     // Collect shader stages
@@ -176,7 +177,7 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     pipelineInfo.layout = pipelineLayout;
     pipelineInfo.renderPass = VK_NULL_HANDLE;
     
-    VkResult res = vkCreateGraphicsPipelines(m_Context.device, m_Context.pipelineCache, 1, &pipelineInfo, m_Context.allocationCallbacks, &pso->pipeline);
+    VkResult res = vkCreateGraphicsPipelines(m_context.device, m_context.pipelineCache, 1, &pipelineInfo, m_context.allocationCallbacks, &pso->pipeline);
     
     if(res != VK_SUCCESS){
         delete pso;

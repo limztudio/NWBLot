@@ -10,6 +10,8 @@
 
 NWB_VULKAN_BEGIN
 
+using __hidden::checked_cast;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -18,8 +20,8 @@ NWB_VULKAN_BEGIN
 //-----------------------------------------------------------------------------
 
 CommandList::CommandList(Device* device, const CommandListParameters& params)
-    : m_Device(device)
-    , m_Context(&device->getContext()){
+    : m_device(device)
+    , m_context(&device->getContext()){
     desc = params;
     stateTracker = UniquePtr<StateTracker>(new StateTracker());
 }
@@ -30,7 +32,7 @@ CommandList::~CommandList(){
 
 void CommandList::open(){
     // Get command buffer from device pool
-    currentCmdBuf = m_Device->getQueue(desc.queueType)->getOrCreateCommandBuffer();
+    currentCmdBuf = m_device->getQueue(desc.queueType)->getOrCreateCommandBuffer();
     
     VkCommandBufferBeginInfo beginInfo = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
     beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;

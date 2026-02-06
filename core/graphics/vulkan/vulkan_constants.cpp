@@ -13,6 +13,8 @@ NWB_VULKAN_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+namespace __hidden{
+
 //-----------------------------------------------------------------------------
 // Format conversion table
 //-----------------------------------------------------------------------------
@@ -121,10 +123,6 @@ VkFormat convertFormat(Format::Enum format){
     
     // Unsupported format
     return VK_FORMAT_UNDEFINED;
-}
-
-VkFormat ConvertFormat(Format::Enum format){
-    return convertFormat(format);
 }
 
 //-----------------------------------------------------------------------------
@@ -253,6 +251,16 @@ VkSampleCountFlagBits getSampleCountFlagBits(u32 sampleCount){
     case 64: return VK_SAMPLE_COUNT_64_BIT;
     default: return VK_SAMPLE_COUNT_1_BIT;
     }
+}
+
+} // namespace __hidden
+
+//-----------------------------------------------------------------------------
+// Format query (public API)
+//-----------------------------------------------------------------------------
+
+VkFormat ConvertFormat(Format::Enum format){
+    return __hidden::convertFormat(format);
 }
 
 //-----------------------------------------------------------------------------

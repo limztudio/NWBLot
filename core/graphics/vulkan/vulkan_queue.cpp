@@ -10,6 +10,7 @@
 
 NWB_VULKAN_BEGIN
 
+using __hidden::checked_cast;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -18,14 +19,14 @@ NWB_VULKAN_BEGIN
 //-----------------------------------------------------------------------------
 
 TrackedCommandBuffer::TrackedCommandBuffer(const VulkanContext& context, CommandQueue::Enum queueType, u32 queueFamilyIndex)
-    : m_Context(context)
+    : m_context(context)
 {
     // Create command pool for this buffer
     VkCommandPoolCreateInfo poolInfo = { VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO };
     poolInfo.queueFamilyIndex = queueFamilyIndex;
     poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
     
-    vkCreateCommandPool(m_Context.device, &poolInfo, m_Context.allocationCallbacks, &cmdPool);
+    vkCreateCommandPool(m_context.device, &poolInfo, m_context.allocationCallbacks, &cmdPool);
     
     // Allocate command buffer
     VkCommandBufferAllocateInfo allocInfo = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO };
@@ -33,17 +34,17 @@ TrackedCommandBuffer::TrackedCommandBuffer(const VulkanContext& context, Command
     allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     allocInfo.commandBufferCount = 1;
     
-    vkAllocateCommandBuffers(m_Context.device, &allocInfo, &cmdBuf);
+    vkAllocateCommandBuffers(m_context.device, &allocInfo, &cmdBuf);
 }
 
 TrackedCommandBuffer::~TrackedCommandBuffer(){
     if(cmdBuf){
-        vkFreeCommandBuffers(m_Context.device, cmdPool, 1, &cmdBuf);
+        vkFreeCommandBuffers(m_context.device, cmdPool, 1, &cmdBuf);
         cmdBuf = VK_NULL_HANDLE;
     }
     
     if(cmdPool){
-        vkDestroyCommandPool(m_Context.device, cmdPool, m_Context.allocationCallbacks);
+        vkDestroyCommandPool(m_context.device, cmdPool, m_context.allocationCallbacks);
         cmdPool = VK_NULL_HANDLE;
     }
     
@@ -56,13 +57,13 @@ TrackedCommandBuffer::~TrackedCommandBuffer(){
 //-----------------------------------------------------------------------------
 
 Queue::Queue(const VulkanContext& context, CommandQueue::Enum queueID, VkQueue queue, u32 queueFamilyIndex)
-    : m_Context(context)
-    , m_Queue(queue)
-    , m_QueueID(queueID)
-    , m_QueueFamilyIndex(queueFamilyIndex)
-    , m_LastRecordingID(0)
-    , m_LastSubmittedID(0)
-    , m_LastFinishedID(0)
+    : m_context(context)
+    , m_queue(queue)
+    , m_queueID(queueID)
+    , m_queueFamilyIndex(queueFamilyIndex)
+    , m_lastRecordingID(0)
+    , m_lastSubmittedID(0)
+    , m_lastFinishedID(0)
 {
     // Create timeline semaphore for tracking
     VkSemaphoreTypeCreateInfo timelineInfo = { VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO };
@@ -72,54 +73,54 @@ Queue::Queue(const VulkanContext& context, CommandQueue::Enum queueID, VkQueue q
     VkSemaphoreCreateInfo semaphoreInfo = { VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
     semaphoreInfo.pNext = &timelineInfo;
     
-    vkCreateSemaphore(m_Context.device, &semaphoreInfo, m_Context.allocationCallbacks, &trackingSemaphore);
+    vkCreateSemaphore(m_context.device, &semaphoreInfo, m_context.allocationCallbacks, &trackingSemaphore);
 }
 
 Queue::~Queue(){
     // Wait for all work to complete
-    if(trackingSemaphore && m_LastSubmittedID > 0){
+    if(trackingSemaphore && m_lastSubmittedID > 0){
         VkSemaphoreWaitInfo waitInfo = { VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO };
         waitInfo.semaphoreCount = 1;
         waitInfo.pSemaphores = &trackingSemaphore;
-        waitInfo.pValues = &m_LastSubmittedID;
-        vkWaitSemaphores(m_Context.device, &waitInfo, UINT64_MAX);
+        waitInfo.pValues = &m_lastSubmittedID;
+        vkWaitSemaphores(m_context.device, &waitInfo, UINT64_MAX);
     }
     
     // Free all command buffers
-    m_CommandBuffersInFlight.clear();
-    m_CommandBuffersPool.clear();
+    m_commandBuffersInFlight.clear();
+    m_commandBuffersPool.clear();
     
     // Destroy semaphore
     if(trackingSemaphore){
-        vkDestroySemaphore(m_Context.device, trackingSemaphore, m_Context.allocationCallbacks);
+        vkDestroySemaphore(m_context.device, trackingSemaphore, m_context.allocationCallbacks);
         trackingSemaphore = VK_NULL_HANDLE;
     }
 }
 
 TrackedCommandBufferPtr Queue::createCommandBuffer(){
-    TrackedCommandBuffer* cmdBuf = new TrackedCommandBuffer(m_Context, m_QueueID, m_QueueFamilyIndex);
-    cmdBuf->recordingID = ++m_LastRecordingID;
+    TrackedCommandBuffer* cmdBuf = new TrackedCommandBuffer(m_context, m_queueID, m_queueFamilyIndex);
+    cmdBuf->recordingID = ++m_lastRecordingID;
     return TrackedCommandBufferPtr(cmdBuf);
 }
 
 TrackedCommandBufferPtr Queue::getOrCreateCommandBuffer(){
-    Mutex::scoped_lock lock(m_Mutex);
+    Mutex::scoped_lock lock(m_mutex);
     
     // Update completed IDs first
     updateLastFinishedID();
     
     // Retire finished command buffers to pool
-    auto it = m_CommandBuffersInFlight.begin();
-    while(it != m_CommandBuffersInFlight.end()){
+    auto it = m_commandBuffersInFlight.begin();
+    while(it != m_commandBuffersInFlight.end()){
         TrackedCommandBuffer* cmdBuf = it->get();
-        if(cmdBuf->submissionID <= m_LastFinishedID){
+        if(cmdBuf->submissionID <= m_lastFinishedID){
             // Clear references
             cmdBuf->referencedResources.clear();
             cmdBuf->referencedStagingBuffers.clear();
             
             // Move to pool
-            m_CommandBuffersPool.push_back(std::move(*it));
-            it = m_CommandBuffersInFlight.erase(it);
+            m_commandBuffersPool.push_back(std::move(*it));
+            it = m_commandBuffersInFlight.erase(it);
         }
         else{
             ++it;
@@ -127,13 +128,13 @@ TrackedCommandBufferPtr Queue::getOrCreateCommandBuffer(){
     }
     
     // Try to reuse a command buffer from the pool
-    if(!m_CommandBuffersPool.empty()){
-        TrackedCommandBufferPtr cmdBuf = std::move(m_CommandBuffersPool.front());
-        m_CommandBuffersPool.pop_front();
+    if(!m_commandBuffersPool.empty()){
+        TrackedCommandBufferPtr cmdBuf = std::move(m_commandBuffersPool.front());
+        m_commandBuffersPool.pop_front();
         
         // Reset the command buffer
         vkResetCommandBuffer(cmdBuf->cmdBuf, 0);
-        cmdBuf->recordingID = ++m_LastRecordingID;
+        cmdBuf->recordingID = ++m_lastRecordingID;
         
         return cmdBuf;
     }
@@ -143,25 +144,25 @@ TrackedCommandBufferPtr Queue::getOrCreateCommandBuffer(){
 }
 
 void Queue::addWaitSemaphore(VkSemaphore semaphore, u64 value){
-    Mutex::scoped_lock lock(m_Mutex);
-    m_WaitSemaphores.push_back(semaphore);
-    m_WaitSemaphoreValues.push_back(value);
+    Mutex::scoped_lock lock(m_mutex);
+    m_waitSemaphores.push_back(semaphore);
+    m_waitSemaphoreValues.push_back(value);
 }
 
 void Queue::addSignalSemaphore(VkSemaphore semaphore, u64 value){
-    Mutex::scoped_lock lock(m_Mutex);
-    m_SignalSemaphores.push_back(semaphore);
-    m_SignalSemaphoreValues.push_back(value);
+    Mutex::scoped_lock lock(m_mutex);
+    m_signalSemaphores.push_back(semaphore);
+    m_signalSemaphoreValues.push_back(value);
 }
 
 u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
     if(!ppCmd || numCmd == 0)
-        return m_LastSubmittedID;
+        return m_lastSubmittedID;
     
-    Mutex::scoped_lock lock(m_Mutex);
+    Mutex::scoped_lock lock(m_mutex);
     
     // Increment submission ID
-    u64 submissionID = ++m_LastSubmittedID;
+    u64 submissionID = ++m_lastSubmittedID;
     
     // Collect command buffers from command lists
     Vector<TrackedCommandBufferPtr> trackedBuffers;
@@ -182,7 +183,7 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
     }
     
     if(cmdBufs.empty())
-        return m_LastSubmittedID - 1;
+        return m_lastSubmittedID - 1;
     
     // Setup timeline semaphore for tracking
     VkSemaphoreSubmitInfo timelineSignal = { VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO };
@@ -193,10 +194,10 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
     // Collect wait semaphores
     Vector<VkSemaphoreSubmitInfo> waitInfos;
     Vector<VkPipelineStageFlags2> waitStages;
-    for(usize i = 0; i < m_WaitSemaphores.size(); ++i){
+    for(usize i = 0; i < m_waitSemaphores.size(); ++i){
         VkSemaphoreSubmitInfo waitInfo = { VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO };
-        waitInfo.semaphore = m_WaitSemaphores[i];
-        waitInfo.value = m_WaitSemaphoreValues[i];
+        waitInfo.semaphore = m_waitSemaphores[i];
+        waitInfo.value = m_waitSemaphoreValues[i];
         waitInfo.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
         waitInfos.push_back(waitInfo);
     }
@@ -205,10 +206,10 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
     Vector<VkSemaphoreSubmitInfo> signalInfos;
     signalInfos.push_back(timelineSignal); // Always signal our tracking semaphore
     
-    for(usize i = 0; i < m_SignalSemaphores.size(); ++i){
+    for(usize i = 0; i < m_signalSemaphores.size(); ++i){
         VkSemaphoreSubmitInfo signalInfo = { VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO };
-        signalInfo.semaphore = m_SignalSemaphores[i];
-        signalInfo.value = m_SignalSemaphoreValues[i];
+        signalInfo.semaphore = m_signalSemaphores[i];
+        signalInfo.value = m_signalSemaphoreValues[i];
         signalInfo.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
         signalInfos.push_back(signalInfo);
     }
@@ -232,22 +233,22 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
     submitInfo.signalSemaphoreInfoCount = (u32)signalInfos.size();
     submitInfo.pSignalSemaphoreInfos = signalInfos.data();
     
-    VkResult res = vkQueueSubmit2(m_Queue, 1, &submitInfo, VK_NULL_HANDLE);
+    VkResult res = vkQueueSubmit2(m_queue, 1, &submitInfo, VK_NULL_HANDLE);
     
     // Clear wait/signal semaphores after submission
-    m_WaitSemaphores.clear();
-    m_WaitSemaphoreValues.clear();
-    m_SignalSemaphores.clear();
-    m_SignalSemaphoreValues.clear();
+    m_waitSemaphores.clear();
+    m_waitSemaphoreValues.clear();
+    m_signalSemaphores.clear();
+    m_signalSemaphoreValues.clear();
     
     // Move command buffers to in-flight list
     for(auto& tracked : trackedBuffers){
-        m_CommandBuffersInFlight.push_back(std::move(tracked));
+        m_commandBuffersInFlight.push_back(std::move(tracked));
     }
     
     if(res != VK_SUCCESS){
         // Submission failed
-        return m_LastSubmittedID - 1;
+        return m_lastSubmittedID - 1;
     }
     
     return submissionID;
@@ -256,15 +257,15 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
 void Queue::updateLastFinishedID(){
     // Query the timeline semaphore value
     u64 completedValue = 0;
-    vkGetSemaphoreCounterValue(m_Context.device, trackingSemaphore, &completedValue);
-    m_LastFinishedID = completedValue;
+    vkGetSemaphoreCounterValue(m_context.device, trackingSemaphore, &completedValue);
+    m_lastFinishedID = completedValue;
 }
 
 bool Queue::pollCommandList(u64 commandListID){
-    Mutex::scoped_lock lock(m_Mutex);
+    Mutex::scoped_lock lock(m_mutex);
     
     updateLastFinishedID();
-    return commandListID <= m_LastFinishedID;
+    return commandListID <= m_lastFinishedID;
 }
 
 bool Queue::waitCommandList(u64 commandListID, u64 timeout){
@@ -274,32 +275,32 @@ bool Queue::waitCommandList(u64 commandListID, u64 timeout){
     waitInfo.pSemaphores = &trackingSemaphore;
     waitInfo.pValues = &commandListID;
     
-    VkResult res = vkWaitSemaphores(m_Context.device, &waitInfo, timeout);
+    VkResult res = vkWaitSemaphores(m_context.device, &waitInfo, timeout);
     
     if(res == VK_SUCCESS){
-        Mutex::scoped_lock lock(m_Mutex);
-        if(commandListID > m_LastFinishedID)
-            m_LastFinishedID = commandListID;
+        Mutex::scoped_lock lock(m_mutex);
+        if(commandListID > m_lastFinishedID)
+            m_lastFinishedID = commandListID;
     }
     
     return res == VK_SUCCESS;
 }
 
 void Queue::waitForIdle(){
-    Mutex::scoped_lock lock(m_Mutex);
+    Mutex::scoped_lock lock(m_mutex);
     
-    vkQueueWaitIdle(m_Queue);
+    vkQueueWaitIdle(m_queue);
     
     // All submissions are now finished
-    m_LastFinishedID = m_LastSubmittedID;
+    m_lastFinishedID = m_lastSubmittedID;
     
     // Retire all command buffers to pool
-    for(auto& tracked : m_CommandBuffersInFlight){
+    for(auto& tracked : m_commandBuffersInFlight){
         tracked->referencedResources.clear();
         tracked->referencedStagingBuffers.clear();
-        m_CommandBuffersPool.push_back(std::move(tracked));
+        m_commandBuffersPool.push_back(std::move(tracked));
     }
-    m_CommandBuffersInFlight.clear();
+    m_commandBuffersInFlight.clear();
 }
 
 //-----------------------------------------------------------------------------

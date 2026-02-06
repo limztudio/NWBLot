@@ -10,6 +10,11 @@
 
 NWB_VULKAN_BEGIN
 
+using __hidden::checked_cast;
+using __hidden::getVkAccessFlags;
+using __hidden::getVkPipelineStageFlags;
+using __hidden::getVkImageLayout;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // CommandList - Resource state transitions and barriers

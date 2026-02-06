@@ -33,15 +33,15 @@ struct BufferChunk : public RefCounter<IResource>{
 
 
 UploadManager::UploadManager(Device* pParent, u64 defaultChunkSize, u64 memoryLimit, bool isScratchBuffer)
-    : m_Device(pParent)
-    , m_DefaultChunkSize(defaultChunkSize)
-    , m_MemoryLimit(memoryLimit)
-    , m_IsScratchBuffer(isScratchBuffer)
+    : m_device(pParent)
+    , m_defaultChunkSize(defaultChunkSize)
+    , m_memoryLimit(memoryLimit)
+    , m_isScratchBuffer(isScratchBuffer)
 {}
 
 UploadManager::~UploadManager(){
-    m_ChunkPool.clear();
-    m_CurrentChunk.reset();
+    m_chunkPool.clear();
+    m_currentChunk.reset();
 }
 
 bool UploadManager::suballocateBuffer(u64 size, Buffer** pBuffer, u64* pOffset, void** pCpuVA,
@@ -51,64 +51,64 @@ bool UploadManager::suballocateBuffer(u64 size, Buffer** pBuffer, u64* pOffset, 
         size = (size + alignment - 1) & ~(u64(alignment) - 1);
     
     // Check if current chunk has space
-    if(m_CurrentChunk && (m_CurrentChunk->allocated + size <= m_CurrentChunk->size)){
-        *pBuffer = m_CurrentChunk->buffer.get();
-        *pOffset = m_CurrentChunk->allocated;
+    if(m_currentChunk && (m_currentChunk->allocated + size <= m_currentChunk->size)){
+        *pBuffer = m_currentChunk->buffer.get();
+        *pOffset = m_currentChunk->allocated;
         if(pCpuVA)
-            *pCpuVA = static_cast<u8*>(m_CurrentChunk->buffer->mappedMemory) + m_CurrentChunk->allocated;
+            *pCpuVA = static_cast<u8*>(m_currentChunk->buffer->mappedMemory) + m_currentChunk->allocated;
         
-        m_CurrentChunk->allocated += size;
+        m_currentChunk->allocated += size;
         return true;
     }
     
     // Try to find a chunk from the pool
-    for(auto it = m_ChunkPool.begin(); it != m_ChunkPool.end(); ++it){
+    for(auto it = m_chunkPool.begin(); it != m_chunkPool.end(); ++it){
         if((*it)->size >= size && (*it)->version < currentVersion){
-            m_CurrentChunk = *it;
-            m_ChunkPool.erase(it);
-            m_CurrentChunk->allocated = 0;
-            m_CurrentChunk->version = currentVersion;
+            m_currentChunk = *it;
+            m_chunkPool.erase(it);
+            m_currentChunk->allocated = 0;
+            m_currentChunk->version = currentVersion;
             
-            *pBuffer = m_CurrentChunk->buffer.get();
+            *pBuffer = m_currentChunk->buffer.get();
             *pOffset = 0;
             if(pCpuVA)
-                *pCpuVA = m_CurrentChunk->buffer->mappedMemory;
+                *pCpuVA = m_currentChunk->buffer->mappedMemory;
             
-            m_CurrentChunk->allocated = size;
+            m_currentChunk->allocated = size;
             return true;
         }
     }
     
     // Create new chunk
-    u64 chunkSize = max(size, m_DefaultChunkSize);
+    u64 chunkSize = Max(size, m_defaultChunkSize);
     
     BufferDesc bufferDesc;
     bufferDesc.byteSize = chunkSize;
     bufferDesc.cpuAccess = CpuAccessMode::Write;
     bufferDesc.isVolatile = false;
-    bufferDesc.debugName = m_IsScratchBuffer ? "ScratchBuffer" : "UploadBuffer";
+    bufferDesc.debugName = m_isScratchBuffer ? "ScratchBuffer" : "UploadBuffer";
     
-    RefCountPtr<Buffer> buffer = static_cast<Buffer*>(m_Device->createBuffer(bufferDesc).get());
+    RefCountPtr<Buffer> buffer = static_cast<Buffer*>(m_device->createBuffer(bufferDesc).get());
     if(!buffer)
         return false;
     
-    m_CurrentChunk = MakeRefCount<BufferChunk>(buffer, chunkSize);
-    m_CurrentChunk->version = currentVersion;
+    m_currentChunk = MakeRefCount<BufferChunk>(buffer, chunkSize);
+    m_currentChunk->version = currentVersion;
     
     *pBuffer = buffer.get();
     *pOffset = 0;
     if(pCpuVA)
         *pCpuVA = buffer->mappedMemory;
     
-    m_CurrentChunk->allocated = size;
+    m_currentChunk->allocated = size;
     return true;
 }
 
 void UploadManager::submitChunks(u64 currentVersion, u64 submittedVersion){
-    if(m_CurrentChunk){
-        m_CurrentChunk->version = submittedVersion;
-        m_ChunkPool.push_back(m_CurrentChunk);
-        m_CurrentChunk.reset();
+    if(m_currentChunk){
+        m_currentChunk->version = submittedVersion;
+        m_chunkPool.push_back(m_currentChunk);
+        m_currentChunk.reset();
     }
 }
 

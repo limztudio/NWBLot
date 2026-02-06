@@ -11,21 +11,24 @@
 NWB_VULKAN_BEGIN
 
 
+using __hidden::checked_cast;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 Buffer::Buffer(const VulkanContext& context, VulkanAllocator& allocator)
-    : m_Context(context)
-    , m_Allocator(allocator)
+    : m_context(context)
+    , m_allocator(allocator)
 {}
 
 Buffer::~Buffer(){
     if(buffer != VK_NULL_HANDLE){
-        vkDestroyBuffer(m_Context.device, buffer, m_Context.allocationCallbacks);
+        vkDestroyBuffer(m_context.device, buffer, m_context.allocationCallbacks);
         buffer = VK_NULL_HANDLE;
     }
     
-    m_Allocator.freeBufferMemory(this);
+    m_allocator.freeBufferMemory(this);
 }
 
 
@@ -34,7 +37,7 @@ Buffer::~Buffer(){
 
 
 BufferHandle Device::createBuffer(const BufferDesc& d){
-    Buffer* buffer = new Buffer(m_Context, m_Allocator);
+    Buffer* buffer = new Buffer(m_context, m_allocator);
     buffer->desc = d;
     
     // Build usage flags
@@ -54,14 +57,14 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
         usageFlags |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
     if(d.isAccelStructStorage)
         usageFlags |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR;
-    if(m_Context.extensions.buffer_device_address)
+    if(m_context.extensions.buffer_device_address)
         usageFlags |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
     
     u64 size = d.byteSize;
     
     // Handle volatile buffers (for frequently updated CBs)
     if(d.isVolatile && d.maxVersions > 0){
-        u64 alignment = m_Context.physicalDeviceProperties.limits.minUniformBufferOffsetAlignment;
+        u64 alignment = m_context.physicalDeviceProperties.limits.minUniformBufferOffsetAlignment;
         size = (size + alignment - 1) & ~(alignment - 1);
         size *= d.maxVersions;
         
@@ -75,26 +78,26 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
     bufferInfo.usage = usageFlags;
     bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     
-    VkResult res = vkCreateBuffer(m_Context.device, &bufferInfo, m_Context.allocationCallbacks, &buffer->buffer);
+    VkResult res = vkCreateBuffer(m_context.device, &bufferInfo, m_context.allocationCallbacks, &buffer->buffer);
     assert(res == VK_SUCCESS);
     
     // Allocate memory if not virtual
     if(!d.isVirtual){
-        VkResult res = m_Allocator.allocateBufferMemory(buffer, m_Context.extensions.buffer_device_address && (usageFlags & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT));
+        VkResult res = m_allocator.allocateBufferMemory(buffer, m_context.extensions.buffer_device_address && (usageFlags & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT));
         assert(res == VK_SUCCESS);
         
         // Map memory for volatile or CPU-accessible buffers
         if(d.isVolatile || d.cpuAccess != CpuAccessMode::None){
-            VkResult res = vkMapMemory(m_Context.device, buffer->memory, 0, size, 0, &buffer->mappedMemory);
+            VkResult res = vkMapMemory(m_context.device, buffer->memory, 0, size, 0, &buffer->mappedMemory);
             assert(res == VK_SUCCESS);
         }
         
         // Get device address
-        if(m_Context.extensions.buffer_device_address){
+        if(m_context.extensions.buffer_device_address){
             VkBufferDeviceAddressInfo addressInfo{};
             addressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
             addressInfo.buffer = buffer->buffer;
-            buffer->deviceAddress = vkGetBufferDeviceAddress(m_Context.device, &addressInfo);
+            buffer->deviceAddress = vkGetBufferDeviceAddress(m_context.device, &addressInfo);
         }
     }
     
@@ -108,7 +111,7 @@ void* Device::mapBuffer(IBuffer* _buffer, CpuAccessMode::Enum cpuAccess){
         return buffer->mappedMemory;
     
     void* data = nullptr;
-    VkResult res = vkMapMemory(m_Context.device, buffer->memory, 0, VK_WHOLE_SIZE, 0, &data);
+    VkResult res = vkMapMemory(m_context.device, buffer->memory, 0, VK_WHOLE_SIZE, 0, &data);
     assert(res == VK_SUCCESS);
     
     buffer->mappedMemory = data;
@@ -119,7 +122,7 @@ void Device::unmapBuffer(IBuffer* _buffer){
     Buffer* buffer = static_cast<Buffer*>(_buffer);
     
     if(buffer->mappedMemory && !buffer->desc.isVolatile && buffer->desc.cpuAccess == CpuAccessMode::None){
-        vkUnmapMemory(m_Context.device, buffer->memory);
+        vkUnmapMemory(m_context.device, buffer->memory);
         buffer->mappedMemory = nullptr;
     }
 }
@@ -128,7 +131,7 @@ MemoryRequirements Device::getBufferMemoryRequirements(IBuffer* _buffer){
     Buffer* buffer = static_cast<Buffer*>(_buffer);
     
     VkMemoryRequirements memRequirements;
-    vkGetBufferMemoryRequirements(m_Context.device, buffer->buffer, &memRequirements);
+    vkGetBufferMemoryRequirements(m_context.device, buffer->buffer, &memRequirements);
     
     MemoryRequirements result;
     result.size = memRequirements.size;
@@ -155,7 +158,7 @@ void CommandList::writeBuffer(IBuffer* _buffer, const void* data, usize dataSize
     Buffer* buffer = checked_cast<Buffer*>(_buffer);
     
     // Allocate staging buffer
-    UploadManager* uploadMgr = m_Device->getUploadManager();
+    UploadManager* uploadMgr = m_device->getUploadManager();
     Buffer* stagingBuffer = nullptr;
     u64 stagingOffset = 0;
     void* cpuVA = nullptr;
@@ -166,7 +169,7 @@ void CommandList::writeBuffer(IBuffer* _buffer, const void* data, usize dataSize
     }
     
     // Copy data to staging
-    memcpy(cpuVA, data, dataSize);
+    NWB_MEMCPY(cpuVA, dataSize, data, dataSize);
     
     // Copy staging to destination
     VkBufferCopy region{};

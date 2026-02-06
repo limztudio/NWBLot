@@ -10,30 +10,34 @@
 
 NWB_VULKAN_BEGIN
 
+using __hidden::checked_cast;
+using namespace __hidden_vulkan;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-// Forward declarations of helper functions
-static VkDescriptorType convertDescriptorType(ResourceType::Enum type);
-static VkShaderStageFlags convertShaderStages(ShaderType::Mask stages);
+namespace __hidden_vulkan{
+VkDescriptorType convertDescriptorType(ResourceType::Enum type);
+VkShaderStageFlags convertShaderStages(ShaderType::Mask stages);
+} // namespace __hidden_vulkan
 
 //-----------------------------------------------------------------------------
 // BindingLayout - Pipeline resource binding layout
 //-----------------------------------------------------------------------------
 
 BindingLayout::BindingLayout(const VulkanContext& context)
-    : m_Context(context)
+    : m_context(context)
 {}
 
 BindingLayout::~BindingLayout(){
     if(pipelineLayout){
-        vkDestroyPipelineLayout(m_Context.device, pipelineLayout, nullptr);
+        vkDestroyPipelineLayout(m_context.device, pipelineLayout, nullptr);
         pipelineLayout = VK_NULL_HANDLE;
     }
     
     for(VkDescriptorSetLayout layout : descriptorSetLayouts){
         if(layout)
-            vkDestroyDescriptorSetLayout(m_Context.device, layout, nullptr);
+            vkDestroyDescriptorSetLayout(m_context.device, layout, nullptr);
     }
     descriptorSetLayouts.clear();
 }
@@ -43,7 +47,7 @@ BindingLayout::~BindingLayout(){
 //-----------------------------------------------------------------------------
 
 DescriptorTable::DescriptorTable(const VulkanContext& context)
-    : m_Context(context)
+    : m_context(context)
 {}
 
 DescriptorTable::~DescriptorTable(){
@@ -56,7 +60,7 @@ DescriptorTable::~DescriptorTable(){
 //-----------------------------------------------------------------------------
 
 BindingSet::BindingSet(const VulkanContext& context)
-    : m_Context(context)
+    : m_context(context)
 {}
 
 BindingSet::~BindingSet(){
@@ -74,7 +78,7 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
     // 3. Create VkPipelineLayout combining all descriptor set layouts
     // 4. Handle push constants if present
     
-    BindingLayout* layout = new BindingLayout(m_Context);
+    BindingLayout* layout = new BindingLayout(m_context);
     layout->desc = desc;
     
     // Create descriptor set layout bindings from desc
@@ -101,7 +105,7 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
     layoutInfo.pBindings = bindings.data();
     
     VkDescriptorSetLayout setLayout = VK_NULL_HANDLE;
-    VkResult res = vkCreateDescriptorSetLayout(m_Context.device, &layoutInfo, m_Context.allocationCallbacks, &setLayout);
+    VkResult res = vkCreateDescriptorSetLayout(m_context.device, &layoutInfo, m_context.allocationCallbacks, &setLayout);
     
     if(res == VK_SUCCESS){
         layout->descriptorSetLayouts.push_back(setLayout);
@@ -123,7 +127,7 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
     pipelineLayoutInfo.pushConstantRangeCount = hasPushConstants ? 1 : 0;
     pipelineLayoutInfo.pPushConstantRanges = hasPushConstants ? &pushConstantRange : nullptr;
     
-    res = vkCreatePipelineLayout(m_Context.device, &pipelineLayoutInfo, m_Context.allocationCallbacks, &layout->pipelineLayout);
+    res = vkCreatePipelineLayout(m_context.device, &pipelineLayoutInfo, m_context.allocationCallbacks, &layout->pipelineLayout);
     
     if(res != VK_SUCCESS){
         delete layout;
@@ -135,7 +139,7 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
 
 BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc){
     // Create a bindless layout with UPDATE_AFTER_BIND flag for descriptor indexing
-    BindingLayout* layout = new BindingLayout(m_Context);
+    BindingLayout* layout = new BindingLayout(m_context);
     layout->isBindless = true;
     layout->bindlessDesc = desc;
     
@@ -171,7 +175,7 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
     layoutInfo.pBindings = bindings.data();
     
     VkDescriptorSetLayout setLayout = VK_NULL_HANDLE;
-    VkResult res = vkCreateDescriptorSetLayout(m_Context.device, &layoutInfo, m_Context.allocationCallbacks, &setLayout);
+    VkResult res = vkCreateDescriptorSetLayout(m_context.device, &layoutInfo, m_context.allocationCallbacks, &setLayout);
     
     if(res == VK_SUCCESS){
         layout->descriptorSetLayouts.push_back(setLayout);
@@ -182,7 +186,7 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
     pipelineLayoutInfo.setLayoutCount = static_cast<u32>(layout->descriptorSetLayouts.size());
     pipelineLayoutInfo.pSetLayouts = layout->descriptorSetLayouts.data();
     
-    res = vkCreatePipelineLayout(m_Context.device, &pipelineLayoutInfo, m_Context.allocationCallbacks, &layout->pipelineLayout);
+    res = vkCreatePipelineLayout(m_context.device, &pipelineLayoutInfo, m_context.allocationCallbacks, &layout->pipelineLayout);
     
     if(res != VK_SUCCESS){
         delete layout;
@@ -200,7 +204,7 @@ DescriptorTableHandle Device::createDescriptorTable(IBindingLayout* _layout){
     // Allocate descriptor sets from pool
     BindingLayout* layout = checked_cast<BindingLayout*>(_layout);
     
-    DescriptorTable* table = new DescriptorTable(m_Context);
+    DescriptorTable* table = new DescriptorTable(m_context);
     table->layout = layout;
     
     // Get or create descriptor pool
@@ -227,7 +231,7 @@ DescriptorTableHandle Device::createDescriptorTable(IBindingLayout* _layout){
     poolInfo.pPoolSizes = poolSizes.data();
     
     VkDescriptorPool pool = VK_NULL_HANDLE;
-    VkResult res = vkCreateDescriptorPool(m_Context.device, &poolInfo, m_Context.allocationCallbacks, &pool);
+    VkResult res = vkCreateDescriptorPool(m_context.device, &poolInfo, m_context.allocationCallbacks, &pool);
     
     if(res != VK_SUCCESS){
         delete table;
@@ -241,10 +245,10 @@ DescriptorTableHandle Device::createDescriptorTable(IBindingLayout* _layout){
         allocInfo.pSetLayouts = layout->descriptorSetLayouts.data();
         
         table->descriptorSets.resize(layout->descriptorSetLayouts.size());
-        res = vkAllocateDescriptorSets(m_Context.device, &allocInfo, table->descriptorSets.data());
+        res = vkAllocateDescriptorSets(m_context.device, &allocInfo, table->descriptorSets.data());
         
         if(res != VK_SUCCESS){
-            vkDestroyDescriptorPool(m_Context.device, pool, m_Context.allocationCallbacks);
+            vkDestroyDescriptorPool(m_context.device, pool, m_context.allocationCallbacks);
             delete table;
             return nullptr;
         }
@@ -314,7 +318,7 @@ bool Device::writeDescriptorTable(IDescriptorTable* descriptorTable, const Bindi
         return false;
     }
     
-    vkUpdateDescriptorSets(m_Context.device, 1, &write, 0, nullptr);
+    vkUpdateDescriptorSets(m_context.device, 1, &write, 0, nullptr);
     return true;
 }
 
@@ -325,7 +329,7 @@ bool Device::writeDescriptorTable(IDescriptorTable* descriptorTable, const Bindi
 BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLayout* _layout){
     BindingLayout* layout = checked_cast<BindingLayout*>(_layout);
     
-    BindingSet* bindingSet = new BindingSet(m_Context);
+    BindingSet* bindingSet = new BindingSet(m_context);
     bindingSet->desc = desc;
     
     // Create descriptor table for this binding set
@@ -403,7 +407,7 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLa
     }
     
     if(!writes.empty()){
-        vkUpdateDescriptorSets(m_Context.device, static_cast<u32>(writes.size()), writes.data(), 0, nullptr);
+        vkUpdateDescriptorSets(m_context.device, static_cast<u32>(writes.size()), writes.data(), 0, nullptr);
     }
     
     return BindingSetHandle(bindingSet, AdoptRef);
@@ -413,7 +417,9 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLa
 // Helper functions for descriptor conversion
 //-----------------------------------------------------------------------------
 
-static VkDescriptorType convertDescriptorType(ResourceType::Enum type){
+namespace __hidden_vulkan{
+
+VkDescriptorType convertDescriptorType(ResourceType::Enum type){
     switch(type){
     case ResourceType::Texture_SRV:
         return VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
@@ -441,7 +447,7 @@ static VkDescriptorType convertDescriptorType(ResourceType::Enum type){
     }
 }
 
-static VkShaderStageFlags convertShaderStages(ShaderType::Mask stages){
+VkShaderStageFlags convertShaderStages(ShaderType::Mask stages){
     VkShaderStageFlags flags = 0;
     
     if(stages & ShaderType::Vertex)
@@ -469,6 +475,8 @@ static VkShaderStageFlags convertShaderStages(ShaderType::Mask stages){
     
     return flags;
 }
+
+} // namespace __hidden_vulkan
 
 //-----------------------------------------------------------------------------
 // Descriptor Pool Management

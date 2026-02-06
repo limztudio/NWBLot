@@ -18,65 +18,65 @@ NWB_VULKAN_BEGIN
 //-----------------------------------------------------------------------------
 
 Device::Device(const DeviceDesc& desc)
-    : m_Allocator(m_Context)
+    : m_allocator(m_context)
 {
     // Initialize Vulkan context from device description
-    m_Context.instance = desc.instance;
-    m_Context.physicalDevice = desc.physicalDevice;
-    m_Context.device = desc.device;
-    m_Context.allocationCallbacks = desc.allocationCallbacks;
+    m_context.instance = desc.instance;
+    m_context.physicalDevice = desc.physicalDevice;
+    m_context.device = desc.device;
+    m_context.allocationCallbacks = desc.allocationCallbacks;
     
     // Query physical device properties
-    vkGetPhysicalDeviceProperties(m_Context.physicalDevice, &m_Context.physicalDeviceProperties);
-    vkGetPhysicalDeviceMemoryProperties(m_Context.physicalDevice, &m_Context.memoryProperties);
+    vkGetPhysicalDeviceProperties(m_context.physicalDevice, &m_context.physicalDeviceProperties);
+    vkGetPhysicalDeviceMemoryProperties(m_context.physicalDevice, &m_context.memoryProperties);
     
     // Check for extensions
-    m_Context.extensions.buffer_device_address = desc.bufferDeviceAddressSupported;
+    m_context.extensions.buffer_device_address = desc.bufferDeviceAddressSupported;
     
     // Parse device extensions
     for(usize i = 0; i < desc.numDeviceExtensions; i++){
         const char* ext = desc.deviceExtensions[i];
-        if(strcmp(ext, VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME) == 0)
-            m_Context.extensions.KHR_synchronization2 = true;
-        else if(strcmp(ext, VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME) == 0)
-            m_Context.extensions.KHR_ray_tracing_pipeline = true;
-        else if(strcmp(ext, VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME) == 0)
-            m_Context.extensions.KHR_acceleration_structure = true;
-        else if(strcmp(ext, VK_EXT_DEBUG_UTILS_EXTENSION_NAME) == 0)
-            m_Context.extensions.EXT_debug_utils = true;
-        else if(strcmp(ext, VK_KHR_SWAPCHAIN_EXTENSION_NAME) == 0)
-            m_Context.extensions.KHR_swapchain = true;
-        else if(strcmp(ext, VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME) == 0)
-            m_Context.extensions.KHR_dynamic_rendering = true;
+        if(NWB_STRCMP(ext, VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME) == 0)
+            m_context.extensions.KHR_synchronization2 = true;
+        else if(NWB_STRCMP(ext, VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME) == 0)
+            m_context.extensions.KHR_ray_tracing_pipeline = true;
+        else if(NWB_STRCMP(ext, VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME) == 0)
+            m_context.extensions.KHR_acceleration_structure = true;
+        else if(NWB_STRCMP(ext, VK_EXT_DEBUG_UTILS_EXTENSION_NAME) == 0)
+            m_context.extensions.EXT_debug_utils = true;
+        else if(NWB_STRCMP(ext, VK_KHR_SWAPCHAIN_EXTENSION_NAME) == 0)
+            m_context.extensions.KHR_swapchain = true;
+        else if(NWB_STRCMP(ext, VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME) == 0)
+            m_context.extensions.KHR_dynamic_rendering = true;
     }
     
     // Query ray tracing properties if available
-    if(m_Context.extensions.KHR_ray_tracing_pipeline){
+    if(m_context.extensions.KHR_ray_tracing_pipeline){
         VkPhysicalDeviceProperties2 props2 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2 };
-        m_Context.rayTracingPipelineProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR;
-        props2.pNext = &m_Context.rayTracingPipelineProperties;
-        vkGetPhysicalDeviceProperties2(m_Context.physicalDevice, &props2);
+        m_context.rayTracingPipelineProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR;
+        props2.pNext = &m_context.rayTracingPipelineProperties;
+        vkGetPhysicalDeviceProperties2(m_context.physicalDevice, &props2);
     }
     
     // Create pipeline cache
     VkPipelineCacheCreateInfo cacheInfo = { VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO };
-    vkCreatePipelineCache(m_Context.device, &cacheInfo, m_Context.allocationCallbacks, &m_Context.pipelineCache);
+    vkCreatePipelineCache(m_context.device, &cacheInfo, m_context.allocationCallbacks, &m_context.pipelineCache);
     
     // Create empty descriptor set layout
     VkDescriptorSetLayoutCreateInfo emptyLayoutInfo = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
     emptyLayoutInfo.bindingCount = 0;
     emptyLayoutInfo.pBindings = nullptr;
-    vkCreateDescriptorSetLayout(m_Context.device, &emptyLayoutInfo, m_Context.allocationCallbacks, &m_Context.emptyDescriptorSetLayout);
+    vkCreateDescriptorSetLayout(m_context.device, &emptyLayoutInfo, m_context.allocationCallbacks, &m_context.emptyDescriptorSetLayout);
     
     // Initialize queues
     if(desc.graphicsQueue && desc.graphicsQueueIndex >= 0){
-        m_Queues[static_cast<u32>(CommandQueue::Graphics)] = UniquePtr<Queue>(new Queue(m_Context, CommandQueue::Graphics, desc.graphicsQueue, desc.graphicsQueueIndex));
+        m_queues[static_cast<u32>(CommandQueue::Graphics)] = UniquePtr<Queue>(new Queue(m_context, CommandQueue::Graphics, desc.graphicsQueue, desc.graphicsQueueIndex));
     }
     if(desc.computeQueue && desc.computeQueueIndex >= 0){
-        m_Queues[static_cast<u32>(CommandQueue::Compute)] = UniquePtr<Queue>(new Queue(m_Context, CommandQueue::Compute, desc.computeQueue, desc.computeQueueIndex));
+        m_queues[static_cast<u32>(CommandQueue::Compute)] = UniquePtr<Queue>(new Queue(m_context, CommandQueue::Compute, desc.computeQueue, desc.computeQueueIndex));
     }
     if(desc.transferQueue && desc.transferQueueIndex >= 0){
-        m_Queues[static_cast<u32>(CommandQueue::Copy)] = UniquePtr<Queue>(new Queue(m_Context, CommandQueue::Copy, desc.transferQueue, desc.transferQueueIndex));
+        m_queues[static_cast<u32>(CommandQueue::Copy)] = UniquePtr<Queue>(new Queue(m_context, CommandQueue::Copy, desc.transferQueue, desc.transferQueueIndex));
     }
     
     // Create upload managers
@@ -84,8 +84,8 @@ Device::Device(const DeviceDesc& desc)
     constexpr u64 defaultScratchChunkSize = 16 * 1024 * 1024; // 16 MB
     constexpr u64 scratchMemoryLimit = 256 * 1024 * 1024; // 256 MB
     
-    m_UploadManager = UniquePtr<UploadManager>(new UploadManager(this, defaultUploadChunkSize, 0, false));
-    m_ScratchManager = UniquePtr<UploadManager>(new UploadManager(this, defaultScratchChunkSize, scratchMemoryLimit, true));
+    m_uploadManager = UniquePtr<UploadManager>(new UploadManager(this, defaultUploadChunkSize, 0, false));
+    m_scratchManager = UniquePtr<UploadManager>(new UploadManager(this, defaultScratchChunkSize, scratchMemoryLimit, true));
 }
 
 Device::~Device(){
@@ -93,31 +93,31 @@ Device::~Device(){
     waitForIdle();
     
     // Destroy upload managers
-    m_UploadManager.reset();
-    m_ScratchManager.reset();
+    m_uploadManager.reset();
+    m_scratchManager.reset();
     
     // Destroy queues
     for(u32 i = 0; i < static_cast<u32>(CommandQueue::kCount); i++){
-        m_Queues[i].reset();
+        m_queues[i].reset();
     }
     
     // Destroy empty descriptor set layout
-    if(m_Context.emptyDescriptorSetLayout){
-        vkDestroyDescriptorSetLayout(m_Context.device, m_Context.emptyDescriptorSetLayout, m_Context.allocationCallbacks);
-        m_Context.emptyDescriptorSetLayout = VK_NULL_HANDLE;
+    if(m_context.emptyDescriptorSetLayout){
+        vkDestroyDescriptorSetLayout(m_context.device, m_context.emptyDescriptorSetLayout, m_context.allocationCallbacks);
+        m_context.emptyDescriptorSetLayout = VK_NULL_HANDLE;
     }
     
     // Destroy pipeline cache
-    if(m_Context.pipelineCache){
-        vkDestroyPipelineCache(m_Context.device, m_Context.pipelineCache, m_Context.allocationCallbacks);
-        m_Context.pipelineCache = VK_NULL_HANDLE;
+    if(m_context.pipelineCache){
+        vkDestroyPipelineCache(m_context.device, m_context.pipelineCache, m_context.allocationCallbacks);
+        m_context.pipelineCache = VK_NULL_HANDLE;
     }
 }
 
 Queue* Device::getQueue(CommandQueue::Enum queueType)const{
     u32 index = static_cast<u32>(queueType);
     if(index < static_cast<u32>(CommandQueue::kCount)){
-        return m_Queues[index].get();
+        return m_queues[index].get();
     }
     return nullptr;
 }
@@ -140,12 +140,12 @@ u64 Device::executeCommandLists(ICommandList* const* pCommandLists, usize numCom
 }
 
 bool Device::waitForIdle(){
-    vkDeviceWaitIdle(m_Context.device);
+    vkDeviceWaitIdle(m_context.device);
     
     // Update all queue completion states
     for(u32 i = 0; i < static_cast<u32>(CommandQueue::kCount); i++){
-        if(m_Queues[i]){
-            m_Queues[i]->updateLastFinishedID();
+        if(m_queues[i]){
+            m_queues[i]->updateLastFinishedID();
         }
     }
     
@@ -155,8 +155,8 @@ bool Device::waitForIdle(){
 void Device::runGarbageCollection(){
     // Update completion status for all queues
     for(u32 i = 0; i < static_cast<u32>(CommandQueue::kCount); i++){
-        if(m_Queues[i]){
-            m_Queues[i]->updateLastFinishedID();
+        if(m_queues[i]){
+            m_queues[i]->updateLastFinishedID();
         }
     }
 }
@@ -170,11 +170,11 @@ bool Device::queryFeatureSupport(Feature::Enum feature, void* pInfo, usize infoS
     case Feature::DeferredCommandLists:
         return true;
     case Feature::RayTracingAccelStruct:
-        return m_Context.extensions.KHR_acceleration_structure;
+        return m_context.extensions.KHR_acceleration_structure;
     case Feature::RayTracingPipeline:
-        return m_Context.extensions.KHR_ray_tracing_pipeline;
+        return m_context.extensions.KHR_ray_tracing_pipeline;
     case Feature::RayQuery:
-        return m_Context.extensions.KHR_ray_tracing_pipeline;
+        return m_context.extensions.KHR_ray_tracing_pipeline;
     case Feature::ShaderExecutionReordering:
         return false; // Would need NV extension check
     case Feature::Meshlets:
@@ -184,9 +184,9 @@ bool Device::queryFeatureSupport(Feature::Enum feature, void* pInfo, usize infoS
     case Feature::VirtualResources:
         return true;
     case Feature::ComputeQueue:
-        return m_Queues[static_cast<u32>(CommandQueue::Compute)] != nullptr;
+        return m_queues[static_cast<u32>(CommandQueue::Compute)] != nullptr;
     case Feature::CopyQueue:
-        return m_Queues[static_cast<u32>(CommandQueue::Copy)] != nullptr;
+        return m_queues[static_cast<u32>(CommandQueue::Copy)] != nullptr;
     case Feature::ConstantBufferRanges:
         return true;
     default:
@@ -200,7 +200,7 @@ FormatSupport::Mask Device::queryFormatSupport(Format::Enum format){
         return FormatSupport::None;
     
     VkFormatProperties props;
-    vkGetPhysicalDeviceFormatProperties(m_Context.physicalDevice, vkFormat, &props);
+    vkGetPhysicalDeviceFormatProperties(m_context.physicalDevice, vkFormat, &props);
     
     FormatSupport::Mask support = FormatSupport::None;
     

@@ -11,6 +11,7 @@
 
 NWB_VULKAN_BEGIN
 
+using __hidden::checked_cast;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // CommandList - Copy operations (staging texture overloads)
@@ -128,7 +129,7 @@ ResourceStates::Mask CommandList::getBufferState(IBuffer* buffer){
 
 
 IDevice* CommandList::getDevice(){
-    return m_Device;
+    return m_device;
 }
 
 const CommandListParameters& CommandList::getDesc(){

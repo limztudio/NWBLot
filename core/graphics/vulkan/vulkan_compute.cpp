@@ -10,6 +10,7 @@
 
 NWB_VULKAN_BEGIN
 
+using __hidden::checked_cast;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -19,7 +20,7 @@ NWB_VULKAN_BEGIN
 
 ComputePipeline::~ComputePipeline(){
     if(pipeline){
-        vkDestroyPipeline(m_Context.device, pipeline, m_Context.allocationCallbacks);
+        vkDestroyPipeline(m_context.device, pipeline, m_context.allocationCallbacks);
         pipeline = VK_NULL_HANDLE;
     }
 }
@@ -35,7 +36,7 @@ Object ComputePipeline::getNativeHandle(ObjectType objectType){
 //-----------------------------------------------------------------------------
 
 ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& desc){
-    ComputePipeline* pso = new ComputePipeline(m_Context);
+    ComputePipeline* pso = new ComputePipeline(m_context);
     pso->desc = desc;
     
     // Compute pipeline requires a compute shader
@@ -65,7 +66,7 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
     pipelineInfo.stage = shaderStage;
     pipelineInfo.layout = pipelineLayout;
     
-    VkResult res = vkCreateComputePipelines(m_Context.device, m_Context.pipelineCache, 1, &pipelineInfo, m_Context.allocationCallbacks, &pso->pipeline);
+    VkResult res = vkCreateComputePipelines(m_context.device, m_context.pipelineCache, 1, &pipelineInfo, m_context.allocationCallbacks, &pso->pipeline);
     
     if(res != VK_SUCCESS){
         delete pso;

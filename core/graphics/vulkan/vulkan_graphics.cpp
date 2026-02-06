@@ -10,6 +10,8 @@
 
 NWB_VULKAN_BEGIN
 
+using __hidden::checked_cast;
+using namespace __hidden_vulkan;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -19,7 +21,7 @@ NWB_VULKAN_BEGIN
 
 GraphicsPipeline::~GraphicsPipeline(){
     if(pipeline){
-        vkDestroyPipeline(m_Context.device, pipeline, nullptr);
+        vkDestroyPipeline(m_context.device, pipeline, nullptr);
         pipeline = VK_NULL_HANDLE;
     }
 }
@@ -35,7 +37,7 @@ Object GraphicsPipeline::getNativeHandle(ObjectType objectType){
 //-----------------------------------------------------------------------------
 
 FramebufferHandle Device::createFramebuffer(const FramebufferDesc& desc){
-    Framebuffer* fb = new Framebuffer(m_Context);
+    Framebuffer* fb = new Framebuffer(m_context);
     fb->desc = desc;
     
     // Calculate framebuffer info from attachments
@@ -94,7 +96,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     // 10. Pipeline layout
     // 11. Render pass or dynamic rendering
     
-    GraphicsPipeline* pso = new GraphicsPipeline(m_Context);
+    GraphicsPipeline* pso = new GraphicsPipeline(m_context);
     pso->desc = desc;
     
     // Step 1: Collect shader stages
@@ -247,7 +249,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     pipelineInfo.renderPass = VK_NULL_HANDLE; // Using dynamic rendering
     pipelineInfo.subpass = 0;
     
-    VkResult res = vkCreateGraphicsPipelines(m_Context.device, m_Context.pipelineCache, 1, &pipelineInfo, m_Context.allocationCallbacks, &pso->pipeline);
+    VkResult res = vkCreateGraphicsPipelines(m_context.device, m_context.pipelineCache, 1, &pipelineInfo, m_context.allocationCallbacks, &pso->pipeline);
     
     if(res != VK_SUCCESS){
         delete pso;
@@ -436,11 +438,13 @@ void CommandList::drawIndirect(u32 offsetBytes, u32 drawCount){
     currentCmdBuf->referencedResources.push_back(currentGraphicsState.indirectParams);
 }
 
+namespace __hidden_vulkan{
+
 //-----------------------------------------------------------------------------
 // Helper functions for state conversion
 //-----------------------------------------------------------------------------
 
-static VkPrimitiveTopology convertPrimitiveTopology(PrimitiveType::Enum primType){
+VkPrimitiveTopology convertPrimitiveTopology(PrimitiveType::Enum primType){
     switch(primType){
     case PrimitiveType::PointList:     return VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
     case PrimitiveType::LineList:      return VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
@@ -454,7 +458,7 @@ static VkPrimitiveTopology convertPrimitiveTopology(PrimitiveType::Enum primType
     }
 }
 
-static VkCullModeFlags convertCullMode(RasterCullMode::Enum cullMode){
+VkCullModeFlags convertCullMode(RasterCullMode::Enum cullMode){
     switch(cullMode){
     case RasterCullMode::Back:  return VK_CULL_MODE_BACK_BIT;
     case RasterCullMode::Front: return VK_CULL_MODE_FRONT_BIT;
@@ -463,7 +467,7 @@ static VkCullModeFlags convertCullMode(RasterCullMode::Enum cullMode){
     }
 }
 
-static VkPolygonMode convertFillMode(RasterFillMode::Enum fillMode){
+VkPolygonMode convertFillMode(RasterFillMode::Enum fillMode){
     switch(fillMode){
     case RasterFillMode::Solid:     return VK_POLYGON_MODE_FILL;
     case RasterFillMode::Wireframe: return VK_POLYGON_MODE_LINE;
@@ -471,7 +475,7 @@ static VkPolygonMode convertFillMode(RasterFillMode::Enum fillMode){
     }
 }
 
-static VkCompareOp convertCompareOp(ComparisonFunc::Enum compareFunc){
+VkCompareOp convertCompareOp(ComparisonFunc::Enum compareFunc){
     switch(compareFunc){
     case ComparisonFunc::Never:        return VK_COMPARE_OP_NEVER;
     case ComparisonFunc::Less:         return VK_COMPARE_OP_LESS;
@@ -485,7 +489,7 @@ static VkCompareOp convertCompareOp(ComparisonFunc::Enum compareFunc){
     }
 }
 
-static VkStencilOp convertStencilOp(StencilOp::Enum stencilOp){
+VkStencilOp convertStencilOp(StencilOp::Enum stencilOp){
     switch(stencilOp){
     case StencilOp::Keep:              return VK_STENCIL_OP_KEEP;
     case StencilOp::Zero:              return VK_STENCIL_OP_ZERO;
@@ -499,7 +503,7 @@ static VkStencilOp convertStencilOp(StencilOp::Enum stencilOp){
     }
 }
 
-static VkBlendFactor convertBlendFactor(BlendFactor::Enum blendFactor){
+VkBlendFactor convertBlendFactor(BlendFactor::Enum blendFactor){
     switch(blendFactor){
     case BlendFactor::Zero:             return VK_BLEND_FACTOR_ZERO;
     case BlendFactor::One:              return VK_BLEND_FACTOR_ONE;
@@ -522,7 +526,7 @@ static VkBlendFactor convertBlendFactor(BlendFactor::Enum blendFactor){
     }
 }
 
-static VkBlendOp convertBlendOp(BlendOp::Enum blendOp){
+VkBlendOp convertBlendOp(BlendOp::Enum blendOp){
     switch(blendOp){
     case BlendOp::Add:             return VK_BLEND_OP_ADD;
     case BlendOp::Subtract:        return VK_BLEND_OP_SUBTRACT;
@@ -533,7 +537,7 @@ static VkBlendOp convertBlendOp(BlendOp::Enum blendOp){
     }
 }
 
-static VkStencilOpState convertStencilOpState(const DepthStencilState& dsState, const DepthStencilState::StencilOpDesc& stencilDesc){
+VkStencilOpState convertStencilOpState(const DepthStencilState& dsState, const DepthStencilState::StencilOpDesc& stencilDesc){
     VkStencilOpState state = {};
     state.failOp = convertStencilOp(stencilDesc.failOp);
     state.passOp = convertStencilOp(stencilDesc.passOp);
@@ -545,7 +549,7 @@ static VkStencilOpState convertStencilOpState(const DepthStencilState& dsState, 
     return state;
 }
 
-static VkPipelineColorBlendAttachmentState convertBlendState(const BlendState::RenderTarget& target){
+VkPipelineColorBlendAttachmentState convertBlendState(const BlendState::RenderTarget& target){
     VkPipelineColorBlendAttachmentState state = {};
     state.blendEnable = target.blendEnable ? VK_TRUE : VK_FALSE;
     state.srcColorBlendFactor = convertBlendFactor(target.srcBlend);
@@ -561,6 +565,8 @@ static VkPipelineColorBlendAttachmentState convertBlendState(const BlendState::R
     if(target.colorWriteMask & ColorMask::Alpha) state.colorWriteMask |= VK_COLOR_COMPONENT_A_BIT;
     return state;
 }
+
+} // namespace __hidden_vulkan
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

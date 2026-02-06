@@ -11,17 +11,20 @@
 NWB_VULKAN_BEGIN
 
 
+using __hidden::convertFormat;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Sampler
 
 
 Sampler::Sampler(const VulkanContext& context)
-    : m_Context(context)
+    : m_context(context)
 {}
 
 Sampler::~Sampler(){
     if(sampler != VK_NULL_HANDLE){
-        vkDestroySampler(m_Context.device, sampler, m_Context.allocationCallbacks);
+        vkDestroySampler(m_context.device, sampler, m_context.allocationCallbacks);
         sampler = VK_NULL_HANDLE;
     }
 }
@@ -32,12 +35,12 @@ Sampler::~Sampler(){
 
 
 Shader::Shader(const VulkanContext& context)
-    : m_Context(context)
+    : m_context(context)
 {}
 
 Shader::~Shader(){
     if(shaderModule != VK_NULL_HANDLE){
-        vkDestroyShaderModule(m_Context.device, shaderModule, m_Context.allocationCallbacks);
+        vkDestroyShaderModule(m_context.device, shaderModule, m_context.allocationCallbacks);
         shaderModule = VK_NULL_HANDLE;
     }
 }
@@ -48,7 +51,7 @@ Shader::~Shader(){
 
 
 ShaderLibrary::ShaderLibrary(const VulkanContext& context)
-    : m_Context(context)
+    : m_context(context)
 {}
 
 ShaderLibrary::~ShaderLibrary(){}
@@ -71,7 +74,7 @@ ShaderHandle ShaderLibrary::getShader(const Name& entryName, ShaderType::Mask sh
 
 
 ShaderHandle Device::createShader(const ShaderDesc& d, const void* binary, usize binarySize){
-    Shader* shader = new Shader(m_Context);
+    Shader* shader = new Shader(m_context);
     shader->desc = d;
     shader->bytecode.assign(static_cast<const u8*>(binary), static_cast<const u8*>(binary) + binarySize);
     
@@ -80,7 +83,7 @@ ShaderHandle Device::createShader(const ShaderDesc& d, const void* binary, usize
     createInfo.codeSize = binarySize;
     createInfo.pCode = reinterpret_cast<const u32*>(binary);
     
-    VkResult res = vkCreateShaderModule(m_Context.device, &createInfo, m_Context.allocationCallbacks, &shader->shaderModule);
+    VkResult res = vkCreateShaderModule(m_context.device, &createInfo, m_context.allocationCallbacks, &shader->shaderModule);
     assert(res == VK_SUCCESS);
     
     return RefCountPtr<IShader, BlankDeleter<IShader>>(shader, AdoptRef);
@@ -117,7 +120,7 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
         if(bufferStrides.find(attr.bufferIndex) == bufferStrides.end())
             bufferStrides[attr.bufferIndex] = stride;
         else
-            bufferStrides[attr.bufferIndex] = max(bufferStrides[attr.bufferIndex], stride);
+            bufferStrides[attr.bufferIndex] = Max(bufferStrides[attr.bufferIndex], stride);
     }
     
     // Create binding descriptions
@@ -151,17 +154,17 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
 
 
 Framebuffer::Framebuffer(const VulkanContext& context)
-    : m_Context(context)
+    : m_context(context)
 {}
 
 Framebuffer::~Framebuffer(){
     if(framebuffer != VK_NULL_HANDLE){
-        vkDestroyFramebuffer(m_Context.device, framebuffer, m_Context.allocationCallbacks);
+        vkDestroyFramebuffer(m_context.device, framebuffer, m_context.allocationCallbacks);
         framebuffer = VK_NULL_HANDLE;
     }
     
     if(renderPass != VK_NULL_HANDLE){
-        vkDestroyRenderPass(m_Context.device, renderPass, m_Context.allocationCallbacks);
+        vkDestroyRenderPass(m_context.device, renderPass, m_context.allocationCallbacks);
         renderPass = VK_NULL_HANDLE;
     }
 }
@@ -172,18 +175,18 @@ Framebuffer::~Framebuffer(){
 
 
 EventQuery::EventQuery(const VulkanContext& context)
-    : m_Context(context)
+    : m_context(context)
 {
     VkFenceCreateInfo fenceInfo{};
     fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
     
-    VkResult res = vkCreateFence(m_Context.device, &fenceInfo, m_Context.allocationCallbacks, &fence);
+    VkResult res = vkCreateFence(m_context.device, &fenceInfo, m_context.allocationCallbacks, &fence);
     assert(res == VK_SUCCESS);
 }
 
 EventQuery::~EventQuery(){
     if(fence != VK_NULL_HANDLE){
-        vkDestroyFence(m_Context.device, fence, m_Context.allocationCallbacks);
+        vkDestroyFence(m_context.device, fence, m_context.allocationCallbacks);
         fence = VK_NULL_HANDLE;
     }
 }
@@ -194,20 +197,20 @@ EventQuery::~EventQuery(){
 
 
 TimerQuery::TimerQuery(const VulkanContext& context)
-    : m_Context(context)
+    : m_context(context)
 {
     VkQueryPoolCreateInfo queryPoolInfo{};
     queryPoolInfo.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
     queryPoolInfo.queryType = VK_QUERY_TYPE_TIMESTAMP;
     queryPoolInfo.queryCount = 2; // Start and end timestamps
     
-    VkResult res = vkCreateQueryPool(m_Context.device, &queryPoolInfo, m_Context.allocationCallbacks, &queryPool);
+    VkResult res = vkCreateQueryPool(m_context.device, &queryPoolInfo, m_context.allocationCallbacks, &queryPool);
     assert(res == VK_SUCCESS);
 }
 
 TimerQuery::~TimerQuery(){
     if(queryPool != VK_NULL_HANDLE){
-        vkDestroyQueryPool(m_Context.device, queryPool, m_Context.allocationCallbacks);
+        vkDestroyQueryPool(m_context.device, queryPool, m_context.allocationCallbacks);
         queryPool = VK_NULL_HANDLE;
     }
 }

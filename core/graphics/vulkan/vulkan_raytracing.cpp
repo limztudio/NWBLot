@@ -10,6 +10,8 @@
 
 NWB_VULKAN_BEGIN
 
+using __hidden::checked_cast;
+using namespace __hidden_vulkan;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -17,25 +19,27 @@ NWB_VULKAN_BEGIN
 // Helper functions for buffer addresses
 //-----------------------------------------------------------------------------
 
-static VkDeviceAddress getBufferDeviceAddress(IBuffer* _buffer, u64 offset = 0){
+namespace __hidden_vulkan{
+VkDeviceAddress getBufferDeviceAddress(IBuffer* _buffer, u64 offset = 0){
     if(!_buffer)
         return 0;
     
     Buffer* buffer = checked_cast<Buffer*>(_buffer);
     return buffer->deviceAddress + offset;
 }
+} // namespace __hidden_vulkan
 
 //-----------------------------------------------------------------------------
 // AccelStruct - Bottom-level and Top-level acceleration structures
 //-----------------------------------------------------------------------------
 
 AccelStruct::AccelStruct(const VulkanContext& context)
-    : m_Context(context)
+    : m_context(context)
 {}
 
 AccelStruct::~AccelStruct(){
     if(accelStruct){
-        vkDestroyAccelerationStructureKHR(m_Context.device, accelStruct, m_Context.allocationCallbacks);
+        vkDestroyAccelerationStructureKHR(m_context.device, accelStruct, m_context.allocationCallbacks);
         accelStruct = VK_NULL_HANDLE;
     }
     
@@ -53,12 +57,12 @@ Object AccelStruct::getNativeHandle(ObjectType objectType){
 //-----------------------------------------------------------------------------
 
 RayTracingPipeline::RayTracingPipeline(const VulkanContext& context)
-    : m_Context(context)
+    : m_context(context)
 {}
 
 RayTracingPipeline::~RayTracingPipeline(){
     if(pipeline){
-        vkDestroyPipeline(m_Context.device, pipeline, m_Context.allocationCallbacks);
+        vkDestroyPipeline(m_context.device, pipeline, m_context.allocationCallbacks);
         pipeline = VK_NULL_HANDLE;
     }
 }
@@ -74,10 +78,10 @@ Object RayTracingPipeline::getNativeHandle(ObjectType objectType){
 //-----------------------------------------------------------------------------
 
 RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStructDesc& desc){
-    if(!m_Context.extensions.KHR_acceleration_structure)
+    if(!m_context.extensions.KHR_acceleration_structure)
         return nullptr;
     
-    AccelStruct* as = new AccelStruct(m_Context);
+    AccelStruct* as = new AccelStruct(m_context);
     as->desc = desc;
     
     // Determine acceleration structure type
@@ -107,7 +111,7 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
     createInfo.size = bufferDesc.byteSize;
     createInfo.type = asType;
     
-    VkResult res = vkCreateAccelerationStructureKHR(m_Context.device, &createInfo, m_Context.allocationCallbacks, &as->accelStruct);
+    VkResult res = vkCreateAccelerationStructureKHR(m_context.device, &createInfo, m_context.allocationCallbacks, &as->accelStruct);
     
     if(res != VK_SUCCESS){
         delete as;
@@ -117,7 +121,7 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
     // Get device address
     VkAccelerationStructureDeviceAddressInfoKHR addressInfo = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR };
     addressInfo.accelerationStructure = as->accelStruct;
-    as->deviceAddress = vkGetAccelerationStructureDeviceAddressKHR(m_Context.device, &addressInfo);
+    as->deviceAddress = vkGetAccelerationStructureDeviceAddressKHR(m_context.device, &addressInfo);
     
     return RayTracingAccelStructHandle(as, AdoptRef);
 }
@@ -154,10 +158,10 @@ bool Device::bindAccelStructMemory(IRayTracingAccelStruct* as, IHeap* heap, u64 
 }
 
 RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipelineDesc& desc){
-    if(!m_Context.extensions.KHR_ray_tracing_pipeline)
+    if(!m_context.extensions.KHR_ray_tracing_pipeline)
         return nullptr;
     
-    RayTracingPipeline* pso = new RayTracingPipeline(m_Context);
+    RayTracingPipeline* pso = new RayTracingPipeline(m_context);
     pso->desc = desc;
     
     // Collect shader stages
@@ -262,8 +266,8 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
     createInfo.maxPipelineRayRecursionDepth = desc.maxRecursionDepth;
     createInfo.layout = pipelineLayout;
     
-    VkResult res = vkCreateRayTracingPipelinesKHR(m_Context.device, VK_NULL_HANDLE, m_Context.pipelineCache, 
-                                                   1, &createInfo, m_Context.allocationCallbacks, &pso->pipeline);
+    VkResult res = vkCreateRayTracingPipelinesKHR(m_context.device, VK_NULL_HANDLE, m_context.pipelineCache, 
+                                                   1, &createInfo, m_context.allocationCallbacks, &pso->pipeline);
     
     if(res != VK_SUCCESS){
         delete pso;
@@ -271,15 +275,15 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
     }
     
     // Get shader group handles for SBT
-    u32 handleSize = m_Context.rayTracingPipelineProperties.shaderGroupHandleSize;
-    u32 handleAlignment = m_Context.rayTracingPipelineProperties.shaderGroupHandleAlignment;
-    u32 baseAlignment = m_Context.rayTracingPipelineProperties.shaderGroupBaseAlignment;
+    u32 handleSize = m_context.rayTracingPipelineProperties.shaderGroupHandleSize;
+    u32 handleAlignment = m_context.rayTracingPipelineProperties.shaderGroupHandleAlignment;
+    u32 baseAlignment = m_context.rayTracingPipelineProperties.shaderGroupBaseAlignment;
     
     u32 handleSizeAligned = (handleSize + handleAlignment - 1) & ~(handleAlignment - 1);
     u32 groupCount = static_cast<u32>(groups.size());
     
     pso->shaderGroupHandles.resize(groupCount * handleSizeAligned);
-    vkGetRayTracingShaderGroupHandlesKHR(m_Context.device, pso->pipeline, 0, groupCount, 
+    vkGetRayTracingShaderGroupHandlesKHR(m_context.device, pso->pipeline, 0, groupCount, 
                                           pso->shaderGroupHandles.size(), pso->shaderGroupHandles.data());
     
     return RayTracingPipelineHandle(pso, AdoptRef);
@@ -290,13 +294,13 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
 //-----------------------------------------------------------------------------
 
 ShaderTable::ShaderTable(const VulkanContext& context)
-    : m_Context(context)
+    : m_context(context)
 {}
 
 ShaderTable::~ShaderTable() = default;
 
 RayTracingShaderTableHandle RayTracingPipeline::createShaderTable(){
-    ShaderTable* sbt = new ShaderTable(m_Context);
+    ShaderTable* sbt = new ShaderTable(m_context);
     sbt->pipeline = this;
     return RayTracingShaderTableHandle(sbt, AdoptRef);
 }
@@ -347,7 +351,7 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* _as, const
     if(!_as || !pGeometries || numGeometries == 0)
         return;
     
-    if(!m_Context->extensions.KHR_acceleration_structure)
+    if(!m_context->extensions.KHR_acceleration_structure)
         return;
     
     AccelStruct* as = checked_cast<AccelStruct*>(_as);
@@ -436,7 +440,7 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* _as, const
     
     // Query scratch buffer size
     VkAccelerationStructureBuildSizesInfoKHR sizeInfo = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR };
-    vkGetAccelerationStructureBuildSizesKHR(m_Context->device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, 
+    vkGetAccelerationStructureBuildSizesKHR(m_context->device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, 
                                              &buildInfo, primitiveCounts.data(), &sizeInfo);
     
     // Allocate scratch buffer
@@ -445,7 +449,7 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* _as, const
     scratchDesc.structStride = 1;
     scratchDesc.debugName = "AS_BuildScratch";
     
-    BufferHandle scratchBuffer = m_Device->createBuffer(scratchDesc);
+    BufferHandle scratchBuffer = m_device->createBuffer(scratchDesc);
     if(scratchBuffer){
         buildInfo.scratchData.deviceAddress = getBufferDeviceAddress(scratchBuffer.get());
         
@@ -461,7 +465,7 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* _as, const
 }
 
 void CommandList::compactBottomLevelAccelStructs(){
-    if(!m_Context->extensions.KHR_acceleration_structure)
+    if(!m_context->extensions.KHR_acceleration_structure)
         return;
     
     // TODO: Iterate over pending bottom-level accel struct compaction requests
@@ -471,7 +475,7 @@ void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* _as, const Ra
     if(!_as || !pInstances || numInstances == 0)
         return;
     
-    if(!m_Context->extensions.KHR_acceleration_structure)
+    if(!m_context->extensions.KHR_acceleration_structure)
         return;
     
     AccelStruct* as = checked_cast<AccelStruct*>(_as);
@@ -484,13 +488,13 @@ void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* _as, const Ra
     instanceBufferDesc.isAccelStructBuildInput = true;
     instanceBufferDesc.debugName = "TLAS_InstanceBuffer";
     
-    BufferHandle instanceBuffer = m_Device->createBuffer(instanceBufferDesc);
+    BufferHandle instanceBuffer = m_device->createBuffer(instanceBufferDesc);
     if(!instanceBuffer)
         return;
     
     // Fill instance data
     VkAccelerationStructureInstanceKHR* mappedInstances = 
-        static_cast<VkAccelerationStructureInstanceKHR*>(m_Device->mapBuffer(instanceBuffer.get(), CpuAccessMode::Write));
+        static_cast<VkAccelerationStructureInstanceKHR*>(m_device->mapBuffer(instanceBuffer.get(), CpuAccessMode::Write));
     
     if(mappedInstances){
         for(usize i = 0; i < numInstances; i++){
@@ -498,7 +502,7 @@ void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* _as, const Ra
             VkAccelerationStructureInstanceKHR& vkInst = mappedInstances[i];
             
             // Copy transform (row-major 3x4)
-            memcpy(&vkInst.transform, &inst.transform, sizeof(VkTransformMatrixKHR));
+            NWB_MEMCPY(&vkInst.transform, sizeof(VkTransformMatrixKHR), &inst.transform, sizeof(VkTransformMatrixKHR));
             
             vkInst.instanceCustomIndex = inst.instanceID & 0xFFFFFF;
             vkInst.mask = inst.instanceMask;
@@ -519,7 +523,7 @@ void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* _as, const Ra
             vkInst.accelerationStructureReference = blas ? blas->deviceAddress : 0;
         }
         
-        m_Device->unmapBuffer(instanceBuffer.get());
+        m_device->unmapBuffer(instanceBuffer.get());
     }
     
     // Set up geometry for instances
@@ -549,7 +553,7 @@ void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* _as, const Ra
     // Query scratch buffer size
     u32 primitiveCount = static_cast<u32>(numInstances);
     VkAccelerationStructureBuildSizesInfoKHR sizeInfo = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR };
-    vkGetAccelerationStructureBuildSizesKHR(m_Context->device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, 
+    vkGetAccelerationStructureBuildSizesKHR(m_context->device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, 
                                              &buildInfo, &primitiveCount, &sizeInfo);
     
     // Allocate scratch buffer
@@ -558,7 +562,7 @@ void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* _as, const Ra
     scratchDesc.structStride = 1;
     scratchDesc.debugName = "TLAS_BuildScratch";
     
-    BufferHandle scratchBuffer = m_Device->createBuffer(scratchDesc);
+    BufferHandle scratchBuffer = m_device->createBuffer(scratchDesc);
     if(scratchBuffer){
         buildInfo.scratchData.deviceAddress = getBufferDeviceAddress(scratchBuffer.get());
         
@@ -583,7 +587,7 @@ void CommandList::buildOpacityMicromap(IRayTracingOpacityMicromap* _omm, const R
 }
 
 void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
-    if(!m_Context->extensions.KHR_ray_tracing_pipeline)
+    if(!m_context->extensions.KHR_ray_tracing_pipeline)
         return;
     
     // Get shader binding table regions from current ray tracing state
@@ -600,9 +604,9 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
     VkStridedDeviceAddressRegionKHR hitRegion = {};
     VkStridedDeviceAddressRegionKHR callableRegion = {};
     
-    u32 handleSize = m_Context->rayTracingPipelineProperties.shaderGroupHandleSize;
-    u32 handleAlignment = m_Context->rayTracingPipelineProperties.shaderGroupHandleAlignment;
-    u32 baseAlignment = m_Context->rayTracingPipelineProperties.shaderGroupBaseAlignment;
+    u32 handleSize = m_context->rayTracingPipelineProperties.shaderGroupHandleSize;
+    u32 handleAlignment = m_context->rayTracingPipelineProperties.shaderGroupHandleAlignment;
+    u32 baseAlignment = m_context->rayTracingPipelineProperties.shaderGroupBaseAlignment;
     
     u32 handleSizeAligned = (handleSize + handleAlignment - 1) & ~(handleAlignment - 1);
     

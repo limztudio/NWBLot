@@ -5,7 +5,55 @@
     <ClCompile Include="$(MSBuildThisFileDirectory)graphics\common.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)graphics\graphics.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)graphics\shader.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_allocator.cpp">
+      <Filter>vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_buffer.cpp">
+      <Filter>vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_commandlist.cpp">
+      <Filter>vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_compute.cpp">
+      <Filter>vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_constants.cpp">
+      <Filter>vulkan</Filter>
+    </ClCompile>
     <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_device.cpp">
+      <Filter>vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_graphics.cpp">
+      <Filter>vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_meshlets.cpp">
+      <Filter>vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_queries.cpp">
+      <Filter>vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_queue.cpp">
+      <Filter>vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_raytracing.cpp">
+      <Filter>vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_resource_bindings.cpp">
+      <Filter>vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_shader.cpp">
+      <Filter>vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_staging_texture.cpp">
+      <Filter>vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_state_tracking.cpp">
+      <Filter>vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_texture.cpp">
+      <Filter>vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_upload.cpp">
       <Filter>vulkan</Filter>
     </ClCompile>
   </ItemGroup>
@@ -18,6 +66,9 @@
       <Filter>vulkan</Filter>
     </ClInclude>
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan.h">
+      <Filter>vulkan</Filter>
+    </ClInclude>
+    <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_backend.h">
       <Filter>vulkan</Filter>
     </ClInclude>
   </ItemGroup>

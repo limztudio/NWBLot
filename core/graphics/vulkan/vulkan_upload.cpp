@@ -44,13 +44,10 @@ UploadManager::~UploadManager(){
     m_currentChunk.reset();
 }
 
-bool UploadManager::suballocateBuffer(u64 size, Buffer** pBuffer, u64* pOffset, void** pCpuVA,
-                                     u64 currentVersion, u32 alignment){
-    // Align size
+bool UploadManager::suballocateBuffer(u64 size, Buffer** pBuffer, u64* pOffset, void** pCpuVA, u64 currentVersion, u32 alignment){
     if(alignment > 0)
-        size = (size + alignment - 1) & ~(u64(alignment) - 1);
+        size = (size + alignment - 1) & ~(static_cast<u64>(alignment) - 1);
     
-    // Check if current chunk has space
     if(m_currentChunk && (m_currentChunk->allocated + size <= m_currentChunk->size)){
         *pBuffer = m_currentChunk->buffer.get();
         *pOffset = m_currentChunk->allocated;
@@ -61,7 +58,6 @@ bool UploadManager::suballocateBuffer(u64 size, Buffer** pBuffer, u64* pOffset, 
         return true;
     }
     
-    // Try to find a chunk from the pool
     for(auto it = m_chunkPool.begin(); it != m_chunkPool.end(); ++it){
         if((*it)->size >= size && (*it)->version < currentVersion){
             m_currentChunk = *it;
@@ -79,8 +75,7 @@ bool UploadManager::suballocateBuffer(u64 size, Buffer** pBuffer, u64* pOffset, 
         }
     }
     
-    // Create new chunk
-    u64 chunkSize = Max(size, m_defaultChunkSize);
+    auto chunkSize = Max<u64>(size, m_defaultChunkSize);
     
     BufferDesc bufferDesc;
     bufferDesc.byteSize = chunkSize;
@@ -92,7 +87,7 @@ bool UploadManager::suballocateBuffer(u64 size, Buffer** pBuffer, u64* pOffset, 
     if(!buffer)
         return false;
     
-    m_currentChunk = MakeRefCount<BufferChunk>(buffer, chunkSize);
+    m_currentChunk = MakeRefCount<BufferChunk>(Move(buffer), chunkSize);
     m_currentChunk->version = currentVersion;
     
     *pBuffer = buffer.get();

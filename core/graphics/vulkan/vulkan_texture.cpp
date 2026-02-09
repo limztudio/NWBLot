@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <assert.h>
+
 #include "vulkan_backend.h"
 
 
@@ -11,19 +13,16 @@
 NWB_VULKAN_BEGIN
 
 
-using __hidden::checked_cast;
-using __hidden::convertFormat;
-using namespace __hidden_vulkan;
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Helper functions for format conversion
 
 
 namespace __hidden_vulkan{
 
 
-VkImageType textureDimensionToImageType(TextureDimension::Enum dimension){
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static constexpr VkImageType TextureDimensionToImageType(TextureDimension::Enum dimension){
     switch(dimension){
         case TextureDimension::Texture1D:
         case TextureDimension::Texture1DArray:
@@ -42,7 +41,7 @@ VkImageType textureDimensionToImageType(TextureDimension::Enum dimension){
     }
 }
 
-VkImageViewType textureDimensionToViewType(TextureDimension::Enum dimension){
+static constexpr VkImageViewType TextureDimensionToViewType(TextureDimension::Enum dimension){
     switch(dimension){
         case TextureDimension::Texture1D: return VK_IMAGE_VIEW_TYPE_1D;
         case TextureDimension::Texture1DArray: return VK_IMAGE_VIEW_TYPE_1D_ARRAY;
@@ -57,7 +56,7 @@ VkImageViewType textureDimensionToViewType(TextureDimension::Enum dimension){
     }
 }
 
-VkSampleCountFlagBits getSampleCount(u32 sampleCount){
+static constexpr VkSampleCountFlagBits GetSampleCount(u32 sampleCount){
     switch(sampleCount){
         case 1: return VK_SAMPLE_COUNT_1_BIT;
         case 2: return VK_SAMPLE_COUNT_2_BIT;
@@ -70,7 +69,7 @@ VkSampleCountFlagBits getSampleCount(u32 sampleCount){
     }
 }
 
-VkImageUsageFlags pickImageUsage(const TextureDesc& desc){
+static constexpr VkImageUsageFlags PickImageUsage(const TextureDesc& desc){
     VkImageUsageFlags usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     
     if(desc.isShaderResource)
@@ -93,7 +92,7 @@ VkImageUsageFlags pickImageUsage(const TextureDesc& desc){
     return usage;
 }
 
-VkImageCreateFlags pickImageFlags(const TextureDesc& desc){
+static constexpr VkImageCreateFlags PickImageFlags(const TextureDesc& desc){
     VkImageCreateFlags flags = 0;
     
     if(desc.dimension == TextureDimension::TextureCube || desc.dimension == TextureDimension::TextureCubeArray)
@@ -106,7 +105,10 @@ VkImageCreateFlags pickImageFlags(const TextureDesc& desc){
 }
 
 
-} // namespace __hidden_vulkan
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -119,7 +121,6 @@ Texture::Texture(const VulkanContext& context, VulkanAllocator& allocator)
 {}
 
 Texture::~Texture(){
-    // Destroy all cached views
     for(auto& pair : views)
         vkDestroyImageView(m_context.device, pair.second, m_context.allocationCallbacks);
     views.clear();
@@ -151,19 +152,16 @@ VkImageView Texture::getView(const TextureSubresourceSet& subresources, TextureD
     if(it != views.end())
         return it->second;
     
-    // Resolve dimension
     if(dimension == TextureDimension::Unknown)
         dimension = desc.dimension;
     
-    // Resolve format
     if(format == Format::UNKNOWN)
         format = desc.format;
     
-    // Resolve subresources
     TextureSubresourceSet resolvedSubresources = subresources.resolve(desc, false);
     
-    VkImageViewType viewType = textureDimensionToViewType(dimension);
-    VkFormat vkFormat = convertFormat(format);
+    VkImageViewType viewType = __hidden_vulkan::TextureDimensionToViewType(dimension);
+    VkFormat vkFormat = ConvertFormat(format);
     
     const FormatInfo& formatInfo = GetFormatInfo(format);
     VkImageAspectFlags aspectMask = 0;
@@ -191,7 +189,7 @@ VkImageView Texture::getView(const TextureSubresourceSet& subresources, TextureD
     
     VkImageView view = VK_NULL_HANDLE;
     VkResult res = vkCreateImageView(m_context.device, &viewInfo, m_context.allocationCallbacks, &view);
-    assert(res == VK_SUCCESS);
+    NWB_ASSERT(res == VK_SUCCESS);
     
     views[key] = view;
     return view;
@@ -231,18 +229,18 @@ StagingTexture::~StagingTexture(){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Device - Texture Implementation
+// Texture Implementation
 
 
 TextureHandle Device::createTexture(const TextureDesc& d){
     Texture* texture = new Texture(m_context, m_allocator);
     texture->desc = d;
     
-    VkImageType imageType = textureDimensionToImageType(d.dimension);
-    VkFormat format = convertFormat(d.format);
-    VkImageUsageFlags usage = pickImageUsage(d);
-    VkImageCreateFlags flags = pickImageFlags(d);
-    VkSampleCountFlagBits sampleCount = getSampleCount(d.sampleCount);
+    VkImageType imageType = __hidden_vulkan::TextureDimensionToImageType(d.dimension);
+    VkFormat format = ConvertFormat(d.format);
+    VkImageUsageFlags usage = __hidden_vulkan::PickImageUsage(d);
+    VkImageCreateFlags flags = __hidden_vulkan::PickImageFlags(d);
+    VkSampleCountFlagBits sampleCount = __hidden_vulkan::GetSampleCount(d.sampleCount);
     
     texture->imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     texture->imageInfo.imageType = imageType;
@@ -260,12 +258,11 @@ TextureHandle Device::createTexture(const TextureDesc& d){
     texture->imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
     
     VkResult res = vkCreateImage(m_context.device, &texture->imageInfo, m_context.allocationCallbacks, &texture->image);
-    assert(res == VK_SUCCESS);
+    NWB_ASSERT(res == VK_SUCCESS);
     
-    // Allocate memory if not virtual
     if(!d.isVirtual){
         VkResult res = m_allocator.allocateTextureMemory(texture);
-        assert(res == VK_SUCCESS);
+        NWB_ASSERT(res == VK_SUCCESS);
     }
     
     return RefCountPtr<ITexture, BlankDeleter<ITexture>>(texture, AdoptRef);
@@ -295,7 +292,7 @@ TextureHandle Device::createHandleForNativeTexture(ObjectType objectType, Object
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Device - Sampler Implementation
+// Sampler Implementation
 
 
 SamplerHandle Device::createSampler(const SamplerDesc& d){
@@ -335,14 +332,14 @@ SamplerHandle Device::createSampler(const SamplerDesc& d){
     samplerInfo.borderColor = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
     
     VkResult res = vkCreateSampler(m_context.device, &samplerInfo, m_context.allocationCallbacks, &sampler->sampler);
-    assert(res == VK_SUCCESS);
+    NWB_ASSERT(res == VK_SUCCESS);
     
     return RefCountPtr<ISampler, BlankDeleter<ISampler>>(sampler, AdoptRef);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// CommandList - Texture operations
+// Texture operations
 
 
 void CommandList::clearTextureFloat(ITexture* _texture, TextureSubresourceSet subresources, const Color& clearColor){
@@ -435,15 +432,13 @@ void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, co
     Texture* dest = checked_cast<Texture*>(_dest);
     const TextureDesc& desc = dest->desc;
     
-    // Calculate required staging buffer size
-    u32 width = Max(1u, desc.width >> mipLevel);
-    u32 height = Max(1u, desc.height >> mipLevel);
-    u32 depth = Max(1u, desc.depth >> mipLevel);
+    auto width = Max<u32>(1u, desc.width >> mipLevel);
+    auto height = Max<u32>(1u, desc.height >> mipLevel);
+    auto depth = Max<u32>(1u, desc.depth >> mipLevel);
     
     const FormatInfo& formatInfo = GetFormatInfo(desc.format);
     u64 dataSize = u64(rowPitch) * height * depth;
     
-    // Allocate staging buffer
     UploadManager* uploadMgr = m_device->getUploadManager();
     Buffer* stagingBuffer = nullptr;
     u64 stagingOffset = 0;
@@ -454,10 +449,8 @@ void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, co
         return;
     }
     
-    // Copy data to staging
     NWB_MEMCPY(cpuVA, dataSize, data, dataSize);
     
-    // Transition image to TRANSFER_DST
     VkImageMemoryBarrier2 barrier = { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2 };
     barrier.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
     barrier.srcAccessMask = VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT;
@@ -477,7 +470,6 @@ void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, co
     depInfo.pImageMemoryBarriers = &barrier;
     vkCmdPipelineBarrier2(currentCmdBuf->cmdBuf, &depInfo);
     
-    // Copy buffer to image
     VkBufferImageCopy region{};
     region.bufferOffset = stagingOffset;
     region.bufferRowLength = 0; // tightly packed
@@ -509,11 +501,9 @@ void CommandList::resolveTexture(ITexture* _dest, const TextureSubresourceSet& d
     region.dstSubresource.baseArrayLayer = dstSubresources.baseArraySlice;
     region.dstSubresource.layerCount = dstSubresources.numArraySlices;
     region.dstOffset = { 0, 0, 0 };
-    region.extent = { Max(1u, src->desc.width >> srcSubresources.baseMipLevel),
-                      Max(1u, src->desc.height >> srcSubresources.baseMipLevel), 1 };
+    region.extent = { Max<u32>(1u, src->desc.width >> srcSubresources.baseMipLevel), Max<u32>(1u, src->desc.height >> srcSubresources.baseMipLevel), 1 };
     
-    vkCmdResolveImage(currentCmdBuf->cmdBuf, src->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                      dest->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+    vkCmdResolveImage(currentCmdBuf->cmdBuf, src->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dest->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
     
     currentCmdBuf->referencedResources.push_back(_src);
     currentCmdBuf->referencedResources.push_back(_dest);

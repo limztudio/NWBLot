@@ -13,11 +13,13 @@ NWB_VULKAN_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-namespace __hidden{
 
-//-----------------------------------------------------------------------------
+namespace __hidden_vulkan{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Format conversion table
-//-----------------------------------------------------------------------------
+
 
 struct FormatMapping{
     Format::Enum format;
@@ -115,7 +117,7 @@ static const usize g_NumFormatMappings = sizeof(g_FormatMappings) / sizeof(g_For
 //-----------------------------------------------------------------------------
 
 
-VkFormat convertFormat(Format::Enum format){
+VkFormat ConvertFormat(Format::Enum format){
     for(usize i = 0; i < g_NumFormatMappings; ++i){
         if(g_FormatMappings[i].format == format)
             return g_FormatMappings[i].vkFormat;
@@ -129,7 +131,7 @@ VkFormat convertFormat(Format::Enum format){
 // Resource state conversion
 //-----------------------------------------------------------------------------
 
-VkAccessFlags2 getVkAccessFlags(ResourceStates::Mask states){
+VkAccessFlags2 GetVkAccessFlags(ResourceStates::Mask states){
     VkAccessFlags2 flags = 0;
     
     if(states & ResourceStates::VertexBuffer)
@@ -176,7 +178,7 @@ VkAccessFlags2 getVkAccessFlags(ResourceStates::Mask states){
     return flags;
 }
 
-VkPipelineStageFlags2 getVkPipelineStageFlags(ResourceStates::Mask states){
+VkPipelineStageFlags2 GetVkPipelineStageFlags(ResourceStates::Mask states){
     VkPipelineStageFlags2 flags = 0;
     
     if(states & ResourceStates::VertexBuffer)
@@ -206,7 +208,7 @@ VkPipelineStageFlags2 getVkPipelineStageFlags(ResourceStates::Mask states){
     return flags;
 }
 
-VkImageLayout getVkImageLayout(ResourceStates::Mask states){
+VkImageLayout GetVkImageLayout(ResourceStates::Mask states){
     // Return the most appropriate layout for the given state
     // Priority: specific states first, general states last
     
@@ -236,11 +238,7 @@ VkImageLayout getVkImageLayout(ResourceStates::Mask states){
     return VK_IMAGE_LAYOUT_GENERAL;
 }
 
-//-----------------------------------------------------------------------------
-// Sample count conversion
-//-----------------------------------------------------------------------------
-
-VkSampleCountFlagBits getSampleCountFlagBits(u32 sampleCount){
+VkSampleCountFlagBits GetSampleCountFlagBits(u32 sampleCount){
     switch(sampleCount){
     case 1:  return VK_SAMPLE_COUNT_1_BIT;
     case 2:  return VK_SAMPLE_COUNT_2_BIT;
@@ -253,14 +251,22 @@ VkSampleCountFlagBits getSampleCountFlagBits(u32 sampleCount){
     }
 }
 
-} // namespace __hidden
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 //-----------------------------------------------------------------------------
 // Format query (public API)
 //-----------------------------------------------------------------------------
 
 VkFormat ConvertFormat(Format::Enum format){
-    return __hidden::convertFormat(format);
+    return __hidden_vulkan::ConvertFormat(format);
 }
 
 //-----------------------------------------------------------------------------

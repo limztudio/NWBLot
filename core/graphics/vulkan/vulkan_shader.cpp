@@ -11,7 +11,7 @@
 NWB_VULKAN_BEGIN
 
 
-using __hidden::convertFormat;
+using __hidden_vulkan::ConvertFormat;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -139,7 +139,7 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
         VkVertexInputAttributeDescription vkAttr{};
         vkAttr.location = i;
         vkAttr.binding = attr.bufferIndex;
-        vkAttr.format = convertFormat(attr.format);
+        vkAttr.format = ConvertFormat(attr.format);
         vkAttr.offset = attr.offset;
         
         layout->vkAttributes.push_back(vkAttr);

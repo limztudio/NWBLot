@@ -19,7 +19,7 @@ VulkanAllocator::VulkanAllocator(const VulkanContext& context)
 {}
 
 u32 VulkanAllocator::findMemoryType(u32 typeFilter, VkMemoryPropertyFlags properties)const{
-    for(u32 i = 0; i < m_context.memoryProperties.memoryTypeCount; i++){
+    for(u32 i = 0; i < m_context.memoryProperties.memoryTypeCount; ++i){
         if((typeFilter & (1 << i)) && (m_context.memoryProperties.memoryTypes[i].propertyFlags & properties) == properties)
             return i;
     }

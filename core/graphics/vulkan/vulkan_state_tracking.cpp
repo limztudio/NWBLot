@@ -10,10 +10,10 @@
 
 NWB_VULKAN_BEGIN
 
-using __hidden::checked_cast;
-using __hidden::getVkAccessFlags;
-using __hidden::getVkPipelineStageFlags;
-using __hidden::getVkImageLayout;
+using __hidden_vulkan::checked_cast;
+using __hidden_vulkan::GetVkAccessFlags;
+using __hidden_vulkan::GetVkPipelineStageFlags;
+using __hidden_vulkan::GetVkImageLayout;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -46,12 +46,12 @@ void CommandList::setTextureState(ITexture* _texture, TextureSubresourceSet subr
     Texture* texture = checked_cast<Texture*>(_texture);
     
     VkImageMemoryBarrier2 barrier = { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2 };
-    barrier.srcStageMask = getVkPipelineStageFlags(ResourceStates::Common);
-    barrier.srcAccessMask = getVkAccessFlags(ResourceStates::Common);
-    barrier.dstStageMask = getVkPipelineStageFlags(stateBits);
-    barrier.dstAccessMask = getVkAccessFlags(stateBits);
+    barrier.srcStageMask = GetVkPipelineStageFlags(ResourceStates::Common);
+    barrier.srcAccessMask = GetVkAccessFlags(ResourceStates::Common);
+    barrier.dstStageMask = GetVkPipelineStageFlags(stateBits);
+    barrier.dstAccessMask = GetVkAccessFlags(stateBits);
     barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    barrier.newLayout = getVkImageLayout(stateBits);
+    barrier.newLayout = GetVkImageLayout(stateBits);
     barrier.image = texture->image;
     barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     barrier.subresourceRange.baseMipLevel = subresources.baseMipLevel;
@@ -73,10 +73,10 @@ void CommandList::setBufferState(IBuffer* _buffer, ResourceStates::Mask stateBit
     Buffer* buffer = checked_cast<Buffer*>(_buffer);
     
     VkBufferMemoryBarrier2 barrier = { VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2 };
-    barrier.srcStageMask = getVkPipelineStageFlags(ResourceStates::Common);
-    barrier.srcAccessMask = getVkAccessFlags(ResourceStates::Common);
-    barrier.dstStageMask = getVkPipelineStageFlags(stateBits);
-    barrier.dstAccessMask = getVkAccessFlags(stateBits);
+    barrier.srcStageMask = GetVkPipelineStageFlags(ResourceStates::Common);
+    barrier.srcAccessMask = GetVkAccessFlags(ResourceStates::Common);
+    barrier.dstStageMask = GetVkPipelineStageFlags(stateBits);
+    barrier.dstAccessMask = GetVkAccessFlags(stateBits);
     barrier.buffer = buffer->buffer;
     barrier.offset = 0;
     barrier.size = VK_WHOLE_SIZE;

@@ -8,7 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-//! Base class for types that should not be assigned.
+// Base class for types that should not be assigned.
 class NoAssign{
 public:
     NoAssign(const NoAssign&) = default;
@@ -17,11 +17,14 @@ public:
     void operator=(const NoAssign&) = delete;
 };
 
-//! Base class for types that should not be copied or assigned.
+// Base class for types that should not be copied or assigned.
 class NoCopy : NoAssign{
 public:
     NoCopy(const NoCopy&) = delete;
+    NoCopy(NoCopy&&) = default;
     NoCopy() = default;
+
+    NoCopy& operator=(NoCopy&&) = default;
 };
 
 

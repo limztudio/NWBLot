@@ -35,6 +35,11 @@ class Device;
 class Queue;
 class TrackedCommandBuffer;
 
+class Buffer;
+class Texture;
+
+struct BufferChunk;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Core Vulkan objects and capabilities
@@ -90,6 +95,8 @@ public:
     
     Vector<RefCountPtr<IResource>> referencedResources;
     Vector<RefCountPtr<IBuffer>> referencedStagingBuffers;
+    
+    VkFence signalFence = VK_NULL_HANDLE;
     
     u64 recordingID = 0;
     u64 submissionID = 0;
@@ -167,11 +174,11 @@ public:
 
 
 public:
-    VkResult allocateBufferMemory(class Buffer* buffer, bool enableDeviceAddress = false);
-    void freeBufferMemory(class Buffer* buffer);
+    VkResult allocateBufferMemory(Buffer* buffer, bool enableDeviceAddress = false);
+    void freeBufferMemory(Buffer* buffer);
     
-    VkResult allocateTextureMemory(class Texture* texture);
-    void freeTextureMemory(class Texture* texture);
+    VkResult allocateTextureMemory(Texture* texture);
+    void freeTextureMemory(Texture* texture);
 
 
 private:
@@ -212,22 +219,19 @@ private:
 // Handles staging buffer uploads
 
 
-struct BufferChunk;
-
-
 class UploadManager final : NoCopy{
 public:
-    UploadManager(class Device* pParent, u64 defaultChunkSize, u64 memoryLimit, bool isScratchBuffer);
+    UploadManager(Device* pParent, u64 defaultChunkSize, u64 memoryLimit, bool isScratchBuffer);
     ~UploadManager();
 
 
 public:
-    bool suballocateBuffer(u64 size, class Buffer** pBuffer, u64* pOffset, void** pCpuVA, u64 currentVersion, u32 alignment = 256);
+    bool suballocateBuffer(u64 size, Buffer** pBuffer, u64* pOffset, void** pCpuVA, u64 currentVersion, u32 alignment = 256);
     void submitChunks(u64 currentVersion, u64 submittedVersion);
 
 
 private:
-    class Device* m_device;
+    Device* m_device;
     u64 m_defaultChunkSize;
     u64 m_memoryLimit;
     bool m_isScratchBuffer;
@@ -575,6 +579,9 @@ private:
 
 
 class RayTracingPipeline final : public RefCounter<IRayTracingPipeline>, NoCopy{
+    friend Device;
+    
+
 public:
     RayTracingPipeline(const VulkanContext& context);
     virtual ~RayTracingPipeline()override;
@@ -595,6 +602,7 @@ public:
 
 private:
     const VulkanContext& m_context;
+    Device* m_device = nullptr;
 };
 
 
@@ -604,7 +612,7 @@ private:
 
 class ShaderTable final : public RefCounter<IRayTracingShaderTable>, NoCopy{
 public:
-    ShaderTable(const VulkanContext& context);
+    ShaderTable(const VulkanContext& context, Device* device);
     virtual ~ShaderTable()override;
     
     
@@ -618,6 +626,11 @@ public:
     virtual void clearCallableShaders()override;
     virtual IRayTracingPipeline* getPipeline()override{ return pipeline; }
     virtual Object getNativeHandle(ObjectType objectType)override;
+    
+    
+private:
+    void allocateSBTBuffer(BufferHandle& outBuffer, u64 sbtSize);
+    u32 findGroupIndex(const Name& exportName)const;
     
     
 public:
@@ -641,6 +654,7 @@ public:
     
 private:
     const VulkanContext& m_context;
+    Device* m_device = nullptr;
 };
 
 
@@ -694,6 +708,7 @@ public:
 public:
     RefCountPtr<BindingLayout> layout;
     Vector<VkDescriptorSet> descriptorSets;
+    VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
 
     
 private:
@@ -773,12 +788,27 @@ public:
     void setPermanentTextureState(ITexture* texture, ResourceStates::Mask state);
     void setPermanentBufferState(IBuffer* buffer, ResourceStates::Mask state);
     
+    [[nodiscard]] bool isPermanentTexture(ITexture* texture)const;
+    [[nodiscard]] bool isPermanentBuffer(IBuffer* buffer)const;
+    [[nodiscard]] ResourceStates::Mask getTextureState(ITexture* texture, ArraySlice arraySlice, MipLevel mipLevel)const;
+    [[nodiscard]] ResourceStates::Mask getBufferState(IBuffer* buffer)const;
+    
+    void beginTrackingTexture(ITexture* texture, TextureSubresourceSet subresources, ResourceStates::Mask state);
+    void beginTrackingBuffer(IBuffer* buffer, ResourceStates::Mask state);
+    
     
 public:
     GraphicsState graphicsState;
     ComputeState computeState;
     MeshletState meshletState;
     RayTracingState rayTracingState;
+    
+    
+private:
+    HashMap<ITexture*, ResourceStates::Mask> m_permanentTextureStates;
+    HashMap<IBuffer*, ResourceStates::Mask> m_permanentBufferStates;
+    HashMap<ITexture*, ResourceStates::Mask> m_textureStates;
+    HashMap<IBuffer*, ResourceStates::Mask> m_bufferStates;
 };
 
 
@@ -788,7 +818,7 @@ public:
 
 class CommandList final : public RefCounter<ICommandList>, NoCopy{
 public:
-    CommandList(class Device* device, const CommandListParameters& params);
+    CommandList(Device* device, const CommandListParameters& params);
     virtual ~CommandList()override;
     
     
@@ -863,7 +893,7 @@ public:
     virtual ResourceStates::Mask getBufferState(IBuffer* buffer)override;
     
     virtual IDevice* getDevice()override;
-    virtual const CommandListParameters& getDesc()override;
+    virtual const CommandListParameters& getDescription()override;
     
 public:
     void copyTextureToBuffer(IBuffer* dest, u64 destOffsetBytes, u32 destRowPitch, ITexture* src, const TextureSlice& srcSlice);
@@ -884,10 +914,17 @@ public:
     ComputeState currentComputeState;
     MeshletState currentMeshletState;
     RayTracingState currentRayTracingState;
+    
+    // Deferred barrier batching
+    Vector<VkImageMemoryBarrier2> m_pendingImageBarriers;
+    Vector<VkBufferMemoryBarrier2> m_pendingBufferBarriers;
+    
+    // Pending BLAS compaction requests
+    Vector<RefCountPtr<AccelStruct>> m_pendingCompactions;
 
     
 private:
-    class Device* m_device;
+    Device* m_device;
     const VulkanContext* m_context;
 };
 

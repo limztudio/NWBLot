@@ -65,7 +65,26 @@ ShaderHandle ShaderLibrary::getShader(const Name& entryName, ShaderType::Mask sh
     auto it = shaders.find(entryName);
     if(it != shaders.end())
         return ShaderHandle(it->second.get());
-    return nullptr;
+    
+    // Create shader on demand from library bytecode
+    Shader* shader = new Shader(m_context);
+    shader->desc.shaderType = shaderType;
+    shader->desc.entryName = entryName;
+    shader->bytecode = bytecode;
+    
+    VkShaderModuleCreateInfo createInfo{};
+    createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    createInfo.codeSize = bytecode.size();
+    createInfo.pCode = reinterpret_cast<const u32*>(bytecode.data());
+    
+    VkResult res = vkCreateShaderModule(m_context.device, &createInfo, m_context.allocationCallbacks, &shader->shaderModule);
+    if(res != VK_SUCCESS){
+        delete shader;
+        return nullptr;
+    }
+    
+    shaders[entryName] = RefCountPtr<Shader>(shader);
+    return ShaderHandle(shader);
 }
 
 
@@ -90,13 +109,38 @@ ShaderHandle Device::createShader(const ShaderDesc& d, const void* binary, usize
 }
 
 ShaderHandle Device::createShaderSpecialization(IShader* baseShader, const ShaderSpecialization* constants, u32 numConstants){
-    // TODO: Implement shader specialization
-    return nullptr;
+    if(!baseShader)
+        return nullptr;
+    
+    Shader* base = static_cast<Shader*>(baseShader);
+    Shader* shader = new Shader(m_context);
+    shader->desc = base->desc;
+    shader->bytecode = base->bytecode;
+    
+    // Create a new shader module from the same bytecode
+    VkShaderModuleCreateInfo createInfo{};
+    createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    createInfo.codeSize = shader->bytecode.size();
+    createInfo.pCode = reinterpret_cast<const u32*>(shader->bytecode.data());
+    
+    VkResult res = vkCreateShaderModule(m_context.device, &createInfo, m_context.allocationCallbacks, &shader->shaderModule);
+    if(res != VK_SUCCESS){
+        delete shader;
+        return nullptr;
+    }
+    
+    // Note: Specialization constants are applied at pipeline creation time
+    // via VkSpecializationInfo, not stored in the shader module itself.
+    // TODO: Store specialization constants for use during pipeline creation
+    
+    return RefCountPtr<IShader, BlankDeleter<IShader>>(shader, AdoptRef);
 }
 
 ShaderLibraryHandle Device::createShaderLibrary(const void* binary, usize binarySize){
-    // TODO: Implement shader library
-    return nullptr;
+    ShaderLibrary* lib = new ShaderLibrary(m_context);
+    lib->bytecode.assign(static_cast<const u8*>(binary), static_cast<const u8*>(binary) + binarySize);
+    
+    return RefCountPtr<IShaderLibrary, BlankDeleter<IShaderLibrary>>(lib, AdoptRef);
 }
 
 

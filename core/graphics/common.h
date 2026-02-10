@@ -3382,7 +3382,7 @@ public:
     virtual IDevice* getDevice() = 0;
 
     // Returns the CommandListParameters structure that was used to create the command list. 
-    virtual const CommandListParameters& getDesc() = 0;
+    virtual const CommandListParameters& getDescription() = 0;
 };
 typedef RefCountPtr<ICommandList, BlankDeleter<ICommandList>> CommandListHandle;
 

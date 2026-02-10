@@ -81,23 +81,12 @@ FramebufferHandle Device::createFramebuffer(const FramebufferDesc& desc){
 // Device - Graphics pipeline creation
 //-----------------------------------------------------------------------------
 
-GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc& desc, IFramebuffer* _fb){
-    // TODO: Implement graphics pipeline creation
-    // This is a complex operation involving:
-    // 1. Shader stages setup
-    // 2. Vertex input state
-    // 3. Input assembly state
-    // 4. Viewport/scissor state (dynamic)
-    // 5. Rasterization state
-    // 6. Multisample state
-    // 7. Depth/stencil state
-    // 8. Color blend state
-    // 9. Dynamic state
-    // 10. Pipeline layout
-    // 11. Render pass or dynamic rendering
-    
+GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc& desc, FramebufferInfo const& fbinfo){
+    using namespace __hidden_vulkan;
+
     GraphicsPipeline* pso = new GraphicsPipeline(m_context);
     pso->desc = desc;
+    pso->framebufferInfo = fbinfo;
     
     // Step 1: Collect shader stages
     Vector<VkPipelineShaderStageCreateInfo> shaderStages;
@@ -166,8 +155,12 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     
     // Step 3: Input assembly
     VkPipelineInputAssemblyStateCreateInfo inputAssembly = { VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO };
-    inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST; // TODO: Convert from desc.primType
+    inputAssembly.topology = convertPrimitiveTopology(desc.primType);
     inputAssembly.primitiveRestartEnable = VK_FALSE;
+    
+    // Tessellation state (for patch primitives)
+    VkPipelineTessellationStateCreateInfo tessellationState = { VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO };
+    tessellationState.patchControlPoints = desc.patchControlPoints;
     
     // Step 4: Viewport and scissor (dynamic)
     VkPipelineViewportStateCreateInfo viewportState = { VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO };
@@ -176,11 +169,11 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     
     // Step 5: Rasterization state
     VkPipelineRasterizationStateCreateInfo rasterizer = { VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO };
-    rasterizer.depthClampEnable = VK_FALSE;
+    rasterizer.depthClampEnable = desc.renderState.rasterState.depthClipEnable ? VK_FALSE : VK_TRUE;
     rasterizer.rasterizerDiscardEnable = VK_FALSE;
-    rasterizer.polygonMode = VK_POLYGON_MODE_FILL; // TODO: Convert from desc.renderState.fillMode
-    rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;   // TODO: Convert from desc.renderState.cullMode
-    rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    rasterizer.polygonMode = convertFillMode(desc.renderState.rasterState.fillMode);
+    rasterizer.cullMode = convertCullMode(desc.renderState.rasterState.cullMode);
+    rasterizer.frontFace = desc.renderState.rasterState.frontCounterClockwise ? VK_FRONT_FACE_COUNTER_CLOCKWISE : VK_FRONT_FACE_CLOCKWISE;
     rasterizer.depthBiasEnable = desc.renderState.rasterState.depthBias != 0 ? VK_TRUE : VK_FALSE;
     rasterizer.depthBiasConstantFactor = (f32)desc.renderState.rasterState.depthBias;
     rasterizer.depthBiasClamp = desc.renderState.rasterState.depthBiasClamp;
@@ -189,22 +182,28 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     
     // Step 6: Multisample state
     VkPipelineMultisampleStateCreateInfo multisampling = { VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO };
-    multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT; // TODO: Get from framebuffer
+    multisampling.rasterizationSamples = GetSampleCount(fbinfo.sampleCount);
     multisampling.sampleShadingEnable = VK_FALSE;
+    multisampling.alphaToCoverageEnable = desc.renderState.blendState.alphaToCoverageEnable ? VK_TRUE : VK_FALSE;
     
     // Step 7: Depth/stencil state
     VkPipelineDepthStencilStateCreateInfo depthStencil = { VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO };
     depthStencil.depthTestEnable = desc.renderState.depthStencilState.depthTestEnable ? VK_TRUE : VK_FALSE;
     depthStencil.depthWriteEnable = desc.renderState.depthStencilState.depthWriteEnable ? VK_TRUE : VK_FALSE;
-    depthStencil.depthCompareOp = VK_COMPARE_OP_LESS; // TODO: Convert from desc.renderState.depthFunc
+    depthStencil.depthCompareOp = convertCompareOp(desc.renderState.depthStencilState.depthFunc);
     depthStencil.depthBoundsTestEnable = VK_FALSE;
     depthStencil.stencilTestEnable = desc.renderState.depthStencilState.stencilEnable ? VK_TRUE : VK_FALSE;
-    // TODO: Fill front and back stencil ops
+    depthStencil.front = convertStencilOpState(desc.renderState.depthStencilState, desc.renderState.depthStencilState.frontFaceStencil);
+    depthStencil.back = convertStencilOpState(desc.renderState.depthStencilState, desc.renderState.depthStencilState.backFaceStencil);
     
     // Step 8: Color blend state
     VkPipelineColorBlendStateCreateInfo colorBlending = { VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO };
+    colorBlending.logicOpEnable = VK_FALSE;
     Vector<VkPipelineColorBlendAttachmentState> blendAttachments;
-    // TODO: Create blend attachment for each render target
+    blendAttachments.reserve(fbinfo.colorFormats.size());
+    for(u32 i = 0; i < (u32)fbinfo.colorFormats.size(); i++){
+        blendAttachments.push_back(convertBlendState(desc.renderState.blendState.targets[i]));
+    }
     colorBlending.attachmentCount = (u32)blendAttachments.size();
     colorBlending.pAttachments = blendAttachments.data();
     
@@ -225,28 +224,56 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     dynamicState.dynamicStateCount = sizeof(dynamicStates) / sizeof(dynamicStates[0]);
     dynamicState.pDynamicStates = dynamicStates;
     
-    // Step 10: Pipeline layout
-    // TODO: Get from binding layout
-    VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
+    // Step 10: Pipeline layout from binding layouts
+    pso->pipelineLayout = VK_NULL_HANDLE;
+    Vector<VkDescriptorSetLayout> allDescriptorSetLayouts;
+    for(u32 i = 0; i < (u32)desc.bindingLayouts.size(); i++){
+        BindingLayout* bl = checked_cast<BindingLayout*>(desc.bindingLayouts[i].get());
+        for(auto& dsl : bl->descriptorSetLayouts){
+            allDescriptorSetLayouts.push_back(dsl);
+        }
+    }
+    if(desc.bindingLayouts.size() == 1){
+        BindingLayout* bl = checked_cast<BindingLayout*>(desc.bindingLayouts[0].get());
+        pso->pipelineLayout = bl->pipelineLayout;
+    } else if(desc.bindingLayouts.size() > 1){
+        VkPipelineLayoutCreateInfo layoutInfo = { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
+        layoutInfo.setLayoutCount = (u32)allDescriptorSetLayouts.size();
+        layoutInfo.pSetLayouts = allDescriptorSetLayouts.data();
+        vkCreatePipelineLayout(m_context.device, &layoutInfo, m_context.allocationCallbacks, &pso->pipelineLayout);
+    }
     
-    // Step 11: Create pipeline with dynamic rendering
+    // Step 11: Dynamic rendering info
     VkPipelineRenderingCreateInfo renderingInfo = { VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO };
-    // TODO: Fill color/depth formats from framebuffer
+    Vector<VkFormat> colorFormats;
+    colorFormats.reserve(fbinfo.colorFormats.size());
+    for(u32 i = 0; i < (u32)fbinfo.colorFormats.size(); i++){
+        colorFormats.push_back(ConvertFormat(fbinfo.colorFormats[i]));
+    }
+    renderingInfo.colorAttachmentCount = (u32)colorFormats.size();
+    renderingInfo.pColorAttachmentFormats = colorFormats.data();
+    if(fbinfo.depthFormat != Format::UNKNOWN){
+        renderingInfo.depthAttachmentFormat = ConvertFormat(fbinfo.depthFormat);
+        renderingInfo.stencilAttachmentFormat = ConvertFormat(fbinfo.depthFormat);
+    }
     
     VkGraphicsPipelineCreateInfo pipelineInfo = { VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO };
-    pipelineInfo.pNext = &renderingInfo;
+    if(m_context.extensions.KHR_dynamic_rendering){
+        pipelineInfo.pNext = &renderingInfo;
+    }
     pipelineInfo.stageCount = (u32)shaderStages.size();
     pipelineInfo.pStages = shaderStages.data();
     pipelineInfo.pVertexInputState = &vertexInputInfo;
     pipelineInfo.pInputAssemblyState = &inputAssembly;
+    pipelineInfo.pTessellationState = (desc.patchControlPoints > 0) ? &tessellationState : nullptr;
     pipelineInfo.pViewportState = &viewportState;
     pipelineInfo.pRasterizationState = &rasterizer;
     pipelineInfo.pMultisampleState = &multisampling;
     pipelineInfo.pDepthStencilState = &depthStencil;
     pipelineInfo.pColorBlendState = &colorBlending;
     pipelineInfo.pDynamicState = &dynamicState;
-    pipelineInfo.layout = pipelineLayout;
-    pipelineInfo.renderPass = VK_NULL_HANDLE; // Using dynamic rendering
+    pipelineInfo.layout = pso->pipelineLayout;
+    pipelineInfo.renderPass = VK_NULL_HANDLE;
     pipelineInfo.subpass = 0;
     
     VkResult res = vkCreateGraphicsPipelines(m_context.device, m_context.pipelineCache, 1, &pipelineInfo, m_context.allocationCallbacks, &pso->pipeline);

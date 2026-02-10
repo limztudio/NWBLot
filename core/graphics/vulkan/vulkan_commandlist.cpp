@@ -51,6 +51,15 @@ void CommandList::close(){
 
 void CommandList::clearState(){
     stateTracker->reset();
+    
+    currentGraphicsState = {};
+    currentComputeState = {};
+    currentMeshletState = {};
+    currentRayTracingState = {};
+    
+    m_pendingImageBarriers.clear();
+    m_pendingBufferBarriers.clear();
+    m_pendingCompactions.clear();
 }
 
 //-----------------------------------------------------------------------------

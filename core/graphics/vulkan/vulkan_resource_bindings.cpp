@@ -52,7 +52,10 @@ DescriptorTable::DescriptorTable(const VulkanContext& context)
 
 DescriptorTable::~DescriptorTable(){
     // Descriptor sets are freed automatically when pool is destroyed
-    // No explicit cleanup needed here
+    if(descriptorPool != VK_NULL_HANDLE){
+        vkDestroyDescriptorPool(m_context.device, descriptorPool, m_context.allocationCallbacks);
+        descriptorPool = VK_NULL_HANDLE;
+    }
 }
 
 //-----------------------------------------------------------------------------
@@ -72,12 +75,6 @@ BindingSet::~BindingSet(){
 //-----------------------------------------------------------------------------
 
 BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
-    // TODO: Implement binding layout creation
-    // 1. Parse BindingLayoutDesc to extract binding items
-    // 2. Create VkDescriptorSetLayout for each descriptor set
-    // 3. Create VkPipelineLayout combining all descriptor set layouts
-    // 4. Handle push constants if present
-    
     BindingLayout* layout = new BindingLayout(m_context);
     layout->desc = desc;
     
@@ -254,12 +251,62 @@ DescriptorTableHandle Device::createDescriptorTable(IBindingLayout* _layout){
         }
     }
     
+    table->descriptorPool = pool;
+    
     return DescriptorTableHandle(table, AdoptRef);
 }
 
 void Device::resizeDescriptorTable(IDescriptorTable* descriptorTable, u32 newSize, bool keepContents){
-    // Resize is typically used for bindless arrays
-    // Implementation depends on whether we support variable descriptor counts
+    DescriptorTable* table = checked_cast<DescriptorTable*>(descriptorTable);
+    
+    if(!table->layout || newSize == 0)
+        return;
+    
+    // Destroy old pool (this frees all allocated descriptor sets)
+    if(table->descriptorPool != VK_NULL_HANDLE){
+        vkDestroyDescriptorPool(m_context.device, table->descriptorPool, m_context.allocationCallbacks);
+        table->descriptorPool = VK_NULL_HANDLE;
+    }
+    table->descriptorSets.clear();
+    
+    // Create new pool with requested size
+    Vector<VkDescriptorPoolSize> poolSizes;
+    VkDescriptorPoolSize uniformSize = { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, newSize };
+    VkDescriptorPoolSize storageSize = { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, newSize };
+    VkDescriptorPoolSize samplerSize = { VK_DESCRIPTOR_TYPE_SAMPLER, newSize };
+    VkDescriptorPoolSize sampledImageSize = { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, newSize };
+    VkDescriptorPoolSize storageImageSize = { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, newSize };
+    poolSizes.push_back(uniformSize);
+    poolSizes.push_back(storageSize);
+    poolSizes.push_back(samplerSize);
+    poolSizes.push_back(sampledImageSize);
+    poolSizes.push_back(storageImageSize);
+    
+    VkDescriptorPoolCreateInfo poolInfo = { VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };
+    poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT | VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
+    poolInfo.maxSets = newSize;
+    poolInfo.poolSizeCount = static_cast<u32>(poolSizes.size());
+    poolInfo.pPoolSizes = poolSizes.data();
+    
+    VkResult res = vkCreateDescriptorPool(m_context.device, &poolInfo, m_context.allocationCallbacks, &table->descriptorPool);
+    if(res != VK_SUCCESS)
+        return;
+    
+    // Allocate new descriptor sets
+    if(!table->layout->descriptorSetLayouts.empty()){
+        // For bindless, we may need to create multiple sets with the same layout
+        Vector<VkDescriptorSetLayout> layouts(newSize, table->layout->descriptorSetLayouts[0]);
+        
+        VkDescriptorSetAllocateInfo allocInfo = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO };
+        allocInfo.descriptorPool = table->descriptorPool;
+        allocInfo.descriptorSetCount = newSize;
+        allocInfo.pSetLayouts = layouts.data();
+        
+        table->descriptorSets.resize(newSize);
+        vkAllocateDescriptorSets(m_context.device, &allocInfo, table->descriptorSets.data());
+    }
+    
+    (void)keepContents;
 }
 
 bool Device::writeDescriptorTable(IDescriptorTable* descriptorTable, const BindingSetItem& item){
@@ -482,11 +529,7 @@ VkShaderStageFlags convertShaderStages(ShaderType::Mask stages){
 // Descriptor Pool Management
 //-----------------------------------------------------------------------------
 
-// TODO: Implement descriptor pool management
-// - Create pools with various descriptor type counts
-// - Allocate from pools
-// - Reset pools when full
-// - Free pools when no longer needed
+
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

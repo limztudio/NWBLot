@@ -224,6 +224,15 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
         cmdBufInfos.push_back(cmdBufInfo);
     }
     
+    // Collect the signal fence from tracked command buffers (if any)
+    VkFence submitFence = VK_NULL_HANDLE;
+    for(auto& tracked : trackedBuffers){
+        if(tracked->signalFence != VK_NULL_HANDLE){
+            submitFence = tracked->signalFence;
+            tracked->signalFence = VK_NULL_HANDLE;
+        }
+    }
+    
     // Submit to queue (using VK_KHR_synchronization2)
     VkSubmitInfo2 submitInfo = { VK_STRUCTURE_TYPE_SUBMIT_INFO_2 };
     submitInfo.waitSemaphoreInfoCount = (u32)waitInfos.size();
@@ -233,7 +242,7 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
     submitInfo.signalSemaphoreInfoCount = (u32)signalInfos.size();
     submitInfo.pSignalSemaphoreInfos = signalInfos.data();
     
-    VkResult res = vkQueueSubmit2(m_queue, 1, &submitInfo, VK_NULL_HANDLE);
+    VkResult res = vkQueueSubmit2(m_queue, 1, &submitInfo, submitFence);
     
     // Clear wait/signal semaphores after submission
     m_waitSemaphores.clear();

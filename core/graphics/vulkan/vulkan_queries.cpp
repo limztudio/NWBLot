@@ -23,9 +23,16 @@ EventQueryHandle Device::createEventQuery(){
 
 void Device::setEventQuery(IEventQuery* _query, CommandQueue::Enum queue){
     EventQuery* query = static_cast<EventQuery*>(_query);
-    query->started = true;
     
-    // TODO: Submit fence to queue
+    vkResetFences(m_context.device, 1, &query->fence);
+    
+    Queue* q = getQueue(queue);
+    if(q){
+        VkSubmitInfo submitInfo = { VK_STRUCTURE_TYPE_SUBMIT_INFO };
+        vkQueueSubmit(q->getVkQueue(), 1, &submitInfo, query->fence);
+    }
+    
+    query->started = true;
 }
 
 bool Device::pollEventQuery(IEventQuery* _query){
@@ -109,7 +116,7 @@ void CommandList::endTimerQuery(ITimerQuery* _query){
 void CommandList::beginMarker(const Name& name){
     if(m_context->extensions.EXT_debug_utils){
         VkDebugUtilsLabelEXT label = { VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT };
-        label.pLabelName = "marker"; // TODO: extract string from Name when Name class has accessors
+        label.pLabelName = name.c_str();
         vkCmdBeginDebugUtilsLabelEXT(currentCmdBuf->cmdBuf, &label);
     }
 }
@@ -122,8 +129,14 @@ void CommandList::endMarker(){
 void CommandList::setEventQuery(IEventQuery* _query, CommandQueue::Enum waitQueue){
     EventQuery* query = checked_cast<EventQuery*>(_query);
     
-    // Set fence at the end of command buffer
-    // Note: Actual fence signaling happens at queue submit time
+    // Reset the fence so it can be signaled again
+    if(query->fence != VK_NULL_HANDLE)
+        vkResetFences(m_context->device, 1, &query->fence);
+    
+    // Store fence on current command buffer; it will be signaled at queue submit time
+    if(currentCmdBuf)
+        currentCmdBuf->signalFence = query->fence;
+    
     query->started = true;
 }
 

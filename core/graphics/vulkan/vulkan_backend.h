@@ -33,6 +33,9 @@ namespace __hidden_vulkan{
     extern constexpr VkImageCreateFlags PickImageFlags(const TextureDesc& desc);
     extern constexpr VkDescriptorType ConvertDescriptorType(ResourceType::Enum type);
     extern constexpr VkShaderStageFlags ConvertShaderStages(ShaderType::Mask stages);
+    extern constexpr VkComponentTypeKHR ConvertCoopVecDataType(CooperativeVectorDataType::Enum type);
+    extern constexpr CooperativeVectorDataType::Enum ConvertCoopVecDataType(VkComponentTypeKHR type);
+    extern constexpr VkCooperativeVectorMatrixLayoutNV ConvertCoopVecMatrixLayout(CooperativeVectorMatrixLayout::Enum layout);
 };
 
 
@@ -72,7 +75,15 @@ struct VulkanContext{
         bool EXT_debug_utils = false;
         bool KHR_swapchain = false;
         bool KHR_dynamic_rendering = false;
+        bool EXT_opacity_micromap = false;
+        bool NV_cooperative_vector = false;
+        bool NV_cluster_acceleration_structure = false;
     } extensions;
+    
+    VkPhysicalDeviceAccelerationStructurePropertiesKHR accelStructProperties{};
+    VkPhysicalDeviceCooperativeVectorPropertiesNV coopVecProperties{};
+    VkPhysicalDeviceCooperativeVectorFeaturesNV coopVecFeatures{};
+    VkPhysicalDeviceClusterAccelerationStructurePropertiesNV nvClusterAccelerationStructureProperties{};
     
 
     VulkanContext() = default;
@@ -132,6 +143,7 @@ public:
     void addSignalSemaphore(VkSemaphore semaphore, u64 value);
     
     u64 submit(ICommandList* const* ppCmd, usize numCmd);
+    void updateTextureTileMappings(ITexture* texture, const TextureTilesMapping* tileMappings, u32 numTileMappings);
     u64 updateLastFinishedID();
     
     [[nodiscard]] bool pollCommandList(u64 commandListID);
@@ -339,6 +351,7 @@ public:
     HashMap<u64, VkImageView> views;
     
     bool managed = true; // if true, owns the VkImage and memory
+    u64 tileByteSize = 0; // for sparse/tiled resources
     
     
 private:
@@ -800,6 +813,35 @@ private:
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Opacity Micromap
+
+
+class OpacityMicromap final : public RefCounter<IRayTracingOpacityMicromap>, NoCopy{
+public:
+    OpacityMicromap(const VulkanContext& context);
+    virtual ~OpacityMicromap()override;
+    
+    
+public:
+    [[nodiscard]] virtual const RayTracingOpacityMicromapDesc& getDescription()const override{ return desc; }
+    [[nodiscard]] virtual bool isCompacted()const override{ return compacted; }
+    [[nodiscard]] virtual u64 getDeviceAddress()const override{ return deviceAddress; }
+    
+    
+public:
+    RayTracingOpacityMicromapDesc desc;
+    RefCountPtr<IBuffer, BlankDeleter<IBuffer>> dataBuffer;
+    VkMicromapEXT micromap = VK_NULL_HANDLE;
+    u64 deviceAddress = 0;
+    bool compacted = false;
+    
+    
+private:
+    const VulkanContext& m_context;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // State Tracker
 
 
@@ -822,6 +864,9 @@ public:
     void beginTrackingTexture(ITexture* texture, TextureSubresourceSet subresources, ResourceStates::Mask state);
     void beginTrackingBuffer(IBuffer* buffer, ResourceStates::Mask state);
     
+    void setEnableUavBarriersForTexture(ITexture* texture, bool enableBarriers);
+    void setEnableUavBarriersForBuffer(IBuffer* buffer, bool enableBarriers);
+    
     
 public:
     GraphicsState graphicsState;
@@ -835,6 +880,8 @@ private:
     HashMap<IBuffer*, ResourceStates::Mask> m_permanentBufferStates;
     HashMap<ITexture*, ResourceStates::Mask> m_textureStates;
     HashMap<IBuffer*, ResourceStates::Mask> m_bufferStates;
+    HashMap<ITexture*, bool> m_textureUavBarriers;
+    HashMap<IBuffer*, bool> m_bufferUavBarriers;
 };
 
 

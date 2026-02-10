@@ -45,14 +45,49 @@ Device::Device(const DeviceDesc& desc)
             m_context.extensions.KHR_swapchain = true;
         else if(NWB_STRCMP(ext, VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME) == 0)
             m_context.extensions.KHR_dynamic_rendering = true;
+        else if(NWB_STRCMP(ext, VK_EXT_OPACITY_MICROMAP_EXTENSION_NAME) == 0)
+            m_context.extensions.EXT_opacity_micromap = true;
+        else if(NWB_STRCMP(ext, VK_NV_COOPERATIVE_VECTOR_EXTENSION_NAME) == 0)
+            m_context.extensions.NV_cooperative_vector = true;
+        else if(NWB_STRCMP(ext, VK_NV_CLUSTER_ACCELERATION_STRUCTURE_EXTENSION_NAME) == 0)
+            m_context.extensions.NV_cluster_acceleration_structure = true;
     }
     
     // Query ray tracing properties if available
     if(m_context.extensions.KHR_ray_tracing_pipeline){
         VkPhysicalDeviceProperties2 props2 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2 };
         m_context.rayTracingPipelineProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR;
-        props2.pNext = &m_context.rayTracingPipelineProperties;
+        
+        void* pNext = &m_context.rayTracingPipelineProperties;
+        
+        if(m_context.extensions.KHR_acceleration_structure){
+            m_context.accelStructProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_PROPERTIES_KHR;
+            m_context.accelStructProperties.pNext = pNext;
+            pNext = &m_context.accelStructProperties;
+        }
+        
+        if(m_context.extensions.NV_cluster_acceleration_structure){
+            m_context.nvClusterAccelerationStructureProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_CLUSTER_ACCELERATION_STRUCTURE_PROPERTIES_NV;
+            m_context.nvClusterAccelerationStructureProperties.pNext = pNext;
+            pNext = &m_context.nvClusterAccelerationStructureProperties;
+        }
+        
+        if(m_context.extensions.NV_cooperative_vector){
+            m_context.coopVecProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_VECTOR_PROPERTIES_NV;
+            m_context.coopVecProperties.pNext = pNext;
+            pNext = &m_context.coopVecProperties;
+        }
+        
+        props2.pNext = pNext;
         vkGetPhysicalDeviceProperties2(m_context.physicalDevice, &props2);
+    }
+    
+    // Query cooperative vector features if available
+    if(m_context.extensions.NV_cooperative_vector){
+        VkPhysicalDeviceFeatures2 features2 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
+        m_context.coopVecFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_VECTOR_FEATURES_NV;
+        features2.pNext = &m_context.coopVecFeatures;
+        vkGetPhysicalDeviceFeatures2(m_context.physicalDevice, &features2);
     }
     
     // Create pipeline cache
@@ -168,6 +203,14 @@ bool Device::queryFeatureSupport(Feature::Enum feature, void* pInfo, usize infoS
         return m_context.extensions.KHR_ray_tracing_pipeline;
     case Feature::ShaderExecutionReordering:
         return false; // Would need NV extension check
+    case Feature::RayTracingOpacityMicromap:
+        return m_context.extensions.EXT_opacity_micromap && m_context.extensions.KHR_synchronization2;
+    case Feature::RayTracingClusters:
+        return m_context.extensions.NV_cluster_acceleration_structure;
+    case Feature::CooperativeVectorInferencing:
+        return m_context.extensions.NV_cooperative_vector && m_context.coopVecFeatures.cooperativeVector;
+    case Feature::CooperativeVectorTraining:
+        return m_context.extensions.NV_cooperative_vector && m_context.coopVecFeatures.cooperativeVectorTraining;
     case Feature::Meshlets:
         return true; // Assume VK_EXT_mesh_shader is available
     case Feature::VariableRateShading:
@@ -297,12 +340,69 @@ HeapHandle Device::createHeap(const HeapDesc& d){
 
 
 CooperativeVectorDeviceFeatures Device::queryCoopVecFeatures(){
-    // Cooperative vectors are not yet supported in this Vulkan backend
-    return CooperativeVectorDeviceFeatures{};
+    CooperativeVectorDeviceFeatures result;
+    
+    if(!m_context.extensions.NV_cooperative_vector)
+        return result;
+    
+    u32 propertyCount = 0;
+    VkResult res = vkGetPhysicalDeviceCooperativeVectorPropertiesNV(m_context.physicalDevice, &propertyCount, nullptr);
+    if(res != VK_SUCCESS || propertyCount == 0)
+        return result;
+    
+    Vector<VkCooperativeVectorPropertiesNV> properties(propertyCount);
+    for(u32 i = 0; i < propertyCount; ++i){
+        properties[i].sType = VK_STRUCTURE_TYPE_COOPERATIVE_VECTOR_PROPERTIES_NV;
+        properties[i].pNext = nullptr;
+    }
+    
+    res = vkGetPhysicalDeviceCooperativeVectorPropertiesNV(m_context.physicalDevice, &propertyCount, properties.data());
+    if(res != VK_SUCCESS)
+        return result;
+    
+    result.matMulFormats.reserve(propertyCount);
+    for(const auto& prop : properties){
+        CooperativeVectorMatMulFormatCombo combo;
+        combo.inputType = __hidden_vulkan::ConvertCoopVecDataType(static_cast<VkComponentTypeKHR>(prop.inputType));
+        combo.inputInterpretation = __hidden_vulkan::ConvertCoopVecDataType(static_cast<VkComponentTypeKHR>(prop.inputInterpretation));
+        combo.matrixInterpretation = __hidden_vulkan::ConvertCoopVecDataType(static_cast<VkComponentTypeKHR>(prop.matrixInterpretation));
+        combo.biasInterpretation = __hidden_vulkan::ConvertCoopVecDataType(static_cast<VkComponentTypeKHR>(prop.biasInterpretation));
+        combo.outputType = __hidden_vulkan::ConvertCoopVecDataType(static_cast<VkComponentTypeKHR>(prop.resultType));
+        combo.transposeSupported = prop.transpose != VK_FALSE;
+        result.matMulFormats.push_back(combo);
+    }
+    
+    result.trainingFloat16 = m_context.coopVecProperties.cooperativeVectorTrainingFloat16Accumulation != VK_FALSE;
+    result.trainingFloat32 = m_context.coopVecProperties.cooperativeVectorTrainingFloat32Accumulation != VK_FALSE;
+    
+    return result;
 }
 
-usize Device::getCoopVecMatrixSize(CooperativeVectorDataType::Enum /*type*/, CooperativeVectorMatrixLayout::Enum /*layout*/, int /*rows*/, int /*columns*/){
-    // Cooperative vectors are not yet supported in this Vulkan backend
+usize Device::getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, int rows, int columns){
+    if(!m_context.extensions.NV_cooperative_vector)
+        return 0;
+    
+    usize dstSize = 0;
+    usize dataTypeSize = GetCooperativeVectorDataTypeSize(type);
+    
+    VkConvertCooperativeVectorMatrixInfoNV convertInfo = { VK_STRUCTURE_TYPE_CONVERT_COOPERATIVE_VECTOR_MATRIX_INFO_NV };
+    convertInfo.srcSize = dataTypeSize * rows * columns;
+    convertInfo.srcData.hostAddress = nullptr;
+    convertInfo.pDstSize = &dstSize;
+    convertInfo.dstData.hostAddress = nullptr;
+    convertInfo.srcComponentType = __hidden_vulkan::ConvertCoopVecDataType(type);
+    convertInfo.dstComponentType = convertInfo.srcComponentType;
+    convertInfo.numRows = static_cast<u32>(rows);
+    convertInfo.numColumns = static_cast<u32>(columns);
+    convertInfo.srcLayout = VK_COOPERATIVE_VECTOR_MATRIX_LAYOUT_ROW_MAJOR_NV;
+    convertInfo.srcStride = dataTypeSize * columns;
+    convertInfo.dstLayout = __hidden_vulkan::ConvertCoopVecMatrixLayout(layout);
+    convertInfo.dstStride = GetCooperativeVectorOptimalMatrixStride(type, layout, rows, columns);
+    
+    VkResult res = vkConvertCooperativeVectorMatrixNV(m_context.device, &convertInfo);
+    if(res == VK_SUCCESS)
+        return dstSize;
+    
     return 0;
 }
 

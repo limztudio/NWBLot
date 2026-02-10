@@ -353,6 +353,128 @@ void Device::queueWaitForCommandList(CommandQueue::Enum waitQueue, CommandQueue:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapping* tileMappings, u32 numTileMappings){
+    Texture* texture = checked_cast<Texture*>(_texture);
+    
+    Vector<VkSparseImageMemoryBind> sparseImageMemoryBinds;
+    Vector<VkSparseMemoryBind> sparseMemoryBinds;
+    
+    const VkImageCreateInfo& imageInfo = texture->imageInfo;
+    VkImageAspectFlags textureAspectFlags = VK_IMAGE_ASPECT_COLOR_BIT;
+    
+    // Determine aspect from format
+    VkFormat fmt = imageInfo.format;
+    if(fmt == VK_FORMAT_D32_SFLOAT || fmt == VK_FORMAT_D16_UNORM)
+        textureAspectFlags = VK_IMAGE_ASPECT_DEPTH_BIT;
+    else if(fmt == VK_FORMAT_D24_UNORM_S8_UINT || fmt == VK_FORMAT_D32_SFLOAT_S8_UINT)
+        textureAspectFlags = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+    
+    u32 tileWidth = 1;
+    u32 tileHeight = 1;
+    u32 tileDepth = 1;
+    
+    VkDeviceSize imageMipTailOffset = 0;
+    VkDeviceSize imageMipTailStride = 1;
+    
+    // Get sparse format properties
+    u32 formatPropCount = 0;
+    vkGetPhysicalDeviceSparseImageFormatProperties(
+        m_context.physicalDevice,
+        imageInfo.format, imageInfo.imageType, imageInfo.samples,
+        imageInfo.usage, imageInfo.tiling,
+        &formatPropCount, nullptr);
+    
+    Vector<VkSparseImageFormatProperties> formatProps(formatPropCount);
+    if(formatPropCount > 0)
+        vkGetPhysicalDeviceSparseImageFormatProperties(
+            m_context.physicalDevice,
+            imageInfo.format, imageInfo.imageType, imageInfo.samples,
+            imageInfo.usage, imageInfo.tiling,
+            &formatPropCount, formatProps.data());
+    
+    if(!formatProps.empty()){
+        tileWidth = formatProps[0].imageGranularity.width;
+        tileHeight = formatProps[0].imageGranularity.height;
+        tileDepth = formatProps[0].imageGranularity.depth;
+    }
+    
+    // Get sparse memory requirements
+    u32 sparseReqCount = 0;
+    vkGetImageSparseMemoryRequirements(m_context.device, texture->image, &sparseReqCount, nullptr);
+    
+    Vector<VkSparseImageMemoryRequirements> sparseReqs(sparseReqCount);
+    if(sparseReqCount > 0)
+        vkGetImageSparseMemoryRequirements(m_context.device, texture->image, &sparseReqCount, sparseReqs.data());
+    
+    if(!sparseReqs.empty()){
+        imageMipTailOffset = sparseReqs[0].imageMipTailOffset;
+        imageMipTailStride = sparseReqs[0].imageMipTailStride;
+    }
+    
+    for(u32 i = 0; i < numTileMappings; i++){
+        u32 numRegions = tileMappings[i].numTextureRegions;
+        Heap* heap = tileMappings[i].heap ? checked_cast<Heap*>(tileMappings[i].heap) : nullptr;
+        VkDeviceMemory deviceMemory = heap ? heap->memory : VK_NULL_HANDLE;
+        
+        for(u32 j = 0; j < numRegions; ++j){
+            const TiledTextureCoordinate& coord = tileMappings[i].tiledTextureCoordinates[j];
+            const TiledTextureRegion& region = tileMappings[i].tiledTextureRegions[j];
+            
+            if(region.tilesNum){
+                // Packed mip tail binding (opaque bind)
+                VkSparseMemoryBind bind = {};
+                bind.resourceOffset = imageMipTailOffset + coord.arrayLevel * imageMipTailStride;
+                bind.size = region.tilesNum * texture->tileByteSize;
+                bind.memory = deviceMemory;
+                bind.memoryOffset = deviceMemory ? tileMappings[i].byteOffsets[j] : 0;
+                sparseMemoryBinds.push_back(bind);
+            }
+            else{
+                // Standard mip binding
+                VkSparseImageMemoryBind bind = {};
+                bind.subresource.arrayLayer = coord.arrayLevel;
+                bind.subresource.mipLevel = coord.mipLevel;
+                bind.subresource.aspectMask = textureAspectFlags;
+                bind.offset.x = coord.x * tileWidth;
+                bind.offset.y = coord.y * tileHeight;
+                bind.offset.z = coord.z * tileDepth;
+                bind.extent.width = region.width * tileWidth;
+                bind.extent.height = region.height * tileHeight;
+                bind.extent.depth = region.depth * tileDepth;
+                bind.memory = deviceMemory;
+                bind.memoryOffset = deviceMemory ? tileMappings[i].byteOffsets[j] : 0;
+                sparseImageMemoryBinds.push_back(bind);
+            }
+        }
+    }
+    
+    VkBindSparseInfo bindSparseInfo = { VK_STRUCTURE_TYPE_BIND_SPARSE_INFO };
+    
+    VkSparseImageMemoryBindInfo sparseImageMemoryBindInfo = {};
+    if(!sparseImageMemoryBinds.empty()){
+        sparseImageMemoryBindInfo.image = texture->image;
+        sparseImageMemoryBindInfo.bindCount = static_cast<u32>(sparseImageMemoryBinds.size());
+        sparseImageMemoryBindInfo.pBinds = sparseImageMemoryBinds.data();
+        bindSparseInfo.imageBindCount = 1;
+        bindSparseInfo.pImageBinds = &sparseImageMemoryBindInfo;
+    }
+    
+    VkSparseImageOpaqueMemoryBindInfo sparseOpaqueBindInfo = {};
+    if(!sparseMemoryBinds.empty()){
+        sparseOpaqueBindInfo.image = texture->image;
+        sparseOpaqueBindInfo.bindCount = static_cast<u32>(sparseMemoryBinds.size());
+        sparseOpaqueBindInfo.pBinds = sparseMemoryBinds.data();
+        bindSparseInfo.imageOpaqueBindCount = 1;
+        bindSparseInfo.pImageOpaqueBinds = &sparseOpaqueBindInfo;
+    }
+    
+    vkQueueBindSparse(m_queue, 1, &bindSparseInfo, VK_NULL_HANDLE);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_VULKAN_END
 
 

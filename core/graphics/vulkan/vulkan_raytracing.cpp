@@ -61,6 +61,22 @@ Object AccelStruct::getNativeHandle(ObjectType objectType){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+OpacityMicromap::OpacityMicromap(const VulkanContext& context)
+    : m_context(context)
+{}
+
+OpacityMicromap::~OpacityMicromap(){
+    if(micromap != VK_NULL_HANDLE){
+        vkDestroyMicromapEXT(m_context.device, micromap, m_context.allocationCallbacks);
+        micromap = VK_NULL_HANDLE;
+    }
+    dataBuffer.reset();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 RayTracingPipeline::RayTracingPipeline(const VulkanContext& context)
     : m_context(context)
 {}
@@ -130,9 +146,60 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
 }
 
 RayTracingOpacityMicromapHandle Device::createOpacityMicromap(const RayTracingOpacityMicromapDesc& desc){
-    (void)desc;
-    // Opacity micromaps require VK_EXT_opacity_micromap extension which is not enabled in this backend
-    return nullptr;
+    if(!m_context.extensions.EXT_opacity_micromap)
+        return nullptr;
+    
+    // Convert flags
+    VkBuildMicromapFlagBitsEXT buildFlags = static_cast<VkBuildMicromapFlagBitsEXT>(0);
+    if(desc.flags & RayTracingOpacityMicromapBuildFlags::FastTrace)
+        buildFlags = VK_BUILD_MICROMAP_PREFER_FAST_TRACE_BIT_EXT;
+    else if(desc.flags & RayTracingOpacityMicromapBuildFlags::FastBuild)
+        buildFlags = VK_BUILD_MICROMAP_PREFER_FAST_BUILD_BIT_EXT;
+    
+    // Usage counts — reinterpret as VkMicromapUsageEXT (binary compatible layout)
+    VkMicromapBuildInfoEXT buildInfo = { VK_STRUCTURE_TYPE_MICROMAP_BUILD_INFO_EXT };
+    buildInfo.type = VK_MICROMAP_TYPE_OPACITY_MICROMAP_EXT;
+    buildInfo.flags = buildFlags;
+    buildInfo.mode = VK_BUILD_MICROMAP_MODE_BUILD_EXT;
+    buildInfo.usageCountsCount = static_cast<u32>(desc.counts.size());
+    buildInfo.pUsageCounts = reinterpret_cast<const VkMicromapUsageEXT*>(desc.counts.data());
+    
+    VkMicromapBuildSizesInfoEXT buildSize = { VK_STRUCTURE_TYPE_MICROMAP_BUILD_SIZES_INFO_EXT };
+    vkGetMicromapBuildSizesEXT(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &buildSize);
+    
+    OpacityMicromap* om = new OpacityMicromap(m_context);
+    om->desc = desc;
+    
+    // Create backing buffer
+    BufferDesc bufferDesc;
+    bufferDesc.canHaveUAVs = true;
+    bufferDesc.byteSize = buildSize.micromapSize;
+    bufferDesc.initialState = ResourceStates::AccelStructBuildBlas;
+    bufferDesc.keepInitialState = true;
+    bufferDesc.isAccelStructStorage = true;
+    bufferDesc.debugName = desc.debugName;
+    om->dataBuffer = createBuffer(bufferDesc);
+    
+    if(!om->dataBuffer){
+        delete om;
+        return nullptr;
+    }
+    
+    Buffer* buffer = checked_cast<Buffer*>(om->dataBuffer.get());
+    
+    VkMicromapCreateInfoEXT createInfo = { VK_STRUCTURE_TYPE_MICROMAP_CREATE_INFO_EXT };
+    createInfo.type = VK_MICROMAP_TYPE_OPACITY_MICROMAP_EXT;
+    createInfo.buffer = buffer->buffer;
+    createInfo.size = buildSize.micromapSize;
+    createInfo.deviceAddress = buffer->deviceAddress;
+    
+    VkResult res = vkCreateMicromapEXT(m_context.device, &createInfo, m_context.allocationCallbacks, &om->micromap);
+    if(res != VK_SUCCESS){
+        delete om;
+        return nullptr;
+    }
+    
+    return RayTracingOpacityMicromapHandle(om, AdoptRef);
 }
 
 MemoryRequirements Device::getAccelStructMemoryRequirements(IRayTracingAccelStruct* _as){
@@ -149,9 +216,117 @@ MemoryRequirements Device::getAccelStructMemoryRequirements(IRayTracingAccelStru
 }
 
 RayTracingClusterOperationSizeInfo Device::getClusterOperationSizeInfo(const RayTracingClusterOperationParams& params){
-    (void)params;
-    // Cluster operations require VK_NV_cluster_acceleration_structure extension which is not enabled in this backend
-    RayTracingClusterOperationSizeInfo info = {};
+    if(!m_context.extensions.NV_cluster_acceleration_structure){
+        return RayTracingClusterOperationSizeInfo{};
+    }
+    
+    RayTracingClusterOperationSizeInfo info;
+    
+    // Convert operation type
+    VkClusterAccelerationStructureOpTypeNV opType;
+    switch(params.type){
+    case RayTracingClusterOperationType::Move:
+        opType = VK_CLUSTER_ACCELERATION_STRUCTURE_OP_TYPE_MOVE_OBJECTS_NV;
+        break;
+    case RayTracingClusterOperationType::ClasBuild:
+        opType = VK_CLUSTER_ACCELERATION_STRUCTURE_OP_TYPE_BUILD_TRIANGLE_CLUSTER_NV;
+        break;
+    case RayTracingClusterOperationType::ClasBuildTemplates:
+        opType = VK_CLUSTER_ACCELERATION_STRUCTURE_OP_TYPE_BUILD_TRIANGLE_CLUSTER_TEMPLATE_NV;
+        break;
+    case RayTracingClusterOperationType::ClasInstantiateTemplates:
+        opType = VK_CLUSTER_ACCELERATION_STRUCTURE_OP_TYPE_INSTANTIATE_TRIANGLE_CLUSTER_NV;
+        break;
+    case RayTracingClusterOperationType::BlasBuild:
+        opType = VK_CLUSTER_ACCELERATION_STRUCTURE_OP_TYPE_BUILD_CLUSTERS_BOTTOM_LEVEL_NV;
+        break;
+    default:
+        return info;
+    }
+    
+    // Convert operation mode
+    VkClusterAccelerationStructureOpModeNV opMode;
+    switch(params.mode){
+    case RayTracingClusterOperationMode::ImplicitDestinations:
+        opMode = VK_CLUSTER_ACCELERATION_STRUCTURE_OP_MODE_IMPLICIT_DESTINATIONS_NV;
+        break;
+    case RayTracingClusterOperationMode::ExplicitDestinations:
+        opMode = VK_CLUSTER_ACCELERATION_STRUCTURE_OP_MODE_EXPLICIT_DESTINATIONS_NV;
+        break;
+    case RayTracingClusterOperationMode::GetSizes:
+        opMode = VK_CLUSTER_ACCELERATION_STRUCTURE_OP_MODE_COMPUTE_SIZES_NV;
+        break;
+    default:
+        return info;
+    }
+    
+    // Convert flags
+    VkBuildAccelerationStructureFlagsKHR opFlags = 0;
+    if(params.flags & RayTracingClusterOperationFlags::FastTrace)
+        opFlags |= VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
+    if(!(params.flags & RayTracingClusterOperationFlags::FastTrace) && (params.flags & RayTracingClusterOperationFlags::FastBuild))
+        opFlags |= VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR;
+    if(params.flags & RayTracingClusterOperationFlags::AllowOMM)
+        opFlags |= VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_OPACITY_MICROMAP_UPDATE_EXT;
+    
+    // Build input info
+    VkClusterAccelerationStructureInputInfoNV inputInfo = { VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_INPUT_INFO_NV };
+    inputInfo.maxAccelerationStructureCount = params.maxArgCount;
+    inputInfo.flags = opFlags;
+    inputInfo.opType = opType;
+    inputInfo.opMode = opMode;
+    
+    // Set operation-specific parameters
+    VkClusterAccelerationStructureMoveObjectsInputNV moveInput = { VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_MOVE_OBJECTS_INPUT_NV };
+    VkClusterAccelerationStructureTriangleClusterInputNV clusterInput = { VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_TRIANGLE_CLUSTER_INPUT_NV };
+    VkClusterAccelerationStructureClustersBottomLevelInputNV blasInput = { VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_CLUSTERS_BOTTOM_LEVEL_INPUT_NV };
+    
+    switch(params.type){
+    case RayTracingClusterOperationType::Move:{
+        VkClusterAccelerationStructureTypeNV moveType;
+        switch(params.move.type){
+        case RayTracingClusterOperationMoveType::BottomLevel:  moveType = VK_CLUSTER_ACCELERATION_STRUCTURE_TYPE_CLUSTERS_BOTTOM_LEVEL_NV; break;
+        case RayTracingClusterOperationMoveType::ClusterLevel: moveType = VK_CLUSTER_ACCELERATION_STRUCTURE_TYPE_TRIANGLE_CLUSTER_NV; break;
+        case RayTracingClusterOperationMoveType::Template:     moveType = VK_CLUSTER_ACCELERATION_STRUCTURE_TYPE_TRIANGLE_CLUSTER_TEMPLATE_NV; break;
+        default: moveType = VK_CLUSTER_ACCELERATION_STRUCTURE_TYPE_CLUSTERS_BOTTOM_LEVEL_NV; break;
+        }
+        moveInput.type = moveType;
+        moveInput.noMoveOverlap = (params.flags & RayTracingClusterOperationFlags::NoOverlap) ? VK_TRUE : VK_FALSE;
+        moveInput.maxMovedBytes = params.move.maxBytes;
+        inputInfo.opInput.pMoveObjects = &moveInput;
+        break;
+    }
+    case RayTracingClusterOperationType::ClasBuild:
+    case RayTracingClusterOperationType::ClasBuildTemplates:
+    case RayTracingClusterOperationType::ClasInstantiateTemplates:{
+        clusterInput.vertexFormat = __hidden_vulkan::ConvertFormat(params.clas.vertexFormat);
+        clusterInput.maxGeometryIndexValue = params.clas.maxGeometryIndex;
+        clusterInput.maxClusterUniqueGeometryCount = params.clas.maxUniqueGeometryCount;
+        clusterInput.maxClusterTriangleCount = params.clas.maxTriangleCount;
+        clusterInput.maxClusterVertexCount = params.clas.maxVertexCount;
+        clusterInput.maxTotalTriangleCount = params.clas.maxTotalTriangleCount;
+        clusterInput.maxTotalVertexCount = params.clas.maxTotalVertexCount;
+        clusterInput.minPositionTruncateBitCount = params.clas.minPositionTruncateBitCount;
+        inputInfo.opInput.pTriangleClusters = &clusterInput;
+        break;
+    }
+    case RayTracingClusterOperationType::BlasBuild:{
+        blasInput.maxClusterCountPerAccelerationStructure = params.blas.maxClasPerBlasCount;
+        blasInput.maxTotalClusterCount = params.blas.maxTotalClasCount;
+        inputInfo.opInput.pClustersBottomLevel = &blasInput;
+        break;
+    }
+    default:
+        break;
+    }
+    
+    // Get build sizes
+    VkClusterAccelerationStructureBuildSizesInfoNV vkSizeInfo = { VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_NV };
+    vkGetClusterAccelerationStructureBuildSizesNV(m_context.device, &inputInfo, &vkSizeInfo);
+    
+    info.resultMaxSizeInBytes = vkSizeInfo.accelerationStructureSize;
+    info.scratchSizeInBytes = vkSizeInfo.buildScratchSize;
+    
     return info;
 }
 
@@ -804,9 +979,73 @@ void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* _as, const Ra
 }
 
 void CommandList::buildOpacityMicromap(IRayTracingOpacityMicromap* _omm, const RayTracingOpacityMicromapDesc& desc){
-    (void)_omm;
-    (void)desc;
-    // Opacity micromaps require VK_EXT_opacity_micromap extension which is not enabled in this backend
+    if(!m_context->extensions.EXT_opacity_micromap)
+        return;
+    
+    OpacityMicromap* omm = checked_cast<OpacityMicromap*>(_omm);
+    
+    if(enableAutomaticBarriers){
+        if(desc.inputBuffer)
+            setBufferState(desc.inputBuffer, ResourceStates::OpacityMicromapBuildInput);
+        if(desc.perOmmDescs)
+            setBufferState(desc.perOmmDescs, ResourceStates::OpacityMicromapBuildInput);
+        if(omm->dataBuffer)
+            setBufferState(omm->dataBuffer.get(), ResourceStates::OpacityMicromapWrite);
+    }
+    
+    if(desc.trackLiveness){
+        if(desc.inputBuffer)
+            currentCmdBuf->referencedResources.push_back(desc.inputBuffer);
+        if(desc.perOmmDescs)
+            currentCmdBuf->referencedResources.push_back(desc.perOmmDescs);
+        if(omm->dataBuffer)
+            currentCmdBuf->referencedResources.push_back(omm->dataBuffer.get());
+    }
+    
+    commitBarriers();
+    
+    // Convert flags
+    VkBuildMicromapFlagBitsEXT buildFlags = static_cast<VkBuildMicromapFlagBitsEXT>(0);
+    if(desc.flags & RayTracingOpacityMicromapBuildFlags::FastTrace)
+        buildFlags = VK_BUILD_MICROMAP_PREFER_FAST_TRACE_BIT_EXT;
+    else if(desc.flags & RayTracingOpacityMicromapBuildFlags::FastBuild)
+        buildFlags = VK_BUILD_MICROMAP_PREFER_FAST_BUILD_BIT_EXT;
+    
+    VkMicromapBuildInfoEXT buildInfo = { VK_STRUCTURE_TYPE_MICROMAP_BUILD_INFO_EXT };
+    buildInfo.type = VK_MICROMAP_TYPE_OPACITY_MICROMAP_EXT;
+    buildInfo.flags = buildFlags;
+    buildInfo.mode = VK_BUILD_MICROMAP_MODE_BUILD_EXT;
+    buildInfo.dstMicromap = omm->micromap;
+    buildInfo.usageCountsCount = static_cast<u32>(desc.counts.size());
+    buildInfo.pUsageCounts = reinterpret_cast<const VkMicromapUsageEXT*>(desc.counts.data());
+    buildInfo.data.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(desc.inputBuffer, desc.inputBufferOffset);
+    buildInfo.triangleArray.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(desc.perOmmDescs, desc.perOmmDescsOffset);
+    buildInfo.triangleArrayStride = sizeof(VkMicromapTriangleEXT);
+    
+    // Query scratch size
+    VkMicromapBuildSizesInfoEXT buildSize = { VK_STRUCTURE_TYPE_MICROMAP_BUILD_SIZES_INFO_EXT };
+    vkGetMicromapBuildSizesEXT(m_context->device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &buildSize);
+    
+    if(buildSize.buildScratchSize != 0){
+        BufferDesc scratchDesc;
+        scratchDesc.byteSize = buildSize.buildScratchSize;
+        scratchDesc.structStride = 1;
+        scratchDesc.debugName = "OMM_BuildScratch";
+        scratchDesc.canHaveUAVs = true;
+        
+        BufferHandle scratchBuffer = m_device->createBuffer(scratchDesc);
+        if(!scratchBuffer)
+            return;
+        
+        buildInfo.scratchData.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(scratchBuffer.get());
+        
+        vkCmdBuildMicromapsEXT(currentCmdBuf->cmdBuf, 1, &buildInfo);
+        
+        currentCmdBuf->referencedStagingBuffers.push_back(Move(scratchBuffer));
+    }
+    else{
+        vkCmdBuildMicromapsEXT(currentCmdBuf->cmdBuf, 1, &buildInfo);
+    }
 }
 
 void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){

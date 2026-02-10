@@ -291,6 +291,20 @@ void StateTracker::beginTrackingBuffer(IBuffer* buffer, ResourceStates::Mask sta
     m_bufferStates[buffer] = state;
 }
 
+void StateTracker::setEnableUavBarriersForTexture(ITexture* texture, bool enableBarriers){
+    if(!texture)
+        return;
+    
+    m_textureUavBarriers[texture] = enableBarriers;
+}
+
+void StateTracker::setEnableUavBarriersForBuffer(IBuffer* buffer, bool enableBarriers){
+    if(!buffer)
+        return;
+    
+    m_bufferUavBarriers[buffer] = enableBarriers;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

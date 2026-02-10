@@ -165,6 +165,10 @@ constexpr VkAccessFlags2 GetVkAccessFlags(ResourceStates::Mask states){
     if(states & ResourceStates::ShadingRateSurface)
         flags |= VK_ACCESS_2_FRAGMENT_SHADING_RATE_ATTACHMENT_READ_BIT_KHR;
     if(states & ResourceStates::OpacityMicromapRead)
+        flags |= VK_ACCESS_2_MICROMAP_READ_BIT_EXT;
+    if(states & ResourceStates::OpacityMicromapWrite)
+        flags |= VK_ACCESS_2_MICROMAP_WRITE_BIT_EXT;
+    if(states & ResourceStates::OpacityMicromapBuildInput)
         flags |= VK_ACCESS_2_SHADER_READ_BIT;
     
     return flags;
@@ -193,6 +197,8 @@ constexpr VkPipelineStageFlags2 GetVkPipelineStageFlags(ResourceStates::Mask sta
         flags |= VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR | VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR;
     if(states & ResourceStates::ShadingRateSurface)
         flags |= VK_PIPELINE_STAGE_2_FRAGMENT_SHADING_RATE_ATTACHMENT_BIT_KHR;
+    if(states & (ResourceStates::OpacityMicromapRead | ResourceStates::OpacityMicromapWrite | ResourceStates::OpacityMicromapBuildInput))
+        flags |= VK_PIPELINE_STAGE_2_MICROMAP_BUILD_BIT_EXT;
     
     if(flags == 0)
         flags = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
@@ -240,6 +246,66 @@ constexpr VkSampleCountFlagBits GetSampleCountFlagBits(u32 sampleCount){
     case 32: return VK_SAMPLE_COUNT_32_BIT;
     case 64: return VK_SAMPLE_COUNT_64_BIT;
     default: return VK_SAMPLE_COUNT_1_BIT;
+    }
+}
+
+constexpr VkComponentTypeKHR ConvertCoopVecDataType(CooperativeVectorDataType::Enum type){
+    switch(type){
+    case CooperativeVectorDataType::UInt8:       return VK_COMPONENT_TYPE_UINT8_KHR;
+    case CooperativeVectorDataType::SInt8:       return VK_COMPONENT_TYPE_SINT8_KHR;
+    case CooperativeVectorDataType::UInt8Packed:  return VK_COMPONENT_TYPE_UINT8_PACKED_NV;
+    case CooperativeVectorDataType::SInt8Packed:  return VK_COMPONENT_TYPE_SINT8_PACKED_NV;
+    case CooperativeVectorDataType::UInt16:      return VK_COMPONENT_TYPE_UINT16_KHR;
+    case CooperativeVectorDataType::SInt16:      return VK_COMPONENT_TYPE_SINT16_KHR;
+    case CooperativeVectorDataType::UInt32:      return VK_COMPONENT_TYPE_UINT32_KHR;
+    case CooperativeVectorDataType::SInt32:      return VK_COMPONENT_TYPE_SINT32_KHR;
+    case CooperativeVectorDataType::UInt64:      return VK_COMPONENT_TYPE_UINT64_KHR;
+    case CooperativeVectorDataType::SInt64:      return VK_COMPONENT_TYPE_SINT64_KHR;
+    case CooperativeVectorDataType::FloatE4M3:   return VK_COMPONENT_TYPE_FLOAT_E4M3_NV;
+    case CooperativeVectorDataType::FloatE5M2:   return VK_COMPONENT_TYPE_FLOAT_E5M2_NV;
+    case CooperativeVectorDataType::Float16:     return VK_COMPONENT_TYPE_FLOAT16_KHR;
+    case CooperativeVectorDataType::BFloat16:    return VK_COMPONENT_TYPE_BFLOAT16_NV;
+    case CooperativeVectorDataType::Float32:     return VK_COMPONENT_TYPE_FLOAT32_KHR;
+    case CooperativeVectorDataType::Float64:     return VK_COMPONENT_TYPE_FLOAT64_KHR;
+    default:
+        NWB_ASSERT(!"Invalid CooperativeVectorDataType");
+        return VK_COMPONENT_TYPE_FLOAT32_KHR;
+    }
+}
+
+constexpr CooperativeVectorDataType::Enum ConvertCoopVecDataType(VkComponentTypeKHR type){
+    switch(type){
+    case VK_COMPONENT_TYPE_UINT8_KHR:       return CooperativeVectorDataType::UInt8;
+    case VK_COMPONENT_TYPE_SINT8_KHR:       return CooperativeVectorDataType::SInt8;
+    case VK_COMPONENT_TYPE_UINT8_PACKED_NV:  return CooperativeVectorDataType::UInt8Packed;
+    case VK_COMPONENT_TYPE_SINT8_PACKED_NV:  return CooperativeVectorDataType::SInt8Packed;
+    case VK_COMPONENT_TYPE_UINT16_KHR:      return CooperativeVectorDataType::UInt16;
+    case VK_COMPONENT_TYPE_SINT16_KHR:      return CooperativeVectorDataType::SInt16;
+    case VK_COMPONENT_TYPE_UINT32_KHR:      return CooperativeVectorDataType::UInt32;
+    case VK_COMPONENT_TYPE_SINT32_KHR:      return CooperativeVectorDataType::SInt32;
+    case VK_COMPONENT_TYPE_UINT64_KHR:      return CooperativeVectorDataType::UInt64;
+    case VK_COMPONENT_TYPE_SINT64_KHR:      return CooperativeVectorDataType::SInt64;
+    case VK_COMPONENT_TYPE_FLOAT_E4M3_NV:   return CooperativeVectorDataType::FloatE4M3;
+    case VK_COMPONENT_TYPE_FLOAT_E5M2_NV:   return CooperativeVectorDataType::FloatE5M2;
+    case VK_COMPONENT_TYPE_FLOAT16_KHR:     return CooperativeVectorDataType::Float16;
+    case VK_COMPONENT_TYPE_BFLOAT16_NV:     return CooperativeVectorDataType::BFloat16;
+    case VK_COMPONENT_TYPE_FLOAT32_KHR:     return CooperativeVectorDataType::Float32;
+    case VK_COMPONENT_TYPE_FLOAT64_KHR:     return CooperativeVectorDataType::Float64;
+    default:
+        NWB_ASSERT(!"Invalid VkComponentTypeKHR");
+        return CooperativeVectorDataType::Float32;
+    }
+}
+
+constexpr VkCooperativeVectorMatrixLayoutNV ConvertCoopVecMatrixLayout(CooperativeVectorMatrixLayout::Enum layout){
+    switch(layout){
+    case CooperativeVectorMatrixLayout::RowMajor:           return VK_COOPERATIVE_VECTOR_MATRIX_LAYOUT_ROW_MAJOR_NV;
+    case CooperativeVectorMatrixLayout::ColumnMajor:        return VK_COOPERATIVE_VECTOR_MATRIX_LAYOUT_COLUMN_MAJOR_NV;
+    case CooperativeVectorMatrixLayout::InferencingOptimal:  return VK_COOPERATIVE_VECTOR_MATRIX_LAYOUT_INFERENCING_OPTIMAL_NV;
+    case CooperativeVectorMatrixLayout::TrainingOptimal:     return VK_COOPERATIVE_VECTOR_MATRIX_LAYOUT_TRAINING_OPTIMAL_NV;
+    default:
+        NWB_ASSERT(!"Invalid CooperativeVectorMatrixLayout");
+        return VK_COOPERATIVE_VECTOR_MATRIX_LAYOUT_ROW_MAJOR_NV;
     }
 }
 

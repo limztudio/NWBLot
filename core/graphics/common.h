@@ -139,7 +139,9 @@ namespace Format{
         RGBA8_SINT,
         RGBA8_UNORM,
         RGBA8_SNORM,
+        RGBA8_UNORM_SRGB,
         BGRA8_UNORM,
+        BGRA8_UNORM_SRGB,
         BGRX8_UNORM,
         SRGBA8_UNORM,
         SBGRA8_UNORM,
@@ -289,6 +291,8 @@ namespace FormatSupport{
     
     constexpr Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
     constexpr Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
+    constexpr Mask& operator|=(Mask& lhs, Mask rhs)noexcept{ lhs = lhs | rhs; return lhs; }
+    constexpr Mask& operator&=(Mask& lhs, Mask rhs)noexcept{ lhs = lhs & rhs; return lhs; }
     constexpr Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
     constexpr bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
     constexpr bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
@@ -385,6 +389,8 @@ namespace ResourceStates{
     
     constexpr Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
     constexpr Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
+    constexpr Mask& operator|=(Mask& lhs, Mask rhs)noexcept{ lhs = lhs | rhs; return lhs; }
+    constexpr Mask& operator&=(Mask& lhs, Mask rhs)noexcept{ lhs = lhs & rhs; return lhs; }
     constexpr Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
     constexpr bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
     constexpr bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
@@ -414,6 +420,8 @@ namespace SharedResourceFlags{
     
     constexpr Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
     constexpr Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
+    constexpr Mask& operator|=(Mask& lhs, Mask rhs)noexcept{ lhs = lhs | rhs; return lhs; }
+    constexpr Mask& operator&=(Mask& lhs, Mask rhs)noexcept{ lhs = lhs & rhs; return lhs; }
     constexpr Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
     constexpr bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
     constexpr bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
@@ -777,6 +785,8 @@ namespace ShaderType{
     
     constexpr Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
     constexpr Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
+    constexpr Mask& operator|=(Mask& lhs, Mask rhs)noexcept{ lhs = lhs | rhs; return lhs; }
+    constexpr Mask& operator&=(Mask& lhs, Mask rhs)noexcept{ lhs = lhs & rhs; return lhs; }
     constexpr Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
     constexpr bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
     constexpr bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
@@ -947,6 +957,8 @@ namespace ColorMask{
     
     constexpr Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
     constexpr Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
+    constexpr Mask& operator|=(Mask& lhs, Mask rhs)noexcept{ lhs = lhs | rhs; return lhs; }
+    constexpr Mask& operator&=(Mask& lhs, Mask rhs)noexcept{ lhs = lhs & rhs; return lhs; }
     constexpr Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
     constexpr bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
     constexpr bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
@@ -1363,6 +1375,8 @@ namespace RayTracingOpacityMicromapBuildFlags{
     
     constexpr Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
     constexpr Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
+    constexpr Mask& operator|=(Mask& lhs, Mask rhs)noexcept{ lhs = lhs | rhs; return lhs; }
+    constexpr Mask& operator&=(Mask& lhs, Mask rhs)noexcept{ lhs = lhs & rhs; return lhs; }
     constexpr Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
     constexpr bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
     constexpr bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
@@ -1440,6 +1454,8 @@ namespace RayTracingGeometryFlags{
     
     constexpr Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
     constexpr Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
+    constexpr Mask& operator|=(Mask& lhs, Mask rhs)noexcept{ lhs = lhs | rhs; return lhs; }
+    constexpr Mask& operator&=(Mask& lhs, Mask rhs)noexcept{ lhs = lhs & rhs; return lhs; }
     constexpr Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
     constexpr bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
     constexpr bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
@@ -1629,6 +1645,8 @@ namespace RayTracingInstanceFlags{
     
     constexpr Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
     constexpr Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
+    constexpr Mask& operator|=(Mask& lhs, Mask rhs)noexcept{ lhs = lhs | rhs; return lhs; }
+    constexpr Mask& operator&=(Mask& lhs, Mask rhs)noexcept{ lhs = lhs & rhs; return lhs; }
     constexpr Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
     constexpr bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
     constexpr bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
@@ -1685,6 +1703,8 @@ namespace RayTracingAccelStructBuildFlags{
     
     constexpr Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
     constexpr Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
+    constexpr Mask& operator|=(Mask& lhs, Mask rhs)noexcept{ lhs = lhs | rhs; return lhs; }
+    constexpr Mask& operator&=(Mask& lhs, Mask rhs)noexcept{ lhs = lhs & rhs; return lhs; }
     constexpr Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
     constexpr bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
     constexpr bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
@@ -1765,6 +1785,8 @@ namespace RayTracingClusterOperationFlags{
     
     constexpr Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
     constexpr Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
+    constexpr Mask& operator|=(Mask& lhs, Mask rhs)noexcept{ lhs = lhs | rhs; return lhs; }
+    constexpr Mask& operator&=(Mask& lhs, Mask rhs)noexcept{ lhs = lhs & rhs; return lhs; }
     constexpr Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
     constexpr bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
     constexpr bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
@@ -2719,9 +2741,9 @@ class IRayTracingPipeline;
 class IRayTracingShaderTable : public IResource{
 public:
     virtual void setRayGenerationShader(const Name& exportName, IBindingSet* bindings = nullptr) = 0;
-    virtual int addMissShader(const Name& exportName, IBindingSet* bindings = nullptr) = 0;
-    virtual int addHitGroup(const Name& exportName, IBindingSet* bindings = nullptr) = 0;
-    virtual int addCallableShader(const Name& exportName, IBindingSet* bindings = nullptr) = 0;
+    virtual u32 addMissShader(const Name& exportName, IBindingSet* bindings = nullptr) = 0;
+    virtual u32 addHitGroup(const Name& exportName, IBindingSet* bindings = nullptr) = 0;
+    virtual u32 addCallableShader(const Name& exportName, IBindingSet* bindings = nullptr) = 0;
     virtual void clearMissShaders() = 0;
     virtual void clearHitShaders() = 0;
     virtual void clearCallableShaders() = 0;

@@ -20,11 +20,19 @@ NWB_VULKAN_BEGIN
 
 
 namespace __hidden_vulkan{
-    extern VkAccessFlags2 GetVkAccessFlags(ResourceStates::Mask state);
-    extern VkPipelineStageFlags2 GetVkPipelineStageFlags(ResourceStates::Mask state);
-    extern VkImageLayout GetVkImageLayout(ResourceStates::Mask state);
-    extern VkFormat ConvertFormat(Format::Enum format);
-    extern VkSampleCountFlagBits GetSampleCountFlagBits(u32 sampleCount);
+    extern constexpr VkAccessFlags2 GetVkAccessFlags(ResourceStates::Mask state);
+    extern constexpr VkPipelineStageFlags2 GetVkPipelineStageFlags(ResourceStates::Mask state);
+    extern constexpr VkImageLayout GetVkImageLayout(ResourceStates::Mask state);
+    extern constexpr VkFormat ConvertFormat(Format::Enum format);
+    extern constexpr VkSampleCountFlagBits GetSampleCountFlagBits(u32 sampleCount);
+    extern VkDeviceAddress GetBufferDeviceAddress(IBuffer* _buffer, u64 offset);
+    extern constexpr VkImageType TextureDimensionToImageType(TextureDimension::Enum dimension);
+    extern constexpr VkImageViewType TextureDimensionToViewType(TextureDimension::Enum dimension);
+    extern constexpr VkSampleCountFlagBits GetSampleCount(u32 sampleCount);
+    extern constexpr VkImageUsageFlags PickImageUsage(const TextureDesc& desc);
+    extern constexpr VkImageCreateFlags PickImageFlags(const TextureDesc& desc);
+    extern constexpr VkDescriptorType ConvertDescriptorType(ResourceType::Enum type);
+    extern constexpr VkShaderStageFlags ConvertShaderStages(ShaderType::Mask stages);
 };
 
 
@@ -37,8 +45,6 @@ class TrackedCommandBuffer;
 
 class Buffer;
 class Texture;
-
-struct BufferChunk;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -93,8 +99,8 @@ public:
     VkCommandBuffer cmdBuf = VK_NULL_HANDLE;
     VkCommandPool cmdPool = VK_NULL_HANDLE;
     
-    Vector<RefCountPtr<IResource>> referencedResources;
-    Vector<RefCountPtr<IBuffer>> referencedStagingBuffers;
+    Vector<RefCountPtr<IResource, BlankDeleter<IResource>>> referencedResources;
+    Vector<RefCountPtr<IBuffer, BlankDeleter<IBuffer>>> referencedStagingBuffers;
     
     VkFence signalFence = VK_NULL_HANDLE;
     
@@ -220,6 +226,22 @@ private:
 
 
 class UploadManager final : NoCopy{
+private:
+    struct BufferChunk : public RefCounter<IResource>{
+        RefCountPtr<Buffer, BlankDeleter<Buffer>> buffer;
+        u64 size;
+        u64 allocated;
+        u64 version;
+    
+        BufferChunk(RefCountPtr<Buffer, BlankDeleter<Buffer>> buf, u64 sz)
+            : buffer(buf)
+            , size(sz)
+            , allocated(0)
+            , version(0)
+        {}
+    };
+    
+    
 public:
     UploadManager(Device* pParent, u64 defaultChunkSize, u64 memoryLimit, bool isScratchBuffer);
     ~UploadManager();
@@ -236,8 +258,8 @@ private:
     u64 m_memoryLimit;
     bool m_isScratchBuffer;
     
-    List<RefCountPtr<BufferChunk>> m_chunkPool;
-    RefCountPtr<BufferChunk> m_currentChunk;
+    List<RefCountPtr<BufferChunk, BlankDeleter<BufferChunk>>> m_chunkPool;
+    RefCountPtr<BufferChunk, BlankDeleter<BufferChunk>> m_currentChunk;
 };
 
 
@@ -425,7 +447,7 @@ public:
 
 public:
     Vector<u8> bytecode;
-    HashMap<Name, RefCountPtr<Shader>> shaders;
+    HashMap<Name, RefCountPtr<Shader, BlankDeleter<Shader>>> shaders;
 
 
 private:
@@ -484,7 +506,7 @@ public:
     VkFramebuffer framebuffer = VK_NULL_HANDLE;
     VkRenderPass renderPass = VK_NULL_HANDLE;
     
-    Vector<RefCountPtr<ITexture>> resources;
+    Vector<RefCountPtr<ITexture, BlankDeleter<ITexture>>> resources;
 
     
 private:
@@ -618,9 +640,9 @@ public:
     
 public:
     virtual void setRayGenerationShader(const Name& exportName, IBindingSet* bindings = nullptr)override;
-    virtual int addMissShader(const Name& exportName, IBindingSet* bindings = nullptr)override;
-    virtual int addHitGroup(const Name& exportName, IBindingSet* bindings = nullptr)override;
-    virtual int addCallableShader(const Name& exportName, IBindingSet* bindings = nullptr)override;
+    virtual u32 addMissShader(const Name& exportName, IBindingSet* bindings = nullptr)override;
+    virtual u32 addHitGroup(const Name& exportName, IBindingSet* bindings = nullptr)override;
+    virtual u32 addCallableShader(const Name& exportName, IBindingSet* bindings = nullptr)override;
     virtual void clearMissShaders()override;
     virtual void clearHitShaders()override;
     virtual void clearCallableShaders()override;
@@ -702,11 +724,11 @@ public:
     [[nodiscard]] virtual u32 getFirstDescriptorIndexInHeap()const override{ return 0; }
     
     [[nodiscard]] virtual const BindingSetDesc* getDescription()const override{ return nullptr; }
-    [[nodiscard]] virtual IBindingLayout* getLayout()const override{ return layout; }
+    [[nodiscard]] virtual IBindingLayout* getLayout()const override{ return layout.get(); }
     
     
 public:
-    RefCountPtr<BindingLayout> layout;
+    RefCountPtr<BindingLayout, BlankDeleter<BindingLayout>> layout;
     Vector<VkDescriptorSet> descriptorSets;
     VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
 
@@ -728,13 +750,13 @@ public:
     
 public:
     [[nodiscard]] virtual const BindingSetDesc* getDescription()const override{ return &desc; }
-    [[nodiscard]] virtual IBindingLayout* getLayout()const override{ return layout; }
+    [[nodiscard]] virtual IBindingLayout* getLayout()const override{ return layout.get(); }
     
     
 public:
     BindingSetDesc desc;
-    RefCountPtr<BindingLayout> layout;
-    RefCountPtr<DescriptorTable> descriptorTable;
+    RefCountPtr<BindingLayout, BlankDeleter<BindingLayout>> layout;
+    RefCountPtr<DescriptorTable, BlankDeleter<DescriptorTable>> descriptorTable;
     Vector<VkDescriptorSet> descriptorSets;
 
     
@@ -763,7 +785,7 @@ public:
 public:
     RayTracingAccelStructDesc desc;
     VkAccelerationStructureKHR accelStruct = VK_NULL_HANDLE;
-    RefCountPtr<IBuffer> buffer;
+    RefCountPtr<IBuffer, BlankDeleter<IBuffer>> buffer;
     u64 deviceAddress = 0;
     bool compacted = false;
 
@@ -920,7 +942,7 @@ public:
     Vector<VkBufferMemoryBarrier2> m_pendingBufferBarriers;
     
     // Pending BLAS compaction requests
-    Vector<RefCountPtr<AccelStruct>> m_pendingCompactions;
+    Vector<RefCountPtr<AccelStruct, BlankDeleter<AccelStruct>>> m_pendingCompactions;
 
     
 private:
@@ -1073,3 +1095,4 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

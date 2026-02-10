@@ -10,11 +10,9 @@
 
 NWB_VULKAN_BEGIN
 
-using __hidden_vulkan::checked_cast;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// MeshletPipeline - Mesh shading pipeline state object
-//-----------------------------------------------------------------------------
+
 
 MeshletPipeline::~MeshletPipeline(){
     if(pipeline){
@@ -29,9 +27,9 @@ Object MeshletPipeline::getNativeHandle(ObjectType objectType){
     return Object(nullptr);
 }
 
-//-----------------------------------------------------------------------------
-// Device - Meshlet pipeline creation
-//-----------------------------------------------------------------------------
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& desc, FramebufferInfo const& fbinfo){
     // Meshlet pipeline uses mesh and task shaders (VK_EXT_mesh_shader)
@@ -146,7 +144,7 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     };
     
     VkPipelineDynamicStateCreateInfo dynamicState = { VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO };
-    dynamicState.dynamicStateCount = sizeof(dynamicStates) / sizeof(dynamicStates[0]);
+    dynamicState.dynamicStateCount = LengthOf(dynamicStates);
     dynamicState.pDynamicStates = dynamicStates;
     
     // Dynamic rendering - fill color/depth formats from framebuffer
@@ -187,9 +185,9 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     return MeshletPipelineHandle(pso, AdoptRef);
 }
 
-//-----------------------------------------------------------------------------
-// CommandList - Meshlet
-//-----------------------------------------------------------------------------
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 void CommandList::setMeshletState(const MeshletState& state){
     currentMeshletState = state;
@@ -226,3 +224,4 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

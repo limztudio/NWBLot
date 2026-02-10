@@ -10,14 +10,147 @@
 
 NWB_VULKAN_BEGIN
 
-using __hidden_vulkan::checked_cast;
-using namespace __hidden_vulkan;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-//-----------------------------------------------------------------------------
-// GraphicsPipeline - Graphics pipeline state object
-//-----------------------------------------------------------------------------
+
+namespace __hidden_vulkan{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+constexpr VkPrimitiveTopology ConvertPrimitiveTopology(PrimitiveType::Enum primType){
+    switch(primType){
+    case PrimitiveType::PointList:     return VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
+    case PrimitiveType::LineList:      return VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
+    case PrimitiveType::TriangleList:  return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    case PrimitiveType::TriangleStrip: return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
+    case PrimitiveType::TriangleFan:   return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN;
+    case PrimitiveType::TriangleListWithAdjacency: return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST_WITH_ADJACENCY;
+    case PrimitiveType::TriangleStripWithAdjacency: return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP_WITH_ADJACENCY;
+    case PrimitiveType::PatchList:     return VK_PRIMITIVE_TOPOLOGY_PATCH_LIST;
+    default: return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    }
+}
+
+constexpr VkCullModeFlags ConvertCullMode(RasterCullMode::Enum cullMode){
+    switch(cullMode){
+    case RasterCullMode::Back:  return VK_CULL_MODE_BACK_BIT;
+    case RasterCullMode::Front: return VK_CULL_MODE_FRONT_BIT;
+    case RasterCullMode::None:  return VK_CULL_MODE_NONE;
+    default: return VK_CULL_MODE_BACK_BIT;
+    }
+}
+
+constexpr VkPolygonMode ConvertFillMode(RasterFillMode::Enum fillMode){
+    switch(fillMode){
+    case RasterFillMode::Solid:     return VK_POLYGON_MODE_FILL;
+    case RasterFillMode::Wireframe: return VK_POLYGON_MODE_LINE;
+    default: return VK_POLYGON_MODE_FILL;
+    }
+}
+
+constexpr VkCompareOp ConvertCompareOp(ComparisonFunc::Enum compareFunc){
+    switch(compareFunc){
+    case ComparisonFunc::Never:        return VK_COMPARE_OP_NEVER;
+    case ComparisonFunc::Less:         return VK_COMPARE_OP_LESS;
+    case ComparisonFunc::Equal:        return VK_COMPARE_OP_EQUAL;
+    case ComparisonFunc::LessOrEqual:  return VK_COMPARE_OP_LESS_OR_EQUAL;
+    case ComparisonFunc::Greater:      return VK_COMPARE_OP_GREATER;
+    case ComparisonFunc::NotEqual:     return VK_COMPARE_OP_NOT_EQUAL;
+    case ComparisonFunc::GreaterOrEqual: return VK_COMPARE_OP_GREATER_OR_EQUAL;
+    case ComparisonFunc::Always:       return VK_COMPARE_OP_ALWAYS;
+    default: return VK_COMPARE_OP_ALWAYS;
+    }
+}
+
+constexpr VkStencilOp ConvertStencilOp(StencilOp::Enum stencilOp){
+    switch(stencilOp){
+    case StencilOp::Keep:              return VK_STENCIL_OP_KEEP;
+    case StencilOp::Zero:              return VK_STENCIL_OP_ZERO;
+    case StencilOp::Replace:           return VK_STENCIL_OP_REPLACE;
+    case StencilOp::IncrementAndClamp: return VK_STENCIL_OP_INCREMENT_AND_CLAMP;
+    case StencilOp::DecrementAndClamp: return VK_STENCIL_OP_DECREMENT_AND_CLAMP;
+    case StencilOp::Invert:            return VK_STENCIL_OP_INVERT;
+    case StencilOp::IncrementAndWrap:  return VK_STENCIL_OP_INCREMENT_AND_WRAP;
+    case StencilOp::DecrementAndWrap:  return VK_STENCIL_OP_DECREMENT_AND_WRAP;
+    default: return VK_STENCIL_OP_KEEP;
+    }
+}
+
+constexpr VkBlendFactor ConvertBlendFactor(BlendFactor::Enum blendFactor){
+    switch(blendFactor){
+    case BlendFactor::Zero:             return VK_BLEND_FACTOR_ZERO;
+    case BlendFactor::One:              return VK_BLEND_FACTOR_ONE;
+    case BlendFactor::SrcColor:         return VK_BLEND_FACTOR_SRC_COLOR;
+    case BlendFactor::InvSrcColor:      return VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR;
+    case BlendFactor::SrcAlpha:         return VK_BLEND_FACTOR_SRC_ALPHA;
+    case BlendFactor::InvSrcAlpha:      return VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    case BlendFactor::DstAlpha:         return VK_BLEND_FACTOR_DST_ALPHA;
+    case BlendFactor::InvDstAlpha:      return VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
+    case BlendFactor::DstColor:         return VK_BLEND_FACTOR_DST_COLOR;
+    case BlendFactor::InvDstColor:      return VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR;
+    case BlendFactor::SrcAlphaSaturate: return VK_BLEND_FACTOR_SRC_ALPHA_SATURATE;
+    case BlendFactor::ConstantColor:    return VK_BLEND_FACTOR_CONSTANT_COLOR;
+    case BlendFactor::InvConstantColor: return VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_COLOR;
+    case BlendFactor::Src1Color:        return VK_BLEND_FACTOR_SRC1_COLOR;
+    case BlendFactor::InvSrc1Color:     return VK_BLEND_FACTOR_ONE_MINUS_SRC1_COLOR;
+    case BlendFactor::Src1Alpha:        return VK_BLEND_FACTOR_SRC1_ALPHA;
+    case BlendFactor::InvSrc1Alpha:     return VK_BLEND_FACTOR_ONE_MINUS_SRC1_ALPHA;
+    default: return VK_BLEND_FACTOR_ZERO;
+    }
+}
+
+constexpr VkBlendOp ConvertBlendOp(BlendOp::Enum blendOp){
+    switch(blendOp){
+    case BlendOp::Add:             return VK_BLEND_OP_ADD;
+    case BlendOp::Subtract:        return VK_BLEND_OP_SUBTRACT;
+    case BlendOp::ReverseSubtract: return VK_BLEND_OP_REVERSE_SUBTRACT;
+    case BlendOp::Min:             return VK_BLEND_OP_MIN;
+    case BlendOp::Max:             return VK_BLEND_OP_MAX;
+    default: return VK_BLEND_OP_ADD;
+    }
+}
+
+constexpr VkStencilOpState ConvertStencilOpState(const DepthStencilState& dsState, const DepthStencilState::StencilOpDesc& stencilDesc){
+    VkStencilOpState state = {};
+    state.failOp = ConvertStencilOp(stencilDesc.failOp);
+    state.passOp = ConvertStencilOp(stencilDesc.passOp);
+    state.depthFailOp = ConvertStencilOp(stencilDesc.depthFailOp);
+    state.compareOp = ConvertCompareOp(stencilDesc.stencilFunc);
+    state.compareMask = dsState.stencilReadMask;
+    state.writeMask = dsState.stencilWriteMask;
+    state.reference = dsState.stencilRefValue;
+    return state;
+}
+
+constexpr VkPipelineColorBlendAttachmentState ConvertBlendState(const BlendState::RenderTarget& target){
+    VkPipelineColorBlendAttachmentState state = {};
+    state.blendEnable = target.blendEnable ? VK_TRUE : VK_FALSE;
+    state.srcColorBlendFactor = ConvertBlendFactor(target.srcBlend);
+    state.dstColorBlendFactor = ConvertBlendFactor(target.destBlend);
+    state.colorBlendOp = ConvertBlendOp(target.blendOp);
+    state.srcAlphaBlendFactor = ConvertBlendFactor(target.srcBlendAlpha);
+    state.dstAlphaBlendFactor = ConvertBlendFactor(target.destBlendAlpha);
+    state.alphaBlendOp = ConvertBlendOp(target.blendOpAlpha);
+    state.colorWriteMask = 0;
+    if(target.colorWriteMask & ColorMask::Red)   state.colorWriteMask |= VK_COLOR_COMPONENT_R_BIT;
+    if(target.colorWriteMask & ColorMask::Green) state.colorWriteMask |= VK_COLOR_COMPONENT_G_BIT;
+    if(target.colorWriteMask & ColorMask::Blue)  state.colorWriteMask |= VK_COLOR_COMPONENT_B_BIT;
+    if(target.colorWriteMask & ColorMask::Alpha) state.colorWriteMask |= VK_COLOR_COMPONENT_A_BIT;
+    return state;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 GraphicsPipeline::~GraphicsPipeline(){
     if(pipeline){
@@ -32,9 +165,9 @@ Object GraphicsPipeline::getNativeHandle(ObjectType objectType){
     return Object(nullptr);
 }
 
-//-----------------------------------------------------------------------------
-// Device - Framebuffer creation
-//-----------------------------------------------------------------------------
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 FramebufferHandle Device::createFramebuffer(const FramebufferDesc& desc){
     Framebuffer* fb = new Framebuffer(m_context);
@@ -77,13 +210,8 @@ FramebufferHandle Device::createFramebuffer(const FramebufferDesc& desc){
     return FramebufferHandle(fb, AdoptRef);
 }
 
-//-----------------------------------------------------------------------------
-// Device - Graphics pipeline creation
-//-----------------------------------------------------------------------------
 
 GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc& desc, FramebufferInfo const& fbinfo){
-    using namespace __hidden_vulkan;
-
     GraphicsPipeline* pso = new GraphicsPipeline(m_context);
     pso->desc = desc;
     pso->framebufferInfo = fbinfo;
@@ -155,7 +283,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     
     // Step 3: Input assembly
     VkPipelineInputAssemblyStateCreateInfo inputAssembly = { VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO };
-    inputAssembly.topology = convertPrimitiveTopology(desc.primType);
+    inputAssembly.topology = __hidden_vulkan::ConvertPrimitiveTopology(desc.primType);
     inputAssembly.primitiveRestartEnable = VK_FALSE;
     
     // Tessellation state (for patch primitives)
@@ -171,8 +299,8 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     VkPipelineRasterizationStateCreateInfo rasterizer = { VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO };
     rasterizer.depthClampEnable = desc.renderState.rasterState.depthClipEnable ? VK_FALSE : VK_TRUE;
     rasterizer.rasterizerDiscardEnable = VK_FALSE;
-    rasterizer.polygonMode = convertFillMode(desc.renderState.rasterState.fillMode);
-    rasterizer.cullMode = convertCullMode(desc.renderState.rasterState.cullMode);
+    rasterizer.polygonMode = __hidden_vulkan::ConvertFillMode(desc.renderState.rasterState.fillMode);
+    rasterizer.cullMode = __hidden_vulkan::ConvertCullMode(desc.renderState.rasterState.cullMode);
     rasterizer.frontFace = desc.renderState.rasterState.frontCounterClockwise ? VK_FRONT_FACE_COUNTER_CLOCKWISE : VK_FRONT_FACE_CLOCKWISE;
     rasterizer.depthBiasEnable = desc.renderState.rasterState.depthBias != 0 ? VK_TRUE : VK_FALSE;
     rasterizer.depthBiasConstantFactor = (f32)desc.renderState.rasterState.depthBias;
@@ -182,7 +310,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     
     // Step 6: Multisample state
     VkPipelineMultisampleStateCreateInfo multisampling = { VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO };
-    multisampling.rasterizationSamples = GetSampleCount(fbinfo.sampleCount);
+    multisampling.rasterizationSamples = __hidden_vulkan::GetSampleCount(fbinfo.sampleCount);
     multisampling.sampleShadingEnable = VK_FALSE;
     multisampling.alphaToCoverageEnable = desc.renderState.blendState.alphaToCoverageEnable ? VK_TRUE : VK_FALSE;
     
@@ -190,11 +318,11 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     VkPipelineDepthStencilStateCreateInfo depthStencil = { VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO };
     depthStencil.depthTestEnable = desc.renderState.depthStencilState.depthTestEnable ? VK_TRUE : VK_FALSE;
     depthStencil.depthWriteEnable = desc.renderState.depthStencilState.depthWriteEnable ? VK_TRUE : VK_FALSE;
-    depthStencil.depthCompareOp = convertCompareOp(desc.renderState.depthStencilState.depthFunc);
+    depthStencil.depthCompareOp = __hidden_vulkan::ConvertCompareOp(desc.renderState.depthStencilState.depthFunc);
     depthStencil.depthBoundsTestEnable = VK_FALSE;
     depthStencil.stencilTestEnable = desc.renderState.depthStencilState.stencilEnable ? VK_TRUE : VK_FALSE;
-    depthStencil.front = convertStencilOpState(desc.renderState.depthStencilState, desc.renderState.depthStencilState.frontFaceStencil);
-    depthStencil.back = convertStencilOpState(desc.renderState.depthStencilState, desc.renderState.depthStencilState.backFaceStencil);
+    depthStencil.front = __hidden_vulkan::ConvertStencilOpState(desc.renderState.depthStencilState, desc.renderState.depthStencilState.frontFaceStencil);
+    depthStencil.back = __hidden_vulkan::ConvertStencilOpState(desc.renderState.depthStencilState, desc.renderState.depthStencilState.backFaceStencil);
     
     // Step 8: Color blend state
     VkPipelineColorBlendStateCreateInfo colorBlending = { VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO };
@@ -202,7 +330,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     Vector<VkPipelineColorBlendAttachmentState> blendAttachments;
     blendAttachments.reserve(fbinfo.colorFormats.size());
     for(u32 i = 0; i < (u32)fbinfo.colorFormats.size(); i++){
-        blendAttachments.push_back(convertBlendState(desc.renderState.blendState.targets[i]));
+        blendAttachments.push_back(__hidden_vulkan::ConvertBlendState(desc.renderState.blendState.targets[i]));
     }
     colorBlending.attachmentCount = (u32)blendAttachments.size();
     colorBlending.pAttachments = blendAttachments.data();
@@ -286,9 +414,9 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     return GraphicsPipelineHandle(pso, AdoptRef);
 }
 
-//-----------------------------------------------------------------------------
-// CommandList - Graphics
-//-----------------------------------------------------------------------------
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 struct RenderPassParameters{
     bool clearColorTargets = false;
@@ -465,136 +593,6 @@ void CommandList::drawIndirect(u32 offsetBytes, u32 drawCount){
     currentCmdBuf->referencedResources.push_back(currentGraphicsState.indirectParams);
 }
 
-namespace __hidden_vulkan{
-
-//-----------------------------------------------------------------------------
-// Helper functions for state conversion
-//-----------------------------------------------------------------------------
-
-VkPrimitiveTopology convertPrimitiveTopology(PrimitiveType::Enum primType){
-    switch(primType){
-    case PrimitiveType::PointList:     return VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
-    case PrimitiveType::LineList:      return VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
-    case PrimitiveType::TriangleList:  return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    case PrimitiveType::TriangleStrip: return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
-    case PrimitiveType::TriangleFan:   return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN;
-    case PrimitiveType::TriangleListWithAdjacency: return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST_WITH_ADJACENCY;
-    case PrimitiveType::TriangleStripWithAdjacency: return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP_WITH_ADJACENCY;
-    case PrimitiveType::PatchList:     return VK_PRIMITIVE_TOPOLOGY_PATCH_LIST;
-    default: return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    }
-}
-
-VkCullModeFlags convertCullMode(RasterCullMode::Enum cullMode){
-    switch(cullMode){
-    case RasterCullMode::Back:  return VK_CULL_MODE_BACK_BIT;
-    case RasterCullMode::Front: return VK_CULL_MODE_FRONT_BIT;
-    case RasterCullMode::None:  return VK_CULL_MODE_NONE;
-    default: return VK_CULL_MODE_BACK_BIT;
-    }
-}
-
-VkPolygonMode convertFillMode(RasterFillMode::Enum fillMode){
-    switch(fillMode){
-    case RasterFillMode::Solid:     return VK_POLYGON_MODE_FILL;
-    case RasterFillMode::Wireframe: return VK_POLYGON_MODE_LINE;
-    default: return VK_POLYGON_MODE_FILL;
-    }
-}
-
-VkCompareOp convertCompareOp(ComparisonFunc::Enum compareFunc){
-    switch(compareFunc){
-    case ComparisonFunc::Never:        return VK_COMPARE_OP_NEVER;
-    case ComparisonFunc::Less:         return VK_COMPARE_OP_LESS;
-    case ComparisonFunc::Equal:        return VK_COMPARE_OP_EQUAL;
-    case ComparisonFunc::LessOrEqual:  return VK_COMPARE_OP_LESS_OR_EQUAL;
-    case ComparisonFunc::Greater:      return VK_COMPARE_OP_GREATER;
-    case ComparisonFunc::NotEqual:     return VK_COMPARE_OP_NOT_EQUAL;
-    case ComparisonFunc::GreaterOrEqual: return VK_COMPARE_OP_GREATER_OR_EQUAL;
-    case ComparisonFunc::Always:       return VK_COMPARE_OP_ALWAYS;
-    default: return VK_COMPARE_OP_ALWAYS;
-    }
-}
-
-VkStencilOp convertStencilOp(StencilOp::Enum stencilOp){
-    switch(stencilOp){
-    case StencilOp::Keep:              return VK_STENCIL_OP_KEEP;
-    case StencilOp::Zero:              return VK_STENCIL_OP_ZERO;
-    case StencilOp::Replace:           return VK_STENCIL_OP_REPLACE;
-    case StencilOp::IncrementAndClamp: return VK_STENCIL_OP_INCREMENT_AND_CLAMP;
-    case StencilOp::DecrementAndClamp: return VK_STENCIL_OP_DECREMENT_AND_CLAMP;
-    case StencilOp::Invert:            return VK_STENCIL_OP_INVERT;
-    case StencilOp::IncrementAndWrap:  return VK_STENCIL_OP_INCREMENT_AND_WRAP;
-    case StencilOp::DecrementAndWrap:  return VK_STENCIL_OP_DECREMENT_AND_WRAP;
-    default: return VK_STENCIL_OP_KEEP;
-    }
-}
-
-VkBlendFactor convertBlendFactor(BlendFactor::Enum blendFactor){
-    switch(blendFactor){
-    case BlendFactor::Zero:             return VK_BLEND_FACTOR_ZERO;
-    case BlendFactor::One:              return VK_BLEND_FACTOR_ONE;
-    case BlendFactor::SrcColor:         return VK_BLEND_FACTOR_SRC_COLOR;
-    case BlendFactor::InvSrcColor:      return VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR;
-    case BlendFactor::SrcAlpha:         return VK_BLEND_FACTOR_SRC_ALPHA;
-    case BlendFactor::InvSrcAlpha:      return VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-    case BlendFactor::DstAlpha:         return VK_BLEND_FACTOR_DST_ALPHA;
-    case BlendFactor::InvDstAlpha:      return VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
-    case BlendFactor::DstColor:         return VK_BLEND_FACTOR_DST_COLOR;
-    case BlendFactor::InvDstColor:      return VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR;
-    case BlendFactor::SrcAlphaSaturate: return VK_BLEND_FACTOR_SRC_ALPHA_SATURATE;
-    case BlendFactor::ConstantColor:    return VK_BLEND_FACTOR_CONSTANT_COLOR;
-    case BlendFactor::InvConstantColor: return VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_COLOR;
-    case BlendFactor::Src1Color:        return VK_BLEND_FACTOR_SRC1_COLOR;
-    case BlendFactor::InvSrc1Color:     return VK_BLEND_FACTOR_ONE_MINUS_SRC1_COLOR;
-    case BlendFactor::Src1Alpha:        return VK_BLEND_FACTOR_SRC1_ALPHA;
-    case BlendFactor::InvSrc1Alpha:     return VK_BLEND_FACTOR_ONE_MINUS_SRC1_ALPHA;
-    default: return VK_BLEND_FACTOR_ZERO;
-    }
-}
-
-VkBlendOp convertBlendOp(BlendOp::Enum blendOp){
-    switch(blendOp){
-    case BlendOp::Add:             return VK_BLEND_OP_ADD;
-    case BlendOp::Subtract:        return VK_BLEND_OP_SUBTRACT;
-    case BlendOp::ReverseSubtract: return VK_BLEND_OP_REVERSE_SUBTRACT;
-    case BlendOp::Min:             return VK_BLEND_OP_MIN;
-    case BlendOp::Max:             return VK_BLEND_OP_MAX;
-    default: return VK_BLEND_OP_ADD;
-    }
-}
-
-VkStencilOpState convertStencilOpState(const DepthStencilState& dsState, const DepthStencilState::StencilOpDesc& stencilDesc){
-    VkStencilOpState state = {};
-    state.failOp = convertStencilOp(stencilDesc.failOp);
-    state.passOp = convertStencilOp(stencilDesc.passOp);
-    state.depthFailOp = convertStencilOp(stencilDesc.depthFailOp);
-    state.compareOp = convertCompareOp(stencilDesc.stencilFunc);
-    state.compareMask = dsState.stencilReadMask;
-    state.writeMask = dsState.stencilWriteMask;
-    state.reference = dsState.stencilRefValue;
-    return state;
-}
-
-VkPipelineColorBlendAttachmentState convertBlendState(const BlendState::RenderTarget& target){
-    VkPipelineColorBlendAttachmentState state = {};
-    state.blendEnable = target.blendEnable ? VK_TRUE : VK_FALSE;
-    state.srcColorBlendFactor = convertBlendFactor(target.srcBlend);
-    state.dstColorBlendFactor = convertBlendFactor(target.destBlend);
-    state.colorBlendOp = convertBlendOp(target.blendOp);
-    state.srcAlphaBlendFactor = convertBlendFactor(target.srcBlendAlpha);
-    state.dstAlphaBlendFactor = convertBlendFactor(target.destBlendAlpha);
-    state.alphaBlendOp = convertBlendOp(target.blendOpAlpha);
-    state.colorWriteMask = 0;
-    if(target.colorWriteMask & ColorMask::Red)   state.colorWriteMask |= VK_COLOR_COMPONENT_R_BIT;
-    if(target.colorWriteMask & ColorMask::Green) state.colorWriteMask |= VK_COLOR_COMPONENT_G_BIT;
-    if(target.colorWriteMask & ColorMask::Blue)  state.colorWriteMask |= VK_COLOR_COMPONENT_B_BIT;
-    if(target.colorWriteMask & ColorMask::Alpha) state.colorWriteMask |= VK_COLOR_COMPONENT_A_BIT;
-    return state;
-}
-
-} // namespace __hidden_vulkan
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -603,3 +601,4 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

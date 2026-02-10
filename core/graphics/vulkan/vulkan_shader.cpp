@@ -11,11 +11,7 @@
 NWB_VULKAN_BEGIN
 
 
-using __hidden_vulkan::ConvertFormat;
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Sampler
 
 
 Sampler::Sampler(const VulkanContext& context)
@@ -31,7 +27,6 @@ Sampler::~Sampler(){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Shader
 
 
 Shader::Shader(const VulkanContext& context)
@@ -47,7 +42,6 @@ Shader::~Shader(){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Shader Library
 
 
 ShaderLibrary::ShaderLibrary(const VulkanContext& context)
@@ -75,7 +69,7 @@ ShaderHandle ShaderLibrary::getShader(const Name& entryName, ShaderType::Mask sh
     VkShaderModuleCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     createInfo.codeSize = bytecode.size();
-    createInfo.pCode = reinterpret_cast<const u32*>(bytecode.data());
+    createInfo.pCode = reinterpret_cast<const uint32_t*>(bytecode.data());
     
     VkResult res = vkCreateShaderModule(m_context.device, &createInfo, m_context.allocationCallbacks, &shader->shaderModule);
     if(res != VK_SUCCESS){
@@ -89,7 +83,6 @@ ShaderHandle ShaderLibrary::getShader(const Name& entryName, ShaderType::Mask sh
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Device - Shader Implementation
 
 
 ShaderHandle Device::createShader(const ShaderDesc& d, const void* binary, usize binarySize){
@@ -103,7 +96,7 @@ ShaderHandle Device::createShader(const ShaderDesc& d, const void* binary, usize
     createInfo.pCode = reinterpret_cast<const u32*>(binary);
     
     VkResult res = vkCreateShaderModule(m_context.device, &createInfo, m_context.allocationCallbacks, &shader->shaderModule);
-    assert(res == VK_SUCCESS);
+    NWB_ASSERT(res == VK_SUCCESS);
     
     return RefCountPtr<IShader, BlankDeleter<IShader>>(shader, AdoptRef);
 }
@@ -121,7 +114,7 @@ ShaderHandle Device::createShaderSpecialization(IShader* baseShader, const Shade
     VkShaderModuleCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     createInfo.codeSize = shader->bytecode.size();
-    createInfo.pCode = reinterpret_cast<const u32*>(shader->bytecode.data());
+    createInfo.pCode = reinterpret_cast<const uint32_t*>(shader->bytecode.data());
     
     VkResult res = vkCreateShaderModule(m_context.device, &createInfo, m_context.allocationCallbacks, &shader->shaderModule);
     if(res != VK_SUCCESS){
@@ -145,7 +138,6 @@ ShaderLibraryHandle Device::createShaderLibrary(const void* binary, usize binary
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Device - Input Layout Implementation
 
 
 InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 attributeCount, IShader* vertexShader){
@@ -177,7 +169,7 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
     }
     
     // Create attribute descriptions
-    for(u32 i = 0; i < attributeCount; i++){
+    for(u32 i = 0; i < attributeCount; ++i){
         const auto& attr = layout->attributes[i];
         
         VkVertexInputAttributeDescription vkAttr{};
@@ -194,7 +186,6 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Framebuffer
 
 
 Framebuffer::Framebuffer(const VulkanContext& context)
@@ -215,7 +206,6 @@ Framebuffer::~Framebuffer(){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Event Query
 
 
 EventQuery::EventQuery(const VulkanContext& context)
@@ -225,7 +215,7 @@ EventQuery::EventQuery(const VulkanContext& context)
     fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
     
     VkResult res = vkCreateFence(m_context.device, &fenceInfo, m_context.allocationCallbacks, &fence);
-    assert(res == VK_SUCCESS);
+    NWB_ASSERT(res == VK_SUCCESS);
 }
 
 EventQuery::~EventQuery(){
@@ -237,7 +227,6 @@ EventQuery::~EventQuery(){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Timer Query
 
 
 TimerQuery::TimerQuery(const VulkanContext& context)
@@ -249,7 +238,7 @@ TimerQuery::TimerQuery(const VulkanContext& context)
     queryPoolInfo.queryCount = 2; // Start and end timestamps
     
     VkResult res = vkCreateQueryPool(m_context.device, &queryPoolInfo, m_context.allocationCallbacks, &queryPool);
-    assert(res == VK_SUCCESS);
+    NWB_ASSERT(res == VK_SUCCESS);
 }
 
 TimerQuery::~TimerQuery(){
@@ -267,3 +256,4 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

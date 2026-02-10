@@ -13,9 +13,6 @@ NWB_VULKAN_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-//-----------------------------------------------------------------------------
-// Device Implementation
-//-----------------------------------------------------------------------------
 
 Device::Device(const DeviceDesc& desc)
     : m_allocator(m_context)
@@ -122,9 +119,6 @@ Queue* Device::getQueue(CommandQueue::Enum queueType)const{
     return nullptr;
 }
 
-//-----------------------------------------------------------------------------
-// Device - Command List and Execution
-//-----------------------------------------------------------------------------
 
 CommandListHandle Device::createCommandList(const CommandListParameters& params){
     CommandList* cmdList = new CommandList(this, params);
@@ -161,9 +155,6 @@ void Device::runGarbageCollection(){
     }
 }
 
-//-----------------------------------------------------------------------------
-// Device - Feature and Format Queries
-//-----------------------------------------------------------------------------
 
 bool Device::queryFeatureSupport(Feature::Enum feature, void* pInfo, usize infoSize){
     switch(feature){
@@ -236,9 +227,9 @@ Object Device::getNativeQueue(ObjectType objectType, CommandQueue::Enum queue){
     return Object(nullptr);
 }
 
-//-----------------------------------------------------------------------------
-// Heap Implementation
-//-----------------------------------------------------------------------------
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 Heap::Heap(const VulkanContext& context)
     : m_context(context)
@@ -257,9 +248,9 @@ Object Heap::getNativeHandle(ObjectType objectType){
     return Object(nullptr);
 }
 
-//-----------------------------------------------------------------------------
-// Device - Heap creation
-//-----------------------------------------------------------------------------
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 HeapHandle Device::createHeap(const HeapDesc& d){
     Heap* heap = new Heap(m_context);
@@ -301,9 +292,9 @@ HeapHandle Device::createHeap(const HeapDesc& d){
     return RefCountPtr<IHeap, BlankDeleter<IHeap>>(heap, AdoptRef);
 }
 
-//-----------------------------------------------------------------------------
-// Device - Cooperative Vector stubs
-//-----------------------------------------------------------------------------
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 CooperativeVectorDeviceFeatures Device::queryCoopVecFeatures(){
     // Cooperative vectors are not yet supported in this Vulkan backend
@@ -315,9 +306,9 @@ usize Device::getCoopVecMatrixSize(CooperativeVectorDataType::Enum /*type*/, Coo
     return 0;
 }
 
-//-----------------------------------------------------------------------------
-// Device - Aftermath stub
-//-----------------------------------------------------------------------------
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 AftermathCrashDumpHelper& Device::getAftermathCrashDumpHelper(){
     NWB_ASSERT(!"Aftermath is not enabled in the Vulkan backend");
@@ -325,9 +316,9 @@ AftermathCrashDumpHelper& Device::getAftermathCrashDumpHelper(){
     return *static_cast<AftermathCrashDumpHelper*>(nullptr);
 }
 
-//-----------------------------------------------------------------------------
-// CreateDevice - Factory function
-//-----------------------------------------------------------------------------
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 DeviceHandle CreateDevice(const DeviceDesc& desc){
     Device* device = new Device(desc);

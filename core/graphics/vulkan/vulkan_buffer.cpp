@@ -11,9 +11,6 @@
 NWB_VULKAN_BEGIN
 
 
-using __hidden_vulkan::checked_cast;
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -35,7 +32,6 @@ Buffer::~Buffer(){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Buffer Implementation
 
 
 BufferHandle Device::createBuffer(const BufferDesc& d){
@@ -81,17 +77,17 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
     bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     
     VkResult res = vkCreateBuffer(m_context.device, &bufferInfo, m_context.allocationCallbacks, &buffer->buffer);
-    assert(res == VK_SUCCESS);
+    NWB_ASSERT(res == VK_SUCCESS);
     
     // Allocate memory if not virtual
     if(!d.isVirtual){
         VkResult res = m_allocator.allocateBufferMemory(buffer, m_context.extensions.buffer_device_address && (usageFlags & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT));
-        assert(res == VK_SUCCESS);
+        NWB_ASSERT(res == VK_SUCCESS);
         
         // Map memory for volatile or CPU-accessible buffers
         if(d.isVolatile || d.cpuAccess != CpuAccessMode::None){
             VkResult res = vkMapMemory(m_context.device, buffer->memory, 0, size, 0, &buffer->mappedMemory);
-            assert(res == VK_SUCCESS);
+            NWB_ASSERT(res == VK_SUCCESS);
         }
         
         // Get device address
@@ -114,7 +110,7 @@ void* Device::mapBuffer(IBuffer* _buffer, CpuAccessMode::Enum cpuAccess){
     
     void* data = nullptr;
     VkResult res = vkMapMemory(m_context.device, buffer->memory, 0, VK_WHOLE_SIZE, 0, &data);
-    assert(res == VK_SUCCESS);
+    NWB_ASSERT(res == VK_SUCCESS);
     
     buffer->mappedMemory = data;
     return data;
@@ -159,7 +155,7 @@ BufferHandle Device::createHandleForNativeBuffer(ObjectType objectType, Object _
     if(objectType != ObjectTypes::VK_Buffer)
         return nullptr;
     
-    VkBuffer nativeBuffer = static_cast<VkBuffer>(static_cast<VkBuffer_T*>(_buffer));
+    VkBuffer nativeBuffer = static_cast<VkBuffer_T*>(_buffer);
     if(nativeBuffer == VK_NULL_HANDLE)
         return nullptr;
     
@@ -243,3 +239,4 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

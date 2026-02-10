@@ -10,20 +10,82 @@
 
 NWB_VULKAN_BEGIN
 
-using __hidden_vulkan::checked_cast;
-using namespace __hidden_vulkan;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_vulkan{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-namespace __hidden_vulkan{
-VkDescriptorType convertDescriptorType(ResourceType::Enum type);
-VkShaderStageFlags convertShaderStages(ShaderType::Mask stages);
-} // namespace __hidden_vulkan
 
-//-----------------------------------------------------------------------------
-// BindingLayout - Pipeline resource binding layout
-//-----------------------------------------------------------------------------
+constexpr VkDescriptorType ConvertDescriptorType(ResourceType::Enum type){
+    switch(type){
+    case ResourceType::Texture_SRV:
+        return VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    case ResourceType::Texture_UAV:
+        return VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    case ResourceType::TypedBuffer_SRV:
+        return VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER;
+    case ResourceType::TypedBuffer_UAV:
+        return VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER;
+    case ResourceType::StructuredBuffer_SRV:
+        return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    case ResourceType::StructuredBuffer_UAV:
+        return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    case ResourceType::ConstantBuffer:
+        return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    case ResourceType::Sampler:
+        return VK_DESCRIPTOR_TYPE_SAMPLER;
+    case ResourceType::RawBuffer_SRV:
+    case ResourceType::RawBuffer_UAV:
+        return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    case ResourceType::RayTracingAccelStruct:
+        return VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
+    default:
+        return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    }
+}
+
+constexpr VkShaderStageFlags ConvertShaderStages(ShaderType::Mask stages){
+    VkShaderStageFlags flags = 0;
+    
+    if(stages & ShaderType::Vertex)
+        flags |= VK_SHADER_STAGE_VERTEX_BIT;
+    if(stages & ShaderType::Hull)
+        flags |= VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;
+    if(stages & ShaderType::Domain)
+        flags |= VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;
+    if(stages & ShaderType::Geometry)
+        flags |= VK_SHADER_STAGE_GEOMETRY_BIT;
+    if(stages & ShaderType::Pixel)
+        flags |= VK_SHADER_STAGE_FRAGMENT_BIT;
+    if(stages & ShaderType::Compute)
+        flags |= VK_SHADER_STAGE_COMPUTE_BIT;
+    if(stages & ShaderType::Amplification)
+        flags |= VK_SHADER_STAGE_TASK_BIT_EXT;
+    if(stages & ShaderType::Mesh)
+        flags |= VK_SHADER_STAGE_MESH_BIT_EXT;
+    if(stages & ShaderType::AllRayTracing)
+        flags |= VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_MISS_BIT_KHR | 
+                 VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_ANY_HIT_BIT_KHR;
+    
+    if(flags == 0)
+        flags = VK_SHADER_STAGE_ALL;
+    
+    return flags;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 BindingLayout::BindingLayout(const VulkanContext& context)
     : m_context(context)
@@ -42,9 +104,9 @@ BindingLayout::~BindingLayout(){
     descriptorSetLayouts.clear();
 }
 
-//-----------------------------------------------------------------------------
-// DescriptorTable - Descriptor set wrapper
-//-----------------------------------------------------------------------------
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 DescriptorTable::DescriptorTable(const VulkanContext& context)
     : m_context(context)
@@ -58,9 +120,9 @@ DescriptorTable::~DescriptorTable(){
     }
 }
 
-//-----------------------------------------------------------------------------
-// BindingSet - Concrete binding set for command list
-//-----------------------------------------------------------------------------
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 BindingSet::BindingSet(const VulkanContext& context)
     : m_context(context)
@@ -70,9 +132,9 @@ BindingSet::~BindingSet(){
     // Binding sets reference descriptor tables, no explicit cleanup
 }
 
-//-----------------------------------------------------------------------------
-// Device - Binding Layout creation
-//-----------------------------------------------------------------------------
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
     BindingLayout* layout = new BindingLayout(m_context);
@@ -90,9 +152,9 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
         }
         VkDescriptorSetLayoutBinding binding = {};
         binding.binding = item.slot;
-        binding.descriptorType = convertDescriptorType(item.type);
+        binding.descriptorType = __hidden_vulkan::ConvertDescriptorType(item.type);
         binding.descriptorCount = item.getArraySize();
-        binding.stageFlags = convertShaderStages(desc.visibility);
+        binding.stageFlags = __hidden_vulkan::ConvertShaderStages(desc.visibility);
         binding.pImmutableSamplers = nullptr;
         bindings.push_back(binding);
     }
@@ -149,9 +211,9 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
     for(const auto& item : desc.registerSpaces){
         VkDescriptorSetLayoutBinding binding = {};
         binding.binding = item.slot;
-        binding.descriptorType = convertDescriptorType(item.type);
+        binding.descriptorType = __hidden_vulkan::ConvertDescriptorType(item.type);
         binding.descriptorCount = desc.maxCapacity; // Large array
-        binding.stageFlags = convertShaderStages(desc.visibility);
+        binding.stageFlags = __hidden_vulkan::ConvertShaderStages(desc.visibility);
         binding.pImmutableSamplers = nullptr;
         bindings.push_back(binding);
         
@@ -193,9 +255,9 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
     return BindingLayoutHandle(layout, AdoptRef);
 }
 
-//-----------------------------------------------------------------------------
-// Device - Descriptor Table creation
-//-----------------------------------------------------------------------------
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 DescriptorTableHandle Device::createDescriptorTable(IBindingLayout* _layout){
     // Allocate descriptor sets from pool
@@ -320,7 +382,7 @@ bool Device::writeDescriptorTable(IDescriptorTable* descriptorTable, const Bindi
     write.dstBinding = item.slot;
     write.dstArrayElement = 0;
     write.descriptorCount = 1;
-    write.descriptorType = convertDescriptorType(item.type);
+    write.descriptorType = __hidden_vulkan::ConvertDescriptorType(item.type);
     
     VkDescriptorBufferInfo bufferInfo = {};
     VkDescriptorImageInfo imageInfo = {};
@@ -369,9 +431,6 @@ bool Device::writeDescriptorTable(IDescriptorTable* descriptorTable, const Bindi
     return true;
 }
 
-//-----------------------------------------------------------------------------
-// Device - Binding Set creation (bind resources to descriptor table)
-//-----------------------------------------------------------------------------
 
 BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLayout* _layout){
     BindingLayout* layout = checked_cast<BindingLayout*>(_layout);
@@ -409,7 +468,7 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLa
         write.dstBinding = item.slot;
         write.dstArrayElement = 0;
         write.descriptorCount = 1;
-        write.descriptorType = convertDescriptorType(item.type);
+        write.descriptorType = __hidden_vulkan::ConvertDescriptorType(item.type);
         
         switch(item.type){
         case ResourceType::ConstantBuffer:
@@ -460,77 +519,6 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLa
     return BindingSetHandle(bindingSet, AdoptRef);
 }
 
-//-----------------------------------------------------------------------------
-// Helper functions for descriptor conversion
-//-----------------------------------------------------------------------------
-
-namespace __hidden_vulkan{
-
-VkDescriptorType convertDescriptorType(ResourceType::Enum type){
-    switch(type){
-    case ResourceType::Texture_SRV:
-        return VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-    case ResourceType::Texture_UAV:
-        return VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-    case ResourceType::TypedBuffer_SRV:
-        return VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER;
-    case ResourceType::TypedBuffer_UAV:
-        return VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER;
-    case ResourceType::StructuredBuffer_SRV:
-        return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    case ResourceType::StructuredBuffer_UAV:
-        return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    case ResourceType::ConstantBuffer:
-        return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    case ResourceType::Sampler:
-        return VK_DESCRIPTOR_TYPE_SAMPLER;
-    case ResourceType::RawBuffer_SRV:
-    case ResourceType::RawBuffer_UAV:
-        return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    case ResourceType::RayTracingAccelStruct:
-        return VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
-    default:
-        return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    }
-}
-
-VkShaderStageFlags convertShaderStages(ShaderType::Mask stages){
-    VkShaderStageFlags flags = 0;
-    
-    if(stages & ShaderType::Vertex)
-        flags |= VK_SHADER_STAGE_VERTEX_BIT;
-    if(stages & ShaderType::Hull)
-        flags |= VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;
-    if(stages & ShaderType::Domain)
-        flags |= VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;
-    if(stages & ShaderType::Geometry)
-        flags |= VK_SHADER_STAGE_GEOMETRY_BIT;
-    if(stages & ShaderType::Pixel)
-        flags |= VK_SHADER_STAGE_FRAGMENT_BIT;
-    if(stages & ShaderType::Compute)
-        flags |= VK_SHADER_STAGE_COMPUTE_BIT;
-    if(stages & ShaderType::Amplification)
-        flags |= VK_SHADER_STAGE_TASK_BIT_EXT;
-    if(stages & ShaderType::Mesh)
-        flags |= VK_SHADER_STAGE_MESH_BIT_EXT;
-    if(stages & ShaderType::AllRayTracing)
-        flags |= VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_MISS_BIT_KHR | 
-                 VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_ANY_HIT_BIT_KHR;
-    
-    if(flags == 0)
-        flags = VK_SHADER_STAGE_ALL;
-    
-    return flags;
-}
-
-} // namespace __hidden_vulkan
-
-//-----------------------------------------------------------------------------
-// Descriptor Pool Management
-//-----------------------------------------------------------------------------
-
-
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -539,3 +527,4 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

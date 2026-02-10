@@ -30,7 +30,7 @@ struct FormatMapping{
     bool isCompressed;
 };
 
-static const FormatMapping g_FormatMappings[] = {
+static constexpr FormatMapping g_FormatMappings[] = {
     // RGBA formats
     { Format::RGBA32_FLOAT,       VK_FORMAT_R32G32B32A32_SFLOAT,  16, false, false, false },
     { Format::RGBA32_UINT,        VK_FORMAT_R32G32B32A32_UINT,    16, false, false, false },
@@ -50,16 +50,16 @@ static const FormatMapping g_FormatMappings[] = {
     { Format::RG32_UINT,          VK_FORMAT_R32G32_UINT,          8,  false, false, false },
     { Format::RG32_SINT,          VK_FORMAT_R32G32_SINT,          8,  false, false, false },
     
-    { Format::RGB10A2_UNORM,      VK_FORMAT_A2B10G10R10_UNORM_PACK32, 4, false, false, false },
+    { Format::R10G10B10A2_UNORM,  VK_FORMAT_A2B10G10R10_UNORM_PACK32, 4, false, false, false },
     { Format::R11G11B10_FLOAT,    VK_FORMAT_B10G11R11_UFLOAT_PACK32,  4, false, false, false },
     
     { Format::RGBA8_UNORM,        VK_FORMAT_R8G8B8A8_UNORM,       4,  false, false, false },
     { Format::RGBA8_SNORM,        VK_FORMAT_R8G8B8A8_SNORM,       4,  false, false, false },
     { Format::RGBA8_UINT,         VK_FORMAT_R8G8B8A8_UINT,        4,  false, false, false },
     { Format::RGBA8_SINT,         VK_FORMAT_R8G8B8A8_SINT,        4,  false, false, false },
-    { Format::RGBA8_SRGB,         VK_FORMAT_R8G8B8A8_SRGB,        4,  false, false, false },
+    { Format::RGBA8_UNORM_SRGB,   VK_FORMAT_R8G8B8A8_SRGB,        4,  false, false, false },
     { Format::BGRA8_UNORM,        VK_FORMAT_B8G8R8A8_UNORM,       4,  false, false, false },
-    { Format::BGRA8_SRGB,         VK_FORMAT_B8G8R8A8_SRGB,        4,  false, false, false },
+    { Format::BGRA8_UNORM_SRGB,   VK_FORMAT_B8G8R8A8_SRGB,        4,  false, false, false },
     
     { Format::RG16_FLOAT,         VK_FORMAT_R16G16_SFLOAT,        4,  false, false, false },
     { Format::RG16_UNORM,         VK_FORMAT_R16G16_UNORM,         4,  false, false, false },
@@ -95,11 +95,11 @@ static const FormatMapping g_FormatMappings[] = {
     
     // Compressed formats - BC (DXT)
     { Format::BC1_UNORM,          VK_FORMAT_BC1_RGBA_UNORM_BLOCK, 0,  false, false, true },
-    { Format::BC1_SRGB,           VK_FORMAT_BC1_RGBA_SRGB_BLOCK,  0,  false, false, true },
+    { Format::BC1_UNORM_SRGB,     VK_FORMAT_BC1_RGBA_SRGB_BLOCK,  0,  false, false, true },
     { Format::BC2_UNORM,          VK_FORMAT_BC2_UNORM_BLOCK,      0,  false, false, true },
-    { Format::BC2_SRGB,           VK_FORMAT_BC2_SRGB_BLOCK,       0,  false, false, true },
+    { Format::BC2_UNORM_SRGB,     VK_FORMAT_BC2_SRGB_BLOCK,       0,  false, false, true },
     { Format::BC3_UNORM,          VK_FORMAT_BC3_UNORM_BLOCK,      0,  false, false, true },
-    { Format::BC3_SRGB,           VK_FORMAT_BC3_SRGB_BLOCK,       0,  false, false, true },
+    { Format::BC3_UNORM_SRGB,     VK_FORMAT_BC3_SRGB_BLOCK,       0,  false, false, true },
     { Format::BC4_UNORM,          VK_FORMAT_BC4_UNORM_BLOCK,      0,  false, false, true },
     { Format::BC4_SNORM,          VK_FORMAT_BC4_SNORM_BLOCK,      0,  false, false, true },
     { Format::BC5_UNORM,          VK_FORMAT_BC5_UNORM_BLOCK,      0,  false, false, true },
@@ -107,17 +107,13 @@ static const FormatMapping g_FormatMappings[] = {
     { Format::BC6H_UFLOAT,        VK_FORMAT_BC6H_UFLOAT_BLOCK,    0,  false, false, true },
     { Format::BC6H_SFLOAT,        VK_FORMAT_BC6H_SFLOAT_BLOCK,    0,  false, false, true },
     { Format::BC7_UNORM,          VK_FORMAT_BC7_UNORM_BLOCK,      0,  false, false, true },
-    { Format::BC7_SRGB,           VK_FORMAT_BC7_SRGB_BLOCK,       0,  false, false, true },
+    { Format::BC7_UNORM_SRGB,     VK_FORMAT_BC7_SRGB_BLOCK,       0,  false, false, true },
 };
 
-static const usize g_NumFormatMappings = sizeof(g_FormatMappings) / sizeof(g_FormatMappings[0]);
-
-//-----------------------------------------------------------------------------
-// Format query functions
-//-----------------------------------------------------------------------------
+static constexpr usize g_NumFormatMappings = LengthOf(g_FormatMappings);
 
 
-VkFormat ConvertFormat(Format::Enum format){
+constexpr VkFormat ConvertFormat(Format::Enum format){
     for(usize i = 0; i < g_NumFormatMappings; ++i){
         if(g_FormatMappings[i].format == format)
             return g_FormatMappings[i].vkFormat;
@@ -127,11 +123,7 @@ VkFormat ConvertFormat(Format::Enum format){
     return VK_FORMAT_UNDEFINED;
 }
 
-//-----------------------------------------------------------------------------
-// Resource state conversion
-//-----------------------------------------------------------------------------
-
-VkAccessFlags2 GetVkAccessFlags(ResourceStates::Mask states){
+constexpr VkAccessFlags2 GetVkAccessFlags(ResourceStates::Mask states){
     VkAccessFlags2 flags = 0;
     
     if(states & ResourceStates::VertexBuffer)
@@ -178,7 +170,7 @@ VkAccessFlags2 GetVkAccessFlags(ResourceStates::Mask states){
     return flags;
 }
 
-VkPipelineStageFlags2 GetVkPipelineStageFlags(ResourceStates::Mask states){
+constexpr VkPipelineStageFlags2 GetVkPipelineStageFlags(ResourceStates::Mask states){
     VkPipelineStageFlags2 flags = 0;
     
     if(states & ResourceStates::VertexBuffer)
@@ -208,7 +200,7 @@ VkPipelineStageFlags2 GetVkPipelineStageFlags(ResourceStates::Mask states){
     return flags;
 }
 
-VkImageLayout GetVkImageLayout(ResourceStates::Mask states){
+constexpr VkImageLayout GetVkImageLayout(ResourceStates::Mask states){
     // Return the most appropriate layout for the given state
     // Priority: specific states first, general states last
     
@@ -238,7 +230,7 @@ VkImageLayout GetVkImageLayout(ResourceStates::Mask states){
     return VK_IMAGE_LAYOUT_GENERAL;
 }
 
-VkSampleCountFlagBits GetSampleCountFlagBits(u32 sampleCount){
+constexpr VkSampleCountFlagBits GetSampleCountFlagBits(u32 sampleCount){
     switch(sampleCount){
     case 1:  return VK_SAMPLE_COUNT_1_BIT;
     case 2:  return VK_SAMPLE_COUNT_2_BIT;
@@ -261,17 +253,9 @@ VkSampleCountFlagBits GetSampleCountFlagBits(u32 sampleCount){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-//-----------------------------------------------------------------------------
-// Format query (public API)
-//-----------------------------------------------------------------------------
-
 VkFormat ConvertFormat(Format::Enum format){
     return __hidden_vulkan::ConvertFormat(format);
 }
-
-//-----------------------------------------------------------------------------
-// VkResult to string conversion
-//-----------------------------------------------------------------------------
 
 const char* ResultToString(VkResult result){
     switch(result){
@@ -318,3 +302,4 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -10,13 +10,9 @@
 
 NWB_VULKAN_BEGIN
 
-using __hidden_vulkan::checked_cast;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-//-----------------------------------------------------------------------------
-// TrackedCommandBuffer
-//-----------------------------------------------------------------------------
 
 TrackedCommandBuffer::TrackedCommandBuffer(const VulkanContext& context, CommandQueue::Enum queueType, u32 queueFamilyIndex)
     : m_context(context)
@@ -52,9 +48,9 @@ TrackedCommandBuffer::~TrackedCommandBuffer(){
     referencedStagingBuffers.clear();
 }
 
-//-----------------------------------------------------------------------------
-// Queue - Command submission and synchronization
-//-----------------------------------------------------------------------------
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 Queue::Queue(const VulkanContext& context, CommandQueue::Enum queueID, VkQueue queue, u32 queueFamilyIndex)
     : m_context(context)
@@ -312,9 +308,9 @@ void Queue::waitForIdle(){
     m_commandBuffersInFlight.clear();
 }
 
-//-----------------------------------------------------------------------------
-// Device - Queue Semaphore Interface
-//-----------------------------------------------------------------------------
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 VkSemaphore Device::getQueueSemaphore(CommandQueue::Enum queue){
     Queue* q = getQueue(queue);
@@ -361,3 +357,4 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

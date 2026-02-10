@@ -10,10 +10,8 @@
 
 NWB_VULKAN_BEGIN
 
-using __hidden_vulkan::checked_cast;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Device - Event/Timer Query Implementation
 
 
 EventQueryHandle Device::createEventQuery(){
@@ -95,9 +93,9 @@ void Device::resetTimerQuery(ITimerQuery* _query){
     query->resolved = false;
 }
 
-//-----------------------------------------------------------------------------
-// CommandList - Queries and markers
-//-----------------------------------------------------------------------------
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 void CommandList::beginTimerQuery(ITimerQuery* _query){
     TimerQuery* query = checked_cast<TimerQuery*>(_query);
@@ -165,3 +163,4 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

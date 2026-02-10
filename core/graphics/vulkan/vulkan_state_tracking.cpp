@@ -10,11 +10,6 @@
 
 NWB_VULKAN_BEGIN
 
-using __hidden_vulkan::checked_cast;
-using __hidden_vulkan::GetVkAccessFlags;
-using __hidden_vulkan::GetVkPipelineStageFlags;
-using __hidden_vulkan::GetVkImageLayout;
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Resource state transitions and barriers
@@ -101,12 +96,12 @@ void CommandList::setTextureState(ITexture* _texture, TextureSubresourceSet subr
         return;
     
     VkImageMemoryBarrier2 barrier = { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2 };
-    barrier.srcStageMask = GetVkPipelineStageFlags(oldState != ResourceStates::Unknown ? oldState : ResourceStates::Common);
-    barrier.srcAccessMask = GetVkAccessFlags(oldState != ResourceStates::Unknown ? oldState : ResourceStates::Common);
-    barrier.dstStageMask = GetVkPipelineStageFlags(stateBits);
-    barrier.dstAccessMask = GetVkAccessFlags(stateBits);
-    barrier.oldLayout = oldState != ResourceStates::Unknown ? GetVkImageLayout(oldState) : VK_IMAGE_LAYOUT_UNDEFINED;
-    barrier.newLayout = GetVkImageLayout(stateBits);
+    barrier.srcStageMask = __hidden_vulkan::GetVkPipelineStageFlags(oldState != ResourceStates::Unknown ? oldState : ResourceStates::Common);
+    barrier.srcAccessMask = __hidden_vulkan::GetVkAccessFlags(oldState != ResourceStates::Unknown ? oldState : ResourceStates::Common);
+    barrier.dstStageMask = __hidden_vulkan::GetVkPipelineStageFlags(stateBits);
+    barrier.dstAccessMask = __hidden_vulkan::GetVkAccessFlags(stateBits);
+    barrier.oldLayout = oldState != ResourceStates::Unknown ? __hidden_vulkan::GetVkImageLayout(oldState) : VK_IMAGE_LAYOUT_UNDEFINED;
+    barrier.newLayout = __hidden_vulkan::GetVkImageLayout(stateBits);
     barrier.image = texture->image;
     barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     barrier.subresourceRange.baseMipLevel = subresources.baseMipLevel;
@@ -142,10 +137,10 @@ void CommandList::setBufferState(IBuffer* _buffer, ResourceStates::Mask stateBit
         return;
     
     VkBufferMemoryBarrier2 barrier = { VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2 };
-    barrier.srcStageMask = GetVkPipelineStageFlags(oldState != ResourceStates::Unknown ? oldState : ResourceStates::Common);
-    barrier.srcAccessMask = GetVkAccessFlags(oldState != ResourceStates::Unknown ? oldState : ResourceStates::Common);
-    barrier.dstStageMask = GetVkPipelineStageFlags(stateBits);
-    barrier.dstAccessMask = GetVkAccessFlags(stateBits);
+    barrier.srcStageMask = __hidden_vulkan::GetVkPipelineStageFlags(oldState != ResourceStates::Unknown ? oldState : ResourceStates::Common);
+    barrier.srcAccessMask = __hidden_vulkan::GetVkAccessFlags(oldState != ResourceStates::Unknown ? oldState : ResourceStates::Common);
+    barrier.dstStageMask = __hidden_vulkan::GetVkPipelineStageFlags(stateBits);
+    barrier.dstAccessMask = __hidden_vulkan::GetVkAccessFlags(stateBits);
     barrier.buffer = buffer->buffer;
     barrier.offset = 0;
     barrier.size = VK_WHOLE_SIZE;
@@ -171,7 +166,7 @@ void CommandList::setAccelStructState(IRayTracingAccelStruct* _as, ResourceState
     AccelStruct* as = checked_cast<AccelStruct*>(_as);
     
     if(as->buffer){
-        setBufferState(as->buffer, stateBits);
+        setBufferState(as->buffer.get(), stateBits);
     }
 }
 
@@ -185,9 +180,9 @@ void CommandList::setPermanentBufferState(IBuffer* buffer, ResourceStates::Mask 
     stateTracker->setPermanentBufferState(buffer, stateBits);
 }
 
-//-----------------------------------------------------------------------------
-// State Tracker - Internal helper for tracking resource states and bindings
-//-----------------------------------------------------------------------------
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 StateTracker::StateTracker(){
 }
@@ -304,3 +299,4 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

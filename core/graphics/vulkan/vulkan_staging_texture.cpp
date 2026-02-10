@@ -12,7 +12,6 @@ NWB_VULKAN_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Device - Staging Texture Implementation
 
 
 StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAccessMode::Enum cpuAccess){
@@ -26,12 +25,12 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
     u64 totalSize = 0;
     for(u32 arraySlice = 0; arraySlice < d.arraySize; ++arraySlice){
         for(u32 mip = 0; mip < d.mipLevels; ++mip){
-            u32 mipWidth = Max(d.width >> mip, 1u);
-            u32 mipHeight = Max(d.height >> mip, 1u);
-            u32 mipDepth = Max(d.depth >> mip, 1u);
+            auto mipWidth = Max<u32>(d.width >> mip, 1u);
+            auto mipHeight = Max<u32>(d.height >> mip, 1u);
+            auto mipDepth = Max<u32>(d.depth >> mip, 1u);
             
-            u32 blocksX = Max(mipWidth / formatInfo.blockSize, 1u);
-            u32 blocksY = Max(mipHeight / formatInfo.blockSize, 1u);
+            auto blocksX = Max<u32>(mipWidth / formatInfo.blockSize, 1u);
+            auto blocksY = Max<u32>(mipHeight / formatInfo.blockSize, 1u);
             
             totalSize += static_cast<u64>(blocksX) * blocksY * mipDepth * formatInfo.bytesPerBlock;
         }
@@ -135,12 +134,12 @@ void* Device::mapStagingTexture(IStagingTexture* tex, const TextureSlice& slice,
             if(arr == resolved.arraySlice && mip == resolved.mipLevel)
                 goto foundOffset;
             
-            u32 mipWidth = Max(desc.width >> mip, 1u);
-            u32 mipHeight = Max(desc.height >> mip, 1u);
-            u32 mipDepth = Max(desc.depth >> mip, 1u);
+            auto mipWidth = Max<u32>(desc.width >> mip, 1u);
+            auto mipHeight = Max<u32>(desc.height >> mip, 1u);
+            auto mipDepth = Max<u32>(desc.depth >> mip, 1u);
             
-            u32 blocksX = Max(mipWidth / formatInfo.blockSize, 1u);
-            u32 blocksY = Max(mipHeight / formatInfo.blockSize, 1u);
+            auto blocksX = Max<u32>(mipWidth / formatInfo.blockSize, 1u);
+            auto blocksY = Max<u32>(mipHeight / formatInfo.blockSize, 1u);
             
             offset += static_cast<u64>(blocksX) * blocksY * mipDepth * formatInfo.bytesPerBlock;
         }
@@ -148,21 +147,22 @@ void* Device::mapStagingTexture(IStagingTexture* tex, const TextureSlice& slice,
     foundOffset:
     
     // Compute row pitch for the resolved mip level
-    u32 mipWidth = Max(desc.width >> resolved.mipLevel, 1u);
-    u32 blocksX = Max(mipWidth / formatInfo.blockSize, 1u);
+    auto mipWidth = Max<u32>(desc.width >> resolved.mipLevel, 1u);
+    auto blocksX = Max<u32>(mipWidth / formatInfo.blockSize, 1u);
     u32 rowPitch = blocksX * formatInfo.bytesPerBlock;
     
     if(outRowPitch)
         *outRowPitch = rowPitch;
     
     // Add sub-slice offset within this mip level
-    u32 mipHeight = Max(desc.height >> resolved.mipLevel, 1u);
-    u32 blocksY = Max(mipHeight / formatInfo.blockSize, 1u);
-    u32 slicePitch = rowPitch * blocksY;
+    auto mipHeight = Max<u32>(desc.height >> resolved.mipLevel, 1u);
+    auto blocksY = Max<u32>(mipHeight / formatInfo.blockSize, 1u);
+    auto slicePitch = rowPitch * blocksY;
     
     offset += static_cast<u64>(resolved.z) * slicePitch
             + static_cast<u64>(resolved.y / formatInfo.blockSize) * rowPitch
-            + static_cast<u64>(resolved.x / formatInfo.blockSize) * formatInfo.bytesPerBlock;
+            + static_cast<u64>(resolved.x / formatInfo.blockSize) * formatInfo.bytesPerBlock
+    ;
     
     return static_cast<u8*>(staging->mappedMemory) + offset;
 }
@@ -173,6 +173,7 @@ void Device::unmapStagingTexture(IStagingTexture* tex){
     (void)tex;
 }
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -180,3 +181,4 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

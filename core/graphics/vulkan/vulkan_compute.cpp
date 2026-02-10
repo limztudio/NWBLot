@@ -10,13 +10,9 @@
 
 NWB_VULKAN_BEGIN
 
-using __hidden_vulkan::checked_cast;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-//-----------------------------------------------------------------------------
-// ComputePipeline - Compute pipeline state object
-//-----------------------------------------------------------------------------
 
 ComputePipeline::~ComputePipeline(){
     if(pipeline){
@@ -31,9 +27,9 @@ Object ComputePipeline::getNativeHandle(ObjectType objectType){
     return Object(nullptr);
 }
 
-//-----------------------------------------------------------------------------
-// Device - Compute pipeline creation
-//-----------------------------------------------------------------------------
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& desc){
     ComputePipeline* pso = new ComputePipeline(m_context);
@@ -76,9 +72,9 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
     return ComputePipelineHandle(pso, AdoptRef);
 }
 
-//-----------------------------------------------------------------------------
-// CommandList - Compute
-//-----------------------------------------------------------------------------
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 void CommandList::setComputeState(const ComputeState& state){
     currentComputeState = state;
@@ -116,6 +112,7 @@ void CommandList::dispatchIndirect(u32 offsetBytes){
     currentCmdBuf->referencedResources.push_back(currentComputeState.indirectParams);
 }
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -123,3 +120,4 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

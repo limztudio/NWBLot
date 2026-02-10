@@ -10,28 +10,33 @@
 
 NWB_VULKAN_BEGIN
 
-using __hidden_vulkan::checked_cast;
-using namespace __hidden_vulkan;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-//-----------------------------------------------------------------------------
-// Helper functions for buffer addresses
-//-----------------------------------------------------------------------------
 
 namespace __hidden_vulkan{
-VkDeviceAddress getBufferDeviceAddress(IBuffer* _buffer, u64 offset = 0){
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+VkDeviceAddress GetBufferDeviceAddress(IBuffer* _buffer, u64 offset = 0){
     if(!_buffer)
         return 0;
     
     Buffer* buffer = checked_cast<Buffer*>(_buffer);
     return buffer->deviceAddress + offset;
 }
-} // namespace __hidden_vulkan
 
-//-----------------------------------------------------------------------------
-// AccelStruct - Bottom-level and Top-level acceleration structures
-//-----------------------------------------------------------------------------
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 AccelStruct::AccelStruct(const VulkanContext& context)
     : m_context(context)
@@ -43,7 +48,7 @@ AccelStruct::~AccelStruct(){
         accelStruct = VK_NULL_HANDLE;
     }
     
-    buffer = nullptr; // RefCountPtr handles cleanup
+    buffer.reset();
 }
 
 Object AccelStruct::getNativeHandle(ObjectType objectType){
@@ -52,9 +57,9 @@ Object AccelStruct::getNativeHandle(ObjectType objectType){
     return Object(nullptr);
 }
 
-//-----------------------------------------------------------------------------
-// RayTracingPipeline - Ray tracing pipeline
-//-----------------------------------------------------------------------------
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 RayTracingPipeline::RayTracingPipeline(const VulkanContext& context)
     : m_context(context)
@@ -73,9 +78,9 @@ Object RayTracingPipeline::getNativeHandle(ObjectType objectType){
     return Object(nullptr);
 }
 
-//-----------------------------------------------------------------------------
-// Device - Ray Tracing methods
-//-----------------------------------------------------------------------------
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStructDesc& desc){
     if(!m_context.extensions.KHR_acceleration_structure)
@@ -85,9 +90,7 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
     as->desc = desc;
     
     // Determine acceleration structure type
-    VkAccelerationStructureTypeKHR asType = desc.isTopLevel ? 
-        VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR : 
-        VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
+    VkAccelerationStructureTypeKHR asType = desc.isTopLevel ?  VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR :  VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
     
     // Create backing buffer for acceleration structure
     BufferDesc bufferDesc;
@@ -300,9 +303,9 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
     return RayTracingPipelineHandle(pso, AdoptRef);
 }
 
-//-----------------------------------------------------------------------------
-// ShaderTable
-//-----------------------------------------------------------------------------
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 ShaderTable::ShaderTable(const VulkanContext& context, Device* device)
     : m_context(context)
@@ -374,7 +377,7 @@ void ShaderTable::setRayGenerationShader(const Name& exportName, IBindingSet* /*
     }
 }
 
-int ShaderTable::addMissShader(const Name& exportName, IBindingSet* /*bindings*/){
+u32 ShaderTable::addMissShader(const Name& exportName, IBindingSet* /*bindings*/){
     if(!pipeline || !m_device)
         return missCount++;
     
@@ -415,7 +418,7 @@ int ShaderTable::addMissShader(const Name& exportName, IBindingSet* /*bindings*/
     return missCount++;
 }
 
-int ShaderTable::addHitGroup(const Name& exportName, IBindingSet* /*bindings*/){
+u32 ShaderTable::addHitGroup(const Name& exportName, IBindingSet* /*bindings*/){
     if(!pipeline || !m_device)
         return hitCount++;
     
@@ -453,7 +456,7 @@ int ShaderTable::addHitGroup(const Name& exportName, IBindingSet* /*bindings*/){
     return hitCount++;
 }
 
-int ShaderTable::addCallableShader(const Name& exportName, IBindingSet* /*bindings*/){
+u32 ShaderTable::addCallableShader(const Name& exportName, IBindingSet* /*bindings*/){
     if(!pipeline || !m_device)
         return callableCount++;
     
@@ -500,12 +503,12 @@ Object ShaderTable::getNativeHandle(ObjectType objectType){
         Buffer* buf = checked_cast<Buffer*>(raygenBuffer.get());
         return Object(buf->buffer);
     }
-    return Object();
+    return Object{};
 }
 
-//-----------------------------------------------------------------------------
-// CommandList - Ray Tracing
-//-----------------------------------------------------------------------------
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 void CommandList::setRayTracingState(const RayTracingState& state){
     currentRayTracingState = state;
@@ -537,9 +540,9 @@ void CommandList::setRayTracingState(const RayTracingState& state){
     }
 }
 
-//-----------------------------------------------------------------------------
-// CommandList - Ray Tracing commands
-//-----------------------------------------------------------------------------
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* _as, const RayTracingGeometryDesc* pGeometries, usize numGeometries, RayTracingAccelStructBuildFlags::Mask buildFlags){
     if(!_as || !pGeometries || numGeometries == 0)
@@ -572,14 +575,14 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* _as, const
             geometry.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
             geometry.geometry.triangles.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
             geometry.geometry.triangles.vertexFormat = ConvertFormat(triangles.vertexFormat);
-            geometry.geometry.triangles.vertexData.deviceAddress = getBufferDeviceAddress(triangles.vertexBuffer, triangles.vertexOffset);
+            geometry.geometry.triangles.vertexData.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(triangles.vertexBuffer, triangles.vertexOffset);
             geometry.geometry.triangles.vertexStride = triangles.vertexStride;
             geometry.geometry.triangles.maxVertex = triangles.vertexCount > 0 ? triangles.vertexCount - 1 : 0;
             
             if(triangles.indexBuffer){
                 geometry.geometry.triangles.indexType = triangles.indexFormat == Format::R16_UINT ? 
                     VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32;
-                geometry.geometry.triangles.indexData.deviceAddress = getBufferDeviceAddress(triangles.indexBuffer, triangles.indexOffset);
+                geometry.geometry.triangles.indexData.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(triangles.indexBuffer, triangles.indexOffset);
                 primitiveCount = triangles.indexCount / 3;
             }
             else{
@@ -594,7 +597,7 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* _as, const
             
             geometry.geometryType = VK_GEOMETRY_TYPE_AABBS_KHR;
             geometry.geometry.aabbs.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_AABBS_DATA_KHR;
-            geometry.geometry.aabbs.data.deviceAddress = getBufferDeviceAddress(aabbs.buffer, aabbs.offset);
+            geometry.geometry.aabbs.data.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(aabbs.buffer, aabbs.offset);
             geometry.geometry.aabbs.stride = aabbs.stride;
             
             primitiveCount = aabbs.count;
@@ -645,7 +648,7 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* _as, const
     
     BufferHandle scratchBuffer = m_device->createBuffer(scratchDesc);
     if(scratchBuffer){
-        buildInfo.scratchData.deviceAddress = getBufferDeviceAddress(scratchBuffer.get());
+        buildInfo.scratchData.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(scratchBuffer.get());
         
         // Build acceleration structure
         const VkAccelerationStructureBuildRangeInfoKHR* pRangeInfos = rangeInfos.data();
@@ -750,7 +753,7 @@ void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* _as, const Ra
     geometry.geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR;
     geometry.geometry.instances.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
     geometry.geometry.instances.arrayOfPointers = VK_FALSE;
-    geometry.geometry.instances.data.deviceAddress = getBufferDeviceAddress(instanceBuffer.get());
+    geometry.geometry.instances.data.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(instanceBuffer.get());
     
     // Set up build info
     VkAccelerationStructureBuildGeometryInfoKHR buildInfo = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR };
@@ -783,7 +786,7 @@ void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* _as, const Ra
     
     BufferHandle scratchBuffer = m_device->createBuffer(scratchDesc);
     if(scratchBuffer){
-        buildInfo.scratchData.deviceAddress = getBufferDeviceAddress(scratchBuffer.get());
+        buildInfo.scratchData.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(scratchBuffer.get());
         
         // Build acceleration structure
         VkAccelerationStructureBuildRangeInfoKHR rangeInfo = {};
@@ -793,8 +796,8 @@ void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* _as, const Ra
         vkCmdBuildAccelerationStructuresKHR(currentCmdBuf->cmdBuf, 1, &buildInfo, &pRangeInfo);
         
         // Track buffers
-        currentCmdBuf->referencedStagingBuffers.push_back(scratchBuffer);
-        currentCmdBuf->referencedStagingBuffers.push_back(instanceBuffer);
+        currentCmdBuf->referencedStagingBuffers.push_back(Move(scratchBuffer));
+        currentCmdBuf->referencedStagingBuffers.push_back(Move(instanceBuffer));
     }
     
     currentCmdBuf->referencedResources.push_back(_as);
@@ -830,32 +833,30 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
     u32 handleSizeAligned = (handleSize + handleAlignment - 1) & ~(handleAlignment - 1);
     
     if(sbt->raygenBuffer){
-        raygenRegion.deviceAddress = getBufferDeviceAddress(sbt->raygenBuffer.get(), sbt->raygenOffset);
+        raygenRegion.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(sbt->raygenBuffer.get(), sbt->raygenOffset);
         raygenRegion.stride = handleSizeAligned;
         raygenRegion.size = handleSizeAligned;
     }
     
     if(sbt->missBuffer){
-        missRegion.deviceAddress = getBufferDeviceAddress(sbt->missBuffer.get(), sbt->missOffset);
+        missRegion.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(sbt->missBuffer.get(), sbt->missOffset);
         missRegion.stride = handleSizeAligned;
         missRegion.size = sbt->missCount * handleSizeAligned;
     }
     
     if(sbt->hitBuffer){
-        hitRegion.deviceAddress = getBufferDeviceAddress(sbt->hitBuffer.get(), sbt->hitOffset);
+        hitRegion.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(sbt->hitBuffer.get(), sbt->hitOffset);
         hitRegion.stride = handleSizeAligned;
         hitRegion.size = sbt->hitCount * handleSizeAligned;
     }
     
     if(sbt->callableBuffer){
-        callableRegion.deviceAddress = getBufferDeviceAddress(sbt->callableBuffer.get(), sbt->callableOffset);
+        callableRegion.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(sbt->callableBuffer.get(), sbt->callableOffset);
         callableRegion.stride = handleSizeAligned;
         callableRegion.size = sbt->callableCount * handleSizeAligned;
     }
     
-    vkCmdTraceRaysKHR(currentCmdBuf->cmdBuf, 
-                      &raygenRegion, &missRegion, &hitRegion, &callableRegion,
-                      args.width, args.height, args.depth);
+    vkCmdTraceRaysKHR(currentCmdBuf->cmdBuf, &raygenRegion, &missRegion, &hitRegion, &callableRegion, args.width, args.height, args.depth);
 }
 
 

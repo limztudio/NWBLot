@@ -22,7 +22,7 @@ namespace __hidden_vulkan{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr VkImageType TextureDimensionToImageType(TextureDimension::Enum dimension){
+constexpr VkImageType TextureDimensionToImageType(TextureDimension::Enum dimension){
     switch(dimension){
         case TextureDimension::Texture1D:
         case TextureDimension::Texture1DArray:
@@ -41,7 +41,7 @@ static constexpr VkImageType TextureDimensionToImageType(TextureDimension::Enum 
     }
 }
 
-static constexpr VkImageViewType TextureDimensionToViewType(TextureDimension::Enum dimension){
+constexpr VkImageViewType TextureDimensionToViewType(TextureDimension::Enum dimension){
     switch(dimension){
         case TextureDimension::Texture1D: return VK_IMAGE_VIEW_TYPE_1D;
         case TextureDimension::Texture1DArray: return VK_IMAGE_VIEW_TYPE_1D_ARRAY;
@@ -56,7 +56,7 @@ static constexpr VkImageViewType TextureDimensionToViewType(TextureDimension::En
     }
 }
 
-static constexpr VkSampleCountFlagBits GetSampleCount(u32 sampleCount){
+constexpr VkSampleCountFlagBits GetSampleCount(u32 sampleCount){
     switch(sampleCount){
         case 1: return VK_SAMPLE_COUNT_1_BIT;
         case 2: return VK_SAMPLE_COUNT_2_BIT;
@@ -69,7 +69,7 @@ static constexpr VkSampleCountFlagBits GetSampleCount(u32 sampleCount){
     }
 }
 
-static constexpr VkImageUsageFlags PickImageUsage(const TextureDesc& desc){
+constexpr VkImageUsageFlags PickImageUsage(const TextureDesc& desc){
     VkImageUsageFlags usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     
     if(desc.isShaderResource)
@@ -92,7 +92,7 @@ static constexpr VkImageUsageFlags PickImageUsage(const TextureDesc& desc){
     return usage;
 }
 
-static constexpr VkImageCreateFlags PickImageFlags(const TextureDesc& desc){
+constexpr VkImageCreateFlags PickImageFlags(const TextureDesc& desc){
     VkImageCreateFlags flags = 0;
     
     if(desc.dimension == TextureDimension::TextureCube || desc.dimension == TextureDimension::TextureCubeArray)
@@ -112,7 +112,6 @@ static constexpr VkImageCreateFlags PickImageFlags(const TextureDesc& desc){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Texture
 
 
 Texture::Texture(const VulkanContext& context, VulkanAllocator& allocator)
@@ -205,7 +204,6 @@ Object Texture::getNativeView(ObjectType objectType, Format::Enum format, Textur
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Staging Texture
 
 
 StagingTexture::StagingTexture(const VulkanContext& context, VulkanAllocator& allocator)
@@ -231,7 +229,6 @@ StagingTexture::~StagingTexture(){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Texture Implementation
 
 
 TextureHandle Device::createTexture(const TextureDesc& d){
@@ -325,7 +322,6 @@ TextureHandle Device::createHandleForNativeTexture(ObjectType objectType, Object
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Sampler Implementation
 
 
 SamplerHandle Device::createSampler(const SamplerDesc& d){
@@ -372,7 +368,6 @@ SamplerHandle Device::createSampler(const SamplerDesc& d){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Texture operations
 
 
 void CommandList::clearTextureFloat(ITexture* _texture, TextureSubresourceSet subresources, const Color& clearColor){
@@ -550,3 +545,4 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

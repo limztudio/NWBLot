@@ -10,9 +10,6 @@
 
 NWB_VULKAN_BEGIN
 
-using __hidden_vulkan::checked_cast;
-using __hidden_vulkan::ConvertFormat;
-using __hidden_vulkan::getBufferDeviceAddress;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Copy operations (staging texture overloads)
@@ -189,7 +186,7 @@ void CommandList::buildTopLevelAccelStructFromBuffer(IRayTracingAccelStruct* _as
     geometry.geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR;
     geometry.geometry.instances.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
     geometry.geometry.instances.arrayOfPointers = VK_FALSE;
-    geometry.geometry.instances.data.deviceAddress = getBufferDeviceAddress(instanceBuffer, instanceBufferOffset);
+    geometry.geometry.instances.data.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(instanceBuffer, instanceBufferOffset);
     
     // Set up build info
     VkAccelerationStructureBuildGeometryInfoKHR buildInfo = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR };
@@ -211,8 +208,7 @@ void CommandList::buildTopLevelAccelStructFromBuffer(IRayTracingAccelStruct* _as
     // Query scratch buffer size
     u32 primitiveCount = static_cast<u32>(numInstances);
     VkAccelerationStructureBuildSizesInfoKHR sizeInfo = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR };
-    vkGetAccelerationStructureBuildSizesKHR(m_context->device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
-                                             &buildInfo, &primitiveCount, &sizeInfo);
+    vkGetAccelerationStructureBuildSizesKHR(m_context->device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &primitiveCount, &sizeInfo);
     
     // Allocate scratch buffer
     BufferDesc scratchDesc;
@@ -222,7 +218,7 @@ void CommandList::buildTopLevelAccelStructFromBuffer(IRayTracingAccelStruct* _as
     
     BufferHandle scratchBuffer = m_device->createBuffer(scratchDesc);
     if(scratchBuffer){
-        buildInfo.scratchData.deviceAddress = getBufferDeviceAddress(scratchBuffer.get());
+        buildInfo.scratchData.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(scratchBuffer.get());
         
         // Build acceleration structure
         VkAccelerationStructureBuildRangeInfoKHR rangeInfo = {};
@@ -327,3 +323,4 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

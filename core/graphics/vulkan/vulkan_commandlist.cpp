@@ -10,14 +10,9 @@
 
 NWB_VULKAN_BEGIN
 
-using __hidden_vulkan::checked_cast;
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-//-----------------------------------------------------------------------------
-// CommandList - Core command recording
-//-----------------------------------------------------------------------------
 
 CommandList::CommandList(Device* device, const CommandListParameters& params)
     : m_device(device)
@@ -62,10 +57,6 @@ void CommandList::clearState(){
     m_pendingCompactions.clear();
 }
 
-//-----------------------------------------------------------------------------
-// Copy operations
-//-----------------------------------------------------------------------------
-
 void CommandList::copyTextureToBuffer(IBuffer* _dest, u64 destOffsetBytes, u32 destRowPitch, ITexture* _src, const TextureSlice& srcSlice){
     Buffer* dest = checked_cast<Buffer*>(_dest);
     Texture* src = checked_cast<Texture*>(_src);
@@ -95,3 +86,4 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

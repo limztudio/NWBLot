@@ -122,9 +122,20 @@ ShaderHandle Device::createShaderSpecialization(IShader* baseShader, const Shade
         return nullptr;
     }
     
-    // Note: Specialization constants are applied at pipeline creation time
-    // via VkSpecializationInfo, not stored in the shader module itself.
-    // TODO: Store specialization constants for use during pipeline creation
+    // Store specialization constants for use during pipeline creation
+    if(constants && numConstants > 0){
+        shader->specializationData.resize(numConstants * sizeof(u32));
+        shader->specializationEntries.resize(numConstants);
+        
+        for(u32 i = 0; i < numConstants; ++i){
+            VkSpecializationMapEntry& entry = shader->specializationEntries[i];
+            entry.constantID = constants[i].constantID;
+            entry.offset = i * sizeof(u32);
+            entry.size = sizeof(u32);
+            
+            NWB_MEMCPY(shader->specializationData.data() + entry.offset, sizeof(u32), &constants[i].value, sizeof(u32));
+        }
+    }
     
     return RefCountPtr<IShader, BlankDeleter<IShader>>(shader, AdoptRef);
 }

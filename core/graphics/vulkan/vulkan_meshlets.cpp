@@ -40,41 +40,45 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     
     // Collect shader stages
     Vector<VkPipelineShaderStageCreateInfo> shaderStages;
+    Vector<VkSpecializationInfo> specInfos;
     shaderStages.reserve(3); // Task (optional), Mesh, Fragment
+    specInfos.reserve(3);
+    
+    auto addShaderStage = [&](IShader* iShader, VkShaderStageFlagBits vkStage){
+        Shader* s = checked_cast<Shader*>(iShader);
+        VkPipelineShaderStageCreateInfo stageInfo = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
+        stageInfo.stage = vkStage;
+        stageInfo.module = s->shaderModule;
+        stageInfo.pName = s->desc.entryName.c_str();
+        
+        if(!s->specializationEntries.empty()){
+            VkSpecializationInfo specInfo{};
+            specInfo.mapEntryCount = static_cast<u32>(s->specializationEntries.size());
+            specInfo.pMapEntries = s->specializationEntries.data();
+            specInfo.dataSize = s->specializationData.size();
+            specInfo.pData = s->specializationData.data();
+            specInfos.push_back(specInfo);
+            stageInfo.pSpecializationInfo = &specInfos.back();
+        }
+        
+        shaderStages.push_back(stageInfo);
+    };
     
     // Task shader (optional - amplification)
-    if(desc.AS){
-        Shader* as = checked_cast<Shader*>(desc.AS.get());
-        VkPipelineShaderStageCreateInfo stageInfo = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
-        stageInfo.stage = VK_SHADER_STAGE_TASK_BIT_EXT;
-        stageInfo.module = as->shaderModule;
-        stageInfo.pName = as->desc.entryName.c_str();
-        shaderStages.push_back(stageInfo);
-    }
+    if(desc.AS)
+        addShaderStage(desc.AS.get(), VK_SHADER_STAGE_TASK_BIT_EXT);
     
     // Mesh shader (required)
-    if(desc.MS){
-        Shader* ms = checked_cast<Shader*>(desc.MS.get());
-        VkPipelineShaderStageCreateInfo stageInfo = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
-        stageInfo.stage = VK_SHADER_STAGE_MESH_BIT_EXT;
-        stageInfo.module = ms->shaderModule;
-        stageInfo.pName = ms->desc.entryName.c_str();
-        shaderStages.push_back(stageInfo);
-    }
+    if(desc.MS)
+        addShaderStage(desc.MS.get(), VK_SHADER_STAGE_MESH_BIT_EXT);
     else{
         delete pso;
         return nullptr; // Mesh shader is required
     }
     
     // Fragment shader (optional)
-    if(desc.PS){
-        Shader* ps = checked_cast<Shader*>(desc.PS.get());
-        VkPipelineShaderStageCreateInfo stageInfo = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
-        stageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-        stageInfo.module = ps->shaderModule;
-        stageInfo.pName = ps->desc.entryName.c_str();
-        shaderStages.push_back(stageInfo);
-    }
+    if(desc.PS)
+        addShaderStage(desc.PS.get(), VK_SHADER_STAGE_FRAGMENT_BIT);
     
     // Get pipeline layout from binding layouts
     VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;

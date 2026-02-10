@@ -218,52 +218,40 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     
     // Step 1: Collect shader stages
     Vector<VkPipelineShaderStageCreateInfo> shaderStages;
+    Vector<VkSpecializationInfo> specInfos;
     shaderStages.reserve(5);
+    specInfos.reserve(5);
     
-    if(desc.VS){
-        Shader* vs = checked_cast<Shader*>(desc.VS.get());
+    auto addShaderStage = [&](IShader* iShader, VkShaderStageFlagBits vkStage){
+        Shader* s = checked_cast<Shader*>(iShader);
         VkPipelineShaderStageCreateInfo stageInfo = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
-        stageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
-        stageInfo.module = vs->shaderModule;
-        stageInfo.pName = vs->desc.entryName.c_str();
+        stageInfo.stage = vkStage;
+        stageInfo.module = s->shaderModule;
+        stageInfo.pName = s->desc.entryName.c_str();
+        
+        if(!s->specializationEntries.empty()){
+            VkSpecializationInfo specInfo{};
+            specInfo.mapEntryCount = static_cast<u32>(s->specializationEntries.size());
+            specInfo.pMapEntries = s->specializationEntries.data();
+            specInfo.dataSize = s->specializationData.size();
+            specInfo.pData = s->specializationData.data();
+            specInfos.push_back(specInfo);
+            stageInfo.pSpecializationInfo = &specInfos.back();
+        }
+        
         shaderStages.push_back(stageInfo);
-    }
+    };
     
-    if(desc.HS){
-        Shader* hs = checked_cast<Shader*>(desc.HS.get());
-        VkPipelineShaderStageCreateInfo stageInfo = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
-        stageInfo.stage = VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;
-        stageInfo.module = hs->shaderModule;
-        stageInfo.pName = hs->desc.entryName.c_str();
-        shaderStages.push_back(stageInfo);
-    }
-    
-    if(desc.DS){
-        Shader* ds = checked_cast<Shader*>(desc.DS.get());
-        VkPipelineShaderStageCreateInfo stageInfo = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
-        stageInfo.stage = VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;
-        stageInfo.module = ds->shaderModule;
-        stageInfo.pName = ds->desc.entryName.c_str();
-        shaderStages.push_back(stageInfo);
-    }
-    
-    if(desc.GS){
-        Shader* gs = checked_cast<Shader*>(desc.GS.get());
-        VkPipelineShaderStageCreateInfo stageInfo = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
-        stageInfo.stage = VK_SHADER_STAGE_GEOMETRY_BIT;
-        stageInfo.module = gs->shaderModule;
-        stageInfo.pName = gs->desc.entryName.c_str();
-        shaderStages.push_back(stageInfo);
-    }
-    
-    if(desc.PS){
-        Shader* ps = checked_cast<Shader*>(desc.PS.get());
-        VkPipelineShaderStageCreateInfo stageInfo = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
-        stageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-        stageInfo.module = ps->shaderModule;
-        stageInfo.pName = ps->desc.entryName.c_str();
-        shaderStages.push_back(stageInfo);
-    }
+    if(desc.VS)
+        addShaderStage(desc.VS.get(), VK_SHADER_STAGE_VERTEX_BIT);
+    if(desc.HS)
+        addShaderStage(desc.HS.get(), VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT);
+    if(desc.DS)
+        addShaderStage(desc.DS.get(), VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT);
+    if(desc.GS)
+        addShaderStage(desc.GS.get(), VK_SHADER_STAGE_GEOMETRY_BIT);
+    if(desc.PS)
+        addShaderStage(desc.PS.get(), VK_SHADER_STAGE_FRAGMENT_BIT);
     
     // Step 2: Vertex input state from InputLayout
     VkPipelineVertexInputStateCreateInfo vertexInputInfo = { VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO };

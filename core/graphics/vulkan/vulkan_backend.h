@@ -423,6 +423,10 @@ public:
     VkShaderModule shaderModule = VK_NULL_HANDLE;
     
     Vector<u8> bytecode;
+    
+    // Specialization constants for pipeline creation
+    Vector<VkSpecializationMapEntry> specializationEntries;
+    Vector<u8> specializationData;
 
 
 private:

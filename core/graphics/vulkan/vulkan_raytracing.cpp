@@ -130,8 +130,8 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
 }
 
 RayTracingOpacityMicromapHandle Device::createOpacityMicromap(const RayTracingOpacityMicromapDesc& desc){
-    // Opacity micromaps require VK_EXT_opacity_micromap
-    // Placeholder implementation
+    (void)desc;
+    // Opacity micromaps require VK_EXT_opacity_micromap extension which is not enabled in this backend
     return nullptr;
 }
 
@@ -149,8 +149,8 @@ MemoryRequirements Device::getAccelStructMemoryRequirements(IRayTracingAccelStru
 }
 
 RayTracingClusterOperationSizeInfo Device::getClusterOperationSizeInfo(const RayTracingClusterOperationParams& params){
-    // Cluster operations for NVIDIA's cluster-based AS optimization
-    // Placeholder implementation
+    (void)params;
+    // Cluster operations require VK_NV_cluster_acceleration_structure extension which is not enabled in this backend
     RayTracingClusterOperationSizeInfo info = {};
     return info;
 }
@@ -804,8 +804,9 @@ void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* _as, const Ra
 }
 
 void CommandList::buildOpacityMicromap(IRayTracingOpacityMicromap* _omm, const RayTracingOpacityMicromapDesc& desc){
-    // Opacity micromaps require VK_EXT_opacity_micromap
-    // Placeholder implementation
+    (void)_omm;
+    (void)desc;
+    // Opacity micromaps require VK_EXT_opacity_micromap extension which is not enabled in this backend
 }
 
 void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){

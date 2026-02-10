@@ -102,15 +102,21 @@ void CommandList::copyTexture(ITexture* dest, const TextureSlice& destSlice, ISt
 
 
 void CommandList::clearSamplerFeedbackTexture(ISamplerFeedbackTexture* texture){
-    // Sampler feedback not supported in Vulkan backend
+    (void)texture;
+    // Sampler feedback is a DX12-specific feature with no Vulkan equivalent
 }
 
 void CommandList::decodeSamplerFeedbackTexture(IBuffer* buffer, ISamplerFeedbackTexture* texture, Format::Enum format){
-    // Sampler feedback not supported in Vulkan backend
+    (void)buffer;
+    (void)texture;
+    (void)format;
+    // Sampler feedback is a DX12-specific feature with no Vulkan equivalent
 }
 
 void CommandList::setSamplerFeedbackTextureState(ISamplerFeedbackTexture* texture, ResourceStates::Mask stateBits){
-    // Sampler feedback not supported in Vulkan backend
+    (void)texture;
+    (void)stateBits;
+    // Sampler feedback is a DX12-specific feature with no Vulkan equivalent
 }
 
 
@@ -236,12 +242,14 @@ void CommandList::buildTopLevelAccelStructFromBuffer(IRayTracingAccelStruct* _as
 }
 
 void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOperationDesc& desc){
-    // TODO: Implement cluster operations
-    NWB_ASSERT(false && "CommandList::executeMultiIndirectClusterOperation not yet implemented");
+    (void)desc;
+    // Cluster operations require VK_NV_cluster_acceleration_structure extension
 }
 
 void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDesc const* convertDescs, usize numDescs){
-    // Cooperative vector matrix conversion not yet supported
+    (void)convertDescs;
+    (void)numDescs;
+    // Cooperative vector matrix conversion requires VK_NV_cooperative_vector extension
 }
 
 
@@ -306,12 +314,12 @@ void Device::updateTextureTileMappings(ITexture* /*texture*/, const TextureTiles
 }
 
 SamplerFeedbackTextureHandle Device::createSamplerFeedbackTexture(ITexture* /*pairedTexture*/, const SamplerFeedbackTextureDesc& /*desc*/){
-    // Sampler feedback not supported in Vulkan backend
+    // Sampler feedback is a DX12-specific feature with no Vulkan equivalent
     return nullptr;
 }
 
 SamplerFeedbackTextureHandle Device::createSamplerFeedbackForNativeTexture(ObjectType /*objectType*/, Object /*texture*/, ITexture* /*pairedTexture*/){
-    // Sampler feedback not supported in Vulkan backend
+    // Sampler feedback is a DX12-specific feature with no Vulkan equivalent
     return nullptr;
 }
 

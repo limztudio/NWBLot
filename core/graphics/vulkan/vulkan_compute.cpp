@@ -49,6 +49,15 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
     shaderStage.module = cs->shaderModule;
     shaderStage.pName = cs->desc.entryName.c_str();
     
+    VkSpecializationInfo specInfo{};
+    if(!cs->specializationEntries.empty()){
+        specInfo.mapEntryCount = static_cast<u32>(cs->specializationEntries.size());
+        specInfo.pMapEntries = cs->specializationEntries.data();
+        specInfo.dataSize = cs->specializationData.size();
+        specInfo.pData = cs->specializationData.data();
+        shaderStage.pSpecializationInfo = &specInfo;
+    }
+    
     // Get pipeline layout from binding layouts
     VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
     if(!desc.bindingLayouts.empty() && desc.bindingLayouts[0]){

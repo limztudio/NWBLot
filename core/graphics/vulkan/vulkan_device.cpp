@@ -237,12 +237,68 @@ Object Device::getNativeQueue(ObjectType objectType, CommandQueue::Enum queue){
 }
 
 //-----------------------------------------------------------------------------
-// Device - Heap creation (placeholder)
+// Heap Implementation
+//-----------------------------------------------------------------------------
+
+Heap::Heap(const VulkanContext& context)
+    : m_context(context)
+{}
+
+Heap::~Heap(){
+    if(memory != VK_NULL_HANDLE){
+        vkFreeMemory(m_context.device, memory, m_context.allocationCallbacks);
+        memory = VK_NULL_HANDLE;
+    }
+}
+
+Object Heap::getNativeHandle(ObjectType objectType){
+    if(objectType == ObjectTypes::VK_DeviceMemory)
+        return Object(memory);
+    return Object(nullptr);
+}
+
+//-----------------------------------------------------------------------------
+// Device - Heap creation
 //-----------------------------------------------------------------------------
 
 HeapHandle Device::createHeap(const HeapDesc& d){
-    // Placeholder - full implementation would create VkDeviceMemory
-    return nullptr;
+    Heap* heap = new Heap(m_context);
+    heap->desc = d;
+    
+    VkMemoryPropertyFlags memoryProperties = 0;
+    switch(d.type){
+        case HeapType::DeviceLocal:
+            memoryProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+            break;
+        case HeapType::Upload:
+            memoryProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+            break;
+        case HeapType::Readback:
+            memoryProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
+            break;
+    }
+    
+    // Find suitable memory type
+    u32 memoryTypeIndex = 0;
+    for(u32 i = 0; i < m_context.memoryProperties.memoryTypeCount; ++i){
+        if((m_context.memoryProperties.memoryTypes[i].propertyFlags & memoryProperties) == memoryProperties){
+            memoryTypeIndex = i;
+            break;
+        }
+    }
+    
+    VkMemoryAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocInfo.allocationSize = d.capacity;
+    allocInfo.memoryTypeIndex = memoryTypeIndex;
+    
+    VkResult res = vkAllocateMemory(m_context.device, &allocInfo, m_context.allocationCallbacks, &heap->memory);
+    if(res != VK_SUCCESS){
+        delete heap;
+        return nullptr;
+    }
+    
+    return RefCountPtr<IHeap, BlankDeleter<IHeap>>(heap, AdoptRef);
 }
 
 //-----------------------------------------------------------------------------

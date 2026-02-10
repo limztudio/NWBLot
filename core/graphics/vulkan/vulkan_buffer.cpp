@@ -23,12 +23,14 @@ Buffer::Buffer(const VulkanContext& context, VulkanAllocator& allocator)
 {}
 
 Buffer::~Buffer(){
-    if(buffer != VK_NULL_HANDLE){
-        vkDestroyBuffer(m_context.device, buffer, m_context.allocationCallbacks);
-        buffer = VK_NULL_HANDLE;
+    if(managed){
+        if(buffer != VK_NULL_HANDLE){
+            vkDestroyBuffer(m_context.device, buffer, m_context.allocationCallbacks);
+            buffer = VK_NULL_HANDLE;
+        }
+        
+        m_allocator.freeBufferMemory(this);
     }
-    
-    m_allocator.freeBufferMemory(this);
 }
 
 
@@ -140,13 +142,41 @@ MemoryRequirements Device::getBufferMemoryRequirements(IBuffer* _buffer){
 }
 
 bool Device::bindBufferMemory(IBuffer* _buffer, IHeap* heap, u64 offset){
-    // TODO: Implement heap binding
-    return false;
+    Buffer* buffer = static_cast<Buffer*>(_buffer);
+    Heap* vkHeap = checked_cast<Heap*>(heap);
+    
+    if(!vkHeap || vkHeap->memory == VK_NULL_HANDLE)
+        return false;
+    
+    // Binding to a heap means the heap owns the memory, not the buffer
+    buffer->memory = VK_NULL_HANDLE;
+    
+    VkResult res = vkBindBufferMemory(m_context.device, buffer->buffer, vkHeap->memory, offset);
+    return res == VK_SUCCESS;
 }
 
-BufferHandle Device::createHandleForNativeBuffer(ObjectType objectType, Object buffer, const BufferDesc& desc){
-    // TODO: Implement native buffer wrapping
-    return nullptr;
+BufferHandle Device::createHandleForNativeBuffer(ObjectType objectType, Object _buffer, const BufferDesc& desc){
+    if(objectType != ObjectTypes::VK_Buffer)
+        return nullptr;
+    
+    VkBuffer nativeBuffer = static_cast<VkBuffer>(static_cast<VkBuffer_T*>(_buffer));
+    if(nativeBuffer == VK_NULL_HANDLE)
+        return nullptr;
+    
+    Buffer* buffer = new Buffer(m_context, m_allocator);
+    buffer->desc = desc;
+    buffer->buffer = nativeBuffer;
+    buffer->managed = false; // externally owned, don't destroy
+    
+    // Get device address if available
+    if(m_context.extensions.buffer_device_address){
+        VkBufferDeviceAddressInfo addressInfo{};
+        addressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+        addressInfo.buffer = nativeBuffer;
+        buffer->deviceAddress = vkGetBufferDeviceAddress(m_context.device, &addressInfo);
+    }
+    
+    return RefCountPtr<IBuffer, BlankDeleter<IBuffer>>(buffer, AdoptRef);
 }
 
 

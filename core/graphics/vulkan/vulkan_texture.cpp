@@ -125,12 +125,14 @@ Texture::~Texture(){
         vkDestroyImageView(m_context.device, pair.second, m_context.allocationCallbacks);
     views.clear();
     
-    if(image != VK_NULL_HANDLE){
-        vkDestroyImage(m_context.device, image, m_context.allocationCallbacks);
-        image = VK_NULL_HANDLE;
+    if(managed){
+        if(image != VK_NULL_HANDLE){
+            vkDestroyImage(m_context.device, image, m_context.allocationCallbacks);
+            image = VK_NULL_HANDLE;
+        }
+        
+        m_allocator.freeTextureMemory(this);
     }
-    
-    m_allocator.freeTextureMemory(this);
 }
 
 u64 Texture::makeViewKey(const TextureSubresourceSet& subresources, TextureDimension::Enum dimension, Format::Enum format, bool isReadOnlyDSV)const{
@@ -281,13 +283,44 @@ MemoryRequirements Device::getTextureMemoryRequirements(ITexture* _texture){
 }
 
 bool Device::bindTextureMemory(ITexture* _texture, IHeap* heap, u64 offset){
-    // TODO: Implement heap binding
-    return false;
+    Texture* texture = static_cast<Texture*>(_texture);
+    Heap* vkHeap = checked_cast<Heap*>(heap);
+    
+    if(!vkHeap || vkHeap->memory == VK_NULL_HANDLE)
+        return false;
+    
+    // Binding to a heap means the heap owns the memory, not the texture
+    texture->memory = VK_NULL_HANDLE;
+    
+    VkResult res = vkBindImageMemory(m_context.device, texture->image, vkHeap->memory, offset);
+    return res == VK_SUCCESS;
 }
 
-TextureHandle Device::createHandleForNativeTexture(ObjectType objectType, Object texture, const TextureDesc& desc){
-    // TODO: Implement native texture wrapping
-    return nullptr;
+TextureHandle Device::createHandleForNativeTexture(ObjectType objectType, Object _texture, const TextureDesc& desc){
+    if(objectType != ObjectTypes::VK_Image)
+        return nullptr;
+    
+    VkImage nativeImage = static_cast<VkImage>(static_cast<VkImage_T*>(_texture));
+    if(nativeImage == VK_NULL_HANDLE)
+        return nullptr;
+    
+    Texture* texture = new Texture(m_context, m_allocator);
+    texture->desc = desc;
+    texture->image = nativeImage;
+    texture->managed = false; // externally owned, don't destroy
+    
+    // Fill in imageInfo for view creation
+    texture->imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    texture->imageInfo.imageType = __hidden_vulkan::TextureDimensionToImageType(desc.dimension);
+    texture->imageInfo.extent.width = desc.width;
+    texture->imageInfo.extent.height = desc.height;
+    texture->imageInfo.extent.depth = desc.depth;
+    texture->imageInfo.mipLevels = desc.mipLevels;
+    texture->imageInfo.arrayLayers = desc.arraySize;
+    texture->imageInfo.format = ConvertFormat(desc.format);
+    texture->imageInfo.samples = __hidden_vulkan::GetSampleCount(desc.sampleCount);
+    
+    return RefCountPtr<ITexture, BlankDeleter<ITexture>>(texture, AdoptRef);
 }
 
 

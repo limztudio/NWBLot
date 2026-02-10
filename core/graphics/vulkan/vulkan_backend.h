@@ -184,6 +184,31 @@ private:
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Vulkan device memory for placed resources
+
+
+class Heap final : public RefCounter<IHeap>, NoCopy{
+public:
+    Heap(const VulkanContext& context);
+    virtual ~Heap()override;
+    
+    
+public:
+    [[nodiscard]] virtual const HeapDesc& getDescription()const override{ return desc; }
+    virtual Object getNativeHandle(ObjectType objectType)override;
+    
+    
+public:
+    HeapDesc desc;
+    VkDeviceMemory memory = VK_NULL_HANDLE;
+    
+    
+private:
+    const VulkanContext& m_context;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Handles staging buffer uploads
 
 
@@ -248,6 +273,8 @@ public:
     Vector<u64> versionTracking;
     VolatileBufferState volatileState;
     
+    bool managed = true; // if true, owns the VkBuffer and memory
+    
     
 private:
     const VulkanContext& m_context;
@@ -284,6 +311,8 @@ public:
     VkImageCreateInfo imageInfo{};
     
     HashMap<u64, VkImageView> views;
+    
+    bool managed = true; // if true, owns the VkImage and memory
     
     
 private:

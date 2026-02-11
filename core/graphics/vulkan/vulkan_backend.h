@@ -148,7 +148,8 @@ public:
     
     [[nodiscard]] bool pollCommandList(u64 commandListID);
     [[nodiscard]] bool waitCommandList(u64 commandListID, u64 timeout);
-    
+    void waitForIdle();
+
     [[nodiscard]] VkQueue getVkQueue()const{ return m_queue; }
     [[nodiscard]] u32 getQueueFamilyIndex()const{ return m_queueFamilyIndex; }
     [[nodiscard]] CommandQueue::Enum getQueueID()const{ return m_queueID; }
@@ -995,7 +996,12 @@ public:
     // Pending BLAS compaction requests
     Vector<RefCountPtr<AccelStruct, BlankDeleter<AccelStruct>>> m_pendingCompactions;
 
-    
+
+private:
+    void beginRenderPass(IFramebuffer* framebuffer, const RenderPassParameters& params);
+    void endRenderPass();
+
+
 private:
     Device* m_device;
     const VulkanContext* m_context;

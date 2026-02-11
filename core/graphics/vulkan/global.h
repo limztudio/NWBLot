@@ -48,7 +48,7 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template <typename T, typename U>
+template<typename T, typename U>
 inline T checked_cast(U u){
     static_assert(!std::is_same<T, U>::value, "Unnecessary checked_cast");
 #ifdef NWB_DEBUG

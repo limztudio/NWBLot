@@ -299,6 +299,109 @@ void ICommandList::setResourceStatesForFramebuffer(IFramebuffer* framebuffer){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// AftermathMarkerTracker Implementation
+
+
+static constexpr AString s_notFoundMarkerString = "ERROR: could not resolve marker";
+static constexpr usize s_numDestroyedMarkerTrackers = 2;
+
+
+AftermathMarkerTracker::AftermathMarkerTracker()
+    : m_eventStack()
+    , m_eventHashes()
+    , m_oldestHashIndex(0)
+    , m_eventStrings()
+{}
+
+usize AftermathMarkerTracker::pushEvent(const char* name){
+    m_eventStack.append(name);
+    auto eventString = m_eventStack.generic_string<char>();
+    usize hash = Hash<decltype(eventString)>{}(eventString);
+
+    if(m_eventStrings.find(hash) == m_eventStrings.end()){
+        m_eventStrings.erase(m_eventHashes[m_oldestHashIndex]);
+        m_eventStrings[hash] = eventString;
+        m_eventHashes[m_oldestHashIndex] = hash;
+        m_oldestHashIndex = (m_oldestHashIndex + 1) % s_maxAftermathEventStrings;
+    }
+
+    return hash;
+}
+
+void AftermathMarkerTracker::popEvent(){
+    m_eventStack = m_eventStack.parent_path();
+}
+
+Pair<bool, AString> AftermathMarkerTracker::getEventString(usize hash){
+    auto found = m_eventStrings.find(hash);
+    if(found != m_eventStrings.end())
+        return MakePair(true, found->second);
+
+    return MakePair(false, s_notFoundMarkerString);
+}
+
+
+AftermathCrashDumpHelper::AftermathCrashDumpHelper()
+    : m_markerTrackers()
+    , m_destroyedMarkerTrackers()
+    , m_shaderBinaryLookupCallbacks()
+{}
+
+void AftermathCrashDumpHelper::registerAftermathMarkerTracker(AftermathMarkerTracker* tracker){
+    m_markerTrackers.insert(tracker);
+}
+
+void AftermathCrashDumpHelper::unRegisterAftermathMarkerTracker(AftermathMarkerTracker* tracker){
+    // Keep the last few destroyed marker trackers around in case they're still executing on the GPU
+    if(m_destroyedMarkerTrackers.size() >= s_numDestroyedMarkerTrackers){
+        m_destroyedMarkerTrackers.pop_front();
+    }
+    
+    m_destroyedMarkerTrackers.push_back(*tracker);
+    m_markerTrackers.erase(tracker);
+}
+
+void AftermathCrashDumpHelper::registerShaderBinaryLookupCallback(void* client, ShaderBinaryLookupCallback lookupCallback){
+    m_shaderBinaryLookupCallbacks[client] = lookupCallback;
+}
+
+void AftermathCrashDumpHelper::unRegisterShaderBinaryLookupCallback(void* client){
+    m_shaderBinaryLookupCallbacks.erase(client);
+}
+
+Pair<bool, AString> AftermathCrashDumpHelper::resolveMarker(usize markerHash){
+    // Search in active marker trackers
+    for(auto markerTracker : m_markerTrackers){
+        auto result = markerTracker->getEventString(markerHash);
+        if(result.first){
+            return result;
+        }
+    }
+
+    // Search in recently destroyed marker trackers
+    for(auto& markerTracker : m_destroyedMarkerTrackers){
+        auto result = markerTracker.getEventString(markerHash);
+        if(result.first){
+            return result;
+        }
+    }
+
+    return MakePair(false, s_notFoundMarkerString);
+}
+
+Pair<const void*, usize> AftermathCrashDumpHelper::findShaderBinary(u64 shaderHash, ShaderHashGeneratorFunction hashGenerator){
+    for(auto& clientCallback : m_shaderBinaryLookupCallbacks){
+        auto result = clientCallback.second(shaderHash, hashGenerator);
+        if(result.second > 0){
+            return result;
+        }
+    }
+
+    return MakePair(static_cast<const void*>(nullptr), static_cast<usize>(0));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_CORE_END

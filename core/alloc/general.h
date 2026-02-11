@@ -23,7 +23,7 @@ extern usize CachelineSize();
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template <typename T>
+template<typename T>
 class GeneralAllocator{
 public:
     static_assert(!IsConst_V<T>, "NWB::Core::Alloc::GeneralAllocator forbids containers of const elements because allocator<const T> is ill-formed.");
@@ -61,7 +61,7 @@ public:
 public:
     constexpr GeneralAllocator()noexcept{}
     constexpr GeneralAllocator(const GeneralAllocator&)noexcept = default;
-    template <class F>
+    template<class F>
     constexpr GeneralAllocator(const GeneralAllocator<F>&)noexcept{}
 
     constexpr ~GeneralAllocator() = default;
@@ -105,16 +105,16 @@ public:
     constexpr AllocationResult<T*> allocate_at_least(const usize count){ return { allocate(count), count }; }
 #endif
 };
-template <typename T, typename F>
+template<typename T, typename F>
 inline bool operator==(const GeneralAllocator<T>&, const GeneralAllocator<F>&)noexcept{ return true; }
-template <typename T, typename F>
+template<typename T, typename F>
 inline bool operator!=(const GeneralAllocator<T>&, const GeneralAllocator<F>&)noexcept{ return false; }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template <typename T>
+template<typename T>
 class CacheAlignedAllocator{
 public:
     static_assert(!IsConst_V<T>, "NWB::Core::Alloc::CacheAlignedAllocator forbids containers of const elements because allocator<const T> is ill-formed.");
@@ -152,7 +152,7 @@ public:
 public:
     constexpr CacheAlignedAllocator()noexcept{}
     constexpr CacheAlignedAllocator(const CacheAlignedAllocator&)noexcept = default;
-    template <class F>
+    template<class F>
     constexpr CacheAlignedAllocator(const CacheAlignedAllocator<F>&)noexcept{}
 
     constexpr ~CacheAlignedAllocator() = default;
@@ -184,9 +184,9 @@ public:
     constexpr AllocationResult<T*> allocate_at_least(const usize count){ return { allocate(count), count }; }
 #endif
 };
-template <typename T, typename F>
+template<typename T, typename F>
 inline bool operator==(const CacheAlignedAllocator<T>&, const CacheAlignedAllocator<F>&)noexcept{ return true; }
-template <typename T, typename F>
+template<typename T, typename F>
 inline bool operator!=(const CacheAlignedAllocator<T>&, const CacheAlignedAllocator<F>&)noexcept{ return false; }
 
 

@@ -12,9 +12,9 @@
 
 
 namespace __hidden_internal_smart_ptr{
-    template <typename P1, typename P2, bool = IsSame_V<RemoveCV_T<typename PointerTraits<P1>::element_type>, RemoveCV_T<typename PointerTraits<P2>::element_type>>>
+    template<typename P1, typename P2, bool = IsSame_V<RemoveCV_T<typename PointerTraits<P1>::element_type>, RemoveCV_T<typename PointerTraits<P2>::element_type>>>
     struct IsArrayCvConvertibleImplementation : public IsConvertible<P1, P2>{};
-    template <typename P1, typename P2>
+    template<typename P1, typename P2>
     struct IsArrayCvConvertibleImplementation<P1, P2, false> : public FalseType{};
 };
 
@@ -23,13 +23,13 @@ namespace __hidden_internal_smart_ptr{
 
 
 namespace __hidden_smart_ptr{
-    template <typename T, typename Deleter>
+    template<typename T, typename Deleter>
     class UniquePointerType{
     private:
-        template <typename U>
+        template<typename U>
         static typename U::pointer test(typename U::pointer*);
 
-        template <typename U>
+        template<typename U>
         static T* test(...);
 
 
@@ -37,15 +37,15 @@ namespace __hidden_smart_ptr{
         typedef decltype(test<typename RemoveReference<Deleter>::type>(0)) type;
     };
 
-    template <typename P1, typename P2, bool = IsScalar_V<P1> && !IsPointer_V<P1>>
+    template<typename P1, typename P2, bool = IsScalar_V<P1> && !IsPointer_V<P1>>
     struct IsArrayCvConvertible : public __hidden_internal_smart_ptr::IsArrayCvConvertibleImplementation<P1, P2>{};
-    template <typename P1, typename P2>
+    template<typename P1, typename P2>
     struct IsArrayCvConvertible<P1, P2, true> : public FalseType{};
 
-    template <typename Base, typename Derived>
+    template<typename Base, typename Derived>
     struct IsDerived : public IntegralConstant<bool, IsBaseOf<Base, Derived>::value && !IsSame<typename RemoveCV<Base>::type, typename RemoveCV<Derived>::type>::value>{};
 
-    template <typename T, typename T_pointer, typename U, typename U_pointer>
+    template<typename T, typename T_pointer, typename U, typename U_pointer>
     struct IsSafeArrayConversion : public IntegralConstant<bool, IsConvertible<U_pointer, T_pointer>::value && IsArray<U>::value && (!IsPointer<U_pointer>::value || !IsPointer<T_pointer>::value || !IsDerived<T, typename RemoveExtent<U>::type>::value)>{};
 };
 
@@ -53,10 +53,10 @@ namespace __hidden_smart_ptr{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template <typename T>
+template<typename T>
 struct DefaultDeleter{
     constexpr DefaultDeleter()noexcept = default;
-	template <typename U>
+	template<typename U>
     DefaultDeleter(const DefaultDeleter<U>&, typename EnableIf<IsConvertible<U*, T*>::value>::type* = 0)noexcept{}
 
 	void operator()(T* p)const noexcept{
@@ -64,10 +64,10 @@ struct DefaultDeleter{
 		delete p;
 	}
 };
-template <typename T>
+template<typename T>
 struct DefaultDeleter<T[]>{
     constexpr DefaultDeleter()noexcept = default;
-	template <typename U>
+	template<typename U>
     DefaultDeleter(const DefaultDeleter<U[]>&, typename EnableIf<__hidden_smart_ptr::IsArrayCvConvertible<U*, T*>::value>::type* = 0)noexcept{}
 
 	void operator()(T* p)const noexcept{
@@ -75,11 +75,11 @@ struct DefaultDeleter<T[]>{
 	}
 };
 
-template <typename T, typename POOL>
+template<typename T, typename POOL>
 struct ArenaDeleter{
     constexpr ArenaDeleter()noexcept = default;
     constexpr ArenaDeleter(POOL& pool)noexcept : mPool(&pool){}
-    template <typename U, typename _POOL>
+    template<typename U, typename _POOL>
     ArenaDeleter(const ArenaDeleter<U, _POOL>&, typename EnableIf<IsConvertible<U*, T*>::value>::type* = 0)noexcept{}
 
     void operator()(T* p)const noexcept{
@@ -90,11 +90,11 @@ struct ArenaDeleter{
 
     POOL* mPool = nullptr;
 };
-template <typename T, typename POOL>
+template<typename T, typename POOL>
 struct ArenaDeleter<T[], POOL>{
     constexpr ArenaDeleter()noexcept = default;
     constexpr ArenaDeleter(POOL& pool, usize size)noexcept : mPool(&pool), mSize(size){}
-    template <typename U, typename _POOL>
+    template<typename U, typename _POOL>
     ArenaDeleter(const ArenaDeleter<U[], _POOL>&, typename EnableIf<__hidden_smart_ptr::IsArrayCvConvertible<U*, T*>::value>::type* = 0)noexcept{}
 
     void operator()(T* p)const noexcept{
@@ -107,10 +107,10 @@ struct ArenaDeleter<T[], POOL>{
     usize mSize = 0;
 };
 
-template <typename T>
+template<typename T>
 struct EmptyDeleter{
     constexpr EmptyDeleter()noexcept = default;
-    template <typename U>
+    template<typename U>
     EmptyDeleter(const EmptyDeleter<U>&, typename EnableIf<IsConvertible<U*, T*>::value>::type* = 0)noexcept{}
 
     void operator()(T* p)const noexcept{
@@ -118,11 +118,11 @@ struct EmptyDeleter{
         p->~T();
     }
 };
-template <typename T>
+template<typename T>
 struct EmptyDeleter<T[]>{
     constexpr EmptyDeleter()noexcept = default;
     constexpr EmptyDeleter(usize size)noexcept : mSize(size){}
-    template <typename U>
+    template<typename U>
     EmptyDeleter(const EmptyDeleter<U[]>&, typename EnableIf<__hidden_smart_ptr::IsArrayCvConvertible<U*, T*>::value>::type* = 0)noexcept{}
 
     void operator()(T* p)const noexcept{
@@ -133,21 +133,21 @@ struct EmptyDeleter<T[]>{
     usize mSize = 0;
 };
 
-template <typename T>
+template<typename T>
 struct BlankDeleter{
     constexpr BlankDeleter()noexcept = default;
-    template <typename U>
+    template<typename U>
     BlankDeleter(const BlankDeleter<U>&, typename EnableIf<IsConvertible<U*, T*>::value>::type* = 0)noexcept{}
 
     void operator()(T* p)const noexcept{
         static_assert(IsCompleteType_V<T>, "Attempting to call the destructor of an incomplete type");
     }
 };
-template <typename T>
+template<typename T>
 struct BlankDeleter<T[]>{
     constexpr BlankDeleter()noexcept = default;
     constexpr BlankDeleter(usize size)noexcept{}
-    template <typename U>
+    template<typename U>
     BlankDeleter(const BlankDeleter<U[]>&, typename EnableIf<__hidden_smart_ptr::IsArrayCvConvertible<U*, T*>::value>::type* = 0)noexcept{}
 
     void operator()(T* p)const noexcept{}

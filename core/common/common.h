@@ -141,7 +141,7 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template <typename T>
+template<typename T>
 inline HashMap<BasicString<T>, BasicString<T>> parseCommandLine(BasicStringView<T> input){
     std::basic_regex<T> regex(
         IsSame_V<T, wchar>

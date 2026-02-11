@@ -890,6 +890,19 @@ private:
 // Command List
 
 
+struct RenderPassParameters{
+    bool clearColorTargets = false;
+    Color colorClearValues[8]{};
+    u8 colorClearMask = 0xff;
+    bool clearDepthTarget = false;
+    f32 depthClearValue = 1.0f;
+    bool clearStencilTarget = false;
+    u8 stencilClearValue = 0;
+
+
+    [[nodiscard]] bool clearColorTarget(u32 index)const{ return (colorClearMask & (1u << index)) != 0; }
+};
+
 class CommandList final : public RefCounter<ICommandList>, NoCopy{
 public:
     CommandList(Device* device, const CommandListParameters& params);
@@ -1005,6 +1018,7 @@ private:
 private:
     Device* m_device;
     const VulkanContext* m_context;
+    AftermathMarkerTracker m_aftermathMarkerTracker;
 };
 
 
@@ -1119,7 +1133,7 @@ public:
     [[nodiscard]] virtual CooperativeVectorDeviceFeatures queryCoopVecFeatures()override;
     virtual usize getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, int rows, int columns)override;
     [[nodiscard]] virtual Object getNativeQueue(ObjectType objectType, CommandQueue::Enum queue)override;
-    virtual bool isAftermathEnabled()override{ return false; }
+    virtual bool isAftermathEnabled()override{ return m_aftermathEnabled; }
     [[nodiscard]] virtual AftermathCrashDumpHelper& getAftermathCrashDumpHelper()override;
     
     [[nodiscard]] virtual VkSemaphore getQueueSemaphore(CommandQueue::Enum queue)override;
@@ -1136,10 +1150,15 @@ public:
     
 
 private:
+    // Aftermath must be first due to reverse destruction order
+    // Queues will destroy CommandLists which will unregister from m_aftermathCrashDumpHelper in their destructors
+    bool m_aftermathEnabled = false;
+    AftermathCrashDumpHelper m_aftermathCrashDumpHelper;
+
     VulkanContext m_context;
     VulkanAllocator m_allocator;
     UniquePtr<Queue> m_queues[static_cast<u32>(CommandQueue::kCount)];
-    
+
     UniquePtr<UploadManager> m_uploadManager;
     UniquePtr<UploadManager> m_scratchManager;
 };

@@ -12,35 +12,35 @@
 
 
 namespace __hidden_compressed_pair{
-	template <typename T>
+	template<typename T>
 	inline void internalSwap(T& t1, T& t2){
 		T tTemp = t1;
 		t1 = t2;
 		t2 = tTemp;
 	}
 
-	template <typename T1, typename T2, bool isSame, bool firstEmpty, bool secondEmpty>
+	template<typename T1, typename T2, bool isSame, bool firstEmpty, bool secondEmpty>
 	struct Switch;
 
-	template <typename T1, typename T2>
+	template<typename T1, typename T2>
 	struct Switch<T1, T2, false, false, false>{ static const int value = 0; };
-	template <typename T1, typename T2>
+	template<typename T1, typename T2>
 	struct Switch<T1, T2, false, true, false>{ static const int value = 1; };
-	template <typename T1, typename T2>
+	template<typename T1, typename T2>
 	struct Switch<T1, T2, false, false, true>{ static const int value = 2; };
-	template <typename T1, typename T2>
+	template<typename T1, typename T2>
 	struct Switch<T1, T2, false, true, true>{ static const int value = 3; };
-	template <typename T1, typename T2>
+	template<typename T1, typename T2>
 	struct Switch<T1, T2, true, true, true>{ static const int value = 4; };
-	template <typename T1, typename T2>
+	template<typename T1, typename T2>
 	struct Switch<T1, T2, true, false, false>{ static const int value = 5; };
 
-	template <typename T1, typename T2>
+	template<typename T1, typename T2>
 	class CompressedPair;
 
-	template <typename T1, typename T2, int version>
+	template<typename T1, typename T2, int version>
 	class Implementation;
-	template <typename T1, typename T2>
+	template<typename T1, typename T2>
 	class Implementation<T1, T2, 0>{
 	public:
 		typedef T1 first_type;
@@ -77,7 +77,7 @@ namespace __hidden_compressed_pair{
 		first_type mFirst;
 		second_type mSecond;
 	};
-	template <typename T1, typename T2>
+	template<typename T1, typename T2>
 	class Implementation<T1, T2, 1> : private T1{
 	public:
 		typedef T1 first_type;
@@ -112,7 +112,7 @@ namespace __hidden_compressed_pair{
 	private:
 		second_type mSecond;
 	};
-	template <typename T1, typename T2>
+	template<typename T1, typename T2>
 	class Implementation<T1, T2, 2> : private T2{
 	public:
 		typedef T1 first_type;
@@ -147,7 +147,7 @@ namespace __hidden_compressed_pair{
 	private:
 		first_type mFirst;
 	};
-	template <typename T1, typename T2>
+	template<typename T1, typename T2>
 	class Implementation<T1, T2, 3> : private T1, private T2{
 	public:
 		typedef T1 first_type;
@@ -176,7 +176,7 @@ namespace __hidden_compressed_pair{
 
 		void swap(CompressedPair<T1, T2>&){}
 	};
-	template <typename T1, typename T2>
+	template<typename T1, typename T2>
 	class Implementation<T1, T2, 4> : private T1{
 	public:
 		typedef T1 first_type;
@@ -204,7 +204,7 @@ namespace __hidden_compressed_pair{
 
 		void swap(CompressedPair<T1, T2>&){}
 	};
-	template <typename T1, typename T2>
+	template<typename T1, typename T2>
 	class Implementation<T1, T2, 5>{
 	public:
 		typedef T1 first_type;
@@ -246,7 +246,7 @@ namespace __hidden_compressed_pair{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template <typename T1, typename T2>
+template<typename T1, typename T2>
 class CompressedPair : private __hidden_compressed_pair::Implementation<T1, T2,
 	__hidden_compressed_pair::Switch<
 	T1,
@@ -292,7 +292,7 @@ public:
 
 	void swap(CompressedPair& y){ base::swap(y); }
 };
-template <typename T>
+template<typename T>
 class CompressedPair<T, T>
 	: private __hidden_compressed_pair::Implementation<T, T,
 	__hidden_compressed_pair::Switch<
@@ -344,7 +344,7 @@ public:
 
 
 namespace std{
-    template <typename T1, typename T2>
+    template<typename T1, typename T2>
     inline void swap(CompressedPair<T1, T2>& x, CompressedPair<T1, T2>& y){ x.swap(y); }
 };
 

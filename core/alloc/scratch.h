@@ -24,7 +24,7 @@ static const usize s_maxAlignSize = 512;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template <usize maxAlignSize = s_maxAlignSize>
+template<usize maxAlignSize = s_maxAlignSize>
 class ScratchArena : NoCopy{
 private:
     class Chunk{
@@ -122,7 +122,7 @@ public:
         }
         return bucket.last->allocate(size);
     }
-    template <typename T>
+    template<typename T>
     inline T* allocate(usize count){
         static_assert(sizeof(T) > 0, "value_type must be complete before calling allocate.");
         const usize bytes = SizeOf<sizeof(T)>(count);
@@ -148,7 +148,7 @@ public:
         size = Alignment(align, size);
         bucket.last->deallocate(size);
     }
-    template <typename T>
+    template<typename T>
     inline void deallocate(void* p, usize count){
         static_assert(sizeof(T) > 0, "value_type must be complete before calling allocate.");
         const usize bytes = SizeOf<sizeof(T)>(count);
@@ -172,7 +172,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template <typename T, usize maxAlignSize = s_maxAlignSize>
+template<typename T, usize maxAlignSize = s_maxAlignSize>
 class ScratchAllocator{
 public:
     static_assert(!IsConst_V<T>, "NWB::Core::Alloc::ScratchAllocator forbids containers of const elements because allocator<const T> is ill-formed.");
@@ -194,7 +194,7 @@ public:
 public:
     constexpr ScratchAllocator(ScratchArena<maxAlignSize>& arena)noexcept : m_arena(arena){}
     constexpr ScratchAllocator(const ScratchAllocator&)noexcept = default;
-    template <class F>
+    template<class F>
     constexpr ScratchAllocator(const ScratchAllocator<F, maxAlignSize>& rhs)noexcept : m_arena(rhs.m_arena){}
 
     constexpr ~ScratchAllocator() = default;
@@ -220,7 +220,7 @@ public:
 private:
     ScratchArena<maxAlignSize>& m_arena;
 };
-template <typename T, typename F, usize maxAlignSize>
+template<typename T, typename F, usize maxAlignSize>
 inline bool operator==(const ScratchAllocator<T, maxAlignSize>&, const ScratchAllocator<F, maxAlignSize>&)noexcept{ return true; }
 
 
@@ -233,34 +233,34 @@ NWB_ALLOC_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template <typename T, usize maxAlignSize = NWB::Core::Alloc::s_maxAlignSize>
+template<typename T, usize maxAlignSize = NWB::Core::Alloc::s_maxAlignSize>
 using ScratchUniquePtr = UniquePtr<T, ArenaDeleter<T, NWB::Core::Alloc::ScratchArena<maxAlignSize>>>;
-template <typename T>
+template<typename T>
 using StackonlyUniquePtr = UniquePtr<T, EmptyDeleter<T>>;
 
-template <typename T, usize maxAlignSize = NWB::Core::Alloc::s_maxAlignSize, typename... Args>
+template<typename T, usize maxAlignSize = NWB::Core::Alloc::s_maxAlignSize, typename... Args>
 inline typename EnableIf<!IsArray<T>::value, ScratchUniquePtr<T, maxAlignSize>>::type MakeScratchUnique(NWB::Core::Alloc::ScratchArena<maxAlignSize>& arena, Args&&... args){
     return ScratchUniquePtr<T, maxAlignSize>(new(arena.allocate<T>(1)) T(Forward<Args>(args)...), ScratchUniquePtr<T, maxAlignSize>::deleter_type(arena));
 }
-template <typename T, usize maxAlignSize = NWB::Core::Alloc::s_maxAlignSize>
+template<typename T, usize maxAlignSize = NWB::Core::Alloc::s_maxAlignSize>
 inline typename EnableIf<IsUnboundedArray<T>::value, ScratchUniquePtr<T, maxAlignSize>>::type MakeScratchUnique(NWB::Core::Alloc::ScratchArena<maxAlignSize>& arena, size_t n){
     typedef typename RemoveExtent<T>::type TBase;
     return ScratchUniquePtr<T, maxAlignSize>(new(arena.allocate<TBase>(n)) TBase[n], ScratchUniquePtr<T, maxAlignSize>::deleter_type(arena, n));
 }
-template <typename T, typename... Args>
+template<typename T, typename... Args>
 typename EnableIf<IsBoundedArray<T>::value>::type
 MakeScratchUnique(Args&&...) = delete;
 
-template <typename T, usize maxAlignSize = NWB::Core::Alloc::s_maxAlignSize, typename... Args>
+template<typename T, usize maxAlignSize = NWB::Core::Alloc::s_maxAlignSize, typename... Args>
 inline typename EnableIf<!IsArray<T>::value, StackonlyUniquePtr<T>>::type MakeStackonlyUnique(NWB::Core::Alloc::ScratchArena<maxAlignSize>& arena, Args&&... args){
     return StackonlyUniquePtr<T>(new(arena.allocate<T>(1)) T(Forward<Args>(args)...));
 }
-template <typename T, usize maxAlignSize = NWB::Core::Alloc::s_maxAlignSize>
+template<typename T, usize maxAlignSize = NWB::Core::Alloc::s_maxAlignSize>
 inline typename EnableIf<IsUnboundedArray<T>::value, StackonlyUniquePtr<T>>::type MakeStackonlyUnique(NWB::Core::Alloc::ScratchArena<maxAlignSize>& arena, size_t n){
     typedef typename RemoveExtent<T>::type TBase;
     return StackonlyUniquePtr<T>(new(arena.allocate<TBase>(n)) TBase[n]);
 }
-template <typename T, typename... Args>
+template<typename T, typename... Args>
 typename EnableIf<IsBoundedArray<T>::value>::type
 MakeStackonlyUnique(Args&&...) = delete;
 

@@ -27,13 +27,13 @@ using AStringView = BasicStringView<char>;
 using WStringView = BasicStringView<wchar>;
 using TStringView = BasicStringView<tchar>;
 
-template <typename T>
+template<typename T>
 using BasicString = std::basic_string<T>;
 using AString = BasicString<char>;
 using WString = BasicString<wchar>;
 using TString = BasicString<tchar>;
 
-template <typename T>
+template<typename T>
 using BasicStringStream = std::basic_stringstream<T>;
 using AStringStream = BasicStringStream<char>;
 using WStringStream = BasicStringStream<wchar>;
@@ -41,22 +41,22 @@ using TStringStream = BasicStringStream<tchar>;
 
 using AFormatContext = std::format_context;
 using WFormatContext = std::wformat_context;
-template <typename T>
+template<typename T>
 using BasicFormatContext = Conditional_T<SameAs<char, T>, AFormatContext, Conditional_T<SameAs<wchar, T>, WFormatContext, void>>;
 using TStringFormatContext = BasicFormatContext<tchar>;
 
-template <typename T>
+template<typename T>
 using BasicFormatArgs = std::basic_format_args<BasicFormatContext<T>>;
 using AFormatArgs = BasicFormatArgs<char>;
 using WFormatArgs = BasicFormatArgs<wchar>;
 using TStringFormatArgs = BasicFormatArgs<tchar>;
 
-template <typename... T>
+template<typename... T>
 using AFormatString = std::format_string<T...>;
-template <typename... T>
+template<typename... T>
 using WFormatString = std::wformat_string<T...>;
 
-template <usize N>
+template<usize N>
 struct ConstString{
     char data[N];
     constexpr ConstString(const char(&str)[N]){
@@ -66,7 +66,7 @@ struct ConstString{
     constexpr operator const char*()const{ return data; }
     constexpr const char* c_str()const{ return data; }
 };
-template <usize N>
+template<usize N>
 struct ConstWString{
     wchar data[N];
     constexpr ConstWString(const wchar(&str)[N]){
@@ -77,16 +77,16 @@ struct ConstWString{
     constexpr const wchar* c_str()const{ return data; }
 };
 #if defined(NWB_UNICODE)
-template <usize N>
+template<usize N>
 using ConstTString = ConstWString<N>;
 #else
-template <usize N>
+template<usize N>
 using ConstTString = ConstString<N>;
 #endif
 
-template <usize N>
+template<usize N>
 constexpr auto MakeConstString(const char(&str)[N]){ return ConstString<N>(str); }
-template <usize N>
+template<usize N>
 constexpr auto MakeConstWString(const wchar(&str)[N]){ return ConstWString<N>(str); }
 #if defined(NWB_UNICODE)
 #define MakeConstTString MakeConstWString
@@ -176,11 +176,11 @@ inline WString StringConvert(In&& src){ return src; }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template <typename... T>
+template<typename... T>
 inline AString StringFormat(AFormatString<T...> fmt, T&&... args){
     return std::vformat(fmt.get(), std::make_format_args<AFormatContext>(args...));
 }
-template <typename... T>
+template<typename... T>
 inline WString StringFormat(WFormatString<T...> fmt, T&&... args){
     return std::vformat(fmt.get(), std::make_format_args<WFormatContext>(args...));
 }

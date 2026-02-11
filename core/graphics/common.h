@@ -23,7 +23,7 @@ NWB_CORE_BEGIN
 
 
 namespace __hidden_core{
-    template <typename T>
+    template<typename T>
     void hashCombine(usize& seed, const T& v){
         std::hash<T> hasher;
         seed ^= hasher(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
@@ -43,6 +43,7 @@ static constexpr u32 s_maxVolatileConstantBuffersPerLayout = 6;
 static constexpr u32 s_maxVolatileConstantBuffers = 32;
 static constexpr u32 s_maxPushConstantSize = 128;
 static constexpr u32 s_constantBufferOffsetSizeAlignment = 256;
+static constexpr u32 s_maxAftermathEventStrings = 128;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -253,7 +254,7 @@ namespace FormatKind{
 
 struct FormatInfo{
     Format::Enum format;
-    const Name* name;
+    const char* name;
     u8 bytesPerBlock;
     u8 blockSize;
     FormatKind::Enum kind;
@@ -3410,10 +3411,70 @@ typedef RefCountPtr<ICommandList, BlankDeleter<ICommandList>> CommandListHandle;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Aftermath
+
+
+typedef Pair<bool, TString> ResolvedMarker;
+typedef Pair<const void*, usize> BinaryBlob;
+typedef Function<u64(BinaryBlob, GraphicsAPI::Enum)> ShaderHashGeneratorFunction;
+typedef Function<BinaryBlob(u64, ShaderHashGeneratorFunction)> ShaderBinaryLookupCallback;
+
+// Aftermath will return the payload of the last marker the GPU executed.
+// In cases of nested regimes, we want the marker payloads to represent the whole "stack" of regimes.
+// AftermathMarkerTracker pushes/pops regimes to this stack.
+// The payload itself is a 64bit value, so AftermathMarkerTracker stores the mappings of strings<->hashes.
+// There should be one AftermathMarkerTracker per graphics API-level command list.
+class AftermathMarkerTracker{
+public:
+    AftermathMarkerTracker();
+
+
+public:
+    usize pushEvent(const char* name);
+    void popEvent();
+    Pair<bool, AString> getEventString(usize hash);
+
+
+private:
+    // Using a filesystem path to track the event stack since that automatically inserts "/" separators
+    Path m_eventStack;
+    
+    Array<usize, s_maxAftermathEventStrings> m_eventHashes;
+    usize m_oldestHashIndex;
+    HashMap<usize, AString> m_eventStrings;
+};
+
+// AftermathCrashDumpHelper tracks all IDevice-level constructs needed when generating a crash dump.
+// It provides two services: resolving a marker hash to the original string, and getting shader bytecode.
+// There should be one AftermathCrashDumpHelper per IDevice.
+// All command lists will register their AftermathMarkerTrackers with the AftermathCrashDumpHelper.
+class AftermathCrashDumpHelper{
+public:
+    AftermathCrashDumpHelper();
+
+    
+public:
+    void registerAftermathMarkerTracker(AftermathMarkerTracker* tracker);
+    void unRegisterAftermathMarkerTracker(AftermathMarkerTracker* tracker);
+    void registerShaderBinaryLookupCallback(void* client, ShaderBinaryLookupCallback lookupCallback);
+    void unRegisterShaderBinaryLookupCallback(void* client);
+
+    Pair<bool, AString> resolveMarker(usize markerHash);
+    BinaryBlob findShaderBinary(u64 shaderHash, ShaderHashGeneratorFunction hashGenerator);
+
+
+private:
+    Set<AftermathMarkerTracker*> m_markerTrackers;
+    // Command lists deleted on CPU could still be executing (and crashing) on GPU,
+    // so keep a small number of recently destroyed marker trackers
+    Deque<AftermathMarkerTracker> m_destroyedMarkerTrackers;
+    HashMap<void*, ShaderBinaryLookupCallback> m_shaderBinaryLookupCallbacks;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Device
 
-
-class AftermathCrashDumpHelper;
 
 class IDevice : public IResource
 {

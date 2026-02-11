@@ -30,7 +30,7 @@ class Graphics{
 
 
 private:
-    template <typename T>
+    template<typename T>
     using PersistentAllocator = Alloc::MemoryAllocator<T>;
     using PersistentArena = Alloc::MemoryArena;
 

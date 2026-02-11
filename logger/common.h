@@ -31,7 +31,7 @@ using MessageQueue = ParallelQueue<MessageType>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template <typename T, const tchar* NAME>
+template<typename T, const tchar* NAME>
 class Base{
 protected:
     static inline bool globalInit(){ return true; }
@@ -50,7 +50,7 @@ public:
 
 
 protected:
-    template <typename... ARGS>
+    template<typename... ARGS>
     inline bool internalInit(ARGS&&... args){ return true; }
     inline void internalDestroy(){}
     inline bool internalUpdate(){ return true; }
@@ -60,7 +60,7 @@ protected:
 
 
 public:
-    template <typename... ARGS>
+    template<typename... ARGS>
     inline bool init(ARGS&&... args){
         if(!static_cast<T*>(this)->m_globalInit){
             if(!static_cast<T*>(this)->globalInit()){
@@ -92,7 +92,7 @@ private:
     static bool m_globalInit;
 };
 
-template <typename T, float UPDATE_INTERVAL, const tchar* NAME>
+template<typename T, float UPDATE_INTERVAL, const tchar* NAME>
 class BaseUpdateOrdinary : public Base<T, NAME>{
 	friend Base<T, NAME>;
 
@@ -129,10 +129,10 @@ private:
 protected:
     static bool m_globalInit;
 };
-template <typename T, float UPDATE_INTERVAL, const tchar* NAME>
+template<typename T, float UPDATE_INTERVAL, const tchar* NAME>
 bool BaseUpdateOrdinary<T, UPDATE_INTERVAL, NAME>::m_globalInit = false;
 
-template <typename T, const tchar* NAME>
+template<typename T, const tchar* NAME>
 class BaseUpdateIfQueued : public Base<T, NAME>{
     friend Base<T, NAME>;
 
@@ -177,7 +177,7 @@ protected:
 protected:
     static bool m_globalInit;
 };
-template <typename T, const tchar* NAME>
+template<typename T, const tchar* NAME>
 bool BaseUpdateIfQueued<T, NAME>::m_globalInit = false;
 
 

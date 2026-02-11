@@ -65,7 +65,7 @@ struct Object{
     constexpr Object(u64 i)noexcept : integer(i){}
     constexpr Object(void* p)noexcept : pointer(p){}
     
-    template <typename T>
+    template<typename T>
     explicit operator T*()const noexcept{ return static_cast<T*>(pointer); }
 };
 

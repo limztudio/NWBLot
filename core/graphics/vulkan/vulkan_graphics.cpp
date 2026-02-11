@@ -406,18 +406,6 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct RenderPassParameters{
-    bool clearColorTargets = false;
-    Color colorClearValues[8]{};
-    u8 colorClearMask = 0xff;
-    bool clearDepthTarget = false;
-    f32 depthClearValue = 1.0f;
-    bool clearStencilTarget = false;
-    u8 stencilClearValue = 0;
-    
-    [[nodiscard]] bool clearColorTarget(u32 index)const{ return (colorClearMask & (1u << index)) != 0; }
-};
-
 void CommandList::beginRenderPass(IFramebuffer* _framebuffer, const RenderPassParameters& params){
     Framebuffer* fb = checked_cast<Framebuffer*>(_framebuffer);
     const FramebufferDesc& fbDesc = fb->desc;

@@ -40,10 +40,10 @@ private:
     i64 value;
 };
 namespace std{
-    template <>
+    template<>
     struct formatter<TimerDelta>{
         constexpr auto parse(format_parse_context& ctx){ return ctx.begin(); }
-        template <typename FormatContext>
+        template<typename FormatContext>
         auto format(const TimerDelta& val, FormatContext& ctx)const{
             auto duration = chrono::duration<i64, ratio<1, 1000>>(static_cast<i64>(val));
             auto h = chrono::duration_cast<chrono::hours>(duration);
@@ -54,10 +54,10 @@ namespace std{
             return format_to(ctx.out(), "{:02}:{:02}:{:02}.{:03}", h.count(), m.count(), s.count(), ms.count());
         }
     };
-    template <>
+    template<>
     struct formatter<TimerDelta, wchar>{
         constexpr auto parse(wformat_parse_context& ctx){ return ctx.begin(); }
-        template <typename FormatContext>
+        template<typename FormatContext>
         auto format(const TimerDelta& val, FormatContext& ctx)const{
             auto duration = chrono::duration<i64, ratio<1, 1000>>(static_cast<i64>(val));
             auto h = chrono::duration_cast<chrono::hours>(duration);
@@ -88,15 +88,15 @@ namespace __hidden_timer{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template <typename T>
+template<typename T>
 inline T DurationInSeconds(const Timer& current, const Timer& late = __hidden_timer::s_veryBegining)noexcept{
     return std::chrono::duration_cast<std::chrono::duration<T, std::ratio<1, 1>>>(current - late).count();
 }
-template <typename T>
+template<typename T>
 inline T DurationInMS(const Timer& current, const Timer& late = __hidden_timer::s_veryBegining)noexcept{
     return std::chrono::duration_cast<std::chrono::duration<T, std::ratio<1, 1000>>>(current - late).count();
 }
-template <typename T>
+template<typename T>
 inline T DurationInNS(const Timer& current, const Timer& late = __hidden_timer::s_veryBegining)noexcept{
     return std::chrono::duration_cast<std::chrono::duration<T, std::ratio<1, 1000000000>>>(current - late).count();
 }

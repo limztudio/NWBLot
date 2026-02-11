@@ -16,12 +16,23 @@ NWB_VULKAN_BEGIN
 
 CommandList::CommandList(Device* device, const CommandListParameters& params)
     : m_device(device)
-    , m_context(&device->getContext()){
+    , m_context(&device->getContext())
+    , m_aftermathMarkerTracker(){
     desc = params;
     stateTracker = UniquePtr<StateTracker>(new StateTracker());
+
+    // Register Aftermath marker tracker if enabled
+    if(m_device->isAftermathEnabled()){
+        m_device->getAftermathCrashDumpHelper().registerAftermathMarkerTracker(&m_aftermathMarkerTracker);
+    }
 }
 
 CommandList::~CommandList(){
+    // Unregister Aftermath marker tracker if enabled
+    if(m_device->isAftermathEnabled()){
+        m_device->getAftermathCrashDumpHelper().unRegisterAftermathMarkerTracker(&m_aftermathMarkerTracker);
+    }
+
     // Command buffers are returned to the pool automatically
 }
 

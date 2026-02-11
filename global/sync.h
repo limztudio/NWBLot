@@ -63,7 +63,7 @@ using QueuingMutex = tbb::queuing_mutex;
 using SharedMutex = tbb::spin_rw_mutex;
 using SharedQueuingMutex = tbb::queuing_rw_mutex;
 
-template <isize LeastMaxValue = PTRDIFF_MAX>
+template<isize LeastMaxValue = PTRDIFF_MAX>
 using Semaphore = std::counting_semaphore<LeastMaxValue>;
 using BinarySemaphore = Semaphore<1>;
 

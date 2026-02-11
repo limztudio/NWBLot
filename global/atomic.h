@@ -15,7 +15,7 @@
 
 using MemoryOrder = std::memory_order;
 
-template <typename T>
+template<typename T>
 using Atomic = std::atomic<T>;
 
 

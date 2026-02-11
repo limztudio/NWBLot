@@ -11,7 +11,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template <typename T, uint32_t _max_elements>
+template<typename T, uint32_t _max_elements>
 class FixedVector : private std::array<T, _max_elements>{
 public:
     typedef std::array<T, _max_elements> base;

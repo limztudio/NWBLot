@@ -47,7 +47,7 @@ public:
 
         return (align <= 1) ? tlsf_malloc(m_handle, size) : tlsf_memalign(m_handle, align, size);
     }
-    template <typename T>
+    template<typename T>
     inline T* allocate(usize count){
         static_assert(sizeof(T) > 0, "value_type must be complete before calling allocate.");
         const usize bytes = SizeOf<sizeof(T)>(count);
@@ -69,7 +69,7 @@ public:
         (void)size;
         tlsf_free(m_handle, p);
     }
-    template <typename T>
+    template<typename T>
     inline void deallocate(void* p, usize count){
         static_assert(sizeof(T) > 0, "value_type must be complete before calling allocate.");
         const usize bytes = SizeOf<sizeof(T)>(count);
@@ -96,9 +96,9 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template <typename T>
+template<typename T>
 class MemoryAllocator{
-    template <typename F>
+    template<typename F>
     friend class MemoryAllocator;
 
 
@@ -122,7 +122,7 @@ public:
 public:
     constexpr MemoryAllocator(MemoryArena& arena)noexcept : m_arena(arena){}
     constexpr MemoryAllocator(const MemoryAllocator&)noexcept = default;
-    template <class F>
+    template<class F>
     constexpr MemoryAllocator(const MemoryAllocator<F>& rhs)noexcept : m_arena(rhs.m_arena){}
 
     constexpr ~MemoryAllocator() = default;
@@ -147,7 +147,7 @@ public:
 private:
     MemoryArena& m_arena;
 };
-template <typename T, typename F>
+template<typename T, typename F>
 inline bool operator==(const MemoryAllocator<T>&, const MemoryAllocator<F>&)noexcept{ return true; }
 
 
@@ -160,19 +160,19 @@ NWB_ALLOC_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template <typename T>
+template<typename T>
 using MemoryUniquePtr = UniquePtr<T, ArenaDeleter<T, NWB::Core::Alloc::MemoryArena>>;
 
-template <typename T, typename... Args>
+template<typename T, typename... Args>
 inline typename EnableIf<!IsArray<T>::value, MemoryUniquePtr<T>>::type MakeMemoryUnique(NWB::Core::Alloc::MemoryArena& arena, Args&&... args){
     return MemoryUniquePtr<T>(new(arena.allocate<T>(1)) T(Forward<Args>(args)...), MemoryUniquePtr<T>::deleter_type(arena));
 }
-template <typename T>
+template<typename T>
 inline typename EnableIf<IsUnboundedArray<T>::value, MemoryUniquePtr<T>>::type MakeMemoryUnique(NWB::Core::Alloc::MemoryArena& arena, size_t n){
     typedef typename RemoveExtent<T>::type TBase;
     return MemoryUniquePtr<T>(new(arena.allocate<TBase>(n)) TBase[n], MemoryUniquePtr<T>::deleter_type(arena, n));
 }
-template <typename T, typename... Args>
+template<typename T, typename... Args>
 typename EnableIf<IsBoundedArray<T>::value>::type
 MakeMemoryUnique(Args&&...) = delete;
 

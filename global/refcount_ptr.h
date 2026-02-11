@@ -12,7 +12,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template <typename T>
+template<typename T>
 concept RefCountClass = IsClass_V<T> && requires(T& obj){
     { obj.addReference() }->SameAs<u32>;
     { obj.release() }->SameAs<u32>;
@@ -25,11 +25,11 @@ inline constexpr AdoptRefT AdoptRef{};
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template <RefCountClass T, typename Deleter = DefaultDeleter<T>>
+template<RefCountClass T, typename Deleter = DefaultDeleter<T>>
 class RefCountPtr{
     static_assert(!IsRValueReference<Deleter>::value, "The supplied Deleter cannot be a r-value reference.");
 private:
-    template <typename U>
+    template<typename U>
     using EnableUFromRawPtr = typename EnableIf<!IsArray<U>::value && IsConvertible<U*, pointer>::value>::type;
 public:
     typedef Deleter deleter_type;
@@ -62,37 +62,37 @@ public:
     constexpr RefCountPtr(pointer pValue, typename RemoveReference<deleter_type>::type&& deleter, AdoptRefT)noexcept : mPair(pValue, Move(deleter)){
         static_assert(!IsLValueReference<deleter_type>::value, "deleter_type reference refers to an rvalue deleter. The reference will probably become invalid before used. Change the deleter_type to not be a reference or construct with permanent deleter.");
     }
-    template <typename U, typename = EnableUFromRawPtr<U>>
+    template<typename U, typename = EnableUFromRawPtr<U>>
     explicit RefCountPtr(U* p)noexcept : mPair(pointer(p)){
         static_assert(!IsPointer<deleter_type>::value, "RefCountPtr deleter default-constructed with null pointer. Use a different constructor or change your deleter to a class.");
         internalAddRef(mPair.first());
     }
-    template <typename U, typename = EnableUFromRawPtr<U>>
+    template<typename U, typename = EnableUFromRawPtr<U>>
     constexpr RefCountPtr(U* p, AdoptRefT)noexcept : mPair(pointer(p)){
         static_assert(!IsPointer<deleter_type>::value, "RefCountPtr deleter default-constructed with null pointer. Use a different constructor or change your deleter to a class.");
     }
-    template <typename U, typename = EnableUFromRawPtr<U>>
+    template<typename U, typename = EnableUFromRawPtr<U>>
     RefCountPtr(U* pValue, typename Conditional<IsLValueReference<deleter_type>::value, deleter_type, typename AddLValueReference<const deleter_type>::type>::type deleter)noexcept : mPair(pValue, deleter){
         internalAddRef(pValue);
     }
-    template <typename U, typename = EnableUFromRawPtr<U>>
+    template<typename U, typename = EnableUFromRawPtr<U>>
     constexpr RefCountPtr(U* pValue, typename Conditional<IsLValueReference<deleter_type>::value, deleter_type, typename AddLValueReference<const deleter_type>::type>::type deleter, AdoptRefT)noexcept : mPair(pValue, deleter){}
-    template <typename U, typename = EnableUFromRawPtr<U>>
+    template<typename U, typename = EnableUFromRawPtr<U>>
     RefCountPtr(U* pValue, typename RemoveReference<deleter_type>::type&& deleter)noexcept : mPair(pValue, Move(deleter)){
         static_assert(!IsLValueReference<deleter_type>::value, "deleter_type reference refers to an rvalue deleter. The reference will probably become invalid before used. Change the deleter_type to not be a reference or construct with permanent deleter.");
         internalAddRef(pValue);
     }
-    template <typename U, typename = EnableUFromRawPtr<U>>
+    template<typename U, typename = EnableUFromRawPtr<U>>
     constexpr RefCountPtr(U* pValue, typename RemoveReference<deleter_type>::type&& deleter, AdoptRefT)noexcept : mPair(pValue, Move(deleter)){
         static_assert(!IsLValueReference<deleter_type>::value, "deleter_type reference refers to an rvalue deleter. The reference will probably become invalid before used. Change the deleter_type to not be a reference or construct with permanent deleter.");
     }
     constexpr RefCountPtr(this_type&& x)noexcept : mPair(x.detach(), Forward<deleter_type>(x.get_deleter())){}
-    template <typename U, typename E>
+    template<typename U, typename E>
     constexpr RefCountPtr(RefCountPtr<U, E>&& u, typename EnableIf<!IsArray<U>::value && IsConvertible<typename RefCountPtr<U, E>::pointer, pointer>::value && IsConvertible<E, deleter_type>::value && (IsSame<deleter_type, E>::value || !IsLValueReference<deleter_type>::value)>::type* = 0)noexcept : mPair(u.detach(), Forward<E>(u.get_deleter())){}
     RefCountPtr(const RefCountPtr& rhs)noexcept : mPair(rhs){
         internalAddRef(mPair.first());
     }
-    template <typename U, typename E>
+    template<typename U, typename E>
     RefCountPtr(const RefCountPtr<U, E>& u, typename EnableIf<!IsArray<U>::value && IsConvertible<typename RefCountPtr<U, E>::pointer, pointer>::value && IsConvertible<E, deleter_type>::value && (IsSame<deleter_type, E>::value || !IsLValueReference<deleter_type>::value)>::type* = 0)noexcept : mPair(u.get(), Forward<E>(u.get_deleter())){
         internalAddRef(mPair.first());
     }
@@ -109,7 +109,7 @@ public:
         }
         return *this;
     }
-    template <typename U, typename E>
+    template<typename U, typename E>
     typename EnableIf<!IsArray<U>::value && IsConvertible<typename RefCountPtr<U, E>::pointer, pointer>::value && IsAssignable<deleter_type&, E&&>::value, this_type&>::type operator=(RefCountPtr<U, E>&& u)noexcept{
         reset();
         mPair.first() = u.detach();
@@ -128,7 +128,7 @@ public:
         }
         return *this;
     }
-    template <typename U, typename E>
+    template<typename U, typename E>
     typename EnableIf<!IsArray<U>::value && IsConvertible<typename RefCountPtr<U, E>::pointer, pointer>::value && IsAssignable<deleter_type&, const E&>::value, this_type&>::type operator=(const RefCountPtr<U, E>& u)noexcept{
         pointer newp = u.get();
         internalAddRef(newp);
@@ -143,7 +143,7 @@ public:
         reset(newp);
         return *this;
     }
-    template <typename U>
+    template<typename U>
     typename EnableIf<!IsArray<U>::value && IsConvertible<U*, pointer>::value, this_type&>::type operator=(U* newp){
         reset(newp);
         return *this;
@@ -223,7 +223,7 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template <typename T>
+template<typename T>
 class RefCounter : public T{
 public:
     u32 addReference(){ return m_referenceCount.fetch_add(1, std::memory_order_relaxed) + 1; }
@@ -247,11 +247,11 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template <typename T, typename... Args>
+template<typename T, typename... Args>
 inline typename EnableIf<!IsArray<T>::value, RefCountPtr<T>>::type MakeRefCount(Args&&... args){
     return RefCountPtr<T>(new T(Forward<Args>(args)...), AdoptRef);
 }
-template <typename T, typename... Args>
+template<typename T, typename... Args>
 typename EnableIf<IsBoundedArray<T>::value>::type
 MakeRefCount(Args&&...) = delete;
 
@@ -260,12 +260,12 @@ MakeRefCount(Args&&...) = delete;
 
 
 namespace std{
-    template <typename T, typename D>
+    template<typename T, typename D>
     struct hash<RefCountPtr<T, D>>{
         size_t operator()(const RefCountPtr<T, D>& x) const noexcept{ return std::hash<typename RefCountPtr<T, D>::pointer>()(x.get()); }
     };
 
-    template <typename T, typename D>
+    template<typename T, typename D>
     inline void swap(RefCountPtr<T, D>& a, RefCountPtr<T, D>& b)noexcept{ a.swap(b); }
 };
 
@@ -273,14 +273,14 @@ namespace std{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template <typename T1, typename D1, typename T2, typename D2>
+template<typename T1, typename D1, typename T2, typename D2>
 inline bool operator==(const RefCountPtr<T1, D1>& a, const RefCountPtr<T2, D2>& b){ return (a.get() == b.get()); }
 
-template <typename T1, typename D1, typename T2, typename D2>
+template<typename T1, typename D1, typename T2, typename D2>
 requires ThreeWayComparableWith<typename RefCountPtr<T1, D1>::pointer, typename RefCountPtr<T2, D2>::pointer>
 inline CompareThreeWayResult_T<typename RefCountPtr<T1, D1>::pointer, typename RefCountPtr<T2, D2>::pointer> operator<=>(const RefCountPtr<T1, D1>& a, const RefCountPtr<T2, D2>& b){ return a.get() <=> b.get(); }
 
-template <typename T1, typename D1, typename T2, typename D2>
+template<typename T1, typename D1, typename T2, typename D2>
 inline bool operator<(const RefCountPtr<T1, D1>& a, const RefCountPtr<T2, D2>& b){
     typedef typename RefCountPtr<T1, D1>::pointer P1;
     typedef typename RefCountPtr<T2, D2>::pointer P2;
@@ -289,41 +289,41 @@ inline bool operator<(const RefCountPtr<T1, D1>& a, const RefCountPtr<T2, D2>& b
     PCommon pT2 = b.get();
     return LessThan<PCommon>()(pT1, pT2);
 }
-template <typename T1, typename D1, typename T2, typename D2>
+template<typename T1, typename D1, typename T2, typename D2>
 inline bool operator>(const RefCountPtr<T1, D1>& a, const RefCountPtr<T2, D2>& b){ return (b < a); }
-template <typename T1, typename D1, typename T2, typename D2>
+template<typename T1, typename D1, typename T2, typename D2>
 inline bool operator<=(const RefCountPtr<T1, D1>& a, const RefCountPtr<T2, D2>& b){ return !(b < a); }
-template <typename T1, typename D1, typename T2, typename D2>
+template<typename T1, typename D1, typename T2, typename D2>
 inline bool operator>=(const RefCountPtr<T1, D1>& a, const RefCountPtr<T2, D2>& b){ return !(a < b); }
 
-template <typename T, typename D>
+template<typename T, typename D>
 inline bool operator==(const RefCountPtr<T, D>& a, std::nullptr_t)noexcept{ return !a; }
-template <typename T, typename D>
+template<typename T, typename D>
 requires ThreeWayComparableWith<typename RefCountPtr<T, D>::pointer, std::nullptr_t>
 inline CompareThreeWayResult_T<typename RefCountPtr<T, D>::pointer, std::nullptr_t> operator<=>(const RefCountPtr<T, D>& a, std::nullptr_t){return a.get() <=> nullptr; }
 
-template <typename T, typename D>
+template<typename T, typename D>
 inline bool operator<(const RefCountPtr<T, D>& a, std::nullptr_t){
     typedef typename RefCountPtr<T, D>::pointer pointer;
     return LessThan<pointer>()(a.get(), nullptr);
 }
-template <typename T, typename D>
+template<typename T, typename D>
 inline bool operator<(std::nullptr_t, const RefCountPtr<T, D>& b){
     typedef typename RefCountPtr<T, D>::pointer pointer;
     pointer pT = b.get();
     return LessThan<pointer>()(nullptr, pT);
 }
-template <typename T, typename D>
+template<typename T, typename D>
 inline bool operator>(const RefCountPtr<T, D>& a, std::nullptr_t){ return (nullptr < a); }
-template <typename T, typename D>
+template<typename T, typename D>
 inline bool operator>(std::nullptr_t, const RefCountPtr<T, D>& b){ return (b < nullptr); }
-template <typename T, typename D>
+template<typename T, typename D>
 inline bool operator<=(const RefCountPtr<T, D>& a, std::nullptr_t){ return !(nullptr < a); }
-template <typename T, typename D>
+template<typename T, typename D>
 inline bool operator<=(std::nullptr_t, const RefCountPtr<T, D>& b){ return !(b < nullptr); }
-template <typename T, typename D>
+template<typename T, typename D>
 inline bool operator>=(const RefCountPtr<T, D>& a, std::nullptr_t){ return !(a < nullptr); }
-template <typename T, typename D>
+template<typename T, typename D>
 inline bool operator>=(std::nullptr_t, const RefCountPtr<T, D>& b){ return !(nullptr < b); }
 
 

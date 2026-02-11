@@ -52,7 +52,7 @@ public:
 
         return (align <= 1) ? m_alloc(size) : m_allocAligned(size, align);
     }
-    template <typename T>
+    template<typename T>
     inline T* allocate(usize count){
         static_assert(sizeof(T) > 0, "value_type must be complete before calling allocate.");
         const usize bytes = SizeOf<sizeof(T)>(count);
@@ -74,7 +74,7 @@ public:
 
         return (align <= 1) ? m_free(p) : m_freeAligned(p);
     }
-    template <typename T>
+    template<typename T>
     inline void deallocate(void* p, usize count){
         static_assert(sizeof(T) > 0, "value_type must be complete before calling allocate.");
         const usize bytes = SizeOf<sizeof(T)>(count);
@@ -101,9 +101,9 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template <typename T>
+template<typename T>
 class CustomAllocator{
-    template <typename F>
+    template<typename F>
     friend class CustomAllocator;
 
 
@@ -127,7 +127,7 @@ public:
 public:
     constexpr CustomAllocator(CustomArena& arena)noexcept : m_arena(arena){}
     constexpr CustomAllocator(const CustomAllocator&)noexcept = default;
-    template <class F>
+    template<class F>
     constexpr CustomAllocator(const CustomAllocator<F>& rhs)noexcept : m_arena(rhs.m_arena){}
 
     constexpr ~CustomAllocator() = default;
@@ -152,7 +152,7 @@ public:
 private:
     CustomArena& m_arena;
 };
-template <typename T, typename F>
+template<typename T, typename F>
 inline bool operator==(const CustomAllocator<T>&, const CustomAllocator<F>&)noexcept{ return true; }
 
 
@@ -165,19 +165,19 @@ NWB_ALLOC_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template <typename T>
+template<typename T>
 using CustomUniquePtr = UniquePtr<T, ArenaDeleter<T, NWB::Core::Alloc::CustomArena>>;
 
-template <typename T, typename... Args>
+template<typename T, typename... Args>
 inline typename EnableIf<!IsArray<T>::value, CustomUniquePtr<T>>::type MakeCustomUnique(NWB::Core::Alloc::CustomArena& arena, Args&&... args){
     return CustomUniquePtr<T>(new(arena.allocate<T>(1)) T(Forward<Args>(args)...), CustomUniquePtr<T>::deleter_type(arena));
 }
-template <typename T>
+template<typename T>
 inline typename EnableIf<IsUnboundedArray<T>::value, CustomUniquePtr<T>>::type MakeCustomUnique(NWB::Core::Alloc::CustomArena& arena, size_t n){
     typedef typename RemoveExtent<T>::type TBase;
     return CustomUniquePtr<T>(new(arena.allocate<TBase>(n)) TBase[n], CustomUniquePtr<T>::deleter_type(arena, n));
 }
-template <typename T, typename... Args>
+template<typename T, typename... Args>
 typename EnableIf<IsBoundedArray<T>::value>::type
 MakeCustomUnique(Args&&...) = delete;
 

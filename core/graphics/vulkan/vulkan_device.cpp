@@ -17,7 +17,9 @@ NWB_VULKAN_BEGIN
 
 
 Device::Device(const DeviceDesc& desc)
-    : m_allocator(m_context)
+    : m_aftermathEnabled(desc.aftermathEnabled)
+    , m_aftermathCrashDumpHelper()
+    , m_allocator(m_context)
 {
     // Initialize Vulkan context from device description
     m_context.instance = desc.instance;
@@ -382,7 +384,7 @@ CooperativeVectorDeviceFeatures Device::queryCoopVecFeatures(){
     if(!m_context.extensions.NV_cooperative_vector)
         return result;
     
-    u32 propertyCount = 0;
+    uint32_t propertyCount = 0;
     VkResult res = vkGetPhysicalDeviceCooperativeVectorPropertiesNV(m_context.physicalDevice, &propertyCount, nullptr);
     if(res != VK_SUCCESS || propertyCount == 0)
         return result;
@@ -448,8 +450,7 @@ usize Device::getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, Coopera
 
 
 AftermathCrashDumpHelper& Device::getAftermathCrashDumpHelper(){
-    NWB_ASSERT_MSG(false, NWB_TEXT("Aftermath is not enabled in the Vulkan backend"));
-    return *static_cast<AftermathCrashDumpHelper*>(nullptr);
+    return m_aftermathCrashDumpHelper;
 }
 
 

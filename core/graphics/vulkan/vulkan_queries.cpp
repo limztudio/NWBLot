@@ -112,6 +112,13 @@ void CommandList::endTimerQuery(ITimerQuery* _query){
 }
 
 void CommandList::beginMarker(const Name& name){
+    if(m_device->isAftermathEnabled()){
+        usize markerHash = m_aftermathMarkerTracker.pushEvent(name.c_str());
+        // TODO: Use vkCmdSetCheckpointNV to set the marker hash as checkpoint data
+        // This requires VK_NV_device_diagnostic_checkpoints extension
+    }
+
+    // Also use debug utils for debugging tools
     if(m_context->extensions.EXT_debug_utils){
         VkDebugUtilsLabelEXT label = { VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT };
         label.pLabelName = name.c_str();
@@ -120,6 +127,12 @@ void CommandList::beginMarker(const Name& name){
 }
 
 void CommandList::endMarker(){
+    // Pop Aftermath marker if enabled
+    if(m_device->isAftermathEnabled()){
+        m_aftermathMarkerTracker.popEvent();
+    }
+
+    // Also end debug utils marker
     if(m_context->extensions.EXT_debug_utils)
         vkCmdEndDebugUtilsLabelEXT(currentCmdBuf->cmdBuf);
 }

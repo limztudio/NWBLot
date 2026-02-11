@@ -31,11 +31,11 @@ bool UploadManager::suballocateBuffer(u64 size, Buffer** pBuffer, u64* pOffset, 
         size = (size + alignment - 1) & ~(static_cast<u64>(alignment) - 1);
     
     if(m_currentChunk && (m_currentChunk->allocated + size <= m_currentChunk->size)){
-        *pBuffer = m_currentChunk->buffer.get();
+        *pBuffer = static_cast<Buffer*>(m_currentChunk->buffer.get());
         *pOffset = m_currentChunk->allocated;
         if(pCpuVA)
-            *pCpuVA = static_cast<u8*>(m_currentChunk->buffer->mappedMemory) + m_currentChunk->allocated;
-        
+            *pCpuVA = static_cast<u8*>(static_cast<Buffer*>(m_currentChunk->buffer.get())->mappedMemory) + m_currentChunk->allocated;
+
         m_currentChunk->allocated += size;
         return true;
     }
@@ -46,37 +46,37 @@ bool UploadManager::suballocateBuffer(u64 size, Buffer** pBuffer, u64* pOffset, 
             m_chunkPool.erase(it);
             m_currentChunk->allocated = 0;
             m_currentChunk->version = currentVersion;
-            
-            *pBuffer = m_currentChunk->buffer.get();
+
+            *pBuffer = static_cast<Buffer*>(m_currentChunk->buffer.get());
             *pOffset = 0;
             if(pCpuVA)
-                *pCpuVA = m_currentChunk->buffer->mappedMemory;
-            
+                *pCpuVA = static_cast<Buffer*>(m_currentChunk->buffer.get())->mappedMemory;
+
             m_currentChunk->allocated = size;
             return true;
         }
     }
     
     auto chunkSize = Max<u64>(size, m_defaultChunkSize);
-    
+
     BufferDesc bufferDesc;
     bufferDesc.byteSize = chunkSize;
     bufferDesc.cpuAccess = CpuAccessMode::Write;
     bufferDesc.isVolatile = false;
     bufferDesc.debugName = m_isScratchBuffer ? "ScratchBuffer" : "UploadBuffer";
-    
-    RefCountPtr<Buffer> buffer = static_cast<Buffer*>(m_device->createBuffer(bufferDesc).get());
-    if(!buffer)
+
+    BufferHandle bufferHandle = m_device->createBuffer(bufferDesc);
+    if(!bufferHandle)
         return false;
-    
-    m_currentChunk = MakeRefCount<BufferChunk>(Move(buffer), chunkSize);
+
+    m_currentChunk = MakeRefCount<BufferChunk>(Move(bufferHandle), chunkSize);
     m_currentChunk->version = currentVersion;
-    
-    *pBuffer = buffer.get();
+
+    *pBuffer = static_cast<Buffer*>(m_currentChunk->buffer.get());
     *pOffset = 0;
     if(pCpuVA)
-        *pCpuVA = buffer->mappedMemory;
-    
+        *pCpuVA = static_cast<Buffer*>(m_currentChunk->buffer.get())->mappedMemory;
+
     m_currentChunk->allocated = size;
     return true;
 }

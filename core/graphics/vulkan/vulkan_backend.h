@@ -243,13 +243,13 @@ private:
 class UploadManager final : NoCopy{
 private:
     struct BufferChunk : public RefCounter<IResource>{
-        RefCountPtr<Buffer, BlankDeleter<Buffer>> buffer;
+        BufferHandle buffer;  // Use IBuffer interface (where refcounting methods are defined)
         u64 size;
         u64 allocated;
         u64 version;
-    
-        BufferChunk(RefCountPtr<Buffer, BlankDeleter<Buffer>> buf, u64 sz)
-            : buffer(buf)
+
+        BufferChunk(BufferHandle buf, u64 sz)
+            : buffer(Move(buf))
             , size(sz)
             , allocated(0)
             , version(0)
@@ -272,9 +272,9 @@ private:
     u64 m_defaultChunkSize;
     u64 m_memoryLimit;
     bool m_isScratchBuffer;
-    
-    List<RefCountPtr<BufferChunk, BlankDeleter<BufferChunk>>> m_chunkPool;
-    RefCountPtr<BufferChunk, BlankDeleter<BufferChunk>> m_currentChunk;
+
+    List<RefCountPtr<BufferChunk>> m_chunkPool;
+    RefCountPtr<BufferChunk> m_currentChunk;
 };
 
 

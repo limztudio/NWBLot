@@ -190,7 +190,7 @@ void CommandList::writeBuffer(IBuffer* _buffer, const void* data, usize dataSize
     void* cpuVA = nullptr;
     
     if(!uploadMgr->suballocateBuffer(dataSize, &stagingBuffer, &stagingOffset, &cpuVA, 0)){
-        NWB_ASSERT(false && "Failed to suballocate staging buffer for writeBuffer");
+        NWB_ASSERT_MSG(false, NWB_TEXT("Failed to suballocate staging buffer for writeBuffer"));
         return;
     }
     

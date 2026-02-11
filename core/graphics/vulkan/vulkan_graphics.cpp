@@ -573,7 +573,7 @@ void CommandList::drawIndexed(const DrawArguments& args){
 
 void CommandList::drawIndirect(u32 offsetBytes, u32 drawCount){
     if(!currentGraphicsState.indirectParams){
-        NWB_ASSERT(false && "No indirect buffer bound for drawIndirect");
+        NWB_ASSERT_MSG(false, NWB_TEXT("No indirect buffer bound for drawIndirect"));
         return;
     }
     Buffer* indirectBuffer = checked_cast<Buffer*>(currentGraphicsState.indirectParams);

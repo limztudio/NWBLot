@@ -149,7 +149,7 @@ void CommandList::setPushConstants(const void* data, usize byteSize){
     }
     
     if(layout == VK_NULL_HANDLE){
-        NWB_ASSERT(false && "setPushConstants: no active pipeline layout");
+        NWB_ASSERT_MSG(false, NWB_TEXT("setPushConstants: no active pipeline layout"));
         return;
     }
     
@@ -163,7 +163,7 @@ void CommandList::setPushConstants(const void* data, usize byteSize){
 
 void CommandList::drawIndexedIndirect(u32 offsetBytes, u32 drawCount){
     if(!currentGraphicsState.indirectParams){
-        NWB_ASSERT(false && "No indirect buffer bound for drawIndexedIndirect");
+        NWB_ASSERT_MSG(false, NWB_TEXT("No indirect buffer bound for drawIndexedIndirect"));
         return;
     }
     Buffer* buffer = checked_cast<Buffer*>(currentGraphicsState.indirectParams);

@@ -473,7 +473,7 @@ void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, co
     void* cpuVA = nullptr;
     
     if(!uploadMgr->suballocateBuffer(dataSize, &stagingBuffer, &stagingOffset, &cpuVA, 0)){
-        NWB_ASSERT(false && "Failed to suballocate staging buffer for writeTexture");
+        NWB_ASSERT_MSG(false, NWB_TEXT("Failed to suballocate staging buffer for writeTexture"));
         return;
     }
     

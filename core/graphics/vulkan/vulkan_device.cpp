@@ -448,7 +448,7 @@ usize Device::getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, Coopera
 
 
 AftermathCrashDumpHelper& Device::getAftermathCrashDumpHelper(){
-    NWB_ASSERT(false, NWB_TEXT("Aftermath is not enabled in the Vulkan backend"));
+    NWB_ASSERT_MSG(false, NWB_TEXT("Aftermath is not enabled in the Vulkan backend"));
     return *static_cast<AftermathCrashDumpHelper*>(nullptr);
 }
 

@@ -113,7 +113,7 @@ void CommandList::dispatch(u32 groupsX, u32 groupsY, u32 groupsZ){
 void CommandList::dispatchIndirect(u32 offsetBytes){
     // dispatchIndirect needs the indirect buffer from current compute state
     if(!currentComputeState.indirectParams){
-        NWB_ASSERT(false && "No indirect buffer bound for dispatchIndirect");
+        NWB_ASSERT_MSG(false, NWB_TEXT("No indirect buffer bound for dispatchIndirect"));
         return;
     }
     Buffer* buffer = checked_cast<Buffer*>(currentComputeState.indirectParams);

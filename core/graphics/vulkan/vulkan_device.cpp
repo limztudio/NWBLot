@@ -4,6 +4,8 @@
 
 #include "vulkan_backend.h"
 
+#include <logger/client/logger.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -92,13 +94,21 @@ Device::Device(const DeviceDesc& desc)
     
     // Create pipeline cache
     VkPipelineCacheCreateInfo cacheInfo = { VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO };
-    vkCreatePipelineCache(m_context.device, &cacheInfo, m_context.allocationCallbacks, &m_context.pipelineCache);
-    
+    VkResult res = vkCreatePipelineCache(m_context.device, &cacheInfo, m_context.allocationCallbacks, &m_context.pipelineCache);
+    if(res != VK_SUCCESS){
+        m_context.pipelineCache = VK_NULL_HANDLE;
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan Device: Failed to create pipeline cache. {}"), ResultToString(res));
+    }
+
     // Create empty descriptor set layout
     VkDescriptorSetLayoutCreateInfo emptyLayoutInfo = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
     emptyLayoutInfo.bindingCount = 0;
     emptyLayoutInfo.pBindings = nullptr;
-    vkCreateDescriptorSetLayout(m_context.device, &emptyLayoutInfo, m_context.allocationCallbacks, &m_context.emptyDescriptorSetLayout);
+    res = vkCreateDescriptorSetLayout(m_context.device, &emptyLayoutInfo, m_context.allocationCallbacks, &m_context.emptyDescriptorSetLayout);
+    if(res != VK_SUCCESS){
+        // This is critical - cannot proceed without empty descriptor set layout
+        m_context.emptyDescriptorSetLayout = VK_NULL_HANDLE;
+    }
     
     // Initialize queues
     if(desc.graphicsQueue && desc.graphicsQueueIndex >= 0){
@@ -169,15 +179,25 @@ u64 Device::executeCommandLists(ICommandList* const* pCommandLists, usize numCom
 }
 
 bool Device::waitForIdle(){
-    vkDeviceWaitIdle(m_context.device);
-    
+    VkResult res = vkDeviceWaitIdle(m_context.device);
+
+    // Check for device loss
+    if(res == VK_ERROR_DEVICE_LOST){
+        return false;
+    }
+
+    if(res != VK_SUCCESS){
+        // Other errors (unlikely but possible)
+        return false;
+    }
+
     // Update all queue completion states
     for(u32 i = 0; i < static_cast<u32>(CommandQueue::kCount); i++){
         if(m_queues[i]){
             m_queues[i]->updateLastFinishedID();
         }
     }
-    
+
     return true;
 }
 
@@ -313,19 +333,36 @@ HeapHandle Device::createHeap(const HeapDesc& d){
     }
     
     // Find suitable memory type
-    u32 memoryTypeIndex = 0;
+    u32 memoryTypeIndex = UINT32_MAX;
     for(u32 i = 0; i < m_context.memoryProperties.memoryTypeCount; ++i){
         if((m_context.memoryProperties.memoryTypes[i].propertyFlags & memoryProperties) == memoryProperties){
             memoryTypeIndex = i;
             break;
         }
     }
-    
+
+    // Validate that we found a suitable memory type
+    if(memoryTypeIndex == UINT32_MAX){
+        delete heap;
+        return nullptr;
+    }
+
+    // Enable device address for heaps (needed for acceleration structures)
+    void* pNext = nullptr;
+    VkMemoryAllocateFlagsInfo allocFlagsInfo{};
+    if(m_context.extensions.buffer_device_address){
+        allocFlagsInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO;
+        allocFlagsInfo.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT;
+        allocFlagsInfo.pNext = pNext;
+        pNext = &allocFlagsInfo;
+    }
+
     VkMemoryAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     allocInfo.allocationSize = d.capacity;
     allocInfo.memoryTypeIndex = memoryTypeIndex;
-    
+    allocInfo.pNext = pNext;
+
     VkResult res = vkAllocateMemory(m_context.device, &allocInfo, m_context.allocationCallbacks, &heap->memory);
     if(res != VK_SUCCESS){
         delete heap;
@@ -411,8 +448,7 @@ usize Device::getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, Coopera
 
 
 AftermathCrashDumpHelper& Device::getAftermathCrashDumpHelper(){
-    NWB_ASSERT(!"Aftermath is not enabled in the Vulkan backend");
-    // This should never be called; isAftermathEnabled() returns false.
+    NWB_ASSERT(false, NWB_TEXT("Aftermath is not enabled in the Vulkan backend"));
     return *static_cast<AftermathCrashDumpHelper*>(nullptr);
 }
 

@@ -18,19 +18,28 @@ TrackedCommandBuffer::TrackedCommandBuffer(const VulkanContext& context, Command
     : m_context(context)
 {
     // Create command pool for this buffer
+    // Use TRANSIENT flag to hint that command buffers are short-lived
     VkCommandPoolCreateInfo poolInfo = { VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO };
     poolInfo.queueFamilyIndex = queueFamilyIndex;
-    poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-    
-    vkCreateCommandPool(m_context.device, &poolInfo, m_context.allocationCallbacks, &cmdPool);
-    
+    poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT | VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
+
+    VkResult res = vkCreateCommandPool(m_context.device, &poolInfo, m_context.allocationCallbacks, &cmdPool);
+    if(res != VK_SUCCESS){
+        cmdPool = VK_NULL_HANDLE;
+        cmdBuf = VK_NULL_HANDLE;
+        return;
+    }
+
     // Allocate command buffer
     VkCommandBufferAllocateInfo allocInfo = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO };
     allocInfo.commandPool = cmdPool;
     allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     allocInfo.commandBufferCount = 1;
-    
-    vkAllocateCommandBuffers(m_context.device, &allocInfo, &cmdBuf);
+
+    res = vkAllocateCommandBuffers(m_context.device, &allocInfo, &cmdBuf);
+    if(res != VK_SUCCESS){
+        cmdBuf = VK_NULL_HANDLE;
+    }
 }
 
 TrackedCommandBuffer::~TrackedCommandBuffer(){
@@ -79,13 +88,15 @@ Queue::~Queue(){
         waitInfo.semaphoreCount = 1;
         waitInfo.pSemaphores = &trackingSemaphore;
         waitInfo.pValues = &m_lastSubmittedID;
-        vkWaitSemaphores(m_context.device, &waitInfo, UINT64_MAX);
+        VkResult res = vkWaitSemaphores(m_context.device, &waitInfo, UINT64_MAX);
+        // Ignore errors in destructor - device may already be lost
+        (void)res;
     }
-    
+
     // Free all command buffers
     m_commandBuffersInFlight.clear();
     m_commandBuffersPool.clear();
-    
+
     // Destroy semaphore
     if(trackingSemaphore){
         vkDestroySemaphore(m_context.device, trackingSemaphore, m_context.allocationCallbacks);
@@ -230,6 +241,7 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
     }
     
     // Submit to queue (using VK_KHR_synchronization2)
+    // NOTE: Requires VK_KHR_synchronization2 extension to be enabled
     VkSubmitInfo2 submitInfo = { VK_STRUCTURE_TYPE_SUBMIT_INFO_2 };
     submitInfo.waitSemaphoreInfoCount = (u32)waitInfos.size();
     submitInfo.pWaitSemaphoreInfos = waitInfos.data();
@@ -237,25 +249,29 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
     submitInfo.pCommandBufferInfos = cmdBufInfos.data();
     submitInfo.signalSemaphoreInfoCount = (u32)signalInfos.size();
     submitInfo.pSignalSemaphoreInfos = signalInfos.data();
-    
+
     VkResult res = vkQueueSubmit2(m_queue, 1, &submitInfo, submitFence);
-    
+
     // Clear wait/signal semaphores after submission
     m_waitSemaphores.clear();
     m_waitSemaphoreValues.clear();
     m_signalSemaphores.clear();
     m_signalSemaphoreValues.clear();
-    
-    // Move command buffers to in-flight list
+
+    if(res != VK_SUCCESS){
+        // Submission failed - check for device loss
+        if(res == VK_ERROR_DEVICE_LOST){
+            // Device lost - critical error
+        }
+        // Don't move command buffers to in-flight list on failure
+        return m_lastSubmittedID - 1;
+    }
+
+    // Move command buffers to in-flight list only on successful submission
     for(auto& tracked : trackedBuffers){
         m_commandBuffersInFlight.push_back(std::move(tracked));
     }
-    
-    if(res != VK_SUCCESS){
-        // Submission failed
-        return m_lastSubmittedID - 1;
-    }
-    
+
     return submissionID;
 }
 
@@ -279,16 +295,23 @@ bool Queue::waitCommandList(u64 commandListID, u64 timeout){
     waitInfo.semaphoreCount = 1;
     waitInfo.pSemaphores = &trackingSemaphore;
     waitInfo.pValues = &commandListID;
-    
+
     VkResult res = vkWaitSemaphores(m_context.device, &waitInfo, timeout);
-    
+
+    // Handle device loss
+    if(res == VK_ERROR_DEVICE_LOST){
+        return false;
+    }
+
     if(res == VK_SUCCESS){
         Mutex::scoped_lock lock(m_mutex);
         if(commandListID > m_lastFinishedID)
             m_lastFinishedID = commandListID;
+        return true;
     }
-    
-    return res == VK_SUCCESS;
+
+    // Timeout or other error
+    return false;
 }
 
 void Queue::waitForIdle(){
@@ -377,12 +400,13 @@ void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapp
     VkDeviceSize imageMipTailStride = 1;
     
     // Get sparse format properties
-    u32 formatPropCount = 0;
+    uint32_t formatPropCount = 0;
     vkGetPhysicalDeviceSparseImageFormatProperties(
         m_context.physicalDevice,
         imageInfo.format, imageInfo.imageType, imageInfo.samples,
         imageInfo.usage, imageInfo.tiling,
-        &formatPropCount, nullptr);
+        &formatPropCount, nullptr
+        );
     
     Vector<VkSparseImageFormatProperties> formatProps(formatPropCount);
     if(formatPropCount > 0)
@@ -390,7 +414,8 @@ void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapp
             m_context.physicalDevice,
             imageInfo.format, imageInfo.imageType, imageInfo.samples,
             imageInfo.usage, imageInfo.tiling,
-            &formatPropCount, formatProps.data());
+            &formatPropCount, formatProps.data()
+            );
     
     if(!formatProps.empty()){
         tileWidth = formatProps[0].imageGranularity.width;
@@ -399,7 +424,7 @@ void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapp
     }
     
     // Get sparse memory requirements
-    u32 sparseReqCount = 0;
+    uint32_t sparseReqCount = 0;
     vkGetImageSparseMemoryRequirements(m_context.device, texture->image, &sparseReqCount, nullptr);
     
     Vector<VkSparseImageMemoryRequirements> sparseReqs(sparseReqCount);

@@ -65,7 +65,7 @@ extern DeviceHandle CreateDevice(const DeviceDesc& desc);
 
 extern VkFormat ConvertFormat(Format::Enum format);
 
-extern const char* ResultToString(VkResult result);
+extern const tchar* ResultToString(VkResult result);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -73,11 +73,13 @@ struct VulkanContext{
         bool KHR_acceleration_structure = false;
         bool buffer_device_address = false;
         bool EXT_debug_utils = false;
+        bool EXT_debug_marker = false;
         bool KHR_swapchain = false;
         bool KHR_dynamic_rendering = false;
         bool EXT_opacity_micromap = false;
         bool NV_cooperative_vector = false;
         bool NV_cluster_acceleration_structure = false;
+        bool NV_device_diagnostic_checkpoints = false;
     } extensions;
     
     VkPhysicalDeviceAccelerationStructurePropertiesKHR accelStructProperties{};

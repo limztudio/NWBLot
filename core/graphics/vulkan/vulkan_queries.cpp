@@ -112,29 +112,40 @@ void CommandList::endTimerQuery(ITimerQuery* _query){
 }
 
 void CommandList::beginMarker(const Name& name){
-    if(m_device->isAftermathEnabled()){
-        usize markerHash = m_aftermathMarkerTracker.pushEvent(name.c_str());
-        // TODO: Use vkCmdSetCheckpointNV to set the marker hash as checkpoint data
-        // This requires VK_NV_device_diagnostic_checkpoints extension
-    }
-
-    // Also use debug utils for debugging tools
+    // VK_EXT_debug_utils (preferred method for debug labels)
     if(m_context->extensions.EXT_debug_utils){
         VkDebugUtilsLabelEXT label = { VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT };
         label.pLabelName = name.c_str();
         vkCmdBeginDebugUtilsLabelEXT(currentCmdBuf->cmdBuf, &label);
     }
+    // VK_EXT_debug_marker (fallback for older systems)
+    else if(m_context->extensions.EXT_debug_marker){
+        VkDebugMarkerMarkerInfoEXT markerInfo = { VK_STRUCTURE_TYPE_DEBUG_MARKER_MARKER_INFO_EXT };
+        markerInfo.pMarkerName = name.c_str();
+        vkCmdDebugMarkerBeginEXT(currentCmdBuf->cmdBuf, &markerInfo);
+    }
+
+    // NVIDIA Aftermath support - set checkpoint for GPU crash analysis
+    if(m_device->isAftermathEnabled()){
+        const usize aftermathMarker = m_aftermathMarkerTracker.pushEvent(name.c_str());
+        vkCmdSetCheckpointNV(currentCmdBuf->cmdBuf, reinterpret_cast<const void*>(aftermathMarker));
+    }
 }
 
 void CommandList::endMarker(){
-    // Pop Aftermath marker if enabled
+    // VK_EXT_debug_utils (preferred method for debug labels)
+    if(m_context->extensions.EXT_debug_utils){
+        vkCmdEndDebugUtilsLabelEXT(currentCmdBuf->cmdBuf);
+    }
+    // VK_EXT_debug_marker (fallback for older systems)
+    else if(m_context->extensions.EXT_debug_marker){
+        vkCmdDebugMarkerEndEXT(currentCmdBuf->cmdBuf);
+    }
+
+    // NVIDIA Aftermath support - pop the marker from the stack
     if(m_device->isAftermathEnabled()){
         m_aftermathMarkerTracker.popEvent();
     }
-
-    // Also end debug utils marker
-    if(m_context->extensions.EXT_debug_utils)
-        vkCmdEndDebugUtilsLabelEXT(currentCmdBuf->cmdBuf);
 }
 
 void CommandList::setEventQuery(IEventQuery* _query, CommandQueue::Enum waitQueue){

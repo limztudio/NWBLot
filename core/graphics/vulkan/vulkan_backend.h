@@ -242,8 +242,8 @@ private:
 
 class UploadManager final : NoCopy{
 private:
-    struct BufferChunk : public RefCounter<IResource>{
-        BufferHandle buffer;  // Use IBuffer interface (where refcounting methods are defined)
+    struct BufferChunk final : public RefCounter<IResource>{
+        BufferHandle buffer;
         u64 size;
         u64 allocated;
         u64 version;

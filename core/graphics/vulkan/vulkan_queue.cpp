@@ -47,12 +47,12 @@ TrackedCommandBuffer::~TrackedCommandBuffer(){
         vkFreeCommandBuffers(m_context.device, cmdPool, 1, &cmdBuf);
         cmdBuf = VK_NULL_HANDLE;
     }
-    
+
     if(cmdPool){
         vkDestroyCommandPool(m_context.device, cmdPool, m_context.allocationCallbacks);
         cmdPool = VK_NULL_HANDLE;
     }
-    
+
     referencedResources.clear();
     referencedStagingBuffers.clear();
 }
@@ -73,10 +73,10 @@ Queue::Queue(const VulkanContext& context, CommandQueue::Enum queueID, VkQueue q
     VkSemaphoreTypeCreateInfo timelineInfo = { VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO };
     timelineInfo.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE;
     timelineInfo.initialValue = 0;
-    
+
     VkSemaphoreCreateInfo semaphoreInfo = { VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
     semaphoreInfo.pNext = &timelineInfo;
-    
+
     vkCreateSemaphore(m_context.device, &semaphoreInfo, m_context.allocationCallbacks, &trackingSemaphore);
 }
 Queue::~Queue(){
@@ -107,33 +107,33 @@ TrackedCommandBufferPtr Queue::createCommandBuffer(){
 
 TrackedCommandBufferPtr Queue::getOrCreateCommandBuffer(){
     Mutex::scoped_lock lock(m_mutex);
-    
+
     updateLastFinishedID();
-    
+
     auto it = m_commandBuffersInFlight.begin();
     while(it != m_commandBuffersInFlight.end()){
         TrackedCommandBuffer* cmdBuf = it->get();
         if(cmdBuf->submissionID <= m_lastFinishedID){
             cmdBuf->referencedResources.clear();
             cmdBuf->referencedStagingBuffers.clear();
-            
+
             m_commandBuffersPool.push_back(std::move(*it));
             it = m_commandBuffersInFlight.erase(it);
         }
         else
             ++it;
     }
-    
+
     if(!m_commandBuffersPool.empty()){
         TrackedCommandBufferPtr cmdBuf = std::move(m_commandBuffersPool.front());
         m_commandBuffersPool.pop_front();
-        
+
         vkResetCommandBuffer(cmdBuf->cmdBuf, 0);
         cmdBuf->recordingID = ++m_lastRecordingID;
-        
+
         return cmdBuf;
     }
-    
+
     return createCommandBuffer();
 }
 
@@ -152,35 +152,35 @@ void Queue::addSignalSemaphore(VkSemaphore semaphore, u64 value){
 u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
     if(!ppCmd || numCmd == 0)
         return m_lastSubmittedID;
-    
+
     Mutex::scoped_lock lock(m_mutex);
-    
+
     u64 submissionID = ++m_lastSubmittedID;
-    
+
     Vector<TrackedCommandBufferPtr> trackedBuffers;
     Vector<VkCommandBuffer> cmdBufs;
     trackedBuffers.reserve(numCmd);
     cmdBufs.reserve(numCmd);
-    
+
     for(usize i = 0; i < numCmd; ++i){
         auto* cmdList = checked_cast<CommandList*>(ppCmd[i]);
         if(!cmdList || !cmdList->currentCmdBuf)
             continue;
-        
+
         cmdBufs.push_back(cmdList->currentCmdBuf->cmdBuf);
-        
+
         cmdList->currentCmdBuf->submissionID = submissionID;
         trackedBuffers.push_back(std::move(cmdList->currentCmdBuf));
     }
-    
+
     if(cmdBufs.empty())
         return m_lastSubmittedID - 1;
-    
+
     VkSemaphoreSubmitInfo timelineSignal = { VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO };
     timelineSignal.semaphore = trackingSemaphore;
     timelineSignal.value = submissionID;
     timelineSignal.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
-    
+
     Vector<VkSemaphoreSubmitInfo> waitInfos;
     Vector<VkPipelineStageFlags2> waitStages;
     for(usize i = 0; i < m_waitSemaphores.size(); ++i){
@@ -190,10 +190,10 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
         waitInfo.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
         waitInfos.push_back(waitInfo);
     }
-    
+
     Vector<VkSemaphoreSubmitInfo> signalInfos;
     signalInfos.push_back(timelineSignal);
-    
+
     for(usize i = 0; i < m_signalSemaphores.size(); ++i){
         VkSemaphoreSubmitInfo signalInfo = { VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO };
         signalInfo.semaphore = m_signalSemaphores[i];
@@ -201,16 +201,16 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
         signalInfo.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
         signalInfos.push_back(signalInfo);
     }
-    
+
     Vector<VkCommandBufferSubmitInfo> cmdBufInfos;
     cmdBufInfos.reserve(numCmd);
-    
+
     for(VkCommandBuffer cmdBuf : cmdBufs){
         VkCommandBufferSubmitInfo cmdBufInfo = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO };
         cmdBufInfo.commandBuffer = cmdBuf;
         cmdBufInfos.push_back(cmdBufInfo);
     }
-    
+
     VkFence submitFence = VK_NULL_HANDLE;
     for(auto& tracked : trackedBuffers){
         if(tracked->signalFence != VK_NULL_HANDLE){
@@ -218,7 +218,7 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
             tracked->signalFence = VK_NULL_HANDLE;
         }
     }
-    
+
     // Requires VK_KHR_synchronization2 extension to be enabled
     VkSubmitInfo2 submitInfo = { VK_STRUCTURE_TYPE_SUBMIT_INFO_2 };
     submitInfo.waitSemaphoreInfoCount = (u32)waitInfos.size();
@@ -257,7 +257,7 @@ void Queue::updateLastFinishedID(){
 
 bool Queue::pollCommandList(u64 commandListID){
     Mutex::scoped_lock lock(m_mutex);
-    
+
     updateLastFinishedID();
     return commandListID <= m_lastFinishedID;
 }
@@ -287,11 +287,11 @@ bool Queue::waitCommandList(u64 commandListID, u64 timeout){
 
 void Queue::waitForIdle(){
     Mutex::scoped_lock lock(m_mutex);
-    
+
     vkQueueWaitIdle(m_queue);
-    
+
     m_lastFinishedID = m_lastSubmittedID;
-    
+
     for(auto& tracked : m_commandBuffersInFlight){
         tracked->referencedResources.clear();
         tracked->referencedStagingBuffers.clear();
@@ -335,7 +335,7 @@ u64 Device::queueGetCompletedInstance(CommandQueue::Enum queue){
 void Device::queueWaitForCommandList(CommandQueue::Enum waitQueue, CommandQueue::Enum executionQueue, u64 instance){
     Queue* wait = getQueue(waitQueue);
     Queue* exec = getQueue(executionQueue);
-    
+
     if(wait && exec){
         wait->addWaitSemaphore(exec->trackingSemaphore, instance);
     }
@@ -347,26 +347,26 @@ void Device::queueWaitForCommandList(CommandQueue::Enum waitQueue, CommandQueue:
 
 void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapping* tileMappings, u32 numTileMappings){
     auto* texture = checked_cast<Texture*>(_texture);
-    
+
     Vector<VkSparseImageMemoryBind> sparseImageMemoryBinds;
     Vector<VkSparseMemoryBind> sparseMemoryBinds;
-    
+
     const VkImageCreateInfo& imageInfo = texture->imageInfo;
     VkImageAspectFlags textureAspectFlags = VK_IMAGE_ASPECT_COLOR_BIT;
-    
+
     VkFormat fmt = imageInfo.format;
     if(fmt == VK_FORMAT_D32_SFLOAT || fmt == VK_FORMAT_D16_UNORM)
         textureAspectFlags = VK_IMAGE_ASPECT_DEPTH_BIT;
     else if(fmt == VK_FORMAT_D24_UNORM_S8_UINT || fmt == VK_FORMAT_D32_SFLOAT_S8_UINT)
         textureAspectFlags = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
-    
+
     u32 tileWidth = 1;
     u32 tileHeight = 1;
     u32 tileDepth = 1;
-    
+
     VkDeviceSize imageMipTailOffset = 0;
     VkDeviceSize imageMipTailStride = 1;
-    
+
     uint32_t formatPropCount = 0;
     vkGetPhysicalDeviceSparseImageFormatProperties(
         m_context.physicalDevice,
@@ -374,7 +374,7 @@ void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapp
         imageInfo.usage, imageInfo.tiling,
         &formatPropCount, nullptr
         );
-    
+
     Vector<VkSparseImageFormatProperties> formatProps(formatPropCount);
     if(formatPropCount > 0)
         vkGetPhysicalDeviceSparseImageFormatProperties(
@@ -383,34 +383,34 @@ void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapp
             imageInfo.usage, imageInfo.tiling,
             &formatPropCount, formatProps.data()
             );
-    
+
     if(!formatProps.empty()){
         tileWidth = formatProps[0].imageGranularity.width;
         tileHeight = formatProps[0].imageGranularity.height;
         tileDepth = formatProps[0].imageGranularity.depth;
     }
-    
+
     uint32_t sparseReqCount = 0;
     vkGetImageSparseMemoryRequirements(m_context.device, texture->image, &sparseReqCount, nullptr);
-    
+
     Vector<VkSparseImageMemoryRequirements> sparseReqs(sparseReqCount);
     if(sparseReqCount > 0)
         vkGetImageSparseMemoryRequirements(m_context.device, texture->image, &sparseReqCount, sparseReqs.data());
-    
+
     if(!sparseReqs.empty()){
         imageMipTailOffset = sparseReqs[0].imageMipTailOffset;
         imageMipTailStride = sparseReqs[0].imageMipTailStride;
     }
-    
+
     for(u32 i = 0; i < numTileMappings; ++i){
         u32 numRegions = tileMappings[i].numTextureRegions;
         Heap* heap = tileMappings[i].heap ? checked_cast<Heap*>(tileMappings[i].heap) : nullptr;
         VkDeviceMemory deviceMemory = heap ? heap->memory : VK_NULL_HANDLE;
-        
+
         for(u32 j = 0; j < numRegions; ++j){
             const TiledTextureCoordinate& coord = tileMappings[i].tiledTextureCoordinates[j];
             const TiledTextureRegion& region = tileMappings[i].tiledTextureRegions[j];
-            
+
             if(region.tilesNum){
                 VkSparseMemoryBind bind = {};
                 bind.resourceOffset = imageMipTailOffset + coord.arrayLevel * imageMipTailStride;
@@ -436,9 +436,9 @@ void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapp
             }
         }
     }
-    
+
     VkBindSparseInfo bindSparseInfo = { VK_STRUCTURE_TYPE_BIND_SPARSE_INFO };
-    
+
     VkSparseImageMemoryBindInfo sparseImageMemoryBindInfo = {};
     if(!sparseImageMemoryBinds.empty()){
         sparseImageMemoryBindInfo.image = texture->image;
@@ -447,7 +447,7 @@ void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapp
         bindSparseInfo.imageBindCount = 1;
         bindSparseInfo.pImageBinds = &sparseImageMemoryBindInfo;
     }
-    
+
     VkSparseImageOpaqueMemoryBindInfo sparseOpaqueBindInfo = {};
     if(!sparseMemoryBinds.empty()){
         sparseOpaqueBindInfo.image = texture->image;
@@ -456,7 +456,7 @@ void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapp
         bindSparseInfo.imageOpaqueBindCount = 1;
         bindSparseInfo.pImageOpaqueBinds = &sparseOpaqueBindInfo;
     }
-    
+
     vkQueueBindSparse(m_queue, 1, &bindSparseInfo, VK_NULL_HANDLE);
 }
 

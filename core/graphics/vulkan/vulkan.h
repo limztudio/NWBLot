@@ -31,24 +31,24 @@ struct DeviceDesc{
     VkInstance instance;
     VkPhysicalDevice physicalDevice;
     VkDevice device;
-    
+
     VkQueue graphicsQueue;
     i32 graphicsQueueIndex = -1;
     VkQueue transferQueue;
     i32 transferQueueIndex = -1;
     VkQueue computeQueue;
     i32 computeQueueIndex = -1;
-    
+
     VkAllocationCallbacks* allocationCallbacks = nullptr;
-    
+
     const char** instanceExtensions = nullptr;
     usize numInstanceExtensions = 0;
-        
+
     const char** deviceExtensions = nullptr;
     usize numDeviceExtensions = 0;
-    
+
     u32 maxTimerQueries = 256;
-    
+
     // Indicates if VkPhysicalDeviceVulkan12Features::bufferDeviceAddress was set to 'true' at device creation time
     bool bufferDeviceAddressSupported = false;
     bool aftermathEnabled = false;

@@ -1,4 +1,4 @@
-﻿// limztudio@gmail.com
+// limztudio@gmail.com
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -60,13 +60,13 @@ struct VulkanContext{
     VkDevice device = VK_NULL_HANDLE;
     VkAllocationCallbacks* allocationCallbacks = nullptr;
     VkPipelineCache pipelineCache = VK_NULL_HANDLE;
-    
+
     VkPhysicalDeviceProperties physicalDeviceProperties{};
     VkPhysicalDeviceMemoryProperties memoryProperties{};
     VkPhysicalDeviceRayTracingPipelinePropertiesKHR rayTracingPipelineProperties{};
-    
+
     VkDescriptorSetLayout emptyDescriptorSetLayout = VK_NULL_HANDLE;
-    
+
     struct Extensions{
         bool KHR_synchronization2 = false;
         bool KHR_ray_tracing_pipeline = false;
@@ -81,12 +81,12 @@ struct VulkanContext{
         bool NV_cluster_acceleration_structure = false;
         bool NV_device_diagnostic_checkpoints = false;
     } extensions;
-    
+
     VkPhysicalDeviceAccelerationStructurePropertiesKHR accelStructProperties{};
     VkPhysicalDeviceCooperativeVectorPropertiesNV coopVecProperties{};
     VkPhysicalDeviceCooperativeVectorFeaturesNV coopVecFeatures{};
     VkPhysicalDeviceClusterAccelerationStructurePropertiesNV nvClusterAccelerationStructureProperties{};
-    
+
 
     VulkanContext() = default;
     VulkanContext(VkInstance inst, VkPhysicalDevice physDev, VkDevice dev, VkAllocationCallbacks* allocCb)
@@ -111,12 +111,12 @@ public:
 public:
     VkCommandBuffer cmdBuf = VK_NULL_HANDLE;
     VkCommandPool cmdPool = VK_NULL_HANDLE;
-    
+
     Vector<RefCountPtr<IResource, BlankDeleter<IResource>>> referencedResources;
     Vector<RefCountPtr<IBuffer, BlankDeleter<IBuffer>>> referencedStagingBuffers;
-    
+
     VkFence signalFence = VK_NULL_HANDLE;
-    
+
     u64 recordingID = 0;
     u64 submissionID = 0;
 
@@ -140,14 +140,14 @@ public:
 public:
     [[nodiscard]] TrackedCommandBufferPtr createCommandBuffer();
     [[nodiscard]] TrackedCommandBufferPtr getOrCreateCommandBuffer();
-    
+
     void addWaitSemaphore(VkSemaphore semaphore, u64 value);
     void addSignalSemaphore(VkSemaphore semaphore, u64 value);
-    
+
     u64 submit(ICommandList* const* ppCmd, usize numCmd);
     void updateTextureTileMappings(ITexture* texture, const TextureTilesMapping* tileMappings, u32 numTileMappings);
     void updateLastFinishedID();
-    
+
     [[nodiscard]] bool pollCommandList(u64 commandListID);
     [[nodiscard]] bool waitCommandList(u64 commandListID, u64 timeout);
     void waitForIdle();
@@ -157,28 +157,28 @@ public:
     [[nodiscard]] CommandQueue::Enum getQueueID()const{ return m_queueID; }
     [[nodiscard]] u64 getLastSubmittedID()const{ return m_lastSubmittedID; }
     [[nodiscard]] u64 getLastFinishedID()const{ return m_lastFinishedID; }
-    
-    
+
+
 public:
     VkSemaphore trackingSemaphore = VK_NULL_HANDLE;
-    
-    
+
+
 private:
     const VulkanContext& m_context;
     VkQueue m_queue;
     CommandQueue::Enum m_queueID;
     u32 m_queueFamilyIndex;
-    
+
     Mutex m_mutex;
     Vector<VkSemaphore> m_waitSemaphores;
     Vector<u64> m_waitSemaphoreValues;
     Vector<VkSemaphore> m_signalSemaphores;
     Vector<u64> m_signalSemaphoreValues;
-    
+
     u64 m_lastRecordingID = 0;
     u64 m_lastSubmittedID = 0;
     u64 m_lastFinishedID = 0;
-    
+
     List<TrackedCommandBufferPtr> m_commandBuffersInFlight;
     List<TrackedCommandBufferPtr> m_commandBuffersPool;
 };
@@ -197,7 +197,7 @@ public:
 public:
     VkResult allocateBufferMemory(Buffer* buffer, bool enableDeviceAddress = false);
     void freeBufferMemory(Buffer* buffer);
-    
+
     VkResult allocateTextureMemory(Texture* texture);
     void freeTextureMemory(Texture* texture);
 
@@ -219,18 +219,18 @@ class Heap final : public RefCounter<IHeap>, NoCopy{
 public:
     Heap(const VulkanContext& context);
     virtual ~Heap()override;
-    
-    
+
+
 public:
     [[nodiscard]] virtual const HeapDesc& getDescription()const override{ return desc; }
     virtual Object getNativeHandle(ObjectType objectType)override;
-    
-    
+
+
 public:
     HeapDesc desc;
     VkDeviceMemory memory = VK_NULL_HANDLE;
-    
-    
+
+
 private:
     const VulkanContext& m_context;
 };
@@ -255,8 +255,8 @@ private:
             , version(0)
         {}
     };
-    
-    
+
+
 public:
     UploadManager(Device& pParent, u64 defaultChunkSize, u64 memoryLimit, bool isScratchBuffer);
     ~UploadManager();
@@ -291,32 +291,32 @@ public:
         i32 maxVersion = 0;
         bool initialized = false;
     };
-    
-    
+
+
 public:
     Buffer(const VulkanContext& context, VulkanAllocator& allocator);
     virtual ~Buffer()override;
-    
-    
+
+
 public:
     [[nodiscard]] virtual const BufferDesc& getDescription()const override{ return desc; }
     [[nodiscard]] virtual GpuVirtualAddress getGpuVirtualAddress()const override{ return deviceAddress; }
-    
-    
+
+
 public:
     BufferDesc desc;
-    
+
     VkBuffer buffer = VK_NULL_HANDLE;
     VkDeviceMemory memory = VK_NULL_HANDLE;
     u64 deviceAddress = 0;
     void* mappedMemory = nullptr;
-    
+
     Vector<u64> versionTracking;
     VolatileBufferState volatileState;
-    
+
     bool managed = true; // if true, owns the VkBuffer and memory
-    
-    
+
+
 private:
     const VulkanContext& m_context;
     VulkanAllocator& m_allocator;
@@ -331,32 +331,32 @@ class Texture final : public RefCounter<ITexture>, NoCopy{
 public:
     Texture(const VulkanContext& context, VulkanAllocator& allocator);
     virtual ~Texture()override;
-    
+
 
 public:
     [[nodiscard]] virtual const TextureDesc& getDescription()const override{ return desc; }
     virtual Object getNativeView(ObjectType objectType, Format::Enum format, TextureSubresourceSet subresources, TextureDimension::Enum dimension, bool isReadOnlyDSV)override;
-    
+
     [[nodiscard]] VkImageView getView(const TextureSubresourceSet& subresources, TextureDimension::Enum dimension, Format::Enum format, bool isReadOnlyDSV = false);
-    
-    
+
+
 private:
     u64 makeViewKey(const TextureSubresourceSet& subresources, TextureDimension::Enum dimension, Format::Enum format, bool isReadOnlyDSV)const;
-    
-    
+
+
 public:
     TextureDesc desc;
-    
+
     VkImage image = VK_NULL_HANDLE;
     VkDeviceMemory memory = VK_NULL_HANDLE;
     VkImageCreateInfo imageInfo{};
-    
+
     HashMap<u64, VkImageView> views;
-    
+
     bool managed = true; // if true, owns the VkImage and memory
     u64 tileByteSize = 0; // for sparse/tiled resources
-    
-    
+
+
 private:
     const VulkanContext& m_context;
     VulkanAllocator& m_allocator;
@@ -371,21 +371,21 @@ class StagingTexture final : public RefCounter<IStagingTexture>, NoCopy{
 public:
     StagingTexture(const VulkanContext& context, VulkanAllocator& allocator);
     virtual ~StagingTexture()override;
-    
-    
+
+
 public:
     [[nodiscard]] virtual const TextureDesc& getDescription()const override{ return desc; }
 
 
 public:
     TextureDesc desc;
-    
+
     VkBuffer buffer = VK_NULL_HANDLE;
     VkDeviceMemory memory = VK_NULL_HANDLE;
     void* mappedMemory = nullptr;
     CpuAccessMode::Enum cpuAccess;
 
-    
+
 private:
     const VulkanContext& m_context;
     VulkanAllocator& m_allocator;
@@ -410,7 +410,7 @@ public:
     SamplerDesc desc;
     VkSampler sampler = VK_NULL_HANDLE;
 
-    
+
 private:
     const VulkanContext& m_context;
 };
@@ -424,8 +424,8 @@ class Shader final : public RefCounter<IShader>, NoCopy{
 public:
     Shader(const VulkanContext& context);
     virtual ~Shader()override;
-    
-    
+
+
 public:
     [[nodiscard]] virtual const ShaderDesc& getDescription()const override{ return desc; }
     virtual void getBytecode(const void** ppBytecode, usize* pSize)const override{
@@ -437,9 +437,9 @@ public:
 public:
     ShaderDesc desc;
     VkShaderModule shaderModule = VK_NULL_HANDLE;
-    
+
     Vector<u8> bytecode;
-    
+
     Vector<VkSpecializationMapEntry> specializationEntries;
     Vector<u8> specializationData;
 
@@ -511,23 +511,23 @@ class Framebuffer final : public RefCounter<IFramebuffer>, NoCopy{
 public:
     Framebuffer(const VulkanContext& context);
     virtual ~Framebuffer()override;
-    
-    
+
+
 public:
     [[nodiscard]] virtual const FramebufferDesc& getDescription()const override{ return desc; }
     [[nodiscard]] virtual const FramebufferInfoEx& getFramebufferInfo()const override{ return framebufferInfo; }
-    
-    
+
+
 public:
     FramebufferDesc desc;
     FramebufferInfoEx framebufferInfo;
-    
+
     VkFramebuffer framebuffer = VK_NULL_HANDLE;
     VkRenderPass renderPass = VK_NULL_HANDLE;
-    
+
     Vector<RefCountPtr<ITexture, BlankDeleter<ITexture>>> resources;
 
-    
+
 private:
     const VulkanContext& m_context;
 };
@@ -541,21 +541,21 @@ class GraphicsPipeline final : public RefCounter<IGraphicsPipeline>, NoCopy{
 public:
     GraphicsPipeline(const VulkanContext& context);
     virtual ~GraphicsPipeline()override;
-    
-    
+
+
 public:
     [[nodiscard]] virtual const GraphicsPipelineDesc& getDescription()const override{ return desc; }
     [[nodiscard]] virtual const FramebufferInfo& getFramebufferInfo()const override{ return framebufferInfo; }
     virtual Object getNativeHandle(ObjectType objectType)override;
-    
-    
+
+
 public:
     GraphicsPipelineDesc desc;
     FramebufferInfo framebufferInfo;
     VkPipeline pipeline = VK_NULL_HANDLE;
     VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
 
-    
+
 private:
     const VulkanContext& m_context;
 };
@@ -569,19 +569,19 @@ class ComputePipeline final : public RefCounter<IComputePipeline>, NoCopy{
 public:
     ComputePipeline(const VulkanContext& context);
     virtual ~ComputePipeline()override;
-    
-    
+
+
 public:
     [[nodiscard]] virtual const ComputePipelineDesc& getDescription()const override{ return desc; }
     virtual Object getNativeHandle(ObjectType objectType)override;
-    
-    
+
+
 public:
     ComputePipelineDesc desc;
     VkPipeline pipeline = VK_NULL_HANDLE;
     VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
-    
-    
+
+
 private:
     const VulkanContext& m_context;
 };
@@ -595,21 +595,21 @@ class MeshletPipeline final : public RefCounter<IMeshletPipeline>, NoCopy{
 public:
     MeshletPipeline(const VulkanContext& context);
     virtual ~MeshletPipeline()override;
-    
+
 
 public:
     [[nodiscard]] virtual const MeshletPipelineDesc& getDescription()const override{ return desc; }
     [[nodiscard]] virtual const FramebufferInfo& getFramebufferInfo()const override{ return framebufferInfo; }
     virtual Object getNativeHandle(ObjectType objectType)override;
-    
-    
+
+
 public:
     MeshletPipelineDesc desc;
     FramebufferInfo framebufferInfo;
     VkPipeline pipeline = VK_NULL_HANDLE;
     VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
 
-    
+
 private:
     const VulkanContext& m_context;
 };
@@ -621,25 +621,25 @@ private:
 
 class RayTracingPipeline final : public RefCounter<IRayTracingPipeline>, NoCopy{
     friend Device;
-    
+
 
 public:
     RayTracingPipeline(const VulkanContext& context);
     virtual ~RayTracingPipeline()override;
-    
-    
+
+
 public:
     [[nodiscard]] virtual const RayTracingPipelineDesc& getDescription()const override{ return desc; }
     virtual RayTracingShaderTableHandle createShaderTable()override;
     virtual Object getNativeHandle(ObjectType objectType)override;
-    
-    
+
+
 public:
     RayTracingPipelineDesc desc;
     VkPipeline pipeline = VK_NULL_HANDLE;
     VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
     Vector<u8> shaderGroupHandles;
-    
+
 
 private:
     const VulkanContext& m_context;
@@ -655,8 +655,8 @@ class ShaderTable final : public RefCounter<IRayTracingShaderTable>, NoCopy{
 public:
     ShaderTable(const VulkanContext& context, Device* device);
     virtual ~ShaderTable()override;
-    
-    
+
+
 public:
     virtual void setRayGenerationShader(const Name& exportName, IBindingSet* bindings = nullptr)override;
     virtual u32 addMissShader(const Name& exportName, IBindingSet* bindings = nullptr)override;
@@ -667,32 +667,32 @@ public:
     virtual void clearCallableShaders()override;
     virtual IRayTracingPipeline* getPipeline()override{ return pipeline; }
     virtual Object getNativeHandle(ObjectType objectType)override;
-    
-    
+
+
 private:
     void allocateSBTBuffer(BufferHandle& outBuffer, u64 sbtSize);
     u32 findGroupIndex(const Name& exportName)const;
-    
-    
+
+
 public:
     RayTracingPipeline* pipeline = nullptr;
-    
+
     BufferHandle raygenBuffer;
     u64 raygenOffset = 0;
-    
+
     BufferHandle missBuffer;
     u64 missOffset = 0;
     u32 missCount = 0;
-    
+
     BufferHandle hitBuffer;
     u64 hitOffset = 0;
     u32 hitCount = 0;
-    
+
     BufferHandle callableBuffer;
     u64 callableOffset = 0;
     u32 callableCount = 0;
 
-    
+
 private:
     const VulkanContext& m_context;
     Device* m_device = nullptr;
@@ -708,13 +708,13 @@ public:
     BindingLayout(const VulkanContext& context);
     virtual ~BindingLayout()override;
 
-    
+
 public:
     [[nodiscard]] virtual const BindingLayoutDesc* getDescription()const override{ return isBindless ? nullptr : &desc; }
     [[nodiscard]] virtual const BindlessLayoutDesc* getBindlessDesc()const override{ return isBindless ? &bindlessDesc : nullptr; }
     virtual Object getNativeHandle(ObjectType objectType)override{ return Object(pipelineLayout); }
 
-    
+
 public:
     BindingLayoutDesc desc;
     BindlessLayoutDesc bindlessDesc;
@@ -722,7 +722,7 @@ public:
     VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
     Vector<VkDescriptorSetLayout> descriptorSetLayouts;
 
-    
+
 private:
     const VulkanContext& m_context;
 };
@@ -736,22 +736,22 @@ class DescriptorTable final : public RefCounter<IDescriptorTable>, NoCopy{
 public:
     DescriptorTable(const VulkanContext& context);
     virtual ~DescriptorTable()override;
-    
-    
+
+
 public:
     [[nodiscard]] virtual u32 getCapacity()const override{ return static_cast<u32>(descriptorSets.size()); }
     [[nodiscard]] virtual u32 getFirstDescriptorIndexInHeap()const override{ return 0; }
-    
+
     [[nodiscard]] virtual const BindingSetDesc* getDescription()const override{ return nullptr; }
     [[nodiscard]] virtual IBindingLayout* getLayout()const override{ return layout.get(); }
-    
-    
+
+
 public:
     RefCountPtr<BindingLayout, BlankDeleter<BindingLayout>> layout;
     Vector<VkDescriptorSet> descriptorSets;
     VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
 
-    
+
 private:
     const VulkanContext& m_context;
 };
@@ -765,20 +765,20 @@ class BindingSet final : public RefCounter<IBindingSet>, NoCopy{
 public:
     BindingSet(const VulkanContext& context);
     virtual ~BindingSet()override;
-    
-    
+
+
 public:
     [[nodiscard]] virtual const BindingSetDesc* getDescription()const override{ return &desc; }
     [[nodiscard]] virtual IBindingLayout* getLayout()const override{ return layout.get(); }
-    
-    
+
+
 public:
     BindingSetDesc desc;
     RefCountPtr<BindingLayout, BlankDeleter<BindingLayout>> layout;
     RefCountPtr<DescriptorTable, BlankDeleter<DescriptorTable>> descriptorTable;
     Vector<VkDescriptorSet> descriptorSets;
 
-    
+
 private:
     const VulkanContext& m_context;
 };
@@ -792,15 +792,15 @@ class AccelStruct final : public RefCounter<IRayTracingAccelStruct>, NoCopy{
 public:
     AccelStruct(const VulkanContext& context);
     virtual ~AccelStruct()override;
-    
-    
+
+
 public:
     [[nodiscard]] virtual const RayTracingAccelStructDesc& getDescription()const override{ return desc; }
     [[nodiscard]] virtual bool isCompacted()const override{ return compacted; }
     [[nodiscard]] virtual u64 getDeviceAddress()const override{ return deviceAddress; }
     virtual Object getNativeHandle(ObjectType objectType)override;
-    
-    
+
+
 public:
     RayTracingAccelStructDesc desc;
     VkAccelerationStructureKHR accelStruct = VK_NULL_HANDLE;
@@ -808,7 +808,7 @@ public:
     u64 deviceAddress = 0;
     bool compacted = false;
 
-    
+
 private:
     const VulkanContext& m_context;
 };
@@ -822,22 +822,22 @@ class OpacityMicromap final : public RefCounter<IRayTracingOpacityMicromap>, NoC
 public:
     OpacityMicromap(const VulkanContext& context);
     virtual ~OpacityMicromap()override;
-    
-    
+
+
 public:
     [[nodiscard]] virtual const RayTracingOpacityMicromapDesc& getDescription()const override{ return desc; }
     [[nodiscard]] virtual bool isCompacted()const override{ return compacted; }
     [[nodiscard]] virtual u64 getDeviceAddress()const override{ return deviceAddress; }
-    
-    
+
+
 public:
     RayTracingOpacityMicromapDesc desc;
     RefCountPtr<IBuffer, BlankDeleter<IBuffer>> dataBuffer;
     VkMicromapEXT micromap = VK_NULL_HANDLE;
     u64 deviceAddress = 0;
     bool compacted = false;
-    
-    
+
+
 private:
     const VulkanContext& m_context;
 };
@@ -851,32 +851,32 @@ class StateTracker final : NoCopy{
 public:
     StateTracker();
     ~StateTracker();
-    
-    
+
+
 public:
     void reset();
     void setPermanentTextureState(ITexture* texture, ResourceStates::Mask state);
     void setPermanentBufferState(IBuffer* buffer, ResourceStates::Mask state);
-    
+
     [[nodiscard]] bool isPermanentTexture(ITexture* texture)const;
     [[nodiscard]] bool isPermanentBuffer(IBuffer* buffer)const;
     [[nodiscard]] ResourceStates::Mask getTextureState(ITexture* texture, ArraySlice arraySlice, MipLevel mipLevel)const;
     [[nodiscard]] ResourceStates::Mask getBufferState(IBuffer* buffer)const;
-    
+
     void beginTrackingTexture(ITexture* texture, TextureSubresourceSet subresources, ResourceStates::Mask state);
     void beginTrackingBuffer(IBuffer* buffer, ResourceStates::Mask state);
-    
+
     void setEnableUavBarriersForTexture(ITexture* texture, bool enableBarriers);
     void setEnableUavBarriersForBuffer(IBuffer* buffer, bool enableBarriers);
-    
-    
+
+
 public:
     GraphicsState graphicsState;
     ComputeState computeState;
     MeshletState meshletState;
     RayTracingState rayTracingState;
-    
-    
+
+
 private:
     HashMap<ITexture*, ResourceStates::Mask> m_permanentTextureStates;
     HashMap<IBuffer*, ResourceStates::Mask> m_permanentBufferStates;
@@ -908,28 +908,28 @@ class CommandList final : public RefCounter<ICommandList>, NoCopy{
 public:
     CommandList(Device& device, const CommandListParameters& params);
     virtual ~CommandList()override;
-    
-    
+
+
 public:
     virtual void open()override;
     virtual void close()override;
     virtual void clearState()override;
-    
+
     virtual void setResourceStatesForBindingSet(IBindingSet* bindingSet)override;
     virtual void setEnableAutomaticBarriers(bool enable)override;
     virtual void commitBarriers()override;
-    
+
     virtual void setTextureState(ITexture* texture, TextureSubresourceSet subresources, ResourceStates::Mask stateBits)override;
     virtual void setBufferState(IBuffer* buffer, ResourceStates::Mask stateBits)override;
     virtual void setAccelStructState(IRayTracingAccelStruct* as, ResourceStates::Mask stateBits)override;
-    
+
     virtual void setPermanentTextureState(ITexture* texture, ResourceStates::Mask stateBits)override;
     virtual void setPermanentBufferState(IBuffer* buffer, ResourceStates::Mask stateBits)override;
-    
+
     virtual void clearTextureFloat(ITexture* texture, TextureSubresourceSet subresources, const Color& clearColor)override;
     virtual void clearDepthStencilTexture(ITexture* texture, TextureSubresourceSet subresources, bool clearDepth, f32 depth, bool clearStencil, u8 stencil)override;
     virtual void clearTextureUInt(ITexture* texture, TextureSubresourceSet subresources, u32 clearColor)override;
-    
+
     virtual void copyTexture(ITexture* dest, const TextureSlice& destSlice, ITexture* src, const TextureSlice& srcSlice)override;
     virtual void copyTexture(IStagingTexture* dest, const TextureSlice& destSlice, ITexture* src, const TextureSlice& srcSlice)override;
     virtual void copyTexture(ITexture* dest, const TextureSlice& destSlice, IStagingTexture* src, const TextureSlice& srcSlice)override;
@@ -938,26 +938,26 @@ public:
     virtual void copyBuffer(IBuffer* dest, u64 destOffsetBytes, IBuffer* src, u64 srcOffsetBytes, u64 dataSizeBytes)override;
     virtual void writeTexture(ITexture* dest, u32 arraySlice, u32 mipLevel, const void* data, usize rowPitch, usize depthPitch = 0)override;
     virtual void resolveTexture(ITexture* dest, const TextureSubresourceSet& dstSubresources, ITexture* src, const TextureSubresourceSet& srcSubresources)override;
-    
+
     virtual void clearSamplerFeedbackTexture(ISamplerFeedbackTexture* texture)override;
     virtual void decodeSamplerFeedbackTexture(IBuffer* buffer, ISamplerFeedbackTexture* texture, Format::Enum format)override;
     virtual void setSamplerFeedbackTextureState(ISamplerFeedbackTexture* texture, ResourceStates::Mask stateBits)override;
-    
+
     virtual void setPushConstants(const void* data, usize byteSize)override;
-    
+
     virtual void setGraphicsState(const GraphicsState& state)override;
     virtual void draw(const DrawArguments& args)override;
     virtual void drawIndexed(const DrawArguments& args)override;
     virtual void drawIndirect(u32 offsetBytes, u32 drawCount = 1)override;
     virtual void drawIndexedIndirect(u32 offsetBytes, u32 drawCount = 1)override;
-    
+
     virtual void setComputeState(const ComputeState& state)override;
     virtual void dispatch(u32 groupsX, u32 groupsY = 1, u32 groupsZ = 1)override;
     virtual void dispatchIndirect(u32 offsetBytes)override;
-    
+
     virtual void setMeshletState(const MeshletState& state)override;
     virtual void dispatchMesh(u32 groupsX, u32 groupsY = 1, u32 groupsZ = 1)override;
-    
+
     virtual void setRayTracingState(const RayTracingState& state)override;
     virtual void dispatchRays(const RayTracingDispatchRaysArguments& args)override;
     virtual void buildBottomLevelAccelStruct(IRayTracingAccelStruct* as, const RayTracingGeometryDesc* pGeometries, usize numGeometries, RayTracingAccelStructBuildFlags::Mask buildFlags = RayTracingAccelStructBuildFlags::None)override;
@@ -967,22 +967,22 @@ public:
     virtual void buildTopLevelAccelStructFromBuffer(IRayTracingAccelStruct* as, IBuffer* instanceBuffer, u64 instanceBufferOffset, usize numInstances, RayTracingAccelStructBuildFlags::Mask buildFlags = RayTracingAccelStructBuildFlags::None)override;
     virtual void executeMultiIndirectClusterOperation(const RayTracingClusterOperationDesc& desc)override;
     virtual void convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDesc const* convertDescs, usize numDescs)override;
-    
+
     virtual void beginTimerQuery(ITimerQuery* query)override;
     virtual void endTimerQuery(ITimerQuery* query)override;
     virtual void beginMarker(const Name& name)override;
     virtual void endMarker()override;
-    
+
     virtual void setEnableUavBarriersForTexture(ITexture* texture, bool enableBarriers)override;
     virtual void setEnableUavBarriersForBuffer(IBuffer* buffer, bool enableBarriers)override;
     virtual void beginTrackingTextureState(ITexture* texture, TextureSubresourceSet subresources, ResourceStates::Mask stateBits)override;
     virtual void beginTrackingBufferState(IBuffer* buffer, ResourceStates::Mask stateBits)override;
     virtual ResourceStates::Mask getTextureSubresourceState(ITexture* texture, ArraySlice arraySlice, MipLevel mipLevel)override;
     virtual ResourceStates::Mask getBufferState(IBuffer* buffer)override;
-    
+
     virtual IDevice* getDevice()override;
     virtual const CommandListParameters& getDescription()override;
-    
+
 public:
     void copyTextureToBuffer(IBuffer* dest, u64 destOffsetBytes, u32 destRowPitch, ITexture* src, const TextureSlice& srcSlice);
     void setEventQuery(IEventQuery* query, CommandQueue::Enum waitQueue);
@@ -994,14 +994,14 @@ public:
 private:
     void beginRenderPass(IFramebuffer* framebuffer, const RenderPassParameters& params);
     void endRenderPass();
-    
-    
+
+
 public:
     CommandListParameters desc;
     TrackedCommandBufferPtr currentCmdBuf;
     UniquePtr<StateTracker> stateTracker;
     bool enableAutomaticBarriers = true;
-    
+
     GraphicsState currentGraphicsState;
     ComputeState currentComputeState;
     MeshletState currentMeshletState;
@@ -1015,7 +1015,7 @@ private:
 
     Vector<VkImageMemoryBarrier2> m_pendingImageBarriers;
     Vector<VkBufferMemoryBarrier2> m_pendingBufferBarriers;
-    
+
     Vector<RefCountPtr<AccelStruct, BlankDeleter<AccelStruct>>> m_pendingCompactions;
 };
 
@@ -1028,13 +1028,13 @@ class EventQuery final : public RefCounter<IEventQuery>, NoCopy{
 public:
     EventQuery(const VulkanContext& context);
     virtual ~EventQuery()override;
-    
-    
+
+
 public:
     VkFence fence = VK_NULL_HANDLE;
     bool started = false;
 
-    
+
 private:
     const VulkanContext& m_context;
 };
@@ -1048,14 +1048,14 @@ class TimerQuery final : public RefCounter<ITimerQuery>, NoCopy{
 public:
     TimerQuery(const VulkanContext& context);
     virtual ~TimerQuery()override;
-    
-    
+
+
 public:
     VkQueryPool queryPool = VK_NULL_HANDLE;
     bool started = false;
     bool resolved = false;
 
-    
+
 private:
     const VulkanContext& m_context;
 };
@@ -1069,7 +1069,7 @@ class Device final : public RefCounter<IDevice>, NoCopy{
 public:
     explicit Device(const DeviceDesc& desc);
     virtual ~Device()override;
-    
+
 
 public:
     [[nodiscard]] virtual HeapHandle createHeap(const HeapDesc& d)override;
@@ -1133,19 +1133,19 @@ public:
     [[nodiscard]] virtual Object getNativeQueue(ObjectType objectType, CommandQueue::Enum queue)override;
     virtual bool isAftermathEnabled()override{ return m_aftermathEnabled; }
     [[nodiscard]] virtual AftermathCrashDumpHelper& getAftermathCrashDumpHelper()override;
-    
+
     [[nodiscard]] virtual VkSemaphore getQueueSemaphore(CommandQueue::Enum queue)override;
     virtual void queueWaitForSemaphore(CommandQueue::Enum waitQueue, VkSemaphore semaphore, u64 value)override;
     virtual void queueSignalSemaphore(CommandQueue::Enum executionQueue, VkSemaphore semaphore, u64 value)override;
     [[nodiscard]] virtual u64 queueGetCompletedInstance(CommandQueue::Enum queue)override;
-    
+
 public:
     [[nodiscard]] const VulkanContext& getContext()const{ return m_context; }
     [[nodiscard]] Queue* getQueue(CommandQueue::Enum queueType)const;
     [[nodiscard]] VulkanAllocator& getAllocator(){ return m_allocator; }
     [[nodiscard]] UploadManager* getUploadManager(){ return m_uploadManager.get(); }
     [[nodiscard]] UploadManager* getScratchManager(){ return m_scratchManager.get(); }
-    
+
 
 private:
     // Aftermath must be first due to reverse destruction order

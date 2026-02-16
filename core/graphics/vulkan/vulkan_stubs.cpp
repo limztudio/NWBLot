@@ -40,7 +40,7 @@ void CommandList::setSamplerFeedbackTextureState(ISamplerFeedbackTexture* textur
 
 void CommandList::setPushConstants(const void* data, usize byteSize){
     VkPipelineLayout layout = VK_NULL_HANDLE;
-    
+
     if(currentGraphicsState.pipeline){
         auto* gp = checked_cast<GraphicsPipeline*>(currentGraphicsState.pipeline);
         layout = gp->pipelineLayout;
@@ -60,12 +60,12 @@ void CommandList::setPushConstants(const void* data, usize byteSize){
             layout = rtpImpl->pipelineLayout;
         }
     }
-    
+
     if(layout == VK_NULL_HANDLE){
         NWB_ASSERT_MSG(false, NWB_TEXT("setPushConstants: no active pipeline layout"));
         return;
     }
-    
+
     vkCmdPushConstants(currentCmdBuf->cmdBuf, layout, VK_SHADER_STAGE_ALL, 0, static_cast<u32>(byteSize), data);
 }
 
@@ -94,56 +94,56 @@ void CommandList::buildTopLevelAccelStructFromBuffer(IRayTracingAccelStruct* _as
 {
     if(!_as || !instanceBuffer || numInstances == 0)
         return;
-    
+
     if(!m_context.extensions.KHR_acceleration_structure)
         return;
-    
+
     auto* as = checked_cast<AccelStruct*>(_as);
-    
+
     VkAccelerationStructureGeometryKHR geometry = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR };
     geometry.geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR;
     geometry.geometry.instances.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
     geometry.geometry.instances.arrayOfPointers = VK_FALSE;
     geometry.geometry.instances.data.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(instanceBuffer, instanceBufferOffset);
-    
+
     VkAccelerationStructureBuildGeometryInfoKHR buildInfo = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR };
     buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
     buildInfo.flags = 0;
-    
+
     if(buildFlags & RayTracingAccelStructBuildFlags::AllowUpdate)
         buildInfo.flags |= VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR;
     if(buildFlags & RayTracingAccelStructBuildFlags::PreferFastTrace)
         buildInfo.flags |= VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
     if(buildFlags & RayTracingAccelStructBuildFlags::PreferFastBuild)
         buildInfo.flags |= VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR;
-    
+
     buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
     buildInfo.dstAccelerationStructure = as->accelStruct;
     buildInfo.geometryCount = 1;
     buildInfo.pGeometries = &geometry;
-    
+
     auto primitiveCount = static_cast<uint32_t>(numInstances);
     VkAccelerationStructureBuildSizesInfoKHR sizeInfo = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR };
     vkGetAccelerationStructureBuildSizesKHR(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &primitiveCount, &sizeInfo);
-    
+
     BufferDesc scratchDesc;
     scratchDesc.byteSize = sizeInfo.buildScratchSize;
     scratchDesc.structStride = 1;
     scratchDesc.debugName = "TLAS_BuildScratch";
-    
+
     BufferHandle scratchBuffer = m_device.createBuffer(scratchDesc);
     if(scratchBuffer){
         buildInfo.scratchData.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(scratchBuffer.get());
-        
+
         VkAccelerationStructureBuildRangeInfoKHR rangeInfo = {};
         rangeInfo.primitiveCount = primitiveCount;
         const VkAccelerationStructureBuildRangeInfoKHR* pRangeInfo = &rangeInfo;
-        
+
         vkCmdBuildAccelerationStructuresKHR(currentCmdBuf->cmdBuf, 1, &buildInfo, &pRangeInfo);
-        
+
         currentCmdBuf->referencedStagingBuffers.push_back(scratchBuffer);
     }
-    
+
     currentCmdBuf->referencedResources.push_back(_as);
     currentCmdBuf->referencedResources.push_back(instanceBuffer);
 }
@@ -151,7 +151,7 @@ void CommandList::buildTopLevelAccelStructFromBuffer(IRayTracingAccelStruct* _as
 void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOperationDesc& desc){
     if(!m_context.extensions.NV_cluster_acceleration_structure)
         return;
-    
+
     VkClusterAccelerationStructureOpTypeNV opType;
     switch(desc.params.type){
     case RayTracingClusterOperationType::Move:
@@ -172,7 +172,7 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
     default:
         return;
     }
-    
+
     VkClusterAccelerationStructureOpModeNV opMode;
     switch(desc.params.mode){
     case RayTracingClusterOperationMode::ImplicitDestinations:
@@ -187,7 +187,7 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
     default:
         return;
     }
-    
+
     VkBuildAccelerationStructureFlagsKHR opFlags = 0;
     if(desc.params.flags & RayTracingClusterOperationFlags::FastTrace)
         opFlags |= VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
@@ -195,17 +195,17 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
         opFlags |= VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR;
     if(desc.params.flags & RayTracingClusterOperationFlags::AllowOMM)
         opFlags |= VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_OPACITY_MICROMAP_UPDATE_EXT;
-    
+
     VkClusterAccelerationStructureInputInfoNV inputInfo = { VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_INPUT_INFO_NV };
     inputInfo.maxAccelerationStructureCount = desc.params.maxArgCount;
     inputInfo.flags = opFlags;
     inputInfo.opType = opType;
     inputInfo.opMode = opMode;
-    
+
     VkClusterAccelerationStructureMoveObjectsInputNV moveInput = { VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_MOVE_OBJECTS_INPUT_NV };
     VkClusterAccelerationStructureTriangleClusterInputNV clusterInput = { VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_TRIANGLE_CLUSTER_INPUT_NV };
     VkClusterAccelerationStructureClustersBottomLevelInputNV blasInput = { VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_CLUSTERS_BOTTOM_LEVEL_INPUT_NV };
-    
+
     switch(desc.params.type){
     case RayTracingClusterOperationType::Move:{
         VkClusterAccelerationStructureTypeNV moveType;
@@ -244,13 +244,13 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
     default:
         break;
     }
-    
+
     auto* indirectArgCountBuffer = desc.inIndirectArgCountBuffer ? checked_cast<Buffer*>(desc.inIndirectArgCountBuffer) : nullptr;
     auto* indirectArgsBuffer = desc.inIndirectArgsBuffer ? checked_cast<Buffer*>(desc.inIndirectArgsBuffer) : nullptr;
     auto* inOutAddressesBuffer = desc.inOutAddressesBuffer ? checked_cast<Buffer*>(desc.inOutAddressesBuffer) : nullptr;
     auto* outSizesBuffer = desc.outSizesBuffer ? checked_cast<Buffer*>(desc.outSizesBuffer) : nullptr;
     auto* outAccelerationStructuresBuffer = desc.outAccelerationStructuresBuffer ? checked_cast<Buffer*>(desc.outAccelerationStructuresBuffer) : nullptr;
-    
+
     if(enableAutomaticBarriers){
         if(indirectArgsBuffer)
             setBufferState(desc.inIndirectArgsBuffer, ResourceStates::ShaderResource);
@@ -263,7 +263,7 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
         if(outAccelerationStructuresBuffer)
             setBufferState(desc.outAccelerationStructuresBuffer, ResourceStates::AccelStructWrite);
     }
-    
+
     if(indirectArgCountBuffer)
         currentCmdBuf->referencedResources.push_back(desc.inIndirectArgCountBuffer);
     if(indirectArgsBuffer)
@@ -274,9 +274,9 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
         currentCmdBuf->referencedResources.push_back(desc.outSizesBuffer);
     if(outAccelerationStructuresBuffer)
         currentCmdBuf->referencedResources.push_back(desc.outAccelerationStructuresBuffer);
-    
+
     commitBarriers();
-    
+
     BufferHandle scratchBufferHandle;
     Buffer* scratchBuffer = nullptr;
     if(desc.scratchSizeInBytes > 0){
@@ -285,42 +285,42 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
         scratchDesc.structStride = 1;
         scratchDesc.debugName = "ClusterOp_Scratch";
         scratchDesc.canHaveUAVs = true;
-        
+
         scratchBufferHandle = m_device.createBuffer(scratchDesc);
         if(!scratchBufferHandle)
             return;
-        
+
         scratchBuffer = checked_cast<Buffer*>(scratchBufferHandle.get());
     }
-    
+
     VkClusterAccelerationStructureCommandsInfoNV commandsInfo = { VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_COMMANDS_INFO_NV };
     commandsInfo.input = inputInfo;
     commandsInfo.scratchData = scratchBuffer ? scratchBuffer->deviceAddress : 0;
     commandsInfo.dstImplicitData = outAccelerationStructuresBuffer ? outAccelerationStructuresBuffer->deviceAddress + desc.outAccelerationStructuresOffsetInBytes : 0;
-    
+
     if(inOutAddressesBuffer){
         commandsInfo.dstAddressesArray.deviceAddress = inOutAddressesBuffer->deviceAddress + desc.inOutAddressesOffsetInBytes;
         commandsInfo.dstAddressesArray.stride = inOutAddressesBuffer->getDescription().structStride;
         commandsInfo.dstAddressesArray.size = inOutAddressesBuffer->getDescription().byteSize - desc.inOutAddressesOffsetInBytes;
     }
-    
+
     if(outSizesBuffer){
         commandsInfo.dstSizesArray.deviceAddress = outSizesBuffer->deviceAddress + desc.outSizesOffsetInBytes;
         commandsInfo.dstSizesArray.stride = outSizesBuffer->getDescription().structStride;
         commandsInfo.dstSizesArray.size = outSizesBuffer->getDescription().byteSize - desc.outSizesOffsetInBytes;
     }
-    
+
     if(indirectArgsBuffer){
         commandsInfo.srcInfosArray.deviceAddress = indirectArgsBuffer->deviceAddress + desc.inIndirectArgsOffsetInBytes;
         commandsInfo.srcInfosArray.stride = indirectArgsBuffer->getDescription().structStride;
         commandsInfo.srcInfosArray.size = indirectArgsBuffer->getDescription().byteSize - desc.inIndirectArgsOffsetInBytes;
     }
-    
+
     commandsInfo.srcInfosCount = indirectArgCountBuffer ? indirectArgCountBuffer->deviceAddress + desc.inIndirectArgCountOffsetInBytes : 0;
     commandsInfo.addressResolutionFlags = static_cast<VkClusterAccelerationStructureAddressResolutionFlagsNV>(0);
-    
+
     vkCmdBuildClusterAccelerationStructureIndirectNV(currentCmdBuf->cmdBuf, &commandsInfo);
-    
+
     if(scratchBufferHandle)
         currentCmdBuf->referencedStagingBuffers.push_back(Move(scratchBufferHandle));
 }
@@ -328,27 +328,27 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
 void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDesc const* convertDescs, usize numDescs){
     if(!m_context.extensions.NV_cooperative_vector)
         return;
-    
+
     if(numDescs == 0)
         return;
-    
+
     Vector<VkConvertCooperativeVectorMatrixInfoNV> vkConvertDescs;
     vkConvertDescs.reserve(numDescs);
-    
+
     Vector<usize> dstSizes;
     dstSizes.reserve(numDescs);
-    
+
     for(usize i = 0; i < numDescs; ++i){
         const CooperativeVectorConvertMatrixLayoutDesc& desc = convertDescs[i];
-        
+
         if(!desc.src.buffer || !desc.dst.buffer)
             continue;
-        
+
         if(enableAutomaticBarriers){
             setBufferState(desc.src.buffer, ResourceStates::ShaderResource);
             setBufferState(desc.dst.buffer, ResourceStates::UnorderedAccess);
         }
-        
+
         VkConvertCooperativeVectorMatrixInfoNV vkDesc = { VK_STRUCTURE_TYPE_CONVERT_COOPERATIVE_VECTOR_MATRIX_INFO_NV };
         vkDesc.srcSize = desc.src.size;
         vkDesc.srcData.deviceAddress = checked_cast<Buffer*>(desc.src.buffer)->deviceAddress + desc.src.offset;
@@ -358,22 +358,22 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
         vkDesc.dstComponentType = __hidden_vulkan::ConvertCoopVecDataType(desc.dst.type);
         vkDesc.numRows = desc.numRows;
         vkDesc.numColumns = desc.numColumns;
-        
+
         vkDesc.srcLayout = __hidden_vulkan::ConvertCoopVecMatrixLayout(desc.src.layout);
         vkDesc.srcStride = desc.src.stride != 0
             ? desc.src.stride
             : GetCooperativeVectorOptimalMatrixStride(desc.src.type, desc.src.layout, desc.numRows, desc.numColumns);
-        
+
         vkDesc.dstLayout = __hidden_vulkan::ConvertCoopVecMatrixLayout(desc.dst.layout);
         vkDesc.dstStride = desc.dst.stride != 0
             ? desc.dst.stride
             : GetCooperativeVectorOptimalMatrixStride(desc.dst.type, desc.dst.layout, desc.numRows, desc.numColumns);
-        
+
         vkConvertDescs.push_back(vkDesc);
     }
-    
+
     commitBarriers();
-    
+
     if(!vkConvertDescs.empty())
         vkCmdConvertCooperativeVectorMatrixNV(currentCmdBuf->cmdBuf, static_cast<u32>(vkConvertDescs.size()), vkConvertDescs.data());
 }
@@ -435,17 +435,17 @@ void Device::getTextureTiling(ITexture* _texture, u32* numTiles, PackedMipDesc* 
     u32 tileWidth = 1;
     u32 tileHeight = 1;
     u32 tileDepth = 1;
-    
+
     uint32_t sparseReqCount = 0;
     vkGetImageSparseMemoryRequirements(m_context.device, texture->image, &sparseReqCount, nullptr);
-    
+
     Vector<VkSparseImageMemoryRequirements> sparseReqs(sparseReqCount);
     if(sparseReqCount > 0)
         vkGetImageSparseMemoryRequirements(m_context.device, texture->image, &sparseReqCount, sparseReqs.data());
-    
+
     if(!sparseReqs.empty()){
         numStandardMips = sparseReqs[0].imageMipTailFirstLod;
-        
+
         if(desc){
             desc->numStandardMips = numStandardMips;
             desc->numPackedMips = texture->desc.mipLevels - numStandardMips;
@@ -453,7 +453,7 @@ void Device::getTextureTiling(ITexture* _texture, u32* numTiles, PackedMipDesc* 
             desc->numTilesForPackedMips = texture->tileByteSize > 0 ? static_cast<u32>(sparseReqs[0].imageMipTailSize / texture->tileByteSize) : 0;
         }
     }
-    
+
     uint32_t formatPropCount = 0;
     vkGetPhysicalDeviceSparseImageFormatProperties(
         m_context.physicalDevice,
@@ -464,7 +464,7 @@ void Device::getTextureTiling(ITexture* _texture, u32* numTiles, PackedMipDesc* 
         texture->imageInfo.tiling,
         &formatPropCount, nullptr
         );
-    
+
     Vector<VkSparseImageFormatProperties> formatProps(formatPropCount);
     if(formatPropCount > 0){
         vkGetPhysicalDeviceSparseImageFormatProperties(
@@ -476,27 +476,27 @@ void Device::getTextureTiling(ITexture* _texture, u32* numTiles, PackedMipDesc* 
             texture->imageInfo.tiling,
             &formatPropCount, formatProps.data());
     }
-    
+
     if(!formatProps.empty()){
         tileWidth = formatProps[0].imageGranularity.width;
         tileHeight = formatProps[0].imageGranularity.height;
         tileDepth = formatProps[0].imageGranularity.depth;
     }
-    
+
     if(tileShape){
         tileShape->widthInTexels = tileWidth;
         tileShape->heightInTexels = tileHeight;
         tileShape->depthInTexels = tileDepth;
     }
-    
+
     if(subresourceTilingsNum && subresourceTilings){
         *subresourceTilingsNum = Min(*subresourceTilingsNum, texture->desc.mipLevels);
         u32 startTileIndex = 0;
-        
+
         u32 width = texture->desc.width;
         u32 height = texture->desc.height;
         u32 depth = texture->desc.depth;
-        
+
         for(u32 i = 0; i < *subresourceTilingsNum; ++i){
             if(i < numStandardMips){
                 subresourceTilings[i].widthInTiles = (width + tileWidth - 1) / tileWidth;
@@ -510,15 +510,15 @@ void Device::getTextureTiling(ITexture* _texture, u32* numTiles, PackedMipDesc* 
                 subresourceTilings[i].depthInTiles = 0;
                 subresourceTilings[i].startTileIndexInOverallResource = UINT32_MAX;
             }
-            
+
             width = Max(width / 2, tileWidth);
             height = Max(height / 2, tileHeight);
             depth = Max(depth / 2, tileDepth);
-            
+
             startTileIndex += subresourceTilings[i].widthInTiles * subresourceTilings[i].heightInTiles * subresourceTilings[i].depthInTiles;
         }
     }
-    
+
     if(numTiles){
         VkMemoryRequirements memReqs;
         vkGetImageMemoryRequirements(m_context.device, texture->image, &memReqs);
@@ -530,7 +530,7 @@ void Device::updateTextureTileMappings(ITexture* texture, const TextureTilesMapp
     Queue* queue = getQueue(executionQueue);
     if(!queue)
         return;
-    
+
     queue->updateTextureTileMappings(texture, tileMappings, numTileMappings);
 }
 

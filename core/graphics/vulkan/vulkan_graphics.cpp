@@ -171,36 +171,36 @@ Object GraphicsPipeline::getNativeHandle(ObjectType objectType){
 FramebufferHandle Device::createFramebuffer(const FramebufferDesc& desc){
     auto* fb = new Framebuffer(m_context);
     fb->desc = desc;
-    
+
     for(u32 i = 0; i < static_cast<u32>(desc.colorAttachments.size()); ++i){
         if(desc.colorAttachments[i].texture){
             fb->resources.push_back(desc.colorAttachments[i].texture);
             auto* tex = checked_cast<Texture*>(desc.colorAttachments[i].texture);
             fb->framebufferInfo.colorFormats.push_back(tex->desc.format);
-            
+
             if(fb->framebufferInfo.width == 0)
                 fb->framebufferInfo.width = tex->desc.width;
             if(fb->framebufferInfo.height == 0)
                 fb->framebufferInfo.height = tex->desc.height;
         }
     }
-    
+
     if(desc.depthAttachment.texture){
         fb->resources.push_back(desc.depthAttachment.texture);
         auto* depthTex = checked_cast<Texture*>(desc.depthAttachment.texture);
         fb->framebufferInfo.depthFormat = depthTex->desc.format;
-        
+
         if(fb->framebufferInfo.width == 0)
             fb->framebufferInfo.width = depthTex->desc.width;
         if(fb->framebufferInfo.height == 0)
             fb->framebufferInfo.height = depthTex->desc.height;
     }
-    
+
     if(!fb->resources.empty()){
         auto* tex = checked_cast<Texture*>(fb->resources[0].get());
         fb->framebufferInfo.sampleCount = tex->desc.sampleCount;
     }
-    
+
     return FramebufferHandle(fb, AdoptRef);
 }
 
@@ -209,20 +209,20 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     auto* pso = new GraphicsPipeline(m_context);
     pso->desc = desc;
     pso->framebufferInfo = fbinfo;
-    
+
     // Step 1: Collect shader stages
     Vector<VkPipelineShaderStageCreateInfo> shaderStages;
     Vector<VkSpecializationInfo> specInfos;
     shaderStages.reserve(5);
     specInfos.reserve(5);
-    
+
     auto addShaderStage = [&](IShader* iShader, VkShaderStageFlagBits vkStage){
         auto* s = checked_cast<Shader*>(iShader);
         VkPipelineShaderStageCreateInfo stageInfo = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
         stageInfo.stage = vkStage;
         stageInfo.module = s->shaderModule;
         stageInfo.pName = s->desc.entryName.c_str();
-        
+
         if(!s->specializationEntries.empty()){
             VkSpecializationInfo specInfo{};
             specInfo.mapEntryCount = static_cast<u32>(s->specializationEntries.size());
@@ -232,10 +232,10 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
             specInfos.push_back(specInfo);
             stageInfo.pSpecializationInfo = &specInfos.back();
         }
-        
+
         shaderStages.push_back(stageInfo);
     };
-    
+
     if(desc.VS)
         addShaderStage(desc.VS.get(), VK_SHADER_STAGE_VERTEX_BIT);
     if(desc.HS)
@@ -246,36 +246,36 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
         addShaderStage(desc.GS.get(), VK_SHADER_STAGE_GEOMETRY_BIT);
     if(desc.PS)
         addShaderStage(desc.PS.get(), VK_SHADER_STAGE_FRAGMENT_BIT);
-    
+
     // Step 2: Vertex input state from InputLayout
     VkPipelineVertexInputStateCreateInfo vertexInputInfo = { VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO };
     Vector<VkVertexInputBindingDescription> bindings;
     Vector<VkVertexInputAttributeDescription> attributes;
-    
+
     if(desc.inputLayout){
         auto* layout = checked_cast<InputLayout*>(desc.inputLayout.get());
         bindings = layout->bindings;
         attributes = layout->vkAttributes;
     }
-    
+
     vertexInputInfo.vertexBindingDescriptionCount = (u32)bindings.size();
     vertexInputInfo.pVertexBindingDescriptions = bindings.data();
     vertexInputInfo.vertexAttributeDescriptionCount = (u32)attributes.size();
     vertexInputInfo.pVertexAttributeDescriptions = attributes.data();
-    
+
     // Step 3: Input assembly
     VkPipelineInputAssemblyStateCreateInfo inputAssembly = { VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO };
     inputAssembly.topology = __hidden_vulkan::ConvertPrimitiveTopology(desc.primType);
     inputAssembly.primitiveRestartEnable = VK_FALSE;
-    
+
     VkPipelineTessellationStateCreateInfo tessellationState = { VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO };
     tessellationState.patchControlPoints = desc.patchControlPoints;
-    
+
     // Step 4: Viewport and scissor (dynamic)
     VkPipelineViewportStateCreateInfo viewportState = { VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO };
     viewportState.viewportCount = 1;
     viewportState.scissorCount = 1;
-    
+
     // Step 5: Rasterization state
     VkPipelineRasterizationStateCreateInfo rasterizer = { VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO };
     rasterizer.depthClampEnable = desc.renderState.rasterState.depthClipEnable ? VK_FALSE : VK_TRUE;
@@ -288,13 +288,13 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     rasterizer.depthBiasClamp = desc.renderState.rasterState.depthBiasClamp;
     rasterizer.depthBiasSlopeFactor = desc.renderState.rasterState.slopeScaledDepthBias;
     rasterizer.lineWidth = 1.0f;
-    
+
     // Step 6: Multisample state
     VkPipelineMultisampleStateCreateInfo multisampling = { VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO };
     multisampling.rasterizationSamples = __hidden_vulkan::GetSampleCount(fbinfo.sampleCount);
     multisampling.sampleShadingEnable = VK_FALSE;
     multisampling.alphaToCoverageEnable = desc.renderState.blendState.alphaToCoverageEnable ? VK_TRUE : VK_FALSE;
-    
+
     // Step 7: Depth/stencil state
     VkPipelineDepthStencilStateCreateInfo depthStencil = { VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO };
     depthStencil.depthTestEnable = desc.renderState.depthStencilState.depthTestEnable ? VK_TRUE : VK_FALSE;
@@ -304,7 +304,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     depthStencil.stencilTestEnable = desc.renderState.depthStencilState.stencilEnable ? VK_TRUE : VK_FALSE;
     depthStencil.front = __hidden_vulkan::ConvertStencilOpState(desc.renderState.depthStencilState, desc.renderState.depthStencilState.frontFaceStencil);
     depthStencil.back = __hidden_vulkan::ConvertStencilOpState(desc.renderState.depthStencilState, desc.renderState.depthStencilState.backFaceStencil);
-    
+
     // Step 8: Color blend state
     VkPipelineColorBlendStateCreateInfo colorBlending = { VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO };
     colorBlending.logicOpEnable = VK_FALSE;
@@ -315,7 +315,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     }
     colorBlending.attachmentCount = (u32)blendAttachments.size();
     colorBlending.pAttachments = blendAttachments.data();
-    
+
     // Step 9: Dynamic state
     VkDynamicState dynamicStates[] = {
         VK_DYNAMIC_STATE_VIEWPORT,
@@ -328,11 +328,11 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
         VK_DYNAMIC_STATE_STENCIL_WRITE_MASK,
         VK_DYNAMIC_STATE_STENCIL_REFERENCE,
     };
-    
+
     VkPipelineDynamicStateCreateInfo dynamicState = { VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO };
     dynamicState.dynamicStateCount = sizeof(dynamicStates) / sizeof(dynamicStates[0]);
     dynamicState.pDynamicStates = dynamicStates;
-    
+
     // Step 10: Pipeline layout from binding layouts
     pso->pipelineLayout = VK_NULL_HANDLE;
     Vector<VkDescriptorSetLayout> allDescriptorSetLayouts;
@@ -351,7 +351,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
         layoutInfo.pSetLayouts = allDescriptorSetLayouts.data();
         vkCreatePipelineLayout(m_context.device, &layoutInfo, m_context.allocationCallbacks, &pso->pipelineLayout);
     }
-    
+
     // Step 11: Dynamic rendering info
     VkPipelineRenderingCreateInfo renderingInfo = { VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO };
     Vector<VkFormat> colorFormats;
@@ -364,7 +364,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
         renderingInfo.depthAttachmentFormat = ConvertFormat(fbinfo.depthFormat);
         renderingInfo.stencilAttachmentFormat = ConvertFormat(fbinfo.depthFormat);
     }
-    
+
     VkGraphicsPipelineCreateInfo pipelineInfo = { VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO };
     if(m_context.extensions.KHR_dynamic_rendering)
         pipelineInfo.pNext = &renderingInfo;
@@ -382,13 +382,13 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     pipelineInfo.layout = pso->pipelineLayout;
     pipelineInfo.renderPass = VK_NULL_HANDLE;
     pipelineInfo.subpass = 0;
-    
+
     VkResult res = vkCreateGraphicsPipelines(m_context.device, m_context.pipelineCache, 1, &pipelineInfo, m_context.allocationCallbacks, &pso->pipeline);
     if(res != VK_SUCCESS){
         delete pso;
         return nullptr;
     }
-    
+
     return GraphicsPipelineHandle(pso, AdoptRef);
 }
 
@@ -399,21 +399,21 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
 void CommandList::beginRenderPass(IFramebuffer* _framebuffer, const RenderPassParameters& params){
     auto* fb = checked_cast<Framebuffer*>(_framebuffer);
     const FramebufferDesc& fbDesc = fb->desc;
-    
+
     // Dynamic rendering (VK_KHR_dynamic_rendering)
     VkRenderingAttachmentInfo colorAttachments[8] = {};
     u32 numColorAttachments = 0;
-    
+
     for(u32 i = 0; i < static_cast<u32>(fbDesc.colorAttachments.size()); ++i){
         if(fbDesc.colorAttachments[i].texture){
             auto* tex = checked_cast<Texture*>(fbDesc.colorAttachments[i].texture);
-            
+
             VkImageView view = tex->getView(fbDesc.colorAttachments[i].subresources, TextureDimension::Texture2D, Format::UNKNOWN);
-            
+
             colorAttachments[numColorAttachments].sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
             colorAttachments[numColorAttachments].imageView = view;
             colorAttachments[numColorAttachments].imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-            
+
             if(params.clearColorTargets && params.clearColorTarget(i)){
                 colorAttachments[numColorAttachments].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
                 const Color& clr = params.colorClearValues[i];
@@ -421,21 +421,21 @@ void CommandList::beginRenderPass(IFramebuffer* _framebuffer, const RenderPassPa
             }
             else
                 colorAttachments[numColorAttachments].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-            
+
             colorAttachments[numColorAttachments].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
             numColorAttachments++;
         }
     }
-    
+
     VkRenderingAttachmentInfo depthAttachment = { VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO };
     VkRenderingAttachmentInfo stencilAttachment = { VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO };
     bool hasDepth = false;
     bool hasStencil = false;
-    
+
     if(fbDesc.depthAttachment.texture){
         auto* depthTex = checked_cast<Texture*>(fbDesc.depthAttachment.texture);
         VkImageView depthView = depthTex->getView(fbDesc.depthAttachment.subresources, TextureDimension::Texture2D, Format::UNKNOWN, true);
-        
+
         const FormatInfo& formatInfo = GetFormatInfo(depthTex->desc.format);
         if(formatInfo.hasDepth){
             depthAttachment.imageView = depthView;
@@ -454,7 +454,7 @@ void CommandList::beginRenderPass(IFramebuffer* _framebuffer, const RenderPassPa
             hasStencil = true;
         }
     }
-    
+
     VkRenderingInfo renderingInfo = { VK_STRUCTURE_TYPE_RENDERING_INFO };
     renderingInfo.renderArea.offset = { 0, 0 };
     renderingInfo.renderArea.extent = { fb->framebufferInfo.width, fb->framebufferInfo.height };
@@ -465,7 +465,7 @@ void CommandList::beginRenderPass(IFramebuffer* _framebuffer, const RenderPassPa
         renderingInfo.pDepthAttachment = &depthAttachment;
     if(hasStencil)
         renderingInfo.pStencilAttachment = &stencilAttachment;
-    
+
     vkCmdBeginRendering(currentCmdBuf->cmdBuf, &renderingInfo);
 }
 
@@ -475,11 +475,11 @@ void CommandList::endRenderPass(){
 
 void CommandList::setGraphicsState(const GraphicsState& state){
     currentGraphicsState = state;
-    
+
     auto* pipeline = checked_cast<GraphicsPipeline*>(state.pipeline);
     if(pipeline)
         vkCmdBindPipeline(currentCmdBuf->cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->pipeline);
-    
+
     // Bind descriptor sets
     if(state.bindings.size() > 0){
         for(usize i = 0; i < state.bindings.size(); ++i){
@@ -493,7 +493,7 @@ void CommandList::setGraphicsState(const GraphicsState& state){
             }
         }
     }
-    
+
     // Set viewport and scissor
     if(!state.viewport.viewports.empty()){
         const auto& vp = state.viewport.viewports[0];
@@ -505,7 +505,7 @@ void CommandList::setGraphicsState(const GraphicsState& state){
         viewport.minDepth = vp.minZ;
         viewport.maxDepth = vp.maxZ;
         vkCmdSetViewport(currentCmdBuf->cmdBuf, 0, 1, &viewport);
-        
+
         VkRect2D scissor{};
         if(!state.viewport.scissorRects.empty()){
             const auto& sr = state.viewport.scissorRects[0];
@@ -518,7 +518,7 @@ void CommandList::setGraphicsState(const GraphicsState& state){
         }
         vkCmdSetScissor(currentCmdBuf->cmdBuf, 0, 1, &scissor);
     }
-    
+
     // Bind vertex buffers
     if(!state.vertexBuffers.empty()){
         VkBuffer vertexBuffers[16];
@@ -531,7 +531,7 @@ void CommandList::setGraphicsState(const GraphicsState& state){
         }
         vkCmdBindVertexBuffers(currentCmdBuf->cmdBuf, 0, count, vertexBuffers, offsets);
     }
-    
+
     // Bind index buffer
     if(state.indexBuffer.buffer){
         auto* ib = checked_cast<Buffer*>(state.indexBuffer.buffer);

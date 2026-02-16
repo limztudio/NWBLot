@@ -28,7 +28,7 @@ UploadManager::~UploadManager(){
 bool UploadManager::suballocateBuffer(u64 size, Buffer** pBuffer, u64* pOffset, void** pCpuVA, u64 currentVersion, u32 alignment){
     if(alignment > 0)
         size = (size + alignment - 1) & ~(static_cast<u64>(alignment) - 1);
-    
+
     if(m_currentChunk && (m_currentChunk->allocated + size <= m_currentChunk->size)){
         *pBuffer = static_cast<Buffer*>(m_currentChunk->buffer.get());
         *pOffset = m_currentChunk->allocated;
@@ -38,7 +38,7 @@ bool UploadManager::suballocateBuffer(u64 size, Buffer** pBuffer, u64* pOffset, 
         m_currentChunk->allocated += size;
         return true;
     }
-    
+
     for(auto it = m_chunkPool.begin(); it != m_chunkPool.end(); ++it){
         if((*it)->size >= size && (*it)->version < currentVersion){
             m_currentChunk = *it;
@@ -55,7 +55,7 @@ bool UploadManager::suballocateBuffer(u64 size, Buffer** pBuffer, u64* pOffset, 
             return true;
         }
     }
-    
+
     auto chunkSize = Max<u64>(size, m_defaultChunkSize);
 
     BufferDesc bufferDesc;

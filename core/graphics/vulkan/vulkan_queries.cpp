@@ -21,15 +21,15 @@ EventQueryHandle Device::createEventQuery(){
 
 void Device::setEventQuery(IEventQuery* _query, CommandQueue::Enum queue){
     auto* query = static_cast<EventQuery*>(_query);
-    
+
     vkResetFences(m_context.device, 1, &query->fence);
-    
+
     Queue* q = getQueue(queue);
     if(q){
         VkSubmitInfo submitInfo = { VK_STRUCTURE_TYPE_SUBMIT_INFO };
         vkQueueSubmit(q->getVkQueue(), 1, &submitInfo, query->fence);
     }
-    
+
     query->started = true;
 }
 
@@ -37,7 +37,7 @@ bool Device::pollEventQuery(IEventQuery* _query){
     auto* query = static_cast<EventQuery*>(_query);
     if(!query->started)
         return true;
-    
+
     VkResult res = vkGetFenceStatus(m_context.device, query->fence);
     return res == VK_SUCCESS;
 }
@@ -46,7 +46,7 @@ void Device::waitEventQuery(IEventQuery* _query){
     auto* query = static_cast<EventQuery*>(_query);
     if(!query->started)
         return;
-    
+
     vkWaitForFences(m_context.device, 1, &query->fence, VK_TRUE, UINT64_MAX);
 }
 
@@ -68,19 +68,19 @@ bool Device::pollTimerQuery(ITimerQuery* _query){
 
 f32 Device::getTimerQueryTime(ITimerQuery* _query){
     auto* query = static_cast<TimerQuery*>(_query);
-    
+
     if(!query->resolved)
         return 0.f;
-    
+
     u64 timestamps[2];
     VkResult res = vkGetQueryPoolResults(m_context.device, query->queryPool, 0, 2, sizeof(timestamps), timestamps, sizeof(u64), VK_QUERY_RESULT_64_BIT);
-    
+
     if(res == VK_SUCCESS){
         u64 diff = timestamps[1] - timestamps[0];
         f32 timestampPeriod = m_context.physicalDeviceProperties.limits.timestampPeriod;
         return static_cast<f32>(diff) * timestampPeriod * 1e-9f; // Convert to seconds
     }
-    
+
     return 0.f;
 }
 
@@ -97,14 +97,14 @@ void Device::resetTimerQuery(ITimerQuery* _query){
 
 void CommandList::beginTimerQuery(ITimerQuery* _query){
     auto* query = checked_cast<TimerQuery*>(_query);
-    
+
     vkCmdWriteTimestamp(currentCmdBuf->cmdBuf, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, query->queryPool, 0);
     query->started = true;
 }
 
 void CommandList::endTimerQuery(ITimerQuery* _query){
     auto* query = checked_cast<TimerQuery*>(_query);
-    
+
     vkCmdWriteTimestamp(currentCmdBuf->cmdBuf, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, query->queryPool, 1);
     query->resolved = true;
 }
@@ -142,28 +142,28 @@ void CommandList::endMarker(){
 
 void CommandList::setEventQuery(IEventQuery* _query, CommandQueue::Enum waitQueue){
     auto* query = checked_cast<EventQuery*>(_query);
-    
+
     if(query->fence != VK_NULL_HANDLE)
         vkResetFences(m_context.device, 1, &query->fence);
-    
+
     if(currentCmdBuf)
         currentCmdBuf->signalFence = query->fence;
-    
+
     query->started = true;
 }
 
 void CommandList::resetEventQuery(IEventQuery* _query){
     auto* query = checked_cast<EventQuery*>(_query);
-    
+
     if(query->fence != VK_NULL_HANDLE)
         vkResetFences(m_context.device, 1, &query->fence);
-    
+
     query->started = false;
 }
 
 void CommandList::waitEventQuery(IEventQuery* _query){
     auto* query = checked_cast<EventQuery*>(_query);
-    
+
     if(query->fence != VK_NULL_HANDLE)
         vkWaitForFences(m_context.device, 1, &query->fence, VK_TRUE, UINT64_MAX);
 }

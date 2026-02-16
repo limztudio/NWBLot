@@ -35,24 +35,24 @@ static constexpr FormatMapping g_FormatMappings[] = {
     { Format::RGBA32_FLOAT,       VK_FORMAT_R32G32B32A32_SFLOAT,  16, false, false, false },
     { Format::RGBA32_UINT,        VK_FORMAT_R32G32B32A32_UINT,    16, false, false, false },
     { Format::RGBA32_SINT,        VK_FORMAT_R32G32B32A32_SINT,    16, false, false, false },
-    
+
     { Format::RGB32_FLOAT,        VK_FORMAT_R32G32B32_SFLOAT,     12, false, false, false },
     { Format::RGB32_UINT,         VK_FORMAT_R32G32B32_UINT,       12, false, false, false },
     { Format::RGB32_SINT,         VK_FORMAT_R32G32B32_SINT,       12, false, false, false },
-    
+
     { Format::RGBA16_FLOAT,       VK_FORMAT_R16G16B16A16_SFLOAT,  8,  false, false, false },
     { Format::RGBA16_UNORM,       VK_FORMAT_R16G16B16A16_UNORM,   8,  false, false, false },
     { Format::RGBA16_SNORM,       VK_FORMAT_R16G16B16A16_SNORM,   8,  false, false, false },
     { Format::RGBA16_UINT,        VK_FORMAT_R16G16B16A16_UINT,    8,  false, false, false },
     { Format::RGBA16_SINT,        VK_FORMAT_R16G16B16A16_SINT,    8,  false, false, false },
-    
+
     { Format::RG32_FLOAT,         VK_FORMAT_R32G32_SFLOAT,        8,  false, false, false },
     { Format::RG32_UINT,          VK_FORMAT_R32G32_UINT,          8,  false, false, false },
     { Format::RG32_SINT,          VK_FORMAT_R32G32_SINT,          8,  false, false, false },
-    
+
     { Format::R10G10B10A2_UNORM,  VK_FORMAT_A2B10G10R10_UNORM_PACK32, 4, false, false, false },
     { Format::R11G11B10_FLOAT,    VK_FORMAT_B10G11R11_UFLOAT_PACK32,  4, false, false, false },
-    
+
     { Format::RGBA8_UNORM,        VK_FORMAT_R8G8B8A8_UNORM,       4,  false, false, false },
     { Format::RGBA8_SNORM,        VK_FORMAT_R8G8B8A8_SNORM,       4,  false, false, false },
     { Format::RGBA8_UINT,         VK_FORMAT_R8G8B8A8_UINT,        4,  false, false, false },
@@ -60,39 +60,39 @@ static constexpr FormatMapping g_FormatMappings[] = {
     { Format::RGBA8_UNORM_SRGB,   VK_FORMAT_R8G8B8A8_SRGB,        4,  false, false, false },
     { Format::BGRA8_UNORM,        VK_FORMAT_B8G8R8A8_UNORM,       4,  false, false, false },
     { Format::BGRA8_UNORM_SRGB,   VK_FORMAT_B8G8R8A8_SRGB,        4,  false, false, false },
-    
+
     { Format::RG16_FLOAT,         VK_FORMAT_R16G16_SFLOAT,        4,  false, false, false },
     { Format::RG16_UNORM,         VK_FORMAT_R16G16_UNORM,         4,  false, false, false },
     { Format::RG16_SNORM,         VK_FORMAT_R16G16_SNORM,         4,  false, false, false },
     { Format::RG16_UINT,          VK_FORMAT_R16G16_UINT,          4,  false, false, false },
     { Format::RG16_SINT,          VK_FORMAT_R16G16_SINT,          4,  false, false, false },
-    
+
     { Format::R32_FLOAT,          VK_FORMAT_R32_SFLOAT,           4,  false, false, false },
     { Format::R32_UINT,           VK_FORMAT_R32_UINT,             4,  false, false, false },
     { Format::R32_SINT,           VK_FORMAT_R32_SINT,             4,  false, false, false },
-    
+
     { Format::RG8_UNORM,          VK_FORMAT_R8G8_UNORM,           2,  false, false, false },
     { Format::RG8_SNORM,          VK_FORMAT_R8G8_SNORM,           2,  false, false, false },
     { Format::RG8_UINT,           VK_FORMAT_R8G8_UINT,            2,  false, false, false },
     { Format::RG8_SINT,           VK_FORMAT_R8G8_SINT,            2,  false, false, false },
-    
+
     { Format::R16_FLOAT,          VK_FORMAT_R16_SFLOAT,           2,  false, false, false },
     { Format::R16_UNORM,          VK_FORMAT_R16_UNORM,            2,  false, false, false },
     { Format::R16_SNORM,          VK_FORMAT_R16_SNORM,            2,  false, false, false },
     { Format::R16_UINT,           VK_FORMAT_R16_UINT,             2,  false, false, false },
     { Format::R16_SINT,           VK_FORMAT_R16_SINT,             2,  false, false, false },
-    
+
     { Format::R8_UNORM,           VK_FORMAT_R8_UNORM,             1,  false, false, false },
     { Format::R8_SNORM,           VK_FORMAT_R8_SNORM,             1,  false, false, false },
     { Format::R8_UINT,            VK_FORMAT_R8_UINT,              1,  false, false, false },
     { Format::R8_SINT,            VK_FORMAT_R8_SINT,              1,  false, false, false },
-    
+
     // Depth/Stencil formats
     { Format::D32,                VK_FORMAT_D32_SFLOAT,           4,  true,  false, false },
     { Format::D24S8,              VK_FORMAT_D24_UNORM_S8_UINT,    4,  true,  true,  false },
     { Format::D32S8,              VK_FORMAT_D32_SFLOAT_S8_UINT,   5,  true,  true,  false },
     { Format::D16,                VK_FORMAT_D16_UNORM,            2,  true,  false, false },
-    
+
     // Compressed formats - BC (DXT)
     { Format::BC1_UNORM,          VK_FORMAT_BC1_RGBA_UNORM_BLOCK, 0,  false, false, true },
     { Format::BC1_UNORM_SRGB,     VK_FORMAT_BC1_RGBA_SRGB_BLOCK,  0,  false, false, true },
@@ -118,13 +118,13 @@ constexpr VkFormat ConvertFormat(Format::Enum format){
         if(g_FormatMappings[i].format == format)
             return g_FormatMappings[i].vkFormat;
     }
-    
+
     return VK_FORMAT_UNDEFINED;
 }
 
 constexpr VkAccessFlags2 GetVkAccessFlags(ResourceStates::Mask states){
     VkAccessFlags2 flags = 0;
-    
+
     if(states & ResourceStates::VertexBuffer)
         flags |= VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT;
     if(states & ResourceStates::IndexBuffer)
@@ -169,13 +169,13 @@ constexpr VkAccessFlags2 GetVkAccessFlags(ResourceStates::Mask states){
         flags |= VK_ACCESS_2_MICROMAP_WRITE_BIT_EXT;
     if(states & ResourceStates::OpacityMicromapBuildInput)
         flags |= VK_ACCESS_2_SHADER_READ_BIT;
-    
+
     return flags;
 }
 
 constexpr VkPipelineStageFlags2 GetVkPipelineStageFlags(ResourceStates::Mask states){
     VkPipelineStageFlags2 flags = 0;
-    
+
     if(states & ResourceStates::VertexBuffer)
         flags |= VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT;
     if(states & ResourceStates::IndexBuffer)
@@ -198,10 +198,10 @@ constexpr VkPipelineStageFlags2 GetVkPipelineStageFlags(ResourceStates::Mask sta
         flags |= VK_PIPELINE_STAGE_2_FRAGMENT_SHADING_RATE_ATTACHMENT_BIT_KHR;
     if(states & (ResourceStates::OpacityMicromapRead | ResourceStates::OpacityMicromapWrite | ResourceStates::OpacityMicromapBuildInput))
         flags |= VK_PIPELINE_STAGE_2_MICROMAP_BUILD_BIT_EXT;
-    
+
     if(flags == 0)
         flags = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
-    
+
     return flags;
 }
 
@@ -228,7 +228,7 @@ constexpr VkImageLayout GetVkImageLayout(ResourceStates::Mask states){
         return VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
     if(states & ResourceStates::ShadingRateSurface)
         return VK_IMAGE_LAYOUT_FRAGMENT_SHADING_RATE_ATTACHMENT_OPTIMAL_KHR;
-    
+
     return VK_IMAGE_LAYOUT_GENERAL;
 }
 

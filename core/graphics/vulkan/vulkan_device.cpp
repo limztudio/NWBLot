@@ -25,12 +25,12 @@ Device::Device(const DeviceDesc& desc)
     m_context.physicalDevice = desc.physicalDevice;
     m_context.device = desc.device;
     m_context.allocationCallbacks = desc.allocationCallbacks;
-    
+
     vkGetPhysicalDeviceProperties(m_context.physicalDevice, &m_context.physicalDeviceProperties);
     vkGetPhysicalDeviceMemoryProperties(m_context.physicalDevice, &m_context.memoryProperties);
-    
+
     m_context.extensions.buffer_device_address = desc.bufferDeviceAddressSupported;
-    
+
     for(usize i = 0; i < desc.numDeviceExtensions; ++i){
         const char* ext = desc.deviceExtensions[i];
         if(NWB_STRCMP(ext, VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME) == 0)
@@ -52,31 +52,31 @@ Device::Device(const DeviceDesc& desc)
         else if(NWB_STRCMP(ext, VK_NV_CLUSTER_ACCELERATION_STRUCTURE_EXTENSION_NAME) == 0)
             m_context.extensions.NV_cluster_acceleration_structure = true;
     }
-    
+
     if(m_context.extensions.KHR_ray_tracing_pipeline){
         VkPhysicalDeviceProperties2 props2 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2 };
         m_context.rayTracingPipelineProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR;
-        
+
         void* pNext = &m_context.rayTracingPipelineProperties;
-        
+
         if(m_context.extensions.KHR_acceleration_structure){
             m_context.accelStructProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_PROPERTIES_KHR;
             m_context.accelStructProperties.pNext = pNext;
             pNext = &m_context.accelStructProperties;
         }
-        
+
         if(m_context.extensions.NV_cluster_acceleration_structure){
             m_context.nvClusterAccelerationStructureProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_CLUSTER_ACCELERATION_STRUCTURE_PROPERTIES_NV;
             m_context.nvClusterAccelerationStructureProperties.pNext = pNext;
             pNext = &m_context.nvClusterAccelerationStructureProperties;
         }
-        
+
         if(m_context.extensions.NV_cooperative_vector){
             m_context.coopVecProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_VECTOR_PROPERTIES_NV;
             m_context.coopVecProperties.pNext = pNext;
             pNext = &m_context.coopVecProperties;
         }
-        
+
         props2.pNext = pNext;
         vkGetPhysicalDeviceProperties2(m_context.physicalDevice, &props2);
     }
@@ -87,7 +87,7 @@ Device::Device(const DeviceDesc& desc)
         features2.pNext = &m_context.coopVecFeatures;
         vkGetPhysicalDeviceFeatures2(m_context.physicalDevice, &features2);
     }
-    
+
     VkPipelineCacheCreateInfo cacheInfo = { VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO };
     VkResult res = vkCreatePipelineCache(m_context.device, &cacheInfo, m_context.allocationCallbacks, &m_context.pipelineCache);
     if(res != VK_SUCCESS){
@@ -103,7 +103,7 @@ Device::Device(const DeviceDesc& desc)
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan Device: Failed to create empty descriptor set layout. {}"), ResultToString(res));
         m_context.emptyDescriptorSetLayout = VK_NULL_HANDLE;
     }
-    
+
     if(desc.graphicsQueue && desc.graphicsQueueIndex >= 0)
         m_queues[static_cast<u32>(CommandQueue::Graphics)] = UniquePtr<Queue>(new Queue(m_context, CommandQueue::Graphics, desc.graphicsQueue, desc.graphicsQueueIndex));
     if(desc.computeQueue && desc.computeQueueIndex >= 0)
@@ -116,18 +116,18 @@ Device::Device(const DeviceDesc& desc)
 }
 Device::~Device(){
     waitForIdle();
-    
+
     m_uploadManager.reset();
     m_scratchManager.reset();
-    
+
     for(u32 i = 0; i < static_cast<u32>(CommandQueue::kCount); ++i)
         m_queues[i].reset();
-    
+
     if(m_context.emptyDescriptorSetLayout){
         vkDestroyDescriptorSetLayout(m_context.device, m_context.emptyDescriptorSetLayout, m_context.allocationCallbacks);
         m_context.emptyDescriptorSetLayout = VK_NULL_HANDLE;
     }
-    
+
     if(m_context.pipelineCache){
         vkDestroyPipelineCache(m_context.device, m_context.pipelineCache, m_context.allocationCallbacks);
         m_context.pipelineCache = VK_NULL_HANDLE;
@@ -152,7 +152,7 @@ u64 Device::executeCommandLists(ICommandList* const* pCommandLists, usize numCom
     Queue* queue = getQueue(executionQueue);
     if(!queue || numCommandLists == 0)
         return 0;
-    
+
     return queue->submit(pCommandLists, numCommandLists);
 }
 
@@ -228,14 +228,14 @@ FormatSupport::Mask Device::queryFormatSupport(Format::Enum format){
     VkFormat vkFormat = ConvertFormat(format);
     if(vkFormat == VK_FORMAT_UNDEFINED)
         return FormatSupport::None;
-    
+
     VkFormatProperties props;
     vkGetPhysicalDeviceFormatProperties(m_context.physicalDevice, vkFormat, &props);
-    
+
     FormatSupport::Mask support = FormatSupport::None;
-    
+
     VkFormatFeatureFlags features = props.optimalTilingFeatures;
-    
+
     if(features & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT)
         support |= FormatSupport::Texture;
     if(features & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT)
@@ -246,13 +246,13 @@ FormatSupport::Mask Device::queryFormatSupport(Format::Enum format){
         support |= FormatSupport::ShaderUavStore;
     if(features & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT)
         support |= FormatSupport::ShaderSample;
-    
+
     VkFormatFeatureFlags bufferFeatures = props.bufferFeatures;
     if(bufferFeatures & VK_FORMAT_FEATURE_UNIFORM_TEXEL_BUFFER_BIT)
         support |= FormatSupport::Buffer;
     if(bufferFeatures & VK_FORMAT_FEATURE_VERTEX_BUFFER_BIT)
         support |= FormatSupport::Buffer;
-    
+
     return support;
 }
 
@@ -291,7 +291,7 @@ Object Heap::getNativeHandle(ObjectType objectType){
 HeapHandle Device::createHeap(const HeapDesc& d){
     auto* heap = new Heap(m_context);
     heap->desc = d;
-    
+
     VkMemoryPropertyFlags memoryProperties = 0;
     switch(d.type){
         case HeapType::DeviceLocal:
@@ -304,7 +304,7 @@ HeapHandle Device::createHeap(const HeapDesc& d){
             memoryProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
             break;
     }
-    
+
     u32 memoryTypeIndex = UINT32_MAX;
     for(u32 i = 0; i < m_context.memoryProperties.memoryTypeCount; ++i){
         if((m_context.memoryProperties.memoryTypes[i].propertyFlags & memoryProperties) == memoryProperties){
@@ -338,7 +338,7 @@ HeapHandle Device::createHeap(const HeapDesc& d){
         delete heap;
         return nullptr;
     }
-    
+
     return RefCountPtr<IHeap, BlankDeleter<IHeap>>(heap, AdoptRef);
 }
 
@@ -348,25 +348,25 @@ HeapHandle Device::createHeap(const HeapDesc& d){
 
 CooperativeVectorDeviceFeatures Device::queryCoopVecFeatures(){
     CooperativeVectorDeviceFeatures result;
-    
+
     if(!m_context.extensions.NV_cooperative_vector)
         return result;
-    
+
     uint32_t propertyCount = 0;
     VkResult res = vkGetPhysicalDeviceCooperativeVectorPropertiesNV(m_context.physicalDevice, &propertyCount, nullptr);
     if(res != VK_SUCCESS || propertyCount == 0)
         return result;
-    
+
     Vector<VkCooperativeVectorPropertiesNV> properties(propertyCount);
     for(u32 i = 0; i < propertyCount; ++i){
         properties[i].sType = VK_STRUCTURE_TYPE_COOPERATIVE_VECTOR_PROPERTIES_NV;
         properties[i].pNext = nullptr;
     }
-    
+
     res = vkGetPhysicalDeviceCooperativeVectorPropertiesNV(m_context.physicalDevice, &propertyCount, properties.data());
     if(res != VK_SUCCESS)
         return result;
-    
+
     result.matMulFormats.reserve(propertyCount);
     for(const auto& prop : properties){
         CooperativeVectorMatMulFormatCombo combo;
@@ -378,20 +378,20 @@ CooperativeVectorDeviceFeatures Device::queryCoopVecFeatures(){
         combo.transposeSupported = prop.transpose != VK_FALSE;
         result.matMulFormats.push_back(combo);
     }
-    
+
     result.trainingFloat16 = m_context.coopVecProperties.cooperativeVectorTrainingFloat16Accumulation != VK_FALSE;
     result.trainingFloat32 = m_context.coopVecProperties.cooperativeVectorTrainingFloat32Accumulation != VK_FALSE;
-    
+
     return result;
 }
 
 usize Device::getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, int rows, int columns){
     if(!m_context.extensions.NV_cooperative_vector)
         return 0;
-    
+
     usize dstSize = 0;
     usize dataTypeSize = GetCooperativeVectorDataTypeSize(type);
-    
+
     VkConvertCooperativeVectorMatrixInfoNV convertInfo = { VK_STRUCTURE_TYPE_CONVERT_COOPERATIVE_VECTOR_MATRIX_INFO_NV };
     convertInfo.srcSize = dataTypeSize * rows * columns;
     convertInfo.srcData.hostAddress = nullptr;
@@ -405,11 +405,11 @@ usize Device::getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, Coopera
     convertInfo.srcStride = dataTypeSize * columns;
     convertInfo.dstLayout = __hidden_vulkan::ConvertCoopVecMatrixLayout(layout);
     convertInfo.dstStride = GetCooperativeVectorOptimalMatrixStride(type, layout, rows, columns);
-    
+
     VkResult res = vkConvertCooperativeVectorMatrixNV(m_context.device, &convertInfo);
     if(res == VK_SUCCESS)
         return dstSize;
-    
+
     return 0;
 }
 

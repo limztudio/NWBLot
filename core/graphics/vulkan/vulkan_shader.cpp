@@ -56,23 +56,23 @@ ShaderHandle ShaderLibrary::getShader(const Name& entryName, ShaderType::Mask sh
     auto it = shaders.find(entryName);
     if(it != shaders.end())
         return ShaderHandle(it->second.get());
-    
+
     Shader* shader = new Shader(m_context);
     shader->desc.shaderType = shaderType;
     shader->desc.entryName = entryName;
     shader->bytecode = bytecode;
-    
+
     VkShaderModuleCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     createInfo.codeSize = bytecode.size();
     createInfo.pCode = reinterpret_cast<const uint32_t*>(bytecode.data());
-    
+
     VkResult res = vkCreateShaderModule(m_context.device, &createInfo, m_context.allocationCallbacks, &shader->shaderModule);
     if(res != VK_SUCCESS){
         delete shader;
         return nullptr;
     }
-    
+
     shaders[entryName] = RefCountPtr<Shader, BlankDeleter<Shader>>(shader);
     return ShaderHandle(shader);
 }
@@ -85,59 +85,59 @@ ShaderHandle Device::createShader(const ShaderDesc& d, const void* binary, usize
     auto* shader = new Shader(m_context);
     shader->desc = d;
     shader->bytecode.assign(static_cast<const u8*>(binary), static_cast<const u8*>(binary) + binarySize);
-    
+
     VkShaderModuleCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     createInfo.codeSize = binarySize;
     createInfo.pCode = reinterpret_cast<const uint32_t*>(binary);
-    
+
     VkResult res = vkCreateShaderModule(m_context.device, &createInfo, m_context.allocationCallbacks, &shader->shaderModule);
     NWB_ASSERT(res == VK_SUCCESS);
-    
+
     return RefCountPtr<IShader, BlankDeleter<IShader>>(shader, AdoptRef);
 }
 
 ShaderHandle Device::createShaderSpecialization(IShader* baseShader, const ShaderSpecialization* constants, u32 numConstants){
     if(!baseShader)
         return nullptr;
-    
+
     auto* base = static_cast<Shader*>(baseShader);
     auto* shader = new Shader(m_context);
     shader->desc = base->desc;
     shader->bytecode = base->bytecode;
-    
+
     VkShaderModuleCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     createInfo.codeSize = shader->bytecode.size();
     createInfo.pCode = reinterpret_cast<const uint32_t*>(shader->bytecode.data());
-    
+
     VkResult res = vkCreateShaderModule(m_context.device, &createInfo, m_context.allocationCallbacks, &shader->shaderModule);
     if(res != VK_SUCCESS){
         delete shader;
         return nullptr;
     }
-    
+
     if(constants && numConstants > 0){
         shader->specializationData.resize(numConstants * sizeof(u32));
         shader->specializationEntries.resize(numConstants);
-        
+
         for(u32 i = 0; i < numConstants; ++i){
             VkSpecializationMapEntry& entry = shader->specializationEntries[i];
             entry.constantID = constants[i].constantID;
             entry.offset = i * sizeof(u32);
             entry.size = sizeof(u32);
-            
+
             NWB_MEMCPY(shader->specializationData.data() + entry.offset, sizeof(u32), &constants[i].value, sizeof(u32));
         }
     }
-    
+
     return RefCountPtr<IShader, BlankDeleter<IShader>>(shader, AdoptRef);
 }
 
 ShaderLibraryHandle Device::createShaderLibrary(const void* binary, usize binarySize){
     auto* lib = new ShaderLibrary(m_context);
     lib->bytecode.assign(static_cast<const u8*>(binary), static_cast<const u8*>(binary) + binarySize);
-    
+
     return RefCountPtr<IShaderLibrary, BlankDeleter<IShaderLibrary>>(lib, AdoptRef);
 }
 
@@ -148,7 +148,7 @@ ShaderLibraryHandle Device::createShaderLibrary(const void* binary, usize binary
 InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 attributeCount, IShader* vertexShader){
     auto* layout = new InputLayout();
     layout->attributes.assign(d, d + attributeCount);
-    
+
     HashMap<u32, u32> bufferStrides;
     for(const auto& attr : layout->attributes){
         u32 stride = attr.elementStride;
@@ -156,13 +156,13 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
             const FormatInfo& formatInfo = GetFormatInfo(attr.format);
             stride = formatInfo.bytesPerBlock * attr.arraySize;
         }
-        
+
         if(bufferStrides.find(attr.bufferIndex) == bufferStrides.end())
             bufferStrides[attr.bufferIndex] = stride;
         else
             bufferStrides[attr.bufferIndex] = Max(bufferStrides[attr.bufferIndex], stride);
     }
-    
+
     for(const auto& pair : bufferStrides){
         VkVertexInputBindingDescription binding{};
         binding.binding = pair.first;
@@ -170,19 +170,19 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
         binding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
         layout->bindings.push_back(binding);
     }
-    
+
     for(u32 i = 0; i < attributeCount; ++i){
         const auto& attr = layout->attributes[i];
-        
+
         VkVertexInputAttributeDescription vkAttr{};
         vkAttr.location = i;
         vkAttr.binding = attr.bufferIndex;
         vkAttr.format = ConvertFormat(attr.format);
         vkAttr.offset = attr.offset;
-        
+
         layout->vkAttributes.push_back(vkAttr);
     }
-    
+
     return RefCountPtr<IInputLayout, BlankDeleter<IInputLayout>>(layout, AdoptRef);
 }
 
@@ -198,7 +198,7 @@ Framebuffer::~Framebuffer(){
         vkDestroyFramebuffer(m_context.device, framebuffer, m_context.allocationCallbacks);
         framebuffer = VK_NULL_HANDLE;
     }
-    
+
     if(renderPass != VK_NULL_HANDLE){
         vkDestroyRenderPass(m_context.device, renderPass, m_context.allocationCallbacks);
         renderPass = VK_NULL_HANDLE;
@@ -214,7 +214,7 @@ EventQuery::EventQuery(const VulkanContext& context)
 {
     VkFenceCreateInfo fenceInfo{};
     fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-    
+
     VkResult res = vkCreateFence(m_context.device, &fenceInfo, m_context.allocationCallbacks, &fence);
     NWB_ASSERT(res == VK_SUCCESS);
 }
@@ -236,7 +236,7 @@ TimerQuery::TimerQuery(const VulkanContext& context)
     queryPoolInfo.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
     queryPoolInfo.queryType = VK_QUERY_TYPE_TIMESTAMP;
     queryPoolInfo.queryCount = 2; // Start and end timestamps
-    
+
     VkResult res = vkCreateQueryPool(m_context.device, &queryPoolInfo, m_context.allocationCallbacks, &queryPool);
     NWB_ASSERT(res == VK_SUCCESS);
 }

@@ -31,12 +31,12 @@ CommandList::~CommandList(){
 
 void CommandList::open(){
     currentCmdBuf = m_device.getQueue(desc.queueType)->getOrCreateCommandBuffer();
-    
+
     VkCommandBufferBeginInfo beginInfo = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
     beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-    
+
     vkBeginCommandBuffer(currentCmdBuf->cmdBuf, &beginInfo);
-    
+
     stateTracker->reset();
 }
 
@@ -47,12 +47,12 @@ void CommandList::close(){
 
 void CommandList::clearState(){
     stateTracker->reset();
-    
+
     currentGraphicsState = {};
     currentComputeState = {};
     currentMeshletState = {};
     currentRayTracingState = {};
-    
+
     m_pendingImageBarriers.clear();
     m_pendingBufferBarriers.clear();
     m_pendingCompactions.clear();
@@ -61,7 +61,7 @@ void CommandList::clearState(){
 void CommandList::copyTextureToBuffer(IBuffer* _dest, u64 destOffsetBytes, u32 destRowPitch, ITexture* _src, const TextureSlice& srcSlice){
     auto* dest = checked_cast<Buffer*>(_dest);
     auto* src = checked_cast<Texture*>(_src);
-    
+
     VkBufferImageCopy region{};
     region.bufferOffset = destOffsetBytes;
     region.bufferRowLength = 0; // tightly packed
@@ -72,9 +72,9 @@ void CommandList::copyTextureToBuffer(IBuffer* _dest, u64 destOffsetBytes, u32 d
     region.imageSubresource.layerCount = 1;
     region.imageOffset = { srcSlice.x, srcSlice.y, srcSlice.z };
     region.imageExtent = { srcSlice.width, srcSlice.height, srcSlice.depth };
-    
+
     vkCmdCopyImageToBuffer(currentCmdBuf->cmdBuf, src->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dest->buffer, 1, &region);
-    
+
     currentCmdBuf->referencedResources.push_back(_src);
     currentCmdBuf->referencedResources.push_back(_dest);
 }

@@ -107,7 +107,7 @@ void CommandList::dispatch(u32 groupsX, u32 groupsY, u32 groupsZ){
 
 void CommandList::dispatchIndirect(u32 offsetBytes){
     if(!currentComputeState.indirectParams){
-        NWB_ASSERT_MSG(false, NWB_TEXT("No indirect buffer bound for dispatchIndirect"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: No indirect buffer bound for dispatchIndirect"));
         return;
     }
     auto* buffer = checked_cast<Buffer*>(currentComputeState.indirectParams);

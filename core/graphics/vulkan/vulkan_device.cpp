@@ -98,7 +98,7 @@ Device::Device(const DeviceDesc& desc)
     VkResult res = vkCreatePipelineCache(m_context.device, &cacheInfo, m_context.allocationCallbacks, &m_context.pipelineCache);
     if(res != VK_SUCCESS){
         m_context.pipelineCache = VK_NULL_HANDLE;
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan Device: Failed to create pipeline cache. {}"), ResultToString(res));
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to create pipeline cache. {}"), ResultToString(res));
     }
 
     VkDescriptorSetLayoutCreateInfo emptyLayoutInfo = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
@@ -106,7 +106,7 @@ Device::Device(const DeviceDesc& desc)
     emptyLayoutInfo.pBindings = nullptr;
     res = vkCreateDescriptorSetLayout(m_context.device, &emptyLayoutInfo, m_context.allocationCallbacks, &m_context.emptyDescriptorSetLayout);
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan Device: Failed to create empty descriptor set layout. {}"), ResultToString(res));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create empty descriptor set layout. {}"), ResultToString(res));
         m_context.emptyDescriptorSetLayout = VK_NULL_HANDLE;
     }
 
@@ -166,12 +166,12 @@ bool Device::waitForIdle(){
     VkResult res = vkDeviceWaitIdle(m_context.device);
 
     if(res == VK_ERROR_DEVICE_LOST){
-        NWB_LOGGER_INFO(NWB_TEXT("Vulkan Device was lost during waitForIdle."));
+        NWB_LOGGER_INFO(NWB_TEXT("Vulkan: Device was lost during waitForIdle."));
         return false;
     }
 
     if(res != VK_SUCCESS){
-        NWB_LOGGER_WARNING(NWB_TEXT("Failed to wait for Vulkan device idle. {}"), ResultToString(res));
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to wait for device idle. {}"), ResultToString(res));
         return false;
     }
 
@@ -320,6 +320,7 @@ HeapHandle Device::createHeap(const HeapDesc& d){
     }
 
     if(memoryTypeIndex == UINT32_MAX){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to find suitable memory type for heap"));
         delete heap;
         return nullptr;
     }
@@ -341,6 +342,7 @@ HeapHandle Device::createHeap(const HeapDesc& d){
 
     VkResult res = vkAllocateMemory(m_context.device, &allocInfo, m_context.allocationCallbacks, &heap->memory);
     if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate heap memory ({} bytes): {}"), d.capacity, ResultToString(res));
         delete heap;
         return nullptr;
     }

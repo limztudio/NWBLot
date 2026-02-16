@@ -264,7 +264,7 @@ constexpr VkComponentTypeKHR ConvertCoopVecDataType(CooperativeVectorDataType::E
     case CooperativeVectorDataType::Float32:     return VK_COMPONENT_TYPE_FLOAT32_KHR;
     case CooperativeVectorDataType::Float64:     return VK_COMPONENT_TYPE_FLOAT64_KHR;
     default:
-        NWB_ASSERT_MSG(false, NWB_TEXT("Invalid CooperativeVectorDataType"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Invalid CooperativeVectorDataType"));
         return VK_COMPONENT_TYPE_FLOAT32_KHR;
     }
 }
@@ -288,7 +288,7 @@ constexpr CooperativeVectorDataType::Enum ConvertCoopVecDataType(VkComponentType
     case VK_COMPONENT_TYPE_FLOAT32_KHR:     return CooperativeVectorDataType::Float32;
     case VK_COMPONENT_TYPE_FLOAT64_KHR:     return CooperativeVectorDataType::Float64;
     default:
-        NWB_ASSERT_MSG(false, NWB_TEXT("Invalid VkComponentTypeKHR"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Invalid VkComponentTypeKHR"));
         return CooperativeVectorDataType::Float32;
     }
 }
@@ -300,7 +300,7 @@ constexpr VkCooperativeVectorMatrixLayoutNV ConvertCoopVecMatrixLayout(Cooperati
     case CooperativeVectorMatrixLayout::InferencingOptimal:  return VK_COOPERATIVE_VECTOR_MATRIX_LAYOUT_INFERENCING_OPTIMAL_NV;
     case CooperativeVectorMatrixLayout::TrainingOptimal:     return VK_COOPERATIVE_VECTOR_MATRIX_LAYOUT_TRAINING_OPTIMAL_NV;
     default:
-        NWB_ASSERT_MSG(false, NWB_TEXT("Invalid CooperativeVectorMatrixLayout"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Invalid CooperativeVectorMatrixLayout"));
         return VK_COOPERATIVE_VECTOR_MATRIX_LAYOUT_ROW_MAJOR_NV;
     }
 }

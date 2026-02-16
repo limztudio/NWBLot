@@ -26,6 +26,7 @@ TrackedCommandBuffer::TrackedCommandBuffer(const VulkanContext& context, Command
 
     VkResult res = vkCreateCommandPool(m_context.device, &poolInfo, m_context.allocationCallbacks, &cmdPool);
     if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create command pool: {}"), ResultToString(res));
         cmdPool = VK_NULL_HANDLE;
         cmdBuf = VK_NULL_HANDLE;
         return;
@@ -38,6 +39,7 @@ TrackedCommandBuffer::TrackedCommandBuffer(const VulkanContext& context, Command
 
     res = vkAllocateCommandBuffers(m_context.device, &allocInfo, &cmdBuf);
     if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate command buffer: {}"), ResultToString(res));
         cmdBuf = VK_NULL_HANDLE;
         vkDestroyCommandPool(m_context.device, cmdPool, m_context.allocationCallbacks);
         cmdPool = VK_NULL_HANDLE;
@@ -242,9 +244,10 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
     m_signalSemaphoreValues.clear();
 
     if(res != VK_SUCCESS){
-        if(res == VK_ERROR_DEVICE_LOST){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan device was lost during queue submission."));
-        }
+        if(res == VK_ERROR_DEVICE_LOST)
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Device was lost during queue submission."));
+        else
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command buffers to queue: {}"), ResultToString(res));
         return m_lastSubmittedID - 1;
     }
 
@@ -277,7 +280,7 @@ bool Queue::waitCommandList(u64 commandListID, u64 timeout){
     VkResult res = vkWaitSemaphores(m_context.device, &waitInfo, timeout);
 
     if(res == VK_ERROR_DEVICE_LOST){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan device was lost while waiting for command list."));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Device was lost while waiting for command list."));
         return false;
     }
 

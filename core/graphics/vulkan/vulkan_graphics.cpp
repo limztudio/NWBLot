@@ -4,6 +4,8 @@
 
 #include "vulkan_backend.h"
 
+#include <logger/client/logger.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -351,7 +353,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
         layoutInfo.pSetLayouts = allDescriptorSetLayouts.data();
         VkResult layoutRes = vkCreatePipelineLayout(m_context.device, &layoutInfo, m_context.allocationCallbacks, &pso->pipelineLayout);
         if(layoutRes != VK_SUCCESS){
-            NWB_ASSERT(layoutRes != VK_SUCCESS);
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create pipeline layout for graphics pipeline: {}"), ResultToString(layoutRes));
             delete pso;
             return nullptr;
         }
@@ -393,6 +395,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
 
     VkResult res = vkCreateGraphicsPipelines(m_context.device, m_context.pipelineCache, 1, &pipelineInfo, m_context.allocationCallbacks, &pso->pipeline);
     if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create graphics pipeline: {}"), ResultToString(res));
         delete pso;
         return nullptr;
     }
@@ -562,7 +565,7 @@ void CommandList::drawIndexed(const DrawArguments& args){
 
 void CommandList::drawIndirect(u32 offsetBytes, u32 drawCount){
     if(!currentGraphicsState.indirectParams){
-        NWB_ASSERT_MSG(false, NWB_TEXT("No indirect buffer bound for drawIndirect"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: No indirect buffer bound for drawIndirect"));
         return;
     }
     auto* indirectBuffer = checked_cast<Buffer*>(currentGraphicsState.indirectParams);

@@ -164,6 +164,7 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
     VkResult res = vkCreateDescriptorSetLayout(m_context.device, &layoutInfo, m_context.allocationCallbacks, &setLayout);
 
     if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor set layout: {}"), ResultToString(res));
         delete layout;
         return nullptr;
     }
@@ -187,6 +188,7 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
     res = vkCreatePipelineLayout(m_context.device, &pipelineLayoutInfo, m_context.allocationCallbacks, &layout->pipelineLayout);
 
     if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create pipeline layout for binding layout: {}"), ResultToString(res));
         delete layout;
         return nullptr;
     }
@@ -234,7 +236,7 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
     VkResult res = vkCreateDescriptorSetLayout(m_context.device, &layoutInfo, m_context.allocationCallbacks, &setLayout);
 
     if(res != VK_SUCCESS){
-        NWB_LOGGER_WARNING(NWB_TEXT("Failed to create bindless descriptor set layout: {}"), ResultToString(res));
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to create bindless descriptor set layout: {}"), ResultToString(res));
         delete layout;
         return nullptr;
     }
@@ -247,6 +249,7 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
     res = vkCreatePipelineLayout(m_context.device, &pipelineLayoutInfo, m_context.allocationCallbacks, &layout->pipelineLayout);
 
     if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create pipeline layout for bindless layout: {}"), ResultToString(res));
         delete layout;
         return nullptr;
     }
@@ -288,6 +291,7 @@ DescriptorTableHandle Device::createDescriptorTable(IBindingLayout* _layout){
     VkResult res = vkCreateDescriptorPool(m_context.device, &poolInfo, m_context.allocationCallbacks, &pool);
 
     if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor pool: {}"), ResultToString(res));
         delete table;
         return nullptr;
     }
@@ -302,6 +306,7 @@ DescriptorTableHandle Device::createDescriptorTable(IBindingLayout* _layout){
         res = vkAllocateDescriptorSets(m_context.device, &allocInfo, table->descriptorSets.data());
 
         if(res != VK_SUCCESS){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate descriptor sets: {}"), ResultToString(res));
             vkDestroyDescriptorPool(m_context.device, pool, m_context.allocationCallbacks);
             delete table;
             return nullptr;
@@ -344,8 +349,10 @@ void Device::resizeDescriptorTable(IDescriptorTable* descriptorTable, u32 newSiz
     poolInfo.pPoolSizes = poolSizes.data();
 
     VkResult res = vkCreateDescriptorPool(m_context.device, &poolInfo, m_context.allocationCallbacks, &table->descriptorPool);
-    if(res != VK_SUCCESS)
+    if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor pool for resize: {}"), ResultToString(res));
         return;
+    }
 
     if(!table->layout->descriptorSetLayouts.empty()){
         Vector<VkDescriptorSetLayout> layouts(newSize, table->layout->descriptorSetLayouts[0]);
@@ -358,6 +365,7 @@ void Device::resizeDescriptorTable(IDescriptorTable* descriptorTable, u32 newSiz
         table->descriptorSets.resize(newSize);
         res = vkAllocateDescriptorSets(m_context.device, &allocInfo, table->descriptorSets.data());
         if(res != VK_SUCCESS){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate descriptor sets during resize: {}"), ResultToString(res));
             table->descriptorSets.clear();
             return;
         }
@@ -435,6 +443,7 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLa
 
     DescriptorTableHandle tableHandle = createDescriptorTable(_layout);
     if(!tableHandle){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor table for binding set"));
         delete bindingSet;
         return nullptr;
     }

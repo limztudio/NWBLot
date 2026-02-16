@@ -4,6 +4,8 @@
 
 #include "vulkan_backend.h"
 
+#include <logger/client/logger.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -69,6 +71,7 @@ ShaderHandle ShaderLibrary::getShader(const Name& entryName, ShaderType::Mask sh
 
     VkResult res = vkCreateShaderModule(m_context.device, &createInfo, m_context.allocationCallbacks, &shader->shaderModule);
     if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create shader module for entry '{}': {}"), entryName.c_str(), ResultToString(res));
         delete shader;
         return nullptr;
     }
@@ -93,6 +96,7 @@ ShaderHandle Device::createShader(const ShaderDesc& d, const void* binary, usize
 
     VkResult res = vkCreateShaderModule(m_context.device, &createInfo, m_context.allocationCallbacks, &shader->shaderModule);
     if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create shader module: {}"), ResultToString(res));
         delete shader;
         return nullptr;
     }
@@ -116,6 +120,7 @@ ShaderHandle Device::createShaderSpecialization(IShader* baseShader, const Shade
 
     VkResult res = vkCreateShaderModule(m_context.device, &createInfo, m_context.allocationCallbacks, &shader->shaderModule);
     if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create shader module for specialization: {}"), ResultToString(res));
         delete shader;
         return nullptr;
     }
@@ -222,7 +227,7 @@ EventQuery::EventQuery(const VulkanContext& context)
     fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
 
     VkResult res = vkCreateFence(m_context.device, &fenceInfo, m_context.allocationCallbacks, &fence);
-    NWB_ASSERT(res == VK_SUCCESS);
+    NWB_ASSERT_MSG(res == VK_SUCCESS, NWB_TEXT("Vulkan: Failed to create fence for EventQuery"));
 }
 EventQuery::~EventQuery(){
     if(fence != VK_NULL_HANDLE){
@@ -244,7 +249,7 @@ TimerQuery::TimerQuery(const VulkanContext& context)
     queryPoolInfo.queryCount = 2; // Start and end timestamps
 
     VkResult res = vkCreateQueryPool(m_context.device, &queryPoolInfo, m_context.allocationCallbacks, &queryPool);
-    NWB_ASSERT(res == VK_SUCCESS);
+    NWB_ASSERT_MSG(res == VK_SUCCESS, NWB_TEXT("Vulkan: Failed to create query pool for TimerQuery"));
 }
 TimerQuery::~TimerQuery(){
     if(queryPool != VK_NULL_HANDLE){

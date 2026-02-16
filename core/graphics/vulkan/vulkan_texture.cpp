@@ -2,9 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <assert.h>
-
 #include "vulkan_backend.h"
+
+#include <logger/client/logger.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -189,7 +189,7 @@ VkImageView Texture::getView(const TextureSubresourceSet& subresources, TextureD
 
     VkImageView view = VK_NULL_HANDLE;
     VkResult res = vkCreateImageView(m_context.device, &viewInfo, m_context.allocationCallbacks, &view);
-    NWB_ASSERT(res == VK_SUCCESS);
+    NWB_ASSERT_MSG(res == VK_SUCCESS, NWB_TEXT("Vulkan: Failed to create image view"));
 
     views[key] = view;
     return view;
@@ -255,11 +255,11 @@ TextureHandle Device::createTexture(const TextureDesc& d){
     texture->imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
 
     VkResult res = vkCreateImage(m_context.device, &texture->imageInfo, m_context.allocationCallbacks, &texture->image);
-    NWB_ASSERT(res == VK_SUCCESS);
+    NWB_ASSERT_MSG(res == VK_SUCCESS, NWB_TEXT("Vulkan: Failed to create image"));
 
     if(!d.isVirtual){
         VkResult res = m_allocator.allocateTextureMemory(texture);
-        NWB_ASSERT(res == VK_SUCCESS);
+        NWB_ASSERT_MSG(res == VK_SUCCESS, NWB_TEXT("Vulkan: Failed to allocate texture memory"));
     }
 
     return RefCountPtr<ITexture, BlankDeleter<ITexture>>(texture, AdoptRef);
@@ -357,7 +357,7 @@ SamplerHandle Device::createSampler(const SamplerDesc& d){
     samplerInfo.borderColor = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
 
     VkResult res = vkCreateSampler(m_context.device, &samplerInfo, m_context.allocationCallbacks, &sampler->sampler);
-    NWB_ASSERT(res == VK_SUCCESS);
+    NWB_ASSERT_MSG(res == VK_SUCCESS, NWB_TEXT("Vulkan: Failed to create sampler"));
 
     return RefCountPtr<ISampler, BlankDeleter<ISampler>>(sampler, AdoptRef);
 }
@@ -557,7 +557,7 @@ void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, co
     void* cpuVA = nullptr;
 
     if(!uploadMgr->suballocateBuffer(dataSize, &stagingBuffer, &stagingOffset, &cpuVA, 0)){
-        NWB_ASSERT_MSG(false, NWB_TEXT("Failed to suballocate staging buffer for writeTexture"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to suballocate staging buffer for writeTexture"));
         return;
     }
 

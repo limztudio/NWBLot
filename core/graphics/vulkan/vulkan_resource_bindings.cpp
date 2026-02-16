@@ -92,7 +92,6 @@ constexpr VkShaderStageFlags ConvertShaderStages(ShaderType::Mask stages){
 BindingLayout::BindingLayout(const VulkanContext& context)
     : m_context(context)
 {}
-
 BindingLayout::~BindingLayout(){
     if(pipelineLayout){
         vkDestroyPipelineLayout(m_context.device, pipelineLayout, nullptr);
@@ -113,7 +112,6 @@ BindingLayout::~BindingLayout(){
 DescriptorTable::DescriptorTable(const VulkanContext& context)
     : m_context(context)
 {}
-
 DescriptorTable::~DescriptorTable(){
     if(descriptorPool != VK_NULL_HANDLE){
         vkDestroyDescriptorPool(m_context.device, descriptorPool, m_context.allocationCallbacks);

@@ -158,7 +158,6 @@ GraphicsPipeline::~GraphicsPipeline(){
         pipeline = VK_NULL_HANDLE;
     }
 }
-
 Object GraphicsPipeline::getNativeHandle(ObjectType objectType){
     if(objectType == ObjectTypes::VK_Pipeline)
         return Object(pipeline);

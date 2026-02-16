@@ -218,7 +218,6 @@ EventQuery::EventQuery(const VulkanContext& context)
     VkResult res = vkCreateFence(m_context.device, &fenceInfo, m_context.allocationCallbacks, &fence);
     NWB_ASSERT(res == VK_SUCCESS);
 }
-
 EventQuery::~EventQuery(){
     if(fence != VK_NULL_HANDLE){
         vkDestroyFence(m_context.device, fence, m_context.allocationCallbacks);
@@ -241,7 +240,6 @@ TimerQuery::TimerQuery(const VulkanContext& context)
     VkResult res = vkCreateQueryPool(m_context.device, &queryPoolInfo, m_context.allocationCallbacks, &queryPool);
     NWB_ASSERT(res == VK_SUCCESS);
 }
-
 TimerQuery::~TimerQuery(){
     if(queryPool != VK_NULL_HANDLE){
         vkDestroyQueryPool(m_context.device, queryPool, m_context.allocationCallbacks);

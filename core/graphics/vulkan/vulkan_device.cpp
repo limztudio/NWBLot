@@ -114,7 +114,6 @@ Device::Device(const DeviceDesc& desc)
     m_uploadManager = UniquePtr<UploadManager>(new UploadManager(*this, s_DefaultUploadChunkSize, 0, false));
     m_scratchManager = UniquePtr<UploadManager>(new UploadManager(*this, s_DefaultScratchChunkSize, s_ScratchMemoryLimit, true));
 }
-
 Device::~Device(){
     waitForIdle();
     

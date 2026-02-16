@@ -20,7 +20,6 @@ MeshletPipeline::~MeshletPipeline(){
         pipeline = VK_NULL_HANDLE;
     }
 }
-
 Object MeshletPipeline::getNativeHandle(ObjectType objectType){
     if(objectType == ObjectTypes::VK_Pipeline)
         return Object(pipeline);

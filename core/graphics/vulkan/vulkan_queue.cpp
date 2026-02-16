@@ -79,7 +79,6 @@ Queue::Queue(const VulkanContext& context, CommandQueue::Enum queueID, VkQueue q
     
     vkCreateSemaphore(m_context.device, &semaphoreInfo, m_context.allocationCallbacks, &trackingSemaphore);
 }
-
 Queue::~Queue(){
     if(trackingSemaphore && m_lastSubmittedID > 0){
         VkSemaphoreWaitInfo waitInfo = { VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO };

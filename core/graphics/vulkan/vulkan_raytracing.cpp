@@ -41,7 +41,6 @@ VkDeviceAddress GetBufferDeviceAddress(IBuffer* _buffer, u64 offset){
 AccelStruct::AccelStruct(const VulkanContext& context)
     : m_context(context)
 {}
-
 AccelStruct::~AccelStruct(){
     if(accelStruct){
         vkDestroyAccelerationStructureKHR(m_context.device, accelStruct, m_context.allocationCallbacks);
@@ -64,7 +63,6 @@ Object AccelStruct::getNativeHandle(ObjectType objectType){
 OpacityMicromap::OpacityMicromap(const VulkanContext& context)
     : m_context(context)
 {}
-
 OpacityMicromap::~OpacityMicromap(){
     if(micromap != VK_NULL_HANDLE){
         vkDestroyMicromapEXT(m_context.device, micromap, m_context.allocationCallbacks);
@@ -80,7 +78,6 @@ OpacityMicromap::~OpacityMicromap(){
 RayTracingPipeline::RayTracingPipeline(const VulkanContext& context)
     : m_context(context)
 {}
-
 RayTracingPipeline::~RayTracingPipeline(){
     if(pipeline){
         vkDestroyPipeline(m_context.device, pipeline, m_context.allocationCallbacks);

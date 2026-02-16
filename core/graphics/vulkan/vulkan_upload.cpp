@@ -20,7 +20,6 @@ UploadManager::UploadManager(Device& pParent, u64 defaultChunkSize, u64 memoryLi
     , m_memoryLimit(memoryLimit)
     , m_isScratchBuffer(isScratchBuffer)
 {}
-
 UploadManager::~UploadManager(){
     m_chunkPool.clear();
     m_currentChunk.reset();

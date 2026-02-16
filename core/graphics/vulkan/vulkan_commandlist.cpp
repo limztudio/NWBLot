@@ -24,7 +24,6 @@ CommandList::CommandList(Device& device, const CommandListParameters& params)
     if(m_device.isAftermathEnabled())
         m_device.getAftermathCrashDumpHelper().registerAftermathMarkerTracker(&m_aftermathMarkerTracker);
 }
-
 CommandList::~CommandList(){
     if(m_device.isAftermathEnabled())
         m_device.getAftermathCrashDumpHelper().unRegisterAftermathMarkerTracker(&m_aftermathMarkerTracker);

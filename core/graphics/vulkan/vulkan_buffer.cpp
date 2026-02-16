@@ -18,7 +18,6 @@ Buffer::Buffer(const VulkanContext& context, VulkanAllocator& allocator)
     : m_context(context)
     , m_allocator(allocator)
 {}
-
 Buffer::~Buffer(){
     if(managed){
         if(buffer != VK_NULL_HANDLE){

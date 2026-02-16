@@ -118,7 +118,6 @@ Texture::Texture(const VulkanContext& context, VulkanAllocator& allocator)
     : m_context(context)
     , m_allocator(allocator)
 {}
-
 Texture::~Texture(){
     for(auto& pair : views)
         vkDestroyImageView(m_context.device, pair.second, m_context.allocationCallbacks);
@@ -210,7 +209,6 @@ StagingTexture::StagingTexture(const VulkanContext& context, VulkanAllocator& al
     : m_context(context)
     , m_allocator(allocator)
 {}
-
 StagingTexture::~StagingTexture(){
     if(buffer != VK_NULL_HANDLE){
         vkDestroyBuffer(m_context.device, buffer, m_context.allocationCallbacks);

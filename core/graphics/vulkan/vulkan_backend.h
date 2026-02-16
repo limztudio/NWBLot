@@ -25,7 +25,7 @@ namespace __hidden_vulkan{
     extern constexpr VkImageLayout GetVkImageLayout(ResourceStates::Mask state);
     extern constexpr VkFormat ConvertFormat(Format::Enum format);
     extern constexpr VkSampleCountFlagBits GetSampleCountFlagBits(u32 sampleCount);
-    extern VkDeviceAddress GetBufferDeviceAddress(IBuffer* _buffer, u64 offset);
+    extern VkDeviceAddress GetBufferDeviceAddress(IBuffer* _buffer, u64 offset = 0);
     extern constexpr VkImageType TextureDimensionToImageType(TextureDimension::Enum dimension);
     extern constexpr VkImageViewType TextureDimensionToViewType(TextureDimension::Enum dimension);
     extern constexpr VkSampleCountFlagBits GetSampleCount(u32 sampleCount);
@@ -146,7 +146,7 @@ public:
     
     u64 submit(ICommandList* const* ppCmd, usize numCmd);
     void updateTextureTileMappings(ITexture* texture, const TextureTilesMapping* tileMappings, u32 numTileMappings);
-    u64 updateLastFinishedID();
+    void updateLastFinishedID();
     
     [[nodiscard]] bool pollCommandList(u64 commandListID);
     [[nodiscard]] bool waitCommandList(u64 commandListID, u64 timeout);
@@ -989,6 +989,11 @@ public:
     void resetEventQuery(IEventQuery* query);
     void waitEventQuery(IEventQuery* query);
     [[nodiscard]] TrackedCommandBufferPtr getCurrentCmdBuf()const{ return currentCmdBuf; }
+
+
+private:
+    void beginRenderPass(IFramebuffer* framebuffer, const RenderPassParameters& params);
+    void endRenderPass();
     
     
 public:
@@ -1001,22 +1006,17 @@ public:
     ComputeState currentComputeState;
     MeshletState currentMeshletState;
     RayTracingState currentRayTracingState;
-    
-    Vector<VkImageMemoryBarrier2> m_pendingImageBarriers;
-    Vector<VkBufferMemoryBarrier2> m_pendingBufferBarriers;
-    
-    Vector<RefCountPtr<AccelStruct, BlankDeleter<AccelStruct>>> m_pendingCompactions;
-
-
-private:
-    void beginRenderPass(IFramebuffer* framebuffer, const RenderPassParameters& params);
-    void endRenderPass();
 
 
 private:
     Device& m_device;
     const VulkanContext& m_context;
     AftermathMarkerTracker m_aftermathMarkerTracker;
+
+    Vector<VkImageMemoryBarrier2> m_pendingImageBarriers;
+    Vector<VkBufferMemoryBarrier2> m_pendingBufferBarriers;
+    
+    Vector<RefCountPtr<AccelStruct, BlankDeleter<AccelStruct>>> m_pendingCompactions;
 };
 
 

@@ -4,6 +4,8 @@
 
 #include "vulkan_backend.h"
 
+#include <logger/client/logger.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -99,7 +101,7 @@ Queue::~Queue(){
 }
 
 TrackedCommandBufferPtr Queue::createCommandBuffer(){
-    TrackedCommandBuffer* cmdBuf = new TrackedCommandBuffer(m_context, m_queueID, m_queueFamilyIndex);
+    auto* cmdBuf = new TrackedCommandBuffer(m_context, m_queueID, m_queueFamilyIndex);
     cmdBuf->recordingID = ++m_lastRecordingID;
     return TrackedCommandBufferPtr(cmdBuf);
 }
@@ -162,7 +164,7 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
     cmdBufs.reserve(numCmd);
     
     for(usize i = 0; i < numCmd; ++i){
-        CommandList* cmdList = checked_cast<CommandList*>(ppCmd[i]);
+        auto* cmdList = checked_cast<CommandList*>(ppCmd[i]);
         if(!cmdList || !cmdList->currentCmdBuf)
             continue;
         
@@ -191,7 +193,7 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
     }
     
     Vector<VkSemaphoreSubmitInfo> signalInfos;
-    signalInfos.push_back(timelineSignal);e
+    signalInfos.push_back(timelineSignal);
     
     for(usize i = 0; i < m_signalSemaphores.size(); ++i){
         VkSemaphoreSubmitInfo signalInfo = { VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO };
@@ -345,7 +347,7 @@ void Device::queueWaitForCommandList(CommandQueue::Enum waitQueue, CommandQueue:
 
 
 void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapping* tileMappings, u32 numTileMappings){
-    Texture* texture = checked_cast<Texture*>(_texture);
+    auto* texture = checked_cast<Texture*>(_texture);
     
     Vector<VkSparseImageMemoryBind> sparseImageMemoryBinds;
     Vector<VkSparseMemoryBind> sparseMemoryBinds;
@@ -401,7 +403,7 @@ void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapp
         imageMipTailStride = sparseReqs[0].imageMipTailStride;
     }
     
-    for(u32 i = 0; i < numTileMappings; i++){
+    for(u32 i = 0; i < numTileMappings; ++i){
         u32 numRegions = tileMappings[i].numTextureRegions;
         Heap* heap = tileMappings[i].heap ? checked_cast<Heap*>(tileMappings[i].heap) : nullptr;
         VkDeviceMemory deviceMemory = heap ? heap->memory : VK_NULL_HANDLE;

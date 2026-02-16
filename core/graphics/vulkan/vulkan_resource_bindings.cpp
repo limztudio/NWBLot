@@ -4,6 +4,8 @@
 
 #include "vulkan_backend.h"
 
+#include <logger/client/logger.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -134,7 +136,7 @@ BindingSet::~BindingSet(){
 
 
 BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
-    BindingLayout* layout = new BindingLayout(m_context);
+    auto* layout = new BindingLayout(m_context);
     layout->desc = desc;
     
     Vector<VkDescriptorSetLayoutBinding> bindings;
@@ -192,7 +194,7 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
 }
 
 BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc){
-    BindingLayout* layout = new BindingLayout(m_context);
+    auto* layout = new BindingLayout(m_context);
     layout->isBindless = true;
     layout->bindlessDesc = desc;
     
@@ -230,7 +232,7 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
     if(res == VK_SUCCESS)
         layout->descriptorSetLayouts.push_back(setLayout);
     else
-        NWB_LOG_WARNING("Failed to create bindless descriptor set layout: {}", ResultToString(res));
+        NWB_LOGGER_WARNING(NWB_TEXT("Failed to create bindless descriptor set layout: {}"), ResultToString(res));
     
     VkPipelineLayoutCreateInfo pipelineLayoutInfo = { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
     pipelineLayoutInfo.setLayoutCount = static_cast<u32>(layout->descriptorSetLayouts.size());
@@ -251,9 +253,9 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
 
 
 DescriptorTableHandle Device::createDescriptorTable(IBindingLayout* _layout){
-    BindingLayout* layout = checked_cast<BindingLayout*>(_layout);
+    auto* layout = checked_cast<BindingLayout*>(_layout);
     
-    DescriptorTable* table = new DescriptorTable(m_context);
+    auto* table = new DescriptorTable(m_context);
     table->layout = layout;
     
     Vector<VkDescriptorPoolSize> poolSizes;
@@ -306,7 +308,7 @@ DescriptorTableHandle Device::createDescriptorTable(IBindingLayout* _layout){
 }
 
 void Device::resizeDescriptorTable(IDescriptorTable* descriptorTable, u32 newSize, bool keepContents){
-    DescriptorTable* table = checked_cast<DescriptorTable*>(descriptorTable);
+    auto* table = checked_cast<DescriptorTable*>(descriptorTable);
     
     if(!table->layout || newSize == 0)
         return;
@@ -355,7 +357,7 @@ void Device::resizeDescriptorTable(IDescriptorTable* descriptorTable, u32 newSiz
 }
 
 bool Device::writeDescriptorTable(IDescriptorTable* descriptorTable, const BindingSetItem& item){
-    DescriptorTable* table = checked_cast<DescriptorTable*>(descriptorTable);
+    auto* table = checked_cast<DescriptorTable*>(descriptorTable);
     
     if(table->descriptorSets.empty())
         return false;
@@ -377,7 +379,7 @@ bool Device::writeDescriptorTable(IDescriptorTable* descriptorTable, const Bindi
     case ResourceType::StructuredBuffer_UAV:
     case ResourceType::RawBuffer_SRV:
     case ResourceType::RawBuffer_UAV:{
-        Buffer* buffer = checked_cast<Buffer*>(item.resourceHandle);
+        auto* buffer = checked_cast<Buffer*>(item.resourceHandle);
         bufferInfo.buffer = buffer->buffer;
         bufferInfo.offset = item.range.byteOffset;
         bufferInfo.range = item.range.byteSize > 0 ? item.range.byteSize : VK_WHOLE_SIZE;
@@ -386,7 +388,7 @@ bool Device::writeDescriptorTable(IDescriptorTable* descriptorTable, const Bindi
     }
     case ResourceType::Texture_SRV:
     case ResourceType::Texture_UAV:{
-        Texture* texture = checked_cast<Texture*>(item.resourceHandle);
+        auto* texture = checked_cast<Texture*>(item.resourceHandle);
         imageInfo.imageView = texture->getView(item.subresources, item.dimension, item.format, false);
         imageInfo.imageLayout = item.type == ResourceType::Texture_UAV ? 
                                 VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
@@ -394,13 +396,13 @@ bool Device::writeDescriptorTable(IDescriptorTable* descriptorTable, const Bindi
         break;
     }
     case ResourceType::Sampler:{
-        Sampler* sampler = checked_cast<Sampler*>(item.resourceHandle);
+        auto* sampler = checked_cast<Sampler*>(item.resourceHandle);
         imageInfo.sampler = sampler->sampler;
         write.pImageInfo = &imageInfo;
         break;
     }
     case ResourceType::RayTracingAccelStruct:{
-        AccelStruct* as = checked_cast<AccelStruct*>(item.resourceHandle);
+        auto* as = checked_cast<AccelStruct*>(item.resourceHandle);
         asInfo.accelerationStructureCount = 1;
         asInfo.pAccelerationStructures = &as->accelStruct;
         write.pNext = &asInfo;
@@ -416,9 +418,9 @@ bool Device::writeDescriptorTable(IDescriptorTable* descriptorTable, const Bindi
 
 
 BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLayout* _layout){
-    BindingLayout* layout = checked_cast<BindingLayout*>(_layout);
+    auto* layout = checked_cast<BindingLayout*>(_layout);
     
-    BindingSet* bindingSet = new BindingSet(m_context);
+    auto* bindingSet = new BindingSet(m_context);
     bindingSet->desc = desc;
     
     DescriptorTableHandle tableHandle = createDescriptorTable(_layout);
@@ -456,7 +458,7 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLa
         case ResourceType::StructuredBuffer_UAV:
         case ResourceType::RawBuffer_SRV:
         case ResourceType::RawBuffer_UAV:{
-            Buffer* buffer = checked_cast<Buffer*>(item.resourceHandle);
+            auto* buffer = checked_cast<Buffer*>(item.resourceHandle);
             VkDescriptorBufferInfo bufInfo = {};
             bufInfo.buffer = buffer->buffer;
             bufInfo.offset = item.range.byteOffset;
@@ -468,18 +470,17 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLa
         }
         case ResourceType::Texture_SRV:
         case ResourceType::Texture_UAV:{
-            Texture* texture = checked_cast<Texture*>(item.resourceHandle);
+            auto* texture = checked_cast<Texture*>(item.resourceHandle);
             VkDescriptorImageInfo imgInfo = {};
             imgInfo.imageView = texture->getView(item.subresources, item.dimension, item.format, false);
-            imgInfo.imageLayout = item.type == ResourceType::Texture_UAV ? 
-                                  VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            imgInfo.imageLayout = item.type == ResourceType::Texture_UAV ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
             imageInfos.push_back(imgInfo);
             write.pImageInfo = &imageInfos.back();
             writes.push_back(write);
             break;
         }
         case ResourceType::Sampler:{
-            Sampler* sampler = checked_cast<Sampler*>(item.resourceHandle);
+            auto* sampler = checked_cast<Sampler*>(item.resourceHandle);
             VkDescriptorImageInfo imgInfo = {};
             imgInfo.sampler = sampler->sampler;
             imageInfos.push_back(imgInfo);

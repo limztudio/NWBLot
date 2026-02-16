@@ -42,21 +42,21 @@ void CommandList::setPushConstants(const void* data, usize byteSize){
     VkPipelineLayout layout = VK_NULL_HANDLE;
     
     if(currentGraphicsState.pipeline){
-        GraphicsPipeline* gp = checked_cast<GraphicsPipeline*>(currentGraphicsState.pipeline);
+        auto* gp = checked_cast<GraphicsPipeline*>(currentGraphicsState.pipeline);
         layout = gp->pipelineLayout;
     }
     else if(currentComputeState.pipeline){
-        ComputePipeline* cp = checked_cast<ComputePipeline*>(currentComputeState.pipeline);
+        auto* cp = checked_cast<ComputePipeline*>(currentComputeState.pipeline);
         layout = cp->pipelineLayout;
     }
     else if(currentMeshletState.pipeline){
-        MeshletPipeline* mp = checked_cast<MeshletPipeline*>(currentMeshletState.pipeline);
+        auto* mp = checked_cast<MeshletPipeline*>(currentMeshletState.pipeline);
         layout = mp->pipelineLayout;
     }
     else if(currentRayTracingState.shaderTable){
-        IRayTracingPipeline* rtp = currentRayTracingState.shaderTable->getPipeline();
+        auto* rtp = currentRayTracingState.shaderTable->getPipeline();
         if(rtp){
-            RayTracingPipeline* rtpImpl = checked_cast<RayTracingPipeline*>(rtp);
+            auto* rtpImpl = checked_cast<RayTracingPipeline*>(rtp);
             layout = rtpImpl->pipelineLayout;
         }
     }
@@ -79,7 +79,7 @@ void CommandList::drawIndexedIndirect(u32 offsetBytes, u32 drawCount){
         NWB_ASSERT_MSG(false, NWB_TEXT("No indirect buffer bound for drawIndexedIndirect"));
         return;
     }
-    Buffer* buffer = checked_cast<Buffer*>(currentGraphicsState.indirectParams);
+    auto* buffer = checked_cast<Buffer*>(currentGraphicsState.indirectParams);
     vkCmdDrawIndexedIndirect(currentCmdBuf->cmdBuf, buffer->buffer, offsetBytes, drawCount, sizeof(DrawIndexedIndirectArguments));
     currentCmdBuf->referencedResources.push_back(currentGraphicsState.indirectParams);
 }
@@ -98,7 +98,7 @@ void CommandList::buildTopLevelAccelStructFromBuffer(IRayTracingAccelStruct* _as
     if(!m_context.extensions.KHR_acceleration_structure)
         return;
     
-    AccelStruct* as = checked_cast<AccelStruct*>(_as);
+    auto* as = checked_cast<AccelStruct*>(_as);
     
     VkAccelerationStructureGeometryKHR geometry = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR };
     geometry.geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR;
@@ -122,7 +122,7 @@ void CommandList::buildTopLevelAccelStructFromBuffer(IRayTracingAccelStruct* _as
     buildInfo.geometryCount = 1;
     buildInfo.pGeometries = &geometry;
     
-    u32 primitiveCount = static_cast<u32>(numInstances);
+    auto primitiveCount = static_cast<uint32_t>(numInstances);
     VkAccelerationStructureBuildSizesInfoKHR sizeInfo = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR };
     vkGetAccelerationStructureBuildSizesKHR(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &primitiveCount, &sizeInfo);
     
@@ -245,11 +245,11 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
         break;
     }
     
-    Buffer* indirectArgCountBuffer = desc.inIndirectArgCountBuffer ? checked_cast<Buffer*>(desc.inIndirectArgCountBuffer) : nullptr;
-    Buffer* indirectArgsBuffer = desc.inIndirectArgsBuffer ? checked_cast<Buffer*>(desc.inIndirectArgsBuffer) : nullptr;
-    Buffer* inOutAddressesBuffer = desc.inOutAddressesBuffer ? checked_cast<Buffer*>(desc.inOutAddressesBuffer) : nullptr;
-    Buffer* outSizesBuffer = desc.outSizesBuffer ? checked_cast<Buffer*>(desc.outSizesBuffer) : nullptr;
-    Buffer* outAccelerationStructuresBuffer = desc.outAccelerationStructuresBuffer ? checked_cast<Buffer*>(desc.outAccelerationStructuresBuffer) : nullptr;
+    auto* indirectArgCountBuffer = desc.inIndirectArgCountBuffer ? checked_cast<Buffer*>(desc.inIndirectArgCountBuffer) : nullptr;
+    auto* indirectArgsBuffer = desc.inIndirectArgsBuffer ? checked_cast<Buffer*>(desc.inIndirectArgsBuffer) : nullptr;
+    auto* inOutAddressesBuffer = desc.inOutAddressesBuffer ? checked_cast<Buffer*>(desc.inOutAddressesBuffer) : nullptr;
+    auto* outSizesBuffer = desc.outSizesBuffer ? checked_cast<Buffer*>(desc.outSizesBuffer) : nullptr;
+    auto* outAccelerationStructuresBuffer = desc.outAccelerationStructuresBuffer ? checked_cast<Buffer*>(desc.outAccelerationStructuresBuffer) : nullptr;
     
     if(enableAutomaticBarriers){
         if(indirectArgsBuffer)
@@ -338,7 +338,7 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
     Vector<usize> dstSizes;
     dstSizes.reserve(numDescs);
     
-    for(usize i = 0; i < numDescs; i++){
+    for(usize i = 0; i < numDescs; ++i){
         const CooperativeVectorConvertMatrixLayoutDesc& desc = convertDescs[i];
         
         if(!desc.src.buffer || !desc.dst.buffer)
@@ -354,17 +354,17 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
         vkDesc.srcData.deviceAddress = checked_cast<Buffer*>(desc.src.buffer)->deviceAddress + desc.src.offset;
         vkDesc.pDstSize = &dstSizes.emplace_back(desc.dst.size);
         vkDesc.dstData.deviceAddress = checked_cast<Buffer*>(desc.dst.buffer)->deviceAddress + desc.dst.offset;
-        vkDesc.srcComponentType = ConvertCoopVecDataType(desc.src.type);
-        vkDesc.dstComponentType = ConvertCoopVecDataType(desc.dst.type);
+        vkDesc.srcComponentType = __hidden_vulkan::ConvertCoopVecDataType(desc.src.type);
+        vkDesc.dstComponentType = __hidden_vulkan::ConvertCoopVecDataType(desc.dst.type);
         vkDesc.numRows = desc.numRows;
         vkDesc.numColumns = desc.numColumns;
         
-        vkDesc.srcLayout = ConvertCoopVecMatrixLayout(desc.src.layout);
+        vkDesc.srcLayout = __hidden_vulkan::ConvertCoopVecMatrixLayout(desc.src.layout);
         vkDesc.srcStride = desc.src.stride != 0
             ? desc.src.stride
             : GetCooperativeVectorOptimalMatrixStride(desc.src.type, desc.src.layout, desc.numRows, desc.numColumns);
         
-        vkDesc.dstLayout = ConvertCoopVecMatrixLayout(desc.dst.layout);
+        vkDesc.dstLayout = __hidden_vulkan::ConvertCoopVecMatrixLayout(desc.dst.layout);
         vkDesc.dstStride = desc.dst.stride != 0
             ? desc.dst.stride
             : GetCooperativeVectorOptimalMatrixStride(desc.dst.type, desc.dst.layout, desc.numRows, desc.numColumns);
@@ -374,9 +374,8 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
     
     commitBarriers();
     
-    if(!vkConvertDescs.empty()){
+    if(!vkConvertDescs.empty())
         vkCmdConvertCooperativeVectorMatrixNV(currentCmdBuf->cmdBuf, static_cast<u32>(vkConvertDescs.size()), vkConvertDescs.data());
-    }
 }
 
 
@@ -431,13 +430,13 @@ const CommandListParameters& CommandList::getDescription(){
 
 
 void Device::getTextureTiling(ITexture* _texture, u32* numTiles, PackedMipDesc* desc, TileShape* tileShape, u32* subresourceTilingsNum, SubresourceTiling* subresourceTilings){
-    Texture* texture = checked_cast<Texture*>(_texture);
+    auto* texture = checked_cast<Texture*>(_texture);
     u32 numStandardMips = 0;
     u32 tileWidth = 1;
     u32 tileHeight = 1;
     u32 tileDepth = 1;
     
-    u32 sparseReqCount = 0;
+    uint32_t sparseReqCount = 0;
     vkGetImageSparseMemoryRequirements(m_context.device, texture->image, &sparseReqCount, nullptr);
     
     Vector<VkSparseImageMemoryRequirements> sparseReqs(sparseReqCount);
@@ -455,7 +454,7 @@ void Device::getTextureTiling(ITexture* _texture, u32* numTiles, PackedMipDesc* 
         }
     }
     
-    u32 formatPropCount = 0;
+    uint32_t formatPropCount = 0;
     vkGetPhysicalDeviceSparseImageFormatProperties(
         m_context.physicalDevice,
         texture->imageInfo.format,
@@ -463,7 +462,8 @@ void Device::getTextureTiling(ITexture* _texture, u32* numTiles, PackedMipDesc* 
         texture->imageInfo.samples,
         texture->imageInfo.usage,
         texture->imageInfo.tiling,
-        &formatPropCount, nullptr);
+        &formatPropCount, nullptr
+        );
     
     Vector<VkSparseImageFormatProperties> formatProps(formatPropCount);
     if(formatPropCount > 0){

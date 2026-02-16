@@ -32,7 +32,7 @@ Object ComputePipeline::getNativeHandle(ObjectType objectType){
 
 
 ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& desc){
-    ComputePipeline* pso = new ComputePipeline(m_context);
+    auto* pso = new ComputePipeline(m_context);
     pso->desc = desc;
     
     if(!desc.CS){
@@ -40,7 +40,7 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
         return nullptr;
     }
     
-    Shader* cs = checked_cast<Shader*>(desc.CS.get());
+    auto* cs = checked_cast<Shader*>(desc.CS.get());
     
     VkPipelineShaderStageCreateInfo shaderStage = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
     shaderStage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
@@ -58,7 +58,7 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
     
     VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
     if(!desc.bindingLayouts.empty() && desc.bindingLayouts[0]){
-        BindingLayout* layout = checked_cast<BindingLayout*>(desc.bindingLayouts[0].get());
+        auto* layout = checked_cast<BindingLayout*>(desc.bindingLayouts[0].get());
         pipelineLayout = layout->pipelineLayout;
         pso->pipelineLayout = pipelineLayout;
     }
@@ -84,14 +84,14 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
 void CommandList::setComputeState(const ComputeState& state){
     currentComputeState = state;
     
-    ComputePipeline* pipeline = checked_cast<ComputePipeline*>(state.pipeline);
+    auto* pipeline = checked_cast<ComputePipeline*>(state.pipeline);
     if(pipeline)
         vkCmdBindPipeline(currentCmdBuf->cmdBuf, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline->pipeline);
     
     if(state.bindings.size() > 0){
-        for(usize i = 0; i < state.bindings.size(); i++){
+        for(usize i = 0; i < state.bindings.size(); ++i){
             if(state.bindings[i]){
-                BindingSet* bindingSet = checked_cast<BindingSet*>(state.bindings[i]);
+                auto* bindingSet = checked_cast<BindingSet*>(state.bindings[i]);
                 if(!bindingSet->descriptorSets.empty())
                     vkCmdBindDescriptorSets(currentCmdBuf->cmdBuf, VK_PIPELINE_BIND_POINT_COMPUTE,
                         pipeline->pipelineLayout, static_cast<u32>(i), 
@@ -110,7 +110,7 @@ void CommandList::dispatchIndirect(u32 offsetBytes){
         NWB_ASSERT_MSG(false, NWB_TEXT("No indirect buffer bound for dispatchIndirect"));
         return;
     }
-    Buffer* buffer = checked_cast<Buffer*>(currentComputeState.indirectParams);
+    auto* buffer = checked_cast<Buffer*>(currentComputeState.indirectParams);
     vkCmdDispatchIndirect(currentCmdBuf->cmdBuf, buffer->buffer, offsetBytes);
     currentCmdBuf->referencedResources.push_back(currentComputeState.indirectParams);
 }

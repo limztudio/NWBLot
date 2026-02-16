@@ -20,11 +20,11 @@ namespace __hidden_vulkan{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-VkDeviceAddress GetBufferDeviceAddress(IBuffer* _buffer, u64 offset = 0){
+VkDeviceAddress GetBufferDeviceAddress(IBuffer* _buffer, u64 offset){
     if(!_buffer)
         return 0;
     
-    Buffer* buffer = checked_cast<Buffer*>(_buffer);
+    auto* buffer = checked_cast<Buffer*>(_buffer);
     return buffer->deviceAddress + offset;
 }
 
@@ -102,7 +102,7 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
     if(!m_context.extensions.KHR_acceleration_structure)
         return nullptr;
     
-    AccelStruct* as = new AccelStruct(m_context);
+    auto* as = new AccelStruct(m_context);
     as->desc = desc;
     
     VkAccelerationStructureTypeKHR asType = desc.isTopLevel ?  VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR :  VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
@@ -161,7 +161,7 @@ RayTracingOpacityMicromapHandle Device::createOpacityMicromap(const RayTracingOp
     VkMicromapBuildSizesInfoEXT buildSize = { VK_STRUCTURE_TYPE_MICROMAP_BUILD_SIZES_INFO_EXT };
     vkGetMicromapBuildSizesEXT(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &buildSize);
     
-    OpacityMicromap* om = new OpacityMicromap(m_context);
+    auto* om = new OpacityMicromap(m_context);
     om->desc = desc;
     
     BufferDesc bufferDesc;
@@ -178,7 +178,7 @@ RayTracingOpacityMicromapHandle Device::createOpacityMicromap(const RayTracingOp
         return nullptr;
     }
     
-    Buffer* buffer = checked_cast<Buffer*>(om->dataBuffer.get());
+    auto* buffer = checked_cast<Buffer*>(om->dataBuffer.get());
     
     VkMicromapCreateInfoEXT createInfo = { VK_STRUCTURE_TYPE_MICROMAP_CREATE_INFO_EXT };
     createInfo.type = VK_MICROMAP_TYPE_OPACITY_MICROMAP_EXT;
@@ -196,7 +196,7 @@ RayTracingOpacityMicromapHandle Device::createOpacityMicromap(const RayTracingOp
 }
 
 MemoryRequirements Device::getAccelStructMemoryRequirements(IRayTracingAccelStruct* _as){
-    AccelStruct* as = checked_cast<AccelStruct*>(_as);
+    auto* as = checked_cast<AccelStruct*>(_as);
     
     MemoryRequirements requirements = {};
     
@@ -321,11 +321,11 @@ bool Device::bindAccelStructMemory(IRayTracingAccelStruct* _as, IHeap* heap, u64
     if(!_as || !heap)
         return false;
     
-    AccelStruct* as = checked_cast<AccelStruct*>(_as);
-    Heap* h = checked_cast<Heap*>(heap);
+    auto* as = checked_cast<AccelStruct*>(_as);
+    auto* h = checked_cast<Heap*>(heap);
     
     if(as->buffer)
-        return bindBufferMemory(as->buffer, heap, offset);
+        return bindBufferMemory(as->buffer.get(), heap, offset);
     
     return false;
 }
@@ -334,7 +334,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
     if(!m_context.extensions.KHR_ray_tracing_pipeline)
         return nullptr;
     
-    RayTracingPipeline* pso = new RayTracingPipeline(m_context);
+    auto* pso = new RayTracingPipeline(m_context);
     pso->desc = desc;
     pso->m_device = this;
     
@@ -347,7 +347,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
         if(!shaderDesc.shader)
             continue;
         
-        Shader* s = checked_cast<Shader*>(shaderDesc.shader.get());
+        auto* s = checked_cast<Shader*>(shaderDesc.shader.get());
         
         VkPipelineShaderStageCreateInfo stageInfo = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
         stageInfo.module = s->shaderModule;
@@ -381,16 +381,14 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
     
     for(const auto& hitGroup : desc.hitGroups){
         VkRayTracingShaderGroupCreateInfoKHR group = { VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR };
-        group.type = hitGroup.isProceduralPrimitive 
-            ? VK_RAY_TRACING_SHADER_GROUP_TYPE_PROCEDURAL_HIT_GROUP_KHR 
-            : VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR;
+        group.type = hitGroup.isProceduralPrimitive ? VK_RAY_TRACING_SHADER_GROUP_TYPE_PROCEDURAL_HIT_GROUP_KHR : VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR;
         group.generalShader = VK_SHADER_UNUSED_KHR;
         group.closestHitShader = VK_SHADER_UNUSED_KHR;
         group.anyHitShader = VK_SHADER_UNUSED_KHR;
         group.intersectionShader = VK_SHADER_UNUSED_KHR;
         
         if(hitGroup.closestHitShader){
-            Shader* s = checked_cast<Shader*>(hitGroup.closestHitShader.get());
+            auto* s = checked_cast<Shader*>(hitGroup.closestHitShader.get());
             VkPipelineShaderStageCreateInfo stageInfo = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
             stageInfo.stage = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
             stageInfo.module = s->shaderModule;
@@ -399,7 +397,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
             stages.push_back(stageInfo);
         }
         if(hitGroup.anyHitShader){
-            Shader* s = checked_cast<Shader*>(hitGroup.anyHitShader.get());
+            auto* s = checked_cast<Shader*>(hitGroup.anyHitShader.get());
             VkPipelineShaderStageCreateInfo stageInfo = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
             stageInfo.stage = VK_SHADER_STAGE_ANY_HIT_BIT_KHR;
             stageInfo.module = s->shaderModule;
@@ -408,7 +406,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
             stages.push_back(stageInfo);
         }
         if(hitGroup.intersectionShader){
-            Shader* s = checked_cast<Shader*>(hitGroup.intersectionShader.get());
+            auto* s = checked_cast<Shader*>(hitGroup.intersectionShader.get());
             VkPipelineShaderStageCreateInfo stageInfo = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
             stageInfo.stage = VK_SHADER_STAGE_INTERSECTION_BIT_KHR;
             stageInfo.module = s->shaderModule;
@@ -421,7 +419,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
     
     VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
     if(!desc.globalBindingLayouts.empty() && desc.globalBindingLayouts[0]){
-        BindingLayout* layout = checked_cast<BindingLayout*>(desc.globalBindingLayouts[0].get());
+        auto* layout = checked_cast<BindingLayout*>(desc.globalBindingLayouts[0].get());
         pipelineLayout = layout->pipelineLayout;
         pso->pipelineLayout = pipelineLayout;
     }
@@ -434,8 +432,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
     createInfo.maxPipelineRayRecursionDepth = desc.maxRecursionDepth;
     createInfo.layout = pipelineLayout;
     
-    VkResult res = vkCreateRayTracingPipelinesKHR(m_context.device, VK_NULL_HANDLE, m_context.pipelineCache, 
-                                                   1, &createInfo, m_context.allocationCallbacks, &pso->pipeline);
+    VkResult res = vkCreateRayTracingPipelinesKHR(m_context.device, VK_NULL_HANDLE, m_context.pipelineCache, 1, &createInfo, m_context.allocationCallbacks, &pso->pipeline);
     
     if(res != VK_SUCCESS){
         delete pso;
@@ -450,8 +447,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
     u32 groupCount = static_cast<u32>(groups.size());
     
     pso->shaderGroupHandles.resize(groupCount * handleSizeAligned);
-    vkGetRayTracingShaderGroupHandlesKHR(m_context.device, pso->pipeline, 0, groupCount, 
-                                          pso->shaderGroupHandles.size(), pso->shaderGroupHandles.data());
+    vkGetRayTracingShaderGroupHandlesKHR(m_context.device, pso->pipeline, 0, groupCount, pso->shaderGroupHandles.size(), pso->shaderGroupHandles.data());
     
     return RayTracingPipelineHandle(pso, AdoptRef);
 }
@@ -464,11 +460,10 @@ ShaderTable::ShaderTable(const VulkanContext& context, Device* device)
     : m_context(context)
     , m_device(device)
 {}
-
 ShaderTable::~ShaderTable() = default;
 
 RayTracingShaderTableHandle RayTracingPipeline::createShaderTable(){
-    ShaderTable* sbt = new ShaderTable(m_context, m_device);
+    auto* sbt = new ShaderTable(m_context, m_device);
     sbt->pipeline = this;
     return RayTracingShaderTableHandle(sbt, AdoptRef);
 }
@@ -557,7 +552,7 @@ u32 ShaderTable::addMissShader(const Name& exportName, IBindingSet* /*bindings*/
         }
         
         u32 groupIndex = findGroupIndex(exportName);
-        u8* dst = static_cast<u8*>(mapped) + missCount * handleSizeAligned;
+        auto* dst = static_cast<u8*>(mapped) + missCount * handleSizeAligned;
         NWB_MEMCPY(dst, handleSizeAligned, pipeline->shaderGroupHandles.data() + groupIndex * handleSizeAligned, handleSize);
         m_device->unmapBuffer(newBuffer.get());
     }
@@ -595,7 +590,7 @@ u32 ShaderTable::addHitGroup(const Name& exportName, IBindingSet* /*bindings*/){
         }
         
         u32 groupIndex = findGroupIndex(exportName);
-        u8* dst = static_cast<u8*>(mapped) + hitCount * handleSizeAligned;
+        auto* dst = static_cast<u8*>(mapped) + hitCount * handleSizeAligned;
         NWB_MEMCPY(dst, handleSizeAligned, pipeline->shaderGroupHandles.data() + groupIndex * handleSizeAligned, handleSize);
         m_device->unmapBuffer(newBuffer.get());
     }
@@ -633,7 +628,7 @@ u32 ShaderTable::addCallableShader(const Name& exportName, IBindingSet* /*bindin
         }
         
         u32 groupIndex = findGroupIndex(exportName);
-        u8* dst = static_cast<u8*>(mapped) + callableCount * handleSizeAligned;
+        auto* dst = static_cast<u8*>(mapped) + callableCount * handleSizeAligned;
         NWB_MEMCPY(dst, handleSizeAligned, pipeline->shaderGroupHandles.data() + groupIndex * handleSizeAligned, handleSize);
         m_device->unmapBuffer(newBuffer.get());
     }
@@ -649,10 +644,10 @@ void ShaderTable::clearCallableShaders(){ callableCount = 0; callableBuffer = nu
 
 Object ShaderTable::getNativeHandle(ObjectType objectType){
     if(objectType == ObjectTypes::VK_Buffer && raygenBuffer){
-        Buffer* buf = checked_cast<Buffer*>(raygenBuffer.get());
+        auto* buf = checked_cast<Buffer*>(raygenBuffer.get());
         return Object(buf->buffer);
     }
-    return Object{};
+    return Object{nullptr};
 }
 
 
@@ -665,7 +660,7 @@ void CommandList::setRayTracingState(const RayTracingState& state){
     if(!state.shaderTable)
         return;
     
-    ShaderTable* sbt = checked_cast<ShaderTable*>(state.shaderTable);
+    auto* sbt = checked_cast<ShaderTable*>(state.shaderTable);
     RayTracingPipeline* pipeline = sbt->pipeline;
     
     if(!pipeline)
@@ -674,9 +669,9 @@ void CommandList::setRayTracingState(const RayTracingState& state){
     vkCmdBindPipeline(currentCmdBuf->cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, pipeline->pipeline);
     
     if(state.bindings.size() > 0 && pipeline->pipelineLayout != VK_NULL_HANDLE){
-        for(usize i = 0; i < state.bindings.size(); i++){
+        for(usize i = 0; i < state.bindings.size(); ++i){
             if(state.bindings[i]){
-                BindingSet* bindingSet = checked_cast<BindingSet*>(state.bindings[i]);
+                auto* bindingSet = checked_cast<BindingSet*>(state.bindings[i]);
                 if(!bindingSet->descriptorSets.empty())
                     vkCmdBindDescriptorSets(currentCmdBuf->cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
                         pipeline->pipelineLayout, static_cast<u32>(i),
@@ -698,17 +693,17 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* _as, const
     if(!m_context.extensions.KHR_acceleration_structure)
         return;
     
-    AccelStruct* as = checked_cast<AccelStruct*>(_as);
+    auto* as = checked_cast<AccelStruct*>(_as);
     
     Vector<VkAccelerationStructureGeometryKHR> geometries;
     Vector<VkAccelerationStructureBuildRangeInfoKHR> rangeInfos;
-    Vector<u32> primitiveCounts;
+    Vector<uint32_t> primitiveCounts;
     
     geometries.reserve(numGeometries);
     rangeInfos.reserve(numGeometries);
     primitiveCounts.reserve(numGeometries);
     
-    for(usize i = 0; i < numGeometries; i++){
+    for(usize i = 0; i < numGeometries; ++i){
         const auto& geomDesc = pGeometries[i];
         
         VkAccelerationStructureGeometryKHR geometry = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR };
@@ -758,7 +753,7 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* _as, const
         
         geometries.push_back(geometry);
         rangeInfos.push_back(rangeInfo);
-        primitiveCounts.push_back(primitiveCount);
+        primitiveCounts.push_back(static_cast<uint32_t>(primitiveCount));
     }
     
     VkAccelerationStructureBuildGeometryInfoKHR buildInfo = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR };
@@ -833,7 +828,7 @@ void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* _as, const Ra
     if(!m_context.extensions.KHR_acceleration_structure)
         return;
     
-    AccelStruct* as = checked_cast<AccelStruct*>(_as);
+    auto* as = checked_cast<AccelStruct*>(_as);
     
     u64 instanceBufferSize = numInstances * sizeof(VkAccelerationStructureInstanceKHR);
     BufferDesc instanceBufferDesc;
@@ -849,7 +844,7 @@ void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* _as, const Ra
     auto* mappedInstances = static_cast<VkAccelerationStructureInstanceKHR*>(m_device.mapBuffer(instanceBuffer.get(), CpuAccessMode::Write));
     
     if(mappedInstances){
-        for(usize i = 0; i < numInstances; i++){
+        for(usize i = 0; i < numInstances; ++i){
             const auto& inst = pInstances[i];
             VkAccelerationStructureInstanceKHR& vkInst = mappedInstances[i];
             
@@ -869,7 +864,7 @@ void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* _as, const Ra
             if(inst.flags & RayTracingInstanceFlags::ForceNonOpaque)
                 vkInst.flags |= VK_GEOMETRY_INSTANCE_FORCE_NO_OPAQUE_BIT_KHR;
             
-            AccelStruct* blas = checked_cast<AccelStruct*>(inst.bottomLevelAS);
+            auto* blas = checked_cast<AccelStruct*>(inst.bottomLevelAS);
             vkInst.accelerationStructureReference = blas ? blas->deviceAddress : 0;
         }
         
@@ -898,7 +893,7 @@ void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* _as, const Ra
     buildInfo.geometryCount = 1;
     buildInfo.pGeometries = &geometry;
     
-    u32 primitiveCount = static_cast<u32>(numInstances);
+    auto primitiveCount = static_cast<uint32_t>(numInstances);
     VkAccelerationStructureBuildSizesInfoKHR sizeInfo = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR };
     vkGetAccelerationStructureBuildSizesKHR(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &primitiveCount, &sizeInfo);
     
@@ -928,7 +923,7 @@ void CommandList::buildOpacityMicromap(IRayTracingOpacityMicromap* _omm, const R
     if(!m_context.extensions.EXT_opacity_micromap)
         return;
     
-    OpacityMicromap* omm = checked_cast<OpacityMicromap*>(_omm);
+    auto* omm = checked_cast<OpacityMicromap*>(_omm);
     
     if(enableAutomaticBarriers){
         if(desc.inputBuffer)
@@ -1001,7 +996,7 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
     if(!state.shaderTable)
         return;
     
-    ShaderTable* sbt = checked_cast<ShaderTable*>(state.shaderTable);
+    auto* sbt = checked_cast<ShaderTable*>(state.shaderTable);
     
     VkStridedDeviceAddressRegionKHR raygenRegion = {};
     VkStridedDeviceAddressRegionKHR missRegion = {};

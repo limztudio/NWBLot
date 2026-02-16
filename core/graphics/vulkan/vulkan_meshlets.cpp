@@ -32,7 +32,7 @@ Object MeshletPipeline::getNativeHandle(ObjectType objectType){
 
 
 MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& desc, FramebufferInfo const& fbinfo){
-    MeshletPipeline* pso = new MeshletPipeline(m_context);
+    auto* pso = new MeshletPipeline(m_context);
     pso->desc = desc;
     
     Vector<VkPipelineShaderStageCreateInfo> shaderStages;
@@ -41,7 +41,7 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     specInfos.reserve(3);
     
     auto addShaderStage = [&](IShader* iShader, VkShaderStageFlagBits vkStage){
-        Shader* s = checked_cast<Shader*>(iShader);
+        auto* s = checked_cast<Shader*>(iShader);
         VkPipelineShaderStageCreateInfo stageInfo = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
         stageInfo.stage = vkStage;
         stageInfo.module = s->shaderModule;
@@ -75,7 +75,7 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     
     VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
     if(!desc.bindingLayouts.empty() && desc.bindingLayouts[0]){
-        BindingLayout* layout = checked_cast<BindingLayout*>(desc.bindingLayouts[0].get());
+        auto* layout = checked_cast<BindingLayout*>(desc.bindingLayouts[0].get());
         pipelineLayout = layout->pipelineLayout;
         pso->pipelineLayout = pipelineLayout;
     }
@@ -180,14 +180,14 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
 void CommandList::setMeshletState(const MeshletState& state){
     currentMeshletState = state;
     
-    MeshletPipeline* pipeline = checked_cast<MeshletPipeline*>(state.pipeline);
+    auto* pipeline = checked_cast<MeshletPipeline*>(state.pipeline);
     if(pipeline)
         vkCmdBindPipeline(currentCmdBuf->cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->pipeline);
     
     if(state.bindings.size() > 0){
-        for(usize i = 0; i < state.bindings.size(); i++){
+        for(usize i = 0; i < state.bindings.size(); ++i){
             if(state.bindings[i]){
-                BindingSet* bindingSet = checked_cast<BindingSet*>(state.bindings[i]);
+                auto* bindingSet = checked_cast<BindingSet*>(state.bindings[i]);
                 if(!bindingSet->descriptorSets.empty())
                     vkCmdBindDescriptorSets(currentCmdBuf->cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
                         pipeline->pipelineLayout, static_cast<u32>(i),

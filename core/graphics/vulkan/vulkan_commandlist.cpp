@@ -15,13 +15,12 @@ NWB_VULKAN_BEGIN
 
 
 CommandList::CommandList(Device& device, const CommandListParameters& params)
-    : m_device(device)
+    : desc(params)
+    , stateTracker(new StateTracker())
+    , m_device(device)
     , m_context(device.getContext())
     , m_aftermathMarkerTracker()
 {
-    desc = params;
-    stateTracker = UniquePtr<StateTracker>(new StateTracker());
-
     if(m_device.isAftermathEnabled())
         m_device.getAftermathCrashDumpHelper().registerAftermathMarkerTracker(&m_aftermathMarkerTracker);
 }

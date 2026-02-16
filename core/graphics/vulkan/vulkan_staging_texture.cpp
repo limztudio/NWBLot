@@ -15,7 +15,7 @@ NWB_VULKAN_BEGIN
 
 
 StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAccessMode::Enum cpuAccess){
-    StagingTexture* staging = new StagingTexture(m_context, m_allocator);
+    auto* staging = new StagingTexture(m_context, m_allocator);
     staging->desc = d;
     staging->cpuAccess = cpuAccess;
     
@@ -104,7 +104,7 @@ void* Device::mapStagingTexture(IStagingTexture* tex, const TextureSlice& slice,
     if(!tex)
         return nullptr;
     
-    StagingTexture* staging = static_cast<StagingTexture*>(tex);
+    auto* staging = static_cast<StagingTexture*>(tex);
     
     if(!staging->mappedMemory){
         VkResult res = vkMapMemory(m_context.device, staging->memory, 0, VK_WHOLE_SIZE, 0, &staging->mappedMemory);

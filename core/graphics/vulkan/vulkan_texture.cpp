@@ -232,7 +232,7 @@ StagingTexture::~StagingTexture(){
 
 
 TextureHandle Device::createTexture(const TextureDesc& d){
-    Texture* texture = new Texture(m_context, m_allocator);
+    auto* texture = new Texture(m_context, m_allocator);
     texture->desc = d;
     
     VkImageType imageType = __hidden_vulkan::TextureDimensionToImageType(d.dimension);
@@ -268,7 +268,7 @@ TextureHandle Device::createTexture(const TextureDesc& d){
 }
 
 MemoryRequirements Device::getTextureMemoryRequirements(ITexture* _texture){
-    Texture* texture = static_cast<Texture*>(_texture);
+    auto* texture = static_cast<Texture*>(_texture);
     
     VkMemoryRequirements memRequirements;
     vkGetImageMemoryRequirements(m_context.device, texture->image, &memRequirements);
@@ -280,8 +280,8 @@ MemoryRequirements Device::getTextureMemoryRequirements(ITexture* _texture){
 }
 
 bool Device::bindTextureMemory(ITexture* _texture, IHeap* heap, u64 offset){
-    Texture* texture = static_cast<Texture*>(_texture);
-    Heap* vkHeap = checked_cast<Heap*>(heap);
+    auto* texture = static_cast<Texture*>(_texture);
+    auto* vkHeap = checked_cast<Heap*>(heap);
     
     if(!vkHeap || vkHeap->memory == VK_NULL_HANDLE)
         return false;
@@ -296,11 +296,11 @@ TextureHandle Device::createHandleForNativeTexture(ObjectType objectType, Object
     if(objectType != ObjectTypes::VK_Image)
         return nullptr;
     
-    VkImage nativeImage = static_cast<VkImage>(static_cast<VkImage_T*>(_texture));
+    auto* nativeImage = static_cast<VkImage>(static_cast<VkImage_T*>(_texture));
     if(nativeImage == VK_NULL_HANDLE)
         return nullptr;
     
-    Texture* texture = new Texture(m_context, m_allocator);
+    auto* texture = new Texture(m_context, m_allocator);
     texture->desc = desc;
     texture->image = nativeImage;
     texture->managed = false;
@@ -323,7 +323,7 @@ TextureHandle Device::createHandleForNativeTexture(ObjectType objectType, Object
 
 
 SamplerHandle Device::createSampler(const SamplerDesc& d){
-    Sampler* sampler = new Sampler(m_context);
+    auto* sampler = new Sampler(m_context);
     sampler->desc = d;
     
     VkFilter minFilter = d.minFilter ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
@@ -369,7 +369,7 @@ SamplerHandle Device::createSampler(const SamplerDesc& d){
 
 
 void CommandList::clearTextureFloat(ITexture* _texture, TextureSubresourceSet subresources, const Color& clearColor){
-    Texture* texture = checked_cast<Texture*>(_texture);
+    auto* texture = checked_cast<Texture*>(_texture);
     
     VkClearColorValue clearValue;
     clearValue.float32[0] = clearColor.r;
@@ -389,7 +389,7 @@ void CommandList::clearTextureFloat(ITexture* _texture, TextureSubresourceSet su
 }
 
 void CommandList::clearDepthStencilTexture(ITexture* _texture, TextureSubresourceSet subresources, bool clearDepth, f32 depth, bool clearStencil, u8 stencil){
-    Texture* texture = checked_cast<Texture*>(_texture);
+    auto* texture = checked_cast<Texture*>(_texture);
     
     VkClearDepthStencilValue clearValue{};
     clearValue.depth = depth;
@@ -411,7 +411,7 @@ void CommandList::clearDepthStencilTexture(ITexture* _texture, TextureSubresourc
 }
 
 void CommandList::clearTextureUInt(ITexture* _texture, TextureSubresourceSet subresources, u32 clearColor){
-    Texture* texture = checked_cast<Texture*>(_texture);
+    auto* texture = checked_cast<Texture*>(_texture);
     
     VkClearColorValue clearValue;
     clearValue.uint32[0] = clearColor;
@@ -431,8 +431,8 @@ void CommandList::clearTextureUInt(ITexture* _texture, TextureSubresourceSet sub
 }
 
 void CommandList::copyTexture(ITexture* _dest, const TextureSlice& destSlice, ITexture* _src, const TextureSlice& srcSlice){
-    Texture* dest = checked_cast<Texture*>(_dest);
-    Texture* src = checked_cast<Texture*>(_src);
+    auto* dest = checked_cast<Texture*>(_dest);
+    auto* src = checked_cast<Texture*>(_src);
     
     VkImageCopy region{};
     region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -454,8 +454,8 @@ void CommandList::copyTexture(ITexture* _dest, const TextureSlice& destSlice, IT
 }
 
 void CommandList::copyTexture(IStagingTexture* dest, const TextureSlice& destSlice, ITexture* src, const TextureSlice& srcSlice){
-    StagingTexture* staging = checked_cast<StagingTexture*>(dest);
-    Texture* texture = checked_cast<Texture*>(src);
+    auto* staging = checked_cast<StagingTexture*>(dest);
+    auto* texture = checked_cast<Texture*>(src);
     
     TextureSlice resolvedSrc = srcSlice.resolve(texture->desc);
     TextureSlice resolvedDst = destSlice.resolve(staging->desc);
@@ -493,8 +493,8 @@ void CommandList::copyTexture(IStagingTexture* dest, const TextureSlice& destSli
 }
 
 void CommandList::copyTexture(ITexture* dest, const TextureSlice& destSlice, IStagingTexture* src, const TextureSlice& srcSlice){
-    Texture* texture = checked_cast<Texture*>(dest);
-    StagingTexture* staging = checked_cast<StagingTexture*>(src);
+    auto* texture = checked_cast<Texture*>(dest);
+    auto* staging = checked_cast<StagingTexture*>(src);
     
     TextureSlice resolvedDst = destSlice.resolve(texture->desc);
     TextureSlice resolvedSrc = srcSlice.resolve(staging->desc);
@@ -532,7 +532,7 @@ void CommandList::copyTexture(ITexture* dest, const TextureSlice& destSlice, ISt
 }
 
 void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, const void* data, usize rowPitch, usize depthPitch){
-    Texture* dest = checked_cast<Texture*>(_dest);
+    auto* dest = checked_cast<Texture*>(_dest);
     const TextureDesc& desc = dest->desc;
     
     auto width = Max<u32>(1u, desc.width >> mipLevel);
@@ -590,8 +590,8 @@ void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, co
 }
 
 void CommandList::resolveTexture(ITexture* _dest, const TextureSubresourceSet& dstSubresources, ITexture* _src, const TextureSubresourceSet& srcSubresources){
-    Texture* dest = checked_cast<Texture*>(_dest);
-    Texture* src = checked_cast<Texture*>(_src);
+    auto* dest = checked_cast<Texture*>(_dest);
+    auto* src = checked_cast<Texture*>(_src);
     
     VkImageResolve region{};
     region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;

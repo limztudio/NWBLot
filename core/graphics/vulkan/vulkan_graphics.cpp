@@ -170,13 +170,13 @@ Object GraphicsPipeline::getNativeHandle(ObjectType objectType){
 
 
 FramebufferHandle Device::createFramebuffer(const FramebufferDesc& desc){
-    Framebuffer* fb = new Framebuffer(m_context);
+    auto* fb = new Framebuffer(m_context);
     fb->desc = desc;
     
-    for(u32 i = 0; i < static_cast<u32>(desc.colorAttachments.size()); i++){
+    for(u32 i = 0; i < static_cast<u32>(desc.colorAttachments.size()); ++i){
         if(desc.colorAttachments[i].texture){
             fb->resources.push_back(desc.colorAttachments[i].texture);
-            Texture* tex = checked_cast<Texture*>(desc.colorAttachments[i].texture);
+            auto* tex = checked_cast<Texture*>(desc.colorAttachments[i].texture);
             fb->framebufferInfo.colorFormats.push_back(tex->desc.format);
             
             if(fb->framebufferInfo.width == 0)
@@ -188,7 +188,7 @@ FramebufferHandle Device::createFramebuffer(const FramebufferDesc& desc){
     
     if(desc.depthAttachment.texture){
         fb->resources.push_back(desc.depthAttachment.texture);
-        Texture* depthTex = checked_cast<Texture*>(desc.depthAttachment.texture);
+        auto* depthTex = checked_cast<Texture*>(desc.depthAttachment.texture);
         fb->framebufferInfo.depthFormat = depthTex->desc.format;
         
         if(fb->framebufferInfo.width == 0)
@@ -198,7 +198,7 @@ FramebufferHandle Device::createFramebuffer(const FramebufferDesc& desc){
     }
     
     if(!fb->resources.empty()){
-        Texture* tex = checked_cast<Texture*>(fb->resources[0].get());
+        auto* tex = checked_cast<Texture*>(fb->resources[0].get());
         fb->framebufferInfo.sampleCount = tex->desc.sampleCount;
     }
     
@@ -207,7 +207,7 @@ FramebufferHandle Device::createFramebuffer(const FramebufferDesc& desc){
 
 
 GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc& desc, FramebufferInfo const& fbinfo){
-    GraphicsPipeline* pso = new GraphicsPipeline(m_context);
+    auto* pso = new GraphicsPipeline(m_context);
     pso->desc = desc;
     pso->framebufferInfo = fbinfo;
     
@@ -218,7 +218,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     specInfos.reserve(5);
     
     auto addShaderStage = [&](IShader* iShader, VkShaderStageFlagBits vkStage){
-        Shader* s = checked_cast<Shader*>(iShader);
+        auto* s = checked_cast<Shader*>(iShader);
         VkPipelineShaderStageCreateInfo stageInfo = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
         stageInfo.stage = vkStage;
         stageInfo.module = s->shaderModule;
@@ -254,7 +254,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     Vector<VkVertexInputAttributeDescription> attributes;
     
     if(desc.inputLayout){
-        InputLayout* layout = checked_cast<InputLayout*>(desc.inputLayout.get());
+        auto* layout = checked_cast<InputLayout*>(desc.inputLayout.get());
         bindings = layout->bindings;
         attributes = layout->vkAttributes;
     }
@@ -338,13 +338,13 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     pso->pipelineLayout = VK_NULL_HANDLE;
     Vector<VkDescriptorSetLayout> allDescriptorSetLayouts;
     for(u32 i = 0; i < (u32)desc.bindingLayouts.size(); ++i){
-        BindingLayout* bl = checked_cast<BindingLayout*>(desc.bindingLayouts[i].get());
+        auto* bl = checked_cast<BindingLayout*>(desc.bindingLayouts[i].get());
         for(auto& dsl : bl->descriptorSetLayouts){
             allDescriptorSetLayouts.push_back(dsl);
         }
     }
     if(desc.bindingLayouts.size() == 1){
-        BindingLayout* bl = checked_cast<BindingLayout*>(desc.bindingLayouts[0].get());
+        auto* bl = checked_cast<BindingLayout*>(desc.bindingLayouts[0].get());
         pso->pipelineLayout = bl->pipelineLayout;
     } else if(desc.bindingLayouts.size() > 1){
         VkPipelineLayoutCreateInfo layoutInfo = { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
@@ -398,16 +398,16 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
 
 
 void CommandList::beginRenderPass(IFramebuffer* _framebuffer, const RenderPassParameters& params){
-    Framebuffer* fb = checked_cast<Framebuffer*>(_framebuffer);
+    auto* fb = checked_cast<Framebuffer*>(_framebuffer);
     const FramebufferDesc& fbDesc = fb->desc;
     
     // Dynamic rendering (VK_KHR_dynamic_rendering)
     VkRenderingAttachmentInfo colorAttachments[8] = {};
     u32 numColorAttachments = 0;
     
-    for(u32 i = 0; i < static_cast<u32>(fbDesc.colorAttachments.size()); i++){
+    for(u32 i = 0; i < static_cast<u32>(fbDesc.colorAttachments.size()); ++i){
         if(fbDesc.colorAttachments[i].texture){
-            Texture* tex = checked_cast<Texture*>(fbDesc.colorAttachments[i].texture);
+            auto* tex = checked_cast<Texture*>(fbDesc.colorAttachments[i].texture);
             
             VkImageView view = tex->getView(fbDesc.colorAttachments[i].subresources, TextureDimension::Texture2D, Format::UNKNOWN);
             
@@ -434,7 +434,7 @@ void CommandList::beginRenderPass(IFramebuffer* _framebuffer, const RenderPassPa
     bool hasStencil = false;
     
     if(fbDesc.depthAttachment.texture){
-        Texture* depthTex = checked_cast<Texture*>(fbDesc.depthAttachment.texture);
+        auto* depthTex = checked_cast<Texture*>(fbDesc.depthAttachment.texture);
         VkImageView depthView = depthTex->getView(fbDesc.depthAttachment.subresources, TextureDimension::Texture2D, Format::UNKNOWN, true);
         
         const FormatInfo& formatInfo = GetFormatInfo(depthTex->desc.format);
@@ -477,16 +477,15 @@ void CommandList::endRenderPass(){
 void CommandList::setGraphicsState(const GraphicsState& state){
     currentGraphicsState = state;
     
-    GraphicsPipeline* pipeline = checked_cast<GraphicsPipeline*>(state.pipeline);
-    
+    auto* pipeline = checked_cast<GraphicsPipeline*>(state.pipeline);
     if(pipeline)
         vkCmdBindPipeline(currentCmdBuf->cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->pipeline);
     
     // Bind descriptor sets
     if(state.bindings.size() > 0){
-        for(usize i = 0; i < state.bindings.size(); i++){
+        for(usize i = 0; i < state.bindings.size(); ++i){
             if(state.bindings[i]){
-                BindingSet* bindingSet = checked_cast<BindingSet*>(state.bindings[i]);
+                auto* bindingSet = checked_cast<BindingSet*>(state.bindings[i]);
                 if(!bindingSet->descriptorSets.empty())
                     vkCmdBindDescriptorSets(currentCmdBuf->cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
                         pipeline->pipelineLayout, static_cast<u32>(i),
@@ -525,9 +524,9 @@ void CommandList::setGraphicsState(const GraphicsState& state){
     if(!state.vertexBuffers.empty()){
         VkBuffer vertexBuffers[16];
         VkDeviceSize offsets[16];
-        u32 count = static_cast<u32>(state.vertexBuffers.size());
-        for(u32 i = 0; i < count; i++){
-            Buffer* vb = checked_cast<Buffer*>(state.vertexBuffers[i].buffer);
+        auto count = static_cast<u32>(state.vertexBuffers.size());
+        for(u32 i = 0; i < count; ++i){
+            auto* vb = checked_cast<Buffer*>(state.vertexBuffers[i].buffer);
             vertexBuffers[i] = vb->buffer;
             offsets[i] = state.vertexBuffers[i].offset;
         }
@@ -536,7 +535,7 @@ void CommandList::setGraphicsState(const GraphicsState& state){
     
     // Bind index buffer
     if(state.indexBuffer.buffer){
-        Buffer* ib = checked_cast<Buffer*>(state.indexBuffer.buffer);
+        auto* ib = checked_cast<Buffer*>(state.indexBuffer.buffer);
         VkIndexType indexType = (state.indexBuffer.format == Format::R16_UINT) ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32;
         vkCmdBindIndexBuffer(currentCmdBuf->cmdBuf, ib->buffer, state.indexBuffer.offset, indexType);
     }
@@ -555,7 +554,7 @@ void CommandList::drawIndirect(u32 offsetBytes, u32 drawCount){
         NWB_ASSERT_MSG(false, NWB_TEXT("No indirect buffer bound for drawIndirect"));
         return;
     }
-    Buffer* indirectBuffer = checked_cast<Buffer*>(currentGraphicsState.indirectParams);
+    auto* indirectBuffer = checked_cast<Buffer*>(currentGraphicsState.indirectParams);
     vkCmdDrawIndirect(currentCmdBuf->cmdBuf, indirectBuffer->buffer, offsetBytes, drawCount, sizeof(DrawIndirectArguments));
     currentCmdBuf->referencedResources.push_back(currentGraphicsState.indirectParams);
 }

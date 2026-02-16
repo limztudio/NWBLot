@@ -15,12 +15,12 @@ NWB_VULKAN_BEGIN
 
 
 EventQueryHandle Device::createEventQuery(){
-    EventQuery* query = new EventQuery(m_context);
+    auto* query = new EventQuery(m_context);
     return RefCountPtr<IEventQuery, BlankDeleter<IEventQuery>>(query, AdoptRef);
 }
 
 void Device::setEventQuery(IEventQuery* _query, CommandQueue::Enum queue){
-    EventQuery* query = static_cast<EventQuery*>(_query);
+    auto* query = static_cast<EventQuery*>(_query);
     
     vkResetFences(m_context.device, 1, &query->fence);
     
@@ -34,8 +34,7 @@ void Device::setEventQuery(IEventQuery* _query, CommandQueue::Enum queue){
 }
 
 bool Device::pollEventQuery(IEventQuery* _query){
-    EventQuery* query = static_cast<EventQuery*>(_query);
-    
+    auto* query = static_cast<EventQuery*>(_query);
     if(!query->started)
         return true;
     
@@ -44,8 +43,7 @@ bool Device::pollEventQuery(IEventQuery* _query){
 }
 
 void Device::waitEventQuery(IEventQuery* _query){
-    EventQuery* query = static_cast<EventQuery*>(_query);
-    
+    auto* query = static_cast<EventQuery*>(_query);
     if(!query->started)
         return;
     
@@ -53,23 +51,23 @@ void Device::waitEventQuery(IEventQuery* _query){
 }
 
 void Device::resetEventQuery(IEventQuery* _query){
-    EventQuery* query = static_cast<EventQuery*>(_query);
+    auto* query = static_cast<EventQuery*>(_query);
     vkResetFences(m_context.device, 1, &query->fence);
     query->started = false;
 }
 
 TimerQueryHandle Device::createTimerQuery(){
-    TimerQuery* query = new TimerQuery(m_context);
+    auto* query = new TimerQuery(m_context);
     return RefCountPtr<ITimerQuery, BlankDeleter<ITimerQuery>>(query, AdoptRef);
 }
 
 bool Device::pollTimerQuery(ITimerQuery* _query){
-    TimerQuery* query = static_cast<TimerQuery*>(_query);
+    auto* query = static_cast<TimerQuery*>(_query);
     return query->resolved;
 }
 
 f32 Device::getTimerQueryTime(ITimerQuery* _query){
-    TimerQuery* query = static_cast<TimerQuery*>(_query);
+    auto* query = static_cast<TimerQuery*>(_query);
     
     if(!query->resolved)
         return 0.f;
@@ -87,7 +85,7 @@ f32 Device::getTimerQueryTime(ITimerQuery* _query){
 }
 
 void Device::resetTimerQuery(ITimerQuery* _query){
-    TimerQuery* query = static_cast<TimerQuery*>(_query);
+    auto* query = static_cast<TimerQuery*>(_query);
     vkResetQueryPool(m_context.device, query->queryPool, 0, 2);
     query->started = false;
     query->resolved = false;
@@ -98,14 +96,14 @@ void Device::resetTimerQuery(ITimerQuery* _query){
 
 
 void CommandList::beginTimerQuery(ITimerQuery* _query){
-    TimerQuery* query = checked_cast<TimerQuery*>(_query);
+    auto* query = checked_cast<TimerQuery*>(_query);
     
     vkCmdWriteTimestamp(currentCmdBuf->cmdBuf, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, query->queryPool, 0);
     query->started = true;
 }
 
 void CommandList::endTimerQuery(ITimerQuery* _query){
-    TimerQuery* query = checked_cast<TimerQuery*>(_query);
+    auto* query = checked_cast<TimerQuery*>(_query);
     
     vkCmdWriteTimestamp(currentCmdBuf->cmdBuf, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, query->queryPool, 1);
     query->resolved = true;
@@ -143,7 +141,7 @@ void CommandList::endMarker(){
 }
 
 void CommandList::setEventQuery(IEventQuery* _query, CommandQueue::Enum waitQueue){
-    EventQuery* query = checked_cast<EventQuery*>(_query);
+    auto* query = checked_cast<EventQuery*>(_query);
     
     if(query->fence != VK_NULL_HANDLE)
         vkResetFences(m_context.device, 1, &query->fence);
@@ -155,7 +153,7 @@ void CommandList::setEventQuery(IEventQuery* _query, CommandQueue::Enum waitQueu
 }
 
 void CommandList::resetEventQuery(IEventQuery* _query){
-    EventQuery* query = checked_cast<EventQuery*>(_query);
+    auto* query = checked_cast<EventQuery*>(_query);
     
     if(query->fence != VK_NULL_HANDLE)
         vkResetFences(m_context.device, 1, &query->fence);
@@ -164,7 +162,7 @@ void CommandList::resetEventQuery(IEventQuery* _query){
 }
 
 void CommandList::waitEventQuery(IEventQuery* _query){
-    EventQuery* query = checked_cast<EventQuery*>(_query);
+    auto* query = checked_cast<EventQuery*>(_query);
     
     if(query->fence != VK_NULL_HANDLE)
         vkWaitForFences(m_context.device, 1, &query->fence, VK_TRUE, UINT64_MAX);

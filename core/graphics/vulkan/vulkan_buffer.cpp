@@ -35,7 +35,7 @@ Buffer::~Buffer(){
 
 
 BufferHandle Device::createBuffer(const BufferDesc& d){
-    Buffer* buffer = new Buffer(m_context, m_allocator);
+    auto* buffer = new Buffer(m_context, m_allocator);
     buffer->desc = d;
     
     VkBufferUsageFlags usageFlags = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
@@ -98,7 +98,7 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
 }
 
 void* Device::mapBuffer(IBuffer* _buffer, CpuAccessMode::Enum cpuAccess){
-    Buffer* buffer = static_cast<Buffer*>(_buffer);
+    auto* buffer = static_cast<Buffer*>(_buffer);
     
     if(buffer->mappedMemory)
         return buffer->mappedMemory;
@@ -112,7 +112,7 @@ void* Device::mapBuffer(IBuffer* _buffer, CpuAccessMode::Enum cpuAccess){
 }
 
 void Device::unmapBuffer(IBuffer* _buffer){
-    Buffer* buffer = static_cast<Buffer*>(_buffer);
+    auto* buffer = static_cast<Buffer*>(_buffer);
     
     if(buffer->mappedMemory && !buffer->desc.isVolatile && buffer->desc.cpuAccess == CpuAccessMode::None){
         vkUnmapMemory(m_context.device, buffer->memory);
@@ -121,7 +121,7 @@ void Device::unmapBuffer(IBuffer* _buffer){
 }
 
 MemoryRequirements Device::getBufferMemoryRequirements(IBuffer* _buffer){
-    Buffer* buffer = static_cast<Buffer*>(_buffer);
+    auto* buffer = static_cast<Buffer*>(_buffer);
     
     VkMemoryRequirements memRequirements;
     vkGetBufferMemoryRequirements(m_context.device, buffer->buffer, &memRequirements);
@@ -133,8 +133,8 @@ MemoryRequirements Device::getBufferMemoryRequirements(IBuffer* _buffer){
 }
 
 bool Device::bindBufferMemory(IBuffer* _buffer, IHeap* heap, u64 offset){
-    Buffer* buffer = static_cast<Buffer*>(_buffer);
-    Heap* vkHeap = checked_cast<Heap*>(heap);
+    auto* buffer = static_cast<Buffer*>(_buffer);
+    auto* vkHeap = checked_cast<Heap*>(heap);
     
     if(!vkHeap || vkHeap->memory == VK_NULL_HANDLE)
         return false;
@@ -150,11 +150,11 @@ BufferHandle Device::createHandleForNativeBuffer(ObjectType objectType, Object _
     if(objectType != ObjectTypes::VK_Buffer)
         return nullptr;
     
-    VkBuffer nativeBuffer = static_cast<VkBuffer_T*>(_buffer);
+    auto* nativeBuffer = static_cast<VkBuffer_T*>(_buffer);
     if(nativeBuffer == VK_NULL_HANDLE)
         return nullptr;
     
-    Buffer* buffer = new Buffer(m_context, m_allocator);
+    auto* buffer = new Buffer(m_context, m_allocator);
     buffer->desc = desc;
     buffer->buffer = nativeBuffer;
     buffer->managed = false;
@@ -174,7 +174,7 @@ BufferHandle Device::createHandleForNativeBuffer(ObjectType objectType, Object _
 
 
 void CommandList::writeBuffer(IBuffer* _buffer, const void* data, usize dataSize, u64 destOffsetBytes){
-    Buffer* buffer = checked_cast<Buffer*>(_buffer);
+    auto* buffer = checked_cast<Buffer*>(_buffer);
     
     UploadManager* uploadMgr = m_device.getUploadManager();
     Buffer* stagingBuffer = nullptr;
@@ -200,15 +200,15 @@ void CommandList::writeBuffer(IBuffer* _buffer, const void* data, usize dataSize
 }
 
 void CommandList::clearBufferUInt(IBuffer* _buffer, u32 clearValue){
-    Buffer* buffer = checked_cast<Buffer*>(_buffer);
+    auto* buffer = checked_cast<Buffer*>(_buffer);
     
     vkCmdFillBuffer(currentCmdBuf->cmdBuf, buffer->buffer, 0, VK_WHOLE_SIZE, clearValue);
     currentCmdBuf->referencedResources.push_back(_buffer);
 }
 
 void CommandList::copyBuffer(IBuffer* _dest, u64 destOffsetBytes, IBuffer* _src, u64 srcOffsetBytes, u64 dataSizeBytes){
-    Buffer* dest = checked_cast<Buffer*>(_dest);
-    Buffer* src = checked_cast<Buffer*>(_src);
+    auto* dest = checked_cast<Buffer*>(_dest);
+    auto* src = checked_cast<Buffer*>(_src);
     
     VkBufferCopy region{};
     region.srcOffset = srcOffsetBytes;

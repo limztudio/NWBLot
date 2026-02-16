@@ -73,7 +73,7 @@ ShaderHandle ShaderLibrary::getShader(const Name& entryName, ShaderType::Mask sh
         return nullptr;
     }
     
-    shaders[entryName] = RefCountPtr<Shader>(shader);
+    shaders[entryName] = RefCountPtr<Shader, BlankDeleter<Shader>>(shader);
     return ShaderHandle(shader);
 }
 
@@ -82,14 +82,14 @@ ShaderHandle ShaderLibrary::getShader(const Name& entryName, ShaderType::Mask sh
 
 
 ShaderHandle Device::createShader(const ShaderDesc& d, const void* binary, usize binarySize){
-    Shader* shader = new Shader(m_context);
+    auto* shader = new Shader(m_context);
     shader->desc = d;
     shader->bytecode.assign(static_cast<const u8*>(binary), static_cast<const u8*>(binary) + binarySize);
     
     VkShaderModuleCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     createInfo.codeSize = binarySize;
-    createInfo.pCode = reinterpret_cast<const u32*>(binary);
+    createInfo.pCode = reinterpret_cast<const uint32_t*>(binary);
     
     VkResult res = vkCreateShaderModule(m_context.device, &createInfo, m_context.allocationCallbacks, &shader->shaderModule);
     NWB_ASSERT(res == VK_SUCCESS);
@@ -101,8 +101,8 @@ ShaderHandle Device::createShaderSpecialization(IShader* baseShader, const Shade
     if(!baseShader)
         return nullptr;
     
-    Shader* base = static_cast<Shader*>(baseShader);
-    Shader* shader = new Shader(m_context);
+    auto* base = static_cast<Shader*>(baseShader);
+    auto* shader = new Shader(m_context);
     shader->desc = base->desc;
     shader->bytecode = base->bytecode;
     
@@ -135,7 +135,7 @@ ShaderHandle Device::createShaderSpecialization(IShader* baseShader, const Shade
 }
 
 ShaderLibraryHandle Device::createShaderLibrary(const void* binary, usize binarySize){
-    ShaderLibrary* lib = new ShaderLibrary(m_context);
+    auto* lib = new ShaderLibrary(m_context);
     lib->bytecode.assign(static_cast<const u8*>(binary), static_cast<const u8*>(binary) + binarySize);
     
     return RefCountPtr<IShaderLibrary, BlankDeleter<IShaderLibrary>>(lib, AdoptRef);
@@ -146,7 +146,7 @@ ShaderLibraryHandle Device::createShaderLibrary(const void* binary, usize binary
 
 
 InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 attributeCount, IShader* vertexShader){
-    InputLayout* layout = new InputLayout();
+    auto* layout = new InputLayout();
     layout->attributes.assign(d, d + attributeCount);
     
     HashMap<u32, u32> bufferStrides;

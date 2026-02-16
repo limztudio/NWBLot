@@ -136,7 +136,7 @@ Device::~Device(){
 }
 
 Queue* Device::getQueue(CommandQueue::Enum queueType)const{
-    u32 index = static_cast<u32>(queueType);
+    auto index = static_cast<u32>(queueType);
     if(index < static_cast<u32>(CommandQueue::kCount)){
         return m_queues[index].get();
     }
@@ -145,7 +145,7 @@ Queue* Device::getQueue(CommandQueue::Enum queueType)const{
 
 
 CommandListHandle Device::createCommandList(const CommandListParameters& params){
-    CommandList* cmdList = new CommandList(*this, params);
+    auto* cmdList = new CommandList(*this, params);
     return CommandListHandle(cmdList, AdoptRef);
 }
 
@@ -272,7 +272,6 @@ Object Device::getNativeQueue(ObjectType objectType, CommandQueue::Enum queue){
 Heap::Heap(const VulkanContext& context)
     : m_context(context)
 {}
-
 Heap::~Heap(){
     if(memory != VK_NULL_HANDLE){
         vkFreeMemory(m_context.device, memory, m_context.allocationCallbacks);
@@ -291,7 +290,7 @@ Object Heap::getNativeHandle(ObjectType objectType){
 
 
 HeapHandle Device::createHeap(const HeapDesc& d){
-    Heap* heap = new Heap(m_context);
+    auto* heap = new Heap(m_context);
     heap->desc = d;
     
     VkMemoryPropertyFlags memoryProperties = 0;
@@ -428,7 +427,7 @@ AftermathCrashDumpHelper& Device::getAftermathCrashDumpHelper(){
 
 
 DeviceHandle CreateDevice(const DeviceDesc& desc){
-    Device* device = new Device(desc);
+    auto* device = new Device(desc);
     return DeviceHandle(device, AdoptRef);
 }
 

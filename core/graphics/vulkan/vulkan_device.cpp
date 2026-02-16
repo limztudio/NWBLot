@@ -21,21 +21,17 @@ Device::Device(const DeviceDesc& desc)
     , m_aftermathCrashDumpHelper()
     , m_allocator(m_context)
 {
-    // Initialize Vulkan context from device description
     m_context.instance = desc.instance;
     m_context.physicalDevice = desc.physicalDevice;
     m_context.device = desc.device;
     m_context.allocationCallbacks = desc.allocationCallbacks;
     
-    // Query physical device properties
     vkGetPhysicalDeviceProperties(m_context.physicalDevice, &m_context.physicalDeviceProperties);
     vkGetPhysicalDeviceMemoryProperties(m_context.physicalDevice, &m_context.memoryProperties);
     
-    // Check for extensions
     m_context.extensions.buffer_device_address = desc.bufferDeviceAddressSupported;
     
-    // Parse device extensions
-    for(usize i = 0; i < desc.numDeviceExtensions; i++){
+    for(usize i = 0; i < desc.numDeviceExtensions; ++i){
         const char* ext = desc.deviceExtensions[i];
         if(NWB_STRCMP(ext, VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME) == 0)
             m_context.extensions.KHR_synchronization2 = true;
@@ -57,7 +53,6 @@ Device::Device(const DeviceDesc& desc)
             m_context.extensions.NV_cluster_acceleration_structure = true;
     }
     
-    // Query ray tracing properties if available
     if(m_context.extensions.KHR_ray_tracing_pipeline){
         VkPhysicalDeviceProperties2 props2 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2 };
         m_context.rayTracingPipelineProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR;
@@ -85,8 +80,7 @@ Device::Device(const DeviceDesc& desc)
         props2.pNext = pNext;
         vkGetPhysicalDeviceProperties2(m_context.physicalDevice, &props2);
     }
-    
-    // Query cooperative vector features if available
+
     if(m_context.extensions.NV_cooperative_vector){
         VkPhysicalDeviceFeatures2 features2 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
         m_context.coopVecFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_VECTOR_FEATURES_NV;
@@ -94,7 +88,6 @@ Device::Device(const DeviceDesc& desc)
         vkGetPhysicalDeviceFeatures2(m_context.physicalDevice, &features2);
     }
     
-    // Create pipeline cache
     VkPipelineCacheCreateInfo cacheInfo = { VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO };
     VkResult res = vkCreatePipelineCache(m_context.device, &cacheInfo, m_context.allocationCallbacks, &m_context.pipelineCache);
     if(res != VK_SUCCESS){
@@ -102,56 +95,40 @@ Device::Device(const DeviceDesc& desc)
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan Device: Failed to create pipeline cache. {}"), ResultToString(res));
     }
 
-    // Create empty descriptor set layout
     VkDescriptorSetLayoutCreateInfo emptyLayoutInfo = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
     emptyLayoutInfo.bindingCount = 0;
     emptyLayoutInfo.pBindings = nullptr;
     res = vkCreateDescriptorSetLayout(m_context.device, &emptyLayoutInfo, m_context.allocationCallbacks, &m_context.emptyDescriptorSetLayout);
     if(res != VK_SUCCESS){
-        // This is critical - cannot proceed without empty descriptor set layout
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan Device: Failed to create empty descriptor set layout. {}"), ResultToString(res));
         m_context.emptyDescriptorSetLayout = VK_NULL_HANDLE;
     }
     
-    // Initialize queues
-    if(desc.graphicsQueue && desc.graphicsQueueIndex >= 0){
+    if(desc.graphicsQueue && desc.graphicsQueueIndex >= 0)
         m_queues[static_cast<u32>(CommandQueue::Graphics)] = UniquePtr<Queue>(new Queue(m_context, CommandQueue::Graphics, desc.graphicsQueue, desc.graphicsQueueIndex));
-    }
-    if(desc.computeQueue && desc.computeQueueIndex >= 0){
+    if(desc.computeQueue && desc.computeQueueIndex >= 0)
         m_queues[static_cast<u32>(CommandQueue::Compute)] = UniquePtr<Queue>(new Queue(m_context, CommandQueue::Compute, desc.computeQueue, desc.computeQueueIndex));
-    }
-    if(desc.transferQueue && desc.transferQueueIndex >= 0){
+    if(desc.transferQueue && desc.transferQueueIndex >= 0)
         m_queues[static_cast<u32>(CommandQueue::Copy)] = UniquePtr<Queue>(new Queue(m_context, CommandQueue::Copy, desc.transferQueue, desc.transferQueueIndex));
-    }
-    
-    // Create upload managers
-    constexpr u64 defaultUploadChunkSize = 64 * 1024 * 1024; // 64 MB
-    constexpr u64 defaultScratchChunkSize = 16 * 1024 * 1024; // 16 MB
-    constexpr u64 scratchMemoryLimit = 256 * 1024 * 1024; // 256 MB
-    
-    m_uploadManager = UniquePtr<UploadManager>(new UploadManager(*this, defaultUploadChunkSize, 0, false));
-    m_scratchManager = UniquePtr<UploadManager>(new UploadManager(*this, defaultScratchChunkSize, scratchMemoryLimit, true));
+
+    m_uploadManager = UniquePtr<UploadManager>(new UploadManager(*this, s_DefaultUploadChunkSize, 0, false));
+    m_scratchManager = UniquePtr<UploadManager>(new UploadManager(*this, s_DefaultScratchChunkSize, s_ScratchMemoryLimit, true));
 }
 
 Device::~Device(){
-    // Wait for all queues to complete
     waitForIdle();
     
-    // Destroy upload managers
     m_uploadManager.reset();
     m_scratchManager.reset();
     
-    // Destroy queues
-    for(u32 i = 0; i < static_cast<u32>(CommandQueue::kCount); i++){
+    for(u32 i = 0; i < static_cast<u32>(CommandQueue::kCount); ++i)
         m_queues[i].reset();
-    }
     
-    // Destroy empty descriptor set layout
     if(m_context.emptyDescriptorSetLayout){
         vkDestroyDescriptorSetLayout(m_context.device, m_context.emptyDescriptorSetLayout, m_context.allocationCallbacks);
         m_context.emptyDescriptorSetLayout = VK_NULL_HANDLE;
     }
     
-    // Destroy pipeline cache
     if(m_context.pipelineCache){
         vkDestroyPipelineCache(m_context.device, m_context.pipelineCache, m_context.allocationCallbacks);
         m_context.pipelineCache = VK_NULL_HANDLE;
@@ -183,18 +160,17 @@ u64 Device::executeCommandLists(ICommandList* const* pCommandLists, usize numCom
 bool Device::waitForIdle(){
     VkResult res = vkDeviceWaitIdle(m_context.device);
 
-    // Check for device loss
     if(res == VK_ERROR_DEVICE_LOST){
+        NWB_LOGGER_INFO(NWB_TEXT("Vulkan Device was lost during waitForIdle."));
         return false;
     }
 
     if(res != VK_SUCCESS){
-        // Other errors (unlikely but possible)
+        NWB_LOGGER_WARNING(NWB_TEXT("Failed to wait for Vulkan device idle. {}"), ResultToString(res));
         return false;
     }
 
-    // Update all queue completion states
-    for(u32 i = 0; i < static_cast<u32>(CommandQueue::kCount); i++){
+    for(u32 i = 0; i < static_cast<u32>(CommandQueue::kCount); ++i){
         if(m_queues[i]){
             m_queues[i]->updateLastFinishedID();
         }
@@ -204,8 +180,7 @@ bool Device::waitForIdle(){
 }
 
 void Device::runGarbageCollection(){
-    // Update completion status for all queues
-    for(u32 i = 0; i < static_cast<u32>(CommandQueue::kCount); i++){
+    for(u32 i = 0; i < static_cast<u32>(CommandQueue::kCount); ++i){
         if(m_queues[i]){
             m_queues[i]->updateLastFinishedID();
         }
@@ -260,7 +235,6 @@ FormatSupport::Mask Device::queryFormatSupport(Format::Enum format){
     
     FormatSupport::Mask support = FormatSupport::None;
     
-    // Check optimal tiling features
     VkFormatFeatureFlags features = props.optimalTilingFeatures;
     
     if(features & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT)
@@ -274,7 +248,6 @@ FormatSupport::Mask Device::queryFormatSupport(Format::Enum format){
     if(features & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT)
         support |= FormatSupport::ShaderSample;
     
-    // Check buffer features
     VkFormatFeatureFlags bufferFeatures = props.bufferFeatures;
     if(bufferFeatures & VK_FORMAT_FEATURE_UNIFORM_TEXEL_BUFFER_BIT)
         support |= FormatSupport::Buffer;
@@ -334,7 +307,6 @@ HeapHandle Device::createHeap(const HeapDesc& d){
             break;
     }
     
-    // Find suitable memory type
     u32 memoryTypeIndex = UINT32_MAX;
     for(u32 i = 0; i < m_context.memoryProperties.memoryTypeCount; ++i){
         if((m_context.memoryProperties.memoryTypes[i].propertyFlags & memoryProperties) == memoryProperties){
@@ -343,13 +315,11 @@ HeapHandle Device::createHeap(const HeapDesc& d){
         }
     }
 
-    // Validate that we found a suitable memory type
     if(memoryTypeIndex == UINT32_MAX){
         delete heap;
         return nullptr;
     }
 
-    // Enable device address for heaps (needed for acceleration structures)
     void* pNext = nullptr;
     VkMemoryAllocateFlagsInfo allocFlagsInfo{};
     if(m_context.extensions.buffer_device_address){

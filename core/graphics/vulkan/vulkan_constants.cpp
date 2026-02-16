@@ -119,7 +119,6 @@ constexpr VkFormat ConvertFormat(Format::Enum format){
             return g_FormatMappings[i].vkFormat;
     }
     
-    // Unsupported format
     return VK_FORMAT_UNDEFINED;
 }
 
@@ -207,9 +206,6 @@ constexpr VkPipelineStageFlags2 GetVkPipelineStageFlags(ResourceStates::Mask sta
 }
 
 constexpr VkImageLayout GetVkImageLayout(ResourceStates::Mask states){
-    // Return the most appropriate layout for the given state
-    // Priority: specific states first, general states last
-    
     if(states & ResourceStates::RenderTarget)
         return VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     if(states & ResourceStates::DepthWrite)
@@ -313,7 +309,7 @@ constexpr VkCooperativeVectorMatrixLayoutNV ConvertCoopVecMatrixLayout(Cooperati
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-}
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

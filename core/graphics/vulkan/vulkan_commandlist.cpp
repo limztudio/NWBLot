@@ -17,27 +17,21 @@ NWB_VULKAN_BEGIN
 CommandList::CommandList(Device& device, const CommandListParameters& params)
     : m_device(device)
     , m_context(device.getContext())
-    , m_aftermathMarkerTracker(){
+    , m_aftermathMarkerTracker()
+{
     desc = params;
     stateTracker = UniquePtr<StateTracker>(new StateTracker());
 
-    // Register Aftermath marker tracker if enabled
-    if(m_device.isAftermathEnabled()){
+    if(m_device.isAftermathEnabled())
         m_device.getAftermathCrashDumpHelper().registerAftermathMarkerTracker(&m_aftermathMarkerTracker);
-    }
 }
 
 CommandList::~CommandList(){
-    // Unregister Aftermath marker tracker if enabled
-    if(m_device.isAftermathEnabled()){
+    if(m_device.isAftermathEnabled())
         m_device.getAftermathCrashDumpHelper().unRegisterAftermathMarkerTracker(&m_aftermathMarkerTracker);
-    }
-
-    // Command buffers are returned to the pool automatically
 }
 
 void CommandList::open(){
-    // Get command buffer from device pool
     currentCmdBuf = m_device.getQueue(desc.queueType)->getOrCreateCommandBuffer();
     
     VkCommandBufferBeginInfo beginInfo = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
@@ -45,14 +39,12 @@ void CommandList::open(){
     
     vkBeginCommandBuffer(currentCmdBuf->cmdBuf, &beginInfo);
     
-    // Reset state tracker
     stateTracker->reset();
 }
 
 void CommandList::close(){
-    if(currentCmdBuf){
+    if(currentCmdBuf)
         vkEndCommandBuffer(currentCmdBuf->cmdBuf);
-    }
 }
 
 void CommandList::clearState(){
@@ -69,8 +61,8 @@ void CommandList::clearState(){
 }
 
 void CommandList::copyTextureToBuffer(IBuffer* _dest, u64 destOffsetBytes, u32 destRowPitch, ITexture* _src, const TextureSlice& srcSlice){
-    Buffer* dest = checked_cast<Buffer*>(_dest);
-    Texture* src = checked_cast<Texture*>(_src);
+    auto* dest = checked_cast<Buffer*>(_dest);
+    auto* src = checked_cast<Texture*>(_src);
     
     VkBufferImageCopy region{};
     region.bufferOffset = destOffsetBytes;

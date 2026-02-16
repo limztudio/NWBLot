@@ -113,7 +113,6 @@ DescriptorTable::DescriptorTable(const VulkanContext& context)
 {}
 
 DescriptorTable::~DescriptorTable(){
-    // Descriptor sets are freed automatically when pool is destroyed
     if(descriptorPool != VK_NULL_HANDLE){
         vkDestroyDescriptorPool(m_context.device, descriptorPool, m_context.allocationCallbacks);
         descriptorPool = VK_NULL_HANDLE;
@@ -127,9 +126,7 @@ DescriptorTable::~DescriptorTable(){
 BindingSet::BindingSet(const VulkanContext& context)
     : m_context(context)
 {}
-
 BindingSet::~BindingSet(){
-    // Binding sets reference descriptor tables, no explicit cleanup
 }
 
 
@@ -140,7 +137,6 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
     BindingLayout* layout = new BindingLayout(m_context);
     layout->desc = desc;
     
-    // Create descriptor set layout bindings from desc
     Vector<VkDescriptorSetLayoutBinding> bindings;
     bindings.reserve(desc.bindings.size());
     
@@ -170,7 +166,6 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
         layout->descriptorSetLayouts.push_back(setLayout);
     }
     
-    // Create pipeline layout
     VkPushConstantRange pushConstantRange = {};
     bool hasPushConstants = pushConstantByteSize > 0;
     
@@ -197,12 +192,10 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
 }
 
 BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc){
-    // Create a bindless layout with UPDATE_AFTER_BIND flag for descriptor indexing
     BindingLayout* layout = new BindingLayout(m_context);
     layout->isBindless = true;
     layout->bindlessDesc = desc;
     
-    // Create descriptor set layout bindings
     Vector<VkDescriptorSetLayoutBinding> bindings;
     bindings.reserve(desc.registerSpaces.size());
     Vector<VkDescriptorBindingFlags> bindingFlags;
@@ -212,14 +205,12 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
         VkDescriptorSetLayoutBinding binding = {};
         binding.binding = item.slot;
         binding.descriptorType = __hidden_vulkan::ConvertDescriptorType(item.type);
-        binding.descriptorCount = desc.maxCapacity; // Large array
+        binding.descriptorCount = desc.maxCapacity;
         binding.stageFlags = __hidden_vulkan::ConvertShaderStages(desc.visibility);
         binding.pImmutableSamplers = nullptr;
         bindings.push_back(binding);
         
-        VkDescriptorBindingFlags flags = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | 
-                                          VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT |
-                                          VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT;
+        VkDescriptorBindingFlags flags = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT | VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT;
         bindingFlags.push_back(flags);
     }
     
@@ -236,11 +227,11 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
     VkDescriptorSetLayout setLayout = VK_NULL_HANDLE;
     VkResult res = vkCreateDescriptorSetLayout(m_context.device, &layoutInfo, m_context.allocationCallbacks, &setLayout);
     
-    if(res == VK_SUCCESS){
+    if(res == VK_SUCCESS)
         layout->descriptorSetLayouts.push_back(setLayout);
-    }
+    else
+        NWB_LOG_WARNING("Failed to create bindless descriptor set layout: {}", ResultToString(res));
     
-    // Create pipeline layout
     VkPipelineLayoutCreateInfo pipelineLayoutInfo = { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
     pipelineLayoutInfo.setLayoutCount = static_cast<u32>(layout->descriptorSetLayouts.size());
     pipelineLayoutInfo.pSetLayouts = layout->descriptorSetLayouts.data();
@@ -260,17 +251,13 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
 
 
 DescriptorTableHandle Device::createDescriptorTable(IBindingLayout* _layout){
-    // Allocate descriptor sets from pool
     BindingLayout* layout = checked_cast<BindingLayout*>(_layout);
     
     DescriptorTable* table = new DescriptorTable(m_context);
     table->layout = layout;
     
-    // Get or create descriptor pool
-    // For now, create a dedicated pool for this table
     Vector<VkDescriptorPoolSize> poolSizes;
     
-    // Estimate pool sizes based on layout
     VkDescriptorPoolSize uniformSize = { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 16 };
     VkDescriptorPoolSize storageSize = { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 16 };
     VkDescriptorPoolSize samplerSize = { VK_DESCRIPTOR_TYPE_SAMPLER, 16 };
@@ -324,14 +311,12 @@ void Device::resizeDescriptorTable(IDescriptorTable* descriptorTable, u32 newSiz
     if(!table->layout || newSize == 0)
         return;
     
-    // Destroy old pool (this frees all allocated descriptor sets)
     if(table->descriptorPool != VK_NULL_HANDLE){
         vkDestroyDescriptorPool(m_context.device, table->descriptorPool, m_context.allocationCallbacks);
         table->descriptorPool = VK_NULL_HANDLE;
     }
     table->descriptorSets.clear();
     
-    // Create new pool with requested size
     Vector<VkDescriptorPoolSize> poolSizes;
     VkDescriptorPoolSize uniformSize = { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, newSize };
     VkDescriptorPoolSize storageSize = { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, newSize };
@@ -354,9 +339,7 @@ void Device::resizeDescriptorTable(IDescriptorTable* descriptorTable, u32 newSiz
     if(res != VK_SUCCESS)
         return;
     
-    // Allocate new descriptor sets
     if(!table->layout->descriptorSetLayouts.empty()){
-        // For bindless, we may need to create multiple sets with the same layout
         Vector<VkDescriptorSetLayout> layouts(newSize, table->layout->descriptorSetLayouts[0]);
         
         VkDescriptorSetAllocateInfo allocInfo = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO };
@@ -438,7 +421,6 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLa
     BindingSet* bindingSet = new BindingSet(m_context);
     bindingSet->desc = desc;
     
-    // Create descriptor table for this binding set
     DescriptorTableHandle tableHandle = createDescriptorTable(_layout);
     if(!tableHandle){
         delete bindingSet;
@@ -447,11 +429,9 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLa
     
     bindingSet->descriptorTable = checked_cast<DescriptorTable*>(tableHandle.get());
     
-    // Copy descriptor sets for direct access
     bindingSet->descriptorSets = bindingSet->descriptorTable->descriptorSets;
     bindingSet->layout = layout;
     
-    // Update descriptors with actual resources
     Vector<VkWriteDescriptorSet> writes;
     Vector<VkDescriptorBufferInfo> bufferInfos;
     Vector<VkDescriptorImageInfo> imageInfos;
@@ -512,9 +492,8 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLa
         }
     }
     
-    if(!writes.empty()){
+    if(!writes.empty())
         vkUpdateDescriptorSets(m_context.device, static_cast<u32>(writes.size()), writes.data(), 0, nullptr);
-    }
     
     return BindingSetHandle(bindingSet, AdoptRef);
 }

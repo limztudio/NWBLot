@@ -440,7 +440,6 @@ public:
     
     Vector<u8> bytecode;
     
-    // Specialization constants for pipeline creation
     Vector<VkSpecializationMapEntry> specializationEntries;
     Vector<u8> specializationData;
 
@@ -998,17 +997,14 @@ public:
     UniquePtr<StateTracker> stateTracker;
     bool enableAutomaticBarriers = true;
     
-    // Current pipeline state for internal use
     GraphicsState currentGraphicsState;
     ComputeState currentComputeState;
     MeshletState currentMeshletState;
     RayTracingState currentRayTracingState;
     
-    // Deferred barrier batching
     Vector<VkImageMemoryBarrier2> m_pendingImageBarriers;
     Vector<VkBufferMemoryBarrier2> m_pendingBufferBarriers;
     
-    // Pending BLAS compaction requests
     Vector<RefCountPtr<AccelStruct, BlankDeleter<AccelStruct>>> m_pendingCompactions;
 
 

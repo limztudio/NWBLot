@@ -32,13 +32,9 @@ Object MeshletPipeline::getNativeHandle(ObjectType objectType){
 
 
 MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& desc, FramebufferInfo const& fbinfo){
-    // Meshlet pipeline uses mesh and task shaders (VK_EXT_mesh_shader)
-    // Similar to graphics pipeline but with different shader stages
-    
     MeshletPipeline* pso = new MeshletPipeline(m_context);
     pso->desc = desc;
     
-    // Collect shader stages
     Vector<VkPipelineShaderStageCreateInfo> shaderStages;
     Vector<VkSpecializationInfo> specInfos;
     shaderStages.reserve(3); // Task (optional), Mesh, Fragment
@@ -64,23 +60,19 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
         shaderStages.push_back(stageInfo);
     };
     
-    // Task shader (optional - amplification)
     if(desc.AS)
         addShaderStage(desc.AS.get(), VK_SHADER_STAGE_TASK_BIT_EXT);
     
-    // Mesh shader (required)
     if(desc.MS)
         addShaderStage(desc.MS.get(), VK_SHADER_STAGE_MESH_BIT_EXT);
     else{
         delete pso;
-        return nullptr; // Mesh shader is required
+        return nullptr;
     }
     
-    // Fragment shader (optional)
     if(desc.PS)
         addShaderStage(desc.PS.get(), VK_SHADER_STAGE_FRAGMENT_BIT);
     
-    // Get pipeline layout from binding layouts
     VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
     if(!desc.bindingLayouts.empty() && desc.bindingLayouts[0]){
         BindingLayout* layout = checked_cast<BindingLayout*>(desc.bindingLayouts[0].get());
@@ -88,7 +80,6 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
         pso->pipelineLayout = pipelineLayout;
     }
     
-    // Rasterization state
     VkPipelineRasterizationStateCreateInfo rasterizer = { VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO };
     rasterizer.depthClampEnable = VK_FALSE;
     rasterizer.rasterizerDiscardEnable = VK_FALSE;
@@ -101,18 +92,15 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     rasterizer.depthBiasSlopeFactor = desc.renderState.rasterState.slopeScaledDepthBias;
     rasterizer.lineWidth = 1.0f;
     
-    // Viewport state (dynamic)
     VkPipelineViewportStateCreateInfo viewportState = { VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO };
     viewportState.viewportCount = 1;
     viewportState.scissorCount = 1;
     
-    // Multisample state
     VkPipelineMultisampleStateCreateInfo multisampling = { VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO };
     multisampling.rasterizationSamples = static_cast<VkSampleCountFlagBits>(fbinfo.sampleCount);
     multisampling.sampleShadingEnable = VK_FALSE;
     multisampling.alphaToCoverageEnable = desc.renderState.blendState.alphaToCoverageEnable ? VK_TRUE : VK_FALSE;
     
-    // Depth/stencil state
     VkPipelineDepthStencilStateCreateInfo depthStencil = { VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO };
     depthStencil.depthTestEnable = desc.renderState.depthStencilState.depthTestEnable ? VK_TRUE : VK_FALSE;
     depthStencil.depthWriteEnable = desc.renderState.depthStencilState.depthWriteEnable ? VK_TRUE : VK_FALSE;
@@ -120,9 +108,8 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     depthStencil.depthBoundsTestEnable = VK_FALSE;
     depthStencil.stencilTestEnable = desc.renderState.depthStencilState.stencilEnable ? VK_TRUE : VK_FALSE;
     
-    // Color blend state
     Vector<VkPipelineColorBlendAttachmentState> blendAttachments;
-    for(u32 i = 0; i < fbinfo.colorFormats.size(); i++){
+    for(u32 i = 0; i < fbinfo.colorFormats.size(); ++i){
         VkPipelineColorBlendAttachmentState attachment = {};
         attachment.blendEnable = VK_FALSE;
         attachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | 
@@ -141,7 +128,6 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     colorBlending.attachmentCount = static_cast<u32>(blendAttachments.size());
     colorBlending.pAttachments = blendAttachments.data();
     
-    // Dynamic state
     VkDynamicState dynamicStates[] = {
         VK_DYNAMIC_STATE_VIEWPORT,
         VK_DYNAMIC_STATE_SCISSOR,
@@ -151,7 +137,6 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     dynamicState.dynamicStateCount = LengthOf(dynamicStates);
     dynamicState.pDynamicStates = dynamicStates;
     
-    // Dynamic rendering - fill color/depth formats from framebuffer
     Vector<VkFormat> colorFormats;
     for(const auto& format : fbinfo.colorFormats){
         colorFormats.push_back(ConvertFormat(format));
@@ -163,7 +148,6 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     renderingInfo.depthAttachmentFormat = ConvertFormat(fbinfo.depthFormat);
     renderingInfo.stencilAttachmentFormat = VK_FORMAT_UNDEFINED;
     
-    // Create pipeline
     VkGraphicsPipelineCreateInfo pipelineInfo = { VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO };
     pipelineInfo.pNext = &renderingInfo;
     pipelineInfo.stageCount = static_cast<u32>(shaderStages.size());
@@ -197,11 +181,9 @@ void CommandList::setMeshletState(const MeshletState& state){
     currentMeshletState = state;
     
     MeshletPipeline* pipeline = checked_cast<MeshletPipeline*>(state.pipeline);
-    
     if(pipeline)
         vkCmdBindPipeline(currentCmdBuf->cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->pipeline);
     
-    // Bind descriptor sets
     if(state.bindings.size() > 0){
         for(usize i = 0; i < state.bindings.size(); i++){
             if(state.bindings[i]){

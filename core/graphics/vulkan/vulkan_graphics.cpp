@@ -173,9 +173,6 @@ FramebufferHandle Device::createFramebuffer(const FramebufferDesc& desc){
     Framebuffer* fb = new Framebuffer(m_context);
     fb->desc = desc;
     
-    // Calculate framebuffer info from attachments
-    
-    // Store color attachments
     for(u32 i = 0; i < static_cast<u32>(desc.colorAttachments.size()); i++){
         if(desc.colorAttachments[i].texture){
             fb->resources.push_back(desc.colorAttachments[i].texture);
@@ -189,7 +186,6 @@ FramebufferHandle Device::createFramebuffer(const FramebufferDesc& desc){
         }
     }
     
-    // Store depth attachment
     if(desc.depthAttachment.texture){
         fb->resources.push_back(desc.depthAttachment.texture);
         Texture* depthTex = checked_cast<Texture*>(desc.depthAttachment.texture);
@@ -201,7 +197,6 @@ FramebufferHandle Device::createFramebuffer(const FramebufferDesc& desc){
             fb->framebufferInfo.height = depthTex->desc.height;
     }
     
-    // Get sample count from first valid attachment
     if(!fb->resources.empty()){
         Texture* tex = checked_cast<Texture*>(fb->resources[0].get());
         fb->framebufferInfo.sampleCount = tex->desc.sampleCount;
@@ -274,7 +269,6 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     inputAssembly.topology = __hidden_vulkan::ConvertPrimitiveTopology(desc.primType);
     inputAssembly.primitiveRestartEnable = VK_FALSE;
     
-    // Tessellation state (for patch primitives)
     VkPipelineTessellationStateCreateInfo tessellationState = { VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO };
     tessellationState.patchControlPoints = desc.patchControlPoints;
     
@@ -317,7 +311,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     colorBlending.logicOpEnable = VK_FALSE;
     Vector<VkPipelineColorBlendAttachmentState> blendAttachments;
     blendAttachments.reserve(fbinfo.colorFormats.size());
-    for(u32 i = 0; i < (u32)fbinfo.colorFormats.size(); i++){
+    for(u32 i = 0; i < (u32)fbinfo.colorFormats.size(); ++i){
         blendAttachments.push_back(__hidden_vulkan::ConvertBlendState(desc.renderState.blendState.targets[i]));
     }
     colorBlending.attachmentCount = (u32)blendAttachments.size();
@@ -343,7 +337,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     // Step 10: Pipeline layout from binding layouts
     pso->pipelineLayout = VK_NULL_HANDLE;
     Vector<VkDescriptorSetLayout> allDescriptorSetLayouts;
-    for(u32 i = 0; i < (u32)desc.bindingLayouts.size(); i++){
+    for(u32 i = 0; i < (u32)desc.bindingLayouts.size(); ++i){
         BindingLayout* bl = checked_cast<BindingLayout*>(desc.bindingLayouts[i].get());
         for(auto& dsl : bl->descriptorSetLayouts){
             allDescriptorSetLayouts.push_back(dsl);
@@ -363,9 +357,8 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     VkPipelineRenderingCreateInfo renderingInfo = { VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO };
     Vector<VkFormat> colorFormats;
     colorFormats.reserve(fbinfo.colorFormats.size());
-    for(u32 i = 0; i < (u32)fbinfo.colorFormats.size(); i++){
+    for(u32 i = 0; i < (u32)fbinfo.colorFormats.size(); ++i)
         colorFormats.push_back(ConvertFormat(fbinfo.colorFormats[i]));
-    }
     renderingInfo.colorAttachmentCount = (u32)colorFormats.size();
     renderingInfo.pColorAttachmentFormats = colorFormats.data();
     if(fbinfo.depthFormat != Format::UNKNOWN){
@@ -374,9 +367,8 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     }
     
     VkGraphicsPipelineCreateInfo pipelineInfo = { VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO };
-    if(m_context.extensions.KHR_dynamic_rendering){
+    if(m_context.extensions.KHR_dynamic_rendering)
         pipelineInfo.pNext = &renderingInfo;
-    }
     pipelineInfo.stageCount = (u32)shaderStages.size();
     pipelineInfo.pStages = shaderStages.data();
     pipelineInfo.pVertexInputState = &vertexInputInfo;
@@ -393,7 +385,6 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     pipelineInfo.subpass = 0;
     
     VkResult res = vkCreateGraphicsPipelines(m_context.device, m_context.pipelineCache, 1, &pipelineInfo, m_context.allocationCallbacks, &pso->pipeline);
-    
     if(res != VK_SUCCESS){
         delete pso;
         return nullptr;

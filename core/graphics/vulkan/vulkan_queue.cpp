@@ -17,7 +17,6 @@ NWB_VULKAN_BEGIN
 TrackedCommandBuffer::TrackedCommandBuffer(const VulkanContext& context, CommandQueue::Enum queueType, u32 queueFamilyIndex)
     : m_context(context)
 {
-    // Create command pool for this buffer
     // Use TRANSIENT flag to hint that command buffers are short-lived
     VkCommandPoolCreateInfo poolInfo = { VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO };
     poolInfo.queueFamilyIndex = queueFamilyIndex;
@@ -30,7 +29,6 @@ TrackedCommandBuffer::TrackedCommandBuffer(const VulkanContext& context, Command
         return;
     }
 
-    // Allocate command buffer
     VkCommandBufferAllocateInfo allocInfo = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO };
     allocInfo.commandPool = cmdPool;
     allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
@@ -70,7 +68,6 @@ Queue::Queue(const VulkanContext& context, CommandQueue::Enum queueID, VkQueue q
     , m_lastSubmittedID(0)
     , m_lastFinishedID(0)
 {
-    // Create timeline semaphore for tracking
     VkSemaphoreTypeCreateInfo timelineInfo = { VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO };
     timelineInfo.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE;
     timelineInfo.initialValue = 0;
@@ -82,7 +79,6 @@ Queue::Queue(const VulkanContext& context, CommandQueue::Enum queueID, VkQueue q
 }
 
 Queue::~Queue(){
-    // Wait for all work to complete
     if(trackingSemaphore && m_lastSubmittedID > 0){
         VkSemaphoreWaitInfo waitInfo = { VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO };
         waitInfo.semaphoreCount = 1;
@@ -93,11 +89,9 @@ Queue::~Queue(){
         (void)res;
     }
 
-    // Free all command buffers
     m_commandBuffersInFlight.clear();
     m_commandBuffersPool.clear();
 
-    // Destroy semaphore
     if(trackingSemaphore){
         vkDestroySemaphore(m_context.device, trackingSemaphore, m_context.allocationCallbacks);
         trackingSemaphore = VK_NULL_HANDLE;
@@ -113,40 +107,32 @@ TrackedCommandBufferPtr Queue::createCommandBuffer(){
 TrackedCommandBufferPtr Queue::getOrCreateCommandBuffer(){
     Mutex::scoped_lock lock(m_mutex);
     
-    // Update completed IDs first
     updateLastFinishedID();
     
-    // Retire finished command buffers to pool
     auto it = m_commandBuffersInFlight.begin();
     while(it != m_commandBuffersInFlight.end()){
         TrackedCommandBuffer* cmdBuf = it->get();
         if(cmdBuf->submissionID <= m_lastFinishedID){
-            // Clear references
             cmdBuf->referencedResources.clear();
             cmdBuf->referencedStagingBuffers.clear();
             
-            // Move to pool
             m_commandBuffersPool.push_back(std::move(*it));
             it = m_commandBuffersInFlight.erase(it);
         }
-        else{
+        else
             ++it;
-        }
     }
     
-    // Try to reuse a command buffer from the pool
     if(!m_commandBuffersPool.empty()){
         TrackedCommandBufferPtr cmdBuf = std::move(m_commandBuffersPool.front());
         m_commandBuffersPool.pop_front();
         
-        // Reset the command buffer
         vkResetCommandBuffer(cmdBuf->cmdBuf, 0);
         cmdBuf->recordingID = ++m_lastRecordingID;
         
         return cmdBuf;
     }
     
-    // Create a new command buffer
     return createCommandBuffer();
 }
 
@@ -168,10 +154,8 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
     
     Mutex::scoped_lock lock(m_mutex);
     
-    // Increment submission ID
     u64 submissionID = ++m_lastSubmittedID;
     
-    // Collect command buffers from command lists
     Vector<TrackedCommandBufferPtr> trackedBuffers;
     Vector<VkCommandBuffer> cmdBufs;
     trackedBuffers.reserve(numCmd);
@@ -184,7 +168,6 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
         
         cmdBufs.push_back(cmdList->currentCmdBuf->cmdBuf);
         
-        // Track this command buffer
         cmdList->currentCmdBuf->submissionID = submissionID;
         trackedBuffers.push_back(std::move(cmdList->currentCmdBuf));
     }
@@ -192,13 +175,11 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
     if(cmdBufs.empty())
         return m_lastSubmittedID - 1;
     
-    // Setup timeline semaphore for tracking
     VkSemaphoreSubmitInfo timelineSignal = { VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO };
     timelineSignal.semaphore = trackingSemaphore;
     timelineSignal.value = submissionID;
     timelineSignal.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
     
-    // Collect wait semaphores
     Vector<VkSemaphoreSubmitInfo> waitInfos;
     Vector<VkPipelineStageFlags2> waitStages;
     for(usize i = 0; i < m_waitSemaphores.size(); ++i){
@@ -209,9 +190,8 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
         waitInfos.push_back(waitInfo);
     }
     
-    // Collect signal semaphores
     Vector<VkSemaphoreSubmitInfo> signalInfos;
-    signalInfos.push_back(timelineSignal); // Always signal our tracking semaphore
+    signalInfos.push_back(timelineSignal);e
     
     for(usize i = 0; i < m_signalSemaphores.size(); ++i){
         VkSemaphoreSubmitInfo signalInfo = { VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO };
@@ -221,7 +201,6 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
         signalInfos.push_back(signalInfo);
     }
     
-    // Setup command buffer submit info
     Vector<VkCommandBufferSubmitInfo> cmdBufInfos;
     cmdBufInfos.reserve(numCmd);
     
@@ -231,7 +210,6 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
         cmdBufInfos.push_back(cmdBufInfo);
     }
     
-    // Collect the signal fence from tracked command buffers (if any)
     VkFence submitFence = VK_NULL_HANDLE;
     for(auto& tracked : trackedBuffers){
         if(tracked->signalFence != VK_NULL_HANDLE){
@@ -240,8 +218,7 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
         }
     }
     
-    // Submit to queue (using VK_KHR_synchronization2)
-    // NOTE: Requires VK_KHR_synchronization2 extension to be enabled
+    // Requires VK_KHR_synchronization2 extension to be enabled
     VkSubmitInfo2 submitInfo = { VK_STRUCTURE_TYPE_SUBMIT_INFO_2 };
     submitInfo.waitSemaphoreInfoCount = (u32)waitInfos.size();
     submitInfo.pWaitSemaphoreInfos = waitInfos.data();
@@ -252,22 +229,18 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
 
     VkResult res = vkQueueSubmit2(m_queue, 1, &submitInfo, submitFence);
 
-    // Clear wait/signal semaphores after submission
     m_waitSemaphores.clear();
     m_waitSemaphoreValues.clear();
     m_signalSemaphores.clear();
     m_signalSemaphoreValues.clear();
 
     if(res != VK_SUCCESS){
-        // Submission failed - check for device loss
         if(res == VK_ERROR_DEVICE_LOST){
-            // Device lost - critical error
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan device was lost during queue submission."));
         }
-        // Don't move command buffers to in-flight list on failure
         return m_lastSubmittedID - 1;
     }
 
-    // Move command buffers to in-flight list only on successful submission
     for(auto& tracked : trackedBuffers){
         m_commandBuffersInFlight.push_back(std::move(tracked));
     }
@@ -276,7 +249,6 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
 }
 
 void Queue::updateLastFinishedID(){
-    // Query the timeline semaphore value
     u64 completedValue = 0;
     vkGetSemaphoreCounterValue(m_context.device, trackingSemaphore, &completedValue);
     m_lastFinishedID = completedValue;
@@ -290,7 +262,6 @@ bool Queue::pollCommandList(u64 commandListID){
 }
 
 bool Queue::waitCommandList(u64 commandListID, u64 timeout){
-    // Wait for this semaphore value
     VkSemaphoreWaitInfo waitInfo = { VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO };
     waitInfo.semaphoreCount = 1;
     waitInfo.pSemaphores = &trackingSemaphore;
@@ -298,8 +269,8 @@ bool Queue::waitCommandList(u64 commandListID, u64 timeout){
 
     VkResult res = vkWaitSemaphores(m_context.device, &waitInfo, timeout);
 
-    // Handle device loss
     if(res == VK_ERROR_DEVICE_LOST){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan device was lost while waiting for command list."));
         return false;
     }
 
@@ -310,7 +281,6 @@ bool Queue::waitCommandList(u64 commandListID, u64 timeout){
         return true;
     }
 
-    // Timeout or other error
     return false;
 }
 
@@ -319,10 +289,8 @@ void Queue::waitForIdle(){
     
     vkQueueWaitIdle(m_queue);
     
-    // All submissions are now finished
     m_lastFinishedID = m_lastSubmittedID;
     
-    // Retire all command buffers to pool
     for(auto& tracked : m_commandBuffersInFlight){
         tracked->referencedResources.clear();
         tracked->referencedStagingBuffers.clear();
@@ -385,7 +353,6 @@ void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapp
     const VkImageCreateInfo& imageInfo = texture->imageInfo;
     VkImageAspectFlags textureAspectFlags = VK_IMAGE_ASPECT_COLOR_BIT;
     
-    // Determine aspect from format
     VkFormat fmt = imageInfo.format;
     if(fmt == VK_FORMAT_D32_SFLOAT || fmt == VK_FORMAT_D16_UNORM)
         textureAspectFlags = VK_IMAGE_ASPECT_DEPTH_BIT;
@@ -399,7 +366,6 @@ void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapp
     VkDeviceSize imageMipTailOffset = 0;
     VkDeviceSize imageMipTailStride = 1;
     
-    // Get sparse format properties
     uint32_t formatPropCount = 0;
     vkGetPhysicalDeviceSparseImageFormatProperties(
         m_context.physicalDevice,
@@ -423,7 +389,6 @@ void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapp
         tileDepth = formatProps[0].imageGranularity.depth;
     }
     
-    // Get sparse memory requirements
     uint32_t sparseReqCount = 0;
     vkGetImageSparseMemoryRequirements(m_context.device, texture->image, &sparseReqCount, nullptr);
     
@@ -446,7 +411,6 @@ void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapp
             const TiledTextureRegion& region = tileMappings[i].tiledTextureRegions[j];
             
             if(region.tilesNum){
-                // Packed mip tail binding (opaque bind)
                 VkSparseMemoryBind bind = {};
                 bind.resourceOffset = imageMipTailOffset + coord.arrayLevel * imageMipTailStride;
                 bind.size = region.tilesNum * texture->tileByteSize;
@@ -455,7 +419,6 @@ void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapp
                 sparseMemoryBinds.push_back(bind);
             }
             else{
-                // Standard mip binding
                 VkSparseImageMemoryBind bind = {};
                 bind.subresource.arrayLayer = coord.arrayLevel;
                 bind.subresource.mipLevel = coord.mipLevel;

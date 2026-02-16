@@ -17,7 +17,6 @@ NWB_VULKAN_BEGIN
 Sampler::Sampler(const VulkanContext& context)
     : m_context(context)
 {}
-
 Sampler::~Sampler(){
     if(sampler != VK_NULL_HANDLE){
         vkDestroySampler(m_context.device, sampler, m_context.allocationCallbacks);
@@ -32,7 +31,6 @@ Sampler::~Sampler(){
 Shader::Shader(const VulkanContext& context)
     : m_context(context)
 {}
-
 Shader::~Shader(){
     if(shaderModule != VK_NULL_HANDLE){
         vkDestroyShaderModule(m_context.device, shaderModule, m_context.allocationCallbacks);
@@ -47,7 +45,6 @@ Shader::~Shader(){
 ShaderLibrary::ShaderLibrary(const VulkanContext& context)
     : m_context(context)
 {}
-
 ShaderLibrary::~ShaderLibrary(){}
 
 void ShaderLibrary::getBytecode(const void** ppBytecode, usize* pSize)const{
@@ -60,7 +57,6 @@ ShaderHandle ShaderLibrary::getShader(const Name& entryName, ShaderType::Mask sh
     if(it != shaders.end())
         return ShaderHandle(it->second.get());
     
-    // Create shader on demand from library bytecode
     Shader* shader = new Shader(m_context);
     shader->desc.shaderType = shaderType;
     shader->desc.entryName = entryName;
@@ -110,7 +106,6 @@ ShaderHandle Device::createShaderSpecialization(IShader* baseShader, const Shade
     shader->desc = base->desc;
     shader->bytecode = base->bytecode;
     
-    // Create a new shader module from the same bytecode
     VkShaderModuleCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     createInfo.codeSize = shader->bytecode.size();
@@ -122,7 +117,6 @@ ShaderHandle Device::createShaderSpecialization(IShader* baseShader, const Shade
         return nullptr;
     }
     
-    // Store specialization constants for use during pipeline creation
     if(constants && numConstants > 0){
         shader->specializationData.resize(numConstants * sizeof(u32));
         shader->specializationEntries.resize(numConstants);
@@ -155,7 +149,6 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
     InputLayout* layout = new InputLayout();
     layout->attributes.assign(d, d + attributeCount);
     
-    // Group by buffer index
     HashMap<u32, u32> bufferStrides;
     for(const auto& attr : layout->attributes){
         u32 stride = attr.elementStride;
@@ -170,7 +163,6 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
             bufferStrides[attr.bufferIndex] = Max(bufferStrides[attr.bufferIndex], stride);
     }
     
-    // Create binding descriptions
     for(const auto& pair : bufferStrides){
         VkVertexInputBindingDescription binding{};
         binding.binding = pair.first;
@@ -179,7 +171,6 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
         layout->bindings.push_back(binding);
     }
     
-    // Create attribute descriptions
     for(u32 i = 0; i < attributeCount; ++i){
         const auto& attr = layout->attributes[i];
         
@@ -202,7 +193,6 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
 Framebuffer::Framebuffer(const VulkanContext& context)
     : m_context(context)
 {}
-
 Framebuffer::~Framebuffer(){
     if(framebuffer != VK_NULL_HANDLE){
         vkDestroyFramebuffer(m_context.device, framebuffer, m_context.allocationCallbacks);

@@ -286,7 +286,6 @@ bool Device::bindTextureMemory(ITexture* _texture, IHeap* heap, u64 offset){
     if(!vkHeap || vkHeap->memory == VK_NULL_HANDLE)
         return false;
     
-    // Binding to a heap means the heap owns the memory, not the texture
     texture->memory = VK_NULL_HANDLE;
     
     VkResult res = vkBindImageMemory(m_context.device, texture->image, vkHeap->memory, offset);
@@ -304,9 +303,8 @@ TextureHandle Device::createHandleForNativeTexture(ObjectType objectType, Object
     Texture* texture = new Texture(m_context, m_allocator);
     texture->desc = desc;
     texture->image = nativeImage;
-    texture->managed = false; // externally owned, don't destroy
+    texture->managed = false;
     
-    // Fill in imageInfo for view creation
     texture->imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     texture->imageInfo.imageType = __hidden_vulkan::TextureDimensionToImageType(desc.dimension);
     texture->imageInfo.extent.width = desc.width;
@@ -449,11 +447,88 @@ void CommandList::copyTexture(ITexture* _dest, const TextureSlice& destSlice, IT
     region.dstOffset = { destSlice.x, destSlice.y, destSlice.z };
     region.extent = { destSlice.width, destSlice.height, destSlice.depth };
     
-    vkCmdCopyImage(currentCmdBuf->cmdBuf, src->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                   dest->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+    vkCmdCopyImage(currentCmdBuf->cmdBuf, src->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dest->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
     
     currentCmdBuf->referencedResources.push_back(_src);
     currentCmdBuf->referencedResources.push_back(_dest);
+}
+
+void CommandList::copyTexture(IStagingTexture* dest, const TextureSlice& destSlice, ITexture* src, const TextureSlice& srcSlice){
+    StagingTexture* staging = checked_cast<StagingTexture*>(dest);
+    Texture* texture = checked_cast<Texture*>(src);
+    
+    TextureSlice resolvedSrc = srcSlice.resolve(texture->desc);
+    TextureSlice resolvedDst = destSlice.resolve(staging->desc);
+    
+    const FormatInfo& formatInfo = GetFormatInfo(texture->desc.format);
+    
+    u64 bufferOffset = 0;
+    if(resolvedDst.mipLevel > 0 || resolvedDst.arraySlice > 0){
+        u32 rowPitch = (resolvedDst.width / formatInfo.blockSize) * formatInfo.bytesPerBlock;
+        u32 slicePitch = rowPitch * (resolvedDst.height / formatInfo.blockSize);
+        bufferOffset = static_cast<u64>(resolvedDst.z) * slicePitch + static_cast<u64>(resolvedDst.y / formatInfo.blockSize) * rowPitch + static_cast<u64>(resolvedDst.x / formatInfo.blockSize) * formatInfo.bytesPerBlock;
+    }
+    
+    VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    if(formatInfo.hasDepth)
+        aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    if(formatInfo.hasStencil)
+        aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+    
+    VkBufferImageCopy region{};
+    region.bufferOffset = bufferOffset;
+    region.bufferRowLength = 0; // tightly packed
+    region.bufferImageHeight = 0;
+    region.imageSubresource.aspectMask = aspectMask;
+    region.imageSubresource.mipLevel = resolvedSrc.mipLevel;
+    region.imageSubresource.baseArrayLayer = resolvedSrc.arraySlice;
+    region.imageSubresource.layerCount = 1;
+    region.imageOffset = { static_cast<i32>(resolvedSrc.x), static_cast<i32>(resolvedSrc.y), static_cast<i32>(resolvedSrc.z) };
+    region.imageExtent = { resolvedSrc.width, resolvedSrc.height, resolvedSrc.depth };
+    
+    vkCmdCopyImageToBuffer(currentCmdBuf->cmdBuf, texture->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, staging->buffer, 1, &region);
+    
+    currentCmdBuf->referencedResources.push_back(src);
+    currentCmdBuf->referencedResources.push_back(dest);
+}
+
+void CommandList::copyTexture(ITexture* dest, const TextureSlice& destSlice, IStagingTexture* src, const TextureSlice& srcSlice){
+    Texture* texture = checked_cast<Texture*>(dest);
+    StagingTexture* staging = checked_cast<StagingTexture*>(src);
+    
+    TextureSlice resolvedDst = destSlice.resolve(texture->desc);
+    TextureSlice resolvedSrc = srcSlice.resolve(staging->desc);
+    
+    const FormatInfo& formatInfo = GetFormatInfo(staging->desc.format);
+    
+    u64 bufferOffset = 0;
+    if(resolvedSrc.mipLevel > 0 || resolvedSrc.arraySlice > 0){
+        u32 rowPitch = (resolvedSrc.width / formatInfo.blockSize) * formatInfo.bytesPerBlock;
+        u32 slicePitch = rowPitch * (resolvedSrc.height / formatInfo.blockSize);
+        bufferOffset = static_cast<u64>(resolvedSrc.z) * slicePitch + static_cast<u64>(resolvedSrc.y / formatInfo.blockSize) * rowPitch + static_cast<u64>(resolvedSrc.x / formatInfo.blockSize) * formatInfo.bytesPerBlock;
+    }
+    
+    VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    if(formatInfo.hasDepth)
+        aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    if(formatInfo.hasStencil)
+        aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+    
+    VkBufferImageCopy region{};
+    region.bufferOffset = bufferOffset;
+    region.bufferRowLength = 0; // tightly packed
+    region.bufferImageHeight = 0;
+    region.imageSubresource.aspectMask = aspectMask;
+    region.imageSubresource.mipLevel = resolvedDst.mipLevel;
+    region.imageSubresource.baseArrayLayer = resolvedDst.arraySlice;
+    region.imageSubresource.layerCount = 1;
+    region.imageOffset = { static_cast<i32>(resolvedDst.x), static_cast<i32>(resolvedDst.y), static_cast<i32>(resolvedDst.z) };
+    region.imageExtent = { resolvedDst.width, resolvedDst.height, resolvedDst.depth };
+    
+    vkCmdCopyBufferToImage(currentCmdBuf->cmdBuf, staging->buffer, texture->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+    
+    currentCmdBuf->referencedResources.push_back(dest);
+    currentCmdBuf->referencedResources.push_back(src);
 }
 
 void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, const void* data, usize rowPitch, usize depthPitch){

@@ -12,92 +12,6 @@ NWB_VULKAN_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Copy operations (staging texture overloads)
-
-
-void CommandList::copyTexture(IStagingTexture* dest, const TextureSlice& destSlice, ITexture* src, const TextureSlice& srcSlice){
-    StagingTexture* staging = checked_cast<StagingTexture*>(dest);
-    Texture* texture = checked_cast<Texture*>(src);
-    
-    TextureSlice resolvedSrc = srcSlice.resolve(texture->desc);
-    TextureSlice resolvedDst = destSlice.resolve(staging->desc);
-    
-    const FormatInfo& formatInfo = GetFormatInfo(texture->desc.format);
-    
-    // Compute buffer offset from destSlice position
-    u64 bufferOffset = 0;
-    if(resolvedDst.mipLevel > 0 || resolvedDst.arraySlice > 0){
-        // Simple linear offset calculation for the staging buffer
-        u32 rowPitch = (resolvedDst.width / formatInfo.blockSize) * formatInfo.bytesPerBlock;
-        u32 slicePitch = rowPitch * (resolvedDst.height / formatInfo.blockSize);
-        bufferOffset = static_cast<u64>(resolvedDst.z) * slicePitch + static_cast<u64>(resolvedDst.y / formatInfo.blockSize) * rowPitch + static_cast<u64>(resolvedDst.x / formatInfo.blockSize) * formatInfo.bytesPerBlock;
-    }
-    
-    VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    if(formatInfo.hasDepth)
-        aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-    if(formatInfo.hasStencil)
-        aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
-    
-    VkBufferImageCopy region{};
-    region.bufferOffset = bufferOffset;
-    region.bufferRowLength = 0; // tightly packed
-    region.bufferImageHeight = 0;
-    region.imageSubresource.aspectMask = aspectMask;
-    region.imageSubresource.mipLevel = resolvedSrc.mipLevel;
-    region.imageSubresource.baseArrayLayer = resolvedSrc.arraySlice;
-    region.imageSubresource.layerCount = 1;
-    region.imageOffset = { static_cast<i32>(resolvedSrc.x), static_cast<i32>(resolvedSrc.y), static_cast<i32>(resolvedSrc.z) };
-    region.imageExtent = { resolvedSrc.width, resolvedSrc.height, resolvedSrc.depth };
-    
-    vkCmdCopyImageToBuffer(currentCmdBuf->cmdBuf, texture->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, staging->buffer, 1, &region);
-    
-    currentCmdBuf->referencedResources.push_back(src);
-    currentCmdBuf->referencedResources.push_back(dest);
-}
-
-void CommandList::copyTexture(ITexture* dest, const TextureSlice& destSlice, IStagingTexture* src, const TextureSlice& srcSlice){
-    Texture* texture = checked_cast<Texture*>(dest);
-    StagingTexture* staging = checked_cast<StagingTexture*>(src);
-    
-    TextureSlice resolvedDst = destSlice.resolve(texture->desc);
-    TextureSlice resolvedSrc = srcSlice.resolve(staging->desc);
-    
-    const FormatInfo& formatInfo = GetFormatInfo(staging->desc.format);
-    
-    // Compute buffer offset from srcSlice position
-    u64 bufferOffset = 0;
-    if(resolvedSrc.mipLevel > 0 || resolvedSrc.arraySlice > 0){
-        u32 rowPitch = (resolvedSrc.width / formatInfo.blockSize) * formatInfo.bytesPerBlock;
-        u32 slicePitch = rowPitch * (resolvedSrc.height / formatInfo.blockSize);
-        bufferOffset = static_cast<u64>(resolvedSrc.z) * slicePitch + static_cast<u64>(resolvedSrc.y / formatInfo.blockSize) * rowPitch + static_cast<u64>(resolvedSrc.x / formatInfo.blockSize) * formatInfo.bytesPerBlock;
-    }
-    
-    VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    if(formatInfo.hasDepth)
-        aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-    if(formatInfo.hasStencil)
-        aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
-    
-    VkBufferImageCopy region{};
-    region.bufferOffset = bufferOffset;
-    region.bufferRowLength = 0; // tightly packed
-    region.bufferImageHeight = 0;
-    region.imageSubresource.aspectMask = aspectMask;
-    region.imageSubresource.mipLevel = resolvedDst.mipLevel;
-    region.imageSubresource.baseArrayLayer = resolvedDst.arraySlice;
-    region.imageSubresource.layerCount = 1;
-    region.imageOffset = { static_cast<i32>(resolvedDst.x), static_cast<i32>(resolvedDst.y), static_cast<i32>(resolvedDst.z) };
-    region.imageExtent = { resolvedDst.width, resolvedDst.height, resolvedDst.depth };
-    
-    vkCmdCopyBufferToImage(currentCmdBuf->cmdBuf, staging->buffer, texture->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-    
-    currentCmdBuf->referencedResources.push_back(dest);
-    currentCmdBuf->referencedResources.push_back(src);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Sampler Feedback (stubs)
 
 
@@ -127,7 +41,6 @@ void CommandList::setSamplerFeedbackTextureState(ISamplerFeedbackTexture* textur
 void CommandList::setPushConstants(const void* data, usize byteSize){
     VkPipelineLayout layout = VK_NULL_HANDLE;
     
-    // Determine the current pipeline layout from active state
     if(currentGraphicsState.pipeline){
         GraphicsPipeline* gp = checked_cast<GraphicsPipeline*>(currentGraphicsState.pipeline);
         layout = gp->pipelineLayout;
@@ -187,14 +100,12 @@ void CommandList::buildTopLevelAccelStructFromBuffer(IRayTracingAccelStruct* _as
     
     AccelStruct* as = checked_cast<AccelStruct*>(_as);
     
-    // Set up geometry for instances using the provided buffer directly
     VkAccelerationStructureGeometryKHR geometry = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR };
     geometry.geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR;
     geometry.geometry.instances.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
     geometry.geometry.instances.arrayOfPointers = VK_FALSE;
     geometry.geometry.instances.data.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(instanceBuffer, instanceBufferOffset);
     
-    // Set up build info
     VkAccelerationStructureBuildGeometryInfoKHR buildInfo = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR };
     buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
     buildInfo.flags = 0;
@@ -211,12 +122,10 @@ void CommandList::buildTopLevelAccelStructFromBuffer(IRayTracingAccelStruct* _as
     buildInfo.geometryCount = 1;
     buildInfo.pGeometries = &geometry;
     
-    // Query scratch buffer size
     u32 primitiveCount = static_cast<u32>(numInstances);
     VkAccelerationStructureBuildSizesInfoKHR sizeInfo = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR };
     vkGetAccelerationStructureBuildSizesKHR(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &primitiveCount, &sizeInfo);
     
-    // Allocate scratch buffer
     BufferDesc scratchDesc;
     scratchDesc.byteSize = sizeInfo.buildScratchSize;
     scratchDesc.structStride = 1;
@@ -226,14 +135,12 @@ void CommandList::buildTopLevelAccelStructFromBuffer(IRayTracingAccelStruct* _as
     if(scratchBuffer){
         buildInfo.scratchData.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(scratchBuffer.get());
         
-        // Build acceleration structure
         VkAccelerationStructureBuildRangeInfoKHR rangeInfo = {};
         rangeInfo.primitiveCount = primitiveCount;
         const VkAccelerationStructureBuildRangeInfoKHR* pRangeInfo = &rangeInfo;
         
         vkCmdBuildAccelerationStructuresKHR(currentCmdBuf->cmdBuf, 1, &buildInfo, &pRangeInfo);
         
-        // Track buffers
         currentCmdBuf->referencedStagingBuffers.push_back(scratchBuffer);
     }
     
@@ -245,7 +152,6 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
     if(!m_context.extensions.NV_cluster_acceleration_structure)
         return;
     
-    // Convert operation type
     VkClusterAccelerationStructureOpTypeNV opType;
     switch(desc.params.type){
     case RayTracingClusterOperationType::Move:
@@ -267,7 +173,6 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
         return;
     }
     
-    // Convert mode
     VkClusterAccelerationStructureOpModeNV opMode;
     switch(desc.params.mode){
     case RayTracingClusterOperationMode::ImplicitDestinations:
@@ -283,7 +188,6 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
         return;
     }
     
-    // Convert flags
     VkBuildAccelerationStructureFlagsKHR opFlags = 0;
     if(desc.params.flags & RayTracingClusterOperationFlags::FastTrace)
         opFlags |= VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
@@ -292,7 +196,6 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
     if(desc.params.flags & RayTracingClusterOperationFlags::AllowOMM)
         opFlags |= VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_OPACITY_MICROMAP_UPDATE_EXT;
     
-    // Build input info
     VkClusterAccelerationStructureInputInfoNV inputInfo = { VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_INPUT_INFO_NV };
     inputInfo.maxAccelerationStructureCount = desc.params.maxArgCount;
     inputInfo.flags = opFlags;
@@ -342,14 +245,12 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
         break;
     }
     
-    // Cast buffers
     Buffer* indirectArgCountBuffer = desc.inIndirectArgCountBuffer ? checked_cast<Buffer*>(desc.inIndirectArgCountBuffer) : nullptr;
     Buffer* indirectArgsBuffer = desc.inIndirectArgsBuffer ? checked_cast<Buffer*>(desc.inIndirectArgsBuffer) : nullptr;
     Buffer* inOutAddressesBuffer = desc.inOutAddressesBuffer ? checked_cast<Buffer*>(desc.inOutAddressesBuffer) : nullptr;
     Buffer* outSizesBuffer = desc.outSizesBuffer ? checked_cast<Buffer*>(desc.outSizesBuffer) : nullptr;
     Buffer* outAccelerationStructuresBuffer = desc.outAccelerationStructuresBuffer ? checked_cast<Buffer*>(desc.outAccelerationStructuresBuffer) : nullptr;
     
-    // Set resource states and barriers
     if(enableAutomaticBarriers){
         if(indirectArgsBuffer)
             setBufferState(desc.inIndirectArgsBuffer, ResourceStates::ShaderResource);
@@ -363,7 +264,6 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
             setBufferState(desc.outAccelerationStructuresBuffer, ResourceStates::AccelStructWrite);
     }
     
-    // Track resources
     if(indirectArgCountBuffer)
         currentCmdBuf->referencedResources.push_back(desc.inIndirectArgCountBuffer);
     if(indirectArgsBuffer)
@@ -377,7 +277,6 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
     
     commitBarriers();
     
-    // Allocate scratch buffer
     BufferHandle scratchBufferHandle;
     Buffer* scratchBuffer = nullptr;
     if(desc.scratchSizeInBytes > 0){
@@ -394,7 +293,6 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
         scratchBuffer = checked_cast<Buffer*>(scratchBufferHandle.get());
     }
     
-    // Build commands info
     VkClusterAccelerationStructureCommandsInfoNV commandsInfo = { VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_COMMANDS_INFO_NV };
     commandsInfo.input = inputInfo;
     commandsInfo.scratchData = scratchBuffer ? scratchBuffer->deviceAddress : 0;
@@ -539,7 +437,6 @@ void Device::getTextureTiling(ITexture* _texture, u32* numTiles, PackedMipDesc* 
     u32 tileHeight = 1;
     u32 tileDepth = 1;
     
-    // Get sparse memory requirements
     u32 sparseReqCount = 0;
     vkGetImageSparseMemoryRequirements(m_context.device, texture->image, &sparseReqCount, nullptr);
     
@@ -558,7 +455,6 @@ void Device::getTextureTiling(ITexture* _texture, u32* numTiles, PackedMipDesc* 
         }
     }
     
-    // Get sparse format properties
     u32 formatPropCount = 0;
     vkGetPhysicalDeviceSparseImageFormatProperties(
         m_context.physicalDevice,

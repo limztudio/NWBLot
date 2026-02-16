@@ -38,7 +38,6 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
     Buffer* buffer = new Buffer(m_context, m_allocator);
     buffer->desc = d;
     
-    // Build usage flags
     VkBufferUsageFlags usageFlags = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     
     if(d.isVertexBuffer)
@@ -60,7 +59,6 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
     
     u64 size = d.byteSize;
     
-    // Handle volatile buffers (for frequently updated CBs)
     if(d.isVolatile && d.maxVersions > 0){
         u64 alignment = m_context.physicalDeviceProperties.limits.minUniformBufferOffsetAlignment;
         size = (size + alignment - 1) & ~(alignment - 1);
@@ -79,18 +77,15 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
     VkResult res = vkCreateBuffer(m_context.device, &bufferInfo, m_context.allocationCallbacks, &buffer->buffer);
     NWB_ASSERT(res == VK_SUCCESS);
     
-    // Allocate memory if not virtual
     if(!d.isVirtual){
         VkResult res = m_allocator.allocateBufferMemory(buffer, m_context.extensions.buffer_device_address && (usageFlags & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT));
         NWB_ASSERT(res == VK_SUCCESS);
         
-        // Map memory for volatile or CPU-accessible buffers
         if(d.isVolatile || d.cpuAccess != CpuAccessMode::None){
             VkResult res = vkMapMemory(m_context.device, buffer->memory, 0, size, 0, &buffer->mappedMemory);
             NWB_ASSERT(res == VK_SUCCESS);
         }
         
-        // Get device address
         if(m_context.extensions.buffer_device_address){
             VkBufferDeviceAddressInfo addressInfo{};
             addressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
@@ -162,9 +157,8 @@ BufferHandle Device::createHandleForNativeBuffer(ObjectType objectType, Object _
     Buffer* buffer = new Buffer(m_context, m_allocator);
     buffer->desc = desc;
     buffer->buffer = nativeBuffer;
-    buffer->managed = false; // externally owned, don't destroy
+    buffer->managed = false;
     
-    // Get device address if available
     if(m_context.extensions.buffer_device_address){
         VkBufferDeviceAddressInfo addressInfo{};
         addressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
@@ -177,13 +171,11 @@ BufferHandle Device::createHandleForNativeBuffer(ObjectType objectType, Object _
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// CommandList - Buffer operations
 
 
 void CommandList::writeBuffer(IBuffer* _buffer, const void* data, usize dataSize, u64 destOffsetBytes){
     Buffer* buffer = checked_cast<Buffer*>(_buffer);
     
-    // Allocate staging buffer
     UploadManager* uploadMgr = m_device.getUploadManager();
     Buffer* stagingBuffer = nullptr;
     u64 stagingOffset = 0;
@@ -194,10 +186,8 @@ void CommandList::writeBuffer(IBuffer* _buffer, const void* data, usize dataSize
         return;
     }
     
-    // Copy data to staging
     NWB_MEMCPY(cpuVA, dataSize, data, dataSize);
     
-    // Copy staging to destination
     VkBufferCopy region{};
     region.srcOffset = stagingOffset;
     region.dstOffset = destOffsetBytes;

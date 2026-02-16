@@ -105,14 +105,12 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
     AccelStruct* as = new AccelStruct(m_context);
     as->desc = desc;
     
-    // Determine acceleration structure type
     VkAccelerationStructureTypeKHR asType = desc.isTopLevel ?  VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR :  VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
     
-    // Create backing buffer for acceleration structure
     BufferDesc bufferDesc;
     bufferDesc.byteSize = desc.topLevelMaxInstances > 0 ? 
         desc.topLevelMaxInstances * sizeof(VkAccelerationStructureInstanceKHR) * 2 : // Estimate for TLAS
-        1024 * 1024; // 1MB default for BLAS, will be resized based on actual requirements
+        1024 * 1024;
     bufferDesc.isAccelStructStorage = true;
     bufferDesc.debugName = "AccelStructBuffer";
     
@@ -123,7 +121,6 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
         return nullptr;
     }
     
-    // Create acceleration structure
     VkAccelerationStructureCreateInfoKHR createInfo = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR };
     createInfo.buffer = checked_cast<Buffer*>(as->buffer.get())->buffer;
     createInfo.offset = 0;
@@ -137,7 +134,6 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
         return nullptr;
     }
     
-    // Get device address
     VkAccelerationStructureDeviceAddressInfoKHR addressInfo = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR };
     addressInfo.accelerationStructure = as->accelStruct;
     as->deviceAddress = vkGetAccelerationStructureDeviceAddressKHR(m_context.device, &addressInfo);
@@ -149,14 +145,12 @@ RayTracingOpacityMicromapHandle Device::createOpacityMicromap(const RayTracingOp
     if(!m_context.extensions.EXT_opacity_micromap)
         return nullptr;
     
-    // Convert flags
     VkBuildMicromapFlagBitsEXT buildFlags = static_cast<VkBuildMicromapFlagBitsEXT>(0);
     if(desc.flags & RayTracingOpacityMicromapBuildFlags::FastTrace)
         buildFlags = VK_BUILD_MICROMAP_PREFER_FAST_TRACE_BIT_EXT;
     else if(desc.flags & RayTracingOpacityMicromapBuildFlags::FastBuild)
         buildFlags = VK_BUILD_MICROMAP_PREFER_FAST_BUILD_BIT_EXT;
     
-    // Usage counts — reinterpret as VkMicromapUsageEXT (binary compatible layout)
     VkMicromapBuildInfoEXT buildInfo = { VK_STRUCTURE_TYPE_MICROMAP_BUILD_INFO_EXT };
     buildInfo.type = VK_MICROMAP_TYPE_OPACITY_MICROMAP_EXT;
     buildInfo.flags = buildFlags;
@@ -170,7 +164,6 @@ RayTracingOpacityMicromapHandle Device::createOpacityMicromap(const RayTracingOp
     OpacityMicromap* om = new OpacityMicromap(m_context);
     om->desc = desc;
     
-    // Create backing buffer
     BufferDesc bufferDesc;
     bufferDesc.canHaveUAVs = true;
     bufferDesc.byteSize = buildSize.micromapSize;
@@ -222,7 +215,6 @@ RayTracingClusterOperationSizeInfo Device::getClusterOperationSizeInfo(const Ray
     
     RayTracingClusterOperationSizeInfo info;
     
-    // Convert operation type
     VkClusterAccelerationStructureOpTypeNV opType;
     switch(params.type){
     case RayTracingClusterOperationType::Move:
@@ -244,7 +236,6 @@ RayTracingClusterOperationSizeInfo Device::getClusterOperationSizeInfo(const Ray
         return info;
     }
     
-    // Convert operation mode
     VkClusterAccelerationStructureOpModeNV opMode;
     switch(params.mode){
     case RayTracingClusterOperationMode::ImplicitDestinations:
@@ -260,7 +251,6 @@ RayTracingClusterOperationSizeInfo Device::getClusterOperationSizeInfo(const Ray
         return info;
     }
     
-    // Convert flags
     VkBuildAccelerationStructureFlagsKHR opFlags = 0;
     if(params.flags & RayTracingClusterOperationFlags::FastTrace)
         opFlags |= VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
@@ -269,14 +259,12 @@ RayTracingClusterOperationSizeInfo Device::getClusterOperationSizeInfo(const Ray
     if(params.flags & RayTracingClusterOperationFlags::AllowOMM)
         opFlags |= VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_OPACITY_MICROMAP_UPDATE_EXT;
     
-    // Build input info
     VkClusterAccelerationStructureInputInfoNV inputInfo = { VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_INPUT_INFO_NV };
     inputInfo.maxAccelerationStructureCount = params.maxArgCount;
     inputInfo.flags = opFlags;
     inputInfo.opType = opType;
     inputInfo.opMode = opMode;
     
-    // Set operation-specific parameters
     VkClusterAccelerationStructureMoveObjectsInputNV moveInput = { VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_MOVE_OBJECTS_INPUT_NV };
     VkClusterAccelerationStructureTriangleClusterInputNV clusterInput = { VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_TRIANGLE_CLUSTER_INPUT_NV };
     VkClusterAccelerationStructureClustersBottomLevelInputNV blasInput = { VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_CLUSTERS_BOTTOM_LEVEL_INPUT_NV };
@@ -320,7 +308,6 @@ RayTracingClusterOperationSizeInfo Device::getClusterOperationSizeInfo(const Ray
         break;
     }
     
-    // Get build sizes
     VkClusterAccelerationStructureBuildSizesInfoNV vkSizeInfo = { VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_NV };
     vkGetClusterAccelerationStructureBuildSizesNV(m_context.device, &inputInfo, &vkSizeInfo);
     
@@ -337,8 +324,6 @@ bool Device::bindAccelStructMemory(IRayTracingAccelStruct* _as, IHeap* heap, u64
     AccelStruct* as = checked_cast<AccelStruct*>(_as);
     Heap* h = checked_cast<Heap*>(heap);
     
-    // The acceleration structure is backed by a buffer
-    // Bind the backing buffer's memory to the heap
     if(as->buffer)
         return bindBufferMemory(as->buffer, heap, offset);
     
@@ -353,13 +338,11 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
     pso->desc = desc;
     pso->m_device = this;
     
-    // Collect shader stages
     Vector<VkPipelineShaderStageCreateInfo> stages;
     Vector<VkRayTracingShaderGroupCreateInfoKHR> groups;
     
     u32 shaderIndex = 0;
     
-    // General shaders (raygen, miss, callable)
     for(const auto& shaderDesc : desc.shaders){
         if(!shaderDesc.shader)
             continue;
@@ -384,7 +367,6 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
             continue;
         }
         
-        // Create general shader group for raygen/miss/callable
         VkRayTracingShaderGroupCreateInfoKHR group = { VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR };
         group.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
         group.generalShader = static_cast<u32>(stages.size());
@@ -397,7 +379,6 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
         shaderIndex++;
     }
     
-    // Create shader groups from hitGroups
     for(const auto& hitGroup : desc.hitGroups){
         VkRayTracingShaderGroupCreateInfoKHR group = { VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR };
         group.type = hitGroup.isProceduralPrimitive 
@@ -438,7 +419,6 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
         groups.push_back(group);
     }
     
-    // Get pipeline layout from binding layouts
     VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
     if(!desc.globalBindingLayouts.empty() && desc.globalBindingLayouts[0]){
         BindingLayout* layout = checked_cast<BindingLayout*>(desc.globalBindingLayouts[0].get());
@@ -446,7 +426,6 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
         pso->pipelineLayout = pipelineLayout;
     }
     
-    // Create ray tracing pipeline
     VkRayTracingPipelineCreateInfoKHR createInfo = { VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR };
     createInfo.stageCount = static_cast<u32>(stages.size());
     createInfo.pStages = stages.data();
@@ -463,7 +442,6 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
         return nullptr;
     }
     
-    // Get shader group handles for SBT
     u32 handleSize = m_context.rayTracingPipelineProperties.shaderGroupHandleSize;
     u32 handleAlignment = m_context.rayTracingPipelineProperties.shaderGroupHandleAlignment;
     u32 baseAlignment = m_context.rayTracingPipelineProperties.shaderGroupBaseAlignment;
@@ -542,7 +520,6 @@ void ShaderTable::setRayGenerationShader(const Name& exportName, IBindingSet* /*
     
     raygenOffset = 0;
     
-    // Find shader group index and copy handle
     u32 groupIndex = findGroupIndex(exportName);
     
     void* mapped = m_device->mapBuffer(raygenBuffer.get(), CpuAccessMode::Write);
@@ -564,7 +541,6 @@ u32 ShaderTable::addMissShader(const Name& exportName, IBindingSet* /*bindings*/
     u32 newCount = missCount + 1;
     u64 sbtSize = (static_cast<u64>(newCount) * handleSizeAligned + baseAlignment - 1) & ~(static_cast<u64>(baseAlignment) - 1);
     
-    // Reallocate miss buffer
     BufferHandle newBuffer;
     allocateSBTBuffer(newBuffer, sbtSize);
     if(!newBuffer)
@@ -572,7 +548,6 @@ u32 ShaderTable::addMissShader(const Name& exportName, IBindingSet* /*bindings*/
     
     void* mapped = m_device->mapBuffer(newBuffer.get(), CpuAccessMode::Write);
     if(mapped){
-        // Copy existing entries
         if(missBuffer && missCount > 0){
             void* oldMapped = m_device->mapBuffer(missBuffer.get(), CpuAccessMode::Read);
             if(oldMapped){
@@ -581,7 +556,6 @@ u32 ShaderTable::addMissShader(const Name& exportName, IBindingSet* /*bindings*/
             }
         }
         
-        // Copy new handle
         u32 groupIndex = findGroupIndex(exportName);
         u8* dst = static_cast<u8*>(mapped) + missCount * handleSizeAligned;
         NWB_MEMCPY(dst, handleSizeAligned, pipeline->shaderGroupHandles.data() + groupIndex * handleSizeAligned, handleSize);
@@ -697,10 +671,8 @@ void CommandList::setRayTracingState(const RayTracingState& state){
     if(!pipeline)
         return;
     
-    // Bind ray tracing pipeline
     vkCmdBindPipeline(currentCmdBuf->cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, pipeline->pipeline);
     
-    // Bind descriptor sets
     if(state.bindings.size() > 0 && pipeline->pipelineLayout != VK_NULL_HANDLE){
         for(usize i = 0; i < state.bindings.size(); i++){
             if(state.bindings[i]){
@@ -728,7 +700,6 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* _as, const
     
     AccelStruct* as = checked_cast<AccelStruct*>(_as);
     
-    // Build geometry array
     Vector<VkAccelerationStructureGeometryKHR> geometries;
     Vector<VkAccelerationStructureBuildRangeInfoKHR> rangeInfos;
     Vector<u32> primitiveCounts;
@@ -779,7 +750,6 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* _as, const
             rangeInfo.primitiveCount = primitiveCount;
         }
         
-        // Set geometry flags
         geometry.flags = 0;
         if(geomDesc.flags & RayTracingGeometryFlags::Opaque)
             geometry.flags |= VK_GEOMETRY_OPAQUE_BIT_KHR;
@@ -791,7 +761,6 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* _as, const
         primitiveCounts.push_back(primitiveCount);
     }
     
-    // Set up build info
     VkAccelerationStructureBuildGeometryInfoKHR buildInfo = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR };
     buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
     buildInfo.flags = 0;
@@ -810,12 +779,9 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* _as, const
     buildInfo.geometryCount = static_cast<u32>(geometries.size());
     buildInfo.pGeometries = geometries.data();
     
-    // Query scratch buffer size
     VkAccelerationStructureBuildSizesInfoKHR sizeInfo = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR };
-    vkGetAccelerationStructureBuildSizesKHR(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, 
-                                             &buildInfo, primitiveCounts.data(), &sizeInfo);
+    vkGetAccelerationStructureBuildSizesKHR(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, primitiveCounts.data(), &sizeInfo);
     
-    // Allocate scratch buffer
     BufferDesc scratchDesc;
     scratchDesc.byteSize = sizeInfo.buildScratchSize;
     scratchDesc.structStride = 1;
@@ -825,15 +791,12 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* _as, const
     if(scratchBuffer){
         buildInfo.scratchData.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(scratchBuffer.get());
         
-        // Build acceleration structure
         const VkAccelerationStructureBuildRangeInfoKHR* pRangeInfos = rangeInfos.data();
         vkCmdBuildAccelerationStructuresKHR(currentCmdBuf->cmdBuf, 1, &buildInfo, &pRangeInfos);
         
-        // Track scratch buffer until command completes
         currentCmdBuf->referencedStagingBuffers.push_back(scratchBuffer);
     }
     
-    // Track for compaction if requested
     if(buildFlags & RayTracingAccelStructBuildFlags::AllowCompaction)
         m_pendingCompactions.push_back(as);
     
@@ -848,12 +811,7 @@ void CommandList::compactBottomLevelAccelStructs(){
         return;
     
     for(auto& as : m_pendingCompactions){
-        // Query compacted size
-        vkCmdWriteAccelerationStructuresPropertiesKHR(
-            currentCmdBuf->cmdBuf,
-            1, &as->accelStruct,
-            VK_QUERY_TYPE_ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR,
-            VK_NULL_HANDLE, 0);
+        vkCmdWriteAccelerationStructuresPropertiesKHR(currentCmdBuf->cmdBuf, 1, &as->accelStruct, VK_QUERY_TYPE_ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR, VK_NULL_HANDLE, 0);
         
         // Note: A full implementation would:
         // 1. Read back the compacted size after GPU finishes
@@ -877,7 +835,6 @@ void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* _as, const Ra
     
     AccelStruct* as = checked_cast<AccelStruct*>(_as);
     
-    // Create instance buffer
     u64 instanceBufferSize = numInstances * sizeof(VkAccelerationStructureInstanceKHR);
     BufferDesc instanceBufferDesc;
     instanceBufferDesc.byteSize = instanceBufferSize;
@@ -889,16 +846,13 @@ void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* _as, const Ra
     if(!instanceBuffer)
         return;
     
-    // Fill instance data
-    VkAccelerationStructureInstanceKHR* mappedInstances = 
-        static_cast<VkAccelerationStructureInstanceKHR*>(m_device.mapBuffer(instanceBuffer.get(), CpuAccessMode::Write));
+    auto* mappedInstances = static_cast<VkAccelerationStructureInstanceKHR*>(m_device.mapBuffer(instanceBuffer.get(), CpuAccessMode::Write));
     
     if(mappedInstances){
         for(usize i = 0; i < numInstances; i++){
             const auto& inst = pInstances[i];
             VkAccelerationStructureInstanceKHR& vkInst = mappedInstances[i];
             
-            // Copy transform (row-major 3x4)
             NWB_MEMCPY(&vkInst.transform, sizeof(VkTransformMatrixKHR), &inst.transform, sizeof(VkTransformMatrixKHR));
             
             vkInst.instanceCustomIndex = inst.instanceID & 0xFFFFFF;
@@ -915,7 +869,6 @@ void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* _as, const Ra
             if(inst.flags & RayTracingInstanceFlags::ForceNonOpaque)
                 vkInst.flags |= VK_GEOMETRY_INSTANCE_FORCE_NO_OPAQUE_BIT_KHR;
             
-            // Get BLAS device address
             AccelStruct* blas = checked_cast<AccelStruct*>(inst.bottomLevelAS);
             vkInst.accelerationStructureReference = blas ? blas->deviceAddress : 0;
         }
@@ -923,14 +876,12 @@ void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* _as, const Ra
         m_device.unmapBuffer(instanceBuffer.get());
     }
     
-    // Set up geometry for instances
     VkAccelerationStructureGeometryKHR geometry = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR };
     geometry.geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR;
     geometry.geometry.instances.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
     geometry.geometry.instances.arrayOfPointers = VK_FALSE;
     geometry.geometry.instances.data.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(instanceBuffer.get());
     
-    // Set up build info
     VkAccelerationStructureBuildGeometryInfoKHR buildInfo = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR };
     buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
     buildInfo.flags = 0;
@@ -947,13 +898,10 @@ void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* _as, const Ra
     buildInfo.geometryCount = 1;
     buildInfo.pGeometries = &geometry;
     
-    // Query scratch buffer size
     u32 primitiveCount = static_cast<u32>(numInstances);
     VkAccelerationStructureBuildSizesInfoKHR sizeInfo = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR };
-    vkGetAccelerationStructureBuildSizesKHR(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, 
-                                             &buildInfo, &primitiveCount, &sizeInfo);
+    vkGetAccelerationStructureBuildSizesKHR(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &primitiveCount, &sizeInfo);
     
-    // Allocate scratch buffer
     BufferDesc scratchDesc;
     scratchDesc.byteSize = sizeInfo.buildScratchSize;
     scratchDesc.structStride = 1;
@@ -963,14 +911,12 @@ void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* _as, const Ra
     if(scratchBuffer){
         buildInfo.scratchData.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(scratchBuffer.get());
         
-        // Build acceleration structure
         VkAccelerationStructureBuildRangeInfoKHR rangeInfo = {};
         rangeInfo.primitiveCount = primitiveCount;
         const VkAccelerationStructureBuildRangeInfoKHR* pRangeInfo = &rangeInfo;
         
         vkCmdBuildAccelerationStructuresKHR(currentCmdBuf->cmdBuf, 1, &buildInfo, &pRangeInfo);
         
-        // Track buffers
         currentCmdBuf->referencedStagingBuffers.push_back(Move(scratchBuffer));
         currentCmdBuf->referencedStagingBuffers.push_back(Move(instanceBuffer));
     }
@@ -1004,7 +950,6 @@ void CommandList::buildOpacityMicromap(IRayTracingOpacityMicromap* _omm, const R
     
     commitBarriers();
     
-    // Convert flags
     VkBuildMicromapFlagBitsEXT buildFlags = static_cast<VkBuildMicromapFlagBitsEXT>(0);
     if(desc.flags & RayTracingOpacityMicromapBuildFlags::FastTrace)
         buildFlags = VK_BUILD_MICROMAP_PREFER_FAST_TRACE_BIT_EXT;
@@ -1022,7 +967,6 @@ void CommandList::buildOpacityMicromap(IRayTracingOpacityMicromap* _omm, const R
     buildInfo.triangleArray.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(desc.perOmmDescs, desc.perOmmDescsOffset);
     buildInfo.triangleArrayStride = sizeof(VkMicromapTriangleEXT);
     
-    // Query scratch size
     VkMicromapBuildSizesInfoEXT buildSize = { VK_STRUCTURE_TYPE_MICROMAP_BUILD_SIZES_INFO_EXT };
     vkGetMicromapBuildSizesEXT(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &buildSize);
     
@@ -1052,13 +996,11 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
     if(!m_context.extensions.KHR_ray_tracing_pipeline)
         return;
     
-    // Get shader binding table regions from current ray tracing state
     RayTracingState& state = currentRayTracingState;
     
     if(!state.shaderTable)
         return;
     
-    // Get SBT addresses from shader table
     ShaderTable* sbt = checked_cast<ShaderTable*>(state.shaderTable);
     
     VkStridedDeviceAddressRegionKHR raygenRegion = {};

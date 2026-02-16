@@ -35,7 +35,6 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
     ComputePipeline* pso = new ComputePipeline(m_context);
     pso->desc = desc;
     
-    // Compute pipeline requires a compute shader
     if(!desc.CS){
         delete pso;
         return nullptr;
@@ -43,7 +42,6 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
     
     Shader* cs = checked_cast<Shader*>(desc.CS.get());
     
-    // Shader stage
     VkPipelineShaderStageCreateInfo shaderStage = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
     shaderStage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
     shaderStage.module = cs->shaderModule;
@@ -58,15 +56,13 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
         shaderStage.pSpecializationInfo = &specInfo;
     }
     
-    // Get pipeline layout from binding layouts
     VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
     if(!desc.bindingLayouts.empty() && desc.bindingLayouts[0]){
         BindingLayout* layout = checked_cast<BindingLayout*>(desc.bindingLayouts[0].get());
         pipelineLayout = layout->pipelineLayout;
         pso->pipelineLayout = pipelineLayout;
     }
-    
-    // Create compute pipeline
+
     VkComputePipelineCreateInfo pipelineInfo = { VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO };
     pipelineInfo.stage = shaderStage;
     pipelineInfo.layout = pipelineLayout;
@@ -92,7 +88,6 @@ void CommandList::setComputeState(const ComputeState& state){
     if(pipeline)
         vkCmdBindPipeline(currentCmdBuf->cmdBuf, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline->pipeline);
     
-    // Bind descriptor sets
     if(state.bindings.size() > 0){
         for(usize i = 0; i < state.bindings.size(); i++){
             if(state.bindings[i]){
@@ -111,7 +106,6 @@ void CommandList::dispatch(u32 groupsX, u32 groupsY, u32 groupsZ){
 }
 
 void CommandList::dispatchIndirect(u32 offsetBytes){
-    // dispatchIndirect needs the indirect buffer from current compute state
     if(!currentComputeState.indirectParams){
         NWB_ASSERT_MSG(false, NWB_TEXT("No indirect buffer bound for dispatchIndirect"));
         return;

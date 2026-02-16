@@ -21,7 +21,6 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
     
     const FormatInfo& formatInfo = GetFormatInfo(d.format);
     
-    // Compute total buffer size across all mip levels and array slices
     u64 totalSize = 0;
     for(u32 arraySlice = 0; arraySlice < d.arraySize; ++arraySlice){
         for(u32 mip = 0; mip < d.mipLevels; ++mip){
@@ -36,7 +35,6 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
         }
     }
     
-    // Create VkBuffer for staging
     VkBufferCreateInfo bufferInfo{};
     bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
     bufferInfo.size = totalSize;
@@ -49,25 +47,21 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
         return nullptr;
     }
     
-    // Get memory requirements
     VkMemoryRequirements memRequirements;
     vkGetBufferMemoryRequirements(m_context.device, staging->buffer, &memRequirements);
     
-    // Find host-visible, host-coherent memory type
     VkMemoryPropertyFlags memProps = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
     if(cpuAccess == CpuAccessMode::Read)
         memProps |= VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
     
     u32 memoryTypeIndex = 0;
     for(u32 i = 0; i < m_context.memoryProperties.memoryTypeCount; ++i){
-        if((memRequirements.memoryTypeBits & (1 << i)) &&
-           (m_context.memoryProperties.memoryTypes[i].propertyFlags & memProps) == memProps){
+        if((memRequirements.memoryTypeBits & (1 << i)) && (m_context.memoryProperties.memoryTypes[i].propertyFlags & memProps) == memProps){
             memoryTypeIndex = i;
             break;
         }
     }
     
-    // Allocate memory
     VkMemoryAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     allocInfo.allocationSize = memRequirements.size;
@@ -81,7 +75,6 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
         return nullptr;
     }
     
-    // Bind memory to buffer
     res = vkBindBufferMemory(m_context.device, staging->buffer, staging->memory, 0);
     if(res != VK_SUCCESS){
         vkFreeMemory(m_context.device, staging->memory, m_context.allocationCallbacks);
@@ -92,7 +85,6 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
         return nullptr;
     }
     
-    // Persistently map memory if CPU access is requested
     if(cpuAccess != CpuAccessMode::None){
         res = vkMapMemory(m_context.device, staging->memory, 0, totalSize, 0, &staging->mappedMemory);
         if(res != VK_SUCCESS){
@@ -114,7 +106,6 @@ void* Device::mapStagingTexture(IStagingTexture* tex, const TextureSlice& slice,
     
     StagingTexture* staging = static_cast<StagingTexture*>(tex);
     
-    // If not already mapped, map now
     if(!staging->mappedMemory){
         VkResult res = vkMapMemory(m_context.device, staging->memory, 0, VK_WHOLE_SIZE, 0, &staging->mappedMemory);
         if(res != VK_SUCCESS)
@@ -125,10 +116,8 @@ void* Device::mapStagingTexture(IStagingTexture* tex, const TextureSlice& slice,
     TextureSlice resolved = slice.resolve(desc);
     const FormatInfo& formatInfo = GetFormatInfo(desc.format);
     
-    // Compute the byte offset to the requested slice within the linear staging buffer
     u64 offset = 0;
     
-    // Sum up all preceding array slices and mip levels
     for(u32 arr = 0; arr < desc.arraySize; ++arr){
         for(u32 mip = 0; mip < desc.mipLevels; ++mip){
             if(arr == resolved.arraySlice && mip == resolved.mipLevel)
@@ -146,7 +135,6 @@ void* Device::mapStagingTexture(IStagingTexture* tex, const TextureSlice& slice,
     }
     foundOffset:
     
-    // Compute row pitch for the resolved mip level
     auto mipWidth = Max<u32>(desc.width >> resolved.mipLevel, 1u);
     auto blocksX = Max<u32>(mipWidth / formatInfo.blockSize, 1u);
     u32 rowPitch = blocksX * formatInfo.bytesPerBlock;
@@ -154,7 +142,6 @@ void* Device::mapStagingTexture(IStagingTexture* tex, const TextureSlice& slice,
     if(outRowPitch)
         *outRowPitch = rowPitch;
     
-    // Add sub-slice offset within this mip level
     auto mipHeight = Max<u32>(desc.height >> resolved.mipLevel, 1u);
     auto blocksY = Max<u32>(mipHeight / formatInfo.blockSize, 1u);
     auto slicePitch = rowPitch * blocksY;

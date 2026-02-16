@@ -19,8 +19,7 @@ void CommandList::setResourceStatesForBindingSet(IBindingSet* bindingSet){
     if(!bindingSet || !enableAutomaticBarriers)
         return;
     
-    BindingSet* bs = checked_cast<BindingSet*>(bindingSet);
-    
+    auto* bs = checked_cast<BindingSet*>(bindingSet);
     for(const auto& item : bs->desc.bindings){
         switch(item.type){
         case ResourceType::Texture_SRV:
@@ -89,7 +88,7 @@ void CommandList::setTextureState(ITexture* _texture, TextureSubresourceSet subr
     if(stateTracker->isPermanentTexture(_texture))
         return;
     
-    Texture* texture = checked_cast<Texture*>(_texture);
+    auto* texture = checked_cast<Texture*>(_texture);
     
     ResourceStates::Mask oldState = stateTracker->getTextureState(_texture, subresources.baseArraySlice, subresources.baseMipLevel);
     if(oldState == stateBits)
@@ -130,7 +129,7 @@ void CommandList::setBufferState(IBuffer* _buffer, ResourceStates::Mask stateBit
     if(stateTracker->isPermanentBuffer(_buffer))
         return;
     
-    Buffer* buffer = checked_cast<Buffer*>(_buffer);
+    auto* buffer = checked_cast<Buffer*>(_buffer);
     
     ResourceStates::Mask oldState = stateTracker->getBufferState(_buffer);
     if(oldState == stateBits)
@@ -163,7 +162,7 @@ void CommandList::setAccelStructState(IRayTracingAccelStruct* _as, ResourceState
     if(!_as)
         return;
     
-    AccelStruct* as = checked_cast<AccelStruct*>(_as);
+    auto* as = checked_cast<AccelStruct*>(_as);
     
     if(as->buffer){
         setBufferState(as->buffer.get(), stateBits);
@@ -171,12 +170,10 @@ void CommandList::setAccelStructState(IRayTracingAccelStruct* _as, ResourceState
 }
 
 void CommandList::setPermanentTextureState(ITexture* texture, ResourceStates::Mask stateBits){
-    // Marks texture as permanently in this state (no further transitions)
     stateTracker->setPermanentTextureState(texture, stateBits);
 }
 
 void CommandList::setPermanentBufferState(IBuffer* buffer, ResourceStates::Mask stateBits){
-    // Marks buffer as permanently in this state
     stateTracker->setPermanentBufferState(buffer, stateBits);
 }
 
@@ -186,12 +183,10 @@ void CommandList::setPermanentBufferState(IBuffer* buffer, ResourceStates::Mask 
 
 StateTracker::StateTracker(){
 }
-
 StateTracker::~StateTracker(){
 }
 
 void StateTracker::reset(){
-    // Clear all tracked state
     graphicsState = {};
     computeState = {};
     meshletState = {};
@@ -199,7 +194,6 @@ void StateTracker::reset(){
     
     m_textureStates.clear();
     m_bufferStates.clear();
-    // Note: permanent states are NOT cleared on reset - they persist across command lists
 }
 
 void StateTracker::setPermanentTextureState(ITexture* texture, ResourceStates::Mask state){
@@ -237,12 +231,10 @@ ResourceStates::Mask StateTracker::getTextureState(ITexture* texture, ArraySlice
     if(!texture)
         return ResourceStates::Unknown;
     
-    // Check permanent state first
     auto permIt = m_permanentTextureStates.find(texture);
     if(permIt != m_permanentTextureStates.end())
         return permIt->second;
     
-    // Check tracked state
     auto it = m_textureStates.find(texture);
     if(it != m_textureStates.end())
         return it->second;
@@ -254,12 +246,10 @@ ResourceStates::Mask StateTracker::getBufferState(IBuffer* buffer)const{
     if(!buffer)
         return ResourceStates::Unknown;
     
-    // Check permanent state first
     auto permIt = m_permanentBufferStates.find(buffer);
     if(permIt != m_permanentBufferStates.end())
         return permIt->second;
     
-    // Check tracked state
     auto it = m_bufferStates.find(buffer);
     if(it != m_bufferStates.end())
         return it->second;
@@ -273,7 +263,6 @@ void StateTracker::beginTrackingTexture(ITexture* texture, TextureSubresourceSet
     if(!texture)
         return;
     
-    // Don't override permanent states
     if(m_permanentTextureStates.count(texture) > 0)
         return;
     
@@ -284,7 +273,6 @@ void StateTracker::beginTrackingBuffer(IBuffer* buffer, ResourceStates::Mask sta
     if(!buffer)
         return;
     
-    // Don't override permanent states
     if(m_permanentBufferStates.count(buffer) > 0)
         return;
     

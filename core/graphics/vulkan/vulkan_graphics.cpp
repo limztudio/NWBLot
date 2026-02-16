@@ -154,7 +154,7 @@ constexpr VkPipelineColorBlendAttachmentState ConvertBlendState(const BlendState
 
 GraphicsPipeline::~GraphicsPipeline(){
     if(pipeline){
-        vkDestroyPipeline(m_context.device, pipeline, nullptr);
+        vkDestroyPipeline(m_context.device, pipeline, m_context.allocationCallbacks);
         pipeline = VK_NULL_HANDLE;
     }
 }
@@ -349,7 +349,12 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
         VkPipelineLayoutCreateInfo layoutInfo = { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
         layoutInfo.setLayoutCount = (u32)allDescriptorSetLayouts.size();
         layoutInfo.pSetLayouts = allDescriptorSetLayouts.data();
-        vkCreatePipelineLayout(m_context.device, &layoutInfo, m_context.allocationCallbacks, &pso->pipelineLayout);
+        VkResult layoutRes = vkCreatePipelineLayout(m_context.device, &layoutInfo, m_context.allocationCallbacks, &pso->pipelineLayout);
+        if(layoutRes != VK_SUCCESS){
+            NWB_ASSERT(layoutRes != VK_SUCCESS);
+            delete pso;
+            return nullptr;
+        }
     }
 
     // Step 11: Dynamic rendering info
@@ -361,8 +366,11 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     renderingInfo.colorAttachmentCount = (u32)colorFormats.size();
     renderingInfo.pColorAttachmentFormats = colorFormats.data();
     if(fbinfo.depthFormat != Format::UNKNOWN){
-        renderingInfo.depthAttachmentFormat = ConvertFormat(fbinfo.depthFormat);
-        renderingInfo.stencilAttachmentFormat = ConvertFormat(fbinfo.depthFormat);
+        const FormatInfo& depthFormatInfo = GetFormatInfo(fbinfo.depthFormat);
+        if(depthFormatInfo.hasDepth)
+            renderingInfo.depthAttachmentFormat = ConvertFormat(fbinfo.depthFormat);
+        if(depthFormatInfo.hasStencil)
+            renderingInfo.stencilAttachmentFormat = ConvertFormat(fbinfo.depthFormat);
     }
 
     VkGraphicsPipelineCreateInfo pipelineInfo = { VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO };
@@ -408,7 +416,10 @@ void CommandList::beginRenderPass(IFramebuffer* _framebuffer, const RenderPassPa
         if(fbDesc.colorAttachments[i].texture){
             auto* tex = checked_cast<Texture*>(fbDesc.colorAttachments[i].texture);
 
-            VkImageView view = tex->getView(fbDesc.colorAttachments[i].subresources, TextureDimension::Texture2D, Format::UNKNOWN);
+            TextureDimension::Enum viewDimension = tex->desc.dimension;
+            if(fbDesc.colorAttachments[i].subresources.numArraySlices == 1)
+                viewDimension = TextureDimension::Texture2D;
+            VkImageView view = tex->getView(fbDesc.colorAttachments[i].subresources, viewDimension, Format::UNKNOWN);
 
             colorAttachments[numColorAttachments].sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
             colorAttachments[numColorAttachments].imageView = view;
@@ -499,9 +510,9 @@ void CommandList::setGraphicsState(const GraphicsState& state){
         const auto& vp = state.viewport.viewports[0];
         VkViewport viewport{};
         viewport.x = vp.minX;
-        viewport.y = vp.minY;
+        viewport.y = vp.maxY;
         viewport.width = vp.maxX - vp.minX;
-        viewport.height = vp.maxY - vp.minY;
+        viewport.height = -(vp.maxY - vp.minY);
         viewport.minDepth = vp.minZ;
         viewport.maxDepth = vp.maxZ;
         vkCmdSetViewport(currentCmdBuf->cmdBuf, 0, 1, &viewport);
@@ -521,9 +532,10 @@ void CommandList::setGraphicsState(const GraphicsState& state){
 
     // Bind vertex buffers
     if(!state.vertexBuffers.empty()){
-        VkBuffer vertexBuffers[16];
-        VkDeviceSize offsets[16];
-        auto count = static_cast<u32>(state.vertexBuffers.size());
+        constexpr u32 kMaxVertexBuffers = 16;
+        VkBuffer vertexBuffers[kMaxVertexBuffers];
+        VkDeviceSize offsets[kMaxVertexBuffers];
+        auto count = Min(static_cast<u32>(state.vertexBuffers.size()), kMaxVertexBuffers);
         for(u32 i = 0; i < count; ++i){
             auto* vb = checked_cast<Buffer*>(state.vertexBuffers[i].buffer);
             vertexBuffers[i] = vb->buffer;

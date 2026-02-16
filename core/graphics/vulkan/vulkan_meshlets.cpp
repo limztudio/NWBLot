@@ -16,7 +16,7 @@ NWB_VULKAN_BEGIN
 
 MeshletPipeline::~MeshletPipeline(){
     if(pipeline){
-        vkDestroyPipeline(m_context.device, pipeline, nullptr);
+        vkDestroyPipeline(m_context.device, pipeline, m_context.allocationCallbacks);
         pipeline = VK_NULL_HANDLE;
     }
 }

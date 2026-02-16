@@ -41,8 +41,12 @@ void CommandList::open(){
 }
 
 void CommandList::close(){
+    commitBarriers();
+
     if(currentCmdBuf)
         vkEndCommandBuffer(currentCmdBuf->cmdBuf);
+
+    clearState();
 }
 
 void CommandList::clearState(){
@@ -62,11 +66,18 @@ void CommandList::copyTextureToBuffer(IBuffer* _dest, u64 destOffsetBytes, u32 d
     auto* dest = checked_cast<Buffer*>(_dest);
     auto* src = checked_cast<Texture*>(_src);
 
+    const FormatInfo& formatInfo = GetFormatInfo(src->desc.format);
+    VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    if(formatInfo.hasDepth)
+        aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    if(formatInfo.hasStencil)
+        aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+
     VkBufferImageCopy region{};
     region.bufferOffset = destOffsetBytes;
-    region.bufferRowLength = 0; // tightly packed
+    region.bufferRowLength = destRowPitch > 0 ? (destRowPitch / formatInfo.bytesPerBlock) : 0;
     region.bufferImageHeight = 0;
-    region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    region.imageSubresource.aspectMask = aspectMask;
     region.imageSubresource.mipLevel = srcSlice.mipLevel;
     region.imageSubresource.baseArrayLayer = srcSlice.arraySlice;
     region.imageSubresource.layerCount = 1;

@@ -51,6 +51,12 @@ Device::Device(const DeviceDesc& desc)
             m_context.extensions.NV_cooperative_vector = true;
         else if(NWB_STRCMP(ext, VK_NV_CLUSTER_ACCELERATION_STRUCTURE_EXTENSION_NAME) == 0)
             m_context.extensions.NV_cluster_acceleration_structure = true;
+        else if(NWB_STRCMP(ext, VK_EXT_MESH_SHADER_EXTENSION_NAME) == 0)
+            m_context.extensions.EXT_mesh_shader = true;
+        else if(NWB_STRCMP(ext, VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME) == 0)
+            m_context.extensions.KHR_fragment_shading_rate = true;
+        else if(NWB_STRCMP(ext, VK_NV_RAY_TRACING_INVOCATION_REORDER_EXTENSION_NAME) == 0)
+            m_context.extensions.NV_ray_tracing_invocation_reorder = true;
     }
 
     if(m_context.extensions.KHR_ray_tracing_pipeline){
@@ -198,7 +204,7 @@ bool Device::queryFeatureSupport(Feature::Enum feature, void* pInfo, usize infoS
     case Feature::RayQuery:
         return m_context.extensions.KHR_ray_tracing_pipeline;
     case Feature::ShaderExecutionReordering:
-        return false; // Would need NV extension check
+        return m_context.extensions.NV_ray_tracing_invocation_reorder;
     case Feature::RayTracingOpacityMicromap:
         return m_context.extensions.EXT_opacity_micromap && m_context.extensions.KHR_synchronization2;
     case Feature::RayTracingClusters:
@@ -208,9 +214,9 @@ bool Device::queryFeatureSupport(Feature::Enum feature, void* pInfo, usize infoS
     case Feature::CooperativeVectorTraining:
         return m_context.extensions.NV_cooperative_vector && m_context.coopVecFeatures.cooperativeVectorTraining;
     case Feature::Meshlets:
-        return true; // Assume VK_EXT_mesh_shader is available
+        return m_context.extensions.EXT_mesh_shader;
     case Feature::VariableRateShading:
-        return true; // Assume VK_KHR_fragment_shading_rate is available
+        return m_context.extensions.KHR_fragment_shading_rate;
     case Feature::VirtualResources:
         return true;
     case Feature::ComputeQueue:

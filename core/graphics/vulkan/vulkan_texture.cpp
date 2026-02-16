@@ -433,12 +433,22 @@ void CommandList::copyTexture(ITexture* _dest, const TextureSlice& destSlice, IT
     auto* src = checked_cast<Texture*>(_src);
 
     VkImageCopy region{};
-    region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    const FormatInfo& srcFormatInfo = GetFormatInfo(src->desc.format);
+    VkImageAspectFlags srcAspect = VK_IMAGE_ASPECT_COLOR_BIT;
+    if(srcFormatInfo.hasDepth) srcAspect = VK_IMAGE_ASPECT_DEPTH_BIT;
+    if(srcFormatInfo.hasStencil) srcAspect |= VK_IMAGE_ASPECT_STENCIL_BIT;
+
+    const FormatInfo& dstFormatInfo = GetFormatInfo(dest->desc.format);
+    VkImageAspectFlags dstAspect = VK_IMAGE_ASPECT_COLOR_BIT;
+    if(dstFormatInfo.hasDepth) dstAspect = VK_IMAGE_ASPECT_DEPTH_BIT;
+    if(dstFormatInfo.hasStencil) dstAspect |= VK_IMAGE_ASPECT_STENCIL_BIT;
+
+    region.srcSubresource.aspectMask = srcAspect;
     region.srcSubresource.mipLevel = srcSlice.mipLevel;
     region.srcSubresource.baseArrayLayer = srcSlice.arraySlice;
     region.srcSubresource.layerCount = 1;
     region.srcOffset = { srcSlice.x, srcSlice.y, srcSlice.z };
-    region.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    region.dstSubresource.aspectMask = dstAspect;
     region.dstSubresource.mipLevel = destSlice.mipLevel;
     region.dstSubresource.baseArrayLayer = destSlice.arraySlice;
     region.dstSubresource.layerCount = 1;
@@ -462,9 +472,9 @@ void CommandList::copyTexture(IStagingTexture* dest, const TextureSlice& destSli
 
     u64 bufferOffset = 0;
     if(resolvedDst.mipLevel > 0 || resolvedDst.arraySlice > 0){
-        u32 rowPitch = (resolvedDst.width / formatInfo.blockSize) * formatInfo.bytesPerBlock;
-        u32 slicePitch = rowPitch * (resolvedDst.height / formatInfo.blockSize);
-        bufferOffset = static_cast<u64>(resolvedDst.z) * slicePitch + static_cast<u64>(resolvedDst.y / formatInfo.blockSize) * rowPitch + static_cast<u64>(resolvedDst.x / formatInfo.blockSize) * formatInfo.bytesPerBlock;
+        u32 rowPitch = ((resolvedDst.width + formatInfo.blockSize - 1) / formatInfo.blockSize) * formatInfo.bytesPerBlock;
+        u32 slicePitch = rowPitch * ((resolvedDst.height + formatInfo.blockSize - 1) / formatInfo.blockSize);
+        bufferOffset = static_cast<u64>(resolvedDst.z) * slicePitch + static_cast<u64>((resolvedDst.y + formatInfo.blockSize - 1) / formatInfo.blockSize) * rowPitch + static_cast<u64>((resolvedDst.x + formatInfo.blockSize - 1) / formatInfo.blockSize) * formatInfo.bytesPerBlock;
     }
 
     VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -501,9 +511,9 @@ void CommandList::copyTexture(ITexture* dest, const TextureSlice& destSlice, ISt
 
     u64 bufferOffset = 0;
     if(resolvedSrc.mipLevel > 0 || resolvedSrc.arraySlice > 0){
-        u32 rowPitch = (resolvedSrc.width / formatInfo.blockSize) * formatInfo.bytesPerBlock;
-        u32 slicePitch = rowPitch * (resolvedSrc.height / formatInfo.blockSize);
-        bufferOffset = static_cast<u64>(resolvedSrc.z) * slicePitch + static_cast<u64>(resolvedSrc.y / formatInfo.blockSize) * rowPitch + static_cast<u64>(resolvedSrc.x / formatInfo.blockSize) * formatInfo.bytesPerBlock;
+        u32 rowPitch = ((resolvedSrc.width + formatInfo.blockSize - 1) / formatInfo.blockSize) * formatInfo.bytesPerBlock;
+        u32 slicePitch = rowPitch * ((resolvedSrc.height + formatInfo.blockSize - 1) / formatInfo.blockSize);
+        bufferOffset = static_cast<u64>(resolvedSrc.z) * slicePitch + static_cast<u64>((resolvedSrc.y + formatInfo.blockSize - 1) / formatInfo.blockSize) * rowPitch + static_cast<u64>((resolvedSrc.x + formatInfo.blockSize - 1) / formatInfo.blockSize) * formatInfo.bytesPerBlock;
     }
 
     VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -538,7 +548,8 @@ void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, co
     auto depth = Max<u32>(1u, desc.depth >> mipLevel);
 
     const FormatInfo& formatInfo = GetFormatInfo(desc.format);
-    u64 dataSize = u64(rowPitch) * height * depth;
+    u32 blockHeight = (height + formatInfo.blockSize - 1) / formatInfo.blockSize;
+    u64 dataSize = u64(rowPitch) * blockHeight * depth;
 
     UploadManager* uploadMgr = m_device.getUploadManager();
     Buffer* stagingBuffer = nullptr;
@@ -560,7 +571,11 @@ void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, co
     barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
     barrier.image = dest->image;
-    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    VkImageAspectFlags writeAspect = VK_IMAGE_ASPECT_COLOR_BIT;
+    if(formatInfo.hasDepth) writeAspect = VK_IMAGE_ASPECT_DEPTH_BIT;
+    if(formatInfo.hasStencil) writeAspect |= VK_IMAGE_ASPECT_STENCIL_BIT;
+
+    barrier.subresourceRange.aspectMask = writeAspect;
     barrier.subresourceRange.baseMipLevel = mipLevel;
     barrier.subresourceRange.levelCount = 1;
     barrier.subresourceRange.baseArrayLayer = arraySlice;
@@ -575,7 +590,7 @@ void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, co
     region.bufferOffset = stagingOffset;
     region.bufferRowLength = 0; // tightly packed
     region.bufferImageHeight = 0;
-    region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    region.imageSubresource.aspectMask = writeAspect;
     region.imageSubresource.mipLevel = mipLevel;
     region.imageSubresource.baseArrayLayer = arraySlice;
     region.imageSubresource.layerCount = 1;

@@ -92,7 +92,10 @@ ShaderHandle Device::createShader(const ShaderDesc& d, const void* binary, usize
     createInfo.pCode = reinterpret_cast<const uint32_t*>(binary);
 
     VkResult res = vkCreateShaderModule(m_context.device, &createInfo, m_context.allocationCallbacks, &shader->shaderModule);
-    NWB_ASSERT(res == VK_SUCCESS);
+    if(res != VK_SUCCESS){
+        delete shader;
+        return nullptr;
+    }
 
     return RefCountPtr<IShader, BlankDeleter<IShader>>(shader, AdoptRef);
 }
@@ -150,6 +153,7 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
     layout->attributes.assign(d, d + attributeCount);
 
     HashMap<u32, u32> bufferStrides;
+    HashMap<u32, bool> bufferInstanced;
     for(const auto& attr : layout->attributes){
         u32 stride = attr.elementStride;
         if(stride == 0){
@@ -157,8 +161,10 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
             stride = formatInfo.bytesPerBlock * attr.arraySize;
         }
 
-        if(bufferStrides.find(attr.bufferIndex) == bufferStrides.end())
+        if(bufferStrides.find(attr.bufferIndex) == bufferStrides.end()){
             bufferStrides[attr.bufferIndex] = stride;
+            bufferInstanced[attr.bufferIndex] = attr.isInstanced;
+        }
         else
             bufferStrides[attr.bufferIndex] = Max(bufferStrides[attr.bufferIndex], stride);
     }
@@ -167,7 +173,7 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
         VkVertexInputBindingDescription binding{};
         binding.binding = pair.first;
         binding.stride = pair.second;
-        binding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+        binding.inputRate = bufferInstanced[pair.first] ? VK_VERTEX_INPUT_RATE_INSTANCE : VK_VERTEX_INPUT_RATE_VERTEX;
         layout->bindings.push_back(binding);
     }
 

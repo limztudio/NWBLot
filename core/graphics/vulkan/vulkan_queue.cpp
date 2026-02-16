@@ -39,6 +39,8 @@ TrackedCommandBuffer::TrackedCommandBuffer(const VulkanContext& context, Command
     res = vkAllocateCommandBuffers(m_context.device, &allocInfo, &cmdBuf);
     if(res != VK_SUCCESS){
         cmdBuf = VK_NULL_HANDLE;
+        vkDestroyCommandPool(m_context.device, cmdPool, m_context.allocationCallbacks);
+        cmdPool = VK_NULL_HANDLE;
     }
 }
 
@@ -138,12 +140,16 @@ TrackedCommandBufferPtr Queue::getOrCreateCommandBuffer(){
 }
 
 void Queue::addWaitSemaphore(VkSemaphore semaphore, u64 value){
+    if(!semaphore)
+        return;
     Mutex::scoped_lock lock(m_mutex);
     m_waitSemaphores.push_back(semaphore);
     m_waitSemaphoreValues.push_back(value);
 }
 
 void Queue::addSignalSemaphore(VkSemaphore semaphore, u64 value){
+    if(!semaphore)
+        return;
     Mutex::scoped_lock lock(m_mutex);
     m_signalSemaphores.push_back(semaphore);
     m_signalSemaphoreValues.push_back(value);

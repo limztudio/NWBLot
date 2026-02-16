@@ -127,6 +127,7 @@ BindingSet::BindingSet(const VulkanContext& context)
     : m_context(context)
 {}
 BindingSet::~BindingSet(){
+    descriptorTable.reset();
 }
 
 
@@ -162,9 +163,11 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
     VkDescriptorSetLayout setLayout = VK_NULL_HANDLE;
     VkResult res = vkCreateDescriptorSetLayout(m_context.device, &layoutInfo, m_context.allocationCallbacks, &setLayout);
 
-    if(res == VK_SUCCESS){
-        layout->descriptorSetLayouts.push_back(setLayout);
+    if(res != VK_SUCCESS){
+        delete layout;
+        return nullptr;
     }
+    layout->descriptorSetLayouts.push_back(setLayout);
 
     VkPushConstantRange pushConstantRange = {};
     bool hasPushConstants = pushConstantByteSize > 0;
@@ -210,9 +213,12 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
         binding.pImmutableSamplers = nullptr;
         bindings.push_back(binding);
 
-        VkDescriptorBindingFlags flags = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT | VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT;
+        VkDescriptorBindingFlags flags = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
         bindingFlags.push_back(flags);
     }
+
+    if(!bindingFlags.empty())
+        bindingFlags.back() |= VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT;
 
     VkDescriptorSetLayoutBindingFlagsCreateInfo bindingFlagsInfo = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO };
     bindingFlagsInfo.bindingCount = static_cast<u32>(bindingFlags.size());
@@ -227,10 +233,12 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
     VkDescriptorSetLayout setLayout = VK_NULL_HANDLE;
     VkResult res = vkCreateDescriptorSetLayout(m_context.device, &layoutInfo, m_context.allocationCallbacks, &setLayout);
 
-    if(res == VK_SUCCESS)
-        layout->descriptorSetLayouts.push_back(setLayout);
-    else
+    if(res != VK_SUCCESS){
         NWB_LOGGER_WARNING(NWB_TEXT("Failed to create bindless descriptor set layout: {}"), ResultToString(res));
+        delete layout;
+        return nullptr;
+    }
+    layout->descriptorSetLayouts.push_back(setLayout);
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo = { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
     pipelineLayoutInfo.setLayoutCount = static_cast<u32>(layout->descriptorSetLayouts.size());
@@ -348,7 +356,11 @@ void Device::resizeDescriptorTable(IDescriptorTable* descriptorTable, u32 newSiz
         allocInfo.pSetLayouts = layouts.data();
 
         table->descriptorSets.resize(newSize);
-        vkAllocateDescriptorSets(m_context.device, &allocInfo, table->descriptorSets.data());
+        res = vkAllocateDescriptorSets(m_context.device, &allocInfo, table->descriptorSets.data());
+        if(res != VK_SUCCESS){
+            table->descriptorSets.clear();
+            return;
+        }
     }
 
     (void)keepContents;
@@ -435,9 +447,11 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLa
     Vector<VkWriteDescriptorSet> writes;
     Vector<VkDescriptorBufferInfo> bufferInfos;
     Vector<VkDescriptorImageInfo> imageInfos;
+    Vector<VkWriteDescriptorSetAccelerationStructureKHR> asInfos;
 
     bufferInfos.reserve(desc.bindings.size());
     imageInfos.reserve(desc.bindings.size());
+    asInfos.reserve(desc.bindings.size());
 
     for(const auto& item : desc.bindings){
         if(!item.resourceHandle)
@@ -483,6 +497,28 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLa
             imgInfo.sampler = sampler->sampler;
             imageInfos.push_back(imgInfo);
             write.pImageInfo = &imageInfos.back();
+            writes.push_back(write);
+            break;
+        }
+        case ResourceType::TypedBuffer_SRV:
+        case ResourceType::TypedBuffer_UAV:{
+            auto* buffer = checked_cast<Buffer*>(item.resourceHandle);
+            VkDescriptorBufferInfo bufInfo = {};
+            bufInfo.buffer = buffer->buffer;
+            bufInfo.offset = item.range.byteOffset;
+            bufInfo.range = item.range.byteSize > 0 ? item.range.byteSize : VK_WHOLE_SIZE;
+            bufferInfos.push_back(bufInfo);
+            write.pBufferInfo = &bufferInfos.back();
+            writes.push_back(write);
+            break;
+        }
+        case ResourceType::RayTracingAccelStruct:{
+            auto* as = checked_cast<AccelStruct*>(item.resourceHandle);
+            VkWriteDescriptorSetAccelerationStructureKHR asWrite = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR };
+            asWrite.accelerationStructureCount = 1;
+            asWrite.pAccelerationStructures = &as->accelStruct;
+            asInfos.push_back(asWrite);
+            write.pNext = &asInfos.back();
             writes.push_back(write);
             break;
         }

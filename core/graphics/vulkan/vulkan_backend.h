@@ -80,6 +80,9 @@ struct VulkanContext{
         bool NV_cooperative_vector = false;
         bool NV_cluster_acceleration_structure = false;
         bool NV_device_diagnostic_checkpoints = false;
+        bool EXT_mesh_shader = false;
+        bool KHR_fragment_shading_rate = false;
+        bool NV_ray_tracing_invocation_reorder = false;
     } extensions;
 
     VkPhysicalDeviceAccelerationStructurePropertiesKHR accelStructProperties{};

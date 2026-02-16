@@ -14,6 +14,26 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+nemaspace __hidden_vulkan{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static u64 AlignBufferOffset(u64 off){
+    return ((off + (s_BufferAlignmentBytes - 1)) / s_BufferAlignmentBytes) * s_BufferAlignmentBytes;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAccessMode::Enum cpuAccess){
     auto* staging = new StagingTexture(m_context, m_allocator);
     staging->desc = d;
@@ -28,10 +48,11 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
             auto mipHeight = Max<u32>(d.height >> mip, 1u);
             auto mipDepth = Max<u32>(d.depth >> mip, 1u);
 
-            auto blocksX = Max<u32>(mipWidth / formatInfo.blockSize, 1u);
-            auto blocksY = Max<u32>(mipHeight / formatInfo.blockSize, 1u);
+            auto blocksX = Max<u32>((mipWidth + formatInfo.blockSize - 1) / formatInfo.blockSize, 1u);
+            auto blocksY = Max<u32>((mipHeight + formatInfo.blockSize - 1) / formatInfo.blockSize, 1u);
 
-            totalSize += static_cast<u64>(blocksX) * blocksY * mipDepth * formatInfo.bytesPerBlock;
+            auto sliceSize = static_cast<u64>(blocksX) * blocksY * formatInfo.bytesPerBlock;
+            totalSize = __hidden_vulkan::AlignBufferOffset(totalSize + sliceSize * mipDepth);
         }
     }
 
@@ -54,12 +75,33 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
     if(cpuAccess == CpuAccessMode::Read)
         memProps |= VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
 
+    bool foundMemoryType = false;
     u32 memoryTypeIndex = 0;
     for(u32 i = 0; i < m_context.memoryProperties.memoryTypeCount; ++i){
         if((memRequirements.memoryTypeBits & (1 << i)) && (m_context.memoryProperties.memoryTypes[i].propertyFlags & memProps) == memProps){
             memoryTypeIndex = i;
+            foundMemoryType = true;
             break;
         }
+    }
+
+    // Fallback: try without HOST_CACHED if Read access was requested
+    if(!foundMemoryType && cpuAccess == CpuAccessMode::Read){
+        memProps = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+        for(u32 i = 0; i < m_context.memoryProperties.memoryTypeCount; ++i){
+            if((memRequirements.memoryTypeBits & (1 << i)) && (m_context.memoryProperties.memoryTypes[i].propertyFlags & memProps) == memProps){
+                memoryTypeIndex = i;
+                foundMemoryType = true;
+                break;
+            }
+        }
+    }
+
+    if(!foundMemoryType){
+        vkDestroyBuffer(m_context.device, staging->buffer, m_context.allocationCallbacks);
+        staging->buffer = VK_NULL_HANDLE;
+        delete staging;
+        return nullptr;
     }
 
     VkMemoryAllocateInfo allocInfo{};
@@ -113,38 +155,41 @@ void* Device::mapStagingTexture(IStagingTexture* tex, const TextureSlice& slice,
     }
 
     const TextureDesc& desc = staging->desc;
-    TextureSlice resolved = slice.resolve(desc);
+    const TextureSlice resolved = slice.resolve(desc);
     const FormatInfo& formatInfo = GetFormatInfo(desc.format);
 
+    // Compute byte offset to the requested slice/mip by summing all preceding regions
     u64 offset = 0;
+    bool found = false;
+    for(u32 arr = 0; arr < desc.arraySize && !found; ++arr){
+        for(u32 mip = 0; mip < desc.mipLevels && !found; ++mip){
+            if(arr == resolved.arraySlice && mip == resolved.mipLevel){
+                found = true;
+                break;
+            }
 
-    for(u32 arr = 0; arr < desc.arraySize; ++arr){
-        for(u32 mip = 0; mip < desc.mipLevels; ++mip){
-            if(arr == resolved.arraySlice && mip == resolved.mipLevel)
-                goto foundOffset;
+            const auto mipWidth = Max<u32>(desc.width >> mip, 1u);
+            const auto mipHeight = Max<u32>(desc.height >> mip, 1u);
+            const auto mipDepth = Max<u32>(desc.depth >> mip, 1u);
 
-            auto mipWidth = Max<u32>(desc.width >> mip, 1u);
-            auto mipHeight = Max<u32>(desc.height >> mip, 1u);
-            auto mipDepth = Max<u32>(desc.depth >> mip, 1u);
+            const auto blocksX = Max<u32>((mipWidth + formatInfo.blockSize - 1) / formatInfo.blockSize, 1u);
+            const auto blocksY = Max<u32>((mipHeight + formatInfo.blockSize - 1) / formatInfo.blockSize, 1u);
 
-            auto blocksX = Max<u32>(mipWidth / formatInfo.blockSize, 1u);
-            auto blocksY = Max<u32>(mipHeight / formatInfo.blockSize, 1u);
-
-            offset += static_cast<u64>(blocksX) * blocksY * mipDepth * formatInfo.bytesPerBlock;
+            const auto sliceSize = static_cast<u64>(blocksX) * blocksY * formatInfo.bytesPerBlock;
+            offset = __hidden_vulkan::AlignBufferOffset(offset + sliceSize * mipDepth);
         }
     }
-    foundOffset:
 
-    auto mipWidth = Max<u32>(desc.width >> resolved.mipLevel, 1u);
-    auto blocksX = Max<u32>(mipWidth / formatInfo.blockSize, 1u);
-    u32 rowPitch = blocksX * formatInfo.bytesPerBlock;
+    const auto mipWidth = Max<u32>(desc.width >> resolved.mipLevel, 1u);
+    const auto blocksX = Max<u32>((mipWidth + formatInfo.blockSize - 1) / formatInfo.blockSize, 1u);
+    const u32 rowPitch = blocksX * formatInfo.bytesPerBlock;
 
     if(outRowPitch)
         *outRowPitch = rowPitch;
 
-    auto mipHeight = Max<u32>(desc.height >> resolved.mipLevel, 1u);
-    auto blocksY = Max<u32>(mipHeight / formatInfo.blockSize, 1u);
-    auto slicePitch = rowPitch * blocksY;
+    const auto mipHeight = Max<u32>(desc.height >> resolved.mipLevel, 1u);
+    const auto blocksY = Max<u32>((mipHeight + formatInfo.blockSize - 1) / formatInfo.blockSize, 1u);
+    const auto slicePitch = rowPitch * blocksY;
 
     offset += static_cast<u64>(resolved.z) * slicePitch
             + static_cast<u64>(resolved.y / formatInfo.blockSize) * rowPitch

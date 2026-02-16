@@ -52,6 +52,8 @@ constexpr u64 s_DefaultUploadChunkSize = 64 * 1024 * 1024; // 64 MB
 constexpr u64 s_DefaultScratchChunkSize = 16 * 1024 * 1024; // 16 MB
 constexpr u64 s_ScratchMemoryLimit = 256 * 1024 * 1024; // 256 MB
 
+constexpr u64 s_BufferAlignmentBytes = 4;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

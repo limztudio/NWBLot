@@ -128,8 +128,8 @@ Device::Device(const DeviceDesc& desc)
     constexpr u64 defaultScratchChunkSize = 16 * 1024 * 1024; // 16 MB
     constexpr u64 scratchMemoryLimit = 256 * 1024 * 1024; // 256 MB
     
-    m_uploadManager = UniquePtr<UploadManager>(new UploadManager(this, defaultUploadChunkSize, 0, false));
-    m_scratchManager = UniquePtr<UploadManager>(new UploadManager(this, defaultScratchChunkSize, scratchMemoryLimit, true));
+    m_uploadManager = UniquePtr<UploadManager>(new UploadManager(*this, defaultUploadChunkSize, 0, false));
+    m_scratchManager = UniquePtr<UploadManager>(new UploadManager(*this, defaultScratchChunkSize, scratchMemoryLimit, true));
 }
 
 Device::~Device(){
@@ -168,7 +168,7 @@ Queue* Device::getQueue(CommandQueue::Enum queueType)const{
 
 
 CommandListHandle Device::createCommandList(const CommandListParameters& params){
-    CommandList* cmdList = new CommandList(this, params);
+    CommandList* cmdList = new CommandList(*this, params);
     return CommandListHandle(cmdList, AdoptRef);
 }
 

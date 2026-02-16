@@ -113,20 +113,20 @@ void CommandList::endTimerQuery(ITimerQuery* _query){
 
 void CommandList::beginMarker(const Name& name){
     // VK_EXT_debug_utils (preferred method for debug labels)
-    if(m_context->extensions.EXT_debug_utils){
+    if(m_context.extensions.EXT_debug_utils){
         VkDebugUtilsLabelEXT label = { VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT };
         label.pLabelName = name.c_str();
         vkCmdBeginDebugUtilsLabelEXT(currentCmdBuf->cmdBuf, &label);
     }
     // VK_EXT_debug_marker (fallback for older systems)
-    else if(m_context->extensions.EXT_debug_marker){
+    else if(m_context.extensions.EXT_debug_marker){
         VkDebugMarkerMarkerInfoEXT markerInfo = { VK_STRUCTURE_TYPE_DEBUG_MARKER_MARKER_INFO_EXT };
         markerInfo.pMarkerName = name.c_str();
         vkCmdDebugMarkerBeginEXT(currentCmdBuf->cmdBuf, &markerInfo);
     }
 
     // NVIDIA Aftermath support - set checkpoint for GPU crash analysis
-    if(m_device->isAftermathEnabled()){
+    if(m_device.isAftermathEnabled()){
         const usize aftermathMarker = m_aftermathMarkerTracker.pushEvent(name.c_str());
         vkCmdSetCheckpointNV(currentCmdBuf->cmdBuf, reinterpret_cast<const void*>(aftermathMarker));
     }
@@ -134,16 +134,16 @@ void CommandList::beginMarker(const Name& name){
 
 void CommandList::endMarker(){
     // VK_EXT_debug_utils (preferred method for debug labels)
-    if(m_context->extensions.EXT_debug_utils){
+    if(m_context.extensions.EXT_debug_utils){
         vkCmdEndDebugUtilsLabelEXT(currentCmdBuf->cmdBuf);
     }
     // VK_EXT_debug_marker (fallback for older systems)
-    else if(m_context->extensions.EXT_debug_marker){
+    else if(m_context.extensions.EXT_debug_marker){
         vkCmdDebugMarkerEndEXT(currentCmdBuf->cmdBuf);
     }
 
     // NVIDIA Aftermath support - pop the marker from the stack
-    if(m_device->isAftermathEnabled()){
+    if(m_device.isAftermathEnabled()){
         m_aftermathMarkerTracker.popEvent();
     }
 }
@@ -153,7 +153,7 @@ void CommandList::setEventQuery(IEventQuery* _query, CommandQueue::Enum waitQueu
     
     // Reset the fence so it can be signaled again
     if(query->fence != VK_NULL_HANDLE)
-        vkResetFences(m_context->device, 1, &query->fence);
+        vkResetFences(m_context.device, 1, &query->fence);
     
     // Store fence on current command buffer; it will be signaled at queue submit time
     if(currentCmdBuf)
@@ -166,7 +166,7 @@ void CommandList::resetEventQuery(IEventQuery* _query){
     EventQuery* query = checked_cast<EventQuery*>(_query);
     
     if(query->fence != VK_NULL_HANDLE)
-        vkResetFences(m_context->device, 1, &query->fence);
+        vkResetFences(m_context.device, 1, &query->fence);
     
     query->started = false;
 }
@@ -176,7 +176,7 @@ void CommandList::waitEventQuery(IEventQuery* _query){
     
     // Wait for fence
     if(query->fence != VK_NULL_HANDLE)
-        vkWaitForFences(m_context->device, 1, &query->fence, VK_TRUE, UINT64_MAX);
+        vkWaitForFences(m_context.device, 1, &query->fence, VK_TRUE, UINT64_MAX);
 }
 
 

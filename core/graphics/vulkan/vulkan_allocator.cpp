@@ -101,11 +101,9 @@ VkResult VulkanAllocator::allocateTextureMemory(Texture* texture){
     vkGetImageMemoryRequirements(m_context.device, texture->image, &memRequirements);
 
     u32 memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-    if(memoryTypeIndex == UINT32_MAX){
+    if(memoryTypeIndex == UINT32_MAX)
         return VK_ERROR_OUT_OF_DEVICE_MEMORY;
-    }
 
-    // Build pNext chain for memory allocation
     void* pNext = nullptr;
 
     // Use dedicated allocation for textures (recommended for optimal performance)

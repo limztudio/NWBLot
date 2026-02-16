@@ -182,7 +182,7 @@ void CommandList::buildTopLevelAccelStructFromBuffer(IRayTracingAccelStruct* _as
     if(!_as || !instanceBuffer || numInstances == 0)
         return;
     
-    if(!m_context->extensions.KHR_acceleration_structure)
+    if(!m_context.extensions.KHR_acceleration_structure)
         return;
     
     AccelStruct* as = checked_cast<AccelStruct*>(_as);
@@ -214,7 +214,7 @@ void CommandList::buildTopLevelAccelStructFromBuffer(IRayTracingAccelStruct* _as
     // Query scratch buffer size
     u32 primitiveCount = static_cast<u32>(numInstances);
     VkAccelerationStructureBuildSizesInfoKHR sizeInfo = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR };
-    vkGetAccelerationStructureBuildSizesKHR(m_context->device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &primitiveCount, &sizeInfo);
+    vkGetAccelerationStructureBuildSizesKHR(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &primitiveCount, &sizeInfo);
     
     // Allocate scratch buffer
     BufferDesc scratchDesc;
@@ -222,7 +222,7 @@ void CommandList::buildTopLevelAccelStructFromBuffer(IRayTracingAccelStruct* _as
     scratchDesc.structStride = 1;
     scratchDesc.debugName = "TLAS_BuildScratch";
     
-    BufferHandle scratchBuffer = m_device->createBuffer(scratchDesc);
+    BufferHandle scratchBuffer = m_device.createBuffer(scratchDesc);
     if(scratchBuffer){
         buildInfo.scratchData.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(scratchBuffer.get());
         
@@ -242,7 +242,7 @@ void CommandList::buildTopLevelAccelStructFromBuffer(IRayTracingAccelStruct* _as
 }
 
 void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOperationDesc& desc){
-    if(!m_context->extensions.NV_cluster_acceleration_structure)
+    if(!m_context.extensions.NV_cluster_acceleration_structure)
         return;
     
     // Convert operation type
@@ -387,7 +387,7 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
         scratchDesc.debugName = "ClusterOp_Scratch";
         scratchDesc.canHaveUAVs = true;
         
-        scratchBufferHandle = m_device->createBuffer(scratchDesc);
+        scratchBufferHandle = m_device.createBuffer(scratchDesc);
         if(!scratchBufferHandle)
             return;
         
@@ -428,7 +428,7 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
 }
 
 void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDesc const* convertDescs, usize numDescs){
-    if(!m_context->extensions.NV_cooperative_vector)
+    if(!m_context.extensions.NV_cooperative_vector)
         return;
     
     if(numDescs == 0)
@@ -520,7 +520,7 @@ ResourceStates::Mask CommandList::getBufferState(IBuffer* buffer){
 
 
 IDevice* CommandList::getDevice(){
-    return m_device;
+    return &m_device;
 }
 
 const CommandListParameters& CommandList::getDescription(){

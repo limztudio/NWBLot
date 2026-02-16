@@ -184,7 +184,7 @@ void CommandList::writeBuffer(IBuffer* _buffer, const void* data, usize dataSize
     Buffer* buffer = checked_cast<Buffer*>(_buffer);
     
     // Allocate staging buffer
-    UploadManager* uploadMgr = m_device->getUploadManager();
+    UploadManager* uploadMgr = m_device.getUploadManager();
     Buffer* stagingBuffer = nullptr;
     u64 stagingOffset = 0;
     void* cpuVA = nullptr;

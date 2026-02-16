@@ -258,7 +258,7 @@ private:
     
     
 public:
-    UploadManager(Device* pParent, u64 defaultChunkSize, u64 memoryLimit, bool isScratchBuffer);
+    UploadManager(Device& pParent, u64 defaultChunkSize, u64 memoryLimit, bool isScratchBuffer);
     ~UploadManager();
 
 
@@ -268,7 +268,7 @@ public:
 
 
 private:
-    Device* m_device;
+    Device& m_device;
     u64 m_defaultChunkSize;
     u64 m_memoryLimit;
     bool m_isScratchBuffer;
@@ -907,7 +907,7 @@ struct RenderPassParameters{
 
 class CommandList final : public RefCounter<ICommandList>, NoCopy{
 public:
-    CommandList(Device* device, const CommandListParameters& params);
+    CommandList(Device& device, const CommandListParameters& params);
     virtual ~CommandList()override;
     
     
@@ -1018,8 +1018,8 @@ private:
 
 
 private:
-    Device* m_device;
-    const VulkanContext* m_context;
+    Device& m_device;
+    const VulkanContext& m_context;
     AftermathMarkerTracker m_aftermathMarkerTracker;
 };
 

@@ -14,7 +14,7 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-UploadManager::UploadManager(Device* pParent, u64 defaultChunkSize, u64 memoryLimit, bool isScratchBuffer)
+UploadManager::UploadManager(Device& pParent, u64 defaultChunkSize, u64 memoryLimit, bool isScratchBuffer)
     : m_device(pParent)
     , m_defaultChunkSize(defaultChunkSize)
     , m_memoryLimit(memoryLimit)
@@ -65,7 +65,7 @@ bool UploadManager::suballocateBuffer(u64 size, Buffer** pBuffer, u64* pOffset, 
     bufferDesc.isVolatile = false;
     bufferDesc.debugName = m_isScratchBuffer ? "ScratchBuffer" : "UploadBuffer";
 
-    BufferHandle bufferHandle = m_device->createBuffer(bufferDesc);
+    BufferHandle bufferHandle = m_device.createBuffer(bufferDesc);
     if(!bufferHandle)
         return false;
 

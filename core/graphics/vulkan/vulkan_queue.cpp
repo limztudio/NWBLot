@@ -121,7 +121,7 @@ TrackedCommandBufferPtr Queue::getOrCreateCommandBuffer(){
             cmdBuf->referencedResources.clear();
             cmdBuf->referencedStagingBuffers.clear();
 
-            m_commandBuffersPool.push_back(std::move(*it));
+            m_commandBuffersPool.push_back(Move(*it));
             it = m_commandBuffersInFlight.erase(it);
         }
         else
@@ -129,7 +129,7 @@ TrackedCommandBufferPtr Queue::getOrCreateCommandBuffer(){
     }
 
     if(!m_commandBuffersPool.empty()){
-        TrackedCommandBufferPtr cmdBuf = std::move(m_commandBuffersPool.front());
+        TrackedCommandBufferPtr cmdBuf = Move(m_commandBuffersPool.front());
         m_commandBuffersPool.pop_front();
 
         vkResetCommandBuffer(cmdBuf->cmdBuf, 0);
@@ -178,7 +178,7 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
         cmdBufs.push_back(cmdList->currentCmdBuf->cmdBuf);
 
         cmdList->currentCmdBuf->submissionID = submissionID;
-        trackedBuffers.push_back(std::move(cmdList->currentCmdBuf));
+        trackedBuffers.push_back(Move(cmdList->currentCmdBuf));
     }
 
     if(cmdBufs.empty())
@@ -252,7 +252,7 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
     }
 
     for(auto& tracked : trackedBuffers){
-        m_commandBuffersInFlight.push_back(std::move(tracked));
+        m_commandBuffersInFlight.push_back(Move(tracked));
     }
 
     return submissionID;
@@ -304,7 +304,7 @@ void Queue::waitForIdle(){
     for(auto& tracked : m_commandBuffersInFlight){
         tracked->referencedResources.clear();
         tracked->referencedStagingBuffers.clear();
-        m_commandBuffersPool.push_back(std::move(tracked));
+        m_commandBuffersPool.push_back(Move(tracked));
     }
     m_commandBuffersInFlight.clear();
 }

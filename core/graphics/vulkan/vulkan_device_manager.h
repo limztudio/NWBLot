@@ -7,9 +7,6 @@
 
 #include "vulkan_backend.h"
 
-#include <unordered_set>
-#include <queue>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -61,9 +58,9 @@ private:
 
 private:
     struct VulkanExtensionSet{
-        std::unordered_set<std::string> instance;
-        std::unordered_set<std::string> layers;
-        std::unordered_set<std::string> device;
+        HashSet<AString> instance;
+        HashSet<AString> layers;
+        HashSet<AString> device;
     };
 
     // minimal set of required extensions
@@ -99,7 +96,7 @@ private:
         },
     };
 
-    std::unordered_set<std::string> m_rayTracingExtensions = {
+    HashSet<AString> m_rayTracingExtensions = {
         VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
         VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
         VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME,
@@ -136,15 +133,15 @@ private:
     };
 
     Vector<SwapChainImage> m_swapChainImages;
-    u32 m_swapChainIndex = static_cast<u32>(-1);
+    uint32_t m_swapChainIndex = static_cast<uint32_t>(-1);
 
     DeviceHandle m_nvrhiDevice;
 
     Vector<VkSemaphore> m_acquireSemaphores;
     Vector<VkSemaphore> m_presentSemaphores;
-    u32 m_acquireSemaphoreIndex = 0;
+    uint32_t m_acquireSemaphoreIndex = 0;
 
-    std::queue<EventQueryHandle> m_framesInFlight;
+    Queue<EventQueryHandle> m_framesInFlight;
     Vector<EventQueryHandle> m_queryPool;
 
     bool m_bufferDeviceAddressSupported = false;
@@ -158,3 +155,4 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

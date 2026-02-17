@@ -35,7 +35,7 @@ static constexpr u32 kTransferQueueIndex = 0;
 static constexpr u32 kPresentQueueIndex = 0;
 
 
-static Vector<const char*> StringSetToVector(const std::unordered_set<std::string>& set){
+static Vector<const char*> StringSetToVector(const HashSet<AString>& set){
     Vector<const char*> ret;
     ret.reserve(set.size());
     for(const auto& s : set)
@@ -44,7 +44,7 @@ static Vector<const char*> StringSetToVector(const std::unordered_set<std::strin
 }
 
 template<typename T>
-static Vector<T> SetToVector(const std::unordered_set<T>& set){
+static Vector<T> SetToVector(const HashSet<T>& set){
     Vector<T> ret;
     ret.reserve(set.size());
     for(const auto& s : set)
@@ -63,7 +63,7 @@ static Vector<T> SetToVector(const std::unordered_set<T>& set){
 
 
 IDevice* DeviceManager::getDevice()const{
-    return m_nvrhiDevice;
+    return m_nvrhiDevice.get();
 }
 
 const tchar* DeviceManager::getRendererString()const{
@@ -98,12 +98,12 @@ void DeviceManager::getEnabledVulkanLayers(Vector<AString>& layers)const{
 }
 
 ITexture* DeviceManager::getCurrentBackBuffer(){
-    return m_swapChainImages[m_swapChainIndex].rhiHandle;
+    return m_swapChainImages[m_swapChainIndex].rhiHandle.get();
 }
 
 ITexture* DeviceManager::getBackBuffer(u32 index){
     if(index < m_swapChainImages.size())
-        return m_swapChainImages[index].rhiHandle;
+        return m_swapChainImages[index].rhiHandle.get();
     return nullptr;
 }
 
@@ -147,23 +147,23 @@ bool DeviceManager::_createInstance(){
     for(const auto& name : m_deviceParams.optionalVulkanLayers)
         m_optionalExtensions.layers.insert(name);
 
-    std::unordered_set<std::string> requiredExtensions = m_enabledExtensions.instance;
+    HashSet<AString> requiredExtensions = m_enabledExtensions.instance;
 
     // figure out which optional extensions are supported
-    u32 extensionCount = 0;
+    uint32_t extensionCount = 0;
     vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
     Vector<VkExtensionProperties> availableExtensions(extensionCount);
     vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, availableExtensions.data());
 
     for(const auto& ext : availableExtensions){
-        const std::string name = ext.extensionName;
+        const AString name = ext.extensionName;
         if(m_optionalExtensions.instance.find(name) != m_optionalExtensions.instance.end())
             m_enabledExtensions.instance.insert(name);
         requiredExtensions.erase(name);
     }
 
     if(!requiredExtensions.empty()){
-        std::stringstream ss;
+        AStringStream ss;
         ss << "Cannot create a Vulkan instance because the following required extension(s) are not supported:";
         for(const auto& ext : requiredExtensions)
             ss << std::endl << "  - " << ext;
@@ -175,22 +175,22 @@ bool DeviceManager::_createInstance(){
     for(const auto& ext : m_enabledExtensions.instance)
         NWB_LOGGER_INFO(NWB_TEXT("Vulkan:     {}"), AString(ext));
 
-    std::unordered_set<std::string> requiredLayers = m_enabledExtensions.layers;
+    HashSet<AString> requiredLayers = m_enabledExtensions.layers;
 
-    u32 layerCount = 0;
+    uint32_t layerCount = 0;
     vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
     Vector<VkLayerProperties> availableLayers(layerCount);
     vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
 
     for(const auto& layer : availableLayers){
-        const std::string name = layer.layerName;
+        const AString name = layer.layerName;
         if(m_optionalExtensions.layers.find(name) != m_optionalExtensions.layers.end())
             m_enabledExtensions.layers.insert(name);
         requiredLayers.erase(name);
     }
 
     if(!requiredLayers.empty()){
-        std::stringstream ss;
+        AStringStream ss;
         ss << "Cannot create a Vulkan instance because the following required layer(s) are not supported:";
         for(const auto& ext : requiredLayers)
             ss << std::endl << "  - " << ext;
@@ -303,7 +303,7 @@ void DeviceManager::_installDebugCallback(){
 
 
 bool DeviceManager::_findQueueFamilies(VkPhysicalDevice physicalDevice){
-    u32 queueFamilyCount = 0;
+    uint32_t queueFamilyCount = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, nullptr);
     Vector<VkQueueFamilyProperties> props(queueFamilyCount);
     vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, props.data());
@@ -347,10 +347,12 @@ bool DeviceManager::_findQueueFamilies(VkPhysicalDevice physicalDevice){
 #endif
     }
 
-    if(m_graphicsQueueFamily == -1 ||
+    if(
+        m_graphicsQueueFamily == -1 ||
         (m_presentQueueFamily == -1 && !m_deviceParams.headlessDevice) ||
         (m_computeQueueFamily == -1 && m_deviceParams.enableComputeQueue) ||
-        (m_transferQueueFamily == -1 && m_deviceParams.enableCopyQueue))
+        (m_transferQueueFamily == -1 && m_deviceParams.enableCopyQueue)
+        )
     {
         return false;
     }
@@ -362,7 +364,7 @@ bool DeviceManager::_pickPhysicalDevice(){
     VkFormat requestedFormat = __hidden_vulkan::ConvertFormat(m_deviceParams.swapChainFormat);
     VkExtent2D requestedExtent = { m_deviceParams.backBufferWidth, m_deviceParams.backBufferHeight };
 
-    u32 deviceCount = 0;
+    uint32_t deviceCount = 0;
     vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, nullptr);
     Vector<VkPhysicalDevice> devices(deviceCount);
     vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, devices.data());
@@ -379,7 +381,7 @@ bool DeviceManager::_pickPhysicalDevice(){
         lastDevice = adapterIndex;
     }
 
-    std::stringstream errorStream;
+    AStringStream errorStream;
     errorStream << "Cannot find a Vulkan device that supports all the required extensions and properties.";
 
     Vector<VkPhysicalDevice> discreteGPUs;
@@ -393,13 +395,13 @@ bool DeviceManager::_pickPhysicalDevice(){
         errorStream << std::endl << prop.deviceName << ":";
 
         // check required device extensions
-        std::unordered_set<std::string> requiredExtensions = m_enabledExtensions.device;
-        u32 extCount = 0;
+        HashSet<AString> requiredExtensions = m_enabledExtensions.device;
+        uint32_t extCount = 0;
         vkEnumerateDeviceExtensionProperties(dev, nullptr, &extCount, nullptr);
         Vector<VkExtensionProperties> deviceExtensions(extCount);
         vkEnumerateDeviceExtensionProperties(dev, nullptr, &extCount, deviceExtensions.data());
         for(const auto& ext : deviceExtensions)
-            requiredExtensions.erase(std::string(ext.extensionName));
+            requiredExtensions.erase(AString(ext.extensionName));
 
         bool deviceIsGood = true;
 
@@ -436,7 +438,7 @@ bool DeviceManager::_pickPhysicalDevice(){
                 VkSurfaceCapabilitiesKHR surfaceCaps;
                 vkGetPhysicalDeviceSurfaceCapabilitiesKHR(dev, m_windowSurface, &surfaceCaps);
 
-                u32 fmtCount = 0;
+                uint32_t fmtCount = 0;
                 vkGetPhysicalDeviceSurfaceFormatsKHR(dev, m_windowSurface, &fmtCount, nullptr);
                 Vector<VkSurfaceFormatKHR> surfaceFmts(fmtCount);
                 vkGetPhysicalDeviceSurfaceFormatsKHR(dev, m_windowSurface, &fmtCount, surfaceFmts.data());
@@ -509,13 +511,13 @@ bool DeviceManager::_pickPhysicalDevice(){
 
 bool DeviceManager::_createDevice(){
     // figure out which optional extensions are supported
-    u32 extCount = 0;
+    uint32_t extCount = 0;
     vkEnumerateDeviceExtensionProperties(m_vulkanPhysicalDevice, nullptr, &extCount, nullptr);
     Vector<VkExtensionProperties> deviceExtensions(extCount);
     vkEnumerateDeviceExtensionProperties(m_vulkanPhysicalDevice, nullptr, &extCount, deviceExtensions.data());
 
     for(const auto& ext : deviceExtensions){
-        const std::string name = ext.extensionName;
+        const AString name = ext.extensionName;
         if(m_optionalExtensions.device.find(name) != m_optionalExtensions.device.end()){
             if(name == VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME && m_deviceParams.headlessDevice)
                 continue;
@@ -533,7 +535,6 @@ bool DeviceManager::_createDevice(){
     vkGetPhysicalDeviceProperties(m_vulkanPhysicalDevice, &physicalDeviceProperties);
 
 #ifdef NWB_UNICODE
-    // Convert device name from char to tchar
     {
         const char* deviceName = physicalDeviceProperties.deviceName;
         usize len = strlen(deviceName);
@@ -598,7 +599,7 @@ bool DeviceManager::_createDevice(){
     vkGetPhysicalDeviceFeatures2(m_vulkanPhysicalDevice, &physicalDeviceFeatures2);
 
     // Queue creation
-    std::unordered_set<i32> uniqueQueueFamilies = { m_graphicsQueueFamily };
+    HashSet<i32> uniqueQueueFamilies = { m_graphicsQueueFamily };
 
     if(!m_deviceParams.headlessDevice)
         uniqueQueueFamilies.insert(m_presentQueueFamily);
@@ -786,9 +787,9 @@ bool DeviceManager::_createSwapChain(){
 
     VkExtent2D extent = { m_deviceParams.backBufferWidth, m_deviceParams.backBufferHeight };
 
-    std::unordered_set<u32> uniqueQueues = {
-        static_cast<u32>(m_graphicsQueueFamily),
-        static_cast<u32>(m_presentQueueFamily)
+    HashSet<uint32_t> uniqueQueues = {
+        static_cast<uint32_t>(m_graphicsQueueFamily),
+        static_cast<uint32_t>(m_presentQueueFamily)
     };
     auto queues = __hidden_vulkan::SetToVector(uniqueQueues);
     const bool enableSwapChainSharing = queues.size() > 1;
@@ -803,7 +804,7 @@ bool DeviceManager::_createSwapChain(){
     desc.imageArrayLayers = 1;
     desc.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
     desc.imageSharingMode = enableSwapChainSharing ? VK_SHARING_MODE_CONCURRENT : VK_SHARING_MODE_EXCLUSIVE;
-    desc.queueFamilyIndexCount = enableSwapChainSharing ? static_cast<u32>(queues.size()) : 0;
+    desc.queueFamilyIndexCount = enableSwapChainSharing ? static_cast<uint32_t>(queues.size()) : 0;
     desc.pQueueFamilyIndices = enableSwapChainSharing ? queues.data() : nullptr;
     desc.preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
     desc.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
@@ -815,7 +816,7 @@ bool DeviceManager::_createSwapChain(){
         desc.flags |= VK_SWAPCHAIN_CREATE_MUTABLE_FORMAT_BIT_KHR;
 
     VkFormat imageFormats[2] = { m_swapChainFormat.format, VK_FORMAT_UNDEFINED };
-    u32 imageFormatCount = 1;
+    uint32_t imageFormatCount = 1;
     switch(m_swapChainFormat.format){
     case VK_FORMAT_R8G8B8A8_UNORM: imageFormats[1] = VK_FORMAT_R8G8B8A8_SRGB; imageFormatCount = 2; break;
     case VK_FORMAT_R8G8B8A8_SRGB:  imageFormats[1] = VK_FORMAT_R8G8B8A8_UNORM; imageFormatCount = 2; break;
@@ -839,7 +840,7 @@ bool DeviceManager::_createSwapChain(){
     }
 
     // retrieve swap chain images
-    u32 imageCount = 0;
+    uint32_t imageCount = 0;
     vkGetSwapchainImagesKHR(m_vulkanDevice, m_swapChain, &imageCount, nullptr);
     Vector<VkImage> images(imageCount);
     vkGetSwapchainImagesKHR(m_vulkanDevice, m_swapChain, &imageCount, images.data());
@@ -1028,7 +1029,8 @@ bool DeviceManager::beginFrame(){
             UINT64_MAX,
             semaphore,
             VK_NULL_HANDLE,
-            &m_swapChainIndex);
+            &m_swapChainIndex
+            );
 
         if((res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR) && attempt < maxAttempts){
             backBufferResizing();
@@ -1046,11 +1048,11 @@ bool DeviceManager::beginFrame(){
             break;
     }
 
-    m_acquireSemaphoreIndex = (m_acquireSemaphoreIndex + 1) % static_cast<u32>(m_acquireSemaphores.size());
+    m_acquireSemaphoreIndex = (m_acquireSemaphoreIndex + 1) % static_cast<uint32_t>(m_acquireSemaphores.size());
 
     if(res == VK_SUCCESS || res == VK_SUBOPTIMAL_KHR){
         // Cast DeviceHandle to Vulkan::IDevice to access queueWaitForSemaphore
-        auto* vulkanDevice = static_cast<Vulkan::IDevice*>(m_nvrhiDevice.Get());
+        auto* vulkanDevice = static_cast<Vulkan::IDevice*>(m_nvrhiDevice.get());
         vulkanDevice->queueWaitForSemaphore(CommandQueue::Graphics, semaphore, 0);
         return true;
     }
@@ -1061,7 +1063,7 @@ bool DeviceManager::beginFrame(){
 bool DeviceManager::present(){
     const VkSemaphore& semaphore = m_presentSemaphores[m_swapChainIndex];
 
-    auto* vulkanDevice = static_cast<Vulkan::IDevice*>(m_nvrhiDevice.Get());
+    auto* vulkanDevice = static_cast<Vulkan::IDevice*>(m_nvrhiDevice.get());
     vulkanDevice->queueSignalSemaphore(CommandQueue::Graphics, semaphore, 0);
 
     // Force semaphore signal by executing empty command list
@@ -1096,8 +1098,8 @@ bool DeviceManager::present(){
         query = m_nvrhiDevice->createEventQuery();
     }
 
-    m_nvrhiDevice->resetEventQuery(query);
-    m_nvrhiDevice->setEventQuery(query, CommandQueue::Graphics);
+    m_nvrhiDevice->resetEventQuery(query.get());
+    m_nvrhiDevice->setEventQuery(query.get(), CommandQueue::Graphics);
     m_framesInFlight.push(query);
 
     return true;
@@ -1112,7 +1114,7 @@ bool DeviceManager::enumerateAdapters(Vector<AdapterInfo>& outAdapters){
     if(!m_vulkanInstance)
         return false;
 
-    u32 deviceCount = 0;
+    uint32_t deviceCount = 0;
     vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, nullptr);
     Vector<VkPhysicalDevice> devices(deviceCount);
     vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, devices.data());
@@ -1164,3 +1166,4 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -36,6 +36,7 @@
     <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_texture.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_upload.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_stubs.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\win32\win32_device_manager.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\basic.h" />
@@ -47,5 +48,6 @@
   </ItemGroup>
   <ItemGroup>
     <Folder Include="$(MSBuildThisFileDirectory)graphics\vulkan\" />
+    <Folder Include="$(MSBuildThisFileDirectory)graphics\win32\" />
   </ItemGroup>
 </Project>

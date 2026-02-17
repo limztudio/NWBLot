@@ -29,10 +29,10 @@ namespace __hidden_vulkan{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr u32 kGraphicsQueueIndex = 0;
-static constexpr u32 kComputeQueueIndex = 0;
-static constexpr u32 kTransferQueueIndex = 0;
-static constexpr u32 kPresentQueueIndex = 0;
+static constexpr u32 s_GraphicsQueueIndex = 0;
+static constexpr u32 s_ComputeQueueIndex = 0;
+static constexpr u32 s_TransferQueueIndex = 0;
+static constexpr u32 s_PresentQueueIndex = 0;
 
 
 static Vector<const char*> StringSetToVector(const HashSet<AString>& set){
@@ -53,6 +53,36 @@ static Vector<T> SetToVector(const HashSet<T>& set){
 }
 
 
+static VKAPI_ATTR VkBool32 VKAPI_CALL VulkanDebugCallback(
+    VkDebugReportFlagsEXT flags,
+    VkDebugReportObjectTypeEXT objType,
+    uint64_t obj,
+    size_t location,
+    int32_t code,
+    const char* layerPrefix,
+    const char* msg,
+    void* userData
+)
+{
+    (void)flags;
+    (void)objType;
+    (void)obj;
+
+    const auto* manager = static_cast<const DeviceManager*>(userData);
+    if(manager){
+        const auto& ignored = manager->getDeviceParams().ignoredVulkanValidationMessageLocations;
+        for(const auto& loc : ignored){
+            if(loc == location)
+                return VK_FALSE;
+        }
+    }
+
+    NWB_LOGGER_WARNING(NWB_TEXT("Vulkan validation: [location=0x{:x} code={} layer='{}'] {}"), location, code, AString(layerPrefix), AString(msg));
+
+    return VK_FALSE;
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -63,7 +93,7 @@ static Vector<T> SetToVector(const HashSet<T>& set){
 
 
 IDevice* DeviceManager::getDevice()const{
-    return m_nvrhiDevice.get();
+    return m_rhiDevice.get();
 }
 
 const tchar* DeviceManager::getRendererString()const{
@@ -117,8 +147,8 @@ u32 DeviceManager::getBackBufferCount(){
 
 void DeviceManager::resizeSwapChain(){
     if(m_vulkanDevice){
-        _destroySwapChain();
-        _createSwapChain();
+        destroySwapChain();
+        createSwapChain();
     }
 }
 
@@ -127,7 +157,7 @@ void DeviceManager::resizeSwapChain(){
 // Instance creation
 
 
-bool DeviceManager::_createInstance(){
+bool DeviceManager::createInstance(){
 #ifdef NWB_PLATFORM_WINDOWS
     if(!m_deviceParams.headlessDevice){
         m_enabledExtensions.instance.insert(VK_KHR_SURFACE_EXTENSION_NAME);
@@ -255,43 +285,15 @@ bool DeviceManager::_createInstance(){
 // Debug callback
 
 
-static VKAPI_ATTR VkBool32 VKAPI_CALL _vulkanDebugCallback(
-    VkDebugReportFlagsEXT flags,
-    VkDebugReportObjectTypeEXT objType,
-    uint64_t obj,
-    size_t location,
-    int32_t code,
-    const char* layerPrefix,
-    const char* msg,
-    void* userData)
-{
-    (void)flags; (void)objType; (void)obj;
-
-    const DeviceManager* manager = static_cast<const DeviceManager*>(userData);
-    if(manager){
-        const auto& ignored = manager->getDeviceParams().ignoredVulkanValidationMessageLocations;
-        for(const auto& loc : ignored){
-            if(loc == location)
-                return VK_FALSE;
-        }
-    }
-
-    NWB_LOGGER_WARNING(NWB_TEXT("Vulkan validation: [location=0x{:x} code={} layer='{}'] {}"),
-        location, code, AString(layerPrefix), AString(msg));
-
-    return VK_FALSE;
-}
-
-void DeviceManager::_installDebugCallback(){
-    auto createFunc = reinterpret_cast<PFN_vkCreateDebugReportCallbackEXT>(
-        vkGetInstanceProcAddr(m_vulkanInstance, "vkCreateDebugReportCallbackEXT"));
+void DeviceManager::installDebugCallback(){
+    auto* createFunc = reinterpret_cast<PFN_vkCreateDebugReportCallbackEXT>(vkGetInstanceProcAddr(m_vulkanInstance, "vkCreateDebugReportCallbackEXT"));
     if(!createFunc)
         return;
 
     VkDebugReportCallbackCreateInfoEXT createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;
     createInfo.flags = VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT | VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT;
-    createInfo.pfnCallback = _vulkanDebugCallback;
+    createInfo.pfnCallback = __hidden_vulkan::VulkanDebugCallback;
     createInfo.pUserData = this;
 
     createFunc(m_vulkanInstance, &createInfo, nullptr, &m_debugReportCallback);
@@ -302,7 +304,7 @@ void DeviceManager::_installDebugCallback(){
 // Physical device selection
 
 
-bool DeviceManager::_findQueueFamilies(VkPhysicalDevice physicalDevice){
+bool DeviceManager::findQueueFamilies(VkPhysicalDevice physicalDevice){
     uint32_t queueFamilyCount = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, nullptr);
     Vector<VkQueueFamilyProperties> props(queueFamilyCount);
@@ -360,7 +362,7 @@ bool DeviceManager::_findQueueFamilies(VkPhysicalDevice physicalDevice){
     return true;
 }
 
-bool DeviceManager::_pickPhysicalDevice(){
+bool DeviceManager::pickPhysicalDevice(){
     VkFormat requestedFormat = __hidden_vulkan::ConvertFormat(m_deviceParams.swapChainFormat);
     VkExtent2D requestedExtent = { m_deviceParams.backBufferWidth, m_deviceParams.backBufferHeight };
 
@@ -422,7 +424,7 @@ bool DeviceManager::_pickPhysicalDevice(){
             deviceIsGood = false;
         }
 
-        if(!_findQueueFamilies(dev)){
+        if(!findQueueFamilies(dev)){
             errorStream << std::endl << "  - does not support the necessary queue types";
             deviceIsGood = false;
         }
@@ -509,7 +511,7 @@ bool DeviceManager::_pickPhysicalDevice(){
 // Logical device creation
 
 
-bool DeviceManager::_createDevice(){
+bool DeviceManager::createDevice(){
     // figure out which optional extensions are supported
     uint32_t extCount = 0;
     vkEnumerateDeviceExtensionProperties(m_vulkanPhysicalDevice, nullptr, &extCount, nullptr);
@@ -706,11 +708,11 @@ bool DeviceManager::_createDevice(){
     VkDeviceCreateInfo deviceCreateInfo = {};
     deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
     deviceCreateInfo.pQueueCreateInfos = queueDesc.data();
-    deviceCreateInfo.queueCreateInfoCount = static_cast<u32>(queueDesc.size());
+    deviceCreateInfo.queueCreateInfoCount = static_cast<uint32_t>(queueDesc.size());
     deviceCreateInfo.pEnabledFeatures = &deviceFeatures;
-    deviceCreateInfo.enabledExtensionCount = static_cast<u32>(extVec.size());
+    deviceCreateInfo.enabledExtensionCount = static_cast<uint32_t>(extVec.size());
     deviceCreateInfo.ppEnabledExtensionNames = extVec.data();
-    deviceCreateInfo.enabledLayerCount = static_cast<u32>(layerVec.size());
+    deviceCreateInfo.enabledLayerCount = static_cast<uint32_t>(layerVec.size());
     deviceCreateInfo.ppEnabledLayerNames = layerVec.data();
     deviceCreateInfo.pNext = &vulkan12features;
 
@@ -720,13 +722,13 @@ bool DeviceManager::_createDevice(){
         return false;
     }
 
-    vkGetDeviceQueue(m_vulkanDevice, static_cast<u32>(m_graphicsQueueFamily), __hidden_vulkan::kGraphicsQueueIndex, &m_graphicsQueue);
+    vkGetDeviceQueue(m_vulkanDevice, static_cast<uint32_t>(m_graphicsQueueFamily), __hidden_vulkan::s_GraphicsQueueIndex, &m_graphicsQueue);
     if(m_deviceParams.enableComputeQueue)
-        vkGetDeviceQueue(m_vulkanDevice, static_cast<u32>(m_computeQueueFamily), __hidden_vulkan::kComputeQueueIndex, &m_computeQueue);
+        vkGetDeviceQueue(m_vulkanDevice, static_cast<uint32_t>(m_computeQueueFamily), __hidden_vulkan::s_ComputeQueueIndex, &m_computeQueue);
     if(m_deviceParams.enableCopyQueue)
-        vkGetDeviceQueue(m_vulkanDevice, static_cast<u32>(m_transferQueueFamily), __hidden_vulkan::kTransferQueueIndex, &m_transferQueue);
+        vkGetDeviceQueue(m_vulkanDevice, static_cast<uint32_t>(m_transferQueueFamily), __hidden_vulkan::s_TransferQueueIndex, &m_transferQueue);
     if(!m_deviceParams.headlessDevice)
-        vkGetDeviceQueue(m_vulkanDevice, static_cast<u32>(m_presentQueueFamily), __hidden_vulkan::kPresentQueueIndex, &m_presentQueue);
+        vkGetDeviceQueue(m_vulkanDevice, static_cast<uint32_t>(m_presentQueueFamily), __hidden_vulkan::s_PresentQueueIndex, &m_presentQueue);
 
     m_bufferDeviceAddressSupported = vulkan12features.bufferDeviceAddress;
 
@@ -740,7 +742,7 @@ bool DeviceManager::_createDevice(){
 // Window surface creation
 
 
-bool DeviceManager::_createWindowSurface(){
+bool DeviceManager::createWindowSurface(){
 #ifdef NWB_PLATFORM_WINDOWS
     Common::WinFrame frame;
     frame.frameParam() = m_platformFrameParam;
@@ -767,7 +769,7 @@ bool DeviceManager::_createWindowSurface(){
 // Swap chain management
 
 
-void DeviceManager::_destroySwapChain(){
+void DeviceManager::destroySwapChain(){
     if(m_vulkanDevice)
         vkDeviceWaitIdle(m_vulkanDevice);
 
@@ -779,8 +781,8 @@ void DeviceManager::_destroySwapChain(){
     m_swapChainImages.clear();
 }
 
-bool DeviceManager::_createSwapChain(){
-    _destroySwapChain();
+bool DeviceManager::createSwapChain(){
+    destroySwapChain();
 
     m_swapChainFormat.format = __hidden_vulkan::ConvertFormat(m_deviceParams.swapChainFormat);
     m_swapChainFormat.colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
@@ -857,7 +859,7 @@ bool DeviceManager::_createSwapChain(){
         textureDesc.keepInitialState = true;
         textureDesc.isRenderTarget = true;
 
-        sci.rhiHandle = m_nvrhiDevice->createHandleForNativeTexture(ObjectTypes::VK_Image, Object(sci.image), textureDesc);
+        sci.rhiHandle = m_rhiDevice->createHandleForNativeTexture(ObjectTypes::VK_Image, Object(sci.image), textureDesc);
         m_swapChainImages.push_back(sci);
     }
 
@@ -876,12 +878,12 @@ bool DeviceManager::createInstanceInternal(){
         m_enabledExtensions.layers.insert("VK_LAYER_KHRONOS_validation");
     }
 
-    return _createInstance();
+    return createInstance();
 }
 
 bool DeviceManager::createDeviceInternal(){
     if(m_deviceParams.enableDebugRuntime)
-        _installDebugCallback();
+        installDebugCallback();
 
     // add device extensions requested by the user
     for(const auto& name : m_deviceParams.requiredVulkanDeviceExtensions)
@@ -896,14 +898,14 @@ bool DeviceManager::createDeviceInternal(){
         else if(m_deviceParams.swapChainFormat == Format::RGBA8_UNORM)
             m_deviceParams.swapChainFormat = Format::BGRA8_UNORM;
 
-        if(!_createWindowSurface())
+        if(!createWindowSurface())
             return false;
     }
-    if(!_pickPhysicalDevice())
+    if(!pickPhysicalDevice())
         return false;
-    if(!_findQueueFamilies(m_vulkanPhysicalDevice))
+    if(!findQueueFamilies(m_vulkanPhysicalDevice))
         return false;
-    if(!_createDevice())
+    if(!createDevice())
         return false;
 
     auto vecInstanceExt = __hidden_vulkan::StringSetToVector(m_enabledExtensions.instance);
@@ -932,13 +934,13 @@ bool DeviceManager::createDeviceInternal(){
     deviceDesc.logBufferLifetime = m_deviceParams.logBufferLifetime;
     deviceDesc.vulkanLibraryName = m_deviceParams.vulkanLibraryName;
 
-    m_nvrhiDevice = CreateDevice(deviceDesc);
+    m_rhiDevice = CreateDevice(deviceDesc);
 
     return true;
 }
 
 bool DeviceManager::createSwapChainInternal(){
-    if(!_createSwapChain())
+    if(!createSwapChain())
         return false;
 
     usize const numPresentSemaphores = m_swapChainImages.size();
@@ -966,7 +968,7 @@ bool DeviceManager::createSwapChainInternal(){
 }
 
 void DeviceManager::destroyDeviceAndSwapChain(){
-    _destroySwapChain();
+    destroySwapChain();
 
     for(auto& semaphore : m_presentSemaphores){
         if(semaphore){
@@ -984,7 +986,7 @@ void DeviceManager::destroyDeviceAndSwapChain(){
     }
     m_acquireSemaphores.clear();
 
-    m_nvrhiDevice = nullptr;
+    m_rhiDevice = nullptr;
     m_rendererString.clear();
 
     if(m_vulkanDevice){
@@ -999,8 +1001,7 @@ void DeviceManager::destroyDeviceAndSwapChain(){
     }
 
     if(m_debugReportCallback){
-        auto destroyFunc = reinterpret_cast<PFN_vkDestroyDebugReportCallbackEXT>(
-            vkGetInstanceProcAddr(m_vulkanInstance, "vkDestroyDebugReportCallbackEXT"));
+        auto* destroyFunc = reinterpret_cast<PFN_vkDestroyDebugReportCallbackEXT>(vkGetInstanceProcAddr(m_vulkanInstance, "vkDestroyDebugReportCallbackEXT"));
         if(destroyFunc)
             destroyFunc(m_vulkanInstance, m_debugReportCallback, nullptr);
         m_debugReportCallback = VK_NULL_HANDLE;
@@ -1018,10 +1019,11 @@ void DeviceManager::destroyDeviceAndSwapChain(){
 
 
 bool DeviceManager::beginFrame(){
+    constexpr i32 maxAttempts = 3;
+
     const VkSemaphore& semaphore = m_acquireSemaphores[m_acquireSemaphoreIndex];
 
-    VkResult res;
-    const i32 maxAttempts = 3;
+    VkResult res = VK_SUCCESS;
     for(i32 attempt = 0; attempt < maxAttempts; ++attempt){
         res = vkAcquireNextImageKHR(
             m_vulkanDevice,
@@ -1052,8 +1054,7 @@ bool DeviceManager::beginFrame(){
 
     if(res == VK_SUCCESS || res == VK_SUBOPTIMAL_KHR){
         // Cast DeviceHandle to Vulkan::IDevice to access queueWaitForSemaphore
-        auto* vulkanDevice = static_cast<Vulkan::IDevice*>(m_nvrhiDevice.get());
-        vulkanDevice->queueWaitForSemaphore(CommandQueue::Graphics, semaphore, 0);
+        m_rhiDevice->queueWaitForSemaphore(CommandQueue::Graphics, semaphore, 0);
         return true;
     }
 
@@ -1063,11 +1064,10 @@ bool DeviceManager::beginFrame(){
 bool DeviceManager::present(){
     const VkSemaphore& semaphore = m_presentSemaphores[m_swapChainIndex];
 
-    auto* vulkanDevice = static_cast<Vulkan::IDevice*>(m_nvrhiDevice.get());
-    vulkanDevice->queueSignalSemaphore(CommandQueue::Graphics, semaphore, 0);
+    m_rhiDevice->queueSignalSemaphore(CommandQueue::Graphics, semaphore, 0);
 
     // Force semaphore signal by executing empty command list
-    m_nvrhiDevice->executeCommandLists(nullptr, 0);
+    m_rhiDevice->executeCommandLists(nullptr, 0);
 
     VkPresentInfoKHR presentInfo = {};
     presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -1080,12 +1080,11 @@ bool DeviceManager::present(){
     const VkResult res = vkQueuePresentKHR(m_presentQueue, &presentInfo);
     if(!(res == VK_SUCCESS || res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR))
         return false;
-
-    // Frames-in-flight management
+    
     while(m_framesInFlight.size() >= m_deviceParams.maxFramesInFlight){
-        auto query = m_framesInFlight.front();
+        auto* query = m_framesInFlight.front();
         m_framesInFlight.pop();
-        m_nvrhiDevice->waitEventQuery(query);
+        m_rhiDevice->waitEventQuery(query);
         m_queryPool.push_back(query);
     }
 
@@ -1094,12 +1093,11 @@ bool DeviceManager::present(){
         query = m_queryPool.back();
         m_queryPool.pop_back();
     }
-    else{
-        query = m_nvrhiDevice->createEventQuery();
-    }
+    else
+        query = m_rhiDevice->createEventQuery();
 
-    m_nvrhiDevice->resetEventQuery(query.get());
-    m_nvrhiDevice->setEventQuery(query.get(), CommandQueue::Graphics);
+    m_rhiDevice->resetEventQuery(query.get());
+    m_rhiDevice->setEventQuery(query.get(), CommandQueue::Graphics);
     m_framesInFlight.push(query);
 
     return true;
@@ -1120,7 +1118,7 @@ bool DeviceManager::enumerateAdapters(Vector<AdapterInfo>& outAdapters){
     vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, devices.data());
     outAdapters.clear();
 
-    for(auto physicalDevice : devices){
+    for(auto* physicalDevice : devices){
         VkPhysicalDeviceProperties2 properties2 = {};
         properties2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
         VkPhysicalDeviceIDProperties idProperties = {};
@@ -1136,17 +1134,17 @@ bool DeviceManager::enumerateAdapters(Vector<AdapterInfo>& outAdapters){
         adapterInfo.deviceID = properties.deviceID;
         adapterInfo.dedicatedVideoMemory = 0;
 
-        memcpy(adapterInfo.uuid.data(), idProperties.deviceUUID, adapterInfo.uuid.size());
+        NWB_MEMCPY(adapterInfo.uuid.data(), adapterInfo.uuid.size(), idProperties.deviceUUID, adapterInfo.uuid.size());
         adapterInfo.hasUUID = true;
 
         if(idProperties.deviceLUIDValid){
-            memcpy(adapterInfo.luid.data(), idProperties.deviceLUID, adapterInfo.luid.size());
+            NWB_MEMCPY(adapterInfo.luid.data(), adapterInfo.luid.size(), idProperties.deviceLUID, adapterInfo.luid.size());
             adapterInfo.hasLUID = true;
         }
 
         VkPhysicalDeviceMemoryProperties memoryProperties;
         vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memoryProperties);
-        for(u32 heapIndex = 0; heapIndex < memoryProperties.memoryHeapCount; ++heapIndex){
+        for(uint32_t heapIndex = 0; heapIndex < memoryProperties.memoryHeapCount; ++heapIndex){
             const VkMemoryHeap& heap = memoryProperties.memoryHeaps[heapIndex];
             if(heap.flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT)
                 adapterInfo.dedicatedVideoMemory += heap.size;

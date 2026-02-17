@@ -18,44 +18,6 @@ NWB_VULKAN_BEGIN
 
 
 class DeviceManager final : public IDeviceManager{
-public:
-    [[nodiscard]] IDevice* getDevice()const override;
-    [[nodiscard]] GraphicsAPI::Enum getGraphicsAPI()const override{ return GraphicsAPI::VULKAN; }
-    [[nodiscard]] const tchar* getRendererString()const override;
-
-    bool enumerateAdapters(Vector<AdapterInfo>& outAdapters) override;
-
-    bool isVulkanInstanceExtensionEnabled(const char* extensionName)const override;
-    bool isVulkanDeviceExtensionEnabled(const char* extensionName)const override;
-    bool isVulkanLayerEnabled(const char* layerName)const override;
-    void getEnabledVulkanInstanceExtensions(Vector<AString>& extensions)const override;
-    void getEnabledVulkanDeviceExtensions(Vector<AString>& extensions)const override;
-    void getEnabledVulkanLayers(Vector<AString>& layers)const override;
-
-    ITexture* getCurrentBackBuffer() override;
-    ITexture* getBackBuffer(u32 index) override;
-    u32 getCurrentBackBufferIndex() override;
-    u32 getBackBufferCount() override;
-
-protected:
-    bool createInstanceInternal() override;
-    bool createDeviceInternal() override;
-    bool createSwapChainInternal() override;
-    void destroyDeviceAndSwapChain() override;
-    void resizeSwapChain() override;
-    bool beginFrame() override;
-    bool present() override;
-
-private:
-    bool _createInstance();
-    bool _createWindowSurface();
-    void _installDebugCallback();
-    bool _pickPhysicalDevice();
-    bool _findQueueFamilies(VkPhysicalDevice physicalDevice);
-    bool _createDevice();
-    bool _createSwapChain();
-    void _destroySwapChain();
-
 private:
     struct VulkanExtensionSet{
         HashSet<AString> instance;
@@ -63,27 +25,73 @@ private:
         HashSet<AString> device;
     };
 
+    struct SwapChainImage{
+        VkImage image;
+        TextureHandle rhiHandle;
+    };
+
+
+public:
+    [[nodiscard]] virtual IDevice* getDevice()const override;
+    [[nodiscard]] virtual GraphicsAPI::Enum getGraphicsAPI()const override{ return GraphicsAPI::VULKAN; }
+    [[nodiscard]] virtual const tchar* getRendererString()const override;
+
+    virtual bool enumerateAdapters(Vector<AdapterInfo>& outAdapters) override;
+
+    virtual bool isVulkanInstanceExtensionEnabled(const char* extensionName)const override;
+    virtual bool isVulkanDeviceExtensionEnabled(const char* extensionName)const override;
+    virtual bool isVulkanLayerEnabled(const char* layerName)const override;
+    virtual void getEnabledVulkanInstanceExtensions(Vector<AString>& extensions)const override;
+    virtual void getEnabledVulkanDeviceExtensions(Vector<AString>& extensions)const override;
+    virtual void getEnabledVulkanLayers(Vector<AString>& layers)const override;
+
+    virtual ITexture* getCurrentBackBuffer() override;
+    virtual ITexture* getBackBuffer(u32 index) override;
+    virtual u32 getCurrentBackBufferIndex() override;
+    virtual u32 getBackBufferCount() override;
+
+protected:
+    virtual bool createInstanceInternal() override;
+    virtual bool createDeviceInternal() override;
+    virtual bool createSwapChainInternal() override;
+    virtual void destroyDeviceAndSwapChain() override;
+    virtual void resizeSwapChain() override;
+    virtual bool beginFrame() override;
+    virtual bool present() override;
+
+private:
+    bool createInstance();
+    bool createWindowSurface();
+    void installDebugCallback();
+    bool pickPhysicalDevice();
+    bool findQueueFamilies(VkPhysicalDevice physicalDevice);
+    bool createDevice();
+    bool createSwapChain();
+    void destroySwapChain();
+
+
+private:
     // minimal set of required extensions
     VulkanExtensionSet m_enabledExtensions = {
-        // instance
-        { VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME },
-        // layers
-        {},
-        // device
-        { VK_KHR_MAINTENANCE1_EXTENSION_NAME },
+        { // instance
+            VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME
+        },
+        { // layers
+        },
+        { // device
+            VK_KHR_MAINTENANCE1_EXTENSION_NAME
+        },
     };
 
     // optional extensions
     VulkanExtensionSet m_optionalExtensions = {
-        // instance
-        {
+        { // instance
             VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
             VK_EXT_SAMPLER_FILTER_MINMAX_EXTENSION_NAME,
         },
-        // layers
-        {},
-        // device
-        {
+        { // layers
+        },
+        { // device
             VK_EXT_DEBUG_MARKER_EXTENSION_NAME,
             VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
             VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME,
@@ -127,15 +135,10 @@ private:
     VkSwapchainKHR m_swapChain = VK_NULL_HANDLE;
     bool m_swapChainMutableFormatSupported = false;
 
-    struct SwapChainImage{
-        VkImage image;
-        TextureHandle rhiHandle;
-    };
-
     Vector<SwapChainImage> m_swapChainImages;
     uint32_t m_swapChainIndex = static_cast<uint32_t>(-1);
 
-    DeviceHandle m_nvrhiDevice;
+    DeviceHandle m_rhiDevice;
 
     Vector<VkSemaphore> m_acquireSemaphores;
     Vector<VkSemaphore> m_presentSemaphores;

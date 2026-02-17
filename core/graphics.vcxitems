@@ -47,6 +47,5 @@
   </ItemGroup>
   <ItemGroup>
     <Folder Include="$(MSBuildThisFileDirectory)graphics\vulkan\" />
-    <Folder Include="$(MSBuildThisFileDirectory)graphics\win32\" />
   </ItemGroup>
 </Project>

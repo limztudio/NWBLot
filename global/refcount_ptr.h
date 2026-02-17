@@ -226,8 +226,8 @@ protected:
 template<typename T>
 class RefCounter : public T{
 public:
-    u32 addReference(){ return m_referenceCount.fetch_add(1, std::memory_order_relaxed) + 1; }
-    u32 release(){
+    u32 addReference()noexcept{ return m_referenceCount.fetch_add(1, std::memory_order_relaxed) + 1; }
+    u32 release()noexcept{
         u32 old = m_referenceCount.fetch_sub(1, std::memory_order_release);
         if (old == 1) {
             std::atomic_thread_fence(std::memory_order_acquire);

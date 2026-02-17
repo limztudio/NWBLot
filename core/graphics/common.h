@@ -3704,6 +3704,8 @@ public:
     {}
     virtual ~IRenderPass() = default;
 
+
+public:
     virtual void setLatewarpOptions(){}
     virtual bool shouldRenderUnfocused(){ return false; }
     virtual void render(IFramebuffer* framebuffer){}
@@ -3720,6 +3722,7 @@ public:
 
     [[nodiscard]] IDeviceManager* getDeviceManager()const{ return m_deviceManager; }
 
+
 private:
     IDeviceManager* m_deviceManager;
 };
@@ -3730,9 +3733,13 @@ private:
 
 
 class IDeviceManager{
+protected:
+    IDeviceManager() = default;
 public:
     virtual ~IDeviceManager() = default;
 
+
+public:
     static IDeviceManager* create(GraphicsAPI::Enum api);
 
     bool createHeadlessDevice(const DeviceCreationParameters& params);
@@ -3794,6 +3801,32 @@ public:
     void mouseButtonUpdate(i32 button, i32 action, i32 mods);
     void mouseScrollUpdate(f64 xoffset, f64 yoffset);
 
+
+protected:
+    void extractPlatformHandles(const Common::FrameData& frameData){
+        m_platformFrameParam = frameData.frameParam();
+    }
+    bool shouldRenderUnfocused()const;
+
+    void backBufferResizing();
+    void backBufferResized();
+    void displayScaleChanged();
+
+    void animate(f64 elapsedTime);
+    void render();
+    void updateAverageFrameTime(f64 elapsedTime);
+    bool animateRenderPresent();
+
+    virtual bool createInstanceInternal() = 0;
+    virtual bool createDeviceInternal() = 0;
+    virtual bool createSwapChainInternal() = 0;
+    virtual void destroyDeviceAndSwapChain() = 0;
+    virtual void resizeSwapChain() = 0;
+    virtual bool beginFrame() = 0;
+    virtual bool present() = 0;
+
+
+protected:
     struct PipelineCallbacks{
         Function<void(IDeviceManager&, u32)> beforeFrame = nullptr;
         Function<void(IDeviceManager&, u32)> beforeAnimate = nullptr;
@@ -3803,9 +3836,6 @@ public:
         Function<void(IDeviceManager&, u32)> beforePresent = nullptr;
         Function<void(IDeviceManager&, u32)> afterPresent = nullptr;
     } m_callbacks;
-
-protected:
-    IDeviceManager() = default;
 
     bool m_skipRenderOnFirstFrame = false;
     bool m_windowVisible = false;
@@ -3831,28 +3861,6 @@ protected:
     u32 m_frameIndex = 0;
 
     Vector<FramebufferHandle> m_swapChainFramebuffers;
-
-    void extractPlatformHandles(const Common::FrameData& frameData){
-        m_platformFrameParam = frameData.frameParam();
-    }
-    bool shouldRenderUnfocused()const;
-
-    void backBufferResizing();
-    void backBufferResized();
-    void displayScaleChanged();
-
-    void animate(f64 elapsedTime);
-    void render();
-    void updateAverageFrameTime(f64 elapsedTime);
-    bool animateRenderPresent();
-
-    virtual bool createInstanceInternal() = 0;
-    virtual bool createDeviceInternal() = 0;
-    virtual bool createSwapChainInternal() = 0;
-    virtual void destroyDeviceAndSwapChain() = 0;
-    virtual void resizeSwapChain() = 0;
-    virtual bool beginFrame() = 0;
-    virtual bool present() = 0;
 
     Common::FrameParam m_platformFrameParam = {};
 

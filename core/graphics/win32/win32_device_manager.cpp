@@ -29,17 +29,16 @@ NWB_CORE_BEGIN
 
 
 void IDeviceManager::extractPlatformHandles(const Common::FrameData& frameData){
-    const auto& winFrame = static_cast<const Common::WinFrame&>(frameData);
-    m_hwnd = winFrame.hwnd();
-    m_hinstance = winFrame.instance();
+    m_platformFrameParam = frameData.frameParam();
 }
 
 void IDeviceManager::updateWindowSize(){
-    if(!m_hwnd)
+    HWND hwnd = static_cast<HWND>(m_platformFrameParam.ptr[2]);
+    if(!hwnd)
         return;
 
     RECT rect;
-    if(!GetClientRect(static_cast<HWND>(m_hwnd), &rect)){
+    if(!GetClientRect(hwnd, &rect)){
         m_windowVisible = false;
         return;
     }
@@ -53,7 +52,7 @@ void IDeviceManager::updateWindowSize(){
     }
 
     m_windowVisible = true;
-    m_windowIsInFocus = (GetForegroundWindow() == static_cast<HWND>(m_hwnd));
+    m_windowIsInFocus = (GetForegroundWindow() == hwnd);
 
     if(static_cast<i32>(m_deviceParams.backBufferWidth) != width ||
         static_cast<i32>(m_deviceParams.backBufferHeight) != height ||
@@ -102,11 +101,11 @@ void IDeviceManager::setWindowTitle(const tchar* title){
 
     m_windowTitle = title;
 
-    if(m_hwnd){
+    if(m_platformFrameParam.ptr[2]){
 #ifdef NWB_UNICODE
-        SetWindowTextW(static_cast<HWND>(m_hwnd), m_windowTitle.c_str());
+        SetWindowTextW(static_cast<HWND>(m_platformFrameParam.ptr[2]), m_windowTitle.c_str());
 #else
-        SetWindowTextA(static_cast<HWND>(m_hwnd), m_windowTitle.c_str());
+        SetWindowTextA(static_cast<HWND>(m_platformFrameParam.ptr[2]), m_windowTitle.c_str());
 #endif
     }
 }

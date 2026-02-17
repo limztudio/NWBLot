@@ -97,14 +97,12 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_common{
-    union FrameParam{
-        void* ptr[3];
-        u64 u64[3];
-        u32 u32[6];
-        u16 u16[12];
-        u8 u8[24];
-    };
+union FrameParam{
+    void* ptr[3];
+    u64 u64[3];
+    u32 u32[6];
+    u16 u16[12];
+    u8 u8[24];
 };
 class FrameData{
 public:
@@ -112,6 +110,9 @@ public:
 
 
 public:
+    inline FrameParam& frameParam(){ return m_data; }
+    inline const FrameParam& frameParam()const{ return m_data; }
+
     inline u16& width(){ return m_data.u16[0]; }
     inline const u16& width()const{ return m_data.u16[0]; }
 

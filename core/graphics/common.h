@@ -3787,7 +3787,6 @@ public:
     virtual void getEnabledVulkanDeviceExtensions(Vector<AString>& extensions)const{}
     virtual void getEnabledVulkanLayers(Vector<AString>& layers)const{}
 
-    // Input callbacks
     void keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods);
     void keyboardCharInput(u32 unicode, i32 mods);
     void mousePosUpdate(f64 xpos, f64 ypos);
@@ -3832,7 +3831,6 @@ protected:
 
     Vector<FramebufferHandle> m_swapChainFramebuffers;
 
-    // platform-specific methods (implemented per-platform, e.g. device_manager_win32.cpp)
     void extractPlatformHandles(const Common::FrameData& frameData);
     void updateWindowSize();
 
@@ -3847,7 +3845,6 @@ protected:
     void updateAverageFrameTime(f64 elapsedTime);
     bool animateRenderPresent();
 
-    // device-specific methods
     virtual bool createInstanceInternal() = 0;
     virtual bool createDeviceInternal() = 0;
     virtual bool createSwapChainInternal() = 0;
@@ -3856,9 +3853,7 @@ protected:
     virtual bool beginFrame() = 0;
     virtual bool present() = 0;
 
-    // Win32 handles for window management
-    void* m_hwnd = nullptr;
-    void* m_hinstance = nullptr;
+    Common::FrameParam m_platformFrameParam = {};
 
 private:
     BasicString<tchar> m_windowTitle;

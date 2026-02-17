@@ -743,8 +743,8 @@ bool DeviceManager::_createWindowSurface(){
 #ifdef NWB_PLATFORM_WINDOWS
     VkWin32SurfaceCreateInfoKHR createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
-    createInfo.hinstance = static_cast<HINSTANCE>(m_hinstance);
-    createInfo.hwnd = static_cast<HWND>(m_hwnd);
+    createInfo.hinstance = static_cast<HINSTANCE>(m_platformFrameParam.ptr[1]);
+    createInfo.hwnd = static_cast<HWND>(m_platformFrameParam.ptr[2]);
 
     const VkResult res = vkCreateWin32SurfaceKHR(m_vulkanInstance, &createInfo, nullptr, &m_windowSurface);
     if(res != VK_SUCCESS){

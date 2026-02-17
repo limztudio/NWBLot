@@ -258,7 +258,7 @@ TextureHandle Device::createTexture(const TextureDesc& d){
     NWB_ASSERT_MSG(res == VK_SUCCESS, NWB_TEXT("Vulkan: Failed to create image"));
 
     if(!d.isVirtual){
-        VkResult res = m_allocator.allocateTextureMemory(texture);
+        res = m_allocator.allocateTextureMemory(texture);
         NWB_ASSERT_MSG(res == VK_SUCCESS, NWB_TEXT("Vulkan: Failed to allocate texture memory"));
     }
 

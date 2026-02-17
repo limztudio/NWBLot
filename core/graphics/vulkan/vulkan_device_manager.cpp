@@ -539,7 +539,7 @@ bool DeviceManager::createDevice(){
 #ifdef NWB_UNICODE
     {
         const char* deviceName = physicalDeviceProperties.deviceName;
-        usize len = strlen(deviceName);
+        usize len = NWB_STRNLEN(deviceName, VK_MAX_PHYSICAL_DEVICE_NAME_SIZE);
         m_rendererString.resize(len);
         for(usize i = 0; i < len; ++i)
             m_rendererString[i] = static_cast<tchar>(deviceName[i]);

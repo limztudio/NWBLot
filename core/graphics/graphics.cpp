@@ -98,9 +98,10 @@ void Graphics::updateWindowState(u32 width, u32 height, bool windowVisible, bool
 
 void Graphics::destroy(){
     if(m_deviceManager){
-        m_deviceManager->shutdown();
-        delete m_deviceManager;
+        IDeviceManager* dm = m_deviceManager;
         m_deviceManager = nullptr;
+        dm->shutdown();
+        delete dm;
     }
 }
 

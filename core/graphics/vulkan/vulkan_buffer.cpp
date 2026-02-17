@@ -77,11 +77,11 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
     NWB_ASSERT(res == VK_SUCCESS);
 
     if(!d.isVirtual){
-        VkResult res = m_allocator.allocateBufferMemory(buffer, m_context.extensions.buffer_device_address && (usageFlags & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT));
+        res = m_allocator.allocateBufferMemory(buffer, m_context.extensions.buffer_device_address && (usageFlags & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT));
         NWB_ASSERT(res == VK_SUCCESS);
 
         if(d.isVolatile || d.cpuAccess != CpuAccessMode::None){
-            VkResult res = vkMapMemory(m_context.device, buffer->memory, 0, size, 0, &buffer->mappedMemory);
+            res = vkMapMemory(m_context.device, buffer->memory, 0, size, 0, &buffer->mappedMemory);
             NWB_ASSERT(res == VK_SUCCESS);
         }
 

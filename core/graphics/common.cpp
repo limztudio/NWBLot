@@ -94,7 +94,7 @@ static constexpr FormatInfo s_formatInfo[Format::kCount] = {
 };
 
 const FormatInfo& GetFormatInfo(Format::Enum format)noexcept{
-    NWB_ASSERT_MSG(static_cast<usize>(format) >= static_cast<usize>(Format::kCount), NWB_TEXT("Format::Enum out of range"));
+    NWB_ASSERT_MSG(static_cast<usize>(format) < static_cast<usize>(Format::kCount), NWB_TEXT("Format::Enum out of range"));
     return s_formatInfo[static_cast<u32>(format)];
 }
 
@@ -192,7 +192,8 @@ bool BlendState::RenderTarget::usesConstantColor()const{
 }
 
 bool BlendState::usesConstantColor(u32 numTargets)const{
-    for(u32 rt = 0; rt < numTargets; ++rt){
+    NWB_ASSERT(numTargets <= s_MaxRenderTargets);
+    for(u32 rt = 0; rt < numTargets && rt < s_MaxRenderTargets; ++rt){
         if(targets[rt].usesConstantColor())
             return true;
     }

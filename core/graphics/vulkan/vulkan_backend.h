@@ -1156,6 +1156,8 @@ private:
     bool m_aftermathEnabled = false;
     AftermathCrashDumpHelper m_aftermathCrashDumpHelper;
 
+    VkAllocationCallbacks m_allocationCallbacksStorage{};
+
     VulkanContext m_context;
     VulkanAllocator m_allocator;
     UniquePtr<Queue> m_queues[static_cast<u32>(CommandQueue::kCount)];

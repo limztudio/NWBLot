@@ -16,15 +16,96 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_vulkan{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static SystemMemoryAllocationScope::Enum ConvertAllocationScope(VkSystemAllocationScope scope){
+    switch(scope){
+    case VK_SYSTEM_ALLOCATION_SCOPE_COMMAND:
+        return SystemMemoryAllocationScope::Command;
+    case VK_SYSTEM_ALLOCATION_SCOPE_OBJECT:
+        return SystemMemoryAllocationScope::Object;
+    case VK_SYSTEM_ALLOCATION_SCOPE_CACHE:
+        return SystemMemoryAllocationScope::Cache;
+    case VK_SYSTEM_ALLOCATION_SCOPE_DEVICE:
+        return SystemMemoryAllocationScope::Device;
+    case VK_SYSTEM_ALLOCATION_SCOPE_INSTANCE:
+        return SystemMemoryAllocationScope::Instance;
+    default:
+        return SystemMemoryAllocationScope::Object;
+    }
+}
+
+static void* VulkanSystemAllocation(void* pUserData, size_t size, size_t alignment, VkSystemAllocationScope allocationScope){
+    auto* allocator = static_cast<SystemMemoryAllocator*>(pUserData);
+    if(!allocator || !allocator->allocate)
+        return nullptr;
+
+    return allocator->allocate(
+        allocator->userData,
+        static_cast<usize>(size),
+        static_cast<usize>(alignment),
+        ConvertAllocationScope(allocationScope)
+    );
+}
+
+static void* VulkanSystemReallocation(void* pUserData, void* pOriginal, size_t size, size_t alignment, VkSystemAllocationScope allocationScope){
+    auto* allocator = static_cast<SystemMemoryAllocator*>(pUserData);
+    if(!allocator || !allocator->reallocate)
+        return nullptr;
+
+    return allocator->reallocate(
+        allocator->userData,
+        pOriginal,
+        static_cast<usize>(size),
+        static_cast<usize>(alignment),
+        ConvertAllocationScope(allocationScope)
+    );
+}
+
+static void VulkanSystemFree(void* pUserData, void* pMemory){
+    auto* allocator = static_cast<SystemMemoryAllocator*>(pUserData);
+    if(!allocator || !allocator->deallocate)
+        return;
+
+    allocator->deallocate(allocator->userData, pMemory);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 Device::Device(const DeviceDesc& desc)
     : m_aftermathEnabled(desc.aftermathEnabled)
-    , m_aftermathCrashDumpHelper()
     , m_allocator(m_context)
 {
     m_context.instance = desc.instance;
     m_context.physicalDevice = desc.physicalDevice;
     m_context.device = desc.device;
-    m_context.allocationCallbacks = desc.allocationCallbacks;
+
+    if(desc.allocationCallbacks)
+        m_context.allocationCallbacks = desc.allocationCallbacks;
+    else if(desc.systemMemoryAllocator && desc.systemMemoryAllocator->isValid()){
+        m_allocationCallbacksStorage = {};
+        m_allocationCallbacksStorage.pUserData = const_cast<SystemMemoryAllocator*>(desc.systemMemoryAllocator);
+        m_allocationCallbacksStorage.pfnAllocation = __hidden_vulkan::VulkanSystemAllocation;
+        m_allocationCallbacksStorage.pfnReallocation = __hidden_vulkan::VulkanSystemReallocation;
+        m_allocationCallbacksStorage.pfnFree = __hidden_vulkan::VulkanSystemFree;
+        m_allocationCallbacksStorage.pfnInternalAllocation = nullptr;
+        m_allocationCallbacksStorage.pfnInternalFree = nullptr;
+        m_context.allocationCallbacks = &m_allocationCallbacksStorage;
+    }
+    else
+        m_context.allocationCallbacks = nullptr;
 
     vkGetPhysicalDeviceProperties(m_context.physicalDevice, &m_context.physicalDeviceProperties);
     vkGetPhysicalDeviceMemoryProperties(m_context.physicalDevice, &m_context.memoryProperties);

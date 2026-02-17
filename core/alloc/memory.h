@@ -47,6 +47,12 @@ public:
 
         return (align <= 1) ? tlsf_malloc(m_handle, size) : tlsf_memalign(m_handle, align, size);
     }
+    inline void* reallocate(void* p, usize align, usize size){
+        size = Alignment(align, size);
+
+        (void)align;
+        return tlsf_realloc(m_handle, p, size);
+    }
     template<typename T>
     inline T* allocate(usize count){
         static_assert(sizeof(T) > 0, "value_type must be complete before calling allocate.");

@@ -47,6 +47,39 @@ static constexpr u32 s_maxAftermathEventStrings = 128;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// System memory allocator callbacks
+
+
+namespace SystemMemoryAllocationScope{
+    enum Enum : u8{
+        Command,
+        Object,
+        Cache,
+        Device,
+        Instance,
+    };
+};
+
+typedef void* (*SystemMemoryAllocateFunction)(void* userData, usize size, usize alignment, SystemMemoryAllocationScope::Enum scope);
+typedef void* (*SystemMemoryReallocateFunction)(void* userData, void* original, usize size, usize alignment, SystemMemoryAllocationScope::Enum scope);
+typedef void (*SystemMemoryFreeFunction)(void* userData, void* memory);
+
+struct SystemMemoryAllocator{
+    void* userData = nullptr;
+    SystemMemoryAllocateFunction allocate = nullptr;
+    SystemMemoryReallocateFunction reallocate = nullptr;
+    SystemMemoryFreeFunction deallocate = nullptr;
+
+    [[nodiscard]] bool isValid()const noexcept{
+        return allocate != nullptr
+            && reallocate != nullptr
+            && deallocate != nullptr
+            ;
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Basic types
 
 struct Color{

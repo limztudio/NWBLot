@@ -39,6 +39,12 @@ public:
     static constexpr const u32 s_maxDynamicAllocSize = 64 * 1024 * 1024;
 
 
+private:
+    static void* allocatePersistentSystemMemory(void* userData, usize size, usize alignment, SystemMemoryAllocationScope::Enum scope);
+    static void* reallocatePersistentSystemMemory(void* userData, void* original, usize size, usize alignment, SystemMemoryAllocationScope::Enum scope);
+    static void freePersistentSystemMemory(void* userData, void* memory);
+
+
 public:
     Graphics();
     ~Graphics();
@@ -47,23 +53,23 @@ public:
 public:
     bool init(const Common::FrameData& data);
     void destroy();
+    [[nodiscard]] const SystemMemoryAllocator& getSystemMemoryAllocator()const noexcept{ return m_systemMemoryAllocator; }
 
 
 private:
     PersistentArena m_persistentArena;
+    SystemMemoryAllocator m_systemMemoryAllocator;
 
 private:
     u16 m_swapchainWidth = 0;
     u16 m_swapchainHeight = 0;
     u8 m_swapchainImageCount = 0;
 
-    PresentMode::Enum m_presentMode = PresentMode::V_SYNC;
-
     u16 m_gpuTimeQueriesPerFrame = 32;
     bool m_gpuTimeQueriesEnabled = false;
 
 private:
-    UniquePtr<VulkanEngine> m_engine;
+    DeviceHandle m_device;
 };
 
 

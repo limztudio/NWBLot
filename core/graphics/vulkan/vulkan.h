@@ -39,6 +39,8 @@ struct DeviceDesc{
     VkQueue computeQueue;
     i32 computeQueueIndex = -1;
 
+    const SystemMemoryAllocator* systemMemoryAllocator = nullptr;
+
     VkAllocationCallbacks* allocationCallbacks = nullptr;
 
     const char** instanceExtensions = nullptr;

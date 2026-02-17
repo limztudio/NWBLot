@@ -447,8 +447,8 @@ bool IDeviceManager::createWindowDeviceAndSwapChain(const DeviceCreationParamete
     // reset the back buffer size state to enforce a resize event
     m_deviceParams.backBufferWidth = 0;
     m_deviceParams.backBufferHeight = 0;
-
-    updateWindowSize();
+    updateWindowState(frameData.width(), frameData.height(), true, true);
+    m_previousFrameTimestamp = TimerNow();
 
     return true;
 }
@@ -599,6 +599,42 @@ bool IDeviceManager::animateRenderPresent(){
     return true;
 }
 
+bool IDeviceManager::runFrame(){
+    if(m_callbacks.beforeFrame)
+        m_callbacks.beforeFrame(*this, m_frameIndex);
+
+    return animateRenderPresent();
+}
+
+void IDeviceManager::updateWindowState(u32 width, u32 height, bool windowVisible, bool windowIsInFocus){
+    m_windowVisible = windowVisible;
+    m_windowIsInFocus = windowIsInFocus;
+
+    if(!m_windowVisible)
+        return;
+
+    if(width == 0 || height == 0){
+        m_windowVisible = false;
+        return;
+    }
+
+    if(static_cast<i32>(m_deviceParams.backBufferWidth) != static_cast<i32>(width) ||
+        static_cast<i32>(m_deviceParams.backBufferHeight) != static_cast<i32>(height) ||
+        (m_deviceParams.vsyncEnabled != m_requestedVSync && getGraphicsAPI() == GraphicsAPI::VULKAN))
+    {
+        backBufferResizing();
+
+        m_deviceParams.backBufferWidth = width;
+        m_deviceParams.backBufferHeight = height;
+        m_deviceParams.vsyncEnabled = m_requestedVSync;
+
+        resizeSwapChain();
+        backBufferResized();
+    }
+
+    m_deviceParams.vsyncEnabled = m_requestedVSync;
+}
+
 void IDeviceManager::getWindowDimensions(i32& width, i32& height){
     width = m_deviceParams.backBufferWidth;
     height = m_deviceParams.backBufferHeight;
@@ -616,6 +652,14 @@ IFramebuffer* IDeviceManager::getFramebuffer(u32 index){
 
 const tchar* IDeviceManager::getWindowTitle(){
     return m_windowTitle.c_str();
+}
+
+void IDeviceManager::setWindowTitle(const tchar* title){
+    NWB_ASSERT(title);
+    if(m_windowTitle == title)
+        return;
+
+    m_windowTitle = title;
 }
 
 void IDeviceManager::shutdown(){

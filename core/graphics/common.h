@@ -3745,7 +3745,8 @@ public:
     void addRenderPassToBack(IRenderPass* pass);
     void removeRenderPass(IRenderPass* pass);
 
-    void runMessageLoop();
+    bool runFrame();
+    void updateWindowState(u32 width, u32 height, bool windowVisible, bool windowIsInFocus);
 
     void getWindowDimensions(i32& width, i32& height);
     void getDPIScaleInfo(f32& x, f32& y)const{
@@ -3831,9 +3832,9 @@ protected:
 
     Vector<FramebufferHandle> m_swapChainFramebuffers;
 
-    void extractPlatformHandles(const Common::FrameData& frameData);
-    void updateWindowSize();
-
+    void extractPlatformHandles(const Common::FrameData& frameData){
+        m_platformFrameParam = frameData.frameParam();
+    }
     bool shouldRenderUnfocused()const;
 
     void backBufferResizing();

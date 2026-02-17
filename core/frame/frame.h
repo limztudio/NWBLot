@@ -44,6 +44,7 @@ public:
 
 private:
     Common::FrameData m_data;
+    BasicString<tchar> m_appliedWindowTitle;
 
 private:
     Graphics m_graphics;

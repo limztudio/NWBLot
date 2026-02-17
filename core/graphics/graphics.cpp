@@ -82,6 +82,20 @@ bool Graphics::init(const Common::FrameData& data){
     return m_deviceManager->createWindowDeviceAndSwapChain(m_deviceCreationParams, data);
 }
 
+bool Graphics::runFrame(){
+    if(!m_deviceManager)
+        return false;
+
+    return m_deviceManager->runFrame();
+}
+
+void Graphics::updateWindowState(u32 width, u32 height, bool windowVisible, bool windowIsInFocus){
+    if(!m_deviceManager)
+        return;
+
+    m_deviceManager->updateWindowState(width, height, windowVisible, windowIsInFocus);
+}
+
 void Graphics::destroy(){
     if(m_deviceManager){
         m_deviceManager->shutdown();

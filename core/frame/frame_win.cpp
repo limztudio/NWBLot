@@ -191,6 +191,26 @@ bool Frame::mainLoop(){
         }
 
         {
+            RECT rect = {};
+            const bool hasRect = GetClientRect(data<Common::WinFrame>().hwnd(), &rect) != FALSE;
+            const bool windowVisible = hasRect && (rect.right > rect.left) && (rect.bottom > rect.top);
+            const u32 width = windowVisible ? static_cast<u32>(rect.right - rect.left) : 0;
+            const u32 height = windowVisible ? static_cast<u32>(rect.bottom - rect.top) : 0;
+            const bool windowIsInFocus = GetForegroundWindow() == data<Common::WinFrame>().hwnd();
+            m_graphics.updateWindowState(width, height, windowVisible, windowIsInFocus);
+
+            if(auto* deviceManager = m_graphics.getDeviceManager()){
+                const tchar* title = deviceManager->getWindowTitle();
+                if(title && m_appliedWindowTitle != title){
+                    m_appliedWindowTitle = title;
+#ifdef NWB_UNICODE
+                    SetWindowTextW(data<Common::WinFrame>().hwnd(), m_appliedWindowTitle.c_str());
+#else
+                    SetWindowTextA(data<Common::WinFrame>().hwnd(), m_appliedWindowTitle.c_str());
+#endif
+                }
+            }
+
             Timer currentTime(TimerNow());
             auto timeDifference = DurationInSeconds<float>(currentTime, lateTime);
             lateTime = currentTime;

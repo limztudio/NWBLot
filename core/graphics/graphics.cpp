@@ -62,10 +62,10 @@ void Graphics::freePersistentSystemMemory(void* userData, void* memory){
 Graphics::Graphics()
     : m_persistentArena(s_maxDynamicAllocSize)
     , m_systemMemoryAllocator{
-        &m_persistentArena,
-        &Graphics::allocatePersistentSystemMemory,
-        &Graphics::reallocatePersistentSystemMemory,
-        &Graphics::freePersistentSystemMemory
+        &m_persistentArena
+        , &Graphics::allocatePersistentSystemMemory
+        , &Graphics::reallocatePersistentSystemMemory
+        , &Graphics::freePersistentSystemMemory
     }
 {
     m_deviceManager = IDeviceManager::create(GraphicsAPI::VULKAN);

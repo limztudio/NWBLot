@@ -88,7 +88,7 @@ public:
         current_size = max_elements;
     }
 
-    constexpr void swap(static_vector& other)noexcept{
+    constexpr void swap(FixedVector& other)noexcept{
         base::swap(*this);
         std::swap(current_size, other.current_size);
     }

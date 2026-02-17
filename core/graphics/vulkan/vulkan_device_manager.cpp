@@ -230,7 +230,7 @@ bool DeviceManager::createInstance(){
 
     NWB_LOGGER_INFO(NWB_TEXT("Vulkan: Enabled layers:"));
     for(const auto& layer : m_enabledExtensions.layers)
-        NWB_LOGGER_INFO(NWB_TEXT("Vulkan:     {}"), AString(layer));
+        NWB_LOGGER_INFO(NWB_TEXT("Vulkan:     {}"), StringConvert(layer));
 
     auto instanceExtVec = __hidden_vulkan::StringSetToVector(m_enabledExtensions.instance);
     auto layerVec = __hidden_vulkan::StringSetToVector(m_enabledExtensions.layers);

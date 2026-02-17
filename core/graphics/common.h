@@ -129,7 +129,7 @@ struct Rect{
     constexpr Rect()noexcept : minX(0), maxX(0), minY(0), maxY(0) {}
     constexpr Rect(i32 width, i32 height)noexcept : minX(0), maxX(width), minY(0), maxY(height) {}
     constexpr Rect(i32 _minX, i32 _maxX, i32 _minY, i32 _maxY)noexcept : minX(_minX), maxX(_maxX), minY(_minY), maxY(_maxY) {}
-    constexpr explicit Rect(const Viewport& viewport)noexcept : minX(static_cast<i32>(floor(viewport.minX))), maxX(static_cast<i32>(ceil(viewport.maxX))), minY(static_cast<i32>(floor(viewport.minY))), maxY(static_cast<i32>(ceil(viewport.maxY))) {}
+    explicit Rect(const Viewport& viewport)noexcept : minX(static_cast<i32>(floor(viewport.minX))), maxX(static_cast<i32>(ceil(viewport.maxX))), minY(static_cast<i32>(floor(viewport.minY))), maxY(static_cast<i32>(ceil(viewport.maxY))) {}
     
     [[nodiscard]] constexpr i32 width()const noexcept{ return maxX - minX; }
     [[nodiscard]] constexpr i32 height()const noexcept{ return maxY - minY; }
@@ -524,9 +524,9 @@ struct TextureSlice{
     
     // -1 means the entire dimension is part of the region
     // resolve() will translate these values into actual dimensions
-    auto width = static_cast<u32>(-1);
-    auto height = static_cast<u32>(-1);
-    auto depth = static_cast<u32>(-1);
+    u32 width = static_cast<u32>(-1);
+    u32 height = static_cast<u32>(-1);
+    u32 depth = static_cast<u32>(-1);
     
     MipLevel mipLevel = 0;
     ArraySlice arraySlice = 0;
@@ -1657,7 +1657,7 @@ struct RayTracingGeometryDesc{
 
     RayTracingGeometryDesc() : geometryData{} {}
 
-    constexpr RayTracingGeometryDesc& setTransform(const AffineTransform& value){ NWB_MEMCPY(&transform, sizeof(transform), &value, sizeof(AffineTransform)); useTransform = true; return *this; }
+    RayTracingGeometryDesc& setTransform(const AffineTransform& value){ NWB_MEMCPY(&transform, sizeof(transform), &value, sizeof(AffineTransform)); useTransform = true; return *this; }
     constexpr RayTracingGeometryDesc& setFlags(RayTracingGeometryFlags::Mask value){ flags = value; return *this; }
     constexpr RayTracingGeometryDesc& setTriangles(const RayTracingGeometryTriangles& value){ geometryData.triangles = value; geometryType = RayTracingGeometryType::Triangles; return *this; }
     constexpr RayTracingGeometryDesc& setAABBs(const RayTracingGeometryAABBs& value){ geometryData.aabbs = value; geometryType = RayTracingGeometryType::AABBs; return *this; }
@@ -1711,7 +1711,7 @@ struct RayTracingInstanceDesc{
     constexpr RayTracingInstanceDesc& setInstanceID(u32 value){ instanceID = value; return *this; }
     constexpr RayTracingInstanceDesc& setInstanceContributionToHitGroupIndex(u32 value){ instanceContributionToHitGroupIndex = value; return *this; }
     constexpr RayTracingInstanceDesc& setInstanceMask(u32 value){ instanceMask = value; return *this; }
-    constexpr RayTracingInstanceDesc& setTransform(const AffineTransform& value){ NWB_MEMCPY(&transform, sizeof(transform), &value, sizeof(AffineTransform)); return *this; }
+    RayTracingInstanceDesc& setTransform(const AffineTransform& value){ NWB_MEMCPY(&transform, sizeof(transform), &value, sizeof(AffineTransform)); return *this; }
     constexpr RayTracingInstanceDesc& setFlags(RayTracingInstanceFlags::Mask value){ flags = value; return *this; }
     constexpr RayTracingInstanceDesc& setBLAS(IRayTracingAccelStruct* value){ bottomLevelAS = value; return *this; }
 };
@@ -2139,7 +2139,7 @@ struct BindingSetItem{
     constexpr BindingSetItem& setSubresources(TextureSubresourceSet value){ subresources = value; return *this; }
     constexpr BindingSetItem& setRange(BufferRange value){ range = value; return *this; }
     
-    static constexpr BindingSetItem None(u32 slot = 0){
+    static BindingSetItem None(u32 slot = 0){
         BindingSetItem result;
         result.slot = slot;
         result.arrayElement = 0;
@@ -2153,7 +2153,7 @@ struct BindingSetItem{
         result.unused2 = 0;
         return result;
     }
-    static constexpr BindingSetItem Texture_SRV(u32 slot, ITexture* texture, Format::Enum format = Format::UNKNOWN, TextureSubresourceSet subresources = s_allSubresources, TextureDimension::Enum dimension = TextureDimension::Unknown){
+    static BindingSetItem Texture_SRV(u32 slot, ITexture* texture, Format::Enum format = Format::UNKNOWN, TextureSubresourceSet subresources = s_allSubresources, TextureDimension::Enum dimension = TextureDimension::Unknown){
         BindingSetItem result;
         result.slot = slot;
         result.arrayElement = 0;
@@ -2166,7 +2166,7 @@ struct BindingSetItem{
         result.unused2 = 0;
         return result;
     }
-    static constexpr BindingSetItem Texture_UAV(u32 slot, ITexture* texture, Format::Enum format = Format::UNKNOWN, TextureSubresourceSet subresources = TextureSubresourceSet(0, 1, 0, TextureSubresourceSet::AllArraySlices), TextureDimension::Enum dimension = TextureDimension::Unknown){
+    static BindingSetItem Texture_UAV(u32 slot, ITexture* texture, Format::Enum format = Format::UNKNOWN, TextureSubresourceSet subresources = TextureSubresourceSet(0, 1, 0, TextureSubresourceSet::AllArraySlices), TextureDimension::Enum dimension = TextureDimension::Unknown){
         BindingSetItem result;
         result.slot = slot;
         result.arrayElement = 0;
@@ -2179,7 +2179,7 @@ struct BindingSetItem{
         result.unused2 = 0;
         return result;
     }
-    static constexpr BindingSetItem TypedBuffer_SRV(u32 slot, IBuffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_entireBuffer){
+    static BindingSetItem TypedBuffer_SRV(u32 slot, IBuffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_entireBuffer){
         BindingSetItem result;
         result.slot = slot;
         result.arrayElement = 0;
@@ -2192,7 +2192,7 @@ struct BindingSetItem{
         result.unused2 = 0;
         return result;
     }
-    static constexpr BindingSetItem TypedBuffer_UAV(u32 slot, IBuffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_entireBuffer){
+    static BindingSetItem TypedBuffer_UAV(u32 slot, IBuffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_entireBuffer){
         BindingSetItem result;
         result.slot = slot;
         result.arrayElement = 0;
@@ -2205,7 +2205,7 @@ struct BindingSetItem{
         result.unused2 = 0;
         return result;
     }
-    static constexpr BindingSetItem ConstantBuffer(u32 slot, IBuffer* buffer, BufferRange range = s_entireBuffer){
+    static BindingSetItem ConstantBuffer(u32 slot, IBuffer* buffer, BufferRange range = s_entireBuffer){
         bool isVolatile = buffer && buffer->getDescription().isVolatile;
 
         BindingSetItem result;
@@ -2220,7 +2220,7 @@ struct BindingSetItem{
         result.unused2 = 0;
         return result;
     }
-    static constexpr BindingSetItem Sampler(u32 slot, ISampler* sampler){
+    static BindingSetItem Sampler(u32 slot, ISampler* sampler){
         BindingSetItem result;
         result.slot = slot;
         result.arrayElement = 0;
@@ -2234,7 +2234,7 @@ struct BindingSetItem{
         result.unused2 = 0;
         return result;
     }
-    static constexpr BindingSetItem RayTracingAccelStruct(u32 slot, IRayTracingAccelStruct* as){
+    static BindingSetItem RayTracingAccelStruct(u32 slot, IRayTracingAccelStruct* as){
         BindingSetItem result;
         result.slot = slot;
         result.arrayElement = 0;
@@ -2248,7 +2248,7 @@ struct BindingSetItem{
         result.unused2 = 0;
         return result;
     }
-    static constexpr BindingSetItem StructuredBuffer_SRV(u32 slot, IBuffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_entireBuffer){
+    static BindingSetItem StructuredBuffer_SRV(u32 slot, IBuffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_entireBuffer){
         BindingSetItem result;
         result.slot = slot;
         result.arrayElement = 0;
@@ -2261,7 +2261,7 @@ struct BindingSetItem{
         result.unused2 = 0;
         return result;
     }
-    static constexpr BindingSetItem StructuredBuffer_UAV(u32 slot, IBuffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_entireBuffer){
+    static BindingSetItem StructuredBuffer_UAV(u32 slot, IBuffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_entireBuffer){
         BindingSetItem result;
         result.slot = slot;
         result.arrayElement = 0;
@@ -2274,7 +2274,7 @@ struct BindingSetItem{
         result.unused2 = 0;
         return result;
     }
-    static constexpr BindingSetItem RawBuffer_SRV(u32 slot, IBuffer* buffer, BufferRange range = s_entireBuffer){
+    static BindingSetItem RawBuffer_SRV(u32 slot, IBuffer* buffer, BufferRange range = s_entireBuffer){
         BindingSetItem result;
         result.slot = slot;
         result.arrayElement = 0;
@@ -2287,7 +2287,7 @@ struct BindingSetItem{
         result.unused2 = 0;
         return result;
     }
-    static constexpr BindingSetItem RawBuffer_UAV(u32 slot, IBuffer* buffer, BufferRange range = s_entireBuffer){
+    static BindingSetItem RawBuffer_UAV(u32 slot, IBuffer* buffer, BufferRange range = s_entireBuffer){
         BindingSetItem result;
         result.slot = slot;
         result.arrayElement = 0;
@@ -2300,7 +2300,7 @@ struct BindingSetItem{
         result.unused2 = 0;
         return result;
     }
-    static constexpr BindingSetItem PushConstants(u32 slot, u32 byteSize){
+    static BindingSetItem PushConstants(u32 slot, u32 byteSize){
         BindingSetItem result;
         result.slot = slot;
         result.arrayElement = 0;
@@ -2314,7 +2314,7 @@ struct BindingSetItem{
         result.unused2 = 0;
         return result;
     }
-    static constexpr BindingSetItem SamplerFeedbackTexture_UAV(u32 slot, ISamplerFeedbackTexture* texture){
+    static BindingSetItem SamplerFeedbackTexture_UAV(u32 slot, ISamplerFeedbackTexture* texture){
         BindingSetItem result;
         result.slot = slot;
         result.arrayElement = 0;
@@ -2729,8 +2729,8 @@ struct RayTracingPipelineShaderDesc{
     BindingLayoutHandle bindingLayout;
     Name exportName;
     
-    constexpr RayTracingPipelineShaderDesc& setShader(IShader* value){ shader = value; return *this; }
-    constexpr RayTracingPipelineShaderDesc& setBindingLayout(IBindingLayout* value){ bindingLayout = value; return *this; }
+    RayTracingPipelineShaderDesc& setShader(IShader* value){ shader = value; return *this; }
+    RayTracingPipelineShaderDesc& setBindingLayout(IBindingLayout* value){ bindingLayout = value; return *this; }
     constexpr RayTracingPipelineShaderDesc& setExportName(const Name& value){ exportName = value; return *this; }
 };
 
@@ -2742,10 +2742,10 @@ struct RayTracingPipelineHitGroupDesc{
     Name exportName;
     bool isProceduralPrimitive = false;
     
-    constexpr RayTracingPipelineHitGroupDesc& setClosestHitShader(IShader* value){ closestHitShader = value; return *this; }
-    constexpr RayTracingPipelineHitGroupDesc& setAnyHitShader(IShader* value){ anyHitShader = value; return *this; }
-    constexpr RayTracingPipelineHitGroupDesc& setIntersectionShader(IShader* value){ intersectionShader = value; return *this; }
-    constexpr RayTracingPipelineHitGroupDesc& setBindingLayout(IBindingLayout* value){ bindingLayout = value; return *this; }
+    RayTracingPipelineHitGroupDesc& setClosestHitShader(IShader* value){ closestHitShader = value; return *this; }
+    RayTracingPipelineHitGroupDesc& setAnyHitShader(IShader* value){ anyHitShader = value; return *this; }
+    RayTracingPipelineHitGroupDesc& setIntersectionShader(IShader* value){ intersectionShader = value; return *this; }
+    RayTracingPipelineHitGroupDesc& setBindingLayout(IBindingLayout* value){ bindingLayout = value; return *this; }
     constexpr RayTracingPipelineHitGroupDesc& setExportName(const Name& value){ exportName = value; return *this; }
     constexpr RayTracingPipelineHitGroupDesc& setIsProceduralPrimitive(bool value){ isProceduralPrimitive = value; return *this; }
 };

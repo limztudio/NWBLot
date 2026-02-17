@@ -304,7 +304,7 @@ void ICommandList::setResourceStatesForFramebuffer(IFramebuffer* framebuffer){
 // AftermathMarkerTracker Implementation
 
 
-static constexpr AString s_notFoundMarkerString = "ERROR: could not resolve marker";
+static const AString s_notFoundMarkerString = "ERROR: could not resolve marker";
 static constexpr usize s_numDestroyedMarkerTrackers = 2;
 
 

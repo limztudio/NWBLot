@@ -28,14 +28,14 @@ inline constexpr AdoptRefT AdoptRef{};
 template<RefCountClass T, typename Deleter = DefaultDeleter<T>>
 class RefCountPtr{
     static_assert(!IsRValueReference<Deleter>::value, "The supplied Deleter cannot be a r-value reference.");
-private:
-    template<typename U>
-    using EnableUFromRawPtr = typename EnableIf<!IsArray<U>::value && IsConvertible<U*, pointer>::value>::type;
 public:
     typedef Deleter deleter_type;
     typedef T element_type;
     typedef RefCountPtr<element_type, deleter_type> this_type;
     typedef typename __hidden_smart_ptr::UniquePointerType<element_type, deleter_type>::type pointer;
+private:
+    template<typename U>
+    using EnableUFromRawPtr = typename EnableIf<!IsArray<U>::value && IsConvertible<U*, pointer>::value>::type;
 
 public:
     constexpr RefCountPtr()noexcept : mPair(pointer()){

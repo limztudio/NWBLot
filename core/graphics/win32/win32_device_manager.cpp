@@ -33,7 +33,9 @@ void IDeviceManager::extractPlatformHandles(const Common::FrameData& frameData){
 }
 
 void IDeviceManager::updateWindowSize(){
-    HWND hwnd = static_cast<HWND>(m_platformFrameParam.ptr[2]);
+    Common::WinFrame frame;
+    frame.frameParam() = m_platformFrameParam;
+    HWND hwnd = frame.hwnd();
     if(!hwnd)
         return;
 
@@ -101,11 +103,13 @@ void IDeviceManager::setWindowTitle(const tchar* title){
 
     m_windowTitle = title;
 
-    if(m_platformFrameParam.ptr[2]){
+    Common::WinFrame frame;
+    frame.frameParam() = m_platformFrameParam;
+    if(frame.hwnd()){
 #ifdef NWB_UNICODE
-        SetWindowTextW(static_cast<HWND>(m_platformFrameParam.ptr[2]), m_windowTitle.c_str());
+        SetWindowTextW(frame.hwnd(), m_windowTitle.c_str());
 #else
-        SetWindowTextA(static_cast<HWND>(m_platformFrameParam.ptr[2]), m_windowTitle.c_str());
+        SetWindowTextA(frame.hwnd(), m_windowTitle.c_str());
 #endif
     }
 }

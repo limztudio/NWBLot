@@ -3623,6 +3623,249 @@ typedef RefCountPtr<IDevice, BlankDeleter<IDevice>> DeviceHandle;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Adapter info
+
+
+struct AdapterInfo{
+    typedef Array<u8, 16> UUID;
+    typedef Array<u8, 8> LUID;
+
+    AString name;
+    u32 vendorID = 0;
+    u32 deviceID = 0;
+    u64 dedicatedVideoMemory = 0;
+
+    UUID uuid = {};
+    bool hasUUID = false;
+    LUID luid = {};
+    bool hasLUID = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Instance and device creation parameters
+
+
+struct InstanceParameters{
+    bool enableDebugRuntime = false;
+    bool enableWarningsAsErrors = false;
+    bool headlessDevice = false;
+    bool enableAftermath = false;
+    bool logBufferLifetime = false;
+    bool enablePerMonitorDPI = false;
+
+    AString vulkanLibraryName;
+    Vector<AString> requiredVulkanInstanceExtensions;
+    Vector<AString> requiredVulkanLayers;
+    Vector<AString> optionalVulkanInstanceExtensions;
+    Vector<AString> optionalVulkanLayers;
+};
+
+struct DeviceCreationParameters : public InstanceParameters{
+    bool startMaximized = false;
+    bool startFullscreen = false;
+    bool startBorderless = false;
+    bool allowModeSwitch = false;
+    i32 windowPosX = -1;
+    i32 windowPosY = -1;
+    u32 backBufferWidth = 1280;
+    u32 backBufferHeight = 720;
+    u32 refreshRate = 0;
+    u32 swapChainBufferCount = 3;
+    Format::Enum swapChainFormat = Format::RGBA8_UNORM_SRGB;
+    u32 swapChainSampleCount = 1;
+    u32 swapChainSampleQuality = 0;
+    u32 maxFramesInFlight = 2;
+    bool enableNvrhiValidationLayer = false;
+    bool vsyncEnabled = false;
+    bool enableRayTracingExtensions = false;
+    bool enableComputeQueue = false;
+    bool enableCopyQueue = false;
+    i32 adapterIndex = -1;
+    bool supportExplicitDisplayScaling = false;
+    bool resizeWindowWithDisplayScale = false;
+
+    Vector<AString> requiredVulkanDeviceExtensions;
+    Vector<AString> optionalVulkanDeviceExtensions;
+    Vector<usize> ignoredVulkanValidationMessageLocations;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Render pass interface
+
+
+class IDeviceManager;
+
+class IRenderPass{
+public:
+    explicit IRenderPass(IDeviceManager* deviceManager)
+        : m_deviceManager(deviceManager)
+    {}
+    virtual ~IRenderPass() = default;
+
+    virtual void setLatewarpOptions(){}
+    virtual bool shouldRenderUnfocused(){ return false; }
+    virtual void render(IFramebuffer* framebuffer){}
+    virtual void animate(f32 elapsedTimeSeconds){}
+    virtual void backBufferResizing(){}
+    virtual void backBufferResized(u32 width, u32 height, u32 sampleCount){}
+    virtual void displayScaleChanged(f32 scaleX, f32 scaleY){}
+
+    virtual bool keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods){ return false; }
+    virtual bool keyboardCharInput(u32 unicode, i32 mods){ return false; }
+    virtual bool mousePosUpdate(f64 xpos, f64 ypos){ return false; }
+    virtual bool mouseScrollUpdate(f64 xoffset, f64 yoffset){ return false; }
+    virtual bool mouseButtonUpdate(i32 button, i32 action, i32 mods){ return false; }
+
+    [[nodiscard]] IDeviceManager* getDeviceManager()const{ return m_deviceManager; }
+
+private:
+    IDeviceManager* m_deviceManager;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Device manager interface
+
+
+class IDeviceManager{
+public:
+    virtual ~IDeviceManager() = default;
+
+    static IDeviceManager* create(GraphicsAPI::Enum api);
+
+    bool createHeadlessDevice(const DeviceCreationParameters& params);
+    bool createWindowDeviceAndSwapChain(const DeviceCreationParameters& params, const Common::FrameData& frameData);
+    bool createInstance(const InstanceParameters& params);
+
+    virtual bool enumerateAdapters(Vector<AdapterInfo>& outAdapters) = 0;
+
+    void addRenderPassToFront(IRenderPass* pass);
+    void addRenderPassToBack(IRenderPass* pass);
+    void removeRenderPass(IRenderPass* pass);
+
+    void runMessageLoop();
+
+    void getWindowDimensions(i32& width, i32& height);
+    void getDPIScaleInfo(f32& x, f32& y)const{
+        x = m_dpiScaleFactorX;
+        y = m_dpiScaleFactorY;
+    }
+
+    [[nodiscard]] virtual IDevice* getDevice()const = 0;
+    [[nodiscard]] virtual const tchar* getRendererString()const = 0;
+    [[nodiscard]] virtual GraphicsAPI::Enum getGraphicsAPI()const = 0;
+
+    const DeviceCreationParameters& getDeviceParams()const{ return m_deviceParams; }
+    [[nodiscard]] f64 getAverageFrameTimeSeconds()const{ return m_averageFrameTime; }
+    [[nodiscard]] f64 getPreviousFrameTimestamp()const{ return DurationInSeconds<f64>(m_previousFrameTimestamp); }
+    void setFrameTimeUpdateInterval(f64 seconds){ m_averageTimeUpdateInterval = seconds; }
+    [[nodiscard]] bool isVsyncEnabled()const{ return m_deviceParams.vsyncEnabled; }
+    virtual void setVsyncEnabled(bool enabled){ m_requestedVSync = enabled; }
+    virtual void reportLiveObjects(){}
+    void setEnableRenderDuringWindowMovement(bool val){ m_enableRenderDuringWindowMovement = val; }
+
+    [[nodiscard]] u32 getFrameIndex()const{ return m_frameIndex; }
+
+    virtual ITexture* getCurrentBackBuffer() = 0;
+    virtual ITexture* getBackBuffer(u32 index) = 0;
+    virtual u32 getCurrentBackBufferIndex() = 0;
+    virtual u32 getBackBufferCount() = 0;
+    IFramebuffer* getCurrentFramebuffer();
+    IFramebuffer* getFramebuffer(u32 index);
+
+    virtual void shutdown();
+
+    void setWindowTitle(const tchar* title);
+    const tchar* getWindowTitle();
+
+    virtual bool isVulkanInstanceExtensionEnabled(const char* extensionName)const{ return false; }
+    virtual bool isVulkanDeviceExtensionEnabled(const char* extensionName)const{ return false; }
+    virtual bool isVulkanLayerEnabled(const char* layerName)const{ return false; }
+    virtual void getEnabledVulkanInstanceExtensions(Vector<AString>& extensions)const{}
+    virtual void getEnabledVulkanDeviceExtensions(Vector<AString>& extensions)const{}
+    virtual void getEnabledVulkanLayers(Vector<AString>& layers)const{}
+
+    // Input callbacks
+    void keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods);
+    void keyboardCharInput(u32 unicode, i32 mods);
+    void mousePosUpdate(f64 xpos, f64 ypos);
+    void mouseButtonUpdate(i32 button, i32 action, i32 mods);
+    void mouseScrollUpdate(f64 xoffset, f64 yoffset);
+
+    struct PipelineCallbacks{
+        Function<void(IDeviceManager&, u32)> beforeFrame = nullptr;
+        Function<void(IDeviceManager&, u32)> beforeAnimate = nullptr;
+        Function<void(IDeviceManager&, u32)> afterAnimate = nullptr;
+        Function<void(IDeviceManager&, u32)> beforeRender = nullptr;
+        Function<void(IDeviceManager&, u32)> afterRender = nullptr;
+        Function<void(IDeviceManager&, u32)> beforePresent = nullptr;
+        Function<void(IDeviceManager&, u32)> afterPresent = nullptr;
+    } m_callbacks;
+
+protected:
+    IDeviceManager() = default;
+
+    bool m_skipRenderOnFirstFrame = false;
+    bool m_windowVisible = false;
+    bool m_windowIsInFocus = true;
+
+    DeviceCreationParameters m_deviceParams;
+    bool m_enableRenderDuringWindowMovement = false;
+    bool m_isNvidia = false;
+    List<IRenderPass*> m_renderPasses;
+    Timer m_previousFrameTimestamp = {};
+    f32 m_dpiScaleFactorX = 1.f;
+    f32 m_dpiScaleFactorY = 1.f;
+    f32 m_prevDPIScaleFactorX = 0.f;
+    f32 m_prevDPIScaleFactorY = 0.f;
+    bool m_requestedVSync = false;
+    bool m_instanceCreated = false;
+
+    f64 m_averageFrameTime = 0.0;
+    f64 m_averageTimeUpdateInterval = 0.5;
+    f64 m_frameTimeSum = 0.0;
+    i32 m_numberOfAccumulatedFrames = 0;
+
+    u32 m_frameIndex = 0;
+
+    Vector<FramebufferHandle> m_swapChainFramebuffers;
+
+    // platform-specific methods (implemented per-platform, e.g. device_manager_win32.cpp)
+    void extractPlatformHandles(const Common::FrameData& frameData);
+    void updateWindowSize();
+
+    bool shouldRenderUnfocused()const;
+
+    void backBufferResizing();
+    void backBufferResized();
+    void displayScaleChanged();
+
+    void animate(f64 elapsedTime);
+    void render();
+    void updateAverageFrameTime(f64 elapsedTime);
+    bool animateRenderPresent();
+
+    // device-specific methods
+    virtual bool createInstanceInternal() = 0;
+    virtual bool createDeviceInternal() = 0;
+    virtual bool createSwapChainInternal() = 0;
+    virtual void destroyDeviceAndSwapChain() = 0;
+    virtual void resizeSwapChain() = 0;
+    virtual bool beginFrame() = 0;
+    virtual bool present() = 0;
+
+    // Win32 handles for window management
+    void* m_hwnd = nullptr;
+    void* m_hinstance = nullptr;
+
+private:
+    BasicString<tchar> m_windowTitle;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_CORE_END

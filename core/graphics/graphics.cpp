@@ -6,13 +6,27 @@
 
 #include <logger/client/logger.h>
 
-#include "vulkan/vulkan_backend.h"
+#include "vulkan/vulkan_device_manager.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_CORE_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+IDeviceManager* IDeviceManager::create(GraphicsAPI::Enum api){
+    switch(api){
+    case GraphicsAPI::VULKAN:
+        return new Vulkan::DeviceManager();
+    default:
+        NWB_LOGGER_ERROR(NWB_TEXT("DeviceManager: Unsupported graphics API."));
+        return nullptr;
+    }
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -54,19 +68,27 @@ Graphics::Graphics()
         &Graphics::freePersistentSystemMemory
     }
 {
-    Vulkan::DeviceDesc deviceDesc = {};
-    deviceDesc.systemMemoryAllocator = &m_systemMemoryAllocator;
-    deviceDesc.allocationCallbacks = nullptr;
-    deviceDesc.maxTimerQueries = m_gpuTimeQueriesPerFrame;
-    deviceDesc.aftermathEnabled = false;
-    deviceDesc.logBufferLifetime = false;
-    
-    m_device = Vulkan::CreateDevice(deviceDesc);
+    m_deviceManager = IDeviceManager::create(GraphicsAPI::VULKAN);
 }
-Graphics::~Graphics(){}
 
-bool Graphics::init(const Common::FrameData& data){ return m_engine->init(data); }
-void Graphics::destroy(){ m_engine.reset(); }
+Graphics::~Graphics(){
+    destroy();
+}
+
+bool Graphics::init(const Common::FrameData& data){
+    if(!m_deviceManager)
+        return false;
+
+    return m_deviceManager->createWindowDeviceAndSwapChain(m_deviceCreationParams, data);
+}
+
+void Graphics::destroy(){
+    if(m_deviceManager){
+        m_deviceManager->shutdown();
+        delete m_deviceManager;
+        m_deviceManager = nullptr;
+    }
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

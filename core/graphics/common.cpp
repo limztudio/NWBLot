@@ -5,6 +5,7 @@
 #include "common.h"
 
 #include <logger/client/logger.h>
+#include <global/sync.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -398,6 +399,272 @@ Pair<const void*, usize> AftermathCrashDumpHelper::findShaderBinary(u64 shaderHa
     }
 
     return MakePair(static_cast<const void*>(nullptr), static_cast<usize>(0));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// IDeviceManager base implementation
+
+
+bool IDeviceManager::createHeadlessDevice(const DeviceCreationParameters& params){
+    m_deviceParams = params;
+    m_deviceParams.headlessDevice = true;
+
+    if(!m_instanceCreated){
+        if(!createInstanceInternal())
+            return false;
+        m_instanceCreated = true;
+    }
+
+    if(!createDeviceInternal())
+        return false;
+
+    NWB_LOGGER_INFO(NWB_TEXT("DeviceManager: Headless device created."));
+    return true;
+}
+
+bool IDeviceManager::createWindowDeviceAndSwapChain(const DeviceCreationParameters& params, const Common::FrameData& frameData){
+    m_deviceParams = params;
+    m_deviceParams.headlessDevice = false;
+
+    m_deviceParams.backBufferWidth = frameData.width();
+    m_deviceParams.backBufferHeight = frameData.height();
+
+    extractPlatformHandles(frameData);
+
+    if(!m_instanceCreated){
+        if(!createInstanceInternal())
+            return false;
+        m_instanceCreated = true;
+    }
+
+    if(!createDeviceInternal())
+        return false;
+
+    if(!createSwapChainInternal())
+        return false;
+
+    // reset the back buffer size state to enforce a resize event
+    m_deviceParams.backBufferWidth = 0;
+    m_deviceParams.backBufferHeight = 0;
+
+    updateWindowSize();
+
+    return true;
+}
+
+bool IDeviceManager::createInstance(const InstanceParameters& params){
+    // Copy instance parameters into device params
+    m_deviceParams.enableDebugRuntime = params.enableDebugRuntime;
+    m_deviceParams.enableWarningsAsErrors = params.enableWarningsAsErrors;
+    m_deviceParams.headlessDevice = params.headlessDevice;
+    m_deviceParams.enableAftermath = params.enableAftermath;
+    m_deviceParams.logBufferLifetime = params.logBufferLifetime;
+    m_deviceParams.enablePerMonitorDPI = params.enablePerMonitorDPI;
+    m_deviceParams.vulkanLibraryName = params.vulkanLibraryName;
+    m_deviceParams.requiredVulkanInstanceExtensions = params.requiredVulkanInstanceExtensions;
+    m_deviceParams.requiredVulkanLayers = params.requiredVulkanLayers;
+    m_deviceParams.optionalVulkanInstanceExtensions = params.optionalVulkanInstanceExtensions;
+    m_deviceParams.optionalVulkanLayers = params.optionalVulkanLayers;
+
+    if(!createInstanceInternal())
+        return false;
+
+    m_instanceCreated = true;
+    return true;
+}
+
+void IDeviceManager::addRenderPassToFront(IRenderPass* pass){
+    m_renderPasses.remove(pass);
+    m_renderPasses.push_front(pass);
+
+    pass->backBufferResizing();
+    pass->backBufferResized(m_deviceParams.backBufferWidth, m_deviceParams.backBufferHeight, m_deviceParams.swapChainSampleCount);
+}
+
+void IDeviceManager::addRenderPassToBack(IRenderPass* pass){
+    m_renderPasses.remove(pass);
+    m_renderPasses.push_back(pass);
+
+    pass->backBufferResizing();
+    pass->backBufferResized(m_deviceParams.backBufferWidth, m_deviceParams.backBufferHeight, m_deviceParams.swapChainSampleCount);
+}
+
+void IDeviceManager::removeRenderPass(IRenderPass* pass){
+    m_renderPasses.remove(pass);
+}
+
+void IDeviceManager::backBufferResizing(){
+    m_swapChainFramebuffers.clear();
+
+    for(auto it : m_renderPasses)
+        it->backBufferResizing();
+}
+
+void IDeviceManager::backBufferResized(){
+    for(auto it : m_renderPasses){
+        it->backBufferResized(m_deviceParams.backBufferWidth, m_deviceParams.backBufferHeight, m_deviceParams.swapChainSampleCount);
+    }
+
+    u32 backBufferCount = getBackBufferCount();
+    m_swapChainFramebuffers.resize(backBufferCount);
+    for(u32 index = 0; index < backBufferCount; ++index){
+        m_swapChainFramebuffers[index] = getDevice()->createFramebuffer(
+            FramebufferDesc().addColorAttachment(getBackBuffer(index)));
+    }
+}
+
+void IDeviceManager::displayScaleChanged(){
+    for(auto it : m_renderPasses)
+        it->displayScaleChanged(m_dpiScaleFactorX, m_dpiScaleFactorY);
+}
+
+void IDeviceManager::animate(f64 elapsedTime){
+    for(auto it : m_renderPasses){
+        it->animate(static_cast<f32>(elapsedTime));
+        it->setLatewarpOptions();
+    }
+}
+
+void IDeviceManager::render(){
+    IFramebuffer* framebuffer = m_swapChainFramebuffers[getCurrentBackBufferIndex()];
+
+    for(auto it : m_renderPasses)
+        it->render(framebuffer);
+}
+
+void IDeviceManager::updateAverageFrameTime(f64 elapsedTime){
+    m_frameTimeSum += elapsedTime;
+    m_numberOfAccumulatedFrames += 1;
+
+    if(m_frameTimeSum > m_averageTimeUpdateInterval && m_numberOfAccumulatedFrames > 0){
+        m_averageFrameTime = m_frameTimeSum / static_cast<f64>(m_numberOfAccumulatedFrames);
+        m_numberOfAccumulatedFrames = 0;
+        m_frameTimeSum = 0.0;
+    }
+}
+
+bool IDeviceManager::shouldRenderUnfocused()const{
+    for(auto it = m_renderPasses.crbegin(); it != m_renderPasses.crend(); ++it){
+        if((*it)->shouldRenderUnfocused())
+            return true;
+    }
+    return false;
+}
+
+bool IDeviceManager::animateRenderPresent(){
+    Timer now = TimerNow();
+    f64 elapsedTime = DurationInSeconds<f64>(now, m_previousFrameTimestamp);
+
+    if(m_windowVisible && (m_windowIsInFocus || shouldRenderUnfocused())){
+        if(m_prevDPIScaleFactorX != m_dpiScaleFactorX || m_prevDPIScaleFactorY != m_dpiScaleFactorY){
+            displayScaleChanged();
+            m_prevDPIScaleFactorX = m_dpiScaleFactorX;
+            m_prevDPIScaleFactorY = m_dpiScaleFactorY;
+        }
+
+        if(m_callbacks.beforeAnimate) m_callbacks.beforeAnimate(*this, m_frameIndex);
+        animate(elapsedTime);
+        if(m_callbacks.afterAnimate) m_callbacks.afterAnimate(*this, m_frameIndex);
+
+        if(m_frameIndex > 0 || !m_skipRenderOnFirstFrame){
+            if(beginFrame()){
+                u32 frameIndex = m_frameIndex;
+
+                if(m_skipRenderOnFirstFrame)
+                    frameIndex--;
+
+                if(m_callbacks.beforeRender) m_callbacks.beforeRender(*this, frameIndex);
+                render();
+                if(m_callbacks.afterRender) m_callbacks.afterRender(*this, frameIndex);
+
+                if(m_callbacks.beforePresent) m_callbacks.beforePresent(*this, frameIndex);
+                bool presentSuccess = present();
+                if(m_callbacks.afterPresent) m_callbacks.afterPresent(*this, frameIndex);
+
+                if(!presentSuccess)
+                    return false;
+            }
+        }
+    }
+
+    yield();
+
+    getDevice()->runGarbageCollection();
+
+    updateAverageFrameTime(elapsedTime);
+    m_previousFrameTimestamp = now;
+
+    ++m_frameIndex;
+    return true;
+}
+
+void IDeviceManager::getWindowDimensions(i32& width, i32& height){
+    width = m_deviceParams.backBufferWidth;
+    height = m_deviceParams.backBufferHeight;
+}
+
+IFramebuffer* IDeviceManager::getCurrentFramebuffer(){
+    return getFramebuffer(getCurrentBackBufferIndex());
+}
+
+IFramebuffer* IDeviceManager::getFramebuffer(u32 index){
+    if(index < m_swapChainFramebuffers.size())
+        return m_swapChainFramebuffers[index];
+    return nullptr;
+}
+
+const tchar* IDeviceManager::getWindowTitle(){
+    return m_windowTitle.c_str();
+}
+
+void IDeviceManager::shutdown(){
+    m_swapChainFramebuffers.clear();
+    destroyDeviceAndSwapChain();
+    m_instanceCreated = false;
+}
+
+void IDeviceManager::keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods){
+    if(key == -1)
+        return;
+
+    for(auto it = m_renderPasses.crbegin(); it != m_renderPasses.crend(); ++it){
+        if((*it)->keyboardUpdate(key, scancode, action, mods))
+            break;
+    }
+}
+
+void IDeviceManager::keyboardCharInput(u32 unicode, i32 mods){
+    for(auto it = m_renderPasses.crbegin(); it != m_renderPasses.crend(); ++it){
+        if((*it)->keyboardCharInput(unicode, mods))
+            break;
+    }
+}
+
+void IDeviceManager::mousePosUpdate(f64 xpos, f64 ypos){
+    if(!m_deviceParams.supportExplicitDisplayScaling){
+        xpos /= m_dpiScaleFactorX;
+        ypos /= m_dpiScaleFactorY;
+    }
+
+    for(auto it = m_renderPasses.crbegin(); it != m_renderPasses.crend(); ++it){
+        if((*it)->mousePosUpdate(xpos, ypos))
+            break;
+    }
+}
+
+void IDeviceManager::mouseButtonUpdate(i32 button, i32 action, i32 mods){
+    for(auto it = m_renderPasses.crbegin(); it != m_renderPasses.crend(); ++it){
+        if((*it)->mouseButtonUpdate(button, action, mods))
+            break;
+    }
+}
+
+void IDeviceManager::mouseScrollUpdate(f64 xoffset, f64 yoffset){
+    for(auto it = m_renderPasses.crbegin(); it != m_renderPasses.crend(); ++it){
+        if((*it)->mouseScrollUpdate(xoffset, yoffset))
+            break;
+    }
 }
 
 

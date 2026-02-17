@@ -19,16 +19,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class VulkanEngine;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class Graphics{
-    friend VulkanEngine;
-
-
 private:
     template<typename T>
     using PersistentAllocator = Alloc::MemoryAllocator<T>;
@@ -54,6 +45,7 @@ public:
     bool init(const Common::FrameData& data);
     void destroy();
     [[nodiscard]] const SystemMemoryAllocator& getSystemMemoryAllocator()const noexcept{ return m_systemMemoryAllocator; }
+    [[nodiscard]] IDeviceManager* getDeviceManager()const noexcept{ return m_deviceManager; }
 
 
 private:
@@ -61,15 +53,10 @@ private:
     SystemMemoryAllocator m_systemMemoryAllocator;
 
 private:
-    u16 m_swapchainWidth = 0;
-    u16 m_swapchainHeight = 0;
-    u8 m_swapchainImageCount = 0;
-
-    u16 m_gpuTimeQueriesPerFrame = 32;
-    bool m_gpuTimeQueriesEnabled = false;
+    DeviceCreationParameters m_deviceCreationParams;
 
 private:
-    DeviceHandle m_device;
+    IDeviceManager* m_deviceManager = nullptr;
 };
 
 

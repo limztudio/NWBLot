@@ -121,7 +121,7 @@ public:
 
 
 protected:
-    __hidden_common::FrameParam m_data;
+    FrameParam m_data;
 };
 #if defined(NWB_PLATFORM_WINDOWS)
 #include <windows.h>

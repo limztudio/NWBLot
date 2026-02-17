@@ -81,7 +81,7 @@ inline Timer TimerNow()noexcept{ return std::chrono::steady_clock::now(); }
 
 
 namespace __hidden_timer{
-    static inline Timer s_veryBegining = TimerNow();
+    static inline Timer s_VeryBegining = TimerNow();
 };
 
 
@@ -89,18 +89,18 @@ namespace __hidden_timer{
 
 
 template<typename T>
-inline T DurationInSeconds(const Timer& current, const Timer& late = __hidden_timer::s_veryBegining)noexcept{
+inline T DurationInSeconds(const Timer& current, const Timer& late = __hidden_timer::s_VeryBegining)noexcept{
     return std::chrono::duration_cast<std::chrono::duration<T, std::ratio<1, 1>>>(current - late).count();
 }
 template<typename T>
-inline T DurationInMS(const Timer& current, const Timer& late = __hidden_timer::s_veryBegining)noexcept{
+inline T DurationInMS(const Timer& current, const Timer& late = __hidden_timer::s_VeryBegining)noexcept{
     return std::chrono::duration_cast<std::chrono::duration<T, std::ratio<1, 1000>>>(current - late).count();
 }
 template<typename T>
-inline T DurationInNS(const Timer& current, const Timer& late = __hidden_timer::s_veryBegining)noexcept{
+inline T DurationInNS(const Timer& current, const Timer& late = __hidden_timer::s_VeryBegining)noexcept{
     return std::chrono::duration_cast<std::chrono::duration<T, std::ratio<1, 1000000000>>>(current - late).count();
 }
-inline TimerDelta DurationInTimeDelta(const Timer& current, const Timer& late = __hidden_timer::s_veryBegining)noexcept{
+inline TimerDelta DurationInTimeDelta(const Timer& current, const Timer& late = __hidden_timer::s_VeryBegining)noexcept{
     return TimerDelta(DurationInMS<i64>(current, late));
 }
 

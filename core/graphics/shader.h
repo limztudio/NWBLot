@@ -55,10 +55,10 @@ struct IndirectInstanceDesc{
     GpuVirtualAddress blasDeviceAddress;
 };
 
-static const u32 s_clasByteAlignment = 128;
-static const u32 s_clasMaxTriangles = 256;
-static const u32 s_clasMaxVertices = 256;
-static const u32 s_maxGeometryIndex = 16777215;
+static constexpr u32 s_ClasByteAlignment = 128;
+static constexpr u32 s_ClasMaxTriangles = 256;
+static constexpr u32 s_ClasMaxVertices = 256;
+static constexpr u32 s_MaxGeometryIndex = 16777215;
 
 struct IndirectTriangleClasArgs{
     u32               clusterId;                         // The user specified cluster Id to encode in the CLAS

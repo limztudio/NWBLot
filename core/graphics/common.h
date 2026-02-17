@@ -34,16 +34,16 @@ namespace __hidden_core{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr u32 s_maxRenderTargets = 8;
-static constexpr u32 s_maxViewports = 16;
-static constexpr u32 s_maxVertexAttributes = 16;
-static constexpr u32 s_maxBindingLayouts = 8;
-static constexpr u32 s_maxBindlessRegisterSpaces = 16;
-static constexpr u32 s_maxVolatileConstantBuffersPerLayout = 6;
-static constexpr u32 s_maxVolatileConstantBuffers = 32;
-static constexpr u32 s_maxPushConstantSize = 128;
-static constexpr u32 s_constantBufferOffsetSizeAlignment = 256;
-static constexpr u32 s_maxAftermathEventStrings = 128;
+static constexpr u32 s_MaxRenderTargets = 8;
+static constexpr u32 s_MaxViewports = 16;
+static constexpr u32 s_MaxVertexAttributes = 16;
+static constexpr u32 s_MaxBindingLayouts = 8;
+static constexpr u32 s_MaxBindlessRegisterSpaces = 16;
+static constexpr u32 s_MaxVolatileConstantBuffersPerLayout = 6;
+static constexpr u32 s_MaxVolatileConstantBuffers = 32;
+static constexpr u32 s_MaxPushConstantSize = 128;
+static constexpr u32 s_ConstantBufferOffsetSizeAlignment = 256;
+static constexpr u32 s_MaxAftermathEventStrings = 128;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1024,7 +1024,7 @@ namespace ColorMask{
             [[nodiscard]] bool usesConstantColor()const;
         };
 
-        RenderTarget targets[s_maxRenderTargets];
+        RenderTarget targets[s_MaxRenderTargets];
         bool alphaToCoverageEnable = false;
 
         constexpr BlendState& setRenderTarget(u32 index, const RenderTarget& target){ targets[index] = target; return *this; }
@@ -1051,7 +1051,7 @@ namespace ColorMask{
         if(lhs.alphaToCoverageEnable != rhs.alphaToCoverageEnable)
             return false;
 
-        for(u32 i = 0; i < s_maxRenderTargets; ++i){
+        for(u32 i = 0; i < s_MaxRenderTargets; ++i){
             if(lhs.targets[i] != rhs.targets[i])
                 return false;
         }
@@ -1223,8 +1223,8 @@ struct ViewportState{
     // note: you can only set each of these either in the PSO or per draw call in DrawArguments
     // it is not legal to have the same state set in both the PSO and DrawArguments
     // leaving these vectors empty means no state is set
-    FixedVector<Viewport, s_maxViewports> viewports;
-    FixedVector<Rect, s_maxViewports> scissorRects;
+    FixedVector<Viewport, s_MaxViewports> viewports;
+    FixedVector<Rect, s_MaxViewports> scissorRects;
 
     constexpr ViewportState& addViewport(const Viewport& v){ viewports.push_back(v); return *this; }
     constexpr ViewportState& addScissorRect(const Rect& r){ scissorRects.push_back(r); return *this; }
@@ -1318,7 +1318,7 @@ struct FramebufferAttachment{
 };
 
 struct FramebufferDesc{
-    FixedVector<FramebufferAttachment, s_maxRenderTargets> colorAttachments;
+    FixedVector<FramebufferAttachment, s_MaxRenderTargets> colorAttachments;
     FramebufferAttachment depthAttachment;
     FramebufferAttachment shadingRateAttachment;
 
@@ -1334,7 +1334,7 @@ struct FramebufferDesc{
 };
 
 struct FramebufferInfo{
-    FixedVector<Format::Enum, s_maxRenderTargets> colorFormats;
+    FixedVector<Format::Enum, s_MaxRenderTargets> colorFormats;
     Format::Enum depthFormat = Format::UNKNOWN;
     u32 sampleCount = 1;
     u32 sampleQuality = 0;
@@ -2079,7 +2079,7 @@ struct BindlessLayoutDesc{
     ShaderType::Mask visibility = ShaderType::None;
     u32 firstSlot = 0;
     u32 maxCapacity = 0;
-    FixedVector<BindingLayoutItem, s_maxBindlessRegisterSpaces> registerSpaces;
+    FixedVector<BindingLayoutItem, s_MaxBindlessRegisterSpaces> registerSpaces;
 
     BindlessLayoutType::Enum layoutType = BindlessLayoutType::Immutable;
 
@@ -2475,7 +2475,7 @@ inline bool operator==(const VariableRateShadingState& lhs, const VariableRateSh
 }
 inline bool operator!=(const VariableRateShadingState& lhs, const VariableRateShadingState& rhs){ return !(lhs == rhs); }
 
-typedef FixedVector<BindingLayoutHandle, s_maxBindingLayouts> BindingLayoutVector;
+typedef FixedVector<BindingLayoutHandle, s_MaxBindingLayouts> BindingLayoutVector;
 
 struct GraphicsPipelineDesc{
     PrimitiveType::Enum primType = PrimitiveType::TriangleList;
@@ -2606,7 +2606,7 @@ inline bool operator==(const IndexBufferBinding& lhs, const IndexBufferBinding& 
 }
 inline bool operator!=(const IndexBufferBinding& lhs, const IndexBufferBinding& rhs)noexcept{ return !(lhs == rhs); }
 
-typedef FixedVector<IBindingSet*, s_maxBindingLayouts> BindingSetVector;
+typedef FixedVector<IBindingSet*, s_MaxBindingLayouts> BindingSetVector;
 
 struct GraphicsState{
     IGraphicsPipeline* pipeline = nullptr;
@@ -2618,7 +2618,7 @@ struct GraphicsState{
 
     BindingSetVector bindings;
 
-    FixedVector<VertexBufferBinding, s_maxVertexAttributes> vertexBuffers;
+    FixedVector<VertexBufferBinding, s_MaxVertexAttributes> vertexBuffers;
     IndexBufferBinding indexBuffer;
 
     IBuffer* indirectParams = nullptr;
@@ -3472,7 +3472,7 @@ private:
     // Using a filesystem path to track the event stack since that automatically inserts "/" separators
     Path m_eventStack;
     
-    Array<usize, s_maxAftermathEventStrings> m_eventHashes;
+    Array<usize, s_MaxAftermathEventStrings> m_eventHashes;
     usize m_oldestHashIndex;
     HashMap<usize, AString> m_eventStrings;
 };

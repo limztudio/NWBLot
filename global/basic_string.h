@@ -125,7 +125,7 @@ inline AString StringConvert(const In& raw){
 }
 template<typename In> requires __hidden_basic_string::FromWcharView<In>
 inline AString StringConvert(In&& raw){
-    WStringView src(Move(raw));
+    WStringView src(raw);
     if(src.empty())
         return AString();
 #if defined(NWB_PLATFORM_WINDOWS)
@@ -156,7 +156,7 @@ inline WString StringConvert(const In& raw){
 }
 template<typename In> requires __hidden_basic_string::FromCharView<In>
 inline WString StringConvert(In&& raw){
-    AStringView src(Move(raw));
+    AStringView src(raw);
     if(src.empty())
         return WString();
 #if defined(NWB_PLATFORM_WINDOWS)

@@ -180,13 +180,11 @@ bool DeviceManager::createInstance(){
     }
 #endif
 
-    // add instance extensions requested by the user
     for(const auto& name : m_deviceParams.requiredVulkanInstanceExtensions)
         m_enabledExtensions.instance.insert(name);
     for(const auto& name : m_deviceParams.optionalVulkanInstanceExtensions)
         m_optionalExtensions.instance.insert(name);
 
-    // add layers requested by the user
     for(const auto& name : m_deviceParams.requiredVulkanLayers)
         m_enabledExtensions.layers.insert(name);
     for(const auto& name : m_deviceParams.optionalVulkanLayers)
@@ -194,7 +192,6 @@ bool DeviceManager::createInstance(){
 
     HashSet<AString> requiredExtensions = m_enabledExtensions.instance;
 
-    // figure out which optional extensions are supported
     uint32_t extensionCount = 0;
     vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
     Vector<VkExtensionProperties> availableExtensions(extensionCount);
@@ -265,7 +262,6 @@ bool DeviceManager::createInstance(){
     applicationInfo.pEngineName = "NWBLot";
     applicationInfo.engineVersion = VK_MAKE_API_VERSION(0, 1, 0, 0);
 
-    // Query the Vulkan API version
     VkResult res = vkEnumerateInstanceVersion(&applicationInfo.apiVersion);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate instance version. {}"), ResultToString(res));
@@ -421,7 +417,6 @@ bool DeviceManager::pickPhysicalDevice(){
 
         errorStream << std::endl << prop.deviceName << ":";
 
-        // check required device extensions
         HashSet<AString> requiredExtensions;
         for(const auto& [name, _] : m_enabledExtensions.device)
             requiredExtensions.insert(name);
@@ -539,7 +534,6 @@ bool DeviceManager::pickPhysicalDevice(){
 
 
 bool DeviceManager::createDevice(){
-    // figure out which optional extensions are supported
     uint32_t extCount = 0;
     vkEnumerateDeviceExtensionProperties(m_vulkanPhysicalDevice, nullptr, &extCount, nullptr);
     Vector<VkExtensionProperties> deviceExtensions(extCount);
@@ -611,7 +605,6 @@ bool DeviceManager::createDevice(){
     physicalDeviceFeatures2.pNext = pNext;
     vkGetPhysicalDeviceFeatures2(m_vulkanPhysicalDevice, &physicalDeviceFeatures2);
 
-    // Queue creation
     HashSet<i32> uniqueQueueFamilies = { m_graphicsQueueFamily };
 
     if(!m_deviceParams.headlessDevice)
@@ -824,7 +817,6 @@ bool DeviceManager::createSwapChain(){
         return false;
     }
 
-    // retrieve swap chain images
     uint32_t imageCount = 0;
     vkGetSwapchainImagesKHR(m_vulkanDevice, m_swapChain, &imageCount, nullptr);
     Vector<VkImage> images(imageCount);
@@ -868,14 +860,12 @@ bool DeviceManager::createDeviceInternal(){
     if(m_deviceParams.enableDebugRuntime)
         installDebugCallback();
 
-    // add device extensions requested by the user
     for(const auto& name : m_deviceParams.requiredVulkanDeviceExtensions)
         m_enabledExtensions.device.insert({ name, nullptr });
     for(const auto& name : m_deviceParams.optionalVulkanDeviceExtensions)
         m_optionalExtensions.device.insert({ name, nullptr });
 
     if(!m_deviceParams.headlessDevice){
-        // Adjust swap chain format for Vulkan (prefer BGRA)
         if(m_deviceParams.swapChainFormat == Format::RGBA8_UNORM_SRGB)
             m_deviceParams.swapChainFormat = Format::BGRA8_UNORM_SRGB;
         else if(m_deviceParams.swapChainFormat == Format::RGBA8_UNORM)
@@ -1036,7 +1026,6 @@ bool DeviceManager::beginFrame(){
     m_acquireSemaphoreIndex = (m_acquireSemaphoreIndex + 1) % static_cast<uint32_t>(m_acquireSemaphores.size());
 
     if(res == VK_SUCCESS || res == VK_SUBOPTIMAL_KHR){
-        // Cast DeviceHandle to Vulkan::IDevice to access queueWaitForSemaphore
         m_rhiDevice->queueWaitForSemaphore(CommandQueue::Graphics, semaphore, 0);
         return true;
     }

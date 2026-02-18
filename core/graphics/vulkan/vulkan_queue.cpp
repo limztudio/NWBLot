@@ -244,10 +244,12 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
     m_signalSemaphoreValues.clear();
 
     if(res != VK_SUCCESS){
-        if(res == VK_ERROR_DEVICE_LOST)
+        if(res == VK_ERROR_DEVICE_LOST){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Device was lost during queue submission."));
-        else
+        }
+        else{
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command buffers to queue: {}"), ResultToString(res));
+        }
         return m_lastSubmittedID - 1;
     }
 

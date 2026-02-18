@@ -126,7 +126,7 @@ template<typename T, typename V, typename Alloc = NWB::Core::Alloc::GeneralAlloc
 using Map = std::map<T, V, std::less<T>, Alloc>;
 
 template<typename T, typename Alloc = NWB::Core::Alloc::GeneralAllocator<T>>
-using Queue = std::queue<T, Alloc>;
+using Queue = std::queue<T, std::deque<T, Alloc>>;
 
 template<typename T, typename Alloc = NWB::Core::Alloc::GeneralAllocator<T>>
 using Deque = std::deque<T, Alloc>;

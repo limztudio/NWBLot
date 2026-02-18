@@ -375,7 +375,7 @@ Pair<bool, AString> AftermathCrashDumpHelper::resolveMarker(usize markerHash){
     // Search in active marker trackers
     for(auto markerTracker : m_markerTrackers){
         auto result = markerTracker->getEventString(markerHash);
-        if(result.first){
+        if(result.first()){
             return result;
         }
     }
@@ -383,7 +383,7 @@ Pair<bool, AString> AftermathCrashDumpHelper::resolveMarker(usize markerHash){
     // Search in recently destroyed marker trackers
     for(auto& markerTracker : m_destroyedMarkerTrackers){
         auto result = markerTracker.getEventString(markerHash);
-        if(result.first){
+        if(result.first()){
             return result;
         }
     }
@@ -394,7 +394,7 @@ Pair<bool, AString> AftermathCrashDumpHelper::resolveMarker(usize markerHash){
 Pair<const void*, usize> AftermathCrashDumpHelper::findShaderBinary(u64 shaderHash, ShaderHashGeneratorFunction hashGenerator){
     for(auto& clientCallback : m_shaderBinaryLookupCallbacks){
         auto result = clientCallback.second(shaderHash, hashGenerator);
-        if(result.second > 0){
+        if(result.second() > 0){
             return result;
         }
     }
@@ -528,7 +528,7 @@ void IDeviceManager::animate(f64 elapsedTime){
 }
 
 void IDeviceManager::render(){
-    IFramebuffer* framebuffer = m_swapChainFramebuffers[getCurrentBackBufferIndex()];
+    IFramebuffer* framebuffer = m_swapChainFramebuffers[getCurrentBackBufferIndex()].get();
 
     for(auto it : m_renderPasses)
         it->render(framebuffer);
@@ -647,7 +647,7 @@ IFramebuffer* IDeviceManager::getCurrentFramebuffer(){
 
 IFramebuffer* IDeviceManager::getFramebuffer(u32 index){
     if(index < m_swapChainFramebuffers.size())
-        return m_swapChainFramebuffers[index];
+        return m_swapChainFramebuffers[index].get();
     return nullptr;
 }
 

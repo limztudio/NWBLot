@@ -154,6 +154,9 @@ constexpr VkPipelineColorBlendAttachmentState ConvertBlendState(const BlendState
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+GraphicsPipeline::GraphicsPipeline(const VulkanContext& context)
+    : m_context(context)
+{}
 GraphicsPipeline::~GraphicsPipeline(){
     if(pipeline){
         vkDestroyPipeline(m_context.device, pipeline, m_context.allocationCallbacks);

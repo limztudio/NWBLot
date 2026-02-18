@@ -50,6 +50,7 @@
     <Import Project="..\configuration\libcurlInclude.props" />
     <Import Project="..\configuration\CLI11Include.props" />
     <Import Project="..\configuration\tbbInclude.props" />
+    <Import Project="..\configuration\vulkaninclude.props" />
     <Import Project="..\configuration\3rdPartyContainerInclude.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='opt|x64'">
@@ -62,6 +63,7 @@
     <Import Project="..\configuration\libcurlInclude.props" />
     <Import Project="..\configuration\CLI11Include.props" />
     <Import Project="..\configuration\tbbInclude.props" />
+    <Import Project="..\configuration\vulkaninclude.props" />
     <Import Project="..\configuration\3rdPartyContainerInclude.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='fin|x64'">
@@ -74,6 +76,7 @@
     <Import Project="..\configuration\libcurlInclude.props" />
     <Import Project="..\configuration\CLI11Include.props" />
     <Import Project="..\configuration\tbbInclude.props" />
+    <Import Project="..\configuration\vulkaninclude.props" />
     <Import Project="..\configuration\3rdPartyContainerInclude.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />

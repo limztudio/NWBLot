@@ -14,6 +14,9 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+ComputePipeline::ComputePipeline(const VulkanContext& context)
+    : m_context(context)
+{}
 ComputePipeline::~ComputePipeline(){
     if(pipeline){
         vkDestroyPipeline(m_context.device, pipeline, m_context.allocationCallbacks);

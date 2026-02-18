@@ -16,6 +16,9 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+MeshletPipeline::MeshletPipeline(const VulkanContext& context)
+    : m_context(context)
+{}
 MeshletPipeline::~MeshletPipeline(){
     if(pipeline){
         vkDestroyPipeline(m_context.device, pipeline, m_context.allocationCallbacks);

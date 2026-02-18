@@ -10,7 +10,6 @@
 
 #ifdef NWB_PLATFORM_WINDOWS
 #include <windows.h>
-#include <vulkan/vulkan_win32.h>
 #endif
 
 
@@ -77,7 +76,7 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL VulkanDebugCallback(
         }
     }
 
-    NWB_LOGGER_WARNING(NWB_TEXT("Vulkan validation: [location=0x{:x} code={} layer='{}'] {}"), location, code, AString(layerPrefix), AString(msg));
+    NWB_LOGGER_WARNING(NWB_TEXT("Vulkan validation: [location=0x{:x} code={} layer='{}'] {}"), location, code, StringConvert(layerPrefix), StringConvert(msg));
 
     return VK_FALSE;
 }
@@ -158,6 +157,14 @@ void DeviceManager::resizeSwapChain(){
 
 
 bool DeviceManager::createInstance(){
+    {
+        const VkResult res = volkInitialize();
+        if(res != VK_SUCCESS){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to initialize volk. {}"), ResultToString(res));
+            return false;
+        }
+    }
+
 #ifdef NWB_PLATFORM_WINDOWS
     if(!m_deviceParams.headlessDevice){
         m_enabledExtensions.instance.insert(VK_KHR_SURFACE_EXTENSION_NAME);
@@ -197,13 +204,13 @@ bool DeviceManager::createInstance(){
         ss << "Cannot create a Vulkan instance because the following required extension(s) are not supported:";
         for(const auto& ext : requiredExtensions)
             ss << std::endl << "  - " << ext;
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: {}"), AString(ss.str()));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: {}"), StringConvert(ss.str()));
         return false;
     }
 
     NWB_LOGGER_INFO(NWB_TEXT("Vulkan: Enabled instance extensions:"));
     for(const auto& ext : m_enabledExtensions.instance)
-        NWB_LOGGER_INFO(NWB_TEXT("Vulkan:     {}"), AString(ext));
+        NWB_LOGGER_INFO(NWB_TEXT("Vulkan:     {}"), StringConvert(ext));
 
     HashSet<AString> requiredLayers = m_enabledExtensions.layers;
 
@@ -224,7 +231,7 @@ bool DeviceManager::createInstance(){
         ss << "Cannot create a Vulkan instance because the following required layer(s) are not supported:";
         for(const auto& ext : requiredLayers)
             ss << std::endl << "  - " << ext;
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: {}"), AString(ss.str()));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: {}"), StringConvert(ss.str()));
         return false;
     }
 
@@ -276,6 +283,8 @@ bool DeviceManager::createInstance(){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create instance. {}"), ResultToString(res));
         return false;
     }
+
+    volkLoadInstance(m_vulkanInstance);
 
     return true;
 }
@@ -502,7 +511,7 @@ bool DeviceManager::pickPhysicalDevice(){
         return true;
     }
 
-    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: {}"), AString(errorStream.str()));
+    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: {}"), StringConvert(errorStream.str()));
     return false;
 }
 
@@ -559,7 +568,7 @@ bool DeviceManager::createDevice(){
 
     NWB_LOGGER_INFO(NWB_TEXT("Vulkan: Enabled device extensions:"));
     for(const auto& ext : m_enabledExtensions.device){
-        NWB_LOGGER_INFO(NWB_TEXT("Vulkan:     {}"), AString(ext));
+        NWB_LOGGER_INFO(NWB_TEXT("Vulkan:     {}"), StringConvert(ext));
 
         if(ext == VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME)
             accelStructSupported = true;
@@ -721,6 +730,8 @@ bool DeviceManager::createDevice(){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create logical device. {}"), ResultToString(res));
         return false;
     }
+
+    volkLoadDevice(m_vulkanDevice);
 
     vkGetDeviceQueue(m_vulkanDevice, static_cast<uint32_t>(m_graphicsQueueFamily), __hidden_vulkan::s_GraphicsQueueIndex, &m_graphicsQueue);
     if(m_deviceParams.enableComputeQueue)
@@ -1082,9 +1093,9 @@ bool DeviceManager::present(){
         return false;
     
     while(m_framesInFlight.size() >= m_deviceParams.maxFramesInFlight){
-        auto* query = m_framesInFlight.front();
+        auto query = m_framesInFlight.front();
         m_framesInFlight.pop();
-        m_rhiDevice->waitEventQuery(query);
+        m_rhiDevice->waitEventQuery(query.get());
         m_queryPool.push_back(query);
     }
 

@@ -81,7 +81,7 @@ void CommandList::copyTextureToBuffer(IBuffer* _dest, u64 destOffsetBytes, u32 d
     region.imageSubresource.mipLevel = srcSlice.mipLevel;
     region.imageSubresource.baseArrayLayer = srcSlice.arraySlice;
     region.imageSubresource.layerCount = 1;
-    region.imageOffset = { srcSlice.x, srcSlice.y, srcSlice.z };
+    region.imageOffset = { static_cast<int32_t>(srcSlice.x), static_cast<int32_t>(srcSlice.y), static_cast<int32_t>(srcSlice.z) };
     region.imageExtent = { srcSlice.width, srcSlice.height, srcSlice.depth };
 
     vkCmdCopyImageToBuffer(currentCmdBuf->cmdBuf, src->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dest->buffer, 1, &region);

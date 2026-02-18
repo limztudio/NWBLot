@@ -89,7 +89,7 @@ public:
     constexpr RefCountPtr(this_type&& x)noexcept : mPair(x.detach(), Forward<deleter_type>(x.get_deleter())){}
     template<typename U, typename E>
     constexpr RefCountPtr(RefCountPtr<U, E>&& u, typename EnableIf<!IsArray<U>::value && IsConvertible<typename RefCountPtr<U, E>::pointer, pointer>::value && IsConvertible<E, deleter_type>::value && (IsSame<deleter_type, E>::value || !IsLValueReference<deleter_type>::value)>::type* = 0)noexcept : mPair(u.detach(), Forward<E>(u.get_deleter())){}
-    RefCountPtr(const RefCountPtr& rhs)noexcept : mPair(rhs){
+    RefCountPtr(const RefCountPtr& rhs)noexcept : mPair(rhs.mPair.first(), rhs.mPair.second()){
         internalAddRef(mPair.first());
     }
     template<typename U, typename E>

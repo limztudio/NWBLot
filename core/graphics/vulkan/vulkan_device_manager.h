@@ -144,7 +144,7 @@ private:
     Vector<VkSemaphore> m_presentSemaphores;
     uint32_t m_acquireSemaphoreIndex = 0;
 
-    Queue<EventQueryHandle> m_framesInFlight;
+    ::Queue<EventQueryHandle> m_framesInFlight;
     Vector<EventQueryHandle> m_queryPool;
 
     bool m_bufferDeviceAddressSupported = false;

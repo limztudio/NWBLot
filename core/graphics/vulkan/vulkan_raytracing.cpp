@@ -305,7 +305,7 @@ RayTracingClusterOperationSizeInfo Device::getClusterOperationSizeInfo(const Ray
         break;
     }
 
-    VkClusterAccelerationStructureBuildSizesInfoNV vkSizeInfo = { VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_NV };
+    VkAccelerationStructureBuildSizesInfoKHR vkSizeInfo = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR };
     vkGetClusterAccelerationStructureBuildSizesNV(m_context.device, &inputInfo, &vkSizeInfo);
 
     info.resultMaxSizeInBytes = vkSizeInfo.accelerationStructureSize;

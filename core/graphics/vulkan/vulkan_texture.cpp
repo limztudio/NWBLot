@@ -447,12 +447,12 @@ void CommandList::copyTexture(ITexture* _dest, const TextureSlice& destSlice, IT
     region.srcSubresource.mipLevel = srcSlice.mipLevel;
     region.srcSubresource.baseArrayLayer = srcSlice.arraySlice;
     region.srcSubresource.layerCount = 1;
-    region.srcOffset = { srcSlice.x, srcSlice.y, srcSlice.z };
+    region.srcOffset = { static_cast<int32_t>(srcSlice.x), static_cast<int32_t>(srcSlice.y), static_cast<int32_t>(srcSlice.z) };
     region.dstSubresource.aspectMask = dstAspect;
     region.dstSubresource.mipLevel = destSlice.mipLevel;
     region.dstSubresource.baseArrayLayer = destSlice.arraySlice;
     region.dstSubresource.layerCount = 1;
-    region.dstOffset = { destSlice.x, destSlice.y, destSlice.z };
+    region.dstOffset = { static_cast<int32_t>(destSlice.x), static_cast<int32_t>(destSlice.y), static_cast<int32_t>(destSlice.z) };
     region.extent = { destSlice.width, destSlice.height, destSlice.depth };
 
     vkCmdCopyImage(currentCmdBuf->cmdBuf, src->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dest->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);

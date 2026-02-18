@@ -9,7 +9,17 @@
 
 #include <core/graphics/common.h>
 
-#include <vulkan/vulkan.h>
+#if defined(NWB_PLATFORM_WINDOWS)
+#define VK_USE_PLATFORM_WIN32_KHR
+#elif defined(NWB_PLATFORM_LINUX)
+#define VK_USE_PLATFORM_XCB_KHR
+#elif defined(NWB_PLATFORM_ANDROID)
+#define VK_USE_PLATFORM_ANDROID_KHR
+#elif defined(NWB_PLATFORM_APPLE)
+#define VK_USE_PLATFORM_METAL_EXT
+#endif
+
+#include <volk/volk.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

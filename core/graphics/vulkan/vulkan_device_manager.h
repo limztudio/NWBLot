@@ -36,7 +36,7 @@ public:
     [[nodiscard]] virtual GraphicsAPI::Enum getGraphicsAPI()const override{ return GraphicsAPI::VULKAN; }
     [[nodiscard]] virtual const tchar* getRendererString()const override;
 
-    virtual bool enumerateAdapters(Vector<AdapterInfo>& outAdapters) override;
+    virtual bool enumerateAdapters(Vector<AdapterInfo>& outAdapters)override;
 
     virtual bool isVulkanInstanceExtensionEnabled(const char* extensionName)const override;
     virtual bool isVulkanDeviceExtensionEnabled(const char* extensionName)const override;
@@ -45,19 +45,19 @@ public:
     virtual void getEnabledVulkanDeviceExtensions(Vector<AString>& extensions)const override;
     virtual void getEnabledVulkanLayers(Vector<AString>& layers)const override;
 
-    virtual ITexture* getCurrentBackBuffer() override;
-    virtual ITexture* getBackBuffer(u32 index) override;
-    virtual u32 getCurrentBackBufferIndex() override;
-    virtual u32 getBackBufferCount() override;
+    virtual ITexture* getCurrentBackBuffer()override;
+    virtual ITexture* getBackBuffer(u32 index)override;
+    virtual u32 getCurrentBackBufferIndex()override;
+    virtual u32 getBackBufferCount()override;
 
 protected:
-    virtual bool createInstanceInternal() override;
-    virtual bool createDeviceInternal() override;
-    virtual bool createSwapChainInternal() override;
-    virtual void destroyDeviceAndSwapChain() override;
-    virtual void resizeSwapChain() override;
-    virtual bool beginFrame() override;
-    virtual bool present() override;
+    virtual bool createInstanceInternal()override;
+    virtual bool createDeviceInternal()override;
+    virtual bool createSwapChainInternal()override;
+    virtual void destroyDeviceAndSwapChain()override;
+    virtual void resizeSwapChain()override;
+    virtual bool beginFrame()override;
+    virtual bool present()override;
 
 private:
     bool createInstance();

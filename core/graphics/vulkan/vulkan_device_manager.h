@@ -22,7 +22,7 @@ private:
     struct VulkanExtensionSet{
         HashSet<AString> instance;
         HashSet<AString> layers;
-        HashMap<AString, void*> device; // extension name → feature struct pointer (nullptr if none)
+        HashMap<AString, void*> device;
     };
 
     struct SwapChainImage{
@@ -71,7 +71,6 @@ private:
 
 
 private:
-    // Feature structs for optional device extensions (must outlive createDevice)
     VkPhysicalDeviceAccelerationStructureFeaturesKHR m_accelStructFeatures = {
         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR, nullptr,
         VK_TRUE, // accelerationStructure
@@ -106,7 +105,6 @@ private:
 
 
 private:
-    // minimal set of required extensions
     VulkanExtensionSet m_enabledExtensions = {
         { // instance
             VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME
@@ -118,7 +116,6 @@ private:
         },
     };
 
-    // optional extensions (name → feature struct; nullptr = no feature struct needed)
     VulkanExtensionSet m_optionalExtensions = {
         { // instance
             VK_EXT_DEBUG_UTILS_EXTENSION_NAME,

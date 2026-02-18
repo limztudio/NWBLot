@@ -237,7 +237,7 @@ CommandListHandle Device::createCommandList(const CommandListParameters& params)
 
 u64 Device::executeCommandLists(ICommandList* const* pCommandLists, usize numCommandLists, CommandQueue::Enum executionQueue){
     Queue* queue = getQueue(executionQueue);
-    if(!queue || numCommandLists == 0)
+    if(!queue)
         return 0;
 
     return queue->submit(pCommandLists, numCommandLists);

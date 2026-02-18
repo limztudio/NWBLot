@@ -22,7 +22,7 @@ private:
     struct VulkanExtensionSet{
         HashSet<AString> instance;
         HashSet<AString> layers;
-        HashSet<AString> device;
+        HashMap<AString, void*> device; // extension name → feature struct pointer (nullptr if none)
     };
 
     struct SwapChainImage{
@@ -71,6 +71,41 @@ private:
 
 
 private:
+    // Feature structs for optional device extensions (must outlive createDevice)
+    VkPhysicalDeviceAccelerationStructureFeaturesKHR m_accelStructFeatures = {
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR, nullptr,
+        VK_TRUE, // accelerationStructure
+    };
+    VkPhysicalDeviceRayTracingPipelineFeaturesKHR m_rayPipelineFeatures = {
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR, nullptr,
+        VK_TRUE, // rayTracingPipeline
+        VK_FALSE, // rayTracingPipelineShaderGroupHandleCaptureReplay
+        VK_FALSE, // rayTracingPipelineShaderGroupHandleCaptureReplayMixed
+        VK_FALSE, // rayTracingPipelineTraceRaysIndirect
+        VK_TRUE, // rayTraversalPrimitiveCulling
+    };
+    VkPhysicalDeviceRayQueryFeaturesKHR m_rayQueryFeatures = {
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR, nullptr,
+        VK_TRUE, // rayQuery
+    };
+    VkPhysicalDeviceMeshShaderFeaturesNV m_meshletFeatures = {
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_NV, nullptr,
+        VK_TRUE, // taskShader
+        VK_TRUE, // meshShader
+    };
+    VkPhysicalDeviceFragmentShadingRateFeaturesKHR m_vrsFeatures = {
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_FEATURES_KHR, nullptr,
+        VK_TRUE, // pipelineFragmentShadingRate
+        VK_TRUE, // primitiveFragmentShadingRate
+        VK_TRUE, // attachmentFragmentShadingRate
+    };
+    VkPhysicalDeviceMutableDescriptorTypeFeaturesEXT m_mutableDescriptorTypeFeatures = {
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MUTABLE_DESCRIPTOR_TYPE_FEATURES_EXT, nullptr,
+        VK_TRUE, // mutableDescriptorType
+    };
+
+
+private:
     // minimal set of required extensions
     VulkanExtensionSet m_enabledExtensions = {
         { // instance
@@ -78,12 +113,12 @@ private:
         },
         { // layers
         },
-        { // device
-            VK_KHR_MAINTENANCE1_EXTENSION_NAME
+        { // device (name → feature struct)
+            { VK_KHR_MAINTENANCE1_EXTENSION_NAME, nullptr },
         },
     };
 
-    // optional extensions
+    // optional extensions (name → feature struct; nullptr = no feature struct needed)
     VulkanExtensionSet m_optionalExtensions = {
         { // instance
             VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
@@ -92,24 +127,24 @@ private:
         { // layers
         },
         { // device
-            VK_EXT_DEBUG_MARKER_EXTENSION_NAME,
-            VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
-            VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME,
-            VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME,
-            VK_KHR_MAINTENANCE_4_EXTENSION_NAME,
-            VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME,
-            VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME,
-            VK_NV_MESH_SHADER_EXTENSION_NAME,
-            VK_EXT_MUTABLE_DESCRIPTOR_TYPE_EXTENSION_NAME,
+            { VK_EXT_DEBUG_MARKER_EXTENSION_NAME, nullptr },
+            { VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME, nullptr },
+            { VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME, nullptr },
+            { VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME, &m_vrsFeatures },
+            { VK_KHR_MAINTENANCE_4_EXTENSION_NAME, nullptr },
+            { VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME, nullptr },
+            { VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME, nullptr },
+            { VK_NV_MESH_SHADER_EXTENSION_NAME, &m_meshletFeatures },
+            { VK_EXT_MUTABLE_DESCRIPTOR_TYPE_EXTENSION_NAME, &m_mutableDescriptorTypeFeatures },
         },
     };
 
-    HashSet<AString> m_rayTracingExtensions = {
-        VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
-        VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
-        VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME,
-        VK_KHR_RAY_QUERY_EXTENSION_NAME,
-        VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
+    HashMap<AString, void*> m_rayTracingExtensions = {
+        { VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME, &m_accelStructFeatures },
+        { VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME, nullptr },
+        { VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME, nullptr },
+        { VK_KHR_RAY_QUERY_EXTENSION_NAME, &m_rayQueryFeatures },
+        { VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME, &m_rayPipelineFeatures },
     };
 
     TString m_rendererString;

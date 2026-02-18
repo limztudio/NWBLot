@@ -42,6 +42,14 @@ static Vector<const char*> StringSetToVector(const HashSet<AString>& set){
     return ret;
 }
 
+static Vector<const char*> StringMapKeysToVector(const HashMap<AString, void*>& map){
+    Vector<const char*> ret;
+    ret.reserve(map.size());
+    for(const auto& [key, val] : map)
+        ret.push_back(key.c_str());
+    return ret;
+}
+
 template<typename T>
 static Vector<T> SetToVector(const HashSet<T>& set){
     Vector<T> ret;
@@ -117,8 +125,8 @@ void DeviceManager::getEnabledVulkanInstanceExtensions(Vector<AString>& extensio
 }
 
 void DeviceManager::getEnabledVulkanDeviceExtensions(Vector<AString>& extensions)const{
-    for(const auto& ext : m_enabledExtensions.device)
-        extensions.push_back(ext);
+    for(const auto& [name, _] : m_enabledExtensions.device)
+        extensions.push_back(name);
 }
 
 void DeviceManager::getEnabledVulkanLayers(Vector<AString>& layers)const{
@@ -208,9 +216,13 @@ bool DeviceManager::createInstance(){
         return false;
     }
 
-    NWB_LOGGER_INFO(NWB_TEXT("Vulkan: Enabled instance extensions:"));
-    for(const auto& ext : m_enabledExtensions.instance)
-        NWB_LOGGER_INFO(NWB_TEXT("Vulkan:     {}"), StringConvert(ext));
+    {
+        AStringStream ss;
+        ss << "Vulkan: Enabled instance extensions:";
+        for(const auto& ext : m_enabledExtensions.instance)
+            ss << std::endl << "    " << ext;
+        NWB_LOGGER_INFO(NWB_TEXT("{}"), StringConvert(ss.str()));
+    }
 
     HashSet<AString> requiredLayers = m_enabledExtensions.layers;
 
@@ -235,9 +247,13 @@ bool DeviceManager::createInstance(){
         return false;
     }
 
-    NWB_LOGGER_INFO(NWB_TEXT("Vulkan: Enabled layers:"));
-    for(const auto& layer : m_enabledExtensions.layers)
-        NWB_LOGGER_INFO(NWB_TEXT("Vulkan:     {}"), StringConvert(layer));
+    {
+        AStringStream ss;
+        ss << "Vulkan: Enabled layers:";
+        for(const auto& layer : m_enabledExtensions.layers)
+            ss << std::endl << "    " << layer;
+        NWB_LOGGER_INFO(NWB_TEXT("{}"), StringConvert(ss.str()));
+    }
 
     auto instanceExtVec = __hidden_vulkan::StringSetToVector(m_enabledExtensions.instance);
     auto layerVec = __hidden_vulkan::StringSetToVector(m_enabledExtensions.layers);
@@ -406,7 +422,9 @@ bool DeviceManager::pickPhysicalDevice(){
         errorStream << std::endl << prop.deviceName << ":";
 
         // check required device extensions
-        HashSet<AString> requiredExtensions = m_enabledExtensions.device;
+        HashSet<AString> requiredExtensions;
+        for(const auto& [name, _] : m_enabledExtensions.device)
+            requiredExtensions.insert(name);
         uint32_t extCount = 0;
         vkEnumerateDeviceExtensionProperties(dev, nullptr, &extCount, nullptr);
         Vector<VkExtensionProperties> deviceExtensions(extCount);
@@ -529,18 +547,22 @@ bool DeviceManager::createDevice(){
 
     for(const auto& ext : deviceExtensions){
         const AString name = ext.extensionName;
-        if(m_optionalExtensions.device.find(name) != m_optionalExtensions.device.end()){
+        auto optIt = m_optionalExtensions.device.find(name);
+        if(optIt != m_optionalExtensions.device.end()){
             if(name == VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME && m_deviceParams.headlessDevice)
                 continue;
-            m_enabledExtensions.device.insert(name);
+            m_enabledExtensions.device.insert({ name, optIt->second });
         }
 
-        if(m_deviceParams.enableRayTracingExtensions && m_rayTracingExtensions.find(name) != m_rayTracingExtensions.end())
-            m_enabledExtensions.device.insert(name);
+        if(m_deviceParams.enableRayTracingExtensions){
+            auto rtIt = m_rayTracingExtensions.find(name);
+            if(rtIt != m_rayTracingExtensions.end())
+                m_enabledExtensions.device.insert({ name, rtIt->second });
+        }
     }
 
     if(!m_deviceParams.headlessDevice)
-        m_enabledExtensions.device.insert(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+        m_enabledExtensions.device.insert({ VK_KHR_SWAPCHAIN_EXTENSION_NAME, nullptr });
 
     VkPhysicalDeviceProperties physicalDeviceProperties;
     vkGetPhysicalDeviceProperties(m_vulkanPhysicalDevice, &physicalDeviceProperties);
@@ -557,41 +579,21 @@ bool DeviceManager::createDevice(){
     m_rendererString = physicalDeviceProperties.deviceName;
 #endif
 
-    bool accelStructSupported = false;
-    bool rayPipelineSupported = false;
-    bool rayQuerySupported = false;
-    bool meshletsSupported = false;
-    bool vrsSupported = false;
-    bool synchronization2Supported = false;
-    bool maintenance4Supported = false;
-    bool mutableDescriptorTypeSupported = false;
-
-    NWB_LOGGER_INFO(NWB_TEXT("Vulkan: Enabled device extensions:"));
-    for(const auto& ext : m_enabledExtensions.device){
-        NWB_LOGGER_INFO(NWB_TEXT("Vulkan:     {}"), StringConvert(ext));
-
-        if(ext == VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME)
-            accelStructSupported = true;
-        else if(ext == VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME)
-            rayPipelineSupported = true;
-        else if(ext == VK_KHR_RAY_QUERY_EXTENSION_NAME)
-            rayQuerySupported = true;
-        else if(ext == VK_NV_MESH_SHADER_EXTENSION_NAME)
-            meshletsSupported = true;
-        else if(ext == VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME)
-            vrsSupported = true;
-        else if(ext == VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME)
-            synchronization2Supported = true;
-        else if(ext == VK_KHR_MAINTENANCE_4_EXTENSION_NAME)
-            maintenance4Supported = true;
-        else if(ext == VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME)
-            m_swapChainMutableFormatSupported = true;
-        else if(ext == VK_EXT_MUTABLE_DESCRIPTOR_TYPE_EXTENSION_NAME)
-            mutableDescriptorTypeSupported = true;
+    {
+        AStringStream ss;
+        ss << "Vulkan: Enabled device extensions:";
+        for(const auto& [name, _] : m_enabledExtensions.device)
+            ss << std::endl << "    " << name;
+        NWB_LOGGER_INFO(NWB_TEXT("{}"), StringConvert(ss.str()));
     }
 
-    // Build the pNext feature chain
-#define APPEND_EXTENSION(condition, desc) if(condition){ (desc).pNext = pNext; pNext = &(desc); }
+    m_swapChainMutableFormatSupported = isVulkanDeviceExtensionEnabled(VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME);
+
+    auto appendToChain = [](void*& pNext, void* feature){
+        reinterpret_cast<VkBaseOutStructure*>(feature)->pNext = reinterpret_cast<VkBaseOutStructure*>(pNext);
+        pNext = feature;
+    };
+
     void* pNext = nullptr;
 
     VkPhysicalDeviceFeatures2 physicalDeviceFeatures2 = {};
@@ -599,12 +601,12 @@ bool DeviceManager::createDevice(){
 
     VkPhysicalDeviceBufferDeviceAddressFeatures bufferDeviceAddressFeatures = {};
     bufferDeviceAddressFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
+    appendToChain(pNext, &bufferDeviceAddressFeatures);
 
     VkPhysicalDeviceMaintenance4Features maintenance4Features = {};
     maintenance4Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_4_FEATURES;
-
-    APPEND_EXTENSION(true, bufferDeviceAddressFeatures);
-    APPEND_EXTENSION(maintenance4Supported, maintenance4Features);
+    if(isVulkanDeviceExtensionEnabled(VK_KHR_MAINTENANCE_4_EXTENSION_NAME))
+        appendToChain(pNext, &maintenance4Features);
 
     physicalDeviceFeatures2.pNext = pNext;
     vkGetPhysicalDeviceFeatures2(m_vulkanPhysicalDevice, &physicalDeviceFeatures2);
@@ -631,67 +633,37 @@ bool DeviceManager::createDevice(){
         queueDesc.push_back(queueInfo);
     }
 
-    // Feature structures for extensions
-    VkPhysicalDeviceAccelerationStructureFeaturesKHR accelStructFeatures = {};
-    accelStructFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
-    accelStructFeatures.accelerationStructure = VK_TRUE;
-
-    VkPhysicalDeviceRayTracingPipelineFeaturesKHR rayPipelineFeatures = {};
-    rayPipelineFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR;
-    rayPipelineFeatures.rayTracingPipeline = VK_TRUE;
-    rayPipelineFeatures.rayTraversalPrimitiveCulling = VK_TRUE;
-
-    VkPhysicalDeviceRayQueryFeaturesKHR rayQueryFeatures = {};
-    rayQueryFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR;
-    rayQueryFeatures.rayQuery = VK_TRUE;
-
-    VkPhysicalDeviceMeshShaderFeaturesNV meshletFeatures = {};
-    meshletFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_NV;
-    meshletFeatures.taskShader = VK_TRUE;
-    meshletFeatures.meshShader = VK_TRUE;
-
-    VkPhysicalDeviceFragmentShadingRateFeaturesKHR vrsFeatures = {};
-    vrsFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_FEATURES_KHR;
-    vrsFeatures.pipelineFragmentShadingRate = VK_TRUE;
-    vrsFeatures.primitiveFragmentShadingRate = VK_TRUE;
-    vrsFeatures.attachmentFragmentShadingRate = VK_TRUE;
-
     VkPhysicalDeviceVulkan13Features vulkan13features = {};
     vulkan13features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
-    vulkan13features.synchronization2 = synchronization2Supported ? VK_TRUE : VK_FALSE;
+    vulkan13features.synchronization2 = isVulkanDeviceExtensionEnabled(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME) ? VK_TRUE : VK_FALSE;
     vulkan13features.maintenance4 = maintenance4Features.maintenance4;
 
-    VkPhysicalDeviceMutableDescriptorTypeFeaturesEXT mutableDescriptorTypeFeatures = {};
-    mutableDescriptorTypeFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MUTABLE_DESCRIPTOR_TYPE_FEATURES_EXT;
-    mutableDescriptorTypeFeatures.mutableDescriptorType = VK_TRUE;
-
     pNext = nullptr;
-    APPEND_EXTENSION(accelStructSupported, accelStructFeatures)
-    APPEND_EXTENSION(rayPipelineSupported, rayPipelineFeatures)
-    APPEND_EXTENSION(rayQuerySupported, rayQueryFeatures)
-    APPEND_EXTENSION(meshletsSupported, meshletFeatures)
-    APPEND_EXTENSION(vrsSupported, vrsFeatures)
-    APPEND_EXTENSION(mutableDescriptorTypeSupported, mutableDescriptorTypeFeatures)
-    APPEND_EXTENSION(physicalDeviceProperties.apiVersion >= VK_API_VERSION_1_3, vulkan13features)
-    APPEND_EXTENSION(physicalDeviceProperties.apiVersion < VK_API_VERSION_1_3 && maintenance4Supported, maintenance4Features)
+    for(const auto& [name, feature] : m_enabledExtensions.device){
+        if(feature)
+            appendToChain(pNext, feature);
+    }
 
-#undef APPEND_EXTENSION
+    if(physicalDeviceProperties.apiVersion >= VK_API_VERSION_1_3)
+        appendToChain(pNext, &vulkan13features);
+    else if(isVulkanDeviceExtensionEnabled(VK_KHR_MAINTENANCE_4_EXTENSION_NAME))
+        appendToChain(pNext, &maintenance4Features);
 
-    VkPhysicalDeviceFeatures deviceFeatures = {};
-    deviceFeatures.shaderImageGatherExtended = VK_TRUE;
-    deviceFeatures.samplerAnisotropy = VK_TRUE;
-    deviceFeatures.tessellationShader = VK_TRUE;
-    deviceFeatures.textureCompressionBC = VK_TRUE;
-    deviceFeatures.geometryShader = VK_TRUE;
-    deviceFeatures.imageCubeArray = VK_TRUE;
-    deviceFeatures.shaderInt16 = VK_TRUE;
-    deviceFeatures.fillModeNonSolid = VK_TRUE;
-    deviceFeatures.fragmentStoresAndAtomics = VK_TRUE;
-    deviceFeatures.dualSrcBlend = VK_TRUE;
-    deviceFeatures.vertexPipelineStoresAndAtomics = VK_TRUE;
-    deviceFeatures.shaderInt64 = VK_TRUE;
-    deviceFeatures.shaderStorageImageWriteWithoutFormat = VK_TRUE;
-    deviceFeatures.shaderStorageImageReadWithoutFormat = VK_TRUE;
+    VkPhysicalDeviceFeatures coreDeviceFeatures = {};
+    coreDeviceFeatures.shaderImageGatherExtended = VK_TRUE;
+    coreDeviceFeatures.samplerAnisotropy = VK_TRUE;
+    coreDeviceFeatures.tessellationShader = VK_TRUE;
+    coreDeviceFeatures.textureCompressionBC = VK_TRUE;
+    coreDeviceFeatures.geometryShader = VK_TRUE;
+    coreDeviceFeatures.imageCubeArray = VK_TRUE;
+    coreDeviceFeatures.shaderInt16 = VK_TRUE;
+    coreDeviceFeatures.fillModeNonSolid = VK_TRUE;
+    coreDeviceFeatures.fragmentStoresAndAtomics = VK_TRUE;
+    coreDeviceFeatures.dualSrcBlend = VK_TRUE;
+    coreDeviceFeatures.vertexPipelineStoresAndAtomics = VK_TRUE;
+    coreDeviceFeatures.shaderInt64 = VK_TRUE;
+    coreDeviceFeatures.shaderStorageImageWriteWithoutFormat = VK_TRUE;
+    coreDeviceFeatures.shaderStorageImageReadWithoutFormat = VK_TRUE;
 
     VkPhysicalDeviceVulkan11Features vulkan11features = {};
     vulkan11features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
@@ -712,13 +684,13 @@ bool DeviceManager::createDevice(){
     vulkan12features.pNext = &vulkan11features;
 
     auto layerVec = __hidden_vulkan::StringSetToVector(m_enabledExtensions.layers);
-    auto extVec = __hidden_vulkan::StringSetToVector(m_enabledExtensions.device);
+    auto extVec = __hidden_vulkan::StringMapKeysToVector(m_enabledExtensions.device);
 
     VkDeviceCreateInfo deviceCreateInfo = {};
     deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
     deviceCreateInfo.pQueueCreateInfos = queueDesc.data();
     deviceCreateInfo.queueCreateInfoCount = static_cast<uint32_t>(queueDesc.size());
-    deviceCreateInfo.pEnabledFeatures = &deviceFeatures;
+    deviceCreateInfo.pEnabledFeatures = &coreDeviceFeatures;
     deviceCreateInfo.enabledExtensionCount = static_cast<uint32_t>(extVec.size());
     deviceCreateInfo.ppEnabledExtensionNames = extVec.data();
     deviceCreateInfo.enabledLayerCount = static_cast<uint32_t>(layerVec.size());
@@ -898,9 +870,9 @@ bool DeviceManager::createDeviceInternal(){
 
     // add device extensions requested by the user
     for(const auto& name : m_deviceParams.requiredVulkanDeviceExtensions)
-        m_enabledExtensions.device.insert(name);
+        m_enabledExtensions.device.insert({ name, nullptr });
     for(const auto& name : m_deviceParams.optionalVulkanDeviceExtensions)
-        m_optionalExtensions.device.insert(name);
+        m_optionalExtensions.device.insert({ name, nullptr });
 
     if(!m_deviceParams.headlessDevice){
         // Adjust swap chain format for Vulkan (prefer BGRA)
@@ -920,7 +892,7 @@ bool DeviceManager::createDeviceInternal(){
         return false;
 
     auto vecInstanceExt = __hidden_vulkan::StringSetToVector(m_enabledExtensions.instance);
-    auto vecDeviceExt = __hidden_vulkan::StringSetToVector(m_enabledExtensions.device);
+    auto vecDeviceExt = __hidden_vulkan::StringMapKeysToVector(m_enabledExtensions.device);
 
     DeviceDesc deviceDesc = {};
     deviceDesc.instance = m_vulkanInstance;

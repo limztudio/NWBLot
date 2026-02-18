@@ -139,11 +139,9 @@ class BaseUpdateIfQueued : public Base<T, NAME>{
 private:
     static void globalUpdate(T* _this){
         for(;;){
-            bool updateSucceeded;
-            {
-                ScopedLock _(_this->m_semaphore);
-                updateSucceeded = _this->internalUpdate();
-            }
+            _this->m_semaphore.acquire();
+
+            bool updateSucceeded = _this->internalUpdate();
 
             if (!updateSucceeded){
                 _this->m_exit.store(true, MemoryOrder::memory_order_release);
@@ -158,7 +156,7 @@ private:
 
 public:
     BaseUpdateIfQueued()
-        : m_semaphore(1)
+        : m_semaphore(0)
     {}
 
 
@@ -166,12 +164,12 @@ protected:
     void internalDestroy(){ m_semaphore.release(); }
 
 protected:
-    inline void enqueue(MessageType&& data){ return Base<T, NAME>::m_msgQueue.emplace(Move(data)); }
-    inline void enqueue(const MessageType& data){ return Base<T, NAME>::m_msgQueue.emplace(data); }
+    inline void enqueue(MessageType&& data){ Base<T, NAME>::m_msgQueue.emplace(Move(data)); m_semaphore.release(); }
+    inline void enqueue(const MessageType& data){ Base<T, NAME>::m_msgQueue.emplace(data); m_semaphore.release(); }
 
 
 protected:
-    BinarySemaphore m_semaphore;
+    Semaphore<> m_semaphore;
 
 
 protected:

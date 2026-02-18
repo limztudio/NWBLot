@@ -158,31 +158,34 @@ void Queue::addSignalSemaphore(VkSemaphore semaphore, u64 value){
 }
 
 u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
-    if(!ppCmd || numCmd == 0)
-        return m_lastSubmittedID;
-
     Mutex::scoped_lock lock(m_mutex);
 
-    u64 submissionID = ++m_lastSubmittedID;
+    bool hasCommands = ppCmd && numCmd > 0;
+    bool hasPendingSemaphores = !m_waitSemaphores.empty() || !m_signalSemaphores.empty();
 
     Vector<TrackedCommandBufferPtr> trackedBuffers;
     Vector<VkCommandBuffer> cmdBufs;
-    trackedBuffers.reserve(numCmd);
-    cmdBufs.reserve(numCmd);
 
-    for(usize i = 0; i < numCmd; ++i){
-        auto* cmdList = checked_cast<CommandList*>(ppCmd[i]);
-        if(!cmdList || !cmdList->currentCmdBuf)
-            continue;
+    if(hasCommands){
+        trackedBuffers.reserve(numCmd);
+        cmdBufs.reserve(numCmd);
 
-        cmdBufs.push_back(cmdList->currentCmdBuf->cmdBuf);
+        for(usize i = 0; i < numCmd; ++i){
+            auto* cmdList = checked_cast<CommandList*>(ppCmd[i]);
+            if(!cmdList || !cmdList->currentCmdBuf)
+                continue;
 
-        cmdList->currentCmdBuf->submissionID = submissionID;
-        trackedBuffers.push_back(Move(cmdList->currentCmdBuf));
+            cmdBufs.push_back(cmdList->currentCmdBuf->cmdBuf);
+
+            cmdList->currentCmdBuf->submissionID = m_lastSubmittedID + 1;
+            trackedBuffers.push_back(Move(cmdList->currentCmdBuf));
+        }
     }
 
-    if(cmdBufs.empty())
-        return m_lastSubmittedID - 1;
+    if(cmdBufs.empty() && !hasPendingSemaphores)
+        return m_lastSubmittedID;
+
+    u64 submissionID = ++m_lastSubmittedID;
 
     VkSemaphoreSubmitInfo timelineSignal = { VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO };
     timelineSignal.semaphore = trackingSemaphore;

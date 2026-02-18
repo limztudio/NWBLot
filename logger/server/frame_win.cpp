@@ -57,6 +57,16 @@ namespace __hidden_frame{
 
     static std::mutex g_listMutex;
 
+    static WNDPROC g_origListProc = nullptr;
+
+    static LRESULT CALLBACK listProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
+        if(uMsg == WM_KEYDOWN && wParam == 'C' && (GetKeyState(VK_CONTROL) & 0x8000)){
+            SendMessage(GetParent(hwnd), uMsg, wParam, lParam);
+            return 0;
+        }
+        return CallWindowProc(g_origListProc, hwnd, uMsg, wParam, lParam);
+    }
+
     static LRESULT CALLBACK winProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
         if(auto* _this = g_frame){
             switch(uMsg){
@@ -94,8 +104,10 @@ namespace __hidden_frame{
                 );
                 if(!g_listHwnd)
                     PostQuitMessage(0);
-                else
+                else{
                     SendMessage(g_listHwnd, WM_SETFONT, reinterpret_cast<WPARAM>(g_font), TRUE);
+                    g_origListProc = reinterpret_cast<WNDPROC>(SetWindowLongPtr(g_listHwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(listProc)));
+                }
             }
             return 0;
 
@@ -170,6 +182,36 @@ namespace __hidden_frame{
                 }
             }
             return TRUE;
+
+            case WM_KEYDOWN:
+            {
+                if(wParam == 'C' && (GetKeyState(VK_CONTROL) & 0x8000)){
+                    std::unique_lock lock(g_listMutex);
+                    if(!g_messages.empty()){
+                        BasicString<tchar> combined;
+                        for(const auto& msg : g_messages){
+                            combined += msg.first();
+                            combined += NWB_TEXT("\r\n");
+                        }
+                        const size_t byteSize = (combined.size() + 1) * sizeof(tchar);
+                        if(OpenClipboard(hwnd)){
+                            EmptyClipboard();
+                            HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, byteSize);
+                            if(hMem){
+                                memcpy(GlobalLock(hMem), combined.c_str(), byteSize);
+                                GlobalUnlock(hMem);
+#if defined(UNICODE) || defined(_UNICODE)
+                                SetClipboardData(CF_UNICODETEXT, hMem);
+#else
+                                SetClipboardData(CF_TEXT, hMem);
+#endif
+                            }
+                            CloseClipboard();
+                        }
+                    }
+                }
+            }
+            return 0;
 
             case WM_DRAWITEM:
             {

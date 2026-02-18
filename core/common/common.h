@@ -117,7 +117,7 @@ public:
     inline const u16& width()const{ return m_data.u16[0]; }
 
     inline u16& height(){ return m_data.u16[1]; }
-    inline const u16& height()const{ return m_data.u16[2]; }
+    inline const u16& height()const{ return m_data.u16[1]; }
 
 
 protected:

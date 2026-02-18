@@ -1,28 +1,71 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
+    <Filter Include="vulkan">
+      <UniqueIdentifier>{a1b2c3d4-0001-0001-0001-000000000002}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
     <ClCompile Include="$(MSBuildThisFileDirectory)graphics\common.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)graphics\graphics.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)graphics\shader.cpp" />
-    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_allocator.cpp" />
-    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_buffer.cpp" />
-    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_commandlist.cpp" />
-    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_compute.cpp" />
-    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_constants.cpp" />
-    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_device.cpp" />
-    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_graphics.cpp" />
-    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_meshlets.cpp" />
-    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_queries.cpp" />
-    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_queue.cpp" />
-    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_raytracing.cpp" />
-    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_resource_bindings.cpp" />
-    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_shader.cpp" />
-    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_staging_texture.cpp" />
-    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_state_tracking.cpp" />
-    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_texture.cpp" />
-    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_upload.cpp" />
-    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_stubs.cpp" />
-    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_device_manager.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_allocator.cpp">
+      <Filter>vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_buffer.cpp">
+      <Filter>vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_commandlist.cpp">
+      <Filter>vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_compute.cpp">
+      <Filter>vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_constants.cpp">
+      <Filter>vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_device.cpp">
+      <Filter>vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_graphics.cpp">
+      <Filter>vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_meshlets.cpp">
+      <Filter>vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_queries.cpp">
+      <Filter>vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_queue.cpp">
+      <Filter>vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_raytracing.cpp">
+      <Filter>vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_resource_bindings.cpp">
+      <Filter>vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_shader.cpp">
+      <Filter>vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_staging_texture.cpp">
+      <Filter>vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_state_tracking.cpp">
+      <Filter>vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_texture.cpp">
+      <Filter>vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_upload.cpp">
+      <Filter>vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_stubs.cpp">
+      <Filter>vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_device_manager.cpp">
+      <Filter>vulkan</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\basic.cpp" />
@@ -30,8 +73,14 @@
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\common.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\graphics.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\shader.h" />
-    <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan.h" />
-    <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_backend.h" />
-    <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_device_manager.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan.h">
+      <Filter>vulkan</Filter>
+    </ClInclude>
+    <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_backend.h">
+      <Filter>vulkan</Filter>
+    </ClInclude>
+    <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_device_manager.h">
+      <Filter>vulkan</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

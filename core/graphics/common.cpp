@@ -301,7 +301,6 @@ void ICommandList::setResourceStatesForFramebuffer(IFramebuffer* framebuffer){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// AftermathMarkerTracker Implementation
 
 
 static const AString s_notFoundMarkerString = "ERROR: could not resolve marker";
@@ -354,10 +353,8 @@ void AftermathCrashDumpHelper::registerAftermathMarkerTracker(AftermathMarkerTra
 }
 
 void AftermathCrashDumpHelper::unRegisterAftermathMarkerTracker(AftermathMarkerTracker* tracker){
-    // Keep the last few destroyed marker trackers around in case they're still executing on the GPU
-    if(m_destroyedMarkerTrackers.size() >= s_numDestroyedMarkerTrackers){
+    if(m_destroyedMarkerTrackers.size() >= s_numDestroyedMarkerTrackers)
         m_destroyedMarkerTrackers.pop_front();
-    }
     
     m_destroyedMarkerTrackers.push_back(*tracker);
     m_markerTrackers.erase(tracker);
@@ -404,7 +401,6 @@ Pair<const void*, usize> AftermathCrashDumpHelper::findShaderBinary(u64 shaderHa
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// IDeviceManager base implementation
 
 
 bool IDeviceManager::createHeadlessDevice(const DeviceCreationParameters& params){
@@ -445,7 +441,6 @@ bool IDeviceManager::createWindowDeviceAndSwapChain(const DeviceCreationParamete
     if(!createSwapChainInternal())
         return false;
 
-    // reset the back buffer size state to enforce a resize event
     m_deviceParams.backBufferWidth = 0;
     m_deviceParams.backBufferHeight = 0;
     updateWindowState(frameData.width(), frameData.height(), true, true);
@@ -455,7 +450,6 @@ bool IDeviceManager::createWindowDeviceAndSwapChain(const DeviceCreationParamete
 }
 
 bool IDeviceManager::createInstance(const InstanceParameters& params){
-    // Copy instance parameters into device params
     m_deviceParams.enableDebugRuntime = params.enableDebugRuntime;
     m_deviceParams.enableWarningsAsErrors = params.enableWarningsAsErrors;
     m_deviceParams.headlessDevice = params.headlessDevice;
@@ -503,9 +497,8 @@ void IDeviceManager::backBufferResizing(){
 }
 
 void IDeviceManager::backBufferResized(){
-    for(auto it : m_renderPasses){
+    for(auto it : m_renderPasses)
         it->backBufferResized(m_deviceParams.backBufferWidth, m_deviceParams.backBufferHeight, m_deviceParams.swapChainSampleCount);
-    }
 
     u32 backBufferCount = getBackBufferCount();
     m_swapChainFramebuffers.resize(backBufferCount);
@@ -564,9 +557,13 @@ bool IDeviceManager::animateRenderPresent(){
             m_prevDPIScaleFactorY = m_dpiScaleFactorY;
         }
 
-        if(m_callbacks.beforeAnimate) m_callbacks.beforeAnimate(*this, m_frameIndex);
+        if(m_callbacks.beforeAnimate)
+            m_callbacks.beforeAnimate(*this, m_frameIndex);
+
         animate(elapsedTime);
-        if(m_callbacks.afterAnimate) m_callbacks.afterAnimate(*this, m_frameIndex);
+
+        if(m_callbacks.afterAnimate)
+            m_callbacks.afterAnimate(*this, m_frameIndex);
 
         if(m_frameIndex > 0 || !m_skipRenderOnFirstFrame){
             if(beginFrame()){
@@ -619,9 +616,11 @@ void IDeviceManager::updateWindowState(u32 width, u32 height, bool windowVisible
         return;
     }
 
-    if(static_cast<i32>(m_deviceParams.backBufferWidth) != static_cast<i32>(width) ||
-        static_cast<i32>(m_deviceParams.backBufferHeight) != static_cast<i32>(height) ||
-        (m_deviceParams.vsyncEnabled != m_requestedVSync && getGraphicsAPI() == GraphicsAPI::VULKAN))
+    if(
+        static_cast<i32>(m_deviceParams.backBufferWidth) != static_cast<i32>(width)
+        || static_cast<i32>(m_deviceParams.backBufferHeight) != static_cast<i32>(height)
+        || (m_deviceParams.vsyncEnabled != m_requestedVSync && getGraphicsAPI() == GraphicsAPI::VULKAN)
+    )
     {
         backBufferResizing();
 

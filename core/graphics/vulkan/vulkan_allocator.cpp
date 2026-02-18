@@ -4,6 +4,8 @@
 
 #include "vulkan_backend.h"
 
+#include <logger/client/logger.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -41,12 +43,12 @@ VkResult VulkanAllocator::allocateBufferMemory(Buffer* buffer, bool enableDevice
 
     u32 memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, memoryProperties);
     if(memoryTypeIndex == UINT32_MAX){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to find suitable memory type for buffer"));
         return VK_ERROR_OUT_OF_DEVICE_MEMORY;
     }
 
     void* pNext = nullptr;
 
-    // Enable device address if needed
     VkMemoryAllocateFlagsInfo allocFlagsInfo{};
     if(enableDeviceAddress){
         allocFlagsInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO;
@@ -57,7 +59,7 @@ VkResult VulkanAllocator::allocateBufferMemory(Buffer* buffer, bool enableDevice
 
     // Use dedicated allocation for large buffers (improves performance)
     VkMemoryDedicatedAllocateInfo dedicatedInfo{};
-    if(memRequirements.size >= 16 * 1024 * 1024){ // 16MB threshold
+    if(memRequirements.size >= s_LargeBufferThreshold){
         dedicatedInfo.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO;
         dedicatedInfo.buffer = buffer->buffer;
         dedicatedInfo.image = VK_NULL_HANDLE;

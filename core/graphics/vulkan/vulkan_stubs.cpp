@@ -148,12 +148,12 @@ void CommandList::buildTopLevelAccelStructFromBuffer(IRayTracingAccelStruct* _as
     currentCmdBuf->referencedResources.push_back(instanceBuffer);
 }
 
-void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOperationDesc& desc){
+void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOperationDesc& opDesc){
     if(!m_context.extensions.NV_cluster_acceleration_structure)
         return;
 
     VkClusterAccelerationStructureOpTypeNV opType;
-    switch(desc.params.type){
+    switch(opDesc.params.type){
     case RayTracingClusterOperationType::Move:
         opType = VK_CLUSTER_ACCELERATION_STRUCTURE_OP_TYPE_MOVE_OBJECTS_NV;
         break;
@@ -174,7 +174,7 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
     }
 
     VkClusterAccelerationStructureOpModeNV opMode;
-    switch(desc.params.mode){
+    switch(opDesc.params.mode){
     case RayTracingClusterOperationMode::ImplicitDestinations:
         opMode = VK_CLUSTER_ACCELERATION_STRUCTURE_OP_MODE_IMPLICIT_DESTINATIONS_NV;
         break;
@@ -189,15 +189,15 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
     }
 
     VkBuildAccelerationStructureFlagsKHR opFlags = 0;
-    if(desc.params.flags & RayTracingClusterOperationFlags::FastTrace)
+    if(opDesc.params.flags & RayTracingClusterOperationFlags::FastTrace)
         opFlags |= VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
-    if(!(desc.params.flags & RayTracingClusterOperationFlags::FastTrace) && (desc.params.flags & RayTracingClusterOperationFlags::FastBuild))
+    if(!(opDesc.params.flags & RayTracingClusterOperationFlags::FastTrace) && (opDesc.params.flags & RayTracingClusterOperationFlags::FastBuild))
         opFlags |= VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR;
-    if(desc.params.flags & RayTracingClusterOperationFlags::AllowOMM)
+    if(opDesc.params.flags & RayTracingClusterOperationFlags::AllowOMM)
         opFlags |= VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_OPACITY_MICROMAP_UPDATE_EXT;
 
     VkClusterAccelerationStructureInputInfoNV inputInfo = { VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_INPUT_INFO_NV };
-    inputInfo.maxAccelerationStructureCount = desc.params.maxArgCount;
+    inputInfo.maxAccelerationStructureCount = opDesc.params.maxArgCount;
     inputInfo.flags = opFlags;
     inputInfo.opType = opType;
     inputInfo.opMode = opMode;
@@ -206,38 +206,38 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
     VkClusterAccelerationStructureTriangleClusterInputNV clusterInput = { VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_TRIANGLE_CLUSTER_INPUT_NV };
     VkClusterAccelerationStructureClustersBottomLevelInputNV blasInput = { VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_CLUSTERS_BOTTOM_LEVEL_INPUT_NV };
 
-    switch(desc.params.type){
+    switch(opDesc.params.type){
     case RayTracingClusterOperationType::Move:{
         VkClusterAccelerationStructureTypeNV moveType;
-        switch(desc.params.move.type){
+        switch(opDesc.params.move.type){
         case RayTracingClusterOperationMoveType::BottomLevel:  moveType = VK_CLUSTER_ACCELERATION_STRUCTURE_TYPE_CLUSTERS_BOTTOM_LEVEL_NV; break;
         case RayTracingClusterOperationMoveType::ClusterLevel: moveType = VK_CLUSTER_ACCELERATION_STRUCTURE_TYPE_TRIANGLE_CLUSTER_NV; break;
         case RayTracingClusterOperationMoveType::Template:     moveType = VK_CLUSTER_ACCELERATION_STRUCTURE_TYPE_TRIANGLE_CLUSTER_TEMPLATE_NV; break;
         default: moveType = VK_CLUSTER_ACCELERATION_STRUCTURE_TYPE_CLUSTERS_BOTTOM_LEVEL_NV; break;
         }
         moveInput.type = moveType;
-        moveInput.noMoveOverlap = (desc.params.flags & RayTracingClusterOperationFlags::NoOverlap) ? VK_TRUE : VK_FALSE;
-        moveInput.maxMovedBytes = desc.params.move.maxBytes;
+        moveInput.noMoveOverlap = (opDesc.params.flags & RayTracingClusterOperationFlags::NoOverlap) ? VK_TRUE : VK_FALSE;
+        moveInput.maxMovedBytes = opDesc.params.move.maxBytes;
         inputInfo.opInput.pMoveObjects = &moveInput;
         break;
     }
     case RayTracingClusterOperationType::ClasBuild:
     case RayTracingClusterOperationType::ClasBuildTemplates:
     case RayTracingClusterOperationType::ClasInstantiateTemplates:{
-        clusterInput.vertexFormat = __hidden_vulkan::ConvertFormat(desc.params.clas.vertexFormat);
-        clusterInput.maxGeometryIndexValue = desc.params.clas.maxGeometryIndex;
-        clusterInput.maxClusterUniqueGeometryCount = desc.params.clas.maxUniqueGeometryCount;
-        clusterInput.maxClusterTriangleCount = desc.params.clas.maxTriangleCount;
-        clusterInput.maxClusterVertexCount = desc.params.clas.maxVertexCount;
-        clusterInput.maxTotalTriangleCount = desc.params.clas.maxTotalTriangleCount;
-        clusterInput.maxTotalVertexCount = desc.params.clas.maxTotalVertexCount;
-        clusterInput.minPositionTruncateBitCount = desc.params.clas.minPositionTruncateBitCount;
+        clusterInput.vertexFormat = __hidden_vulkan::ConvertFormat(opDesc.params.clas.vertexFormat);
+        clusterInput.maxGeometryIndexValue = opDesc.params.clas.maxGeometryIndex;
+        clusterInput.maxClusterUniqueGeometryCount = opDesc.params.clas.maxUniqueGeometryCount;
+        clusterInput.maxClusterTriangleCount = opDesc.params.clas.maxTriangleCount;
+        clusterInput.maxClusterVertexCount = opDesc.params.clas.maxVertexCount;
+        clusterInput.maxTotalTriangleCount = opDesc.params.clas.maxTotalTriangleCount;
+        clusterInput.maxTotalVertexCount = opDesc.params.clas.maxTotalVertexCount;
+        clusterInput.minPositionTruncateBitCount = opDesc.params.clas.minPositionTruncateBitCount;
         inputInfo.opInput.pTriangleClusters = &clusterInput;
         break;
     }
     case RayTracingClusterOperationType::BlasBuild:{
-        blasInput.maxClusterCountPerAccelerationStructure = desc.params.blas.maxClasPerBlasCount;
-        blasInput.maxTotalClusterCount = desc.params.blas.maxTotalClasCount;
+        blasInput.maxClusterCountPerAccelerationStructure = opDesc.params.blas.maxClasPerBlasCount;
+        blasInput.maxTotalClusterCount = opDesc.params.blas.maxTotalClasCount;
         inputInfo.opInput.pClustersBottomLevel = &blasInput;
         break;
     }
@@ -245,43 +245,43 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
         break;
     }
 
-    auto* indirectArgCountBuffer = desc.inIndirectArgCountBuffer ? checked_cast<Buffer*>(desc.inIndirectArgCountBuffer) : nullptr;
-    auto* indirectArgsBuffer = desc.inIndirectArgsBuffer ? checked_cast<Buffer*>(desc.inIndirectArgsBuffer) : nullptr;
-    auto* inOutAddressesBuffer = desc.inOutAddressesBuffer ? checked_cast<Buffer*>(desc.inOutAddressesBuffer) : nullptr;
-    auto* outSizesBuffer = desc.outSizesBuffer ? checked_cast<Buffer*>(desc.outSizesBuffer) : nullptr;
-    auto* outAccelerationStructuresBuffer = desc.outAccelerationStructuresBuffer ? checked_cast<Buffer*>(desc.outAccelerationStructuresBuffer) : nullptr;
+    auto* indirectArgCountBuffer = opDesc.inIndirectArgCountBuffer ? checked_cast<Buffer*>(opDesc.inIndirectArgCountBuffer) : nullptr;
+    auto* indirectArgsBuffer = opDesc.inIndirectArgsBuffer ? checked_cast<Buffer*>(opDesc.inIndirectArgsBuffer) : nullptr;
+    auto* inOutAddressesBuffer = opDesc.inOutAddressesBuffer ? checked_cast<Buffer*>(opDesc.inOutAddressesBuffer) : nullptr;
+    auto* outSizesBuffer = opDesc.outSizesBuffer ? checked_cast<Buffer*>(opDesc.outSizesBuffer) : nullptr;
+    auto* outAccelerationStructuresBuffer = opDesc.outAccelerationStructuresBuffer ? checked_cast<Buffer*>(opDesc.outAccelerationStructuresBuffer) : nullptr;
 
     if(enableAutomaticBarriers){
         if(indirectArgsBuffer)
-            setBufferState(desc.inIndirectArgsBuffer, ResourceStates::ShaderResource);
+            setBufferState(opDesc.inIndirectArgsBuffer, ResourceStates::ShaderResource);
         if(indirectArgCountBuffer)
-            setBufferState(desc.inIndirectArgCountBuffer, ResourceStates::ShaderResource);
+            setBufferState(opDesc.inIndirectArgCountBuffer, ResourceStates::ShaderResource);
         if(inOutAddressesBuffer)
-            setBufferState(desc.inOutAddressesBuffer, ResourceStates::UnorderedAccess);
+            setBufferState(opDesc.inOutAddressesBuffer, ResourceStates::UnorderedAccess);
         if(outSizesBuffer)
-            setBufferState(desc.outSizesBuffer, ResourceStates::UnorderedAccess);
+            setBufferState(opDesc.outSizesBuffer, ResourceStates::UnorderedAccess);
         if(outAccelerationStructuresBuffer)
-            setBufferState(desc.outAccelerationStructuresBuffer, ResourceStates::AccelStructWrite);
+            setBufferState(opDesc.outAccelerationStructuresBuffer, ResourceStates::AccelStructWrite);
     }
 
     if(indirectArgCountBuffer)
-        currentCmdBuf->referencedResources.push_back(desc.inIndirectArgCountBuffer);
+        currentCmdBuf->referencedResources.push_back(opDesc.inIndirectArgCountBuffer);
     if(indirectArgsBuffer)
-        currentCmdBuf->referencedResources.push_back(desc.inIndirectArgsBuffer);
+        currentCmdBuf->referencedResources.push_back(opDesc.inIndirectArgsBuffer);
     if(inOutAddressesBuffer)
-        currentCmdBuf->referencedResources.push_back(desc.inOutAddressesBuffer);
+        currentCmdBuf->referencedResources.push_back(opDesc.inOutAddressesBuffer);
     if(outSizesBuffer)
-        currentCmdBuf->referencedResources.push_back(desc.outSizesBuffer);
+        currentCmdBuf->referencedResources.push_back(opDesc.outSizesBuffer);
     if(outAccelerationStructuresBuffer)
-        currentCmdBuf->referencedResources.push_back(desc.outAccelerationStructuresBuffer);
+        currentCmdBuf->referencedResources.push_back(opDesc.outAccelerationStructuresBuffer);
 
     commitBarriers();
 
     BufferHandle scratchBufferHandle;
     Buffer* scratchBuffer = nullptr;
-    if(desc.scratchSizeInBytes > 0){
+    if(opDesc.scratchSizeInBytes > 0){
         BufferDesc scratchDesc;
-        scratchDesc.byteSize = desc.scratchSizeInBytes;
+        scratchDesc.byteSize = opDesc.scratchSizeInBytes;
         scratchDesc.structStride = 1;
         scratchDesc.debugName = "ClusterOp_Scratch";
         scratchDesc.canHaveUAVs = true;
@@ -296,27 +296,27 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
     VkClusterAccelerationStructureCommandsInfoNV commandsInfo = { VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_COMMANDS_INFO_NV };
     commandsInfo.input = inputInfo;
     commandsInfo.scratchData = scratchBuffer ? scratchBuffer->deviceAddress : 0;
-    commandsInfo.dstImplicitData = outAccelerationStructuresBuffer ? outAccelerationStructuresBuffer->deviceAddress + desc.outAccelerationStructuresOffsetInBytes : 0;
+    commandsInfo.dstImplicitData = outAccelerationStructuresBuffer ? outAccelerationStructuresBuffer->deviceAddress + opDesc.outAccelerationStructuresOffsetInBytes : 0;
 
     if(inOutAddressesBuffer){
-        commandsInfo.dstAddressesArray.deviceAddress = inOutAddressesBuffer->deviceAddress + desc.inOutAddressesOffsetInBytes;
+        commandsInfo.dstAddressesArray.deviceAddress = inOutAddressesBuffer->deviceAddress + opDesc.inOutAddressesOffsetInBytes;
         commandsInfo.dstAddressesArray.stride = inOutAddressesBuffer->getDescription().structStride;
-        commandsInfo.dstAddressesArray.size = inOutAddressesBuffer->getDescription().byteSize - desc.inOutAddressesOffsetInBytes;
+        commandsInfo.dstAddressesArray.size = inOutAddressesBuffer->getDescription().byteSize - opDesc.inOutAddressesOffsetInBytes;
     }
 
     if(outSizesBuffer){
-        commandsInfo.dstSizesArray.deviceAddress = outSizesBuffer->deviceAddress + desc.outSizesOffsetInBytes;
+        commandsInfo.dstSizesArray.deviceAddress = outSizesBuffer->deviceAddress + opDesc.outSizesOffsetInBytes;
         commandsInfo.dstSizesArray.stride = outSizesBuffer->getDescription().structStride;
-        commandsInfo.dstSizesArray.size = outSizesBuffer->getDescription().byteSize - desc.outSizesOffsetInBytes;
+        commandsInfo.dstSizesArray.size = outSizesBuffer->getDescription().byteSize - opDesc.outSizesOffsetInBytes;
     }
 
     if(indirectArgsBuffer){
-        commandsInfo.srcInfosArray.deviceAddress = indirectArgsBuffer->deviceAddress + desc.inIndirectArgsOffsetInBytes;
+        commandsInfo.srcInfosArray.deviceAddress = indirectArgsBuffer->deviceAddress + opDesc.inIndirectArgsOffsetInBytes;
         commandsInfo.srcInfosArray.stride = indirectArgsBuffer->getDescription().structStride;
-        commandsInfo.srcInfosArray.size = indirectArgsBuffer->getDescription().byteSize - desc.inIndirectArgsOffsetInBytes;
+        commandsInfo.srcInfosArray.size = indirectArgsBuffer->getDescription().byteSize - opDesc.inIndirectArgsOffsetInBytes;
     }
 
-    commandsInfo.srcInfosCount = indirectArgCountBuffer ? indirectArgCountBuffer->deviceAddress + desc.inIndirectArgCountOffsetInBytes : 0;
+    commandsInfo.srcInfosCount = indirectArgCountBuffer ? indirectArgCountBuffer->deviceAddress + opDesc.inIndirectArgCountOffsetInBytes : 0;
     commandsInfo.addressResolutionFlags = static_cast<VkClusterAccelerationStructureAddressResolutionFlagsNV>(0);
 
     vkCmdBuildClusterAccelerationStructureIndirectNV(currentCmdBuf->cmdBuf, &commandsInfo);
@@ -339,35 +339,35 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
     dstSizes.reserve(numDescs);
 
     for(usize i = 0; i < numDescs; ++i){
-        const CooperativeVectorConvertMatrixLayoutDesc& desc = convertDescs[i];
+        const CooperativeVectorConvertMatrixLayoutDesc& convertDesc = convertDescs[i];
 
-        if(!desc.src.buffer || !desc.dst.buffer)
+        if(!convertDesc.src.buffer || !convertDesc.dst.buffer)
             continue;
 
         if(enableAutomaticBarriers){
-            setBufferState(desc.src.buffer, ResourceStates::ShaderResource);
-            setBufferState(desc.dst.buffer, ResourceStates::UnorderedAccess);
+            setBufferState(convertDesc.src.buffer, ResourceStates::ShaderResource);
+            setBufferState(convertDesc.dst.buffer, ResourceStates::UnorderedAccess);
         }
 
         VkConvertCooperativeVectorMatrixInfoNV vkDesc = { VK_STRUCTURE_TYPE_CONVERT_COOPERATIVE_VECTOR_MATRIX_INFO_NV };
-        vkDesc.srcSize = desc.src.size;
-        vkDesc.srcData.deviceAddress = checked_cast<Buffer*>(desc.src.buffer)->deviceAddress + desc.src.offset;
-        vkDesc.pDstSize = &dstSizes.emplace_back(desc.dst.size);
-        vkDesc.dstData.deviceAddress = checked_cast<Buffer*>(desc.dst.buffer)->deviceAddress + desc.dst.offset;
-        vkDesc.srcComponentType = __hidden_vulkan::ConvertCoopVecDataType(desc.src.type);
-        vkDesc.dstComponentType = __hidden_vulkan::ConvertCoopVecDataType(desc.dst.type);
-        vkDesc.numRows = desc.numRows;
-        vkDesc.numColumns = desc.numColumns;
+        vkDesc.srcSize = convertDesc.src.size;
+        vkDesc.srcData.deviceAddress = checked_cast<Buffer*>(convertDesc.src.buffer)->deviceAddress + convertDesc.src.offset;
+        vkDesc.pDstSize = &dstSizes.emplace_back(convertDesc.dst.size);
+        vkDesc.dstData.deviceAddress = checked_cast<Buffer*>(convertDesc.dst.buffer)->deviceAddress + convertDesc.dst.offset;
+        vkDesc.srcComponentType = __hidden_vulkan::ConvertCoopVecDataType(convertDesc.src.type);
+        vkDesc.dstComponentType = __hidden_vulkan::ConvertCoopVecDataType(convertDesc.dst.type);
+        vkDesc.numRows = convertDesc.numRows;
+        vkDesc.numColumns = convertDesc.numColumns;
 
-        vkDesc.srcLayout = __hidden_vulkan::ConvertCoopVecMatrixLayout(desc.src.layout);
-        vkDesc.srcStride = desc.src.stride != 0
-            ? desc.src.stride
-            : GetCooperativeVectorOptimalMatrixStride(desc.src.type, desc.src.layout, desc.numRows, desc.numColumns);
+        vkDesc.srcLayout = __hidden_vulkan::ConvertCoopVecMatrixLayout(convertDesc.src.layout);
+        vkDesc.srcStride = convertDesc.src.stride != 0
+            ? convertDesc.src.stride
+            : GetCooperativeVectorOptimalMatrixStride(convertDesc.src.type, convertDesc.src.layout, convertDesc.numRows, convertDesc.numColumns);
 
-        vkDesc.dstLayout = __hidden_vulkan::ConvertCoopVecMatrixLayout(desc.dst.layout);
-        vkDesc.dstStride = desc.dst.stride != 0
-            ? desc.dst.stride
-            : GetCooperativeVectorOptimalMatrixStride(desc.dst.type, desc.dst.layout, desc.numRows, desc.numColumns);
+        vkDesc.dstLayout = __hidden_vulkan::ConvertCoopVecMatrixLayout(convertDesc.dst.layout);
+        vkDesc.dstStride = convertDesc.dst.stride != 0
+            ? convertDesc.dst.stride
+            : GetCooperativeVectorOptimalMatrixStride(convertDesc.dst.type, convertDesc.dst.layout, convertDesc.numRows, convertDesc.numColumns);
 
         vkConvertDescs.push_back(vkDesc);
     }

@@ -274,7 +274,7 @@ void Device::runGarbageCollection(){
 }
 
 
-bool Device::queryFeatureSupport(Feature::Enum feature, void* pInfo, usize infoSize){
+bool Device::queryFeatureSupport(Feature::Enum feature, void*, usize){
     switch(feature){
     case Feature::DeferredCommandLists:
         return true;

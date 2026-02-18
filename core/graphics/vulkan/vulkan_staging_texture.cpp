@@ -142,7 +142,7 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
     return StagingTextureHandle(staging, AdoptRef);
 }
 
-void* Device::mapStagingTexture(IStagingTexture* tex, const TextureSlice& slice, CpuAccessMode::Enum cpuAccess, usize* outRowPitch){
+void* Device::mapStagingTexture(IStagingTexture* tex, const TextureSlice& slice, CpuAccessMode::Enum, usize* outRowPitch){
     if(!tex)
         return nullptr;
 

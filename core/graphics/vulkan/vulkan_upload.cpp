@@ -80,7 +80,7 @@ bool UploadManager::suballocateBuffer(u64 size, Buffer** pBuffer, u64* pOffset, 
     return true;
 }
 
-void UploadManager::submitChunks(u64 currentVersion, u64 submittedVersion){
+void UploadManager::submitChunks(u64, u64 submittedVersion){
     if(m_currentChunk){
         m_currentChunk->version = submittedVersion;
         m_chunkPool.push_back(m_currentChunk);

@@ -139,7 +139,7 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     };
 
     VkPipelineDynamicStateCreateInfo dynamicState = { VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO };
-    dynamicState.dynamicStateCount = LengthOf(dynamicStates);
+    dynamicState.dynamicStateCount = static_cast<u32>(LengthOf(dynamicStates));
     dynamicState.pDynamicStates = dynamicStates;
 
     Vector<VkFormat> colorFormats;

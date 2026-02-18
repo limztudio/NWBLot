@@ -140,7 +140,7 @@ void CommandList::endMarker(){
     }
 }
 
-void CommandList::setEventQuery(IEventQuery* _query, CommandQueue::Enum waitQueue){
+void CommandList::setEventQuery(IEventQuery* _query, CommandQueue::Enum){
     auto* query = checked_cast<EventQuery*>(_query);
 
     if(query->fence != VK_NULL_HANDLE)

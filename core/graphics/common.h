@@ -1964,6 +1964,7 @@ struct BindingLayoutItem{
         ret.slot = slot; \
         ret.type = ResourceType::TYPE_ENUM; \
         ret.size = 1; \
+        (void)size; \
         return ret; \
     }
     NWB_BINDING_LAYOUT_ITEM_INITIALIZER(Texture_SRV)
@@ -2409,7 +2410,7 @@ struct SinglePassStereoState{
     
     constexpr SinglePassStereoState& setEnabled(bool value){ enabled = value; return *this; }
     constexpr SinglePassStereoState& setIndependentViewportMask(bool value){ independentViewportMask = value; return *this; }
-    constexpr SinglePassStereoState& setRenderTargetIndexOffset(u16 value){ renderTargetIndexOffset = value; return *this; }
+    constexpr SinglePassStereoState& setRenderTargetIndexOffset(u16 value){ renderTargetIndexOffset = static_cast<u8>(value); return *this; }
 };
 inline bool operator==(const SinglePassStereoState& lhs, const SinglePassStereoState& rhs){
     return 
@@ -3708,17 +3709,17 @@ public:
 public:
     virtual void setLatewarpOptions(){}
     virtual bool shouldRenderUnfocused(){ return false; }
-    virtual void render(IFramebuffer* framebuffer){}
-    virtual void animate(f32 elapsedTimeSeconds){}
+    virtual void render(IFramebuffer*){}
+    virtual void animate(f32){}
     virtual void backBufferResizing(){}
-    virtual void backBufferResized(u32 width, u32 height, u32 sampleCount){}
-    virtual void displayScaleChanged(f32 scaleX, f32 scaleY){}
+    virtual void backBufferResized(u32, u32, u32){}
+    virtual void displayScaleChanged(f32, f32){}
 
-    virtual bool keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods){ return false; }
-    virtual bool keyboardCharInput(u32 unicode, i32 mods){ return false; }
-    virtual bool mousePosUpdate(f64 xpos, f64 ypos){ return false; }
-    virtual bool mouseScrollUpdate(f64 xoffset, f64 yoffset){ return false; }
-    virtual bool mouseButtonUpdate(i32 button, i32 action, i32 mods){ return false; }
+    virtual bool keyboardUpdate(i32, i32, i32, i32){ return false; }
+    virtual bool keyboardCharInput(u32, i32){ return false; }
+    virtual bool mousePosUpdate(f64, f64){ return false; }
+    virtual bool mouseScrollUpdate(f64, f64){ return false; }
+    virtual bool mouseButtonUpdate(i32, i32, i32){ return false; }
 
     [[nodiscard]] IDeviceManager* getDeviceManager()const{ return m_deviceManager; }
 
@@ -3788,12 +3789,12 @@ public:
     void setWindowTitle(const tchar* title);
     const tchar* getWindowTitle();
 
-    virtual bool isVulkanInstanceExtensionEnabled(const char* extensionName)const{ return false; }
-    virtual bool isVulkanDeviceExtensionEnabled(const char* extensionName)const{ return false; }
-    virtual bool isVulkanLayerEnabled(const char* layerName)const{ return false; }
-    virtual void getEnabledVulkanInstanceExtensions(Vector<AString>& extensions)const{}
-    virtual void getEnabledVulkanDeviceExtensions(Vector<AString>& extensions)const{}
-    virtual void getEnabledVulkanLayers(Vector<AString>& layers)const{}
+    virtual bool isVulkanInstanceExtensionEnabled(const char*)const{ return false; }
+    virtual bool isVulkanDeviceExtensionEnabled(const char*)const{ return false; }
+    virtual bool isVulkanLayerEnabled(const char*)const{ return false; }
+    virtual void getEnabledVulkanInstanceExtensions(Vector<AString>&)const{}
+    virtual void getEnabledVulkanDeviceExtensions(Vector<AString>&)const{}
+    virtual void getEnabledVulkanLayers(Vector<AString>&)const{}
 
     void keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods);
     void keyboardCharInput(u32 unicode, i32 mods);

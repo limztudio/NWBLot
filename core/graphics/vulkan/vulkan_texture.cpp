@@ -539,15 +539,15 @@ void CommandList::copyTexture(ITexture* dest, const TextureSlice& destSlice, ISt
     currentCmdBuf->referencedResources.push_back(src);
 }
 
-void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, const void* data, usize rowPitch, usize depthPitch){
+void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, const void* data, usize rowPitch, usize){
     auto* dest = checked_cast<Texture*>(_dest);
-    const TextureDesc& desc = dest->desc;
+    const TextureDesc& texDesc = dest->desc;
 
-    auto width = Max<u32>(1u, desc.width >> mipLevel);
-    auto height = Max<u32>(1u, desc.height >> mipLevel);
-    auto depth = Max<u32>(1u, desc.depth >> mipLevel);
+    auto width = Max<u32>(1u, texDesc.width >> mipLevel);
+    auto height = Max<u32>(1u, texDesc.height >> mipLevel);
+    auto depth = Max<u32>(1u, texDesc.depth >> mipLevel);
 
-    const FormatInfo& formatInfo = GetFormatInfo(desc.format);
+    const FormatInfo& formatInfo = GetFormatInfo(texDesc.format);
     u32 blockHeight = (height + formatInfo.blockSize - 1) / formatInfo.blockSize;
     u64 dataSize = u64(rowPitch) * blockHeight * depth;
 

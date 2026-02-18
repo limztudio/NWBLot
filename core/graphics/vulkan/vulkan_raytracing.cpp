@@ -319,7 +319,6 @@ bool Device::bindAccelStructMemory(IRayTracingAccelStruct* _as, IHeap* heap, u64
         return false;
 
     auto* as = checked_cast<AccelStruct*>(_as);
-    auto* h = checked_cast<Heap*>(heap);
 
     if(as->buffer)
         return bindBufferMemory(as->buffer.get(), heap, offset);
@@ -438,7 +437,6 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
 
     u32 handleSize = m_context.rayTracingPipelineProperties.shaderGroupHandleSize;
     u32 handleAlignment = m_context.rayTracingPipelineProperties.shaderGroupHandleAlignment;
-    u32 baseAlignment = m_context.rayTracingPipelineProperties.shaderGroupBaseAlignment;
 
     u32 handleSizeAligned = (handleSize + handleAlignment - 1) & ~(handleAlignment - 1);
     u32 groupCount = static_cast<u32>(groups.size());
@@ -916,26 +914,26 @@ void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* _as, const Ra
     currentCmdBuf->referencedResources.push_back(_as);
 }
 
-void CommandList::buildOpacityMicromap(IRayTracingOpacityMicromap* _omm, const RayTracingOpacityMicromapDesc& desc){
+void CommandList::buildOpacityMicromap(IRayTracingOpacityMicromap* _omm, const RayTracingOpacityMicromapDesc& ommDesc){
     if(!m_context.extensions.EXT_opacity_micromap)
         return;
 
     auto* omm = checked_cast<OpacityMicromap*>(_omm);
 
     if(enableAutomaticBarriers){
-        if(desc.inputBuffer)
-            setBufferState(desc.inputBuffer, ResourceStates::OpacityMicromapBuildInput);
-        if(desc.perOmmDescs)
-            setBufferState(desc.perOmmDescs, ResourceStates::OpacityMicromapBuildInput);
+        if(ommDesc.inputBuffer)
+            setBufferState(ommDesc.inputBuffer, ResourceStates::OpacityMicromapBuildInput);
+        if(ommDesc.perOmmDescs)
+            setBufferState(ommDesc.perOmmDescs, ResourceStates::OpacityMicromapBuildInput);
         if(omm->dataBuffer)
             setBufferState(omm->dataBuffer.get(), ResourceStates::OpacityMicromapWrite);
     }
 
-    if(desc.trackLiveness){
-        if(desc.inputBuffer)
-            currentCmdBuf->referencedResources.push_back(desc.inputBuffer);
-        if(desc.perOmmDescs)
-            currentCmdBuf->referencedResources.push_back(desc.perOmmDescs);
+    if(ommDesc.trackLiveness){
+        if(ommDesc.inputBuffer)
+            currentCmdBuf->referencedResources.push_back(ommDesc.inputBuffer);
+        if(ommDesc.perOmmDescs)
+            currentCmdBuf->referencedResources.push_back(ommDesc.perOmmDescs);
         if(omm->dataBuffer)
             currentCmdBuf->referencedResources.push_back(omm->dataBuffer.get());
     }
@@ -943,9 +941,9 @@ void CommandList::buildOpacityMicromap(IRayTracingOpacityMicromap* _omm, const R
     commitBarriers();
 
     VkBuildMicromapFlagBitsEXT buildFlags = static_cast<VkBuildMicromapFlagBitsEXT>(0);
-    if(desc.flags & RayTracingOpacityMicromapBuildFlags::FastTrace)
+    if(ommDesc.flags & RayTracingOpacityMicromapBuildFlags::FastTrace)
         buildFlags = VK_BUILD_MICROMAP_PREFER_FAST_TRACE_BIT_EXT;
-    else if(desc.flags & RayTracingOpacityMicromapBuildFlags::FastBuild)
+    else if(ommDesc.flags & RayTracingOpacityMicromapBuildFlags::FastBuild)
         buildFlags = VK_BUILD_MICROMAP_PREFER_FAST_BUILD_BIT_EXT;
 
     VkMicromapBuildInfoEXT buildInfo = { VK_STRUCTURE_TYPE_MICROMAP_BUILD_INFO_EXT };
@@ -953,10 +951,10 @@ void CommandList::buildOpacityMicromap(IRayTracingOpacityMicromap* _omm, const R
     buildInfo.flags = buildFlags;
     buildInfo.mode = VK_BUILD_MICROMAP_MODE_BUILD_EXT;
     buildInfo.dstMicromap = omm->micromap;
-    buildInfo.usageCountsCount = static_cast<u32>(desc.counts.size());
-    buildInfo.pUsageCounts = reinterpret_cast<const VkMicromapUsageEXT*>(desc.counts.data());
-    buildInfo.data.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(desc.inputBuffer, desc.inputBufferOffset);
-    buildInfo.triangleArray.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(desc.perOmmDescs, desc.perOmmDescsOffset);
+    buildInfo.usageCountsCount = static_cast<u32>(ommDesc.counts.size());
+    buildInfo.pUsageCounts = reinterpret_cast<const VkMicromapUsageEXT*>(ommDesc.counts.data());
+    buildInfo.data.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(ommDesc.inputBuffer, ommDesc.inputBufferOffset);
+    buildInfo.triangleArray.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(ommDesc.perOmmDescs, ommDesc.perOmmDescsOffset);
     buildInfo.triangleArrayStride = sizeof(VkMicromapTriangleEXT);
 
     VkMicromapBuildSizesInfoEXT buildSize = { VK_STRUCTURE_TYPE_MICROMAP_BUILD_SIZES_INFO_EXT };
@@ -1002,7 +1000,6 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
 
     u32 handleSize = m_context.rayTracingPipelineProperties.shaderGroupHandleSize;
     u32 handleAlignment = m_context.rayTracingPipelineProperties.shaderGroupHandleAlignment;
-    u32 baseAlignment = m_context.rayTracingPipelineProperties.shaderGroupBaseAlignment;
 
     u32 handleSizeAligned = (handleSize + handleAlignment - 1) & ~(handleAlignment - 1);
 

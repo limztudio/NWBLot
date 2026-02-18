@@ -139,7 +139,7 @@ struct BlankDeleter{
     template<typename U>
     BlankDeleter(const BlankDeleter<U>&, typename EnableIf<IsConvertible<U*, T*>::value>::type* = 0)noexcept{}
 
-    void operator()(T* p)const noexcept{
+    void operator()(T*)const noexcept{
         static_assert(IsCompleteType_V<T>, "Attempting to call the destructor of an incomplete type");
     }
 };

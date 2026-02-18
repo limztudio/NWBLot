@@ -27,7 +27,7 @@ bool Frame::startup(){
 }
 void Frame::cleanup(){
 }
-bool Frame::update(float delta){
+bool Frame::update(float){
     return true;
 }
 

@@ -71,17 +71,13 @@ constexpr u64 s_BufferAlignmentBytes = 4;
 template<typename T, typename U>
 inline T checked_cast(U u){
     static_assert(!std::is_same<T, U>::value, "Unnecessary checked_cast");
+    if(!u)
+        return nullptr;
+    T t = static_cast<T>(u);
 #ifdef NWB_DEBUG
-    if(!u)
-        return nullptr;
-    T t = dynamic_cast<T>(u);
     NWB_ASSERT(t);
-    return t;
-#else
-    if(!u)
-        return nullptr;
-    return static_cast<T>(u);
 #endif
+    return t;
 }
 
 

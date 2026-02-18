@@ -335,7 +335,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     };
 
     VkPipelineDynamicStateCreateInfo dynamicState = { VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO };
-    dynamicState.dynamicStateCount = sizeof(dynamicStates) / sizeof(dynamicStates[0]);
+    dynamicState.dynamicStateCount = LengthOf(dynamicStates);
     dynamicState.pDynamicStates = dynamicStates;
 
     // Step 10: Pipeline layout from binding layouts

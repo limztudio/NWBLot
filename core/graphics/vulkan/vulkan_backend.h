@@ -105,7 +105,7 @@ struct VulkanContext{
 
 class TrackedCommandBuffer final : public RefCounter<IResource>, NoCopy{
 public:
-    TrackedCommandBuffer(const VulkanContext& context, CommandQueue::Enum queueType, u32 queueFamilyIndex);
+    TrackedCommandBuffer(const VulkanContext& context, CommandQueue::Enum, u32 queueFamilyIndex);
     virtual ~TrackedCommandBuffer()override;
 
 
@@ -265,7 +265,7 @@ public:
 
 public:
     bool suballocateBuffer(u64 size, Buffer** pBuffer, u64* pOffset, void** pCpuVA, u64 currentVersion, u32 alignment = 256);
-    void submitChunks(u64 currentVersion, u64 submittedVersion);
+    void submitChunks(u64, u64 submittedVersion);
 
 
 private:
@@ -713,7 +713,7 @@ public:
 public:
     [[nodiscard]] virtual const BindingLayoutDesc* getDescription()const override{ return isBindless ? nullptr : &desc; }
     [[nodiscard]] virtual const BindlessLayoutDesc* getBindlessDesc()const override{ return isBindless ? &bindlessDesc : nullptr; }
-    virtual Object getNativeHandle(ObjectType objectType)override{ return Object(pipelineLayout); }
+    virtual Object getNativeHandle(ObjectType)override{ return Object(pipelineLayout); }
 
 
 public:
@@ -937,7 +937,7 @@ public:
     virtual void writeBuffer(IBuffer* buffer, const void* data, usize dataSize, u64 destOffsetBytes = 0)override;
     virtual void clearBufferUInt(IBuffer* buffer, u32 clearValue)override;
     virtual void copyBuffer(IBuffer* dest, u64 destOffsetBytes, IBuffer* src, u64 srcOffsetBytes, u64 dataSizeBytes)override;
-    virtual void writeTexture(ITexture* dest, u32 arraySlice, u32 mipLevel, const void* data, usize rowPitch, usize depthPitch = 0)override;
+    virtual void writeTexture(ITexture* dest, u32 arraySlice, u32 mipLevel, const void* data, usize rowPitch, usize /*depthPitch*/ = 0)override;
     virtual void resolveTexture(ITexture* dest, const TextureSubresourceSet& dstSubresources, ITexture* src, const TextureSubresourceSet& srcSubresources)override;
 
     virtual void clearSamplerFeedbackTexture(ISamplerFeedbackTexture* texture)override;
@@ -1079,14 +1079,14 @@ public:
     virtual bool bindTextureMemory(ITexture* texture, IHeap* heap, u64 offset)override;
     [[nodiscard]] virtual TextureHandle createHandleForNativeTexture(ObjectType objectType, Object texture, const TextureDesc& desc)override;
     [[nodiscard]] virtual StagingTextureHandle createStagingTexture(const TextureDesc& d, CpuAccessMode::Enum cpuAccess)override;
-    virtual void* mapStagingTexture(IStagingTexture* tex, const TextureSlice& slice, CpuAccessMode::Enum cpuAccess, usize* outRowPitch)override;
+    virtual void* mapStagingTexture(IStagingTexture* tex, const TextureSlice& slice, CpuAccessMode::Enum, usize* outRowPitch)override;
     virtual void unmapStagingTexture(IStagingTexture* tex)override;
     virtual void getTextureTiling(ITexture* texture, u32* numTiles, PackedMipDesc* desc, TileShape* tileShape, u32* subresourceTilingsNum, SubresourceTiling* subresourceTilings)override;
     virtual void updateTextureTileMappings(ITexture* texture, const TextureTilesMapping* tileMappings, u32 numTileMappings, CommandQueue::Enum executionQueue = CommandQueue::Graphics)override;
     [[nodiscard]] virtual SamplerFeedbackTextureHandle createSamplerFeedbackTexture(ITexture* pairedTexture, const SamplerFeedbackTextureDesc& desc)override;
     [[nodiscard]] virtual SamplerFeedbackTextureHandle createSamplerFeedbackForNativeTexture(ObjectType objectType, Object texture, ITexture* pairedTexture)override;
     [[nodiscard]] virtual BufferHandle createBuffer(const BufferDesc& d)override;
-    virtual void* mapBuffer(IBuffer* buffer, CpuAccessMode::Enum cpuAccess)override;
+    virtual void* mapBuffer(IBuffer* buffer, CpuAccessMode::Enum)override;
     virtual void unmapBuffer(IBuffer* buffer)override;
     [[nodiscard]] virtual MemoryRequirements getBufferMemoryRequirements(IBuffer* buffer)override;
     virtual bool bindBufferMemory(IBuffer* buffer, IHeap* heap, u64 offset)override;
@@ -1095,7 +1095,7 @@ public:
     [[nodiscard]] virtual ShaderHandle createShaderSpecialization(IShader* baseShader, const ShaderSpecialization* constants, u32 numConstants)override;
     [[nodiscard]] virtual ShaderLibraryHandle createShaderLibrary(const void* binary, usize binarySize)override;
     [[nodiscard]] virtual SamplerHandle createSampler(const SamplerDesc& d)override;
-    [[nodiscard]] virtual InputLayoutHandle createInputLayout(const VertexAttributeDesc* d, u32 attributeCount, IShader* vertexShader)override;
+    [[nodiscard]] virtual InputLayoutHandle createInputLayout(const VertexAttributeDesc* d, u32 attributeCount, IShader*)override;
     [[nodiscard]] virtual EventQueryHandle createEventQuery()override;
     virtual void setEventQuery(IEventQuery* query, CommandQueue::Enum queue)override;
     virtual bool pollEventQuery(IEventQuery* query)override;
@@ -1127,7 +1127,7 @@ public:
     virtual void queueWaitForCommandList(CommandQueue::Enum waitQueue, CommandQueue::Enum executionQueue, u64 instance)override;
     virtual bool waitForIdle()override;
     virtual void runGarbageCollection()override;
-    virtual bool queryFeatureSupport(Feature::Enum feature, void* pInfo = nullptr, usize infoSize = 0)override;
+    virtual bool queryFeatureSupport(Feature::Enum feature, void* = nullptr, usize = 0)override;
     [[nodiscard]] virtual FormatSupport::Mask queryFormatSupport(Format::Enum format)override;
     [[nodiscard]] virtual CooperativeVectorDeviceFeatures queryCoopVecFeatures()override;
     virtual usize getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, int rows, int columns)override;

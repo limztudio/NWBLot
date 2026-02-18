@@ -96,7 +96,7 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
     return RefCountPtr<IBuffer, BlankDeleter<IBuffer>>(buffer, AdoptRef);
 }
 
-void* Device::mapBuffer(IBuffer* _buffer, CpuAccessMode::Enum cpuAccess){
+void* Device::mapBuffer(IBuffer* _buffer, CpuAccessMode::Enum){
     auto* buffer = static_cast<Buffer*>(_buffer);
 
     if(buffer->mappedMemory)

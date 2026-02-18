@@ -16,7 +16,7 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TrackedCommandBuffer::TrackedCommandBuffer(const VulkanContext& context, CommandQueue::Enum queueType, u32 queueFamilyIndex)
+TrackedCommandBuffer::TrackedCommandBuffer(const VulkanContext& context, CommandQueue::Enum, u32 queueFamilyIndex)
     : m_context(context)
 {
     // Use TRANSIENT flag to hint that command buffers are short-lived

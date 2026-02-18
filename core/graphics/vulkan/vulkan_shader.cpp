@@ -153,7 +153,7 @@ ShaderLibraryHandle Device::createShaderLibrary(const void* binary, usize binary
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 attributeCount, IShader* vertexShader){
+InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 attributeCount, IShader*){
     auto* layout = new InputLayout();
     layout->attributes.assign(d, d + attributeCount);
 

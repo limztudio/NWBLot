@@ -58,6 +58,12 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr u32 s_MinimumVersion = static_cast<u32>(VK_MAKE_API_VERSION(0, 1, 3, 0));
+
+constexpr u32 s_AppVersion = static_cast<u32>(VK_MAKE_API_VERSION(0, 1, 0, 0));
+constexpr u32 s_EngineVersion = static_cast<u32>(VK_MAKE_API_VERSION(0, 1, 0, 0));
+constexpr const char* s_AppName = "NWBLot";
+
 constexpr u64 s_DefaultUploadChunkSize = 64 * 1024 * 1024; // 64 MB
 constexpr u64 s_DefaultScratchChunkSize = 16 * 1024 * 1024; // 16 MB
 constexpr u64 s_ScratchMemoryLimit = 256 * 1024 * 1024; // 256 MB
@@ -71,7 +77,7 @@ constexpr u64 s_BufferAlignmentBytes = 4;
 
 template<typename T, typename U>
 inline T checked_cast(U u){
-    static_assert(!std::is_same<T, U>::value, "Unnecessary checked_cast");
+    static_assert(!IsSame<T, U>::value, "Unnecessary checked_cast");
     if(!u)
         return nullptr;
     T t = static_cast<T>(u);

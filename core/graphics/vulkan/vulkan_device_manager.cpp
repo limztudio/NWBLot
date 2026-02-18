@@ -214,11 +214,11 @@ bool DeviceManager::createInstance(){
     }
 
     {
-        AStringStream ss;
-        ss << "Vulkan: Enabled instance extensions:";
+        TStringStream ss;
+        ss << NWB_TEXT("Vulkan: Enabled instance extensions:");
         for(const auto& ext : m_enabledExtensions.instance)
-            ss << std::endl << "    " << ext;
-        NWB_LOGGER_INFO(NWB_TEXT("{}"), StringConvert(ss.str()));
+            ss << NWB_TEXT("\n    ") << StringConvert(ext);
+        NWB_LOGGER_INFO(NWB_TEXT("{}"), ss.str());
     }
 
     HashSet<AString> requiredLayers = m_enabledExtensions.layers;
@@ -245,11 +245,11 @@ bool DeviceManager::createInstance(){
     }
 
     {
-        AStringStream ss;
-        ss << "Vulkan: Enabled layers:";
+        TStringStream ss;
+        ss << NWB_TEXT("Vulkan: Enabled layers:");
         for(const auto& layer : m_enabledExtensions.layers)
-            ss << std::endl << "    " << layer;
-        NWB_LOGGER_INFO(NWB_TEXT("{}"), StringConvert(ss.str()));
+            ss << NWB_TEXT("\n    ") << StringConvert(layer);
+        NWB_LOGGER_INFO(NWB_TEXT("{}"), ss.str());
     }
 
     auto instanceExtVec = __hidden_vulkan::StringSetToVector(m_enabledExtensions.instance);
@@ -257,10 +257,10 @@ bool DeviceManager::createInstance(){
 
     VkApplicationInfo applicationInfo = {};
     applicationInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-    applicationInfo.pApplicationName = "NWBLot";
-    applicationInfo.applicationVersion = VK_MAKE_API_VERSION(0, 1, 0, 0);
-    applicationInfo.pEngineName = "NWBLot";
-    applicationInfo.engineVersion = VK_MAKE_API_VERSION(0, 1, 0, 0);
+    applicationInfo.pApplicationName = s_AppName;
+    applicationInfo.applicationVersion = static_cast<uint32_t>(s_AppVersion);
+    applicationInfo.pEngineName = s_AppName;
+    applicationInfo.engineVersion = static_cast<uint32_t>(s_EngineVersion);
 
     VkResult res = vkEnumerateInstanceVersion(&applicationInfo.apiVersion);
     if(res != VK_SUCCESS){
@@ -268,12 +268,15 @@ bool DeviceManager::createInstance(){
         return false;
     }
 
-    const u32 minimumVulkanVersion = VK_MAKE_API_VERSION(0, 1, 3, 0);
-    if(applicationInfo.apiVersion < minimumVulkanVersion){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: API version {}.{}.{} is too low, at least 1.3.0 is required."),
+    if(applicationInfo.apiVersion < s_MinimumVersion){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: API version {}.{}.{} is too low, at least {}.{}.{} is required."),
             VK_API_VERSION_MAJOR(applicationInfo.apiVersion),
             VK_API_VERSION_MINOR(applicationInfo.apiVersion),
-            VK_API_VERSION_PATCH(applicationInfo.apiVersion));
+            VK_API_VERSION_PATCH(applicationInfo.apiVersion),
+            VK_API_VERSION_MAJOR(s_MinimumVersion),
+            VK_API_VERSION_MINOR(s_MinimumVersion),
+            VK_API_VERSION_PATCH(s_MinimumVersion)
+            );
         return false;
     }
 
@@ -574,11 +577,11 @@ bool DeviceManager::createDevice(){
 #endif
 
     {
-        AStringStream ss;
-        ss << "Vulkan: Enabled device extensions:";
+        TStringStream ss;
+        ss << NWB_TEXT("Vulkan: Enabled device extensions:");
         for(const auto& [name, _] : m_enabledExtensions.device)
-            ss << std::endl << "    " << name;
-        NWB_LOGGER_INFO(NWB_TEXT("{}"), StringConvert(ss.str()));
+            ss << NWB_TEXT("\n    ") << StringConvert(name);
+        NWB_LOGGER_INFO(NWB_TEXT("{}"), ss.str());
     }
 
     m_swapChainMutableFormatSupported = isVulkanDeviceExtensionEnabled(VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME);

@@ -266,7 +266,7 @@ TextureHandle Device::createTexture(const TextureDesc& d){
         NWB_ASSERT_MSG(res == VK_SUCCESS, NWB_TEXT("Vulkan: Failed to allocate texture memory"));
     }
 
-    return RefCountPtr<ITexture, BlankDeleter<ITexture>>(texture, AdoptRef);
+    return RefCountPtr<ITexture, ArenaRefDeleter<ITexture>>(texture, AdoptRef);
 }
 
 MemoryRequirements Device::getTextureMemoryRequirements(ITexture* _texture){
@@ -319,7 +319,7 @@ TextureHandle Device::createHandleForNativeTexture(ObjectType objectType, Object
     texture->imageInfo.format = ConvertFormat(desc.format);
     texture->imageInfo.samples = __hidden_vulkan::GetSampleCount(desc.sampleCount);
 
-    return RefCountPtr<ITexture, BlankDeleter<ITexture>>(texture, AdoptRef);
+    return RefCountPtr<ITexture, ArenaRefDeleter<ITexture>>(texture, AdoptRef);
 }
 
 
@@ -367,7 +367,7 @@ SamplerHandle Device::createSampler(const SamplerDesc& d){
     res = vkCreateSampler(m_context.device, &samplerInfo, m_context.allocationCallbacks, &sampler->sampler);
     NWB_ASSERT_MSG(res == VK_SUCCESS, NWB_TEXT("Vulkan: Failed to create sampler"));
 
-    return RefCountPtr<ISampler, BlankDeleter<ISampler>>(sampler, AdoptRef);
+    return RefCountPtr<ISampler, ArenaRefDeleter<ISampler>>(sampler, AdoptRef);
 }
 
 

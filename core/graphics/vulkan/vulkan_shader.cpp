@@ -78,7 +78,7 @@ ShaderHandle ShaderLibrary::getShader(const Name& entryName, ShaderType::Mask sh
         return nullptr;
     }
 
-    shaders[entryName] = RefCountPtr<Shader, BlankDeleter<Shader>>(shader);
+    shaders[entryName] = RefCountPtr<Shader, ArenaRefDeleter<Shader>>(shader);
     return ShaderHandle(shader);
 }
 
@@ -105,7 +105,7 @@ ShaderHandle Device::createShader(const ShaderDesc& d, const void* binary, usize
         return nullptr;
     }
 
-    return RefCountPtr<IShader, BlankDeleter<IShader>>(shader, AdoptRef);
+    return RefCountPtr<IShader, ArenaRefDeleter<IShader>>(shader, AdoptRef);
 }
 
 ShaderHandle Device::createShaderSpecialization(IShader* baseShader, const ShaderSpecialization* constants, u32 numConstants){
@@ -145,14 +145,14 @@ ShaderHandle Device::createShaderSpecialization(IShader* baseShader, const Shade
         }
     }
 
-    return RefCountPtr<IShader, BlankDeleter<IShader>>(shader, AdoptRef);
+    return RefCountPtr<IShader, ArenaRefDeleter<IShader>>(shader, AdoptRef);
 }
 
 ShaderLibraryHandle Device::createShaderLibrary(const void* binary, usize binarySize){
     auto* lib = new ShaderLibrary(m_context);
     lib->bytecode.assign(static_cast<const u8*>(binary), static_cast<const u8*>(binary) + binarySize);
 
-    return RefCountPtr<IShaderLibrary, BlankDeleter<IShaderLibrary>>(lib, AdoptRef);
+    return RefCountPtr<IShaderLibrary, ArenaRefDeleter<IShaderLibrary>>(lib, AdoptRef);
 }
 
 
@@ -200,7 +200,7 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
         layout->vkAttributes.push_back(vkAttr);
     }
 
-    return RefCountPtr<IInputLayout, BlankDeleter<IInputLayout>>(layout, AdoptRef);
+    return RefCountPtr<IInputLayout, ArenaRefDeleter<IInputLayout>>(layout, AdoptRef);
 }
 
 

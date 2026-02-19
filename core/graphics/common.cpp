@@ -17,6 +17,65 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void* GraphicsAllocator::allocatePersistentSystemMemory(void* userData, usize size, usize alignment, SystemMemoryAllocationScope::Enum scope){
+    (void)scope;
+    if(!userData)
+        return nullptr;
+
+    auto* arena = static_cast<Alloc::MemoryArena*>(userData);
+    return arena->allocate(alignment, size);
+}
+
+void* GraphicsAllocator::reallocatePersistentSystemMemory(void* userData, void* original, usize size, usize alignment, SystemMemoryAllocationScope::Enum scope){
+    (void)scope;
+    if(!userData)
+        return nullptr;
+
+    auto* arena = static_cast<Alloc::MemoryArena*>(userData);
+    return arena->reallocate(original, alignment, size);
+}
+
+void GraphicsAllocator::freePersistentSystemMemory(void* userData, void* memory){
+    if(!userData || !memory)
+        return;
+
+    auto* arena = static_cast<Alloc::MemoryArena*>(userData);
+    arena->deallocate(memory, 1, 0);
+}
+
+void* GraphicsAllocator::allocateObjectMemory(usize size){
+    return Alloc::CoreAlloc(size, "NWB::Core::GraphicsAllocator::ObjectArena::allocate");
+}
+void GraphicsAllocator::freeObjectMemory(void* ptr){
+    Alloc::CoreFree(ptr, "NWB::Core::GraphicsAllocator::ObjectArena::free");
+}
+void* GraphicsAllocator::allocateObjectMemoryAligned(usize size, usize align){
+    return Alloc::CoreAllocAligned(size, align, "NWB::Core::GraphicsAllocator::ObjectArena::allocateAligned");
+}
+void GraphicsAllocator::freeObjectMemoryAligned(void* ptr){
+    Alloc::CoreFreeAligned(ptr, "NWB::Core::GraphicsAllocator::ObjectArena::freeAligned");
+}
+
+GraphicsAllocator::GraphicsAllocator(u32 maxPersistentAllocationSize)
+    : m_persistentArena(maxPersistentAllocationSize)
+    , m_systemMemoryAllocator{
+        &m_persistentArena
+        , &GraphicsAllocator::allocatePersistentSystemMemory
+        , &GraphicsAllocator::reallocatePersistentSystemMemory
+        , &GraphicsAllocator::freePersistentSystemMemory
+    }
+    , m_objectArena(
+        &GraphicsAllocator::allocateObjectMemory
+        , &GraphicsAllocator::freeObjectMemory
+        , &GraphicsAllocator::allocateObjectMemoryAligned
+        , &GraphicsAllocator::freeObjectMemoryAligned
+    )
+{}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static constexpr FormatInfo s_formatInfo[Format::kCount] = {
     { Format::UNKNOWN,           "UNKNOWN",           0,   0, FormatKind::Integer,      false, false, false, false, false, false, false, false },
 

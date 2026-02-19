@@ -77,6 +77,8 @@ inline bool operator!=(const Object& lhs, const Object& rhs)noexcept{ return lhs
 
 
 class IResource{
+    template<typename> friend struct ArenaRefDeleter;
+
 protected:
     IResource()noexcept = default;
     virtual ~IResource()noexcept = default;

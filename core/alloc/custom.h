@@ -184,3 +184,38 @@ MakeCustomUnique(Args&&...) = delete;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+template<typename T>
+struct ArenaRefDeleter{
+    NWB::Core::Alloc::CustomArena* arena = nullptr;
+
+    constexpr ArenaRefDeleter()noexcept = default;
+    constexpr explicit ArenaRefDeleter(NWB::Core::Alloc::CustomArena* a)noexcept : arena(a){}
+    template<typename U>
+    ArenaRefDeleter(const ArenaRefDeleter<U>& other, typename EnableIf<IsConvertible<U*, T*>::value>::type* = 0)noexcept : arena(other.arena){}
+
+    void operator()(T* p)const noexcept{
+        if(p && arena){
+            p->~T();
+            arena->deallocate(p, alignof(T), sizeof(T));
+        }
+    }
+};
+
+template<typename Concrete, typename... Args>
+Concrete* NewArenaObject(NWB::Core::Alloc::CustomArena& arena, Args&&... args){
+    auto* mem = arena.allocate<Concrete>(1);
+    return new(mem) Concrete(static_cast<Args&&>(args)...);
+}
+
+template<typename Concrete>
+void DestroyArenaObject(NWB::Core::Alloc::CustomArena& arena, Concrete* p){
+    if(p){
+        p->~Concrete();
+        arena.deallocate<Concrete>(p, 1);
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

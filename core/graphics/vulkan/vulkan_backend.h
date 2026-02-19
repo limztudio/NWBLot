@@ -7,6 +7,8 @@
 
 #include "vulkan.h"
 
+#include <core/alloc/custom.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -58,6 +60,9 @@ struct VulkanContext{
     VkDevice device = VK_NULL_HANDLE;
     VkAllocationCallbacks* allocationCallbacks = nullptr;
     VkPipelineCache pipelineCache = VK_NULL_HANDLE;
+
+    Alloc::CustomArena* objectArena = nullptr;
+    GraphicsAllocator* allocator = nullptr;
 
     VkPhysicalDeviceProperties physicalDeviceProperties{};
     VkPhysicalDeviceMemoryProperties memoryProperties{};
@@ -113,8 +118,8 @@ public:
     VkCommandBuffer cmdBuf = VK_NULL_HANDLE;
     VkCommandPool cmdPool = VK_NULL_HANDLE;
 
-    Vector<RefCountPtr<IResource, BlankDeleter<IResource>>> referencedResources;
-    Vector<RefCountPtr<IBuffer, BlankDeleter<IBuffer>>> referencedStagingBuffers;
+    Vector<RefCountPtr<IResource, ArenaRefDeleter<IResource>>> referencedResources;
+    Vector<RefCountPtr<IBuffer, ArenaRefDeleter<IBuffer>>> referencedStagingBuffers;
 
     VkFence signalFence = VK_NULL_HANDLE;
 
@@ -125,7 +130,7 @@ public:
 private:
     const VulkanContext& m_context;
 };
-typedef RefCountPtr<TrackedCommandBuffer, BlankDeleter<TrackedCommandBuffer>> TrackedCommandBufferPtr;
+typedef RefCountPtr<TrackedCommandBuffer, ArenaRefDeleter<TrackedCommandBuffer>> TrackedCommandBufferPtr;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -467,7 +472,7 @@ public:
 
 public:
     Vector<u8> bytecode;
-    HashMap<Name, RefCountPtr<Shader, BlankDeleter<Shader>>> shaders;
+    HashMap<Name, RefCountPtr<Shader, ArenaRefDeleter<Shader>>> shaders;
 
 
 private:
@@ -526,7 +531,7 @@ public:
     VkFramebuffer framebuffer = VK_NULL_HANDLE;
     VkRenderPass renderPass = VK_NULL_HANDLE;
 
-    Vector<RefCountPtr<ITexture, BlankDeleter<ITexture>>> resources;
+    Vector<RefCountPtr<ITexture, ArenaRefDeleter<ITexture>>> resources;
 
 
 private:
@@ -748,7 +753,7 @@ public:
 
 
 public:
-    RefCountPtr<BindingLayout, BlankDeleter<BindingLayout>> layout;
+    RefCountPtr<BindingLayout, ArenaRefDeleter<BindingLayout>> layout;
     Vector<VkDescriptorSet> descriptorSets;
     VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
 
@@ -775,8 +780,8 @@ public:
 
 public:
     BindingSetDesc desc;
-    RefCountPtr<BindingLayout, BlankDeleter<BindingLayout>> layout;
-    RefCountPtr<DescriptorTable, BlankDeleter<DescriptorTable>> descriptorTable;
+    RefCountPtr<BindingLayout, ArenaRefDeleter<BindingLayout>> layout;
+    RefCountPtr<DescriptorTable, ArenaRefDeleter<DescriptorTable>> descriptorTable;
     Vector<VkDescriptorSet> descriptorSets;
 
 
@@ -805,7 +810,7 @@ public:
 public:
     RayTracingAccelStructDesc desc;
     VkAccelerationStructureKHR accelStruct = VK_NULL_HANDLE;
-    RefCountPtr<IBuffer, BlankDeleter<IBuffer>> buffer;
+    RefCountPtr<IBuffer, ArenaRefDeleter<IBuffer>> buffer;
     u64 deviceAddress = 0;
     bool compacted = false;
 
@@ -833,7 +838,7 @@ public:
 
 public:
     RayTracingOpacityMicromapDesc desc;
-    RefCountPtr<IBuffer, BlankDeleter<IBuffer>> dataBuffer;
+    RefCountPtr<IBuffer, ArenaRefDeleter<IBuffer>> dataBuffer;
     VkMicromapEXT micromap = VK_NULL_HANDLE;
     u64 deviceAddress = 0;
     bool compacted = false;
@@ -1017,7 +1022,7 @@ private:
     Vector<VkImageMemoryBarrier2> m_pendingImageBarriers;
     Vector<VkBufferMemoryBarrier2> m_pendingBufferBarriers;
 
-    Vector<RefCountPtr<AccelStruct, BlankDeleter<AccelStruct>>> m_pendingCompactions;
+    Vector<RefCountPtr<AccelStruct, ArenaRefDeleter<AccelStruct>>> m_pendingCompactions;
 };
 
 
@@ -1158,10 +1163,10 @@ private:
 
     VulkanContext m_context;
     VulkanAllocator m_allocator;
-    UniquePtr<Queue> m_queues[static_cast<u32>(CommandQueue::kCount)];
+    CustomUniquePtr<Queue> m_queues[static_cast<u32>(CommandQueue::kCount)];
 
-    UniquePtr<UploadManager> m_uploadManager;
-    UniquePtr<UploadManager> m_scratchManager;
+    CustomUniquePtr<UploadManager> m_uploadManager;
+    CustomUniquePtr<UploadManager> m_scratchManager;
 };
 
 

@@ -25,7 +25,7 @@ public:
     virtual void queueSignalSemaphore(CommandQueue::Enum executionQueue, VkSemaphore semaphore, u64 value) = 0;
     virtual u64 queueGetCompletedInstance(CommandQueue::Enum queue) = 0;
 };
-typedef RefCountPtr<IDevice, BlankDeleter<IDevice>> DeviceHandle;
+typedef RefCountPtr<IDevice, ArenaRefDeleter<IDevice>> DeviceHandle;
 
 struct DeviceDesc{
     VkInstance instance;
@@ -40,6 +40,8 @@ struct DeviceDesc{
     i32 computeQueueIndex = -1;
 
     const SystemMemoryAllocator* systemMemoryAllocator = nullptr;
+
+    GraphicsAllocator* allocator = nullptr;
 
     VkAllocationCallbacks* allocationCallbacks = nullptr;
 

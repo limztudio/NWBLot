@@ -9,6 +9,8 @@
 
 #include <core/common/common.h>
 
+#include <core/alloc/alloc.h>
+
 #include "basic.h"
 #include "shader.h"
 
@@ -23,11 +25,21 @@ NWB_CORE_BEGIN
 
 
 namespace __hidden_core{
-    template<typename T>
-    void hashCombine(usize& seed, const T& v){
-        std::hash<T> hasher;
-        seed ^= hasher(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-    }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename T>
+void HashCombine(usize& seed, const T& v){
+    std::hash<T> hasher;
+    seed ^= hasher(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 
@@ -80,7 +92,39 @@ struct SystemMemoryAllocator{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class GraphicsAllocator : NoCopy{
+public:
+    GraphicsAllocator(u32 maxPersistentAllocationSize);
+
+
+public:
+    [[nodiscard]] const SystemMemoryAllocator& getSystemMemoryAllocator()const noexcept{ return m_systemMemoryAllocator; }
+    [[nodiscard]] Alloc::CustomArena& getObjectArena()noexcept{ return m_objectArena; }
+
+
+private:
+    static void* allocatePersistentSystemMemory(void* userData, usize size, usize alignment, SystemMemoryAllocationScope::Enum scope);
+    static void* reallocatePersistentSystemMemory(void* userData, void* original, usize size, usize alignment, SystemMemoryAllocationScope::Enum scope);
+    static void freePersistentSystemMemory(void* userData, void* memory);
+
+    static void* allocateObjectMemory(usize size);
+    static void freeObjectMemory(void* ptr);
+    static void* allocateObjectMemoryAligned(usize size, usize align);
+    static void freeObjectMemoryAligned(void* ptr);
+
+
+private:
+    Alloc::MemoryArena m_persistentArena;
+    SystemMemoryAllocator m_systemMemoryAllocator;
+    Alloc::CustomArena m_objectArena;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Basic types
+
 
 struct Color{
     f32 r, g, b, a;
@@ -356,7 +400,7 @@ class IHeap : public IResource{
 public:
     [[nodiscard]] virtual const HeapDesc& getDescription()const = 0;
 };
-typedef RefCountPtr<IHeap, BlankDeleter<IHeap>> HeapHandle;
+typedef RefCountPtr<IHeap, ArenaRefDeleter<IHeap>> HeapHandle;
 
 struct MemoryRequirements{
     u64 size = 0;
@@ -588,13 +632,13 @@ public:
     // Similar to getNativeObject, returns a native view for a specified set of subresources. Returns nullptr if unavailable.
     virtual Object getNativeView(ObjectType objectType, Format::Enum format = Format::UNKNOWN, TextureSubresourceSet subresources = s_allSubresources, TextureDimension::Enum dimension = TextureDimension::Unknown, bool isReadOnlyDSV = false) = 0;
 };
-typedef RefCountPtr<ITexture, BlankDeleter<ITexture>> TextureHandle;
+typedef RefCountPtr<ITexture, ArenaRefDeleter<ITexture>> TextureHandle;
 
 class IStagingTexture : public IResource{
 public:
     [[nodiscard]] virtual const TextureDesc& getDescription()const = 0;
 };
-typedef RefCountPtr<IStagingTexture, BlankDeleter<IStagingTexture>> StagingTextureHandle;
+typedef RefCountPtr<IStagingTexture, ArenaRefDeleter<IStagingTexture>> StagingTextureHandle;
 
 struct TiledTextureCoordinate{
     u16 mipLevel = 0;
@@ -660,7 +704,7 @@ public:
     
     virtual TextureHandle getPairedTexture() = 0;
 };
-typedef RefCountPtr<ISamplerFeedbackTexture, BlankDeleter<ISamplerFeedbackTexture>> SamplerFeedbackTextureHandle;
+typedef RefCountPtr<ISamplerFeedbackTexture, ArenaRefDeleter<ISamplerFeedbackTexture>> SamplerFeedbackTextureHandle;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -690,7 +734,7 @@ public:
     [[nodiscard]] virtual const VertexAttributeDesc* getAttributeDescription(u32 index)const = 0;
     [[nodiscard]] virtual u32 getNumAttributes()const = 0;
 };
-typedef RefCountPtr<IInputLayout, BlankDeleter<IInputLayout>> InputLayoutHandle;
+typedef RefCountPtr<IInputLayout, ArenaRefDeleter<IInputLayout>> InputLayoutHandle;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -777,14 +821,14 @@ struct BufferRange{
     constexpr BufferRange& setByteSize(u64 value){ byteSize = value; return *this; }
 };
 
-static constexpr BufferRange s_entireBuffer = BufferRange(0, static_cast<u64>(-1));
+static constexpr BufferRange s_EntireBuffer = BufferRange(0, static_cast<u64>(-1));
 
 class IBuffer : public IResource{
 public:
     [[nodiscard]] virtual const BufferDesc& getDescription()const = 0;
     [[nodiscard]] virtual GpuVirtualAddress getGpuVirtualAddress()const = 0;
 };
-typedef RefCountPtr<IBuffer, BlankDeleter<IBuffer>> BufferHandle;
+typedef RefCountPtr<IBuffer, ArenaRefDeleter<IBuffer>> BufferHandle;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -917,7 +961,7 @@ public:
 
     virtual void getBytecode(const void** ppBytecode, usize* pSize)const = 0;
 };
-typedef RefCountPtr<IShader, BlankDeleter<IShader>> ShaderHandle;
+typedef RefCountPtr<IShader, ArenaRefDeleter<IShader>> ShaderHandle;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -929,7 +973,7 @@ public:
     virtual void getBytecode(const void** ppBytecode, usize* pSize)const = 0;
     virtual ShaderHandle getShader(const Name& entryName, ShaderType::Mask shaderType) = 0;
 };
-typedef RefCountPtr<IShaderLibrary, BlankDeleter<IShaderLibrary>> ShaderLibraryHandle;
+typedef RefCountPtr<IShaderLibrary, ArenaRefDeleter<IShaderLibrary>> ShaderLibraryHandle;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1293,7 +1337,7 @@ class ISampler : public IResource{
 public:
     [[nodiscard]] virtual const SamplerDesc& getDescription()const = 0;
 };
-typedef RefCountPtr<ISampler, BlankDeleter<ISampler>> SamplerHandle;
+typedef RefCountPtr<ISampler, ArenaRefDeleter<ISampler>> SamplerHandle;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1384,7 +1428,7 @@ public:
     [[nodiscard]] virtual const FramebufferDesc& getDescription()const = 0;
     [[nodiscard]] virtual const FramebufferInfoEx& getFramebufferInfo()const = 0;
 };
-typedef RefCountPtr<IFramebuffer, BlankDeleter<IFramebuffer>> FramebufferHandle;
+typedef RefCountPtr<IFramebuffer, ArenaRefDeleter<IFramebuffer>> FramebufferHandle;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1461,7 +1505,7 @@ public:
     [[nodiscard]] virtual bool isCompacted()const = 0;
     [[nodiscard]] virtual u64 getDeviceAddress()const = 0;
 };
-typedef RefCountPtr<IRayTracingOpacityMicromap, BlankDeleter<IRayTracingOpacityMicromap>> RayTracingOpacityMicromapHandle;
+typedef RefCountPtr<IRayTracingOpacityMicromap, ArenaRefDeleter<IRayTracingOpacityMicromap>> RayTracingOpacityMicromapHandle;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1774,7 +1818,7 @@ public:
     [[nodiscard]] virtual bool isCompacted()const = 0;
     [[nodiscard]] virtual u64 getDeviceAddress()const = 0;
 };
-typedef RefCountPtr<IRayTracingAccelStruct, BlankDeleter<IRayTracingAccelStruct>> RayTracingAccelStructHandle;
+typedef RefCountPtr<IRayTracingAccelStruct, ArenaRefDeleter<IRayTracingAccelStruct>> RayTracingAccelStructHandle;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2096,7 +2140,7 @@ public:
     [[nodiscard]] virtual const BindingLayoutDesc* getDescription()const = 0;    // returns nullptr for bindless layouts
     [[nodiscard]] virtual const BindlessLayoutDesc* getBindlessDesc()const = 0;  // returns nullptr for regular layouts
 };
-typedef RefCountPtr<IBindingLayout, BlankDeleter<IBindingLayout>> BindingLayoutHandle;
+typedef RefCountPtr<IBindingLayout, ArenaRefDeleter<IBindingLayout>> BindingLayoutHandle;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2180,7 +2224,7 @@ struct BindingSetItem{
         result.unused2 = 0;
         return result;
     }
-    static BindingSetItem TypedBuffer_SRV(u32 slot, IBuffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_entireBuffer){
+    static BindingSetItem TypedBuffer_SRV(u32 slot, IBuffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_EntireBuffer){
         BindingSetItem result;
         result.slot = slot;
         result.arrayElement = 0;
@@ -2193,7 +2237,7 @@ struct BindingSetItem{
         result.unused2 = 0;
         return result;
     }
-    static BindingSetItem TypedBuffer_UAV(u32 slot, IBuffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_entireBuffer){
+    static BindingSetItem TypedBuffer_UAV(u32 slot, IBuffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_EntireBuffer){
         BindingSetItem result;
         result.slot = slot;
         result.arrayElement = 0;
@@ -2206,7 +2250,7 @@ struct BindingSetItem{
         result.unused2 = 0;
         return result;
     }
-    static BindingSetItem ConstantBuffer(u32 slot, IBuffer* buffer, BufferRange range = s_entireBuffer){
+    static BindingSetItem ConstantBuffer(u32 slot, IBuffer* buffer, BufferRange range = s_EntireBuffer){
         bool isVolatile = buffer && buffer->getDescription().isVolatile;
 
         BindingSetItem result;
@@ -2249,7 +2293,7 @@ struct BindingSetItem{
         result.unused2 = 0;
         return result;
     }
-    static BindingSetItem StructuredBuffer_SRV(u32 slot, IBuffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_entireBuffer){
+    static BindingSetItem StructuredBuffer_SRV(u32 slot, IBuffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_EntireBuffer){
         BindingSetItem result;
         result.slot = slot;
         result.arrayElement = 0;
@@ -2262,7 +2306,7 @@ struct BindingSetItem{
         result.unused2 = 0;
         return result;
     }
-    static BindingSetItem StructuredBuffer_UAV(u32 slot, IBuffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_entireBuffer){
+    static BindingSetItem StructuredBuffer_UAV(u32 slot, IBuffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_EntireBuffer){
         BindingSetItem result;
         result.slot = slot;
         result.arrayElement = 0;
@@ -2275,7 +2319,7 @@ struct BindingSetItem{
         result.unused2 = 0;
         return result;
     }
-    static BindingSetItem RawBuffer_SRV(u32 slot, IBuffer* buffer, BufferRange range = s_entireBuffer){
+    static BindingSetItem RawBuffer_SRV(u32 slot, IBuffer* buffer, BufferRange range = s_EntireBuffer){
         BindingSetItem result;
         result.slot = slot;
         result.arrayElement = 0;
@@ -2288,7 +2332,7 @@ struct BindingSetItem{
         result.unused2 = 0;
         return result;
     }
-    static BindingSetItem RawBuffer_UAV(u32 slot, IBuffer* buffer, BufferRange range = s_entireBuffer){
+    static BindingSetItem RawBuffer_UAV(u32 slot, IBuffer* buffer, BufferRange range = s_EntireBuffer){
         BindingSetItem result;
         result.slot = slot;
         result.arrayElement = 0;
@@ -2370,7 +2414,7 @@ public:
     [[nodiscard]] virtual const BindingSetDesc* getDescription()const = 0;  // returns nullptr for descriptor tables
     [[nodiscard]] virtual IBindingLayout* getLayout()const = 0;
 };
-typedef RefCountPtr<IBindingSet, BlankDeleter<IBindingSet>> BindingSetHandle;
+typedef RefCountPtr<IBindingSet, ArenaRefDeleter<IBindingSet>> BindingSetHandle;
 
 // Descriptor tables are bare, without extra mappings, state, or liveness tracking.
 // Unlike binding sets, descriptor tables are mutable - moreover, modification is the only way to populate them.
@@ -2382,7 +2426,7 @@ public:
     [[nodiscard]] virtual u32 getCapacity()const = 0;
     [[nodiscard]] virtual u32 getFirstDescriptorIndexInHeap()const = 0;
 };
-typedef RefCountPtr<IDescriptorTable, BlankDeleter<IDescriptorTable>> DescriptorTableHandle;
+typedef RefCountPtr<IDescriptorTable, ArenaRefDeleter<IDescriptorTable>> DescriptorTableHandle;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2515,7 +2559,7 @@ public:
     [[nodiscard]] virtual const GraphicsPipelineDesc& getDescription()const = 0;
     [[nodiscard]] virtual const FramebufferInfo& getFramebufferInfo()const = 0;
 };
-typedef RefCountPtr<IGraphicsPipeline, BlankDeleter<IGraphicsPipeline>> GraphicsPipelineHandle;
+typedef RefCountPtr<IGraphicsPipeline, ArenaRefDeleter<IGraphicsPipeline>> GraphicsPipelineHandle;
 
 struct ComputePipelineDesc{
     ShaderHandle CS;
@@ -2530,7 +2574,7 @@ class IComputePipeline : public IResource{
 public:
     [[nodiscard]] virtual const ComputePipelineDesc& getDescription()const = 0;
 };
-typedef RefCountPtr<IComputePipeline, BlankDeleter<IComputePipeline>> ComputePipelineHandle;
+typedef RefCountPtr<IComputePipeline, ArenaRefDeleter<IComputePipeline>> ComputePipelineHandle;
 
 struct MeshletPipelineDesc{
     PrimitiveType::Enum primType = PrimitiveType::TriangleList;
@@ -2558,7 +2602,7 @@ public:
     [[nodiscard]] virtual const MeshletPipelineDesc& getDescription()const = 0;
     [[nodiscard]] virtual const FramebufferInfo& getFramebufferInfo()const = 0;
 };
-typedef RefCountPtr<IMeshletPipeline, BlankDeleter<IMeshletPipeline>> MeshletPipelineHandle;
+typedef RefCountPtr<IMeshletPipeline, ArenaRefDeleter<IMeshletPipeline>> MeshletPipelineHandle;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2566,10 +2610,10 @@ typedef RefCountPtr<IMeshletPipeline, BlankDeleter<IMeshletPipeline>> MeshletPip
 
 
 class IEventQuery : public IResource{};
-typedef RefCountPtr<IEventQuery, BlankDeleter<IEventQuery>> EventQueryHandle;
+typedef RefCountPtr<IEventQuery, ArenaRefDeleter<IEventQuery>> EventQueryHandle;
 
 class ITimerQuery : public IResource{};
-typedef RefCountPtr<ITimerQuery, BlankDeleter<ITimerQuery>> TimerQueryHandle;
+typedef RefCountPtr<ITimerQuery, ArenaRefDeleter<ITimerQuery>> TimerQueryHandle;
 
 struct VertexBufferBinding{
     IBuffer* buffer = nullptr;
@@ -2784,14 +2828,14 @@ public:
     virtual void clearCallableShaders() = 0;
     virtual IRayTracingPipeline* getPipeline() = 0;
 };
-typedef RefCountPtr<IRayTracingShaderTable, BlankDeleter<IRayTracingShaderTable>> RayTracingShaderTableHandle;
+typedef RefCountPtr<IRayTracingShaderTable, ArenaRefDeleter<IRayTracingShaderTable>> RayTracingShaderTableHandle;
 
 class IRayTracingPipeline : public IResource{
 public:
     [[nodiscard]] virtual const RayTracingPipelineDesc& getDescription()const = 0;
     virtual RayTracingShaderTableHandle createShaderTable() = 0;
 };
-typedef RefCountPtr<IRayTracingPipeline, BlankDeleter<IRayTracingPipeline>> RayTracingPipelineHandle;
+typedef RefCountPtr<IRayTracingPipeline, ArenaRefDeleter<IRayTracingPipeline>> RayTracingPipelineHandle;
 
 struct RayTracingState{
     IRayTracingShaderTable* shaderTable = nullptr;
@@ -3441,7 +3485,7 @@ public:
     // Returns the CommandListParameters structure that was used to create the command list. 
     virtual const CommandListParameters& getDescription() = 0;
 };
-typedef RefCountPtr<ICommandList, BlankDeleter<ICommandList>> CommandListHandle;
+typedef RefCountPtr<ICommandList, ArenaRefDeleter<ICommandList>> CommandListHandle;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -3620,7 +3664,7 @@ public:
         return executeCommandLists(&commandList, 1, executionQueue);
     }
 };
-typedef RefCountPtr<IDevice, BlankDeleter<IDevice>> DeviceHandle;
+typedef RefCountPtr<IDevice, ArenaRefDeleter<IDevice>> DeviceHandle;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -3686,7 +3730,7 @@ struct DeviceCreationParameters : public InstanceParameters{
     bool supportExplicitDisplayScaling = false;
     bool resizeWindowWithDisplayScale = false;
 
-    const SystemMemoryAllocator* systemMemoryAllocator = nullptr;
+    GraphicsAllocator* allocator = nullptr;
 
     Vector<AString> requiredVulkanDeviceExtensions;
     Vector<AString> optionalVulkanDeviceExtensions;
@@ -3894,10 +3938,10 @@ namespace std{
     struct hash<NWB::Core::TextureSubresourceSet>{
         size_t operator()(NWB::Core::TextureSubresourceSet const& s)const noexcept{
             usize hash = 0;
-            NWB::Core::__hidden_core::hashCombine(hash, s.baseMipLevel);
-            NWB::Core::__hidden_core::hashCombine(hash, s.numMipLevels);
-            NWB::Core::__hidden_core::hashCombine(hash, s.baseArraySlice);
-            NWB::Core::__hidden_core::hashCombine(hash, s.numArraySlices);
+            NWB::Core::__hidden_core::HashCombine(hash, s.baseMipLevel);
+            NWB::Core::__hidden_core::HashCombine(hash, s.numMipLevels);
+            NWB::Core::__hidden_core::HashCombine(hash, s.baseArraySlice);
+            NWB::Core::__hidden_core::HashCombine(hash, s.numArraySlices);
             return static_cast<size_t>(hash);
         }
     };
@@ -3906,8 +3950,8 @@ namespace std{
     struct hash<NWB::Core::BufferRange>{
         size_t operator()(NWB::Core::BufferRange const& s)const noexcept{
             usize hash = 0;
-            NWB::Core::__hidden_core::hashCombine(hash, s.byteOffset);
-            NWB::Core::__hidden_core::hashCombine(hash, s.byteSize);
+            NWB::Core::__hidden_core::HashCombine(hash, s.byteOffset);
+            NWB::Core::__hidden_core::HashCombine(hash, s.byteSize);
             return static_cast<size_t>(hash);
         }
     };
@@ -3916,13 +3960,13 @@ namespace std{
     struct hash<NWB::Core::BindingSetItem>{
         size_t operator()(NWB::Core::BindingSetItem const& s)const noexcept{
             usize value = 0;
-            NWB::Core::__hidden_core::hashCombine(value, s.resourceHandle);
-            NWB::Core::__hidden_core::hashCombine(value, s.slot);
-            NWB::Core::__hidden_core::hashCombine(value, s.type);
-            NWB::Core::__hidden_core::hashCombine(value, s.dimension);
-            NWB::Core::__hidden_core::hashCombine(value, s.format);
-            NWB::Core::__hidden_core::hashCombine(value, s.rawData[0]);
-            NWB::Core::__hidden_core::hashCombine(value, s.rawData[1]);
+            NWB::Core::__hidden_core::HashCombine(value, s.resourceHandle);
+            NWB::Core::__hidden_core::HashCombine(value, s.slot);
+            NWB::Core::__hidden_core::HashCombine(value, s.type);
+            NWB::Core::__hidden_core::HashCombine(value, s.dimension);
+            NWB::Core::__hidden_core::HashCombine(value, s.format);
+            NWB::Core::__hidden_core::HashCombine(value, s.rawData[0]);
+            NWB::Core::__hidden_core::HashCombine(value, s.rawData[1]);
             return static_cast<size_t>(value);
         }
     };
@@ -3932,7 +3976,7 @@ namespace std{
         size_t operator()(NWB::Core::BindingSetDesc const& s)const noexcept{
             usize value = 0;
             for(const auto& item : s.bindings)
-                NWB::Core::__hidden_core::hashCombine(value, item);
+                NWB::Core::__hidden_core::HashCombine(value, item);
             return static_cast<size_t>(value);
         }
     };
@@ -3942,10 +3986,10 @@ namespace std{
         size_t operator()(NWB::Core::FramebufferInfo const& s)const noexcept{
             usize hash = 0;
             for(auto format : s.colorFormats)
-                NWB::Core::__hidden_core::hashCombine(hash, format);
-            NWB::Core::__hidden_core::hashCombine(hash, s.depthFormat);
-            NWB::Core::__hidden_core::hashCombine(hash, s.sampleCount);
-            NWB::Core::__hidden_core::hashCombine(hash, s.sampleQuality);
+                NWB::Core::__hidden_core::HashCombine(hash, format);
+            NWB::Core::__hidden_core::HashCombine(hash, s.depthFormat);
+            NWB::Core::__hidden_core::HashCombine(hash, s.sampleCount);
+            NWB::Core::__hidden_core::HashCombine(hash, s.sampleQuality);
             return static_cast<size_t>(hash);
         }
     };
@@ -3954,14 +3998,14 @@ namespace std{
     struct hash<NWB::Core::BlendState::RenderTarget>{
         size_t operator()(NWB::Core::BlendState::RenderTarget const& s)const noexcept{
             usize hash = 0;
-            NWB::Core::__hidden_core::hashCombine(hash, s.blendEnable);
-            NWB::Core::__hidden_core::hashCombine(hash, s.srcBlend);
-            NWB::Core::__hidden_core::hashCombine(hash, s.destBlend);
-            NWB::Core::__hidden_core::hashCombine(hash, s.blendOp);
-            NWB::Core::__hidden_core::hashCombine(hash, s.srcBlendAlpha);
-            NWB::Core::__hidden_core::hashCombine(hash, s.destBlendAlpha);
-            NWB::Core::__hidden_core::hashCombine(hash, s.blendOpAlpha);
-            NWB::Core::__hidden_core::hashCombine(hash, s.colorWriteMask);
+            NWB::Core::__hidden_core::HashCombine(hash, s.blendEnable);
+            NWB::Core::__hidden_core::HashCombine(hash, s.srcBlend);
+            NWB::Core::__hidden_core::HashCombine(hash, s.destBlend);
+            NWB::Core::__hidden_core::HashCombine(hash, s.blendOp);
+            NWB::Core::__hidden_core::HashCombine(hash, s.srcBlendAlpha);
+            NWB::Core::__hidden_core::HashCombine(hash, s.destBlendAlpha);
+            NWB::Core::__hidden_core::HashCombine(hash, s.blendOpAlpha);
+            NWB::Core::__hidden_core::HashCombine(hash, s.colorWriteMask);
             return static_cast<size_t>(hash);
         }
     };
@@ -3970,9 +4014,9 @@ namespace std{
     struct hash<NWB::Core::BlendState>{
         size_t operator()(NWB::Core::BlendState const& s)const noexcept{
             usize hash = 0;
-            NWB::Core::__hidden_core::hashCombine(hash, s.alphaToCoverageEnable);
+            NWB::Core::__hidden_core::HashCombine(hash, s.alphaToCoverageEnable);
             for(const auto& target : s.targets)
-                NWB::Core::__hidden_core::hashCombine(hash, target);
+                NWB::Core::__hidden_core::HashCombine(hash, target);
             return static_cast<size_t>(hash);
         }
     };
@@ -3981,10 +4025,10 @@ namespace std{
     struct hash<NWB::Core::VariableRateShadingState>{
         size_t operator()(NWB::Core::VariableRateShadingState const& s)const noexcept{
             usize hash = 0;
-            NWB::Core::__hidden_core::hashCombine(hash, s.enabled);
-            NWB::Core::__hidden_core::hashCombine(hash, s.shadingRate);
-            NWB::Core::__hidden_core::hashCombine(hash, s.pipelinePrimitiveCombiner);
-            NWB::Core::__hidden_core::hashCombine(hash, s.imageCombiner);
+            NWB::Core::__hidden_core::HashCombine(hash, s.enabled);
+            NWB::Core::__hidden_core::HashCombine(hash, s.shadingRate);
+            NWB::Core::__hidden_core::HashCombine(hash, s.pipelinePrimitiveCombiner);
+            NWB::Core::__hidden_core::HashCombine(hash, s.imageCombiner);
             return static_cast<size_t>(hash);
         }
     };

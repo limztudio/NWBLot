@@ -95,7 +95,7 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
         }
     }
 
-    return RefCountPtr<IBuffer, BlankDeleter<IBuffer>>(buffer, AdoptRef);
+    return RefCountPtr<IBuffer, ArenaRefDeleter<IBuffer>>(buffer, AdoptRef);
 }
 
 void* Device::mapBuffer(IBuffer* _buffer, CpuAccessMode::Enum){
@@ -171,7 +171,7 @@ BufferHandle Device::createHandleForNativeBuffer(ObjectType objectType, Object _
         buffer->deviceAddress = vkGetBufferDeviceAddress(m_context.device, &addressInfo);
     }
 
-    return RefCountPtr<IBuffer, BlankDeleter<IBuffer>>(buffer, AdoptRef);
+    return RefCountPtr<IBuffer, ArenaRefDeleter<IBuffer>>(buffer, AdoptRef);
 }
 
 

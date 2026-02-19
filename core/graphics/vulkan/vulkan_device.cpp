@@ -93,6 +93,8 @@ Device::Device(const DeviceDesc& desc)
     m_context.instance = desc.instance;
     m_context.physicalDevice = desc.physicalDevice;
     m_context.device = desc.device;
+    m_context.allocator = desc.allocator;
+    m_context.objectArena = desc.allocator ? &desc.allocator->getObjectArena() : nullptr;
 
     if(desc.allocationCallbacks)
         m_context.allocationCallbacks = desc.allocationCallbacks;
@@ -193,15 +195,37 @@ Device::Device(const DeviceDesc& desc)
         m_context.emptyDescriptorSetLayout = VK_NULL_HANDLE;
     }
 
-    if(desc.graphicsQueue && desc.graphicsQueueIndex >= 0)
-        m_queues[static_cast<u32>(CommandQueue::Graphics)] = UniquePtr<Queue>(new Queue(m_context, CommandQueue::Graphics, desc.graphicsQueue, desc.graphicsQueueIndex));
-    if(desc.computeQueue && desc.computeQueueIndex >= 0)
-        m_queues[static_cast<u32>(CommandQueue::Compute)] = UniquePtr<Queue>(new Queue(m_context, CommandQueue::Compute, desc.computeQueue, desc.computeQueueIndex));
-    if(desc.transferQueue && desc.transferQueueIndex >= 0)
-        m_queues[static_cast<u32>(CommandQueue::Copy)] = UniquePtr<Queue>(new Queue(m_context, CommandQueue::Copy, desc.transferQueue, desc.transferQueueIndex));
+    if(desc.graphicsQueue && desc.graphicsQueueIndex >= 0){
+        auto& arena = *m_context.objectArena;
+        auto* mem = arena.allocate<Queue>(1);
+        auto* q = new(mem) Queue(m_context, CommandQueue::Graphics, desc.graphicsQueue, desc.graphicsQueueIndex);
+        m_queues[static_cast<u32>(CommandQueue::Graphics)] = CustomUniquePtr<Queue>(q, CustomUniquePtr<Queue>::deleter_type(arena));
+    }
+    if(desc.computeQueue && desc.computeQueueIndex >= 0){
+        auto& arena = *m_context.objectArena;
+        auto* mem = arena.allocate<Queue>(1);
+        auto* q = new(mem) Queue(m_context, CommandQueue::Compute, desc.computeQueue, desc.computeQueueIndex);
+        m_queues[static_cast<u32>(CommandQueue::Compute)] = CustomUniquePtr<Queue>(q, CustomUniquePtr<Queue>::deleter_type(arena));
+    }
+    if(desc.transferQueue && desc.transferQueueIndex >= 0){
+        auto& arena = *m_context.objectArena;
+        auto* mem = arena.allocate<Queue>(1);
+        auto* q = new(mem) Queue(m_context, CommandQueue::Copy, desc.transferQueue, desc.transferQueueIndex);
+        m_queues[static_cast<u32>(CommandQueue::Copy)] = CustomUniquePtr<Queue>(q, CustomUniquePtr<Queue>::deleter_type(arena));
+    }
 
-    m_uploadManager = UniquePtr<UploadManager>(new UploadManager(*this, s_DefaultUploadChunkSize, 0, false));
-    m_scratchManager = UniquePtr<UploadManager>(new UploadManager(*this, s_DefaultScratchChunkSize, s_ScratchMemoryLimit, true));
+    {
+        auto& arena = *m_context.objectArena;
+        auto* mem = arena.allocate<UploadManager>(1);
+        auto* p = new(mem) UploadManager(*this, s_DefaultUploadChunkSize, 0, false);
+        m_uploadManager = CustomUniquePtr<UploadManager>(p, CustomUniquePtr<UploadManager>::deleter_type(arena));
+    }
+    {
+        auto& arena = *m_context.objectArena;
+        auto* mem = arena.allocate<UploadManager>(1);
+        auto* p = new(mem) UploadManager(*this, s_DefaultScratchChunkSize, s_ScratchMemoryLimit, true);
+        m_scratchManager = CustomUniquePtr<UploadManager>(p, CustomUniquePtr<UploadManager>::deleter_type(arena));
+    }
 }
 Device::~Device(){
     waitForIdle();
@@ -233,8 +257,8 @@ Queue* Device::getQueue(CommandQueue::Enum queueType)const{
 
 
 CommandListHandle Device::createCommandList(const CommandListParameters& params){
-    auto* cmdList = new CommandList(*this, params);
-    return CommandListHandle(cmdList, AdoptRef);
+    auto* cmdList = NewArenaObject<CommandList>(*m_context.objectArena, *this, params);
+    return CommandListHandle(cmdList, CommandListHandle::deleter_type(m_context.objectArena), AdoptRef);
 }
 
 u64 Device::executeCommandLists(ICommandList* const* pCommandLists, usize numCommandLists, CommandQueue::Enum executionQueue){
@@ -380,7 +404,7 @@ Object Heap::getNativeHandle(ObjectType objectType){
 HeapHandle Device::createHeap(const HeapDesc& d){
     VkResult res = VK_SUCCESS;
 
-    auto* heap = new Heap(m_context);
+    auto* heap = NewArenaObject<Heap>(*m_context.objectArena, m_context);
     heap->desc = d;
 
     VkMemoryPropertyFlags memoryProperties = 0;
@@ -406,7 +430,7 @@ HeapHandle Device::createHeap(const HeapDesc& d){
 
     if(memoryTypeIndex == UINT32_MAX){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to find suitable memory type for heap"));
-        delete heap;
+        DestroyArenaObject(*m_context.objectArena, heap);
         return nullptr;
     }
 
@@ -428,11 +452,11 @@ HeapHandle Device::createHeap(const HeapDesc& d){
     res = vkAllocateMemory(m_context.device, &allocInfo, m_context.allocationCallbacks, &heap->memory);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate heap memory ({} bytes): {}"), d.capacity, ResultToString(res));
-        delete heap;
+        DestroyArenaObject(*m_context.objectArena, heap);
         return nullptr;
     }
 
-    return RefCountPtr<IHeap, BlankDeleter<IHeap>>(heap, AdoptRef);
+    return HeapHandle(heap, HeapHandle::deleter_type(m_context.objectArena), AdoptRef);
 }
 
 
@@ -523,8 +547,9 @@ AftermathCrashDumpHelper& Device::getAftermathCrashDumpHelper(){
 
 
 DeviceHandle CreateDevice(const DeviceDesc& desc){
-    auto* device = new Device(desc);
-    return DeviceHandle(device, AdoptRef);
+    NWB_ASSERT(desc.allocator != nullptr);
+    auto* device = NewArenaObject<Device>(desc.allocator->getObjectArena(), desc);
+    return DeviceHandle(device, DeviceHandle::deleter_type(&desc.allocator->getObjectArena()), AdoptRef);
 }
 
 

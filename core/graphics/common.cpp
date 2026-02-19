@@ -502,10 +502,10 @@ void IDeviceManager::backBufferResized(){
 
     u32 backBufferCount = getBackBufferCount();
     m_swapChainFramebuffers.resize(backBufferCount);
-    for(u32 index = 0; index < backBufferCount; ++index){
-        m_swapChainFramebuffers[index] = getDevice()->createFramebuffer(
-            FramebufferDesc().addColorAttachment(getBackBuffer(index)));
-    }
+    for(u32 index = 0; index < backBufferCount; ++index)
+        m_swapChainFramebuffers[index] = getDevice()->createFramebuffer(FramebufferDesc().addColorAttachment(getBackBuffer(index)));
+
+    NWB_LOGGER_INFO(NWB_TEXT("DeviceManager: Back buffer resized to {}x{}"), m_deviceParams.backBufferWidth, m_deviceParams.backBufferHeight);
 }
 
 void IDeviceManager::displayScaleChanged(){

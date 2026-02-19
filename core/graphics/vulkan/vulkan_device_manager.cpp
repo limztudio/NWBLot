@@ -1005,11 +1005,9 @@ void DeviceManager::destroyDeviceAndSwapChain(){
 bool DeviceManager::beginFrame(){
     VkResult res = VK_SUCCESS;
 
-    constexpr i32 maxAttempts = 3;
-
     const VkSemaphore& semaphore = m_acquireSemaphores[m_acquireSemaphoreIndex];
 
-    for(i32 attempt = 0; attempt < maxAttempts; ++attempt){
+    for(usize attempt = 0; attempt < s_MaxRetryCountAcquireNextImage; ++attempt){
         res = vkAcquireNextImageKHR(
             m_vulkanDevice,
             m_swapChain,
@@ -1019,7 +1017,7 @@ bool DeviceManager::beginFrame(){
             &m_swapChainIndex
             );
 
-        if((res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR) && attempt < maxAttempts){
+        if((res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR) && attempt < s_MaxRetryCountAcquireNextImage - 1){
             backBufferResizing();
 
             VkSurfaceCapabilitiesKHR surfaceCaps;

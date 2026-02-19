@@ -917,6 +917,7 @@ bool DeviceManager::createDeviceInternal(){
     deviceDesc.aftermathEnabled = m_deviceParams.enableAftermath;
     deviceDesc.logBufferLifetime = m_deviceParams.logBufferLifetime;
     deviceDesc.vulkanLibraryName = m_deviceParams.vulkanLibraryName;
+    deviceDesc.systemMemoryAllocator = m_deviceParams.systemMemoryAllocator;
 
     m_rhiDevice = CreateDevice(deviceDesc);
 

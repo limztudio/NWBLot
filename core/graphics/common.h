@@ -3686,6 +3686,8 @@ struct DeviceCreationParameters : public InstanceParameters{
     bool supportExplicitDisplayScaling = false;
     bool resizeWindowWithDisplayScale = false;
 
+    const SystemMemoryAllocator* systemMemoryAllocator = nullptr;
+
     Vector<AString> requiredVulkanDeviceExtensions;
     Vector<AString> optionalVulkanDeviceExtensions;
     Vector<usize> ignoredVulkanValidationMessageLocations;

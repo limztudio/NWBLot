@@ -79,6 +79,7 @@ bool Graphics::init(const Common::FrameData& data){
     if(!m_deviceManager)
         return false;
 
+    m_deviceCreationParams.systemMemoryAllocator = &m_systemMemoryAllocator;
     return m_deviceManager->createWindowDeviceAndSwapChain(m_deviceCreationParams, data);
 }
 

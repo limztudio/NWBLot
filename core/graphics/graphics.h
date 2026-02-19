@@ -46,6 +46,8 @@ public:
     bool runFrame();
     void updateWindowState(u32 width, u32 height, bool windowVisible, bool windowIsInFocus);
     void destroy();
+
+public:
     [[nodiscard]] const SystemMemoryAllocator& getSystemMemoryAllocator()const noexcept{ return m_systemMemoryAllocator; }
     [[nodiscard]] IDeviceManager* getDeviceManager()const noexcept{ return m_deviceManager; }
 

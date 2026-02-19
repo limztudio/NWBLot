@@ -135,6 +135,8 @@ BindingSet::~BindingSet(){
 
 
 BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
+    VkResult res = VK_SUCCESS;
+
     auto* layout = new BindingLayout(m_context);
     layout->desc = desc;
 
@@ -161,8 +163,7 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
     layoutInfo.pBindings = bindings.data();
 
     VkDescriptorSetLayout setLayout = VK_NULL_HANDLE;
-    VkResult res = vkCreateDescriptorSetLayout(m_context.device, &layoutInfo, m_context.allocationCallbacks, &setLayout);
-
+    res = vkCreateDescriptorSetLayout(m_context.device, &layoutInfo, m_context.allocationCallbacks, &setLayout);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor set layout: {}"), ResultToString(res));
         delete layout;
@@ -186,7 +187,6 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
     pipelineLayoutInfo.pPushConstantRanges = hasPushConstants ? &pushConstantRange : nullptr;
 
     res = vkCreatePipelineLayout(m_context.device, &pipelineLayoutInfo, m_context.allocationCallbacks, &layout->pipelineLayout);
-
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create pipeline layout for binding layout: {}"), ResultToString(res));
         delete layout;
@@ -197,6 +197,8 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
 }
 
 BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc){
+    VkResult res = VK_SUCCESS;
+
     auto* layout = new BindingLayout(m_context);
     layout->isBindless = true;
     layout->bindlessDesc = desc;
@@ -233,8 +235,7 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
     layoutInfo.pBindings = bindings.data();
 
     VkDescriptorSetLayout setLayout = VK_NULL_HANDLE;
-    VkResult res = vkCreateDescriptorSetLayout(m_context.device, &layoutInfo, m_context.allocationCallbacks, &setLayout);
-
+    res = vkCreateDescriptorSetLayout(m_context.device, &layoutInfo, m_context.allocationCallbacks, &setLayout);
     if(res != VK_SUCCESS){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to create bindless descriptor set layout: {}"), ResultToString(res));
         delete layout;
@@ -262,6 +263,8 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
 
 
 DescriptorTableHandle Device::createDescriptorTable(IBindingLayout* _layout){
+    VkResult res = VK_SUCCESS;
+
     auto* layout = checked_cast<BindingLayout*>(_layout);
 
     auto* table = new DescriptorTable(m_context);
@@ -288,8 +291,7 @@ DescriptorTableHandle Device::createDescriptorTable(IBindingLayout* _layout){
     poolInfo.pPoolSizes = poolSizes.data();
 
     VkDescriptorPool pool = VK_NULL_HANDLE;
-    VkResult res = vkCreateDescriptorPool(m_context.device, &poolInfo, m_context.allocationCallbacks, &pool);
-
+    res = vkCreateDescriptorPool(m_context.device, &poolInfo, m_context.allocationCallbacks, &pool);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor pool: {}"), ResultToString(res));
         delete table;
@@ -319,6 +321,8 @@ DescriptorTableHandle Device::createDescriptorTable(IBindingLayout* _layout){
 }
 
 void Device::resizeDescriptorTable(IDescriptorTable* descriptorTable, u32 newSize, bool keepContents){
+    VkResult res = VK_SUCCESS;
+
     auto* table = checked_cast<DescriptorTable*>(descriptorTable);
 
     if(!table->layout || newSize == 0)
@@ -348,7 +352,7 @@ void Device::resizeDescriptorTable(IDescriptorTable* descriptorTable, u32 newSiz
     poolInfo.poolSizeCount = static_cast<u32>(poolSizes.size());
     poolInfo.pPoolSizes = poolSizes.data();
 
-    VkResult res = vkCreateDescriptorPool(m_context.device, &poolInfo, m_context.allocationCallbacks, &table->descriptorPool);
+    res = vkCreateDescriptorPool(m_context.device, &poolInfo, m_context.allocationCallbacks, &table->descriptorPool);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor pool for resize: {}"), ResultToString(res));
         return;

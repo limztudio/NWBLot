@@ -22,7 +22,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static int mainLogic(u16 logPort, void* inst){
+static int MainLogic(u16 logPort, void* inst){
     {
         NWB::Log::Server logger;
         if(!logger.init(logPort))
@@ -55,7 +55,7 @@ static int mainLogic(u16 logPort, void* inst){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static int entry_point(isize argc, tchar** argv, void* inst){
+static int EntryPoint(isize argc, tchar** argv, void* inst){
     int ret;
 
     u16 logPort;
@@ -75,7 +75,7 @@ static int entry_point(isize argc, tchar** argv, void* inst){
 
     try{
         NWB::Core::Common::Initializer::instance().initialize();
-        ret = mainLogic(logPort, inst);
+        ret = MainLogic(logPort, inst);
         NWB::Core::Common::Initializer::instance().finalize();
     }
     catch(...){
@@ -92,14 +92,14 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
     (void)hPrevInstance;
     (void)lpCmdLine;
     (void)nCmdShow;
-    return entry_point(__argc, __wargv, hInstance);
+    return EntryPoint(__argc, __wargv, hInstance);
 }
 #else
 int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nCmdShow){
     (void)hPrevInstance;
     (void)lpCmdLine;
     (void)nCmdShow;
-    return entry_point(__argc, __argv, hInstance);
+    return EntryPoint(__argc, __argv, hInstance);
 }
 #endif
 #endif

@@ -34,11 +34,13 @@ void Device::setEventQuery(IEventQuery* _query, CommandQueue::Enum queue){
 }
 
 bool Device::pollEventQuery(IEventQuery* _query){
+    VkResult res = VK_SUCCESS;
+
     auto* query = static_cast<EventQuery*>(_query);
     if(!query->started)
         return true;
 
-    VkResult res = vkGetFenceStatus(m_context.device, query->fence);
+    res = vkGetFenceStatus(m_context.device, query->fence);
     return res == VK_SUCCESS;
 }
 
@@ -67,14 +69,15 @@ bool Device::pollTimerQuery(ITimerQuery* _query){
 }
 
 f32 Device::getTimerQueryTime(ITimerQuery* _query){
+    VkResult res = VK_SUCCESS;
+
     auto* query = static_cast<TimerQuery*>(_query);
 
     if(!query->resolved)
         return 0.f;
 
     u64 timestamps[2];
-    VkResult res = vkGetQueryPoolResults(m_context.device, query->queryPool, 0, 2, sizeof(timestamps), timestamps, sizeof(u64), VK_QUERY_RESULT_64_BIT);
-
+    res = vkGetQueryPoolResults(m_context.device, query->queryPool, 0, 2, sizeof(timestamps), timestamps, sizeof(u64), VK_QUERY_RESULT_64_BIT);
     if(res == VK_SUCCESS){
         u64 diff = timestamps[1] - timestamps[0];
         f32 timestampPeriod = m_context.physicalDeviceProperties.limits.timestampPeriod;

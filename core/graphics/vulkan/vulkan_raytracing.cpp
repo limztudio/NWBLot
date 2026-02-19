@@ -96,6 +96,8 @@ Object RayTracingPipeline::getNativeHandle(ObjectType objectType){
 
 
 RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStructDesc& desc){
+    VkResult res = VK_SUCCESS;
+
     if(!m_context.extensions.KHR_acceleration_structure)
         return nullptr;
 
@@ -124,8 +126,7 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
     createInfo.size = bufferDesc.byteSize;
     createInfo.type = asType;
 
-    VkResult res = vkCreateAccelerationStructureKHR(m_context.device, &createInfo, m_context.allocationCallbacks, &as->accelStruct);
-
+    res = vkCreateAccelerationStructureKHR(m_context.device, &createInfo, m_context.allocationCallbacks, &as->accelStruct);
     if(res != VK_SUCCESS){
         delete as;
         return nullptr;
@@ -139,6 +140,8 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
 }
 
 RayTracingOpacityMicromapHandle Device::createOpacityMicromap(const RayTracingOpacityMicromapDesc& desc){
+    VkResult res = VK_SUCCESS;
+
     if(!m_context.extensions.EXT_opacity_micromap)
         return nullptr;
 
@@ -183,7 +186,7 @@ RayTracingOpacityMicromapHandle Device::createOpacityMicromap(const RayTracingOp
     createInfo.size = buildSize.micromapSize;
     createInfo.deviceAddress = buffer->deviceAddress;
 
-    VkResult res = vkCreateMicromapEXT(m_context.device, &createInfo, m_context.allocationCallbacks, &om->micromap);
+    res = vkCreateMicromapEXT(m_context.device, &createInfo, m_context.allocationCallbacks, &om->micromap);
     if(res != VK_SUCCESS){
         delete om;
         return nullptr;
@@ -327,6 +330,8 @@ bool Device::bindAccelStructMemory(IRayTracingAccelStruct* _as, IHeap* heap, u64
 }
 
 RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipelineDesc& desc){
+    VkResult res = VK_SUCCESS;
+
     if(!m_context.extensions.KHR_ray_tracing_pipeline)
         return nullptr;
 
@@ -428,8 +433,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
     createInfo.maxPipelineRayRecursionDepth = desc.maxRecursionDepth;
     createInfo.layout = pipelineLayout;
 
-    VkResult res = vkCreateRayTracingPipelinesKHR(m_context.device, VK_NULL_HANDLE, m_context.pipelineCache, 1, &createInfo, m_context.allocationCallbacks, &pso->pipeline);
-
+    res = vkCreateRayTracingPipelinesKHR(m_context.device, VK_NULL_HANDLE, m_context.pipelineCache, 1, &createInfo, m_context.allocationCallbacks, &pso->pipeline);
     if(res != VK_SUCCESS){
         delete pso;
         return nullptr;

@@ -165,8 +165,10 @@ void DeviceManager::resizeSwapChain(){
 
 
 bool DeviceManager::createInstance(){
+    VkResult res = VK_SUCCESS;
+
     {
-        const VkResult res = volkInitialize();
+        res = volkInitialize();
         if(res != VK_SUCCESS){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to initialize volk. {}"), ResultToString(res));
             return false;
@@ -214,11 +216,11 @@ bool DeviceManager::createInstance(){
     }
 
     {
-        TStringStream ss;
-        ss << NWB_TEXT("Vulkan: Enabled instance extensions:");
+        AStringStream ss;
+        ss << "Vulkan: Enabled instance extensions:";
         for(const auto& ext : m_enabledExtensions.instance)
-            ss << NWB_TEXT("\n    ") << StringConvert(ext);
-        NWB_LOGGER_INFO(NWB_TEXT("{}"), ss.str());
+            ss << "\n    " << ext;
+        NWB_LOGGER_INFO(NWB_TEXT("{}"), StringConvert(ss.str()));
     }
 
     HashSet<AString> requiredLayers = m_enabledExtensions.layers;
@@ -245,11 +247,11 @@ bool DeviceManager::createInstance(){
     }
 
     {
-        TStringStream ss;
-        ss << NWB_TEXT("Vulkan: Enabled layers:");
+        AStringStream ss;
+        ss << "Vulkan: Enabled layers:";
         for(const auto& layer : m_enabledExtensions.layers)
-            ss << NWB_TEXT("\n    ") << StringConvert(layer);
-        NWB_LOGGER_INFO(NWB_TEXT("{}"), ss.str());
+            ss << "\n    " << layer;
+        NWB_LOGGER_INFO(NWB_TEXT("{}"), StringConvert(ss.str()));
     }
 
     auto instanceExtVec = __hidden_vulkan::StringSetToVector(m_enabledExtensions.instance);
@@ -262,7 +264,7 @@ bool DeviceManager::createInstance(){
     applicationInfo.pEngineName = s_AppName;
     applicationInfo.engineVersion = static_cast<uint32_t>(s_EngineVersion);
 
-    VkResult res = vkEnumerateInstanceVersion(&applicationInfo.apiVersion);
+    res = vkEnumerateInstanceVersion(&applicationInfo.apiVersion);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate instance version. {}"), ResultToString(res));
         return false;
@@ -537,6 +539,8 @@ bool DeviceManager::pickPhysicalDevice(){
 
 
 bool DeviceManager::createDevice(){
+    VkResult res = VK_SUCCESS;
+
     uint32_t extCount = 0;
     vkEnumerateDeviceExtensionProperties(m_vulkanPhysicalDevice, nullptr, &extCount, nullptr);
     Vector<VkExtensionProperties> deviceExtensions(extCount);
@@ -577,11 +581,11 @@ bool DeviceManager::createDevice(){
 #endif
 
     {
-        TStringStream ss;
-        ss << NWB_TEXT("Vulkan: Enabled device extensions:");
+        AStringStream ss;
+        ss << "Vulkan: Enabled device extensions:";
         for(const auto& [name, _] : m_enabledExtensions.device)
-            ss << NWB_TEXT("\n    ") << StringConvert(name);
-        NWB_LOGGER_INFO(NWB_TEXT("{}"), ss.str());
+            ss << "\n    " << name;
+        NWB_LOGGER_INFO(NWB_TEXT("{}"), StringConvert(ss.str()));
     }
 
     m_swapChainMutableFormatSupported = isVulkanDeviceExtensionEnabled(VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME);
@@ -693,7 +697,7 @@ bool DeviceManager::createDevice(){
     deviceCreateInfo.ppEnabledLayerNames = layerVec.data();
     deviceCreateInfo.pNext = &vulkan12features;
 
-    const VkResult res = vkCreateDevice(m_vulkanPhysicalDevice, &deviceCreateInfo, nullptr, &m_vulkanDevice);
+    res = vkCreateDevice(m_vulkanPhysicalDevice, &deviceCreateInfo, nullptr, &m_vulkanDevice);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create logical device. {}"), ResultToString(res));
         return false;
@@ -722,6 +726,8 @@ bool DeviceManager::createDevice(){
 
 
 bool DeviceManager::createWindowSurface(){
+    VkResult res = VK_SUCCESS;
+
 #ifdef NWB_PLATFORM_WINDOWS
     Common::WinFrame frame;
     frame.frameParam() = m_platformFrameParam;
@@ -731,7 +737,7 @@ bool DeviceManager::createWindowSurface(){
     createInfo.hinstance = frame.instance();
     createInfo.hwnd = frame.hwnd();
 
-    const VkResult res = vkCreateWin32SurfaceKHR(m_vulkanInstance, &createInfo, nullptr, &m_windowSurface);
+    res = vkCreateWin32SurfaceKHR(m_vulkanInstance, &createInfo, nullptr, &m_windowSurface);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create Win32 surface. {}"), ResultToString(res));
         return false;
@@ -761,6 +767,8 @@ void DeviceManager::destroySwapChain(){
 }
 
 bool DeviceManager::createSwapChain(){
+    VkResult res = VK_SUCCESS;
+
     destroySwapChain();
 
     m_swapChainFormat.format = __hidden_vulkan::ConvertFormat(m_deviceParams.swapChainFormat);
@@ -814,7 +822,7 @@ bool DeviceManager::createSwapChain(){
     if(m_swapChainMutableFormatSupported)
         desc.pNext = &imageFormatListCreateInfo;
 
-    const VkResult res = vkCreateSwapchainKHR(m_vulkanDevice, &desc, nullptr, &m_swapChain);
+    res = vkCreateSwapchainKHR(m_vulkanDevice, &desc, nullptr, &m_swapChain);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create swap chain. {}"), ResultToString(res));
         return false;
@@ -995,11 +1003,12 @@ void DeviceManager::destroyDeviceAndSwapChain(){
 
 
 bool DeviceManager::beginFrame(){
+    VkResult res = VK_SUCCESS;
+
     constexpr i32 maxAttempts = 3;
 
     const VkSemaphore& semaphore = m_acquireSemaphores[m_acquireSemaphoreIndex];
 
-    VkResult res = VK_SUCCESS;
     for(i32 attempt = 0; attempt < maxAttempts; ++attempt){
         res = vkAcquireNextImageKHR(
             m_vulkanDevice,
@@ -1037,6 +1046,8 @@ bool DeviceManager::beginFrame(){
 }
 
 bool DeviceManager::present(){
+    VkResult res = VK_SUCCESS;
+
     const VkSemaphore& semaphore = m_presentSemaphores[m_swapChainIndex];
 
     m_rhiDevice->queueSignalSemaphore(CommandQueue::Graphics, semaphore, 0);
@@ -1052,7 +1063,7 @@ bool DeviceManager::present(){
     presentInfo.pSwapchains = &m_swapChain;
     presentInfo.pImageIndices = &m_swapChainIndex;
 
-    const VkResult res = vkQueuePresentKHR(m_presentQueue, &presentInfo);
+    res = vkQueuePresentKHR(m_presentQueue, &presentInfo);
     if(!(res == VK_SUCCESS || res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR))
         return false;
     

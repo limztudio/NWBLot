@@ -35,6 +35,8 @@ static constexpr u64 AlignBufferOffset(u64 off){
 
 
 StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAccessMode::Enum cpuAccess){
+    VkResult res = VK_SUCCESS;
+
     auto* staging = new StagingTexture(m_context, m_allocator);
     staging->desc = d;
     staging->cpuAccess = cpuAccess;
@@ -62,7 +64,7 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
     bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-    VkResult res = vkCreateBuffer(m_context.device, &bufferInfo, m_context.allocationCallbacks, &staging->buffer);
+    res = vkCreateBuffer(m_context.device, &bufferInfo, m_context.allocationCallbacks, &staging->buffer);
     if(res != VK_SUCCESS){
         delete staging;
         return nullptr;
@@ -143,13 +145,15 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
 }
 
 void* Device::mapStagingTexture(IStagingTexture* tex, const TextureSlice& slice, CpuAccessMode::Enum, usize* outRowPitch){
+    VkResult res = VK_SUCCESS;
+
     if(!tex)
         return nullptr;
 
     auto* staging = static_cast<StagingTexture*>(tex);
 
     if(!staging->mappedMemory){
-        VkResult res = vkMapMemory(m_context.device, staging->memory, 0, VK_WHOLE_SIZE, 0, &staging->mappedMemory);
+        res = vkMapMemory(m_context.device, staging->memory, 0, VK_WHOLE_SIZE, 0, &staging->mappedMemory);
         if(res != VK_SUCCESS)
             return nullptr;
     }

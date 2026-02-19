@@ -88,6 +88,8 @@ Device::Device(const DeviceDesc& desc)
     : m_aftermathEnabled(desc.aftermathEnabled)
     , m_allocator(m_context)
 {
+    VkResult res = VK_SUCCESS;
+
     m_context.instance = desc.instance;
     m_context.physicalDevice = desc.physicalDevice;
     m_context.device = desc.device;
@@ -176,7 +178,7 @@ Device::Device(const DeviceDesc& desc)
     }
 
     VkPipelineCacheCreateInfo cacheInfo = { VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO };
-    VkResult res = vkCreatePipelineCache(m_context.device, &cacheInfo, m_context.allocationCallbacks, &m_context.pipelineCache);
+    res = vkCreatePipelineCache(m_context.device, &cacheInfo, m_context.allocationCallbacks, &m_context.pipelineCache);
     if(res != VK_SUCCESS){
         m_context.pipelineCache = VK_NULL_HANDLE;
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to create pipeline cache. {}"), ResultToString(res));
@@ -244,14 +246,14 @@ u64 Device::executeCommandLists(ICommandList* const* pCommandLists, usize numCom
 }
 
 bool Device::waitForIdle(){
-    VkResult res = vkDeviceWaitIdle(m_context.device);
+    VkResult res = VK_SUCCESS;
 
+    res = vkDeviceWaitIdle(m_context.device);
     if(res == VK_ERROR_DEVICE_LOST){
         NWB_LOGGER_INFO(NWB_TEXT("Vulkan: Device was lost during waitForIdle."));
         return false;
     }
-
-    if(res != VK_SUCCESS){
+    else if(res != VK_SUCCESS){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to wait for device idle. {}"), ResultToString(res));
         return false;
     }
@@ -376,6 +378,8 @@ Object Heap::getNativeHandle(ObjectType objectType){
 
 
 HeapHandle Device::createHeap(const HeapDesc& d){
+    VkResult res = VK_SUCCESS;
+
     auto* heap = new Heap(m_context);
     heap->desc = d;
 
@@ -421,7 +425,7 @@ HeapHandle Device::createHeap(const HeapDesc& d){
     allocInfo.memoryTypeIndex = memoryTypeIndex;
     allocInfo.pNext = pNext;
 
-    VkResult res = vkAllocateMemory(m_context.device, &allocInfo, m_context.allocationCallbacks, &heap->memory);
+    res = vkAllocateMemory(m_context.device, &allocInfo, m_context.allocationCallbacks, &heap->memory);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate heap memory ({} bytes): {}"), d.capacity, ResultToString(res));
         delete heap;
@@ -436,15 +440,17 @@ HeapHandle Device::createHeap(const HeapDesc& d){
 
 
 CooperativeVectorDeviceFeatures Device::queryCoopVecFeatures(){
-    CooperativeVectorDeviceFeatures result;
+    VkResult res = VK_SUCCESS;
+
+    CooperativeVectorDeviceFeatures output;
 
     if(!m_context.extensions.NV_cooperative_vector)
-        return result;
+        return output;
 
     uint32_t propertyCount = 0;
-    VkResult res = vkGetPhysicalDeviceCooperativeVectorPropertiesNV(m_context.physicalDevice, &propertyCount, nullptr);
+    res = vkGetPhysicalDeviceCooperativeVectorPropertiesNV(m_context.physicalDevice, &propertyCount, nullptr);
     if(res != VK_SUCCESS || propertyCount == 0)
-        return result;
+        return output;
 
     Vector<VkCooperativeVectorPropertiesNV> properties(propertyCount);
     for(u32 i = 0; i < propertyCount; ++i){
@@ -454,9 +460,9 @@ CooperativeVectorDeviceFeatures Device::queryCoopVecFeatures(){
 
     res = vkGetPhysicalDeviceCooperativeVectorPropertiesNV(m_context.physicalDevice, &propertyCount, properties.data());
     if(res != VK_SUCCESS)
-        return result;
+        return output;
 
-    result.matMulFormats.reserve(propertyCount);
+    output.matMulFormats.reserve(propertyCount);
     for(const auto& prop : properties){
         CooperativeVectorMatMulFormatCombo combo;
         combo.inputType = __hidden_vulkan::ConvertCoopVecDataType(static_cast<VkComponentTypeKHR>(prop.inputType));
@@ -465,16 +471,18 @@ CooperativeVectorDeviceFeatures Device::queryCoopVecFeatures(){
         combo.biasInterpretation = __hidden_vulkan::ConvertCoopVecDataType(static_cast<VkComponentTypeKHR>(prop.biasInterpretation));
         combo.outputType = __hidden_vulkan::ConvertCoopVecDataType(static_cast<VkComponentTypeKHR>(prop.resultType));
         combo.transposeSupported = prop.transpose != VK_FALSE;
-        result.matMulFormats.push_back(combo);
+        output.matMulFormats.push_back(combo);
     }
 
-    result.trainingFloat16 = m_context.coopVecProperties.cooperativeVectorTrainingFloat16Accumulation != VK_FALSE;
-    result.trainingFloat32 = m_context.coopVecProperties.cooperativeVectorTrainingFloat32Accumulation != VK_FALSE;
+    output.trainingFloat16 = m_context.coopVecProperties.cooperativeVectorTrainingFloat16Accumulation != VK_FALSE;
+    output.trainingFloat32 = m_context.coopVecProperties.cooperativeVectorTrainingFloat32Accumulation != VK_FALSE;
 
-    return result;
+    return output;
 }
 
 usize Device::getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, int rows, int columns){
+    VkResult res = VK_SUCCESS;
+
     if(!m_context.extensions.NV_cooperative_vector)
         return 0;
 
@@ -495,7 +503,7 @@ usize Device::getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, Coopera
     convertInfo.dstLayout = __hidden_vulkan::ConvertCoopVecMatrixLayout(layout);
     convertInfo.dstStride = GetCooperativeVectorOptimalMatrixStride(type, layout, rows, columns);
 
-    VkResult res = vkConvertCooperativeVectorMatrixNV(m_context.device, &convertInfo);
+    res = vkConvertCooperativeVectorMatrixNV(m_context.device, &convertInfo);
     if(res == VK_SUCCESS)
         return dstSize;
 

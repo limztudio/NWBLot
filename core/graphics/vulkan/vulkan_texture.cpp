@@ -146,6 +146,8 @@ u64 Texture::makeViewKey(const TextureSubresourceSet& subresources, TextureDimen
 }
 
 VkImageView Texture::getView(const TextureSubresourceSet& subresources, TextureDimension::Enum dimension, Format::Enum format, bool isReadOnlyDSV){
+    VkResult res = VK_SUCCESS;
+
     u64 key = makeViewKey(subresources, dimension, format, isReadOnlyDSV);
 
     auto it = views.find(key);
@@ -188,7 +190,7 @@ VkImageView Texture::getView(const TextureSubresourceSet& subresources, TextureD
     viewInfo.subresourceRange.layerCount = resolvedSubresources.numArraySlices;
 
     VkImageView view = VK_NULL_HANDLE;
-    VkResult res = vkCreateImageView(m_context.device, &viewInfo, m_context.allocationCallbacks, &view);
+    res = vkCreateImageView(m_context.device, &viewInfo, m_context.allocationCallbacks, &view);
     NWB_ASSERT_MSG(res == VK_SUCCESS, NWB_TEXT("Vulkan: Failed to create image view"));
 
     views[key] = view;
@@ -230,6 +232,8 @@ StagingTexture::~StagingTexture(){
 
 
 TextureHandle Device::createTexture(const TextureDesc& d){
+    VkResult res = VK_SUCCESS;
+
     auto* texture = new Texture(m_context, m_allocator);
     texture->desc = d;
 
@@ -254,7 +258,7 @@ TextureHandle Device::createTexture(const TextureDesc& d){
     texture->imageInfo.flags = flags;
     texture->imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
 
-    VkResult res = vkCreateImage(m_context.device, &texture->imageInfo, m_context.allocationCallbacks, &texture->image);
+    res = vkCreateImage(m_context.device, &texture->imageInfo, m_context.allocationCallbacks, &texture->image);
     NWB_ASSERT_MSG(res == VK_SUCCESS, NWB_TEXT("Vulkan: Failed to create image"));
 
     if(!d.isVirtual){
@@ -278,6 +282,8 @@ MemoryRequirements Device::getTextureMemoryRequirements(ITexture* _texture){
 }
 
 bool Device::bindTextureMemory(ITexture* _texture, IHeap* heap, u64 offset){
+    VkResult res = VK_SUCCESS;
+
     auto* texture = static_cast<Texture*>(_texture);
     auto* vkHeap = checked_cast<Heap*>(heap);
 
@@ -286,7 +292,7 @@ bool Device::bindTextureMemory(ITexture* _texture, IHeap* heap, u64 offset){
 
     texture->memory = VK_NULL_HANDLE;
 
-    VkResult res = vkBindImageMemory(m_context.device, texture->image, vkHeap->memory, offset);
+    res = vkBindImageMemory(m_context.device, texture->image, vkHeap->memory, offset);
     return res == VK_SUCCESS;
 }
 
@@ -321,6 +327,8 @@ TextureHandle Device::createHandleForNativeTexture(ObjectType objectType, Object
 
 
 SamplerHandle Device::createSampler(const SamplerDesc& d){
+    VkResult res = VK_SUCCESS;
+
     auto* sampler = new Sampler(m_context);
     sampler->desc = d;
 
@@ -356,7 +364,7 @@ SamplerHandle Device::createSampler(const SamplerDesc& d){
     samplerInfo.maxLod = VK_LOD_CLAMP_NONE;
     samplerInfo.borderColor = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
 
-    VkResult res = vkCreateSampler(m_context.device, &samplerInfo, m_context.allocationCallbacks, &sampler->sampler);
+    res = vkCreateSampler(m_context.device, &samplerInfo, m_context.allocationCallbacks, &sampler->sampler);
     NWB_ASSERT_MSG(res == VK_SUCCESS, NWB_TEXT("Vulkan: Failed to create sampler"));
 
     return RefCountPtr<ISampler, BlankDeleter<ISampler>>(sampler, AdoptRef);

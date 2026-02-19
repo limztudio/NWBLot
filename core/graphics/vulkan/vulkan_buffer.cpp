@@ -34,6 +34,8 @@ Buffer::~Buffer(){
 
 
 BufferHandle Device::createBuffer(const BufferDesc& d){
+    VkResult res = VK_SUCCESS;
+
     auto* buffer = new Buffer(m_context, m_allocator);
     buffer->desc = d;
 
@@ -73,7 +75,7 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
     bufferInfo.usage = usageFlags;
     bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-    VkResult res = vkCreateBuffer(m_context.device, &bufferInfo, m_context.allocationCallbacks, &buffer->buffer);
+    res = vkCreateBuffer(m_context.device, &bufferInfo, m_context.allocationCallbacks, &buffer->buffer);
     NWB_ASSERT(res == VK_SUCCESS);
 
     if(!d.isVirtual){
@@ -97,13 +99,15 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
 }
 
 void* Device::mapBuffer(IBuffer* _buffer, CpuAccessMode::Enum){
+    VkResult res = VK_SUCCESS;
+
     auto* buffer = static_cast<Buffer*>(_buffer);
 
     if(buffer->mappedMemory)
         return buffer->mappedMemory;
 
     void* data = nullptr;
-    VkResult res = vkMapMemory(m_context.device, buffer->memory, 0, VK_WHOLE_SIZE, 0, &data);
+    res = vkMapMemory(m_context.device, buffer->memory, 0, VK_WHOLE_SIZE, 0, &data);
     NWB_ASSERT(res == VK_SUCCESS);
 
     buffer->mappedMemory = data;
@@ -132,6 +136,8 @@ MemoryRequirements Device::getBufferMemoryRequirements(IBuffer* _buffer){
 }
 
 bool Device::bindBufferMemory(IBuffer* _buffer, IHeap* heap, u64 offset){
+    VkResult res = VK_SUCCESS;
+
     auto* buffer = static_cast<Buffer*>(_buffer);
     auto* vkHeap = checked_cast<Heap*>(heap);
 
@@ -141,7 +147,7 @@ bool Device::bindBufferMemory(IBuffer* _buffer, IHeap* heap, u64 offset){
     // Binding to a heap means the heap owns the memory, not the buffer
     buffer->memory = VK_NULL_HANDLE;
 
-    VkResult res = vkBindBufferMemory(m_context.device, buffer->buffer, vkHeap->memory, offset);
+    res = vkBindBufferMemory(m_context.device, buffer->buffer, vkHeap->memory, offset);
     return res == VK_SUCCESS;
 }
 

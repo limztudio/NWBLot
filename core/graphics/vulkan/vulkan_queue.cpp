@@ -19,12 +19,14 @@ NWB_VULKAN_BEGIN
 TrackedCommandBuffer::TrackedCommandBuffer(const VulkanContext& context, CommandQueue::Enum, u32 queueFamilyIndex)
     : m_context(context)
 {
+    VkResult res = VK_SUCCESS;
+
     // Use TRANSIENT flag to hint that command buffers are short-lived
     VkCommandPoolCreateInfo poolInfo = { VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO };
     poolInfo.queueFamilyIndex = queueFamilyIndex;
     poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT | VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
 
-    VkResult res = vkCreateCommandPool(m_context.device, &poolInfo, m_context.allocationCallbacks, &cmdPool);
+    res = vkCreateCommandPool(m_context.device, &poolInfo, m_context.allocationCallbacks, &cmdPool);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create command pool: {}"), ResultToString(res));
         cmdPool = VK_NULL_HANDLE;
@@ -84,13 +86,15 @@ Queue::Queue(const VulkanContext& context, CommandQueue::Enum queueID, VkQueue q
     vkCreateSemaphore(m_context.device, &semaphoreInfo, m_context.allocationCallbacks, &trackingSemaphore);
 }
 Queue::~Queue(){
+    VkResult res = VK_SUCCESS;
+
     if(trackingSemaphore && m_lastSubmittedID > 0){
         VkSemaphoreWaitInfo waitInfo = { VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO };
         waitInfo.semaphoreCount = 1;
         waitInfo.pSemaphores = &trackingSemaphore;
         waitInfo.pValues = &m_lastSubmittedID;
-        VkResult res = vkWaitSemaphores(m_context.device, &waitInfo, UINT64_MAX);
-        // Ignore errors in destructor - device may already be lost
+
+        res = vkWaitSemaphores(m_context.device, &waitInfo, UINT64_MAX);
         (void)res;
     }
 
@@ -158,6 +162,8 @@ void Queue::addSignalSemaphore(VkSemaphore semaphore, u64 value){
 }
 
 u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
+    VkResult res = VK_SUCCESS;
+
     Mutex::scoped_lock lock(m_mutex);
 
     bool hasCommands = ppCmd && numCmd > 0;
@@ -239,7 +245,7 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
     submitInfo.signalSemaphoreInfoCount = (u32)signalInfos.size();
     submitInfo.pSignalSemaphoreInfos = signalInfos.data();
 
-    VkResult res = vkQueueSubmit2(m_queue, 1, &submitInfo, submitFence);
+    res = vkQueueSubmit2(m_queue, 1, &submitInfo, submitFence);
 
     m_waitSemaphores.clear();
     m_waitSemaphoreValues.clear();
@@ -277,19 +283,19 @@ bool Queue::pollCommandList(u64 commandListID){
 }
 
 bool Queue::waitCommandList(u64 commandListID, u64 timeout){
+    VkResult res = VK_SUCCESS;
+
     VkSemaphoreWaitInfo waitInfo = { VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO };
     waitInfo.semaphoreCount = 1;
     waitInfo.pSemaphores = &trackingSemaphore;
     waitInfo.pValues = &commandListID;
 
-    VkResult res = vkWaitSemaphores(m_context.device, &waitInfo, timeout);
-
+    res = vkWaitSemaphores(m_context.device, &waitInfo, timeout);
     if(res == VK_ERROR_DEVICE_LOST){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Device was lost while waiting for command list."));
         return false;
     }
-
-    if(res == VK_SUCCESS){
+    else if(res == VK_SUCCESS){
         Mutex::scoped_lock lock(m_mutex);
         if(commandListID > m_lastFinishedID)
             m_lastFinishedID = commandListID;

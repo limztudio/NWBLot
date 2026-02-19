@@ -35,6 +35,8 @@ Object ComputePipeline::getNativeHandle(ObjectType objectType){
 
 
 ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& desc){
+    VkResult res = VK_SUCCESS;
+
     auto* pso = new ComputePipeline(m_context);
     pso->desc = desc;
 
@@ -70,8 +72,7 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
     pipelineInfo.stage = shaderStage;
     pipelineInfo.layout = pipelineLayout;
 
-    VkResult res = vkCreateComputePipelines(m_context.device, m_context.pipelineCache, 1, &pipelineInfo, m_context.allocationCallbacks, &pso->pipeline);
-
+    res = vkCreateComputePipelines(m_context.device, m_context.pipelineCache, 1, &pipelineInfo, m_context.allocationCallbacks, &pso->pipeline);
     if(res != VK_SUCCESS){
         delete pso;
         return nullptr;

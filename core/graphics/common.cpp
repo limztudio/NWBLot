@@ -466,10 +466,6 @@ IDeviceManager::IDeviceManager(const DeviceCreationParameters& params)
     : m_deviceParams(params)
 {}
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool IDeviceManager::createHeadlessDevice(){
     m_deviceParams.headlessDevice = true;
 

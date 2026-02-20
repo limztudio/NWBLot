@@ -124,21 +124,6 @@ DeviceManager::DeviceManager(const DeviceCreationParameters& params)
     initDefaultExtensions();
 }
 
-void DeviceManager::initDefaultExtensions(){
-    for(auto name : s_enabledInstanceExts)
-        m_enabledExtensions.instance.insert(name);
-    for(const auto& e : m_enabledDeviceExts)
-        m_enabledExtensions.device.insert({ e.name, e.feature });
-
-    for(auto name : s_optionalInstanceExts)
-        m_optionalExtensions.instance.insert(name);
-    for(const auto& e : m_optionalDeviceExts)
-        m_optionalExtensions.device.insert({ e.name, e.feature });
-
-    for(const auto& e : m_rayTracingExts)
-        m_rayTracingExtensions.insert({ e.name, e.feature });
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -207,6 +192,21 @@ void DeviceManager::resizeSwapChain(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Instance creation
 
+
+void DeviceManager::initDefaultExtensions(){
+    for(auto name : s_enabledInstanceExts)
+        m_enabledExtensions.instance.insert(name);
+    for(const auto& e : m_enabledDeviceExts)
+        m_enabledExtensions.device.insert({ e.name, e.feature });
+
+    for(auto name : s_optionalInstanceExts)
+        m_optionalExtensions.instance.insert(name);
+    for(const auto& e : m_optionalDeviceExts)
+        m_optionalExtensions.device.insert({ e.name, e.feature });
+
+    for(const auto& e : m_rayTracingExts)
+        m_rayTracingExtensions.insert({ e.name, e.feature });
+}
 
 bool DeviceManager::createInstance(){
     VkResult res = VK_SUCCESS;

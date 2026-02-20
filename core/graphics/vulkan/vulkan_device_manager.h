@@ -44,6 +44,9 @@ private:
 
 public:
     explicit DeviceManager(const DeviceCreationParameters& params);
+
+
+public:
     [[nodiscard]] virtual IDevice* getDevice()const override;
     [[nodiscard]] virtual GraphicsAPI::Enum getGraphicsAPI()const override{ return GraphicsAPI::VULKAN; }
     [[nodiscard]] virtual const tchar* getRendererString()const override;
@@ -61,6 +64,7 @@ public:
     virtual ITexture* getBackBuffer(u32 index)override;
     virtual u32 getCurrentBackBufferIndex()override;
     virtual u32 getBackBufferCount()override;
+
 
 protected:
     virtual bool createInstanceInternal()override;

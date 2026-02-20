@@ -19,6 +19,7 @@ UploadManager::UploadManager(Device& pParent, u64 defaultChunkSize, u64 memoryLi
     , m_defaultChunkSize(defaultChunkSize)
     , m_memoryLimit(memoryLimit)
     , m_isScratchBuffer(isScratchBuffer)
+    , m_chunkPool(Alloc::CustomAllocator<RefCountPtr<BufferChunk>>(*m_device.getContext().objectArena))
 {}
 UploadManager::~UploadManager(){
     m_chunkPool.clear();

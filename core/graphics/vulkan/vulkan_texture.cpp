@@ -117,6 +117,7 @@ constexpr VkImageCreateFlags PickImageFlags(const TextureDesc& desc){
 Texture::Texture(const VulkanContext& context, VulkanAllocator& allocator)
     : m_context(context)
     , m_allocator(allocator)
+    , views(0, Hasher<u64>(), EqualTo<u64>(), Alloc::CustomAllocator<Pair<const u64, VkImageView>>(*context.objectArena))
 {}
 Texture::~Texture(){
     for(auto& pair : views)

@@ -462,8 +462,15 @@ Pair<const void*, usize> AftermathCrashDumpHelper::findShaderBinary(u64 shaderHa
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool IDeviceManager::createHeadlessDevice(const DeviceCreationParameters& params){
-    m_deviceParams = params;
+IDeviceManager::IDeviceManager(const DeviceCreationParameters& params)
+    : m_deviceParams(params)
+{}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool IDeviceManager::createHeadlessDevice(){
     m_deviceParams.headlessDevice = true;
 
     if(!m_instanceCreated){
@@ -479,8 +486,7 @@ bool IDeviceManager::createHeadlessDevice(const DeviceCreationParameters& params
     return true;
 }
 
-bool IDeviceManager::createWindowDeviceAndSwapChain(const DeviceCreationParameters& params, const Common::FrameData& frameData){
-    m_deviceParams = params;
+bool IDeviceManager::createWindowDeviceAndSwapChain(const Common::FrameData& frameData){
     m_deviceParams.headlessDevice = false;
 
     m_deviceParams.backBufferWidth = frameData.width();

@@ -3781,16 +3781,16 @@ private:
 
 class IDeviceManager{
 protected:
-    IDeviceManager() = default;
+    explicit IDeviceManager(const DeviceCreationParameters& params);
 public:
     virtual ~IDeviceManager() = default;
 
 
 public:
-    static IDeviceManager* create(GraphicsAPI::Enum api);
+    static IDeviceManager* create(GraphicsAPI::Enum api, const DeviceCreationParameters& params);
 
-    bool createHeadlessDevice(const DeviceCreationParameters& params);
-    bool createWindowDeviceAndSwapChain(const DeviceCreationParameters& params, const Common::FrameData& frameData);
+    bool createHeadlessDevice();
+    bool createWindowDeviceAndSwapChain(const Common::FrameData& frameData);
     bool createInstance(const InstanceParameters& params);
 
     virtual bool enumerateAdapters(Vector<AdapterInfo>& outAdapters) = 0;

@@ -32,6 +32,9 @@ Sampler::~Sampler(){
 
 Shader::Shader(const VulkanContext& context)
     : m_context(context)
+    , bytecode(Alloc::CustomAllocator<u8>(*context.objectArena))
+    , specializationEntries(Alloc::CustomAllocator<VkSpecializationMapEntry>(*context.objectArena))
+    , specializationData(Alloc::CustomAllocator<u8>(*context.objectArena))
 {}
 Shader::~Shader(){
     if(shaderModule != VK_NULL_HANDLE){
@@ -46,6 +49,8 @@ Shader::~Shader(){
 
 ShaderLibrary::ShaderLibrary(const VulkanContext& context)
     : m_context(context)
+    , bytecode(Alloc::CustomAllocator<u8>(*context.objectArena))
+    , shaders(0, Hasher<Name>(), EqualTo<Name>(), Alloc::CustomAllocator<Pair<const Name, RefCountPtr<Shader, ArenaRefDeleter<Shader>>>>(*context.objectArena))
 {}
 ShaderLibrary::~ShaderLibrary(){}
 
@@ -159,12 +164,23 @@ ShaderLibraryHandle Device::createShaderLibrary(const void* binary, usize binary
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+InputLayout::InputLayout(const VulkanContext& context)
+    : m_context(context)
+    , attributes(Alloc::CustomAllocator<VertexAttributeDesc>(*context.objectArena))
+    , bindings(Alloc::CustomAllocator<VkVertexInputBindingDescription>(*context.objectArena))
+    , vkAttributes(Alloc::CustomAllocator<VkVertexInputAttributeDescription>(*context.objectArena))
+{}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 attributeCount, IShader*){
-    auto* layout = new InputLayout();
+    auto* layout = new InputLayout(m_context);
     layout->attributes.assign(d, d + attributeCount);
 
-    HashMap<u32, u32> bufferStrides;
-    HashMap<u32, bool> bufferInstanced;
+    HashMap<u32, u32, Hasher<u32>, EqualTo<u32>, Alloc::CustomAllocator<Pair<const u32, u32>>> bufferStrides(0, Hasher<u32>(), EqualTo<u32>(), Alloc::CustomAllocator<Pair<const u32, u32>>(*m_context.objectArena));
+    HashMap<u32, bool, Hasher<u32>, EqualTo<u32>, Alloc::CustomAllocator<Pair<const u32, bool>>> bufferInstanced(0, Hasher<u32>(), EqualTo<u32>(), Alloc::CustomAllocator<Pair<const u32, bool>>(*m_context.objectArena));
     for(const auto& attr : layout->attributes){
         u32 stride = attr.elementStride;
         if(stride == 0){
@@ -209,6 +225,7 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
 
 Framebuffer::Framebuffer(const VulkanContext& context)
     : m_context(context)
+    , resources(Alloc::CustomAllocator<RefCountPtr<ITexture, ArenaRefDeleter<ITexture>>>(*context.objectArena))
 {}
 Framebuffer::~Framebuffer(){
     if(framebuffer != VK_NULL_HANDLE){

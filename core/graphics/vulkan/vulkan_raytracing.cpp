@@ -77,6 +77,7 @@ OpacityMicromap::~OpacityMicromap(){
 
 RayTracingPipeline::RayTracingPipeline(const VulkanContext& context)
     : m_context(context)
+    , shaderGroupHandles(Alloc::CustomAllocator<u8>(*context.objectArena))
 {}
 RayTracingPipeline::~RayTracingPipeline(){
     if(pipeline){
@@ -339,8 +340,8 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
     pso->desc = desc;
     pso->m_device = this;
 
-    Vector<VkPipelineShaderStageCreateInfo> stages;
-    Vector<VkRayTracingShaderGroupCreateInfoKHR> groups;
+    Vector<VkPipelineShaderStageCreateInfo, Alloc::CustomAllocator<VkPipelineShaderStageCreateInfo>> stages(Alloc::CustomAllocator<VkPipelineShaderStageCreateInfo>(*m_context.objectArena));
+    Vector<VkRayTracingShaderGroupCreateInfoKHR, Alloc::CustomAllocator<VkRayTracingShaderGroupCreateInfoKHR>> groups(Alloc::CustomAllocator<VkRayTracingShaderGroupCreateInfoKHR>(*m_context.objectArena));
 
     u32 shaderIndex = 0;
 
@@ -694,9 +695,9 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* _as, const
 
     auto* as = checked_cast<AccelStruct*>(_as);
 
-    Vector<VkAccelerationStructureGeometryKHR> geometries;
-    Vector<VkAccelerationStructureBuildRangeInfoKHR> rangeInfos;
-    Vector<uint32_t> primitiveCounts;
+    Vector<VkAccelerationStructureGeometryKHR, Alloc::CustomAllocator<VkAccelerationStructureGeometryKHR>> geometries(Alloc::CustomAllocator<VkAccelerationStructureGeometryKHR>(*m_context.objectArena));
+    Vector<VkAccelerationStructureBuildRangeInfoKHR, Alloc::CustomAllocator<VkAccelerationStructureBuildRangeInfoKHR>> rangeInfos(Alloc::CustomAllocator<VkAccelerationStructureBuildRangeInfoKHR>(*m_context.objectArena));
+    Vector<uint32_t, Alloc::CustomAllocator<uint32_t>> primitiveCounts(Alloc::CustomAllocator<uint32_t>(*m_context.objectArena));
 
     geometries.reserve(numGeometries);
     rangeInfos.reserve(numGeometries);

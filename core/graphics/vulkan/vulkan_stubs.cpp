@@ -332,10 +332,10 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
     if(numDescs == 0)
         return;
 
-    Vector<VkConvertCooperativeVectorMatrixInfoNV> vkConvertDescs;
+    Vector<VkConvertCooperativeVectorMatrixInfoNV, Alloc::CustomAllocator<VkConvertCooperativeVectorMatrixInfoNV>> vkConvertDescs(Alloc::CustomAllocator<VkConvertCooperativeVectorMatrixInfoNV>(*m_context.objectArena));
     vkConvertDescs.reserve(numDescs);
 
-    Vector<usize> dstSizes;
+    Vector<usize, Alloc::CustomAllocator<usize>> dstSizes(Alloc::CustomAllocator<usize>(*m_context.objectArena));
     dstSizes.reserve(numDescs);
 
     for(usize i = 0; i < numDescs; ++i){
@@ -439,7 +439,7 @@ void Device::getTextureTiling(ITexture* _texture, u32* numTiles, PackedMipDesc* 
     uint32_t sparseReqCount = 0;
     vkGetImageSparseMemoryRequirements(m_context.device, texture->image, &sparseReqCount, nullptr);
 
-    Vector<VkSparseImageMemoryRequirements> sparseReqs(sparseReqCount);
+    Vector<VkSparseImageMemoryRequirements, Alloc::CustomAllocator<VkSparseImageMemoryRequirements>> sparseReqs(sparseReqCount, Alloc::CustomAllocator<VkSparseImageMemoryRequirements>(*m_context.objectArena));
     if(sparseReqCount > 0)
         vkGetImageSparseMemoryRequirements(m_context.device, texture->image, &sparseReqCount, sparseReqs.data());
 
@@ -465,7 +465,7 @@ void Device::getTextureTiling(ITexture* _texture, u32* numTiles, PackedMipDesc* 
         &formatPropCount, nullptr
         );
 
-    Vector<VkSparseImageFormatProperties> formatProps(formatPropCount);
+    Vector<VkSparseImageFormatProperties, Alloc::CustomAllocator<VkSparseImageFormatProperties>> formatProps(formatPropCount, Alloc::CustomAllocator<VkSparseImageFormatProperties>(*m_context.objectArena));
     if(formatPropCount > 0){
         vkGetPhysicalDeviceSparseImageFormatProperties(
             m_context.physicalDevice,

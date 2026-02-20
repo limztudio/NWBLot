@@ -18,10 +18,10 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-IDeviceManager* IDeviceManager::create(GraphicsAPI::Enum api){
+IDeviceManager* IDeviceManager::create(GraphicsAPI::Enum api, const DeviceCreationParameters& params){
     switch(api){
     case GraphicsAPI::VULKAN:
-        return new Vulkan::DeviceManager();
+        return new Vulkan::DeviceManager(params);
     default:
         NWB_LOGGER_ERROR(NWB_TEXT("DeviceManager: Unsupported graphics API."));
         return nullptr;
@@ -35,7 +35,8 @@ IDeviceManager* IDeviceManager::create(GraphicsAPI::Enum api){
 Graphics::Graphics()
     : m_allocator(s_maxDynamicAllocSize)
 {
-    m_deviceManager = IDeviceManager::create(GraphicsAPI::VULKAN);
+    m_deviceCreationParams.allocator = &m_allocator;
+    m_deviceManager = IDeviceManager::create(GraphicsAPI::VULKAN, m_deviceCreationParams);
 }
 Graphics::~Graphics(){
     destroy();
@@ -45,8 +46,7 @@ bool Graphics::init(const Common::FrameData& data){
     if(!m_deviceManager)
         return false;
 
-    m_deviceCreationParams.allocator = &m_allocator;
-    return m_deviceManager->createWindowDeviceAndSwapChain(m_deviceCreationParams, data);
+    return m_deviceManager->createWindowDeviceAndSwapChain(data);
 }
 
 bool Graphics::runFrame(){

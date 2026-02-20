@@ -186,7 +186,15 @@ void CommandList::setPermanentBufferState(IBuffer* buffer, ResourceStates::Mask 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-StateTracker::StateTracker(){
+StateTracker::StateTracker(const VulkanContext& context)
+    : m_context(context)
+    , m_permanentTextureStates(0, Hasher<ITexture*>(), EqualTo<ITexture*>(), Alloc::CustomAllocator<Pair<const ITexture*, ResourceStates::Mask>>(*context.objectArena))
+    , m_permanentBufferStates(0, Hasher<IBuffer*>(), EqualTo<IBuffer*>(), Alloc::CustomAllocator<Pair<const IBuffer*, ResourceStates::Mask>>(*context.objectArena))
+    , m_textureStates(0, Hasher<ITexture*>(), EqualTo<ITexture*>(), Alloc::CustomAllocator<Pair<const ITexture*, ResourceStates::Mask>>(*context.objectArena))
+    , m_bufferStates(0, Hasher<IBuffer*>(), EqualTo<IBuffer*>(), Alloc::CustomAllocator<Pair<const IBuffer*, ResourceStates::Mask>>(*context.objectArena))
+    , m_textureUavBarriers(0, Hasher<ITexture*>(), EqualTo<ITexture*>(), Alloc::CustomAllocator<Pair<const ITexture*, bool>>(*context.objectArena))
+    , m_bufferUavBarriers(0, Hasher<IBuffer*>(), EqualTo<IBuffer*>(), Alloc::CustomAllocator<Pair<const IBuffer*, bool>>(*context.objectArena))
+{
 }
 StateTracker::~StateTracker(){
 }

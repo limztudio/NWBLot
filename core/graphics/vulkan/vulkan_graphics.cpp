@@ -218,8 +218,8 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     pso->framebufferInfo = fbinfo;
 
     // Step 1: Collect shader stages
-    Vector<VkPipelineShaderStageCreateInfo> shaderStages;
-    Vector<VkSpecializationInfo> specInfos;
+    Vector<VkPipelineShaderStageCreateInfo, Alloc::CustomAllocator<VkPipelineShaderStageCreateInfo>> shaderStages(Alloc::CustomAllocator<VkPipelineShaderStageCreateInfo>(*m_context.objectArena));
+    Vector<VkSpecializationInfo, Alloc::CustomAllocator<VkSpecializationInfo>> specInfos(Alloc::CustomAllocator<VkSpecializationInfo>(*m_context.objectArena));
     shaderStages.reserve(5);
     specInfos.reserve(5);
 
@@ -256,19 +256,15 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
 
     // Step 2: Vertex input state from InputLayout
     VkPipelineVertexInputStateCreateInfo vertexInputInfo = { VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO };
-    Vector<VkVertexInputBindingDescription> bindings;
-    Vector<VkVertexInputAttributeDescription> attributes;
 
     if(desc.inputLayout){
         auto* layout = checked_cast<InputLayout*>(desc.inputLayout.get());
-        bindings = layout->bindings;
-        attributes = layout->vkAttributes;
-    }
 
-    vertexInputInfo.vertexBindingDescriptionCount = (u32)bindings.size();
-    vertexInputInfo.pVertexBindingDescriptions = bindings.data();
-    vertexInputInfo.vertexAttributeDescriptionCount = (u32)attributes.size();
-    vertexInputInfo.pVertexAttributeDescriptions = attributes.data();
+        vertexInputInfo.vertexBindingDescriptionCount = (u32)layout->bindings.size();
+        vertexInputInfo.pVertexBindingDescriptions = layout->bindings.data();
+        vertexInputInfo.vertexAttributeDescriptionCount = (u32)layout->vkAttributes.size();
+        vertexInputInfo.pVertexAttributeDescriptions = layout->vkAttributes.data();
+    }
 
     // Step 3: Input assembly
     VkPipelineInputAssemblyStateCreateInfo inputAssembly = { VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO };
@@ -315,7 +311,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     // Step 8: Color blend state
     VkPipelineColorBlendStateCreateInfo colorBlending = { VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO };
     colorBlending.logicOpEnable = VK_FALSE;
-    Vector<VkPipelineColorBlendAttachmentState> blendAttachments;
+    Vector<VkPipelineColorBlendAttachmentState, Alloc::CustomAllocator<VkPipelineColorBlendAttachmentState>> blendAttachments(Alloc::CustomAllocator<VkPipelineColorBlendAttachmentState>(*m_context.objectArena));
     blendAttachments.reserve(fbinfo.colorFormats.size());
     for(u32 i = 0; i < (u32)fbinfo.colorFormats.size(); ++i){
         blendAttachments.push_back(__hidden_vulkan::ConvertBlendState(desc.renderState.blendState.targets[i]));
@@ -342,7 +338,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
 
     // Step 10: Pipeline layout from binding layouts
     pso->pipelineLayout = VK_NULL_HANDLE;
-    Vector<VkDescriptorSetLayout> allDescriptorSetLayouts;
+    Vector<VkDescriptorSetLayout, Alloc::CustomAllocator<VkDescriptorSetLayout>> allDescriptorSetLayouts(Alloc::CustomAllocator<VkDescriptorSetLayout>(*m_context.objectArena));
     for(u32 i = 0; i < (u32)desc.bindingLayouts.size(); ++i){
         auto* bl = checked_cast<BindingLayout*>(desc.bindingLayouts[i].get());
         for(auto& dsl : bl->descriptorSetLayouts){
@@ -366,7 +362,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
 
     // Step 11: Dynamic rendering info
     VkPipelineRenderingCreateInfo renderingInfo = { VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO };
-    Vector<VkFormat> colorFormats;
+    Vector<VkFormat, Alloc::CustomAllocator<VkFormat>> colorFormats(Alloc::CustomAllocator<VkFormat>(*m_context.objectArena));
     colorFormats.reserve(fbinfo.colorFormats.size());
     for(u32 i = 0; i < (u32)fbinfo.colorFormats.size(); ++i)
         colorFormats.push_back(ConvertFormat(fbinfo.colorFormats[i]));

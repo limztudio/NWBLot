@@ -137,7 +137,7 @@ public:
 
 public:
     constexpr void deallocate(T* const buffer, const usize count)noexcept{
-        NWB_ASSERT((buffer != nullptr || count == 0) && "null pointer cannot point to a block of non-zero size");
+        NWB_ASSERT_MSG((buffer != nullptr || count == 0), NWB_TEXT("null pointer cannot point to a block of non-zero size"));
 
         m_arena.deallocate<T>(buffer, count);
     }

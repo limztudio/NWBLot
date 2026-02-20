@@ -34,25 +34,34 @@ static constexpr u32 s_TransferQueueIndex = 0;
 static constexpr u32 s_PresentQueueIndex = 0;
 
 
-static Vector<const char*> StringSetToVector(const HashSet<AString>& set){
-    Vector<const char*> ret;
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename Set>
+static Vector<const char*, Alloc::CustomAllocator<const char*>> StringSetToVector(const Set& set, Alloc::CustomArena& arena){
+    Alloc::CustomAllocator<const char*> alloc(arena);
+    Vector<const char*, Alloc::CustomAllocator<const char*>> ret(alloc);
     ret.reserve(set.size());
     for(const auto& s : set)
         ret.push_back(s.c_str());
     return ret;
 }
 
-static Vector<const char*> StringMapKeysToVector(const HashMap<AString, void*>& map){
-    Vector<const char*> ret;
+template<typename Map>
+static Vector<const char*, Alloc::CustomAllocator<const char*>> StringMapKeysToVector(const Map& map, Alloc::CustomArena& arena){
+    Alloc::CustomAllocator<const char*> alloc(arena);
+    Vector<const char*, Alloc::CustomAllocator<const char*>> ret(alloc);
     ret.reserve(map.size());
     for(const auto& [key, val] : map)
         ret.push_back(key.c_str());
     return ret;
 }
 
-template<typename T>
-static Vector<T> SetToVector(const HashSet<T>& set){
-    Vector<T> ret;
+template<typename Set>
+static auto SetToVector(const Set& set, Alloc::CustomArena& arena){
+    using T = typename Set::value_type;
+    Alloc::CustomAllocator<T> alloc(arena);
+    Vector<T, Alloc::CustomAllocator<T>> ret(alloc);
     ret.reserve(set.size());
     for(const auto& s : set)
         ret.push_back(s);
@@ -94,6 +103,41 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL VulkanDebugCallback(
 
 
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+DeviceManager::DeviceManager(const DeviceCreationParameters& params)
+    : IDeviceManager(params)
+    , m_arena(params.allocator->getObjectArena())
+    , m_enabledExtensions(m_arena)
+    , m_optionalExtensions(m_arena)
+    , m_rayTracingExtensions(0, Hasher<AString>(), EqualTo<AString>(), Alloc::CustomAllocator<Pair<const AString, void*>>(m_arena))
+    , m_swapChainImages(Alloc::CustomAllocator<SwapChainImage>(m_arena))
+    , m_acquireSemaphores(Alloc::CustomAllocator<VkSemaphore>(m_arena))
+    , m_presentSemaphores(Alloc::CustomAllocator<VkSemaphore>(m_arena))
+    , m_framesInFlight(std::deque<EventQueryHandle, Alloc::CustomAllocator<EventQueryHandle>>(Alloc::CustomAllocator<EventQueryHandle>(m_arena)))
+    , m_queryPool(Alloc::CustomAllocator<EventQueryHandle>(m_arena))
+{
+    NWB_ASSERT_MSG(params.allocator, NWB_TEXT("DeviceManager requires a valid GraphicsAllocator"));
+    initDefaultExtensions();
+}
+
+void DeviceManager::initDefaultExtensions(){
+    for(auto name : s_enabledInstanceExts)
+        m_enabledExtensions.instance.insert(name);
+    for(const auto& e : m_enabledDeviceExts)
+        m_enabledExtensions.device.insert({ e.name, e.feature });
+
+    for(auto name : s_optionalInstanceExts)
+        m_optionalExtensions.instance.insert(name);
+    for(const auto& e : m_optionalDeviceExts)
+        m_optionalExtensions.device.insert({ e.name, e.feature });
+
+    for(const auto& e : m_rayTracingExts)
+        m_rayTracingExtensions.insert({ e.name, e.feature });
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -192,11 +236,11 @@ bool DeviceManager::createInstance(){
     for(const auto& name : m_deviceParams.optionalVulkanLayers)
         m_optionalExtensions.layers.insert(name);
 
-    HashSet<AString> requiredExtensions = m_enabledExtensions.instance;
+    decltype(m_enabledExtensions.instance) requiredExtensions(m_enabledExtensions.instance);
 
     uint32_t extensionCount = 0;
     vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
-    Vector<VkExtensionProperties> availableExtensions(extensionCount);
+    Vector<VkExtensionProperties, Alloc::CustomAllocator<VkExtensionProperties>> availableExtensions(extensionCount, Alloc::CustomAllocator<VkExtensionProperties>(m_arena));
     vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, availableExtensions.data());
 
     for(const auto& ext : availableExtensions){
@@ -223,11 +267,11 @@ bool DeviceManager::createInstance(){
         NWB_LOGGER_INFO(NWB_TEXT("{}"), StringConvert(ss.str()));
     }
 
-    HashSet<AString> requiredLayers = m_enabledExtensions.layers;
+    decltype(m_enabledExtensions.layers) requiredLayers(m_enabledExtensions.layers);
 
     uint32_t layerCount = 0;
     vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
-    Vector<VkLayerProperties> availableLayers(layerCount);
+    Vector<VkLayerProperties, Alloc::CustomAllocator<VkLayerProperties>> availableLayers(layerCount, Alloc::CustomAllocator<VkLayerProperties>(m_arena));
     vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
 
     for(const auto& layer : availableLayers){
@@ -254,8 +298,8 @@ bool DeviceManager::createInstance(){
         NWB_LOGGER_INFO(NWB_TEXT("{}"), StringConvert(ss.str()));
     }
 
-    auto instanceExtVec = __hidden_vulkan::StringSetToVector(m_enabledExtensions.instance);
-    auto layerVec = __hidden_vulkan::StringSetToVector(m_enabledExtensions.layers);
+    auto instanceExtVec = __hidden_vulkan::StringSetToVector(m_enabledExtensions.instance, m_arena);
+    auto layerVec = __hidden_vulkan::StringSetToVector(m_enabledExtensions.layers, m_arena);
 
     VkApplicationInfo applicationInfo = {};
     applicationInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -333,7 +377,7 @@ void DeviceManager::installDebugCallback(){
 bool DeviceManager::findQueueFamilies(VkPhysicalDevice physicalDevice){
     uint32_t queueFamilyCount = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, nullptr);
-    Vector<VkQueueFamilyProperties> props(queueFamilyCount);
+    Vector<VkQueueFamilyProperties, Alloc::CustomAllocator<VkQueueFamilyProperties>> props(queueFamilyCount, Alloc::CustomAllocator<VkQueueFamilyProperties>(m_arena));
     vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, props.data());
 
     m_graphicsQueueFamily = -1;
@@ -394,7 +438,7 @@ bool DeviceManager::pickPhysicalDevice(){
 
     uint32_t deviceCount = 0;
     vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, nullptr);
-    Vector<VkPhysicalDevice> devices(deviceCount);
+    Vector<VkPhysicalDevice, Alloc::CustomAllocator<VkPhysicalDevice>> devices(deviceCount, Alloc::CustomAllocator<VkPhysicalDevice>(m_arena));
     vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, devices.data());
 
     i32 adapterIndex = m_deviceParams.adapterIndex;
@@ -412,8 +456,8 @@ bool DeviceManager::pickPhysicalDevice(){
     AStringStream errorStream;
     errorStream << "Cannot find a Vulkan device that supports all the required extensions and properties.";
 
-    Vector<VkPhysicalDevice> discreteGPUs;
-    Vector<VkPhysicalDevice> otherGPUs;
+    Vector<VkPhysicalDevice, Alloc::CustomAllocator<VkPhysicalDevice>> discreteGPUs((Alloc::CustomAllocator<VkPhysicalDevice>(m_arena)));
+    Vector<VkPhysicalDevice, Alloc::CustomAllocator<VkPhysicalDevice>> otherGPUs((Alloc::CustomAllocator<VkPhysicalDevice>(m_arena)));
 
     for(i32 deviceIndex = firstDevice; deviceIndex <= lastDevice; ++deviceIndex){
         VkPhysicalDevice dev = devices[deviceIndex];
@@ -422,12 +466,12 @@ bool DeviceManager::pickPhysicalDevice(){
 
         errorStream << std::endl << prop.deviceName << ":";
 
-        HashSet<AString> requiredExtensions;
+        HashSet<AString, Hasher<AString>, EqualTo<AString>, Alloc::CustomAllocator<AString>> requiredExtensions(0, Hasher<AString>(), EqualTo<AString>(), Alloc::CustomAllocator<AString>(m_arena));
         for(const auto& [name, _] : m_enabledExtensions.device)
             requiredExtensions.insert(name);
         uint32_t extCount = 0;
         vkEnumerateDeviceExtensionProperties(dev, nullptr, &extCount, nullptr);
-        Vector<VkExtensionProperties> deviceExtensions(extCount);
+        Vector<VkExtensionProperties, Alloc::CustomAllocator<VkExtensionProperties>> deviceExtensions(extCount, Alloc::CustomAllocator<VkExtensionProperties>(m_arena));
         vkEnumerateDeviceExtensionProperties(dev, nullptr, &extCount, deviceExtensions.data());
         for(const auto& ext : deviceExtensions)
             requiredExtensions.erase(AString(ext.extensionName));
@@ -469,7 +513,7 @@ bool DeviceManager::pickPhysicalDevice(){
 
                 uint32_t fmtCount = 0;
                 vkGetPhysicalDeviceSurfaceFormatsKHR(dev, m_windowSurface, &fmtCount, nullptr);
-                Vector<VkSurfaceFormatKHR> surfaceFmts(fmtCount);
+                Vector<VkSurfaceFormatKHR, Alloc::CustomAllocator<VkSurfaceFormatKHR>> surfaceFmts(fmtCount, Alloc::CustomAllocator<VkSurfaceFormatKHR>(m_arena));
                 vkGetPhysicalDeviceSurfaceFormatsKHR(dev, m_windowSurface, &fmtCount, surfaceFmts.data());
 
                 if(surfaceCaps.minImageCount > m_deviceParams.swapChainBufferCount ||
@@ -543,7 +587,7 @@ bool DeviceManager::createDevice(){
 
     uint32_t extCount = 0;
     vkEnumerateDeviceExtensionProperties(m_vulkanPhysicalDevice, nullptr, &extCount, nullptr);
-    Vector<VkExtensionProperties> deviceExtensions(extCount);
+    Vector<VkExtensionProperties, Alloc::CustomAllocator<VkExtensionProperties>> deviceExtensions(extCount, Alloc::CustomAllocator<VkExtensionProperties>(m_arena));
     vkEnumerateDeviceExtensionProperties(m_vulkanPhysicalDevice, nullptr, &extCount, deviceExtensions.data());
 
     for(const auto& ext : deviceExtensions){
@@ -612,7 +656,8 @@ bool DeviceManager::createDevice(){
     physicalDeviceFeatures2.pNext = pNext;
     vkGetPhysicalDeviceFeatures2(m_vulkanPhysicalDevice, &physicalDeviceFeatures2);
 
-    HashSet<i32> uniqueQueueFamilies = { m_graphicsQueueFamily };
+    HashSet<i32, Hasher<i32>, EqualTo<i32>, Alloc::CustomAllocator<i32>> uniqueQueueFamilies(0, Hasher<i32>(), EqualTo<i32>(), Alloc::CustomAllocator<i32>(m_arena));
+    uniqueQueueFamilies.insert(m_graphicsQueueFamily);
 
     if(!m_deviceParams.headlessDevice)
         uniqueQueueFamilies.insert(m_presentQueueFamily);
@@ -622,7 +667,7 @@ bool DeviceManager::createDevice(){
         uniqueQueueFamilies.insert(m_transferQueueFamily);
 
     f32 priority = 1.f;
-    Vector<VkDeviceQueueCreateInfo> queueDesc;
+    Vector<VkDeviceQueueCreateInfo, Alloc::CustomAllocator<VkDeviceQueueCreateInfo>> queueDesc((Alloc::CustomAllocator<VkDeviceQueueCreateInfo>(m_arena)));
     queueDesc.reserve(uniqueQueueFamilies.size());
     for(i32 queueFamily : uniqueQueueFamilies){
         VkDeviceQueueCreateInfo queueInfo = {};
@@ -683,8 +728,8 @@ bool DeviceManager::createDevice(){
     vulkan12features.scalarBlockLayout = VK_TRUE;
     vulkan12features.pNext = &vulkan11features;
 
-    auto layerVec = __hidden_vulkan::StringSetToVector(m_enabledExtensions.layers);
-    auto extVec = __hidden_vulkan::StringMapKeysToVector(m_enabledExtensions.device);
+    auto layerVec = __hidden_vulkan::StringSetToVector(m_enabledExtensions.layers, m_arena);
+    auto extVec = __hidden_vulkan::StringMapKeysToVector(m_enabledExtensions.device, m_arena);
 
     VkDeviceCreateInfo deviceCreateInfo = {};
     deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -776,11 +821,11 @@ bool DeviceManager::createSwapChain(){
 
     VkExtent2D extent = { m_deviceParams.backBufferWidth, m_deviceParams.backBufferHeight };
 
-    HashSet<uint32_t> uniqueQueues = {
-        static_cast<uint32_t>(m_graphicsQueueFamily),
-        static_cast<uint32_t>(m_presentQueueFamily)
-    };
-    auto queues = __hidden_vulkan::SetToVector(uniqueQueues);
+    Alloc::CustomAllocator<uint32_t> uqAlloc(m_arena);
+    HashSet<uint32_t, Hasher<uint32_t>, EqualTo<uint32_t>, Alloc::CustomAllocator<uint32_t>> uniqueQueues(0, Hasher<uint32_t>(), EqualTo<uint32_t>(), uqAlloc);
+    uniqueQueues.insert(static_cast<uint32_t>(m_graphicsQueueFamily));
+    uniqueQueues.insert(static_cast<uint32_t>(m_presentQueueFamily));
+    auto queues = __hidden_vulkan::SetToVector(uniqueQueues, m_arena);
     const bool enableSwapChainSharing = queues.size() > 1;
 
     VkSwapchainCreateInfoKHR desc = {};
@@ -830,7 +875,7 @@ bool DeviceManager::createSwapChain(){
 
     uint32_t imageCount = 0;
     vkGetSwapchainImagesKHR(m_vulkanDevice, m_swapChain, &imageCount, nullptr);
-    Vector<VkImage> images(imageCount);
+    Vector<VkImage, Alloc::CustomAllocator<VkImage>> images(imageCount, Alloc::CustomAllocator<VkImage>(m_arena));
     vkGetSwapchainImagesKHR(m_vulkanDevice, m_swapChain, &imageCount, images.data());
 
     for(auto image : images){
@@ -892,8 +937,8 @@ bool DeviceManager::createDeviceInternal(){
     if(!createDevice())
         return false;
 
-    auto vecInstanceExt = __hidden_vulkan::StringSetToVector(m_enabledExtensions.instance);
-    auto vecDeviceExt = __hidden_vulkan::StringMapKeysToVector(m_enabledExtensions.device);
+    auto vecInstanceExt = __hidden_vulkan::StringSetToVector(m_enabledExtensions.instance, m_arena);
+    auto vecDeviceExt = __hidden_vulkan::StringMapKeysToVector(m_enabledExtensions.device, m_arena);
 
     DeviceDesc deviceDesc = {};
     deviceDesc.instance = m_vulkanInstance;
@@ -1100,7 +1145,7 @@ bool DeviceManager::enumerateAdapters(Vector<AdapterInfo>& outAdapters){
 
     uint32_t deviceCount = 0;
     vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, nullptr);
-    Vector<VkPhysicalDevice> devices(deviceCount);
+    Vector<VkPhysicalDevice, Alloc::CustomAllocator<VkPhysicalDevice>> devices(deviceCount, Alloc::CustomAllocator<VkPhysicalDevice>(m_arena));
     vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, devices.data());
     outAdapters.clear();
 

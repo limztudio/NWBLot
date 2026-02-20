@@ -17,6 +17,7 @@ NWB_VULKAN_BEGIN
 Buffer::Buffer(const VulkanContext& context, VulkanAllocator& allocator)
     : m_context(context)
     , m_allocator(allocator)
+    , versionTracking(Alloc::CustomAllocator<u64>(*context.objectArena))
 {}
 Buffer::~Buffer(){
     if(managed){

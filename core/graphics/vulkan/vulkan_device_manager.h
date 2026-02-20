@@ -19,10 +19,21 @@ NWB_VULKAN_BEGIN
 
 class DeviceManager final : public IDeviceManager{
 private:
+    struct ExtEntry{
+        const char* name;
+        void* feature = nullptr;
+    };
+
     struct VulkanExtensionSet{
-        HashSet<AString> instance;
-        HashSet<AString> layers;
-        HashMap<AString, void*> device;
+        HashSet<AString, Hasher<AString>, EqualTo<AString>, Alloc::CustomAllocator<AString>> instance;
+        HashSet<AString, Hasher<AString>, EqualTo<AString>, Alloc::CustomAllocator<AString>> layers;
+        HashMap<AString, void*, Hasher<AString>, EqualTo<AString>, Alloc::CustomAllocator<Pair<const AString, void*>>> device;
+
+        explicit VulkanExtensionSet(Alloc::CustomArena& arena)
+            : instance(0, Hasher<AString>(), EqualTo<AString>(), Alloc::CustomAllocator<AString>(arena))
+            , layers(0, Hasher<AString>(), EqualTo<AString>(), Alloc::CustomAllocator<AString>(arena))
+            , device(0, Hasher<AString>(), EqualTo<AString>(), Alloc::CustomAllocator<Pair<const AString, void*>>(arena))
+        {}
     };
 
     struct SwapChainImage{
@@ -32,6 +43,7 @@ private:
 
 
 public:
+    explicit DeviceManager(const DeviceCreationParameters& params);
     [[nodiscard]] virtual IDevice* getDevice()const override;
     [[nodiscard]] virtual GraphicsAPI::Enum getGraphicsAPI()const override{ return GraphicsAPI::VULKAN; }
     [[nodiscard]] virtual const tchar* getRendererString()const override;
@@ -60,6 +72,7 @@ protected:
     virtual bool present()override;
 
 private:
+    void initDefaultExtensions();
     bool createInstance();
     bool createWindowSurface();
     void installDebugCallback();
@@ -68,6 +81,16 @@ private:
     bool createDevice();
     bool createSwapChain();
     void destroySwapChain();
+
+
+private:
+    static constexpr const char* s_enabledInstanceExts[] = {
+        VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,
+    };
+    static constexpr const char* s_optionalInstanceExts[] = {
+        VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
+        VK_EXT_SAMPLER_FILTER_MINMAX_EXTENSION_NAME,
+    };
 
 
 private:
@@ -103,46 +126,37 @@ private:
         VK_TRUE, // mutableDescriptorType
     };
 
-
-private:
-    VulkanExtensionSet m_enabledExtensions = {
-        { // instance
-            VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME
-        },
-        { // layers
-        },
-        { // device (name → feature struct)
-            { VK_KHR_MAINTENANCE1_EXTENSION_NAME, nullptr },
-        },
+    const ExtEntry m_enabledDeviceExts[1] = {
+        { VK_KHR_MAINTENANCE1_EXTENSION_NAME },
     };
-
-    VulkanExtensionSet m_optionalExtensions = {
-        { // instance
-            VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
-            VK_EXT_SAMPLER_FILTER_MINMAX_EXTENSION_NAME,
-        },
-        { // layers
-        },
-        { // device
-            { VK_EXT_DEBUG_MARKER_EXTENSION_NAME, nullptr },
-            { VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME, nullptr },
-            { VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME, nullptr },
-            { VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME, &m_vrsFeatures },
-            { VK_KHR_MAINTENANCE_4_EXTENSION_NAME, nullptr },
-            { VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME, nullptr },
-            { VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME, nullptr },
-            { VK_NV_MESH_SHADER_EXTENSION_NAME, &m_meshletFeatures },
-            { VK_EXT_MUTABLE_DESCRIPTOR_TYPE_EXTENSION_NAME, &m_mutableDescriptorTypeFeatures },
-        },
+    const ExtEntry m_optionalDeviceExts[9] = {
+        { VK_EXT_DEBUG_MARKER_EXTENSION_NAME },
+        { VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME },
+        { VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME },
+        { VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME, &m_vrsFeatures },
+        { VK_KHR_MAINTENANCE_4_EXTENSION_NAME },
+        { VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME },
+        { VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME },
+        { VK_NV_MESH_SHADER_EXTENSION_NAME, &m_meshletFeatures },
+        { VK_EXT_MUTABLE_DESCRIPTOR_TYPE_EXTENSION_NAME, &m_mutableDescriptorTypeFeatures },
     };
-
-    HashMap<AString, void*> m_rayTracingExtensions = {
+    const ExtEntry m_rayTracingExts[5] = {
         { VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME, &m_accelStructFeatures },
-        { VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME, nullptr },
-        { VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME, nullptr },
+        { VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME },
+        { VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME },
         { VK_KHR_RAY_QUERY_EXTENSION_NAME, &m_rayQueryFeatures },
         { VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME, &m_rayPipelineFeatures },
     };
+
+
+private:
+    Alloc::CustomArena& m_arena;
+
+private:
+    VulkanExtensionSet m_enabledExtensions;
+    VulkanExtensionSet m_optionalExtensions;
+
+    HashMap<AString, void*, Hasher<AString>, EqualTo<AString>, Alloc::CustomAllocator<Pair<const AString, void*>>> m_rayTracingExtensions;
 
     TString m_rendererString;
 
@@ -167,17 +181,17 @@ private:
     VkSwapchainKHR m_swapChain = VK_NULL_HANDLE;
     bool m_swapChainMutableFormatSupported = false;
 
-    Vector<SwapChainImage> m_swapChainImages;
+    Vector<SwapChainImage, Alloc::CustomAllocator<SwapChainImage>> m_swapChainImages;
     uint32_t m_swapChainIndex = static_cast<uint32_t>(-1);
 
     DeviceHandle m_rhiDevice;
 
-    Vector<VkSemaphore> m_acquireSemaphores;
-    Vector<VkSemaphore> m_presentSemaphores;
+    Vector<VkSemaphore, Alloc::CustomAllocator<VkSemaphore>> m_acquireSemaphores;
+    Vector<VkSemaphore, Alloc::CustomAllocator<VkSemaphore>> m_presentSemaphores;
     uint32_t m_acquireSemaphoreIndex = 0;
 
-    ::Queue<EventQueryHandle> m_framesInFlight;
-    Vector<EventQueryHandle> m_queryPool;
+    ::Queue<EventQueryHandle, Alloc::CustomAllocator<EventQueryHandle>> m_framesInFlight;
+    Vector<EventQueryHandle, Alloc::CustomAllocator<EventQueryHandle>> m_queryPool;
 
     bool m_bufferDeviceAddressSupported = false;
 };

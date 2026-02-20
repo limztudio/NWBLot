@@ -16,10 +16,13 @@ NWB_VULKAN_BEGIN
 
 CommandList::CommandList(Device& device, const CommandListParameters& params)
     : desc(params)
-    , stateTracker(new StateTracker())
+    , stateTracker(new StateTracker(device.getContext()))
     , m_device(device)
     , m_context(device.getContext())
     , m_aftermathMarkerTracker()
+    , m_pendingImageBarriers(Alloc::CustomAllocator<VkImageMemoryBarrier2>(*device.getContext().objectArena))
+    , m_pendingBufferBarriers(Alloc::CustomAllocator<VkBufferMemoryBarrier2>(*device.getContext().objectArena))
+    , m_pendingCompactions(Alloc::CustomAllocator<RefCountPtr<AccelStruct, ArenaRefDeleter<AccelStruct>>>(*device.getContext().objectArena))
 {
     if(m_device.isAftermathEnabled())
         m_device.getAftermathCrashDumpHelper().registerAftermathMarkerTracker(&m_aftermathMarkerTracker);

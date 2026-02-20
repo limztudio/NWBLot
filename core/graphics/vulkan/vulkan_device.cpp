@@ -476,7 +476,7 @@ CooperativeVectorDeviceFeatures Device::queryCoopVecFeatures(){
     if(res != VK_SUCCESS || propertyCount == 0)
         return output;
 
-    Vector<VkCooperativeVectorPropertiesNV> properties(propertyCount);
+    Vector<VkCooperativeVectorPropertiesNV, Alloc::CustomAllocator<VkCooperativeVectorPropertiesNV>> properties(propertyCount, Alloc::CustomAllocator<VkCooperativeVectorPropertiesNV>(*m_context.objectArena));
     for(u32 i = 0; i < propertyCount; ++i){
         properties[i].sType = VK_STRUCTURE_TYPE_COOPERATIVE_VECTOR_PROPERTIES_NV;
         properties[i].pNext = nullptr;

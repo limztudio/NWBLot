@@ -118,8 +118,8 @@ public:
     VkCommandBuffer cmdBuf = VK_NULL_HANDLE;
     VkCommandPool cmdPool = VK_NULL_HANDLE;
 
-    Vector<RefCountPtr<IResource, ArenaRefDeleter<IResource>>> referencedResources;
-    Vector<RefCountPtr<IBuffer, ArenaRefDeleter<IBuffer>>> referencedStagingBuffers;
+    Vector<RefCountPtr<IResource, ArenaRefDeleter<IResource>>, Alloc::CustomAllocator<RefCountPtr<IResource, ArenaRefDeleter<IResource>>>> referencedResources;
+    Vector<RefCountPtr<IBuffer, ArenaRefDeleter<IBuffer>>, Alloc::CustomAllocator<RefCountPtr<IBuffer, ArenaRefDeleter<IBuffer>>>> referencedStagingBuffers;
 
     VkFence signalFence = VK_NULL_HANDLE;
 
@@ -176,17 +176,17 @@ private:
     u32 m_queueFamilyIndex;
 
     Mutex m_mutex;
-    Vector<VkSemaphore> m_waitSemaphores;
-    Vector<u64> m_waitSemaphoreValues;
-    Vector<VkSemaphore> m_signalSemaphores;
-    Vector<u64> m_signalSemaphoreValues;
+    Vector<VkSemaphore, Alloc::CustomAllocator<VkSemaphore>> m_waitSemaphores;
+    Vector<u64, Alloc::CustomAllocator<u64>> m_waitSemaphoreValues;
+    Vector<VkSemaphore, Alloc::CustomAllocator<VkSemaphore>> m_signalSemaphores;
+    Vector<u64, Alloc::CustomAllocator<u64>> m_signalSemaphoreValues;
 
     u64 m_lastRecordingID = 0;
     u64 m_lastSubmittedID = 0;
     u64 m_lastFinishedID = 0;
 
-    List<TrackedCommandBufferPtr> m_commandBuffersInFlight;
-    List<TrackedCommandBufferPtr> m_commandBuffersPool;
+    List<TrackedCommandBufferPtr, Alloc::CustomAllocator<TrackedCommandBufferPtr>> m_commandBuffersInFlight;
+    List<TrackedCommandBufferPtr, Alloc::CustomAllocator<TrackedCommandBufferPtr>> m_commandBuffersPool;
 };
 
 
@@ -279,7 +279,7 @@ private:
     u64 m_memoryLimit;
     bool m_isScratchBuffer;
 
-    List<RefCountPtr<BufferChunk>> m_chunkPool;
+    List<RefCountPtr<BufferChunk>, Alloc::CustomAllocator<RefCountPtr<BufferChunk>>> m_chunkPool;
     RefCountPtr<BufferChunk> m_currentChunk;
 };
 
@@ -317,7 +317,7 @@ public:
     u64 deviceAddress = 0;
     void* mappedMemory = nullptr;
 
-    Vector<u64> versionTracking;
+    Vector<u64, Alloc::CustomAllocator<u64>> versionTracking;
     VolatileBufferState volatileState;
 
     bool managed = true; // if true, owns the VkBuffer and memory
@@ -357,7 +357,7 @@ public:
     VkDeviceMemory memory = VK_NULL_HANDLE;
     VkImageCreateInfo imageInfo{};
 
-    HashMap<u64, VkImageView> views;
+    HashMap<u64, VkImageView, Hasher<u64>, EqualTo<u64>, Alloc::CustomAllocator<Pair<const u64, VkImageView>>> views;
 
     bool managed = true; // if true, owns the VkImage and memory
     u64 tileByteSize = 0; // for sparse/tiled resources
@@ -444,10 +444,10 @@ public:
     ShaderDesc desc;
     VkShaderModule shaderModule = VK_NULL_HANDLE;
 
-    Vector<u8> bytecode;
+    Vector<u8, Alloc::CustomAllocator<u8>> bytecode;
 
-    Vector<VkSpecializationMapEntry> specializationEntries;
-    Vector<u8> specializationData;
+    Vector<VkSpecializationMapEntry, Alloc::CustomAllocator<VkSpecializationMapEntry>> specializationEntries;
+    Vector<u8, Alloc::CustomAllocator<u8>> specializationData;
 
 
 private:
@@ -471,8 +471,8 @@ public:
 
 
 public:
-    Vector<u8> bytecode;
-    HashMap<Name, RefCountPtr<Shader, ArenaRefDeleter<Shader>>> shaders;
+    Vector<u8, Alloc::CustomAllocator<u8>> bytecode;
+    HashMap<Name, RefCountPtr<Shader, ArenaRefDeleter<Shader>>, Hasher<Name>, EqualTo<Name>, Alloc::CustomAllocator<Pair<const Name, RefCountPtr<Shader, ArenaRefDeleter<Shader>>>>> shaders;
 
 
 private:
@@ -486,7 +486,7 @@ private:
 
 class InputLayout final : public RefCounter<IInputLayout>, NoCopy{
 public:
-    InputLayout() = default;
+    InputLayout(const VulkanContext& context);
     virtual ~InputLayout()override = default;
 
 
@@ -503,9 +503,13 @@ public:
 
 
 public:
-    Vector<VertexAttributeDesc> attributes;
-    Vector<VkVertexInputBindingDescription> bindings;
-    Vector<VkVertexInputAttributeDescription> vkAttributes;
+    Vector<VertexAttributeDesc, Alloc::CustomAllocator<VertexAttributeDesc>> attributes;
+    Vector<VkVertexInputBindingDescription, Alloc::CustomAllocator<VkVertexInputBindingDescription>> bindings;
+    Vector<VkVertexInputAttributeDescription, Alloc::CustomAllocator<VkVertexInputAttributeDescription>> vkAttributes;
+
+
+private:
+    const VulkanContext& m_context;
 };
 
 
@@ -531,7 +535,7 @@ public:
     VkFramebuffer framebuffer = VK_NULL_HANDLE;
     VkRenderPass renderPass = VK_NULL_HANDLE;
 
-    Vector<RefCountPtr<ITexture, ArenaRefDeleter<ITexture>>> resources;
+    Vector<RefCountPtr<ITexture, ArenaRefDeleter<ITexture>>, Alloc::CustomAllocator<RefCountPtr<ITexture, ArenaRefDeleter<ITexture>>>> resources;
 
 
 private:
@@ -644,7 +648,7 @@ public:
     RayTracingPipelineDesc desc;
     VkPipeline pipeline = VK_NULL_HANDLE;
     VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
-    Vector<u8> shaderGroupHandles;
+    Vector<u8, Alloc::CustomAllocator<u8>> shaderGroupHandles;
 
 
 private:
@@ -726,7 +730,7 @@ public:
     BindlessLayoutDesc bindlessDesc;
     bool isBindless = false;
     VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
-    Vector<VkDescriptorSetLayout> descriptorSetLayouts;
+    Vector<VkDescriptorSetLayout, Alloc::CustomAllocator<VkDescriptorSetLayout>> descriptorSetLayouts;
 
 
 private:
@@ -754,7 +758,7 @@ public:
 
 public:
     RefCountPtr<BindingLayout, ArenaRefDeleter<BindingLayout>> layout;
-    Vector<VkDescriptorSet> descriptorSets;
+    Vector<VkDescriptorSet, Alloc::CustomAllocator<VkDescriptorSet>> descriptorSets;
     VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
 
 
@@ -782,7 +786,7 @@ public:
     BindingSetDesc desc;
     RefCountPtr<BindingLayout, ArenaRefDeleter<BindingLayout>> layout;
     RefCountPtr<DescriptorTable, ArenaRefDeleter<DescriptorTable>> descriptorTable;
-    Vector<VkDescriptorSet> descriptorSets;
+    Vector<VkDescriptorSet, Alloc::CustomAllocator<VkDescriptorSet>> descriptorSets;
 
 
 private:
@@ -855,7 +859,7 @@ private:
 
 class StateTracker final : NoCopy{
 public:
-    StateTracker();
+    StateTracker(const VulkanContext& context);
     ~StateTracker();
 
 
@@ -884,12 +888,14 @@ public:
 
 
 private:
-    HashMap<ITexture*, ResourceStates::Mask> m_permanentTextureStates;
-    HashMap<IBuffer*, ResourceStates::Mask> m_permanentBufferStates;
-    HashMap<ITexture*, ResourceStates::Mask> m_textureStates;
-    HashMap<IBuffer*, ResourceStates::Mask> m_bufferStates;
-    HashMap<ITexture*, bool> m_textureUavBarriers;
-    HashMap<IBuffer*, bool> m_bufferUavBarriers;
+    HashMap<ITexture*, ResourceStates::Mask, Hasher<ITexture*>, EqualTo<ITexture*>, Alloc::CustomAllocator<Pair<const ITexture*, ResourceStates::Mask>>> m_permanentTextureStates;
+    HashMap<IBuffer*, ResourceStates::Mask, Hasher<IBuffer*>, EqualTo<IBuffer*>, Alloc::CustomAllocator<Pair<const IBuffer*, ResourceStates::Mask>>> m_permanentBufferStates;
+    HashMap<ITexture*, ResourceStates::Mask, Hasher<ITexture*>, EqualTo<ITexture*>, Alloc::CustomAllocator<Pair<const ITexture*, ResourceStates::Mask>>> m_textureStates;
+    HashMap<IBuffer*, ResourceStates::Mask, Hasher<IBuffer*>, EqualTo<IBuffer*>, Alloc::CustomAllocator<Pair<const IBuffer*, ResourceStates::Mask>>> m_bufferStates;
+    HashMap<ITexture*, bool, Hasher<ITexture*>, EqualTo<ITexture*>, Alloc::CustomAllocator<Pair<const ITexture*, bool>>> m_textureUavBarriers;
+    HashMap<IBuffer*, bool, Hasher<IBuffer*>, EqualTo<IBuffer*>, Alloc::CustomAllocator<Pair<const IBuffer*, bool>>> m_bufferUavBarriers;
+
+    const VulkanContext& m_context;
 };
 
 
@@ -1019,10 +1025,10 @@ private:
     const VulkanContext& m_context;
     AftermathMarkerTracker m_aftermathMarkerTracker;
 
-    Vector<VkImageMemoryBarrier2> m_pendingImageBarriers;
-    Vector<VkBufferMemoryBarrier2> m_pendingBufferBarriers;
+    Vector<VkImageMemoryBarrier2, Alloc::CustomAllocator<VkImageMemoryBarrier2>> m_pendingImageBarriers;
+    Vector<VkBufferMemoryBarrier2, Alloc::CustomAllocator<VkBufferMemoryBarrier2>> m_pendingBufferBarriers;
 
-    Vector<RefCountPtr<AccelStruct, ArenaRefDeleter<AccelStruct>>> m_pendingCompactions;
+    Vector<RefCountPtr<AccelStruct, ArenaRefDeleter<AccelStruct>>, Alloc::CustomAllocator<RefCountPtr<AccelStruct, ArenaRefDeleter<AccelStruct>>>> m_pendingCompactions;
 };
 
 

@@ -18,6 +18,8 @@ NWB_VULKAN_BEGIN
 
 TrackedCommandBuffer::TrackedCommandBuffer(const VulkanContext& context, CommandQueue::Enum, u32 queueFamilyIndex)
     : m_context(context)
+    , referencedResources(Alloc::CustomAllocator<RefCountPtr<IResource, ArenaRefDeleter<IResource>>>(*context.objectArena))
+    , referencedStagingBuffers(Alloc::CustomAllocator<RefCountPtr<IBuffer, ArenaRefDeleter<IBuffer>>>(*context.objectArena))
 {
     VkResult res = VK_SUCCESS;
 
@@ -72,9 +74,15 @@ Queue::Queue(const VulkanContext& context, CommandQueue::Enum queueID, VkQueue q
     , m_queue(queue)
     , m_queueID(queueID)
     , m_queueFamilyIndex(queueFamilyIndex)
+    , m_waitSemaphores(Alloc::CustomAllocator<VkSemaphore>(*context.objectArena))
+    , m_waitSemaphoreValues(Alloc::CustomAllocator<u64>(*context.objectArena))
+    , m_signalSemaphores(Alloc::CustomAllocator<VkSemaphore>(*context.objectArena))
+    , m_signalSemaphoreValues(Alloc::CustomAllocator<u64>(*context.objectArena))
     , m_lastRecordingID(0)
     , m_lastSubmittedID(0)
     , m_lastFinishedID(0)
+    , m_commandBuffersInFlight(Alloc::CustomAllocator<TrackedCommandBufferPtr>(*context.objectArena))
+    , m_commandBuffersPool(Alloc::CustomAllocator<TrackedCommandBufferPtr>(*context.objectArena))
 {
     VkSemaphoreTypeCreateInfo timelineInfo = { VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO };
     timelineInfo.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE;
@@ -169,8 +177,8 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
     bool hasCommands = ppCmd && numCmd > 0;
     bool hasPendingSemaphores = !m_waitSemaphores.empty() || !m_signalSemaphores.empty();
 
-    Vector<TrackedCommandBufferPtr> trackedBuffers;
-    Vector<VkCommandBuffer> cmdBufs;
+    Vector<TrackedCommandBufferPtr, Alloc::CustomAllocator<TrackedCommandBufferPtr>> trackedBuffers(Alloc::CustomAllocator<TrackedCommandBufferPtr>(*m_context.objectArena));
+    Vector<VkCommandBuffer, Alloc::CustomAllocator<VkCommandBuffer>> cmdBufs(Alloc::CustomAllocator<VkCommandBuffer>(*m_context.objectArena));
 
     if(hasCommands){
         trackedBuffers.reserve(numCmd);
@@ -198,8 +206,8 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
     timelineSignal.value = submissionID;
     timelineSignal.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
 
-    Vector<VkSemaphoreSubmitInfo> waitInfos;
-    Vector<VkPipelineStageFlags2> waitStages;
+    Vector<VkSemaphoreSubmitInfo, Alloc::CustomAllocator<VkSemaphoreSubmitInfo>> waitInfos(Alloc::CustomAllocator<VkSemaphoreSubmitInfo>(*m_context.objectArena));
+    Vector<VkPipelineStageFlags2, Alloc::CustomAllocator<VkPipelineStageFlags2>> waitStages(Alloc::CustomAllocator<VkPipelineStageFlags2>(*m_context.objectArena));
     for(usize i = 0; i < m_waitSemaphores.size(); ++i){
         VkSemaphoreSubmitInfo waitInfo = { VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO };
         waitInfo.semaphore = m_waitSemaphores[i];
@@ -208,7 +216,7 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
         waitInfos.push_back(waitInfo);
     }
 
-    Vector<VkSemaphoreSubmitInfo> signalInfos;
+    Vector<VkSemaphoreSubmitInfo, Alloc::CustomAllocator<VkSemaphoreSubmitInfo>> signalInfos(Alloc::CustomAllocator<VkSemaphoreSubmitInfo>(*m_context.objectArena));
     signalInfos.push_back(timelineSignal);
 
     for(usize i = 0; i < m_signalSemaphores.size(); ++i){
@@ -219,7 +227,7 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
         signalInfos.push_back(signalInfo);
     }
 
-    Vector<VkCommandBufferSubmitInfo> cmdBufInfos;
+    Vector<VkCommandBufferSubmitInfo, Alloc::CustomAllocator<VkCommandBufferSubmitInfo>> cmdBufInfos(Alloc::CustomAllocator<VkCommandBufferSubmitInfo>(*m_context.objectArena));
     cmdBufInfos.reserve(numCmd);
 
     for(VkCommandBuffer cmdBuf : cmdBufs){
@@ -368,8 +376,8 @@ void Device::queueWaitForCommandList(CommandQueue::Enum waitQueue, CommandQueue:
 void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapping* tileMappings, u32 numTileMappings){
     auto* texture = checked_cast<Texture*>(_texture);
 
-    Vector<VkSparseImageMemoryBind> sparseImageMemoryBinds;
-    Vector<VkSparseMemoryBind> sparseMemoryBinds;
+    Vector<VkSparseImageMemoryBind, Alloc::CustomAllocator<VkSparseImageMemoryBind>> sparseImageMemoryBinds(Alloc::CustomAllocator<VkSparseImageMemoryBind>(*m_context.objectArena));
+    Vector<VkSparseMemoryBind, Alloc::CustomAllocator<VkSparseMemoryBind>> sparseMemoryBinds(Alloc::CustomAllocator<VkSparseMemoryBind>(*m_context.objectArena));
 
     const VkImageCreateInfo& imageInfo = texture->imageInfo;
     VkImageAspectFlags textureAspectFlags = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -395,7 +403,7 @@ void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapp
         &formatPropCount, nullptr
         );
 
-    Vector<VkSparseImageFormatProperties> formatProps(formatPropCount);
+    Vector<VkSparseImageFormatProperties, Alloc::CustomAllocator<VkSparseImageFormatProperties>> formatProps(formatPropCount, Alloc::CustomAllocator<VkSparseImageFormatProperties>(*m_context.objectArena));
     if(formatPropCount > 0)
         vkGetPhysicalDeviceSparseImageFormatProperties(
             m_context.physicalDevice,
@@ -413,7 +421,7 @@ void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapp
     uint32_t sparseReqCount = 0;
     vkGetImageSparseMemoryRequirements(m_context.device, texture->image, &sparseReqCount, nullptr);
 
-    Vector<VkSparseImageMemoryRequirements> sparseReqs(sparseReqCount);
+    Vector<VkSparseImageMemoryRequirements, Alloc::CustomAllocator<VkSparseImageMemoryRequirements>> sparseReqs(sparseReqCount, Alloc::CustomAllocator<VkSparseImageMemoryRequirements>(*m_context.objectArena));
     if(sparseReqCount > 0)
         vkGetImageSparseMemoryRequirements(m_context.device, texture->image, &sparseReqCount, sparseReqs.data());
 

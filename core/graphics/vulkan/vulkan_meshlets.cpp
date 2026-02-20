@@ -41,8 +41,8 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     auto* pso = new MeshletPipeline(m_context);
     pso->desc = desc;
 
-    Vector<VkPipelineShaderStageCreateInfo> shaderStages;
-    Vector<VkSpecializationInfo> specInfos;
+    Vector<VkPipelineShaderStageCreateInfo, Alloc::CustomAllocator<VkPipelineShaderStageCreateInfo>> shaderStages(Alloc::CustomAllocator<VkPipelineShaderStageCreateInfo>(*m_context.objectArena));
+    Vector<VkSpecializationInfo, Alloc::CustomAllocator<VkSpecializationInfo>> specInfos(Alloc::CustomAllocator<VkSpecializationInfo>(*m_context.objectArena));
     shaderStages.reserve(3); // Task (optional), Mesh, Fragment
     specInfos.reserve(3);
 
@@ -115,7 +115,7 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     depthStencil.depthBoundsTestEnable = VK_FALSE;
     depthStencil.stencilTestEnable = desc.renderState.depthStencilState.stencilEnable ? VK_TRUE : VK_FALSE;
 
-    Vector<VkPipelineColorBlendAttachmentState> blendAttachments;
+    Vector<VkPipelineColorBlendAttachmentState, Alloc::CustomAllocator<VkPipelineColorBlendAttachmentState>> blendAttachments(Alloc::CustomAllocator<VkPipelineColorBlendAttachmentState>(*m_context.objectArena));
     for(u32 i = 0; i < fbinfo.colorFormats.size(); ++i){
         VkPipelineColorBlendAttachmentState attachment = {};
         attachment.blendEnable = VK_FALSE;
@@ -144,7 +144,7 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     dynamicState.dynamicStateCount = static_cast<u32>(LengthOf(dynamicStates));
     dynamicState.pDynamicStates = dynamicStates;
 
-    Vector<VkFormat> colorFormats;
+    Vector<VkFormat, Alloc::CustomAllocator<VkFormat>> colorFormats(Alloc::CustomAllocator<VkFormat>(*m_context.objectArena));
     for(const auto& format : fbinfo.colorFormats){
         colorFormats.push_back(ConvertFormat(format));
     }

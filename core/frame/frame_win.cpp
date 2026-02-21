@@ -31,52 +31,62 @@ NWB_CORE_BEGIN
 
 
 namespace __hidden_frame{
-    // in windows, the frame is a singleton
-    static Frame* g_frame = nullptr;
-    static LRESULT CALLBACK winProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
-        if(auto* _this = g_frame){
-            PAINTSTRUCT ps;
 
-            switch(uMsg){
-            case WM_DESTROY:
-            {
-                PostQuitMessage(0);
-            }
-            return 0;
-            case WM_CLOSE:
-            {
-                DestroyWindow(hwnd);
-            }
-            return 0;
 
-            case WM_ACTIVATE:
-            {
-                switch(LOWORD(wParam)){
-                case WA_INACTIVE:
-                    _this->data<Common::WinFrame>().isActive() = false;
-                    break;
-                default:
-                    _this->data<Common::WinFrame>().isActive() = true;
-                    break;
-                }
-            }
-            return 0;
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-            case WM_PAINT:
-            {
-                bool ret = false;
-                if(auto hdc = BeginPaint(hwnd, &ps)){
-                    ret = _this->render();
-                    EndPaint(hwnd, &ps);
-                }
-                if(!ret)
-                    PostQuitMessage(0);
-            }
-            return 0;
+
+// in windows, the frame is a singleton
+static Frame* g_frame = nullptr;
+static LRESULT CALLBACK winProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
+    if(auto* _this = g_frame){
+        PAINTSTRUCT ps;
+
+        switch(uMsg){
+        case WM_DESTROY:
+        {
+            PostQuitMessage(0);
+        }
+        return 0;
+        case WM_CLOSE:
+        {
+            DestroyWindow(hwnd);
+        }
+        return 0;
+
+        case WM_ACTIVATE:
+        {
+            switch(LOWORD(wParam)){
+            case WA_INACTIVE:
+                _this->data<Common::WinFrame>().isActive() = false;
+                break;
+            default:
+                _this->data<Common::WinFrame>().isActive() = true;
+                break;
             }
         }
-        return DefWindowProc(hwnd, uMsg, wParam, lParam);
+        return 0;
+
+        case WM_PAINT:
+        {
+            bool ret = false;
+            if(auto hdc = BeginPaint(hwnd, &ps)){
+                ret = _this->render();
+                EndPaint(hwnd, &ps);
+            }
+            if(!ret)
+                PostQuitMessage(0);
+        }
+        return 0;
+        }
     }
+    return DefWindowProc(hwnd, uMsg, wParam, lParam);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 

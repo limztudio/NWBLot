@@ -23,53 +23,63 @@ NWB_ALLOC_BEGIN
 
 
 namespace __hidden_alloc{
-    struct CacheSize : Core::Common::Initializerable{
-        bool initialize()override{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct CacheSize : Core::Common::Initializerable{
+    bool initialize()override{
 #if defined(_WIN32)
-            DWORD bufferSize = 0;
-            GetLogicalProcessorInformation(nullptr, &bufferSize);
+        DWORD bufferSize = 0;
+        GetLogicalProcessorInformation(nullptr, &bufferSize);
 
-            ScratchArena<> scratchArena(bufferSize);
-            auto* info = reinterpret_cast<SYSTEM_LOGICAL_PROCESSOR_INFORMATION*>(scratchArena.allocate<u8>(bufferSize));
+        ScratchArena<> scratchArena(bufferSize);
+        auto* info = reinterpret_cast<SYSTEM_LOGICAL_PROCESSOR_INFORMATION*>(scratchArena.allocate<u8>(bufferSize));
 
-            if(GetLogicalProcessorInformation(info, &bufferSize)){
-                for(DWORD i = 0, e = bufferSize / sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION); i < e; ++i){
-                    if(info[i].Relationship != RelationCache)
-                        continue;
-
-                    const auto cur = static_cast<usize>(info[i].Cache.LineSize);
-                    if(size < cur)
-                        size = cur;
-                }
-            }
-#elif defined(_SC_LEVEL1_DCACHE_LINESIZE)
-            auto lineSizes[] = {
-                sysconf(_SC_LEVEL1_DCACHE_LINESIZE),
-                sysconf(_SC_LEVEL2_DCACHE_LINESIZE),
-                sysconf(_SC_LEVEL3_DCACHE_LINESIZE),
-            };
-            for(auto lineSize : lineSizes){
-                if(lineSize <= 0)
+        if(GetLogicalProcessorInformation(info, &bufferSize)){
+            for(DWORD i = 0, e = bufferSize / sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION); i < e; ++i){
+                if(info[i].Relationship != RelationCache)
                     continue;
 
-                const auto cur = static_cast<usize>(lineSize);
+                const auto cur = static_cast<usize>(info[i].Cache.LineSize);
                 if(size < cur)
                     size = cur;
             }
-#endif
-            return true;
         }
-        void finalize()override{}
+#elif defined(_SC_LEVEL1_DCACHE_LINESIZE)
+        auto lineSizes[] = {
+            sysconf(_SC_LEVEL1_DCACHE_LINESIZE),
+            sysconf(_SC_LEVEL2_DCACHE_LINESIZE),
+            sysconf(_SC_LEVEL3_DCACHE_LINESIZE),
+        };
+        for(auto lineSize : lineSizes){
+            if(lineSize <= 0)
+                continue;
 
-        usize size = 64;
-    } static cacheSize;
+            const auto cur = static_cast<usize>(lineSize);
+            if(size < cur)
+                size = cur;
+        }
+#endif
+        return true;
+    }
+    void finalize()override{}
+
+    usize size = 64;
+} static s_CacheSize;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-usize CachelineSize(){ return __hidden_alloc::cacheSize.size; }
+usize CachelineSize(){ return __hidden_alloc::s_CacheSize.size; }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

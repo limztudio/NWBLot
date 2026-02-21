@@ -21,33 +21,48 @@ NWB_COMMON_BEGIN
 
 
 namespace __hidden_common{
-    class BaseInitializerable{
-    public:
-        virtual ~BaseInitializerable() = default;
 
 
-    public:
-        virtual bool initialize() = 0;
-        virtual void finalize() = 0;
-    };
-    class FunctionalInitializerable : public BaseInitializerable{
-    public:
-        template<typename INIT, typename FIN>
-        FunctionalInitializerable(INIT&& init, FIN&& fin)
-            : m_init(Forward(init), Forward(fin))
-        {}
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-    public:
-        inline bool initialize()override{ return m_init ? m_init() : true; }
-        inline void finalize()override{ if(m_fin) m_fin(); }
+class BaseInitializerable{
+public:
+    virtual ~BaseInitializerable() = default;
 
 
-    private:
-        Function<bool()> m_init;
-        Function<void()> m_fin;
-    };
+public:
+    virtual bool initialize() = 0;
+    virtual void finalize() = 0;
 };
+class FunctionalInitializerable : public BaseInitializerable{
+public:
+    template<typename INIT, typename FIN>
+    FunctionalInitializerable(INIT&& init, FIN&& fin)
+        : m_init(Forward(init), Forward(fin))
+    {}
+
+
+public:
+    inline bool initialize()override{ return m_init ? m_init() : true; }
+    inline void finalize()override{ if(m_fin) m_fin(); }
+
+
+private:
+    Function<bool()> m_init;
+    Function<void()> m_fin;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class Initializerable : public __hidden_common::BaseInitializerable{
 public:
     Initializerable();

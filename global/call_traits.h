@@ -9,17 +9,27 @@
 
 
 namespace __hidden_call_traits{
-	template<typename T, bool small_>
-	struct Implementation1{ typedef const T& param_type; };
-	template<typename T>
-	struct Implementation1<T, true>{ typedef const T param_type; };
 
-	template<typename T, bool isp, bool b1>
-	struct Implementation0{ typedef const T& param_type; };
-	template<typename T, bool isp>
-	struct Implementation0<T, isp, true>{ typedef typename Implementation1<T, sizeof(T) <= sizeof(void*)>::param_type param_type; };
-	template<typename T, bool b1>
-	struct Implementation0<T, true, b1>{ typedef T const param_type; };
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename T, bool small_>
+struct Implementation1{ typedef const T& param_type; };
+template<typename T>
+struct Implementation1<T, true>{ typedef const T param_type; };
+
+template<typename T, bool isp, bool b1>
+struct Implementation0{ typedef const T& param_type; };
+template<typename T, bool isp>
+struct Implementation0<T, isp, true>{ typedef typename Implementation1<T, sizeof(T) <= sizeof(void*)>::param_type param_type; };
+template<typename T, bool b1>
+struct Implementation0<T, true, b1>{ typedef T const param_type; };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 

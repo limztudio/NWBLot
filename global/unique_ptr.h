@@ -202,13 +202,23 @@ MakeUnique(Args&&...) = delete;
 
 
 namespace std{
-    template<typename T, typename D>
-    struct hash<UniquePtr<T, D>>{
-        size_t operator()(const UniquePtr<T, D>& x) const noexcept{ return std::hash<typename UniquePtr<T, D>::pointer>()(x.get()); }
-    };
 
-    template<typename T, typename D>
-    inline void swap(UniquePtr<T, D>& a, UniquePtr<T, D>& b)noexcept{ a.swap(b); }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename T, typename D>
+struct hash<UniquePtr<T, D>>{
+    size_t operator()(const UniquePtr<T, D>& x) const noexcept{ return std::hash<typename UniquePtr<T, D>::pointer>()(x.get()); }
+};
+
+template<typename T, typename D>
+inline void swap(UniquePtr<T, D>& a, UniquePtr<T, D>& b)noexcept{ a.swap(b); }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 

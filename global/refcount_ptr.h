@@ -260,13 +260,23 @@ MakeRefCount(Args&&...) = delete;
 
 
 namespace std{
-    template<typename T, typename D>
-    struct hash<RefCountPtr<T, D>>{
-        size_t operator()(const RefCountPtr<T, D>& x) const noexcept{ return std::hash<typename RefCountPtr<T, D>::pointer>()(x.get()); }
-    };
 
-    template<typename T, typename D>
-    inline void swap(RefCountPtr<T, D>& a, RefCountPtr<T, D>& b)noexcept{ a.swap(b); }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename T, typename D>
+struct hash<RefCountPtr<T, D>>{
+    size_t operator()(const RefCountPtr<T, D>& x) const noexcept{ return std::hash<typename RefCountPtr<T, D>::pointer>()(x.get()); }
+};
+
+template<typename T, typename D>
+inline void swap(RefCountPtr<T, D>& a, RefCountPtr<T, D>& b)noexcept{ a.swap(b); }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 

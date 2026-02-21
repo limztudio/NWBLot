@@ -18,21 +18,31 @@ NWB_LOG_BEGIN
 
 
 namespace __hidden_frame{
-    union FrameParam{
-        void* ptr[2];
-        u64 u64[2];
-        u32 u32[4];
-        u16 u16[8];
-        u8 u8[16];
-    };
-    class FrameData{
-    public:
-        inline FrameData() : m_data{ nullptr, }{}
 
 
-    protected:
-        FrameParam m_data;
-    };
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+union FrameParam{
+    void* ptr[2];
+    u64 u64[2];
+    u32 u32[4];
+    u16 u16[8];
+    u8 u8[16];
+};
+class FrameData{
+public:
+    inline FrameData() : m_data{ nullptr, }{}
+
+
+protected:
+    FrameParam m_data;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 

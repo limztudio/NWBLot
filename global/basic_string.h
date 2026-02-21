@@ -99,11 +99,21 @@ constexpr auto MakeConstWString(const wchar(&str)[N]){ return ConstWString<N>(st
 
 
 namespace __hidden_basic_string{
-    template<typename In>
-    concept FromWcharView = IsConvertible_V<In, WStringView>;
 
-    template<typename In>
-    concept FromCharView = IsConvertible_V<In, AStringView>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename In>
+concept FromWcharView = IsConvertible_V<In, WStringView>;
+
+template<typename In>
+concept FromCharView = IsConvertible_V<In, AStringView>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 

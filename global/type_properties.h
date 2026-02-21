@@ -29,10 +29,20 @@ using FalseType = BoolConstant<false>;
 
 
 namespace __hidden_type_properties{
-    template<typename T>
-    struct IsReferenceWrapper : public FalseType{};
-    template<typename T>
-    struct IsReferenceWrapper<ReferenceWrapper<T>> : public TrueType{};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename T>
+struct IsReferenceWrapper : public FalseType{};
+template<typename T>
+struct IsReferenceWrapper<ReferenceWrapper<T>> : public TrueType{};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 

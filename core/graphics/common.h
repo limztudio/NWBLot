@@ -3926,112 +3926,122 @@ NWB_CORE_END
 
 
 namespace std{
-    template<typename T>
-    struct hash<RefCountPtr<T>>{
-        size_t operator()(RefCountPtr<T> const& s)const noexcept{
-            hash<T*> _hash;
-            return _hash(s.Get());
-        }
-    };
 
-    template<>
-    struct hash<NWB::Core::TextureSubresourceSet>{
-        size_t operator()(NWB::Core::TextureSubresourceSet const& s)const noexcept{
-            usize hash = 0;
-            NWB::Core::__hidden_core::HashCombine(hash, s.baseMipLevel);
-            NWB::Core::__hidden_core::HashCombine(hash, s.numMipLevels);
-            NWB::Core::__hidden_core::HashCombine(hash, s.baseArraySlice);
-            NWB::Core::__hidden_core::HashCombine(hash, s.numArraySlices);
-            return static_cast<size_t>(hash);
-        }
-    };
 
-    template<>
-    struct hash<NWB::Core::BufferRange>{
-        size_t operator()(NWB::Core::BufferRange const& s)const noexcept{
-            usize hash = 0;
-            NWB::Core::__hidden_core::HashCombine(hash, s.byteOffset);
-            NWB::Core::__hidden_core::HashCombine(hash, s.byteSize);
-            return static_cast<size_t>(hash);
-        }
-    };
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    template<>
-    struct hash<NWB::Core::BindingSetItem>{
-        size_t operator()(NWB::Core::BindingSetItem const& s)const noexcept{
-            usize value = 0;
-            NWB::Core::__hidden_core::HashCombine(value, s.resourceHandle);
-            NWB::Core::__hidden_core::HashCombine(value, s.slot);
-            NWB::Core::__hidden_core::HashCombine(value, s.type);
-            NWB::Core::__hidden_core::HashCombine(value, s.dimension);
-            NWB::Core::__hidden_core::HashCombine(value, s.format);
-            NWB::Core::__hidden_core::HashCombine(value, s.rawData[0]);
-            NWB::Core::__hidden_core::HashCombine(value, s.rawData[1]);
-            return static_cast<size_t>(value);
-        }
-    };
 
-    template<>
-    struct hash<NWB::Core::BindingSetDesc>{
-        size_t operator()(NWB::Core::BindingSetDesc const& s)const noexcept{
-            usize value = 0;
-            for(const auto& item : s.bindings)
-                NWB::Core::__hidden_core::HashCombine(value, item);
-            return static_cast<size_t>(value);
-        }
-    };
+template<typename T>
+struct hash<RefCountPtr<T>>{
+    size_t operator()(RefCountPtr<T> const& s)const noexcept{
+        hash<T*> _hash;
+        return _hash(s.Get());
+    }
+};
 
-    template<>
-    struct hash<NWB::Core::FramebufferInfo>{
-        size_t operator()(NWB::Core::FramebufferInfo const& s)const noexcept{
-            usize hash = 0;
-            for(auto format : s.colorFormats)
-                NWB::Core::__hidden_core::HashCombine(hash, format);
-            NWB::Core::__hidden_core::HashCombine(hash, s.depthFormat);
-            NWB::Core::__hidden_core::HashCombine(hash, s.sampleCount);
-            NWB::Core::__hidden_core::HashCombine(hash, s.sampleQuality);
-            return static_cast<size_t>(hash);
-        }
-    };
+template<>
+struct hash<NWB::Core::TextureSubresourceSet>{
+    size_t operator()(NWB::Core::TextureSubresourceSet const& s)const noexcept{
+        usize hash = 0;
+        NWB::Core::__hidden_core::HashCombine(hash, s.baseMipLevel);
+        NWB::Core::__hidden_core::HashCombine(hash, s.numMipLevels);
+        NWB::Core::__hidden_core::HashCombine(hash, s.baseArraySlice);
+        NWB::Core::__hidden_core::HashCombine(hash, s.numArraySlices);
+        return static_cast<size_t>(hash);
+    }
+};
 
-    template<>
-    struct hash<NWB::Core::BlendState::RenderTarget>{
-        size_t operator()(NWB::Core::BlendState::RenderTarget const& s)const noexcept{
-            usize hash = 0;
-            NWB::Core::__hidden_core::HashCombine(hash, s.blendEnable);
-            NWB::Core::__hidden_core::HashCombine(hash, s.srcBlend);
-            NWB::Core::__hidden_core::HashCombine(hash, s.destBlend);
-            NWB::Core::__hidden_core::HashCombine(hash, s.blendOp);
-            NWB::Core::__hidden_core::HashCombine(hash, s.srcBlendAlpha);
-            NWB::Core::__hidden_core::HashCombine(hash, s.destBlendAlpha);
-            NWB::Core::__hidden_core::HashCombine(hash, s.blendOpAlpha);
-            NWB::Core::__hidden_core::HashCombine(hash, s.colorWriteMask);
-            return static_cast<size_t>(hash);
-        }
-    };
+template<>
+struct hash<NWB::Core::BufferRange>{
+    size_t operator()(NWB::Core::BufferRange const& s)const noexcept{
+        usize hash = 0;
+        NWB::Core::__hidden_core::HashCombine(hash, s.byteOffset);
+        NWB::Core::__hidden_core::HashCombine(hash, s.byteSize);
+        return static_cast<size_t>(hash);
+    }
+};
 
-    template<>
-    struct hash<NWB::Core::BlendState>{
-        size_t operator()(NWB::Core::BlendState const& s)const noexcept{
-            usize hash = 0;
-            NWB::Core::__hidden_core::HashCombine(hash, s.alphaToCoverageEnable);
-            for(const auto& target : s.targets)
-                NWB::Core::__hidden_core::HashCombine(hash, target);
-            return static_cast<size_t>(hash);
-        }
-    };
-    
-    template<>
-    struct hash<NWB::Core::VariableRateShadingState>{
-        size_t operator()(NWB::Core::VariableRateShadingState const& s)const noexcept{
-            usize hash = 0;
-            NWB::Core::__hidden_core::HashCombine(hash, s.enabled);
-            NWB::Core::__hidden_core::HashCombine(hash, s.shadingRate);
-            NWB::Core::__hidden_core::HashCombine(hash, s.pipelinePrimitiveCombiner);
-            NWB::Core::__hidden_core::HashCombine(hash, s.imageCombiner);
-            return static_cast<size_t>(hash);
-        }
-    };
+template<>
+struct hash<NWB::Core::BindingSetItem>{
+    size_t operator()(NWB::Core::BindingSetItem const& s)const noexcept{
+        usize value = 0;
+        NWB::Core::__hidden_core::HashCombine(value, s.resourceHandle);
+        NWB::Core::__hidden_core::HashCombine(value, s.slot);
+        NWB::Core::__hidden_core::HashCombine(value, s.type);
+        NWB::Core::__hidden_core::HashCombine(value, s.dimension);
+        NWB::Core::__hidden_core::HashCombine(value, s.format);
+        NWB::Core::__hidden_core::HashCombine(value, s.rawData[0]);
+        NWB::Core::__hidden_core::HashCombine(value, s.rawData[1]);
+        return static_cast<size_t>(value);
+    }
+};
+
+template<>
+struct hash<NWB::Core::BindingSetDesc>{
+    size_t operator()(NWB::Core::BindingSetDesc const& s)const noexcept{
+        usize value = 0;
+        for(const auto& item : s.bindings)
+            NWB::Core::__hidden_core::HashCombine(value, item);
+        return static_cast<size_t>(value);
+    }
+};
+
+template<>
+struct hash<NWB::Core::FramebufferInfo>{
+    size_t operator()(NWB::Core::FramebufferInfo const& s)const noexcept{
+        usize hash = 0;
+        for(auto format : s.colorFormats)
+            NWB::Core::__hidden_core::HashCombine(hash, format);
+        NWB::Core::__hidden_core::HashCombine(hash, s.depthFormat);
+        NWB::Core::__hidden_core::HashCombine(hash, s.sampleCount);
+        NWB::Core::__hidden_core::HashCombine(hash, s.sampleQuality);
+        return static_cast<size_t>(hash);
+    }
+};
+
+template<>
+struct hash<NWB::Core::BlendState::RenderTarget>{
+    size_t operator()(NWB::Core::BlendState::RenderTarget const& s)const noexcept{
+        usize hash = 0;
+        NWB::Core::__hidden_core::HashCombine(hash, s.blendEnable);
+        NWB::Core::__hidden_core::HashCombine(hash, s.srcBlend);
+        NWB::Core::__hidden_core::HashCombine(hash, s.destBlend);
+        NWB::Core::__hidden_core::HashCombine(hash, s.blendOp);
+        NWB::Core::__hidden_core::HashCombine(hash, s.srcBlendAlpha);
+        NWB::Core::__hidden_core::HashCombine(hash, s.destBlendAlpha);
+        NWB::Core::__hidden_core::HashCombine(hash, s.blendOpAlpha);
+        NWB::Core::__hidden_core::HashCombine(hash, s.colorWriteMask);
+        return static_cast<size_t>(hash);
+    }
+};
+
+template<>
+struct hash<NWB::Core::BlendState>{
+    size_t operator()(NWB::Core::BlendState const& s)const noexcept{
+        usize hash = 0;
+        NWB::Core::__hidden_core::HashCombine(hash, s.alphaToCoverageEnable);
+        for(const auto& target : s.targets)
+            NWB::Core::__hidden_core::HashCombine(hash, target);
+        return static_cast<size_t>(hash);
+    }
+};
+
+template<>
+struct hash<NWB::Core::VariableRateShadingState>{
+    size_t operator()(NWB::Core::VariableRateShadingState const& s)const noexcept{
+        usize hash = 0;
+        NWB::Core::__hidden_core::HashCombine(hash, s.enabled);
+        NWB::Core::__hidden_core::HashCombine(hash, s.shadingRate);
+        NWB::Core::__hidden_core::HashCombine(hash, s.pipelinePrimitiveCombiner);
+        NWB::Core::__hidden_core::HashCombine(hash, s.imageCombiner);
+        return static_cast<size_t>(hash);
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 

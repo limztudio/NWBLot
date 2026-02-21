@@ -837,7 +837,7 @@ bool DeviceManager::createSwapChain(){
     uniqueQueues.insert(static_cast<uint32_t>(m_graphicsQueueFamily));
     uniqueQueues.insert(static_cast<uint32_t>(m_presentQueueFamily));
 
-    Vector<uint32_t, Alloc::ScratchAllocator<uint32_t>> queues(Alloc::ScratchAllocator<uint32_t>(scratchArena));
+    Vector<uint32_t, Alloc::ScratchAllocator<uint32_t>> queues{ Alloc::ScratchAllocator<uint32_t>(scratchArena) };
     queues.reserve(uniqueQueues.size());
     for(const auto& q : uniqueQueues)
         queues.push_back(q);

@@ -145,7 +145,7 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
     auto* layout = NewArenaObject<BindingLayout>(*m_context.objectArena, m_context);
     layout->desc = desc;
 
-    Vector<VkDescriptorSetLayoutBinding, Alloc::ScratchAllocator<VkDescriptorSetLayoutBinding>> bindings(Alloc::ScratchAllocator<VkDescriptorSetLayoutBinding>(scratchArena));
+    Vector<VkDescriptorSetLayoutBinding, Alloc::ScratchAllocator<VkDescriptorSetLayoutBinding>> bindings{ Alloc::ScratchAllocator<VkDescriptorSetLayoutBinding>(scratchArena) };
     bindings.reserve(desc.bindings.size());
 
     u32 pushConstantByteSize = 0;
@@ -210,9 +210,9 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
     layout->isBindless = true;
     layout->bindlessDesc = desc;
 
-    Vector<VkDescriptorSetLayoutBinding, Alloc::ScratchAllocator<VkDescriptorSetLayoutBinding>> bindings(Alloc::ScratchAllocator<VkDescriptorSetLayoutBinding>(scratchArena));
+    Vector<VkDescriptorSetLayoutBinding, Alloc::ScratchAllocator<VkDescriptorSetLayoutBinding>> bindings{ Alloc::ScratchAllocator<VkDescriptorSetLayoutBinding>(scratchArena) };
     bindings.reserve(desc.registerSpaces.size());
-    Vector<VkDescriptorBindingFlags, Alloc::ScratchAllocator<VkDescriptorBindingFlags>> bindingFlags(Alloc::ScratchAllocator<VkDescriptorBindingFlags>(scratchArena));
+    Vector<VkDescriptorBindingFlags, Alloc::ScratchAllocator<VkDescriptorBindingFlags>> bindingFlags{ Alloc::ScratchAllocator<VkDescriptorBindingFlags>(scratchArena) };
     bindingFlags.reserve(desc.registerSpaces.size());
 
     for(const auto& item : desc.registerSpaces){
@@ -279,7 +279,7 @@ DescriptorTableHandle Device::createDescriptorTable(IBindingLayout* _layout){
     auto* table = NewArenaObject<DescriptorTable>(*m_context.objectArena, m_context);
     table->layout = layout;
 
-    Vector<VkDescriptorPoolSize, Alloc::ScratchAllocator<VkDescriptorPoolSize>> poolSizes(Alloc::ScratchAllocator<VkDescriptorPoolSize>(scratchArena));
+    Vector<VkDescriptorPoolSize, Alloc::ScratchAllocator<VkDescriptorPoolSize>> poolSizes{ Alloc::ScratchAllocator<VkDescriptorPoolSize>(scratchArena) };
     poolSizes.reserve(5);
 
     VkDescriptorPoolSize uniformSize = { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 16 };
@@ -346,7 +346,7 @@ void Device::resizeDescriptorTable(IDescriptorTable* descriptorTable, u32 newSiz
 
     Alloc::ScratchArena<> scratchArena;
 
-    Vector<VkDescriptorPoolSize, Alloc::ScratchAllocator<VkDescriptorPoolSize>> poolSizes(Alloc::ScratchAllocator<VkDescriptorPoolSize>(scratchArena));
+    Vector<VkDescriptorPoolSize, Alloc::ScratchAllocator<VkDescriptorPoolSize>> poolSizes{ Alloc::ScratchAllocator<VkDescriptorPoolSize>(scratchArena) };
     poolSizes.reserve(5);
     VkDescriptorPoolSize uniformSize = { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, newSize };
     VkDescriptorPoolSize storageSize = { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, newSize };
@@ -472,10 +472,10 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLa
 
     Alloc::ScratchArena<> scratchArena(4096);
 
-    Vector<VkWriteDescriptorSet, Alloc::ScratchAllocator<VkWriteDescriptorSet>> writes(Alloc::ScratchAllocator<VkWriteDescriptorSet>(scratchArena));
-    Vector<VkDescriptorBufferInfo, Alloc::ScratchAllocator<VkDescriptorBufferInfo>> bufferInfos(Alloc::ScratchAllocator<VkDescriptorBufferInfo>(scratchArena));
-    Vector<VkDescriptorImageInfo, Alloc::ScratchAllocator<VkDescriptorImageInfo>> imageInfos(Alloc::ScratchAllocator<VkDescriptorImageInfo>(scratchArena));
-    Vector<VkWriteDescriptorSetAccelerationStructureKHR, Alloc::ScratchAllocator<VkWriteDescriptorSetAccelerationStructureKHR>> asInfos(Alloc::ScratchAllocator<VkWriteDescriptorSetAccelerationStructureKHR>(scratchArena));
+    Vector<VkWriteDescriptorSet, Alloc::ScratchAllocator<VkWriteDescriptorSet>> writes{ Alloc::ScratchAllocator<VkWriteDescriptorSet>(scratchArena) };
+    Vector<VkDescriptorBufferInfo, Alloc::ScratchAllocator<VkDescriptorBufferInfo>> bufferInfos{ Alloc::ScratchAllocator<VkDescriptorBufferInfo>(scratchArena) };
+    Vector<VkDescriptorImageInfo, Alloc::ScratchAllocator<VkDescriptorImageInfo>> imageInfos{ Alloc::ScratchAllocator<VkDescriptorImageInfo>(scratchArena) };
+    Vector<VkWriteDescriptorSetAccelerationStructureKHR, Alloc::ScratchAllocator<VkWriteDescriptorSetAccelerationStructureKHR>> asInfos{ Alloc::ScratchAllocator<VkWriteDescriptorSetAccelerationStructureKHR>(scratchArena) };
 
     writes.reserve(desc.bindings.size());
     bufferInfos.reserve(desc.bindings.size());

@@ -220,8 +220,8 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     pso->framebufferInfo = fbinfo;
 
     // Step 1: Collect shader stages
-    Vector<VkPipelineShaderStageCreateInfo, Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>> shaderStages(Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>(scratchArena));
-    Vector<VkSpecializationInfo, Alloc::ScratchAllocator<VkSpecializationInfo>> specInfos(Alloc::ScratchAllocator<VkSpecializationInfo>(scratchArena));
+    Vector<VkPipelineShaderStageCreateInfo, Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>> shaderStages{ Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>(scratchArena) };
+    Vector<VkSpecializationInfo, Alloc::ScratchAllocator<VkSpecializationInfo>> specInfos{ Alloc::ScratchAllocator<VkSpecializationInfo>(scratchArena) };
     shaderStages.reserve(5);
     specInfos.reserve(5);
 
@@ -313,7 +313,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     // Step 8: Color blend state
     VkPipelineColorBlendStateCreateInfo colorBlending = { VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO };
     colorBlending.logicOpEnable = VK_FALSE;
-    Vector<VkPipelineColorBlendAttachmentState, Alloc::ScratchAllocator<VkPipelineColorBlendAttachmentState>> blendAttachments(Alloc::ScratchAllocator<VkPipelineColorBlendAttachmentState>(scratchArena));
+    Vector<VkPipelineColorBlendAttachmentState, Alloc::ScratchAllocator<VkPipelineColorBlendAttachmentState>> blendAttachments{ Alloc::ScratchAllocator<VkPipelineColorBlendAttachmentState>(scratchArena) };
     blendAttachments.reserve(fbinfo.colorFormats.size());
     for(u32 i = 0; i < (u32)fbinfo.colorFormats.size(); ++i){
         blendAttachments.push_back(__hidden_vulkan::ConvertBlendState(desc.renderState.blendState.targets[i]));
@@ -340,7 +340,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
 
     // Step 10: Pipeline layout from binding layouts
     pso->pipelineLayout = VK_NULL_HANDLE;
-    Vector<VkDescriptorSetLayout, Alloc::ScratchAllocator<VkDescriptorSetLayout>> allDescriptorSetLayouts(Alloc::ScratchAllocator<VkDescriptorSetLayout>(scratchArena));
+    Vector<VkDescriptorSetLayout, Alloc::ScratchAllocator<VkDescriptorSetLayout>> allDescriptorSetLayouts{ Alloc::ScratchAllocator<VkDescriptorSetLayout>(scratchArena) };
     for(u32 i = 0; i < (u32)desc.bindingLayouts.size(); ++i){
         auto* bl = checked_cast<BindingLayout*>(desc.bindingLayouts[i].get());
         for(auto& dsl : bl->descriptorSetLayouts){
@@ -364,7 +364,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
 
     // Step 11: Dynamic rendering info
     VkPipelineRenderingCreateInfo renderingInfo = { VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO };
-    Vector<VkFormat, Alloc::ScratchAllocator<VkFormat>> colorFormats(Alloc::ScratchAllocator<VkFormat>(scratchArena));
+    Vector<VkFormat, Alloc::ScratchAllocator<VkFormat>> colorFormats{ Alloc::ScratchAllocator<VkFormat>(scratchArena) };
     colorFormats.reserve(fbinfo.colorFormats.size());
     for(u32 i = 0; i < (u32)fbinfo.colorFormats.size(); ++i)
         colorFormats.push_back(ConvertFormat(fbinfo.colorFormats[i]));

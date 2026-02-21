@@ -334,10 +334,10 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
 
     Alloc::ScratchArena<> scratchArena;
 
-    Vector<VkConvertCooperativeVectorMatrixInfoNV, Alloc::ScratchAllocator<VkConvertCooperativeVectorMatrixInfoNV>> vkConvertDescs(Alloc::ScratchAllocator<VkConvertCooperativeVectorMatrixInfoNV>(scratchArena));
+    Vector<VkConvertCooperativeVectorMatrixInfoNV, Alloc::ScratchAllocator<VkConvertCooperativeVectorMatrixInfoNV>> vkConvertDescs{ Alloc::ScratchAllocator<VkConvertCooperativeVectorMatrixInfoNV>(scratchArena) };
     vkConvertDescs.reserve(numDescs);
 
-    Vector<usize, Alloc::ScratchAllocator<usize>> dstSizes(Alloc::ScratchAllocator<usize>(scratchArena));
+    Vector<usize, Alloc::ScratchAllocator<usize>> dstSizes{ Alloc::ScratchAllocator<usize>(scratchArena) };
     dstSizes.reserve(numDescs);
 
     for(usize i = 0; i < numDescs; ++i){

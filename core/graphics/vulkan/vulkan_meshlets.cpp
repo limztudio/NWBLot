@@ -43,8 +43,8 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     auto* pso = NewArenaObject<MeshletPipeline>(*m_context.objectArena, m_context);
     pso->desc = desc;
 
-    Vector<VkPipelineShaderStageCreateInfo, Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>> shaderStages(Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>(scratchArena));
-    Vector<VkSpecializationInfo, Alloc::ScratchAllocator<VkSpecializationInfo>> specInfos(Alloc::ScratchAllocator<VkSpecializationInfo>(scratchArena));
+    Vector<VkPipelineShaderStageCreateInfo, Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>> shaderStages{ Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>(scratchArena) };
+    Vector<VkSpecializationInfo, Alloc::ScratchAllocator<VkSpecializationInfo>> specInfos{ Alloc::ScratchAllocator<VkSpecializationInfo>(scratchArena) };
     shaderStages.reserve(3); // Task (optional), Mesh, Fragment
     specInfos.reserve(3);
 
@@ -117,7 +117,7 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     depthStencil.depthBoundsTestEnable = VK_FALSE;
     depthStencil.stencilTestEnable = desc.renderState.depthStencilState.stencilEnable ? VK_TRUE : VK_FALSE;
 
-    Vector<VkPipelineColorBlendAttachmentState, Alloc::ScratchAllocator<VkPipelineColorBlendAttachmentState>> blendAttachments(Alloc::ScratchAllocator<VkPipelineColorBlendAttachmentState>(scratchArena));
+    Vector<VkPipelineColorBlendAttachmentState, Alloc::ScratchAllocator<VkPipelineColorBlendAttachmentState>> blendAttachments{ Alloc::ScratchAllocator<VkPipelineColorBlendAttachmentState>(scratchArena) };
     blendAttachments.reserve(fbinfo.colorFormats.empty() ? 1 : fbinfo.colorFormats.size());
     for(u32 i = 0; i < fbinfo.colorFormats.size(); ++i){
         VkPipelineColorBlendAttachmentState attachment = {};
@@ -145,7 +145,7 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     dynamicState.dynamicStateCount = static_cast<u32>(LengthOf(dynamicStates));
     dynamicState.pDynamicStates = dynamicStates;
 
-    Vector<VkFormat, Alloc::ScratchAllocator<VkFormat>> colorFormats(Alloc::ScratchAllocator<VkFormat>(scratchArena));
+    Vector<VkFormat, Alloc::ScratchAllocator<VkFormat>> colorFormats{ Alloc::ScratchAllocator<VkFormat>(scratchArena) };
     colorFormats.reserve(fbinfo.colorFormats.size());
     for(const auto& format : fbinfo.colorFormats){
         colorFormats.push_back(ConvertFormat(format));

@@ -180,7 +180,7 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
     bool hasPendingSemaphores = !m_waitSemaphores.empty() || !m_signalSemaphores.empty();
 
     Vector<TrackedCommandBufferPtr, Alloc::CustomAllocator<TrackedCommandBufferPtr>> trackedBuffers(Alloc::CustomAllocator<TrackedCommandBufferPtr>(*m_context.objectArena));
-    Vector<VkCommandBuffer, Alloc::ScratchAllocator<VkCommandBuffer>> cmdBufs(Alloc::ScratchAllocator<VkCommandBuffer>(scratchArena));
+    Vector<VkCommandBuffer, Alloc::ScratchAllocator<VkCommandBuffer>> cmdBufs{ Alloc::ScratchAllocator<VkCommandBuffer>(scratchArena) };
 
     if(hasCommands){
         trackedBuffers.reserve(numCmd);
@@ -208,8 +208,8 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
     timelineSignal.value = submissionID;
     timelineSignal.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
 
-    Vector<VkSemaphoreSubmitInfo, Alloc::ScratchAllocator<VkSemaphoreSubmitInfo>> waitInfos(Alloc::ScratchAllocator<VkSemaphoreSubmitInfo>(scratchArena));
-    Vector<VkPipelineStageFlags2, Alloc::ScratchAllocator<VkPipelineStageFlags2>> waitStages(Alloc::ScratchAllocator<VkPipelineStageFlags2>(scratchArena));
+    Vector<VkSemaphoreSubmitInfo, Alloc::ScratchAllocator<VkSemaphoreSubmitInfo>> waitInfos{ Alloc::ScratchAllocator<VkSemaphoreSubmitInfo>(scratchArena) };
+    Vector<VkPipelineStageFlags2, Alloc::ScratchAllocator<VkPipelineStageFlags2>> waitStages{ Alloc::ScratchAllocator<VkPipelineStageFlags2>(scratchArena) };
     waitInfos.reserve(m_waitSemaphores.size());
     for(usize i = 0; i < m_waitSemaphores.size(); ++i){
         VkSemaphoreSubmitInfo waitInfo = { VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO };
@@ -219,7 +219,7 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
         waitInfos.push_back(waitInfo);
     }
 
-    Vector<VkSemaphoreSubmitInfo, Alloc::ScratchAllocator<VkSemaphoreSubmitInfo>> signalInfos(Alloc::ScratchAllocator<VkSemaphoreSubmitInfo>(scratchArena));
+    Vector<VkSemaphoreSubmitInfo, Alloc::ScratchAllocator<VkSemaphoreSubmitInfo>> signalInfos{ Alloc::ScratchAllocator<VkSemaphoreSubmitInfo>(scratchArena) };
     signalInfos.reserve(1 + m_signalSemaphores.size());
     signalInfos.push_back(timelineSignal);
 
@@ -231,7 +231,7 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
         signalInfos.push_back(signalInfo);
     }
 
-    Vector<VkCommandBufferSubmitInfo, Alloc::ScratchAllocator<VkCommandBufferSubmitInfo>> cmdBufInfos(Alloc::ScratchAllocator<VkCommandBufferSubmitInfo>(scratchArena));
+    Vector<VkCommandBufferSubmitInfo, Alloc::ScratchAllocator<VkCommandBufferSubmitInfo>> cmdBufInfos{ Alloc::ScratchAllocator<VkCommandBufferSubmitInfo>(scratchArena) };
     cmdBufInfos.reserve(numCmd);
 
     for(VkCommandBuffer cmdBuf : cmdBufs){
@@ -382,8 +382,8 @@ void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapp
 
     Alloc::ScratchArena<> scratchArena(8192);
 
-    Vector<VkSparseImageMemoryBind, Alloc::ScratchAllocator<VkSparseImageMemoryBind>> sparseImageMemoryBinds(Alloc::ScratchAllocator<VkSparseImageMemoryBind>(scratchArena));
-    Vector<VkSparseMemoryBind, Alloc::ScratchAllocator<VkSparseMemoryBind>> sparseMemoryBinds(Alloc::ScratchAllocator<VkSparseMemoryBind>(scratchArena));
+    Vector<VkSparseImageMemoryBind, Alloc::ScratchAllocator<VkSparseImageMemoryBind>> sparseImageMemoryBinds{ Alloc::ScratchAllocator<VkSparseImageMemoryBind>(scratchArena) };
+    Vector<VkSparseMemoryBind, Alloc::ScratchAllocator<VkSparseMemoryBind>> sparseMemoryBinds{ Alloc::ScratchAllocator<VkSparseMemoryBind>(scratchArena) };
 
     const VkImageCreateInfo& imageInfo = texture->imageInfo;
     VkImageAspectFlags textureAspectFlags = VK_IMAGE_ASPECT_COLOR_BIT;

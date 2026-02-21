@@ -342,8 +342,8 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
 
     Alloc::ScratchArena<> scratchArena(4096);
 
-    Vector<VkPipelineShaderStageCreateInfo, Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>> stages(Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>(scratchArena));
-    Vector<VkRayTracingShaderGroupCreateInfoKHR, Alloc::ScratchAllocator<VkRayTracingShaderGroupCreateInfoKHR>> groups(Alloc::ScratchAllocator<VkRayTracingShaderGroupCreateInfoKHR>(scratchArena));
+    Vector<VkPipelineShaderStageCreateInfo, Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>> stages{ Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>(scratchArena) };
+    Vector<VkRayTracingShaderGroupCreateInfoKHR, Alloc::ScratchAllocator<VkRayTracingShaderGroupCreateInfoKHR>> groups{ Alloc::ScratchAllocator<VkRayTracingShaderGroupCreateInfoKHR>(scratchArena) };
 
     stages.reserve(desc.shaders.size() + desc.hitGroups.size() * 3);
     groups.reserve(desc.shaders.size() + desc.hitGroups.size());
@@ -702,9 +702,9 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* _as, const
 
     Alloc::ScratchArena<> scratchArena(4096);
 
-    Vector<VkAccelerationStructureGeometryKHR, Alloc::ScratchAllocator<VkAccelerationStructureGeometryKHR>> geometries(Alloc::ScratchAllocator<VkAccelerationStructureGeometryKHR>(scratchArena));
-    Vector<VkAccelerationStructureBuildRangeInfoKHR, Alloc::ScratchAllocator<VkAccelerationStructureBuildRangeInfoKHR>> rangeInfos(Alloc::ScratchAllocator<VkAccelerationStructureBuildRangeInfoKHR>(scratchArena));
-    Vector<uint32_t, Alloc::ScratchAllocator<uint32_t>> primitiveCounts(Alloc::ScratchAllocator<uint32_t>(scratchArena));
+    Vector<VkAccelerationStructureGeometryKHR, Alloc::ScratchAllocator<VkAccelerationStructureGeometryKHR>> geometries{ Alloc::ScratchAllocator<VkAccelerationStructureGeometryKHR>(scratchArena) };
+    Vector<VkAccelerationStructureBuildRangeInfoKHR, Alloc::ScratchAllocator<VkAccelerationStructureBuildRangeInfoKHR>> rangeInfos{ Alloc::ScratchAllocator<VkAccelerationStructureBuildRangeInfoKHR>(scratchArena) };
+    Vector<uint32_t, Alloc::ScratchAllocator<uint32_t>> primitiveCounts{ Alloc::ScratchAllocator<uint32_t>(scratchArena) };
 
     geometries.reserve(numGeometries);
     rangeInfos.reserve(numGeometries);

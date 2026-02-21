@@ -1015,6 +1015,13 @@ bool DeviceManager::createSwapChainInternal(){
 }
 
 void DeviceManager::destroyDeviceAndSwapChain(){
+    if(m_rhiDevice)
+        m_rhiDevice->waitForIdle();
+
+    while(!m_framesInFlight.empty())
+        m_framesInFlight.pop();
+    m_queryPool.clear();
+
     destroySwapChain();
 
     for(auto& semaphore : m_presentSemaphores){

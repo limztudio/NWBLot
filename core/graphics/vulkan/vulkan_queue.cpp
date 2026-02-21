@@ -20,6 +20,7 @@ TrackedCommandBuffer::TrackedCommandBuffer(const VulkanContext& context, Command
     : m_context(context)
     , referencedResources(Alloc::CustomAllocator<RefCountPtr<IResource, ArenaRefDeleter<IResource>>>(*context.objectArena))
     , referencedStagingBuffers(Alloc::CustomAllocator<RefCountPtr<IBuffer, ArenaRefDeleter<IBuffer>>>(*context.objectArena))
+    , referencedAccelStructHandles(Alloc::CustomAllocator<VkAccelerationStructureKHR>(*context.objectArena))
 {
     VkResult res = VK_SUCCESS;
 
@@ -60,6 +61,11 @@ TrackedCommandBuffer::~TrackedCommandBuffer(){
         vkDestroyCommandPool(m_context.device, cmdPool, m_context.allocationCallbacks);
         cmdPool = VK_NULL_HANDLE;
     }
+
+    for(auto handle : referencedAccelStructHandles)
+        if(handle != VK_NULL_HANDLE)
+            vkDestroyAccelerationStructureKHR(m_context.device, handle, m_context.allocationCallbacks);
+    referencedAccelStructHandles.clear();
 
     referencedResources.clear();
     referencedStagingBuffers.clear();

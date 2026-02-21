@@ -121,6 +121,8 @@ public:
     Vector<RefCountPtr<IResource, ArenaRefDeleter<IResource>>, Alloc::CustomAllocator<RefCountPtr<IResource, ArenaRefDeleter<IResource>>>> referencedResources;
     Vector<RefCountPtr<IBuffer, ArenaRefDeleter<IBuffer>>, Alloc::CustomAllocator<RefCountPtr<IBuffer, ArenaRefDeleter<IBuffer>>>> referencedStagingBuffers;
 
+    Vector<VkAccelerationStructureKHR, Alloc::CustomAllocator<VkAccelerationStructureKHR>> referencedAccelStructHandles;
+
     VkFence signalFence = VK_NULL_HANDLE;
 
     u64 recordingID = 0;
@@ -817,6 +819,9 @@ public:
     RefCountPtr<IBuffer, ArenaRefDeleter<IBuffer>> buffer;
     u64 deviceAddress = 0;
     bool compacted = false;
+
+    VkQueryPool compactionQueryPool = VK_NULL_HANDLE;
+    u32 compactionQueryIndex = 0;
 
 
 private:

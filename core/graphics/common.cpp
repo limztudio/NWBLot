@@ -474,7 +474,7 @@ void AftermathCrashDumpHelper::unRegisterShaderBinaryLookupCallback(void* client
 
 Pair<bool, AString> AftermathCrashDumpHelper::resolveMarker(usize markerHash){
     // Search in active marker trackers
-    for(auto markerTracker : m_markerTrackers){
+    for(auto* markerTracker : m_markerTrackers){
         auto result = markerTracker->getEventString(markerHash);
         if(result.first()){
             return result;

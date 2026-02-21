@@ -194,12 +194,12 @@ void DeviceManager::resizeSwapChain(){
 
 
 void DeviceManager::initDefaultExtensions(){
-    for(auto name : s_enabledInstanceExts)
+    for(const auto* name : s_enabledInstanceExts)
         m_enabledExtensions.instance.insert(name);
     for(const auto& e : m_enabledDeviceExts)
         m_enabledExtensions.device.insert({ e.name, e.feature });
 
-    for(auto name : s_optionalInstanceExts)
+    for(const auto* name : s_optionalInstanceExts)
         m_optionalExtensions.instance.insert(name);
     for(const auto& e : m_optionalDeviceExts)
         m_optionalExtensions.device.insert({ e.name, e.feature });
@@ -894,7 +894,7 @@ bool DeviceManager::createSwapChain(){
     Vector<VkImage, Alloc::ScratchAllocator<VkImage>> images(imageCount, Alloc::ScratchAllocator<VkImage>(scratchArena));
     vkGetSwapchainImagesKHR(m_vulkanDevice, m_swapChain, &imageCount, images.data());
 
-    for(auto image : images){
+    for(auto* image : images){
         SwapChainImage sci;
         sci.image = image;
 

@@ -42,6 +42,11 @@ AccelStruct::AccelStruct(const VulkanContext& context)
     : m_context(context)
 {}
 AccelStruct::~AccelStruct(){
+    if(compactionQueryPool != VK_NULL_HANDLE){
+        vkDestroyQueryPool(m_context.device, compactionQueryPool, m_context.allocationCallbacks);
+        compactionQueryPool = VK_NULL_HANDLE;
+    }
+
     if(accelStruct){
         vkDestroyAccelerationStructureKHR(m_context.device, accelStruct, m_context.allocationCallbacks);
         accelStruct = VK_NULL_HANDLE;
@@ -806,6 +811,8 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* _as, const
 }
 
 void CommandList::compactBottomLevelAccelStructs(){
+    VkResult res = VK_SUCCESS;
+
     if(!m_context.extensions.KHR_acceleration_structure)
         return;
 
@@ -813,19 +820,102 @@ void CommandList::compactBottomLevelAccelStructs(){
         return;
 
     for(auto& as : m_pendingCompactions){
-        vkCmdWriteAccelerationStructuresPropertiesKHR(currentCmdBuf->cmdBuf, 1, &as->accelStruct, VK_QUERY_TYPE_ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR, VK_NULL_HANDLE, 0);
+        if(as->compactionQueryPool == VK_NULL_HANDLE || as->compacted)
+            continue;
 
-        // Note: A full implementation would:
-        // 1. Read back the compacted size after GPU finishes
-        // 2. Create a new, smaller AS
-        // 3. vkCmdCopyAccelerationStructureKHR with COMPACT mode
-        // 4. Swap the new AS into the AccelStruct object
-        // This requires multi-pass (submit, readback, submit) which cannot happen in a single command list.
-        // For now, mark as compacted since the data is valid.
+        u64 compactedSize = 0;
+        res = vkGetQueryPoolResults(
+            m_context.device,
+            as->compactionQueryPool,
+            as->compactionQueryIndex,
+            1,
+            sizeof(u64),
+            &compactedSize,
+            sizeof(u64),
+            VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT
+        );
+
+        if(res != VK_SUCCESS || compactedSize == 0)
+            continue;
+
+        BufferDesc compactBufferDesc;
+        compactBufferDesc.byteSize = compactedSize;
+        compactBufferDesc.isAccelStructStorage = true;
+        compactBufferDesc.debugName = as->desc.debugName;
+
+        BufferHandle compactBuffer = m_device.createBuffer(compactBufferDesc);
+        if(!compactBuffer)
+            continue;
+
+        VkAccelerationStructureCreateInfoKHR createInfo = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR };
+        createInfo.buffer = checked_cast<Buffer*>(compactBuffer.get())->buffer;
+        createInfo.size = compactedSize;
+        createInfo.type = as->desc.isTopLevel
+            ? VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR
+            : VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR
+            ;
+
+        VkAccelerationStructureKHR newAS = VK_NULL_HANDLE;
+        res = vkCreateAccelerationStructureKHR(m_context.device, &createInfo, m_context.allocationCallbacks, &newAS);
+        if(res != VK_SUCCESS)
+            continue;
+
+        VkCopyAccelerationStructureInfoKHR copyInfo = { VK_STRUCTURE_TYPE_COPY_ACCELERATION_STRUCTURE_INFO_KHR };
+        copyInfo.src  = as->accelStruct; // original (still the copy source)
+        copyInfo.dst  = newAS;
+        copyInfo.mode = VK_COPY_ACCELERATION_STRUCTURE_MODE_COMPACT_KHR;
+        vkCmdCopyAccelerationStructureKHR(currentCmdBuf->cmdBuf, &copyInfo);
+
+        currentCmdBuf->referencedAccelStructHandles.push_back(as->accelStruct);
+        currentCmdBuf->referencedStagingBuffers.push_back(as->buffer);
+
+        as->accelStruct = newAS;
+        as->buffer = Move(compactBuffer);
+
+        VkAccelerationStructureDeviceAddressInfoKHR addrInfo = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR };
+        addrInfo.accelerationStructure = as->accelStruct;
+        as->deviceAddress = vkGetAccelerationStructureDeviceAddressKHR(m_context.device, &addrInfo);
+
+        vkDestroyQueryPool(m_context.device, as->compactionQueryPool, m_context.allocationCallbacks);
+        as->compactionQueryPool  = VK_NULL_HANDLE;
+        as->compactionQueryIndex = 0;
         as->compacted = true;
     }
 
-    m_pendingCompactions.clear();
+    for(auto& as : m_pendingCompactions){
+        if(as->compactionQueryPool != VK_NULL_HANDLE || as->compacted)
+            continue;
+
+        VkQueryPoolCreateInfo queryPoolInfo = { VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO };
+        queryPoolInfo.queryType  = VK_QUERY_TYPE_ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR;
+        queryPoolInfo.queryCount = 1;
+
+        VkQueryPool queryPool = VK_NULL_HANDLE;
+        if(vkCreateQueryPool(m_context.device, &queryPoolInfo, m_context.allocationCallbacks, &queryPool) != VK_SUCCESS)
+            continue;
+
+        vkCmdResetQueryPool(currentCmdBuf->cmdBuf, queryPool, 0, 1);
+
+        vkCmdWriteAccelerationStructuresPropertiesKHR(
+            currentCmdBuf->cmdBuf,
+            1,
+            &as->accelStruct,
+            VK_QUERY_TYPE_ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR,
+            queryPool,
+            0
+        );
+
+        as->compactionQueryPool  = queryPool;
+        as->compactionQueryIndex = 0;
+    }
+
+    {
+        usize dst = 0;
+        for(usize i = 0; i < m_pendingCompactions.size(); ++i)
+            if(!m_pendingCompactions[i]->compacted)
+                m_pendingCompactions[dst++] = Move(m_pendingCompactions[i]);
+        m_pendingCompactions.resize(dst);
+    }
 }
 
 void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* _as, const RayTracingInstanceDesc* pInstances, usize numInstances, RayTracingAccelStructBuildFlags::Mask buildFlags){

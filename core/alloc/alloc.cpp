@@ -29,8 +29,8 @@ namespace __hidden_alloc{
             DWORD bufferSize = 0;
             GetLogicalProcessorInformation(nullptr, &bufferSize);
 
-            UniquePtr<u8[]> buffer(new u8[bufferSize]);
-            auto* info = reinterpret_cast<SYSTEM_LOGICAL_PROCESSOR_INFORMATION*>(buffer.get());
+            ScratchArena<> scratchArena(bufferSize);
+            auto* info = reinterpret_cast<SYSTEM_LOGICAL_PROCESSOR_INFORMATION*>(scratchArena.allocate<u8>(bufferSize));
 
             if(GetLogicalProcessorInformation(info, &bufferSize)){
                 for(DWORD i = 0, e = bufferSize / sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION); i < e; ++i){

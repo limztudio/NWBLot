@@ -38,11 +38,13 @@ Object MeshletPipeline::getNativeHandle(ObjectType objectType){
 MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& desc, FramebufferInfo const& fbinfo){
     VkResult res = VK_SUCCESS;
 
-    auto* pso = new MeshletPipeline(m_context);
+    Alloc::ScratchArena<> scratchArena;
+
+    auto* pso = NewArenaObject<MeshletPipeline>(*m_context.objectArena, m_context);
     pso->desc = desc;
 
-    Vector<VkPipelineShaderStageCreateInfo, Alloc::CustomAllocator<VkPipelineShaderStageCreateInfo>> shaderStages(Alloc::CustomAllocator<VkPipelineShaderStageCreateInfo>(*m_context.objectArena));
-    Vector<VkSpecializationInfo, Alloc::CustomAllocator<VkSpecializationInfo>> specInfos(Alloc::CustomAllocator<VkSpecializationInfo>(*m_context.objectArena));
+    Vector<VkPipelineShaderStageCreateInfo, Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>> shaderStages(Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>(scratchArena));
+    Vector<VkSpecializationInfo, Alloc::ScratchAllocator<VkSpecializationInfo>> specInfos(Alloc::ScratchAllocator<VkSpecializationInfo>(scratchArena));
     shaderStages.reserve(3); // Task (optional), Mesh, Fragment
     specInfos.reserve(3);
 
@@ -73,7 +75,7 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
         addShaderStage(desc.MS.get(), VK_SHADER_STAGE_MESH_BIT_EXT);
     else{
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Mesh shader is required for meshlet pipeline"));
-        delete pso;
+        DestroyArenaObject(*m_context.objectArena, pso);
         return nullptr;
     }
 
@@ -115,19 +117,18 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     depthStencil.depthBoundsTestEnable = VK_FALSE;
     depthStencil.stencilTestEnable = desc.renderState.depthStencilState.stencilEnable ? VK_TRUE : VK_FALSE;
 
-    Vector<VkPipelineColorBlendAttachmentState, Alloc::CustomAllocator<VkPipelineColorBlendAttachmentState>> blendAttachments(Alloc::CustomAllocator<VkPipelineColorBlendAttachmentState>(*m_context.objectArena));
+    Vector<VkPipelineColorBlendAttachmentState, Alloc::ScratchAllocator<VkPipelineColorBlendAttachmentState>> blendAttachments(Alloc::ScratchAllocator<VkPipelineColorBlendAttachmentState>(scratchArena));
+    blendAttachments.reserve(fbinfo.colorFormats.empty() ? 1 : fbinfo.colorFormats.size());
     for(u32 i = 0; i < fbinfo.colorFormats.size(); ++i){
         VkPipelineColorBlendAttachmentState attachment = {};
         attachment.blendEnable = VK_FALSE;
-        attachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | 
-                                    VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+        attachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
         blendAttachments.push_back(attachment);
     }
     if(blendAttachments.empty()){
         VkPipelineColorBlendAttachmentState attachment = {};
         attachment.blendEnable = VK_FALSE;
-        attachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | 
-                                    VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+        attachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
         blendAttachments.push_back(attachment);
     }
 
@@ -144,7 +145,8 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     dynamicState.dynamicStateCount = static_cast<u32>(LengthOf(dynamicStates));
     dynamicState.pDynamicStates = dynamicStates;
 
-    Vector<VkFormat, Alloc::CustomAllocator<VkFormat>> colorFormats(Alloc::CustomAllocator<VkFormat>(*m_context.objectArena));
+    Vector<VkFormat, Alloc::ScratchAllocator<VkFormat>> colorFormats(Alloc::ScratchAllocator<VkFormat>(scratchArena));
+    colorFormats.reserve(fbinfo.colorFormats.size());
     for(const auto& format : fbinfo.colorFormats){
         colorFormats.push_back(ConvertFormat(format));
     }
@@ -173,11 +175,11 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     res = vkCreateGraphicsPipelines(m_context.device, m_context.pipelineCache, 1, &pipelineInfo, m_context.allocationCallbacks, &pso->pipeline);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create meshlet pipeline: {}"), ResultToString(res));
-        delete pso;
+        DestroyArenaObject(*m_context.objectArena, pso);
         return nullptr;
     }
 
-    return MeshletPipelineHandle(pso, AdoptRef);
+    return MeshletPipelineHandle(pso, MeshletPipelineHandle::deleter_type(m_context.objectArena), AdoptRef);
 }
 
 

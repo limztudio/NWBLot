@@ -174,6 +174,10 @@ private:
 
 template<typename T, usize maxAlignSize = s_maxAlignSize>
 class ScratchAllocator{
+    template<typename F, usize>
+    friend class ScratchAllocator;
+
+
 public:
     static_assert(!IsConst_V<T>, "NWB::Core::Alloc::ScratchAllocator forbids containers of const elements because allocator<const T> is ill-formed.");
     static_assert(!IsFunction_V<T>, "NWB::Core::Alloc::ScratchAllocator forbids allocators for function elements because of [allocator.requirements].");
@@ -192,6 +196,13 @@ public:
 
 
 public:
+    template<typename U>
+    struct rebind{
+        using other = ScratchAllocator<U, maxAlignSize>;
+    };
+
+
+public:
     constexpr ScratchAllocator(ScratchArena<maxAlignSize>& arena)noexcept : m_arena(arena){}
     constexpr ScratchAllocator(const ScratchAllocator&)noexcept = default;
     template<class F>
@@ -203,7 +214,7 @@ public:
 
 public:
     constexpr void deallocate(T* const buffer, const usize count)noexcept{
-        assert((buffer != nullptr || count == 0) && "null pointer cannot point to a block of non-zero size");
+        NWB_ASSERT_MSG((buffer != nullptr || count == 0), NWB_TEXT("null pointer cannot point to a block of non-zero size"));
 
         const usize bytes = sizeof(T) * count;
         (void)bytes;
@@ -222,6 +233,8 @@ private:
 };
 template<typename T, typename F, usize maxAlignSize>
 inline bool operator==(const ScratchAllocator<T, maxAlignSize>&, const ScratchAllocator<F, maxAlignSize>&)noexcept{ return true; }
+template<typename T, typename F, usize maxAlignSize>
+inline bool operator!=(const ScratchAllocator<T, maxAlignSize>&, const ScratchAllocator<F, maxAlignSize>&)noexcept{ return false; }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

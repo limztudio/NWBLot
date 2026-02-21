@@ -37,11 +37,11 @@ Object ComputePipeline::getNativeHandle(ObjectType objectType){
 ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& desc){
     VkResult res = VK_SUCCESS;
 
-    auto* pso = new ComputePipeline(m_context);
+    auto* pso = NewArenaObject<ComputePipeline>(*m_context.objectArena, m_context);
     pso->desc = desc;
 
     if(!desc.CS){
-        delete pso;
+        DestroyArenaObject(*m_context.objectArena, pso);
         return nullptr;
     }
 
@@ -74,11 +74,11 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
 
     res = vkCreateComputePipelines(m_context.device, m_context.pipelineCache, 1, &pipelineInfo, m_context.allocationCallbacks, &pso->pipeline);
     if(res != VK_SUCCESS){
-        delete pso;
+        DestroyArenaObject(*m_context.objectArena, pso);
         return nullptr;
     }
 
-    return ComputePipelineHandle(pso, AdoptRef);
+    return ComputePipelineHandle(pso, ComputePipelineHandle::deleter_type(m_context.objectArena), AdoptRef);
 }
 
 

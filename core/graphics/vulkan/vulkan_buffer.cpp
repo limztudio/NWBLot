@@ -37,7 +37,7 @@ Buffer::~Buffer(){
 BufferHandle Device::createBuffer(const BufferDesc& d){
     VkResult res = VK_SUCCESS;
 
-    auto* buffer = new Buffer(m_context, m_allocator);
+    auto* buffer = NewArenaObject<Buffer>(*m_context.objectArena, m_context, m_allocator);
     buffer->desc = d;
 
     VkBufferUsageFlags usageFlags = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
@@ -96,7 +96,7 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
         }
     }
 
-    return RefCountPtr<IBuffer, ArenaRefDeleter<IBuffer>>(buffer, AdoptRef);
+    return BufferHandle(buffer, BufferHandle::deleter_type(m_context.objectArena), AdoptRef);
 }
 
 void* Device::mapBuffer(IBuffer* _buffer, CpuAccessMode::Enum){
@@ -160,7 +160,7 @@ BufferHandle Device::createHandleForNativeBuffer(ObjectType objectType, Object _
     if(nativeBuffer == VK_NULL_HANDLE)
         return nullptr;
 
-    auto* buffer = new Buffer(m_context, m_allocator);
+    auto* buffer = NewArenaObject<Buffer>(*m_context.objectArena, m_context, m_allocator);
     buffer->desc = desc;
     buffer->buffer = nativeBuffer;
     buffer->managed = false;
@@ -172,7 +172,7 @@ BufferHandle Device::createHandleForNativeBuffer(ObjectType objectType, Object _
         buffer->deviceAddress = vkGetBufferDeviceAddress(m_context.device, &addressInfo);
     }
 
-    return RefCountPtr<IBuffer, ArenaRefDeleter<IBuffer>>(buffer, AdoptRef);
+    return BufferHandle(buffer, BufferHandle::deleter_type(m_context.objectArena), AdoptRef);
 }
 
 

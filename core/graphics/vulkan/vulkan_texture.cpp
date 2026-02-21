@@ -235,7 +235,7 @@ StagingTexture::~StagingTexture(){
 TextureHandle Device::createTexture(const TextureDesc& d){
     VkResult res = VK_SUCCESS;
 
-    auto* texture = new Texture(m_context, m_allocator);
+    auto* texture = NewArenaObject<Texture>(*m_context.objectArena, m_context, m_allocator);
     texture->desc = d;
 
     VkImageType imageType = __hidden_vulkan::TextureDimensionToImageType(d.dimension);
@@ -267,7 +267,7 @@ TextureHandle Device::createTexture(const TextureDesc& d){
         NWB_ASSERT_MSG(res == VK_SUCCESS, NWB_TEXT("Vulkan: Failed to allocate texture memory"));
     }
 
-    return RefCountPtr<ITexture, ArenaRefDeleter<ITexture>>(texture, AdoptRef);
+    return TextureHandle(texture, TextureHandle::deleter_type(m_context.objectArena), AdoptRef);
 }
 
 MemoryRequirements Device::getTextureMemoryRequirements(ITexture* _texture){
@@ -305,7 +305,7 @@ TextureHandle Device::createHandleForNativeTexture(ObjectType objectType, Object
     if(nativeImage == VK_NULL_HANDLE)
         return nullptr;
 
-    auto* texture = new Texture(m_context, m_allocator);
+    auto* texture = NewArenaObject<Texture>(*m_context.objectArena, m_context, m_allocator);
     texture->desc = desc;
     texture->image = nativeImage;
     texture->managed = false;
@@ -320,7 +320,7 @@ TextureHandle Device::createHandleForNativeTexture(ObjectType objectType, Object
     texture->imageInfo.format = ConvertFormat(desc.format);
     texture->imageInfo.samples = __hidden_vulkan::GetSampleCount(desc.sampleCount);
 
-    return RefCountPtr<ITexture, ArenaRefDeleter<ITexture>>(texture, AdoptRef);
+    return TextureHandle(texture, TextureHandle::deleter_type(m_context.objectArena), AdoptRef);
 }
 
 
@@ -330,7 +330,7 @@ TextureHandle Device::createHandleForNativeTexture(ObjectType objectType, Object
 SamplerHandle Device::createSampler(const SamplerDesc& d){
     VkResult res = VK_SUCCESS;
 
-    auto* sampler = new Sampler(m_context);
+    auto* sampler = NewArenaObject<Sampler>(*m_context.objectArena, m_context);
     sampler->desc = d;
 
     VkFilter minFilter = d.minFilter ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
@@ -368,7 +368,7 @@ SamplerHandle Device::createSampler(const SamplerDesc& d){
     res = vkCreateSampler(m_context.device, &samplerInfo, m_context.allocationCallbacks, &sampler->sampler);
     NWB_ASSERT_MSG(res == VK_SUCCESS, NWB_TEXT("Vulkan: Failed to create sampler"));
 
-    return RefCountPtr<ISampler, ArenaRefDeleter<ISampler>>(sampler, AdoptRef);
+    return SamplerHandle(sampler, SamplerHandle::deleter_type(m_context.objectArena), AdoptRef);
 }
 
 

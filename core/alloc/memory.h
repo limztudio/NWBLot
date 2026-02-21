@@ -126,6 +126,13 @@ public:
 
 
 public:
+    template<typename U>
+    struct rebind{
+        using other = MemoryAllocator<U>;
+    };
+
+
+public:
     constexpr MemoryAllocator(MemoryArena& arena)noexcept : m_arena(arena){}
     constexpr MemoryAllocator(const MemoryAllocator&)noexcept = default;
     template<class F>
@@ -155,6 +162,8 @@ private:
 };
 template<typename T, typename F>
 inline bool operator==(const MemoryAllocator<T>&, const MemoryAllocator<F>&)noexcept{ return true; }
+template<typename T, typename F>
+inline bool operator!=(const MemoryAllocator<T>&, const MemoryAllocator<F>&)noexcept{ return false; }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

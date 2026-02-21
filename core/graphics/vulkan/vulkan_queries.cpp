@@ -15,8 +15,8 @@ NWB_VULKAN_BEGIN
 
 
 EventQueryHandle Device::createEventQuery(){
-    auto* query = new EventQuery(m_context);
-    return RefCountPtr<IEventQuery, ArenaRefDeleter<IEventQuery>>(query, AdoptRef);
+    auto* query = NewArenaObject<EventQuery>(*m_context.objectArena, m_context);
+    return EventQueryHandle(query, EventQueryHandle::deleter_type(m_context.objectArena), AdoptRef);
 }
 
 void Device::setEventQuery(IEventQuery* _query, CommandQueue::Enum queue){
@@ -59,8 +59,8 @@ void Device::resetEventQuery(IEventQuery* _query){
 }
 
 TimerQueryHandle Device::createTimerQuery(){
-    auto* query = new TimerQuery(m_context);
-    return RefCountPtr<ITimerQuery, ArenaRefDeleter<ITimerQuery>>(query, AdoptRef);
+    auto* query = NewArenaObject<TimerQuery>(*m_context.objectArena, m_context);
+    return TimerQueryHandle(query, TimerQueryHandle::deleter_type(m_context.objectArena), AdoptRef);
 }
 
 bool Device::pollTimerQuery(ITimerQuery* _query){

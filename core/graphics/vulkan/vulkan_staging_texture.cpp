@@ -37,7 +37,7 @@ static constexpr u64 AlignBufferOffset(u64 off){
 StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAccessMode::Enum cpuAccess){
     VkResult res = VK_SUCCESS;
 
-    auto* staging = new StagingTexture(m_context, m_allocator);
+    auto* staging = NewArenaObject<StagingTexture>(*m_context.objectArena, m_context, m_allocator);
     staging->desc = d;
     staging->cpuAccess = cpuAccess;
 
@@ -66,7 +66,7 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
 
     res = vkCreateBuffer(m_context.device, &bufferInfo, m_context.allocationCallbacks, &staging->buffer);
     if(res != VK_SUCCESS){
-        delete staging;
+        DestroyArenaObject(*m_context.objectArena, staging);
         return nullptr;
     }
 
@@ -102,7 +102,7 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
     if(!foundMemoryType){
         vkDestroyBuffer(m_context.device, staging->buffer, m_context.allocationCallbacks);
         staging->buffer = VK_NULL_HANDLE;
-        delete staging;
+        DestroyArenaObject(*m_context.objectArena, staging);
         return nullptr;
     }
 
@@ -115,7 +115,7 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
     if(res != VK_SUCCESS){
         vkDestroyBuffer(m_context.device, staging->buffer, m_context.allocationCallbacks);
         staging->buffer = VK_NULL_HANDLE;
-        delete staging;
+        DestroyArenaObject(*m_context.objectArena, staging);
         return nullptr;
     }
 
@@ -125,7 +125,7 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
         vkDestroyBuffer(m_context.device, staging->buffer, m_context.allocationCallbacks);
         staging->memory = VK_NULL_HANDLE;
         staging->buffer = VK_NULL_HANDLE;
-        delete staging;
+        DestroyArenaObject(*m_context.objectArena, staging);
         return nullptr;
     }
 
@@ -136,12 +136,12 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
             vkDestroyBuffer(m_context.device, staging->buffer, m_context.allocationCallbacks);
             staging->memory = VK_NULL_HANDLE;
             staging->buffer = VK_NULL_HANDLE;
-            delete staging;
+            DestroyArenaObject(*m_context.objectArena, staging);
             return nullptr;
         }
     }
 
-    return StagingTextureHandle(staging, AdoptRef);
+    return StagingTextureHandle(staging, StagingTextureHandle::deleter_type(m_context.objectArena), AdoptRef);
 }
 
 void* Device::mapStagingTexture(IStagingTexture* tex, const TextureSlice& slice, CpuAccessMode::Enum, usize* outRowPitch){

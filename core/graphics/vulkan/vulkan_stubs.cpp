@@ -332,10 +332,12 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
     if(numDescs == 0)
         return;
 
-    Vector<VkConvertCooperativeVectorMatrixInfoNV, Alloc::CustomAllocator<VkConvertCooperativeVectorMatrixInfoNV>> vkConvertDescs(Alloc::CustomAllocator<VkConvertCooperativeVectorMatrixInfoNV>(*m_context.objectArena));
+    Alloc::ScratchArena<> scratchArena;
+
+    Vector<VkConvertCooperativeVectorMatrixInfoNV, Alloc::ScratchAllocator<VkConvertCooperativeVectorMatrixInfoNV>> vkConvertDescs(Alloc::ScratchAllocator<VkConvertCooperativeVectorMatrixInfoNV>(scratchArena));
     vkConvertDescs.reserve(numDescs);
 
-    Vector<usize, Alloc::CustomAllocator<usize>> dstSizes(Alloc::CustomAllocator<usize>(*m_context.objectArena));
+    Vector<usize, Alloc::ScratchAllocator<usize>> dstSizes(Alloc::ScratchAllocator<usize>(scratchArena));
     dstSizes.reserve(numDescs);
 
     for(usize i = 0; i < numDescs; ++i){
@@ -436,10 +438,12 @@ void Device::getTextureTiling(ITexture* _texture, u32* numTiles, PackedMipDesc* 
     u32 tileHeight = 1;
     u32 tileDepth = 1;
 
+    Alloc::ScratchArena<> scratchArena;
+
     uint32_t sparseReqCount = 0;
     vkGetImageSparseMemoryRequirements(m_context.device, texture->image, &sparseReqCount, nullptr);
 
-    Vector<VkSparseImageMemoryRequirements, Alloc::CustomAllocator<VkSparseImageMemoryRequirements>> sparseReqs(sparseReqCount, Alloc::CustomAllocator<VkSparseImageMemoryRequirements>(*m_context.objectArena));
+    Vector<VkSparseImageMemoryRequirements, Alloc::ScratchAllocator<VkSparseImageMemoryRequirements>> sparseReqs(sparseReqCount, Alloc::ScratchAllocator<VkSparseImageMemoryRequirements>(scratchArena));
     if(sparseReqCount > 0)
         vkGetImageSparseMemoryRequirements(m_context.device, texture->image, &sparseReqCount, sparseReqs.data());
 
@@ -465,7 +469,7 @@ void Device::getTextureTiling(ITexture* _texture, u32* numTiles, PackedMipDesc* 
         &formatPropCount, nullptr
         );
 
-    Vector<VkSparseImageFormatProperties, Alloc::CustomAllocator<VkSparseImageFormatProperties>> formatProps(formatPropCount, Alloc::CustomAllocator<VkSparseImageFormatProperties>(*m_context.objectArena));
+    Vector<VkSparseImageFormatProperties, Alloc::ScratchAllocator<VkSparseImageFormatProperties>> formatProps(formatPropCount, Alloc::ScratchAllocator<VkSparseImageFormatProperties>(scratchArena));
     if(formatPropCount > 0){
         vkGetPhysicalDeviceSparseImageFormatProperties(
             m_context.physicalDevice,

@@ -16,7 +16,7 @@ NWB_VULKAN_BEGIN
 
 CommandList::CommandList(Device& device, const CommandListParameters& params)
     : desc(params)
-    , stateTracker(new StateTracker(device.getContext()))
+    , stateTracker(MakeCustomUnique<StateTracker>(*device.getContext().objectArena, device.getContext()))
     , m_device(device)
     , m_context(device.getContext())
     , m_aftermathMarkerTracker()

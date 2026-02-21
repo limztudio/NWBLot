@@ -1011,7 +1011,7 @@ private:
 public:
     CommandListParameters desc;
     TrackedCommandBufferPtr currentCmdBuf;
-    UniquePtr<StateTracker> stateTracker;
+    CustomUniquePtr<StateTracker> stateTracker;
     bool enableAutomaticBarriers = true;
 
     GraphicsState currentGraphicsState;

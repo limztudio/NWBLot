@@ -476,7 +476,8 @@ CooperativeVectorDeviceFeatures Device::queryCoopVecFeatures(){
     if(res != VK_SUCCESS || propertyCount == 0)
         return output;
 
-    Vector<VkCooperativeVectorPropertiesNV, Alloc::CustomAllocator<VkCooperativeVectorPropertiesNV>> properties(propertyCount, Alloc::CustomAllocator<VkCooperativeVectorPropertiesNV>(*m_context.objectArena));
+    Alloc::ScratchArena<> scratchArena;
+    Vector<VkCooperativeVectorPropertiesNV, Alloc::ScratchAllocator<VkCooperativeVectorPropertiesNV>> properties(propertyCount, Alloc::ScratchAllocator<VkCooperativeVectorPropertiesNV>(scratchArena));
     for(u32 i = 0; i < propertyCount; ++i){
         properties[i].sType = VK_STRUCTURE_TYPE_COOPERATIVE_VECTOR_PROPERTIES_NV;
         properties[i].pNext = nullptr;
@@ -533,10 +534,6 @@ usize Device::getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, Coopera
 
     return 0;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 AftermathCrashDumpHelper& Device::getAftermathCrashDumpHelper(){
     return m_aftermathCrashDumpHelper;

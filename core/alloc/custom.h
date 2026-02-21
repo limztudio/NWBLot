@@ -125,6 +125,13 @@ public:
 
 
 public:
+    template<typename U>
+    struct rebind{
+        using other = CustomAllocator<U>;
+    };
+
+
+public:
     constexpr CustomAllocator(CustomArena& arena)noexcept : m_arena(arena){}
     constexpr CustomAllocator(const CustomAllocator&)noexcept = default;
     template<class F>
@@ -154,6 +161,8 @@ private:
 };
 template<typename T, typename F>
 inline bool operator==(const CustomAllocator<T>&, const CustomAllocator<F>&)noexcept{ return true; }
+template<typename T, typename F>
+inline bool operator!=(const CustomAllocator<T>&, const CustomAllocator<F>&)noexcept{ return false; }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -201,20 +210,6 @@ struct ArenaRefDeleter{
         }
     }
 };
-
-template<typename Concrete, typename... Args>
-Concrete* NewArenaObject(NWB::Core::Alloc::CustomArena& arena, Args&&... args){
-    auto* mem = arena.allocate<Concrete>(1);
-    return new(mem) Concrete(static_cast<Args&&>(args)...);
-}
-
-template<typename Concrete>
-void DestroyArenaObject(NWB::Core::Alloc::CustomArena& arena, Concrete* p){
-    if(p){
-        p->~Concrete();
-        arena.deallocate<Concrete>(p, 1);
-    }
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

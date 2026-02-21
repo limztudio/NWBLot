@@ -64,9 +64,9 @@ ShaderHandle ShaderLibrary::getShader(const Name& entryName, ShaderType::Mask sh
 
     auto it = shaders.find(entryName);
     if(it != shaders.end())
-        return ShaderHandle(it->second.get());
+        return ShaderHandle(it->second.get(), ShaderHandle::deleter_type(m_context.objectArena));
 
-    Shader* shader = new Shader(m_context);
+    Shader* shader = NewArenaObject<Shader>(*m_context.objectArena, m_context);
     shader->desc.shaderType = shaderType;
     shader->desc.entryName = entryName;
     shader->bytecode = bytecode;
@@ -79,12 +79,12 @@ ShaderHandle ShaderLibrary::getShader(const Name& entryName, ShaderType::Mask sh
     res = vkCreateShaderModule(m_context.device, &createInfo, m_context.allocationCallbacks, &shader->shaderModule);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create shader module for entry '{}': {}"), StringConvert(entryName.c_str()), ResultToString(res));
-        delete shader;
+        DestroyArenaObject(*m_context.objectArena, shader);
         return nullptr;
     }
 
-    shaders[entryName] = RefCountPtr<Shader, ArenaRefDeleter<Shader>>(shader);
-    return ShaderHandle(shader);
+    shaders[entryName] = RefCountPtr<Shader, ArenaRefDeleter<Shader>>(shader, ArenaRefDeleter<Shader>(m_context.objectArena));
+    return ShaderHandle(shader, ShaderHandle::deleter_type(m_context.objectArena));
 }
 
 
@@ -94,7 +94,7 @@ ShaderHandle ShaderLibrary::getShader(const Name& entryName, ShaderType::Mask sh
 ShaderHandle Device::createShader(const ShaderDesc& d, const void* binary, usize binarySize){
     VkResult res = VK_SUCCESS;
 
-    auto* shader = new Shader(m_context);
+    auto* shader = NewArenaObject<Shader>(*m_context.objectArena, m_context);
     shader->desc = d;
     shader->bytecode.assign(static_cast<const u8*>(binary), static_cast<const u8*>(binary) + binarySize);
 
@@ -106,11 +106,11 @@ ShaderHandle Device::createShader(const ShaderDesc& d, const void* binary, usize
     res = vkCreateShaderModule(m_context.device, &createInfo, m_context.allocationCallbacks, &shader->shaderModule);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create shader module: {}"), ResultToString(res));
-        delete shader;
+        DestroyArenaObject(*m_context.objectArena, shader);
         return nullptr;
     }
 
-    return RefCountPtr<IShader, ArenaRefDeleter<IShader>>(shader, AdoptRef);
+    return ShaderHandle(shader, ShaderHandle::deleter_type(m_context.objectArena), AdoptRef);
 }
 
 ShaderHandle Device::createShaderSpecialization(IShader* baseShader, const ShaderSpecialization* constants, u32 numConstants){
@@ -120,7 +120,7 @@ ShaderHandle Device::createShaderSpecialization(IShader* baseShader, const Shade
         return nullptr;
 
     auto* base = static_cast<Shader*>(baseShader);
-    auto* shader = new Shader(m_context);
+    auto* shader = NewArenaObject<Shader>(*m_context.objectArena, m_context);
     shader->desc = base->desc;
     shader->bytecode = base->bytecode;
 
@@ -132,7 +132,7 @@ ShaderHandle Device::createShaderSpecialization(IShader* baseShader, const Shade
     res = vkCreateShaderModule(m_context.device, &createInfo, m_context.allocationCallbacks, &shader->shaderModule);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create shader module for specialization: {}"), ResultToString(res));
-        delete shader;
+        DestroyArenaObject(*m_context.objectArena, shader);
         return nullptr;
     }
 
@@ -150,14 +150,14 @@ ShaderHandle Device::createShaderSpecialization(IShader* baseShader, const Shade
         }
     }
 
-    return RefCountPtr<IShader, ArenaRefDeleter<IShader>>(shader, AdoptRef);
+    return ShaderHandle(shader, ShaderHandle::deleter_type(m_context.objectArena), AdoptRef);
 }
 
 ShaderLibraryHandle Device::createShaderLibrary(const void* binary, usize binarySize){
-    auto* lib = new ShaderLibrary(m_context);
+    auto* lib = NewArenaObject<ShaderLibrary>(*m_context.objectArena, m_context);
     lib->bytecode.assign(static_cast<const u8*>(binary), static_cast<const u8*>(binary) + binarySize);
 
-    return RefCountPtr<IShaderLibrary, ArenaRefDeleter<IShaderLibrary>>(lib, AdoptRef);
+    return ShaderLibraryHandle(lib, ShaderLibraryHandle::deleter_type(m_context.objectArena), AdoptRef);
 }
 
 
@@ -176,11 +176,13 @@ InputLayout::InputLayout(const VulkanContext& context)
 
 
 InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 attributeCount, IShader*){
-    auto* layout = new InputLayout(m_context);
+    auto* layout = NewArenaObject<InputLayout>(*m_context.objectArena, m_context);
     layout->attributes.assign(d, d + attributeCount);
 
-    HashMap<u32, u32, Hasher<u32>, EqualTo<u32>, Alloc::CustomAllocator<Pair<const u32, u32>>> bufferStrides(0, Hasher<u32>(), EqualTo<u32>(), Alloc::CustomAllocator<Pair<const u32, u32>>(*m_context.objectArena));
-    HashMap<u32, bool, Hasher<u32>, EqualTo<u32>, Alloc::CustomAllocator<Pair<const u32, bool>>> bufferInstanced(0, Hasher<u32>(), EqualTo<u32>(), Alloc::CustomAllocator<Pair<const u32, bool>>(*m_context.objectArena));
+    Alloc::ScratchArena<> scratchArena;
+
+    HashMap<u32, u32, Hasher<u32>, EqualTo<u32>, Alloc::ScratchAllocator<Pair<const u32, u32>>> bufferStrides(0, Hasher<u32>(), EqualTo<u32>(), Alloc::ScratchAllocator<Pair<const u32, u32>>(scratchArena));
+    HashMap<u32, bool, Hasher<u32>, EqualTo<u32>, Alloc::ScratchAllocator<Pair<const u32, bool>>> bufferInstanced(0, Hasher<u32>(), EqualTo<u32>(), Alloc::ScratchAllocator<Pair<const u32, bool>>(scratchArena));
     for(const auto& attr : layout->attributes){
         u32 stride = attr.elementStride;
         if(stride == 0){
@@ -216,7 +218,7 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
         layout->vkAttributes.push_back(vkAttr);
     }
 
-    return RefCountPtr<IInputLayout, ArenaRefDeleter<IInputLayout>>(layout, AdoptRef);
+    return InputLayoutHandle(layout, InputLayoutHandle::deleter_type(m_context.objectArena), AdoptRef);
 }
 
 

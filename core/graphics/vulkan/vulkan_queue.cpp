@@ -116,9 +116,9 @@ Queue::~Queue(){
 }
 
 TrackedCommandBufferPtr Queue::createCommandBuffer(){
-    auto* cmdBuf = new TrackedCommandBuffer(m_context, m_queueID, m_queueFamilyIndex);
+    auto* cmdBuf = NewArenaObject<TrackedCommandBuffer>(*m_context.objectArena, m_context, m_queueID, m_queueFamilyIndex);
     cmdBuf->recordingID = ++m_lastRecordingID;
-    return TrackedCommandBufferPtr(cmdBuf);
+    return TrackedCommandBufferPtr(cmdBuf, TrackedCommandBufferPtr::deleter_type(m_context.objectArena));
 }
 
 TrackedCommandBufferPtr Queue::getOrCreateCommandBuffer(){
@@ -174,11 +174,13 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
 
     Mutex::scoped_lock lock(m_mutex);
 
+    Alloc::ScratchArena<> scratchArena;
+
     bool hasCommands = ppCmd && numCmd > 0;
     bool hasPendingSemaphores = !m_waitSemaphores.empty() || !m_signalSemaphores.empty();
 
     Vector<TrackedCommandBufferPtr, Alloc::CustomAllocator<TrackedCommandBufferPtr>> trackedBuffers(Alloc::CustomAllocator<TrackedCommandBufferPtr>(*m_context.objectArena));
-    Vector<VkCommandBuffer, Alloc::CustomAllocator<VkCommandBuffer>> cmdBufs(Alloc::CustomAllocator<VkCommandBuffer>(*m_context.objectArena));
+    Vector<VkCommandBuffer, Alloc::ScratchAllocator<VkCommandBuffer>> cmdBufs(Alloc::ScratchAllocator<VkCommandBuffer>(scratchArena));
 
     if(hasCommands){
         trackedBuffers.reserve(numCmd);
@@ -206,8 +208,9 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
     timelineSignal.value = submissionID;
     timelineSignal.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
 
-    Vector<VkSemaphoreSubmitInfo, Alloc::CustomAllocator<VkSemaphoreSubmitInfo>> waitInfos(Alloc::CustomAllocator<VkSemaphoreSubmitInfo>(*m_context.objectArena));
-    Vector<VkPipelineStageFlags2, Alloc::CustomAllocator<VkPipelineStageFlags2>> waitStages(Alloc::CustomAllocator<VkPipelineStageFlags2>(*m_context.objectArena));
+    Vector<VkSemaphoreSubmitInfo, Alloc::ScratchAllocator<VkSemaphoreSubmitInfo>> waitInfos(Alloc::ScratchAllocator<VkSemaphoreSubmitInfo>(scratchArena));
+    Vector<VkPipelineStageFlags2, Alloc::ScratchAllocator<VkPipelineStageFlags2>> waitStages(Alloc::ScratchAllocator<VkPipelineStageFlags2>(scratchArena));
+    waitInfos.reserve(m_waitSemaphores.size());
     for(usize i = 0; i < m_waitSemaphores.size(); ++i){
         VkSemaphoreSubmitInfo waitInfo = { VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO };
         waitInfo.semaphore = m_waitSemaphores[i];
@@ -216,7 +219,8 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
         waitInfos.push_back(waitInfo);
     }
 
-    Vector<VkSemaphoreSubmitInfo, Alloc::CustomAllocator<VkSemaphoreSubmitInfo>> signalInfos(Alloc::CustomAllocator<VkSemaphoreSubmitInfo>(*m_context.objectArena));
+    Vector<VkSemaphoreSubmitInfo, Alloc::ScratchAllocator<VkSemaphoreSubmitInfo>> signalInfos(Alloc::ScratchAllocator<VkSemaphoreSubmitInfo>(scratchArena));
+    signalInfos.reserve(1 + m_signalSemaphores.size());
     signalInfos.push_back(timelineSignal);
 
     for(usize i = 0; i < m_signalSemaphores.size(); ++i){
@@ -227,7 +231,7 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
         signalInfos.push_back(signalInfo);
     }
 
-    Vector<VkCommandBufferSubmitInfo, Alloc::CustomAllocator<VkCommandBufferSubmitInfo>> cmdBufInfos(Alloc::CustomAllocator<VkCommandBufferSubmitInfo>(*m_context.objectArena));
+    Vector<VkCommandBufferSubmitInfo, Alloc::ScratchAllocator<VkCommandBufferSubmitInfo>> cmdBufInfos(Alloc::ScratchAllocator<VkCommandBufferSubmitInfo>(scratchArena));
     cmdBufInfos.reserve(numCmd);
 
     for(VkCommandBuffer cmdBuf : cmdBufs){
@@ -376,8 +380,10 @@ void Device::queueWaitForCommandList(CommandQueue::Enum waitQueue, CommandQueue:
 void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapping* tileMappings, u32 numTileMappings){
     auto* texture = checked_cast<Texture*>(_texture);
 
-    Vector<VkSparseImageMemoryBind, Alloc::CustomAllocator<VkSparseImageMemoryBind>> sparseImageMemoryBinds(Alloc::CustomAllocator<VkSparseImageMemoryBind>(*m_context.objectArena));
-    Vector<VkSparseMemoryBind, Alloc::CustomAllocator<VkSparseMemoryBind>> sparseMemoryBinds(Alloc::CustomAllocator<VkSparseMemoryBind>(*m_context.objectArena));
+    Alloc::ScratchArena<> scratchArena(8192);
+
+    Vector<VkSparseImageMemoryBind, Alloc::ScratchAllocator<VkSparseImageMemoryBind>> sparseImageMemoryBinds(Alloc::ScratchAllocator<VkSparseImageMemoryBind>(scratchArena));
+    Vector<VkSparseMemoryBind, Alloc::ScratchAllocator<VkSparseMemoryBind>> sparseMemoryBinds(Alloc::ScratchAllocator<VkSparseMemoryBind>(scratchArena));
 
     const VkImageCreateInfo& imageInfo = texture->imageInfo;
     VkImageAspectFlags textureAspectFlags = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -403,7 +409,7 @@ void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapp
         &formatPropCount, nullptr
         );
 
-    Vector<VkSparseImageFormatProperties, Alloc::CustomAllocator<VkSparseImageFormatProperties>> formatProps(formatPropCount, Alloc::CustomAllocator<VkSparseImageFormatProperties>(*m_context.objectArena));
+    Vector<VkSparseImageFormatProperties, Alloc::ScratchAllocator<VkSparseImageFormatProperties>> formatProps(formatPropCount, Alloc::ScratchAllocator<VkSparseImageFormatProperties>(scratchArena));
     if(formatPropCount > 0)
         vkGetPhysicalDeviceSparseImageFormatProperties(
             m_context.physicalDevice,
@@ -421,7 +427,7 @@ void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapp
     uint32_t sparseReqCount = 0;
     vkGetImageSparseMemoryRequirements(m_context.device, texture->image, &sparseReqCount, nullptr);
 
-    Vector<VkSparseImageMemoryRequirements, Alloc::CustomAllocator<VkSparseImageMemoryRequirements>> sparseReqs(sparseReqCount, Alloc::CustomAllocator<VkSparseImageMemoryRequirements>(*m_context.objectArena));
+    Vector<VkSparseImageMemoryRequirements, Alloc::ScratchAllocator<VkSparseImageMemoryRequirements>> sparseReqs(sparseReqCount, Alloc::ScratchAllocator<VkSparseImageMemoryRequirements>(scratchArena));
     if(sparseReqCount > 0)
         vkGetImageSparseMemoryRequirements(m_context.device, texture->image, &sparseReqCount, sparseReqs.data());
 

@@ -102,7 +102,7 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
     if(!m_context.extensions.KHR_acceleration_structure)
         return nullptr;
 
-    auto* as = new AccelStruct(m_context);
+    auto* as = NewArenaObject<AccelStruct>(*m_context.objectArena, m_context);
     as->desc = desc;
 
     VkAccelerationStructureTypeKHR asType = desc.isTopLevel ?  VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR :  VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
@@ -117,7 +117,7 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
     as->buffer = createBuffer(bufferDesc);
 
     if(!as->buffer){
-        delete as;
+        DestroyArenaObject(*m_context.objectArena, as);
         return nullptr;
     }
 
@@ -129,7 +129,7 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
 
     res = vkCreateAccelerationStructureKHR(m_context.device, &createInfo, m_context.allocationCallbacks, &as->accelStruct);
     if(res != VK_SUCCESS){
-        delete as;
+        DestroyArenaObject(*m_context.objectArena, as);
         return nullptr;
     }
 
@@ -137,7 +137,7 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
     addressInfo.accelerationStructure = as->accelStruct;
     as->deviceAddress = vkGetAccelerationStructureDeviceAddressKHR(m_context.device, &addressInfo);
 
-    return RayTracingAccelStructHandle(as, AdoptRef);
+    return RayTracingAccelStructHandle(as, RayTracingAccelStructHandle::deleter_type(m_context.objectArena), AdoptRef);
 }
 
 RayTracingOpacityMicromapHandle Device::createOpacityMicromap(const RayTracingOpacityMicromapDesc& desc){
@@ -162,7 +162,7 @@ RayTracingOpacityMicromapHandle Device::createOpacityMicromap(const RayTracingOp
     VkMicromapBuildSizesInfoEXT buildSize = { VK_STRUCTURE_TYPE_MICROMAP_BUILD_SIZES_INFO_EXT };
     vkGetMicromapBuildSizesEXT(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &buildSize);
 
-    auto* om = new OpacityMicromap(m_context);
+    auto* om = NewArenaObject<OpacityMicromap>(*m_context.objectArena, m_context);
     om->desc = desc;
 
     BufferDesc bufferDesc;
@@ -175,7 +175,7 @@ RayTracingOpacityMicromapHandle Device::createOpacityMicromap(const RayTracingOp
     om->dataBuffer = createBuffer(bufferDesc);
 
     if(!om->dataBuffer){
-        delete om;
+        DestroyArenaObject(*m_context.objectArena, om);
         return nullptr;
     }
 
@@ -189,11 +189,11 @@ RayTracingOpacityMicromapHandle Device::createOpacityMicromap(const RayTracingOp
 
     res = vkCreateMicromapEXT(m_context.device, &createInfo, m_context.allocationCallbacks, &om->micromap);
     if(res != VK_SUCCESS){
-        delete om;
+        DestroyArenaObject(*m_context.objectArena, om);
         return nullptr;
     }
 
-    return RayTracingOpacityMicromapHandle(om, AdoptRef);
+    return RayTracingOpacityMicromapHandle(om, RayTracingOpacityMicromapHandle::deleter_type(m_context.objectArena), AdoptRef);
 }
 
 MemoryRequirements Device::getAccelStructMemoryRequirements(IRayTracingAccelStruct* _as){
@@ -336,12 +336,17 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
     if(!m_context.extensions.KHR_ray_tracing_pipeline)
         return nullptr;
 
-    auto* pso = new RayTracingPipeline(m_context);
+    auto* pso = NewArenaObject<RayTracingPipeline>(*m_context.objectArena, m_context);
     pso->desc = desc;
     pso->m_device = this;
 
-    Vector<VkPipelineShaderStageCreateInfo, Alloc::CustomAllocator<VkPipelineShaderStageCreateInfo>> stages(Alloc::CustomAllocator<VkPipelineShaderStageCreateInfo>(*m_context.objectArena));
-    Vector<VkRayTracingShaderGroupCreateInfoKHR, Alloc::CustomAllocator<VkRayTracingShaderGroupCreateInfoKHR>> groups(Alloc::CustomAllocator<VkRayTracingShaderGroupCreateInfoKHR>(*m_context.objectArena));
+    Alloc::ScratchArena<> scratchArena(4096);
+
+    Vector<VkPipelineShaderStageCreateInfo, Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>> stages(Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>(scratchArena));
+    Vector<VkRayTracingShaderGroupCreateInfoKHR, Alloc::ScratchAllocator<VkRayTracingShaderGroupCreateInfoKHR>> groups(Alloc::ScratchAllocator<VkRayTracingShaderGroupCreateInfoKHR>(scratchArena));
+
+    stages.reserve(desc.shaders.size() + desc.hitGroups.size() * 3);
+    groups.reserve(desc.shaders.size() + desc.hitGroups.size());
 
     u32 shaderIndex = 0;
 
@@ -436,7 +441,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
 
     res = vkCreateRayTracingPipelinesKHR(m_context.device, VK_NULL_HANDLE, m_context.pipelineCache, 1, &createInfo, m_context.allocationCallbacks, &pso->pipeline);
     if(res != VK_SUCCESS){
-        delete pso;
+        DestroyArenaObject(*m_context.objectArena, pso);
         return nullptr;
     }
 
@@ -449,7 +454,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
     pso->shaderGroupHandles.resize(groupCount * handleSizeAligned);
     vkGetRayTracingShaderGroupHandlesKHR(m_context.device, pso->pipeline, 0, groupCount, pso->shaderGroupHandles.size(), pso->shaderGroupHandles.data());
 
-    return RayTracingPipelineHandle(pso, AdoptRef);
+    return RayTracingPipelineHandle(pso, RayTracingPipelineHandle::deleter_type(m_context.objectArena), AdoptRef);
 }
 
 
@@ -463,9 +468,9 @@ ShaderTable::ShaderTable(const VulkanContext& context, Device* device)
 ShaderTable::~ShaderTable() = default;
 
 RayTracingShaderTableHandle RayTracingPipeline::createShaderTable(){
-    auto* sbt = new ShaderTable(m_context, m_device);
+    auto* sbt = NewArenaObject<ShaderTable>(*m_context.objectArena, m_context, m_device);
     sbt->pipeline = this;
-    return RayTracingShaderTableHandle(sbt, AdoptRef);
+    return RayTracingShaderTableHandle(sbt, RayTracingShaderTableHandle::deleter_type(m_context.objectArena), AdoptRef);
 }
 
 u32 ShaderTable::findGroupIndex(const Name& exportName)const{
@@ -695,9 +700,11 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* _as, const
 
     auto* as = checked_cast<AccelStruct*>(_as);
 
-    Vector<VkAccelerationStructureGeometryKHR, Alloc::CustomAllocator<VkAccelerationStructureGeometryKHR>> geometries(Alloc::CustomAllocator<VkAccelerationStructureGeometryKHR>(*m_context.objectArena));
-    Vector<VkAccelerationStructureBuildRangeInfoKHR, Alloc::CustomAllocator<VkAccelerationStructureBuildRangeInfoKHR>> rangeInfos(Alloc::CustomAllocator<VkAccelerationStructureBuildRangeInfoKHR>(*m_context.objectArena));
-    Vector<uint32_t, Alloc::CustomAllocator<uint32_t>> primitiveCounts(Alloc::CustomAllocator<uint32_t>(*m_context.objectArena));
+    Alloc::ScratchArena<> scratchArena(4096);
+
+    Vector<VkAccelerationStructureGeometryKHR, Alloc::ScratchAllocator<VkAccelerationStructureGeometryKHR>> geometries(Alloc::ScratchAllocator<VkAccelerationStructureGeometryKHR>(scratchArena));
+    Vector<VkAccelerationStructureBuildRangeInfoKHR, Alloc::ScratchAllocator<VkAccelerationStructureBuildRangeInfoKHR>> rangeInfos(Alloc::ScratchAllocator<VkAccelerationStructureBuildRangeInfoKHR>(scratchArena));
+    Vector<uint32_t, Alloc::ScratchAllocator<uint32_t>> primitiveCounts(Alloc::ScratchAllocator<uint32_t>(scratchArena));
 
     geometries.reserve(numGeometries);
     rangeInfos.reserve(numGeometries);
@@ -1043,3 +1050,4 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

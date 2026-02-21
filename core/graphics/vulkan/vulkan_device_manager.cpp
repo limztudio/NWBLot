@@ -238,9 +238,11 @@ bool DeviceManager::createInstance(){
 
     decltype(m_enabledExtensions.instance) requiredExtensions(m_enabledExtensions.instance);
 
+    Alloc::ScratchArena<> scratchArena(32768);
+
     uint32_t extensionCount = 0;
     vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
-    Vector<VkExtensionProperties, Alloc::CustomAllocator<VkExtensionProperties>> availableExtensions(extensionCount, Alloc::CustomAllocator<VkExtensionProperties>(m_arena));
+    Vector<VkExtensionProperties, Alloc::ScratchAllocator<VkExtensionProperties>> availableExtensions(extensionCount, Alloc::ScratchAllocator<VkExtensionProperties>(scratchArena));
     vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, availableExtensions.data());
 
     for(const auto& ext : availableExtensions){
@@ -271,7 +273,7 @@ bool DeviceManager::createInstance(){
 
     uint32_t layerCount = 0;
     vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
-    Vector<VkLayerProperties, Alloc::CustomAllocator<VkLayerProperties>> availableLayers(layerCount, Alloc::CustomAllocator<VkLayerProperties>(m_arena));
+    Vector<VkLayerProperties, Alloc::ScratchAllocator<VkLayerProperties>> availableLayers(layerCount, Alloc::ScratchAllocator<VkLayerProperties>(scratchArena));
     vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
 
     for(const auto& layer : availableLayers){
@@ -377,7 +379,10 @@ void DeviceManager::installDebugCallback(){
 bool DeviceManager::findQueueFamilies(VkPhysicalDevice physicalDevice){
     uint32_t queueFamilyCount = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, nullptr);
-    Vector<VkQueueFamilyProperties, Alloc::CustomAllocator<VkQueueFamilyProperties>> props(queueFamilyCount, Alloc::CustomAllocator<VkQueueFamilyProperties>(m_arena));
+
+    Alloc::ScratchArena<> scratchArena;
+
+    Vector<VkQueueFamilyProperties, Alloc::ScratchAllocator<VkQueueFamilyProperties>> props(queueFamilyCount, Alloc::ScratchAllocator<VkQueueFamilyProperties>(scratchArena));
     vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, props.data());
 
     m_graphicsQueueFamily = -1;
@@ -438,7 +443,10 @@ bool DeviceManager::pickPhysicalDevice(){
 
     uint32_t deviceCount = 0;
     vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, nullptr);
-    Vector<VkPhysicalDevice, Alloc::CustomAllocator<VkPhysicalDevice>> devices(deviceCount, Alloc::CustomAllocator<VkPhysicalDevice>(m_arena));
+
+    Alloc::ScratchArena<> scratchArena(32768);
+
+    Vector<VkPhysicalDevice, Alloc::ScratchAllocator<VkPhysicalDevice>> devices(deviceCount, Alloc::ScratchAllocator<VkPhysicalDevice>(scratchArena));
     vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, devices.data());
 
     i32 adapterIndex = m_deviceParams.adapterIndex;
@@ -456,8 +464,8 @@ bool DeviceManager::pickPhysicalDevice(){
     AStringStream errorStream;
     errorStream << "Cannot find a Vulkan device that supports all the required extensions and properties.";
 
-    Vector<VkPhysicalDevice, Alloc::CustomAllocator<VkPhysicalDevice>> discreteGPUs((Alloc::CustomAllocator<VkPhysicalDevice>(m_arena)));
-    Vector<VkPhysicalDevice, Alloc::CustomAllocator<VkPhysicalDevice>> otherGPUs((Alloc::CustomAllocator<VkPhysicalDevice>(m_arena)));
+    Vector<VkPhysicalDevice, Alloc::ScratchAllocator<VkPhysicalDevice>> discreteGPUs((Alloc::ScratchAllocator<VkPhysicalDevice>(scratchArena)));
+    Vector<VkPhysicalDevice, Alloc::ScratchAllocator<VkPhysicalDevice>> otherGPUs((Alloc::ScratchAllocator<VkPhysicalDevice>(scratchArena)));
 
     for(i32 deviceIndex = firstDevice; deviceIndex <= lastDevice; ++deviceIndex){
         VkPhysicalDevice dev = devices[deviceIndex];
@@ -466,12 +474,12 @@ bool DeviceManager::pickPhysicalDevice(){
 
         errorStream << std::endl << prop.deviceName << ":";
 
-        HashSet<AString, Hasher<AString>, EqualTo<AString>, Alloc::CustomAllocator<AString>> requiredExtensions(0, Hasher<AString>(), EqualTo<AString>(), Alloc::CustomAllocator<AString>(m_arena));
+        HashSet<AString, Hasher<AString>, EqualTo<AString>, Alloc::ScratchAllocator<AString>> requiredExtensions(0, Hasher<AString>(), EqualTo<AString>(), Alloc::ScratchAllocator<AString>(scratchArena));
         for(const auto& [name, _] : m_enabledExtensions.device)
             requiredExtensions.insert(name);
         uint32_t extCount = 0;
         vkEnumerateDeviceExtensionProperties(dev, nullptr, &extCount, nullptr);
-        Vector<VkExtensionProperties, Alloc::CustomAllocator<VkExtensionProperties>> deviceExtensions(extCount, Alloc::CustomAllocator<VkExtensionProperties>(m_arena));
+        Vector<VkExtensionProperties, Alloc::ScratchAllocator<VkExtensionProperties>> deviceExtensions(extCount, Alloc::ScratchAllocator<VkExtensionProperties>(scratchArena));
         vkEnumerateDeviceExtensionProperties(dev, nullptr, &extCount, deviceExtensions.data());
         for(const auto& ext : deviceExtensions)
             requiredExtensions.erase(AString(ext.extensionName));
@@ -513,7 +521,7 @@ bool DeviceManager::pickPhysicalDevice(){
 
                 uint32_t fmtCount = 0;
                 vkGetPhysicalDeviceSurfaceFormatsKHR(dev, m_windowSurface, &fmtCount, nullptr);
-                Vector<VkSurfaceFormatKHR, Alloc::CustomAllocator<VkSurfaceFormatKHR>> surfaceFmts(fmtCount, Alloc::CustomAllocator<VkSurfaceFormatKHR>(m_arena));
+                Vector<VkSurfaceFormatKHR, Alloc::ScratchAllocator<VkSurfaceFormatKHR>> surfaceFmts(fmtCount, Alloc::ScratchAllocator<VkSurfaceFormatKHR>(scratchArena));
                 vkGetPhysicalDeviceSurfaceFormatsKHR(dev, m_windowSurface, &fmtCount, surfaceFmts.data());
 
                 if(surfaceCaps.minImageCount > m_deviceParams.swapChainBufferCount ||
@@ -585,9 +593,11 @@ bool DeviceManager::pickPhysicalDevice(){
 bool DeviceManager::createDevice(){
     VkResult res = VK_SUCCESS;
 
+    Alloc::ScratchArena<> scratchArena(32768);
+
     uint32_t extCount = 0;
     vkEnumerateDeviceExtensionProperties(m_vulkanPhysicalDevice, nullptr, &extCount, nullptr);
-    Vector<VkExtensionProperties, Alloc::CustomAllocator<VkExtensionProperties>> deviceExtensions(extCount, Alloc::CustomAllocator<VkExtensionProperties>(m_arena));
+    Vector<VkExtensionProperties, Alloc::ScratchAllocator<VkExtensionProperties>> deviceExtensions(extCount, Alloc::ScratchAllocator<VkExtensionProperties>(scratchArena));
     vkEnumerateDeviceExtensionProperties(m_vulkanPhysicalDevice, nullptr, &extCount, deviceExtensions.data());
 
     for(const auto& ext : deviceExtensions){
@@ -656,7 +666,7 @@ bool DeviceManager::createDevice(){
     physicalDeviceFeatures2.pNext = pNext;
     vkGetPhysicalDeviceFeatures2(m_vulkanPhysicalDevice, &physicalDeviceFeatures2);
 
-    HashSet<i32, Hasher<i32>, EqualTo<i32>, Alloc::CustomAllocator<i32>> uniqueQueueFamilies(0, Hasher<i32>(), EqualTo<i32>(), Alloc::CustomAllocator<i32>(m_arena));
+    HashSet<i32, Hasher<i32>, EqualTo<i32>, Alloc::ScratchAllocator<i32>> uniqueQueueFamilies(0, Hasher<i32>(), EqualTo<i32>(), Alloc::ScratchAllocator<i32>(scratchArena));
     uniqueQueueFamilies.insert(m_graphicsQueueFamily);
 
     if(!m_deviceParams.headlessDevice)
@@ -667,7 +677,7 @@ bool DeviceManager::createDevice(){
         uniqueQueueFamilies.insert(m_transferQueueFamily);
 
     f32 priority = 1.f;
-    Vector<VkDeviceQueueCreateInfo, Alloc::CustomAllocator<VkDeviceQueueCreateInfo>> queueDesc((Alloc::CustomAllocator<VkDeviceQueueCreateInfo>(m_arena)));
+    Vector<VkDeviceQueueCreateInfo, Alloc::ScratchAllocator<VkDeviceQueueCreateInfo>> queueDesc((Alloc::ScratchAllocator<VkDeviceQueueCreateInfo>(scratchArena)));
     queueDesc.reserve(uniqueQueueFamilies.size());
     for(i32 queueFamily : uniqueQueueFamilies){
         VkDeviceQueueCreateInfo queueInfo = {};
@@ -821,11 +831,16 @@ bool DeviceManager::createSwapChain(){
 
     VkExtent2D extent = { m_deviceParams.backBufferWidth, m_deviceParams.backBufferHeight };
 
-    Alloc::CustomAllocator<uint32_t> uqAlloc(m_arena);
-    HashSet<uint32_t, Hasher<uint32_t>, EqualTo<uint32_t>, Alloc::CustomAllocator<uint32_t>> uniqueQueues(0, Hasher<uint32_t>(), EqualTo<uint32_t>(), uqAlloc);
+    Alloc::ScratchArena<> scratchArena;
+
+    HashSet<uint32_t, Hasher<uint32_t>, EqualTo<uint32_t>, Alloc::ScratchAllocator<uint32_t>> uniqueQueues(0, Hasher<uint32_t>(), EqualTo<uint32_t>(), Alloc::ScratchAllocator<uint32_t>(scratchArena));
     uniqueQueues.insert(static_cast<uint32_t>(m_graphicsQueueFamily));
     uniqueQueues.insert(static_cast<uint32_t>(m_presentQueueFamily));
-    auto queues = __hidden_vulkan::SetToVector(uniqueQueues, m_arena);
+
+    Vector<uint32_t, Alloc::ScratchAllocator<uint32_t>> queues(Alloc::ScratchAllocator<uint32_t>(scratchArena));
+    queues.reserve(uniqueQueues.size());
+    for(const auto& q : uniqueQueues)
+        queues.push_back(q);
     const bool enableSwapChainSharing = queues.size() > 1;
 
     VkSwapchainCreateInfoKHR desc = {};
@@ -875,7 +890,8 @@ bool DeviceManager::createSwapChain(){
 
     uint32_t imageCount = 0;
     vkGetSwapchainImagesKHR(m_vulkanDevice, m_swapChain, &imageCount, nullptr);
-    Vector<VkImage, Alloc::CustomAllocator<VkImage>> images(imageCount, Alloc::CustomAllocator<VkImage>(m_arena));
+
+    Vector<VkImage, Alloc::ScratchAllocator<VkImage>> images(imageCount, Alloc::ScratchAllocator<VkImage>(scratchArena));
     vkGetSwapchainImagesKHR(m_vulkanDevice, m_swapChain, &imageCount, images.data());
 
     for(auto image : images){
@@ -1145,7 +1161,10 @@ bool DeviceManager::enumerateAdapters(Vector<AdapterInfo>& outAdapters){
 
     uint32_t deviceCount = 0;
     vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, nullptr);
-    Vector<VkPhysicalDevice, Alloc::CustomAllocator<VkPhysicalDevice>> devices(deviceCount, Alloc::CustomAllocator<VkPhysicalDevice>(m_arena));
+
+    Alloc::ScratchArena<> scratchArena;
+
+    Vector<VkPhysicalDevice, Alloc::ScratchAllocator<VkPhysicalDevice>> devices(deviceCount, Alloc::ScratchAllocator<VkPhysicalDevice>(scratchArena));
     vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, devices.data());
     outAdapters.clear();
 

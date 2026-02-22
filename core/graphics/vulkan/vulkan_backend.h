@@ -39,13 +39,16 @@ namespace __hidden_vulkan{
         if(!dst || !src || size == 0)
             return;
 
-        if(workerPool.isParallelEnabled() && size >= parallelThreshold){
+        const usize effectiveParallelThreshold = parallelThreshold > 0 ? parallelThreshold : 1;
+        const usize effectiveChunkSize = chunkSize > 0 ? chunkSize : 1;
+
+        if(workerPool.isParallelEnabled() && size >= effectiveParallelThreshold){
             auto* dstBytes = static_cast<u8*>(dst);
             auto* srcBytes = static_cast<const u8*>(src);
-            const usize chunkCount = (size + chunkSize - 1) / chunkSize;
+            const usize chunkCount = 1 + ((size - 1) / effectiveChunkSize);
             workerPool.parallelFor(static_cast<usize>(0), chunkCount, [&](usize chunkIndex){
-                const usize chunkOffset = chunkIndex * chunkSize;
-                const usize chunkBytes = Min(chunkSize, size - chunkOffset);
+                const usize chunkOffset = chunkIndex * effectiveChunkSize;
+                const usize chunkBytes = Min(effectiveChunkSize, size - chunkOffset);
                 NWB_MEMCPY(dstBytes + chunkOffset, chunkBytes, srcBytes + chunkOffset, chunkBytes);
             });
             return;

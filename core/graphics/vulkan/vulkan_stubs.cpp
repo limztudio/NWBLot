@@ -482,7 +482,7 @@ void Device::getTextureTiling(ITexture* _texture, u32* numTiles, PackedMipDesc* 
         texture->m_imageInfo.usage,
         texture->m_imageInfo.tiling,
         &formatPropCount, nullptr
-        );
+    );
 
     Vector<VkSparseImageFormatProperties, Alloc::ScratchAllocator<VkSparseImageFormatProperties>> formatProps(formatPropCount, Alloc::ScratchAllocator<VkSparseImageFormatProperties>(scratchArena));
     if(formatPropCount > 0){
@@ -493,7 +493,8 @@ void Device::getTextureTiling(ITexture* _texture, u32* numTiles, PackedMipDesc* 
             texture->m_imageInfo.samples,
             texture->m_imageInfo.usage,
             texture->m_imageInfo.tiling,
-            &formatPropCount, formatProps.data());
+            &formatPropCount, formatProps.data()
+        );
     }
 
     if(!formatProps.empty()){

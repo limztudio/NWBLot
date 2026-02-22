@@ -555,6 +555,11 @@ AftermathCrashDumpHelper& Device::getAftermathCrashDumpHelper(){
 
 DeviceHandle CreateDevice(const DeviceDesc& desc){
     NWB_ASSERT(desc.allocator != nullptr);
+    NWB_ASSERT(desc.threadPool != nullptr);
+
+    if(!desc.allocator || !desc.threadPool)
+        return nullptr;
+
     auto* device = NewArenaObject<Device>(desc.allocator->getObjectArena(), desc);
     return DeviceHandle(device, DeviceHandle::deleter_type(&desc.allocator->getObjectArena()), AdoptRef);
 }

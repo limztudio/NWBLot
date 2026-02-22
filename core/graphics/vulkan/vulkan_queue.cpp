@@ -91,6 +91,8 @@ Queue::Queue(const VulkanContext& context, CommandQueue::Enum queueID, VkQueue q
     , m_commandBuffersInFlight(Alloc::CustomAllocator<TrackedCommandBufferPtr>(*context.objectArena))
     , m_commandBuffersPool(Alloc::CustomAllocator<TrackedCommandBufferPtr>(*context.objectArena))
 {
+    VkResult res = VK_SUCCESS;
+
     VkSemaphoreTypeCreateInfo timelineInfo = { VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO };
     timelineInfo.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE;
     timelineInfo.initialValue = 0;
@@ -98,7 +100,11 @@ Queue::Queue(const VulkanContext& context, CommandQueue::Enum queueID, VkQueue q
     VkSemaphoreCreateInfo semaphoreInfo = { VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
     semaphoreInfo.pNext = &timelineInfo;
 
-    vkCreateSemaphore(m_context.device, &semaphoreInfo, m_context.allocationCallbacks, &m_trackingSemaphore);
+    res = vkCreateSemaphore(m_context.device, &semaphoreInfo, m_context.allocationCallbacks, &m_trackingSemaphore);
+    if(res != VK_SUCCESS){
+        m_trackingSemaphore = VK_NULL_HANDLE;
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create queue timeline semaphore: {}"), ResultToString(res));
+    }
 }
 Queue::~Queue(){
     VkResult res = VK_SUCCESS;
@@ -216,7 +222,6 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
     timelineSignal.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
 
     Vector<VkSemaphoreSubmitInfo, Alloc::ScratchAllocator<VkSemaphoreSubmitInfo>> waitInfos{ Alloc::ScratchAllocator<VkSemaphoreSubmitInfo>(scratchArena) };
-    Vector<VkPipelineStageFlags2, Alloc::ScratchAllocator<VkPipelineStageFlags2>> waitStages{ Alloc::ScratchAllocator<VkPipelineStageFlags2>(scratchArena) };
     waitInfos.reserve(m_waitSemaphores.size());
     for(usize i = 0; i < m_waitSemaphores.size(); ++i){
         VkSemaphoreSubmitInfo waitInfo = { VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO };
@@ -239,7 +244,7 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
     }
 
     Vector<VkCommandBufferSubmitInfo, Alloc::ScratchAllocator<VkCommandBufferSubmitInfo>> cmdBufInfos{ Alloc::ScratchAllocator<VkCommandBufferSubmitInfo>(scratchArena) };
-    cmdBufInfos.reserve(numCmd);
+    cmdBufInfos.reserve(cmdBufs.size());
 
     for(VkCommandBuffer cmdBuf : cmdBufs){
         VkCommandBufferSubmitInfo cmdBufInfo = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO };
@@ -385,7 +390,15 @@ void Device::queueWaitForCommandList(CommandQueue::Enum waitQueue, CommandQueue:
 
 
 void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapping* tileMappings, u32 numTileMappings){
+    VkResult res = VK_SUCCESS;
+
+    if(!_texture || !tileMappings || numTileMappings == 0)
+        return;
+
     auto* texture = checked_cast<Texture*>(_texture);
+    Alloc::ThreadPool* workerPool = m_context.threadPool;
+    const bool useParallelPool = workerPool && workerPool->isParallelEnabled();
+    const usize mappingCount = static_cast<usize>(numTileMappings);
 
     Alloc::ScratchArena<> scratchArena(8192);
 
@@ -449,14 +462,12 @@ void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapp
         usize opaqueBase = 0;
         usize imageBase = 0;
     };
-    Vector<MappingBindCounts, Alloc::ScratchAllocator<MappingBindCounts>> mappingCounts(numTileMappings, Alloc::ScratchAllocator<MappingBindCounts>(scratchArena));
+    Vector<MappingBindCounts, Alloc::ScratchAllocator<MappingBindCounts>> mappingCounts(mappingCount, Alloc::ScratchAllocator<MappingBindCounts>(scratchArena));
 
-    usize totalOpaqueBinds = 0;
-    usize totalImageBinds = 0;
-    for(u32 i = 0; i < numTileMappings; ++i){
+    auto countMappingBinds = [&](usize i){
         MappingBindCounts& counts = mappingCounts[i];
-        counts.opaqueBase = totalOpaqueBinds;
-        counts.imageBase = totalImageBinds;
+        counts.opaqueCount = 0;
+        counts.imageCount = 0;
 
         const TextureTilesMapping& mapping = tileMappings[i];
         for(u32 j = 0; j < mapping.numTextureRegions; ++j){
@@ -466,7 +477,23 @@ void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapp
             else
                 ++counts.imageCount;
         }
+    };
 
+    constexpr usize kParallelTileCountThreshold = 128;
+    constexpr usize kTileCountGrainSize = 16;
+    if(useParallelPool && mappingCount >= kParallelTileCountThreshold)
+        workerPool->parallelFor(static_cast<usize>(0), mappingCount, kTileCountGrainSize, countMappingBinds);
+    else{
+        for(usize i = 0; i < mappingCount; ++i)
+            countMappingBinds(i);
+    }
+
+    usize totalOpaqueBinds = 0;
+    usize totalImageBinds = 0;
+    for(usize i = 0; i < mappingCount; ++i){
+        MappingBindCounts& counts = mappingCounts[i];
+        counts.opaqueBase = totalOpaqueBinds;
+        counts.imageBase = totalImageBinds;
         totalOpaqueBinds += counts.opaqueCount;
         totalImageBinds += counts.imageCount;
     }
@@ -517,10 +544,10 @@ void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapp
     constexpr usize kParallelTileMappingThreshold = 128;
     constexpr usize kTileMappingGrainSize = 8;
     const usize totalBindings = totalOpaqueBinds + totalImageBinds;
-    if(m_context.threadPool->isParallelEnabled() && totalBindings >= kParallelTileMappingThreshold)
-        m_context.threadPool->parallelFor(static_cast<usize>(0), numTileMappings, kTileMappingGrainSize, buildMappingBinds);
+    if(useParallelPool && totalBindings >= kParallelTileMappingThreshold)
+        workerPool->parallelFor(static_cast<usize>(0), mappingCount, kTileMappingGrainSize, buildMappingBinds);
     else{
-        for(usize i = 0; i < numTileMappings; ++i)
+        for(usize i = 0; i < mappingCount; ++i)
             buildMappingBinds(i);
     }
 
@@ -544,7 +571,9 @@ void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapp
         bindSparseInfo.pImageOpaqueBinds = &sparseOpaqueBindInfo;
     }
 
-    vkQueueBindSparse(m_queue, 1, &bindSparseInfo, VK_NULL_HANDLE);
+    res = vkQueueBindSparse(m_queue, 1, &bindSparseInfo, VK_NULL_HANDLE);
+    if(res != VK_SUCCESS)
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to update texture tile mappings: {}"), ResultToString(res));
 }
 
 

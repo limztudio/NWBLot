@@ -79,10 +79,16 @@ constexpr auto MakePair(Arg0&& arg0, Arg1&& arg1){
     return Pair<Arg0Type, Arg1Type>(Forward<Arg0>(arg0), Forward<Arg1>(arg1));
 }
 
-template<typename Arg0, typename... Args>
-using Tuple = std::tuple<Arg0, Args...>;
+template<typename... Args>
+using Tuple = std::tuple<Args...>;
 template<typename... Args>
 constexpr auto MakeTuple(Args&&... args){ return std::make_tuple(Forward<Args>(args)...); }
+template<size_t I, typename... Args>
+constexpr auto& Get(Tuple<Args...>& t){ return std::get<I>(t); }
+template<size_t I, typename... Args>
+constexpr const auto& Get(const Tuple<Args...>& t){ return std::get<I>(t); }
+template<typename... Args>
+constexpr auto Tie(Args&... args){ return std::tie(args...); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

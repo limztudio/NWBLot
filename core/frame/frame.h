@@ -8,6 +8,7 @@
 #include <core/global.h>
 
 #include <core/common/common.h>
+#include <core/ecs/ecs.h>
 #include <core/graphics/graphics.h>
 
 
@@ -41,12 +42,17 @@ public:
     bool update(float delta);
     bool render();
 
+public:
+    inline ECS::World& world(){ return m_world; }
+    inline const ECS::World& world()const{ return m_world; }
+
 
 private:
     Common::FrameData m_data;
     BasicString<tchar> m_appliedWindowTitle;
 
 private:
+    ECS::World m_world;
     Graphics m_graphics;
 };
 

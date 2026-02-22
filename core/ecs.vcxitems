@@ -1,0 +1,29 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup Label="Globals">
+    <MSBuildAllProjects Condition="'$(MSBuildVersion)' == '' Or '$(MSBuildVersion)' &lt; '16.0'">$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <ItemsProjectGuid>{3A7DE81A-C807-4B1B-8B92-762A5E1DE1D5}</ItemsProjectGuid>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories);$(MSBuildThisFileDirectory)</AdditionalIncludeDirectories>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ProjectCapability Include="SourceItemsFromImports" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="$(MSBuildThisFileDirectory)ecs\entity.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)ecs\system.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)ecs\world.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="$(MSBuildThisFileDirectory)ecs\entity.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)ecs\component.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)ecs\system.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)ecs\query.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)ecs\world.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)ecs\ecs.h" />
+  </ItemGroup>
+</Project>

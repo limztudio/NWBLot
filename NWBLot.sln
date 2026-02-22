@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 17
-VisualStudioVersion = 17.10.35122.118
+# Visual Studio Version 18
+VisualStudioVersion = 18.3.11512.155 d18.3
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "loader_win", "loader\loader_win.vcxproj", "{444BDA19-1C4C-46A3-A9AC-944369FCCD6D}"
 EndProject
@@ -58,6 +58,10 @@ EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "loader", "loader\loader.vcxitems", "{E4255DA4-E58C-46C4-AA34-37454F0D36A3}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libcurl_and", "3rd_parties\curl\libcurl_and.vcxproj", "{4E0E4BA9-63B8-4275-8039-CFCBDB04CB7A}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ecs", "core\ecs.vcxitems", "{3A7DE81A-C807-4B1B-8B92-762A5E1DE1D5}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ecs_win", "core\ecs_win.vcxproj", "{398A0D86-0574-4A01-9AB9-21FDD55CDA26}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -186,6 +190,18 @@ Global
 		{4E0E4BA9-63B8-4275-8039-CFCBDB04CB7A}.opt|Android-arm64-v8a.ActiveCfg = dbg|ARM64
 		{4E0E4BA9-63B8-4275-8039-CFCBDB04CB7A}.opt|Android-arm64-v8a.Build.0 = dbg|ARM64
 		{4E0E4BA9-63B8-4275-8039-CFCBDB04CB7A}.opt|x64.ActiveCfg = fin|ARM64
+		{398A0D86-0574-4A01-9AB9-21FDD55CDA26}.dbg|Android-arm64-v8a.ActiveCfg = dbg|x64
+		{398A0D86-0574-4A01-9AB9-21FDD55CDA26}.dbg|Android-arm64-v8a.Build.0 = dbg|x64
+		{398A0D86-0574-4A01-9AB9-21FDD55CDA26}.dbg|x64.ActiveCfg = dbg|x64
+		{398A0D86-0574-4A01-9AB9-21FDD55CDA26}.dbg|x64.Build.0 = dbg|x64
+		{398A0D86-0574-4A01-9AB9-21FDD55CDA26}.fin|Android-arm64-v8a.ActiveCfg = fin|x64
+		{398A0D86-0574-4A01-9AB9-21FDD55CDA26}.fin|Android-arm64-v8a.Build.0 = fin|x64
+		{398A0D86-0574-4A01-9AB9-21FDD55CDA26}.fin|x64.ActiveCfg = fin|x64
+		{398A0D86-0574-4A01-9AB9-21FDD55CDA26}.fin|x64.Build.0 = fin|x64
+		{398A0D86-0574-4A01-9AB9-21FDD55CDA26}.opt|Android-arm64-v8a.ActiveCfg = opt|x64
+		{398A0D86-0574-4A01-9AB9-21FDD55CDA26}.opt|Android-arm64-v8a.Build.0 = opt|x64
+		{398A0D86-0574-4A01-9AB9-21FDD55CDA26}.opt|x64.ActiveCfg = opt|x64
+		{398A0D86-0574-4A01-9AB9-21FDD55CDA26}.opt|x64.Build.0 = opt|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -214,6 +230,8 @@ Global
 		{008C5CA9-C302-476D-9522-82996B0688DE} = {CFE39472-2E21-4B67-9107-BF6DB86A9606}
 		{55BED694-9B31-4D8A-B7DB-A9C394F6FCD0} = {CFE39472-2E21-4B67-9107-BF6DB86A9606}
 		{4E0E4BA9-63B8-4275-8039-CFCBDB04CB7A} = {64BAECF7-F9F4-4DE8-B4FE-0F3123038189}
+		{3A7DE81A-C807-4B1B-8B92-762A5E1DE1D5} = {027298CC-1FD1-4E7A-AD78-8F251DB56C6E}
+		{398A0D86-0574-4A01-9AB9-21FDD55CDA26} = {027298CC-1FD1-4E7A-AD78-8F251DB56C6E}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {379F8795-FF4F-4779-BCAC-25452D9B0E5D}

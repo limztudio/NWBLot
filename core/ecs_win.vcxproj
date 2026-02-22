@@ -14,11 +14,19 @@
       <Platform>x64</Platform>
     </ProjectConfiguration>
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="alloc_win.vcxproj">
+      <Project>{eaeb21b7-2cd6-4ee0-9d26-f607bcd7c5d3}</Project>
+    </ProjectReference>
+    <ProjectReference Include="graphics_win.vcxproj">
+      <Project>{cff12a98-c588-4586-9837-683f6ba8dc0f}</Project>
+    </ProjectReference>
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
-    <ProjectGuid>{7BC9137C-EAA2-4FE2-B4AD-C03C173AA73B}</ProjectGuid>
-    <RootNamespace>frame_win</RootNamespace>
+    <ProjectGuid>{398A0D86-0574-4A01-9AB9-21FDD55CDA26}</ProjectGuid>
+    <RootNamespace>ecs_win</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -38,7 +46,7 @@
   <ImportGroup Label="ExtensionSettings">
   </ImportGroup>
   <ImportGroup Label="Shared">
-    <Import Project="frame.vcxitems" />
+    <Import Project="ecs.vcxitems" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='dbg|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
@@ -47,7 +55,7 @@
     <Import Project="..\configuration\simdAVX2.props" />
     <Import Project="..\configuration\unicodeChar.props" />
     <Import Project="..\configuration\basicInclude.props" />
-    <Import Project="..\configuration\libcurlInclude.props" />
+    <Import Project="..\configuration\tbbInclude.props" />
     <Import Project="..\configuration\3rdPartyContainerInclude.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='opt|x64'">
@@ -57,7 +65,7 @@
     <Import Project="..\configuration\simdAVX2.props" />
     <Import Project="..\configuration\unicodeChar.props" />
     <Import Project="..\configuration\basicInclude.props" />
-    <Import Project="..\configuration\libcurlInclude.props" />
+    <Import Project="..\configuration\tbbInclude.props" />
     <Import Project="..\configuration\3rdPartyContainerInclude.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='fin|x64'">
@@ -67,39 +75,19 @@
     <Import Project="..\configuration\simdAVX2.props" />
     <Import Project="..\configuration\unicodeChar.props" />
     <Import Project="..\configuration\basicInclude.props" />
-    <Import Project="..\configuration\libcurlInclude.props" />
+    <Import Project="..\configuration\tbbInclude.props" />
     <Import Project="..\configuration\3rdPartyContainerInclude.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='dbg|x64'">
-    <TargetName>frame</TargetName>
+    <TargetName>ecs</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='opt|x64'">
-    <TargetName>frame</TargetName>
+    <TargetName>ecs</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='fin|x64'">
-    <TargetName>frame</TargetName>
+    <TargetName>ecs</TargetName>
   </PropertyGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='dbg|x64'">
-  </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='opt|x64'">
-  </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='fin|x64'">
-  </ItemDefinitionGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\logger\logclient_win.vcxproj">
-      <Project>{5bde19c4-41a9-4c6c-847e-1c978d315aa1}</Project>
-    </ProjectReference>
-    <ProjectReference Include="common_win.vcxproj">
-      <Project>{89fa56d0-3dda-4af6-8970-2dfbf76d4b47}</Project>
-    </ProjectReference>
-    <ProjectReference Include="ecs_win.vcxproj">
-      <Project>{398a0d86-0574-4a01-9ab9-21fdd55cda26}</Project>
-    </ProjectReference>
-    <ProjectReference Include="graphics_win.vcxproj">
-      <Project>{cff12a98-c588-4586-9837-683f6ba8dc0f}</Project>
-    </ProjectReference>
-  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

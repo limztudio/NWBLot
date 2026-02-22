@@ -32,7 +32,7 @@ void Frame::cleanup(){
     m_graphics.destroy();
 }
 bool Frame::update(float delta){
-    (void)delta;
+    m_world.tick(delta);
     return m_graphics.runFrame();
 }
 bool Frame::render(){

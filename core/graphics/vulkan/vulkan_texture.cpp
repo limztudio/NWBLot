@@ -115,7 +115,8 @@ constexpr VkImageCreateFlags PickImageFlags(const TextureDesc& desc){
 
 
 Texture::Texture(const VulkanContext& context, VulkanAllocator& allocator)
-    : m_context(context)
+    : RefCounter<ITexture>(*context.threadPool)
+    , m_context(context)
     , m_allocator(allocator)
     , m_views(0, Hasher<u64>(), EqualTo<u64>(), Alloc::CustomAllocator<Pair<const u64, VkImageView>>(*context.objectArena))
 {}
@@ -209,7 +210,8 @@ Object Texture::getNativeView(ObjectType objectType, Format::Enum format, Textur
 
 
 StagingTexture::StagingTexture(const VulkanContext& context, VulkanAllocator& allocator)
-    : m_context(context)
+    : RefCounter<IStagingTexture>(*context.threadPool)
+    , m_context(context)
     , m_allocator(allocator)
 {}
 StagingTexture::~StagingTexture(){
@@ -571,7 +573,7 @@ void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, co
     }
 
     const usize uploadSize = static_cast<usize>(dataSize);
-    __hidden_vulkan::CopyHostMemory(&m_device.getWorkerPool(), cpuVA, data, uploadSize);
+    __hidden_vulkan::CopyHostMemory(m_context.threadPool, cpuVA, data, uploadSize);
 
     VkImageMemoryBarrier2 barrier = { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2 };
     barrier.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;

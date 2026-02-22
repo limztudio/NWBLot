@@ -15,7 +15,8 @@ NWB_VULKAN_BEGIN
 
 
 CommandList::CommandList(Device& device, const CommandListParameters& params)
-    : m_desc(params)
+    : RefCounter<ICommandList>(*device.getContext().threadPool)
+    , m_desc(params)
     , m_stateTracker(MakeCustomUnique<StateTracker>(*device.getContext().objectArena, device.getContext()))
     , m_device(device)
     , m_context(device.getContext())

@@ -980,6 +980,7 @@ bool DeviceManager::createDeviceInternal(){
     deviceDesc.vulkanLibraryName = m_deviceParams.vulkanLibraryName;
     deviceDesc.systemMemoryAllocator = m_deviceParams.allocator ? &m_deviceParams.allocator->getSystemMemoryAllocator() : nullptr;
     deviceDesc.allocator = m_deviceParams.allocator;
+    deviceDesc.threadPool = m_deviceParams.threadPool;
 
     m_rhiDevice = CreateDevice(deviceDesc);
 

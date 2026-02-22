@@ -40,6 +40,7 @@ public:
 
 private:
     GraphicsAllocator m_allocator;
+    Alloc::ThreadPool m_threadPool;
     DeviceCreationParameters m_deviceCreationParams;
 
 private:

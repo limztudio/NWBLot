@@ -380,7 +380,7 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
         vkConvertDescs[i] = vkDesc;
     };
 
-    auto& workerPool = m_device.getWorkerPool();
+    auto& workerPool = *m_context.threadPool;
     constexpr usize kParallelConvertThreshold = 256;
     constexpr usize kConvertGrainSize = 64;
     if(workerPool.isParallelEnabled() && validDescs.size() >= kParallelConvertThreshold)

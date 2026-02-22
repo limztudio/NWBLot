@@ -15,7 +15,8 @@ NWB_VULKAN_BEGIN
 
 
 Buffer::Buffer(const VulkanContext& context, VulkanAllocator& allocator)
-    : m_context(context)
+    : RefCounter<IBuffer>(*context.threadPool)
+    , m_context(context)
     , m_allocator(allocator)
     , m_versionTracking(Alloc::CustomAllocator<u64>(*context.objectArena))
 {}
@@ -192,7 +193,7 @@ void CommandList::writeBuffer(IBuffer* _buffer, const void* data, usize dataSize
         return;
     }
 
-    __hidden_vulkan::CopyHostMemory(&m_device.getWorkerPool(), cpuVA, data, dataSize);
+    __hidden_vulkan::CopyHostMemory(m_context.threadPool, cpuVA, data, dataSize);
 
     VkBufferCopy region{};
     region.srcOffset = stagingOffset;

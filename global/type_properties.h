@@ -98,15 +98,15 @@ template<typename T, size_t Size>
 constexpr auto LengthOf(const T(&)[Size])noexcept{ return Size; }
 
 template<typename T>
-constexpr auto Forward(RemoveReference_T<T>& v)noexcept{ return static_cast<T&&>(v); }
+constexpr T&& Forward(RemoveReference_T<T>& v)noexcept{ return static_cast<T&&>(v); }
 template<typename T>
-constexpr auto Forward(RemoveReference_T<T>&& v)noexcept{
+constexpr T&& Forward(RemoveReference_T<T>&& v)noexcept{
     static_assert(!IsLValueReference_V<T>, "bad forward call");
     return static_cast<T&&>(v);
 }
 
 template<typename T>
-constexpr auto Move(T&& v)noexcept{ return static_cast<RemoveReference_T<T>&&>(v); }
+constexpr RemoveReference_T<T>&& Move(T&& v)noexcept{ return static_cast<RemoveReference_T<T>&&>(v); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

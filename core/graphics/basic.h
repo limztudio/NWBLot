@@ -7,7 +7,7 @@
 
 #include <core/global.h>
 
-#include <core/common/common.h>
+#include <core/alloc/alloc.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -76,12 +76,12 @@ inline bool operator!=(const Object& lhs, const Object& rhs)noexcept{ return lhs
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class IResource{
+class IResource : public Alloc::ITaskScheduler{
     template<typename> friend struct ArenaRefDeleter;
 
 
 protected:
-    IResource()noexcept = default;
+    inline explicit IResource(Alloc::ThreadPool& pool)noexcept : Alloc::ITaskScheduler(pool){}
     virtual ~IResource()noexcept = default;
     
     

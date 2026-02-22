@@ -18,6 +18,30 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_graphics{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static u32 QueryGraphicsWorkerThreadCount(){
+    u32 coreCount = Alloc::QueryCoreCount(Alloc::CoreAffinity::Performance);
+    if(coreCount <= 1)
+        coreCount = Alloc::QueryCoreCount(Alloc::CoreAffinity::Any);
+
+    return coreCount > 1 ? (coreCount - 1) : 0;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 IDeviceManager* IDeviceManager::create(GraphicsAPI::Enum api, const DeviceCreationParameters& params){
     switch(api){
     case GraphicsAPI::VULKAN:
@@ -34,8 +58,10 @@ IDeviceManager* IDeviceManager::create(GraphicsAPI::Enum api, const DeviceCreati
 
 Graphics::Graphics()
     : m_allocator(s_maxDynamicAllocSize)
+    , m_threadPool(__hidden_graphics::QueryGraphicsWorkerThreadCount(), Alloc::CoreAffinity::Any)
 {
     m_deviceCreationParams.allocator = &m_allocator;
+    m_deviceCreationParams.threadPool = &m_threadPool;
     m_deviceManager = IDeviceManager::create(GraphicsAPI::VULKAN, m_deviceCreationParams);
 }
 Graphics::~Graphics(){

@@ -80,6 +80,7 @@ struct VulkanContext{
 
     Alloc::CustomArena* objectArena = nullptr;
     GraphicsAllocator* allocator = nullptr;
+    Alloc::ThreadPool* threadPool = nullptr;
 
     VkPhysicalDeviceProperties physicalDeviceProperties{};
     VkPhysicalDeviceMemoryProperties memoryProperties{};
@@ -162,7 +163,7 @@ class Queue final : NoCopy{
 
 
 public:
-    Queue(const VulkanContext& context, Alloc::ThreadPool& workerPool, CommandQueue::Enum queueID, VkQueue queue, u32 queueFamilyIndex);
+    Queue(const VulkanContext& context, CommandQueue::Enum queueID, VkQueue queue, u32 queueFamilyIndex);
     ~Queue();
 
 
@@ -193,7 +194,6 @@ private:
     VkSemaphore m_trackingSemaphore = VK_NULL_HANDLE;
 
     const VulkanContext& m_context;
-    Alloc::ThreadPool& m_workerPool;
 
     VkQueue m_queue;
     CommandQueue::Enum m_queueID;
@@ -281,8 +281,9 @@ private:
         u64 allocated;
         u64 version;
 
-        BufferChunk(BufferHandle buf, u64 sz)
-            : buffer(Move(buf))
+        BufferChunk(Alloc::ThreadPool& pool, BufferHandle buf, u64 sz)
+            : RefCounter<IResource>(pool)
+            , buffer(Move(buf))
             , size(sz)
             , allocated(0)
             , version(0)
@@ -689,7 +690,7 @@ class RayTracingPipeline final : public RefCounter<IRayTracingPipeline>, NoCopy{
 
 
 public:
-    RayTracingPipeline(const VulkanContext& context);
+    RayTracingPipeline(const VulkanContext& context, Device& device);
     virtual ~RayTracingPipeline()override;
 
 
@@ -706,7 +707,7 @@ private:
     Vector<u8, Alloc::CustomAllocator<u8>> m_shaderGroupHandles;
 
     const VulkanContext& m_context;
-    Device* m_device = nullptr;
+    Device& m_device;
 };
 
 
@@ -720,7 +721,7 @@ class ShaderTable final : public RefCounter<IRayTracingShaderTable>, NoCopy{
 
 
 public:
-    ShaderTable(const VulkanContext& context, Device* device);
+    ShaderTable(const VulkanContext& context, Device& device);
     virtual ~ShaderTable()override;
 
 
@@ -760,7 +761,7 @@ private:
     u32 m_callableCount = 0;
 
     const VulkanContext& m_context;
-    Device* m_device = nullptr;
+    Device& m_device;
 };
 
 
@@ -1230,8 +1231,6 @@ public:
     [[nodiscard]] const VulkanContext& getContext()const{ return m_context; }
     [[nodiscard]] Queue* getQueue(CommandQueue::Enum queueType)const;
     [[nodiscard]] VulkanAllocator& getAllocator(){ return m_allocator; }
-    [[nodiscard]] Alloc::ThreadPool& getWorkerPool(){ return m_workerPool; }
-    [[nodiscard]] const Alloc::ThreadPool& getWorkerPool()const{ return m_workerPool; }
     [[nodiscard]] UploadManager* getUploadManager(){ return m_uploadManager.get(); }
     [[nodiscard]] UploadManager* getScratchManager(){ return m_scratchManager.get(); }
 
@@ -1246,7 +1245,6 @@ private:
 
     VulkanContext m_context;
     VulkanAllocator m_allocator;
-    Alloc::ThreadPool m_workerPool;
     CustomUniquePtr<Queue> m_queues[static_cast<u32>(CommandQueue::kCount)];
 
     CustomUniquePtr<UploadManager> m_uploadManager;

@@ -15,7 +15,8 @@ NWB_VULKAN_BEGIN
 
 
 ComputePipeline::ComputePipeline(const VulkanContext& context)
-    : m_context(context)
+    : RefCounter<IComputePipeline>(*context.threadPool)
+    , m_context(context)
 {}
 ComputePipeline::~ComputePipeline(){
     if(m_pipeline){

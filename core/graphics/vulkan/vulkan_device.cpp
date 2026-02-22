@@ -74,15 +74,6 @@ static void VulkanSystemFree(void* pUserData, void* pMemory){
     allocator->deallocate(allocator->userData, pMemory);
 }
 
-static u32 QueryVulkanWorkerThreadCount(){
-    u32 coreCount = Alloc::QueryCoreCount(Alloc::CoreAffinity::Performance);
-    if(coreCount <= 1)
-        coreCount = Alloc::QueryCoreCount(Alloc::CoreAffinity::Any);
-
-    return coreCount > 1 ? (coreCount - 1) : 0;
-}
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -93,9 +84,9 @@ static u32 QueryVulkanWorkerThreadCount(){
 
 
 Device::Device(const DeviceDesc& desc)
-    : m_aftermathEnabled(desc.aftermathEnabled)
+    : RefCounter<IDevice>(*desc.threadPool)
+    , m_aftermathEnabled(desc.aftermathEnabled)
     , m_allocator(m_context)
-    , m_workerPool(__hidden_vulkan::QueryVulkanWorkerThreadCount(), Alloc::CoreAffinity::Any)
 {
     VkResult res = VK_SUCCESS;
 
@@ -103,6 +94,7 @@ Device::Device(const DeviceDesc& desc)
     m_context.physicalDevice = desc.physicalDevice;
     m_context.device = desc.device;
     m_context.allocator = desc.allocator;
+    m_context.threadPool = desc.threadPool;
     m_context.objectArena = desc.allocator ? &desc.allocator->getObjectArena() : nullptr;
 
     if(desc.allocationCallbacks)
@@ -207,19 +199,19 @@ Device::Device(const DeviceDesc& desc)
     if(desc.graphicsQueue && desc.graphicsQueueIndex >= 0){
         auto& arena = *m_context.objectArena;
         auto* mem = arena.allocate<Queue>(1);
-        auto* q = new(mem) Queue(m_context, m_workerPool, CommandQueue::Graphics, desc.graphicsQueue, desc.graphicsQueueIndex);
+        auto* q = new(mem) Queue(m_context, CommandQueue::Graphics, desc.graphicsQueue, desc.graphicsQueueIndex);
         m_queues[static_cast<u32>(CommandQueue::Graphics)] = CustomUniquePtr<Queue>(q, CustomUniquePtr<Queue>::deleter_type(arena));
     }
     if(desc.computeQueue && desc.computeQueueIndex >= 0){
         auto& arena = *m_context.objectArena;
         auto* mem = arena.allocate<Queue>(1);
-        auto* q = new(mem) Queue(m_context, m_workerPool, CommandQueue::Compute, desc.computeQueue, desc.computeQueueIndex);
+        auto* q = new(mem) Queue(m_context, CommandQueue::Compute, desc.computeQueue, desc.computeQueueIndex);
         m_queues[static_cast<u32>(CommandQueue::Compute)] = CustomUniquePtr<Queue>(q, CustomUniquePtr<Queue>::deleter_type(arena));
     }
     if(desc.transferQueue && desc.transferQueueIndex >= 0){
         auto& arena = *m_context.objectArena;
         auto* mem = arena.allocate<Queue>(1);
-        auto* q = new(mem) Queue(m_context, m_workerPool, CommandQueue::Copy, desc.transferQueue, desc.transferQueueIndex);
+        auto* q = new(mem) Queue(m_context, CommandQueue::Copy, desc.transferQueue, desc.transferQueueIndex);
         m_queues[static_cast<u32>(CommandQueue::Copy)] = CustomUniquePtr<Queue>(q, CustomUniquePtr<Queue>::deleter_type(arena));
     }
 
@@ -391,7 +383,8 @@ Object Device::getNativeQueue(ObjectType objectType, CommandQueue::Enum queue){
 
 
 Heap::Heap(const VulkanContext& context)
-    : m_context(context)
+    : RefCounter<IHeap>(*context.threadPool)
+    , m_context(context)
 {}
 Heap::~Heap(){
     if(m_memory != VK_NULL_HANDLE){
@@ -509,8 +502,8 @@ CooperativeVectorDeviceFeatures Device::queryCoopVecFeatures(){
     };
 
     constexpr usize kParallelCoopVecThreshold = 128;
-    if(m_workerPool.isParallelEnabled() && propertyCount >= kParallelCoopVecThreshold)
-        m_workerPool.parallelFor(static_cast<usize>(0), propertyCount, fillMatMulFormat);
+    if(m_context.threadPool->isParallelEnabled() && propertyCount >= kParallelCoopVecThreshold)
+        m_context.threadPool->parallelFor(static_cast<usize>(0), propertyCount, fillMatMulFormat);
     else{
         for(usize i = 0; i < propertyCount; ++i)
             fillMatMulFormat(i);

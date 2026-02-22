@@ -17,7 +17,8 @@ NWB_VULKAN_BEGIN
 
 
 Sampler::Sampler(const VulkanContext& context)
-    : m_context(context)
+    : RefCounter<ISampler>(*context.threadPool)
+    , m_context(context)
 {}
 Sampler::~Sampler(){
     if(m_sampler != VK_NULL_HANDLE){
@@ -31,7 +32,8 @@ Sampler::~Sampler(){
 
 
 Shader::Shader(const VulkanContext& context)
-    : m_context(context)
+    : RefCounter<IShader>(*context.threadPool)
+    , m_context(context)
     , m_bytecode(Alloc::CustomAllocator<u8>(*context.objectArena))
     , m_specializationEntries(Alloc::CustomAllocator<VkSpecializationMapEntry>(*context.objectArena))
     , m_specializationData(Alloc::CustomAllocator<u8>(*context.objectArena))
@@ -48,7 +50,8 @@ Shader::~Shader(){
 
 
 ShaderLibrary::ShaderLibrary(const VulkanContext& context)
-    : m_context(context)
+    : RefCounter<IShaderLibrary>(*context.threadPool)
+    , m_context(context)
     , m_bytecode(Alloc::CustomAllocator<u8>(*context.objectArena))
     , m_shaders(0, Hasher<Name>(), EqualTo<Name>(), Alloc::CustomAllocator<Pair<const Name, RefCountPtr<Shader, ArenaRefDeleter<Shader>>>>(*context.objectArena))
 {}
@@ -150,8 +153,8 @@ ShaderHandle Device::createShaderSpecialization(IShader* baseShader, const Shade
         };
 
         constexpr usize kParallelSpecializationThreshold = 256;
-        if(m_workerPool.isParallelEnabled() && numConstants >= kParallelSpecializationThreshold)
-            m_workerPool.parallelFor(static_cast<usize>(0), numConstants, fillConstant);
+        if(m_context.threadPool->isParallelEnabled() && numConstants >= kParallelSpecializationThreshold)
+            m_context.threadPool->parallelFor(static_cast<usize>(0), numConstants, fillConstant);
         else{
             for(usize i = 0; i < numConstants; ++i)
                 fillConstant(i);
@@ -173,7 +176,8 @@ ShaderLibraryHandle Device::createShaderLibrary(const void* binary, usize binary
 
 
 InputLayout::InputLayout(const VulkanContext& context)
-    : m_context(context)
+    : RefCounter<IInputLayout>(*context.threadPool)
+    , m_context(context)
     , m_attributes(Alloc::CustomAllocator<VertexAttributeDesc>(*context.objectArena))
     , m_bindings(Alloc::CustomAllocator<VkVertexInputBindingDescription>(*context.objectArena))
     , m_vkAttributes(Alloc::CustomAllocator<VkVertexInputAttributeDescription>(*context.objectArena))
@@ -234,7 +238,8 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
 
 
 Framebuffer::Framebuffer(const VulkanContext& context)
-    : m_context(context)
+    : RefCounter<IFramebuffer>(*context.threadPool)
+    , m_context(context)
     , m_resources(Alloc::CustomAllocator<RefCountPtr<ITexture, ArenaRefDeleter<ITexture>>>(*context.objectArena))
 {}
 Framebuffer::~Framebuffer(){
@@ -254,7 +259,8 @@ Framebuffer::~Framebuffer(){
 
 
 EventQuery::EventQuery(const VulkanContext& context)
-    : m_context(context)
+    : RefCounter<IEventQuery>(*context.threadPool)
+    , m_context(context)
 {
     VkResult res = VK_SUCCESS;
 
@@ -276,7 +282,8 @@ EventQuery::~EventQuery(){
 
 
 TimerQuery::TimerQuery(const VulkanContext& context)
-    : m_context(context)
+    : RefCounter<ITimerQuery>(*context.threadPool)
+    , m_context(context)
 {
     VkResult res = VK_SUCCESS;
 

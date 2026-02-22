@@ -90,7 +90,8 @@ constexpr VkShaderStageFlags ConvertShaderStages(ShaderType::Mask stages){
 
 
 BindingLayout::BindingLayout(const VulkanContext& context)
-    : m_context(context)
+    : RefCounter<IBindingLayout>(*context.threadPool)
+    , m_context(context)
     , m_descriptorSetLayouts(Alloc::CustomAllocator<VkDescriptorSetLayout>(*context.objectArena))
 {}
 BindingLayout::~BindingLayout(){
@@ -111,7 +112,8 @@ BindingLayout::~BindingLayout(){
 
 
 DescriptorTable::DescriptorTable(const VulkanContext& context)
-    : m_context(context)
+    : RefCounter<IDescriptorTable>(*context.threadPool)
+    , m_context(context)
     , m_descriptorSets(Alloc::CustomAllocator<VkDescriptorSet>(*context.objectArena))
 {}
 DescriptorTable::~DescriptorTable(){
@@ -126,7 +128,8 @@ DescriptorTable::~DescriptorTable(){
 
 
 BindingSet::BindingSet(const VulkanContext& context)
-    : m_context(context)
+    : RefCounter<IBindingSet>(*context.threadPool)
+    , m_context(context)
     , m_descriptorSets(Alloc::CustomAllocator<VkDescriptorSet>(*context.objectArena))
 {}
 BindingSet::~BindingSet(){

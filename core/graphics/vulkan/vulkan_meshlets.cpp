@@ -17,7 +17,8 @@ NWB_VULKAN_BEGIN
 
 
 MeshletPipeline::MeshletPipeline(const VulkanContext& context)
-    : m_context(context)
+    : RefCounter<IMeshletPipeline>(*context.threadPool)
+    , m_context(context)
 {}
 MeshletPipeline::~MeshletPipeline(){
     if(m_pipeline){

@@ -155,7 +155,8 @@ constexpr VkPipelineColorBlendAttachmentState ConvertBlendState(const BlendState
 
 
 GraphicsPipeline::GraphicsPipeline(const VulkanContext& context)
-    : m_context(context)
+    : RefCounter<IGraphicsPipeline>(*context.threadPool)
+    , m_context(context)
 {}
 GraphicsPipeline::~GraphicsPipeline(){
     if(m_pipeline){

@@ -39,7 +39,8 @@ VkDeviceAddress GetBufferDeviceAddress(IBuffer* _buffer, u64 offset){
 
 
 AccelStruct::AccelStruct(const VulkanContext& context)
-    : m_context(context)
+    : RefCounter<IRayTracingAccelStruct>(*context.threadPool)
+    , m_context(context)
 {}
 AccelStruct::~AccelStruct(){
     if(m_compactionQueryPool != VK_NULL_HANDLE){
@@ -66,7 +67,8 @@ Object AccelStruct::getNativeHandle(ObjectType objectType){
 
 
 OpacityMicromap::OpacityMicromap(const VulkanContext& context)
-    : m_context(context)
+    : RefCounter<IRayTracingOpacityMicromap>(*context.threadPool)
+    , m_context(context)
 {}
 OpacityMicromap::~OpacityMicromap(){
     if(m_micromap != VK_NULL_HANDLE){
@@ -80,9 +82,11 @@ OpacityMicromap::~OpacityMicromap(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RayTracingPipeline::RayTracingPipeline(const VulkanContext& context)
-    : m_context(context)
+RayTracingPipeline::RayTracingPipeline(const VulkanContext& context, Device& device)
+    : RefCounter<IRayTracingPipeline>(*context.threadPool)
+    , m_context(context)
     , m_shaderGroupHandles(Alloc::CustomAllocator<u8>(*context.objectArena))
+    , m_device(device)
 {}
 RayTracingPipeline::~RayTracingPipeline(){
     if(m_pipeline){
@@ -341,9 +345,8 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
     if(!m_context.extensions.KHR_ray_tracing_pipeline)
         return nullptr;
 
-    auto* pso = NewArenaObject<RayTracingPipeline>(*m_context.objectArena, m_context);
+    auto* pso = NewArenaObject<RayTracingPipeline>(*m_context.objectArena, m_context, *this);
     pso->m_desc = desc;
-    pso->m_device = this;
 
     Alloc::ScratchArena<> scratchArena(4096);
 
@@ -466,8 +469,9 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ShaderTable::ShaderTable(const VulkanContext& context, Device* device)
-    : m_context(context)
+ShaderTable::ShaderTable(const VulkanContext& context, Device& device)
+    : RefCounter<IRayTracingShaderTable>(*context.threadPool)
+    , m_context(context)
     , m_device(device)
 {}
 ShaderTable::~ShaderTable() = default;
@@ -497,20 +501,17 @@ u32 ShaderTable::findGroupIndex(const Name& exportName)const{
 }
 
 void ShaderTable::allocateSBTBuffer(BufferHandle& outBuffer, u64 sbtSize){
-    if(!m_device)
-        return;
-
     BufferDesc bufferDesc;
     bufferDesc.byteSize = sbtSize;
     bufferDesc.debugName = "SBT_Buffer";
     bufferDesc.isShaderBindingTable = true;
     bufferDesc.cpuAccess = CpuAccessMode::Write;
 
-    outBuffer = m_device->createBuffer(bufferDesc);
+    outBuffer = m_device.createBuffer(bufferDesc);
 }
 
 void ShaderTable::setRayGenerationShader(const Name& exportName, IBindingSet* /*bindings*/){
-    if(!m_pipeline || !m_device)
+    if(!m_pipeline)
         return;
 
     u32 handleSize = m_context.rayTracingPipelineProperties.shaderGroupHandleSize;
@@ -527,15 +528,15 @@ void ShaderTable::setRayGenerationShader(const Name& exportName, IBindingSet* /*
 
     u32 groupIndex = findGroupIndex(exportName);
 
-    void* mapped = m_device->mapBuffer(m_raygenBuffer.get(), CpuAccessMode::Write);
+    void* mapped = m_device.mapBuffer(m_raygenBuffer.get(), CpuAccessMode::Write);
     if(mapped){
         NWB_MEMCPY(mapped, handleSizeAligned, m_pipeline->m_shaderGroupHandles.data() + groupIndex * handleSizeAligned, handleSize);
-        m_device->unmapBuffer(m_raygenBuffer.get());
+        m_device.unmapBuffer(m_raygenBuffer.get());
     }
 }
 
 u32 ShaderTable::addMissShader(const Name& exportName, IBindingSet* /*bindings*/){
-    if(!m_pipeline || !m_device)
+    if(!m_pipeline)
         return m_missCount++;
 
     u32 handleSize = m_context.rayTracingPipelineProperties.shaderGroupHandleSize;
@@ -551,21 +552,21 @@ u32 ShaderTable::addMissShader(const Name& exportName, IBindingSet* /*bindings*/
     if(!newBuffer)
         return m_missCount++;
 
-    void* mapped = m_device->mapBuffer(newBuffer.get(), CpuAccessMode::Write);
+    void* mapped = m_device.mapBuffer(newBuffer.get(), CpuAccessMode::Write);
     if(mapped){
         if(m_missBuffer && m_missCount > 0){
-            void* oldMapped = m_device->mapBuffer(m_missBuffer.get(), CpuAccessMode::Read);
+            void* oldMapped = m_device.mapBuffer(m_missBuffer.get(), CpuAccessMode::Read);
             if(oldMapped){
                 const usize copySize = static_cast<usize>(m_missCount) * handleSizeAligned;
-                __hidden_vulkan::CopyHostMemory(m_device ? &m_device->getWorkerPool() : nullptr, mapped, oldMapped, copySize);
-                m_device->unmapBuffer(m_missBuffer.get());
+                __hidden_vulkan::CopyHostMemory(m_context.threadPool, mapped, oldMapped, copySize);
+                m_device.unmapBuffer(m_missBuffer.get());
             }
         }
 
         u32 groupIndex = findGroupIndex(exportName);
         auto* dst = static_cast<u8*>(mapped) + m_missCount * handleSizeAligned;
         NWB_MEMCPY(dst, handleSizeAligned, m_pipeline->m_shaderGroupHandles.data() + groupIndex * handleSizeAligned, handleSize);
-        m_device->unmapBuffer(newBuffer.get());
+        m_device.unmapBuffer(newBuffer.get());
     }
 
     m_missBuffer = newBuffer;
@@ -574,7 +575,7 @@ u32 ShaderTable::addMissShader(const Name& exportName, IBindingSet* /*bindings*/
 }
 
 u32 ShaderTable::addHitGroup(const Name& exportName, IBindingSet* /*bindings*/){
-    if(!m_pipeline || !m_device)
+    if(!m_pipeline)
         return m_hitCount++;
 
     u32 handleSize = m_context.rayTracingPipelineProperties.shaderGroupHandleSize;
@@ -590,21 +591,21 @@ u32 ShaderTable::addHitGroup(const Name& exportName, IBindingSet* /*bindings*/){
     if(!newBuffer)
         return m_hitCount++;
 
-    void* mapped = m_device->mapBuffer(newBuffer.get(), CpuAccessMode::Write);
+    void* mapped = m_device.mapBuffer(newBuffer.get(), CpuAccessMode::Write);
     if(mapped){
         if(m_hitBuffer && m_hitCount > 0){
-            void* oldMapped = m_device->mapBuffer(m_hitBuffer.get(), CpuAccessMode::Read);
+            void* oldMapped = m_device.mapBuffer(m_hitBuffer.get(), CpuAccessMode::Read);
             if(oldMapped){
                 const usize copySize = static_cast<usize>(m_hitCount) * handleSizeAligned;
-                __hidden_vulkan::CopyHostMemory(m_device ? &m_device->getWorkerPool() : nullptr, mapped, oldMapped, copySize);
-                m_device->unmapBuffer(m_hitBuffer.get());
+                __hidden_vulkan::CopyHostMemory(m_context.threadPool, mapped, oldMapped, copySize);
+                m_device.unmapBuffer(m_hitBuffer.get());
             }
         }
 
         u32 groupIndex = findGroupIndex(exportName);
         auto* dst = static_cast<u8*>(mapped) + m_hitCount * handleSizeAligned;
         NWB_MEMCPY(dst, handleSizeAligned, m_pipeline->m_shaderGroupHandles.data() + groupIndex * handleSizeAligned, handleSize);
-        m_device->unmapBuffer(newBuffer.get());
+        m_device.unmapBuffer(newBuffer.get());
     }
 
     m_hitBuffer = newBuffer;
@@ -613,7 +614,7 @@ u32 ShaderTable::addHitGroup(const Name& exportName, IBindingSet* /*bindings*/){
 }
 
 u32 ShaderTable::addCallableShader(const Name& exportName, IBindingSet* /*bindings*/){
-    if(!m_pipeline || !m_device)
+    if(!m_pipeline)
         return m_callableCount++;
 
     u32 handleSize = m_context.rayTracingPipelineProperties.shaderGroupHandleSize;
@@ -629,21 +630,21 @@ u32 ShaderTable::addCallableShader(const Name& exportName, IBindingSet* /*bindin
     if(!newBuffer)
         return m_callableCount++;
 
-    void* mapped = m_device->mapBuffer(newBuffer.get(), CpuAccessMode::Write);
+    void* mapped = m_device.mapBuffer(newBuffer.get(), CpuAccessMode::Write);
     if(mapped){
         if(m_callableBuffer && m_callableCount > 0){
-            void* oldMapped = m_device->mapBuffer(m_callableBuffer.get(), CpuAccessMode::Read);
+            void* oldMapped = m_device.mapBuffer(m_callableBuffer.get(), CpuAccessMode::Read);
             if(oldMapped){
                 const usize copySize = static_cast<usize>(m_callableCount) * handleSizeAligned;
-                __hidden_vulkan::CopyHostMemory(m_device ? &m_device->getWorkerPool() : nullptr, mapped, oldMapped, copySize);
-                m_device->unmapBuffer(m_callableBuffer.get());
+                __hidden_vulkan::CopyHostMemory(m_context.threadPool, mapped, oldMapped, copySize);
+                m_device.unmapBuffer(m_callableBuffer.get());
             }
         }
 
         u32 groupIndex = findGroupIndex(exportName);
         auto* dst = static_cast<u8*>(mapped) + m_callableCount * handleSizeAligned;
         NWB_MEMCPY(dst, handleSizeAligned, m_pipeline->m_shaderGroupHandles.data() + groupIndex * handleSizeAligned, handleSize);
-        m_device->unmapBuffer(newBuffer.get());
+        m_device.unmapBuffer(newBuffer.get());
     }
 
     m_callableBuffer = newBuffer;
@@ -771,7 +772,7 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* _as, const
         primitiveCounts[i] = static_cast<uint32_t>(primitiveCount);
     };
 
-    auto& workerPool = m_device.getWorkerPool();
+    auto& workerPool = *m_context.threadPool;
     constexpr usize kParallelGeometryThreshold = 256;
     constexpr usize kGeometryGrainSize = 64;
     if(workerPool.isParallelEnabled() && numGeometries >= kParallelGeometryThreshold)
@@ -979,7 +980,7 @@ void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* _as, const Ra
         };
 
         // TLAS instance conversion is CPU-only and scales with scene instance count.
-        auto& workerPool = m_device.getWorkerPool();
+        auto& workerPool = *m_context.threadPool;
         constexpr usize kParallelThreshold = 1024;
         constexpr usize kGrainSize = 256;
         if(workerPool.isParallelEnabled() && numInstances >= kParallelThreshold)

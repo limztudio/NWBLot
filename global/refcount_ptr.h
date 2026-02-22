@@ -226,6 +226,10 @@ protected:
 template<typename T>
 class RefCounter : public T{
 public:
+    template<typename... Args>
+    explicit RefCounter(Args&&... args) : T(Forward<Args>(args)...){}
+
+public:
     u32 addReference()noexcept{ return m_referenceCount.fetch_add(1, std::memory_order_relaxed) + 1; }
     u32 release()noexcept{
         u32 old = m_referenceCount.fetch_sub(1, std::memory_order_release);

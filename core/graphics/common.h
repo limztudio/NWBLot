@@ -8,7 +8,6 @@
 #include <core/global.h>
 
 #include <core/common/common.h>
-
 #include <core/alloc/alloc.h>
 
 #include "basic.h"
@@ -397,6 +396,9 @@ struct HeapDesc{
 };
 
 class IHeap : public IResource{
+    using IResource::IResource;
+
+
 public:
     [[nodiscard]] virtual const HeapDesc& getDescription()const = 0;
 };
@@ -626,6 +628,9 @@ inline bool operator!=(const TextureSubresourceSet& lhs, const TextureSubresourc
 static constexpr auto s_allSubresources = TextureSubresourceSet(0, TextureSubresourceSet::AllMipLevels, 0, TextureSubresourceSet::AllArraySlices);
 
 class ITexture : public IResource{
+    using IResource::IResource;
+
+
 public:
     [[nodiscard]] virtual const TextureDesc& getDescription()const = 0;
     
@@ -635,6 +640,9 @@ public:
 typedef RefCountPtr<ITexture, ArenaRefDeleter<ITexture>> TextureHandle;
 
 class IStagingTexture : public IResource{
+    using IResource::IResource;
+
+
 public:
     [[nodiscard]] virtual const TextureDesc& getDescription()const = 0;
 };
@@ -699,6 +707,9 @@ struct SamplerFeedbackTextureDesc{
 };
 
 class ISamplerFeedbackTexture : public IResource{
+    using IResource::IResource;
+
+
 public:
     [[nodiscard]] virtual const SamplerFeedbackTextureDesc& getDescription()const = 0;
     
@@ -730,6 +741,9 @@ struct VertexAttributeDesc{
 };
 
 class IInputLayout : public IResource{
+    using IResource::IResource;
+
+
 public:
     [[nodiscard]] virtual const VertexAttributeDesc* getAttributeDescription(u32 index)const = 0;
     [[nodiscard]] virtual u32 getNumAttributes()const = 0;
@@ -824,6 +838,9 @@ struct BufferRange{
 static constexpr BufferRange s_EntireBuffer = BufferRange(0, static_cast<u64>(-1));
 
 class IBuffer : public IResource{
+    using IResource::IResource;
+
+
 public:
     [[nodiscard]] virtual const BufferDesc& getDescription()const = 0;
     [[nodiscard]] virtual GpuVirtualAddress getGpuVirtualAddress()const = 0;
@@ -956,6 +973,9 @@ struct ShaderSpecialization{
 };
 
 class IShader : public IResource{
+    using IResource::IResource;
+
+
 public:
     [[nodiscard]] virtual const ShaderDesc& getDescription()const = 0;
 
@@ -969,6 +989,9 @@ typedef RefCountPtr<IShader, ArenaRefDeleter<IShader>> ShaderHandle;
 
 
 class IShaderLibrary : public IResource{
+    using IResource::IResource;
+
+
 public:
     virtual void getBytecode(const void** ppBytecode, usize* pSize)const = 0;
     virtual ShaderHandle getShader(const Name& entryName, ShaderType::Mask shaderType) = 0;
@@ -1334,6 +1357,9 @@ struct SamplerDesc{
 };
 
 class ISampler : public IResource{
+    using IResource::IResource;
+
+
 public:
     [[nodiscard]] virtual const SamplerDesc& getDescription()const = 0;
 };
@@ -1424,6 +1450,9 @@ struct FramebufferInfoEx : FramebufferInfo{
 };
 
 class IFramebuffer : public IResource{
+    using IResource::IResource;
+
+
 public:
     [[nodiscard]] virtual const FramebufferDesc& getDescription()const = 0;
     [[nodiscard]] virtual const FramebufferInfoEx& getFramebufferInfo()const = 0;
@@ -1500,6 +1529,9 @@ struct RayTracingOpacityMicromapDesc{
 };
 
 class IRayTracingOpacityMicromap : public IResource{
+    using IResource::IResource;
+
+
 public:
     [[nodiscard]] virtual const RayTracingOpacityMicromapDesc& getDescription()const = 0;
     [[nodiscard]] virtual bool isCompacted()const = 0;
@@ -1813,6 +1845,9 @@ struct RayTracingAccelStructDesc{
 
 
 class IRayTracingAccelStruct : public IResource{
+    using IResource::IResource;
+
+
 public:
     [[nodiscard]] virtual const RayTracingAccelStructDesc& getDescription()const = 0;
     [[nodiscard]] virtual bool isCompacted()const = 0;
@@ -2136,6 +2171,9 @@ struct BindlessLayoutDesc{
 };
 
 class IBindingLayout : public IResource{
+    using IResource::IResource;
+
+
 public:
     [[nodiscard]] virtual const BindingLayoutDesc* getDescription()const = 0;    // returns nullptr for bindless layouts
     [[nodiscard]] virtual const BindlessLayoutDesc* getBindlessDesc()const = 0;  // returns nullptr for regular layouts
@@ -2410,6 +2448,9 @@ inline bool operator==(const BindingSetDesc& lhs, const BindingSetDesc& rhs){
 inline bool operator!=(const BindingSetDesc& lhs, const BindingSetDesc& rhs){ return !(lhs == rhs); }
 
 class IBindingSet : public IResource{
+    using IResource::IResource;
+
+
 public:
     [[nodiscard]] virtual const BindingSetDesc* getDescription()const = 0;  // returns nullptr for descriptor tables
     [[nodiscard]] virtual IBindingLayout* getLayout()const = 0;
@@ -2422,6 +2463,7 @@ typedef RefCountPtr<IBindingSet, ArenaRefDeleter<IBindingSet>> BindingSetHandle;
 // All tracking is off, so applications should use descriptor tables with great care.
 // IDescriptorTable is derived from IBindingSet to allow mixing them in the binding arrays.
 class IDescriptorTable : public IBindingSet{
+    using IBindingSet::IBindingSet;
 public:
     [[nodiscard]] virtual u32 getCapacity()const = 0;
     [[nodiscard]] virtual u32 getFirstDescriptorIndexInHeap()const = 0;
@@ -2555,6 +2597,9 @@ struct GraphicsPipelineDesc{
 };
 
 class IGraphicsPipeline : public IResource{
+    using IResource::IResource;
+
+
 public:
     [[nodiscard]] virtual const GraphicsPipelineDesc& getDescription()const = 0;
     [[nodiscard]] virtual const FramebufferInfo& getFramebufferInfo()const = 0;
@@ -2571,6 +2616,9 @@ struct ComputePipelineDesc{
 };
 
 class IComputePipeline : public IResource{
+    using IResource::IResource;
+
+
 public:
     [[nodiscard]] virtual const ComputePipelineDesc& getDescription()const = 0;
 };
@@ -2598,6 +2646,9 @@ struct MeshletPipelineDesc{
 };
 
 class IMeshletPipeline : public IResource{
+    using IResource::IResource;
+
+
 public:
     [[nodiscard]] virtual const MeshletPipelineDesc& getDescription()const = 0;
     [[nodiscard]] virtual const FramebufferInfo& getFramebufferInfo()const = 0;
@@ -2609,10 +2660,10 @@ typedef RefCountPtr<IMeshletPipeline, ArenaRefDeleter<IMeshletPipeline>> Meshlet
 // Draw and Dispatch
 
 
-class IEventQuery : public IResource{};
+class IEventQuery : public IResource{ using IResource::IResource; };
 typedef RefCountPtr<IEventQuery, ArenaRefDeleter<IEventQuery>> EventQueryHandle;
 
-class ITimerQuery : public IResource{};
+class ITimerQuery : public IResource{ using IResource::IResource; };
 typedef RefCountPtr<ITimerQuery, ArenaRefDeleter<ITimerQuery>> TimerQueryHandle;
 
 struct VertexBufferBinding{
@@ -2818,6 +2869,9 @@ struct RayTracingPipelineDesc{
 class IRayTracingPipeline;
 
 class IRayTracingShaderTable : public IResource{
+    using IResource::IResource;
+
+
 public:
     virtual void setRayGenerationShader(const Name& exportName, IBindingSet* bindings = nullptr) = 0;
     virtual u32 addMissShader(const Name& exportName, IBindingSet* bindings = nullptr) = 0;
@@ -2831,6 +2885,9 @@ public:
 typedef RefCountPtr<IRayTracingShaderTable, ArenaRefDeleter<IRayTracingShaderTable>> RayTracingShaderTableHandle;
 
 class IRayTracingPipeline : public IResource{
+    using IResource::IResource;
+
+
 public:
     [[nodiscard]] virtual const RayTracingPipelineDesc& getDescription()const = 0;
     virtual RayTracingShaderTableHandle createShaderTable() = 0;
@@ -3057,6 +3114,9 @@ struct CommandListParameters{
 // - Vulkan: The command list objects don't own the VkCommandBuffer-s but request available ones from the queue
 //   instead. The upload and scratch buffers behave the same way they do on DX12.
 class ICommandList : public IResource{
+    using IResource::IResource;
+
+
 public:
     // Prepares the command list for recording a new sequence of commands.
     // All other methods of ICommandList must only be used when the command list is open.
@@ -3556,6 +3616,9 @@ private:
 
 class IDevice : public IResource
 {
+    using IResource::IResource;
+
+
 public:
     virtual HeapHandle createHeap(const HeapDesc& d) = 0;
 
@@ -3731,6 +3794,7 @@ struct DeviceCreationParameters : public InstanceParameters{
     bool resizeWindowWithDisplayScale = false;
 
     GraphicsAllocator* allocator = nullptr;
+    Alloc::ThreadPool* threadPool = nullptr;
 
     Vector<AString> requiredVulkanDeviceExtensions;
     Vector<AString> optionalVulkanDeviceExtensions;

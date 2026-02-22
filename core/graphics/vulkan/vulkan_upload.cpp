@@ -69,7 +69,7 @@ bool UploadManager::suballocateBuffer(u64 size, Buffer** pBuffer, u64* pOffset, 
     if(!bufferHandle)
         return false;
 
-    m_currentChunk = MakeRefCount<BufferChunk>(Move(bufferHandle), chunkSize);
+    m_currentChunk = MakeRefCount<BufferChunk>(*m_device.getContext().threadPool, Move(bufferHandle), chunkSize);
     m_currentChunk->version = currentVersion;
 
     *pBuffer = static_cast<Buffer*>(m_currentChunk->buffer.get());

@@ -18,6 +18,9 @@ NWB_VULKAN_BEGIN
 
 
 class IDevice : public Core::IDevice{
+    using Core::IDevice::IDevice;
+
+
 public:
     // Additional Vulkan-specific public methods
     virtual VkSemaphore getQueueSemaphore(CommandQueue::Enum queue) = 0;
@@ -42,6 +45,7 @@ struct DeviceDesc{
     const SystemMemoryAllocator* systemMemoryAllocator = nullptr;
 
     GraphicsAllocator* allocator = nullptr;
+    Alloc::ThreadPool* threadPool = nullptr;
 
     VkAllocationCallbacks* allocationCallbacks = nullptr;
 

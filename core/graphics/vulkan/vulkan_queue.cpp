@@ -17,7 +17,8 @@ NWB_VULKAN_BEGIN
 
 
 TrackedCommandBuffer::TrackedCommandBuffer(const VulkanContext& context, CommandQueue::Enum, u32 queueFamilyIndex)
-    : m_context(context)
+    : RefCounter<IResource>(*context.threadPool)
+    , m_context(context)
     , m_referencedResources(Alloc::CustomAllocator<RefCountPtr<IResource, ArenaRefDeleter<IResource>>>(*context.objectArena))
     , m_referencedStagingBuffers(Alloc::CustomAllocator<RefCountPtr<IBuffer, ArenaRefDeleter<IBuffer>>>(*context.objectArena))
     , m_referencedAccelStructHandles(Alloc::CustomAllocator<VkAccelerationStructureKHR>(*context.objectArena))
@@ -75,9 +76,8 @@ TrackedCommandBuffer::~TrackedCommandBuffer(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Queue::Queue(const VulkanContext& context, Alloc::ThreadPool& workerPool, CommandQueue::Enum queueID, VkQueue queue, u32 queueFamilyIndex)
+Queue::Queue(const VulkanContext& context, CommandQueue::Enum queueID, VkQueue queue, u32 queueFamilyIndex)
     : m_context(context)
-    , m_workerPool(workerPool)
     , m_queue(queue)
     , m_queueID(queueID)
     , m_queueFamilyIndex(queueFamilyIndex)
@@ -517,8 +517,8 @@ void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapp
     constexpr usize kParallelTileMappingThreshold = 128;
     constexpr usize kTileMappingGrainSize = 8;
     const usize totalBindings = totalOpaqueBinds + totalImageBinds;
-    if(m_workerPool.isParallelEnabled() && totalBindings >= kParallelTileMappingThreshold)
-        m_workerPool.parallelFor(static_cast<usize>(0), numTileMappings, kTileMappingGrainSize, buildMappingBinds);
+    if(m_context.threadPool->isParallelEnabled() && totalBindings >= kParallelTileMappingThreshold)
+        m_context.threadPool->parallelFor(static_cast<usize>(0), numTileMappings, kTileMappingGrainSize, buildMappingBinds);
     else{
         for(usize i = 0; i < numTileMappings; ++i)
             buildMappingBinds(i);

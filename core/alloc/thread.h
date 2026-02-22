@@ -165,6 +165,7 @@ public:
     inline void wait(){ waitPending(); }
 
 public:
+    inline bool isParallelEnabled()const{ return m_threadCount > 0; }
     inline u32 threadCount()const{ return m_threadCount; }
 
 

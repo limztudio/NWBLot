@@ -74,6 +74,14 @@ static void VulkanSystemFree(void* pUserData, void* pMemory){
     allocator->deallocate(allocator->userData, pMemory);
 }
 
+static u32 QueryVulkanWorkerThreadCount(){
+    u32 coreCount = Alloc::QueryCoreCount(Alloc::CoreAffinity::Performance);
+    if(coreCount <= 1)
+        coreCount = Alloc::QueryCoreCount(Alloc::CoreAffinity::Any);
+
+    return coreCount > 1 ? (coreCount - 1) : 0;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -87,6 +95,7 @@ static void VulkanSystemFree(void* pUserData, void* pMemory){
 Device::Device(const DeviceDesc& desc)
     : m_aftermathEnabled(desc.aftermathEnabled)
     , m_allocator(m_context)
+    , m_workerPool(__hidden_vulkan::QueryVulkanWorkerThreadCount(), Alloc::CoreAffinity::Any)
 {
     VkResult res = VK_SUCCESS;
 
@@ -557,4 +566,3 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

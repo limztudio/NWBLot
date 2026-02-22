@@ -7,8 +7,6 @@
 
 #include "vulkan.h"
 
-#include <core/alloc/custom.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1211,6 +1209,8 @@ public:
     [[nodiscard]] const VulkanContext& getContext()const{ return m_context; }
     [[nodiscard]] Queue* getQueue(CommandQueue::Enum queueType)const;
     [[nodiscard]] VulkanAllocator& getAllocator(){ return m_allocator; }
+    [[nodiscard]] Alloc::ThreadPool& getWorkerPool(){ return m_workerPool; }
+    [[nodiscard]] const Alloc::ThreadPool& getWorkerPool()const{ return m_workerPool; }
     [[nodiscard]] UploadManager* getUploadManager(){ return m_uploadManager.get(); }
     [[nodiscard]] UploadManager* getScratchManager(){ return m_scratchManager.get(); }
 
@@ -1225,6 +1225,7 @@ private:
 
     VulkanContext m_context;
     VulkanAllocator m_allocator;
+    Alloc::ThreadPool m_workerPool;
     CustomUniquePtr<Queue> m_queues[static_cast<u32>(CommandQueue::kCount)];
 
     CustomUniquePtr<UploadManager> m_uploadManager;

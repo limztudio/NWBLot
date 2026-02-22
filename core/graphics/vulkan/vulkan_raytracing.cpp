@@ -941,7 +941,7 @@ void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* _as, const Ra
     auto* mappedInstances = static_cast<VkAccelerationStructureInstanceKHR*>(m_device.mapBuffer(instanceBuffer.get(), CpuAccessMode::Write));
 
     if(mappedInstances){
-        for(usize i = 0; i < numInstances; ++i){
+        auto buildVkInstance = [&](usize i){
             const auto& inst = pInstances[i];
             VkAccelerationStructureInstanceKHR& vkInst = mappedInstances[i];
 
@@ -963,6 +963,17 @@ void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* _as, const Ra
 
             auto* blas = checked_cast<AccelStruct*>(inst.bottomLevelAS);
             vkInst.accelerationStructureReference = blas ? blas->m_deviceAddress : 0;
+        };
+
+        // TLAS instance conversion is CPU-only and scales with scene instance count.
+        auto& workerPool = m_device.getWorkerPool();
+        constexpr usize kParallelThreshold = 1024;
+        constexpr usize kGrainSize = 256;
+        if(workerPool.isParallelEnabled() && numInstances >= kParallelThreshold)
+            workerPool.parallelFor(static_cast<usize>(0), numInstances, kGrainSize, buildVkInstance);
+        else{
+            for(usize i = 0; i < numInstances; ++i)
+                buildVkInstance(i);
         }
 
         m_device.unmapBuffer(instanceBuffer.get());
@@ -1140,4 +1151,3 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

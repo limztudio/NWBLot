@@ -6,6 +6,7 @@
 
 
 #include <core/global.h>
+#include <core/alloc/alloc.h>
 
 #include <core/graphics/common.h>
 

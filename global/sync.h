@@ -18,6 +18,7 @@
 #include <tbb/spin_rw_mutex.h>
 #include <tbb/queuing_rw_mutex.h>
 #include <mutex>
+#include <condition_variable>
 
 #include <semaphore>
 
@@ -63,9 +64,17 @@ using QueuingMutex = tbb::queuing_mutex;
 using SharedMutex = tbb::spin_rw_mutex;
 using SharedQueuingMutex = tbb::queuing_rw_mutex;
 
+using ConditionVariable = std::condition_variable;
+using ConditionVariableAny = std::condition_variable_any;
+
 template<isize LeastMaxValue = PTRDIFF_MAX>
 using Semaphore = std::counting_semaphore<LeastMaxValue>;
 using BinarySemaphore = Semaphore<1>;
+
+template<typename Mutex>
+using LockGuard = std::lock_guard<Mutex>;
+template<typename Mutex>
+using UniqueLock = std::unique_lock<Mutex>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -138,47 +147,9 @@ private:
 /** Instances of MallocMutex must be declared in memory that is zero-initialized.
     There are no constructors.  This is a feature that lets it be
     used in situations where the mutex might be used while file-scope constructors
-    are running.
-
-    There are no methods "acquire" or "release".  The scoped_lock must be used
-    in a strict block-scoped locking pattern.  Omitting these methods permitted
-    further simplification. */
+    are running. */
 class MallocMutex : NoCopy{
 public:
-    class scoped_lock : NoCopy{
-    public:
-        scoped_lock(MallocMutex& m)
-        : m_mutex(m), m_taken(true)
-        { m.lock(); }
-        scoped_lock(MallocMutex& m, bool block, bool* locked)
-            : m_mutex(m), m_taken(false)
-        {
-            if(block){
-                m.lock();
-                m_taken = true;
-            }
-            else
-                m_taken = m.try_lock();
-            if(locked)
-                *locked = m_taken;
-        }
-        ~scoped_lock(){
-            if(m_taken)
-                m_mutex.unlock();
-        }
-
-        scoped_lock(scoped_lock& other) = delete;
-        scoped_lock& operator=(scoped_lock&) = delete;
-
-
-    private:
-        MallocMutex& m_mutex;
-        bool m_taken;
-    };
-    friend class scoped_lock;
-
-
-private:
     void lock(){
         AtomicBackOff backoff;
         while(m_flag.test_and_set())
@@ -196,30 +167,10 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename T>
-class ScopedLock : NoCopy{
+template<typename... Mutexes>
+class ScopedLock : public std::scoped_lock<Mutexes...>{
 public:
-    ScopedLock(ScopedLock& other) = delete;
-    ScopedLock& operator=(ScopedLock&) = delete;
-
-    ScopedLock(T& obj) : m_obj(obj){ m_obj.lock(); }
-    ~ScopedLock(){ m_obj.unlock(); }
-
-
-private:
-    T& m_obj;
-};
-template<>
-class ScopedLock<MallocMutex> : NoCopy{
-public:
-    ScopedLock(ScopedLock& other) = delete;
-    ScopedLock& operator=(ScopedLock&) = delete;
-
-    ScopedLock(MallocMutex& obj) : lock(obj){}
-
-
-private:
-    MallocMutex::scoped_lock lock;
+    using std::scoped_lock<Mutexes...>::scoped_lock;
 };
 template<isize LeastMaxValue>
 class ScopedLock<Semaphore<LeastMaxValue>> : NoCopy{

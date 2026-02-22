@@ -7,9 +7,6 @@
 
 #include "system.h"
 
-#include <tbb/parallel_for.h>
-#include <tbb/blocked_range.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -130,20 +127,18 @@ public:
     }
 
     template<typename Func>
-    void parallelEach(Func&& func)const{
+    void parallelEach(Alloc::ThreadPool& pool, Func&& func)const{
         if(!Get<0>(m_pools))
             return;
 
         auto& entities = Get<0>(m_pools)->denseEntities();
         const usize n = entities.size();
 
-        tbb::parallel_for(tbb::blocked_range<usize>(0, n),
-            [this, &entities, &func](const tbb::blocked_range<usize>& range){
-                for(usize i = range.begin(); i < range.end(); ++i){
-                    Entity e = entities[i];
-                    if(allHave(e))
-                        applyFunc(func, e, std::index_sequence_for<Ts...>{});
-                }
+        pool.parallelFor(static_cast<usize>(0), n,
+            [this, &entities, &func](usize i){
+                Entity e = entities[i];
+                if(allHave(e))
+                    applyFunc(func, e, std::index_sequence_for<Ts...>{});
             }
         );
     }

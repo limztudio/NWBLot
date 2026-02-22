@@ -25,5 +25,6 @@
     <ClInclude Include="$(MSBuildThisFileDirectory)alloc\custom.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)alloc\memory.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)alloc\scratch.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)alloc\thread.h" />
   </ItemGroup>
 </Project>

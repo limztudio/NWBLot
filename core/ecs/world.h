@@ -17,9 +17,9 @@ NWB_ECS_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class World : NoCopy{
+class World : NoCopy, public Alloc::ITaskScheduler{
 public:
-    World();
+    World(u32 workerThreads = 0, Alloc::CoreAffinity affinity = Alloc::CoreAffinity::Any, usize poolArenaSize = 0);
     ~World();
 
 
@@ -150,6 +150,7 @@ private:
 
 
 private:
+    Alloc::ThreadPool m_threadPool;
     EntityManager m_entityManager;
     HashMap<ComponentTypeId, UniquePtr<IComponentPool>> m_pools;
     Vector<UniquePtr<ISystem>> m_systems;

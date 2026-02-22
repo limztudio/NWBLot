@@ -14,10 +14,17 @@ NWB_ECS_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-World::World()
+World::World(u32 workerThreads, Alloc::CoreAffinity affinity, usize poolArenaSize)
+    : m_threadPool(
+        (workerThreads > 0) ? workerThreads : Alloc::QueryCoreCount(affinity),
+        affinity,
+        poolArenaSize
+    )
+    , Alloc::ITaskScheduler(m_threadPool)
 {}
 World::~World()
 {
+    m_threadPool.wait();
     m_systems.clear();
     m_pools.clear();
 }

@@ -2,9 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "system.h"
-
-#include <tbb/task_group.h>
+#include "world.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -51,15 +49,28 @@ void SystemScheduler::rebuild(){
     //  - They do not both write the same component type
     //  - One does not write a component that the other reads
 
-    Vector<bool> assigned(m_allSystems.size(), false);
+    Alloc::ScratchArena<> scratchArena(4096);
+
+    Vector<u8, Alloc::ScratchAllocator<u8>> assigned(
+        m_allSystems.size(), 0,
+        Alloc::ScratchAllocator<u8>(scratchArena)
+    );
     usize numAssigned = 0;
 
     while(numAssigned < m_allSystems.size()){
         Vector<ISystem*> stage;
 
         // Collect writes and reads for the current stage
-        HashSet<ComponentTypeId> stageWrites;
-        HashSet<ComponentTypeId> stageReads;
+        HashSet<ComponentTypeId, Hasher<ComponentTypeId>, EqualTo<ComponentTypeId>,
+                Alloc::ScratchAllocator<ComponentTypeId>> stageWrites(
+            0, Hasher<ComponentTypeId>(), EqualTo<ComponentTypeId>(),
+            Alloc::ScratchAllocator<ComponentTypeId>(scratchArena)
+        );
+        HashSet<ComponentTypeId, Hasher<ComponentTypeId>, EqualTo<ComponentTypeId>,
+                Alloc::ScratchAllocator<ComponentTypeId>> stageReads(
+            0, Hasher<ComponentTypeId>(), EqualTo<ComponentTypeId>(),
+            Alloc::ScratchAllocator<ComponentTypeId>(scratchArena)
+        );
 
         for(usize i = 0; i < m_allSystems.size(); ++i){
             if(assigned[i])
@@ -98,7 +109,7 @@ void SystemScheduler::rebuild(){
                         stageReads.insert(ca.typeId);
                 }
                 stage.push_back(sys);
-                assigned[i] = true;
+                assigned[i] = 1;
                 ++numAssigned;
             }
         }
@@ -118,25 +129,22 @@ void SystemScheduler::execute(World& world, float delta){
     if(m_dirty)
         rebuild();
 
+    Alloc::ThreadPool& pool = world.taskPool();
+
     for(auto& stage : m_stages){
         if(stage.size() == 1){
-            // Single system: run inline, avoid task_group overhead
+            // Single system: run inline, avoid scheduling overhead
             if(stage[0]->enabled())
                 stage[0]->update(world, delta);
         }
         else{
-            // Multiple systems: run in parallel
-            tbb::task_group group;
-
-            for(auto* sys : stage){
-                if(sys->enabled()){
-                    group.run([sys, &world, delta](){
-                        sys->update(world, delta);
-                    });
+            // Multiple systems: run in parallel via thread pool
+            pool.parallelFor(static_cast<usize>(0), stage.size(),
+                [&stage, &world, delta](usize i){
+                    if(stage[i]->enabled())
+                        stage[i]->update(world, delta);
                 }
-            }
-
-            group.wait();
+            );
         }
     }
 }

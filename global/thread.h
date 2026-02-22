@@ -7,12 +7,14 @@
 
 #include <stop_token>
 #include <thread>
+#include <latch>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 using StopToken = std::stop_token;
+using Latch = std::latch;
 
 using Thread = std::thread;
 using JoiningThread = std::jthread;

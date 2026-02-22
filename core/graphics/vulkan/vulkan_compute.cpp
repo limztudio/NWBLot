@@ -4,6 +4,8 @@
 
 #include "vulkan_backend.h"
 
+#include <logger/client/logger.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -23,6 +25,12 @@ ComputePipeline::~ComputePipeline(){
         vkDestroyPipeline(m_context.device, m_pipeline, m_context.allocationCallbacks);
         m_pipeline = VK_NULL_HANDLE;
     }
+
+    if(m_ownsPipelineLayout && m_pipelineLayout != VK_NULL_HANDLE){
+        vkDestroyPipelineLayout(m_context.device, m_pipelineLayout, m_context.allocationCallbacks);
+        m_pipelineLayout = VK_NULL_HANDLE;
+        m_ownsPipelineLayout = false;
+    }
 }
 
 Object ComputePipeline::getNativeHandle(ObjectType objectType){
@@ -37,6 +45,7 @@ Object ComputePipeline::getNativeHandle(ObjectType objectType){
 
 ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& desc){
     VkResult res = VK_SUCCESS;
+    Alloc::ScratchArena<> scratchArena;
 
     auto* pso = NewArenaObject<ComputePipeline>(*m_context.objectArena, m_context);
     pso->m_desc = desc;
@@ -63,11 +72,49 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
     }
 
     VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
-    if(!desc.bindingLayouts.empty() && desc.bindingLayouts[0]){
+    if(desc.bindingLayouts.size() == 1){
         auto* layout = checked_cast<BindingLayout*>(desc.bindingLayouts[0].get());
-        pipelineLayout = layout->m_pipelineLayout;
-        pso->m_pipelineLayout = pipelineLayout;
+        if(layout)
+            pipelineLayout = layout->m_pipelineLayout;
     }
+    else if(desc.bindingLayouts.size() > 1){
+        Vector<VkDescriptorSetLayout, Alloc::ScratchAllocator<VkDescriptorSetLayout>> allDescriptorSetLayouts{ Alloc::ScratchAllocator<VkDescriptorSetLayout>(scratchArena) };
+        u32 pushConstantByteSize = 0;
+        for(u32 i = 0; i < static_cast<u32>(desc.bindingLayouts.size()); ++i){
+            auto* bl = checked_cast<BindingLayout*>(desc.bindingLayouts[i].get());
+            if(!bl)
+                continue;
+            for(const auto& item : bl->m_desc.bindings){
+                if(item.type == ResourceType::PushConstants)
+                    pushConstantByteSize = Max<u32>(pushConstantByteSize, item.size);
+            }
+            for(auto& dsl : bl->m_descriptorSetLayouts)
+                allDescriptorSetLayouts.push_back(dsl);
+        }
+
+        if(!allDescriptorSetLayouts.empty()){
+            VkPushConstantRange pushConstantRange = {};
+            if(pushConstantByteSize > 0){
+                pushConstantRange.stageFlags = VK_SHADER_STAGE_ALL;
+                pushConstantRange.offset = 0;
+                pushConstantRange.size = pushConstantByteSize;
+            }
+
+            VkPipelineLayoutCreateInfo layoutInfo = { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
+            layoutInfo.setLayoutCount = static_cast<u32>(allDescriptorSetLayouts.size());
+            layoutInfo.pSetLayouts = allDescriptorSetLayouts.data();
+            layoutInfo.pushConstantRangeCount = pushConstantByteSize > 0 ? 1u : 0u;
+            layoutInfo.pPushConstantRanges = pushConstantByteSize > 0 ? &pushConstantRange : nullptr;
+            res = vkCreatePipelineLayout(m_context.device, &layoutInfo, m_context.allocationCallbacks, &pipelineLayout);
+            if(res != VK_SUCCESS){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create pipeline layout for compute pipeline: {}"), ResultToString(res));
+                DestroyArenaObject(*m_context.objectArena, pso);
+                return nullptr;
+            }
+            pso->m_ownsPipelineLayout = true;
+        }
+    }
+    pso->m_pipelineLayout = pipelineLayout;
 
     VkComputePipelineCreateInfo pipelineInfo = { VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO };
     pipelineInfo.stage = shaderStage;
@@ -75,6 +122,7 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
 
     res = vkCreateComputePipelines(m_context.device, m_context.pipelineCache, 1, &pipelineInfo, m_context.allocationCallbacks, &pso->m_pipeline);
     if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create compute pipeline: {}"), ResultToString(res));
         DestroyArenaObject(*m_context.objectArena, pso);
         return nullptr;
     }
@@ -93,7 +141,7 @@ void CommandList::setComputeState(const ComputeState& state){
     if(pipeline)
         vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline->m_pipeline);
 
-    if(state.bindings.size() > 0){
+    if(state.bindings.size() > 0 && pipeline && pipeline->m_pipelineLayout != VK_NULL_HANDLE){
         for(usize i = 0; i < state.bindings.size(); ++i){
             if(state.bindings[i]){
                 auto* bindingSet = checked_cast<BindingSet*>(state.bindings[i]);

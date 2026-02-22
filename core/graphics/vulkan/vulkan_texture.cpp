@@ -137,24 +137,18 @@ Texture::~Texture(){
 
 u64 Texture::makeViewKey(const TextureSubresourceSet& subresources, TextureDimension::Enum dimension, Format::Enum format, bool isReadOnlyDSV)const{
     u64 key = 0;
-    key |= static_cast<u64>(subresources.baseMipLevel) << 0;
-    key |= static_cast<u64>(subresources.numMipLevels) << 8;
-    key |= static_cast<u64>(subresources.baseArraySlice) << 16;
-    key |= static_cast<u64>(subresources.numArraySlices) << 24;
-    key |= static_cast<u64>(dimension) << 32;
-    key |= static_cast<u64>(format) << 40;
-    key |= static_cast<u64>(isReadOnlyDSV ? 1 : 0) << 48;
+    key |= static_cast<u64>(subresources.baseMipLevel) << s_TextureViewKeyBaseMipShift;
+    key |= static_cast<u64>(subresources.numMipLevels) << s_TextureViewKeyMipCountShift;
+    key |= static_cast<u64>(subresources.baseArraySlice) << s_TextureViewKeyBaseArraySliceShift;
+    key |= static_cast<u64>(subresources.numArraySlices) << s_TextureViewKeyArraySliceCountShift;
+    key |= static_cast<u64>(dimension) << s_TextureViewKeyDimensionShift;
+    key |= static_cast<u64>(format) << s_TextureViewKeyFormatShift;
+    key |= static_cast<u64>(isReadOnlyDSV ? 1 : 0) << s_TextureViewKeyReadOnlyDsvShift;
     return key;
 }
 
 VkImageView Texture::getView(const TextureSubresourceSet& subresources, TextureDimension::Enum dimension, Format::Enum format, bool isReadOnlyDSV){
     VkResult res = VK_SUCCESS;
-
-    u64 key = makeViewKey(subresources, dimension, format, isReadOnlyDSV);
-
-    auto it = m_views.find(key);
-    if(it != m_views.end())
-        return it->second;
 
     if(dimension == TextureDimension::Unknown)
         dimension = m_desc.dimension;
@@ -163,6 +157,11 @@ VkImageView Texture::getView(const TextureSubresourceSet& subresources, TextureD
         format = m_desc.format;
 
     TextureSubresourceSet resolvedSubresources = subresources.resolve(m_desc, false);
+    u64 key = makeViewKey(resolvedSubresources, dimension, format, isReadOnlyDSV);
+
+    auto it = m_views.find(key);
+    if(it != m_views.end())
+        return it->second;
 
     VkImageViewType viewType = __hidden_vulkan::TextureDimensionToViewType(dimension);
     VkFormat vkFormat = ConvertFormat(format);
@@ -193,14 +192,18 @@ VkImageView Texture::getView(const TextureSubresourceSet& subresources, TextureD
 
     VkImageView view = VK_NULL_HANDLE;
     res = vkCreateImageView(m_context.device, &viewInfo, m_context.allocationCallbacks, &view);
-    NWB_ASSERT_MSG(res == VK_SUCCESS, NWB_TEXT("Vulkan: Failed to create image view"));
+    if(res != VK_SUCCESS){
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create image view"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create image view: {}"), ResultToString(res));
+        return VK_NULL_HANDLE;
+    }
 
     m_views[key] = view;
     return view;
 }
 
 Object Texture::getNativeView(ObjectType objectType, Format::Enum format, TextureSubresourceSet subresources, TextureDimension::Enum dimension, bool isReadOnlyDSV){
-    if(objectType == ObjectTypes::NWB_VK_Device)
+    if(objectType == ObjectTypes::VK_ImageView || objectType == ObjectTypes::NWB_VK_Device)
         return getView(subresources, dimension, format, isReadOnlyDSV);
     return nullptr;
 }
@@ -262,17 +265,30 @@ TextureHandle Device::createTexture(const TextureDesc& d){
     texture->m_imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
 
     res = vkCreateImage(m_context.device, &texture->m_imageInfo, m_context.allocationCallbacks, &texture->m_image);
-    NWB_ASSERT_MSG(res == VK_SUCCESS, NWB_TEXT("Vulkan: Failed to create image"));
+    if(res != VK_SUCCESS){
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create image"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create image: {}"), ResultToString(res));
+        DestroyArenaObject(*m_context.objectArena, texture);
+        return nullptr;
+    }
 
     if(!d.isVirtual){
         res = m_allocator.allocateTextureMemory(texture);
-        NWB_ASSERT_MSG(res == VK_SUCCESS, NWB_TEXT("Vulkan: Failed to allocate texture memory"));
+        if(res != VK_SUCCESS){
+            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to allocate texture memory"));
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate texture memory: {}"), ResultToString(res));
+            DestroyArenaObject(*m_context.objectArena, texture);
+            return nullptr;
+        }
     }
 
     return TextureHandle(texture, TextureHandle::deleter_type(m_context.objectArena), AdoptRef);
 }
 
 MemoryRequirements Device::getTextureMemoryRequirements(ITexture* _texture){
+    if(!_texture)
+        return {};
+
     auto* texture = static_cast<Texture*>(_texture);
 
     VkMemoryRequirements memRequirements;
@@ -286,6 +302,9 @@ MemoryRequirements Device::getTextureMemoryRequirements(ITexture* _texture){
 
 bool Device::bindTextureMemory(ITexture* _texture, IHeap* heap, u64 offset){
     VkResult res = VK_SUCCESS;
+
+    if(!_texture)
+        return false;
 
     auto* texture = static_cast<Texture*>(_texture);
     auto* vkHeap = checked_cast<Heap*>(heap);
@@ -368,7 +387,12 @@ SamplerHandle Device::createSampler(const SamplerDesc& d){
     samplerInfo.borderColor = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
 
     res = vkCreateSampler(m_context.device, &samplerInfo, m_context.allocationCallbacks, &sampler->m_sampler);
-    NWB_ASSERT_MSG(res == VK_SUCCESS, NWB_TEXT("Vulkan: Failed to create sampler"));
+    if(res != VK_SUCCESS){
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create sampler"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create sampler: {}"), ResultToString(res));
+        DestroyArenaObject(*m_context.objectArena, sampler);
+        return nullptr;
+    }
 
     return SamplerHandle(sampler, SamplerHandle::deleter_type(m_context.objectArena), AdoptRef);
 }

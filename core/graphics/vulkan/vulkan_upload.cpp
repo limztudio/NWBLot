@@ -27,6 +27,11 @@ UploadManager::~UploadManager(){
 }
 
 bool UploadManager::suballocateBuffer(u64 size, Buffer** pBuffer, u64* pOffset, void** pCpuVA, u64 currentVersion, u32 alignment){
+    if(!pBuffer || !pOffset)
+        return false;
+
+    Mutex::scoped_lock lock(m_mutex);
+
     if(alignment > 0)
         size = (size + alignment - 1) & ~(static_cast<u64>(alignment) - 1);
 
@@ -43,6 +48,10 @@ bool UploadManager::suballocateBuffer(u64 size, Buffer** pBuffer, u64* pOffset, 
     for(auto it = m_chunkPool.begin(); it != m_chunkPool.end(); ++it){
         if((*it)->size >= size && (*it)->version < currentVersion){
             m_currentChunk = *it;
+            if(m_chunkPoolBytes >= (*it)->size)
+                m_chunkPoolBytes -= (*it)->size;
+            else
+                m_chunkPoolBytes = 0;
             m_chunkPool.erase(it);
             m_currentChunk->allocated = 0;
             m_currentChunk->version = currentVersion;
@@ -82,10 +91,24 @@ bool UploadManager::suballocateBuffer(u64 size, Buffer** pBuffer, u64* pOffset, 
 }
 
 void UploadManager::submitChunks(u64, u64 submittedVersion){
+    Mutex::scoped_lock lock(m_mutex);
+
     if(m_currentChunk){
         m_currentChunk->version = submittedVersion;
+        m_chunkPoolBytes += m_currentChunk->size;
         m_chunkPool.push_back(m_currentChunk);
         m_currentChunk.reset();
+
+        if(m_memoryLimit > 0){
+            while(m_chunkPoolBytes > m_memoryLimit && !m_chunkPool.empty()){
+                auto& chunk = m_chunkPool.front();
+                if(m_chunkPoolBytes >= chunk->size)
+                    m_chunkPoolBytes -= chunk->size;
+                else
+                    m_chunkPoolBytes = 0;
+                m_chunkPool.pop_front();
+            }
+        }
     }
 }
 

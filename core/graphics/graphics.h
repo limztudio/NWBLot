@@ -19,7 +19,8 @@ NWB_CORE_BEGIN
 
 class Graphics{
 private:
-    static constexpr u32 s_maxDynamicAllocSize = 64 * 1024 * 1024;
+    static constexpr u32 s_dynamicAllocatorSize = 64 * 1024 * 1024;
+    static constexpr u32 s_reservedPerformanceCoresForMainThread = 1;
 
 
 public:
@@ -36,6 +37,10 @@ public:
 public:
     [[nodiscard]] GraphicsAllocator& getAllocator()noexcept{ return m_allocator; }
     [[nodiscard]] IDeviceManager* getDeviceManager()const noexcept{ return m_deviceManager; }
+
+
+private:
+    static u32 queryGraphicsWorkerThreadCount();
 
 
 private:

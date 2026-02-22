@@ -410,6 +410,7 @@ HeapHandle Device::createHeap(const HeapDesc& d){
     heap->m_desc = d;
 
     VkMemoryPropertyFlags memoryProperties = 0;
+    bool isReadbackHeap = false;
     switch(d.type){
         case HeapType::DeviceLocal:
             memoryProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
@@ -419,6 +420,7 @@ HeapHandle Device::createHeap(const HeapDesc& d){
             break;
         case HeapType::Readback:
             memoryProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
+            isReadbackHeap = true;
             break;
     }
 
@@ -427,6 +429,16 @@ HeapHandle Device::createHeap(const HeapDesc& d){
         if((m_context.memoryProperties.memoryTypes[i].propertyFlags & memoryProperties) == memoryProperties){
             memoryTypeIndex = i;
             break;
+        }
+    }
+
+    if(memoryTypeIndex == UINT32_MAX && isReadbackHeap){
+        memoryProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+        for(u32 i = 0; i < m_context.memoryProperties.memoryTypeCount; ++i){
+            if((m_context.memoryProperties.memoryTypes[i].propertyFlags & memoryProperties) == memoryProperties){
+                memoryTypeIndex = i;
+                break;
+            }
         }
     }
 
@@ -501,8 +513,7 @@ CooperativeVectorDeviceFeatures Device::queryCoopVecFeatures(){
         combo.transposeSupported = prop.transpose != VK_FALSE;
     };
 
-    constexpr usize kParallelCoopVecThreshold = 128;
-    if(taskPool().isParallelEnabled() && propertyCount >= kParallelCoopVecThreshold)
+    if(taskPool().isParallelEnabled() && propertyCount >= s_ParallelCoopVecThreshold)
         scheduleParallelFor(static_cast<usize>(0), propertyCount, fillMatMulFormat);
     else{
         for(usize i = 0; i < propertyCount; ++i)

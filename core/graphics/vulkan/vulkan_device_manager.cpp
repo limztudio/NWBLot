@@ -28,15 +28,6 @@ namespace __hidden_vulkan{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr u32 s_GraphicsQueueIndex = 0;
-static constexpr u32 s_ComputeQueueIndex = 0;
-static constexpr u32 s_TransferQueueIndex = 0;
-static constexpr u32 s_PresentQueueIndex = 0;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 template<typename Set>
 static Vector<const char*, Alloc::CustomAllocator<const char*>> StringSetToVector(const Set& set, Alloc::CustomArena& arena){
     Alloc::CustomAllocator<const char*> alloc(arena);
@@ -164,7 +155,9 @@ void DeviceManager::getEnabledVulkanLayers(Vector<AString>& layers)const{
 }
 
 ITexture* DeviceManager::getCurrentBackBuffer(){
-    return m_swapChainImages[m_swapChainIndex].rhiHandle.get();
+    if(m_swapChainIndex < m_swapChainImages.size())
+        return m_swapChainImages[m_swapChainIndex].rhiHandle.get();
+    return nullptr;
 }
 
 ITexture* DeviceManager::getBackBuffer(u32 index){
@@ -182,9 +175,77 @@ u32 DeviceManager::getBackBufferCount(){
 }
 
 void DeviceManager::resizeSwapChain(){
+    VkResult res = VK_SUCCESS;
+
     if(m_vulkanDevice){
+        auto clearSemaphores = [&](Vector<VkSemaphore, Alloc::CustomAllocator<VkSemaphore>>& semaphores){
+            for(auto& semaphore : semaphores){
+                if(semaphore)
+                    vkDestroySemaphore(m_vulkanDevice, semaphore, nullptr);
+                semaphore = VK_NULL_HANDLE;
+            }
+            semaphores.clear();
+        };
+
         destroySwapChain();
-        createSwapChain();
+        if(!createSwapChain()){
+            clearSemaphores(m_presentSemaphores);
+            clearSemaphores(m_acquireSemaphores);
+            return;
+        }
+
+        const usize requiredPresentSemaphores = m_swapChainImages.size();
+        if(m_presentSemaphores.size() != requiredPresentSemaphores){
+            clearSemaphores(m_presentSemaphores);
+            m_presentSemaphores.reserve(requiredPresentSemaphores);
+
+            for(usize i = 0; i < requiredPresentSemaphores; ++i){
+                VkSemaphoreCreateInfo semInfo = {};
+                semInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+                VkSemaphore sem = VK_NULL_HANDLE;
+                res = vkCreateSemaphore(m_vulkanDevice, &semInfo, nullptr, &sem);
+                if(res != VK_SUCCESS){
+                    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to recreate present semaphore during resize. {}"), ResultToString(res));
+                    clearSemaphores(m_presentSemaphores);
+                    clearSemaphores(m_acquireSemaphores);
+                    destroySwapChain();
+                    return;
+                }
+                m_presentSemaphores.push_back(sem);
+            }
+        }
+
+        const usize requiredAcquireSemaphores = Max<usize>(m_deviceParams.maxFramesInFlight, m_swapChainImages.size());
+        if(m_acquireSemaphores.size() != requiredAcquireSemaphores){
+            clearSemaphores(m_acquireSemaphores);
+            m_acquireSemaphores.reserve(requiredAcquireSemaphores);
+
+            for(usize i = 0; i < requiredAcquireSemaphores; ++i){
+                VkSemaphoreCreateInfo semInfo = {};
+                semInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+                VkSemaphore sem = VK_NULL_HANDLE;
+                res = vkCreateSemaphore(m_vulkanDevice, &semInfo, nullptr, &sem);
+                if(res != VK_SUCCESS){
+                    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to recreate acquire semaphore during resize. {}"), ResultToString(res));
+                    clearSemaphores(m_presentSemaphores);
+                    clearSemaphores(m_acquireSemaphores);
+                    destroySwapChain();
+                    return;
+                }
+                m_acquireSemaphores.push_back(sem);
+            }
+        }
+
+        if(m_presentSemaphores.empty() || m_acquireSemaphores.empty()){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Swap chain resize left semaphore pools empty; destroying swap chain."));
+            clearSemaphores(m_presentSemaphores);
+            clearSemaphores(m_acquireSemaphores);
+            destroySwapChain();
+            return;
+        }
+
+        m_swapChainIndex = 0;
+        m_acquireSemaphoreIndex = 0;
     }
 }
 
@@ -358,6 +419,8 @@ bool DeviceManager::createInstance(){
 
 
 void DeviceManager::installDebugCallback(){
+    VkResult res = VK_SUCCESS;
+
     auto* createFunc = reinterpret_cast<PFN_vkCreateDebugReportCallbackEXT>(vkGetInstanceProcAddr(m_vulkanInstance, "vkCreateDebugReportCallbackEXT"));
     if(!createFunc)
         return;
@@ -368,7 +431,11 @@ void DeviceManager::installDebugCallback(){
     createInfo.pfnCallback = __hidden_vulkan::VulkanDebugCallback;
     createInfo.pUserData = this;
 
-    createFunc(m_vulkanInstance, &createInfo, nullptr, &m_debugReportCallback);
+    res = createFunc(m_vulkanInstance, &createInfo, nullptr, &m_debugReportCallback);
+    if(res != VK_SUCCESS){
+        m_debugReportCallback = VK_NULL_HANDLE;
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to install debug callback. {}"), ResultToString(res));
+    }
 }
 
 
@@ -760,13 +827,13 @@ bool DeviceManager::createDevice(){
 
     volkLoadDevice(m_vulkanDevice);
 
-    vkGetDeviceQueue(m_vulkanDevice, static_cast<uint32_t>(m_graphicsQueueFamily), __hidden_vulkan::s_GraphicsQueueIndex, &m_graphicsQueue);
+    vkGetDeviceQueue(m_vulkanDevice, static_cast<uint32_t>(m_graphicsQueueFamily), s_GraphicsQueueIndex, &m_graphicsQueue);
     if(m_deviceParams.enableComputeQueue)
-        vkGetDeviceQueue(m_vulkanDevice, static_cast<uint32_t>(m_computeQueueFamily), __hidden_vulkan::s_ComputeQueueIndex, &m_computeQueue);
+        vkGetDeviceQueue(m_vulkanDevice, static_cast<uint32_t>(m_computeQueueFamily), s_ComputeQueueIndex, &m_computeQueue);
     if(m_deviceParams.enableCopyQueue)
-        vkGetDeviceQueue(m_vulkanDevice, static_cast<uint32_t>(m_transferQueueFamily), __hidden_vulkan::s_TransferQueueIndex, &m_transferQueue);
+        vkGetDeviceQueue(m_vulkanDevice, static_cast<uint32_t>(m_transferQueueFamily), s_TransferQueueIndex, &m_transferQueue);
     if(!m_deviceParams.headlessDevice)
-        vkGetDeviceQueue(m_vulkanDevice, static_cast<uint32_t>(m_presentQueueFamily), __hidden_vulkan::s_PresentQueueIndex, &m_presentQueue);
+        vkGetDeviceQueue(m_vulkanDevice, static_cast<uint32_t>(m_presentQueueFamily), s_PresentQueueIndex, &m_presentQueue);
 
     m_bufferDeviceAddressSupported = vulkan12features.bufferDeviceAddress;
 
@@ -864,13 +931,13 @@ bool DeviceManager::createSwapChain(){
     if(m_swapChainMutableFormatSupported)
         desc.flags |= VK_SWAPCHAIN_CREATE_MUTABLE_FORMAT_BIT_KHR;
 
-    VkFormat imageFormats[2] = { m_swapChainFormat.format, VK_FORMAT_UNDEFINED };
+    VkFormat imageFormats[s_MaxMutableSwapChainFormats] = { m_swapChainFormat.format, VK_FORMAT_UNDEFINED };
     uint32_t imageFormatCount = 1;
     switch(m_swapChainFormat.format){
-    case VK_FORMAT_R8G8B8A8_UNORM: imageFormats[1] = VK_FORMAT_R8G8B8A8_SRGB; imageFormatCount = 2; break;
-    case VK_FORMAT_R8G8B8A8_SRGB:  imageFormats[1] = VK_FORMAT_R8G8B8A8_UNORM; imageFormatCount = 2; break;
-    case VK_FORMAT_B8G8R8A8_UNORM: imageFormats[1] = VK_FORMAT_B8G8R8A8_SRGB; imageFormatCount = 2; break;
-    case VK_FORMAT_B8G8R8A8_SRGB:  imageFormats[1] = VK_FORMAT_B8G8R8A8_UNORM; imageFormatCount = 2; break;
+    case VK_FORMAT_R8G8B8A8_UNORM: imageFormats[1] = VK_FORMAT_R8G8B8A8_SRGB; imageFormatCount = s_MaxMutableSwapChainFormats; break;
+    case VK_FORMAT_R8G8B8A8_SRGB:  imageFormats[1] = VK_FORMAT_R8G8B8A8_UNORM; imageFormatCount = s_MaxMutableSwapChainFormats; break;
+    case VK_FORMAT_B8G8R8A8_UNORM: imageFormats[1] = VK_FORMAT_B8G8R8A8_SRGB; imageFormatCount = s_MaxMutableSwapChainFormats; break;
+    case VK_FORMAT_B8G8R8A8_SRGB:  imageFormats[1] = VK_FORMAT_B8G8R8A8_UNORM; imageFormatCount = s_MaxMutableSwapChainFormats; break;
     default: break;
     }
 
@@ -889,10 +956,32 @@ bool DeviceManager::createSwapChain(){
     }
 
     uint32_t imageCount = 0;
-    vkGetSwapchainImagesKHR(m_vulkanDevice, m_swapChain, &imageCount, nullptr);
+    res = vkGetSwapchainImagesKHR(m_vulkanDevice, m_swapChain, &imageCount, nullptr);
+    if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to query swap chain image count. {}"), ResultToString(res));
+        vkDestroySwapchainKHR(m_vulkanDevice, m_swapChain, nullptr);
+        m_swapChain = VK_NULL_HANDLE;
+        m_swapChainImages.clear();
+        return false;
+    }
+
+    if(imageCount == 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Swap chain reported zero images."));
+        vkDestroySwapchainKHR(m_vulkanDevice, m_swapChain, nullptr);
+        m_swapChain = VK_NULL_HANDLE;
+        m_swapChainImages.clear();
+        return false;
+    }
 
     Vector<VkImage, Alloc::ScratchAllocator<VkImage>> images(imageCount, Alloc::ScratchAllocator<VkImage>(scratchArena));
-    vkGetSwapchainImagesKHR(m_vulkanDevice, m_swapChain, &imageCount, images.data());
+    res = vkGetSwapchainImagesKHR(m_vulkanDevice, m_swapChain, &imageCount, images.data());
+    if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to retrieve swap chain images. {}"), ResultToString(res));
+        vkDestroySwapchainKHR(m_vulkanDevice, m_swapChain, nullptr);
+        m_swapChain = VK_NULL_HANDLE;
+        m_swapChainImages.clear();
+        return false;
+    }
 
     for(auto* image : images){
         SwapChainImage sci;
@@ -907,6 +996,13 @@ bool DeviceManager::createSwapChain(){
         textureDesc.isRenderTarget = true;
 
         sci.rhiHandle = m_rhiDevice->createHandleForNativeTexture(ObjectTypes::VK_Image, Object(sci.image), textureDesc);
+        if(!sci.rhiHandle){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create RHI handle for a swap chain image."));
+            m_swapChainImages.clear();
+            vkDestroySwapchainKHR(m_vulkanDevice, m_swapChain, nullptr);
+            m_swapChain = VK_NULL_HANDLE;
+            return false;
+        }
         m_swapChainImages.push_back(sci);
     }
 
@@ -988,16 +1084,41 @@ bool DeviceManager::createDeviceInternal(){
 }
 
 bool DeviceManager::createSwapChainInternal(){
+    VkResult res = VK_SUCCESS;
+
     if(!createSwapChain())
         return false;
+
+    auto cleanupSwapchainSemaphores = [&](){
+        for(auto& semaphore : m_presentSemaphores){
+            if(semaphore)
+                vkDestroySemaphore(m_vulkanDevice, semaphore, nullptr);
+            semaphore = VK_NULL_HANDLE;
+        }
+        m_presentSemaphores.clear();
+
+        for(auto& semaphore : m_acquireSemaphores){
+            if(semaphore)
+                vkDestroySemaphore(m_vulkanDevice, semaphore, nullptr);
+            semaphore = VK_NULL_HANDLE;
+        }
+        m_acquireSemaphores.clear();
+
+        destroySwapChain();
+    };
 
     usize const numPresentSemaphores = m_swapChainImages.size();
     m_presentSemaphores.reserve(numPresentSemaphores);
     for(u32 i = 0; i < numPresentSemaphores; ++i){
         VkSemaphoreCreateInfo semInfo = {};
         semInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-        VkSemaphore sem;
-        vkCreateSemaphore(m_vulkanDevice, &semInfo, nullptr, &sem);
+        VkSemaphore sem = VK_NULL_HANDLE;
+        res = vkCreateSemaphore(m_vulkanDevice, &semInfo, nullptr, &sem);
+        if(res != VK_SUCCESS){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create present semaphore. {}"), ResultToString(res));
+            cleanupSwapchainSemaphores();
+            return false;
+        }
         m_presentSemaphores.push_back(sem);
     }
 
@@ -1007,10 +1128,18 @@ bool DeviceManager::createSwapChainInternal(){
     for(u32 i = 0; i < numAcquireSemaphores; ++i){
         VkSemaphoreCreateInfo semInfo = {};
         semInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-        VkSemaphore sem;
-        vkCreateSemaphore(m_vulkanDevice, &semInfo, nullptr, &sem);
+        VkSemaphore sem = VK_NULL_HANDLE;
+        res = vkCreateSemaphore(m_vulkanDevice, &semInfo, nullptr, &sem);
+        if(res != VK_SUCCESS){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create acquire semaphore. {}"), ResultToString(res));
+            cleanupSwapchainSemaphores();
+            return false;
+        }
         m_acquireSemaphores.push_back(sem);
     }
+
+    m_swapChainIndex = 0;
+    m_acquireSemaphoreIndex = 0;
 
     return true;
 }
@@ -1075,10 +1204,24 @@ void DeviceManager::destroyDeviceAndSwapChain(){
 
 bool DeviceManager::beginFrame(){
     VkResult res = VK_SUCCESS;
+    VkSemaphore semaphore = VK_NULL_HANDLE;
 
-    const VkSemaphore& semaphore = m_acquireSemaphores[m_acquireSemaphoreIndex];
+    if(!m_swapChain || m_acquireSemaphores.empty()){
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: beginFrame skipped because swap chain or acquire semaphores are not ready."));
+        return false;
+    }
 
     for(usize attempt = 0; attempt < s_MaxRetryCountAcquireNextImage; ++attempt){
+        if(!m_swapChain || m_acquireSemaphores.empty()){
+            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: beginFrame aborted because swap chain or acquire semaphores are unavailable."));
+            return false;
+        }
+
+        if(m_acquireSemaphoreIndex >= m_acquireSemaphores.size())
+            m_acquireSemaphoreIndex = 0;
+
+        semaphore = m_acquireSemaphores[m_acquireSemaphoreIndex];
+
         res = vkAcquireNextImageKHR(
             m_vulkanDevice,
             m_swapChain,
@@ -1104,9 +1247,13 @@ bool DeviceManager::beginFrame(){
             break;
     }
 
-    m_acquireSemaphoreIndex = (m_acquireSemaphoreIndex + 1) % static_cast<uint32_t>(m_acquireSemaphores.size());
+    if(m_acquireSemaphores.empty()){
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: beginFrame aborted because acquire semaphore pool became empty."));
+        return false;
+    }
 
     if(res == VK_SUCCESS || res == VK_SUBOPTIMAL_KHR){
+        m_acquireSemaphoreIndex = (m_acquireSemaphoreIndex + 1) % static_cast<uint32_t>(m_acquireSemaphores.size());
         m_rhiDevice->queueWaitForSemaphore(CommandQueue::Graphics, semaphore, 0);
         return true;
     }
@@ -1116,6 +1263,14 @@ bool DeviceManager::beginFrame(){
 
 bool DeviceManager::present(){
     VkResult res = VK_SUCCESS;
+
+    if(!m_swapChain || m_presentSemaphores.empty() || m_swapChainImages.empty()){
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: present skipped because swap chain or present semaphores are not ready."));
+        return false;
+    }
+
+    if(m_swapChainIndex >= m_presentSemaphores.size() || m_swapChainIndex >= m_swapChainImages.size())
+        m_swapChainIndex = 0;
 
     const VkSemaphore& semaphore = m_presentSemaphores[m_swapChainIndex];
 
@@ -1151,6 +1306,11 @@ bool DeviceManager::present(){
     else
         query = m_rhiDevice->createEventQuery();
 
+    if(!query){
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to acquire frame synchronization query; continuing without frame fence throttling."));
+        return true;
+    }
+
     m_rhiDevice->resetEventQuery(query.get());
     m_rhiDevice->setEventQuery(query.get(), CommandQueue::Graphics);
     m_framesInFlight.push(query);
@@ -1164,19 +1324,33 @@ bool DeviceManager::present(){
 
 
 bool DeviceManager::enumerateAdapters(Vector<AdapterInfo>& outAdapters){
+    VkResult res = VK_SUCCESS;
+
     if(!m_vulkanInstance)
         return false;
 
     uint32_t deviceCount = 0;
-    vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, nullptr);
+    res = vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, nullptr);
+    if(res != VK_SUCCESS)
+        return false;
+
+    if(deviceCount == 0){
+        outAdapters.clear();
+        return true;
+    }
 
     Alloc::ScratchArena<> scratchArena;
 
     Vector<VkPhysicalDevice, Alloc::ScratchAllocator<VkPhysicalDevice>> devices(deviceCount, Alloc::ScratchAllocator<VkPhysicalDevice>(scratchArena));
-    vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, devices.data());
-    outAdapters.clear();
+    res = vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, devices.data());
+    if(res != VK_SUCCESS)
+        return false;
 
-    for(auto* physicalDevice : devices){
+    outAdapters.clear();
+    outAdapters.resize(deviceCount);
+
+    auto fillAdapterInfo = [&](usize i){
+        auto* physicalDevice = devices[i];
         VkPhysicalDeviceProperties2 properties2 = {};
         properties2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
         VkPhysicalDeviceIDProperties idProperties = {};
@@ -1208,7 +1382,18 @@ bool DeviceManager::enumerateAdapters(Vector<AdapterInfo>& outAdapters){
                 adapterInfo.dedicatedVideoMemory += heap.size;
         }
 
-        outAdapters.push_back(Move(adapterInfo));
+        outAdapters[i] = Move(adapterInfo);
+    };
+
+    if(m_deviceParams.threadPool
+        && m_deviceParams.threadPool->isParallelEnabled()
+        && deviceCount >= s_ParallelAdapterThreshold)
+    {
+        m_deviceParams.threadPool->parallelFor(static_cast<usize>(0), static_cast<usize>(deviceCount), fillAdapterInfo);
+    }
+    else{
+        for(usize i = 0; i < static_cast<usize>(deviceCount); ++i)
+            fillAdapterInfo(i);
     }
 
     return true;

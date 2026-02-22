@@ -25,6 +25,12 @@ MeshletPipeline::~MeshletPipeline(){
         vkDestroyPipeline(m_context.device, m_pipeline, m_context.allocationCallbacks);
         m_pipeline = VK_NULL_HANDLE;
     }
+
+    if(m_ownsPipelineLayout && m_pipelineLayout != VK_NULL_HANDLE){
+        vkDestroyPipelineLayout(m_context.device, m_pipelineLayout, m_context.allocationCallbacks);
+        m_pipelineLayout = VK_NULL_HANDLE;
+        m_ownsPipelineLayout = false;
+    }
 }
 Object MeshletPipeline::getNativeHandle(ObjectType objectType){
     if(objectType == ObjectTypes::VK_Pipeline)
@@ -39,6 +45,11 @@ Object MeshletPipeline::getNativeHandle(ObjectType objectType){
 MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& desc, FramebufferInfo const& fbinfo){
     VkResult res = VK_SUCCESS;
 
+    if(!m_context.extensions.KHR_dynamic_rendering){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Dynamic rendering extension is required to create meshlet pipelines."));
+        return nullptr;
+    }
+
     Alloc::ScratchArena<> scratchArena;
 
     auto* pso = NewArenaObject<MeshletPipeline>(*m_context.objectArena, m_context);
@@ -46,8 +57,8 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
 
     Vector<VkPipelineShaderStageCreateInfo, Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>> shaderStages{ Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>(scratchArena) };
     Vector<VkSpecializationInfo, Alloc::ScratchAllocator<VkSpecializationInfo>> specInfos{ Alloc::ScratchAllocator<VkSpecializationInfo>(scratchArena) };
-    shaderStages.reserve(3); // Task (optional), Mesh, Fragment
-    specInfos.reserve(3);
+    shaderStages.reserve(s_MeshletPipelineStageReserveCount); // Task (optional), Mesh, Fragment
+    specInfos.reserve(s_MeshletPipelineStageReserveCount);
 
     auto addShaderStage = [&](IShader* iShader, VkShaderStageFlagBits vkStage){
         auto* s = checked_cast<Shader*>(iShader);
@@ -84,11 +95,49 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
         addShaderStage(desc.PS.get(), VK_SHADER_STAGE_FRAGMENT_BIT);
 
     VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
-    if(!desc.bindingLayouts.empty() && desc.bindingLayouts[0]){
+    if(desc.bindingLayouts.size() == 1){
         auto* layout = checked_cast<BindingLayout*>(desc.bindingLayouts[0].get());
-        pipelineLayout = layout->m_pipelineLayout;
-        pso->m_pipelineLayout = pipelineLayout;
+        if(layout)
+            pipelineLayout = layout->m_pipelineLayout;
     }
+    else if(desc.bindingLayouts.size() > 1){
+        Vector<VkDescriptorSetLayout, Alloc::ScratchAllocator<VkDescriptorSetLayout>> allDescriptorSetLayouts{ Alloc::ScratchAllocator<VkDescriptorSetLayout>(scratchArena) };
+        u32 pushConstantByteSize = 0;
+        for(u32 i = 0; i < static_cast<u32>(desc.bindingLayouts.size()); ++i){
+            auto* bl = checked_cast<BindingLayout*>(desc.bindingLayouts[i].get());
+            if(!bl)
+                continue;
+            for(const auto& item : bl->m_desc.bindings){
+                if(item.type == ResourceType::PushConstants)
+                    pushConstantByteSize = Max<u32>(pushConstantByteSize, item.size);
+            }
+            for(auto& dsl : bl->m_descriptorSetLayouts)
+                allDescriptorSetLayouts.push_back(dsl);
+        }
+
+        if(!allDescriptorSetLayouts.empty()){
+            VkPushConstantRange pushConstantRange = {};
+            if(pushConstantByteSize > 0){
+                pushConstantRange.stageFlags = VK_SHADER_STAGE_ALL;
+                pushConstantRange.offset = 0;
+                pushConstantRange.size = pushConstantByteSize;
+            }
+
+            VkPipelineLayoutCreateInfo layoutInfo = { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
+            layoutInfo.setLayoutCount = static_cast<u32>(allDescriptorSetLayouts.size());
+            layoutInfo.pSetLayouts = allDescriptorSetLayouts.data();
+            layoutInfo.pushConstantRangeCount = pushConstantByteSize > 0 ? 1u : 0u;
+            layoutInfo.pPushConstantRanges = pushConstantByteSize > 0 ? &pushConstantRange : nullptr;
+            res = vkCreatePipelineLayout(m_context.device, &layoutInfo, m_context.allocationCallbacks, &pipelineLayout);
+            if(res != VK_SUCCESS){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create pipeline layout for meshlet pipeline: {}"), ResultToString(res));
+                DestroyArenaObject(*m_context.objectArena, pso);
+                return nullptr;
+            }
+            pso->m_ownsPipelineLayout = true;
+        }
+    }
+    pso->m_pipelineLayout = pipelineLayout;
 
     VkPipelineRasterizationStateCreateInfo rasterizer = { VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO };
     rasterizer.depthClampEnable = VK_FALSE;
@@ -100,14 +149,14 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     rasterizer.depthBiasConstantFactor = static_cast<f32>(desc.renderState.rasterState.depthBias);
     rasterizer.depthBiasClamp = desc.renderState.rasterState.depthBiasClamp;
     rasterizer.depthBiasSlopeFactor = desc.renderState.rasterState.slopeScaledDepthBias;
-    rasterizer.lineWidth = 1.0f;
+    rasterizer.lineWidth = s_DefaultRasterLineWidth;
 
     VkPipelineViewportStateCreateInfo viewportState = { VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO };
     viewportState.viewportCount = 1;
     viewportState.scissorCount = 1;
 
     VkPipelineMultisampleStateCreateInfo multisampling = { VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO };
-    multisampling.rasterizationSamples = static_cast<VkSampleCountFlagBits>(fbinfo.sampleCount);
+    multisampling.rasterizationSamples = __hidden_vulkan::GetSampleCount(fbinfo.sampleCount);
     multisampling.sampleShadingEnable = VK_FALSE;
     multisampling.alphaToCoverageEnable = desc.renderState.blendState.alphaToCoverageEnable ? VK_TRUE : VK_FALSE;
 
@@ -194,7 +243,7 @@ void CommandList::setMeshletState(const MeshletState& state){
     if(pipeline)
         vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->m_pipeline);
 
-    if(state.bindings.size() > 0){
+    if(state.bindings.size() > 0 && pipeline && pipeline->m_pipelineLayout != VK_NULL_HANDLE){
         for(usize i = 0; i < state.bindings.size(); ++i){
             if(state.bindings[i]){
                 auto* bindingSet = checked_cast<BindingSet*>(state.bindings[i]);

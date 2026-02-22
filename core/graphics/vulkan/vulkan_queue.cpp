@@ -130,11 +130,18 @@ Queue::~Queue(){
 
 TrackedCommandBufferPtr Queue::createCommandBuffer(){
     auto* cmdBuf = NewArenaObject<TrackedCommandBuffer>(*m_context.objectArena, m_context, m_queueID, m_queueFamilyIndex);
+    if(!cmdBuf->m_cmdBuf){
+        DestroyArenaObject(*m_context.objectArena, cmdBuf);
+        return nullptr;
+    }
+
     cmdBuf->m_recordingID = ++m_lastRecordingID;
     return TrackedCommandBufferPtr(cmdBuf, TrackedCommandBufferPtr::deleter_type(m_context.objectArena));
 }
 
 TrackedCommandBufferPtr Queue::getOrCreateCommandBuffer(){
+    VkResult res = VK_SUCCESS;
+
     Mutex::scoped_lock lock(m_mutex);
 
     updateLastFinishedID();
@@ -143,6 +150,11 @@ TrackedCommandBufferPtr Queue::getOrCreateCommandBuffer(){
     while(it != m_commandBuffersInFlight.end()){
         TrackedCommandBuffer* cmdBuf = it->get();
         if(cmdBuf->m_submissionID <= m_lastFinishedID){
+            for(auto handle : cmdBuf->m_referencedAccelStructHandles){
+                if(handle != VK_NULL_HANDLE)
+                    vkDestroyAccelerationStructureKHR(m_context.device, handle, m_context.allocationCallbacks);
+            }
+            cmdBuf->m_referencedAccelStructHandles.clear();
             cmdBuf->m_referencedResources.clear();
             cmdBuf->m_referencedStagingBuffers.clear();
 
@@ -157,7 +169,15 @@ TrackedCommandBufferPtr Queue::getOrCreateCommandBuffer(){
         TrackedCommandBufferPtr cmdBuf = Move(m_commandBuffersPool.front());
         m_commandBuffersPool.pop_front();
 
-        vkResetCommandBuffer(cmdBuf->m_cmdBuf, 0);
+        if(!cmdBuf || cmdBuf->m_cmdBuf == VK_NULL_HANDLE)
+            return createCommandBuffer();
+
+        res = vkResetCommandBuffer(cmdBuf->m_cmdBuf, 0);
+        if(res != VK_SUCCESS){
+            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to reset command buffer, creating a new one: {}"), ResultToString(res));
+            return createCommandBuffer();
+        }
+
         cmdBuf->m_recordingID = ++m_lastRecordingID;
 
         return cmdBuf;
@@ -214,6 +234,25 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
     if(cmdBufs.empty() && !hasPendingSemaphores)
         return m_lastSubmittedID;
 
+    if(m_trackingSemaphore == VK_NULL_HANDLE){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Queue submission skipped because timeline semaphore is unavailable."));
+        m_waitSemaphores.clear();
+        m_waitSemaphoreValues.clear();
+        m_signalSemaphores.clear();
+        m_signalSemaphoreValues.clear();
+
+        for(auto& tracked : trackedBuffers){
+            if(!tracked)
+                continue;
+            // Submission did not happen; drop references but do not destroy deferred handles here.
+            tracked->m_referencedAccelStructHandles.clear();
+            tracked->m_referencedResources.clear();
+            tracked->m_referencedStagingBuffers.clear();
+            m_commandBuffersPool.push_back(Move(tracked));
+        }
+        return m_lastSubmittedID;
+    }
+
     u64 submissionID = ++m_lastSubmittedID;
 
     VkSemaphoreSubmitInfo timelineSignal = { VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO };
@@ -262,11 +301,11 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
 
     // Requires VK_KHR_synchronization2 extension to be enabled
     VkSubmitInfo2 submitInfo = { VK_STRUCTURE_TYPE_SUBMIT_INFO_2 };
-    submitInfo.waitSemaphoreInfoCount = (u32)waitInfos.size();
+    submitInfo.waitSemaphoreInfoCount = static_cast<uint32_t>(waitInfos.size());
     submitInfo.pWaitSemaphoreInfos = waitInfos.data();
-    submitInfo.commandBufferInfoCount = (u32)cmdBufInfos.size();
+    submitInfo.commandBufferInfoCount = static_cast<uint32_t>(cmdBufInfos.size());
     submitInfo.pCommandBufferInfos = cmdBufInfos.data();
-    submitInfo.signalSemaphoreInfoCount = (u32)signalInfos.size();
+    submitInfo.signalSemaphoreInfoCount = static_cast<uint32_t>(signalInfos.size());
     submitInfo.pSignalSemaphoreInfos = signalInfos.data();
 
     res = vkQueueSubmit2(m_queue, 1, &submitInfo, submitFence);
@@ -277,13 +316,26 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
     m_signalSemaphoreValues.clear();
 
     if(res != VK_SUCCESS){
+        m_lastSubmittedID = submissionID - 1;
+
         if(res == VK_ERROR_DEVICE_LOST){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Device was lost during queue submission."));
         }
         else{
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command buffers to queue: {}"), ResultToString(res));
         }
-        return m_lastSubmittedID - 1;
+
+        for(auto& tracked : trackedBuffers){
+            if(!tracked)
+                continue;
+            // Submission failed; command lists were not executed.
+            tracked->m_referencedAccelStructHandles.clear();
+            tracked->m_referencedResources.clear();
+            tracked->m_referencedStagingBuffers.clear();
+            m_commandBuffersPool.push_back(Move(tracked));
+        }
+
+        return m_lastSubmittedID;
     }
 
     for(auto& tracked : trackedBuffers){
@@ -294,9 +346,19 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
 }
 
 void Queue::updateLastFinishedID(){
+    VkResult res = VK_SUCCESS;
+
+    if(!m_trackingSemaphore){
+        m_lastFinishedID = m_lastSubmittedID;
+        return;
+    }
+
     u64 completedValue = 0;
-    vkGetSemaphoreCounterValue(m_context.device, m_trackingSemaphore, &completedValue);
-    m_lastFinishedID = completedValue;
+    res = vkGetSemaphoreCounterValue(m_context.device, m_trackingSemaphore, &completedValue);
+    if(res == VK_SUCCESS)
+        m_lastFinishedID = completedValue;
+    else
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to query queue timeline semaphore value: {}"), ResultToString(res));
 }
 
 bool Queue::pollCommandList(u64 commandListID){
@@ -308,6 +370,12 @@ bool Queue::pollCommandList(u64 commandListID){
 
 bool Queue::waitCommandList(u64 commandListID, u64 timeout){
     VkResult res = VK_SUCCESS;
+
+    if(commandListID == 0)
+        return true;
+
+    if(!m_trackingSemaphore)
+        return false;
 
     VkSemaphoreWaitInfo waitInfo = { VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO };
     waitInfo.semaphoreCount = 1;
@@ -330,18 +398,28 @@ bool Queue::waitCommandList(u64 commandListID, u64 timeout){
 }
 
 void Queue::waitForIdle(){
+    VkResult res = VK_SUCCESS;
+
     Mutex::scoped_lock lock(m_mutex);
 
-    vkQueueWaitIdle(m_queue);
+    res = vkQueueWaitIdle(m_queue);
+    if(res != VK_SUCCESS)
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Queue wait-for-idle failed: {}"), ResultToString(res));
+    if(res == VK_SUCCESS){
+        m_lastFinishedID = m_lastSubmittedID;
 
-    m_lastFinishedID = m_lastSubmittedID;
-
-    for(auto& tracked : m_commandBuffersInFlight){
-        tracked->m_referencedResources.clear();
-        tracked->m_referencedStagingBuffers.clear();
-        m_commandBuffersPool.push_back(Move(tracked));
+        for(auto& tracked : m_commandBuffersInFlight){
+            for(auto handle : tracked->m_referencedAccelStructHandles){
+                if(handle != VK_NULL_HANDLE)
+                    vkDestroyAccelerationStructureKHR(m_context.device, handle, m_context.allocationCallbacks);
+            }
+            tracked->m_referencedAccelStructHandles.clear();
+            tracked->m_referencedResources.clear();
+            tracked->m_referencedStagingBuffers.clear();
+            m_commandBuffersPool.push_back(Move(tracked));
+        }
+        m_commandBuffersInFlight.clear();
     }
-    m_commandBuffersInFlight.clear();
 }
 
 
@@ -470,6 +548,11 @@ void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapp
         counts.imageCount = 0;
 
         const TextureTilesMapping& mapping = tileMappings[i];
+        if(mapping.numTextureRegions == 0 || !mapping.tiledTextureRegions || !mapping.tiledTextureCoordinates)
+            return;
+        if(mapping.heap && !mapping.byteOffsets)
+            return;
+
         for(u32 j = 0; j < mapping.numTextureRegions; ++j){
             const TiledTextureRegion& region = mapping.tiledTextureRegions[j];
             if(region.tilesNum)
@@ -479,10 +562,8 @@ void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapp
         }
     };
 
-    constexpr usize kParallelTileCountThreshold = 128;
-    constexpr usize kTileCountGrainSize = 16;
-    if(useParallelPool && mappingCount >= kParallelTileCountThreshold)
-        workerPool->parallelFor(static_cast<usize>(0), mappingCount, kTileCountGrainSize, countMappingBinds);
+    if(useParallelPool && mappingCount >= s_ParallelTileCountThreshold)
+        workerPool->parallelFor(static_cast<usize>(0), mappingCount, s_TileCountGrainSize, countMappingBinds);
     else{
         for(usize i = 0; i < mappingCount; ++i)
             countMappingBinds(i);
@@ -504,6 +585,10 @@ void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapp
     auto buildMappingBinds = [&](usize i){
         const TextureTilesMapping& mapping = tileMappings[i];
         const MappingBindCounts& counts = mappingCounts[i];
+        if(mapping.numTextureRegions == 0 || !mapping.tiledTextureRegions || !mapping.tiledTextureCoordinates)
+            return;
+        if(mapping.heap && !mapping.byteOffsets)
+            return;
 
         Heap* heap = mapping.heap ? checked_cast<Heap*>(mapping.heap) : nullptr;
         VkDeviceMemory deviceMemory = heap ? heap->m_memory : VK_NULL_HANDLE;
@@ -541,11 +626,9 @@ void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapp
         }
     };
 
-    constexpr usize kParallelTileMappingThreshold = 128;
-    constexpr usize kTileMappingGrainSize = 8;
     const usize totalBindings = totalOpaqueBinds + totalImageBinds;
-    if(useParallelPool && totalBindings >= kParallelTileMappingThreshold)
-        workerPool->parallelFor(static_cast<usize>(0), mappingCount, kTileMappingGrainSize, buildMappingBinds);
+    if(useParallelPool && totalBindings >= s_ParallelTileMappingThreshold)
+        workerPool->parallelFor(static_cast<usize>(0), mappingCount, s_TileMappingGrainSize, buildMappingBinds);
     else{
         for(usize i = 0; i < mappingCount; ++i)
             buildMappingBinds(i);
@@ -571,7 +654,10 @@ void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapp
         bindSparseInfo.pImageOpaqueBinds = &sparseOpaqueBindInfo;
     }
 
-    res = vkQueueBindSparse(m_queue, 1, &bindSparseInfo, VK_NULL_HANDLE);
+    {
+        Mutex::scoped_lock lock(m_mutex);
+        res = vkQueueBindSparse(m_queue, 1, &bindSparseInfo, VK_NULL_HANDLE);
+    }
     if(res != VK_SUCCESS)
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to update texture tile mappings: {}"), ResultToString(res));
 }

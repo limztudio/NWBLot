@@ -163,6 +163,12 @@ GraphicsPipeline::~GraphicsPipeline(){
         vkDestroyPipeline(m_context.device, m_pipeline, m_context.allocationCallbacks);
         m_pipeline = VK_NULL_HANDLE;
     }
+
+    if(m_ownsPipelineLayout && m_pipelineLayout != VK_NULL_HANDLE){
+        vkDestroyPipelineLayout(m_context.device, m_pipelineLayout, m_context.allocationCallbacks);
+        m_pipelineLayout = VK_NULL_HANDLE;
+        m_ownsPipelineLayout = false;
+    }
 }
 Object GraphicsPipeline::getNativeHandle(ObjectType objectType){
     if(objectType == ObjectTypes::VK_Pipeline)
@@ -178,7 +184,12 @@ FramebufferHandle Device::createFramebuffer(const FramebufferDesc& desc){
     auto* fb = NewArenaObject<Framebuffer>(*m_context.objectArena, m_context);
     fb->m_desc = desc;
 
-    for(u32 i = 0; i < static_cast<u32>(desc.colorAttachments.size()); ++i){
+    constexpr u32 kMaxColorAttachments = s_MaxRenderTargets;
+    const u32 colorAttachmentCount = Min<u32>(static_cast<u32>(desc.colorAttachments.size()), kMaxColorAttachments);
+    if(desc.colorAttachments.size() > kMaxColorAttachments)
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Framebuffer has more than {} color attachments; truncating to {}."), kMaxColorAttachments, kMaxColorAttachments);
+
+    for(u32 i = 0; i < colorAttachmentCount; ++i){
         if(desc.colorAttachments[i].texture){
             fb->m_resources.push_back(desc.colorAttachments[i].texture);
             auto* tex = checked_cast<Texture*>(desc.colorAttachments[i].texture);
@@ -214,7 +225,12 @@ FramebufferHandle Device::createFramebuffer(const FramebufferDesc& desc){
 GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc& desc, FramebufferInfo const& fbinfo){
     VkResult res = VK_SUCCESS;
 
-    Alloc::ScratchArena<> scratchArena(2048);
+    if(!m_context.extensions.KHR_dynamic_rendering){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Dynamic rendering extension is required to create graphics pipelines."));
+        return nullptr;
+    }
+
+    Alloc::ScratchArena<> scratchArena(s_GraphicsPipelineScratchArenaBytes);
 
     auto* pso = NewArenaObject<GraphicsPipeline>(*m_context.objectArena, m_context);
     pso->m_desc = desc;
@@ -257,15 +273,21 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     if(desc.PS)
         addShaderStage(desc.PS.get(), VK_SHADER_STAGE_FRAGMENT_BIT);
 
+    if(shaderStages.empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create graphics pipeline: no shader stages provided"));
+        DestroyArenaObject(*m_context.objectArena, pso);
+        return nullptr;
+    }
+
     // Step 2: Vertex input state from InputLayout
     VkPipelineVertexInputStateCreateInfo vertexInputInfo = { VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO };
 
     if(desc.inputLayout){
         auto* layout = checked_cast<InputLayout*>(desc.inputLayout.get());
 
-        vertexInputInfo.vertexBindingDescriptionCount = (u32)layout->m_bindings.size();
+        vertexInputInfo.vertexBindingDescriptionCount = static_cast<uint32_t>(layout->m_bindings.size());
         vertexInputInfo.pVertexBindingDescriptions = layout->m_bindings.data();
-        vertexInputInfo.vertexAttributeDescriptionCount = (u32)layout->m_vkAttributes.size();
+        vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(layout->m_vkAttributes.size());
         vertexInputInfo.pVertexAttributeDescriptions = layout->m_vkAttributes.data();
     }
 
@@ -293,7 +315,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     rasterizer.depthBiasConstantFactor = (f32)desc.renderState.rasterState.depthBias;
     rasterizer.depthBiasClamp = desc.renderState.rasterState.depthBiasClamp;
     rasterizer.depthBiasSlopeFactor = desc.renderState.rasterState.slopeScaledDepthBias;
-    rasterizer.lineWidth = 1.0f;
+    rasterizer.lineWidth = s_DefaultRasterLineWidth;
 
     // Step 6: Multisample state
     VkPipelineMultisampleStateCreateInfo multisampling = { VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO };
@@ -316,10 +338,10 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     colorBlending.logicOpEnable = VK_FALSE;
     Vector<VkPipelineColorBlendAttachmentState, Alloc::ScratchAllocator<VkPipelineColorBlendAttachmentState>> blendAttachments{ Alloc::ScratchAllocator<VkPipelineColorBlendAttachmentState>(scratchArena) };
     blendAttachments.reserve(fbinfo.colorFormats.size());
-    for(u32 i = 0; i < (u32)fbinfo.colorFormats.size(); ++i){
+    for(u32 i = 0; i < static_cast<u32>(fbinfo.colorFormats.size()); ++i){
         blendAttachments.push_back(__hidden_vulkan::ConvertBlendState(desc.renderState.blendState.targets[i]));
     }
-    colorBlending.attachmentCount = (u32)blendAttachments.size();
+    colorBlending.attachmentCount = static_cast<uint32_t>(blendAttachments.size());
     colorBlending.pAttachments = blendAttachments.data();
 
     // Step 9: Dynamic state
@@ -342,24 +364,44 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     // Step 10: Pipeline layout from binding layouts
     pso->m_pipelineLayout = VK_NULL_HANDLE;
     Vector<VkDescriptorSetLayout, Alloc::ScratchAllocator<VkDescriptorSetLayout>> allDescriptorSetLayouts{ Alloc::ScratchAllocator<VkDescriptorSetLayout>(scratchArena) };
-    for(u32 i = 0; i < (u32)desc.bindingLayouts.size(); ++i){
+    u32 pushConstantByteSize = 0;
+    for(u32 i = 0; i < static_cast<u32>(desc.bindingLayouts.size()); ++i){
         auto* bl = checked_cast<BindingLayout*>(desc.bindingLayouts[i].get());
+        if(!bl)
+            continue;
+        for(const auto& item : bl->m_desc.bindings){
+            if(item.type == ResourceType::PushConstants)
+                pushConstantByteSize = Max<u32>(pushConstantByteSize, item.size);
+        }
         for(auto& dsl : bl->m_descriptorSetLayouts){
             allDescriptorSetLayouts.push_back(dsl);
         }
     }
     if(desc.bindingLayouts.size() == 1){
         auto* bl = checked_cast<BindingLayout*>(desc.bindingLayouts[0].get());
-        pso->m_pipelineLayout = bl->m_pipelineLayout;
+        if(bl)
+            pso->m_pipelineLayout = bl->m_pipelineLayout;
     } else if(desc.bindingLayouts.size() > 1){
-        VkPipelineLayoutCreateInfo layoutInfo = { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
-        layoutInfo.setLayoutCount = (u32)allDescriptorSetLayouts.size();
-        layoutInfo.pSetLayouts = allDescriptorSetLayouts.data();
-        res = vkCreatePipelineLayout(m_context.device, &layoutInfo, m_context.allocationCallbacks, &pso->m_pipelineLayout);
-        if(res != VK_SUCCESS){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create pipeline layout for graphics pipeline: {}"), ResultToString(res));
-            DestroyArenaObject(*m_context.objectArena, pso);
-            return nullptr;
+        if(!allDescriptorSetLayouts.empty()){
+            VkPushConstantRange pushConstantRange = {};
+            if(pushConstantByteSize > 0){
+                pushConstantRange.stageFlags = VK_SHADER_STAGE_ALL;
+                pushConstantRange.offset = 0;
+                pushConstantRange.size = pushConstantByteSize;
+            }
+
+            VkPipelineLayoutCreateInfo layoutInfo = { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
+            layoutInfo.setLayoutCount = static_cast<uint32_t>(allDescriptorSetLayouts.size());
+            layoutInfo.pSetLayouts = allDescriptorSetLayouts.data();
+            layoutInfo.pushConstantRangeCount = pushConstantByteSize > 0 ? 1u : 0u;
+            layoutInfo.pPushConstantRanges = pushConstantByteSize > 0 ? &pushConstantRange : nullptr;
+            res = vkCreatePipelineLayout(m_context.device, &layoutInfo, m_context.allocationCallbacks, &pso->m_pipelineLayout);
+            if(res != VK_SUCCESS){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create pipeline layout for graphics pipeline: {}"), ResultToString(res));
+                DestroyArenaObject(*m_context.objectArena, pso);
+                return nullptr;
+            }
+            pso->m_ownsPipelineLayout = true;
         }
     }
 
@@ -367,9 +409,9 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     VkPipelineRenderingCreateInfo renderingInfo = { VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO };
     Vector<VkFormat, Alloc::ScratchAllocator<VkFormat>> colorFormats{ Alloc::ScratchAllocator<VkFormat>(scratchArena) };
     colorFormats.reserve(fbinfo.colorFormats.size());
-    for(u32 i = 0; i < (u32)fbinfo.colorFormats.size(); ++i)
+    for(u32 i = 0; i < static_cast<u32>(fbinfo.colorFormats.size()); ++i)
         colorFormats.push_back(ConvertFormat(fbinfo.colorFormats[i]));
-    renderingInfo.colorAttachmentCount = (u32)colorFormats.size();
+    renderingInfo.colorAttachmentCount = static_cast<uint32_t>(colorFormats.size());
     renderingInfo.pColorAttachmentFormats = colorFormats.data();
     if(fbinfo.depthFormat != Format::UNKNOWN){
         const FormatInfo& depthFormatInfo = GetFormatInfo(fbinfo.depthFormat);
@@ -382,7 +424,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     VkGraphicsPipelineCreateInfo pipelineInfo = { VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO };
     if(m_context.extensions.KHR_dynamic_rendering)
         pipelineInfo.pNext = &renderingInfo;
-    pipelineInfo.stageCount = (u32)shaderStages.size();
+    pipelineInfo.stageCount = static_cast<uint32_t>(shaderStages.size());
     pipelineInfo.pStages = shaderStages.data();
     pipelineInfo.pVertexInputState = &vertexInputInfo;
     pipelineInfo.pInputAssemblyState = &inputAssembly;
@@ -413,13 +455,22 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
 
 void CommandList::beginRenderPass(IFramebuffer* _framebuffer, const RenderPassParameters& params){
     auto* fb = checked_cast<Framebuffer*>(_framebuffer);
+    if(!fb)
+        return;
+
     const FramebufferDesc& fbDesc = fb->m_desc;
 
     // Dynamic rendering (VK_KHR_dynamic_rendering)
-    VkRenderingAttachmentInfo colorAttachments[8] = {};
+    constexpr u32 kMaxColorAttachments = s_MaxRenderTargets;
+    VkRenderingAttachmentInfo colorAttachments[kMaxColorAttachments] = {};
     u32 numColorAttachments = 0;
 
     for(u32 i = 0; i < static_cast<u32>(fbDesc.colorAttachments.size()); ++i){
+        if(numColorAttachments >= kMaxColorAttachments){
+            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Render pass has more than {} color attachments; truncating to {}."), kMaxColorAttachments, kMaxColorAttachments);
+            break;
+        }
+
         if(fbDesc.colorAttachments[i].texture){
             auto* tex = checked_cast<Texture*>(fbDesc.colorAttachments[i].texture);
 
@@ -499,7 +550,7 @@ void CommandList::setGraphicsState(const GraphicsState& state){
         vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->m_pipeline);
 
     // Bind descriptor sets
-    if(state.bindings.size() > 0){
+    if(state.bindings.size() > 0 && pipeline && pipeline->m_pipelineLayout != VK_NULL_HANDLE){
         for(usize i = 0; i < state.bindings.size(); ++i){
             if(state.bindings[i]){
                 auto* bindingSet = checked_cast<BindingSet*>(state.bindings[i]);
@@ -527,19 +578,19 @@ void CommandList::setGraphicsState(const GraphicsState& state){
         VkRect2D scissor{};
         if(!state.viewport.scissorRects.empty()){
             const auto& sr = state.viewport.scissorRects[0];
-            scissor.offset = { sr.minX, sr.minY };
-            scissor.extent = { static_cast<u32>(sr.maxX - sr.minX), static_cast<u32>(sr.maxY - sr.minY) };
+            scissor.offset = { static_cast<int32_t>(sr.minX), static_cast<int32_t>(sr.minY) };
+            scissor.extent = { static_cast<uint32_t>(sr.maxX - sr.minX), static_cast<uint32_t>(sr.maxY - sr.minY) };
         }
         else{
-            scissor.offset = { (i32)vp.minX, (i32)vp.minY };
-            scissor.extent = { (u32)(vp.maxX - vp.minX), (u32)(vp.maxY - vp.minY) };
+            scissor.offset = { static_cast<int32_t>(vp.minX), static_cast<int32_t>(vp.minY) };
+            scissor.extent = { static_cast<uint32_t>(vp.maxX - vp.minX), static_cast<uint32_t>(vp.maxY - vp.minY) };
         }
         vkCmdSetScissor(m_currentCmdBuf->m_cmdBuf, 0, 1, &scissor);
     }
 
     // Bind vertex buffers
     if(!state.vertexBuffers.empty()){
-        constexpr u32 kMaxVertexBuffers = 16;
+        constexpr u32 kMaxVertexBuffers = s_MaxVertexAttributes;
         VkBuffer vertexBuffers[kMaxVertexBuffers];
         VkDeviceSize offsets[kMaxVertexBuffers];
         auto count = Min(static_cast<u32>(state.vertexBuffers.size()), kMaxVertexBuffers);

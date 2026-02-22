@@ -35,7 +35,14 @@ namespace __hidden_vulkan{
     extern constexpr CooperativeVectorDataType::Enum ConvertCoopVecDataType(VkComponentTypeKHR type);
     extern constexpr VkCooperativeVectorMatrixLayoutNV ConvertCoopVecMatrixLayout(CooperativeVectorMatrixLayout::Enum layout);
 
-    inline void CopyHostMemory(Alloc::ThreadPool& workerPool, void* dst, const void* src, usize size, usize parallelThreshold = 1024 * 1024, usize chunkSize = 256 * 1024){
+    inline void CopyHostMemory(
+        Alloc::ThreadPool& workerPool,
+        void* dst,
+        const void* src,
+        usize size,
+        usize parallelThreshold = s_CopyHostMemoryParallelThreshold,
+        usize chunkSize = s_CopyHostMemoryChunkSize)
+    {
         if(!dst || !src || size == 0)
             return;
 
@@ -300,7 +307,13 @@ public:
 
 
 public:
-    bool suballocateBuffer(u64 size, Buffer** pBuffer, u64* pOffset, void** pCpuVA, u64 currentVersion, u32 alignment = 256);
+    bool suballocateBuffer(
+        u64 size,
+        Buffer** pBuffer,
+        u64* pOffset,
+        void** pCpuVA,
+        u64 currentVersion,
+        u32 alignment = s_DefaultUploadSuballocationAlignment);
     void submitChunks(u64, u64 submittedVersion);
 
 
@@ -309,6 +322,8 @@ private:
     u64 m_defaultChunkSize;
     u64 m_memoryLimit;
     bool m_isScratchBuffer;
+    Mutex m_mutex;
+    u64 m_chunkPoolBytes = 0;
 
     List<RefCountPtr<BufferChunk>, Alloc::CustomAllocator<RefCountPtr<BufferChunk>>> m_chunkPool;
     RefCountPtr<BufferChunk> m_currentChunk;
@@ -350,6 +365,17 @@ public:
 
 
 private:
+    struct BufferViewEntry{
+        Format::Enum format = Format::UNKNOWN;
+        u64 byteOffset = 0;
+        u64 byteSize = 0;
+        VkBufferView view = VK_NULL_HANDLE;
+    };
+
+private:
+    [[nodiscard]] VkBufferView getView(Format::Enum format, u64 byteOffset, u64 byteSize);
+
+private:
     BufferDesc m_desc;
 
     VkBuffer m_buffer = VK_NULL_HANDLE;
@@ -358,6 +384,8 @@ private:
     void* m_mappedMemory = nullptr;
 
     Vector<u64, Alloc::CustomAllocator<u64>> m_versionTracking;
+    Vector<BufferViewEntry, Alloc::CustomAllocator<BufferViewEntry>> m_bufferViews;
+    Mutex m_bufferViewsMutex;
     VolatileBufferState m_volatileState;
 
     bool m_managed = true; // if true, owns the VkBuffer and memory
@@ -619,6 +647,7 @@ private:
     FramebufferInfo m_framebufferInfo;
     VkPipeline m_pipeline = VK_NULL_HANDLE;
     VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
+    bool m_ownsPipelineLayout = false;
 
     const VulkanContext& m_context;
 };
@@ -647,6 +676,7 @@ private:
     ComputePipelineDesc m_desc;
     VkPipeline m_pipeline = VK_NULL_HANDLE;
     VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
+    bool m_ownsPipelineLayout = false;
 
     const VulkanContext& m_context;
 };
@@ -677,6 +707,7 @@ private:
     FramebufferInfo m_framebufferInfo;
     VkPipeline m_pipeline = VK_NULL_HANDLE;
     VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
+    bool m_ownsPipelineLayout = false;
 
     const VulkanContext& m_context;
 };
@@ -707,6 +738,7 @@ private:
     RayTracingPipelineDesc m_desc;
     VkPipeline m_pipeline = VK_NULL_HANDLE;
     VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
+    bool m_ownsPipelineLayout = false;
     Vector<u8, Alloc::CustomAllocator<u8>> m_shaderGroupHandles;
 
     const VulkanContext& m_context;
@@ -979,10 +1011,10 @@ private:
 
 struct RenderPassParameters{
     bool clearColorTargets = false;
-    Color colorClearValues[8]{};
-    u8 colorClearMask = 0xff;
+    Color colorClearValues[s_MaxRenderTargets]{};
+    u8 colorClearMask = static_cast<u8>((1u << s_MaxRenderTargets) - 1u);
     bool clearDepthTarget = false;
-    f32 depthClearValue = 1.0f;
+    f32 depthClearValue = s_DepthClearValue;
     bool clearStencilTarget = false;
     u8 stencilClearValue = 0;
 

@@ -34,21 +34,52 @@ CommandList::~CommandList(){
 }
 
 void CommandList::open(){
-    m_currentCmdBuf = m_device.getQueue(m_desc.queueType)->getOrCreateCommandBuffer();
+    VkResult res = VK_SUCCESS;
+
+    Queue* queue = m_device.getQueue(m_desc.queueType);
+    if(!queue){
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Requested queue is not available"));
+        m_currentCmdBuf = nullptr;
+        return;
+    }
+
+    m_currentCmdBuf = queue->getOrCreateCommandBuffer();
+    if(!m_currentCmdBuf || m_currentCmdBuf->m_cmdBuf == VK_NULL_HANDLE){
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to acquire command buffer"));
+        m_currentCmdBuf = nullptr;
+        return;
+    }
 
     VkCommandBufferBeginInfo beginInfo = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
     beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-    vkBeginCommandBuffer(m_currentCmdBuf->m_cmdBuf, &beginInfo);
+    res = vkBeginCommandBuffer(m_currentCmdBuf->m_cmdBuf, &beginInfo);
+    if(res != VK_SUCCESS){
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to begin command buffer recording"));
+        m_currentCmdBuf = nullptr;
+        return;
+    }
 
     m_stateTracker->reset();
 }
 
 void CommandList::close(){
+    VkResult res = VK_SUCCESS;
+
+    if(!m_currentCmdBuf){
+        clearState();
+        return;
+    }
+
     commitBarriers();
 
-    if(m_currentCmdBuf)
-        vkEndCommandBuffer(m_currentCmdBuf->m_cmdBuf);
+    res = vkEndCommandBuffer(m_currentCmdBuf->m_cmdBuf);
+    if(res != VK_SUCCESS){
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to end command buffer recording"));
+        m_currentCmdBuf.reset();
+        clearState();
+        return;
+    }
 
     clearState();
 }

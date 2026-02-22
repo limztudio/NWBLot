@@ -96,13 +96,13 @@ BindingLayout::BindingLayout(const VulkanContext& context)
 {}
 BindingLayout::~BindingLayout(){
     if(m_pipelineLayout){
-        vkDestroyPipelineLayout(m_context.device, m_pipelineLayout, nullptr);
+        vkDestroyPipelineLayout(m_context.device, m_pipelineLayout, m_context.allocationCallbacks);
         m_pipelineLayout = VK_NULL_HANDLE;
     }
 
     for(VkDescriptorSetLayout layout : m_descriptorSetLayouts){
         if(layout)
-            vkDestroyDescriptorSetLayout(m_context.device, layout, nullptr);
+            vkDestroyDescriptorSetLayout(m_context.device, layout, m_context.allocationCallbacks);
     }
     m_descriptorSetLayouts.clear();
 }
@@ -278,24 +278,56 @@ DescriptorTableHandle Device::createDescriptorTable(IBindingLayout* _layout){
     Alloc::ScratchArena<> scratchArena;
 
     auto* layout = checked_cast<BindingLayout*>(_layout);
+    if(!layout)
+        return nullptr;
+    if(layout->m_descriptorSetLayouts.empty())
+        return nullptr;
 
     auto* table = NewArenaObject<DescriptorTable>(*m_context.objectArena, m_context);
     table->m_layout = layout;
 
     Vector<VkDescriptorPoolSize, Alloc::ScratchAllocator<VkDescriptorPoolSize>> poolSizes{ Alloc::ScratchAllocator<VkDescriptorPoolSize>(scratchArena) };
-    poolSizes.reserve(5);
+    poolSizes.reserve(8);
 
-    VkDescriptorPoolSize uniformSize = { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 16 };
-    VkDescriptorPoolSize storageSize = { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 16 };
-    VkDescriptorPoolSize samplerSize = { VK_DESCRIPTOR_TYPE_SAMPLER, 16 };
-    VkDescriptorPoolSize sampledImageSize = { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 64 };
-    VkDescriptorPoolSize storageImageSize = { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 16 };
+    auto addPoolSize = [&](VkDescriptorType type, u32 count){
+        if(count == 0)
+            return;
 
-    poolSizes.push_back(uniformSize);
-    poolSizes.push_back(storageSize);
-    poolSizes.push_back(samplerSize);
-    poolSizes.push_back(sampledImageSize);
-    poolSizes.push_back(storageImageSize);
+        for(auto& poolSize : poolSizes){
+            if(poolSize.type == type){
+                poolSize.descriptorCount += count;
+                return;
+            }
+        }
+
+        VkDescriptorPoolSize poolSize = {};
+        poolSize.type = type;
+        poolSize.descriptorCount = count;
+        poolSizes.push_back(poolSize);
+    };
+
+    if(layout->m_isBindless){
+        for(const auto& item : layout->m_bindlessDesc.registerSpaces){
+            const VkDescriptorType type = __hidden_vulkan::ConvertDescriptorType(item.type);
+            addPoolSize(type, layout->m_bindlessDesc.maxCapacity > 0 ? layout->m_bindlessDesc.maxCapacity : 1u);
+        }
+    }
+    else{
+        for(const auto& item : layout->m_desc.bindings){
+            if(item.type == ResourceType::PushConstants || item.type == ResourceType::None)
+                continue;
+
+            const VkDescriptorType type = __hidden_vulkan::ConvertDescriptorType(item.type);
+            addPoolSize(type, item.getArraySize() > 0 ? item.getArraySize() : 1u);
+        }
+    }
+
+    if(poolSizes.empty()){
+        VkDescriptorPoolSize fallback = {};
+        fallback.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        fallback.descriptorCount = 1;
+        poolSizes.push_back(fallback);
+    }
 
     VkDescriptorPoolCreateInfo poolInfo = { VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };
     poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
@@ -337,6 +369,8 @@ void Device::resizeDescriptorTable(IDescriptorTable* m_descriptorTable, u32 newS
     VkResult res = VK_SUCCESS;
 
     auto* table = checked_cast<DescriptorTable*>(m_descriptorTable);
+    if(!table)
+        return;
 
     if(!table->m_layout || newSize == 0)
         return;
@@ -350,17 +384,21 @@ void Device::resizeDescriptorTable(IDescriptorTable* m_descriptorTable, u32 newS
     Alloc::ScratchArena<> scratchArena;
 
     Vector<VkDescriptorPoolSize, Alloc::ScratchAllocator<VkDescriptorPoolSize>> poolSizes{ Alloc::ScratchAllocator<VkDescriptorPoolSize>(scratchArena) };
-    poolSizes.reserve(5);
+    poolSizes.reserve(7);
     VkDescriptorPoolSize uniformSize = { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, newSize };
     VkDescriptorPoolSize storageSize = { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, newSize };
     VkDescriptorPoolSize samplerSize = { VK_DESCRIPTOR_TYPE_SAMPLER, newSize };
     VkDescriptorPoolSize sampledImageSize = { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, newSize };
     VkDescriptorPoolSize storageImageSize = { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, newSize };
+    VkDescriptorPoolSize uniformTexelSize = { VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, newSize };
+    VkDescriptorPoolSize storageTexelSize = { VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, newSize };
     poolSizes.push_back(uniformSize);
     poolSizes.push_back(storageSize);
     poolSizes.push_back(samplerSize);
     poolSizes.push_back(sampledImageSize);
     poolSizes.push_back(storageImageSize);
+    poolSizes.push_back(uniformTexelSize);
+    poolSizes.push_back(storageTexelSize);
 
     VkDescriptorPoolCreateInfo poolInfo = { VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };
     poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT | VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
@@ -396,6 +434,10 @@ void Device::resizeDescriptorTable(IDescriptorTable* m_descriptorTable, u32 newS
 
 bool Device::writeDescriptorTable(IDescriptorTable* m_descriptorTable, const BindingSetItem& item){
     auto* table = checked_cast<DescriptorTable*>(m_descriptorTable);
+    if(!table)
+        return false;
+    if(!item.resourceHandle)
+        return false;
 
     if(table->m_descriptorSets.empty())
         return false;
@@ -409,6 +451,7 @@ bool Device::writeDescriptorTable(IDescriptorTable* m_descriptorTable, const Bin
 
     VkDescriptorBufferInfo bufferInfo = {};
     VkDescriptorImageInfo imageInfo = {};
+    VkBufferView texelBufferView = VK_NULL_HANDLE;
     VkWriteDescriptorSetAccelerationStructureKHR asInfo = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR };
 
     switch(item.type){
@@ -418,6 +461,8 @@ bool Device::writeDescriptorTable(IDescriptorTable* m_descriptorTable, const Bin
     case ResourceType::RawBuffer_SRV:
     case ResourceType::RawBuffer_UAV:{
         auto* buffer = checked_cast<Buffer*>(item.resourceHandle);
+        if(!buffer)
+            return false;
         bufferInfo.buffer = buffer->m_buffer;
         bufferInfo.offset = item.range.byteOffset;
         bufferInfo.range = item.range.byteSize > 0 ? item.range.byteSize : VK_WHOLE_SIZE;
@@ -427,20 +472,38 @@ bool Device::writeDescriptorTable(IDescriptorTable* m_descriptorTable, const Bin
     case ResourceType::Texture_SRV:
     case ResourceType::Texture_UAV:{
         auto* texture = checked_cast<Texture*>(item.resourceHandle);
+        if(!texture)
+            return false;
         imageInfo.imageView = texture->getView(item.subresources, item.dimension, item.format, false);
         imageInfo.imageLayout = item.type == ResourceType::Texture_UAV ? 
                                 VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         write.pImageInfo = &imageInfo;
         break;
     }
+    case ResourceType::TypedBuffer_SRV:
+    case ResourceType::TypedBuffer_UAV:{
+        auto* buffer = checked_cast<Buffer*>(item.resourceHandle);
+        if(!buffer)
+            return false;
+        const Format::Enum viewFormat = item.format != Format::UNKNOWN ? item.format : buffer->m_desc.format;
+        texelBufferView = buffer->getView(viewFormat, item.range.byteOffset, item.range.byteSize);
+        if(texelBufferView == VK_NULL_HANDLE)
+            return false;
+        write.pTexelBufferView = &texelBufferView;
+        break;
+    }
     case ResourceType::Sampler:{
         auto* sampler = checked_cast<Sampler*>(item.resourceHandle);
+        if(!sampler)
+            return false;
         imageInfo.sampler = sampler->m_sampler;
         write.pImageInfo = &imageInfo;
         break;
     }
     case ResourceType::RayTracingAccelStruct:{
         auto* as = checked_cast<AccelStruct*>(item.resourceHandle);
+        if(!as)
+            return false;
         asInfo.accelerationStructureCount = 1;
         asInfo.pAccelerationStructures = &as->m_accelStruct;
         write.pNext = &asInfo;
@@ -457,6 +520,8 @@ bool Device::writeDescriptorTable(IDescriptorTable* m_descriptorTable, const Bin
 
 BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLayout* _layout){
     auto* layout = checked_cast<BindingLayout*>(_layout);
+    if(!layout)
+        return nullptr;
 
     auto* bindingSet = NewArenaObject<BindingSet>(*m_context.objectArena, m_context);
     bindingSet->m_desc = desc;
@@ -469,20 +534,30 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLa
     }
 
     bindingSet->m_descriptorTable = checked_cast<DescriptorTable*>(tableHandle.get());
+    if(!bindingSet->m_descriptorTable){
+        DestroyArenaObject(*m_context.objectArena, bindingSet);
+        return nullptr;
+    }
 
     bindingSet->m_descriptorSets = bindingSet->m_descriptorTable->m_descriptorSets;
+    if(bindingSet->m_descriptorSets.empty()){
+        DestroyArenaObject(*m_context.objectArena, bindingSet);
+        return nullptr;
+    }
     bindingSet->m_layout = layout;
 
-    Alloc::ScratchArena<> scratchArena(4096);
+    Alloc::ScratchArena<> scratchArena(s_DescriptorBindingScratchArenaBytes);
 
     Vector<VkWriteDescriptorSet, Alloc::ScratchAllocator<VkWriteDescriptorSet>> writes{ Alloc::ScratchAllocator<VkWriteDescriptorSet>(scratchArena) };
     Vector<VkDescriptorBufferInfo, Alloc::ScratchAllocator<VkDescriptorBufferInfo>> bufferInfos{ Alloc::ScratchAllocator<VkDescriptorBufferInfo>(scratchArena) };
     Vector<VkDescriptorImageInfo, Alloc::ScratchAllocator<VkDescriptorImageInfo>> imageInfos{ Alloc::ScratchAllocator<VkDescriptorImageInfo>(scratchArena) };
+    Vector<VkBufferView, Alloc::ScratchAllocator<VkBufferView>> texelBufferViews{ Alloc::ScratchAllocator<VkBufferView>(scratchArena) };
     Vector<VkWriteDescriptorSetAccelerationStructureKHR, Alloc::ScratchAllocator<VkWriteDescriptorSetAccelerationStructureKHR>> asInfos{ Alloc::ScratchAllocator<VkWriteDescriptorSetAccelerationStructureKHR>(scratchArena) };
 
     writes.reserve(desc.bindings.size());
     bufferInfos.reserve(desc.bindings.size());
     imageInfos.reserve(desc.bindings.size());
+    texelBufferViews.reserve(desc.bindings.size());
     asInfos.reserve(desc.bindings.size());
 
     for(const auto& item : desc.bindings){
@@ -503,6 +578,8 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLa
         case ResourceType::RawBuffer_SRV:
         case ResourceType::RawBuffer_UAV:{
             auto* buffer = checked_cast<Buffer*>(item.resourceHandle);
+            if(!buffer)
+                continue;
             VkDescriptorBufferInfo bufInfo = {};
             bufInfo.buffer = buffer->m_buffer;
             bufInfo.offset = item.range.byteOffset;
@@ -515,6 +592,8 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLa
         case ResourceType::Texture_SRV:
         case ResourceType::Texture_UAV:{
             auto* texture = checked_cast<Texture*>(item.resourceHandle);
+            if(!texture)
+                continue;
             VkDescriptorImageInfo imgInfo = {};
             imgInfo.imageView = texture->getView(item.subresources, item.dimension, item.format, false);
             imgInfo.imageLayout = item.type == ResourceType::Texture_UAV ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
@@ -525,6 +604,8 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLa
         }
         case ResourceType::Sampler:{
             auto* sampler = checked_cast<Sampler*>(item.resourceHandle);
+            if(!sampler)
+                continue;
             VkDescriptorImageInfo imgInfo = {};
             imgInfo.sampler = sampler->m_sampler;
             imageInfos.push_back(imgInfo);
@@ -535,17 +616,21 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLa
         case ResourceType::TypedBuffer_SRV:
         case ResourceType::TypedBuffer_UAV:{
             auto* buffer = checked_cast<Buffer*>(item.resourceHandle);
-            VkDescriptorBufferInfo bufInfo = {};
-            bufInfo.buffer = buffer->m_buffer;
-            bufInfo.offset = item.range.byteOffset;
-            bufInfo.range = item.range.byteSize > 0 ? item.range.byteSize : VK_WHOLE_SIZE;
-            bufferInfos.push_back(bufInfo);
-            write.pBufferInfo = &bufferInfos.back();
+            if(!buffer)
+                continue;
+            const Format::Enum viewFormat = item.format != Format::UNKNOWN ? item.format : buffer->m_desc.format;
+            VkBufferView view = buffer->getView(viewFormat, item.range.byteOffset, item.range.byteSize);
+            if(view == VK_NULL_HANDLE)
+                continue;
+            texelBufferViews.push_back(view);
+            write.pTexelBufferView = &texelBufferViews.back();
             writes.push_back(write);
             break;
         }
         case ResourceType::RayTracingAccelStruct:{
             auto* as = checked_cast<AccelStruct*>(item.resourceHandle);
+            if(!as)
+                continue;
             VkWriteDescriptorSetAccelerationStructureKHR asWrite = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR };
             asWrite.accelerationStructureCount = 1;
             asWrite.pAccelerationStructures = &as->m_accelStruct;

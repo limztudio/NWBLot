@@ -29,10 +29,22 @@ namespace __hidden_core{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr usize s_HashCombineGoldenRatio = 0x9e3779b9u;
+constexpr usize s_HashCombineLeftShift = 6;
+constexpr usize s_HashCombineRightShift = 2;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<typename T>
 void HashCombine(usize& seed, const T& v){
     std::hash<T> hasher;
-    seed ^= hasher(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+    seed ^= hasher(v)
+        + s_HashCombineGoldenRatio
+        + (seed << s_HashCombineLeftShift)
+        + (seed >> s_HashCombineRightShift)
+        ;
 }
 
 
@@ -55,6 +67,23 @@ static constexpr u32 s_MaxVolatileConstantBuffers = 32;
 static constexpr u32 s_MaxPushConstantSize = 128;
 static constexpr u32 s_ConstantBufferOffsetSizeAlignment = 256;
 static constexpr u32 s_MaxAftermathEventStrings = 128;
+
+static constexpr u32 s_VulkanBindingOffsetShaderResource = 0;
+static constexpr u32 s_VulkanBindingOffsetSampler = 128;
+static constexpr u32 s_VulkanBindingOffsetConstantBuffer = 256;
+static constexpr u32 s_VulkanBindingOffsetUnorderedAccess = 384;
+
+static constexpr usize s_CommandListUploadChunkSize = 64 * 1024;
+static constexpr usize s_CommandListScratchChunkSize = 64 * 1024;
+static constexpr usize s_CommandListScratchMaxMemory = 1024 * 1024 * 1024;
+
+static constexpr i32 s_WindowPositionAuto = -1;
+static constexpr u32 s_BackBufferWidth = 1280;
+static constexpr u32 s_BackBufferHeight = 720;
+static constexpr u32 s_SwapChainBufferCount = 3;
+static constexpr u32 s_MaxFramesInFlight = 2;
+static constexpr f32 s_DepthClearValue = 1.0f;
+static constexpr f64 s_AverageFrameTimeUpdateIntervalSeconds = 0.5;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2079,10 +2108,10 @@ inline bool operator!=(const BindingLayoutItem& lhs, const BindingLayoutItem& rh
 static_assert(sizeof(BindingLayoutItem) == 8, "sizeof(BindingLayoutItem) is supposed to be 8 bytes");
 
 struct VulkanBindingOffsets{
-    u32 shaderResource = 0;
-    u32 sampler = 128;
-    u32 constantBuffer = 256;
-    u32 unorderedAccess = 384;
+    u32 shaderResource = s_VulkanBindingOffsetShaderResource;
+    u32 sampler = s_VulkanBindingOffsetSampler;
+    u32 constantBuffer = s_VulkanBindingOffsetConstantBuffer;
+    u32 unorderedAccess = s_VulkanBindingOffsetUnorderedAccess;
 
     constexpr VulkanBindingOffsets& setShaderResourceOffset(u32 value){ shaderResource = value; return *this; }
     constexpr VulkanBindingOffsets& setSamplerOffset(u32 value){ sampler = value; return *this; }
@@ -3077,13 +3106,13 @@ struct CommandListParameters{
     bool enableImmediateExecution = true;
 
     // Minimum size of memory chunks created to upload data to the device on DX12.
-    usize uploadChunkSize = 64 * 1024;
+    usize uploadChunkSize = s_CommandListUploadChunkSize;
 
     // Minimum size of memory chunks created for AS build scratch buffers.
-    usize scratchChunkSize = 64 * 1024;
+    usize scratchChunkSize = s_CommandListScratchChunkSize;
 
     // Maximum total memory size used for all AS build scratch buffers owned by this command list.
-    usize scratchMaxMemory = 1024 * 1024 * 1024;
+    usize scratchMaxMemory = s_CommandListScratchMaxMemory;
 
     // Type of the queue that this command list is to be executed on.
     // COPY and COMPUTE queues have limited subsets of methods available.
@@ -3774,16 +3803,16 @@ struct DeviceCreationParameters : public InstanceParameters{
     bool startFullscreen = false;
     bool startBorderless = false;
     bool allowModeSwitch = false;
-    i32 windowPosX = -1;
-    i32 windowPosY = -1;
-    u32 backBufferWidth = 1280;
-    u32 backBufferHeight = 720;
+    i32 windowPosX = s_WindowPositionAuto;
+    i32 windowPosY = s_WindowPositionAuto;
+    u32 backBufferWidth = s_BackBufferWidth;
+    u32 backBufferHeight = s_BackBufferHeight;
     u32 refreshRate = 0;
-    u32 swapChainBufferCount = 3;
+    u32 swapChainBufferCount = s_SwapChainBufferCount;
     Format::Enum swapChainFormat = Format::RGBA8_UNORM_SRGB;
     u32 swapChainSampleCount = 1;
     u32 swapChainSampleQuality = 0;
-    u32 maxFramesInFlight = 2;
+    u32 maxFramesInFlight = s_MaxFramesInFlight;
     bool enableNvrhiValidationLayer = false;
     bool vsyncEnabled = false;
     bool enableRayTracingExtensions = false;
@@ -3965,7 +3994,7 @@ protected:
     bool m_instanceCreated = false;
 
     f64 m_averageFrameTime = 0.0;
-    f64 m_averageTimeUpdateInterval = 0.5;
+    f64 m_averageTimeUpdateInterval = s_AverageFrameTimeUpdateIntervalSeconds;
     f64 m_frameTimeSum = 0.0;
     i32 m_numberOfAccumulatedFrames = 0;
 

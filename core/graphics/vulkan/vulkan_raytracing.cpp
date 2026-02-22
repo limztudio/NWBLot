@@ -4,6 +4,8 @@
 
 #include "vulkan_backend.h"
 
+#include <logger/client/logger.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -93,6 +95,12 @@ RayTracingPipeline::~RayTracingPipeline(){
         vkDestroyPipeline(m_context.device, m_pipeline, m_context.allocationCallbacks);
         m_pipeline = VK_NULL_HANDLE;
     }
+
+    if(m_ownsPipelineLayout && m_pipelineLayout != VK_NULL_HANDLE){
+        vkDestroyPipelineLayout(m_context.device, m_pipelineLayout, m_context.allocationCallbacks);
+        m_pipelineLayout = VK_NULL_HANDLE;
+        m_ownsPipelineLayout = false;
+    }
 }
 
 Object RayTracingPipeline::getNativeHandle(ObjectType objectType){
@@ -118,8 +126,8 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
 
     BufferDesc bufferDesc;
     bufferDesc.byteSize = desc.topLevelMaxInstances > 0 ? 
-        desc.topLevelMaxInstances * sizeof(VkAccelerationStructureInstanceKHR) * 2 : // Estimate for TLAS
-        1024 * 1024;
+        desc.topLevelMaxInstances * sizeof(VkAccelerationStructureInstanceKHR) * s_DefaultTlasBufferSizeMultiplier : // Estimate for TLAS
+        s_DefaultTopLevelASBufferSize;
     bufferDesc.isAccelStructStorage = true;
     bufferDesc.debugName = "AccelStructBuffer";
 
@@ -212,7 +220,7 @@ MemoryRequirements Device::getAccelStructMemoryRequirements(IRayTracingAccelStru
 
     if(as->m_buffer){
         requirements.size = as->m_buffer->getDescription().byteSize;
-        requirements.alignment = 256; // AS alignment requirement
+        requirements.alignment = s_AccelerationStructureAlignment; // AS alignment requirement
     }
 
     return requirements;
@@ -348,15 +356,13 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
     auto* pso = NewArenaObject<RayTracingPipeline>(*m_context.objectArena, m_context, *this);
     pso->m_desc = desc;
 
-    Alloc::ScratchArena<> scratchArena(4096);
+    Alloc::ScratchArena<> scratchArena(s_RayTracingScratchArenaBytes);
 
     Vector<VkPipelineShaderStageCreateInfo, Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>> stages{ Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>(scratchArena) };
     Vector<VkRayTracingShaderGroupCreateInfoKHR, Alloc::ScratchAllocator<VkRayTracingShaderGroupCreateInfoKHR>> groups{ Alloc::ScratchAllocator<VkRayTracingShaderGroupCreateInfoKHR>(scratchArena) };
 
-    stages.reserve(desc.shaders.size() + desc.hitGroups.size() * 3);
+    stages.reserve(desc.shaders.size() + desc.hitGroups.size() * s_RayTracingHitGroupShaderStageCount);
     groups.reserve(desc.shaders.size() + desc.hitGroups.size());
-
-    u32 shaderIndex = 0;
 
     for(const auto& shaderDesc : desc.shaders){
         if(!shaderDesc.shader)
@@ -391,7 +397,6 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
 
         stages.push_back(stageInfo);
         groups.push_back(group);
-        shaderIndex++;
     }
 
     for(const auto& hitGroup : desc.hitGroups){
@@ -432,12 +437,55 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
         groups.push_back(group);
     }
 
-    VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
-    if(!desc.globalBindingLayouts.empty() && desc.globalBindingLayouts[0]){
-        auto* layout = checked_cast<BindingLayout*>(desc.globalBindingLayouts[0].get());
-        pipelineLayout = layout->m_pipelineLayout;
-        pso->m_pipelineLayout = pipelineLayout;
+    if(stages.empty() || groups.empty()){
+        DestroyArenaObject(*m_context.objectArena, pso);
+        return nullptr;
     }
+
+    VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
+    if(desc.globalBindingLayouts.size() == 1){
+        auto* layout = checked_cast<BindingLayout*>(desc.globalBindingLayouts[0].get());
+        if(layout)
+            pipelineLayout = layout->m_pipelineLayout;
+    }
+    else if(desc.globalBindingLayouts.size() > 1){
+        Vector<VkDescriptorSetLayout, Alloc::ScratchAllocator<VkDescriptorSetLayout>> allDescriptorSetLayouts{ Alloc::ScratchAllocator<VkDescriptorSetLayout>(scratchArena) };
+        u32 pushConstantByteSize = 0;
+        for(u32 i = 0; i < static_cast<u32>(desc.globalBindingLayouts.size()); ++i){
+            auto* bl = checked_cast<BindingLayout*>(desc.globalBindingLayouts[i].get());
+            if(!bl)
+                continue;
+            for(const auto& item : bl->m_desc.bindings){
+                if(item.type == ResourceType::PushConstants)
+                    pushConstantByteSize = Max<u32>(pushConstantByteSize, item.size);
+            }
+            for(auto& dsl : bl->m_descriptorSetLayouts)
+                allDescriptorSetLayouts.push_back(dsl);
+        }
+
+        if(!allDescriptorSetLayouts.empty()){
+            VkPushConstantRange pushConstantRange = {};
+            if(pushConstantByteSize > 0){
+                pushConstantRange.stageFlags = VK_SHADER_STAGE_ALL;
+                pushConstantRange.offset = 0;
+                pushConstantRange.size = pushConstantByteSize;
+            }
+
+            VkPipelineLayoutCreateInfo layoutInfo = { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
+            layoutInfo.setLayoutCount = static_cast<u32>(allDescriptorSetLayouts.size());
+            layoutInfo.pSetLayouts = allDescriptorSetLayouts.data();
+            layoutInfo.pushConstantRangeCount = pushConstantByteSize > 0 ? 1u : 0u;
+            layoutInfo.pPushConstantRanges = pushConstantByteSize > 0 ? &pushConstantRange : nullptr;
+            res = vkCreatePipelineLayout(m_context.device, &layoutInfo, m_context.allocationCallbacks, &pipelineLayout);
+            if(res != VK_SUCCESS){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create pipeline layout for ray tracing pipeline: {}"), ResultToString(res));
+                DestroyArenaObject(*m_context.objectArena, pso);
+                return nullptr;
+            }
+            pso->m_ownsPipelineLayout = true;
+        }
+    }
+    pso->m_pipelineLayout = pipelineLayout;
 
     VkRayTracingPipelineCreateInfoKHR createInfo = { VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR };
     createInfo.stageCount = static_cast<u32>(stages.size());
@@ -460,7 +508,18 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
     u32 groupCount = static_cast<u32>(groups.size());
 
     pso->m_shaderGroupHandles.resize(groupCount * handleSizeAligned);
-    vkGetRayTracingShaderGroupHandlesKHR(m_context.device, pso->m_pipeline, 0, groupCount, pso->m_shaderGroupHandles.size(), pso->m_shaderGroupHandles.data());
+    res = vkGetRayTracingShaderGroupHandlesKHR(
+        m_context.device,
+        pso->m_pipeline,
+        0,
+        groupCount,
+        pso->m_shaderGroupHandles.size(),
+        pso->m_shaderGroupHandles.data()
+    );
+    if(res != VK_SUCCESS){
+        DestroyArenaObject(*m_context.objectArena, pso);
+        return nullptr;
+    }
 
     return RayTracingPipelineHandle(pso, RayTracingPipelineHandle::deleter_type(m_context.objectArena), AdoptRef);
 }
@@ -484,7 +543,7 @@ RayTracingShaderTableHandle RayTracingPipeline::createShaderTable(){
 
 u32 ShaderTable::findGroupIndex(const Name& exportName)const{
     if(!m_pipeline)
-        return 0;
+        return UINT32_MAX;
 
     u32 groupIndex = 0;
     for(const auto& shaderDesc : m_pipeline->m_desc.shaders){
@@ -497,7 +556,7 @@ u32 ShaderTable::findGroupIndex(const Name& exportName)const{
             return groupIndex;
         groupIndex++;
     }
-    return 0;
+    return UINT32_MAX;
 }
 
 void ShaderTable::allocateSBTBuffer(BufferHandle& outBuffer, u64 sbtSize){
@@ -527,12 +586,19 @@ void ShaderTable::setRayGenerationShader(const Name& exportName, IBindingSet* /*
     m_raygenOffset = 0;
 
     u32 groupIndex = findGroupIndex(exportName);
+    if(groupIndex == UINT32_MAX){
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Ray generation export not found in pipeline"));
+        return;
+    }
 
     void* mapped = m_device.mapBuffer(m_raygenBuffer.get(), CpuAccessMode::Write);
-    if(mapped){
-        NWB_MEMCPY(mapped, handleSizeAligned, m_pipeline->m_shaderGroupHandles.data() + groupIndex * handleSizeAligned, handleSize);
-        m_device.unmapBuffer(m_raygenBuffer.get());
+    if(!mapped){
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to map ray generation SBT buffer"));
+        return;
     }
+
+    NWB_MEMCPY(mapped, handleSizeAligned, m_pipeline->m_shaderGroupHandles.data() + groupIndex * handleSizeAligned, handleSize);
+    m_device.unmapBuffer(m_raygenBuffer.get());
 }
 
 u32 ShaderTable::addMissShader(const Name& exportName, IBindingSet* /*bindings*/){
@@ -549,25 +615,39 @@ u32 ShaderTable::addMissShader(const Name& exportName, IBindingSet* /*bindings*/
 
     BufferHandle newBuffer;
     allocateSBTBuffer(newBuffer, sbtSize);
-    if(!newBuffer)
-        return m_missCount++;
+    if(!newBuffer){
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to allocate miss SBT buffer"));
+        return m_missCount;
+    }
 
     void* mapped = m_device.mapBuffer(newBuffer.get(), CpuAccessMode::Write);
-    if(mapped){
-        if(m_missBuffer && m_missCount > 0){
-            void* oldMapped = m_device.mapBuffer(m_missBuffer.get(), CpuAccessMode::Read);
-            if(oldMapped){
-                const usize copySize = static_cast<usize>(m_missCount) * handleSizeAligned;
-                __hidden_vulkan::CopyHostMemory(taskPool(), mapped, oldMapped, copySize);
-                m_device.unmapBuffer(m_missBuffer.get());
-            }
-        }
-
-        u32 groupIndex = findGroupIndex(exportName);
-        auto* dst = static_cast<u8*>(mapped) + m_missCount * handleSizeAligned;
-        NWB_MEMCPY(dst, handleSizeAligned, m_pipeline->m_shaderGroupHandles.data() + groupIndex * handleSizeAligned, handleSize);
-        m_device.unmapBuffer(newBuffer.get());
+    if(!mapped){
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to map miss SBT buffer"));
+        return m_missCount;
     }
+
+    if(m_missBuffer && m_missCount > 0){
+        void* oldMapped = m_device.mapBuffer(m_missBuffer.get(), CpuAccessMode::Read);
+        if(!oldMapped){
+            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to map previous miss SBT buffer"));
+            m_device.unmapBuffer(newBuffer.get());
+            return m_missCount;
+        }
+        const usize copySize = static_cast<usize>(m_missCount) * handleSizeAligned;
+        __hidden_vulkan::CopyHostMemory(taskPool(), mapped, oldMapped, copySize);
+        m_device.unmapBuffer(m_missBuffer.get());
+    }
+
+    u32 groupIndex = findGroupIndex(exportName);
+    if(groupIndex == UINT32_MAX){
+        m_device.unmapBuffer(newBuffer.get());
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Miss shader export not found in pipeline"));
+        return m_missCount;
+    }
+
+    auto* dst = static_cast<u8*>(mapped) + m_missCount * handleSizeAligned;
+    NWB_MEMCPY(dst, handleSizeAligned, m_pipeline->m_shaderGroupHandles.data() + groupIndex * handleSizeAligned, handleSize);
+    m_device.unmapBuffer(newBuffer.get());
 
     m_missBuffer = newBuffer;
     m_missOffset = 0;
@@ -588,25 +668,39 @@ u32 ShaderTable::addHitGroup(const Name& exportName, IBindingSet* /*bindings*/){
 
     BufferHandle newBuffer;
     allocateSBTBuffer(newBuffer, sbtSize);
-    if(!newBuffer)
-        return m_hitCount++;
+    if(!newBuffer){
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to allocate hit SBT buffer"));
+        return m_hitCount;
+    }
 
     void* mapped = m_device.mapBuffer(newBuffer.get(), CpuAccessMode::Write);
-    if(mapped){
-        if(m_hitBuffer && m_hitCount > 0){
-            void* oldMapped = m_device.mapBuffer(m_hitBuffer.get(), CpuAccessMode::Read);
-            if(oldMapped){
-                const usize copySize = static_cast<usize>(m_hitCount) * handleSizeAligned;
-                __hidden_vulkan::CopyHostMemory(taskPool(), mapped, oldMapped, copySize);
-                m_device.unmapBuffer(m_hitBuffer.get());
-            }
-        }
-
-        u32 groupIndex = findGroupIndex(exportName);
-        auto* dst = static_cast<u8*>(mapped) + m_hitCount * handleSizeAligned;
-        NWB_MEMCPY(dst, handleSizeAligned, m_pipeline->m_shaderGroupHandles.data() + groupIndex * handleSizeAligned, handleSize);
-        m_device.unmapBuffer(newBuffer.get());
+    if(!mapped){
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to map hit SBT buffer"));
+        return m_hitCount;
     }
+
+    if(m_hitBuffer && m_hitCount > 0){
+        void* oldMapped = m_device.mapBuffer(m_hitBuffer.get(), CpuAccessMode::Read);
+        if(!oldMapped){
+            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to map previous hit SBT buffer"));
+            m_device.unmapBuffer(newBuffer.get());
+            return m_hitCount;
+        }
+        const usize copySize = static_cast<usize>(m_hitCount) * handleSizeAligned;
+        __hidden_vulkan::CopyHostMemory(taskPool(), mapped, oldMapped, copySize);
+        m_device.unmapBuffer(m_hitBuffer.get());
+    }
+
+    u32 groupIndex = findGroupIndex(exportName);
+    if(groupIndex == UINT32_MAX){
+        m_device.unmapBuffer(newBuffer.get());
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Hit group export not found in pipeline"));
+        return m_hitCount;
+    }
+
+    auto* dst = static_cast<u8*>(mapped) + m_hitCount * handleSizeAligned;
+    NWB_MEMCPY(dst, handleSizeAligned, m_pipeline->m_shaderGroupHandles.data() + groupIndex * handleSizeAligned, handleSize);
+    m_device.unmapBuffer(newBuffer.get());
 
     m_hitBuffer = newBuffer;
     m_hitOffset = 0;
@@ -627,25 +721,39 @@ u32 ShaderTable::addCallableShader(const Name& exportName, IBindingSet* /*bindin
 
     BufferHandle newBuffer;
     allocateSBTBuffer(newBuffer, sbtSize);
-    if(!newBuffer)
-        return m_callableCount++;
+    if(!newBuffer){
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to allocate callable SBT buffer"));
+        return m_callableCount;
+    }
 
     void* mapped = m_device.mapBuffer(newBuffer.get(), CpuAccessMode::Write);
-    if(mapped){
-        if(m_callableBuffer && m_callableCount > 0){
-            void* oldMapped = m_device.mapBuffer(m_callableBuffer.get(), CpuAccessMode::Read);
-            if(oldMapped){
-                const usize copySize = static_cast<usize>(m_callableCount) * handleSizeAligned;
-                __hidden_vulkan::CopyHostMemory(taskPool(), mapped, oldMapped, copySize);
-                m_device.unmapBuffer(m_callableBuffer.get());
-            }
-        }
-
-        u32 groupIndex = findGroupIndex(exportName);
-        auto* dst = static_cast<u8*>(mapped) + m_callableCount * handleSizeAligned;
-        NWB_MEMCPY(dst, handleSizeAligned, m_pipeline->m_shaderGroupHandles.data() + groupIndex * handleSizeAligned, handleSize);
-        m_device.unmapBuffer(newBuffer.get());
+    if(!mapped){
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to map callable SBT buffer"));
+        return m_callableCount;
     }
+
+    if(m_callableBuffer && m_callableCount > 0){
+        void* oldMapped = m_device.mapBuffer(m_callableBuffer.get(), CpuAccessMode::Read);
+        if(!oldMapped){
+            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to map previous callable SBT buffer"));
+            m_device.unmapBuffer(newBuffer.get());
+            return m_callableCount;
+        }
+        const usize copySize = static_cast<usize>(m_callableCount) * handleSizeAligned;
+        __hidden_vulkan::CopyHostMemory(taskPool(), mapped, oldMapped, copySize);
+        m_device.unmapBuffer(m_callableBuffer.get());
+    }
+
+    u32 groupIndex = findGroupIndex(exportName);
+    if(groupIndex == UINT32_MAX){
+        m_device.unmapBuffer(newBuffer.get());
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Callable shader export not found in pipeline"));
+        return m_callableCount;
+    }
+
+    auto* dst = static_cast<u8*>(mapped) + m_callableCount * handleSizeAligned;
+    NWB_MEMCPY(dst, handleSizeAligned, m_pipeline->m_shaderGroupHandles.data() + groupIndex * handleSizeAligned, handleSize);
+    m_device.unmapBuffer(newBuffer.get());
 
     m_callableBuffer = newBuffer;
     m_callableOffset = 0;
@@ -709,7 +817,7 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* _as, const
 
     auto* as = checked_cast<AccelStruct*>(_as);
 
-    Alloc::ScratchArena<> scratchArena(4096);
+    Alloc::ScratchArena<> scratchArena(s_RayTracingScratchArenaBytes);
 
     Vector<VkAccelerationStructureGeometryKHR, Alloc::ScratchAllocator<VkAccelerationStructureGeometryKHR>> geometries{ Alloc::ScratchAllocator<VkAccelerationStructureGeometryKHR>(scratchArena) };
     Vector<VkAccelerationStructureBuildRangeInfoKHR, Alloc::ScratchAllocator<VkAccelerationStructureBuildRangeInfoKHR>> rangeInfos{ Alloc::ScratchAllocator<VkAccelerationStructureBuildRangeInfoKHR>(scratchArena) };
@@ -740,11 +848,11 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* _as, const
                 geometry.geometry.triangles.indexType = triangles.indexFormat == Format::R16_UINT ? 
                     VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32;
                 geometry.geometry.triangles.indexData.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(triangles.indexBuffer, triangles.indexOffset);
-                primitiveCount = triangles.indexCount / 3;
+                primitiveCount = triangles.indexCount / s_TrianglesPerPrimitive;
             }
             else{
                 geometry.geometry.triangles.indexType = VK_INDEX_TYPE_NONE_KHR;
-                primitiveCount = triangles.vertexCount / 3;
+                primitiveCount = triangles.vertexCount / s_TrianglesPerPrimitive;
             }
 
             rangeInfo.primitiveCount = primitiveCount;
@@ -772,10 +880,8 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* _as, const
         primitiveCounts[i] = static_cast<uint32_t>(primitiveCount);
     };
 
-    constexpr usize kParallelGeometryThreshold = 256;
-    constexpr usize kGeometryGrainSize = 64;
-    if(taskPool().isParallelEnabled() && numGeometries >= kParallelGeometryThreshold)
-        scheduleParallelFor(static_cast<usize>(0), numGeometries, kGeometryGrainSize, buildGeometry);
+    if(taskPool().isParallelEnabled() && numGeometries >= s_ParallelGeometryThreshold)
+        scheduleParallelFor(static_cast<usize>(0), numGeometries, s_GeometryGrainSize, buildGeometry);
     else{
         for(usize i = 0; i < numGeometries; ++i)
             buildGeometry(i);
@@ -807,15 +913,19 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* _as, const
     scratchDesc.structStride = 1;
     scratchDesc.debugName = "AS_BuildScratch";
 
-    BufferHandle scratchBuffer = m_device.createBuffer(scratchDesc);
-    if(scratchBuffer){
+    BufferHandle scratchBuffer;
+    if(sizeInfo.buildScratchSize > 0){
+        scratchBuffer = m_device.createBuffer(scratchDesc);
+        if(!scratchBuffer){
+            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to allocate BLAS scratch buffer"));
+            return;
+        }
         buildInfo.scratchData.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(scratchBuffer.get());
-
-        const VkAccelerationStructureBuildRangeInfoKHR* pRangeInfos = rangeInfos.data();
-        vkCmdBuildAccelerationStructuresKHR(m_currentCmdBuf->m_cmdBuf, 1, &buildInfo, &pRangeInfos);
-
         m_currentCmdBuf->m_referencedStagingBuffers.push_back(scratchBuffer);
     }
+
+    const VkAccelerationStructureBuildRangeInfoKHR* pRangeInfos = rangeInfos.data();
+    vkCmdBuildAccelerationStructuresKHR(m_currentCmdBuf->m_cmdBuf, 1, &buildInfo, &pRangeInfos);
 
     if(buildFlags & RayTracingAccelStructBuildFlags::AllowCompaction)
         m_pendingCompactions.push_back(as);
@@ -901,21 +1011,21 @@ void CommandList::compactBottomLevelAccelStructs(){
 
         VkQueryPoolCreateInfo queryPoolInfo = { VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO };
         queryPoolInfo.queryType  = VK_QUERY_TYPE_ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR;
-        queryPoolInfo.queryCount = 1;
+        queryPoolInfo.queryCount = s_SingleQueryCount;
 
         VkQueryPool queryPool = VK_NULL_HANDLE;
         if(vkCreateQueryPool(m_context.device, &queryPoolInfo, m_context.allocationCallbacks, &queryPool) != VK_SUCCESS)
             continue;
 
-        vkCmdResetQueryPool(m_currentCmdBuf->m_cmdBuf, queryPool, 0, 1);
+        vkCmdResetQueryPool(m_currentCmdBuf->m_cmdBuf, queryPool, s_TimerQueryBeginIndex, s_SingleQueryCount);
 
         vkCmdWriteAccelerationStructuresPropertiesKHR(
             m_currentCmdBuf->m_cmdBuf,
-            1,
+            s_SingleQueryCount,
             &as->m_accelStruct,
             VK_QUERY_TYPE_ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR,
             queryPool,
-            0
+            s_TimerQueryBeginIndex
         );
 
         as->m_compactionQueryPool  = queryPool;
@@ -952,44 +1062,44 @@ void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* _as, const Ra
         return;
 
     auto* mappedInstances = static_cast<VkAccelerationStructureInstanceKHR*>(m_device.mapBuffer(instanceBuffer.get(), CpuAccessMode::Write));
-
-    if(mappedInstances){
-        auto buildVkInstance = [&](usize i){
-            const auto& inst = pInstances[i];
-            VkAccelerationStructureInstanceKHR& vkInst = mappedInstances[i];
-
-            NWB_MEMCPY(&vkInst.transform, sizeof(VkTransformMatrixKHR), &inst.transform, sizeof(VkTransformMatrixKHR));
-
-            vkInst.instanceCustomIndex = inst.instanceID & 0xFFFFFF;
-            vkInst.mask = inst.instanceMask;
-            vkInst.instanceShaderBindingTableRecordOffset = inst.instanceContributionToHitGroupIndex & 0xFFFFFF;
-            vkInst.flags = 0;
-
-            if(inst.flags & RayTracingInstanceFlags::TriangleCullDisable)
-                vkInst.flags |= VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR;
-            if(inst.flags & RayTracingInstanceFlags::TriangleFrontCounterclockwise)
-                vkInst.flags |= VK_GEOMETRY_INSTANCE_TRIANGLE_FRONT_COUNTERCLOCKWISE_BIT_KHR;
-            if(inst.flags & RayTracingInstanceFlags::ForceOpaque)
-                vkInst.flags |= VK_GEOMETRY_INSTANCE_FORCE_OPAQUE_BIT_KHR;
-            if(inst.flags & RayTracingInstanceFlags::ForceNonOpaque)
-                vkInst.flags |= VK_GEOMETRY_INSTANCE_FORCE_NO_OPAQUE_BIT_KHR;
-
-            auto* blas = checked_cast<AccelStruct*>(inst.bottomLevelAS);
-            vkInst.accelerationStructureReference = blas ? blas->m_deviceAddress : 0;
-        };
-
-        // TLAS instance conversion is CPU-only and scales with scene instance count.
-        constexpr usize kParallelThreshold = 1024;
-        constexpr usize kGrainSize = 256;
-        if(taskPool().isParallelEnabled() && numInstances >= kParallelThreshold)
-            scheduleParallelFor(static_cast<usize>(0), numInstances, kGrainSize, buildVkInstance);
-        else{
-            for(usize i = 0; i < numInstances; ++i)
-                buildVkInstance(i);
-        }
-
-        m_device.unmapBuffer(instanceBuffer.get());
+    if(!mappedInstances){
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to map TLAS instance buffer"));
+        return;
     }
+
+    auto buildVkInstance = [&](usize i){
+        const auto& inst = pInstances[i];
+        VkAccelerationStructureInstanceKHR& vkInst = mappedInstances[i];
+
+        NWB_MEMCPY(&vkInst.transform, sizeof(VkTransformMatrixKHR), &inst.transform, sizeof(VkTransformMatrixKHR));
+
+        vkInst.instanceCustomIndex = inst.instanceID & s_InstanceFieldMask24Bit;
+        vkInst.mask = inst.instanceMask;
+        vkInst.instanceShaderBindingTableRecordOffset = inst.instanceContributionToHitGroupIndex & s_InstanceFieldMask24Bit;
+        vkInst.flags = 0;
+
+        if(inst.flags & RayTracingInstanceFlags::TriangleCullDisable)
+            vkInst.flags |= VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR;
+        if(inst.flags & RayTracingInstanceFlags::TriangleFrontCounterclockwise)
+            vkInst.flags |= VK_GEOMETRY_INSTANCE_TRIANGLE_FRONT_COUNTERCLOCKWISE_BIT_KHR;
+        if(inst.flags & RayTracingInstanceFlags::ForceOpaque)
+            vkInst.flags |= VK_GEOMETRY_INSTANCE_FORCE_OPAQUE_BIT_KHR;
+        if(inst.flags & RayTracingInstanceFlags::ForceNonOpaque)
+            vkInst.flags |= VK_GEOMETRY_INSTANCE_FORCE_NO_OPAQUE_BIT_KHR;
+
+        auto* blas = checked_cast<AccelStruct*>(inst.bottomLevelAS);
+        vkInst.accelerationStructureReference = blas ? blas->m_deviceAddress : 0;
+    };
+
+    // TLAS instance conversion is CPU-only and scales with scene instance count.
+    if(taskPool().isParallelEnabled() && numInstances >= s_ParallelTlasInstanceThreshold)
+        scheduleParallelFor(static_cast<usize>(0), numInstances, s_TlasInstanceGrainSize, buildVkInstance);
+    else{
+        for(usize i = 0; i < numInstances; ++i)
+            buildVkInstance(i);
+    }
+
+    m_device.unmapBuffer(instanceBuffer.get());
 
     VkAccelerationStructureGeometryKHR geometry = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR };
     geometry.geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR;
@@ -1022,20 +1132,23 @@ void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* _as, const Ra
     scratchDesc.structStride = 1;
     scratchDesc.debugName = "TLAS_BuildScratch";
 
-    BufferHandle scratchBuffer = m_device.createBuffer(scratchDesc);
-    if(scratchBuffer){
+    BufferHandle scratchBuffer;
+    if(sizeInfo.buildScratchSize > 0){
+        scratchBuffer = m_device.createBuffer(scratchDesc);
+        if(!scratchBuffer){
+            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to allocate TLAS scratch buffer"));
+            return;
+        }
         buildInfo.scratchData.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(scratchBuffer.get());
-
-        VkAccelerationStructureBuildRangeInfoKHR rangeInfo = {};
-        rangeInfo.primitiveCount = primitiveCount;
-        const VkAccelerationStructureBuildRangeInfoKHR* pRangeInfo = &rangeInfo;
-
-        vkCmdBuildAccelerationStructuresKHR(m_currentCmdBuf->m_cmdBuf, 1, &buildInfo, &pRangeInfo);
-
         m_currentCmdBuf->m_referencedStagingBuffers.push_back(Move(scratchBuffer));
-        m_currentCmdBuf->m_referencedStagingBuffers.push_back(Move(instanceBuffer));
     }
 
+    VkAccelerationStructureBuildRangeInfoKHR rangeInfo = {};
+    rangeInfo.primitiveCount = primitiveCount;
+    const VkAccelerationStructureBuildRangeInfoKHR* pRangeInfo = &rangeInfo;
+    vkCmdBuildAccelerationStructuresKHR(m_currentCmdBuf->m_cmdBuf, 1, &buildInfo, &pRangeInfo);
+
+    m_currentCmdBuf->m_referencedStagingBuffers.push_back(Move(instanceBuffer));
     m_currentCmdBuf->m_referencedResources.push_back(_as);
 }
 

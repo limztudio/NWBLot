@@ -36,14 +36,22 @@ VkResult VulkanAllocator::allocateBufferMemory(Buffer* buffer, bool enableDevice
     vkGetBufferMemoryRequirements(m_context.device, buffer->m_buffer, &memRequirements);
 
     VkMemoryPropertyFlags memoryProperties = 0;
+    bool isReadbackBuffer = false;
     if(buffer->m_desc.cpuAccess == CpuAccessMode::Write)
         memoryProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-    else if(buffer->m_desc.cpuAccess == CpuAccessMode::Read)
+    else if(buffer->m_desc.cpuAccess == CpuAccessMode::Read){
         memoryProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
+        isReadbackBuffer = true;
+    }
     else
         memoryProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
     u32 memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, memoryProperties);
+    if(memoryTypeIndex == UINT32_MAX && isReadbackBuffer){
+        // HOST_CACHED is optional on some platforms; fall back to coherent readback memory.
+        memoryProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+        memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, memoryProperties);
+    }
     if(memoryTypeIndex == UINT32_MAX){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to find suitable memory type for buffer"));
         return VK_ERROR_OUT_OF_DEVICE_MEMORY;
@@ -107,18 +115,22 @@ VkResult VulkanAllocator::allocateTextureMemory(Texture* texture){
     vkGetImageMemoryRequirements(m_context.device, texture->m_image, &memRequirements);
 
     u32 memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-    if(memoryTypeIndex == UINT32_MAX)
+    if(memoryTypeIndex == UINT32_MAX){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to find suitable memory type for texture"));
         return VK_ERROR_OUT_OF_DEVICE_MEMORY;
+    }
 
     void* pNext = nullptr;
 
-    // Use dedicated allocation for textures (recommended for optimal performance)
+    // Dedicated texture allocations can help very large resources, but are expensive for small textures.
     VkMemoryDedicatedAllocateInfo dedicatedInfo{};
-    dedicatedInfo.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO;
-    dedicatedInfo.image = texture->m_image;
-    dedicatedInfo.buffer = VK_NULL_HANDLE;
-    dedicatedInfo.pNext = pNext;
-    pNext = &dedicatedInfo;
+    if(memRequirements.size >= s_LargeBufferThreshold){
+        dedicatedInfo.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO;
+        dedicatedInfo.image = texture->m_image;
+        dedicatedInfo.buffer = VK_NULL_HANDLE;
+        dedicatedInfo.pNext = pNext;
+        pNext = &dedicatedInfo;
+    }
 
     VkMemoryAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;

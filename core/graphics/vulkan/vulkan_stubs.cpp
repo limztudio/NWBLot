@@ -4,6 +4,8 @@
 
 #include "vulkan_backend.h"
 
+#include <logger/client/logger.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -131,18 +133,21 @@ void CommandList::buildTopLevelAccelStructFromBuffer(IRayTracingAccelStruct* _as
     scratchDesc.structStride = 1;
     scratchDesc.debugName = "TLAS_BuildScratch";
 
-    BufferHandle scratchBuffer = m_device.createBuffer(scratchDesc);
-    if(scratchBuffer){
+    BufferHandle scratchBuffer;
+    if(sizeInfo.buildScratchSize > 0){
+        scratchBuffer = m_device.createBuffer(scratchDesc);
+        if(!scratchBuffer){
+            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to allocate TLAS scratch buffer"));
+            return;
+        }
         buildInfo.scratchData.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(scratchBuffer.get());
-
-        VkAccelerationStructureBuildRangeInfoKHR rangeInfo = {};
-        rangeInfo.primitiveCount = primitiveCount;
-        const VkAccelerationStructureBuildRangeInfoKHR* pRangeInfo = &rangeInfo;
-
-        vkCmdBuildAccelerationStructuresKHR(m_currentCmdBuf->m_cmdBuf, 1, &buildInfo, &pRangeInfo);
-
         m_currentCmdBuf->m_referencedStagingBuffers.push_back(scratchBuffer);
     }
+
+    VkAccelerationStructureBuildRangeInfoKHR rangeInfo = {};
+    rangeInfo.primitiveCount = primitiveCount;
+    const VkAccelerationStructureBuildRangeInfoKHR* pRangeInfo = &rangeInfo;
+    vkCmdBuildAccelerationStructuresKHR(m_currentCmdBuf->m_cmdBuf, 1, &buildInfo, &pRangeInfo);
 
     m_currentCmdBuf->m_referencedResources.push_back(_as);
     m_currentCmdBuf->m_referencedResources.push_back(instanceBuffer);
@@ -250,6 +255,27 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
     auto* inOutAddressesBuffer = opDesc.inOutAddressesBuffer ? checked_cast<Buffer*>(opDesc.inOutAddressesBuffer) : nullptr;
     auto* outSizesBuffer = opDesc.outSizesBuffer ? checked_cast<Buffer*>(opDesc.outSizesBuffer) : nullptr;
     auto* outAccelerationStructuresBuffer = opDesc.outAccelerationStructuresBuffer ? checked_cast<Buffer*>(opDesc.outAccelerationStructuresBuffer) : nullptr;
+
+    if(indirectArgCountBuffer && opDesc.inIndirectArgCountOffsetInBytes >= indirectArgCountBuffer->getDescription().byteSize){
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Cluster operation indirect-arg-count offset is out of range."));
+        return;
+    }
+    if(indirectArgsBuffer && opDesc.inIndirectArgsOffsetInBytes >= indirectArgsBuffer->getDescription().byteSize){
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Cluster operation indirect-args offset is out of range."));
+        return;
+    }
+    if(inOutAddressesBuffer && opDesc.inOutAddressesOffsetInBytes >= inOutAddressesBuffer->getDescription().byteSize){
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Cluster operation in/out-addresses offset is out of range."));
+        return;
+    }
+    if(outSizesBuffer && opDesc.outSizesOffsetInBytes >= outSizesBuffer->getDescription().byteSize){
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Cluster operation out-sizes offset is out of range."));
+        return;
+    }
+    if(outAccelerationStructuresBuffer && opDesc.outAccelerationStructuresOffsetInBytes >= outAccelerationStructuresBuffer->getDescription().byteSize){
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Cluster operation output AS offset is out of range."));
+        return;
+    }
 
     if(m_enableAutomaticBarriers){
         if(indirectArgsBuffer)
@@ -380,10 +406,8 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
         vkConvertDescs[i] = vkDesc;
     };
 
-    constexpr usize kParallelConvertThreshold = 256;
-    constexpr usize kConvertGrainSize = 64;
-    if(taskPool().isParallelEnabled() && validDescs.size() >= kParallelConvertThreshold)
-        scheduleParallelFor(static_cast<usize>(0), validDescs.size(), kConvertGrainSize, buildConvertDesc);
+    if(taskPool().isParallelEnabled() && validDescs.size() >= s_ParallelConvertThreshold)
+        scheduleParallelFor(static_cast<usize>(0), validDescs.size(), s_ConvertGrainSize, buildConvertDesc);
     else{
         for(usize i = 0; i < validDescs.size(); ++i)
             buildConvertDesc(i);
@@ -447,6 +471,9 @@ const CommandListParameters& CommandList::getDescription(){
 
 
 void Device::getTextureTiling(ITexture* _texture, u32* numTiles, PackedMipDesc* desc, TileShape* tileShape, u32* subresourceTilingsNum, SubresourceTiling* subresourceTilings){
+    if(!_texture)
+        return;
+
     auto* texture = checked_cast<Texture*>(_texture);
     u32 numStandardMips = 0;
     u32 tileWidth = 1;

@@ -74,6 +74,11 @@ ShaderHandle ShaderLibrary::getShader(const Name& entryName, ShaderType::Mask sh
     shader->m_desc.entryName = entryName;
     shader->m_bytecode = m_bytecode;
 
+    if(shader->m_bytecode.empty() || (shader->m_bytecode.size() & 3) != 0){
+        DestroyArenaObject(*m_context.objectArena, shader);
+        return nullptr;
+    }
+
     VkShaderModuleCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     createInfo.codeSize = m_bytecode.size();
@@ -96,6 +101,11 @@ ShaderHandle ShaderLibrary::getShader(const Name& entryName, ShaderType::Mask sh
 
 ShaderHandle Device::createShader(const ShaderDesc& d, const void* binary, usize binarySize){
     VkResult res = VK_SUCCESS;
+
+    if(!binary || binarySize == 0 || (binarySize & 3) != 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Invalid shader bytecode payload"));
+        return nullptr;
+    }
 
     auto* shader = NewArenaObject<Shader>(*m_context.objectArena, m_context);
     shader->m_desc = d;
@@ -140,20 +150,19 @@ ShaderHandle Device::createShaderSpecialization(IShader* baseShader, const Shade
     }
 
     if(constants && numConstants > 0){
-        shader->m_specializationData.resize(numConstants * sizeof(u32));
+        shader->m_specializationData.resize(numConstants * sizeof(uint32_t));
         shader->m_specializationEntries.resize(numConstants);
 
         auto fillConstant = [&](usize i){
             VkSpecializationMapEntry& entry = shader->m_specializationEntries[i];
             entry.constantID = constants[i].constantID;
-            entry.offset = static_cast<u32>(i * sizeof(u32));
-            entry.size = sizeof(u32);
+            entry.offset = static_cast<uint32_t>(i * sizeof(uint32_t));
+            entry.size = sizeof(uint32_t);
 
-            NWB_MEMCPY(shader->m_specializationData.data() + entry.offset, sizeof(u32), &constants[i].value, sizeof(u32));
+            NWB_MEMCPY(shader->m_specializationData.data() + entry.offset, sizeof(uint32_t), &constants[i].value, sizeof(uint32_t));
         };
 
-        constexpr usize kParallelSpecializationThreshold = 256;
-        if(taskPool().isParallelEnabled() && numConstants >= kParallelSpecializationThreshold)
+        if(taskPool().isParallelEnabled() && numConstants >= s_ParallelSpecializationThreshold)
             scheduleParallelFor(static_cast<usize>(0), numConstants, fillConstant);
         else{
             for(usize i = 0; i < numConstants; ++i)
@@ -165,6 +174,11 @@ ShaderHandle Device::createShaderSpecialization(IShader* baseShader, const Shade
 }
 
 ShaderLibraryHandle Device::createShaderLibrary(const void* binary, usize binarySize){
+    if(!binary || binarySize == 0 || (binarySize & 3) != 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Invalid shader library bytecode payload"));
+        return nullptr;
+    }
+
     auto* lib = NewArenaObject<ShaderLibrary>(*m_context.objectArena, m_context);
     lib->m_bytecode.assign(static_cast<const u8*>(binary), static_cast<const u8*>(binary) + binarySize);
 
@@ -188,8 +202,12 @@ InputLayout::InputLayout(const VulkanContext& context)
 
 
 InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 attributeCount, IShader*){
+    if(attributeCount > 0 && !d)
+        return nullptr;
+
     auto* layout = NewArenaObject<InputLayout>(*m_context.objectArena, m_context);
-    layout->m_attributes.assign(d, d + attributeCount);
+    if(attributeCount > 0)
+        layout->m_attributes.assign(d, d + attributeCount);
 
     Alloc::ScratchArena<> scratchArena;
 
@@ -218,16 +236,24 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
         layout->m_bindings.push_back(binding);
     }
 
-    for(u32 i = 0; i < attributeCount; ++i){
+    layout->m_vkAttributes.resize(attributeCount);
+    auto fillVkAttribute = [&](usize i){
         const auto& attr = layout->m_attributes[i];
 
         VkVertexInputAttributeDescription vkAttr{};
-        vkAttr.location = i;
+        vkAttr.location = static_cast<u32>(i);
         vkAttr.binding = attr.bufferIndex;
         vkAttr.format = ConvertFormat(attr.format);
         vkAttr.offset = attr.offset;
 
-        layout->m_vkAttributes.push_back(vkAttr);
+        layout->m_vkAttributes[i] = vkAttr;
+    };
+
+    if(taskPool().isParallelEnabled() && attributeCount >= s_ParallelInputLayoutThreshold)
+        scheduleParallelFor(static_cast<usize>(0), attributeCount, s_InputLayoutGrainSize, fillVkAttribute);
+    else{
+        for(usize i = 0; i < attributeCount; ++i)
+            fillVkAttribute(i);
     }
 
     return InputLayoutHandle(layout, InputLayoutHandle::deleter_type(m_context.objectArena), AdoptRef);
@@ -268,7 +294,11 @@ EventQuery::EventQuery(const VulkanContext& context)
     fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
 
     res = vkCreateFence(m_context.device, &fenceInfo, m_context.allocationCallbacks, &m_fence);
-    NWB_ASSERT_MSG(res == VK_SUCCESS, NWB_TEXT("Vulkan: Failed to create fence for EventQuery"));
+    if(res != VK_SUCCESS){
+        m_fence = VK_NULL_HANDLE;
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create fence for EventQuery"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create fence for EventQuery: {}"), ResultToString(res));
+    }
 }
 EventQuery::~EventQuery(){
     if(m_fence != VK_NULL_HANDLE){
@@ -290,10 +320,14 @@ TimerQuery::TimerQuery(const VulkanContext& context)
     VkQueryPoolCreateInfo queryPoolInfo{};
     queryPoolInfo.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
     queryPoolInfo.queryType = VK_QUERY_TYPE_TIMESTAMP;
-    queryPoolInfo.queryCount = 2; // Start and end timestamps
+    queryPoolInfo.queryCount = s_TimerQueryTimestampCount; // Start and end timestamps
 
     res = vkCreateQueryPool(m_context.device, &queryPoolInfo, m_context.allocationCallbacks, &m_queryPool);
-    NWB_ASSERT_MSG(res == VK_SUCCESS, NWB_TEXT("Vulkan: Failed to create query pool for TimerQuery"));
+    if(res != VK_SUCCESS){
+        m_queryPool = VK_NULL_HANDLE;
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create query pool for TimerQuery"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create query pool for TimerQuery: {}"), ResultToString(res));
+    }
 }
 TimerQuery::~TimerQuery(){
     if(m_queryPool != VK_NULL_HANDLE){

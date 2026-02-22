@@ -18,29 +18,17 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_graphics{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static u32 QueryGraphicsWorkerThreadCount(){
+u32 Graphics::queryGraphicsWorkerThreadCount(){
     u32 coreCount = Alloc::QueryCoreCount(Alloc::CoreAffinity::Performance);
     if(coreCount <= 1)
         coreCount = Alloc::QueryCoreCount(Alloc::CoreAffinity::Any);
 
-    return coreCount > 1 ? (coreCount - 1) : 0;
+    const u32 reservedCores = s_reservedPerformanceCoresForMainThread;
+    return coreCount > reservedCores ? (coreCount - reservedCores) : 0;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 IDeviceManager* IDeviceManager::create(GraphicsAPI::Enum api, const DeviceCreationParameters& params){
     switch(api){
@@ -57,8 +45,8 @@ IDeviceManager* IDeviceManager::create(GraphicsAPI::Enum api, const DeviceCreati
 
 
 Graphics::Graphics()
-    : m_allocator(s_maxDynamicAllocSize)
-    , m_threadPool(__hidden_graphics::QueryGraphicsWorkerThreadCount(), Alloc::CoreAffinity::Any)
+    : m_allocator(s_dynamicAllocatorSize)
+    , m_threadPool(queryGraphicsWorkerThreadCount(), Alloc::CoreAffinity::Any)
 {
     m_deviceCreationParams.allocator = &m_allocator;
     m_deviceCreationParams.threadPool = &m_threadPool;
@@ -106,3 +94,4 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

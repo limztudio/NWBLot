@@ -4,6 +4,8 @@
 
 #include "vulkan_backend.h"
 
+#include <logger/client/logger.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -16,19 +18,36 @@ NWB_VULKAN_BEGIN
 
 EventQueryHandle Device::createEventQuery(){
     auto* query = NewArenaObject<EventQuery>(*m_context.objectArena, m_context);
+    if(!query->m_fence){
+        DestroyArenaObject(*m_context.objectArena, query);
+        return nullptr;
+    }
     return EventQueryHandle(query, EventQueryHandle::deleter_type(m_context.objectArena), AdoptRef);
 }
 
 void Device::setEventQuery(IEventQuery* _query, CommandQueue::Enum queue){
-    auto* query = static_cast<EventQuery*>(_query);
+    if(!_query)
+        return;
 
-    vkResetFences(m_context.device, 1, &query->m_fence);
+    VkResult res = VK_SUCCESS;
+    auto* query = static_cast<EventQuery*>(_query);
+    if(query->m_fence == VK_NULL_HANDLE)
+        return;
+
+    res = vkResetFences(m_context.device, 1, &query->m_fence);
+    if(res != VK_SUCCESS)
+        return;
 
     Queue* q = getQueue(queue);
     if(q){
         VkSubmitInfo submitInfo = { VK_STRUCTURE_TYPE_SUBMIT_INFO };
-        vkQueueSubmit(q->getVkQueue(), 1, &submitInfo, query->m_fence);
+        Mutex::scoped_lock lock(q->m_mutex);
+        res = vkQueueSubmit(q->getVkQueue(), 1, &submitInfo, query->m_fence);
+        if(res != VK_SUCCESS)
+            return;
     }
+    else
+        return;
 
     query->m_started = true;
 }
@@ -36,7 +55,12 @@ void Device::setEventQuery(IEventQuery* _query, CommandQueue::Enum queue){
 bool Device::pollEventQuery(IEventQuery* _query){
     VkResult res = VK_SUCCESS;
 
+    if(!_query)
+        return false;
+
     auto* query = static_cast<EventQuery*>(_query);
+    if(query->m_fence == VK_NULL_HANDLE)
+        return false;
     if(!query->m_started)
         return true;
 
@@ -45,25 +69,53 @@ bool Device::pollEventQuery(IEventQuery* _query){
 }
 
 void Device::waitEventQuery(IEventQuery* _query){
+    VkResult res = VK_SUCCESS;
+
+    if(!_query)
+        return;
+
     auto* query = static_cast<EventQuery*>(_query);
+    if(query->m_fence == VK_NULL_HANDLE)
+        return;
     if(!query->m_started)
         return;
 
-    vkWaitForFences(m_context.device, 1, &query->m_fence, VK_TRUE, UINT64_MAX);
+    res = vkWaitForFences(m_context.device, 1, &query->m_fence, VK_TRUE, UINT64_MAX);
+    if(res == VK_SUCCESS)
+        query->m_started = false;
+    else
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to wait event query fence: {}"), ResultToString(res));
 }
 
 void Device::resetEventQuery(IEventQuery* _query){
+    VkResult res = VK_SUCCESS;
+
+    if(!_query)
+        return;
+
     auto* query = static_cast<EventQuery*>(_query);
-    vkResetFences(m_context.device, 1, &query->m_fence);
-    query->m_started = false;
+    if(query->m_fence == VK_NULL_HANDLE)
+        return;
+    res = vkResetFences(m_context.device, 1, &query->m_fence);
+    if(res == VK_SUCCESS)
+        query->m_started = false;
+    else
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to reset event query fence: {}"), ResultToString(res));
 }
 
 TimerQueryHandle Device::createTimerQuery(){
     auto* query = NewArenaObject<TimerQuery>(*m_context.objectArena, m_context);
+    if(!query->m_queryPool){
+        DestroyArenaObject(*m_context.objectArena, query);
+        return nullptr;
+    }
     return TimerQueryHandle(query, TimerQueryHandle::deleter_type(m_context.objectArena), AdoptRef);
 }
 
 bool Device::pollTimerQuery(ITimerQuery* _query){
+    if(!_query)
+        return false;
+
     auto* query = static_cast<TimerQuery*>(_query);
     return query->m_resolved;
 }
@@ -71,15 +123,28 @@ bool Device::pollTimerQuery(ITimerQuery* _query){
 f32 Device::getTimerQueryTime(ITimerQuery* _query){
     VkResult res = VK_SUCCESS;
 
+    if(!_query)
+        return 0.f;
+
     auto* query = static_cast<TimerQuery*>(_query);
+    if(query->m_queryPool == VK_NULL_HANDLE)
+        return 0.f;
 
     if(!query->m_resolved)
         return 0.f;
 
-    u64 timestamps[2];
-    res = vkGetQueryPoolResults(m_context.device, query->m_queryPool, 0, 2, sizeof(timestamps), timestamps, sizeof(u64), VK_QUERY_RESULT_64_BIT);
+    u64 timestamps[s_TimerQueryTimestampCount];
+    res = vkGetQueryPoolResults(
+        m_context.device,
+        query->m_queryPool,
+        s_TimerQueryBeginIndex,
+        s_TimerQueryTimestampCount,
+        sizeof(timestamps),
+        timestamps,
+        sizeof(u64),
+        VK_QUERY_RESULT_64_BIT);
     if(res == VK_SUCCESS){
-        u64 diff = timestamps[1] - timestamps[0];
+        u64 diff = timestamps[s_TimerQueryEndIndex] - timestamps[s_TimerQueryBeginIndex];
         f32 timestampPeriod = m_context.physicalDeviceProperties.limits.timestampPeriod;
         return static_cast<f32>(diff) * timestampPeriod * 1e-9f; // Convert to seconds
     }
@@ -88,8 +153,13 @@ f32 Device::getTimerQueryTime(ITimerQuery* _query){
 }
 
 void Device::resetTimerQuery(ITimerQuery* _query){
+    if(!_query)
+        return;
+
     auto* query = static_cast<TimerQuery*>(_query);
-    vkResetQueryPool(m_context.device, query->m_queryPool, 0, 2);
+    if(query->m_queryPool == VK_NULL_HANDLE)
+        return;
+    vkResetQueryPool(m_context.device, query->m_queryPool, s_TimerQueryBeginIndex, s_TimerQueryTimestampCount);
     query->m_started = false;
     query->m_resolved = false;
 }
@@ -100,15 +170,19 @@ void Device::resetTimerQuery(ITimerQuery* _query){
 
 void CommandList::beginTimerQuery(ITimerQuery* _query){
     auto* query = checked_cast<TimerQuery*>(_query);
+    if(!query || query->m_queryPool == VK_NULL_HANDLE)
+        return;
 
-    vkCmdWriteTimestamp(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, query->m_queryPool, 0);
+    vkCmdWriteTimestamp(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, query->m_queryPool, s_TimerQueryBeginIndex);
     query->m_started = true;
 }
 
 void CommandList::endTimerQuery(ITimerQuery* _query){
     auto* query = checked_cast<TimerQuery*>(_query);
+    if(!query || query->m_queryPool == VK_NULL_HANDLE)
+        return;
 
-    vkCmdWriteTimestamp(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, query->m_queryPool, 1);
+    vkCmdWriteTimestamp(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, query->m_queryPool, s_TimerQueryEndIndex);
     query->m_resolved = true;
 }
 
@@ -144,31 +218,53 @@ void CommandList::endMarker(){
 }
 
 void CommandList::setEventQuery(IEventQuery* _query, CommandQueue::Enum){
+    VkResult res = VK_SUCCESS;
+
     auto* query = checked_cast<EventQuery*>(_query);
+    if(!query || query->m_fence == VK_NULL_HANDLE)
+        return;
 
-    if(query->m_fence != VK_NULL_HANDLE)
-        vkResetFences(m_context.device, 1, &query->m_fence);
+    res = vkResetFences(m_context.device, 1, &query->m_fence);
+    if(res != VK_SUCCESS){
+        query->m_started = false;
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to reset event query fence for command list signal: {}"), ResultToString(res));
+        return;
+    }
 
-    if(m_currentCmdBuf)
+    if(m_currentCmdBuf){
         m_currentCmdBuf->m_signalFence = query->m_fence;
-
-    query->m_started = true;
+        query->m_started = true;
+    }
+    else
+        query->m_started = false;
 }
 
 void CommandList::resetEventQuery(IEventQuery* _query){
+    VkResult res = VK_SUCCESS;
+
     auto* query = checked_cast<EventQuery*>(_query);
+    if(!query || query->m_fence == VK_NULL_HANDLE)
+        return;
 
-    if(query->m_fence != VK_NULL_HANDLE)
-        vkResetFences(m_context.device, 1, &query->m_fence);
-
-    query->m_started = false;
+    res = vkResetFences(m_context.device, 1, &query->m_fence);
+    if(res == VK_SUCCESS)
+        query->m_started = false;
+    else
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to reset event query fence from command list: {}"), ResultToString(res));
 }
 
 void CommandList::waitEventQuery(IEventQuery* _query){
-    auto* query = checked_cast<EventQuery*>(_query);
+    VkResult res = VK_SUCCESS;
 
-    if(query->m_fence != VK_NULL_HANDLE)
-        vkWaitForFences(m_context.device, 1, &query->m_fence, VK_TRUE, UINT64_MAX);
+    auto* query = checked_cast<EventQuery*>(_query);
+    if(!query || query->m_fence == VK_NULL_HANDLE)
+        return;
+
+    res = vkWaitForFences(m_context.device, 1, &query->m_fence, VK_TRUE, UINT64_MAX);
+    if(res == VK_SUCCESS)
+        query->m_started = false;
+    else
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to wait event query fence from command list: {}"), ResultToString(res));
 }
 
 

@@ -4,6 +4,8 @@
 
 #include "vulkan_backend.h"
 
+#include <logger/client/logger.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -19,8 +21,17 @@ Buffer::Buffer(const VulkanContext& context, VulkanAllocator& allocator)
     , m_context(context)
     , m_allocator(allocator)
     , m_versionTracking(Alloc::CustomAllocator<u64>(*context.objectArena))
+    , m_bufferViews(Alloc::CustomAllocator<BufferViewEntry>(*context.objectArena))
 {}
 Buffer::~Buffer(){
+    for(auto& viewEntry : m_bufferViews){
+        if(viewEntry.view != VK_NULL_HANDLE){
+            vkDestroyBufferView(m_context.device, viewEntry.view, m_context.allocationCallbacks);
+            viewEntry.view = VK_NULL_HANDLE;
+        }
+    }
+    m_bufferViews.clear();
+
     if(m_managed){
         if(m_buffer != VK_NULL_HANDLE){
             vkDestroyBuffer(m_context.device, m_buffer, m_context.allocationCallbacks);
@@ -35,13 +46,73 @@ Buffer::~Buffer(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+VkBufferView Buffer::getView(Format::Enum format, u64 byteOffset, u64 byteSize){
+    VkResult res = VK_SUCCESS;
+
+    if(m_buffer == VK_NULL_HANDLE || format == Format::UNKNOWN)
+        return VK_NULL_HANDLE;
+
+    const VkFormat vkFormat = ConvertFormat(format);
+    if(vkFormat == VK_FORMAT_UNDEFINED)
+        return VK_NULL_HANDLE;
+
+    if(byteOffset >= m_desc.byteSize)
+        return VK_NULL_HANDLE;
+    const u64 maxRange = m_desc.byteSize - byteOffset;
+
+    u64 resolvedSize = byteSize;
+    if(resolvedSize == 0 || resolvedSize == VK_WHOLE_SIZE){
+        resolvedSize = maxRange;
+    }
+    else if(resolvedSize > maxRange)
+        resolvedSize = maxRange;
+    if(resolvedSize == 0)
+        return VK_NULL_HANDLE;
+
+    Mutex::scoped_lock lock(m_bufferViewsMutex);
+    for(const auto& viewEntry : m_bufferViews){
+        if(viewEntry.format == format && viewEntry.byteOffset == byteOffset && viewEntry.byteSize == resolvedSize)
+            return viewEntry.view;
+    }
+
+    VkBufferViewCreateInfo viewInfo = { VK_STRUCTURE_TYPE_BUFFER_VIEW_CREATE_INFO };
+    viewInfo.buffer = m_buffer;
+    viewInfo.format = vkFormat;
+    viewInfo.offset = byteOffset;
+    viewInfo.range = resolvedSize;
+
+    VkBufferView view = VK_NULL_HANDLE;
+    res = vkCreateBufferView(m_context.device, &viewInfo, m_context.allocationCallbacks, &view);
+    if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer view: {}"), ResultToString(res));
+        return VK_NULL_HANDLE;
+    }
+
+    BufferViewEntry entry;
+    entry.format = format;
+    entry.byteOffset = byteOffset;
+    entry.byteSize = resolvedSize;
+    entry.view = view;
+    m_bufferViews.push_back(entry);
+
+    return view;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 BufferHandle Device::createBuffer(const BufferDesc& d){
     VkResult res = VK_SUCCESS;
 
     auto* buffer = NewArenaObject<Buffer>(*m_context.objectArena, m_context, m_allocator);
     buffer->m_desc = d;
 
-    VkBufferUsageFlags usageFlags = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    VkBufferUsageFlags usageFlags =
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+        VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT |
+        VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT;
 
     if(d.isVertexBuffer)
         usageFlags |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
@@ -78,15 +149,30 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
     bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
     res = vkCreateBuffer(m_context.device, &bufferInfo, m_context.allocationCallbacks, &buffer->m_buffer);
-    NWB_ASSERT(res == VK_SUCCESS);
+    if(res != VK_SUCCESS){
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create buffer"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer: {}"), ResultToString(res));
+        DestroyArenaObject(*m_context.objectArena, buffer);
+        return nullptr;
+    }
 
     if(!d.isVirtual){
         res = m_allocator.allocateBufferMemory(buffer, m_context.extensions.buffer_device_address && (usageFlags & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT));
-        NWB_ASSERT(res == VK_SUCCESS);
+        if(res != VK_SUCCESS){
+            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to allocate buffer memory"));
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate buffer memory: {}"), ResultToString(res));
+            DestroyArenaObject(*m_context.objectArena, buffer);
+            return nullptr;
+        }
 
         if(d.isVolatile || d.cpuAccess != CpuAccessMode::None){
             res = vkMapMemory(m_context.device, buffer->m_memory, 0, size, 0, &buffer->m_mappedMemory);
-            NWB_ASSERT(res == VK_SUCCESS);
+            if(res != VK_SUCCESS){
+                NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to map buffer memory"));
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map buffer memory: {}"), ResultToString(res));
+                DestroyArenaObject(*m_context.objectArena, buffer);
+                return nullptr;
+            }
         }
 
         if(m_context.extensions.buffer_device_address){
@@ -103,20 +189,50 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
 void* Device::mapBuffer(IBuffer* _buffer, CpuAccessMode::Enum){
     VkResult res = VK_SUCCESS;
 
-    auto* buffer = static_cast<Buffer*>(_buffer);
+    if(!_buffer)
+        return nullptr;
 
-    if(buffer->m_mappedMemory)
+    auto* buffer = static_cast<Buffer*>(_buffer);
+    if(buffer->m_memory == VK_NULL_HANDLE)
+        return nullptr;
+
+    auto invalidateReadRange = [&]() -> bool{
+        if(buffer->m_desc.cpuAccess != CpuAccessMode::Read)
+            return true;
+
+        VkMappedMemoryRange range = { VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE };
+        range.memory = buffer->m_memory;
+        range.offset = 0;
+        range.size = VK_WHOLE_SIZE;
+        res = vkInvalidateMappedMemoryRanges(m_context.device, 1, &range);
+        if(res != VK_SUCCESS){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to invalidate readback buffer mapping: {}"), ResultToString(res));
+            return false;
+        }
+        return true;
+    };
+
+    if(buffer->m_mappedMemory){
+        if(!invalidateReadRange())
+            return nullptr;
         return buffer->m_mappedMemory;
+    }
 
     void* data = nullptr;
     res = vkMapMemory(m_context.device, buffer->m_memory, 0, VK_WHOLE_SIZE, 0, &data);
-    NWB_ASSERT(res == VK_SUCCESS);
+    if(res != VK_SUCCESS)
+        return nullptr;
 
     buffer->m_mappedMemory = data;
+    if(!invalidateReadRange())
+        return nullptr;
     return data;
 }
 
 void Device::unmapBuffer(IBuffer* _buffer){
+    if(!_buffer)
+        return;
+
     auto* buffer = static_cast<Buffer*>(_buffer);
 
     if(buffer->m_mappedMemory && !buffer->m_desc.isVolatile && buffer->m_desc.cpuAccess == CpuAccessMode::None){
@@ -126,6 +242,9 @@ void Device::unmapBuffer(IBuffer* _buffer){
 }
 
 MemoryRequirements Device::getBufferMemoryRequirements(IBuffer* _buffer){
+    if(!_buffer)
+        return {};
+
     auto* buffer = static_cast<Buffer*>(_buffer);
 
     VkMemoryRequirements memRequirements;
@@ -139,6 +258,9 @@ MemoryRequirements Device::getBufferMemoryRequirements(IBuffer* _buffer){
 
 bool Device::bindBufferMemory(IBuffer* _buffer, IHeap* heap, u64 offset){
     VkResult res = VK_SUCCESS;
+
+    if(!_buffer)
+        return false;
 
     auto* buffer = static_cast<Buffer*>(_buffer);
     auto* vkHeap = checked_cast<Heap*>(heap);
@@ -181,6 +303,9 @@ BufferHandle Device::createHandleForNativeBuffer(ObjectType objectType, Object _
 
 
 void CommandList::writeBuffer(IBuffer* _buffer, const void* data, usize dataSize, u64 destOffsetBytes){
+    if(!_buffer || !data || dataSize == 0)
+        return;
+
     auto* buffer = checked_cast<Buffer*>(_buffer);
 
     UploadManager* uploadMgr = m_device.getUploadManager();

@@ -573,7 +573,7 @@ void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, co
     }
 
     const usize uploadSize = static_cast<usize>(dataSize);
-    __hidden_vulkan::CopyHostMemory(m_context.threadPool, cpuVA, data, uploadSize);
+    __hidden_vulkan::CopyHostMemory(taskPool(), cpuVA, data, uploadSize);
 
     VkImageMemoryBarrier2 barrier = { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2 };
     barrier.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;

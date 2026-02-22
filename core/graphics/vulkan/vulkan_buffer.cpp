@@ -193,7 +193,7 @@ void CommandList::writeBuffer(IBuffer* _buffer, const void* data, usize dataSize
         return;
     }
 
-    __hidden_vulkan::CopyHostMemory(m_context.threadPool, cpuVA, data, dataSize);
+    __hidden_vulkan::CopyHostMemory(taskPool(), cpuVA, data, dataSize);
 
     VkBufferCopy region{};
     region.srcOffset = stagingOffset;

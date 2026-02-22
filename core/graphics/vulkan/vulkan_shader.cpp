@@ -153,8 +153,8 @@ ShaderHandle Device::createShaderSpecialization(IShader* baseShader, const Shade
         };
 
         constexpr usize kParallelSpecializationThreshold = 256;
-        if(m_context.threadPool->isParallelEnabled() && numConstants >= kParallelSpecializationThreshold)
-            m_context.threadPool->parallelFor(static_cast<usize>(0), numConstants, fillConstant);
+        if(taskPool().isParallelEnabled() && numConstants >= kParallelSpecializationThreshold)
+            scheduleParallelFor(static_cast<usize>(0), numConstants, fillConstant);
         else{
             for(usize i = 0; i < numConstants; ++i)
                 fillConstant(i);

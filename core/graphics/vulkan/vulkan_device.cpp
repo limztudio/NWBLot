@@ -502,8 +502,8 @@ CooperativeVectorDeviceFeatures Device::queryCoopVecFeatures(){
     };
 
     constexpr usize kParallelCoopVecThreshold = 128;
-    if(m_context.threadPool->isParallelEnabled() && propertyCount >= kParallelCoopVecThreshold)
-        m_context.threadPool->parallelFor(static_cast<usize>(0), propertyCount, fillMatMulFormat);
+    if(taskPool().isParallelEnabled() && propertyCount >= kParallelCoopVecThreshold)
+        scheduleParallelFor(static_cast<usize>(0), propertyCount, fillMatMulFormat);
     else{
         for(usize i = 0; i < propertyCount; ++i)
             fillMatMulFormat(i);

@@ -558,7 +558,7 @@ u32 ShaderTable::addMissShader(const Name& exportName, IBindingSet* /*bindings*/
             void* oldMapped = m_device.mapBuffer(m_missBuffer.get(), CpuAccessMode::Read);
             if(oldMapped){
                 const usize copySize = static_cast<usize>(m_missCount) * handleSizeAligned;
-                __hidden_vulkan::CopyHostMemory(m_context.threadPool, mapped, oldMapped, copySize);
+                __hidden_vulkan::CopyHostMemory(taskPool(), mapped, oldMapped, copySize);
                 m_device.unmapBuffer(m_missBuffer.get());
             }
         }
@@ -597,7 +597,7 @@ u32 ShaderTable::addHitGroup(const Name& exportName, IBindingSet* /*bindings*/){
             void* oldMapped = m_device.mapBuffer(m_hitBuffer.get(), CpuAccessMode::Read);
             if(oldMapped){
                 const usize copySize = static_cast<usize>(m_hitCount) * handleSizeAligned;
-                __hidden_vulkan::CopyHostMemory(m_context.threadPool, mapped, oldMapped, copySize);
+                __hidden_vulkan::CopyHostMemory(taskPool(), mapped, oldMapped, copySize);
                 m_device.unmapBuffer(m_hitBuffer.get());
             }
         }
@@ -636,7 +636,7 @@ u32 ShaderTable::addCallableShader(const Name& exportName, IBindingSet* /*bindin
             void* oldMapped = m_device.mapBuffer(m_callableBuffer.get(), CpuAccessMode::Read);
             if(oldMapped){
                 const usize copySize = static_cast<usize>(m_callableCount) * handleSizeAligned;
-                __hidden_vulkan::CopyHostMemory(m_context.threadPool, mapped, oldMapped, copySize);
+                __hidden_vulkan::CopyHostMemory(taskPool(), mapped, oldMapped, copySize);
                 m_device.unmapBuffer(m_callableBuffer.get());
             }
         }
@@ -772,11 +772,10 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* _as, const
         primitiveCounts[i] = static_cast<uint32_t>(primitiveCount);
     };
 
-    auto& workerPool = *m_context.threadPool;
     constexpr usize kParallelGeometryThreshold = 256;
     constexpr usize kGeometryGrainSize = 64;
-    if(workerPool.isParallelEnabled() && numGeometries >= kParallelGeometryThreshold)
-        workerPool.parallelFor(static_cast<usize>(0), numGeometries, kGeometryGrainSize, buildGeometry);
+    if(taskPool().isParallelEnabled() && numGeometries >= kParallelGeometryThreshold)
+        scheduleParallelFor(static_cast<usize>(0), numGeometries, kGeometryGrainSize, buildGeometry);
     else{
         for(usize i = 0; i < numGeometries; ++i)
             buildGeometry(i);
@@ -980,11 +979,10 @@ void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* _as, const Ra
         };
 
         // TLAS instance conversion is CPU-only and scales with scene instance count.
-        auto& workerPool = *m_context.threadPool;
         constexpr usize kParallelThreshold = 1024;
         constexpr usize kGrainSize = 256;
-        if(workerPool.isParallelEnabled() && numInstances >= kParallelThreshold)
-            workerPool.parallelFor(static_cast<usize>(0), numInstances, kGrainSize, buildVkInstance);
+        if(taskPool().isParallelEnabled() && numInstances >= kParallelThreshold)
+            scheduleParallelFor(static_cast<usize>(0), numInstances, kGrainSize, buildVkInstance);
         else{
             for(usize i = 0; i < numInstances; ++i)
                 buildVkInstance(i);

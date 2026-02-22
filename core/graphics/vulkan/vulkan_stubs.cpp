@@ -380,11 +380,10 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
         vkConvertDescs[i] = vkDesc;
     };
 
-    auto& workerPool = *m_context.threadPool;
     constexpr usize kParallelConvertThreshold = 256;
     constexpr usize kConvertGrainSize = 64;
-    if(workerPool.isParallelEnabled() && validDescs.size() >= kParallelConvertThreshold)
-        workerPool.parallelFor(static_cast<usize>(0), validDescs.size(), kConvertGrainSize, buildConvertDesc);
+    if(taskPool().isParallelEnabled() && validDescs.size() >= kParallelConvertThreshold)
+        scheduleParallelFor(static_cast<usize>(0), validDescs.size(), kConvertGrainSize, buildConvertDesc);
     else{
         for(usize i = 0; i < validDescs.size(); ++i)
             buildConvertDesc(i);

@@ -29,7 +29,17 @@ class ThreadPool : NoCopy{
 private:
     struct TaskItem{
         Function<void()> func;
-        bool tracked;
+    };
+
+    struct ParallelForDesc{
+        void (*invoke)(const void* functor, usize chunkBegin, usize chunkEnd);
+        const void* functor;
+        Atomic<usize> nextChunk{ 0 };
+        usize numWorkerChunks;
+        usize begin;
+        usize chunkSize;
+        usize remainder;
+        Latch* done;
     };
 
     using WorkerAllocator = MemoryAllocator<JoiningThread>;
@@ -78,15 +88,14 @@ public:
         m_pendingCount.fetch_add(1, std::memory_order_release);
         {
             LockGuard lock(m_mutex);
-            m_tasks.push_back(TaskItem{ Function<void()>(Forward<Func>(task)), true });
+            m_tasks.push_back(TaskItem{ Function<void()>(Forward<Func>(task)) });
         }
         m_taskAvailable.notify_one();
     }
 
     template<typename Func, typename Callback>
     inline void enqueue(Func&& task, Callback&& onComplete){
-        enqueue([t = Function<void()>(Forward<Func>(task)),
-                 cb = Function<void()>(Forward<Callback>(onComplete))](){
+        enqueue([t = Function<void()>(Forward<Func>(task)), cb = Function<void()>(Forward<Callback>(onComplete))](){
             t();
             cb();
         });
@@ -119,33 +128,7 @@ public:
         const usize chunkSize = count / numChunks;
         const usize remainder = count % numChunks;
 
-        Latch done(static_cast<std::ptrdiff_t>(workerChunks));
-
-        usize pos = begin;
-        for(usize t = 0; t < workerChunks; ++t){
-            usize thisChunk = chunkSize + ((t < remainder) ? 1 : 0);
-            usize chunkBegin = pos;
-            usize chunkEnd = pos + thisChunk;
-            pos = chunkEnd;
-
-            {
-                LockGuard lock(m_mutex);
-                m_tasks.push_back(TaskItem{
-                    [&func, chunkBegin, chunkEnd, &done](){
-                        for(usize i = chunkBegin; i < chunkEnd; ++i)
-                            func(i);
-                        done.count_down();
-                    },
-                    false
-                });
-            }
-            m_taskAvailable.notify_one();
-        }
-
-        for(usize i = pos; i < end; ++i)
-            func(i);
-
-        done.wait();
+        dispatchParallelFor(begin, end, func, workerChunks, chunkSize, remainder);
     }
 
     template<typename Func>
@@ -175,33 +158,7 @@ public:
         const usize chunkSize = count / numChunks;
         const usize remainder = count % numChunks;
 
-        Latch done(static_cast<std::ptrdiff_t>(workerChunks));
-
-        usize pos = begin;
-        for(usize t = 0; t < workerChunks; ++t){
-            usize thisChunk = chunkSize + ((t < remainder) ? 1 : 0);
-            usize chunkBegin = pos;
-            usize chunkEnd = pos + thisChunk;
-            pos = chunkEnd;
-
-            {
-                LockGuard lock(m_mutex);
-                m_tasks.push_back(TaskItem{
-                    [&func, chunkBegin, chunkEnd, &done](){
-                        for(usize i = chunkBegin; i < chunkEnd; ++i)
-                            func(i);
-                        done.count_down();
-                    },
-                    false
-                });
-            }
-            m_taskAvailable.notify_one();
-        }
-
-        for(usize i = pos; i < end; ++i)
-            func(i);
-
-        done.wait();
+        dispatchParallelFor(begin, end, func, workerChunks, chunkSize, remainder);
     }
 
 public:
@@ -218,23 +175,82 @@ private:
             m_pendingCount.wait(current, std::memory_order_relaxed);
     }
 
+    inline bool hasParallelWork()const{
+        return m_pfWork && m_pfWork->nextChunk.load(std::memory_order_relaxed) < m_pfWork->numWorkerChunks;
+    }
+
+    static inline void processParallelFor(ParallelForDesc* pf){
+        while(true){
+            const usize c = pf->nextChunk.fetch_add(1, std::memory_order_relaxed);
+            if(c >= pf->numWorkerChunks)
+                break;
+
+            const usize cb = pf->begin + c * pf->chunkSize + ((c < pf->remainder) ? c : pf->remainder);
+            const usize ce = cb + pf->chunkSize + ((c < pf->remainder) ? 1 : 0);
+
+            pf->invoke(pf->functor, cb, ce);
+            pf->done->count_down();
+        }
+    }
+
+    template<typename Func>
+    inline void dispatchParallelFor(usize begin, usize end, const Func& func, usize workerChunks, usize chunkSize, usize remainder){
+        Latch done(static_cast<std::ptrdiff_t>(workerChunks));
+
+        ParallelForDesc desc;
+        desc.invoke = [](const void* ctx, usize cb, usize ce){
+            const auto& f = *static_cast<const Func*>(ctx);
+            for(usize i = cb; i < ce; ++i)
+                f(i);
+        };
+        desc.functor = &func;
+        desc.nextChunk.store(0, std::memory_order_relaxed);
+        desc.numWorkerChunks = workerChunks;
+        desc.begin = begin;
+        desc.chunkSize = chunkSize;
+        desc.remainder = remainder;
+        desc.done = &done;
+
+        {
+            LockGuard lock(m_mutex);
+            m_pfWork = &desc;
+        }
+        m_taskAvailable.notify_all();
+
+        const usize callerBegin = begin + workerChunks * chunkSize + remainder;
+        for(usize i = callerBegin; i < end; ++i)
+            func(i);
+
+        done.wait();
+
+        {
+            LockGuard lock(m_mutex);
+            m_pfWork = nullptr;
+        }
+    }
+
     inline void workerLoop(StopToken stopToken, u64 affinityMask){
         SetCurrentThreadAffinity(affinityMask);
 
         while(true){
-            TaskItem item;
-            {
-                UniqueLock lock(m_mutex);
-                if(!m_taskAvailable.wait(lock, stopToken, [this](){ return !m_tasks.empty(); }))
-                    break;
+            UniqueLock lock(m_mutex);
+            if(!m_taskAvailable.wait(lock, stopToken, [this](){
+                return hasParallelWork() || !m_tasks.empty();
+            }))
+                break;
 
-                item = Move(m_tasks.front());
-                m_tasks.pop_front();
+            if(hasParallelWork()){
+                auto* pf = m_pfWork;
+                lock.unlock();
+                processParallelFor(pf);
             }
+            else{
+                TaskItem item = Move(m_tasks.front());
+                m_tasks.pop_front();
+                lock.unlock();
 
-            item.func();
+                item.func();
 
-            if(item.tracked){
                 if(m_pendingCount.fetch_sub(1, std::memory_order_acq_rel) == 1)
                     m_pendingCount.notify_all();
             }
@@ -246,6 +262,7 @@ private:
     MemoryArena m_arena;
     Vector<JoiningThread, WorkerAllocator> m_workers;
     Deque<TaskItem, TaskAllocator> m_tasks;
+    ParallelForDesc* m_pfWork = nullptr;
     Mutex m_mutex;
     ConditionVariableAny m_taskAvailable;
     Atomic<i32> m_pendingCount{ 0 };
@@ -292,3 +309,4 @@ NWB_ALLOC_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

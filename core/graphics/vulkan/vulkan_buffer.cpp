@@ -17,13 +17,13 @@ NWB_VULKAN_BEGIN
 Buffer::Buffer(const VulkanContext& context, VulkanAllocator& allocator)
     : m_context(context)
     , m_allocator(allocator)
-    , versionTracking(Alloc::CustomAllocator<u64>(*context.objectArena))
+    , m_versionTracking(Alloc::CustomAllocator<u64>(*context.objectArena))
 {}
 Buffer::~Buffer(){
-    if(managed){
-        if(buffer != VK_NULL_HANDLE){
-            vkDestroyBuffer(m_context.device, buffer, m_context.allocationCallbacks);
-            buffer = VK_NULL_HANDLE;
+    if(m_managed){
+        if(m_buffer != VK_NULL_HANDLE){
+            vkDestroyBuffer(m_context.device, m_buffer, m_context.allocationCallbacks);
+            m_buffer = VK_NULL_HANDLE;
         }
 
         m_allocator.freeBufferMemory(this);
@@ -38,7 +38,7 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
     VkResult res = VK_SUCCESS;
 
     auto* buffer = NewArenaObject<Buffer>(*m_context.objectArena, m_context, m_allocator);
-    buffer->desc = d;
+    buffer->m_desc = d;
 
     VkBufferUsageFlags usageFlags = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 
@@ -66,8 +66,8 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
         size = (size + alignment - 1) & ~(alignment - 1);
         size *= d.maxVersions;
 
-        buffer->versionTracking.resize(d.maxVersions);
-        std::fill(buffer->versionTracking.begin(), buffer->versionTracking.end(), 0);
+        buffer->m_versionTracking.resize(d.maxVersions);
+        std::fill(buffer->m_versionTracking.begin(), buffer->m_versionTracking.end(), 0);
     }
 
     VkBufferCreateInfo bufferInfo{};
@@ -76,7 +76,7 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
     bufferInfo.usage = usageFlags;
     bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-    res = vkCreateBuffer(m_context.device, &bufferInfo, m_context.allocationCallbacks, &buffer->buffer);
+    res = vkCreateBuffer(m_context.device, &bufferInfo, m_context.allocationCallbacks, &buffer->m_buffer);
     NWB_ASSERT(res == VK_SUCCESS);
 
     if(!d.isVirtual){
@@ -84,15 +84,15 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
         NWB_ASSERT(res == VK_SUCCESS);
 
         if(d.isVolatile || d.cpuAccess != CpuAccessMode::None){
-            res = vkMapMemory(m_context.device, buffer->memory, 0, size, 0, &buffer->mappedMemory);
+            res = vkMapMemory(m_context.device, buffer->m_memory, 0, size, 0, &buffer->m_mappedMemory);
             NWB_ASSERT(res == VK_SUCCESS);
         }
 
         if(m_context.extensions.buffer_device_address){
             VkBufferDeviceAddressInfo addressInfo{};
             addressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-            addressInfo.buffer = buffer->buffer;
-            buffer->deviceAddress = vkGetBufferDeviceAddress(m_context.device, &addressInfo);
+            addressInfo.buffer = buffer->m_buffer;
+            buffer->m_deviceAddress = vkGetBufferDeviceAddress(m_context.device, &addressInfo);
         }
     }
 
@@ -104,23 +104,23 @@ void* Device::mapBuffer(IBuffer* _buffer, CpuAccessMode::Enum){
 
     auto* buffer = static_cast<Buffer*>(_buffer);
 
-    if(buffer->mappedMemory)
-        return buffer->mappedMemory;
+    if(buffer->m_mappedMemory)
+        return buffer->m_mappedMemory;
 
     void* data = nullptr;
-    res = vkMapMemory(m_context.device, buffer->memory, 0, VK_WHOLE_SIZE, 0, &data);
+    res = vkMapMemory(m_context.device, buffer->m_memory, 0, VK_WHOLE_SIZE, 0, &data);
     NWB_ASSERT(res == VK_SUCCESS);
 
-    buffer->mappedMemory = data;
+    buffer->m_mappedMemory = data;
     return data;
 }
 
 void Device::unmapBuffer(IBuffer* _buffer){
     auto* buffer = static_cast<Buffer*>(_buffer);
 
-    if(buffer->mappedMemory && !buffer->desc.isVolatile && buffer->desc.cpuAccess == CpuAccessMode::None){
-        vkUnmapMemory(m_context.device, buffer->memory);
-        buffer->mappedMemory = nullptr;
+    if(buffer->m_mappedMemory && !buffer->m_desc.isVolatile && buffer->m_desc.cpuAccess == CpuAccessMode::None){
+        vkUnmapMemory(m_context.device, buffer->m_memory);
+        buffer->m_mappedMemory = nullptr;
     }
 }
 
@@ -128,7 +128,7 @@ MemoryRequirements Device::getBufferMemoryRequirements(IBuffer* _buffer){
     auto* buffer = static_cast<Buffer*>(_buffer);
 
     VkMemoryRequirements memRequirements;
-    vkGetBufferMemoryRequirements(m_context.device, buffer->buffer, &memRequirements);
+    vkGetBufferMemoryRequirements(m_context.device, buffer->m_buffer, &memRequirements);
 
     MemoryRequirements result;
     result.size = memRequirements.size;
@@ -142,13 +142,13 @@ bool Device::bindBufferMemory(IBuffer* _buffer, IHeap* heap, u64 offset){
     auto* buffer = static_cast<Buffer*>(_buffer);
     auto* vkHeap = checked_cast<Heap*>(heap);
 
-    if(!vkHeap || vkHeap->memory == VK_NULL_HANDLE)
+    if(!vkHeap || vkHeap->m_memory == VK_NULL_HANDLE)
         return false;
 
     // Binding to a heap means the heap owns the memory, not the buffer
-    buffer->memory = VK_NULL_HANDLE;
+    buffer->m_memory = VK_NULL_HANDLE;
 
-    res = vkBindBufferMemory(m_context.device, buffer->buffer, vkHeap->memory, offset);
+    res = vkBindBufferMemory(m_context.device, buffer->m_buffer, vkHeap->m_memory, offset);
     return res == VK_SUCCESS;
 }
 
@@ -161,15 +161,15 @@ BufferHandle Device::createHandleForNativeBuffer(ObjectType objectType, Object _
         return nullptr;
 
     auto* buffer = NewArenaObject<Buffer>(*m_context.objectArena, m_context, m_allocator);
-    buffer->desc = desc;
-    buffer->buffer = nativeBuffer;
-    buffer->managed = false;
+    buffer->m_desc = desc;
+    buffer->m_buffer = nativeBuffer;
+    buffer->m_managed = false;
 
     if(m_context.extensions.buffer_device_address){
         VkBufferDeviceAddressInfo addressInfo{};
         addressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
         addressInfo.buffer = nativeBuffer;
-        buffer->deviceAddress = vkGetBufferDeviceAddress(m_context.device, &addressInfo);
+        buffer->m_deviceAddress = vkGetBufferDeviceAddress(m_context.device, &addressInfo);
     }
 
     return BufferHandle(buffer, BufferHandle::deleter_type(m_context.objectArena), AdoptRef);
@@ -199,17 +199,17 @@ void CommandList::writeBuffer(IBuffer* _buffer, const void* data, usize dataSize
     region.dstOffset = destOffsetBytes;
     region.size = dataSize;
 
-    vkCmdCopyBuffer(currentCmdBuf->cmdBuf, stagingBuffer->buffer, buffer->buffer, 1, &region);
+    vkCmdCopyBuffer(m_currentCmdBuf->m_cmdBuf, stagingBuffer->m_buffer, buffer->m_buffer, 1, &region);
 
-    currentCmdBuf->referencedResources.push_back(_buffer);
-    currentCmdBuf->referencedResources.push_back(stagingBuffer);
+    m_currentCmdBuf->m_referencedResources.push_back(_buffer);
+    m_currentCmdBuf->m_referencedResources.push_back(stagingBuffer);
 }
 
 void CommandList::clearBufferUInt(IBuffer* _buffer, u32 clearValue){
     auto* buffer = checked_cast<Buffer*>(_buffer);
 
-    vkCmdFillBuffer(currentCmdBuf->cmdBuf, buffer->buffer, 0, VK_WHOLE_SIZE, clearValue);
-    currentCmdBuf->referencedResources.push_back(_buffer);
+    vkCmdFillBuffer(m_currentCmdBuf->m_cmdBuf, buffer->m_buffer, 0, VK_WHOLE_SIZE, clearValue);
+    m_currentCmdBuf->m_referencedResources.push_back(_buffer);
 }
 
 void CommandList::copyBuffer(IBuffer* _dest, u64 destOffsetBytes, IBuffer* _src, u64 srcOffsetBytes, u64 dataSizeBytes){
@@ -221,10 +221,10 @@ void CommandList::copyBuffer(IBuffer* _dest, u64 destOffsetBytes, IBuffer* _src,
     region.dstOffset = destOffsetBytes;
     region.size = dataSizeBytes;
 
-    vkCmdCopyBuffer(currentCmdBuf->cmdBuf, src->buffer, dest->buffer, 1, &region);
+    vkCmdCopyBuffer(m_currentCmdBuf->m_cmdBuf, src->m_buffer, dest->m_buffer, 1, &region);
 
-    currentCmdBuf->referencedResources.push_back(_src);
-    currentCmdBuf->referencedResources.push_back(_dest);
+    m_currentCmdBuf->m_referencedResources.push_back(_src);
+    m_currentCmdBuf->m_referencedResources.push_back(_dest);
 }
 
 

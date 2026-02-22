@@ -117,17 +117,17 @@ constexpr VkImageCreateFlags PickImageFlags(const TextureDesc& desc){
 Texture::Texture(const VulkanContext& context, VulkanAllocator& allocator)
     : m_context(context)
     , m_allocator(allocator)
-    , views(0, Hasher<u64>(), EqualTo<u64>(), Alloc::CustomAllocator<Pair<const u64, VkImageView>>(*context.objectArena))
+    , m_views(0, Hasher<u64>(), EqualTo<u64>(), Alloc::CustomAllocator<Pair<const u64, VkImageView>>(*context.objectArena))
 {}
 Texture::~Texture(){
-    for(auto& pair : views)
+    for(auto& pair : m_views)
         vkDestroyImageView(m_context.device, pair.second, m_context.allocationCallbacks);
-    views.clear();
+    m_views.clear();
 
-    if(managed){
-        if(image != VK_NULL_HANDLE){
-            vkDestroyImage(m_context.device, image, m_context.allocationCallbacks);
-            image = VK_NULL_HANDLE;
+    if(m_managed){
+        if(m_image != VK_NULL_HANDLE){
+            vkDestroyImage(m_context.device, m_image, m_context.allocationCallbacks);
+            m_image = VK_NULL_HANDLE;
         }
 
         m_allocator.freeTextureMemory(this);
@@ -151,17 +151,17 @@ VkImageView Texture::getView(const TextureSubresourceSet& subresources, TextureD
 
     u64 key = makeViewKey(subresources, dimension, format, isReadOnlyDSV);
 
-    auto it = views.find(key);
-    if(it != views.end())
+    auto it = m_views.find(key);
+    if(it != m_views.end())
         return it->second;
 
     if(dimension == TextureDimension::Unknown)
-        dimension = desc.dimension;
+        dimension = m_desc.dimension;
 
     if(format == Format::UNKNOWN)
-        format = desc.format;
+        format = m_desc.format;
 
-    TextureSubresourceSet resolvedSubresources = subresources.resolve(desc, false);
+    TextureSubresourceSet resolvedSubresources = subresources.resolve(m_desc, false);
 
     VkImageViewType viewType = __hidden_vulkan::TextureDimensionToViewType(dimension);
     VkFormat vkFormat = ConvertFormat(format);
@@ -177,7 +177,7 @@ VkImageView Texture::getView(const TextureSubresourceSet& subresources, TextureD
 
     VkImageViewCreateInfo viewInfo{};
     viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    viewInfo.image = image;
+    viewInfo.image = m_image;
     viewInfo.viewType = viewType;
     viewInfo.format = vkFormat;
     viewInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
@@ -194,7 +194,7 @@ VkImageView Texture::getView(const TextureSubresourceSet& subresources, TextureD
     res = vkCreateImageView(m_context.device, &viewInfo, m_context.allocationCallbacks, &view);
     NWB_ASSERT_MSG(res == VK_SUCCESS, NWB_TEXT("Vulkan: Failed to create image view"));
 
-    views[key] = view;
+    m_views[key] = view;
     return view;
 }
 
@@ -213,18 +213,18 @@ StagingTexture::StagingTexture(const VulkanContext& context, VulkanAllocator& al
     , m_allocator(allocator)
 {}
 StagingTexture::~StagingTexture(){
-    if(buffer != VK_NULL_HANDLE){
-        vkDestroyBuffer(m_context.device, buffer, m_context.allocationCallbacks);
-        buffer = VK_NULL_HANDLE;
+    if(m_buffer != VK_NULL_HANDLE){
+        vkDestroyBuffer(m_context.device, m_buffer, m_context.allocationCallbacks);
+        m_buffer = VK_NULL_HANDLE;
     }
 
-    if(memory != VK_NULL_HANDLE){
-        if(mappedMemory){
-            vkUnmapMemory(m_context.device, memory);
-            mappedMemory = nullptr;
+    if(m_memory != VK_NULL_HANDLE){
+        if(m_mappedMemory){
+            vkUnmapMemory(m_context.device, m_memory);
+            m_mappedMemory = nullptr;
         }
-        vkFreeMemory(m_context.device, memory, m_context.allocationCallbacks);
-        memory = VK_NULL_HANDLE;
+        vkFreeMemory(m_context.device, m_memory, m_context.allocationCallbacks);
+        m_memory = VK_NULL_HANDLE;
     }
 }
 
@@ -236,7 +236,7 @@ TextureHandle Device::createTexture(const TextureDesc& d){
     VkResult res = VK_SUCCESS;
 
     auto* texture = NewArenaObject<Texture>(*m_context.objectArena, m_context, m_allocator);
-    texture->desc = d;
+    texture->m_desc = d;
 
     VkImageType imageType = __hidden_vulkan::TextureDimensionToImageType(d.dimension);
     VkFormat format = ConvertFormat(d.format);
@@ -244,22 +244,22 @@ TextureHandle Device::createTexture(const TextureDesc& d){
     VkImageCreateFlags flags = __hidden_vulkan::PickImageFlags(d);
     VkSampleCountFlagBits sampleCount = __hidden_vulkan::GetSampleCount(d.sampleCount);
 
-    texture->imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-    texture->imageInfo.imageType = imageType;
-    texture->imageInfo.extent.width = d.width;
-    texture->imageInfo.extent.height = d.height;
-    texture->imageInfo.extent.depth = d.depth;
-    texture->imageInfo.mipLevels = d.mipLevels;
-    texture->imageInfo.arrayLayers = d.arraySize;
-    texture->imageInfo.format = format;
-    texture->imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    texture->imageInfo.usage = usage;
-    texture->imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    texture->imageInfo.samples = sampleCount;
-    texture->imageInfo.flags = flags;
-    texture->imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    texture->m_imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    texture->m_imageInfo.imageType = imageType;
+    texture->m_imageInfo.extent.width = d.width;
+    texture->m_imageInfo.extent.height = d.height;
+    texture->m_imageInfo.extent.depth = d.depth;
+    texture->m_imageInfo.mipLevels = d.mipLevels;
+    texture->m_imageInfo.arrayLayers = d.arraySize;
+    texture->m_imageInfo.format = format;
+    texture->m_imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    texture->m_imageInfo.usage = usage;
+    texture->m_imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    texture->m_imageInfo.samples = sampleCount;
+    texture->m_imageInfo.flags = flags;
+    texture->m_imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
 
-    res = vkCreateImage(m_context.device, &texture->imageInfo, m_context.allocationCallbacks, &texture->image);
+    res = vkCreateImage(m_context.device, &texture->m_imageInfo, m_context.allocationCallbacks, &texture->m_image);
     NWB_ASSERT_MSG(res == VK_SUCCESS, NWB_TEXT("Vulkan: Failed to create image"));
 
     if(!d.isVirtual){
@@ -274,7 +274,7 @@ MemoryRequirements Device::getTextureMemoryRequirements(ITexture* _texture){
     auto* texture = static_cast<Texture*>(_texture);
 
     VkMemoryRequirements memRequirements;
-    vkGetImageMemoryRequirements(m_context.device, texture->image, &memRequirements);
+    vkGetImageMemoryRequirements(m_context.device, texture->m_image, &memRequirements);
 
     MemoryRequirements result;
     result.size = memRequirements.size;
@@ -288,12 +288,12 @@ bool Device::bindTextureMemory(ITexture* _texture, IHeap* heap, u64 offset){
     auto* texture = static_cast<Texture*>(_texture);
     auto* vkHeap = checked_cast<Heap*>(heap);
 
-    if(!vkHeap || vkHeap->memory == VK_NULL_HANDLE)
+    if(!vkHeap || vkHeap->m_memory == VK_NULL_HANDLE)
         return false;
 
-    texture->memory = VK_NULL_HANDLE;
+    texture->m_memory = VK_NULL_HANDLE;
 
-    res = vkBindImageMemory(m_context.device, texture->image, vkHeap->memory, offset);
+    res = vkBindImageMemory(m_context.device, texture->m_image, vkHeap->m_memory, offset);
     return res == VK_SUCCESS;
 }
 
@@ -306,19 +306,19 @@ TextureHandle Device::createHandleForNativeTexture(ObjectType objectType, Object
         return nullptr;
 
     auto* texture = NewArenaObject<Texture>(*m_context.objectArena, m_context, m_allocator);
-    texture->desc = desc;
-    texture->image = nativeImage;
-    texture->managed = false;
+    texture->m_desc = desc;
+    texture->m_image = nativeImage;
+    texture->m_managed = false;
 
-    texture->imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-    texture->imageInfo.imageType = __hidden_vulkan::TextureDimensionToImageType(desc.dimension);
-    texture->imageInfo.extent.width = desc.width;
-    texture->imageInfo.extent.height = desc.height;
-    texture->imageInfo.extent.depth = desc.depth;
-    texture->imageInfo.mipLevels = desc.mipLevels;
-    texture->imageInfo.arrayLayers = desc.arraySize;
-    texture->imageInfo.format = ConvertFormat(desc.format);
-    texture->imageInfo.samples = __hidden_vulkan::GetSampleCount(desc.sampleCount);
+    texture->m_imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    texture->m_imageInfo.imageType = __hidden_vulkan::TextureDimensionToImageType(desc.dimension);
+    texture->m_imageInfo.extent.width = desc.width;
+    texture->m_imageInfo.extent.height = desc.height;
+    texture->m_imageInfo.extent.depth = desc.depth;
+    texture->m_imageInfo.mipLevels = desc.mipLevels;
+    texture->m_imageInfo.arrayLayers = desc.arraySize;
+    texture->m_imageInfo.format = ConvertFormat(desc.format);
+    texture->m_imageInfo.samples = __hidden_vulkan::GetSampleCount(desc.sampleCount);
 
     return TextureHandle(texture, TextureHandle::deleter_type(m_context.objectArena), AdoptRef);
 }
@@ -331,7 +331,7 @@ SamplerHandle Device::createSampler(const SamplerDesc& d){
     VkResult res = VK_SUCCESS;
 
     auto* sampler = NewArenaObject<Sampler>(*m_context.objectArena, m_context);
-    sampler->desc = d;
+    sampler->m_desc = d;
 
     VkFilter minFilter = d.minFilter ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
     VkFilter magFilter = d.magFilter ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
@@ -365,7 +365,7 @@ SamplerHandle Device::createSampler(const SamplerDesc& d){
     samplerInfo.maxLod = VK_LOD_CLAMP_NONE;
     samplerInfo.borderColor = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
 
-    res = vkCreateSampler(m_context.device, &samplerInfo, m_context.allocationCallbacks, &sampler->sampler);
+    res = vkCreateSampler(m_context.device, &samplerInfo, m_context.allocationCallbacks, &sampler->m_sampler);
     NWB_ASSERT_MSG(res == VK_SUCCESS, NWB_TEXT("Vulkan: Failed to create sampler"));
 
     return SamplerHandle(sampler, SamplerHandle::deleter_type(m_context.objectArena), AdoptRef);
@@ -391,8 +391,8 @@ void CommandList::clearTextureFloat(ITexture* _texture, TextureSubresourceSet su
     range.baseArrayLayer = subresources.baseArraySlice;
     range.layerCount = subresources.numArraySlices;
 
-    vkCmdClearColorImage(currentCmdBuf->cmdBuf, texture->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearValue, 1, &range);
-    currentCmdBuf->referencedResources.push_back(_texture);
+    vkCmdClearColorImage(m_currentCmdBuf->m_cmdBuf, texture->m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearValue, 1, &range);
+    m_currentCmdBuf->m_referencedResources.push_back(_texture);
 }
 
 void CommandList::clearDepthStencilTexture(ITexture* _texture, TextureSubresourceSet subresources, bool clearDepth, f32 depth, bool clearStencil, u8 stencil){
@@ -413,8 +413,8 @@ void CommandList::clearDepthStencilTexture(ITexture* _texture, TextureSubresourc
     range.baseArrayLayer = subresources.baseArraySlice;
     range.layerCount = subresources.numArraySlices;
 
-    vkCmdClearDepthStencilImage(currentCmdBuf->cmdBuf, texture->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearValue, 1, &range);
-    currentCmdBuf->referencedResources.push_back(_texture);
+    vkCmdClearDepthStencilImage(m_currentCmdBuf->m_cmdBuf, texture->m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearValue, 1, &range);
+    m_currentCmdBuf->m_referencedResources.push_back(_texture);
 }
 
 void CommandList::clearTextureUInt(ITexture* _texture, TextureSubresourceSet subresources, u32 clearColor){
@@ -433,8 +433,8 @@ void CommandList::clearTextureUInt(ITexture* _texture, TextureSubresourceSet sub
     range.baseArrayLayer = subresources.baseArraySlice;
     range.layerCount = subresources.numArraySlices;
 
-    vkCmdClearColorImage(currentCmdBuf->cmdBuf, texture->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearValue, 1, &range);
-    currentCmdBuf->referencedResources.push_back(_texture);
+    vkCmdClearColorImage(m_currentCmdBuf->m_cmdBuf, texture->m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearValue, 1, &range);
+    m_currentCmdBuf->m_referencedResources.push_back(_texture);
 }
 
 void CommandList::copyTexture(ITexture* _dest, const TextureSlice& destSlice, ITexture* _src, const TextureSlice& srcSlice){
@@ -442,12 +442,12 @@ void CommandList::copyTexture(ITexture* _dest, const TextureSlice& destSlice, IT
     auto* src = checked_cast<Texture*>(_src);
 
     VkImageCopy region{};
-    const FormatInfo& srcFormatInfo = GetFormatInfo(src->desc.format);
+    const FormatInfo& srcFormatInfo = GetFormatInfo(src->m_desc.format);
     VkImageAspectFlags srcAspect = VK_IMAGE_ASPECT_COLOR_BIT;
     if(srcFormatInfo.hasDepth) srcAspect = VK_IMAGE_ASPECT_DEPTH_BIT;
     if(srcFormatInfo.hasStencil) srcAspect |= VK_IMAGE_ASPECT_STENCIL_BIT;
 
-    const FormatInfo& dstFormatInfo = GetFormatInfo(dest->desc.format);
+    const FormatInfo& dstFormatInfo = GetFormatInfo(dest->m_desc.format);
     VkImageAspectFlags dstAspect = VK_IMAGE_ASPECT_COLOR_BIT;
     if(dstFormatInfo.hasDepth) dstAspect = VK_IMAGE_ASPECT_DEPTH_BIT;
     if(dstFormatInfo.hasStencil) dstAspect |= VK_IMAGE_ASPECT_STENCIL_BIT;
@@ -464,20 +464,20 @@ void CommandList::copyTexture(ITexture* _dest, const TextureSlice& destSlice, IT
     region.dstOffset = { static_cast<int32_t>(destSlice.x), static_cast<int32_t>(destSlice.y), static_cast<int32_t>(destSlice.z) };
     region.extent = { destSlice.width, destSlice.height, destSlice.depth };
 
-    vkCmdCopyImage(currentCmdBuf->cmdBuf, src->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dest->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+    vkCmdCopyImage(m_currentCmdBuf->m_cmdBuf, src->m_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dest->m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
-    currentCmdBuf->referencedResources.push_back(_src);
-    currentCmdBuf->referencedResources.push_back(_dest);
+    m_currentCmdBuf->m_referencedResources.push_back(_src);
+    m_currentCmdBuf->m_referencedResources.push_back(_dest);
 }
 
 void CommandList::copyTexture(IStagingTexture* dest, const TextureSlice& destSlice, ITexture* src, const TextureSlice& srcSlice){
     auto* staging = checked_cast<StagingTexture*>(dest);
     auto* texture = checked_cast<Texture*>(src);
 
-    TextureSlice resolvedSrc = srcSlice.resolve(texture->desc);
-    TextureSlice resolvedDst = destSlice.resolve(staging->desc);
+    TextureSlice resolvedSrc = srcSlice.resolve(texture->m_desc);
+    TextureSlice resolvedDst = destSlice.resolve(staging->m_desc);
 
-    const FormatInfo& formatInfo = GetFormatInfo(texture->desc.format);
+    const FormatInfo& formatInfo = GetFormatInfo(texture->m_desc.format);
 
     u64 bufferOffset = 0;
     if(resolvedDst.mipLevel > 0 || resolvedDst.arraySlice > 0){
@@ -503,20 +503,20 @@ void CommandList::copyTexture(IStagingTexture* dest, const TextureSlice& destSli
     region.imageOffset = { static_cast<i32>(resolvedSrc.x), static_cast<i32>(resolvedSrc.y), static_cast<i32>(resolvedSrc.z) };
     region.imageExtent = { resolvedSrc.width, resolvedSrc.height, resolvedSrc.depth };
 
-    vkCmdCopyImageToBuffer(currentCmdBuf->cmdBuf, texture->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, staging->buffer, 1, &region);
+    vkCmdCopyImageToBuffer(m_currentCmdBuf->m_cmdBuf, texture->m_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, staging->m_buffer, 1, &region);
 
-    currentCmdBuf->referencedResources.push_back(src);
-    currentCmdBuf->referencedResources.push_back(dest);
+    m_currentCmdBuf->m_referencedResources.push_back(src);
+    m_currentCmdBuf->m_referencedResources.push_back(dest);
 }
 
 void CommandList::copyTexture(ITexture* dest, const TextureSlice& destSlice, IStagingTexture* src, const TextureSlice& srcSlice){
     auto* texture = checked_cast<Texture*>(dest);
     auto* staging = checked_cast<StagingTexture*>(src);
 
-    TextureSlice resolvedDst = destSlice.resolve(texture->desc);
-    TextureSlice resolvedSrc = srcSlice.resolve(staging->desc);
+    TextureSlice resolvedDst = destSlice.resolve(texture->m_desc);
+    TextureSlice resolvedSrc = srcSlice.resolve(staging->m_desc);
 
-    const FormatInfo& formatInfo = GetFormatInfo(staging->desc.format);
+    const FormatInfo& formatInfo = GetFormatInfo(staging->m_desc.format);
 
     u64 bufferOffset = 0;
     if(resolvedSrc.mipLevel > 0 || resolvedSrc.arraySlice > 0){
@@ -542,15 +542,15 @@ void CommandList::copyTexture(ITexture* dest, const TextureSlice& destSlice, ISt
     region.imageOffset = { static_cast<i32>(resolvedDst.x), static_cast<i32>(resolvedDst.y), static_cast<i32>(resolvedDst.z) };
     region.imageExtent = { resolvedDst.width, resolvedDst.height, resolvedDst.depth };
 
-    vkCmdCopyBufferToImage(currentCmdBuf->cmdBuf, staging->buffer, texture->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+    vkCmdCopyBufferToImage(m_currentCmdBuf->m_cmdBuf, staging->m_buffer, texture->m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
-    currentCmdBuf->referencedResources.push_back(dest);
-    currentCmdBuf->referencedResources.push_back(src);
+    m_currentCmdBuf->m_referencedResources.push_back(dest);
+    m_currentCmdBuf->m_referencedResources.push_back(src);
 }
 
 void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, const void* data, usize rowPitch, usize){
     auto* dest = checked_cast<Texture*>(_dest);
-    const TextureDesc& texDesc = dest->desc;
+    const TextureDesc& texDesc = dest->m_desc;
 
     auto width = Max<u32>(1u, texDesc.width >> mipLevel);
     auto height = Max<u32>(1u, texDesc.height >> mipLevel);
@@ -579,7 +579,7 @@ void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, co
     barrier.dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
     barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    barrier.image = dest->image;
+    barrier.image = dest->m_image;
     VkImageAspectFlags writeAspect = VK_IMAGE_ASPECT_COLOR_BIT;
     if(formatInfo.hasDepth) writeAspect = VK_IMAGE_ASPECT_DEPTH_BIT;
     if(formatInfo.hasStencil) writeAspect |= VK_IMAGE_ASPECT_STENCIL_BIT;
@@ -593,7 +593,7 @@ void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, co
     VkDependencyInfo depInfo = { VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
     depInfo.imageMemoryBarrierCount = 1;
     depInfo.pImageMemoryBarriers = &barrier;
-    vkCmdPipelineBarrier2(currentCmdBuf->cmdBuf, &depInfo);
+    vkCmdPipelineBarrier2(m_currentCmdBuf->m_cmdBuf, &depInfo);
 
     VkBufferImageCopy region{};
     region.bufferOffset = stagingOffset;
@@ -605,10 +605,10 @@ void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, co
     region.imageSubresource.layerCount = 1;
     region.imageExtent = { width, height, depth };
 
-    vkCmdCopyBufferToImage(currentCmdBuf->cmdBuf, stagingBuffer->buffer, dest->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+    vkCmdCopyBufferToImage(m_currentCmdBuf->m_cmdBuf, stagingBuffer->m_buffer, dest->m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
-    currentCmdBuf->referencedResources.push_back(_dest);
-    currentCmdBuf->referencedStagingBuffers.push_back(stagingBuffer);
+    m_currentCmdBuf->m_referencedResources.push_back(_dest);
+    m_currentCmdBuf->m_referencedStagingBuffers.push_back(stagingBuffer);
 }
 
 void CommandList::resolveTexture(ITexture* _dest, const TextureSubresourceSet& dstSubresources, ITexture* _src, const TextureSubresourceSet& srcSubresources){
@@ -626,12 +626,12 @@ void CommandList::resolveTexture(ITexture* _dest, const TextureSubresourceSet& d
     region.dstSubresource.baseArrayLayer = dstSubresources.baseArraySlice;
     region.dstSubresource.layerCount = dstSubresources.numArraySlices;
     region.dstOffset = { 0, 0, 0 };
-    region.extent = { Max<u32>(1u, src->desc.width >> srcSubresources.baseMipLevel), Max<u32>(1u, src->desc.height >> srcSubresources.baseMipLevel), 1 };
+    region.extent = { Max<u32>(1u, src->m_desc.width >> srcSubresources.baseMipLevel), Max<u32>(1u, src->m_desc.height >> srcSubresources.baseMipLevel), 1 };
 
-    vkCmdResolveImage(currentCmdBuf->cmdBuf, src->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dest->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+    vkCmdResolveImage(m_currentCmdBuf->m_cmdBuf, src->m_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dest->m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
-    currentCmdBuf->referencedResources.push_back(_src);
-    currentCmdBuf->referencedResources.push_back(_dest);
+    m_currentCmdBuf->m_referencedResources.push_back(_src);
+    m_currentCmdBuf->m_referencedResources.push_back(_dest);
 }
 
 

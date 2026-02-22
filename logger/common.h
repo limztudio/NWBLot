@@ -96,6 +96,7 @@ template<typename T, float UPDATE_INTERVAL, const tchar* NAME>
 class BaseUpdateOrdinary : public Base<T, NAME>{
 	friend Base<T, NAME>;
 
+
 private:
     static void globalUpdate(T* _this){
         for(;;){
@@ -135,6 +136,7 @@ bool BaseUpdateOrdinary<T, UPDATE_INTERVAL, NAME>::m_globalInit = false;
 template<typename T, const tchar* NAME>
 class BaseUpdateIfQueued : public Base<T, NAME>{
     friend Base<T, NAME>;
+
 
 private:
     static void globalUpdate(T* _this){

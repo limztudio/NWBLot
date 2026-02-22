@@ -78,6 +78,8 @@ class NamePool;
 class Name{
     friend class NamePool;
     friend constexpr bool operator==(const Name& a, const Name& b);
+
+
 public:
     constexpr Name()
         : m_hash{}

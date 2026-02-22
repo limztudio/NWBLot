@@ -41,23 +41,23 @@ void CommandList::setSamplerFeedbackTextureState(ISamplerFeedbackTexture* textur
 void CommandList::setPushConstants(const void* data, usize byteSize){
     VkPipelineLayout layout = VK_NULL_HANDLE;
 
-    if(currentGraphicsState.pipeline){
-        auto* gp = checked_cast<GraphicsPipeline*>(currentGraphicsState.pipeline);
-        layout = gp->pipelineLayout;
+    if(m_currentGraphicsState.pipeline){
+        auto* gp = checked_cast<GraphicsPipeline*>(m_currentGraphicsState.pipeline);
+        layout = gp->m_pipelineLayout;
     }
-    else if(currentComputeState.pipeline){
-        auto* cp = checked_cast<ComputePipeline*>(currentComputeState.pipeline);
-        layout = cp->pipelineLayout;
+    else if(m_currentComputeState.pipeline){
+        auto* cp = checked_cast<ComputePipeline*>(m_currentComputeState.pipeline);
+        layout = cp->m_pipelineLayout;
     }
-    else if(currentMeshletState.pipeline){
-        auto* mp = checked_cast<MeshletPipeline*>(currentMeshletState.pipeline);
-        layout = mp->pipelineLayout;
+    else if(m_currentMeshletState.pipeline){
+        auto* mp = checked_cast<MeshletPipeline*>(m_currentMeshletState.pipeline);
+        layout = mp->m_pipelineLayout;
     }
-    else if(currentRayTracingState.shaderTable){
-        auto* rtp = currentRayTracingState.shaderTable->getPipeline();
+    else if(m_currentRayTracingState.shaderTable){
+        auto* rtp = m_currentRayTracingState.shaderTable->getPipeline();
         if(rtp){
             auto* rtpImpl = checked_cast<RayTracingPipeline*>(rtp);
-            layout = rtpImpl->pipelineLayout;
+            layout = rtpImpl->m_pipelineLayout;
         }
     }
 
@@ -66,7 +66,7 @@ void CommandList::setPushConstants(const void* data, usize byteSize){
         return;
     }
 
-    vkCmdPushConstants(currentCmdBuf->cmdBuf, layout, VK_SHADER_STAGE_ALL, 0, static_cast<u32>(byteSize), data);
+    vkCmdPushConstants(m_currentCmdBuf->m_cmdBuf, layout, VK_SHADER_STAGE_ALL, 0, static_cast<u32>(byteSize), data);
 }
 
 
@@ -75,13 +75,13 @@ void CommandList::setPushConstants(const void* data, usize byteSize){
 
 
 void CommandList::drawIndexedIndirect(u32 offsetBytes, u32 drawCount){
-    if(!currentGraphicsState.indirectParams){
+    if(!m_currentGraphicsState.indirectParams){
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: No indirect buffer bound for drawIndexedIndirect"));
         return;
     }
-    auto* buffer = checked_cast<Buffer*>(currentGraphicsState.indirectParams);
-    vkCmdDrawIndexedIndirect(currentCmdBuf->cmdBuf, buffer->buffer, offsetBytes, drawCount, sizeof(DrawIndexedIndirectArguments));
-    currentCmdBuf->referencedResources.push_back(currentGraphicsState.indirectParams);
+    auto* buffer = checked_cast<Buffer*>(m_currentGraphicsState.indirectParams);
+    vkCmdDrawIndexedIndirect(m_currentCmdBuf->m_cmdBuf, buffer->m_buffer, offsetBytes, drawCount, sizeof(DrawIndexedIndirectArguments));
+    m_currentCmdBuf->m_referencedResources.push_back(m_currentGraphicsState.indirectParams);
 }
 
 
@@ -118,7 +118,7 @@ void CommandList::buildTopLevelAccelStructFromBuffer(IRayTracingAccelStruct* _as
         buildInfo.flags |= VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR;
 
     buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
-    buildInfo.dstAccelerationStructure = as->accelStruct;
+    buildInfo.dstAccelerationStructure = as->m_accelStruct;
     buildInfo.geometryCount = 1;
     buildInfo.pGeometries = &geometry;
 
@@ -139,13 +139,13 @@ void CommandList::buildTopLevelAccelStructFromBuffer(IRayTracingAccelStruct* _as
         rangeInfo.primitiveCount = primitiveCount;
         const VkAccelerationStructureBuildRangeInfoKHR* pRangeInfo = &rangeInfo;
 
-        vkCmdBuildAccelerationStructuresKHR(currentCmdBuf->cmdBuf, 1, &buildInfo, &pRangeInfo);
+        vkCmdBuildAccelerationStructuresKHR(m_currentCmdBuf->m_cmdBuf, 1, &buildInfo, &pRangeInfo);
 
-        currentCmdBuf->referencedStagingBuffers.push_back(scratchBuffer);
+        m_currentCmdBuf->m_referencedStagingBuffers.push_back(scratchBuffer);
     }
 
-    currentCmdBuf->referencedResources.push_back(_as);
-    currentCmdBuf->referencedResources.push_back(instanceBuffer);
+    m_currentCmdBuf->m_referencedResources.push_back(_as);
+    m_currentCmdBuf->m_referencedResources.push_back(instanceBuffer);
 }
 
 void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOperationDesc& opDesc){
@@ -251,7 +251,7 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
     auto* outSizesBuffer = opDesc.outSizesBuffer ? checked_cast<Buffer*>(opDesc.outSizesBuffer) : nullptr;
     auto* outAccelerationStructuresBuffer = opDesc.outAccelerationStructuresBuffer ? checked_cast<Buffer*>(opDesc.outAccelerationStructuresBuffer) : nullptr;
 
-    if(enableAutomaticBarriers){
+    if(m_enableAutomaticBarriers){
         if(indirectArgsBuffer)
             setBufferState(opDesc.inIndirectArgsBuffer, ResourceStates::ShaderResource);
         if(indirectArgCountBuffer)
@@ -265,15 +265,15 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
     }
 
     if(indirectArgCountBuffer)
-        currentCmdBuf->referencedResources.push_back(opDesc.inIndirectArgCountBuffer);
+        m_currentCmdBuf->m_referencedResources.push_back(opDesc.inIndirectArgCountBuffer);
     if(indirectArgsBuffer)
-        currentCmdBuf->referencedResources.push_back(opDesc.inIndirectArgsBuffer);
+        m_currentCmdBuf->m_referencedResources.push_back(opDesc.inIndirectArgsBuffer);
     if(inOutAddressesBuffer)
-        currentCmdBuf->referencedResources.push_back(opDesc.inOutAddressesBuffer);
+        m_currentCmdBuf->m_referencedResources.push_back(opDesc.inOutAddressesBuffer);
     if(outSizesBuffer)
-        currentCmdBuf->referencedResources.push_back(opDesc.outSizesBuffer);
+        m_currentCmdBuf->m_referencedResources.push_back(opDesc.outSizesBuffer);
     if(outAccelerationStructuresBuffer)
-        currentCmdBuf->referencedResources.push_back(opDesc.outAccelerationStructuresBuffer);
+        m_currentCmdBuf->m_referencedResources.push_back(opDesc.outAccelerationStructuresBuffer);
 
     commitBarriers();
 
@@ -295,34 +295,34 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
 
     VkClusterAccelerationStructureCommandsInfoNV commandsInfo = { VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_COMMANDS_INFO_NV };
     commandsInfo.input = inputInfo;
-    commandsInfo.scratchData = scratchBuffer ? scratchBuffer->deviceAddress : 0;
-    commandsInfo.dstImplicitData = outAccelerationStructuresBuffer ? outAccelerationStructuresBuffer->deviceAddress + opDesc.outAccelerationStructuresOffsetInBytes : 0;
+    commandsInfo.scratchData = scratchBuffer ? scratchBuffer->m_deviceAddress : 0;
+    commandsInfo.dstImplicitData = outAccelerationStructuresBuffer ? outAccelerationStructuresBuffer->m_deviceAddress + opDesc.outAccelerationStructuresOffsetInBytes : 0;
 
     if(inOutAddressesBuffer){
-        commandsInfo.dstAddressesArray.deviceAddress = inOutAddressesBuffer->deviceAddress + opDesc.inOutAddressesOffsetInBytes;
+        commandsInfo.dstAddressesArray.deviceAddress = inOutAddressesBuffer->m_deviceAddress + opDesc.inOutAddressesOffsetInBytes;
         commandsInfo.dstAddressesArray.stride = inOutAddressesBuffer->getDescription().structStride;
         commandsInfo.dstAddressesArray.size = inOutAddressesBuffer->getDescription().byteSize - opDesc.inOutAddressesOffsetInBytes;
     }
 
     if(outSizesBuffer){
-        commandsInfo.dstSizesArray.deviceAddress = outSizesBuffer->deviceAddress + opDesc.outSizesOffsetInBytes;
+        commandsInfo.dstSizesArray.deviceAddress = outSizesBuffer->m_deviceAddress + opDesc.outSizesOffsetInBytes;
         commandsInfo.dstSizesArray.stride = outSizesBuffer->getDescription().structStride;
         commandsInfo.dstSizesArray.size = outSizesBuffer->getDescription().byteSize - opDesc.outSizesOffsetInBytes;
     }
 
     if(indirectArgsBuffer){
-        commandsInfo.srcInfosArray.deviceAddress = indirectArgsBuffer->deviceAddress + opDesc.inIndirectArgsOffsetInBytes;
+        commandsInfo.srcInfosArray.deviceAddress = indirectArgsBuffer->m_deviceAddress + opDesc.inIndirectArgsOffsetInBytes;
         commandsInfo.srcInfosArray.stride = indirectArgsBuffer->getDescription().structStride;
         commandsInfo.srcInfosArray.size = indirectArgsBuffer->getDescription().byteSize - opDesc.inIndirectArgsOffsetInBytes;
     }
 
-    commandsInfo.srcInfosCount = indirectArgCountBuffer ? indirectArgCountBuffer->deviceAddress + opDesc.inIndirectArgCountOffsetInBytes : 0;
+    commandsInfo.srcInfosCount = indirectArgCountBuffer ? indirectArgCountBuffer->m_deviceAddress + opDesc.inIndirectArgCountOffsetInBytes : 0;
     commandsInfo.addressResolutionFlags = static_cast<VkClusterAccelerationStructureAddressResolutionFlagsNV>(0);
 
-    vkCmdBuildClusterAccelerationStructureIndirectNV(currentCmdBuf->cmdBuf, &commandsInfo);
+    vkCmdBuildClusterAccelerationStructureIndirectNV(m_currentCmdBuf->m_cmdBuf, &commandsInfo);
 
     if(scratchBufferHandle)
-        currentCmdBuf->referencedStagingBuffers.push_back(Move(scratchBufferHandle));
+        m_currentCmdBuf->m_referencedStagingBuffers.push_back(Move(scratchBufferHandle));
 }
 
 void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDesc const* convertDescs, usize numDescs){
@@ -346,16 +346,16 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
         if(!convertDesc.src.buffer || !convertDesc.dst.buffer)
             continue;
 
-        if(enableAutomaticBarriers){
+        if(m_enableAutomaticBarriers){
             setBufferState(convertDesc.src.buffer, ResourceStates::ShaderResource);
             setBufferState(convertDesc.dst.buffer, ResourceStates::UnorderedAccess);
         }
 
         VkConvertCooperativeVectorMatrixInfoNV vkDesc = { VK_STRUCTURE_TYPE_CONVERT_COOPERATIVE_VECTOR_MATRIX_INFO_NV };
         vkDesc.srcSize = convertDesc.src.size;
-        vkDesc.srcData.deviceAddress = checked_cast<Buffer*>(convertDesc.src.buffer)->deviceAddress + convertDesc.src.offset;
+        vkDesc.srcData.deviceAddress = checked_cast<Buffer*>(convertDesc.src.buffer)->m_deviceAddress + convertDesc.src.offset;
         vkDesc.pDstSize = &dstSizes.emplace_back(convertDesc.dst.size);
-        vkDesc.dstData.deviceAddress = checked_cast<Buffer*>(convertDesc.dst.buffer)->deviceAddress + convertDesc.dst.offset;
+        vkDesc.dstData.deviceAddress = checked_cast<Buffer*>(convertDesc.dst.buffer)->m_deviceAddress + convertDesc.dst.offset;
         vkDesc.srcComponentType = __hidden_vulkan::ConvertCoopVecDataType(convertDesc.src.type);
         vkDesc.dstComponentType = __hidden_vulkan::ConvertCoopVecDataType(convertDesc.dst.type);
         vkDesc.numRows = convertDesc.numRows;
@@ -377,7 +377,7 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
     commitBarriers();
 
     if(!vkConvertDescs.empty())
-        vkCmdConvertCooperativeVectorMatrixNV(currentCmdBuf->cmdBuf, static_cast<u32>(vkConvertDescs.size()), vkConvertDescs.data());
+        vkCmdConvertCooperativeVectorMatrixNV(m_currentCmdBuf->m_cmdBuf, static_cast<u32>(vkConvertDescs.size()), vkConvertDescs.data());
 }
 
 
@@ -388,29 +388,29 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
 void CommandList::setEnableUavBarriersForTexture(ITexture* texture, bool enableBarriers){
     if(!texture)
         return;
-    stateTracker->setEnableUavBarriersForTexture(texture, enableBarriers);
+    m_stateTracker->setEnableUavBarriersForTexture(texture, enableBarriers);
 }
 
 void CommandList::setEnableUavBarriersForBuffer(IBuffer* buffer, bool enableBarriers){
     if(!buffer)
         return;
-    stateTracker->setEnableUavBarriersForBuffer(buffer, enableBarriers);
+    m_stateTracker->setEnableUavBarriersForBuffer(buffer, enableBarriers);
 }
 
 void CommandList::beginTrackingTextureState(ITexture* texture, TextureSubresourceSet subresources, ResourceStates::Mask stateBits){
-    stateTracker->beginTrackingTexture(texture, subresources, stateBits);
+    m_stateTracker->beginTrackingTexture(texture, subresources, stateBits);
 }
 
 void CommandList::beginTrackingBufferState(IBuffer* buffer, ResourceStates::Mask stateBits){
-    stateTracker->beginTrackingBuffer(buffer, stateBits);
+    m_stateTracker->beginTrackingBuffer(buffer, stateBits);
 }
 
 ResourceStates::Mask CommandList::getTextureSubresourceState(ITexture* texture, ArraySlice arraySlice, MipLevel mipLevel){
-    return stateTracker->getTextureState(texture, arraySlice, mipLevel);
+    return m_stateTracker->getTextureState(texture, arraySlice, mipLevel);
 }
 
 ResourceStates::Mask CommandList::getBufferState(IBuffer* buffer){
-    return stateTracker->getBufferState(buffer);
+    return m_stateTracker->getBufferState(buffer);
 }
 
 
@@ -423,7 +423,7 @@ IDevice* CommandList::getDevice(){
 }
 
 const CommandListParameters& CommandList::getDescription(){
-    return desc;
+    return m_desc;
 }
 
 
@@ -441,31 +441,31 @@ void Device::getTextureTiling(ITexture* _texture, u32* numTiles, PackedMipDesc* 
     Alloc::ScratchArena<> scratchArena;
 
     uint32_t sparseReqCount = 0;
-    vkGetImageSparseMemoryRequirements(m_context.device, texture->image, &sparseReqCount, nullptr);
+    vkGetImageSparseMemoryRequirements(m_context.device, texture->m_image, &sparseReqCount, nullptr);
 
     Vector<VkSparseImageMemoryRequirements, Alloc::ScratchAllocator<VkSparseImageMemoryRequirements>> sparseReqs(sparseReqCount, Alloc::ScratchAllocator<VkSparseImageMemoryRequirements>(scratchArena));
     if(sparseReqCount > 0)
-        vkGetImageSparseMemoryRequirements(m_context.device, texture->image, &sparseReqCount, sparseReqs.data());
+        vkGetImageSparseMemoryRequirements(m_context.device, texture->m_image, &sparseReqCount, sparseReqs.data());
 
     if(!sparseReqs.empty()){
         numStandardMips = sparseReqs[0].imageMipTailFirstLod;
 
         if(desc){
             desc->numStandardMips = numStandardMips;
-            desc->numPackedMips = texture->desc.mipLevels - numStandardMips;
-            desc->startTileIndexInOverallResource = texture->tileByteSize > 0 ? static_cast<u32>(sparseReqs[0].imageMipTailOffset / texture->tileByteSize) : 0;
-            desc->numTilesForPackedMips = texture->tileByteSize > 0 ? static_cast<u32>(sparseReqs[0].imageMipTailSize / texture->tileByteSize) : 0;
+            desc->numPackedMips = texture->m_desc.mipLevels - numStandardMips;
+            desc->startTileIndexInOverallResource = texture->m_tileByteSize > 0 ? static_cast<u32>(sparseReqs[0].imageMipTailOffset / texture->m_tileByteSize) : 0;
+            desc->numTilesForPackedMips = texture->m_tileByteSize > 0 ? static_cast<u32>(sparseReqs[0].imageMipTailSize / texture->m_tileByteSize) : 0;
         }
     }
 
     uint32_t formatPropCount = 0;
     vkGetPhysicalDeviceSparseImageFormatProperties(
         m_context.physicalDevice,
-        texture->imageInfo.format,
-        texture->imageInfo.imageType,
-        texture->imageInfo.samples,
-        texture->imageInfo.usage,
-        texture->imageInfo.tiling,
+        texture->m_imageInfo.format,
+        texture->m_imageInfo.imageType,
+        texture->m_imageInfo.samples,
+        texture->m_imageInfo.usage,
+        texture->m_imageInfo.tiling,
         &formatPropCount, nullptr
         );
 
@@ -473,11 +473,11 @@ void Device::getTextureTiling(ITexture* _texture, u32* numTiles, PackedMipDesc* 
     if(formatPropCount > 0){
         vkGetPhysicalDeviceSparseImageFormatProperties(
             m_context.physicalDevice,
-            texture->imageInfo.format,
-            texture->imageInfo.imageType,
-            texture->imageInfo.samples,
-            texture->imageInfo.usage,
-            texture->imageInfo.tiling,
+            texture->m_imageInfo.format,
+            texture->m_imageInfo.imageType,
+            texture->m_imageInfo.samples,
+            texture->m_imageInfo.usage,
+            texture->m_imageInfo.tiling,
             &formatPropCount, formatProps.data());
     }
 
@@ -494,12 +494,12 @@ void Device::getTextureTiling(ITexture* _texture, u32* numTiles, PackedMipDesc* 
     }
 
     if(subresourceTilingsNum && subresourceTilings){
-        *subresourceTilingsNum = Min(*subresourceTilingsNum, texture->desc.mipLevels);
+        *subresourceTilingsNum = Min(*subresourceTilingsNum, texture->m_desc.mipLevels);
         u32 startTileIndex = 0;
 
-        u32 width = texture->desc.width;
-        u32 height = texture->desc.height;
-        u32 depth = texture->desc.depth;
+        u32 width = texture->m_desc.width;
+        u32 height = texture->m_desc.height;
+        u32 depth = texture->m_desc.depth;
 
         for(u32 i = 0; i < *subresourceTilingsNum; ++i){
             if(i < numStandardMips){
@@ -525,8 +525,8 @@ void Device::getTextureTiling(ITexture* _texture, u32* numTiles, PackedMipDesc* 
 
     if(numTiles){
         VkMemoryRequirements memReqs;
-        vkGetImageMemoryRequirements(m_context.device, texture->image, &memReqs);
-        *numTiles = texture->tileByteSize > 0 ? static_cast<u32>(memReqs.size / texture->tileByteSize) : 0;
+        vkGetImageMemoryRequirements(m_context.device, texture->m_image, &memReqs);
+        *numTiles = texture->m_tileByteSize > 0 ? static_cast<u32>(memReqs.size / texture->m_tileByteSize) : 0;
     }
 }
 

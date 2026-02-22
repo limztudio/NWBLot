@@ -34,7 +34,7 @@ bool UploadManager::suballocateBuffer(u64 size, Buffer** pBuffer, u64* pOffset, 
         *pBuffer = static_cast<Buffer*>(m_currentChunk->buffer.get());
         *pOffset = m_currentChunk->allocated;
         if(pCpuVA)
-            *pCpuVA = static_cast<u8*>(static_cast<Buffer*>(m_currentChunk->buffer.get())->mappedMemory) + m_currentChunk->allocated;
+            *pCpuVA = static_cast<u8*>(static_cast<Buffer*>(m_currentChunk->buffer.get())->m_mappedMemory) + m_currentChunk->allocated;
 
         m_currentChunk->allocated += size;
         return true;
@@ -50,7 +50,7 @@ bool UploadManager::suballocateBuffer(u64 size, Buffer** pBuffer, u64* pOffset, 
             *pBuffer = static_cast<Buffer*>(m_currentChunk->buffer.get());
             *pOffset = 0;
             if(pCpuVA)
-                *pCpuVA = static_cast<Buffer*>(m_currentChunk->buffer.get())->mappedMemory;
+                *pCpuVA = static_cast<Buffer*>(m_currentChunk->buffer.get())->m_mappedMemory;
 
             m_currentChunk->allocated = size;
             return true;
@@ -75,7 +75,7 @@ bool UploadManager::suballocateBuffer(u64 size, Buffer** pBuffer, u64* pOffset, 
     *pBuffer = static_cast<Buffer*>(m_currentChunk->buffer.get());
     *pOffset = 0;
     if(pCpuVA)
-        *pCpuVA = static_cast<Buffer*>(m_currentChunk->buffer.get())->mappedMemory;
+        *pCpuVA = static_cast<Buffer*>(m_currentChunk->buffer.get())->m_mappedMemory;
 
     m_currentChunk->allocated = size;
     return true;

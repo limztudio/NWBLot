@@ -25,7 +25,7 @@ VkDeviceAddress GetBufferDeviceAddress(IBuffer* _buffer, u64 offset){
         return 0;
 
     auto* buffer = checked_cast<Buffer*>(_buffer);
-    return buffer->deviceAddress + offset;
+    return buffer->m_deviceAddress + offset;
 }
 
 
@@ -42,22 +42,22 @@ AccelStruct::AccelStruct(const VulkanContext& context)
     : m_context(context)
 {}
 AccelStruct::~AccelStruct(){
-    if(compactionQueryPool != VK_NULL_HANDLE){
-        vkDestroyQueryPool(m_context.device, compactionQueryPool, m_context.allocationCallbacks);
-        compactionQueryPool = VK_NULL_HANDLE;
+    if(m_compactionQueryPool != VK_NULL_HANDLE){
+        vkDestroyQueryPool(m_context.device, m_compactionQueryPool, m_context.allocationCallbacks);
+        m_compactionQueryPool = VK_NULL_HANDLE;
     }
 
-    if(accelStruct){
-        vkDestroyAccelerationStructureKHR(m_context.device, accelStruct, m_context.allocationCallbacks);
-        accelStruct = VK_NULL_HANDLE;
+    if(m_accelStruct){
+        vkDestroyAccelerationStructureKHR(m_context.device, m_accelStruct, m_context.allocationCallbacks);
+        m_accelStruct = VK_NULL_HANDLE;
     }
 
-    buffer.reset();
+    m_buffer.reset();
 }
 
 Object AccelStruct::getNativeHandle(ObjectType objectType){
     if(objectType == ObjectTypes::VK_AccelerationStructureKHR)
-        return Object(accelStruct);
+        return Object(m_accelStruct);
     return Object(nullptr);
 }
 
@@ -69,11 +69,11 @@ OpacityMicromap::OpacityMicromap(const VulkanContext& context)
     : m_context(context)
 {}
 OpacityMicromap::~OpacityMicromap(){
-    if(micromap != VK_NULL_HANDLE){
-        vkDestroyMicromapEXT(m_context.device, micromap, m_context.allocationCallbacks);
-        micromap = VK_NULL_HANDLE;
+    if(m_micromap != VK_NULL_HANDLE){
+        vkDestroyMicromapEXT(m_context.device, m_micromap, m_context.allocationCallbacks);
+        m_micromap = VK_NULL_HANDLE;
     }
-    dataBuffer.reset();
+    m_dataBuffer.reset();
 }
 
 
@@ -82,18 +82,18 @@ OpacityMicromap::~OpacityMicromap(){
 
 RayTracingPipeline::RayTracingPipeline(const VulkanContext& context)
     : m_context(context)
-    , shaderGroupHandles(Alloc::CustomAllocator<u8>(*context.objectArena))
+    , m_shaderGroupHandles(Alloc::CustomAllocator<u8>(*context.objectArena))
 {}
 RayTracingPipeline::~RayTracingPipeline(){
-    if(pipeline){
-        vkDestroyPipeline(m_context.device, pipeline, m_context.allocationCallbacks);
-        pipeline = VK_NULL_HANDLE;
+    if(m_pipeline){
+        vkDestroyPipeline(m_context.device, m_pipeline, m_context.allocationCallbacks);
+        m_pipeline = VK_NULL_HANDLE;
     }
 }
 
 Object RayTracingPipeline::getNativeHandle(ObjectType objectType){
     if(objectType == ObjectTypes::VK_Pipeline)
-        return Object(pipeline);
+        return Object(m_pipeline);
     return Object(nullptr);
 }
 
@@ -108,7 +108,7 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
         return nullptr;
 
     auto* as = NewArenaObject<AccelStruct>(*m_context.objectArena, m_context);
-    as->desc = desc;
+    as->m_desc = desc;
 
     VkAccelerationStructureTypeKHR asType = desc.isTopLevel ?  VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR :  VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
 
@@ -119,28 +119,28 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
     bufferDesc.isAccelStructStorage = true;
     bufferDesc.debugName = "AccelStructBuffer";
 
-    as->buffer = createBuffer(bufferDesc);
+    as->m_buffer = createBuffer(bufferDesc);
 
-    if(!as->buffer){
+    if(!as->m_buffer){
         DestroyArenaObject(*m_context.objectArena, as);
         return nullptr;
     }
 
     VkAccelerationStructureCreateInfoKHR createInfo = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR };
-    createInfo.buffer = checked_cast<Buffer*>(as->buffer.get())->buffer;
+    createInfo.buffer = checked_cast<Buffer*>(as->m_buffer.get())->m_buffer;
     createInfo.offset = 0;
     createInfo.size = bufferDesc.byteSize;
     createInfo.type = asType;
 
-    res = vkCreateAccelerationStructureKHR(m_context.device, &createInfo, m_context.allocationCallbacks, &as->accelStruct);
+    res = vkCreateAccelerationStructureKHR(m_context.device, &createInfo, m_context.allocationCallbacks, &as->m_accelStruct);
     if(res != VK_SUCCESS){
         DestroyArenaObject(*m_context.objectArena, as);
         return nullptr;
     }
 
     VkAccelerationStructureDeviceAddressInfoKHR addressInfo = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR };
-    addressInfo.accelerationStructure = as->accelStruct;
-    as->deviceAddress = vkGetAccelerationStructureDeviceAddressKHR(m_context.device, &addressInfo);
+    addressInfo.accelerationStructure = as->m_accelStruct;
+    as->m_deviceAddress = vkGetAccelerationStructureDeviceAddressKHR(m_context.device, &addressInfo);
 
     return RayTracingAccelStructHandle(as, RayTracingAccelStructHandle::deleter_type(m_context.objectArena), AdoptRef);
 }
@@ -168,7 +168,7 @@ RayTracingOpacityMicromapHandle Device::createOpacityMicromap(const RayTracingOp
     vkGetMicromapBuildSizesEXT(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &buildSize);
 
     auto* om = NewArenaObject<OpacityMicromap>(*m_context.objectArena, m_context);
-    om->desc = desc;
+    om->m_desc = desc;
 
     BufferDesc bufferDesc;
     bufferDesc.canHaveUAVs = true;
@@ -177,22 +177,22 @@ RayTracingOpacityMicromapHandle Device::createOpacityMicromap(const RayTracingOp
     bufferDesc.keepInitialState = true;
     bufferDesc.isAccelStructStorage = true;
     bufferDesc.debugName = desc.debugName;
-    om->dataBuffer = createBuffer(bufferDesc);
+    om->m_dataBuffer = createBuffer(bufferDesc);
 
-    if(!om->dataBuffer){
+    if(!om->m_dataBuffer){
         DestroyArenaObject(*m_context.objectArena, om);
         return nullptr;
     }
 
-    auto* buffer = checked_cast<Buffer*>(om->dataBuffer.get());
+    auto* buffer = checked_cast<Buffer*>(om->m_dataBuffer.get());
 
     VkMicromapCreateInfoEXT createInfo = { VK_STRUCTURE_TYPE_MICROMAP_CREATE_INFO_EXT };
     createInfo.type = VK_MICROMAP_TYPE_OPACITY_MICROMAP_EXT;
-    createInfo.buffer = buffer->buffer;
+    createInfo.buffer = buffer->m_buffer;
     createInfo.size = buildSize.micromapSize;
-    createInfo.deviceAddress = buffer->deviceAddress;
+    createInfo.deviceAddress = buffer->m_deviceAddress;
 
-    res = vkCreateMicromapEXT(m_context.device, &createInfo, m_context.allocationCallbacks, &om->micromap);
+    res = vkCreateMicromapEXT(m_context.device, &createInfo, m_context.allocationCallbacks, &om->m_micromap);
     if(res != VK_SUCCESS){
         DestroyArenaObject(*m_context.objectArena, om);
         return nullptr;
@@ -206,8 +206,8 @@ MemoryRequirements Device::getAccelStructMemoryRequirements(IRayTracingAccelStru
 
     MemoryRequirements requirements = {};
 
-    if(as->buffer){
-        requirements.size = as->buffer->getDescription().byteSize;
+    if(as->m_buffer){
+        requirements.size = as->m_buffer->getDescription().byteSize;
         requirements.alignment = 256; // AS alignment requirement
     }
 
@@ -329,8 +329,8 @@ bool Device::bindAccelStructMemory(IRayTracingAccelStruct* _as, IHeap* heap, u64
 
     auto* as = checked_cast<AccelStruct*>(_as);
 
-    if(as->buffer)
-        return bindBufferMemory(as->buffer.get(), heap, offset);
+    if(as->m_buffer)
+        return bindBufferMemory(as->m_buffer.get(), heap, offset);
 
     return false;
 }
@@ -342,7 +342,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
         return nullptr;
 
     auto* pso = NewArenaObject<RayTracingPipeline>(*m_context.objectArena, m_context);
-    pso->desc = desc;
+    pso->m_desc = desc;
     pso->m_device = this;
 
     Alloc::ScratchArena<> scratchArena(4096);
@@ -362,10 +362,10 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
         auto* s = checked_cast<Shader*>(shaderDesc.shader.get());
 
         VkPipelineShaderStageCreateInfo stageInfo = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
-        stageInfo.module = s->shaderModule;
-        stageInfo.pName = s->desc.entryName.c_str();
+        stageInfo.module = s->m_shaderModule;
+        stageInfo.pName = s->m_desc.entryName.c_str();
 
-        switch(s->desc.shaderType){
+        switch(s->m_desc.shaderType){
         case ShaderType::RayGeneration:
             stageInfo.stage = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
             break;
@@ -403,8 +403,8 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
             auto* s = checked_cast<Shader*>(hitGroup.closestHitShader.get());
             VkPipelineShaderStageCreateInfo stageInfo = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
             stageInfo.stage = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
-            stageInfo.module = s->shaderModule;
-            stageInfo.pName = s->desc.entryName.c_str();
+            stageInfo.module = s->m_shaderModule;
+            stageInfo.pName = s->m_desc.entryName.c_str();
             group.closestHitShader = static_cast<u32>(stages.size());
             stages.push_back(stageInfo);
         }
@@ -412,8 +412,8 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
             auto* s = checked_cast<Shader*>(hitGroup.anyHitShader.get());
             VkPipelineShaderStageCreateInfo stageInfo = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
             stageInfo.stage = VK_SHADER_STAGE_ANY_HIT_BIT_KHR;
-            stageInfo.module = s->shaderModule;
-            stageInfo.pName = s->desc.entryName.c_str();
+            stageInfo.module = s->m_shaderModule;
+            stageInfo.pName = s->m_desc.entryName.c_str();
             group.anyHitShader = static_cast<u32>(stages.size());
             stages.push_back(stageInfo);
         }
@@ -421,8 +421,8 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
             auto* s = checked_cast<Shader*>(hitGroup.intersectionShader.get());
             VkPipelineShaderStageCreateInfo stageInfo = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
             stageInfo.stage = VK_SHADER_STAGE_INTERSECTION_BIT_KHR;
-            stageInfo.module = s->shaderModule;
-            stageInfo.pName = s->desc.entryName.c_str();
+            stageInfo.module = s->m_shaderModule;
+            stageInfo.pName = s->m_desc.entryName.c_str();
             group.intersectionShader = static_cast<u32>(stages.size());
             stages.push_back(stageInfo);
         }
@@ -432,8 +432,8 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
     VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
     if(!desc.globalBindingLayouts.empty() && desc.globalBindingLayouts[0]){
         auto* layout = checked_cast<BindingLayout*>(desc.globalBindingLayouts[0].get());
-        pipelineLayout = layout->pipelineLayout;
-        pso->pipelineLayout = pipelineLayout;
+        pipelineLayout = layout->m_pipelineLayout;
+        pso->m_pipelineLayout = pipelineLayout;
     }
 
     VkRayTracingPipelineCreateInfoKHR createInfo = { VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR };
@@ -444,7 +444,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
     createInfo.maxPipelineRayRecursionDepth = desc.maxRecursionDepth;
     createInfo.layout = pipelineLayout;
 
-    res = vkCreateRayTracingPipelinesKHR(m_context.device, VK_NULL_HANDLE, m_context.pipelineCache, 1, &createInfo, m_context.allocationCallbacks, &pso->pipeline);
+    res = vkCreateRayTracingPipelinesKHR(m_context.device, VK_NULL_HANDLE, m_context.pipelineCache, 1, &createInfo, m_context.allocationCallbacks, &pso->m_pipeline);
     if(res != VK_SUCCESS){
         DestroyArenaObject(*m_context.objectArena, pso);
         return nullptr;
@@ -456,8 +456,8 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
     u32 handleSizeAligned = (handleSize + handleAlignment - 1) & ~(handleAlignment - 1);
     u32 groupCount = static_cast<u32>(groups.size());
 
-    pso->shaderGroupHandles.resize(groupCount * handleSizeAligned);
-    vkGetRayTracingShaderGroupHandlesKHR(m_context.device, pso->pipeline, 0, groupCount, pso->shaderGroupHandles.size(), pso->shaderGroupHandles.data());
+    pso->m_shaderGroupHandles.resize(groupCount * handleSizeAligned);
+    vkGetRayTracingShaderGroupHandlesKHR(m_context.device, pso->m_pipeline, 0, groupCount, pso->m_shaderGroupHandles.size(), pso->m_shaderGroupHandles.data());
 
     return RayTracingPipelineHandle(pso, RayTracingPipelineHandle::deleter_type(m_context.objectArena), AdoptRef);
 }
@@ -474,21 +474,21 @@ ShaderTable::~ShaderTable() = default;
 
 RayTracingShaderTableHandle RayTracingPipeline::createShaderTable(){
     auto* sbt = NewArenaObject<ShaderTable>(*m_context.objectArena, m_context, m_device);
-    sbt->pipeline = this;
+    sbt->m_pipeline = this;
     return RayTracingShaderTableHandle(sbt, RayTracingShaderTableHandle::deleter_type(m_context.objectArena), AdoptRef);
 }
 
 u32 ShaderTable::findGroupIndex(const Name& exportName)const{
-    if(!pipeline)
+    if(!m_pipeline)
         return 0;
 
     u32 groupIndex = 0;
-    for(const auto& shaderDesc : pipeline->desc.shaders){
+    for(const auto& shaderDesc : m_pipeline->m_desc.shaders){
         if(shaderDesc.shader && shaderDesc.shader->getDescription().entryName == exportName)
             return groupIndex;
         groupIndex++;
     }
-    for(const auto& hitGroup : pipeline->desc.hitGroups){
+    for(const auto& hitGroup : m_pipeline->m_desc.hitGroups){
         if(hitGroup.exportName == exportName)
             return groupIndex;
         groupIndex++;
@@ -510,7 +510,7 @@ void ShaderTable::allocateSBTBuffer(BufferHandle& outBuffer, u64 sbtSize){
 }
 
 void ShaderTable::setRayGenerationShader(const Name& exportName, IBindingSet* /*bindings*/){
-    if(!pipeline || !m_device)
+    if(!m_pipeline || !m_device)
         return;
 
     u32 handleSize = m_context.rayTracingPipelineProperties.shaderGroupHandleSize;
@@ -519,143 +519,143 @@ void ShaderTable::setRayGenerationShader(const Name& exportName, IBindingSet* /*
     u32 handleSizeAligned = (handleSize + handleAlignment - 1) & ~(handleAlignment - 1);
     u64 sbtSize = (handleSizeAligned + baseAlignment - 1) & ~(static_cast<u64>(baseAlignment) - 1);
 
-    allocateSBTBuffer(raygenBuffer, sbtSize);
-    if(!raygenBuffer)
+    allocateSBTBuffer(m_raygenBuffer, sbtSize);
+    if(!m_raygenBuffer)
         return;
 
-    raygenOffset = 0;
+    m_raygenOffset = 0;
 
     u32 groupIndex = findGroupIndex(exportName);
 
-    void* mapped = m_device->mapBuffer(raygenBuffer.get(), CpuAccessMode::Write);
+    void* mapped = m_device->mapBuffer(m_raygenBuffer.get(), CpuAccessMode::Write);
     if(mapped){
-        NWB_MEMCPY(mapped, handleSizeAligned, pipeline->shaderGroupHandles.data() + groupIndex * handleSizeAligned, handleSize);
-        m_device->unmapBuffer(raygenBuffer.get());
+        NWB_MEMCPY(mapped, handleSizeAligned, m_pipeline->m_shaderGroupHandles.data() + groupIndex * handleSizeAligned, handleSize);
+        m_device->unmapBuffer(m_raygenBuffer.get());
     }
 }
 
 u32 ShaderTable::addMissShader(const Name& exportName, IBindingSet* /*bindings*/){
-    if(!pipeline || !m_device)
-        return missCount++;
+    if(!m_pipeline || !m_device)
+        return m_missCount++;
 
     u32 handleSize = m_context.rayTracingPipelineProperties.shaderGroupHandleSize;
     u32 handleAlignment = m_context.rayTracingPipelineProperties.shaderGroupHandleAlignment;
     u32 baseAlignment = m_context.rayTracingPipelineProperties.shaderGroupBaseAlignment;
     u32 handleSizeAligned = (handleSize + handleAlignment - 1) & ~(handleAlignment - 1);
 
-    u32 newCount = missCount + 1;
+    u32 newCount = m_missCount + 1;
     u64 sbtSize = (static_cast<u64>(newCount) * handleSizeAligned + baseAlignment - 1) & ~(static_cast<u64>(baseAlignment) - 1);
 
     BufferHandle newBuffer;
     allocateSBTBuffer(newBuffer, sbtSize);
     if(!newBuffer)
-        return missCount++;
+        return m_missCount++;
 
     void* mapped = m_device->mapBuffer(newBuffer.get(), CpuAccessMode::Write);
     if(mapped){
-        if(missBuffer && missCount > 0){
-            void* oldMapped = m_device->mapBuffer(missBuffer.get(), CpuAccessMode::Read);
+        if(m_missBuffer && m_missCount > 0){
+            void* oldMapped = m_device->mapBuffer(m_missBuffer.get(), CpuAccessMode::Read);
             if(oldMapped){
-                NWB_MEMCPY(mapped, missCount * handleSizeAligned, oldMapped, missCount * handleSizeAligned);
-                m_device->unmapBuffer(missBuffer.get());
+                NWB_MEMCPY(mapped, m_missCount * handleSizeAligned, oldMapped, m_missCount * handleSizeAligned);
+                m_device->unmapBuffer(m_missBuffer.get());
             }
         }
 
         u32 groupIndex = findGroupIndex(exportName);
-        auto* dst = static_cast<u8*>(mapped) + missCount * handleSizeAligned;
-        NWB_MEMCPY(dst, handleSizeAligned, pipeline->shaderGroupHandles.data() + groupIndex * handleSizeAligned, handleSize);
+        auto* dst = static_cast<u8*>(mapped) + m_missCount * handleSizeAligned;
+        NWB_MEMCPY(dst, handleSizeAligned, m_pipeline->m_shaderGroupHandles.data() + groupIndex * handleSizeAligned, handleSize);
         m_device->unmapBuffer(newBuffer.get());
     }
 
-    missBuffer = newBuffer;
-    missOffset = 0;
-    return missCount++;
+    m_missBuffer = newBuffer;
+    m_missOffset = 0;
+    return m_missCount++;
 }
 
 u32 ShaderTable::addHitGroup(const Name& exportName, IBindingSet* /*bindings*/){
-    if(!pipeline || !m_device)
-        return hitCount++;
+    if(!m_pipeline || !m_device)
+        return m_hitCount++;
 
     u32 handleSize = m_context.rayTracingPipelineProperties.shaderGroupHandleSize;
     u32 handleAlignment = m_context.rayTracingPipelineProperties.shaderGroupHandleAlignment;
     u32 baseAlignment = m_context.rayTracingPipelineProperties.shaderGroupBaseAlignment;
     u32 handleSizeAligned = (handleSize + handleAlignment - 1) & ~(handleAlignment - 1);
 
-    u32 newCount = hitCount + 1;
+    u32 newCount = m_hitCount + 1;
     u64 sbtSize = (static_cast<u64>(newCount) * handleSizeAligned + baseAlignment - 1) & ~(static_cast<u64>(baseAlignment) - 1);
 
     BufferHandle newBuffer;
     allocateSBTBuffer(newBuffer, sbtSize);
     if(!newBuffer)
-        return hitCount++;
+        return m_hitCount++;
 
     void* mapped = m_device->mapBuffer(newBuffer.get(), CpuAccessMode::Write);
     if(mapped){
-        if(hitBuffer && hitCount > 0){
-            void* oldMapped = m_device->mapBuffer(hitBuffer.get(), CpuAccessMode::Read);
+        if(m_hitBuffer && m_hitCount > 0){
+            void* oldMapped = m_device->mapBuffer(m_hitBuffer.get(), CpuAccessMode::Read);
             if(oldMapped){
-                NWB_MEMCPY(mapped, hitCount * handleSizeAligned, oldMapped, hitCount * handleSizeAligned);
-                m_device->unmapBuffer(hitBuffer.get());
+                NWB_MEMCPY(mapped, m_hitCount * handleSizeAligned, oldMapped, m_hitCount * handleSizeAligned);
+                m_device->unmapBuffer(m_hitBuffer.get());
             }
         }
 
         u32 groupIndex = findGroupIndex(exportName);
-        auto* dst = static_cast<u8*>(mapped) + hitCount * handleSizeAligned;
-        NWB_MEMCPY(dst, handleSizeAligned, pipeline->shaderGroupHandles.data() + groupIndex * handleSizeAligned, handleSize);
+        auto* dst = static_cast<u8*>(mapped) + m_hitCount * handleSizeAligned;
+        NWB_MEMCPY(dst, handleSizeAligned, m_pipeline->m_shaderGroupHandles.data() + groupIndex * handleSizeAligned, handleSize);
         m_device->unmapBuffer(newBuffer.get());
     }
 
-    hitBuffer = newBuffer;
-    hitOffset = 0;
-    return hitCount++;
+    m_hitBuffer = newBuffer;
+    m_hitOffset = 0;
+    return m_hitCount++;
 }
 
 u32 ShaderTable::addCallableShader(const Name& exportName, IBindingSet* /*bindings*/){
-    if(!pipeline || !m_device)
-        return callableCount++;
+    if(!m_pipeline || !m_device)
+        return m_callableCount++;
 
     u32 handleSize = m_context.rayTracingPipelineProperties.shaderGroupHandleSize;
     u32 handleAlignment = m_context.rayTracingPipelineProperties.shaderGroupHandleAlignment;
     u32 baseAlignment = m_context.rayTracingPipelineProperties.shaderGroupBaseAlignment;
     u32 handleSizeAligned = (handleSize + handleAlignment - 1) & ~(handleAlignment - 1);
 
-    u32 newCount = callableCount + 1;
+    u32 newCount = m_callableCount + 1;
     u64 sbtSize = (static_cast<u64>(newCount) * handleSizeAligned + baseAlignment - 1) & ~(static_cast<u64>(baseAlignment) - 1);
 
     BufferHandle newBuffer;
     allocateSBTBuffer(newBuffer, sbtSize);
     if(!newBuffer)
-        return callableCount++;
+        return m_callableCount++;
 
     void* mapped = m_device->mapBuffer(newBuffer.get(), CpuAccessMode::Write);
     if(mapped){
-        if(callableBuffer && callableCount > 0){
-            void* oldMapped = m_device->mapBuffer(callableBuffer.get(), CpuAccessMode::Read);
+        if(m_callableBuffer && m_callableCount > 0){
+            void* oldMapped = m_device->mapBuffer(m_callableBuffer.get(), CpuAccessMode::Read);
             if(oldMapped){
-                NWB_MEMCPY(mapped, callableCount * handleSizeAligned, oldMapped, callableCount * handleSizeAligned);
-                m_device->unmapBuffer(callableBuffer.get());
+                NWB_MEMCPY(mapped, m_callableCount * handleSizeAligned, oldMapped, m_callableCount * handleSizeAligned);
+                m_device->unmapBuffer(m_callableBuffer.get());
             }
         }
 
         u32 groupIndex = findGroupIndex(exportName);
-        auto* dst = static_cast<u8*>(mapped) + callableCount * handleSizeAligned;
-        NWB_MEMCPY(dst, handleSizeAligned, pipeline->shaderGroupHandles.data() + groupIndex * handleSizeAligned, handleSize);
+        auto* dst = static_cast<u8*>(mapped) + m_callableCount * handleSizeAligned;
+        NWB_MEMCPY(dst, handleSizeAligned, m_pipeline->m_shaderGroupHandles.data() + groupIndex * handleSizeAligned, handleSize);
         m_device->unmapBuffer(newBuffer.get());
     }
 
-    callableBuffer = newBuffer;
-    callableOffset = 0;
-    return callableCount++;
+    m_callableBuffer = newBuffer;
+    m_callableOffset = 0;
+    return m_callableCount++;
 }
 
-void ShaderTable::clearMissShaders(){ missCount = 0; missBuffer = nullptr; }
-void ShaderTable::clearHitShaders(){ hitCount = 0; hitBuffer = nullptr; }
-void ShaderTable::clearCallableShaders(){ callableCount = 0; callableBuffer = nullptr; }
+void ShaderTable::clearMissShaders(){ m_missCount = 0; m_missBuffer = nullptr; }
+void ShaderTable::clearHitShaders(){ m_hitCount = 0; m_hitBuffer = nullptr; }
+void ShaderTable::clearCallableShaders(){ m_callableCount = 0; m_callableBuffer = nullptr; }
 
 Object ShaderTable::getNativeHandle(ObjectType objectType){
-    if(objectType == ObjectTypes::VK_Buffer && raygenBuffer){
-        auto* buf = checked_cast<Buffer*>(raygenBuffer.get());
-        return Object(buf->buffer);
+    if(objectType == ObjectTypes::VK_Buffer && m_raygenBuffer){
+        auto* buf = checked_cast<Buffer*>(m_raygenBuffer.get());
+        return Object(buf->m_buffer);
     }
     return Object{nullptr};
 }
@@ -665,28 +665,28 @@ Object ShaderTable::getNativeHandle(ObjectType objectType){
 
 
 void CommandList::setRayTracingState(const RayTracingState& state){
-    currentRayTracingState = state;
+    m_currentRayTracingState = state;
 
     if(!state.shaderTable)
         return;
 
     auto* sbt = checked_cast<ShaderTable*>(state.shaderTable);
-    RayTracingPipeline* pipeline = sbt->pipeline;
+    RayTracingPipeline* pipeline = sbt->m_pipeline;
 
     if(!pipeline)
         return;
 
-    vkCmdBindPipeline(currentCmdBuf->cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, pipeline->pipeline);
+    vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, pipeline->m_pipeline);
 
-    if(state.bindings.size() > 0 && pipeline->pipelineLayout != VK_NULL_HANDLE){
+    if(state.bindings.size() > 0 && pipeline->m_pipelineLayout != VK_NULL_HANDLE){
         for(usize i = 0; i < state.bindings.size(); ++i){
             if(state.bindings[i]){
                 auto* bindingSet = checked_cast<BindingSet*>(state.bindings[i]);
-                if(!bindingSet->descriptorSets.empty())
-                    vkCmdBindDescriptorSets(currentCmdBuf->cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
-                        pipeline->pipelineLayout, static_cast<u32>(i),
-                        static_cast<u32>(bindingSet->descriptorSets.size()),
-                        bindingSet->descriptorSets.data(), 0, nullptr);
+                if(!bindingSet->m_descriptorSets.empty())
+                    vkCmdBindDescriptorSets(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
+                        pipeline->m_pipelineLayout, static_cast<u32>(i),
+                        static_cast<u32>(bindingSet->m_descriptorSets.size()),
+                        bindingSet->m_descriptorSets.data(), 0, nullptr);
             }
         }
     }
@@ -782,7 +782,7 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* _as, const
         buildInfo.flags |= VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR;
 
     buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
-    buildInfo.dstAccelerationStructure = as->accelStruct;
+    buildInfo.dstAccelerationStructure = as->m_accelStruct;
     buildInfo.geometryCount = static_cast<u32>(geometries.size());
     buildInfo.pGeometries = geometries.data();
 
@@ -799,15 +799,15 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* _as, const
         buildInfo.scratchData.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(scratchBuffer.get());
 
         const VkAccelerationStructureBuildRangeInfoKHR* pRangeInfos = rangeInfos.data();
-        vkCmdBuildAccelerationStructuresKHR(currentCmdBuf->cmdBuf, 1, &buildInfo, &pRangeInfos);
+        vkCmdBuildAccelerationStructuresKHR(m_currentCmdBuf->m_cmdBuf, 1, &buildInfo, &pRangeInfos);
 
-        currentCmdBuf->referencedStagingBuffers.push_back(scratchBuffer);
+        m_currentCmdBuf->m_referencedStagingBuffers.push_back(scratchBuffer);
     }
 
     if(buildFlags & RayTracingAccelStructBuildFlags::AllowCompaction)
         m_pendingCompactions.push_back(as);
 
-    currentCmdBuf->referencedResources.push_back(_as);
+    m_currentCmdBuf->m_referencedResources.push_back(_as);
 }
 
 void CommandList::compactBottomLevelAccelStructs(){
@@ -820,14 +820,14 @@ void CommandList::compactBottomLevelAccelStructs(){
         return;
 
     for(auto& as : m_pendingCompactions){
-        if(as->compactionQueryPool == VK_NULL_HANDLE || as->compacted)
+        if(as->m_compactionQueryPool == VK_NULL_HANDLE || as->m_compacted)
             continue;
 
         u64 compactedSize = 0;
         res = vkGetQueryPoolResults(
             m_context.device,
-            as->compactionQueryPool,
-            as->compactionQueryIndex,
+            as->m_compactionQueryPool,
+            as->m_compactionQueryIndex,
             1,
             sizeof(u64),
             &compactedSize,
@@ -841,16 +841,16 @@ void CommandList::compactBottomLevelAccelStructs(){
         BufferDesc compactBufferDesc;
         compactBufferDesc.byteSize = compactedSize;
         compactBufferDesc.isAccelStructStorage = true;
-        compactBufferDesc.debugName = as->desc.debugName;
+        compactBufferDesc.debugName = as->m_desc.debugName;
 
         BufferHandle compactBuffer = m_device.createBuffer(compactBufferDesc);
         if(!compactBuffer)
             continue;
 
         VkAccelerationStructureCreateInfoKHR createInfo = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR };
-        createInfo.buffer = checked_cast<Buffer*>(compactBuffer.get())->buffer;
+        createInfo.buffer = checked_cast<Buffer*>(compactBuffer.get())->m_buffer;
         createInfo.size = compactedSize;
-        createInfo.type = as->desc.isTopLevel
+        createInfo.type = as->m_desc.isTopLevel
             ? VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR
             : VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR
             ;
@@ -861,29 +861,29 @@ void CommandList::compactBottomLevelAccelStructs(){
             continue;
 
         VkCopyAccelerationStructureInfoKHR copyInfo = { VK_STRUCTURE_TYPE_COPY_ACCELERATION_STRUCTURE_INFO_KHR };
-        copyInfo.src  = as->accelStruct; // original (still the copy source)
+        copyInfo.src  = as->m_accelStruct; // original (still the copy source)
         copyInfo.dst  = newAS;
         copyInfo.mode = VK_COPY_ACCELERATION_STRUCTURE_MODE_COMPACT_KHR;
-        vkCmdCopyAccelerationStructureKHR(currentCmdBuf->cmdBuf, &copyInfo);
+        vkCmdCopyAccelerationStructureKHR(m_currentCmdBuf->m_cmdBuf, &copyInfo);
 
-        currentCmdBuf->referencedAccelStructHandles.push_back(as->accelStruct);
-        currentCmdBuf->referencedStagingBuffers.push_back(as->buffer);
+        m_currentCmdBuf->m_referencedAccelStructHandles.push_back(as->m_accelStruct);
+        m_currentCmdBuf->m_referencedStagingBuffers.push_back(as->m_buffer);
 
-        as->accelStruct = newAS;
-        as->buffer = Move(compactBuffer);
+        as->m_accelStruct = newAS;
+        as->m_buffer = Move(compactBuffer);
 
         VkAccelerationStructureDeviceAddressInfoKHR addrInfo = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR };
-        addrInfo.accelerationStructure = as->accelStruct;
-        as->deviceAddress = vkGetAccelerationStructureDeviceAddressKHR(m_context.device, &addrInfo);
+        addrInfo.accelerationStructure = as->m_accelStruct;
+        as->m_deviceAddress = vkGetAccelerationStructureDeviceAddressKHR(m_context.device, &addrInfo);
 
-        vkDestroyQueryPool(m_context.device, as->compactionQueryPool, m_context.allocationCallbacks);
-        as->compactionQueryPool  = VK_NULL_HANDLE;
-        as->compactionQueryIndex = 0;
-        as->compacted = true;
+        vkDestroyQueryPool(m_context.device, as->m_compactionQueryPool, m_context.allocationCallbacks);
+        as->m_compactionQueryPool  = VK_NULL_HANDLE;
+        as->m_compactionQueryIndex = 0;
+        as->m_compacted = true;
     }
 
     for(auto& as : m_pendingCompactions){
-        if(as->compactionQueryPool != VK_NULL_HANDLE || as->compacted)
+        if(as->m_compactionQueryPool != VK_NULL_HANDLE || as->m_compacted)
             continue;
 
         VkQueryPoolCreateInfo queryPoolInfo = { VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO };
@@ -894,25 +894,25 @@ void CommandList::compactBottomLevelAccelStructs(){
         if(vkCreateQueryPool(m_context.device, &queryPoolInfo, m_context.allocationCallbacks, &queryPool) != VK_SUCCESS)
             continue;
 
-        vkCmdResetQueryPool(currentCmdBuf->cmdBuf, queryPool, 0, 1);
+        vkCmdResetQueryPool(m_currentCmdBuf->m_cmdBuf, queryPool, 0, 1);
 
         vkCmdWriteAccelerationStructuresPropertiesKHR(
-            currentCmdBuf->cmdBuf,
+            m_currentCmdBuf->m_cmdBuf,
             1,
-            &as->accelStruct,
+            &as->m_accelStruct,
             VK_QUERY_TYPE_ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR,
             queryPool,
             0
         );
 
-        as->compactionQueryPool  = queryPool;
-        as->compactionQueryIndex = 0;
+        as->m_compactionQueryPool  = queryPool;
+        as->m_compactionQueryIndex = 0;
     }
 
     {
         usize dst = 0;
         for(usize i = 0; i < m_pendingCompactions.size(); ++i)
-            if(!m_pendingCompactions[i]->compacted)
+            if(!m_pendingCompactions[i]->m_compacted)
                 m_pendingCompactions[dst++] = Move(m_pendingCompactions[i]);
         m_pendingCompactions.resize(dst);
     }
@@ -962,7 +962,7 @@ void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* _as, const Ra
                 vkInst.flags |= VK_GEOMETRY_INSTANCE_FORCE_NO_OPAQUE_BIT_KHR;
 
             auto* blas = checked_cast<AccelStruct*>(inst.bottomLevelAS);
-            vkInst.accelerationStructureReference = blas ? blas->deviceAddress : 0;
+            vkInst.accelerationStructureReference = blas ? blas->m_deviceAddress : 0;
         }
 
         m_device.unmapBuffer(instanceBuffer.get());
@@ -986,7 +986,7 @@ void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* _as, const Ra
         buildInfo.flags |= VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR;
 
     buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
-    buildInfo.dstAccelerationStructure = as->accelStruct;
+    buildInfo.dstAccelerationStructure = as->m_accelStruct;
     buildInfo.geometryCount = 1;
     buildInfo.pGeometries = &geometry;
 
@@ -1007,13 +1007,13 @@ void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* _as, const Ra
         rangeInfo.primitiveCount = primitiveCount;
         const VkAccelerationStructureBuildRangeInfoKHR* pRangeInfo = &rangeInfo;
 
-        vkCmdBuildAccelerationStructuresKHR(currentCmdBuf->cmdBuf, 1, &buildInfo, &pRangeInfo);
+        vkCmdBuildAccelerationStructuresKHR(m_currentCmdBuf->m_cmdBuf, 1, &buildInfo, &pRangeInfo);
 
-        currentCmdBuf->referencedStagingBuffers.push_back(Move(scratchBuffer));
-        currentCmdBuf->referencedStagingBuffers.push_back(Move(instanceBuffer));
+        m_currentCmdBuf->m_referencedStagingBuffers.push_back(Move(scratchBuffer));
+        m_currentCmdBuf->m_referencedStagingBuffers.push_back(Move(instanceBuffer));
     }
 
-    currentCmdBuf->referencedResources.push_back(_as);
+    m_currentCmdBuf->m_referencedResources.push_back(_as);
 }
 
 void CommandList::buildOpacityMicromap(IRayTracingOpacityMicromap* _omm, const RayTracingOpacityMicromapDesc& ommDesc){
@@ -1022,22 +1022,22 @@ void CommandList::buildOpacityMicromap(IRayTracingOpacityMicromap* _omm, const R
 
     auto* omm = checked_cast<OpacityMicromap*>(_omm);
 
-    if(enableAutomaticBarriers){
+    if(m_enableAutomaticBarriers){
         if(ommDesc.inputBuffer)
             setBufferState(ommDesc.inputBuffer, ResourceStates::OpacityMicromapBuildInput);
         if(ommDesc.perOmmDescs)
             setBufferState(ommDesc.perOmmDescs, ResourceStates::OpacityMicromapBuildInput);
-        if(omm->dataBuffer)
-            setBufferState(omm->dataBuffer.get(), ResourceStates::OpacityMicromapWrite);
+        if(omm->m_dataBuffer)
+            setBufferState(omm->m_dataBuffer.get(), ResourceStates::OpacityMicromapWrite);
     }
 
     if(ommDesc.trackLiveness){
         if(ommDesc.inputBuffer)
-            currentCmdBuf->referencedResources.push_back(ommDesc.inputBuffer);
+            m_currentCmdBuf->m_referencedResources.push_back(ommDesc.inputBuffer);
         if(ommDesc.perOmmDescs)
-            currentCmdBuf->referencedResources.push_back(ommDesc.perOmmDescs);
-        if(omm->dataBuffer)
-            currentCmdBuf->referencedResources.push_back(omm->dataBuffer.get());
+            m_currentCmdBuf->m_referencedResources.push_back(ommDesc.perOmmDescs);
+        if(omm->m_dataBuffer)
+            m_currentCmdBuf->m_referencedResources.push_back(omm->m_dataBuffer.get());
     }
 
     commitBarriers();
@@ -1052,7 +1052,7 @@ void CommandList::buildOpacityMicromap(IRayTracingOpacityMicromap* _omm, const R
     buildInfo.type = VK_MICROMAP_TYPE_OPACITY_MICROMAP_EXT;
     buildInfo.flags = buildFlags;
     buildInfo.mode = VK_BUILD_MICROMAP_MODE_BUILD_EXT;
-    buildInfo.dstMicromap = omm->micromap;
+    buildInfo.dstMicromap = omm->m_micromap;
     buildInfo.usageCountsCount = static_cast<u32>(ommDesc.counts.size());
     buildInfo.pUsageCounts = reinterpret_cast<const VkMicromapUsageEXT*>(ommDesc.counts.data());
     buildInfo.data.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(ommDesc.inputBuffer, ommDesc.inputBufferOffset);
@@ -1075,12 +1075,12 @@ void CommandList::buildOpacityMicromap(IRayTracingOpacityMicromap* _omm, const R
 
         buildInfo.scratchData.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(scratchBuffer.get());
 
-        vkCmdBuildMicromapsEXT(currentCmdBuf->cmdBuf, 1, &buildInfo);
+        vkCmdBuildMicromapsEXT(m_currentCmdBuf->m_cmdBuf, 1, &buildInfo);
 
-        currentCmdBuf->referencedStagingBuffers.push_back(Move(scratchBuffer));
+        m_currentCmdBuf->m_referencedStagingBuffers.push_back(Move(scratchBuffer));
     }
     else{
-        vkCmdBuildMicromapsEXT(currentCmdBuf->cmdBuf, 1, &buildInfo);
+        vkCmdBuildMicromapsEXT(m_currentCmdBuf->m_cmdBuf, 1, &buildInfo);
     }
 }
 
@@ -1088,7 +1088,7 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
     if(!m_context.extensions.KHR_ray_tracing_pipeline)
         return;
 
-    RayTracingState& state = currentRayTracingState;
+    RayTracingState& state = m_currentRayTracingState;
 
     if(!state.shaderTable)
         return;
@@ -1105,31 +1105,31 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
 
     u32 handleSizeAligned = (handleSize + handleAlignment - 1) & ~(handleAlignment - 1);
 
-    if(sbt->raygenBuffer){
-        raygenRegion.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(sbt->raygenBuffer.get(), sbt->raygenOffset);
+    if(sbt->m_raygenBuffer){
+        raygenRegion.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(sbt->m_raygenBuffer.get(), sbt->m_raygenOffset);
         raygenRegion.stride = handleSizeAligned;
         raygenRegion.size = handleSizeAligned;
     }
 
-    if(sbt->missBuffer){
-        missRegion.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(sbt->missBuffer.get(), sbt->missOffset);
+    if(sbt->m_missBuffer){
+        missRegion.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(sbt->m_missBuffer.get(), sbt->m_missOffset);
         missRegion.stride = handleSizeAligned;
-        missRegion.size = sbt->missCount * handleSizeAligned;
+        missRegion.size = sbt->m_missCount * handleSizeAligned;
     }
 
-    if(sbt->hitBuffer){
-        hitRegion.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(sbt->hitBuffer.get(), sbt->hitOffset);
+    if(sbt->m_hitBuffer){
+        hitRegion.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(sbt->m_hitBuffer.get(), sbt->m_hitOffset);
         hitRegion.stride = handleSizeAligned;
-        hitRegion.size = sbt->hitCount * handleSizeAligned;
+        hitRegion.size = sbt->m_hitCount * handleSizeAligned;
     }
 
-    if(sbt->callableBuffer){
-        callableRegion.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(sbt->callableBuffer.get(), sbt->callableOffset);
+    if(sbt->m_callableBuffer){
+        callableRegion.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(sbt->m_callableBuffer.get(), sbt->m_callableOffset);
         callableRegion.stride = handleSizeAligned;
-        callableRegion.size = sbt->callableCount * handleSizeAligned;
+        callableRegion.size = sbt->m_callableCount * handleSizeAligned;
     }
 
-    vkCmdTraceRaysKHR(currentCmdBuf->cmdBuf, &raygenRegion, &missRegion, &hitRegion, &callableRegion, args.width, args.height, args.depth);
+    vkCmdTraceRaysKHR(m_currentCmdBuf->m_cmdBuf, &raygenRegion, &missRegion, &hitRegion, &callableRegion, args.width, args.height, args.depth);
 }
 
 

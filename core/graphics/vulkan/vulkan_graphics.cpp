@@ -158,14 +158,14 @@ GraphicsPipeline::GraphicsPipeline(const VulkanContext& context)
     : m_context(context)
 {}
 GraphicsPipeline::~GraphicsPipeline(){
-    if(pipeline){
-        vkDestroyPipeline(m_context.device, pipeline, m_context.allocationCallbacks);
-        pipeline = VK_NULL_HANDLE;
+    if(m_pipeline){
+        vkDestroyPipeline(m_context.device, m_pipeline, m_context.allocationCallbacks);
+        m_pipeline = VK_NULL_HANDLE;
     }
 }
 Object GraphicsPipeline::getNativeHandle(ObjectType objectType){
     if(objectType == ObjectTypes::VK_Pipeline)
-        return Object(pipeline);
+        return Object(m_pipeline);
     return Object(nullptr);
 }
 
@@ -175,35 +175,35 @@ Object GraphicsPipeline::getNativeHandle(ObjectType objectType){
 
 FramebufferHandle Device::createFramebuffer(const FramebufferDesc& desc){
     auto* fb = NewArenaObject<Framebuffer>(*m_context.objectArena, m_context);
-    fb->desc = desc;
+    fb->m_desc = desc;
 
     for(u32 i = 0; i < static_cast<u32>(desc.colorAttachments.size()); ++i){
         if(desc.colorAttachments[i].texture){
-            fb->resources.push_back(desc.colorAttachments[i].texture);
+            fb->m_resources.push_back(desc.colorAttachments[i].texture);
             auto* tex = checked_cast<Texture*>(desc.colorAttachments[i].texture);
-            fb->framebufferInfo.colorFormats.push_back(tex->desc.format);
+            fb->m_framebufferInfo.colorFormats.push_back(tex->m_desc.format);
 
-            if(fb->framebufferInfo.width == 0)
-                fb->framebufferInfo.width = tex->desc.width;
-            if(fb->framebufferInfo.height == 0)
-                fb->framebufferInfo.height = tex->desc.height;
+            if(fb->m_framebufferInfo.width == 0)
+                fb->m_framebufferInfo.width = tex->m_desc.width;
+            if(fb->m_framebufferInfo.height == 0)
+                fb->m_framebufferInfo.height = tex->m_desc.height;
         }
     }
 
     if(desc.depthAttachment.texture){
-        fb->resources.push_back(desc.depthAttachment.texture);
+        fb->m_resources.push_back(desc.depthAttachment.texture);
         auto* depthTex = checked_cast<Texture*>(desc.depthAttachment.texture);
-        fb->framebufferInfo.depthFormat = depthTex->desc.format;
+        fb->m_framebufferInfo.depthFormat = depthTex->m_desc.format;
 
-        if(fb->framebufferInfo.width == 0)
-            fb->framebufferInfo.width = depthTex->desc.width;
-        if(fb->framebufferInfo.height == 0)
-            fb->framebufferInfo.height = depthTex->desc.height;
+        if(fb->m_framebufferInfo.width == 0)
+            fb->m_framebufferInfo.width = depthTex->m_desc.width;
+        if(fb->m_framebufferInfo.height == 0)
+            fb->m_framebufferInfo.height = depthTex->m_desc.height;
     }
 
-    if(!fb->resources.empty()){
-        auto* tex = checked_cast<Texture*>(fb->resources[0].get());
-        fb->framebufferInfo.sampleCount = tex->desc.sampleCount;
+    if(!fb->m_resources.empty()){
+        auto* tex = checked_cast<Texture*>(fb->m_resources[0].get());
+        fb->m_framebufferInfo.sampleCount = tex->m_desc.sampleCount;
     }
 
     return FramebufferHandle(fb, FramebufferHandle::deleter_type(m_context.objectArena), AdoptRef);
@@ -216,8 +216,8 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     Alloc::ScratchArena<> scratchArena(2048);
 
     auto* pso = NewArenaObject<GraphicsPipeline>(*m_context.objectArena, m_context);
-    pso->desc = desc;
-    pso->framebufferInfo = fbinfo;
+    pso->m_desc = desc;
+    pso->m_framebufferInfo = fbinfo;
 
     // Step 1: Collect shader stages
     Vector<VkPipelineShaderStageCreateInfo, Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>> shaderStages{ Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>(scratchArena) };
@@ -229,15 +229,15 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
         auto* s = checked_cast<Shader*>(iShader);
         VkPipelineShaderStageCreateInfo stageInfo = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
         stageInfo.stage = vkStage;
-        stageInfo.module = s->shaderModule;
-        stageInfo.pName = s->desc.entryName.c_str();
+        stageInfo.module = s->m_shaderModule;
+        stageInfo.pName = s->m_desc.entryName.c_str();
 
-        if(!s->specializationEntries.empty()){
+        if(!s->m_specializationEntries.empty()){
             VkSpecializationInfo specInfo{};
-            specInfo.mapEntryCount = static_cast<u32>(s->specializationEntries.size());
-            specInfo.pMapEntries = s->specializationEntries.data();
-            specInfo.dataSize = s->specializationData.size();
-            specInfo.pData = s->specializationData.data();
+            specInfo.mapEntryCount = static_cast<u32>(s->m_specializationEntries.size());
+            specInfo.pMapEntries = s->m_specializationEntries.data();
+            specInfo.dataSize = s->m_specializationData.size();
+            specInfo.pData = s->m_specializationData.data();
             specInfos.push_back(specInfo);
             stageInfo.pSpecializationInfo = &specInfos.back();
         }
@@ -262,10 +262,10 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     if(desc.inputLayout){
         auto* layout = checked_cast<InputLayout*>(desc.inputLayout.get());
 
-        vertexInputInfo.vertexBindingDescriptionCount = (u32)layout->bindings.size();
-        vertexInputInfo.pVertexBindingDescriptions = layout->bindings.data();
-        vertexInputInfo.vertexAttributeDescriptionCount = (u32)layout->vkAttributes.size();
-        vertexInputInfo.pVertexAttributeDescriptions = layout->vkAttributes.data();
+        vertexInputInfo.vertexBindingDescriptionCount = (u32)layout->m_bindings.size();
+        vertexInputInfo.pVertexBindingDescriptions = layout->m_bindings.data();
+        vertexInputInfo.vertexAttributeDescriptionCount = (u32)layout->m_vkAttributes.size();
+        vertexInputInfo.pVertexAttributeDescriptions = layout->m_vkAttributes.data();
     }
 
     // Step 3: Input assembly
@@ -339,22 +339,22 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     dynamicState.pDynamicStates = dynamicStates;
 
     // Step 10: Pipeline layout from binding layouts
-    pso->pipelineLayout = VK_NULL_HANDLE;
+    pso->m_pipelineLayout = VK_NULL_HANDLE;
     Vector<VkDescriptorSetLayout, Alloc::ScratchAllocator<VkDescriptorSetLayout>> allDescriptorSetLayouts{ Alloc::ScratchAllocator<VkDescriptorSetLayout>(scratchArena) };
     for(u32 i = 0; i < (u32)desc.bindingLayouts.size(); ++i){
         auto* bl = checked_cast<BindingLayout*>(desc.bindingLayouts[i].get());
-        for(auto& dsl : bl->descriptorSetLayouts){
+        for(auto& dsl : bl->m_descriptorSetLayouts){
             allDescriptorSetLayouts.push_back(dsl);
         }
     }
     if(desc.bindingLayouts.size() == 1){
         auto* bl = checked_cast<BindingLayout*>(desc.bindingLayouts[0].get());
-        pso->pipelineLayout = bl->pipelineLayout;
+        pso->m_pipelineLayout = bl->m_pipelineLayout;
     } else if(desc.bindingLayouts.size() > 1){
         VkPipelineLayoutCreateInfo layoutInfo = { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
         layoutInfo.setLayoutCount = (u32)allDescriptorSetLayouts.size();
         layoutInfo.pSetLayouts = allDescriptorSetLayouts.data();
-        res = vkCreatePipelineLayout(m_context.device, &layoutInfo, m_context.allocationCallbacks, &pso->pipelineLayout);
+        res = vkCreatePipelineLayout(m_context.device, &layoutInfo, m_context.allocationCallbacks, &pso->m_pipelineLayout);
         if(res != VK_SUCCESS){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create pipeline layout for graphics pipeline: {}"), ResultToString(res));
             DestroyArenaObject(*m_context.objectArena, pso);
@@ -392,11 +392,11 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     pipelineInfo.pDepthStencilState = &depthStencil;
     pipelineInfo.pColorBlendState = &colorBlending;
     pipelineInfo.pDynamicState = &dynamicState;
-    pipelineInfo.layout = pso->pipelineLayout;
+    pipelineInfo.layout = pso->m_pipelineLayout;
     pipelineInfo.renderPass = VK_NULL_HANDLE;
     pipelineInfo.subpass = 0;
 
-    res = vkCreateGraphicsPipelines(m_context.device, m_context.pipelineCache, 1, &pipelineInfo, m_context.allocationCallbacks, &pso->pipeline);
+    res = vkCreateGraphicsPipelines(m_context.device, m_context.pipelineCache, 1, &pipelineInfo, m_context.allocationCallbacks, &pso->m_pipeline);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create graphics pipeline: {}"), ResultToString(res));
         DestroyArenaObject(*m_context.objectArena, pso);
@@ -412,7 +412,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
 
 void CommandList::beginRenderPass(IFramebuffer* _framebuffer, const RenderPassParameters& params){
     auto* fb = checked_cast<Framebuffer*>(_framebuffer);
-    const FramebufferDesc& fbDesc = fb->desc;
+    const FramebufferDesc& fbDesc = fb->m_desc;
 
     // Dynamic rendering (VK_KHR_dynamic_rendering)
     VkRenderingAttachmentInfo colorAttachments[8] = {};
@@ -422,7 +422,7 @@ void CommandList::beginRenderPass(IFramebuffer* _framebuffer, const RenderPassPa
         if(fbDesc.colorAttachments[i].texture){
             auto* tex = checked_cast<Texture*>(fbDesc.colorAttachments[i].texture);
 
-            TextureDimension::Enum viewDimension = tex->desc.dimension;
+            TextureDimension::Enum viewDimension = tex->m_desc.dimension;
             if(fbDesc.colorAttachments[i].subresources.numArraySlices == 1)
                 viewDimension = TextureDimension::Texture2D;
             VkImageView view = tex->getView(fbDesc.colorAttachments[i].subresources, viewDimension, Format::UNKNOWN);
@@ -453,7 +453,7 @@ void CommandList::beginRenderPass(IFramebuffer* _framebuffer, const RenderPassPa
         auto* depthTex = checked_cast<Texture*>(fbDesc.depthAttachment.texture);
         VkImageView depthView = depthTex->getView(fbDesc.depthAttachment.subresources, TextureDimension::Texture2D, Format::UNKNOWN, true);
 
-        const FormatInfo& formatInfo = GetFormatInfo(depthTex->desc.format);
+        const FormatInfo& formatInfo = GetFormatInfo(depthTex->m_desc.format);
         if(formatInfo.hasDepth){
             depthAttachment.imageView = depthView;
             depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
@@ -474,7 +474,7 @@ void CommandList::beginRenderPass(IFramebuffer* _framebuffer, const RenderPassPa
 
     VkRenderingInfo renderingInfo = { VK_STRUCTURE_TYPE_RENDERING_INFO };
     renderingInfo.renderArea.offset = { 0, 0 };
-    renderingInfo.renderArea.extent = { fb->framebufferInfo.width, fb->framebufferInfo.height };
+    renderingInfo.renderArea.extent = { fb->m_framebufferInfo.width, fb->m_framebufferInfo.height };
     renderingInfo.layerCount = 1;
     renderingInfo.colorAttachmentCount = numColorAttachments;
     renderingInfo.pColorAttachments = colorAttachments;
@@ -483,30 +483,30 @@ void CommandList::beginRenderPass(IFramebuffer* _framebuffer, const RenderPassPa
     if(hasStencil)
         renderingInfo.pStencilAttachment = &stencilAttachment;
 
-    vkCmdBeginRendering(currentCmdBuf->cmdBuf, &renderingInfo);
+    vkCmdBeginRendering(m_currentCmdBuf->m_cmdBuf, &renderingInfo);
 }
 
 void CommandList::endRenderPass(){
-    vkCmdEndRendering(currentCmdBuf->cmdBuf);
+    vkCmdEndRendering(m_currentCmdBuf->m_cmdBuf);
 }
 
 void CommandList::setGraphicsState(const GraphicsState& state){
-    currentGraphicsState = state;
+    m_currentGraphicsState = state;
 
     auto* pipeline = checked_cast<GraphicsPipeline*>(state.pipeline);
     if(pipeline)
-        vkCmdBindPipeline(currentCmdBuf->cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->pipeline);
+        vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->m_pipeline);
 
     // Bind descriptor sets
     if(state.bindings.size() > 0){
         for(usize i = 0; i < state.bindings.size(); ++i){
             if(state.bindings[i]){
                 auto* bindingSet = checked_cast<BindingSet*>(state.bindings[i]);
-                if(!bindingSet->descriptorSets.empty())
-                    vkCmdBindDescriptorSets(currentCmdBuf->cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                        pipeline->pipelineLayout, static_cast<u32>(i),
-                        static_cast<u32>(bindingSet->descriptorSets.size()),
-                        bindingSet->descriptorSets.data(), 0, nullptr);
+                if(!bindingSet->m_descriptorSets.empty())
+                    vkCmdBindDescriptorSets(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                        pipeline->m_pipelineLayout, static_cast<u32>(i),
+                        static_cast<u32>(bindingSet->m_descriptorSets.size()),
+                        bindingSet->m_descriptorSets.data(), 0, nullptr);
             }
         }
     }
@@ -521,7 +521,7 @@ void CommandList::setGraphicsState(const GraphicsState& state){
         viewport.height = -(vp.maxY - vp.minY);
         viewport.minDepth = vp.minZ;
         viewport.maxDepth = vp.maxZ;
-        vkCmdSetViewport(currentCmdBuf->cmdBuf, 0, 1, &viewport);
+        vkCmdSetViewport(m_currentCmdBuf->m_cmdBuf, 0, 1, &viewport);
 
         VkRect2D scissor{};
         if(!state.viewport.scissorRects.empty()){
@@ -533,7 +533,7 @@ void CommandList::setGraphicsState(const GraphicsState& state){
             scissor.offset = { (i32)vp.minX, (i32)vp.minY };
             scissor.extent = { (u32)(vp.maxX - vp.minX), (u32)(vp.maxY - vp.minY) };
         }
-        vkCmdSetScissor(currentCmdBuf->cmdBuf, 0, 1, &scissor);
+        vkCmdSetScissor(m_currentCmdBuf->m_cmdBuf, 0, 1, &scissor);
     }
 
     // Bind vertex buffers
@@ -544,36 +544,36 @@ void CommandList::setGraphicsState(const GraphicsState& state){
         auto count = Min(static_cast<u32>(state.vertexBuffers.size()), kMaxVertexBuffers);
         for(u32 i = 0; i < count; ++i){
             auto* vb = checked_cast<Buffer*>(state.vertexBuffers[i].buffer);
-            vertexBuffers[i] = vb->buffer;
+            vertexBuffers[i] = vb->m_buffer;
             offsets[i] = state.vertexBuffers[i].offset;
         }
-        vkCmdBindVertexBuffers(currentCmdBuf->cmdBuf, 0, count, vertexBuffers, offsets);
+        vkCmdBindVertexBuffers(m_currentCmdBuf->m_cmdBuf, 0, count, vertexBuffers, offsets);
     }
 
     // Bind index buffer
     if(state.indexBuffer.buffer){
         auto* ib = checked_cast<Buffer*>(state.indexBuffer.buffer);
         VkIndexType indexType = (state.indexBuffer.format == Format::R16_UINT) ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32;
-        vkCmdBindIndexBuffer(currentCmdBuf->cmdBuf, ib->buffer, state.indexBuffer.offset, indexType);
+        vkCmdBindIndexBuffer(m_currentCmdBuf->m_cmdBuf, ib->m_buffer, state.indexBuffer.offset, indexType);
     }
 }
 
 void CommandList::draw(const DrawArguments& args){
-    vkCmdDraw(currentCmdBuf->cmdBuf, args.vertexCount, args.instanceCount, args.startVertexLocation, args.startInstanceLocation);
+    vkCmdDraw(m_currentCmdBuf->m_cmdBuf, args.vertexCount, args.instanceCount, args.startVertexLocation, args.startInstanceLocation);
 }
 
 void CommandList::drawIndexed(const DrawArguments& args){
-    vkCmdDrawIndexed(currentCmdBuf->cmdBuf, args.vertexCount, args.instanceCount, args.startIndexLocation, args.startVertexLocation, args.startInstanceLocation);
+    vkCmdDrawIndexed(m_currentCmdBuf->m_cmdBuf, args.vertexCount, args.instanceCount, args.startIndexLocation, args.startVertexLocation, args.startInstanceLocation);
 }
 
 void CommandList::drawIndirect(u32 offsetBytes, u32 drawCount){
-    if(!currentGraphicsState.indirectParams){
+    if(!m_currentGraphicsState.indirectParams){
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: No indirect buffer bound for drawIndirect"));
         return;
     }
-    auto* indirectBuffer = checked_cast<Buffer*>(currentGraphicsState.indirectParams);
-    vkCmdDrawIndirect(currentCmdBuf->cmdBuf, indirectBuffer->buffer, offsetBytes, drawCount, sizeof(DrawIndirectArguments));
-    currentCmdBuf->referencedResources.push_back(currentGraphicsState.indirectParams);
+    auto* indirectBuffer = checked_cast<Buffer*>(m_currentGraphicsState.indirectParams);
+    vkCmdDrawIndirect(m_currentCmdBuf->m_cmdBuf, indirectBuffer->m_buffer, offsetBytes, drawCount, sizeof(DrawIndirectArguments));
+    m_currentCmdBuf->m_referencedResources.push_back(m_currentGraphicsState.indirectParams);
 }
 
 

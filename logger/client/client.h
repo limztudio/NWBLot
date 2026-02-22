@@ -24,6 +24,7 @@ class Client : public BaseUpdateIfQueued<Client, CLIENT_NAME>{
     friend class Base;
     friend class BaseUpdateIfQueued;
 
+
 private:
     static bool globalInit();
     static usize sendCallback(void* contents, usize size, usize nmemb, Client* _this);

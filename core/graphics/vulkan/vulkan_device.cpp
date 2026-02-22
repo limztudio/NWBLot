@@ -385,15 +385,15 @@ Heap::Heap(const VulkanContext& context)
     : m_context(context)
 {}
 Heap::~Heap(){
-    if(memory != VK_NULL_HANDLE){
-        vkFreeMemory(m_context.device, memory, m_context.allocationCallbacks);
-        memory = VK_NULL_HANDLE;
+    if(m_memory != VK_NULL_HANDLE){
+        vkFreeMemory(m_context.device, m_memory, m_context.allocationCallbacks);
+        m_memory = VK_NULL_HANDLE;
     }
 }
 
 Object Heap::getNativeHandle(ObjectType objectType){
     if(objectType == ObjectTypes::VK_DeviceMemory)
-        return Object(memory);
+        return Object(m_memory);
     return Object(nullptr);
 }
 
@@ -405,7 +405,7 @@ HeapHandle Device::createHeap(const HeapDesc& d){
     VkResult res = VK_SUCCESS;
 
     auto* heap = NewArenaObject<Heap>(*m_context.objectArena, m_context);
-    heap->desc = d;
+    heap->m_desc = d;
 
     VkMemoryPropertyFlags memoryProperties = 0;
     switch(d.type){
@@ -449,7 +449,7 @@ HeapHandle Device::createHeap(const HeapDesc& d){
     allocInfo.memoryTypeIndex = memoryTypeIndex;
     allocInfo.pNext = pNext;
 
-    res = vkAllocateMemory(m_context.device, &allocInfo, m_context.allocationCallbacks, &heap->memory);
+    res = vkAllocateMemory(m_context.device, &allocInfo, m_context.allocationCallbacks, &heap->m_memory);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate heap memory ({} bytes): {}"), d.capacity, ResultToString(res));
         DestroyArenaObject(*m_context.objectArena, heap);

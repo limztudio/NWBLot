@@ -16,11 +16,11 @@ NWB_VULKAN_BEGIN
 
 
 void CommandList::setResourceStatesForBindingSet(IBindingSet* bindingSet){
-    if(!bindingSet || !enableAutomaticBarriers)
+    if(!bindingSet || !m_enableAutomaticBarriers)
         return;
 
     auto* bs = checked_cast<BindingSet*>(bindingSet);
-    for(const auto& item : bs->desc.bindings){
+    for(const auto& item : bs->m_desc.bindings){
         switch(item.type){
         case ResourceType::Texture_SRV:
             if(item.resourceHandle)
@@ -62,7 +62,7 @@ void CommandList::setResourceStatesForBindingSet(IBindingSet* bindingSet){
 }
 
 void CommandList::setEnableAutomaticBarriers(bool enable){
-    enableAutomaticBarriers = enable;
+    m_enableAutomaticBarriers = enable;
 }
 
 void CommandList::commitBarriers(){
@@ -75,7 +75,7 @@ void CommandList::commitBarriers(){
     depInfo.bufferMemoryBarrierCount = static_cast<u32>(m_pendingBufferBarriers.size());
     depInfo.pBufferMemoryBarriers = m_pendingBufferBarriers.data();
 
-    vkCmdPipelineBarrier2(currentCmdBuf->cmdBuf, &depInfo);
+    vkCmdPipelineBarrier2(m_currentCmdBuf->m_cmdBuf, &depInfo);
 
     m_pendingImageBarriers.clear();
     m_pendingBufferBarriers.clear();
@@ -85,12 +85,12 @@ void CommandList::setTextureState(ITexture* _texture, TextureSubresourceSet subr
     if(!_texture)
         return;
 
-    if(stateTracker->isPermanentTexture(_texture))
+    if(m_stateTracker->isPermanentTexture(_texture))
         return;
 
     auto* texture = checked_cast<Texture*>(_texture);
 
-    ResourceStates::Mask oldState = stateTracker->getTextureState(_texture, subresources.baseArraySlice, subresources.baseMipLevel);
+    ResourceStates::Mask oldState = m_stateTracker->getTextureState(_texture, subresources.baseArraySlice, subresources.baseMipLevel);
     if(oldState == stateBits)
         return;
 
@@ -101,9 +101,9 @@ void CommandList::setTextureState(ITexture* _texture, TextureSubresourceSet subr
     barrier.dstAccessMask = __hidden_vulkan::GetVkAccessFlags(stateBits);
     barrier.oldLayout = oldState != ResourceStates::Unknown ? __hidden_vulkan::GetVkImageLayout(oldState) : VK_IMAGE_LAYOUT_UNDEFINED;
     barrier.newLayout = __hidden_vulkan::GetVkImageLayout(stateBits);
-    barrier.image = texture->image;
+    barrier.image = texture->m_image;
 
-    const FormatInfo& formatInfo = GetFormatInfo(texture->desc.format);
+    const FormatInfo& formatInfo = GetFormatInfo(texture->m_desc.format);
     VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     if(formatInfo.hasDepth) aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
     if(formatInfo.hasStencil) aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
@@ -113,9 +113,9 @@ void CommandList::setTextureState(ITexture* _texture, TextureSubresourceSet subr
     barrier.subresourceRange.baseArrayLayer = subresources.baseArraySlice;
     barrier.subresourceRange.layerCount = subresources.numArraySlices;
 
-    stateTracker->beginTrackingTexture(_texture, subresources, stateBits);
+    m_stateTracker->beginTrackingTexture(_texture, subresources, stateBits);
 
-    if(!enableAutomaticBarriers){
+    if(!m_enableAutomaticBarriers){
         m_pendingImageBarriers.push_back(barrier);
         return;
     }
@@ -124,19 +124,19 @@ void CommandList::setTextureState(ITexture* _texture, TextureSubresourceSet subr
     depInfo.imageMemoryBarrierCount = 1;
     depInfo.pImageMemoryBarriers = &barrier;
 
-    vkCmdPipelineBarrier2(currentCmdBuf->cmdBuf, &depInfo);
+    vkCmdPipelineBarrier2(m_currentCmdBuf->m_cmdBuf, &depInfo);
 }
 
 void CommandList::setBufferState(IBuffer* _buffer, ResourceStates::Mask stateBits){
     if(!_buffer)
         return;
 
-    if(stateTracker->isPermanentBuffer(_buffer))
+    if(m_stateTracker->isPermanentBuffer(_buffer))
         return;
 
     auto* buffer = checked_cast<Buffer*>(_buffer);
 
-    ResourceStates::Mask oldState = stateTracker->getBufferState(_buffer);
+    ResourceStates::Mask oldState = m_stateTracker->getBufferState(_buffer);
     if(oldState == stateBits)
         return;
 
@@ -145,13 +145,13 @@ void CommandList::setBufferState(IBuffer* _buffer, ResourceStates::Mask stateBit
     barrier.srcAccessMask = __hidden_vulkan::GetVkAccessFlags(oldState != ResourceStates::Unknown ? oldState : ResourceStates::Common);
     barrier.dstStageMask = __hidden_vulkan::GetVkPipelineStageFlags(stateBits);
     barrier.dstAccessMask = __hidden_vulkan::GetVkAccessFlags(stateBits);
-    barrier.buffer = buffer->buffer;
+    barrier.buffer = buffer->m_buffer;
     barrier.offset = 0;
     barrier.size = VK_WHOLE_SIZE;
 
-    stateTracker->beginTrackingBuffer(_buffer, stateBits);
+    m_stateTracker->beginTrackingBuffer(_buffer, stateBits);
 
-    if(!enableAutomaticBarriers){
+    if(!m_enableAutomaticBarriers){
         m_pendingBufferBarriers.push_back(barrier);
         return;
     }
@@ -160,7 +160,7 @@ void CommandList::setBufferState(IBuffer* _buffer, ResourceStates::Mask stateBit
     depInfo.bufferMemoryBarrierCount = 1;
     depInfo.pBufferMemoryBarriers = &barrier;
 
-    vkCmdPipelineBarrier2(currentCmdBuf->cmdBuf, &depInfo);
+    vkCmdPipelineBarrier2(m_currentCmdBuf->m_cmdBuf, &depInfo);
 }
 
 void CommandList::setAccelStructState(IRayTracingAccelStruct* _as, ResourceStates::Mask stateBits){
@@ -169,17 +169,17 @@ void CommandList::setAccelStructState(IRayTracingAccelStruct* _as, ResourceState
 
     auto* as = checked_cast<AccelStruct*>(_as);
 
-    if(as->buffer){
-        setBufferState(as->buffer.get(), stateBits);
+    if(as->m_buffer){
+        setBufferState(as->m_buffer.get(), stateBits);
     }
 }
 
 void CommandList::setPermanentTextureState(ITexture* texture, ResourceStates::Mask stateBits){
-    stateTracker->setPermanentTextureState(texture, stateBits);
+    m_stateTracker->setPermanentTextureState(texture, stateBits);
 }
 
 void CommandList::setPermanentBufferState(IBuffer* buffer, ResourceStates::Mask stateBits){
-    stateTracker->setPermanentBufferState(buffer, stateBits);
+    m_stateTracker->setPermanentBufferState(buffer, stateBits);
 }
 
 
@@ -200,10 +200,10 @@ StateTracker::~StateTracker(){
 }
 
 void StateTracker::reset(){
-    graphicsState = {};
-    computeState = {};
-    meshletState = {};
-    rayTracingState = {};
+    m_graphicsState = {};
+    m_computeState = {};
+    m_meshletState = {};
+    m_rayTracingState = {};
 
     m_textureStates.clear();
     m_bufferStates.clear();

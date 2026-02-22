@@ -38,8 +38,8 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
     VkResult res = VK_SUCCESS;
 
     auto* staging = NewArenaObject<StagingTexture>(*m_context.objectArena, m_context, m_allocator);
-    staging->desc = d;
-    staging->cpuAccess = cpuAccess;
+    staging->m_desc = d;
+    staging->m_cpuAccess = cpuAccess;
 
     const FormatInfo& formatInfo = GetFormatInfo(d.format);
 
@@ -64,14 +64,14 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
     bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-    res = vkCreateBuffer(m_context.device, &bufferInfo, m_context.allocationCallbacks, &staging->buffer);
+    res = vkCreateBuffer(m_context.device, &bufferInfo, m_context.allocationCallbacks, &staging->m_buffer);
     if(res != VK_SUCCESS){
         DestroyArenaObject(*m_context.objectArena, staging);
         return nullptr;
     }
 
     VkMemoryRequirements memRequirements;
-    vkGetBufferMemoryRequirements(m_context.device, staging->buffer, &memRequirements);
+    vkGetBufferMemoryRequirements(m_context.device, staging->m_buffer, &memRequirements);
 
     VkMemoryPropertyFlags memProps = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
     if(cpuAccess == CpuAccessMode::Read)
@@ -100,8 +100,8 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
     }
 
     if(!foundMemoryType){
-        vkDestroyBuffer(m_context.device, staging->buffer, m_context.allocationCallbacks);
-        staging->buffer = VK_NULL_HANDLE;
+        vkDestroyBuffer(m_context.device, staging->m_buffer, m_context.allocationCallbacks);
+        staging->m_buffer = VK_NULL_HANDLE;
         DestroyArenaObject(*m_context.objectArena, staging);
         return nullptr;
     }
@@ -111,31 +111,31 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
     allocInfo.allocationSize = memRequirements.size;
     allocInfo.memoryTypeIndex = memoryTypeIndex;
 
-    res = vkAllocateMemory(m_context.device, &allocInfo, m_context.allocationCallbacks, &staging->memory);
+    res = vkAllocateMemory(m_context.device, &allocInfo, m_context.allocationCallbacks, &staging->m_memory);
     if(res != VK_SUCCESS){
-        vkDestroyBuffer(m_context.device, staging->buffer, m_context.allocationCallbacks);
-        staging->buffer = VK_NULL_HANDLE;
+        vkDestroyBuffer(m_context.device, staging->m_buffer, m_context.allocationCallbacks);
+        staging->m_buffer = VK_NULL_HANDLE;
         DestroyArenaObject(*m_context.objectArena, staging);
         return nullptr;
     }
 
-    res = vkBindBufferMemory(m_context.device, staging->buffer, staging->memory, 0);
+    res = vkBindBufferMemory(m_context.device, staging->m_buffer, staging->m_memory, 0);
     if(res != VK_SUCCESS){
-        vkFreeMemory(m_context.device, staging->memory, m_context.allocationCallbacks);
-        vkDestroyBuffer(m_context.device, staging->buffer, m_context.allocationCallbacks);
-        staging->memory = VK_NULL_HANDLE;
-        staging->buffer = VK_NULL_HANDLE;
+        vkFreeMemory(m_context.device, staging->m_memory, m_context.allocationCallbacks);
+        vkDestroyBuffer(m_context.device, staging->m_buffer, m_context.allocationCallbacks);
+        staging->m_memory = VK_NULL_HANDLE;
+        staging->m_buffer = VK_NULL_HANDLE;
         DestroyArenaObject(*m_context.objectArena, staging);
         return nullptr;
     }
 
     if(cpuAccess != CpuAccessMode::None){
-        res = vkMapMemory(m_context.device, staging->memory, 0, totalSize, 0, &staging->mappedMemory);
+        res = vkMapMemory(m_context.device, staging->m_memory, 0, totalSize, 0, &staging->m_mappedMemory);
         if(res != VK_SUCCESS){
-            vkFreeMemory(m_context.device, staging->memory, m_context.allocationCallbacks);
-            vkDestroyBuffer(m_context.device, staging->buffer, m_context.allocationCallbacks);
-            staging->memory = VK_NULL_HANDLE;
-            staging->buffer = VK_NULL_HANDLE;
+            vkFreeMemory(m_context.device, staging->m_memory, m_context.allocationCallbacks);
+            vkDestroyBuffer(m_context.device, staging->m_buffer, m_context.allocationCallbacks);
+            staging->m_memory = VK_NULL_HANDLE;
+            staging->m_buffer = VK_NULL_HANDLE;
             DestroyArenaObject(*m_context.objectArena, staging);
             return nullptr;
         }
@@ -152,13 +152,13 @@ void* Device::mapStagingTexture(IStagingTexture* tex, const TextureSlice& slice,
 
     auto* staging = static_cast<StagingTexture*>(tex);
 
-    if(!staging->mappedMemory){
-        res = vkMapMemory(m_context.device, staging->memory, 0, VK_WHOLE_SIZE, 0, &staging->mappedMemory);
+    if(!staging->m_mappedMemory){
+        res = vkMapMemory(m_context.device, staging->m_memory, 0, VK_WHOLE_SIZE, 0, &staging->m_mappedMemory);
         if(res != VK_SUCCESS)
             return nullptr;
     }
 
-    const TextureDesc& desc = staging->desc;
+    const TextureDesc& desc = staging->m_desc;
     const TextureSlice resolved = slice.resolve(desc);
     const FormatInfo& formatInfo = GetFormatInfo(desc.format);
 
@@ -200,7 +200,7 @@ void* Device::mapStagingTexture(IStagingTexture* tex, const TextureSlice& slice,
             + static_cast<u64>(resolved.x / formatInfo.blockSize) * formatInfo.bytesPerBlock
     ;
 
-    return static_cast<u8*>(staging->mappedMemory) + offset;
+    return static_cast<u8*>(staging->m_mappedMemory) + offset;
 }
 
 void Device::unmapStagingTexture(IStagingTexture* tex){

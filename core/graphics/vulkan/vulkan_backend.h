@@ -109,27 +109,28 @@ struct VulkanContext{
 
 
 class TrackedCommandBuffer final : public RefCounter<IResource>, NoCopy{
+    friend class CommandList;
+    friend class Queue;
+
+
 public:
     TrackedCommandBuffer(const VulkanContext& context, CommandQueue::Enum, u32 queueFamilyIndex);
     virtual ~TrackedCommandBuffer()override;
 
 
-public:
-    VkCommandBuffer cmdBuf = VK_NULL_HANDLE;
-    VkCommandPool cmdPool = VK_NULL_HANDLE;
-
-    Vector<RefCountPtr<IResource, ArenaRefDeleter<IResource>>, Alloc::CustomAllocator<RefCountPtr<IResource, ArenaRefDeleter<IResource>>>> referencedResources;
-    Vector<RefCountPtr<IBuffer, ArenaRefDeleter<IBuffer>>, Alloc::CustomAllocator<RefCountPtr<IBuffer, ArenaRefDeleter<IBuffer>>>> referencedStagingBuffers;
-
-    Vector<VkAccelerationStructureKHR, Alloc::CustomAllocator<VkAccelerationStructureKHR>> referencedAccelStructHandles;
-
-    VkFence signalFence = VK_NULL_HANDLE;
-
-    u64 recordingID = 0;
-    u64 submissionID = 0;
-
-
 private:
+    VkCommandBuffer m_cmdBuf = VK_NULL_HANDLE;
+    VkCommandPool m_cmdPool = VK_NULL_HANDLE;
+
+    Vector<RefCountPtr<IResource, ArenaRefDeleter<IResource>>, Alloc::CustomAllocator<RefCountPtr<IResource, ArenaRefDeleter<IResource>>>> m_referencedResources;
+    Vector<RefCountPtr<IBuffer, ArenaRefDeleter<IBuffer>>, Alloc::CustomAllocator<RefCountPtr<IBuffer, ArenaRefDeleter<IBuffer>>>> m_referencedStagingBuffers;
+    Vector<VkAccelerationStructureKHR, Alloc::CustomAllocator<VkAccelerationStructureKHR>> m_referencedAccelStructHandles;
+
+    VkFence m_signalFence = VK_NULL_HANDLE;
+
+    u64 m_recordingID = 0;
+    u64 m_submissionID = 0;
+
     const VulkanContext& m_context;
 };
 typedef RefCountPtr<TrackedCommandBuffer, ArenaRefDeleter<TrackedCommandBuffer>> TrackedCommandBufferPtr;
@@ -140,6 +141,9 @@ typedef RefCountPtr<TrackedCommandBuffer, ArenaRefDeleter<TrackedCommandBuffer>>
 
 
 class Queue final : NoCopy{
+    friend class Device;
+
+
 public:
     Queue(const VulkanContext& context, CommandQueue::Enum queueID, VkQueue queue, u32 queueFamilyIndex);
     ~Queue();
@@ -165,13 +169,12 @@ public:
     [[nodiscard]] CommandQueue::Enum getQueueID()const{ return m_queueID; }
     [[nodiscard]] u64 getLastSubmittedID()const{ return m_lastSubmittedID; }
     [[nodiscard]] u64 getLastFinishedID()const{ return m_lastFinishedID; }
-
-
-public:
-    VkSemaphore trackingSemaphore = VK_NULL_HANDLE;
+    [[nodiscard]] VkSemaphore getTrackingSemaphore()const{ return m_trackingSemaphore; }
 
 
 private:
+    VkSemaphore m_trackingSemaphore = VK_NULL_HANDLE;
+
     const VulkanContext& m_context;
     VkQueue m_queue;
     CommandQueue::Enum m_queueID;
@@ -224,22 +227,25 @@ private:
 
 
 class Heap final : public RefCounter<IHeap>, NoCopy{
+    friend class Device;
+    friend class VulkanAllocator;
+    friend class Queue;
+
+
 public:
     Heap(const VulkanContext& context);
     virtual ~Heap()override;
 
 
 public:
-    [[nodiscard]] virtual const HeapDesc& getDescription()const override{ return desc; }
+    [[nodiscard]] virtual const HeapDesc& getDescription()const override{ return m_desc; }
     virtual Object getNativeHandle(ObjectType objectType)override;
 
 
-public:
-    HeapDesc desc;
-    VkDeviceMemory memory = VK_NULL_HANDLE;
-
-
 private:
+    HeapDesc m_desc;
+    VkDeviceMemory m_memory = VK_NULL_HANDLE;
+
     const VulkanContext& m_context;
 };
 
@@ -291,6 +297,15 @@ private:
 
 
 class Buffer final : public RefCounter<IBuffer>, NoCopy{
+    friend class Device;
+    friend class CommandList;
+    friend class VulkanAllocator;
+    friend class UploadManager;
+    friend class ShaderTable;
+
+    friend VkDeviceAddress __hidden_vulkan::GetBufferDeviceAddress(IBuffer* _buffer, u64 offset);
+
+
 public:
     // For volatile buffers - version tracking per frame
     struct VolatileBufferState{
@@ -307,25 +322,23 @@ public:
 
 
 public:
-    [[nodiscard]] virtual const BufferDesc& getDescription()const override{ return desc; }
-    [[nodiscard]] virtual GpuVirtualAddress getGpuVirtualAddress()const override{ return deviceAddress; }
-
-
-public:
-    BufferDesc desc;
-
-    VkBuffer buffer = VK_NULL_HANDLE;
-    VkDeviceMemory memory = VK_NULL_HANDLE;
-    u64 deviceAddress = 0;
-    void* mappedMemory = nullptr;
-
-    Vector<u64, Alloc::CustomAllocator<u64>> versionTracking;
-    VolatileBufferState volatileState;
-
-    bool managed = true; // if true, owns the VkBuffer and memory
+    [[nodiscard]] virtual const BufferDesc& getDescription()const override{ return m_desc; }
+    [[nodiscard]] virtual GpuVirtualAddress getGpuVirtualAddress()const override{ return m_deviceAddress; }
 
 
 private:
+    BufferDesc m_desc;
+
+    VkBuffer m_buffer = VK_NULL_HANDLE;
+    VkDeviceMemory m_memory = VK_NULL_HANDLE;
+    u64 m_deviceAddress = 0;
+    void* m_mappedMemory = nullptr;
+
+    Vector<u64, Alloc::CustomAllocator<u64>> m_versionTracking;
+    VolatileBufferState m_volatileState;
+
+    bool m_managed = true; // if true, owns the VkBuffer and memory
+
     const VulkanContext& m_context;
     VulkanAllocator& m_allocator;
 };
@@ -336,36 +349,40 @@ private:
 
 
 class Texture final : public RefCounter<ITexture>, NoCopy{
+    friend class Device;
+    friend class CommandList;
+    friend class VulkanAllocator;
+    friend class Queue;
+
+
 public:
     Texture(const VulkanContext& context, VulkanAllocator& allocator);
     virtual ~Texture()override;
 
 
 public:
-    [[nodiscard]] virtual const TextureDesc& getDescription()const override{ return desc; }
+    [[nodiscard]] virtual const TextureDesc& getDescription()const override{ return m_desc; }
     virtual Object getNativeView(ObjectType objectType, Format::Enum format, TextureSubresourceSet subresources, TextureDimension::Enum dimension, bool isReadOnlyDSV)override;
 
     [[nodiscard]] VkImageView getView(const TextureSubresourceSet& subresources, TextureDimension::Enum dimension, Format::Enum format, bool isReadOnlyDSV = false);
-
+ 
 
 private:
     u64 makeViewKey(const TextureSubresourceSet& subresources, TextureDimension::Enum dimension, Format::Enum format, bool isReadOnlyDSV)const;
 
 
-public:
-    TextureDesc desc;
-
-    VkImage image = VK_NULL_HANDLE;
-    VkDeviceMemory memory = VK_NULL_HANDLE;
-    VkImageCreateInfo imageInfo{};
-
-    HashMap<u64, VkImageView, Hasher<u64>, EqualTo<u64>, Alloc::CustomAllocator<Pair<const u64, VkImageView>>> views;
-
-    bool managed = true; // if true, owns the VkImage and memory
-    u64 tileByteSize = 0; // for sparse/tiled resources
-
-
 private:
+    TextureDesc m_desc;
+
+    VkImage m_image = VK_NULL_HANDLE;
+    VkDeviceMemory m_memory = VK_NULL_HANDLE;
+    VkImageCreateInfo m_imageInfo{};
+
+    HashMap<u64, VkImageView, Hasher<u64>, EqualTo<u64>, Alloc::CustomAllocator<Pair<const u64, VkImageView>>> m_views;
+
+    bool m_managed = true; // if true, owns the VkImage and memory
+    u64 m_tileByteSize = 0; // for sparse/tiled resources
+
     const VulkanContext& m_context;
     VulkanAllocator& m_allocator;
 };
@@ -376,25 +393,27 @@ private:
 
 
 class StagingTexture final : public RefCounter<IStagingTexture>, NoCopy{
+    friend class Device;
+    friend class CommandList;
+
+
 public:
     StagingTexture(const VulkanContext& context, VulkanAllocator& allocator);
     virtual ~StagingTexture()override;
 
 
 public:
-    [[nodiscard]] virtual const TextureDesc& getDescription()const override{ return desc; }
-
-
-public:
-    TextureDesc desc;
-
-    VkBuffer buffer = VK_NULL_HANDLE;
-    VkDeviceMemory memory = VK_NULL_HANDLE;
-    void* mappedMemory = nullptr;
-    CpuAccessMode::Enum cpuAccess;
+    [[nodiscard]] virtual const TextureDesc& getDescription()const override{ return m_desc; }
 
 
 private:
+    TextureDesc m_desc;
+
+    VkBuffer m_buffer = VK_NULL_HANDLE;
+    VkDeviceMemory m_memory = VK_NULL_HANDLE;
+    void* m_mappedMemory = nullptr;
+    CpuAccessMode::Enum m_cpuAccess{};
+
     const VulkanContext& m_context;
     VulkanAllocator& m_allocator;
 };
@@ -405,21 +424,22 @@ private:
 
 
 class Sampler final : public RefCounter<ISampler>, NoCopy{
+    friend class Device;
+
+
 public:
     Sampler(const VulkanContext& context);
     virtual ~Sampler()override;
 
 
 public:
-    [[nodiscard]] virtual const SamplerDesc& getDescription()const override{ return desc; }
-
-
-public:
-    SamplerDesc desc;
-    VkSampler sampler = VK_NULL_HANDLE;
+    [[nodiscard]] virtual const SamplerDesc& getDescription()const override{ return m_desc; }
 
 
 private:
+    SamplerDesc m_desc;
+    VkSampler m_sampler = VK_NULL_HANDLE;
+
     const VulkanContext& m_context;
 };
 
@@ -429,30 +449,33 @@ private:
 
 
 class Shader final : public RefCounter<IShader>, NoCopy{
+    friend class Device;
+    friend class CommandList;
+    friend class ShaderLibrary;
+
+
 public:
     Shader(const VulkanContext& context);
     virtual ~Shader()override;
 
 
 public:
-    [[nodiscard]] virtual const ShaderDesc& getDescription()const override{ return desc; }
+    [[nodiscard]] virtual const ShaderDesc& getDescription()const override{ return m_desc; }
     virtual void getBytecode(const void** ppBytecode, usize* pSize)const override{
-        *ppBytecode = bytecode.data();
-        *pSize = bytecode.size();
+        *ppBytecode = m_bytecode.data();
+        *pSize = m_bytecode.size();
     }
 
 
-public:
-    ShaderDesc desc;
-    VkShaderModule shaderModule = VK_NULL_HANDLE;
-
-    Vector<u8, Alloc::CustomAllocator<u8>> bytecode;
-
-    Vector<VkSpecializationMapEntry, Alloc::CustomAllocator<VkSpecializationMapEntry>> specializationEntries;
-    Vector<u8, Alloc::CustomAllocator<u8>> specializationData;
-
-
 private:
+    ShaderDesc m_desc;
+    VkShaderModule m_shaderModule = VK_NULL_HANDLE;
+
+    Vector<u8, Alloc::CustomAllocator<u8>> m_bytecode;
+
+    Vector<VkSpecializationMapEntry, Alloc::CustomAllocator<VkSpecializationMapEntry>> m_specializationEntries;
+    Vector<u8, Alloc::CustomAllocator<u8>> m_specializationData;
+
     const VulkanContext& m_context;
 };
 
@@ -462,6 +485,9 @@ private:
 
 
 class ShaderLibrary final : public RefCounter<IShaderLibrary>, NoCopy{
+    friend class Device;
+
+
 public:
     ShaderLibrary(const VulkanContext& context);
     virtual ~ShaderLibrary()override;
@@ -472,12 +498,10 @@ public:
     virtual ShaderHandle getShader(const Name& entryName, ShaderType::Mask shaderType)override;
 
 
-public:
-    Vector<u8, Alloc::CustomAllocator<u8>> bytecode;
-    HashMap<Name, RefCountPtr<Shader, ArenaRefDeleter<Shader>>, Hasher<Name>, EqualTo<Name>, Alloc::CustomAllocator<Pair<const Name, RefCountPtr<Shader, ArenaRefDeleter<Shader>>>>> shaders;
-
-
 private:
+    Vector<u8, Alloc::CustomAllocator<u8>> m_bytecode;
+    HashMap<Name, RefCountPtr<Shader, ArenaRefDeleter<Shader>>, Hasher<Name>, EqualTo<Name>, Alloc::CustomAllocator<Pair<const Name, RefCountPtr<Shader, ArenaRefDeleter<Shader>>>>> m_shaders;
+
     const VulkanContext& m_context;
 };
 
@@ -487,6 +511,10 @@ private:
 
 
 class InputLayout final : public RefCounter<IInputLayout>, NoCopy{
+    friend class Device;
+    friend class CommandList;
+
+
 public:
     InputLayout(const VulkanContext& context);
     virtual ~InputLayout()override = default;
@@ -494,23 +522,19 @@ public:
 
 public:
     [[nodiscard]] virtual const VertexAttributeDesc* getAttributeDescription(u32 index)const override{
-        if(index >= attributes.size())
+        if(index >= m_attributes.size())
             return nullptr;
-        return &attributes[index];
+        return &m_attributes[index];
     }
 
-    [[nodiscard]] virtual u32 getNumAttributes()const override{
-        return static_cast<u32>(attributes.size());
-    }
-
-
-public:
-    Vector<VertexAttributeDesc, Alloc::CustomAllocator<VertexAttributeDesc>> attributes;
-    Vector<VkVertexInputBindingDescription, Alloc::CustomAllocator<VkVertexInputBindingDescription>> bindings;
-    Vector<VkVertexInputAttributeDescription, Alloc::CustomAllocator<VkVertexInputAttributeDescription>> vkAttributes;
+    [[nodiscard]] virtual u32 getNumAttributes()const override{ return static_cast<u32>(m_attributes.size()); }
 
 
 private:
+    Vector<VertexAttributeDesc, Alloc::CustomAllocator<VertexAttributeDesc>> m_attributes;
+    Vector<VkVertexInputBindingDescription, Alloc::CustomAllocator<VkVertexInputBindingDescription>> m_bindings;
+    Vector<VkVertexInputAttributeDescription, Alloc::CustomAllocator<VkVertexInputAttributeDescription>> m_vkAttributes;
+
     const VulkanContext& m_context;
 };
 
@@ -520,27 +544,29 @@ private:
 
 
 class Framebuffer final : public RefCounter<IFramebuffer>, NoCopy{
+    friend class Device;
+    friend class CommandList;
+
+
 public:
     Framebuffer(const VulkanContext& context);
     virtual ~Framebuffer()override;
 
 
 public:
-    [[nodiscard]] virtual const FramebufferDesc& getDescription()const override{ return desc; }
-    [[nodiscard]] virtual const FramebufferInfoEx& getFramebufferInfo()const override{ return framebufferInfo; }
-
-
-public:
-    FramebufferDesc desc;
-    FramebufferInfoEx framebufferInfo;
-
-    VkFramebuffer framebuffer = VK_NULL_HANDLE;
-    VkRenderPass renderPass = VK_NULL_HANDLE;
-
-    Vector<RefCountPtr<ITexture, ArenaRefDeleter<ITexture>>, Alloc::CustomAllocator<RefCountPtr<ITexture, ArenaRefDeleter<ITexture>>>> resources;
+    [[nodiscard]] virtual const FramebufferDesc& getDescription()const override{ return m_desc; }
+    [[nodiscard]] virtual const FramebufferInfoEx& getFramebufferInfo()const override{ return m_framebufferInfo; }
 
 
 private:
+    FramebufferDesc m_desc;
+    FramebufferInfoEx m_framebufferInfo;
+
+    VkFramebuffer m_framebuffer = VK_NULL_HANDLE;
+    VkRenderPass m_renderPass = VK_NULL_HANDLE;
+
+    Vector<RefCountPtr<ITexture, ArenaRefDeleter<ITexture>>, Alloc::CustomAllocator<RefCountPtr<ITexture, ArenaRefDeleter<ITexture>>>> m_resources;
+
     const VulkanContext& m_context;
 };
 
@@ -550,25 +576,27 @@ private:
 
 
 class GraphicsPipeline final : public RefCounter<IGraphicsPipeline>, NoCopy{
+    friend class Device;
+    friend class CommandList;
+
+
 public:
     GraphicsPipeline(const VulkanContext& context);
     virtual ~GraphicsPipeline()override;
 
 
 public:
-    [[nodiscard]] virtual const GraphicsPipelineDesc& getDescription()const override{ return desc; }
-    [[nodiscard]] virtual const FramebufferInfo& getFramebufferInfo()const override{ return framebufferInfo; }
+    [[nodiscard]] virtual const GraphicsPipelineDesc& getDescription()const override{ return m_desc; }
+    [[nodiscard]] virtual const FramebufferInfo& getFramebufferInfo()const override{ return m_framebufferInfo; }
     virtual Object getNativeHandle(ObjectType objectType)override;
 
 
-public:
-    GraphicsPipelineDesc desc;
-    FramebufferInfo framebufferInfo;
-    VkPipeline pipeline = VK_NULL_HANDLE;
-    VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
-
-
 private:
+    GraphicsPipelineDesc m_desc;
+    FramebufferInfo m_framebufferInfo;
+    VkPipeline m_pipeline = VK_NULL_HANDLE;
+    VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
+
     const VulkanContext& m_context;
 };
 
@@ -578,23 +606,25 @@ private:
 
 
 class ComputePipeline final : public RefCounter<IComputePipeline>, NoCopy{
+    friend class Device;
+    friend class CommandList;
+
+
 public:
     ComputePipeline(const VulkanContext& context);
     virtual ~ComputePipeline()override;
 
 
 public:
-    [[nodiscard]] virtual const ComputePipelineDesc& getDescription()const override{ return desc; }
+    [[nodiscard]] virtual const ComputePipelineDesc& getDescription()const override{ return m_desc; }
     virtual Object getNativeHandle(ObjectType objectType)override;
 
 
-public:
-    ComputePipelineDesc desc;
-    VkPipeline pipeline = VK_NULL_HANDLE;
-    VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
-
-
 private:
+    ComputePipelineDesc m_desc;
+    VkPipeline m_pipeline = VK_NULL_HANDLE;
+    VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
+
     const VulkanContext& m_context;
 };
 
@@ -604,25 +634,27 @@ private:
 
 
 class MeshletPipeline final : public RefCounter<IMeshletPipeline>, NoCopy{
+    friend class Device;
+    friend class CommandList;
+
+
 public:
     MeshletPipeline(const VulkanContext& context);
     virtual ~MeshletPipeline()override;
 
 
 public:
-    [[nodiscard]] virtual const MeshletPipelineDesc& getDescription()const override{ return desc; }
-    [[nodiscard]] virtual const FramebufferInfo& getFramebufferInfo()const override{ return framebufferInfo; }
+    [[nodiscard]] virtual const MeshletPipelineDesc& getDescription()const override{ return m_desc; }
+    [[nodiscard]] virtual const FramebufferInfo& getFramebufferInfo()const override{ return m_framebufferInfo; }
     virtual Object getNativeHandle(ObjectType objectType)override;
 
 
-public:
-    MeshletPipelineDesc desc;
-    FramebufferInfo framebufferInfo;
-    VkPipeline pipeline = VK_NULL_HANDLE;
-    VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
-
-
 private:
+    MeshletPipelineDesc m_desc;
+    FramebufferInfo m_framebufferInfo;
+    VkPipeline m_pipeline = VK_NULL_HANDLE;
+    VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
+
     const VulkanContext& m_context;
 };
 
@@ -632,7 +664,9 @@ private:
 
 
 class RayTracingPipeline final : public RefCounter<IRayTracingPipeline>, NoCopy{
-    friend Device;
+    friend class Device;
+    friend class CommandList;
+    friend class ShaderTable;
 
 
 public:
@@ -641,19 +675,17 @@ public:
 
 
 public:
-    [[nodiscard]] virtual const RayTracingPipelineDesc& getDescription()const override{ return desc; }
+    [[nodiscard]] virtual const RayTracingPipelineDesc& getDescription()const override{ return m_desc; }
     virtual RayTracingShaderTableHandle createShaderTable()override;
     virtual Object getNativeHandle(ObjectType objectType)override;
 
 
-public:
-    RayTracingPipelineDesc desc;
-    VkPipeline pipeline = VK_NULL_HANDLE;
-    VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
-    Vector<u8, Alloc::CustomAllocator<u8>> shaderGroupHandles;
-
-
 private:
+    RayTracingPipelineDesc m_desc;
+    VkPipeline m_pipeline = VK_NULL_HANDLE;
+    VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
+    Vector<u8, Alloc::CustomAllocator<u8>> m_shaderGroupHandles;
+
     const VulkanContext& m_context;
     Device* m_device = nullptr;
 };
@@ -664,6 +696,10 @@ private:
 
 
 class ShaderTable final : public RefCounter<IRayTracingShaderTable>, NoCopy{
+    friend class CommandList;
+    friend class RayTracingPipeline;
+
+
 public:
     ShaderTable(const VulkanContext& context, Device* device);
     virtual ~ShaderTable()override;
@@ -677,7 +713,7 @@ public:
     virtual void clearMissShaders()override;
     virtual void clearHitShaders()override;
     virtual void clearCallableShaders()override;
-    virtual IRayTracingPipeline* getPipeline()override{ return pipeline; }
+    virtual IRayTracingPipeline* getPipeline()override{ return m_pipeline; }
     virtual Object getNativeHandle(ObjectType objectType)override;
 
 
@@ -686,26 +722,24 @@ private:
     u32 findGroupIndex(const Name& exportName)const;
 
 
-public:
-    RayTracingPipeline* pipeline = nullptr;
-
-    BufferHandle raygenBuffer;
-    u64 raygenOffset = 0;
-
-    BufferHandle missBuffer;
-    u64 missOffset = 0;
-    u32 missCount = 0;
-
-    BufferHandle hitBuffer;
-    u64 hitOffset = 0;
-    u32 hitCount = 0;
-
-    BufferHandle callableBuffer;
-    u64 callableOffset = 0;
-    u32 callableCount = 0;
-
-
 private:
+    RayTracingPipeline* m_pipeline = nullptr;
+
+    BufferHandle m_raygenBuffer;
+    u64 m_raygenOffset = 0;
+
+    BufferHandle m_missBuffer;
+    u64 m_missOffset = 0;
+    u32 m_missCount = 0;
+
+    BufferHandle m_hitBuffer;
+    u64 m_hitOffset = 0;
+    u32 m_hitCount = 0;
+
+    BufferHandle m_callableBuffer;
+    u64 m_callableOffset = 0;
+    u32 m_callableCount = 0;
+
     const VulkanContext& m_context;
     Device* m_device = nullptr;
 };
@@ -716,26 +750,28 @@ private:
 
 
 class BindingLayout final : public RefCounter<IBindingLayout>, NoCopy{
+    friend class Device;
+    friend class CommandList;
+
+
 public:
     BindingLayout(const VulkanContext& context);
     virtual ~BindingLayout()override;
 
 
 public:
-    [[nodiscard]] virtual const BindingLayoutDesc* getDescription()const override{ return isBindless ? nullptr : &desc; }
-    [[nodiscard]] virtual const BindlessLayoutDesc* getBindlessDesc()const override{ return isBindless ? &bindlessDesc : nullptr; }
-    virtual Object getNativeHandle(ObjectType)override{ return Object(pipelineLayout); }
-
-
-public:
-    BindingLayoutDesc desc;
-    BindlessLayoutDesc bindlessDesc;
-    bool isBindless = false;
-    VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
-    Vector<VkDescriptorSetLayout, Alloc::CustomAllocator<VkDescriptorSetLayout>> descriptorSetLayouts;
+    [[nodiscard]] virtual const BindingLayoutDesc* getDescription()const override{ return m_isBindless ? nullptr : &m_desc; }
+    [[nodiscard]] virtual const BindlessLayoutDesc* getBindlessDesc()const override{ return m_isBindless ? &m_bindlessDesc : nullptr; }
+    virtual Object getNativeHandle(ObjectType)override{ return Object(m_pipelineLayout); }
 
 
 private:
+    BindingLayoutDesc m_desc;
+    BindlessLayoutDesc m_bindlessDesc;
+    bool m_isBindless = false;
+    VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
+    Vector<VkDescriptorSetLayout, Alloc::CustomAllocator<VkDescriptorSetLayout>> m_descriptorSetLayouts;
+
     const VulkanContext& m_context;
 };
 
@@ -745,26 +781,28 @@ private:
 
 
 class DescriptorTable final : public RefCounter<IDescriptorTable>, NoCopy{
+    friend class Device;
+    friend class CommandList;
+
+
 public:
     DescriptorTable(const VulkanContext& context);
     virtual ~DescriptorTable()override;
 
 
 public:
-    [[nodiscard]] virtual u32 getCapacity()const override{ return static_cast<u32>(descriptorSets.size()); }
+    [[nodiscard]] virtual u32 getCapacity()const override{ return static_cast<u32>(m_descriptorSets.size()); }
     [[nodiscard]] virtual u32 getFirstDescriptorIndexInHeap()const override{ return 0; }
 
     [[nodiscard]] virtual const BindingSetDesc* getDescription()const override{ return nullptr; }
-    [[nodiscard]] virtual IBindingLayout* getLayout()const override{ return layout.get(); }
-
-
-public:
-    RefCountPtr<BindingLayout, ArenaRefDeleter<BindingLayout>> layout;
-    Vector<VkDescriptorSet, Alloc::CustomAllocator<VkDescriptorSet>> descriptorSets;
-    VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
+    [[nodiscard]] virtual IBindingLayout* getLayout()const override{ return m_layout.get(); }
 
 
 private:
+    RefCountPtr<BindingLayout, ArenaRefDeleter<BindingLayout>> m_layout;
+    Vector<VkDescriptorSet, Alloc::CustomAllocator<VkDescriptorSet>> m_descriptorSets;
+    VkDescriptorPool m_descriptorPool = VK_NULL_HANDLE;
+
     const VulkanContext& m_context;
 };
 
@@ -774,24 +812,26 @@ private:
 
 
 class BindingSet final : public RefCounter<IBindingSet>, NoCopy{
+    friend class Device;
+    friend class CommandList;
+
+
 public:
     BindingSet(const VulkanContext& context);
     virtual ~BindingSet()override;
 
 
 public:
-    [[nodiscard]] virtual const BindingSetDesc* getDescription()const override{ return &desc; }
-    [[nodiscard]] virtual IBindingLayout* getLayout()const override{ return layout.get(); }
-
-
-public:
-    BindingSetDesc desc;
-    RefCountPtr<BindingLayout, ArenaRefDeleter<BindingLayout>> layout;
-    RefCountPtr<DescriptorTable, ArenaRefDeleter<DescriptorTable>> descriptorTable;
-    Vector<VkDescriptorSet, Alloc::CustomAllocator<VkDescriptorSet>> descriptorSets;
+    [[nodiscard]] virtual const BindingSetDesc* getDescription()const override{ return &m_desc; }
+    [[nodiscard]] virtual IBindingLayout* getLayout()const override{ return m_layout.get(); }
 
 
 private:
+    BindingSetDesc m_desc;
+    RefCountPtr<BindingLayout, ArenaRefDeleter<BindingLayout>> m_layout;
+    RefCountPtr<DescriptorTable, ArenaRefDeleter<DescriptorTable>> m_descriptorTable;
+    Vector<VkDescriptorSet, Alloc::CustomAllocator<VkDescriptorSet>> m_descriptorSets;
+
     const VulkanContext& m_context;
 };
 
@@ -801,30 +841,32 @@ private:
 
 
 class AccelStruct final : public RefCounter<IRayTracingAccelStruct>, NoCopy{
+    friend class Device;
+    friend class CommandList;
+
+
 public:
     AccelStruct(const VulkanContext& context);
     virtual ~AccelStruct()override;
 
 
 public:
-    [[nodiscard]] virtual const RayTracingAccelStructDesc& getDescription()const override{ return desc; }
-    [[nodiscard]] virtual bool isCompacted()const override{ return compacted; }
-    [[nodiscard]] virtual u64 getDeviceAddress()const override{ return deviceAddress; }
+    [[nodiscard]] virtual const RayTracingAccelStructDesc& getDescription()const override{ return m_desc; }
+    [[nodiscard]] virtual bool isCompacted()const override{ return m_compacted; }
+    [[nodiscard]] virtual u64 getDeviceAddress()const override{ return m_deviceAddress; }
     virtual Object getNativeHandle(ObjectType objectType)override;
 
 
-public:
-    RayTracingAccelStructDesc desc;
-    VkAccelerationStructureKHR accelStruct = VK_NULL_HANDLE;
-    RefCountPtr<IBuffer, ArenaRefDeleter<IBuffer>> buffer;
-    u64 deviceAddress = 0;
-    bool compacted = false;
-
-    VkQueryPool compactionQueryPool = VK_NULL_HANDLE;
-    u32 compactionQueryIndex = 0;
-
-
 private:
+    RayTracingAccelStructDesc m_desc;
+    VkAccelerationStructureKHR m_accelStruct = VK_NULL_HANDLE;
+    RefCountPtr<IBuffer, ArenaRefDeleter<IBuffer>> m_buffer;
+    u64 m_deviceAddress = 0;
+    bool m_compacted = false;
+
+    VkQueryPool m_compactionQueryPool = VK_NULL_HANDLE;
+    u32 m_compactionQueryIndex = 0;
+
     const VulkanContext& m_context;
 };
 
@@ -834,26 +876,28 @@ private:
 
 
 class OpacityMicromap final : public RefCounter<IRayTracingOpacityMicromap>, NoCopy{
+    friend class Device;
+    friend class CommandList;
+
+
 public:
     OpacityMicromap(const VulkanContext& context);
     virtual ~OpacityMicromap()override;
 
 
 public:
-    [[nodiscard]] virtual const RayTracingOpacityMicromapDesc& getDescription()const override{ return desc; }
-    [[nodiscard]] virtual bool isCompacted()const override{ return compacted; }
-    [[nodiscard]] virtual u64 getDeviceAddress()const override{ return deviceAddress; }
-
-
-public:
-    RayTracingOpacityMicromapDesc desc;
-    RefCountPtr<IBuffer, ArenaRefDeleter<IBuffer>> dataBuffer;
-    VkMicromapEXT micromap = VK_NULL_HANDLE;
-    u64 deviceAddress = 0;
-    bool compacted = false;
+    [[nodiscard]] virtual const RayTracingOpacityMicromapDesc& getDescription()const override{ return m_desc; }
+    [[nodiscard]] virtual bool isCompacted()const override{ return m_compacted; }
+    [[nodiscard]] virtual u64 getDeviceAddress()const override{ return m_deviceAddress; }
 
 
 private:
+    RayTracingOpacityMicromapDesc m_desc;
+    RefCountPtr<IBuffer, ArenaRefDeleter<IBuffer>> m_dataBuffer;
+    VkMicromapEXT m_micromap = VK_NULL_HANDLE;
+    u64 m_deviceAddress = 0;
+    bool m_compacted = false;
+
     const VulkanContext& m_context;
 };
 
@@ -863,6 +907,9 @@ private:
 
 
 class StateTracker final : NoCopy{
+    friend class CommandList;
+
+
 public:
     StateTracker(const VulkanContext& context);
     ~StateTracker();
@@ -885,12 +932,11 @@ public:
     void setEnableUavBarriersForBuffer(IBuffer* buffer, bool enableBarriers);
 
 
-public:
-    GraphicsState graphicsState;
-    ComputeState computeState;
-    MeshletState meshletState;
-    RayTracingState rayTracingState;
-
+private:
+    GraphicsState m_graphicsState;
+    ComputeState m_computeState;
+    MeshletState m_meshletState;
+    RayTracingState m_rayTracingState;
 
 private:
     HashMap<ITexture*, ResourceStates::Mask, Hasher<ITexture*>, EqualTo<ITexture*>, Alloc::CustomAllocator<Pair<const ITexture*, ResourceStates::Mask>>> m_permanentTextureStates;
@@ -922,6 +968,9 @@ struct RenderPassParameters{
 };
 
 class CommandList final : public RefCounter<ICommandList>, NoCopy{
+    friend class Queue;
+
+
 public:
     CommandList(Device& device, const CommandListParameters& params);
     virtual ~CommandList()override;
@@ -1005,7 +1054,7 @@ public:
     void setEventQuery(IEventQuery* query, CommandQueue::Enum waitQueue);
     void resetEventQuery(IEventQuery* query);
     void waitEventQuery(IEventQuery* query);
-    [[nodiscard]] TrackedCommandBufferPtr getCurrentCmdBuf()const{ return currentCmdBuf; }
+    [[nodiscard]] TrackedCommandBufferPtr getCurrentCmdBuf()const{ return m_currentCmdBuf; }
 
 
 private:
@@ -1013,19 +1062,17 @@ private:
     void endRenderPass();
 
 
-public:
-    CommandListParameters desc;
-    TrackedCommandBufferPtr currentCmdBuf;
-    CustomUniquePtr<StateTracker> stateTracker;
-    bool enableAutomaticBarriers = true;
-
-    GraphicsState currentGraphicsState;
-    ComputeState currentComputeState;
-    MeshletState currentMeshletState;
-    RayTracingState currentRayTracingState;
-
-
 private:
+    CommandListParameters m_desc;
+    TrackedCommandBufferPtr m_currentCmdBuf;
+    CustomUniquePtr<StateTracker> m_stateTracker;
+    bool m_enableAutomaticBarriers = true;
+
+    GraphicsState m_currentGraphicsState;
+    ComputeState m_currentComputeState;
+    MeshletState m_currentMeshletState;
+    RayTracingState m_currentRayTracingState;
+
     Device& m_device;
     const VulkanContext& m_context;
     AftermathMarkerTracker m_aftermathMarkerTracker;
@@ -1042,17 +1089,19 @@ private:
 
 
 class EventQuery final : public RefCounter<IEventQuery>, NoCopy{
+    friend class Device;
+    friend class CommandList;
+
+
 public:
     EventQuery(const VulkanContext& context);
     virtual ~EventQuery()override;
 
 
-public:
-    VkFence fence = VK_NULL_HANDLE;
-    bool started = false;
-
-
 private:
+    VkFence m_fence = VK_NULL_HANDLE;
+    bool m_started = false;
+
     const VulkanContext& m_context;
 };
 
@@ -1062,18 +1111,20 @@ private:
 
 
 class TimerQuery final : public RefCounter<ITimerQuery>, NoCopy{
+    friend class Device;
+    friend class CommandList;
+
+
 public:
     TimerQuery(const VulkanContext& context);
     virtual ~TimerQuery()override;
 
 
-public:
-    VkQueryPool queryPool = VK_NULL_HANDLE;
-    bool started = false;
-    bool resolved = false;
-
-
 private:
+    VkQueryPool m_queryPool = VK_NULL_HANDLE;
+    bool m_started = false;
+    bool m_resolved = false;
+
     const VulkanContext& m_context;
 };
 

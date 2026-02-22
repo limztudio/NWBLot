@@ -18,9 +18,9 @@ NWB_VULKAN_BEGIN
 
 TrackedCommandBuffer::TrackedCommandBuffer(const VulkanContext& context, CommandQueue::Enum, u32 queueFamilyIndex)
     : m_context(context)
-    , referencedResources(Alloc::CustomAllocator<RefCountPtr<IResource, ArenaRefDeleter<IResource>>>(*context.objectArena))
-    , referencedStagingBuffers(Alloc::CustomAllocator<RefCountPtr<IBuffer, ArenaRefDeleter<IBuffer>>>(*context.objectArena))
-    , referencedAccelStructHandles(Alloc::CustomAllocator<VkAccelerationStructureKHR>(*context.objectArena))
+    , m_referencedResources(Alloc::CustomAllocator<RefCountPtr<IResource, ArenaRefDeleter<IResource>>>(*context.objectArena))
+    , m_referencedStagingBuffers(Alloc::CustomAllocator<RefCountPtr<IBuffer, ArenaRefDeleter<IBuffer>>>(*context.objectArena))
+    , m_referencedAccelStructHandles(Alloc::CustomAllocator<VkAccelerationStructureKHR>(*context.objectArena))
 {
     VkResult res = VK_SUCCESS;
 
@@ -29,46 +29,46 @@ TrackedCommandBuffer::TrackedCommandBuffer(const VulkanContext& context, Command
     poolInfo.queueFamilyIndex = queueFamilyIndex;
     poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT | VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
 
-    res = vkCreateCommandPool(m_context.device, &poolInfo, m_context.allocationCallbacks, &cmdPool);
+    res = vkCreateCommandPool(m_context.device, &poolInfo, m_context.allocationCallbacks, &m_cmdPool);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create command pool: {}"), ResultToString(res));
-        cmdPool = VK_NULL_HANDLE;
-        cmdBuf = VK_NULL_HANDLE;
+        m_cmdPool = VK_NULL_HANDLE;
+        m_cmdBuf = VK_NULL_HANDLE;
         return;
     }
 
     VkCommandBufferAllocateInfo allocInfo = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO };
-    allocInfo.commandPool = cmdPool;
+    allocInfo.commandPool = m_cmdPool;
     allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     allocInfo.commandBufferCount = 1;
 
-    res = vkAllocateCommandBuffers(m_context.device, &allocInfo, &cmdBuf);
+    res = vkAllocateCommandBuffers(m_context.device, &allocInfo, &m_cmdBuf);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate command buffer: {}"), ResultToString(res));
-        cmdBuf = VK_NULL_HANDLE;
-        vkDestroyCommandPool(m_context.device, cmdPool, m_context.allocationCallbacks);
-        cmdPool = VK_NULL_HANDLE;
+        m_cmdBuf = VK_NULL_HANDLE;
+        vkDestroyCommandPool(m_context.device, m_cmdPool, m_context.allocationCallbacks);
+        m_cmdPool = VK_NULL_HANDLE;
     }
 }
 
 TrackedCommandBuffer::~TrackedCommandBuffer(){
-    if(cmdBuf){
-        vkFreeCommandBuffers(m_context.device, cmdPool, 1, &cmdBuf);
-        cmdBuf = VK_NULL_HANDLE;
+    if(m_cmdBuf){
+        vkFreeCommandBuffers(m_context.device, m_cmdPool, 1, &m_cmdBuf);
+        m_cmdBuf = VK_NULL_HANDLE;
     }
 
-    if(cmdPool){
-        vkDestroyCommandPool(m_context.device, cmdPool, m_context.allocationCallbacks);
-        cmdPool = VK_NULL_HANDLE;
+    if(m_cmdPool){
+        vkDestroyCommandPool(m_context.device, m_cmdPool, m_context.allocationCallbacks);
+        m_cmdPool = VK_NULL_HANDLE;
     }
 
-    for(auto handle : referencedAccelStructHandles)
+    for(auto handle : m_referencedAccelStructHandles)
         if(handle != VK_NULL_HANDLE)
             vkDestroyAccelerationStructureKHR(m_context.device, handle, m_context.allocationCallbacks);
-    referencedAccelStructHandles.clear();
+    m_referencedAccelStructHandles.clear();
 
-    referencedResources.clear();
-    referencedStagingBuffers.clear();
+    m_referencedResources.clear();
+    m_referencedStagingBuffers.clear();
 }
 
 
@@ -97,15 +97,15 @@ Queue::Queue(const VulkanContext& context, CommandQueue::Enum queueID, VkQueue q
     VkSemaphoreCreateInfo semaphoreInfo = { VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
     semaphoreInfo.pNext = &timelineInfo;
 
-    vkCreateSemaphore(m_context.device, &semaphoreInfo, m_context.allocationCallbacks, &trackingSemaphore);
+    vkCreateSemaphore(m_context.device, &semaphoreInfo, m_context.allocationCallbacks, &m_trackingSemaphore);
 }
 Queue::~Queue(){
     VkResult res = VK_SUCCESS;
 
-    if(trackingSemaphore && m_lastSubmittedID > 0){
+    if(m_trackingSemaphore && m_lastSubmittedID > 0){
         VkSemaphoreWaitInfo waitInfo = { VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO };
         waitInfo.semaphoreCount = 1;
-        waitInfo.pSemaphores = &trackingSemaphore;
+        waitInfo.pSemaphores = &m_trackingSemaphore;
         waitInfo.pValues = &m_lastSubmittedID;
 
         res = vkWaitSemaphores(m_context.device, &waitInfo, UINT64_MAX);
@@ -115,15 +115,15 @@ Queue::~Queue(){
     m_commandBuffersInFlight.clear();
     m_commandBuffersPool.clear();
 
-    if(trackingSemaphore){
-        vkDestroySemaphore(m_context.device, trackingSemaphore, m_context.allocationCallbacks);
-        trackingSemaphore = VK_NULL_HANDLE;
+    if(m_trackingSemaphore){
+        vkDestroySemaphore(m_context.device, m_trackingSemaphore, m_context.allocationCallbacks);
+        m_trackingSemaphore = VK_NULL_HANDLE;
     }
 }
 
 TrackedCommandBufferPtr Queue::createCommandBuffer(){
     auto* cmdBuf = NewArenaObject<TrackedCommandBuffer>(*m_context.objectArena, m_context, m_queueID, m_queueFamilyIndex);
-    cmdBuf->recordingID = ++m_lastRecordingID;
+    cmdBuf->m_recordingID = ++m_lastRecordingID;
     return TrackedCommandBufferPtr(cmdBuf, TrackedCommandBufferPtr::deleter_type(m_context.objectArena));
 }
 
@@ -135,9 +135,9 @@ TrackedCommandBufferPtr Queue::getOrCreateCommandBuffer(){
     auto it = m_commandBuffersInFlight.begin();
     while(it != m_commandBuffersInFlight.end()){
         TrackedCommandBuffer* cmdBuf = it->get();
-        if(cmdBuf->submissionID <= m_lastFinishedID){
-            cmdBuf->referencedResources.clear();
-            cmdBuf->referencedStagingBuffers.clear();
+        if(cmdBuf->m_submissionID <= m_lastFinishedID){
+            cmdBuf->m_referencedResources.clear();
+            cmdBuf->m_referencedStagingBuffers.clear();
 
             m_commandBuffersPool.push_back(Move(*it));
             it = m_commandBuffersInFlight.erase(it);
@@ -150,8 +150,8 @@ TrackedCommandBufferPtr Queue::getOrCreateCommandBuffer(){
         TrackedCommandBufferPtr cmdBuf = Move(m_commandBuffersPool.front());
         m_commandBuffersPool.pop_front();
 
-        vkResetCommandBuffer(cmdBuf->cmdBuf, 0);
-        cmdBuf->recordingID = ++m_lastRecordingID;
+        vkResetCommandBuffer(cmdBuf->m_cmdBuf, 0);
+        cmdBuf->m_recordingID = ++m_lastRecordingID;
 
         return cmdBuf;
     }
@@ -194,13 +194,13 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
 
         for(usize i = 0; i < numCmd; ++i){
             auto* cmdList = checked_cast<CommandList*>(ppCmd[i]);
-            if(!cmdList || !cmdList->currentCmdBuf)
+            if(!cmdList || !cmdList->m_currentCmdBuf)
                 continue;
 
-            cmdBufs.push_back(cmdList->currentCmdBuf->cmdBuf);
+            cmdBufs.push_back(cmdList->m_currentCmdBuf->m_cmdBuf);
 
-            cmdList->currentCmdBuf->submissionID = m_lastSubmittedID + 1;
-            trackedBuffers.push_back(Move(cmdList->currentCmdBuf));
+            cmdList->m_currentCmdBuf->m_submissionID = m_lastSubmittedID + 1;
+            trackedBuffers.push_back(Move(cmdList->m_currentCmdBuf));
         }
     }
 
@@ -210,7 +210,7 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
     u64 submissionID = ++m_lastSubmittedID;
 
     VkSemaphoreSubmitInfo timelineSignal = { VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO };
-    timelineSignal.semaphore = trackingSemaphore;
+    timelineSignal.semaphore = m_trackingSemaphore;
     timelineSignal.value = submissionID;
     timelineSignal.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
 
@@ -248,9 +248,9 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
 
     VkFence submitFence = VK_NULL_HANDLE;
     for(auto& tracked : trackedBuffers){
-        if(tracked->signalFence != VK_NULL_HANDLE){
-            submitFence = tracked->signalFence;
-            tracked->signalFence = VK_NULL_HANDLE;
+        if(tracked->m_signalFence != VK_NULL_HANDLE){
+            submitFence = tracked->m_signalFence;
+            tracked->m_signalFence = VK_NULL_HANDLE;
         }
     }
 
@@ -289,7 +289,7 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
 
 void Queue::updateLastFinishedID(){
     u64 completedValue = 0;
-    vkGetSemaphoreCounterValue(m_context.device, trackingSemaphore, &completedValue);
+    vkGetSemaphoreCounterValue(m_context.device, m_trackingSemaphore, &completedValue);
     m_lastFinishedID = completedValue;
 }
 
@@ -305,7 +305,7 @@ bool Queue::waitCommandList(u64 commandListID, u64 timeout){
 
     VkSemaphoreWaitInfo waitInfo = { VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO };
     waitInfo.semaphoreCount = 1;
-    waitInfo.pSemaphores = &trackingSemaphore;
+    waitInfo.pSemaphores = &m_trackingSemaphore;
     waitInfo.pValues = &commandListID;
 
     res = vkWaitSemaphores(m_context.device, &waitInfo, timeout);
@@ -331,8 +331,8 @@ void Queue::waitForIdle(){
     m_lastFinishedID = m_lastSubmittedID;
 
     for(auto& tracked : m_commandBuffersInFlight){
-        tracked->referencedResources.clear();
-        tracked->referencedStagingBuffers.clear();
+        tracked->m_referencedResources.clear();
+        tracked->m_referencedStagingBuffers.clear();
         m_commandBuffersPool.push_back(Move(tracked));
     }
     m_commandBuffersInFlight.clear();
@@ -344,7 +344,7 @@ void Queue::waitForIdle(){
 
 VkSemaphore Device::getQueueSemaphore(CommandQueue::Enum queue){
     Queue* q = getQueue(queue);
-    return q ? q->trackingSemaphore : VK_NULL_HANDLE;
+    return q ? q->m_trackingSemaphore : VK_NULL_HANDLE;
 }
 
 void Device::queueWaitForSemaphore(CommandQueue::Enum waitQueue, VkSemaphore semaphore, u64 value){
@@ -375,7 +375,7 @@ void Device::queueWaitForCommandList(CommandQueue::Enum waitQueue, CommandQueue:
     Queue* exec = getQueue(executionQueue);
 
     if(wait && exec){
-        wait->addWaitSemaphore(exec->trackingSemaphore, instance);
+        wait->addWaitSemaphore(exec->m_trackingSemaphore, instance);
     }
 }
 
@@ -391,7 +391,7 @@ void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapp
     Vector<VkSparseImageMemoryBind, Alloc::ScratchAllocator<VkSparseImageMemoryBind>> sparseImageMemoryBinds{ Alloc::ScratchAllocator<VkSparseImageMemoryBind>(scratchArena) };
     Vector<VkSparseMemoryBind, Alloc::ScratchAllocator<VkSparseMemoryBind>> sparseMemoryBinds{ Alloc::ScratchAllocator<VkSparseMemoryBind>(scratchArena) };
 
-    const VkImageCreateInfo& imageInfo = texture->imageInfo;
+    const VkImageCreateInfo& imageInfo = texture->m_imageInfo;
     VkImageAspectFlags textureAspectFlags = VK_IMAGE_ASPECT_COLOR_BIT;
 
     VkFormat fmt = imageInfo.format;
@@ -431,11 +431,11 @@ void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapp
     }
 
     uint32_t sparseReqCount = 0;
-    vkGetImageSparseMemoryRequirements(m_context.device, texture->image, &sparseReqCount, nullptr);
+    vkGetImageSparseMemoryRequirements(m_context.device, texture->m_image, &sparseReqCount, nullptr);
 
     Vector<VkSparseImageMemoryRequirements, Alloc::ScratchAllocator<VkSparseImageMemoryRequirements>> sparseReqs(sparseReqCount, Alloc::ScratchAllocator<VkSparseImageMemoryRequirements>(scratchArena));
     if(sparseReqCount > 0)
-        vkGetImageSparseMemoryRequirements(m_context.device, texture->image, &sparseReqCount, sparseReqs.data());
+        vkGetImageSparseMemoryRequirements(m_context.device, texture->m_image, &sparseReqCount, sparseReqs.data());
 
     if(!sparseReqs.empty()){
         imageMipTailOffset = sparseReqs[0].imageMipTailOffset;
@@ -445,7 +445,7 @@ void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapp
     for(u32 i = 0; i < numTileMappings; ++i){
         u32 numRegions = tileMappings[i].numTextureRegions;
         Heap* heap = tileMappings[i].heap ? checked_cast<Heap*>(tileMappings[i].heap) : nullptr;
-        VkDeviceMemory deviceMemory = heap ? heap->memory : VK_NULL_HANDLE;
+        VkDeviceMemory deviceMemory = heap ? heap->m_memory : VK_NULL_HANDLE;
 
         for(u32 j = 0; j < numRegions; ++j){
             const TiledTextureCoordinate& coord = tileMappings[i].tiledTextureCoordinates[j];
@@ -454,7 +454,7 @@ void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapp
             if(region.tilesNum){
                 VkSparseMemoryBind bind = {};
                 bind.resourceOffset = imageMipTailOffset + coord.arrayLevel * imageMipTailStride;
-                bind.size = region.tilesNum * texture->tileByteSize;
+                bind.size = region.tilesNum * texture->m_tileByteSize;
                 bind.memory = deviceMemory;
                 bind.memoryOffset = deviceMemory ? tileMappings[i].byteOffsets[j] : 0;
                 sparseMemoryBinds.push_back(bind);
@@ -481,7 +481,7 @@ void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapp
 
     VkSparseImageMemoryBindInfo sparseImageMemoryBindInfo = {};
     if(!sparseImageMemoryBinds.empty()){
-        sparseImageMemoryBindInfo.image = texture->image;
+        sparseImageMemoryBindInfo.image = texture->m_image;
         sparseImageMemoryBindInfo.bindCount = static_cast<u32>(sparseImageMemoryBinds.size());
         sparseImageMemoryBindInfo.pBinds = sparseImageMemoryBinds.data();
         bindSparseInfo.imageBindCount = 1;
@@ -490,7 +490,7 @@ void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapp
 
     VkSparseImageOpaqueMemoryBindInfo sparseOpaqueBindInfo = {};
     if(!sparseMemoryBinds.empty()){
-        sparseOpaqueBindInfo.image = texture->image;
+        sparseOpaqueBindInfo.image = texture->m_image;
         sparseOpaqueBindInfo.bindCount = static_cast<u32>(sparseMemoryBinds.size());
         sparseOpaqueBindInfo.pBinds = sparseMemoryBinds.data();
         bindSparseInfo.imageOpaqueBindCount = 1;

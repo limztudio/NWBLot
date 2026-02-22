@@ -33,12 +33,12 @@ VkResult VulkanAllocator::allocateBufferMemory(Buffer* buffer, bool enableDevice
     VkResult res = VK_SUCCESS;
 
     VkMemoryRequirements memRequirements;
-    vkGetBufferMemoryRequirements(m_context.device, buffer->buffer, &memRequirements);
+    vkGetBufferMemoryRequirements(m_context.device, buffer->m_buffer, &memRequirements);
 
     VkMemoryPropertyFlags memoryProperties = 0;
-    if(buffer->desc.cpuAccess == CpuAccessMode::Write)
+    if(buffer->m_desc.cpuAccess == CpuAccessMode::Write)
         memoryProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-    else if(buffer->desc.cpuAccess == CpuAccessMode::Read)
+    else if(buffer->m_desc.cpuAccess == CpuAccessMode::Read)
         memoryProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
     else
         memoryProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
@@ -63,7 +63,7 @@ VkResult VulkanAllocator::allocateBufferMemory(Buffer* buffer, bool enableDevice
     VkMemoryDedicatedAllocateInfo dedicatedInfo{};
     if(memRequirements.size >= s_LargeBufferThreshold){
         dedicatedInfo.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO;
-        dedicatedInfo.buffer = buffer->buffer;
+        dedicatedInfo.buffer = buffer->m_buffer;
         dedicatedInfo.image = VK_NULL_HANDLE;
         dedicatedInfo.pNext = pNext;
         pNext = &dedicatedInfo;
@@ -75,14 +75,14 @@ VkResult VulkanAllocator::allocateBufferMemory(Buffer* buffer, bool enableDevice
     allocInfo.memoryTypeIndex = memoryTypeIndex;
     allocInfo.pNext = pNext;
 
-    res = vkAllocateMemory(m_context.device, &allocInfo, m_context.allocationCallbacks, &buffer->memory);
+    res = vkAllocateMemory(m_context.device, &allocInfo, m_context.allocationCallbacks, &buffer->m_memory);
     if(res != VK_SUCCESS)
         return res;
 
-    res = vkBindBufferMemory(m_context.device, buffer->buffer, buffer->memory, 0);
+    res = vkBindBufferMemory(m_context.device, buffer->m_buffer, buffer->m_memory, 0);
     if(res != VK_SUCCESS){
-        vkFreeMemory(m_context.device, buffer->memory, m_context.allocationCallbacks);
-        buffer->memory = VK_NULL_HANDLE;
+        vkFreeMemory(m_context.device, buffer->m_memory, m_context.allocationCallbacks);
+        buffer->m_memory = VK_NULL_HANDLE;
         return res;
     }
 
@@ -90,13 +90,13 @@ VkResult VulkanAllocator::allocateBufferMemory(Buffer* buffer, bool enableDevice
 }
 
 void VulkanAllocator::freeBufferMemory(Buffer* buffer){
-    if(buffer->memory != VK_NULL_HANDLE){
-        if(buffer->mappedMemory){
-            vkUnmapMemory(m_context.device, buffer->memory);
-            buffer->mappedMemory = nullptr;
+    if(buffer->m_memory != VK_NULL_HANDLE){
+        if(buffer->m_mappedMemory){
+            vkUnmapMemory(m_context.device, buffer->m_memory);
+            buffer->m_mappedMemory = nullptr;
         }
-        vkFreeMemory(m_context.device, buffer->memory, m_context.allocationCallbacks);
-        buffer->memory = VK_NULL_HANDLE;
+        vkFreeMemory(m_context.device, buffer->m_memory, m_context.allocationCallbacks);
+        buffer->m_memory = VK_NULL_HANDLE;
     }
 }
 
@@ -104,7 +104,7 @@ VkResult VulkanAllocator::allocateTextureMemory(Texture* texture){
     VkResult res = VK_SUCCESS;
 
     VkMemoryRequirements memRequirements;
-    vkGetImageMemoryRequirements(m_context.device, texture->image, &memRequirements);
+    vkGetImageMemoryRequirements(m_context.device, texture->m_image, &memRequirements);
 
     u32 memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
     if(memoryTypeIndex == UINT32_MAX)
@@ -115,7 +115,7 @@ VkResult VulkanAllocator::allocateTextureMemory(Texture* texture){
     // Use dedicated allocation for textures (recommended for optimal performance)
     VkMemoryDedicatedAllocateInfo dedicatedInfo{};
     dedicatedInfo.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO;
-    dedicatedInfo.image = texture->image;
+    dedicatedInfo.image = texture->m_image;
     dedicatedInfo.buffer = VK_NULL_HANDLE;
     dedicatedInfo.pNext = pNext;
     pNext = &dedicatedInfo;
@@ -126,14 +126,14 @@ VkResult VulkanAllocator::allocateTextureMemory(Texture* texture){
     allocInfo.memoryTypeIndex = memoryTypeIndex;
     allocInfo.pNext = pNext;
 
-    res = vkAllocateMemory(m_context.device, &allocInfo, m_context.allocationCallbacks, &texture->memory);
+    res = vkAllocateMemory(m_context.device, &allocInfo, m_context.allocationCallbacks, &texture->m_memory);
     if(res != VK_SUCCESS)
         return res;
 
-    res = vkBindImageMemory(m_context.device, texture->image, texture->memory, 0);
+    res = vkBindImageMemory(m_context.device, texture->m_image, texture->m_memory, 0);
     if(res != VK_SUCCESS){
-        vkFreeMemory(m_context.device, texture->memory, m_context.allocationCallbacks);
-        texture->memory = VK_NULL_HANDLE;
+        vkFreeMemory(m_context.device, texture->m_memory, m_context.allocationCallbacks);
+        texture->m_memory = VK_NULL_HANDLE;
         return res;
     }
 
@@ -141,9 +141,9 @@ VkResult VulkanAllocator::allocateTextureMemory(Texture* texture){
 }
 
 void VulkanAllocator::freeTextureMemory(Texture* texture){
-    if(texture->memory != VK_NULL_HANDLE){
-        vkFreeMemory(m_context.device, texture->memory, m_context.allocationCallbacks);
-        texture->memory = VK_NULL_HANDLE;
+    if(texture->m_memory != VK_NULL_HANDLE){
+        vkFreeMemory(m_context.device, texture->m_memory, m_context.allocationCallbacks);
+        texture->m_memory = VK_NULL_HANDLE;
     }
 }
 

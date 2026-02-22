@@ -20,14 +20,14 @@ MeshletPipeline::MeshletPipeline(const VulkanContext& context)
     : m_context(context)
 {}
 MeshletPipeline::~MeshletPipeline(){
-    if(pipeline){
-        vkDestroyPipeline(m_context.device, pipeline, m_context.allocationCallbacks);
-        pipeline = VK_NULL_HANDLE;
+    if(m_pipeline){
+        vkDestroyPipeline(m_context.device, m_pipeline, m_context.allocationCallbacks);
+        m_pipeline = VK_NULL_HANDLE;
     }
 }
 Object MeshletPipeline::getNativeHandle(ObjectType objectType){
     if(objectType == ObjectTypes::VK_Pipeline)
-        return Object(pipeline);
+        return Object(m_pipeline);
     return Object(nullptr);
 }
 
@@ -41,7 +41,7 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     Alloc::ScratchArena<> scratchArena;
 
     auto* pso = NewArenaObject<MeshletPipeline>(*m_context.objectArena, m_context);
-    pso->desc = desc;
+    pso->m_desc = desc;
 
     Vector<VkPipelineShaderStageCreateInfo, Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>> shaderStages{ Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>(scratchArena) };
     Vector<VkSpecializationInfo, Alloc::ScratchAllocator<VkSpecializationInfo>> specInfos{ Alloc::ScratchAllocator<VkSpecializationInfo>(scratchArena) };
@@ -52,15 +52,15 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
         auto* s = checked_cast<Shader*>(iShader);
         VkPipelineShaderStageCreateInfo stageInfo = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
         stageInfo.stage = vkStage;
-        stageInfo.module = s->shaderModule;
-        stageInfo.pName = s->desc.entryName.c_str();
+        stageInfo.module = s->m_shaderModule;
+        stageInfo.pName = s->m_desc.entryName.c_str();
 
-        if(!s->specializationEntries.empty()){
+        if(!s->m_specializationEntries.empty()){
             VkSpecializationInfo specInfo{};
-            specInfo.mapEntryCount = static_cast<u32>(s->specializationEntries.size());
-            specInfo.pMapEntries = s->specializationEntries.data();
-            specInfo.dataSize = s->specializationData.size();
-            specInfo.pData = s->specializationData.data();
+            specInfo.mapEntryCount = static_cast<u32>(s->m_specializationEntries.size());
+            specInfo.pMapEntries = s->m_specializationEntries.data();
+            specInfo.dataSize = s->m_specializationData.size();
+            specInfo.pData = s->m_specializationData.data();
             specInfos.push_back(specInfo);
             stageInfo.pSpecializationInfo = &specInfos.back();
         }
@@ -85,8 +85,8 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
     if(!desc.bindingLayouts.empty() && desc.bindingLayouts[0]){
         auto* layout = checked_cast<BindingLayout*>(desc.bindingLayouts[0].get());
-        pipelineLayout = layout->pipelineLayout;
-        pso->pipelineLayout = pipelineLayout;
+        pipelineLayout = layout->m_pipelineLayout;
+        pso->m_pipelineLayout = pipelineLayout;
     }
 
     VkPipelineRasterizationStateCreateInfo rasterizer = { VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO };
@@ -172,7 +172,7 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     pipelineInfo.layout = pipelineLayout;
     pipelineInfo.renderPass = VK_NULL_HANDLE;
 
-    res = vkCreateGraphicsPipelines(m_context.device, m_context.pipelineCache, 1, &pipelineInfo, m_context.allocationCallbacks, &pso->pipeline);
+    res = vkCreateGraphicsPipelines(m_context.device, m_context.pipelineCache, 1, &pipelineInfo, m_context.allocationCallbacks, &pso->m_pipeline);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create meshlet pipeline: {}"), ResultToString(res));
         DestroyArenaObject(*m_context.objectArena, pso);
@@ -187,28 +187,28 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
 
 
 void CommandList::setMeshletState(const MeshletState& state){
-    currentMeshletState = state;
+    m_currentMeshletState = state;
 
     auto* pipeline = checked_cast<MeshletPipeline*>(state.pipeline);
     if(pipeline)
-        vkCmdBindPipeline(currentCmdBuf->cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->pipeline);
+        vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->m_pipeline);
 
     if(state.bindings.size() > 0){
         for(usize i = 0; i < state.bindings.size(); ++i){
             if(state.bindings[i]){
                 auto* bindingSet = checked_cast<BindingSet*>(state.bindings[i]);
-                if(!bindingSet->descriptorSets.empty())
-                    vkCmdBindDescriptorSets(currentCmdBuf->cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                        pipeline->pipelineLayout, static_cast<u32>(i),
-                        static_cast<u32>(bindingSet->descriptorSets.size()),
-                        bindingSet->descriptorSets.data(), 0, nullptr);
+                if(!bindingSet->m_descriptorSets.empty())
+                    vkCmdBindDescriptorSets(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                        pipeline->m_pipelineLayout, static_cast<u32>(i),
+                        static_cast<u32>(bindingSet->m_descriptorSets.size()),
+                        bindingSet->m_descriptorSets.data(), 0, nullptr);
             }
         }
     }
 }
 
 void CommandList::dispatchMesh(u32 groupsX, u32 groupsY, u32 groupsZ){
-    vkCmdDrawMeshTasksEXT(currentCmdBuf->cmdBuf, groupsX, groupsY, groupsZ);
+    vkCmdDrawMeshTasksEXT(m_currentCmdBuf->m_cmdBuf, groupsX, groupsY, groupsZ);
 }
 
 

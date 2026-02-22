@@ -35,15 +35,20 @@ private:
         void (*invoke)(const void* functor, usize chunkBegin, usize chunkEnd);
         const void* functor;
         Atomic<usize> nextChunk{ 0 };
-        usize numWorkerChunks;
+        usize numChunks;
         usize begin;
         usize chunkSize;
         usize remainder;
         Latch* done;
+        Atomic<i32> activeWorkers{ 0 };
     };
 
     using WorkerAllocator = MemoryAllocator<JoiningThread>;
     using TaskAllocator = MemoryAllocator<TaskItem>;
+
+
+private:
+    static constexpr usize s_ChunkOversubscription = 4;
 
 
 private:
@@ -52,6 +57,14 @@ private:
         const usize taskBytes = static_cast<usize>(threadCount) * 8 * sizeof(TaskItem);
         const usize total = workerBytes + taskBytes + 4096;
         return MemoryArena::StructureAlignedSize(total > 32768 ? total : 32768);
+    }
+
+    static inline usize computeChunkCount(usize maxChunks, usize totalThreads){
+        usize targetChunks = totalThreads;
+        if(totalThreads <= static_cast<usize>(-1) / s_ChunkOversubscription)
+            targetChunks = totalThreads * s_ChunkOversubscription;
+
+        return (maxChunks < targetChunks) ? maxChunks : targetChunks;
     }
 
 
@@ -116,10 +129,9 @@ public:
         }
 
         const usize totalThreads = static_cast<usize>(m_threadCount) + 1;
-        const usize numChunks = (count < totalThreads) ? count : totalThreads;
-        const usize workerChunks = numChunks - 1;
+        const usize numChunks = computeChunkCount(count, totalThreads);
 
-        if(workerChunks == 0){
+        if(numChunks <= 1){
             for(usize i = begin; i < end; ++i)
                 func(i);
             return;
@@ -128,7 +140,7 @@ public:
         const usize chunkSize = count / numChunks;
         const usize remainder = count % numChunks;
 
-        dispatchParallelFor(begin, end, func, workerChunks, chunkSize, remainder);
+        dispatchParallelFor(begin, end, func, numChunks, chunkSize, remainder);
     }
 
     template<typename Func>
@@ -137,19 +149,19 @@ public:
             return;
 
         const usize count = end - begin;
+        const usize effectiveGrainSize = grainSize > 0 ? grainSize : 1;
 
-        if(m_threadCount == 0 || count <= grainSize){
+        if(m_threadCount == 0 || count <= effectiveGrainSize){
             for(usize i = begin; i < end; ++i)
                 func(i);
             return;
         }
 
-        const usize maxChunks = (count + grainSize - 1) / grainSize;
+        const usize maxChunks = (count + effectiveGrainSize - 1) / effectiveGrainSize;
         const usize totalThreads = static_cast<usize>(m_threadCount) + 1;
-        const usize numChunks = (maxChunks < totalThreads) ? maxChunks : totalThreads;
-        const usize workerChunks = numChunks - 1;
+        const usize numChunks = computeChunkCount(maxChunks, totalThreads);
 
-        if(workerChunks == 0){
+        if(numChunks <= 1){
             for(usize i = begin; i < end; ++i)
                 func(i);
             return;
@@ -158,7 +170,7 @@ public:
         const usize chunkSize = count / numChunks;
         const usize remainder = count % numChunks;
 
-        dispatchParallelFor(begin, end, func, workerChunks, chunkSize, remainder);
+        dispatchParallelFor(begin, end, func, numChunks, chunkSize, remainder);
     }
 
 public:
@@ -177,13 +189,13 @@ private:
     }
 
     inline bool hasParallelWork()const{
-        return m_pfWork && m_pfWork->nextChunk.load(std::memory_order_relaxed) < m_pfWork->numWorkerChunks;
+        return m_pfWork && m_pfWork->nextChunk.load(std::memory_order_relaxed) < m_pfWork->numChunks;
     }
 
     static inline void processParallelFor(ParallelForDesc* pf){
         while(true){
             const usize c = pf->nextChunk.fetch_add(1, std::memory_order_relaxed);
-            if(c >= pf->numWorkerChunks)
+            if(c >= pf->numChunks)
                 break;
 
             const usize cb = pf->begin + c * pf->chunkSize + ((c < pf->remainder) ? c : pf->remainder);
@@ -195,8 +207,8 @@ private:
     }
 
     template<typename Func>
-    inline void dispatchParallelFor(usize begin, usize end, const Func& func, usize workerChunks, usize chunkSize, usize remainder){
-        Latch done(static_cast<std::ptrdiff_t>(workerChunks));
+    inline void dispatchParallelFor(usize begin, usize, const Func& func, usize numChunks, usize chunkSize, usize remainder){
+        Latch done(static_cast<std::ptrdiff_t>(numChunks));
 
         ParallelForDesc desc;
         desc.invoke = [](const void* ctx, usize cb, usize ce){
@@ -206,11 +218,12 @@ private:
         };
         desc.functor = &func;
         desc.nextChunk.store(0, std::memory_order_relaxed);
-        desc.numWorkerChunks = workerChunks;
+        desc.numChunks = numChunks;
         desc.begin = begin;
         desc.chunkSize = chunkSize;
         desc.remainder = remainder;
         desc.done = &done;
+        desc.activeWorkers.store(0, std::memory_order_relaxed);
 
         {
             LockGuard lock(m_mutex);
@@ -218,11 +231,13 @@ private:
         }
         m_taskAvailable.notify_all();
 
-        const usize callerBegin = begin + workerChunks * chunkSize + remainder;
-        for(usize i = callerBegin; i < end; ++i)
-            func(i);
+        processParallelFor(&desc);
 
         done.wait();
+
+        i32 activeWorkers = 0;
+        while((activeWorkers = desc.activeWorkers.load(std::memory_order_acquire)) > 0)
+            desc.activeWorkers.wait(activeWorkers, std::memory_order_relaxed);
 
         {
             LockGuard lock(m_mutex);
@@ -233,7 +248,7 @@ private:
     inline void workerLoop(StopToken stopToken, u64 affinityMask){
         SetCurrentThreadAffinity(affinityMask);
 
-        while(true){
+        for(;;){
             UniqueLock lock(m_mutex);
             if(!m_taskAvailable.wait(lock, stopToken, [this](){
                 return hasParallelWork() || !m_tasks.empty();
@@ -242,8 +257,11 @@ private:
 
             if(hasParallelWork()){
                 auto* pf = m_pfWork;
+                pf->activeWorkers.fetch_add(1, std::memory_order_acq_rel);
                 lock.unlock();
                 processParallelFor(pf);
+                if(pf->activeWorkers.fetch_sub(1, std::memory_order_acq_rel) == 1)
+                    pf->activeWorkers.notify_all();
             }
             else{
                 TaskItem item = Move(m_tasks.front());

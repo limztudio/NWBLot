@@ -143,7 +143,7 @@ class Queue final : NoCopy{
 
 
 public:
-    Queue(const VulkanContext& context, CommandQueue::Enum queueID, VkQueue queue, u32 queueFamilyIndex);
+    Queue(const VulkanContext& context, Alloc::ThreadPool& workerPool, CommandQueue::Enum queueID, VkQueue queue, u32 queueFamilyIndex);
     ~Queue();
 
 
@@ -174,6 +174,8 @@ private:
     VkSemaphore m_trackingSemaphore = VK_NULL_HANDLE;
 
     const VulkanContext& m_context;
+    Alloc::ThreadPool& m_workerPool;
+
     VkQueue m_queue;
     CommandQueue::Enum m_queueID;
     u32 m_queueFamilyIndex;

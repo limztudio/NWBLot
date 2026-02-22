@@ -75,8 +75,9 @@ TrackedCommandBuffer::~TrackedCommandBuffer(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Queue::Queue(const VulkanContext& context, CommandQueue::Enum queueID, VkQueue queue, u32 queueFamilyIndex)
+Queue::Queue(const VulkanContext& context, Alloc::ThreadPool& workerPool, CommandQueue::Enum queueID, VkQueue queue, u32 queueFamilyIndex)
     : m_context(context)
+    , m_workerPool(workerPool)
     , m_queue(queue)
     , m_queueID(queueID)
     , m_queueFamilyIndex(queueFamilyIndex)
@@ -442,22 +443,58 @@ void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapp
         imageMipTailStride = sparseReqs[0].imageMipTailStride;
     }
 
+    struct MappingBindCounts{
+        usize opaqueCount = 0;
+        usize imageCount = 0;
+        usize opaqueBase = 0;
+        usize imageBase = 0;
+    };
+    Vector<MappingBindCounts, Alloc::ScratchAllocator<MappingBindCounts>> mappingCounts(numTileMappings, Alloc::ScratchAllocator<MappingBindCounts>(scratchArena));
+
+    usize totalOpaqueBinds = 0;
+    usize totalImageBinds = 0;
     for(u32 i = 0; i < numTileMappings; ++i){
-        u32 numRegions = tileMappings[i].numTextureRegions;
-        Heap* heap = tileMappings[i].heap ? checked_cast<Heap*>(tileMappings[i].heap) : nullptr;
+        MappingBindCounts& counts = mappingCounts[i];
+        counts.opaqueBase = totalOpaqueBinds;
+        counts.imageBase = totalImageBinds;
+
+        const TextureTilesMapping& mapping = tileMappings[i];
+        for(u32 j = 0; j < mapping.numTextureRegions; ++j){
+            const TiledTextureRegion& region = mapping.tiledTextureRegions[j];
+            if(region.tilesNum)
+                ++counts.opaqueCount;
+            else
+                ++counts.imageCount;
+        }
+
+        totalOpaqueBinds += counts.opaqueCount;
+        totalImageBinds += counts.imageCount;
+    }
+
+    sparseMemoryBinds.resize(totalOpaqueBinds);
+    sparseImageMemoryBinds.resize(totalImageBinds);
+
+    auto buildMappingBinds = [&](usize i){
+        const TextureTilesMapping& mapping = tileMappings[i];
+        const MappingBindCounts& counts = mappingCounts[i];
+
+        Heap* heap = mapping.heap ? checked_cast<Heap*>(mapping.heap) : nullptr;
         VkDeviceMemory deviceMemory = heap ? heap->m_memory : VK_NULL_HANDLE;
 
-        for(u32 j = 0; j < numRegions; ++j){
-            const TiledTextureCoordinate& coord = tileMappings[i].tiledTextureCoordinates[j];
-            const TiledTextureRegion& region = tileMappings[i].tiledTextureRegions[j];
+        usize opaqueWrite = counts.opaqueBase;
+        usize imageWrite = counts.imageBase;
+
+        for(u32 j = 0; j < mapping.numTextureRegions; ++j){
+            const TiledTextureCoordinate& coord = mapping.tiledTextureCoordinates[j];
+            const TiledTextureRegion& region = mapping.tiledTextureRegions[j];
 
             if(region.tilesNum){
                 VkSparseMemoryBind bind = {};
                 bind.resourceOffset = imageMipTailOffset + coord.arrayLevel * imageMipTailStride;
                 bind.size = region.tilesNum * texture->m_tileByteSize;
                 bind.memory = deviceMemory;
-                bind.memoryOffset = deviceMemory ? tileMappings[i].byteOffsets[j] : 0;
-                sparseMemoryBinds.push_back(bind);
+                bind.memoryOffset = deviceMemory ? mapping.byteOffsets[j] : 0;
+                sparseMemoryBinds[opaqueWrite++] = bind;
             }
             else{
                 VkSparseImageMemoryBind bind = {};
@@ -471,10 +508,20 @@ void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapp
                 bind.extent.height = region.height * tileHeight;
                 bind.extent.depth = region.depth * tileDepth;
                 bind.memory = deviceMemory;
-                bind.memoryOffset = deviceMemory ? tileMappings[i].byteOffsets[j] : 0;
-                sparseImageMemoryBinds.push_back(bind);
+                bind.memoryOffset = deviceMemory ? mapping.byteOffsets[j] : 0;
+                sparseImageMemoryBinds[imageWrite++] = bind;
             }
         }
+    };
+
+    constexpr usize kParallelTileMappingThreshold = 128;
+    constexpr usize kTileMappingGrainSize = 8;
+    const usize totalBindings = totalOpaqueBinds + totalImageBinds;
+    if(m_workerPool.isParallelEnabled() && totalBindings >= kParallelTileMappingThreshold)
+        m_workerPool.parallelFor(static_cast<usize>(0), numTileMappings, kTileMappingGrainSize, buildMappingBinds);
+    else{
+        for(usize i = 0; i < numTileMappings; ++i)
+            buildMappingBinds(i);
     }
 
     VkBindSparseInfo bindSparseInfo = { VK_STRUCTURE_TYPE_BIND_SPARSE_INFO };

@@ -207,19 +207,19 @@ Device::Device(const DeviceDesc& desc)
     if(desc.graphicsQueue && desc.graphicsQueueIndex >= 0){
         auto& arena = *m_context.objectArena;
         auto* mem = arena.allocate<Queue>(1);
-        auto* q = new(mem) Queue(m_context, CommandQueue::Graphics, desc.graphicsQueue, desc.graphicsQueueIndex);
+        auto* q = new(mem) Queue(m_context, m_workerPool, CommandQueue::Graphics, desc.graphicsQueue, desc.graphicsQueueIndex);
         m_queues[static_cast<u32>(CommandQueue::Graphics)] = CustomUniquePtr<Queue>(q, CustomUniquePtr<Queue>::deleter_type(arena));
     }
     if(desc.computeQueue && desc.computeQueueIndex >= 0){
         auto& arena = *m_context.objectArena;
         auto* mem = arena.allocate<Queue>(1);
-        auto* q = new(mem) Queue(m_context, CommandQueue::Compute, desc.computeQueue, desc.computeQueueIndex);
+        auto* q = new(mem) Queue(m_context, m_workerPool, CommandQueue::Compute, desc.computeQueue, desc.computeQueueIndex);
         m_queues[static_cast<u32>(CommandQueue::Compute)] = CustomUniquePtr<Queue>(q, CustomUniquePtr<Queue>::deleter_type(arena));
     }
     if(desc.transferQueue && desc.transferQueueIndex >= 0){
         auto& arena = *m_context.objectArena;
         auto* mem = arena.allocate<Queue>(1);
-        auto* q = new(mem) Queue(m_context, CommandQueue::Copy, desc.transferQueue, desc.transferQueueIndex);
+        auto* q = new(mem) Queue(m_context, m_workerPool, CommandQueue::Copy, desc.transferQueue, desc.transferQueueIndex);
         m_queues[static_cast<u32>(CommandQueue::Copy)] = CustomUniquePtr<Queue>(q, CustomUniquePtr<Queue>::deleter_type(arena));
     }
 
@@ -496,16 +496,24 @@ CooperativeVectorDeviceFeatures Device::queryCoopVecFeatures(){
     if(res != VK_SUCCESS)
         return output;
 
-    output.matMulFormats.reserve(propertyCount);
-    for(const auto& prop : properties){
-        CooperativeVectorMatMulFormatCombo combo;
+    output.matMulFormats.resize(propertyCount);
+    auto fillMatMulFormat = [&](usize i){
+        const auto& prop = properties[i];
+        CooperativeVectorMatMulFormatCombo& combo = output.matMulFormats[i];
         combo.inputType = __hidden_vulkan::ConvertCoopVecDataType(static_cast<VkComponentTypeKHR>(prop.inputType));
         combo.inputInterpretation = __hidden_vulkan::ConvertCoopVecDataType(static_cast<VkComponentTypeKHR>(prop.inputInterpretation));
         combo.matrixInterpretation = __hidden_vulkan::ConvertCoopVecDataType(static_cast<VkComponentTypeKHR>(prop.matrixInterpretation));
         combo.biasInterpretation = __hidden_vulkan::ConvertCoopVecDataType(static_cast<VkComponentTypeKHR>(prop.biasInterpretation));
         combo.outputType = __hidden_vulkan::ConvertCoopVecDataType(static_cast<VkComponentTypeKHR>(prop.resultType));
         combo.transposeSupported = prop.transpose != VK_FALSE;
-        output.matMulFormats.push_back(combo);
+    };
+
+    constexpr usize kParallelCoopVecThreshold = 128;
+    if(m_workerPool.isParallelEnabled() && propertyCount >= kParallelCoopVecThreshold)
+        m_workerPool.parallelFor(static_cast<usize>(0), propertyCount, fillMatMulFormat);
+    else{
+        for(usize i = 0; i < propertyCount; ++i)
+            fillMatMulFormat(i);
     }
 
     output.trainingFloat16 = m_context.coopVecProperties.cooperativeVectorTrainingFloat16Accumulation != VK_FALSE;

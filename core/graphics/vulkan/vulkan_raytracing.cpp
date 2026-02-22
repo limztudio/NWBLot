@@ -711,11 +711,11 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* _as, const
     Vector<VkAccelerationStructureBuildRangeInfoKHR, Alloc::ScratchAllocator<VkAccelerationStructureBuildRangeInfoKHR>> rangeInfos{ Alloc::ScratchAllocator<VkAccelerationStructureBuildRangeInfoKHR>(scratchArena) };
     Vector<uint32_t, Alloc::ScratchAllocator<uint32_t>> primitiveCounts{ Alloc::ScratchAllocator<uint32_t>(scratchArena) };
 
-    geometries.reserve(numGeometries);
-    rangeInfos.reserve(numGeometries);
-    primitiveCounts.reserve(numGeometries);
+    geometries.resize(numGeometries);
+    rangeInfos.resize(numGeometries);
+    primitiveCounts.resize(numGeometries);
 
-    for(usize i = 0; i < numGeometries; ++i){
+    auto buildGeometry = [&](usize i){
         const auto& geomDesc = pGeometries[i];
 
         VkAccelerationStructureGeometryKHR geometry = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR };
@@ -763,9 +763,19 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* _as, const
         if(geomDesc.flags & RayTracingGeometryFlags::NoDuplicateAnyHitInvocation)
             geometry.flags |= VK_GEOMETRY_NO_DUPLICATE_ANY_HIT_INVOCATION_BIT_KHR;
 
-        geometries.push_back(geometry);
-        rangeInfos.push_back(rangeInfo);
-        primitiveCounts.push_back(static_cast<uint32_t>(primitiveCount));
+        geometries[i] = geometry;
+        rangeInfos[i] = rangeInfo;
+        primitiveCounts[i] = static_cast<uint32_t>(primitiveCount);
+    };
+
+    auto& workerPool = m_device.getWorkerPool();
+    constexpr usize kParallelGeometryThreshold = 256;
+    constexpr usize kGeometryGrainSize = 64;
+    if(workerPool.isParallelEnabled() && numGeometries >= kParallelGeometryThreshold)
+        workerPool.parallelFor(static_cast<usize>(0), numGeometries, kGeometryGrainSize, buildGeometry);
+    else{
+        for(usize i = 0; i < numGeometries; ++i)
+            buildGeometry(i);
     }
 
     VkAccelerationStructureBuildGeometryInfoKHR buildInfo = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR };
@@ -1151,3 +1161,4 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

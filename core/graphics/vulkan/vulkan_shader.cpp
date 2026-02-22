@@ -140,13 +140,21 @@ ShaderHandle Device::createShaderSpecialization(IShader* baseShader, const Shade
         shader->m_specializationData.resize(numConstants * sizeof(u32));
         shader->m_specializationEntries.resize(numConstants);
 
-        for(u32 i = 0; i < numConstants; ++i){
+        auto fillConstant = [&](usize i){
             VkSpecializationMapEntry& entry = shader->m_specializationEntries[i];
             entry.constantID = constants[i].constantID;
-            entry.offset = i * sizeof(u32);
+            entry.offset = static_cast<u32>(i * sizeof(u32));
             entry.size = sizeof(u32);
 
             NWB_MEMCPY(shader->m_specializationData.data() + entry.offset, sizeof(u32), &constants[i].value, sizeof(u32));
+        };
+
+        constexpr usize kParallelSpecializationThreshold = 256;
+        if(m_workerPool.isParallelEnabled() && numConstants >= kParallelSpecializationThreshold)
+            m_workerPool.parallelFor(static_cast<usize>(0), numConstants, fillConstant);
+        else{
+            for(usize i = 0; i < numConstants; ++i)
+                fillConstant(i);
         }
     }
 

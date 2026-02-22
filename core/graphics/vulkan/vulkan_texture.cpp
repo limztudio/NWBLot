@@ -570,7 +570,22 @@ void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, co
         return;
     }
 
-    NWB_MEMCPY(cpuVA, dataSize, data, dataSize);
+    const usize uploadSize = static_cast<usize>(dataSize);
+    auto& workerPool = m_device.getWorkerPool();
+    constexpr usize kParallelCopyThreshold = 1024 * 1024;
+    constexpr usize kCopyChunkSize = 256 * 1024;
+    if(workerPool.isParallelEnabled() && uploadSize >= kParallelCopyThreshold){
+        auto* dst = static_cast<u8*>(cpuVA);
+        auto* src = static_cast<const u8*>(data);
+        const usize chunkCount = (uploadSize + kCopyChunkSize - 1) / kCopyChunkSize;
+        workerPool.parallelFor(static_cast<usize>(0), chunkCount, [&](usize chunkIndex){
+            const usize chunkOffset = chunkIndex * kCopyChunkSize;
+            const usize chunkSize = Min(kCopyChunkSize, uploadSize - chunkOffset);
+            NWB_MEMCPY(dst + chunkOffset, chunkSize, src + chunkOffset, chunkSize);
+        });
+    }
+    else
+        NWB_MEMCPY(cpuVA, uploadSize, data, uploadSize);
 
     VkImageMemoryBarrier2 barrier = { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2 };
     barrier.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;

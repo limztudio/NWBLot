@@ -334,15 +334,11 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
 
     Alloc::ScratchArena<> scratchArena;
 
-    Vector<VkConvertCooperativeVectorMatrixInfoNV, Alloc::ScratchAllocator<VkConvertCooperativeVectorMatrixInfoNV>> vkConvertDescs{ Alloc::ScratchAllocator<VkConvertCooperativeVectorMatrixInfoNV>(scratchArena) };
-    vkConvertDescs.reserve(numDescs);
-
-    Vector<usize, Alloc::ScratchAllocator<usize>> dstSizes{ Alloc::ScratchAllocator<usize>(scratchArena) };
-    dstSizes.reserve(numDescs);
+    Vector<CooperativeVectorConvertMatrixLayoutDesc const*, Alloc::ScratchAllocator<CooperativeVectorConvertMatrixLayoutDesc const*>> validDescs{ Alloc::ScratchAllocator<CooperativeVectorConvertMatrixLayoutDesc const*>(scratchArena) };
+    validDescs.reserve(numDescs);
 
     for(usize i = 0; i < numDescs; ++i){
         const CooperativeVectorConvertMatrixLayoutDesc& convertDesc = convertDescs[i];
-
         if(!convertDesc.src.buffer || !convertDesc.dst.buffer)
             continue;
 
@@ -351,10 +347,20 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
             setBufferState(convertDesc.dst.buffer, ResourceStates::UnorderedAccess);
         }
 
+        validDescs.push_back(&convertDesc);
+    }
+
+    Vector<VkConvertCooperativeVectorMatrixInfoNV, Alloc::ScratchAllocator<VkConvertCooperativeVectorMatrixInfoNV>> vkConvertDescs(validDescs.size(), Alloc::ScratchAllocator<VkConvertCooperativeVectorMatrixInfoNV>(scratchArena));
+    Vector<usize, Alloc::ScratchAllocator<usize>> dstSizes(validDescs.size(), Alloc::ScratchAllocator<usize>(scratchArena));
+
+    auto buildConvertDesc = [&](usize i){
+        const CooperativeVectorConvertMatrixLayoutDesc& convertDesc = *validDescs[i];
+        dstSizes[i] = convertDesc.dst.size;
+
         VkConvertCooperativeVectorMatrixInfoNV vkDesc = { VK_STRUCTURE_TYPE_CONVERT_COOPERATIVE_VECTOR_MATRIX_INFO_NV };
         vkDesc.srcSize = convertDesc.src.size;
         vkDesc.srcData.deviceAddress = checked_cast<Buffer*>(convertDesc.src.buffer)->m_deviceAddress + convertDesc.src.offset;
-        vkDesc.pDstSize = &dstSizes.emplace_back(convertDesc.dst.size);
+        vkDesc.pDstSize = &dstSizes[i];
         vkDesc.dstData.deviceAddress = checked_cast<Buffer*>(convertDesc.dst.buffer)->m_deviceAddress + convertDesc.dst.offset;
         vkDesc.srcComponentType = __hidden_vulkan::ConvertCoopVecDataType(convertDesc.src.type);
         vkDesc.dstComponentType = __hidden_vulkan::ConvertCoopVecDataType(convertDesc.dst.type);
@@ -371,7 +377,17 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
             ? convertDesc.dst.stride
             : GetCooperativeVectorOptimalMatrixStride(convertDesc.dst.type, convertDesc.dst.layout, convertDesc.numRows, convertDesc.numColumns);
 
-        vkConvertDescs.push_back(vkDesc);
+        vkConvertDescs[i] = vkDesc;
+    };
+
+    auto& workerPool = m_device.getWorkerPool();
+    constexpr usize kParallelConvertThreshold = 256;
+    constexpr usize kConvertGrainSize = 64;
+    if(workerPool.isParallelEnabled() && validDescs.size() >= kParallelConvertThreshold)
+        workerPool.parallelFor(static_cast<usize>(0), validDescs.size(), kConvertGrainSize, buildConvertDesc);
+    else{
+        for(usize i = 0; i < validDescs.size(); ++i)
+            buildConvertDesc(i);
     }
 
     commitBarriers();

@@ -192,7 +192,21 @@ void CommandList::writeBuffer(IBuffer* _buffer, const void* data, usize dataSize
         return;
     }
 
-    NWB_MEMCPY(cpuVA, dataSize, data, dataSize);
+    auto& workerPool = m_device.getWorkerPool();
+    constexpr usize kParallelCopyThreshold = 1024 * 1024;
+    constexpr usize kCopyChunkSize = 256 * 1024;
+    if(workerPool.isParallelEnabled() && dataSize >= kParallelCopyThreshold){
+        auto* dst = static_cast<u8*>(cpuVA);
+        auto* src = static_cast<const u8*>(data);
+        const usize chunkCount = (dataSize + kCopyChunkSize - 1) / kCopyChunkSize;
+        workerPool.parallelFor(static_cast<usize>(0), chunkCount, [&](usize chunkIndex){
+            const usize chunkOffset = chunkIndex * kCopyChunkSize;
+            const usize chunkSize = Min(kCopyChunkSize, dataSize - chunkOffset);
+            NWB_MEMCPY(dst + chunkOffset, chunkSize, src + chunkOffset, chunkSize);
+        });
+    }
+    else
+        NWB_MEMCPY(cpuVA, dataSize, data, dataSize);
 
     VkBufferCopy region{};
     region.srcOffset = stagingOffset;

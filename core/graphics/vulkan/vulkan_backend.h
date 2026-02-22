@@ -34,6 +34,25 @@ namespace __hidden_vulkan{
     extern constexpr VkComponentTypeKHR ConvertCoopVecDataType(CooperativeVectorDataType::Enum type);
     extern constexpr CooperativeVectorDataType::Enum ConvertCoopVecDataType(VkComponentTypeKHR type);
     extern constexpr VkCooperativeVectorMatrixLayoutNV ConvertCoopVecMatrixLayout(CooperativeVectorMatrixLayout::Enum layout);
+
+    inline void CopyHostMemory(Alloc::ThreadPool* workerPool, void* dst, const void* src, usize size, usize parallelThreshold = 1024 * 1024, usize chunkSize = 256 * 1024){
+        if(!dst || !src || size == 0)
+            return;
+
+        if(workerPool && workerPool->isParallelEnabled() && size >= parallelThreshold){
+            auto* dstBytes = static_cast<u8*>(dst);
+            auto* srcBytes = static_cast<const u8*>(src);
+            const usize chunkCount = (size + chunkSize - 1) / chunkSize;
+            workerPool->parallelFor(static_cast<usize>(0), chunkCount, [&](usize chunkIndex){
+                const usize chunkOffset = chunkIndex * chunkSize;
+                const usize chunkBytes = Min(chunkSize, size - chunkOffset);
+                NWB_MEMCPY(dstBytes + chunkOffset, chunkBytes, srcBytes + chunkOffset, chunkBytes);
+            });
+            return;
+        }
+
+        NWB_MEMCPY(dst, size, src, size);
+    }
 };
 
 

@@ -556,7 +556,8 @@ u32 ShaderTable::addMissShader(const Name& exportName, IBindingSet* /*bindings*/
         if(m_missBuffer && m_missCount > 0){
             void* oldMapped = m_device->mapBuffer(m_missBuffer.get(), CpuAccessMode::Read);
             if(oldMapped){
-                NWB_MEMCPY(mapped, m_missCount * handleSizeAligned, oldMapped, m_missCount * handleSizeAligned);
+                const usize copySize = static_cast<usize>(m_missCount) * handleSizeAligned;
+                __hidden_vulkan::CopyHostMemory(m_device ? &m_device->getWorkerPool() : nullptr, mapped, oldMapped, copySize);
                 m_device->unmapBuffer(m_missBuffer.get());
             }
         }
@@ -594,7 +595,8 @@ u32 ShaderTable::addHitGroup(const Name& exportName, IBindingSet* /*bindings*/){
         if(m_hitBuffer && m_hitCount > 0){
             void* oldMapped = m_device->mapBuffer(m_hitBuffer.get(), CpuAccessMode::Read);
             if(oldMapped){
-                NWB_MEMCPY(mapped, m_hitCount * handleSizeAligned, oldMapped, m_hitCount * handleSizeAligned);
+                const usize copySize = static_cast<usize>(m_hitCount) * handleSizeAligned;
+                __hidden_vulkan::CopyHostMemory(m_device ? &m_device->getWorkerPool() : nullptr, mapped, oldMapped, copySize);
                 m_device->unmapBuffer(m_hitBuffer.get());
             }
         }
@@ -632,7 +634,8 @@ u32 ShaderTable::addCallableShader(const Name& exportName, IBindingSet* /*bindin
         if(m_callableBuffer && m_callableCount > 0){
             void* oldMapped = m_device->mapBuffer(m_callableBuffer.get(), CpuAccessMode::Read);
             if(oldMapped){
-                NWB_MEMCPY(mapped, m_callableCount * handleSizeAligned, oldMapped, m_callableCount * handleSizeAligned);
+                const usize copySize = static_cast<usize>(m_callableCount) * handleSizeAligned;
+                __hidden_vulkan::CopyHostMemory(m_device ? &m_device->getWorkerPool() : nullptr, mapped, oldMapped, copySize);
                 m_device->unmapBuffer(m_callableBuffer.get());
             }
         }

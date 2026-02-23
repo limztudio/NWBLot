@@ -25,6 +25,7 @@ World::World(u32 workerThreads, Alloc::CoreAffinity affinity, usize poolArenaSiz
 World::~World()
 {
     m_threadPool.wait();
+    m_messageBus.clear();
     m_systems.clear();
     m_pools.clear();
 }
@@ -83,6 +84,7 @@ void World::removeSystem(ISystem* system){
 
 
 void World::tick(float delta){
+    m_messageBus.swapBuffers();
     m_scheduler.execute(*this, delta);
 }
 

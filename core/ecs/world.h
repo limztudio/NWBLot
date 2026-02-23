@@ -6,6 +6,7 @@
 
 
 #include "query.h"
+#include "message_bus.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -126,6 +127,37 @@ public:
     }
 
 
+    // ---- Message bus ----
+public:
+    template<typename T>
+    void postMessage(const T& message){
+        m_messageBus.post<T>(message);
+    }
+
+    template<typename T>
+    void postMessage(T&& message){
+        m_messageBus.post<T>(Move(message));
+    }
+
+    template<typename T, typename... Args>
+    void emplaceMessage(Args&&... args){
+        m_messageBus.emplace<T>(Forward<Args>(args)...);
+    }
+
+    template<typename T, typename Func>
+    void consumeMessages(Func&& func)const{
+        m_messageBus.consume<T>(Forward<Func>(func));
+    }
+
+    template<typename T>
+    usize messageCount()const{
+        return m_messageBus.messageCount<T>();
+    }
+
+    void swapMessageBuffers(){ m_messageBus.swapBuffers(); }
+    void clearMessages(){ m_messageBus.clear(); }
+
+
     // ---- Tick ----
 public:
     void tick(float delta);
@@ -155,6 +187,7 @@ private:
     HashMap<ComponentTypeId, UniquePtr<IComponentPool>> m_pools;
     Vector<UniquePtr<ISystem>> m_systems;
     SystemScheduler m_scheduler;
+    MessageBus m_messageBus;
 };
 
 

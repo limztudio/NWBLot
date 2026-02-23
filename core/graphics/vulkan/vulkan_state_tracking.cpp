@@ -105,8 +105,10 @@ void CommandList::setTextureState(ITexture* _texture, TextureSubresourceSet subr
 
     const FormatInfo& formatInfo = GetFormatInfo(texture->m_desc.format);
     VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    if(formatInfo.hasDepth) aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-    if(formatInfo.hasStencil) aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+    if(formatInfo.hasDepth)
+        aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    if(formatInfo.hasStencil)
+        aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
     barrier.subresourceRange.aspectMask = aspectMask;
     barrier.subresourceRange.baseMipLevel = subresources.baseMipLevel;
     barrier.subresourceRange.levelCount = subresources.numMipLevels;

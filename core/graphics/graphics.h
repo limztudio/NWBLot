@@ -19,8 +19,8 @@ NWB_CORE_BEGIN
 
 class Graphics{
 private:
-    static constexpr u32 s_dynamicAllocatorSize = 64 * 1024 * 1024;
-    static constexpr u32 s_reservedPerformanceCoresForMainThread = 1;
+    static constexpr u32 s_DynamicAllocatorSize = 64 * 1024 * 1024;
+    static constexpr u32 s_ReservedPerformanceCoresForMainThread = 1;
 
 
 public:

@@ -121,7 +121,7 @@ Texture::Texture(const VulkanContext& context, VulkanAllocator& allocator)
     , m_views(0, Hasher<u64>(), EqualTo<u64>(), Alloc::CustomAllocator<Pair<const u64, VkImageView>>(*context.objectArena))
 {}
 Texture::~Texture(){
-    for(auto& pair : m_views)
+    for(const auto& pair : m_views)
         vkDestroyImageView(m_context.device, pair.second, m_context.allocationCallbacks);
     m_views.clear();
 
@@ -470,13 +470,17 @@ void CommandList::copyTexture(ITexture* _dest, const TextureSlice& destSlice, IT
     VkImageCopy region{};
     const FormatInfo& srcFormatInfo = GetFormatInfo(src->m_desc.format);
     VkImageAspectFlags srcAspect = VK_IMAGE_ASPECT_COLOR_BIT;
-    if(srcFormatInfo.hasDepth) srcAspect = VK_IMAGE_ASPECT_DEPTH_BIT;
-    if(srcFormatInfo.hasStencil) srcAspect |= VK_IMAGE_ASPECT_STENCIL_BIT;
+    if(srcFormatInfo.hasDepth)
+        srcAspect = VK_IMAGE_ASPECT_DEPTH_BIT;
+    if(srcFormatInfo.hasStencil)
+        srcAspect |= VK_IMAGE_ASPECT_STENCIL_BIT;
 
     const FormatInfo& dstFormatInfo = GetFormatInfo(dest->m_desc.format);
     VkImageAspectFlags dstAspect = VK_IMAGE_ASPECT_COLOR_BIT;
-    if(dstFormatInfo.hasDepth) dstAspect = VK_IMAGE_ASPECT_DEPTH_BIT;
-    if(dstFormatInfo.hasStencil) dstAspect |= VK_IMAGE_ASPECT_STENCIL_BIT;
+    if(dstFormatInfo.hasDepth)
+        dstAspect = VK_IMAGE_ASPECT_DEPTH_BIT;
+    if(dstFormatInfo.hasStencil)
+        dstAspect |= VK_IMAGE_ASPECT_STENCIL_BIT;
 
     region.srcSubresource.aspectMask = srcAspect;
     region.srcSubresource.mipLevel = srcSlice.mipLevel;
@@ -608,8 +612,10 @@ void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, co
     barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
     barrier.image = dest->m_image;
     VkImageAspectFlags writeAspect = VK_IMAGE_ASPECT_COLOR_BIT;
-    if(formatInfo.hasDepth) writeAspect = VK_IMAGE_ASPECT_DEPTH_BIT;
-    if(formatInfo.hasStencil) writeAspect |= VK_IMAGE_ASPECT_STENCIL_BIT;
+    if(formatInfo.hasDepth)
+        writeAspect = VK_IMAGE_ASPECT_DEPTH_BIT;
+    if(formatInfo.hasStencil)
+        writeAspect |= VK_IMAGE_ASPECT_STENCIL_BIT;
 
     barrier.subresourceRange.aspectMask = writeAspect;
     barrier.subresourceRange.baseMipLevel = mipLevel;

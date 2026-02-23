@@ -37,9 +37,9 @@ namespace __hidden_frame{
 
 
 // in windows, the frame is a singleton
-static Frame* g_frame = nullptr;
-static LRESULT CALLBACK winProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
-    if(auto* _this = g_frame){
+static Frame* g_Frame = nullptr;
+static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
+    if(auto* _this = g_Frame){
         PAINTSTRUCT ps;
 
         switch(uMsg){
@@ -94,7 +94,7 @@ static LRESULT CALLBACK winProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 
 
 Frame::Frame(void* inst, u16 width, u16 height){
-    __hidden_frame::g_frame = this;
+    __hidden_frame::g_Frame = this;
 
     data<Common::WinFrame>().width() = width;
     data<Common::WinFrame>().height() = height;
@@ -103,7 +103,7 @@ Frame::Frame(void* inst, u16 width, u16 height){
 }
 Frame::~Frame(){
     cleanup();
-    __hidden_frame::g_frame = nullptr;
+    __hidden_frame::g_Frame = nullptr;
 }
 
 bool Frame::init(){
@@ -116,7 +116,7 @@ bool Frame::init(){
     {
         wc.cbSize = sizeof(WNDCLASSEX);
         wc.style = CS_HREDRAW | CS_VREDRAW;
-        wc.lpfnWndProc = __hidden_frame::winProc;
+        wc.lpfnWndProc = __hidden_frame::WinProc;
         wc.hInstance = data<Common::WinFrame>().instance();
         wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
         wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW);

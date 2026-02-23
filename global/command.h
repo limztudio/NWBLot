@@ -23,25 +23,25 @@ enum class ArgCommand : u8{
 
     iNumArg,
 };
-constexpr const char* g_argCmd[] = {
+constexpr const char* g_ArgCmd[] = {
     "-a,--logaddress",
     "-p,--logport",
 };
 const Tuple<
     std::string
     , u16
-> g_argDefault = {
+> g_ArgDefault = {
     "http://localhost",
     static_cast<u16>(7117),
 };
-constexpr const char* g_argDesc[] = {
+constexpr const char* g_ArgDesc[] = {
     "Log server address",
     "Log server port",
 };
 
 template<ArgCommand i, typename CLI, typename T>
 inline auto ArgAddOption(CLI& cli, T& arg){
-    return cli.add_option(g_argCmd[static_cast<usize>(i)], arg, g_argDesc[static_cast<usize>(i)])->default_val(Get<static_cast<usize>(i)>(g_argDefault));
+    return cli.add_option(g_ArgCmd[static_cast<usize>(i)], arg, g_ArgDesc[static_cast<usize>(i)])->default_val(Get<static_cast<usize>(i)>(g_ArgDefault));
 }
 
 

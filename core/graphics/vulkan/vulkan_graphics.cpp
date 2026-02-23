@@ -137,10 +137,14 @@ constexpr VkPipelineColorBlendAttachmentState ConvertBlendState(const BlendState
     state.dstAlphaBlendFactor = ConvertBlendFactor(target.destBlendAlpha);
     state.alphaBlendOp = ConvertBlendOp(target.blendOpAlpha);
     state.colorWriteMask = 0;
-    if(target.colorWriteMask & ColorMask::Red)   state.colorWriteMask |= VK_COLOR_COMPONENT_R_BIT;
-    if(target.colorWriteMask & ColorMask::Green) state.colorWriteMask |= VK_COLOR_COMPONENT_G_BIT;
-    if(target.colorWriteMask & ColorMask::Blue)  state.colorWriteMask |= VK_COLOR_COMPONENT_B_BIT;
-    if(target.colorWriteMask & ColorMask::Alpha) state.colorWriteMask |= VK_COLOR_COMPONENT_A_BIT;
+    if(target.colorWriteMask & ColorMask::Red)
+        state.colorWriteMask |= VK_COLOR_COMPONENT_R_BIT;
+    if(target.colorWriteMask & ColorMask::Green)
+        state.colorWriteMask |= VK_COLOR_COMPONENT_G_BIT;
+    if(target.colorWriteMask & ColorMask::Blue)
+        state.colorWriteMask |= VK_COLOR_COMPONENT_B_BIT;
+    if(target.colorWriteMask & ColorMask::Alpha)
+        state.colorWriteMask |= VK_COLOR_COMPONENT_A_BIT;
     return state;
 }
 
@@ -373,7 +377,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
             if(item.type == ResourceType::PushConstants)
                 pushConstantByteSize = Max<u32>(pushConstantByteSize, item.size);
         }
-        for(auto& dsl : bl->m_descriptorSetLayouts){
+        for(const auto& dsl : bl->m_descriptorSetLayouts){
             allDescriptorSetLayouts.push_back(dsl);
         }
     }

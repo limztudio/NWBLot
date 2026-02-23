@@ -35,13 +35,13 @@ class TypeIdGenerator{
 public:
     template<typename T>
     static ComponentTypeId id(){
-        static const ComponentTypeId value = s_nextId++;
+        static const ComponentTypeId value = s_NextId++;
         return value;
     }
 
 
 private:
-    inline static Atomic<ComponentTypeId> s_nextId{ 0 };
+    inline static Atomic<ComponentTypeId> s_NextId{ 0 };
 };
 
 

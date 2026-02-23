@@ -39,6 +39,7 @@ Updated: 2026-02-23
 - Keep control statements compact; single-line guard clauses are common.
 - Constructor initializer lists are split across lines with leading commas.
 - Heavy use of visual separators and blank lines between logical blocks.
+- Prefer pre-increment/decrement (`++p`, `--p`) over post-increment/decrement (`p++`, `p--`) when behavior is equivalent.
 - For single-statement `if/for/while`, put the statement on the next line:
   - `if(condition)`
   - `    execute();`

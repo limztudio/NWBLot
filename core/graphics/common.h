@@ -654,7 +654,7 @@ inline bool operator==(const TextureSubresourceSet& lhs, const TextureSubresourc
 }
 inline bool operator!=(const TextureSubresourceSet& lhs, const TextureSubresourceSet& rhs)noexcept{ return !(lhs == rhs); }
 
-static constexpr auto s_allSubresources = TextureSubresourceSet(0, TextureSubresourceSet::AllMipLevels, 0, TextureSubresourceSet::AllArraySlices);
+static constexpr auto s_AllSubresources = TextureSubresourceSet(0, TextureSubresourceSet::AllMipLevels, 0, TextureSubresourceSet::AllArraySlices);
 
 class ITexture : public IResource{
     using IResource::IResource;
@@ -664,7 +664,7 @@ public:
     [[nodiscard]] virtual const TextureDesc& getDescription()const = 0;
     
     // Similar to getNativeObject, returns a native view for a specified set of subresources. Returns nullptr if unavailable.
-    virtual Object getNativeView(ObjectType objectType, Format::Enum format = Format::UNKNOWN, TextureSubresourceSet subresources = s_allSubresources, TextureDimension::Enum dimension = TextureDimension::Unknown, bool isReadOnlyDSV = false) = 0;
+    virtual Object getNativeView(ObjectType objectType, Format::Enum format = Format::UNKNOWN, TextureSubresourceSet subresources = s_AllSubresources, TextureDimension::Enum dimension = TextureDimension::Unknown, bool isReadOnlyDSV = false) = 0;
 };
 typedef RefCountPtr<ITexture, ArenaRefDeleter<ITexture>> TextureHandle;
 
@@ -2265,7 +2265,7 @@ struct BindingSetItem{
         result.unused2 = 0;
         return result;
     }
-    static BindingSetItem Texture_SRV(u32 slot, ITexture* texture, Format::Enum format = Format::UNKNOWN, TextureSubresourceSet subresources = s_allSubresources, TextureDimension::Enum dimension = TextureDimension::Unknown){
+    static BindingSetItem Texture_SRV(u32 slot, ITexture* texture, Format::Enum format = Format::UNKNOWN, TextureSubresourceSet subresources = s_AllSubresources, TextureDimension::Enum dimension = TextureDimension::Unknown){
         BindingSetItem result;
         result.slot = slot;
         result.arrayElement = 0;
@@ -2434,7 +2434,7 @@ struct BindingSetItem{
         result.resourceHandle = texture;
         result.format = Format::UNKNOWN;
         result.dimension = TextureDimension::Unknown;
-        result.subresources = s_allSubresources;
+        result.subresources = s_AllSubresources;
         result.unused = 0;
         result.unused2 = 0;
         return result;
@@ -4083,7 +4083,7 @@ template<>
 struct hash<NWB::Core::FramebufferInfo>{
     size_t operator()(NWB::Core::FramebufferInfo const& s)const noexcept{
         usize hash = 0;
-        for(auto format : s.colorFormats)
+        for(const auto format : s.colorFormats)
             NWB::Core::__hidden_core::HashCombine(hash, format);
         NWB::Core::__hidden_core::HashCombine(hash, s.depthFormat);
         NWB::Core::__hidden_core::HashCombine(hash, s.sampleCount);

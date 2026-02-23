@@ -14,7 +14,7 @@ NWB_LOG_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Client::s_sendSwitch = false;
+bool Client::s_SendSwitch = false;
 
 
 bool Client::globalInit(){
@@ -30,8 +30,8 @@ usize Client::sendCallback(void* contents, usize size, usize nmemb, Client* _thi
     (void)size;
     (void)nmemb;
 
-    if(s_sendSwitch){
-        s_sendSwitch = false;
+    if(s_SendSwitch){
+        s_SendSwitch = false;
         return 0;
     }
 
@@ -60,7 +60,7 @@ usize Client::sendCallback(void* contents, usize size, usize nmemb, Client* _thi
 
     auto sizeWritten = static_cast<usize>(ptr - reinterpret_cast<u8*>(contents));
 
-    s_sendSwitch = true;
+    s_SendSwitch = true;
     return sizeWritten;
 }
 

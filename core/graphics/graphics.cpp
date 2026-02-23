@@ -23,7 +23,7 @@ u32 Graphics::queryGraphicsWorkerThreadCount(){
     if(coreCount <= 1)
         coreCount = Alloc::QueryCoreCount(Alloc::CoreAffinity::Any);
 
-    const u32 reservedCores = s_reservedPerformanceCoresForMainThread;
+    const u32 reservedCores = s_ReservedPerformanceCoresForMainThread;
     return coreCount > reservedCores ? (coreCount - reservedCores) : 0;
 }
 
@@ -45,7 +45,7 @@ IDeviceManager* IDeviceManager::create(GraphicsAPI::Enum api, const DeviceCreati
 
 
 Graphics::Graphics()
-    : m_allocator(s_dynamicAllocatorSize)
+    : m_allocator(s_DynamicAllocatorSize)
     , m_threadPool(queryGraphicsWorkerThreadCount(), Alloc::CoreAffinity::Any)
 {
     m_deviceCreationParams.allocator = &m_allocator;

@@ -88,7 +88,7 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
                 if(item.type == ResourceType::PushConstants)
                     pushConstantByteSize = Max<u32>(pushConstantByteSize, item.size);
             }
-            for(auto& dsl : bl->m_descriptorSetLayouts)
+            for(const auto& dsl : bl->m_descriptorSetLayouts)
                 allDescriptorSetLayouts.push_back(dsl);
         }
 

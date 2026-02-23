@@ -63,7 +63,7 @@ TrackedCommandBuffer::~TrackedCommandBuffer(){
         m_cmdPool = VK_NULL_HANDLE;
     }
 
-    for(auto handle : m_referencedAccelStructHandles)
+    for(const auto handle : m_referencedAccelStructHandles)
         if(handle != VK_NULL_HANDLE)
             vkDestroyAccelerationStructureKHR(m_context.device, handle, m_context.allocationCallbacks);
     m_referencedAccelStructHandles.clear();
@@ -150,7 +150,7 @@ TrackedCommandBufferPtr Queue::getOrCreateCommandBuffer(){
     while(it != m_commandBuffersInFlight.end()){
         TrackedCommandBuffer* cmdBuf = it->get();
         if(cmdBuf->m_submissionID <= m_lastFinishedID){
-            for(auto handle : cmdBuf->m_referencedAccelStructHandles){
+            for(const auto handle : cmdBuf->m_referencedAccelStructHandles){
                 if(handle != VK_NULL_HANDLE)
                     vkDestroyAccelerationStructureKHR(m_context.device, handle, m_context.allocationCallbacks);
             }
@@ -409,7 +409,7 @@ void Queue::waitForIdle(){
         m_lastFinishedID = m_lastSubmittedID;
 
         for(auto& tracked : m_commandBuffersInFlight){
-            for(auto handle : tracked->m_referencedAccelStructHandles){
+            for(const auto handle : tracked->m_referencedAccelStructHandles){
                 if(handle != VK_NULL_HANDLE)
                     vkDestroyAccelerationStructureKHR(m_context.device, handle, m_context.allocationCallbacks);
             }

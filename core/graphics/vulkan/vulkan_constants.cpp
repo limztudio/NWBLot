@@ -30,7 +30,7 @@ struct FormatMapping{
     bool isCompressed;
 };
 
-static constexpr FormatMapping g_FormatMappings[] = {
+static constexpr FormatMapping s_FormatMappings[] = {
     // RGBA formats
     { Format::RGBA32_FLOAT           , VK_FORMAT_R32G32B32A32_SFLOAT           , 16, false, false, false },
     { Format::RGBA32_UINT            , VK_FORMAT_R32G32B32A32_UINT             , 16, false, false, false },
@@ -154,13 +154,13 @@ static constexpr FormatMapping g_FormatMappings[] = {
     { Format::ASTC_12x12_FLOAT       , VK_FORMAT_UNDEFINED                     ,  0, false, false, true  },
 };
 
-static constexpr usize g_NumFormatMappings = LengthOf(g_FormatMappings);
+static constexpr usize s_NumFormatMappings = LengthOf(s_FormatMappings);
 
 
 constexpr VkFormat ConvertFormat(Format::Enum format){
-    for(usize i = 0; i < g_NumFormatMappings; ++i){
-        if(g_FormatMappings[i].format == format)
-            return g_FormatMappings[i].vkFormat;
+    for(usize i = 0; i < s_NumFormatMappings; ++i){
+        if(s_FormatMappings[i].format == format)
+            return s_FormatMappings[i].vkFormat;
     }
 
     return VK_FORMAT_UNDEFINED;

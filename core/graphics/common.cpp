@@ -76,7 +76,7 @@ GraphicsAllocator::GraphicsAllocator(u32 maxPersistentAllocationSize)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr FormatInfo s_formatInfo[Format::kCount] = {
+static constexpr FormatInfo s_FormatInfo[Format::kCount] = {
     { Format::UNKNOWN              , "UNKNOWN"              ,  0,  0, FormatKind::Integer     , false, false, false, false, false, false, false, false },
 
     { Format::R8_UINT              , "R8_UINT"              ,  1,  1, FormatKind::Integer     , true , false, false, false, false, false, false, false },
@@ -199,7 +199,7 @@ static constexpr FormatInfo s_formatInfo[Format::kCount] = {
 
 const FormatInfo& GetFormatInfo(Format::Enum format)noexcept{
     NWB_ASSERT_MSG(static_cast<usize>(format) < static_cast<usize>(Format::kCount), NWB_TEXT("Format::Enum out of range"));
-    return s_formatInfo[static_cast<u32>(format)];
+    return s_FormatInfo[static_cast<u32>(format)];
 }
 
 
@@ -407,8 +407,8 @@ void ICommandList::setResourceStatesForFramebuffer(IFramebuffer* framebuffer){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static const AString s_notFoundMarkerString = "ERROR: could not resolve marker";
-static constexpr usize s_numDestroyedMarkerTrackers = 2;
+static const AString s_NotFoundMarkerString = "ERROR: could not resolve marker";
+static constexpr usize s_NumDestroyedMarkerTrackers = 2;
 
 
 AftermathMarkerTracker::AftermathMarkerTracker()
@@ -442,7 +442,7 @@ Pair<bool, AString> AftermathMarkerTracker::getEventString(usize hash){
     if(found != m_eventStrings.end())
         return MakePair(true, found->second);
 
-    return MakePair(false, s_notFoundMarkerString);
+    return MakePair(false, s_NotFoundMarkerString);
 }
 
 
@@ -457,7 +457,7 @@ void AftermathCrashDumpHelper::registerAftermathMarkerTracker(AftermathMarkerTra
 }
 
 void AftermathCrashDumpHelper::unRegisterAftermathMarkerTracker(AftermathMarkerTracker* tracker){
-    if(m_destroyedMarkerTrackers.size() >= s_numDestroyedMarkerTrackers)
+    if(m_destroyedMarkerTrackers.size() >= s_NumDestroyedMarkerTrackers)
         m_destroyedMarkerTrackers.pop_front();
     
     m_destroyedMarkerTrackers.push_back(*tracker);
@@ -489,7 +489,7 @@ Pair<bool, AString> AftermathCrashDumpHelper::resolveMarker(usize markerHash){
         }
     }
 
-    return MakePair(false, s_notFoundMarkerString);
+    return MakePair(false, s_NotFoundMarkerString);
 }
 
 Pair<const void*, usize> AftermathCrashDumpHelper::findShaderBinary(u64 shaderHash, ShaderHashGeneratorFunction hashGenerator){
@@ -598,13 +598,13 @@ void IDeviceManager::removeRenderPass(IRenderPass* pass){
 void IDeviceManager::backBufferResizing(){
     m_swapChainFramebuffers.clear();
 
-    for(auto it : m_renderPasses)
-        it->backBufferResizing();
+    for(auto* renderPass : m_renderPasses)
+        renderPass->backBufferResizing();
 }
 
 void IDeviceManager::backBufferResized(){
-    for(auto it : m_renderPasses)
-        it->backBufferResized(m_deviceParams.backBufferWidth, m_deviceParams.backBufferHeight, m_deviceParams.swapChainSampleCount);
+    for(auto* renderPass : m_renderPasses)
+        renderPass->backBufferResized(m_deviceParams.backBufferWidth, m_deviceParams.backBufferHeight, m_deviceParams.swapChainSampleCount);
 
     u32 backBufferCount = getBackBufferCount();
     m_swapChainFramebuffers.resize(backBufferCount);
@@ -615,22 +615,22 @@ void IDeviceManager::backBufferResized(){
 }
 
 void IDeviceManager::displayScaleChanged(){
-    for(auto it : m_renderPasses)
-        it->displayScaleChanged(m_dpiScaleFactorX, m_dpiScaleFactorY);
+    for(auto* renderPass : m_renderPasses)
+        renderPass->displayScaleChanged(m_dpiScaleFactorX, m_dpiScaleFactorY);
 }
 
 void IDeviceManager::animate(f64 elapsedTime){
-    for(auto it : m_renderPasses){
-        it->animate(static_cast<f32>(elapsedTime));
-        it->setLatewarpOptions();
+    for(auto* renderPass : m_renderPasses){
+        renderPass->animate(static_cast<f32>(elapsedTime));
+        renderPass->setLatewarpOptions();
     }
 }
 
 void IDeviceManager::render(){
     IFramebuffer* framebuffer = m_swapChainFramebuffers[getCurrentBackBufferIndex()].get();
 
-    for(auto it : m_renderPasses)
-        it->render(framebuffer);
+    for(auto* renderPass : m_renderPasses)
+        renderPass->render(framebuffer);
 }
 
 void IDeviceManager::updateAverageFrameTime(f64 elapsedTime){
@@ -676,15 +676,19 @@ bool IDeviceManager::animateRenderPresent(){
                 u32 frameIndex = m_frameIndex;
 
                 if(m_skipRenderOnFirstFrame)
-                    frameIndex--;
+                    --frameIndex;
 
-                if(m_callbacks.beforeRender) m_callbacks.beforeRender(*this, frameIndex);
+                if(m_callbacks.beforeRender)
+                    m_callbacks.beforeRender(*this, frameIndex);
                 render();
-                if(m_callbacks.afterRender) m_callbacks.afterRender(*this, frameIndex);
+                if(m_callbacks.afterRender)
+                    m_callbacks.afterRender(*this, frameIndex);
 
-                if(m_callbacks.beforePresent) m_callbacks.beforePresent(*this, frameIndex);
+                if(m_callbacks.beforePresent)
+                    m_callbacks.beforePresent(*this, frameIndex);
                 bool presentSuccess = present();
-                if(m_callbacks.afterPresent) m_callbacks.afterPresent(*this, frameIndex);
+                if(m_callbacks.afterPresent)
+                    m_callbacks.afterPresent(*this, frameIndex);
 
                 if(!presentSuccess)
                     return false;

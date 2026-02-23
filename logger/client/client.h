@@ -31,7 +31,7 @@ private:
 
 
 private:
-    static bool s_sendSwitch;
+    static bool s_SendSwitch;
 
 
 public:

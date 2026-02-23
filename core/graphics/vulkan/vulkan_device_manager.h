@@ -88,10 +88,10 @@ private:
 
 
 private:
-    static constexpr const char* s_enabledInstanceExts[] = {
+    static constexpr const char* s_EnabledInstanceExts[] = {
         VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,
     };
-    static constexpr const char* s_optionalInstanceExts[] = {
+    static constexpr const char* s_OptionalInstanceExts[] = {
         VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
         VK_EXT_SAMPLER_FILTER_MINMAX_EXTENSION_NAME,
     };

@@ -255,12 +255,12 @@ void DeviceManager::resizeSwapChain(){
 
 
 void DeviceManager::initDefaultExtensions(){
-    for(const auto* name : s_enabledInstanceExts)
+    for(const auto* name : s_EnabledInstanceExts)
         m_enabledExtensions.instance.insert(name);
     for(const auto& e : m_enabledDeviceExts)
         m_enabledExtensions.device.insert({ e.name, e.feature });
 
-    for(const auto* name : s_optionalInstanceExts)
+    for(const auto* name : s_OptionalInstanceExts)
         m_optionalExtensions.instance.insert(name);
     for(const auto& e : m_optionalDeviceExts)
         m_optionalExtensions.device.insert({ e.name, e.feature });

@@ -96,3 +96,11 @@ Updated: 2026-02-23
 - Use module namespace wrapper macros and `__hidden_*` internal namespaces.
 - Use project types/containers/macros when equivalents exist.
 - Validate and log all external API failure paths.
+
+## 11. New project layout (Visual Studio)
+- New project source files must be listed in a `.vcxitems` file.
+- The project `.vcxproj` must include/import the `.vcxitems`.
+- Always separate source listing and project properties.
+- `.vcxitems` contains source file entries only.
+- `.vcxproj` contains project property/configuration definitions only.
+- Design for reuse: one shared `.vcxitems` with multiple platform-specific `.vcxproj` files.

@@ -549,12 +549,12 @@ u32 ShaderTable::findGroupIndex(const Name& exportName)const{
     for(const auto& shaderDesc : m_pipeline->m_desc.shaders){
         if(shaderDesc.shader && shaderDesc.shader->getDescription().entryName == exportName)
             return groupIndex;
-        groupIndex++;
+        ++groupIndex;
     }
     for(const auto& hitGroup : m_pipeline->m_desc.hitGroups){
         if(hitGroup.exportName == exportName)
             return groupIndex;
-        groupIndex++;
+        ++groupIndex;
     }
     return UINT32_MAX;
 }

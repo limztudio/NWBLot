@@ -496,7 +496,7 @@ void CommandList::beginRenderPass(IFramebuffer* _framebuffer, const RenderPassPa
                 colorAttachments[numColorAttachments].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
 
             colorAttachments[numColorAttachments].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-            numColorAttachments++;
+            ++numColorAttachments;
         }
     }
 

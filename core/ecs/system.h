@@ -17,15 +17,17 @@ NWB_ECS_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-enum class AccessMode : u8{
-    Read,
-    Write
+namespace AccessMode{
+    enum Enum : u8{
+        Read,
+        Write
+    };
 };
 
 
 struct ComponentAccess{
     ComponentTypeId typeId;
-    AccessMode mode;
+    AccessMode::Enum mode;
 };
 
 
@@ -44,7 +46,7 @@ public:
 
 
 public:
-    virtual void update(World& world, float delta) = 0;
+    virtual void update(World& world, f32 delta) = 0;
 
 
 public:
@@ -56,15 +58,17 @@ public:
 protected:
     template<typename T>
     inline void readAccess(){
-        m_access.push_back(ComponentAccess{ ComponentType<T>(), AccessMode::Read });
+        registerAccess(ComponentType<T>(), AccessMode::Read);
     }
     template<typename T>
     inline void writeAccess(){
-        m_access.push_back(ComponentAccess{ ComponentType<T>(), AccessMode::Write });
+        registerAccess(ComponentType<T>(), AccessMode::Write);
     }
 
 
 private:
+    void registerAccess(ComponentTypeId typeId, AccessMode::Enum mode);
+
     FixedVector<ComponentAccess, 16> m_access;
     bool m_enabled = true;
 };
@@ -74,8 +78,14 @@ private:
 
 
 class SystemScheduler{
+private:
+    using SystemAllocator = Alloc::CustomAllocator<ISystem*>;
+    using Stage = Vector<ISystem*, SystemAllocator>;
+    using StageAllocator = Alloc::CustomAllocator<Stage>;
+
+
 public:
-    SystemScheduler();
+    explicit SystemScheduler(Alloc::CustomArena& arena);
     ~SystemScheduler();
 
 
@@ -83,13 +93,15 @@ public:
     void addSystem(ISystem* system);
     void removeSystem(ISystem* system);
     void rebuild();
-    void execute(World& world, float delta);
+    void execute(World& world, f32 delta);
 
 
 private:
+    Alloc::CustomArena& m_arena;
+
     // Each stage is a group of systems that can safely run in parallel
-    Vector<Vector<ISystem*>> m_stages;
-    Vector<ISystem*> m_allSystems;
+    Vector<Stage, StageAllocator> m_stages;
+    Stage m_allSystems;
     bool m_dirty;
 };
 

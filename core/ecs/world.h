@@ -19,29 +19,48 @@ NWB_ECS_BEGIN
 
 
 class World : NoCopy, public Alloc::ITaskScheduler{
+private:
+    using PoolMapAllocator = Alloc::CustomAllocator<Pair<const ComponentTypeId, UniquePtr<IComponentPool>>>;
+    using SystemVectorAllocator = Alloc::CustomAllocator<UniquePtr<ISystem>>;
+
+
+private:
+    static UniquePtr<Alloc::CustomArena> createOwnedArena();
+
+
 public:
-    World(u32 workerThreads = 0, Alloc::CoreAffinity affinity = Alloc::CoreAffinity::Any, usize poolArenaSize = 0);
+    World(
+        u32 workerThreads = 0,
+        Alloc::CoreAffinity affinity = Alloc::CoreAffinity::Any,
+        usize poolArenaSize = 0,
+        Alloc::CustomArena* arena = nullptr
+    );
     ~World();
 
 
-    // ---- Entity management ----
 public:
     Entity createEntity();
     void destroyEntity(Entity entity);
     bool alive(Entity entity)const;
     usize entityCount()const;
 
+    inline Alloc::CustomArena& arena(){ return *m_arena; }
+    inline const Alloc::CustomArena& arena()const{ return *m_arena; }
 
-    // ---- Component management ----
+
 public:
     template<typename T, typename... Args>
     T& addComponent(Entity entity, Args&&... args){
+        NWB_ASSERT(m_entityManager.alive(entity));
         auto* pool = assurePool<T>();
         return pool->add(entity, Forward<Args>(args)...);
     }
 
     template<typename T>
     void removeComponent(Entity entity){
+        if(!m_entityManager.alive(entity))
+            return;
+
         auto* pool = getPool<T>();
         if(pool)
             pool->remove(entity);
@@ -49,6 +68,7 @@ public:
 
     template<typename T>
     T& getComponent(Entity entity){
+        NWB_ASSERT(m_entityManager.alive(entity));
         auto* pool = getPool<T>();
         NWB_ASSERT(pool);
         return pool->get(entity);
@@ -56,6 +76,7 @@ public:
 
     template<typename T>
     const T& getComponent(Entity entity)const{
+        NWB_ASSERT(m_entityManager.alive(entity));
         auto* pool = getPool<T>();
         NWB_ASSERT(pool);
         return pool->get(entity);
@@ -63,6 +84,9 @@ public:
 
     template<typename T>
     bool hasComponent(Entity entity)const{
+        if(!m_entityManager.alive(entity))
+            return false;
+
         auto* pool = getPool<T>();
         return pool ? pool->has(entity) : false;
     }
@@ -86,27 +110,27 @@ public:
     }
 
 
-    // ---- View / Query ----
 public:
     template<typename... Ts>
     View<Ts...> view(){
         return View<Ts...>(
-            std::make_tuple(assurePool<Ts>()...)
+            MakeTuple(assurePool<Ts>()...)
         );
     }
 
     template<typename... Ts>
     View<Ts...> view()const{
         return View<Ts...>(
-            std::make_tuple(const_cast<ComponentPool<Ts>*>(getPool<Ts>())...)
+            MakeTuple(const_cast<ComponentPool<Ts>*>(getPool<Ts>())...)
         );
     }
 
 
-    // ---- System management ----
 public:
     template<typename T, typename... Args>
     T& addSystem(Args&&... args){
+        static_assert(IsBaseOf_V<ISystem, T>, "addSystem requires T to derive from ISystem");
+
         auto ptr = MakeUnique<T>(Forward<Args>(args)...);
         T& ref = *ptr;
         m_scheduler.addSystem(ptr.get());
@@ -127,7 +151,6 @@ public:
     }
 
 
-    // ---- Message bus ----
 public:
     template<typename T>
     void postMessage(const T& message){
@@ -158,12 +181,10 @@ public:
     void clearMessages(){ m_messageBus.clear(); }
 
 
-    // ---- Tick ----
 public:
-    void tick(float delta);
+    void tick(f32 delta);
 
 
-    // ---- Internal ----
 private:
     template<typename T>
     ComponentPool<T>* assurePool(){
@@ -172,7 +193,7 @@ private:
         if(itr != m_pools.end())
             return static_cast<ComponentPool<T>*>(itr->second.get());
 
-        auto pool = MakeUnique<ComponentPool<T>>();
+        auto pool = MakeUnique<ComponentPool<T>>(*m_arena);
         auto* raw = pool.get();
         m_pools.emplace(typeId, Move(pool));
         return raw;
@@ -182,10 +203,13 @@ private:
 
 
 private:
+    UniquePtr<Alloc::CustomArena> m_ownedArena;
+    Alloc::CustomArena* m_arena = nullptr;
+
     Alloc::ThreadPool m_threadPool;
     EntityManager m_entityManager;
-    HashMap<ComponentTypeId, UniquePtr<IComponentPool>> m_pools;
-    Vector<UniquePtr<ISystem>> m_systems;
+    HashMap<ComponentTypeId, UniquePtr<IComponentPool>, Hasher<ComponentTypeId>, EqualTo<ComponentTypeId>, PoolMapAllocator> m_pools;
+    Vector<UniquePtr<ISystem>, SystemVectorAllocator> m_systems;
     SystemScheduler m_scheduler;
     MessageBus m_messageBus;
 };

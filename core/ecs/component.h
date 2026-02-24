@@ -7,8 +7,6 @@
 
 #include "entity.h"
 
-#include <typeindex>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -83,8 +81,16 @@ public:
 template<typename T>
 class ComponentPool : public IComponentPool{
 public:
-    ComponentPool()
+    using SparseAllocator = Alloc::CustomAllocator<u32>;
+    using EntityAllocator = Alloc::CustomAllocator<Entity>;
+    using ComponentAllocator = Alloc::CustomAllocator<T>;
+
+
+    explicit ComponentPool(Alloc::CustomArena& arena)
         : m_typeId(ComponentType<T>())
+        , m_sparse(SparseAllocator(arena))
+        , m_dense(EntityAllocator(arena))
+        , m_components(ComponentAllocator(arena))
     {}
 
 
@@ -114,7 +120,7 @@ public:
         return m_components[m_sparse[entity.index()]];
     }
 
-    inline bool has(Entity entity)const override{
+    inline virtual bool has(Entity entity)const override{
         const u32 index = entity.index();
         if(index >= static_cast<u32>(m_sparse.size()))
             return false;
@@ -124,7 +130,7 @@ public:
         return m_dense[dense] == entity;
     }
 
-    void remove(Entity entity)override{
+    virtual void remove(Entity entity)override{
         if(!has(entity))
             return;
 
@@ -145,14 +151,14 @@ public:
         m_sparse[index] = ~0u;
     }
 
-    inline void clear()override{
+    inline virtual void clear()override{
         m_sparse.clear();
         m_dense.clear();
         m_components.clear();
     }
 
-    inline usize size()const override{ return m_dense.size(); }
-    inline ComponentTypeId typeId()const override{ return m_typeId; }
+    inline virtual usize size()const override{ return m_dense.size(); }
+    inline virtual ComponentTypeId typeId()const override{ return m_typeId; }
 
 
 public:
@@ -162,18 +168,18 @@ public:
     inline T* components(){ return m_components.data(); }
     inline const T* components()const{ return m_components.data(); }
 
-    inline Vector<Entity>& denseEntities(){ return m_dense; }
-    inline const Vector<Entity>& denseEntities()const{ return m_dense; }
+    inline Vector<Entity, EntityAllocator>& denseEntities(){ return m_dense; }
+    inline const Vector<Entity, EntityAllocator>& denseEntities()const{ return m_dense; }
 
-    inline Vector<T>& denseComponents(){ return m_components; }
-    inline const Vector<T>& denseComponents()const{ return m_components; }
+    inline Vector<T, ComponentAllocator>& denseComponents(){ return m_components; }
+    inline const Vector<T, ComponentAllocator>& denseComponents()const{ return m_components; }
 
 
 private:
     ComponentTypeId m_typeId;
-    Vector<u32> m_sparse;
-    Vector<Entity> m_dense;
-    Vector<T> m_components;
+    Vector<u32, SparseAllocator> m_sparse;
+    Vector<Entity, EntityAllocator> m_dense;
+    Vector<T, ComponentAllocator> m_components;
 };
 
 

@@ -8,6 +8,7 @@
 #include <compare>
 #include <memory>
 #include <iterator>
+#include <utility>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -245,6 +246,11 @@ using AllocatorTraits = std::allocator_traits<T>;
 
 template<class T, T Val>
 using IntegralConstant = std::integral_constant<T, Val>;
+
+template<size_t... Is>
+using IndexSequence = std::index_sequence<Is...>;
+template<typename... Ts>
+using IndexSequenceFor = std::index_sequence_for<Ts...>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

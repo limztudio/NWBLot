@@ -1,7 +1,7 @@
 # NWBLot Inferred Code Standard
 
 Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_parties/`).  
-Updated: 2026-02-23
+Updated: 2026-02-24
 
 ## 1. File and module structure
 - Use lowercase `snake_case` filenames for C++ source and headers.
@@ -27,6 +27,7 @@ Updated: 2026-02-23
 - Constants use `s_` prefix and are usually `constexpr`.
 - Enum pattern is typically:
   - `namespace SomeEnum { enum Enum : u8 { ... }; };`
+- For engine public/module-facing enums, use the namespace-enum pattern (`namespace X { enum Enum : u8 { ... }; };`) and do not use `enum class`.
 - Handle aliases follow `<Type>Handle` naming.
 - Global functions start with `Uppercase`.
 - Global static variables start with `s_Uppercase`.
@@ -39,6 +40,10 @@ Updated: 2026-02-23
 - Keep control statements compact; single-line guard clauses are common.
 - Constructor initializer lists are split across lines with leading commas.
 - Heavy use of visual separators and blank lines between logical blocks.
+- Prefer two blank lines between adjacent function definitions in the same class/struct implementation when they are part of the same logical area.
+- Use `////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////` between function definitions only when crossing a strong boundary:
+  - changing to a clearly different function category/personality, or
+  - moving between definitions of different classes/structs in the same `.cpp`.
 - Prefer pre-increment/decrement (`++p`, `--p`) over post-increment/decrement (`p++`, `p--`) when behavior is equivalent.
 - For single-statement `if/for/while`, put the statement on the next line:
   - `if(condition)`
@@ -92,6 +97,7 @@ Updated: 2026-02-23
 - Prefer `ScratchArena` for containers/temporary objects that only live within a local scope.
 
 ## 10. Practical checklist for new code
+- Before every code create/modify action, re-read the current `standard.md` and apply it as the source of truth (do not rely on memory).
 - Match file banner and section-separator style.
 - Keep naming prefixes consistent (`m_`, `s_`, `g_`).
 - Use module namespace wrapper macros and `__hidden_*` internal namespaces.
@@ -109,15 +115,21 @@ Updated: 2026-02-23
 ## 12. Class/Struct Layout and Order
 - `struct` layout rule: declare member variables first, then member functions.
 - `class` layout rule: declare member functions first, then member variables.
+- Class-level type aliases (`using ...`) should be placed at the top of the class, before member function declarations.
+- After the class-level type-alias block (`using ...`), keep two blank lines before the next access section or member declaration block.
+- If class-level aliases and static helper/factory declarations share the same visibility, separate categories by reopening the access label (e.g., `private:` then `private:`).
 - Friend declarations (`friend class ...`, `friend ...`) must appear at the very beginning of the class.
 - Internal helper declarations (`struct`, `enum`, `class` used only internally) should appear before normal function/member sections.
+- Static member function declarations should appear before non-static helper/member function declarations in the same access section.
+- Static helper/factory functions should be declared in an early dedicated section, not in the middle/bottom of the class after normal API blocks.
+- If a static helper must be `private`, place a `private:` helper section near the top of the class (after aliases/helpers) before the main `public` API sections.
 - Reusing the same access specifier (`public:`, `private:`, `protected:`) for category separation is allowed and preferred.
 - When the category changes significantly, separate sections with two blank lines.
 - When the category change is minor, one blank line is enough.
 - Static member variables are declared before non-static member variables.
 - Constructors/destructor are declared together with no empty line between them.
 - If operator overload members exist, place them right after constructor/destructor declarations.
-- Prefer `public` sections first, then `private`/`protected` sections.
+- Prefer `public` sections first, then `private`/`protected` sections, except for an early top `private:` helper section when needed for static helper/factory declarations.
 - Once the member-variable section begins, do not declare additional member functions afterward.
 - Prefer declaring `operator==` and `operator!=` outside the class/struct scope.
 

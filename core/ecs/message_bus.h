@@ -63,6 +63,10 @@ inline MessageTypeId MessageType(){
 
 class MessageBus : NoCopy{
 private:
+    using ChannelMapAllocator = Alloc::CustomAllocator<Pair<const MessageTypeId, UniquePtr<class IMessageChannel>>>;
+
+
+private:
     class IMessageChannel{
     public:
         virtual ~IMessageChannel() = default;
@@ -75,6 +79,11 @@ private:
 
     template<typename T>
     class MessageChannel final : public IMessageChannel{
+    public:
+        explicit MessageChannel(Alloc::CustomArena& arena)
+            : m_readBuffer(Alloc::CustomAllocator<T>(arena))
+        {}
+
     public:
         void post(const T& message){
             m_pending.push(MakeUnique<T>(message));
@@ -118,12 +127,15 @@ private:
 
     private:
         ParallelQueue<UniquePtr<T>> m_pending;
-        Vector<T> m_readBuffer;
+        Vector<T, Alloc::CustomAllocator<T>> m_readBuffer;
     };
 
 
 public:
-    MessageBus() = default;
+    explicit MessageBus(Alloc::CustomArena& arena)
+        : m_arena(arena)
+        , m_channels(0, Hasher<MessageTypeId>(), EqualTo<MessageTypeId>(), ChannelMapAllocator(arena))
+    {}
     ~MessageBus() = default;
 
 
@@ -163,7 +175,9 @@ public:
     }
 
     void swapBuffers(){
-        Vector<IMessageChannel*> channels;
+        Vector<IMessageChannel*, Alloc::CustomAllocator<IMessageChannel*>> channels(
+            Alloc::CustomAllocator<IMessageChannel*>(m_arena)
+        );
 
         {
             Mutex::scoped_lock lock(m_channelsMutex);
@@ -179,7 +193,9 @@ public:
     }
 
     void clear(){
-        Vector<IMessageChannel*> channels;
+        Vector<IMessageChannel*, Alloc::CustomAllocator<IMessageChannel*>> channels(
+            Alloc::CustomAllocator<IMessageChannel*>(m_arena)
+        );
 
         {
             Mutex::scoped_lock lock(m_channelsMutex);
@@ -206,7 +222,7 @@ private:
         if(itr != m_channels.end())
             return static_cast<MessageChannel<T>*>(itr->second.get());
 
-        auto channel = MakeUnique<MessageChannel<T>>();
+        auto channel = MakeUnique<MessageChannel<T>>(m_arena);
         auto* raw = channel.get();
         m_channels.emplace(typeId, Move(channel));
         return raw;
@@ -226,8 +242,9 @@ private:
 
 
 private:
+    Alloc::CustomArena& m_arena;
     mutable Mutex m_channelsMutex;
-    HashMap<MessageTypeId, UniquePtr<IMessageChannel>> m_channels;
+    HashMap<MessageTypeId, UniquePtr<IMessageChannel>, Hasher<MessageTypeId>, EqualTo<MessageTypeId>, ChannelMapAllocator> m_channels;
 };
 
 

@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "system.h"
+
 #include "world.h"
 
 
@@ -14,31 +16,58 @@ NWB_ECS_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SystemScheduler::SystemScheduler()
-    : m_dirty(false)
+void ISystem::registerAccess(ComponentTypeId typeId, AccessMode::Enum mode){
+    for(usize i = 0; i < m_access.size(); ++i){
+        auto& access = m_access[i];
+        if(access.typeId != typeId)
+            continue;
+
+        // Write is stronger than read; keep the strongest access mode.
+        if(mode == AccessMode::Write)
+            access.mode = AccessMode::Write;
+        return;
+    }
+
+    m_access.push_back(ComponentAccess{ typeId, mode });
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+SystemScheduler::SystemScheduler(Alloc::CustomArena& arena)
+    : m_arena(arena)
+    , m_stages(StageAllocator(arena))
+    , m_allSystems(SystemAllocator(arena))
+    , m_dirty(false)
 {}
 SystemScheduler::~SystemScheduler()
 {}
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void SystemScheduler::addSystem(ISystem* system){
+    if(!system)
+        return;
+
+    if(FindIf(m_allSystems.begin(), m_allSystems.end(),
+        [system](ISystem* iterSystem){ return iterSystem == system; }
+    ) != m_allSystems.end())
+        return;
+
     m_allSystems.push_back(system);
     m_dirty = true;
 }
 
+
 void SystemScheduler::removeSystem(ISystem* system){
-    auto itr = std::find(m_allSystems.begin(), m_allSystems.end(), system);
+    auto itr = FindIf(m_allSystems.begin(), m_allSystems.end(),
+        [system](ISystem* iterSystem){ return iterSystem == system; }
+    );
     if(itr != m_allSystems.end()){
         m_allSystems.erase(itr);
         m_dirty = true;
     }
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 void SystemScheduler::rebuild(){
@@ -58,7 +87,7 @@ void SystemScheduler::rebuild(){
     usize numAssigned = 0;
 
     while(numAssigned < m_allSystems.size()){
-        Vector<ISystem*> stage;
+        Stage stage(SystemAllocator(m_arena));
 
         // Collect writes and reads for the current stage
         HashSet<ComponentTypeId, Hasher<ComponentTypeId>, EqualTo<ComponentTypeId>,
@@ -114,18 +143,26 @@ void SystemScheduler::rebuild(){
             }
         }
 
-        if(!stage.empty())
-            m_stages.push_back(Move(stage));
+        if(stage.empty()){
+            for(usize i = 0; i < m_allSystems.size(); ++i){
+                if(assigned[i])
+                    continue;
+
+                stage.push_back(m_allSystems[i]);
+                assigned[i] = 1;
+                ++numAssigned;
+                break;
+            }
+        }
+
+        m_stages.push_back(Move(stage));
     }
 
     m_dirty = false;
 }
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void SystemScheduler::execute(World& world, float delta){
+void SystemScheduler::execute(World& world, f32 delta){
     if(m_dirty)
         rebuild();
 

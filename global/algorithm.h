@@ -5,24 +5,18 @@
 #pragma once
 
 
-#include "assert.h"
-#include "compile.h"
-#include "platform.h"
-#include "type.h"
-#include "algorithm.h"
-#include "call_traits.h"
-#include "containers.h"
-#include "unique_ptr.h"
-#include "refcount_ptr.h"
-#include "simplemath.h"
-#include "timer.h"
+#include "type_properties.h"
+
+#include <algorithm>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#define NWB_BEGIN namespace NWB{
-#define NWB_END };
+template<typename InputIt, typename Predicate>
+constexpr InputIt FindIf(InputIt first, InputIt last, Predicate&& pred){
+    return std::find_if(first, last, Forward<Predicate>(pred));
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

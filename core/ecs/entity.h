@@ -63,8 +63,14 @@ static constexpr Entity ENTITY_INVALID = Entity{};
 
 
 class EntityManager{
+private:
+    using GenerationAllocator = Alloc::CustomAllocator<u32>;
+    using FreeIndexAllocator = Alloc::CustomAllocator<u32>;
+
+
 public:
     EntityManager();
+    explicit EntityManager(Alloc::CustomArena& arena);
     ~EntityManager();
 
 
@@ -76,8 +82,8 @@ public:
 
 
 private:
-    Vector<u32> m_generations;
-    Deque<u32> m_freeIndices;
+    Vector<u32, GenerationAllocator> m_generations;
+    Deque<u32, FreeIndexAllocator> m_freeIndices;
     usize m_aliveCount;
 };
 

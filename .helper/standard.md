@@ -105,3 +105,27 @@ Updated: 2026-02-23
 - `.vcxitems` contains source file entries only.
 - `.vcxproj` contains project property/configuration definitions only.
 - Design for reuse: one shared `.vcxitems` with multiple platform-specific `.vcxproj` files.
+
+## 12. Class/Struct Layout and Order
+- `struct` layout rule: declare member variables first, then member functions.
+- `class` layout rule: declare member functions first, then member variables.
+- Friend declarations (`friend class ...`, `friend ...`) must appear at the very beginning of the class.
+- Internal helper declarations (`struct`, `enum`, `class` used only internally) should appear before normal function/member sections.
+- Reusing the same access specifier (`public:`, `private:`, `protected:`) for category separation is allowed and preferred.
+- When the category changes significantly, separate sections with two blank lines.
+- When the category change is minor, one blank line is enough.
+- Static member variables are declared before non-static member variables.
+- Constructors/destructor are declared together with no empty line between them.
+- If operator overload members exist, place them right after constructor/destructor declarations.
+- Prefer `public` sections first, then `private`/`protected` sections.
+- Once the member-variable section begins, do not declare additional member functions afterward.
+- Prefer declaring `operator==` and `operator!=` outside the class/struct scope.
+
+## 13. Declaration/Definition Order
+- In `.cpp` files, function definitions must follow the declaration order from the corresponding class/struct declaration.
+- Allowed:
+  - Declaration order: `X()`, then `Y()`
+  - Definition order: `X()`, then `Y()`
+- Not allowed:
+  - Declaration order: `X()`, then `Y()`
+  - Definition order: `Y()`, then `X()`

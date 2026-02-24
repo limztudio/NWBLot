@@ -123,10 +123,10 @@ template<typename... Ts>
 class View{
     static_assert(sizeof...(Ts) > 0, "View requires at least one component type");
 
+
 public:
     using IteratorType = __hidden_ecs::ViewIterator<Ts...>;
     using ComponentTuple = Tuple<ComponentPool<Ts>*...>;
-
 
 
 public:

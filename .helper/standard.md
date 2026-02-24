@@ -118,6 +118,8 @@ Updated: 2026-02-24
 - Class-level type aliases (`using ...`) should be placed at the top of the class, before member function declarations.
 - After the class-level type-alias block (`using ...`), keep two blank lines before the next access section or member declaration block.
 - If class-level aliases and static helper/factory declarations share the same visibility, separate categories by reopening the access label (e.g., `private:` then `private:`).
+- If class-level aliases and constructor/function declaration blocks share the same visibility, separate categories by reopening the access label (e.g., `public:` then `public:`).
+- If a class-scope `static_assert(...)` appears before an access section, keep two blank lines before the next access label (`public:`, `private:`, `protected:`).
 - Friend declarations (`friend class ...`, `friend ...`) must appear at the very beginning of the class.
 - Internal helper declarations (`struct`, `enum`, `class` used only internally) should appear before normal function/member sections.
 - Static member function declarations should appear before non-static helper/member function declarations in the same access section.

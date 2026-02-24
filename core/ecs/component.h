@@ -86,6 +86,7 @@ public:
     using ComponentAllocator = Alloc::CustomAllocator<T>;
 
 
+public:
     explicit ComponentPool(Alloc::CustomArena& arena)
         : m_typeId(ComponentType<T>())
         , m_sparse(SparseAllocator(arena))

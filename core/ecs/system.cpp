@@ -89,17 +89,8 @@ void SystemScheduler::rebuild(){
     while(numAssigned < m_allSystems.size()){
         Stage stage(SystemAllocator(m_arena));
 
-        // Collect writes and reads for the current stage
-        HashSet<ComponentTypeId, Hasher<ComponentTypeId>, EqualTo<ComponentTypeId>,
-                Alloc::ScratchAllocator<ComponentTypeId>> stageWrites(
-            0, Hasher<ComponentTypeId>(), EqualTo<ComponentTypeId>(),
-            Alloc::ScratchAllocator<ComponentTypeId>(scratchArena)
-        );
-        HashSet<ComponentTypeId, Hasher<ComponentTypeId>, EqualTo<ComponentTypeId>,
-                Alloc::ScratchAllocator<ComponentTypeId>> stageReads(
-            0, Hasher<ComponentTypeId>(), EqualTo<ComponentTypeId>(),
-            Alloc::ScratchAllocator<ComponentTypeId>(scratchArena)
-        );
+        HashSet<ComponentTypeId, Hasher<ComponentTypeId>, EqualTo<ComponentTypeId>, Alloc::ScratchAllocator<ComponentTypeId>> stageWrites(0, Hasher<ComponentTypeId>(), EqualTo<ComponentTypeId>(), Alloc::ScratchAllocator<ComponentTypeId>(scratchArena));
+        HashSet<ComponentTypeId, Hasher<ComponentTypeId>, EqualTo<ComponentTypeId>, Alloc::ScratchAllocator<ComponentTypeId>> stageReads(0, Hasher<ComponentTypeId>(), EqualTo<ComponentTypeId>(), Alloc::ScratchAllocator<ComponentTypeId>(scratchArena));
 
         for(usize i = 0; i < m_allSystems.size(); ++i){
             if(assigned[i])
@@ -108,19 +99,16 @@ void SystemScheduler::rebuild(){
             ISystem* sys = m_allSystems[i];
             const auto& acc = sys->access();
 
-            // Check compatibility with current stage
             bool compatible = true;
             for(usize a = 0; a < acc.size(); ++a){
                 const auto& ca = acc[a];
                 if(ca.mode == AccessMode::Write){
-                    // Cannot write something another system in this stage writes or reads
                     if(stageWrites.count(ca.typeId) || stageReads.count(ca.typeId)){
                         compatible = false;
                         break;
                     }
                 }
                 else{
-                    // Cannot read something another system in this stage writes
                     if(stageWrites.count(ca.typeId)){
                         compatible = false;
                         break;
@@ -129,7 +117,6 @@ void SystemScheduler::rebuild(){
             }
 
             if(compatible){
-                // Add this system's access tokens to the stage
                 for(usize a = 0; a < acc.size(); ++a){
                     const auto& ca = acc[a];
                     if(ca.mode == AccessMode::Write)
@@ -170,12 +157,10 @@ void SystemScheduler::execute(World& world, f32 delta){
 
     for(auto& stage : m_stages){
         if(stage.size() == 1){
-            // Single system: run inline, avoid scheduling overhead
             if(stage[0]->enabled())
                 stage[0]->update(world, delta);
         }
         else{
-            // Multiple systems: run in parallel via thread pool
             pool.parallelFor(static_cast<usize>(0), stage.size(),
                 [&stage, &world, delta](usize i){
                     if(stage[i]->enabled())

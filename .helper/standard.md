@@ -65,6 +65,7 @@ Updated: 2026-02-26
 - First include the matching local header (`#include "file.h"`).
 - Then include project/external headers.
 - Keep includes grouped with a blank line between groups.
+- Exception for precompiled-header translation units: if the project requires PCH (`/Yu`), include `pch.h` first, then include the matching local header immediately after.
 
 ## 6. Type and API usage
 - Prefer project scalar aliases (`u32`, `u64`, `usize`, `f32`, etc.) from `global/type.h`.

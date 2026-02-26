@@ -57,7 +57,7 @@ static inline void machine_pause(std::int32_t delay){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using Mutex = tbb::mutex;
+using Mutex = tbb::mutex; // Legacy compatibility alias; prefer Futex for new code.
 using RecursiveMutex = std::recursive_mutex;
 using SpinMutex = tbb::spin_mutex;
 using QueuingMutex = tbb::queuing_mutex;

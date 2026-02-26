@@ -100,7 +100,7 @@ public:
         }
         m_pendingCount.fetch_add(1, std::memory_order_release);
         {
-            LockGuard lock(m_mutex);
+            ScopedLock lock(m_mutex);
             m_tasks.push_back(TaskItem{ Function<void()>(Forward<Func>(task)) });
         }
         m_taskAvailable.notify_one();
@@ -226,7 +226,7 @@ private:
         desc.activeWorkers.store(0, std::memory_order_relaxed);
 
         {
-            LockGuard lock(m_mutex);
+            ScopedLock lock(m_mutex);
             m_pfWork = &desc;
         }
         m_taskAvailable.notify_all();
@@ -240,7 +240,7 @@ private:
             desc.activeWorkers.wait(activeWorkers, std::memory_order_relaxed);
 
         {
-            LockGuard lock(m_mutex);
+            ScopedLock lock(m_mutex);
             m_pfWork = nullptr;
         }
     }

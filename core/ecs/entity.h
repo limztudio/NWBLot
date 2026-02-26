@@ -79,6 +79,7 @@ public:
     void destroy(Entity entity);
     bool alive(Entity entity)const;
     usize count()const;
+    void clear();
 
 
 private:

@@ -673,6 +673,7 @@ bool DeviceManager::createDevice(){
     VkResult res = VK_SUCCESS;
 
     Alloc::ScratchArena<> scratchArena(32768);
+    m_dynamicRenderingSupported = false;
 
     uint32_t extCount = 0;
     vkEnumerateDeviceExtensionProperties(m_vulkanPhysicalDevice, nullptr, &extCount, nullptr);
@@ -723,6 +724,8 @@ bool DeviceManager::createDevice(){
 
     m_swapChainMutableFormatSupported = isVulkanDeviceExtensionEnabled(VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME);
     const bool coopVecExtensionEnabled = isVulkanDeviceExtensionEnabled(VK_NV_COOPERATIVE_VECTOR_EXTENSION_NAME);
+    const bool dynamicRenderingExtensionEnabled = isVulkanDeviceExtensionEnabled(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
+    const bool apiSupportsVulkan13 = physicalDeviceProperties.apiVersion >= VK_API_VERSION_1_3;
 
     auto appendToChain = [](void*& pNext, void* feature){
         reinterpret_cast<VkBaseOutStructure*>(feature)->pNext = reinterpret_cast<VkBaseOutStructure*>(pNext);
@@ -742,6 +745,11 @@ bool DeviceManager::createDevice(){
     maintenance4Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_4_FEATURES;
     if(isVulkanDeviceExtensionEnabled(VK_KHR_MAINTENANCE_4_EXTENSION_NAME))
         appendToChain(pNext, &maintenance4Features);
+
+    VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeatures = {};
+    dynamicRenderingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES;
+    if(apiSupportsVulkan13 || dynamicRenderingExtensionEnabled)
+        appendToChain(pNext, &dynamicRenderingFeatures);
 
     VkPhysicalDeviceCooperativeVectorFeaturesNV cooperativeVectorFeatures = {};
     cooperativeVectorFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_VECTOR_FEATURES_NV;
@@ -777,6 +785,14 @@ bool DeviceManager::createDevice(){
     vulkan13features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
     vulkan13features.synchronization2 = isVulkanDeviceExtensionEnabled(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME) ? VK_TRUE : VK_FALSE;
     vulkan13features.maintenance4 = maintenance4Features.maintenance4;
+    vulkan13features.dynamicRendering = dynamicRenderingFeatures.dynamicRendering;
+
+    if(dynamicRenderingFeatures.dynamicRendering == VK_TRUE)
+        m_dynamicRenderingSupported = true;
+    else{
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Dynamic rendering is not supported by the selected device/configuration."));
+        return false;
+    }
 
     pNext = nullptr;
     for(const auto& [name, feature] : m_enabledExtensions.device){
@@ -784,10 +800,13 @@ bool DeviceManager::createDevice(){
             appendToChain(pNext, feature);
     }
 
+    if(!apiSupportsVulkan13 && dynamicRenderingExtensionEnabled)
+        appendToChain(pNext, &dynamicRenderingFeatures);
+
     if(coopVecExtensionEnabled && cooperativeVectorFeatures.cooperativeVector)
         appendToChain(pNext, &cooperativeVectorFeatures);
 
-    if(physicalDeviceProperties.apiVersion >= VK_API_VERSION_1_3)
+    if(apiSupportsVulkan13)
         appendToChain(pNext, &vulkan13features);
     else if(isVulkanDeviceExtensionEnabled(VK_KHR_MAINTENANCE_4_EXTENSION_NAME))
         appendToChain(pNext, &maintenance4Features);
@@ -1094,6 +1113,7 @@ bool DeviceManager::createDeviceInternal(){
     deviceDesc.deviceExtensions = vecDeviceExt.data();
     deviceDesc.numDeviceExtensions = vecDeviceExt.size();
     deviceDesc.bufferDeviceAddressSupported = m_bufferDeviceAddressSupported;
+    deviceDesc.dynamicRenderingSupported = m_dynamicRenderingSupported;
     deviceDesc.aftermathEnabled = m_deviceParams.enableAftermath;
     deviceDesc.logBufferLifetime = m_deviceParams.logBufferLifetime;
     deviceDesc.vulkanLibraryName = m_deviceParams.vulkanLibraryName;

@@ -237,6 +237,7 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
 
 
 void CommandList::setMeshletState(const MeshletState& state){
+    ensureGraphicsRenderPass(state.framebuffer);
     m_currentMeshletState = state;
 
     auto* pipeline = checked_cast<MeshletPipeline*>(state.pipeline);

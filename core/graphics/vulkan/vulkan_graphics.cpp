@@ -546,7 +546,37 @@ void CommandList::endRenderPass(){
     vkCmdEndRendering(m_currentCmdBuf->m_cmdBuf);
 }
 
+void CommandList::ensureGraphicsRenderPass(IFramebuffer* framebuffer){
+    if(!framebuffer)
+        return;
+
+    if(m_renderPassActive && m_renderPassFramebuffer == framebuffer)
+        return;
+
+    endActiveRenderPass();
+
+    if(m_enableAutomaticBarriers){
+        setResourceStatesForFramebuffer(*framebuffer);
+        commitBarriers();
+    }
+
+    RenderPassParameters params = {};
+    beginRenderPass(framebuffer, params);
+    m_renderPassActive = true;
+    m_renderPassFramebuffer = framebuffer;
+}
+
+void CommandList::endActiveRenderPass(){
+    if(!m_renderPassActive)
+        return;
+
+    endRenderPass();
+    m_renderPassActive = false;
+    m_renderPassFramebuffer = nullptr;
+}
+
 void CommandList::setGraphicsState(const GraphicsState& state){
+    ensureGraphicsRenderPass(state.framebuffer);
     m_currentGraphicsState = state;
 
     auto* pipeline = checked_cast<GraphicsPipeline*>(state.pipeline);

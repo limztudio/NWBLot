@@ -175,6 +175,7 @@ public:
 
 public:
     void tick(f32 delta);
+    void clear();
 
 
 private:

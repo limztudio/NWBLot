@@ -106,6 +106,7 @@ Device::Device(const DeviceDesc& desc)
     vkGetPhysicalDeviceMemoryProperties(m_context.physicalDevice, &m_context.memoryProperties);
 
     m_context.extensions.buffer_device_address = desc.bufferDeviceAddressSupported;
+    m_context.extensions.KHR_dynamic_rendering = desc.dynamicRenderingSupported;
 
     for(usize i = 0; i < desc.numDeviceExtensions; ++i){
         const char* ext = desc.deviceExtensions[i];

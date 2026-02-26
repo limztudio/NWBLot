@@ -135,6 +135,7 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
 
 
 void CommandList::setComputeState(const ComputeState& state){
+    endActiveRenderPass();
     m_currentComputeState = state;
 
     auto* pipeline = checked_cast<ComputePipeline*>(state.pipeline);

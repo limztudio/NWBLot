@@ -9,6 +9,7 @@
 
 #include <core/common/common.h>
 #include <core/ecs/ecs.h>
+#include <core/ecs_graphics/ecs_graphics.h>
 #include <core/graphics/graphics.h>
 
 
@@ -75,6 +76,7 @@ private:
     Alloc::CustomArena m_worldObjectArena;
     Alloc::ThreadPool m_worldThreadPool;
     ECS::World m_world;
+    ECSGraphics::RendererSystem* m_rendererSystem = nullptr;
 
     Graphics m_graphics;
 };

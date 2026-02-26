@@ -109,6 +109,12 @@ usize EntityManager::count()const{
     return m_aliveCount;
 }
 
+void EntityManager::clear(){
+    m_generations.clear();
+    m_freeIndices.clear();
+    m_aliveCount = 0;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

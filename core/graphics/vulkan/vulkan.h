@@ -59,6 +59,8 @@ struct DeviceDesc{
 
     // Indicates if VkPhysicalDeviceVulkan12Features::bufferDeviceAddress was set to 'true' at device creation time
     bool bufferDeviceAddressSupported = false;
+    // Indicates if dynamic rendering was enabled at device creation time (via Vulkan 1.3 core or KHR extension)
+    bool dynamicRenderingSupported = false;
     bool aftermathEnabled = false;
     bool logBufferLifetime = false;
 

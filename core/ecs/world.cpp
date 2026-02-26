@@ -25,10 +25,7 @@ World::World(Alloc::CustomArena& arena, Alloc::ThreadPool& threadPool)
 {}
 World::~World()
 {
-    taskPool().wait();
-    m_messageBus.clear();
-    m_systems.clear();
-    m_pools.clear();
+    clear();
 }
 
 
@@ -70,6 +67,18 @@ void World::removeSystem(ISystem& system){
 void World::tick(f32 delta){
     m_messageBus.swapBuffers();
     m_scheduler.execute(*this, delta);
+}
+
+void World::clear(){
+    taskPool().wait();
+    m_messageBus.clear();
+
+    for(auto& system : m_systems)
+        m_scheduler.removeSystem(*system);
+    m_systems.clear();
+
+    m_pools.clear();
+    m_entityManager.clear();
 }
 
 

@@ -71,6 +71,7 @@ void CommandList::close(){
         return;
     }
 
+    endActiveRenderPass();
     commitBarriers();
 
     res = vkEndCommandBuffer(m_currentCmdBuf->m_cmdBuf);
@@ -85,12 +86,17 @@ void CommandList::close(){
 }
 
 void CommandList::clearState(){
+    if(m_currentCmdBuf && m_renderPassActive)
+        endActiveRenderPass();
+
     m_stateTracker->reset();
 
     m_currentGraphicsState = {};
     m_currentComputeState = {};
     m_currentMeshletState = {};
     m_currentRayTracingState = {};
+    m_renderPassActive = false;
+    m_renderPassFramebuffer = nullptr;
 
     m_pendingImageBarriers.clear();
     m_pendingBufferBarriers.clear();

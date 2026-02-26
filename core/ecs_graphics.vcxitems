@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup Label="Globals">
+    <MSBuildAllProjects Condition="'$(MSBuildVersion)' == '' Or '$(MSBuildVersion)' &lt; '16.0'">$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <ItemsProjectGuid>{B0BA92AE-7B08-46A0-9657-954374FEF2EE}</ItemsProjectGuid>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories);$(MSBuildThisFileDirectory)</AdditionalIncludeDirectories>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ProjectCapability Include="SourceItemsFromImports" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="$(MSBuildThisFileDirectory)ecs_graphics\renderer_system.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="$(MSBuildThisFileDirectory)ecs_graphics\global.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)ecs_graphics\components.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)ecs_graphics\renderer_system.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)ecs_graphics\cube_shader_spirv.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)ecs_graphics\ecs_graphics.h" />
+  </ItemGroup>
+</Project>

@@ -1128,6 +1128,8 @@ public:
 private:
     void beginRenderPass(IFramebuffer* framebuffer, const RenderPassParameters& params);
     void endRenderPass();
+    void ensureGraphicsRenderPass(IFramebuffer* framebuffer);
+    void endActiveRenderPass();
 
 
 private:
@@ -1135,6 +1137,8 @@ private:
     TrackedCommandBufferPtr m_currentCmdBuf;
     CustomUniquePtr<StateTracker> m_stateTracker;
     bool m_enableAutomaticBarriers = true;
+    bool m_renderPassActive = false;
+    IFramebuffer* m_renderPassFramebuffer = nullptr;
 
     GraphicsState m_currentGraphicsState;
     ComputeState m_currentComputeState;

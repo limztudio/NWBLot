@@ -113,9 +113,22 @@ bool Frame::startup(){
     if(!m_graphics.init(data<Common::FrameData>()))
         return false;
 
+    m_rendererSystem = &m_world.addSystem<ECSGraphics::RendererSystem>(m_world, m_graphics);
+    m_graphics.getDeviceManager()->addRenderPassToBack(*m_rendererSystem);
+
+    ECS::Entity cubeEntity = m_world.createEntity();
+    m_world.addComponent<ECSGraphics::CubeComponent>(cubeEntity);
+    m_world.addComponent<ECSGraphics::RendererComponent>(cubeEntity);
+
     return true;
 }
 void Frame::cleanup(){
+    if(m_rendererSystem){
+        m_graphics.getDeviceManager()->removeRenderPass(*m_rendererSystem);
+        m_rendererSystem = nullptr;
+    }
+
+    m_world.clear();
     m_graphics.destroy();
 }
 bool Frame::update(float delta){

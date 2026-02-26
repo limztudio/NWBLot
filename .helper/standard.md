@@ -78,6 +78,7 @@ Updated: 2026-02-26
 - Prefer project wrapper/alias types over raw `std::` names (e.g., `Vector` instead of `std::vector`, traits aliases like `IsSame`).
 - Before introducing a new direct `std::` usage, check `global/global.h` and related global headers for an existing wrapper/alias.
 - If missing and broadly useful, add a project-level alias/wrapper rather than repeating direct `std::` usage across modules.
+- Prefer project C-runtime wrapper macros from `global/compile.h` for memory/string operations (`NWB_MEMCPY`, `NWB_MEMSET`, `NWB_MEMCMP`, `NWB_STRCPY`, etc.) instead of direct `std::`/CRT calls when equivalent wrappers exist.
 - When exposing inherited member functions without changing behavior, prefer `using BaseType::functionName;` over trivial forwarding wrappers like `inline foo(...){ return BaseType::foo(...); }`.
 - Keep forwarding wrappers only when they add behavior, transform contracts, or intentionally change the exposed API shape.
 - Strictly distinguish references vs pointers:
@@ -93,6 +94,7 @@ Updated: 2026-02-26
     - Never return references or pointers to local stack objects.
   - Members:
     - Prefer reference members for mandatory dependencies that never change after construction.
+    - For mandatory services/dependencies (e.g., allocators, schedulers, pools, job systems), require constructor-injected references and avoid nullable pointer members/default-null constructor parameters.
     - Use `NotNull<T*>` members when non-null is required but reference members are impractical (e.g., reseating/assignment requirements).
     - Use raw pointer members only for truly optional relationships.
   - For `NotNull<T*>`, do not add redundant null checks before dereference; treat it as non-null by contract.
@@ -117,6 +119,7 @@ Updated: 2026-02-26
 - Prefer scratch/arena allocations in hot paths to minimize heap churn.
 - Prefer `ScratchArena` for containers/temporary objects that only live within a local scope.
 - For function-local temporary containers (`Vector`, `HashSet`, `HashMap`, etc.), default to `ScratchArena` + `ScratchAllocator`; use `CustomAllocator` only when data must outlive the current scope.
+- Data captured by async jobs/callbacks (e.g., lambda captures submitted to `ThreadPool`/`JobSystem`) is considered outliving the current scope; do not back such captures with `ScratchArena`.
 - For parallel containers (`ParallelQueue`, `ParallelVector`, `ParallelHashMap`, etc.), use a cache-aligned allocator that matches the owning arena (`CustomCacheAlignedAllocator`, `MemoryCacheAlignedAllocator`, `ScratchCacheAlignedAllocator`) instead of default allocators when arena ownership exists.
 
 ## 10. Practical checklist for new code

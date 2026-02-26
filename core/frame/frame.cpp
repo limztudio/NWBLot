@@ -87,6 +87,7 @@ Frame::Frame(void* inst, u16 width, u16 height)
     )
     , m_graphicsAllocator(m_graphicsPersistentArena, m_graphicsObjectArena)
     , m_graphicsThreadPool(queryGraphicsWorkerThreadCount(), Alloc::CoreAffinity::Any)
+    , m_graphicsJobSystem(m_graphicsThreadPool)
     , m_worldObjectArena(
         &__hidden_frame::WorldObjectArenaAlloc,
         &__hidden_frame::WorldObjectArenaFree,
@@ -95,7 +96,7 @@ Frame::Frame(void* inst, u16 width, u16 height)
     )
     , m_worldThreadPool(queryWorldWorkerThreadCount(), Alloc::CoreAffinity::Any)
     , m_world(m_worldObjectArena, m_worldThreadPool)
-    , m_graphics(m_graphicsAllocator, m_graphicsThreadPool)
+    , m_graphics(m_graphicsAllocator, m_graphicsThreadPool, m_graphicsJobSystem)
 {
     auto& frameData = data<Common::FrameData>();
     frameData.width() = width;

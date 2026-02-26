@@ -70,6 +70,7 @@ private:
     Alloc::CustomArena m_graphicsObjectArena;
     GraphicsAllocator m_graphicsAllocator;
     Alloc::ThreadPool m_graphicsThreadPool;
+    Alloc::JobSystem m_graphicsJobSystem;
 
     Alloc::CustomArena m_worldObjectArena;
     Alloc::ThreadPool m_worldThreadPool;

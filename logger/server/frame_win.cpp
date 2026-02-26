@@ -59,7 +59,7 @@ static HFONT g_Font = nullptr;
 static HWND g_ListHwnd = nullptr;
 static Deque<Pair<BasicString<tchar>, Log::Type>> g_Messages;
 
-static Mutex g_ListMutex;
+static Futex g_ListMutex;
 
 static WNDPROC g_OrigListProc = nullptr;
 

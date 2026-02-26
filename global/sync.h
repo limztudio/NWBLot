@@ -80,6 +80,56 @@ using UniqueLock = std::unique_lock<Mutex>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class Futex : NoCopy{
+private:
+    static constexpr u32 s_Unlocked = 0;
+    static constexpr u32 s_Locked = 1;
+    static constexpr u32 s_LockedContended = 2;
+    static constexpr i32 s_SpinCount = 6;
+
+
+public:
+    void lock(){
+        if(try_lock())
+            return;
+
+        for(i32 i = 0; i < s_SpinCount; ++i){
+            if(try_lock())
+                return;
+            machine_pause(1 << i);
+        }
+
+        while(m_state.exchange(s_LockedContended, MemoryOrder::memory_order_acquire) != s_Unlocked)
+            m_state.wait(s_LockedContended, MemoryOrder::memory_order_relaxed);
+    }
+
+    bool try_lock(){
+        u32 expected = s_Unlocked;
+        return m_state.compare_exchange_strong(
+            expected,
+            s_Locked,
+            MemoryOrder::memory_order_acquire,
+            MemoryOrder::memory_order_relaxed
+        );
+    }
+
+    void unlock(){
+        const u32 previous = m_state.fetch_sub(1, MemoryOrder::memory_order_release);
+        if(previous != s_Locked){
+            m_state.store(s_Unlocked, MemoryOrder::memory_order_release);
+            m_state.notify_one();
+        }
+    }
+
+
+private:
+    Atomic<u32> m_state{ s_Unlocked };
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 //! Class that implements exponential backoff.
 class AtomicBackOff{
 private:

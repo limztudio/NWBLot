@@ -250,7 +250,7 @@ private:
 
 private:
     Alloc::CustomArena& m_arena;
-    mutable Mutex m_channelsMutex;
+    mutable Futex m_channelsMutex;
     HashMap<MessageTypeId, UniquePtr<IMessageChannel>, Hasher<MessageTypeId>, EqualTo<MessageTypeId>, ChannelMapAllocator> m_channels;
 };
 

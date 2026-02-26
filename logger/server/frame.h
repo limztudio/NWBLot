@@ -53,6 +53,7 @@ class Frame{
 public:
     static void print(BasicStringView<tchar> str, Log::Type type);
 
+
 public:
     Frame(void* inst);
     ~Frame();

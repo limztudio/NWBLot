@@ -282,7 +282,7 @@ private:
     Vector<JoiningThread, WorkerAllocator> m_workers;
     Deque<TaskItem, TaskAllocator> m_tasks;
     ParallelForDesc* m_pfWork = nullptr;
-    Mutex m_mutex;
+    Futex m_mutex;
     ConditionVariableAny m_taskAvailable;
     Atomic<i32> m_pendingCount{ 0 };
     u32 m_threadCount;

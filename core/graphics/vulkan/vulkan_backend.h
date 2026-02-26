@@ -222,7 +222,7 @@ private:
     CommandQueue::Enum m_queueID;
     u32 m_queueFamilyIndex;
 
-    Mutex m_mutex;
+    Futex m_mutex;
     Vector<VkSemaphore, Alloc::CustomAllocator<VkSemaphore>> m_waitSemaphores;
     Vector<u64, Alloc::CustomAllocator<u64>> m_waitSemaphoreValues;
     Vector<VkSemaphore, Alloc::CustomAllocator<VkSemaphore>> m_signalSemaphores;
@@ -335,7 +335,7 @@ private:
     u64 m_defaultChunkSize;
     u64 m_memoryLimit;
     bool m_isScratchBuffer;
-    Mutex m_mutex;
+    Futex m_mutex;
     u64 m_chunkPoolBytes = 0;
 
     List<RefCountPtr<BufferChunk>, Alloc::CustomAllocator<RefCountPtr<BufferChunk>>> m_chunkPool;
@@ -398,7 +398,7 @@ private:
 
     Vector<u64, Alloc::CustomAllocator<u64>> m_versionTracking;
     Vector<BufferViewEntry, Alloc::CustomAllocator<BufferViewEntry>> m_bufferViews;
-    Mutex m_bufferViewsMutex;
+    Futex m_bufferViewsMutex;
     VolatileBufferState m_volatileState;
 
     bool m_managed = true; // if true, owns the VkBuffer and memory

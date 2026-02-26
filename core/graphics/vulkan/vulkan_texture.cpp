@@ -115,10 +115,10 @@ constexpr VkImageCreateFlags PickImageFlags(const TextureDesc& desc){
 
 
 Texture::Texture(const VulkanContext& context, VulkanAllocator& allocator)
-    : RefCounter<ITexture>(*context.threadPool)
+    : RefCounter<ITexture>(context.threadPool)
     , m_context(context)
     , m_allocator(allocator)
-    , m_views(0, Hasher<u64>(), EqualTo<u64>(), Alloc::CustomAllocator<Pair<const u64, VkImageView>>(*context.objectArena))
+    , m_views(0, Hasher<u64>(), EqualTo<u64>(), Alloc::CustomAllocator<Pair<const u64, VkImageView>>(context.objectArena))
 {}
 Texture::~Texture(){
     for(const auto& pair : m_views)
@@ -213,7 +213,7 @@ Object Texture::getNativeView(ObjectType objectType, Format::Enum format, Textur
 
 
 StagingTexture::StagingTexture(const VulkanContext& context, VulkanAllocator& allocator)
-    : RefCounter<IStagingTexture>(*context.threadPool)
+    : RefCounter<IStagingTexture>(context.threadPool)
     , m_context(context)
     , m_allocator(allocator)
 {}
@@ -240,7 +240,7 @@ StagingTexture::~StagingTexture(){
 TextureHandle Device::createTexture(const TextureDesc& d){
     VkResult res = VK_SUCCESS;
 
-    auto* texture = NewArenaObject<Texture>(*m_context.objectArena, m_context, m_allocator);
+    auto* texture = NewArenaObject<Texture>(m_context.objectArena, m_context, m_allocator);
     texture->m_desc = d;
 
     VkImageType imageType = __hidden_vulkan::TextureDimensionToImageType(d.dimension);
@@ -268,7 +268,7 @@ TextureHandle Device::createTexture(const TextureDesc& d){
     if(res != VK_SUCCESS){
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create image"));
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create image: {}"), ResultToString(res));
-        DestroyArenaObject(*m_context.objectArena, texture);
+        DestroyArenaObject(m_context.objectArena, texture);
         return nullptr;
     }
 
@@ -277,12 +277,12 @@ TextureHandle Device::createTexture(const TextureDesc& d){
         if(res != VK_SUCCESS){
             NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to allocate texture memory"));
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate texture memory: {}"), ResultToString(res));
-            DestroyArenaObject(*m_context.objectArena, texture);
+            DestroyArenaObject(m_context.objectArena, texture);
             return nullptr;
         }
     }
 
-    return TextureHandle(texture, TextureHandle::deleter_type(m_context.objectArena), AdoptRef);
+    return TextureHandle(texture, TextureHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
 
 MemoryRequirements Device::getTextureMemoryRequirements(ITexture* _texture){
@@ -326,7 +326,7 @@ TextureHandle Device::createHandleForNativeTexture(ObjectType objectType, Object
     if(nativeImage == VK_NULL_HANDLE)
         return nullptr;
 
-    auto* texture = NewArenaObject<Texture>(*m_context.objectArena, m_context, m_allocator);
+    auto* texture = NewArenaObject<Texture>(m_context.objectArena, m_context, m_allocator);
     texture->m_desc = desc;
     texture->m_image = nativeImage;
     texture->m_managed = false;
@@ -341,7 +341,7 @@ TextureHandle Device::createHandleForNativeTexture(ObjectType objectType, Object
     texture->m_imageInfo.format = ConvertFormat(desc.format);
     texture->m_imageInfo.samples = __hidden_vulkan::GetSampleCount(desc.sampleCount);
 
-    return TextureHandle(texture, TextureHandle::deleter_type(m_context.objectArena), AdoptRef);
+    return TextureHandle(texture, TextureHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
 
 
@@ -351,7 +351,7 @@ TextureHandle Device::createHandleForNativeTexture(ObjectType objectType, Object
 SamplerHandle Device::createSampler(const SamplerDesc& d){
     VkResult res = VK_SUCCESS;
 
-    auto* sampler = NewArenaObject<Sampler>(*m_context.objectArena, m_context);
+    auto* sampler = NewArenaObject<Sampler>(m_context.objectArena, m_context);
     sampler->m_desc = d;
 
     VkFilter minFilter = d.minFilter ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
@@ -390,11 +390,11 @@ SamplerHandle Device::createSampler(const SamplerDesc& d){
     if(res != VK_SUCCESS){
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create sampler"));
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create sampler: {}"), ResultToString(res));
-        DestroyArenaObject(*m_context.objectArena, sampler);
+        DestroyArenaObject(m_context.objectArena, sampler);
         return nullptr;
     }
 
-    return SamplerHandle(sampler, SamplerHandle::deleter_type(m_context.objectArena), AdoptRef);
+    return SamplerHandle(sampler, SamplerHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
 
 

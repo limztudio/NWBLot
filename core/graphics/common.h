@@ -124,7 +124,7 @@ struct SystemMemoryAllocator{
 
 class GraphicsAllocator : NoCopy{
 public:
-    GraphicsAllocator(u32 maxPersistentAllocationSize);
+    GraphicsAllocator(Alloc::MemoryArena& persistentArena, Alloc::CustomArena& objectArena);
 
 
 public:
@@ -137,16 +137,11 @@ private:
     static void* reallocatePersistentSystemMemory(void* userData, void* original, usize size, usize alignment, SystemMemoryAllocationScope::Enum scope);
     static void freePersistentSystemMemory(void* userData, void* memory);
 
-    static void* allocateObjectMemory(usize size);
-    static void freeObjectMemory(void* ptr);
-    static void* allocateObjectMemoryAligned(usize size, usize align);
-    static void freeObjectMemoryAligned(void* ptr);
-
 
 private:
-    Alloc::MemoryArena m_persistentArena;
+    Alloc::MemoryArena& m_persistentArena;
     SystemMemoryAllocator m_systemMemoryAllocator;
-    Alloc::CustomArena m_objectArena;
+    Alloc::CustomArena& m_objectArena;
 };
 
 

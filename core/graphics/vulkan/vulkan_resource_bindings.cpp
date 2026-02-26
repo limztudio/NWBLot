@@ -90,9 +90,9 @@ constexpr VkShaderStageFlags ConvertShaderStages(ShaderType::Mask stages){
 
 
 BindingLayout::BindingLayout(const VulkanContext& context)
-    : RefCounter<IBindingLayout>(*context.threadPool)
+    : RefCounter<IBindingLayout>(context.threadPool)
     , m_context(context)
-    , m_descriptorSetLayouts(Alloc::CustomAllocator<VkDescriptorSetLayout>(*context.objectArena))
+    , m_descriptorSetLayouts(Alloc::CustomAllocator<VkDescriptorSetLayout>(context.objectArena))
 {}
 BindingLayout::~BindingLayout(){
     if(m_pipelineLayout){
@@ -112,9 +112,9 @@ BindingLayout::~BindingLayout(){
 
 
 DescriptorTable::DescriptorTable(const VulkanContext& context)
-    : RefCounter<IDescriptorTable>(*context.threadPool)
+    : RefCounter<IDescriptorTable>(context.threadPool)
     , m_context(context)
-    , m_descriptorSets(Alloc::CustomAllocator<VkDescriptorSet>(*context.objectArena))
+    , m_descriptorSets(Alloc::CustomAllocator<VkDescriptorSet>(context.objectArena))
 {}
 DescriptorTable::~DescriptorTable(){
     if(m_descriptorPool != VK_NULL_HANDLE){
@@ -128,9 +128,9 @@ DescriptorTable::~DescriptorTable(){
 
 
 BindingSet::BindingSet(const VulkanContext& context)
-    : RefCounter<IBindingSet>(*context.threadPool)
+    : RefCounter<IBindingSet>(context.threadPool)
     , m_context(context)
-    , m_descriptorSets(Alloc::CustomAllocator<VkDescriptorSet>(*context.objectArena))
+    , m_descriptorSets(Alloc::CustomAllocator<VkDescriptorSet>(context.objectArena))
 {}
 BindingSet::~BindingSet(){
     m_descriptorTable.reset();
@@ -145,7 +145,7 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
 
     Alloc::ScratchArena<> scratchArena;
 
-    auto* layout = NewArenaObject<BindingLayout>(*m_context.objectArena, m_context);
+    auto* layout = NewArenaObject<BindingLayout>(m_context.objectArena, m_context);
     layout->m_desc = desc;
 
     Vector<VkDescriptorSetLayoutBinding, Alloc::ScratchAllocator<VkDescriptorSetLayoutBinding>> bindings{ Alloc::ScratchAllocator<VkDescriptorSetLayoutBinding>(scratchArena) };
@@ -174,7 +174,7 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
     res = vkCreateDescriptorSetLayout(m_context.device, &layoutInfo, m_context.allocationCallbacks, &setLayout);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor set layout: {}"), ResultToString(res));
-        DestroyArenaObject(*m_context.objectArena, layout);
+        DestroyArenaObject(m_context.objectArena, layout);
         return nullptr;
     }
     layout->m_descriptorSetLayouts.push_back(setLayout);
@@ -197,11 +197,11 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
     res = vkCreatePipelineLayout(m_context.device, &pipelineLayoutInfo, m_context.allocationCallbacks, &layout->m_pipelineLayout);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create pipeline layout for binding layout: {}"), ResultToString(res));
-        DestroyArenaObject(*m_context.objectArena, layout);
+        DestroyArenaObject(m_context.objectArena, layout);
         return nullptr;
     }
 
-    return BindingLayoutHandle(layout, BindingLayoutHandle::deleter_type(m_context.objectArena), AdoptRef);
+    return BindingLayoutHandle(layout, BindingLayoutHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
 
 BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc){
@@ -209,7 +209,7 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
 
     Alloc::ScratchArena<> scratchArena;
 
-    auto* layout = NewArenaObject<BindingLayout>(*m_context.objectArena, m_context);
+    auto* layout = NewArenaObject<BindingLayout>(m_context.objectArena, m_context);
     layout->m_isBindless = true;
     layout->m_bindlessDesc = desc;
 
@@ -248,7 +248,7 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
     res = vkCreateDescriptorSetLayout(m_context.device, &layoutInfo, m_context.allocationCallbacks, &setLayout);
     if(res != VK_SUCCESS){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to create bindless descriptor set layout: {}"), ResultToString(res));
-        DestroyArenaObject(*m_context.objectArena, layout);
+        DestroyArenaObject(m_context.objectArena, layout);
         return nullptr;
     }
     layout->m_descriptorSetLayouts.push_back(setLayout);
@@ -261,11 +261,11 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
 
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create pipeline layout for bindless layout: {}"), ResultToString(res));
-        DestroyArenaObject(*m_context.objectArena, layout);
+        DestroyArenaObject(m_context.objectArena, layout);
         return nullptr;
     }
 
-    return BindingLayoutHandle(layout, BindingLayoutHandle::deleter_type(m_context.objectArena), AdoptRef);
+    return BindingLayoutHandle(layout, BindingLayoutHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
 
 
@@ -283,7 +283,7 @@ DescriptorTableHandle Device::createDescriptorTable(IBindingLayout* _layout){
     if(layout->m_descriptorSetLayouts.empty())
         return nullptr;
 
-    auto* table = NewArenaObject<DescriptorTable>(*m_context.objectArena, m_context);
+    auto* table = NewArenaObject<DescriptorTable>(m_context.objectArena, m_context);
     table->m_layout = layout;
 
     Vector<VkDescriptorPoolSize, Alloc::ScratchAllocator<VkDescriptorPoolSize>> poolSizes{ Alloc::ScratchAllocator<VkDescriptorPoolSize>(scratchArena) };
@@ -339,7 +339,7 @@ DescriptorTableHandle Device::createDescriptorTable(IBindingLayout* _layout){
     res = vkCreateDescriptorPool(m_context.device, &poolInfo, m_context.allocationCallbacks, &pool);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor pool: {}"), ResultToString(res));
-        DestroyArenaObject(*m_context.objectArena, table);
+        DestroyArenaObject(m_context.objectArena, table);
         return nullptr;
     }
 
@@ -355,14 +355,14 @@ DescriptorTableHandle Device::createDescriptorTable(IBindingLayout* _layout){
         if(res != VK_SUCCESS){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate descriptor sets: {}"), ResultToString(res));
             vkDestroyDescriptorPool(m_context.device, pool, m_context.allocationCallbacks);
-            DestroyArenaObject(*m_context.objectArena, table);
+            DestroyArenaObject(m_context.objectArena, table);
             return nullptr;
         }
     }
 
     table->m_descriptorPool = pool;
 
-    return DescriptorTableHandle(table, DescriptorTableHandle::deleter_type(m_context.objectArena), AdoptRef);
+    return DescriptorTableHandle(table, DescriptorTableHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
 
 void Device::resizeDescriptorTable(IDescriptorTable* m_descriptorTable, u32 newSize, bool keepContents){
@@ -523,25 +523,25 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLa
     if(!layout)
         return nullptr;
 
-    auto* bindingSet = NewArenaObject<BindingSet>(*m_context.objectArena, m_context);
+    auto* bindingSet = NewArenaObject<BindingSet>(m_context.objectArena, m_context);
     bindingSet->m_desc = desc;
 
     DescriptorTableHandle tableHandle = createDescriptorTable(_layout);
     if(!tableHandle){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor table for binding set"));
-        DestroyArenaObject(*m_context.objectArena, bindingSet);
+        DestroyArenaObject(m_context.objectArena, bindingSet);
         return nullptr;
     }
 
     bindingSet->m_descriptorTable = checked_cast<DescriptorTable*>(tableHandle.get());
     if(!bindingSet->m_descriptorTable){
-        DestroyArenaObject(*m_context.objectArena, bindingSet);
+        DestroyArenaObject(m_context.objectArena, bindingSet);
         return nullptr;
     }
 
     bindingSet->m_descriptorSets = bindingSet->m_descriptorTable->m_descriptorSets;
     if(bindingSet->m_descriptorSets.empty()){
-        DestroyArenaObject(*m_context.objectArena, bindingSet);
+        DestroyArenaObject(m_context.objectArena, bindingSet);
         return nullptr;
     }
     bindingSet->m_layout = layout;
@@ -647,7 +647,7 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLa
     if(!writes.empty())
         vkUpdateDescriptorSets(m_context.device, static_cast<u32>(writes.size()), writes.data(), 0, nullptr);
 
-    return BindingSetHandle(bindingSet, BindingSetHandle::deleter_type(m_context.objectArena), AdoptRef);
+    return BindingSetHandle(bindingSet, BindingSetHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
 
 

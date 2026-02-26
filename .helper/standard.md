@@ -77,6 +77,11 @@ Updated: 2026-02-24
 - Prefer project wrapper/alias types over raw `std::` names (e.g., `Vector` instead of `std::vector`, traits aliases like `IsSame`).
 - Before introducing a new direct `std::` usage, check `global/global.h` and related global headers for an existing wrapper/alias.
 - If missing and broadly useful, add a project-level alias/wrapper rather than repeating direct `std::` usage across modules.
+- Strictly distinguish references vs pointers:
+  - Use references (`T&`, `const T&`) for required, non-null dependencies and parameters.
+  - Use pointers (`T*`) only when null is a valid state, reseating is required, or pointer semantics are explicitly needed.
+  - Avoid nullable-pointer APIs followed by immediate non-null assertions; model required inputs as references instead.
+- For scoped mutex locking, prefer `ScopedLock lock(m_mutex);` (or `ScopedLock lock(otherMutex);`) instead of `Mutex::scoped_lock ...` when possible.
 
 ## 7. Ownership and memory patterns
 - Prefer engine ownership types (`UniquePtr`, `RefCountPtr`, `CustomUniquePtr`) over raw owning pointers.
@@ -95,6 +100,8 @@ Updated: 2026-02-24
 - Use thread pool and chunking thresholds for larger CPU-side memory/data operations.
 - Prefer scratch/arena allocations in hot paths to minimize heap churn.
 - Prefer `ScratchArena` for containers/temporary objects that only live within a local scope.
+- For function-local temporary containers (`Vector`, `HashSet`, `HashMap`, etc.), default to `ScratchArena` + `ScratchAllocator`; use `CustomAllocator` only when data must outlive the current scope.
+- For parallel containers (`ParallelQueue`, `ParallelVector`, `ParallelHashMap`, etc.), use a cache-aligned allocator that matches the owning arena (`CustomCacheAlignedAllocator`, `MemoryCacheAlignedAllocator`, `ScratchCacheAlignedAllocator`) instead of default allocators when arena ownership exists.
 
 ## 10. Practical checklist for new code
 - Before every code create/modify action, re-read the current `standard.md` and apply it as the source of truth (do not rely on memory).
@@ -123,6 +130,9 @@ Updated: 2026-02-24
 - Friend declarations (`friend class ...`, `friend ...`) must appear at the very beginning of the class.
 - Internal helper declarations (`struct`, `enum`, `class` used only internally) should appear before normal function/member sections.
 - Static member function declarations should appear before non-static helper/member function declarations in the same access section.
+- Do not interleave static and non-static member declarations within the same class category; place all static declarations first, then non-static declarations.
+- Keep class-level static helper/constant declarations in an early dedicated section before constructor/destructor declarations.
+- When both static member variables and static member functions exist in the static section, declare static variables first, then static functions.
 - Static helper/factory functions should be declared in an early dedicated section, not in the middle/bottom of the class after normal API blocks.
 - If a static helper must be `private`, place a `private:` helper section near the top of the class (after aliases/helpers) before the main `public` API sections.
 - Reusing the same access specifier (`public:`, `private:`, `protected:`) for category separation is allowed and preferred.

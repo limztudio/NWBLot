@@ -17,11 +17,11 @@ NWB_VULKAN_BEGIN
 
 
 TrackedCommandBuffer::TrackedCommandBuffer(const VulkanContext& context, CommandQueue::Enum, u32 queueFamilyIndex)
-    : RefCounter<IResource>(*context.threadPool)
+    : RefCounter<IResource>(context.threadPool)
     , m_context(context)
-    , m_referencedResources(Alloc::CustomAllocator<RefCountPtr<IResource, ArenaRefDeleter<IResource>>>(*context.objectArena))
-    , m_referencedStagingBuffers(Alloc::CustomAllocator<RefCountPtr<IBuffer, ArenaRefDeleter<IBuffer>>>(*context.objectArena))
-    , m_referencedAccelStructHandles(Alloc::CustomAllocator<VkAccelerationStructureKHR>(*context.objectArena))
+    , m_referencedResources(Alloc::CustomAllocator<RefCountPtr<IResource, ArenaRefDeleter<IResource>>>(context.objectArena))
+    , m_referencedStagingBuffers(Alloc::CustomAllocator<RefCountPtr<IBuffer, ArenaRefDeleter<IBuffer>>>(context.objectArena))
+    , m_referencedAccelStructHandles(Alloc::CustomAllocator<VkAccelerationStructureKHR>(context.objectArena))
 {
     VkResult res = VK_SUCCESS;
 
@@ -81,15 +81,15 @@ Queue::Queue(const VulkanContext& context, CommandQueue::Enum queueID, VkQueue q
     , m_queue(queue)
     , m_queueID(queueID)
     , m_queueFamilyIndex(queueFamilyIndex)
-    , m_waitSemaphores(Alloc::CustomAllocator<VkSemaphore>(*context.objectArena))
-    , m_waitSemaphoreValues(Alloc::CustomAllocator<u64>(*context.objectArena))
-    , m_signalSemaphores(Alloc::CustomAllocator<VkSemaphore>(*context.objectArena))
-    , m_signalSemaphoreValues(Alloc::CustomAllocator<u64>(*context.objectArena))
+    , m_waitSemaphores(Alloc::CustomAllocator<VkSemaphore>(context.objectArena))
+    , m_waitSemaphoreValues(Alloc::CustomAllocator<u64>(context.objectArena))
+    , m_signalSemaphores(Alloc::CustomAllocator<VkSemaphore>(context.objectArena))
+    , m_signalSemaphoreValues(Alloc::CustomAllocator<u64>(context.objectArena))
     , m_lastRecordingID(0)
     , m_lastSubmittedID(0)
     , m_lastFinishedID(0)
-    , m_commandBuffersInFlight(Alloc::CustomAllocator<TrackedCommandBufferPtr>(*context.objectArena))
-    , m_commandBuffersPool(Alloc::CustomAllocator<TrackedCommandBufferPtr>(*context.objectArena))
+    , m_commandBuffersInFlight(Alloc::CustomAllocator<TrackedCommandBufferPtr>(context.objectArena))
+    , m_commandBuffersPool(Alloc::CustomAllocator<TrackedCommandBufferPtr>(context.objectArena))
 {
     VkResult res = VK_SUCCESS;
 
@@ -129,20 +129,20 @@ Queue::~Queue(){
 }
 
 TrackedCommandBufferPtr Queue::createCommandBuffer(){
-    auto* cmdBuf = NewArenaObject<TrackedCommandBuffer>(*m_context.objectArena, m_context, m_queueID, m_queueFamilyIndex);
+    auto* cmdBuf = NewArenaObject<TrackedCommandBuffer>(m_context.objectArena, m_context, m_queueID, m_queueFamilyIndex);
     if(!cmdBuf->m_cmdBuf){
-        DestroyArenaObject(*m_context.objectArena, cmdBuf);
+        DestroyArenaObject(m_context.objectArena, cmdBuf);
         return nullptr;
     }
 
     cmdBuf->m_recordingID = ++m_lastRecordingID;
-    return TrackedCommandBufferPtr(cmdBuf, TrackedCommandBufferPtr::deleter_type(m_context.objectArena));
+    return TrackedCommandBufferPtr(cmdBuf, TrackedCommandBufferPtr::deleter_type(&m_context.objectArena));
 }
 
 TrackedCommandBufferPtr Queue::getOrCreateCommandBuffer(){
     VkResult res = VK_SUCCESS;
 
-    Mutex::scoped_lock lock(m_mutex);
+    ScopedLock lock(m_mutex);
 
     updateLastFinishedID();
 
@@ -189,7 +189,7 @@ TrackedCommandBufferPtr Queue::getOrCreateCommandBuffer(){
 void Queue::addWaitSemaphore(VkSemaphore semaphore, u64 value){
     if(!semaphore)
         return;
-    Mutex::scoped_lock lock(m_mutex);
+    ScopedLock lock(m_mutex);
     m_waitSemaphores.push_back(semaphore);
     m_waitSemaphoreValues.push_back(value);
 }
@@ -197,7 +197,7 @@ void Queue::addWaitSemaphore(VkSemaphore semaphore, u64 value){
 void Queue::addSignalSemaphore(VkSemaphore semaphore, u64 value){
     if(!semaphore)
         return;
-    Mutex::scoped_lock lock(m_mutex);
+    ScopedLock lock(m_mutex);
     m_signalSemaphores.push_back(semaphore);
     m_signalSemaphoreValues.push_back(value);
 }
@@ -205,14 +205,14 @@ void Queue::addSignalSemaphore(VkSemaphore semaphore, u64 value){
 u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
     VkResult res = VK_SUCCESS;
 
-    Mutex::scoped_lock lock(m_mutex);
+    ScopedLock lock(m_mutex);
 
     Alloc::ScratchArena<> scratchArena;
 
     bool hasCommands = ppCmd && numCmd > 0;
     bool hasPendingSemaphores = !m_waitSemaphores.empty() || !m_signalSemaphores.empty();
 
-    Vector<TrackedCommandBufferPtr, Alloc::CustomAllocator<TrackedCommandBufferPtr>> trackedBuffers(Alloc::CustomAllocator<TrackedCommandBufferPtr>(*m_context.objectArena));
+    Vector<TrackedCommandBufferPtr, Alloc::ScratchAllocator<TrackedCommandBufferPtr>> trackedBuffers{ Alloc::ScratchAllocator<TrackedCommandBufferPtr>(scratchArena) };
     Vector<VkCommandBuffer, Alloc::ScratchAllocator<VkCommandBuffer>> cmdBufs{ Alloc::ScratchAllocator<VkCommandBuffer>(scratchArena) };
 
     if(hasCommands){
@@ -362,7 +362,7 @@ void Queue::updateLastFinishedID(){
 }
 
 bool Queue::pollCommandList(u64 commandListID){
-    Mutex::scoped_lock lock(m_mutex);
+    ScopedLock lock(m_mutex);
 
     updateLastFinishedID();
     return commandListID <= m_lastFinishedID;
@@ -388,7 +388,7 @@ bool Queue::waitCommandList(u64 commandListID, u64 timeout){
         return false;
     }
     else if(res == VK_SUCCESS){
-        Mutex::scoped_lock lock(m_mutex);
+        ScopedLock lock(m_mutex);
         if(commandListID > m_lastFinishedID)
             m_lastFinishedID = commandListID;
         return true;
@@ -400,7 +400,7 @@ bool Queue::waitCommandList(u64 commandListID, u64 timeout){
 void Queue::waitForIdle(){
     VkResult res = VK_SUCCESS;
 
-    Mutex::scoped_lock lock(m_mutex);
+    ScopedLock lock(m_mutex);
 
     res = vkQueueWaitIdle(m_queue);
     if(res != VK_SUCCESS)
@@ -474,8 +474,8 @@ void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapp
         return;
 
     auto* texture = checked_cast<Texture*>(_texture);
-    Alloc::ThreadPool* workerPool = m_context.threadPool;
-    const bool useParallelPool = workerPool && workerPool->isParallelEnabled();
+    Alloc::ThreadPool& workerPool = m_context.threadPool;
+    const bool useParallelPool = workerPool.isParallelEnabled();
     const usize mappingCount = static_cast<usize>(numTileMappings);
 
     Alloc::ScratchArena<> scratchArena(8192);
@@ -563,7 +563,7 @@ void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapp
     };
 
     if(useParallelPool && mappingCount >= s_ParallelTileCountThreshold)
-        workerPool->parallelFor(static_cast<usize>(0), mappingCount, s_TileCountGrainSize, countMappingBinds);
+        workerPool.parallelFor(static_cast<usize>(0), mappingCount, s_TileCountGrainSize, countMappingBinds);
     else{
         for(usize i = 0; i < mappingCount; ++i)
             countMappingBinds(i);
@@ -628,7 +628,7 @@ void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapp
 
     const usize totalBindings = totalOpaqueBinds + totalImageBinds;
     if(useParallelPool && totalBindings >= s_ParallelTileMappingThreshold)
-        workerPool->parallelFor(static_cast<usize>(0), mappingCount, s_TileMappingGrainSize, buildMappingBinds);
+        workerPool.parallelFor(static_cast<usize>(0), mappingCount, s_TileMappingGrainSize, buildMappingBinds);
     else{
         for(usize i = 0; i < mappingCount; ++i)
             buildMappingBinds(i);
@@ -655,7 +655,7 @@ void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapp
     }
 
     {
-        Mutex::scoped_lock lock(m_mutex);
+        ScopedLock lock(m_mutex);
         res = vkQueueBindSparse(m_queue, 1, &bindSparseInfo, VK_NULL_HANDLE);
     }
     if(res != VK_SUCCESS)

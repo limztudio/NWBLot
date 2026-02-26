@@ -15,15 +15,15 @@ NWB_VULKAN_BEGIN
 
 
 CommandList::CommandList(Device& device, const CommandListParameters& params)
-    : RefCounter<ICommandList>(*device.getContext().threadPool)
+    : RefCounter<ICommandList>(device.getContext().threadPool)
     , m_desc(params)
-    , m_stateTracker(MakeCustomUnique<StateTracker>(*device.getContext().objectArena, device.getContext()))
+    , m_stateTracker(MakeCustomUnique<StateTracker>(device.getContext().objectArena, device.getContext()))
     , m_device(device)
     , m_context(device.getContext())
     , m_aftermathMarkerTracker()
-    , m_pendingImageBarriers(Alloc::CustomAllocator<VkImageMemoryBarrier2>(*device.getContext().objectArena))
-    , m_pendingBufferBarriers(Alloc::CustomAllocator<VkBufferMemoryBarrier2>(*device.getContext().objectArena))
-    , m_pendingCompactions(Alloc::CustomAllocator<RefCountPtr<AccelStruct, ArenaRefDeleter<AccelStruct>>>(*device.getContext().objectArena))
+    , m_pendingImageBarriers(Alloc::CustomAllocator<VkImageMemoryBarrier2>(device.getContext().objectArena))
+    , m_pendingBufferBarriers(Alloc::CustomAllocator<VkBufferMemoryBarrier2>(device.getContext().objectArena))
+    , m_pendingCompactions(Alloc::CustomAllocator<RefCountPtr<AccelStruct, ArenaRefDeleter<AccelStruct>>>(device.getContext().objectArena))
 {
     if(m_device.isAftermathEnabled())
         m_device.getAftermathCrashDumpHelper().registerAftermathMarkerTracker(&m_aftermathMarkerTracker);

@@ -17,11 +17,11 @@ NWB_VULKAN_BEGIN
 
 
 Buffer::Buffer(const VulkanContext& context, VulkanAllocator& allocator)
-    : RefCounter<IBuffer>(*context.threadPool)
+    : RefCounter<IBuffer>(context.threadPool)
     , m_context(context)
     , m_allocator(allocator)
-    , m_versionTracking(Alloc::CustomAllocator<u64>(*context.objectArena))
-    , m_bufferViews(Alloc::CustomAllocator<BufferViewEntry>(*context.objectArena))
+    , m_versionTracking(Alloc::CustomAllocator<u64>(context.objectArena))
+    , m_bufferViews(Alloc::CustomAllocator<BufferViewEntry>(context.objectArena))
 {}
 Buffer::~Buffer(){
     for(auto& viewEntry : m_bufferViews){
@@ -69,7 +69,7 @@ VkBufferView Buffer::getView(Format::Enum format, u64 byteOffset, u64 byteSize){
     if(resolvedSize == 0)
         return VK_NULL_HANDLE;
 
-    Mutex::scoped_lock lock(m_bufferViewsMutex);
+    ScopedLock lock(m_bufferViewsMutex);
     for(const auto& viewEntry : m_bufferViews){
         if(viewEntry.format == format && viewEntry.byteOffset == byteOffset && viewEntry.byteSize == resolvedSize)
             return viewEntry.view;
@@ -105,7 +105,7 @@ VkBufferView Buffer::getView(Format::Enum format, u64 byteOffset, u64 byteSize){
 BufferHandle Device::createBuffer(const BufferDesc& d){
     VkResult res = VK_SUCCESS;
 
-    auto* buffer = NewArenaObject<Buffer>(*m_context.objectArena, m_context, m_allocator);
+    auto* buffer = NewArenaObject<Buffer>(m_context.objectArena, m_context, m_allocator);
     buffer->m_desc = d;
 
     VkBufferUsageFlags usageFlags =
@@ -152,7 +152,7 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
     if(res != VK_SUCCESS){
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create buffer"));
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer: {}"), ResultToString(res));
-        DestroyArenaObject(*m_context.objectArena, buffer);
+        DestroyArenaObject(m_context.objectArena, buffer);
         return nullptr;
     }
 
@@ -161,7 +161,7 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
         if(res != VK_SUCCESS){
             NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to allocate buffer memory"));
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate buffer memory: {}"), ResultToString(res));
-            DestroyArenaObject(*m_context.objectArena, buffer);
+            DestroyArenaObject(m_context.objectArena, buffer);
             return nullptr;
         }
 
@@ -170,7 +170,7 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
             if(res != VK_SUCCESS){
                 NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to map buffer memory"));
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map buffer memory: {}"), ResultToString(res));
-                DestroyArenaObject(*m_context.objectArena, buffer);
+                DestroyArenaObject(m_context.objectArena, buffer);
                 return nullptr;
             }
         }
@@ -183,7 +183,7 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
         }
     }
 
-    return BufferHandle(buffer, BufferHandle::deleter_type(m_context.objectArena), AdoptRef);
+    return BufferHandle(buffer, BufferHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
 
 void* Device::mapBuffer(IBuffer* _buffer, CpuAccessMode::Enum){
@@ -283,7 +283,7 @@ BufferHandle Device::createHandleForNativeBuffer(ObjectType objectType, Object _
     if(nativeBuffer == VK_NULL_HANDLE)
         return nullptr;
 
-    auto* buffer = NewArenaObject<Buffer>(*m_context.objectArena, m_context, m_allocator);
+    auto* buffer = NewArenaObject<Buffer>(m_context.objectArena, m_context, m_allocator);
     buffer->m_desc = desc;
     buffer->m_buffer = nativeBuffer;
     buffer->m_managed = false;
@@ -295,7 +295,7 @@ BufferHandle Device::createHandleForNativeBuffer(ObjectType objectType, Object _
         buffer->m_deviceAddress = vkGetBufferDeviceAddress(m_context.device, &addressInfo);
     }
 
-    return BufferHandle(buffer, BufferHandle::deleter_type(m_context.objectArena), AdoptRef);
+    return BufferHandle(buffer, BufferHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
 
 

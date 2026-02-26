@@ -29,9 +29,9 @@ namespace __hidden_vulkan{
 
 
 template<typename Set>
-static Vector<const char*, Alloc::CustomAllocator<const char*>> StringSetToVector(const Set& set, Alloc::CustomArena& arena){
-    Alloc::CustomAllocator<const char*> alloc(arena);
-    Vector<const char*, Alloc::CustomAllocator<const char*>> ret(alloc);
+static Vector<const char*, Alloc::ScratchAllocator<const char*>> StringSetToVector(const Set& set, Alloc::ScratchArena<>& arena){
+    Alloc::ScratchAllocator<const char*> alloc(arena);
+    Vector<const char*, Alloc::ScratchAllocator<const char*>> ret(alloc);
     ret.reserve(set.size());
     for(const auto& s : set)
         ret.push_back(s.c_str());
@@ -39,9 +39,9 @@ static Vector<const char*, Alloc::CustomAllocator<const char*>> StringSetToVecto
 }
 
 template<typename Map>
-static Vector<const char*, Alloc::CustomAllocator<const char*>> StringMapKeysToVector(const Map& map, Alloc::CustomArena& arena){
-    Alloc::CustomAllocator<const char*> alloc(arena);
-    Vector<const char*, Alloc::CustomAllocator<const char*>> ret(alloc);
+static Vector<const char*, Alloc::ScratchAllocator<const char*>> StringMapKeysToVector(const Map& map, Alloc::ScratchArena<>& arena){
+    Alloc::ScratchAllocator<const char*> alloc(arena);
+    Vector<const char*, Alloc::ScratchAllocator<const char*>> ret(alloc);
     ret.reserve(map.size());
     for(const auto& [key, val] : map)
         ret.push_back(key.c_str());
@@ -49,10 +49,10 @@ static Vector<const char*, Alloc::CustomAllocator<const char*>> StringMapKeysToV
 }
 
 template<typename Set>
-static auto SetToVector(const Set& set, Alloc::CustomArena& arena){
+static auto SetToVector(const Set& set, Alloc::ScratchArena<>& arena){
     using T = typename Set::value_type;
-    Alloc::CustomAllocator<T> alloc(arena);
-    Vector<T, Alloc::CustomAllocator<T>> ret(alloc);
+    Alloc::ScratchAllocator<T> alloc(arena);
+    Vector<T, Alloc::ScratchAllocator<T>> ret(alloc);
     ret.reserve(set.size());
     for(const auto& s : set)
         ret.push_back(s);
@@ -99,9 +99,22 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL VulkanDebugCallback(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static GraphicsAllocator& RequireAllocator(const DeviceCreationParameters& params){
+    NWB_ASSERT_MSG(params.allocator, NWB_TEXT("DeviceManager requires a valid GraphicsAllocator"));
+    return *params.allocator;
+}
+
+static Alloc::ThreadPool& RequireThreadPool(const DeviceCreationParameters& params){
+    NWB_ASSERT_MSG(params.threadPool, NWB_TEXT("DeviceManager requires a valid worker ThreadPool"));
+    return *params.threadPool;
+}
+
+
 DeviceManager::DeviceManager(const DeviceCreationParameters& params)
     : IDeviceManager(params)
-    , m_arena(params.allocator->getObjectArena())
+    , m_allocator(RequireAllocator(params))
+    , m_threadPool(RequireThreadPool(params))
+    , m_arena(m_allocator.getObjectArena())
     , m_enabledExtensions(m_arena)
     , m_optionalExtensions(m_arena)
     , m_rayTracingExtensions(0, Hasher<AString>(), EqualTo<AString>(), Alloc::CustomAllocator<Pair<const AString, void*>>(m_arena))
@@ -111,7 +124,6 @@ DeviceManager::DeviceManager(const DeviceCreationParameters& params)
     , m_framesInFlight(std::deque<EventQueryHandle, Alloc::CustomAllocator<EventQueryHandle>>(Alloc::CustomAllocator<EventQueryHandle>(m_arena)))
     , m_queryPool(Alloc::CustomAllocator<EventQueryHandle>(m_arena))
 {
-    NWB_ASSERT_MSG(params.allocator, NWB_TEXT("DeviceManager requires a valid GraphicsAllocator"));
     initDefaultExtensions();
 }
 
@@ -361,8 +373,8 @@ bool DeviceManager::createInstance(){
         NWB_LOGGER_INFO(NWB_TEXT("{}"), StringConvert(ss.str()));
     }
 
-    auto instanceExtVec = __hidden_vulkan::StringSetToVector(m_enabledExtensions.instance, m_arena);
-    auto layerVec = __hidden_vulkan::StringSetToVector(m_enabledExtensions.layers, m_arena);
+    auto instanceExtVec = __hidden_vulkan::StringSetToVector(m_enabledExtensions.instance, scratchArena);
+    auto layerVec = __hidden_vulkan::StringSetToVector(m_enabledExtensions.layers, scratchArena);
 
     VkApplicationInfo applicationInfo = {};
     applicationInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -805,8 +817,8 @@ bool DeviceManager::createDevice(){
     vulkan12features.scalarBlockLayout = VK_TRUE;
     vulkan12features.pNext = &vulkan11features;
 
-    auto layerVec = __hidden_vulkan::StringSetToVector(m_enabledExtensions.layers, m_arena);
-    auto extVec = __hidden_vulkan::StringMapKeysToVector(m_enabledExtensions.device, m_arena);
+    auto layerVec = __hidden_vulkan::StringSetToVector(m_enabledExtensions.layers, scratchArena);
+    auto extVec = __hidden_vulkan::StringMapKeysToVector(m_enabledExtensions.device, scratchArena);
 
     VkDeviceCreateInfo deviceCreateInfo = {};
     deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -1049,10 +1061,12 @@ bool DeviceManager::createDeviceInternal(){
     if(!createDevice())
         return false;
 
-    auto vecInstanceExt = __hidden_vulkan::StringSetToVector(m_enabledExtensions.instance, m_arena);
-    auto vecDeviceExt = __hidden_vulkan::StringMapKeysToVector(m_enabledExtensions.device, m_arena);
+    Alloc::ScratchArena<> scratchArena(32768);
 
-    DeviceDesc deviceDesc = {};
+    auto vecInstanceExt = __hidden_vulkan::StringSetToVector(m_enabledExtensions.instance, scratchArena);
+    auto vecDeviceExt = __hidden_vulkan::StringMapKeysToVector(m_enabledExtensions.device, scratchArena);
+
+    DeviceDesc deviceDesc(m_allocator, m_threadPool);
     deviceDesc.instance = m_vulkanInstance;
     deviceDesc.physicalDevice = m_vulkanPhysicalDevice;
     deviceDesc.device = m_vulkanDevice;
@@ -1074,9 +1088,7 @@ bool DeviceManager::createDeviceInternal(){
     deviceDesc.aftermathEnabled = m_deviceParams.enableAftermath;
     deviceDesc.logBufferLifetime = m_deviceParams.logBufferLifetime;
     deviceDesc.vulkanLibraryName = m_deviceParams.vulkanLibraryName;
-    deviceDesc.systemMemoryAllocator = m_deviceParams.allocator ? &m_deviceParams.allocator->getSystemMemoryAllocator() : nullptr;
-    deviceDesc.allocator = m_deviceParams.allocator;
-    deviceDesc.threadPool = m_deviceParams.threadPool;
+    deviceDesc.systemMemoryAllocator = &m_allocator.getSystemMemoryAllocator();
 
     m_rhiDevice = CreateDevice(deviceDesc);
 
@@ -1385,11 +1397,8 @@ bool DeviceManager::enumerateAdapters(Vector<AdapterInfo>& outAdapters){
         outAdapters[i] = Move(adapterInfo);
     };
 
-    if(m_deviceParams.threadPool
-        && m_deviceParams.threadPool->isParallelEnabled()
-        && deviceCount >= s_ParallelAdapterThreshold)
-    {
-        m_deviceParams.threadPool->parallelFor(static_cast<usize>(0), static_cast<usize>(deviceCount), fillAdapterInfo);
+    if(m_threadPool.isParallelEnabled() && deviceCount >= s_ParallelAdapterThreshold){
+        m_threadPool.parallelFor(static_cast<usize>(0), static_cast<usize>(deviceCount), fillAdapterInfo);
     }
     else{
         for(usize i = 0; i < static_cast<usize>(deviceCount); ++i)

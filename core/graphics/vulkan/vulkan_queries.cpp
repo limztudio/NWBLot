@@ -17,12 +17,12 @@ NWB_VULKAN_BEGIN
 
 
 EventQueryHandle Device::createEventQuery(){
-    auto* query = NewArenaObject<EventQuery>(*m_context.objectArena, m_context);
+    auto* query = NewArenaObject<EventQuery>(m_context.objectArena, m_context);
     if(!query->m_fence){
-        DestroyArenaObject(*m_context.objectArena, query);
+        DestroyArenaObject(m_context.objectArena, query);
         return nullptr;
     }
-    return EventQueryHandle(query, EventQueryHandle::deleter_type(m_context.objectArena), AdoptRef);
+    return EventQueryHandle(query, EventQueryHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
 
 void Device::setEventQuery(IEventQuery* _query, CommandQueue::Enum queue){
@@ -41,7 +41,7 @@ void Device::setEventQuery(IEventQuery* _query, CommandQueue::Enum queue){
     Queue* q = getQueue(queue);
     if(q){
         VkSubmitInfo submitInfo = { VK_STRUCTURE_TYPE_SUBMIT_INFO };
-        Mutex::scoped_lock lock(q->m_mutex);
+        ScopedLock lock(q->m_mutex);
         res = vkQueueSubmit(q->getVkQueue(), 1, &submitInfo, query->m_fence);
         if(res != VK_SUCCESS)
             return;
@@ -104,12 +104,12 @@ void Device::resetEventQuery(IEventQuery* _query){
 }
 
 TimerQueryHandle Device::createTimerQuery(){
-    auto* query = NewArenaObject<TimerQuery>(*m_context.objectArena, m_context);
+    auto* query = NewArenaObject<TimerQuery>(m_context.objectArena, m_context);
     if(!query->m_queryPool){
-        DestroyArenaObject(*m_context.objectArena, query);
+        DestroyArenaObject(m_context.objectArena, query);
         return nullptr;
     }
-    return TimerQueryHandle(query, TimerQueryHandle::deleter_type(m_context.objectArena), AdoptRef);
+    return TimerQueryHandle(query, TimerQueryHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
 
 bool Device::pollTimerQuery(ITimerQuery* _query){

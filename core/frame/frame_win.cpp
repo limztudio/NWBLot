@@ -93,19 +93,6 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Frame::Frame(void* inst, u16 width, u16 height){
-    __hidden_frame::g_Frame = this;
-
-    data<Common::WinFrame>().width() = width;
-    data<Common::WinFrame>().height() = height;
-    data<Common::WinFrame>().isActive() = false;
-    data<Common::WinFrame>().instance() = reinterpret_cast<HINSTANCE>(inst);
-}
-Frame::~Frame(){
-    cleanup();
-    __hidden_frame::g_Frame = nullptr;
-}
-
 bool Frame::init(){
     const tchar* ClassName = NWB_TEXT("NWB_FRAME");
     const tchar* AppName = NWB_TEXT("NWBLoader");
@@ -230,6 +217,15 @@ bool Frame::mainLoop(){
         }
     }
     return false;
+}
+
+void Frame::setupPlatform(void* inst){
+    __hidden_frame::g_Frame = this;
+    data<Common::WinFrame>().isActive() = false;
+    data<Common::WinFrame>().instance() = reinterpret_cast<HINSTANCE>(inst);
+}
+void Frame::cleanupPlatform(){
+    __hidden_frame::g_Frame = nullptr;
 }
 
 

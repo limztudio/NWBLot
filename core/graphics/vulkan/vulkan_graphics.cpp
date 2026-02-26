@@ -159,7 +159,7 @@ constexpr VkPipelineColorBlendAttachmentState ConvertBlendState(const BlendState
 
 
 GraphicsPipeline::GraphicsPipeline(const VulkanContext& context)
-    : RefCounter<IGraphicsPipeline>(*context.threadPool)
+    : RefCounter<IGraphicsPipeline>(context.threadPool)
     , m_context(context)
 {}
 GraphicsPipeline::~GraphicsPipeline(){
@@ -185,7 +185,7 @@ Object GraphicsPipeline::getNativeHandle(ObjectType objectType){
 
 
 FramebufferHandle Device::createFramebuffer(const FramebufferDesc& desc){
-    auto* fb = NewArenaObject<Framebuffer>(*m_context.objectArena, m_context);
+    auto* fb = NewArenaObject<Framebuffer>(m_context.objectArena, m_context);
     fb->m_desc = desc;
 
     constexpr u32 kMaxColorAttachments = s_MaxRenderTargets;
@@ -222,7 +222,7 @@ FramebufferHandle Device::createFramebuffer(const FramebufferDesc& desc){
         fb->m_framebufferInfo.sampleCount = tex->m_desc.sampleCount;
     }
 
-    return FramebufferHandle(fb, FramebufferHandle::deleter_type(m_context.objectArena), AdoptRef);
+    return FramebufferHandle(fb, FramebufferHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
 
 
@@ -236,7 +236,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
 
     Alloc::ScratchArena<> scratchArena(s_GraphicsPipelineScratchArenaBytes);
 
-    auto* pso = NewArenaObject<GraphicsPipeline>(*m_context.objectArena, m_context);
+    auto* pso = NewArenaObject<GraphicsPipeline>(m_context.objectArena, m_context);
     pso->m_desc = desc;
     pso->m_framebufferInfo = fbinfo;
 
@@ -279,7 +279,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
 
     if(shaderStages.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create graphics pipeline: no shader stages provided"));
-        DestroyArenaObject(*m_context.objectArena, pso);
+        DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
 
@@ -402,7 +402,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
             res = vkCreatePipelineLayout(m_context.device, &layoutInfo, m_context.allocationCallbacks, &pso->m_pipelineLayout);
             if(res != VK_SUCCESS){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create pipeline layout for graphics pipeline: {}"), ResultToString(res));
-                DestroyArenaObject(*m_context.objectArena, pso);
+                DestroyArenaObject(m_context.objectArena, pso);
                 return nullptr;
             }
             pso->m_ownsPipelineLayout = true;
@@ -446,11 +446,11 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     res = vkCreateGraphicsPipelines(m_context.device, m_context.pipelineCache, 1, &pipelineInfo, m_context.allocationCallbacks, &pso->m_pipeline);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create graphics pipeline: {}"), ResultToString(res));
-        DestroyArenaObject(*m_context.objectArena, pso);
+        DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
 
-    return GraphicsPipelineHandle(pso, GraphicsPipelineHandle::deleter_type(m_context.objectArena), AdoptRef);
+    return GraphicsPipelineHandle(pso, GraphicsPipelineHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
 
 

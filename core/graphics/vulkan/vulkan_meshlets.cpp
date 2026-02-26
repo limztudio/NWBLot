@@ -17,7 +17,7 @@ NWB_VULKAN_BEGIN
 
 
 MeshletPipeline::MeshletPipeline(const VulkanContext& context)
-    : RefCounter<IMeshletPipeline>(*context.threadPool)
+    : RefCounter<IMeshletPipeline>(context.threadPool)
     , m_context(context)
 {}
 MeshletPipeline::~MeshletPipeline(){
@@ -52,7 +52,7 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
 
     Alloc::ScratchArena<> scratchArena;
 
-    auto* pso = NewArenaObject<MeshletPipeline>(*m_context.objectArena, m_context);
+    auto* pso = NewArenaObject<MeshletPipeline>(m_context.objectArena, m_context);
     pso->m_desc = desc;
 
     Vector<VkPipelineShaderStageCreateInfo, Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>> shaderStages{ Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>(scratchArena) };
@@ -87,7 +87,7 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
         addShaderStage(desc.MS.get(), VK_SHADER_STAGE_MESH_BIT_EXT);
     else{
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Mesh shader is required for meshlet pipeline"));
-        DestroyArenaObject(*m_context.objectArena, pso);
+        DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
 
@@ -131,7 +131,7 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
             res = vkCreatePipelineLayout(m_context.device, &layoutInfo, m_context.allocationCallbacks, &pipelineLayout);
             if(res != VK_SUCCESS){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create pipeline layout for meshlet pipeline: {}"), ResultToString(res));
-                DestroyArenaObject(*m_context.objectArena, pso);
+                DestroyArenaObject(m_context.objectArena, pso);
                 return nullptr;
             }
             pso->m_ownsPipelineLayout = true;
@@ -225,11 +225,11 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     res = vkCreateGraphicsPipelines(m_context.device, m_context.pipelineCache, 1, &pipelineInfo, m_context.allocationCallbacks, &pso->m_pipeline);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create meshlet pipeline: {}"), ResultToString(res));
-        DestroyArenaObject(*m_context.objectArena, pso);
+        DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
 
-    return MeshletPipelineHandle(pso, MeshletPipelineHandle::deleter_type(m_context.objectArena), AdoptRef);
+    return MeshletPipelineHandle(pso, MeshletPipelineHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
 
 

@@ -41,7 +41,7 @@ VkDeviceAddress GetBufferDeviceAddress(IBuffer* _buffer, u64 offset){
 
 
 AccelStruct::AccelStruct(const VulkanContext& context)
-    : RefCounter<IRayTracingAccelStruct>(*context.threadPool)
+    : RefCounter<IRayTracingAccelStruct>(context.threadPool)
     , m_context(context)
 {}
 AccelStruct::~AccelStruct(){
@@ -69,7 +69,7 @@ Object AccelStruct::getNativeHandle(ObjectType objectType){
 
 
 OpacityMicromap::OpacityMicromap(const VulkanContext& context)
-    : RefCounter<IRayTracingOpacityMicromap>(*context.threadPool)
+    : RefCounter<IRayTracingOpacityMicromap>(context.threadPool)
     , m_context(context)
 {}
 OpacityMicromap::~OpacityMicromap(){
@@ -85,9 +85,9 @@ OpacityMicromap::~OpacityMicromap(){
 
 
 RayTracingPipeline::RayTracingPipeline(const VulkanContext& context, Device& device)
-    : RefCounter<IRayTracingPipeline>(*context.threadPool)
+    : RefCounter<IRayTracingPipeline>(context.threadPool)
     , m_context(context)
-    , m_shaderGroupHandles(Alloc::CustomAllocator<u8>(*context.objectArena))
+    , m_shaderGroupHandles(Alloc::CustomAllocator<u8>(context.objectArena))
     , m_device(device)
 {}
 RayTracingPipeline::~RayTracingPipeline(){
@@ -119,7 +119,7 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
     if(!m_context.extensions.KHR_acceleration_structure)
         return nullptr;
 
-    auto* as = NewArenaObject<AccelStruct>(*m_context.objectArena, m_context);
+    auto* as = NewArenaObject<AccelStruct>(m_context.objectArena, m_context);
     as->m_desc = desc;
 
     VkAccelerationStructureTypeKHR asType = desc.isTopLevel ?  VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR :  VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
@@ -134,7 +134,7 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
     as->m_buffer = createBuffer(bufferDesc);
 
     if(!as->m_buffer){
-        DestroyArenaObject(*m_context.objectArena, as);
+        DestroyArenaObject(m_context.objectArena, as);
         return nullptr;
     }
 
@@ -146,7 +146,7 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
 
     res = vkCreateAccelerationStructureKHR(m_context.device, &createInfo, m_context.allocationCallbacks, &as->m_accelStruct);
     if(res != VK_SUCCESS){
-        DestroyArenaObject(*m_context.objectArena, as);
+        DestroyArenaObject(m_context.objectArena, as);
         return nullptr;
     }
 
@@ -154,7 +154,7 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
     addressInfo.accelerationStructure = as->m_accelStruct;
     as->m_deviceAddress = vkGetAccelerationStructureDeviceAddressKHR(m_context.device, &addressInfo);
 
-    return RayTracingAccelStructHandle(as, RayTracingAccelStructHandle::deleter_type(m_context.objectArena), AdoptRef);
+    return RayTracingAccelStructHandle(as, RayTracingAccelStructHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
 
 RayTracingOpacityMicromapHandle Device::createOpacityMicromap(const RayTracingOpacityMicromapDesc& desc){
@@ -179,7 +179,7 @@ RayTracingOpacityMicromapHandle Device::createOpacityMicromap(const RayTracingOp
     VkMicromapBuildSizesInfoEXT buildSize = { VK_STRUCTURE_TYPE_MICROMAP_BUILD_SIZES_INFO_EXT };
     vkGetMicromapBuildSizesEXT(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &buildSize);
 
-    auto* om = NewArenaObject<OpacityMicromap>(*m_context.objectArena, m_context);
+    auto* om = NewArenaObject<OpacityMicromap>(m_context.objectArena, m_context);
     om->m_desc = desc;
 
     BufferDesc bufferDesc;
@@ -192,7 +192,7 @@ RayTracingOpacityMicromapHandle Device::createOpacityMicromap(const RayTracingOp
     om->m_dataBuffer = createBuffer(bufferDesc);
 
     if(!om->m_dataBuffer){
-        DestroyArenaObject(*m_context.objectArena, om);
+        DestroyArenaObject(m_context.objectArena, om);
         return nullptr;
     }
 
@@ -206,11 +206,11 @@ RayTracingOpacityMicromapHandle Device::createOpacityMicromap(const RayTracingOp
 
     res = vkCreateMicromapEXT(m_context.device, &createInfo, m_context.allocationCallbacks, &om->m_micromap);
     if(res != VK_SUCCESS){
-        DestroyArenaObject(*m_context.objectArena, om);
+        DestroyArenaObject(m_context.objectArena, om);
         return nullptr;
     }
 
-    return RayTracingOpacityMicromapHandle(om, RayTracingOpacityMicromapHandle::deleter_type(m_context.objectArena), AdoptRef);
+    return RayTracingOpacityMicromapHandle(om, RayTracingOpacityMicromapHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
 
 MemoryRequirements Device::getAccelStructMemoryRequirements(IRayTracingAccelStruct* _as){
@@ -353,7 +353,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
     if(!m_context.extensions.KHR_ray_tracing_pipeline)
         return nullptr;
 
-    auto* pso = NewArenaObject<RayTracingPipeline>(*m_context.objectArena, m_context, *this);
+    auto* pso = NewArenaObject<RayTracingPipeline>(m_context.objectArena, m_context, *this);
     pso->m_desc = desc;
 
     Alloc::ScratchArena<> scratchArena(s_RayTracingScratchArenaBytes);
@@ -438,7 +438,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
     }
 
     if(stages.empty() || groups.empty()){
-        DestroyArenaObject(*m_context.objectArena, pso);
+        DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
 
@@ -479,7 +479,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
             res = vkCreatePipelineLayout(m_context.device, &layoutInfo, m_context.allocationCallbacks, &pipelineLayout);
             if(res != VK_SUCCESS){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create pipeline layout for ray tracing pipeline: {}"), ResultToString(res));
-                DestroyArenaObject(*m_context.objectArena, pso);
+                DestroyArenaObject(m_context.objectArena, pso);
                 return nullptr;
             }
             pso->m_ownsPipelineLayout = true;
@@ -497,7 +497,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
 
     res = vkCreateRayTracingPipelinesKHR(m_context.device, VK_NULL_HANDLE, m_context.pipelineCache, 1, &createInfo, m_context.allocationCallbacks, &pso->m_pipeline);
     if(res != VK_SUCCESS){
-        DestroyArenaObject(*m_context.objectArena, pso);
+        DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
 
@@ -517,11 +517,11 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
         pso->m_shaderGroupHandles.data()
     );
     if(res != VK_SUCCESS){
-        DestroyArenaObject(*m_context.objectArena, pso);
+        DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
 
-    return RayTracingPipelineHandle(pso, RayTracingPipelineHandle::deleter_type(m_context.objectArena), AdoptRef);
+    return RayTracingPipelineHandle(pso, RayTracingPipelineHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
 
 
@@ -529,16 +529,16 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
 
 
 ShaderTable::ShaderTable(const VulkanContext& context, Device& device)
-    : RefCounter<IRayTracingShaderTable>(*context.threadPool)
+    : RefCounter<IRayTracingShaderTable>(context.threadPool)
     , m_context(context)
     , m_device(device)
 {}
 ShaderTable::~ShaderTable() = default;
 
 RayTracingShaderTableHandle RayTracingPipeline::createShaderTable(){
-    auto* sbt = NewArenaObject<ShaderTable>(*m_context.objectArena, m_context, m_device);
+    auto* sbt = NewArenaObject<ShaderTable>(m_context.objectArena, m_context, m_device);
     sbt->m_pipeline = this;
-    return RayTracingShaderTableHandle(sbt, RayTracingShaderTableHandle::deleter_type(m_context.objectArena), AdoptRef);
+    return RayTracingShaderTableHandle(sbt, RayTracingShaderTableHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
 
 u32 ShaderTable::findGroupIndex(const Name& exportName)const{

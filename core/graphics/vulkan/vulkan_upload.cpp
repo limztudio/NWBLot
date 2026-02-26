@@ -19,7 +19,7 @@ UploadManager::UploadManager(Device& pParent, u64 defaultChunkSize, u64 memoryLi
     , m_defaultChunkSize(defaultChunkSize)
     , m_memoryLimit(memoryLimit)
     , m_isScratchBuffer(isScratchBuffer)
-    , m_chunkPool(Alloc::CustomAllocator<RefCountPtr<BufferChunk>>(*m_device.getContext().objectArena))
+    , m_chunkPool(Alloc::CustomAllocator<RefCountPtr<BufferChunk>>(m_device.getContext().objectArena))
 {}
 UploadManager::~UploadManager(){
     m_chunkPool.clear();
@@ -30,7 +30,7 @@ bool UploadManager::suballocateBuffer(u64 size, Buffer** pBuffer, u64* pOffset, 
     if(!pBuffer || !pOffset)
         return false;
 
-    Mutex::scoped_lock lock(m_mutex);
+    ScopedLock lock(m_mutex);
 
     if(alignment > 0)
         size = (size + alignment - 1) & ~(static_cast<u64>(alignment) - 1);
@@ -78,7 +78,7 @@ bool UploadManager::suballocateBuffer(u64 size, Buffer** pBuffer, u64* pOffset, 
     if(!bufferHandle)
         return false;
 
-    m_currentChunk = MakeRefCount<BufferChunk>(*m_device.getContext().threadPool, Move(bufferHandle), chunkSize);
+    m_currentChunk = MakeRefCount<BufferChunk>(m_device.getContext().threadPool, Move(bufferHandle), chunkSize);
     m_currentChunk->version = currentVersion;
 
     *pBuffer = static_cast<Buffer*>(m_currentChunk->buffer.get());
@@ -91,7 +91,7 @@ bool UploadManager::suballocateBuffer(u64 size, Buffer** pBuffer, u64* pOffset, 
 }
 
 void UploadManager::submitChunks(u64, u64 submittedVersion){
-    Mutex::scoped_lock lock(m_mutex);
+    ScopedLock lock(m_mutex);
 
     if(m_currentChunk){
         m_currentChunk->version = submittedVersion;

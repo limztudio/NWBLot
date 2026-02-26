@@ -87,7 +87,7 @@ void SystemScheduler::rebuild(){
     usize numAssigned = 0;
 
     while(numAssigned < m_allSystems.size()){
-        Stage stage(SystemAllocator(m_arena));
+        Stage stage{SystemAllocator(m_arena)};
 
         HashSet<ComponentTypeId, Hasher<ComponentTypeId>, EqualTo<ComponentTypeId>, Alloc::ScratchAllocator<ComponentTypeId>> stageWrites(0, Hasher<ComponentTypeId>(), EqualTo<ComponentTypeId>(), Alloc::ScratchAllocator<ComponentTypeId>(scratchArena));
         HashSet<ComponentTypeId, Hasher<ComponentTypeId>, EqualTo<ComponentTypeId>, Alloc::ScratchAllocator<ComponentTypeId>> stageReads(0, Hasher<ComponentTypeId>(), EqualTo<ComponentTypeId>(), Alloc::ScratchAllocator<ComponentTypeId>(scratchArena));

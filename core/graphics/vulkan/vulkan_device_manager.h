@@ -154,6 +154,8 @@ private:
 
 
 private:
+    GraphicsAllocator& m_allocator;
+    Alloc::ThreadPool& m_threadPool;
     Alloc::CustomArena& m_arena;
 
 private:

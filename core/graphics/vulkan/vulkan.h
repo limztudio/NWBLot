@@ -31,21 +31,21 @@ public:
 typedef RefCountPtr<IDevice, ArenaRefDeleter<IDevice>> DeviceHandle;
 
 struct DeviceDesc{
-    VkInstance instance;
-    VkPhysicalDevice physicalDevice;
-    VkDevice device;
+    VkInstance instance = VK_NULL_HANDLE;
+    VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
+    VkDevice device = VK_NULL_HANDLE;
 
-    VkQueue graphicsQueue;
+    VkQueue graphicsQueue = VK_NULL_HANDLE;
     i32 graphicsQueueIndex = -1;
-    VkQueue transferQueue;
+    VkQueue transferQueue = VK_NULL_HANDLE;
     i32 transferQueueIndex = -1;
-    VkQueue computeQueue;
+    VkQueue computeQueue = VK_NULL_HANDLE;
     i32 computeQueueIndex = -1;
 
     const SystemMemoryAllocator* systemMemoryAllocator = nullptr;
 
-    GraphicsAllocator* allocator = nullptr;
-    Alloc::ThreadPool* threadPool = nullptr;
+    GraphicsAllocator& allocator;
+    Alloc::ThreadPool& threadPool;
 
     VkAllocationCallbacks* allocationCallbacks = nullptr;
 
@@ -63,6 +63,12 @@ struct DeviceDesc{
     bool logBufferLifetime = false;
 
     AString vulkanLibraryName;
+
+
+    explicit DeviceDesc(GraphicsAllocator& allocatorRef, Alloc::ThreadPool& threadPoolRef)
+        : allocator(allocatorRef)
+        , threadPool(threadPoolRef)
+    {}
 };
 
 

@@ -14,66 +14,18 @@ NWB_ECS_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ecs{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static void* ECSArenaAlloc(usize size){
-    return Alloc::CoreAlloc(size, "NWB::Core::ECS::World::ECSArenaAlloc");
-}
-
-static void ECSArenaFree(void* ptr){
-    Alloc::CoreFree(ptr, "NWB::Core::ECS::World::ECSArenaFree");
-}
-
-static void* ECSArenaAllocAligned(usize size, usize align){
-    return Alloc::CoreAllocAligned(size, align, "NWB::Core::ECS::World::ECSArenaAllocAligned");
-}
-
-static void ECSArenaFreeAligned(void* ptr){
-    Alloc::CoreFreeAligned(ptr, "NWB::Core::ECS::World::ECSArenaFreeAligned");
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-UniquePtr<Alloc::CustomArena> World::createOwnedArena(){
-    return MakeUnique<Alloc::CustomArena>(
-        &__hidden_ecs::ECSArenaAlloc,
-        &__hidden_ecs::ECSArenaFree,
-        &__hidden_ecs::ECSArenaAllocAligned,
-        &__hidden_ecs::ECSArenaFreeAligned
-    );
-}
-
-
-World::World(u32 workerThreads, Alloc::CoreAffinity affinity, usize poolArenaSize, Alloc::CustomArena* arena)
-    : Alloc::ITaskScheduler(m_threadPool)
-    , m_ownedArena(arena ? UniquePtr<Alloc::CustomArena>() : World::createOwnedArena())
-    , m_arena(arena ? arena : m_ownedArena.get())
-    , m_threadPool(
-        (workerThreads > 0) ? workerThreads : Alloc::QueryCoreCount(affinity),
-        affinity,
-        poolArenaSize
-    )
-    , m_entityManager(*m_arena)
-    , m_pools(0, Hasher<ComponentTypeId>(), EqualTo<ComponentTypeId>(), PoolMapAllocator(*m_arena))
-    , m_systems(SystemVectorAllocator(*m_arena))
-    , m_scheduler(*m_arena)
-    , m_messageBus(*m_arena)
+World::World(Alloc::CustomArena& arena, Alloc::ThreadPool& threadPool)
+    : Alloc::ITaskScheduler(threadPool)
+    , m_arena(arena)
+    , m_entityManager(m_arena)
+    , m_pools(0, Hasher<ComponentTypeId>(), EqualTo<ComponentTypeId>(), PoolMapAllocator(m_arena))
+    , m_systems(SystemVectorAllocator(m_arena))
+    , m_scheduler(m_arena)
+    , m_messageBus(m_arena)
 {}
 World::~World()
 {
-    m_threadPool.wait();
+    taskPool().wait();
     m_messageBus.clear();
     m_systems.clear();
     m_pools.clear();

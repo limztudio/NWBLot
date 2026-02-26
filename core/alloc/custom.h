@@ -168,6 +168,87 @@ inline bool operator!=(const CustomAllocator<T>&, const CustomAllocator<F>&)noex
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+template<typename T>
+class CustomCacheAlignedAllocator{
+    template<typename F>
+    friend class CustomCacheAlignedAllocator;
+
+
+public:
+    static_assert(!IsConst_V<T>, "NWB::Core::Alloc::CustomCacheAlignedAllocator forbids containers of const elements because allocator<const T> is ill-formed.");
+    static_assert(!IsFunction_V<T>, "NWB::Core::Alloc::CustomCacheAlignedAllocator forbids allocators for function elements because of [allocator.requirements].");
+    static_assert(!IsReference_V<T>, "NWB::Core::Alloc::CustomCacheAlignedAllocator forbids allocators for reference elements because of [allocator.requirements].");
+
+
+public:
+    using _From_primary = CustomCacheAlignedAllocator;
+    using value_type = T;
+
+    using size_type = usize;
+    using difference_type = isize;
+
+    using propagate_on_container_move_assignment = TrueType;
+    using is_always_equal = TrueType;
+
+
+public:
+    template<typename U>
+    struct rebind{
+        using other = CustomCacheAlignedAllocator<U>;
+    };
+
+
+public:
+    constexpr CustomCacheAlignedAllocator(CustomArena& arena)noexcept : m_arena(arena){}
+    constexpr CustomCacheAlignedAllocator(const CustomCacheAlignedAllocator&)noexcept = default;
+    template<class F>
+    constexpr CustomCacheAlignedAllocator(const CustomCacheAlignedAllocator<F>& rhs)noexcept : m_arena(rhs.m_arena){}
+
+    constexpr ~CustomCacheAlignedAllocator() = default;
+    constexpr CustomCacheAlignedAllocator& operator=(const CustomCacheAlignedAllocator&)noexcept{ return *this; }
+
+
+public:
+    usize max_size()const noexcept{
+        return (~usize(0) - CachelineSize()) / sizeof(value_type);
+    }
+
+    constexpr void deallocate(T* const buffer, const usize count)noexcept{
+        NWB_ASSERT_MSG((buffer != nullptr || count == 0), NWB_TEXT("null pointer cannot point to a block of non-zero size"));
+
+        const usize bytes = sizeof(T) * count;
+        if(!bytes)
+            return;
+
+        const usize alignSize = Max(CachelineSize(), static_cast<usize>(alignof(T)));
+        m_arena.deallocate(buffer, alignSize, bytes);
+    }
+
+    constexpr __declspec(allocator) T* allocate(const usize count){
+        const usize bytes = SizeOf<sizeof(T)>(count);
+        if(!bytes)
+            return nullptr;
+
+        const usize alignSize = Max(CachelineSize(), static_cast<usize>(alignof(T)));
+        return reinterpret_cast<T*>(m_arena.allocate(alignSize, bytes));
+    }
+#if _HAS_CXX23
+    constexpr AllocationResult<T*> allocate_at_least(const usize count){ return { allocate(count), count }; }
+#endif
+
+
+private:
+    CustomArena& m_arena;
+};
+template<typename T, typename F>
+inline bool operator==(const CustomCacheAlignedAllocator<T>&, const CustomCacheAlignedAllocator<F>&)noexcept{ return true; }
+template<typename T, typename F>
+inline bool operator!=(const CustomCacheAlignedAllocator<T>&, const CustomCacheAlignedAllocator<F>&)noexcept{ return false; }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_ALLOC_END
 
 

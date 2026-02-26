@@ -172,6 +172,8 @@ class ScopedLock : public std::scoped_lock<Mutexes...>{
 public:
     using std::scoped_lock<Mutexes...>::scoped_lock;
 };
+template<typename... Mutexes>
+ScopedLock(Mutexes&...) -> ScopedLock<Mutexes...>;
 template<isize LeastMaxValue>
 class ScopedLock<Semaphore<LeastMaxValue>> : NoCopy{
 public:
@@ -185,6 +187,8 @@ public:
 private:
     Semaphore<LeastMaxValue>& m_obj;
 };
+template<isize LeastMaxValue>
+ScopedLock(Semaphore<LeastMaxValue>&) -> ScopedLock<Semaphore<LeastMaxValue>>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

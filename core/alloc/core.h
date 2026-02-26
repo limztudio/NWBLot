@@ -17,6 +17,8 @@ NWB_ALLOC_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+extern usize CachelineSize();
+
 extern void* CoreAlloc(usize size, const char* log);
 extern void* CoreRealloc(void* p, usize size, const char* log);
 extern void* CoreAllocAligned(usize size, usize align, const char* log);

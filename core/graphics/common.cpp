@@ -43,33 +43,15 @@ void GraphicsAllocator::freePersistentSystemMemory(void* userData, void* memory)
     arena->deallocate(memory, 1, 0);
 }
 
-void* GraphicsAllocator::allocateObjectMemory(usize size){
-    return Alloc::CoreAlloc(size, "NWB::Core::GraphicsAllocator::ObjectArena::allocate");
-}
-void GraphicsAllocator::freeObjectMemory(void* ptr){
-    Alloc::CoreFree(ptr, "NWB::Core::GraphicsAllocator::ObjectArena::free");
-}
-void* GraphicsAllocator::allocateObjectMemoryAligned(usize size, usize align){
-    return Alloc::CoreAllocAligned(size, align, "NWB::Core::GraphicsAllocator::ObjectArena::allocateAligned");
-}
-void GraphicsAllocator::freeObjectMemoryAligned(void* ptr){
-    Alloc::CoreFreeAligned(ptr, "NWB::Core::GraphicsAllocator::ObjectArena::freeAligned");
-}
-
-GraphicsAllocator::GraphicsAllocator(u32 maxPersistentAllocationSize)
-    : m_persistentArena(maxPersistentAllocationSize)
+GraphicsAllocator::GraphicsAllocator(Alloc::MemoryArena& persistentArena, Alloc::CustomArena& objectArena)
+    : m_persistentArena(persistentArena)
     , m_systemMemoryAllocator{
         &m_persistentArena
         , &GraphicsAllocator::allocatePersistentSystemMemory
         , &GraphicsAllocator::reallocatePersistentSystemMemory
         , &GraphicsAllocator::freePersistentSystemMemory
     }
-    , m_objectArena(
-        &GraphicsAllocator::allocateObjectMemory
-        , &GraphicsAllocator::freeObjectMemory
-        , &GraphicsAllocator::allocateObjectMemoryAligned
-        , &GraphicsAllocator::freeObjectMemoryAligned
-    )
+    , m_objectArena(objectArena)
 {}
 
 

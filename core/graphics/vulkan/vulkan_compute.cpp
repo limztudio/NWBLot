@@ -17,7 +17,7 @@ NWB_VULKAN_BEGIN
 
 
 ComputePipeline::ComputePipeline(const VulkanContext& context)
-    : RefCounter<IComputePipeline>(*context.threadPool)
+    : RefCounter<IComputePipeline>(context.threadPool)
     , m_context(context)
 {}
 ComputePipeline::~ComputePipeline(){
@@ -47,11 +47,11 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
     VkResult res = VK_SUCCESS;
     Alloc::ScratchArena<> scratchArena;
 
-    auto* pso = NewArenaObject<ComputePipeline>(*m_context.objectArena, m_context);
+    auto* pso = NewArenaObject<ComputePipeline>(m_context.objectArena, m_context);
     pso->m_desc = desc;
 
     if(!desc.CS){
-        DestroyArenaObject(*m_context.objectArena, pso);
+        DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
 
@@ -108,7 +108,7 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
             res = vkCreatePipelineLayout(m_context.device, &layoutInfo, m_context.allocationCallbacks, &pipelineLayout);
             if(res != VK_SUCCESS){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create pipeline layout for compute pipeline: {}"), ResultToString(res));
-                DestroyArenaObject(*m_context.objectArena, pso);
+                DestroyArenaObject(m_context.objectArena, pso);
                 return nullptr;
             }
             pso->m_ownsPipelineLayout = true;
@@ -123,11 +123,11 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
     res = vkCreateComputePipelines(m_context.device, m_context.pipelineCache, 1, &pipelineInfo, m_context.allocationCallbacks, &pso->m_pipeline);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create compute pipeline: {}"), ResultToString(res));
-        DestroyArenaObject(*m_context.objectArena, pso);
+        DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
 
-    return ComputePipelineHandle(pso, ComputePipelineHandle::deleter_type(m_context.objectArena), AdoptRef);
+    return ComputePipelineHandle(pso, ComputePipelineHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
 
 

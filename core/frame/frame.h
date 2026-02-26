@@ -22,6 +22,16 @@ NWB_CORE_BEGIN
 
 
 class Frame{
+private:
+    static constexpr u32 s_GraphicsPersistentArenaSize = 64 * 1024 * 1024;
+    static constexpr u32 s_ReservedCoresForMainThread = 1;
+
+
+private:
+    static u32 queryGraphicsWorkerThreadCount();
+    static u32 queryWorldWorkerThreadCount();
+
+
 public:
     Frame(void* inst, u16 width, u16 height);
     ~Frame();
@@ -48,11 +58,23 @@ public:
 
 
 private:
+    void setupPlatform(void* inst);
+    void cleanupPlatform();
+
+
+private:
     Common::FrameData m_data;
     BasicString<tchar> m_appliedWindowTitle;
 
-private:
+    Alloc::MemoryArena m_graphicsPersistentArena;
+    Alloc::CustomArena m_graphicsObjectArena;
+    GraphicsAllocator m_graphicsAllocator;
+    Alloc::ThreadPool m_graphicsThreadPool;
+
+    Alloc::CustomArena m_worldObjectArena;
+    Alloc::ThreadPool m_worldThreadPool;
     ECS::World m_world;
+
     Graphics m_graphics;
 };
 

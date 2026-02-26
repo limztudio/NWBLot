@@ -79,9 +79,14 @@ private:
 
     template<typename T>
     class MessageChannel final : public IMessageChannel{
+    private:
+        using PendingAllocator = Alloc::CustomCacheAlignedAllocator<UniquePtr<T>>;
+
+
     public:
         explicit MessageChannel(Alloc::CustomArena& arena)
-            : m_readBuffer(Alloc::CustomAllocator<T>(arena))
+            : m_pending(PendingAllocator(arena))
+            , m_readBuffer(Alloc::CustomAllocator<T>(arena))
         {}
 
     public:
@@ -126,7 +131,7 @@ private:
 
 
     private:
-        ParallelQueue<UniquePtr<T>> m_pending;
+        ParallelQueue<UniquePtr<T>, PendingAllocator> m_pending;
         Vector<T, Alloc::CustomAllocator<T>> m_readBuffer;
     };
 
@@ -175,12 +180,13 @@ public:
     }
 
     void swapBuffers(){
-        Vector<IMessageChannel*, Alloc::CustomAllocator<IMessageChannel*>> channels(
-            Alloc::CustomAllocator<IMessageChannel*>(m_arena)
-        );
+        Alloc::ScratchArena<> scratchArena(4096);
+        Vector<IMessageChannel*, Alloc::ScratchAllocator<IMessageChannel*>> channels{
+            Alloc::ScratchAllocator<IMessageChannel*>(scratchArena)
+        };
 
         {
-            Mutex::scoped_lock lock(m_channelsMutex);
+            ScopedLock lock(m_channelsMutex);
             channels.reserve(m_channels.size());
             for(auto& [typeId, channel] : m_channels){
                 (void)typeId;
@@ -193,12 +199,13 @@ public:
     }
 
     void clear(){
-        Vector<IMessageChannel*, Alloc::CustomAllocator<IMessageChannel*>> channels(
-            Alloc::CustomAllocator<IMessageChannel*>(m_arena)
-        );
+        Alloc::ScratchArena<> scratchArena(4096);
+        Vector<IMessageChannel*, Alloc::ScratchAllocator<IMessageChannel*>> channels{
+            Alloc::ScratchAllocator<IMessageChannel*>(scratchArena)
+        };
 
         {
-            Mutex::scoped_lock lock(m_channelsMutex);
+            ScopedLock lock(m_channelsMutex);
             channels.reserve(m_channels.size());
             for(auto& [typeId, channel] : m_channels){
                 (void)typeId;
@@ -216,7 +223,7 @@ private:
     MessageChannel<T>* getOrCreateChannel(){
         const MessageTypeId typeId = MessageType<T>();
 
-        Mutex::scoped_lock lock(m_channelsMutex);
+        ScopedLock lock(m_channelsMutex);
 
         auto itr = m_channels.find(typeId);
         if(itr != m_channels.end())
@@ -232,7 +239,7 @@ private:
     const MessageChannel<T>* getChannel()const{
         const MessageTypeId typeId = MessageType<T>();
 
-        Mutex::scoped_lock lock(m_channelsMutex);
+        ScopedLock lock(m_channelsMutex);
 
         auto itr = m_channels.find(typeId);
         if(itr == m_channels.end())

@@ -24,16 +24,10 @@ private:
     using SystemVectorAllocator = Alloc::CustomAllocator<UniquePtr<ISystem>>;
 
 
-private:
-    static UniquePtr<Alloc::CustomArena> createOwnedArena();
-
-
 public:
     World(
-        u32 workerThreads = 0,
-        Alloc::CoreAffinity affinity = Alloc::CoreAffinity::Any,
-        usize poolArenaSize = 0,
-        Alloc::CustomArena* arena = nullptr
+        Alloc::CustomArena& arena,
+        Alloc::ThreadPool& threadPool
     );
     ~World();
 
@@ -44,8 +38,8 @@ public:
     bool alive(Entity entity)const;
     usize entityCount()const;
 
-    inline Alloc::CustomArena& arena(){ return *m_arena; }
-    inline const Alloc::CustomArena& arena()const{ return *m_arena; }
+    inline Alloc::CustomArena& arena(){ return m_arena; }
+    inline const Alloc::CustomArena& arena()const{ return m_arena; }
 
 
 public:
@@ -193,7 +187,7 @@ private:
         if(itr != m_pools.end())
             return static_cast<ComponentPool<T>*>(itr->second.get());
 
-        auto pool = MakeUnique<ComponentPool<T>>(*m_arena);
+        auto pool = MakeUnique<ComponentPool<T>>(m_arena);
         auto* raw = pool.get();
         m_pools.emplace(typeId, Move(pool));
         return raw;
@@ -203,10 +197,8 @@ private:
 
 
 private:
-    UniquePtr<Alloc::CustomArena> m_ownedArena;
-    Alloc::CustomArena* m_arena = nullptr;
+    Alloc::CustomArena& m_arena;
 
-    Alloc::ThreadPool m_threadPool;
     EntityManager m_entityManager;
     HashMap<ComponentTypeId, UniquePtr<IComponentPool>, Hasher<ComponentTypeId>, EqualTo<ComponentTypeId>, PoolMapAllocator> m_pools;
     Vector<UniquePtr<ISystem>, SystemVectorAllocator> m_systems;

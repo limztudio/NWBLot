@@ -18,13 +18,8 @@ NWB_CORE_BEGIN
 
 
 class Graphics{
-private:
-    static constexpr u32 s_DynamicAllocatorSize = 64 * 1024 * 1024;
-    static constexpr u32 s_ReservedPerformanceCoresForMainThread = 1;
-
-
 public:
-    Graphics();
+    Graphics(GraphicsAllocator& allocator, Alloc::ThreadPool& threadPool);
     ~Graphics();
 
 
@@ -40,12 +35,8 @@ public:
 
 
 private:
-    static u32 queryGraphicsWorkerThreadCount();
-
-
-private:
-    GraphicsAllocator m_allocator;
-    Alloc::ThreadPool m_threadPool;
+    GraphicsAllocator& m_allocator;
+    Alloc::ThreadPool& m_threadPool;
     DeviceCreationParameters m_deviceCreationParams;
 
 private:

@@ -1,4 +1,4 @@
-﻿// limztudio@gmail.com
+// limztudio@gmail.com
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -88,9 +88,9 @@ struct VulkanContext{
     VkAllocationCallbacks* allocationCallbacks = nullptr;
     VkPipelineCache pipelineCache = VK_NULL_HANDLE;
 
-    Alloc::CustomArena* objectArena = nullptr;
-    GraphicsAllocator* allocator = nullptr;
-    Alloc::ThreadPool* threadPool = nullptr;
+    Alloc::CustomArena& objectArena;
+    GraphicsAllocator& allocator;
+    Alloc::ThreadPool& threadPool;
 
     VkPhysicalDeviceProperties physicalDeviceProperties{};
     VkPhysicalDeviceMemoryProperties memoryProperties{};
@@ -122,12 +122,25 @@ struct VulkanContext{
     VkPhysicalDeviceClusterAccelerationStructurePropertiesNV nvClusterAccelerationStructureProperties{};
 
 
-    VulkanContext() = default;
-    VulkanContext(VkInstance inst, VkPhysicalDevice physDev, VkDevice dev, VkAllocationCallbacks* allocCb)
+    explicit VulkanContext(GraphicsAllocator& allocatorRef, Alloc::ThreadPool& threadPoolRef)
+        : objectArena(allocatorRef.getObjectArena())
+        , allocator(allocatorRef)
+        , threadPool(threadPoolRef)
+    {}
+    VulkanContext(
+        GraphicsAllocator& allocatorRef,
+        Alloc::ThreadPool& threadPoolRef,
+        VkInstance inst,
+        VkPhysicalDevice physDev,
+        VkDevice dev,
+        VkAllocationCallbacks* allocCb)
         : instance(inst)
         , physicalDevice(physDev)
         , device(dev)
         , allocationCallbacks(allocCb)
+        , objectArena(allocatorRef.getObjectArena())
+        , allocator(allocatorRef)
+        , threadPool(threadPoolRef)
     {}
 };
 

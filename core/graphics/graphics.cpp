@@ -18,18 +18,6 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-u32 Graphics::queryGraphicsWorkerThreadCount(){
-    u32 coreCount = Alloc::QueryCoreCount(Alloc::CoreAffinity::Performance);
-    if(coreCount <= 1)
-        coreCount = Alloc::QueryCoreCount(Alloc::CoreAffinity::Any);
-
-    const u32 reservedCores = s_ReservedPerformanceCoresForMainThread;
-    return coreCount > reservedCores ? (coreCount - reservedCores) : 0;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 IDeviceManager* IDeviceManager::create(GraphicsAPI::Enum api, const DeviceCreationParameters& params){
     switch(api){
     case GraphicsAPI::VULKAN:
@@ -44,9 +32,9 @@ IDeviceManager* IDeviceManager::create(GraphicsAPI::Enum api, const DeviceCreati
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Graphics::Graphics()
-    : m_allocator(s_DynamicAllocatorSize)
-    , m_threadPool(queryGraphicsWorkerThreadCount(), Alloc::CoreAffinity::Any)
+Graphics::Graphics(GraphicsAllocator& allocator, Alloc::ThreadPool& threadPool)
+    : m_allocator(allocator)
+    , m_threadPool(threadPool)
 {
     m_deviceCreationParams.allocator = &m_allocator;
     m_deviceCreationParams.threadPool = &m_threadPool;

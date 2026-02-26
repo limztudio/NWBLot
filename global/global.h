@@ -11,6 +11,7 @@
 #include "type.h"
 #include "algorithm.h"
 #include "call_traits.h"
+#include "not_null.h"
 #include "containers.h"
 #include "unique_ptr.h"
 #include "refcount_ptr.h"

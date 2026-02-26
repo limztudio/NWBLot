@@ -3485,7 +3485,7 @@ public:
     virtual void setResourceStatesForBindingSet(IBindingSet* bindingSet) = 0;
     
     // Sets the necessary resource states for all targets of the framebuffer.
-    void setResourceStatesForFramebuffer(IFramebuffer* framebuffer);
+    void setResourceStatesForFramebuffer(IFramebuffer& framebuffer);
 
     // Enables or disables the placement of UAV barriers for the given texture (DX12/VK) or all resources (DX11)
     // between draw or dispatch calls. Disabling UAV barriers may improve performance in cases when the same
@@ -3616,8 +3616,8 @@ public:
 
     
 public:
-    void registerAftermathMarkerTracker(AftermathMarkerTracker* tracker);
-    void unRegisterAftermathMarkerTracker(AftermathMarkerTracker* tracker);
+    void registerAftermathMarkerTracker(AftermathMarkerTracker& tracker);
+    void unRegisterAftermathMarkerTracker(AftermathMarkerTracker& tracker);
     void registerShaderBinaryLookupCallback(void* client, ShaderBinaryLookupCallback lookupCallback);
     void unRegisterShaderBinaryLookupCallback(void* client);
 
@@ -3834,7 +3834,7 @@ class IDeviceManager;
 
 class IRenderPass{
 public:
-    explicit IRenderPass(IDeviceManager* deviceManager)
+    explicit IRenderPass(IDeviceManager& deviceManager)
         : m_deviceManager(deviceManager)
     {}
     virtual ~IRenderPass() = default;
@@ -3855,11 +3855,11 @@ public:
     virtual bool mouseScrollUpdate(f64, f64){ return false; }
     virtual bool mouseButtonUpdate(i32, i32, i32){ return false; }
 
-    [[nodiscard]] IDeviceManager* getDeviceManager()const{ return m_deviceManager; }
+    [[nodiscard]] IDeviceManager& getDeviceManager()const{ return m_deviceManager; }
 
 
 private:
-    IDeviceManager* m_deviceManager;
+    IDeviceManager& m_deviceManager;
 };
 
 
@@ -3883,9 +3883,9 @@ public:
 
     virtual bool enumerateAdapters(Vector<AdapterInfo>& outAdapters) = 0;
 
-    void addRenderPassToFront(IRenderPass* pass);
-    void addRenderPassToBack(IRenderPass* pass);
-    void removeRenderPass(IRenderPass* pass);
+    void addRenderPassToFront(IRenderPass& pass);
+    void addRenderPassToBack(IRenderPass& pass);
+    void removeRenderPass(IRenderPass& pass);
 
     bool runFrame();
     void updateWindowState(u32 width, u32 height, bool windowVisible, bool windowIsInFocus);
@@ -3920,7 +3920,7 @@ public:
 
     virtual void shutdown();
 
-    void setWindowTitle(const tchar* title);
+    void setWindowTitle(NotNull<const tchar*> title);
     const tchar* getWindowTitle();
 
     virtual bool isVulkanInstanceExtensionEnabled(const char*)const{ return false; }

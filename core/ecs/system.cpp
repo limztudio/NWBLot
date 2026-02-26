@@ -45,23 +45,20 @@ SystemScheduler::~SystemScheduler()
 {}
 
 
-void SystemScheduler::addSystem(ISystem* system){
-    if(!system)
-        return;
-
+void SystemScheduler::addSystem(ISystem& system){
     if(FindIf(m_allSystems.begin(), m_allSystems.end(),
-        [system](ISystem* iterSystem){ return iterSystem == system; }
+        [&system](ISystem* iterSystem){ return iterSystem == &system; }
     ) != m_allSystems.end())
         return;
 
-    m_allSystems.push_back(system);
+    m_allSystems.push_back(&system);
     m_dirty = true;
 }
 
 
-void SystemScheduler::removeSystem(ISystem* system){
+void SystemScheduler::removeSystem(ISystem& system){
     auto itr = FindIf(m_allSystems.begin(), m_allSystems.end(),
-        [system](ISystem* iterSystem){ return iterSystem == system; }
+        [&system](ISystem* iterSystem){ return iterSystem == &system; }
     );
     if(itr != m_allSystems.end()){
         m_allSystems.erase(itr);

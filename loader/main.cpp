@@ -23,7 +23,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static int MainLogic(const char* logAddress, void* inst){
+static int MainLogic(NotNull<const char*> logAddress, void* inst){
     {
         NWB::Log::Client logger;
         if(!logger.init(logAddress))
@@ -83,7 +83,7 @@ static int EntryPoint(isize argc, tchar** argv, void* inst){
 
     try{
         NWB::Core::Common::Initializer::instance().initialize();
-        ret = MainLogic(logAddress.c_str(), inst);
+        ret = MainLogic(MakeNotNull(logAddress.c_str()), inst);
         NWB::Core::Common::Initializer::instance().finalize();
     }
     catch(...){

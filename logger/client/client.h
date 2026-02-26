@@ -26,12 +26,9 @@ class Client : public BaseUpdateIfQueued<Client, CLIENT_NAME>{
 
 
 private:
+    static bool s_SendSwitch;
     static bool globalInit();
     static usize sendCallback(void* contents, usize size, usize nmemb, Client* _this);
-
-
-private:
-    static bool s_SendSwitch;
 
 
 public:
@@ -40,12 +37,11 @@ public:
 
 
 public:
-    inline void enqueue(TString&& str, Type type = Type::Info){ return Base::enqueue(Move(str), type); }
-    inline void enqueue(const TString& str, Type type = Type::Info){ return Base::enqueue(str, type); }
+    using Base::enqueue;
 
 
 protected:
-    bool internalInit(const char* url);
+    bool internalInit(NotNull<const char*> url);
     bool internalUpdate();
 
 protected:

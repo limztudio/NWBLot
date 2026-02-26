@@ -56,11 +56,11 @@ usize World::entityCount()const{
 }
 
 
-void World::removeSystem(ISystem* system){
+void World::removeSystem(ISystem& system){
     m_scheduler.removeSystem(system);
 
     auto itr = FindIf(m_systems.begin(), m_systems.end(),
-        [system](const UniquePtr<ISystem>& ptr){ return ptr.get() == system; }
+        [&system](const UniquePtr<ISystem>& ptr){ return ptr.get() == &system; }
     );
     if(itr != m_systems.end())
         m_systems.erase(itr);

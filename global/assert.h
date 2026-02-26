@@ -28,7 +28,7 @@
 {                                                                                                                                       \
     if(!(condition)){                                                                                                                   \
         const auto msg = ::std::format(__VA_ARGS__);                                                                                    \
-        NWB_TCERR << NWB_TEXT("ASSERT ") << NWB_TEXT(__FILE__) << NWB_TEXT(":") << __LINE__ << NWB_TEXT("\n") << msg << NWB_TEXT("\n"); \
+        NWB_TCERR << NWB_TEXT("ASSERT ") << NWB_TEXT(__FILE__) << NWB_TEXT(":") << __LINE__ << NWB_TEXT("\n") << msg.c_str() << NWB_TEXT("\n"); \
         ::std::abort();                                                                                                                 \
     }                                                                                                                                   \
 }

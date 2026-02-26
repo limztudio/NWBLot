@@ -33,6 +33,10 @@ using MessageQueue = ParallelQueue<MessageType>;
 
 template<typename T, const tchar* NAME>
 class Base{
+private:
+    static bool m_globalInit;
+
+
 protected:
     static inline bool globalInit(){ return true; }
 
@@ -87,14 +91,15 @@ protected:
 protected:
     Thread m_thread;
     Atomic<bool> m_exit;
-
-private:
-    static bool m_globalInit;
 };
 
 template<typename T, float UPDATE_INTERVAL, const tchar* NAME>
 class BaseUpdateOrdinary : public Base<T, NAME>{
-	friend Base<T, NAME>;
+    friend Base<T, NAME>;
+
+
+private:
+    static bool m_globalInit;
 
 
 private:
@@ -125,10 +130,6 @@ protected:
 
 private:
     Timer m_lastTime;
-
-
-protected:
-    static bool m_globalInit;
 };
 template<typename T, float UPDATE_INTERVAL, const tchar* NAME>
 bool BaseUpdateOrdinary<T, UPDATE_INTERVAL, NAME>::m_globalInit = false;
@@ -139,13 +140,17 @@ class BaseUpdateIfQueued : public Base<T, NAME>{
 
 
 private:
+    static bool m_globalInit;
+
+
+private:
     static void globalUpdate(T* _this){
         for(;;){
             _this->m_semaphore.acquire();
 
             bool updateSucceeded = _this->internalUpdate();
 
-            if (!updateSucceeded){
+            if(!updateSucceeded){
                 _this->m_exit.store(true, MemoryOrder::memory_order_release);
                 break;
             }
@@ -172,10 +177,6 @@ protected:
 
 protected:
     Semaphore<> m_semaphore;
-
-
-protected:
-    static bool m_globalInit;
 };
 template<typename T, const tchar* NAME>
 bool BaseUpdateIfQueued<T, NAME>::m_globalInit = false;

@@ -51,6 +51,9 @@ protected:
 
 class Frame{
 public:
+    static void print(BasicStringView<tchar> str, Log::Type type);
+
+public:
     Frame(void* inst);
     ~Frame();
 
@@ -68,10 +71,6 @@ public:
     bool startup();
     void cleanup();
     bool update(float delta);
-
-
-public:
-    static void print(BasicStringView<tchar> str, Log::Type type);
 
 
 private:

@@ -372,8 +372,8 @@ constexpr usize GetCooperativeVectorOptimalMatrixStride(CooperativeVectorDataTyp
 }
 
 
-void ICommandList::setResourceStatesForFramebuffer(IFramebuffer* framebuffer){
-    const FramebufferDesc& desc = framebuffer->getDescription();
+void ICommandList::setResourceStatesForFramebuffer(IFramebuffer& framebuffer){
+    const FramebufferDesc& desc = framebuffer.getDescription();
 
     for(const auto& attachment : desc.colorAttachments)
         setTextureState(attachment.texture, attachment.subresources, ResourceStates::RenderTarget);
@@ -434,16 +434,16 @@ AftermathCrashDumpHelper::AftermathCrashDumpHelper()
     , m_shaderBinaryLookupCallbacks()
 {}
 
-void AftermathCrashDumpHelper::registerAftermathMarkerTracker(AftermathMarkerTracker* tracker){
-    m_markerTrackers.insert(tracker);
+void AftermathCrashDumpHelper::registerAftermathMarkerTracker(AftermathMarkerTracker& tracker){
+    m_markerTrackers.insert(&tracker);
 }
 
-void AftermathCrashDumpHelper::unRegisterAftermathMarkerTracker(AftermathMarkerTracker* tracker){
+void AftermathCrashDumpHelper::unRegisterAftermathMarkerTracker(AftermathMarkerTracker& tracker){
     if(m_destroyedMarkerTrackers.size() >= s_NumDestroyedMarkerTrackers)
         m_destroyedMarkerTrackers.pop_front();
     
-    m_destroyedMarkerTrackers.push_back(*tracker);
-    m_markerTrackers.erase(tracker);
+    m_destroyedMarkerTrackers.push_back(tracker);
+    m_markerTrackers.erase(&tracker);
 }
 
 void AftermathCrashDumpHelper::registerShaderBinaryLookupCallback(void* client, ShaderBinaryLookupCallback lookupCallback){
@@ -557,24 +557,24 @@ bool IDeviceManager::createInstance(const InstanceParameters& params){
     return true;
 }
 
-void IDeviceManager::addRenderPassToFront(IRenderPass* pass){
-    m_renderPasses.remove(pass);
-    m_renderPasses.push_front(pass);
+void IDeviceManager::addRenderPassToFront(IRenderPass& pass){
+    m_renderPasses.remove(&pass);
+    m_renderPasses.push_front(&pass);
 
-    pass->backBufferResizing();
-    pass->backBufferResized(m_deviceParams.backBufferWidth, m_deviceParams.backBufferHeight, m_deviceParams.swapChainSampleCount);
+    pass.backBufferResizing();
+    pass.backBufferResized(m_deviceParams.backBufferWidth, m_deviceParams.backBufferHeight, m_deviceParams.swapChainSampleCount);
 }
 
-void IDeviceManager::addRenderPassToBack(IRenderPass* pass){
-    m_renderPasses.remove(pass);
-    m_renderPasses.push_back(pass);
+void IDeviceManager::addRenderPassToBack(IRenderPass& pass){
+    m_renderPasses.remove(&pass);
+    m_renderPasses.push_back(&pass);
 
-    pass->backBufferResizing();
-    pass->backBufferResized(m_deviceParams.backBufferWidth, m_deviceParams.backBufferHeight, m_deviceParams.swapChainSampleCount);
+    pass.backBufferResizing();
+    pass.backBufferResized(m_deviceParams.backBufferWidth, m_deviceParams.backBufferHeight, m_deviceParams.swapChainSampleCount);
 }
 
-void IDeviceManager::removeRenderPass(IRenderPass* pass){
-    m_renderPasses.remove(pass);
+void IDeviceManager::removeRenderPass(IRenderPass& pass){
+    m_renderPasses.remove(&pass);
 }
 
 void IDeviceManager::backBufferResizing(){
@@ -746,12 +746,11 @@ const tchar* IDeviceManager::getWindowTitle(){
     return m_windowTitle.c_str();
 }
 
-void IDeviceManager::setWindowTitle(const tchar* title){
-    NWB_ASSERT(title);
-    if(m_windowTitle == title)
+void IDeviceManager::setWindowTitle(NotNull<const tchar*> title){
+    if(m_windowTitle == title.get())
         return;
 
-    m_windowTitle = title;
+    m_windowTitle = title.get();
 }
 
 void IDeviceManager::shutdown(){

@@ -32,25 +32,15 @@ public:
         , m_free(free)
         , m_allocAligned(allocAligned)
         , m_freeAligned(freeAligned)
-    {
-        NWB_ASSERT(m_alloc != nullptr);
-        NWB_ASSERT(m_free != nullptr);
-        NWB_ASSERT(m_allocAligned != nullptr);
-        NWB_ASSERT(m_freeAligned != nullptr);
-	}
-    ~CustomArena(){
-        m_alloc = nullptr;
-        m_free = nullptr;
-        m_allocAligned = nullptr;
-        m_freeAligned = nullptr;
-    }
+    {}
+    ~CustomArena() = default;
 
 
 public:
     inline void* allocate(usize align, usize size){
         size = Alignment(align, size);
 
-        return (align <= 1) ? m_alloc(size) : m_allocAligned(size, align);
+        return (align <= 1) ? m_alloc.get()(size) : m_allocAligned.get()(size, align);
     }
     template<typename T>
     inline T* allocate(usize count){
@@ -72,7 +62,7 @@ public:
     inline void deallocate(void* p, usize align, usize size){
         (void)size;
 
-        return (align <= 1) ? m_free(p) : m_freeAligned(p);
+        return (align <= 1) ? m_free.get()(p) : m_freeAligned.get()(p);
     }
     template<typename T>
     inline void deallocate(void* p, usize count){
@@ -91,10 +81,10 @@ public:
 
 
 private:
-    AllocFunc m_alloc;
-    FreeFunc m_free;
-    AllocAlignedFunc m_allocAligned;
-    FreeAlignedFunc m_freeAligned;
+    NotNull<AllocFunc> m_alloc;
+    NotNull<FreeFunc> m_free;
+    NotNull<AllocAlignedFunc> m_allocAligned;
+    NotNull<FreeAlignedFunc> m_freeAligned;
 };
 
 

@@ -1,7 +1,7 @@
 # NWBLot Inferred Code Standard
 
 Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_parties/`).  
-Updated: 2026-02-24
+Updated: 2026-02-26
 
 ## 1. File and module structure
 - Use lowercase `snake_case` filenames for C++ source and headers.
@@ -77,9 +77,24 @@ Updated: 2026-02-24
 - Prefer project wrapper/alias types over raw `std::` names (e.g., `Vector` instead of `std::vector`, traits aliases like `IsSame`).
 - Before introducing a new direct `std::` usage, check `global/global.h` and related global headers for an existing wrapper/alias.
 - If missing and broadly useful, add a project-level alias/wrapper rather than repeating direct `std::` usage across modules.
+- When exposing inherited member functions without changing behavior, prefer `using BaseType::functionName;` over trivial forwarding wrappers like `inline foo(...){ return BaseType::foo(...); }`.
+- Keep forwarding wrappers only when they add behavior, transform contracts, or intentionally change the exposed API shape.
 - Strictly distinguish references vs pointers:
-  - Use references (`T&`, `const T&`) for required, non-null dependencies and parameters.
-  - Use pointers (`T*`) only when null is a valid state, reseating is required, or pointer semantics are explicitly needed.
+  - Parameters:
+    - Use references (`T&`, `const T&`) for required, non-null inputs by default.
+    - Use `NotNull<T*>` only when pointer semantics are required (e.g., nullable interop boundaries, pointer identity APIs, or reseating semantics) but null is still invalid.
+    - For required C-string style inputs (`const char*`, `const tchar*`), prefer `NotNull<const char*>` / `NotNull<const tchar*>` instead of raw pointers.
+    - Use raw pointers (`T*`) only when null is a valid and meaningful state.
+  - Returns:
+    - Return `T&`/`const T&` for always-present objects with externally guaranteed lifetime.
+    - Return `NotNull<T*>` only when pointer semantics are intentionally part of the return contract and null is invalid.
+    - Return `T*` for optional/maybe-found results.
+    - Never return references or pointers to local stack objects.
+  - Members:
+    - Prefer reference members for mandatory dependencies that never change after construction.
+    - Use `NotNull<T*>` members when non-null is required but reference members are impractical (e.g., reseating/assignment requirements).
+    - Use raw pointer members only for truly optional relationships.
+  - For `NotNull<T*>`, do not add redundant null checks before dereference; treat it as non-null by contract.
   - Avoid nullable-pointer APIs followed by immediate non-null assertions; model required inputs as references instead.
 - For scoped mutex locking, prefer `ScopedLock lock(m_mutex);` (or `ScopedLock lock(otherMutex);`) instead of `Mutex::scoped_lock ...` when possible.
 

@@ -20,7 +20,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <mutex>
 #include <windows.h>
 
 #include "frame.h"
@@ -60,7 +59,7 @@ static HFONT g_Font = nullptr;
 static HWND g_ListHwnd = nullptr;
 static Deque<Pair<BasicString<tchar>, Log::Type>> g_Messages;
 
-static std::mutex g_ListMutex;
+static Mutex g_ListMutex;
 
 static WNDPROC g_OrigListProc = nullptr;
 
@@ -191,7 +190,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         case WM_KEYDOWN:
         {
             if(wParam == 'C' && (GetKeyState(VK_CONTROL) & 0x8000)){
-                std::unique_lock lock(g_ListMutex);
+                ScopedLock lock(g_ListMutex);
                 if(!g_Messages.empty()){
                     BasicString<tchar> combined;
                     for(const auto& msg : g_Messages){
@@ -401,7 +400,7 @@ bool Frame::mainLoop(){
 }
 
 void Frame::print(BasicStringView<tchar> str, Log::Type type){
-    std::unique_lock lock(__hidden_frame::g_ListMutex);
+    ScopedLock lock(__hidden_frame::g_ListMutex);
 
     __hidden_frame::g_Messages.emplace_back(BasicString<tchar>(str), type);
     SendMessage(__hidden_frame::g_ListHwnd, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(__hidden_frame::g_Messages[__hidden_frame::g_Messages.size() - 1].first().c_str()));

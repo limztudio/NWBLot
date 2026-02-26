@@ -26,11 +26,11 @@ CommandList::CommandList(Device& device, const CommandListParameters& params)
     , m_pendingCompactions(Alloc::CustomAllocator<RefCountPtr<AccelStruct, ArenaRefDeleter<AccelStruct>>>(device.getContext().objectArena))
 {
     if(m_device.isAftermathEnabled())
-        m_device.getAftermathCrashDumpHelper().registerAftermathMarkerTracker(&m_aftermathMarkerTracker);
+        m_device.getAftermathCrashDumpHelper().registerAftermathMarkerTracker(m_aftermathMarkerTracker);
 }
 CommandList::~CommandList(){
     if(m_device.isAftermathEnabled())
-        m_device.getAftermathCrashDumpHelper().unRegisterAftermathMarkerTracker(&m_aftermathMarkerTracker);
+        m_device.getAftermathCrashDumpHelper().unRegisterAftermathMarkerTracker(m_aftermathMarkerTracker);
 }
 
 void CommandList::open(){

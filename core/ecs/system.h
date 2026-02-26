@@ -90,8 +90,8 @@ public:
 
 
 public:
-    void addSystem(ISystem* system);
-    void removeSystem(ISystem* system);
+    void addSystem(ISystem& system);
+    void removeSystem(ISystem& system);
     void rebuild();
     void execute(World& world, f32 delta);
 

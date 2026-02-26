@@ -63,16 +63,14 @@ public:
     template<typename T>
     T& getComponent(Entity entity){
         NWB_ASSERT(m_entityManager.alive(entity));
-        auto* pool = getPool<T>();
-        NWB_ASSERT(pool);
+        auto& pool = requirePool<T>();
         return pool->get(entity);
     }
 
     template<typename T>
     const T& getComponent(Entity entity)const{
         NWB_ASSERT(m_entityManager.alive(entity));
-        auto* pool = getPool<T>();
-        NWB_ASSERT(pool);
+        const auto& pool = requirePool<T>();
         return pool->get(entity);
     }
 
@@ -127,12 +125,12 @@ public:
 
         auto ptr = MakeUnique<T>(Forward<Args>(args)...);
         T& ref = *ptr;
-        m_scheduler.addSystem(ptr.get());
+        m_scheduler.addSystem(ref);
         m_systems.push_back(Move(ptr));
         return ref;
     }
 
-    void removeSystem(ISystem* system);
+    void removeSystem(ISystem& system);
 
     template<typename T>
     T* getSystem(){
@@ -191,6 +189,19 @@ private:
         auto* raw = pool.get();
         m_pools.emplace(typeId, Move(pool));
         return raw;
+    }
+    template<typename T>
+    ComponentPool<T>& requirePool(){
+        auto* pool = getPool<T>();
+        NWB_ASSERT(pool);
+        return *pool;
+    }
+
+    template<typename T>
+    const ComponentPool<T>& requirePool()const{
+        auto* pool = getPool<T>();
+        NWB_ASSERT(pool);
+        return *pool;
     }
 
     void destroyEntityComponents(Entity entity);

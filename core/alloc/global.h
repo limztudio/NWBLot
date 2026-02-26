@@ -12,6 +12,7 @@
 #include <global/unique_ptr.h>
 #include <global/containers.h>
 #include <global/generic.h>
+#include <global/not_null.h>
 #include <global/simplemath.h>
 #include <global/atomic.h>
 #include <global/sync.h>

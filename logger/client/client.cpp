@@ -30,16 +30,19 @@ usize Client::sendCallback(void* contents, usize size, usize nmemb, Client* _thi
     (void)size;
     (void)nmemb;
 
+    const auto thisPtr = MakeNotNull(_this);
+    const auto contentsPtr = MakeNotNull(contents);
+
     if(s_SendSwitch){
         s_SendSwitch = false;
         return 0;
     }
 
     MessageType msg;
-    if(!_this->try_dequeue(msg))
+    if(!thisPtr->try_dequeue(msg))
         return 0;
 
-    auto* ptr = reinterpret_cast<u8*>(contents);
+    auto* ptr = reinterpret_cast<u8*>(contentsPtr.get());
 
     const auto& [time, type, str] = msg;
     {
@@ -58,7 +61,7 @@ usize Client::sendCallback(void* contents, usize size, usize nmemb, Client* _thi
         ptr += sizeof(tchar);
     }
 
-    auto sizeWritten = static_cast<usize>(ptr - reinterpret_cast<u8*>(contents));
+    auto sizeWritten = static_cast<usize>(ptr - reinterpret_cast<u8*>(contentsPtr.get()));
 
     s_SendSwitch = true;
     return sizeWritten;
@@ -76,7 +79,7 @@ Client::~Client(){
     }
 }
 
-bool Client::internalInit(const char* url){
+bool Client::internalInit(NotNull<const char*> url){
     m_curl = curl_easy_init();
     if(!m_curl){
         enqueue(StringFormat(NWB_TEXT("Failed to initialize CURL on {}"), CLIENT_NAME), Type::Fatal);
@@ -85,7 +88,7 @@ bool Client::internalInit(const char* url){
 
     CURLcode ret;
 
-    ret = curl_easy_setopt(m_curl, CURLOPT_URL, url);
+    ret = curl_easy_setopt(m_curl, CURLOPT_URL, url.get());
     if(ret != CURLE_OK){
         enqueue(StringFormat(NWB_TEXT("Failed to set URL on {}: {}"), CLIENT_NAME, StringConvert(curl_easy_strerror(ret))), Type::Fatal);
         return false;

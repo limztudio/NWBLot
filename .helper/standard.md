@@ -168,3 +168,51 @@ Updated: 2026-02-26
 - Not allowed:
   - Declaration order: `X()`, then `Y()`
   - Definition order: `Y()`, then `X()`
+
+## 14. Mutex Selection Guide (`global/sync.h`)
+- Default choice: use `Futex` for non-recursive mutual exclusion in engine/runtime code.
+- Keep `Mutex` (`tbb::mutex`) mainly for legacy compatibility and interop with code that is already standardized on TBB mutex types.
+- Use `ScopedLock`/`LockGuard` for simple scope-based locking; use `UniqueLock` only when lock state must be manually controlled (unlock/relock, condition wait patterns).
+
+### 14.1 Quick decision order
+- If the same thread must re-enter the same lock by design, use `RecursiveMutex`.
+- Else if the lock is read-mostly and read/write split is meaningful, use a shared mutex type:
+  - `SharedMutex` for very short read/write critical sections and low latency spin behavior.
+  - `SharedQueuingMutex` when fairness under contention is more important than lowest raw latency.
+- Else if the lock protects initialization/static allocator bootstrap memory with zero-init/no-constructor constraints, use `MallocMutex`.
+- Else if the critical section is extremely short and never blocks/sleeps/allocates, use `SpinMutex`.
+- Else if contention is high and fairness matters for short sections, use `QueuingMutex`.
+- Otherwise, use `Futex`.
+
+### 14.2 Type-by-type guidance
+- `Futex`:
+  - Best for general-purpose engine locks.
+  - Good when contention may happen and threads should park instead of hot-spinning.
+  - Preferred default for `m_mutex` fields in systems code.
+- `Mutex` (`tbb::mutex`):
+  - Use for compatibility with existing TBB-oriented code paths or when changing the lock type would add migration risk without measurable gain.
+  - Do not pick it by default for new code.
+- `SpinMutex`:
+  - Use only for tiny critical sections (few instructions, metadata/state flips).
+  - Do not hold across calls that may block, allocate heavily, or trigger OS waits.
+- `QueuingMutex`:
+  - Use for short sections with sustained contention where FIFO-like fairness helps avoid starvation.
+- `SharedMutex` (`tbb::spin_rw_mutex`):
+  - Use for read-heavy data with tiny read-side critical sections and infrequent writes.
+  - Avoid if read sections can become long or block.
+- `SharedQueuingMutex` (`tbb::queuing_rw_mutex`):
+  - Use for read-heavy scenarios with heavier contention/fairness needs than `SharedMutex`.
+- `RecursiveMutex`:
+  - Use only when reentrancy is required by API/call-graph design.
+  - Do not use as a workaround for lock-order or ownership bugs.
+- `MallocMutex`:
+  - Use only where zero-initialized storage and constructor-free mutex behavior is required (allocator/bootstrap/early init paths).
+
+### 14.3 Condition variable pairing
+- Prefer `ConditionVariableAny` with `Futex`, `SpinMutex`, `QueuingMutex`, `RecursiveMutex`, or TBB mutex wrappers.
+- `ConditionVariable` (`std::condition_variable`) requires `std::unique_lock<std::mutex>`; do not pair it with `Futex`/TBB mutex types.
+
+### 14.4 Practical defaults
+- If unsure, start with `Futex`.
+- Upgrade to `QueuingMutex`/`SharedQueuingMutex` only after observing contention/fairness issues.
+- Use spin-based locks (`SpinMutex`, `SharedMutex`) only for measured hot-path wins with very short lock hold times.

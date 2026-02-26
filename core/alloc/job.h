@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include "memory.h"
 #include "thread.h"
 #include "scratch.h"
 
@@ -33,27 +34,90 @@ public:
 
 private:
     struct JobNode{
+        using DependencyAllocator = MemoryAllocator<JobHandle>;
+
         Function<void()> func;
-        Vector<JobHandle> dependents;
+        Vector<JobHandle, DependencyAllocator> dependents;
         u32 generation = 1;
         u32 remainingDependencies = 0;
         bool completed = true;
         bool scheduled = false;
+
+
+    public:
+        inline explicit JobNode(MemoryArena& arena)
+            : dependents(DependencyAllocator(arena))
+        {}
     };
 
 
+private:
+    using JobNodeAllocator = MemoryAllocator<JobNode>;
+    using JobFreeNodeAllocator = MemoryAllocator<u32>;
+
+
+private:
+    static constexpr usize s_DefaultMinimumArenaSize = 65536;
+    static constexpr usize s_DefaultNodeReservePerThread = 256;
+
+
+private:
+    static inline usize defaultNodeReserveCount(u32 threadCount){
+        const usize totalThreads = static_cast<usize>(threadCount) + 1;
+        return totalThreads * s_DefaultNodeReservePerThread;
+    }
+
+    static inline usize defaultArenaSize(u32 threadCount){
+        const usize reserveCount = defaultNodeReserveCount(threadCount);
+        const usize nodeBytes = reserveCount * sizeof(JobNode);
+        const usize dependencyBytes = reserveCount * 4 * sizeof(JobHandle);
+        const usize freeListBytes = reserveCount * sizeof(u32);
+        const usize total = nodeBytes + dependencyBytes + freeListBytes + 4096;
+        const usize arenaSize = total > s_DefaultMinimumArenaSize ? total : s_DefaultMinimumArenaSize;
+        return MemoryArena::StructureAlignedSize(arenaSize);
+    }
+
+    static inline usize resolveArenaSize(u32 threadCount, usize arenaSize){
+        if(arenaSize > 0)
+            return arenaSize;
+
+        return defaultArenaSize(threadCount);
+    }
+
+
 public:
-    inline explicit JobSystem(ThreadPool& pool)
+    inline explicit JobSystem(ThreadPool& pool, usize arenaSize = 0)
         : m_pool(pool)
-    {}
+        , m_arena(resolveArenaSize(pool.threadCount(), arenaSize))
+        , m_nodes(JobNodeAllocator(m_arena))
+        , m_freeNodes(JobFreeNodeAllocator(m_arena))
+    {
+        const usize reserveCount = defaultNodeReserveCount(pool.threadCount());
+        m_nodes.reserve(reserveCount);
+        m_freeNodes.reserve(reserveCount);
+    }
     inline explicit JobSystem(u32 threadCount, u64 affinityMask = 0, usize arenaSize = 0)
         : m_ownedPool(MakeUnique<ThreadPool>(threadCount, affinityMask, arenaSize))
         , m_pool(*m_ownedPool)
-    {}
+        , m_arena(resolveArenaSize(threadCount, arenaSize))
+        , m_nodes(JobNodeAllocator(m_arena))
+        , m_freeNodes(JobFreeNodeAllocator(m_arena))
+    {
+        const usize reserveCount = defaultNodeReserveCount(threadCount);
+        m_nodes.reserve(reserveCount);
+        m_freeNodes.reserve(reserveCount);
+    }
     inline explicit JobSystem(u32 threadCount, CoreAffinity affinity, usize arenaSize = 0)
         : m_ownedPool(MakeUnique<ThreadPool>(threadCount, affinity, arenaSize))
         , m_pool(*m_ownedPool)
-    {}
+        , m_arena(resolveArenaSize(threadCount, arenaSize))
+        , m_nodes(JobNodeAllocator(m_arena))
+        , m_freeNodes(JobFreeNodeAllocator(m_arena))
+    {
+        const usize reserveCount = defaultNodeReserveCount(threadCount);
+        m_nodes.reserve(reserveCount);
+        m_freeNodes.reserve(reserveCount);
+    }
 
     inline ~JobSystem(){
         waitAll();
@@ -173,7 +237,7 @@ private:
         else{
             NWB_ASSERT_MSG(m_nodes.size() < static_cast<usize>(JobHandle::s_InvalidIndex), NWB_TEXT("JobSystem exceeded maximum number of trackable jobs"));
             index = static_cast<u32>(m_nodes.size());
-            m_nodes.push_back(JobNode{});
+            m_nodes.emplace_back(m_arena);
         }
 
         JobNode& node = m_nodes[index];
@@ -295,8 +359,9 @@ private:
     UniquePtr<ThreadPool> m_ownedPool;
     ThreadPool& m_pool;
 
-    Vector<JobNode> m_nodes;
-    Vector<u32> m_freeNodes;
+    MemoryArena m_arena;
+    Vector<JobNode, JobNodeAllocator> m_nodes;
+    Vector<u32, JobFreeNodeAllocator> m_freeNodes;
 
     mutable Futex m_mutex;
     ConditionVariableAny m_jobCompleted;

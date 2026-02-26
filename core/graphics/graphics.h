@@ -66,6 +66,14 @@ public:
         }
     };
 
+    struct CoopVectorSupport{
+        bool inferencingSupported = false;
+        bool trainingSupported = false;
+        bool fp16InferencingSupported = false;
+        bool fp16TrainingSupported = false;
+        bool fp32TrainingSupported = false;
+    };
+
     using JobHandle = Alloc::JobSystem::JobHandle;
 
 
@@ -98,6 +106,10 @@ public:
     [[nodiscard]] JobHandle setupBufferAsync(const BufferSetupDesc& desc, BufferHandle* outBuffer);
     [[nodiscard]] JobHandle setupTextureAsync(const TextureSetupDesc& desc, TextureHandle* outTexture);
     [[nodiscard]] JobHandle setupMeshAsync(const MeshSetupDesc& desc, MeshResource* outMesh);
+
+    [[nodiscard]] CoopVectorSupport queryCoopVecSupport()const;
+    [[nodiscard]] CooperativeVectorDeviceFeatures queryCoopVecFeatures()const;
+    [[nodiscard]] usize getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, int rows, int columns)const;
 
     void waitJob(JobHandle handle)const;
     void waitAllJobs()const;

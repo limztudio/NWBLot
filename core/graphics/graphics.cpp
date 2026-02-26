@@ -38,6 +38,21 @@ static UploadBytes CopyBytes(Alloc::CustomArena& arena, const void* data, usize 
     return bytes;
 }
 
+static void AddVulkanDeviceExtensionOnce(Vector<AString>& extensions, const char* extensionName){
+    for(const auto& extension : extensions){
+        if(NWB_STRCMP(extension.c_str(), extensionName) == 0)
+            return;
+    }
+    extensions.push_back(extensionName);
+}
+
+constexpr bool IsFp16CoopVecFormat(const CooperativeVectorMatMulFormatCombo& combo){
+    return combo.inputType == CooperativeVectorDataType::Float16 &&
+           combo.inputInterpretation == CooperativeVectorDataType::Float16 &&
+           combo.matrixInterpretation == CooperativeVectorDataType::Float16 &&
+           combo.outputType == CooperativeVectorDataType::Float16;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -69,6 +84,7 @@ Graphics::Graphics(GraphicsAllocator& allocator, Alloc::ThreadPool& threadPool, 
 {
     m_deviceCreationParams.allocator = &m_allocator;
     m_deviceCreationParams.threadPool = &m_threadPool;
+    __hidden_graphics::AddVulkanDeviceExtensionOnce(m_deviceCreationParams.optionalVulkanDeviceExtensions, "VK_NV_cooperative_vector");
     m_deviceManager.reset(IDeviceManager::create(GraphicsAPI::VULKAN, m_deviceCreationParams));
     NWB_ASSERT_MSG(m_deviceManager != nullptr, NWB_TEXT("Graphics: DeviceManager creation failed."));
 }
@@ -273,6 +289,38 @@ Graphics::JobHandle Graphics::setupMeshAsync(const MeshSetupDesc& desc, MeshReso
         jobDesc.indexDataSize = indexBytes.size();
         *outMesh = setupMesh(jobDesc);
     });
+}
+
+Graphics::CoopVectorSupport Graphics::queryCoopVecSupport()const{
+    CoopVectorSupport output;
+
+    IDevice* device = getDevice();
+
+    output.inferencingSupported = device->queryFeatureSupport(Feature::CooperativeVectorInferencing);
+    output.trainingSupported = device->queryFeatureSupport(Feature::CooperativeVectorTraining);
+
+    const CooperativeVectorDeviceFeatures features = device->queryCoopVecFeatures();
+    output.fp32TrainingSupported = features.trainingFloat32;
+
+    for(const auto& combo : features.matMulFormats){
+        if(__hidden_graphics::IsFp16CoopVecFormat(combo)){
+            output.fp16InferencingSupported = true;
+            output.fp16TrainingSupported = features.trainingFloat16;
+            break;
+        }
+    }
+
+    return output;
+}
+
+CooperativeVectorDeviceFeatures Graphics::queryCoopVecFeatures()const{
+    IDevice* device = getDevice();
+    return device->queryCoopVecFeatures();
+}
+
+usize Graphics::getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, int rows, int columns)const{
+    IDevice* device = getDevice();
+    return device->getCoopVecMatrixSize(type, layout, rows, columns);
 }
 
 void Graphics::waitJob(JobHandle handle)const{

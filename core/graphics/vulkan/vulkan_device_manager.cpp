@@ -722,6 +722,7 @@ bool DeviceManager::createDevice(){
     }
 
     m_swapChainMutableFormatSupported = isVulkanDeviceExtensionEnabled(VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME);
+    const bool coopVecExtensionEnabled = isVulkanDeviceExtensionEnabled(VK_NV_COOPERATIVE_VECTOR_EXTENSION_NAME);
 
     auto appendToChain = [](void*& pNext, void* feature){
         reinterpret_cast<VkBaseOutStructure*>(feature)->pNext = reinterpret_cast<VkBaseOutStructure*>(pNext);
@@ -741,6 +742,11 @@ bool DeviceManager::createDevice(){
     maintenance4Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_4_FEATURES;
     if(isVulkanDeviceExtensionEnabled(VK_KHR_MAINTENANCE_4_EXTENSION_NAME))
         appendToChain(pNext, &maintenance4Features);
+
+    VkPhysicalDeviceCooperativeVectorFeaturesNV cooperativeVectorFeatures = {};
+    cooperativeVectorFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_VECTOR_FEATURES_NV;
+    if(coopVecExtensionEnabled)
+        appendToChain(pNext, &cooperativeVectorFeatures);
 
     physicalDeviceFeatures2.pNext = pNext;
     vkGetPhysicalDeviceFeatures2(m_vulkanPhysicalDevice, &physicalDeviceFeatures2);
@@ -777,6 +783,9 @@ bool DeviceManager::createDevice(){
         if(feature)
             appendToChain(pNext, feature);
     }
+
+    if(coopVecExtensionEnabled && cooperativeVectorFeatures.cooperativeVector)
+        appendToChain(pNext, &cooperativeVectorFeatures);
 
     if(physicalDeviceProperties.apiVersion >= VK_API_VERSION_1_3)
         appendToChain(pNext, &vulkan13features);

@@ -28,6 +28,48 @@ using UploadBytesAllocator = Alloc::CustomAllocator<u8>;
 using UploadBytes = Vector<u8, UploadBytesAllocator>;
 
 
+struct BufferSetupJobData{
+    Graphics::BufferSetupDesc setupDesc;
+    UploadBytes uploadBytes;
+    BufferHandle& outBuffer;
+
+
+    BufferSetupJobData(Alloc::CustomArena& arena, const Graphics::BufferSetupDesc& desc, BufferHandle& output)
+        : setupDesc(desc)
+        , uploadBytes(UploadBytesAllocator(arena))
+        , outBuffer(output)
+    {}
+};
+
+struct TextureSetupJobData{
+    Graphics::TextureSetupDesc setupDesc;
+    UploadBytes uploadBytes;
+    TextureHandle& outTexture;
+
+
+    TextureSetupJobData(Alloc::CustomArena& arena, const Graphics::TextureSetupDesc& desc, TextureHandle& output)
+        : setupDesc(desc)
+        , uploadBytes(UploadBytesAllocator(arena))
+        , outTexture(output)
+    {}
+};
+
+struct MeshSetupJobData{
+    Graphics::MeshSetupDesc setupDesc;
+    UploadBytes vertexBytes;
+    UploadBytes indexBytes;
+    Graphics::MeshResource& outMesh;
+
+
+    MeshSetupJobData(Alloc::CustomArena& arena, const Graphics::MeshSetupDesc& desc, Graphics::MeshResource& output)
+        : setupDesc(desc)
+        , vertexBytes(UploadBytesAllocator(arena))
+        , indexBytes(UploadBytesAllocator(arena))
+        , outMesh(output)
+    {}
+};
+
+
 static UploadBytes CopyBytes(Alloc::CustomArena& arena, const void* data, usize dataSize){
     UploadBytes bytes{UploadBytesAllocator(arena)};
     if(data && dataSize > 0){
@@ -229,65 +271,62 @@ Graphics::MeshResource Graphics::setupMesh(const MeshSetupDesc& desc)const{
     return output;
 }
 
-Graphics::JobHandle Graphics::setupBufferAsync(const BufferSetupDesc& desc, BufferHandle* outBuffer){
-    if(!outBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("Graphics::setupBufferAsync requires a valid output pointer."));
-        return JobHandle{};
-    }
+Graphics::JobHandle Graphics::setupBufferAsync(const BufferSetupDesc& desc, BufferHandle& outBuffer){
+    auto payload = MakeCustomUnique<__hidden_graphics::BufferSetupJobData>(
+        m_allocator.getObjectArena(),
+        m_allocator.getObjectArena(),
+        desc,
+        outBuffer
+    );
+    payload->uploadBytes = __hidden_graphics::CopyBytes(m_allocator.getObjectArena(), desc.data, desc.dataSize);
+    payload->setupDesc.data = nullptr;
+    payload->setupDesc.dataSize = payload->uploadBytes.size();
 
-    BufferSetupDesc setupDesc = desc;
-    __hidden_graphics::UploadBytes uploadBytes = __hidden_graphics::CopyBytes(m_allocator.getObjectArena(), desc.data, desc.dataSize);
-    setupDesc.data = nullptr;
-    setupDesc.dataSize = uploadBytes.size();
-
-    return m_jobSystem.submit([this, setupDesc, uploadBytes = Move(uploadBytes), outBuffer]() mutable{
-        BufferSetupDesc jobDesc = setupDesc;
-        jobDesc.data = uploadBytes.empty() ? nullptr : uploadBytes.data();
-        jobDesc.dataSize = uploadBytes.size();
-        *outBuffer = setupBuffer(jobDesc);
+    return m_jobSystem.submit([this, payload = Move(payload)]() mutable{
+        payload->setupDesc.data = payload->uploadBytes.empty() ? nullptr : payload->uploadBytes.data();
+        payload->setupDesc.dataSize = payload->uploadBytes.size();
+        payload->outBuffer = setupBuffer(payload->setupDesc);
     });
 }
 
-Graphics::JobHandle Graphics::setupTextureAsync(const TextureSetupDesc& desc, TextureHandle* outTexture){
-    if(!outTexture){
-        NWB_LOGGER_ERROR(NWB_TEXT("Graphics::setupTextureAsync requires a valid output pointer."));
-        return JobHandle{};
-    }
+Graphics::JobHandle Graphics::setupTextureAsync(const TextureSetupDesc& desc, TextureHandle& outTexture){
+    auto payload = MakeCustomUnique<__hidden_graphics::TextureSetupJobData>(
+        m_allocator.getObjectArena(),
+        m_allocator.getObjectArena(),
+        desc,
+        outTexture
+    );
+    payload->uploadBytes = __hidden_graphics::CopyBytes(m_allocator.getObjectArena(), desc.data, desc.uploadDataSize);
+    payload->setupDesc.data = nullptr;
+    payload->setupDesc.uploadDataSize = payload->uploadBytes.size();
 
-    TextureSetupDesc setupDesc = desc;
-    __hidden_graphics::UploadBytes uploadBytes = __hidden_graphics::CopyBytes(m_allocator.getObjectArena(), desc.data, desc.uploadDataSize);
-    setupDesc.data = nullptr;
-    setupDesc.uploadDataSize = uploadBytes.size();
-
-    return m_jobSystem.submit([this, setupDesc, uploadBytes = Move(uploadBytes), outTexture]() mutable{
-        TextureSetupDesc jobDesc = setupDesc;
-        jobDesc.data = uploadBytes.empty() ? nullptr : uploadBytes.data();
-        jobDesc.uploadDataSize = uploadBytes.size();
-        *outTexture = setupTexture(jobDesc);
+    return m_jobSystem.submit([this, payload = Move(payload)]() mutable{
+        payload->setupDesc.data = payload->uploadBytes.empty() ? nullptr : payload->uploadBytes.data();
+        payload->setupDesc.uploadDataSize = payload->uploadBytes.size();
+        payload->outTexture = setupTexture(payload->setupDesc);
     });
 }
 
-Graphics::JobHandle Graphics::setupMeshAsync(const MeshSetupDesc& desc, MeshResource* outMesh){
-    if(!outMesh){
-        NWB_LOGGER_ERROR(NWB_TEXT("Graphics::setupMeshAsync requires a valid output pointer."));
-        return JobHandle{};
-    }
+Graphics::JobHandle Graphics::setupMeshAsync(const MeshSetupDesc& desc, MeshResource& outMesh){
+    auto payload = MakeCustomUnique<__hidden_graphics::MeshSetupJobData>(
+        m_allocator.getObjectArena(),
+        m_allocator.getObjectArena(),
+        desc,
+        outMesh
+    );
+    payload->vertexBytes = __hidden_graphics::CopyBytes(m_allocator.getObjectArena(), desc.vertexData, desc.vertexDataSize);
+    payload->indexBytes = __hidden_graphics::CopyBytes(m_allocator.getObjectArena(), desc.indexData, desc.indexDataSize);
+    payload->setupDesc.vertexData = nullptr;
+    payload->setupDesc.vertexDataSize = payload->vertexBytes.size();
+    payload->setupDesc.indexData = nullptr;
+    payload->setupDesc.indexDataSize = payload->indexBytes.size();
 
-    MeshSetupDesc setupDesc = desc;
-    __hidden_graphics::UploadBytes vertexBytes = __hidden_graphics::CopyBytes(m_allocator.getObjectArena(), desc.vertexData, desc.vertexDataSize);
-    __hidden_graphics::UploadBytes indexBytes = __hidden_graphics::CopyBytes(m_allocator.getObjectArena(), desc.indexData, desc.indexDataSize);
-    setupDesc.vertexData = nullptr;
-    setupDesc.vertexDataSize = vertexBytes.size();
-    setupDesc.indexData = nullptr;
-    setupDesc.indexDataSize = indexBytes.size();
-
-    return m_jobSystem.submit([this, setupDesc, vertexBytes = Move(vertexBytes), indexBytes = Move(indexBytes), outMesh]() mutable{
-        MeshSetupDesc jobDesc = setupDesc;
-        jobDesc.vertexData = vertexBytes.empty() ? nullptr : vertexBytes.data();
-        jobDesc.vertexDataSize = vertexBytes.size();
-        jobDesc.indexData = indexBytes.empty() ? nullptr : indexBytes.data();
-        jobDesc.indexDataSize = indexBytes.size();
-        *outMesh = setupMesh(jobDesc);
+    return m_jobSystem.submit([this, payload = Move(payload)]() mutable{
+        payload->setupDesc.vertexData = payload->vertexBytes.empty() ? nullptr : payload->vertexBytes.data();
+        payload->setupDesc.vertexDataSize = payload->vertexBytes.size();
+        payload->setupDesc.indexData = payload->indexBytes.empty() ? nullptr : payload->indexBytes.data();
+        payload->setupDesc.indexDataSize = payload->indexBytes.size();
+        payload->outMesh = setupMesh(payload->setupDesc);
     });
 }
 

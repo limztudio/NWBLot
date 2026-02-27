@@ -25,10 +25,136 @@ extern void SetCurrentThreadAffinity(u64 mask);
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+template<usize InlineStorageSize>
+class InplaceFunction : NoCopy{
+private:
+    struct Storage{
+        alignas(MaxAlign) u8 data[InlineStorageSize];
+    };
+
+    using InvokeFn = void(*)(void*);
+    using DestroyFn = void(*)(void*);
+    using MoveFn = void(*)(void*, void*);
+
+
+public:
+    inline InplaceFunction() = default;
+    inline ~InplaceFunction(){ reset(); }
+
+    inline InplaceFunction(InplaceFunction&& rhs)noexcept{
+        moveFrom(Move(rhs));
+    }
+
+    inline InplaceFunction& operator=(InplaceFunction&& rhs)noexcept{
+        if(this != &rhs){
+            reset();
+            moveFrom(Move(rhs));
+        }
+        return *this;
+    }
+
+    template<typename Func, typename = EnableIf_T<!IsSame_V<Decay_T<Func>, InplaceFunction>>>
+    inline explicit InplaceFunction(Func&& func){
+        assign(Forward<Func>(func));
+    }
+
+    template<typename Func, typename = EnableIf_T<!IsSame_V<Decay_T<Func>, InplaceFunction>>>
+    inline InplaceFunction& operator=(Func&& func){
+        reset();
+        assign(Forward<Func>(func));
+        return *this;
+    }
+
+    inline explicit operator bool()const{ return m_invoke != nullptr; }
+
+    inline void operator()(){
+        NWB_ASSERT_MSG(m_invoke != nullptr, NWB_TEXT("InplaceFunction invoked without target"));
+        m_invoke(storagePtr());
+    }
+
+    inline void reset(){
+        if(!m_destroy)
+            return;
+
+        m_destroy(storagePtr());
+        m_invoke = nullptr;
+        m_destroy = nullptr;
+        m_move = nullptr;
+    }
+
+
+private:
+    template<typename Func>
+    inline void assign(Func&& func){
+        using FuncType = Decay_T<Func>;
+
+        static_assert(sizeof(FuncType) <= InlineStorageSize, "InplaceFunction capture size exceeds inline storage");
+        static_assert(alignof(FuncType) <= alignof(Storage), "InplaceFunction capture alignment exceeds inline storage");
+
+        new(storagePtr()) FuncType(Forward<Func>(func));
+
+        m_invoke = [](void* storage){
+            FuncType* f = static_cast<FuncType*>(storage);
+            (*f)();
+        };
+        m_destroy = [](void* storage){
+            FuncType* f = static_cast<FuncType*>(storage);
+            f->~FuncType();
+        };
+        m_move = [](void* dst, void* src){
+            FuncType* source = static_cast<FuncType*>(src);
+            new(dst) FuncType(Move(*source));
+            source->~FuncType();
+        };
+    }
+
+    inline void moveFrom(InplaceFunction&& rhs)noexcept{
+        if(!rhs.m_invoke)
+            return;
+
+        rhs.m_move(storagePtr(), rhs.storagePtr());
+        m_invoke = rhs.m_invoke;
+        m_destroy = rhs.m_destroy;
+        m_move = rhs.m_move;
+
+        rhs.m_invoke = nullptr;
+        rhs.m_destroy = nullptr;
+        rhs.m_move = nullptr;
+    }
+
+    inline void* storagePtr(){
+        return static_cast<void*>(m_storage.data);
+    }
+
+    inline void* storagePtr()const{
+        return const_cast<void*>(static_cast<const void*>(m_storage.data));
+    }
+
+
+private:
+    Storage m_storage = {};
+    InvokeFn m_invoke = nullptr;
+    DestroyFn m_destroy = nullptr;
+    MoveFn m_move = nullptr;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class ThreadPool : NoCopy{
 private:
+    static constexpr usize s_TaskInlineStorageBytes = 128;
+    static constexpr usize s_ChunkOversubscription = 4;
+
+
+private:
+    using TaskFunction = InplaceFunction<s_TaskInlineStorageBytes>;
+
+
+private:
     struct TaskItem{
-        Function<void()> func;
+        TaskFunction func;
     };
 
     struct ParallelForDesc{
@@ -45,10 +171,6 @@ private:
 
     using WorkerAllocator = MemoryAllocator<JoiningThread>;
     using TaskAllocator = MemoryAllocator<TaskItem>;
-
-
-private:
-    static constexpr usize s_ChunkOversubscription = 4;
 
 
 private:
@@ -100,17 +222,36 @@ public:
         }
         m_pendingCount.fetch_add(1, std::memory_order_release);
         {
-            ScopedLock lock(m_mutex);
-            m_tasks.push_back(TaskItem{ Function<void()>(Forward<Func>(task)) });
+            ScopedLock lock(m_taskMutex);
+            m_tasks.push_back(TaskItem{ TaskFunction(Forward<Func>(task)) });
         }
         m_taskAvailable.notify_one();
     }
 
+    template<typename TaskBuilder>
+    inline void enqueueBatch(usize taskCount, const TaskBuilder& taskBuilder){
+        if(taskCount == 0)
+            return;
+
+        NWB_ASSERT_MSG(m_threadCount > 0, NWB_TEXT("enqueueBatch requires at least one worker thread"));
+
+        m_pendingCount.fetch_add(static_cast<i32>(taskCount), std::memory_order_release);
+        {
+            ScopedLock lock(m_taskMutex);
+            for(usize i = 0; i < taskCount; ++i)
+                m_tasks.push_back(TaskItem{ TaskFunction(taskBuilder(i)) });
+        }
+
+        const usize wakeCount = Min(taskCount, static_cast<usize>(m_threadCount));
+        for(usize i = 0; i < wakeCount; ++i)
+            m_taskAvailable.notify_one();
+    }
+
     template<typename Func, typename Callback>
     inline void enqueue(Func&& task, Callback&& onComplete){
-        enqueue([t = Function<void()>(Forward<Func>(task)), cb = Function<void()>(Forward<Callback>(onComplete))](){
-            t();
-            cb();
+        enqueue([taskFn = Forward<Func>(task), onCompleteFn = Forward<Callback>(onComplete)]() mutable{
+            taskFn();
+            onCompleteFn();
         });
     }
 
@@ -189,7 +330,8 @@ private:
     }
 
     inline bool hasParallelWork()const{
-        return m_pfWork && m_pfWork->nextChunk.load(std::memory_order_relaxed) < m_pfWork->numChunks;
+        ParallelForDesc* pf = m_pfWork.load(std::memory_order_acquire);
+        return pf && pf->nextChunk.load(std::memory_order_relaxed) < pf->numChunks;
     }
 
     static inline void processParallelFor(ParallelForDesc* pf){
@@ -209,6 +351,7 @@ private:
     template<typename Func>
     inline void dispatchParallelFor(usize begin, usize, const Func& func, usize numChunks, usize chunkSize, usize remainder){
         Latch done(static_cast<std::ptrdiff_t>(numChunks));
+        UniqueLock parallelLock(m_pfMutex);
 
         ParallelForDesc desc;
         desc.invoke = [](const void* ctx, usize cb, usize ce){
@@ -225,10 +368,7 @@ private:
         desc.done = &done;
         desc.activeWorkers.store(0, std::memory_order_relaxed);
 
-        {
-            ScopedLock lock(m_mutex);
-            m_pfWork = &desc;
-        }
+        m_pfWork.store(&desc, std::memory_order_release);
         m_taskAvailable.notify_all();
 
         processParallelFor(&desc);
@@ -239,39 +379,46 @@ private:
         while((activeWorkers = desc.activeWorkers.load(std::memory_order_acquire)) > 0)
             desc.activeWorkers.wait(activeWorkers, std::memory_order_relaxed);
 
-        {
-            ScopedLock lock(m_mutex);
-            m_pfWork = nullptr;
-        }
+        m_pfWork.store(nullptr, std::memory_order_release);
     }
 
     inline void workerLoop(StopToken stopToken, u64 affinityMask){
         SetCurrentThreadAffinity(affinityMask);
 
         for(;;){
-            UniqueLock lock(m_mutex);
-            if(!m_taskAvailable.wait(lock, stopToken, [this](){
-                return hasParallelWork() || !m_tasks.empty();
-            }))
-                break;
+            TaskItem item;
+            bool hasTask = false;
 
-            if(hasParallelWork()){
-                auto* pf = m_pfWork;
-                pf->activeWorkers.fetch_add(1, std::memory_order_acq_rel);
-                lock.unlock();
-                processParallelFor(pf);
-                if(pf->activeWorkers.fetch_sub(1, std::memory_order_acq_rel) == 1)
-                    pf->activeWorkers.notify_all();
+            {
+                UniqueLock taskLock(m_taskMutex);
+                if(!m_taskAvailable.wait(taskLock, stopToken, [this](){
+                    return hasParallelWork() || !m_tasks.empty();
+                }))
+                    break;
+
+                const bool parallelWorkAvailable = hasParallelWork();
+                if(!parallelWorkAvailable && !m_tasks.empty()){
+                    item = Move(m_tasks.front());
+                    m_tasks.pop_front();
+                    hasTask = true;
+                }
             }
-            else{
-                TaskItem item = Move(m_tasks.front());
-                m_tasks.pop_front();
-                lock.unlock();
 
+            if(hasTask){
                 item.func();
 
                 if(m_pendingCount.fetch_sub(1, std::memory_order_acq_rel) == 1)
                     m_pendingCount.notify_all();
+            }
+            else{
+                ParallelForDesc* pf = m_pfWork.load(std::memory_order_acquire);
+                if(!pf)
+                    continue;
+
+                pf->activeWorkers.fetch_add(1, std::memory_order_acq_rel);
+                processParallelFor(pf);
+                if(pf->activeWorkers.fetch_sub(1, std::memory_order_acq_rel) == 1)
+                    pf->activeWorkers.notify_all();
             }
         }
     }
@@ -281,8 +428,9 @@ private:
     MemoryArena m_arena;
     Vector<JoiningThread, WorkerAllocator> m_workers;
     Deque<TaskItem, TaskAllocator> m_tasks;
-    ParallelForDesc* m_pfWork = nullptr;
-    Futex m_mutex;
+    Atomic<ParallelForDesc*> m_pfWork{ nullptr };
+    Futex m_taskMutex;
+    Futex m_pfMutex;
     ConditionVariableAny m_taskAvailable;
     Atomic<i32> m_pendingCount{ 0 };
     u32 m_threadCount;

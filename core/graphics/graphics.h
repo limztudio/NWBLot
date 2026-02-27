@@ -103,9 +103,9 @@ public:
     [[nodiscard]] Alloc::JobSystem& getJobSystem()noexcept{ return m_jobSystem; }
     [[nodiscard]] const Alloc::JobSystem& getJobSystem()const noexcept{ return m_jobSystem; }
 
-    [[nodiscard]] JobHandle setupBufferAsync(const BufferSetupDesc& desc, BufferHandle* outBuffer);
-    [[nodiscard]] JobHandle setupTextureAsync(const TextureSetupDesc& desc, TextureHandle* outTexture);
-    [[nodiscard]] JobHandle setupMeshAsync(const MeshSetupDesc& desc, MeshResource* outMesh);
+    [[nodiscard]] JobHandle setupBufferAsync(const BufferSetupDesc& desc, BufferHandle& outBuffer);
+    [[nodiscard]] JobHandle setupTextureAsync(const TextureSetupDesc& desc, TextureHandle& outTexture);
+    [[nodiscard]] JobHandle setupMeshAsync(const MeshSetupDesc& desc, MeshResource& outMesh);
 
     [[nodiscard]] CoopVectorSupport queryCoopVecSupport()const;
     [[nodiscard]] CooperativeVectorDeviceFeatures queryCoopVecFeatures()const;

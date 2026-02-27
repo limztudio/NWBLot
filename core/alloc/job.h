@@ -6,8 +6,8 @@
 
 
 #include "memory.h"
+#include "arena_object.h"
 #include "thread.h"
-#include "scratch.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -33,11 +33,27 @@ public:
 
 
 private:
+    static constexpr usize s_JobInlineStorageBytes = 384;
+    static constexpr u32 s_WorkFirstDepthLimit = 8;
+    static constexpr u32 s_ReadyBatchCapacity = 256;
+
+
+private:
+    using JobFunction = InplaceFunction<s_JobInlineStorageBytes>;
+    using ReadyBatch = FixedVector<JobHandle, s_ReadyBatchCapacity>;
+
+
+private:
+    struct JobSignal{
+        Atomic<u32> completedGeneration{ 0 };
+    };
+
     struct JobNode{
         using DependencyAllocator = MemoryAllocator<JobHandle>;
 
-        Function<void()> func;
+        JobFunction func;
         Vector<JobHandle, DependencyAllocator> dependents;
+        JobSignal* completionSignal = nullptr;
         u32 generation = 1;
         u32 remainingDependencies = 0;
         bool completed = true;
@@ -127,22 +143,22 @@ public:
 public:
     template<typename Func>
     inline JobHandle submit(Func&& task){
-        return submitWithDependencies(Function<void()>(Forward<Func>(task)), nullptr, 0);
+        return submitWithDependencies(JobFunction(Forward<Func>(task)), nullptr, 0);
     }
 
     template<typename Func>
     inline JobHandle submit(Func&& task, JobHandle dependency){
-        return submitWithDependencies(Function<void()>(Forward<Func>(task)), &dependency, 1);
+        return submitWithDependencies(JobFunction(Forward<Func>(task)), &dependency, 1);
     }
 
     template<typename Func>
     inline JobHandle submit(Func&& task, std::initializer_list<JobHandle> dependencies){
-        return submitWithDependencies(Function<void()>(Forward<Func>(task)), dependencies.begin(), dependencies.size());
+        return submitWithDependencies(JobFunction(Forward<Func>(task)), dependencies.begin(), dependencies.size());
     }
 
     template<typename Func>
     inline JobHandle submit(Func&& task, const JobHandle* dependencies, usize dependencyCount){
-        return submitWithDependencies(Function<void()>(Forward<Func>(task)), dependencies, dependencyCount);
+        return submitWithDependencies(JobFunction(Forward<Func>(task)), dependencies, dependencyCount);
     }
 
     template<typename Func>
@@ -155,9 +171,27 @@ public:
         if(!handle.isValid())
             return;
 
-        UniqueLock lock(m_mutex);
-        while(isPendingLocked(handle))
-            m_jobCompleted.wait(lock);
+        for(;;){
+            JobSignal* completionSignal = nullptr;
+            u32 completedGeneration = 0;
+
+            {
+                ScopedLock lock(m_mutex);
+
+                JobNode* node = tryResolveNodeLocked(handle);
+                if(!node)
+                    return;
+
+                completionSignal = node->completionSignal;
+                NWB_ASSERT_MSG(completionSignal != nullptr, NWB_TEXT("JobSystem encountered a null completion signal"));
+
+                completedGeneration = completionSignal->completedGeneration.load(std::memory_order_acquire);
+                if(completedGeneration >= handle.generation)
+                    return;
+            }
+
+            completionSignal->completedGeneration.wait(completedGeneration, std::memory_order_relaxed);
+        }
     }
 
     inline void wait(std::initializer_list<JobHandle> handles){
@@ -188,7 +222,7 @@ public:
 
 
 private:
-    inline JobHandle submitWithDependencies(Function<void()>&& task, const JobHandle* dependencies, usize dependencyCount){
+    inline JobHandle submitWithDependencies(JobFunction&& task, const JobHandle* dependencies, usize dependencyCount){
         if(!task)
             return JobHandle{};
 
@@ -228,7 +262,7 @@ private:
         return output;
     }
 
-    inline JobHandle acquireNodeLocked(Function<void()>&& task){
+    inline JobHandle acquireNodeLocked(JobFunction&& task){
         u32 index = JobHandle::s_InvalidIndex;
         if(!m_freeNodes.empty()){
             index = m_freeNodes.back();
@@ -238,9 +272,14 @@ private:
             NWB_ASSERT_MSG(m_nodes.size() < static_cast<usize>(JobHandle::s_InvalidIndex), NWB_TEXT("JobSystem exceeded maximum number of trackable jobs"));
             index = static_cast<u32>(m_nodes.size());
             m_nodes.emplace_back(m_arena);
+
+            JobNode& createdNode = m_nodes[index];
+            createdNode.completionSignal = NewArenaObject<JobSignal>(m_arena);
+            NWB_ASSERT_MSG(createdNode.completionSignal != nullptr, NWB_TEXT("JobSystem failed to allocate a completion signal"));
         }
 
         JobNode& node = m_nodes[index];
+        NWB_ASSERT_MSG(node.completionSignal != nullptr, NWB_TEXT("JobSystem acquired an invalid completion signal"));
         node.func = Move(task);
         node.dependents.clear();
         node.remainingDependencies = 0;
@@ -254,7 +293,7 @@ private:
     }
 
     inline void recycleNodeLocked(u32 index, JobNode& node){
-        node.func = Function<void()>();
+        node.func = JobFunction();
         node.dependents.clear();
         node.remainingDependencies = 0;
         node.completed = true;
@@ -295,36 +334,62 @@ private:
         });
     }
 
-    inline void execute(JobHandle handle){
-        Function<void()> task;
-        {
-            ScopedLock lock(m_mutex);
+    inline void enqueueExecutionBatch(const JobHandle* handles, usize handleCount){
+        if(handleCount == 0)
+            return;
 
-            JobNode* node = tryResolveNodeLocked(handle);
-            if(!node || !node->scheduled)
-                return;
-
-            task = Move(node->func);
-        }
-
-        if(task)
-            task();
-
-        complete(handle);
+        m_pool.enqueueBatch(handleCount, [this, handles](usize i){
+            const JobHandle handle = handles[i];
+            return [this, handle](){
+                execute(handle);
+            };
+        });
     }
 
-    inline void complete(JobHandle handle){
-        ScratchArena<> scratchArena(256);
-        Vector<JobHandle, ScratchAllocator<JobHandle>> readyJobs{ ScratchAllocator<JobHandle>(scratchArena) };
+    inline void execute(JobHandle handle){
+        JobHandle current = handle;
+        u32 workFirstDepth = 0;
+
+        while(current.isValid()){
+            JobFunction task;
+            {
+                ScopedLock lock(m_mutex);
+
+                JobNode* node = tryResolveNodeLocked(current);
+                if(!node || !node->scheduled)
+                    return;
+
+                task = Move(node->func);
+            }
+
+            if(task)
+                task();
+
+            const bool allowInline = workFirstDepth < s_WorkFirstDepthLimit;
+            const JobHandle inlineContinuation = complete(current, allowInline);
+            if(!inlineContinuation.isValid())
+                return;
+
+            current = inlineContinuation;
+            ++workFirstDepth;
+        }
+    }
+
+    inline JobHandle complete(JobHandle handle, bool allowInline){
+        ReadyBatch readyJobs;
+        JobSignal* completionSignal = nullptr;
+        JobHandle inlineContinuation;
 
         {
             ScopedLock lock(m_mutex);
 
             JobNode* node = tryResolveNodeLocked(handle);
             if(!node)
-                return;
+                return JobHandle{};
 
-            readyJobs.reserve(node->dependents.size());
+            completionSignal = node->completionSignal;
+            NWB_ASSERT_MSG(completionSignal != nullptr, NWB_TEXT("JobSystem encountered a null completion signal"));
+
             for(usize i = 0; i < node->dependents.size(); ++i){
                 const JobHandle dependentHandle = node->dependents[i];
                 JobNode* dependentNode = tryResolveNodeLocked(dependentHandle);
@@ -338,6 +403,13 @@ private:
                 --dependentNode->remainingDependencies;
                 if(dependentNode->remainingDependencies == 0 && !dependentNode->scheduled){
                     dependentNode->scheduled = true;
+
+                    if(allowInline && !inlineContinuation.isValid()){
+                        inlineContinuation = dependentHandle;
+                        continue;
+                    }
+
+                    NWB_ASSERT_MSG(readyJobs.size() < readyJobs.max_size(), NWB_TEXT("JobSystem ready batch capacity exceeded"));
                     readyJobs.push_back(dependentHandle);
                 }
             }
@@ -345,13 +417,15 @@ private:
             recycleNodeLocked(handle.index, *node);
         }
 
-        m_jobCompleted.notify_all();
+        completionSignal->completedGeneration.store(handle.generation, std::memory_order_release);
+        completionSignal->completedGeneration.notify_all();
 
-        for(usize i = 0; i < readyJobs.size(); ++i)
-            enqueueExecution(readyJobs[i]);
+        enqueueExecutionBatch(readyJobs.data(), readyJobs.size());
 
         if(m_pendingJobCount.fetch_sub(1, std::memory_order_acq_rel) == 1)
             m_pendingJobCount.notify_all();
+
+        return inlineContinuation;
     }
 
 
@@ -364,7 +438,6 @@ private:
     Vector<u32, JobFreeNodeAllocator> m_freeNodes;
 
     mutable Futex m_mutex;
-    ConditionVariableAny m_jobCompleted;
     Atomic<i32> m_pendingJobCount{ 0 };
 };
 

@@ -35,17 +35,17 @@ void GraphicsObjectArenaFreeAligned(void* ptr){
     Alloc::CoreFreeAligned(ptr, "NWB::Core::Frame::GraphicsObjectArenaFreeAligned");
 }
 
-void* WorldObjectArenaAlloc(usize size){
-    return Alloc::CoreAlloc(size, "NWB::Core::Frame::WorldObjectArenaAlloc");
+void* ProjectObjectArenaAlloc(usize size){
+    return Alloc::CoreAlloc(size, "NWB::Core::Frame::ProjectObjectArenaAlloc");
 }
-void WorldObjectArenaFree(void* ptr){
-    Alloc::CoreFree(ptr, "NWB::Core::Frame::WorldObjectArenaFree");
+void ProjectObjectArenaFree(void* ptr){
+    Alloc::CoreFree(ptr, "NWB::Core::Frame::ProjectObjectArenaFree");
 }
-void* WorldObjectArenaAllocAligned(usize size, usize align){
-    return Alloc::CoreAllocAligned(size, align, "NWB::Core::Frame::WorldObjectArenaAllocAligned");
+void* ProjectObjectArenaAllocAligned(usize size, usize align){
+    return Alloc::CoreAllocAligned(size, align, "NWB::Core::Frame::ProjectObjectArenaAllocAligned");
 }
-void WorldObjectArenaFreeAligned(void* ptr){
-    Alloc::CoreFreeAligned(ptr, "NWB::Core::Frame::WorldObjectArenaFreeAligned");
+void ProjectObjectArenaFreeAligned(void* ptr){
+    Alloc::CoreFreeAligned(ptr, "NWB::Core::Frame::ProjectObjectArenaFreeAligned");
 }
 
 
@@ -65,7 +65,7 @@ u32 Frame::queryGraphicsWorkerThreadCount(){
 
     return coreCount > s_ReservedCoresForMainThread ? (coreCount - s_ReservedCoresForMainThread) : 0;
 }
-u32 Frame::queryWorldWorkerThreadCount(){
+u32 Frame::queryProjectWorkerThreadCount(){
     u32 coreCount = Alloc::QueryCoreCount(Alloc::CoreAffinity::Any);
     const u32 graphicsWorkerThreadCount = queryGraphicsWorkerThreadCount();
     const u32 reservedCoreCount = s_ReservedCoresForMainThread + graphicsWorkerThreadCount;
@@ -88,14 +88,14 @@ Frame::Frame(void* inst, u16 width, u16 height)
     , m_graphicsAllocator(m_graphicsPersistentArena, m_graphicsObjectArena)
     , m_graphicsThreadPool(queryGraphicsWorkerThreadCount(), Alloc::CoreAffinity::Any)
     , m_graphicsJobSystem(m_graphicsThreadPool)
-    , m_worldObjectArena(
-        &__hidden_frame::WorldObjectArenaAlloc,
-        &__hidden_frame::WorldObjectArenaFree,
-        &__hidden_frame::WorldObjectArenaAllocAligned,
-        &__hidden_frame::WorldObjectArenaFreeAligned
+    , m_projectObjectArena(
+        &__hidden_frame::ProjectObjectArenaAlloc,
+        &__hidden_frame::ProjectObjectArenaFree,
+        &__hidden_frame::ProjectObjectArenaAllocAligned,
+        &__hidden_frame::ProjectObjectArenaFreeAligned
     )
-    , m_worldThreadPool(queryWorldWorkerThreadCount(), Alloc::CoreAffinity::Any)
-    , m_world(m_worldObjectArena, m_worldThreadPool)
+    , m_projectThreadPool(queryProjectWorkerThreadCount(), Alloc::CoreAffinity::Any)
+    , m_projectJobSystem(m_projectThreadPool)
     , m_graphics(m_graphicsAllocator, m_graphicsThreadPool, m_graphicsJobSystem)
 {
     auto& frameData = data<Common::FrameData>();
@@ -113,26 +113,17 @@ bool Frame::startup(){
     if(!m_graphics.init(data<Common::FrameData>()))
         return false;
 
-    m_rendererSystem = &m_world.addSystem<ECSGraphics::RendererSystem>(m_world, m_graphics);
-    m_graphics.getDeviceManager()->addRenderPassToBack(*m_rendererSystem);
-
-    ECS::Entity cubeEntity = m_world.createEntity();
-    m_world.addComponent<ECSGraphics::CubeComponent>(cubeEntity);
-    m_world.addComponent<ECSGraphics::RendererComponent>(cubeEntity);
-
     return true;
 }
 void Frame::cleanup(){
-    if(m_rendererSystem){
-        m_graphics.getDeviceManager()->removeRenderPass(*m_rendererSystem);
-        m_rendererSystem = nullptr;
-    }
-
-    m_world.clear();
     m_graphics.destroy();
 }
 bool Frame::update(float delta){
-    m_world.tick(delta);
+    if(m_projectUpdateCallback){
+        if(!m_projectUpdateCallback(m_projectUpdateUserData, delta))
+            return false;
+    }
+
     return m_graphics.runFrame();
 }
 bool Frame::render(){

@@ -45,9 +45,7 @@ public:
 
 
 public:
-    EntityID createEntity();
-    void destroyEntity(EntityID entityId);
-    bool alive(EntityID entityId)const;
+    Entity createEntity();
     usize entityCount()const;
 
 
@@ -130,6 +128,9 @@ public:
 
 
 private:
+    void destroyEntity(EntityID entityId);
+    bool alive(EntityID entityId)const;
+
     template<typename T, typename... Args>
     T& addComponent(EntityID entityId, Args&&... args){
         NWB_ASSERT(m_entityManager.alive(entityId));

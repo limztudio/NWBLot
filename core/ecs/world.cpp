@@ -3,6 +3,7 @@
 
 
 #include "world.h"
+#include "entity.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -29,8 +30,8 @@ World::~World()
 }
 
 
-EntityID World::createEntity(){
-    return m_entityManager.create();
+Entity World::createEntity(){
+    return Entity(*this, m_entityManager.create());
 }
 
 

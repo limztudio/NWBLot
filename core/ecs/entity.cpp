@@ -59,7 +59,6 @@ static Alloc::CustomArena& DefaultECSArena(){
 EntityManager::EntityManager()
     : EntityManager(__hidden_ecs::DefaultECSArena())
 {}
-
 EntityManager::EntityManager(Alloc::CustomArena& arena)
     : m_generations(GenerationAllocator(arena))
     , m_freeIndices(FreeIndexAllocator(arena))

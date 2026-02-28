@@ -18,11 +18,7 @@ NWB_ECS_BEGIN
 
 
 class Entity{
-public:
-    Entity(World& world, EntityID entityId)
-        : m_world(world)
-        , m_entity(entityId)
-    {}
+    friend class World;
 
 
 public:
@@ -56,6 +52,13 @@ public:
     bool hasComponent()const{
         return m_world.hasComponent<T>(m_entity);
     }
+
+
+private:
+    Entity(World& world, EntityID entityId)
+        : m_world(world)
+        , m_entity(entityId)
+    {}
 
 
 private:

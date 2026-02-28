@@ -46,7 +46,7 @@ ProjectTestbed::~ProjectTestbed(){
 bool ProjectTestbed::onStartup(){
     (void)m_rendererSystem;
 
-    NWB::Core::ECS::Entity cubeEntity(*m_world, m_world->createEntity());
+    auto cubeEntity = m_world->createEntity();
     cubeEntity.addComponent<NWB::Core::ECSGraphics::CubeComponent>();
     cubeEntity.addComponent<NWB::Core::ECSGraphics::RendererComponent>();
 

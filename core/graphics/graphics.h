@@ -89,7 +89,6 @@ public:
     void destroy();
 
 public:
-    [[nodiscard]] GraphicsAllocator& getAllocator()noexcept{ return m_allocator; }
     [[nodiscard]] IDeviceManager* getDeviceManager()const noexcept{ return m_deviceManager.get(); }
     [[nodiscard]] IDevice* getDevice()const noexcept;
 
@@ -99,9 +98,6 @@ public:
     [[nodiscard]] BufferHandle setupBuffer(const BufferSetupDesc& desc)const;
     [[nodiscard]] TextureHandle setupTexture(const TextureSetupDesc& desc)const;
     [[nodiscard]] MeshResource setupMesh(const MeshSetupDesc& desc)const;
-
-    [[nodiscard]] Alloc::JobSystem& getJobSystem()noexcept{ return m_jobSystem; }
-    [[nodiscard]] const Alloc::JobSystem& getJobSystem()const noexcept{ return m_jobSystem; }
 
     [[nodiscard]] JobHandle setupBufferAsync(const BufferSetupDesc& desc, BufferHandle& outBuffer);
     [[nodiscard]] JobHandle setupTextureAsync(const TextureSetupDesc& desc, TextureHandle& outTexture);

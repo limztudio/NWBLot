@@ -54,16 +54,13 @@ public:
 
 
 public:
-    virtual bool onStartup(ProjectRuntimeContext& context){
-        (void)context;
+    virtual bool onStartup(){
         return true;
     }
-    virtual void onShutdown(ProjectRuntimeContext& context){
-        (void)context;
+    virtual void onShutdown(){
     }
 
-    virtual bool onUpdate(ProjectRuntimeContext& context, f32 delta){
-        (void)context;
+    virtual bool onUpdate(f32 delta){
         (void)delta;
         return true;
     }

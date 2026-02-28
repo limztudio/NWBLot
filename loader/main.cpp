@@ -34,7 +34,6 @@ namespace __hidden_loader{
 
 struct CallbackShutdownGuard{
     NWB::IProjectEntryCallbacks* callbacks = nullptr;
-    NWB::ProjectRuntimeContext& context;
     bool active = false;
 
     ~CallbackShutdownGuard(){
@@ -42,7 +41,7 @@ struct CallbackShutdownGuard{
             return;
 
         try{
-            callbacks->onShutdown(context);
+            callbacks->onShutdown();
         }
         catch(...){
         }
@@ -51,14 +50,13 @@ struct CallbackShutdownGuard{
 
 struct UpdateCallbackContext{
     NWB::IProjectEntryCallbacks* callbacks = nullptr;
-    NWB::ProjectRuntimeContext& context;
 };
 
 bool ProjectTickCallback(void* userData, f32 delta){
     NWB_ASSERT(userData);
     auto* updateContext = static_cast<UpdateCallbackContext*>(userData);
     NWB_ASSERT(updateContext->callbacks);
-    return updateContext->callbacks->onUpdate(updateContext->context, delta);
+    return updateContext->callbacks->onUpdate(delta);
 }
 
 
@@ -100,11 +98,11 @@ static int MainLogic(NotNull<const char*> logAddress, void* inst){
                 NWB_LOGGER_FATAL(NWB_TEXT("CreateProjectEntryCallbacks failed: callback instance is null"));
                 return -1;
             }
-            __hidden_loader::CallbackShutdownGuard callbackShutdownGuard{ callbacks.get(), context };
-            __hidden_loader::UpdateCallbackContext updateCallbackContext{ callbacks.get(), context };
+            __hidden_loader::CallbackShutdownGuard callbackShutdownGuard{ callbacks.get() };
+            __hidden_loader::UpdateCallbackContext updateCallbackContext{ callbacks.get() };
 
             callbackShutdownGuard.active = true;
-            if(!callbacks->onStartup(context))
+            if(!callbacks->onStartup())
                 return -1;
             frame.setProjectUpdateCallback(&__hidden_loader::ProjectTickCallback, &updateCallbackContext);
 

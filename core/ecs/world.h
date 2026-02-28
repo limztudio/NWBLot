@@ -18,7 +18,16 @@ NWB_ECS_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class Entity;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class World : NoCopy, public Alloc::ITaskScheduler{
+    friend class Entity;
+
+
 private:
     using PoolMapAllocator = Alloc::CustomAllocator<Pair<const ComponentTypeId, UniquePtr<IComponentPool>>>;
 
@@ -31,81 +40,15 @@ private:
 
 
 public:
-    World(
-        Alloc::CustomArena& arena,
-        Alloc::ThreadPool& threadPool
-    );
+    World(Alloc::CustomArena& arena, Alloc::ThreadPool& threadPool);
     ~World();
 
 
 public:
-    Entity createEntity();
-    void destroyEntity(Entity entity);
-    bool alive(Entity entity)const;
+    EntityID createEntity();
+    void destroyEntity(EntityID entityId);
+    bool alive(EntityID entityId)const;
     usize entityCount()const;
-
-    inline Alloc::CustomArena& arena(){ return m_arena; }
-    inline const Alloc::CustomArena& arena()const{ return m_arena; }
-
-
-public:
-    template<typename T, typename... Args>
-    T& addComponent(Entity entity, Args&&... args){
-        NWB_ASSERT(m_entityManager.alive(entity));
-        auto* pool = assurePool<T>();
-        return pool->add(entity, Forward<Args>(args)...);
-    }
-
-    template<typename T>
-    void removeComponent(Entity entity){
-        if(!m_entityManager.alive(entity))
-            return;
-
-        auto* pool = getPool<T>();
-        if(pool)
-            pool->remove(entity);
-    }
-
-    template<typename T>
-    T& getComponent(Entity entity){
-        NWB_ASSERT(m_entityManager.alive(entity));
-        auto& pool = requirePool<T>();
-        return pool->get(entity);
-    }
-
-    template<typename T>
-    const T& getComponent(Entity entity)const{
-        NWB_ASSERT(m_entityManager.alive(entity));
-        const auto& pool = requirePool<T>();
-        return pool->get(entity);
-    }
-
-    template<typename T>
-    bool hasComponent(Entity entity)const{
-        if(!m_entityManager.alive(entity))
-            return false;
-
-        auto* pool = getPool<T>();
-        return pool ? pool->has(entity) : false;
-    }
-
-    template<typename T>
-    ComponentPool<T>* getPool(){
-        const auto typeId = ComponentType<T>();
-        auto itr = m_pools.find(typeId);
-        if(itr == m_pools.end())
-            return nullptr;
-        return static_cast<ComponentPool<T>*>(itr->second.get());
-    }
-
-    template<typename T>
-    const ComponentPool<T>* getPool()const{
-        const auto typeId = ComponentType<T>();
-        auto itr = m_pools.find(typeId);
-        if(itr == m_pools.end())
-            return nullptr;
-        return static_cast<const ComponentPool<T>*>(itr->second.get());
-    }
 
 
 public:
@@ -187,6 +130,64 @@ public:
 
 
 private:
+    template<typename T, typename... Args>
+    T& addComponent(EntityID entityId, Args&&... args){
+        NWB_ASSERT(m_entityManager.alive(entityId));
+        auto* pool = assurePool<T>();
+        return pool->add(entityId, Forward<Args>(args)...);
+    }
+
+    template<typename T>
+    void removeComponent(EntityID entityId){
+        if(!m_entityManager.alive(entityId))
+            return;
+
+        auto* pool = getPool<T>();
+        if(pool)
+            pool->remove(entityId);
+    }
+
+    template<typename T>
+    T& getComponent(EntityID entityId){
+        NWB_ASSERT(m_entityManager.alive(entityId));
+        auto& pool = requirePool<T>();
+        return pool->get(entityId);
+    }
+
+    template<typename T>
+    const T& getComponent(EntityID entityId)const{
+        NWB_ASSERT(m_entityManager.alive(entityId));
+        const auto& pool = requirePool<T>();
+        return pool->get(entityId);
+    }
+
+    template<typename T>
+    bool hasComponent(EntityID entityId)const{
+        if(!m_entityManager.alive(entityId))
+            return false;
+
+        auto* pool = getPool<T>();
+        return pool ? pool->has(entityId) : false;
+    }
+
+    template<typename T>
+    ComponentPool<T>* getPool(){
+        const auto typeId = ComponentType<T>();
+        auto itr = m_pools.find(typeId);
+        if(itr == m_pools.end())
+            return nullptr;
+        return static_cast<ComponentPool<T>*>(itr->second.get());
+    }
+
+    template<typename T>
+    const ComponentPool<T>* getPool()const{
+        const auto typeId = ComponentType<T>();
+        auto itr = m_pools.find(typeId);
+        if(itr == m_pools.end())
+            return nullptr;
+        return static_cast<const ComponentPool<T>*>(itr->second.get());
+    }
+
     template<typename T>
     ComponentPool<T>* assurePool(){
         const auto typeId = ComponentType<T>();
@@ -213,7 +214,7 @@ private:
         return *pool;
     }
 
-    void destroyEntityComponents(Entity entity);
+    void destroyEntityComponents(EntityID entityId);
 
 
 private:
@@ -225,9 +226,6 @@ private:
     SystemScheduler m_scheduler;
     MessageBus m_messageBus;
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_ECS_END

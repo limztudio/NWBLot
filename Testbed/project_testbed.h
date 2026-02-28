@@ -25,11 +25,11 @@ public:
     virtual ~ProjectTestbed() override;
 
 public:
-    virtual bool onStartup(NWB::ProjectRuntimeContext& context)override;
-    virtual void onShutdown(NWB::ProjectRuntimeContext& context)override;
+    virtual bool onStartup()override;
+    virtual void onShutdown()override;
 
 public:
-    virtual bool onUpdate(NWB::ProjectRuntimeContext& context, f32 delta)override;
+    virtual bool onUpdate(f32 delta)override;
 
 
 private:

@@ -19,6 +19,7 @@
     <ClCompile Include="$(MSBuildThisFileDirectory)ecs\world.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="$(MSBuildThisFileDirectory)ecs\entity_id.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)ecs\entity.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)ecs\component.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)ecs\system.h" />

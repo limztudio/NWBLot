@@ -364,7 +364,7 @@ FormatSupport::Mask Device::queryFormatSupport(Format::Enum format){
 Object Device::getNativeQueue(ObjectType objectType, CommandQueue::Enum queue){
     if(objectType == ObjectTypes::VK_Queue){
         Queue* q = getQueue(queue);
-        return q ? Object(q->getVkQueue()) : Object(nullptr);
+        return q ? Object(q->m_queue) : Object(nullptr);
     }
     return Object(nullptr);
 }

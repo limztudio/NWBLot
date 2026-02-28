@@ -1,0 +1,122 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include "global.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ECS_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ecs{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static constexpr u32 ENTITY_INDEX_BITS = 22;
+static constexpr u32 ENTITY_GENERATION_BITS = 10;
+static constexpr u32 ENTITY_INDEX_MASK = (1u << ENTITY_INDEX_BITS) - 1u;
+static constexpr u32 ENTITY_GENERATION_MASK = (1u << ENTITY_GENERATION_BITS) - 1u;
+static constexpr u32 ENTITY_INVALID_INDEX = ENTITY_INDEX_MASK;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct EntityID{
+    u32 id;
+
+    inline constexpr EntityID() : id(~0u){}
+    inline constexpr explicit EntityID(u32 _id) : id(_id){}
+    inline constexpr EntityID(u32 index, u32 generation)
+        : id((generation & __hidden_ecs::ENTITY_GENERATION_MASK) << __hidden_ecs::ENTITY_INDEX_BITS | (index & __hidden_ecs::ENTITY_INDEX_MASK))
+    {}
+
+    inline constexpr u32 index()const{ return id & __hidden_ecs::ENTITY_INDEX_MASK; }
+    inline constexpr u32 generation()const{ return (id >> __hidden_ecs::ENTITY_INDEX_BITS) & __hidden_ecs::ENTITY_GENERATION_MASK; }
+    inline constexpr bool valid()const{ return index() != __hidden_ecs::ENTITY_INVALID_INDEX; }
+};
+inline constexpr bool operator==(const EntityID& lhs, const EntityID& rhs){ return lhs.id == rhs.id; }
+inline constexpr bool operator!=(const EntityID& lhs, const EntityID& rhs){ return lhs.id != rhs.id; }
+inline constexpr bool operator<(const EntityID& lhs, const EntityID& rhs){ return lhs.id < rhs.id; }
+
+static constexpr EntityID ENTITY_ID_INVALID = EntityID{};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class EntityManager{
+private:
+    using GenerationAllocator = Alloc::CustomAllocator<u32>;
+    using FreeIndexAllocator = Alloc::CustomAllocator<u32>;
+
+
+public:
+    EntityManager();
+    explicit EntityManager(Alloc::CustomArena& arena);
+    ~EntityManager();
+
+
+public:
+    EntityID create();
+    void destroy(EntityID entityId);
+    bool alive(EntityID entityId)const;
+    usize count()const;
+    void clear();
+
+
+private:
+    Vector<u32, GenerationAllocator> m_generations;
+    Deque<u32, FreeIndexAllocator> m_freeIndices;
+    usize m_aliveCount;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ECS_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace std{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<>
+struct hash<NWB::Core::ECS::EntityID>{
+    usize operator()(const NWB::Core::ECS::EntityID& e)const noexcept{
+        return hash<u32>{}(e.id);
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

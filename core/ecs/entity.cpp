@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "entity.h"
+#include "entity_id.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -69,7 +69,7 @@ EntityManager::~EntityManager()
 {}
 
 
-Entity EntityManager::create(){
+EntityID EntityManager::create(){
     u32 index;
 
     if(!m_freeIndices.empty()){
@@ -82,26 +82,26 @@ Entity EntityManager::create(){
     }
 
     ++m_aliveCount;
-    return Entity(index, m_generations[index]);
+    return EntityID(index, m_generations[index]);
 }
 
 
-void EntityManager::destroy(Entity entity){
-    if(!alive(entity))
+void EntityManager::destroy(EntityID entityId){
+    if(!alive(entityId))
         return;
 
-    const u32 index = entity.index();
+    const u32 index = entityId.index();
     m_generations[index] = (m_generations[index] + 1) & __hidden_ecs::ENTITY_GENERATION_MASK;
     m_freeIndices.push_back(index);
     --m_aliveCount;
 }
 
 
-bool EntityManager::alive(Entity entity)const{
-    const u32 index = entity.index();
+bool EntityManager::alive(EntityID entityId)const{
+    const u32 index = entityId.index();
     if(index >= static_cast<u32>(m_generations.size()))
         return false;
-    return m_generations[index] == entity.generation();
+    return m_generations[index] == entityId.generation();
 }
 
 

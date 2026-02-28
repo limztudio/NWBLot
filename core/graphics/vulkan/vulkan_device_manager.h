@@ -52,6 +52,7 @@ public:
     [[nodiscard]] virtual const tchar* getRendererString()const override;
 
     virtual bool enumerateAdapters(Vector<AdapterInfo>& outAdapters)override;
+    [[nodiscard]] bool isValidationMessageLocationIgnored(usize location)const;
 
     virtual bool isVulkanInstanceExtensionEnabled(const char* extensionName)const override;
     virtual bool isVulkanDeviceExtensionEnabled(const char* extensionName)const override;

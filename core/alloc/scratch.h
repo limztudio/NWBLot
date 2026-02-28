@@ -28,6 +28,9 @@ template<usize maxAlignSize = s_MaxAlignSize>
 class ScratchArena : NoCopy{
 private:
     class Chunk{
+        friend class ScratchArena;
+
+
     public:
         inline Chunk(usize align, usize size)
             : m_size(Alignment(align, size))
@@ -40,11 +43,6 @@ private:
             CoreFreeAligned(m_buffer, "NWB::Core::Alloc::ScratchArena::Chunk::destructor");
         }
 
-
-    public:
-        inline void* buffer()const{ return m_buffer; }
-        inline Chunk* next()const{ return m_next; }
-        inline usize remaining()const{ return m_remaining; }
 
         inline void* allocate(usize size){
             auto* ret = m_available;
@@ -96,7 +94,7 @@ public:
     ~ScratchArena(){
         for(auto& bucket : m_bucket){
             for(auto* cur = bucket.head; cur;){
-                auto* next = cur->next();
+                auto* next = cur->m_next;
                 delete cur;
                 cur = next;
             }
@@ -116,9 +114,9 @@ public:
             bucket.head = new Chunk(align, bucket.size);
             bucket.last = bucket.head;
         }
-        else if(size > bucket.last->remaining()){
+        else if(size > bucket.last->m_remaining){
             bucket.last->add(new Chunk(align, bucket.size));
-            bucket.last = bucket.last->next();
+            bucket.last = bucket.last->m_next;
         }
         return bucket.last->allocate(size);
     }

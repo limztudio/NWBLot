@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "entity.h"
+#include "entity_id.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -61,14 +61,26 @@ inline ComponentTypeId ComponentType(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_ecs{
+template<typename... Ts>
+struct ViewIterator;
+};
+
+template<typename... Ts>
+class View;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class IComponentPool{
 public:
     virtual ~IComponentPool() = default;
 
 
 public:
-    virtual bool has(Entity entity)const = 0;
-    virtual void remove(Entity entity) = 0;
+    virtual bool has(EntityID entityId)const = 0;
+    virtual void remove(EntityID entityId) = 0;
     virtual void clear() = 0;
     virtual usize size()const = 0;
     virtual ComponentTypeId typeId()const = 0;
@@ -80,9 +92,15 @@ public:
 
 template<typename T>
 class ComponentPool : public IComponentPool{
+    template<typename... Ts>
+    friend struct __hidden_ecs::ViewIterator;
+    template<typename... Ts>
+    friend class View;
+
+
 public:
     using SparseAllocator = Alloc::CustomAllocator<u32>;
-    using EntityAllocator = Alloc::CustomAllocator<Entity>;
+    using EntityIdAllocator = Alloc::CustomAllocator<EntityID>;
     using ComponentAllocator = Alloc::CustomAllocator<T>;
 
 
@@ -90,61 +108,61 @@ public:
     explicit ComponentPool(Alloc::CustomArena& arena)
         : m_typeId(ComponentType<T>())
         , m_sparse(SparseAllocator(arena))
-        , m_dense(EntityAllocator(arena))
+        , m_dense(EntityIdAllocator(arena))
         , m_components(ComponentAllocator(arena))
     {}
 
 
 public:
     template<typename... Args>
-    T& add(Entity entity, Args&&... args){
-        NWB_ASSERT(!has(entity));
+    T& add(EntityID entityId, Args&&... args){
+        NWB_ASSERT(!has(entityId));
 
-        const u32 index = entity.index();
+        const u32 index = entityId.index();
 
         if(index >= static_cast<u32>(m_sparse.size()))
             m_sparse.resize(static_cast<usize>(index) + 1, ~0u);
 
         m_sparse[index] = static_cast<u32>(m_dense.size());
-        m_dense.push_back(entity);
+        m_dense.push_back(entityId);
         m_components.emplace_back(Forward<Args>(args)...);
 
         return m_components.back();
     }
 
-    inline T& get(Entity entity){
-        NWB_ASSERT(has(entity));
-        return m_components[m_sparse[entity.index()]];
+    inline T& get(EntityID entityId){
+        NWB_ASSERT(has(entityId));
+        return m_components[m_sparse[entityId.index()]];
     }
-    inline const T& get(Entity entity)const{
-        NWB_ASSERT(has(entity));
-        return m_components[m_sparse[entity.index()]];
+    inline const T& get(EntityID entityId)const{
+        NWB_ASSERT(has(entityId));
+        return m_components[m_sparse[entityId.index()]];
     }
 
-    inline virtual bool has(Entity entity)const override{
-        const u32 index = entity.index();
+    inline virtual bool has(EntityID entityId)const override{
+        const u32 index = entityId.index();
         if(index >= static_cast<u32>(m_sparse.size()))
             return false;
         const u32 dense = m_sparse[index];
         if(dense >= static_cast<u32>(m_dense.size()))
             return false;
-        return m_dense[dense] == entity;
+        return m_dense[dense] == entityId;
     }
 
-    virtual void remove(Entity entity)override{
-        if(!has(entity))
+    virtual void remove(EntityID entityId)override{
+        if(!has(entityId))
             return;
 
-        const u32 index = entity.index();
+        const u32 index = entityId.index();
         const u32 denseIndex = m_sparse[index];
         const u32 lastDense = static_cast<u32>(m_dense.size()) - 1;
 
         if(denseIndex != lastDense){
             // Swap-and-pop
-            const Entity lastEntity = m_dense[lastDense];
-            m_dense[denseIndex] = lastEntity;
+            const EntityID lastEntityId = m_dense[lastDense];
+            m_dense[denseIndex] = lastEntityId;
             m_components[denseIndex] = Move(m_components[lastDense]);
-            m_sparse[lastEntity.index()] = denseIndex;
+            m_sparse[lastEntityId.index()] = denseIndex;
         }
 
         m_dense.pop_back();
@@ -161,25 +179,10 @@ public:
     inline virtual usize size()const override{ return m_dense.size(); }
     inline virtual ComponentTypeId typeId()const override{ return m_typeId; }
 
-
-public:
-    inline Entity* entities(){ return m_dense.data(); }
-    inline const Entity* entities()const{ return m_dense.data(); }
-
-    inline T* components(){ return m_components.data(); }
-    inline const T* components()const{ return m_components.data(); }
-
-    inline Vector<Entity, EntityAllocator>& denseEntities(){ return m_dense; }
-    inline const Vector<Entity, EntityAllocator>& denseEntities()const{ return m_dense; }
-
-    inline Vector<T, ComponentAllocator>& denseComponents(){ return m_components; }
-    inline const Vector<T, ComponentAllocator>& denseComponents()const{ return m_components; }
-
-
 private:
     ComponentTypeId m_typeId;
     Vector<u32, SparseAllocator> m_sparse;
-    Vector<Entity, EntityAllocator> m_dense;
+    Vector<EntityID, EntityIdAllocator> m_dense;
     Vector<T, ComponentAllocator> m_components;
 };
 

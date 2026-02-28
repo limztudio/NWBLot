@@ -50,6 +50,9 @@ class World;
 
 
 class ISystem{
+    friend class SystemScheduler;
+
+
 public:
     virtual ~ISystem() = default;
 
@@ -59,11 +62,6 @@ public:
 
 
 public:
-    inline const FixedVector<ComponentAccess, 16>& access()const{ return m_access; }
-    inline bool enabled()const{ return m_enabled; }
-    inline void setEnabled(bool v){ m_enabled = v; }
-
-
 protected:
     template<typename T>
     inline void readAccess(){

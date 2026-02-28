@@ -42,7 +42,7 @@ void Device::setEventQuery(IEventQuery* _query, CommandQueue::Enum queue){
     if(q){
         VkSubmitInfo submitInfo = { VK_STRUCTURE_TYPE_SUBMIT_INFO };
         ScopedLock lock(q->m_mutex);
-        res = vkQueueSubmit(q->getVkQueue(), 1, &submitInfo, query->m_fence);
+        res = vkQueueSubmit(q->m_queue, 1, &submitInfo, query->m_fence);
         if(res != VK_SUCCESS)
             return;
     }

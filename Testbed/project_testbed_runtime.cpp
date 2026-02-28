@@ -43,24 +43,20 @@ ProjectTestbed::~ProjectTestbed(){
 }
 
 
-bool ProjectTestbed::onStartup(NWB::ProjectRuntimeContext& context){
-    (void)context;
+bool ProjectTestbed::onStartup(){
     (void)m_rendererSystem;
 
-    NWB::Core::ECS::Entity cubeEntity = m_world->createEntity();
-    m_world->addComponent<NWB::Core::ECSGraphics::CubeComponent>(cubeEntity);
-    m_world->addComponent<NWB::Core::ECSGraphics::RendererComponent>(cubeEntity);
+    NWB::Core::ECS::Entity cubeEntity(*m_world, m_world->createEntity());
+    cubeEntity.addComponent<NWB::Core::ECSGraphics::CubeComponent>();
+    cubeEntity.addComponent<NWB::Core::ECSGraphics::RendererComponent>();
 
     return true;
 }
-void ProjectTestbed::onShutdown(NWB::ProjectRuntimeContext& context){
-    (void)context;
+void ProjectTestbed::onShutdown(){
 }
 
 
-bool ProjectTestbed::onUpdate(NWB::ProjectRuntimeContext& context, f32 delta){
-    (void)context;
-
+bool ProjectTestbed::onUpdate(f32 delta){
     m_world->tick(delta);
 
     return true;

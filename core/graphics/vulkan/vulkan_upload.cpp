@@ -19,7 +19,7 @@ UploadManager::UploadManager(Device& pParent, u64 defaultChunkSize, u64 memoryLi
     , m_defaultChunkSize(defaultChunkSize)
     , m_memoryLimit(memoryLimit)
     , m_isScratchBuffer(isScratchBuffer)
-    , m_chunkPool(Alloc::CustomAllocator<RefCountPtr<BufferChunk>>(m_device.getContext().objectArena))
+    , m_chunkPool(Alloc::CustomAllocator<RefCountPtr<BufferChunk>>(m_device.m_context.objectArena))
 {}
 UploadManager::~UploadManager(){
     m_chunkPool.clear();
@@ -78,7 +78,7 @@ bool UploadManager::suballocateBuffer(u64 size, Buffer** pBuffer, u64* pOffset, 
     if(!bufferHandle)
         return false;
 
-    m_currentChunk = MakeRefCount<BufferChunk>(m_device.getContext().threadPool, Move(bufferHandle), chunkSize);
+    m_currentChunk = MakeRefCount<BufferChunk>(m_device.m_context.threadPool, Move(bufferHandle), chunkSize);
     m_currentChunk->version = currentVersion;
 
     *pBuffer = static_cast<Buffer*>(m_currentChunk->buffer.get());

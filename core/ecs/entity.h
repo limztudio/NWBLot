@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "global.h"
+#include "world.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -17,75 +17,50 @@ NWB_ECS_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ecs{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static constexpr u32 ENTITY_INDEX_BITS = 22;
-static constexpr u32 ENTITY_GENERATION_BITS = 10;
-static constexpr u32 ENTITY_INDEX_MASK = (1u << ENTITY_INDEX_BITS) - 1u;
-static constexpr u32 ENTITY_GENERATION_MASK = (1u << ENTITY_GENERATION_BITS) - 1u;
-static constexpr u32 ENTITY_INVALID_INDEX = ENTITY_INDEX_MASK;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct Entity{
-    u32 id;
-
-    inline constexpr Entity() : id(~0u){}
-    inline constexpr explicit Entity(u32 _id) : id(_id){}
-    inline constexpr Entity(u32 index, u32 generation)
-        : id((generation & __hidden_ecs::ENTITY_GENERATION_MASK) << __hidden_ecs::ENTITY_INDEX_BITS | (index & __hidden_ecs::ENTITY_INDEX_MASK))
+class Entity{
+public:
+    Entity(World& world, EntityID entityId)
+        : m_world(world)
+        , m_entity(entityId)
     {}
 
-    inline constexpr u32 index()const{ return id & __hidden_ecs::ENTITY_INDEX_MASK; }
-    inline constexpr u32 generation()const{ return (id >> __hidden_ecs::ENTITY_INDEX_BITS) & __hidden_ecs::ENTITY_GENERATION_MASK; }
-    inline constexpr bool valid()const{ return index() != __hidden_ecs::ENTITY_INVALID_INDEX; }
-};
-inline constexpr bool operator==(const Entity& lhs, const Entity& rhs){ return lhs.id == rhs.id; }
-inline constexpr bool operator!=(const Entity& lhs, const Entity& rhs){ return lhs.id != rhs.id; }
-inline constexpr bool operator<(const Entity& lhs, const Entity& rhs){ return lhs.id < rhs.id; }
 
-static constexpr Entity ENTITY_INVALID = Entity{};
+public:
+    [[nodiscard]] bool alive()const{ return m_world.alive(m_entity); }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class EntityManager{
-private:
-    using GenerationAllocator = Alloc::CustomAllocator<u32>;
-    using FreeIndexAllocator = Alloc::CustomAllocator<u32>;
+    void destroy(){ m_world.destroyEntity(m_entity); }
 
 
 public:
-    EntityManager();
-    explicit EntityManager(Alloc::CustomArena& arena);
-    ~EntityManager();
+    template<typename T, typename... Args>
+    T& addComponent(Args&&... args){
+        return m_world.addComponent<T>(m_entity, Forward<Args>(args)...);
+    }
 
+    template<typename T>
+    void removeComponent(){
+        m_world.removeComponent<T>(m_entity);
+    }
 
-public:
-    Entity create();
-    void destroy(Entity entity);
-    bool alive(Entity entity)const;
-    usize count()const;
-    void clear();
+    template<typename T>
+    T& getComponent(){
+        return m_world.getComponent<T>(m_entity);
+    }
+
+    template<typename T>
+    const T& getComponent()const{
+        return m_world.getComponent<T>(m_entity);
+    }
+
+    template<typename T>
+    bool hasComponent()const{
+        return m_world.hasComponent<T>(m_entity);
+    }
 
 
 private:
-    Vector<u32, GenerationAllocator> m_generations;
-    Deque<u32, FreeIndexAllocator> m_freeIndices;
-    usize m_aliveCount;
+    World& m_world;
+    EntityID m_entity;
 };
 
 
@@ -93,29 +68,6 @@ private:
 
 
 NWB_ECS_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace std{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<>
-struct hash<NWB::Core::ECS::Entity>{
-    usize operator()(const NWB::Core::ECS::Entity& e)const noexcept{
-        return hash<u32>{}(e.id);
-    }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

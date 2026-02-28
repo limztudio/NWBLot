@@ -449,7 +449,7 @@ u64 Device::queueGetCompletedInstance(CommandQueue::Enum queue){
     Queue* q = getQueue(queue);
     if(q){
         q->updateLastFinishedID();
-        return q->getLastFinishedID();
+        return q->m_lastFinishedID;
     }
     return 0;
 }

@@ -3900,16 +3900,9 @@ public:
     [[nodiscard]] virtual const tchar* getRendererString()const = 0;
     [[nodiscard]] virtual GraphicsAPI::Enum getGraphicsAPI()const = 0;
 
-    const DeviceCreationParameters& getDeviceParams()const{ return m_deviceParams; }
-    [[nodiscard]] f64 getAverageFrameTimeSeconds()const{ return m_averageFrameTime; }
     [[nodiscard]] f64 getPreviousFrameTimestamp()const{ return DurationInSeconds<f64>(m_previousFrameTimestamp); }
-    void setFrameTimeUpdateInterval(f64 seconds){ m_averageTimeUpdateInterval = seconds; }
     [[nodiscard]] bool isVsyncEnabled()const{ return m_deviceParams.vsyncEnabled; }
-    virtual void setVsyncEnabled(bool enabled){ m_requestedVSync = enabled; }
     virtual void reportLiveObjects(){}
-    void setEnableRenderDuringWindowMovement(bool val){ m_enableRenderDuringWindowMovement = val; }
-
-    [[nodiscard]] u32 getFrameIndex()const{ return m_frameIndex; }
 
     virtual ITexture* getCurrentBackBuffer() = 0;
     virtual ITexture* getBackBuffer(u32 index) = 0;

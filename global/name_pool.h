@@ -61,14 +61,14 @@ public:
     // Returns the Name. If a name with the same hash already exists, the original entry is kept.
     Name store(const char* str){
         Name name(str);
-        m_entries.insert({ name.hash(), AString(str) });
+        m_entries.insert({ name.m_hash, AString(str) });
         return name;
     }
 
     // Looks up the stored string for a given Name.
     // Returns the original string if found, or an empty string otherwise.
     [[nodiscard]] const char* find(const Name& name)const{
-        auto it = m_entries.find(name.hash());
+        auto it = m_entries.find(name.m_hash);
         if(it != m_entries.end())
             return it->second.c_str();
         return "";
@@ -76,7 +76,7 @@ public:
 
     // Checks if a Name is registered in the pool.
     [[nodiscard]] bool contains(const Name& name)const{
-        return m_entries.find(name.hash()) != m_entries.end();
+        return m_entries.find(name.m_hash) != m_entries.end();
     }
 
     // Returns the number of registered names.

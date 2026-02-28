@@ -94,7 +94,7 @@ void SystemScheduler::rebuild(){
                 continue;
 
             ISystem* sys = m_allSystems[i];
-            const auto& acc = sys->access();
+            const auto& acc = sys->m_access;
 
             bool compatible = true;
             for(usize a = 0; a < acc.size(); ++a){
@@ -154,13 +154,13 @@ void SystemScheduler::execute(World& world, f32 delta){
 
     for(auto& stage : m_stages){
         if(stage.size() == 1){
-            if(stage[0]->enabled())
+            if(stage[0]->m_enabled)
                 stage[0]->update(world, delta);
         }
         else{
             pool.parallelFor(static_cast<usize>(0), stage.size(),
                 [&stage, &world, delta](usize i){
-                    if(stage[i]->enabled())
+                    if(stage[i]->m_enabled)
                         stage[i]->update(world, delta);
                 }
             );

@@ -76,13 +76,8 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL VulkanDebugCallback(
     (void)obj;
 
     const auto* manager = static_cast<const DeviceManager*>(userData);
-    if(manager){
-        const auto& ignored = manager->getDeviceParams().ignoredVulkanValidationMessageLocations;
-        for(const auto& loc : ignored){
-            if(loc == location)
-                return VK_FALSE;
-        }
-    }
+    if(manager && manager->isValidationMessageLocationIgnored(static_cast<usize>(location)))
+        return VK_FALSE;
 
     NWB_LOGGER_WARNING(NWB_TEXT("Vulkan validation: [location=0x{:x} code={} layer='{}'] {}"), location, code, StringConvert(layerPrefix), StringConvert(msg));
 
@@ -137,6 +132,14 @@ IDevice* DeviceManager::getDevice()const{
 
 const tchar* DeviceManager::getRendererString()const{
     return m_rendererString.c_str();
+}
+
+bool DeviceManager::isValidationMessageLocationIgnored(usize location)const{
+    for(const auto& ignored : m_deviceParams.ignoredVulkanValidationMessageLocations){
+        if(ignored == location)
+            return true;
+    }
+    return false;
 }
 
 bool DeviceManager::isVulkanInstanceExtensionEnabled(const char* extensionName)const{

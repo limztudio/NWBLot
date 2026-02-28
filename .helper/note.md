@@ -33,7 +33,16 @@ Updated: 2026-02-28
 4. For project callback instances created after frame init, keep required core objects as non-null members (owner + references) and tear them down in callback destruction before frame destruction.
 5. If ownership and non-null access point to the same object (`UniquePtr` + duplicate reference), prefer a single owner member and keep non-null by construction/contract to reduce duplicated state.
 6. For required owned pointers that must not be treated as nullable, use the generic `NotNullUniquePtr<T>` wrapper (no `operator bool`) instead of ad-hoc per-class storage wrappers.
+7. Keep `IProjectEntryCallbacks` lifecycle/update callbacks minimal (`onStartup()`, `onUpdate(f32)`, `onShutdown()`), and use the callback object's stored runtime context instead of passing context every call.
 
 ## ECS Runtime Type Safety
 
 1. Keep `World::getSystem<T>()` RTTI-free (`/GR-` compatible) by using explicit `SystemTypeId` matching instead of `dynamic_cast`.
+
+## ECS API Shape
+
+1. `World` is still the ownership/lifecycle source of truth for component storage.
+2. Keep `World` component APIs (`add/remove/get/hasComponent`) private and expose them only through the generic `NWB::Core::ECS::Entity` facade.
+3. Treat `EntityID` as a lightweight ID and `Entity` as the component operation surface.
+4. Do not introduce ad-hoc or project-local ECS wrappers for this role.
+

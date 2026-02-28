@@ -1,7 +1,7 @@
 # NWBLot Inferred Code Standard
 
 Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_parties/`).  
-Updated: 2026-02-27
+Updated: 2026-02-28
 
 ## 1. File and module structure
 - Use lowercase `snake_case` filenames for C++ source and headers.
@@ -10,9 +10,11 @@ Updated: 2026-02-27
   - A long `////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////` separator line.
 - Use `#pragma once` in headers.
 - Separate major file sections with the long slash separator and optional section comments.
-- Source files must end with `////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////` followed by a double newline.
+- Source files must end with `////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////` followed by exactly two blank lines.
+- Exact EOF rule for source files: after the final separator line, keep exactly two newline terminators (`\n\n`, or `\r\n\r\n` on Windows). Do not keep one or three.
 - Use UTF-8 encoding for source files.
-- Use Windows-style newlines (`CRLF`).
+- Use Windows-style newlines (`CRLF`) for all source files.
+- Do not commit LF-only or mixed line endings in source files.
 
 ## 2. Namespace style
 - Use namespace wrapper macros (`NWB_BEGIN`, `NWB_CORE_BEGIN`, `NWB_VULKAN_BEGIN`, etc.) instead of raw namespace blocks in module public files.
@@ -82,6 +84,11 @@ Updated: 2026-02-27
 - Prefer project C-runtime wrapper macros from `global/compile.h` for memory/string operations (`NWB_MEMCPY`, `NWB_MEMSET`, `NWB_MEMCMP`, `NWB_STRCPY`, etc.) instead of direct `std::`/CRT calls when equivalent wrappers exist.
 - When exposing inherited member functions without changing behavior, prefer `using BaseType::functionName;` over trivial forwarding wrappers like `inline foo(...){ return BaseType::foo(...); }`.
 - Keep forwarding wrappers only when they add behavior, transform contracts, or intentionally change the exposed API shape.
+- Do not add trivial pass-through accessors that only return a private member (`return m_x;`) when they are not needed as a module boundary API.
+- If such access is only needed inside the same module bubble, remove the accessor and use direct member access; use `friend` declarations explicitly where cross-class private access is required.
+- Keep trivial accessors only when they are actually used across module boundaries or are part of a deliberate external API contract.
+- Apply the same rule to trivial pass-through setters (`setX(...) { m_x = ...; }`): remove them when unused or bubble-only.
+- Keep trivial setters only when they are part of a deliberate external API contract and actually needed at module boundaries.
 - Strictly distinguish references vs pointers:
   - Parameters:
     - Use references (`T&`, `const T&`) for required, non-null inputs by default.

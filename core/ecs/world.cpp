@@ -29,22 +29,22 @@ World::~World()
 }
 
 
-Entity World::createEntity(){
+EntityID World::createEntity(){
     return m_entityManager.create();
 }
 
 
-void World::destroyEntity(Entity entity){
-    if(!m_entityManager.alive(entity))
+void World::destroyEntity(EntityID entityId){
+    if(!m_entityManager.alive(entityId))
         return;
 
-    destroyEntityComponents(entity);
-    m_entityManager.destroy(entity);
+    destroyEntityComponents(entityId);
+    m_entityManager.destroy(entityId);
 }
 
 
-bool World::alive(Entity entity)const{
-    return m_entityManager.alive(entity);
+bool World::alive(EntityID entityId)const{
+    return m_entityManager.alive(entityId);
 }
 
 
@@ -82,10 +82,10 @@ void World::clear(){
 }
 
 
-void World::destroyEntityComponents(Entity entity){
+void World::destroyEntityComponents(EntityID entityId){
     for(auto& [typeId, pool] : m_pools){
-        if(pool->has(entity))
-            pool->remove(entity);
+        if(pool->has(entityId))
+            pool->remove(entityId);
     }
 }
 

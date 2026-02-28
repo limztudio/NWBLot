@@ -205,13 +205,6 @@ public:
     [[nodiscard]] bool waitCommandList(u64 commandListID, u64 timeout);
     void waitForIdle();
 
-    [[nodiscard]] VkQueue getVkQueue()const{ return m_queue; }
-    [[nodiscard]] u32 getQueueFamilyIndex()const{ return m_queueFamilyIndex; }
-    [[nodiscard]] CommandQueue::Enum getQueueID()const{ return m_queueID; }
-    [[nodiscard]] u64 getLastSubmittedID()const{ return m_lastSubmittedID; }
-    [[nodiscard]] u64 getLastFinishedID()const{ return m_lastFinishedID; }
-    [[nodiscard]] VkSemaphore getTrackingSemaphore()const{ return m_trackingSemaphore; }
-
 
 private:
     VkSemaphore m_trackingSemaphore = VK_NULL_HANDLE;
@@ -1122,7 +1115,6 @@ public:
     void setEventQuery(IEventQuery* query, CommandQueue::Enum waitQueue);
     void resetEventQuery(IEventQuery* query);
     void waitEventQuery(IEventQuery* query);
-    [[nodiscard]] TrackedCommandBufferPtr getCurrentCmdBuf()const{ return m_currentCmdBuf; }
 
 
 private:
@@ -1206,6 +1198,12 @@ private:
 
 
 class Device final : public RefCounter<IDevice>, NoCopy{
+    friend class Buffer;
+    friend class CommandList;
+    friend class Texture;
+    friend class UploadManager;
+
+
 public:
     explicit Device(const DeviceDesc& desc);
     virtual ~Device()override;
@@ -1280,11 +1278,7 @@ public:
     [[nodiscard]] virtual u64 queueGetCompletedInstance(CommandQueue::Enum queue)override;
 
 public:
-    [[nodiscard]] const VulkanContext& getContext()const{ return m_context; }
     [[nodiscard]] Queue* getQueue(CommandQueue::Enum queueType)const;
-    [[nodiscard]] VulkanAllocator& getAllocator(){ return m_allocator; }
-    [[nodiscard]] UploadManager* getUploadManager(){ return m_uploadManager.get(); }
-    [[nodiscard]] UploadManager* getScratchManager(){ return m_scratchManager.get(); }
 
 
 private:

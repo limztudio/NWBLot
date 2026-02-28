@@ -104,11 +104,11 @@ private:
 public:
     inline explicit JobSystem(ThreadPool& pool, usize arenaSize = 0)
         : m_pool(pool)
-        , m_arena(resolveArenaSize(pool.threadCount(), arenaSize))
+        , m_arena(resolveArenaSize(pool.m_threadCount, arenaSize))
         , m_nodes(JobNodeAllocator(m_arena))
         , m_freeNodes(JobFreeNodeAllocator(m_arena))
     {
-        const usize reserveCount = defaultNodeReserveCount(pool.threadCount());
+        const usize reserveCount = defaultNodeReserveCount(pool.m_threadCount);
         m_nodes.reserve(reserveCount);
         m_freeNodes.reserve(reserveCount);
     }
@@ -212,14 +212,6 @@ public:
         ScopedLock lock(m_mutex);
         return !isPendingLocked(handle);
     }
-
-public:
-    inline bool isParallelEnabled()const{ return m_pool.isParallelEnabled(); }
-    inline u32 threadCount()const{ return m_pool.threadCount(); }
-
-    inline ThreadPool& workerPool(){ return m_pool; }
-    inline const ThreadPool& workerPool()const{ return m_pool; }
-
 
 private:
     inline JobHandle submitWithDependencies(JobFunction&& task, const JobHandle* dependencies, usize dependencyCount){
@@ -448,11 +440,6 @@ private:
 class IJobScheduler{
 public:
     inline explicit IJobScheduler(JobSystem& jobSystem) : m_jobSystem(jobSystem){}
-
-
-public:
-    inline JobSystem& jobSystem(){ return m_jobSystem; }
-    inline const JobSystem& jobSystem()const{ return m_jobSystem; }
 
 
 protected:

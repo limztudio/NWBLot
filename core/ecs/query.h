@@ -41,7 +41,7 @@ inline constexpr auto ForwardAsTuple(Ts&&... values){
 template<typename... Ts>
 struct ViewIterator{
     using ComponentTuple = Tuple<ComponentPool<Ts>*...>;
-    using ValueTuple = Tuple<Entity, Ts&...>;
+    using ValueTuple = Tuple<EntityID, Ts&...>;
 
     ComponentTuple pools;
     usize anchorPoolIndex;
@@ -64,38 +64,38 @@ struct ViewIterator{
 
     void skipInvalid(){
         while(index < count){
-            Entity e = entityAt(index);
-            if(e.valid() && allHave(e))
+            EntityID entityId = entityAt(index);
+            if(entityId.valid() && allHave(entityId))
                 break;
             ++index;
         }
     }
 
-    bool allHave(Entity e)const{
-        return allHaveImpl(e, IndexSequenceFor<Ts...>{});
+    bool allHave(EntityID entityId)const{
+        return allHaveImpl(entityId, IndexSequenceFor<Ts...>{});
     }
     template<usize... Is>
-    bool allHaveImpl(Entity e, IndexSequence<Is...>)const{
-        return ((Get<Is>(pools) != nullptr && Get<Is>(pools)->has(e)) && ...);
+    bool allHaveImpl(EntityID entityId, IndexSequence<Is...>)const{
+        return ((Get<Is>(pools) != nullptr && Get<Is>(pools)->has(entityId)) && ...);
     }
 
-    Entity entityAt(usize denseIndex)const{
+    EntityID entityAt(usize denseIndex)const{
         return entityAtImpl(denseIndex, IndexSequenceFor<Ts...>{});
     }
     template<usize... Is>
-    Entity entityAtImpl(usize denseIndex, IndexSequence<Is...>)const{
-        Entity result = ENTITY_INVALID;
-        (void)((anchorPoolIndex == Is ? (result = Get<Is>(pools)->denseEntities()[denseIndex], true) : false) || ...);
+    EntityID entityAtImpl(usize denseIndex, IndexSequence<Is...>)const{
+        EntityID result = ENTITY_ID_INVALID;
+        (void)((anchorPoolIndex == Is ? (result = Get<Is>(pools)->m_dense[denseIndex], true) : false) || ...);
         return result;
     }
 
     ValueTuple operator*()const{
-        Entity e = entityAt(index);
-        return deref(e, IndexSequenceFor<Ts...>{});
+        EntityID entityId = entityAt(index);
+        return deref(entityId, IndexSequenceFor<Ts...>{});
     }
     template<usize... Is>
-    ValueTuple deref(Entity e, IndexSequence<Is...>)const{
-        return ForwardAsTuple(e, Get<Is>(pools)->get(e)...);
+    ValueTuple deref(EntityID entityId, IndexSequence<Is...>)const{
+        return ForwardAsTuple(entityId, Get<Is>(pools)->get(entityId)...);
     }
 
     ViewIterator& operator++(){
@@ -153,9 +153,9 @@ public:
             return;
 
         for(usize i = 0; i < m_count; ++i){
-            Entity e = entityAt(i);
-            if(e.valid() && allHave(e))
-                applyFunc(func, e, __hidden_ecs::IndexSequenceFor<Ts...>{});
+            EntityID entityId = entityAt(i);
+            if(entityId.valid() && allHave(entityId))
+                applyFunc(func, entityId, __hidden_ecs::IndexSequenceFor<Ts...>{});
         }
     }
 
@@ -166,9 +166,9 @@ public:
 
         pool.parallelFor(static_cast<usize>(0), m_count,
             [this, &func](usize i){
-                Entity e = entityAt(i);
-                if(e.valid() && allHave(e))
-                    applyFunc(func, e, __hidden_ecs::IndexSequenceFor<Ts...>{});
+                EntityID entityId = entityAt(i);
+                if(entityId.valid() && allHave(entityId))
+                    applyFunc(func, entityId, __hidden_ecs::IndexSequenceFor<Ts...>{});
             }
         );
     }
@@ -206,29 +206,29 @@ private:
         }
     }
 
-    Entity entityAt(usize denseIndex)const{
+    EntityID entityAt(usize denseIndex)const{
         return entityAtImpl(denseIndex, __hidden_ecs::IndexSequenceFor<Ts...>{});
     }
 
     template<usize... Is>
-    Entity entityAtImpl(usize denseIndex, __hidden_ecs::IndexSequence<Is...>)const{
-        Entity result = ENTITY_INVALID;
-        (void)((m_anchorPoolIndex == Is ? (result = Get<Is>(m_pools)->denseEntities()[denseIndex], true) : false) || ...);
+    EntityID entityAtImpl(usize denseIndex, __hidden_ecs::IndexSequence<Is...>)const{
+        EntityID result = ENTITY_ID_INVALID;
+        (void)((m_anchorPoolIndex == Is ? (result = Get<Is>(m_pools)->m_dense[denseIndex], true) : false) || ...);
         return result;
     }
 
-    bool allHave(Entity e)const{
-        return allHaveImpl(e, __hidden_ecs::IndexSequenceFor<Ts...>{});
+    bool allHave(EntityID entityId)const{
+        return allHaveImpl(entityId, __hidden_ecs::IndexSequenceFor<Ts...>{});
     }
 
     template<usize... Is>
-    bool allHaveImpl(Entity e, __hidden_ecs::IndexSequence<Is...>)const{
-        return ((Get<Is>(m_pools) != nullptr && Get<Is>(m_pools)->has(e)) && ...);
+    bool allHaveImpl(EntityID entityId, __hidden_ecs::IndexSequence<Is...>)const{
+        return ((Get<Is>(m_pools) != nullptr && Get<Is>(m_pools)->has(entityId)) && ...);
     }
 
     template<typename Func, usize... Is>
-    void applyFunc(Func& func, Entity e, __hidden_ecs::IndexSequence<Is...>)const{
-        func(e, Get<Is>(m_pools)->get(e)...);
+    void applyFunc(Func& func, EntityID entityId, __hidden_ecs::IndexSequence<Is...>)const{
+        func(entityId, Get<Is>(m_pools)->get(entityId)...);
     }
 
 

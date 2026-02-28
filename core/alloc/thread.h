@@ -142,7 +142,16 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class JobSystem;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class ThreadPool : NoCopy{
+    friend class JobSystem;
+
+
 private:
     static constexpr usize s_TaskInlineStorageBytes = 128;
     static constexpr usize s_ChunkOversubscription = 4;
@@ -319,7 +328,6 @@ public:
 
 public:
     inline bool isParallelEnabled()const{ return m_threadCount > 0; }
-    inline u32 threadCount()const{ return m_threadCount; }
 
 
 private:

@@ -590,7 +590,7 @@ void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, co
     u32 blockHeight = (height + formatInfo.blockSize - 1) / formatInfo.blockSize;
     u64 dataSize = u64(rowPitch) * blockHeight * depth;
 
-    UploadManager* uploadMgr = m_device.getUploadManager();
+    UploadManager* uploadMgr = m_device.m_uploadManager.get();
     Buffer* stagingBuffer = nullptr;
     u64 stagingOffset = 0;
     void* cpuVA = nullptr;

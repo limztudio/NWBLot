@@ -6,6 +6,7 @@
 
 
 #include "type.h"
+#include <functional>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -77,6 +78,7 @@ class NamePool;
 
 class Name{
     friend class NamePool;
+    friend struct std::hash<Name>;
     friend constexpr bool operator==(const Name& a, const Name& b);
 
 
@@ -113,8 +115,6 @@ public:
         }
         return false;
     }
-
-    [[nodiscard]] constexpr const NameHash& hash()const{ return m_hash; }
 
     [[nodiscard]] const char* c_str()const{
 #if defined(NWB_DEBUG)
@@ -169,7 +169,7 @@ inline constexpr Name NAME_NONE = {};
 template<>
 struct std::hash<Name>{
     usize operator()(const Name& name)const{
-        const auto& h = name.hash();
+        const auto& h = name.m_hash;
         usize seed = static_cast<usize>(h.qwords[0]);
         for(u32 i = 1; i < 8; ++i)
             seed ^= static_cast<usize>(h.qwords[i]) + 0x9e3779b97f4a7c15ull + (seed << 6) + (seed >> 2);

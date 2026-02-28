@@ -1,0 +1,11 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <ItemsProjectGuid>{B51AFA68-0F13-4CA4-A3A2-4E6C9A511B62}</ItemsProjectGuid>
+  </PropertyGroup>
+  <ItemGroup>
+    <ClCompile Include="$(MSBuildThisFileDirectory)filesystem\filesystem.cpp" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)filesystem\global.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)filesystem\filesystem.h" />
+  </ItemGroup>
+</Project>

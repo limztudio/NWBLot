@@ -18,6 +18,16 @@ constexpr InputIt FindIf(InputIt first, InputIt last, Predicate&& pred){
     return std::find_if(first, last, Forward<Predicate>(pred));
 }
 
+template<typename RandomIt>
+constexpr void Sort(RandomIt first, RandomIt last){
+    std::sort(first, last);
+}
+
+template<typename RandomIt, typename Compare>
+constexpr void Sort(RandomIt first, RandomIt last, Compare&& compare){
+    std::sort(first, last, Forward<Compare>(compare));
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

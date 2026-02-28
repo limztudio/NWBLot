@@ -1,4 +1,4 @@
-// limztudio@gmail.com
+﻿// limztudio@gmail.com
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -6,31 +6,33 @@
 
 
 #include "name.h"
+#include "containers.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_name{
+namespace __hidden_name_pool{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct NameHashEqual{
-    bool operator()(const NameHash& a, const NameHash& b)const{
-        return
-            a.qwords[0] == b.qwords[0]
-            && a.qwords[1] == b.qwords[1]
-            && a.qwords[2] == b.qwords[2]
-            && a.qwords[3] == b.qwords[3]
-            && a.qwords[4] == b.qwords[4]
-            && a.qwords[5] == b.qwords[5]
-            && a.qwords[6] == b.qwords[6]
-            && a.qwords[7] == b.qwords[7]
-            ;
+inline AString CanonicalString(AStringView str){
+    AString output;
+    output.reserve(str.size());
+    for(const char ch : str)
+        output.push_back(__hidden_name::Canonicalize(ch));
+    return output;
+}
+
+inline bool HasEmbeddedNull(AStringView str){
+    for(const char ch : str){
+        if(ch == '\0')
+            return true;
     }
-};
+    return false;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -42,50 +44,101 @@ struct NameHashEqual{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class NamePool{
+class NamePool : NoCopy{
+private:
+    using NameIndexMap = HashMap<NameHash, usize>;
+
+
 public:
     static NamePool& instance(){
         static NamePool pool;
         return pool;
     }
 
+
 private:
     NamePool() = default;
     ~NamePool() = default;
 
-    NamePool(const NamePool&) = delete;
-    NamePool& operator=(const NamePool&) = delete;
 
 public:
-    // Registers a name and stores its original string for reverse lookup.
-    // Returns the Name. If a name with the same hash already exists, the original entry is kept.
-    Name store(const char* str){
-        Name name(str);
-        m_entries.insert({ name.m_hash, AString(str) });
+    [[nodiscard]] Name store(AStringView str){
+        if(str.empty())
+            return NAME_NONE;
+        if(__hidden_name_pool::HasEmbeddedNull(str))
+            return NAME_NONE;
+
+        const AString canonical = __hidden_name_pool::CanonicalString(str);
+        const Name name(canonical.c_str());
+
+        ScopedLock lock(m_mutex);
+
+        const auto itr = m_nameIndex.find(name.hash());
+        if(itr != m_nameIndex.end()){
+            const usize index = itr->second;
+            if(index >= m_strings.size())
+                return NAME_NONE;
+            if(m_strings[index] == canonical)
+                return name;
+
+            NWB_ASSERT_MSG(false, "Name hash collision detected in NamePool::store");
+            return NAME_NONE;
+        }
+
+        const usize newIndex = m_strings.size();
+        m_strings.push_back(canonical);
+        m_nameIndex.insert({ name.hash(), newIndex });
         return name;
     }
+    [[nodiscard]] Name store(const char* str){
+        if(str == nullptr)
+            return NAME_NONE;
+        return store(AStringView(str));
+    }
 
-    // Looks up the stored string for a given Name.
-    // Returns the original string if found, or an empty string otherwise.
     [[nodiscard]] const char* find(const Name& name)const{
-        auto it = m_entries.find(name.m_hash);
-        if(it != m_entries.end())
-            return it->second.c_str();
-        return "";
+        ScopedLock lock(m_mutex);
+
+        const auto itr = m_nameIndex.find(name.hash());
+        if(itr == m_nameIndex.end())
+            return "";
+
+        const usize index = itr->second;
+        if(index >= m_strings.size())
+            return "";
+        return m_strings[index].c_str();
+    }
+    [[nodiscard]] bool find(const Name& name, AString& outCanonical)const{
+        ScopedLock lock(m_mutex);
+
+        const auto itr = m_nameIndex.find(name.hash());
+        if(itr == m_nameIndex.end())
+            return false;
+
+        const usize index = itr->second;
+        if(index >= m_strings.size())
+            return false;
+
+        outCanonical = m_strings[index];
+        return true;
     }
 
-    // Checks if a Name is registered in the pool.
     [[nodiscard]] bool contains(const Name& name)const{
-        return m_entries.find(name.m_hash) != m_entries.end();
+        ScopedLock lock(m_mutex);
+        return m_nameIndex.find(name.hash()) != m_nameIndex.end();
     }
 
-    // Returns the number of registered names.
     [[nodiscard]] usize size()const{
-        return m_entries.size();
+        ScopedLock lock(m_mutex);
+        return m_nameIndex.size();
     }
+
 
 private:
-    ParallelHashMap<NameHash, AString, Hasher<NameHash>, __hidden_name::NameHashEqual> m_entries;
+    mutable Futex m_mutex;
+
+    NameIndexMap m_nameIndex;
+    Deque<AString> m_strings;
 };
 
 

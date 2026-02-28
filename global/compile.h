@@ -97,6 +97,7 @@
 #define NWB_WSTRCAT(dest, destSize, src) wcscat_s(dest, destSize, src)
 #define NWB_SPRINTF(format, formatSize, ...) sprintf_s(format, formatSize, __VA_ARGS__)
 #define NWB_WSPRINTF(format, formatSize, ...) swprintf_s(format, formatSize, __VA_ARGS__)
+#define NWB_STRERROR(dest, destSize, errorNum) strerror_s(dest, destSize, errorNum)
 #else
 #define NWB_STRNLEN(src, count) strnlen(src, count)
 #define NWB_WSTRNLEN(src, count) wcsnlen(src, count)
@@ -111,6 +112,7 @@
 #define NWB_WSTRCAT(dest, destSize, src) wcscat(dest, src)
 #define NWB_SPRINTF(format, formatSize, ...) sprintf(format, __VA_ARGS__)
 #define NWB_WSPRINTF(format, formatSize, ...) swprintf(format, __VA_ARGS__)
+#define NWB_STRERROR(dest, destSize, errorNum) (((destSize) == 0) ? -1 : (NWB_STRNCPY(dest, destSize, strerror(errorNum), (destSize) - 1), (dest)[(destSize) - 1] = '\0', 0))
 #endif
 
 #if defined(UNICODE) || defined(_UNICODE)

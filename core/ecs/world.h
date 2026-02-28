@@ -21,7 +21,13 @@ NWB_ECS_BEGIN
 class World : NoCopy, public Alloc::ITaskScheduler{
 private:
     using PoolMapAllocator = Alloc::CustomAllocator<Pair<const ComponentTypeId, UniquePtr<IComponentPool>>>;
-    using SystemVectorAllocator = Alloc::CustomAllocator<UniquePtr<ISystem>>;
+
+    struct SystemEntry{
+        SystemTypeId typeId;
+        UniquePtr<ISystem> system;
+    };
+
+    using SystemVectorAllocator = Alloc::CustomAllocator<SystemEntry>;
 
 
 public:
@@ -126,7 +132,7 @@ public:
         auto ptr = MakeUnique<T>(Forward<Args>(args)...);
         T& ref = *ptr;
         m_scheduler.addSystem(ref);
-        m_systems.push_back(Move(ptr));
+        m_systems.push_back(SystemEntry{ SystemType<T>(), Move(ptr) });
         return ref;
     }
 
@@ -134,10 +140,12 @@ public:
 
     template<typename T>
     T* getSystem(){
-        for(auto& s : m_systems){
-            T* casted = dynamic_cast<T*>(s.get());
-            if(casted)
-                return casted;
+        const SystemTypeId systemTypeId = SystemType<T>();
+
+        for(auto& system : m_systems){
+            if(system.typeId != systemTypeId)
+                continue;
+            return static_cast<T*>(system.system.get());
         }
         return nullptr;
     }
@@ -213,7 +221,7 @@ private:
 
     EntityManager m_entityManager;
     HashMap<ComponentTypeId, UniquePtr<IComponentPool>, Hasher<ComponentTypeId>, EqualTo<ComponentTypeId>, PoolMapAllocator> m_pools;
-    Vector<UniquePtr<ISystem>, SystemVectorAllocator> m_systems;
+    Vector<SystemEntry, SystemVectorAllocator> m_systems;
     SystemScheduler m_scheduler;
     MessageBus m_messageBus;
 };

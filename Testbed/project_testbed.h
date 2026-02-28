@@ -15,8 +15,14 @@
 
 
 class ProjectTestbed final : public NWB::IProjectEntryCallbacks{
+private:
+    static NotNullUniquePtr<NWB::Core::ECS::World> createInitialWorldOrDie(NWB::ProjectRuntimeContext& context);
+    static NWB::Core::ECSGraphics::RendererSystem& requireRendererSystemOrDie(NWB::Core::ECS::World& world);
+
+
 public:
-    virtual NWB::ProjectFrameClientSize queryFrameClientSize()const override;
+    explicit ProjectTestbed(NWB::ProjectRuntimeContext& context);
+    virtual ~ProjectTestbed() override;
 
 public:
     virtual bool onStartup(NWB::ProjectRuntimeContext& context)override;
@@ -27,8 +33,9 @@ public:
 
 
 private:
-    NWB::Core::ECSGraphics::RendererSystem* m_rendererSystem = nullptr;
-    UniquePtr<NWB::Core::ECS::World> m_world;
+    NWB::ProjectRuntimeContext& m_context;
+    NotNullUniquePtr<NWB::Core::ECS::World> m_world;
+    NWB::Core::ECSGraphics::RendererSystem& m_rendererSystem;
 };
 
 

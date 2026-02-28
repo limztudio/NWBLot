@@ -8,7 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB::ProjectFrameClientSize ProjectTestbed::queryFrameClientSize()const{
+NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
     return { 1280, 900 };
 }
 
@@ -16,9 +16,8 @@ NWB::ProjectFrameClientSize ProjectTestbed::queryFrameClientSize()const{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB::IProjectEntryCallbacks& NWB::QueryProjectEntryCallbacks(){
-    static ProjectTestbed s_ProjectTestbed;
-    return s_ProjectTestbed;
+UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
+    return MakeUnique<ProjectTestbed>(context);
 }
 
 

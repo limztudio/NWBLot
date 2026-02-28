@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include "assert.h"
 #include "compressed_pair.h"
 #include "smart_ptr.h"
 
@@ -184,6 +185,65 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+template<typename T, typename Deleter = DefaultDeleter<T>>
+class NotNullUniquePtr{
+    static_assert(!IsArray<T>::value, "NotNullUniquePtr does not support array types.");
+
+
+public:
+    typedef T element_type;
+    typedef Deleter deleter_type;
+    typedef UniquePtr<element_type, deleter_type> owner_type;
+    typedef typename owner_type::pointer pointer;
+
+
+public:
+    NotNullUniquePtr() = delete;
+    NotNullUniquePtr(std::nullptr_t) = delete;
+    explicit NotNullUniquePtr(owner_type&& owner)noexcept
+        : m_owner(Move(owner))
+    {
+        NWB_ASSERT_MSG(m_owner.get(), "NotNullUniquePtr requires non-null owner");
+    }
+
+    NotNullUniquePtr(NotNullUniquePtr&&)noexcept = default;
+    NotNullUniquePtr& operator=(NotNullUniquePtr&&)noexcept = default;
+
+    NotNullUniquePtr(const NotNullUniquePtr&) = delete;
+    NotNullUniquePtr& operator=(const NotNullUniquePtr&) = delete;
+    NotNullUniquePtr& operator=(std::nullptr_t) = delete;
+
+
+public:
+    typename AddLValueReference<element_type>::type operator*()const{
+        return *m_owner;
+    }
+    pointer operator->()const noexcept{
+        return m_owner.get();
+    }
+
+
+public:
+    [[nodiscard]] pointer get()const noexcept{
+        return m_owner.get();
+    }
+
+    [[nodiscard]] owner_type& owner()noexcept{
+        return m_owner;
+    }
+    [[nodiscard]] const owner_type& owner()const noexcept{
+        return m_owner;
+    }
+
+
+private:
+    owner_type m_owner;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<typename T, typename... Args>
 inline typename EnableIf<!IsArray<T>::value, UniquePtr<T>>::type MakeUnique(Args&&... args){
     return UniquePtr<T>(new T(Forward<Args>(args)...));
@@ -196,6 +256,15 @@ inline typename EnableIf<IsUnboundedArray<T>::value, UniquePtr<T>>::type MakeUni
 template<typename T, typename... Args>
 typename EnableIf<IsBoundedArray<T>::value>::type
 MakeUnique(Args&&...) = delete;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename T, typename Deleter>
+[[nodiscard]] inline NotNullUniquePtr<T, Deleter> MakeNotNullUnique(UniquePtr<T, Deleter>&& owner){
+    return NotNullUniquePtr<T, Deleter>(Move(owner));
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

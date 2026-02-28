@@ -7,6 +7,7 @@
 
 #include <core/ecs/ecs.h>
 #include <core/ecs_graphics/ecs_graphics.h>
+#include <logger/client/logger.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -18,32 +19,55 @@ NWB_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool CreateBasicProjectWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS::World>& outWorld, Core::ECSGraphics::RendererSystem*& outRendererSystem){
-    outRendererSystem = nullptr;
+bool CreateInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS::World>& outWorld){
     outWorld.reset();
 
     auto* deviceManager = context.graphics.getDeviceManager();
-    if(!deviceManager)
+    if(!deviceManager){
+        NWB_LOGGER_FATAL(NWB_TEXT("CreateInitialProjectWorld failed: graphics device manager is null"));
         return false;
+    }
 
-    outWorld = MakeUnique<Core::ECS::World>(context.objectArena, context.threadPool);
-    outRendererSystem = &outWorld->addSystem<Core::ECSGraphics::RendererSystem>(*outWorld, context.graphics);
-    deviceManager->addRenderPassToBack(*outRendererSystem);
+    auto world = MakeUnique<Core::ECS::World>(context.objectArena, context.threadPool);
+    if(!world){
+        NWB_LOGGER_FATAL(NWB_TEXT("CreateInitialProjectWorld failed: ECS world allocation failed"));
+        return false;
+    }
+
+    world->addSystem<Core::ECSGraphics::RendererSystem>(*world, context.graphics);
+    auto* rendererSystem = world->getSystem<Core::ECSGraphics::RendererSystem>();
+    if(!rendererSystem){
+        NWB_LOGGER_FATAL(NWB_TEXT("CreateInitialProjectWorld failed: core renderer system was not created"));
+        return false;
+    }
+    deviceManager->addRenderPassToBack(*rendererSystem);
+
+    outWorld = Move(world);
 
     return true;
 }
 
-void DestroyBasicProjectWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS::World>& world, Core::ECSGraphics::RendererSystem*& rendererSystem){
-    if(rendererSystem){
-        if(auto* deviceManager = context.graphics.getDeviceManager())
-            deviceManager->removeRenderPass(*rendererSystem);
-        rendererSystem = nullptr;
+void DestroyInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS::World>& world){
+    if(!world){
+        NWB_LOGGER_FATAL(NWB_TEXT("DestroyInitialProjectWorld failed: world is null"));
+        return;
     }
 
-    if(world){
-        world->clear();
-        world.reset();
+    auto* rendererSystem = world->getSystem<Core::ECSGraphics::RendererSystem>();
+    if(!rendererSystem){
+        NWB_LOGGER_FATAL(NWB_TEXT("DestroyInitialProjectWorld failed: core renderer system is null"));
+        return;
     }
+
+    auto* deviceManager = context.graphics.getDeviceManager();
+    if(!deviceManager){
+        NWB_LOGGER_FATAL(NWB_TEXT("DestroyInitialProjectWorld failed: graphics device manager is null"));
+        return;
+    }
+
+    deviceManager->removeRenderPass(*rendererSystem);
+    world->clear();
+    world.reset();
 }
 
 

@@ -1,6 +1,6 @@
 # NWBLot Notes
 
-Updated: 2026-02-27
+Updated: 2026-02-28
 
 ## Important Rules
 
@@ -24,3 +24,16 @@ Updated: 2026-02-27
    - Work-first dependent execution (inline one continuation, enqueue remainder).
    - Split `ThreadPool` synchronization domains (`parallelFor` control vs task queue).
    - Reduce per-completion temporary container overhead.
+
+## Project Bootstrap Invariants
+
+1. `CreateInitialProjectWorld` / `DestroyInitialProjectWorld` are strict engine bootstrap APIs for required core world/system setup and teardown.
+2. In project runtime code, `m_world` and required core systems (e.g., renderer system) are treated as required invariants after successful startup.
+3. Prefer assertion/invariant semantics in project runtime for required core objects; avoid defensive per-frame null checks for them.
+4. For project callback instances created after frame init, keep required core objects as non-null members (owner + references) and tear them down in callback destruction before frame destruction.
+5. If ownership and non-null access point to the same object (`UniquePtr` + duplicate reference), prefer a single owner member and keep non-null by construction/contract to reduce duplicated state.
+6. For required owned pointers that must not be treated as nullable, use the generic `NotNullUniquePtr<T>` wrapper (no `operator bool`) instead of ad-hoc per-class storage wrappers.
+
+## ECS Runtime Type Safety
+
+1. Keep `World::getSystem<T>()` RTTI-free (`/GR-` compatible) by using explicit `SystemTypeId` matching instead of `dynamic_cast`.

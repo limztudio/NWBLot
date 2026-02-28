@@ -25,6 +25,15 @@ namespace AccessMode{
 };
 
 
+using SystemTypeId = usize;
+
+
+template<typename T>
+inline SystemTypeId SystemType(){
+    return __hidden_ecs::TypeIdGenerator::id<Decay_T<T>>();
+}
+
+
 struct ComponentAccess{
     ComponentTypeId typeId;
     AccessMode::Enum mode;

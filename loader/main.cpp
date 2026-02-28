@@ -33,16 +33,16 @@ namespace __hidden_loader{
 
 
 struct CallbackShutdownGuard{
-    NWB::IProjectEntryCallbacks& callbacks;
+    NWB::IProjectEntryCallbacks* callbacks = nullptr;
     NWB::ProjectRuntimeContext& context;
     bool active = false;
 
     ~CallbackShutdownGuard(){
-        if(!active)
+        if(!active || !callbacks)
             return;
 
         try{
-            callbacks.onShutdown(context);
+            callbacks->onShutdown(context);
         }
         catch(...){
         }
@@ -50,14 +50,15 @@ struct CallbackShutdownGuard{
 };
 
 struct UpdateCallbackContext{
-    NWB::IProjectEntryCallbacks& callbacks;
+    NWB::IProjectEntryCallbacks* callbacks = nullptr;
     NWB::ProjectRuntimeContext& context;
 };
 
 bool ProjectTickCallback(void* userData, f32 delta){
     NWB_ASSERT(userData);
     auto* updateContext = static_cast<UpdateCallbackContext*>(userData);
-    return updateContext->callbacks.onUpdate(updateContext->context, delta);
+    NWB_ASSERT(updateContext->callbacks);
+    return updateContext->callbacks->onUpdate(updateContext->context, delta);
 }
 
 
@@ -78,8 +79,7 @@ static int MainLogic(NotNull<const char*> logAddress, void* inst){
         NWB_LOGGER_REGISTER(&logger);
 
         try{
-            auto& callbacks = NWB::QueryProjectEntryCallbacks();
-            const NWB::ProjectFrameClientSize frameClientSize = callbacks.queryFrameClientSize();
+            const NWB::ProjectFrameClientSize frameClientSize = NWB::QueryProjectFrameClientSize();
             if(frameClientSize.width == 0 || frameClientSize.height == 0){
                 NWB_LOGGER_FATAL(NWB_TEXT("Invalid project frame client size: {}x{}"), frameClientSize.width, frameClientSize.height);
                 return -1;
@@ -91,14 +91,20 @@ static int MainLogic(NotNull<const char*> logAddress, void* inst){
                 frame.projectThreadPool(),
                 frame.projectJobSystem(),
             };
-            __hidden_loader::CallbackShutdownGuard callbackShutdownGuard{ callbacks, context };
-            __hidden_loader::UpdateCallbackContext updateCallbackContext{ callbacks, context };
 
             if(!frame.init())
                 return -1;
 
+            auto callbacks = NWB::CreateProjectEntryCallbacks(context);
+            if(!callbacks){
+                NWB_LOGGER_FATAL(NWB_TEXT("CreateProjectEntryCallbacks failed: callback instance is null"));
+                return -1;
+            }
+            __hidden_loader::CallbackShutdownGuard callbackShutdownGuard{ callbacks.get(), context };
+            __hidden_loader::UpdateCallbackContext updateCallbackContext{ callbacks.get(), context };
+
             callbackShutdownGuard.active = true;
-            if(!callbacks.onStartup(context))
+            if(!callbacks->onStartup(context))
                 return -1;
             frame.setProjectUpdateCallback(&__hidden_loader::ProjectTickCallback, &updateCallbackContext);
 

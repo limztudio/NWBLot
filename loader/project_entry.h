@@ -24,10 +24,6 @@ namespace Core{
         class World;
     };
 
-    namespace ECSGraphics{
-        class RendererSystem;
-    };
-
     namespace Alloc{
         class CustomArena;
         class ThreadPool;
@@ -58,13 +54,12 @@ public:
 
 
 public:
-    virtual ProjectFrameClientSize queryFrameClientSize()const{
-        return {};
-    }
-
     virtual bool onStartup(ProjectRuntimeContext& context){
         (void)context;
         return true;
+    }
+    virtual void onShutdown(ProjectRuntimeContext& context){
+        (void)context;
     }
 
     virtual bool onUpdate(ProjectRuntimeContext& context, f32 delta){
@@ -72,17 +67,14 @@ public:
         (void)delta;
         return true;
     }
-
-    virtual void onShutdown(ProjectRuntimeContext& context){
-        (void)context;
-    }
 };
 
 
-IProjectEntryCallbacks& QueryProjectEntryCallbacks();
+ProjectFrameClientSize QueryProjectFrameClientSize();
+UniquePtr<IProjectEntryCallbacks> CreateProjectEntryCallbacks(ProjectRuntimeContext& context);
 
-bool CreateBasicProjectWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS::World>& outWorld, Core::ECSGraphics::RendererSystem*& outRendererSystem);
-void DestroyBasicProjectWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS::World>& world, Core::ECSGraphics::RendererSystem*& rendererSystem);
+bool CreateInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS::World>& outWorld);
+void DestroyInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS::World>& world);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

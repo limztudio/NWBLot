@@ -7,5 +7,6 @@
     <ClCompile Include="$(MSBuildThisFileDirectory)filesystem\filesystem.cpp" />
     <ClInclude Include="$(MSBuildThisFileDirectory)filesystem\global.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)filesystem\filesystem.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)filesystem\volume_naming.h" />
   </ItemGroup>
 </Project>

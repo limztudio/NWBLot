@@ -97,7 +97,7 @@ constexpr auto Tie(Args&... args){ return std::tie(args...); }
 template<typename T, typename Hash = Hasher<T>, typename Equal = EqualTo<T>, typename Alloc = NWB::Core::Alloc::GeneralAllocator<T>>
 using ParallelHashSet = tbb::concurrent_unordered_set<T, Hash, Equal, Alloc>;
 
-template<typename T, typename V, typename Hash = Hasher<T>, typename Equal = EqualTo<T>, typename Alloc = NWB::Core::Alloc::GeneralAllocator<Pair<const T, V>>>
+template<typename T, typename V, typename Hash = Hasher<T>, typename Equal = EqualTo<T>, typename Alloc = NWB::Core::Alloc::GeneralAllocator<Pair<T, V>>>
 using ParallelHashMap = tbb::concurrent_unordered_map<T, V, Hash, Equal, Alloc>;
 
 template<typename T, typename Alloc = NWB::Core::Alloc::CacheAlignedAllocator<T>>
@@ -116,7 +116,7 @@ using ParallelBlockQueue = tbb::concurrent_bounded_queue<T>;
 template<typename T, typename Hash = Hasher<T>, typename Equal = EqualTo<T>, typename Alloc = NWB::Core::Alloc::GeneralAllocator<T>>
 using HashSet = tsl::robin_set<T, Hash, Equal, Alloc>;
 
-template<typename T, typename V, typename Hash = Hasher<T>, typename Equal = EqualTo<T>, typename Alloc = NWB::Core::Alloc::GeneralAllocator<Pair<const T, V>>>
+template<typename T, typename V, typename Hash = Hasher<T>, typename Equal = EqualTo<T>, typename Alloc = NWB::Core::Alloc::GeneralAllocator<Pair<T, V>>>
 using HashMap = tsl::robin_map<T, V, Hash, Equal, Alloc>;
 
 template<typename T, usize N>
@@ -134,7 +134,7 @@ using Vector = std::vector<T, Alloc>;
 template<typename T, typename Alloc = NWB::Core::Alloc::GeneralAllocator<T>>
 using Set = std::set<T, std::less<T>, Alloc>;
 
-template<typename T, typename V, typename Alloc = NWB::Core::Alloc::GeneralAllocator<Pair<const T, V>>>
+template<typename T, typename V, typename Alloc = NWB::Core::Alloc::GeneralAllocator<Pair<T, V>>>
 using Map = std::map<T, V, std::less<T>, Alloc>;
 
 template<typename T, typename Alloc = NWB::Core::Alloc::GeneralAllocator<T>>

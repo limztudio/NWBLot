@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup Label="Globals">
+    <MSBuildAllProjects Condition="'$(MSBuildVersion)' == '' Or '$(MSBuildVersion)' &lt; '16.0'">$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <ItemsProjectGuid>{E9D8BC32-5A40-4FC6-BF08-1114FD967F0E}</ItemsProjectGuid>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)..\;$(MSBuildThisFileDirectory)..\global\;$(MSBuildThisFileDirectory)..\3rd_parties\curl\include\;$(MSBuildThisFileDirectory)..\3rd_parties\CLI11\;$(MSBuildThisFileDirectory)..\3rd_parties\oneTBB\include\;$(MSBuildThisFileDirectory)..\3rd_parties\tsl\;$(MSBuildThisFileDirectory);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>NWB_COOK=1;__TBB_NO_IMPLICIT_LINKAGE=1;__TBBMALLOC_NO_IMPLICIT_LINKAGE=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="$(MSBuildThisFileDirectory)main.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)resource_cooker.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)resource_cooker_command_line.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)..\impl\assets_graphics\asset_cooker_registration.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)..\impl\assets_graphics\shader_asset_cooker.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)..\core\graphics\shader_cook_common.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)..\core\graphics\shader_compile.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)..\core\graphics\vulkan\vulkan_shader_compile.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="$(MSBuildThisFileDirectory)resource_cooker.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)..\core\assets\global.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)..\core\assets\asset.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)..\core\assets\asset_cooker.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)..\impl\assets_graphics\asset_cooker_registration.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)..\impl\assets_graphics\shader_asset_cooker.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)..\core\filesystem\global.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)..\core\filesystem\filesystem.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)..\core\filesystem\volume_naming.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)..\core\graphics\shader_archive.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)..\core\graphics\shader_compile.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)..\core\graphics\shader_cook.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)..\core\graphics\vulkan\vulkan_shader_compile.h" />
+  </ItemGroup>
+</Project>

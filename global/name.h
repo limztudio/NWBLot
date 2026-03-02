@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "type.h"
+#include "hash_utils.h"
 #include <functional>
 
 
@@ -25,8 +25,6 @@ namespace __hidden_name{
 
 
 inline constexpr u32 s_HashLaneCount = 8;
-inline constexpr u64 FNV64_OFFSET_BASIS = 14695981039346656037ull;
-inline constexpr u64 FNV64_PRIME = 1099511628211ull;
 
 inline constexpr u64 LANE_SEEDS[8] = {
     FNV64_OFFSET_BASIS,
@@ -39,38 +37,6 @@ inline constexpr u64 LANE_SEEDS[8] = {
     FNV64_OFFSET_BASIS ^ 0xA0B1C2D3E4F50617ull,
 };
 static_assert(sizeof(LANE_SEEDS) / sizeof(LANE_SEEDS[0]) == s_HashLaneCount, "LANE_SEEDS count must match s_HashLaneCount");
-
-inline constexpr char Canonicalize(char c){
-    if(c == '\\')
-        return '/';
-    return (c >= 'A' && c <= 'Z') ? static_cast<char>(c + ('a' - 'A')) : c;
-}
-
-inline constexpr u64 FNV1a64(const char* str, u64 seed){
-    u64 hash = seed;
-    if(str == nullptr)
-        return hash;
-    for(; *str != '\0'; ++str){
-        hash ^= static_cast<u64>(static_cast<u8>(Canonicalize(*str)));
-        hash *= FNV64_PRIME;
-    }
-    return hash;
-}
-
-inline constexpr void CopyCanonical(char* dst, const usize dstSize, const char* src){
-    if(dstSize == 0)
-        return;
-
-    if(src == nullptr){
-        dst[0] = '\0';
-        return;
-    }
-
-    usize writeIndex = 0;
-    for(; writeIndex + 1 < dstSize && src[writeIndex] != '\0'; ++writeIndex)
-        dst[writeIndex] = Canonicalize(src[writeIndex]);
-    dst[writeIndex] = '\0';
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -88,14 +54,27 @@ struct NameHash{
 static_assert(sizeof(NameHash) == 64, "NameHash size must stay stable");
 
 
-inline constexpr NameHash ComputeNameHash(const char* str){
+template<typename CharT>
+inline constexpr NameHash ComputeNameHash(const CharT* str){
     if(str == nullptr)
         return {};
 
     NameHash hash = {};
     for(u32 i = 0; i < __hidden_name::s_HashLaneCount; ++i)
-        hash.qwords[i] = __hidden_name::FNV1a64(str, __hidden_name::LANE_SEEDS[i]);
+        hash.qwords[i] = FNV1a64(str, __hidden_name::LANE_SEEDS[i]);
     return hash;
+}
+
+
+[[nodiscard]] inline constexpr bool LessNameHash(const NameHash& lhs, const NameHash& rhs){
+    for(u32 i = 0; i < __hidden_name::s_HashLaneCount; ++i){
+        if(lhs.qwords[i] < rhs.qwords[i])
+            return true;
+        if(lhs.qwords[i] > rhs.qwords[i])
+            return false;
+    }
+
+    return false;
 }
 
 
@@ -135,7 +114,8 @@ inline constexpr usize HashValue(const NameHash& hash){
     return seed;
 }
 
-inline void HashToDebugString(const NameHash& hash, char* dst, const usize dstSize){
+template<typename CharT>
+inline void HashToDebugString(const NameHash& hash, CharT* dst, const usize dstSize){
     if(dstSize == 0)
         return;
 
@@ -143,19 +123,19 @@ inline void HashToDebugString(const NameHash& hash, char* dst, const usize dstSi
 
     const usize requiredLength = (16 * s_HashLaneCount) + (s_HashLaneCount - 1);
     if(dstSize <= requiredLength){
-        dst[0] = '\0';
+        dst[0] = CharT{};
         return;
     }
 
-    char* writeCursor = dst;
+    CharT* writeCursor = dst;
     for(u32 i = 0; i < s_HashLaneCount; ++i){
         if(i > 0)
-            *writeCursor++ = '_';
+            *writeCursor++ = static_cast<CharT>('_');
         const u64 value = hash.qwords[i];
         for(int bitShift = 60; bitShift >= 0; bitShift -= 4)
-            *writeCursor++ = s_Hex[(value >> bitShift) & 0xF];
+            *writeCursor++ = static_cast<CharT>(s_Hex[(value >> bitShift) & 0xF]);
     }
-    *writeCursor = '\0';
+    *writeCursor = CharT{};
 }
 
 
@@ -191,6 +171,12 @@ public:
         , m_debugName{}
 #endif
     {}
+    constexpr Name(std::nullptr_t)
+        : m_hash{}
+#if defined(NWB_DEBUG)
+        , m_debugName{}
+#endif
+    {}
     constexpr Name(const char* str)
         : m_hash(ComputeNameHash(str))
 #if defined(NWB_DEBUG)
@@ -198,7 +184,17 @@ public:
 #endif
     {
 #if defined(NWB_DEBUG)
-        __hidden_name::CopyCanonical(m_debugName, 256, str);
+        CopyCanonical(m_debugName, 256, str);
+#endif
+    }
+    constexpr Name(const wchar* str)
+        : m_hash(ComputeNameHash(str))
+#if defined(NWB_DEBUG)
+        , m_debugName{}
+#endif
+    {
+#if defined(NWB_DEBUG)
+        CopyCanonical(m_debugName, 256, str);
 #endif
     }
     explicit Name(const NameHash& hash)
@@ -251,6 +247,65 @@ static_assert(!static_cast<bool>(Name(nullptr)), "Name(nullptr) must be invalid"
 static_assert(Name("") != NAME_NONE, "Empty string hash must not be NAME_NONE");
 static_assert(Name("A\\B") == Name("a/b"), "Name canonicalization must map '\\\\' to '/' and uppercase to lowercase");
 static_assert(Name("PATH/TO/FILE") == Name("path/to/file"), "Name canonicalization must be case-insensitive");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename CharT>
+[[nodiscard]] inline Name ToName(const BasicStringView<CharT> text){
+    if(text.empty())
+        return NAME_NONE;
+
+    const BasicString<CharT> localString(text);
+    return Name(localString.c_str());
+}
+template<typename CharT>
+[[nodiscard]] inline Name ToName(const BasicString<CharT>& text){
+    return ToName(BasicStringView<CharT>(text));
+}
+
+
+template<typename CharT>
+[[nodiscard]] inline BasicString<CharT> EncodeNameHash(const Name& name){
+    static constexpr u32 s_NameHashLaneCount = 8;
+    static constexpr usize s_NameHashHexLength = s_NameHashLaneCount * 16;
+
+    BasicString<CharT> encoded;
+    encoded.reserve(s_NameHashHexLength);
+
+    const NameHash& hash = name.hash();
+    for(u32 lane = 0; lane < s_NameHashLaneCount; ++lane)
+        AppendHexU64<CharT>(hash.qwords[lane], encoded);
+
+    return encoded;
+}
+
+
+template<typename CharT>
+[[nodiscard]] inline bool DecodeNameHash(const BasicStringView<CharT> encodedHash, Name& outName){
+    static constexpr u32 s_NameHashLaneCount = 8;
+    static constexpr usize s_NameHashHexLength = s_NameHashLaneCount * 16;
+
+    if(encodedHash.size() != s_NameHashHexLength)
+        return false;
+
+    NameHash hash = {};
+    for(u32 lane = 0; lane < s_NameHashLaneCount; ++lane){
+        const usize begin = static_cast<usize>(lane) * 16;
+        const BasicStringView<CharT> laneHex = encodedHash.substr(begin, 16);
+
+        if(!ParseHexU64<CharT>(laneHex, hash.qwords[lane]))
+            return false;
+    }
+
+    outName = Name(hash);
+    return true;
+}
+template<typename CharT>
+[[nodiscard]] inline bool DecodeNameHash(const BasicString<CharT>& encodedHash, Name& outName){
+    return DecodeNameHash(BasicStringView<CharT>(encodedHash), outName);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

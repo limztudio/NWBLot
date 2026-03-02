@@ -12,38 +12,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_name_pool{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline AString CanonicalString(AStringView str){
-    AString output;
-    output.reserve(str.size());
-    for(const char ch : str)
-        output.push_back(__hidden_name::Canonicalize(ch));
-    return output;
-}
-
-inline bool HasEmbeddedNull(AStringView str){
-    for(const char ch : str){
-        if(ch == '\0')
-            return true;
-    }
-    return false;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class NamePool : NoCopy{
 private:
     using NameIndexMap = HashMap<NameHash, usize>;
@@ -65,10 +33,10 @@ public:
     [[nodiscard]] Name store(AStringView str){
         if(str.empty())
             return NAME_NONE;
-        if(__hidden_name_pool::HasEmbeddedNull(str))
+        if(HasEmbeddedNull(str))
             return NAME_NONE;
 
-        const AString canonical = __hidden_name_pool::CanonicalString(str);
+        const AString canonical = CanonicalizeText(str);
         const Name name(canonical.c_str());
 
         ScopedLock lock(m_mutex);

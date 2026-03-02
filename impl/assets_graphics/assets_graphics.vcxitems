@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup Label="Globals">
+    <MSBuildAllProjects Condition="'$(MSBuildVersion)' == '' Or '$(MSBuildVersion)' &lt; '16.0'">$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <ItemsProjectGuid>{CC115E08-B195-4823-868C-07112B9F0C3F}</ItemsProjectGuid>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories);$(MSBuildThisFileDirectory)</AdditionalIncludeDirectories>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ProjectCapability Include="SourceItemsFromImports" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="$(MSBuildThisFileDirectory)shader_asset.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)shader_asset_cooker.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)material_asset.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)asset_cooker_registration.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="$(MSBuildThisFileDirectory)shader_asset.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)shader_asset_cooker.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)material_asset.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)asset_cooker_registration.h" />
+  </ItemGroup>
+</Project>

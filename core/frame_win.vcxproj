@@ -96,11 +96,14 @@
     <ProjectReference Include="ecs_win.vcxproj">
       <Project>{398a0d86-0574-4a01-9ab9-21fdd55cda26}</Project>
     </ProjectReference>
-    <ProjectReference Include="ecs_graphics_win.vcxproj">
+    <ProjectReference Include="..\impl\ecs_graphics\ecs_graphics_win.vcxproj">
       <Project>{b40a9d65-0633-4cd1-9ad2-049f1704a24f}</Project>
     </ProjectReference>
     <ProjectReference Include="graphics_win.vcxproj">
       <Project>{cff12a98-c588-4586-9837-683f6ba8dc0f}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\impl\assets_graphics\assets_graphics_win.vcxproj">
+      <Project>{6CEA536C-A650-43F7-A325-CEF848E8B343}</Project>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

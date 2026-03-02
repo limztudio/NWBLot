@@ -87,6 +87,9 @@
     <ProjectReference Include="..\logger\logclient_win.vcxproj">
       <Project>{5bde19c4-41a9-4c6c-847e-1c978d315aa1}</Project>
     </ProjectReference>
+    <ProjectReference Include="assets_win.vcxproj">
+      <Project>{B72E6F8D-6D2F-4A6E-B2D7-4FA7E470A2B1}</Project>
+    </ProjectReference>
     <ProjectReference Include="common_win.vcxproj">
       <Project>{89fa56d0-3dda-4af6-8970-2dfbf76d4b47}</Project>
     </ProjectReference>

@@ -3,9 +3,11 @@
 
 
 #include "filesystem.h"
+#include "volume_naming.h"
 
 
 #include <logger/client/logger.h>
+#include <core/alloc/core.h>
 
 #include <cerrno>
 #include <cstring>
@@ -29,26 +31,7 @@ namespace __hidden_filesystem{
 
 static constexpr u64 s_VolumeDefaultMetadataBytes = 512ull * 1024ull;
 static constexpr u64 s_VolumeMinMetadataBytes = 4ull * 1024ull;
-static constexpr u32 s_VolumeFormatVersion = 2u;
 static constexpr u64 s_VolumeMoveChunkBytes = 1024ull * 1024ull;
-
-static constexpr char s_VolumeMagic[8] = { 'N', 'W', 'B', 'V', 'O', 'L', '1', '\0' };
-
-struct VolumeHeaderDisk{
-    char magic[8];
-    u32 version;
-    u32 reserved;
-    u64 segmentSize;
-    u64 metadataBytes;
-    u64 fileCount;
-    u64 indexBytes;
-    u64 nextFreeOffset;
-};
-struct VolumeIndexEntryDisk{
-    NameHash hash;
-    u64 offset;
-    u64 size;
-};
 
 
 template<typename T>
@@ -126,28 +109,14 @@ static bool ToStreamSize(const u64 value, std::streamsize& out){
     return true;
 }
 
-static AString MakeSegmentFileName(AStringView volumeName, const usize index){
-    return StringFormat("{}_{}.vol", volumeName, index);
-}
-
 template<typename T>
 static void AppendPOD(Vector<u8>& output, const T& value){
     const auto* begin = reinterpret_cast<const u8*>(&value);
     output.insert(output.end(), begin, begin + sizeof(T));
 }
 
-static bool LessNameHash(const NameHash& lhs, const NameHash& rhs){
-    for(u32 i = 0; i < 8; ++i){
-        if(lhs.qwords[i] < rhs.qwords[i])
-            return true;
-        if(lhs.qwords[i] > rhs.qwords[i])
-            return false;
-    }
-    return false;
-}
-
 static bool LessName(const Name& lhs, const Name& rhs){
-    return LessNameHash(lhs.hash(), rhs.hash());
+    return ::LessNameHash(lhs.hash(), rhs.hash());
 }
 
 static AString LastErrnoMessage(){
@@ -181,7 +150,7 @@ static void LogFailureWithPath(AStringView volumeName, AStringView operation, co
     );
 }
 
-static void LogFailureWithFsError(AStringView volumeName, AStringView operation, const Path& path, const std::error_code& errorCode){
+static void LogFailureWithFsError(AStringView volumeName, AStringView operation, const Path& path, const ErrorCode& errorCode){
     NWB_LOGGER_WARNING(
         NWB_TEXT("Filesystem('{}'): {} failed on '{}': [{}] {}"),
         StringConvert(volumeName),
@@ -190,6 +159,82 @@ static void LogFailureWithFsError(AStringView volumeName, AStringView operation,
         errorCode.value(),
         StringConvert(errorCode.message())
     );
+}
+
+static void* BuildArenaAlloc(usize size){ return NWB::Core::Alloc::CoreAlloc(size, "filesystem_build_volume"); }
+static void BuildArenaFree(void* ptr){ NWB::Core::Alloc::CoreFree(ptr, "filesystem_build_volume"); }
+static void* BuildArenaAllocAligned(usize size, usize align){
+    return NWB::Core::Alloc::CoreAllocAligned(size, align, "filesystem_build_volume");
+}
+static void BuildArenaFreeAligned(void* ptr){ NWB::Core::Alloc::CoreFreeAligned(ptr, "filesystem_build_volume"); }
+
+static bool CleanOldSegments(const Path& outputDirectory, const AString& volumeName, AString& outError){
+    ErrorCode errorCode;
+
+    const AString segmentPrefix = StringFormat("{}_", volumeName);
+    for(const auto& directoryEntry : std::filesystem::directory_iterator(outputDirectory, errorCode)){
+        if(errorCode)
+            break;
+
+        const Path currentPath = directoryEntry.path();
+        const AString fileName = currentPath.filename().string();
+        const bool prefixMatch = fileName.starts_with(segmentPrefix);
+        const bool extensionMatch = currentPath.extension() == ".vol";
+        if(!prefixMatch || !extensionMatch)
+            continue;
+
+        std::filesystem::remove(currentPath, errorCode);
+        if(errorCode){
+            outError = StringFormat(
+                "Failed to remove old segment '{}' : {}",
+                PathToString(currentPath),
+                errorCode.message()
+            );
+            return false;
+        }
+    }
+    if(errorCode){
+        outError = StringFormat(
+            "Failed to iterate output directory '{}' : {}",
+            PathToString(outputDirectory),
+            errorCode.message()
+        );
+        return false;
+    }
+
+    errorCode.clear();
+    for(usize segmentIndex = 0;; ++segmentIndex){
+        const Path hashedPath = outputDirectory / MakeVolumeSegmentFileName(volumeName, segmentIndex);
+
+        const bool exists = FileExists(hashedPath, errorCode);
+        if(errorCode){
+            outError = StringFormat(
+                "Failed to query hashed segment '{}' : {}",
+                PathToString(hashedPath),
+                errorCode.message()
+            );
+            return false;
+        }
+        if(!exists)
+            break;
+
+        std::filesystem::remove(hashedPath, errorCode);
+        if(errorCode){
+            outError = StringFormat(
+                "Failed to remove old hashed segment '{}' : {}",
+                PathToString(hashedPath),
+                errorCode.message()
+            );
+            return false;
+        }
+
+        if(segmentIndex == Limit<usize>::s_Max){
+            outError = "Segment index overflow while removing old hashed segments";
+            return false;
+        }
+    }
+
+    return true;
 }
 
 
@@ -202,7 +247,59 @@ static void LogFailureWithFsError(AStringView volumeName, AStringView operation,
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-VolumeFileSystem::VolumeFileSystem()
+bool BuildVolume(
+    const Path& outputDirectory,
+    const VolumeBuildConfig& config,
+    const HashMap<AString, Vector<u8>>& files,
+    VolumeBuildInfo& outBuildInfo,
+    AString& outError
+){
+    outBuildInfo = {};
+    outError.clear();
+
+    ErrorCode errorCode;
+    CreateDirectories(outputDirectory, errorCode);
+    if(errorCode){
+        outError = StringFormat(
+            "Failed to create output directory '{}' : {}",
+            PathToString(outputDirectory),
+            errorCode.message()
+        );
+        return false;
+    }
+
+    if(!__hidden_filesystem::CleanOldSegments(outputDirectory, config.volumeName, outError))
+        return false;
+
+    Alloc::CustomArena arena(
+        __hidden_filesystem::BuildArenaAlloc,
+        __hidden_filesystem::BuildArenaFree,
+        __hidden_filesystem::BuildArenaAllocAligned,
+        __hidden_filesystem::BuildArenaFreeAligned
+    );
+
+    VolumeSession volumeSession(arena);
+    if(!volumeSession.create(outputDirectory, config, outError))
+        return false;
+
+    for(const auto& [virtualPath, payloadBytes] : files){
+        if(!volumeSession.pushData(virtualPath, payloadBytes, outError))
+            return false;
+    }
+
+    outBuildInfo.fileCount = volumeSession.fileCount();
+    outBuildInfo.segmentCount = static_cast<u64>(volumeSession.segmentCount());
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+VolumeFileSystem::VolumeFileSystem(Alloc::CustomArena& arena)
+    : m_arena(arena)
+    , m_segmentPaths(SegmentPathAllocator(m_arena))
+    , m_files(0, Hasher<Name>(), EqualTo<Name>(), FileMapAllocator(m_arena))
 {}
 
 VolumeFileSystem::~VolumeFileSystem(){
@@ -225,8 +322,8 @@ bool VolumeFileSystem::mount(const VolumeMountDesc& desc){
     m_writable = (desc.usage != VolumeUsage::RuntimeReadOnly);
     m_maxSegments = desc.maxSegments;
 
-    std::error_code errorCode;
-    if(!std::filesystem::exists(m_mountDirectory, errorCode)){
+    ErrorCode errorCode;
+    if(!FileExists(m_mountDirectory, errorCode)){
         if(errorCode){
             __hidden_filesystem::LogFailureWithFsError(m_volumeName, "mount:exists", m_mountDirectory, errorCode);
             return false;
@@ -237,7 +334,7 @@ bool VolumeFileSystem::mount(const VolumeMountDesc& desc){
             return false;
         }
 
-        if(!std::filesystem::create_directories(m_mountDirectory, errorCode)){
+        if(!CreateDirectories(m_mountDirectory, errorCode)){
             __hidden_filesystem::LogFailureWithFsError(m_volumeName, "mount:create_directories", m_mountDirectory, errorCode);
             return false;
         }
@@ -268,7 +365,7 @@ bool VolumeFileSystem::mount(const VolumeMountDesc& desc){
             ? __hidden_filesystem::DefaultMetadataBytes(m_segmentSize)
             : desc.metadataSize;
 
-        if(m_metadataBytes <= sizeof(__hidden_filesystem::VolumeHeaderDisk) || m_metadataBytes >= m_segmentSize){
+        if(m_metadataBytes <= sizeof(VolumeHeaderDisk) || m_metadataBytes >= m_segmentSize){
             __hidden_filesystem::LogFailure(
                 m_volumeName,
                 "mount",
@@ -292,7 +389,7 @@ bool VolumeFileSystem::mount(const VolumeMountDesc& desc){
         }
     }
     else{
-        std::error_code sizeError;
+        ErrorCode sizeError;
         const u64 discoveredSegmentSize = std::filesystem::file_size(m_segmentPaths[0], sizeError);
         if(sizeError || discoveredSegmentSize == 0){
             if(sizeError)
@@ -726,12 +823,46 @@ bool VolumeFileSystem::compact(const bool shrinkSegments){
 bool VolumeFileSystem::scanSegmentsLocked(){
     m_segmentPaths.clear();
 
+    ErrorCode errorCode;
+
+    for(usize segmentIndex = 0;; ++segmentIndex){
+        const Path hashedSegmentPath = m_mountDirectory / MakeVolumeSegmentFileName(m_volumeName, segmentIndex);
+
+        const bool exists = FileExists(hashedSegmentPath, errorCode);
+        if(errorCode){
+            __hidden_filesystem::LogFailureWithFsError(m_volumeName, "scanSegments:exists", hashedSegmentPath, errorCode);
+            return false;
+        }
+        if(!exists)
+            break;
+
+        const bool regularFile = std::filesystem::is_regular_file(hashedSegmentPath, errorCode);
+        if(errorCode){
+            __hidden_filesystem::LogFailureWithFsError(m_volumeName, "scanSegments:is_regular_file", hashedSegmentPath, errorCode);
+            return false;
+        }
+        if(!regularFile){
+            __hidden_filesystem::LogFailureWithPath(m_volumeName, "scanSegments:is_regular_file", hashedSegmentPath, "segment path is not a regular file");
+            return false;
+        }
+
+        m_segmentPaths.push_back(hashedSegmentPath);
+
+        if(segmentIndex == Limit<usize>::s_Max){
+            __hidden_filesystem::LogFailure(m_volumeName, "scanSegments", "segment index overflow");
+            return false;
+        }
+    }
+
+    if(!m_segmentPaths.empty())
+        return true;
+
     Vector<Pair<usize, Path>> sortedSegments;
     HashSet<usize> seenIndices;
     const AString prefix = m_volumeName + "_";
     constexpr AStringView suffix = ".vol";
 
-    std::error_code errorCode;
+    errorCode.clear();
     std::filesystem::directory_iterator directoryIt(m_mountDirectory, errorCode);
     std::filesystem::directory_iterator end;
 
@@ -943,22 +1074,22 @@ bool VolumeFileSystem::ensureCapacityLocked(const u64 requiredBytes){
 }
 
 bool VolumeFileSystem::loadMetadataLocked(){
-    __hidden_filesystem::VolumeHeaderDisk header{};
+    VolumeHeaderDisk header{};
     if(!readBytesLocked(0, &header, sizeof(header))){
         __hidden_filesystem::LogFailure(m_volumeName, "loadMetadata", "failed to read metadata header");
         return false;
     }
 
-    if(NWB_MEMCMP(header.magic, __hidden_filesystem::s_VolumeMagic, sizeof(header.magic)) != 0){
+    if(NWB_MEMCMP(header.magic, s_VolumeMagic, sizeof(header.magic)) != 0){
         __hidden_filesystem::LogFailure(m_volumeName, "loadMetadata", "magic mismatch");
         return false;
     }
-    if(header.version != __hidden_filesystem::s_VolumeFormatVersion){
+    if(header.version != s_VolumeFormatVersion){
         NWB_LOGGER_WARNING(
             NWB_TEXT("Filesystem('{}'): loadMetadata failed: format version {} is not supported (expected {})"),
             StringConvert(m_volumeName),
             header.version,
-            __hidden_filesystem::s_VolumeFormatVersion
+            s_VolumeFormatVersion
         );
         return false;
     }
@@ -1004,12 +1135,12 @@ bool VolumeFileSystem::loadMetadataLocked(){
         __hidden_filesystem::LogFailure(m_volumeName, "loadMetadata", "index byte count exceeds runtime addressable range");
         return false;
     }
-    if(header.fileCount > Limit<u64>::s_Max / static_cast<u64>(sizeof(__hidden_filesystem::VolumeIndexEntryDisk))){
+    if(header.fileCount > Limit<u64>::s_Max / static_cast<u64>(sizeof(VolumeIndexEntryDisk))){
         __hidden_filesystem::LogFailure(m_volumeName, "loadMetadata", "file count overflows index entry byte computation");
         return false;
     }
 
-    const u64 expectedIndexBytes = header.fileCount * static_cast<u64>(sizeof(__hidden_filesystem::VolumeIndexEntryDisk));
+    const u64 expectedIndexBytes = header.fileCount * static_cast<u64>(sizeof(VolumeIndexEntryDisk));
     if(header.indexBytes != expectedIndexBytes){
         NWB_LOGGER_WARNING(
             NWB_TEXT("Filesystem('{}'): loadMetadata failed: index byte count {} does not match expected {}"),
@@ -1026,15 +1157,15 @@ bool VolumeFileSystem::loadMetadataLocked(){
         return false;
     }
 
-    FileMap loadedFiles;
+    FileMap loadedFiles(0, Hasher<Name>(), EqualTo<Name>(), FileMapAllocator(m_arena));
     u64 cursor = 0;
     for(u64 i = 0; i < header.fileCount; ++i){
-        if(header.indexBytes - cursor < sizeof(__hidden_filesystem::VolumeIndexEntryDisk)){
+        if(header.indexBytes - cursor < sizeof(VolumeIndexEntryDisk)){
             __hidden_filesystem::LogFailure(m_volumeName, "loadMetadata", "truncated metadata index entry");
             return false;
         }
 
-        __hidden_filesystem::VolumeIndexEntryDisk entry{};
+        VolumeIndexEntryDisk entry{};
         NWB_MEMCPY(&entry, sizeof(entry), indexData.data() + static_cast<usize>(cursor), sizeof(entry));
         cursor += sizeof(entry);
 
@@ -1091,9 +1222,9 @@ bool VolumeFileSystem::flushMetadataLocked(){
         return false;
     }
 
-    __hidden_filesystem::VolumeHeaderDisk header{};
-    NWB_MEMCPY(header.magic, sizeof(header.magic), __hidden_filesystem::s_VolumeMagic, sizeof(__hidden_filesystem::s_VolumeMagic));
-    header.version = __hidden_filesystem::s_VolumeFormatVersion;
+    VolumeHeaderDisk header{};
+    NWB_MEMCPY(header.magic, sizeof(header.magic), s_VolumeMagic, sizeof(s_VolumeMagic));
+    header.version = s_VolumeFormatVersion;
     header.reserved = 0;
     header.segmentSize = m_segmentSize;
     header.metadataBytes = m_metadataBytes;
@@ -1107,11 +1238,11 @@ bool VolumeFileSystem::flushMetadataLocked(){
     Sort(sortedPaths.begin(), sortedPaths.end(), __hidden_filesystem::LessName);
 
     Vector<u8> indexBytes;
-    if(header.fileCount > Limit<u64>::s_Max / static_cast<u64>(sizeof(__hidden_filesystem::VolumeIndexEntryDisk))){
+    if(header.fileCount > Limit<u64>::s_Max / static_cast<u64>(sizeof(VolumeIndexEntryDisk))){
         __hidden_filesystem::LogFailure(m_volumeName, "flushMetadata", "file count overflows index size");
         return false;
     }
-    const u64 expectedIndexBytes = header.fileCount * static_cast<u64>(sizeof(__hidden_filesystem::VolumeIndexEntryDisk));
+    const u64 expectedIndexBytes = header.fileCount * static_cast<u64>(sizeof(VolumeIndexEntryDisk));
     if(expectedIndexBytes > static_cast<u64>(Limit<usize>::s_Max)){
         __hidden_filesystem::LogFailure(m_volumeName, "flushMetadata", "metadata index exceeds runtime addressable range");
         return false;
@@ -1126,7 +1257,7 @@ bool VolumeFileSystem::flushMetadataLocked(){
         }
 
         const FileRecord& record = itr->second;
-        __hidden_filesystem::VolumeIndexEntryDisk entry{};
+        VolumeIndexEntryDisk entry{};
         entry.hash = pathName.hash();
         entry.offset = record.offset;
         entry.size = record.size;
@@ -1168,13 +1299,13 @@ bool VolumeFileSystem::flushMetadataLocked(){
 }
 
 bool VolumeFileSystem::canFitMetadataForFileCountLocked(const u64 fileCount)const{
-    if(fileCount > Limit<u64>::s_Max / static_cast<u64>(sizeof(__hidden_filesystem::VolumeIndexEntryDisk)))
+    if(fileCount > Limit<u64>::s_Max / static_cast<u64>(sizeof(VolumeIndexEntryDisk)))
         return false;
 
-    const u64 indexBytes = fileCount * static_cast<u64>(sizeof(__hidden_filesystem::VolumeIndexEntryDisk));
+    const u64 indexBytes = fileCount * static_cast<u64>(sizeof(VolumeIndexEntryDisk));
 
     u64 metadataBytes = 0;
-    if(!__hidden_filesystem::AddNoOverflow(static_cast<u64>(sizeof(__hidden_filesystem::VolumeHeaderDisk)), indexBytes, metadataBytes))
+    if(!__hidden_filesystem::AddNoOverflow(static_cast<u64>(sizeof(VolumeHeaderDisk)), indexBytes, metadataBytes))
         return false;
 
     return metadataBytes <= m_metadataBytes;
@@ -1468,7 +1599,7 @@ bool VolumeFileSystem::trimSegmentsForNextFreeOffsetLocked(){
 
     while(m_segmentPaths.size() > static_cast<usize>(requiredSegments)){
         const Path removePath = m_segmentPaths.back();
-        std::error_code errorCode;
+        ErrorCode errorCode;
         const bool removed = std::filesystem::remove(removePath, errorCode);
         if(errorCode || !removed){
             if(errorCode)
@@ -1501,7 +1632,98 @@ void VolumeFileSystem::unmountLocked(){
 }
 
 Path VolumeFileSystem::segmentPath(const usize segmentIndex)const{
-    return m_mountDirectory / __hidden_filesystem::MakeSegmentFileName(m_volumeName, segmentIndex);
+    return m_mountDirectory / MakeVolumeSegmentFileName(m_volumeName, segmentIndex);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+VolumeSession::VolumeSession(Alloc::CustomArena& arena)
+    : m_volumeFileSystem(arena)
+{}
+
+
+bool VolumeSession::create(const Path& outputDirectory, const VolumeBuildConfig& config, AString& outError){
+    outError.clear();
+
+    VolumeMountDesc desc;
+    desc.volumeName = config.volumeName;
+    desc.mountDirectory = outputDirectory;
+    desc.segmentSize = config.segmentSize;
+    desc.metadataSize = config.metadataSize;
+    desc.createIfMissing = true;
+    desc.usage = VolumeUsage::CookWrite;
+
+    if(m_volumeFileSystem.mount(desc))
+        return true;
+
+    outError = StringFormat("VolumeSession::create failed to mount volume '{}'", config.volumeName);
+    return false;
+}
+
+
+bool VolumeSession::load(const AStringView volumeName, const Path& mountDirectory, AString& outError){
+    outError.clear();
+
+    VolumeMountDesc desc;
+    desc.volumeName = AString(volumeName);
+    desc.mountDirectory = mountDirectory;
+    desc.createIfMissing = false;
+    desc.usage = VolumeUsage::RuntimeReadOnly;
+
+    if(m_volumeFileSystem.mount(desc))
+        return true;
+
+    outError = StringFormat("VolumeSession::load failed to mount volume '{}'", volumeName);
+    return false;
+}
+
+bool VolumeSession::pushData(const AStringView virtualPath, const Vector<u8>& data, AString& outError){
+    outError.clear();
+
+    if(!m_volumeFileSystem.mounted()){
+        outError = "VolumeSession::pushData failed: volume is not mounted";
+        return false;
+    }
+    if(!m_volumeFileSystem.writable()){
+        outError = "VolumeSession::pushData failed: volume is read-only";
+        return false;
+    }
+    if(virtualPath.empty()){
+        outError = "VolumeSession::pushData failed: virtual path is empty";
+        return false;
+    }
+
+    const AString virtualPathText(virtualPath);
+    const Name virtualPathName(virtualPathText.c_str());
+    if(m_volumeFileSystem.writeFile(virtualPathName, data))
+        return true;
+
+    outError = StringFormat("VolumeSession::pushData failed to write '{}'", virtualPath);
+    return false;
+}
+
+
+bool VolumeSession::loadData(const AStringView virtualPath, Vector<u8>& outData, AString& outError)const{
+    outError.clear();
+
+    if(!m_volumeFileSystem.mounted()){
+        outError = "VolumeSession::loadData failed: volume is not mounted";
+        return false;
+    }
+    if(virtualPath.empty()){
+        outError = "VolumeSession::loadData failed: virtual path is empty";
+        return false;
+    }
+
+    const AString virtualPathText(virtualPath);
+    const Name virtualPathName(virtualPathText.c_str());
+    if(m_volumeFileSystem.readFile(virtualPathName, outData))
+        return true;
+
+    outError = StringFormat("VolumeSession::loadData failed to read '{}'", virtualPath);
+    return false;
 }
 
 

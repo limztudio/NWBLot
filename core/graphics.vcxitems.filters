@@ -8,7 +8,8 @@
   <ItemGroup>
     <ClCompile Include="$(MSBuildThisFileDirectory)graphics\common.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)graphics\graphics.cpp" />
-    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\shader.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\shader_archive.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\shader_compile.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_allocator.cpp">
       <Filter>vulkan</Filter>
     </ClCompile>
@@ -72,7 +73,10 @@
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\basic.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\common.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\graphics.h" />
-    <ClInclude Include="$(MSBuildThisFileDirectory)graphics\shader.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)graphics\shader_archive.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)graphics\shader_param.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)graphics\shader_compile.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)graphics\shader_cook.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan.h">
       <Filter>vulkan</Filter>
     </ClInclude>
@@ -82,5 +86,11 @@
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_device_manager.h">
       <Filter>vulkan</Filter>
     </ClInclude>
+    <ClInclude Include="$(MSBuildThisFileDirectory)assets\global.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)assets\asset.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)assets\asset_handle.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)assets\asset_pool.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)assets\asset_registry.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)assets\asset_manager.h" />
   </ItemGroup>
 </Project>

@@ -1,0 +1,136 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include "common.h"
+
+
+#if defined(NWB_COOK)
+#include <filesystem>
+#include <fstream>
+#include <sstream>
+#include <system_error>
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#if defined(NWB_COOK)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace ShaderCook{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static constexpr u64 s_DefaultSegmentSize = 16ull * 1024ull * 1024ull;
+static constexpr u64 s_DefaultMetadataSize = 512ull * 1024ull;
+
+namespace FileSystem = std::filesystem;
+
+using ErrorCode = std::error_code;
+using StreamOffset = std::streamoff;
+using StreamSize = std::streamsize;
+
+using InputFileStream = std::ifstream;
+using OutputFileStream = std::ofstream;
+using InOutFileStream = std::fstream;
+using OutputStringStream = std::ostringstream;
+
+template<typename T>
+using CookVector = Vector<T>;
+
+template<typename T, typename V>
+using CookMap = HashMap<T, V>;
+
+template<typename T>
+using CookHashSet = HashSet<T>;
+
+using DefineCombo = CookMap<AString, AString>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct ManifestEntry{
+    AString name;
+    AString compiler = "glslang";
+    AString stage;
+    AString targetProfile;
+    AString entryPoint = "main";
+    AString source;
+    AString defaultVariant;
+
+    CookMap<AString, CookVector<AString>> defineValues;
+};
+
+struct ManifestData{
+    AString volumeName = "graphics";
+    u64 segmentSize = s_DefaultSegmentSize;
+    u64 metadataSize = s_DefaultMetadataSize;
+
+    CookVector<AString> includeRoots;
+    CookVector<ManifestEntry> entries;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool ParseManifestFile(const Path& manifestPath, ManifestData& outManifest, AString& outError);
+bool GatherShaderDependencies(
+    const Path& sourcePath,
+    const CookVector<Path>& includeDirectories,
+    CookVector<Path>& outDependencies,
+    AString& outError
+);
+
+void ExpandDefineCombinations(
+    const CookMap<AString, CookVector<AString>>& defineValues,
+    CookVector<DefineCombo>& outCombinations
+);
+AString BuildVariantName(const DefineCombo& combo);
+
+bool ComputeSourceChecksum(
+    const ManifestEntry& entry,
+    AStringView variantName,
+    const CookVector<Path>& dependencies,
+    u64& outChecksum,
+    AString& outError
+);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

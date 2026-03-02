@@ -4,13 +4,13 @@
 
 #include "renderer_system.h"
 
-#include "cube_shader_spirv.h"
+#include <core/graphics/shader_archive.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_ECS_GRAPHICS_BEGIN
+NWB_IMPL_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -51,7 +51,9 @@ static constexpr u16 s_CubeIndices[36] = {
     1, 2, 6, 1, 6, 5,
 };
 
-static constexpr Color s_ClearColor = Color(0.07f, 0.09f, 0.13f, 1.f);
+static constexpr Core::Color s_ClearColor = Core::Color(0.07f, 0.09f, 0.13f, 1.f);
+static constexpr AStringView s_CubeVertexShaderName = "engine/ecs_graphics/cube.vs";
+static constexpr AStringView s_CubePixelShaderName = "engine/ecs_graphics/cube.ps";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -63,10 +65,11 @@ static constexpr Color s_ClearColor = Color(0.07f, 0.09f, 0.13f, 1.f);
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RendererSystem::RendererSystem(ECS::World& world, Graphics& graphics)
-    : IRenderPass(*graphics.getDeviceManager())
+RendererSystem::RendererSystem(Core::ECS::World& world, Core::Graphics& graphics, ShaderBinaryLookupCallback shaderBinaryLookup)
+    : Core::IRenderPass(*graphics.getDeviceManager())
     , m_world(world)
     , m_graphics(graphics)
+    , m_shaderBinaryLookup(Move(shaderBinaryLookup))
 {
     readAccess<CubeComponent>();
     writeAccess<RendererComponent>();
@@ -75,7 +78,7 @@ RendererSystem::~RendererSystem()
 {}
 
 
-void RendererSystem::update(ECS::World& world, f32 delta){
+void RendererSystem::update(Core::ECS::World& world, f32 delta){
     (void)delta;
 
     auto cubeView = world.view<CubeComponent, RendererComponent>();
@@ -89,7 +92,7 @@ void RendererSystem::update(ECS::World& world, f32 delta){
     }
 }
 
-void RendererSystem::render(IFramebuffer* framebuffer){
+void RendererSystem::render(Core::IFramebuffer* framebuffer){
     if(!framebuffer)
         return;
 
@@ -98,18 +101,18 @@ void RendererSystem::render(IFramebuffer* framebuffer){
 
     auto cubeView = m_world.view<CubeComponent, RendererComponent>();
 
-    IDevice* device = m_graphics.getDevice();
-    CommandListHandle commandList = device->createCommandList();
+    Core::IDevice* device = m_graphics.getDevice();
+    Core::CommandListHandle commandList = device->createCommandList();
     if(!commandList)
         return;
 
     commandList->open();
 
-    ITexture* backBuffer = getDeviceManager().getCurrentBackBuffer();
+    Core::ITexture* backBuffer = getDeviceManager().getCurrentBackBuffer();
     if(backBuffer)
-        commandList->clearTextureFloat(backBuffer, s_AllSubresources, __hidden_ecs_graphics::s_ClearColor);
+        commandList->clearTextureFloat(backBuffer, Core::s_AllSubresources, __hidden_ecs_graphics::s_ClearColor);
 
-    ViewportState viewportState;
+    Core::ViewportState viewportState;
     viewportState.addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
 
     for(auto [entity, cube, renderer] : cubeView){
@@ -119,16 +122,16 @@ void RendererSystem::render(IFramebuffer* framebuffer){
         if(!renderer.visible || !renderer.mesh.isValid())
             continue;
 
-        GraphicsState state;
+        Core::GraphicsState state;
         state.setPipeline(m_pipeline.get());
         state.setFramebuffer(framebuffer);
         state.setViewport(viewportState);
-        state.addVertexBuffer(VertexBufferBinding().setBuffer(renderer.mesh.vertexBuffer.get()).setSlot(0).setOffset(0));
-        state.setIndexBuffer(IndexBufferBinding().setBuffer(renderer.mesh.indexBuffer.get()).setOffset(0).setFormat(renderer.mesh.indexFormat));
+        state.addVertexBuffer(Core::VertexBufferBinding().setBuffer(renderer.mesh.vertexBuffer.get()).setSlot(0).setOffset(0));
+        state.setIndexBuffer(Core::IndexBufferBinding().setBuffer(renderer.mesh.indexBuffer.get()).setOffset(0).setFormat(renderer.mesh.indexFormat));
 
         commandList->setGraphicsState(state);
 
-        DrawArguments drawArgs;
+        Core::DrawArguments drawArgs;
         drawArgs.setVertexCount(renderer.mesh.indexCount);
         commandList->drawIndexed(drawArgs);
     }
@@ -153,42 +156,22 @@ void RendererSystem::backBufferResized(u32 width, u32 height, u32 sampleCount){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererSystem::ensurePipeline(IFramebuffer* framebuffer){
+bool RendererSystem::ensurePipeline(Core::IFramebuffer* framebuffer){
     if(!framebuffer)
         return false;
 
-    IDevice* device = m_graphics.getDevice();
+    if(!ensureShaderLoaded(m_vertexShader, __hidden_ecs_graphics::s_CubeVertexShaderName, Core::ShaderType::Vertex, "ECSGraphics_CubeVS"))
+        return false;
 
-    if(!m_vertexShader){
-        ShaderDesc desc;
-        desc.setShaderType(ShaderType::Vertex);
-        desc.setDebugName("ECSGraphics_CubeVS");
-        m_vertexShader = device->createShader(
-            desc,
-            NWB::Core::__hidden_ecs_graphics::s_CubeVertexShaderSpirv,
-            sizeof(NWB::Core::__hidden_ecs_graphics::s_CubeVertexShaderSpirv)
-        );
-        if(!m_vertexShader)
-            return false;
-    }
+    if(!ensureShaderLoaded(m_pixelShader, __hidden_ecs_graphics::s_CubePixelShaderName, Core::ShaderType::Pixel, "ECSGraphics_CubePS"))
+        return false;
 
-    if(!m_pixelShader){
-        ShaderDesc desc;
-        desc.setShaderType(ShaderType::Pixel);
-        desc.setDebugName("ECSGraphics_CubePS");
-        m_pixelShader = device->createShader(
-            desc,
-            NWB::Core::__hidden_ecs_graphics::s_CubePixelShaderSpirv,
-            sizeof(NWB::Core::__hidden_ecs_graphics::s_CubePixelShaderSpirv)
-        );
-        if(!m_pixelShader)
-            return false;
-    }
+    Core::IDevice* device = m_graphics.getDevice();
 
     if(!m_inputLayout){
-        VertexAttributeDesc attributes[2];
-        attributes[0].setFormat(Format::RGB32_FLOAT).setBufferIndex(0).setOffset(0).setElementStride(sizeof(__hidden_ecs_graphics::CubeVertex)).setName("POSITION");
-        attributes[1].setFormat(Format::RGB32_FLOAT).setBufferIndex(0).setOffset(sizeof(f32) * 3).setElementStride(sizeof(__hidden_ecs_graphics::CubeVertex)).setName("COLOR");
+        Core::VertexAttributeDesc attributes[2];
+        attributes[0].setFormat(Core::Format::RGB32_FLOAT).setBufferIndex(0).setOffset(0).setElementStride(sizeof(__hidden_ecs_graphics::CubeVertex)).setName("POSITION");
+        attributes[1].setFormat(Core::Format::RGB32_FLOAT).setBufferIndex(0).setOffset(sizeof(f32) * 3).setElementStride(sizeof(__hidden_ecs_graphics::CubeVertex)).setName("COLOR");
 
         m_inputLayout = device->createInputLayout(attributes, 2, m_vertexShader.get());
         if(!m_inputLayout)
@@ -198,12 +181,12 @@ bool RendererSystem::ensurePipeline(IFramebuffer* framebuffer){
     if(m_pipeline)
         return true;
 
-    GraphicsPipelineDesc desc;
+    Core::GraphicsPipelineDesc desc;
     desc.setInputLayout(m_inputLayout.get());
     desc.setVertexShader(m_vertexShader.get());
     desc.setPixelShader(m_pixelShader.get());
 
-    RenderState renderState;
+    Core::RenderState renderState;
     renderState.depthStencilState.disableDepthTest().disableDepthWrite();
     renderState.rasterState.setCullNone();
     desc.setRenderState(renderState);
@@ -212,7 +195,42 @@ bool RendererSystem::ensurePipeline(IFramebuffer* framebuffer){
     return m_pipeline != nullptr;
 }
 
-Graphics::MeshResource RendererSystem::createCubeMesh(const CubeComponent& cube)const{
+bool RendererSystem::ensureShaderLoaded(
+    Core::ShaderHandle& outShader,
+    const AStringView shaderName,
+    const Core::ShaderType::Mask shaderType,
+    const Name& debugName
+){
+    if(outShader)
+        return true;
+
+    if(!m_shaderBinaryLookup)
+        return false;
+
+    Vector<u8> shaderBinary;
+    if(!m_shaderBinaryLookup(shaderName, Core::ShaderArchive::s_DefaultVariant, shaderBinary))
+        return false;
+
+    if(shaderBinary.empty() || (shaderBinary.size() & 3u) != 0u)
+        return false;
+
+    Core::ShaderDesc shaderDesc;
+    shaderDesc.setShaderType(shaderType);
+    shaderDesc.setDebugName(debugName);
+
+    Core::IDevice* device = m_graphics.getDevice();
+    outShader = device->createShader(
+        shaderDesc,
+        shaderBinary.data(),
+        shaderBinary.size()
+    );
+    if(!outShader)
+        return false;
+
+    return true;
+}
+
+Core::Graphics::MeshResource RendererSystem::createCubeMesh(const CubeComponent& cube)const{
     Array<__hidden_ecs_graphics::CubeVertex, 8> vertices{};
     for(usize i = 0; i < vertices.size(); ++i){
         vertices[i] = __hidden_ecs_graphics::s_CubeVertices[i];
@@ -224,7 +242,7 @@ Graphics::MeshResource RendererSystem::createCubeMesh(const CubeComponent& cube)
         vertices[i].b *= cube.color.b;
     }
 
-    Graphics::MeshSetupDesc desc;
+    Core::Graphics::MeshSetupDesc desc;
     desc.vertexData = vertices.data();
     desc.vertexDataSize = sizeof(vertices);
     desc.vertexStride = sizeof(__hidden_ecs_graphics::CubeVertex);
@@ -241,7 +259,7 @@ Graphics::MeshResource RendererSystem::createCubeMesh(const CubeComponent& cube)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_ECS_GRAPHICS_END
+NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

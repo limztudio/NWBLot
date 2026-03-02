@@ -14,13 +14,12 @@
     <ProjectCapability Include="SourceItemsFromImports" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="$(MSBuildThisFileDirectory)ecs_graphics\renderer_system.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)..\impl\ecs_graphics\renderer_system.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="$(MSBuildThisFileDirectory)ecs_graphics\global.h" />
-    <ClInclude Include="$(MSBuildThisFileDirectory)ecs_graphics\components.h" />
-    <ClInclude Include="$(MSBuildThisFileDirectory)ecs_graphics\renderer_system.h" />
-    <ClInclude Include="$(MSBuildThisFileDirectory)ecs_graphics\cube_shader_spirv.h" />
-    <ClInclude Include="$(MSBuildThisFileDirectory)ecs_graphics\ecs_graphics.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)..\impl\ecs_graphics\global.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)..\impl\ecs_graphics\components.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)..\impl\ecs_graphics\renderer_system.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)..\impl\ecs_graphics\ecs_graphics.h" />
   </ItemGroup>
 </Project>

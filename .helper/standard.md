@@ -20,6 +20,11 @@ Updated: 2026-02-28
 - Use namespace wrapper macros (`NWB_BEGIN`, `NWB_CORE_BEGIN`, `NWB_VULKAN_BEGIN`, etc.) instead of raw namespace blocks in module public files.
 - End wrapped namespaces with corresponding `*_END` macros.
 - Put private/internal helpers in `namespace __hidden_<module>{ ... }`.
+  - The `<module>` suffix should match the file or logical module name (e.g., `__hidden_shader_cook`, `__hidden_vulkan_shader`, `__hidden_assets`).
+  - `__hidden_*` namespaces are for translation-unit-local implementation details that should not be called by outside code.
+  - They live inside the file's `.cpp`, not in headers.
+  - Never expose `__hidden_*` symbols in public headers or use them across translation units.
+  - `using namespace` directives for project namespaces (e.g., `using namespace ShaderCook;`) are allowed inside `__hidden_*` namespaces for convenience.
 
 ## 3. Naming conventions
 - Types (`class`, `struct`, `enum namespaces`) use `PascalCase`.
@@ -39,6 +44,10 @@ Updated: 2026-02-28
 ## 4. Formatting conventions
 - Indentation is 4 spaces (no tabs observed in sampled files).
 - Braces are generally K&R style (`if(...) {`, `switch(...) {`, `class X{`).
+- No space between closing `)` and trailing qualifiers (`const`, `override`, `final`, `noexcept`):
+  - Correct: `name()const;`, `assetType()const override;`, `foo()noexcept;`
+  - Wrong: `name() const;`, `assetType() const override;`
+  - This applies to declarations, definitions, and multiline signatures alike (e.g., `)const{`, `)const override{`, `)const = 0;`).
 - Keep control statements compact; single-line guard clauses are common.
 - Constructor initializer lists are split across lines with leading commas.
 - Heavy use of visual separators and blank lines between logical blocks.
@@ -81,7 +90,12 @@ Updated: 2026-02-28
 - Before introducing a new direct `std::` usage, check `global/global.h` and related global headers for an existing wrapper/alias.
 - If missing and broadly useful, add a project-level alias/wrapper rather than repeating direct `std::` usage across modules.
 - For generic core std types used across modules (e.g., `std::max_align_t`), add/use a `global/type.h` alias (`MaxAlign`) instead of direct `std::` usage in module code.
+- When wrapping `std::` functions that return a meaningful value *and* accept an error-code out parameter (e.g., `std::filesystem::exists(path, ec)`), the wrapper must preserve the original return value; do not collapse it into the error code.
+  - The return value carries the answer (e.g., "does the file exist?"), the `ErrorCode&` carries the failure reason (e.g., permission denied). These are two different pieces of information — "file does not exist" is a valid `false` result, not an error.
+  - Correct: `[[nodiscard]] inline bool FileExists(const Path& path, ErrorCode& errorCode)noexcept{ return std::filesystem::exists(path, errorCode); }`
+  - Wrong: `inline ErrorCode FileExists(const Path& path)noexcept{ ... }` — discards the bool result; callers cannot distinguish "file not found" from "no error".
 - Prefer project C-runtime wrapper macros from `global/compile.h` for memory/string operations (`NWB_MEMCPY`, `NWB_MEMSET`, `NWB_MEMCMP`, `NWB_STRCPY`, etc.) instead of direct `std::`/CRT calls when equivalent wrappers exist.
+- For console I/O, prefer project stream macros from `global/compile.h` (`NWB_COUT`, `NWB_CERR`, `NWB_TCOUT`, `NWB_TCERR`) instead of direct `std::cout`/`std::cerr` or `fprintf(stdout/stderr, ...)`.
 - When exposing inherited member functions without changing behavior, prefer `using BaseType::functionName;` over trivial forwarding wrappers like `inline foo(...){ return BaseType::foo(...); }`.
 - Keep forwarding wrappers only when they add behavior, transform contracts, or intentionally change the exposed API shape.
 - Do not add trivial pass-through accessors that only return a private member (`return m_x;`) when they are not needed as a module boundary API.
@@ -89,6 +103,9 @@ Updated: 2026-02-28
 - Keep trivial accessors only when they are actually used across module boundaries or are part of a deliberate external API contract.
 - Apply the same rule to trivial pass-through setters (`setX(...) { m_x = ...; }`): remove them when unused or bubble-only.
 - Keep trivial setters only when they are part of a deliberate external API contract and actually needed at module boundaries.
+- Trivial single-statement member functions (getters that return a member, setters that assign a member, `assetType()` returning a literal, etc.) should be defined inline in the header rather than in a `.cpp` file.
+  - Example: `[[nodiscard]] const Name& shaderName()const{ return m_shaderName; }`
+  - Multi-statement bodies, loops, conditionals, or functions that call other non-trivial helpers belong in the `.cpp`.
 - Strictly distinguish references vs pointers:
   - Parameters:
     - Use references (`T&`, `const T&`) for required, non-null inputs by default.

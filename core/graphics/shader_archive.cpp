@@ -2,45 +2,35 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#pragma once
-
-
-#include "global.h"
-
-#include <core/graphics/graphics.h>
+#include "shader_archive.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_ECS_GRAPHICS_BEGIN
+NWB_CORE_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct CubeComponent{
-    f32 size = 1.f;
-    Color color = Color(1.f, 1.f, 1.f, 1.f);
+AString ShaderArchive::buildVirtualPath(const AStringView shaderName, const AStringView variantName){
+    const AString canonicalShaderName = CanonicalizeText(shaderName);
 
-    constexpr CubeComponent& setSize(f32 value){ size = value; return *this; }
-    constexpr CubeComponent& setColor(const Color& value){ color = value; return *this; }
-};
+    AString canonicalVariantName = CanonicalizeText(variantName);
+    if(canonicalVariantName.empty())
+        canonicalVariantName = s_DefaultVariant;
 
-struct RendererComponent{
-    Graphics::MeshResource mesh;
-    bool visible = true;
-
-    RendererComponent& setMesh(const Graphics::MeshResource& value){ mesh = value; return *this; }
-    constexpr RendererComponent& setVisible(bool value){ visible = value; return *this; }
-};
+    const u64 variantHash = ComputeFnv64Text(canonicalVariantName);
+    const AString variantHashHex = FormatHex64(variantHash);
+    return StringFormat("shader/{}/{}.spv", canonicalShaderName, variantHashHex);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_ECS_GRAPHICS_END
+NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

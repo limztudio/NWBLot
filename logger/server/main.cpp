@@ -8,9 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <exception>
-#include <windows.h>
-
 #include <CLI.hpp>
 
 #include <command.h>
@@ -40,7 +37,7 @@ static int MainLogic(u16 logPort, void* inst){
             if(!frame.mainLoop())
                 return -1;
         }
-        catch(const std::exception& e){
+        catch(const GeneralException& e){
             NWB_LOGGER.enqueue(StringFormat(NWB_TEXT("Exception: {}"), StringConvert(e.what())), NWB::Log::Type::Fatal);
             NWB_LOGGER_REGISTER(nullptr);
             return -1;

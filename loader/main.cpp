@@ -8,8 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <exception>
-
 #include <CLI.hpp>
 
 #include <global.h>
@@ -19,6 +17,8 @@
 #include <logger/client/logger.h>
 #include <core/common/common.h>
 #include <core/frame/frame.h>
+#include <core/graphics/shader_archive.h>
+#include <core/filesystem/filesystem.h>
 
 #include "project_entry.h"
 
@@ -59,6 +59,10 @@ bool ProjectTickCallback(void* userData, f32 delta){
     return updateContext->callbacks->onUpdate(delta);
 }
 
+Path ResolveShaderMountDirectory(){
+    return Path("res");
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -83,15 +87,49 @@ static int MainLogic(NotNull<const char*> logAddress, void* inst){
                 return -1;
             }
             NWB::Core::Frame frame(inst, frameClientSize.width, frameClientSize.height);
+            NWB::Core::Filesystem::VolumeSession graphicsVolume(frame.projectObjectArena());
+            HashSet<AString> missingVirtualPaths;
             NWB::ProjectRuntimeContext context = {
                 frame.graphics(),
                 frame.projectObjectArena(),
                 frame.projectThreadPool(),
                 frame.projectJobSystem(),
+                {},
+            };
+            context.shaderBinaryLookup = [&graphicsVolume, &missingVirtualPaths](const AStringView shaderName, const AStringView variantName, Vector<u8>& outBinary){
+                const AString virtualPath = NWB::Core::ShaderArchive::buildVirtualPath(shaderName, variantName);
+
+                if(missingVirtualPaths.find(virtualPath) != missingVirtualPaths.end())
+                    return false;
+
+                AString errorMessage;
+                if(graphicsVolume.loadData(virtualPath, outBinary, errorMessage))
+                    return true;
+
+                missingVirtualPaths.insert(virtualPath);
+                NWB_LOGGER_WARNING(
+                    NWB_TEXT("Shader lookup miss: shader='{}', variant='{}', virtualPath='{}' ({})"),
+                    StringConvert(shaderName),
+                    StringConvert(variantName),
+                    StringConvert(virtualPath),
+                    StringConvert(errorMessage)
+                );
+                return false;
             };
 
             if(!frame.init())
                 return -1;
+
+            const Path shaderMountDirectory = __hidden_loader::ResolveShaderMountDirectory();
+            AString mountError;
+            if(!graphicsVolume.load("graphics", shaderMountDirectory, mountError)){
+                NWB_LOGGER_FATAL(
+                    NWB_TEXT("Failed to load graphics volume from '{}': {}"),
+                    StringConvert(shaderMountDirectory.string()),
+                    StringConvert(mountError)
+                );
+                return -1;
+            }
 
             auto callbacks = NWB::CreateProjectEntryCallbacks(context);
             if(!callbacks){
@@ -112,7 +150,7 @@ static int MainLogic(NotNull<const char*> logAddress, void* inst){
             if(!frame.mainLoop())
                 return -1;
         }
-        catch(const std::exception& e){
+        catch(const GeneralException& e){
             NWB_LOGGER_FATAL(NWB_TEXT("Exception: {}"), StringConvert(e.what()));
             NWB_LOGGER_REGISTER(nullptr);
             return -1;

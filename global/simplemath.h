@@ -6,6 +6,7 @@
 
 
 #include <algorithm>
+#include <limits>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -33,6 +34,15 @@ template<typename T>
 constexpr inline T FloorLog2(T x){ return (x == 1) ? 0 : (1 + FloorLog2<T>(x >> 1)); }
 template<typename T>
 constexpr inline T CeilLog2(T x){ return (x == 1) ? 0 : (FloorLog2<T>(x - 1) + 1); }
+
+template<typename T>
+[[nodiscard]] constexpr bool AddNoOverflow(const T lhs, const T rhs, T& outResult){
+    if(lhs > ((std::numeric_limits<T>::max)() - rhs))
+        return false;
+
+    outResult = lhs + rhs;
+    return true;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -6,7 +6,7 @@
 #include "project_entry.h"
 
 #include <core/ecs/ecs.h>
-#include <core/ecs_graphics/ecs_graphics.h>
+#include <impl/ecs_graphics/ecs_graphics.h>
 #include <logger/client/logger.h>
 
 
@@ -34,7 +34,12 @@ bool CreateInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Core::E
         return false;
     }
 
-    world->addSystem<Core::ECSGraphics::RendererSystem>(*world, context.graphics);
+    if(!context.shaderBinaryLookup){
+        NWB_LOGGER_FATAL(NWB_TEXT("CreateInitialProjectWorld failed: shader binary lookup callback is null"));
+        return false;
+    }
+
+    world->addSystem<Core::ECSGraphics::RendererSystem>(*world, context.graphics, context.shaderBinaryLookup);
     auto* rendererSystem = world->getSystem<Core::ECSGraphics::RendererSystem>();
     if(!rendererSystem){
         NWB_LOGGER_FATAL(NWB_TEXT("CreateInitialProjectWorld failed: core renderer system was not created"));

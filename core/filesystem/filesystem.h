@@ -17,6 +17,35 @@ NWB_FILESYSTEM_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static constexpr char s_VolumeMagic[8] = { 'N', 'W', 'B', 'V', 'O', 'L', '1', '\0' };
+static constexpr u32 s_VolumeFormatVersion = 2u;
+
+
+struct VolumeHeaderDisk{
+    char magic[8];
+    u32 version;
+    u32 reserved;
+    u64 segmentSize;
+    u64 metadataBytes;
+    u64 fileCount;
+    u64 indexBytes;
+    u64 nextFreeOffset;
+};
+
+struct VolumeIndexEntryDisk{
+    NameHash hash;
+    u64 offset;
+    u64 size;
+};
+
+
+static_assert(sizeof(VolumeHeaderDisk) == 56, "VolumeHeaderDisk size mismatch");
+static_assert(sizeof(VolumeIndexEntryDisk) == 80, "VolumeIndexEntryDisk size mismatch");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace VolumeUsage{
 enum Enum : u8{
     RuntimeReadOnly = 0,
@@ -37,6 +66,27 @@ struct VolumeMountDesc{
     VolumeUsage::Enum usage = VolumeUsage::RuntimeReadOnly;
 };
 
+
+struct VolumeBuildConfig{
+    AString volumeName;
+    u64 segmentSize = 0;
+    u64 metadataSize = 0;
+};
+
+struct VolumeBuildInfo{
+    u64 fileCount = 0;
+    u64 segmentCount = 0;
+};
+
+bool BuildVolume(
+    const Path& outputDirectory,
+    const VolumeBuildConfig& config,
+    const HashMap<AString, Vector<u8>>& files,
+    VolumeBuildInfo& outBuildInfo,
+    AString& outError
+);
+
+
 class VolumeFileSystem : NoCopy{
 private:
     struct FileRecord{
@@ -44,11 +94,15 @@ private:
         u64 size = 0;
     };
 
-    using FileMap = HashMap<Name, FileRecord>;
+    using SegmentPathAllocator = Alloc::CustomAllocator<Path>;
+    using SegmentPathVector = Vector<Path, SegmentPathAllocator>;
+
+    using FileMapAllocator = Alloc::CustomAllocator<Pair<const Name, FileRecord>>;
+    using FileMap = HashMap<Name, FileRecord, Hasher<Name>, EqualTo<Name>, FileMapAllocator>;
 
 
 public:
-    VolumeFileSystem();
+    explicit VolumeFileSystem(Alloc::CustomArena& arena);
     ~VolumeFileSystem();
 
 
@@ -118,8 +172,32 @@ private:
     u64 m_nextFreeOffset = 0;
     usize m_maxSegments = 0;
 
-    Vector<Path> m_segmentPaths;
+    Alloc::CustomArena& m_arena;
+    SegmentPathVector m_segmentPaths;
     FileMap m_files;
+};
+
+
+class VolumeSession final : NoCopy{
+public:
+    explicit VolumeSession(Alloc::CustomArena& arena);
+
+
+public:
+    bool create(const Path& outputDirectory, const VolumeBuildConfig& config, AString& outError);
+    bool load(AStringView volumeName, const Path& mountDirectory, AString& outError);
+
+    bool pushData(AStringView virtualPath, const Vector<u8>& data, AString& outError);
+    bool loadData(AStringView virtualPath, Vector<u8>& outData, AString& outError)const;
+
+    [[nodiscard]] bool mounted()const{ return m_volumeFileSystem.mounted(); }
+    [[nodiscard]] bool writable()const{ return m_volumeFileSystem.writable(); }
+    [[nodiscard]] u64 fileCount()const{ return m_volumeFileSystem.fileCount(); }
+    [[nodiscard]] usize segmentCount()const{ return m_volumeFileSystem.segmentCount(); }
+
+
+private:
+    VolumeFileSystem m_volumeFileSystem;
 };
 
 

@@ -14,21 +14,24 @@ NWB_ASSETS_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool AssetCookerRegistry::registerCooker(IAssetCooker& cooker){
-    const AString incomingType = ::CanonicalizeText(cooker.assetType());
+bool AssetCookerRegistry::registerCooker(UniquePtr<IAssetCooker>&& cooker){
+    if(!cooker)
+        return false;
+
+    const AString incomingType = ::CanonicalizeText(cooker->assetType());
     if(incomingType.empty())
         return false;
 
-    for(IAssetCooker* registeredCooker : m_assetCookers){
-        if(registeredCooker == &cooker)
-            return true;
+    for(const UniquePtr<IAssetCooker>& registeredCooker : m_assetCookers){
+        if(!registeredCooker)
+            continue;
 
         const AString registeredType = ::CanonicalizeText(registeredCooker->assetType());
         if(registeredType == incomingType)
             return false;
     }
 
-    m_assetCookers.push_back(&cooker);
+    m_assetCookers.push_back(Move(cooker));
     return true;
 }
 
@@ -36,14 +39,24 @@ bool AssetCookerRegistry::registerCooker(IAssetCooker& cooker){
 bool AssetCookerRegistry::cook(const AssetCookOptions& options, AString& outError)const{
     const AString requestedType = ::CanonicalizeText(options.assetType);
     if(requestedType.empty()){
-        if(m_assetCookers.size() == 1)
-            return m_assetCookers[0]->cook(options, outError);
+        u32 validCookerCount = 0;
+        IAssetCooker* selectedCooker = nullptr;
+        for(const UniquePtr<IAssetCooker>& cooker : m_assetCookers){
+            if(!cooker)
+                continue;
+
+            ++validCookerCount;
+            selectedCooker = cooker.get();
+        }
+
+        if(validCookerCount == 1 && selectedCooker != nullptr)
+            return selectedCooker->cook(options, outError);
 
         outError = "Missing --asset-type";
         return false;
     }
 
-    for(IAssetCooker* cooker : m_assetCookers){
+    for(const UniquePtr<IAssetCooker>& cooker : m_assetCookers){
         if(cooker == nullptr)
             continue;
 

@@ -109,12 +109,6 @@ static bool ToStreamSize(const u64 value, std::streamsize& out){
     return true;
 }
 
-template<typename T>
-static void AppendPOD(Vector<u8>& output, const T& value){
-    const auto* begin = reinterpret_cast<const u8*>(&value);
-    output.insert(output.end(), begin, begin + sizeof(T));
-}
-
 static bool LessName(const Name& lhs, const Name& rhs){
     return ::LessNameHash(lhs.hash(), rhs.hash());
 }
@@ -168,7 +162,7 @@ static void* BuildArenaAllocAligned(usize size, usize align){
 }
 static void BuildArenaFreeAligned(void* ptr){ NWB::Core::Alloc::CoreFreeAligned(ptr, "filesystem_build_volume"); }
 
-static bool CleanOldSegments(const Path& outputDirectory, const AString& volumeName, AString& outError){
+static bool RemoveExistingVolumeSegments(const Path& outputDirectory, const AString& volumeName, AString& outError){
     ErrorCode errorCode;
 
     const AString segmentPrefix = StringFormat("{}_", volumeName);
@@ -267,9 +261,6 @@ bool BuildVolume(
         );
         return false;
     }
-
-    if(!__hidden_filesystem::CleanOldSegments(outputDirectory, config.volumeName, outError))
-        return false;
 
     Alloc::CustomArena arena(
         __hidden_filesystem::BuildArenaAlloc,
@@ -1262,7 +1253,7 @@ bool VolumeFileSystem::flushMetadataLocked(){
         entry.offset = record.offset;
         entry.size = record.size;
 
-        __hidden_filesystem::AppendPOD(indexBytes, entry);
+        AppendPOD(indexBytes, entry);
     }
 
     header.indexBytes = static_cast<u64>(indexBytes.size());
@@ -1647,6 +1638,9 @@ VolumeSession::VolumeSession(Alloc::CustomArena& arena)
 bool VolumeSession::create(const Path& outputDirectory, const VolumeBuildConfig& config, AString& outError){
     outError.clear();
 
+    if(!__hidden_filesystem::RemoveExistingVolumeSegments(outputDirectory, config.volumeName, outError))
+        return false;
+
     VolumeMountDesc desc;
     desc.volumeName = config.volumeName;
     desc.mountDirectory = outputDirectory;
@@ -1707,6 +1701,7 @@ bool VolumeSession::pushData(const AStringView virtualPath, const Vector<u8>& da
 
 bool VolumeSession::loadData(const AStringView virtualPath, Vector<u8>& outData, AString& outError)const{
     outError.clear();
+    outData.clear();
 
     if(!m_volumeFileSystem.mounted()){
         outError = "VolumeSession::loadData failed: volume is not mounted";
@@ -1719,6 +1714,11 @@ bool VolumeSession::loadData(const AStringView virtualPath, Vector<u8>& outData,
 
     const AString virtualPathText(virtualPath);
     const Name virtualPathName(virtualPathText.c_str());
+    if(!m_volumeFileSystem.fileExists(virtualPathName)){
+        outError = StringFormat("VolumeSession::loadData failed: file '{}' was not found", virtualPath);
+        return false;
+    }
+
     if(m_volumeFileSystem.readFile(virtualPathName, outData))
         return true;
 

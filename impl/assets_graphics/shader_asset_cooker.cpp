@@ -5,13 +5,12 @@
 #include "shader_asset_cooker.h"
 
 #if defined(NWB_COOK)
-#include "shader_asset.h"
-
 #include <core/graphics/shader_archive.h>
-#include <core/graphics/shader_compile.h>
+#include <core/graphics/shader_compiler.h>
 #include <core/graphics/shader_cook.h>
 
 #include <core/filesystem/filesystem.h>
+#include <core/alloc/core.h>
 #endif
 
 
@@ -115,6 +114,12 @@ static bool CacheSourceChecksumMatches(
     return trimmedCachedChecksum == sourceChecksumHex;
 }
 
+static void* VolumeArenaAlloc(usize size){ return Core::Alloc::CoreAlloc(size, "shader_cook_volume"); }
+static void VolumeArenaFree(void* ptr){ Core::Alloc::CoreFree(ptr, "shader_cook_volume"); }
+static void* VolumeArenaAllocAligned(usize size, usize align){
+    return Core::Alloc::CoreAllocAligned(size, align, "shader_cook_volume");
+}
+static void VolumeArenaFreeAligned(void* ptr){ Core::Alloc::CoreFreeAligned(ptr, "shader_cook_volume"); }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -217,11 +222,32 @@ bool ShaderAssetCooker::CookShaderAssets(const ShaderCookEnvironment& environmen
 
     const AString normalizedConfiguration = __hidden_assets::NormalizeCookConfiguration(environment.configuration);
     const AString configurationSafeName = BuildSafeCacheName(normalizedConfiguration);
-    Core::ShaderCook::CookMap<AString, Core::ShaderCook::CookVector<u8>> volumeFiles;
-    AString shaderIndexText = "NWB_SHADER_INDEX_V1\n";
+    Vector<Core::ShaderArchive::Record> shaderIndexRecords;
+
+    Core::Filesystem::VolumeBuildConfig volumeConfig;
+    volumeConfig.volumeName = manifest.volumeName;
+    volumeConfig.segmentSize = manifest.segmentSize;
+    volumeConfig.metadataSize = manifest.metadataSize;
+
+    Core::Alloc::CustomArena volumeArena(
+        __hidden_assets::VolumeArenaAlloc,
+        __hidden_assets::VolumeArenaFree,
+        __hidden_assets::VolumeArenaAllocAligned,
+        __hidden_assets::VolumeArenaFreeAligned
+    );
+
+    Core::Filesystem::VolumeSession volumeSession(volumeArena);
+    if(!volumeSession.create(outputDirectory, volumeConfig, outError))
+        return false;
 
     Core::ShaderCompile shaderCompile;
     Core::IShaderCompiler* const shaderCompiler = shaderCompile.getCompiler();
+    if(shaderCompiler == nullptr){
+        outError = shaderCompile.error().empty()
+            ? AString("Failed to create shader compiler")
+            : shaderCompile.error();
+        return false;
+    }
 
     for(const Core::ShaderCook::ManifestEntry& entry : manifest.entries){
         Path sourcePath;
@@ -308,50 +334,35 @@ bool ShaderAssetCooker::CookShaderAssets(const ShaderCookEnvironment& environmen
                 cookedBytecode.empty() ? nullptr : cookedBytecode.data(),
                 cookedBytecode.size()
             );
-            const AString bytecodeChecksumHex = FormatHex64(bytecodeChecksum);
 
             if(!__hidden_assets::WriteCacheSourceChecksum(cacheSourceChecksumPath, sourceChecksumHex, outError))
                 return false;
 
-            Shader shaderAsset;
             const AString virtualPath = Core::ShaderArchive::buildVirtualPath(entry.name, variantName);
-            shaderAsset.setMetadata(
-                Name(entry.name.c_str()),
-                Name(variantName.c_str()),
-                entry.stage,
-                entry.entryPoint,
-                sourceChecksumHex,
-                bytecodeChecksumHex,
-                virtualPath
-            );
-
-            AString indexLine;
-            if(!shaderAsset.buildIndexLine(indexLine, outError))
+            if(!volumeSession.pushData(virtualPath, cookedBytecode, outError))
                 return false;
-            shaderIndexText += indexLine;
-            shaderIndexText += '\n';
 
-            volumeFiles[virtualPath] = Move(cookedBytecode);
+            Core::ShaderArchive::Record record;
+            record.shaderName = Name(entry.name.c_str());
+            record.variantName = Name(variantName.c_str());
+            record.stage = Name(entry.stage.c_str());
+            record.entryPoint = Name(entry.entryPoint.c_str());
+            record.sourceChecksum = sourceChecksum;
+            record.bytecodeChecksum = bytecodeChecksum;
+            record.virtualPathHash = Name(virtualPath.c_str()).hash();
+            shaderIndexRecords.push_back(Move(record));
         }
     }
 
-    volumeFiles[Core::ShaderArchive::s_IndexVirtualPath] = Core::ShaderCook::CookVector<u8>(
-        shaderIndexText.begin(),
-        shaderIndexText.end()
-    );
-
-    Core::Filesystem::VolumeBuildConfig volumeConfig;
-    volumeConfig.volumeName = manifest.volumeName;
-    volumeConfig.segmentSize = manifest.segmentSize;
-    volumeConfig.metadataSize = manifest.metadataSize;
-
-    Core::Filesystem::VolumeBuildInfo buildInfo;
-    if(!Core::Filesystem::BuildVolume(outputDirectory, volumeConfig, volumeFiles, buildInfo, outError))
+    Vector<u8> indexBinary;
+    if(!Core::ShaderArchive::serializeIndex(shaderIndexRecords, indexBinary, outError))
+        return false;
+    if(!volumeSession.pushData(Core::ShaderArchive::s_IndexVirtualPath, indexBinary, outError))
         return false;
 
     outResult.volumeName = manifest.volumeName;
-    outResult.fileCount = buildInfo.fileCount;
-    outResult.segmentCount = buildInfo.segmentCount;
+    outResult.fileCount = volumeSession.fileCount();
+    outResult.segmentCount = static_cast<u64>(volumeSession.segmentCount());
     return true;
 }
 

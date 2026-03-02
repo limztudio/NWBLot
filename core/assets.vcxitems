@@ -12,6 +12,7 @@
     <ClCompile Include="$(MSBuildThisFileDirectory)assets\asset_cooker.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)assets\asset_registry.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)assets\asset_manager.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)assets\asset_module.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="$(MSBuildThisFileDirectory)assets\global.h" />
@@ -21,5 +22,6 @@
     <ClInclude Include="$(MSBuildThisFileDirectory)assets\asset_pool.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)assets\asset_registry.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)assets\asset_manager.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)assets\asset_module.h" />
   </ItemGroup>
 </Project>

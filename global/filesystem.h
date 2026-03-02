@@ -92,6 +92,25 @@ template<typename Container>
     return stream.eof() && stream.gcount() == static_cast<std::streamsize>(fileSize);
 }
 
+template<typename Container, typename PodType>
+inline void AppendPOD(Container& outBinary, const PodType& value){
+    const usize beginOffset = outBinary.size();
+    outBinary.resize(beginOffset + sizeof(PodType));
+    NWB_MEMCPY(outBinary.data() + beginOffset, sizeof(PodType), &value, sizeof(PodType));
+}
+
+template<typename Container, typename PodType>
+[[nodiscard]] inline bool ReadPOD(const Container& binary, usize& inOutOffset, PodType& outValue){
+    if(inOutOffset > binary.size())
+        return false;
+    if(binary.size() - inOutOffset < sizeof(PodType))
+        return false;
+
+    NWB_MEMCPY(&outValue, sizeof(PodType), binary.data() + inOutOffset, sizeof(PodType));
+    inOutOffset += sizeof(PodType);
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

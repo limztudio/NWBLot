@@ -34,12 +34,17 @@ bool CreateInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Core::E
         return false;
     }
 
-    if(!context.shaderBinaryLookup){
-        NWB_LOGGER_FATAL(NWB_TEXT("CreateInitialProjectWorld failed: shader binary lookup callback is null"));
+    if(!context.shaderPathResolver){
+        NWB_LOGGER_FATAL(NWB_TEXT("CreateInitialProjectWorld failed: shader path resolver callback is null"));
         return false;
     }
 
-    world->addSystem<Core::ECSGraphics::RendererSystem>(*world, context.graphics, context.shaderBinaryLookup);
+    world->addSystem<Core::ECSGraphics::RendererSystem>(
+        *world,
+        context.graphics,
+        context.assetManager,
+        context.shaderPathResolver
+    );
     auto* rendererSystem = world->getSystem<Core::ECSGraphics::RendererSystem>();
     if(!rendererSystem){
         NWB_LOGGER_FATAL(NWB_TEXT("CreateInitialProjectWorld failed: core renderer system was not created"));

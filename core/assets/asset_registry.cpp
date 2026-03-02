@@ -14,18 +14,26 @@ NWB_ASSETS_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool AssetRegistry::registerCodec(const IAssetCodec& codec, const bool replaceExisting){
-    const AString typeName = ::CanonicalizeText(codec.assetType());
+bool AssetRegistry::registerCodec(UniquePtr<IAssetCodec>&& codec, const bool replaceExisting){
+    if(!codec)
+        return false;
+
+    const AString typeName = ::CanonicalizeText(codec->assetType());
     if(typeName.empty())
         return false;
 
     ScopedLock lock(m_mutex);
 
     const auto found = m_codecs.find(typeName);
-    if(found != m_codecs.end() && !replaceExisting)
-        return false;
+    if(found != m_codecs.end()){
+        if(!replaceExisting)
+            return false;
 
-    m_codecs[typeName] = &codec;
+        found.value() = Move(codec);
+        return true;
+    }
+
+    m_codecs[typeName] = Move(codec);
     return true;
 }
 
@@ -51,7 +59,7 @@ const IAssetCodec* AssetRegistry::findCodec(const AStringView assetType)const{
     if(found == m_codecs.end())
         return nullptr;
 
-    return found->second;
+    return found->second.get();
 }
 
 

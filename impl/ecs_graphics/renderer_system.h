@@ -8,6 +8,7 @@
 #include "components.h"
 
 #include <core/ecs/world.h>
+#include <core/assets/asset_manager.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -21,10 +22,15 @@ NWB_IMPL_BEGIN
 
 class RendererSystem final : public Core::ECS::ISystem, public Core::IRenderPass{
 public:
-    using ShaderBinaryLookupCallback = Function<bool(AStringView shaderName, AStringView variantName, Vector<u8>& outBinary)>;
+    using ShaderPathResolveCallback = Function<bool(AStringView shaderName, AStringView variantName, AString& outVirtualPath)>;
 
 public:
-    RendererSystem(Core::ECS::World& world, Core::Graphics& graphics, ShaderBinaryLookupCallback shaderBinaryLookup);
+    RendererSystem(
+        Core::ECS::World& world,
+        Core::Graphics& graphics,
+        Core::Assets::AssetManager& assetManager,
+        ShaderPathResolveCallback shaderPathResolver
+    );
     virtual ~RendererSystem()override;
 
 
@@ -50,7 +56,8 @@ private:
 private:
     Core::ECS::World& m_world;
     Core::Graphics& m_graphics;
-    ShaderBinaryLookupCallback m_shaderBinaryLookup;
+    Core::Assets::AssetManager& m_assetManager;
+    ShaderPathResolveCallback m_shaderPathResolver;
 
     Core::GraphicsPipelineHandle m_pipeline;
     Core::ShaderHandle m_vertexShader;

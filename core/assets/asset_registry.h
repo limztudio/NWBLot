@@ -19,11 +19,11 @@ NWB_ASSETS_BEGIN
 
 class AssetRegistry final : NoCopy{
 private:
-    using CodecMap = AssetMap<AString, const IAssetCodec*>;
+    using CodecMap = AssetMap<AString, UniquePtr<IAssetCodec>>;
 
 
 public:
-    bool registerCodec(const IAssetCodec& codec, bool replaceExisting = false);
+    bool registerCodec(UniquePtr<IAssetCodec>&& codec, bool replaceExisting = false);
     bool unregisterCodec(AStringView assetType);
 
     [[nodiscard]] const IAssetCodec* findCodec(AStringView assetType)const;

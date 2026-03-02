@@ -103,24 +103,27 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='dbg|x64'">
     <Link>
       <SubSystem>Windows</SubSystem>
-      <AdditionalOptions>/WHOLEARCHIVE:loader.lib %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/WHOLEARCHIVE:assets_graphics.lib %(AdditionalOptions)</AdditionalOptions>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='opt|x64'">
     <Link>
       <SubSystem>Windows</SubSystem>
-      <AdditionalOptions>/WHOLEARCHIVE:loader.lib %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/WHOLEARCHIVE:assets_graphics.lib %(AdditionalOptions)</AdditionalOptions>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='fin|x64'">
     <Link>
       <SubSystem>Windows</SubSystem>
-      <AdditionalOptions>/WHOLEARCHIVE:loader.lib %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/WHOLEARCHIVE:assets_graphics.lib %(AdditionalOptions)</AdditionalOptions>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ProjectReference Include="..\loader\loader_win.vcxproj">
       <Project>{444bda19-1c4c-46a3-a9ac-944369fccd6d}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\impl\assets_graphics\assets_graphics_win.vcxproj">
+      <Project>{6CEA536C-A650-43F7-A325-CEF848E8B343}</Project>
     </ProjectReference>
     <ProjectReference Include="..\core\alloc_win.vcxproj">
       <Project>{eaeb21b7-2cd6-4ee0-9d26-f607bcd7c5d3}</Project>

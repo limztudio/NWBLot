@@ -6,7 +6,7 @@
 
 
 #include "vulkan.h"
-#include <core/graphics/common.h>
+#include <core/graphics/shader_compiler.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -26,7 +26,7 @@ NWB_VULKAN_BEGIN
 
 class VulkanShaderCompiler final : public IShaderCompiler{
 public:
-    bool compileVariant(const ShaderCompilerRequest& request, AString& outError) override;
+    virtual bool compileVariant(const ShaderCompilerRequest& request, AString& outError)override;
 };
 
 

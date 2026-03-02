@@ -55,6 +55,16 @@ static shaderc_source_language MapCompilerToSourceLanguage(const AStringView com
     return shaderc_source_language_glsl;
 }
 
+static IShaderCompiler* CreateVulkanShaderCompiler(){
+    return new VulkanShaderCompiler();
+}
+
+static ShaderCompilerFactory s_VulkanShaderCompilerFactory = {
+    "vulkan",
+    &CreateVulkanShaderCompiler
+};
+static AutoShaderCompilerFactoryRegistration s_VulkanShaderCompilerFactoryRegistration(s_VulkanShaderCompilerFactory);
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

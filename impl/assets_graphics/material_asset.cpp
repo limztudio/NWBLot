@@ -14,6 +14,59 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_assets{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static constexpr u32 s_MaterialMagic = 0x4D544C31u; // MTL1
+static constexpr u32 s_MaterialVersion = 1u;
+
+
+bool AppendString(Core::Assets::AssetBytes& outBinary, const AStringView text){
+    if(text.size() > Limit<u32>::s_Max)
+        return false;
+
+    const u32 textLength = static_cast<u32>(text.size());
+    AppendPOD(outBinary, textLength);
+    if(textLength == 0)
+        return true;
+
+    const usize beginOffset = outBinary.size();
+    outBinary.resize(beginOffset + textLength);
+    NWB_MEMCPY(outBinary.data() + beginOffset, textLength, text.data(), textLength);
+    return true;
+}
+
+bool ReadString(const Core::Assets::AssetBytes& binary, usize& inOutOffset, AString& outText){
+    u32 textLength = 0;
+    if(!ReadPOD(binary, inOutOffset, textLength))
+        return false;
+
+    if(inOutOffset > binary.size())
+        return false;
+    if(binary.size() - inOutOffset < textLength)
+        return false;
+
+    outText.assign(
+        reinterpret_cast<const char*>(binary.data() + inOutOffset),
+        textLength
+    );
+    inOutOffset += textLength;
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool Material::loadBinary(const AStringView virtualPath, const Core::Assets::AssetBytes& binary, AString& outError){
     outError.clear();
     m_virtualPath = virtualPath;
@@ -22,91 +75,65 @@ bool Material::loadBinary(const AStringView virtualPath, const Core::Assets::Ass
     m_shaderVariant = NAME_NONE;
     m_parameters.clear();
 
-    const AString text(reinterpret_cast<const char*>(binary.data()), binary.size());
-    AStringStream stream(text);
+    usize cursor = 0;
+    u32 magic = 0;
+    if(!ReadPOD(binary, cursor, magic)){
+        outError = "Material::loadBinary failed: missing magic";
+        return false;
+    }
+    if(magic != __hidden_assets::s_MaterialMagic){
+        outError = "Material::loadBinary failed: invalid magic";
+        return false;
+    }
 
-    AString line;
-    bool magicSeen = false;
-    while(ReadTextLine(stream, line)){
-        if(!line.empty() && line.back() == '\r')
-            line.pop_back();
-        if(line.empty())
-            continue;
+    u32 version = 0;
+    if(!ReadPOD(binary, cursor, version)){
+        outError = "Material::loadBinary failed: missing version";
+        return false;
+    }
+    if(version != __hidden_assets::s_MaterialVersion){
+        outError = StringFormat("Material::loadBinary failed: unsupported version {}", version);
+        return false;
+    }
 
-        if(!magicSeen){
-            if(line != "NWB_MATERIAL_V1"){
-                outError = StringFormat("Material::loadBinary failed: invalid header '{}'", line);
-                return false;
-            }
-            magicSeen = true;
-            continue;
+    NameHash materialHash{};
+    NameHash shaderHash{};
+    NameHash variantHash{};
+    if(!ReadPOD(binary, cursor, materialHash)
+        || !ReadPOD(binary, cursor, shaderHash)
+        || !ReadPOD(binary, cursor, variantHash))
+    {
+        outError = "Material::loadBinary failed: missing name hashes";
+        return false;
+    }
+
+    u32 parameterCount = 0;
+    if(!ReadPOD(binary, cursor, parameterCount)){
+        outError = "Material::loadBinary failed: missing parameter count";
+        return false;
+    }
+
+    m_name = Name(materialHash);
+    m_shaderName = Name(shaderHash);
+    m_shaderVariant = Name(variantHash);
+
+    for(u32 i = 0; i < parameterCount; ++i){
+        AString key;
+        AString value;
+        if(!__hidden_assets::ReadString(binary, cursor, key) || !__hidden_assets::ReadString(binary, cursor, value)){
+            outError = StringFormat("Material::loadBinary failed: malformed parameter at index {}", i);
+            return false;
         }
-
-        const usize equalPos = line.find('=');
-        if(equalPos == AString::npos){
-            outError = StringFormat("Material::loadBinary failed: malformed line '{}'", line);
+        if(key.empty()){
+            outError = "Material::loadBinary failed: parameter key is empty";
             return false;
         }
 
-        const AString key = ::Trim(AStringView(line).substr(0, equalPos));
-        const AString value = ::Trim(AStringView(line).substr(equalPos + 1));
-        Name parsedName = NAME_NONE;
-        if(key == "name_hash"){
-            if(!::DecodeNameHash(value, parsedName)){
-                outError = StringFormat("Material::loadBinary failed: invalid name_hash '{}'", value);
-                return false;
-            }
-
-            m_name = parsedName;
-            continue;
-        }
-        if(key == "shader_hash"){
-            if(!::DecodeNameHash(value, parsedName)){
-                outError = StringFormat("Material::loadBinary failed: invalid shader_hash '{}'", value);
-                return false;
-            }
-
-            m_shaderName = parsedName;
-            continue;
-        }
-        if(key == "variant_hash"){
-            if(!::DecodeNameHash(value, parsedName)){
-                outError = StringFormat("Material::loadBinary failed: invalid variant_hash '{}'", value);
-                return false;
-            }
-
-            m_shaderVariant = parsedName;
-            continue;
-        }
-
-        if(key == "name"){
-            m_name = ::ToName(value);
-            continue;
-        }
-        if(key == "shader"){
-            m_shaderName = ::ToName(value);
-            continue;
-        }
-        if(key == "variant"){
-            m_shaderVariant = ::ToName(value);
-            continue;
-        }
-
-        static constexpr AStringView s_ParamPrefix = "param.";
-        if(AStringView(key).starts_with(s_ParamPrefix)){
-            const AString paramKey = AString(AStringView(key).substr(s_ParamPrefix.size()));
-            if(paramKey.empty()){
-                outError = "Material::loadBinary failed: parameter key is empty";
-                return false;
-            }
-
-            m_parameters[paramKey] = value;
-            continue;
-        }
+        m_parameters[key] = value;
     }
 
-    if(!magicSeen){
-        outError = "Material::loadBinary failed: missing header";
+    if(cursor != binary.size()){
+        outError = "Material::loadBinary failed: trailing bytes detected";
         return false;
     }
 
@@ -123,12 +150,18 @@ bool Material::saveBinary(Core::Assets::AssetBytes& outBinary, AString& outError
         outError = "Material::saveBinary failed: name is empty";
         return false;
     }
+    if(m_parameters.size() > Limit<u32>::s_Max){
+        outError = "Material::saveBinary failed: parameter count exceeds u32 range";
+        return false;
+    }
 
-    AString text;
-    text += "NWB_MATERIAL_V1\n";
-    text += StringFormat("name_hash={}\n", ::EncodeNameHash<char>(m_name));
-    text += StringFormat("shader_hash={}\n", ::EncodeNameHash<char>(m_shaderName));
-    text += StringFormat("variant_hash={}\n", ::EncodeNameHash<char>(m_shaderVariant));
+    outBinary.clear();
+    AppendPOD(outBinary, __hidden_assets::s_MaterialMagic);
+    AppendPOD(outBinary, __hidden_assets::s_MaterialVersion);
+    AppendPOD(outBinary, m_name.hash());
+    AppendPOD(outBinary, m_shaderName.hash());
+    AppendPOD(outBinary, m_shaderVariant.hash());
+    AppendPOD(outBinary, static_cast<u32>(m_parameters.size()));
 
     Core::Assets::AssetVector<const AString*> sortedParameterKeys;
     sortedParameterKeys.reserve(m_parameters.size());
@@ -148,10 +181,12 @@ bool Material::saveBinary(Core::Assets::AssetBytes& outBinary, AString& outError
         if(found == m_parameters.end())
             continue;
 
-        text += StringFormat("param.{}={}\n", *key, found->second);
+        if(!__hidden_assets::AppendString(outBinary, *key) || !__hidden_assets::AppendString(outBinary, found->second)){
+            outError = "Material::saveBinary failed: parameter text is too long";
+            return false;
+        }
     }
 
-    outBinary.assign(text.begin(), text.end());
     return true;
 }
 

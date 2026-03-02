@@ -5,6 +5,7 @@
 #include "renderer_system.h"
 
 #include <core/graphics/shader_archive.h>
+#include <impl/assets_graphics/shader_asset.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -65,11 +66,17 @@ static constexpr AStringView s_CubePixelShaderName = "engine/ecs_graphics/cube.p
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RendererSystem::RendererSystem(Core::ECS::World& world, Core::Graphics& graphics, ShaderBinaryLookupCallback shaderBinaryLookup)
+RendererSystem::RendererSystem(
+    Core::ECS::World& world,
+    Core::Graphics& graphics,
+    Core::Assets::AssetManager& assetManager,
+    ShaderPathResolveCallback shaderPathResolver
+)
     : Core::IRenderPass(*graphics.getDeviceManager())
     , m_world(world)
     , m_graphics(graphics)
-    , m_shaderBinaryLookup(Move(shaderBinaryLookup))
+    , m_assetManager(assetManager)
+    , m_shaderPathResolver(Move(shaderPathResolver))
 {
     readAccess<CubeComponent>();
     writeAccess<RendererComponent>();
@@ -204,13 +211,26 @@ bool RendererSystem::ensureShaderLoaded(
     if(outShader)
         return true;
 
-    if(!m_shaderBinaryLookup)
+    AString virtualPath;
+    if(m_shaderPathResolver){
+        if(!m_shaderPathResolver(shaderName, Core::ShaderArchive::s_DefaultVariant, virtualPath))
+            virtualPath = Core::ShaderArchive::buildVirtualPath(shaderName, Core::ShaderArchive::s_DefaultVariant);
+    }
+    else{
+        virtualPath = Core::ShaderArchive::buildVirtualPath(shaderName, Core::ShaderArchive::s_DefaultVariant);
+    }
+
+    UniquePtr<Core::Assets::IAsset> loadedAsset;
+    AString loadError;
+    if(!m_assetManager.loadSync("shader", virtualPath, loadedAsset, loadError))
+        return false;
+    if(!loadedAsset)
+        return false;
+    if(loadedAsset->assetType() != "shader")
         return false;
 
-    Vector<u8> shaderBinary;
-    if(!m_shaderBinaryLookup(shaderName, Core::ShaderArchive::s_DefaultVariant, shaderBinary))
-        return false;
-
+    const Shader* shaderAsset = static_cast<const Shader*>(loadedAsset.get());
+    const Vector<u8>& shaderBinary = shaderAsset->bytecode();
     if(shaderBinary.empty() || (shaderBinary.size() & 3u) != 0u)
         return false;
 

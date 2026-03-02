@@ -1,0 +1,60 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include "asset_registry.h"
+
+#if defined(NWB_COOK)
+#include "asset_cooker.h"
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ASSETS_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct AssetDomainModule{
+    using RegisterCodecsFunction = void (*)(AssetRegistry& outRegistry);
+#if defined(NWB_COOK)
+    using RegisterCookersFunction = void (*)(AssetCookerRegistry& outRegistry);
+#endif
+
+
+    RegisterCodecsFunction registerCodecs = nullptr;
+#if defined(NWB_COOK)
+    RegisterCookersFunction registerCookers = nullptr;
+#endif
+    AssetDomainModule* next = nullptr;
+};
+
+
+class AutoAssetDomainModuleRegistration final : NoCopy{
+public:
+    explicit AutoAssetDomainModuleRegistration(AssetDomainModule& module);
+};
+
+
+void RegisterAssetDomainModule(AssetDomainModule& module);
+void RegisterDomainAssetCodecs(AssetRegistry& outRegistry);
+
+#if defined(NWB_COOK)
+void RegisterDomainAssetCookers(AssetCookerRegistry& outRegistry);
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ASSETS_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

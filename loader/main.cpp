@@ -17,6 +17,8 @@
 #include <logger/client/logger.h>
 #include <core/common/common.h>
 #include <core/frame/frame.h>
+#include <core/assets/asset_module.h>
+#include <core/assets/asset_manager.h>
 #include <core/graphics/shader_archive.h>
 #include <core/filesystem/filesystem.h>
 
@@ -64,6 +66,37 @@ Path ResolveShaderMountDirectory(){
 }
 
 
+class VolumeAssetBinarySource final : public NWB::Core::Assets::IAssetBinarySource{
+public:
+    explicit VolumeAssetBinarySource(NWB::Core::Filesystem::VolumeSession& volumeSession)
+        : m_volumeSession(volumeSession)
+    {}
+
+
+public:
+    virtual bool readAssetBinary(AStringView virtualPath, NWB::Core::Assets::AssetBytes& outBinary, AString& outError)const override{
+        return m_volumeSession.loadData(virtualPath, outBinary, outError);
+    }
+
+
+private:
+    NWB::Core::Filesystem::VolumeSession& m_volumeSession;
+};
+
+
+bool LoadShaderArchiveRecords(
+    const NWB::Core::Assets::IAssetBinarySource& assetBinarySource,
+    Vector<NWB::Core::ShaderArchive::Record>& outRecords,
+    AString& outError
+){
+    NWB::Core::Assets::AssetBytes indexBinary;
+    if(!assetBinarySource.readAssetBinary(NWB::Core::ShaderArchive::s_IndexVirtualPath, indexBinary, outError))
+        return false;
+
+    return NWB::Core::ShaderArchive::deserializeIndex(indexBinary, outRecords, outError);
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -86,40 +119,13 @@ static int MainLogic(NotNull<const char*> logAddress, void* inst){
                 NWB_LOGGER_FATAL(NWB_TEXT("Invalid project frame client size: {}x{}"), frameClientSize.width, frameClientSize.height);
                 return -1;
             }
+
             NWB::Core::Frame frame(inst, frameClientSize.width, frameClientSize.height);
-            NWB::Core::Filesystem::VolumeSession graphicsVolume(frame.projectObjectArena());
-            HashSet<AString> missingVirtualPaths;
-            NWB::ProjectRuntimeContext context = {
-                frame.graphics(),
-                frame.projectObjectArena(),
-                frame.projectThreadPool(),
-                frame.projectJobSystem(),
-                {},
-            };
-            context.shaderBinaryLookup = [&graphicsVolume, &missingVirtualPaths](const AStringView shaderName, const AStringView variantName, Vector<u8>& outBinary){
-                const AString virtualPath = NWB::Core::ShaderArchive::buildVirtualPath(shaderName, variantName);
-
-                if(missingVirtualPaths.find(virtualPath) != missingVirtualPaths.end())
-                    return false;
-
-                AString errorMessage;
-                if(graphicsVolume.loadData(virtualPath, outBinary, errorMessage))
-                    return true;
-
-                missingVirtualPaths.insert(virtualPath);
-                NWB_LOGGER_WARNING(
-                    NWB_TEXT("Shader lookup miss: shader='{}', variant='{}', virtualPath='{}' ({})"),
-                    StringConvert(shaderName),
-                    StringConvert(variantName),
-                    StringConvert(virtualPath),
-                    StringConvert(errorMessage)
-                );
-                return false;
-            };
 
             if(!frame.init())
                 return -1;
 
+            NWB::Core::Filesystem::VolumeSession graphicsVolume(frame.projectObjectArena());
             const Path shaderMountDirectory = __hidden_loader::ResolveShaderMountDirectory();
             AString mountError;
             if(!graphicsVolume.load("graphics", shaderMountDirectory, mountError)){
@@ -130,6 +136,48 @@ static int MainLogic(NotNull<const char*> logAddress, void* inst){
                 );
                 return -1;
             }
+
+            __hidden_loader::VolumeAssetBinarySource assetBinarySource(graphicsVolume);
+
+            NWB::Core::Assets::AssetRegistry assetRegistry;
+            NWB::Core::Assets::RegisterDomainAssetCodecs(assetRegistry);
+
+            NWB::Core::Assets::AssetManager assetManager(assetRegistry, assetBinarySource);
+
+            Vector<NWB::Core::ShaderArchive::Record> shaderArchiveRecords;
+            AString shaderArchiveError;
+            if(!__hidden_loader::LoadShaderArchiveRecords(assetBinarySource, shaderArchiveRecords, shaderArchiveError)){
+                NWB_LOGGER_FATAL(
+                    NWB_TEXT("Failed to load shader archive index '{}': {}"),
+                    StringConvert(NWB::Core::ShaderArchive::s_IndexVirtualPath),
+                    StringConvert(shaderArchiveError)
+                );
+                return -1;
+            }
+
+            NWB::ProjectRuntimeContext context = {
+                frame.graphics(),
+                frame.projectObjectArena(),
+                frame.projectThreadPool(),
+                frame.projectJobSystem(),
+                assetManager,
+                {},
+            };
+            context.shaderPathResolver = [&shaderArchiveRecords](const AStringView shaderName, const AStringView variantName, AString& outVirtualPath){
+                const AString shaderNameText(shaderName);
+                const AString variantNameText(variantName.empty() ? NWB::Core::ShaderArchive::s_DefaultVariant : variantName);
+
+                if(NWB::Core::ShaderArchive::findVirtualPath(
+                    shaderArchiveRecords,
+                    shaderNameText,
+                    variantNameText,
+                    outVirtualPath
+                ))
+                    return true;
+
+                outVirtualPath = NWB::Core::ShaderArchive::buildVirtualPath(shaderNameText, variantNameText);
+                return true;
+            };
 
             auto callbacks = NWB::CreateProjectEntryCallbacks(context);
             if(!callbacks){

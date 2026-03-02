@@ -9,7 +9,7 @@
     <ClCompile Include="$(MSBuildThisFileDirectory)graphics\common.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)graphics\graphics.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)graphics\shader_archive.cpp" />
-    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\shader_compile.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)graphics\shader_compiler.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan_allocator.cpp">
       <Filter>vulkan</Filter>
     </ClCompile>
@@ -75,7 +75,7 @@
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\graphics.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\shader_archive.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\shader_param.h" />
-    <ClInclude Include="$(MSBuildThisFileDirectory)graphics\shader_compile.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)graphics\shader_compiler.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\shader_cook.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)graphics\vulkan\vulkan.h">
       <Filter>vulkan</Filter>

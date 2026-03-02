@@ -1024,46 +1024,6 @@ typedef RefCountPtr<IShaderLibrary, ArenaRefDeleter<IShaderLibrary>> ShaderLibra
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Shader Compiler
-
-
-#if defined(NWB_COOK)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct ShaderCompilerRequest{
-    AStringView shaderName;
-    AStringView compiler;
-    AStringView stage;
-    AStringView targetProfile;
-    AStringView entryPoint;
-    const HashMap<AString, AString>& defineCombo;
-    const Vector<Path>& includeDirectories;
-    const Path& sourcePath;
-    const Path& cachePath;
-};
-
-class IShaderCompiler : NoCopy{
-public:
-    virtual ~IShaderCompiler() = default;
-
-
-public:
-    static IShaderCompiler* create();
-
-    virtual bool compileVariant(const ShaderCompilerRequest& request, AString& outError) = 0;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Blend State
 
 

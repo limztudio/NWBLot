@@ -43,12 +43,12 @@ public:
 
 class AssetCookerRegistry final{
 public:
-    bool registerCooker(IAssetCooker& cooker);
+    bool registerCooker(UniquePtr<IAssetCooker>&& cooker);
     bool cook(const AssetCookOptions& options, AString& outError)const;
 
 
 private:
-    Vector<IAssetCooker*> m_assetCookers;
+    Vector<UniquePtr<IAssetCooker>> m_assetCookers;
 };
 
 

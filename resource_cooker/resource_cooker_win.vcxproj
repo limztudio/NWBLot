@@ -18,9 +18,6 @@
     <ProjectReference Include="..\core\assets_win.vcxproj">
       <Project>{B72E6F8D-6D2F-4A6E-B2D7-4FA7E470A2B1}</Project>
     </ProjectReference>
-    <ProjectReference Include="..\impl\assets_graphics\assets_graphics_win.vcxproj">
-      <Project>{6CEA536C-A650-43F7-A325-CEF848E8B343}</Project>
-    </ProjectReference>
     <ProjectReference Include="..\core\alloc_win.vcxproj">
       <Project>{EAEB21B7-2CD6-4EE0-9D26-F607BCD7C5D3}</Project>
     </ProjectReference>

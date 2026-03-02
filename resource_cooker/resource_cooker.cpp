@@ -4,7 +4,7 @@
 
 #include "resource_cooker.h"
 
-#include <impl/assets_graphics/asset_cooker_registration.h>
+#include <core/assets/asset_module.h>
 
 #include <logger/client/logger.h>
 
@@ -20,7 +20,7 @@ int ResourceCookerMain(int argc, char** argv){
         CookOptions options;
         AString errorMessage;
         NWB::Core::Assets::AssetCookerRegistry assetCookerRegistry;
-        NWB::Impl::RegisterDomainAssetCookers(assetCookerRegistry);
+        NWB::Core::Assets::RegisterDomainAssetCookers(assetCookerRegistry);
         if(!ParseCommandLine(argc, argv, options, errorMessage)){
             if(!errorMessage.empty())
                 NWB_CERR << errorMessage << '\n';

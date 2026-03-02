@@ -29,6 +29,10 @@ namespace Core{
         class ThreadPool;
         class JobSystem;
     };
+
+    namespace Assets{
+        class AssetManager;
+    };
 };
 
 
@@ -41,13 +45,14 @@ struct ProjectFrameClientSize{
 };
 
 struct ProjectRuntimeContext{
-    using ShaderBinaryLookupCallback = Function<bool(AStringView shaderName, AStringView variantName, Vector<u8>& outBinary)>;
+    using ShaderPathResolveCallback = Function<bool(AStringView shaderName, AStringView variantName, AString& outVirtualPath)>;
 
     Core::Graphics& graphics;
     Core::Alloc::CustomArena& objectArena;
     Core::Alloc::ThreadPool& threadPool;
     Core::Alloc::JobSystem& jobSystem;
-    ShaderBinaryLookupCallback shaderBinaryLookup;
+    Core::Assets::AssetManager& assetManager;
+    ShaderPathResolveCallback shaderPathResolver;
 };
 
 

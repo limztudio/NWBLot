@@ -47,7 +47,69 @@ bool LessRecord(const ShaderArchive::Record& lhs, const ShaderArchive::Record& r
     if(lhsShaderHash != rhsShaderHash)
         return LessNameHash(lhsShaderHash, rhsShaderHash);
 
-    return LessNameHash(lhs.variantName.hash(), rhs.variantName.hash());
+    const NameHash& lhsVariantHash = lhs.variantName.hash();
+    const NameHash& rhsVariantHash = rhs.variantName.hash();
+    if(lhsVariantHash != rhsVariantHash)
+        return LessNameHash(lhsVariantHash, rhsVariantHash);
+
+    const NameHash& lhsStageHash = lhs.stage.hash();
+    const NameHash& rhsStageHash = rhs.stage.hash();
+    if(lhsStageHash != rhsStageHash)
+        return LessNameHash(lhsStageHash, rhsStageHash);
+
+    const NameHash& lhsEntryPointHash = lhs.entryPoint.hash();
+    const NameHash& rhsEntryPointHash = rhs.entryPoint.hash();
+    if(lhsEntryPointHash != rhsEntryPointHash)
+        return LessNameHash(lhsEntryPointHash, rhsEntryPointHash);
+
+    return LessNameHash(lhs.virtualPathHash, rhs.virtualPathHash);
+}
+
+
+bool SameShaderVariant(const ShaderArchive::Record& lhs, const ShaderArchive::Record& rhs){
+    return lhs.shaderName == rhs.shaderName
+        && lhs.variantName == rhs.variantName;
+}
+
+
+bool ValidateRecord(const ShaderArchive::Record& record, AString& outError){
+    if(!record.shaderName || !record.variantName){
+        outError = "ShaderArchive::serializeIndex failed: record has empty mandatory field";
+        return false;
+    }
+    if(record.virtualPathHash == NameHash{}){
+        outError = "ShaderArchive::serializeIndex failed: virtual path hash is empty";
+        return false;
+    }
+
+    return true;
+}
+
+
+bool ResolveVirtualPathCandidate(
+    const Vector<ShaderArchive::Record>& records,
+    const Name& shaderName,
+    const Name& variantName,
+    const AStringView canonicalShaderName,
+    const AStringView canonicalVariantName,
+    AString& outVirtualPath
+){
+    const AString candidateVirtualPath = ShaderArchive::buildVirtualPath(canonicalShaderName, canonicalVariantName);
+    const NameHash candidateVirtualPathHash = Name(candidateVirtualPath.c_str()).hash();
+
+    for(const ShaderArchive::Record& record : records){
+        if(record.shaderName != shaderName)
+            continue;
+        if(record.variantName != variantName)
+            continue;
+        if(record.virtualPathHash != candidateVirtualPathHash)
+            continue;
+
+        outVirtualPath = candidateVirtualPath;
+        return true;
+    }
+
+    return false;
 }
 
 
@@ -85,6 +147,29 @@ bool ShaderArchive::serializeIndex(const Vector<Record>& records, Vector<u8>& ou
     Vector<Record> sortedRecords = records;
     Sort(sortedRecords.begin(), sortedRecords.end(), __hidden_shader_archive::LessRecord);
 
+    for(usize i = 0; i < sortedRecords.size(); ++i){
+        const Record& record = sortedRecords[i];
+        if(!__hidden_shader_archive::ValidateRecord(record, outError))
+            return false;
+
+        if(i == 0)
+            continue;
+
+        if(__hidden_shader_archive::SameShaderVariant(sortedRecords[i - 1], record)){
+            outError = StringFormat(
+                "ShaderArchive::serializeIndex failed: duplicate shader+variant key detected (shader='{}', variant='{}')",
+                record.shaderName.c_str(),
+                record.variantName.c_str()
+            );
+            return false;
+        }
+    }
+
+    if(sortedRecords.size() > (Limit<usize>::s_Max - sizeof(__hidden_shader_archive::IndexHeaderDisk)) / sizeof(__hidden_shader_archive::RecordHeaderDisk)){
+        outError = "ShaderArchive::serializeIndex failed: output binary size overflow";
+        return false;
+    }
+
     __hidden_shader_archive::IndexHeaderDisk header;
     NWB_MEMCPY(header.magic, sizeof(header.magic), __hidden_shader_archive::s_IndexMagic, sizeof(__hidden_shader_archive::s_IndexMagic));
     header.version = __hidden_shader_archive::s_IndexVersion;
@@ -94,15 +179,6 @@ bool ShaderArchive::serializeIndex(const Vector<Record>& records, Vector<u8>& ou
     AppendPOD(outBinary, header);
 
     for(const Record& record : sortedRecords){
-        if(!record.shaderName || !record.variantName){
-            outError = "ShaderArchive::serializeIndex failed: record has empty mandatory field";
-            return false;
-        }
-        if(record.virtualPathHash == NameHash{}){
-            outError = "ShaderArchive::serializeIndex failed: virtual path hash is empty";
-            return false;
-        }
-
         __hidden_shader_archive::RecordHeaderDisk recordHeader;
         recordHeader.shaderName = record.shaderName.hash();
         recordHeader.variantName = record.variantName.hash();
@@ -139,6 +215,13 @@ bool ShaderArchive::deserializeIndex(const Vector<u8>& binary, Vector<Record>& o
         outError = StringFormat("ShaderArchive::deserializeIndex failed: unsupported version {}", header.version);
         return false;
     }
+    if(header.recordCount > (binary.size() - cursor) / sizeof(__hidden_shader_archive::RecordHeaderDisk)){
+        outError = StringFormat(
+            "ShaderArchive::deserializeIndex failed: record count {} exceeds available data",
+            header.recordCount
+        );
+        return false;
+    }
 
     outRecords.reserve(header.recordCount);
     for(u32 i = 0; i < header.recordCount; ++i){
@@ -159,6 +242,23 @@ bool ShaderArchive::deserializeIndex(const Vector<u8>& binary, Vector<Record>& o
         if(record.virtualPathHash == NameHash{}){
             outError = StringFormat("ShaderArchive::deserializeIndex failed: empty virtual path hash at record {}", i);
             return false;
+        }
+        if(!outRecords.empty()){
+            const Record& previous = outRecords.back();
+            if(__hidden_shader_archive::LessRecord(record, previous)){
+                outError = StringFormat(
+                    "ShaderArchive::deserializeIndex failed: records are out of order at index {}",
+                    i
+                );
+                return false;
+            }
+            if(__hidden_shader_archive::SameShaderVariant(previous, record)){
+                outError = StringFormat(
+                    "ShaderArchive::deserializeIndex failed: duplicate shader+variant key at record {}",
+                    i
+                );
+                return false;
+            }
         }
 
         outRecords.push_back(Move(record));
@@ -193,33 +293,30 @@ bool ShaderArchive::findVirtualPath(
     const Name requestedVariantName(canonicalVariantName.c_str());
     const Name defaultVariantName(s_DefaultVariant);
 
-    auto resolveVariant = [&](const Name& candidateVariantName, const AStringView candidateVariantText){
-        for(const Record& record : records){
-            if(record.shaderName != requestedShaderName)
-                continue;
-            if(record.variantName != candidateVariantName)
-                continue;
-
-            const AString virtualPath = buildVirtualPath(canonicalShaderName, candidateVariantText);
-            const Name virtualPathName(virtualPath.c_str());
-            if(virtualPathName.hash() != record.virtualPathHash)
-                continue;
-
-            outVirtualPath = virtualPath;
-            return true;
-        }
-
-        return false;
-    };
-
-    if(resolveVariant(requestedVariantName, canonicalVariantName))
+    if(__hidden_shader_archive::ResolveVirtualPathCandidate(
+        records,
+        requestedShaderName,
+        requestedVariantName,
+        canonicalShaderName,
+        canonicalVariantName,
+        outVirtualPath
+    )){
         return true;
+    }
 
     if(requestedVariantName == defaultVariantName)
         return false;
 
-    if(resolveVariant(defaultVariantName, s_DefaultVariant))
+    if(__hidden_shader_archive::ResolveVirtualPathCandidate(
+        records,
+        requestedShaderName,
+        defaultVariantName,
+        canonicalShaderName,
+        s_DefaultVariant,
+        outVirtualPath
+    )){
         return true;
+    }
 
     return false;
 }
@@ -232,3 +329,4 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

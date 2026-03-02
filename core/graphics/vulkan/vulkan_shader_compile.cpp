@@ -25,26 +25,39 @@ namespace __hidden_vulkan_shader{
 
 
 static shaderc_shader_kind MapStageToShaderKind(const AStringView stage){
-    if(stage == "vs") return shaderc_vertex_shader;
-    if(stage == "ps") return shaderc_fragment_shader;
-    if(stage == "cs") return shaderc_compute_shader;
-    if(stage == "gs") return shaderc_geometry_shader;
-    if(stage == "hs") return shaderc_tess_control_shader;
-    if(stage == "ds") return shaderc_tess_evaluation_shader;
-    if(stage == "vert") return shaderc_vertex_shader;
-    if(stage == "frag") return shaderc_fragment_shader;
-    if(stage == "comp") return shaderc_compute_shader;
-    if(stage == "geom") return shaderc_geometry_shader;
-    if(stage == "tesc") return shaderc_tess_control_shader;
-    if(stage == "tese") return shaderc_tess_evaluation_shader;
-    if(stage == "task") return shaderc_task_shader;
-    if(stage == "mesh") return shaderc_mesh_shader;
-    if(stage == "rgen") return shaderc_raygen_shader;
-    if(stage == "rint") return shaderc_intersection_shader;
-    if(stage == "rahit") return shaderc_anyhit_shader;
-    if(stage == "rchit") return shaderc_closesthit_shader;
-    if(stage == "rmiss") return shaderc_miss_shader;
-    if(stage == "rcall") return shaderc_callable_shader;
+    struct StageMapping{
+        AStringView name;
+        shaderc_shader_kind kind;
+    };
+
+    static constexpr StageMapping s_StageMappings[] = {
+        { "vs", shaderc_vertex_shader },
+        { "ps", shaderc_fragment_shader },
+        { "cs", shaderc_compute_shader },
+        { "gs", shaderc_geometry_shader },
+        { "hs", shaderc_tess_control_shader },
+        { "ds", shaderc_tess_evaluation_shader },
+        { "vert", shaderc_vertex_shader },
+        { "frag", shaderc_fragment_shader },
+        { "comp", shaderc_compute_shader },
+        { "geom", shaderc_geometry_shader },
+        { "tesc", shaderc_tess_control_shader },
+        { "tese", shaderc_tess_evaluation_shader },
+        { "task", shaderc_task_shader },
+        { "mesh", shaderc_mesh_shader },
+        { "rgen", shaderc_raygen_shader },
+        { "rint", shaderc_intersection_shader },
+        { "rahit", shaderc_anyhit_shader },
+        { "rchit", shaderc_closesthit_shader },
+        { "rmiss", shaderc_miss_shader },
+        { "rcall", shaderc_callable_shader }
+    };
+
+    for(const StageMapping& mapping : s_StageMappings){
+        if(stage == mapping.name)
+            return mapping.kind;
+    }
+
     return shaderc_glsl_infer_from_source;
 }
 
@@ -55,8 +68,8 @@ static shaderc_source_language MapCompilerToSourceLanguage(const AStringView com
     return shaderc_source_language_glsl;
 }
 
-static IShaderCompiler* CreateVulkanShaderCompiler(){
-    return new VulkanShaderCompiler();
+static UniquePtr<IShaderCompiler> CreateVulkanShaderCompiler(){
+    return MakeUnique<VulkanShaderCompiler>();
 }
 
 static ShaderCompilerFactory s_VulkanShaderCompilerFactory = {
@@ -71,7 +84,10 @@ static AutoShaderCompilerFactoryRegistration s_VulkanShaderCompilerFactoryRegist
 
 class ShaderFileIncluder final : public shaderc::CompileOptions::IncluderInterface{
 private:
-    using IncludePayload = Pair<std::string*, std::string*>;
+    struct IncludePayload{
+        std::string sourceName;
+        std::string content;
+    };
 
 
 public:
@@ -108,38 +124,36 @@ public:
         }
 
         auto* result = new shaderc_include_result{};
+        auto* payload = new IncludePayload{};
+
         if(resolvedPath.empty()){
-            auto* errorMessage = new std::string(
-                StringFormat("Include '{}' not found", requestedSource)
-            );
+            payload->content = StringFormat("Include '{}' not found", requestedSource);
             result->source_name = "";
             result->source_name_length = 0;
-            result->content = errorMessage->c_str();
-            result->content_length = errorMessage->size();
-            result->user_data = errorMessage;
+            result->content = payload->content.c_str();
+            result->content_length = payload->content.size();
+            result->user_data = payload;
             return result;
         }
 
         AString fileContent;
         if(!ReadTextFile(resolvedPath, fileContent)){
-            auto* errorMessage = new std::string(
-                StringFormat("Failed to read include '{}'", PathToString(resolvedPath))
-            );
+            payload->content = StringFormat("Failed to read include '{}'", PathToString(resolvedPath));
             result->source_name = "";
             result->source_name_length = 0;
-            result->content = errorMessage->c_str();
-            result->content_length = errorMessage->size();
-            result->user_data = errorMessage;
+            result->content = payload->content.c_str();
+            result->content_length = payload->content.size();
+            result->user_data = payload;
             return result;
         }
 
-        auto* resolvedName = new std::string(PathToString(resolvedPath));
-        auto* content = new std::string(Move(fileContent));
-        result->source_name = resolvedName->c_str();
-        result->source_name_length = resolvedName->size();
-        result->content = content->c_str();
-        result->content_length = content->size();
-        result->user_data = new IncludePayload(resolvedName, content);
+        payload->sourceName = PathToString(resolvedPath);
+        payload->content.assign(fileContent.data(), fileContent.size());
+        result->source_name = payload->sourceName.c_str();
+        result->source_name_length = payload->sourceName.size();
+        result->content = payload->content.c_str();
+        result->content_length = payload->content.size();
+        result->user_data = payload;
         return result;
     }
 
@@ -147,16 +161,7 @@ public:
         if(!data)
             return;
 
-        if(data->source_name_length == 0){
-            delete static_cast<std::string*>(data->user_data);
-        }
-        else{
-            auto* payload = static_cast<IncludePayload*>(data->user_data);
-            delete payload->first();
-            delete payload->second();
-            delete payload;
-        }
-
+        delete static_cast<IncludePayload*>(data->user_data);
         delete data;
     }
 
@@ -230,9 +235,16 @@ bool VulkanShaderCompiler::compileVariant(const ShaderCompilerRequest& request, 
         return false;
     }
 
-    const auto* spirvBegin = reinterpret_cast<const u8*>(result.cbegin());
-    const auto* spirvEnd = reinterpret_cast<const u8*>(result.cend());
-    const usize spirvSize = static_cast<usize>(spirvEnd - spirvBegin);
+    const usize spirvWordCount = static_cast<usize>(result.cend() - result.cbegin());
+    const usize spirvSize = spirvWordCount * sizeof(u32);
+    if(spirvSize == 0){
+        outError = StringFormat(
+            "Shader compile failed for '{}' (variant '{}') : compiled bytecode is empty",
+            request.shaderName,
+            Core::ShaderCook::BuildVariantName(request.defineCombo)
+        );
+        return false;
+    }
 
     std::ofstream stream(request.cachePath, std::ofstream::binary | std::ofstream::trunc);
     if(!stream.is_open()){
@@ -240,7 +252,7 @@ bool VulkanShaderCompiler::compileVariant(const ShaderCompilerRequest& request, 
         return false;
     }
 
-    stream.write(reinterpret_cast<const char*>(spirvBegin), static_cast<std::streamsize>(spirvSize));
+    stream.write(reinterpret_cast<const char*>(result.cbegin()), static_cast<std::streamsize>(spirvSize));
     if(!stream.good()){
         outError = StringFormat("Failed to write SPIR-V output '{}'", PathToString(request.cachePath));
         return false;

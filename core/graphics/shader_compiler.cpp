@@ -42,6 +42,45 @@ static bool AlreadyRegistered(const ShaderCompilerFactory& factory){
 }
 
 
+static bool BackendTypeAlreadyRegistered(const AStringView backendType){
+    ShaderCompilerFactory* node = s_FactoryHead;
+    while(node != nullptr){
+        if(node->createFunction != nullptr && CanonicalizeText(node->backendType) == backendType)
+            return true;
+
+        node = node->next;
+    }
+
+    return false;
+}
+
+
+static ShaderCompilerFactory* FindFirstFactory(){
+    ShaderCompilerFactory* node = s_FactoryHead;
+    while(node != nullptr){
+        if(node->createFunction != nullptr)
+            return node;
+
+        node = node->next;
+    }
+
+    return nullptr;
+}
+
+
+static ShaderCompilerFactory* FindFactoryByBackendType(const AStringView backendType){
+    ShaderCompilerFactory* node = s_FactoryHead;
+    while(node != nullptr){
+        if(node->createFunction != nullptr && CanonicalizeText(node->backendType) == backendType)
+            return node;
+
+        node = node->next;
+    }
+
+    return nullptr;
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -57,13 +96,17 @@ AutoShaderCompilerFactoryRegistration::AutoShaderCompilerFactoryRegistration(Sha
 
 
 void RegisterShaderCompilerFactory(ShaderCompilerFactory& factory){
-    if(factory.backendType.empty())
-        return;
     if(factory.createFunction == nullptr)
+        return;
+
+    const AString canonicalBackendType = CanonicalizeText(factory.backendType);
+    if(canonicalBackendType.empty())
         return;
 
     ScopedLock lock(__hidden_shader_compile::s_FactoryMutex);
     if(__hidden_shader_compile::AlreadyRegistered(factory))
+        return;
+    if(__hidden_shader_compile::BackendTypeAlreadyRegistered(canonicalBackendType))
         return;
 
     factory.next = __hidden_shader_compile::s_FactoryHead;
@@ -76,51 +119,41 @@ UniquePtr<IShaderCompiler> CreateShaderCompiler(const AStringView backendType, A
 
     const AString canonicalBackendType = CanonicalizeText(backendType);
 
-    ScopedLock lock(__hidden_shader_compile::s_FactoryMutex);
+    ShaderCompilerFactory::CreateFunction createFunction = nullptr;
+    AString selectedBackendType;
+    {
+        ScopedLock lock(__hidden_shader_compile::s_FactoryMutex);
 
-    ShaderCompilerFactory* selectedFactory = nullptr;
-    ShaderCompilerFactory* firstFactory = nullptr;
-    ShaderCompilerFactory* node = __hidden_shader_compile::s_FactoryHead;
-    while(node != nullptr){
-        if(node->createFunction == nullptr){
-            node = node->next;
-            continue;
+        ShaderCompilerFactory* selectedFactory = nullptr;
+        if(!canonicalBackendType.empty())
+            selectedFactory = __hidden_shader_compile::FindFactoryByBackendType(canonicalBackendType);
+        if(selectedFactory == nullptr)
+            selectedFactory = __hidden_shader_compile::FindFirstFactory();
+
+        if(selectedFactory == nullptr){
+            outError = "No shader compiler factory is registered";
+            return {};
         }
 
-        if(firstFactory == nullptr)
-            firstFactory = node;
-
-        if(canonicalBackendType.empty()){
-            selectedFactory = firstFactory;
-            break;
-        }
-
-        if(CanonicalizeText(node->backendType) == canonicalBackendType){
-            selectedFactory = node;
-            break;
-        }
-
-        node = node->next;
+        createFunction = selectedFactory->createFunction;
+        selectedBackendType = AString(selectedFactory->backendType);
     }
 
-    if(selectedFactory == nullptr)
-        selectedFactory = firstFactory;
-
-    if(selectedFactory == nullptr){
+    if(createFunction == nullptr){
         outError = "No shader compiler factory is registered";
         return {};
     }
 
-    IShaderCompiler* compiler = selectedFactory->createFunction();
+    UniquePtr<IShaderCompiler> compiler = createFunction();
     if(compiler == nullptr){
         outError = StringFormat(
             "Shader compiler factory '{}' returned null compiler instance",
-            selectedFactory->backendType
+            selectedBackendType
         );
         return {};
     }
 
-    return UniquePtr<IShaderCompiler>(compiler);
+    return compiler;
 }
 
 
@@ -148,3 +181,4 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

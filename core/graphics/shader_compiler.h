@@ -47,7 +47,7 @@ public:
 
 
 struct ShaderCompilerFactory{
-    using CreateFunction = IShaderCompiler* (*)();
+    using CreateFunction = UniquePtr<IShaderCompiler> (*)();
 
     AStringView backendType;
     CreateFunction createFunction = nullptr;

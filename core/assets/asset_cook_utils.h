@@ -45,11 +45,7 @@ NWB_ASSETS_BEGIN
 }
 
 
-[[nodiscard]] inline bool WriteCookSourceChecksum(
-    const Path& checksumPath,
-    const AStringView checksumHex,
-    AString& outError
-){
+[[nodiscard]] inline bool WriteCookSourceChecksum(const Path& checksumPath, const AStringView checksumHex, AString& outError){
     if(!WriteTextFile(checksumPath, checksumHex)){
         outError = StringFormat("Failed to write cook source checksum '{}'", PathToString(checksumPath));
         return false;
@@ -57,15 +53,11 @@ NWB_ASSETS_BEGIN
     return true;
 }
 
-[[nodiscard]] inline bool CookSourceChecksumMatches(
-    const Path& checksumPath,
-    const AStringView checksumHex
-){
+[[nodiscard]] inline bool CookSourceChecksumMatches(const Path& checksumPath, const AStringView checksumHex){
     AString cachedText;
     if(!ReadTextFile(checksumPath, cachedText))
         return false;
 
-    TrimTrailingCarriageReturn(cachedText);
     return Trim(cachedText) == checksumHex;
 }
 

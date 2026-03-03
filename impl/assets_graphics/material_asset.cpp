@@ -129,25 +129,22 @@ bool Material::saveBinary(Core::Assets::AssetBytes& outBinary, AString& outError
     AppendPOD(outBinary, m_shaderVariant.hash());
     AppendPOD(outBinary, static_cast<u32>(m_parameters.size()));
 
-    Vector<const AString*> sortedParameterKeys;
-    sortedParameterKeys.reserve(m_parameters.size());
-    for(const auto& [key, _] : m_parameters)
-        sortedParameterKeys.push_back(&key);
+    using ParamEntry = Pair<const AString*, const AString*>;
+    Vector<ParamEntry> sortedParams;
+    sortedParams.reserve(m_parameters.size());
+    for(const auto& [key, value] : m_parameters)
+        sortedParams.push_back({ &key, &value });
 
     Sort(
-        sortedParameterKeys.begin(),
-        sortedParameterKeys.end(),
-        [](const AString* lhs, const AString* rhs){
-            return *lhs < *rhs;
+        sortedParams.begin(),
+        sortedParams.end(),
+        [](const ParamEntry& lhs, const ParamEntry& rhs){
+            return *lhs.first < *rhs.first;
         }
     );
 
-    for(const AString* key : sortedParameterKeys){
-        const auto found = m_parameters.find(*key);
-        if(found == m_parameters.end())
-            continue;
-
-        if(!AppendString(outBinary, *key) || !AppendString(outBinary, found.value())){
+    for(const auto& [key, value] : sortedParams){
+        if(!AppendString(outBinary, *key) || !AppendString(outBinary, *value)){
             outError = "Material::saveBinary failed: parameter text is too long";
             return false;
         }

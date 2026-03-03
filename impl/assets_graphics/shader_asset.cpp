@@ -17,13 +17,26 @@ NWB_IMPL_BEGIN
 bool Shader::loadBinary(const AStringView virtualPath, const Core::Assets::AssetBytes& binary, AString& outError){
     outError.clear();
 
-    m_virtualPath = virtualPath;
-    m_bytecode = binary;
-    if(m_virtualPath.empty()){
+    if(virtualPath.empty()){
         outError = "Shader::loadBinary failed: virtual path is empty";
         return false;
     }
 
+    static constexpr u32 s_SpvMagic = 0x07230203u;
+    if(binary.size() < sizeof(u32) || (binary.size() & 3u) != 0u){
+        outError = "Shader::loadBinary failed: invalid bytecode size";
+        return false;
+    }
+    usize cursor = 0;
+    u32 magic = 0;
+    ReadPOD(binary, cursor, magic);
+    if(magic != s_SpvMagic){
+        outError = "Shader::loadBinary failed: invalid SPIR-V magic";
+        return false;
+    }
+
+    m_virtualPath = virtualPath;
+    m_bytecode = binary;
     return true;
 }
 

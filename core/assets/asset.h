@@ -71,12 +71,13 @@ public:
 
 #if defined(NWB_COOK)
     virtual bool serialize(const IAsset& asset, AssetBytes& outBinary, AString& outError)const override{
-        if(asset.assetType() != assetType()){
+        const AStringView codecType = assetType();
+        if(asset.assetType() != codecType){
             outError = StringFormat(
                 "'{}' codec: invalid asset type '{}', expected '{}'",
-                assetType(),
+                codecType,
                 asset.assetType(),
-                assetType()
+                codecType
             );
             return false;
         }

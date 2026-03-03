@@ -51,24 +51,9 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class MaterialAssetCodec final : public Core::Assets::IAssetCodec{
+class MaterialAssetCodec final : public Core::Assets::AssetCodecOf<Material>{
 public:
     [[nodiscard]] virtual AStringView assetType()const override{ return "material"; }
-
-    virtual bool deserialize(
-        AStringView virtualPath,
-        const Core::Assets::AssetBytes& binary,
-        UniquePtr<Core::Assets::IAsset>& outAsset,
-        AString& outError
-    )const override;
-
-#if defined(NWB_COOK)
-    virtual bool serialize(
-        const Core::Assets::IAsset& asset,
-        Core::Assets::AssetBytes& outBinary,
-        AString& outError
-    )const override;
-#endif
 };
 
 

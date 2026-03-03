@@ -24,40 +24,6 @@ static constexpr u32 s_MaterialMagic = 0x4D544C31u; // MTL1
 static constexpr u32 s_MaterialVersion = 1u;
 
 
-bool AppendString(Core::Assets::AssetBytes& outBinary, const AStringView text){
-    if(text.size() > Limit<u32>::s_Max)
-        return false;
-
-    const u32 textLength = static_cast<u32>(text.size());
-    AppendPOD(outBinary, textLength);
-    if(textLength == 0)
-        return true;
-
-    const usize beginOffset = outBinary.size();
-    outBinary.resize(beginOffset + textLength);
-    NWB_MEMCPY(outBinary.data() + beginOffset, textLength, text.data(), textLength);
-    return true;
-}
-
-bool ReadString(const Core::Assets::AssetBytes& binary, usize& inOutOffset, AString& outText){
-    u32 textLength = 0;
-    if(!ReadPOD(binary, inOutOffset, textLength))
-        return false;
-
-    if(inOutOffset > binary.size())
-        return false;
-    if(binary.size() - inOutOffset < textLength)
-        return false;
-
-    outText.assign(
-        reinterpret_cast<const char*>(binary.data() + inOutOffset),
-        textLength
-    );
-    inOutOffset += textLength;
-    return true;
-}
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -120,7 +86,7 @@ bool Material::loadBinary(const AStringView virtualPath, const Core::Assets::Ass
     for(u32 i = 0; i < parameterCount; ++i){
         AString key;
         AString value;
-        if(!__hidden_assets::ReadString(binary, cursor, key) || !__hidden_assets::ReadString(binary, cursor, value)){
+        if(!ReadString(binary, cursor, key) || !ReadString(binary, cursor, value)){
             outError = StringFormat("Material::loadBinary failed: malformed parameter at index {}", i);
             return false;
         }
@@ -181,7 +147,7 @@ bool Material::saveBinary(Core::Assets::AssetBytes& outBinary, AString& outError
         if(found == m_parameters.end())
             continue;
 
-        if(!__hidden_assets::AppendString(outBinary, *key) || !__hidden_assets::AppendString(outBinary, found->second)){
+        if(!AppendString(outBinary, *key) || !AppendString(outBinary, found->second)){
             outError = "Material::saveBinary failed: parameter text is too long";
             return false;
         }
@@ -198,47 +164,6 @@ void Material::setShader(const Name& shaderName, const Name& variantName){
     m_shaderName = shaderName;
     m_shaderVariant = variantName;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-bool MaterialAssetCodec::deserialize(
-    const AStringView virtualPath,
-    const Core::Assets::AssetBytes& binary,
-    UniquePtr<Core::Assets::IAsset>& outAsset,
-    AString& outError
-)const{
-    auto material = MakeUnique<Material>();
-    if(!material->loadBinary(virtualPath, binary, outError))
-        return false;
-
-    outAsset = Move(material);
-    return true;
-}
-
-#if defined(NWB_COOK)
-
-
-bool MaterialAssetCodec::serialize(
-    const Core::Assets::IAsset& asset,
-    Core::Assets::AssetBytes& outBinary,
-    AString& outError
-)const{
-    if(asset.assetType() != assetType()){
-        outError = StringFormat(
-            "MaterialAssetCodec: invalid asset type '{}', expected '{}'",
-            asset.assetType(),
-            assetType()
-        );
-        return false;
-    }
-
-    return static_cast<const Material&>(asset).saveBinary(outBinary, outError);
-}
-
-
-#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -111,6 +111,38 @@ template<typename Container, typename PodType>
     return true;
 }
 
+template<typename Container>
+[[nodiscard]] inline bool AppendString(Container& outBinary, const AStringView text){
+    if(text.size() > Limit<u32>::s_Max)
+        return false;
+
+    const u32 textLength = static_cast<u32>(text.size());
+    AppendPOD(outBinary, textLength);
+    if(textLength == 0)
+        return true;
+
+    const usize beginOffset = outBinary.size();
+    outBinary.resize(beginOffset + textLength);
+    NWB_MEMCPY(outBinary.data() + beginOffset, textLength, text.data(), textLength);
+    return true;
+}
+
+template<typename Container>
+[[nodiscard]] inline bool ReadString(const Container& binary, usize& inOutOffset, AString& outText){
+    u32 textLength = 0;
+    if(!ReadPOD(binary, inOutOffset, textLength))
+        return false;
+
+    if(inOutOffset > binary.size())
+        return false;
+    if(binary.size() - inOutOffset < textLength)
+        return false;
+
+    outText.assign(reinterpret_cast<const char*>(binary.data() + inOutOffset), textLength);
+    inOutOffset += textLength;
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

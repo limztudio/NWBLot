@@ -58,6 +58,34 @@ public:
 };
 
 
+template<typename T>
+class AssetCodecOf : public IAssetCodec{
+public:
+    virtual bool deserialize(AStringView virtualPath, const AssetBytes& binary, UniquePtr<IAsset>& outAsset, AString& outError)const override{
+        auto asset = MakeUnique<T>();
+        if(!asset->loadBinary(virtualPath, binary, outError))
+            return false;
+        outAsset = Move(asset);
+        return true;
+    }
+
+#if defined(NWB_COOK)
+    virtual bool serialize(const IAsset& asset, AssetBytes& outBinary, AString& outError)const override{
+        if(asset.assetType() != assetType()){
+            outError = StringFormat(
+                "'{}' codec: invalid asset type '{}', expected '{}'",
+                assetType(),
+                asset.assetType(),
+                assetType()
+            );
+            return false;
+        }
+        return static_cast<const T&>(asset).saveBinary(outBinary, outError);
+    }
+#endif
+};
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

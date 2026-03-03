@@ -9,10 +9,6 @@
 
 #include <core/assets/asset.h>
 
-#if defined(NWB_COOK)
-#include <core/assets/asset_cooker.h>
-#endif
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -44,24 +40,9 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class ShaderAssetCodec final : public Core::Assets::IAssetCodec{
+class ShaderAssetCodec final : public Core::Assets::AssetCodecOf<Shader>{
 public:
     [[nodiscard]] virtual AStringView assetType()const override{ return "shader"; }
-
-    virtual bool deserialize(
-        AStringView virtualPath,
-        const Core::Assets::AssetBytes& binary,
-        UniquePtr<Core::Assets::IAsset>& outAsset,
-        AString& outError
-    )const override;
-
-#if defined(NWB_COOK)
-    virtual bool serialize(
-        const Core::Assets::IAsset& asset,
-        Core::Assets::AssetBytes& outBinary,
-        AString& outError
-    )const override;
-#endif
 };
 
 

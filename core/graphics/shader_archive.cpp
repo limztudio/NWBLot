@@ -94,30 +94,28 @@ AString NormalizeVariantName(const AStringView variantName){
 }
 
 
-bool ResolveVirtualPathCandidate(
-    const Vector<ShaderArchive::Record>& records,
-    const Name& shaderName,
-    const Name& variantName,
-    const AStringView canonicalShaderName,
-    const AStringView canonicalVariantName,
-    AString& outVirtualPath
-){
-    const AString candidateVirtualPath = ShaderArchive::buildVirtualPath(canonicalShaderName, canonicalVariantName);
-    const NameHash candidateVirtualPathHash = Name(candidateVirtualPath.c_str()).hash();
+AString BuildVirtualPathFromCanonical(const AStringView canonicalShaderName, const AStringView canonicalVariantName){
+    const u64 variantHash = ComputeFnv64Text(canonicalVariantName);
+    const AString variantHashHex = FormatHex64(variantHash);
+    return StringFormat("shader/{}/{}.spv", canonicalShaderName, variantHashHex);
+}
 
-    for(const ShaderArchive::Record& record : records){
-        if(record.shaderName != shaderName)
-            continue;
-        if(record.variantName != variantName)
-            continue;
-        if(record.virtualPathHash != candidateVirtualPathHash)
-            continue;
 
-        outVirtualPath = candidateVirtualPath;
-        return true;
-    }
-
-    return false;
+const ShaderArchive::Record* FindRecord(const Vector<ShaderArchive::Record>& records, const Name& shaderName, const Name& variantName){
+    const auto it = LowerBound(records.begin(), records.end(), nullptr,
+        [&shaderName, &variantName](const ShaderArchive::Record& record, std::nullptr_t){
+            const NameHash& recordShader = record.shaderName.hash();
+            const NameHash& targetShader = shaderName.hash();
+            if(recordShader != targetShader)
+                return LessNameHash(recordShader, targetShader);
+            return LessNameHash(record.variantName.hash(), variantName.hash());
+        }
+    );
+    if(it == records.end())
+        return nullptr;
+    if(it->shaderName != shaderName || it->variantName != variantName)
+        return nullptr;
+    return &*it;
 }
 
 
@@ -131,12 +129,10 @@ bool ResolveVirtualPathCandidate(
 
 
 AString ShaderArchive::buildVirtualPath(const AStringView shaderName, const AStringView variantName){
-    const AString canonicalShaderName = CanonicalizeText(shaderName);
-    const AString canonicalVariantName = __hidden_shader_archive::NormalizeVariantName(variantName);
-
-    const u64 variantHash = ComputeFnv64Text(canonicalVariantName);
-    const AString variantHashHex = FormatHex64(variantHash);
-    return StringFormat("shader/{}/{}.spv", canonicalShaderName, variantHashHex);
+    return __hidden_shader_archive::BuildVirtualPathFromCanonical(
+        CanonicalizeText(shaderName),
+        __hidden_shader_archive::NormalizeVariantName(variantName)
+    );
 }
 
 
@@ -278,12 +274,7 @@ bool ShaderArchive::deserializeIndex(const Vector<u8>& binary, Vector<Record>& o
 }
 
 
-bool ShaderArchive::findVirtualPath(
-    const Vector<Record>& records,
-    const AStringView shaderName,
-    const AStringView variantName,
-    AString& outVirtualPath
-){
+bool ShaderArchive::findVirtualPath(const Vector<Record>& records, const AStringView shaderName, const AStringView variantName, AString& outVirtualPath){
     outVirtualPath.clear();
 
     const AString canonicalShaderName = CanonicalizeText(shaderName);
@@ -294,30 +285,18 @@ bool ShaderArchive::findVirtualPath(
 
     const Name requestedShaderName(canonicalShaderName.c_str());
     const Name requestedVariantName(canonicalVariantName.c_str());
-    const Name defaultVariantName(s_DefaultVariant);
+    static constexpr Name s_DefaultVariantName(s_DefaultVariant);
 
-    if(__hidden_shader_archive::ResolveVirtualPathCandidate(
-        records,
-        requestedShaderName,
-        requestedVariantName,
-        canonicalShaderName,
-        canonicalVariantName,
-        outVirtualPath
-    )){
+    if(__hidden_shader_archive::FindRecord(records, requestedShaderName, requestedVariantName)){
+        outVirtualPath = __hidden_shader_archive::BuildVirtualPathFromCanonical(canonicalShaderName, canonicalVariantName);
         return true;
     }
 
-    if(requestedVariantName == defaultVariantName)
+    if(requestedVariantName == s_DefaultVariantName)
         return false;
 
-    if(__hidden_shader_archive::ResolveVirtualPathCandidate(
-        records,
-        requestedShaderName,
-        defaultVariantName,
-        canonicalShaderName,
-        s_DefaultVariant,
-        outVirtualPath
-    )){
+    if(__hidden_shader_archive::FindRecord(records, requestedShaderName, s_DefaultVariantName)){
+        outVirtualPath = __hidden_shader_archive::BuildVirtualPathFromCanonical(canonicalShaderName, s_DefaultVariant);
         return true;
     }
 

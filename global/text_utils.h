@@ -83,6 +83,13 @@ template<typename CharT>
 }
 
 
+[[nodiscard]] inline i32 Stoi(const AString& str, usize* pos = nullptr, i32 base = 10){ return std::stoi(str, pos, base); }
+[[nodiscard]] inline i64 Stoll(const AString& str, usize* pos = nullptr, i32 base = 10){ return std::stoll(str, pos, base); }
+[[nodiscard]] inline u64 Stoull(const AString& str, usize* pos = nullptr, i32 base = 10){ return std::stoull(str, pos, base); }
+[[nodiscard]] inline f32 Stof(const AString& str, usize* pos = nullptr){ return std::stof(str, pos); }
+[[nodiscard]] inline f64 Stod(const AString& str, usize* pos = nullptr){ return std::stod(str, pos); }
+
+
 template<typename CharT = char>
 [[nodiscard]] inline BasicString<CharT> PathToString(const Path& path){
     if constexpr(SameAs<CharT, char>)

@@ -66,6 +66,8 @@ using MaxAlign = std::max_align_t;
 
 using GeneralException = std::exception;
 
+using RuntimeException = std::runtime_error;
+
 
 using ErrorCode = std::error_code;
 

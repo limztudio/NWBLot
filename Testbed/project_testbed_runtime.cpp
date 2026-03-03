@@ -16,11 +16,11 @@ NotNullUniquePtr<NWB::Core::ECS::World> ProjectTestbed::createInitialWorldOrDie(
     UniquePtr<NWB::Core::ECS::World> world;
     if(!NWB::CreateInitialProjectWorld(context, world)){
         NWB_LOGGER_FATAL(NWB_TEXT("ProjectTestbed initialization failed: CreateInitialProjectWorld returned false"));
-        throw std::runtime_error("ProjectTestbed initialization failed");
+        throw RuntimeException("ProjectTestbed initialization failed");
     }
     if(!world){
         NWB_LOGGER_FATAL(NWB_TEXT("ProjectTestbed initialization failed: CreateInitialProjectWorld returned null world"));
-        throw std::runtime_error("ProjectTestbed initialization failed");
+        throw RuntimeException("ProjectTestbed initialization failed");
     }
     return MakeNotNullUnique(Move(world));
 }

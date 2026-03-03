@@ -65,7 +65,7 @@ static int EntryPoint(isize argc, tchar** argv, void* inst){
             app.parse(static_cast<int>(argc), argv);
         }
         catch(const CLI::ParseError& e){
-            app.exit(e, std::cout, std::cerr);
+            app.exit(e, NWB_COUT, NWB_CERR);
             return -1;
         }
     }

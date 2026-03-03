@@ -899,7 +899,7 @@ bool VolumeFileSystem::scanSegmentsLocked(){
 
         usize index = 0;
         try{
-            const u64 parsed = std::stoull(indexString);
+            const u64 parsed = Stoull(indexString);
             if(parsed > static_cast<u64>(Limit<usize>::s_Max))
                 continue;
             index = static_cast<usize>(parsed);

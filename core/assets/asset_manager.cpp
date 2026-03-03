@@ -67,8 +67,8 @@ u64 AssetManager::enqueueLoad(const AStringView assetType, const AStringView vir
         ScopedLock lock(m_mutex);
 
         RequestRecord request;
-        request.requestId = requestId;
-        request.state = AssetLoadState::Pending;
+        request.result.requestId = requestId;
+        request.result.state = AssetLoadState::Pending;
         request.assetType = canonicalType;
         request.virtualPath = AString(virtualPath);
         m_requests[requestId] = Move(request);
@@ -89,7 +89,7 @@ void AssetManager::processPending(){
         ScopedLock lock(m_mutex);
         pendingRequestIds.reserve(m_requests.size());
         for(const auto& [requestId, request] : m_requests){
-            if(request.state == AssetLoadState::Pending)
+            if(request.result.state == AssetLoadState::Pending)
                 pendingRequestIds.push_back(requestId);
         }
     }
@@ -109,14 +109,10 @@ bool AssetManager::tryPopResult(const u64 requestId, AssetLoadResult& outResult)
         return false;
 
     RequestRecord& request = found.value();
-    if(request.state != AssetLoadState::Completed)
+    if(request.result.state != AssetLoadState::Completed)
         return false;
 
-    outResult.requestId = request.requestId;
-    outResult.state = request.state;
-    outResult.success = request.success;
-    outResult.asset = Move(request.asset);
-    outResult.error = Move(request.error);
+    outResult = Move(request.result);
 
     m_requests.erase(found);
     return true;
@@ -134,7 +130,7 @@ u64 AssetManager::pendingRequestCount()const{
 
     u64 pendingCount = 0;
     for(const auto& [_, request] : m_requests){
-        if(request.state == AssetLoadState::Pending || request.state == AssetLoadState::InFlight)
+        if(request.result.state == AssetLoadState::Pending || request.result.state == AssetLoadState::InFlight)
             ++pendingCount;
     }
 
@@ -147,7 +143,7 @@ u64 AssetManager::completedRequestCount()const{
 
     u64 completedCount = 0;
     for(const auto& [_, request] : m_requests){
-        if(request.state == AssetLoadState::Completed)
+        if(request.result.state == AssetLoadState::Completed)
             ++completedCount;
     }
 
@@ -184,10 +180,10 @@ void AssetManager::processRequest(const u64 requestId){
             return;
 
         RequestRecord& request = found.value();
-        if(request.state != AssetLoadState::Pending)
+        if(request.result.state != AssetLoadState::Pending)
             return;
 
-        request.state = AssetLoadState::InFlight;
+        request.result.state = AssetLoadState::InFlight;
         assetType = request.assetType;
         virtualPath = request.virtualPath;
     }
@@ -204,10 +200,10 @@ void AssetManager::processRequest(const u64 requestId){
             return;
 
         RequestRecord& request = found.value();
-        request.state = AssetLoadState::Completed;
-        request.success = success;
-        request.asset = Move(loadedAsset);
-        request.error = Move(loadError);
+        request.result.state = AssetLoadState::Completed;
+        request.result.success = success;
+        request.result.asset = Move(loadedAsset);
+        request.result.error = Move(loadError);
     }
 }
 

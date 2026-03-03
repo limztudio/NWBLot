@@ -248,11 +248,11 @@ ResourceStates::Mask StateTracker::getTextureState(ITexture* texture, ArraySlice
 
     auto permIt = m_permanentTextureStates.find(texture);
     if(permIt != m_permanentTextureStates.end())
-        return permIt->second;
+        return permIt.value();
 
     auto it = m_textureStates.find(texture);
     if(it != m_textureStates.end())
-        return it->second;
+        return it.value();
 
     return ResourceStates::Unknown;
 }
@@ -263,11 +263,11 @@ ResourceStates::Mask StateTracker::getBufferState(IBuffer* buffer)const{
 
     auto permIt = m_permanentBufferStates.find(buffer);
     if(permIt != m_permanentBufferStates.end())
-        return permIt->second;
+        return permIt.value();
 
     auto it = m_bufferStates.find(buffer);
     if(it != m_bufferStates.end())
-        return it->second;
+        return it.value();
 
     return ResourceStates::Unknown;
 }

@@ -147,7 +147,7 @@ bool Material::saveBinary(Core::Assets::AssetBytes& outBinary, AString& outError
         if(found == m_parameters.end())
             continue;
 
-        if(!AppendString(outBinary, *key) || !AppendString(outBinary, found->second)){
+        if(!AppendString(outBinary, *key) || !AppendString(outBinary, found.value())){
             outError = "Material::saveBinary failed: parameter text is too long";
             return false;
         }

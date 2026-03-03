@@ -5,6 +5,8 @@
 #include "shader_asset_cooker.h"
 
 #if defined(NWB_COOK)
+#include <core/assets/asset_cook_utils.h>
+
 #include <core/graphics/shader_archive.h>
 #include <core/graphics/shader_compiler.h>
 #include <core/graphics/shader_cook.h>
@@ -38,21 +40,7 @@ namespace __hidden_assets{
 static constexpr AStringView s_DefaultVariant = "default";
 
 
-static AString NormalizeCookConfiguration(const AStringView configuration){
-    if(configuration.empty())
-        return "default";
-
-    const AString normalized = CanonicalizeText(configuration);
-    if(normalized.empty())
-        return "default";
-    return normalized;
-}
-
-
-static AString NormalizeVariantName(
-    const Core::ShaderCook::ManifestEntry& entry,
-    const AStringView generatedVariantName
-){
+static AString NormalizeVariantName(const Core::ShaderCook::ManifestEntry& entry, const AStringView generatedVariantName){
     AString canonicalGeneratedVariantName = CanonicalizeText(generatedVariantName);
     if(canonicalGeneratedVariantName.empty())
         canonicalGeneratedVariantName = s_DefaultVariant;
@@ -81,38 +69,9 @@ struct VariantCachePaths{
 };
 
 
-static bool WriteCacheSourceChecksum(
-    const Path& checksumPath,
-    AStringView sourceChecksumHex,
-    AString& outError
-);
-static bool CacheSourceChecksumMatches(const Path& checksumPath, AStringView sourceChecksumHex);
+static bool ResolveCookPaths(const ShaderCookEnvironment& environment, ResolvedCookPaths& outPaths, AString& outError){
+    ErrorCode errorCode;
 
-
-static bool ResolvePathFromRepoRoot(
-    const Path& repoRoot,
-    const Path& inputPath,
-    const AStringView pathLabel,
-    Path& outPath,
-    AString& outError
-){
-    if(ResolveAbsolutePath(repoRoot, PathToString(inputPath), outPath))
-        return true;
-
-    outError = StringFormat(
-        "ShaderAssetCooker::CookShaderAssets failed to resolve {} '{}'",
-        pathLabel,
-        PathToString(inputPath)
-    );
-    return false;
-}
-
-
-static bool ResolveCookPaths(
-    const ShaderCookEnvironment& environment,
-    ResolvedCookPaths& outPaths,
-    AString& outError
-){
     outPaths = {};
 
     if(environment.manifestPath.empty()){
@@ -124,7 +83,6 @@ static bool ResolveCookPaths(
         return false;
     }
 
-    ErrorCode errorCode;
     outPaths.repoRoot = environment.repoRoot.empty() ? Path(".") : environment.repoRoot;
     outPaths.repoRoot = AbsolutePath(outPaths.repoRoot, errorCode).lexically_normal();
     if(errorCode){
@@ -135,19 +93,18 @@ static bool ResolveCookPaths(
         return false;
     }
 
-    if(!ResolvePathFromRepoRoot(outPaths.repoRoot, environment.manifestPath, "manifest path", outPaths.manifestPath, outError))
+    if(!Core::Assets::ResolvePathFromCookRoot(outPaths.repoRoot, environment.manifestPath, "manifest path", outPaths.manifestPath, outError))
         return false;
-    if(!ResolvePathFromRepoRoot(outPaths.repoRoot, environment.outputDirectory, "output directory", outPaths.outputDirectory, outError))
+    if(!Core::Assets::ResolvePathFromCookRoot(outPaths.repoRoot, environment.outputDirectory, "output directory", outPaths.outputDirectory, outError))
         return false;
 
     const Path defaultCacheDirectory = outPaths.repoRoot / "__build_obj/shader_cache";
     const Path requestedCacheDirectory = environment.cacheDirectory.empty()
         ? defaultCacheDirectory
         : environment.cacheDirectory;
-    if(!ResolvePathFromRepoRoot(outPaths.repoRoot, requestedCacheDirectory, "cache directory", outPaths.cacheDirectory, outError))
+    if(!Core::Assets::ResolvePathFromCookRoot(outPaths.repoRoot, requestedCacheDirectory, "cache directory", outPaths.cacheDirectory, outError))
         return false;
 
-    errorCode.clear();
     CreateDirectories(outPaths.cacheDirectory, errorCode);
     if(errorCode){
         outError = StringFormat(
@@ -162,18 +119,15 @@ static bool ResolveCookPaths(
 }
 
 
-static bool BuildIncludeDirectories(
-    const Path& repoRoot,
-    const Core::ShaderCook::ManifestData& manifest,
-    Core::ShaderCook::CookVector<Path>& outIncludeDirectories,
-    AString& outError
-){
+static bool BuildIncludeDirectories(const Path& repoRoot, const Core::ShaderCook::ManifestData& manifest, Core::ShaderCook::CookVector<Path>& outIncludeDirectories, AString& outError){
+    ErrorCode errorCode;
+
     outIncludeDirectories.clear();
     outIncludeDirectories.reserve(manifest.includeRoots.size());
 
     for(const AString& includeRoot : manifest.includeRoots){
         Path includeDirectory;
-        if(!ResolveAbsolutePath(repoRoot, includeRoot, includeDirectory)){
+        if(!ResolveAbsolutePath(repoRoot, includeRoot, includeDirectory, errorCode)){
             outError = StringFormat("Failed to resolve include_root '{}'", includeRoot);
             return false;
         }
@@ -185,19 +139,7 @@ static bool BuildIncludeDirectories(
 }
 
 
-static bool EnsureSourceFileExists(const Path& sourcePath){
-    ErrorCode errorCode;
-    const bool exists = FileExists(sourcePath, errorCode);
-    return exists && !errorCode;
-}
-
-
-static VariantCachePaths BuildVariantCachePaths(
-    const Path& cacheDirectory,
-    const AStringView configurationSafeName,
-    const Core::ShaderCook::ManifestEntry& entry,
-    const AStringView variantName
-){
+static VariantCachePaths BuildVariantCachePaths(const Path& cacheDirectory, const AStringView configurationSafeName, const Core::ShaderCook::ManifestEntry& entry, const AStringView variantName){
     const AString shaderSafeName = BuildSafeCacheName(entry.name);
     const AString variantHashHex = FormatHex64(ComputeFnv64Text(variantName));
 
@@ -214,13 +156,6 @@ static VariantCachePaths BuildVariantCachePaths(
 }
 
 
-static bool IsExistingFile(const Path& path){
-    ErrorCode errorCode;
-    const bool exists = FileExists(path, errorCode);
-    return exists && !errorCode;
-}
-
-
 static bool EnsureVariantCache(
     const Core::ShaderCook::ManifestEntry& entry,
     const Core::ShaderCook::DefineCombo& defineCombo,
@@ -231,11 +166,14 @@ static bool EnsureVariantCache(
     Core::IShaderCompiler& shaderCompiler,
     const bool forceRebuild,
     AString& outError
-){
+)
+{
+    ErrorCode errorCode;
+
     const bool cacheUpToDate = !forceRebuild
-        && IsExistingFile(cachePaths.bytecodePath)
-        && IsExistingFile(cachePaths.sourceChecksumPath)
-        && CacheSourceChecksumMatches(cachePaths.sourceChecksumPath, sourceChecksumHex);
+        && FileExists(cachePaths.bytecodePath, errorCode)
+        && FileExists(cachePaths.sourceChecksumPath, errorCode)
+        && Core::Assets::CookSourceChecksumMatches(cachePaths.sourceChecksumPath, sourceChecksumHex);
     if(cacheUpToDate)
         return true;
 
@@ -253,21 +191,18 @@ static bool EnsureVariantCache(
     if(!shaderCompiler.compileVariant(compileRequest, outError))
         return false;
 
-    if(!WriteCacheSourceChecksum(cachePaths.sourceChecksumPath, sourceChecksumHex, outError))
+    if(!Core::Assets::WriteCookSourceChecksum(cachePaths.sourceChecksumPath, sourceChecksumHex, outError))
         return false;
 
     return true;
 }
 
 
-static bool LoadBytecodeFromCache(
-    const Path& cachePath,
-    const AStringView shaderName,
-    Core::ShaderCook::CookVector<u8>& outBytecode,
-    AString& outError
-){
+static bool LoadBytecodeFromCache(const Path& cachePath, const AStringView shaderName, Core::ShaderCook::CookVector<u8>& outBytecode, AString& outError){
+    ErrorCode errorCode;
+
     outBytecode.clear();
-    if(!ReadBinaryFile(cachePath, outBytecode)){
+    if(!ReadBinaryFile(cachePath, outBytecode, errorCode)){
         outError = StringFormat(
             "Failed to read shader bytecode cache '{}' for entry '{}'",
             PathToString(cachePath),
@@ -297,7 +232,8 @@ static bool EmitShaderArchiveRecord(
     Core::Filesystem::VolumeSession& volumeSession,
     Vector<Core::ShaderArchive::Record>& inOutRecords,
     AString& outError
-){
+)
+{
     const AString variantNameText(variantName);
     const AString virtualPath = Core::ShaderArchive::buildVirtualPath(entry.name, variantName);
     const NameHash virtualPathHash = Name(virtualPath.c_str()).hash();
@@ -328,58 +264,11 @@ static bool EmitShaderArchiveRecord(
 }
 
 
-static bool WriteCacheSourceChecksum(
-    const Path& checksumPath,
-    const AStringView sourceChecksumHex,
-    AString& outError
-){
-    Core::ShaderCook::OutputFileStream stream(
-        checksumPath,
-        Core::ShaderCook::OutputFileStream::binary | Core::ShaderCook::OutputFileStream::trunc
-    );
-    if(!stream.is_open()){
-        outError = StringFormat(
-            "Failed to write shader cache checksum '{}'",
-            PathToString(checksumPath)
-        );
-        return false;
-    }
-
-    stream.write(
-        sourceChecksumHex.data(),
-        static_cast<Core::ShaderCook::StreamSize>(sourceChecksumHex.size())
-    );
-    if(!stream.good()){
-        outError = StringFormat(
-            "Failed to write shader cache checksum data '{}'",
-            PathToString(checksumPath)
-        );
-        return false;
-    }
-
-    return true;
-}
-
-
-static bool CacheSourceChecksumMatches(
-    const Path& checksumPath,
-    const AStringView sourceChecksumHex
-){
-    AString cachedChecksumText;
-    if(!ReadTextFile(checksumPath, cachedChecksumText))
-        return false;
-
-    TrimTrailingCarriageReturn(cachedChecksumText);
-    const AString trimmedCachedChecksum = Trim(cachedChecksumText);
-    return trimmedCachedChecksum == sourceChecksumHex;
-}
-
 static void* VolumeArenaAlloc(usize size){ return Core::Alloc::CoreAlloc(size, "shader_cook_volume"); }
 static void VolumeArenaFree(void* ptr){ Core::Alloc::CoreFree(ptr, "shader_cook_volume"); }
-static void* VolumeArenaAllocAligned(usize size, usize align){
-    return Core::Alloc::CoreAllocAligned(size, align, "shader_cook_volume");
-}
+static void* VolumeArenaAllocAligned(usize size, usize align){ return Core::Alloc::CoreAllocAligned(size, align, "shader_cook_volume"); }
 static void VolumeArenaFreeAligned(void* ptr){ Core::Alloc::CoreFreeAligned(ptr, "shader_cook_volume"); }
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -406,7 +295,7 @@ bool ShaderAssetCooker::CookShaderAssets(const ShaderCookEnvironment& environmen
     if(!__hidden_assets::BuildIncludeDirectories(resolvedPaths.repoRoot, manifest, includeDirectories, outError))
         return false;
 
-    const AString normalizedConfiguration = __hidden_assets::NormalizeCookConfiguration(environment.configuration);
+    const AString normalizedConfiguration = Core::Assets::NormalizeCookConfiguration(environment.configuration);
     const AString configurationSafeName = BuildSafeCacheName(normalizedConfiguration);
     Vector<Core::ShaderArchive::Record> shaderIndexRecords;
     Core::ShaderCook::CookHashSet<NameHash> seenVirtualPathHashes;
@@ -438,7 +327,7 @@ bool ShaderAssetCooker::CookShaderAssets(const ShaderCookEnvironment& environmen
 
     for(const Core::ShaderCook::ManifestEntry& entry : manifest.entries){
         Path sourcePath;
-        if(!ResolveAbsolutePath(resolvedPaths.repoRoot, entry.source, sourcePath)){
+        if(!ResolveAbsolutePath(resolvedPaths.repoRoot, entry.source, sourcePath, errorCode)){
             outError = StringFormat(
                 "Failed to resolve source path '{}' for entry '{}'",
                 entry.source,
@@ -447,7 +336,7 @@ bool ShaderAssetCooker::CookShaderAssets(const ShaderCookEnvironment& environmen
             return false;
         }
 
-        if(!__hidden_assets::EnsureSourceFileExists(sourcePath)){
+        if(!FileExists(sourcePath, errorCode)){
             outError = StringFormat(
                 "Shader source does not exist for entry '{}': '{}'",
                 entry.name,

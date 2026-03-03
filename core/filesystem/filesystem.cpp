@@ -166,7 +166,7 @@ static bool RemoveExistingVolumeSegments(const Path& outputDirectory, const AStr
     ErrorCode errorCode;
 
     const AString segmentPrefix = StringFormat("{}_", volumeName);
-    for(const auto& directoryEntry : std::filesystem::directory_iterator(outputDirectory, errorCode)){
+    for(const auto& directoryEntry : DirectoryIterator(outputDirectory, errorCode)){
         if(errorCode)
             break;
 
@@ -177,13 +177,8 @@ static bool RemoveExistingVolumeSegments(const Path& outputDirectory, const AStr
         if(!prefixMatch || !extensionMatch)
             continue;
 
-        std::filesystem::remove(currentPath, errorCode);
-        if(errorCode){
-            outError = StringFormat(
-                "Failed to remove old segment '{}' : {}",
-                PathToString(currentPath),
-                errorCode.message()
-            );
+        if(!RemoveFile(currentPath, errorCode)){
+            outError = StringFormat("Failed to remove old segment '{}' : {}", PathToString(currentPath), errorCode.message());
             return false;
         }
     }
@@ -212,13 +207,8 @@ static bool RemoveExistingVolumeSegments(const Path& outputDirectory, const AStr
         if(!exists)
             break;
 
-        std::filesystem::remove(hashedPath, errorCode);
-        if(errorCode){
-            outError = StringFormat(
-                "Failed to remove old hashed segment '{}' : {}",
-                PathToString(hashedPath),
-                errorCode.message()
-            );
+        if(!RemoveFile(hashedPath, errorCode)){
+            outError = StringFormat("Failed to remove old hashed segment '{}' : {}", PathToString(hashedPath), errorCode.message());
             return false;
         }
 
@@ -241,17 +231,12 @@ static bool RemoveExistingVolumeSegments(const Path& outputDirectory, const AStr
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool BuildVolume(
-    const Path& outputDirectory,
-    const VolumeBuildConfig& config,
-    const HashMap<AString, Vector<u8>>& files,
-    VolumeBuildInfo& outBuildInfo,
-    AString& outError
-){
+bool BuildVolume(const Path& outputDirectory, const VolumeBuildConfig& config, const HashMap<AString, Vector<u8>>& files, VolumeBuildInfo& outBuildInfo, AString& outError){
+    ErrorCode errorCode;
+
     outBuildInfo = {};
     outError.clear();
 
-    ErrorCode errorCode;
     CreateDirectories(outputDirectory, errorCode);
     if(errorCode){
         outError = StringFormat(
@@ -299,6 +284,8 @@ VolumeFileSystem::~VolumeFileSystem(){
 
 
 bool VolumeFileSystem::mount(const VolumeMountDesc& desc){
+    ErrorCode errorCode;
+
     ScopedLock lock(m_mutex);
     unmountLocked();
 
@@ -313,7 +300,6 @@ bool VolumeFileSystem::mount(const VolumeMountDesc& desc){
     m_writable = (desc.usage != VolumeUsage::RuntimeReadOnly);
     m_maxSegments = desc.maxSegments;
 
-    ErrorCode errorCode;
     if(!FileExists(m_mountDirectory, errorCode)){
         if(errorCode){
             __hidden_filesystem::LogFailureWithFsError(m_volumeName, "mount:exists", m_mountDirectory, errorCode);
@@ -330,11 +316,8 @@ bool VolumeFileSystem::mount(const VolumeMountDesc& desc){
             return false;
         }
     }
-    else if(!std::filesystem::is_directory(m_mountDirectory, errorCode)){
-        if(errorCode)
-            __hidden_filesystem::LogFailureWithFsError(m_volumeName, "mount:is_directory", m_mountDirectory, errorCode);
-        else
-            __hidden_filesystem::LogFailureWithPath(m_volumeName, "mount:is_directory", m_mountDirectory, "path is not a directory");
+    else if(!IsDirectory(m_mountDirectory, errorCode)){
+        __hidden_filesystem::LogFailureWithPath(m_volumeName, "mount:is_directory", m_mountDirectory, "path is not a directory");
         return false;
     }
 
@@ -380,11 +363,10 @@ bool VolumeFileSystem::mount(const VolumeMountDesc& desc){
         }
     }
     else{
-        ErrorCode sizeError;
-        const u64 discoveredSegmentSize = std::filesystem::file_size(m_segmentPaths[0], sizeError);
-        if(sizeError || discoveredSegmentSize == 0){
-            if(sizeError)
-                __hidden_filesystem::LogFailureWithFsError(m_volumeName, "mount:file_size", m_segmentPaths[0], sizeError);
+        const u64 discoveredSegmentSize = FileSize(m_segmentPaths[0], errorCode);
+        if(errorCode || discoveredSegmentSize == 0){
+            if(errorCode)
+                __hidden_filesystem::LogFailureWithFsError(m_volumeName, "mount:file_size", m_segmentPaths[0], errorCode);
             else
                 __hidden_filesystem::LogFailureWithPath(m_volumeName, "mount:file_size", m_segmentPaths[0], "segment size is zero");
             unmountLocked();
@@ -393,11 +375,10 @@ bool VolumeFileSystem::mount(const VolumeMountDesc& desc){
         m_segmentSize = discoveredSegmentSize;
 
         for(const Path& segmentPath : m_segmentPaths){
-            const u64 segmentFileSize = std::filesystem::file_size(segmentPath, sizeError);
-            if(sizeError || segmentFileSize != m_segmentSize){
-                if(sizeError){
-                    __hidden_filesystem::LogFailureWithFsError(m_volumeName, "mount:file_size", segmentPath, sizeError);
-                }
+            const u64 segmentFileSize = FileSize(segmentPath, errorCode);
+            if(errorCode || segmentFileSize != m_segmentSize){
+                if(errorCode)
+                    __hidden_filesystem::LogFailureWithFsError(m_volumeName, "mount:file_size", segmentPath, errorCode);
                 else{
                     NWB_LOGGER_WARNING(
                         NWB_TEXT("Filesystem('{}'): mount failed: segment '{}' has size {}, expected {}"),
@@ -506,8 +487,8 @@ u64 VolumeFileSystem::usedBytes()const{
     ScopedLock lock(m_mutex);
 
     u64 totalUsedBytes = 0;
-    for(const auto& current : m_files){
-        if(!__hidden_filesystem::AddNoOverflow(totalUsedBytes, current.second.size, totalUsedBytes))
+    for(const auto& [_, record] : m_files){
+        if(!__hidden_filesystem::AddNoOverflow(totalUsedBytes, record.size, totalUsedBytes))
             return Limit<u64>::s_Max;
     }
 
@@ -520,8 +501,8 @@ u64 VolumeFileSystem::wastedBytes()const{
         return 0;
 
     u64 totalUsedBytes = 0;
-    for(const auto& current : m_files){
-        if(!__hidden_filesystem::AddNoOverflow(totalUsedBytes, current.second.size, totalUsedBytes))
+    for(const auto& [_, record] : m_files){
+        if(!__hidden_filesystem::AddNoOverflow(totalUsedBytes, record.size, totalUsedBytes))
             return 0;
     }
 
@@ -583,7 +564,7 @@ bool VolumeFileSystem::writeFile(const Name& virtualPath, const void* data, cons
 
     FileRecord previousRecord;
     if(existed)
-        previousRecord = itrFind->second;
+        previousRecord = itrFind.value();
     const u64 previousNextFreeOffset = m_nextFreeOffset;
 
     m_files[virtualPath] = FileRecord{ writeOffset, byteCount };
@@ -621,7 +602,7 @@ bool VolumeFileSystem::readFile(const Name& virtualPath, Vector<u8>& outData)con
         return false;
     }
 
-    const FileRecord& record = itr->second;
+    const FileRecord& record = itr.value();
     if(record.size > static_cast<u64>(Limit<usize>::s_Max)){
         NWB_LOGGER_WARNING(
             NWB_TEXT("Filesystem('{}'): readFile failed: file size {} exceeds runtime buffer limit {}"),
@@ -660,7 +641,7 @@ bool VolumeFileSystem::removeFile(const Name& virtualPath){
         return false;
     }
 
-    const FileRecord removedRecord = itr->second;
+    const FileRecord removedRecord = itr.value();
     m_files.erase(itr);
     if(flushMetadataLocked())
         return true;
@@ -696,7 +677,7 @@ bool VolumeFileSystem::fileSize(const Name& virtualPath, u64& outSize)const{
         return false;
     }
 
-    outSize = itr->second.size;
+    outSize = itr.value().size;
     return true;
 }
 
@@ -705,8 +686,8 @@ Vector<Name> VolumeFileSystem::listFiles()const{
 
     Vector<Name> output;
     output.reserve(m_files.size());
-    for(const auto& current : m_files)
-        output.push_back(current.first);
+    for(const auto& [path, _] : m_files)
+        output.push_back(path);
 
     Sort(output.begin(), output.end(), __hidden_filesystem::LessName);
     return output;
@@ -730,9 +711,7 @@ bool VolumeFileSystem::compact(const bool shrinkSegments){
     Vector<FileLayout> layouts;
     layouts.reserve(m_files.size());
 
-    for(const auto& current : m_files){
-        const FileRecord& record = current.second;
-
+    for(const auto& [path, record] : m_files){
         u64 endOffset = 0;
         if(!__hidden_filesystem::AddNoOverflow(record.offset, record.size, endOffset)){
             __hidden_filesystem::LogFailure(m_volumeName, "compact", "offset overflow detected in file layout");
@@ -747,7 +726,7 @@ bool VolumeFileSystem::compact(const bool shrinkSegments){
             return false;
         }
 
-        layouts.push_back(FileLayout{ current.first, record.offset, 0, record.size });
+        layouts.push_back(FileLayout{ path, record.offset, 0, record.size });
     }
 
     Sort(
@@ -812,9 +791,9 @@ bool VolumeFileSystem::compact(const bool shrinkSegments){
 
 
 bool VolumeFileSystem::scanSegmentsLocked(){
-    m_segmentPaths.clear();
-
     ErrorCode errorCode;
+
+    m_segmentPaths.clear();
 
     for(usize segmentIndex = 0;; ++segmentIndex){
         const Path hashedSegmentPath = m_mountDirectory / MakeVolumeSegmentFileName(m_volumeName, segmentIndex);
@@ -827,12 +806,7 @@ bool VolumeFileSystem::scanSegmentsLocked(){
         if(!exists)
             break;
 
-        const bool regularFile = std::filesystem::is_regular_file(hashedSegmentPath, errorCode);
-        if(errorCode){
-            __hidden_filesystem::LogFailureWithFsError(m_volumeName, "scanSegments:is_regular_file", hashedSegmentPath, errorCode);
-            return false;
-        }
-        if(!regularFile){
+        if(!IsRegularFile(hashedSegmentPath, errorCode)){
             __hidden_filesystem::LogFailureWithPath(m_volumeName, "scanSegments:is_regular_file", hashedSegmentPath, "segment path is not a regular file");
             return false;
         }
@@ -854,8 +828,8 @@ bool VolumeFileSystem::scanSegmentsLocked(){
     constexpr AStringView suffix = ".vol";
 
     errorCode.clear();
-    std::filesystem::directory_iterator directoryIt(m_mountDirectory, errorCode);
-    std::filesystem::directory_iterator end;
+    DirectoryIterator directoryIt(m_mountDirectory, errorCode);
+    DirectoryIterator end;
 
     if(errorCode){
         __hidden_filesystem::LogFailureWithFsError(m_volumeName, "scanSegments:open_directory", m_mountDirectory, errorCode);
@@ -867,12 +841,7 @@ bool VolumeFileSystem::scanSegmentsLocked(){
             __hidden_filesystem::LogFailureWithFsError(m_volumeName, "scanSegments:iterate", m_mountDirectory, errorCode);
             return false;
         }
-        const bool regularFile = directoryIt->is_regular_file(errorCode);
-        if(errorCode){
-            __hidden_filesystem::LogFailureWithFsError(m_volumeName, "scanSegments:is_regular_file", directoryIt->path(), errorCode);
-            return false;
-        }
-        if(!regularFile)
+        if(!IsRegularFile(directoryIt->path(), errorCode))
             continue;
 
         const AString fileName = directoryIt->path().filename().string();
@@ -1224,8 +1193,8 @@ bool VolumeFileSystem::flushMetadataLocked(){
 
     Vector<Name> sortedPaths;
     sortedPaths.reserve(m_files.size());
-    for(const auto& current : m_files)
-        sortedPaths.push_back(current.first);
+    for(const auto& [path, _] : m_files)
+        sortedPaths.push_back(path);
     Sort(sortedPaths.begin(), sortedPaths.end(), __hidden_filesystem::LessName);
 
     Vector<u8> indexBytes;
@@ -1247,7 +1216,7 @@ bool VolumeFileSystem::flushMetadataLocked(){
             return false;
         }
 
-        const FileRecord& record = itr->second;
+        const FileRecord& record = itr.value();
         VolumeIndexEntryDisk entry{};
         entry.hash = pathName.hash();
         entry.offset = record.offset;
@@ -1559,6 +1528,8 @@ bool VolumeFileSystem::moveBytesLocked(const u64 destinationOffset, const u64 so
 }
 
 bool VolumeFileSystem::trimSegmentsForNextFreeOffsetLocked(){
+    ErrorCode errorCode;
+
     if(!m_writable || m_segmentSize == 0){
         __hidden_filesystem::LogFailure(m_volumeName, "trimSegments", "filesystem is not writable or segment size is zero");
         return false;
@@ -1590,13 +1561,8 @@ bool VolumeFileSystem::trimSegmentsForNextFreeOffsetLocked(){
 
     while(m_segmentPaths.size() > static_cast<usize>(requiredSegments)){
         const Path removePath = m_segmentPaths.back();
-        ErrorCode errorCode;
-        const bool removed = std::filesystem::remove(removePath, errorCode);
-        if(errorCode || !removed){
-            if(errorCode)
-                __hidden_filesystem::LogFailureWithFsError(m_volumeName, "trimSegments:remove", removePath, errorCode);
-            else
-                __hidden_filesystem::LogFailureWithPath(m_volumeName, "trimSegments:remove", removePath, "remove returned false");
+        if(!RemoveFile(removePath, errorCode)){
+            __hidden_filesystem::LogFailureWithPath(m_volumeName, "trimSegments:remove", removePath, "failed to remove segment");
             return false;
         }
         m_segmentPaths.pop_back();

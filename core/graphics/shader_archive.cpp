@@ -86,6 +86,14 @@ bool ValidateRecord(const ShaderArchive::Record& record, AString& outError){
 }
 
 
+AString NormalizeVariantName(const AStringView variantName){
+    AString canonical = CanonicalizeText(variantName);
+    if(canonical.empty())
+        canonical = ShaderArchive::s_DefaultVariant;
+    return canonical;
+}
+
+
 bool ResolveVirtualPathCandidate(
     const Vector<ShaderArchive::Record>& records,
     const Name& shaderName,
@@ -124,10 +132,7 @@ bool ResolveVirtualPathCandidate(
 
 AString ShaderArchive::buildVirtualPath(const AStringView shaderName, const AStringView variantName){
     const AString canonicalShaderName = CanonicalizeText(shaderName);
-
-    AString canonicalVariantName = CanonicalizeText(variantName);
-    if(canonicalVariantName.empty())
-        canonicalVariantName = s_DefaultVariant;
+    const AString canonicalVariantName = __hidden_shader_archive::NormalizeVariantName(variantName);
 
     const u64 variantHash = ComputeFnv64Text(canonicalVariantName);
     const AString variantHashHex = FormatHex64(variantHash);
@@ -285,9 +290,7 @@ bool ShaderArchive::findVirtualPath(
     if(canonicalShaderName.empty())
         return false;
 
-    AString canonicalVariantName = CanonicalizeText(variantName);
-    if(canonicalVariantName.empty())
-        canonicalVariantName = s_DefaultVariant;
+    const AString canonicalVariantName = __hidden_shader_archive::NormalizeVariantName(variantName);
 
     const Name requestedShaderName(canonicalShaderName.c_str());
     const Name requestedVariantName(canonicalVariantName.c_str());

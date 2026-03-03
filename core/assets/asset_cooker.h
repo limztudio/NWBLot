@@ -48,7 +48,7 @@ public:
 
 
 private:
-    Vector<UniquePtr<IAssetCooker>> m_assetCookers;
+    HashMap<AString, UniquePtr<IAssetCooker>> m_assetCookers;
 };
 
 

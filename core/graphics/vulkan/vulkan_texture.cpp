@@ -121,8 +121,8 @@ Texture::Texture(const VulkanContext& context, VulkanAllocator& allocator)
     , m_views(0, Hasher<u64>(), EqualTo<u64>(), Alloc::CustomAllocator<Pair<const u64, VkImageView>>(context.objectArena))
 {}
 Texture::~Texture(){
-    for(const auto& pair : m_views)
-        vkDestroyImageView(m_context.device, pair.second, m_context.allocationCallbacks);
+    for(const auto& [_, view] : m_views)
+        vkDestroyImageView(m_context.device, view, m_context.allocationCallbacks);
     m_views.clear();
 
     if(m_managed){
@@ -161,7 +161,7 @@ VkImageView Texture::getView(const TextureSubresourceSet& subresources, TextureD
 
     auto it = m_views.find(key);
     if(it != m_views.end())
-        return it->second;
+        return it.value();
 
     VkImageViewType viewType = __hidden_vulkan::TextureDimensionToViewType(dimension);
     VkFormat vkFormat = ConvertFormat(format);

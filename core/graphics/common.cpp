@@ -422,7 +422,7 @@ void AftermathMarkerTracker::popEvent(){
 Pair<bool, AString> AftermathMarkerTracker::getEventString(usize hash){
     auto found = m_eventStrings.find(hash);
     if(found != m_eventStrings.end())
-        return MakePair(true, found->second);
+        return MakePair(true, found.value());
 
     return MakePair(false, s_NotFoundMarkerString);
 }

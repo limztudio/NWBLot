@@ -17,8 +17,7 @@ NWB_ECS_BEGIN
 
 
 void ISystem::registerAccess(ComponentTypeId typeId, AccessMode::Enum mode){
-    for(usize i = 0; i < m_access.size(); ++i){
-        auto& access = m_access[i];
+    for(auto& access : m_access){
         if(access.typeId != typeId)
             continue;
 
@@ -104,8 +103,7 @@ void SystemScheduler::rebuild(){
             const auto& acc = sys->m_access;
 
             bool compatible = true;
-            for(usize a = 0; a < acc.size(); ++a){
-                const auto& ca = acc[a];
+            for(const auto& ca : acc){
                 if(ca.mode == AccessMode::Write){
                     if(stageWrites.count(ca.typeId) || stageReads.count(ca.typeId)){
                         compatible = false;
@@ -121,8 +119,7 @@ void SystemScheduler::rebuild(){
             }
 
             if(compatible){
-                for(usize a = 0; a < acc.size(); ++a){
-                    const auto& ca = acc[a];
+                for(const auto& ca : acc){
                     if(ca.mode == AccessMode::Write)
                         stageWrites.insert(ca.typeId);
                     else

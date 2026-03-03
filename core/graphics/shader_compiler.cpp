@@ -42,19 +42,6 @@ static bool AlreadyRegistered(const ShaderCompilerFactory& factory){
 }
 
 
-static bool BackendTypeAlreadyRegistered(const AStringView backendType){
-    ShaderCompilerFactory* node = s_FactoryHead;
-    while(node != nullptr){
-        if(node->createFunction != nullptr && CanonicalizeText(node->backendType) == backendType)
-            return true;
-
-        node = node->next;
-    }
-
-    return false;
-}
-
-
 static ShaderCompilerFactory* FindFirstFactory(){
     ShaderCompilerFactory* node = s_FactoryHead;
     while(node != nullptr){
@@ -106,7 +93,7 @@ void RegisterShaderCompilerFactory(ShaderCompilerFactory& factory){
     ScopedLock lock(__hidden_shader_compile::s_FactoryMutex);
     if(__hidden_shader_compile::AlreadyRegistered(factory))
         return;
-    if(__hidden_shader_compile::BackendTypeAlreadyRegistered(canonicalBackendType))
+    if(__hidden_shader_compile::FindFactoryByBackendType(canonicalBackendType) != nullptr)
         return;
 
     factory.next = __hidden_shader_compile::s_FactoryHead;
@@ -120,7 +107,6 @@ UniquePtr<IShaderCompiler> CreateShaderCompiler(const AStringView backendType, A
     const AString canonicalBackendType = CanonicalizeText(backendType);
 
     ShaderCompilerFactory::CreateFunction createFunction = nullptr;
-    AString selectedBackendType;
     {
         ScopedLock lock(__hidden_shader_compile::s_FactoryMutex);
 
@@ -136,19 +122,13 @@ UniquePtr<IShaderCompiler> CreateShaderCompiler(const AStringView backendType, A
         }
 
         createFunction = selectedFactory->createFunction;
-        selectedBackendType = AString(selectedFactory->backendType);
-    }
-
-    if(createFunction == nullptr){
-        outError = "No shader compiler factory is registered";
-        return {};
     }
 
     UniquePtr<IShaderCompiler> compiler = createFunction();
     if(compiler == nullptr){
         outError = StringFormat(
             "Shader compiler factory '{}' returned null compiler instance",
-            selectedBackendType
+            backendType
         );
         return {};
     }

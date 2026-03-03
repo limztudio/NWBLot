@@ -58,19 +58,6 @@ template<typename CharT>
 }
 
 
-[[nodiscard]] inline AString FormatHex64A(const u64 value){
-    char buffer[17] = {};
-    NWB_SPRINTF(buffer, sizeof(buffer), "%016llx", static_cast<unsigned long long>(value));
-    return AString(buffer);
-}
-[[nodiscard]] inline WString FormatHex64W(const u64 value){
-    wchar buffer[17] = {};
-    NWB_WSPRINTF(buffer, 17, L"%016llx", static_cast<unsigned long long>(value));
-    return WString(buffer);
-}
-[[nodiscard]] inline auto FormatHex64(const u64 value){ return FormatHex64A(value); }
-
-
 template<typename CharT>
 [[nodiscard]] inline bool ParseHexDigit(const CharT ch, u8& outValue){
     if(ch >= static_cast<CharT>('0') && ch <= static_cast<CharT>('9')){
@@ -121,6 +108,21 @@ inline void AppendHexU64(const u64 value, BasicString<CharT>& outText){
         outText.push_back(s_HexDigits[nibble]);
     }
 }
+
+
+[[nodiscard]] inline AString FormatHex64A(const u64 value){
+    AString result;
+    result.reserve(16);
+    AppendHexU64(value, result);
+    return result;
+}
+[[nodiscard]] inline WString FormatHex64W(const u64 value){
+    WString result;
+    result.reserve(16);
+    AppendHexU64(value, result);
+    return result;
+}
+[[nodiscard]] inline auto FormatHex64(const u64 value){ return FormatHex64A(value); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

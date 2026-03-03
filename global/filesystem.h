@@ -18,24 +18,48 @@
 
 using Path = std::filesystem::path;
 
+using DirectoryIterator = std::filesystem::directory_iterator;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool FileExists(const Path& path, ErrorCode& errorCode)noexcept{
-    return std::filesystem::exists(path, errorCode);
+[[nodiscard]] inline bool FileExists(const Path& path, ErrorCode& outError)noexcept{
+    return std::filesystem::exists(path, outError);
 }
 
-[[nodiscard]] inline Path AbsolutePath(const Path& path, ErrorCode& errorCode){
-    return std::filesystem::absolute(path, errorCode);
+[[nodiscard]] inline bool IsDirectory(const Path& path, ErrorCode& outError)noexcept{
+    return std::filesystem::is_directory(path, outError);
 }
 
-inline bool CreateDirectories(const Path& path, ErrorCode& errorCode)noexcept{
-    return std::filesystem::create_directories(path, errorCode);
+[[nodiscard]] inline bool IsRegularFile(const Path& path, ErrorCode& outError)noexcept{
+    return std::filesystem::is_regular_file(path, outError);
 }
 
 
-[[nodiscard]] inline bool ResolveAbsolutePath(const Path& baseDirectory, const AStringView relativeOrAbsolute, Path& outPath){
+[[nodiscard]] inline Path AbsolutePath(const Path& path, ErrorCode& outError)noexcept{
+    return std::filesystem::absolute(path, outError);
+}
+
+
+[[nodiscard]] inline bool CreateDirectories(const Path& path, ErrorCode& outError)noexcept{
+    std::filesystem::create_directories(path, outError);
+    return !outError;
+}
+
+
+[[nodiscard]] inline bool RemoveFile(const Path& path, ErrorCode& outError)noexcept{
+    std::filesystem::remove(path, outError);
+    return !outError;
+}
+
+
+[[nodiscard]] inline u64 FileSize(const Path& path, ErrorCode& outError)noexcept{
+    return std::filesystem::file_size(path, outError);
+}
+
+
+[[nodiscard]] inline bool ResolveAbsolutePath(const Path& baseDirectory, const AStringView relativeOrAbsolute, Path& outPath, ErrorCode& outError){
     if(relativeOrAbsolute.empty())
         return false;
 
@@ -43,9 +67,8 @@ inline bool CreateDirectories(const Path& path, ErrorCode& errorCode)noexcept{
     if(!candidate.is_absolute())
         candidate = baseDirectory / candidate;
 
-    ErrorCode errorCode;
-    const Path absolutePath = AbsolutePath(candidate, errorCode);
-    if(errorCode)
+    const Path absolutePath = AbsolutePath(candidate, outError);
+    if(outError)
         return false;
 
     outPath = absolutePath.lexically_normal();
@@ -64,14 +87,22 @@ inline bool CreateDirectories(const Path& path, ErrorCode& errorCode)noexcept{
     return stream.good() || stream.eof();
 }
 
+[[nodiscard]] inline bool WriteTextFile(const Path& path, const AStringView content){
+    std::ofstream stream(path, std::ofstream::binary | std::ofstream::trunc);
+    if(!stream.is_open())
+        return false;
+
+    stream.write(content.data(), static_cast<std::streamsize>(content.size()));
+    return stream.good();
+}
+
 
 template<typename Container>
-[[nodiscard]] inline bool ReadBinaryFile(const Path& path, Container& outBytes){
+[[nodiscard]] inline bool ReadBinaryFile(const Path& path, Container& outBytes, ErrorCode& outError){
     outBytes.clear();
 
-    ErrorCode errorCode;
-    const u64 fileSize = std::filesystem::file_size(path, errorCode);
-    if(errorCode)
+    const u64 fileSize = FileSize(path, outError);
+    if(outError)
         return false;
 
     if(fileSize > static_cast<u64>(Limit<usize>::s_Max))

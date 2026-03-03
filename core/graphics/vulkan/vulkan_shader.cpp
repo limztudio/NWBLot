@@ -67,7 +67,7 @@ ShaderHandle ShaderLibrary::getShader(const Name& entryName, ShaderType::Mask sh
 
     auto it = m_shaders.find(entryName);
     if(it != m_shaders.end())
-        return ShaderHandle(it->second.get(), ShaderHandle::deleter_type(&m_context.objectArena));
+        return ShaderHandle(it.value().get(), ShaderHandle::deleter_type(&m_context.objectArena));
 
     Shader* shader = NewArenaObject<Shader>(m_context.objectArena, m_context);
     shader->m_desc.shaderType = shaderType;
@@ -228,11 +228,11 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
             bufferStrides[attr.bufferIndex] = Max(bufferStrides[attr.bufferIndex], stride);
     }
 
-    for(const auto& pair : bufferStrides){
+    for(const auto& [bufferIndex, stride] : bufferStrides){
         VkVertexInputBindingDescription binding{};
-        binding.binding = pair.first;
-        binding.stride = pair.second;
-        binding.inputRate = bufferInstanced[pair.first] ? VK_VERTEX_INPUT_RATE_INSTANCE : VK_VERTEX_INPUT_RATE_VERTEX;
+        binding.binding = bufferIndex;
+        binding.stride = stride;
+        binding.inputRate = bufferInstanced[bufferIndex] ? VK_VERTEX_INPUT_RATE_INSTANCE : VK_VERTEX_INPUT_RATE_VERTEX;
         layout->m_bindings.push_back(binding);
     }
 

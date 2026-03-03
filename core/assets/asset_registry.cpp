@@ -59,7 +59,7 @@ const IAssetCodec* AssetRegistry::findCodec(const AStringView assetType)const{
     if(found == m_codecs.end())
         return nullptr;
 
-    return found->second.get();
+    return found.value().get();
 }
 
 

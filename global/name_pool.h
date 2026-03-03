@@ -43,7 +43,7 @@ public:
 
         const auto itr = m_nameIndex.find(name.hash());
         if(itr != m_nameIndex.end()){
-            const usize index = itr->second;
+            const usize index = itr.value();
             if(index >= m_strings.size())
                 return NAME_NONE;
             if(m_strings[index] == canonical)
@@ -71,7 +71,7 @@ public:
         if(itr == m_nameIndex.end())
             return "";
 
-        const usize index = itr->second;
+        const usize index = itr.value();
         if(index >= m_strings.size())
             return "";
         return m_strings[index].c_str();
@@ -83,7 +83,7 @@ public:
         if(itr == m_nameIndex.end())
             return false;
 
-        const usize index = itr->second;
+        const usize index = itr.value();
         if(index >= m_strings.size())
             return false;
 

@@ -96,27 +96,22 @@ public:
     {}
 
 
-    shaderc_include_result* GetInclude(
-        const char* requestedSource,
-        const shaderc_include_type type,
-        const char* requestingSource,
-        [[maybe_unused]] const size_t includeDepth
-    ) override{
+    shaderc_include_result* GetInclude(const char* requestedSource, const shaderc_include_type type, const char* requestingSource, [[maybe_unused]] const size_t includeDepth)override{
+        ErrorCode errorCode;
+
         const Path requestingDirectory = Path(requestingSource).parent_path();
         Path resolvedPath;
 
         if(type == shaderc_include_type_relative){
-            std::error_code errorCode;
             const Path localCandidate = (requestingDirectory / Path(requestedSource)).lexically_normal();
-            if(FileExists(localCandidate, errorCode) && !errorCode)
+            if(FileExists(localCandidate, errorCode))
                 resolvedPath = localCandidate;
         }
 
         if(resolvedPath.empty()){
             for(const Path& includeDirectory : m_includeDirectories){
-                std::error_code errorCode;
                 const Path candidate = (includeDirectory / Path(requestedSource)).lexically_normal();
-                if(FileExists(candidate, errorCode) && !errorCode){
+                if(FileExists(candidate, errorCode)){
                     resolvedPath = candidate;
                     break;
                 }
@@ -126,26 +121,22 @@ public:
         auto* result = new shaderc_include_result{};
         auto* payload = new IncludePayload{};
 
-        if(resolvedPath.empty()){
-            payload->content = StringFormat("Include '{}' not found", requestedSource);
+        const auto makeErrorResult = [&](AString message) -> shaderc_include_result*{
+            payload->content = Move(message);
             result->source_name = "";
             result->source_name_length = 0;
             result->content = payload->content.c_str();
             result->content_length = payload->content.size();
             result->user_data = payload;
             return result;
-        }
+        };
+
+        if(resolvedPath.empty())
+            return makeErrorResult(StringFormat("Include '{}' not found", requestedSource));
 
         AString fileContent;
-        if(!ReadTextFile(resolvedPath, fileContent)){
-            payload->content = StringFormat("Failed to read include '{}'", PathToString(resolvedPath));
-            result->source_name = "";
-            result->source_name_length = 0;
-            result->content = payload->content.c_str();
-            result->content_length = payload->content.size();
-            result->user_data = payload;
-            return result;
-        }
+        if(!ReadTextFile(resolvedPath, fileContent))
+            return makeErrorResult(StringFormat("Failed to read include '{}'", PathToString(resolvedPath)));
 
         payload->sourceName = PathToString(resolvedPath);
         payload->content.assign(fileContent.data(), fileContent.size());
@@ -157,7 +148,7 @@ public:
         return result;
     }
 
-    void ReleaseInclude(shaderc_include_result* data) override{
+    void ReleaseInclude(shaderc_include_result* data)override{
         if(!data)
             return;
 
@@ -181,7 +172,8 @@ private:
 
 
 bool VulkanShaderCompiler::compileVariant(const ShaderCompilerRequest& request, AString& outError){
-    std::error_code errorCode;
+    ErrorCode errorCode;
+
     CreateDirectories(request.cachePath.parent_path(), errorCode);
     if(errorCode){
         outError = StringFormat(

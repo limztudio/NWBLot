@@ -202,7 +202,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                         EmptyClipboard();
                         HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, byteSize);
                         if(hMem){
-                            memcpy(GlobalLock(hMem), combined.c_str(), byteSize);
+                            NWB_MEMCPY(GlobalLock(hMem), byteSize, combined.c_str(), byteSize);
                             GlobalUnlock(hMem);
 #if defined(UNICODE) || defined(_UNICODE)
                             SetClipboardData(CF_UNICODETEXT, hMem);

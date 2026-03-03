@@ -139,7 +139,6 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
         size *= d.maxVersions;
 
         buffer->m_versionTracking.resize(d.maxVersions);
-        std::fill(buffer->m_versionTracking.begin(), buffer->m_versionTracking.end(), 0);
     }
 
     VkBufferCreateInfo bufferInfo{};

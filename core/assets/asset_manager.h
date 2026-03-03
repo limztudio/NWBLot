@@ -58,13 +58,9 @@ struct AssetLoadResult{
 class AssetManager final : NoCopy{
 private:
     struct RequestRecord{
-        u64 requestId = 0;
-        AssetLoadState::Enum state = AssetLoadState::Invalid;
+        AssetLoadResult result;
         AString assetType;
         AString virtualPath;
-        bool success = false;
-        UniquePtr<IAsset> asset;
-        AString error;
     };
 
     using RequestMap = HashMap<u64, RequestRecord>;

@@ -35,6 +35,21 @@ struct SortedDependencyItem{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+template<typename MapT>
+static CookVector<Pair<const AString*, const typename MapT::mapped_type*>> SortedDefineEntries(const MapT& map){
+    using EntryPtr = Pair<const AString*, const typename MapT::mapped_type*>;
+    CookVector<EntryPtr> entries;
+    entries.reserve(map.size());
+    for(const auto& [name, value] : map)
+        entries.push_back({ &name, &value });
+    Sort(entries.begin(), entries.end(), [](const EntryPtr& lhs, const EntryPtr& rhs){ return *lhs.first < *rhs.first; });
+    return entries;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void ExpandDefineCombinations(
     const CookMap<AString, CookVector<AString>>& defineValues,
     CookVector<DefineCombo>& outCombinations
@@ -42,25 +57,8 @@ void ExpandDefineCombinations(
     outCombinations.clear();
     outCombinations.push_back({});
 
-    CookVector<const AString*> sortedDefineNames;
-    sortedDefineNames.reserve(defineValues.size());
-    for(const auto& [defineName, _] : defineValues)
-        sortedDefineNames.push_back(&defineName);
-
-    Sort(
-        sortedDefineNames.begin(),
-        sortedDefineNames.end(),
-        [](const AString* lhs, const AString* rhs){
-            return *lhs < *rhs;
-        }
-    );
-
-    for(const AString* defineName : sortedDefineNames){
-        const auto found = defineValues.find(*defineName);
-        if(found == defineValues.end())
-            continue;
-
-        const CookVector<AString>& values = found->second;
+    for(const auto& [defineName, pValues] : SortedDefineEntries(defineValues)){
+        const CookVector<AString>& values = *pValues;
         CookVector<DefineCombo> expanded;
         expanded.reserve(outCombinations.size() * values.size());
 
@@ -81,35 +79,16 @@ AString BuildVariantName(const DefineCombo& combo){
     if(combo.empty())
         return "default";
 
-    CookVector<const AString*> sortedDefineNames;
-    sortedDefineNames.reserve(combo.size());
-    for(const auto& [defineName, _] : combo)
-        sortedDefineNames.push_back(&defineName);
-
-    Sort(
-        sortedDefineNames.begin(),
-        sortedDefineNames.end(),
-        [](const AString* lhs, const AString* rhs){
-            return *lhs < *rhs;
-        }
-    );
-
     AString variantName;
     bool first = true;
-    for(const AString* defineName : sortedDefineNames){
-        const auto found = combo.find(*defineName);
-        if(found == combo.end())
-            continue;
-
-        const AString& value = found->second;
-
+    for(const auto& [defineName, pValue] : SortedDefineEntries(combo)){
         if(!first)
             variantName += ';';
         first = false;
 
         variantName += *defineName;
         variantName += '=';
-        variantName += value;
+        variantName += *pValue;
     }
 
     return variantName;
@@ -219,7 +198,7 @@ static bool ValidateDefaultVariant(const ManifestEntry& entry, AString& outError
         }
 
         bool valueFound = false;
-        for(const AString& allowedValue : defineIt->second){
+        for(const AString& allowedValue : defineIt.value()){
             if(allowedValue == defineValue){
                 valueFound = true;
                 break;
@@ -316,24 +295,18 @@ static bool ExtractIncludeName(const AStringView line, AString& outIncludeName){
 }
 
 
-static bool ResolveIncludeFile(
-    const AStringView includeName,
-    const Path& sourceDirectory,
-    const CookVector<Path>& includeDirectories,
-    Path& outPath
-){
+static bool ResolveIncludeFile(const AStringView includeName, const Path& sourceDirectory, const CookVector<Path>& includeDirectories, Path& outPath){
     ErrorCode errorCode;
 
     const Path localCandidate = (sourceDirectory / Path(includeName)).lexically_normal();
-    if(FileExists(localCandidate, errorCode) && !errorCode){
+    if(FileExists(localCandidate, errorCode)){
         outPath = localCandidate;
         return true;
     }
 
     for(const Path& includeDirectory : includeDirectories){
-        errorCode.clear();
         const Path includeCandidate = (includeDirectory / Path(includeName)).lexically_normal();
-        if(FileExists(includeCandidate, errorCode) && !errorCode){
+        if(FileExists(includeCandidate, errorCode)){
             outPath = includeCandidate;
             return true;
         }
@@ -343,14 +316,9 @@ static bool ResolveIncludeFile(
 }
 
 
-static bool CollectDependenciesRecursive(
-    const Path& dependencyPath,
-    const CookVector<Path>& includeDirectories,
-    CookHashSet<AString>& inOutVisitedPaths,
-    CookVector<Path>& inOutDependencies,
-    AString& outError
-){
+static bool CollectDependenciesRecursive(const Path& dependencyPath, const CookVector<Path>& includeDirectories, CookHashSet<AString>& inOutVisitedPaths, CookVector<Path>& inOutDependencies, AString& outError){
     ErrorCode errorCode;
+
     const Path absolutePath = AbsolutePath(dependencyPath, errorCode).lexically_normal();
     if(errorCode){
         outError = StringFormat(
@@ -595,12 +563,7 @@ bool ParseManifestFile(const Path& manifestPath, ManifestData& outManifest, AStr
 }
 
 
-bool GatherShaderDependencies(
-    const Path& sourcePath,
-    const CookVector<Path>& includeDirectories,
-    CookVector<Path>& outDependencies,
-    AString& outError
-){
+bool GatherShaderDependencies(const Path& sourcePath, const CookVector<Path>& includeDirectories, CookVector<Path>& outDependencies, AString& outError){
     outDependencies.clear();
 
     CookHashSet<AString> visited;
@@ -611,13 +574,9 @@ bool GatherShaderDependencies(
 }
 
 
-bool ComputeSourceChecksum(
-    const ManifestEntry& entry,
-    const AStringView variantName,
-    const CookVector<Path>& dependencies,
-    u64& outChecksum,
-    AString& outError
-){
+bool ComputeSourceChecksum(const ManifestEntry& entry, const AStringView variantName, const CookVector<Path>& dependencies, u64& outChecksum, AString& outError){
+    ErrorCode errorCode;
+
     outChecksum = FNV64_OFFSET_BASIS;
 
     AString header;
@@ -672,7 +631,7 @@ bool ComputeSourceChecksum(
         );
 
         CookVector<u8> dependencyBytes;
-        if(!ReadBinaryFile(item.path, dependencyBytes)){
+        if(!ReadBinaryFile(item.path, dependencyBytes, errorCode)){
             outError = StringFormat("Failed to read dependency file '{}'", item.canonicalPath);
             return false;
         }

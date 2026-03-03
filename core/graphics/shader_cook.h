@@ -9,17 +9,6 @@
 
 
 #if defined(NWB_COOK)
-#include <filesystem>
-#include <fstream>
-#include <sstream>
-#include <system_error>
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(NWB_COOK)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -39,17 +28,6 @@ namespace ShaderCook{
 
 inline constexpr u64 s_DefaultSegmentSize = 16ull * 1024ull * 1024ull;
 inline constexpr u64 s_DefaultMetadataSize = 512ull * 1024ull;
-
-namespace FileSystem = std::filesystem;
-
-using ErrorCode = std::error_code;
-using StreamOffset = std::streamoff;
-using StreamSize = std::streamsize;
-
-using InputFileStream = std::ifstream;
-using OutputFileStream = std::ofstream;
-using InOutFileStream = std::fstream;
-using OutputStringStream = std::ostringstream;
 
 template<typename T>
 using CookVector = Vector<T>;

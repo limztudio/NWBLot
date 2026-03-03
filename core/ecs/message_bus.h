@@ -188,7 +188,7 @@ private:
 
         auto itr = m_channels.find(typeId);
         if(itr != m_channels.end())
-            return static_cast<MessageChannel<T>*>(itr->second.get());
+            return static_cast<MessageChannel<T>*>(itr.value().get());
 
         auto channel = MakeUnique<MessageChannel<T>>(m_arena);
         auto* raw = channel.get();
@@ -205,7 +205,7 @@ private:
         auto itr = m_channels.find(typeId);
         if(itr == m_channels.end())
             return nullptr;
-        return static_cast<const MessageChannel<T>*>(itr->second.get());
+        return static_cast<const MessageChannel<T>*>(itr.value().get());
     }
 
 

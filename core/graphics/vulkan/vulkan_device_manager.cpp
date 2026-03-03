@@ -689,13 +689,13 @@ bool DeviceManager::createDevice(){
         if(optIt != m_optionalExtensions.device.end()){
             if(name == VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME && m_deviceParams.headlessDevice)
                 continue;
-            m_enabledExtensions.device.insert({ name, optIt->second });
+            m_enabledExtensions.device.insert({ name, optIt.value() });
         }
 
         if(m_deviceParams.enableRayTracingExtensions){
             auto rtIt = m_rayTracingExtensions.find(name);
             if(rtIt != m_rayTracingExtensions.end())
-                m_enabledExtensions.device.insert({ name, rtIt->second });
+                m_enabledExtensions.device.insert({ name, rtIt.value() });
         }
     }
 

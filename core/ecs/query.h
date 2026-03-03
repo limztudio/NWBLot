@@ -178,7 +178,7 @@ private:
     void initializeAnchor(){
         m_valid = true;
         m_anchorPoolIndex = 0;
-        m_count = static_cast<usize>(-1);
+        m_count = Limit<usize>::s_Max;
 
         initializeAnchorImpl(__hidden_ecs::IndexSequenceFor<Ts...>{});
 

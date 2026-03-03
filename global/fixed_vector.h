@@ -14,7 +14,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename T, uint32_t _max_elements>
+template<typename T, u32 _max_elements>
 class FixedVector : private std::array<T, _max_elements>{
 public:
     typedef std::array<T, _max_elements> base;
@@ -37,7 +37,7 @@ public:
         : base()
         , current_size(0)
     {}
-    FixedVector(size_t size)
+    FixedVector(usize size)
         : base()
         , current_size(size)
     {
@@ -92,7 +92,7 @@ public:
     }
 
     constexpr void swap(FixedVector& other)noexcept{
-        base::swap(*this);
+        base::swap(other);
         std::swap(current_size, other.current_size);
     }
 
@@ -116,23 +116,21 @@ public:
     constexpr void resize(size_type new_size)noexcept{
         NWB_ASSERT(new_size <= max_elements);
 
-        if(current_size > new_size){
-            for(size_type i = new_size; i < current_size; ++i)
-                *(data() + i) = T{};
-        }
-        else{
-            for(size_type i = current_size; i < new_size; ++i)
-                *(data() + i) = T{};
-        }
+        const size_type lo = current_size < new_size ? current_size : new_size;
+        const size_type hi = current_size < new_size ? new_size : current_size;
+        for(size_type i = lo; i < hi; ++i)
+            *(data() + i) = T{};
 
         current_size = new_size;
     }
 
-    constexpr reference emplace_back()noexcept{
+    template<typename... Args>
+    constexpr reference emplace_back(Args&&... args){
         NWB_ASSERT(current_size < max_elements);
+        T* slot = data() + current_size;
+        *slot = T(Forward<Args>(args)...);
         ++current_size;
-        back() = T{};
-        return back();
+        return *slot;
     }
 
 private:

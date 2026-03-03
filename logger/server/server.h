@@ -19,7 +19,7 @@ NWB_LOG_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr tchar SERVER_NAME[] = NWB_TEXT("Server");
+inline constexpr tchar SERVER_NAME[] = NWB_TEXT("Server");
 class Server : public BaseUpdateOrdinary<Server, 0.1f, SERVER_NAME>{
     friend class Base;
     friend class BaseUpdateOrdinary;

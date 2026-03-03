@@ -57,13 +57,6 @@ public:
         );
     }
 
-    template<typename... Ts>
-    View<Ts...> view()const{
-        return View<Ts...>(
-            MakeTuple(const_cast<ComponentPool<Ts>*>(getPool<Ts>())...)
-        );
-    }
-
 
 public:
     template<typename T, typename... Args>
@@ -151,15 +144,13 @@ private:
     template<typename T>
     T& getComponent(EntityID entityId){
         NWB_ASSERT(m_entityManager.alive(entityId));
-        auto& pool = requirePool<T>();
-        return pool->get(entityId);
+        return requirePool<T>().get(entityId);
     }
 
     template<typename T>
     const T& getComponent(EntityID entityId)const{
         NWB_ASSERT(m_entityManager.alive(entityId));
-        const auto& pool = requirePool<T>();
-        return pool->get(entityId);
+        return requirePool<T>().get(entityId);
     }
 
     template<typename T>

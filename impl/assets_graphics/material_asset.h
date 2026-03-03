@@ -36,7 +36,7 @@ public:
     [[nodiscard]] const Name& name()const{ return m_name; }
     [[nodiscard]] const Name& shaderName()const{ return m_shaderName; }
     [[nodiscard]] const Name& shaderVariant()const{ return m_shaderVariant; }
-    [[nodiscard]] const Core::Assets::AssetMap<AString, AString>& parameters()const{ return m_parameters; }
+    [[nodiscard]] const HashMap<AString, AString>& parameters()const{ return m_parameters; }
 
 
 private:
@@ -44,7 +44,7 @@ private:
     Name m_shaderName;
     Name m_shaderVariant;
     AString m_virtualPath;
-    Core::Assets::AssetMap<AString, AString> m_parameters;
+    HashMap<AString, AString> m_parameters;
 };
 
 

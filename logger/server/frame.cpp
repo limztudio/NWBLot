@@ -27,7 +27,7 @@ bool Frame::startup(){
 }
 void Frame::cleanup(){
 }
-bool Frame::update(float){
+bool Frame::update(f32){
     return true;
 }
 

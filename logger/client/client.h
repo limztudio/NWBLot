@@ -19,7 +19,7 @@ NWB_LOG_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr tchar CLIENT_NAME[] = NWB_TEXT("Client");
+inline constexpr tchar CLIENT_NAME[] = NWB_TEXT("Client");
 class Client : public BaseUpdateIfQueued<Client, CLIENT_NAME>{
     friend class Base;
     friend class BaseUpdateIfQueued;

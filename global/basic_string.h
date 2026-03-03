@@ -126,10 +126,10 @@ inline AString StringConvert(const In& raw){
     if(src.empty())
         return AString();
 #if defined(NWB_PLATFORM_WINDOWS)
-    const auto len = WideCharToMultiByte(CP_ACP, 0, src.data(), static_cast<int>(src.length()), nullptr, 0, nullptr, nullptr);
+    const auto len = WideCharToMultiByte(CP_UTF8, 0, src.data(), static_cast<int>(src.length()), nullptr, 0, nullptr, nullptr);
     NWB_ASSERT(len != 0);
     AString dst(len, 0);
-    WideCharToMultiByte(CP_ACP, 0, src.data(), static_cast<int>(src.length()), dst.data(), len, nullptr, nullptr);
+    WideCharToMultiByte(CP_UTF8, 0, src.data(), static_cast<int>(src.length()), dst.data(), len, nullptr, nullptr);
     return dst;
 #endif
 }
@@ -139,10 +139,10 @@ inline AString StringConvert(In&& raw){
     if(src.empty())
         return AString();
 #if defined(NWB_PLATFORM_WINDOWS)
-    const auto len = WideCharToMultiByte(CP_ACP, 0, src.data(), static_cast<int>(src.length()), nullptr, 0, nullptr, nullptr);
+    const auto len = WideCharToMultiByte(CP_UTF8, 0, src.data(), static_cast<int>(src.length()), nullptr, 0, nullptr, nullptr);
     NWB_ASSERT(len != 0);
     AString dst(len, 0);
-    WideCharToMultiByte(CP_ACP, 0, src.data(), static_cast<int>(src.length()), dst.data(), len, nullptr, nullptr);
+    WideCharToMultiByte(CP_UTF8, 0, src.data(), static_cast<int>(src.length()), dst.data(), len, nullptr, nullptr);
     return dst;
 #endif
 }

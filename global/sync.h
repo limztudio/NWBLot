@@ -36,13 +36,13 @@
 
 
 #if defined(NWB_PLATFORM_WINDOWS)
-static inline void yield(){ SwitchToThread(); }
+inline void yield(){ SwitchToThread(); }
 #else
 using std::this_thread::yield;
 #endif
 
 
-static inline void machine_pause(std::int32_t delay){
+inline void machine_pause(i32 delay){
 #if defined(__ARM_ARCH_7A__) || defined(__aarch64__)
     while(delay-- > 0){ __asm__ __volatile__("isb sy" ::: "memory"); }
 #elif defined(__SSE__)
@@ -136,7 +136,7 @@ private:
     //! Time delay, in units of "pause" instructions.
     /** Should be equal to approximately the number of "pause" instructions
       that take the same time as an context switch. Must be a power of two.*/
-    static constexpr std::int32_t LOOPS_BEFORE_YIELD = 16;
+    static constexpr i32 LOOPS_BEFORE_YIELD = 16;
 
 
 public:
@@ -186,7 +186,7 @@ public:
 
 
 private:
-    std::int32_t count;
+    i32 count;
 };
 
 
@@ -227,8 +227,8 @@ ScopedLock(Mutexes&...) -> ScopedLock<Mutexes...>;
 template<isize LeastMaxValue>
 class ScopedLock<Semaphore<LeastMaxValue>> : NoCopy{
 public:
-    ScopedLock(ScopedLock& other) = delete;
-    ScopedLock& operator=(ScopedLock&) = delete;
+    ScopedLock(const ScopedLock&) = delete;
+    ScopedLock& operator=(const ScopedLock&) = delete;
 
     ScopedLock(Semaphore<LeastMaxValue>& obj) : m_obj(obj){ m_obj.acquire(); }
     ~ScopedLock(){ m_obj.release(); }

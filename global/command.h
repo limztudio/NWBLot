@@ -23,18 +23,18 @@ enum class ArgCommand : u8{
 
     iNumArg,
 };
-constexpr const char* g_ArgCmd[] = {
+inline constexpr const char* g_ArgCmd[] = {
     "-a,--logaddress",
     "-p,--logport",
 };
-const Tuple<
-    std::string
+inline const Tuple<
+    AString
     , u16
 > g_ArgDefault = {
     "http://localhost",
     static_cast<u16>(7117),
 };
-constexpr const char* g_ArgDesc[] = {
+inline constexpr const char* g_ArgDesc[] = {
     "Log server address",
     "Log server port",
 };

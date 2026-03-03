@@ -118,7 +118,7 @@ bool Frame::startup(){
 void Frame::cleanup(){
     m_graphics.destroy();
 }
-bool Frame::update(float delta){
+bool Frame::update(f32 delta){
     if(m_projectUpdateCallback){
         if(!m_projectUpdateCallback(m_projectUpdateUserData, delta))
             return false;

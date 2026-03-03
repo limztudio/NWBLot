@@ -163,7 +163,7 @@ bool Material::saveBinary(Core::Assets::AssetBytes& outBinary, AString& outError
     AppendPOD(outBinary, m_shaderVariant.hash());
     AppendPOD(outBinary, static_cast<u32>(m_parameters.size()));
 
-    Core::Assets::AssetVector<const AString*> sortedParameterKeys;
+    Vector<const AString*> sortedParameterKeys;
     sortedParameterKeys.reserve(m_parameters.size());
     for(const auto& [key, _] : m_parameters)
         sortedParameterKeys.push_back(&key);

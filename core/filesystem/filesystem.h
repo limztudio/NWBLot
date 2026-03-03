@@ -17,8 +17,8 @@ NWB_FILESYSTEM_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr char s_VolumeMagic[8] = { 'N', 'W', 'B', 'V', 'O', 'L', '1', '\0' };
-static constexpr u32 s_VolumeFormatVersion = 2u;
+inline constexpr char s_VolumeMagic[8] = { 'N', 'W', 'B', 'V', 'O', 'L', '1', '\0' };
+inline constexpr u32 s_VolumeFormatVersion = 2u;
 
 
 struct VolumeHeaderDisk{

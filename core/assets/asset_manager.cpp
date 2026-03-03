@@ -84,7 +84,7 @@ u64 AssetManager::enqueueLoad(const AStringView assetType, const AStringView vir
 
 
 void AssetManager::processPending(){
-    AssetVector<u64> pendingRequestIds;
+    Vector<u64> pendingRequestIds;
     {
         ScopedLock lock(m_mutex);
         pendingRequestIds.reserve(m_requests.size());

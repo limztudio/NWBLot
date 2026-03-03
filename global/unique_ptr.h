@@ -249,7 +249,7 @@ inline typename EnableIf<!IsArray<T>::value, UniquePtr<T>>::type MakeUnique(Args
     return UniquePtr<T>(new T(Forward<Args>(args)...));
 }
 template<typename T>
-inline typename EnableIf<IsUnboundedArray<T>::value, UniquePtr<T>>::type MakeUnique(size_t n){
+inline typename EnableIf<IsUnboundedArray<T>::value, UniquePtr<T>>::type MakeUnique(usize n){
     typedef typename RemoveExtent<T>::type TBase;
     return UniquePtr<T>(new TBase[n]);
 }

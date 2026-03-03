@@ -30,7 +30,7 @@ using SystemTypeId = usize;
 
 template<typename T>
 inline SystemTypeId SystemType(){
-    return __hidden_ecs::TypeIdGenerator::id<Decay_T<T>>();
+    return __hidden_ecs::TypeCounter<__hidden_ecs::EcsTypeTag>::id<Decay_T<T>>();
 }
 
 
@@ -61,7 +61,6 @@ public:
     virtual void update(World& world, f32 delta) = 0;
 
 
-public:
 protected:
     template<typename T>
     inline void readAccess(){
@@ -99,6 +98,7 @@ public:
 public:
     void addSystem(ISystem& system);
     void removeSystem(ISystem& system);
+    void clear();
     void rebuild();
     void execute(World& world, f32 delta);
 

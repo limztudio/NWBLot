@@ -116,7 +116,7 @@ DeviceManager::DeviceManager(const DeviceCreationParameters& params)
     , m_swapChainImages(Alloc::CustomAllocator<SwapChainImage>(m_arena))
     , m_acquireSemaphores(Alloc::CustomAllocator<VkSemaphore>(m_arena))
     , m_presentSemaphores(Alloc::CustomAllocator<VkSemaphore>(m_arena))
-    , m_framesInFlight(std::deque<EventQueryHandle, Alloc::CustomAllocator<EventQueryHandle>>(Alloc::CustomAllocator<EventQueryHandle>(m_arena)))
+    , m_framesInFlight(Deque<EventQueryHandle, Alloc::CustomAllocator<EventQueryHandle>>(Alloc::CustomAllocator<EventQueryHandle>(m_arena)))
     , m_queryPool(Alloc::CustomAllocator<EventQueryHandle>(m_arena))
 {
     initDefaultExtensions();

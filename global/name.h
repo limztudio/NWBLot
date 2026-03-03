@@ -132,7 +132,7 @@ inline void HashToDebugString(const NameHash& hash, CharT* dst, const usize dstS
         if(i > 0)
             *writeCursor++ = static_cast<CharT>('_');
         const u64 value = hash.qwords[i];
-        for(int bitShift = 60; bitShift >= 0; bitShift -= 4)
+        for(i32 bitShift = 60; bitShift >= 0; bitShift -= 4)
             *writeCursor++ = static_cast<CharT>(s_Hex[(value >> bitShift) & 0xF]);
     }
     *writeCursor = CharT{};

@@ -39,7 +39,8 @@ class FunctionalInitializerable : public BaseInitializerable{
 public:
     template<typename INIT, typename FIN>
     FunctionalInitializerable(INIT&& init, FIN&& fin)
-        : m_init(Forward(init), Forward(fin))
+        : m_init(Forward<INIT>(init))
+        , m_fin(Forward<FIN>(fin))
     {}
 
 
@@ -100,7 +101,7 @@ public:
 public:
     inline void enqueue(Initializerable* item){ m_cursor = m_items.emplace_after(m_cursor, item, false); }
     template<typename INITIALIZE, typename FINALIZE>
-    inline void enqueue(INITIALIZE&& initialize, FINALIZE&& finalize){ m_cursor = m_items.emplace_after(m_cursor, new __hidden_common::FunctionalInitializerable(Forward(initialize), Forward(finalize)), true); }
+    inline void enqueue(INITIALIZE&& initialize, FINALIZE&& finalize){ m_cursor = m_items.emplace_after(m_cursor, new __hidden_common::FunctionalInitializerable(Forward<INITIALIZE>(initialize), Forward<FINALIZE>(finalize)), true); }
 
 
 private:

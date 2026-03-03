@@ -209,7 +209,7 @@ bool Frame::mainLoop(){
             }
 
             Timer currentTime(TimerNow());
-            auto timeDifference = DurationInSeconds<float>(currentTime, lateTime);
+            auto timeDifference = DurationInSeconds<f32>(currentTime, lateTime);
             lateTime = currentTime;
 
             if(!update(timeDifference))

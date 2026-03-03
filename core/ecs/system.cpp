@@ -67,6 +67,13 @@ void SystemScheduler::removeSystem(ISystem& system){
 }
 
 
+void SystemScheduler::clear(){
+    m_allSystems.clear();
+    m_stages.clear();
+    m_dirty = false;
+}
+
+
 void SystemScheduler::rebuild(){
     m_stages.clear();
 

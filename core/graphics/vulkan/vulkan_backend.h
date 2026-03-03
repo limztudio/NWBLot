@@ -1267,7 +1267,7 @@ public:
     virtual bool queryFeatureSupport(Feature::Enum feature, void* = nullptr, usize = 0)override;
     [[nodiscard]] virtual FormatSupport::Mask queryFormatSupport(Format::Enum format)override;
     [[nodiscard]] virtual CooperativeVectorDeviceFeatures queryCoopVecFeatures()override;
-    virtual usize getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, int rows, int columns)override;
+    virtual usize getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, i32 rows, i32 columns)override;
     [[nodiscard]] virtual Object getNativeQueue(ObjectType objectType, CommandQueue::Enum queue)override;
     virtual bool isAftermathEnabled()override{ return m_aftermathEnabled; }
     [[nodiscard]] virtual AftermathCrashDumpHelper& getAftermathCrashDumpHelper()override;

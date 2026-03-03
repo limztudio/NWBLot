@@ -19,7 +19,7 @@ NWB_ASSETS_BEGIN
 
 class AssetRegistry final : NoCopy{
 private:
-    using CodecMap = AssetMap<AString, UniquePtr<IAssetCodec>>;
+    using CodecMap = HashMap<AString, UniquePtr<IAssetCodec>>;
 
 
 public:

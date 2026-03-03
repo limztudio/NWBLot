@@ -85,8 +85,8 @@ static AutoShaderCompilerFactoryRegistration s_VulkanShaderCompilerFactoryRegist
 class ShaderFileIncluder final : public shaderc::CompileOptions::IncluderInterface{
 private:
     struct IncludePayload{
-        std::string sourceName;
-        std::string content;
+        AString sourceName;
+        AString content;
     };
 
 

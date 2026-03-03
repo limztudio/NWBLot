@@ -37,8 +37,8 @@ namespace ShaderCook{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr u64 s_DefaultSegmentSize = 16ull * 1024ull * 1024ull;
-static constexpr u64 s_DefaultMetadataSize = 512ull * 1024ull;
+inline constexpr u64 s_DefaultSegmentSize = 16ull * 1024ull * 1024ull;
+inline constexpr u64 s_DefaultMetadataSize = 512ull * 1024ull;
 
 namespace FileSystem = std::filesystem;
 

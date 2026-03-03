@@ -23,11 +23,11 @@ namespace __hidden_ecs{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr u32 ENTITY_INDEX_BITS = 22;
-static constexpr u32 ENTITY_GENERATION_BITS = 10;
-static constexpr u32 ENTITY_INDEX_MASK = (1u << ENTITY_INDEX_BITS) - 1u;
-static constexpr u32 ENTITY_GENERATION_MASK = (1u << ENTITY_GENERATION_BITS) - 1u;
-static constexpr u32 ENTITY_INVALID_INDEX = ENTITY_INDEX_MASK;
+inline constexpr u32 ENTITY_INDEX_BITS = 22;
+inline constexpr u32 ENTITY_GENERATION_BITS = 10;
+inline constexpr u32 ENTITY_INDEX_MASK = (1u << ENTITY_INDEX_BITS) - 1u;
+inline constexpr u32 ENTITY_GENERATION_MASK = (1u << ENTITY_GENERATION_BITS) - 1u;
+inline constexpr u32 ENTITY_INVALID_INDEX = ENTITY_INDEX_MASK;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -56,7 +56,7 @@ inline constexpr bool operator==(const EntityID& lhs, const EntityID& rhs){ retu
 inline constexpr bool operator!=(const EntityID& lhs, const EntityID& rhs){ return lhs.id != rhs.id; }
 inline constexpr bool operator<(const EntityID& lhs, const EntityID& rhs){ return lhs.id < rhs.id; }
 
-static constexpr EntityID ENTITY_ID_INVALID = EntityID{};
+inline constexpr EntityID ENTITY_ID_INVALID = EntityID{};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

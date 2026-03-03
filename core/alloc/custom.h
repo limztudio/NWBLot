@@ -253,7 +253,7 @@ inline typename EnableIf<!IsArray<T>::value, CustomUniquePtr<T>>::type MakeCusto
     return CustomUniquePtr<T>(new(arena.allocate<T>(1)) T(Forward<Args>(args)...), CustomUniquePtr<T>::deleter_type(arena));
 }
 template<typename T>
-inline typename EnableIf<IsUnboundedArray<T>::value, CustomUniquePtr<T>>::type MakeCustomUnique(NWB::Core::Alloc::CustomArena& arena, size_t n){
+inline typename EnableIf<IsUnboundedArray<T>::value, CustomUniquePtr<T>>::type MakeCustomUnique(NWB::Core::Alloc::CustomArena& arena, usize n){
     typedef typename RemoveExtent<T>::type TBase;
     return CustomUniquePtr<T>(new(arena.allocate<TBase>(n)) TBase[n], CustomUniquePtr<T>::deleter_type(arena, n));
 }

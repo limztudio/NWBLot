@@ -52,8 +52,8 @@ public:
 
 
 private:
-    AssetVector<Slot> m_slots;
-    AssetVector<u32> m_freeIndices;
+    Vector<Slot> m_slots;
+    Vector<u32> m_freeIndices;
     u32 m_liveCount = 0;
 };
 

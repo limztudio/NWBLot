@@ -101,7 +101,6 @@
 #else
 #define NWB_STRNLEN(src, count) strnlen(src, count)
 #define NWB_WSTRNLEN(src, count) wcsnlen(src, count)
-#define NWB_MEMCMP(lhs, rhs, size) memcmp(lhs, rhs, size)
 #define NWB_MEMCPY(dest, destSize, src, srcSize) memcpy(dest, src, srcSize)
 #define NWB_WMEMCPY(dest, destSize, src, srcSize) wmemcpy(dest, src, srcSize)
 #define NWB_STRCPY(dest, destSize, src) strcpy(dest, src)

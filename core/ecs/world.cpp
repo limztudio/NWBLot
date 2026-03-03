@@ -73,11 +73,8 @@ void World::tick(f32 delta){
 void World::clear(){
     taskPool().wait();
     m_messageBus.clear();
-
-    for(auto& system : m_systems)
-        m_scheduler.removeSystem(*system.system);
+    m_scheduler.clear();
     m_systems.clear();
-
     m_pools.clear();
     m_entityManager.clear();
 }

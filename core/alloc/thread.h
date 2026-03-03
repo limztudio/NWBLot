@@ -126,10 +126,6 @@ private:
         return static_cast<void*>(m_storage.data);
     }
 
-    inline void* storagePtr()const{
-        return const_cast<void*>(static_cast<const void*>(m_storage.data));
-    }
-
 
 private:
     Storage m_storage = {};

@@ -403,7 +403,7 @@ AftermathMarkerTracker::AftermathMarkerTracker()
 usize AftermathMarkerTracker::pushEvent(const char* name){
     m_eventStack.append(name);
     auto eventString = m_eventStack.generic_string<char>();
-    usize hash = Hash<decltype(eventString)>{}(eventString);
+    usize hash = Hasher<decltype(eventString)>{}(eventString);
 
     if(m_eventStrings.find(hash) == m_eventStrings.end()){
         m_eventStrings.erase(m_eventHashes[m_oldestHashIndex]);

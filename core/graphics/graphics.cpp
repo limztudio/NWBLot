@@ -357,7 +357,7 @@ CooperativeVectorDeviceFeatures Graphics::queryCoopVecFeatures()const{
     return device->queryCoopVecFeatures();
 }
 
-usize Graphics::getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, int rows, int columns)const{
+usize Graphics::getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, i32 rows, i32 columns)const{
     IDevice* device = getDevice();
     return device->getCoopVecMatrixSize(type, layout, rows, columns);
 }

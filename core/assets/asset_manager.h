@@ -67,7 +67,7 @@ private:
         AString error;
     };
 
-    using RequestMap = AssetMap<u64, RequestRecord>;
+    using RequestMap = HashMap<u64, RequestRecord>;
 
 
 public:

@@ -33,10 +33,6 @@ using MessageQueue = ParallelQueue<MessageType>;
 
 template<typename T, const tchar* NAME>
 class Base{
-private:
-    static bool m_globalInit;
-
-
 protected:
     static inline bool globalInit(){ return true; }
 
@@ -93,7 +89,7 @@ protected:
     Atomic<bool> m_exit;
 };
 
-template<typename T, float UPDATE_INTERVAL, const tchar* NAME>
+template<typename T, f32 UPDATE_INTERVAL, const tchar* NAME>
 class BaseUpdateOrdinary : public Base<T, NAME>{
     friend Base<T, NAME>;
 
@@ -106,7 +102,7 @@ private:
     static void globalUpdate(T* _this){
         for(;;){
             auto curTime = TimerNow();
-            if(DurationInSeconds<float>(curTime, _this->m_lastTime) < UPDATE_INTERVAL)
+            if(DurationInSeconds<f32>(curTime, _this->m_lastTime) < UPDATE_INTERVAL)
                 continue;
 
             _this->m_lastTime = curTime;
@@ -131,7 +127,7 @@ protected:
 private:
     Timer m_lastTime;
 };
-template<typename T, float UPDATE_INTERVAL, const tchar* NAME>
+template<typename T, f32 UPDATE_INTERVAL, const tchar* NAME>
 bool BaseUpdateOrdinary<T, UPDATE_INTERVAL, NAME>::m_globalInit = false;
 
 template<typename T, const tchar* NAME>

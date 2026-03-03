@@ -29,9 +29,9 @@ namespace __hidden_core{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr usize s_HashCombineGoldenRatio = 0x9e3779b9u;
-constexpr usize s_HashCombineLeftShift = 6;
-constexpr usize s_HashCombineRightShift = 2;
+inline constexpr usize s_HashCombineGoldenRatio = 0x9e3779b9u;
+inline constexpr usize s_HashCombineLeftShift = 6;
+inline constexpr usize s_HashCombineRightShift = 2;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -39,7 +39,7 @@ constexpr usize s_HashCombineRightShift = 2;
 
 template<typename T>
 void HashCombine(usize& seed, const T& v){
-    std::hash<T> hasher;
+    Hasher<T> hasher;
     seed ^= hasher(v)
         + s_HashCombineGoldenRatio
         + (seed << s_HashCombineLeftShift)
@@ -57,33 +57,33 @@ void HashCombine(usize& seed, const T& v){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr u32 s_MaxRenderTargets = 8;
-static constexpr u32 s_MaxViewports = 16;
-static constexpr u32 s_MaxVertexAttributes = 16;
-static constexpr u32 s_MaxBindingLayouts = 8;
-static constexpr u32 s_MaxBindlessRegisterSpaces = 16;
-static constexpr u32 s_MaxVolatileConstantBuffersPerLayout = 6;
-static constexpr u32 s_MaxVolatileConstantBuffers = 32;
-static constexpr u32 s_MaxPushConstantSize = 128;
-static constexpr u32 s_ConstantBufferOffsetSizeAlignment = 256;
-static constexpr u32 s_MaxAftermathEventStrings = 128;
+inline constexpr u32 s_MaxRenderTargets = 8;
+inline constexpr u32 s_MaxViewports = 16;
+inline constexpr u32 s_MaxVertexAttributes = 16;
+inline constexpr u32 s_MaxBindingLayouts = 8;
+inline constexpr u32 s_MaxBindlessRegisterSpaces = 16;
+inline constexpr u32 s_MaxVolatileConstantBuffersPerLayout = 6;
+inline constexpr u32 s_MaxVolatileConstantBuffers = 32;
+inline constexpr u32 s_MaxPushConstantSize = 128;
+inline constexpr u32 s_ConstantBufferOffsetSizeAlignment = 256;
+inline constexpr u32 s_MaxAftermathEventStrings = 128;
 
-static constexpr u32 s_VulkanBindingOffsetShaderResource = 0;
-static constexpr u32 s_VulkanBindingOffsetSampler = 128;
-static constexpr u32 s_VulkanBindingOffsetConstantBuffer = 256;
-static constexpr u32 s_VulkanBindingOffsetUnorderedAccess = 384;
+inline constexpr u32 s_VulkanBindingOffsetShaderResource = 0;
+inline constexpr u32 s_VulkanBindingOffsetSampler = 128;
+inline constexpr u32 s_VulkanBindingOffsetConstantBuffer = 256;
+inline constexpr u32 s_VulkanBindingOffsetUnorderedAccess = 384;
 
-static constexpr usize s_CommandListUploadChunkSize = 64 * 1024;
-static constexpr usize s_CommandListScratchChunkSize = 64 * 1024;
-static constexpr usize s_CommandListScratchMaxMemory = 1024 * 1024 * 1024;
+inline constexpr usize s_CommandListUploadChunkSize = 64 * 1024;
+inline constexpr usize s_CommandListScratchChunkSize = 64 * 1024;
+inline constexpr usize s_CommandListScratchMaxMemory = 1024 * 1024 * 1024;
 
-static constexpr i32 s_WindowPositionAuto = -1;
-static constexpr u32 s_BackBufferWidth = 1280;
-static constexpr u32 s_BackBufferHeight = 720;
-static constexpr u32 s_SwapChainBufferCount = 3;
-static constexpr u32 s_MaxFramesInFlight = 2;
-static constexpr f32 s_DepthClearValue = 1.0f;
-static constexpr f64 s_AverageFrameTimeUpdateIntervalSeconds = 0.5;
+inline constexpr i32 s_WindowPositionAuto = -1;
+inline constexpr u32 s_BackBufferWidth = 1280;
+inline constexpr u32 s_BackBufferHeight = 720;
+inline constexpr u32 s_SwapChainBufferCount = 3;
+inline constexpr u32 s_MaxFramesInFlight = 2;
+inline constexpr f32 s_DepthClearValue = 1.0f;
+inline constexpr f64 s_AverageFrameTimeUpdateIntervalSeconds = 0.5;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -649,7 +649,7 @@ inline bool operator==(const TextureSubresourceSet& lhs, const TextureSubresourc
 }
 inline bool operator!=(const TextureSubresourceSet& lhs, const TextureSubresourceSet& rhs)noexcept{ return !(lhs == rhs); }
 
-static constexpr auto s_AllSubresources = TextureSubresourceSet(0, TextureSubresourceSet::AllMipLevels, 0, TextureSubresourceSet::AllArraySlices);
+inline constexpr auto s_AllSubresources = TextureSubresourceSet(0, TextureSubresourceSet::AllMipLevels, 0, TextureSubresourceSet::AllArraySlices);
 
 class ITexture : public IResource{
     using IResource::IResource;
@@ -859,7 +859,7 @@ struct BufferRange{
     constexpr BufferRange& setByteSize(u64 value){ byteSize = value; return *this; }
 };
 
-static constexpr BufferRange s_EntireBuffer = BufferRange(0, static_cast<u64>(-1));
+inline constexpr BufferRange s_EntireBuffer = BufferRange(0, static_cast<u64>(-1));
 
 class IBuffer : public IResource{
     using IResource::IResource;
@@ -1572,7 +1572,7 @@ class IRayTracingAccelStruct;
 
 typedef f32 AffineTransform[12];
 
-constexpr AffineTransform s_identityTransform = {
+inline constexpr AffineTransform s_identityTransform = {
     1.f, 0.f, 0.f, 0.f,
     0.f, 1.f, 0.f, 0.f,
     0.f, 0.f, 1.f, 0.f
@@ -3739,7 +3739,7 @@ public:
     virtual CooperativeVectorDeviceFeatures queryCoopVecFeatures() = 0;
 
     // Calculates and returns the on-device size for a CoopVec matrix of the given dimensions, type and layout.
-    virtual usize getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, int rows, int columns) = 0;
+    virtual usize getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, i32 rows, i32 columns) = 0;
 
     virtual Object getNativeQueue(ObjectType objectType, CommandQueue::Enum queue) = 0;
 

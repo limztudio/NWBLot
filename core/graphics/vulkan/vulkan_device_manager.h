@@ -190,13 +190,13 @@ private:
     bool m_swapChainMutableFormatSupported = false;
 
     Vector<SwapChainImage, Alloc::CustomAllocator<SwapChainImage>> m_swapChainImages;
-    uint32_t m_swapChainIndex = static_cast<uint32_t>(-1);
+    u32 m_swapChainIndex = static_cast<u32>(-1);
 
     DeviceHandle m_rhiDevice;
 
     Vector<VkSemaphore, Alloc::CustomAllocator<VkSemaphore>> m_acquireSemaphores;
     Vector<VkSemaphore, Alloc::CustomAllocator<VkSemaphore>> m_presentSemaphores;
-    uint32_t m_acquireSemaphoreIndex = 0;
+    u32 m_acquireSemaphoreIndex = 0;
 
     ::Queue<EventQueryHandle, Alloc::CustomAllocator<EventQueryHandle>> m_framesInFlight;
     Vector<EventQueryHandle, Alloc::CustomAllocator<EventQueryHandle>> m_queryPool;

@@ -114,7 +114,7 @@ static bool LessName(const Name& lhs, const Name& rhs){
 }
 
 static AString LastErrnoMessage(){
-    const int errorNumber = errno;
+    const i32 errorNumber = errno;
     if(errorNumber == 0)
         return AString("none");
 
@@ -899,8 +899,8 @@ bool VolumeFileSystem::scanSegmentsLocked(){
 
         usize index = 0;
         try{
-            const unsigned long long parsed = std::stoull(indexString);
-            if(parsed > static_cast<unsigned long long>(Limit<usize>::s_Max))
+            const u64 parsed = std::stoull(indexString);
+            if(parsed > static_cast<u64>(Limit<usize>::s_Max))
                 continue;
             index = static_cast<usize>(parsed);
         }

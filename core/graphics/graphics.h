@@ -105,7 +105,7 @@ public:
 
     [[nodiscard]] CoopVectorSupport queryCoopVecSupport()const;
     [[nodiscard]] CooperativeVectorDeviceFeatures queryCoopVecFeatures()const;
-    [[nodiscard]] usize getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, int rows, int columns)const;
+    [[nodiscard]] usize getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, i32 rows, i32 columns)const;
 
     void waitJob(JobHandle handle)const;
     void waitAllJobs()const;

@@ -29,18 +29,28 @@ namespace __hidden_ecs{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class TypeIdGenerator{
+// Separate tag types ensure ECS type IDs and message type IDs live in independent counter spaces.
+struct EcsTypeTag{};
+struct MessageTypeTag{};
+
+
+template<typename Tag>
+class TypeCounter{
 public:
     template<typename T>
-    static ComponentTypeId id(){
-        static const ComponentTypeId value = s_NextId++;
+    static usize id(){
+        static const usize value = s_NextId++;
         return value;
     }
 
 
 private:
-    inline static Atomic<ComponentTypeId> s_NextId{ 0 };
+    inline static Atomic<usize> s_NextId{ 0 };
 };
+
+
+template<typename... Ts>
+struct ViewIterator;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -54,17 +64,8 @@ private:
 
 template<typename T>
 inline ComponentTypeId ComponentType(){
-    return __hidden_ecs::TypeIdGenerator::id<Decay_T<T>>();
+    return __hidden_ecs::TypeCounter<__hidden_ecs::EcsTypeTag>::id<Decay_T<T>>();
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ecs{
-template<typename... Ts>
-struct ViewIterator;
-};
 
 template<typename... Ts>
 class View;

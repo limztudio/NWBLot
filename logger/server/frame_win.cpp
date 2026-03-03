@@ -197,7 +197,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                         combined += msg.first();
                         combined += NWB_TEXT("\r\n");
                     }
-                    const size_t byteSize = (combined.size() + 1) * sizeof(tchar);
+                    const usize byteSize = (combined.size() + 1) * sizeof(tchar);
                     if(OpenClipboard(hwnd)){
                         EmptyClipboard();
                         HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, byteSize);
@@ -389,7 +389,7 @@ bool Frame::mainLoop(){
 
         {
             Timer currentTime(TimerNow());
-            auto timeDifference = DurationInSeconds<float>(currentTime, lateTime);
+            auto timeDifference = DurationInSeconds<f32>(currentTime, lateTime);
             lateTime = currentTime;
 
             if(!update(timeDifference))

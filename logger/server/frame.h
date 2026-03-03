@@ -71,7 +71,7 @@ public:
 public:
     bool startup();
     void cleanup();
-    bool update(float delta);
+    bool update(f32 delta);
 
 
 private:

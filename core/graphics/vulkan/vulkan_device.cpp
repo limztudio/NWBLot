@@ -517,7 +517,7 @@ CooperativeVectorDeviceFeatures Device::queryCoopVecFeatures(){
     return output;
 }
 
-usize Device::getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, int rows, int columns){
+usize Device::getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, i32 rows, i32 columns){
     VkResult res = VK_SUCCESS;
 
     if(!m_context.extensions.NV_cooperative_vector)

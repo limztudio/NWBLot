@@ -23,38 +23,9 @@ using MessageTypeId = usize;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ecs{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class MessageTypeIdGenerator{
-public:
-    template<typename T>
-    static MessageTypeId id(){
-        static const MessageTypeId value = s_NextMessageTypeId++;
-        return value;
-    }
-
-
-private:
-    inline static Atomic<MessageTypeId> s_NextMessageTypeId{ 0 };
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 template<typename T>
 inline MessageTypeId MessageType(){
-    return __hidden_ecs::MessageTypeIdGenerator::id<Decay_T<T>>();
+    return __hidden_ecs::TypeCounter<__hidden_ecs::MessageTypeTag>::id<Decay_T<T>>();
 }
 
 
@@ -180,45 +151,35 @@ public:
     }
 
     void swapBuffers(){
-        Alloc::ScratchArena<> scratchArena(4096);
-        Vector<IMessageChannel*, Alloc::ScratchAllocator<IMessageChannel*>> channels{
-            Alloc::ScratchAllocator<IMessageChannel*>(scratchArena)
-        };
-
-        {
-            ScopedLock lock(m_channelsMutex);
-            channels.reserve(m_channels.size());
-            for(auto& [typeId, channel] : m_channels){
-                (void)typeId;
-                channels.push_back(channel.get());
-            }
-        }
-
-        for(auto* channel : channels)
-            channel->swapBuffers();
+        forEachChannelUnlocked([](IMessageChannel* ch){ ch->swapBuffers(); });
     }
 
     void clear(){
-        Alloc::ScratchArena<> scratchArena(4096);
-        Vector<IMessageChannel*, Alloc::ScratchAllocator<IMessageChannel*>> channels{
-            Alloc::ScratchAllocator<IMessageChannel*>(scratchArena)
-        };
-
-        {
-            ScopedLock lock(m_channelsMutex);
-            channels.reserve(m_channels.size());
-            for(auto& [typeId, channel] : m_channels){
-                (void)typeId;
-                channels.push_back(channel.get());
-            }
-        }
-
-        for(auto* channel : channels)
-            channel->clear();
+        forEachChannelUnlocked([](IMessageChannel* ch){ ch->clear(); });
     }
 
 
 private:
+    template<typename Func>
+    void forEachChannelUnlocked(Func&& func){
+        Alloc::ScratchArena<> scratchArena(4096);
+        Vector<IMessageChannel*, Alloc::ScratchAllocator<IMessageChannel*>> channels{
+            Alloc::ScratchAllocator<IMessageChannel*>(scratchArena)
+        };
+
+        {
+            ScopedLock lock(m_channelsMutex);
+            channels.reserve(m_channels.size());
+            for(auto& [typeId, channel] : m_channels){
+                (void)typeId;
+                channels.push_back(channel.get());
+            }
+        }
+
+        for(auto* channel : channels)
+            func(channel);
+    }
+
     template<typename T>
     MessageChannel<T>* getOrCreateChannel(){
         const MessageTypeId typeId = MessageType<T>();

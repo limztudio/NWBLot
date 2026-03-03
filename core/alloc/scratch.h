@@ -18,7 +18,7 @@ NWB_ALLOC_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static const usize s_MaxAlignSize = 512;
+inline constexpr usize s_MaxAlignSize = 512;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -333,7 +333,7 @@ inline typename EnableIf<!IsArray<T>::value, ScratchUniquePtr<T, maxAlignSize>>:
     return ScratchUniquePtr<T, maxAlignSize>(new(arena.template allocate<T>(1)) T(Forward<Args>(args)...), typename ScratchUniquePtr<T, maxAlignSize>::deleter_type(arena));
 }
 template<typename T, usize maxAlignSize = NWB::Core::Alloc::s_MaxAlignSize>
-inline typename EnableIf<IsUnboundedArray<T>::value, ScratchUniquePtr<T, maxAlignSize>>::type MakeScratchUnique(NWB::Core::Alloc::ScratchArena<maxAlignSize>& arena, size_t n){
+inline typename EnableIf<IsUnboundedArray<T>::value, ScratchUniquePtr<T, maxAlignSize>>::type MakeScratchUnique(NWB::Core::Alloc::ScratchArena<maxAlignSize>& arena, usize n){
     typedef typename RemoveExtent<T>::type TBase;
     return ScratchUniquePtr<T, maxAlignSize>(new(arena.template allocate<TBase>(n)) TBase[n], typename ScratchUniquePtr<T, maxAlignSize>::deleter_type(arena, n));
 }
@@ -346,7 +346,7 @@ inline typename EnableIf<!IsArray<T>::value, StackonlyUniquePtr<T>>::type MakeSt
     return StackonlyUniquePtr<T>(new(arena.template allocate<T>(1)) T(Forward<Args>(args)...));
 }
 template<typename T, usize maxAlignSize = NWB::Core::Alloc::s_MaxAlignSize>
-inline typename EnableIf<IsUnboundedArray<T>::value, StackonlyUniquePtr<T>>::type MakeStackonlyUnique(NWB::Core::Alloc::ScratchArena<maxAlignSize>& arena, size_t n){
+inline typename EnableIf<IsUnboundedArray<T>::value, StackonlyUniquePtr<T>>::type MakeStackonlyUnique(NWB::Core::Alloc::ScratchArena<maxAlignSize>& arena, usize n){
     typedef typename RemoveExtent<T>::type TBase;
     return StackonlyUniquePtr<T>(new(arena.template allocate<TBase>(n)) TBase[n]);
 }

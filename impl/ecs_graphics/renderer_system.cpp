@@ -212,13 +212,8 @@ bool RendererSystem::ensureShaderLoaded(
         return true;
 
     AString virtualPath;
-    if(m_shaderPathResolver){
-        if(!m_shaderPathResolver(shaderName, Core::ShaderArchive::s_DefaultVariant, virtualPath))
-            virtualPath = Core::ShaderArchive::buildVirtualPath(shaderName, Core::ShaderArchive::s_DefaultVariant);
-    }
-    else{
+    if(!m_shaderPathResolver || !m_shaderPathResolver(shaderName, Core::ShaderArchive::s_DefaultVariant, virtualPath))
         virtualPath = Core::ShaderArchive::buildVirtualPath(shaderName, Core::ShaderArchive::s_DefaultVariant);
-    }
 
     UniquePtr<Core::Assets::IAsset> loadedAsset;
     AString loadError;
@@ -244,10 +239,7 @@ bool RendererSystem::ensureShaderLoaded(
         shaderBinary.data(),
         shaderBinary.size()
     );
-    if(!outShader)
-        return false;
-
-    return true;
+    return static_cast<bool>(outShader);
 }
 
 Core::Graphics::MeshResource RendererSystem::createCubeMesh(const CubeComponent& cube)const{

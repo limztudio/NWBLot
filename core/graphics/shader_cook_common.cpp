@@ -373,9 +373,6 @@ static bool CollectDependenciesRecursive(const Path& dependencyPath, const CookV
 
 bool ParseManifestFile(const Path& manifestPath, ManifestData& outManifest, AString& outError){
     outManifest = {};
-    outManifest.volumeName = "graphics";
-    outManifest.segmentSize = s_DefaultSegmentSize;
-    outManifest.metadataSize = s_DefaultMetadataSize;
 
     AString manifestText;
     if(!ReadTextFile(manifestPath, manifestText)){
@@ -409,8 +406,6 @@ bool ParseManifestFile(const Path& manifestPath, ManifestData& outManifest, AStr
 
             parsingEntry = true;
             currentEntry = {};
-            currentEntry.compiler = "glslang";
-            currentEntry.entryPoint = "main";
             continue;
         }
         if(trimmed == "entry.end"){
@@ -567,10 +562,7 @@ bool GatherShaderDependencies(const Path& sourcePath, const CookVector<Path>& in
     outDependencies.clear();
 
     CookHashSet<AString> visited;
-    if(!CollectDependenciesRecursive(sourcePath, includeDirectories, visited, outDependencies, outError))
-        return false;
-
-    return true;
+    return CollectDependenciesRecursive(sourcePath, includeDirectories, visited, outDependencies, outError);
 }
 
 

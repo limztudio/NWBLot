@@ -46,7 +46,7 @@ class ShaderAssetCooker final : public Core::Assets::IAssetCooker{
 public:
     [[nodiscard]] virtual AStringView assetType()const override{ return "shader"; }
 
-    static bool CookShaderAssets(const ShaderCookEnvironment& environment, ShaderCookResult& outResult, AString& outError);
+    static bool CookShaderAssets(const ShaderCookEnvironment& environment, Core::Alloc::CustomArena& cookArena, ShaderCookResult& outResult, AString& outError);
     virtual bool cook(const Core::Assets::AssetCookOptions& options, AString& outError)override;
 };
 

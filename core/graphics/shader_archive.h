@@ -34,6 +34,8 @@ public:
     static constexpr const char* s_IndexVirtualPath = "shader/index.bin";
     static constexpr const char* s_DefaultVariant = "default";
 
+
+public:
     [[nodiscard]] static AString buildVirtualPath(AStringView shaderName, AStringView variantName);
     static bool serializeIndex(const Vector<Record>& records, Vector<u8>& outBinary, AString& outError);
     static bool deserializeIndex(const Vector<u8>& binary, Vector<Record>& outRecords, AString& outError);

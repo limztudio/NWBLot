@@ -12,12 +12,41 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_resource_cooker{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static void* ResourceCookAlloc(usize size){ return NWB::Core::Alloc::CoreAlloc(size, "resource_cook"); }
+static void ResourceCookFree(void* ptr){ NWB::Core::Alloc::CoreFree(ptr, "resource_cook"); }
+static void* ResourceCookAllocAligned(usize size, usize align){ return NWB::Core::Alloc::CoreAllocAligned(size, align, "resource_cook"); }
+static void ResourceCookFreeAligned(void* ptr){ NWB::Core::Alloc::CoreFreeAligned(ptr, "resource_cook"); }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 int ResourceCookerMain(int argc, char** argv){
     try{
         NWB::Log::Client logger;
         NWB_LOGGER_REGISTER(&logger);
 
+        NWB::Core::Alloc::CustomArena cookArena(
+            __hidden_resource_cooker::ResourceCookAlloc,
+            __hidden_resource_cooker::ResourceCookFree,
+            __hidden_resource_cooker::ResourceCookAllocAligned,
+            __hidden_resource_cooker::ResourceCookFreeAligned
+        );
+
         CookOptions options;
+        options.cookArena = &cookArena;
         AString errorMessage;
         NWB::Core::Assets::AssetCookerRegistry assetCookerRegistry;
         NWB::Core::Assets::RegisterDomainAssetCookers(assetCookerRegistry);

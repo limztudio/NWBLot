@@ -4000,6 +4000,43 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#if defined(NWB_COOK)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct ShaderCompilerRequest{
+    AStringView shaderName;
+    AStringView compiler;
+    AStringView stage;
+    AStringView targetProfile;
+    AStringView entryPoint;
+    AStringView variantName;
+    const HashMap<AString, AString, Hasher<AString>, EqualTo<AString>, Alloc::CustomAllocator<Pair<const AString, AString>>>& defineCombo;
+    const Vector<Path, Alloc::CustomAllocator<Path>>& includeDirectories;
+    const Path& sourcePath;
+};
+
+class IShaderCompiler : NoCopy{
+public:
+    virtual ~IShaderCompiler() = default;
+
+
+public:
+    virtual bool compileVariant(const ShaderCompilerRequest& request, Vector<u8, Alloc::CustomAllocator<u8>>& outBytecode, AString& outError) = 0;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_CORE_END
 
 

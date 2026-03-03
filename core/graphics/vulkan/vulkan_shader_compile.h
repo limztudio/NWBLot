@@ -5,8 +5,7 @@
 #pragma once
 
 
-#include "vulkan.h"
-#include <core/graphics/shader_compiler.h>
+#include "global.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -26,7 +25,7 @@ NWB_VULKAN_BEGIN
 
 class VulkanShaderCompiler final : public IShaderCompiler{
 public:
-    virtual bool compileVariant(const ShaderCompilerRequest& request, AString& outError)override;
+    virtual bool compileVariant(const ShaderCompilerRequest& request, Vector<u8, Alloc::CustomAllocator<u8>>& outBytecode, AString& outError)override;
 };
 
 

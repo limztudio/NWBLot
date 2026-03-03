@@ -123,6 +123,18 @@ template<typename Container>
     return stream.eof() && stream.gcount() == static_cast<std::streamsize>(fileSize);
 }
 
+template<typename Container>
+[[nodiscard]] inline bool WriteBinaryFile(const Path& path, const Container& bytes){
+    std::ofstream stream(path, std::ofstream::binary | std::ofstream::trunc);
+    if(!stream.is_open())
+        return false;
+
+    if(!bytes.empty())
+        stream.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+    return stream.good();
+}
+
+
 template<typename Container, typename PodType>
 inline void AppendPOD(Container& outBinary, const PodType& value){
     const usize beginOffset = outBinary.size();

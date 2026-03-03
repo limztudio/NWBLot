@@ -156,26 +156,33 @@ static VariantCachePaths BuildVariantCachePaths(const Path& cacheDirectory, cons
 }
 
 
-static bool EnsureVariantCache(
+static bool GetVariantBytecode(
     const Core::ShaderCook::ManifestEntry& entry,
+    const AStringView variantName,
     const Core::ShaderCook::DefineCombo& defineCombo,
     const Core::ShaderCook::CookVector<Path>& includeDirectories,
     const Path& sourcePath,
     const VariantCachePaths& cachePaths,
     const AStringView sourceChecksumHex,
+    Core::Alloc::CustomArena& cookArena,
     Core::IShaderCompiler& shaderCompiler,
-    const bool forceRebuild,
+    Core::ShaderCook::CookVector<u8>& outBytecode,
     AString& outError
 )
 {
     ErrorCode errorCode;
 
-    const bool cacheUpToDate = !forceRebuild
-        && FileExists(cachePaths.bytecodePath, errorCode)
+    outBytecode.clear();
+
+    const bool cacheUpToDate =
+        FileExists(cachePaths.bytecodePath, errorCode)
         && FileExists(cachePaths.sourceChecksumPath, errorCode)
         && Core::Assets::CookSourceChecksumMatches(cachePaths.sourceChecksumPath, sourceChecksumHex);
-    if(cacheUpToDate)
-        return true;
+    if(cacheUpToDate){
+        if(ReadBinaryFile(cachePaths.bytecodePath, outBytecode, errorCode) && !outBytecode.empty() && (outBytecode.size() & 3u) == 0u)
+            return true;
+        outBytecode.clear();
+    }
 
     const Core::ShaderCompilerRequest compileRequest = {
         entry.name,
@@ -183,41 +190,35 @@ static bool EnsureVariantCache(
         entry.stage,
         entry.targetProfile,
         entry.entryPoint,
+        variantName,
         defineCombo,
         includeDirectories,
-        sourcePath,
-        cachePaths.bytecodePath
+        sourcePath
     };
-    if(!shaderCompiler.compileVariant(compileRequest, outError))
+    if(!shaderCompiler.compileVariant(compileRequest, outBytecode, outError))
         return false;
+
+    CreateDirectories(cachePaths.bytecodePath.parent_path(), errorCode);
+    if(errorCode){
+        outError = StringFormat(
+            "Failed to create cache directory '{}': {}",
+            PathToString(cachePaths.bytecodePath.parent_path()),
+            errorCode.message()
+        );
+        return false;
+    }
+
+    if(!WriteBinaryFile(cachePaths.bytecodePath, outBytecode)){
+        outError = StringFormat(
+            "Failed to write shader bytecode cache '{}' for entry '{}'",
+            PathToString(cachePaths.bytecodePath),
+            entry.name
+        );
+        return false;
+    }
 
     if(!Core::Assets::WriteCookSourceChecksum(cachePaths.sourceChecksumPath, sourceChecksumHex, outError))
         return false;
-
-    return true;
-}
-
-
-static bool LoadBytecodeFromCache(const Path& cachePath, const AStringView shaderName, Core::ShaderCook::CookVector<u8>& outBytecode, AString& outError){
-    ErrorCode errorCode;
-
-    outBytecode.clear();
-    if(!ReadBinaryFile(cachePath, outBytecode, errorCode)){
-        outError = StringFormat(
-            "Failed to read shader bytecode cache '{}' for entry '{}'",
-            PathToString(cachePath),
-            shaderName
-        );
-        return false;
-    }
-    if(outBytecode.empty() || (outBytecode.size() & 3u) != 0u){
-        outError = StringFormat(
-            "Invalid shader bytecode cache '{}' for entry '{}'",
-            PathToString(cachePath),
-            shaderName
-        );
-        return false;
-    }
 
     return true;
 }
@@ -264,12 +265,6 @@ static bool EmitShaderArchiveRecord(
 }
 
 
-static void* VolumeArenaAlloc(usize size){ return Core::Alloc::CoreAlloc(size, "shader_cook_volume"); }
-static void VolumeArenaFree(void* ptr){ Core::Alloc::CoreFree(ptr, "shader_cook_volume"); }
-static void* VolumeArenaAllocAligned(usize size, usize align){ return Core::Alloc::CoreAllocAligned(size, align, "shader_cook_volume"); }
-static void VolumeArenaFreeAligned(void* ptr){ Core::Alloc::CoreFreeAligned(ptr, "shader_cook_volume"); }
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -279,7 +274,7 @@ static void VolumeArenaFreeAligned(void* ptr){ Core::Alloc::CoreFreeAligned(ptr,
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ShaderAssetCooker::CookShaderAssets(const ShaderCookEnvironment& environment, ShaderCookResult& outResult, AString& outError){
+bool ShaderAssetCooker::CookShaderAssets(const ShaderCookEnvironment& environment, Core::Alloc::CustomArena& cookArena, ShaderCookResult& outResult, AString& outError){
     outResult = {};
     outError.clear();
 
@@ -287,32 +282,25 @@ bool ShaderAssetCooker::CookShaderAssets(const ShaderCookEnvironment& environmen
     if(!__hidden_assets::ResolveCookPaths(environment, resolvedPaths, outError))
         return false;
 
-    Core::ShaderCook::ManifestData manifest;
-    if(!Core::ShaderCook::ParseManifestFile(resolvedPaths.manifestPath, manifest, outError))
+    Core::ShaderCook::ManifestData manifest(cookArena);
+    if(!Core::ShaderCook::ParseManifestFile(resolvedPaths.manifestPath, cookArena, manifest, outError))
         return false;
 
-    Core::ShaderCook::CookVector<Path> includeDirectories;
+    Core::ShaderCook::CookVector<Path> includeDirectories(Core::ShaderCook::CookAllocator<Path>(cookArena));
     if(!__hidden_assets::BuildIncludeDirectories(resolvedPaths.repoRoot, manifest, includeDirectories, outError))
         return false;
 
     const AString normalizedConfiguration = Core::Assets::NormalizeCookConfiguration(environment.configuration);
     const AString configurationSafeName = BuildSafeCacheName(normalizedConfiguration);
     Vector<Core::ShaderArchive::Record> shaderIndexRecords;
-    Core::ShaderCook::CookHashSet<NameHash> seenVirtualPathHashes;
+    Core::ShaderCook::CookHashSet<NameHash> seenVirtualPathHashes(Core::ShaderCook::CookAllocator<NameHash>(cookArena));
 
     Core::Filesystem::VolumeBuildConfig volumeConfig;
     volumeConfig.volumeName = manifest.volumeName;
     volumeConfig.segmentSize = manifest.segmentSize;
     volumeConfig.metadataSize = manifest.metadataSize;
 
-    Core::Alloc::CustomArena volumeArena(
-        __hidden_assets::VolumeArenaAlloc,
-        __hidden_assets::VolumeArenaFree,
-        __hidden_assets::VolumeArenaAllocAligned,
-        __hidden_assets::VolumeArenaFreeAligned
-    );
-
-    Core::Filesystem::VolumeSession volumeSession(volumeArena);
+    Core::Filesystem::VolumeSession volumeSession(cookArena);
     if(!volumeSession.create(resolvedPaths.outputDirectory, volumeConfig, outError))
         return false;
 
@@ -325,6 +313,7 @@ bool ShaderAssetCooker::CookShaderAssets(const ShaderCookEnvironment& environmen
         return false;
     }
 
+    ErrorCode errorCode;
     for(const Core::ShaderCook::ManifestEntry& entry : manifest.entries){
         Path sourcePath;
         if(!ResolveAbsolutePath(resolvedPaths.repoRoot, entry.source, sourcePath, errorCode)){
@@ -345,21 +334,21 @@ bool ShaderAssetCooker::CookShaderAssets(const ShaderCookEnvironment& environmen
             return false;
         }
 
-        Core::ShaderCook::CookVector<Path> dependencies;
-        if(!Core::ShaderCook::GatherShaderDependencies(sourcePath, includeDirectories, dependencies, outError))
+        Core::ShaderCook::CookVector<Path> dependencies(Core::ShaderCook::CookAllocator<Path>(cookArena));
+        if(!Core::ShaderCook::GatherShaderDependencies(sourcePath, includeDirectories, cookArena, dependencies, outError))
             return false;
 
-        Core::ShaderCook::CookVector<Core::ShaderCook::DefineCombo> defineCombinations;
-        Core::ShaderCook::ExpandDefineCombinations(entry.defineValues, defineCombinations);
+        Core::ShaderCook::CookVector<Core::ShaderCook::DefineCombo> defineCombinations(Core::ShaderCook::CookAllocator<Core::ShaderCook::DefineCombo>(cookArena));
+        Core::ShaderCook::ExpandDefineCombinations(entry.defineValues, cookArena, defineCombinations);
         if(defineCombinations.empty())
-            defineCombinations.push_back({});
+            defineCombinations.push_back(Core::ShaderCook::DefineCombo(Core::ShaderCook::CookAllocator<Pair<const AString, AString>>(cookArena)));
 
         for(const Core::ShaderCook::DefineCombo& defineCombo : defineCombinations){
-            const AString generatedVariantName = Core::ShaderCook::BuildVariantName(defineCombo);
+            const AString generatedVariantName = Core::ShaderCook::BuildVariantName(defineCombo, cookArena);
             const AString variantName = __hidden_assets::NormalizeVariantName(entry, generatedVariantName);
 
             u64 sourceChecksum = 0;
-            if(!Core::ShaderCook::ComputeSourceChecksum(entry, variantName, dependencies, sourceChecksum, outError))
+            if(!Core::ShaderCook::ComputeSourceChecksum(entry, variantName, dependencies, cookArena, sourceChecksum, outError))
                 return false;
             const AString sourceChecksumHex = FormatHex64(sourceChecksum);
 
@@ -369,37 +358,21 @@ bool ShaderAssetCooker::CookShaderAssets(const ShaderCookEnvironment& environmen
                 entry,
                 variantName
             );
-            if(!__hidden_assets::EnsureVariantCache(
+            Core::ShaderCook::CookVector<u8> cookedBytecode(Core::ShaderCook::CookAllocator<u8>(cookArena));
+            if(!__hidden_assets::GetVariantBytecode(
                 entry,
+                variantName,
                 defineCombo,
                 includeDirectories,
                 sourcePath,
                 cachePaths,
                 sourceChecksumHex,
+                cookArena,
                 *shaderCompiler,
-                false,
+                cookedBytecode,
                 outError
             )){
                 return false;
-            }
-
-            Core::ShaderCook::CookVector<u8> cookedBytecode;
-            if(!__hidden_assets::LoadBytecodeFromCache(cachePaths.bytecodePath, entry.name, cookedBytecode, outError)){
-                if(!__hidden_assets::EnsureVariantCache(
-                    entry,
-                    defineCombo,
-                    includeDirectories,
-                    sourcePath,
-                    cachePaths,
-                    sourceChecksumHex,
-                    *shaderCompiler,
-                    true,
-                    outError
-                )){
-                    return false;
-                }
-                if(!__hidden_assets::LoadBytecodeFromCache(cachePaths.bytecodePath, entry.name, cookedBytecode, outError))
-                    return false;
             }
             if(!__hidden_assets::EmitShaderArchiveRecord(
                 entry,
@@ -432,6 +405,11 @@ bool ShaderAssetCooker::CookShaderAssets(const ShaderCookEnvironment& environmen
 bool ShaderAssetCooker::cook(const Core::Assets::AssetCookOptions& options, AString& outError){
     outError.clear();
 
+    if(!options.cookArena){
+        outError = "ShaderAssetCooker::cook failed: cookArena is null";
+        return false;
+    }
+
     ShaderCookEnvironment environment;
     environment.configuration = options.configuration;
     environment.repoRoot = options.repoRoot.empty() ? Path(".") : Path(options.repoRoot);
@@ -440,7 +418,7 @@ bool ShaderAssetCooker::cook(const Core::Assets::AssetCookOptions& options, AStr
     environment.cacheDirectory = options.cacheDirectory.empty() ? Path() : Path(options.cacheDirectory);
 
     ShaderCookResult result;
-    if(!CookShaderAssets(environment, result, outError))
+    if(!CookShaderAssets(environment, *options.cookArena, result, outError))
         return false;
 
     NWB_COUT

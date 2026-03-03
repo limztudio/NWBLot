@@ -2,11 +2,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#if defined(NWB_COOK)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include "vulkan_shader_compile.h"
 
 #include <shaderc/shaderc.hpp>
-
-#include <core/graphics/shader_cook.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -91,7 +95,7 @@ private:
 
 
 public:
-    explicit ShaderFileIncluder(const Vector<Path>& includeDirectories)
+    explicit ShaderFileIncluder(const Vector<Path, Alloc::CustomAllocator<Path>>& includeDirectories)
         : m_includeDirectories(includeDirectories)
     {}
 
@@ -158,7 +162,7 @@ public:
 
 
 private:
-    const Vector<Path>& m_includeDirectories;
+    const Vector<Path, Alloc::CustomAllocator<Path>>& m_includeDirectories;
 };
 
 
@@ -171,19 +175,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool VulkanShaderCompiler::compileVariant(const ShaderCompilerRequest& request, AString& outError){
-    ErrorCode errorCode;
-
-    CreateDirectories(request.cachePath.parent_path(), errorCode);
-    if(errorCode){
-        outError = StringFormat(
-            "Failed to create cache directory '{}' : {}",
-            PathToString(request.cachePath.parent_path()),
-            errorCode.message()
-        );
-        return false;
-    }
-
+bool VulkanShaderCompiler::compileVariant(const ShaderCompilerRequest& request, Vector<u8, Alloc::CustomAllocator<u8>>& outBytecode, AString& outError){
     AString sourceText;
     if(!ReadTextFile(request.sourcePath, sourceText)){
         outError = StringFormat("Failed to read shader source '{}'", PathToString(request.sourcePath));
@@ -221,7 +213,7 @@ bool VulkanShaderCompiler::compileVariant(const ShaderCompilerRequest& request, 
         outError = StringFormat(
             "Shader compile failed for '{}' (variant '{}') :\n{}",
             request.shaderName,
-            Core::ShaderCook::BuildVariantName(request.defineCombo),
+            request.variantName,
             result.GetErrorMessage()
         );
         return false;
@@ -233,23 +225,13 @@ bool VulkanShaderCompiler::compileVariant(const ShaderCompilerRequest& request, 
         outError = StringFormat(
             "Shader compile failed for '{}' (variant '{}') : compiled bytecode is empty",
             request.shaderName,
-            Core::ShaderCook::BuildVariantName(request.defineCombo)
+            request.variantName
         );
         return false;
     }
 
-    std::ofstream stream(request.cachePath, std::ofstream::binary | std::ofstream::trunc);
-    if(!stream.is_open()){
-        outError = StringFormat("Failed to open output '{}' for writing", PathToString(request.cachePath));
-        return false;
-    }
-
-    stream.write(reinterpret_cast<const char*>(result.cbegin()), static_cast<std::streamsize>(spirvSize));
-    if(!stream.good()){
-        outError = StringFormat("Failed to write SPIR-V output '{}'", PathToString(request.cachePath));
-        return false;
-    }
-
+    outBytecode.resize(spirvSize);
+    NWB_MEMCPY(outBytecode.data(), spirvSize, result.cbegin(), spirvSize);
     return true;
 }
 
@@ -258,6 +240,12 @@ bool VulkanShaderCompiler::compileVariant(const ShaderCompilerRequest& request, 
 
 
 NWB_VULKAN_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

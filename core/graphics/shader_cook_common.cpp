@@ -36,9 +36,9 @@ struct SortedDependencyItem{
 
 
 template<typename MapT>
-static CookVector<Pair<const AString*, const typename MapT::mapped_type*>> SortedDefineEntries(const MapT& map){
+static CookVector<Pair<const AString*, const typename MapT::mapped_type*>> SortedDefineEntries(const MapT& map, CookArena& arena){
     using EntryPtr = Pair<const AString*, const typename MapT::mapped_type*>;
-    CookVector<EntryPtr> entries;
+    CookVector<EntryPtr> entries(CookAllocator<EntryPtr>(arena));
     entries.reserve(map.size());
     for(const auto& [name, value] : map)
         entries.push_back({ &name, &value });
@@ -52,14 +52,15 @@ static CookVector<Pair<const AString*, const typename MapT::mapped_type*>> Sorte
 
 void ExpandDefineCombinations(
     const CookMap<AString, CookVector<AString>>& defineValues,
+    CookArena& arena,
     CookVector<DefineCombo>& outCombinations
 ){
     outCombinations.clear();
-    outCombinations.push_back({});
+    outCombinations.push_back(DefineCombo(CookAllocator<Pair<const AString, AString>>(arena)));
 
-    for(const auto& [defineName, pValues] : SortedDefineEntries(defineValues)){
+    for(const auto& [defineName, pValues] : SortedDefineEntries(defineValues, arena)){
         const CookVector<AString>& values = *pValues;
-        CookVector<DefineCombo> expanded;
+        CookVector<DefineCombo> expanded(CookAllocator<DefineCombo>(arena));
         expanded.reserve(outCombinations.size() * values.size());
 
         for(const DefineCombo& combo : outCombinations){
@@ -75,13 +76,13 @@ void ExpandDefineCombinations(
 }
 
 
-AString BuildVariantName(const DefineCombo& combo){
+AString BuildVariantName(const DefineCombo& combo, CookArena& arena){
     if(combo.empty())
         return "default";
 
     AString variantName;
     bool first = true;
-    for(const auto& [defineName, pValue] : SortedDefineEntries(combo)){
+    for(const auto& [defineName, pValue] : SortedDefineEntries(combo, arena)){
         if(!first)
             variantName += ';';
         first = false;
@@ -122,7 +123,7 @@ static bool ParseDefineValues(const AStringView valueText, CookVector<AString>& 
 }
 
 
-static bool ValidateDefaultVariant(const ManifestEntry& entry, AString& outError){
+static bool ValidateDefaultVariant(const ManifestEntry& entry, CookArena& arena, AString& outError){
     if(entry.defaultVariant.empty())
         return true;
 
@@ -146,7 +147,7 @@ static bool ValidateDefaultVariant(const ManifestEntry& entry, AString& outError
         return false;
     }
 
-    CookHashSet<AString> seenDefines;
+    CookHashSet<AString> seenDefines(CookAllocator<AString>(arena));
     usize begin = 0;
     while(begin < entry.defaultVariant.size()){
         usize segmentEnd = entry.defaultVariant.find(';', begin);
@@ -240,8 +241,8 @@ static bool ValidateDefaultVariant(const ManifestEntry& entry, AString& outError
 }
 
 
-static bool ValidateManifestEntries(const CookVector<ManifestEntry>& entries, AString& outError){
-    CookHashSet<Name> uniqueEntryNames;
+static bool ValidateManifestEntries(const CookVector<ManifestEntry>& entries, CookArena& arena, AString& outError){
+    CookHashSet<Name> uniqueEntryNames(CookAllocator<Name>(arena));
     for(const ManifestEntry& entry : entries){
         const Name entryName(entry.name.c_str());
         if(!uniqueEntryNames.insert(entryName).second){
@@ -251,7 +252,7 @@ static bool ValidateManifestEntries(const CookVector<ManifestEntry>& entries, AS
             );
             return false;
         }
-        if(!ValidateDefaultVariant(entry, outError))
+        if(!ValidateDefaultVariant(entry, arena, outError))
             return false;
     }
 
@@ -370,8 +371,8 @@ static bool CollectDependenciesRecursive(const Path& dependencyPath, const CookV
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ParseManifestFile(const Path& manifestPath, ManifestData& outManifest, AString& outError){
-    outManifest = {};
+bool ParseManifestFile(const Path& manifestPath, CookArena& arena, ManifestData& outManifest, AString& outError){
+    outManifest = ManifestData(arena);
 
     AString manifestText;
     if(!ReadTextFile(manifestPath, manifestText)){
@@ -381,7 +382,7 @@ bool ParseManifestFile(const Path& manifestPath, ManifestData& outManifest, AStr
     StripUtf8Bom(manifestText);
 
     bool parsingEntry = false;
-    ManifestEntry currentEntry;
+    ManifestEntry currentEntry(arena);
 
     AStringStream stream(manifestText);
     AString line;
@@ -404,7 +405,7 @@ bool ParseManifestFile(const Path& manifestPath, ManifestData& outManifest, AStr
             }
 
             parsingEntry = true;
-            currentEntry = {};
+            currentEntry = ManifestEntry(arena);
             continue;
         }
         if(trimmed == "entry.end"){
@@ -429,7 +430,7 @@ bool ParseManifestFile(const Path& manifestPath, ManifestData& outManifest, AStr
                 ? AString()
                 : CanonicalizeText(currentEntry.defaultVariant);
 
-            outManifest.entries.push_back(currentEntry);
+            outManifest.entries.push_back(Move(currentEntry));
             parsingEntry = false;
             continue;
         }
@@ -520,13 +521,13 @@ bool ParseManifestFile(const Path& manifestPath, ManifestData& outManifest, AStr
                 return false;
             }
 
-            CookVector<AString> defineValues;
+            CookVector<AString> defineValues(CookAllocator<AString>(arena));
             if(!ParseDefineValues(value, defineValues)){
                 outError = StringFormat("Manifest line {}: define '{}' has invalid values '{}'", lineNumber, defineName, value);
                 return false;
             }
 
-            currentEntry.defineValues[defineName] = defineValues;
+            currentEntry.defineValues.insert_or_assign(defineName, Move(defineValues));
             continue;
         }
 
@@ -550,22 +551,19 @@ bool ParseManifestFile(const Path& manifestPath, ManifestData& outManifest, AStr
         outError = "Manifest parsing failed: no entry was defined";
         return false;
     }
-    if(!ValidateManifestEntries(outManifest.entries, outError))
-        return false;
-
-    return true;
+    return ValidateManifestEntries(outManifest.entries, arena, outError);
 }
 
 
-bool GatherShaderDependencies(const Path& sourcePath, const CookVector<Path>& includeDirectories, CookVector<Path>& outDependencies, AString& outError){
+bool GatherShaderDependencies(const Path& sourcePath, const CookVector<Path>& includeDirectories, CookArena& arena, CookVector<Path>& outDependencies, AString& outError){
     outDependencies.clear();
 
-    CookHashSet<AString> visited;
+    CookHashSet<AString> visited(CookAllocator<AString>(arena));
     return CollectDependenciesRecursive(sourcePath, includeDirectories, visited, outDependencies, outError);
 }
 
 
-bool ComputeSourceChecksum(const ManifestEntry& entry, const AStringView variantName, const CookVector<Path>& dependencies, u64& outChecksum, AString& outError){
+bool ComputeSourceChecksum(const ManifestEntry& entry, const AStringView variantName, const CookVector<Path>& dependencies, CookArena& arena, u64& outChecksum, AString& outError){
     ErrorCode errorCode;
 
     outChecksum = FNV64_OFFSET_BASIS;
@@ -595,7 +593,7 @@ bool ComputeSourceChecksum(const ManifestEntry& entry, const AStringView variant
 
     outChecksum = UpdateFnv64(outChecksum, reinterpret_cast<const u8*>(header.data()), header.size());
 
-    CookVector<SortedDependencyItem> sortedDependencies;
+    CookVector<SortedDependencyItem> sortedDependencies(CookAllocator<SortedDependencyItem>(arena));
     sortedDependencies.reserve(dependencies.size());
     for(const Path& dependency : dependencies){
         SortedDependencyItem item;
@@ -621,7 +619,7 @@ bool ComputeSourceChecksum(const ManifestEntry& entry, const AStringView variant
             dependencyPrefix.size()
         );
 
-        CookVector<u8> dependencyBytes;
+        CookVector<u8> dependencyBytes(CookAllocator<u8>(arena));
         if(!ReadBinaryFile(item.path, dependencyBytes, errorCode)){
             outError = StringFormat("Failed to read dependency file '{}'", item.canonicalPath);
             return false;

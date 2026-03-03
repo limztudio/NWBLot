@@ -18,6 +18,8 @@ NWB_ASSETS_BEGIN
 
 
 struct AssetCookOptions{
+    Alloc::CustomArena* cookArena = nullptr;
+
     AString repoRoot;
     AString manifest;
     AString outputDirectory;

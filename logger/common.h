@@ -62,12 +62,12 @@ protected:
 public:
     template<typename... ARGS>
     inline bool init(ARGS&&... args){
-        if(!static_cast<T*>(this)->m_globalInit){
+        if(!static_cast<T*>(this)->s_GlobalInit){
             if(!static_cast<T*>(this)->globalInit()){
                 static_cast<T*>(this)->T::enqueue(StringFormat(NWB_TEXT("Failed to global initialization on {}"), NAME), Type::Fatal);
                 return false;
             }
-            static_cast<T*>(this)->m_globalInit = true;
+            static_cast<T*>(this)->s_GlobalInit = true;
         }
 
         auto ret = static_cast<T*>(this)->internalInit(Forward<ARGS>(args)...);
@@ -95,7 +95,7 @@ class BaseUpdateOrdinary : public Base<T, NAME>{
 
 
 private:
-    static bool m_globalInit;
+    static bool s_GlobalInit;
 
 
 private:
@@ -128,7 +128,7 @@ private:
     Timer m_lastTime;
 };
 template<typename T, f32 UPDATE_INTERVAL, const tchar* NAME>
-bool BaseUpdateOrdinary<T, UPDATE_INTERVAL, NAME>::m_globalInit = false;
+bool BaseUpdateOrdinary<T, UPDATE_INTERVAL, NAME>::s_GlobalInit = false;
 
 template<typename T, const tchar* NAME>
 class BaseUpdateIfQueued : public Base<T, NAME>{
@@ -136,7 +136,7 @@ class BaseUpdateIfQueued : public Base<T, NAME>{
 
 
 private:
-    static bool m_globalInit;
+    static bool s_GlobalInit;
 
 
 private:
@@ -175,7 +175,7 @@ protected:
     Semaphore<> m_semaphore;
 };
 template<typename T, const tchar* NAME>
-bool BaseUpdateIfQueued<T, NAME>::m_globalInit = false;
+bool BaseUpdateIfQueued<T, NAME>::s_GlobalInit = false;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

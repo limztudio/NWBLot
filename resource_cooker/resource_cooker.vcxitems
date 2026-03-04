@@ -15,27 +15,23 @@
     <ClCompile Include="$(MSBuildThisFileDirectory)main.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)resource_cooker.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)resource_cooker_command_line.cpp" />
-    <ClCompile Include="$(MSBuildThisFileDirectory)..\core\assets\asset_module.cpp" />
-    <ClCompile Include="$(MSBuildThisFileDirectory)..\impl\assets_graphics\graphics_asset_module.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)..\impl\assets_graphics\asset_registration.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)..\impl\assets_graphics\shader_asset_cooker.cpp" />
-    <ClCompile Include="$(MSBuildThisFileDirectory)..\core\graphics\shader_cook_common.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)..\core\graphics\shader_cook.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)..\core\graphics\shader_archive.cpp" />
-    <ClCompile Include="$(MSBuildThisFileDirectory)..\core\graphics\shader_compiler.cpp" />
-    <ClCompile Include="$(MSBuildThisFileDirectory)..\core\graphics\vulkan\vulkan_shader_compile.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)..\core\graphics\vulkan\vulkan_shader_compiler.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="$(MSBuildThisFileDirectory)resource_cooker.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)..\core\assets\global.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)..\core\assets\asset.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)..\core\assets\asset_cooker.h" />
-    <ClInclude Include="$(MSBuildThisFileDirectory)..\core\assets\asset_module.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)..\impl\assets_graphics\shader_asset_cooker.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)..\core\filesystem\global.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)..\core\filesystem\filesystem.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)..\core\filesystem\volume_naming.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)..\core\graphics\shader_archive.h" />
-    <ClInclude Include="$(MSBuildThisFileDirectory)..\core\graphics\shader_compiler.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)..\core\graphics\shader_cook.h" />
-    <ClInclude Include="$(MSBuildThisFileDirectory)..\core\graphics\vulkan\vulkan_shader_compile.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)..\core\graphics\vulkan\vulkan_shader_compiler.h" />
   </ItemGroup>
 </Project>

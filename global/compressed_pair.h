@@ -290,7 +290,6 @@ public:
 	CompressedPair() : base(){}
 	CompressedPair(first_param_type x, second_param_type y) : base(x, y){}
 	explicit CompressedPair(first_param_type x) : base(x){}
-	explicit CompressedPair(second_param_type y) : base(y){}
 
 
 public:

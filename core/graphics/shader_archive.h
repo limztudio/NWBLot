@@ -19,6 +19,19 @@ NWB_CORE_BEGIN
 
 class ShaderArchive{
 public:
+    static constexpr const char* s_IndexVirtualPath = "shader/index.bin";
+    static constexpr const char* s_DefaultVariant = "default";
+
+
+public:
+    using ArchiveArena = Core::Alloc::CustomArena;
+    template<typename T>
+    using ArchiveAllocator = Core::Alloc::CustomAllocator<T>;
+    template<typename T>
+    using ArchiveVector = Vector<T, ArchiveAllocator<T>>;
+
+
+public:
     struct Record{
         Name shaderName = NAME_NONE;
         Name variantName = NAME_NONE;
@@ -31,20 +44,10 @@ public:
 
 
 public:
-    static constexpr const char* s_IndexVirtualPath = "shader/index.bin";
-    static constexpr const char* s_DefaultVariant = "default";
-
-
-public:
     [[nodiscard]] static AString buildVirtualPath(AStringView shaderName, AStringView variantName);
-    static bool serializeIndex(const Vector<Record>& records, Vector<u8>& outBinary, AString& outError);
-    static bool deserializeIndex(const Vector<u8>& binary, Vector<Record>& outRecords, AString& outError);
-    static bool findVirtualPath(
-        const Vector<Record>& records,
-        AStringView shaderName,
-        AStringView variantName,
-        AString& outVirtualPath
-    );
+    static bool serializeIndex(const Vector<Record>& records, Vector<u8>& outBinary);
+    static bool deserializeIndex(const Vector<u8>& binary, Vector<Record>& outRecords);
+    static bool findVirtualPath(const Vector<Record>& records, AStringView shaderName, AStringView variantName, AString& outVirtualPath);
 };
 
 

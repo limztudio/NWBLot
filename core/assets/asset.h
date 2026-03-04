@@ -45,14 +45,12 @@ public:
     virtual bool deserialize(
         AStringView virtualPath,
         const AssetBytes& binary,
-        UniquePtr<IAsset>& outAsset,
-        AString& outError
+        UniquePtr<IAsset>& outAsset
     )const = 0;
 #if defined(NWB_COOK)
     virtual bool serialize(
         const IAsset& asset,
-        AssetBytes& outBinary,
-        AString& outError
+        AssetBytes& outBinary
     )const = 0;
 #endif
 };
@@ -61,27 +59,18 @@ public:
 template<typename T>
 class AssetCodecOf : public IAssetCodec{
 public:
-    virtual bool deserialize(AStringView virtualPath, const AssetBytes& binary, UniquePtr<IAsset>& outAsset, AString& outError)const override{
+    virtual bool deserialize(AStringView virtualPath, const AssetBytes& binary, UniquePtr<IAsset>& outAsset)const override{
         auto asset = MakeUnique<T>();
-        if(!asset->loadBinary(virtualPath, binary, outError))
+        if(!asset->loadBinary(virtualPath, binary))
             return false;
         outAsset = Move(asset);
         return true;
     }
 
 #if defined(NWB_COOK)
-    virtual bool serialize(const IAsset& asset, AssetBytes& outBinary, AString& outError)const override{
-        const AStringView codecType = assetType();
-        if(asset.assetType() != codecType){
-            outError = StringFormat(
-                "'{}' codec: invalid asset type '{}', expected '{}'",
-                codecType,
-                asset.assetType(),
-                codecType
-            );
-            return false;
-        }
-        return static_cast<const T&>(asset).saveBinary(outBinary, outError);
+    virtual bool serialize(const IAsset& asset, AssetBytes& outBinary)const override{
+        NWB_ASSERT(asset.assetType() == assetType());
+        return static_cast<const T&>(asset).saveBinary(outBinary);
     }
 #endif
 };

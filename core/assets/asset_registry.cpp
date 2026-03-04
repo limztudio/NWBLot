@@ -4,6 +4,8 @@
 
 #include "asset_registry.h"
 
+#include <logger/client/logger.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -63,23 +65,16 @@ const IAssetCodec* AssetRegistry::findCodec(const AStringView assetType)const{
 }
 
 
-bool AssetRegistry::deserializeAsset(
-    const AStringView assetType,
-    const AStringView virtualPath,
-    const AssetBytes& binary,
-    UniquePtr<IAsset>& outAsset,
-    AString& outError
-)const{
+bool AssetRegistry::deserializeAsset(const AStringView assetType, const AStringView virtualPath, const AssetBytes& binary, UniquePtr<IAsset>& outAsset)const{
     outAsset.reset();
-    outError.clear();
 
     const IAssetCodec* codec = findCodec(assetType);
     if(codec == nullptr){
-        outError = StringFormat("AssetRegistry: no codec for type '{}'", assetType);
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetRegistry: no codec for type '{}'"), StringConvert(assetType));
         return false;
     }
 
-    return codec->deserialize(virtualPath, binary, outAsset, outError);
+    return codec->deserialize(virtualPath, binary, outAsset);
 }
 
 
@@ -92,21 +87,16 @@ bool AssetRegistry::deserializeAsset(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool AssetRegistry::serializeAsset(
-    const IAsset& asset,
-    AssetBytes& outBinary,
-    AString& outError
-)const{
+bool AssetRegistry::serializeAsset(const IAsset& asset, AssetBytes& outBinary)const{
     outBinary.clear();
-    outError.clear();
 
     const IAssetCodec* codec = findCodec(asset.assetType());
     if(codec == nullptr){
-        outError = StringFormat("AssetRegistry: no codec for type '{}'", asset.assetType());
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetRegistry: no codec for type '{}'"), StringConvert(asset.assetType()));
         return false;
     }
 
-    return codec->serialize(asset, outBinary, outError);
+    return codec->serialize(asset, outBinary);
 }
 
 

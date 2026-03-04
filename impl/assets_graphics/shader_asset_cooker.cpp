@@ -2,30 +2,27 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#if defined(NWB_COOK)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include "shader_asset_cooker.h"
 
-#if defined(NWB_COOK)
-#include <core/assets/asset_cook_utils.h>
-
 #include <core/graphics/shader_archive.h>
-#include <core/graphics/shader_compiler.h>
 #include <core/graphics/shader_cook.h>
 
 #include <core/filesystem/filesystem.h>
 #include <core/alloc/core.h>
-#endif
+
+#include <logger/client/logger.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(NWB_COOK)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -62,55 +59,66 @@ struct ResolvedCookPaths{
     Path outputDirectory;
     Path cacheDirectory;
 };
-
 struct VariantCachePaths{
     Path bytecodePath;
     Path sourceChecksumPath;
 };
-
-
-static bool ResolveCookPaths(const ShaderCookEnvironment& environment, ResolvedCookPaths& outPaths, AString& outError){
+static bool ResolveCookPaths(const ShaderCookEnvironment& environment, ResolvedCookPaths& outPaths){
     ErrorCode errorCode;
 
     outPaths = {};
 
     if(environment.manifestPath.empty()){
-        outError = "ShaderAssetCooker::CookShaderAssets failed: manifest path is empty";
+        NWB_LOGGER_ERROR(NWB_TEXT("ShaderAssetCooker::CookShaderAssets failed: manifest path is empty"));
         return false;
     }
     if(environment.outputDirectory.empty()){
-        outError = "ShaderAssetCooker::CookShaderAssets failed: output directory is empty";
+        NWB_LOGGER_ERROR(NWB_TEXT("ShaderAssetCooker::CookShaderAssets failed: output directory is empty"));
         return false;
     }
 
     outPaths.repoRoot = environment.repoRoot.empty() ? Path(".") : environment.repoRoot;
     outPaths.repoRoot = AbsolutePath(outPaths.repoRoot, errorCode).lexically_normal();
     if(errorCode){
-        outError = StringFormat(
-            "ShaderAssetCooker::CookShaderAssets failed to resolve repo root: {}",
-            errorCode.message()
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("ShaderAssetCooker::CookShaderAssets failed to resolve repo root: {}"),
+            StringConvert(errorCode.message())
         );
         return false;
     }
 
-    if(!Core::Assets::ResolvePathFromCookRoot(outPaths.repoRoot, environment.manifestPath, "manifest path", outPaths.manifestPath, outError))
+    if(!ResolveAbsolutePath(outPaths.repoRoot, PathToString(environment.manifestPath), outPaths.manifestPath, errorCode)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("ShaderAssetCooker::CookShaderAssets failed to resolve manifest path '{}'"),
+            PathToString<tchar>(environment.manifestPath)
+        );
         return false;
-    if(!Core::Assets::ResolvePathFromCookRoot(outPaths.repoRoot, environment.outputDirectory, "output directory", outPaths.outputDirectory, outError))
+    }
+    if(!ResolveAbsolutePath(outPaths.repoRoot, PathToString(environment.outputDirectory), outPaths.outputDirectory, errorCode)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("ShaderAssetCooker::CookShaderAssets failed to resolve output directory '{}'"),
+            PathToString<tchar>(environment.outputDirectory)
+        );
         return false;
+    }
 
     const Path defaultCacheDirectory = outPaths.repoRoot / "__build_obj/shader_cache";
     const Path requestedCacheDirectory = environment.cacheDirectory.empty()
         ? defaultCacheDirectory
         : environment.cacheDirectory;
-    if(!Core::Assets::ResolvePathFromCookRoot(outPaths.repoRoot, requestedCacheDirectory, "cache directory", outPaths.cacheDirectory, outError))
+    if(!ResolveAbsolutePath(outPaths.repoRoot, PathToString(requestedCacheDirectory), outPaths.cacheDirectory, errorCode)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("ShaderAssetCooker::CookShaderAssets failed to resolve cache directory '{}'"),
+            PathToString<tchar>(requestedCacheDirectory)
+        );
         return false;
+    }
 
-    CreateDirectories(outPaths.cacheDirectory, errorCode);
-    if(errorCode){
-        outError = StringFormat(
-            "ShaderAssetCooker::CookShaderAssets failed to create cache directory '{}': {}",
-            PathToString(outPaths.cacheDirectory),
-            errorCode.message()
+    if(!CreateDirectories(outPaths.cacheDirectory, errorCode)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("ShaderAssetCooker::CookShaderAssets failed to create cache directory '{}': {}"),
+            PathToString<tchar>(outPaths.cacheDirectory),
+            StringConvert(errorCode.message())
         );
         return false;
     }
@@ -119,7 +127,7 @@ static bool ResolveCookPaths(const ShaderCookEnvironment& environment, ResolvedC
 }
 
 
-static bool BuildIncludeDirectories(const Path& repoRoot, const Core::ShaderCook::ManifestData& manifest, Core::ShaderCook::CookVector<Path>& outIncludeDirectories, AString& outError){
+static bool BuildIncludeDirectories(const Path& repoRoot, const Core::ShaderCook::ManifestData& manifest, Core::ShaderCook::CookVector<Path>& outIncludeDirectories){
     ErrorCode errorCode;
 
     outIncludeDirectories.clear();
@@ -128,7 +136,7 @@ static bool BuildIncludeDirectories(const Path& repoRoot, const Core::ShaderCook
     for(const AString& includeRoot : manifest.includeRoots){
         Path includeDirectory;
         if(!ResolveAbsolutePath(repoRoot, includeRoot, includeDirectory, errorCode)){
-            outError = StringFormat("Failed to resolve include_root '{}'", includeRoot);
+            NWB_LOGGER_ERROR(NWB_TEXT("ShaderAssetCooker::CookShaderAssets failed: failed to resolve include_root '{}': {}"), StringConvert(includeRoot), StringConvert(errorCode.message()));
             return false;
         }
 
@@ -164,20 +172,20 @@ static bool GetVariantBytecode(
     const Path& sourcePath,
     const VariantCachePaths& cachePaths,
     const AStringView sourceChecksumHex,
-    Core::Alloc::CustomArena& cookArena,
-    Core::IShaderCompiler& shaderCompiler,
-    Core::ShaderCook::CookVector<u8>& outBytecode,
-    AString& outError
+    Core::ShaderCook& shaderCook,
+    Vector<u8>& outBytecode
 )
 {
     ErrorCode errorCode;
 
     outBytecode.clear();
 
-    const bool cacheUpToDate =
-        FileExists(cachePaths.bytecodePath, errorCode)
-        && FileExists(cachePaths.sourceChecksumPath, errorCode)
-        && Core::Assets::CookSourceChecksumMatches(cachePaths.sourceChecksumPath, sourceChecksumHex);
+    const bool cacheUpToDate = [&]() -> bool {
+        if(!FileExists(cachePaths.bytecodePath, errorCode) || !FileExists(cachePaths.sourceChecksumPath, errorCode))
+            return false;
+        AString cachedText;
+        return ReadTextFile(cachePaths.sourceChecksumPath, cachedText) && (Trim(cachedText) == sourceChecksumHex);
+    }();
     if(cacheUpToDate){
         if(ReadBinaryFile(cachePaths.bytecodePath, outBytecode, errorCode) && !outBytecode.empty() && (outBytecode.size() & 3u) == 0u)
             return true;
@@ -195,30 +203,34 @@ static bool GetVariantBytecode(
         includeDirectories,
         sourcePath
     };
-    if(!shaderCompiler.compileVariant(compileRequest, outBytecode, outError))
+    if(!shaderCook.compileVariant(compileRequest, outBytecode))
         return false;
 
-    CreateDirectories(cachePaths.bytecodePath.parent_path(), errorCode);
-    if(errorCode){
-        outError = StringFormat(
-            "Failed to create cache directory '{}': {}",
-            PathToString(cachePaths.bytecodePath.parent_path()),
-            errorCode.message()
+    if(!CreateDirectories(cachePaths.bytecodePath.parent_path(), errorCode)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("ShaderAssetCooker::CookShaderAssets failed to create cache directory '{}': {}"),
+            PathToString<tchar>(cachePaths.bytecodePath.parent_path()),
+            StringConvert(errorCode.message())
         );
         return false;
     }
 
     if(!WriteBinaryFile(cachePaths.bytecodePath, outBytecode)){
-        outError = StringFormat(
-            "Failed to write shader bytecode cache '{}' for entry '{}'",
-            PathToString(cachePaths.bytecodePath),
-            entry.name
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Failed to write shader bytecode cache '{}' for entry '{}'"),
+            PathToString<tchar>(cachePaths.bytecodePath),
+            StringConvert(entry.name)
         );
         return false;
     }
 
-    if(!Core::Assets::WriteCookSourceChecksum(cachePaths.sourceChecksumPath, sourceChecksumHex, outError))
+    if(!WriteTextFile(cachePaths.sourceChecksumPath, sourceChecksumHex)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Failed to write cook source checksum '{}'"),
+            PathToString<tchar>(cachePaths.sourceChecksumPath)
+        );
         return false;
+    }
 
     return true;
 }
@@ -228,28 +240,36 @@ static bool EmitShaderArchiveRecord(
     const Core::ShaderCook::ManifestEntry& entry,
     const AStringView variantName,
     const u64 sourceChecksum,
-    const Core::ShaderCook::CookVector<u8>& bytecode,
+    const Vector<u8>& bytecode,
     Core::ShaderCook::CookHashSet<NameHash>& inOutVirtualPathHashes,
     Core::Filesystem::VolumeSession& volumeSession,
-    Vector<Core::ShaderArchive::Record>& inOutRecords,
-    AString& outError
+    Vector<Core::ShaderArchive::Record>& inOutRecords
 )
 {
     const AString variantNameText(variantName);
     const AString virtualPath = Core::ShaderArchive::buildVirtualPath(entry.name, variantName);
     const NameHash virtualPathHash = Name(virtualPath.c_str()).hash();
     if(!inOutVirtualPathHashes.insert(virtualPathHash).second){
-        outError = StringFormat(
-            "Shader cook produced duplicate virtual path '{}' (entry='{}', variant='{}')",
-            virtualPath,
-            entry.name,
-            variantName
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Shader cook produced duplicate virtual path '{}' (entry='{}', variant='{}')"),
+            StringConvert(virtualPath),
+            StringConvert(entry.name),
+            StringConvert(variantName)
         );
         return false;
     }
 
-    if(!volumeSession.pushData(virtualPath, bytecode, outError))
-        return false;
+    {
+        AString localError;
+        if(!volumeSession.pushData(virtualPath, bytecode, localError)){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Failed to push shader bytecode '{}': {}"),
+                StringConvert(virtualPath),
+                StringConvert(localError)
+            );
+            return false;
+        }
+    }
 
     Core::ShaderArchive::Record record;
     record.shaderName = Name(entry.name.c_str());
@@ -274,142 +294,7 @@ static bool EmitShaderArchiveRecord(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ShaderAssetCooker::CookShaderAssets(const ShaderCookEnvironment& environment, Core::Alloc::CustomArena& cookArena, ShaderCookResult& outResult, AString& outError){
-    outResult = {};
-    outError.clear();
-
-    __hidden_assets::ResolvedCookPaths resolvedPaths;
-    if(!__hidden_assets::ResolveCookPaths(environment, resolvedPaths, outError))
-        return false;
-
-    Core::ShaderCook::ManifestData manifest(cookArena);
-    if(!Core::ShaderCook::ParseManifestFile(resolvedPaths.manifestPath, cookArena, manifest, outError))
-        return false;
-
-    Core::ShaderCook::CookVector<Path> includeDirectories(Core::ShaderCook::CookAllocator<Path>(cookArena));
-    if(!__hidden_assets::BuildIncludeDirectories(resolvedPaths.repoRoot, manifest, includeDirectories, outError))
-        return false;
-
-    const AString normalizedConfiguration = Core::Assets::NormalizeCookConfiguration(environment.configuration);
-    const AString configurationSafeName = BuildSafeCacheName(normalizedConfiguration);
-    Vector<Core::ShaderArchive::Record> shaderIndexRecords;
-    Core::ShaderCook::CookHashSet<NameHash> seenVirtualPathHashes(Core::ShaderCook::CookAllocator<NameHash>(cookArena));
-
-    Core::Filesystem::VolumeBuildConfig volumeConfig;
-    volumeConfig.volumeName = manifest.volumeName;
-    volumeConfig.segmentSize = manifest.segmentSize;
-    volumeConfig.metadataSize = manifest.metadataSize;
-
-    Core::Filesystem::VolumeSession volumeSession(cookArena);
-    if(!volumeSession.create(resolvedPaths.outputDirectory, volumeConfig, outError))
-        return false;
-
-    Core::ShaderCompile shaderCompile;
-    Core::IShaderCompiler* const shaderCompiler = shaderCompile.getCompiler();
-    if(shaderCompiler == nullptr){
-        outError = shaderCompile.error().empty()
-            ? AString("Failed to create shader compiler")
-            : shaderCompile.error();
-        return false;
-    }
-
-    ErrorCode errorCode;
-    for(const Core::ShaderCook::ManifestEntry& entry : manifest.entries){
-        Path sourcePath;
-        if(!ResolveAbsolutePath(resolvedPaths.repoRoot, entry.source, sourcePath, errorCode)){
-            outError = StringFormat(
-                "Failed to resolve source path '{}' for entry '{}'",
-                entry.source,
-                entry.name
-            );
-            return false;
-        }
-
-        if(!FileExists(sourcePath, errorCode)){
-            outError = StringFormat(
-                "Shader source does not exist for entry '{}': '{}'",
-                entry.name,
-                PathToString(sourcePath)
-            );
-            return false;
-        }
-
-        Core::ShaderCook::CookVector<Path> dependencies(Core::ShaderCook::CookAllocator<Path>(cookArena));
-        if(!Core::ShaderCook::GatherShaderDependencies(sourcePath, includeDirectories, cookArena, dependencies, outError))
-            return false;
-
-        Core::ShaderCook::CookVector<Core::ShaderCook::DefineCombo> defineCombinations(Core::ShaderCook::CookAllocator<Core::ShaderCook::DefineCombo>(cookArena));
-        Core::ShaderCook::ExpandDefineCombinations(entry.defineValues, cookArena, defineCombinations);
-        if(defineCombinations.empty())
-            defineCombinations.push_back(Core::ShaderCook::DefineCombo(Core::ShaderCook::CookAllocator<Pair<const AString, AString>>(cookArena)));
-
-        for(const Core::ShaderCook::DefineCombo& defineCombo : defineCombinations){
-            const AString generatedVariantName = Core::ShaderCook::BuildVariantName(defineCombo, cookArena);
-            const AString variantName = __hidden_assets::NormalizeVariantName(entry, generatedVariantName);
-
-            u64 sourceChecksum = 0;
-            if(!Core::ShaderCook::ComputeSourceChecksum(entry, variantName, dependencies, cookArena, sourceChecksum, outError))
-                return false;
-            const AString sourceChecksumHex = FormatHex64(sourceChecksum);
-
-            const __hidden_assets::VariantCachePaths cachePaths = __hidden_assets::BuildVariantCachePaths(
-                resolvedPaths.cacheDirectory,
-                configurationSafeName,
-                entry,
-                variantName
-            );
-            Core::ShaderCook::CookVector<u8> cookedBytecode(Core::ShaderCook::CookAllocator<u8>(cookArena));
-            if(!__hidden_assets::GetVariantBytecode(
-                entry,
-                variantName,
-                defineCombo,
-                includeDirectories,
-                sourcePath,
-                cachePaths,
-                sourceChecksumHex,
-                cookArena,
-                *shaderCompiler,
-                cookedBytecode,
-                outError
-            )){
-                return false;
-            }
-            if(!__hidden_assets::EmitShaderArchiveRecord(
-                entry,
-                variantName,
-                sourceChecksum,
-                cookedBytecode,
-                seenVirtualPathHashes,
-                volumeSession,
-                shaderIndexRecords,
-                outError
-            )){
-                return false;
-            }
-        }
-    }
-
-    Vector<u8> indexBinary;
-    if(!Core::ShaderArchive::serializeIndex(shaderIndexRecords, indexBinary, outError))
-        return false;
-    if(!volumeSession.pushData(Core::ShaderArchive::s_IndexVirtualPath, indexBinary, outError))
-        return false;
-
-    outResult.volumeName = manifest.volumeName;
-    outResult.fileCount = volumeSession.fileCount();
-    outResult.segmentCount = static_cast<u64>(volumeSession.segmentCount());
-    return true;
-}
-
-
-bool ShaderAssetCooker::cook(const Core::Assets::AssetCookOptions& options, AString& outError){
-    outError.clear();
-
-    if(!options.cookArena){
-        outError = "ShaderAssetCooker::cook failed: cookArena is null";
-        return false;
-    }
-
+bool ShaderAssetCooker::cook(const Core::Assets::AssetCookOptions& options){
     ShaderCookEnvironment environment;
     environment.configuration = options.configuration;
     environment.repoRoot = options.repoRoot.empty() ? Path(".") : Path(options.repoRoot);
@@ -418,7 +303,7 @@ bool ShaderAssetCooker::cook(const Core::Assets::AssetCookOptions& options, AStr
     environment.cacheDirectory = options.cacheDirectory.empty() ? Path() : Path(options.cacheDirectory);
 
     ShaderCookResult result;
-    if(!CookShaderAssets(environment, *options.cookArena, result, outError))
+    if(!cookShaderAssets(environment, result))
         return false;
 
     NWB_COUT
@@ -438,16 +323,152 @@ bool ShaderAssetCooker::cook(const Core::Assets::AssetCookOptions& options, AStr
 }
 
 
+bool ShaderAssetCooker::cookShaderAssets(const ShaderCookEnvironment& environment, ShaderCookResult& outResult){
+    outResult = {};
+
+    Core::ShaderCook shaderCook(m_arena);
+    if(!shaderCook)
+        return false;
+
+    __hidden_assets::ResolvedCookPaths resolvedPaths;
+    if(!__hidden_assets::ResolveCookPaths(environment, resolvedPaths))
+        return false;
+
+    Core::ShaderCook::ManifestData manifest(m_arena);
+    if(!shaderCook.parseManifestFile(resolvedPaths.manifestPath, manifest))
+        return false;
+
+    Core::ShaderCook::CookVector<Path> includeDirectories{Core::ShaderCook::CookAllocator<Path>(m_arena)};
+    if(!__hidden_assets::BuildIncludeDirectories(resolvedPaths.repoRoot, manifest, includeDirectories))
+        return false;
+
+    AString normalizedConfiguration = CanonicalizeText(environment.configuration);
+    if(normalizedConfiguration.empty())
+        normalizedConfiguration = "default";
+    const AString configurationSafeName = BuildSafeCacheName(normalizedConfiguration);
+    Vector<Core::ShaderArchive::Record> shaderIndexRecords;
+    Core::ShaderCook::CookHashSet<NameHash> seenVirtualPathHashes{Core::ShaderCook::CookAllocator<NameHash>(m_arena)};
+
+    Core::Filesystem::VolumeBuildConfig volumeConfig;
+    volumeConfig.volumeName = manifest.volumeName;
+    volumeConfig.segmentSize = manifest.segmentSize;
+    volumeConfig.metadataSize = manifest.metadataSize;
+
+    Core::Filesystem::VolumeSession volumeSession(m_arena);
+    {
+        AString localError;
+        if(!volumeSession.create(resolvedPaths.outputDirectory, volumeConfig, localError)){
+            NWB_LOGGER_ERROR(NWB_TEXT("ShaderAssetCooker::CookShaderAssets failed to create volume session: {}"), StringConvert(localError));
+            return false;
+        }
+    }
+
+    ErrorCode errorCode;
+    for(const Core::ShaderCook::ManifestEntry& entry : manifest.entries){
+        Path sourcePath;
+        if(!ResolveAbsolutePath(resolvedPaths.repoRoot, entry.source, sourcePath, errorCode)){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Failed to resolve source path '{}' for entry '{}'"),
+                StringConvert(entry.source),
+                StringConvert(entry.name)
+            );
+            return false;
+        }
+
+        if(!FileExists(sourcePath, errorCode)){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Shader source does not exist for entry '{}': '{}'"),
+                StringConvert(entry.name),
+                PathToString<tchar>(sourcePath)
+            );
+            return false;
+        }
+
+        Core::ShaderCook::CookVector<Path> dependencies{Core::ShaderCook::CookAllocator<Path>(m_arena)};
+        if(!shaderCook.gatherShaderDependencies(sourcePath, includeDirectories, dependencies))
+            return false;
+
+        Core::ShaderCook::CookVector<Core::ShaderCook::DefineCombo> defineCombinations{Core::ShaderCook::CookAllocator<Core::ShaderCook::DefineCombo>(m_arena)};
+        shaderCook.expandDefineCombinations(entry.defineValues, defineCombinations);
+        if(defineCombinations.empty())
+            defineCombinations.push_back(Core::ShaderCook::DefineCombo(Core::ShaderCook::CookAllocator<Pair<const AString, AString>>(m_arena)));
+
+        for(const Core::ShaderCook::DefineCombo& defineCombo : defineCombinations){
+            const AString generatedVariantName = shaderCook.buildVariantName(defineCombo);
+            const AString variantName = __hidden_assets::NormalizeVariantName(entry, generatedVariantName);
+
+            u64 sourceChecksum = 0;
+            if(!shaderCook.computeSourceChecksum(entry, variantName, dependencies, sourceChecksum))
+                return false;
+            const AString sourceChecksumHex = FormatHex64(sourceChecksum);
+
+            const __hidden_assets::VariantCachePaths cachePaths = __hidden_assets::BuildVariantCachePaths(
+                resolvedPaths.cacheDirectory,
+                configurationSafeName,
+                entry,
+                variantName
+            );
+            Vector<u8> cookedBytecode;
+            if(!__hidden_assets::GetVariantBytecode(
+                entry,
+                variantName,
+                defineCombo,
+                includeDirectories,
+                sourcePath,
+                cachePaths,
+                sourceChecksumHex,
+                shaderCook,
+                cookedBytecode
+            )){
+                return false;
+            }
+            if(!__hidden_assets::EmitShaderArchiveRecord(
+                entry,
+                variantName,
+                sourceChecksum,
+                cookedBytecode,
+                seenVirtualPathHashes,
+                volumeSession,
+                shaderIndexRecords
+            )){
+                return false;
+            }
+        }
+    }
+
+    Vector<u8> indexBinary;
+    if(!Core::ShaderArchive::serializeIndex(shaderIndexRecords, indexBinary)){
+        NWB_LOGGER_ERROR(NWB_TEXT("ShaderAssetCooker::CookShaderAssets failed to serialize shader index"));
+        return false;
+    }
+    {
+        AString localError;
+        if(!volumeSession.pushData(Core::ShaderArchive::s_IndexVirtualPath, indexBinary, localError)){
+            NWB_LOGGER_ERROR(NWB_TEXT("ShaderAssetCooker::CookShaderAssets failed to push shader index: {}"), StringConvert(localError));
+            return false;
+        }
+    }
+
+    outResult.volumeName = manifest.volumeName;
+    outResult.fileCount = volumeSession.fileCount();
+    outResult.segmentCount = static_cast<u64>(volumeSession.segmentCount());
+    return true;
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

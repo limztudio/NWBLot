@@ -4,6 +4,8 @@
 
 #include "asset_cooker.h"
 
+#include <logger/client/logger.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -30,23 +32,23 @@ bool AssetCookerRegistry::registerCooker(UniquePtr<IAssetCooker>&& cooker){
 }
 
 
-bool AssetCookerRegistry::cook(const AssetCookOptions& options, AString& outError)const{
+bool AssetCookerRegistry::cook(const AssetCookOptions& options)const{
     const AString requestedType = ::CanonicalizeText(options.assetType);
     if(requestedType.empty()){
         if(m_assetCookers.size() == 1)
-            return m_assetCookers.begin().value()->cook(options, outError);
+            return m_assetCookers.begin().value()->cook(options);
 
-        outError = "Missing --asset-type";
+        NWB_LOGGER_ERROR(NWB_TEXT("Missing --asset-type"));
         return false;
     }
 
     const auto found = m_assetCookers.find(requestedType);
     if(found == m_assetCookers.end()){
-        outError = StringFormat("Unsupported --asset-type '{}'", options.assetType);
+        NWB_LOGGER_ERROR(NWB_TEXT("Unsupported --asset-type '{}'"), StringConvert(options.assetType));
         return false;
     }
 
-    return found.value()->cook(options, outError);
+    return found.value()->cook(options);
 }
 
 

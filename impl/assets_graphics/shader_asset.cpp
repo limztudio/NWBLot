@@ -4,6 +4,8 @@
 
 #include "shader_asset.h"
 
+#include <logger/client/logger.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -14,24 +16,21 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Shader::loadBinary(const AStringView virtualPath, const Core::Assets::AssetBytes& binary, AString& outError){
-    outError.clear();
-
+bool Shader::loadBinary(const AStringView virtualPath, const Core::Assets::AssetBytes& binary){
     if(virtualPath.empty()){
-        outError = "Shader::loadBinary failed: virtual path is empty";
+        NWB_LOGGER_ERROR(NWB_TEXT("Shader::loadBinary failed: virtual path is empty"));
         return false;
     }
 
     static constexpr u32 s_SpvMagic = 0x07230203u;
     if(binary.size() < sizeof(u32) || (binary.size() & 3u) != 0u){
-        outError = "Shader::loadBinary failed: invalid bytecode size";
+        NWB_LOGGER_ERROR(NWB_TEXT("Shader::loadBinary failed: invalid bytecode size"));
         return false;
     }
     usize cursor = 0;
     u32 magic = 0;
-    ReadPOD(binary, cursor, magic);
-    if(magic != s_SpvMagic){
-        outError = "Shader::loadBinary failed: invalid SPIR-V magic";
+    if(!ReadPOD(binary, cursor, magic) || magic != s_SpvMagic){
+        NWB_LOGGER_ERROR(NWB_TEXT("Shader::loadBinary failed: invalid SPIR-V magic"));
         return false;
     }
 
@@ -47,9 +46,10 @@ bool Shader::loadBinary(const AStringView virtualPath, const Core::Assets::Asset
 #if defined(NWB_COOK)
 
 
-bool Shader::saveBinary(Core::Assets::AssetBytes& outBinary, AString& outError)const{
-    outError.clear();
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+bool Shader::saveBinary(Core::Assets::AssetBytes& outBinary)const{
     outBinary = m_bytecode;
     return true;
 }

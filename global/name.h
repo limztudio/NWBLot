@@ -240,6 +240,9 @@ inline constexpr bool operator==(const Name& a, const Name& b){
 inline constexpr bool operator!=(const Name& a, const Name& b){
     return !(a == b);
 }
+inline constexpr bool operator<(const Name& a, const Name& b){
+    return LessNameHash(a.hash(), b.hash());
+}
 
 inline constexpr Name NAME_NONE = {};
 static_assert(Name(nullptr) == NAME_NONE, "Name(nullptr) must produce NAME_NONE");

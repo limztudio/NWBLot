@@ -25,9 +25,10 @@ public:
     [[nodiscard]] virtual AStringView virtualPath()const override{ return m_virtualPath; }
     [[nodiscard]] const Core::Assets::AssetBytes& bytecode()const{ return m_bytecode; }
 
-    bool loadBinary(AStringView virtualPath, const Core::Assets::AssetBytes& binary, AString& outError);
+public:
+    bool loadBinary(AStringView virtualPath, const Core::Assets::AssetBytes& binary);
 #if defined(NWB_COOK)
-    bool saveBinary(Core::Assets::AssetBytes& outBinary, AString& outError)const;
+    bool saveBinary(Core::Assets::AssetBytes& outBinary)const;
 #endif
 
 

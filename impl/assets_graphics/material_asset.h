@@ -24,11 +24,13 @@ public:
     [[nodiscard]] virtual AStringView assetType()const override{ return "material"; }
     [[nodiscard]] virtual AStringView virtualPath()const override{ return m_virtualPath; }
 
-    bool loadBinary(AStringView virtualPath, const Core::Assets::AssetBytes& binary, AString& outError);
+public:
+    bool loadBinary(AStringView virtualPath, const Core::Assets::AssetBytes& binary);
 #if defined(NWB_COOK)
-    bool saveBinary(Core::Assets::AssetBytes& outBinary, AString& outError)const;
+    bool saveBinary(Core::Assets::AssetBytes& outBinary)const;
 #endif
 
+public:
     void setName(const Name& name){ m_name = name; }
     void setShader(const Name& shaderName, const Name& variantName);
     void setParameter(AStringView key, AStringView value){ m_parameters[AString(key)] = AString(value); }

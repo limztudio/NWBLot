@@ -4020,11 +4020,16 @@ struct ShaderCompilerRequest{
 
 class IShaderCompiler : NoCopy{
 public:
+    IShaderCompiler(Alloc::CustomArena& memoryArena) : m_memoryArena(memoryArena){}
     virtual ~IShaderCompiler() = default;
 
 
 public:
-    virtual bool compileVariant(const ShaderCompilerRequest& request, Vector<u8, Alloc::CustomAllocator<u8>>& outBytecode, AString& outError) = 0;
+    virtual bool compileVariant(const ShaderCompilerRequest& request, Vector<u8>& outBytecode) = 0;
+    
+    
+protected:
+    Alloc::CustomArena& m_memoryArena;
 };
 
 

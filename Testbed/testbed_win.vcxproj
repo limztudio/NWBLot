@@ -80,14 +80,6 @@
     <Import Project="..\configuration\3rdPartyContainerInclude.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
-  <PropertyGroup>
-    <NwbRepoRoot>$(MSBuildProjectDirectory)\..</NwbRepoRoot>
-    <NwbResourceCookerProject>$(NwbRepoRoot)\resource_cooker\resource_cooker_win.vcxproj</NwbResourceCookerProject>
-    <NwbResourceCookerExecutable>$(SolutionDir)\__exec\$(Platform)\$(Configuration)\resource_cooker.exe</NwbResourceCookerExecutable>
-    <NwbShaderManifest>$(IntDir)shader_build.generated.nwbcook</NwbShaderManifest>
-    <NwbShaderOutputDirectory>$(SolutionDir)\__exec\res</NwbShaderOutputDirectory>
-    <NwbShaderCacheDirectory>$(NwbRepoRoot)\__build_obj\shader_cache\$(Platform)\$(Configuration)</NwbShaderCacheDirectory>
-  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='dbg|x64'">
     <TargetName>testbed</TargetName>
     <LocalDebuggerWorkingDirectory>$(SolutionDir)\__exec\</LocalDebuggerWorkingDirectory>
@@ -118,7 +110,16 @@
       <AdditionalOptions>/WHOLEARCHIVE:assets_graphics.lib %(AdditionalOptions)</AdditionalOptions>
     </Link>
   </ItemDefinitionGroup>
+  <ItemDefinitionGroup>
+    <PostBuildEvent>
+      <Message>Cooking NWB shaders...</Message>
+      <Command>"$(SolutionDir)__exec\$(Platform)\$(Configuration)\resource_cooker.exe" --repo-root "$(MSBuildProjectDirectory)\.." --manifest "$(SolutionDir)__exec\res\shader_manifest.nwbcook" --output-directory "$(SolutionDir)__exec\res" --cache-directory "$(MSBuildProjectDirectory)\..\__build_obj\shader_cache\$(Platform)\$(Configuration)" --configuration "$(Configuration)"</Command>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
   <ItemGroup>
+    <ProjectReference Include="..\resource_cooker\resource_cooker_win.vcxproj">
+      <Project>{54707CE8-4D88-454D-A8B8-221136264572}</Project>
+    </ProjectReference>
     <ProjectReference Include="..\loader\loader_win.vcxproj">
       <Project>{444bda19-1c4c-46a3-a9ac-944369fccd6d}</Project>
     </ProjectReference>
@@ -138,15 +139,6 @@
       <Project>{5bde19c4-41a9-4c6c-847e-1c978d315aa1}</Project>
     </ProjectReference>
   </ItemGroup>
-  <Target Name="NwbGenerateShaderManifest" BeforeTargets="NwbCookGraphicsShaders">
-    <WriteLinesToFile File="$(NwbShaderManifest)" Lines="@(NwbShaderCookManifestLine->'%(Text)')" Overwrite="true" Encoding="UTF-8" />
-  </Target>
-  <Target Name="NwbBuildResourceCooker" BeforeTargets="NwbCookGraphicsShaders">
-    <MSBuild Projects="$(NwbResourceCookerProject)" Targets="Build" Properties="Configuration=$(Configuration);Platform=$(Platform)" />
-  </Target>
-  <Target Name="NwbCookGraphicsShaders" BeforeTargets="ClCompile" DependsOnTargets="NwbGenerateShaderManifest;NwbBuildResourceCooker">
-    <Exec Command="&quot;$(NwbResourceCookerExecutable)&quot; --repo-root &quot;$(NwbRepoRoot)&quot; --manifest &quot;$(NwbShaderManifest)&quot; --output-directory &quot;$(NwbShaderOutputDirectory)&quot; --cache-directory &quot;$(NwbShaderCacheDirectory)&quot; --configuration &quot;$(Configuration)&quot;" />
-  </Target>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

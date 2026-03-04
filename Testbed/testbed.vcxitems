@@ -5,92 +5,6 @@
     <HasSharedItems>true</HasSharedItems>
     <ItemsProjectGuid>{9FD6BD47-8B94-4C90-A726-6F8FA13CFE03}</ItemsProjectGuid>
   </PropertyGroup>
-  <ItemGroup>
-    <NwbShaderCookManifestLine Include="manifest_0001">
-      <Text># NWB shader cook manifest (v1)</Text>
-    </NwbShaderCookManifestLine>
-    <NwbShaderCookManifestLine Include="manifest_0002">
-      <Text>volume.name=graphics</Text>
-    </NwbShaderCookManifestLine>
-    <NwbShaderCookManifestLine Include="manifest_0003">
-      <Text>volume.segment_size=16777216</Text>
-    </NwbShaderCookManifestLine>
-    <NwbShaderCookManifestLine Include="manifest_0004">
-      <Text>volume.metadata_size=524288</Text>
-    </NwbShaderCookManifestLine>
-    <NwbShaderCookManifestLine Include="manifest_0005">
-      <Text>include_root=core/graphics/shaders</Text>
-    </NwbShaderCookManifestLine>
-    <NwbShaderCookManifestLine Include="manifest_0006">
-      <Text>include_root=Testbed/shaders</Text>
-    </NwbShaderCookManifestLine>
-    <NwbShaderCookManifestLine Include="manifest_0007">
-      <Text>entry.begin</Text>
-    </NwbShaderCookManifestLine>
-    <NwbShaderCookManifestLine Include="manifest_0008">
-      <Text>entry.name=engine/ecs_graphics/cube.vs</Text>
-    </NwbShaderCookManifestLine>
-    <NwbShaderCookManifestLine Include="manifest_0009">
-      <Text>entry.compiler=dxc</Text>
-    </NwbShaderCookManifestLine>
-    <NwbShaderCookManifestLine Include="manifest_0010">
-      <Text>entry.stage=vs</Text>
-    </NwbShaderCookManifestLine>
-    <NwbShaderCookManifestLine Include="manifest_0011">
-      <Text>entry.target_profile=vs_6_0</Text>
-    </NwbShaderCookManifestLine>
-    <NwbShaderCookManifestLine Include="manifest_0012">
-      <Text>entry.entry_point=main</Text>
-    </NwbShaderCookManifestLine>
-    <NwbShaderCookManifestLine Include="manifest_0013">
-      <Text>entry.source=core/graphics/shaders/engine/ecs_graphics/cube.vs.hlsl</Text>
-    </NwbShaderCookManifestLine>
-    <NwbShaderCookManifestLine Include="manifest_0014">
-      <Text>entry.default_variant=NWB_PROJECT_BXDF=0;NWB_PROJECT_TINT=0</Text>
-    </NwbShaderCookManifestLine>
-    <NwbShaderCookManifestLine Include="manifest_0015">
-      <Text>entry.define.NWB_PROJECT_BXDF=0,1</Text>
-    </NwbShaderCookManifestLine>
-    <NwbShaderCookManifestLine Include="manifest_0016">
-      <Text>entry.define.NWB_PROJECT_TINT=0,1</Text>
-    </NwbShaderCookManifestLine>
-    <NwbShaderCookManifestLine Include="manifest_0017">
-      <Text>entry.end</Text>
-    </NwbShaderCookManifestLine>
-    <NwbShaderCookManifestLine Include="manifest_0018">
-      <Text>entry.begin</Text>
-    </NwbShaderCookManifestLine>
-    <NwbShaderCookManifestLine Include="manifest_0019">
-      <Text>entry.name=engine/ecs_graphics/cube.ps</Text>
-    </NwbShaderCookManifestLine>
-    <NwbShaderCookManifestLine Include="manifest_0020">
-      <Text>entry.compiler=dxc</Text>
-    </NwbShaderCookManifestLine>
-    <NwbShaderCookManifestLine Include="manifest_0021">
-      <Text>entry.stage=ps</Text>
-    </NwbShaderCookManifestLine>
-    <NwbShaderCookManifestLine Include="manifest_0022">
-      <Text>entry.target_profile=ps_6_0</Text>
-    </NwbShaderCookManifestLine>
-    <NwbShaderCookManifestLine Include="manifest_0023">
-      <Text>entry.entry_point=main</Text>
-    </NwbShaderCookManifestLine>
-    <NwbShaderCookManifestLine Include="manifest_0024">
-      <Text>entry.source=core/graphics/shaders/engine/ecs_graphics/cube.ps.hlsl</Text>
-    </NwbShaderCookManifestLine>
-    <NwbShaderCookManifestLine Include="manifest_0025">
-      <Text>entry.default_variant=NWB_PROJECT_BXDF=0;NWB_PROJECT_TINT=0</Text>
-    </NwbShaderCookManifestLine>
-    <NwbShaderCookManifestLine Include="manifest_0026">
-      <Text>entry.define.NWB_PROJECT_BXDF=0,1</Text>
-    </NwbShaderCookManifestLine>
-    <NwbShaderCookManifestLine Include="manifest_0027">
-      <Text>entry.define.NWB_PROJECT_TINT=0,1</Text>
-    </NwbShaderCookManifestLine>
-    <NwbShaderCookManifestLine Include="manifest_0028">
-      <Text>entry.end</Text>
-    </NwbShaderCookManifestLine>
-  </ItemGroup>
   <ItemDefinitionGroup>
     <ClCompile>
       <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories);$(MSBuildThisFileDirectory)</AdditionalIncludeDirectories>
@@ -102,5 +16,8 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="$(MSBuildThisFileDirectory)project_testbed.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="$(SolutionDir)__exec\res\shader_manifest.nwbcook" />
   </ItemGroup>
 </Project>

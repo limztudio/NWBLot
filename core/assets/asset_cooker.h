@@ -18,8 +18,6 @@ NWB_ASSETS_BEGIN
 
 
 struct AssetCookOptions{
-    Alloc::CustomArena* cookArena = nullptr;
-
     AString repoRoot;
     AString manifest;
     AString outputDirectory;
@@ -34,24 +32,37 @@ struct AssetCookOptions{
 
 class IAssetCooker{
 public:
+    explicit IAssetCooker(Alloc::CustomArena& arena) : m_arena(arena){}
     virtual ~IAssetCooker() = default;
 
 
 public:
     [[nodiscard]] virtual AStringView assetType()const = 0;
-    virtual bool cook(const AssetCookOptions& options, AString& outError) = 0;
+
+    virtual bool cook(const AssetCookOptions& options) = 0;
+
+
+protected:
+    Alloc::CustomArena& m_arena;
 };
 
 
 class AssetCookerRegistry final{
 public:
     bool registerCooker(UniquePtr<IAssetCooker>&& cooker);
-    bool cook(const AssetCookOptions& options, AString& outError)const;
+
+    bool cook(const AssetCookOptions& options)const;
 
 
 private:
     HashMap<AString, UniquePtr<IAssetCooker>> m_assetCookers;
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void RegisterDomainAssetCookers(AssetCookerRegistry& outRegistry, Alloc::CustomArena& arena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

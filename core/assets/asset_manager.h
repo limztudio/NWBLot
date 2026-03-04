@@ -33,7 +33,7 @@ public:
 
 
 public:
-    virtual bool readAssetBinary(AStringView virtualPath, AssetBytes& outBinary, AString& outError)const = 0;
+    virtual bool readAssetBinary(AStringView virtualPath, AssetBytes& outBinary)const = 0;
 };
 
 class IAssetAsyncExecutor{
@@ -51,7 +51,6 @@ struct AssetLoadResult{
     AssetLoadState::Enum state = AssetLoadState::Invalid;
     bool success = false;
     UniquePtr<IAsset> asset;
-    AString error;
 };
 
 
@@ -76,8 +75,7 @@ public:
     bool loadSync(
         AStringView assetType,
         AStringView virtualPath,
-        UniquePtr<IAsset>& outAsset,
-        AString& outError
+        UniquePtr<IAsset>& outAsset
     )const;
 
     [[nodiscard]] u64 enqueueLoad(AStringView assetType, AStringView virtualPath);

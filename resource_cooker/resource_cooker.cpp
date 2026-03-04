@@ -4,8 +4,6 @@
 
 #include "resource_cooker.h"
 
-#include <core/assets/asset_module.h>
-
 #include <logger/client/logger.h>
 
 
@@ -45,11 +43,11 @@ int ResourceCookerMain(int argc, char** argv){
             __hidden_resource_cooker::ResourceCookFreeAligned
         );
 
-        CookOptions options;
-        options.cookArena = &cookArena;
-        AString errorMessage;
         NWB::Core::Assets::AssetCookerRegistry assetCookerRegistry;
-        NWB::Core::Assets::RegisterDomainAssetCookers(assetCookerRegistry);
+        NWB::Core::Assets::RegisterDomainAssetCookers(assetCookerRegistry, cookArena);
+
+        CookOptions options;
+        AString errorMessage;
         if(!ParseCommandLine(argc, argv, options, errorMessage)){
             if(!errorMessage.empty())
                 NWB_CERR << errorMessage << '\n';
@@ -57,8 +55,7 @@ int ResourceCookerMain(int argc, char** argv){
             return -1;
         }
 
-        if(!assetCookerRegistry.cook(options, errorMessage)){
-            NWB_CERR << errorMessage << '\n';
+        if(!assetCookerRegistry.cook(options)){
             return -1;
         }
 

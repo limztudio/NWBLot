@@ -39,13 +39,10 @@ public:
         generation = 0;
     }
 };
-
-
 template<typename TAsset>
 [[nodiscard]] inline bool operator==(const AssetHandle<TAsset>& lhs, const AssetHandle<TAsset>& rhs){
     return lhs.index == rhs.index && lhs.generation == rhs.generation;
 }
-
 template<typename TAsset>
 [[nodiscard]] inline bool operator!=(const AssetHandle<TAsset>& lhs, const AssetHandle<TAsset>& rhs){
     return !(lhs == rhs);

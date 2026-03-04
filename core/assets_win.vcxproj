@@ -14,6 +14,11 @@
       <Platform>x64</Platform>
     </ProjectConfiguration>
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\logger\logclient_win.vcxproj">
+      <Project>{5bde19c4-41a9-4c6c-847e-1c978d315aa1}</Project>
+    </ProjectReference>
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
@@ -52,6 +57,7 @@
     <Import Project="..\configuration\basicInclude.props" />
     <Import Project="..\configuration\tbbInclude.props" />
     <Import Project="..\configuration\3rdPartyContainerInclude.props" />
+    <Import Project="..\configuration\libcurlInclude.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='opt|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
@@ -62,6 +68,7 @@
     <Import Project="..\configuration\basicInclude.props" />
     <Import Project="..\configuration\tbbInclude.props" />
     <Import Project="..\configuration\3rdPartyContainerInclude.props" />
+    <Import Project="..\configuration\libcurlInclude.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='fin|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
@@ -72,6 +79,7 @@
     <Import Project="..\configuration\basicInclude.props" />
     <Import Project="..\configuration\tbbInclude.props" />
     <Import Project="..\configuration\3rdPartyContainerInclude.props" />
+    <Import Project="..\configuration\libcurlInclude.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='dbg|x64'">

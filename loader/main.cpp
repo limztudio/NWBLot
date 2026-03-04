@@ -17,7 +17,7 @@
 #include <logger/client/logger.h>
 #include <core/common/common.h>
 #include <core/frame/frame.h>
-#include <core/assets/asset_module.h>
+#include <core/assets/asset_registry.h>
 #include <core/assets/asset_manager.h>
 #include <core/graphics/shader_archive.h>
 #include <core/filesystem/filesystem.h>
@@ -74,8 +74,13 @@ public:
 
 
 public:
-    virtual bool readAssetBinary(AStringView virtualPath, NWB::Core::Assets::AssetBytes& outBinary, AString& outError)const override{
-        return m_volumeSession.loadData(virtualPath, outBinary, outError);
+    virtual bool readAssetBinary(AStringView virtualPath, NWB::Core::Assets::AssetBytes& outBinary)const override{
+        AString loadError;
+        if(!m_volumeSession.loadData(virtualPath, outBinary, loadError)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to read asset '{}': {}"), StringConvert(virtualPath), StringConvert(loadError));
+            return false;
+        }
+        return true;
     }
 
 
@@ -86,14 +91,13 @@ private:
 
 bool LoadShaderArchiveRecords(
     const NWB::Core::Assets::IAssetBinarySource& assetBinarySource,
-    Vector<NWB::Core::ShaderArchive::Record>& outRecords,
-    AString& outError
+    Vector<NWB::Core::ShaderArchive::Record>& outRecords
 ){
     NWB::Core::Assets::AssetBytes indexBinary;
-    if(!assetBinarySource.readAssetBinary(NWB::Core::ShaderArchive::s_IndexVirtualPath, indexBinary, outError))
+    if(!assetBinarySource.readAssetBinary(NWB::Core::ShaderArchive::s_IndexVirtualPath, indexBinary))
         return false;
 
-    return NWB::Core::ShaderArchive::deserializeIndex(indexBinary, outRecords, outError);
+    return NWB::Core::ShaderArchive::deserializeIndex(indexBinary, outRecords);
 }
 
 
@@ -145,12 +149,10 @@ static int MainLogic(NotNull<const char*> logAddress, void* inst){
             NWB::Core::Assets::AssetManager assetManager(assetRegistry, assetBinarySource);
 
             Vector<NWB::Core::ShaderArchive::Record> shaderArchiveRecords;
-            AString shaderArchiveError;
-            if(!__hidden_loader::LoadShaderArchiveRecords(assetBinarySource, shaderArchiveRecords, shaderArchiveError)){
+            if(!__hidden_loader::LoadShaderArchiveRecords(assetBinarySource, shaderArchiveRecords)){
                 NWB_LOGGER_FATAL(
-                    NWB_TEXT("Failed to load shader archive index '{}': {}"),
-                    StringConvert(NWB::Core::ShaderArchive::s_IndexVirtualPath),
-                    StringConvert(shaderArchiveError)
+                    NWB_TEXT("Failed to load shader archive index '{}'"),
+                    StringConvert(NWB::Core::ShaderArchive::s_IndexVirtualPath)
                 );
                 return -1;
             }

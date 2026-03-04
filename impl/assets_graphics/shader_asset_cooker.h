@@ -44,10 +44,17 @@ struct ShaderCookResult{
 
 class ShaderAssetCooker final : public Core::Assets::IAssetCooker{
 public:
+    explicit ShaderAssetCooker(Core::Alloc::CustomArena& arena) : IAssetCooker(arena){}
+
+
+public:
     [[nodiscard]] virtual AStringView assetType()const override{ return "shader"; }
 
-    static bool CookShaderAssets(const ShaderCookEnvironment& environment, Core::Alloc::CustomArena& cookArena, ShaderCookResult& outResult, AString& outError);
-    virtual bool cook(const Core::Assets::AssetCookOptions& options, AString& outError)override;
+    virtual bool cook(const Core::Assets::AssetCookOptions& options)override;
+
+
+private:
+    bool cookShaderAssets(const ShaderCookEnvironment& environment, ShaderCookResult& outResult);
 };
 
 

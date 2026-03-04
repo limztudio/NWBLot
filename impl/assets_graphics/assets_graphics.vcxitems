@@ -14,10 +14,10 @@
     <ProjectCapability Include="SourceItemsFromImports" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="$(MSBuildThisFileDirectory)asset_registration.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)shader_asset.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)shader_asset_cooker.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)material_asset.cpp" />
-    <ClCompile Include="$(MSBuildThisFileDirectory)graphics_asset_module.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="$(MSBuildThisFileDirectory)shader_asset.h" />

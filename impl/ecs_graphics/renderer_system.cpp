@@ -216,8 +216,7 @@ bool RendererSystem::ensureShaderLoaded(
         virtualPath = Core::ShaderArchive::buildVirtualPath(shaderName, Core::ShaderArchive::s_DefaultVariant);
 
     UniquePtr<Core::Assets::IAsset> loadedAsset;
-    AString loadError;
-    if(!m_assetManager.loadSync("shader", virtualPath, loadedAsset, loadError))
+    if(!m_assetManager.loadSync("shader", virtualPath, loadedAsset))
         return false;
     if(!loadedAsset)
         return false;

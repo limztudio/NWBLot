@@ -5,13 +5,16 @@
 #pragma once
 
 
-#include "global.h"
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#if defined(NWB_COOK)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_COOK)
+#include "global.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -25,7 +28,11 @@ NWB_VULKAN_BEGIN
 
 class VulkanShaderCompiler final : public IShaderCompiler{
 public:
-    virtual bool compileVariant(const ShaderCompilerRequest& request, Vector<u8, Alloc::CustomAllocator<u8>>& outBytecode, AString& outError)override;
+    VulkanShaderCompiler(Alloc::CustomArena& memoryArena);
+
+
+public:
+    virtual bool compileVariant(const ShaderCompilerRequest& request, Vector<u8>& outBytecode)override;
 };
 
 

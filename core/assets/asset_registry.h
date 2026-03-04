@@ -32,15 +32,13 @@ public:
         AStringView assetType,
         AStringView virtualPath,
         const AssetBytes& binary,
-        UniquePtr<IAsset>& outAsset,
-        AString& outError
+        UniquePtr<IAsset>& outAsset
     )const;
 
 #if defined(NWB_COOK)
     bool serializeAsset(
         const IAsset& asset,
-        AssetBytes& outBinary,
-        AString& outError
+        AssetBytes& outBinary
     )const;
 #endif
 
@@ -49,6 +47,12 @@ private:
     mutable Futex m_mutex;
     CodecMap m_codecs;
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void RegisterDomainAssetCodecs(AssetRegistry& outRegistry);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

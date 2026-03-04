@@ -4,6 +4,8 @@
 
 #include "asset_manager.h"
 
+#include <logger/client/logger.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -29,27 +31,25 @@ void AssetManager::setAsyncExecutor(IAssetAsyncExecutor* asyncExecutor){
 bool AssetManager::loadSync(
     const AStringView assetType,
     const AStringView virtualPath,
-    UniquePtr<IAsset>& outAsset,
-    AString& outError
+    UniquePtr<IAsset>& outAsset
 )const{
     outAsset.reset();
-    outError.clear();
 
     const AString canonicalType = ::CanonicalizeText(assetType);
     if(canonicalType.empty()){
-        outError = "AssetManager: asset type is empty";
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetManager: asset type is empty"));
         return false;
     }
     if(virtualPath.empty()){
-        outError = "AssetManager: virtual path is empty";
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetManager: virtual path is empty"));
         return false;
     }
 
     AssetBytes binary;
-    if(!m_binarySource.readAssetBinary(virtualPath, binary, outError))
+    if(!m_binarySource.readAssetBinary(virtualPath, binary))
         return false;
 
-    return m_registry.deserializeAsset(canonicalType, virtualPath, binary, outAsset, outError);
+    return m_registry.deserializeAsset(canonicalType, virtualPath, binary, outAsset);
 }
 
 
@@ -189,8 +189,7 @@ void AssetManager::processRequest(const u64 requestId){
     }
 
     UniquePtr<IAsset> loadedAsset;
-    AString loadError;
-    const bool success = loadSync(assetType, virtualPath, loadedAsset, loadError);
+    const bool success = loadSync(assetType, virtualPath, loadedAsset);
 
     {
         ScopedLock lock(m_mutex);
@@ -203,7 +202,6 @@ void AssetManager::processRequest(const u64 requestId){
         request.result.state = AssetLoadState::Completed;
         request.result.success = success;
         request.result.asset = Move(loadedAsset);
-        request.result.error = Move(loadError);
     }
 }
 

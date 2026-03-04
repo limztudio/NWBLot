@@ -8,9 +8,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "vulkan_shader_compile.h"
+#include "vulkan_shader_compiler.h"
 
 #include <shaderc/shaderc.hpp>
+
+#include <logger/client/logger.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -71,16 +73,6 @@ static shaderc_source_language MapCompilerToSourceLanguage(const AStringView com
         return shaderc_source_language_hlsl;
     return shaderc_source_language_glsl;
 }
-
-static UniquePtr<IShaderCompiler> CreateVulkanShaderCompiler(){
-    return MakeUnique<VulkanShaderCompiler>();
-}
-
-static ShaderCompilerFactory s_VulkanShaderCompilerFactory = {
-    "vulkan",
-    &CreateVulkanShaderCompiler
-};
-static AutoShaderCompilerFactoryRegistration s_VulkanShaderCompilerFactoryRegistration(s_VulkanShaderCompilerFactory);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -175,16 +167,21 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool VulkanShaderCompiler::compileVariant(const ShaderCompilerRequest& request, Vector<u8, Alloc::CustomAllocator<u8>>& outBytecode, AString& outError){
+VulkanShaderCompiler::VulkanShaderCompiler(Alloc::CustomArena& memoryArena)
+    : IShaderCompiler(memoryArena)
+{}
+
+
+bool VulkanShaderCompiler::compileVariant(const ShaderCompilerRequest& request, Vector<u8>& outBytecode){
     AString sourceText;
     if(!ReadTextFile(request.sourcePath, sourceText)){
-        outError = StringFormat("Failed to read shader source '{}'", PathToString(request.sourcePath));
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to read shader source '{}'"), PathToString<tchar>(request.sourcePath));
         return false;
     }
 
     const shaderc_shader_kind shaderKind = __hidden_vulkan_shader::MapStageToShaderKind(request.stage);
     if(shaderKind == shaderc_glsl_infer_from_source){
-        outError = StringFormat("Unknown shader stage '{}' in entry '{}'", request.stage, request.shaderName);
+        NWB_LOGGER_ERROR(NWB_TEXT("Unknown shader stage '{}' in entry '{}'"), StringConvert(request.stage), StringConvert(request.shaderName));
         return false;
     }
 
@@ -210,11 +207,10 @@ bool VulkanShaderCompiler::compileVariant(const ShaderCompilerRequest& request, 
     );
 
     if(result.GetCompilationStatus() != shaderc_compilation_status_success){
-        outError = StringFormat(
-            "Shader compile failed for '{}' (variant '{}') :\n{}",
-            request.shaderName,
-            request.variantName,
-            result.GetErrorMessage()
+        NWB_LOGGER_ERROR(NWB_TEXT("Shader compile failed for '{}' (variant '{}') :\n{}"),
+            StringConvert(request.shaderName),
+            StringConvert(request.variantName),
+            StringConvert(result.GetErrorMessage())
         );
         return false;
     }
@@ -222,10 +218,9 @@ bool VulkanShaderCompiler::compileVariant(const ShaderCompilerRequest& request, 
     const usize spirvWordCount = static_cast<usize>(result.cend() - result.cbegin());
     const usize spirvSize = spirvWordCount * sizeof(u32);
     if(spirvSize == 0){
-        outError = StringFormat(
-            "Shader compile failed for '{}' (variant '{}') : compiled bytecode is empty",
-            request.shaderName,
-            request.variantName
+        NWB_LOGGER_ERROR(NWB_TEXT("Shader compile failed for '{}' (variant '{}') : compiled bytecode is empty"),
+            StringConvert(request.shaderName),
+            StringConvert(request.variantName)
         );
         return false;
     }

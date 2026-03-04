@@ -237,8 +237,7 @@ bool BuildVolume(const Path& outputDirectory, const VolumeBuildConfig& config, c
     outBuildInfo = {};
     outError.clear();
 
-    CreateDirectories(outputDirectory, errorCode);
-    if(errorCode){
+    if(!CreateDirectories(outputDirectory, errorCode)){
         outError = StringFormat(
             "Failed to create output directory '{}' : {}",
             PathToString(outputDirectory),

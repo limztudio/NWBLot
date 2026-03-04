@@ -4,6 +4,8 @@
 
 #include "material_asset.h"
 
+#include <logger/client/logger.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -33,8 +35,7 @@ static constexpr u32 s_MaterialVersion = 1u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Material::loadBinary(const AStringView virtualPath, const Core::Assets::AssetBytes& binary, AString& outError){
-    outError.clear();
+bool Material::loadBinary(const AStringView virtualPath, const Core::Assets::AssetBytes& binary){
     m_virtualPath = virtualPath;
     m_name = NAME_NONE;
     m_shaderName = NAME_NONE;
@@ -44,21 +45,21 @@ bool Material::loadBinary(const AStringView virtualPath, const Core::Assets::Ass
     usize cursor = 0;
     u32 magic = 0;
     if(!ReadPOD(binary, cursor, magic)){
-        outError = "Material::loadBinary failed: missing magic";
+        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: missing magic"));
         return false;
     }
     if(magic != __hidden_assets::s_MaterialMagic){
-        outError = "Material::loadBinary failed: invalid magic";
+        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: invalid magic"));
         return false;
     }
 
     u32 version = 0;
     if(!ReadPOD(binary, cursor, version)){
-        outError = "Material::loadBinary failed: missing version";
+        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: missing version"));
         return false;
     }
     if(version != __hidden_assets::s_MaterialVersion){
-        outError = StringFormat("Material::loadBinary failed: unsupported version {}", version);
+        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: unsupported version {}"), version);
         return false;
     }
 
@@ -69,13 +70,13 @@ bool Material::loadBinary(const AStringView virtualPath, const Core::Assets::Ass
         || !ReadPOD(binary, cursor, shaderHash)
         || !ReadPOD(binary, cursor, variantHash))
     {
-        outError = "Material::loadBinary failed: missing name hashes";
+        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: missing name hashes"));
         return false;
     }
 
     u32 parameterCount = 0;
     if(!ReadPOD(binary, cursor, parameterCount)){
-        outError = "Material::loadBinary failed: missing parameter count";
+        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: missing parameter count"));
         return false;
     }
 
@@ -87,11 +88,11 @@ bool Material::loadBinary(const AStringView virtualPath, const Core::Assets::Ass
         AString key;
         AString value;
         if(!ReadString(binary, cursor, key) || !ReadString(binary, cursor, value)){
-            outError = StringFormat("Material::loadBinary failed: malformed parameter at index {}", i);
+            NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: malformed parameter at index {}"), i);
             return false;
         }
         if(key.empty()){
-            outError = "Material::loadBinary failed: parameter key is empty";
+            NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: parameter key is empty"));
             return false;
         }
 
@@ -99,25 +100,30 @@ bool Material::loadBinary(const AStringView virtualPath, const Core::Assets::Ass
     }
 
     if(cursor != binary.size()){
-        outError = "Material::loadBinary failed: trailing bytes detected";
+        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: trailing bytes detected"));
         return false;
     }
 
     return true;
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #if defined(NWB_COOK)
 
 
-bool Material::saveBinary(Core::Assets::AssetBytes& outBinary, AString& outError)const{
-    outError.clear();
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+bool Material::saveBinary(Core::Assets::AssetBytes& outBinary)const{
     if(!m_name){
-        outError = "Material::saveBinary failed: name is empty";
+        NWB_LOGGER_ERROR(NWB_TEXT("Material::saveBinary failed: name is empty"));
         return false;
     }
     if(m_parameters.size() > Limit<u32>::s_Max){
-        outError = "Material::saveBinary failed: parameter count exceeds u32 range";
+        NWB_LOGGER_ERROR(NWB_TEXT("Material::saveBinary failed: parameter count exceeds u32 range"));
         return false;
     }
 
@@ -135,9 +141,7 @@ bool Material::saveBinary(Core::Assets::AssetBytes& outBinary, AString& outError
     for(const auto& [key, value] : m_parameters)
         sortedParams.push_back({ &key, &value });
 
-    Sort(
-        sortedParams.begin(),
-        sortedParams.end(),
+    Sort(sortedParams.begin(), sortedParams.end(),
         [](const ParamEntry& lhs, const ParamEntry& rhs){
             return *lhs.first < *rhs.first;
         }
@@ -145,7 +149,7 @@ bool Material::saveBinary(Core::Assets::AssetBytes& outBinary, AString& outError
 
     for(const auto& [key, value] : sortedParams){
         if(!AppendString(outBinary, *key) || !AppendString(outBinary, *value)){
-            outError = "Material::saveBinary failed: parameter text is too long";
+            NWB_LOGGER_ERROR(NWB_TEXT("Material::saveBinary failed: parameter text is too long"));
             return false;
         }
     }
@@ -154,7 +158,13 @@ bool Material::saveBinary(Core::Assets::AssetBytes& outBinary, AString& outError
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 void Material::setShader(const Name& shaderName, const Name& variantName){

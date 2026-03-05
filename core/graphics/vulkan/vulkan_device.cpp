@@ -114,6 +114,8 @@ Device::Device(const DeviceDesc& desc)
             m_context.extensions.KHR_synchronization2 = true;
         else if(NWB_STRCMP(ext, VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME) == 0)
             m_context.extensions.KHR_ray_tracing_pipeline = true;
+        else if(NWB_STRCMP(ext, VK_KHR_RAY_QUERY_EXTENSION_NAME) == 0)
+            m_context.extensions.KHR_ray_query = true;
         else if(NWB_STRCMP(ext, VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME) == 0)
             m_context.extensions.KHR_acceleration_structure = true;
         else if(NWB_STRCMP(ext, VK_EXT_DEBUG_UTILS_EXTENSION_NAME) == 0)
@@ -301,7 +303,7 @@ bool Device::queryFeatureSupport(Feature::Enum feature, void*, usize){
     case Feature::RayTracingPipeline:
         return m_context.extensions.KHR_ray_tracing_pipeline;
     case Feature::RayQuery:
-        return m_context.extensions.KHR_ray_tracing_pipeline;
+        return m_context.extensions.KHR_ray_query;
     case Feature::ShaderExecutionReordering:
         return m_context.extensions.NV_ray_tracing_invocation_reorder;
     case Feature::RayTracingOpacityMicromap:
@@ -522,12 +524,22 @@ usize Device::getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, Coopera
 
     if(!m_context.extensions.NV_cooperative_vector)
         return 0;
+    if(rows <= 0 || columns <= 0)
+        return 0;
 
     usize dstSize = 0;
     usize dataTypeSize = GetCooperativeVectorDataTypeSize(type);
+    const usize rowCount = static_cast<usize>(rows);
+    const usize columnCount = static_cast<usize>(columns);
+    if(rowCount > (Limit<usize>::s_Max / columnCount))
+        return 0;
+
+    const usize elementCount = rowCount * columnCount;
+    if(dataTypeSize > (Limit<usize>::s_Max / elementCount))
+        return 0;
 
     VkConvertCooperativeVectorMatrixInfoNV convertInfo = { VK_STRUCTURE_TYPE_CONVERT_COOPERATIVE_VECTOR_MATRIX_INFO_NV };
-    convertInfo.srcSize = dataTypeSize * rows * columns;
+    convertInfo.srcSize = dataTypeSize * elementCount;
     convertInfo.srcData.hostAddress = nullptr;
     convertInfo.pDstSize = &dstSize;
     convertInfo.dstData.hostAddress = nullptr;

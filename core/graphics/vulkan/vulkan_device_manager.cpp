@@ -324,9 +324,17 @@ bool DeviceManager::createInstance(){
     Alloc::ScratchArena<> scratchArena(32768);
 
     uint32_t extensionCount = 0;
-    vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
+    res = vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
+    if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate instance extension count. {}"), ResultToString(res));
+        return false;
+    }
     Vector<VkExtensionProperties, Alloc::ScratchAllocator<VkExtensionProperties>> availableExtensions(extensionCount, Alloc::ScratchAllocator<VkExtensionProperties>(scratchArena));
-    vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, availableExtensions.data());
+    res = vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, availableExtensions.data());
+    if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate instance extensions. {}"), ResultToString(res));
+        return false;
+    }
 
     for(const auto& ext : availableExtensions){
         const AString name = ext.extensionName;
@@ -355,9 +363,17 @@ bool DeviceManager::createInstance(){
     decltype(m_enabledExtensions.layers) requiredLayers(m_enabledExtensions.layers);
 
     uint32_t layerCount = 0;
-    vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
+    res = vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
+    if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate layer count. {}"), ResultToString(res));
+        return false;
+    }
     Vector<VkLayerProperties, Alloc::ScratchAllocator<VkLayerProperties>> availableLayers(layerCount, Alloc::ScratchAllocator<VkLayerProperties>(scratchArena));
-    vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
+    res = vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
+    if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate layers. {}"), ResultToString(res));
+        return false;
+    }
 
     for(const auto& layer : availableLayers){
         const AString name = layer.layerName;
@@ -530,13 +546,23 @@ bool DeviceManager::pickPhysicalDevice(){
     VkFormat requestedFormat = __hidden_vulkan::ConvertFormat(m_deviceParams.swapChainFormat);
     VkExtent2D requestedExtent = { m_deviceParams.backBufferWidth, m_deviceParams.backBufferHeight };
 
+    VkResult res = VK_SUCCESS;
+
     uint32_t deviceCount = 0;
-    vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, nullptr);
+    res = vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, nullptr);
+    if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate physical device count. {}"), ResultToString(res));
+        return false;
+    }
 
     Alloc::ScratchArena<> scratchArena(32768);
 
     Vector<VkPhysicalDevice, Alloc::ScratchAllocator<VkPhysicalDevice>> devices(deviceCount, Alloc::ScratchAllocator<VkPhysicalDevice>(scratchArena));
-    vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, devices.data());
+    res = vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, devices.data());
+    if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate physical devices. {}"), ResultToString(res));
+        return false;
+    }
 
     i32 adapterIndex = m_deviceParams.adapterIndex;
     i32 firstDevice = 0;
@@ -567,9 +593,17 @@ bool DeviceManager::pickPhysicalDevice(){
         for(const auto& [name, _] : m_enabledExtensions.device)
             requiredExtensions.insert(name);
         uint32_t extCount = 0;
-        vkEnumerateDeviceExtensionProperties(dev, nullptr, &extCount, nullptr);
+        res = vkEnumerateDeviceExtensionProperties(dev, nullptr, &extCount, nullptr);
+        if(res != VK_SUCCESS){
+            errorStream << std::endl << "  - failed to enumerate device extension count";
+            continue;
+        }
         Vector<VkExtensionProperties, Alloc::ScratchAllocator<VkExtensionProperties>> deviceExtensions(extCount, Alloc::ScratchAllocator<VkExtensionProperties>(scratchArena));
-        vkEnumerateDeviceExtensionProperties(dev, nullptr, &extCount, deviceExtensions.data());
+        res = vkEnumerateDeviceExtensionProperties(dev, nullptr, &extCount, deviceExtensions.data());
+        if(res != VK_SUCCESS){
+            errorStream << std::endl << "  - failed to enumerate device extensions";
+            continue;
+        }
         for(const auto& ext : deviceExtensions)
             requiredExtensions.erase(AString(ext.extensionName));
 
@@ -599,19 +633,38 @@ bool DeviceManager::pickPhysicalDevice(){
 
         if(deviceIsGood && m_windowSurface){
             VkBool32 surfaceSupported = VK_FALSE;
-            vkGetPhysicalDeviceSurfaceSupportKHR(dev, m_presentQueueFamily, m_windowSurface, &surfaceSupported);
-            if(!surfaceSupported){
+            res = vkGetPhysicalDeviceSurfaceSupportKHR(dev, m_presentQueueFamily, m_windowSurface, &surfaceSupported);
+            if(res != VK_SUCCESS){
+                errorStream << std::endl << "  - failed to query surface support";
+                deviceIsGood = false;
+            }
+            else if(!surfaceSupported){
                 errorStream << std::endl << "  - does not support the window surface";
                 deviceIsGood = false;
             }
             else{
                 VkSurfaceCapabilitiesKHR surfaceCaps;
-                vkGetPhysicalDeviceSurfaceCapabilitiesKHR(dev, m_windowSurface, &surfaceCaps);
+                res = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(dev, m_windowSurface, &surfaceCaps);
+                if(res != VK_SUCCESS){
+                    errorStream << std::endl << "  - failed to query surface capabilities";
+                    deviceIsGood = false;
+                    continue;
+                }
 
                 uint32_t fmtCount = 0;
-                vkGetPhysicalDeviceSurfaceFormatsKHR(dev, m_windowSurface, &fmtCount, nullptr);
+                res = vkGetPhysicalDeviceSurfaceFormatsKHR(dev, m_windowSurface, &fmtCount, nullptr);
+                if(res != VK_SUCCESS){
+                    errorStream << std::endl << "  - failed to query surface format count";
+                    deviceIsGood = false;
+                    continue;
+                }
                 Vector<VkSurfaceFormatKHR, Alloc::ScratchAllocator<VkSurfaceFormatKHR>> surfaceFmts(fmtCount, Alloc::ScratchAllocator<VkSurfaceFormatKHR>(scratchArena));
-                vkGetPhysicalDeviceSurfaceFormatsKHR(dev, m_windowSurface, &fmtCount, surfaceFmts.data());
+                res = vkGetPhysicalDeviceSurfaceFormatsKHR(dev, m_windowSurface, &fmtCount, surfaceFmts.data());
+                if(res != VK_SUCCESS){
+                    errorStream << std::endl << "  - failed to query surface formats";
+                    deviceIsGood = false;
+                    continue;
+                }
 
                 if(surfaceCaps.minImageCount > m_deviceParams.swapChainBufferCount ||
                     (surfaceCaps.maxImageCount < m_deviceParams.swapChainBufferCount && surfaceCaps.maxImageCount > 0))
@@ -639,13 +692,6 @@ bool DeviceManager::pickPhysicalDevice(){
 
                 if(!surfaceFormatPresent){
                     errorStream << std::endl << "  - does not support the requested swap chain format";
-                    deviceIsGood = false;
-                }
-
-                VkBool32 canPresent = VK_FALSE;
-                vkGetPhysicalDeviceSurfaceSupportKHR(dev, m_graphicsQueueFamily, m_windowSurface, &canPresent);
-                if(!canPresent){
-                    errorStream << std::endl << "  - cannot present";
                     deviceIsGood = false;
                 }
             }
@@ -686,9 +732,17 @@ bool DeviceManager::createDevice(){
     m_dynamicRenderingSupported = false;
 
     uint32_t extCount = 0;
-    vkEnumerateDeviceExtensionProperties(m_vulkanPhysicalDevice, nullptr, &extCount, nullptr);
+    res = vkEnumerateDeviceExtensionProperties(m_vulkanPhysicalDevice, nullptr, &extCount, nullptr);
+    if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate device extension count. {}"), ResultToString(res));
+        return false;
+    }
     Vector<VkExtensionProperties, Alloc::ScratchAllocator<VkExtensionProperties>> deviceExtensions(extCount, Alloc::ScratchAllocator<VkExtensionProperties>(scratchArena));
-    vkEnumerateDeviceExtensionProperties(m_vulkanPhysicalDevice, nullptr, &extCount, deviceExtensions.data());
+    res = vkEnumerateDeviceExtensionProperties(m_vulkanPhysicalDevice, nullptr, &extCount, deviceExtensions.data());
+    if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate device extensions. {}"), ResultToString(res));
+        return false;
+    }
 
     for(const auto& ext : deviceExtensions){
         const AString name = ext.extensionName;
@@ -747,6 +801,14 @@ bool DeviceManager::createDevice(){
     VkPhysicalDeviceFeatures2 physicalDeviceFeatures2 = {};
     physicalDeviceFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
 
+    VkPhysicalDeviceVulkan11Features supportedVulkan11Features = {};
+    supportedVulkan11Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
+    appendToChain(pNext, &supportedVulkan11Features);
+
+    VkPhysicalDeviceVulkan12Features supportedVulkan12Features = {};
+    supportedVulkan12Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+    appendToChain(pNext, &supportedVulkan12Features);
+
     VkPhysicalDeviceBufferDeviceAddressFeatures bufferDeviceAddressFeatures = {};
     bufferDeviceAddressFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
     appendToChain(pNext, &bufferDeviceAddressFeatures);
@@ -766,8 +828,49 @@ bool DeviceManager::createDevice(){
     if(coopVecExtensionEnabled)
         appendToChain(pNext, &cooperativeVectorFeatures);
 
+    for(auto& [_, feature] : m_enabledExtensions.device){
+        if(feature)
+            appendToChain(pNext, feature);
+    }
+
     physicalDeviceFeatures2.pNext = pNext;
     vkGetPhysicalDeviceFeatures2(m_vulkanPhysicalDevice, &physicalDeviceFeatures2);
+
+    auto requireFeature = [&](const VkBool32 supported, const AStringView featureName)->bool{
+        if(supported == VK_TRUE)
+            return true;
+
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Required device feature '{}' is not supported by the selected GPU."), StringConvert(featureName));
+        return false;
+    };
+
+    const VkPhysicalDeviceFeatures& supportedCoreFeatures = physicalDeviceFeatures2.features;
+    if(!requireFeature(supportedCoreFeatures.shaderImageGatherExtended, "shaderImageGatherExtended")
+        || !requireFeature(supportedCoreFeatures.samplerAnisotropy, "samplerAnisotropy")
+        || !requireFeature(supportedCoreFeatures.tessellationShader, "tessellationShader")
+        || !requireFeature(supportedCoreFeatures.textureCompressionBC, "textureCompressionBC")
+        || !requireFeature(supportedCoreFeatures.geometryShader, "geometryShader")
+        || !requireFeature(supportedCoreFeatures.imageCubeArray, "imageCubeArray")
+        || !requireFeature(supportedCoreFeatures.shaderInt16, "shaderInt16")
+        || !requireFeature(supportedCoreFeatures.fillModeNonSolid, "fillModeNonSolid")
+        || !requireFeature(supportedCoreFeatures.fragmentStoresAndAtomics, "fragmentStoresAndAtomics")
+        || !requireFeature(supportedCoreFeatures.dualSrcBlend, "dualSrcBlend")
+        || !requireFeature(supportedCoreFeatures.vertexPipelineStoresAndAtomics, "vertexPipelineStoresAndAtomics")
+        || !requireFeature(supportedCoreFeatures.shaderInt64, "shaderInt64")
+        || !requireFeature(supportedCoreFeatures.shaderStorageImageWriteWithoutFormat, "shaderStorageImageWriteWithoutFormat")
+        || !requireFeature(supportedCoreFeatures.shaderStorageImageReadWithoutFormat, "shaderStorageImageReadWithoutFormat")
+        || !requireFeature(supportedVulkan11Features.storageBuffer16BitAccess, "storageBuffer16BitAccess")
+        || !requireFeature(supportedVulkan12Features.descriptorIndexing, "descriptorIndexing")
+        || !requireFeature(supportedVulkan12Features.runtimeDescriptorArray, "runtimeDescriptorArray")
+        || !requireFeature(supportedVulkan12Features.descriptorBindingPartiallyBound, "descriptorBindingPartiallyBound")
+        || !requireFeature(supportedVulkan12Features.descriptorBindingVariableDescriptorCount, "descriptorBindingVariableDescriptorCount")
+        || !requireFeature(supportedVulkan12Features.timelineSemaphore, "timelineSemaphore")
+        || !requireFeature(supportedVulkan12Features.shaderSampledImageArrayNonUniformIndexing, "shaderSampledImageArrayNonUniformIndexing")
+        || !requireFeature(supportedVulkan12Features.shaderSubgroupExtendedTypes, "shaderSubgroupExtendedTypes")
+        || !requireFeature(supportedVulkan12Features.scalarBlockLayout, "scalarBlockLayout"))
+    {
+        return false;
+    }
 
     HashSet<i32, Hasher<i32>, EqualTo<i32>, Alloc::ScratchAllocator<i32>> uniqueQueueFamilies(0, Hasher<i32>(), EqualTo<i32>(), Alloc::ScratchAllocator<i32>(scratchArena));
     uniqueQueueFamilies.insert(m_graphicsQueueFamily);
@@ -822,37 +925,37 @@ bool DeviceManager::createDevice(){
         appendToChain(pNext, &maintenance4Features);
 
     VkPhysicalDeviceFeatures coreDeviceFeatures = {};
-    coreDeviceFeatures.shaderImageGatherExtended = VK_TRUE;
-    coreDeviceFeatures.samplerAnisotropy = VK_TRUE;
-    coreDeviceFeatures.tessellationShader = VK_TRUE;
-    coreDeviceFeatures.textureCompressionBC = VK_TRUE;
-    coreDeviceFeatures.geometryShader = VK_TRUE;
-    coreDeviceFeatures.imageCubeArray = VK_TRUE;
-    coreDeviceFeatures.shaderInt16 = VK_TRUE;
-    coreDeviceFeatures.fillModeNonSolid = VK_TRUE;
-    coreDeviceFeatures.fragmentStoresAndAtomics = VK_TRUE;
-    coreDeviceFeatures.dualSrcBlend = VK_TRUE;
-    coreDeviceFeatures.vertexPipelineStoresAndAtomics = VK_TRUE;
-    coreDeviceFeatures.shaderInt64 = VK_TRUE;
-    coreDeviceFeatures.shaderStorageImageWriteWithoutFormat = VK_TRUE;
-    coreDeviceFeatures.shaderStorageImageReadWithoutFormat = VK_TRUE;
+    coreDeviceFeatures.shaderImageGatherExtended = supportedCoreFeatures.shaderImageGatherExtended;
+    coreDeviceFeatures.samplerAnisotropy = supportedCoreFeatures.samplerAnisotropy;
+    coreDeviceFeatures.tessellationShader = supportedCoreFeatures.tessellationShader;
+    coreDeviceFeatures.textureCompressionBC = supportedCoreFeatures.textureCompressionBC;
+    coreDeviceFeatures.geometryShader = supportedCoreFeatures.geometryShader;
+    coreDeviceFeatures.imageCubeArray = supportedCoreFeatures.imageCubeArray;
+    coreDeviceFeatures.shaderInt16 = supportedCoreFeatures.shaderInt16;
+    coreDeviceFeatures.fillModeNonSolid = supportedCoreFeatures.fillModeNonSolid;
+    coreDeviceFeatures.fragmentStoresAndAtomics = supportedCoreFeatures.fragmentStoresAndAtomics;
+    coreDeviceFeatures.dualSrcBlend = supportedCoreFeatures.dualSrcBlend;
+    coreDeviceFeatures.vertexPipelineStoresAndAtomics = supportedCoreFeatures.vertexPipelineStoresAndAtomics;
+    coreDeviceFeatures.shaderInt64 = supportedCoreFeatures.shaderInt64;
+    coreDeviceFeatures.shaderStorageImageWriteWithoutFormat = supportedCoreFeatures.shaderStorageImageWriteWithoutFormat;
+    coreDeviceFeatures.shaderStorageImageReadWithoutFormat = supportedCoreFeatures.shaderStorageImageReadWithoutFormat;
 
     VkPhysicalDeviceVulkan11Features vulkan11features = {};
     vulkan11features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
-    vulkan11features.storageBuffer16BitAccess = VK_TRUE;
+    vulkan11features.storageBuffer16BitAccess = supportedVulkan11Features.storageBuffer16BitAccess;
     vulkan11features.pNext = pNext;
 
     VkPhysicalDeviceVulkan12Features vulkan12features = {};
     vulkan12features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
-    vulkan12features.descriptorIndexing = VK_TRUE;
-    vulkan12features.runtimeDescriptorArray = VK_TRUE;
-    vulkan12features.descriptorBindingPartiallyBound = VK_TRUE;
-    vulkan12features.descriptorBindingVariableDescriptorCount = VK_TRUE;
-    vulkan12features.timelineSemaphore = VK_TRUE;
-    vulkan12features.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
+    vulkan12features.descriptorIndexing = supportedVulkan12Features.descriptorIndexing;
+    vulkan12features.runtimeDescriptorArray = supportedVulkan12Features.runtimeDescriptorArray;
+    vulkan12features.descriptorBindingPartiallyBound = supportedVulkan12Features.descriptorBindingPartiallyBound;
+    vulkan12features.descriptorBindingVariableDescriptorCount = supportedVulkan12Features.descriptorBindingVariableDescriptorCount;
+    vulkan12features.timelineSemaphore = supportedVulkan12Features.timelineSemaphore;
+    vulkan12features.shaderSampledImageArrayNonUniformIndexing = supportedVulkan12Features.shaderSampledImageArrayNonUniformIndexing;
     vulkan12features.bufferDeviceAddress = bufferDeviceAddressFeatures.bufferDeviceAddress;
-    vulkan12features.shaderSubgroupExtendedTypes = VK_TRUE;
-    vulkan12features.scalarBlockLayout = VK_TRUE;
+    vulkan12features.shaderSubgroupExtendedTypes = supportedVulkan12Features.shaderSubgroupExtendedTypes;
+    vulkan12features.scalarBlockLayout = supportedVulkan12Features.scalarBlockLayout;
     vulkan12features.pNext = &vulkan11features;
 
     auto layerVec = __hidden_vulkan::StringSetToVector(m_enabledExtensions.layers, scratchArena);
@@ -946,9 +1049,99 @@ bool DeviceManager::createSwapChain(){
     m_swapChainFormat.format = __hidden_vulkan::ConvertFormat(m_deviceParams.swapChainFormat);
     m_swapChainFormat.colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 
-    VkExtent2D extent = { m_deviceParams.backBufferWidth, m_deviceParams.backBufferHeight };
+    VkSurfaceCapabilitiesKHR surfaceCaps{};
+    res = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_vulkanPhysicalDevice, m_windowSurface, &surfaceCaps);
+    if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to query surface capabilities. {}"), ResultToString(res));
+        return false;
+    }
+
+    VkExtent2D extent = {};
+    if(surfaceCaps.currentExtent.width != UINT32_MAX && surfaceCaps.currentExtent.height != UINT32_MAX){
+        extent = surfaceCaps.currentExtent;
+    }
+    else{
+        extent.width = Max(surfaceCaps.minImageExtent.width, Min(surfaceCaps.maxImageExtent.width, m_deviceParams.backBufferWidth));
+        extent.height = Max(surfaceCaps.minImageExtent.height, Min(surfaceCaps.maxImageExtent.height, m_deviceParams.backBufferHeight));
+    }
+    if(extent.width == 0 || extent.height == 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Surface extent is invalid ({}x{})."), extent.width, extent.height);
+        return false;
+    }
+
+    m_deviceParams.backBufferWidth = extent.width;
+    m_deviceParams.backBufferHeight = extent.height;
+
+    uint32_t presentModeCount = 0;
+    res = vkGetPhysicalDeviceSurfacePresentModesKHR(m_vulkanPhysicalDevice, m_windowSurface, &presentModeCount, nullptr);
+    if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate present mode count. {}"), ResultToString(res));
+        return false;
+    }
 
     Alloc::ScratchArena<> scratchArena;
+
+    Vector<VkPresentModeKHR, Alloc::ScratchAllocator<VkPresentModeKHR>> presentModes(presentModeCount, Alloc::ScratchAllocator<VkPresentModeKHR>(scratchArena));
+    res = vkGetPhysicalDeviceSurfacePresentModesKHR(m_vulkanPhysicalDevice, m_windowSurface, &presentModeCount, presentModes.data());
+    if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate present modes. {}"), ResultToString(res));
+        return false;
+    }
+
+    const VkPresentModeKHR requestedPresentMode = m_deviceParams.vsyncEnabled ? VK_PRESENT_MODE_FIFO_KHR : VK_PRESENT_MODE_IMMEDIATE_KHR;
+    VkPresentModeKHR selectedPresentMode = requestedPresentMode;
+    bool presentModeFound = false;
+    for(const auto& mode : presentModes){
+        if(mode == requestedPresentMode){
+            presentModeFound = true;
+            break;
+        }
+    }
+    if(!presentModeFound){
+        selectedPresentMode = VK_PRESENT_MODE_FIFO_KHR;
+        for(const auto& mode : presentModes){
+            if(mode == selectedPresentMode){
+                presentModeFound = true;
+                break;
+            }
+        }
+    }
+    if(!presentModeFound){
+        if(presentModes.empty()){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Surface exposes no present modes."));
+            return false;
+        }
+        selectedPresentMode = presentModes[0];
+    }
+
+    uint32_t selectedImageCount = Max(m_deviceParams.swapChainBufferCount, surfaceCaps.minImageCount);
+    if(surfaceCaps.maxImageCount > 0)
+        selectedImageCount = Min(selectedImageCount, surfaceCaps.maxImageCount);
+
+    const VkSurfaceTransformFlagBitsKHR selectedPreTransform =
+        (surfaceCaps.supportedTransforms & VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR)
+            ? VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR
+            : surfaceCaps.currentTransform;
+
+    VkCompositeAlphaFlagBitsKHR selectedCompositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+    bool compositeAlphaFound = false;
+    const VkCompositeAlphaFlagBitsKHR compositeAlphaCandidates[] = {
+        VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+        VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR,
+        VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR,
+        VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR
+    };
+    for(const auto candidate : compositeAlphaCandidates){
+        if(surfaceCaps.supportedCompositeAlpha & candidate){
+            selectedCompositeAlpha = candidate;
+            compositeAlphaFound = true;
+            break;
+        }
+    }
+    if(!compositeAlphaFound){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Surface supports no compatible composite alpha mode."));
+        return false;
+    }
 
     HashSet<uint32_t, Hasher<uint32_t>, EqualTo<uint32_t>, Alloc::ScratchAllocator<uint32_t>> uniqueQueues(0, Hasher<uint32_t>(), EqualTo<uint32_t>(), Alloc::ScratchAllocator<uint32_t>(scratchArena));
     uniqueQueues.insert(static_cast<uint32_t>(m_graphicsQueueFamily));
@@ -963,7 +1156,7 @@ bool DeviceManager::createSwapChain(){
     VkSwapchainCreateInfoKHR desc = {};
     desc.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
     desc.surface = m_windowSurface;
-    desc.minImageCount = m_deviceParams.swapChainBufferCount;
+    desc.minImageCount = selectedImageCount;
     desc.imageFormat = m_swapChainFormat.format;
     desc.imageColorSpace = m_swapChainFormat.colorSpace;
     desc.imageExtent = extent;
@@ -972,9 +1165,9 @@ bool DeviceManager::createSwapChain(){
     desc.imageSharingMode = enableSwapChainSharing ? VK_SHARING_MODE_CONCURRENT : VK_SHARING_MODE_EXCLUSIVE;
     desc.queueFamilyIndexCount = enableSwapChainSharing ? static_cast<uint32_t>(queues.size()) : 0;
     desc.pQueueFamilyIndices = enableSwapChainSharing ? queues.data() : nullptr;
-    desc.preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
-    desc.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-    desc.presentMode = m_deviceParams.vsyncEnabled ? VK_PRESENT_MODE_FIFO_KHR : VK_PRESENT_MODE_IMMEDIATE_KHR;
+    desc.preTransform = selectedPreTransform;
+    desc.compositeAlpha = selectedCompositeAlpha;
+    desc.presentMode = selectedPresentMode;
     desc.clipped = VK_TRUE;
     desc.oldSwapchain = VK_NULL_HANDLE;
 
@@ -1078,6 +1271,11 @@ bool DeviceManager::createDeviceInternal(){
     if(m_deviceParams.enableDebugRuntime)
         installDebugCallback();
 
+    if(m_deviceParams.maxFramesInFlight == 0){
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: maxFramesInFlight was 0; clamping to 1."));
+        m_deviceParams.maxFramesInFlight = 1;
+    }
+
     for(const auto& name : m_deviceParams.requiredVulkanDeviceExtensions)
         m_enabledExtensions.device.insert({ name, nullptr });
     for(const auto& name : m_deviceParams.optionalVulkanDeviceExtensions)
@@ -1130,6 +1328,10 @@ bool DeviceManager::createDeviceInternal(){
     deviceDesc.systemMemoryAllocator = &m_allocator.getSystemMemoryAllocator();
 
     m_rhiDevice = CreateDevice(deviceDesc);
+    if(!m_rhiDevice){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create RHI device wrapper."));
+        return false;
+    }
 
     return true;
 }
@@ -1236,10 +1438,20 @@ bool DeviceManager::beginFrame(){
             backBufferResizing();
 
             VkSurfaceCapabilitiesKHR surfaceCaps;
-            vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_vulkanPhysicalDevice, m_windowSurface, &surfaceCaps);
+            const VkResult surfaceResult = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_vulkanPhysicalDevice, m_windowSurface, &surfaceCaps);
+            if(surfaceResult != VK_SUCCESS){
+                NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to query surface capabilities during resize. {}"), ResultToString(surfaceResult));
+                return false;
+            }
 
-            m_deviceParams.backBufferWidth = surfaceCaps.currentExtent.width;
-            m_deviceParams.backBufferHeight = surfaceCaps.currentExtent.height;
+            if(surfaceCaps.currentExtent.width != UINT32_MAX && surfaceCaps.currentExtent.height != UINT32_MAX){
+                m_deviceParams.backBufferWidth = surfaceCaps.currentExtent.width;
+                m_deviceParams.backBufferHeight = surfaceCaps.currentExtent.height;
+            }
+            else{
+                m_deviceParams.backBufferWidth = Max(surfaceCaps.minImageExtent.width, Min(surfaceCaps.maxImageExtent.width, m_deviceParams.backBufferWidth));
+                m_deviceParams.backBufferHeight = Max(surfaceCaps.minImageExtent.height, Min(surfaceCaps.maxImageExtent.height, m_deviceParams.backBufferHeight));
+            }
 
             resizeSwapChain();
             backBufferResized();

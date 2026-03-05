@@ -101,6 +101,7 @@ struct VulkanContext{
     struct Extensions{
         bool KHR_synchronization2 = false;
         bool KHR_ray_tracing_pipeline = false;
+        bool KHR_ray_query = false;
         bool KHR_acceleration_structure = false;
         bool buffer_device_address = false;
         bool EXT_debug_utils = false;

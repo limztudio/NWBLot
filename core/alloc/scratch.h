@@ -104,7 +104,17 @@ public:
 
 public:
     inline void* allocate(usize align, usize size){
-        auto& bucket = m_bucket[FloorLog2(align)];
+        NWB_ASSERT_MSG(align != 0, NWB_TEXT("ScratchArena alignment must be non-zero"));
+        NWB_ASSERT_MSG(align <= maxAlignSize, NWB_TEXT("ScratchArena alignment exceeds maxAlignSize"));
+        if(align == 0 || align > maxAlignSize)
+            return nullptr;
+
+        const usize bucketIndex = FloorLog2(align);
+        NWB_ASSERT_MSG(bucketIndex < LengthOf(m_bucket), NWB_TEXT("ScratchArena alignment bucket index is out of range"));
+        if(bucketIndex >= LengthOf(m_bucket))
+            return nullptr;
+
+        auto& bucket = m_bucket[bucketIndex];
 
         size = Alignment(align, size);
         if(size > bucket.size)
@@ -123,6 +133,7 @@ public:
     template<typename T>
     inline T* allocate(usize count){
         static_assert(sizeof(T) > 0, "value_type must be complete before calling allocate.");
+        static_assert(alignof(T) <= maxAlignSize, "ScratchArena cannot allocate types with alignment greater than maxAlignSize.");
         const usize bytes = SizeOf<sizeof(T)>(count);
 
         T* output = nullptr;
@@ -140,7 +151,17 @@ public:
     inline void deallocate(void* p, usize align, usize size){
         (void)p;
 
-        auto& bucket = m_bucket[FloorLog2(align)];
+        NWB_ASSERT_MSG(align != 0, NWB_TEXT("ScratchArena alignment must be non-zero"));
+        NWB_ASSERT_MSG(align <= maxAlignSize, NWB_TEXT("ScratchArena alignment exceeds maxAlignSize"));
+        if(align == 0 || align > maxAlignSize)
+            return;
+
+        const usize bucketIndex = FloorLog2(align);
+        NWB_ASSERT_MSG(bucketIndex < LengthOf(m_bucket), NWB_TEXT("ScratchArena alignment bucket index is out of range"));
+        if(bucketIndex >= LengthOf(m_bucket))
+            return;
+
+        auto& bucket = m_bucket[bucketIndex];
         NWB_ASSERT_MSG(bucket.last != nullptr, NWB_TEXT("Attempted to deallocate before allocating"));
 
         size = Alignment(align, size);
@@ -149,6 +170,7 @@ public:
     template<typename T>
     inline void deallocate(void* p, usize count){
         static_assert(sizeof(T) > 0, "value_type must be complete before calling allocate.");
+        static_assert(alignof(T) <= maxAlignSize, "ScratchArena cannot deallocate types with alignment greater than maxAlignSize.");
         const usize bytes = SizeOf<sizeof(T)>(count);
 
         if(bytes){

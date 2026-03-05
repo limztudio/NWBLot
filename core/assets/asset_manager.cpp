@@ -35,8 +35,7 @@ bool AssetManager::loadSync(
 )const{
     outAsset.reset();
 
-    const AString canonicalType = ::CanonicalizeText(assetType);
-    if(canonicalType.empty()){
+    if(assetType.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetManager: asset type is empty"));
         return false;
     }
@@ -49,7 +48,7 @@ bool AssetManager::loadSync(
     if(!m_binarySource.readAssetBinary(virtualPath, binary))
         return false;
 
-    return m_registry.deserializeAsset(canonicalType, virtualPath, binary, outAsset);
+    return m_registry.deserializeAsset(assetType, virtualPath, binary, outAsset);
 }
 
 

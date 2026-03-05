@@ -327,8 +327,6 @@ bool ShaderAssetCooker::cookShaderAssets(const ShaderCookEnvironment& environmen
     outResult = {};
 
     Core::ShaderCook shaderCook(m_arena);
-    if(!shaderCook)
-        return false;
 
     __hidden_assets::ResolvedCookPaths resolvedPaths;
     if(!__hidden_assets::ResolveCookPaths(environment, resolvedPaths))
@@ -472,4 +470,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

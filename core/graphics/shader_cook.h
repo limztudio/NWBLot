@@ -99,10 +99,6 @@ public:
 
 
 public:
-    inline bool operator!()const{ return !m_compiler; }
-
-    
-public:
     inline bool compileVariant(const ShaderCompilerRequest& request, Vector<u8>& outBytecode){ return m_compiler->compileVariant(request, outBytecode); }
 
 public:

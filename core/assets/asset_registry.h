@@ -26,8 +26,6 @@ public:
     bool registerCodec(UniquePtr<IAssetCodec>&& codec, bool replaceExisting = false);
     bool unregisterCodec(AStringView assetType);
 
-    [[nodiscard]] const IAssetCodec* findCodec(AStringView assetType)const;
-
     bool deserializeAsset(
         AStringView assetType,
         AStringView virtualPath,

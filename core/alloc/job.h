@@ -27,8 +27,8 @@ public:
         u32 index = s_InvalidIndex;
         u32 generation = 0;
 
-        inline bool isValid()const{ return index != s_InvalidIndex && generation != 0; }
-        inline explicit operator bool()const{ return isValid(); }
+        inline bool valid()const{ return index != s_InvalidIndex && generation != 0; }
+        inline explicit operator bool()const{ return valid(); }
     };
 
 
@@ -168,7 +168,7 @@ public:
 
 public:
     inline void wait(JobHandle handle){
-        if(!handle.isValid())
+        if(!handle.valid())
             return;
 
         for(;;){
@@ -206,7 +206,7 @@ public:
     }
 
     inline bool isComplete(JobHandle handle)const{
-        if(!handle.isValid())
+        if(!handle.valid())
             return true;
 
         ScopedLock lock(m_mutex);
@@ -310,7 +310,7 @@ private:
     }
 
     inline JobNode* tryResolveNodeLocked(JobHandle handle){
-        if(!handle.isValid() || handle.index >= m_nodes.size())
+        if(!handle.valid() || handle.index >= m_nodes.size())
             return nullptr;
 
         JobNode& node = m_nodes[handle.index];
@@ -342,7 +342,7 @@ private:
         JobHandle current = handle;
         u32 workFirstDepth = 0;
 
-        while(current.isValid()){
+        while(current.valid()){
             JobFunction task;
             {
                 ScopedLock lock(m_mutex);
@@ -359,7 +359,7 @@ private:
 
             const bool allowInline = workFirstDepth < s_WorkFirstDepthLimit;
             const JobHandle inlineContinuation = complete(current, allowInline);
-            if(!inlineContinuation.isValid())
+            if(!inlineContinuation.valid())
                 return;
 
             current = inlineContinuation;
@@ -396,7 +396,7 @@ private:
                 if(dependentNode->remainingDependencies == 0 && !dependentNode->scheduled){
                     dependentNode->scheduled = true;
 
-                    if(allowInline && !inlineContinuation.isValid()){
+                    if(allowInline && !inlineContinuation.valid()){
                         inlineContinuation = dependentHandle;
                         continue;
                     }

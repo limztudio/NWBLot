@@ -61,7 +61,7 @@ public:
         u32 indexCount = 0;
         Format::Enum indexFormat = Format::UNKNOWN;
 
-        [[nodiscard]] bool isValid()const noexcept{
+        [[nodiscard]] bool valid()const noexcept{
             return vertexBuffer != nullptr;
         }
     };

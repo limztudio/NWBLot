@@ -56,29 +56,6 @@ public:
 };
 
 
-template<typename T>
-class AssetCodecOf : public IAssetCodec{
-public:
-    virtual bool deserialize(AStringView virtualPath, const AssetBytes& binary, UniquePtr<IAsset>& outAsset)const override{
-        auto asset = MakeUnique<T>();
-        if(!asset->loadBinary(virtualPath, binary))
-            return false;
-        outAsset = Move(asset);
-        return true;
-    }
-
-#if defined(NWB_COOK)
-    virtual bool serialize(const IAsset& asset, AssetBytes& outBinary)const override{
-        NWB_ASSERT(asset.assetType() == assetType());
-        return static_cast<const T&>(asset).saveBinary(outBinary);
-    }
-#endif
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_ASSETS_END
 
 

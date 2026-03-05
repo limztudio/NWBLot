@@ -39,7 +39,6 @@ bool AssetRegistry::registerCodec(UniquePtr<IAssetCodec>&& codec, const bool rep
     return true;
 }
 
-
 bool AssetRegistry::unregisterCodec(const AStringView assetType){
     const AString typeName = ::CanonicalizeText(assetType);
     if(typeName.empty())
@@ -49,26 +48,23 @@ bool AssetRegistry::unregisterCodec(const AStringView assetType){
     return m_codecs.erase(typeName) != 0;
 }
 
-
-const IAssetCodec* AssetRegistry::findCodec(const AStringView assetType)const{
-    const AString typeName = ::CanonicalizeText(assetType);
-    if(typeName.empty())
-        return nullptr;
-
-    ScopedLock lock(m_mutex);
-
-    const auto found = m_codecs.find(typeName);
-    if(found == m_codecs.end())
-        return nullptr;
-
-    return found.value().get();
-}
-
-
 bool AssetRegistry::deserializeAsset(const AStringView assetType, const AStringView virtualPath, const AssetBytes& binary, UniquePtr<IAsset>& outAsset)const{
     outAsset.reset();
 
-    const IAssetCodec* codec = findCodec(assetType);
+    const AString typeName = ::CanonicalizeText(assetType);
+    if(typeName.empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetRegistry: asset type is empty"));
+        return false;
+    }
+
+    const IAssetCodec* codec = nullptr;
+    {
+        ScopedLock lock(m_mutex);
+        const auto found = m_codecs.find(typeName);
+        if(found != m_codecs.end())
+            codec = found.value().get();
+    }
+
     if(codec == nullptr){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetRegistry: no codec for type '{}'"), StringConvert(assetType));
         return false;

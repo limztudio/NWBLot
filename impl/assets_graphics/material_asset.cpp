@@ -111,34 +111,57 @@ bool Material::loadBinary(const AStringView virtualPath, const Core::Assets::Ass
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+bool MaterialAssetCodec::deserialize(const AStringView virtualPath, const Core::Assets::AssetBytes& binary, UniquePtr<Core::Assets::IAsset>& outAsset)const{
+    auto asset = MakeUnique<Material>();
+    if(!asset->loadBinary(virtualPath, binary))
+        return false;
+
+    outAsset = Move(asset);
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #if defined(NWB_COOK)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Material::saveBinary(Core::Assets::AssetBytes& outBinary)const{
-    if(!m_name){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material::saveBinary failed: name is empty"));
+bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
+    if(asset.assetType() != assetType()){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("MaterialAssetCodec::serialize failed: invalid asset type '{}', expected '{}'"),
+            StringConvert(asset.assetType()),
+            StringConvert(assetType())
+        );
         return false;
     }
-    if(m_parameters.size() > Limit<u32>::s_Max){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material::saveBinary failed: parameter count exceeds u32 range"));
+
+    const Material& material = static_cast<const Material&>(asset);
+    if(!material.name()){
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: name is empty"));
+        return false;
+    }
+    if(material.parameters().size() > Limit<u32>::s_Max){
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: parameter count exceeds u32 range"));
         return false;
     }
 
     outBinary.clear();
     AppendPOD(outBinary, __hidden_assets::s_MaterialMagic);
     AppendPOD(outBinary, __hidden_assets::s_MaterialVersion);
-    AppendPOD(outBinary, m_name.hash());
-    AppendPOD(outBinary, m_shaderName.hash());
-    AppendPOD(outBinary, m_shaderVariant.hash());
-    AppendPOD(outBinary, static_cast<u32>(m_parameters.size()));
+    AppendPOD(outBinary, material.name().hash());
+    AppendPOD(outBinary, material.shaderName().hash());
+    AppendPOD(outBinary, material.shaderVariant().hash());
+    AppendPOD(outBinary, static_cast<u32>(material.parameters().size()));
 
     using ParamEntry = Pair<const AString*, const AString*>;
     Vector<ParamEntry> sortedParams;
-    sortedParams.reserve(m_parameters.size());
-    for(const auto& [key, value] : m_parameters)
+    sortedParams.reserve(material.parameters().size());
+    for(const auto& [key, value] : material.parameters())
         sortedParams.push_back({ &key, &value });
 
     Sort(sortedParams.begin(), sortedParams.end(),
@@ -149,7 +172,7 @@ bool Material::saveBinary(Core::Assets::AssetBytes& outBinary)const{
 
     for(const auto& [key, value] : sortedParams){
         if(!AppendString(outBinary, *key) || !AppendString(outBinary, *value)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material::saveBinary failed: parameter text is too long"));
+            NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: parameter text is too long"));
             return false;
         }
     }

@@ -110,7 +110,7 @@ struct SystemMemoryAllocator{
     SystemMemoryReallocateFunction reallocate = nullptr;
     SystemMemoryFreeFunction deallocate = nullptr;
 
-    [[nodiscard]] bool isValid()const noexcept{
+    [[nodiscard]] bool valid()const noexcept{
         return allocate != nullptr
             && reallocate != nullptr
             && deallocate != nullptr

@@ -392,7 +392,7 @@ bool ShaderCook::parseManifestFile(const Path& manifestPath, ManifestData& outMa
             currentEntry.compiler = currentEntry.compiler.empty() ? AString("glslang") : CanonicalizeText(currentEntry.compiler);
             currentEntry.stage = CanonicalizeText(currentEntry.stage);
             currentEntry.targetProfile = CanonicalizeText(currentEntry.targetProfile);
-            // defaultVariant contains case-sensitive preprocessor define names — must not canonicalize
+            // defaultVariant contains case-sensitive preprocessor define names; do not canonicalize
 
             outManifest.entries.push_back(Move(currentEntry));
             parsingEntry = false;

@@ -363,7 +363,7 @@ usize Graphics::getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, Coope
 }
 
 void Graphics::waitJob(JobHandle handle)const{
-    if(!handle.isValid())
+    if(!handle.valid())
         return;
 
     m_jobSystem.wait(handle);

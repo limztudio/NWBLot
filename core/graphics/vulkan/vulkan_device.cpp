@@ -91,7 +91,7 @@ Device::Device(const DeviceDesc& desc)
 {
     VkResult res = VK_SUCCESS;
 
-    if(!desc.allocationCallbacks && desc.systemMemoryAllocator && desc.systemMemoryAllocator->isValid()){
+    if(!desc.allocationCallbacks && desc.systemMemoryAllocator && desc.systemMemoryAllocator->valid()){
         m_allocationCallbacksStorage = {};
         m_allocationCallbacksStorage.pUserData = const_cast<SystemMemoryAllocator*>(desc.systemMemoryAllocator);
         m_allocationCallbacksStorage.pfnAllocation = __hidden_vulkan::VulkanSystemAllocation;

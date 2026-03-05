@@ -92,7 +92,7 @@ void RendererSystem::update(Core::ECS::World& world, f32 delta){
     for(auto [entity, cube, renderer] : cubeView){
         (void)entity;
 
-        if(renderer.mesh.isValid())
+        if(renderer.mesh.valid())
             continue;
 
         renderer.mesh = createCubeMesh(cube);
@@ -126,7 +126,7 @@ void RendererSystem::render(Core::IFramebuffer* framebuffer){
         (void)entity;
         (void)cube;
 
-        if(!renderer.visible || !renderer.mesh.isValid())
+        if(!renderer.visible || !renderer.mesh.valid())
             continue;
 
         Core::GraphicsState state;

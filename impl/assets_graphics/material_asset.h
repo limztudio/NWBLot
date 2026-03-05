@@ -26,9 +26,6 @@ public:
 
 public:
     bool loadBinary(AStringView virtualPath, const Core::Assets::AssetBytes& binary);
-#if defined(NWB_COOK)
-    bool saveBinary(Core::Assets::AssetBytes& outBinary)const;
-#endif
 
 public:
     void setName(const Name& name){ m_name = name; }
@@ -53,9 +50,15 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class MaterialAssetCodec final : public Core::Assets::AssetCodecOf<Material>{
+class MaterialAssetCodec final : public Core::Assets::IAssetCodec{
 public:
     [[nodiscard]] virtual AStringView assetType()const override{ return "material"; }
+
+public:
+    virtual bool deserialize(AStringView virtualPath, const Core::Assets::AssetBytes& binary, UniquePtr<Core::Assets::IAsset>& outAsset)const override;
+#if defined(NWB_COOK)
+    virtual bool serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const override;
+#endif
 };
 
 

@@ -35,13 +35,6 @@ public:
         UniquePtr<IAsset>& outAsset
     )const;
 
-#if defined(NWB_COOK)
-    bool serializeAsset(
-        const IAsset& asset,
-        AssetBytes& outBinary
-    )const;
-#endif
-
 
 private:
     mutable Futex m_mutex;

@@ -43,14 +43,36 @@ bool Shader::loadBinary(const AStringView virtualPath, const Core::Assets::Asset
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+bool ShaderAssetCodec::deserialize(const AStringView virtualPath, const Core::Assets::AssetBytes& binary, UniquePtr<Core::Assets::IAsset>& outAsset)const{
+    auto asset = MakeUnique<Shader>();
+    if(!asset->loadBinary(virtualPath, binary))
+        return false;
+
+    outAsset = Move(asset);
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #if defined(NWB_COOK)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Shader::saveBinary(Core::Assets::AssetBytes& outBinary)const{
-    outBinary = m_bytecode;
+bool ShaderAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
+    if(asset.assetType() != assetType()){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("ShaderAssetCodec::serialize failed: invalid asset type '{}', expected '{}'"),
+            StringConvert(asset.assetType()),
+            StringConvert(assetType())
+        );
+        return false;
+    }
+
+    outBinary = static_cast<const Shader&>(asset).bytecode();
     return true;
 }
 

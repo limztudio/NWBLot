@@ -27,9 +27,6 @@ public:
 
 public:
     bool loadBinary(AStringView virtualPath, const Core::Assets::AssetBytes& binary);
-#if defined(NWB_COOK)
-    bool saveBinary(Core::Assets::AssetBytes& outBinary)const;
-#endif
 
 
 private:
@@ -41,9 +38,14 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class ShaderAssetCodec final : public Core::Assets::AssetCodecOf<Shader>{
+class ShaderAssetCodec final : public Core::Assets::IAssetCodec{
 public:
     [[nodiscard]] virtual AStringView assetType()const override{ return "shader"; }
+
+    virtual bool deserialize(AStringView virtualPath, const Core::Assets::AssetBytes& binary, UniquePtr<Core::Assets::IAsset>& outAsset)const override;
+#if defined(NWB_COOK)
+    virtual bool serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const override;
+#endif
 };
 
 

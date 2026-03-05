@@ -213,9 +213,8 @@ public:
 public:
     constexpr void deallocate(T* const buffer, const usize count)noexcept{
         NWB_ASSERT_MSG((buffer != nullptr || count == 0), NWB_TEXT("null pointer cannot point to a block of non-zero size"));
-
-        const usize bytes = sizeof(T) * count;
-        (void)bytes;
+        (void)buffer;
+        (void)count;
     }
 
     constexpr __declspec(allocator) T* allocate(const usize count){
@@ -285,9 +284,8 @@ public:
 
     constexpr void deallocate(T* const buffer, const usize count)noexcept{
         NWB_ASSERT_MSG((buffer != nullptr || count == 0), NWB_TEXT("null pointer cannot point to a block of non-zero size"));
-
-        const usize bytes = sizeof(T) * count;
-        (void)bytes;
+        (void)buffer;
+        (void)count;
     }
 
     constexpr __declspec(allocator) T* allocate(const usize count){

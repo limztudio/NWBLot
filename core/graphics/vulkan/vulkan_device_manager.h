@@ -40,6 +40,7 @@ private:
         VkImage image;
         TextureHandle rhiHandle;
     };
+    using SemaphoreVector = Vector<VkSemaphore, Alloc::CustomAllocator<VkSemaphore>>;
 
 
 public:
@@ -86,6 +87,8 @@ private:
     bool createDevice();
     bool createSwapChain();
     void destroySwapChain();
+    void clearSemaphores(SemaphoreVector& semaphores);
+    bool recreateSemaphores(SemaphoreVector& semaphores, usize count, AStringView operationName);
 
 
 private:
@@ -194,8 +197,8 @@ private:
 
     DeviceHandle m_rhiDevice;
 
-    Vector<VkSemaphore, Alloc::CustomAllocator<VkSemaphore>> m_acquireSemaphores;
-    Vector<VkSemaphore, Alloc::CustomAllocator<VkSemaphore>> m_presentSemaphores;
+    SemaphoreVector m_acquireSemaphores;
+    SemaphoreVector m_presentSemaphores;
     u32 m_acquireSemaphoreIndex = 0;
 
     ::Queue<EventQueryHandle, Alloc::CustomAllocator<EventQueryHandle>> m_framesInFlight;

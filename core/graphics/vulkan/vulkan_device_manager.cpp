@@ -155,16 +155,22 @@ bool DeviceManager::isVulkanLayerEnabled(const char* layerName)const{
 }
 
 void DeviceManager::getEnabledVulkanInstanceExtensions(Vector<AString>& extensions)const{
+    extensions.clear();
+    extensions.reserve(m_enabledExtensions.instance.size());
     for(const auto& ext : m_enabledExtensions.instance)
         extensions.push_back(ext);
 }
 
 void DeviceManager::getEnabledVulkanDeviceExtensions(Vector<AString>& extensions)const{
+    extensions.clear();
+    extensions.reserve(m_enabledExtensions.device.size());
     for(const auto& [name, _] : m_enabledExtensions.device)
         extensions.push_back(name);
 }
 
 void DeviceManager::getEnabledVulkanLayers(Vector<AString>& layers)const{
+    layers.clear();
+    layers.reserve(m_enabledExtensions.layers.size());
     for(const auto& ext : m_enabledExtensions.layers)
         layers.push_back(ext);
 }
@@ -189,19 +195,44 @@ u32 DeviceManager::getBackBufferCount(){
     return static_cast<u32>(m_swapChainImages.size());
 }
 
-void DeviceManager::resizeSwapChain(){
-    VkResult res = VK_SUCCESS;
-
+void DeviceManager::clearSemaphores(SemaphoreVector& semaphores){
     if(m_vulkanDevice){
-        auto clearSemaphores = [&](Vector<VkSemaphore, Alloc::CustomAllocator<VkSemaphore>>& semaphores){
-            for(auto& semaphore : semaphores){
-                if(semaphore)
-                    vkDestroySemaphore(m_vulkanDevice, semaphore, nullptr);
-                semaphore = VK_NULL_HANDLE;
-            }
-            semaphores.clear();
-        };
+        for(auto& semaphore : semaphores){
+            if(semaphore)
+                vkDestroySemaphore(m_vulkanDevice, semaphore, nullptr);
+            semaphore = VK_NULL_HANDLE;
+        }
+    }
+    semaphores.clear();
+}
 
+bool DeviceManager::recreateSemaphores(SemaphoreVector& semaphores, const usize count, const AStringView operationName){
+    clearSemaphores(semaphores);
+    semaphores.reserve(count);
+
+    VkSemaphoreCreateInfo semInfo = {};
+    semInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+    for(usize i = 0; i < count; ++i){
+        VkSemaphore sem = VK_NULL_HANDLE;
+        const VkResult res = vkCreateSemaphore(m_vulkanDevice, &semInfo, nullptr, &sem);
+        if(res != VK_SUCCESS){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Vulkan: Failed to {}. {}"),
+                StringConvert(operationName),
+                ResultToString(res)
+            );
+            clearSemaphores(semaphores);
+            return false;
+        }
+        semaphores.push_back(sem);
+    }
+
+    return true;
+}
+
+void DeviceManager::resizeSwapChain(){
+    if(m_vulkanDevice){
         destroySwapChain();
         if(!createSwapChain()){
             clearSemaphores(m_presentSemaphores);
@@ -211,43 +242,19 @@ void DeviceManager::resizeSwapChain(){
 
         const usize requiredPresentSemaphores = m_swapChainImages.size();
         if(m_presentSemaphores.size() != requiredPresentSemaphores){
-            clearSemaphores(m_presentSemaphores);
-            m_presentSemaphores.reserve(requiredPresentSemaphores);
-
-            for(usize i = 0; i < requiredPresentSemaphores; ++i){
-                VkSemaphoreCreateInfo semInfo = {};
-                semInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-                VkSemaphore sem = VK_NULL_HANDLE;
-                res = vkCreateSemaphore(m_vulkanDevice, &semInfo, nullptr, &sem);
-                if(res != VK_SUCCESS){
-                    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to recreate present semaphore during resize. {}"), ResultToString(res));
-                    clearSemaphores(m_presentSemaphores);
-                    clearSemaphores(m_acquireSemaphores);
-                    destroySwapChain();
-                    return;
-                }
-                m_presentSemaphores.push_back(sem);
+            if(!recreateSemaphores(m_presentSemaphores, requiredPresentSemaphores, "recreate present semaphores during resize")){
+                clearSemaphores(m_acquireSemaphores);
+                destroySwapChain();
+                return;
             }
         }
 
         const usize requiredAcquireSemaphores = Max<usize>(m_deviceParams.maxFramesInFlight, m_swapChainImages.size());
         if(m_acquireSemaphores.size() != requiredAcquireSemaphores){
-            clearSemaphores(m_acquireSemaphores);
-            m_acquireSemaphores.reserve(requiredAcquireSemaphores);
-
-            for(usize i = 0; i < requiredAcquireSemaphores; ++i){
-                VkSemaphoreCreateInfo semInfo = {};
-                semInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-                VkSemaphore sem = VK_NULL_HANDLE;
-                res = vkCreateSemaphore(m_vulkanDevice, &semInfo, nullptr, &sem);
-                if(res != VK_SUCCESS){
-                    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to recreate acquire semaphore during resize. {}"), ResultToString(res));
-                    clearSemaphores(m_presentSemaphores);
-                    clearSemaphores(m_acquireSemaphores);
-                    destroySwapChain();
-                    return;
-                }
-                m_acquireSemaphores.push_back(sem);
+            if(!recreateSemaphores(m_acquireSemaphores, requiredAcquireSemaphores, "recreate acquire semaphores during resize")){
+                clearSemaphores(m_presentSemaphores);
+                destroySwapChain();
+                return;
             }
         }
 
@@ -1128,58 +1135,21 @@ bool DeviceManager::createDeviceInternal(){
 }
 
 bool DeviceManager::createSwapChainInternal(){
-    VkResult res = VK_SUCCESS;
-
     if(!createSwapChain())
         return false;
 
-    auto cleanupSwapchainSemaphores = [&](){
-        for(auto& semaphore : m_presentSemaphores){
-            if(semaphore)
-                vkDestroySemaphore(m_vulkanDevice, semaphore, nullptr);
-            semaphore = VK_NULL_HANDLE;
-        }
-        m_presentSemaphores.clear();
-
-        for(auto& semaphore : m_acquireSemaphores){
-            if(semaphore)
-                vkDestroySemaphore(m_vulkanDevice, semaphore, nullptr);
-            semaphore = VK_NULL_HANDLE;
-        }
-        m_acquireSemaphores.clear();
-
-        destroySwapChain();
-    };
-
     usize const numPresentSemaphores = m_swapChainImages.size();
-    m_presentSemaphores.reserve(numPresentSemaphores);
-    for(u32 i = 0; i < numPresentSemaphores; ++i){
-        VkSemaphoreCreateInfo semInfo = {};
-        semInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-        VkSemaphore sem = VK_NULL_HANDLE;
-        res = vkCreateSemaphore(m_vulkanDevice, &semInfo, nullptr, &sem);
-        if(res != VK_SUCCESS){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create present semaphore. {}"), ResultToString(res));
-            cleanupSwapchainSemaphores();
-            return false;
-        }
-        m_presentSemaphores.push_back(sem);
+    if(!recreateSemaphores(m_presentSemaphores, numPresentSemaphores, "create present semaphores")){
+        destroySwapChain();
+        return false;
     }
 
     usize const numAcquireSemaphores = (m_deviceParams.maxFramesInFlight > m_swapChainImages.size())
         ? m_deviceParams.maxFramesInFlight : m_swapChainImages.size();
-    m_acquireSemaphores.reserve(numAcquireSemaphores);
-    for(u32 i = 0; i < numAcquireSemaphores; ++i){
-        VkSemaphoreCreateInfo semInfo = {};
-        semInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-        VkSemaphore sem = VK_NULL_HANDLE;
-        res = vkCreateSemaphore(m_vulkanDevice, &semInfo, nullptr, &sem);
-        if(res != VK_SUCCESS){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create acquire semaphore. {}"), ResultToString(res));
-            cleanupSwapchainSemaphores();
-            return false;
-        }
-        m_acquireSemaphores.push_back(sem);
+    if(!recreateSemaphores(m_acquireSemaphores, numAcquireSemaphores, "create acquire semaphores")){
+        clearSemaphores(m_presentSemaphores);
+        destroySwapChain();
+        return false;
     }
 
     m_swapChainIndex = 0;
@@ -1198,21 +1168,8 @@ void DeviceManager::destroyDeviceAndSwapChain(){
 
     destroySwapChain();
 
-    for(auto& semaphore : m_presentSemaphores){
-        if(semaphore){
-            vkDestroySemaphore(m_vulkanDevice, semaphore, nullptr);
-            semaphore = VK_NULL_HANDLE;
-        }
-    }
-    m_presentSemaphores.clear();
-
-    for(auto& semaphore : m_acquireSemaphores){
-        if(semaphore){
-            vkDestroySemaphore(m_vulkanDevice, semaphore, nullptr);
-            semaphore = VK_NULL_HANDLE;
-        }
-    }
-    m_acquireSemaphores.clear();
+    clearSemaphores(m_presentSemaphores);
+    clearSemaphores(m_acquireSemaphores);
 
     m_rhiDevice = nullptr;
     m_rendererString.clear();

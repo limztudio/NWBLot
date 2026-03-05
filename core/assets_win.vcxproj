@@ -15,6 +15,9 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="common_win.vcxproj">
+      <Project>{89FA56D0-3DDA-4AF6-8970-2DFBF76D4B47}</Project>
+    </ProjectReference>
     <ProjectReference Include="..\logger\logclient_win.vcxproj">
       <Project>{5bde19c4-41a9-4c6c-847e-1c978d315aa1}</Project>
     </ProjectReference>

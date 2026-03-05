@@ -15,6 +15,7 @@
 
 #include <core/filesystem/filesystem.h>
 #include <core/alloc/core.h>
+#include <core/assets/asset_auto_registration.h>
 
 #include <logger/client/logger.h>
 
@@ -35,6 +36,12 @@ namespace __hidden_assets{
 
 
 static constexpr AStringView s_DefaultVariant = "default";
+
+
+UniquePtr<Core::Assets::IAssetCooker> CreateShaderAssetCooker(Core::Alloc::CustomArena& arena){
+    return MakeUnique<ShaderAssetCooker>(arena);
+}
+Core::Assets::AssetCookerAutoRegistrar s_ShaderAssetCookerAutoRegistrar(&CreateShaderAssetCooker);
 
 
 static AString NormalizeVariantName(const Core::ShaderCook::ManifestEntry& entry, const AStringView generatedVariantName){
@@ -470,3 +477,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

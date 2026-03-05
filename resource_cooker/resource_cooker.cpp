@@ -5,6 +5,8 @@
 #include "resource_cooker.h"
 
 #include <logger/client/logger.h>
+#include <core/common/common.h>
+#include <core/assets/asset_auto_registration.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -21,6 +23,15 @@ static void ResourceCookFree(void* ptr){ NWB::Core::Alloc::CoreFree(ptr, "resour
 static void* ResourceCookAllocAligned(usize size, usize align){ return NWB::Core::Alloc::CoreAllocAligned(size, align, "resource_cook"); }
 static void ResourceCookFreeAligned(void* ptr){ NWB::Core::Alloc::CoreFreeAligned(ptr, "resource_cook"); }
 
+struct CommonInitializerGuard{
+    bool active = false;
+
+    ~CommonInitializerGuard(){
+        if(active)
+            NWB::Core::Common::Initializer::instance().finalize();
+    }
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -33,6 +44,11 @@ static void ResourceCookFreeAligned(void* ptr){ NWB::Core::Alloc::CoreFreeAligne
 
 int ResourceCookerMain(int argc, char** argv){
     try{
+        __hidden_resource_cooker::CommonInitializerGuard commonInitializerGuard;
+        if(!NWB::Core::Common::Initializer::instance().initialize())
+            return -1;
+        commonInitializerGuard.active = true;
+
         NWB::Log::Client logger;
         NWB_LOGGER_REGISTER(&logger);
 
@@ -44,7 +60,7 @@ int ResourceCookerMain(int argc, char** argv){
         );
 
         NWB::Core::Assets::AssetCookerRegistry assetCookerRegistry;
-        NWB::Core::Assets::RegisterDomainAssetCookers(assetCookerRegistry, cookArena);
+        NWB::Core::Assets::RegisterAutoCollectedAssetCookers(assetCookerRegistry, cookArena);
 
         CookOptions options;
         AString errorMessage;

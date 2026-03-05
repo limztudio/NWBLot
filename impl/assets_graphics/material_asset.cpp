@@ -5,6 +5,7 @@
 #include "material_asset.h"
 
 #include <logger/client/logger.h>
+#include <core/assets/asset_auto_registration.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -24,6 +25,12 @@ namespace __hidden_assets{
 
 static constexpr u32 s_MaterialMagic = 0x4D544C31u; // MTL1
 static constexpr u32 s_MaterialVersion = 1u;
+
+
+UniquePtr<Core::Assets::IAssetCodec> CreateMaterialAssetCodec(){
+    return MakeUnique<MaterialAssetCodec>();
+}
+Core::Assets::AssetCodecAutoRegistrar s_MaterialAssetCodecAutoRegistrar(&CreateMaterialAssetCodec);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

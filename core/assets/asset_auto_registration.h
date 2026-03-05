@@ -1,0 +1,73 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include "asset_registry.h"
+#include "asset_cooker.h"
+#include <core/common/common.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ASSETS_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using AssetCodecFactory = UniquePtr<IAssetCodec>(*)();
+using AssetCookerFactory = UniquePtr<IAssetCooker>(*)(Alloc::CustomArena& arena);
+
+
+class AssetCodecAutoRegistrar final : public Core::Common::Initializerable{
+public:
+    explicit AssetCodecAutoRegistrar(AssetCodecFactory factory)
+        : m_factory(factory)
+    {}
+
+
+public:
+    virtual bool initialize()override;
+    virtual void finalize()override{}
+
+
+private:
+    AssetCodecFactory m_factory = nullptr;
+};
+
+class AssetCookerAutoRegistrar final : public Core::Common::Initializerable{
+public:
+    explicit AssetCookerAutoRegistrar(AssetCookerFactory factory)
+        : m_factory(factory)
+    {}
+
+
+public:
+    virtual bool initialize()override;
+    virtual void finalize()override{}
+
+
+private:
+    AssetCookerFactory m_factory = nullptr;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void RegisterAutoCollectedAssetCodecs(AssetRegistry& outRegistry);
+void RegisterAutoCollectedAssetCookers(AssetCookerRegistry& outRegistry, Alloc::CustomArena& arena);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ASSETS_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -9,11 +9,13 @@
     <ProjectCapability Include="SourceItemsFromImports" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="$(MSBuildThisFileDirectory)assets\asset_auto_registration.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)assets\asset_cooker.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)assets\asset_registry.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)assets\asset_manager.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="$(MSBuildThisFileDirectory)assets\asset_auto_registration.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)assets\global.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)assets\asset.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)assets\asset_cooker.h" />

@@ -19,6 +19,7 @@
 #include <core/frame/frame.h>
 #include <core/assets/asset_registry.h>
 #include <core/assets/asset_manager.h>
+#include <core/assets/asset_auto_registration.h>
 #include <core/graphics/shader_archive.h>
 #include <core/filesystem/filesystem.h>
 
@@ -144,7 +145,7 @@ static int MainLogic(NotNull<const char*> logAddress, void* inst){
             __hidden_loader::VolumeAssetBinarySource assetBinarySource(graphicsVolume);
 
             NWB::Core::Assets::AssetRegistry assetRegistry;
-            NWB::Core::Assets::RegisterDomainAssetCodecs(assetRegistry);
+            NWB::Core::Assets::RegisterAutoCollectedAssetCodecs(assetRegistry);
 
             NWB::Core::Assets::AssetManager assetManager(assetRegistry, assetBinarySource);
 

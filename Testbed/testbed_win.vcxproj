@@ -43,6 +43,7 @@
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='dbg|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
     <Import Project="..\configuration\generalOutput.props" />
+    <Import Project="..\configuration\assetCook.props" />
     <Import Project="..\configuration\dbgCodeGen_win.props" />
     <Import Project="..\configuration\simdAVX2.props" />
     <Import Project="..\configuration\unicodeChar.props" />
@@ -56,6 +57,7 @@
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='opt|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
     <Import Project="..\configuration\generalOutput.props" />
+    <Import Project="..\configuration\assetCook.props" />
     <Import Project="..\configuration\optCodeGen_win.props" />
     <Import Project="..\configuration\simdAVX2.props" />
     <Import Project="..\configuration\unicodeChar.props" />
@@ -69,6 +71,7 @@
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='fin|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
     <Import Project="..\configuration\generalOutput.props" />
+    <Import Project="..\configuration\assetCook.props" />
     <Import Project="..\configuration\finCodeGen_win.props" />
     <Import Project="..\configuration\simdAVX2.props" />
     <Import Project="..\configuration\unicodeChar.props" />
@@ -109,12 +112,6 @@
       <SubSystem>Windows</SubSystem>
       <AdditionalOptions>/WHOLEARCHIVE:assets_graphics.lib %(AdditionalOptions)</AdditionalOptions>
     </Link>
-  </ItemDefinitionGroup>
-  <ItemDefinitionGroup>
-    <PostBuildEvent>
-      <Message>Cooking NWB shaders...</Message>
-      <Command>"$(SolutionDir)__exec\$(Platform)\$(Configuration)\resource_cooker.exe" --repo-root "$(MSBuildProjectDirectory)\.." --manifest "$(SolutionDir)__exec\res\shader_manifest.nwbcook" --output-directory "$(SolutionDir)__exec\res" --cache-directory "$(MSBuildProjectDirectory)\..\__build_obj\shader_cache\$(Platform)\$(Configuration)" --configuration "$(Configuration)"</Command>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ProjectReference Include="..\resource_cooker\resource_cooker_win.vcxproj">

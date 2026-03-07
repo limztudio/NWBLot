@@ -6,6 +6,7 @@
 
 
 #include <chrono>
+#include <ctime>
 
 #include "basic_string.h"
 
@@ -108,6 +109,22 @@ inline Timer s_VeryBegining = TimerNow();
 
 
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] inline bool GetLocalTime(std::tm& outTime){
+    const auto now = std::time(nullptr);
+    if(now == static_cast<std::time_t>(-1))
+        return false;
+
+#if defined(_MSC_VER)
+    return localtime_s(&outTime, &now) == 0;
+#else
+    return localtime_r(&now, &outTime) != nullptr;
+#endif
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

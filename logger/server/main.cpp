@@ -22,7 +22,7 @@
 static int MainLogic(u16 logPort, void* inst){
     {
         NWB::Log::Server logger;
-        if(!logger.init(logPort))
+        if(!logger.init(logPort, NWB_TEXT("logserver")))
             return -1;
         NWB_LOGGER_REGISTER(&logger);
 

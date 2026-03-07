@@ -8,6 +8,10 @@
 #include <filesystem>
 #include <fstream>
 
+#if defined(NWB_PLATFORM_WINDOWS)
+#include <windows.h>
+#endif
+
 #include "generic.h"
 #include "type.h"
 #include "limit.h"
@@ -19,6 +23,45 @@
 using Path = std::filesystem::path;
 
 using DirectoryIterator = std::filesystem::directory_iterator;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] inline bool GetExecutablePath(Path& outPath){
+#if defined(NWB_PLATFORM_WINDOWS)
+    constexpr usize s_MaxPathLength = 4096;
+    wchar executablePathBuffer[s_MaxPathLength] = {};
+    const DWORD copiedLength = GetModuleFileNameW(nullptr, executablePathBuffer, static_cast<DWORD>(s_MaxPathLength));
+    if(copiedLength == 0 || copiedLength >= static_cast<DWORD>(s_MaxPathLength))
+        return false;
+
+    outPath = Path(executablePathBuffer);
+    return true;
+#else
+    ErrorCode errorCode;
+    outPath = std::filesystem::current_path(errorCode);
+    return !errorCode;
+#endif
+}
+
+[[nodiscard]] inline bool GetExecutableDirectory(Path& outDirectory){
+    Path executablePath;
+    if(!GetExecutablePath(executablePath))
+        return false;
+
+    outDirectory = executablePath.parent_path();
+    return !outDirectory.empty();
+}
+
+[[nodiscard]] inline bool GetExecutableName(Path& outName){
+    Path executablePath;
+    if(!GetExecutablePath(executablePath))
+        return false;
+
+    outName = executablePath.stem();
+    return !outName.empty();
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

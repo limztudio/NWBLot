@@ -339,7 +339,7 @@ private:
     }
 
     static inline void processParallelFor(ParallelForDesc* pf){
-        while(true){
+        for(;;){
             const usize c = pf->nextChunk.fetch_add(1, std::memory_order_relaxed);
             if(c >= pf->numChunks)
                 break;

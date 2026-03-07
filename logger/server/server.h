@@ -39,7 +39,7 @@ public:
 
 
 protected:
-    bool internalInit(u16 port);
+    bool internalInit(u16 port, BasicStringView<tchar> logFileNameBase = {});
     bool internalUpdate();
 
 protected:
@@ -49,6 +49,7 @@ protected:
 
 private:
     MHD_Daemon* m_daemon;
+    ProcessedMessageFile m_processedMsgFile;
 };
 
 

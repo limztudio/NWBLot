@@ -1007,7 +1007,7 @@ bool VolumeFileSystem::ensureCapacityLocked(const u64 requiredBytes){
         return false;
     }
 
-    while(true){
+    for(;;){
         const u64 segmentCount = static_cast<u64>(m_segmentPaths.size());
         if(segmentCount > Limit<u64>::s_Max / m_segmentSize){
             __hidden_filesystem::LogFailure(m_volumeName, "ensureCapacity", "capacity overflow while computing current volume size");

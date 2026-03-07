@@ -49,7 +49,9 @@ int ResourceCookerMain(int argc, char** argv){
             return -1;
         commonInitializerGuard.active = true;
 
-        NWB::Log::Client logger;
+        NWB::Log::ClientStandalone logger;
+        if(!logger.init(NWB_TEXT("resource_cooker")))
+            return -1;
         NWB_LOGGER_REGISTER(&logger);
 
         NWB::Core::Alloc::CustomArena cookArena(

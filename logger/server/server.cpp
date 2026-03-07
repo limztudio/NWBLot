@@ -136,31 +136,33 @@ Server::~Server(){
         MHD_stop_daemon(m_daemon);
         m_daemon = nullptr;
     }
+
+    stopWorker();
+    m_processedMsgFile.close();
 }
 
-bool Server::internalInit(u16 port){
+bool Server::internalInit(u16 port, BasicStringView<tchar> logFileNameBase){
+    if(logFileNameBase.empty()){
+        if(!m_processedMsgFile.openByExecutableName())
+            return false;
+    }
+    else{
+        if(!m_processedMsgFile.open(logFileNameBase))
+            return false;
+    }
+
     m_daemon = MHD_start_daemon(MHD_USE_INTERNAL_POLLING_THREAD, port, nullptr, nullptr, &Server::requestCallback, this, MHD_OPTION_END);
 
-    return true;
+    return m_daemon != nullptr;
 }
 bool Server::internalUpdate(){
     MessageType msg;
     while(tryDequeue(msg)){
-        const auto& [time, type, str] = msg;
-        switch(type){
-        case Type::Info:
-            Frame::print(StringFormat(NWB_TEXT("{} [INFO]:\n{}"), DurationInTimeDelta(time), str), type);
-            break;
-        case Type::Warning:
-            Frame::print(StringFormat(NWB_TEXT("{} [WARNING]:\n{}"), DurationInTimeDelta(time), str), type);
-            break;
-        case Type::Error:
-            Frame::print(StringFormat(NWB_TEXT("{} [ERROR]:\n{}"), DurationInTimeDelta(time), str), type);
-            break;
-        case Type::Fatal:
-            Frame::print(StringFormat(NWB_TEXT("{} [FATAL]:\n{}"), DurationInTimeDelta(time), str), type);
-            break;
-        }
+        const auto type = Get<1>(msg);
+        const TString formattedMessage = FormatMessageForProcessing(msg);
+
+        Frame::print(formattedMessage, type);
+        m_processedMsgFile.writeLine(formattedMessage);
     }
 
     return true;

@@ -73,6 +73,8 @@ Client::Client()
     , m_msgCount(0)
 {}
 Client::~Client(){
+    stopWorker();
+
     if(m_curl){
         curl_easy_cleanup(m_curl);
         m_curl = nullptr;
@@ -121,7 +123,7 @@ bool Client::internalInit(NotNull<const char*> url){
     return true;
 }
 bool Client::internalUpdate(){
-    if(!m_msgCount.load(MemoryOrder::memory_order_acquire))
+    if(!m_msgCount.load(MemoryOrder::memory_order_relaxed))
         return true;
 
     CURLcode ret;
@@ -130,6 +132,41 @@ bool Client::internalUpdate(){
     if(ret != CURLE_OK){
         enqueue(StringFormat(NWB_TEXT("Failed to perform on {}: {}"), CLIENT_NAME, StringConvert(curl_easy_strerror(ret))), Type::Error);
         return true;
+    }
+
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool ClientStandalone::globalInit(){
+    return true;
+}
+
+
+ClientStandalone::ClientStandalone(){
+}
+ClientStandalone::~ClientStandalone(){
+    stopWorker();
+    m_processedMsgFile.close();
+}
+
+
+bool ClientStandalone::internalInit(BasicStringView<tchar> logFileNameBase){
+    if(logFileNameBase.empty())
+        return m_processedMsgFile.openByExecutableName();
+
+    return m_processedMsgFile.open(logFileNameBase);
+}
+bool ClientStandalone::internalUpdate(){
+    MessageType msg;
+    while(tryDequeue(msg)){
+        const TString formattedMessage = FormatMessageForProcessing(msg);
+
+        NWB_TCOUT << formattedMessage << static_cast<tchar>('\n');
+        m_processedMsgFile.writeLine(formattedMessage);
     }
 
     return true;

@@ -7,6 +7,8 @@
 
 #include "global.h"
 
+#include <fstream>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -31,6 +33,98 @@ using MessageQueue = ParallelQueue<MessageType>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[[nodiscard]] inline const tchar* MessageTypeToString(Type type){
+    switch(type){
+    case Type::Info:
+        return NWB_TEXT("INFO");
+    case Type::Warning:
+        return NWB_TEXT("WARNING");
+    case Type::Error:
+        return NWB_TEXT("ERROR");
+    case Type::Fatal:
+        return NWB_TEXT("FATAL");
+    }
+    return NWB_TEXT("UNKNOWN");
+}
+
+[[nodiscard]] inline TString FormatMessageForProcessing(const MessageType& msg){
+    const auto& [time, type, str] = msg;
+    return StringFormat(NWB_TEXT("{} [{}]:\n{}"), DurationInTimeDelta(time), MessageTypeToString(type), str);
+}
+
+
+class ProcessedMessageFile{
+public:
+    using StreamType = std::basic_ofstream<tchar>;
+
+
+public:
+    ProcessedMessageFile() = default;
+    ~ProcessedMessageFile(){ close(); }
+
+
+public:
+    bool open(BasicStringView<tchar> fileNameBase){
+        close();
+        if(fileNameBase.empty())
+            return false;
+
+        std::tm localTime = {};
+        if(!GetLocalTime(localTime))
+            return false;
+
+        Path executableDirectory;
+        if(!GetExecutableDirectory(executableDirectory))
+            return false;
+
+        const TString fileName = StringFormat(
+            NWB_TEXT("{}_{:04}{:02}{:02}_{:02}{:02}{:02}.log"),
+            fileNameBase,
+            localTime.tm_year + 1900,
+            localTime.tm_mon + 1,
+            localTime.tm_mday,
+            localTime.tm_hour,
+            localTime.tm_min,
+            localTime.tm_sec
+        );
+        m_filePath = executableDirectory / fileName;
+
+        m_stream.open(m_filePath, std::ios::out | std::ios::app);
+        return m_stream.is_open();
+    }
+    bool openByExecutableName(){
+        Path executableName;
+        if(!GetExecutableName(executableName))
+            return false;
+
+        const TString executableNameString = PathToString<tchar>(executableName);
+        return open(executableNameString);
+    }
+
+    void close(){
+        if(m_stream.is_open())
+            m_stream.close();
+    }
+
+    bool writeLine(BasicStringView<tchar> line){
+        if(!m_stream.is_open())
+            return false;
+
+        m_stream << line << static_cast<tchar>('\n');
+        m_stream.flush();
+        return m_stream.good();
+    }
+
+
+private:
+    StreamType m_stream;
+    Path m_filePath;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<typename T, const tchar* NAME>
 class Base{
 protected:
@@ -39,13 +133,10 @@ protected:
 
 public:
     Base()
-        :  m_exit(false)
+        : m_exit(false)
     {}
     virtual ~Base(){
-        m_exit.store(true, MemoryOrder::memory_order_release);
-        static_cast<T*>(this)->internalDestroy();
-        if(m_thread.joinable())
-            m_thread.join();
+        stopWorker();
     }
 
 
@@ -57,6 +148,14 @@ protected:
 
 protected:
     inline bool tryDequeue(MessageType& msg){ return m_msgQueue.try_pop(msg); }
+    void stopWorker(){
+        const bool alreadyStopping = m_exit.exchange(true, MemoryOrder::memory_order_acq_rel);
+
+        if(!alreadyStopping)
+            static_cast<T*>(this)->internalDestroy();
+        if(m_thread.joinable())
+            m_thread.join();
+    }
 
 
 public:

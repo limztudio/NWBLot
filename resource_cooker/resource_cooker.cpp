@@ -68,7 +68,7 @@ int ResourceCookerMain(int argc, char** argv){
         AString errorMessage;
         if(!ParseCommandLine(argc, argv, options, errorMessage)){
             if(!errorMessage.empty())
-                NWB_CERR << errorMessage << '\n';
+                NWB_LOGGER_ERROR(NWB_TEXT("Failed to parse command line: {}"), StringConvert(errorMessage));
             PrintUsage();
             return -1;
         }

@@ -66,8 +66,18 @@ template<typename CharT>
 }
 
 
+[[nodiscard]] inline bool ParseI64FromChars(const char* begin, const char* end, i64& outValue){
+    const auto parseResult = std::from_chars(begin, end, outValue, 10);
+    return parseResult.ec == std::errc() && parseResult.ptr == end;
+}
+
 [[nodiscard]] inline bool ParseU64FromChars(const char* begin, const char* end, u64& outValue){
     const auto parseResult = std::from_chars(begin, end, outValue, 10);
+    return parseResult.ec == std::errc() && parseResult.ptr == end;
+}
+
+[[nodiscard]] inline bool ParseF64FromChars(const char* begin, const char* end, f64& outValue){
+    const auto parseResult = std::from_chars(begin, end, outValue);
     return parseResult.ec == std::errc() && parseResult.ptr == end;
 }
 

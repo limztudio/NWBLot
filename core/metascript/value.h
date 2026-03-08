@@ -43,7 +43,7 @@ public:
     explicit Value(Alloc::CustomArena& arena);
     Value(i64 val, Alloc::CustomArena& arena);
     Value(f64 val, Alloc::CustomArena& arena);
-    Value(AStringView val, Alloc::CustomArena& arena);
+    Value(MStringView val, Alloc::CustomArena& arena);
     ~Value();
     Value(const Value& other);
     Value(Value&& other)noexcept;
@@ -74,7 +74,7 @@ public:
     [[nodiscard]] i64 asInteger()const;
     [[nodiscard]] f64 asDouble()const;
     [[nodiscard]] f64 toDouble()const;
-    [[nodiscard]] AStringView asString()const;
+    [[nodiscard]] MStringView asString()const;
     [[nodiscard]] const ListType& asList()const;
     [[nodiscard]] ListType& asList();
     [[nodiscard]] const MapType& asMap()const;
@@ -82,14 +82,30 @@ public:
 
     void setInteger(i64 val);
     void setDouble(f64 val);
-    void setString(AStringView val);
+    void setString(MStringView val);
     void makeList();
     void makeMap();
 
-    Value& field(AStringView name);
-    [[nodiscard]] const Value* findField(AStringView name)const;
+    Value& field(MStringView name);
+    [[nodiscard]] const Value* findField(MStringView name)const;
 
     void append(Value&& val);
+
+    [[nodiscard]] AString copyString()const;
+
+    template<typename Container>
+    [[nodiscard]] bool copyStringList(Container& outList)const{
+        if(!isList())
+            return false;
+        const auto& list = asList();
+        outList.reserve(list.size());
+        for(const auto& elem : list){
+            if(!elem.isString())
+                return false;
+            outList.push_back(elem.copyString());
+        }
+        return true;
+    }
 
 
 private:
@@ -97,7 +113,7 @@ private:
     void copyFrom(const Value& other);
     void moveFrom(Value&& other)noexcept;
 
-    [[nodiscard]] StringType makeArenaString(AStringView sv)const;
+    [[nodiscard]] StringType makeArenaString(MStringView sv)const;
     [[nodiscard]] ListType* allocList()const;
     [[nodiscard]] MapType* allocMap()const;
     void freeList(ListType* p);

@@ -49,11 +49,6 @@ int ResourceCookerMain(int argc, char** argv){
             return -1;
         commonInitializerGuard.active = true;
 
-        NWB::Log::ClientStandalone logger;
-        if(!logger.init(NWB_TEXT("resource_cooker")))
-            return -1;
-        NWB_LOGGER_REGISTER(&logger);
-
         NWB::Core::Alloc::CustomArena cookArena(
             __hidden_resource_cooker::ResourceCookAlloc,
             __hidden_resource_cooker::ResourceCookFree,
@@ -80,12 +75,11 @@ int ResourceCookerMain(int argc, char** argv){
         return 0;
     }
     catch(const GeneralException& e){
-        const AString exceptionMessage = StringFormat("Unhandled exception: {}", e.what());
-        NWB_CERR << exceptionMessage << '\n';
+        NWB_LOGGER_FATAL(NWB_TEXT("Unhandled exception: {}"), StringConvert(e.what()));
         return -1;
     }
     catch(...){
-        NWB_CERR << "Unhandled exception" << '\n';
+        NWB_LOGGER_FATAL(NWB_TEXT("Unhandled exception"));
         return -1;
     }
 }

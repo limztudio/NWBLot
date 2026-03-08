@@ -13,7 +13,7 @@
 static void ConfigureCommandLineOptions(CLI::App& outApp, CookOptions& outOptions){
     outApp.add_option("--repo-root", outOptions.repoRoot, "Repository root path")
         ->required();
-    outApp.add_option("--manifest", outOptions.manifest, "Cook manifest path")
+    outApp.add_option("--asset-root", outOptions.assetRoots, "Asset root directories to scan for .nwb files")
         ->required();
     outApp.add_option("--output-directory", outOptions.outputDirectory, "Output volume directory path")
         ->required();

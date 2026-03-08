@@ -166,19 +166,23 @@ static int MainLogic(NotNull<const char*> logAddress, void* inst){
                 assetManager,
                 {},
             };
-            context.shaderPathResolver = [&shaderArchiveRecords](const AStringView shaderName, const AStringView variantName, AString& outVirtualPath){
+            context.shaderPathResolver = [&shaderArchiveRecords](const AStringView shaderName, const AStringView variantName, const AStringView stageName, AString& outVirtualPath){
                 const AString shaderNameText(shaderName);
                 const AString variantNameText(variantName.empty() ? NWB::Core::ShaderArchive::s_DefaultVariant : variantName);
+                const AString stageNameText(stageName);
+                if(stageNameText.empty())
+                    return false;
 
                 if(NWB::Core::ShaderArchive::findVirtualPath(
                     shaderArchiveRecords,
                     shaderNameText,
                     variantNameText,
+                    stageNameText,
                     outVirtualPath
                 ))
                     return true;
 
-                outVirtualPath = NWB::Core::ShaderArchive::buildVirtualPath(shaderNameText, variantNameText);
+                outVirtualPath = NWB::Core::ShaderArchive::buildVirtualPath(shaderNameText, variantNameText, stageNameText);
                 return true;
             };
 

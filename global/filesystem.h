@@ -12,6 +12,7 @@
 #include <windows.h>
 #endif
 
+#include "basic_string.h"
 #include "generic.h"
 #include "type.h"
 #include "limit.h"
@@ -23,6 +24,16 @@
 using Path = std::filesystem::path;
 
 using DirectoryIterator = std::filesystem::directory_iterator;
+using RecursiveDirectoryIterator = std::filesystem::recursive_directory_iterator;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct StagedDirectoryPaths{
+    Path stageDirectory;
+    Path backupDirectory;
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -94,6 +105,47 @@ using DirectoryIterator = std::filesystem::directory_iterator;
 [[nodiscard]] inline bool RemoveFile(const Path& path, ErrorCode& outError)noexcept{
     std::filesystem::remove(path, outError);
     return !outError;
+}
+
+[[nodiscard]] inline bool RemoveAll(const Path& path, ErrorCode& outError)noexcept{
+    std::filesystem::remove_all(path, outError);
+    return !outError;
+}
+
+[[nodiscard]] inline bool RenamePath(const Path& from, const Path& to, ErrorCode& outError)noexcept{
+    std::filesystem::rename(from, to, outError);
+    return !outError;
+}
+
+
+[[nodiscard]] inline bool RemoveAllIfExists(const Path& path, ErrorCode& outError)noexcept{
+    outError.clear();
+
+    const bool exists = FileExists(path, outError);
+    if(outError || !exists)
+        return !outError;
+
+    outError.clear();
+    return RemoveAll(path, outError);
+}
+
+[[nodiscard]] inline bool EnsureEmptyDirectory(const Path& path, ErrorCode& outError)noexcept{
+    if(!RemoveAllIfExists(path, outError))
+        return false;
+
+    outError.clear();
+    return CreateDirectories(path, outError);
+}
+
+[[nodiscard]] inline StagedDirectoryPaths BuildStagedDirectoryPaths(const Path& outputDirectory, const AStringView stageToken){
+    const Path stageBaseDirectory = outputDirectory.parent_path().empty()
+        ? outputDirectory
+        : outputDirectory.parent_path();
+
+    StagedDirectoryPaths output;
+    output.stageDirectory = stageBaseDirectory / StringFormat(".{}_stage", stageToken);
+    output.backupDirectory = stageBaseDirectory / StringFormat(".{}_backup", stageToken);
+    return output;
 }
 
 

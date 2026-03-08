@@ -12,6 +12,8 @@
 
 #include "vulkan/vulkan_shader_compiler.h"
 
+#include <core/metascript/parser.h>
+
 #include <logger/client/logger.h>
 
 
@@ -28,30 +30,23 @@ namespace __hidden_shader_cook{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// asset type keywords
 
 
-static bool ParseDefineValues(const AStringView valueText, ShaderCook::CookVector<AString>& outValues){
-    outValues.clear();
+static constexpr AStringView s_AssetTypeShader = "shader";
+static constexpr AStringView s_AssetTypeInclude = "include";
 
-    usize begin = 0;
-    while(begin <= valueText.size()){
-        usize commaPos = valueText.find(',', begin);
-        if(commaPos == AStringView::npos)
-            commaPos = valueText.size();
-
-        const AString value = Trim(valueText.substr(begin, commaPos - begin));
-        if(value.empty())
-            return false;
-
-        outValues.push_back(value);
-        if(commaPos == valueText.size())
-            break;
-
-        begin = commaPos + 1;
-    }
-
-    return true;
+static AString CanonicalAssetType(const Metascript::Document& doc){
+    const auto assetType = doc.assetType();
+    return CanonicalizeText(AString(assetType.data(), assetType.size()));
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// HLSL source parsing - #include extraction and resolution
+
+
+static constexpr AStringView s_HlslIncludeDirective = "include";
 
 static bool ExtractIncludeName(const AStringView line, AString& outIncludeName){
     outIncludeName.clear();
@@ -67,10 +62,9 @@ static bool ExtractIncludeName(const AStringView line, AString& outIncludeName){
     while(cursor < line.size() && IsAsciiSpace(line[cursor]))
         ++cursor;
 
-    static constexpr AStringView s_IncludeKeyword = "include";
-    if(line.substr(cursor, s_IncludeKeyword.size()) != s_IncludeKeyword)
+    if(line.substr(cursor, s_HlslIncludeDirective.size()) != s_HlslIncludeDirective)
         return false;
-    cursor += s_IncludeKeyword.size();
+    cursor += s_HlslIncludeDirective.size();
 
     while(cursor < line.size() && IsAsciiSpace(line[cursor]))
         ++cursor;
@@ -91,21 +85,43 @@ static bool ResolveIncludeFile(const AStringView includeName, const Path& source
     ErrorCode errorCode;
 
     const Path localCandidate = (sourceDirectory / Path(includeName)).lexically_normal();
+    errorCode.clear();
     if(FileExists(localCandidate, errorCode)){
         outPath = localCandidate;
         return true;
     }
+    if(errorCode){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Failed to query include candidate '{}': {}"),
+            PathToString<tchar>(localCandidate),
+            StringConvert(errorCode.message())
+        );
+        return false;
+    }
 
     for(const Path& includeDirectory : includeDirectories){
         const Path includeCandidate = (includeDirectory / Path(includeName)).lexically_normal();
+        errorCode.clear();
         if(FileExists(includeCandidate, errorCode)){
             outPath = includeCandidate;
             return true;
+        }
+        if(errorCode){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Failed to query include candidate '{}': {}"),
+                PathToString<tchar>(includeCandidate),
+                StringConvert(errorCode.message())
+            );
+            return false;
         }
     }
 
     return false;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// HLSL dependency collection
 
 
 template <typename ScratchArena>
@@ -171,44 +187,48 @@ static bool CollectDependencies(const Path& startPath, const ShaderCook::CookVec
 }
 
 
-template <typename ScratchArena>
-static bool ValidateDefaultVariant(const ShaderCook::ManifestEntry& entry, ScratchArena& scratchArena){
-    if(entry.defaultVariant.empty())
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// shader entry validation
+
+
+template <typename DefineMap, typename ScratchArena>
+static bool ValidateDefaultVariant(const AStringView contextLabel, const AStringView defaultVariant, const DefineMap& defineValues, ScratchArena& scratchArena){
+    if(defaultVariant.empty())
         return true;
 
-    if(entry.defaultVariant == "default"){
-        if(entry.defineValues.empty())
+    if(defaultVariant == "default"){
+        if(defineValues.empty())
             return true;
 
         NWB_LOGGER_ERROR(
-            NWB_TEXT("Manifest parsing failed: entry '{}' default variant 'default' is only valid when no entry.define.* values are specified"),
-            StringConvert(entry.name)
-            );
+            NWB_TEXT("Meta '{}': default variant 'default' is only valid when no defines are specified"),
+            StringConvert(contextLabel)
+        );
         return false;
     }
 
-    if(entry.defineValues.empty()){
+    if(defineValues.empty()){
         NWB_LOGGER_ERROR(
-            NWB_TEXT("Manifest parsing failed: entry '{}' default variant '{}' requires entry.define.* values to be specified"),
-            StringConvert(entry.name),
-            StringConvert(entry.defaultVariant)
+            NWB_TEXT("Meta '{}': default variant '{}' requires defines to be specified"),
+            StringConvert(contextLabel),
+            StringConvert(defaultVariant)
         );
         return false;
     }
 
     HashSet<Name, Hasher<Name>, EqualTo<Name>, Alloc::ScratchAllocator<Name>> seenDefines{Alloc::ScratchAllocator<Name>(scratchArena)};
     usize begin = 0;
-    while(begin < entry.defaultVariant.size()){
-        usize segmentEnd = entry.defaultVariant.find(';', begin);
+    while(begin < defaultVariant.size()){
+        usize segmentEnd = defaultVariant.find(';', begin);
         if(segmentEnd == AString::npos)
-            segmentEnd = entry.defaultVariant.size();
+            segmentEnd = defaultVariant.size();
 
-        const AString segment = Trim(AStringView(entry.defaultVariant).substr(begin, segmentEnd - begin));
+        const AString segment = Trim(defaultVariant.substr(begin, segmentEnd - begin));
         if(segment.empty()){
             NWB_LOGGER_ERROR(
-                NWB_TEXT("Manifest parsing failed: entry '{}' default variant '{}' has invalid empty segment"),
-                StringConvert(entry.name),
-                StringConvert(entry.defaultVariant)
+                NWB_TEXT("Meta '{}': default variant '{}' has invalid empty segment"),
+                StringConvert(contextLabel),
+                StringConvert(defaultVariant)
             );
             return false;
         }
@@ -216,9 +236,9 @@ static bool ValidateDefaultVariant(const ShaderCook::ManifestEntry& entry, Scrat
         const usize equalPos = segment.find('=');
         if(equalPos == AString::npos || equalPos == 0 || equalPos + 1 >= segment.size()){
             NWB_LOGGER_ERROR(
-                NWB_TEXT("Manifest parsing failed: entry '{}' default variant '{}' has invalid assignment '{}'"),
-                StringConvert(entry.name),
-                StringConvert(entry.defaultVariant),
+                NWB_TEXT("Meta '{}': default variant '{}' has invalid assignment '{}'"),
+                StringConvert(contextLabel),
+                StringConvert(defaultVariant),
                 StringConvert(segment)
             );
             return false;
@@ -228,19 +248,21 @@ static bool ValidateDefaultVariant(const ShaderCook::ManifestEntry& entry, Scrat
         const AString defineValue = Trim(AStringView(segment).substr(equalPos + 1));
         if(defineName.empty() || defineValue.empty()){
             NWB_LOGGER_ERROR(
-                NWB_TEXT("Manifest parsing failed: entry '{}' default variant '{}' has invalid assignment '{}'"),
-                StringConvert(entry.name),
-                StringConvert(entry.defaultVariant),
+                NWB_TEXT("Meta '{}': default variant '{}' has invalid assignment '{}'"),
+                StringConvert(contextLabel),
+                StringConvert(defaultVariant),
                 StringConvert(segment)
             );
             return false;
         }
-        const auto defineIt = entry.defineValues.find(Name(defineName.c_str()));
-        if(defineIt == entry.defineValues.end()){
+
+        const Name defineNameId(defineName.c_str());
+        const auto defineIt = defineValues.find(defineNameId);
+        if(defineIt == defineValues.end()){
             NWB_LOGGER_ERROR(
-                NWB_TEXT("Manifest parsing failed: entry '{}' default variant '{}' references unknown define '{}'"),
-                StringConvert(entry.name),
-                StringConvert(entry.defaultVariant),
+                NWB_TEXT("Meta '{}': default variant '{}' references unknown define '{}'"),
+                StringConvert(contextLabel),
+                StringConvert(defaultVariant),
                 StringConvert(defineName)
             );
             return false;
@@ -255,20 +277,20 @@ static bool ValidateDefaultVariant(const ShaderCook::ManifestEntry& entry, Scrat
         }
         if(!valueFound){
             NWB_LOGGER_ERROR(
-                NWB_TEXT("Manifest parsing failed: entry '{}' default variant '{}' has unsupported value '{}' for define '{}'"),
-                StringConvert(entry.name),
-                StringConvert(entry.defaultVariant),
+                NWB_TEXT("Meta '{}': default variant '{}' has unsupported value '{}' for define '{}'"),
+                StringConvert(contextLabel),
+                StringConvert(defaultVariant),
                 StringConvert(defineValue),
                 StringConvert(defineName)
             );
             return false;
         }
 
-        if(!seenDefines.insert(Name(defineName.c_str())).second){
+        if(!seenDefines.insert(defineNameId).second){
             NWB_LOGGER_ERROR(
-                NWB_TEXT("Manifest parsing failed: entry '{}' default variant '{}' assigns define '{}' more than once"),
-                StringConvert(entry.name),
-                StringConvert(entry.defaultVariant),
+                NWB_TEXT("Meta '{}': default variant '{}' assigns define '{}' more than once"),
+                StringConvert(contextLabel),
+                StringConvert(defaultVariant),
                 StringConvert(defineName)
             );
             return false;
@@ -277,11 +299,11 @@ static bool ValidateDefaultVariant(const ShaderCook::ManifestEntry& entry, Scrat
         begin = segmentEnd + 1;
     }
 
-    if(seenDefines.size() != entry.defineValues.size()){
+    if(seenDefines.size() != defineValues.size()){
         NWB_LOGGER_ERROR(
-            NWB_TEXT("Manifest parsing failed: entry '{}' default variant '{}' must assign all defines"),
-            StringConvert(entry.name),
-            StringConvert(entry.defaultVariant)
+            NWB_TEXT("Meta '{}': default variant '{}' must assign all defines"),
+            StringConvert(contextLabel),
+            StringConvert(defaultVariant)
         );
         return false;
     }
@@ -289,22 +311,145 @@ static bool ValidateDefaultVariant(const ShaderCook::ManifestEntry& entry, Scrat
     return true;
 }
 
-template <typename ScratchArena>
-static bool ValidateManifestEntries(const ShaderCook::CookVector<ShaderCook::ManifestEntry>& entries, ScratchArena& scratchArena){
-    HashSet<Name, Hasher<Name>, EqualTo<Name>, Alloc::ScratchAllocator<Name>> uniqueEntryNames{Alloc::ScratchAllocator<Name>(scratchArena)};
-    for(const ShaderCook::ManifestEntry& entry : entries){
-        const Name entryName(entry.name.c_str());
-        if(!uniqueEntryNames.insert(entryName).second){
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// .nwb metadata parsing helpers
+
+
+static AString SourcePathFromNwb(const Path& nwbFilePath){
+    Path sourcePath = nwbFilePath;
+    sourcePath.replace_extension();
+    return PathToString(sourcePath);
+}
+
+static bool ParseNwbDocument(const Path& nwbFilePath, Metascript::Document& outDoc){
+    AString metaText;
+    if(!ReadTextFile(nwbFilePath, metaText)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to read meta '{}'"), PathToString<tchar>(nwbFilePath));
+        return false;
+    }
+    StripUtf8Bom(metaText);
+
+    if(!outDoc.parse(AStringView(metaText))){
+        for(const Metascript::ParseError& err : outDoc.errors()){
             NWB_LOGGER_ERROR(
-                NWB_TEXT("Manifest parsing failed: duplicated entry.name '{}' is not allowed"),
-                StringConvert(entry.name)
+                NWB_TEXT("Meta '{}' parse error at {}:{}: {}"),
+                PathToString<tchar>(nwbFilePath),
+                err.line,
+                err.column,
+                StringConvert(AStringView(err.message.data(), err.message.size()))
+            );
+        }
+        return false;
+    }
+    return true;
+}
+
+static bool ParseDefaultVariant(const Path& nwbFilePath, const Metascript::Value& asset, AString& outDefaultVariant){
+    outDefaultVariant.clear();
+
+    const auto* defaultVariantVal = asset.findField("default_variant");
+    if(!defaultVariantVal)
+        return true;
+
+    if(defaultVariantVal->isList()){
+        const auto& list = defaultVariantVal->asList();
+        for(usize i = 0; i < list.size(); ++i){
+            if(!list[i].isString()){
+                NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': default_variant list elements must be strings"), PathToString<tchar>(nwbFilePath));
+                return false;
+            }
+            if(i > 0)
+                outDefaultVariant += ';';
+            outDefaultVariant += list[i].copyString();
+        }
+    }
+    else if(defaultVariantVal->isString()){
+        outDefaultVariant = defaultVariantVal->copyString();
+    }
+    else{
+        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': default_variant must be a string or list of strings"), PathToString<tchar>(nwbFilePath));
+        return false;
+    }
+    return true;
+}
+
+static bool ParseStringField(
+    const Path& nwbFilePath,
+    const Metascript::Value& asset,
+    const AStringView fieldName,
+    AString& outValue,
+    const bool canonicalize
+){
+    const auto* fieldValue = asset.findField(fieldName);
+    if(!fieldValue)
+        return true;
+    if(!fieldValue->isString()){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Meta '{}': field '{}' must be a string"),
+            PathToString<tchar>(nwbFilePath),
+            StringConvert(fieldName)
+        );
+        return false;
+    }
+
+    outValue = fieldValue->copyString();
+    if(canonicalize)
+        outValue = CanonicalizeText(outValue);
+    return true;
+}
+
+static bool ParseDefines(const Path& nwbFilePath, const Metascript::Value& asset, ShaderCook::CookArena& arena, ShaderCook::CookMap<Name, ShaderCook::DefineEntry>& outDefineValues){
+    outDefineValues.clear();
+
+    const auto* definesVal = asset.findField("defines");
+    if(!definesVal)
+        return true;
+
+    if(!definesVal->isMap()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': defines must be a map"), PathToString<tchar>(nwbFilePath));
+        return false;
+    }
+
+    const auto defineAllocator = ShaderCook::CookAllocator<AString>(arena);
+    const auto& definesMap = definesVal->asMap();
+    for(const auto& [key, val] : definesMap){
+        const AString defineName(key.data(), key.size());
+        if(defineName.empty()){
+            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': define names must not be empty"), PathToString<tchar>(nwbFilePath));
+            return false;
+        }
+
+        ShaderCook::CookVector<AString> defineValues(defineAllocator);
+        if(!val.copyStringList(defineValues)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': define '{}' values must be a list of strings"), PathToString<tchar>(nwbFilePath), StringConvert(defineName));
+            return false;
+        }
+        if(defineValues.empty()){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Meta '{}': define '{}' must provide at least one value"),
+                PathToString<tchar>(nwbFilePath),
+                StringConvert(defineName)
             );
             return false;
         }
-        if(!ValidateDefaultVariant(entry, scratchArena))
-            return false;
-    }
+        for(const AString& defineValue : defineValues){
+            if(!defineValue.empty())
+                continue;
 
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Meta '{}': define '{}' values must not be empty"),
+                PathToString<tchar>(nwbFilePath),
+                StringConvert(defineName)
+            );
+            return false;
+        }
+
+        outDefineValues.insert_or_assign(Name(defineName.c_str()), ShaderCook::DefineEntry{defineName, Move(defineValues)});
+    }
     return true;
 }
 
@@ -328,228 +473,149 @@ ShaderCook::ShaderCook(CookArena& memoryArena)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ShaderCook::parseManifestFile(const Path& manifestPath, ManifestData& outManifest){
-    outManifest = ManifestData(m_memoryArena);
+bool ShaderCook::parseDocument(const Path& nwbFilePath, Metascript::Document& outDoc){
+    return __hidden_shader_cook::ParseNwbDocument(nwbFilePath, outDoc);
+}
 
-    AString manifestText;
-    if(!ReadTextFile(manifestPath, manifestText)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Failed to read manifest '{}'"),
-            PathToString<tchar>(manifestPath)
-        );
-        return false;
-    }
-    StripUtf8Bom(manifestText);
-
-    bool parsingEntry = false;
-    ManifestEntry currentEntry(m_memoryArena);
-
-    AStringStream stream(manifestText);
-    AString line;
-    usize lineNumber = 0;
-    while(ReadTextLine(stream, line)){
-        ++lineNumber;
-
-        TrimTrailingCarriageReturn(line);
-
-        const AString trimmed = Trim(line);
-        if(trimmed.empty())
-            continue;
-        if(trimmed[0] == '#')
-            continue;
-
-        if(trimmed == "entry.begin"){
-            if(parsingEntry){
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("Manifest line {}: nested entry.begin is not allowed"),
-                    lineNumber
-                );
-                return false;
-            }
-
-            parsingEntry = true;
-            currentEntry = ManifestEntry(m_memoryArena);
-            continue;
-        }
-        if(trimmed == "entry.end"){
-            if(!parsingEntry){
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("Manifest line {}: entry.end without entry.begin"),
-                    lineNumber
-                );
-                return false;
-            }
-
-            if(currentEntry.name.empty() || currentEntry.stage.empty() || currentEntry.source.empty()){
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("Manifest line {}: entry requires name/stage/source (entry.name, entry.stage, entry.source)"),
-                    lineNumber
-                );
-                return false;
-            }
-
-            currentEntry.name = CanonicalizeText(currentEntry.name);
-            currentEntry.compiler = currentEntry.compiler.empty() ? AString("glslang") : CanonicalizeText(currentEntry.compiler);
-            currentEntry.stage = CanonicalizeText(currentEntry.stage);
-            currentEntry.targetProfile = CanonicalizeText(currentEntry.targetProfile);
-            // defaultVariant contains case-sensitive preprocessor define names; do not canonicalize
-
-            outManifest.entries.push_back(Move(currentEntry));
-            parsingEntry = false;
-            continue;
-        }
-
-        const usize equalPos = trimmed.find('=');
-        if(equalPos == AString::npos){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Manifest line {}: expected key=value"),
-                lineNumber
-            );
-            return false;
-        }
-
-        const AString key = Trim(AStringView(trimmed).substr(0, equalPos));
-        const AString value = Trim(AStringView(trimmed).substr(equalPos + 1));
-        if(key.empty()){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Manifest line {}: key is empty"),
-                lineNumber
-            );
-            return false;
-        }
-
-        if(!parsingEntry){
-            if(key == "volume.name"){
-                outManifest.volumeName = CanonicalizeText(value);
-                continue;
-            }
-            if(key == "volume.segment_size"){
-                u64 parsedValue = 0;
-                if(!ParseU64(value, parsedValue) || parsedValue == 0){
-                    NWB_LOGGER_ERROR(
-                        NWB_TEXT("Manifest line {}: invalid volume.segment_size '{}'"),
-                        lineNumber,
-                        StringConvert(value)
-                    );
-                    return false;
-                }
-                outManifest.segmentSize = parsedValue;
-                continue;
-            }
-            if(key == "volume.metadata_size"){
-                u64 parsedValue = 0;
-                if(!ParseU64(value, parsedValue)){
-                    NWB_LOGGER_ERROR(
-                        NWB_TEXT("Manifest line {}: invalid volume.metadata_size '{}'"),
-                        lineNumber,
-                        StringConvert(value)
-                    );
-                    return false;
-                }
-                outManifest.metadataSize = parsedValue;
-                continue;
-            }
-            if(key == "include_root"){
-                if(value.empty()){
-                    NWB_LOGGER_ERROR(
-                        NWB_TEXT("Manifest line {}: include_root cannot be empty"),
-                        lineNumber
-                    );
-                    return false;
-                }
-                outManifest.includeRoots.push_back(value);
-                continue;
-            }
-
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Manifest line {}: unsupported global key '{}'"),
-                lineNumber,
-                StringConvert(key)
-            );
-            return false;
-        }
-
-        if(key == "entry.name"){
-            currentEntry.name = value;
-            continue;
-        }
-        if(key == "entry.compiler"){
-            currentEntry.compiler = value;
-            continue;
-        }
-        if(key == "entry.stage"){
-            currentEntry.stage = value;
-            continue;
-        }
-        if(key == "entry.target_profile"){
-            currentEntry.targetProfile = value;
-            continue;
-        }
-        if(key == "entry.entry_point"){
-            currentEntry.entryPoint = value.empty() ? AString("main") : value;
-            continue;
-        }
-        if(key == "entry.source"){
-            currentEntry.source = value;
-            continue;
-        }
-        if(key == "entry.default_variant"){
-            currentEntry.defaultVariant = value;
-            continue;
-        }
-
-        static constexpr AStringView s_EntryDefinePrefix = "entry.define.";
-        if(key.starts_with(s_EntryDefinePrefix)){
-            const AString defineName = Trim(AStringView(key).substr(s_EntryDefinePrefix.size()));
-            if(defineName.empty()){
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("Manifest line {}: define key is empty"),
-                    lineNumber
-                );
-                return false;
-            }
-
-            CookVector<AString> defineValues{CookAllocator<AString>(m_memoryArena)};
-            if(!__hidden_shader_cook::ParseDefineValues(value, defineValues)){
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("Manifest line {}: define '{}' has invalid values '{}'"),
-                    lineNumber,
-                    StringConvert(defineName),
-                    StringConvert(value)
-                );
-                return false;
-            }
-
-            currentEntry.defineValues.insert_or_assign(Name(defineName.c_str()), DefineEntry{defineName, Move(defineValues)});
-            continue;
-        }
-
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Manifest line {}: unsupported entry key '{}'"),
-            lineNumber,
-            StringConvert(key)
-        );
-        return false;
-    }
-
-    if(parsingEntry){
-        NWB_LOGGER_ERROR(NWB_TEXT("Manifest parsing failed: missing trailing entry.end"));
-        return false;
-    }
-    if(outManifest.volumeName.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Manifest parsing failed: volume.name is empty"));
-        return false;
-    }
-    if(outManifest.segmentSize == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Manifest parsing failed: volume.segment_size is zero"));
-        return false;
-    }
-    if(outManifest.entries.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Manifest parsing failed: no entry was defined"));
-        return false;
-    }
+bool ShaderCook::validateDefaultVariant(const AStringView contextLabel, const AStringView defaultVariant, const CookMap<Name, DefineEntry>& defineValues){
     Alloc::ScratchArena<> validationArena;
-    return __hidden_shader_cook::ValidateManifestEntries(outManifest.entries, validationArena);
+    return __hidden_shader_cook::ValidateDefaultVariant(contextLabel, defaultVariant, defineValues, validationArena);
+}
+
+bool ShaderCook::parseShaderMeta(const Path& nwbFilePath, const Metascript::Document& doc, ShaderEntry& outEntry){
+    outEntry = ShaderEntry(m_memoryArena);
+
+    if(__hidden_shader_cook::CanonicalAssetType(doc) != __hidden_shader_cook::s_AssetTypeShader)
+        return true;
+
+    const Metascript::Value& asset = doc.asset();
+    if(!asset.isMap()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': asset is not a map"), PathToString<tchar>(nwbFilePath));
+        return false;
+    }
+
+    outEntry.source = __hidden_shader_cook::SourcePathFromNwb(nwbFilePath);
+
+    if(!__hidden_shader_cook::ParseStringField(nwbFilePath, asset, "name", outEntry.name, true))
+        return false;
+    if(!__hidden_shader_cook::ParseStringField(nwbFilePath, asset, "compiler", outEntry.compiler, true))
+        return false;
+    if(!__hidden_shader_cook::ParseStringField(nwbFilePath, asset, "stage", outEntry.stage, true))
+        return false;
+    if(!__hidden_shader_cook::ParseStringField(nwbFilePath, asset, "target_profile", outEntry.targetProfile, true))
+        return false;
+    if(!__hidden_shader_cook::ParseStringField(nwbFilePath, asset, "entry_point", outEntry.entryPoint, false))
+        return false;
+    if(outEntry.entryPoint.empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': entry_point must not be empty"), PathToString<tchar>(nwbFilePath));
+        return false;
+    }
+
+    if(!__hidden_shader_cook::ParseDefaultVariant(nwbFilePath, asset, outEntry.defaultVariant))
+        return false;
+
+    if(const auto* includeRootsVal = asset.findField("include_roots")){
+        if(!includeRootsVal->copyStringList(outEntry.includeRoots)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': include_roots must be a list of strings"), PathToString<tchar>(nwbFilePath));
+            return false;
+        }
+        for(const AString& includeRoot : outEntry.includeRoots){
+            if(!includeRoot.empty())
+                continue;
+
+            NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': include_roots entries must not be empty"), PathToString<tchar>(nwbFilePath));
+            return false;
+        }
+    }
+
+    if(!__hidden_shader_cook::ParseDefines(nwbFilePath, asset, m_memoryArena, outEntry.defineValues))
+        return false;
+
+    if(outEntry.name.empty() || outEntry.stage.empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': name and stage are required"), PathToString<tchar>(nwbFilePath));
+        return false;
+    }
+
+    if(!validateDefaultVariant(PathToString(nwbFilePath), outEntry.defaultVariant, outEntry.defineValues))
+        return false;
+    if(!canonicalizeVariantSignature(outEntry.defaultVariant, outEntry.defaultVariant)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': failed to canonicalize default_variant"), PathToString<tchar>(nwbFilePath));
+        return false;
+    }
+
+    return true;
+}
+
+bool ShaderCook::parseShaderMeta(const Path& nwbFilePath, ShaderEntry& outEntry){
+    Metascript::Document doc(m_memoryArena);
+    if(!parseDocument(nwbFilePath, doc))
+        return false;
+
+    return parseShaderMeta(nwbFilePath, doc, outEntry);
+}
+
+bool ShaderCook::parseIncludeMeta(const Path& nwbFilePath, const Metascript::Document& doc, IncludeEntry& outEntry){
+    outEntry = IncludeEntry(m_memoryArena);
+
+    if(__hidden_shader_cook::CanonicalAssetType(doc) != __hidden_shader_cook::s_AssetTypeInclude)
+        return true;
+
+    const Metascript::Value& asset = doc.asset();
+    if(!asset.isMap()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Include meta '{}': asset is not a map"), PathToString<tchar>(nwbFilePath));
+        return false;
+    }
+
+    outEntry.source = __hidden_shader_cook::SourcePathFromNwb(nwbFilePath);
+
+    if(!__hidden_shader_cook::ParseDefaultVariant(nwbFilePath, asset, outEntry.defaultVariant))
+        return false;
+    if(!__hidden_shader_cook::ParseDefines(nwbFilePath, asset, m_memoryArena, outEntry.defineValues))
+        return false;
+
+    if(!validateDefaultVariant(PathToString(nwbFilePath), outEntry.defaultVariant, outEntry.defineValues))
+        return false;
+    if(!canonicalizeVariantSignature(outEntry.defaultVariant, outEntry.defaultVariant)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Include meta '{}': failed to canonicalize default_variant"), PathToString<tchar>(nwbFilePath));
+        return false;
+    }
+
+    return true;
+}
+
+bool ShaderCook::parseIncludeMeta(const Path& nwbFilePath, IncludeEntry& outEntry){
+    Metascript::Document doc(m_memoryArena);
+    if(!parseDocument(nwbFilePath, doc))
+        return false;
+
+    return parseIncludeMeta(nwbFilePath, doc, outEntry);
+}
+
+void ShaderCook::mergeInheritedDefines(ShaderEntry& inOutEntry, const CookVector<Path>& dependencies, const CookMap<AString, IncludeEntry>& includeMetadata){
+    for(const Path& dep : dependencies){
+        const AString depKey = CanonicalizeText(PathToString(dep));
+        const auto found = includeMetadata.find(depKey);
+        if(found == includeMetadata.end())
+            continue;
+
+        const IncludeEntry& includeEntry = found.value();
+
+        for(const auto& [defineName, defineEntry] : includeEntry.defineValues){
+            if(inOutEntry.defineValues.find(defineName) == inOutEntry.defineValues.end()){
+                inOutEntry.defineValues.insert_or_assign(defineName, DefineEntry{
+                    defineEntry.name,
+                    CookVector<AString>(defineEntry.values, CookAllocator<AString>(m_memoryArena))
+                });
+            }
+        }
+
+        if(!includeEntry.defaultVariant.empty()){
+            if(inOutEntry.defaultVariant.empty())
+                inOutEntry.defaultVariant = includeEntry.defaultVariant;
+            else
+                inOutEntry.defaultVariant = includeEntry.defaultVariant + ";" + inOutEntry.defaultVariant;
+        }
+    }
 }
 
 bool ShaderCook::gatherShaderDependencies(const Path& sourcePath, const CookVector<Path>& includeDirectories, CookVector<Path>& outDependencies){
@@ -603,35 +669,52 @@ AString ShaderCook::buildVariantName(const DefineCombo& combo){
     return variantName;
 }
 
-bool ShaderCook::computeSourceChecksum(const ManifestEntry& entry, const AStringView variantName, const CookVector<Path>& dependencies, u64& outChecksum){
+bool ShaderCook::canonicalizeVariantSignature(const AStringView variantSignature, AString& outCanonical){
+    outCanonical.clear();
+
+    const AString trimmedSignature = Trim(variantSignature);
+    if(trimmedSignature.empty())
+        return true;
+    if(trimmedSignature == "default"){
+        outCanonical = "default";
+        return true;
+    }
+
+    DefineCombo assignments{CookAllocator<Pair<const AString, AString>>(m_memoryArena)};
+
+    usize begin = 0;
+    while(begin < trimmedSignature.size()){
+        usize segmentEnd = trimmedSignature.find(';', begin);
+        if(segmentEnd == AString::npos)
+            segmentEnd = trimmedSignature.size();
+
+        const AString segment = Trim(trimmedSignature.substr(begin, segmentEnd - begin));
+        if(segment.empty())
+            return false;
+
+        const usize equalPos = segment.find('=');
+        if(equalPos == AString::npos || equalPos == 0 || equalPos + 1 >= segment.size())
+            return false;
+
+        const AString defineName = Trim(AStringView(segment).substr(0, equalPos));
+        const AString defineValue = Trim(AStringView(segment).substr(equalPos + 1));
+        if(defineName.empty() || defineValue.empty())
+            return false;
+        if(assignments.find(defineName) != assignments.end())
+            return false;
+
+        assignments.insert_or_assign(defineName, defineValue);
+        begin = segmentEnd + 1;
+    }
+
+    outCanonical = buildVariantName(assignments);
+    return true;
+}
+
+bool ShaderCook::computeDependencyChecksum(const CookVector<Path>& dependencies, u64& outChecksum){
     ErrorCode errorCode;
 
     outChecksum = FNV64_OFFSET_BASIS;
-
-    AString header;
-    header.reserve(
-        entry.name.size()
-        + entry.compiler.size()
-        + entry.stage.size()
-        + entry.targetProfile.size()
-        + entry.entryPoint.size()
-        + variantName.size()
-        + 6
-    );
-    header += entry.name;
-    header += '\n';
-    header += entry.compiler;
-    header += '\n';
-    header += entry.stage;
-    header += '\n';
-    header += entry.targetProfile;
-    header += '\n';
-    header += entry.entryPoint;
-    header += '\n';
-    header += variantName;
-    header += '\n';
-
-    outChecksum = UpdateFnv64(outChecksum, reinterpret_cast<const u8*>(header.data()), header.size());
 
     CookVector<SortedDependencyItem> sortedDependencies{CookAllocator<SortedDependencyItem>(m_memoryArena)};
     sortedDependencies.reserve(dependencies.size());
@@ -658,11 +741,21 @@ bool ShaderCook::computeSourceChecksum(const ManifestEntry& entry, const AString
         );
 
         CookVector<u8> dependencyBytes{CookAllocator<u8>(m_memoryArena)};
+        errorCode.clear();
         if(!ReadBinaryFile(item.path, dependencyBytes, errorCode)){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Failed to read dependency file '{}'"),
-                PathToString<tchar>(item.canonicalPath)
-            );
+            if(errorCode){
+                NWB_LOGGER_ERROR(
+                    NWB_TEXT("Failed to read dependency file '{}' : {}"),
+                    PathToString<tchar>(item.path),
+                    StringConvert(errorCode.message())
+                );
+            }
+            else{
+                NWB_LOGGER_ERROR(
+                    NWB_TEXT("Failed to read dependency file '{}'"),
+                    PathToString<tchar>(item.path)
+                );
+            }
             return false;
         }
         if(!dependencyBytes.empty()){
@@ -680,6 +773,42 @@ bool ShaderCook::computeSourceChecksum(const ManifestEntry& entry, const AString
     return true;
 }
 
+bool ShaderCook::computeSourceChecksum(const ShaderEntry& entry, const AStringView variantSignature, const u64 dependencyChecksum, u64& outChecksum){
+    static constexpr AStringView s_ChecksumVersionTag = "shader-source-v2";
+
+    outChecksum = FNV64_OFFSET_BASIS;
+
+    AString header;
+    header.reserve(
+        s_ChecksumVersionTag.size()
+        + entry.name.size()
+        + entry.compiler.size()
+        + entry.stage.size()
+        + entry.targetProfile.size()
+        + entry.entryPoint.size()
+        + variantSignature.size()
+        + 7
+    );
+    header += s_ChecksumVersionTag;
+    header += '\n';
+    header += entry.name;
+    header += '\n';
+    header += entry.compiler;
+    header += '\n';
+    header += entry.stage;
+    header += '\n';
+    header += entry.targetProfile;
+    header += '\n';
+    header += entry.entryPoint;
+    header += '\n';
+    header += variantSignature;
+    header += '\n';
+
+    outChecksum = UpdateFnv64(outChecksum, reinterpret_cast<const u8*>(header.data()), header.size());
+    outChecksum = UpdateFnv64(outChecksum, reinterpret_cast<const u8*>(&dependencyChecksum), sizeof(dependencyChecksum));
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -694,4 +823,3 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

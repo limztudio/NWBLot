@@ -19,7 +19,7 @@ NWB_ASSETS_BEGIN
 
 struct AssetCookOptions{
     AString repoRoot;
-    AString manifest;
+    Vector<AString> assetRoots;
     AString outputDirectory;
     AString cacheDirectory;
     AString configuration;

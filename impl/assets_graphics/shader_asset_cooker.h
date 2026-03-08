@@ -30,7 +30,7 @@ NWB_IMPL_BEGIN
 struct ShaderCookEnvironment{
     AString configuration;
     Path repoRoot;
-    Path manifestPath;
+    Vector<Path> assetRoots;
     Path outputDirectory;
     Path cacheDirectory;
 };

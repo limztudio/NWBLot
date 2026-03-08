@@ -162,7 +162,297 @@ static void* BuildArenaAllocAligned(usize size, usize align){
 }
 static void BuildArenaFreeAligned(void* ptr){ NWB::Core::Alloc::CoreFreeAligned(ptr, "filesystem_build_volume"); }
 
-static bool RemoveExistingVolumeSegments(const Path& outputDirectory, const AString& volumeName, AString& outError){
+using StagedVolumePaths = StagedDirectoryPaths;
+
+static void RemoveDirectoryIfPresentBestEffort(const Path& directoryPath, const AStringView label);
+static bool RestoreVolumeSegments(const Path& fromDirectory, const Path& toDirectory, const Vector<Path>& fileNames);
+
+struct StageDirectoryCleanupGuard{
+    Path directoryPath;
+    bool active = true;
+
+    ~StageDirectoryCleanupGuard(){
+        if(active)
+            RemoveDirectoryIfPresentBestEffort(directoryPath, "stage directory");
+    }
+};
+
+static StagedVolumePaths BuildStagedVolumePaths(const Path& outputDirectory, const AStringView volumeName){
+    AString stageKey = PathToString(outputDirectory);
+    stageKey += '|';
+    stageKey += volumeName;
+    return BuildStagedDirectoryPaths(outputDirectory, StringFormat("volume_{}", FormatHex64(ComputeFnv64Text(stageKey))));
+}
+
+static bool RemoveDirectoryIfPresent(const Path& directoryPath, const AStringView label){
+    ErrorCode errorCode;
+
+    if(!RemoveAllIfExists(directoryPath, errorCode)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Filesystem volume publish: failed to remove {} '{}': {}"),
+            StringConvert(label),
+            PathToString<tchar>(directoryPath),
+            StringConvert(errorCode.message())
+        );
+        return false;
+    }
+
+    return true;
+}
+
+static void RemoveDirectoryIfPresentBestEffort(const Path& directoryPath, const AStringView label){
+    ErrorCode errorCode;
+
+    if(!RemoveAllIfExists(directoryPath, errorCode) && errorCode){
+        NWB_LOGGER_WARNING(
+            NWB_TEXT("Filesystem volume publish: failed to remove {} '{}': {}"),
+            StringConvert(label),
+            PathToString<tchar>(directoryPath),
+            StringConvert(errorCode.message())
+        );
+    }
+}
+
+static bool EnsureEmptyDirectory(const Path& directoryPath, const AStringView label){
+    ErrorCode errorCode;
+
+    if(!::EnsureEmptyDirectory(directoryPath, errorCode)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Filesystem volume publish: failed to create {} '{}': {}"),
+            StringConvert(label),
+            PathToString<tchar>(directoryPath),
+            StringConvert(errorCode.message())
+        );
+        return false;
+    }
+
+    return true;
+}
+
+static bool MoveExistingVolumeSegments(const Path& fromDirectory, const Path& toDirectory, const AStringView volumeName, Vector<Path>& outMovedFileNames){
+    ErrorCode errorCode;
+
+    outMovedFileNames.clear();
+
+    const auto rollbackMovedFiles = [&]() -> void {
+        if(outMovedFileNames.empty())
+            return;
+
+        if(!RestoreVolumeSegments(toDirectory, fromDirectory, outMovedFileNames)){
+            NWB_LOGGER_WARNING(NWB_TEXT("Filesystem volume publish: failed to roll back existing output volume after backup failure"));
+            return;
+        }
+
+        RemoveDirectoryIfPresentBestEffort(toDirectory, "backup directory");
+        outMovedFileNames.clear();
+    };
+
+    const bool sourceExists = FileExists(fromDirectory, errorCode);
+    if(errorCode){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Filesystem volume publish: failed to query output directory '{}': {}"),
+            PathToString<tchar>(fromDirectory),
+            StringConvert(errorCode.message())
+        );
+        return false;
+    }
+    if(!sourceExists)
+        return true;
+
+    bool destinationCreated = false;
+    const auto ensureDestination = [&]() -> bool {
+        if(destinationCreated)
+            return true;
+
+        if(!CreateDirectories(toDirectory, errorCode)){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Filesystem volume publish: failed to create backup directory '{}': {}"),
+                PathToString<tchar>(toDirectory),
+                StringConvert(errorCode.message())
+            );
+            return false;
+        }
+
+        destinationCreated = true;
+        return true;
+    };
+
+    const AString segmentPrefix = StringFormat("{}_", volumeName);
+    for(const auto& directoryEntry : DirectoryIterator(fromDirectory, errorCode)){
+        if(errorCode)
+            break;
+
+        const Path currentPath = directoryEntry.path();
+        const AString fileName = currentPath.filename().string();
+        const bool prefixMatch = fileName.starts_with(segmentPrefix);
+        const bool extensionMatch = currentPath.extension() == ".vol";
+        if(!prefixMatch || !extensionMatch)
+            continue;
+
+        if(!ensureDestination())
+            return false;
+        if(!RenamePath(currentPath, toDirectory / currentPath.filename(), errorCode)){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Filesystem volume publish: failed to move existing segment '{}' to backup: {}"),
+                PathToString<tchar>(currentPath),
+                StringConvert(errorCode.message())
+            );
+            rollbackMovedFiles();
+            return false;
+        }
+
+        outMovedFileNames.push_back(currentPath.filename());
+    }
+    if(errorCode){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Filesystem volume publish: failed to iterate output directory '{}': {}"),
+            PathToString<tchar>(fromDirectory),
+            StringConvert(errorCode.message())
+        );
+        rollbackMovedFiles();
+        return false;
+    }
+
+    errorCode.clear();
+    for(usize segmentIndex = 0;; ++segmentIndex){
+        const Path currentPath = fromDirectory / MakeVolumeSegmentFileName(volumeName, segmentIndex);
+        const bool exists = FileExists(currentPath, errorCode);
+        if(errorCode){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Filesystem volume publish: failed to query volume segment '{}': {}"),
+                PathToString<tchar>(currentPath),
+                StringConvert(errorCode.message())
+            );
+            rollbackMovedFiles();
+            return false;
+        }
+        if(!exists)
+            break;
+
+        if(!ensureDestination())
+            return false;
+        if(!RenamePath(currentPath, toDirectory / currentPath.filename(), errorCode)){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Filesystem volume publish: failed to move existing segment '{}' to backup: {}"),
+                PathToString<tchar>(currentPath),
+                StringConvert(errorCode.message())
+            );
+            rollbackMovedFiles();
+            return false;
+        }
+
+        outMovedFileNames.push_back(currentPath.filename());
+
+        if(segmentIndex == Limit<usize>::s_Max){
+            NWB_LOGGER_ERROR(NWB_TEXT("Filesystem volume publish: segment index overflow while backing up existing volume"));
+            rollbackMovedFiles();
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static bool RestoreVolumeSegments(const Path& fromDirectory, const Path& toDirectory, const Vector<Path>& fileNames){
+    ErrorCode errorCode;
+
+    if(fileNames.empty())
+        return true;
+    if(!CreateDirectories(toDirectory, errorCode)){
+        NWB_LOGGER_WARNING(
+            NWB_TEXT("Filesystem volume publish: failed to recreate output directory '{}' during rollback: {}"),
+            PathToString<tchar>(toDirectory),
+            StringConvert(errorCode.message())
+        );
+        return false;
+    }
+
+    for(const Path& fileName : fileNames){
+        const Path sourcePath = fromDirectory / fileName;
+        const Path destinationPath = toDirectory / fileName;
+        if(!RenamePath(sourcePath, destinationPath, errorCode)){
+            NWB_LOGGER_WARNING(
+                NWB_TEXT("Filesystem volume publish: failed to restore backup segment '{}' during rollback: {}"),
+                PathToString<tchar>(sourcePath),
+                StringConvert(errorCode.message())
+            );
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static bool MoveStagedVolumeSegments(const Path& fromDirectory, const Path& toDirectory, const AStringView volumeName, const usize segmentCount, usize& outMovedCount){
+    ErrorCode errorCode;
+
+    outMovedCount = 0;
+
+    if(segmentCount == 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Filesystem volume publish: staged volume '{}' did not produce any segments"), StringConvert(volumeName));
+        return false;
+    }
+    if(!CreateDirectories(toDirectory, errorCode)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Filesystem volume publish: failed to create output directory '{}': {}"),
+            PathToString<tchar>(toDirectory),
+            StringConvert(errorCode.message())
+        );
+        return false;
+    }
+
+    for(usize segmentIndex = 0; segmentIndex < segmentCount; ++segmentIndex){
+        const Path fileName = MakeVolumeSegmentFileName(volumeName, segmentIndex);
+        const Path sourcePath = fromDirectory / fileName;
+        const Path destinationPath = toDirectory / fileName;
+        if(!RenamePath(sourcePath, destinationPath, errorCode)){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Filesystem volume publish: failed to promote staged segment '{}' to '{}': {}"),
+                PathToString<tchar>(sourcePath),
+                PathToString<tchar>(destinationPath),
+                StringConvert(errorCode.message())
+            );
+            return false;
+        }
+
+        ++outMovedCount;
+    }
+
+    return true;
+}
+
+static void RemovePromotedVolumeSegmentsBestEffort(const Path& outputDirectory, const AStringView volumeName, const usize segmentCount){
+    ErrorCode errorCode;
+
+    for(usize segmentIndex = 0; segmentIndex < segmentCount; ++segmentIndex){
+        const Path segmentPath = outputDirectory / MakeVolumeSegmentFileName(volumeName, segmentIndex);
+        errorCode.clear();
+        RemoveFile(segmentPath, errorCode);
+    }
+}
+
+static bool PromoteStagedVolume(const StagedVolumePaths& stagedPaths, const Path& outputDirectory, const AStringView volumeName, const usize segmentCount){
+    Vector<Path> movedBackupFiles;
+    if(!MoveExistingVolumeSegments(outputDirectory, stagedPaths.backupDirectory, volumeName, movedBackupFiles))
+        return false;
+
+    usize movedStageSegmentCount = 0;
+    if(!MoveStagedVolumeSegments(stagedPaths.stageDirectory, outputDirectory, volumeName, segmentCount, movedStageSegmentCount)){
+        RemovePromotedVolumeSegmentsBestEffort(outputDirectory, volumeName, movedStageSegmentCount);
+        if(RestoreVolumeSegments(stagedPaths.backupDirectory, outputDirectory, movedBackupFiles)){
+            RemoveDirectoryIfPresentBestEffort(stagedPaths.backupDirectory, "backup directory");
+            RemoveDirectoryIfPresentBestEffort(stagedPaths.stageDirectory, "stage directory");
+        }
+        return false;
+    }
+
+    RemoveDirectoryIfPresentBestEffort(stagedPaths.backupDirectory, "backup directory");
+    RemoveDirectoryIfPresentBestEffort(stagedPaths.stageDirectory, "stage directory");
+
+    return true;
+}
+
+static bool RemoveExistingVolumeSegments(const Path& outputDirectory, const AString& volumeName){
     ErrorCode errorCode;
 
     const AString segmentPrefix = StringFormat("{}_", volumeName);
@@ -178,15 +468,19 @@ static bool RemoveExistingVolumeSegments(const Path& outputDirectory, const AStr
             continue;
 
         if(!RemoveFile(currentPath, errorCode)){
-            outError = StringFormat("Failed to remove old segment '{}' : {}", PathToString(currentPath), errorCode.message());
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Failed to remove old segment '{}' : {}"),
+                PathToString<tchar>(currentPath),
+                StringConvert(errorCode.message())
+            );
             return false;
         }
     }
     if(errorCode){
-        outError = StringFormat(
-            "Failed to iterate output directory '{}' : {}",
-            PathToString(outputDirectory),
-            errorCode.message()
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Failed to iterate output directory '{}' : {}"),
+            PathToString<tchar>(outputDirectory),
+            StringConvert(errorCode.message())
         );
         return false;
     }
@@ -197,10 +491,10 @@ static bool RemoveExistingVolumeSegments(const Path& outputDirectory, const AStr
 
         const bool exists = FileExists(hashedPath, errorCode);
         if(errorCode){
-            outError = StringFormat(
-                "Failed to query hashed segment '{}' : {}",
-                PathToString(hashedPath),
-                errorCode.message()
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Failed to query hashed segment '{}' : {}"),
+                PathToString<tchar>(hashedPath),
+                StringConvert(errorCode.message())
             );
             return false;
         }
@@ -208,12 +502,16 @@ static bool RemoveExistingVolumeSegments(const Path& outputDirectory, const AStr
             break;
 
         if(!RemoveFile(hashedPath, errorCode)){
-            outError = StringFormat("Failed to remove old hashed segment '{}' : {}", PathToString(hashedPath), errorCode.message());
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Failed to remove old hashed segment '{}' : {}"),
+                PathToString<tchar>(hashedPath),
+                StringConvert(errorCode.message())
+            );
             return false;
         }
 
         if(segmentIndex == Limit<usize>::s_Max){
-            outError = "Segment index overflow while removing old hashed segments";
+            NWB_LOGGER_ERROR(NWB_TEXT("Segment index overflow while removing old hashed segments"));
             return false;
         }
     }
@@ -231,20 +529,15 @@ static bool RemoveExistingVolumeSegments(const Path& outputDirectory, const AStr
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool BuildVolume(const Path& outputDirectory, const VolumeBuildConfig& config, const HashMap<AString, Vector<u8>>& files, VolumeBuildInfo& outBuildInfo, AString& outError){
-    ErrorCode errorCode;
-
+bool BuildVolume(const Path& outputDirectory, const VolumeBuildConfig& config, const HashMap<AString, Vector<u8>>& files, VolumeBuildInfo& outBuildInfo){
     outBuildInfo = {};
-    outError.clear();
 
-    if(!CreateDirectories(outputDirectory, errorCode)){
-        outError = StringFormat(
-            "Failed to create output directory '{}' : {}",
-            PathToString(outputDirectory),
-            errorCode.message()
-        );
+    const __hidden_filesystem::StagedVolumePaths stagedVolumePaths = __hidden_filesystem::BuildStagedVolumePaths(outputDirectory, config.volumeName);
+    if(!__hidden_filesystem::EnsureEmptyDirectory(stagedVolumePaths.stageDirectory, "stage directory"))
         return false;
-    }
+    __hidden_filesystem::StageDirectoryCleanupGuard stageDirectoryCleanup{stagedVolumePaths.stageDirectory};
+    if(!__hidden_filesystem::RemoveDirectoryIfPresent(stagedVolumePaths.backupDirectory, "backup directory"))
+        return false;
 
     Alloc::CustomArena arena(
         __hidden_filesystem::BuildArenaAlloc,
@@ -253,18 +546,37 @@ bool BuildVolume(const Path& outputDirectory, const VolumeBuildConfig& config, c
         __hidden_filesystem::BuildArenaFreeAligned
     );
 
-    VolumeSession volumeSession(arena);
-    if(!volumeSession.create(outputDirectory, config, outError))
-        return false;
-
-    for(const auto& [virtualPath, payloadBytes] : files){
-        if(!volumeSession.pushData(virtualPath, payloadBytes, outError))
+    {
+        VolumeSession volumeSession(arena);
+        if(!volumeSession.create(stagedVolumePaths.stageDirectory, config))
             return false;
+
+        for(const auto& [virtualPath, payloadBytes] : files){
+            if(!volumeSession.pushDataDeferred(virtualPath, payloadBytes))
+                return false;
+        }
+        if(!volumeSession.flush())
+            return false;
+
+        outBuildInfo.fileCount = volumeSession.fileCount();
+        outBuildInfo.segmentCount = static_cast<u64>(volumeSession.segmentCount());
     }
 
-    outBuildInfo.fileCount = volumeSession.fileCount();
-    outBuildInfo.segmentCount = static_cast<u64>(volumeSession.segmentCount());
+    if(!__hidden_filesystem::PromoteStagedVolume(
+        stagedVolumePaths,
+        outputDirectory,
+        config.volumeName,
+        static_cast<usize>(outBuildInfo.segmentCount)
+    )){
+        return false;
+    }
+    stageDirectoryCleanup.active = false;
+
     return true;
+}
+
+bool PublishStagedVolume(const StagedDirectoryPaths& stagedPaths, const Path& outputDirectory, const AStringView volumeName, const usize segmentCount){
+    return __hidden_filesystem::PromoteStagedVolume(stagedPaths, outputDirectory, volumeName, segmentCount);
 }
 
 
@@ -513,8 +825,7 @@ u64 VolumeFileSystem::wastedBytes()const{
 }
 
 
-bool VolumeFileSystem::writeFile(const Name& virtualPath, const void* data, const usize bytes){
-    ScopedLock lock(m_mutex);
+bool VolumeFileSystem::writeFileLocked(const Name& virtualPath, const void* data, const usize bytes, const bool flushMetadataAfterWrite){
     if(!m_mounted || !m_writable){
         __hidden_filesystem::LogFailure(m_volumeName, "writeFile", "filesystem is not mounted in writable mode");
         return false;
@@ -569,6 +880,9 @@ bool VolumeFileSystem::writeFile(const Name& virtualPath, const void* data, cons
     m_files[virtualPath] = FileRecord{ writeOffset, byteCount };
     m_nextFreeOffset = newFileEnd;
 
+    if(!flushMetadataAfterWrite)
+        return true;
+
     if(flushMetadataLocked())
         return true;
 
@@ -581,8 +895,32 @@ bool VolumeFileSystem::writeFile(const Name& virtualPath, const void* data, cons
     return false;
 }
 
+bool VolumeFileSystem::writeFile(const Name& virtualPath, const void* data, const usize bytes){
+    ScopedLock lock(m_mutex);
+    return writeFileLocked(virtualPath, data, bytes, true);
+}
+
 bool VolumeFileSystem::writeFile(const Name& virtualPath, const Vector<u8>& data){
     return writeFile(virtualPath, data.empty() ? nullptr : data.data(), data.size());
+}
+
+bool VolumeFileSystem::writeFileDeferred(const Name& virtualPath, const void* data, const usize bytes){
+    ScopedLock lock(m_mutex);
+    return writeFileLocked(virtualPath, data, bytes, false);
+}
+
+bool VolumeFileSystem::writeFileDeferred(const Name& virtualPath, const Vector<u8>& data){
+    return writeFileDeferred(virtualPath, data.empty() ? nullptr : data.data(), data.size());
+}
+
+bool VolumeFileSystem::flushMetadata(){
+    ScopedLock lock(m_mutex);
+    if(!m_mounted || !m_writable){
+        __hidden_filesystem::LogFailure(m_volumeName, "flushMetadata", "filesystem is not mounted in writable mode");
+        return false;
+    }
+
+    return flushMetadataLocked();
 }
 
 bool VolumeFileSystem::readFile(const Name& virtualPath, Vector<u8>& outData)const{
@@ -840,7 +1178,14 @@ bool VolumeFileSystem::scanSegmentsLocked(){
             __hidden_filesystem::LogFailureWithFsError(m_volumeName, "scanSegments:iterate", m_mountDirectory, errorCode);
             return false;
         }
-        if(!IsRegularFile(directoryIt->path(), errorCode))
+
+        errorCode.clear();
+        const bool isRegularFile = IsRegularFile(directoryIt->path(), errorCode);
+        if(errorCode){
+            __hidden_filesystem::LogFailureWithFsError(m_volumeName, "scanSegments:is_regular_file", directoryIt->path(), errorCode);
+            return false;
+        }
+        if(!isRegularFile)
             continue;
 
         const AString fileName = directoryIt->path().filename().string();
@@ -1600,10 +1945,8 @@ VolumeSession::VolumeSession(Alloc::CustomArena& arena)
 {}
 
 
-bool VolumeSession::create(const Path& outputDirectory, const VolumeBuildConfig& config, AString& outError){
-    outError.clear();
-
-    if(!__hidden_filesystem::RemoveExistingVolumeSegments(outputDirectory, config.volumeName, outError))
+bool VolumeSession::create(const Path& outputDirectory, const VolumeBuildConfig& config){
+    if(!__hidden_filesystem::RemoveExistingVolumeSegments(outputDirectory, config.volumeName))
         return false;
 
     VolumeMountDesc desc;
@@ -1617,14 +1960,15 @@ bool VolumeSession::create(const Path& outputDirectory, const VolumeBuildConfig&
     if(m_volumeFileSystem.mount(desc))
         return true;
 
-    outError = StringFormat("VolumeSession::create failed to mount volume '{}'", config.volumeName);
+    NWB_LOGGER_ERROR(
+        NWB_TEXT("VolumeSession::create failed to mount volume '{}'"),
+        StringConvert(config.volumeName)
+    );
     return false;
 }
 
 
-bool VolumeSession::load(const AStringView volumeName, const Path& mountDirectory, AString& outError){
-    outError.clear();
-
+bool VolumeSession::load(const AStringView volumeName, const Path& mountDirectory){
     VolumeMountDesc desc;
     desc.volumeName = AString(volumeName);
     desc.mountDirectory = mountDirectory;
@@ -1634,23 +1978,24 @@ bool VolumeSession::load(const AStringView volumeName, const Path& mountDirector
     if(m_volumeFileSystem.mount(desc))
         return true;
 
-    outError = StringFormat("VolumeSession::load failed to mount volume '{}'", volumeName);
+    NWB_LOGGER_ERROR(
+        NWB_TEXT("VolumeSession::load failed to mount volume '{}'"),
+        StringConvert(volumeName)
+    );
     return false;
 }
 
-bool VolumeSession::pushData(const AStringView virtualPath, const Vector<u8>& data, AString& outError){
-    outError.clear();
-
+bool VolumeSession::pushData(const AStringView virtualPath, const Vector<u8>& data){
     if(!m_volumeFileSystem.mounted()){
-        outError = "VolumeSession::pushData failed: volume is not mounted";
+        NWB_LOGGER_ERROR(NWB_TEXT("VolumeSession::pushData failed: volume is not mounted"));
         return false;
     }
     if(!m_volumeFileSystem.writable()){
-        outError = "VolumeSession::pushData failed: volume is read-only";
+        NWB_LOGGER_ERROR(NWB_TEXT("VolumeSession::pushData failed: volume is read-only"));
         return false;
     }
     if(virtualPath.empty()){
-        outError = "VolumeSession::pushData failed: virtual path is empty";
+        NWB_LOGGER_ERROR(NWB_TEXT("VolumeSession::pushData failed: virtual path is empty"));
         return false;
     }
 
@@ -1659,35 +2004,86 @@ bool VolumeSession::pushData(const AStringView virtualPath, const Vector<u8>& da
     if(m_volumeFileSystem.writeFile(virtualPathName, data))
         return true;
 
-    outError = StringFormat("VolumeSession::pushData failed to write '{}'", virtualPath);
+    NWB_LOGGER_ERROR(
+        NWB_TEXT("VolumeSession::pushData failed to write '{}'"),
+        StringConvert(virtualPath)
+    );
+    return false;
+}
+
+bool VolumeSession::pushDataDeferred(const AStringView virtualPath, const Vector<u8>& data){
+    if(!m_volumeFileSystem.mounted()){
+        NWB_LOGGER_ERROR(NWB_TEXT("VolumeSession::pushDataDeferred failed: volume is not mounted"));
+        return false;
+    }
+    if(!m_volumeFileSystem.writable()){
+        NWB_LOGGER_ERROR(NWB_TEXT("VolumeSession::pushDataDeferred failed: volume is read-only"));
+        return false;
+    }
+    if(virtualPath.empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("VolumeSession::pushDataDeferred failed: virtual path is empty"));
+        return false;
+    }
+
+    const AString virtualPathText(virtualPath);
+    const Name virtualPathName(virtualPathText.c_str());
+    if(m_volumeFileSystem.writeFileDeferred(virtualPathName, data))
+        return true;
+
+    NWB_LOGGER_ERROR(
+        NWB_TEXT("VolumeSession::pushDataDeferred failed to write '{}'"),
+        StringConvert(virtualPath)
+    );
+    return false;
+}
+
+bool VolumeSession::flush(){
+    if(!m_volumeFileSystem.mounted()){
+        NWB_LOGGER_ERROR(NWB_TEXT("VolumeSession::flush failed: volume is not mounted"));
+        return false;
+    }
+    if(!m_volumeFileSystem.writable()){
+        NWB_LOGGER_ERROR(NWB_TEXT("VolumeSession::flush failed: volume is read-only"));
+        return false;
+    }
+
+    if(m_volumeFileSystem.flushMetadata())
+        return true;
+
+    NWB_LOGGER_ERROR(NWB_TEXT("VolumeSession::flush failed to write metadata"));
     return false;
 }
 
 
-bool VolumeSession::loadData(const AStringView virtualPath, Vector<u8>& outData, AString& outError)const{
-    outError.clear();
+bool VolumeSession::loadData(const AStringView virtualPath, Vector<u8>& outData)const{
     outData.clear();
 
     if(!m_volumeFileSystem.mounted()){
-        outError = "VolumeSession::loadData failed: volume is not mounted";
+        NWB_LOGGER_ERROR(NWB_TEXT("VolumeSession::loadData failed: volume is not mounted"));
         return false;
     }
     if(virtualPath.empty()){
-        outError = "VolumeSession::loadData failed: virtual path is empty";
+        NWB_LOGGER_ERROR(NWB_TEXT("VolumeSession::loadData failed: virtual path is empty"));
         return false;
     }
 
     const AString virtualPathText(virtualPath);
     const Name virtualPathName(virtualPathText.c_str());
     if(!m_volumeFileSystem.fileExists(virtualPathName)){
-        outError = StringFormat("VolumeSession::loadData failed: file '{}' was not found", virtualPath);
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("VolumeSession::loadData failed: file '{}' was not found"),
+            StringConvert(virtualPath)
+        );
         return false;
     }
 
     if(m_volumeFileSystem.readFile(virtualPathName, outData))
         return true;
 
-    outError = StringFormat("VolumeSession::loadData failed to read '{}'", virtualPath);
+    NWB_LOGGER_ERROR(
+        NWB_TEXT("VolumeSession::loadData failed to read '{}'"),
+        StringConvert(virtualPath)
+    );
     return false;
 }
 

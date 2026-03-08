@@ -1,5 +1,3 @@
-#include "project/bxdf.hlsli"
-
 struct VSInput{
     float3 position : POSITION;
     float3 color : COLOR0;
@@ -50,4 +48,3 @@ VSOutput main(VSInput input){
     output.position = BuildClipPosition(input.position);
     return output;
 }
-

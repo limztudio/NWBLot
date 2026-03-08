@@ -97,18 +97,27 @@ public:
 
         const Path requestingDirectory = Path(requestingSource).parent_path();
         Path resolvedPath;
+        AString lookupError;
 
         if(type == shaderc_include_type_relative){
             const Path localCandidate = (requestingDirectory / Path(requestedSource)).lexically_normal();
+            errorCode.clear();
             if(FileExists(localCandidate, errorCode))
                 resolvedPath = localCandidate;
+            else if(errorCode)
+                lookupError = StringFormat("Failed to query include candidate '{}' : {}", PathToString(localCandidate), errorCode.message());
         }
 
-        if(resolvedPath.empty()){
+        if(resolvedPath.empty() && lookupError.empty()){
             for(const Path& includeDirectory : m_includeDirectories){
                 const Path candidate = (includeDirectory / Path(requestedSource)).lexically_normal();
+                errorCode.clear();
                 if(FileExists(candidate, errorCode)){
                     resolvedPath = candidate;
+                    break;
+                }
+                if(errorCode){
+                    lookupError = StringFormat("Failed to query include candidate '{}' : {}", PathToString(candidate), errorCode.message());
                     break;
                 }
             }
@@ -126,6 +135,9 @@ public:
             result->user_data = payload;
             return result;
         };
+
+        if(!lookupError.empty())
+            return makeErrorResult(Move(lookupError));
 
         if(resolvedPath.empty())
             return makeErrorResult(StringFormat("Include '{}' not found", requestedSource));

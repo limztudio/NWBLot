@@ -20,9 +20,9 @@ namespace __hidden_metascript_lexer{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool isDigit(char c){ return c >= '0' && c <= '9'; }
-[[nodiscard]] inline bool isAlpha(char c){ return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'; }
-[[nodiscard]] inline bool isAlphaNumeric(char c){ return isAlpha(c) || isDigit(c); }
+[[nodiscard]] inline bool isDigit(MChar c){ return c >= '0' && c <= '9'; }
+[[nodiscard]] inline bool isAlpha(MChar c){ return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'; }
+[[nodiscard]] inline bool isAlphaNumeric(MChar c){ return isAlpha(c) || isDigit(c); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -34,7 +34,7 @@ namespace __hidden_metascript_lexer{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Lexer::Lexer(AStringView source)
+Lexer::Lexer(MStringView source)
     : m_source(source)
 {}
 
@@ -58,7 +58,7 @@ Token Lexer::next(){
     if(isAtEnd())
         return makeToken(TokenType::EndOfFile, 0);
 
-    const char c = peek();
+    const MChar c = peek();
 
     if(isAlpha(c))
         return readIdentifier();
@@ -128,7 +128,7 @@ void Lexer::skipWhitespaceAndComments(){
         if(isAtEnd())
             return;
 
-        const char c = peek();
+        const MChar c = peek();
         if(c == ' ' || c == '\t' || c == '\r'){
             advance();
             continue;
@@ -165,7 +165,7 @@ void Lexer::skipWhitespaceAndComments(){
                 m_hasPendingError = true;
                 m_errorLine = commentLine;
                 m_errorColumn = commentColumn;
-                m_errorMessage = AStringView("unterminated block comment");
+                m_errorMessage = MStringView("unterminated block comment");
                 return;
             }
 
@@ -206,7 +206,7 @@ Token Lexer::readNumber(){
         advance();
 
     if(!isAtEnd() && peek() == '.'){
-        const char afterDot = peekNext();
+        const MChar afterDot = peekNext();
         if(afterDot >= '0' && afterDot <= '9'){
             isDouble = true;
             advance();
@@ -242,7 +242,7 @@ Token Lexer::readString(){
     if(isAtEnd()){
         Token tok;
         tok.type = TokenType::Error;
-        tok.text = AStringView("unterminated string literal");
+        tok.text = MStringView("unterminated string literal");
         tok.line = startLine;
         tok.column = startColumn;
         return tok;
@@ -271,7 +271,7 @@ Token Lexer::makeToken(TokenType::Enum type, usize length){
     return tok;
 }
 
-Token Lexer::makeErrorToken(AStringView message){
+Token Lexer::makeErrorToken(MStringView message){
     Token tok;
     tok.type = TokenType::Error;
     tok.text = message;
@@ -280,23 +280,23 @@ Token Lexer::makeErrorToken(AStringView message){
     return tok;
 }
 
-char Lexer::peek()const{
+MChar Lexer::peek()const{
     if(isAtEnd())
         return '\0';
     return m_source[m_current];
 }
 
-char Lexer::peekNext()const{
+MChar Lexer::peekNext()const{
     if(m_current + 1 >= m_source.size())
         return '\0';
     return m_source[m_current + 1];
 }
 
-char Lexer::advance(){
+MChar Lexer::advance(){
     if(isAtEnd())
         return '\0';
 
-    const char c = m_source[m_current];
+    const MChar c = m_source[m_current];
     ++m_current;
 
     if(c == '\n'){

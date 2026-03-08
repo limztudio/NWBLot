@@ -27,14 +27,14 @@ using AStringView = BasicStringView<char>;
 using WStringView = BasicStringView<wchar>;
 using TStringView = BasicStringView<tchar>;
 
-template<typename T>
-using BasicString = std::basic_string<T>;
+template<typename T, typename Allocator = std::allocator<T>>
+using BasicString = std::basic_string<T, std::char_traits<T>, Allocator>;
 using AString = BasicString<char>;
 using WString = BasicString<wchar>;
 using TString = BasicString<tchar>;
 
-template<typename T>
-using BasicStringStream = std::basic_stringstream<T>;
+template<typename T, typename Allocator = std::allocator<T>>
+using BasicStringStream = std::basic_stringstream<T, std::char_traits<T>, Allocator>;
 using AStringStream = BasicStringStream<char>;
 using WStringStream = BasicStringStream<wchar>;
 using TStringStream = BasicStringStream<tchar>;

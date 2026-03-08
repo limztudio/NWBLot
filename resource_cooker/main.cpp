@@ -4,11 +4,20 @@
 
 #include "resource_cooker.h"
 
+#include <logger/client/logger.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 int main(int argc, char** argv){
+    NWB::Log::ClientStandalone logger;
+    if(!logger.init(NWB_TEXT("resource_cooker"))){
+        NWB_CERR << "[resource_cooker] logger.init() failed\n";
+        return -1;
+    }
+    NWB_LOGGER_REGISTER(&logger);
+
     return ResourceCookerMain(argc, argv);
 }
 

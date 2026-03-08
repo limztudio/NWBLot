@@ -1,0 +1,10 @@
+include bxdf;
+
+bxdf.default_variant = [
+    "NWB_PROJECT_BXDF=0",
+    "NWB_PROJECT_TINT=0"
+];
+bxdf.defines = {
+    "NWB_PROJECT_BXDF": ["0", "1"],
+    "NWB_PROJECT_TINT": ["0", "1"]
+};

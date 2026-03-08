@@ -8,7 +8,7 @@
   <ItemDefinitionGroup>
     <ClCompile>
       <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)..\;$(MSBuildThisFileDirectory)..\global\;$(MSBuildThisFileDirectory)..\3rd_parties\curl\include\;$(MSBuildThisFileDirectory)..\3rd_parties\CLI11\;$(MSBuildThisFileDirectory)..\3rd_parties\oneTBB\include\;$(MSBuildThisFileDirectory)..\3rd_parties\tsl\;$(MSBuildThisFileDirectory);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>NWB_COOK=1;__TBB_NO_IMPLICIT_LINKAGE=1;__TBBMALLOC_NO_IMPLICIT_LINKAGE=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>__TBB_NO_IMPLICIT_LINKAGE=1;__TBBMALLOC_NO_IMPLICIT_LINKAGE=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemGroup>

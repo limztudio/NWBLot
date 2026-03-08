@@ -39,15 +39,15 @@ public:
 
 
 public:
-    [[nodiscard]] bool parse(AStringView source);
+    [[nodiscard]] bool parse(MStringView source);
     [[nodiscard]] bool parse(IMetaReader& reader);
 
-    [[nodiscard]] AStringView assetType()const{ return AStringView(m_assetType.data(), m_assetType.size()); }
-    [[nodiscard]] AStringView assetVariable()const{ return AStringView(m_assetVariable.data(), m_assetVariable.size()); }
+    [[nodiscard]] MStringView assetType()const{ return MStringView(m_assetType.data(), m_assetType.size()); }
+    [[nodiscard]] MStringView assetVariable()const{ return MStringView(m_assetVariable.data(), m_assetVariable.size()); }
     [[nodiscard]] const Value& asset()const;
     [[nodiscard]] Value& asset();
 
-    [[nodiscard]] const Value* findVariable(AStringView name)const;
+    [[nodiscard]] const Value* findVariable(MStringView name)const;
 
     [[nodiscard]] bool hasErrors()const{ return !m_errors.empty(); }
     [[nodiscard]] const ErrorList& errors()const{ return m_errors; }

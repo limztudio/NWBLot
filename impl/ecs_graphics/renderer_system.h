@@ -22,7 +22,7 @@ NWB_IMPL_BEGIN
 
 class RendererSystem final : public Core::ECS::ISystem, public Core::IRenderPass{
 public:
-    using ShaderPathResolveCallback = Function<bool(AStringView shaderName, AStringView variantName, AString& outVirtualPath)>;
+    using ShaderPathResolveCallback = Function<bool(AStringView shaderName, AStringView variantName, AStringView stageName, AString& outVirtualPath)>;
 
 public:
     RendererSystem(

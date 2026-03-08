@@ -22,7 +22,7 @@ namespace __hidden_metascript_parser{
 
 class Parser{
 public:
-    Parser(AStringView source, Alloc::CustomArena& arena, MVector<ParseError>& errors, MStringMap<Value>& variables)
+    Parser(MStringView source, Alloc::CustomArena& arena, MVector<ParseError>& errors, MStringMap<Value>& variables)
         : m_lexer(source)
         , m_arena(arena)
         , m_errors(errors)
@@ -47,7 +47,7 @@ public:
         }
         catch(const GeneralException& e){
             error(m_current.line, m_current.column,
-                AStringView(e.what(), AString::traits_type::length(e.what())));
+                MStringView(e.what(), MString::traits_type::length(e.what())));
             return false;
         }
     }
@@ -72,7 +72,7 @@ private:
         if(!expect(TokenType::Semicolon, "expected ';' after declaration"))
             return false;
 
-        MString key(outAssetVariable.data(), outAssetVariable.size(), MAllocator<char>(m_arena));
+        MString key(outAssetVariable.data(), outAssetVariable.size(), MAllocator<MChar>(m_arena));
         m_variables.emplace(Move(key), Value(m_arena));
         return true;
     }
@@ -83,7 +83,7 @@ private:
             return false;
         }
 
-        const AStringView firstName = m_current.text;
+        const MStringView firstName = m_current.text;
         const u32 firstLine = m_current.line;
         const u32 firstColumn = m_current.column;
         advance();
@@ -93,7 +93,7 @@ private:
             return false;
         }
 
-        MVector<AStringView> path(MAllocator<AStringView>(m_arena));
+        MVector<MStringView> path{MAllocator<MStringView>(m_arena)};
         path.reserve(4);
         path.push_back(firstName);
 
@@ -270,7 +270,7 @@ private:
             const auto name = m_current.text;
             advance();
 
-            MVector<AStringView> path(MAllocator<AStringView>(m_arena));
+            MVector<MStringView> path{MAllocator<MStringView>(m_arena)};
             path.reserve(4);
             path.push_back(name);
 
@@ -443,7 +443,7 @@ private:
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-    Value* resolveTarget(const MVector<AStringView>& path, const bool allowCreateRoot, const u32 errorLine, const u32 errorColumn){
+    Value* resolveTarget(const MVector<MStringView>& path, const bool allowCreateRoot, const u32 errorLine, const u32 errorColumn){
         NWB_ASSERT(!path.empty());
 
         const auto rootName = path[0];
@@ -454,7 +454,7 @@ private:
                 return nullptr;
             }
 
-            MString rootKey(rootName.data(), rootName.size(), MAllocator<char>(m_arena));
+            MString rootKey(rootName.data(), rootName.size(), MAllocator<MChar>(m_arena));
             auto result = m_variables.emplace(Move(rootKey), Value(m_arena));
             rootIt = result.first;
         }
@@ -474,7 +474,7 @@ private:
         return current;
     }
 
-    Value resolveRead(const MVector<AStringView>& path){
+    Value resolveRead(const MVector<MStringView>& path){
         NWB_ASSERT(!path.empty());
 
         auto rootIt = m_variables.find(path[0]);
@@ -595,7 +595,7 @@ private:
             error(m_current.text);
     }
 
-    bool expect(TokenType::Enum type, AStringView expected){
+    bool expect(TokenType::Enum type, MStringView expected){
         if(m_current.type == type){
             advance();
             return true;
@@ -604,21 +604,21 @@ private:
         return false;
     }
 
-    void error(AStringView message){
+    void error(MStringView message){
         error(m_current.line, m_current.column, message);
     }
 
-    void error(u32 line, u32 column, AStringView message){
-        m_errors.push_back(ParseError{line, column, MString(message.data(), message.size(), MAllocator<char>(m_arena))});
+    void error(u32 line, u32 column, MStringView message){
+        m_errors.push_back(ParseError{line, column, MString(message.data(), message.size(), MAllocator<MChar>(m_arena))});
     }
 
-    void errorExpected(AStringView expected){
+    void errorExpected(MStringView expected){
         const auto desc = tokenDescription();
-        MString msg(MAllocator<char>(m_arena));
+        MString msg{MAllocator<MChar>(m_arena)};
         msg.append(expected.data(), expected.size());
         msg.append(", found ", 8);
         msg.append(desc.data(), desc.size());
-        error(m_current.line, m_current.column, AStringView(msg.data(), msg.size()));
+        error(m_current.line, m_current.column, MStringView(msg.data(), msg.size()));
     }
 
     [[nodiscard]] AString tokenDescription()const{
@@ -685,14 +685,14 @@ private:
 
 Document::Document(Alloc::CustomArena& arena)
     : m_arena(arena)
-    , m_assetType(MAllocator<char>(arena))
-    , m_assetVariable(MAllocator<char>(arena))
+    , m_assetType(MAllocator<MChar>(arena))
+    , m_assetVariable(MAllocator<MChar>(arena))
     , m_variables(0, MStringHash(), MStringEqual(), MAllocator<Pair<MString, Value>>(arena))
     , m_errors(MAllocator<ParseError>(arena))
 {}
 
 
-bool Document::parse(AStringView source){
+bool Document::parse(MStringView source){
     m_errors.clear();
     m_assetType.clear();
     m_assetVariable.clear();
@@ -706,14 +706,14 @@ bool Document::parse(IMetaReader& reader){
     try{
         constexpr usize chunkSize = 4096;
 
-        MString buffer(MAllocator<char>(m_arena));
-        char chunk[chunkSize];
+        MString buffer{MAllocator<MChar>(m_arena)};
+        MChar chunk[chunkSize];
 
         for(;;){
             const isize bytesRead = reader.read(chunk, chunkSize);
             if(bytesRead < 0){
                 m_errors.clear();
-                m_errors.push_back(ParseError{0, 0, MString("read error", MAllocator<char>(m_arena))});
+                m_errors.push_back(ParseError{0, 0, MString("read error", MAllocator<MChar>(m_arena))});
                 return false;
             }
             if(bytesRead == 0)
@@ -721,30 +721,30 @@ bool Document::parse(IMetaReader& reader){
             buffer.append(chunk, static_cast<usize>(bytesRead));
         }
 
-        return parse(AStringView(buffer.data(), buffer.size()));
+        return parse(MStringView(buffer.data(), buffer.size()));
     }
     catch(const GeneralException& e){
         m_errors.clear();
-        m_errors.push_back(ParseError{0, 0, MString(e.what(), MAllocator<char>(m_arena))});
+        m_errors.push_back(ParseError{0, 0, MString(e.what(), MAllocator<MChar>(m_arena))});
         return false;
     }
 }
 
 const Value& Document::asset()const{
-    const AStringView key(m_assetVariable.data(), m_assetVariable.size());
+    const MStringView key(m_assetVariable.data(), m_assetVariable.size());
     auto it = m_variables.find(key);
     NWB_ASSERT(it != m_variables.end());
     return it.value();
 }
 
 Value& Document::asset(){
-    const AStringView key(m_assetVariable.data(), m_assetVariable.size());
+    const MStringView key(m_assetVariable.data(), m_assetVariable.size());
     auto it = m_variables.find(key);
     NWB_ASSERT(it != m_variables.end());
     return it.value();
 }
 
-const Value* Document::findVariable(AStringView name)const{
+const Value* Document::findVariable(MStringView name)const{
     auto it = m_variables.find(name);
     if(it == m_variables.end())
         return nullptr;

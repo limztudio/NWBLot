@@ -32,11 +32,11 @@ Value::Value(f64 val, Alloc::CustomArena& arena)
     m_data.m_double = val;
 }
 
-Value::Value(AStringView val, Alloc::CustomArena& arena)
+Value::Value(MStringView val, Alloc::CustomArena& arena)
     : m_arena(arena)
     , m_type(ValueType::String)
 {
-    m_data.m_string = NewArenaObject<StringType>(m_arena, val.data(), val.size(), MAllocator<char>(m_arena));
+    m_data.m_string = NewArenaObject<StringType>(m_arena, val.data(), val.size(), MAllocator<MChar>(m_arena));
 }
 
 Value::~Value(){
@@ -86,7 +86,7 @@ Value Value::operator+(const Value& rhs)const{
         const auto lsv = asString();
         const auto rsv = rhs.asString();
 
-        StringType result(MAllocator<char>(m_arena));
+        StringType result{MAllocator<MChar>(m_arena)};
         result.reserve(lsv.size() + rsv.size());
         result.append(lsv.data(), lsv.size());
         result.append(rsv.data(), rsv.size());
@@ -248,9 +248,16 @@ f64 Value::toDouble()const{
     return m_data.m_double;
 }
 
-AStringView Value::asString()const{
+MStringView Value::asString()const{
     NWB_ASSERT(m_type == ValueType::String);
-    return AStringView(m_data.m_string->data(), m_data.m_string->size());
+    return MStringView(m_data.m_string->data(), m_data.m_string->size());
+}
+
+AString Value::copyString()const{
+    if(!isString())
+        return {};
+    const MStringView sv = asString();
+    return AString(sv.data(), sv.size());
 }
 
 const Value::ListType& Value::asList()const{
@@ -286,10 +293,10 @@ void Value::setDouble(f64 val){
     m_data.m_double = val;
 }
 
-void Value::setString(AStringView val){
+void Value::setString(MStringView val){
     destroy();
     m_type = ValueType::String;
-    m_data.m_string = NewArenaObject<StringType>(m_arena, val.data(), val.size(), MAllocator<char>(m_arena));
+    m_data.m_string = NewArenaObject<StringType>(m_arena, val.data(), val.size(), MAllocator<MChar>(m_arena));
 }
 
 void Value::makeList(){
@@ -305,7 +312,7 @@ void Value::makeMap(){
 }
 
 
-Value& Value::field(AStringView name){
+Value& Value::field(MStringView name){
     if(m_type == ValueType::Null)
         makeMap();
     NWB_ASSERT(m_type == ValueType::Map);
@@ -314,12 +321,12 @@ Value& Value::field(AStringView name){
     if(it != m_data.m_map->end())
         return it.value();
 
-    StringType key(name.data(), name.size(), MAllocator<char>(m_arena));
+    StringType key(name.data(), name.size(), MAllocator<MChar>(m_arena));
     auto result = m_data.m_map->emplace(Move(key), Value(m_arena));
     return result.first.value();
 }
 
-const Value* Value::findField(AStringView name)const{
+const Value* Value::findField(MStringView name)const{
     NWB_ASSERT(m_type == ValueType::Map);
 
     auto it = m_data.m_map->find(name);
@@ -373,7 +380,7 @@ void Value::copyFrom(const Value& other){
         m_data.m_double = other.m_data.m_double;
         break;
     case ValueType::String:
-        m_data.m_string = NewArenaObject<StringType>(m_arena, other.m_data.m_string->data(), other.m_data.m_string->size(), MAllocator<char>(m_arena));
+        m_data.m_string = NewArenaObject<StringType>(m_arena, other.m_data.m_string->data(), other.m_data.m_string->size(), MAllocator<MChar>(m_arena));
         break;
     case ValueType::List:{
         m_data.m_list = allocList();
@@ -385,7 +392,7 @@ void Value::copyFrom(const Value& other){
     case ValueType::Map:{
         m_data.m_map = allocMap();
         for(const auto& [k, v] : *other.m_data.m_map)
-            m_data.m_map->emplace(StringType(k, MAllocator<char>(m_arena)), v);
+            m_data.m_map->emplace(StringType(k, MAllocator<MChar>(m_arena)), v);
         break;
     }
     default:
@@ -401,8 +408,8 @@ void Value::moveFrom(Value&& other)noexcept{
     other.m_data = {};
 }
 
-Value::StringType Value::makeArenaString(AStringView sv)const{
-    return StringType(sv.data(), sv.size(), MAllocator<char>(m_arena));
+Value::StringType Value::makeArenaString(MStringView sv)const{
+    return StringType(sv.data(), sv.size(), MAllocator<MChar>(m_arena));
 }
 
 Value::ListType* Value::allocList()const{

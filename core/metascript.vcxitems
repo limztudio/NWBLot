@@ -19,7 +19,6 @@
     <ClCompile Include="$(MSBuildThisFileDirectory)metascript\parser.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="$(MSBuildThisFileDirectory)metascript\global.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)metascript\value.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)metascript\lexer.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)metascript\parser.h" />

@@ -26,12 +26,15 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace Metascript{
+class Document;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class ShaderCook{
-private:
-    static constexpr u64 s_DefaultSegmentSize = 16ull * 1024ull * 1024ull;
-    static constexpr u64 s_DefaultMetadataSize = 512ull * 1024ull;
-
-
 public:
     using CookArena = Core::Alloc::CustomArena;
     template<typename T>
@@ -56,7 +59,17 @@ public:
 
 
 public:
-    struct ManifestEntry{
+    struct IncludeEntry{
+        AString source;
+        AString defaultVariant;
+        CookMap<Name, DefineEntry> defineValues;
+
+        explicit IncludeEntry(CookArena& memoryArena)
+            : defineValues(CookAllocator<Pair<const Name, DefineEntry>>(memoryArena))
+        {}
+    };
+
+    struct ShaderEntry{
         AString name;
         AString compiler = "glslang";
         AString stage;
@@ -65,24 +78,12 @@ public:
         AString source;
         AString defaultVariant;
 
+        CookVector<AString> includeRoots;
         CookMap<Name, DefineEntry> defineValues;
 
-        explicit ManifestEntry(CookArena& memoryArena)
-            : defineValues(CookAllocator<Pair<const Name, DefineEntry>>(memoryArena))
-        {}
-    };
-
-    struct ManifestData{
-        AString volumeName = "graphics";
-        u64 segmentSize = s_DefaultSegmentSize;
-        u64 metadataSize = s_DefaultMetadataSize;
-
-        CookVector<AString> includeRoots;
-        CookVector<ManifestEntry> entries;
-
-        explicit ManifestData(CookArena& memoryArena)
+        explicit ShaderEntry(CookArena& memoryArena)
             : includeRoots(CookAllocator<AString>(memoryArena))
-            , entries(CookAllocator<ManifestEntry>(memoryArena))
+            , defineValues(CookAllocator<Pair<const Name, DefineEntry>>(memoryArena))
         {}
     };
 
@@ -102,15 +103,25 @@ public:
     inline bool compileVariant(const ShaderCompilerRequest& request, Vector<u8>& outBytecode){ return m_compiler->compileVariant(request, outBytecode); }
 
 public:
-    bool parseManifestFile(const Path& manifestPath, ManifestData& outManifest);
+    bool parseDocument(const Path& nwbFilePath, Metascript::Document& outDoc);
+    bool parseShaderMeta(const Path& nwbFilePath, const Metascript::Document& doc, ShaderEntry& outEntry);
+    bool parseShaderMeta(const Path& nwbFilePath, ShaderEntry& outEntry);
+    bool parseIncludeMeta(const Path& nwbFilePath, const Metascript::Document& doc, IncludeEntry& outEntry);
+    bool parseIncludeMeta(const Path& nwbFilePath, IncludeEntry& outEntry);
+
+    bool validateDefaultVariant(AStringView contextLabel, AStringView defaultVariant, const CookMap<Name, DefineEntry>& defineValues);
+
+    void mergeInheritedDefines(ShaderEntry& inOutEntry, const CookVector<Path>& dependencies, const CookMap<AString, IncludeEntry>& includeMetadata);
 
     bool gatherShaderDependencies(const Path& sourcePath, const CookVector<Path>& includeDirectories, CookVector<Path>& outDependencies);
 
     void expandDefineCombinations(const CookMap<Name, DefineEntry>& defineValues, CookVector<DefineCombo>& outCombinations);
 
     AString buildVariantName(const DefineCombo& combo);
+    bool canonicalizeVariantSignature(AStringView variantSignature, AString& outCanonical);
 
-    bool computeSourceChecksum(const ManifestEntry& entry, const AStringView variantName, const CookVector<Path>& dependencies, u64& outChecksum);
+    bool computeDependencyChecksum(const CookVector<Path>& dependencies, u64& outChecksum);
+    bool computeSourceChecksum(const ShaderEntry& entry, const AStringView variantSignature, u64 dependencyChecksum, u64& outChecksum);
 
 
 private:

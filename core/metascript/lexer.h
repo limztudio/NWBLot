@@ -56,7 +56,7 @@ namespace TokenType{
 
 struct Token{
     TokenType::Enum type = TokenType::EndOfFile;
-    AStringView text;
+    MStringView text;
     u32 line = 1;
     u32 column = 1;
 };
@@ -67,7 +67,7 @@ struct Token{
 
 class Lexer{
 public:
-    Lexer(AStringView source);
+    Lexer(MStringView source);
 
 
 public:
@@ -82,23 +82,23 @@ private:
     [[nodiscard]] Token readNumber();
     [[nodiscard]] Token readString();
     [[nodiscard]] Token makeToken(TokenType::Enum type, usize length);
-    [[nodiscard]] Token makeErrorToken(AStringView message);
+    [[nodiscard]] Token makeErrorToken(MStringView message);
 
-    [[nodiscard]] char peek()const;
-    [[nodiscard]] char peekNext()const;
-    char advance();
+    [[nodiscard]] MChar peek()const;
+    [[nodiscard]] MChar peekNext()const;
+    MChar advance();
     [[nodiscard]] bool isAtEnd()const{ return m_current >= m_source.size(); }
 
 
 private:
-    AStringView m_source;
+    MStringView m_source;
     usize m_current = 0;
     u32 m_line = 1;
     u32 m_column = 1;
     bool m_hasPendingError = false;
     u32 m_errorLine = 1;
     u32 m_errorColumn = 1;
-    AStringView m_errorMessage;
+    MStringView m_errorMessage;
 };
 
 

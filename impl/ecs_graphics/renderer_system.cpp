@@ -53,8 +53,28 @@ static constexpr u16 s_CubeIndices[36] = {
 };
 
 static constexpr Core::Color s_ClearColor = Core::Color(0.07f, 0.09f, 0.13f, 1.f);
-static constexpr AStringView s_CubeVertexShaderName = "engine/ecs_graphics/cube.vs";
-static constexpr AStringView s_CubePixelShaderName = "engine/ecs_graphics/cube.ps";
+static constexpr AStringView s_CubeVertexShaderName = "project/shaders/bxdf.vs";
+static constexpr AStringView s_CubePixelShaderName = "project/shaders/bxdf.ps";
+
+static AStringView StageNameFromShaderType(const Core::ShaderType::Mask shaderType){
+    switch(shaderType){
+        case Core::ShaderType::Vertex: return "vs";
+        case Core::ShaderType::Hull: return "hs";
+        case Core::ShaderType::Domain: return "ds";
+        case Core::ShaderType::Geometry: return "gs";
+        case Core::ShaderType::Pixel: return "ps";
+        case Core::ShaderType::Compute: return "cs";
+        case Core::ShaderType::Amplification: return "task";
+        case Core::ShaderType::Mesh: return "mesh";
+        case Core::ShaderType::RayGeneration: return "rgen";
+        case Core::ShaderType::AnyHit: return "rahit";
+        case Core::ShaderType::ClosestHit: return "rchit";
+        case Core::ShaderType::Miss: return "rmiss";
+        case Core::ShaderType::Intersection: return "rint";
+        case Core::ShaderType::Callable: return "rcall";
+        default: return {};
+    }
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -211,9 +231,13 @@ bool RendererSystem::ensureShaderLoaded(
     if(outShader)
         return true;
 
+    const AStringView stageName = __hidden_ecs_graphics::StageNameFromShaderType(shaderType);
+    if(stageName.empty())
+        return false;
+
     AString virtualPath;
-    if(!m_shaderPathResolver || !m_shaderPathResolver(shaderName, Core::ShaderArchive::s_DefaultVariant, virtualPath))
-        virtualPath = Core::ShaderArchive::buildVirtualPath(shaderName, Core::ShaderArchive::s_DefaultVariant);
+    if(!m_shaderPathResolver || !m_shaderPathResolver(shaderName, Core::ShaderArchive::s_DefaultVariant, stageName, virtualPath))
+        virtualPath = Core::ShaderArchive::buildVirtualPath(shaderName, Core::ShaderArchive::s_DefaultVariant, stageName);
 
     UniquePtr<Core::Assets::IAsset> loadedAsset;
     if(!m_assetManager.loadSync("shader", virtualPath, loadedAsset))

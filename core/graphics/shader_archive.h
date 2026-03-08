@@ -44,10 +44,10 @@ public:
 
 
 public:
-    [[nodiscard]] static AString buildVirtualPath(AStringView shaderName, AStringView variantName);
+    [[nodiscard]] static AString buildVirtualPath(AStringView shaderName, AStringView variantName, AStringView stageName);
     static bool serializeIndex(const Vector<Record>& records, Vector<u8>& outBinary);
     static bool deserializeIndex(const Vector<u8>& binary, Vector<Record>& outRecords);
-    static bool findVirtualPath(const Vector<Record>& records, AStringView shaderName, AStringView variantName, AString& outVirtualPath);
+    static bool findVirtualPath(const Vector<Record>& records, AStringView shaderName, AStringView variantName, AStringView stageName, AString& outVirtualPath);
 };
 
 

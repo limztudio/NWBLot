@@ -14,59 +14,31 @@
       <Platform>x64</Platform>
     </ProjectConfiguration>
   </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\core\assets_win.vcxproj">
-      <Project>{B72E6F8D-6D2F-4A6E-B2D7-4FA7E470A2B1}</Project>
-    </ProjectReference>
-    <ProjectReference Include="..\core\alloc_win.vcxproj">
-      <Project>{EAEB21B7-2CD6-4EE0-9D26-F607BCD7C5D3}</Project>
-    </ProjectReference>
-    <ProjectReference Include="..\core\filesystem_win.vcxproj">
-      <Project>{AB8E8D84-2518-4B67-8D55-9F838F6B5C1D}</Project>
-    </ProjectReference>
-    <ProjectReference Include="..\logger\logclient_win.vcxproj">
-      <Project>{5BDE19C4-41A9-4C6C-847E-1C978D315AA1}</Project>
-    </ProjectReference>
-    <ProjectReference Include="..\core\common_win.vcxproj">
-      <Project>{89FA56D0-3DDA-4AF6-8970-2DFBF76D4B47}</Project>
-    </ProjectReference>
-    <ProjectReference Include="..\3rd_parties\oneTBB\tbb_win.vcxproj">
-      <Project>{7D934963-C0D2-4C5A-A3EF-CA1AC3FB7832}</Project>
-    </ProjectReference>
-    <ProjectReference Include="..\core\metascript_win.vcxproj">
-      <Project>{B2C3D4E5-F6A7-8901-BCDE-F12345678901}</Project>
-    </ProjectReference>
-    <ProjectReference Include="..\core\graphics_win.vcxproj">
-      <Project>{CFF12A98-C588-4586-9837-683F6BA8DC0F}</Project>
-    </ProjectReference>
-  </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
-    <ProjectGuid>{54707CE8-4D88-454D-A8B8-221136264572}</ProjectGuid>
-    <RootNamespace>resource_cooker_win</RootNamespace>
+    <ProjectGuid>{D1E2F3A5-B5C6-7890-1234-56789ABCDE02}</ProjectGuid>
+    <RootNamespace>graphics_cook_win</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='dbg|x64'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
+    <ConfigurationType>StaticLibrary</ConfigurationType>
     <PlatformToolset>v145</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='opt|x64'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
+    <ConfigurationType>StaticLibrary</ConfigurationType>
     <PlatformToolset>v145</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='fin|x64'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
+    <ConfigurationType>StaticLibrary</ConfigurationType>
     <PlatformToolset>v145</PlatformToolset>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
   </ImportGroup>
   <ImportGroup Label="Shared">
-    <Import Project="resource_cooker.vcxitems" />
-    <Import Project="..\core\graphics_cook.vcxitems" />
-    <Import Project="..\impl\assets_graphics\assets_graphics_cook.vcxitems" />
+    <Import Project="graphics_cook.vcxitems" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='dbg|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
@@ -76,6 +48,8 @@
     <Import Project="..\configuration\unicodeChar.props" />
     <Import Project="..\configuration\basicInclude.props" />
     <Import Project="..\configuration\libcurlInclude.props" />
+    <Import Project="..\configuration\vulkaninclude.props" />
+    <Import Project="..\configuration\3rdPartyContainerInclude.props" />
     <Import Project="..\configuration\shadercInclude.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='opt|x64'">
@@ -86,6 +60,8 @@
     <Import Project="..\configuration\unicodeChar.props" />
     <Import Project="..\configuration\basicInclude.props" />
     <Import Project="..\configuration\libcurlInclude.props" />
+    <Import Project="..\configuration\vulkaninclude.props" />
+    <Import Project="..\configuration\3rdPartyContainerInclude.props" />
     <Import Project="..\configuration\shadercInclude.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='fin|x64'">
@@ -96,23 +72,34 @@
     <Import Project="..\configuration\unicodeChar.props" />
     <Import Project="..\configuration\basicInclude.props" />
     <Import Project="..\configuration\libcurlInclude.props" />
+    <Import Project="..\configuration\vulkaninclude.props" />
+    <Import Project="..\configuration\3rdPartyContainerInclude.props" />
     <Import Project="..\configuration\shadercInclude.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
-  <PropertyGroup>
-    <NwbRepoRoot>$(MSBuildProjectDirectory)\..</NwbRepoRoot>
-    <IntDir>$(NwbRepoRoot)\__build_obj\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-    <OutDir>$(NwbRepoRoot)\__exec\$(Platform)\$(Configuration)\</OutDir>
-  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='dbg|x64'">
-    <TargetName>resource_cooker</TargetName>
+    <TargetName>graphics_cook</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='opt|x64'">
-    <TargetName>resource_cooker</TargetName>
+    <TargetName>graphics_cook</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='fin|x64'">
-    <TargetName>resource_cooker</TargetName>
+    <TargetName>graphics_cook</TargetName>
   </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\logger\logclient_win.vcxproj">
+      <Project>{5bde19c4-41a9-4c6c-847e-1c978d315aa1}</Project>
+    </ProjectReference>
+    <ProjectReference Include="assets_win.vcxproj">
+      <Project>{B72E6F8D-6D2F-4A6E-B2D7-4FA7E470A2B1}</Project>
+    </ProjectReference>
+    <ProjectReference Include="common_win.vcxproj">
+      <Project>{89fa56d0-3dda-4af6-8970-2dfbf76d4b47}</Project>
+    </ProjectReference>
+    <ProjectReference Include="metascript_win.vcxproj">
+      <Project>{B2C3D4E5-F6A7-8901-BCDE-F12345678901}</Project>
+    </ProjectReference>
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

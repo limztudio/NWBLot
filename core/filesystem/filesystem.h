@@ -82,8 +82,14 @@ bool BuildVolume(
     const Path& outputDirectory,
     const VolumeBuildConfig& config,
     const HashMap<AString, Vector<u8>>& files,
-    VolumeBuildInfo& outBuildInfo,
-    AString& outError
+    VolumeBuildInfo& outBuildInfo
+);
+
+bool PublishStagedVolume(
+    const StagedDirectoryPaths& stagedPaths,
+    const Path& outputDirectory,
+    AStringView volumeName,
+    usize segmentCount
 );
 
 
@@ -127,6 +133,9 @@ public:
 public:
     bool writeFile(const Name& virtualPath, const void* data, usize bytes);
     bool writeFile(const Name& virtualPath, const Vector<u8>& data);
+    bool writeFileDeferred(const Name& virtualPath, const void* data, usize bytes);
+    bool writeFileDeferred(const Name& virtualPath, const Vector<u8>& data);
+    bool flushMetadata();
 
     bool readFile(const Name& virtualPath, Vector<u8>& outData)const;
     bool removeFile(const Name& virtualPath);
@@ -139,6 +148,7 @@ public:
 
 
 private:
+    bool writeFileLocked(const Name& virtualPath, const void* data, usize bytes, bool flushMetadataAfterWrite);
     bool scanSegmentsLocked();
 
     bool createSegmentLocked(usize segmentIndex);
@@ -184,11 +194,13 @@ public:
 
 
 public:
-    bool create(const Path& outputDirectory, const VolumeBuildConfig& config, AString& outError);
-    bool load(AStringView volumeName, const Path& mountDirectory, AString& outError);
+    bool create(const Path& outputDirectory, const VolumeBuildConfig& config);
+    bool load(AStringView volumeName, const Path& mountDirectory);
 
-    bool pushData(AStringView virtualPath, const Vector<u8>& data, AString& outError);
-    bool loadData(AStringView virtualPath, Vector<u8>& outData, AString& outError)const;
+    bool pushData(AStringView virtualPath, const Vector<u8>& data);
+    bool pushDataDeferred(AStringView virtualPath, const Vector<u8>& data);
+    bool flush();
+    bool loadData(AStringView virtualPath, Vector<u8>& outData)const;
 
     [[nodiscard]] bool mounted()const{ return m_volumeFileSystem.mounted(); }
     [[nodiscard]] bool writable()const{ return m_volumeFileSystem.writable(); }

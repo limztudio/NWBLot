@@ -13,6 +13,7 @@
 #endif
 
 #include "basic_string.h"
+#include "compact_string.h"
 #include "generic.h"
 #include "type.h"
 #include "limit.h"
@@ -88,6 +89,11 @@ struct StagedDirectoryPaths{
 
 [[nodiscard]] inline bool IsRegularFile(const Path& path, ErrorCode& outError)noexcept{
     return std::filesystem::is_regular_file(path, outError);
+}
+
+[[nodiscard]] inline bool IsMissingPathError(const ErrorCode& error)noexcept{
+    return error == std::errc::no_such_file_or_directory
+        || error == std::errc::not_a_directory;
 }
 
 
@@ -264,6 +270,10 @@ template<typename Container>
     NWB_MEMCPY(outBinary.data() + beginOffset, textLength, text.data(), textLength);
     return true;
 }
+template<typename Container>
+[[nodiscard]] inline bool AppendString(Container& outBinary, const CompactString& text){
+    return AppendString(outBinary, text.view());
+}
 
 template<typename Container>
 [[nodiscard]] inline bool ReadString(const Container& binary, usize& inOutOffset, AString& outText){
@@ -279,6 +289,13 @@ template<typename Container>
     outText.assign(reinterpret_cast<const char*>(binary.data() + inOutOffset), textLength);
     inOutOffset += textLength;
     return true;
+}
+template<typename Container>
+[[nodiscard]] inline bool ReadString(const Container& binary, usize& inOutOffset, CompactString& outText){
+    AString text;
+    if(!ReadString(binary, inOutOffset, text))
+        return false;
+    return outText.assign(text);
 }
 
 

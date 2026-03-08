@@ -12,6 +12,7 @@
 
 #include "vulkan/vulkan_shader_compiler.h"
 
+#include <core/assets/asset_paths.h>
 #include <core/metascript/parser.h>
 
 #include <logger/client/logger.h>
@@ -86,11 +87,11 @@ static bool ResolveIncludeFile(const AStringView includeName, const Path& source
 
     const Path localCandidate = (sourceDirectory / Path(includeName)).lexically_normal();
     errorCode.clear();
-    if(FileExists(localCandidate, errorCode)){
+    if(IsRegularFile(localCandidate, errorCode)){
         outPath = localCandidate;
         return true;
     }
-    if(errorCode){
+    if(errorCode && !IsMissingPathError(errorCode)){
         NWB_LOGGER_ERROR(
             NWB_TEXT("Failed to query include candidate '{}': {}"),
             PathToString<tchar>(localCandidate),
@@ -102,11 +103,11 @@ static bool ResolveIncludeFile(const AStringView includeName, const Path& source
     for(const Path& includeDirectory : includeDirectories){
         const Path includeCandidate = (includeDirectory / Path(includeName)).lexically_normal();
         errorCode.clear();
-        if(FileExists(includeCandidate, errorCode)){
+        if(IsRegularFile(includeCandidate, errorCode)){
             outPath = includeCandidate;
             return true;
         }
-        if(errorCode){
+        if(errorCode && !IsMissingPathError(errorCode)){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("Failed to query include candidate '{}': {}"),
                 PathToString<tchar>(includeCandidate),
@@ -256,7 +257,7 @@ static bool ValidateDefaultVariant(const AStringView contextLabel, const AString
             return false;
         }
 
-        const Name defineNameId(defineName.c_str());
+        const Name defineNameId(defineName);
         const auto defineIt = defineValues.find(defineNameId);
         if(defineIt == defineValues.end()){
             NWB_LOGGER_ERROR(
@@ -319,10 +320,16 @@ static bool ValidateDefaultVariant(const AStringView contextLabel, const AString
 // .nwb metadata parsing helpers
 
 
-static AString SourcePathFromNwb(const Path& nwbFilePath){
-    Path sourcePath = nwbFilePath;
-    sourcePath.replace_extension();
-    return PathToString(sourcePath);
+static bool RejectVirtualPathOverrideField(const Path& nwbFilePath, const Metascript::Value& asset, const AStringView assetLabel){
+    if(!asset.findField("name"))
+        return true;
+
+    NWB_LOGGER_ERROR(
+        NWB_TEXT("{} meta '{}': field 'name' is no longer supported; virtual paths are derived from the asset file hierarchy"),
+        StringConvert(assetLabel),
+        PathToString<tchar>(nwbFilePath)
+    );
+    return false;
 }
 
 static bool ParseNwbDocument(const Path& nwbFilePath, Metascript::Document& outDoc){
@@ -448,7 +455,7 @@ static bool ParseDefines(const Path& nwbFilePath, const Metascript::Value& asset
             return false;
         }
 
-        outDefineValues.insert_or_assign(Name(defineName.c_str()), ShaderCook::DefineEntry{defineName, Move(defineValues)});
+        outDefineValues.insert_or_assign(Name(AStringView(defineName)), ShaderCook::DefineEntry{defineName, Move(defineValues)});
     }
     return true;
 }
@@ -494,9 +501,10 @@ bool ShaderCook::parseShaderMeta(const Path& nwbFilePath, const Metascript::Docu
         return false;
     }
 
-    outEntry.source = __hidden_shader_cook::SourcePathFromNwb(nwbFilePath);
+    if(!Assets::ResolvePairedSourcePathFromMetadata(nwbFilePath, outEntry.source))
+        return false;
 
-    if(!__hidden_shader_cook::ParseStringField(nwbFilePath, asset, "name", outEntry.name, true))
+    if(!__hidden_shader_cook::RejectVirtualPathOverrideField(nwbFilePath, asset, "Shader"))
         return false;
     if(!__hidden_shader_cook::ParseStringField(nwbFilePath, asset, "compiler", outEntry.compiler, true))
         return false;
@@ -531,8 +539,8 @@ bool ShaderCook::parseShaderMeta(const Path& nwbFilePath, const Metascript::Docu
     if(!__hidden_shader_cook::ParseDefines(nwbFilePath, asset, m_memoryArena, outEntry.defineValues))
         return false;
 
-    if(outEntry.name.empty() || outEntry.stage.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': name and stage are required"), PathToString<tchar>(nwbFilePath));
+    if(outEntry.stage.empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': stage is required"), PathToString<tchar>(nwbFilePath));
         return false;
     }
 
@@ -560,7 +568,8 @@ bool ShaderCook::parseIncludeMeta(const Path& nwbFilePath, const Metascript::Doc
     if(__hidden_shader_cook::CanonicalAssetType(doc) != __hidden_shader_cook::s_AssetTypeInclude)
         return true;
 
-    outEntry.source = __hidden_shader_cook::SourcePathFromNwb(nwbFilePath);
+    if(!Assets::ResolvePairedSourcePathFromMetadata(nwbFilePath, outEntry.source))
+        return false;
 
     const Metascript::Value& asset = doc.asset();
     if(!asset.isMap())
@@ -820,3 +829,4 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

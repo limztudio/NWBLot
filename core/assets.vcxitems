@@ -20,7 +20,9 @@
     <ClInclude Include="$(MSBuildThisFileDirectory)assets\asset.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)assets\asset_cooker.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)assets\asset_handle.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)assets\asset_paths.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)assets\asset_pool.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)assets\asset_ref.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)assets\asset_registry.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)assets\asset_manager.h" />
   </ItemGroup>

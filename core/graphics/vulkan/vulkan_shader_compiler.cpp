@@ -102,9 +102,9 @@ public:
         if(type == shaderc_include_type_relative){
             const Path localCandidate = (requestingDirectory / Path(requestedSource)).lexically_normal();
             errorCode.clear();
-            if(FileExists(localCandidate, errorCode))
+            if(IsRegularFile(localCandidate, errorCode))
                 resolvedPath = localCandidate;
-            else if(errorCode)
+            else if(errorCode && !IsMissingPathError(errorCode))
                 lookupError = StringFormat("Failed to query include candidate '{}' : {}", PathToString(localCandidate), errorCode.message());
         }
 
@@ -112,11 +112,11 @@ public:
             for(const Path& includeDirectory : m_includeDirectories){
                 const Path candidate = (includeDirectory / Path(requestedSource)).lexically_normal();
                 errorCode.clear();
-                if(FileExists(candidate, errorCode)){
+                if(IsRegularFile(candidate, errorCode)){
                     resolvedPath = candidate;
                     break;
                 }
-                if(errorCode){
+                if(errorCode && !IsMissingPathError(errorCode)){
                     lookupError = StringFormat("Failed to query include candidate '{}' : {}", PathToString(candidate), errorCode.message());
                     break;
                 }

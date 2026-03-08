@@ -4,6 +4,8 @@
 
 #include "asset_manager.h"
 
+#include <core/alloc/scratch.h>
+
 #include <logger/client/logger.h>
 
 
@@ -29,17 +31,17 @@ void AssetManager::setAsyncExecutor(IAssetAsyncExecutor* asyncExecutor){
 
 
 bool AssetManager::loadSync(
-    const AStringView assetType,
-    const AStringView virtualPath,
+    const Name& assetType,
+    const Name& virtualPath,
     UniquePtr<IAsset>& outAsset
 )const{
     outAsset.reset();
 
-    if(assetType.empty()){
+    if(!assetType){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetManager: asset type is empty"));
         return false;
     }
-    if(virtualPath.empty()){
+    if(!virtualPath){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetManager: virtual path is empty"));
         return false;
     }
@@ -52,9 +54,8 @@ bool AssetManager::loadSync(
 }
 
 
-u64 AssetManager::enqueueLoad(const AStringView assetType, const AStringView virtualPath){
-    const AString canonicalType = ::CanonicalizeText(assetType);
-    if(canonicalType.empty() || virtualPath.empty())
+u64 AssetManager::enqueueLoad(const Name& assetType, const Name& virtualPath){
+    if(!assetType || !virtualPath)
         return 0;
 
     const u64 requestId = m_nextRequestId.fetch_add(1, MemoryOrder::memory_order_relaxed);
@@ -68,8 +69,8 @@ u64 AssetManager::enqueueLoad(const AStringView assetType, const AStringView vir
         RequestRecord request;
         request.result.requestId = requestId;
         request.result.state = AssetLoadState::Pending;
-        request.assetType = canonicalType;
-        request.virtualPath = AString(virtualPath);
+        request.assetType = assetType;
+        request.virtualPath = virtualPath;
         m_requests[requestId] = Move(request);
 
         asyncExecutor = m_asyncExecutor;
@@ -83,7 +84,8 @@ u64 AssetManager::enqueueLoad(const AStringView assetType, const AStringView vir
 
 
 void AssetManager::processPending(){
-    Vector<u64> pendingRequestIds;
+    Alloc::ScratchArena<> scratchArena;
+    Vector<u64, Alloc::ScratchAllocator<u64>> pendingRequestIds{Alloc::ScratchAllocator<u64>(scratchArena)};
     {
         ScopedLock lock(m_mutex);
         pendingRequestIds.reserve(m_requests.size());
@@ -162,15 +164,16 @@ void AssetManager::dispatchAsync(const u64 requestId){
     if(asyncExecutor == nullptr)
         return;
 
-    asyncExecutor->enqueue([this, requestId](){
+    const NotNull<IAssetAsyncExecutor*> requiredExecutor(asyncExecutor);
+    requiredExecutor->enqueue([this, requestId](){
         processRequest(requestId);
     });
 }
 
 
 void AssetManager::processRequest(const u64 requestId){
-    AString assetType;
-    AString virtualPath;
+    Name assetType = NAME_NONE;
+    Name virtualPath = NAME_NONE;
     {
         ScopedLock lock(m_mutex);
 

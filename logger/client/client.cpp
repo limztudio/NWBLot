@@ -4,6 +4,8 @@
 
 #include "client.h"
 
+#include <curl/curl.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -76,7 +78,7 @@ Client::~Client(){
     stopWorker();
 
     if(m_curl){
-        curl_easy_cleanup(m_curl);
+        curl_easy_cleanup(static_cast<CURL*>(m_curl));
         m_curl = nullptr;
     }
 }
@@ -88,33 +90,34 @@ bool Client::internalInit(NotNull<const char*> url){
         return false;
     }
 
+    CURL* const curlHandle = static_cast<CURL*>(m_curl);
     CURLcode ret;
 
-    ret = curl_easy_setopt(m_curl, CURLOPT_URL, url.get());
+    ret = curl_easy_setopt(curlHandle, CURLOPT_URL, url.get());
     if(ret != CURLE_OK){
         enqueue(StringFormat(NWB_TEXT("Failed to set URL on {}: {}"), CLIENT_NAME, StringConvert(curl_easy_strerror(ret))), Type::Fatal);
         return false;
     }
 
-    ret = curl_easy_setopt(m_curl, CURLOPT_READFUNCTION, sendCallback);
+    ret = curl_easy_setopt(curlHandle, CURLOPT_READFUNCTION, sendCallback);
     if(ret != CURLE_OK){
         enqueue(StringFormat(NWB_TEXT("Failed to set write callback on {}: {}"), CLIENT_NAME, StringConvert(curl_easy_strerror(ret))), Type::Fatal);
         return false;
     }
 
-    ret = curl_easy_setopt(m_curl, CURLOPT_READDATA, this);
+    ret = curl_easy_setopt(curlHandle, CURLOPT_READDATA, this);
     if(ret != CURLE_OK){
         enqueue(StringFormat(NWB_TEXT("Failed to set write data on {}: {}"), CLIENT_NAME, StringConvert(curl_easy_strerror(ret))), Type::Fatal);
         return false;
     }
 
-    ret = curl_easy_setopt(m_curl, CURLOPT_POST, 1);
+    ret = curl_easy_setopt(curlHandle, CURLOPT_POST, 1);
     if(ret != CURLE_OK){
         enqueue(StringFormat(NWB_TEXT("Failed to set post on {}: {}"), CLIENT_NAME, StringConvert(curl_easy_strerror(ret))), Type::Fatal);
         return false;
     }
 
-    ret = curl_easy_setopt(m_curl, CURLOPT_POSTFIELDSIZE, -1);
+    ret = curl_easy_setopt(curlHandle, CURLOPT_POSTFIELDSIZE, -1);
     if(ret != CURLE_OK){
         enqueue(StringFormat(NWB_TEXT("Failed to set file size on {}: {}"), CLIENT_NAME, StringConvert(curl_easy_strerror(ret))), Type::Fatal);
         return false;
@@ -126,9 +129,10 @@ bool Client::internalUpdate(){
     if(!m_msgCount.load(MemoryOrder::memory_order_relaxed))
         return true;
 
+    CURL* const curlHandle = static_cast<CURL*>(m_curl);
     CURLcode ret;
 
-    ret = curl_easy_perform(m_curl);
+    ret = curl_easy_perform(curlHandle);
     if(ret != CURLE_OK){
         enqueue(StringFormat(NWB_TEXT("Failed to perform on {}: {}"), CLIENT_NAME, StringConvert(curl_easy_strerror(ret))), Type::Error);
         return true;

@@ -106,6 +106,11 @@ Updated: 2026-02-28
 - Trivial single-statement member functions (getters that return a member, setters that assign a member, `assetType()` returning a literal, etc.) should be defined inline in the header rather than in a `.cpp` file.
   - Example: `[[nodiscard]] const Name& shaderName()const{ return m_shaderName; }`
   - Multi-statement bodies, loops, conditionals, or functions that call other non-trivial helpers belong in the `.cpp`.
+- For asset bindings:
+  - When a component references an asset, use `Core::Assets::AssetRef<T>`.
+  - When an asset references another asset, use `Core::Assets::AssetRef<T>`.
+  - Do not store those bindings as raw `Name`, `CompactString`, `AString`, or other untyped text.
+  - Do not add convenience setters/constructors that accept raw path text or raw `Name` for typed asset bindings; accept or store `AssetRef<T>` directly.
 - Strictly distinguish references vs pointers:
   - Parameters:
     - Use references (`T&`, `const T&`) for required, non-null inputs by default.
@@ -136,6 +141,8 @@ Updated: 2026-02-28
 - Check external API results immediately (for Vulkan, check `VkResult` after each call).
 - Log through logger macros (`NWB_LOGGER_INFO`, `NWB_LOGGER_WARNING`, `NWB_LOGGER_ERROR`, `NWB_LOGGER_FATAL`).
 - Use assertions (`NWB_ASSERT`, `NWB_ASSERT_MSG`) for invariant checking.
+- For caches of derived/runtime-created objects, the cache key must include every input that affects the created result.
+  - Example: graphics pipeline caches must include framebuffer/render-target compatibility when pipeline creation depends on framebuffer info.
 
 ## 9. Performance-oriented conventions
 - Use `constexpr` for static mappings and constants.
@@ -148,12 +155,13 @@ Updated: 2026-02-28
 - For parallel containers (`ParallelQueue`, `ParallelVector`, `ParallelHashMap`, etc.), use a cache-aligned allocator that matches the owning arena (`CustomCacheAlignedAllocator`, `MemoryCacheAlignedAllocator`, `ScratchCacheAlignedAllocator`) instead of default allocators when arena ownership exists.
 
 ## 10. Practical checklist for new code
-- Before every code create/modify action, re-read the current `standard.md` and apply it as the source of truth (do not rely on memory).
+- Before every code create/modify action, re-read the current `.helper/standard.md` and apply it as the source of truth (do not rely on memory).
 - Match file banner and section-separator style.
 - Keep naming prefixes consistent (`m_`, `s_`, `g_`).
 - Use module namespace wrapper macros and `__hidden_*` internal namespaces.
 - Use project types/containers/macros when equivalents exist.
 - Validate and log all external API failure paths.
+- When iterating ECS views with structured bindings, prefer reference-preserving bindings (`auto&&`) unless copying is explicitly intended.
 
 ## 11. New project layout (Visual Studio)
 - New project source files must be listed in a `.vcxitems` file.

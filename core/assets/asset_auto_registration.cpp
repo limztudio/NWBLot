@@ -4,6 +4,7 @@
 
 #include "asset_auto_registration.h"
 
+#include <core/alloc/scratch.h>
 #include <logger/client/logger.h>
 
 
@@ -79,7 +80,8 @@ bool AssetCookerAutoRegistrar::initialize(){
 
 
 void RegisterAutoCollectedAssetCodecs(AssetRegistry& outRegistry){
-    Vector<AssetCodecFactory> codecFactories;
+    Alloc::ScratchArena<> scratchArena;
+    Vector<AssetCodecFactory, Alloc::ScratchAllocator<AssetCodecFactory>> codecFactories{Alloc::ScratchAllocator<AssetCodecFactory>(scratchArena)};
     {
         auto& autoFactoryQueue = __hidden_assets::QueryAutoFactoryQueue();
         ScopedLock lock(autoFactoryQueue.mutex);
@@ -105,7 +107,8 @@ void RegisterAutoCollectedAssetCodecs(AssetRegistry& outRegistry){
 }
 
 void RegisterAutoCollectedAssetCookers(AssetCookerRegistry& outRegistry, Alloc::CustomArena& arena){
-    Vector<AssetCookerFactory> cookerFactories;
+    Alloc::ScratchArena<> scratchArena;
+    Vector<AssetCookerFactory, Alloc::ScratchAllocator<AssetCookerFactory>> cookerFactories{Alloc::ScratchAllocator<AssetCookerFactory>(scratchArena)};
     {
         auto& autoFactoryQueue = __hidden_assets::QueryAutoFactoryQueue();
         ScopedLock lock(autoFactoryQueue.mutex);

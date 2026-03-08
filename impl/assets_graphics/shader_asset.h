@@ -21,16 +21,31 @@ NWB_IMPL_BEGIN
 
 class Shader final : public Core::Assets::IAsset{
 public:
-    [[nodiscard]] virtual AStringView assetType()const override{ return "shader"; }
-    [[nodiscard]] virtual AStringView virtualPath()const override{ return m_virtualPath; }
+    static constexpr AStringView s_AssetTypeText = "shader";
+
+
+public:
+    Shader()
+        : IAsset(AssetTypeName())
+    {}
+    explicit Shader(const Name& virtualPath)
+        : IAsset(AssetTypeName(), virtualPath)
+    {}
+
+
+public:
+    [[nodiscard]] static const Name& AssetTypeName(){
+        static const Name s_AssetType(s_AssetTypeText.data());
+        return s_AssetType;
+    }
+
     [[nodiscard]] const Core::Assets::AssetBytes& bytecode()const{ return m_bytecode; }
 
 public:
-    bool loadBinary(AStringView virtualPath, const Core::Assets::AssetBytes& binary);
+    bool loadBinary(const Core::Assets::AssetBytes& binary);
 
 
 private:
-    AString m_virtualPath;
     Core::Assets::AssetBytes m_bytecode;
 };
 
@@ -40,9 +55,11 @@ private:
 
 class ShaderAssetCodec final : public Core::Assets::IAssetCodec{
 public:
-    [[nodiscard]] virtual AStringView assetType()const override{ return "shader"; }
+    ShaderAssetCodec()
+        : IAssetCodec(Shader::AssetTypeName())
+    {}
 
-    virtual bool deserialize(AStringView virtualPath, const Core::Assets::AssetBytes& binary, UniquePtr<Core::Assets::IAsset>& outAsset)const override;
+    virtual bool deserialize(const Name& virtualPath, const Core::Assets::AssetBytes& binary, UniquePtr<Core::Assets::IAsset>& outAsset)const override;
 #if defined(NWB_COOK)
     virtual bool serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const override;
 #endif

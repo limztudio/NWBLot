@@ -39,6 +39,16 @@ inline constexpr u64 FNV1a64(const CharT* str, u64 seed){
     return hash;
 }
 
+template<typename CharT>
+[[nodiscard]] inline constexpr u64 UpdateFnv64TextCanonical(u64 hash, const BasicStringView<CharT> text){
+    for(const CharT ch : text){
+        hash ^= static_cast<u64>(static_cast<u8>(Canonicalize(ch)));
+        hash *= FNV64_PRIME;
+    }
+
+    return hash;
+}
+
 [[nodiscard]] inline u64 ComputeFnv64Bytes(const void* data, const usize byteCount){
     return UpdateFnv64(
         FNV64_OFFSET_BASIS,

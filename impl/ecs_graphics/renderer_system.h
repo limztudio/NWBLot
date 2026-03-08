@@ -9,6 +9,7 @@
 
 #include <core/ecs/world.h>
 #include <core/assets/asset_manager.h>
+#include <core/graphics/graphics.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -21,8 +22,29 @@ NWB_IMPL_BEGIN
 
 
 class RendererSystem final : public Core::ECS::ISystem, public Core::IRenderPass{
+private:
+    struct MaterialPipelineKey{
+        Name material = NAME_NONE;
+        Core::FramebufferInfo framebufferInfo;
+    };
+    struct MaterialPipelineKeyHasher{
+        usize operator()(const MaterialPipelineKey& key)const;
+    };
+    struct MaterialPipelineKeyEqualTo{
+        bool operator()(const MaterialPipelineKey& lhs, const MaterialPipelineKey& rhs)const;
+    };
+
+    struct MaterialPipelineResources{
+        Core::GraphicsPipelineHandle pipeline;
+        Core::ShaderHandle vertexShader;
+        Core::ShaderHandle pixelShader;
+        Core::InputLayoutHandle inputLayout;
+    };
+
+
 public:
-    using ShaderPathResolveCallback = Function<bool(AStringView shaderName, AStringView variantName, AStringView stageName, AString& outVirtualPath)>;
+    using ShaderPathResolveCallback = Function<bool(const Name& shaderName, const CompactString& variantName, const Name& stageName, Name& outVirtualPath)>;
+
 
 public:
     RendererSystem(
@@ -43,14 +65,15 @@ public:
 
 
 private:
-    [[nodiscard]] bool ensurePipeline(Core::IFramebuffer* framebuffer);
+    [[nodiscard]] bool ensureGeometryLoaded(const Core::Assets::AssetRef<Geometry>& geometryAsset, Core::Graphics::MeshResource& outMesh);
+    [[nodiscard]] bool ensureRendererPipeline(const RendererComponent& renderer, Core::IFramebuffer* framebuffer, MaterialPipelineResources*& outResources);
     [[nodiscard]] bool ensureShaderLoaded(
         Core::ShaderHandle& outShader,
-        AStringView shaderName,
+        const Name& shaderName,
+        const CompactString& variantName,
         Core::ShaderType::Mask shaderType,
         const Name& debugName
     );
-    [[nodiscard]] Core::Graphics::MeshResource createCubeMesh(const CubeComponent& cube)const;
 
 
 private:
@@ -59,10 +82,8 @@ private:
     Core::Assets::AssetManager& m_assetManager;
     ShaderPathResolveCallback m_shaderPathResolver;
 
-    Core::GraphicsPipelineHandle m_pipeline;
-    Core::ShaderHandle m_vertexShader;
-    Core::ShaderHandle m_pixelShader;
-    Core::InputLayoutHandle m_inputLayout;
+    HashMap<Name, Core::Graphics::MeshResource, Hasher<Name>, EqualTo<Name>> m_geometryMeshes;
+    HashMap<MaterialPipelineKey, MaterialPipelineResources, MaterialPipelineKeyHasher, MaterialPipelineKeyEqualTo> m_materialPipelines;
 };
 
 

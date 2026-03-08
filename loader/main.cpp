@@ -75,7 +75,7 @@ public:
 
 
 public:
-    virtual bool readAssetBinary(AStringView virtualPath, NWB::Core::Assets::AssetBytes& outBinary)const override{
+    virtual bool readAssetBinary(const Name& virtualPath, NWB::Core::Assets::AssetBytes& outBinary)const override{
         return m_volumeSession.loadData(virtualPath, outBinary);
     }
 
@@ -90,7 +90,7 @@ bool LoadShaderArchiveRecords(
     Vector<NWB::Core::ShaderArchive::Record>& outRecords
 ){
     NWB::Core::Assets::AssetBytes indexBinary;
-    if(!assetBinarySource.readAssetBinary(NWB::Core::ShaderArchive::s_IndexVirtualPath, indexBinary))
+    if(!assetBinarySource.readAssetBinary(NWB::Core::ShaderArchive::IndexVirtualPathName(), indexBinary))
         return false;
 
     return NWB::Core::ShaderArchive::deserializeIndex(indexBinary, outRecords);
@@ -154,24 +154,14 @@ static int MainLogic(NotNull<const char*> logAddress, void* inst){
                 assetManager,
                 {},
             };
-            context.shaderPathResolver = [&shaderArchiveRecords](const AStringView shaderName, const AStringView variantName, const AStringView stageName, AString& outVirtualPath){
-                const AString shaderNameText(shaderName);
-                const AString variantNameText(variantName.empty() ? NWB::Core::ShaderArchive::s_DefaultVariant : variantName);
-                const AString stageNameText(stageName);
-                if(stageNameText.empty())
-                    return false;
-
-                if(NWB::Core::ShaderArchive::findVirtualPath(
+            context.shaderPathResolver = [&shaderArchiveRecords](const Name& shaderName, const CompactString& variantName, const Name& stageName, Name& outVirtualPath){
+                return NWB::Core::ShaderArchive::findVirtualPath(
                     shaderArchiveRecords,
-                    shaderNameText,
-                    variantNameText,
-                    stageNameText,
+                    shaderName,
+                    variantName,
+                    stageName,
                     outVirtualPath
-                ))
-                    return true;
-
-                outVirtualPath = NWB::Core::ShaderArchive::buildVirtualPath(shaderNameText, variantNameText, stageNameText);
-                return true;
+                );
             };
 
             auto callbacks = NWB::CreateProjectEntryCallbacks(context);

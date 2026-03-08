@@ -4,6 +4,7 @@
 
 #include "material_asset.h"
 
+#include <core/alloc/scratch.h>
 #include <logger/client/logger.h>
 #include <core/assets/asset_auto_registration.h>
 
@@ -23,8 +24,8 @@ namespace __hidden_assets{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr u32 s_MaterialMagic = 0x4D544C31u; // MTL1
-static constexpr u32 s_MaterialVersion = 1u;
+static constexpr u32 s_MaterialMagic = 0x4D544C33u; // MTL3
+static constexpr u32 s_MaterialVersion = 3u;
 
 
 UniquePtr<Core::Assets::IAssetCodec> CreateMaterialAssetCodec(){
@@ -42,11 +43,14 @@ Core::Assets::AssetCodecAutoRegistrar s_MaterialAssetCodecAutoRegistrar(&CreateM
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Material::loadBinary(const AStringView virtualPath, const Core::Assets::AssetBytes& binary){
-    m_virtualPath = virtualPath;
-    m_name = NAME_NONE;
-    m_shaderName = NAME_NONE;
-    m_shaderVariant = NAME_NONE;
+bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
+    if(!virtualPath()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: virtual path is empty"));
+        return false;
+    }
+
+    m_shaderVariant.clear();
+    m_stageShaders.clear();
     m_parameters.clear();
 
     usize cursor = 0;
@@ -70,15 +74,45 @@ bool Material::loadBinary(const AStringView virtualPath, const Core::Assets::Ass
         return false;
     }
 
-    NameHash materialHash{};
-    NameHash shaderHash{};
-    NameHash variantHash{};
-    if(!ReadPOD(binary, cursor, materialHash)
-        || !ReadPOD(binary, cursor, shaderHash)
-        || !ReadPOD(binary, cursor, variantHash))
-    {
-        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: missing name hashes"));
+    if(!ReadString(binary, cursor, m_shaderVariant)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: missing shader variant"));
         return false;
+    }
+
+    u32 shaderCount = 0;
+    if(!ReadPOD(binary, cursor, shaderCount)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: missing shader count"));
+        return false;
+    }
+    if(shaderCount == 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: material has no shader stages"));
+        return false;
+    }
+    m_stageShaders.reserve(shaderCount);
+
+    for(u32 i = 0; i < shaderCount; ++i){
+        NameHash stageNameHash = {};
+        NameHash shaderNameHash = {};
+        if(!ReadPOD(binary, cursor, stageNameHash) || !ReadPOD(binary, cursor, shaderNameHash)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: malformed shader stage at index {}"), i);
+            return false;
+        }
+
+        const Name stageName(stageNameHash);
+        const Name shaderName(shaderNameHash);
+        const Core::Assets::AssetRef<Shader> shaderAsset(shaderName);
+        if(!stageName || !shaderAsset.valid()){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: shader stage entries must not be empty"));
+            return false;
+        }
+
+        if(!m_stageShaders.insert({ stageName, shaderAsset }).second){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Material::loadBinary failed: duplicate shader stage '{}'"),
+                StringConvert(stageName.c_str())
+            );
+            return false;
+        }
     }
 
     u32 parameterCount = 0;
@@ -86,24 +120,27 @@ bool Material::loadBinary(const AStringView virtualPath, const Core::Assets::Ass
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: missing parameter count"));
         return false;
     }
-
-    m_name = Name(materialHash);
-    m_shaderName = Name(shaderHash);
-    m_shaderVariant = Name(variantHash);
+    m_parameters.reserve(parameterCount);
 
     for(u32 i = 0; i < parameterCount; ++i){
-        AString key;
-        AString value;
+        CompactString key;
+        CompactString value;
         if(!ReadString(binary, cursor, key) || !ReadString(binary, cursor, value)){
             NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: malformed parameter at index {}"), i);
             return false;
         }
-        if(key.empty()){
+        if(!key){
             NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: parameter key is empty"));
             return false;
         }
 
-        m_parameters[key] = value;
+        if(!m_parameters.insert({ key, value }).second){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Material::loadBinary failed: duplicate parameter key '{}'"),
+                StringConvert(key.c_str())
+            );
+            return false;
+        }
     }
 
     if(cursor != binary.size()){
@@ -118,9 +155,9 @@ bool Material::loadBinary(const AStringView virtualPath, const Core::Assets::Ass
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool MaterialAssetCodec::deserialize(const AStringView virtualPath, const Core::Assets::AssetBytes& binary, UniquePtr<Core::Assets::IAsset>& outAsset)const{
-    auto asset = MakeUnique<Material>();
-    if(!asset->loadBinary(virtualPath, binary))
+bool MaterialAssetCodec::deserialize(const Name& virtualPath, const Core::Assets::AssetBytes& binary, UniquePtr<Core::Assets::IAsset>& outAsset)const{
+    auto asset = MakeUnique<Material>(virtualPath);
+    if(!asset->loadBinary(binary))
         return false;
 
     outAsset = Move(asset);
@@ -141,43 +178,84 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
     if(asset.assetType() != assetType()){
         NWB_LOGGER_ERROR(
             NWB_TEXT("MaterialAssetCodec::serialize failed: invalid asset type '{}', expected '{}'"),
-            StringConvert(asset.assetType()),
-            StringConvert(assetType())
+            StringConvert(asset.assetType().c_str()),
+            StringConvert(Material::s_AssetTypeText)
         );
         return false;
     }
 
     const Material& material = static_cast<const Material&>(asset);
-    if(!material.name()){
-        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: name is empty"));
+    if(!material.virtualPath()){
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: virtual path is empty"));
+        return false;
+    }
+    if(material.stageShaders().empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: material has no shader stages"));
         return false;
     }
     if(material.parameters().size() > Limit<u32>::s_Max){
         NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: parameter count exceeds u32 range"));
         return false;
     }
+    if(material.stageShaders().size() > Limit<u32>::s_Max){
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: shader stage count exceeds u32 range"));
+        return false;
+    }
 
     outBinary.clear();
     AppendPOD(outBinary, __hidden_assets::s_MaterialMagic);
     AppendPOD(outBinary, __hidden_assets::s_MaterialVersion);
-    AppendPOD(outBinary, material.name().hash());
-    AppendPOD(outBinary, material.shaderName().hash());
-    AppendPOD(outBinary, material.shaderVariant().hash());
+    if(!AppendString(outBinary, material.shaderVariant())){
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: shader variant is too long"));
+        return false;
+    }
+    AppendPOD(outBinary, static_cast<u32>(material.stageShaders().size()));
+
+    using ShaderStageEntry = Pair<const Name*, const Core::Assets::AssetRef<Shader>*>;
+    Core::Alloc::ScratchArena<> scratchArena;
+    Vector<ShaderStageEntry, Core::Alloc::ScratchAllocator<ShaderStageEntry>> sortedShaders{Core::Alloc::ScratchAllocator<ShaderStageEntry>(scratchArena)};
+    sortedShaders.reserve(material.stageShaders().size());
+    for(const auto& [stageName, shaderAsset] : material.stageShaders())
+        sortedShaders.push_back({ &stageName, &shaderAsset });
+
+    Sort(sortedShaders.begin(), sortedShaders.end(),
+        [](const ShaderStageEntry& lhs, const ShaderStageEntry& rhs){
+            return *lhs.first() < *rhs.first();
+        }
+    );
+
+    for(const ShaderStageEntry& shaderStageEntry : sortedShaders){
+        const Name* stageName = shaderStageEntry.first();
+        const Core::Assets::AssetRef<Shader>* shaderAsset = shaderStageEntry.second();
+        if(!*stageName || !shaderAsset->valid()){
+            NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: shader stage entries must not be empty"));
+            return false;
+        }
+        AppendPOD(outBinary, stageName->hash());
+        AppendPOD(outBinary, shaderAsset->name().hash());
+    }
+
     AppendPOD(outBinary, static_cast<u32>(material.parameters().size()));
 
-    using ParamEntry = Pair<const AString*, const AString*>;
-    Vector<ParamEntry> sortedParams;
+    using ParamEntry = Pair<const CompactString*, const CompactString*>;
+    Vector<ParamEntry, Core::Alloc::ScratchAllocator<ParamEntry>> sortedParams{Core::Alloc::ScratchAllocator<ParamEntry>(scratchArena)};
     sortedParams.reserve(material.parameters().size());
     for(const auto& [key, value] : material.parameters())
         sortedParams.push_back({ &key, &value });
 
     Sort(sortedParams.begin(), sortedParams.end(),
         [](const ParamEntry& lhs, const ParamEntry& rhs){
-            return *lhs.first < *rhs.first;
+            return *lhs.first() < *rhs.first();
         }
     );
 
-    for(const auto& [key, value] : sortedParams){
+    for(const ParamEntry& paramEntry : sortedParams){
+        const CompactString* key = paramEntry.first();
+        const CompactString* value = paramEntry.second();
+        if(!*key){
+            NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: parameter key must not be empty"));
+            return false;
+        }
         if(!AppendString(outBinary, *key) || !AppendString(outBinary, *value)){
             NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: parameter text is too long"));
             return false;
@@ -197,9 +275,36 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void Material::setShader(const Name& shaderName, const Name& variantName){
-    m_shaderName = shaderName;
+void Material::setShaderVariant(const CompactString& variantName){
     m_shaderVariant = variantName;
+}
+
+void Material::setShaderForStage(const Name& stageName, const Core::Assets::AssetRef<Shader>& shaderAsset){
+    if(!stageName || !shaderAsset.valid())
+        return;
+
+    m_stageShaders[stageName] = shaderAsset;
+}
+
+bool Material::setParameter(const CompactString& key, const CompactString& value){
+    if(!key)
+        return false;
+
+    m_parameters[key] = value;
+    return true;
+}
+
+bool Material::findShaderForStage(const Name& stageName, Core::Assets::AssetRef<Shader>& outShaderAsset)const{
+    outShaderAsset.reset();
+    if(!stageName)
+        return false;
+
+    const auto found = m_stageShaders.find(stageName);
+    if(found == m_stageShaders.end())
+        return false;
+
+    outShaderAsset = found.value();
+    return outShaderAsset.valid();
 }
 
 

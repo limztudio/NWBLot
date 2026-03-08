@@ -1,8 +1,0 @@
-shader bxdf_vs;
-
-bxdf_vs.name = "project/shaders/bxdf.vs";
-bxdf_vs.compiler = "dxc";
-bxdf_vs.stage = "vs";
-bxdf_vs.target_profile = "vs_6_0";
-bxdf_vs.entry_point = "main";
-bxdf_vs.include_roots = ["impl/assets_graphics/assets"];

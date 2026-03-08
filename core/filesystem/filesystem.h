@@ -197,10 +197,13 @@ public:
     bool create(const Path& outputDirectory, const VolumeBuildConfig& config);
     bool load(AStringView volumeName, const Path& mountDirectory);
 
+    bool pushData(const Name& virtualPath, const Vector<u8>& data);
     bool pushData(AStringView virtualPath, const Vector<u8>& data);
+    bool pushDataDeferred(const Name& virtualPath, const Vector<u8>& data);
     bool pushDataDeferred(AStringView virtualPath, const Vector<u8>& data);
     bool flush();
     bool loadData(AStringView virtualPath, Vector<u8>& outData)const;
+    bool loadData(const Name& virtualPath, Vector<u8>& outData)const;
 
     [[nodiscard]] bool mounted()const{ return m_volumeFileSystem.mounted(); }
     [[nodiscard]] bool writable()const{ return m_volumeFileSystem.writable(); }

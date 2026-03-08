@@ -1,0 +1,13 @@
+material asset;
+
+asset.shaders = {
+    "vs": "project/shaders/bxdf_vs",
+    "ps": "project/shaders/bxdf_ps"
+};
+asset.shader_variant = [
+    "NWB_PROJECT_BXDF=1",
+    "NWB_PROJECT_TINT=1"
+];
+asset.parameters = {
+    "albedo_texture": "project/textures/cube_albedo"
+};

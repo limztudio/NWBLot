@@ -89,18 +89,33 @@ bool ValidateRecord(const ShaderArchive::Record& record){
 }
 
 
-AString NormalizeVariantName(const AStringView variantName){
-    AString canonical = CanonicalizeText(variantName);
-    if(canonical.empty())
-        canonical = ShaderArchive::s_DefaultVariant;
+CompactString NormalizeVariantName(const AStringView variantName){
+    CompactString canonical;
+    if(variantName.empty()){
+        const bool assigned = canonical.assign(ShaderArchive::s_DefaultVariant);
+        NWB_ASSERT_MSG(assigned, NWB_TEXT("ShaderArchive: default variant name exceeded CompactString capacity"));
+        if(!assigned)
+            canonical.clear();
+        return canonical;
+    }
+
+    const bool assigned = canonical.assign(variantName);
+    NWB_ASSERT_MSG(assigned, NWB_TEXT("ShaderArchive: canonical variant name exceeded CompactString capacity"));
+    if(!assigned)
+        canonical.clear();
     return canonical;
 }
 
+u64 UpdateFnv64NameLane(u64 hash, const NameHash& nameHash, const u32 lane){
+    NWB_ASSERT_MSG(lane < __hidden_name::s_HashLaneCount, NWB_TEXT("ShaderArchive: invalid hash lane"));
 
-AString BuildVirtualPathFromCanonical(const AStringView canonicalShaderName, const AStringView canonicalVariantName, const AStringView canonicalStageName){
-    const u64 variantHash = ComputeFnv64Text(canonicalVariantName);
-    const AString variantHashHex = FormatHex64(variantHash);
-    return StringFormat("shader/{}/{}/{}.spv", canonicalShaderName, canonicalStageName, variantHashHex);
+    const u64 laneValue = nameHash.qwords[lane];
+    for(u32 byteIndex = 0; byteIndex < sizeof(laneValue); ++byteIndex){
+        hash ^= static_cast<u8>((laneValue >> (byteIndex * 8u)) & 0xFFu);
+        hash *= FNV64_PRIME;
+    }
+
+    return hash;
 }
 
 
@@ -138,12 +153,38 @@ const ShaderArchive::Record* FindRecord(const RecordVector& records, const Name&
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AString ShaderArchive::buildVirtualPath(const AStringView shaderName, const AStringView variantName, const AStringView stageName){
-    return __hidden_shader_archive::BuildVirtualPathFromCanonical(
-        CanonicalizeText(shaderName),
-        __hidden_shader_archive::NormalizeVariantName(variantName),
-        CanonicalizeText(stageName)
-    );
+const Name& ShaderArchive::IndexVirtualPathName(){
+    static const Name s_IndexVirtualPathName(s_IndexVirtualPath);
+    return s_IndexVirtualPathName;
+}
+
+Name ShaderArchive::buildVirtualPathName(const Name& shaderName, const CompactString& variantName, const Name& stageName){
+    if(!shaderName || !stageName)
+        return NAME_NONE;
+
+    const CompactString canonicalVariantName = __hidden_shader_archive::NormalizeVariantName(variantName.view());
+    if(canonicalVariantName.empty())
+        return NAME_NONE;
+
+    const Name canonicalVariantNameId(canonicalVariantName.view());
+    if(!canonicalVariantNameId)
+        return NAME_NONE;
+
+    NameHash derivedHash = {};
+    static constexpr char s_VirtualPathPrefix[] = "nwb/shader/archive/path";
+    for(u32 lane = 0; lane < __hidden_name::s_HashLaneCount; ++lane){
+        u64 laneHash = UpdateFnv64(
+            FNV64_OFFSET_BASIS,
+            reinterpret_cast<const u8*>(s_VirtualPathPrefix),
+            sizeof(s_VirtualPathPrefix) - 1
+        );
+        laneHash = __hidden_shader_archive::UpdateFnv64NameLane(laneHash, shaderName.hash(), lane);
+        laneHash = __hidden_shader_archive::UpdateFnv64NameLane(laneHash, canonicalVariantNameId.hash(), lane);
+        laneHash = __hidden_shader_archive::UpdateFnv64NameLane(laneHash, stageName.hash(), lane);
+        derivedHash.qwords[lane] = laneHash;
+    }
+
+    return Name(derivedHash);
 }
 
 bool ShaderArchive::serializeIndex(const Vector<Record>& records, Vector<u8>& outBinary){
@@ -154,7 +195,10 @@ bool ShaderArchive::serializeIndex(const Vector<Record>& records, Vector<u8>& ou
         return false;
     }
 
-    Vector<Record> sortedRecords(records);
+    Alloc::ScratchArena<> scratchArena;
+    Vector<Record, Alloc::ScratchAllocator<Record>> sortedRecords{Alloc::ScratchAllocator<Record>(scratchArena)};
+    sortedRecords.reserve(records.size());
+    sortedRecords.insert(sortedRecords.end(), records.begin(), records.end());
     Sort(sortedRecords.begin(), sortedRecords.end(), __hidden_shader_archive::LessRecord);
 
     for(usize i = 0; i < sortedRecords.size(); ++i){
@@ -272,33 +316,28 @@ bool ShaderArchive::deserializeIndex(const Vector<u8>& binary, Vector<Record>& o
     return true;
 }
 
-bool ShaderArchive::findVirtualPath(const Vector<Record>& records, const AStringView shaderName, const AStringView variantName, const AStringView stageName, AString& outVirtualPath){
-    outVirtualPath.clear();
+bool ShaderArchive::findVirtualPath(const Vector<Record>& records, const Name& shaderName, const CompactString& variantName, const Name& stageName, Name& outVirtualPath){
+    outVirtualPath = NAME_NONE;
 
-    const AString canonicalShaderName = CanonicalizeText(shaderName);
-    if(canonicalShaderName.empty())
+    if(!shaderName || !stageName)
         return false;
 
-    const AString canonicalVariantName = __hidden_shader_archive::NormalizeVariantName(variantName);
-    const AString canonicalStageName = CanonicalizeText(stageName);
-    if(canonicalStageName.empty())
+    const CompactString canonicalVariantName = __hidden_shader_archive::NormalizeVariantName(variantName.view());
+    if(canonicalVariantName.empty())
         return false;
-
-    const Name requestedShaderName(canonicalShaderName.c_str());
-    const Name requestedVariantName(canonicalVariantName.c_str());
-    const Name requestedStageName(canonicalStageName.c_str());
+    const Name requestedVariantName(canonicalVariantName.view());
     static constexpr Name s_DefaultVariantName(s_DefaultVariant);
 
-    if(__hidden_shader_archive::FindRecord(records, requestedShaderName, requestedVariantName, requestedStageName)){
-        outVirtualPath = __hidden_shader_archive::BuildVirtualPathFromCanonical(canonicalShaderName, canonicalVariantName, canonicalStageName);
+    if(const Record* record = __hidden_shader_archive::FindRecord(records, shaderName, requestedVariantName, stageName)){
+        outVirtualPath = Name(record->virtualPathHash);
         return true;
     }
 
     if(requestedVariantName == s_DefaultVariantName)
         return false;
 
-    if(__hidden_shader_archive::FindRecord(records, requestedShaderName, s_DefaultVariantName, requestedStageName)){
-        outVirtualPath = __hidden_shader_archive::BuildVirtualPathFromCanonical(canonicalShaderName, s_DefaultVariant, canonicalStageName);
+    if(const Record* record = __hidden_shader_archive::FindRecord(records, shaderName, s_DefaultVariantName, stageName)){
+        outVirtualPath = Name(record->virtualPathHash);
         return true;
     }
 

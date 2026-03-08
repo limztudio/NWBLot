@@ -4,6 +4,8 @@
 
 #include "asset_cooker.h"
 
+#include <core/alloc/scratch.h>
+
 #include <logger/client/logger.h>
 
 
@@ -22,14 +24,15 @@ namespace __hidden_assets{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static AString DescribeAvailableCookers(const HashMap<AString, UniquePtr<IAssetCooker>>& cookers){
+static AString DescribeAvailableCookers(const HashMap<Name, UniquePtr<IAssetCooker>, Hasher<Name>, EqualTo<Name>>& cookers){
     if(cookers.empty())
         return "(none)";
 
-    Vector<AString> types;
+    Alloc::ScratchArena<> scratchArena;
+    Vector<CompactString, Alloc::ScratchAllocator<CompactString>> types{Alloc::ScratchAllocator<CompactString>(scratchArena)};
     types.reserve(cookers.size());
-    for(const auto& [typeName, _] : cookers)
-        types.push_back(typeName);
+    for(const auto& [_, cooker] : cookers)
+        types.push_back(cooker->assetTypeText());
 
     Sort(types.begin(), types.end());
 
@@ -37,7 +40,7 @@ static AString DescribeAvailableCookers(const HashMap<AString, UniquePtr<IAssetC
     for(usize i = 0; i < types.size(); ++i){
         if(i > 0)
             output += ", ";
-        output += types[i];
+        output += types[i].c_str();
     }
 
     return output;
@@ -57,14 +60,14 @@ bool AssetCookerRegistry::registerCooker(UniquePtr<IAssetCooker>&& cooker){
     if(!cooker)
         return false;
 
-    const AString canonicalType = ::CanonicalizeText(cooker->assetType());
-    if(canonicalType.empty())
+    const Name typeName = cooker->assetType();
+    if(!typeName)
         return false;
 
-    if(m_assetCookers.find(canonicalType) != m_assetCookers.end())
+    if(m_assetCookers.find(typeName) != m_assetCookers.end())
         return false;
 
-    m_assetCookers[canonicalType] = Move(cooker);
+    m_assetCookers[typeName] = Move(cooker);
     return true;
 }
 
@@ -76,12 +79,14 @@ bool AssetCookerRegistry::cook(const AssetCookOptions& options)const{
     }
 
     const AString availableCookers = __hidden_assets::DescribeAvailableCookers(m_assetCookers);
-    const AString requestedType = ::CanonicalizeText(options.assetType);
-    if(requestedType.empty()){
+    const Name requestedType = options.assetType.empty()
+        ? NAME_NONE
+        : Name(options.assetType.view());
+    if(!requestedType){
         if(m_assetCookers.size() == 1){
-            for(const auto& [typeName, cooker] : m_assetCookers){
+            for(const auto& [_, cooker] : m_assetCookers){
                 AssetCookOptions resolvedOptions = options;
-                resolvedOptions.assetType = typeName;
+                resolvedOptions.assetType = cooker->assetTypeText();
                 return cooker->cook(resolvedOptions);
             }
         }
@@ -97,7 +102,7 @@ bool AssetCookerRegistry::cook(const AssetCookOptions& options)const{
     if(found == m_assetCookers.end()){
         NWB_LOGGER_ERROR(
             NWB_TEXT("Unsupported --asset-type '{}'. Available types: {}"),
-            StringConvert(options.assetType),
+            StringConvert(options.assetType.c_str()),
             StringConvert(availableCookers)
         );
         return false;

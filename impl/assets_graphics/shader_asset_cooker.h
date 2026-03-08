@@ -28,7 +28,7 @@ NWB_IMPL_BEGIN
 
 
 struct ShaderCookEnvironment{
-    AString configuration;
+    CompactString configuration;
     Path repoRoot;
     Vector<Path> assetRoots;
     Path outputDirectory;
@@ -36,7 +36,7 @@ struct ShaderCookEnvironment{
 };
 
 struct ShaderCookResult{
-    AString volumeName;
+    CompactString volumeName;
     u64 fileCount = 0;
     u64 segmentCount = 0;
 };
@@ -44,11 +44,9 @@ struct ShaderCookResult{
 
 class ShaderAssetCooker final : public Core::Assets::IAssetCooker{
 public:
-    explicit ShaderAssetCooker(Core::Alloc::CustomArena& arena) : IAssetCooker(arena){}
-
-
-public:
-    [[nodiscard]] virtual AStringView assetType()const override{ return "shader"; }
+    explicit ShaderAssetCooker(Core::Alloc::CustomArena& arena)
+        : IAssetCooker(arena, CompactString("shader"))
+    {}
 
     virtual bool cook(const Core::Assets::AssetCookOptions& options)override;
 
@@ -71,4 +69,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

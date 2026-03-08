@@ -65,6 +65,17 @@ inline constexpr NameHash ComputeNameHash(const CharT* str){
     return hash;
 }
 
+template<typename CharT>
+inline NameHash ComputeNameHash(const BasicStringView<CharT> text){
+    if(HasEmbeddedNull(text))
+        return {};
+
+    NameHash hash = {};
+    for(u32 i = 0; i < __hidden_name::s_HashLaneCount; ++i)
+        hash.qwords[i] = UpdateFnv64TextCanonical(__hidden_name::LANE_SEEDS[i], text);
+    return hash;
+}
+
 
 [[nodiscard]] inline constexpr bool LessNameHash(const NameHash& lhs, const NameHash& rhs){
     for(u32 i = 0; i < __hidden_name::s_HashLaneCount; ++i){
@@ -207,6 +218,46 @@ public:
         __hidden_name::HashToDebugString(m_hash, m_debugName, 256);
 #endif
     }
+    explicit Name(const AStringView text)
+        : m_hash(ComputeNameHash(text))
+#if defined(NWB_DEBUG)
+        , m_debugName{}
+#endif
+    {
+#if defined(NWB_DEBUG)
+        if(HasEmbeddedNull(text)){
+            m_debugName[0] = '\0';
+            return;
+        }
+
+        const usize copyCount = text.size() < 255
+            ? text.size()
+            : static_cast<usize>(255);
+        for(usize i = 0; i < copyCount; ++i)
+            m_debugName[i] = Canonicalize(text[i]);
+        m_debugName[copyCount] = '\0';
+#endif
+    }
+    explicit Name(const WStringView text)
+        : m_hash(ComputeNameHash(text))
+#if defined(NWB_DEBUG)
+        , m_debugName{}
+#endif
+    {
+#if defined(NWB_DEBUG)
+        if(HasEmbeddedNull(text)){
+            m_debugName[0] = '\0';
+            return;
+        }
+
+        const usize copyCount = text.size() < 255
+            ? text.size()
+            : static_cast<usize>(255);
+        for(usize i = 0; i < copyCount; ++i)
+            m_debugName[i] = static_cast<char>(Canonicalize(text[i]));
+        m_debugName[copyCount] = '\0';
+#endif
+    }
 
 
 public:
@@ -260,12 +311,52 @@ template<typename CharT>
     if(text.empty())
         return NAME_NONE;
 
-    const BasicString<CharT> localString(text);
-    return Name(localString.c_str());
+    return Name(text);
 }
 template<typename CharT>
 [[nodiscard]] inline Name ToName(const BasicString<CharT>& text){
     return ToName(BasicStringView<CharT>(text));
+}
+
+
+namespace __hidden_name{
+
+
+inline u64 UpdateFnv64U64(u64 hash, const u64 value){
+    for(u32 byteIndex = 0; byteIndex < sizeof(value); ++byteIndex){
+        hash ^= static_cast<u8>((value >> (byteIndex * 8u)) & 0xFFu);
+        hash *= FNV64_PRIME;
+    }
+    return hash;
+}
+
+
+};
+
+
+template<typename CharT>
+[[nodiscard]] inline Name DeriveName(const Name& baseName, const BasicStringView<CharT> suffix){
+    if(!baseName || suffix.empty() || HasEmbeddedNull(suffix))
+        return NAME_NONE;
+
+    NameHash derivedHash = {};
+    static constexpr char s_DerivePrefix[] = "nwb/name/derive";
+    for(u32 lane = 0; lane < __hidden_name::s_HashLaneCount; ++lane){
+        u64 laneHash = UpdateFnv64(
+            FNV64_OFFSET_BASIS,
+            reinterpret_cast<const u8*>(s_DerivePrefix),
+            sizeof(s_DerivePrefix) - 1
+        );
+        laneHash = __hidden_name::UpdateFnv64U64(laneHash, baseName.hash().qwords[lane]);
+        laneHash = UpdateFnv64TextCanonical(laneHash, suffix);
+        derivedHash.qwords[lane] = laneHash;
+    }
+
+    return Name(derivedHash);
+}
+template<typename CharT>
+[[nodiscard]] inline Name DeriveName(const Name& baseName, const BasicString<CharT>& suffix){
+    return DeriveName(baseName, BasicStringView<CharT>(suffix));
 }
 
 

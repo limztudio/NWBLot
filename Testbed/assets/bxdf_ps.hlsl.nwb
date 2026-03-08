@@ -1,8 +1,0 @@
-shader bxdf_ps;
-
-bxdf_ps.name = "project/shaders/bxdf.ps";
-bxdf_ps.compiler = "dxc";
-bxdf_ps.stage = "ps";
-bxdf_ps.target_profile = "ps_6_0";
-bxdf_ps.entry_point = "main";
-bxdf_ps.include_roots = ["impl/assets_graphics/assets"];

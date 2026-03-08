@@ -46,9 +46,13 @@ ProjectTestbed::~ProjectTestbed(){
 bool ProjectTestbed::onStartup(){
     (void)m_rendererSystem;
 
+    const NWB::Core::Assets::AssetRef<NWB::Impl::Geometry> cubeGeometry(Name("project/meshes/cube"));
+    const NWB::Core::Assets::AssetRef<NWB::Impl::Material> cubeMaterial(Name("project/materials/mat_test"));
+
     auto cubeEntity = m_world->createEntity();
-    cubeEntity.addComponent<NWB::Core::ECSGraphics::CubeComponent>();
-    cubeEntity.addComponent<NWB::Core::ECSGraphics::RendererComponent>();
+    auto& renderer = cubeEntity.addComponent<NWB::Core::ECSGraphics::RendererComponent>();
+    renderer.geometry = cubeGeometry;
+    renderer.material = cubeMaterial;
 
     return true;
 }

@@ -9,8 +9,8 @@
   </PropertyGroup>
   <ItemDefinitionGroup>
     <PostBuildEvent>
-      <Message>Cooking NWB shaders...</Message>
-      <Command>"$(SolutionDir)__exec\$(Platform)\$(Configuration)\resource_cooker.exe" --repo-root "$(MSBuildProjectDirectory)\.." --asset-root "impl/assets_graphics/assets" --asset-root "Testbed/assets" --output-directory "$(SolutionDir)__exec\res" --cache-directory "$(MSBuildProjectDirectory)\..\__build_obj\shader_cache\$(Platform)\$(Configuration)" --configuration "$(Configuration)"</Command>
+      <Message>Cooking NWB graphics assets...</Message>
+      <Command>"$(SolutionDir)__exec\$(Platform)\$(Configuration)\resource_cooker.exe" --repo-root "$(MSBuildProjectDirectory)\.." --asset-root "impl/assets" --asset-root "Testbed/assets" --output-directory "$(SolutionDir)__exec\res" --cache-directory "$(MSBuildProjectDirectory)\..\__build_obj\shader_cache\$(Platform)\$(Configuration)" --configuration "$(Configuration)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup />

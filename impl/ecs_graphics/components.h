@@ -7,7 +7,7 @@
 
 #include "../global.h"
 
-#include <core/graphics/graphics.h>
+#include <core/assets/asset_ref.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -19,20 +19,17 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct CubeComponent{
-    f32 size = 1.f;
-    Core::Color color = Core::Color(1.f, 1.f, 1.f, 1.f);
+class Geometry;
+class Material;
 
-    constexpr CubeComponent& setSize(f32 value){ size = value; return *this; }
-    constexpr CubeComponent& setColor(const Core::Color& value){ color = value; return *this; }
-};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 struct RendererComponent{
-    Core::Graphics::MeshResource mesh;
+    Core::Assets::AssetRef<Geometry> geometry;
+    Core::Assets::AssetRef<Material> material;
     bool visible = true;
-
-    RendererComponent& setMesh(const Core::Graphics::MeshResource& value){ mesh = value; return *this; }
-    constexpr RendererComponent& setVisible(bool value){ visible = value; return *this; }
 };
 
 

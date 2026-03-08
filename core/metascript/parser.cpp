@@ -37,6 +37,7 @@ public:
         try{
             if(!parseDeclaration(outAssetType, outAssetVariable))
                 return false;
+            m_declaredAssetVariable = MStringView(outAssetVariable.data(), outAssetVariable.size());
 
             while(m_current.type != TokenType::EndOfFile){
                 if(!parseStatement())
@@ -447,6 +448,11 @@ private:
         NWB_ASSERT(!path.empty());
 
         const auto rootName = path[0];
+        if(rootName != m_declaredAssetVariable){
+            error(errorLine, errorColumn, "assignments must target the declared asset variable");
+            return nullptr;
+        }
+
         auto rootIt = m_variables.find(rootName);
         if(rootIt == m_variables.end()){
             if(!allowCreateRoot){
@@ -476,6 +482,11 @@ private:
 
     Value resolveRead(const MVector<MStringView>& path){
         NWB_ASSERT(!path.empty());
+
+        if(path[0] != m_declaredAssetVariable){
+            error("references must target the declared asset variable");
+            return Value(m_arena);
+        }
 
         auto rootIt = m_variables.find(path[0]);
         if(rootIt == m_variables.end()){
@@ -668,6 +679,7 @@ private:
     Alloc::CustomArena& m_arena;
     MVector<ParseError>& m_errors;
     MStringMap<Value>& m_variables;
+    MStringView m_declaredAssetVariable;
 
     Token m_current;
     Token m_previous;

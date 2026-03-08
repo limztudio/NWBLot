@@ -38,8 +38,8 @@ Core::Assets::AssetCodecAutoRegistrar s_ShaderAssetCodecAutoRegistrar(&CreateSha
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Shader::loadBinary(const AStringView virtualPath, const Core::Assets::AssetBytes& binary){
-    if(virtualPath.empty()){
+bool Shader::loadBinary(const Core::Assets::AssetBytes& binary){
+    if(!virtualPath()){
         NWB_LOGGER_ERROR(NWB_TEXT("Shader::loadBinary failed: virtual path is empty"));
         return false;
     }
@@ -56,7 +56,6 @@ bool Shader::loadBinary(const AStringView virtualPath, const Core::Assets::Asset
         return false;
     }
 
-    m_virtualPath = virtualPath;
     m_bytecode = binary;
     return true;
 }
@@ -65,9 +64,9 @@ bool Shader::loadBinary(const AStringView virtualPath, const Core::Assets::Asset
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ShaderAssetCodec::deserialize(const AStringView virtualPath, const Core::Assets::AssetBytes& binary, UniquePtr<Core::Assets::IAsset>& outAsset)const{
-    auto asset = MakeUnique<Shader>();
-    if(!asset->loadBinary(virtualPath, binary))
+bool ShaderAssetCodec::deserialize(const Name& virtualPath, const Core::Assets::AssetBytes& binary, UniquePtr<Core::Assets::IAsset>& outAsset)const{
+    auto asset = MakeUnique<Shader>(virtualPath);
+    if(!asset->loadBinary(binary))
         return false;
 
     outAsset = Move(asset);
@@ -88,8 +87,8 @@ bool ShaderAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets
     if(asset.assetType() != assetType()){
         NWB_LOGGER_ERROR(
             NWB_TEXT("ShaderAssetCodec::serialize failed: invalid asset type '{}', expected '{}'"),
-            StringConvert(asset.assetType()),
-            StringConvert(assetType())
+            StringConvert(asset.assetType().c_str()),
+            StringConvert(Shader::s_AssetTypeText)
         );
         return false;
     }

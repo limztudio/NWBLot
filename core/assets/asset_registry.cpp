@@ -20,8 +20,8 @@ bool AssetRegistry::registerCodec(UniquePtr<IAssetCodec>&& codec, const bool rep
     if(!codec)
         return false;
 
-    const AString typeName = ::CanonicalizeText(codec->assetType());
-    if(typeName.empty())
+    const Name typeName = codec->assetType();
+    if(!typeName)
         return false;
 
     ScopedLock lock(m_mutex);
@@ -39,37 +39,44 @@ bool AssetRegistry::registerCodec(UniquePtr<IAssetCodec>&& codec, const bool rep
     return true;
 }
 
-bool AssetRegistry::unregisterCodec(const AStringView assetType){
-    const AString typeName = ::CanonicalizeText(assetType);
-    if(typeName.empty())
+bool AssetRegistry::unregisterCodec(const Name& assetType){
+    if(!assetType)
         return false;
 
     ScopedLock lock(m_mutex);
-    return m_codecs.erase(typeName) != 0;
+    return m_codecs.erase(assetType) != 0;
 }
 
-bool AssetRegistry::deserializeAsset(const AStringView assetType, const AStringView virtualPath, const AssetBytes& binary, UniquePtr<IAsset>& outAsset)const{
+bool AssetRegistry::deserializeAsset(
+    const Name& assetType,
+    const Name& virtualPath,
+    const AssetBytes& binary,
+    UniquePtr<IAsset>& outAsset
+)const{
     outAsset.reset();
 
-    const AString typeName = ::CanonicalizeText(assetType);
-    if(typeName.empty()){
+    if(!assetType){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetRegistry: asset type is empty"));
         return false;
     }
 
-    const IAssetCodec* codec = nullptr;
-    {
-        ScopedLock lock(m_mutex);
-        const auto found = m_codecs.find(typeName);
-        if(found != m_codecs.end())
-            codec = found.value().get();
-    }
+    return deserializeAssetByName(assetType, virtualPath, binary, outAsset);
+}
 
-    if(codec == nullptr){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetRegistry: no codec for type '{}'"), StringConvert(assetType));
+bool AssetRegistry::deserializeAssetByName(
+    const Name& assetType,
+    const Name& virtualPath,
+    const AssetBytes& binary,
+    UniquePtr<IAsset>& outAsset
+)const{
+    ScopedLock lock(m_mutex);
+    const auto found = m_codecs.find(assetType);
+    if(found == m_codecs.end() || found.value() == nullptr){
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetRegistry: no codec for type '{}'"), StringConvert(assetType.c_str()));
         return false;
     }
 
+    const NotNull<const IAssetCodec*> codec(found.value().get());
     return codec->deserialize(virtualPath, binary, outAsset);
 }
 

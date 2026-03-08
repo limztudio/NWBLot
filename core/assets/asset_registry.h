@@ -19,16 +19,25 @@ NWB_ASSETS_BEGIN
 
 class AssetRegistry final : NoCopy{
 private:
-    using CodecMap = HashMap<AString, UniquePtr<IAssetCodec>>;
+    using CodecMap = HashMap<Name, UniquePtr<IAssetCodec>, Hasher<Name>, EqualTo<Name>>;
 
 
 public:
     bool registerCodec(UniquePtr<IAssetCodec>&& codec, bool replaceExisting = false);
-    bool unregisterCodec(AStringView assetType);
+    bool unregisterCodec(const Name& assetType);
 
     bool deserializeAsset(
-        AStringView assetType,
-        AStringView virtualPath,
+        const Name& assetType,
+        const Name& virtualPath,
+        const AssetBytes& binary,
+        UniquePtr<IAsset>& outAsset
+    )const;
+
+
+private:
+    bool deserializeAssetByName(
+        const Name& assetType,
+        const Name& virtualPath,
         const AssetBytes& binary,
         UniquePtr<IAsset>& outAsset
     )const;

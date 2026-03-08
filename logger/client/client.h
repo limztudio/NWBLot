@@ -5,8 +5,6 @@
 #pragma once
 
 
-#include <curl/curl.h>
-
 #include <logger/common.h>
 
 
@@ -80,7 +78,7 @@ protected:
 
 
 private:
-    CURL* m_curl;
+    void* m_curl;
 
 private:
     Atomic<i32> m_msgCount;

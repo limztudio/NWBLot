@@ -33,7 +33,7 @@ public:
 
 
 public:
-    virtual bool readAssetBinary(AStringView virtualPath, AssetBytes& outBinary)const = 0;
+    virtual bool readAssetBinary(const Name& virtualPath, AssetBytes& outBinary)const = 0;
 };
 
 class IAssetAsyncExecutor{
@@ -58,8 +58,8 @@ class AssetManager final : NoCopy{
 private:
     struct RequestRecord{
         AssetLoadResult result;
-        AString assetType;
-        AString virtualPath;
+        Name assetType = NAME_NONE;
+        Name virtualPath = NAME_NONE;
     };
 
     using RequestMap = HashMap<u64, RequestRecord>;
@@ -73,12 +73,12 @@ public:
     void setAsyncExecutor(IAssetAsyncExecutor* asyncExecutor);
 
     bool loadSync(
-        AStringView assetType,
-        AStringView virtualPath,
+        const Name& assetType,
+        const Name& virtualPath,
         UniquePtr<IAsset>& outAsset
     )const;
 
-    [[nodiscard]] u64 enqueueLoad(AStringView assetType, AStringView virtualPath);
+    [[nodiscard]] u64 enqueueLoad(const Name& assetType, const Name& virtualPath);
     void processPending();
     bool tryPopResult(u64 requestId, AssetLoadResult& outResult);
 

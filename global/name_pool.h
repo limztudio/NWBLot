@@ -37,7 +37,7 @@ public:
             return NAME_NONE;
 
         const AString canonical = CanonicalizeText(str);
-        const Name name(canonical.c_str());
+        const Name name(str);
 
         ScopedLock lock(m_mutex);
 

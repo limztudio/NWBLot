@@ -8,7 +8,6 @@
 #include "../global.h"
 
 #include <core/assets/asset.h>
-#include <core/assets/asset_ref.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -20,22 +19,16 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class Shader;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class Material final : public Core::Assets::IAsset{
+class Geometry final : public Core::Assets::IAsset{
 public:
-    static constexpr AStringView s_AssetTypeText = "material";
+    static constexpr AStringView s_AssetTypeText = "geometry";
 
 
 public:
-    Material()
+    Geometry()
         : IAsset(AssetTypeName())
     {}
-    explicit Material(const Name& virtualPath)
+    explicit Geometry(const Name& virtualPath)
         : IAsset(AssetTypeName(), virtualPath)
     {}
 
@@ -50,31 +43,31 @@ public:
     bool loadBinary(const Core::Assets::AssetBytes& binary);
 
 public:
-    void setShaderVariant(const CompactString& variantName);
-    void setShaderForStage(const Name& stageName, const Core::Assets::AssetRef<Shader>& shaderAsset);
-    bool setParameter(const CompactString& key, const CompactString& value);
+    void setVertexLayout(u32 vertexStride){ m_vertexStride = vertexStride; }
+    void setVertexData(const void* data, usize bytes);
+    void setIndexData(const void* data, usize bytes, bool use32BitIndices);
 
-    [[nodiscard]] bool findShaderForStage(const Name& stageName, Core::Assets::AssetRef<Shader>& outShaderAsset)const;
-
-    [[nodiscard]] const CompactString& shaderVariant()const{ return m_shaderVariant; }
-    [[nodiscard]] const HashMap<Name, Core::Assets::AssetRef<Shader>>& stageShaders()const{ return m_stageShaders; }
-    [[nodiscard]] const HashMap<CompactString, CompactString>& parameters()const{ return m_parameters; }
+    [[nodiscard]] u32 vertexStride()const{ return m_vertexStride; }
+    [[nodiscard]] bool use32BitIndices()const{ return m_use32BitIndices; }
+    [[nodiscard]] const Vector<u8>& vertexData()const{ return m_vertexData; }
+    [[nodiscard]] const Vector<u8>& indexData()const{ return m_indexData; }
 
 
 private:
-    CompactString m_shaderVariant;
-    HashMap<Name, Core::Assets::AssetRef<Shader>> m_stageShaders;
-    HashMap<CompactString, CompactString> m_parameters;
+    u32 m_vertexStride = 0;
+    bool m_use32BitIndices = false;
+    Vector<u8> m_vertexData;
+    Vector<u8> m_indexData;
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class MaterialAssetCodec final : public Core::Assets::IAssetCodec{
+class GeometryAssetCodec final : public Core::Assets::IAssetCodec{
 public:
-    MaterialAssetCodec()
-        : IAssetCodec(Material::AssetTypeName())
+    GeometryAssetCodec()
+        : IAssetCodec(Geometry::AssetTypeName())
     {}
 
 public:

@@ -6,7 +6,6 @@
 
 
 #include "basic_string.h"
-#include "filesystem.h"
 
 #include <cctype>
 #include <charconv>
@@ -100,8 +99,8 @@ template<typename CharT>
 [[nodiscard]] inline f64 Stod(const AString& str, usize* pos = nullptr){ return std::stod(str, pos); }
 
 
-template<typename CharT = char>
-[[nodiscard]] inline BasicString<CharT> PathToString(const Path& path){
+template<typename CharT = char, typename PathT>
+[[nodiscard]] inline BasicString<CharT> PathToString(const PathT& path){
     if constexpr(SameAs<CharT, char>)
         return path.generic_string();
     else

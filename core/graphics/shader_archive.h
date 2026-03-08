@@ -24,14 +24,6 @@ public:
 
 
 public:
-    using ArchiveArena = Core::Alloc::CustomArena;
-    template<typename T>
-    using ArchiveAllocator = Core::Alloc::CustomAllocator<T>;
-    template<typename T>
-    using ArchiveVector = Vector<T, ArchiveAllocator<T>>;
-
-
-public:
     struct Record{
         Name shaderName = NAME_NONE;
         Name variantName = NAME_NONE;
@@ -44,10 +36,11 @@ public:
 
 
 public:
-    [[nodiscard]] static AString buildVirtualPath(AStringView shaderName, AStringView variantName, AStringView stageName);
+    [[nodiscard]] static const Name& IndexVirtualPathName();
+    [[nodiscard]] static Name buildVirtualPathName(const Name& shaderName, const CompactString& variantName, const Name& stageName);
     static bool serializeIndex(const Vector<Record>& records, Vector<u8>& outBinary);
     static bool deserializeIndex(const Vector<u8>& binary, Vector<Record>& outRecords);
-    static bool findVirtualPath(const Vector<Record>& records, AStringView shaderName, AStringView variantName, AStringView stageName, AString& outVirtualPath);
+    static bool findVirtualPath(const Vector<Record>& records, const Name& shaderName, const CompactString& variantName, const Name& stageName, Name& outVirtualPath);
 };
 
 

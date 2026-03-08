@@ -1,0 +1,7 @@
+shader asset;
+
+asset.compiler = "dxc";
+asset.stage = "vs";
+asset.target_profile = "vs_6_0";
+asset.entry_point = "main";
+asset.include_roots = ["engine/graphics"];

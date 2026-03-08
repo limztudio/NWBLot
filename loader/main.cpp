@@ -76,12 +76,7 @@ public:
 
 public:
     virtual bool readAssetBinary(AStringView virtualPath, NWB::Core::Assets::AssetBytes& outBinary)const override{
-        AString loadError;
-        if(!m_volumeSession.loadData(virtualPath, outBinary, loadError)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to read asset '{}': {}"), StringConvert(virtualPath), StringConvert(loadError));
-            return false;
-        }
-        return true;
+        return m_volumeSession.loadData(virtualPath, outBinary);
     }
 
 
@@ -132,15 +127,8 @@ static int MainLogic(NotNull<const char*> logAddress, void* inst){
 
             NWB::Core::Filesystem::VolumeSession graphicsVolume(frame.projectObjectArena());
             const Path shaderMountDirectory = __hidden_loader::ResolveShaderMountDirectory();
-            AString mountError;
-            if(!graphicsVolume.load("graphics", shaderMountDirectory, mountError)){
-                NWB_LOGGER_FATAL(
-                    NWB_TEXT("Failed to load graphics volume from '{}': {}"),
-                    StringConvert(shaderMountDirectory.string()),
-                    StringConvert(mountError)
-                );
+            if(!graphicsVolume.load("graphics", shaderMountDirectory))
                 return -1;
-            }
 
             __hidden_loader::VolumeAssetBinarySource assetBinarySource(graphicsVolume);
 

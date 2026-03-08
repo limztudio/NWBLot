@@ -427,7 +427,13 @@ static void RemovePromotedVolumeSegmentsBestEffort(const Path& outputDirectory, 
     for(usize segmentIndex = 0; segmentIndex < segmentCount; ++segmentIndex){
         const Path segmentPath = outputDirectory / MakeVolumeSegmentFileName(volumeName, segmentIndex);
         errorCode.clear();
-        RemoveFile(segmentPath, errorCode);
+        if(!RemoveFile(segmentPath, errorCode)){
+            NWB_LOGGER_WARNING(
+                NWB_TEXT("Filesystem volume publish: failed to remove promoted segment '{}' after failed promotion: {}"),
+                PathToString<tchar>(segmentPath),
+                StringConvert(errorCode.message())
+            );
+        }
     }
 }
 

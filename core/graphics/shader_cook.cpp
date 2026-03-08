@@ -560,13 +560,11 @@ bool ShaderCook::parseIncludeMeta(const Path& nwbFilePath, const Metascript::Doc
     if(__hidden_shader_cook::CanonicalAssetType(doc) != __hidden_shader_cook::s_AssetTypeInclude)
         return true;
 
-    const Metascript::Value& asset = doc.asset();
-    if(!asset.isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Include meta '{}': asset is not a map"), PathToString<tchar>(nwbFilePath));
-        return false;
-    }
-
     outEntry.source = __hidden_shader_cook::SourcePathFromNwb(nwbFilePath);
+
+    const Metascript::Value& asset = doc.asset();
+    if(!asset.isMap())
+        return true;
 
     if(!__hidden_shader_cook::ParseDefaultVariant(nwbFilePath, asset, outEntry.defaultVariant))
         return false;
@@ -670,9 +668,8 @@ AString ShaderCook::buildVariantName(const DefineCombo& combo){
 }
 
 bool ShaderCook::canonicalizeVariantSignature(const AStringView variantSignature, AString& outCanonical){
-    outCanonical.clear();
-
     const AString trimmedSignature = Trim(variantSignature);
+    outCanonical.clear();
     if(trimmedSignature.empty())
         return true;
     if(trimmedSignature == "default"){

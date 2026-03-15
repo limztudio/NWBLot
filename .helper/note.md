@@ -9,6 +9,7 @@ Updated: 2026-02-28
 3. Asset-to-asset and component-to-asset bindings must use typed `Core::Assets::AssetRef<T>`, not raw `Name` or string forms.
 4. Graphics pipeline caches must include framebuffer/render-target compatibility in the cache key; material/shader identity alone is not enough when pipeline creation depends on framebuffer info.
 5. Basic built-in geometry should live in `.nwb` metadata payloads, not as hardcoded vertex/index arrays inside the cooker.
+6. If an asset invariant is format-wide, validate it in the asset/codec layer, not only in one cooker path.
 
 ## Scheduler Architecture
 
@@ -48,4 +49,6 @@ Updated: 2026-02-28
 2. Keep `World` component APIs (`add/remove/get/hasComponent`) private and expose them only through the generic `NWB::Core::ECS::Entity` facade.
 3. Treat `EntityID` as a lightweight ID and `Entity` as the component operation surface.
 4. Do not introduce ad-hoc or project-local ECS wrappers for this role.
+
+
 

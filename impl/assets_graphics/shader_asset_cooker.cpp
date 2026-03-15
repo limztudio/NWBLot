@@ -11,6 +11,7 @@
 #include "shader_asset_cooker.h"
 #include "geometry_asset.h"
 #include "material_asset.h"
+#include "shader_asset.h"
 
 #include <core/graphics/shader_archive.h>
 #include <core/graphics/shader_cook.h>
@@ -50,10 +51,6 @@ UniquePtr<Core::Assets::IAssetCooker> CreateShaderAssetCooker(Core::Alloc::Custo
 }
 Core::Assets::AssetCookerAutoRegistrar s_ShaderAssetCookerAutoRegistrar(&CreateShaderAssetCooker);
 
-static const Name& ShaderAssetTypeName(){
-    static const Name s_Name("shader");
-    return s_Name;
-}
 static const Name& IncludeAssetTypeName(){
     static const Name s_Name("include");
     return s_Name;
@@ -524,21 +521,21 @@ static bool ParseMaterialStageShaders(
         NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': shaders must be a map"), PathToString<tchar>(nwbFilePath));
         return false;
     }
+    outStageShaders.reserve(shadersValue->asMap().size());
 
     for(const auto& [stageKey, shaderValue] : shadersValue->asMap()){
+        const AStringView stageKeyText(stageKey.data(), stageKey.size());
         if(!shaderValue.isString()){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("Material meta '{}': shader '{}' must be a string"),
                 PathToString<tchar>(nwbFilePath),
-                StringConvert(AString(stageKey.data(), stageKey.size()))
+                StringConvert(stageKeyText)
             );
             return false;
         }
 
-        const AString stageNameText = CanonicalizeText(AString(stageKey.data(), stageKey.size()));
-        const AString shaderNameText = CanonicalizeText(shaderValue.copyString());
-        const Name stageName = ToName(stageNameText);
-        const Name shaderName = ToName(shaderNameText);
+        const Name stageName = ToName(stageKeyText);
+        const Name shaderName = ToName(shaderValue.asString());
         const Core::Assets::AssetRef<Shader> shaderAsset(shaderName);
         if(!stageName || !shaderAsset.valid()){
             NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': shader stage entries must not be empty"), PathToString<tchar>(nwbFilePath));
@@ -549,7 +546,7 @@ static bool ParseMaterialStageShaders(
             NWB_LOGGER_ERROR(
                 NWB_TEXT("Material meta '{}': duplicate shader stage '{}'"),
                 PathToString<tchar>(nwbFilePath),
-                StringConvert(stageNameText)
+                StringConvert(stageKeyText)
             );
             return false;
         }
@@ -577,24 +574,27 @@ static bool ParseMaterialParameters(
         NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': parameters must be a map"), PathToString<tchar>(nwbFilePath));
         return false;
     }
+    outParameters.reserve(parametersValue->asMap().size());
 
     for(const auto& [paramKey, paramValue] : parametersValue->asMap()){
+        const AStringView paramKeyText(paramKey.data(), paramKey.size());
         if(!paramValue.isString()){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("Material meta '{}': parameter '{}' must be a string"),
                 PathToString<tchar>(nwbFilePath),
-                StringConvert(AString(paramKey.data(), paramKey.size()))
+                StringConvert(paramKeyText)
             );
             return false;
         }
 
         CompactString key;
         CompactString value;
-        if(!key.assign(AStringView(paramKey.data(), paramKey.size())) || !value.assign(paramValue.copyString())){
+        const AStringView paramValueText(paramValue.asString().data(), paramValue.asString().size());
+        if(!key.assign(paramKeyText) || !value.assign(paramValueText)){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("Material meta '{}': parameter '{}' exceeds CompactString capacity"),
                 PathToString<tchar>(nwbFilePath),
-                StringConvert(AString(paramKey.data(), paramKey.size()))
+                StringConvert(paramKeyText)
             );
             return false;
         }
@@ -693,16 +693,24 @@ static bool ParseGeometryMeta(const DiscoveredNwbFile& discoveredFile, const Cor
         return false;
     }
 
-    const AString indexType = CanonicalizeText(indexTypeValue->copyString());
-    if(indexType == "u16")
+    CompactString indexType;
+    const AStringView indexTypeText(indexTypeValue->asString().data(), indexTypeValue->asString().size());
+    if(!indexType.assign(indexTypeText)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Geometry meta '{}': index_type exceeds CompactString capacity"),
+            PathToString<tchar>(discoveredFile.filePath)
+        );
+        return false;
+    }
+    if(indexType.view() == "u16")
         outEntry.use32BitIndices = false;
-    else if(indexType == "u32")
+    else if(indexType.view() == "u32")
         outEntry.use32BitIndices = true;
     else{
         NWB_LOGGER_ERROR(
             NWB_TEXT("Geometry meta '{}': unsupported index_type '{}'"),
             PathToString<tchar>(discoveredFile.filePath),
-            StringConvert(indexType)
+            StringConvert(indexType.view())
         );
         return false;
     }
@@ -809,39 +817,11 @@ static bool ParseGeometryMeta(const DiscoveredNwbFile& discoveredFile, const Cor
 }
 
 static bool BuildGeometryAsset(const GeometryEntry& geometryEntry, Geometry& outGeometry){
-    if(geometryEntry.vertexStride == 0 || geometryEntry.vertexData.empty() || geometryEntry.indexData.empty()){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("ShaderAssetCooker: geometry '{}' has incomplete payload"),
-            StringConvert(geometryEntry.virtualPath.c_str())
-        );
-        return false;
-    }
-    if((geometryEntry.vertexData.size() % geometryEntry.vertexStride) != 0){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("ShaderAssetCooker: geometry '{}' vertex payload size {} is not aligned to stride {}"),
-            StringConvert(geometryEntry.virtualPath.c_str()),
-            geometryEntry.vertexData.size(),
-            geometryEntry.vertexStride
-        );
-        return false;
-    }
-
-    const usize indexElementSize = geometryEntry.use32BitIndices ? sizeof(u32) : sizeof(u16);
-    if((geometryEntry.indexData.size() % indexElementSize) != 0){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("ShaderAssetCooker: geometry '{}' index payload size {} is not aligned to {}-byte indices"),
-            StringConvert(geometryEntry.virtualPath.c_str()),
-            geometryEntry.indexData.size(),
-            indexElementSize
-        );
-        return false;
-    }
-
     outGeometry = Geometry(geometryEntry.virtualPath);
     outGeometry.setVertexLayout(geometryEntry.vertexStride);
     outGeometry.setVertexData(geometryEntry.vertexData.data(), geometryEntry.vertexData.size());
     outGeometry.setIndexData(geometryEntry.indexData.data(), geometryEntry.indexData.size(), geometryEntry.use32BitIndices);
-    return true;
+    return outGeometry.validatePayload();
 }
 
 static bool BuildIncludeDirectories(const Path& repoRoot, const Vector<Path>& assetRoots, const Core::ShaderCook::ShaderEntry& entry, Core::ShaderCook::CookVector<Path>& outIncludeDirectories){
@@ -856,6 +836,7 @@ static bool BuildIncludeDirectories(const Path& repoRoot, const Vector<Path>& as
 
     outIncludeDirectories.clear();
     outIncludeDirectories.reserve(entry.includeRoots.size());
+    seenIncludeDirectories.reserve(entry.includeRoots.size());
 
     for(const AString& includeRoot : entry.includeRoots){
         Path includeDirectory;
@@ -1293,7 +1274,7 @@ static bool ParseAssetMetadata(
 
         const AStringView rawAssetTypeText(doc.assetType().data(), doc.assetType().size());
         const Name assetType = ToName(rawAssetTypeText);
-        if(assetType == ShaderAssetTypeName()){
+        if(assetType == Shader::AssetTypeName()){
             Core::ShaderCook::ShaderEntry shaderEntry(cookArena);
             if(!shaderCook.parseShaderMeta(nwbFile, doc, shaderEntry))
                 return false;
@@ -1920,3 +1901,7 @@ NWB_IMPL_END
 
 
 #endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

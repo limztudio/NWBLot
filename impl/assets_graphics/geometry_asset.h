@@ -41,6 +41,7 @@ public:
 
 public:
     bool loadBinary(const Core::Assets::AssetBytes& binary);
+    [[nodiscard]] bool validatePayload()const;
 
 public:
     void setVertexLayout(u32 vertexStride){ m_vertexStride = vertexStride; }

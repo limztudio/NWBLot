@@ -55,6 +55,96 @@ void Geometry::setIndexData(const void* data, const usize bytes, const bool use3
         NWB_MEMCPY(m_indexData.data(), bytes, data, bytes);
 }
 
+bool Geometry::validatePayload()const{
+    const char* geometryPathText = virtualPath() ? virtualPath().c_str() : "<unnamed>";
+
+    if(m_vertexStride == 0 || m_vertexData.empty() || m_indexData.empty()){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Geometry::validatePayload failed: geometry '{}' has incomplete payload"),
+            StringConvert(geometryPathText)
+        );
+        return false;
+    }
+
+    if((m_vertexData.size() % m_vertexStride) != 0){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Geometry::validatePayload failed: geometry '{}' vertex payload size {} is not aligned to stride {}"),
+            StringConvert(geometryPathText),
+            m_vertexData.size(),
+            m_vertexStride
+        );
+        return false;
+    }
+
+    const usize indexStride = m_use32BitIndices ? sizeof(u32) : sizeof(u16);
+    if((m_indexData.size() % indexStride) != 0){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Geometry::validatePayload failed: geometry '{}' index payload size {} is not aligned to {}-byte indices"),
+            StringConvert(geometryPathText),
+            m_indexData.size(),
+            indexStride
+        );
+        return false;
+    }
+
+    const usize vertexCount = m_vertexData.size() / m_vertexStride;
+    const usize indexCount = m_indexData.size() / indexStride;
+    if(vertexCount > static_cast<usize>(Limit<u32>::s_Max) || indexCount > static_cast<usize>(Limit<u32>::s_Max)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Geometry::validatePayload failed: geometry '{}' exceeds u32 vertex/index count limits"),
+            StringConvert(geometryPathText)
+        );
+        return false;
+    }
+    if((indexCount % 3u) != 0u){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Geometry::validatePayload failed: geometry '{}' index count {} is not a multiple of 3 for triangle-list rendering"),
+            StringConvert(geometryPathText),
+            indexCount
+        );
+        return false;
+    }
+
+    usize cursor = 0;
+    u64 maxIndexValue = 0;
+    while(cursor < m_indexData.size()){
+        if(m_use32BitIndices){
+            u32 indexValue = 0;
+            if(!ReadPOD(m_indexData, cursor, indexValue)){
+                NWB_LOGGER_ERROR(
+                    NWB_TEXT("Geometry::validatePayload failed: geometry '{}' contains malformed u32 index data"),
+                    StringConvert(geometryPathText)
+                );
+                return false;
+            }
+            maxIndexValue = Max(maxIndexValue, static_cast<u64>(indexValue));
+            continue;
+        }
+
+        u16 indexValue = 0;
+        if(!ReadPOD(m_indexData, cursor, indexValue)){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Geometry::validatePayload failed: geometry '{}' contains malformed u16 index data"),
+                StringConvert(geometryPathText)
+            );
+            return false;
+        }
+        maxIndexValue = Max(maxIndexValue, static_cast<u64>(indexValue));
+    }
+
+    if(maxIndexValue >= static_cast<u64>(vertexCount)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Geometry::validatePayload failed: geometry '{}' references vertex index {} but only has {} vertices"),
+            StringConvert(geometryPathText),
+            maxIndexValue,
+            vertexCount
+        );
+        return false;
+    }
+
+    return true;
+}
+
 
 bool Geometry::loadBinary(const Core::Assets::AssetBytes& binary){
     if(!virtualPath()){
@@ -126,7 +216,7 @@ bool Geometry::loadBinary(const Core::Assets::AssetBytes& binary){
         return false;
     }
 
-    return true;
+    return validatePayload();
 }
 
 
@@ -160,10 +250,8 @@ bool GeometryAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
     }
 
     const Geometry& geometry = static_cast<const Geometry&>(asset);
-    if(geometry.vertexStride() == 0 || geometry.vertexData().empty() || geometry.indexData().empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("GeometryAssetCodec::serialize failed: geometry payload is incomplete"));
+    if(!geometry.validatePayload())
         return false;
-    }
 
     outBinary.clear();
     AppendPOD(outBinary, __hidden_assets::s_GeometryMagic);

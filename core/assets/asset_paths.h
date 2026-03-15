@@ -85,6 +85,36 @@ namespace __hidden_asset_paths{
     return outVirtualRoot.assign(PathToString(*componentIt)) && !outVirtualRoot.empty();
 }
 
+[[nodiscard]] inline bool BuildDerivedAssetVirtualPathText(const Path& assetRoot, const AStringView virtualRoot, const Path& sourceOrMetaPath, AString& outVirtualPath){
+    outVirtualPath.clear();
+
+    const Path relativePath = sourceOrMetaPath.lexically_relative(assetRoot);
+    if(relativePath.empty()){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Assets: failed to derive asset path from '{}' relative to asset root '{}'"),
+            PathToString<tchar>(sourceOrMetaPath),
+            PathToString<tchar>(assetRoot)
+        );
+        return false;
+    }
+
+    Path logicalPath = relativePath;
+    logicalPath.replace_extension();
+
+    AString relativePathText;
+    if(!BuildRelativeAssetPathText(logicalPath, relativePathText)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Assets: asset '{}' is not under asset root '{}'"),
+            PathToString<tchar>(sourceOrMetaPath),
+            PathToString<tchar>(assetRoot)
+        );
+        return false;
+    }
+
+    outVirtualPath = StringFormat("{}/{}", virtualRoot, relativePathText);
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -112,39 +142,8 @@ namespace __hidden_asset_paths{
     return true;
 }
 
-[[nodiscard]] inline bool BuildDerivedAssetVirtualPath(
-    const Path& assetRoot,
-    const AStringView virtualRoot,
-    const Path& sourceOrMetaPath,
-    AString& outVirtualPath
-){
-    outVirtualPath.clear();
-
-    const Path relativePath = sourceOrMetaPath.lexically_relative(assetRoot);
-    if(relativePath.empty()){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Assets: failed to derive asset path from '{}' relative to asset root '{}'"),
-            PathToString<tchar>(sourceOrMetaPath),
-            PathToString<tchar>(assetRoot)
-        );
-        return false;
-    }
-
-    Path logicalPath = relativePath;
-    logicalPath.replace_extension();
-
-    AString relativePathText;
-    if(!__hidden_asset_paths::BuildRelativeAssetPathText(logicalPath, relativePathText)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Assets: asset '{}' is not under asset root '{}'"),
-            PathToString<tchar>(sourceOrMetaPath),
-            PathToString<tchar>(assetRoot)
-        );
-        return false;
-    }
-
-    outVirtualPath = StringFormat("{}/{}", virtualRoot, relativePathText);
-    return true;
+[[nodiscard]] inline bool BuildDerivedAssetVirtualPath(const Path& assetRoot, const AStringView virtualRoot, const Path& sourceOrMetaPath, AString& outVirtualPath){
+    return __hidden_asset_paths::BuildDerivedAssetVirtualPathText(assetRoot, virtualRoot, sourceOrMetaPath, outVirtualPath);
 }
 
 [[nodiscard]] inline bool BuildDerivedAssetVirtualPath(
@@ -156,7 +155,7 @@ namespace __hidden_asset_paths{
     outVirtualPath = NAME_NONE;
 
     AString virtualPathText;
-    if(!BuildDerivedAssetVirtualPath(assetRoot, virtualRoot, sourceOrMetaPath, virtualPathText))
+    if(!__hidden_asset_paths::BuildDerivedAssetVirtualPathText(assetRoot, virtualRoot, sourceOrMetaPath, virtualPathText))
         return false;
 
     outVirtualPath = Name(AStringView(virtualPathText));

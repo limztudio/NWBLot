@@ -113,6 +113,8 @@ Updated: 2026-02-28
   - Do not add convenience setters/constructors that accept raw path text or raw `Name` for typed asset bindings; accept or store `AssetRef<T>` directly.
 - For simple generated geometry assets, keep the shape description/payload in `.nwb` metadata.
   - Do not hardcode primitive vertex/index tables in asset cooker C++ just to support built-in shapes.
+- Generic asset payload validation belongs in the asset type / codec domain.
+  - Do not leave structural validation that applies to all instances of an asset type only inside one specific cooker implementation.
 - Strictly distinguish references vs pointers:
   - Parameters:
     - Use references (`T&`, `const T&`) for required, non-null inputs by default.
@@ -255,3 +257,4 @@ Updated: 2026-02-28
 - If unsure, start with `Futex`.
 - Upgrade to `QueuingMutex`/`SharedQueuingMutex` only after observing contention/fairness issues.
 - Use spin-based locks (`SpinMutex`, `SharedMutex`) only for measured hot-path wins with very short lock hold times.
+

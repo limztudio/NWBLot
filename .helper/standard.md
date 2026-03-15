@@ -111,6 +111,8 @@ Updated: 2026-02-28
   - When an asset references another asset, use `Core::Assets::AssetRef<T>`.
   - Do not store those bindings as raw `Name`, `CompactString`, `AString`, or other untyped text.
   - Do not add convenience setters/constructors that accept raw path text or raw `Name` for typed asset bindings; accept or store `AssetRef<T>` directly.
+- For simple generated geometry assets, keep the shape description/payload in `.nwb` metadata.
+  - Do not hardcode primitive vertex/index tables in asset cooker C++ just to support built-in shapes.
 - Strictly distinguish references vs pointers:
   - Parameters:
     - Use references (`T&`, `const T&`) for required, non-null inputs by default.

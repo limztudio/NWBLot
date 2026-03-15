@@ -8,6 +8,7 @@ Updated: 2026-02-28
 2. Use `getDevice()` and rely on invariant/assert behavior instead of defensive null handling that adds overhead and hides invalid states.
 3. Asset-to-asset and component-to-asset bindings must use typed `Core::Assets::AssetRef<T>`, not raw `Name` or string forms.
 4. Graphics pipeline caches must include framebuffer/render-target compatibility in the cache key; material/shader identity alone is not enough when pipeline creation depends on framebuffer info.
+5. Basic built-in geometry should live in `.nwb` metadata payloads, not as hardcoded vertex/index arrays inside the cooker.
 
 ## Scheduler Architecture
 

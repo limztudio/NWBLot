@@ -94,7 +94,10 @@ struct VariantCachePaths{
 };
 struct GeometryEntry{
     Name virtualPath = NAME_NONE;
-    CompactString primitive;
+    u32 vertexStride = 0;
+    bool use32BitIndices = false;
+    Vector<u8> vertexData;
+    Vector<u8> indexData;
 };
 struct MaterialEntry{
     Name virtualPath = NAME_NONE;
@@ -157,35 +160,6 @@ struct PreparedShaderPlan{
     {}
 };
 using StagedVolumePaths = StagedDirectoryPaths;
-
-struct CubeGeometryVertex{
-    f32 px;
-    f32 py;
-    f32 pz;
-    f32 r;
-    f32 g;
-    f32 b;
-};
-
-static constexpr CubeGeometryVertex s_CubeVertices[8] = {
-    { -0.5f, -0.5f, -0.5f, 0.9f, 0.2f, 0.2f },
-    { +0.5f, -0.5f, -0.5f, 0.2f, 0.9f, 0.2f },
-    { +0.5f, +0.5f, -0.5f, 0.2f, 0.2f, 0.9f },
-    { -0.5f, +0.5f, -0.5f, 0.9f, 0.9f, 0.2f },
-    { -0.5f, -0.5f, +0.5f, 0.9f, 0.2f, 0.9f },
-    { +0.5f, -0.5f, +0.5f, 0.2f, 0.9f, 0.9f },
-    { +0.5f, +0.5f, +0.5f, 0.95f, 0.95f, 0.95f },
-    { -0.5f, +0.5f, +0.5f, 0.4f, 0.4f, 0.4f },
-};
-
-static constexpr u16 s_CubeIndices[36] = {
-    0, 2, 1, 0, 3, 2,
-    4, 5, 6, 4, 6, 7,
-    0, 1, 5, 0, 5, 4,
-    2, 3, 7, 2, 7, 6,
-    0, 4, 7, 0, 7, 3,
-    1, 2, 6, 1, 6, 5,
-};
 
 static void RemoveDirectoryIfPresentBestEffort(const Path& directoryPath, const AStringView label);
 
@@ -685,18 +659,149 @@ static bool ParseGeometryMeta(const DiscoveredNwbFile& discoveredFile, const Cor
     if(!Core::Assets::BuildDerivedAssetVirtualPath(discoveredFile.assetRoot, discoveredFile.virtualRoot, discoveredFile.filePath, outEntry.virtualPath))
         return false;
 
-    const auto* primitiveValue = asset.findField("primitive");
-    if(!primitiveValue || !primitiveValue->isString()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': primitive must be a string"), PathToString<tchar>(discoveredFile.filePath));
+    if(asset.findField("primitive")){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Geometry meta '{}': field 'primitive' is no longer supported; define vertex_stride, vertex_data, index_type, and index_data in metadata"),
+            PathToString<tchar>(discoveredFile.filePath)
+        );
         return false;
     }
 
-    if(!outEntry.primitive.assign(primitiveValue->copyString())){
-        NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': primitive exceeds CompactString capacity"), PathToString<tchar>(discoveredFile.filePath));
+    const auto* vertexStrideValue = asset.findField("vertex_stride");
+    if(!vertexStrideValue || !vertexStrideValue->isInteger()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': vertex_stride must be an integer"), PathToString<tchar>(discoveredFile.filePath));
         return false;
     }
-    if(!outEntry.primitive){
-        NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': primitive must not be empty"), PathToString<tchar>(discoveredFile.filePath));
+    const i64 vertexStrideValueInt = vertexStrideValue->asInteger();
+    if(vertexStrideValueInt <= 0 || static_cast<u64>(vertexStrideValueInt) > static_cast<u64>(Limit<u32>::s_Max)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': vertex_stride is out of range"), PathToString<tchar>(discoveredFile.filePath));
+        return false;
+    }
+    if((vertexStrideValueInt % static_cast<i64>(sizeof(f32))) != 0){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Geometry meta '{}': vertex_stride must be a multiple of {} because vertex_data is encoded as f32 scalars"),
+            PathToString<tchar>(discoveredFile.filePath),
+            sizeof(f32)
+        );
+        return false;
+    }
+    outEntry.vertexStride = static_cast<u32>(vertexStrideValueInt);
+
+    const auto* indexTypeValue = asset.findField("index_type");
+    if(!indexTypeValue || !indexTypeValue->isString()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': index_type must be a string ('u16' or 'u32')"), PathToString<tchar>(discoveredFile.filePath));
+        return false;
+    }
+
+    const AString indexType = CanonicalizeText(indexTypeValue->copyString());
+    if(indexType == "u16")
+        outEntry.use32BitIndices = false;
+    else if(indexType == "u32")
+        outEntry.use32BitIndices = true;
+    else{
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Geometry meta '{}': unsupported index_type '{}'"),
+            PathToString<tchar>(discoveredFile.filePath),
+            StringConvert(indexType)
+        );
+        return false;
+    }
+
+    auto appendVertexScalars = [&](const auto& self, const Core::Metascript::Value& value) -> bool{
+        if(value.isList()){
+            for(const Core::Metascript::Value& child : value.asList()){
+                if(!self(self, child))
+                    return false;
+            }
+            return true;
+        }
+
+        if(!value.isNumeric()){
+            NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': vertex_data must contain only numeric values"), PathToString<tchar>(discoveredFile.filePath));
+            return false;
+        }
+
+        const f64 numericValue = value.toDouble();
+        if(!IsFinite(numericValue)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': vertex_data must contain only finite numeric values"), PathToString<tchar>(discoveredFile.filePath));
+            return false;
+        }
+
+        AppendPOD(outEntry.vertexData, static_cast<f32>(numericValue));
+        return true;
+    };
+
+    auto appendIndices = [&](const auto& self, const Core::Metascript::Value& value) -> bool{
+        if(value.isList()){
+            for(const Core::Metascript::Value& child : value.asList()){
+                if(!self(self, child))
+                    return false;
+            }
+            return true;
+        }
+
+        if(!value.isNumeric()){
+            NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': index_data must contain only integer values"), PathToString<tchar>(discoveredFile.filePath));
+            return false;
+        }
+
+        const f64 numericValue = value.toDouble();
+        if(!IsFinite(numericValue)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': index_data must contain only finite integers"), PathToString<tchar>(discoveredFile.filePath));
+            return false;
+        }
+        if(numericValue < 0.0 || numericValue != Floor(numericValue)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': index_data values must be non-negative integers"), PathToString<tchar>(discoveredFile.filePath));
+            return false;
+        }
+
+        if(outEntry.use32BitIndices){
+            if(numericValue > static_cast<f64>(Limit<u32>::s_Max)){
+                NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': index_data contains a value that exceeds u32"), PathToString<tchar>(discoveredFile.filePath));
+                return false;
+            }
+            AppendPOD(outEntry.indexData, static_cast<u32>(numericValue));
+            return true;
+        }
+
+        if(numericValue > static_cast<f64>(Limit<u16>::s_Max)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': index_data contains a value that exceeds u16"), PathToString<tchar>(discoveredFile.filePath));
+            return false;
+        }
+        AppendPOD(outEntry.indexData, static_cast<u16>(numericValue));
+        return true;
+    };
+
+    const auto* vertexDataValue = asset.findField("vertex_data");
+    if(!vertexDataValue || !vertexDataValue->isList()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': vertex_data must be a list"), PathToString<tchar>(discoveredFile.filePath));
+        return false;
+    }
+    if(!appendVertexScalars(appendVertexScalars, *vertexDataValue))
+        return false;
+    if(outEntry.vertexData.empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': vertex_data must not be empty"), PathToString<tchar>(discoveredFile.filePath));
+        return false;
+    }
+    if((outEntry.vertexData.size() % outEntry.vertexStride) != 0){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Geometry meta '{}': vertex_data byte count {} is not a multiple of vertex_stride {}"),
+            PathToString<tchar>(discoveredFile.filePath),
+            outEntry.vertexData.size(),
+            outEntry.vertexStride
+        );
+        return false;
+    }
+
+    const auto* indexDataValue = asset.findField("index_data");
+    if(!indexDataValue || !indexDataValue->isList()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': index_data must be a list"), PathToString<tchar>(discoveredFile.filePath));
+        return false;
+    }
+    if(!appendIndices(appendIndices, *indexDataValue))
+        return false;
+    if(outEntry.indexData.empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': index_data must not be empty"), PathToString<tchar>(discoveredFile.filePath));
         return false;
     }
 
@@ -704,19 +809,38 @@ static bool ParseGeometryMeta(const DiscoveredNwbFile& discoveredFile, const Cor
 }
 
 static bool BuildGeometryAsset(const GeometryEntry& geometryEntry, Geometry& outGeometry){
-    if(geometryEntry.primitive.view() != AStringView("cube")){
+    if(geometryEntry.vertexStride == 0 || geometryEntry.vertexData.empty() || geometryEntry.indexData.empty()){
         NWB_LOGGER_ERROR(
-            NWB_TEXT("ShaderAssetCooker: unsupported geometry primitive '{}' for '{}'"),
-            StringConvert(geometryEntry.primitive.c_str()),
+            NWB_TEXT("ShaderAssetCooker: geometry '{}' has incomplete payload"),
             StringConvert(geometryEntry.virtualPath.c_str())
+        );
+        return false;
+    }
+    if((geometryEntry.vertexData.size() % geometryEntry.vertexStride) != 0){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("ShaderAssetCooker: geometry '{}' vertex payload size {} is not aligned to stride {}"),
+            StringConvert(geometryEntry.virtualPath.c_str()),
+            geometryEntry.vertexData.size(),
+            geometryEntry.vertexStride
+        );
+        return false;
+    }
+
+    const usize indexElementSize = geometryEntry.use32BitIndices ? sizeof(u32) : sizeof(u16);
+    if((geometryEntry.indexData.size() % indexElementSize) != 0){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("ShaderAssetCooker: geometry '{}' index payload size {} is not aligned to {}-byte indices"),
+            StringConvert(geometryEntry.virtualPath.c_str()),
+            geometryEntry.indexData.size(),
+            indexElementSize
         );
         return false;
     }
 
     outGeometry = Geometry(geometryEntry.virtualPath);
-    outGeometry.setVertexLayout(static_cast<u32>(sizeof(CubeGeometryVertex)));
-    outGeometry.setVertexData(s_CubeVertices, sizeof(s_CubeVertices));
-    outGeometry.setIndexData(s_CubeIndices, sizeof(s_CubeIndices), false);
+    outGeometry.setVertexLayout(geometryEntry.vertexStride);
+    outGeometry.setVertexData(geometryEntry.vertexData.data(), geometryEntry.vertexData.size());
+    outGeometry.setIndexData(geometryEntry.indexData.data(), geometryEntry.indexData.size(), geometryEntry.use32BitIndices);
     return true;
 }
 

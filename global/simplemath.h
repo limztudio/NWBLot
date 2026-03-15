@@ -6,6 +6,7 @@
 
 
 #include <algorithm>
+#include <cmath>
 #include <limits>
 
 
@@ -34,6 +35,24 @@ template<typename T>
 constexpr inline T FloorLog2(T x){ return (x == 1) ? 0 : (1 + FloorLog2<T>(x >> 1)); }
 template<typename T>
 constexpr inline T CeilLog2(T x){ return (x == 1) ? 0 : (FloorLog2<T>(x - 1) + 1); }
+
+template<typename T>
+[[nodiscard]] inline T Floor(const T value){
+    using std::floor;
+    return static_cast<T>(floor(value));
+}
+
+template<typename T>
+[[nodiscard]] inline T Ceil(const T value){
+    using std::ceil;
+    return static_cast<T>(ceil(value));
+}
+
+template<typename T>
+[[nodiscard]] inline bool IsFinite(const T value){
+    using std::isfinite;
+    return isfinite(value);
+}
 
 template<typename T>
 [[nodiscard]] constexpr bool AddNoOverflow(const T lhs, const T rhs, T& outResult){

@@ -196,7 +196,7 @@ struct Rect{
     constexpr Rect()noexcept : minX(0), maxX(0), minY(0), maxY(0) {}
     constexpr Rect(i32 width, i32 height)noexcept : minX(0), maxX(width), minY(0), maxY(height) {}
     constexpr Rect(i32 _minX, i32 _maxX, i32 _minY, i32 _maxY)noexcept : minX(_minX), maxX(_maxX), minY(_minY), maxY(_maxY) {}
-    explicit Rect(const Viewport& viewport)noexcept : minX(static_cast<i32>(floor(viewport.minX))), maxX(static_cast<i32>(ceil(viewport.maxX))), minY(static_cast<i32>(floor(viewport.minY))), maxY(static_cast<i32>(ceil(viewport.maxY))) {}
+    explicit Rect(const Viewport& viewport)noexcept : minX(static_cast<i32>(Floor(viewport.minX))), maxX(static_cast<i32>(Ceil(viewport.maxX))), minY(static_cast<i32>(Floor(viewport.minY))), maxY(static_cast<i32>(Ceil(viewport.maxY))) {}
     
     [[nodiscard]] constexpr i32 width()const noexcept{ return maxX - minX; }
     [[nodiscard]] constexpr i32 height()const noexcept{ return maxY - minY; }

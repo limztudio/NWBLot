@@ -336,6 +336,10 @@ private:
 
             if(!expect(TokenType::Comma, "expected ',' or closing delimiter in list"))
                 return Value(m_arena);
+            if(m_current.type == closeToken){
+                advance();
+                return list;
+            }
         }
     }
 
@@ -367,6 +371,10 @@ private:
 
         if(!expect(TokenType::Comma, "expected ',' or '}' in list"))
             return Value(m_arena);
+        if(m_current.type == TokenType::RightBrace){
+            advance();
+            return list;
+        }
 
         while(m_current.type != TokenType::RightBrace){
             Value elem = parseExpression();
@@ -379,6 +387,8 @@ private:
 
             if(!expect(TokenType::Comma, "expected ',' or '}' in list"))
                 return Value(m_arena);
+            if(m_current.type == TokenType::RightBrace)
+                break;
         }
 
         advance();
@@ -409,6 +419,10 @@ private:
 
         if(!expect(TokenType::Comma, "expected ',' or '}' in map"))
             return Value(m_arena);
+        if(m_current.type == TokenType::RightBrace){
+            advance();
+            return map;
+        }
 
         while(m_current.type != TokenType::RightBrace){
             Value key = parseExpression();
@@ -434,6 +448,8 @@ private:
 
             if(!expect(TokenType::Comma, "expected ',' or '}' in map"))
                 return Value(m_arena);
+            if(m_current.type == TokenType::RightBrace)
+                break;
         }
 
         advance();

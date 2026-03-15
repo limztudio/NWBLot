@@ -1244,6 +1244,11 @@ static bool ParseAssetMetadata(
     const Vector<DiscoveredNwbFile>& nwbFiles,
     ParsedAssetMetadata& outMetadata
 ){
+    outMetadata.includeMetadata.reserve(nwbFiles.size());
+    outMetadata.shaderEntries.reserve(nwbFiles.size());
+    outMetadata.materialEntries.reserve(nwbFiles.size());
+    outMetadata.geometryEntries.reserve(nwbFiles.size());
+
     HashSet<
         PreparedShaderKey,
         PreparedShaderKeyHasher,

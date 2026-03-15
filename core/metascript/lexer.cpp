@@ -232,8 +232,36 @@ Token Lexer::readString(){
     const usize contentStart = m_current;
 
     while(!isAtEnd() && peek() != '"'){
-        if(peek() == '\\')
+        if(peek() == '\n' || peek() == '\r'){
+            Token tok;
+            tok.type = TokenType::Error;
+            tok.text = MStringView("newline in string literal");
+            tok.line = startLine;
+            tok.column = startColumn;
+            return tok;
+        }
+
+        if(peek() == '\\'){
             advance();
+
+            if(isAtEnd()){
+                Token tok;
+                tok.type = TokenType::Error;
+                tok.text = MStringView("unterminated string literal");
+                tok.line = startLine;
+                tok.column = startColumn;
+                return tok;
+            }
+            if(peek() == '\n' || peek() == '\r'){
+                Token tok;
+                tok.type = TokenType::Error;
+                tok.text = MStringView("newline in string literal");
+                tok.line = startLine;
+                tok.column = startColumn;
+                return tok;
+            }
+        }
+
         advance();
     }
 

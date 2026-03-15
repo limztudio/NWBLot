@@ -84,11 +84,11 @@ bool AssetCookerRegistry::cook(const AssetCookOptions& options)const{
         : Name(options.assetType.view());
     if(!requestedType){
         if(m_assetCookers.size() == 1){
-            for(const auto& [_, cooker] : m_assetCookers){
-                AssetCookOptions resolvedOptions = options;
-                resolvedOptions.assetType = cooker->assetTypeText();
-                return cooker->cook(resolvedOptions);
-            }
+            const auto& onlyCookerEntry = *m_assetCookers.begin();
+            IAssetCooker& onlyCooker = *onlyCookerEntry.second;
+            AssetCookOptions resolvedOptions = options;
+            resolvedOptions.assetType = onlyCooker.assetTypeText();
+            return onlyCooker.cook(resolvedOptions);
         }
 
         NWB_LOGGER_ERROR(

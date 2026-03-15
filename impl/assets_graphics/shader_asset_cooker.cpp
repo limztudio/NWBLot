@@ -85,6 +85,7 @@ struct ResolvedCookPaths{
 struct DiscoveredNwbFile{
     Path assetRoot;
     Path filePath;
+    AString normalizedPathText;
     CompactString virtualRoot;
 };
 struct VariantCachePaths{
@@ -256,21 +257,41 @@ static bool ResolveCookPaths(const ShaderCookEnvironment& environment, ResolvedC
     outPaths.assetRoots.reserve(environment.assetRoots.size());
     for(const Path& assetRoot : environment.assetRoots){
         Path resolvedAssetRoot;
+        errorCode.clear();
         if(!ResolveAbsolutePath(outPaths.repoRoot, PathToString(assetRoot), resolvedAssetRoot, errorCode)){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("ShaderAssetCooker: failed to resolve asset root '{}'"),
-                PathToString<tchar>(assetRoot)
-            );
+            if(errorCode){
+                NWB_LOGGER_ERROR(
+                    NWB_TEXT("ShaderAssetCooker: failed to resolve asset root '{}': {}"),
+                    PathToString<tchar>(assetRoot),
+                    StringConvert(errorCode.message())
+                );
+            }
+            else{
+                NWB_LOGGER_ERROR(
+                    NWB_TEXT("ShaderAssetCooker: asset root is empty or invalid: '{}'"),
+                    PathToString<tchar>(assetRoot)
+                );
+            }
             return false;
         }
         outPaths.assetRoots.push_back(Move(resolvedAssetRoot));
     }
 
+    errorCode.clear();
     if(!ResolveAbsolutePath(outPaths.repoRoot, PathToString(environment.outputDirectory), outPaths.outputDirectory, errorCode)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("ShaderAssetCooker: failed to resolve output directory '{}'"),
-            PathToString<tchar>(environment.outputDirectory)
-        );
+        if(errorCode){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("ShaderAssetCooker: failed to resolve output directory '{}': {}"),
+                PathToString<tchar>(environment.outputDirectory),
+                StringConvert(errorCode.message())
+            );
+        }
+        else{
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("ShaderAssetCooker: output directory is empty or invalid: '{}'"),
+                PathToString<tchar>(environment.outputDirectory)
+            );
+        }
         return false;
     }
 
@@ -278,11 +299,21 @@ static bool ResolveCookPaths(const ShaderCookEnvironment& environment, ResolvedC
     const Path requestedCacheDirectory = environment.cacheDirectory.empty()
         ? defaultCacheDirectory
         : environment.cacheDirectory;
+    errorCode.clear();
     if(!ResolveAbsolutePath(outPaths.repoRoot, PathToString(requestedCacheDirectory), outPaths.cacheDirectory, errorCode)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("ShaderAssetCooker: failed to resolve cache directory '{}'"),
-            PathToString<tchar>(requestedCacheDirectory)
-        );
+        if(errorCode){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("ShaderAssetCooker: failed to resolve cache directory '{}': {}"),
+                PathToString<tchar>(requestedCacheDirectory),
+                StringConvert(errorCode.message())
+            );
+        }
+        else{
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("ShaderAssetCooker: cache directory is empty or invalid: '{}'"),
+                PathToString<tchar>(requestedCacheDirectory)
+            );
+        }
         return false;
     }
 
@@ -370,6 +401,7 @@ static bool DiscoverNwbFiles(const Vector<Path>& assetRoots, Vector<DiscoveredNw
             outNwbFiles.push_back(DiscoveredNwbFile{
                 assetRoot,
                 filePath,
+                Move(normalizedPath),
                 virtualRoot
             });
         }
@@ -377,8 +409,7 @@ static bool DiscoverNwbFiles(const Vector<Path>& assetRoots, Vector<DiscoveredNw
 
     Sort(outNwbFiles.begin(), outNwbFiles.end(),
         [](const DiscoveredNwbFile& lhs, const DiscoveredNwbFile& rhs){
-            return CanonicalizeText(PathToString(lhs.filePath.lexically_normal()))
-                < CanonicalizeText(PathToString(rhs.filePath.lexically_normal()));
+            return lhs.normalizedPathText < rhs.normalizedPathText;
         }
     );
 
@@ -665,7 +696,14 @@ static bool BuildGeometryAsset(const GeometryEntry& geometryEntry, Geometry& out
 }
 
 static bool BuildIncludeDirectories(const Path& repoRoot, const Vector<Path>& assetRoots, const Core::ShaderCook::ShaderEntry& entry, Core::ShaderCook::CookVector<Path>& outIncludeDirectories){
+    Core::Alloc::ScratchArena<> scratchArena;
     ErrorCode errorCode;
+    HashSet<AString, Hasher<AString>, EqualTo<AString>, Core::Alloc::ScratchAllocator<AString>> seenIncludeDirectories(
+        0,
+        Hasher<AString>(),
+        EqualTo<AString>(),
+        Core::Alloc::ScratchAllocator<AString>(scratchArena)
+    );
 
     outIncludeDirectories.clear();
     outIncludeDirectories.reserve(entry.includeRoots.size());
@@ -682,13 +720,23 @@ static bool BuildIncludeDirectories(const Path& repoRoot, const Vector<Path>& as
                 return false;
             }
 
+            errorCode.clear();
             if(!ResolveAbsolutePath(repoRoot, includeRoot, includeDirectory, errorCode)){
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("ShaderAssetCooker: failed to resolve include root '{}' for entry '{}': {}"),
-                    StringConvert(includeRoot),
-                    StringConvert(entry.name),
-                    StringConvert(errorCode.message())
-                );
+                if(errorCode){
+                    NWB_LOGGER_ERROR(
+                        NWB_TEXT("ShaderAssetCooker: failed to resolve include root '{}' for entry '{}': {}"),
+                        StringConvert(includeRoot),
+                        StringConvert(entry.name),
+                        StringConvert(errorCode.message())
+                    );
+                }
+                else{
+                    NWB_LOGGER_ERROR(
+                        NWB_TEXT("ShaderAssetCooker: include root '{}' is empty or invalid for entry '{}'"),
+                        StringConvert(includeRoot),
+                        StringConvert(entry.name)
+                    );
+                }
                 return false;
             }
         }
@@ -712,6 +760,10 @@ static bool BuildIncludeDirectories(const Path& repoRoot, const Vector<Path>& as
             );
             return false;
         }
+
+        const AString normalizedIncludeDirectory = CanonicalizeText(PathToString(includeDirectory.lexically_normal()));
+        if(!seenIncludeDirectories.insert(normalizedIncludeDirectory).second)
+            continue;
 
         outIncludeDirectories.push_back(Move(includeDirectory));
     }
@@ -1219,12 +1271,23 @@ bool ShaderAssetCooker::cookShaderAssets(const ShaderCookEnvironment& environmen
         __hidden_assets::PreparedShaderEntry preparedEntry(m_arena);
         preparedEntry.entry = Move(entry);
 
+        errorCode.clear();
         if(!ResolveAbsolutePath(resolvedPaths.repoRoot, preparedEntry.entry.source, preparedEntry.sourcePath, errorCode)){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Failed to resolve source path '{}' for entry '{}'"),
-                StringConvert(preparedEntry.entry.source),
-                StringConvert(preparedEntry.entry.name)
-            );
+            if(errorCode){
+                NWB_LOGGER_ERROR(
+                    NWB_TEXT("Failed to resolve source path '{}' for entry '{}': {}"),
+                    StringConvert(preparedEntry.entry.source),
+                    StringConvert(preparedEntry.entry.name),
+                    StringConvert(errorCode.message())
+                );
+            }
+            else{
+                NWB_LOGGER_ERROR(
+                    NWB_TEXT("Failed to resolve source path '{}' for entry '{}': path is empty or invalid"),
+                    StringConvert(preparedEntry.entry.source),
+                    StringConvert(preparedEntry.entry.name)
+                );
+            }
             return false;
         }
 

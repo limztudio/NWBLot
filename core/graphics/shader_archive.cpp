@@ -94,15 +94,11 @@ CompactString NormalizeVariantName(const AStringView variantName){
     if(variantName.empty()){
         const bool assigned = canonical.assign(ShaderArchive::s_DefaultVariant);
         NWB_ASSERT_MSG(assigned, NWB_TEXT("ShaderArchive: default variant name exceeded CompactString capacity"));
-        if(!assigned)
-            canonical.clear();
         return canonical;
     }
 
     const bool assigned = canonical.assign(variantName);
     NWB_ASSERT_MSG(assigned, NWB_TEXT("ShaderArchive: canonical variant name exceeded CompactString capacity"));
-    if(!assigned)
-        canonical.clear();
     return canonical;
 }
 
@@ -352,4 +348,3 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

@@ -61,6 +61,8 @@ struct DeviceDesc{
     bool bufferDeviceAddressSupported = false;
     // Indicates if dynamic rendering was enabled at device creation time (via Vulkan 1.3 core or KHR extension)
     bool dynamicRenderingSupported = false;
+    // Indicates if synchronization2 was enabled at device creation time (via Vulkan 1.3 core or KHR extension)
+    bool synchronization2Supported = false;
     bool aftermathEnabled = false;
     bool logBufferLifetime = false;
 

@@ -110,6 +110,7 @@ Device::Device(const DeviceDesc& desc)
 
     m_context.extensions.buffer_device_address = desc.bufferDeviceAddressSupported;
     m_context.extensions.KHR_dynamic_rendering = desc.dynamicRenderingSupported;
+    m_context.extensions.KHR_synchronization2 = desc.synchronization2Supported;
 
     for(usize i = 0; i < desc.numDeviceExtensions; ++i){
         const char* ext = desc.deviceExtensions[i];
@@ -135,7 +136,7 @@ Device::Device(const DeviceDesc& desc)
             m_context.extensions.NV_cooperative_vector = true;
         else if(NWB_STRCMP(ext, VK_NV_CLUSTER_ACCELERATION_STRUCTURE_EXTENSION_NAME) == 0)
             m_context.extensions.NV_cluster_acceleration_structure = true;
-        else if(NWB_STRCMP(ext, VK_EXT_MESH_SHADER_EXTENSION_NAME) == 0)
+        else if(NWB_STRCMP(ext, VK_EXT_MESH_SHADER_EXTENSION_NAME) == 0 || NWB_STRCMP(ext, VK_NV_MESH_SHADER_EXTENSION_NAME) == 0)
             m_context.extensions.EXT_mesh_shader = true;
         else if(NWB_STRCMP(ext, VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME) == 0)
             m_context.extensions.KHR_fragment_shading_rate = true;

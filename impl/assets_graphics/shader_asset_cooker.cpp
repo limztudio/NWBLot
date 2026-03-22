@@ -58,18 +58,17 @@ static const Name& IncludeAssetTypeName(){
 
 
 static AString NormalizeVariantName(const Core::ShaderCook::ShaderEntry& entry, const AStringView generatedVariantName){
-    AString canonicalGeneratedVariantName = CanonicalizeText(generatedVariantName);
-    if(canonicalGeneratedVariantName.empty())
-        canonicalGeneratedVariantName = Core::ShaderArchive::s_DefaultVariant;
+    const AStringView normalizedGeneratedVariantName = generatedVariantName.empty()
+        ? AStringView(Core::ShaderArchive::s_DefaultVariant)
+        : generatedVariantName;
 
     if(entry.defaultVariant.empty())
-        return canonicalGeneratedVariantName;
+        return AString(normalizedGeneratedVariantName);
 
-    const AString canonicalDefaultVariantName = CanonicalizeText(entry.defaultVariant);
-    if(canonicalGeneratedVariantName == canonicalDefaultVariantName)
+    if(normalizedGeneratedVariantName == AStringView(entry.defaultVariant))
         return AString(Core::ShaderArchive::s_DefaultVariant);
 
-    return canonicalGeneratedVariantName;
+    return AString(normalizedGeneratedVariantName);
 }
 
 
@@ -98,7 +97,7 @@ struct GeometryEntry{
 };
 struct MaterialEntry{
     Name virtualPath = NAME_NONE;
-    CompactString shaderVariant = CompactString(Core::ShaderArchive::s_DefaultVariant);
+    AString shaderVariant = Core::ShaderArchive::s_DefaultVariant;
     HashMap<Name, Core::Assets::AssetRef<Shader>> stageShaders;
     HashMap<CompactString, CompactString> parameters;
 };
@@ -430,16 +429,9 @@ static bool ParseVariantField(
     const Core::Metascript::Value& asset,
     const AStringView fieldName,
     const AStringView defaultValue,
-    CompactString& outVariant
+    AString& outVariant
 ){
-    if(!outVariant.assign(defaultValue)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Material meta '{}': default value for '{}' exceeds CompactString capacity"),
-            PathToString<tchar>(nwbFilePath),
-            StringConvert(fieldName)
-        );
-        return false;
-    }
+    outVariant = defaultValue;
 
     const auto* variantValue = asset.findField(fieldName);
     if(!variantValue)
@@ -476,10 +468,12 @@ static bool ParseVariantField(
 
     rawVariant = Trim(rawVariant);
     if(rawVariant.empty()){
-        return outVariant.assign(defaultValue);
+        outVariant = defaultValue;
+        return true;
     }
     if(rawVariant == Core::ShaderArchive::s_DefaultVariant){
-        return outVariant.assign(Core::ShaderArchive::s_DefaultVariant);
+        outVariant = Core::ShaderArchive::s_DefaultVariant;
+        return true;
     }
 
     AString canonicalVariant;
@@ -493,15 +487,7 @@ static bool ParseVariantField(
         return false;
     }
 
-    if(!outVariant.assign(canonicalVariant)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Material meta '{}': field '{}' exceeds CompactString capacity"),
-            PathToString<tchar>(nwbFilePath),
-            StringConvert(fieldName)
-        );
-        return false;
-    }
-
+    outVariant = Move(canonicalVariant);
     return true;
 }
 
@@ -904,13 +890,13 @@ static bool BuildIncludeDirectories(const Path& repoRoot, const Vector<Path>& as
 static bool CountShaderVariants(const Core::ShaderCook::ShaderEntry& entry, u64& outVariantCount){
     outVariantCount = 1;
 
-    for(const auto& [_, defineEntry] : entry.defineValues){
+    for(const auto& [defineName, defineEntry] : entry.defineValues){
         const u64 valueCount = static_cast<u64>(defineEntry.values.size());
         if(valueCount == 0){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("ShaderAssetCooker: entry '{}' has define '{}' with no values"),
                 StringConvert(entry.name),
-                StringConvert(defineEntry.name)
+                StringConvert(defineName)
             );
             return false;
         }
@@ -980,7 +966,7 @@ static bool NormalizeMaterialVariant(
     const AString contextLabel = StringFormat("{} [{}]", materialEntry.virtualPath.c_str(), stageName.c_str());
     const AStringView requestedVariant = materialEntry.shaderVariant.empty()
         ? Core::ShaderArchive::s_DefaultVariant
-        : materialEntry.shaderVariant.view();
+        : AStringView(materialEntry.shaderVariant);
 
     if(requestedVariant == Core::ShaderArchive::s_DefaultVariant){
         if(!preparedShaderEntry.entry.defineValues.empty() && preparedShaderEntry.entry.defaultVariant.empty()){
@@ -1037,13 +1023,13 @@ static bool ValidateAndNormalizeMaterials(
     for(const PreparedShaderEntry& preparedEntry : preparedEntries){
         const PreparedShaderKey shaderKey{
             ToName(preparedEntry.entry.name),
-            ToName(preparedEntry.entry.stage)
+            ToName(preparedEntry.entry.stage.view())
         };
         if(!preparedShaderLookup.insert({ shaderKey, &preparedEntry }).second){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("ShaderAssetCooker: duplicate prepared shader key '{}' stage '{}'"),
                 StringConvert(preparedEntry.entry.name),
-                StringConvert(preparedEntry.entry.stage)
+                StringConvert(preparedEntry.entry.stage.c_str())
             );
             return false;
         }
@@ -1090,13 +1076,7 @@ static bool ValidateAndNormalizeMaterials(
         if(!hasNormalizedVariant)
             normalizedVariant = AString(Core::ShaderArchive::s_DefaultVariant);
 
-        if(!materialEntry.shaderVariant.assign(normalizedVariant)){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Material '{}' normalized shader variant exceeds CompactString capacity"),
-                StringConvert(materialEntry.virtualPath.c_str())
-            );
-            return false;
-        }
+        materialEntry.shaderVariant = Move(normalizedVariant);
     }
 
     return true;
@@ -1105,7 +1085,7 @@ static bool ValidateAndNormalizeMaterials(
 
 static VariantCachePaths BuildVariantCachePaths(const Path& cacheDirectory, const AStringView configurationSafeName, const Core::ShaderCook::ShaderEntry& entry, const AStringView variantName){
     const AString shaderSafeName = BuildSafeCacheName(entry.name);
-    const AString stageSafeName = BuildSafeCacheName(entry.stage);
+    const AString stageSafeName = BuildSafeCacheName(entry.stage.view());
     const AString variantHashHex = FormatHex64(ComputeFnv64Text(variantName));
 
     VariantCachePaths cachePaths;
@@ -1175,9 +1155,9 @@ static bool GetVariantBytecode(
 
     const Core::ShaderCompilerRequest compileRequest = {
         entry.name,
-        entry.compiler,
-        entry.stage,
-        entry.targetProfile,
+        entry.compiler.view(),
+        entry.stage.view(),
+        entry.targetProfile.view(),
         entry.entryPoint,
         variantName,
         defineCombo,
@@ -1295,13 +1275,13 @@ static bool ParseAssetMetadata(
 
             const PreparedShaderKey shaderIdentityKey{
                 ToName(shaderEntry.name),
-                ToName(shaderEntry.stage)
+                ToName(shaderEntry.stage.view())
             };
             if(!seenShaderIdentityKeys.insert(shaderIdentityKey).second){
                 NWB_LOGGER_ERROR(
                     NWB_TEXT("ShaderAssetCooker: duplicate shader identity '{}' for stage '{}' from meta '{}'"),
                     StringConvert(shaderEntry.name),
-                    StringConvert(shaderEntry.stage),
+                    StringConvert(shaderEntry.stage.c_str()),
                     PathToString<tchar>(nwbFile)
                 );
                 return false;
@@ -1522,13 +1502,12 @@ static bool AppendPreparedShadersToVolume(
     for(PreparedShaderEntry& preparedEntry : preparedEntries){
         Core::ShaderCook::ShaderEntry& entry = preparedEntry.entry;
         const Name shaderName = ToName(entry.name);
-        const Name stageName = ToName(entry.stage);
-        const Name entryPointName = ToName(entry.entryPoint);
-        if(!shaderName || !stageName || !entryPointName){
+        const Name stageName = ToName(entry.stage.view());
+        if(!shaderName || !stageName || entry.entryPoint.empty()){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("Shader cook failed to canonicalize shader identity for '{}' stage '{}' entry point '{}'"),
                 StringConvert(entry.name),
-                StringConvert(entry.stage),
+                StringConvert(entry.stage.c_str()),
                 StringConvert(entry.entryPoint)
             );
             return false;
@@ -1569,34 +1548,12 @@ static bool AppendPreparedShadersToVolume(
                 return false;
             }
 
-            CompactString compactVariantName;
-            if(!compactVariantName.assign(variantName)){
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("Shader cook variant name exceeds CompactString capacity (shader='{}', stage='{}', variant='{}')"),
-                    StringConvert(entry.name),
-                    StringConvert(entry.stage),
-                    StringConvert(variantName)
-                );
-                return false;
-            }
-
-            const Name variantNameId(compactVariantName.view());
-            if(!variantNameId){
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("Shader cook failed to canonicalize variant identity for '{}' stage '{}' variant '{}'"),
-                    StringConvert(entry.name),
-                    StringConvert(entry.stage),
-                    StringConvert(variantName)
-                );
-                return false;
-            }
-
-            const Name virtualPath = Core::ShaderArchive::buildVirtualPathName(shaderName, compactVariantName, stageName);
+            const Name virtualPath = Core::ShaderArchive::buildVirtualPathName(shaderName, variantName, stageName);
             if(!virtualPath){
                 NWB_LOGGER_ERROR(
                     NWB_TEXT("Shader cook failed to build virtual path for '{}' stage '{}' variant '{}'"),
                     StringConvert(entry.name),
-                    StringConvert(entry.stage),
+                    StringConvert(entry.stage.c_str()),
                     StringConvert(variantName)
                 );
                 return false;
@@ -1623,9 +1580,8 @@ static bool AppendPreparedShadersToVolume(
 
             Core::ShaderArchive::Record record;
             record.shaderName = shaderName;
-            record.variantName = variantNameId;
+            record.variantName = variantName;
             record.stage = stageName;
-            record.entryPoint = entryPointName;
             record.sourceChecksum = sourceChecksum;
             record.bytecodeChecksum = ComputeFnv64Bytes(cookedBytecode.data(), cookedBytecode.size());
             record.virtualPathHash = virtualPathHash;

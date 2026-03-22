@@ -50,19 +50,19 @@ public:
     bool loadBinary(const Core::Assets::AssetBytes& binary);
 
 public:
-    void setShaderVariant(const CompactString& variantName);
+    void setShaderVariant(AStringView variantName);
     void setShaderForStage(const Name& stageName, const Core::Assets::AssetRef<Shader>& shaderAsset);
     bool setParameter(const CompactString& key, const CompactString& value);
 
     [[nodiscard]] bool findShaderForStage(const Name& stageName, Core::Assets::AssetRef<Shader>& outShaderAsset)const;
 
-    [[nodiscard]] const CompactString& shaderVariant()const{ return m_shaderVariant; }
+    [[nodiscard]] const AString& shaderVariant()const{ return m_shaderVariant; }
     [[nodiscard]] const HashMap<Name, Core::Assets::AssetRef<Shader>>& stageShaders()const{ return m_stageShaders; }
     [[nodiscard]] const HashMap<CompactString, CompactString>& parameters()const{ return m_parameters; }
 
 
 private:
-    CompactString m_shaderVariant;
+    AString m_shaderVariant;
     HashMap<Name, Core::Assets::AssetRef<Shader>> m_stageShaders;
     HashMap<CompactString, CompactString> m_parameters;
 };

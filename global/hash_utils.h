@@ -49,6 +49,15 @@ template<typename CharT>
     return hash;
 }
 
+template<typename CharT>
+[[nodiscard]] inline u64 UpdateFnv64TextExact(u64 hash, const BasicStringView<CharT> text){
+    return UpdateFnv64(
+        hash,
+        reinterpret_cast<const u8*>(text.data()),
+        text.size() * sizeof(CharT)
+    );
+}
+
 [[nodiscard]] inline u64 ComputeFnv64Bytes(const void* data, const usize byteCount){
     return UpdateFnv64(
         FNV64_OFFSET_BASIS,

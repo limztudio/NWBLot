@@ -57,6 +57,8 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
 
     Vector<VkPipelineShaderStageCreateInfo, Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>> shaderStages{ Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>(scratchArena) };
     Vector<VkSpecializationInfo, Alloc::ScratchAllocator<VkSpecializationInfo>> specInfos{ Alloc::ScratchAllocator<VkSpecializationInfo>(scratchArena) };
+    Vector<VkDescriptorSetAndBindingMappingEXT, Alloc::ScratchAllocator<VkDescriptorSetAndBindingMappingEXT>> descriptorHeapMappings{ Alloc::ScratchAllocator<VkDescriptorSetAndBindingMappingEXT>(scratchArena) };
+    Vector<VkShaderDescriptorSetAndBindingMappingInfoEXT, Alloc::ScratchAllocator<VkShaderDescriptorSetAndBindingMappingInfoEXT>> descriptorHeapStageMappings{ Alloc::ScratchAllocator<VkShaderDescriptorSetAndBindingMappingInfoEXT>(scratchArena) };
     shaderStages.reserve(s_MeshletPipelineStageReserveCount); // Task (optional), Mesh, Fragment
     specInfos.reserve(s_MeshletPipelineStageReserveCount);
 
@@ -65,7 +67,7 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
         VkPipelineShaderStageCreateInfo stageInfo = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
         stageInfo.stage = vkStage;
         stageInfo.module = s->m_shaderModule;
-        stageInfo.pName = s->m_desc.entryName.c_str();
+        stageInfo.pName = s->m_entryPointName.c_str();
 
         if(!s->m_specializationEntries.empty()){
             VkSpecializationInfo specInfo{};
@@ -94,47 +96,62 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     if(desc.PS)
         addShaderStage(desc.PS.get(), VK_SHADER_STAGE_FRAGMENT_BIT);
 
+    VkPipelineCreateFlags2CreateInfo descriptorHeapFlags2{};
+    pso->m_usesDescriptorHeap = DescriptorHeapManager::tryEnablePipeline(
+        m_context,
+        desc.bindingLayouts,
+        shaderStages,
+        pso->m_descriptorHeapPushRanges,
+        pso->m_descriptorHeapPushDataSize,
+        descriptorHeapFlags2,
+        descriptorHeapMappings,
+        descriptorHeapStageMappings
+    );
+
     VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
-    if(desc.bindingLayouts.size() == 1){
-        auto* layout = checked_cast<BindingLayout*>(desc.bindingLayouts[0].get());
-        if(layout)
-            pipelineLayout = layout->m_pipelineLayout;
-    }
-    else if(desc.bindingLayouts.size() > 1){
-        Vector<VkDescriptorSetLayout, Alloc::ScratchAllocator<VkDescriptorSetLayout>> allDescriptorSetLayouts{ Alloc::ScratchAllocator<VkDescriptorSetLayout>(scratchArena) };
-        u32 pushConstantByteSize = 0;
-        for(u32 i = 0; i < static_cast<u32>(desc.bindingLayouts.size()); ++i){
-            auto* bl = checked_cast<BindingLayout*>(desc.bindingLayouts[i].get());
-            if(!bl)
-                continue;
-            for(const auto& item : bl->m_desc.bindings){
-                if(item.type == ResourceType::PushConstants)
-                    pushConstantByteSize = Max<u32>(pushConstantByteSize, item.size);
-            }
-            for(const auto& dsl : bl->m_descriptorSetLayouts)
-                allDescriptorSetLayouts.push_back(dsl);
+    if(!pso->m_usesDescriptorHeap){
+        if(desc.bindingLayouts.size() == 1){
+            auto* layout = checked_cast<BindingLayout*>(desc.bindingLayouts[0].get());
+            if(layout)
+                pipelineLayout = layout->m_pipelineLayout;
         }
-
-        if(!allDescriptorSetLayouts.empty()){
-            VkPushConstantRange pushConstantRange = {};
-            if(pushConstantByteSize > 0){
-                pushConstantRange.stageFlags = VK_SHADER_STAGE_ALL;
-                pushConstantRange.offset = 0;
-                pushConstantRange.size = pushConstantByteSize;
+        else if(desc.bindingLayouts.size() > 1){
+            Vector<VkDescriptorSetLayout, Alloc::ScratchAllocator<VkDescriptorSetLayout>> allDescriptorSetLayouts{ Alloc::ScratchAllocator<VkDescriptorSetLayout>(scratchArena) };
+            u32 pushConstantByteSize = 0;
+            for(u32 i = 0; i < static_cast<u32>(desc.bindingLayouts.size()); ++i){
+                auto* bl = checked_cast<BindingLayout*>(desc.bindingLayouts[i].get());
+                if(!bl)
+                    continue;
+                const BindingLayoutDesc& bindingLayoutDesc = bl->getBindingLayoutDesc();
+                for(const auto& item : bindingLayoutDesc.bindings){
+                    if(item.type == ResourceType::PushConstants)
+                        pushConstantByteSize = Max<u32>(pushConstantByteSize, item.size);
+                }
+                for(const auto& dsl : bl->m_descriptorSetLayouts)
+                    allDescriptorSetLayouts.push_back(dsl);
             }
 
-            VkPipelineLayoutCreateInfo layoutInfo = { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
-            layoutInfo.setLayoutCount = static_cast<u32>(allDescriptorSetLayouts.size());
-            layoutInfo.pSetLayouts = allDescriptorSetLayouts.data();
-            layoutInfo.pushConstantRangeCount = pushConstantByteSize > 0 ? 1u : 0u;
-            layoutInfo.pPushConstantRanges = pushConstantByteSize > 0 ? &pushConstantRange : nullptr;
-            res = vkCreatePipelineLayout(m_context.device, &layoutInfo, m_context.allocationCallbacks, &pipelineLayout);
-            if(res != VK_SUCCESS){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create pipeline layout for meshlet pipeline: {}"), ResultToString(res));
-                DestroyArenaObject(m_context.objectArena, pso);
-                return nullptr;
+            if(!allDescriptorSetLayouts.empty()){
+                VkPushConstantRange pushConstantRange = {};
+                if(pushConstantByteSize > 0){
+                    pushConstantRange.stageFlags = VK_SHADER_STAGE_ALL;
+                    pushConstantRange.offset = 0;
+                    pushConstantRange.size = pushConstantByteSize;
+                }
+
+                VkPipelineLayoutCreateInfo layoutInfo = { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
+                layoutInfo.setLayoutCount = static_cast<u32>(allDescriptorSetLayouts.size());
+                layoutInfo.pSetLayouts = allDescriptorSetLayouts.data();
+                layoutInfo.pushConstantRangeCount = pushConstantByteSize > 0 ? 1u : 0u;
+                layoutInfo.pPushConstantRanges = pushConstantByteSize > 0 ? &pushConstantRange : nullptr;
+                res = vkCreatePipelineLayout(m_context.device, &layoutInfo, m_context.allocationCallbacks, &pipelineLayout);
+                if(res != VK_SUCCESS){
+                    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create pipeline layout for meshlet pipeline: {}"), ResultToString(res));
+                    DestroyArenaObject(m_context.objectArena, pso);
+                    return nullptr;
+                }
+                pso->m_ownsPipelineLayout = true;
             }
-            pso->m_ownsPipelineLayout = true;
         }
     }
     pso->m_pipelineLayout = pipelineLayout;
@@ -208,7 +225,12 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     renderingInfo.stencilAttachmentFormat = VK_FORMAT_UNDEFINED;
 
     VkGraphicsPipelineCreateInfo pipelineInfo = { VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO };
-    pipelineInfo.pNext = &renderingInfo;
+    if(pso->m_usesDescriptorHeap){
+        descriptorHeapFlags2.pNext = &renderingInfo;
+        pipelineInfo.pNext = &descriptorHeapFlags2;
+    }
+    else
+        pipelineInfo.pNext = &renderingInfo;
     pipelineInfo.stageCount = static_cast<u32>(shaderStages.size());
     pipelineInfo.pStages = shaderStages.data();
     pipelineInfo.pVertexInputState = nullptr; // Mesh shaders don't use vertex input
@@ -219,7 +241,7 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     pipelineInfo.pDepthStencilState = &depthStencil;
     pipelineInfo.pColorBlendState = &colorBlending;
     pipelineInfo.pDynamicState = &dynamicState;
-    pipelineInfo.layout = pipelineLayout;
+    pipelineInfo.layout = pso->m_usesDescriptorHeap ? VK_NULL_HANDLE : pipelineLayout;
     pipelineInfo.renderPass = VK_NULL_HANDLE;
 
     res = vkCreateGraphicsPipelines(m_context.device, m_context.pipelineCache, 1, &pipelineInfo, m_context.allocationCallbacks, &pso->m_pipeline);
@@ -244,7 +266,12 @@ void CommandList::setMeshletState(const MeshletState& state){
     if(pipeline)
         vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->m_pipeline);
 
-    if(state.bindings.size() > 0 && pipeline && pipeline->m_pipelineLayout != VK_NULL_HANDLE){
+    if(pipeline)
+        retainBindingSets(state.bindings);
+
+    if(pipeline && pipeline->m_usesDescriptorHeap)
+        bindDescriptorHeapState(true, pipeline->m_descriptorHeapPushRanges, pipeline->m_descriptorHeapPushDataSize, state.bindings);
+    else if(state.bindings.size() > 0 && pipeline && pipeline->m_pipelineLayout != VK_NULL_HANDLE){
         for(usize i = 0; i < state.bindings.size(); ++i){
             if(state.bindings[i]){
                 auto* bindingSet = checked_cast<BindingSet*>(state.bindings[i]);

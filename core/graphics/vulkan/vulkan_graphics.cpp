@@ -243,6 +243,8 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     // Step 1: Collect shader stages
     Vector<VkPipelineShaderStageCreateInfo, Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>> shaderStages{ Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>(scratchArena) };
     Vector<VkSpecializationInfo, Alloc::ScratchAllocator<VkSpecializationInfo>> specInfos{ Alloc::ScratchAllocator<VkSpecializationInfo>(scratchArena) };
+    Vector<VkDescriptorSetAndBindingMappingEXT, Alloc::ScratchAllocator<VkDescriptorSetAndBindingMappingEXT>> descriptorHeapMappings{ Alloc::ScratchAllocator<VkDescriptorSetAndBindingMappingEXT>(scratchArena) };
+    Vector<VkShaderDescriptorSetAndBindingMappingInfoEXT, Alloc::ScratchAllocator<VkShaderDescriptorSetAndBindingMappingInfoEXT>> descriptorHeapStageMappings{ Alloc::ScratchAllocator<VkShaderDescriptorSetAndBindingMappingInfoEXT>(scratchArena) };
     shaderStages.reserve(5);
     specInfos.reserve(5);
 
@@ -251,7 +253,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
         VkPipelineShaderStageCreateInfo stageInfo = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
         stageInfo.stage = vkStage;
         stageInfo.module = s->m_shaderModule;
-        stageInfo.pName = s->m_desc.entryName.c_str();
+        stageInfo.pName = s->m_entryPointName.c_str();
 
         if(!s->m_specializationEntries.empty()){
             VkSpecializationInfo specInfo{};
@@ -282,6 +284,18 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
         DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
+
+    VkPipelineCreateFlags2CreateInfo descriptorHeapFlags2{};
+    pso->m_usesDescriptorHeap = DescriptorHeapManager::tryEnablePipeline(
+        m_context,
+        desc.bindingLayouts,
+        shaderStages,
+        pso->m_descriptorHeapPushRanges,
+        pso->m_descriptorHeapPushDataSize,
+        descriptorHeapFlags2,
+        descriptorHeapMappings,
+        descriptorHeapStageMappings
+    );
 
     // Step 2: Vertex input state from InputLayout
     VkPipelineVertexInputStateCreateInfo vertexInputInfo = { VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO };
@@ -367,45 +381,49 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
 
     // Step 10: Pipeline layout from binding layouts
     pso->m_pipelineLayout = VK_NULL_HANDLE;
-    Vector<VkDescriptorSetLayout, Alloc::ScratchAllocator<VkDescriptorSetLayout>> allDescriptorSetLayouts{ Alloc::ScratchAllocator<VkDescriptorSetLayout>(scratchArena) };
-    u32 pushConstantByteSize = 0;
-    for(u32 i = 0; i < static_cast<u32>(desc.bindingLayouts.size()); ++i){
-        auto* bl = checked_cast<BindingLayout*>(desc.bindingLayouts[i].get());
-        if(!bl)
-            continue;
-        for(const auto& item : bl->m_desc.bindings){
-            if(item.type == ResourceType::PushConstants)
-                pushConstantByteSize = Max<u32>(pushConstantByteSize, item.size);
-        }
-        for(const auto& dsl : bl->m_descriptorSetLayouts){
-            allDescriptorSetLayouts.push_back(dsl);
-        }
-    }
-    if(desc.bindingLayouts.size() == 1){
-        auto* bl = checked_cast<BindingLayout*>(desc.bindingLayouts[0].get());
-        if(bl)
-            pso->m_pipelineLayout = bl->m_pipelineLayout;
-    } else if(desc.bindingLayouts.size() > 1){
-        if(!allDescriptorSetLayouts.empty()){
-            VkPushConstantRange pushConstantRange = {};
-            if(pushConstantByteSize > 0){
-                pushConstantRange.stageFlags = VK_SHADER_STAGE_ALL;
-                pushConstantRange.offset = 0;
-                pushConstantRange.size = pushConstantByteSize;
+    if(!pso->m_usesDescriptorHeap){
+        Vector<VkDescriptorSetLayout, Alloc::ScratchAllocator<VkDescriptorSetLayout>> allDescriptorSetLayouts{ Alloc::ScratchAllocator<VkDescriptorSetLayout>(scratchArena) };
+        u32 pushConstantByteSize = 0;
+        for(u32 i = 0; i < static_cast<u32>(desc.bindingLayouts.size()); ++i){
+            auto* bl = checked_cast<BindingLayout*>(desc.bindingLayouts[i].get());
+            if(!bl)
+                continue;
+            const BindingLayoutDesc& bindingLayoutDesc = bl->getBindingLayoutDesc();
+            for(const auto& item : bindingLayoutDesc.bindings){
+                if(item.type == ResourceType::PushConstants)
+                    pushConstantByteSize = Max<u32>(pushConstantByteSize, item.size);
             }
+            for(const auto& dsl : bl->m_descriptorSetLayouts)
+                allDescriptorSetLayouts.push_back(dsl);
+        }
 
-            VkPipelineLayoutCreateInfo layoutInfo = { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
-            layoutInfo.setLayoutCount = static_cast<uint32_t>(allDescriptorSetLayouts.size());
-            layoutInfo.pSetLayouts = allDescriptorSetLayouts.data();
-            layoutInfo.pushConstantRangeCount = pushConstantByteSize > 0 ? 1u : 0u;
-            layoutInfo.pPushConstantRanges = pushConstantByteSize > 0 ? &pushConstantRange : nullptr;
-            res = vkCreatePipelineLayout(m_context.device, &layoutInfo, m_context.allocationCallbacks, &pso->m_pipelineLayout);
-            if(res != VK_SUCCESS){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create pipeline layout for graphics pipeline: {}"), ResultToString(res));
-                DestroyArenaObject(m_context.objectArena, pso);
-                return nullptr;
+        if(desc.bindingLayouts.size() == 1){
+            auto* bl = checked_cast<BindingLayout*>(desc.bindingLayouts[0].get());
+            if(bl)
+                pso->m_pipelineLayout = bl->m_pipelineLayout;
+        }
+        else if(desc.bindingLayouts.size() > 1){
+            if(!allDescriptorSetLayouts.empty()){
+                VkPushConstantRange pushConstantRange = {};
+                if(pushConstantByteSize > 0){
+                    pushConstantRange.stageFlags = VK_SHADER_STAGE_ALL;
+                    pushConstantRange.offset = 0;
+                    pushConstantRange.size = pushConstantByteSize;
+                }
+
+                VkPipelineLayoutCreateInfo layoutInfo = { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
+                layoutInfo.setLayoutCount = static_cast<uint32_t>(allDescriptorSetLayouts.size());
+                layoutInfo.pSetLayouts = allDescriptorSetLayouts.data();
+                layoutInfo.pushConstantRangeCount = pushConstantByteSize > 0 ? 1u : 0u;
+                layoutInfo.pPushConstantRanges = pushConstantByteSize > 0 ? &pushConstantRange : nullptr;
+                res = vkCreatePipelineLayout(m_context.device, &layoutInfo, m_context.allocationCallbacks, &pso->m_pipelineLayout);
+                if(res != VK_SUCCESS){
+                    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create pipeline layout for graphics pipeline: {}"), ResultToString(res));
+                    DestroyArenaObject(m_context.objectArena, pso);
+                    return nullptr;
+                }
+                pso->m_ownsPipelineLayout = true;
             }
-            pso->m_ownsPipelineLayout = true;
         }
     }
 
@@ -426,7 +444,11 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     }
 
     VkGraphicsPipelineCreateInfo pipelineInfo = { VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO };
-    if(m_context.extensions.KHR_dynamic_rendering)
+    if(pso->m_usesDescriptorHeap){
+        descriptorHeapFlags2.pNext = m_context.extensions.KHR_dynamic_rendering ? &renderingInfo : nullptr;
+        pipelineInfo.pNext = &descriptorHeapFlags2;
+    }
+    else if(m_context.extensions.KHR_dynamic_rendering)
         pipelineInfo.pNext = &renderingInfo;
     pipelineInfo.stageCount = static_cast<uint32_t>(shaderStages.size());
     pipelineInfo.pStages = shaderStages.data();
@@ -439,7 +461,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     pipelineInfo.pDepthStencilState = &depthStencil;
     pipelineInfo.pColorBlendState = &colorBlending;
     pipelineInfo.pDynamicState = &dynamicState;
-    pipelineInfo.layout = pso->m_pipelineLayout;
+    pipelineInfo.layout = pso->m_usesDescriptorHeap ? VK_NULL_HANDLE : pso->m_pipelineLayout;
     pipelineInfo.renderPass = VK_NULL_HANDLE;
     pipelineInfo.subpass = 0;
 
@@ -583,8 +605,12 @@ void CommandList::setGraphicsState(const GraphicsState& state){
     if(pipeline)
         vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->m_pipeline);
 
-    // Bind descriptor sets
-    if(state.bindings.size() > 0 && pipeline && pipeline->m_pipelineLayout != VK_NULL_HANDLE){
+    if(pipeline)
+        retainBindingSets(state.bindings);
+
+    if(pipeline && pipeline->m_usesDescriptorHeap)
+        bindDescriptorHeapState(true, pipeline->m_descriptorHeapPushRanges, pipeline->m_descriptorHeapPushDataSize, state.bindings);
+    else if(state.bindings.size() > 0 && pipeline && pipeline->m_pipelineLayout != VK_NULL_HANDLE){
         for(usize i = 0; i < state.bindings.size(); ++i){
             if(state.bindings[i]){
                 auto* bindingSet = checked_cast<BindingSet*>(state.bindings[i]);

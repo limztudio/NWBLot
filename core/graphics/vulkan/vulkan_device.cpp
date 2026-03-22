@@ -88,8 +88,11 @@ Device::Device(const DeviceDesc& desc)
     , m_aftermathEnabled(desc.aftermathEnabled)
     , m_context(desc.allocator, desc.threadPool, desc.instance, desc.physicalDevice, desc.device, desc.allocationCallbacks)
     , m_allocator(m_context)
+    , m_descriptorHeapManager(m_context)
 {
     VkResult res = VK_SUCCESS;
+
+    m_context.descriptorHeapManager = &m_descriptorHeapManager;
 
     if(!desc.allocationCallbacks && desc.systemMemoryAllocator && desc.systemMemoryAllocator->valid()){
         m_allocationCallbacksStorage = {};
@@ -124,6 +127,8 @@ Device::Device(const DeviceDesc& desc)
             m_context.extensions.KHR_swapchain = true;
         else if(NWB_STRCMP(ext, VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME) == 0)
             m_context.extensions.KHR_dynamic_rendering = true;
+        else if(NWB_STRCMP(ext, VK_EXT_DESCRIPTOR_HEAP_EXTENSION_NAME) == 0)
+            m_context.extensions.EXT_descriptor_heap = true;
         else if(NWB_STRCMP(ext, VK_EXT_OPACITY_MICROMAP_EXTENSION_NAME) == 0)
             m_context.extensions.EXT_opacity_micromap = true;
         else if(NWB_STRCMP(ext, VK_NV_COOPERATIVE_VECTOR_EXTENSION_NAME) == 0)
@@ -171,6 +176,18 @@ Device::Device(const DeviceDesc& desc)
         m_context.coopVecFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_VECTOR_FEATURES_NV;
         features2.pNext = &m_context.coopVecFeatures;
         vkGetPhysicalDeviceFeatures2(m_context.physicalDevice, &features2);
+    }
+
+    if(m_context.extensions.EXT_descriptor_heap){
+        VkPhysicalDeviceProperties2 props2 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2 };
+        m_context.descriptorHeapProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_PROPERTIES_EXT;
+        props2.pNext = &m_context.descriptorHeapProperties;
+        vkGetPhysicalDeviceProperties2(m_context.physicalDevice, &props2);
+
+        if(!m_descriptorHeapManager.initialize()){
+            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Descriptor heap initialization failed, falling back to descriptor sets."));
+            m_context.extensions.EXT_descriptor_heap = false;
+        }
     }
 
     VkPipelineCacheCreateInfo cacheInfo = { VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO };
@@ -226,6 +243,8 @@ Device::~Device(){
 
     m_uploadManager.reset();
     m_scratchManager.reset();
+
+    m_descriptorHeapManager.shutdown();
 
     for(u32 i = 0; i < static_cast<u32>(CommandQueue::kCount); ++i)
         m_queues[i].reset();

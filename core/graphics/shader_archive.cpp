@@ -34,9 +34,7 @@ struct IndexHeaderDisk{
 
 struct RecordHeaderDisk{
     NameHash shaderName;
-    NameHash variantName;
     NameHash stage;
-    NameHash entryPoint;
     NameHash virtualPathHash;
     u64 sourceChecksum = 0;
     u64 bytecodeChecksum = 0;
@@ -49,20 +47,13 @@ bool LessRecord(const ShaderArchive::Record& lhs, const ShaderArchive::Record& r
     if(lhsShaderHash != rhsShaderHash)
         return LessNameHash(lhsShaderHash, rhsShaderHash);
 
-    const NameHash& lhsVariantHash = lhs.variantName.hash();
-    const NameHash& rhsVariantHash = rhs.variantName.hash();
-    if(lhsVariantHash != rhsVariantHash)
-        return LessNameHash(lhsVariantHash, rhsVariantHash);
+    if(lhs.variantName != rhs.variantName)
+        return lhs.variantName < rhs.variantName;
 
     const NameHash& lhsStageHash = lhs.stage.hash();
     const NameHash& rhsStageHash = rhs.stage.hash();
     if(lhsStageHash != rhsStageHash)
         return LessNameHash(lhsStageHash, rhsStageHash);
-
-    const NameHash& lhsEntryPointHash = lhs.entryPoint.hash();
-    const NameHash& rhsEntryPointHash = rhs.entryPoint.hash();
-    if(lhsEntryPointHash != rhsEntryPointHash)
-        return LessNameHash(lhsEntryPointHash, rhsEntryPointHash);
 
     return LessNameHash(lhs.virtualPathHash, rhs.virtualPathHash);
 }
@@ -76,7 +67,7 @@ bool SameShaderVariantStage(const ShaderArchive::Record& lhs, const ShaderArchiv
 
 
 bool ValidateRecord(const ShaderArchive::Record& record){
-    if(!record.shaderName || !record.variantName || !record.stage){
+    if(!record.shaderName || record.variantName.empty() || !record.stage){
         NWB_LOGGER_ERROR(NWB_TEXT("ShaderArchive::serializeIndex failed: record has empty mandatory field"));
         return false;
     }
@@ -89,17 +80,10 @@ bool ValidateRecord(const ShaderArchive::Record& record){
 }
 
 
-CompactString NormalizeVariantName(const AStringView variantName){
-    CompactString canonical;
-    if(variantName.empty()){
-        const bool assigned = canonical.assign(ShaderArchive::s_DefaultVariant);
-        NWB_ASSERT_MSG(assigned, NWB_TEXT("ShaderArchive: default variant name exceeded CompactString capacity"));
-        return canonical;
-    }
-
-    const bool assigned = canonical.assign(variantName);
-    NWB_ASSERT_MSG(assigned, NWB_TEXT("ShaderArchive: canonical variant name exceeded CompactString capacity"));
-    return canonical;
+AStringView NormalizeVariantName(const AStringView variantName){
+    return variantName.empty()
+        ? AStringView(ShaderArchive::s_DefaultVariant)
+        : variantName;
 }
 
 u64 UpdateFnv64NameLane(u64 hash, const NameHash& nameHash, const u32 lane){
@@ -116,7 +100,7 @@ u64 UpdateFnv64NameLane(u64 hash, const NameHash& nameHash, const u32 lane){
 
 
 template <typename RecordVector>
-const ShaderArchive::Record* FindRecord(const RecordVector& records, const Name& shaderName, const Name& variantName, const Name& stageName){
+const ShaderArchive::Record* FindRecord(const RecordVector& records, const Name& shaderName, const AStringView variantName, const Name& stageName){
     const auto it = LowerBound(records.begin(), records.end(), nullptr,
         [&shaderName, &variantName, &stageName](const ShaderArchive::Record& record, std::nullptr_t){
             const NameHash& recordShader = record.shaderName.hash();
@@ -124,17 +108,16 @@ const ShaderArchive::Record* FindRecord(const RecordVector& records, const Name&
             if(recordShader != targetShader)
                 return LessNameHash(recordShader, targetShader);
 
-            const NameHash& recordVariant = record.variantName.hash();
-            const NameHash& targetVariant = variantName.hash();
-            if(recordVariant != targetVariant)
-                return LessNameHash(recordVariant, targetVariant);
+            const AStringView recordVariant(record.variantName);
+            if(recordVariant != variantName)
+                return recordVariant < variantName;
 
             return LessNameHash(record.stage.hash(), stageName.hash());
         }
     );
     if(it == records.end())
         return nullptr;
-    if(it->shaderName != shaderName || it->variantName != variantName || it->stage != stageName)
+    if(it->shaderName != shaderName || AStringView(it->variantName) != variantName || it->stage != stageName)
         return nullptr;
     return &*it;
 }
@@ -154,17 +137,11 @@ const Name& ShaderArchive::IndexVirtualPathName(){
     return s_IndexVirtualPathName;
 }
 
-Name ShaderArchive::buildVirtualPathName(const Name& shaderName, const CompactString& variantName, const Name& stageName){
+Name ShaderArchive::buildVirtualPathName(const Name& shaderName, const AStringView variantName, const Name& stageName){
     if(!shaderName || !stageName)
         return NAME_NONE;
 
-    const CompactString canonicalVariantName = __hidden_shader_archive::NormalizeVariantName(variantName.view());
-    if(canonicalVariantName.empty())
-        return NAME_NONE;
-
-    const Name canonicalVariantNameId(canonicalVariantName.view());
-    if(!canonicalVariantNameId)
-        return NAME_NONE;
+    const AStringView canonicalVariantName = __hidden_shader_archive::NormalizeVariantName(variantName);
 
     NameHash derivedHash = {};
     static constexpr char s_VirtualPathPrefix[] = "nwb/shader/archive/path";
@@ -175,7 +152,7 @@ Name ShaderArchive::buildVirtualPathName(const Name& shaderName, const CompactSt
             sizeof(s_VirtualPathPrefix) - 1
         );
         laneHash = __hidden_shader_archive::UpdateFnv64NameLane(laneHash, shaderName.hash(), lane);
-        laneHash = __hidden_shader_archive::UpdateFnv64NameLane(laneHash, canonicalVariantNameId.hash(), lane);
+        laneHash = UpdateFnv64TextExact(laneHash, canonicalVariantName);
         laneHash = __hidden_shader_archive::UpdateFnv64NameLane(laneHash, stageName.hash(), lane);
         derivedHash.qwords[lane] = laneHash;
     }
@@ -197,10 +174,16 @@ bool ShaderArchive::serializeIndex(const Vector<Record>& records, Vector<u8>& ou
     sortedRecords.insert(sortedRecords.end(), records.begin(), records.end());
     Sort(sortedRecords.begin(), sortedRecords.end(), __hidden_shader_archive::LessRecord);
 
+    usize variantTextBinaryBytes = 0;
     for(usize i = 0; i < sortedRecords.size(); ++i){
         const Record& record = sortedRecords[i];
         if(!__hidden_shader_archive::ValidateRecord(record))
             return false;
+        if(record.variantName.size() > Limit<u32>::s_Max){
+            NWB_LOGGER_ERROR(NWB_TEXT("ShaderArchive::serializeIndex failed: variant name exceeds u32 range"));
+            return false;
+        }
+        variantTextBinaryBytes += sizeof(u32) + record.variantName.size();
 
         if(i == 0)
             continue;
@@ -209,7 +192,7 @@ bool ShaderArchive::serializeIndex(const Vector<Record>& records, Vector<u8>& ou
             NWB_LOGGER_ERROR(
                 NWB_TEXT("ShaderArchive::serializeIndex failed: duplicate shader+variant+stage key detected (shader='{}', variant='{}', stage='{}')"),
                 StringConvert(record.shaderName.c_str()),
-                StringConvert(record.variantName.c_str()),
+                StringConvert(AStringView(record.variantName)),
                 StringConvert(record.stage.c_str())
             );
             return false;
@@ -226,20 +209,22 @@ bool ShaderArchive::serializeIndex(const Vector<Record>& records, Vector<u8>& ou
     header.version = __hidden_shader_archive::s_IndexVersion;
     header.recordCount = static_cast<u32>(sortedRecords.size());
 
-    outBinary.reserve(sizeof(header) + sortedRecords.size() * sizeof(__hidden_shader_archive::RecordHeaderDisk));
+    outBinary.reserve(sizeof(header) + sortedRecords.size() * sizeof(__hidden_shader_archive::RecordHeaderDisk) + variantTextBinaryBytes);
     AppendPOD(outBinary, header);
 
     for(const Record& record : sortedRecords){
         __hidden_shader_archive::RecordHeaderDisk recordHeader;
         recordHeader.shaderName = record.shaderName.hash();
-        recordHeader.variantName = record.variantName.hash();
         recordHeader.stage = record.stage.hash();
-        recordHeader.entryPoint = record.entryPoint.hash();
         recordHeader.virtualPathHash = record.virtualPathHash;
         recordHeader.sourceChecksum = record.sourceChecksum;
         recordHeader.bytecodeChecksum = record.bytecodeChecksum;
 
         AppendPOD(outBinary, recordHeader);
+        if(!AppendString(outBinary, AStringView(record.variantName))){
+            NWB_LOGGER_ERROR(NWB_TEXT("ShaderArchive::serializeIndex failed: variant name append failed"));
+            return false;
+        }
     }
 
     return true;
@@ -279,12 +264,18 @@ bool ShaderArchive::deserializeIndex(const Vector<u8>& binary, Vector<Record>& o
 
         Record record;
         record.shaderName = Name(recordHeader.shaderName);
-        record.variantName = Name(recordHeader.variantName);
         record.stage = Name(recordHeader.stage);
-        record.entryPoint = Name(recordHeader.entryPoint);
         record.virtualPathHash = recordHeader.virtualPathHash;
         record.sourceChecksum = recordHeader.sourceChecksum;
         record.bytecodeChecksum = recordHeader.bytecodeChecksum;
+        if(!ReadString(binary, cursor, record.variantName)){
+            NWB_LOGGER_ERROR(NWB_TEXT("ShaderArchive::deserializeIndex failed: missing variant name at record {}"), i);
+            return false;
+        }
+        if(record.variantName.empty()){
+            NWB_LOGGER_ERROR(NWB_TEXT("ShaderArchive::deserializeIndex failed: empty variant name at record {}"), i);
+            return false;
+        }
         if(record.virtualPathHash == NameHash{}){
             NWB_LOGGER_ERROR(NWB_TEXT("ShaderArchive::deserializeIndex failed: empty virtual path hash at record {}"), i);
             return false;
@@ -312,27 +303,23 @@ bool ShaderArchive::deserializeIndex(const Vector<u8>& binary, Vector<Record>& o
     return true;
 }
 
-bool ShaderArchive::findVirtualPath(const Vector<Record>& records, const Name& shaderName, const CompactString& variantName, const Name& stageName, Name& outVirtualPath){
+bool ShaderArchive::findVirtualPath(const Vector<Record>& records, const Name& shaderName, const AStringView variantName, const Name& stageName, Name& outVirtualPath){
     outVirtualPath = NAME_NONE;
 
     if(!shaderName || !stageName)
         return false;
 
-    const CompactString canonicalVariantName = __hidden_shader_archive::NormalizeVariantName(variantName.view());
-    if(canonicalVariantName.empty())
-        return false;
-    const Name requestedVariantName(canonicalVariantName.view());
-    static constexpr Name s_DefaultVariantName(s_DefaultVariant);
+    const AStringView canonicalVariantName = __hidden_shader_archive::NormalizeVariantName(variantName);
 
-    if(const Record* record = __hidden_shader_archive::FindRecord(records, shaderName, requestedVariantName, stageName)){
+    if(const Record* record = __hidden_shader_archive::FindRecord(records, shaderName, canonicalVariantName, stageName)){
         outVirtualPath = Name(record->virtualPathHash);
         return true;
     }
 
-    if(requestedVariantName == s_DefaultVariantName)
+    if(canonicalVariantName == AStringView(s_DefaultVariant))
         return false;
 
-    if(const Record* record = __hidden_shader_archive::FindRecord(records, shaderName, s_DefaultVariantName, stageName)){
+    if(const Record* record = __hidden_shader_archive::FindRecord(records, shaderName, s_DefaultVariant, stageName)){
         outVirtualPath = Name(record->virtualPathHash);
         return true;
     }

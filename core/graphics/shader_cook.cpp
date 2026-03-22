@@ -125,8 +125,8 @@ static bool ResolveIncludeFile(const AStringView includeName, const Path& source
 // HLSL dependency collection
 
 
-template <typename ScratchArena>
-static bool CollectDependencies(const Path& startPath, const ShaderCook::CookVector<Path>& includeDirectories, ShaderCook::CookHashSet<AString>& inOutVisitedPaths, ShaderCook::CookVector<Path>& inOutDependencies, ScratchArena& scratchArena){
+template <typename VisitedSet, typename ScratchArena>
+static bool CollectDependencies(const Path& startPath, const ShaderCook::CookVector<Path>& includeDirectories, VisitedSet& inOutVisitedPaths, ShaderCook::CookVector<Path>& inOutDependencies, ScratchArena& scratchArena){
     ErrorCode errorCode;
 
     Deque<Path, Alloc::ScratchAllocator<Path>> pending{Alloc::ScratchAllocator<Path>(scratchArena)};
@@ -158,6 +158,7 @@ static bool CollectDependencies(const Path& startPath, const ShaderCook::CookVec
             );
             return false;
         }
+        StripUtf8Bom(sourceText);
 
         inOutDependencies.push_back(absolutePath);
 
@@ -217,7 +218,7 @@ static bool ValidateDefaultVariant(const AStringView contextLabel, const AString
         return false;
     }
 
-    HashSet<Name, Hasher<Name>, EqualTo<Name>, Alloc::ScratchAllocator<Name>> seenDefines{Alloc::ScratchAllocator<Name>(scratchArena)};
+    HashSet<AString, Hasher<AString>, EqualTo<AString>, Alloc::ScratchAllocator<AString>> seenDefines{Alloc::ScratchAllocator<AString>(scratchArena)};
     usize begin = 0;
     while(begin < defaultVariant.size()){
         usize segmentEnd = defaultVariant.find(';', begin);
@@ -257,8 +258,7 @@ static bool ValidateDefaultVariant(const AStringView contextLabel, const AString
             return false;
         }
 
-        const Name defineNameId(defineName);
-        const auto defineIt = defineValues.find(defineNameId);
+        const auto defineIt = defineValues.find(defineName);
         if(defineIt == defineValues.end()){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("Meta '{}': default variant '{}' references unknown define '{}'"),
@@ -287,7 +287,7 @@ static bool ValidateDefaultVariant(const AStringView contextLabel, const AString
             return false;
         }
 
-        if(!seenDefines.insert(defineNameId).second){
+        if(!seenDefines.insert(defineName).second){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("Meta '{}': default variant '{}' assigns define '{}' more than once"),
                 StringConvert(contextLabel),
@@ -409,7 +409,39 @@ static bool ParseStringField(
     return true;
 }
 
-static bool ParseDefines(const Path& nwbFilePath, const Metascript::Value& asset, ShaderCook::CookArena& arena, ShaderCook::CookMap<Name, ShaderCook::DefineEntry>& outDefineValues){
+static bool ParseCompactStringField(
+    const Path& nwbFilePath,
+    const Metascript::Value& asset,
+    const AStringView fieldName,
+    CompactString& outValue
+)
+{
+    const auto* fieldValue = asset.findField(fieldName);
+    if(!fieldValue)
+        return true;
+    if(!fieldValue->isString()){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Meta '{}': field '{}' must be a string"),
+            PathToString<tchar>(nwbFilePath),
+            StringConvert(fieldName)
+        );
+        return false;
+    }
+
+    const AStringView fieldText(fieldValue->asString().data(), fieldValue->asString().size());
+    if(!outValue.assign(fieldText)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Meta '{}': field '{}' exceeds CompactString capacity"),
+            PathToString<tchar>(nwbFilePath),
+            StringConvert(fieldName)
+        );
+        return false;
+    }
+
+    return true;
+}
+
+static bool ParseDefines(const Path& nwbFilePath, const Metascript::Value& asset, ShaderCook::CookArena& arena, ShaderCook::CookMap<AString, ShaderCook::DefineEntry>& outDefineValues){
     outDefineValues.clear();
 
     const auto* definesVal = asset.findField("defines");
@@ -421,8 +453,9 @@ static bool ParseDefines(const Path& nwbFilePath, const Metascript::Value& asset
         return false;
     }
 
-    const auto defineAllocator = ShaderCook::CookAllocator<AString>(arena);
     const auto& definesMap = definesVal->asMap();
+    const auto defineAllocator = ShaderCook::CookAllocator<AString>(arena);
+    outDefineValues.reserve(definesMap.size());
     for(const auto& [key, val] : definesMap){
         const AString defineName(key.data(), key.size());
         if(defineName.empty()){
@@ -455,7 +488,8 @@ static bool ParseDefines(const Path& nwbFilePath, const Metascript::Value& asset
             return false;
         }
 
-        outDefineValues.insert_or_assign(Name(AStringView(defineName)), ShaderCook::DefineEntry{defineName, Move(defineValues)});
+        ShaderCook::DefineEntry defineEntry(Move(defineValues));
+        outDefineValues.insert_or_assign(defineName, Move(defineEntry));
     }
     return true;
 }
@@ -484,7 +518,7 @@ bool ShaderCook::parseDocument(const Path& nwbFilePath, Metascript::Document& ou
     return __hidden_shader_cook::ParseNwbDocument(nwbFilePath, outDoc);
 }
 
-bool ShaderCook::validateDefaultVariant(const AStringView contextLabel, const AStringView defaultVariant, const CookMap<Name, DefineEntry>& defineValues){
+bool ShaderCook::validateDefaultVariant(const AStringView contextLabel, const AStringView defaultVariant, const CookMap<AString, DefineEntry>& defineValues){
     Alloc::ScratchArena<> validationArena;
     return __hidden_shader_cook::ValidateDefaultVariant(contextLabel, defaultVariant, defineValues, validationArena);
 }
@@ -506,11 +540,11 @@ bool ShaderCook::parseShaderMeta(const Path& nwbFilePath, const Metascript::Docu
 
     if(!__hidden_shader_cook::RejectVirtualPathOverrideField(nwbFilePath, asset, "Shader"))
         return false;
-    if(!__hidden_shader_cook::ParseStringField(nwbFilePath, asset, "compiler", outEntry.compiler, true))
+    if(!__hidden_shader_cook::ParseCompactStringField(nwbFilePath, asset, "compiler", outEntry.compiler))
         return false;
-    if(!__hidden_shader_cook::ParseStringField(nwbFilePath, asset, "stage", outEntry.stage, true))
+    if(!__hidden_shader_cook::ParseCompactStringField(nwbFilePath, asset, "stage", outEntry.stage))
         return false;
-    if(!__hidden_shader_cook::ParseStringField(nwbFilePath, asset, "target_profile", outEntry.targetProfile, true))
+    if(!__hidden_shader_cook::ParseCompactStringField(nwbFilePath, asset, "target_profile", outEntry.targetProfile))
         return false;
     if(!__hidden_shader_cook::ParseStringField(nwbFilePath, asset, "entry_point", outEntry.entryPoint, false))
         return false;
@@ -610,7 +644,6 @@ void ShaderCook::mergeInheritedDefines(ShaderEntry& inOutEntry, const CookVector
         for(const auto& [defineName, defineEntry] : includeEntry.defineValues){
             if(inOutEntry.defineValues.find(defineName) == inOutEntry.defineValues.end()){
                 inOutEntry.defineValues.insert_or_assign(defineName, DefineEntry{
-                    defineEntry.name,
                     CookVector<AString>(defineEntry.values, CookAllocator<AString>(m_memoryArena))
                 });
             }
@@ -630,16 +663,16 @@ bool ShaderCook::gatherShaderDependencies(const Path& sourcePath, const CookVect
 
     outDependencies.clear();
 
-    CookHashSet<AString> visited{CookAllocator<AString>(m_memoryArena)};
+    HashSet<AString, Hasher<AString>, EqualTo<AString>, Alloc::ScratchAllocator<AString>> visited{Alloc::ScratchAllocator<AString>(scratchArena)};
     return __hidden_shader_cook::CollectDependencies(sourcePath, includeDirectories, visited, outDependencies, scratchArena);
 }
 
-void ShaderCook::expandDefineCombinations(const CookMap<Name, DefineEntry>& defineValues, CookVector<DefineCombo>& outCombinations){
+void ShaderCook::expandDefineCombinations(const CookMap<AString, DefineEntry>& defineValues, CookVector<DefineCombo>& outCombinations){
     outCombinations.clear();
     outCombinations.push_back(DefineCombo(CookAllocator<Pair<const AString, AString>>(m_memoryArena)));
 
     for(const auto& entry : sortedDefineEntries(defineValues)){
-        const AString& defineName = entry.value->name;
+        const AString& defineName = *entry.key;
         const CookVector<AString>& values = entry.value->values;
 
         CookVector<DefineCombo> expanded{CookAllocator<DefineCombo>(m_memoryArena)};
@@ -719,10 +752,13 @@ bool ShaderCook::canonicalizeVariantSignature(const AStringView variantSignature
 
 bool ShaderCook::computeDependencyChecksum(const CookVector<Path>& dependencies, u64& outChecksum){
     ErrorCode errorCode;
+    static constexpr u8 s_NewlineByte = '\n';
+    static constexpr u8 s_ZeroByte = 0;
+    Alloc::ScratchArena<> scratchArena;
 
     outChecksum = FNV64_OFFSET_BASIS;
 
-    CookVector<SortedDependencyItem> sortedDependencies{CookAllocator<SortedDependencyItem>(m_memoryArena)};
+    Vector<SortedDependencyItem, Alloc::ScratchAllocator<SortedDependencyItem>> sortedDependencies{Alloc::ScratchAllocator<SortedDependencyItem>(scratchArena)};
     sortedDependencies.reserve(dependencies.size());
     for(const Path& dependency : dependencies){
         SortedDependencyItem item;
@@ -737,16 +773,12 @@ bool ShaderCook::computeDependencyChecksum(const CookVector<Path>& dependencies,
         }
     );
 
+    Vector<u8, Alloc::ScratchAllocator<u8>> dependencyBytes{Alloc::ScratchAllocator<u8>(scratchArena)};
     for(const SortedDependencyItem& item : sortedDependencies){
-        AString dependencyPrefix = item.canonicalPath;
-        dependencyPrefix += '\n';
-        outChecksum = UpdateFnv64(
-            outChecksum,
-            reinterpret_cast<const u8*>(dependencyPrefix.data()),
-            dependencyPrefix.size()
-        );
+        outChecksum = UpdateFnv64TextExact(outChecksum, AStringView(item.canonicalPath));
+        outChecksum = UpdateFnv64(outChecksum, &s_NewlineByte, 1);
 
-        CookVector<u8> dependencyBytes{CookAllocator<u8>(m_memoryArena)};
+        dependencyBytes.clear();
         errorCode.clear();
         if(!ReadBinaryFile(item.path, dependencyBytes, errorCode)){
             if(errorCode){
@@ -772,8 +804,7 @@ bool ShaderCook::computeDependencyChecksum(const CookVector<Path>& dependencies,
             );
         }
 
-        const u8 zeroByte = 0;
-        outChecksum = UpdateFnv64(outChecksum, &zeroByte, 1);
+        outChecksum = UpdateFnv64(outChecksum, &s_ZeroByte, 1);
     }
 
     return true;
@@ -781,36 +812,22 @@ bool ShaderCook::computeDependencyChecksum(const CookVector<Path>& dependencies,
 
 bool ShaderCook::computeSourceChecksum(const ShaderEntry& entry, const AStringView variantSignature, const u64 dependencyChecksum, u64& outChecksum){
     static constexpr AStringView s_ChecksumVersionTag = "shader-source-v2";
+    const u8 newlineByte = '\n';
 
     outChecksum = FNV64_OFFSET_BASIS;
 
-    AString header;
-    header.reserve(
-        s_ChecksumVersionTag.size()
-        + entry.name.size()
-        + entry.compiler.size()
-        + entry.stage.size()
-        + entry.targetProfile.size()
-        + entry.entryPoint.size()
-        + variantSignature.size()
-        + 7
-    );
-    header += s_ChecksumVersionTag;
-    header += '\n';
-    header += entry.name;
-    header += '\n';
-    header += entry.compiler;
-    header += '\n';
-    header += entry.stage;
-    header += '\n';
-    header += entry.targetProfile;
-    header += '\n';
-    header += entry.entryPoint;
-    header += '\n';
-    header += variantSignature;
-    header += '\n';
+    const auto appendChecksumLine = [&outChecksum, &newlineByte](const AStringView text){
+        outChecksum = UpdateFnv64TextExact(outChecksum, text);
+        outChecksum = UpdateFnv64(outChecksum, &newlineByte, 1);
+    };
 
-    outChecksum = UpdateFnv64(outChecksum, reinterpret_cast<const u8*>(header.data()), header.size());
+    appendChecksumLine(s_ChecksumVersionTag);
+    appendChecksumLine(AStringView(entry.name));
+    appendChecksumLine(entry.compiler.view());
+    appendChecksumLine(entry.stage.view());
+    appendChecksumLine(entry.targetProfile.view());
+    appendChecksumLine(AStringView(entry.entryPoint));
+    appendChecksumLine(variantSignature);
     outChecksum = UpdateFnv64(outChecksum, reinterpret_cast<const u8*>(&dependencyChecksum), sizeof(dependencyChecksum));
     return true;
 }

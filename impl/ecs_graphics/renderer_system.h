@@ -43,7 +43,7 @@ private:
 
 
 public:
-    using ShaderPathResolveCallback = Function<bool(const Name& shaderName, const CompactString& variantName, const Name& stageName, Name& outVirtualPath)>;
+    using ShaderPathResolveCallback = Function<bool(const Name& shaderName, AStringView variantName, const Name& stageName, Name& outVirtualPath)>;
 
 
 public:
@@ -70,7 +70,7 @@ private:
     [[nodiscard]] bool ensureShaderLoaded(
         Core::ShaderHandle& outShader,
         const Name& shaderName,
-        const CompactString& variantName,
+        AStringView variantName,
         Core::ShaderType::Mask shaderType,
         const Name& debugName
     );

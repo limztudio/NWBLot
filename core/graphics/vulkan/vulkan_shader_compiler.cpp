@@ -68,10 +68,18 @@ static shaderc_shader_kind MapStageToShaderKind(const AStringView stage){
 }
 
 
-static shaderc_source_language MapCompilerToSourceLanguage(const AStringView compiler){
-    if(compiler == "dxc" || compiler == "hlsl")
-        return shaderc_source_language_hlsl;
-    return shaderc_source_language_glsl;
+static bool TryMapCompilerToSourceLanguage(const AStringView compiler, shaderc_source_language& outLanguage){
+    if(compiler.empty() || compiler == "glslang" || compiler == "glsl"){
+        outLanguage = shaderc_source_language_glsl;
+        return true;
+    }
+
+    if(compiler == "dxc" || compiler == "hlsl"){
+        outLanguage = shaderc_source_language_hlsl;
+        return true;
+    }
+
+    return false;
 }
 
 
@@ -145,9 +153,10 @@ public:
         AString fileContent;
         if(!ReadTextFile(resolvedPath, fileContent))
             return makeErrorResult(StringFormat("Failed to read include '{}'", PathToString(resolvedPath)));
+        StripUtf8Bom(fileContent);
 
         payload->sourceName = PathToString(resolvedPath);
-        payload->content.assign(fileContent.data(), fileContent.size());
+        payload->content = Move(fileContent);
         result->source_name = payload->sourceName.c_str();
         result->source_name_length = payload->sourceName.size();
         result->content = payload->content.c_str();
@@ -185,11 +194,24 @@ VulkanShaderCompiler::VulkanShaderCompiler(Alloc::CustomArena& memoryArena)
 
 
 bool VulkanShaderCompiler::compileVariant(const ShaderCompilerRequest& request, Vector<u8>& outBytecode){
+    outBytecode.clear();
+
+    if(request.sourcePath.empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to compile shader '{}' : source path is empty"), StringConvert(request.shaderName));
+        return false;
+    }
+
+    if(request.entryPoint.empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to compile shader '{}' : entry point is empty"), StringConvert(request.shaderName));
+        return false;
+    }
+
     AString sourceText;
     if(!ReadTextFile(request.sourcePath, sourceText)){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to read shader source '{}'"), PathToString<tchar>(request.sourcePath));
         return false;
     }
+    StripUtf8Bom(sourceText);
 
     const shaderc_shader_kind shaderKind = __hidden_vulkan_shader::MapStageToShaderKind(request.stage);
     if(shaderKind == shaderc_glsl_infer_from_source){
@@ -199,7 +221,12 @@ bool VulkanShaderCompiler::compileVariant(const ShaderCompilerRequest& request, 
 
     shaderc::CompileOptions options;
     options.SetTargetEnvironment(shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_2);
-    options.SetSourceLanguage(__hidden_vulkan_shader::MapCompilerToSourceLanguage(request.compiler));
+    shaderc_source_language sourceLanguage = shaderc_source_language_glsl;
+    if(!__hidden_vulkan_shader::TryMapCompilerToSourceLanguage(request.compiler, sourceLanguage)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Unknown shader compiler '{}' in entry '{}'"), StringConvert(request.compiler), StringConvert(request.shaderName));
+        return false;
+    }
+    options.SetSourceLanguage(sourceLanguage);
 
     for(const auto& [defineName, value] : request.defineCombo)
         options.AddMacroDefinition(defineName, value);

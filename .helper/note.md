@@ -10,6 +10,14 @@ Updated: 2026-02-28
 4. Graphics pipeline caches must include framebuffer/render-target compatibility in the cache key; material/shader identity alone is not enough when pipeline creation depends on framebuffer info.
 5. Basic built-in geometry should live in `.nwb` metadata payloads, not as hardcoded vertex/index arrays inside the cooker.
 6. If an asset invariant is format-wide, validate it in the asset/codec layer, not only in one cooker path.
+7. Vulkan command buffers must retain bound `IBindingSet` objects until GPU completion; descriptor tables and descriptor-heap ranges are GPU-visible lifetime, not temporary CPU-side state.
+8. Explicit textual config tokens like shader `compiler` and `stage` should fail on unknown values; do not silently fall back to a different backend/language.
+9. Vulkan/SPIR-V shader entry points need exact case-sensitive text at pipeline creation time; use `Name` only for identity/cache lookup, and preserve the exact entry-point string separately.
+10. GPU debug markers / Aftermath event labels are debug text, not identity keys; keep them as exact strings instead of `Name`.
+11. Strip UTF-8 BOM on shader source/include text before compilation or include scanning; otherwise the first token/include can fail on BOM-prefixed files.
+12. Do not store unused case-sensitive shader entry-point metadata in hash-only archive/index formats; keep only the lookup keys and exact text actually required at the consuming API boundary.
+13. Shader define names and variant signatures are exact case-sensitive shader text; do not route them through `Name` or `CompactString`, or distinct variants can collide.
+14. Short canonical shader metadata tokens like `compiler`, `stage`, and `target_profile` are good `CompactString` candidates; keep `AString` for unbounded or exact-text fields instead.
 
 ## Scheduler Architecture
 

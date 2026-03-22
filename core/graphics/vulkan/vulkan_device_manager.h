@@ -133,13 +133,19 @@ private:
         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MUTABLE_DESCRIPTOR_TYPE_FEATURES_EXT, nullptr,
         VK_TRUE, // mutableDescriptorType
     };
+    VkPhysicalDeviceDescriptorHeapFeaturesEXT m_descriptorHeapFeatures = {
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_FEATURES_EXT, nullptr,
+        VK_TRUE, // descriptorHeap
+        VK_FALSE, // descriptorHeapCaptureReplay
+    };
 
     const ExtEntry m_enabledDeviceExts[1] = {
         { VK_KHR_MAINTENANCE1_EXTENSION_NAME },
     };
-    const ExtEntry m_optionalDeviceExts[10] = {
+    const ExtEntry m_optionalDeviceExts[11] = {
         { VK_EXT_DEBUG_MARKER_EXTENSION_NAME },
         { VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME },
+        { VK_EXT_DESCRIPTOR_HEAP_EXTENSION_NAME, &m_descriptorHeapFeatures },
         { VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME },
         { VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME, &m_vrsFeatures },
         { VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME },

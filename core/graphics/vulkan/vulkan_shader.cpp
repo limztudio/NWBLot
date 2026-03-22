@@ -16,6 +16,159 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_vulkan_shader{
+
+
+enum class EntryPointLookupResult : u8{
+    Found,
+    NotFound,
+    InvalidSpirv,
+    Ambiguous,
+};
+
+inline constexpr u32 s_SpirvMagic = 0x07230203u;
+inline constexpr u16 s_OpEntryPoint = 15u;
+inline constexpr usize s_SpirvHeaderWords = 5;
+
+inline ShaderType::Mask ConvertExecutionModel(const u32 executionModel){
+    switch(executionModel){
+    case 0u: return ShaderType::Vertex;
+    case 1u: return ShaderType::Hull;
+    case 2u: return ShaderType::Domain;
+    case 3u: return ShaderType::Geometry;
+    case 4u: return ShaderType::Pixel;
+    case 5u: return ShaderType::Compute;
+    case 5267u: return ShaderType::Amplification;
+    case 5268u: return ShaderType::Mesh;
+    case 5313u: return ShaderType::RayGeneration;
+    case 5314u: return ShaderType::Intersection;
+    case 5315u: return ShaderType::AnyHit;
+    case 5316u: return ShaderType::ClosestHit;
+    case 5317u: return ShaderType::Miss;
+    case 5318u: return ShaderType::Callable;
+    case 5364u: return ShaderType::Amplification;
+    case 5365u: return ShaderType::Mesh;
+    default: return ShaderType::None;
+    }
+}
+
+inline EntryPointLookupResult ResolveEntryPointName(
+    const Vector<u8, Alloc::CustomAllocator<u8>>& bytecode,
+    const Name& entryName,
+    const ShaderType::Mask shaderType,
+    AString& outEntryPointName)
+{
+    outEntryPointName.clear();
+
+    if(!entryName || shaderType == ShaderType::None)
+        return EntryPointLookupResult::NotFound;
+
+    if(bytecode.empty() || (bytecode.size() & 3) != 0)
+        return EntryPointLookupResult::InvalidSpirv;
+
+    const usize wordCount = bytecode.size() / sizeof(u32);
+    if(wordCount < s_SpirvHeaderWords)
+        return EntryPointLookupResult::InvalidSpirv;
+
+    const auto* words = reinterpret_cast<const u32*>(bytecode.data());
+    if(words[0] != s_SpirvMagic)
+        return EntryPointLookupResult::InvalidSpirv;
+
+    for(usize instructionIndex = s_SpirvHeaderWords; instructionIndex < wordCount; ){
+        const u32 instruction = words[instructionIndex];
+        const u16 opcode = static_cast<u16>(instruction & 0xFFFFu);
+        const u16 instructionWordCount = static_cast<u16>(instruction >> 16u);
+        if(instructionWordCount == 0)
+            return EntryPointLookupResult::InvalidSpirv;
+
+        const usize nextInstructionIndex = instructionIndex + instructionWordCount;
+        if(nextInstructionIndex > wordCount)
+            return EntryPointLookupResult::InvalidSpirv;
+
+        if(opcode == s_OpEntryPoint){
+            if(instructionWordCount <= 3)
+                return EntryPointLookupResult::InvalidSpirv;
+
+            const ShaderType::Mask candidateShaderType = ConvertExecutionModel(words[instructionIndex + 1]);
+            if(candidateShaderType != ShaderType::None && candidateShaderType == shaderType){
+                const auto* entryPointBytes = reinterpret_cast<const char*>(&words[instructionIndex + 3]);
+                const usize entryPointMaxBytes = (instructionWordCount - 3u) * sizeof(u32);
+
+                usize entryPointLength = 0;
+                while(entryPointLength < entryPointMaxBytes && entryPointBytes[entryPointLength] != '\0')
+                    ++entryPointLength;
+
+                if(entryPointLength == entryPointMaxBytes)
+                    return EntryPointLookupResult::InvalidSpirv;
+
+                const AStringView candidateEntryPoint(entryPointBytes, entryPointLength);
+                if(ToName(candidateEntryPoint) == entryName){
+                    if(outEntryPointName.empty())
+                        outEntryPointName.assign(candidateEntryPoint.data(), candidateEntryPoint.size());
+                    else if(outEntryPointName != candidateEntryPoint)
+                        return EntryPointLookupResult::Ambiguous;
+                }
+            }
+        }
+
+        instructionIndex = nextInstructionIndex;
+    }
+
+    return outEntryPointName.empty()
+        ? EntryPointLookupResult::NotFound
+        : EntryPointLookupResult::Found;
+}
+
+inline bool ResolveShaderEntryPoint(
+    const Vector<u8, Alloc::CustomAllocator<u8>>& bytecode,
+    const Name& entryName,
+    const ShaderType::Mask shaderType,
+    const char* errorContext,
+    AString& outEntryPointName)
+{
+    const EntryPointLookupResult lookupResult = ResolveEntryPointName(bytecode, entryName, shaderType, outEntryPointName);
+    switch(lookupResult){
+    case EntryPointLookupResult::Found:
+        return true;
+
+    case EntryPointLookupResult::NotFound:
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Shader entry point '{}' (stage=0x{:x}) was not found in SPIR-V for {}"),
+            StringConvert(entryName.c_str()),
+            static_cast<u32>(shaderType),
+            StringConvert(errorContext)
+        );
+        return false;
+
+    case EntryPointLookupResult::InvalidSpirv:
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Invalid SPIR-V while resolving shader entry point '{}' (stage=0x{:x}) for {}"),
+            StringConvert(entryName.c_str()),
+            static_cast<u32>(shaderType),
+            StringConvert(errorContext)
+        );
+        return false;
+
+    case EntryPointLookupResult::Ambiguous:
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Ambiguous case-sensitive SPIR-V entry point match for '{}' (stage=0x{:x}) in {}"),
+            StringConvert(entryName.c_str()),
+            static_cast<u32>(shaderType),
+            StringConvert(errorContext)
+        );
+        return false;
+    }
+
+    return false;
+}
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 Sampler::Sampler(const VulkanContext& context)
     : RefCounter<ISampler>(context.threadPool)
     , m_context(context)
@@ -53,7 +206,7 @@ ShaderLibrary::ShaderLibrary(const VulkanContext& context)
     : RefCounter<IShaderLibrary>(context.threadPool)
     , m_context(context)
     , m_bytecode(Alloc::CustomAllocator<u8>(context.objectArena))
-    , m_shaders(0, Hasher<Name>(), EqualTo<Name>(), Alloc::CustomAllocator<Pair<const Name, RefCountPtr<Shader, ArenaRefDeleter<Shader>>>>(context.objectArena))
+    , m_shaders(0, ShaderLibraryKeyHasher(), EqualTo<ShaderLibraryKey>(), Alloc::CustomAllocator<Pair<const ShaderLibraryKey, RefCountPtr<Shader, ArenaRefDeleter<Shader>>>>(context.objectArena))
 {}
 ShaderLibrary::~ShaderLibrary(){}
 
@@ -65,7 +218,9 @@ void ShaderLibrary::getBytecode(const void** ppBytecode, usize* pSize)const{
 ShaderHandle ShaderLibrary::getShader(const Name& entryName, ShaderType::Mask shaderType){
     VkResult res = VK_SUCCESS;
 
-    auto it = m_shaders.find(entryName);
+    const ShaderLibraryKey key{ entryName, shaderType };
+
+    auto it = m_shaders.find(key);
     if(it != m_shaders.end())
         return ShaderHandle(it.value().get(), ShaderHandle::deleter_type(&m_context.objectArena));
 
@@ -79,6 +234,11 @@ ShaderHandle ShaderLibrary::getShader(const Name& entryName, ShaderType::Mask sh
         return nullptr;
     }
 
+    if(!__hidden_vulkan_shader::ResolveShaderEntryPoint(shader->m_bytecode, entryName, shaderType, "shader library", shader->m_entryPointName)){
+        DestroyArenaObject(m_context.objectArena, shader);
+        return nullptr;
+    }
+
     VkShaderModuleCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     createInfo.codeSize = m_bytecode.size();
@@ -86,12 +246,12 @@ ShaderHandle ShaderLibrary::getShader(const Name& entryName, ShaderType::Mask sh
 
     res = vkCreateShaderModule(m_context.device, &createInfo, m_context.allocationCallbacks, &shader->m_shaderModule);
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create shader module for entry '{}': {}"), StringConvert(entryName.c_str()), ResultToString(res));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create shader module for entry '{}': {}"), StringConvert(shader->m_entryPointName), ResultToString(res));
         DestroyArenaObject(m_context.objectArena, shader);
         return nullptr;
     }
 
-    m_shaders[entryName] = RefCountPtr<Shader, ArenaRefDeleter<Shader>>(shader, ArenaRefDeleter<Shader>(&m_context.objectArena));
+    m_shaders[key] = RefCountPtr<Shader, ArenaRefDeleter<Shader>>(shader, ArenaRefDeleter<Shader>(&m_context.objectArena));
     return ShaderHandle(shader, ShaderHandle::deleter_type(&m_context.objectArena));
 }
 
@@ -110,6 +270,11 @@ ShaderHandle Device::createShader(const ShaderDesc& d, const void* binary, usize
     auto* shader = NewArenaObject<Shader>(m_context.objectArena, m_context);
     shader->m_desc = d;
     shader->m_bytecode.assign(static_cast<const u8*>(binary), static_cast<const u8*>(binary) + binarySize);
+
+    if(!__hidden_vulkan_shader::ResolveShaderEntryPoint(shader->m_bytecode, d.entryName, d.shaderType, "standalone shader", shader->m_entryPointName)){
+        DestroyArenaObject(m_context.objectArena, shader);
+        return nullptr;
+    }
 
     VkShaderModuleCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -136,6 +301,7 @@ ShaderHandle Device::createShaderSpecialization(IShader* baseShader, const Shade
     auto* shader = NewArenaObject<Shader>(m_context.objectArena, m_context);
     shader->m_desc = base->m_desc;
     shader->m_bytecode = base->m_bytecode;
+    shader->m_entryPointName = base->m_entryPointName;
 
     VkShaderModuleCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;

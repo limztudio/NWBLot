@@ -53,8 +53,10 @@ public:
     using DefineCombo = CookMap<AString, AString>;
 
     struct DefineEntry{
-        AString name;
         CookVector<AString> values;
+
+        explicit DefineEntry(CookArena& memoryArena) : values(CookAllocator<AString>(memoryArena)){}
+        explicit DefineEntry(CookVector<AString>&& inValues) : values(Move(inValues)){}
     };
 
 
@@ -62,28 +64,26 @@ public:
     struct IncludeEntry{
         AString source;
         AString defaultVariant;
-        CookMap<Name, DefineEntry> defineValues;
+        CookMap<AString, DefineEntry> defineValues;
 
-        explicit IncludeEntry(CookArena& memoryArena)
-            : defineValues(CookAllocator<Pair<const Name, DefineEntry>>(memoryArena))
-        {}
+        explicit IncludeEntry(CookArena& memoryArena) : defineValues(CookAllocator<Pair<const AString, DefineEntry>>(memoryArena)){}
     };
 
     struct ShaderEntry{
         AString name;
-        AString compiler = "glslang";
-        AString stage;
-        AString targetProfile;
+        CompactString compiler = CompactString("glslang");
+        CompactString stage;
+        CompactString targetProfile;
         AString entryPoint = "main";
         AString source;
         AString defaultVariant;
 
         CookVector<AString> includeRoots;
-        CookMap<Name, DefineEntry> defineValues;
+        CookMap<AString, DefineEntry> defineValues;
 
         explicit ShaderEntry(CookArena& memoryArena)
             : includeRoots(CookAllocator<AString>(memoryArena))
-            , defineValues(CookAllocator<Pair<const Name, DefineEntry>>(memoryArena))
+            , defineValues(CookAllocator<Pair<const AString, DefineEntry>>(memoryArena))
         {}
     };
 
@@ -109,13 +109,13 @@ public:
     bool parseIncludeMeta(const Path& nwbFilePath, const Metascript::Document& doc, IncludeEntry& outEntry);
     bool parseIncludeMeta(const Path& nwbFilePath, IncludeEntry& outEntry);
 
-    bool validateDefaultVariant(AStringView contextLabel, AStringView defaultVariant, const CookMap<Name, DefineEntry>& defineValues);
+    bool validateDefaultVariant(AStringView contextLabel, AStringView defaultVariant, const CookMap<AString, DefineEntry>& defineValues);
 
     void mergeInheritedDefines(ShaderEntry& inOutEntry, const CookVector<Path>& dependencies, const CookMap<AString, IncludeEntry>& includeMetadata);
 
     bool gatherShaderDependencies(const Path& sourcePath, const CookVector<Path>& includeDirectories, CookVector<Path>& outDependencies);
 
-    void expandDefineCombinations(const CookMap<Name, DefineEntry>& defineValues, CookVector<DefineCombo>& outCombinations);
+    void expandDefineCombinations(const CookMap<AString, DefineEntry>& defineValues, CookVector<DefineCombo>& outCombinations);
 
     AString buildVariantName(const DefineCombo& combo);
     bool canonicalizeVariantSignature(AStringView variantSignature, AString& outCanonical);

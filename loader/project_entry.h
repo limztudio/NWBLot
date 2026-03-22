@@ -45,7 +45,7 @@ struct ProjectFrameClientSize{
 };
 
 struct ProjectRuntimeContext{
-    using ShaderPathResolveCallback = Function<bool(const Name& shaderName, const CompactString& variantName, const Name& stageName, Name& outVirtualPath)>;
+    using ShaderPathResolveCallback = Function<bool(const Name& shaderName, AStringView variantName, const Name& stageName, Name& outVirtualPath)>;
 
     Core::Graphics& graphics;
     Core::Alloc::CustomArena& objectArena;

@@ -266,7 +266,7 @@ bool RendererSystem::ensureRendererPipeline(const RendererComponent& renderer, C
 
     Core::Assets::AssetRef<Shader> vertexShaderAsset;
     Core::Assets::AssetRef<Shader> pixelShaderAsset;
-    CompactString shaderVariant(Core::ShaderArchive::s_DefaultVariant);
+    AStringView shaderVariant = Core::ShaderArchive::s_DefaultVariant;
     UniquePtr<Core::Assets::IAsset> loadedAsset;
     if(!m_assetManager.loadSync(Material::AssetTypeName(), materialKey, loadedAsset)){
         NWB_LOGGER_ERROR(
@@ -289,8 +289,8 @@ bool RendererSystem::ensureRendererPipeline(const RendererComponent& renderer, C
 
     const Material& material = static_cast<const Material&>(*loadedAsset);
     shaderVariant = material.shaderVariant().empty()
-        ? CompactString(Core::ShaderArchive::s_DefaultVariant)
-        : material.shaderVariant();
+        ? AStringView(Core::ShaderArchive::s_DefaultVariant)
+        : AStringView(material.shaderVariant());
     const Name& vertexStageName = __hidden_ecs_graphics::StageNameFromShaderType(Core::ShaderType::Vertex);
     const Name& pixelStageName = __hidden_ecs_graphics::StageNameFromShaderType(Core::ShaderType::Pixel);
     if(!material.findShaderForStage(vertexStageName, vertexShaderAsset) || !material.findShaderForStage(pixelStageName, pixelShaderAsset)){
@@ -356,7 +356,7 @@ bool RendererSystem::ensureRendererPipeline(const RendererComponent& renderer, C
 bool RendererSystem::ensureShaderLoaded(
     Core::ShaderHandle& outShader,
     const Name& shaderName,
-    const CompactString& variantName,
+    const AStringView variantName,
     const Core::ShaderType::Mask shaderType,
     const Name& debugName
 ){
@@ -373,8 +373,8 @@ bool RendererSystem::ensureShaderLoaded(
         return false;
     }
 
-    const CompactString resolvedVariantName = variantName.empty()
-        ? CompactString(Core::ShaderArchive::s_DefaultVariant)
+    const AStringView resolvedVariantName = variantName.empty()
+        ? AStringView(Core::ShaderArchive::s_DefaultVariant)
         : variantName;
     if(!m_shaderPathResolver){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: shader path resolver is null"));
@@ -386,7 +386,7 @@ bool RendererSystem::ensureShaderLoaded(
         NWB_LOGGER_ERROR(
             NWB_TEXT("RendererSystem: failed to resolve shader '{}' variant '{}' stage '{}'"),
             StringConvert(shaderName.c_str()),
-            StringConvert(resolvedVariantName.c_str()),
+            StringConvert(resolvedVariantName),
             StringConvert(stageName.c_str())
         );
         return false;

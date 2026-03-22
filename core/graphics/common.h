@@ -3467,7 +3467,7 @@ public:
     // - DX12: Maps to PIXBeginEvent.
     // - Vulkan: Maps to cmdBeginDebugUtilsLabelEXT or cmdDebugMarkerBeginEXT.
     // If Nsight Aftermath integration is enabled, also calls GFSDK_Aftermath_SetEventMarker on DX11 and DX12.
-    virtual void beginMarker(const Name& name) = 0;
+    virtual void beginMarker(const AStringView name) = 0;
 
     // Places a debug marker denoting the end of a range of commands in the command list.
     // - DX11: Maps to ID3DUserDefinedAnnotation::EndEvent.

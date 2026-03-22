@@ -205,7 +205,7 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
     outBinary.clear();
     AppendPOD(outBinary, __hidden_assets::s_MaterialMagic);
     AppendPOD(outBinary, __hidden_assets::s_MaterialVersion);
-    if(!AppendString(outBinary, material.shaderVariant())){
+    if(!AppendString(outBinary, AStringView(material.shaderVariant()))){
         NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: shader variant is too long"));
         return false;
     }
@@ -275,8 +275,8 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void Material::setShaderVariant(const CompactString& variantName){
-    m_shaderVariant = variantName;
+void Material::setShaderVariant(const AStringView variantName){
+    m_shaderVariant = AString(variantName);
 }
 
 void Material::setShaderForStage(const Name& stageName, const Core::Assets::AssetRef<Shader>& shaderAsset){

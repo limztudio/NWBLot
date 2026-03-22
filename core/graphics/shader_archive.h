@@ -26,9 +26,8 @@ public:
 public:
     struct Record{
         Name shaderName = NAME_NONE;
-        Name variantName = NAME_NONE;
+        AString variantName;
         Name stage = NAME_NONE;
-        Name entryPoint = NAME_NONE;
         u64 sourceChecksum = 0;
         u64 bytecodeChecksum = 0;
         NameHash virtualPathHash = {};
@@ -37,10 +36,10 @@ public:
 
 public:
     [[nodiscard]] static const Name& IndexVirtualPathName();
-    [[nodiscard]] static Name buildVirtualPathName(const Name& shaderName, const CompactString& variantName, const Name& stageName);
+    [[nodiscard]] static Name buildVirtualPathName(const Name& shaderName, AStringView variantName, const Name& stageName);
     static bool serializeIndex(const Vector<Record>& records, Vector<u8>& outBinary);
     static bool deserializeIndex(const Vector<u8>& binary, Vector<Record>& outRecords);
-    static bool findVirtualPath(const Vector<Record>& records, const Name& shaderName, const CompactString& variantName, const Name& stageName, Name& outVirtualPath);
+    static bool findVirtualPath(const Vector<Record>& records, const Name& shaderName, AStringView variantName, const Name& stageName, Name& outVirtualPath);
 };
 
 

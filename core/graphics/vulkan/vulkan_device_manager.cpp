@@ -48,18 +48,6 @@ static Vector<const char*, Alloc::ScratchAllocator<const char*>> StringMapKeysTo
     return ret;
 }
 
-template<typename Set>
-static auto SetToVector(const Set& set, Alloc::ScratchArena<>& arena){
-    using T = typename Set::value_type;
-    Alloc::ScratchAllocator<T> alloc(arena);
-    Vector<T, Alloc::ScratchAllocator<T>> ret(alloc);
-    ret.reserve(set.size());
-    for(const auto& s : set)
-        ret.push_back(s);
-    return ret;
-}
-
-
 static VKAPI_ATTR VkBool32 VKAPI_CALL VulkanDebugCallback(
     VkDebugReportFlagsEXT flags,
     VkDebugReportObjectTypeEXT objType,
@@ -778,17 +766,10 @@ bool DeviceManager::createDevice(){
     m_rendererString = physicalDeviceProperties.deviceName;
 #endif
 
-    {
-        AStringStream ss;
-        ss << "Vulkan: Enabled device extensions:";
-        for(const auto& [name, _] : m_enabledExtensions.device)
-            ss << "\n    " << name;
-        NWB_LOGGER_INFO(NWB_TEXT("{}"), StringConvert(ss.str()));
-    }
-
     m_swapChainMutableFormatSupported = isVulkanDeviceExtensionEnabled(VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME);
     const bool coopVecExtensionEnabled = isVulkanDeviceExtensionEnabled(VK_NV_COOPERATIVE_VECTOR_EXTENSION_NAME);
     const bool dynamicRenderingExtensionEnabled = isVulkanDeviceExtensionEnabled(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
+    const bool descriptorHeapExtensionEnabled = isVulkanDeviceExtensionEnabled(VK_EXT_DESCRIPTOR_HEAP_EXTENSION_NAME);
     const bool apiSupportsVulkan13 = physicalDeviceProperties.apiVersion >= VK_API_VERSION_1_3;
 
     auto appendToChain = [](void*& pNext, void* feature){
@@ -813,6 +794,11 @@ bool DeviceManager::createDevice(){
     bufferDeviceAddressFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
     appendToChain(pNext, &bufferDeviceAddressFeatures);
 
+    VkPhysicalDeviceDescriptorHeapFeaturesEXT descriptorHeapFeatures = {};
+    descriptorHeapFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_FEATURES_EXT;
+    if(descriptorHeapExtensionEnabled)
+        appendToChain(pNext, &descriptorHeapFeatures);
+
     VkPhysicalDeviceMaintenance4Features maintenance4Features = {};
     maintenance4Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_4_FEATURES;
     if(isVulkanDeviceExtensionEnabled(VK_KHR_MAINTENANCE_4_EXTENSION_NAME))
@@ -835,6 +821,17 @@ bool DeviceManager::createDevice(){
 
     physicalDeviceFeatures2.pNext = pNext;
     vkGetPhysicalDeviceFeatures2(m_vulkanPhysicalDevice, &physicalDeviceFeatures2);
+
+    if(descriptorHeapExtensionEnabled && descriptorHeapFeatures.descriptorHeap != VK_TRUE)
+        m_enabledExtensions.device.erase(VK_EXT_DESCRIPTOR_HEAP_EXTENSION_NAME);
+
+    {
+        AStringStream ss;
+        ss << "Vulkan: Enabled device extensions:";
+        for(const auto& [name, _] : m_enabledExtensions.device)
+            ss << "\n    " << name;
+        NWB_LOGGER_INFO(NWB_TEXT("{}"), StringConvert(ss.str()));
+    }
 
     auto requireFeature = [&](const VkBool32 supported, const AStringView featureName)->bool{
         if(supported == VK_TRUE)
@@ -918,6 +915,12 @@ bool DeviceManager::createDevice(){
 
     if(coopVecExtensionEnabled && cooperativeVectorFeatures.cooperativeVector)
         appendToChain(pNext, &cooperativeVectorFeatures);
+
+    if(descriptorHeapExtensionEnabled && descriptorHeapFeatures.descriptorHeap == VK_TRUE){
+        m_descriptorHeapFeatures.descriptorHeap = VK_TRUE;
+        m_descriptorHeapFeatures.descriptorHeapCaptureReplay = descriptorHeapFeatures.descriptorHeapCaptureReplay;
+        appendToChain(pNext, &m_descriptorHeapFeatures);
+    }
 
     if(apiSupportsVulkan13)
         appendToChain(pNext, &vulkan13features);

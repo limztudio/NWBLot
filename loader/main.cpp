@@ -154,7 +154,7 @@ static int MainLogic(NotNull<const char*> logAddress, void* inst){
                 assetManager,
                 {},
             };
-            context.shaderPathResolver = [&shaderArchiveRecords](const Name& shaderName, const CompactString& variantName, const Name& stageName, Name& outVirtualPath){
+            context.shaderPathResolver = [&shaderArchiveRecords](const Name& shaderName, const AStringView variantName, const Name& stageName, Name& outVirtualPath){
                 return NWB::Core::ShaderArchive::findVirtualPath(
                     shaderArchiveRecords,
                     shaderName,

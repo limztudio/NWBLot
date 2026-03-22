@@ -186,20 +186,22 @@ void CommandList::endTimerQuery(ITimerQuery* _query){
     query->m_resolved = true;
 }
 
-void CommandList::beginMarker(const Name& name){
+void CommandList::beginMarker(const AStringView name){
+    const AString markerName(name);
+
     if(m_context.extensions.EXT_debug_utils){
         VkDebugUtilsLabelEXT label = { VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT };
-        label.pLabelName = name.c_str();
+        label.pLabelName = markerName.c_str();
         vkCmdBeginDebugUtilsLabelEXT(m_currentCmdBuf->m_cmdBuf, &label);
     }
     else if(m_context.extensions.EXT_debug_marker){
         VkDebugMarkerMarkerInfoEXT markerInfo = { VK_STRUCTURE_TYPE_DEBUG_MARKER_MARKER_INFO_EXT };
-        markerInfo.pMarkerName = name.c_str();
+        markerInfo.pMarkerName = markerName.c_str();
         vkCmdDebugMarkerBeginEXT(m_currentCmdBuf->m_cmdBuf, &markerInfo);
     }
 
     if(m_device.isAftermathEnabled()){
-        const usize aftermathMarker = m_aftermathMarkerTracker.pushEvent(name.c_str());
+        const usize aftermathMarker = m_aftermathMarkerTracker.pushEvent(markerName.c_str());
         vkCmdSetCheckpointNV(m_currentCmdBuf->m_cmdBuf, reinterpret_cast<const void*>(aftermathMarker));
     }
 }

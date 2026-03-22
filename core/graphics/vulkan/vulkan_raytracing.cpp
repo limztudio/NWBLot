@@ -360,6 +360,8 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
 
     Vector<VkPipelineShaderStageCreateInfo, Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>> stages{ Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>(scratchArena) };
     Vector<VkRayTracingShaderGroupCreateInfoKHR, Alloc::ScratchAllocator<VkRayTracingShaderGroupCreateInfoKHR>> groups{ Alloc::ScratchAllocator<VkRayTracingShaderGroupCreateInfoKHR>(scratchArena) };
+    Vector<VkDescriptorSetAndBindingMappingEXT, Alloc::ScratchAllocator<VkDescriptorSetAndBindingMappingEXT>> descriptorHeapMappings{ Alloc::ScratchAllocator<VkDescriptorSetAndBindingMappingEXT>(scratchArena) };
+    Vector<VkShaderDescriptorSetAndBindingMappingInfoEXT, Alloc::ScratchAllocator<VkShaderDescriptorSetAndBindingMappingInfoEXT>> descriptorHeapStageMappings{ Alloc::ScratchAllocator<VkShaderDescriptorSetAndBindingMappingInfoEXT>(scratchArena) };
 
     stages.reserve(desc.shaders.size() + desc.hitGroups.size() * s_RayTracingHitGroupShaderStageCount);
     groups.reserve(desc.shaders.size() + desc.hitGroups.size());
@@ -372,7 +374,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
 
         VkPipelineShaderStageCreateInfo stageInfo = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
         stageInfo.module = s->m_shaderModule;
-        stageInfo.pName = s->m_desc.entryName.c_str();
+        stageInfo.pName = s->m_entryPointName.c_str();
 
         switch(s->m_desc.shaderType){
         case ShaderType::RayGeneration:
@@ -412,7 +414,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
             VkPipelineShaderStageCreateInfo stageInfo = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
             stageInfo.stage = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
             stageInfo.module = s->m_shaderModule;
-            stageInfo.pName = s->m_desc.entryName.c_str();
+            stageInfo.pName = s->m_entryPointName.c_str();
             group.closestHitShader = static_cast<u32>(stages.size());
             stages.push_back(stageInfo);
         }
@@ -421,7 +423,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
             VkPipelineShaderStageCreateInfo stageInfo = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
             stageInfo.stage = VK_SHADER_STAGE_ANY_HIT_BIT_KHR;
             stageInfo.module = s->m_shaderModule;
-            stageInfo.pName = s->m_desc.entryName.c_str();
+            stageInfo.pName = s->m_entryPointName.c_str();
             group.anyHitShader = static_cast<u32>(stages.size());
             stages.push_back(stageInfo);
         }
@@ -430,7 +432,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
             VkPipelineShaderStageCreateInfo stageInfo = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
             stageInfo.stage = VK_SHADER_STAGE_INTERSECTION_BIT_KHR;
             stageInfo.module = s->m_shaderModule;
-            stageInfo.pName = s->m_desc.entryName.c_str();
+            stageInfo.pName = s->m_entryPointName.c_str();
             group.intersectionShader = static_cast<u32>(stages.size());
             stages.push_back(stageInfo);
         }
@@ -442,58 +444,75 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
         return nullptr;
     }
 
+    VkPipelineCreateFlags2CreateInfo descriptorHeapFlags2{};
+    pso->m_usesDescriptorHeap = DescriptorHeapManager::tryEnablePipeline(
+        m_context,
+        desc.globalBindingLayouts,
+        stages,
+        pso->m_descriptorHeapPushRanges,
+        pso->m_descriptorHeapPushDataSize,
+        descriptorHeapFlags2,
+        descriptorHeapMappings,
+        descriptorHeapStageMappings
+    );
+
     VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
-    if(desc.globalBindingLayouts.size() == 1){
-        auto* layout = checked_cast<BindingLayout*>(desc.globalBindingLayouts[0].get());
-        if(layout)
-            pipelineLayout = layout->m_pipelineLayout;
-    }
-    else if(desc.globalBindingLayouts.size() > 1){
-        Vector<VkDescriptorSetLayout, Alloc::ScratchAllocator<VkDescriptorSetLayout>> allDescriptorSetLayouts{ Alloc::ScratchAllocator<VkDescriptorSetLayout>(scratchArena) };
-        u32 pushConstantByteSize = 0;
-        for(u32 i = 0; i < static_cast<u32>(desc.globalBindingLayouts.size()); ++i){
-            auto* bl = checked_cast<BindingLayout*>(desc.globalBindingLayouts[i].get());
-            if(!bl)
-                continue;
-            for(const auto& item : bl->m_desc.bindings){
-                if(item.type == ResourceType::PushConstants)
-                    pushConstantByteSize = Max<u32>(pushConstantByteSize, item.size);
-            }
-            for(const auto& dsl : bl->m_descriptorSetLayouts)
-                allDescriptorSetLayouts.push_back(dsl);
+    if(!pso->m_usesDescriptorHeap){
+        if(desc.globalBindingLayouts.size() == 1){
+            auto* layout = checked_cast<BindingLayout*>(desc.globalBindingLayouts[0].get());
+            if(layout)
+                pipelineLayout = layout->m_pipelineLayout;
         }
-
-        if(!allDescriptorSetLayouts.empty()){
-            VkPushConstantRange pushConstantRange = {};
-            if(pushConstantByteSize > 0){
-                pushConstantRange.stageFlags = VK_SHADER_STAGE_ALL;
-                pushConstantRange.offset = 0;
-                pushConstantRange.size = pushConstantByteSize;
+        else if(desc.globalBindingLayouts.size() > 1){
+            Vector<VkDescriptorSetLayout, Alloc::ScratchAllocator<VkDescriptorSetLayout>> allDescriptorSetLayouts{ Alloc::ScratchAllocator<VkDescriptorSetLayout>(scratchArena) };
+            u32 pushConstantByteSize = 0;
+            for(u32 i = 0; i < static_cast<u32>(desc.globalBindingLayouts.size()); ++i){
+                auto* bl = checked_cast<BindingLayout*>(desc.globalBindingLayouts[i].get());
+                if(!bl)
+                    continue;
+                const BindingLayoutDesc& bindingLayoutDesc = bl->getBindingLayoutDesc();
+                for(const auto& item : bindingLayoutDesc.bindings){
+                    if(item.type == ResourceType::PushConstants)
+                        pushConstantByteSize = Max<u32>(pushConstantByteSize, item.size);
+                }
+                for(const auto& dsl : bl->m_descriptorSetLayouts)
+                    allDescriptorSetLayouts.push_back(dsl);
             }
 
-            VkPipelineLayoutCreateInfo layoutInfo = { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
-            layoutInfo.setLayoutCount = static_cast<u32>(allDescriptorSetLayouts.size());
-            layoutInfo.pSetLayouts = allDescriptorSetLayouts.data();
-            layoutInfo.pushConstantRangeCount = pushConstantByteSize > 0 ? 1u : 0u;
-            layoutInfo.pPushConstantRanges = pushConstantByteSize > 0 ? &pushConstantRange : nullptr;
-            res = vkCreatePipelineLayout(m_context.device, &layoutInfo, m_context.allocationCallbacks, &pipelineLayout);
-            if(res != VK_SUCCESS){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create pipeline layout for ray tracing pipeline: {}"), ResultToString(res));
-                DestroyArenaObject(m_context.objectArena, pso);
-                return nullptr;
+            if(!allDescriptorSetLayouts.empty()){
+                VkPushConstantRange pushConstantRange = {};
+                if(pushConstantByteSize > 0){
+                    pushConstantRange.stageFlags = VK_SHADER_STAGE_ALL;
+                    pushConstantRange.offset = 0;
+                    pushConstantRange.size = pushConstantByteSize;
+                }
+
+                VkPipelineLayoutCreateInfo layoutInfo = { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
+                layoutInfo.setLayoutCount = static_cast<u32>(allDescriptorSetLayouts.size());
+                layoutInfo.pSetLayouts = allDescriptorSetLayouts.data();
+                layoutInfo.pushConstantRangeCount = pushConstantByteSize > 0 ? 1u : 0u;
+                layoutInfo.pPushConstantRanges = pushConstantByteSize > 0 ? &pushConstantRange : nullptr;
+                res = vkCreatePipelineLayout(m_context.device, &layoutInfo, m_context.allocationCallbacks, &pipelineLayout);
+                if(res != VK_SUCCESS){
+                    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create pipeline layout for ray tracing pipeline: {}"), ResultToString(res));
+                    DestroyArenaObject(m_context.objectArena, pso);
+                    return nullptr;
+                }
+                pso->m_ownsPipelineLayout = true;
             }
-            pso->m_ownsPipelineLayout = true;
         }
     }
     pso->m_pipelineLayout = pipelineLayout;
 
     VkRayTracingPipelineCreateInfoKHR createInfo = { VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR };
+    if(pso->m_usesDescriptorHeap)
+        createInfo.pNext = &descriptorHeapFlags2;
     createInfo.stageCount = static_cast<u32>(stages.size());
     createInfo.pStages = stages.data();
     createInfo.groupCount = static_cast<u32>(groups.size());
     createInfo.pGroups = groups.data();
     createInfo.maxPipelineRayRecursionDepth = desc.maxRecursionDepth;
-    createInfo.layout = pipelineLayout;
+    createInfo.layout = pso->m_usesDescriptorHeap ? VK_NULL_HANDLE : pipelineLayout;
 
     res = vkCreateRayTracingPipelinesKHR(m_context.device, VK_NULL_HANDLE, m_context.pipelineCache, 1, &createInfo, m_context.allocationCallbacks, &pso->m_pipeline);
     if(res != VK_SUCCESS){
@@ -791,7 +810,11 @@ void CommandList::setRayTracingState(const RayTracingState& state){
 
     vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, pipeline->m_pipeline);
 
-    if(state.bindings.size() > 0 && pipeline->m_pipelineLayout != VK_NULL_HANDLE){
+    retainBindingSets(state.bindings);
+
+    if(pipeline->m_usesDescriptorHeap)
+        bindDescriptorHeapState(true, pipeline->m_descriptorHeapPushRanges, pipeline->m_descriptorHeapPushDataSize, state.bindings);
+    else if(state.bindings.size() > 0 && pipeline->m_pipelineLayout != VK_NULL_HANDLE){
         for(usize i = 0; i < state.bindings.size(); ++i){
             if(state.bindings[i]){
                 auto* bindingSet = checked_cast<BindingSet*>(state.bindings[i]);

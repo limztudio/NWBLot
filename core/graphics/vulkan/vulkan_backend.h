@@ -72,6 +72,7 @@ namespace __hidden_vulkan{
 class Device;
 class Queue;
 class TrackedCommandBuffer;
+class DescriptorHeapManager;
 
 class Buffer;
 class Texture;
@@ -104,6 +105,7 @@ struct VulkanContext{
         bool KHR_ray_query = false;
         bool KHR_acceleration_structure = false;
         bool buffer_device_address = false;
+        bool EXT_descriptor_heap = false;
         bool EXT_debug_utils = false;
         bool EXT_debug_marker = false;
         bool KHR_swapchain = false;
@@ -118,9 +120,11 @@ struct VulkanContext{
     } extensions;
 
     VkPhysicalDeviceAccelerationStructurePropertiesKHR accelStructProperties{};
+    VkPhysicalDeviceDescriptorHeapPropertiesEXT descriptorHeapProperties{};
     VkPhysicalDeviceCooperativeVectorPropertiesNV coopVecProperties{};
     VkPhysicalDeviceCooperativeVectorFeaturesNV coopVecFeatures{};
     VkPhysicalDeviceClusterAccelerationStructurePropertiesNV nvClusterAccelerationStructureProperties{};
+    DescriptorHeapManager* descriptorHeapManager = nullptr;
 
 
     explicit VulkanContext(GraphicsAllocator& allocatorRef, Alloc::ThreadPool& threadPoolRef)
@@ -420,6 +424,7 @@ public:
 
 public:
     [[nodiscard]] virtual const TextureDesc& getDescription()const override{ return m_desc; }
+    virtual Object getNativeHandle(ObjectType objectType)override;
     virtual Object getNativeView(ObjectType objectType, Format::Enum format, TextureSubresourceSet subresources, TextureDimension::Enum dimension, bool isReadOnlyDSV)override;
 
     [[nodiscard]] VkImageView getView(const TextureSubresourceSet& subresources, TextureDimension::Enum dimension, Format::Enum format, bool isReadOnlyDSV = false);
@@ -530,6 +535,7 @@ private:
     VkShaderModule m_shaderModule = VK_NULL_HANDLE;
 
     Vector<u8, Alloc::CustomAllocator<u8>> m_bytecode;
+    AString m_entryPointName;
 
     Vector<VkSpecializationMapEntry, Alloc::CustomAllocator<VkSpecializationMapEntry>> m_specializationEntries;
     Vector<u8, Alloc::CustomAllocator<u8>> m_specializationData;
@@ -540,6 +546,29 @@ private:
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Shader Library
+
+
+struct ShaderLibraryKey{
+    Name entryName = NAME_NONE;
+    ShaderType::Mask shaderType = ShaderType::None;
+};
+
+inline bool operator==(const ShaderLibraryKey& lhs, const ShaderLibraryKey& rhs)noexcept{
+    return lhs.entryName == rhs.entryName
+        && lhs.shaderType == rhs.shaderType
+        ;
+}
+
+struct ShaderLibraryKeyHasher{
+    usize operator()(const ShaderLibraryKey& value)const noexcept{
+        usize seed = std::hash<Name>{}(value.entryName);
+        seed ^= static_cast<usize>(value.shaderType)
+            + static_cast<usize>(0x9e3779b97f4a7c15ull)
+            + (seed << 6)
+            + (seed >> 2);
+        return seed;
+    }
+};
 
 
 class ShaderLibrary final : public RefCounter<IShaderLibrary>, NoCopy{
@@ -558,7 +587,7 @@ public:
 
 private:
     Vector<u8, Alloc::CustomAllocator<u8>> m_bytecode;
-    HashMap<Name, RefCountPtr<Shader, ArenaRefDeleter<Shader>>, Hasher<Name>, EqualTo<Name>, Alloc::CustomAllocator<Pair<const Name, RefCountPtr<Shader, ArenaRefDeleter<Shader>>>>> m_shaders;
+    HashMap<ShaderLibraryKey, RefCountPtr<Shader, ArenaRefDeleter<Shader>>, ShaderLibraryKeyHasher, EqualTo<ShaderLibraryKey>, Alloc::CustomAllocator<Pair<const ShaderLibraryKey, RefCountPtr<Shader, ArenaRefDeleter<Shader>>>>> m_shaders;
 
     const VulkanContext& m_context;
 };
@@ -630,6 +659,110 @@ private:
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Descriptor Heap
+
+
+enum class DescriptorHeapKind : u8{
+    None = 0,
+    Resource,
+    Sampler,
+};
+
+struct DescriptorHeapAllocation{
+    DescriptorHeapKind kind = DescriptorHeapKind::None;
+    u32 offsetBytes = 0;
+    u32 sizeBytes = 0;
+
+    [[nodiscard]] bool valid()const{ return kind != DescriptorHeapKind::None && sizeBytes > 0; }
+};
+
+struct DescriptorHeapBindingMeta{
+    ResourceType::Enum resourceType = ResourceType::None;
+    VkDescriptorType descriptorType = VK_DESCRIPTOR_TYPE_MAX_ENUM;
+    DescriptorHeapKind heapKind = DescriptorHeapKind::None;
+    u32 slot = 0;
+    u32 arraySize = 0;
+    u32 descriptorSize = 0;
+    u32 descriptorStride = 0;
+};
+
+struct DescriptorHeapPushRange{
+    u32 bindingSetIndex = 0;
+    u32 pushOffsetBytes = 0;
+    u32 pushWordCount = 0;
+};
+
+class DescriptorHeapManager final : NoCopy{
+private:
+    struct FreeRange{
+        u32 offsetBytes = 0;
+        u32 sizeBytes = 0;
+    };
+
+    struct HeapStorage{
+        VkBuffer buffer = VK_NULL_HANDLE;
+        VkDeviceMemory memory = VK_NULL_HANDLE;
+        void* mappedMemory = nullptr;
+        VkDeviceAddress deviceAddress = 0;
+        u32 capacityBytes = 0;
+        u32 writableOffsetBytes = 0;
+        VkBindHeapInfoEXT bindInfo{};
+        Futex mutex;
+        Vector<FreeRange, Alloc::CustomAllocator<FreeRange>> freeRanges;
+
+        explicit HeapStorage(Alloc::CustomArena& arena)
+            : freeRanges(Alloc::CustomAllocator<FreeRange>(arena))
+        {}
+    };
+
+
+public:
+    static bool tryEnablePipeline(
+        const VulkanContext& context,
+        const BindingLayoutVector& bindingLayouts,
+        Vector<VkPipelineShaderStageCreateInfo, Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>>& shaderStages,
+        FixedVector<DescriptorHeapPushRange, s_MaxBindingLayouts>& outPushRanges,
+        u32& outPushDataSize,
+        VkPipelineCreateFlags2CreateInfo& outFlags2,
+        Vector<VkDescriptorSetAndBindingMappingEXT, Alloc::ScratchAllocator<VkDescriptorSetAndBindingMappingEXT>>& outMappings,
+        Vector<VkShaderDescriptorSetAndBindingMappingInfoEXT, Alloc::ScratchAllocator<VkShaderDescriptorSetAndBindingMappingInfoEXT>>& outStageMappings);
+
+
+public:
+    explicit DescriptorHeapManager(const VulkanContext& context);
+    ~DescriptorHeapManager();
+
+
+public:
+    bool initialize();
+    void shutdown();
+
+    [[nodiscard]] bool isEnabled()const{ return m_enabled; }
+    [[nodiscard]] u32 getDescriptorSize(VkDescriptorType descriptorType)const;
+    [[nodiscard]] u32 getDescriptorStride(VkDescriptorType descriptorType)const;
+    [[nodiscard]] const VkBindHeapInfoEXT& getResourceBindInfo()const{ return m_resourceHeap.bindInfo; }
+    [[nodiscard]] const VkBindHeapInfoEXT& getSamplerBindInfo()const{ return m_samplerHeap.bindInfo; }
+
+    [[nodiscard]] DescriptorHeapAllocation allocate(DescriptorHeapKind kind, u32 sizeBytes, u32 alignmentBytes);
+    void free(const DescriptorHeapAllocation& allocation);
+
+    bool writeDescriptor(const BindingSetItem& item, const DescriptorHeapBindingMeta& meta, u32 dstOffsetBytes);
+
+
+private:
+    bool initializeHeap(HeapStorage& heap, const CompactString& debugName, u32 capacityBytes, u32 reservedRangeBytes);
+    void shutdownHeap(HeapStorage& heap);
+
+
+private:
+    const VulkanContext& m_context;
+    bool m_enabled = false;
+    HeapStorage m_resourceHeap;
+    HeapStorage m_samplerHeap;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Graphics Pipeline
 
 
@@ -655,6 +788,9 @@ private:
     VkPipeline m_pipeline = VK_NULL_HANDLE;
     VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
     bool m_ownsPipelineLayout = false;
+    bool m_usesDescriptorHeap = false;
+    FixedVector<DescriptorHeapPushRange, s_MaxBindingLayouts> m_descriptorHeapPushRanges;
+    u32 m_descriptorHeapPushDataSize = 0;
 
     const VulkanContext& m_context;
 };
@@ -684,6 +820,9 @@ private:
     VkPipeline m_pipeline = VK_NULL_HANDLE;
     VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
     bool m_ownsPipelineLayout = false;
+    bool m_usesDescriptorHeap = false;
+    FixedVector<DescriptorHeapPushRange, s_MaxBindingLayouts> m_descriptorHeapPushRanges;
+    u32 m_descriptorHeapPushDataSize = 0;
 
     const VulkanContext& m_context;
 };
@@ -715,6 +854,9 @@ private:
     VkPipeline m_pipeline = VK_NULL_HANDLE;
     VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
     bool m_ownsPipelineLayout = false;
+    bool m_usesDescriptorHeap = false;
+    FixedVector<DescriptorHeapPushRange, s_MaxBindingLayouts> m_descriptorHeapPushRanges;
+    u32 m_descriptorHeapPushDataSize = 0;
 
     const VulkanContext& m_context;
 };
@@ -746,6 +888,9 @@ private:
     VkPipeline m_pipeline = VK_NULL_HANDLE;
     VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
     bool m_ownsPipelineLayout = false;
+    bool m_usesDescriptorHeap = false;
+    FixedVector<DescriptorHeapPushRange, s_MaxBindingLayouts> m_descriptorHeapPushRanges;
+    u32 m_descriptorHeapPushDataSize = 0;
     Vector<u8, Alloc::CustomAllocator<u8>> m_shaderGroupHandles;
 
     const VulkanContext& m_context;
@@ -826,6 +971,12 @@ public:
     [[nodiscard]] virtual const BindlessLayoutDesc* getBindlessDesc()const override{ return m_isBindless ? &m_bindlessDesc : nullptr; }
     virtual Object getNativeHandle(ObjectType)override{ return Object(m_pipelineLayout); }
 
+public:
+    [[nodiscard]] const BindingLayoutDesc& getBindingLayoutDesc()const{ return m_desc; }
+    [[nodiscard]] bool isBindlessLayout()const{ return m_isBindless; }
+    [[nodiscard]] bool isDescriptorHeapCompatible()const{ return m_descriptorHeapCompatible; }
+    [[nodiscard]] const Vector<DescriptorHeapBindingMeta, Alloc::CustomAllocator<DescriptorHeapBindingMeta>>& getDescriptorHeapBindings()const{ return m_descriptorHeapBindings; }
+
 
 private:
     BindingLayoutDesc m_desc;
@@ -833,6 +984,8 @@ private:
     bool m_isBindless = false;
     VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
     Vector<VkDescriptorSetLayout, Alloc::CustomAllocator<VkDescriptorSetLayout>> m_descriptorSetLayouts;
+    bool m_descriptorHeapCompatible = false;
+    Vector<DescriptorHeapBindingMeta, Alloc::CustomAllocator<DescriptorHeapBindingMeta>> m_descriptorHeapBindings;
 
     const VulkanContext& m_context;
 };
@@ -893,6 +1046,8 @@ private:
     RefCountPtr<BindingLayout, ArenaRefDeleter<BindingLayout>> m_layout;
     RefCountPtr<DescriptorTable, ArenaRefDeleter<DescriptorTable>> m_descriptorTable;
     Vector<VkDescriptorSet, Alloc::CustomAllocator<VkDescriptorSet>> m_descriptorSets;
+    Vector<u32, Alloc::CustomAllocator<u32>> m_descriptorHeapPushIndices;
+    Vector<DescriptorHeapAllocation, Alloc::CustomAllocator<DescriptorHeapAllocation>> m_descriptorHeapAllocations;
 
     const VulkanContext& m_context;
 };
@@ -1098,7 +1253,7 @@ public:
 
     virtual void beginTimerQuery(ITimerQuery* query)override;
     virtual void endTimerQuery(ITimerQuery* query)override;
-    virtual void beginMarker(const Name& name)override;
+    virtual void beginMarker(const AStringView name)override;
     virtual void endMarker()override;
 
     virtual void setEnableUavBarriersForTexture(ITexture* texture, bool enableBarriers)override;
@@ -1119,6 +1274,14 @@ public:
 
 
 private:
+    void retainBindingSets(const BindingSetVector& bindings);
+
+    void bindDescriptorHeapState(
+        bool usesDescriptorHeap,
+        const FixedVector<DescriptorHeapPushRange, s_MaxBindingLayouts>& pushRanges,
+        u32 pushDataSize,
+        const BindingSetVector& bindings);
+
     void beginRenderPass(IFramebuffer* framebuffer, const RenderPassParameters& params);
     void endRenderPass();
     void ensureGraphicsRenderPass(IFramebuffer* framebuffer);
@@ -1292,6 +1455,7 @@ private:
 
     VulkanContext m_context;
     VulkanAllocator m_allocator;
+    DescriptorHeapManager m_descriptorHeapManager;
     CustomUniquePtr<Queue> m_queues[static_cast<u32>(CommandQueue::kCount)];
 
     CustomUniquePtr<UploadManager> m_uploadManager;

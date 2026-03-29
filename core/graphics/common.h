@@ -4006,6 +4006,11 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct ShaderMacroDefinition{
+    AStringView name;
+    AStringView value;
+};
+
 struct ShaderCompilerRequest{
     AStringView shaderName;
     AStringView compiler;
@@ -4013,7 +4018,8 @@ struct ShaderCompilerRequest{
     AStringView targetProfile;
     AStringView entryPoint;
     AStringView variantName;
-    const HashMap<AString, AString, Hasher<AString>, EqualTo<AString>, Alloc::CustomAllocator<Pair<const AString, AString>>>& defineCombo;
+    const ShaderMacroDefinition* defines = nullptr;
+    u32 defineCount = 0;
     const Vector<Path, Alloc::CustomAllocator<Path>>& includeDirectories;
     const Path& sourcePath;
 };

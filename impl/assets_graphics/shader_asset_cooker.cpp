@@ -12,6 +12,7 @@
 #include "geometry_asset.h"
 #include "material_asset.h"
 #include "shader_asset.h"
+#include "shader_stage_names.h"
 
 #include <core/graphics/shader_archive.h>
 #include <core/graphics/shader_cook.h>
@@ -54,6 +55,40 @@ Core::Assets::AssetCookerAutoRegistrar s_ShaderAssetCookerAutoRegistrar(&CreateS
 static const Name& IncludeAssetTypeName(){
     static const Name s_Name("include");
     return s_Name;
+}
+
+static bool IsMeshShaderStage(const AStringView stageName){
+    return stageName == "mesh";
+}
+
+static bool IsMaterialPixelShaderStage(const Name& stageName){
+    static const Name s_StageName("ps");
+    return stageName == s_StageName;
+}
+
+static bool IsMaterialMeshShaderStage(const Name& stageName){
+    static const Name s_StageName("mesh");
+    return stageName == s_StageName;
+}
+
+static bool IsSupportedRendererMaterialShaderStage(const Name& stageName){
+    return IsMaterialPixelShaderStage(stageName) || IsMaterialMeshShaderStage(stageName);
+}
+
+static bool BuildMeshComputeShadowEntry(const Core::ShaderCook::ShaderEntry& sourceEntry, Core::ShaderCook::ShaderEntry& outEntry){
+    outEntry = sourceEntry;
+    if(!outEntry.archiveStage.assign(ShaderStageNames::MeshComputeArchiveStageText()))
+        return false;
+    if(!outEntry.stage.assign("cs"))
+        return false;
+    if(!outEntry.targetProfile.assign("cs"))
+        return false;
+
+    outEntry.implicitDefines.insert_or_assign(
+        AString(ShaderStageNames::MeshComputeImplicitDefineText()),
+        AString("1")
+    );
+    return true;
 }
 
 
@@ -525,6 +560,14 @@ static bool ParseMaterialStageShaders(
         const Core::Assets::AssetRef<Shader> shaderAsset(shaderName);
         if(!stageName || !shaderAsset.valid()){
             NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': shader stage entries must not be empty"), PathToString<tchar>(nwbFilePath));
+            return false;
+        }
+        if(!IsSupportedRendererMaterialShaderStage(stageName)){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Material meta '{}': shader stage '{}' is not supported by the ECS renderer material contract; only 'mesh' and 'ps' are allowed"),
+                PathToString<tchar>(nwbFilePath),
+                StringConvert(stageKeyText)
+            );
             return false;
         }
 
@@ -1023,13 +1066,13 @@ static bool ValidateAndNormalizeMaterials(
     for(const PreparedShaderEntry& preparedEntry : preparedEntries){
         const PreparedShaderKey shaderKey{
             ToName(preparedEntry.entry.name),
-            ToName(preparedEntry.entry.stage.view())
+            ToName(preparedEntry.entry.archiveStage.view())
         };
         if(!preparedShaderLookup.insert({ shaderKey, &preparedEntry }).second){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("ShaderAssetCooker: duplicate prepared shader key '{}' stage '{}'"),
                 StringConvert(preparedEntry.entry.name),
-                StringConvert(preparedEntry.entry.stage.c_str())
+                StringConvert(preparedEntry.entry.archiveStage.c_str())
             );
             return false;
         }
@@ -1085,7 +1128,7 @@ static bool ValidateAndNormalizeMaterials(
 
 static VariantCachePaths BuildVariantCachePaths(const Path& cacheDirectory, const AStringView configurationSafeName, const Core::ShaderCook::ShaderEntry& entry, const AStringView variantName){
     const AString shaderSafeName = BuildSafeCacheName(entry.name);
-    const AString stageSafeName = BuildSafeCacheName(entry.stage.view());
+    const AString stageSafeName = BuildSafeCacheName(entry.archiveStage.view());
     const AString variantHashHex = FormatHex64(ComputeFnv64Text(variantName));
 
     VariantCachePaths cachePaths;
@@ -1114,6 +1157,7 @@ static bool GetVariantBytecode(
 )
 {
     ErrorCode errorCode;
+    Core::Alloc::ScratchArena<> scratchArena;
 
     outBytecode.clear();
 
@@ -1153,6 +1197,31 @@ static bool GetVariantBytecode(
         outBytecode.clear();
     }
 
+    HashMap<
+        AString,
+        AString,
+        Hasher<AString>,
+        EqualTo<AString>,
+        Core::Alloc::ScratchAllocator<Pair<const AString, AString>>
+    > mergedDefines(
+        0,
+        Hasher<AString>(),
+        EqualTo<AString>(),
+        Core::Alloc::ScratchAllocator<Pair<const AString, AString>>(scratchArena)
+    );
+    mergedDefines.reserve(defineCombo.size() + entry.implicitDefines.size());
+    for(const auto& [defineName, value] : defineCombo)
+        mergedDefines.insert_or_assign(defineName, value);
+    for(const auto& [defineName, value] : entry.implicitDefines)
+        mergedDefines.insert_or_assign(defineName, value);
+
+    Vector<Core::ShaderMacroDefinition, Core::Alloc::ScratchAllocator<Core::ShaderMacroDefinition>> compileDefines{
+        Core::Alloc::ScratchAllocator<Core::ShaderMacroDefinition>(scratchArena)
+    };
+    compileDefines.reserve(mergedDefines.size());
+    for(const auto& [defineName, value] : mergedDefines)
+        compileDefines.push_back(Core::ShaderMacroDefinition{ AStringView(defineName), AStringView(value) });
+
     const Core::ShaderCompilerRequest compileRequest = {
         entry.name,
         entry.compiler.view(),
@@ -1160,7 +1229,8 @@ static bool GetVariantBytecode(
         entry.targetProfile.view(),
         entry.entryPoint,
         variantName,
-        defineCombo,
+        compileDefines.data(),
+        static_cast<u32>(compileDefines.size()),
         includeDirectories,
         sourcePath
     };
@@ -1275,13 +1345,13 @@ static bool ParseAssetMetadata(
 
             const PreparedShaderKey shaderIdentityKey{
                 ToName(shaderEntry.name),
-                ToName(shaderEntry.stage.view())
+                ToName(shaderEntry.archiveStage.view())
             };
             if(!seenShaderIdentityKeys.insert(shaderIdentityKey).second){
                 NWB_LOGGER_ERROR(
                     NWB_TEXT("ShaderAssetCooker: duplicate shader identity '{}' for stage '{}' from meta '{}'"),
                     StringConvert(shaderEntry.name),
-                    StringConvert(shaderEntry.stage.c_str()),
+                    StringConvert(shaderEntry.archiveStage.c_str()),
                     PathToString<tchar>(nwbFile)
                 );
                 return false;
@@ -1390,11 +1460,12 @@ static bool PrepareShaderEntriesForCook(
     const IncludeMetadataMap& includeMetadata,
     ShaderEntryVector& inOutShaderEntries,
     PreparedShaderPlan& outPreparedPlan
-){
+)
+{
     ErrorCode errorCode;
 
     outPreparedPlan.preparedEntries.clear();
-    outPreparedPlan.preparedEntries.reserve(inOutShaderEntries.size());
+    outPreparedPlan.preparedEntries.reserve(inOutShaderEntries.size() * 2u);
     outPreparedPlan.plannedFileCount = 1; // shader archive index
 
     for(Core::ShaderCook::ShaderEntry& entry : inOutShaderEntries){
@@ -1483,7 +1554,31 @@ static bool PrepareShaderEntriesForCook(
         if(!AddPlannedFileCount(preparedEntry.variantCount, outPreparedPlan.plannedFileCount))
             return false;
 
+        const bool emitMeshComputeShadow = IsMeshShaderStage(preparedEntry.entry.archiveStage.view());
         outPreparedPlan.preparedEntries.push_back(Move(preparedEntry));
+
+        if(!emitMeshComputeShadow)
+            continue;
+
+        PreparedShaderEntry meshComputeShadowEntry(cookArena);
+        if(!BuildMeshComputeShadowEntry(outPreparedPlan.preparedEntries.back().entry, meshComputeShadowEntry.entry)){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("ShaderAssetCooker: failed to build mesh-compute shadow entry for '{}'"),
+                StringConvert(outPreparedPlan.preparedEntries.back().entry.name)
+            );
+            return false;
+        }
+
+        meshComputeShadowEntry.sourcePath = outPreparedPlan.preparedEntries.back().sourcePath;
+        meshComputeShadowEntry.includeDirectories = outPreparedPlan.preparedEntries.back().includeDirectories;
+        meshComputeShadowEntry.dependencies = outPreparedPlan.preparedEntries.back().dependencies;
+        meshComputeShadowEntry.dependencyChecksum = outPreparedPlan.preparedEntries.back().dependencyChecksum;
+        meshComputeShadowEntry.variantCount = outPreparedPlan.preparedEntries.back().variantCount;
+
+        if(!AddPlannedFileCount(meshComputeShadowEntry.variantCount, outPreparedPlan.plannedFileCount))
+            return false;
+
+        outPreparedPlan.preparedEntries.push_back(Move(meshComputeShadowEntry));
     }
 
     return true;
@@ -1502,12 +1597,12 @@ static bool AppendPreparedShadersToVolume(
     for(PreparedShaderEntry& preparedEntry : preparedEntries){
         Core::ShaderCook::ShaderEntry& entry = preparedEntry.entry;
         const Name shaderName = ToName(entry.name);
-        const Name stageName = ToName(entry.stage.view());
+        const Name stageName = ToName(entry.archiveStage.view());
         if(!shaderName || !stageName || entry.entryPoint.empty()){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("Shader cook failed to canonicalize shader identity for '{}' stage '{}' entry point '{}'"),
                 StringConvert(entry.name),
-                StringConvert(entry.stage.c_str()),
+                StringConvert(entry.archiveStage.c_str()),
                 StringConvert(entry.entryPoint)
             );
             return false;
@@ -1553,7 +1648,7 @@ static bool AppendPreparedShadersToVolume(
                 NWB_LOGGER_ERROR(
                     NWB_TEXT("Shader cook failed to build virtual path for '{}' stage '{}' variant '{}'"),
                     StringConvert(entry.name),
-                    StringConvert(entry.stage.c_str()),
+                    StringConvert(entry.archiveStage.c_str()),
                     StringConvert(variantName)
                 );
                 return false;

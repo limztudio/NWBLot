@@ -21,6 +21,7 @@
   <ItemGroup>
     <ClInclude Include="$(MSBuildThisFileDirectory)geometry_asset.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)material_asset.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)shader_stage_names.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)shader_asset_cooker.h" />
   </ItemGroup>
 </Project>

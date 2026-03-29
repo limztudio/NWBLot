@@ -1,6 +1,6 @@
 # NWBLot Notes
 
-Updated: 2026-02-28
+Updated: 2026-03-29
 
 ## Important Rules
 
@@ -18,6 +18,11 @@ Updated: 2026-02-28
 12. Do not store unused case-sensitive shader entry-point metadata in hash-only archive/index formats; keep only the lookup keys and exact text actually required at the consuming API boundary.
 13. Shader define names and variant signatures are exact case-sensitive shader text; do not route them through `Name` or `CompactString`, or distinct variants can collide.
 14. Short canonical shader metadata tokens like `compiler`, `stage`, and `target_profile` are good `CompactString` candidates; keep `AString` for unbounded or exact-text fields instead.
+15. The ECS renderer material contract is shader-driven only: prefer `MeshShader + PS` on mesh-capable hardware, otherwise use `CS + PS`; do not add a material-facing `VS + PS` fallback path back into this renderer.
+16. If a mesh-capable device and material both provide the mesh path, failures creating or using that mesh path are errors to fix, not reasons to silently fall back to compute.
+17. Keep mesh and compute-emulation renderer resources path-specific: mesh path bindings stay read-only (`SRV` geometry buffers + push constants), while compute-emulation owns the UAV vertex expansion buffer and its internal raster bridge resources.
+18. The compute-emulation path still intentionally uses the internal `engine/graphics/mesh_emulation_vs` bridge and the device-manager render-pass integration; those are runtime requirements, not leftovers from the removed material-facing `VS + PS` path.
+19. ECS renderer material assets expose only `mesh` and `ps` stages. Do not add a user-authored `cs` or `task` stage for this path; the cooker derives the internal compute-emulation stage from the mesh shader source automatically.
 
 ## Scheduler Architecture
 

@@ -9,6 +9,7 @@
 #include <impl/assets_graphics/geometry_asset.h>
 #include <impl/assets_graphics/material_asset.h>
 #include <impl/assets_graphics/shader_asset.h>
+#include <impl/assets_graphics/shader_stage_names.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -28,6 +29,23 @@ namespace __hidden_ecs_graphics{
 
 static constexpr Core::Color s_ClearColor = Core::Color(0.07f, 0.09f, 0.13f, 1.f);
 static constexpr u32 s_PositionColorVertexStride = sizeof(f32) * 6u;
+static constexpr u32 s_EmulatedVertexStride = sizeof(f32) * 8u;
+static constexpr u32 s_TrianglesPerWorkgroup = 32u;
+
+
+struct ShaderDrivenPushConstants{
+    u32 triangleCount = 0;
+};
+
+struct EmulatedVertex{
+    f32 position[4];
+    f32 color[3];
+    f32 padding = 0.f;
+};
+
+static_assert(sizeof(ShaderDrivenPushConstants) == sizeof(u32), "ShaderDrivenPushConstants layout must stay stable");
+static_assert(sizeof(EmulatedVertex) == s_EmulatedVertexStride, "EmulatedVertex layout must match the mesh emulation shader");
+
 
 static const Name& StageNameFromShaderType(const Core::ShaderType::Mask shaderType){
     switch(shaderType){
@@ -47,6 +65,34 @@ static const Name& StageNameFromShaderType(const Core::ShaderType::Mask shaderTy
         case Core::ShaderType::Callable: { static const Name s("rcall"); return s; }
         default: return NAME_NONE;
     }
+}
+
+static const Name& MeshEmulationVertexShaderName(){
+    static const Name s("engine/graphics/mesh_emulation_vs");
+    return s;
+}
+
+static Core::RenderState BuildDefaultRenderState(){
+    Core::RenderState renderState;
+    renderState.depthStencilState.disableDepthTest().disableDepthWrite();
+    renderState.rasterState.setCullNone();
+    return renderState;
+}
+
+static bool TryFindShaderForStage(const Material& material, const Core::ShaderType::Mask shaderType, Core::Assets::AssetRef<Shader>& outShaderAsset){
+    outShaderAsset.reset();
+
+    const Name& stageName = StageNameFromShaderType(shaderType);
+    if(!stageName)
+        return false;
+
+    return material.findShaderForStage(stageName, outShaderAsset);
+}
+
+static u32 ComputeDispatchGroupCount(const u32 triangleCount){
+    return triangleCount == 0
+        ? 0
+        : (triangleCount + s_TrianglesPerWorkgroup - 1u) / s_TrianglesPerWorkgroup;
 }
 
 
@@ -71,8 +117,7 @@ usize RendererSystem::MaterialPipelineKeyHasher::operator()(const MaterialPipeli
 }
 
 bool RendererSystem::MaterialPipelineKeyEqualTo::operator()(const MaterialPipelineKey& lhs, const MaterialPipelineKey& rhs)const{
-    return lhs.material == rhs.material
-        && lhs.framebufferInfo == rhs.framebufferInfo;
+    return lhs.material == rhs.material && lhs.framebufferInfo == rhs.framebufferInfo;
 }
 
 
@@ -125,30 +170,85 @@ void RendererSystem::render(Core::IFramebuffer* framebuffer){
         if(!renderer.visible)
             continue;
 
-        Core::Graphics::MeshResource mesh;
-        if(!ensureGeometryLoaded(renderer.geometry, mesh))
+        GeometryResources* geometry = nullptr;
+        if(!ensureGeometryLoaded(renderer.geometry, geometry))
             continue;
-        if(!mesh.valid())
+        if(!geometry || !geometry->valid())
             continue;
 
         MaterialPipelineResources* pipelineResources = nullptr;
         if(!ensureRendererPipeline(renderer, framebuffer, pipelineResources))
             continue;
-        if(!pipelineResources || !pipelineResources->pipeline)
+        if(!pipelineResources)
             continue;
 
-        Core::GraphicsState state;
-        state.setPipeline(pipelineResources->pipeline.get());
-        state.setFramebuffer(framebuffer);
-        state.setViewport(viewportState);
-        state.addVertexBuffer(Core::VertexBufferBinding().setBuffer(mesh.vertexBuffer.get()).setSlot(0).setOffset(0));
-        state.setIndexBuffer(Core::IndexBufferBinding().setBuffer(mesh.indexBuffer.get()).setOffset(0).setFormat(mesh.indexFormat));
+        switch(pipelineResources->renderPath){
+        case RenderPath::MeshShader:{
+            if(!pipelineResources->meshletPipeline)
+                continue;
+            if(!ensureMeshBindingSet(*geometry))
+                continue;
 
-        commandList->setGraphicsState(state);
+            commandList->setBufferState(geometry->shaderVertexBuffer.get(), Core::ResourceStates::ShaderResource);
+            commandList->setBufferState(geometry->shaderIndexBuffer.get(), Core::ResourceStates::ShaderResource);
 
-        Core::DrawArguments drawArgs;
-        drawArgs.setVertexCount(mesh.indexCount);
-        commandList->drawIndexed(drawArgs);
+            Core::MeshletState meshletState;
+            meshletState.setPipeline(pipelineResources->meshletPipeline.get());
+            meshletState.setFramebuffer(framebuffer);
+            meshletState.setViewport(viewportState);
+            meshletState.addBindingSet(geometry->meshBindingSet.get());
+
+            commandList->setMeshletState(meshletState);
+
+            const __hidden_ecs_graphics::ShaderDrivenPushConstants pushConstants = { geometry->triangleCount };
+            commandList->setPushConstants(&pushConstants, sizeof(pushConstants));
+            commandList->dispatchMesh(geometry->dispatchGroupCount);
+            break;
+        }
+        case RenderPath::ComputeEmulation:{
+            if(!pipelineResources->computePipeline || !pipelineResources->emulationPipeline)
+                continue;
+            if(!ensureComputeBindingSet(*geometry))
+                continue;
+
+            commandList->setBufferState(geometry->shaderVertexBuffer.get(), Core::ResourceStates::ShaderResource);
+            commandList->setBufferState(geometry->shaderIndexBuffer.get(), Core::ResourceStates::ShaderResource);
+            commandList->setBufferState(geometry->emulationVertexBuffer.get(), Core::ResourceStates::UnorderedAccess);
+
+            Core::ComputeState computeState;
+            computeState.setPipeline(pipelineResources->computePipeline.get());
+            computeState.addBindingSet(geometry->computeBindingSet.get());
+
+            commandList->setComputeState(computeState);
+
+            const __hidden_ecs_graphics::ShaderDrivenPushConstants pushConstants = { geometry->triangleCount };
+            commandList->setPushConstants(&pushConstants, sizeof(pushConstants));
+            commandList->dispatch(geometry->dispatchGroupCount);
+
+            commandList->setBufferState(geometry->emulationVertexBuffer.get(), Core::ResourceStates::VertexBuffer);
+
+            Core::GraphicsState graphicsState;
+            graphicsState.setPipeline(pipelineResources->emulationPipeline.get());
+            graphicsState.setFramebuffer(framebuffer);
+            graphicsState.setViewport(viewportState);
+            graphicsState.addVertexBuffer(
+                Core::VertexBufferBinding()
+                    .setBuffer(geometry->emulationVertexBuffer.get())
+                    .setSlot(0)
+                    .setOffset(0)
+            );
+
+            commandList->setGraphicsState(graphicsState);
+
+            Core::DrawArguments drawArgs;
+            drawArgs.setVertexCount(geometry->indexCount);
+            commandList->draw(drawArgs);
+            break;
+        }
+        default:{
+            break;
+        }
+        }
     }
 
     commandList->close();
@@ -168,8 +268,8 @@ void RendererSystem::backBufferResized(u32 width, u32 height, u32 sampleCount){
 }
 
 
-bool RendererSystem::ensureGeometryLoaded(const Core::Assets::AssetRef<Geometry>& geometryAsset, Core::Graphics::MeshResource& outMesh){
-    outMesh = {};
+bool RendererSystem::ensureGeometryLoaded(const Core::Assets::AssetRef<Geometry>& geometryAsset, GeometryResources*& outGeometry){
+    outGeometry = nullptr;
 
     const Name geometryPath = geometryAsset.name();
     if(!geometryPath){
@@ -177,10 +277,10 @@ bool RendererSystem::ensureGeometryLoaded(const Core::Assets::AssetRef<Geometry>
         return false;
     }
 
-    const auto foundMesh = m_geometryMeshes.find(geometryPath);
-    if(foundMesh != m_geometryMeshes.end()){
-        outMesh = foundMesh.value();
-        return outMesh.valid();
+    const auto foundGeometry = m_geometryMeshes.find(geometryPath);
+    if(foundGeometry != m_geometryMeshes.end()){
+        outGeometry = &foundGeometry.value();
+        return outGeometry->valid();
     }
 
     UniquePtr<Core::Assets::IAsset> loadedAsset;
@@ -209,35 +309,222 @@ bool RendererSystem::ensureGeometryLoaded(const Core::Assets::AssetRef<Geometry>
         return false;
     }
 
-    Core::Graphics::MeshSetupDesc meshDesc;
-    meshDesc.vertexData = geometry.vertexData().data();
-    meshDesc.vertexDataSize = geometry.vertexData().size();
-    meshDesc.vertexStride = geometry.vertexStride();
-    meshDesc.vertexBufferName = DeriveName(geometryPath, AStringView(":vb"));
-    meshDesc.indexData = geometry.indexData().data();
-    meshDesc.indexDataSize = geometry.indexData().size();
-    meshDesc.use32BitIndices = geometry.use32BitIndices();
-    meshDesc.indexBufferName = DeriveName(geometryPath, AStringView(":ib"));
-    if(!meshDesc.vertexBufferName || !meshDesc.indexBufferName){
+    GeometryResources createdGeometry;
+    createdGeometry.geometryName = geometryPath;
+
+    const usize indexStride = geometry.use32BitIndices() ? sizeof(u32) : sizeof(u16);
+    if(geometry.indexData().size() == 0 || (geometry.indexData().size() % indexStride) != 0u){
         NWB_LOGGER_ERROR(
-            NWB_TEXT("RendererSystem: failed to derive mesh buffer names for geometry '{}'"),
+            NWB_TEXT("RendererSystem: geometry '{}' has malformed index payload"),
             StringConvert(geometryPath.c_str())
         );
         return false;
     }
 
-    Core::Graphics::MeshResource createdMesh = m_graphics.setupMesh(meshDesc);
-    if(!createdMesh.valid()){
+    createdGeometry.indexCount = static_cast<u32>(geometry.indexData().size() / indexStride);
+    if(createdGeometry.indexCount == 0 || (createdGeometry.indexCount % 3u) != 0u){
         NWB_LOGGER_ERROR(
-            NWB_TEXT("RendererSystem: failed to upload geometry '{}'"),
+            NWB_TEXT("RendererSystem: geometry '{}' index count {} is incompatible with triangle-based mesh rendering"),
+            StringConvert(geometryPath.c_str()),
+            createdGeometry.indexCount
+        );
+        return false;
+    }
+
+    createdGeometry.triangleCount = createdGeometry.indexCount / 3u;
+    createdGeometry.dispatchGroupCount = __hidden_ecs_graphics::ComputeDispatchGroupCount(createdGeometry.triangleCount);
+    if(createdGeometry.dispatchGroupCount == 0){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("RendererSystem: geometry '{}' produced no dispatch groups"),
             StringConvert(geometryPath.c_str())
         );
         return false;
     }
 
-    m_geometryMeshes[geometryPath] = createdMesh;
-    outMesh = createdMesh;
+    const Name shaderVertexBufferName = DeriveName(geometryPath, AStringView(":shader_vb"));
+    const Name shaderIndexBufferName = DeriveName(geometryPath, AStringView(":shader_ib"));
+    if(!shaderVertexBufferName || !shaderIndexBufferName){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("RendererSystem: failed to derive shader-driven buffer names for geometry '{}'"),
+            StringConvert(geometryPath.c_str())
+        );
+        return false;
+    }
+
+    Core::Graphics::BufferSetupDesc shaderVertexSetup;
+    shaderVertexSetup.bufferDesc
+        .setByteSize(static_cast<u64>(geometry.vertexData().size()))
+        .setStructStride(geometry.vertexStride())
+        .setDebugName(shaderVertexBufferName);
+    shaderVertexSetup.data = geometry.vertexData().data();
+    shaderVertexSetup.dataSize = geometry.vertexData().size();
+    createdGeometry.shaderVertexBuffer = m_graphics.setupBuffer(shaderVertexSetup);
+    if(!createdGeometry.shaderVertexBuffer){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("RendererSystem: failed to create shader vertex buffer for geometry '{}'"),
+            StringConvert(geometryPath.c_str())
+        );
+        return false;
+    }
+
+    Vector<u32> expandedIndices;
+    expandedIndices.resize(createdGeometry.indexCount);
+    if(geometry.use32BitIndices()){
+        const u32* indexData = reinterpret_cast<const u32*>(geometry.indexData().data());
+        for(u32 i = 0; i < createdGeometry.indexCount; ++i)
+            expandedIndices[i] = indexData[i];
+    }
+    else{
+        const u16* indexData = reinterpret_cast<const u16*>(geometry.indexData().data());
+        for(u32 i = 0; i < createdGeometry.indexCount; ++i)
+            expandedIndices[i] = static_cast<u32>(indexData[i]);
+    }
+
+    Core::Graphics::BufferSetupDesc shaderIndexSetup;
+    shaderIndexSetup.bufferDesc
+        .setByteSize(static_cast<u64>(expandedIndices.size() * sizeof(u32)))
+        .setStructStride(sizeof(u32))
+        .setDebugName(shaderIndexBufferName);
+    shaderIndexSetup.data = expandedIndices.data();
+    shaderIndexSetup.dataSize = expandedIndices.size() * sizeof(u32);
+    createdGeometry.shaderIndexBuffer = m_graphics.setupBuffer(shaderIndexSetup);
+    if(!createdGeometry.shaderIndexBuffer){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("RendererSystem: failed to create shader index buffer for geometry '{}'"),
+            StringConvert(geometryPath.c_str())
+        );
+        return false;
+    }
+
+    auto [it, inserted] = m_geometryMeshes.emplace(geometryPath, GeometryResources{});
+    (void)inserted;
+    it.value() = Move(createdGeometry);
+
+    outGeometry = &it.value();
+    return outGeometry->valid();
+}
+
+bool RendererSystem::ensureMeshShaderResources(){
+    if(m_meshBindingLayout)
+        return true;
+
+    Core::BindingLayoutDesc bindingLayoutDesc;
+    bindingLayoutDesc.setVisibility(Core::ShaderType::Amplification | Core::ShaderType::Mesh);
+    bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(0, 1));
+    bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(1, 1));
+    bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(__hidden_ecs_graphics::ShaderDrivenPushConstants)));
+
+    Core::IDevice* device = m_graphics.getDevice();
+    m_meshBindingLayout = device->createBindingLayout(bindingLayoutDesc);
+    return static_cast<bool>(m_meshBindingLayout);
+}
+
+bool RendererSystem::ensureComputeEmulationResources(){
+    if(!m_computeBindingLayout){
+        Core::BindingLayoutDesc bindingLayoutDesc;
+        bindingLayoutDesc.setVisibility(Core::ShaderType::Compute);
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(0, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(1, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(2, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(__hidden_ecs_graphics::ShaderDrivenPushConstants)));
+
+        Core::IDevice* device = m_graphics.getDevice();
+        m_computeBindingLayout = device->createBindingLayout(bindingLayoutDesc);
+        if(!m_computeBindingLayout)
+            return false;
+    }
+
+    if(!m_emulationVertexShader){
+        if(!ensureShaderLoaded(
+            m_emulationVertexShader,
+            __hidden_ecs_graphics::MeshEmulationVertexShaderName(),
+            Core::ShaderArchive::s_DefaultVariant,
+            Core::ShaderType::Vertex,
+            "ECSGraphics_MeshEmulationVS"
+        ))
+            return false;
+    }
+
+    if(!m_emulationInputLayout){
+        Core::VertexAttributeDesc attributes[2];
+        attributes[0]
+            .setFormat(Core::Format::RGBA32_FLOAT)
+            .setBufferIndex(0)
+            .setOffset(0)
+            .setElementStride(__hidden_ecs_graphics::s_EmulatedVertexStride)
+            .setName("POSITION");
+        attributes[1]
+            .setFormat(Core::Format::RGB32_FLOAT)
+            .setBufferIndex(0)
+            .setOffset(sizeof(f32) * 4u)
+            .setElementStride(__hidden_ecs_graphics::s_EmulatedVertexStride)
+            .setName("COLOR");
+
+        Core::IDevice* device = m_graphics.getDevice();
+        m_emulationInputLayout = device->createInputLayout(attributes, 2, m_emulationVertexShader.get());
+        if(!m_emulationInputLayout)
+            return false;
+    }
+
     return true;
+}
+
+bool RendererSystem::ensureMeshBindingSet(GeometryResources& geometry){
+    if(geometry.meshBindingSet)
+        return true;
+    if(!ensureMeshShaderResources())
+        return false;
+
+    Core::BindingSetDesc bindingSetDesc;
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(0, geometry.shaderVertexBuffer.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(1, geometry.shaderIndexBuffer.get()));
+
+    Core::IDevice* device = m_graphics.getDevice();
+    geometry.meshBindingSet = device->createBindingSet(bindingSetDesc, m_meshBindingLayout.get());
+    return static_cast<bool>(geometry.meshBindingSet);
+}
+
+bool RendererSystem::ensureComputeBindingSet(GeometryResources& geometry){
+    if(geometry.computeBindingSet)
+        return true;
+    if(!ensureComputeEmulationResources())
+        return false;
+
+    if(!geometry.emulationVertexBuffer){
+        const Name emulationVertexBufferName = DeriveName(geometry.geometryName, AStringView(":emulation_vb"));
+        if(!emulationVertexBufferName){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("RendererSystem: failed to derive compute-emulation vertex buffer name for geometry '{}'"),
+                StringConvert(geometry.geometryName.c_str())
+            );
+            return false;
+        }
+
+        Core::BufferDesc emulationVertexBufferDesc;
+        emulationVertexBufferDesc
+            .setByteSize(static_cast<u64>(geometry.indexCount) * __hidden_ecs_graphics::s_EmulatedVertexStride)
+            .setStructStride(__hidden_ecs_graphics::s_EmulatedVertexStride)
+            .setCanHaveUAVs(true)
+            .setIsVertexBuffer(true)
+            .setDebugName(emulationVertexBufferName);
+        geometry.emulationVertexBuffer = m_graphics.createBuffer(emulationVertexBufferDesc);
+        if(!geometry.emulationVertexBuffer){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("RendererSystem: failed to create compute-emulation vertex buffer for geometry '{}'"),
+                StringConvert(geometry.geometryName.c_str())
+            );
+            return false;
+        }
+    }
+
+    Core::BindingSetDesc bindingSetDesc;
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(0, geometry.shaderVertexBuffer.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(1, geometry.shaderIndexBuffer.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(2, geometry.emulationVertexBuffer.get()));
+
+    Core::IDevice* device = m_graphics.getDevice();
+    geometry.computeBindingSet = device->createBindingSet(bindingSetDesc, m_computeBindingLayout.get());
+    return static_cast<bool>(geometry.computeBindingSet);
 }
 
 
@@ -259,22 +546,35 @@ bool RendererSystem::ensureRendererPipeline(const RendererComponent& renderer, C
 
     auto [it, inserted] = m_materialPipelines.emplace(pipelineKey, MaterialPipelineResources{});
     MaterialPipelineResources& resources = it.value();
-    if(resources.pipeline){
-        outResources = &resources;
-        return true;
+    switch(resources.renderPath){
+    case RenderPath::MeshShader:
+        if(resources.meshletPipeline){
+            outResources = &resources;
+            return true;
+        }
+        break;
+    case RenderPath::ComputeEmulation:
+        if(resources.computePipeline && resources.emulationPipeline){
+            outResources = &resources;
+            return true;
+        }
+        break;
+    default:
+        break;
     }
 
-    Core::Assets::AssetRef<Shader> vertexShaderAsset;
-    Core::Assets::AssetRef<Shader> pixelShaderAsset;
-    AStringView shaderVariant = Core::ShaderArchive::s_DefaultVariant;
+    auto removeFailedEntry = [&](){
+        if(inserted)
+            m_materialPipelines.erase(pipelineKey);
+    };
+
     UniquePtr<Core::Assets::IAsset> loadedAsset;
     if(!m_assetManager.loadSync(Material::AssetTypeName(), materialKey, loadedAsset)){
         NWB_LOGGER_ERROR(
             NWB_TEXT("RendererSystem: failed to load material '{}'"),
             StringConvert(materialKey.c_str())
         );
-        if(inserted)
-            m_materialPipelines.erase(pipelineKey);
+        removeFailedEntry();
         return false;
     }
     if(!loadedAsset || loadedAsset->assetType() != Material::AssetTypeName()){
@@ -282,75 +582,171 @@ bool RendererSystem::ensureRendererPipeline(const RendererComponent& renderer, C
             NWB_TEXT("RendererSystem: asset '{}' is not a material"),
             StringConvert(materialKey.c_str())
         );
-        if(inserted)
-            m_materialPipelines.erase(pipelineKey);
+        removeFailedEntry();
         return false;
     }
 
     const Material& material = static_cast<const Material&>(*loadedAsset);
-    shaderVariant = material.shaderVariant().empty()
-        ? AStringView(Core::ShaderArchive::s_DefaultVariant)
-        : AStringView(material.shaderVariant());
-    const Name& vertexStageName = __hidden_ecs_graphics::StageNameFromShaderType(Core::ShaderType::Vertex);
-    const Name& pixelStageName = __hidden_ecs_graphics::StageNameFromShaderType(Core::ShaderType::Pixel);
-    if(!material.findShaderForStage(vertexStageName, vertexShaderAsset) || !material.findShaderForStage(pixelStageName, pixelShaderAsset)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("RendererSystem: material '{}' must provide both 'vs' and 'ps' shaders"),
-            StringConvert(materialKey.c_str())
-        );
-        if(inserted)
-            m_materialPipelines.erase(pipelineKey);
-        return false;
-    }
+    const AStringView shaderVariant = material.shaderVariant().empty() ? AStringView(Core::ShaderArchive::s_DefaultVariant) : AStringView(material.shaderVariant());
 
-    if(!ensureShaderLoaded(resources.vertexShader, vertexShaderAsset.name(), shaderVariant, Core::ShaderType::Vertex, "ECSGraphics_RendererVS"))
-    {
-        if(inserted)
-            m_materialPipelines.erase(pipelineKey);
-        return false;
-    }
+    Core::Assets::AssetRef<Shader> pixelShaderAsset;
+    Core::Assets::AssetRef<Shader> meshShaderAsset;
 
-    if(!ensureShaderLoaded(resources.pixelShader, pixelShaderAsset.name(), shaderVariant, Core::ShaderType::Pixel, "ECSGraphics_RendererPS"))
-    {
-        if(inserted)
-            m_materialPipelines.erase(pipelineKey);
-        return false;
-    }
+    const bool hasPixelShader = __hidden_ecs_graphics::TryFindShaderForStage(material, Core::ShaderType::Pixel, pixelShaderAsset);
+    const bool hasMeshShader = __hidden_ecs_graphics::TryFindShaderForStage(material, Core::ShaderType::Mesh, meshShaderAsset);
 
     Core::IDevice* device = m_graphics.getDevice();
+    const Core::RenderState defaultRenderState = __hidden_ecs_graphics::BuildDefaultRenderState();
 
-    if(!resources.inputLayout){
-        Core::VertexAttributeDesc attributes[2];
-        attributes[0].setFormat(Core::Format::RGB32_FLOAT).setBufferIndex(0).setOffset(0).setElementStride(__hidden_ecs_graphics::s_PositionColorVertexStride).setName("POSITION");
-        attributes[1].setFormat(Core::Format::RGB32_FLOAT).setBufferIndex(0).setOffset(sizeof(f32) * 3).setElementStride(__hidden_ecs_graphics::s_PositionColorVertexStride).setName("COLOR");
+    auto tryBuildMeshPipeline = [&]() -> bool{
+        if(!hasMeshShader || !hasPixelShader)
+            return false;
+        if(!ensureMeshShaderResources())
+            return false;
+        if(!ensureShaderLoaded(resources.meshShader, meshShaderAsset.name(), shaderVariant, Core::ShaderType::Mesh, "ECSGraphics_RendererMesh"))
+            return false;
+        if(!ensureShaderLoaded(resources.pixelShader, pixelShaderAsset.name(), shaderVariant, Core::ShaderType::Pixel, "ECSGraphics_RendererPS"))
+            return false;
 
-        resources.inputLayout = device->createInputLayout(attributes, 2, resources.vertexShader.get());
-        if(!resources.inputLayout){
-            if(inserted)
-                m_materialPipelines.erase(pipelineKey);
+        Core::MeshletPipelineDesc pipelineDesc;
+        pipelineDesc.setMeshShader(resources.meshShader.get());
+        pipelineDesc.setPixelShader(resources.pixelShader.get());
+        pipelineDesc.setRenderState(defaultRenderState);
+        pipelineDesc.addBindingLayout(m_meshBindingLayout.get());
+
+        resources.meshletPipeline = device->createMeshletPipeline(pipelineDesc, framebuffer->getFramebufferInfo());
+        if(!resources.meshletPipeline)
+            return false;
+
+        resources.renderPath = RenderPath::MeshShader;
+        return true;
+    };
+
+    auto tryBuildComputePipeline = [&]() -> bool{
+        if(!hasMeshShader || !hasPixelShader)
+            return false;
+        if(!ensureComputeEmulationResources())
+            return false;
+        const Name& meshComputeArchiveStageName = ShaderStageNames::MeshComputeArchiveStageName();
+        if(!ensureShaderLoaded(
+            resources.computeShader,
+            meshShaderAsset.name(),
+            shaderVariant,
+            Core::ShaderType::Compute,
+            "ECSGraphics_RendererCS",
+            &meshComputeArchiveStageName))
+        {
             return false;
         }
-    }
+        if(!ensureShaderLoaded(resources.pixelShader, pixelShaderAsset.name(), shaderVariant, Core::ShaderType::Pixel, "ECSGraphics_RendererPS"))
+            return false;
 
-    Core::GraphicsPipelineDesc desc;
-    desc.setInputLayout(resources.inputLayout.get());
-    desc.setVertexShader(resources.vertexShader.get());
-    desc.setPixelShader(resources.pixelShader.get());
+        Core::ComputePipelineDesc computeDesc;
+        computeDesc.setComputeShader(resources.computeShader.get());
+        computeDesc.addBindingLayout(m_computeBindingLayout.get());
+        resources.computePipeline = device->createComputePipeline(computeDesc);
+        if(!resources.computePipeline)
+            return false;
 
-    Core::RenderState renderState;
-    renderState.depthStencilState.disableDepthTest().disableDepthWrite();
-    renderState.rasterState.setCullNone();
-    desc.setRenderState(renderState);
+        Core::GraphicsPipelineDesc emulationDesc;
+        emulationDesc.setInputLayout(m_emulationInputLayout.get());
+        emulationDesc.setVertexShader(m_emulationVertexShader.get());
+        emulationDesc.setPixelShader(resources.pixelShader.get());
+        emulationDesc.setRenderState(defaultRenderState);
+        resources.emulationPipeline = device->createGraphicsPipeline(emulationDesc, framebuffer->getFramebufferInfo());
+        if(!resources.emulationPipeline){
+            resources.computePipeline.reset();
+            return false;
+        }
 
-    resources.pipeline = device->createGraphicsPipeline(desc, framebuffer->getFramebufferInfo());
-    if(!resources.pipeline){
-        if(inserted)
-            m_materialPipelines.erase(pipelineKey);
+        resources.renderPath = RenderPath::ComputeEmulation;
+        return true;
+    };
+
+    const bool meshSupported = device->queryFeatureSupport(Core::Feature::Meshlets);
+    if(!hasPixelShader){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("RendererSystem: material '{}' requires a pixel shader"),
+            StringConvert(materialKey.c_str())
+        );
+        removeFailedEntry();
         return false;
     }
 
+    if(!hasMeshShader){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("RendererSystem: material '{}' requires a mesh shader; compute emulation is derived internally from that mesh shader"),
+            StringConvert(materialKey.c_str())
+        );
+        removeFailedEntry();
+        return false;
+    }
+
+    if(meshSupported && hasMeshShader){
+        if(!tryBuildMeshPipeline()){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("RendererSystem: failed to create the required mesh rendering path for material '{}' on a mesh-capable device"),
+                StringConvert(materialKey.c_str())
+            );
+            removeFailedEntry();
+            return false;
+        }
+
+        logMaterialRenderPathDecision(materialKey, resources.renderPath, meshSupported);
+        outResources = &resources;
+        return true;
+    }
+
+    if(!tryBuildComputePipeline()){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("RendererSystem: failed to create compute-emulation rendering path for material '{}' from its mesh shader"),
+            StringConvert(materialKey.c_str())
+        );
+        removeFailedEntry();
+        return false;
+    }
+
+    logMaterialRenderPathDecision(materialKey, resources.renderPath, meshSupported);
     outResources = &resources;
     return true;
+}
+
+void RendererSystem::logMaterialRenderPathDecision(const Name& materialKey, const RenderPath renderPath, const bool meshSupported){
+    const auto foundLoggedPath = m_loggedMaterialPaths.find(materialKey);
+    if(foundLoggedPath != m_loggedMaterialPaths.end() && foundLoggedPath.value() == renderPath)
+        return;
+
+    auto [it, inserted] = m_loggedMaterialPaths.emplace(materialKey, renderPath);
+    if(!inserted)
+        it.value() = renderPath;
+
+    switch(renderPath){
+    case RenderPath::MeshShader:{
+        NWB_LOGGER_INFO(
+            NWB_TEXT("RendererSystem: material '{}' selected MeshShader + PS on this device"),
+            StringConvert(materialKey.c_str())
+        );
+        break;
+    }
+    case RenderPath::ComputeEmulation:{
+        if(!meshSupported){
+            NWB_LOGGER_INFO(
+                NWB_TEXT("RendererSystem: material '{}' selected CS + PS by compiling its mesh shader for compute emulation because this device does not support mesh shaders"),
+                StringConvert(materialKey.c_str())
+            );
+        }
+        else{
+            NWB_LOGGER_INFO(
+                NWB_TEXT("RendererSystem: material '{}' selected CS + PS through compute emulation"),
+                StringConvert(materialKey.c_str())
+            );
+        }
+        break;
+    }
+    default:{
+        break;
+    }
+    }
 }
 
 bool RendererSystem::ensureShaderLoaded(
@@ -358,8 +754,10 @@ bool RendererSystem::ensureShaderLoaded(
     const Name& shaderName,
     const AStringView variantName,
     const Core::ShaderType::Mask shaderType,
-    const Name& debugName
-){
+    const Name& debugName,
+    const Name* archiveStageName
+)
+{
     if(outShader)
         return true;
     if(!shaderName){
@@ -367,7 +765,9 @@ bool RendererSystem::ensureShaderLoaded(
         return false;
     }
 
-    const Name& stageName = __hidden_ecs_graphics::StageNameFromShaderType(shaderType);
+    const Name& stageName = archiveStageName
+        ? *archiveStageName
+        : __hidden_ecs_graphics::StageNameFromShaderType(shaderType);
     if(!stageName){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: unsupported shader stage {}"), static_cast<u32>(shaderType));
         return false;

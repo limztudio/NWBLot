@@ -1,0 +1,123 @@
+#ifndef NWB_MESH_SHADER_AUTHORING_GLSLI
+#define NWB_MESH_SHADER_AUTHORING_GLSLI
+
+#ifndef NWB_MESH_SHADER_EMULATION_COMPUTE
+#define NWB_MESH_SHADER_EMULATION_COMPUTE 0
+#endif
+
+#ifndef NWB_MESH_SHADER_GROUP_SIZE_X
+#define NWB_MESH_SHADER_GROUP_SIZE_X 32
+#endif
+
+#if !NWB_MESH_SHADER_EMULATION_COMPUTE
+#extension GL_EXT_mesh_shader : require
+#endif
+
+struct NwbMeshSourceVertex{
+    vec3 position;
+    vec3 color;
+};
+
+struct NwbMeshGeneratedVertex{
+    vec4 position;
+    vec3 color;
+    float padding;
+};
+
+#define NWB_MESH_BUILD_VERTEX_SIGNATURE NwbMeshGeneratedVertex nwbProjectBuildMeshVertex(uint triangleIndex, uint corner, NwbMeshSourceVertex source)
+
+layout(local_size_x = NWB_MESH_SHADER_GROUP_SIZE_X) in;
+
+layout(std430, binding = 0) readonly buffer NwbMeshSourceVerticesBuffer{
+    NwbMeshSourceVertex nwbMeshSourceVertices[];
+};
+
+layout(std430, binding = 1) readonly buffer NwbMeshSourceIndicesBuffer{
+    uint nwbMeshSourceIndices[];
+};
+
+layout(push_constant) uniform NwbMeshPushConstants{
+    uint triangleCount;
+} g_NwbMeshPushConstants;
+
+#if NWB_MESH_SHADER_EMULATION_COMPUTE
+layout(std430, binding = 2) buffer NwbMeshGeneratedVerticesBuffer{
+    NwbMeshGeneratedVertex nwbMeshGeneratedVertices[];
+};
+#else
+layout(triangles) out;
+layout(max_vertices = NWB_MESH_SHADER_GROUP_SIZE_X * 3, max_primitives = NWB_MESH_SHADER_GROUP_SIZE_X) out;
+layout(location = 0) out vec3 outColor[];
+#endif
+
+uint nwbMeshGroupThreadID(){
+    return gl_LocalInvocationID.x;
+}
+
+uint nwbMeshGroupID(){
+    return gl_WorkGroupID.x;
+}
+
+uint nwbMeshBaseTriangle(){
+    return nwbMeshGroupID() * NWB_MESH_SHADER_GROUP_SIZE_X;
+}
+
+uint nwbMeshRemainingTriangles(){
+    return g_NwbMeshPushConstants.triangleCount > nwbMeshBaseTriangle()
+        ? (g_NwbMeshPushConstants.triangleCount - nwbMeshBaseTriangle())
+        : 0u;
+}
+
+uint nwbMeshActiveTriangleCount(){
+    return min(uint(NWB_MESH_SHADER_GROUP_SIZE_X), nwbMeshRemainingTriangles());
+}
+
+bool nwbMeshInvocationActive(){
+    return nwbMeshGroupThreadID() < nwbMeshActiveTriangleCount();
+}
+
+uint nwbMeshTriangleIndex(){
+    return nwbMeshBaseTriangle() + nwbMeshGroupThreadID();
+}
+
+NwbMeshSourceVertex nwbMeshLoadSourceVertex(const uint triangleIndex, const uint corner){
+    const uint indexBase = triangleIndex * 3u;
+    return nwbMeshSourceVertices[nwbMeshSourceIndices[indexBase + corner]];
+}
+
+NWB_MESH_BUILD_VERTEX_SIGNATURE;
+
+void main(){
+#if !NWB_MESH_SHADER_EMULATION_COMPUTE
+    const uint activeTriangles = nwbMeshActiveTriangleCount();
+    SetMeshOutputsEXT(activeTriangles * 3u, activeTriangles);
+#endif
+
+    if(!nwbMeshInvocationActive())
+        return;
+
+    const uint triangleIndex = nwbMeshTriangleIndex();
+    const uint vertexBase = nwbMeshGroupThreadID() * 3u;
+
+    for(uint corner = 0u; corner < 3u; ++corner){
+        const NwbMeshGeneratedVertex generatedVertex = nwbProjectBuildMeshVertex(
+            triangleIndex,
+            corner,
+            nwbMeshLoadSourceVertex(triangleIndex, corner)
+        );
+
+#if NWB_MESH_SHADER_EMULATION_COMPUTE
+        nwbMeshGeneratedVertices[triangleIndex * 3u + corner] = generatedVertex;
+#else
+        const uint outputVertex = vertexBase + corner;
+        gl_MeshVerticesEXT[outputVertex].gl_Position = generatedVertex.position;
+        outColor[outputVertex] = generatedVertex.color;
+#endif
+    }
+
+#if !NWB_MESH_SHADER_EMULATION_COMPUTE
+    gl_PrimitiveTriangleIndicesEXT[nwbMeshGroupThreadID()] = uvec3(vertexBase + 0u, vertexBase + 1u, vertexBase + 2u);
+#endif
+}
+
+#endif

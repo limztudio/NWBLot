@@ -73,6 +73,7 @@ public:
         AString name;
         CompactString compiler = CompactString("glslang");
         CompactString stage;
+        CompactString archiveStage;
         CompactString targetProfile;
         AString entryPoint = "main";
         AString source;
@@ -80,10 +81,12 @@ public:
 
         CookVector<AString> includeRoots;
         CookMap<AString, DefineEntry> defineValues;
+        CookMap<AString, AString> implicitDefines;
 
         explicit ShaderEntry(CookArena& memoryArena)
             : includeRoots(CookAllocator<AString>(memoryArena))
             , defineValues(CookAllocator<Pair<const AString, DefineEntry>>(memoryArena))
+            , implicitDefines(CookAllocator<Pair<const AString, AString>>(memoryArena))
         {}
     };
 

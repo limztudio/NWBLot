@@ -544,6 +544,7 @@ bool ShaderCook::parseShaderMeta(const Path& nwbFilePath, const Metascript::Docu
         return false;
     if(!__hidden_shader_cook::ParseCompactStringField(nwbFilePath, asset, "stage", outEntry.stage))
         return false;
+    outEntry.archiveStage = outEntry.stage;
     if(!__hidden_shader_cook::ParseCompactStringField(nwbFilePath, asset, "target_profile", outEntry.targetProfile))
         return false;
     if(!__hidden_shader_cook::ParseStringField(nwbFilePath, asset, "entry_point", outEntry.entryPoint, false))
@@ -825,9 +826,14 @@ bool ShaderCook::computeSourceChecksum(const ShaderEntry& entry, const AStringVi
     appendChecksumLine(AStringView(entry.name));
     appendChecksumLine(entry.compiler.view());
     appendChecksumLine(entry.stage.view());
+    appendChecksumLine(entry.archiveStage.view());
     appendChecksumLine(entry.targetProfile.view());
     appendChecksumLine(AStringView(entry.entryPoint));
     appendChecksumLine(variantSignature);
+    for(const auto& entryDefine : sortedDefineEntries(entry.implicitDefines)){
+        appendChecksumLine(*entryDefine.key);
+        appendChecksumLine(*entryDefine.value);
+    }
     outChecksum = UpdateFnv64(outChecksum, reinterpret_cast<const u8*>(&dependencyChecksum), sizeof(dependencyChecksum));
     return true;
 }

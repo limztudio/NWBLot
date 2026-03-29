@@ -228,8 +228,8 @@ bool VulkanShaderCompiler::compileVariant(const ShaderCompilerRequest& request, 
     }
     options.SetSourceLanguage(sourceLanguage);
 
-    for(const auto& [defineName, value] : request.defineCombo)
-        options.AddMacroDefinition(defineName, value);
+    for(u32 i = 0; i < request.defineCount; ++i)
+        options.AddMacroDefinition(AString(request.defines[i].name), AString(request.defines[i].value));
 
     options.SetIncluder(std::make_unique<__hidden_vulkan_shader::ShaderFileIncluder>(request.includeDirectories));
 

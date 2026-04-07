@@ -9,4 +9,7 @@ target_sources(nwb_logserver PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/pch.h"
     "${CMAKE_CURRENT_LIST_DIR}/server.h"
 )
+if(WIN32)
+    set_target_properties(nwb_logserver PROPERTIES WIN32_EXECUTABLE ON)
+endif()
 target_link_libraries(nwb_logserver PRIVATE nwb::microhttpd nwb_alloc nwb_common nwb::cli11_headers)

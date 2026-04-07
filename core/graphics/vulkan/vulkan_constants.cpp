@@ -157,7 +157,7 @@ static constexpr FormatMapping s_FormatMappings[] = {
 static constexpr usize s_NumFormatMappings = LengthOf(s_FormatMappings);
 
 
-constexpr VkFormat ConvertFormat(Format::Enum format){
+VkFormat ConvertFormat(Format::Enum format){
     for(usize i = 0; i < s_NumFormatMappings; ++i){
         if(s_FormatMappings[i].format == format)
             return s_FormatMappings[i].vkFormat;
@@ -166,7 +166,7 @@ constexpr VkFormat ConvertFormat(Format::Enum format){
     return VK_FORMAT_UNDEFINED;
 }
 
-constexpr VkAccessFlags2 GetVkAccessFlags(ResourceStates::Mask states){
+VkAccessFlags2 GetVkAccessFlags(ResourceStates::Mask states){
     VkAccessFlags2 flags = 0;
 
     if(states & ResourceStates::VertexBuffer)
@@ -215,7 +215,7 @@ constexpr VkAccessFlags2 GetVkAccessFlags(ResourceStates::Mask states){
     return flags;
 }
 
-constexpr VkPipelineStageFlags2 GetVkPipelineStageFlags(ResourceStates::Mask states){
+VkPipelineStageFlags2 GetVkPipelineStageFlags(ResourceStates::Mask states){
     VkPipelineStageFlags2 flags = 0;
 
     if(states & ResourceStates::VertexBuffer)
@@ -247,7 +247,7 @@ constexpr VkPipelineStageFlags2 GetVkPipelineStageFlags(ResourceStates::Mask sta
     return flags;
 }
 
-constexpr VkImageLayout GetVkImageLayout(ResourceStates::Mask states){
+VkImageLayout GetVkImageLayout(ResourceStates::Mask states){
     if(states & ResourceStates::RenderTarget)
         return VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     if(states & ResourceStates::DepthWrite)
@@ -274,7 +274,7 @@ constexpr VkImageLayout GetVkImageLayout(ResourceStates::Mask states){
     return VK_IMAGE_LAYOUT_GENERAL;
 }
 
-constexpr VkSampleCountFlagBits GetSampleCountFlagBits(u32 sampleCount){
+VkSampleCountFlagBits GetSampleCountFlagBits(u32 sampleCount){
     switch(sampleCount){
     case 1:  return VK_SAMPLE_COUNT_1_BIT;
     case 2:  return VK_SAMPLE_COUNT_2_BIT;
@@ -287,7 +287,7 @@ constexpr VkSampleCountFlagBits GetSampleCountFlagBits(u32 sampleCount){
     }
 }
 
-constexpr VkComponentTypeKHR ConvertCoopVecDataType(CooperativeVectorDataType::Enum type){
+VkComponentTypeKHR ConvertCoopVecDataType(CooperativeVectorDataType::Enum type){
     switch(type){
     case CooperativeVectorDataType::UInt8:        return VK_COMPONENT_TYPE_UINT8_KHR;
     case CooperativeVectorDataType::SInt8:        return VK_COMPONENT_TYPE_SINT8_KHR;
@@ -311,7 +311,7 @@ constexpr VkComponentTypeKHR ConvertCoopVecDataType(CooperativeVectorDataType::E
     }
 }
 
-constexpr CooperativeVectorDataType::Enum ConvertCoopVecDataType(VkComponentTypeKHR type){
+CooperativeVectorDataType::Enum ConvertCoopVecDataType(VkComponentTypeKHR type){
     switch(type){
     case VK_COMPONENT_TYPE_UINT8_KHR:        return CooperativeVectorDataType::UInt8;
     case VK_COMPONENT_TYPE_SINT8_KHR:        return CooperativeVectorDataType::SInt8;
@@ -335,7 +335,7 @@ constexpr CooperativeVectorDataType::Enum ConvertCoopVecDataType(VkComponentType
     }
 }
 
-constexpr VkCooperativeVectorMatrixLayoutNV ConvertCoopVecMatrixLayout(CooperativeVectorMatrixLayout::Enum layout){
+VkCooperativeVectorMatrixLayoutNV ConvertCoopVecMatrixLayout(CooperativeVectorMatrixLayout::Enum layout){
     switch(layout){
     case CooperativeVectorMatrixLayout::RowMajor:            return VK_COOPERATIVE_VECTOR_MATRIX_LAYOUT_ROW_MAJOR_NV;
     case CooperativeVectorMatrixLayout::ColumnMajor:         return VK_COOPERATIVE_VECTOR_MATRIX_LAYOUT_COLUMN_MAJOR_NV;

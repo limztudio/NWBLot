@@ -61,24 +61,40 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
 
     auto receivedCallback = [thisPtr](const void* contents, usize totalSize){
         const auto* ptr = reinterpret_cast<const u8*>(contents);
-        auto sizeLeft = static_cast<isize>(totalSize);
+        usize sizeLeft = totalSize;
 
-        Timer time;
+        if(sizeLeft < sizeof(Timer) + sizeof(Type) + sizeof(tchar)){
+            thisPtr->enqueue(StringFormat(NWB_TEXT("Received a truncated message on {}"), SERVER_NAME), Type::Error);
+            return;
+        }
+
+        Timer time{};
         {
             NWB_MEMCPY(&time, sizeof(decltype(time)), ptr, sizeof(decltype(time)));
             ptr += sizeof(decltype(time));
             sizeLeft -= sizeof(decltype(time));
         }
 
-        Type type;
+        Type type{};
         {
             NWB_MEMCPY(&type, sizeof(decltype(type)), ptr, sizeof(decltype(type)));
             ptr += sizeof(decltype(type));
             sizeLeft -= sizeof(decltype(type));
         }
 
-        NWB_ASSERT(sizeLeft > 0);
-        TString strMsg(reinterpret_cast<const tchar*>(ptr));
+        if(sizeLeft < sizeof(tchar) || (sizeLeft % sizeof(tchar)) != 0){
+            thisPtr->enqueue(StringFormat(NWB_TEXT("Received a malformed message payload on {}"), SERVER_NAME), Type::Error);
+            return;
+        }
+
+        const auto* msgText = reinterpret_cast<const tchar*>(ptr);
+        const usize msgCharCount = sizeLeft / sizeof(tchar);
+        if(msgText[msgCharCount - 1] != 0){
+            thisPtr->enqueue(StringFormat(NWB_TEXT("Received a non-null-terminated message on {}"), SERVER_NAME), Type::Error);
+            return;
+        }
+
+        TString strMsg(msgText, msgCharCount - 1);
 
         thisPtr->enqueue(MakeTuple(Move(time), type, Move(strMsg)));
     };

@@ -18,15 +18,15 @@ NWB_VULKAN_BEGIN
 
 TrackedCommandBuffer::TrackedCommandBuffer(const VulkanContext& context, CommandQueue::Enum, u32 queueFamilyIndex)
     : RefCounter<IResource>(context.threadPool)
-    , m_context(context)
     , m_referencedResources(Alloc::CustomAllocator<RefCountPtr<IResource, ArenaRefDeleter<IResource>>>(context.objectArena))
     , m_referencedStagingBuffers(Alloc::CustomAllocator<RefCountPtr<IBuffer, ArenaRefDeleter<IBuffer>>>(context.objectArena))
     , m_referencedAccelStructHandles(Alloc::CustomAllocator<VkAccelerationStructureKHR>(context.objectArena))
+    , m_context(context)
 {
     VkResult res = VK_SUCCESS;
 
     // Use TRANSIENT flag to hint that command buffers are short-lived
-    VkCommandPoolCreateInfo poolInfo = { VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO };
+    VkCommandPoolCreateInfo poolInfo = __hidden_vulkan::MakeVkStruct<VkCommandPoolCreateInfo>(VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO);
     poolInfo.queueFamilyIndex = queueFamilyIndex;
     poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT | VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
 
@@ -38,7 +38,7 @@ TrackedCommandBuffer::TrackedCommandBuffer(const VulkanContext& context, Command
         return;
     }
 
-    VkCommandBufferAllocateInfo allocInfo = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO };
+    VkCommandBufferAllocateInfo allocInfo = __hidden_vulkan::MakeVkStruct<VkCommandBufferAllocateInfo>(VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO);
     allocInfo.commandPool = m_cmdPool;
     allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     allocInfo.commandBufferCount = 1;
@@ -93,11 +93,11 @@ Queue::Queue(const VulkanContext& context, CommandQueue::Enum queueID, VkQueue q
 {
     VkResult res = VK_SUCCESS;
 
-    VkSemaphoreTypeCreateInfo timelineInfo = { VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO };
+    VkSemaphoreTypeCreateInfo timelineInfo = __hidden_vulkan::MakeVkStruct<VkSemaphoreTypeCreateInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO);
     timelineInfo.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE;
     timelineInfo.initialValue = 0;
 
-    VkSemaphoreCreateInfo semaphoreInfo = { VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
+    VkSemaphoreCreateInfo semaphoreInfo = __hidden_vulkan::MakeVkStruct<VkSemaphoreCreateInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO);
     semaphoreInfo.pNext = &timelineInfo;
 
     res = vkCreateSemaphore(m_context.device, &semaphoreInfo, m_context.allocationCallbacks, &m_trackingSemaphore);
@@ -110,7 +110,7 @@ Queue::~Queue(){
     VkResult res = VK_SUCCESS;
 
     if(m_trackingSemaphore && m_lastSubmittedID > 0){
-        VkSemaphoreWaitInfo waitInfo = { VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO };
+        VkSemaphoreWaitInfo waitInfo = __hidden_vulkan::MakeVkStruct<VkSemaphoreWaitInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO);
         waitInfo.semaphoreCount = 1;
         waitInfo.pSemaphores = &m_trackingSemaphore;
         waitInfo.pValues = &m_lastSubmittedID;
@@ -255,7 +255,7 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
 
     u64 submissionID = ++m_lastSubmittedID;
 
-    VkSemaphoreSubmitInfo timelineSignal = { VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO };
+    VkSemaphoreSubmitInfo timelineSignal = __hidden_vulkan::MakeVkStruct<VkSemaphoreSubmitInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO);
     timelineSignal.semaphore = m_trackingSemaphore;
     timelineSignal.value = submissionID;
     timelineSignal.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
@@ -263,7 +263,7 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
     Vector<VkSemaphoreSubmitInfo, Alloc::ScratchAllocator<VkSemaphoreSubmitInfo>> waitInfos{ Alloc::ScratchAllocator<VkSemaphoreSubmitInfo>(scratchArena) };
     waitInfos.reserve(m_waitSemaphores.size());
     for(usize i = 0; i < m_waitSemaphores.size(); ++i){
-        VkSemaphoreSubmitInfo waitInfo = { VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO };
+        VkSemaphoreSubmitInfo waitInfo = __hidden_vulkan::MakeVkStruct<VkSemaphoreSubmitInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO);
         waitInfo.semaphore = m_waitSemaphores[i];
         waitInfo.value = m_waitSemaphoreValues[i];
         waitInfo.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
@@ -275,7 +275,7 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
     signalInfos.push_back(timelineSignal);
 
     for(usize i = 0; i < m_signalSemaphores.size(); ++i){
-        VkSemaphoreSubmitInfo signalInfo = { VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO };
+        VkSemaphoreSubmitInfo signalInfo = __hidden_vulkan::MakeVkStruct<VkSemaphoreSubmitInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO);
         signalInfo.semaphore = m_signalSemaphores[i];
         signalInfo.value = m_signalSemaphoreValues[i];
         signalInfo.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
@@ -286,7 +286,7 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
     cmdBufInfos.reserve(cmdBufs.size());
 
     for(VkCommandBuffer cmdBuf : cmdBufs){
-        VkCommandBufferSubmitInfo cmdBufInfo = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO };
+        VkCommandBufferSubmitInfo cmdBufInfo = __hidden_vulkan::MakeVkStruct<VkCommandBufferSubmitInfo>(VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO);
         cmdBufInfo.commandBuffer = cmdBuf;
         cmdBufInfos.push_back(cmdBufInfo);
     }
@@ -300,7 +300,7 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
     }
 
     // Requires VK_KHR_synchronization2 extension to be enabled
-    VkSubmitInfo2 submitInfo = { VK_STRUCTURE_TYPE_SUBMIT_INFO_2 };
+    VkSubmitInfo2 submitInfo = __hidden_vulkan::MakeVkStruct<VkSubmitInfo2>(VK_STRUCTURE_TYPE_SUBMIT_INFO_2);
     submitInfo.waitSemaphoreInfoCount = static_cast<uint32_t>(waitInfos.size());
     submitInfo.pWaitSemaphoreInfos = waitInfos.data();
     submitInfo.commandBufferInfoCount = static_cast<uint32_t>(cmdBufInfos.size());
@@ -377,7 +377,7 @@ bool Queue::waitCommandList(u64 commandListID, u64 timeout){
     if(!m_trackingSemaphore)
         return false;
 
-    VkSemaphoreWaitInfo waitInfo = { VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO };
+    VkSemaphoreWaitInfo waitInfo = __hidden_vulkan::MakeVkStruct<VkSemaphoreWaitInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO);
     waitInfo.semaphoreCount = 1;
     waitInfo.pSemaphores = &m_trackingSemaphore;
     waitInfo.pValues = &commandListID;
@@ -634,7 +634,7 @@ void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapp
             buildMappingBinds(i);
     }
 
-    VkBindSparseInfo bindSparseInfo = { VK_STRUCTURE_TYPE_BIND_SPARSE_INFO };
+    VkBindSparseInfo bindSparseInfo = __hidden_vulkan::MakeVkStruct<VkBindSparseInfo>(VK_STRUCTURE_TYPE_BIND_SPARSE_INFO);
 
     VkSparseImageMemoryBindInfo sparseImageMemoryBindInfo = {};
     if(!sparseImageMemoryBinds.empty()){

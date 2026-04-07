@@ -18,10 +18,10 @@ NWB_VULKAN_BEGIN
 
 Buffer::Buffer(const VulkanContext& context, VulkanAllocator& allocator)
     : RefCounter<IBuffer>(context.threadPool)
-    , m_context(context)
-    , m_allocator(allocator)
     , m_versionTracking(Alloc::CustomAllocator<u64>(context.objectArena))
     , m_bufferViews(Alloc::CustomAllocator<BufferViewEntry>(context.objectArena))
+    , m_context(context)
+    , m_allocator(allocator)
 {}
 Buffer::~Buffer(){
     for(auto& viewEntry : m_bufferViews){
@@ -75,7 +75,7 @@ VkBufferView Buffer::getView(Format::Enum format, u64 byteOffset, u64 byteSize){
             return viewEntry.view;
     }
 
-    VkBufferViewCreateInfo viewInfo = { VK_STRUCTURE_TYPE_BUFFER_VIEW_CREATE_INFO };
+    VkBufferViewCreateInfo viewInfo = __hidden_vulkan::MakeVkStruct<VkBufferViewCreateInfo>(VK_STRUCTURE_TYPE_BUFFER_VIEW_CREATE_INFO);
     viewInfo.buffer = m_buffer;
     viewInfo.format = vkFormat;
     viewInfo.offset = byteOffset;
@@ -199,7 +199,7 @@ void* Device::mapBuffer(IBuffer* _buffer, CpuAccessMode::Enum){
         if(buffer->m_desc.cpuAccess != CpuAccessMode::Read)
             return true;
 
-        VkMappedMemoryRange range = { VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE };
+        VkMappedMemoryRange range = __hidden_vulkan::MakeVkStruct<VkMappedMemoryRange>(VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE);
         range.memory = buffer->m_memory;
         range.offset = 0;
         range.size = VK_WHOLE_SIZE;

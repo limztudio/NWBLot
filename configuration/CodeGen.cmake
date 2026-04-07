@@ -5,10 +5,9 @@ function(nwb_apply_codegen target)
         C_STANDARD 17
         C_STANDARD_REQUIRED YES
         C_EXTENSIONS NO
-        CXX_STANDARD 20
-        CXX_STANDARD_REQUIRED YES
-        CXX_EXTENSIONS NO
     )
+
+    nwb_apply_latest_cxx(${target})
 
     if(WIN32 AND (NWB_COMPILER_IS_CLANG OR NWB_COMPILER_IS_MSVC))
         set_property(TARGET ${target} PROPERTY
@@ -26,7 +25,10 @@ function(nwb_apply_codegen target)
     )
 
     if(WIN32)
-        target_compile_definitions(${target} PRIVATE NOMINMAX)
+        target_compile_definitions(${target} PRIVATE
+            NOMINMAX
+            WIN32_LEAN_AND_MEAN
+        )
     endif()
 
     if(NWB_COMPILER_FRONTEND_MSVC)

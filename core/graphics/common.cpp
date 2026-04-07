@@ -249,6 +249,9 @@ bool TextureSubresourceSet::isEntireTexture(const TextureDesc& desc)const{
     case TextureDimension::Texture2DMSArray: 
         if(baseArraySlice > 0u || baseArraySlice + numArraySlices < desc.arraySize)
             return false;
+        break;
+    default:
+        break;
     }
     
     return true;
@@ -325,7 +328,7 @@ FramebufferInfoEx::FramebufferInfoEx(const FramebufferDesc& desc) : FramebufferI
 }
 
 
-constexpr usize GetCooperativeVectorDataTypeSize(CooperativeVectorDataType::Enum type){
+usize GetCooperativeVectorDataTypeSize(CooperativeVectorDataType::Enum type){
     switch(type){
     case CooperativeVectorDataType::UInt8:
     case CooperativeVectorDataType::SInt8:
@@ -359,7 +362,7 @@ constexpr usize GetCooperativeVectorDataTypeSize(CooperativeVectorDataType::Enum
     return 0;
 }
 
-constexpr usize GetCooperativeVectorOptimalMatrixStride(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, u32 rows, u32 columns){
+usize GetCooperativeVectorOptimalMatrixStride(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, u32 rows, u32 columns){
     const usize dataTypeSize = GetCooperativeVectorDataTypeSize(type);
         
     switch(layout){
@@ -367,6 +370,9 @@ constexpr usize GetCooperativeVectorOptimalMatrixStride(CooperativeVectorDataTyp
         return dataTypeSize * columns;
     case CooperativeVectorMatrixLayout::ColumnMajor:
         return dataTypeSize * rows;
+    case CooperativeVectorMatrixLayout::InferencingOptimal:
+    case CooperativeVectorMatrixLayout::TrainingOptimal:
+        return 0;
     }
     return 0;
 }

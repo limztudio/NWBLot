@@ -22,7 +22,7 @@ namespace __hidden_vulkan{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr VkImageType TextureDimensionToImageType(TextureDimension::Enum dimension){
+VkImageType TextureDimensionToImageType(TextureDimension::Enum dimension){
     switch(dimension){
         case TextureDimension::Texture1D:
         case TextureDimension::Texture1DArray:
@@ -41,7 +41,7 @@ constexpr VkImageType TextureDimensionToImageType(TextureDimension::Enum dimensi
     }
 }
 
-constexpr VkImageViewType TextureDimensionToViewType(TextureDimension::Enum dimension){
+VkImageViewType TextureDimensionToViewType(TextureDimension::Enum dimension){
     switch(dimension){
         case TextureDimension::Texture1D: return VK_IMAGE_VIEW_TYPE_1D;
         case TextureDimension::Texture1DArray: return VK_IMAGE_VIEW_TYPE_1D_ARRAY;
@@ -56,7 +56,7 @@ constexpr VkImageViewType TextureDimensionToViewType(TextureDimension::Enum dime
     }
 }
 
-constexpr VkSampleCountFlagBits GetSampleCount(u32 sampleCount){
+VkSampleCountFlagBits GetSampleCount(u32 sampleCount){
     switch(sampleCount){
         case 1: return VK_SAMPLE_COUNT_1_BIT;
         case 2: return VK_SAMPLE_COUNT_2_BIT;
@@ -69,7 +69,7 @@ constexpr VkSampleCountFlagBits GetSampleCount(u32 sampleCount){
     }
 }
 
-constexpr VkImageUsageFlags PickImageUsage(const TextureDesc& desc){
+VkImageUsageFlags PickImageUsage(const TextureDesc& desc){
     VkImageUsageFlags usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 
     if(desc.isShaderResource)
@@ -92,7 +92,7 @@ constexpr VkImageUsageFlags PickImageUsage(const TextureDesc& desc){
     return usage;
 }
 
-constexpr VkImageCreateFlags PickImageFlags(const TextureDesc& desc){
+VkImageCreateFlags PickImageFlags(const TextureDesc& desc){
     VkImageCreateFlags flags = 0;
 
     if(desc.dimension == TextureDimension::TextureCube || desc.dimension == TextureDimension::TextureCubeArray)
@@ -116,9 +116,9 @@ constexpr VkImageCreateFlags PickImageFlags(const TextureDesc& desc){
 
 Texture::Texture(const VulkanContext& context, VulkanAllocator& allocator)
     : RefCounter<ITexture>(context.threadPool)
+    , m_views(0, Hasher<u64>(), EqualTo<u64>(), Alloc::CustomAllocator<Pair<const u64, VkImageView>>(context.objectArena))
     , m_context(context)
     , m_allocator(allocator)
-    , m_views(0, Hasher<u64>(), EqualTo<u64>(), Alloc::CustomAllocator<Pair<const u64, VkImageView>>(context.objectArena))
 {}
 Texture::~Texture(){
     for(const auto& [_, view] : m_views)
@@ -611,7 +611,7 @@ void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, co
     const usize uploadSize = static_cast<usize>(dataSize);
     __hidden_vulkan::CopyHostMemory(taskPool(), cpuVA, data, uploadSize);
 
-    VkImageMemoryBarrier2 barrier = { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2 };
+    VkImageMemoryBarrier2 barrier = __hidden_vulkan::MakeVkStruct<VkImageMemoryBarrier2>(VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2);
     barrier.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
     barrier.srcAccessMask = VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT;
     barrier.dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
@@ -631,7 +631,7 @@ void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, co
     barrier.subresourceRange.baseArrayLayer = arraySlice;
     barrier.subresourceRange.layerCount = 1;
 
-    VkDependencyInfo depInfo = { VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
+    VkDependencyInfo depInfo = __hidden_vulkan::MakeVkStruct<VkDependencyInfo>(VK_STRUCTURE_TYPE_DEPENDENCY_INFO);
     depInfo.imageMemoryBarrierCount = 1;
     depInfo.pImageMemoryBarriers = &barrier;
     vkCmdPipelineBarrier2(m_currentCmdBuf->m_cmdBuf, &depInfo);

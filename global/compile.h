@@ -137,7 +137,7 @@
 #define NWB_STRCMP(lhs, rhs) strcmp(lhs, rhs)
 #define NWB_WSTRCMP(lhs, rhs) wcscmp(lhs, rhs)
 #define NWB_MEMSET(dest, value, size) memset(dest, value, size)
-#if NWB_COMPILER_FRONTEND_MSVC
+#if defined(_MSC_VER)
 #define NWB_STRNLEN(src, count) strnlen_s(src, count)
 #define NWB_WSTRNLEN(src, count) wcsnlen_s(src, count)
 #define NWB_MEMCPY(dest, destSize, src, srcSize) memcpy_s(dest, destSize, src, srcSize)

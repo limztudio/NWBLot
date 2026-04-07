@@ -57,7 +57,7 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
 
     auto* cs = checked_cast<Shader*>(desc.CS.get());
 
-    VkPipelineShaderStageCreateInfo shaderStage = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
+    VkPipelineShaderStageCreateInfo shaderStage = __hidden_vulkan::MakeVkStruct<VkPipelineShaderStageCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
     shaderStage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
     shaderStage.module = cs->m_shaderModule;
     shaderStage.pName = cs->m_entryPointName.c_str();
@@ -118,7 +118,7 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
                     pushConstantRange.size = pushConstantByteSize;
                 }
 
-                VkPipelineLayoutCreateInfo layoutInfo = { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
+                VkPipelineLayoutCreateInfo layoutInfo = __hidden_vulkan::MakeVkStruct<VkPipelineLayoutCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO);
                 layoutInfo.setLayoutCount = static_cast<u32>(allDescriptorSetLayouts.size());
                 layoutInfo.pSetLayouts = allDescriptorSetLayouts.data();
                 layoutInfo.pushConstantRangeCount = pushConstantByteSize > 0 ? 1u : 0u;
@@ -135,7 +135,7 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
     }
     pso->m_pipelineLayout = pipelineLayout;
 
-    VkComputePipelineCreateInfo pipelineInfo = { VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO };
+    VkComputePipelineCreateInfo pipelineInfo = __hidden_vulkan::MakeVkStruct<VkComputePipelineCreateInfo>(VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO);
     if(pso->m_usesDescriptorHeap)
         pipelineInfo.pNext = &descriptorHeapFlags2;
     pipelineInfo.stage = shaderStages[0];

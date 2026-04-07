@@ -22,7 +22,7 @@ namespace __hidden_vulkan{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr VkDescriptorType ConvertDescriptorType(ResourceType::Enum type){
+VkDescriptorType ConvertDescriptorType(ResourceType::Enum type){
     switch(type){
     case ResourceType::Texture_SRV:
         return VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
@@ -50,7 +50,7 @@ constexpr VkDescriptorType ConvertDescriptorType(ResourceType::Enum type){
     }
 }
 
-constexpr VkShaderStageFlags ConvertShaderStages(ShaderType::Mask stages){
+VkShaderStageFlags ConvertShaderStages(ShaderType::Mask stages){
     VkShaderStageFlags flags = 0;
 
     if(stages & ShaderType::Vertex)
@@ -472,10 +472,10 @@ bool DescriptorHeapManager::writeDescriptor(const BindingSetItem& item, const De
         return vkWriteSamplerDescriptorsEXT(m_context.device, 1, &samplerInfo, &dstRange) == VK_SUCCESS;
     }
 
-    VkResourceDescriptorInfoEXT resourceInfo{ VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT };
-    VkImageDescriptorInfoEXT imageInfo{ VK_STRUCTURE_TYPE_IMAGE_DESCRIPTOR_INFO_EXT };
+    VkResourceDescriptorInfoEXT resourceInfo = __hidden_vulkan::MakeVkStruct<VkResourceDescriptorInfoEXT>(VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT);
+    VkImageDescriptorInfoEXT imageInfo = __hidden_vulkan::MakeVkStruct<VkImageDescriptorInfoEXT>(VK_STRUCTURE_TYPE_IMAGE_DESCRIPTOR_INFO_EXT);
     VkImageViewCreateInfo imageViewInfo{};
-    VkTexelBufferDescriptorInfoEXT texelInfo{ VK_STRUCTURE_TYPE_TEXEL_BUFFER_DESCRIPTOR_INFO_EXT };
+    VkTexelBufferDescriptorInfoEXT texelInfo = __hidden_vulkan::MakeVkStruct<VkTexelBufferDescriptorInfoEXT>(VK_STRUCTURE_TYPE_TEXEL_BUFFER_DESCRIPTOR_INFO_EXT);
     VkDeviceAddressRangeEXT addressRange{};
 
     resourceInfo.type = meta.descriptorType;
@@ -649,9 +649,9 @@ void DescriptorHeapManager::shutdownHeap(HeapStorage& heap){
 
 BindingLayout::BindingLayout(const VulkanContext& context)
     : RefCounter<IBindingLayout>(context.threadPool)
-    , m_context(context)
     , m_descriptorSetLayouts(Alloc::CustomAllocator<VkDescriptorSetLayout>(context.objectArena))
     , m_descriptorHeapBindings(Alloc::CustomAllocator<DescriptorHeapBindingMeta>(context.objectArena))
+    , m_context(context)
 {}
 BindingLayout::~BindingLayout(){
     if(m_pipelineLayout){
@@ -672,8 +672,8 @@ BindingLayout::~BindingLayout(){
 
 DescriptorTable::DescriptorTable(const VulkanContext& context)
     : RefCounter<IDescriptorTable>(context.threadPool)
-    , m_context(context)
     , m_descriptorSets(Alloc::CustomAllocator<VkDescriptorSet>(context.objectArena))
+    , m_context(context)
 {}
 DescriptorTable::~DescriptorTable(){
     if(m_descriptorPool != VK_NULL_HANDLE){
@@ -688,10 +688,10 @@ DescriptorTable::~DescriptorTable(){
 
 BindingSet::BindingSet(const VulkanContext& context)
     : RefCounter<IBindingSet>(context.threadPool)
-    , m_context(context)
     , m_descriptorSets(Alloc::CustomAllocator<VkDescriptorSet>(context.objectArena))
     , m_descriptorHeapPushIndices(Alloc::CustomAllocator<u32>(context.objectArena))
     , m_descriptorHeapAllocations(Alloc::CustomAllocator<DescriptorHeapAllocation>(context.objectArena))
+    , m_context(context)
 {}
 BindingSet::~BindingSet(){
     if(m_context.descriptorHeapManager){
@@ -731,7 +731,7 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
         bindings.push_back(binding);
     }
 
-    VkDescriptorSetLayoutCreateInfo layoutInfo = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
+    VkDescriptorSetLayoutCreateInfo layoutInfo = __hidden_vulkan::MakeVkStruct<VkDescriptorSetLayoutCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO);
     layoutInfo.bindingCount = static_cast<u32>(bindings.size());
     layoutInfo.pBindings = bindings.data();
 
@@ -753,7 +753,7 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
         pushConstantRange.size = pushConstantByteSize;
     }
 
-    VkPipelineLayoutCreateInfo pipelineLayoutInfo = { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo = __hidden_vulkan::MakeVkStruct<VkPipelineLayoutCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO);
     pipelineLayoutInfo.setLayoutCount = static_cast<u32>(layout->m_descriptorSetLayouts.size());
     pipelineLayoutInfo.pSetLayouts = layout->m_descriptorSetLayouts.data();
     pipelineLayoutInfo.pushConstantRangeCount = hasPushConstants ? 1 : 0;
@@ -838,11 +838,11 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
     if(!bindingFlags.empty())
         bindingFlags.back() |= VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT;
 
-    VkDescriptorSetLayoutBindingFlagsCreateInfo bindingFlagsInfo = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO };
+    VkDescriptorSetLayoutBindingFlagsCreateInfo bindingFlagsInfo = __hidden_vulkan::MakeVkStruct<VkDescriptorSetLayoutBindingFlagsCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO);
     bindingFlagsInfo.bindingCount = static_cast<u32>(bindingFlags.size());
     bindingFlagsInfo.pBindingFlags = bindingFlags.data();
 
-    VkDescriptorSetLayoutCreateInfo layoutInfo = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
+    VkDescriptorSetLayoutCreateInfo layoutInfo = __hidden_vulkan::MakeVkStruct<VkDescriptorSetLayoutCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO);
     layoutInfo.pNext = &bindingFlagsInfo;
     layoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
     layoutInfo.bindingCount = static_cast<u32>(bindings.size());
@@ -857,7 +857,7 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
     }
     layout->m_descriptorSetLayouts.push_back(setLayout);
 
-    VkPipelineLayoutCreateInfo pipelineLayoutInfo = { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo = __hidden_vulkan::MakeVkStruct<VkPipelineLayoutCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO);
     pipelineLayoutInfo.setLayoutCount = static_cast<u32>(layout->m_descriptorSetLayouts.size());
     pipelineLayoutInfo.pSetLayouts = layout->m_descriptorSetLayouts.data();
 
@@ -933,7 +933,7 @@ DescriptorTableHandle Device::createDescriptorTable(IBindingLayout* _layout){
         poolSizes.push_back(fallback);
     }
 
-    VkDescriptorPoolCreateInfo poolInfo = { VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };
+    VkDescriptorPoolCreateInfo poolInfo = __hidden_vulkan::MakeVkStruct<VkDescriptorPoolCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO);
     poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
     poolInfo.maxSets = static_cast<u32>(layout->m_descriptorSetLayouts.size());
     poolInfo.poolSizeCount = static_cast<u32>(poolSizes.size());
@@ -948,7 +948,7 @@ DescriptorTableHandle Device::createDescriptorTable(IBindingLayout* _layout){
     }
 
     if(!layout->m_descriptorSetLayouts.empty()){
-        VkDescriptorSetAllocateInfo allocInfo = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO };
+        VkDescriptorSetAllocateInfo allocInfo = __hidden_vulkan::MakeVkStruct<VkDescriptorSetAllocateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO);
         allocInfo.descriptorPool = pool;
         allocInfo.descriptorSetCount = static_cast<u32>(layout->m_descriptorSetLayouts.size());
         allocInfo.pSetLayouts = layout->m_descriptorSetLayouts.data();
@@ -1004,7 +1004,7 @@ void Device::resizeDescriptorTable(IDescriptorTable* m_descriptorTable, u32 newS
     poolSizes.push_back(uniformTexelSize);
     poolSizes.push_back(storageTexelSize);
 
-    VkDescriptorPoolCreateInfo poolInfo = { VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };
+    VkDescriptorPoolCreateInfo poolInfo = __hidden_vulkan::MakeVkStruct<VkDescriptorPoolCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO);
     poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT | VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
     poolInfo.maxSets = newSize;
     poolInfo.poolSizeCount = static_cast<u32>(poolSizes.size());
@@ -1019,7 +1019,7 @@ void Device::resizeDescriptorTable(IDescriptorTable* m_descriptorTable, u32 newS
     if(!table->m_layout->m_descriptorSetLayouts.empty()){
         Vector<VkDescriptorSetLayout, Alloc::ScratchAllocator<VkDescriptorSetLayout>> layouts(newSize, table->m_layout->m_descriptorSetLayouts[0], Alloc::ScratchAllocator<VkDescriptorSetLayout>(scratchArena));
 
-        VkDescriptorSetAllocateInfo allocInfo = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO };
+        VkDescriptorSetAllocateInfo allocInfo = __hidden_vulkan::MakeVkStruct<VkDescriptorSetAllocateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO);
         allocInfo.descriptorPool = table->m_descriptorPool;
         allocInfo.descriptorSetCount = newSize;
         allocInfo.pSetLayouts = layouts.data();
@@ -1046,7 +1046,7 @@ bool Device::writeDescriptorTable(IDescriptorTable* m_descriptorTable, const Bin
     if(table->m_descriptorSets.empty())
         return false;
 
-    VkWriteDescriptorSet write = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
+    VkWriteDescriptorSet write = __hidden_vulkan::MakeVkStruct<VkWriteDescriptorSet>(VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET);
     write.dstSet = table->m_descriptorSets[0];
     write.dstBinding = item.slot;
     write.dstArrayElement = item.arrayElement;
@@ -1056,7 +1056,7 @@ bool Device::writeDescriptorTable(IDescriptorTable* m_descriptorTable, const Bin
     VkDescriptorBufferInfo bufferInfo = {};
     VkDescriptorImageInfo imageInfo = {};
     VkBufferView texelBufferView = VK_NULL_HANDLE;
-    VkWriteDescriptorSetAccelerationStructureKHR asInfo = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR };
+    VkWriteDescriptorSetAccelerationStructureKHR asInfo = __hidden_vulkan::MakeVkStruct<VkWriteDescriptorSetAccelerationStructureKHR>(VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR);
 
     switch(item.type){
     case ResourceType::ConstantBuffer:
@@ -1208,7 +1208,7 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLa
             continue;
         }
 
-        VkWriteDescriptorSet write = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
+        VkWriteDescriptorSet write = __hidden_vulkan::MakeVkStruct<VkWriteDescriptorSet>(VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET);
         write.dstSet = bindingSet->m_descriptorSets[0];
         write.dstBinding = item.slot;
         write.dstArrayElement = item.arrayElement;
@@ -1275,7 +1275,7 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLa
             auto* as = checked_cast<AccelStruct*>(item.resourceHandle);
             if(!as)
                 continue;
-            VkWriteDescriptorSetAccelerationStructureKHR asWrite = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR };
+            VkWriteDescriptorSetAccelerationStructureKHR asWrite = __hidden_vulkan::MakeVkStruct<VkWriteDescriptorSetAccelerationStructureKHR>(VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR);
             asWrite.accelerationStructureCount = 1;
             asWrite.pAccelerationStructures = &as->m_accelStruct;
             asInfos.push_back(asWrite);

@@ -250,7 +250,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
 
     auto addShaderStage = [&](IShader* iShader, VkShaderStageFlagBits vkStage){
         auto* s = checked_cast<Shader*>(iShader);
-        VkPipelineShaderStageCreateInfo stageInfo = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
+        VkPipelineShaderStageCreateInfo stageInfo = __hidden_vulkan::MakeVkStruct<VkPipelineShaderStageCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
         stageInfo.stage = vkStage;
         stageInfo.module = s->m_shaderModule;
         stageInfo.pName = s->m_entryPointName.c_str();
@@ -298,7 +298,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     );
 
     // Step 2: Vertex input state from InputLayout
-    VkPipelineVertexInputStateCreateInfo vertexInputInfo = { VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO };
+    VkPipelineVertexInputStateCreateInfo vertexInputInfo = __hidden_vulkan::MakeVkStruct<VkPipelineVertexInputStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO);
 
     if(desc.inputLayout){
         auto* layout = checked_cast<InputLayout*>(desc.inputLayout.get());
@@ -310,20 +310,20 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     }
 
     // Step 3: Input assembly
-    VkPipelineInputAssemblyStateCreateInfo inputAssembly = { VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO };
+    VkPipelineInputAssemblyStateCreateInfo inputAssembly = __hidden_vulkan::MakeVkStruct<VkPipelineInputAssemblyStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO);
     inputAssembly.topology = __hidden_vulkan::ConvertPrimitiveTopology(desc.primType);
     inputAssembly.primitiveRestartEnable = VK_FALSE;
 
-    VkPipelineTessellationStateCreateInfo tessellationState = { VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO };
+    VkPipelineTessellationStateCreateInfo tessellationState = __hidden_vulkan::MakeVkStruct<VkPipelineTessellationStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO);
     tessellationState.patchControlPoints = desc.patchControlPoints;
 
     // Step 4: Viewport and scissor (dynamic)
-    VkPipelineViewportStateCreateInfo viewportState = { VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO };
+    VkPipelineViewportStateCreateInfo viewportState = __hidden_vulkan::MakeVkStruct<VkPipelineViewportStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO);
     viewportState.viewportCount = 1;
     viewportState.scissorCount = 1;
 
     // Step 5: Rasterization state
-    VkPipelineRasterizationStateCreateInfo rasterizer = { VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO };
+    VkPipelineRasterizationStateCreateInfo rasterizer = __hidden_vulkan::MakeVkStruct<VkPipelineRasterizationStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO);
     rasterizer.depthClampEnable = desc.renderState.rasterState.depthClipEnable ? VK_FALSE : VK_TRUE;
     rasterizer.rasterizerDiscardEnable = VK_FALSE;
     rasterizer.polygonMode = __hidden_vulkan::ConvertFillMode(desc.renderState.rasterState.fillMode);
@@ -336,13 +336,13 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     rasterizer.lineWidth = s_DefaultRasterLineWidth;
 
     // Step 6: Multisample state
-    VkPipelineMultisampleStateCreateInfo multisampling = { VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO };
+    VkPipelineMultisampleStateCreateInfo multisampling = __hidden_vulkan::MakeVkStruct<VkPipelineMultisampleStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO);
     multisampling.rasterizationSamples = __hidden_vulkan::GetSampleCount(fbinfo.sampleCount);
     multisampling.sampleShadingEnable = VK_FALSE;
     multisampling.alphaToCoverageEnable = desc.renderState.blendState.alphaToCoverageEnable ? VK_TRUE : VK_FALSE;
 
     // Step 7: Depth/stencil state
-    VkPipelineDepthStencilStateCreateInfo depthStencil = { VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO };
+    VkPipelineDepthStencilStateCreateInfo depthStencil = __hidden_vulkan::MakeVkStruct<VkPipelineDepthStencilStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO);
     depthStencil.depthTestEnable = desc.renderState.depthStencilState.depthTestEnable ? VK_TRUE : VK_FALSE;
     depthStencil.depthWriteEnable = desc.renderState.depthStencilState.depthWriteEnable ? VK_TRUE : VK_FALSE;
     depthStencil.depthCompareOp = __hidden_vulkan::ConvertCompareOp(desc.renderState.depthStencilState.depthFunc);
@@ -352,7 +352,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     depthStencil.back = __hidden_vulkan::ConvertStencilOpState(desc.renderState.depthStencilState, desc.renderState.depthStencilState.backFaceStencil);
 
     // Step 8: Color blend state
-    VkPipelineColorBlendStateCreateInfo colorBlending = { VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO };
+    VkPipelineColorBlendStateCreateInfo colorBlending = __hidden_vulkan::MakeVkStruct<VkPipelineColorBlendStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO);
     colorBlending.logicOpEnable = VK_FALSE;
     Vector<VkPipelineColorBlendAttachmentState, Alloc::ScratchAllocator<VkPipelineColorBlendAttachmentState>> blendAttachments{ Alloc::ScratchAllocator<VkPipelineColorBlendAttachmentState>(scratchArena) };
     blendAttachments.reserve(fbinfo.colorFormats.size());
@@ -375,7 +375,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
         VK_DYNAMIC_STATE_STENCIL_REFERENCE,
     };
 
-    VkPipelineDynamicStateCreateInfo dynamicState = { VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO };
+    VkPipelineDynamicStateCreateInfo dynamicState = __hidden_vulkan::MakeVkStruct<VkPipelineDynamicStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO);
     dynamicState.dynamicStateCount = static_cast<uint32_t>(LengthOf(dynamicStates));
     dynamicState.pDynamicStates = dynamicStates;
 
@@ -411,7 +411,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
                     pushConstantRange.size = pushConstantByteSize;
                 }
 
-                VkPipelineLayoutCreateInfo layoutInfo = { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
+                VkPipelineLayoutCreateInfo layoutInfo = __hidden_vulkan::MakeVkStruct<VkPipelineLayoutCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO);
                 layoutInfo.setLayoutCount = static_cast<uint32_t>(allDescriptorSetLayouts.size());
                 layoutInfo.pSetLayouts = allDescriptorSetLayouts.data();
                 layoutInfo.pushConstantRangeCount = pushConstantByteSize > 0 ? 1u : 0u;
@@ -428,7 +428,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     }
 
     // Step 11: Dynamic rendering info
-    VkPipelineRenderingCreateInfo renderingInfo = { VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO };
+    VkPipelineRenderingCreateInfo renderingInfo = __hidden_vulkan::MakeVkStruct<VkPipelineRenderingCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO);
     Vector<VkFormat, Alloc::ScratchAllocator<VkFormat>> colorFormats{ Alloc::ScratchAllocator<VkFormat>(scratchArena) };
     colorFormats.reserve(fbinfo.colorFormats.size());
     for(u32 i = 0; i < static_cast<u32>(fbinfo.colorFormats.size()); ++i)
@@ -443,7 +443,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
             renderingInfo.stencilAttachmentFormat = ConvertFormat(fbinfo.depthFormat);
     }
 
-    VkGraphicsPipelineCreateInfo pipelineInfo = { VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO };
+    VkGraphicsPipelineCreateInfo pipelineInfo = __hidden_vulkan::MakeVkStruct<VkGraphicsPipelineCreateInfo>(VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO);
     if(pso->m_usesDescriptorHeap){
         descriptorHeapFlags2.pNext = m_context.extensions.KHR_dynamic_rendering ? &renderingInfo : nullptr;
         pipelineInfo.pNext = &descriptorHeapFlags2;
@@ -512,7 +512,7 @@ void CommandList::beginRenderPass(IFramebuffer* _framebuffer, const RenderPassPa
             if(params.clearColorTargets && params.clearColorTarget(i)){
                 colorAttachments[numColorAttachments].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
                 const Color& clr = params.colorClearValues[i];
-                colorAttachments[numColorAttachments].clearValue.color = { clr.r, clr.g, clr.b, clr.a };
+                colorAttachments[numColorAttachments].clearValue.color = {{ clr.r, clr.g, clr.b, clr.a }};
             }
             else
                 colorAttachments[numColorAttachments].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
@@ -522,8 +522,8 @@ void CommandList::beginRenderPass(IFramebuffer* _framebuffer, const RenderPassPa
         }
     }
 
-    VkRenderingAttachmentInfo depthAttachment = { VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO };
-    VkRenderingAttachmentInfo stencilAttachment = { VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO };
+    VkRenderingAttachmentInfo depthAttachment = __hidden_vulkan::MakeVkStruct<VkRenderingAttachmentInfo>(VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO);
+    VkRenderingAttachmentInfo stencilAttachment = __hidden_vulkan::MakeVkStruct<VkRenderingAttachmentInfo>(VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO);
     bool hasDepth = false;
     bool hasStencil = false;
 
@@ -550,7 +550,7 @@ void CommandList::beginRenderPass(IFramebuffer* _framebuffer, const RenderPassPa
         }
     }
 
-    VkRenderingInfo renderingInfo = { VK_STRUCTURE_TYPE_RENDERING_INFO };
+    VkRenderingInfo renderingInfo = __hidden_vulkan::MakeVkStruct<VkRenderingInfo>(VK_STRUCTURE_TYPE_RENDERING_INFO);
     renderingInfo.renderArea.offset = { 0, 0 };
     renderingInfo.renderArea.extent = { fb->m_framebufferInfo.width, fb->m_framebufferInfo.height };
     renderingInfo.layerCount = 1;

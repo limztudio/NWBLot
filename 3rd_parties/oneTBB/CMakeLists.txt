@@ -37,7 +37,7 @@ if(WIN32)
         "${CMAKE_CURRENT_LIST_DIR}/src/tbb/thread_request_serializer.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/src/tbb/version.cpp"
     )
-    target_include_directories(nwb_vendor_tbb PUBLIC "${CMAKE_CURRENT_LIST_DIR}/include")
+    target_include_directories(nwb_vendor_tbb SYSTEM PUBLIC "${CMAKE_CURRENT_LIST_DIR}/include")
     target_compile_definitions(nwb_vendor_tbb PRIVATE
         __TBB_BUILD
         __TBB_SKIP_DEPENDENCY_SIGNATURE_VERIFICATION=1
@@ -53,6 +53,7 @@ if(WIN32)
     if(NWB_COMPILER_FRONTEND_MSVC)
         target_compile_options(nwb_vendor_tbb PRIVATE /wd4324)
     endif()
+    nwb_disable_vendor_warnings(nwb_vendor_tbb)
     target_link_libraries(nwb_vendor_tbb PRIVATE Threads::Threads)
     target_link_options(nwb_vendor_tbb PRIVATE
         "LINKER:/DEF:${CMAKE_CURRENT_LIST_DIR}/src/tbb/def/win64-tbb.def"
@@ -73,7 +74,7 @@ if(WIN32)
         "${CMAKE_CURRENT_LIST_DIR}/src/tbbmalloc/tbbmalloc.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/src/tbb/itt_notify.cpp"
     )
-    target_include_directories(nwb_vendor_tbbmalloc PUBLIC "${CMAKE_CURRENT_LIST_DIR}/include")
+    target_include_directories(nwb_vendor_tbbmalloc SYSTEM PUBLIC "${CMAKE_CURRENT_LIST_DIR}/include")
     target_compile_definitions(nwb_vendor_tbbmalloc PRIVATE
         __TBBMALLOC_BUILD
         __TBB_USE_ITT_NOTIFY
@@ -88,6 +89,7 @@ if(WIN32)
     if(NWB_COMPILER_FRONTEND_MSVC)
         target_compile_options(nwb_vendor_tbbmalloc PRIVATE /wd4324 /wd4267 /wd4244 /wd4245 /wd4458)
     endif()
+    nwb_disable_vendor_warnings(nwb_vendor_tbbmalloc)
     target_link_libraries(nwb_vendor_tbbmalloc PRIVATE Threads::Threads)
     target_link_options(nwb_vendor_tbbmalloc PRIVATE
         "LINKER:/DEF:${CMAKE_CURRENT_LIST_DIR}/src/tbbmalloc/def/win64-tbbmalloc.def"

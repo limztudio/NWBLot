@@ -27,7 +27,7 @@ public:
     NoCopy(NoCopy&&) = default;
     NoCopy() = default;
 
-    NoCopy& operator=(NoCopy&&) = default;
+    NoCopy& operator=(NoCopy&&) = delete;
 };
 
 

@@ -29,7 +29,7 @@ if(WIN32)
         "${CMAKE_CURRENT_LIST_DIR}/trees.h"
         "${CMAKE_CURRENT_LIST_DIR}/zutil.h"
     )
-    target_include_directories(nwb_vendor_zlib PUBLIC
+    target_include_directories(nwb_vendor_zlib SYSTEM PUBLIC
         "${CMAKE_CURRENT_LIST_DIR}"
         "${CMAKE_CURRENT_LIST_DIR}/built"
     )
@@ -38,6 +38,7 @@ if(WIN32)
         _CRT_SECURE_NO_DEPRECATE
         _CRT_NONSTDC_NO_DEPRECATE
     )
+    nwb_disable_vendor_warnings(nwb_vendor_zlib)
 else()
     find_package(ZLIB REQUIRED)
     add_library(nwb_zlib INTERFACE)

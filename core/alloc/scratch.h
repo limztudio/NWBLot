@@ -240,7 +240,7 @@ public:
     }
 
     constexpr NWB_ALLOCATOR_PREFIX T* allocate(const usize count) NWB_ALLOCATOR_SUFFIX{
-        return m_arena.allocate<T>(count);
+        return m_arena.template allocate<T>(count);
     }
 #if _HAS_CXX23
     constexpr AllocationResult<T*> allocate_at_least(const usize count){ return { allocate(count), count }; }

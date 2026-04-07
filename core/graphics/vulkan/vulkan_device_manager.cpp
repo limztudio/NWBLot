@@ -902,7 +902,7 @@ bool DeviceManager::createDevice(){
 
     void* pNext = nullptr;
 
-    VkPhysicalDeviceFeatures2 physicalDeviceFeatures2 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
+    VkPhysicalDeviceFeatures2 physicalDeviceFeatures2 = __hidden_vulkan::MakeVkStruct<VkPhysicalDeviceFeatures2>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2);
 
     __hidden_vulkan::OptionalDeviceFeatureSet requestedOptionalFeatures = __hidden_vulkan::MakeRequestedOptionalDeviceFeatures();
     __hidden_vulkan::OptionalDeviceFeatureSet supportedOptionalFeatures;

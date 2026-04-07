@@ -142,7 +142,10 @@ public:
 
 protected:
     template<typename... ARGS>
-    inline bool internalInit(ARGS&&... args){ return true; }
+    inline bool internalInit(ARGS&&... args){
+        ((void)args, ...);
+        return true;
+    }
     inline void internalDestroy(){}
     inline bool internalUpdate(){ return true; }
 

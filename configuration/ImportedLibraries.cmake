@@ -57,6 +57,7 @@ function(nwb_find_library_target target_name)
         nwb_set_imported_library_locations(${target_name} DEFAULT "${_library}")
         set_target_properties(${target_name} PROPERTIES
             INTERFACE_INCLUDE_DIRECTORIES "${_include_dir}"
+            INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${_include_dir}"
         )
     endif()
 endfunction()

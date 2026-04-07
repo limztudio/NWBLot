@@ -18,22 +18,29 @@ NWB_VULKAN_BEGIN
 
 
 namespace __hidden_vulkan{
-    extern constexpr VkAccessFlags2 GetVkAccessFlags(ResourceStates::Mask state);
-    extern constexpr VkPipelineStageFlags2 GetVkPipelineStageFlags(ResourceStates::Mask state);
-    extern constexpr VkImageLayout GetVkImageLayout(ResourceStates::Mask state);
-    extern constexpr VkFormat ConvertFormat(Format::Enum format);
-    extern constexpr VkSampleCountFlagBits GetSampleCountFlagBits(u32 sampleCount);
+    VkAccessFlags2 GetVkAccessFlags(ResourceStates::Mask state);
+    VkPipelineStageFlags2 GetVkPipelineStageFlags(ResourceStates::Mask state);
+    VkImageLayout GetVkImageLayout(ResourceStates::Mask state);
+    VkFormat ConvertFormat(Format::Enum format);
+    VkSampleCountFlagBits GetSampleCountFlagBits(u32 sampleCount);
     extern VkDeviceAddress GetBufferDeviceAddress(IBuffer* _buffer, u64 offset = 0);
-    extern constexpr VkImageType TextureDimensionToImageType(TextureDimension::Enum dimension);
-    extern constexpr VkImageViewType TextureDimensionToViewType(TextureDimension::Enum dimension);
-    extern constexpr VkSampleCountFlagBits GetSampleCount(u32 sampleCount);
-    extern constexpr VkImageUsageFlags PickImageUsage(const TextureDesc& desc);
-    extern constexpr VkImageCreateFlags PickImageFlags(const TextureDesc& desc);
-    extern constexpr VkDescriptorType ConvertDescriptorType(ResourceType::Enum type);
-    extern constexpr VkShaderStageFlags ConvertShaderStages(ShaderType::Mask stages);
-    extern constexpr VkComponentTypeKHR ConvertCoopVecDataType(CooperativeVectorDataType::Enum type);
-    extern constexpr CooperativeVectorDataType::Enum ConvertCoopVecDataType(VkComponentTypeKHR type);
-    extern constexpr VkCooperativeVectorMatrixLayoutNV ConvertCoopVecMatrixLayout(CooperativeVectorMatrixLayout::Enum layout);
+    VkImageType TextureDimensionToImageType(TextureDimension::Enum dimension);
+    VkImageViewType TextureDimensionToViewType(TextureDimension::Enum dimension);
+    VkSampleCountFlagBits GetSampleCount(u32 sampleCount);
+    VkImageUsageFlags PickImageUsage(const TextureDesc& desc);
+    VkImageCreateFlags PickImageFlags(const TextureDesc& desc);
+    VkDescriptorType ConvertDescriptorType(ResourceType::Enum type);
+    VkShaderStageFlags ConvertShaderStages(ShaderType::Mask stages);
+    VkComponentTypeKHR ConvertCoopVecDataType(CooperativeVectorDataType::Enum type);
+    CooperativeVectorDataType::Enum ConvertCoopVecDataType(VkComponentTypeKHR type);
+    VkCooperativeVectorMatrixLayoutNV ConvertCoopVecMatrixLayout(CooperativeVectorMatrixLayout::Enum layout);
+
+    template<typename T>
+    constexpr T MakeVkStruct(VkStructureType sType){
+        T output{};
+        output.sType = sType;
+        return output;
+    }
 
     inline void CopyHostMemory(
         Alloc::ThreadPool& workerPool,

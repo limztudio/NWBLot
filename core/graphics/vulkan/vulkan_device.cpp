@@ -145,7 +145,7 @@ Device::Device(const DeviceDesc& desc)
     }
 
     if(m_context.extensions.KHR_ray_tracing_pipeline){
-        VkPhysicalDeviceProperties2 props2 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2 };
+        VkPhysicalDeviceProperties2 props2 = __hidden_vulkan::MakeVkStruct<VkPhysicalDeviceProperties2>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2);
         m_context.rayTracingPipelineProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR;
 
         void* pNext = &m_context.rayTracingPipelineProperties;
@@ -173,14 +173,14 @@ Device::Device(const DeviceDesc& desc)
     }
 
     if(m_context.extensions.NV_cooperative_vector){
-        VkPhysicalDeviceFeatures2 features2 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
+        VkPhysicalDeviceFeatures2 features2 = __hidden_vulkan::MakeVkStruct<VkPhysicalDeviceFeatures2>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2);
         m_context.coopVecFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_VECTOR_FEATURES_NV;
         features2.pNext = &m_context.coopVecFeatures;
         vkGetPhysicalDeviceFeatures2(m_context.physicalDevice, &features2);
     }
 
     if(m_context.extensions.EXT_descriptor_heap){
-        VkPhysicalDeviceProperties2 props2 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2 };
+        VkPhysicalDeviceProperties2 props2 = __hidden_vulkan::MakeVkStruct<VkPhysicalDeviceProperties2>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2);
         m_context.descriptorHeapProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_PROPERTIES_EXT;
         props2.pNext = &m_context.descriptorHeapProperties;
         vkGetPhysicalDeviceProperties2(m_context.physicalDevice, &props2);
@@ -191,14 +191,14 @@ Device::Device(const DeviceDesc& desc)
         }
     }
 
-    VkPipelineCacheCreateInfo cacheInfo = { VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO };
+    VkPipelineCacheCreateInfo cacheInfo = __hidden_vulkan::MakeVkStruct<VkPipelineCacheCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO);
     res = vkCreatePipelineCache(m_context.device, &cacheInfo, m_context.allocationCallbacks, &m_context.pipelineCache);
     if(res != VK_SUCCESS){
         m_context.pipelineCache = VK_NULL_HANDLE;
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to create pipeline cache. {}"), ResultToString(res));
     }
 
-    VkDescriptorSetLayoutCreateInfo emptyLayoutInfo = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
+    VkDescriptorSetLayoutCreateInfo emptyLayoutInfo = __hidden_vulkan::MakeVkStruct<VkDescriptorSetLayoutCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO);
     emptyLayoutInfo.bindingCount = 0;
     emptyLayoutInfo.pBindings = nullptr;
     res = vkCreateDescriptorSetLayout(m_context.device, &emptyLayoutInfo, m_context.allocationCallbacks, &m_context.emptyDescriptorSetLayout);
@@ -558,7 +558,7 @@ usize Device::getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, Coopera
     if(dataTypeSize > (Limit<usize>::s_Max / elementCount))
         return 0;
 
-    VkConvertCooperativeVectorMatrixInfoNV convertInfo = { VK_STRUCTURE_TYPE_CONVERT_COOPERATIVE_VECTOR_MATRIX_INFO_NV };
+    VkConvertCooperativeVectorMatrixInfoNV convertInfo = __hidden_vulkan::MakeVkStruct<VkConvertCooperativeVectorMatrixInfoNV>(VK_STRUCTURE_TYPE_CONVERT_COOPERATIVE_VECTOR_MATRIX_INFO_NV);
     convertInfo.srcSize = dataTypeSize * elementCount;
     convertInfo.srcData.hostAddress = nullptr;
     convertInfo.pDstSize = &dstSize;

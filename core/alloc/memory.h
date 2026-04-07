@@ -22,7 +22,7 @@ NWB_ALLOC_BEGIN
 
 class MemoryArena : NoCopy{
 public:
-    constexpr static usize StructureAlignedSize(usize byte)noexcept{ return byte + static_cast<usize>(tlsf_size() + 8); }
+    inline static usize StructureAlignedSize(usize byte)noexcept{ return byte + static_cast<usize>(tlsf_size() + 8); }
 
 
 public:

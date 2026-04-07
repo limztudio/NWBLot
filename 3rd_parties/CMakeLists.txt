@@ -1,3 +1,11 @@
+function(nwb_disable_vendor_warnings target)
+    if(NWB_COMPILER_FRONTEND_MSVC)
+        target_compile_options(${target} PRIVATE /W0)
+    else()
+        target_compile_options(${target} PRIVATE -w)
+    endif()
+endfunction()
+
 add_subdirectory(CLI11)
 add_subdirectory(tsl)
 add_subdirectory(zlib)

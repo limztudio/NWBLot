@@ -122,7 +122,7 @@ union FrameParam{
 };
 class FrameData{
 public:
-    inline FrameData() : m_data{ nullptr, }{}
+    inline FrameData() : m_data{}{}
 
 
 public:

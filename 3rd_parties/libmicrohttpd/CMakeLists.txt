@@ -26,8 +26,10 @@ if(WIN32)
         "${CMAKE_CURRENT_LIST_DIR}/microhttpd/sysfdsetsize.c"
         "${CMAKE_CURRENT_LIST_DIR}/microhttpd/tsearch.c"
     )
-    target_include_directories(nwb_vendor_microhttpd PUBLIC
+    target_include_directories(nwb_vendor_microhttpd PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}"
+    )
+    target_include_directories(nwb_vendor_microhttpd SYSTEM PUBLIC
         "${CMAKE_CURRENT_LIST_DIR}/include"
     )
     target_compile_definitions(nwb_vendor_microhttpd
@@ -35,9 +37,9 @@ if(WIN32)
             _LIB
             MHD_W32LIB
             _CRT_SECURE_NO_DEPRECATE
-        INTERFACE
             WIN32_LEAN_AND_MEAN=1
     )
+    nwb_disable_vendor_warnings(nwb_vendor_microhttpd)
     if(NWB_COMPILER_FRONTEND_MSVC)
         target_compile_options(nwb_vendor_microhttpd PRIVATE /wd4127 /wd5287)
     endif()

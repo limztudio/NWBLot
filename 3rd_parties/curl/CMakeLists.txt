@@ -334,10 +334,10 @@ if(WIN32)
         "${CMAKE_CURRENT_LIST_DIR}/lib/ws.h"
         "${CMAKE_CURRENT_LIST_DIR}/curl_config.h"
     )
-    target_include_directories(nwb_vendor_curl PUBLIC
+    target_include_directories(nwb_vendor_curl SYSTEM PUBLIC
         "${CMAKE_CURRENT_LIST_DIR}"
-        "${CMAKE_CURRENT_LIST_DIR}/lib"
     )
+    target_include_directories(nwb_vendor_curl PRIVATE "${CMAKE_CURRENT_LIST_DIR}/lib")
     target_compile_definitions(nwb_vendor_curl
         PRIVATE
             CURL_HIDDEN_SYMBOLS
@@ -348,6 +348,7 @@ if(WIN32)
         PUBLIC
             CURL_STATICLIB
     )
+    nwb_disable_vendor_warnings(nwb_vendor_curl)
     target_link_libraries(nwb_vendor_curl PUBLIC
         ws2_32
         bcrypt

@@ -3033,11 +3033,11 @@ struct CooperativeVectorConvertMatrixLayoutDesc{
 };
 
 // Returns the size in bytes of a given data type.
-extern constexpr usize GetCooperativeVectorDataTypeSize(CooperativeVectorDataType::Enum type);
+usize GetCooperativeVectorDataTypeSize(CooperativeVectorDataType::Enum type);
 
 // Returns the stride for a given matrix if it's stored in a RowMajor or ColumnMajor layout.
 // For other layouts, returns 0.
-extern constexpr usize GetCooperativeVectorOptimalMatrixStride(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, u32 rows, u32 columns);
+usize GetCooperativeVectorOptimalMatrixStride(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, u32 rows, u32 columns);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

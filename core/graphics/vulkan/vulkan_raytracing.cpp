@@ -86,8 +86,8 @@ OpacityMicromap::~OpacityMicromap(){
 
 RayTracingPipeline::RayTracingPipeline(const VulkanContext& context, Device& device)
     : RefCounter<IRayTracingPipeline>(context.threadPool)
-    , m_context(context)
     , m_shaderGroupHandles(Alloc::CustomAllocator<u8>(context.objectArena))
+    , m_context(context)
     , m_device(device)
 {}
 RayTracingPipeline::~RayTracingPipeline(){
@@ -138,7 +138,7 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
         return nullptr;
     }
 
-    VkAccelerationStructureCreateInfoKHR createInfo = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR };
+    VkAccelerationStructureCreateInfoKHR createInfo = __hidden_vulkan::MakeVkStruct<VkAccelerationStructureCreateInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR);
     createInfo.buffer = checked_cast<Buffer*>(as->m_buffer.get())->m_buffer;
     createInfo.offset = 0;
     createInfo.size = bufferDesc.byteSize;
@@ -150,7 +150,7 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
         return nullptr;
     }
 
-    VkAccelerationStructureDeviceAddressInfoKHR addressInfo = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR };
+    VkAccelerationStructureDeviceAddressInfoKHR addressInfo = __hidden_vulkan::MakeVkStruct<VkAccelerationStructureDeviceAddressInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR);
     addressInfo.accelerationStructure = as->m_accelStruct;
     as->m_deviceAddress = vkGetAccelerationStructureDeviceAddressKHR(m_context.device, &addressInfo);
 
@@ -169,14 +169,14 @@ RayTracingOpacityMicromapHandle Device::createOpacityMicromap(const RayTracingOp
     else if(desc.flags & RayTracingOpacityMicromapBuildFlags::FastBuild)
         buildFlags = VK_BUILD_MICROMAP_PREFER_FAST_BUILD_BIT_EXT;
 
-    VkMicromapBuildInfoEXT buildInfo = { VK_STRUCTURE_TYPE_MICROMAP_BUILD_INFO_EXT };
+    VkMicromapBuildInfoEXT buildInfo = __hidden_vulkan::MakeVkStruct<VkMicromapBuildInfoEXT>(VK_STRUCTURE_TYPE_MICROMAP_BUILD_INFO_EXT);
     buildInfo.type = VK_MICROMAP_TYPE_OPACITY_MICROMAP_EXT;
     buildInfo.flags = buildFlags;
     buildInfo.mode = VK_BUILD_MICROMAP_MODE_BUILD_EXT;
     buildInfo.usageCountsCount = static_cast<u32>(desc.counts.size());
     buildInfo.pUsageCounts = reinterpret_cast<const VkMicromapUsageEXT*>(desc.counts.data());
 
-    VkMicromapBuildSizesInfoEXT buildSize = { VK_STRUCTURE_TYPE_MICROMAP_BUILD_SIZES_INFO_EXT };
+    VkMicromapBuildSizesInfoEXT buildSize = __hidden_vulkan::MakeVkStruct<VkMicromapBuildSizesInfoEXT>(VK_STRUCTURE_TYPE_MICROMAP_BUILD_SIZES_INFO_EXT);
     vkGetMicromapBuildSizesEXT(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &buildSize);
 
     auto* om = NewArenaObject<OpacityMicromap>(m_context.objectArena, m_context);
@@ -198,7 +198,7 @@ RayTracingOpacityMicromapHandle Device::createOpacityMicromap(const RayTracingOp
 
     auto* buffer = checked_cast<Buffer*>(om->m_dataBuffer.get());
 
-    VkMicromapCreateInfoEXT createInfo = { VK_STRUCTURE_TYPE_MICROMAP_CREATE_INFO_EXT };
+    VkMicromapCreateInfoEXT createInfo = __hidden_vulkan::MakeVkStruct<VkMicromapCreateInfoEXT>(VK_STRUCTURE_TYPE_MICROMAP_CREATE_INFO_EXT);
     createInfo.type = VK_MICROMAP_TYPE_OPACITY_MICROMAP_EXT;
     createInfo.buffer = buffer->m_buffer;
     createInfo.size = buildSize.micromapSize;
@@ -277,15 +277,15 @@ RayTracingClusterOperationSizeInfo Device::getClusterOperationSizeInfo(const Ray
     if(params.flags & RayTracingClusterOperationFlags::AllowOMM)
         opFlags |= VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_OPACITY_MICROMAP_UPDATE_EXT;
 
-    VkClusterAccelerationStructureInputInfoNV inputInfo = { VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_INPUT_INFO_NV };
+    VkClusterAccelerationStructureInputInfoNV inputInfo = __hidden_vulkan::MakeVkStruct<VkClusterAccelerationStructureInputInfoNV>(VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_INPUT_INFO_NV);
     inputInfo.maxAccelerationStructureCount = params.maxArgCount;
     inputInfo.flags = opFlags;
     inputInfo.opType = opType;
     inputInfo.opMode = opMode;
 
-    VkClusterAccelerationStructureMoveObjectsInputNV moveInput = { VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_MOVE_OBJECTS_INPUT_NV };
-    VkClusterAccelerationStructureTriangleClusterInputNV clusterInput = { VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_TRIANGLE_CLUSTER_INPUT_NV };
-    VkClusterAccelerationStructureClustersBottomLevelInputNV blasInput = { VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_CLUSTERS_BOTTOM_LEVEL_INPUT_NV };
+    VkClusterAccelerationStructureMoveObjectsInputNV moveInput = __hidden_vulkan::MakeVkStruct<VkClusterAccelerationStructureMoveObjectsInputNV>(VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_MOVE_OBJECTS_INPUT_NV);
+    VkClusterAccelerationStructureTriangleClusterInputNV clusterInput = __hidden_vulkan::MakeVkStruct<VkClusterAccelerationStructureTriangleClusterInputNV>(VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_TRIANGLE_CLUSTER_INPUT_NV);
+    VkClusterAccelerationStructureClustersBottomLevelInputNV blasInput = __hidden_vulkan::MakeVkStruct<VkClusterAccelerationStructureClustersBottomLevelInputNV>(VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_CLUSTERS_BOTTOM_LEVEL_INPUT_NV);
 
     switch(params.type){
     case RayTracingClusterOperationType::Move:{
@@ -326,7 +326,7 @@ RayTracingClusterOperationSizeInfo Device::getClusterOperationSizeInfo(const Ray
         break;
     }
 
-    VkAccelerationStructureBuildSizesInfoKHR vkSizeInfo = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR };
+    VkAccelerationStructureBuildSizesInfoKHR vkSizeInfo = __hidden_vulkan::MakeVkStruct<VkAccelerationStructureBuildSizesInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR);
     vkGetClusterAccelerationStructureBuildSizesNV(m_context.device, &inputInfo, &vkSizeInfo);
 
     info.resultMaxSizeInBytes = vkSizeInfo.accelerationStructureSize;
@@ -372,7 +372,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
 
         auto* s = checked_cast<Shader*>(shaderDesc.shader.get());
 
-        VkPipelineShaderStageCreateInfo stageInfo = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
+        VkPipelineShaderStageCreateInfo stageInfo = __hidden_vulkan::MakeVkStruct<VkPipelineShaderStageCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
         stageInfo.module = s->m_shaderModule;
         stageInfo.pName = s->m_entryPointName.c_str();
 
@@ -390,7 +390,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
             continue;
         }
 
-        VkRayTracingShaderGroupCreateInfoKHR group = { VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR };
+        VkRayTracingShaderGroupCreateInfoKHR group = __hidden_vulkan::MakeVkStruct<VkRayTracingShaderGroupCreateInfoKHR>(VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR);
         group.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
         group.generalShader = static_cast<u32>(stages.size());
         group.closestHitShader = VK_SHADER_UNUSED_KHR;
@@ -402,7 +402,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
     }
 
     for(const auto& hitGroup : desc.hitGroups){
-        VkRayTracingShaderGroupCreateInfoKHR group = { VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR };
+        VkRayTracingShaderGroupCreateInfoKHR group = __hidden_vulkan::MakeVkStruct<VkRayTracingShaderGroupCreateInfoKHR>(VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR);
         group.type = hitGroup.isProceduralPrimitive ? VK_RAY_TRACING_SHADER_GROUP_TYPE_PROCEDURAL_HIT_GROUP_KHR : VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR;
         group.generalShader = VK_SHADER_UNUSED_KHR;
         group.closestHitShader = VK_SHADER_UNUSED_KHR;
@@ -411,7 +411,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
 
         if(hitGroup.closestHitShader){
             auto* s = checked_cast<Shader*>(hitGroup.closestHitShader.get());
-            VkPipelineShaderStageCreateInfo stageInfo = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
+            VkPipelineShaderStageCreateInfo stageInfo = __hidden_vulkan::MakeVkStruct<VkPipelineShaderStageCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
             stageInfo.stage = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
             stageInfo.module = s->m_shaderModule;
             stageInfo.pName = s->m_entryPointName.c_str();
@@ -420,7 +420,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
         }
         if(hitGroup.anyHitShader){
             auto* s = checked_cast<Shader*>(hitGroup.anyHitShader.get());
-            VkPipelineShaderStageCreateInfo stageInfo = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
+            VkPipelineShaderStageCreateInfo stageInfo = __hidden_vulkan::MakeVkStruct<VkPipelineShaderStageCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
             stageInfo.stage = VK_SHADER_STAGE_ANY_HIT_BIT_KHR;
             stageInfo.module = s->m_shaderModule;
             stageInfo.pName = s->m_entryPointName.c_str();
@@ -429,7 +429,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
         }
         if(hitGroup.intersectionShader){
             auto* s = checked_cast<Shader*>(hitGroup.intersectionShader.get());
-            VkPipelineShaderStageCreateInfo stageInfo = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
+            VkPipelineShaderStageCreateInfo stageInfo = __hidden_vulkan::MakeVkStruct<VkPipelineShaderStageCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
             stageInfo.stage = VK_SHADER_STAGE_INTERSECTION_BIT_KHR;
             stageInfo.module = s->m_shaderModule;
             stageInfo.pName = s->m_entryPointName.c_str();
@@ -487,7 +487,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
                     pushConstantRange.size = pushConstantByteSize;
                 }
 
-                VkPipelineLayoutCreateInfo layoutInfo = { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
+                VkPipelineLayoutCreateInfo layoutInfo = __hidden_vulkan::MakeVkStruct<VkPipelineLayoutCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO);
                 layoutInfo.setLayoutCount = static_cast<u32>(allDescriptorSetLayouts.size());
                 layoutInfo.pSetLayouts = allDescriptorSetLayouts.data();
                 layoutInfo.pushConstantRangeCount = pushConstantByteSize > 0 ? 1u : 0u;
@@ -504,7 +504,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
     }
     pso->m_pipelineLayout = pipelineLayout;
 
-    VkRayTracingPipelineCreateInfoKHR createInfo = { VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR };
+    VkRayTracingPipelineCreateInfoKHR createInfo = __hidden_vulkan::MakeVkStruct<VkRayTracingPipelineCreateInfoKHR>(VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR);
     if(pso->m_usesDescriptorHeap)
         createInfo.pNext = &descriptorHeapFlags2;
     createInfo.stageCount = static_cast<u32>(stages.size());
@@ -854,7 +854,7 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* _as, const
     auto buildGeometry = [&](usize i){
         const auto& geomDesc = pGeometries[i];
 
-        VkAccelerationStructureGeometryKHR geometry = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR };
+        VkAccelerationStructureGeometryKHR geometry = __hidden_vulkan::MakeVkStruct<VkAccelerationStructureGeometryKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR);
         VkAccelerationStructureBuildRangeInfoKHR rangeInfo = {};
         u32 primitiveCount = 0;
 
@@ -911,7 +911,7 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* _as, const
             buildGeometry(i);
     }
 
-    VkAccelerationStructureBuildGeometryInfoKHR buildInfo = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR };
+    VkAccelerationStructureBuildGeometryInfoKHR buildInfo = __hidden_vulkan::MakeVkStruct<VkAccelerationStructureBuildGeometryInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR);
     buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
     buildInfo.flags = 0;
 
@@ -929,7 +929,7 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* _as, const
     buildInfo.geometryCount = static_cast<u32>(geometries.size());
     buildInfo.pGeometries = geometries.data();
 
-    VkAccelerationStructureBuildSizesInfoKHR sizeInfo = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR };
+    VkAccelerationStructureBuildSizesInfoKHR sizeInfo = __hidden_vulkan::MakeVkStruct<VkAccelerationStructureBuildSizesInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR);
     vkGetAccelerationStructureBuildSizesKHR(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, primitiveCounts.data(), &sizeInfo);
 
     BufferDesc scratchDesc;
@@ -994,7 +994,7 @@ void CommandList::compactBottomLevelAccelStructs(){
         if(!compactBuffer)
             continue;
 
-        VkAccelerationStructureCreateInfoKHR createInfo = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR };
+        VkAccelerationStructureCreateInfoKHR createInfo = __hidden_vulkan::MakeVkStruct<VkAccelerationStructureCreateInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR);
         createInfo.buffer = checked_cast<Buffer*>(compactBuffer.get())->m_buffer;
         createInfo.size = compactedSize;
         createInfo.type = as->m_desc.isTopLevel
@@ -1007,7 +1007,7 @@ void CommandList::compactBottomLevelAccelStructs(){
         if(res != VK_SUCCESS)
             continue;
 
-        VkCopyAccelerationStructureInfoKHR copyInfo = { VK_STRUCTURE_TYPE_COPY_ACCELERATION_STRUCTURE_INFO_KHR };
+        VkCopyAccelerationStructureInfoKHR copyInfo = __hidden_vulkan::MakeVkStruct<VkCopyAccelerationStructureInfoKHR>(VK_STRUCTURE_TYPE_COPY_ACCELERATION_STRUCTURE_INFO_KHR);
         copyInfo.src  = as->m_accelStruct; // original (still the copy source)
         copyInfo.dst  = newAS;
         copyInfo.mode = VK_COPY_ACCELERATION_STRUCTURE_MODE_COMPACT_KHR;
@@ -1019,7 +1019,7 @@ void CommandList::compactBottomLevelAccelStructs(){
         as->m_accelStruct = newAS;
         as->m_buffer = Move(compactBuffer);
 
-        VkAccelerationStructureDeviceAddressInfoKHR addrInfo = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR };
+        VkAccelerationStructureDeviceAddressInfoKHR addrInfo = __hidden_vulkan::MakeVkStruct<VkAccelerationStructureDeviceAddressInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR);
         addrInfo.accelerationStructure = as->m_accelStruct;
         as->m_deviceAddress = vkGetAccelerationStructureDeviceAddressKHR(m_context.device, &addrInfo);
 
@@ -1033,7 +1033,7 @@ void CommandList::compactBottomLevelAccelStructs(){
         if(as->m_compactionQueryPool != VK_NULL_HANDLE || as->m_compacted)
             continue;
 
-        VkQueryPoolCreateInfo queryPoolInfo = { VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO };
+        VkQueryPoolCreateInfo queryPoolInfo = __hidden_vulkan::MakeVkStruct<VkQueryPoolCreateInfo>(VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO);
         queryPoolInfo.queryType  = VK_QUERY_TYPE_ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR;
         queryPoolInfo.queryCount = s_SingleQueryCount;
 
@@ -1125,13 +1125,13 @@ void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* _as, const Ra
 
     m_device.unmapBuffer(instanceBuffer.get());
 
-    VkAccelerationStructureGeometryKHR geometry = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR };
+    VkAccelerationStructureGeometryKHR geometry = __hidden_vulkan::MakeVkStruct<VkAccelerationStructureGeometryKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR);
     geometry.geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR;
     geometry.geometry.instances.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
     geometry.geometry.instances.arrayOfPointers = VK_FALSE;
     geometry.geometry.instances.data.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(instanceBuffer.get());
 
-    VkAccelerationStructureBuildGeometryInfoKHR buildInfo = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR };
+    VkAccelerationStructureBuildGeometryInfoKHR buildInfo = __hidden_vulkan::MakeVkStruct<VkAccelerationStructureBuildGeometryInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR);
     buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
     buildInfo.flags = 0;
 
@@ -1148,7 +1148,7 @@ void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* _as, const Ra
     buildInfo.pGeometries = &geometry;
 
     auto primitiveCount = static_cast<uint32_t>(numInstances);
-    VkAccelerationStructureBuildSizesInfoKHR sizeInfo = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR };
+    VkAccelerationStructureBuildSizesInfoKHR sizeInfo = __hidden_vulkan::MakeVkStruct<VkAccelerationStructureBuildSizesInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR);
     vkGetAccelerationStructureBuildSizesKHR(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &primitiveCount, &sizeInfo);
 
     BufferDesc scratchDesc;
@@ -1208,7 +1208,7 @@ void CommandList::buildOpacityMicromap(IRayTracingOpacityMicromap* _omm, const R
     else if(ommDesc.flags & RayTracingOpacityMicromapBuildFlags::FastBuild)
         buildFlags = VK_BUILD_MICROMAP_PREFER_FAST_BUILD_BIT_EXT;
 
-    VkMicromapBuildInfoEXT buildInfo = { VK_STRUCTURE_TYPE_MICROMAP_BUILD_INFO_EXT };
+    VkMicromapBuildInfoEXT buildInfo = __hidden_vulkan::MakeVkStruct<VkMicromapBuildInfoEXT>(VK_STRUCTURE_TYPE_MICROMAP_BUILD_INFO_EXT);
     buildInfo.type = VK_MICROMAP_TYPE_OPACITY_MICROMAP_EXT;
     buildInfo.flags = buildFlags;
     buildInfo.mode = VK_BUILD_MICROMAP_MODE_BUILD_EXT;
@@ -1219,7 +1219,7 @@ void CommandList::buildOpacityMicromap(IRayTracingOpacityMicromap* _omm, const R
     buildInfo.triangleArray.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(ommDesc.perOmmDescs, ommDesc.perOmmDescsOffset);
     buildInfo.triangleArrayStride = sizeof(VkMicromapTriangleEXT);
 
-    VkMicromapBuildSizesInfoEXT buildSize = { VK_STRUCTURE_TYPE_MICROMAP_BUILD_SIZES_INFO_EXT };
+    VkMicromapBuildSizesInfoEXT buildSize = __hidden_vulkan::MakeVkStruct<VkMicromapBuildSizesInfoEXT>(VK_STRUCTURE_TYPE_MICROMAP_BUILD_SIZES_INFO_EXT);
     vkGetMicromapBuildSizesEXT(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &buildSize);
 
     if(buildSize.buildScratchSize != 0){

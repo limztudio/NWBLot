@@ -69,7 +69,7 @@ void CommandList::commitBarriers(){
     if(m_pendingImageBarriers.empty() && m_pendingBufferBarriers.empty())
         return;
 
-    VkDependencyInfo depInfo = { VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
+    VkDependencyInfo depInfo = __hidden_vulkan::MakeVkStruct<VkDependencyInfo>(VK_STRUCTURE_TYPE_DEPENDENCY_INFO);
     depInfo.imageMemoryBarrierCount = static_cast<u32>(m_pendingImageBarriers.size());
     depInfo.pImageMemoryBarriers = m_pendingImageBarriers.data();
     depInfo.bufferMemoryBarrierCount = static_cast<u32>(m_pendingBufferBarriers.size());
@@ -94,7 +94,7 @@ void CommandList::setTextureState(ITexture* _texture, TextureSubresourceSet subr
     if(oldState == stateBits)
         return;
 
-    VkImageMemoryBarrier2 barrier = { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2 };
+    VkImageMemoryBarrier2 barrier = __hidden_vulkan::MakeVkStruct<VkImageMemoryBarrier2>(VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2);
     barrier.srcStageMask = __hidden_vulkan::GetVkPipelineStageFlags(oldState != ResourceStates::Unknown ? oldState : ResourceStates::Common);
     barrier.srcAccessMask = __hidden_vulkan::GetVkAccessFlags(oldState != ResourceStates::Unknown ? oldState : ResourceStates::Common);
     barrier.dstStageMask = __hidden_vulkan::GetVkPipelineStageFlags(stateBits);
@@ -122,7 +122,7 @@ void CommandList::setTextureState(ITexture* _texture, TextureSubresourceSet subr
         return;
     }
 
-    VkDependencyInfo depInfo = { VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
+    VkDependencyInfo depInfo = __hidden_vulkan::MakeVkStruct<VkDependencyInfo>(VK_STRUCTURE_TYPE_DEPENDENCY_INFO);
     depInfo.imageMemoryBarrierCount = 1;
     depInfo.pImageMemoryBarriers = &barrier;
 
@@ -142,7 +142,7 @@ void CommandList::setBufferState(IBuffer* _buffer, ResourceStates::Mask stateBit
     if(oldState == stateBits)
         return;
 
-    VkBufferMemoryBarrier2 barrier = { VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2 };
+    VkBufferMemoryBarrier2 barrier = __hidden_vulkan::MakeVkStruct<VkBufferMemoryBarrier2>(VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2);
     barrier.srcStageMask = __hidden_vulkan::GetVkPipelineStageFlags(oldState != ResourceStates::Unknown ? oldState : ResourceStates::Common);
     barrier.srcAccessMask = __hidden_vulkan::GetVkAccessFlags(oldState != ResourceStates::Unknown ? oldState : ResourceStates::Common);
     barrier.dstStageMask = __hidden_vulkan::GetVkPipelineStageFlags(stateBits);
@@ -158,7 +158,7 @@ void CommandList::setBufferState(IBuffer* _buffer, ResourceStates::Mask stateBit
         return;
     }
 
-    VkDependencyInfo depInfo = { VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
+    VkDependencyInfo depInfo = __hidden_vulkan::MakeVkStruct<VkDependencyInfo>(VK_STRUCTURE_TYPE_DEPENDENCY_INFO);
     depInfo.bufferMemoryBarrierCount = 1;
     depInfo.pBufferMemoryBarriers = &barrier;
 
@@ -189,13 +189,13 @@ void CommandList::setPermanentBufferState(IBuffer* buffer, ResourceStates::Mask 
 
 
 StateTracker::StateTracker(const VulkanContext& context)
-    : m_context(context)
-    , m_permanentTextureStates(0, Hasher<ITexture*>(), EqualTo<ITexture*>(), Alloc::CustomAllocator<Pair<const ITexture*, ResourceStates::Mask>>(context.objectArena))
+    : m_permanentTextureStates(0, Hasher<ITexture*>(), EqualTo<ITexture*>(), Alloc::CustomAllocator<Pair<const ITexture*, ResourceStates::Mask>>(context.objectArena))
     , m_permanentBufferStates(0, Hasher<IBuffer*>(), EqualTo<IBuffer*>(), Alloc::CustomAllocator<Pair<const IBuffer*, ResourceStates::Mask>>(context.objectArena))
     , m_textureStates(0, Hasher<ITexture*>(), EqualTo<ITexture*>(), Alloc::CustomAllocator<Pair<const ITexture*, ResourceStates::Mask>>(context.objectArena))
     , m_bufferStates(0, Hasher<IBuffer*>(), EqualTo<IBuffer*>(), Alloc::CustomAllocator<Pair<const IBuffer*, ResourceStates::Mask>>(context.objectArena))
     , m_textureUavBarriers(0, Hasher<ITexture*>(), EqualTo<ITexture*>(), Alloc::CustomAllocator<Pair<const ITexture*, bool>>(context.objectArena))
     , m_bufferUavBarriers(0, Hasher<IBuffer*>(), EqualTo<IBuffer*>(), Alloc::CustomAllocator<Pair<const IBuffer*, bool>>(context.objectArena))
+    , m_context(context)
 {
 }
 StateTracker::~StateTracker(){

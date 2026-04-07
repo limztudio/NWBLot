@@ -186,10 +186,10 @@ Sampler::~Sampler(){
 
 Shader::Shader(const VulkanContext& context)
     : RefCounter<IShader>(context.threadPool)
-    , m_context(context)
     , m_bytecode(Alloc::CustomAllocator<u8>(context.objectArena))
     , m_specializationEntries(Alloc::CustomAllocator<VkSpecializationMapEntry>(context.objectArena))
     , m_specializationData(Alloc::CustomAllocator<u8>(context.objectArena))
+    , m_context(context)
 {}
 Shader::~Shader(){
     if(m_shaderModule != VK_NULL_HANDLE){
@@ -204,9 +204,9 @@ Shader::~Shader(){
 
 ShaderLibrary::ShaderLibrary(const VulkanContext& context)
     : RefCounter<IShaderLibrary>(context.threadPool)
-    , m_context(context)
     , m_bytecode(Alloc::CustomAllocator<u8>(context.objectArena))
     , m_shaders(0, ShaderLibraryKeyHasher(), EqualTo<ShaderLibraryKey>(), Alloc::CustomAllocator<Pair<const ShaderLibraryKey, RefCountPtr<Shader, ArenaRefDeleter<Shader>>>>(context.objectArena))
+    , m_context(context)
 {}
 ShaderLibrary::~ShaderLibrary(){}
 
@@ -357,10 +357,10 @@ ShaderLibraryHandle Device::createShaderLibrary(const void* binary, usize binary
 
 InputLayout::InputLayout(const VulkanContext& context)
     : RefCounter<IInputLayout>(context.threadPool)
-    , m_context(context)
     , m_attributes(Alloc::CustomAllocator<VertexAttributeDesc>(context.objectArena))
     , m_bindings(Alloc::CustomAllocator<VkVertexInputBindingDescription>(context.objectArena))
     , m_vkAttributes(Alloc::CustomAllocator<VkVertexInputAttributeDescription>(context.objectArena))
+    , m_context(context)
 {}
 
 
@@ -431,8 +431,8 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
 
 Framebuffer::Framebuffer(const VulkanContext& context)
     : RefCounter<IFramebuffer>(context.threadPool)
-    , m_context(context)
     , m_resources(Alloc::CustomAllocator<RefCountPtr<ITexture, ArenaRefDeleter<ITexture>>>(context.objectArena))
+    , m_context(context)
 {}
 Framebuffer::~Framebuffer(){
     if(m_framebuffer != VK_NULL_HANDLE){

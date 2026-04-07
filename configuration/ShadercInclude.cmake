@@ -49,6 +49,7 @@ function(nwb_configure_shaderc_include)
 
     set_target_properties(nwb_shaderc_combined PROPERTIES
         INTERFACE_INCLUDE_DIRECTORIES "${_shaderc_include_dir}"
+        INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${_shaderc_include_dir}"
     )
 
     add_library(nwb::shaderc_combined ALIAS nwb_shaderc_combined)

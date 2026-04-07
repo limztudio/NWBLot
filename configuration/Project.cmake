@@ -2,6 +2,7 @@ include_guard(GLOBAL)
 
 include("${CMAKE_CURRENT_LIST_DIR}/CompilerFrontend.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/BuildConfigurations.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/LanguageStandard.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/CodeGen.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/GeneralOutput.cmake")
 

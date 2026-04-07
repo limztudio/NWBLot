@@ -62,7 +62,6 @@
   <component name="ChangeListManager">
     <list default="true" id="16cb6efc-7504-465a-8233-5acabd0ff4be" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Testbed/CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/Testbed/CMakeLists.txt" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -101,7 +100,7 @@
   </component>
   <component name="PropertiesComponent">{
   &quot;keyToString&quot;: {
-    &quot;CMake Application.nwb_logserver.executor&quot;: &quot;Run&quot;,
+    &quot;CMake Application.nwb_logserver.executor&quot;: &quot;Debug&quot;,
     &quot;CMake Application.testbed.executor&quot;: &quot;Run&quot;,
     &quot;Compound Run Configuration.testbed + logserver.executor&quot;: &quot;Run&quot;,
     &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
@@ -230,6 +229,11 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
+    <configuration name="testbed" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="NWBLot" TARGET_NAME="testbed" CONFIG_NAME="windows-clang-testbed-x64 - windows-clang-testbed-dbg" RUN_TARGET_PROJECT_NAME="NWBLot" RUN_TARGET_NAME="testbed" WORKING_DIR="file://$PROJECT_DIR$/__exec">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
     <configuration name="testbed + logserver" type="CompoundRunConfigurationType">
       <toRun name="nwb_logserver" type="CMakeRunConfiguration" />
       <toRun name="testbed" type="CMakeRunConfiguration" />
@@ -273,6 +277,8 @@
       <workItem from="1775590322214" duration="386000" />
       <workItem from="1775591060190" duration="165000" />
       <workItem from="1775591259015" duration="40000" />
+      <workItem from="1775591496047" duration="89000" />
+      <workItem from="1775591690399" duration="189000" />
     </task>
     <servers />
   </component>

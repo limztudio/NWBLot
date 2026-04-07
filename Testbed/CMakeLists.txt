@@ -9,18 +9,18 @@ set_target_properties(testbed PROPERTIES
     VS_DEBUGGER_WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}/__exec"
 )
 target_link_libraries(testbed PRIVATE
-    loader
-    "$<LINK_LIBRARY:WHOLE_ARCHIVE,assets_graphics>"
-    alloc
-    filesystem
-    frame
-    logclient
+    nwb_loader
+    "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_graphics>"
+    nwb_alloc
+    nwb_filesystem
+    nwb_frame
+    nwb_logclient
 )
 
-if(TARGET resource_cooker)
-    add_dependencies(testbed resource_cooker)
+if(TARGET nwb_resource_cooker)
+    add_dependencies(testbed nwb_resource_cooker)
     add_custom_command(TARGET testbed POST_BUILD
-        COMMAND "$<TARGET_FILE:resource_cooker>"
+        COMMAND "$<TARGET_FILE:nwb_resource_cooker>"
             --repo-root "${PROJECT_SOURCE_DIR}"
             --asset-root "impl/assets"
             --asset-root "Testbed/assets"

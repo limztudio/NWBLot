@@ -1,5 +1,5 @@
-nwb_declare_static_library(assets)
-target_sources(assets PRIVATE
+nwb_declare_static_library(nwb_assets)
+target_sources(nwb_assets PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/asset_auto_registration.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/asset_cooker.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/asset_registry.cpp"
@@ -15,4 +15,4 @@ target_sources(assets PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/asset_registry.h"
     "${CMAKE_CURRENT_LIST_DIR}/asset_manager.h"
 )
-target_link_libraries(assets PUBLIC common logclient)
+target_link_libraries(nwb_assets PUBLIC nwb_common nwb_logclient)

@@ -1,5 +1,5 @@
-nwb_declare_static_library(graphics)
-target_sources(graphics PRIVATE
+nwb_declare_static_library(nwb_graphics)
+target_sources(nwb_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/basic.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/common.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/graphics.cpp"
@@ -36,14 +36,14 @@ target_sources(graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_device_manager.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_shader_compiler.h"
 )
-target_link_libraries(graphics PUBLIC logclient assets common nwb::volk)
+target_link_libraries(nwb_graphics PUBLIC nwb_logclient nwb_assets nwb_common nwb::volk)
 
-nwb_declare_static_library(graphics_cook)
-target_sources(graphics_cook PRIVATE
+nwb_declare_static_library(nwb_graphics_cook)
+target_sources(nwb_graphics_cook PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/shader_cook.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_shader_compiler.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/shader_cook.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_shader_compiler.h"
 )
-target_link_libraries(graphics_cook PUBLIC logclient assets common metascript nwb::shaderc_combined)
-target_compile_definitions(graphics_cook PRIVATE NWB_COOK=1)
+target_link_libraries(nwb_graphics_cook PUBLIC nwb_logclient nwb_assets nwb_common nwb_metascript nwb::shaderc_combined)
+target_compile_definitions(nwb_graphics_cook PRIVATE NWB_COOK=1)

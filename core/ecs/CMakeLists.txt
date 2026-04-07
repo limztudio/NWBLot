@@ -1,5 +1,5 @@
-nwb_declare_static_library(ecs)
-target_sources(ecs PRIVATE
+nwb_declare_static_library(nwb_ecs)
+target_sources(nwb_ecs PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/entity.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/system.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/world.cpp"
@@ -12,4 +12,4 @@ target_sources(ecs PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/world.h"
     "${CMAKE_CURRENT_LIST_DIR}/ecs.h"
 )
-target_link_libraries(ecs PUBLIC alloc graphics)
+target_link_libraries(nwb_ecs PUBLIC nwb_alloc nwb_graphics)

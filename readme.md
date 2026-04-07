@@ -11,7 +11,7 @@
 
 - Windows quick start
   - engine-only configure: `cmake --preset windows-clang-engine-x64`
-  - engine-only build: `cmake --build --preset windows-clang-engine-dbg --target resource_cooker`
+  - engine-only build: `cmake --build --preset windows-clang-engine-dbg --target nwb_resource_cooker`
   - testbed configure: `cmake --preset windows-clang-testbed-x64`
   - testbed build: `cmake --build --preset windows-clang-testbed-dbg --target testbed`
   - full configure preset: `cmake --preset windows-clang-x64`
@@ -27,5 +27,5 @@
 - Linux status
   - engine preset: `linux-clang-engine-x64`
   - migration is still in progress.
-  - Windows-only targets are intentionally disabled on non-Windows for now: `frame`, `loader`, `logserver`, `testbed`.
+  - Windows-only targets are intentionally disabled on non-Windows for now: `nwb_frame`, `nwb_loader`, `nwb_logserver`, `testbed`.
 

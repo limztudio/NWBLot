@@ -7,6 +7,7 @@
 
 #include <exception>
 #include <cstddef>
+#include <cstdint>
 #include <system_error>
 #include <type_traits>
 
@@ -40,8 +41,8 @@ typedef unsigned int u32;
 typedef long long i64;
 typedef unsigned long long u64;
 
-using isize = Conditional_T<sizeof(void*) == 8, __int64, int>;
-using usize = Conditional_T<sizeof(void*) == 8, unsigned __int64, unsigned int>;
+using isize = std::intptr_t;
+using usize = std::uintptr_t;
 
 typedef float f32;
 typedef double f64;
@@ -83,12 +84,15 @@ using ErrorCode = std::error_code;
 #define NWB_TEXT(x) __NWB_TEXT(x)
 
 #if defined(NWB_PLATFORM_WINDOWS)
-#if defined(_MSC_VER)
+#if NWB_COMPILER_FRONTEND_MSVC || __has_declspec_attribute(dllexport)
 #define NWB_DLL_EXPORT __declspec(dllexport)
 #define NWB_DLL_IMPORT __declspec(dllimport)
-#else
+#elif __has_attribute(dllexport)
 #define NWB_DLL_EXPORT __attribute__((dllexport))
 #define NWB_DLL_IMPORT __attribute__((dllimport))
+#else
+#define NWB_DLL_EXPORT
+#define NWB_DLL_IMPORT
 #endif
 #elif (defined(NWB_PLATFORM_UNIX) || defined(NWB_PLATFORM_APPLE))
 #define NWB_DLL_EXPORT __attribute__((visibility("default")))

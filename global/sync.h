@@ -5,10 +5,13 @@
 #pragma once
 
 
+#if defined(__SSE__) || defined(_M_IX86) || defined(_M_X64)
+#include <immintrin.h>
+#endif
+
 #if defined(_MSC_VER)
 #pragma intrinsic(__rdtsc)
 
-#include <immintrin.h>
 #include <float.h>
 #endif
 

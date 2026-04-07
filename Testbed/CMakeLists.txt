@@ -1,0 +1,33 @@
+nwb_declare_executable(testbed)
+target_sources(testbed PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/project_testbed_entry.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/project_testbed_runtime.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/project_testbed.h"
+)
+set_target_properties(testbed PROPERTIES
+    WIN32_EXECUTABLE ON
+    VS_DEBUGGER_WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}/__exec"
+)
+target_link_libraries(testbed PRIVATE
+    loader
+    "$<LINK_LIBRARY:WHOLE_ARCHIVE,assets_graphics>"
+    alloc
+    filesystem
+    frame
+    logclient
+)
+
+if(TARGET resource_cooker)
+    add_dependencies(testbed resource_cooker)
+    add_custom_command(TARGET testbed POST_BUILD
+        COMMAND "$<TARGET_FILE:resource_cooker>"
+            --repo-root "${PROJECT_SOURCE_DIR}"
+            --asset-root "impl/assets"
+            --asset-root "Testbed/assets"
+            --output-directory "${PROJECT_SOURCE_DIR}/__exec/res"
+            --cache-directory "${PROJECT_SOURCE_DIR}/__build_obj/shader_cache/${NWB_OUTPUT_ARCH}/$<CONFIG>"
+            --configuration "$<CONFIG>"
+        WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
+        COMMENT "Cooking NWB graphics assets..."
+    )
+endif()

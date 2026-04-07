@@ -1,0 +1,150 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 25,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "binaryDir": "${sourceDir}/out/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+    {
+      "name": "variant-engine",
+      "hidden": true,
+      "cacheVariables": {
+        "NWB_BUILD_TESTBED": "OFF"
+      }
+    },
+    {
+      "name": "variant-testbed",
+      "hidden": true,
+      "cacheVariables": {
+        "NWB_BUILD_TESTBED": "ON"
+      }
+    },
+    {
+      "name": "windows-clang-base",
+      "hidden": true,
+      "inherits": [
+        "base"
+      ],
+      "generator": "Ninja Multi-Config",
+      "toolchainFile": "${sourceDir}/configuration/toolchains/windows-clang.cmake",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
+      "name": "linux-clang-base",
+      "hidden": true,
+      "inherits": [
+        "base"
+      ],
+      "generator": "Ninja Multi-Config",
+      "toolchainFile": "${sourceDir}/configuration/toolchains/linux-clang.cmake",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      }
+    },
+    {
+      "name": "windows-clang-x64",
+      "inherits": [
+        "windows-clang-base",
+        "variant-testbed"
+      ]
+    },
+    {
+      "name": "windows-clang-engine-x64",
+      "inherits": [
+        "windows-clang-base",
+        "variant-engine"
+      ]
+    },
+    {
+      "name": "windows-clang-testbed-x64",
+      "inherits": [
+        "windows-clang-base",
+        "variant-testbed"
+      ]
+    },
+    {
+      "name": "linux-clang-engine-x64",
+      "inherits": [
+        "linux-clang-base",
+        "variant-engine"
+      ]
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "windows-clang-dbg",
+      "configurePreset": "windows-clang-x64",
+      "configuration": "dbg"
+    },
+    {
+      "name": "windows-clang-opt",
+      "configurePreset": "windows-clang-x64",
+      "configuration": "opt"
+    },
+    {
+      "name": "windows-clang-fin",
+      "configurePreset": "windows-clang-x64",
+      "configuration": "fin"
+    },
+    {
+      "name": "windows-clang-engine-dbg",
+      "configurePreset": "windows-clang-engine-x64",
+      "configuration": "dbg"
+    },
+    {
+      "name": "windows-clang-engine-opt",
+      "configurePreset": "windows-clang-engine-x64",
+      "configuration": "opt"
+    },
+    {
+      "name": "windows-clang-engine-fin",
+      "configurePreset": "windows-clang-engine-x64",
+      "configuration": "fin"
+    },
+    {
+      "name": "windows-clang-testbed-dbg",
+      "configurePreset": "windows-clang-testbed-x64",
+      "configuration": "dbg"
+    },
+    {
+      "name": "windows-clang-testbed-opt",
+      "configurePreset": "windows-clang-testbed-x64",
+      "configuration": "opt"
+    },
+    {
+      "name": "windows-clang-testbed-fin",
+      "configurePreset": "windows-clang-testbed-x64",
+      "configuration": "fin"
+    },
+    {
+      "name": "linux-clang-engine-dbg",
+      "configurePreset": "linux-clang-engine-x64",
+      "configuration": "dbg"
+    },
+    {
+      "name": "linux-clang-engine-opt",
+      "configurePreset": "linux-clang-engine-x64",
+      "configuration": "opt"
+    },
+    {
+      "name": "linux-clang-engine-fin",
+      "configurePreset": "linux-clang-engine-x64",
+      "configuration": "fin"
+    }
+  ]
+}

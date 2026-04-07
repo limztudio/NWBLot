@@ -138,7 +138,7 @@ public:
         m_arena.deallocate<T>(buffer, count);
     }
 
-    constexpr __declspec(allocator) T* allocate(const usize count){
+    constexpr NWB_ALLOCATOR_PREFIX T* allocate(const usize count) NWB_ALLOCATOR_SUFFIX{
         return m_arena.allocate<T>(count);
     }
 #if _HAS_CXX23
@@ -214,7 +214,7 @@ public:
         m_arena.deallocate(buffer, alignSize, bytes);
     }
 
-    constexpr __declspec(allocator) T* allocate(const usize count){
+    constexpr NWB_ALLOCATOR_PREFIX T* allocate(const usize count) NWB_ALLOCATOR_SUFFIX{
         const usize bytes = SizeOf<sizeof(T)>(count);
         if(!bytes)
             return nullptr;
@@ -245,17 +245,23 @@ NWB_ALLOC_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace NWB{ namespace Core{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<typename T>
 using CustomUniquePtr = UniquePtr<T, ArenaDeleter<T, NWB::Core::Alloc::CustomArena>>;
 
 template<typename T, typename... Args>
 inline typename EnableIf<!IsArray<T>::value, CustomUniquePtr<T>>::type MakeCustomUnique(NWB::Core::Alloc::CustomArena& arena, Args&&... args){
-    return CustomUniquePtr<T>(new(arena.allocate<T>(1)) T(Forward<Args>(args)...), CustomUniquePtr<T>::deleter_type(arena));
+    return CustomUniquePtr<T>(new(arena.allocate<T>(1)) T(Forward<Args>(args)...), typename CustomUniquePtr<T>::deleter_type(arena));
 }
 template<typename T>
 inline typename EnableIf<IsUnboundedArray<T>::value, CustomUniquePtr<T>>::type MakeCustomUnique(NWB::Core::Alloc::CustomArena& arena, usize n){
     typedef typename RemoveExtent<T>::type TBase;
-    return CustomUniquePtr<T>(new(arena.allocate<TBase>(n)) TBase[n], CustomUniquePtr<T>::deleter_type(arena, n));
+    return CustomUniquePtr<T>(new(arena.allocate<TBase>(n)) TBase[n], typename CustomUniquePtr<T>::deleter_type(arena, n));
 }
 template<typename T, typename... Args>
 typename EnableIf<IsBoundedArray<T>::value>::type
@@ -281,6 +287,12 @@ struct ArenaRefDeleter{
         }
     }
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}; };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

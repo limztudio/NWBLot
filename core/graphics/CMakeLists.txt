@@ -1,0 +1,49 @@
+nwb_declare_static_library(graphics)
+target_sources(graphics PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/basic.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/common.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/graphics.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/shader_archive.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/shader_cook.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_allocator.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_buffer.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_commandlist.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_compute.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_constants.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_device.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_graphics.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_meshlets.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_queries.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_queue.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_raytracing.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_resource_bindings.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_shader.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_staging_texture.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_state_tracking.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_texture.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_upload.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_stubs.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_device_manager.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_shader_compiler.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/basic.h"
+    "${CMAKE_CURRENT_LIST_DIR}/common.h"
+    "${CMAKE_CURRENT_LIST_DIR}/graphics.h"
+    "${CMAKE_CURRENT_LIST_DIR}/shader_archive.h"
+    "${CMAKE_CURRENT_LIST_DIR}/shader_param.h"
+    "${CMAKE_CURRENT_LIST_DIR}/shader_cook.h"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan.h"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_backend.h"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_device_manager.h"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_shader_compiler.h"
+)
+target_link_libraries(graphics PUBLIC logclient assets common nwb::volk)
+
+nwb_declare_static_library(graphics_cook)
+target_sources(graphics_cook PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/shader_cook.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_shader_compiler.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/shader_cook.h"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_shader_compiler.h"
+)
+target_link_libraries(graphics_cook PUBLIC logclient assets common metascript nwb::shaderc_combined)
+target_compile_definitions(graphics_cook PRIVATE NWB_COOK=1)

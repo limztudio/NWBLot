@@ -149,7 +149,7 @@ public:
         m_arena.deallocate<T>(buffer, count);
     }
 
-    constexpr __declspec(allocator) T* allocate(const usize count){
+    constexpr NWB_ALLOCATOR_PREFIX T* allocate(const usize count) NWB_ALLOCATOR_SUFFIX{
         return m_arena.allocate<T>(count);
     }
 #if _HAS_CXX23
@@ -225,7 +225,7 @@ public:
         m_arena.deallocate(buffer, alignSize, bytes);
     }
 
-    constexpr __declspec(allocator) T* allocate(const usize count){
+    constexpr NWB_ALLOCATOR_PREFIX T* allocate(const usize count) NWB_ALLOCATOR_SUFFIX{
         const usize bytes = SizeOf<sizeof(T)>(count);
         if(!bytes)
             return nullptr;

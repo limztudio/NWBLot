@@ -1,0 +1,16 @@
+include_guard(GLOBAL)
+
+macro(nwb_configure_build_configs)
+    if(CMAKE_CONFIGURATION_TYPES)
+        set(CMAKE_CONFIGURATION_TYPES "dbg;opt;fin" CACHE STRING "" FORCE)
+    else()
+        set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS dbg opt fin)
+        if(NOT CMAKE_BUILD_TYPE)
+            set(CMAKE_BUILD_TYPE "dbg" CACHE STRING "" FORCE)
+        endif()
+    endif()
+
+    set(CMAKE_MAP_IMPORTED_CONFIG_DBG "DBG;Debug;RelWithDebInfo;Release;")
+    set(CMAKE_MAP_IMPORTED_CONFIG_OPT "OPT;Release;RelWithDebInfo;MinSizeRel;")
+    set(CMAKE_MAP_IMPORTED_CONFIG_FIN "FIN;Release;RelWithDebInfo;MinSizeRel;")
+endmacro()

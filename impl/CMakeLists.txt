@@ -1,0 +1,2 @@
+add_subdirectory(assets_graphics)
+add_subdirectory(ecs_graphics)

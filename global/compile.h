@@ -8,6 +8,43 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#ifndef __has_attribute
+#define __has_attribute(x) 0
+#endif
+
+#ifndef __has_builtin
+#define __has_builtin(x) 0
+#endif
+
+#ifndef __has_declspec_attribute
+#define __has_declspec_attribute(x) 0
+#endif
+
+#if defined(__clang__)
+#define NWB_COMPILER_CLANG 1
+#else
+#define NWB_COMPILER_CLANG 0
+#endif
+
+#if defined(_MSC_VER) && !defined(__clang__)
+#define NWB_COMPILER_MSVC 1
+#else
+#define NWB_COMPILER_MSVC 0
+#endif
+
+#if defined(__clang_cl__) || (defined(_MSC_VER) && !defined(__clang__))
+#define NWB_COMPILER_FRONTEND_MSVC 1
+#else
+#define NWB_COMPILER_FRONTEND_MSVC 0
+#endif
+
+#if !NWB_COMPILER_FRONTEND_MSVC
+#define NWB_COMPILER_FRONTEND_GNU 1
+#else
+#define NWB_COMPILER_FRONTEND_GNU 0
+#endif
+
+
 #if defined(PROP_DBG)
 #define NWB_DEBUG
 #elif defined(PROP_OPT)
@@ -27,42 +64,58 @@
 #if defined(NWB_DEBUG)
 #define NWB_INLINE
 #elif defined(NWB_OPTIMIZE) || defined(NWB_FINAL)
-#if defined(_MSC_VER)
+#if NWB_COMPILER_FRONTEND_MSVC
 #define NWB_INLINE __forceinline
+#elif __has_attribute(always_inline) || defined(__GNUC__)
+#define NWB_INLINE inline __attribute__((always_inline))
 #else
 #define NWB_INLINE inline
 #endif
 #endif
 
-#if defined(_MSC_VER)
+#if __has_attribute(vectorcall)
+#define NWB_VECTORCALL __attribute__((vectorcall))
+#elif NWB_COMPILER_FRONTEND_MSVC
 #define NWB_VECTORCALL __vectorcall
 #else
 #define NWB_VECTORCALL
+#endif
+
+#if NWB_COMPILER_FRONTEND_MSVC
+#define NWB_ALLOCATOR_PREFIX __declspec(allocator)
+#define NWB_ALLOCATOR_SUFFIX
+#elif __has_attribute(malloc) || defined(__GNUC__)
+#define NWB_ALLOCATOR_PREFIX
+#define NWB_ALLOCATOR_SUFFIX __attribute__((malloc))
+#else
+#define NWB_ALLOCATOR_PREFIX
+#define NWB_ALLOCATOR_SUFFIX
 #endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#if NWB_COMPILER_FRONTEND_MSVC
+#define NWB_DEBUGTRAP __debugbreak()
+#elif __has_builtin(__builtin_debugtrap)
+#define NWB_DEBUGTRAP __builtin_debugtrap()
+#elif __has_builtin(__builtin_trap)
+#define NWB_DEBUGTRAP __builtin_trap()
+#else
+#define NWB_DEBUGTRAP
+#endif
+
 #if defined(NWB_DEBUG)
 #define NWB_OCCUR_ASSERT true
 #define NWB_OCCUR_WARNING true
-#if defined(_MSC_VER)
-#define NWB_HARDBREAK __debugbreak()
-#define NWB_SOFTBREAK __debugbreak()
-#else
-#define NWB_HARDBREAK
-#define NWB_SOFTBREAK
-#endif
+#define NWB_HARDBREAK NWB_DEBUGTRAP
+#define NWB_SOFTBREAK NWB_DEBUGTRAP
 #elif defined(NWB_OPTIMIZE)
 #define NWB_OCCUR_ASSERT false
 #define NWB_OCCUR_WARNING true
 #define NWB_HARDBREAK
-#if defined(_MSC_VER)
-#define NWB_SOFTBREAK __debugbreak()
-#else
-#define NWB_SOFTBREAK
-#endif
+#define NWB_SOFTBREAK NWB_DEBUGTRAP
 #else
 #define NWB_OCCUR_ASSERT false
 #define NWB_OCCUR_WARNING false
@@ -84,7 +137,7 @@
 #define NWB_STRCMP(lhs, rhs) strcmp(lhs, rhs)
 #define NWB_WSTRCMP(lhs, rhs) wcscmp(lhs, rhs)
 #define NWB_MEMSET(dest, value, size) memset(dest, value, size)
-#if defined(_MSC_VER)
+#if NWB_COMPILER_FRONTEND_MSVC
 #define NWB_STRNLEN(src, count) strnlen_s(src, count)
 #define NWB_WSTRNLEN(src, count) wcsnlen_s(src, count)
 #define NWB_MEMCPY(dest, destSize, src, srcSize) memcpy_s(dest, destSize, src, srcSize)

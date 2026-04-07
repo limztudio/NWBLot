@@ -75,7 +75,7 @@ public:
             CoreFreeSizeAligned(buffer, bytes, "NWB::Core::Alloc::GeneralAllocator::deallocate");
     }
 
-    constexpr __declspec(allocator) T* allocate(const usize count){
+    constexpr NWB_ALLOCATOR_PREFIX T* allocate(const usize count) NWB_ALLOCATOR_SUFFIX{
         static_assert(sizeof(T) > 0, "value_type must be complete before calling allocate.");
 
         T* output = nullptr;
@@ -166,7 +166,7 @@ public:
         CoreFreeSizeAligned(buffer, bytes, "NWB::Core::Alloc::CacheAlignedAllocator::deallocate");
     }
 
-    constexpr __declspec(allocator) T* allocate(const usize count){
+    constexpr NWB_ALLOCATOR_PREFIX T* allocate(const usize count) NWB_ALLOCATOR_SUFFIX{
         static_assert(sizeof(T) > 0, "value_type must be complete before calling allocate.");
 
         const usize bytes = SizeOf<sizeof(T)>(count);

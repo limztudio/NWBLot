@@ -1,0 +1,6 @@
+add_subdirectory(CLI11)
+add_subdirectory(tsl)
+add_subdirectory(zlib)
+add_subdirectory(curl)
+add_subdirectory(libmicrohttpd)
+add_subdirectory(oneTBB)

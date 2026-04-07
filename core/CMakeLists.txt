@@ -1,0 +1,7 @@
+add_subdirectory(alloc)
+add_subdirectory(common)
+add_subdirectory(metascript)
+add_subdirectory(assets)
+add_subdirectory(filesystem)
+add_subdirectory(graphics)
+add_subdirectory(ecs)

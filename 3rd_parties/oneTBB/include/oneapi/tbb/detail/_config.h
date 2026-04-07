@@ -335,10 +335,14 @@
 #define __TBB_CPP17_UNCAUGHT_EXCEPTIONS_PRESENT             (_MSC_VER >= 1900 || __GLIBCXX__ && __cpp_lib_uncaught_exceptions \
                                                             || _LIBCPP_VERSION >= 3700 && (!__TBB_MACOS_TARGET_VERSION || __TBB_MACOS_TARGET_VERSION >= 101200))
 
+#ifndef __TBB_TSX_INTRINSICS_PRESENT
 #define __TBB_TSX_INTRINSICS_PRESENT (__RTM__ || __INTEL_COMPILER || (_MSC_VER>=1700 && (__TBB_x86_64 || __TBB_x86_32)))
+#endif
 
+#ifndef __TBB_WAITPKG_INTRINSICS_PRESENT
 #define __TBB_WAITPKG_INTRINSICS_PRESENT ((__INTEL_COMPILER >= 1900 || (__TBB_GCC_VERSION >= 110000 && (__APPLE__ || __TBB_GNU_ASM_VERSION >= 2032)) || __TBB_CLANG_VERSION >= 120000) \
                                          && (_WIN32 || _WIN64 || __unix__ || __APPLE__) && (__TBB_x86_32 || __TBB_x86_64) && !__ANDROID__)
+#endif
 
 /** Internal TBB features & modes **/
 

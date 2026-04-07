@@ -33,6 +33,7 @@ bld/
 [Ll]ogs/
 __build_obj/
 __exec/
+out/
 
 # Visual Studio 2015/2017 cache/options directory
 .vs/
@@ -398,3 +399,12 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
+
+# Legacy MSBuild project files kept out of the CMake/Clang workflow
+*.sln
+*.vcxproj
+*.vcxproj.user
+*.vcxitems
+*.props
+*.targets
+*.filters

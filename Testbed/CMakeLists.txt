@@ -5,6 +5,7 @@ target_sources(testbed PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/project_testbed.h"
 )
 set_target_properties(testbed PROPERTIES
+    DEBUGGER_WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}/__exec"
     WIN32_EXECUTABLE ON
     VS_DEBUGGER_WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}/__exec"
 )

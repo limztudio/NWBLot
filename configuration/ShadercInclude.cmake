@@ -11,25 +11,43 @@ function(nwb_configure_shaderc_include)
         NAMES shaderc/shaderc.hpp
         HINTS "$ENV{VULKAN_SDK}"
         PATH_SUFFIXES include Include
-        REQUIRED
     )
-
-    add_library(nwb_shaderc_combined UNKNOWN IMPORTED GLOBAL)
 
     if(WIN32)
         find_library(_shaderc_dbg
             NAMES shaderc_combinedd
             HINTS "$ENV{VULKAN_SDK}"
             PATH_SUFFIXES lib Lib lib64
-            REQUIRED
         )
         find_library(_shaderc_rel
             NAMES shaderc_combined
             HINTS "$ENV{VULKAN_SDK}"
             PATH_SUFFIXES lib Lib lib64
-            REQUIRED
+        )
+    else()
+        find_library(_shaderc_library
+            NAMES shaderc_combined shaderc_shared shaderc
+            HINTS "$ENV{VULKAN_SDK}"
+            PATH_SUFFIXES lib Lib lib64
         )
 
+        if(NOT _shaderc_include_dir OR NOT _shaderc_library)
+            message(STATUS "Shader cook targets disabled: missing shaderc headers or library")
+            return()
+        endif()
+    endif()
+
+    if(WIN32 AND NOT _shaderc_include_dir)
+        message(STATUS "Shader cook targets disabled: missing shaderc headers or library")
+        return()
+    endif()
+    if(WIN32 AND (NOT _shaderc_dbg OR NOT _shaderc_rel))
+        message(STATUS "Shader cook targets disabled: missing shaderc headers or library")
+        return()
+    endif()
+
+    add_library(nwb_shaderc_combined UNKNOWN IMPORTED GLOBAL)
+    if(WIN32)
         nwb_set_imported_library_locations(nwb_shaderc_combined
             DEFAULT "${_shaderc_rel}"
             DBG "${_shaderc_dbg}"
@@ -37,13 +55,6 @@ function(nwb_configure_shaderc_include)
             FIN "${_shaderc_rel}"
         )
     else()
-        find_library(_shaderc_library
-            NAMES shaderc_combined shaderc_shared shaderc
-            HINTS "$ENV{VULKAN_SDK}"
-            PATH_SUFFIXES lib Lib lib64
-            REQUIRED
-        )
-
         nwb_set_imported_library_locations(nwb_shaderc_combined DEFAULT "${_shaderc_library}")
     endif()
 

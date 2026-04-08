@@ -126,7 +126,7 @@ bool Client::internalInit(NotNull<const char*> url){
     return true;
 }
 bool Client::internalUpdate(){
-    if(!m_msgCount.load(MemoryOrder::memory_order_relaxed))
+    if(!m_msgCount.load(std::memory_order_relaxed))
         return true;
 
     CURL* const curlHandle = static_cast<CURL*>(m_curl);
@@ -184,4 +184,3 @@ NWB_LOG_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

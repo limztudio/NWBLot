@@ -47,12 +47,14 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     endif()
 endif()
 
-nwb_declare_static_library(nwb_graphics_cook)
-target_sources(nwb_graphics_cook PRIVATE
-    "${CMAKE_CURRENT_LIST_DIR}/shader_cook.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_shader_compiler.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/shader_cook.h"
-    "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_shader_compiler.h"
-)
-target_link_libraries(nwb_graphics_cook PUBLIC nwb_logclient nwb_assets nwb_common nwb_metascript nwb::shaderc_combined)
-target_compile_definitions(nwb_graphics_cook PRIVATE NWB_COOK=1)
+if(NWB_BUILD_RESOURCE_COOKER AND TARGET nwb::shaderc_combined)
+    nwb_declare_static_library(nwb_graphics_cook)
+    target_sources(nwb_graphics_cook PRIVATE
+        "${CMAKE_CURRENT_LIST_DIR}/shader_cook.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_shader_compiler.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/shader_cook.h"
+        "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_shader_compiler.h"
+    )
+    target_link_libraries(nwb_graphics_cook PUBLIC nwb_logclient nwb_assets nwb_common nwb_metascript nwb::shaderc_combined)
+    target_compile_definitions(nwb_graphics_cook PRIVATE NWB_COOK=1)
+endif()

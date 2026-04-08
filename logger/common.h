@@ -152,7 +152,7 @@ protected:
 protected:
     inline bool tryDequeue(MessageType& msg){ return m_msgQueue.try_pop(msg); }
     void stopWorker(){
-        const bool alreadyStopping = m_exit.exchange(true, MemoryOrder::memory_order_acq_rel);
+        const bool alreadyStopping = m_exit.exchange(true, std::memory_order_acq_rel);
 
         if(!alreadyStopping)
             static_cast<T*>(this)->internalDestroy();
@@ -209,7 +209,7 @@ private:
 
             _this->m_lastTime = curTime;
 
-            if(_this->internalUpdate() && _this->m_exit.load(MemoryOrder::memory_order_acquire))
+            if(_this->internalUpdate() && _this->m_exit.load(std::memory_order_acquire))
                 break;
         }
     }
@@ -249,11 +249,11 @@ private:
             bool updateSucceeded = _this->internalUpdate();
 
             if(!updateSucceeded){
-                _this->m_exit.store(true, MemoryOrder::memory_order_release);
+                _this->m_exit.store(true, std::memory_order_release);
                 break;
             }
 
-            if(_this->m_exit.load(MemoryOrder::memory_order_acquire))
+            if(_this->m_exit.load(std::memory_order_acquire))
                 break;
         }
     }
@@ -287,4 +287,3 @@ NWB_LOG_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

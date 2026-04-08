@@ -33,8 +33,11 @@ public:
 
 inline constexpr tchar CLIENT_NAME[] = NWB_TEXT("Client");
 class Client : public IClient, public BaseUpdateIfQueued<Client, CLIENT_NAME>{
-    friend class Base;
-    friend class BaseUpdateIfQueued;
+    template<typename, const tchar*> friend class Base;
+    template<typename, const tchar*> friend class BaseUpdateIfQueued;
+
+    using BaseType = Base<Client, CLIENT_NAME>;
+    using UpdateBaseType = BaseUpdateIfQueued<Client, CLIENT_NAME>;
 
 
 private:
@@ -49,8 +52,8 @@ public:
 
 
 public:
-    virtual void enqueue(TString&& str, Type type = Type::Info)override{ static_cast<Base<Client, CLIENT_NAME>&>(*this).enqueue(Move(str), type); }
-    virtual void enqueue(const TString& str, Type type = Type::Info)override{ static_cast<Base<Client, CLIENT_NAME>&>(*this).enqueue(str, type); }
+    virtual void enqueue(TString&& str, Type type = Type::Info)override{ BaseType::enqueue(Move(str), type); }
+    virtual void enqueue(const TString& str, Type type = Type::Info)override{ BaseType::enqueue(str, type); }
 
 
 protected:
@@ -59,20 +62,20 @@ protected:
 
 protected:
     inline void enqueue(MessageType&& data){
-        Base<Client, CLIENT_NAME>::m_msgQueue.emplace(Move(data));
-        m_msgCount.fetch_add(1, MemoryOrder::memory_order_relaxed);
-        m_semaphore.release();
+        this->m_msgQueue.emplace(Move(data));
+        m_msgCount.fetch_add(1, std::memory_order_relaxed);
+        this->m_semaphore.release();
     }
     inline void enqueue(const MessageType& data){
-        Base<Client, CLIENT_NAME>::m_msgQueue.emplace(data);
-        m_msgCount.fetch_add(1, MemoryOrder::memory_order_relaxed);
-        m_semaphore.release();
+        this->m_msgQueue.emplace(data);
+        m_msgCount.fetch_add(1, std::memory_order_relaxed);
+        this->m_semaphore.release();
     }
 
     inline bool try_dequeue(MessageType& msg){
-        auto ret = BaseUpdateIfQueued::tryDequeue(msg);
+        auto ret = this->tryDequeue(msg);
         if(ret)
-            m_msgCount.fetch_sub(1, MemoryOrder::memory_order_relaxed);
+            m_msgCount.fetch_sub(1, std::memory_order_relaxed);
         return ret;
     }
 
@@ -90,8 +93,11 @@ private:
 
 inline constexpr tchar CLIENT_STANDALONE_NAME[] = NWB_TEXT("ClientStandalone");
 class ClientStandalone : public IClient, public BaseUpdateIfQueued<ClientStandalone, CLIENT_STANDALONE_NAME>{
-    friend class Base;
-    friend class BaseUpdateIfQueued;
+    template<typename, const tchar*> friend class Base;
+    template<typename, const tchar*> friend class BaseUpdateIfQueued;
+
+    using BaseType = Base<ClientStandalone, CLIENT_STANDALONE_NAME>;
+    using UpdateBaseType = BaseUpdateIfQueued<ClientStandalone, CLIENT_STANDALONE_NAME>;
 
 
 private:
@@ -104,8 +110,8 @@ public:
 
 
 public:
-    virtual void enqueue(TString&& str, Type type = Type::Info)override{ static_cast<Base<ClientStandalone, CLIENT_STANDALONE_NAME>&>(*this).enqueue(Move(str), type); }
-    virtual void enqueue(const TString& str, Type type = Type::Info)override{ static_cast<Base<ClientStandalone, CLIENT_STANDALONE_NAME>&>(*this).enqueue(str, type); }
+    virtual void enqueue(TString&& str, Type type = Type::Info)override{ BaseType::enqueue(Move(str), type); }
+    virtual void enqueue(const TString& str, Type type = Type::Info)override{ BaseType::enqueue(str, type); }
 
 
 protected:
@@ -113,8 +119,8 @@ protected:
     bool internalUpdate();
 
 protected:
-    inline void enqueue(MessageType&& data){ BaseUpdateIfQueued::enqueue(Move(data)); }
-    inline void enqueue(const MessageType& data){ BaseUpdateIfQueued::enqueue(data); }
+    inline void enqueue(MessageType&& data){ UpdateBaseType::enqueue(Move(data)); }
+    inline void enqueue(const MessageType& data){ UpdateBaseType::enqueue(data); }
 
 
 private:
@@ -129,4 +135,3 @@ NWB_LOG_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

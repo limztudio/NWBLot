@@ -24,6 +24,7 @@
 #include <condition_variable>
 
 #include <semaphore>
+#include <climits>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -70,7 +71,7 @@ using SharedQueuingMutex = tbb::queuing_rw_mutex;
 using ConditionVariable = std::condition_variable;
 using ConditionVariableAny = std::condition_variable_any;
 
-template<isize LeastMaxValue = PTRDIFF_MAX>
+template<isize LeastMaxValue = static_cast<isize>(INT_MAX)>
 using Semaphore = std::counting_semaphore<LeastMaxValue>;
 using BinarySemaphore = Semaphore<1>;
 
@@ -102,8 +103,8 @@ public:
             machine_pause(1 << i);
         }
 
-        while(m_state.exchange(s_LockedContended, MemoryOrder::memory_order_acquire) != s_Unlocked)
-            m_state.wait(s_LockedContended, MemoryOrder::memory_order_relaxed);
+        while(m_state.exchange(s_LockedContended, std::memory_order_acquire) != s_Unlocked)
+            m_state.wait(s_LockedContended, std::memory_order_relaxed);
     }
 
     bool try_lock(){
@@ -111,15 +112,15 @@ public:
         return m_state.compare_exchange_strong(
             expected,
             s_Locked,
-            MemoryOrder::memory_order_acquire,
-            MemoryOrder::memory_order_relaxed
+            std::memory_order_acquire,
+            std::memory_order_relaxed
         );
     }
 
     void unlock(){
-        const u32 previous = m_state.fetch_sub(1, MemoryOrder::memory_order_release);
+        const u32 previous = m_state.fetch_sub(1, std::memory_order_release);
         if(previous != s_Locked){
-            m_state.store(s_Unlocked, MemoryOrder::memory_order_release);
+            m_state.store(s_Unlocked, std::memory_order_release);
             m_state.notify_one();
         }
     }
@@ -209,7 +210,7 @@ public:
             backoff.pause();
     }
     bool try_lock(){ return (!m_flag.test_and_set()); }
-    void unlock(){ m_flag.clear(MemoryOrder::memory_order_release); }
+    void unlock(){ m_flag.clear(std::memory_order_release); }
 
 
 private:
@@ -245,4 +246,3 @@ ScopedLock(Semaphore<LeastMaxValue>&) -> ScopedLock<Semaphore<LeastMaxValue>>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

@@ -58,7 +58,7 @@ u64 AssetManager::enqueueLoad(const Name& assetType, const Name& virtualPath){
     if(!assetType || !virtualPath)
         return 0;
 
-    const u64 requestId = m_nextRequestId.fetch_add(1, MemoryOrder::memory_order_relaxed);
+    const u64 requestId = m_nextRequestId.fetch_add(1, std::memory_order_relaxed);
     if(requestId == 0)
         return 0;
 
@@ -215,4 +215,3 @@ NWB_ASSETS_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

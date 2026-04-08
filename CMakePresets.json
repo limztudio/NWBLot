@@ -82,7 +82,11 @@
       "inherits": [
         "linux-clang-base",
         "variant-engine"
-      ]
+      ],
+      "cacheVariables": {
+        "NWB_BUILD_LOGSERVER": "OFF",
+        "NWB_BUILD_RESOURCE_COOKER": "OFF"
+      }
     }
   ],
   "buildPresets": [

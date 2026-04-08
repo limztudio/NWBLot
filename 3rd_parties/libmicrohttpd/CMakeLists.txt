@@ -45,9 +45,13 @@ if(WIN32)
     endif()
     target_link_libraries(nwb_vendor_microhttpd PUBLIC ws2_32)
 else()
-    nwb_find_library_target(nwb_microhttpd REQUIRED
+    nwb_find_library_target(nwb_microhttpd
         INCLUDE_NAME microhttpd.h
         LIB_NAMES microhttpd
     )
-    add_library(nwb::microhttpd ALIAS nwb_microhttpd)
+    if(TARGET nwb_microhttpd)
+        add_library(nwb::microhttpd ALIAS nwb_microhttpd)
+    else()
+        message(STATUS "Log server support disabled: libmicrohttpd development files not found")
+    endif()
 endif()

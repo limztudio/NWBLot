@@ -50,10 +50,18 @@ struct CacheSize : Core::Common::Initializerable{
             }
         }
 #elif defined(_SC_LEVEL1_DCACHE_LINESIZE)
-        auto lineSizes[] = {
+        const auto lineSizes[] = {
             sysconf(_SC_LEVEL1_DCACHE_LINESIZE),
+#if defined(_SC_LEVEL2_DCACHE_LINESIZE)
             sysconf(_SC_LEVEL2_DCACHE_LINESIZE),
+#else
+            static_cast<long>(-1),
+#endif
+#if defined(_SC_LEVEL3_DCACHE_LINESIZE)
             sysconf(_SC_LEVEL3_DCACHE_LINESIZE),
+#else
+            static_cast<long>(-1),
+#endif
         };
         for(auto lineSize : lineSizes){
             if(lineSize <= 0)
@@ -195,4 +203,3 @@ NWB_ALLOC_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

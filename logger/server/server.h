@@ -21,8 +21,11 @@ NWB_LOG_BEGIN
 
 inline constexpr tchar SERVER_NAME[] = NWB_TEXT("Server");
 class Server : public BaseUpdateOrdinary<Server, 0.1f, SERVER_NAME>{
-    friend class Base;
-    friend class BaseUpdateOrdinary;
+    template<typename, const tchar*> friend class Base;
+    template<typename, f32, const tchar*> friend class BaseUpdateOrdinary;
+
+    using BaseType = Base<Server, SERVER_NAME>;
+    using UpdateBaseType = BaseUpdateOrdinary<Server, 0.1f, SERVER_NAME>;
 
 
 private:
@@ -35,7 +38,7 @@ public:
 
 
 public:
-    using Base::enqueue;
+    using BaseType::enqueue;
 
 
 protected:
@@ -43,8 +46,8 @@ protected:
     bool internalUpdate();
 
 protected:
-    using BaseUpdateOrdinary::enqueue;
-    using BaseUpdateOrdinary::tryDequeue;
+    using UpdateBaseType::enqueue;
+    using UpdateBaseType::tryDequeue;
 
 
 private:
@@ -86,4 +89,3 @@ NWB_LOG_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

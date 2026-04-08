@@ -10,7 +10,7 @@
 
 #include <CLI.hpp>
 
-#include <command.h>
+#include <global/command.h>
 #include <core/common/common.h>
 #include "server.h"
 #include "frame.h"

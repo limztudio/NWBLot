@@ -6,7 +6,7 @@
 
 #include <logger/client/logger.h>
 
-#include <thread.h>
+#include <global/thread.h>
 
 #include <linux/input-event-codes.h>
 #include <poll.h>

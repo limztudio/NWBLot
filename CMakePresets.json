@@ -29,6 +29,27 @@
       }
     },
     {
+      "name": "output-full",
+      "hidden": true,
+      "cacheVariables": {
+        "NWB_OUTPUT_DOMAIN": "full"
+      }
+    },
+    {
+      "name": "output-engine",
+      "hidden": true,
+      "cacheVariables": {
+        "NWB_OUTPUT_DOMAIN": "engine"
+      }
+    },
+    {
+      "name": "output-testbed",
+      "hidden": true,
+      "cacheVariables": {
+        "NWB_OUTPUT_DOMAIN": "testbed"
+      }
+    },
+    {
       "name": "windows-clang-base",
       "hidden": true,
       "inherits": [
@@ -60,28 +81,40 @@
       "name": "windows-clang-x64",
       "inherits": [
         "windows-clang-base",
-        "variant-testbed"
+        "variant-testbed",
+        "output-full"
       ]
     },
     {
       "name": "windows-clang-engine-x64",
       "inherits": [
         "windows-clang-base",
-        "variant-engine"
+        "variant-engine",
+        "output-engine"
       ]
     },
     {
       "name": "windows-clang-testbed-x64",
       "inherits": [
         "windows-clang-base",
-        "variant-testbed"
+        "variant-testbed",
+        "output-testbed"
+      ]
+    },
+    {
+      "name": "linux-clang-x64",
+      "inherits": [
+        "linux-clang-base",
+        "variant-engine",
+        "output-full"
       ]
     },
     {
       "name": "linux-clang-engine-x64",
       "inherits": [
         "linux-clang-base",
-        "variant-engine"
+        "variant-engine",
+        "output-engine"
       ],
       "cacheVariables": {
         "NWB_BUILD_LOGSERVER": "OFF",
@@ -133,6 +166,21 @@
     {
       "name": "windows-clang-testbed-fin",
       "configurePreset": "windows-clang-testbed-x64",
+      "configuration": "fin"
+    },
+    {
+      "name": "linux-clang-dbg",
+      "configurePreset": "linux-clang-x64",
+      "configuration": "dbg"
+    },
+    {
+      "name": "linux-clang-opt",
+      "configurePreset": "linux-clang-x64",
+      "configuration": "opt"
+    },
+    {
+      "name": "linux-clang-fin",
+      "configurePreset": "linux-clang-x64",
       "configuration": "fin"
     },
     {

@@ -5,16 +5,14 @@ target_sources(testbed PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/project_testbed.h"
 )
 set_target_properties(testbed PROPERTIES
-    DEBUGGER_WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}/__exec"
+    DEBUGGER_WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}"
     WIN32_EXECUTABLE ON
-    VS_DEBUGGER_WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}/__exec"
+    VS_DEBUGGER_WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}"
 )
 target_link_libraries(testbed PRIVATE
     nwb_loader
+    nwb_ecs_graphics
     "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_graphics>"
-    nwb_alloc
-    nwb_filesystem
-    nwb_frame
     nwb_logclient
 )
 
@@ -25,10 +23,10 @@ if(TARGET nwb_resource_cooker)
             --repo-root "${PROJECT_SOURCE_DIR}"
             --asset-root "impl/assets"
             --asset-root "Testbed/assets"
-            --output-directory "${PROJECT_SOURCE_DIR}/__exec/res"
-            --cache-directory "${PROJECT_SOURCE_DIR}/__build_obj/shader_cache/${NWB_OUTPUT_ARCH}/$<CONFIG>"
+            --output-directory "${NWB_OUTPUT_ROOT}/res"
+            --cache-directory "${PROJECT_SOURCE_DIR}/__build_obj/shader_cache/${NWB_OUTPUT_PLATFORM}/${NWB_OUTPUT_ARCH}/${NWB_OUTPUT_DOMAIN}/$<CONFIG>"
             --configuration "$<CONFIG>"
-        WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
+        WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}"
         COMMENT "Cooking NWB graphics assets..."
     )
 endif()

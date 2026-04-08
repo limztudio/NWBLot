@@ -10,9 +10,9 @@
 
 #include <CLI.hpp>
 
-#include <global.h>
+#include <global/global.h>
 
-#include <command.h>
+#include <global/command.h>
 
 #include <logger/client/logger.h>
 #include <core/common/common.h>

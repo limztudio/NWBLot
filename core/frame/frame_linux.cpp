@@ -41,6 +41,7 @@ static const char* BackendName(Common::LinuxFrameBackend backend){
     }
 }
 
+#if defined(NWB_WITH_WAYLAND)
 static bool HasEnvValue(const char* name){
     const char* value = std::getenv(name);
     return value && value[0] != '\0';
@@ -50,6 +51,7 @@ static bool EnvEquals(const char* name, const char* value){
     const char* current = std::getenv(name);
     return current && std::strcmp(current, value) == 0;
 }
+#endif
 
 static usize BuildBackendOrder(Common::LinuxFrameBackend (&outOrder)[2]){
     usize count = 0;

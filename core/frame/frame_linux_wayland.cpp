@@ -92,10 +92,6 @@ static void SetWaylandDisplay(Common::LinuxFrame& frameData, wl_display* display
     frameData.nativeDisplay() = display;
 }
 
-static wl_surface* GetWaylandSurface(const Common::LinuxFrame& frameData){
-    return reinterpret_cast<wl_surface*>(static_cast<usize>(frameData.nativeWindowHandle()));
-}
-
 static void SetWaylandSurface(Common::LinuxFrame& frameData, wl_surface* surface){
     frameData.nativeWindowHandle() = static_cast<u64>(reinterpret_cast<usize>(surface));
 }
@@ -423,10 +419,15 @@ static void OnToplevelConfigure(void* data, xdg_toplevel* toplevel, i32 width, i
         frameData.height() = ClampDimension(height);
 
     bool activated = false;
-    u32* state = nullptr;
-    wl_array_for_each(state, states){
-        if(*state == XDG_TOPLEVEL_STATE_ACTIVATED)
-            activated = true;
+    if(states && states->data && states->size >= sizeof(u32)){
+        const auto* state = static_cast<const u32*>(states->data);
+        const usize stateCount = states->size / sizeof(u32);
+        for(usize i = 0; i < stateCount; i++){
+            if(state[i] == XDG_TOPLEVEL_STATE_ACTIVATED){
+                activated = true;
+                break;
+            }
+        }
     }
 
     frameData.isActive() = activated;
@@ -440,6 +441,23 @@ static void OnToplevelClose(void* data, xdg_toplevel* toplevel){
     context.visible = false;
     StopKeyRepeat(context);
 }
+
+#if defined(XDG_TOPLEVEL_CONFIGURE_BOUNDS_SINCE_VERSION)
+static void OnToplevelConfigureBounds(void* data, xdg_toplevel* toplevel, i32 width, i32 height){
+    (void)data;
+    (void)toplevel;
+    (void)width;
+    (void)height;
+}
+#endif
+
+#if defined(XDG_TOPLEVEL_WM_CAPABILITIES_SINCE_VERSION)
+static void OnToplevelWmCapabilities(void* data, xdg_toplevel* toplevel, wl_array* capabilities){
+    (void)data;
+    (void)toplevel;
+    (void)capabilities;
+}
+#endif
 
 static void OnSeatCapabilities(void* data, wl_seat* seat, u32 capabilities);
 static void OnSeatName(void* data, wl_seat* seat, const char* name){
@@ -538,6 +556,24 @@ static void OnPointerAxisDiscrete(void* data, wl_pointer* pointer, u32 axis, i32
     else if(axis == WL_POINTER_AXIS_VERTICAL_SCROLL)
         context.scrollDiscreteY += discrete;
 }
+
+#if defined(WL_POINTER_AXIS_VALUE120_SINCE_VERSION)
+static void OnPointerAxisValue120(void* data, wl_pointer* pointer, u32 axis, i32 value120){
+    (void)data;
+    (void)pointer;
+    (void)axis;
+    (void)value120;
+}
+#endif
+
+#if defined(WL_POINTER_AXIS_RELATIVE_DIRECTION_SINCE_VERSION)
+static void OnPointerAxisRelativeDirection(void* data, wl_pointer* pointer, u32 axis, u32 direction){
+    (void)data;
+    (void)pointer;
+    (void)axis;
+    (void)direction;
+}
+#endif
 
 static void OnKeyboardKeymap(void* data, wl_keyboard* keyboard, u32 format, i32 fd, u32 size){
     (void)keyboard;
@@ -680,6 +716,12 @@ static const xdg_surface_listener s_XdgSurfaceListener = {
 static const xdg_toplevel_listener s_ToplevelListener = {
     &OnToplevelConfigure,
     &OnToplevelClose,
+#if defined(XDG_TOPLEVEL_CONFIGURE_BOUNDS_SINCE_VERSION)
+    &OnToplevelConfigureBounds,
+#endif
+#if defined(XDG_TOPLEVEL_WM_CAPABILITIES_SINCE_VERSION)
+    &OnToplevelWmCapabilities,
+#endif
 };
 
 static const wl_seat_listener s_SeatListener = {
@@ -697,6 +739,12 @@ static const wl_pointer_listener s_PointerListener = {
     &OnPointerAxisSource,
     &OnPointerAxisStop,
     &OnPointerAxisDiscrete,
+#if defined(WL_POINTER_AXIS_VALUE120_SINCE_VERSION)
+    &OnPointerAxisValue120,
+#endif
+#if defined(WL_POINTER_AXIS_RELATIVE_DIRECTION_SINCE_VERSION)
+    &OnPointerAxisRelativeDirection,
+#endif
 };
 
 static const wl_keyboard_listener s_KeyboardListener = {

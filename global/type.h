@@ -38,8 +38,8 @@ typedef unsigned short u16;
 typedef int i32;
 typedef unsigned int u32;
 
-typedef long long i64;
-typedef unsigned long long u64;
+using i64 = std::int64_t;
+using u64 = std::uint64_t;
 
 using isize = std::intptr_t;
 using usize = std::uintptr_t;
@@ -110,4 +110,3 @@ using ErrorCode = std::error_code;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

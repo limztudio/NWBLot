@@ -8,6 +8,13 @@
 #include <X11/keysym.h>
 #include <X11/Xutil.h>
 
+#ifdef Button4
+#undef Button4
+#endif
+#ifdef Button5
+#undef Button5
+#endif
+
 #include <logger/client/logger.h>
 
 #include <thread.h>
@@ -134,10 +141,10 @@ static bool TranslateScroll(u32 button, f64& xoffset, f64& yoffset){
     yoffset = 0.0;
 
     switch(button){
-    case Button4:
+    case 4:
         yoffset = 1.0;
         return true;
-    case Button5:
+    case 5:
         yoffset = -1.0;
         return true;
     case 6:

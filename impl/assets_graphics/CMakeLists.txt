@@ -23,6 +23,6 @@ if(TARGET nwb_graphics_cook)
         "${CMAKE_CURRENT_LIST_DIR}/shader_stage_names.h"
         "${CMAKE_CURRENT_LIST_DIR}/shader_asset_cooker.h"
     )
-    target_link_libraries(nwb_assets_graphics_cook PUBLIC nwb_assets nwb_graphics nwb_graphics_cook nwb_metascript)
+    target_link_libraries(nwb_assets_graphics_cook PUBLIC nwb_assets nwb_graphics nwb_graphics_cook nwb_metascript nwb_filesystem)
     target_compile_definitions(nwb_assets_graphics_cook PRIVATE NWB_COOK=1)
 endif()

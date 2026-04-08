@@ -110,6 +110,64 @@ concept FromWcharView = IsConvertible_V<In, WStringView>;
 template<typename In>
 concept FromCharView = IsConvertible_V<In, AStringView>;
 
+inline void AppendUtf8CodePoint(AString& out, u32 codePoint){
+    if(codePoint <= 0x7F){
+        out.push_back(static_cast<char>(codePoint));
+        return;
+    }
+
+    if(codePoint <= 0x7FF){
+        out.push_back(static_cast<char>(0xC0u | (codePoint >> 6)));
+        out.push_back(static_cast<char>(0x80u | (codePoint & 0x3Fu)));
+        return;
+    }
+
+    if(codePoint <= 0xFFFF){
+        out.push_back(static_cast<char>(0xE0u | (codePoint >> 12)));
+        out.push_back(static_cast<char>(0x80u | ((codePoint >> 6) & 0x3Fu)));
+        out.push_back(static_cast<char>(0x80u | (codePoint & 0x3Fu)));
+        return;
+    }
+
+    if(codePoint <= 0x10FFFF){
+        out.push_back(static_cast<char>(0xF0u | (codePoint >> 18)));
+        out.push_back(static_cast<char>(0x80u | ((codePoint >> 12) & 0x3Fu)));
+        out.push_back(static_cast<char>(0x80u | ((codePoint >> 6) & 0x3Fu)));
+        out.push_back(static_cast<char>(0x80u | (codePoint & 0x3Fu)));
+        return;
+    }
+
+    out.push_back('?');
+}
+
+[[nodiscard]] inline AString WideToUtf8(WStringView src){
+    if(src.empty())
+        return AString();
+
+    AString dst;
+    dst.reserve(src.size());
+
+    for(usize i = 0; i < src.size(); ++i){
+        u32 codePoint = static_cast<u32>(src[i]);
+
+#if WCHAR_MAX <= 0xFFFF
+        if(codePoint >= 0xD800u && codePoint <= 0xDBFFu && (i + 1) < src.size()){
+            const u32 low = static_cast<u32>(src[i + 1]);
+            if(low >= 0xDC00u && low <= 0xDFFFu){
+                codePoint = 0x10000u + (((codePoint - 0xD800u) << 10) | (low - 0xDC00u));
+                ++i;
+            }
+        }else if(codePoint >= 0xDC00u && codePoint <= 0xDFFFu){
+            codePoint = static_cast<u32>('?');
+        }
+#endif
+
+        AppendUtf8CodePoint(dst, codePoint);
+    }
+
+    return dst;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -120,67 +178,51 @@ concept FromCharView = IsConvertible_V<In, AStringView>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename In> requires __hidden_basic_string::FromWcharView<In>
-inline AString StringConvert(const In& raw){
-    WStringView src(raw);
+#if defined(NWB_UNICODE)
+template<typename In> requires __hidden_basic_string::FromCharView<In>
+inline TString StringConvert(const In& raw){
+    AStringView src(raw);
     if(src.empty())
-        return AString();
-#if defined(NWB_PLATFORM_WINDOWS)
-    const auto len = WideCharToMultiByte(CP_UTF8, 0, src.data(), static_cast<int>(src.length()), nullptr, 0, nullptr, nullptr);
-    NWB_ASSERT(len != 0);
-    AString dst(len, 0);
-    WideCharToMultiByte(CP_UTF8, 0, src.data(), static_cast<int>(src.length()), dst.data(), len, nullptr, nullptr);
-    return dst;
-#endif
-}
-template<typename In> requires __hidden_basic_string::FromWcharView<In>
-inline AString StringConvert(In&& raw){
-    WStringView src(raw);
-    if(src.empty())
-        return AString();
-#if defined(NWB_PLATFORM_WINDOWS)
-    const auto len = WideCharToMultiByte(CP_UTF8, 0, src.data(), static_cast<int>(src.length()), nullptr, 0, nullptr, nullptr);
-    NWB_ASSERT(len != 0);
-    AString dst(len, 0);
-    WideCharToMultiByte(CP_UTF8, 0, src.data(), static_cast<int>(src.length()), dst.data(), len, nullptr, nullptr);
-    return dst;
-#endif
-}
-template<typename In>
-inline AString StringConvert(const In& src){ return src; }
-template<typename In>
-inline AString StringConvert(In&& src){ return src; }
+        return TString();
 
-template<typename In> requires __hidden_basic_string::FromCharView<In>
-inline WString StringConvert(const In& raw){
-    AStringView src(raw);
-    if(src.empty())
-        return WString();
 #if defined(NWB_PLATFORM_WINDOWS)
     const auto len = MultiByteToWideChar(CP_UTF8, 0, src.data(), static_cast<int>(src.length()), nullptr, 0);
     NWB_ASSERT(len != 0);
-    WString dst(len, 0);
+    TString dst(len, 0);
     MultiByteToWideChar(CP_UTF8, 0, src.data(), static_cast<int>(src.length()), dst.data(), len);
+    return dst;
+#else
+    TString dst;
+    dst.reserve(src.size());
+    for(unsigned char ch : src)
+        dst.push_back(static_cast<wchar>(ch));
     return dst;
 #endif
 }
-template<typename In> requires __hidden_basic_string::FromCharView<In>
-inline WString StringConvert(In&& raw){
-    AStringView src(raw);
+
+template<typename In>
+inline TString StringConvert(const In& src){ return TString(src); }
+#else
+template<typename In> requires __hidden_basic_string::FromWcharView<In>
+inline TString StringConvert(const In& raw){
+    const WStringView src(raw);
     if(src.empty())
-        return WString();
+        return TString();
+
 #if defined(NWB_PLATFORM_WINDOWS)
-    const auto len = MultiByteToWideChar(CP_UTF8, 0, src.data(), static_cast<int>(src.length()), nullptr, 0);
+    const auto len = WideCharToMultiByte(CP_UTF8, 0, src.data(), static_cast<int>(src.length()), nullptr, 0, nullptr, nullptr);
     NWB_ASSERT(len != 0);
-    WString dst(len, 0);
-    MultiByteToWideChar(CP_UTF8, 0, src.data(), static_cast<int>(src.length()), dst.data(), len);
+    TString dst(len, 0);
+    WideCharToMultiByte(CP_UTF8, 0, src.data(), static_cast<int>(src.length()), dst.data(), len, nullptr, nullptr);
     return dst;
+#else
+    return __hidden_basic_string::WideToUtf8(src);
 #endif
 }
+
 template<typename In>
-inline WString StringConvert(const In& src){ return src; }
-template<typename In>
-inline WString StringConvert(In&& src){ return src; }
+inline TString StringConvert(const In& src){ return TString(src); }
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -197,4 +239,3 @@ inline WString StringFormat(WFormatString<T...> fmt, T&&... args){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

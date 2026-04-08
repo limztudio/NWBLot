@@ -11,11 +11,17 @@
 #include <core/graphics/common.h>
 
 #if defined(NWB_PLATFORM_WINDOWS)
+#ifndef VK_USE_PLATFORM_WIN32_KHR
 #define VK_USE_PLATFORM_WIN32_KHR
+#endif
 #elif defined(NWB_PLATFORM_LINUX)
+#ifndef VK_USE_PLATFORM_XLIB_KHR
 #define VK_USE_PLATFORM_XLIB_KHR
+#endif
 #if defined(NWB_WITH_WAYLAND)
+#ifndef VK_USE_PLATFORM_WAYLAND_KHR
 #define VK_USE_PLATFORM_WAYLAND_KHR
+#endif
 #endif
 #elif defined(NWB_PLATFORM_ANDROID)
 #define VK_USE_PLATFORM_ANDROID_KHR

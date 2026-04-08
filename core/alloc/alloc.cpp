@@ -50,7 +50,7 @@ struct CacheSize : Core::Common::Initializerable{
             }
         }
 #elif defined(_SC_LEVEL1_DCACHE_LINESIZE)
-        const auto lineSizes[] = {
+        const long lineSizes[] = {
             sysconf(_SC_LEVEL1_DCACHE_LINESIZE),
 #if defined(_SC_LEVEL2_DCACHE_LINESIZE)
             sysconf(_SC_LEVEL2_DCACHE_LINESIZE),

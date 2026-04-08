@@ -18,6 +18,43 @@ NWB_ALLOC_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class CustomArena;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_custom_allocator{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline void* DefaultAlloc(usize size){
+    return CoreAlloc(size, "CustomAllocator");
+}
+inline void DefaultFree(void* ptr){
+    CoreFree(ptr, "CustomAllocator");
+}
+inline void* DefaultAllocAligned(usize size, usize align){
+    return CoreAllocAligned(size, align, "CustomAllocator");
+}
+inline void DefaultFreeAligned(void* ptr){
+    CoreFreeAligned(ptr, "CustomAllocator");
+}
+
+CustomArena& DefaultArena();
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class CustomArena : NoCopy{
 public:
     typedef void* (*AllocFunc)(usize size);
@@ -91,6 +128,27 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_custom_allocator{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline CustomArena& DefaultArena(){
+    static CustomArena arena(DefaultAlloc, DefaultFree, DefaultAllocAligned, DefaultFreeAligned);
+    return arena;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<typename T>
 class CustomAllocator{
     template<typename F>
@@ -111,7 +169,7 @@ public:
     using difference_type = isize;
 
     using propagate_on_container_move_assignment = TrueType;
-    using is_always_equal = TrueType;
+    using is_always_equal = FalseType;
 
 
 public:
@@ -122,6 +180,9 @@ public:
 
 
 public:
+    CustomAllocator()noexcept
+        : m_arena(__hidden_custom_allocator::DefaultArena())
+    {}
     constexpr CustomAllocator(CustomArena& arena)noexcept : m_arena(arena){}
     constexpr CustomAllocator(const CustomAllocator&)noexcept = default;
     template<class F>
@@ -132,6 +193,8 @@ public:
 
 
 public:
+    [[nodiscard]] constexpr CustomArena& arena()const noexcept{ return m_arena; }
+
     constexpr void deallocate(T* const buffer, const usize count)noexcept{
         NWB_ASSERT_MSG((buffer != nullptr || count == 0), NWB_TEXT("null pointer cannot point to a block of non-zero size"));
 
@@ -150,9 +213,9 @@ private:
     CustomArena& m_arena;
 };
 template<typename T, typename F>
-inline bool operator==(const CustomAllocator<T>&, const CustomAllocator<F>&)noexcept{ return true; }
+inline bool operator==(const CustomAllocator<T>& lhs, const CustomAllocator<F>& rhs)noexcept{ return &lhs.arena() == &rhs.arena(); }
 template<typename T, typename F>
-inline bool operator!=(const CustomAllocator<T>&, const CustomAllocator<F>&)noexcept{ return false; }
+inline bool operator!=(const CustomAllocator<T>& lhs, const CustomAllocator<F>& rhs)noexcept{ return !(lhs == rhs); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -178,7 +241,7 @@ public:
     using difference_type = isize;
 
     using propagate_on_container_move_assignment = TrueType;
-    using is_always_equal = TrueType;
+    using is_always_equal = FalseType;
 
 
 public:
@@ -189,6 +252,9 @@ public:
 
 
 public:
+    CustomCacheAlignedAllocator()noexcept
+        : m_arena(__hidden_custom_allocator::DefaultArena())
+    {}
     constexpr CustomCacheAlignedAllocator(CustomArena& arena)noexcept : m_arena(arena){}
     constexpr CustomCacheAlignedAllocator(const CustomCacheAlignedAllocator&)noexcept = default;
     template<class F>
@@ -199,6 +265,8 @@ public:
 
 
 public:
+    [[nodiscard]] constexpr CustomArena& arena()const noexcept{ return m_arena; }
+
     usize max_size()const noexcept{
         return (~usize(0) - CachelineSize()) / sizeof(value_type);
     }
@@ -231,9 +299,9 @@ private:
     CustomArena& m_arena;
 };
 template<typename T, typename F>
-inline bool operator==(const CustomCacheAlignedAllocator<T>&, const CustomCacheAlignedAllocator<F>&)noexcept{ return true; }
+inline bool operator==(const CustomCacheAlignedAllocator<T>& lhs, const CustomCacheAlignedAllocator<F>& rhs)noexcept{ return &lhs.arena() == &rhs.arena(); }
 template<typename T, typename F>
-inline bool operator!=(const CustomCacheAlignedAllocator<T>&, const CustomCacheAlignedAllocator<F>&)noexcept{ return false; }
+inline bool operator!=(const CustomCacheAlignedAllocator<T>& lhs, const CustomCacheAlignedAllocator<F>& rhs)noexcept{ return !(lhs == rhs); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -296,4 +364,3 @@ struct ArenaRefDeleter{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

@@ -27,5 +27,5 @@
 - Linux status
   - engine preset: `linux-clang-engine-x64`
   - migration is still in progress.
-  - Windows-only targets are intentionally disabled on non-Windows for now: `nwb_frame`, `nwb_loader`, `nwb_logserver`, `testbed`.
-
+  - `nwb_logserver` is available on Linux in console mode.
+  - Windows-only targets are intentionally disabled on non-Windows for now: `nwb_frame`, `nwb_loader`, `testbed`.

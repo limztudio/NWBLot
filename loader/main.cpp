@@ -258,6 +258,10 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
     return EntryPoint(__argc, __argv, hInstance);
 }
 #endif
+#elif defined(NWB_PLATFORM_LINUX)
+int main(int argc, char** argv){
+    return EntryPoint(static_cast<isize>(argc), argv, nullptr);
+}
 #endif
 
 

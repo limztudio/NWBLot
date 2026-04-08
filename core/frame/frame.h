@@ -72,6 +72,9 @@ public:
     [[nodiscard]] inline Alloc::JobSystem& projectJobSystem(){ return m_projectJobSystem; }
     [[nodiscard]] inline const Alloc::JobSystem& projectJobSystem()const{ return m_projectJobSystem; }
 
+    [[nodiscard]] inline BasicString<tchar>& appliedWindowTitle(){ return m_appliedWindowTitle; }
+    [[nodiscard]] inline const BasicString<tchar>& appliedWindowTitle()const{ return m_appliedWindowTitle; }
+
 
 private:
     void setupPlatform(void* inst);

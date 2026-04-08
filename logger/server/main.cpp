@@ -99,6 +99,10 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
     return EntryPoint(__argc, __argv, hInstance);
 }
 #endif
+#else
+int main(int argc, char** argv){
+    return EntryPoint(argc, argv, nullptr);
+}
 #endif
 
 

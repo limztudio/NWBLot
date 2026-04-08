@@ -38,6 +38,15 @@ target_sources(nwb_graphics PRIVATE
 )
 target_link_libraries(nwb_graphics PUBLIC nwb_logclient nwb_assets nwb_common nwb::volk)
 
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    target_link_libraries(nwb_graphics PRIVATE nwb::x11)
+
+    if(TARGET nwb::wayland)
+        target_link_libraries(nwb_graphics PRIVATE nwb::wayland)
+        target_compile_definitions(nwb_graphics PRIVATE NWB_WITH_WAYLAND=1)
+    endif()
+endif()
+
 nwb_declare_static_library(nwb_graphics_cook)
 target_sources(nwb_graphics_cook PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/shader_cook.cpp"

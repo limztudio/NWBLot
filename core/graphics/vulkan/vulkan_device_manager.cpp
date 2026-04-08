@@ -417,6 +417,28 @@ bool DeviceManager::createInstance(){
         m_enabledExtensions.instance.insert(VK_KHR_SURFACE_EXTENSION_NAME);
         m_enabledExtensions.instance.insert(VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
     }
+#elif defined(NWB_PLATFORM_LINUX)
+    if(!m_deviceParams.headlessDevice){
+        m_enabledExtensions.instance.insert(VK_KHR_SURFACE_EXTENSION_NAME);
+
+        Common::LinuxFrame frame;
+        frame.frameParam() = m_platformFrameParam;
+
+        switch(frame.backend()){
+        case Common::LinuxFrameBackend::X11:
+            m_enabledExtensions.instance.insert(VK_KHR_XLIB_SURFACE_EXTENSION_NAME);
+            break;
+#if defined(NWB_WITH_WAYLAND)
+        case Common::LinuxFrameBackend::Wayland:
+            m_enabledExtensions.instance.insert(VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME);
+            break;
+#endif
+        case Common::LinuxFrameBackend::None:
+        default:
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot create a Linux surface without a valid native window backend."));
+            return false;
+        }
+    }
 #endif
 
     for(const auto& name : m_deviceParams.requiredVulkanInstanceExtensions)
@@ -633,6 +655,15 @@ bool DeviceManager::findQueueFamilies(VkPhysicalDevice physicalDevice){
             if(queueFamily.queueCount > 0){
                 VkBool32 supported = vkGetPhysicalDeviceWin32PresentationSupportKHR(physicalDevice, i);
                 if(supported)
+                    m_presentQueueFamily = i;
+            }
+        }
+#elif defined(NWB_PLATFORM_LINUX)
+        if(m_presentQueueFamily == -1 && m_windowSurface){
+            if(queueFamily.queueCount > 0){
+                VkBool32 supported = VK_FALSE;
+                const VkResult result = vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, i, m_windowSurface, &supported);
+                if(result == VK_SUCCESS && supported)
                     m_presentQueueFamily = i;
             }
         }
@@ -1155,6 +1186,46 @@ bool DeviceManager::createWindowSurface(){
         return false;
     }
     return true;
+#elif defined(NWB_PLATFORM_LINUX)
+    Common::LinuxFrame frame;
+    frame.frameParam() = m_platformFrameParam;
+
+    switch(frame.backend()){
+    case Common::LinuxFrameBackend::X11:
+    {
+        VkXlibSurfaceCreateInfoKHR createInfo = {};
+        createInfo.sType = VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR;
+        createInfo.dpy = reinterpret_cast<decltype(createInfo.dpy)>(frame.nativeDisplay());
+        createInfo.window = static_cast<decltype(createInfo.window)>(frame.nativeWindowHandle());
+
+        res = vkCreateXlibSurfaceKHR(m_vulkanInstance, &createInfo, nullptr, &m_windowSurface);
+        if(res != VK_SUCCESS){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create Xlib surface. {}"), ResultToString(res));
+            return false;
+        }
+        return true;
+    }
+#if defined(NWB_WITH_WAYLAND)
+    case Common::LinuxFrameBackend::Wayland:
+    {
+        VkWaylandSurfaceCreateInfoKHR createInfo = {};
+        createInfo.sType = VK_STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR;
+        createInfo.display = reinterpret_cast<decltype(createInfo.display)>(frame.nativeDisplay());
+        createInfo.surface = reinterpret_cast<decltype(createInfo.surface)>(static_cast<usize>(frame.nativeWindowHandle()));
+
+        res = vkCreateWaylandSurfaceKHR(m_vulkanInstance, &createInfo, nullptr, &m_windowSurface);
+        if(res != VK_SUCCESS){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create Wayland surface. {}"), ResultToString(res));
+            return false;
+        }
+        return true;
+    }
+#endif
+    case Common::LinuxFrameBackend::None:
+    default:
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Unsupported Linux window backend for surface creation."));
+        return false;
+    }
 #else
     NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Surface creation not supported on this platform."));
     return false;

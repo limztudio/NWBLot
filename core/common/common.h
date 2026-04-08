@@ -10,10 +10,6 @@
 
 #include <regex>
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_COMMON_BEGIN
 
 
@@ -114,11 +110,11 @@ private:
 
 
 union FrameParam{
-    void* ptr[3];
-    u64 u64[3];
-    u32 u32[6];
-    u16 u16[12];
-    u8 u8[24];
+    void* ptr[4];
+    u64 u64[4];
+    u32 u32[8];
+    u16 u16[16];
+    u8 u8[32];
 };
 class FrameData{
 public:
@@ -151,6 +147,32 @@ public:
 
     inline HWND& hwnd(){ return reinterpret_cast<HWND&>(m_data.ptr[2]); }
     inline const HWND& hwnd()const{ return reinterpret_cast<const HWND&>(m_data.ptr[2]); }
+};
+#elif defined(NWB_PLATFORM_LINUX)
+enum class LinuxFrameBackend : u8{
+    None = 0,
+    X11,
+    Wayland,
+};
+class LinuxFrame : public FrameData{
+public:
+    inline bool& isActive(){ return reinterpret_cast<bool&>(m_data.u8[4]); }
+    inline const bool& isActive()const{ return reinterpret_cast<const bool&>(m_data.u8[4]); }
+
+    inline LinuxFrameBackend& backend(){ return reinterpret_cast<LinuxFrameBackend&>(m_data.u8[5]); }
+    inline const LinuxFrameBackend& backend()const{ return reinterpret_cast<const LinuxFrameBackend&>(m_data.u8[5]); }
+
+    inline void*& nativeDisplay(){ return reinterpret_cast<void*&>(m_data.ptr[1]); }
+    inline void* const& nativeDisplay()const{ return reinterpret_cast<void* const&>(m_data.ptr[1]); }
+
+    inline u64& nativeWindowHandle(){ return reinterpret_cast<u64&>(m_data.u64[2]); }
+    inline const u64& nativeWindowHandle()const{ return reinterpret_cast<const u64&>(m_data.u64[2]); }
+
+    inline void*& nativeState(){ return reinterpret_cast<void*&>(m_data.ptr[3]); }
+    inline void* const& nativeState()const{ return reinterpret_cast<void* const&>(m_data.ptr[3]); }
+
+    inline u64& nativeAuxValue(){ return reinterpret_cast<u64&>(m_data.u64[3]); }
+    inline const u64& nativeAuxValue()const{ return reinterpret_cast<const u64&>(m_data.u64[3]); }
 };
 #endif
 

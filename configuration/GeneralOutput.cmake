@@ -20,7 +20,11 @@ macro(nwb_resolve_output_domain)
 
     string(TOLOWER "${CMAKE_SYSTEM_NAME}" NWB_OUTPUT_PLATFORM)
     set(NWB_OUTPUT_DOMAIN "${_nwb_output_domain}")
-    set(NWB_OUTPUT_ROOT "${PROJECT_SOURCE_DIR}/__exec/${NWB_OUTPUT_PLATFORM}/${NWB_OUTPUT_ARCH}/${NWB_OUTPUT_DOMAIN}")
+    if(NWB_OUTPUT_DOMAIN STREQUAL "engine")
+        set(NWB_OUTPUT_ROOT "${PROJECT_SOURCE_DIR}/__exec/${NWB_OUTPUT_PLATFORM}/${NWB_OUTPUT_ARCH}")
+    else()
+        set(NWB_OUTPUT_ROOT "${PROJECT_SOURCE_DIR}/__exec/${NWB_OUTPUT_PLATFORM}/${NWB_OUTPUT_ARCH}/${NWB_OUTPUT_DOMAIN}")
+    endif()
 endmacro()
 
 macro(nwb_configure_general_output)

@@ -17,7 +17,7 @@ if(WIN32)
         "${CMAKE_CURRENT_LIST_DIR}/trees.c"
         "${CMAKE_CURRENT_LIST_DIR}/uncompr.c"
         "${CMAKE_CURRENT_LIST_DIR}/zutil.c"
-        "${CMAKE_CURRENT_LIST_DIR}/built/zconf.h"
+        "${CMAKE_CURRENT_LIST_DIR}/zconf.h"
         "${CMAKE_CURRENT_LIST_DIR}/zlib.h"
         "${CMAKE_CURRENT_LIST_DIR}/crc32.h"
         "${CMAKE_CURRENT_LIST_DIR}/deflate.h"
@@ -31,7 +31,6 @@ if(WIN32)
     )
     target_include_directories(nwb_vendor_zlib SYSTEM PUBLIC
         "${CMAKE_CURRENT_LIST_DIR}"
-        "${CMAKE_CURRENT_LIST_DIR}/built"
     )
     target_compile_definitions(nwb_vendor_zlib PRIVATE
         NO_FSEEKO

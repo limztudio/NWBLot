@@ -21,10 +21,10 @@
  * SPDX-License-Identifier: curl
  *
  ***************************************************************************/
-
 #include "curl_setup.h"
 
 #include "curl_gethostname.h"
+#include "curlx/strcopy.h"
 
 /*
  * Curl_gethostname() is a wrapper around gethostname() which allows
@@ -46,8 +46,8 @@ int Curl_gethostname(char * const name, GETHOSTNAME_TYPE_ARG2 namelen)
 #ifndef HAVE_GETHOSTNAME
 
   /* Allow compilation and return failure when unavailable */
-  (void) name;
-  (void) namelen;
+  (void)name;
+  (void)namelen;
   return -1;
 
 #else
@@ -59,7 +59,10 @@ int Curl_gethostname(char * const name, GETHOSTNAME_TYPE_ARG2 namelen)
   /* Override hostname when environment variable CURL_GETHOSTNAME is set */
   const char *force_hostname = getenv("CURL_GETHOSTNAME");
   if(force_hostname) {
-    strncpy(name, force_hostname, namelen - 1);
+    if(strlen(force_hostname) < (size_t)namelen)
+      curlx_strcopy(name, namelen, force_hostname, strlen(force_hostname));
+    else
+      return 1; /* cannot do it */
     err = 0;
   }
   else {
@@ -70,7 +73,11 @@ int Curl_gethostname(char * const name, GETHOSTNAME_TYPE_ARG2 namelen)
 #else /* DEBUGBUILD */
 
   name[0] = '\0';
+#ifdef __AMIGA__
+  err = gethostname((unsigned char *)name, namelen);
+#else
   err = gethostname(name, namelen);
+#endif
 
 #endif
 
@@ -86,5 +93,4 @@ int Curl_gethostname(char * const name, GETHOSTNAME_TYPE_ARG2 namelen)
 
   return 0;
 #endif
-
 }

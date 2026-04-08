@@ -21,6 +21,12 @@
  * SPDX-License-Identifier: curl
  *
  ***************************************************************************/
+#include "curl_setup.h"
+
+#include "parsedate.h"
+#include "curlx/strparse.h"
+#include "curlx/strcopy.h"
+
 /*
   A brief summary of the date string formats this parser groks:
 
@@ -75,132 +81,111 @@
 
 */
 
-#include "curl_setup.h"
-
-#include <limits.h>
-
-#include <curl/curl.h>
-#include "strcase.h"
-#include "warnless.h"
-#include "parsedate.h"
-
-/*
- * parsedate()
- *
- * Returns:
- *
- * PARSEDATE_OK     - a fine conversion
- * PARSEDATE_FAIL   - failed to convert
- * PARSEDATE_LATER  - time overflow at the far end of time_t
- * PARSEDATE_SOONER - time underflow at the low end of time_t
- */
-
-static int parsedate(const char *date, time_t *output);
-
-#define PARSEDATE_OK     0
-#define PARSEDATE_FAIL   -1
-#define PARSEDATE_LATER  1
-#define PARSEDATE_SOONER 2
-
 #if !defined(CURL_DISABLE_PARSEDATE) || !defined(CURL_DISABLE_FTP) || \
-  !defined(CURL_DISABLE_FILE)
+  !defined(CURL_DISABLE_FILE) || defined(USE_GNUTLS)
 /* These names are also used by FTP and FILE code */
-const char * const Curl_wkday[] =
-{"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
-const char * const Curl_month[]=
-{ "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
+const char * const Curl_wkday[] = {
+  "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"
+};
+const char * const Curl_month[] = {
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+};
 #endif
 
+#define PARSEDATE_OK     0
+#define PARSEDATE_FAIL   (-1)
+
 #ifndef CURL_DISABLE_PARSEDATE
-static const char * const weekday[] =
-{ "Monday", "Tuesday", "Wednesday", "Thursday",
-  "Friday", "Saturday", "Sunday" };
+
+#define PARSEDATE_LATER  1
+#if defined(HAVE_TIME_T_UNSIGNED) || (SIZEOF_TIME_T < 5)
+#define PARSEDATE_SOONER 2
+#endif
+
+static const char * const weekday[] = {
+  "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"
+};
 
 struct tzinfo {
   char name[5];
-  int offset; /* +/- in minutes */
+  int16_t offset; /* +/- in minutes */
 };
 
-/* Here's a bunch of frequently used time zone names. These were supported
-   by the old getdate parser. */
-#define tDAYZONE -60       /* offset for daylight savings time */
-static const struct tzinfo tz[]= {
-  {"GMT", 0},              /* Greenwich Mean */
-  {"UT",  0},              /* Universal Time */
-  {"UTC", 0},              /* Universal (Coordinated) */
-  {"WET", 0},              /* Western European */
-  {"BST", 0 tDAYZONE},     /* British Summer */
-  {"WAT", 60},             /* West Africa */
-  {"AST", 240},            /* Atlantic Standard */
-  {"ADT", 240 tDAYZONE},   /* Atlantic Daylight */
-  {"EST", 300},            /* Eastern Standard */
-  {"EDT", 300 tDAYZONE},   /* Eastern Daylight */
-  {"CST", 360},            /* Central Standard */
-  {"CDT", 360 tDAYZONE},   /* Central Daylight */
-  {"MST", 420},            /* Mountain Standard */
-  {"MDT", 420 tDAYZONE},   /* Mountain Daylight */
-  {"PST", 480},            /* Pacific Standard */
-  {"PDT", 480 tDAYZONE},   /* Pacific Daylight */
-  {"YST", 540},            /* Yukon Standard */
-  {"YDT", 540 tDAYZONE},   /* Yukon Daylight */
-  {"HST", 600},            /* Hawaii Standard */
-  {"HDT", 600 tDAYZONE},   /* Hawaii Daylight */
-  {"CAT", 600},            /* Central Alaska */
-  {"AHST", 600},           /* Alaska-Hawaii Standard */
-  {"NT",  660},            /* Nome */
-  {"IDLW", 720},           /* International Date Line West */
-  {"CET", -60},            /* Central European */
-  {"MET", -60},            /* Middle European */
-  {"MEWT", -60},           /* Middle European Winter */
-  {"MEST", -60 tDAYZONE},  /* Middle European Summer */
-  {"CEST", -60 tDAYZONE},  /* Central European Summer */
-  {"MESZ", -60 tDAYZONE},  /* Middle European Summer */
-  {"FWT", -60},            /* French Winter */
-  {"FST", -60 tDAYZONE},   /* French Summer */
-  {"EET", -120},           /* Eastern Europe, USSR Zone 1 */
-  {"WAST", -420},          /* West Australian Standard */
-  {"WADT", -420 tDAYZONE}, /* West Australian Daylight */
-  {"CCT", -480},           /* China Coast, USSR Zone 7 */
-  {"JST", -540},           /* Japan Standard, USSR Zone 8 */
-  {"EAST", -600},          /* Eastern Australian Standard */
-  {"EADT", -600 tDAYZONE}, /* Eastern Australian Daylight */
-  {"GST", -600},           /* Guam Standard, USSR Zone 9 */
-  {"NZT", -720},           /* New Zealand */
-  {"NZST", -720},          /* New Zealand Standard */
-  {"NZDT", -720 tDAYZONE}, /* New Zealand Daylight */
-  {"IDLE", -720},          /* International Date Line East */
-  /* Next up: Military timezone names. RFC822 allowed these, but (as noted in
-     RFC 1123) had their signs wrong. Here we use the correct signs to match
-     actual military usage.
-   */
-  {"A",  1 * 60},         /* Alpha */
-  {"B",  2 * 60},         /* Bravo */
-  {"C",  3 * 60},         /* Charlie */
-  {"D",  4 * 60},         /* Delta */
-  {"E",  5 * 60},         /* Echo */
-  {"F",  6 * 60},         /* Foxtrot */
-  {"G",  7 * 60},         /* Golf */
-  {"H",  8 * 60},         /* Hotel */
-  {"I",  9 * 60},         /* India */
-  /* "J", Juliet is not used as a timezone, to indicate the observer's local
-     time */
-  {"K", 10 * 60},         /* Kilo */
-  {"L", 11 * 60},         /* Lima */
-  {"M", 12 * 60},         /* Mike */
-  {"N",  -1 * 60},         /* November */
-  {"O",  -2 * 60},         /* Oscar */
-  {"P",  -3 * 60},         /* Papa */
-  {"Q",  -4 * 60},         /* Quebec */
-  {"R",  -5 * 60},         /* Romeo */
-  {"S",  -6 * 60},         /* Sierra */
-  {"T",  -7 * 60},         /* Tango */
-  {"U",  -8 * 60},         /* Uniform */
-  {"V",  -9 * 60},         /* Victor */
-  {"W", -10 * 60},         /* Whiskey */
-  {"X", -11 * 60},         /* X-ray */
-  {"Y", -12 * 60},         /* Yankee */
-  {"Z", 0},                /* Zulu, zero meridian, a.k.a. UTC */
+#define tDAYZONE (-60)         /* offset for daylight savings time */
+
+/* alpha-sorted list of time zones */
+static const struct tzinfo tz[] = {
+  { "A", -1 * 60 },            /* Alpha */
+  { "ADT",   240 + tDAYZONE }, /* Atlantic Daylight */
+  { "AHST",  600 },            /* Alaska-Hawaii Standard */
+  { "AST",   240 },            /* Atlantic Standard */
+  { "B", -2 * 60 },            /* Bravo */
+  { "BST",     0 + tDAYZONE }, /* British Summer */
+  { "C", -3 * 60 },            /* Charlie */
+  { "CAT",   600 },            /* Central Alaska */
+  { "CCT",  -480 },            /* China Coast, USSR Zone 7 */
+  { "CDT",   360 + tDAYZONE }, /* Central Daylight */
+  { "CEST",  -60 + tDAYZONE }, /* Central European Summer */
+  { "CET",   -60 },            /* Central European */
+  { "CST",   360 },            /* Central Standard */
+  { "D", -4 * 60 },            /* Delta */
+  { "E", -5 * 60 },            /* Echo */
+  { "EADT", -600 + tDAYZONE }, /* Eastern Australian Daylight */
+  { "EAST", -600 },            /* Eastern Australian Standard */
+  { "EDT",   300 + tDAYZONE }, /* Eastern Daylight */
+  { "EET",  -120 },            /* Eastern Europe, USSR Zone 1 */
+  { "EST",   300 },            /* Eastern Standard */
+  { "F", -6 * 60 },            /* Foxtrot */
+  { "FST",   -60 + tDAYZONE }, /* French Summer */
+  { "FWT",   -60 },            /* French Winter */
+  { "G", -7 * 60 },            /* Golf */
+  { "GMT",     0 },            /* Greenwich Mean */
+  { "GST",  -600 },            /* Guam Standard, USSR Zone 9 */
+  { "H", -8 * 60 },            /* Hotel */
+  { "HDT",   600 + tDAYZONE }, /* Hawaii Daylight */
+  { "HST",   600 },            /* Hawaii Standard */
+  { "I", -9 * 60 },            /* India */
+  { "IDLE", -720 },            /* International Date Line East */
+  { "IDLW",  720 },            /* International Date Line West */
+  { "JST",  -540 },            /* Japan Standard, USSR Zone 8 */
+  { "K", -10 * 60 },           /* Kilo */
+  { "L", -11 * 60 },           /* Lima */
+  { "M", -12 * 60 },           /* Mike */
+  { "MDT",   420 + tDAYZONE }, /* Mountain Daylight */
+  { "MEST",  -60 + tDAYZONE }, /* Middle European Summer */
+  { "MESZ",  -60 + tDAYZONE }, /* Middle European Summer */
+  { "MET",   -60 },            /* Middle European */
+  { "MEWT",  -60 },            /* Middle European Winter */
+  { "MST",   420 },            /* Mountain Standard */
+  { "N",      60 },            /* November */
+  { "NT",    660 },            /* Nome */ /* spellchecker:disable-line */
+  { "NZDT", -720 + tDAYZONE }, /* New Zealand Daylight */
+  { "NZST", -720 },            /* New Zealand Standard */
+  { "NZT",  -720 },            /* New Zealand */
+  { "O",  2 * 60 },            /* Oscar */
+  { "P",  3 * 60 },            /* Papa */
+  { "PDT",   480 + tDAYZONE }, /* Pacific Daylight */
+  { "PST",   480 },            /* Pacific Standard */
+  { "Q",  4 * 60 },            /* Quebec */
+  { "R",  5 * 60 },            /* Romeo */
+  { "S",  6 * 60 },            /* Sierra */
+  { "T",  7 * 60 },            /* Tango */
+  { "U",  8 * 60 },            /* Uniform */
+  { "UT",      0 },            /* Universal Time */
+  { "UTC",     0 },            /* Universal (Coordinated) */
+  { "V",  9 * 60 },            /* Victor */
+  { "W", 10 * 60 },            /* Whiskey */
+  { "WADT", -420 + tDAYZONE }, /* West Australian Daylight */
+  { "WAST", -420 }, /* spellchecker:disable-line */
+                               /* West Australian Standard */
+  { "WAT",    60 },            /* West Africa */
+  { "WET",     0 },            /* Western European */
+  { "X", 11 * 60 },            /* X-ray */
+  { "Y", 12 * 60 },            /* Yankee */
+  { "YDT",   540 + tDAYZONE }, /* Yukon Daylight */
+  { "YST",   540 },            /* Yukon Standard */
+  { "Z",       0 },            /* Zulu, zero meridian, a.k.a. UTC */
 };
 
 /* returns:
@@ -218,10 +203,10 @@ static int checkday(const char *check, size_t len)
     what = &Curl_wkday[0];
   else
     return -1; /* too short */
-  for(i = 0; i<7; i++) {
+  for(i = 0; i < 7; i++) {
     size_t ilen = strlen(what[0]);
     if((ilen == len) &&
-       strncasecompare(check, what[0], len))
+       curl_strnequal(check, what[0], len))
       return i;
     what++;
   }
@@ -235,30 +220,32 @@ static int checkmonth(const char *check, size_t len)
   if(len != 3)
     return -1; /* not a month */
 
-  for(i = 0; i<12; i++) {
-    if(strncasecompare(check, what[0], 3))
+  for(i = 0; i < 12; i++) {
+    if(curl_strnequal(check, what[0], 3))
       return i;
     what++;
   }
   return -1; /* return the offset or -1, no real offset is -1 */
 }
 
-/* return the time zone offset between GMT and the input one, in number
-   of seconds or -1 if the timezone was not found/legal */
+static int tzcompare(const void *m1, const void *m2)
+{
+  const struct tzinfo *tz1 = m1;
+  const struct tzinfo *tz2 = m2;
+  return strcmp(tz1->name, tz2->name);
+}
 
+/* return the time zone offset between GMT and the input one, in number of
+   seconds or -1 if the timezone was not found/legal */
 static int checktz(const char *check, size_t len)
 {
-  unsigned int i;
-  const struct tzinfo *what = tz;
-  if(len > 4) /* longer than any valid timezone */
-    return -1;
-
-  for(i = 0; i< sizeof(tz)/sizeof(tz[0]); i++) {
-    size_t ilen = strlen(what->name);
-    if((ilen == len) &&
-       strncasecompare(check, what->name, len))
-      return what->offset*60;
-    what++;
+  if(len <= 4) {
+    const struct tzinfo *what;
+    struct tzinfo find;
+    curlx_strcopy(find.name, sizeof(find.name), check, len);
+    what = bsearch(&find, tz, CURL_ARRAYSIZE(tz), sizeof(tz[0]), tzcompare);
+    if(what)
+      return what->offset * 60;
   }
   return -1;
 }
@@ -276,6 +263,9 @@ enum assume {
   DATE_TIME
 };
 
+/* (1969 / 4) - (1969 / 100) + (1969 / 400) = 492 - 19 + 4 = 477 */
+#define LEAP_DAYS_BEFORE_1969 477
+
 /*
  * time2epoch: time stamp to seconds since epoch in GMT time zone. Similar to
  * mktime but for GMT only.
@@ -283,14 +273,15 @@ enum assume {
 static time_t time2epoch(int sec, int min, int hour,
                          int mday, int mon, int year)
 {
-  static const int month_days_cumulative [12] =
-    { 0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334 };
-  int leap_days = year - (mon <= 1);
-  leap_days = ((leap_days / 4) - (leap_days / 100) + (leap_days / 400)
-               - (1969 / 4) + (1969 / 100) - (1969 / 400));
-  return ((((time_t) (year - 1970) * 365
-            + leap_days + month_days_cumulative[mon] + mday - 1) * 24
-           + hour) * 60 + min) * 60 + sec;
+  static const int cumulative_days[12] = {
+    0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334
+  };
+  int y = year - (mon <= 1);
+  int leap_days = (y / 4) - (y / 100) + (y / 400) - LEAP_DAYS_BEFORE_1969;
+  time_t days = (time_t)(year - 1970) * 365 + leap_days +
+    cumulative_days[mon] + mday - 1;
+
+  return (((days * 24 + hour) * 60 + min) * 60) + sec;
 }
 
 /* Returns the value of a single-digit or two-digit decimal number, return
@@ -301,12 +292,11 @@ static int oneortwodigit(const char *date, const char **endp)
   int num = date[0] - '0';
   if(ISDIGIT(date[1])) {
     *endp = &date[2];
-    return num*10 + (date[1] - '0');
+    return (num * 10) + (date[1] - '0');
   }
   *endp = &date[1];
   return num;
 }
-
 
 /* HH:MM:SS or HH:MM and accept single-digits too */
 static bool match_time(const char *date,
@@ -336,7 +326,7 @@ match:
   *h = hh;
   *m = mm;
   *s = ss;
-  *endp = (char *)p;
+  *endp = (char *)CURL_UNCONST(p);
   return TRUE;
 }
 
@@ -359,7 +349,7 @@ static int parsedate(const char *date, time_t *output)
   time_t t = 0;
   int wdaynum = -1;  /* day of the week number, 0-6 (mon-sun) */
   int monnum = -1;   /* month of the year number, 0-11 */
-  int mdaynum = -1; /* day of month, 1 - 31 */
+  int mdaynum = -1;  /* day of month, 1 - 31 */
   int hournum = -1;
   int minnum = -1;
   int secnum = -1;
@@ -396,7 +386,7 @@ static int parsedate(const char *date, time_t *output)
         }
 
         if(!found && (tzoff == -1)) {
-          /* this just must be a time zone string */
+          /* this must be a time zone string */
           tzoff = checktz(date, len);
           if(tzoff != -1)
             found = TRUE;
@@ -409,7 +399,7 @@ static int parsedate(const char *date, time_t *output)
     }
     else if(ISDIGIT(*date)) {
       /* a digit */
-      int val;
+      unsigned int val;
       char *end;
       if((secnum == -1) &&
          match_time(date, &hournum, &minnum, &secnum, &end)) {
@@ -417,32 +407,21 @@ static int parsedate(const char *date, time_t *output)
         date = end;
       }
       else {
-        long lval;
-        int error;
-        int old_errno;
-
-        old_errno = errno;
-        errno = 0;
-        lval = strtol(date, &end, 10);
-        error = errno;
-        if(errno != old_errno)
-          errno = old_errno;
-
-        if(error)
+        curl_off_t lval;
+        int num_digits = 0;
+        const char *p = date;
+        if(curlx_str_number(&p, &lval, 99999999))
           return PARSEDATE_FAIL;
 
-#if LONG_MAX != INT_MAX
-        if((lval > (long)INT_MAX) || (lval < (long)INT_MIN))
-          return PARSEDATE_FAIL;
-#endif
-
-        val = curlx_sltosi(lval);
+        /* we know num_digits cannot be larger than 8 */
+        num_digits = (int)(p - date);
+        val = (unsigned int)lval;
 
         if((tzoff == -1) &&
-           ((end - date) == 4) &&
+           (num_digits == 4) &&
            (val <= 1400) &&
-           (indate< date) &&
-           ((date[-1] == '+' || date[-1] == '-'))) {
+           (indate < date) &&
+           (date[-1] == '+' || date[-1] == '-')) {
           /* four digits and a value less than or equal to 1400 (to take into
              account all sorts of funny time zone diffs) and it is preceded
              with a plus or minus. This is a time zone indication. 1400 is
@@ -452,26 +431,26 @@ static int parsedate(const char *date, time_t *output)
              anyone has a more authoritative source for the exact maximum time
              zone offsets, please speak up! */
           found = TRUE;
-          tzoff = (val/100 * 60 + val%100)*60;
+          tzoff = ((val / 100 * 60) + (val % 100)) * 60;
 
           /* the + and - prefix indicates the local time compared to GMT,
              this we need their reversed math to get what we want */
-          tzoff = date[-1]=='+'?-tzoff:tzoff;
+          tzoff = date[-1] == '+' ? -tzoff : tzoff;
         }
 
-        if(((end - date) == 8) &&
-           (yearnum == -1) &&
-           (monnum == -1) &&
-           (mdaynum == -1)) {
+        else if((num_digits == 8) &&
+                (yearnum == -1) &&
+                (monnum == -1) &&
+                (mdaynum == -1)) {
           /* 8 digits, no year, month or day yet. This is YYYYMMDD */
           found = TRUE;
-          yearnum = val/10000;
-          monnum = (val%10000)/100-1; /* month is 0 - 11 */
-          mdaynum = val%100;
+          yearnum = val / 10000;
+          monnum = ((val % 10000) / 100) - 1; /* month is 0 - 11 */
+          mdaynum = val % 100;
         }
 
         if(!found && (dignext == DATE_MDAY) && (mdaynum == -1)) {
-          if((val > 0) && (val<32)) {
+          if((val > 0) && (val < 32)) {
             mdaynum = val;
             found = TRUE;
           }
@@ -494,19 +473,19 @@ static int parsedate(const char *date, time_t *output)
         if(!found)
           return PARSEDATE_FAIL;
 
-        date = end;
+        date = p;
       }
     }
 
     part++;
   }
 
-  if(-1 == secnum)
+  if(secnum == -1)
     secnum = minnum = hournum = 0; /* no time, make it zero */
 
-  if((-1 == mdaynum) ||
-     (-1 == monnum) ||
-     (-1 == yearnum))
+  if((mdaynum == -1) ||
+     (monnum == -1) ||
+     (yearnum == -1))
     /* lacks vital info, fail */
     return PARSEDATE_FAIL;
 
@@ -558,7 +537,7 @@ static int parsedate(const char *date, time_t *output)
   if(tzoff == -1)
     tzoff = 0;
 
-  if((tzoff > 0) && (t > TIME_T_MAX - tzoff)) {
+  if((tzoff > 0) && (t > (time_t)(TIME_T_MAX - tzoff))) {
     *output = TIME_T_MAX;
     return PARSEDATE_LATER; /* time_t overflow */
   }
@@ -579,14 +558,14 @@ static int parsedate(const char *date, time_t *output)
 }
 #endif
 
-time_t curl_getdate(const char *p, const time_t *now)
+time_t curl_getdate(const char *p, const time_t *unused)
 {
   time_t parsed = -1;
   int rc = parsedate(p, &parsed);
-  (void)now; /* legacy argument from the past that we ignore */
+  (void)unused; /* legacy argument from the past that we ignore */
 
   if(rc == PARSEDATE_OK) {
-    if(parsed == -1)
+    if(parsed == (time_t)-1)
       /* avoid returning -1 for a working scenario */
       parsed++;
     return parsed;
@@ -597,48 +576,10 @@ time_t curl_getdate(const char *p, const time_t *now)
 
 /* Curl_getdate_capped() differs from curl_getdate() in that this will return
    TIME_T_MAX in case the parsed time value was too big, instead of an
-   error. */
+   error. Returns non-zero on error. */
 
-time_t Curl_getdate_capped(const char *p)
+int Curl_getdate_capped(const char *p, time_t *tp)
 {
-  time_t parsed = -1;
-  int rc = parsedate(p, &parsed);
-
-  switch(rc) {
-  case PARSEDATE_OK:
-    if(parsed == -1)
-      /* avoid returning -1 for a working scenario */
-      parsed++;
-    return parsed;
-  case PARSEDATE_LATER:
-    /* this returns the maximum time value */
-    return parsed;
-  default:
-    return -1; /* everything else is fail */
-  }
-  /* UNREACHABLE */
-}
-
-/*
- * Curl_gmtime() is a gmtime() replacement for portability. Do not use the
- * gmtime_r() or gmtime() functions anywhere else but here.
- *
- */
-
-CURLcode Curl_gmtime(time_t intime, struct tm *store)
-{
-  const struct tm *tm;
-#ifdef HAVE_GMTIME_R
-  /* thread-safe version */
-  tm = (struct tm *)gmtime_r(&intime, store);
-#else
-  /* !checksrc! disable BANNEDFUNC 1 */
-  tm = gmtime(&intime);
-  if(tm)
-    *store = *tm; /* copy the pointed struct to the local copy */
-#endif
-
-  if(!tm)
-    return CURLE_BAD_FUNCTION_ARGUMENT;
-  return CURLE_OK;
+  int rc = parsedate(p, tp);
+  return (rc == PARSEDATE_FAIL);
 }

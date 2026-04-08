@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2025, University of Cincinnati, developed by Henry Schreiner
+// Copyright (c) 2017-2026, University of Cincinnati, developed by Henry Schreiner
 // under NSF AWARD 1414736 and by the respective contributors.
 // All rights reserved.
 //
@@ -10,13 +10,15 @@
 
 // [CLI11:public_includes:set]
 #include <algorithm>
+#include <cstdint>
 #include <fstream>
 #include <iostream>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 // [CLI11:public_includes:end]
-
+#include "Encoding.hpp"
 #include "Error.hpp"
 #include "StringTools.hpp"
 
@@ -24,6 +26,9 @@ namespace CLI {
 // [CLI11:config_fwd_hpp:verbatim]
 
 class App;
+
+/// enumeration of output modes for writing config files
+enum class ConfigOutputMode : std::uint8_t { Active = 0, AllDefaults, ActiveSubcommandDefaults };
 
 /// Holds values to load into Options
 struct ConfigItem {
@@ -54,6 +59,12 @@ class Config {
     /// Convert an app into a configuration
     virtual std::string to_config(const App *, bool, bool, std::string) const = 0;
 
+    /// Convert an app into a configuration
+    virtual std::string
+    to_config(const App *app, ConfigOutputMode mode, bool write_description, std::string prefix) const {
+        return to_config(app, mode != ConfigOutputMode::Active, write_description, std::move(prefix));
+    }
+
     /// Convert a configuration into an app
     virtual std::vector<ConfigItem> from_config(std::istream &) const = 0;
 
@@ -70,7 +81,12 @@ class Config {
 
     /// Parse a config file, throw an error (ParseError:ConfigParseError or FileError) on failure
     CLI11_NODISCARD std::vector<ConfigItem> from_file(const std::string &name) const {
+#if defined CLI11_HAS_FILESYSTEM && CLI11_HAS_FILESYSTEM > 0
+        std::ifstream input{to_path(name)};
+#else
         std::ifstream input{name};
+#endif
+
         if(!input.good())
             throw FileError::Missing(name);
 
@@ -112,6 +128,9 @@ class ConfigBase : public Config {
     std::string configSection{};
 
   public:
+    std::string
+    to_config(const App * /*app*/, ConfigOutputMode mode, bool write_description, std::string prefix) const override;
+
     std::string
     to_config(const App * /*app*/, bool default_also, bool write_description, std::string prefix) const override;
 

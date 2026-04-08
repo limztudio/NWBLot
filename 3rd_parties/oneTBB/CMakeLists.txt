@@ -45,10 +45,7 @@ if(WIN32)
         _CRT_SECURE_NO_WARNINGS
     )
     if(NWB_COMPILER_IS_CLANG)
-        target_compile_definitions(nwb_vendor_tbb PRIVATE
-            __TBB_WAITPKG_INTRINSICS_PRESENT=0
-            __TBB_TSX_INTRINSICS_PRESENT=0
-        )
+        target_compile_options(nwb_vendor_tbb PRIVATE -mrtm -mwaitpkg)
     endif()
     if(NWB_COMPILER_FRONTEND_MSVC)
         target_compile_options(nwb_vendor_tbb PRIVATE /wd4324)
@@ -81,10 +78,7 @@ if(WIN32)
         _CRT_SECURE_NO_WARNINGS
     )
     if(NWB_COMPILER_IS_CLANG)
-        target_compile_definitions(nwb_vendor_tbbmalloc PRIVATE
-            __TBB_WAITPKG_INTRINSICS_PRESENT=0
-            __TBB_TSX_INTRINSICS_PRESENT=0
-        )
+        target_compile_options(nwb_vendor_tbbmalloc PRIVATE -mrtm -mwaitpkg)
     endif()
     if(NWB_COMPILER_FRONTEND_MSVC)
         target_compile_options(nwb_vendor_tbbmalloc PRIVATE /wd4324 /wd4267 /wd4244 /wd4245 /wd4458)

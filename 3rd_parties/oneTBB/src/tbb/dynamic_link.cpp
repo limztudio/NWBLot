@@ -1,5 +1,6 @@
 /*
     Copyright (c) 2005-2025 Intel Corporation
+    Copyright (c) 2026 UXL Foundation Contributors
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -19,9 +20,12 @@
 
 #include "oneapi/tbb/detail/_template_helpers.h"
 #include "oneapi/tbb/detail/_utils.h"
+#if DYNAMIC_LINK_FIND_LIB_WITH_TBB_RUNTIME_VERSION
+#include "oneapi/tbb/version.h" // to get TBB_runtime_version
+#endif
 
 /*
-    This file is used by both TBB and OpenMP RTL. Do not use __TBB_ASSERT() macro
+    This file can be used by both TBB and OpenMP RTL. Do not use __TBB_ASSERT() macro
     and runtime_warning() function because they are not available in OpenMP. Use
     __TBB_ASSERT_EX and DYNAMIC_LINK_WARNING instead.
 */
@@ -136,7 +140,7 @@ namespace r1 {
         const char* str = nullptr;
         // Note: dlerr_t depends on OS: it is char const * on Linux* and macOS*, int on Windows*.
 #if _WIN32
-#if __INTEL_LLVM_COMPILER
+#if __INTEL_LLVM_COMPILER || __clang__
 // Suppress the incorrect warning about the format specifier for the unsigned long long type.
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat"
@@ -376,9 +380,20 @@ namespace r1 {
         ap_data._len = (std::size_t)(backslash - ap_data._path) + 1;
         *(backslash+1) = 0;
     #else
+        // There is an use case, when we want to find TBB library, not just some shared object
+        // providing "dynamic_link" symbol (it can be shared object that directly includes
+        // dynamic_link.cpp). For this case we use a public TBB symbol. Searching for public symbol
+        // in every case leads to finding main executable instead of TBB library on some version of
+        // Linux.
+        #if DYNAMIC_LINK_FIND_LIB_WITH_TBB_RUNTIME_VERSION
+        static void *func_from_lib = (void*)&TBB_runtime_version;
+        #else
+        static void *func_from_lib = (void*)&dynamic_link;
+        #endif
+
         // Get the library path
         Dl_info dlinfo;
-        int res = dladdr( (void*)&dynamic_link, &dlinfo ); // any function inside the library can be used for the address
+        int res = dladdr( func_from_lib, &dlinfo );
         if ( !res ) {
             char const * err = dlerror();
             DYNAMIC_LINK_WARNING( dl_sys_fail, "dladdr", err );

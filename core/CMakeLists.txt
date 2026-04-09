@@ -5,3 +5,7 @@ add_subdirectory(assets)
 add_subdirectory(filesystem)
 add_subdirectory(graphics)
 add_subdirectory(ecs)
+
+if(WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    add_subdirectory(frame)
+endif()

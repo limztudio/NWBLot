@@ -26,4 +26,9 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     endif()
 endif()
 
-target_link_libraries(nwb_frame PUBLIC nwb_logclient nwb_common nwb_ecs nwb_ecs_graphics nwb_graphics nwb_assets_graphics)
+target_link_libraries(nwb_frame PUBLIC
+    nwb_alloc
+    nwb_common
+    nwb_graphics
+)
+target_link_libraries(nwb_frame PRIVATE nwb_logclient)

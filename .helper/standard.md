@@ -66,7 +66,7 @@ Updated: 2026-04-09
   - `    a,`
   - `    b,`
   - `);`
-- For multiline ternary statements, place the trailing `;` on its own line after the final branch expression:
+- For standalone multiline ternary statements, place the trailing `;` on its own line after the final branch expression:
   - Correct:
   - `return cond`
   - `    ? valueA`
@@ -76,6 +76,20 @@ Updated: 2026-04-09
   - `return cond`
   - `    ? valueA`
   - `    : valueB;`
+- When a multiline ternary expression is used inside a parenthesized call or constructor, keep the closing `);` together on the same line:
+  - Correct:
+  - `std::basic_regex<T> regex(`
+  - `    IsSame_V<T, wchar>`
+  - `    ? L"..."`
+  - `    : "..."`
+  - `);`
+  - Wrong:
+  - `std::basic_regex<T> regex(`
+  - `    IsSame_V<T, wchar>`
+  - `    ? L"..."`
+  - `    : "..."`
+  - `)`
+  - `;`
 - Do not use mixed styles like:
   - `foobar(a,`
   - `    b);`

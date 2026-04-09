@@ -186,8 +186,7 @@ inline HashMap<BasicString<T>, BasicString<T>> parseCommandLine(BasicStringView<
         IsSame_V<T, wchar>
         ? L"(\\w+)\\s*=\\s*(?:\"([^\"]*)\"|(\\S+))"
         :  "(\\w+)\\s*=\\s*(?:\"([^\"]*)\"|(\\S+))"
-    )
-    ;
+    );
 
     HashMap<BasicString<T>, BasicString<T>> output;
     std::match_results<typename BasicString<T>::const_iterator> match;

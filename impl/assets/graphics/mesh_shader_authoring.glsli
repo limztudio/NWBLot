@@ -65,7 +65,8 @@ uint nwbMeshBaseTriangle(){
 uint nwbMeshRemainingTriangles(){
     return g_NwbMeshPushConstants.triangleCount > nwbMeshBaseTriangle()
         ? (g_NwbMeshPushConstants.triangleCount - nwbMeshBaseTriangle())
-        : 0u;
+        : 0u
+    ;
 }
 
 uint nwbMeshActiveTriangleCount(){
@@ -121,3 +122,4 @@ void main(){
 }
 
 #endif
+

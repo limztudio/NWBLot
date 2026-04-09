@@ -138,7 +138,8 @@ inline constexpr CharT Canonicalize(CharT c){
         return static_cast<CharT>('/');
     return (c >= static_cast<CharT>('A') && c <= static_cast<CharT>('Z'))
         ? static_cast<CharT>(c + (static_cast<CharT>('a') - static_cast<CharT>('A')))
-        : c;
+        : c
+    ;
 }
 
 template<typename DstCharT, typename SrcCharT>

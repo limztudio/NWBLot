@@ -1,7 +1,7 @@
 # NWBLot Inferred Code Standard
 
 Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_parties/`).  
-Updated: 2026-02-28
+Updated: 2026-04-09
 
 ## 1. File and module structure
 - Use lowercase `snake_case` filenames for C++ source and headers.
@@ -66,6 +66,16 @@ Updated: 2026-02-28
   - `    a,`
   - `    b,`
   - `);`
+- For multiline ternary `return` statements, place the trailing `;` on its own line after the final branch expression:
+  - Correct:
+  - `return cond`
+  - `    ? valueA`
+  - `    : valueB`
+  - `;`
+  - Wrong:
+  - `return cond`
+  - `    ? valueA`
+  - `    : valueB;`
 - Do not use mixed styles like:
   - `foobar(a,`
   - `    b);`

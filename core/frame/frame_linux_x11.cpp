@@ -100,22 +100,26 @@ static i32 AdjustModifiersForKey(i32 key, i32 action, i32 mods){
     case Key::RightShift:
         return action == InputAction::Release
             ? (mods & ~InputModifier::Shift)
-            : (mods | InputModifier::Shift);
+            : (mods | InputModifier::Shift)
+        ;
     case Key::LeftControl:
     case Key::RightControl:
         return action == InputAction::Release
             ? (mods & ~InputModifier::Control)
-            : (mods | InputModifier::Control);
+            : (mods | InputModifier::Control)
+        ;
     case Key::LeftAlt:
     case Key::RightAlt:
         return action == InputAction::Release
             ? (mods & ~InputModifier::Alt)
-            : (mods | InputModifier::Alt);
+            : (mods | InputModifier::Alt)
+        ;
     case Key::LeftSuper:
     case Key::RightSuper:
         return action == InputAction::Release
             ? (mods & ~InputModifier::Super)
-            : (mods | InputModifier::Super);
+            : (mods | InputModifier::Super)
+        ;
     default:
         return mods;
     }

@@ -116,7 +116,8 @@ inline EntryPointLookupResult ResolveEntryPointName(
 
     return outEntryPointName.empty()
         ? EntryPointLookupResult::NotFound
-        : EntryPointLookupResult::Found;
+        : EntryPointLookupResult::Found
+    ;
 }
 
 inline bool ResolveShaderEntryPoint(

@@ -61,7 +61,8 @@ public:
     [[nodiscard]] bool assign(const char* text){
         return text == nullptr
             ? clearAndReturn(true)
-            : assign(AStringView(text));
+            : assign(AStringView(text))
+        ;
     }
 
     [[nodiscard]] bool assign(const AStringView text){
@@ -86,7 +87,8 @@ public:
     [[nodiscard]] bool append(const char* text){
         return text == nullptr
             ? true
-            : append(AStringView(text));
+            : append(AStringView(text))
+        ;
     }
 
     [[nodiscard]] bool append(const AStringView text){
@@ -290,3 +292,4 @@ struct hash<CompactString>{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

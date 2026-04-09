@@ -83,7 +83,8 @@ bool ValidateRecord(const ShaderArchive::Record& record){
 AStringView NormalizeVariantName(const AStringView variantName){
     return variantName.empty()
         ? AStringView(ShaderArchive::s_DefaultVariant)
-        : variantName;
+        : variantName
+    ;
 }
 
 u64 UpdateFnv64NameLane(u64 hash, const NameHash& nameHash, const u32 lane){
@@ -335,3 +336,4 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

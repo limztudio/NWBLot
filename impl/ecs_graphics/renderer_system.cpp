@@ -92,7 +92,8 @@ static bool TryFindShaderForStage(const Material& material, const Core::ShaderTy
 static u32 ComputeDispatchGroupCount(const u32 triangleCount){
     return triangleCount == 0
         ? 0
-        : (triangleCount + s_TrianglesPerWorkgroup - 1u) / s_TrianglesPerWorkgroup;
+        : (triangleCount + s_TrianglesPerWorkgroup - 1u) / s_TrianglesPerWorkgroup
+    ;
 }
 
 

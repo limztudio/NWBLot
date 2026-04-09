@@ -865,7 +865,8 @@ static void ProcessKeyRepeat(WaylandContext& context){
 
     const i32 stepMs = context.repeatRate > 0
         ? ((1000 / context.repeatRate) > 0 ? (1000 / context.repeatRate) : 1)
-        : 0;
+        : 0
+    ;
     do{
         const i32 mods = TranslateModifiers(context);
         deviceManager->keyboardUpdate(context.repeatKey, context.repeatScancode, InputAction::Repeat, mods);

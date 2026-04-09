@@ -1329,7 +1329,8 @@ bool DeviceManager::createSwapChain(){
     const VkSurfaceTransformFlagBitsKHR selectedPreTransform =
         (surfaceCaps.supportedTransforms & VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR)
             ? VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR
-            : surfaceCaps.currentTransform;
+            : surfaceCaps.currentTransform
+    ;
 
     VkCompositeAlphaFlagBitsKHR selectedCompositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
     bool compositeAlphaFound = false;

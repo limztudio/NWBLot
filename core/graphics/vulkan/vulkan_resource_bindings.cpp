@@ -1080,7 +1080,8 @@ bool Device::writeDescriptorTable(IDescriptorTable* m_descriptorTable, const Bin
             return false;
         imageInfo.imageView = texture->getView(item.subresources, item.dimension, item.format, false);
         imageInfo.imageLayout = item.type == ResourceType::Texture_UAV ? 
-                                VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                                VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+        ;
         write.pImageInfo = &imageInfo;
         break;
     }

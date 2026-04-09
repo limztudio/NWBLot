@@ -870,9 +870,7 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* _as, const
             geometry.geometry.triangles.maxVertex = triangles.vertexCount > 0 ? triangles.vertexCount - 1 : 0;
 
             if(triangles.indexBuffer){
-                geometry.geometry.triangles.indexType = triangles.indexFormat == Format::R16_UINT ? 
-                    VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32
-                ;
+                geometry.geometry.triangles.indexType = triangles.indexFormat == Format::R16_UINT ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32;
                 geometry.geometry.triangles.indexData.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(triangles.indexBuffer, triangles.indexOffset);
                 primitiveCount = triangles.indexCount / s_TrianglesPerPrimitive;
             }

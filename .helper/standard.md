@@ -66,6 +66,13 @@ Updated: 2026-04-09
   - `    a,`
   - `    b,`
   - `);`
+- For simple value-selection assignments, prefer the single-line ternary form:
+  - Correct:
+  - `value = cond ? valueA : valueB;`
+  - Wrong:
+  - `value = cond ?`
+  - `    valueA : valueB`
+  - `;`
 - For standalone multiline ternary statements, place the trailing `;` on its own line after the final branch expression:
   - Correct:
   - `return cond`

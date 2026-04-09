@@ -173,7 +173,8 @@ public:
         const usize remaining = m_size - pos;
         const usize copiedCount = count == s_NPos || count > remaining
             ? remaining
-            : count;
+            : count
+        ;
 
         for(usize i = 0; i < copiedCount; ++i)
             result.m_storage[i] = m_storage[pos + i];
@@ -292,4 +293,3 @@ struct hash<CompactString>{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

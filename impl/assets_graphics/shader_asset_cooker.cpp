@@ -95,7 +95,8 @@ static bool BuildMeshComputeShadowEntry(const Core::ShaderCook::ShaderEntry& sou
 static AString NormalizeVariantName(const Core::ShaderCook::ShaderEntry& entry, const AStringView generatedVariantName){
     const AStringView normalizedGeneratedVariantName = generatedVariantName.empty()
         ? AStringView(Core::ShaderArchive::s_DefaultVariant)
-        : generatedVariantName;
+        : generatedVariantName
+    ;
 
     if(entry.defaultVariant.empty())
         return AString(normalizedGeneratedVariantName);
@@ -328,7 +329,8 @@ static bool ResolveCookPaths(const ShaderCookEnvironment& environment, ResolvedC
     const Path defaultCacheDirectory = outPaths.repoRoot / "__build_obj/shader_cache";
     const Path requestedCacheDirectory = environment.cacheDirectory.empty()
         ? defaultCacheDirectory
-        : environment.cacheDirectory;
+        : environment.cacheDirectory
+    ;
     errorCode.clear();
     if(!ResolveAbsolutePath(outPaths.repoRoot, PathToString(requestedCacheDirectory), outPaths.cacheDirectory, errorCode)){
         if(errorCode){
@@ -1009,7 +1011,8 @@ static bool NormalizeMaterialVariant(
     const AString contextLabel = StringFormat("{} [{}]", materialEntry.virtualPath.c_str(), stageName.c_str());
     const AStringView requestedVariant = materialEntry.shaderVariant.empty()
         ? Core::ShaderArchive::s_DefaultVariant
-        : AStringView(materialEntry.shaderVariant);
+        : AStringView(materialEntry.shaderVariant)
+    ;
 
     if(requestedVariant == Core::ShaderArchive::s_DefaultVariant){
         if(!preparedShaderEntry.entry.defineValues.empty() && preparedShaderEntry.entry.defaultVariant.empty()){
@@ -1960,4 +1963,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

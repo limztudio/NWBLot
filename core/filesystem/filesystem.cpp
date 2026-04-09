@@ -43,14 +43,16 @@ static bool CanRepresentU64(const u64 value){
         constexpr usize bitCount = sizeof(T) * 8;
         constexpr u64 maxValue = bitCount >= 64
             ? (Limit<u64>::s_Max >> 1)
-            : ((u64(1) << (bitCount - 1)) - 1);
+            : ((u64(1) << (bitCount - 1)) - 1)
+        ;
         return value <= maxValue;
     }
     else{
         constexpr usize bitCount = sizeof(T) * 8;
         constexpr u64 maxValue = bitCount >= 64
             ? Limit<u64>::s_Max
-            : ((u64(1) << bitCount) - 1);
+            : ((u64(1) << bitCount) - 1)
+        ;
         return value <= maxValue;
     }
 }
@@ -654,7 +656,8 @@ bool VolumeFileSystem::mount(const VolumeMountDesc& desc){
         m_segmentSize = desc.segmentSize;
         m_metadataBytes = desc.metadataSize == 0
             ? __hidden_filesystem::DefaultMetadataBytes(m_segmentSize)
-            : desc.metadataSize;
+            : desc.metadataSize
+        ;
 
         if(m_metadataBytes <= sizeof(VolumeHeaderDisk) || m_metadataBytes >= m_segmentSize){
             __hidden_filesystem::LogFailure(
@@ -2161,4 +2164,3 @@ NWB_FILESYSTEM_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

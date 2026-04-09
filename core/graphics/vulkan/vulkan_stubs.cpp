@@ -396,12 +396,14 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
         vkDesc.srcLayout = __hidden_vulkan::ConvertCoopVecMatrixLayout(convertDesc.src.layout);
         vkDesc.srcStride = convertDesc.src.stride != 0
             ? convertDesc.src.stride
-            : GetCooperativeVectorOptimalMatrixStride(convertDesc.src.type, convertDesc.src.layout, convertDesc.numRows, convertDesc.numColumns);
+            : GetCooperativeVectorOptimalMatrixStride(convertDesc.src.type, convertDesc.src.layout, convertDesc.numRows, convertDesc.numColumns)
+        ;
 
         vkDesc.dstLayout = __hidden_vulkan::ConvertCoopVecMatrixLayout(convertDesc.dst.layout);
         vkDesc.dstStride = convertDesc.dst.stride != 0
             ? convertDesc.dst.stride
-            : GetCooperativeVectorOptimalMatrixStride(convertDesc.dst.type, convertDesc.dst.layout, convertDesc.numRows, convertDesc.numColumns);
+            : GetCooperativeVectorOptimalMatrixStride(convertDesc.dst.type, convertDesc.dst.layout, convertDesc.numRows, convertDesc.numColumns)
+        ;
 
         vkConvertDescs[i] = vkDesc;
     };
@@ -599,4 +601,3 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

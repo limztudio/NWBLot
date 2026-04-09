@@ -50,7 +50,8 @@ namespace __hidden_asset_paths{
     const AString parentDirectoryName = CanonicalizeText(PathToString(assetRoot.parent_path().filename()));
     outVirtualRootText = parentDirectoryName == s_ImplDirectoryName
         ? s_EngineVirtualRoot
-        : s_ProjectVirtualRoot;
+        : s_ProjectVirtualRoot
+    ;
     return true;
 }
 
@@ -327,4 +328,3 @@ NWB_ASSETS_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

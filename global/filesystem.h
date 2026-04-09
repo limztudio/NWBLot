@@ -146,7 +146,8 @@ struct StagedDirectoryPaths{
 [[nodiscard]] inline StagedDirectoryPaths BuildStagedDirectoryPaths(const Path& outputDirectory, const AStringView stageToken){
     const Path stageBaseDirectory = outputDirectory.parent_path().empty()
         ? outputDirectory
-        : outputDirectory.parent_path();
+        : outputDirectory.parent_path()
+    ;
 
     StagedDirectoryPaths output;
     output.stageDirectory = stageBaseDirectory / StringFormat(".{}_stage", stageToken);
@@ -300,4 +301,3 @@ template<typename Container>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

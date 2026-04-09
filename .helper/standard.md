@@ -66,7 +66,7 @@ Updated: 2026-04-09
   - `    a,`
   - `    b,`
   - `);`
-- For multiline ternary `return` statements, place the trailing `;` on its own line after the final branch expression:
+- For multiline ternary statements, place the trailing `;` on its own line after the final branch expression:
   - Correct:
   - `return cond`
   - `    ? valueA`

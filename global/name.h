@@ -232,7 +232,8 @@ public:
 
         const usize copyCount = text.size() < 255
             ? text.size()
-            : static_cast<usize>(255);
+            : static_cast<usize>(255)
+        ;
         for(usize i = 0; i < copyCount; ++i)
             m_debugName[i] = Canonicalize(text[i]);
         m_debugName[copyCount] = '\0';
@@ -252,7 +253,8 @@ public:
 
         const usize copyCount = text.size() < 255
             ? text.size()
-            : static_cast<usize>(255);
+            : static_cast<usize>(255)
+        ;
         for(usize i = 0; i < copyCount; ++i)
             m_debugName[i] = static_cast<char>(Canonicalize(text[i]));
         m_debugName[copyCount] = '\0';
@@ -432,4 +434,3 @@ struct hash<NameHash>{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

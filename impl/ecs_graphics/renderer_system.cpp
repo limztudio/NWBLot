@@ -768,7 +768,8 @@ bool RendererSystem::ensureShaderLoaded(
 
     const Name& stageName = archiveStageName
         ? *archiveStageName
-        : __hidden_ecs_graphics::StageNameFromShaderType(shaderType);
+        : __hidden_ecs_graphics::StageNameFromShaderType(shaderType)
+    ;
     if(!stageName){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: unsupported shader stage {}"), static_cast<u32>(shaderType));
         return false;
@@ -776,7 +777,8 @@ bool RendererSystem::ensureShaderLoaded(
 
     const AStringView resolvedVariantName = variantName.empty()
         ? AStringView(Core::ShaderArchive::s_DefaultVariant)
-        : variantName;
+        : variantName
+    ;
     if(!m_shaderPathResolver){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: shader path resolver is null"));
         return false;
@@ -849,4 +851,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

@@ -81,7 +81,8 @@ bool AssetCookerRegistry::cook(const AssetCookOptions& options)const{
     const AString availableCookers = __hidden_assets::DescribeAvailableCookers(m_assetCookers);
     const Name requestedType = options.assetType.empty()
         ? NAME_NONE
-        : Name(options.assetType.view());
+        : Name(options.assetType.view())
+    ;
     if(!requestedType){
         if(m_assetCookers.size() == 1){
             const auto& onlyCookerEntry = *m_assetCookers.begin();
@@ -119,4 +120,3 @@ NWB_ASSETS_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

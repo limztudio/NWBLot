@@ -41,9 +41,7 @@ class Client : public IClient, public BaseUpdateIfQueued<Client, CLIENT_NAME>{
 
 
 private:
-    static bool s_SendSwitch;
     static bool globalInit();
-    static usize sendCallback(void* contents, usize size, usize nmemb, Client* _this);
 
 
 public:

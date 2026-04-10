@@ -11,8 +11,8 @@
 #include <CLI.hpp>
 
 #include <global/global.h>
-
 #include <global/command.h>
+#include <global/filesystem.h>
 
 #include <logger/client/logger.h>
 #include <core/common/common.h>
@@ -22,6 +22,7 @@
 #include <core/assets/asset_auto_registration.h>
 #include <core/graphics/shader_archive.h>
 #include <core/filesystem/filesystem.h>
+#include <core/filesystem/volume_naming.h>
 
 #include "project_entry.h"
 
@@ -62,7 +63,41 @@ bool ProjectTickCallback(void* userData, f32 delta){
     return updateContext->callbacks->onUpdate(delta);
 }
 
+bool HasGraphicsVolumeSegment(const Path& mountDirectory){
+    ErrorCode errorCode;
+    if(!IsDirectory(mountDirectory, errorCode) || errorCode)
+        return false;
+
+    const Path segmentPath = mountDirectory / NWB::Core::Filesystem::MakeVolumeSegmentFileName("graphics", 0);
+    errorCode.clear();
+    return FileExists(segmentPath, errorCode) && !errorCode;
+}
+
 Path ResolveShaderMountDirectory(){
+    ErrorCode errorCode;
+    Path currentDirectory;
+    if(GetCurrentPath(currentDirectory, errorCode)){
+        const Path currentResDirectory = currentDirectory / "res";
+        if(HasGraphicsVolumeSegment(currentResDirectory))
+            return currentResDirectory;
+    }
+
+    Path executableDirectory;
+    if(!GetExecutableDirectory(executableDirectory))
+        return Path("res");
+
+    const Path executableResDirectory = executableDirectory / "res";
+    if(HasGraphicsVolumeSegment(executableResDirectory))
+        return executableResDirectory;
+
+    const Path parentDirectory = executableDirectory.parent_path();
+    if(parentDirectory.empty())
+        return Path("res");
+
+    const Path parentResDirectory = parentDirectory / "res";
+    if(HasGraphicsVolumeSegment(parentResDirectory))
+        return parentResDirectory;
+
     return Path("res");
 }
 

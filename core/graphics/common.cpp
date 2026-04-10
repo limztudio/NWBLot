@@ -517,6 +517,7 @@ bool IDeviceManager::createHeadlessDevice(){
 
 bool IDeviceManager::createWindowDeviceAndSwapChain(const Common::FrameData& frameData){
     m_deviceParams.headlessDevice = false;
+    m_hasPresentedFrame = false;
 
     m_deviceParams.backBufferWidth = frameData.width();
     m_deviceParams.backBufferHeight = frameData.height();
@@ -643,8 +644,9 @@ bool IDeviceManager::shouldRenderUnfocused()const{
 bool IDeviceManager::animateRenderPresent(){
     Timer now = TimerNow();
     f64 elapsedTime = DurationInSeconds<f64>(now, m_previousFrameTimestamp);
+    const bool shouldBootstrapWindowPresentation = !m_hasPresentedFrame;
 
-    if(m_windowVisible && (m_windowIsInFocus || shouldRenderUnfocused())){
+    if(m_windowVisible && (m_windowIsInFocus || shouldRenderUnfocused() || shouldBootstrapWindowPresentation)){
         if(m_prevDPIScaleFactorX != m_dpiScaleFactorX || m_prevDPIScaleFactorY != m_dpiScaleFactorY){
             displayScaleChanged();
             m_prevDPIScaleFactorX = m_dpiScaleFactorX;
@@ -680,6 +682,8 @@ bool IDeviceManager::animateRenderPresent(){
 
                 if(!presentSuccess)
                     return false;
+
+                m_hasPresentedFrame = true;
             }
         }
     }
@@ -816,4 +820,3 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

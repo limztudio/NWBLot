@@ -4132,6 +4132,7 @@ protected:
     } m_callbacks;
 
     bool m_skipRenderOnFirstFrame = false;
+    bool m_hasPresentedFrame = false;
     bool m_windowVisible = false;
     bool m_windowIsInFocus = true;
 

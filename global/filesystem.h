@@ -40,6 +40,24 @@ struct StagedDirectoryPaths{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[[nodiscard]] inline bool ReadSymlink(const Path& path, Path& outPath, ErrorCode& outError)noexcept{
+    outPath = std::filesystem::read_symlink(path, outError);
+    return !outError;
+}
+
+[[nodiscard]] inline bool GetCurrentPath(Path& outPath, ErrorCode& outError)noexcept{
+    outPath = std::filesystem::current_path(outError);
+    return !outError;
+}
+
+[[nodiscard]] inline Path LexicallyNormal(const Path& path)noexcept{
+    return path.lexically_normal();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] inline bool GetExecutablePath(Path& outPath){
 #if defined(NWB_PLATFORM_WINDOWS)
     constexpr usize s_MaxPathLength = 4096;
@@ -50,10 +68,16 @@ struct StagedDirectoryPaths{
 
     outPath = Path(executablePathBuffer);
     return true;
+#elif defined(NWB_PLATFORM_LINUX)
+    ErrorCode errorCode;
+    if(!ReadSymlink(Path("/proc/self/exe"), outPath, errorCode) || outPath.empty())
+        return false;
+
+    outPath = LexicallyNormal(outPath);
+    return true;
 #else
     ErrorCode errorCode;
-    outPath = std::filesystem::current_path(errorCode);
-    return !errorCode;
+    return GetCurrentPath(outPath, errorCode);
 #endif
 }
 
@@ -173,7 +197,7 @@ struct StagedDirectoryPaths{
     if(outError)
         return false;
 
-    outPath = absolutePath.lexically_normal();
+    outPath = LexicallyNormal(absolutePath);
     return true;
 }
 

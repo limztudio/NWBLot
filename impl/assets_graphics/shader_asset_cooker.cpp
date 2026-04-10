@@ -1803,7 +1803,7 @@ bool ShaderAssetCooker::cook(const Core::Assets::AssetCookOptions& options){
     environment.configuration = options.configuration;
     environment.repoRoot = options.repoRoot.empty() ? Path(".") : Path(options.repoRoot.c_str());
     environment.assetRoots.reserve(options.assetRoots.size());
-    for(const CompactString& assetRoot : options.assetRoots)
+    for(const AString& assetRoot : options.assetRoots)
         environment.assetRoots.push_back(Path(assetRoot.c_str()));
     environment.outputDirectory = Path(options.outputDirectory.c_str());
     environment.cacheDirectory = options.cacheDirectory.empty() ? Path() : Path(options.cacheDirectory.c_str());

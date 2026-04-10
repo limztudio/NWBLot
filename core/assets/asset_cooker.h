@@ -18,10 +18,10 @@ NWB_ASSETS_BEGIN
 
 
 struct AssetCookOptions{
-    CompactString repoRoot;
-    Vector<CompactString> assetRoots;
-    CompactString outputDirectory;
-    CompactString cacheDirectory;
+    AString repoRoot;
+    Vector<AString> assetRoots;
+    AString outputDirectory;
+    AString cacheDirectory;
     CompactString configuration;
     CompactString assetType;
 };
@@ -79,4 +79,3 @@ NWB_ASSETS_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

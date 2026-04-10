@@ -26,10 +26,13 @@ struct NwbMeshGeneratedVertex{
 
 #define NWB_MESH_BUILD_VERTEX_SIGNATURE NwbMeshGeneratedVertex nwbProjectBuildMeshVertex(uint triangleIndex, uint corner, NwbMeshSourceVertex source)
 
+const uint NWB_MESH_SOURCE_VERTEX_SCALAR_STRIDE = 6u;
+
 layout(local_size_x = NWB_MESH_SHADER_GROUP_SIZE_X) in;
 
+// Geometry vertices are uploaded as tightly packed position+color floats (24 bytes), so decode them manually.
 layout(std430, binding = 0) readonly buffer NwbMeshSourceVerticesBuffer{
-    NwbMeshSourceVertex nwbMeshSourceVertices[];
+    float nwbMeshSourceVertexScalars[];
 };
 
 layout(std430, binding = 1) readonly buffer NwbMeshSourceIndicesBuffer{
@@ -83,7 +86,21 @@ uint nwbMeshTriangleIndex(){
 
 NwbMeshSourceVertex nwbMeshLoadSourceVertex(const uint triangleIndex, const uint corner){
     const uint indexBase = triangleIndex * 3u;
-    return nwbMeshSourceVertices[nwbMeshSourceIndices[indexBase + corner]];
+    const uint sourceVertexIndex = nwbMeshSourceIndices[indexBase + corner];
+    const uint scalarBase = sourceVertexIndex * NWB_MESH_SOURCE_VERTEX_SCALAR_STRIDE;
+
+    NwbMeshSourceVertex sourceVertex;
+    sourceVertex.position = vec3(
+        nwbMeshSourceVertexScalars[scalarBase + 0u],
+        nwbMeshSourceVertexScalars[scalarBase + 1u],
+        nwbMeshSourceVertexScalars[scalarBase + 2u]
+    );
+    sourceVertex.color = vec3(
+        nwbMeshSourceVertexScalars[scalarBase + 3u],
+        nwbMeshSourceVertexScalars[scalarBase + 4u],
+        nwbMeshSourceVertexScalars[scalarBase + 5u]
+    );
+    return sourceVertex;
 }
 
 NWB_MESH_BUILD_VERTEX_SIGNATURE;
@@ -122,4 +139,3 @@ void main(){
 }
 
 #endif
-

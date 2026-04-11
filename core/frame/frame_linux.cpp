@@ -175,7 +175,7 @@ bool Frame::init(){
         const Common::LinuxFrameBackend backend = backendOrder[i];
         if(__hidden_frame::TryInitBackend(*this, backend)){
             frameData.backend() = backend;
-            NWB_LOGGER_INFO(NWB_TEXT("Frame: Using Linux {} backend."), StringConvert(__hidden_frame::BackendName(backend)));
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Frame: Using Linux {} backend."), StringConvert(__hidden_frame::BackendName(backend)));
 
             if(!startup())
                 return false;

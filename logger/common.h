@@ -21,7 +21,9 @@ NWB_LOG_BEGIN
 
 enum class Type : u8{
     Info,
+    EssentialInfo,
     Warning,
+    CriticalWarning,
     Error,
     Fatal,
 };
@@ -37,14 +39,29 @@ using MessageQueue = ParallelQueue<MessageType>;
     switch(type){
     case Type::Info:
         return NWB_TEXT("INFO");
+    case Type::EssentialInfo:
+        return NWB_TEXT("ESSENTIAL INFO");
     case Type::Warning:
         return NWB_TEXT("WARNING");
+    case Type::CriticalWarning:
+        return NWB_TEXT("CRITICAL WARNING");
     case Type::Error:
         return NWB_TEXT("ERROR");
     case Type::Fatal:
         return NWB_TEXT("FATAL");
     }
     return NWB_TEXT("UNKNOWN");
+}
+
+[[nodiscard]] inline bool MessageTypeWritesToErrorStream(Type type){
+    switch(type){
+    case Type::CriticalWarning:
+    case Type::Error:
+    case Type::Fatal:
+        return true;
+    default:
+        return false;
+    }
 }
 
 [[nodiscard]] inline TString FormatMessageForProcessing(const MessageType& msg){

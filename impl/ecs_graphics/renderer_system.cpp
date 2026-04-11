@@ -80,7 +80,6 @@ static const Name& MeshEmulationVertexShaderName(){
 static Core::RenderState BuildDefaultRenderState(){
     Core::RenderState renderState;
     renderState.depthStencilState.disableDepthTest().disableDepthWrite();
-    renderState.rasterState.setCullNone();
     return renderState;
 }
 

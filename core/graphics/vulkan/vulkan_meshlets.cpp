@@ -16,6 +16,31 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_vulkan_meshlets{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+constexpr VkCullModeFlags ConvertCullMode(RasterCullMode::Enum cullMode){
+    switch(cullMode){
+    case RasterCullMode::Back:  return VK_CULL_MODE_BACK_BIT;
+    case RasterCullMode::Front: return VK_CULL_MODE_FRONT_BIT;
+    case RasterCullMode::None:  return VK_CULL_MODE_NONE;
+    default: return VK_CULL_MODE_BACK_BIT;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 MeshletPipeline::MeshletPipeline(const VulkanContext& context)
     : RefCounter<IMeshletPipeline>(context.threadPool)
     , m_context(context)
@@ -160,7 +185,7 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     rasterizer.depthClampEnable = VK_FALSE;
     rasterizer.rasterizerDiscardEnable = VK_FALSE;
     rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
-    rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+    rasterizer.cullMode = __hidden_vulkan_meshlets::ConvertCullMode(desc.renderState.rasterState.cullMode);
     rasterizer.frontFace = desc.renderState.rasterState.frontCounterClockwise ? VK_FRONT_FACE_COUNTER_CLOCKWISE : VK_FRONT_FACE_CLOCKWISE;
     rasterizer.depthBiasEnable = desc.renderState.rasterState.depthBias != 0 ? VK_TRUE : VK_FALSE;
     rasterizer.depthBiasConstantFactor = static_cast<f32>(desc.renderState.rasterState.depthBias);
@@ -326,4 +351,3 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

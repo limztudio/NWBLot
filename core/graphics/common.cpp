@@ -358,7 +358,7 @@ usize GetCooperativeVectorDataTypeSize(CooperativeVectorDataType::Enum type){
     case CooperativeVectorDataType::Float64:
         return 8;
     }
-    NWB_ASSERT_MSG(false, NWB_TEXT("Unknown CooperativeVectorDataType::Enum value"));
+    NWB_FATAL_ASSERT_MSG(false, NWB_TEXT("Unknown CooperativeVectorDataType::Enum value"));
     return 0;
 }
 
@@ -511,7 +511,7 @@ bool IDeviceManager::createHeadlessDevice(){
     if(!createDeviceInternal())
         return false;
 
-    NWB_LOGGER_INFO(NWB_TEXT("DeviceManager: Headless device created."));
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("DeviceManager: headless device created"));
     return true;
 }
 
@@ -541,6 +541,11 @@ bool IDeviceManager::createWindowDeviceAndSwapChain(const Common::FrameData& fra
     updateWindowState(frameData.width(), frameData.height(), true, true);
     m_previousFrameTimestamp = TimerNow();
 
+    NWB_LOGGER_ESSENTIAL_INFO(
+        NWB_TEXT("DeviceManager: window device and swap chain created ({}x{})"),
+        frameData.width(),
+        frameData.height()
+    );
     return true;
 }
 

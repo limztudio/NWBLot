@@ -110,8 +110,10 @@ Frame::~Frame(){
 
 
 bool Frame::startup(){
-    if(!m_graphics.init(data<Common::FrameData>()))
+    if(!m_graphics.init(data<Common::FrameData>())){
+        NWB_LOGGER_ERROR(NWB_TEXT("Frame: graphics initialization failed"));
         return false;
+    }
 
     return true;
 }
@@ -120,11 +122,18 @@ void Frame::cleanup(){
 }
 bool Frame::update(f32 delta){
     if(m_projectUpdateCallback){
-        if(!m_projectUpdateCallback(m_projectUpdateUserData, delta))
+        if(!m_projectUpdateCallback(m_projectUpdateUserData, delta)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Frame: project update callback returned false"));
             return false;
+        }
     }
 
-    return m_graphics.runFrame();
+    if(!m_graphics.runFrame()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Frame: graphics frame update failed"));
+        return false;
+    }
+
+    return true;
 }
 bool Frame::render(){
     return true;
@@ -138,4 +147,3 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

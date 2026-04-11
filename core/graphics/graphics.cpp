@@ -128,24 +128,24 @@ Graphics::Graphics(GraphicsAllocator& allocator, Alloc::ThreadPool& threadPool, 
     m_deviceCreationParams.threadPool = &m_threadPool;
     __hidden_graphics::AddVulkanDeviceExtensionOnce(m_deviceCreationParams.optionalVulkanDeviceExtensions, "VK_NV_cooperative_vector");
     m_deviceManager.reset(IDeviceManager::create(GraphicsAPI::VULKAN, m_deviceCreationParams));
-    NWB_ASSERT_MSG(m_deviceManager != nullptr, NWB_TEXT("Graphics: DeviceManager creation failed."));
+    NWB_FATAL_ASSERT_MSG(m_deviceManager != nullptr, NWB_TEXT("Graphics: DeviceManager creation failed."));
 }
 Graphics::~Graphics(){
     destroy();
 }
 
 bool Graphics::init(const Common::FrameData& data){
-    NWB_ASSERT_MSG(m_deviceManager != nullptr, NWB_TEXT("Graphics::init requires a valid DeviceManager."));
+    NWB_FATAL_ASSERT_MSG(m_deviceManager != nullptr, NWB_TEXT("Graphics::init requires a valid DeviceManager."));
     return m_deviceManager->createWindowDeviceAndSwapChain(data);
 }
 
 bool Graphics::runFrame(){
-    NWB_ASSERT_MSG(m_deviceManager != nullptr, NWB_TEXT("Graphics::runFrame requires a valid DeviceManager."));
+    NWB_FATAL_ASSERT_MSG(m_deviceManager != nullptr, NWB_TEXT("Graphics::runFrame requires a valid DeviceManager."));
     return m_deviceManager->runFrame();
 }
 
 void Graphics::updateWindowState(u32 width, u32 height, bool windowVisible, bool windowIsInFocus){
-    NWB_ASSERT_MSG(m_deviceManager != nullptr, NWB_TEXT("Graphics::updateWindowState requires a valid DeviceManager."));
+    NWB_FATAL_ASSERT_MSG(m_deviceManager != nullptr, NWB_TEXT("Graphics::updateWindowState requires a valid DeviceManager."));
     m_deviceManager->updateWindowState(width, height, windowVisible, windowIsInFocus);
 }
 
@@ -159,7 +159,7 @@ void Graphics::destroy(){
 }
 
 IDevice* Graphics::getDevice()const noexcept{
-    NWB_ASSERT_MSG(m_deviceManager != nullptr, NWB_TEXT("Graphics::getDevice requires a valid DeviceManager."));
+    NWB_FATAL_ASSERT_MSG(m_deviceManager != nullptr, NWB_TEXT("Graphics::getDevice requires a valid DeviceManager."));
     return m_deviceManager->getDevice();
 }
 
@@ -175,8 +175,13 @@ BufferHandle Graphics::setupBuffer(const BufferSetupDesc& desc)const{
     IDevice* device = getDevice();
 
     BufferHandle buffer = device->createBuffer(desc.bufferDesc);
-    if(!buffer)
+    if(!buffer){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Graphics: failed to create setup buffer '{}'"),
+            StringConvert(desc.bufferDesc.debugName.c_str())
+        );
         return {};
+    }
 
     if(!desc.data || desc.dataSize == 0)
         return buffer;
@@ -184,8 +189,13 @@ BufferHandle Graphics::setupBuffer(const BufferSetupDesc& desc)const{
     CommandListParameters cmdParams;
     cmdParams.setQueueType(desc.queue);
     CommandListHandle commandList = device->createCommandList(cmdParams);
-    if(!commandList)
+    if(!commandList){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Graphics: failed to create upload command list for buffer '{}'"),
+            StringConvert(desc.bufferDesc.debugName.c_str())
+        );
         return {};
+    }
 
     commandList->open();
     commandList->writeBuffer(buffer.get(), desc.data, desc.dataSize, desc.destOffsetBytes);
@@ -199,8 +209,13 @@ TextureHandle Graphics::setupTexture(const TextureSetupDesc& desc)const{
     IDevice* device = getDevice();
 
     TextureHandle texture = device->createTexture(desc.textureDesc);
-    if(!texture)
+    if(!texture){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Graphics: failed to create setup texture '{}'"),
+            StringConvert(desc.textureDesc.name.c_str())
+        );
         return {};
+    }
 
     if(!desc.data || desc.uploadDataSize == 0)
         return texture;
@@ -208,8 +223,13 @@ TextureHandle Graphics::setupTexture(const TextureSetupDesc& desc)const{
     CommandListParameters cmdParams;
     cmdParams.setQueueType(desc.queue);
     CommandListHandle commandList = device->createCommandList(cmdParams);
-    if(!commandList)
+    if(!commandList){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Graphics: failed to create upload command list for texture '{}'"),
+            StringConvert(desc.textureDesc.name.c_str())
+        );
         return {};
+    }
 
     commandList->open();
     commandList->writeTexture(texture.get(), desc.arraySlice, desc.mipLevel, desc.data, desc.rowPitch, desc.depthPitch);
@@ -237,8 +257,13 @@ Graphics::MeshResource Graphics::setupMesh(const MeshSetupDesc& desc)const{
         vertexSetup.queue = desc.queue;
 
         output.vertexBuffer = setupBuffer(vertexSetup);
-        if(!output.vertexBuffer)
+        if(!output.vertexBuffer){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Graphics: failed to set up mesh vertex buffer '{}'"),
+                StringConvert(desc.vertexBufferName.c_str())
+            );
             return MeshResource{};
+        }
     }
 
     if(desc.indexData && desc.indexDataSize > 0){
@@ -255,8 +280,13 @@ Graphics::MeshResource Graphics::setupMesh(const MeshSetupDesc& desc)const{
         indexSetup.queue = desc.queue;
 
         output.indexBuffer = setupBuffer(indexSetup);
-        if(!output.indexBuffer)
+        if(!output.indexBuffer){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Graphics: failed to set up mesh index buffer '{}'"),
+                StringConvert(desc.indexBufferName.c_str())
+            );
             return MeshResource{};
+        }
     }
 
     if(output.vertexStride > 0 && desc.vertexDataSize > 0)
@@ -381,4 +411,3 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

@@ -35,19 +35,25 @@ void Device::setEventQuery(IEventQuery* _query, CommandQueue::Enum queue){
         return;
 
     res = vkResetFences(m_context.device, 1, &query->m_fence);
-    if(res != VK_SUCCESS)
+    if(res != VK_SUCCESS){
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to reset event query fence before submit: {}"), ResultToString(res));
         return;
+    }
 
     Queue* q = getQueue(queue);
     if(q){
         VkSubmitInfo submitInfo = __hidden_vulkan::MakeVkStruct<VkSubmitInfo>(VK_STRUCTURE_TYPE_SUBMIT_INFO);
         ScopedLock lock(q->m_mutex);
         res = vkQueueSubmit(q->m_queue, 1, &submitInfo, query->m_fence);
-        if(res != VK_SUCCESS)
+        if(res != VK_SUCCESS){
+            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to submit event query fence: {}"), ResultToString(res));
             return;
+        }
     }
-    else
+    else{
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to set event query: requested queue is not available"));
         return;
+    }
 
     query->m_started = true;
 }
@@ -149,6 +155,7 @@ f32 Device::getTimerQueryTime(ITimerQuery* _query){
         return static_cast<f32>(diff) * timestampPeriod * 1e-9f; // Convert to seconds
     }
 
+    NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to retrieve timer query results: {}"), ResultToString(res));
     return 0.f;
 }
 
@@ -277,4 +284,3 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

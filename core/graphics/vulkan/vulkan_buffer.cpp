@@ -188,12 +188,16 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
 void* Device::mapBuffer(IBuffer* _buffer, CpuAccessMode::Enum){
     VkResult res = VK_SUCCESS;
 
-    if(!_buffer)
+    if(!_buffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map buffer: buffer is null"));
         return nullptr;
+    }
 
     auto* buffer = static_cast<Buffer*>(_buffer);
-    if(buffer->m_memory == VK_NULL_HANDLE)
+    if(buffer->m_memory == VK_NULL_HANDLE){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map buffer: buffer has no bound memory"));
         return nullptr;
+    }
 
     auto invalidateReadRange = [&]() -> bool{
         if(buffer->m_desc.cpuAccess != CpuAccessMode::Read)
@@ -219,8 +223,10 @@ void* Device::mapBuffer(IBuffer* _buffer, CpuAccessMode::Enum){
 
     void* data = nullptr;
     res = vkMapMemory(m_context.device, buffer->m_memory, 0, VK_WHOLE_SIZE, 0, &data);
-    if(res != VK_SUCCESS)
+    if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map buffer memory: {}"), ResultToString(res));
         return nullptr;
+    }
 
     buffer->m_mappedMemory = data;
     if(!invalidateReadRange())
@@ -241,8 +247,10 @@ void Device::unmapBuffer(IBuffer* _buffer){
 }
 
 MemoryRequirements Device::getBufferMemoryRequirements(IBuffer* _buffer){
-    if(!_buffer)
+    if(!_buffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get buffer memory requirements: buffer is null"));
         return {};
+    }
 
     auto* buffer = static_cast<Buffer*>(_buffer);
 
@@ -258,29 +266,42 @@ MemoryRequirements Device::getBufferMemoryRequirements(IBuffer* _buffer){
 bool Device::bindBufferMemory(IBuffer* _buffer, IHeap* heap, u64 offset){
     VkResult res = VK_SUCCESS;
 
-    if(!_buffer)
+    if(!_buffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind buffer memory: buffer is null"));
         return false;
+    }
 
     auto* buffer = static_cast<Buffer*>(_buffer);
     auto* vkHeap = checked_cast<Heap*>(heap);
 
-    if(!vkHeap || vkHeap->m_memory == VK_NULL_HANDLE)
+    if(!vkHeap || vkHeap->m_memory == VK_NULL_HANDLE){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind buffer memory: heap is invalid"));
         return false;
+    }
 
     // Binding to a heap means the heap owns the memory, not the buffer
     buffer->m_memory = VK_NULL_HANDLE;
 
     res = vkBindBufferMemory(m_context.device, buffer->m_buffer, vkHeap->m_memory, offset);
-    return res == VK_SUCCESS;
+    if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind buffer memory: {}"), ResultToString(res));
+        return false;
+    }
+
+    return true;
 }
 
 BufferHandle Device::createHandleForNativeBuffer(ObjectType objectType, Object _buffer, const BufferDesc& desc){
-    if(objectType != ObjectTypes::VK_Buffer)
+    if(objectType != ObjectTypes::VK_Buffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer handle for native buffer: object type is not VK_Buffer"));
         return nullptr;
+    }
 
     auto* nativeBuffer = static_cast<VkBuffer_T*>(_buffer);
-    if(nativeBuffer == VK_NULL_HANDLE)
+    if(nativeBuffer == VK_NULL_HANDLE){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer handle for native buffer: buffer handle is null"));
         return nullptr;
+    }
 
     auto* buffer = NewArenaObject<Buffer>(m_context.objectArena, m_context, m_allocator);
     buffer->m_desc = desc;
@@ -313,6 +334,7 @@ void CommandList::writeBuffer(IBuffer* _buffer, const void* data, usize dataSize
     void* cpuVA = nullptr;
 
     if(!uploadMgr->suballocateBuffer(dataSize, &stagingBuffer, &stagingOffset, &cpuVA, 0)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to suballocate staging buffer for writeBuffer"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to suballocate staging buffer for writeBuffer"));
         return;
     }
@@ -360,4 +382,3 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

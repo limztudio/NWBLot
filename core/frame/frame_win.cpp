@@ -158,6 +158,7 @@ bool Frame::init(){
     if(!startup())
         return false;
 
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Frame: Using Windows backend."));
     return true;
 }
 bool Frame::showFrame(){

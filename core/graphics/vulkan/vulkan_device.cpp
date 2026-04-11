@@ -186,7 +186,7 @@ Device::Device(const DeviceDesc& desc)
         vkGetPhysicalDeviceProperties2(m_context.physicalDevice, &props2);
 
         if(!m_descriptorHeapManager.initialize()){
-            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Descriptor heap initialization failed, falling back to descriptor sets."));
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Descriptor heap initialization failed, falling back to descriptor sets."));
             m_context.extensions.EXT_descriptor_heap = false;
         }
     }
@@ -277,8 +277,10 @@ CommandListHandle Device::createCommandList(const CommandListParameters& params)
 
 u64 Device::executeCommandLists(ICommandList* const* pCommandLists, usize numCommandLists, CommandQueue::Enum executionQueue){
     Queue* queue = getQueue(executionQueue);
-    if(!queue)
+    if(!queue){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to execute command lists: requested queue is not available"));
         return 0;
+    }
 
     return queue->submit(pCommandLists, numCommandLists);
 }
@@ -288,11 +290,11 @@ bool Device::waitForIdle(){
 
     res = vkDeviceWaitIdle(m_context.device);
     if(res == VK_ERROR_DEVICE_LOST){
-        NWB_LOGGER_INFO(NWB_TEXT("Vulkan: Device was lost during waitForIdle."));
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Device was lost during waitForIdle."));
         return false;
     }
     else if(res != VK_SUCCESS){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to wait for device idle. {}"), ResultToString(res));
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to wait for device idle. {}"), ResultToString(res));
         return false;
     }
 
@@ -600,4 +602,3 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

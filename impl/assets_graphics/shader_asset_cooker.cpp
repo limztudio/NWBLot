@@ -1812,7 +1812,7 @@ bool ShaderAssetCooker::cook(const Core::Assets::AssetCookOptions& options){
     if(!cookShaderAssets(environment, result))
         return false;
 
-    NWB_LOGGER_INFO(
+    NWB_LOGGER_ESSENTIAL_INFO(
         NWB_TEXT("Graphics asset cook complete [{}] - volume='{}', files={}, segments={}, mount='{}'"),
         StringConvert(options.configuration.c_str()),
         StringConvert(result.volumeName.c_str()),

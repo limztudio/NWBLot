@@ -1158,7 +1158,7 @@ bool DeviceManager::createDevice(){
 
     m_bufferDeviceAddressSupported = vulkan12features.bufferDeviceAddress == VK_TRUE;
 
-    NWB_LOGGER_INFO(NWB_TEXT("Vulkan: Created device: {}"), m_rendererString);
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Vulkan: created device '{}'"), m_rendererString);
 
     return true;
 }
@@ -1481,7 +1481,7 @@ bool DeviceManager::createDeviceInternal(){
         installDebugCallback();
 
     if(m_deviceParams.maxFramesInFlight == 0){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: maxFramesInFlight was 0; clamping to 1."));
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: maxFramesInFlight was 0; clamping to 1."));
         m_deviceParams.maxFramesInFlight = 1;
     }
 
@@ -1681,6 +1681,7 @@ bool DeviceManager::beginFrame(){
         return true;
     }
 
+    NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to acquire next swap chain image. {}"), ResultToString(res));
     return false;
 }
 
@@ -1711,8 +1712,10 @@ bool DeviceManager::present(){
     presentInfo.pImageIndices = &m_swapChainIndex;
 
     res = vkQueuePresentKHR(m_presentQueue, &presentInfo);
-    if(!(res == VK_SUCCESS || res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR))
+    if(!(res == VK_SUCCESS || res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR)){
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Queue present failed. {}"), ResultToString(res));
         return false;
+    }
     
     while(m_framesInFlight.size() >= m_deviceParams.maxFramesInFlight){
         auto query = m_framesInFlight.front();
@@ -1749,13 +1752,17 @@ bool DeviceManager::present(){
 bool DeviceManager::enumerateAdapters(Vector<AdapterInfo>& outAdapters){
     VkResult res = VK_SUCCESS;
 
-    if(!m_vulkanInstance)
+    if(!m_vulkanInstance){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate adapters: instance is null"));
         return false;
+    }
 
     uint32_t deviceCount = 0;
     res = vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, nullptr);
-    if(res != VK_SUCCESS)
+    if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate adapter count. {}"), ResultToString(res));
         return false;
+    }
 
     if(deviceCount == 0){
         outAdapters.clear();
@@ -1766,8 +1773,10 @@ bool DeviceManager::enumerateAdapters(Vector<AdapterInfo>& outAdapters){
 
     Vector<VkPhysicalDevice, Alloc::ScratchAllocator<VkPhysicalDevice>> devices(deviceCount, Alloc::ScratchAllocator<VkPhysicalDevice>(scratchArena));
     res = vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, devices.data());
-    if(res != VK_SUCCESS)
+    if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate adapters. {}"), ResultToString(res));
         return false;
+    }
 
     outAdapters.clear();
     outAdapters.resize(deviceCount);

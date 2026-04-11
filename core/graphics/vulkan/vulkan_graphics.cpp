@@ -680,6 +680,7 @@ void CommandList::drawIndexed(const DrawArguments& args){
 
 void CommandList::drawIndirect(u32 offsetBytes, u32 drawCount){
     if(!m_currentGraphicsState.indirectParams){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: No indirect buffer bound for drawIndirect"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: No indirect buffer bound for drawIndirect"));
         return;
     }
@@ -696,4 +697,3 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

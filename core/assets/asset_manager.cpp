@@ -47,20 +47,39 @@ bool AssetManager::loadSync(
     }
 
     AssetBytes binary;
-    if(!m_binarySource.readAssetBinary(virtualPath, binary))
+    if(!m_binarySource.readAssetBinary(virtualPath, binary)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("AssetManager: failed to read binary for asset '{}' of type '{}'"),
+            StringConvert(virtualPath.c_str()),
+            StringConvert(assetType.c_str())
+        );
         return false;
+    }
 
-    return m_registry.deserializeAsset(assetType, virtualPath, binary, outAsset);
+    if(!m_registry.deserializeAsset(assetType, virtualPath, binary, outAsset)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("AssetManager: failed to deserialize asset '{}' of type '{}'"),
+            StringConvert(virtualPath.c_str()),
+            StringConvert(assetType.c_str())
+        );
+        return false;
+    }
+
+    return true;
 }
 
 
 u64 AssetManager::enqueueLoad(const Name& assetType, const Name& virtualPath){
-    if(!assetType || !virtualPath)
+    if(!assetType || !virtualPath){
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetManager: rejected async load request with empty asset type or virtual path"));
         return 0;
+    }
 
     const u64 requestId = m_nextRequestId.fetch_add(1, std::memory_order_relaxed);
-    if(requestId == 0)
+    if(requestId == 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetManager: async load request id wrapped to zero"));
         return 0;
+    }
 
     IAssetAsyncExecutor* asyncExecutor = nullptr;
     {

@@ -153,8 +153,10 @@ void RendererSystem::render(Core::IFramebuffer* framebuffer){
 
     Core::IDevice* device = m_graphics.getDevice();
     Core::CommandListHandle commandList = device->createCommandList();
-    if(!commandList)
+    if(!commandList){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create render command list"));
         return;
+    }
 
     commandList->open();
 
@@ -417,7 +419,12 @@ bool RendererSystem::ensureMeshShaderResources(){
 
     Core::IDevice* device = m_graphics.getDevice();
     m_meshBindingLayout = device->createBindingLayout(bindingLayoutDesc);
-    return static_cast<bool>(m_meshBindingLayout);
+    if(!m_meshBindingLayout){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create mesh shader binding layout"));
+        return false;
+    }
+
+    return true;
 }
 
 bool RendererSystem::ensureComputeEmulationResources(){
@@ -431,8 +438,10 @@ bool RendererSystem::ensureComputeEmulationResources(){
 
         Core::IDevice* device = m_graphics.getDevice();
         m_computeBindingLayout = device->createBindingLayout(bindingLayoutDesc);
-        if(!m_computeBindingLayout)
+        if(!m_computeBindingLayout){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute-emulation binding layout"));
             return false;
+        }
     }
 
     if(!m_emulationVertexShader){
@@ -463,8 +472,10 @@ bool RendererSystem::ensureComputeEmulationResources(){
 
         Core::IDevice* device = m_graphics.getDevice();
         m_emulationInputLayout = device->createInputLayout(attributes, 2, m_emulationVertexShader.get());
-        if(!m_emulationInputLayout)
+        if(!m_emulationInputLayout){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute-emulation input layout"));
             return false;
+        }
     }
 
     return true;
@@ -482,7 +493,15 @@ bool RendererSystem::ensureMeshBindingSet(GeometryResources& geometry){
 
     Core::IDevice* device = m_graphics.getDevice();
     geometry.meshBindingSet = device->createBindingSet(bindingSetDesc, m_meshBindingLayout.get());
-    return static_cast<bool>(geometry.meshBindingSet);
+    if(!geometry.meshBindingSet){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("RendererSystem: failed to create mesh shader binding set for geometry '{}'"),
+            StringConvert(geometry.geometryName.c_str())
+        );
+        return false;
+    }
+
+    return true;
 }
 
 bool RendererSystem::ensureComputeBindingSet(GeometryResources& geometry){
@@ -525,7 +544,15 @@ bool RendererSystem::ensureComputeBindingSet(GeometryResources& geometry){
 
     Core::IDevice* device = m_graphics.getDevice();
     geometry.computeBindingSet = device->createBindingSet(bindingSetDesc, m_computeBindingLayout.get());
-    return static_cast<bool>(geometry.computeBindingSet);
+    if(!geometry.computeBindingSet){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("RendererSystem: failed to create compute-emulation binding set for geometry '{}'"),
+            StringConvert(geometry.geometryName.c_str())
+        );
+        return false;
+    }
+
+    return true;
 }
 
 
@@ -616,8 +643,13 @@ bool RendererSystem::ensureRendererPipeline(const RendererComponent& renderer, C
         pipelineDesc.addBindingLayout(m_meshBindingLayout.get());
 
         resources.meshletPipeline = device->createMeshletPipeline(pipelineDesc, framebuffer->getFramebufferInfo());
-        if(!resources.meshletPipeline)
+        if(!resources.meshletPipeline){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("RendererSystem: failed to create meshlet pipeline for material '{}'"),
+                StringConvert(materialKey.c_str())
+            );
             return false;
+        }
 
         resources.renderPath = RenderPath::MeshShader;
         return true;
@@ -646,8 +678,13 @@ bool RendererSystem::ensureRendererPipeline(const RendererComponent& renderer, C
         computeDesc.setComputeShader(resources.computeShader.get());
         computeDesc.addBindingLayout(m_computeBindingLayout.get());
         resources.computePipeline = device->createComputePipeline(computeDesc);
-        if(!resources.computePipeline)
+        if(!resources.computePipeline){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("RendererSystem: failed to create compute pipeline for material '{}'"),
+                StringConvert(materialKey.c_str())
+            );
             return false;
+        }
 
         Core::GraphicsPipelineDesc emulationDesc;
         emulationDesc.setInputLayout(m_emulationInputLayout.get());
@@ -656,6 +693,10 @@ bool RendererSystem::ensureRendererPipeline(const RendererComponent& renderer, C
         emulationDesc.setRenderState(defaultRenderState);
         resources.emulationPipeline = device->createGraphicsPipeline(emulationDesc, framebuffer->getFramebufferInfo());
         if(!resources.emulationPipeline){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("RendererSystem: failed to create emulation graphics pipeline for material '{}'"),
+                StringConvert(materialKey.c_str())
+            );
             resources.computePipeline.reset();
             return false;
         }
@@ -723,7 +764,7 @@ void RendererSystem::logMaterialRenderPathDecision(const Name& materialKey, cons
 
     switch(renderPath){
     case RenderPath::MeshShader:{
-        NWB_LOGGER_INFO(
+        NWB_LOGGER_ESSENTIAL_INFO(
             NWB_TEXT("RendererSystem: material '{}' selected MeshShader + PS on this device"),
             StringConvert(materialKey.c_str())
         );
@@ -731,13 +772,13 @@ void RendererSystem::logMaterialRenderPathDecision(const Name& materialKey, cons
     }
     case RenderPath::ComputeEmulation:{
         if(!meshSupported){
-            NWB_LOGGER_INFO(
+            NWB_LOGGER_ESSENTIAL_INFO(
                 NWB_TEXT("RendererSystem: material '{}' selected CS + PS by compiling its mesh shader for compute emulation because this device does not support mesh shaders"),
                 StringConvert(materialKey.c_str())
             );
         }
         else{
-            NWB_LOGGER_INFO(
+            NWB_LOGGER_ESSENTIAL_INFO(
                 NWB_TEXT("RendererSystem: material '{}' selected CS + PS through compute emulation"),
                 StringConvert(materialKey.c_str())
             );
@@ -794,8 +835,15 @@ bool RendererSystem::ensureShaderLoaded(
         );
         return false;
     }
-    if(!shaderVirtualPath)
+    if(!shaderVirtualPath){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("RendererSystem: shader resolver returned an empty path for shader '{}' variant '{}' stage '{}'"),
+            StringConvert(shaderName.c_str()),
+            StringConvert(resolvedVariantName),
+            StringConvert(stageName.c_str())
+        );
         return false;
+    }
 
     UniquePtr<Core::Assets::IAsset> loadedAsset;
     if(!m_assetManager.loadSync(Shader::AssetTypeName(), shaderVirtualPath, loadedAsset)){
@@ -840,7 +888,16 @@ bool RendererSystem::ensureShaderLoaded(
         shaderBinary.data(),
         shaderBinary.size()
     );
-    return static_cast<bool>(outShader);
+    if(!outShader){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("RendererSystem: failed to create shader '{}' from asset '{}'"),
+            StringConvert(debugName.c_str()),
+            StringConvert(shaderVirtualPath.c_str())
+        );
+        return false;
+    }
+
+    return true;
 }
 
 

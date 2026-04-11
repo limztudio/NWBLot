@@ -51,6 +51,7 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
     pso->m_desc = desc;
 
     if(!desc.CS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create compute pipeline: compute shader is null"));
         DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
@@ -188,6 +189,7 @@ void CommandList::dispatch(u32 groupsX, u32 groupsY, u32 groupsZ){
 
 void CommandList::dispatchIndirect(u32 offsetBytes){
     if(!m_currentComputeState.indirectParams){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: No indirect buffer bound for dispatchIndirect"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: No indirect buffer bound for dispatchIndirect"));
         return;
     }
@@ -204,4 +206,3 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

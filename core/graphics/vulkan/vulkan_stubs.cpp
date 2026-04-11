@@ -64,6 +64,7 @@ void CommandList::setPushConstants(const void* data, usize byteSize){
     }
 
     if(layout == VK_NULL_HANDLE){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: CommandList::setPushConstants: no active pipeline layout"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: CommandList::setPushConstants: no active pipeline layout"));
         return;
     }
@@ -78,6 +79,7 @@ void CommandList::setPushConstants(const void* data, usize byteSize){
 
 void CommandList::drawIndexedIndirect(u32 offsetBytes, u32 drawCount){
     if(!m_currentGraphicsState.indirectParams){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: No indirect buffer bound for drawIndexedIndirect"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: No indirect buffer bound for drawIndexedIndirect"));
         return;
     }
@@ -94,7 +96,15 @@ void CommandList::drawIndexedIndirect(u32 offsetBytes, u32 drawCount){
 void CommandList::buildTopLevelAccelStructFromBuffer(IRayTracingAccelStruct* _as, IBuffer* instanceBuffer,
     u64 instanceBufferOffset, usize numInstances, RayTracingAccelStructBuildFlags::Mask buildFlags)
 {
-    if(!_as || !instanceBuffer || numInstances == 0)
+    if(!_as){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS from buffer: acceleration structure is null"));
+        return;
+    }
+    if(!instanceBuffer && numInstances > 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS from buffer: instance buffer is null"));
+        return;
+    }
+    if(numInstances == 0)
         return;
 
     if(!m_context.extensions.KHR_acceleration_structure)
@@ -137,6 +147,7 @@ void CommandList::buildTopLevelAccelStructFromBuffer(IRayTracingAccelStruct* _as
     if(sizeInfo.buildScratchSize > 0){
         scratchBuffer = m_device.createBuffer(scratchDesc);
         if(!scratchBuffer){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate TLAS scratch buffer"));
             NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to allocate TLAS scratch buffer"));
             return;
         }
@@ -313,8 +324,10 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
         scratchDesc.canHaveUAVs = true;
 
         scratchBufferHandle = m_device.createBuffer(scratchDesc);
-        if(!scratchBufferHandle)
+        if(!scratchBufferHandle){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate cluster operation scratch buffer"));
             return;
+        }
 
         scratchBuffer = checked_cast<Buffer*>(scratchBufferHandle.get());
     }
@@ -473,8 +486,10 @@ const CommandListParameters& CommandList::getDescription(){
 
 
 void Device::getTextureTiling(ITexture* _texture, u32* numTiles, PackedMipDesc* desc, TileShape* tileShape, u32* subresourceTilingsNum, SubresourceTiling* subresourceTilings){
-    if(!_texture)
+    if(!_texture){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get texture tiling: texture is null"));
         return;
+    }
 
     auto* texture = checked_cast<Texture*>(_texture);
     u32 numStandardMips = 0;
@@ -576,9 +591,22 @@ void Device::getTextureTiling(ITexture* _texture, u32* numTiles, PackedMipDesc* 
 }
 
 void Device::updateTextureTileMappings(ITexture* texture, const TextureTilesMapping* tileMappings, u32 numTileMappings, CommandQueue::Enum executionQueue){
-    Queue* queue = getQueue(executionQueue);
-    if(!queue)
+    if(!texture){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to update texture tile mappings: texture is null"));
         return;
+    }
+    if(!tileMappings && numTileMappings > 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to update texture tile mappings: mappings are null"));
+        return;
+    }
+    if(numTileMappings == 0)
+        return;
+
+    Queue* queue = getQueue(executionQueue);
+    if(!queue){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to update texture tile mappings: requested queue is not available"));
+        return;
+    }
 
     queue->updateTextureTileMappings(texture, tileMappings, numTileMappings);
 }

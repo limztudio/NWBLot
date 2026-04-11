@@ -68,10 +68,21 @@ int ResourceCookerMain(int argc, char** argv){
             return -1;
         }
 
+        const char* requestedAssetType = options.assetType.empty() ? "auto" : options.assetType.c_str();
+        NWB_LOGGER_ESSENTIAL_INFO(
+            NWB_TEXT("Resource cooker: starting cook type='{}' configuration='{}' roots={} output='{}'"),
+            StringConvert(requestedAssetType),
+            StringConvert(options.configuration.c_str()),
+            options.assetRoots.size(),
+            StringConvert(options.outputDirectory.c_str())
+        );
+
         if(!assetCookerRegistry.cook(options)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Resource cooker: asset cook failed"));
             return -1;
         }
 
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Resource cooker: asset cook succeeded"));
         return 0;
     }
     catch(const GeneralException& e){
@@ -86,4 +97,3 @@ int ResourceCookerMain(int argc, char** argv){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

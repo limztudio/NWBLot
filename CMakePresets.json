@@ -115,11 +115,7 @@
         "linux-clang-base",
         "variant-engine",
         "output-engine"
-      ],
-      "cacheVariables": {
-        "NWB_BUILD_LOGSERVER": "OFF",
-        "NWB_BUILD_RESOURCE_COOKER": "OFF"
-      }
+      ]
     },
     {
       "name": "linux-clang-testbed-x64",

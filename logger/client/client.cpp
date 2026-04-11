@@ -69,6 +69,8 @@ bool Client::globalInit(){
 
 Client::Client()
     : m_curl(nullptr)
+    , m_pendingPayload()
+    , m_hasPendingPayload(false)
     , m_msgCount(0)
 {}
 Client::~Client(){
@@ -105,37 +107,52 @@ bool Client::internalInit(NotNull<const char*> url){
     return true;
 }
 bool Client::internalUpdate(){
-    if(!m_msgCount.load(std::memory_order_relaxed))
-        return true;
+    if(!m_hasPendingPayload){
+        if(!m_msgCount.load(std::memory_order_relaxed))
+            return true;
 
-    MessageType msg;
-    if(!try_dequeue(msg))
-        return true;
+        MessageType msg;
+        if(!try_dequeue(msg))
+            return true;
 
-    Vector<u8> payload;
-    __hidden_logger_client::BuildPayload(msg, payload);
+        __hidden_logger_client::BuildPayload(msg, m_pendingPayload);
+        m_hasPendingPayload = true;
+    }
+
+    auto scheduleRetry = [this](){
+        if(this->m_exit.load(std::memory_order_acquire))
+            return;
+
+        SleepMS(100);
+        if(this->m_exit.load(std::memory_order_acquire))
+            return;
+
+        this->m_semaphore.release();
+    };
 
     CURL* const curlHandle = static_cast<CURL*>(m_curl);
     CURLcode ret;
 
-    ret = curl_easy_setopt(curlHandle, CURLOPT_POSTFIELDS, reinterpret_cast<char*>(payload.data()));
+    ret = curl_easy_setopt(curlHandle, CURLOPT_POSTFIELDS, reinterpret_cast<char*>(m_pendingPayload.data()));
     if(ret != CURLE_OK){
-        enqueue(StringFormat(NWB_TEXT("Failed to set post fields on {}: {}"), CLIENT_NAME, StringConvert(curl_easy_strerror(ret))), Type::Error);
+        scheduleRetry();
         return true;
     }
 
-    ret = curl_easy_setopt(curlHandle, CURLOPT_POSTFIELDSIZE_LARGE, static_cast<curl_off_t>(payload.size()));
+    ret = curl_easy_setopt(curlHandle, CURLOPT_POSTFIELDSIZE_LARGE, static_cast<curl_off_t>(m_pendingPayload.size()));
     if(ret != CURLE_OK){
-        enqueue(StringFormat(NWB_TEXT("Failed to set payload size on {}: {}"), CLIENT_NAME, StringConvert(curl_easy_strerror(ret))), Type::Error);
+        scheduleRetry();
         return true;
     }
 
     ret = curl_easy_perform(curlHandle);
     if(ret != CURLE_OK){
-        enqueue(StringFormat(NWB_TEXT("Failed to perform on {}: {}"), CLIENT_NAME, StringConvert(curl_easy_strerror(ret))), Type::Error);
+        scheduleRetry();
         return true;
     }
 
+    m_pendingPayload.clear();
+    m_hasPendingPayload = false;
     return true;
 }
 

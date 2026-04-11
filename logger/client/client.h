@@ -80,6 +80,8 @@ protected:
 
 private:
     void* m_curl;
+    Vector<u8> m_pendingPayload;
+    bool m_hasPendingPayload;
 
 private:
     Atomic<i32> m_msgCount;

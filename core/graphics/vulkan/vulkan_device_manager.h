@@ -133,7 +133,7 @@ private:
         { VK_KHR_MAINTENANCE_4_EXTENSION_NAME },
         { VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME },
         { VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME },
-        { VK_NV_MESH_SHADER_EXTENSION_NAME, DeviceExtensionFeature::MeshShader },
+        { VK_EXT_MESH_SHADER_EXTENSION_NAME, DeviceExtensionFeature::MeshShader },
         { VK_EXT_MUTABLE_DESCRIPTOR_TYPE_EXTENSION_NAME, DeviceExtensionFeature::MutableDescriptorType },
     };
     const ExtEntry m_rayTracingExts[5] = {

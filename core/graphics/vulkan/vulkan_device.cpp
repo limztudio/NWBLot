@@ -136,7 +136,7 @@ Device::Device(const DeviceDesc& desc)
             m_context.extensions.NV_cooperative_vector = true;
         else if(NWB_STRCMP(ext, VK_NV_CLUSTER_ACCELERATION_STRUCTURE_EXTENSION_NAME) == 0)
             m_context.extensions.NV_cluster_acceleration_structure = true;
-        else if(NWB_STRCMP(ext, VK_EXT_MESH_SHADER_EXTENSION_NAME) == 0 || NWB_STRCMP(ext, VK_NV_MESH_SHADER_EXTENSION_NAME) == 0)
+        else if(NWB_STRCMP(ext, VK_EXT_MESH_SHADER_EXTENSION_NAME) == 0)
             m_context.extensions.EXT_mesh_shader = true;
         else if(NWB_STRCMP(ext, VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME) == 0)
             m_context.extensions.KHR_fragment_shading_rate = true;
@@ -177,6 +177,21 @@ Device::Device(const DeviceDesc& desc)
         m_context.coopVecFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_VECTOR_FEATURES_NV;
         features2.pNext = &m_context.coopVecFeatures;
         vkGetPhysicalDeviceFeatures2(m_context.physicalDevice, &features2);
+    }
+
+    if(m_context.extensions.EXT_descriptor_heap){
+        if(
+            !vkGetPhysicalDeviceDescriptorSizeEXT
+            || !vkWriteResourceDescriptorsEXT
+            || !vkWriteSamplerDescriptorsEXT
+            || !vkCmdBindResourceHeapEXT
+            || !vkCmdBindSamplerHeapEXT
+            || !vkCmdPushDataEXT
+        )
+        {
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Descriptor heap entry points are unavailable, falling back to descriptor sets."));
+            m_context.extensions.EXT_descriptor_heap = false;
+        }
     }
 
     if(m_context.extensions.EXT_descriptor_heap){
@@ -337,7 +352,7 @@ bool Device::queryFeatureSupport(Feature::Enum feature, void*, usize){
     case Feature::CooperativeVectorTraining:
         return m_context.extensions.NV_cooperative_vector && m_context.coopVecFeatures.cooperativeVectorTraining;
     case Feature::Meshlets:
-        return m_context.extensions.EXT_mesh_shader;
+        return m_context.extensions.EXT_mesh_shader && vkCmdDrawMeshTasksEXT;
     case Feature::VariableRateShading:
         return m_context.extensions.KHR_fragment_shading_rate;
     case Feature::VirtualResources:

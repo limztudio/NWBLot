@@ -63,8 +63,8 @@ struct OptionalDeviceFeatureSet{
         MakeVkFeatureStruct<VkPhysicalDeviceRayTracingPipelineFeaturesKHR>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR);
     VkPhysicalDeviceRayQueryFeaturesKHR rayQuery =
         MakeVkFeatureStruct<VkPhysicalDeviceRayQueryFeaturesKHR>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR);
-    VkPhysicalDeviceMeshShaderFeaturesNV meshShader =
-        MakeVkFeatureStruct<VkPhysicalDeviceMeshShaderFeaturesNV>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_NV);
+    VkPhysicalDeviceMeshShaderFeaturesEXT meshShader =
+        MakeVkFeatureStruct<VkPhysicalDeviceMeshShaderFeaturesEXT>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT);
     VkPhysicalDeviceFragmentShadingRateFeaturesKHR fragmentShadingRate =
         MakeVkFeatureStruct<VkPhysicalDeviceFragmentShadingRateFeaturesKHR>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_FEATURES_KHR);
     VkPhysicalDeviceMutableDescriptorTypeFeaturesEXT mutableDescriptorType =

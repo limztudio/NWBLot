@@ -35,6 +35,11 @@ static constexpr u32 s_TrianglesPerWorkgroup = 32u;
 
 struct ShaderDrivenPushConstants{
     u32 triangleCount = 0;
+    u32 scissorCullEnabled = 0;
+    u32 padding0 = 0;
+    u32 padding1 = 0;
+    f32 viewportRect[4] = {};
+    f32 scissorRect[4] = {};
 };
 
 struct EmulatedVertex{
@@ -43,7 +48,7 @@ struct EmulatedVertex{
     f32 padding = 0.f;
 };
 
-static_assert(sizeof(ShaderDrivenPushConstants) == sizeof(u32), "ShaderDrivenPushConstants layout must stay stable");
+static_assert(sizeof(ShaderDrivenPushConstants) == 48, "ShaderDrivenPushConstants layout must stay stable");
 static_assert(sizeof(EmulatedVertex) == s_EmulatedVertexStride, "EmulatedVertex layout must match the mesh emulation shader");
 
 
@@ -94,6 +99,31 @@ static u32 ComputeDispatchGroupCount(const u32 triangleCount){
         ? 0
         : (triangleCount + s_TrianglesPerWorkgroup - 1u) / s_TrianglesPerWorkgroup
     ;
+}
+
+static ShaderDrivenPushConstants BuildShaderDrivenPushConstants(const u32 triangleCount, const Core::ViewportState& viewportState){
+    ShaderDrivenPushConstants pushConstants;
+    pushConstants.triangleCount = triangleCount;
+
+    if(viewportState.viewports.empty())
+        return pushConstants;
+
+    const Core::Viewport& viewport = viewportState.viewports[0];
+    pushConstants.scissorCullEnabled = 1;
+    pushConstants.viewportRect[0] = viewport.minX;
+    pushConstants.viewportRect[1] = viewport.minY;
+    pushConstants.viewportRect[2] = viewport.maxX;
+    pushConstants.viewportRect[3] = viewport.maxY;
+
+    Core::Rect scissorRect(viewport);
+    if(!viewportState.scissorRects.empty())
+        scissorRect = viewportState.scissorRects[0];
+
+    pushConstants.scissorRect[0] = static_cast<f32>(scissorRect.minX);
+    pushConstants.scissorRect[1] = static_cast<f32>(scissorRect.minY);
+    pushConstants.scissorRect[2] = static_cast<f32>(scissorRect.maxX);
+    pushConstants.scissorRect[3] = static_cast<f32>(scissorRect.maxY);
+    return pushConstants;
 }
 
 
@@ -203,7 +233,8 @@ void RendererSystem::render(Core::IFramebuffer* framebuffer){
 
             commandList->setMeshletState(meshletState);
 
-            const __hidden_ecs_graphics::ShaderDrivenPushConstants pushConstants = { geometry->triangleCount };
+            const __hidden_ecs_graphics::ShaderDrivenPushConstants pushConstants =
+                __hidden_ecs_graphics::BuildShaderDrivenPushConstants(geometry->triangleCount, viewportState);
             commandList->setPushConstants(&pushConstants, sizeof(pushConstants));
             commandList->dispatchMesh(geometry->dispatchGroupCount);
             break;
@@ -224,7 +255,8 @@ void RendererSystem::render(Core::IFramebuffer* framebuffer){
 
             commandList->setComputeState(computeState);
 
-            const __hidden_ecs_graphics::ShaderDrivenPushConstants pushConstants = { geometry->triangleCount };
+            const __hidden_ecs_graphics::ShaderDrivenPushConstants pushConstants =
+                __hidden_ecs_graphics::BuildShaderDrivenPushConstants(geometry->triangleCount, viewportState);
             commandList->setPushConstants(&pushConstants, sizeof(pushConstants));
             commandList->dispatch(geometry->dispatchGroupCount);
 

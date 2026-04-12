@@ -14,6 +14,43 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_vulkan{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static bool AlignUploadOffsetChecked(const u64 value, const u32 alignment, u64& outAligned){
+    if(alignment <= 1u){
+        outAligned = value;
+        return true;
+    }
+
+    const u64 alignmentValue = static_cast<u64>(alignment);
+    const u64 remainder = value % alignmentValue;
+    if(remainder == 0){
+        outAligned = value;
+        return true;
+    }
+
+    const u64 addend = alignmentValue - remainder;
+    if(value > Limit<u64>::s_Max - addend)
+        return false;
+
+    outAligned = value + addend;
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 UploadManager::UploadManager(Device& pParent, u64 defaultChunkSize, u64 memoryLimit, bool isScratchBuffer)
     : m_device(pParent)
     , m_defaultChunkSize(defaultChunkSize)
@@ -32,23 +69,25 @@ bool UploadManager::suballocateBuffer(u64 size, Buffer** pBuffer, u64* pOffset, 
 
     ScopedLock lock(m_mutex);
 
-    if(alignment > 0){
-        const u64 alignmentMask = static_cast<u64>(alignment) - 1;
-        if(size > UINT64_MAX - alignmentMask)
+    const auto trySuballocateFromChunk = [&](BufferChunk& chunk) -> bool {
+        u64 alignedOffset = 0;
+        if(!__hidden_vulkan::AlignUploadOffsetChecked(chunk.allocated, alignment, alignedOffset))
+            return false;
+        if(alignedOffset > chunk.size || size > chunk.size - alignedOffset)
             return false;
 
-        size = (size + alignmentMask) & ~alignmentMask;
-    }
-
-    if(m_currentChunk && m_currentChunk->allocated <= m_currentChunk->size && size <= m_currentChunk->size - m_currentChunk->allocated){
-        *pBuffer = static_cast<Buffer*>(m_currentChunk->buffer.get());
-        *pOffset = m_currentChunk->allocated;
+        Buffer* buffer = static_cast<Buffer*>(chunk.buffer.get());
+        *pBuffer = buffer;
+        *pOffset = alignedOffset;
         if(pCpuVA)
-            *pCpuVA = static_cast<u8*>(static_cast<Buffer*>(m_currentChunk->buffer.get())->m_mappedMemory) + m_currentChunk->allocated;
+            *pCpuVA = static_cast<u8*>(buffer->m_mappedMemory) + alignedOffset;
 
-        m_currentChunk->allocated += size;
+        chunk.allocated = alignedOffset + size;
         return true;
-    }
+    };
+
+    if(m_currentChunk && trySuballocateFromChunk(*m_currentChunk))
+        return true;
 
     for(auto it = m_chunkPool.begin(); it != m_chunkPool.end(); ++it){
         if((*it)->size >= size && (*it)->version < currentVersion){
@@ -61,13 +100,7 @@ bool UploadManager::suballocateBuffer(u64 size, Buffer** pBuffer, u64* pOffset, 
             m_currentChunk->allocated = 0;
             m_currentChunk->version = currentVersion;
 
-            *pBuffer = static_cast<Buffer*>(m_currentChunk->buffer.get());
-            *pOffset = 0;
-            if(pCpuVA)
-                *pCpuVA = static_cast<Buffer*>(m_currentChunk->buffer.get())->m_mappedMemory;
-
-            m_currentChunk->allocated = size;
-            return true;
+            return trySuballocateFromChunk(*m_currentChunk);
         }
     }
 
@@ -86,13 +119,7 @@ bool UploadManager::suballocateBuffer(u64 size, Buffer** pBuffer, u64* pOffset, 
     m_currentChunk = MakeRefCount<BufferChunk>(m_device.m_context.threadPool, Move(bufferHandle), chunkSize);
     m_currentChunk->version = currentVersion;
 
-    *pBuffer = static_cast<Buffer*>(m_currentChunk->buffer.get());
-    *pOffset = 0;
-    if(pCpuVA)
-        *pCpuVA = static_cast<Buffer*>(m_currentChunk->buffer.get())->m_mappedMemory;
-
-    m_currentChunk->allocated = size;
-    return true;
+    return trySuballocateFromChunk(*m_currentChunk);
 }
 
 void UploadManager::submitChunks(u64, u64 submittedVersion){

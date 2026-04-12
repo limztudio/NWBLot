@@ -136,7 +136,7 @@ TrackedCommandBufferPtr Queue::createCommandBuffer(){
     }
 
     cmdBuf->m_recordingID = ++m_lastRecordingID;
-    return TrackedCommandBufferPtr(cmdBuf, TrackedCommandBufferPtr::deleter_type(&m_context.objectArena));
+    return TrackedCommandBufferPtr(cmdBuf, TrackedCommandBufferPtr::deleter_type(&m_context.objectArena), AdoptRef);
 }
 
 TrackedCommandBufferPtr Queue::getOrCreateCommandBuffer(){

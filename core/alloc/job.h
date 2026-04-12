@@ -78,16 +78,17 @@ private:
 
 private:
     static inline usize defaultNodeReserveCount(u32 threadCount){
-        const usize totalThreads = static_cast<usize>(threadCount) + 1;
-        return totalThreads * s_DefaultNodeReservePerThread;
+        const usize totalThreads = AddSize(static_cast<usize>(threadCount), 1);
+        return SizeOf<s_DefaultNodeReservePerThread>(totalThreads);
     }
 
     static inline usize defaultArenaSize(u32 threadCount){
         const usize reserveCount = defaultNodeReserveCount(threadCount);
-        const usize nodeBytes = reserveCount * sizeof(JobNode);
-        const usize dependencyBytes = reserveCount * 4 * sizeof(JobHandle);
-        const usize freeListBytes = reserveCount * sizeof(u32);
-        const usize total = nodeBytes + dependencyBytes + freeListBytes + 4096;
+        const usize nodeBytes = SizeOf<sizeof(JobNode)>(reserveCount);
+        const usize dependencyCount = SizeOf<4>(reserveCount);
+        const usize dependencyBytes = SizeOf<sizeof(JobHandle)>(dependencyCount);
+        const usize freeListBytes = SizeOf<sizeof(u32)>(reserveCount);
+        const usize total = AddSize(AddSize(AddSize(nodeBytes, dependencyBytes), freeListBytes), 4096);
         const usize arenaSize = total > s_DefaultMinimumArenaSize ? total : s_DefaultMinimumArenaSize;
         return MemoryArena::StructureAlignedSize(arenaSize);
     }
@@ -493,4 +494,3 @@ NWB_ALLOC_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

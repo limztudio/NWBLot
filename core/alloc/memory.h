@@ -22,7 +22,10 @@ NWB_ALLOC_BEGIN
 
 class MemoryArena : NoCopy{
 public:
-    inline static usize StructureAlignedSize(usize byte)noexcept{ return byte + static_cast<usize>(tlsf_size() + 8); }
+    inline static usize StructureAlignedSize(usize byte){
+        const usize overhead = AddSize(static_cast<usize>(tlsf_size()), 8);
+        return AddSize(byte, overhead);
+    }
 
 
 public:
@@ -274,4 +277,3 @@ MakeMemoryUnique(Args&&...) = delete;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

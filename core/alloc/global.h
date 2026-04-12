@@ -58,8 +58,19 @@ constexpr inline usize SizeOf(usize count){
     return count * size;
 }
 
+constexpr inline usize AddSize(usize lhs, usize rhs){
+    if(lhs > static_cast<usize>(-1) - rhs)
+        throw std::bad_array_new_length{};
+
+    return lhs + rhs;
+}
+
 constexpr inline usize Alignment(usize align, usize size){
-    return (size + align - 1) & ~(align - 1);
+    if(align <= 1)
+        return size;
+
+    const usize padding = align - 1;
+    return AddSize(size, padding) & ~padding;
 }
 
 
@@ -70,4 +81,3 @@ NWB_ALLOC_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

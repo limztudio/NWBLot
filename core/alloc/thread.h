@@ -180,9 +180,11 @@ private:
 
 private:
     static inline usize defaultArenaSize(u32 threadCount){
-        const usize workerBytes = static_cast<usize>(threadCount + 1) * sizeof(JoiningThread);
-        const usize taskBytes = static_cast<usize>(threadCount) * 8 * sizeof(TaskItem);
-        const usize total = workerBytes + taskBytes + 4096;
+        const usize workerCount = AddSize(static_cast<usize>(threadCount), 1);
+        const usize workerBytes = SizeOf<sizeof(JoiningThread)>(workerCount);
+        const usize taskCount = SizeOf<8>(static_cast<usize>(threadCount));
+        const usize taskBytes = SizeOf<sizeof(TaskItem)>(taskCount);
+        const usize total = AddSize(AddSize(workerBytes, taskBytes), 4096);
         return MemoryArena::StructureAlignedSize(total > 32768 ? total : 32768);
     }
 
@@ -480,4 +482,3 @@ NWB_ALLOC_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

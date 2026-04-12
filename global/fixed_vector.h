@@ -52,25 +52,49 @@ public:
 
 
 public:
-    using base::at;
-
-public:
     constexpr reference operator[](size_type pos){
-        NWB_ASSERT(pos < current_size);
-        return base::operator[](pos);
+        return at(pos);
     }
 
     constexpr const_reference operator[](size_type pos)const{
+        return at(pos);
+    }
+
+    constexpr reference at(size_type pos){
         NWB_ASSERT(pos < current_size);
+        if(pos >= current_size)
+            throw RuntimeException("FixedVector index out of range");
+
+        return base::operator[](pos);
+    }
+
+    constexpr const_reference at(size_type pos)const{
+        NWB_ASSERT(pos < current_size);
+        if(pos >= current_size)
+            throw RuntimeException("FixedVector index out of range");
+
         return base::operator[](pos);
     }
 
 public:
-    using base::front;
+    constexpr reference front(){ return at(0); }
+    constexpr const_reference front()const{ return at(0); }
 
 public:
-    constexpr reference back()noexcept{ auto tmp =  end(); --tmp; return *tmp; }
-    constexpr const_reference back()const noexcept{ auto tmp = cend(); --tmp; return *tmp; }
+    constexpr reference back(){
+        NWB_ASSERT(current_size > 0);
+        if(current_size == 0)
+            throw RuntimeException("FixedVector back on empty vector");
+
+        return base::operator[](current_size - 1);
+    }
+    constexpr const_reference back()const{
+        NWB_ASSERT(current_size > 0);
+        if(current_size == 0)
+            throw RuntimeException("FixedVector back on empty vector");
+
+        return base::operator[](current_size - 1);
+    }
 
 public:
     using base::data;

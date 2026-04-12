@@ -75,6 +75,8 @@ public:
     [[nodiscard]] inline BasicString<tchar>& appliedWindowTitle(){ return m_appliedWindowTitle; }
     [[nodiscard]] inline const BasicString<tchar>& appliedWindowTitle()const{ return m_appliedWindowTitle; }
 
+    [[nodiscard]] const tchar* syncGraphicsWindowState(u32 width, u32 height, bool windowVisible, bool windowIsInFocus);
+
 
 private:
     void setupPlatform(void* inst);

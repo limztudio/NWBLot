@@ -22,12 +22,6 @@ NWB_BEGIN
 bool CreateInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS::World>& outWorld){
     outWorld.reset();
 
-    auto* deviceManager = context.graphics.getDeviceManager();
-    if(!deviceManager){
-        NWB_LOGGER_FATAL(NWB_TEXT("CreateInitialProjectWorld failed: graphics device manager is null"));
-        return false;
-    }
-
     auto world = MakeUnique<Core::ECS::World>(context.objectArena, context.threadPool);
     if(!world){
         NWB_LOGGER_FATAL(NWB_TEXT("CreateInitialProjectWorld failed: ECS world allocation failed"));
@@ -50,7 +44,7 @@ bool CreateInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Core::E
         NWB_LOGGER_FATAL(NWB_TEXT("CreateInitialProjectWorld failed: core renderer system was not created"));
         return false;
     }
-    deviceManager->addRenderPassToBack(*rendererSystem);
+    context.graphics.addRenderPassToBack(*rendererSystem);
 
     outWorld = Move(world);
 
@@ -69,13 +63,7 @@ void DestroyInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Core::
         return;
     }
 
-    auto* deviceManager = context.graphics.getDeviceManager();
-    if(!deviceManager){
-        NWB_LOGGER_FATAL(NWB_TEXT("DestroyInitialProjectWorld failed: graphics device manager is null"));
-        return;
-    }
-
-    deviceManager->removeRenderPass(*rendererSystem);
+    context.graphics.removeRenderPass(*rendererSystem);
     world->clear();
     world.reset();
 }
@@ -88,4 +76,3 @@ NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

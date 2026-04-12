@@ -249,7 +249,7 @@ static void StopKeyRepeat(WaylandContext& context){
     context.repeatScancode = 0;
 }
 
-static void DispatchTextInput(IDeviceManager& deviceManager, const WaylandContext& context, u32 keycode, i32 mods){
+static void DispatchTextInput(Graphics& graphics, const WaylandContext& context, u32 keycode, i32 mods){
     if(!context.xkbState)
         return;
 
@@ -257,20 +257,18 @@ static void DispatchTextInput(IDeviceManager& deviceManager, const WaylandContex
     if(unicode < 32 || unicode == 127)
         return;
 
-    deviceManager.keyboardCharInput(unicode, mods);
+    graphics.keyboardCharInput(unicode, mods);
 }
 
 static void DispatchScroll(WaylandContext& context){
     if(!context.scrollPending || !context.frame)
         return;
 
-    if(auto* deviceManager = context.frame->graphics().getDeviceManager()){
-        f64 xoffset = context.scrollDiscreteX != 0 ? static_cast<f64>(context.scrollDiscreteX) : (context.scrollX / 120.0);
-        f64 yoffset = context.scrollDiscreteY != 0 ? -static_cast<f64>(context.scrollDiscreteY) : (-context.scrollY / 120.0);
+    f64 xoffset = context.scrollDiscreteX != 0 ? static_cast<f64>(context.scrollDiscreteX) : (context.scrollX / 120.0);
+    f64 yoffset = context.scrollDiscreteY != 0 ? -static_cast<f64>(context.scrollDiscreteY) : (-context.scrollY / 120.0);
 
-        if(xoffset != 0.0 || yoffset != 0.0)
-            deviceManager->mouseScrollUpdate(xoffset, yoffset);
-    }
+    if(xoffset != 0.0 || yoffset != 0.0)
+        context.frame->graphics().mouseScrollUpdate(xoffset, yoffset);
 
     context.scrollX = 0.0;
     context.scrollY = 0.0;
@@ -472,8 +470,7 @@ static void OnPointerEnter(void* data, wl_pointer* pointer, u32 serial, wl_surfa
     (void)surface;
 
     auto& context = *static_cast<WaylandContext*>(data);
-    if(auto* deviceManager = context.frame->graphics().getDeviceManager())
-        deviceManager->mousePosUpdate(wl_fixed_to_double(sx), wl_fixed_to_double(sy));
+    context.frame->graphics().mousePosUpdate(wl_fixed_to_double(sx), wl_fixed_to_double(sy));
 }
 
 static void OnPointerLeave(void* data, wl_pointer* pointer, u32 serial, wl_surface* surface){
@@ -488,8 +485,7 @@ static void OnPointerMotion(void* data, wl_pointer* pointer, u32 time, wl_fixed_
     (void)time;
 
     auto& context = *static_cast<WaylandContext*>(data);
-    if(auto* deviceManager = context.frame->graphics().getDeviceManager())
-        deviceManager->mousePosUpdate(wl_fixed_to_double(sx), wl_fixed_to_double(sy));
+    context.frame->graphics().mousePosUpdate(wl_fixed_to_double(sx), wl_fixed_to_double(sy));
 }
 
 static void OnPointerButton(void* data, wl_pointer* pointer, u32 serial, u32 time, u32 button, u32 state){
@@ -498,15 +494,13 @@ static void OnPointerButton(void* data, wl_pointer* pointer, u32 serial, u32 tim
     (void)time;
 
     auto& context = *static_cast<WaylandContext*>(data);
-    if(auto* deviceManager = context.frame->graphics().getDeviceManager()){
-        const i32 translatedButton = TranslatePointerButton(button);
-        if(translatedButton != -1){
-            deviceManager->mouseButtonUpdate(
-                translatedButton,
-                state == WL_POINTER_BUTTON_STATE_PRESSED ? InputAction::Press : InputAction::Release,
-                TranslateModifiers(context)
-            );
-        }
+    const i32 translatedButton = TranslatePointerButton(button);
+    if(translatedButton != -1){
+        context.frame->graphics().mouseButtonUpdate(
+            translatedButton,
+            state == WL_POINTER_BUTTON_STATE_PRESSED ? InputAction::Press : InputAction::Release,
+            TranslateModifiers(context)
+        );
     }
 }
 
@@ -646,37 +640,35 @@ static void OnKeyboardKey(void* data, wl_keyboard* keyboard, u32 serial, u32 tim
     if(!context.xkbState)
         return;
 
-    if(auto* deviceManager = context.frame->graphics().getDeviceManager()){
-        const u32 keycode = key + 8u;
-        const xkb_keysym_t keySym = xkb_state_key_get_one_sym(context.xkbState, keycode);
-        const i32 translatedKey = TranslateKey(keySym);
+    const u32 keycode = key + 8u;
+    const xkb_keysym_t keySym = xkb_state_key_get_one_sym(context.xkbState, keycode);
+    const i32 translatedKey = TranslateKey(keySym);
 
-        if(state == WL_KEYBOARD_KEY_STATE_PRESSED){
-            xkb_state_update_key(context.xkbState, keycode, XKB_KEY_DOWN);
+    if(state == WL_KEYBOARD_KEY_STATE_PRESSED){
+        xkb_state_update_key(context.xkbState, keycode, XKB_KEY_DOWN);
 
-            const i32 mods = TranslateModifiers(context);
-            deviceManager->keyboardUpdate(translatedKey, static_cast<i32>(key), InputAction::Press, mods);
-            DispatchTextInput(*deviceManager, context, keycode, mods);
+        const i32 mods = TranslateModifiers(context);
+        context.frame->graphics().keyboardUpdate(translatedKey, static_cast<i32>(key), InputAction::Press, mods);
+        DispatchTextInput(context.frame->graphics(), context, keycode, mods);
 
-            if(context.repeatRate > 0
-                && context.xkbKeymap
-                && xkb_keymap_key_repeats(context.xkbKeymap, keycode) > 0){
-                context.repeatPending = true;
-                context.repeatKeycode = keycode;
-                context.repeatKey = translatedKey;
-                context.repeatScancode = static_cast<i32>(key);
-                context.nextRepeatTime = TimerNow() + std::chrono::milliseconds(context.repeatDelayMs);
-            }
+        if(context.repeatRate > 0
+            && context.xkbKeymap
+            && xkb_keymap_key_repeats(context.xkbKeymap, keycode) > 0){
+            context.repeatPending = true;
+            context.repeatKeycode = keycode;
+            context.repeatKey = translatedKey;
+            context.repeatScancode = static_cast<i32>(key);
+            context.nextRepeatTime = TimerNow() + std::chrono::milliseconds(context.repeatDelayMs);
         }
-        else{
-            xkb_state_update_key(context.xkbState, keycode, XKB_KEY_UP);
+    }
+    else{
+        xkb_state_update_key(context.xkbState, keycode, XKB_KEY_UP);
 
-            const i32 mods = TranslateModifiers(context);
-            deviceManager->keyboardUpdate(translatedKey, static_cast<i32>(key), InputAction::Release, mods);
+        const i32 mods = TranslateModifiers(context);
+        context.frame->graphics().keyboardUpdate(translatedKey, static_cast<i32>(key), InputAction::Release, mods);
 
-            if(context.repeatPending && context.repeatKeycode == keycode)
-                StopKeyRepeat(context);
-        }
+        if(context.repeatPending && context.repeatKeycode == keycode)
+            StopKeyRepeat(context);
     }
 }
 
@@ -855,10 +847,6 @@ static void ProcessKeyRepeat(WaylandContext& context){
     if(!context.repeatPending || !context.frame || !context.xkbState)
         return;
 
-    auto* deviceManager = context.frame->graphics().getDeviceManager();
-    if(!deviceManager)
-        return;
-
     const Timer now = TimerNow();
     if(now < context.nextRepeatTime)
         return;
@@ -869,8 +857,8 @@ static void ProcessKeyRepeat(WaylandContext& context){
     ;
     do{
         const i32 mods = TranslateModifiers(context);
-        deviceManager->keyboardUpdate(context.repeatKey, context.repeatScancode, InputAction::Repeat, mods);
-        DispatchTextInput(*deviceManager, context, context.repeatKeycode, mods);
+        context.frame->graphics().keyboardUpdate(context.repeatKey, context.repeatScancode, InputAction::Repeat, mods);
+        DispatchTextInput(context.frame->graphics(), context, context.repeatKeycode, mods);
 
         if(stepMs <= 0){
             StopKeyRepeat(context);
@@ -1022,14 +1010,9 @@ bool RunWaylandFrame(Frame& frame){
         windowVisible = context->visible && frameData.width() > 0 && frameData.height() > 0;
         windowIsInFocus = frameData.isActive();
 
-        frame.graphics().updateWindowState(frameData.width(), frameData.height(), windowVisible, windowIsInFocus);
-        if(auto* deviceManager = frame.graphics().getDeviceManager()){
-            const tchar* title = deviceManager->getWindowTitle();
-            if(title && frame.appliedWindowTitle() != title){
-                frame.appliedWindowTitle() = title;
-                xdg_toplevel_set_title(context->toplevel, frame.appliedWindowTitle().c_str());
-                wl_display_flush(context->display);
-            }
+        if(const tchar* title = frame.syncGraphicsWindowState(frameData.width(), frameData.height(), windowVisible, windowIsInFocus)){
+            xdg_toplevel_set_title(context->toplevel, title);
+            wl_display_flush(context->display);
         }
 
         Timer currentTime(TimerNow());

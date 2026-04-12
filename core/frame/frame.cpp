@@ -139,6 +139,17 @@ bool Frame::render(){
     return true;
 }
 
+const tchar* Frame::syncGraphicsWindowState(u32 width, u32 height, bool windowVisible, bool windowIsInFocus){
+    m_graphics.updateWindowState(width, height, windowVisible, windowIsInFocus);
+
+    const tchar* title = m_graphics.getWindowTitle();
+    if(!title || m_appliedWindowTitle == title)
+        return nullptr;
+
+    m_appliedWindowTitle = title;
+    return m_appliedWindowTitle.c_str();
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

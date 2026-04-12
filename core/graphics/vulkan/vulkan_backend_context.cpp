@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "vulkan_device_manager.h"
+#include "vulkan_backend_context.h"
 
 #include <logger/client/logger.h>
 
@@ -113,6 +113,17 @@ static void* GetOptionalDeviceFeatureStruct(OptionalDeviceFeatureSet& features, 
     }
 }
 
+static Format::Enum GetBackBufferFormat(const DeviceCreationParameters& params){
+    if(params.headlessDevice)
+        return params.swapChainFormat;
+
+    if(params.swapChainFormat == Format::RGBA8_UNORM_SRGB)
+        return Format::BGRA8_UNORM_SRGB;
+    if(params.swapChainFormat == Format::RGBA8_UNORM)
+        return Format::BGRA8_UNORM;
+    return params.swapChainFormat;
+}
+
 static bool SupportsRequestedValue(VkBool32 requested, VkBool32 supported){
     return requested != VK_TRUE || supported == VK_TRUE;
 }
@@ -185,8 +196,8 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL VulkanDebugCallback(
     (void)objType;
     (void)obj;
 
-    const auto* manager = static_cast<const DeviceManager*>(userData);
-    if(manager && manager->isValidationMessageLocationIgnored(static_cast<usize>(location)))
+    const auto* backend = static_cast<const Backend*>(userData);
+    if(backend && backend->isValidationMessageLocationIgnored(static_cast<usize>(location)))
         return VK_FALSE;
 
     NWB_LOGGER_WARNING(NWB_TEXT("Vulkan validation: [location=0x{:x} code={} layer='{}'] {}"), location, code, StringConvert(layerPrefix), StringConvert(msg));
@@ -204,21 +215,16 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL VulkanDebugCallback(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static GraphicsAllocator& RequireAllocator(const DeviceCreationParameters& params){
-    NWB_ASSERT_MSG(params.allocator, NWB_TEXT("DeviceManager requires a valid GraphicsAllocator"));
-    return *params.allocator;
-}
-
-static Alloc::ThreadPool& RequireThreadPool(const DeviceCreationParameters& params){
-    NWB_ASSERT_MSG(params.threadPool, NWB_TEXT("DeviceManager requires a valid worker ThreadPool"));
-    return *params.threadPool;
-}
-
-
-DeviceManager::DeviceManager(const DeviceCreationParameters& params)
-    : IDeviceManager(params)
-    , m_allocator(RequireAllocator(params))
-    , m_threadPool(RequireThreadPool(params))
+Backend::Backend(
+    const DeviceCreationParameters& params,
+    SwapChainRuntimeState& swapChainState,
+    GraphicsAllocator& allocator,
+    Alloc::ThreadPool& threadPool
+)
+    : m_deviceParams(params)
+    , m_swapChainState(swapChainState)
+    , m_allocator(allocator)
+    , m_threadPool(threadPool)
     , m_arena(m_allocator.getObjectArena())
     , m_enabledExtensions(m_arena)
     , m_optionalExtensions(m_arena)
@@ -236,15 +242,15 @@ DeviceManager::DeviceManager(const DeviceCreationParameters& params)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-IDevice* DeviceManager::getDevice()const{
+IDevice* Backend::getDevice()const{
     return m_rhiDevice.get();
 }
 
-const tchar* DeviceManager::getRendererString()const{
+const tchar* Backend::getRendererString()const{
     return m_rendererString.c_str();
 }
 
-bool DeviceManager::isValidationMessageLocationIgnored(usize location)const{
+bool Backend::isValidationMessageLocationIgnored(usize location)const{
     for(const auto& ignored : m_deviceParams.ignoredVulkanValidationMessageLocations){
         if(ignored == location)
             return true;
@@ -252,60 +258,60 @@ bool DeviceManager::isValidationMessageLocationIgnored(usize location)const{
     return false;
 }
 
-bool DeviceManager::isVulkanInstanceExtensionEnabled(const char* extensionName)const{
+bool Backend::isVulkanInstanceExtensionEnabled(const char* extensionName)const{
     return m_enabledExtensions.instance.find(extensionName) != m_enabledExtensions.instance.end();
 }
 
-bool DeviceManager::isVulkanDeviceExtensionEnabled(const char* extensionName)const{
+bool Backend::isVulkanDeviceExtensionEnabled(const char* extensionName)const{
     return m_enabledExtensions.device.find(extensionName) != m_enabledExtensions.device.end();
 }
 
-bool DeviceManager::isVulkanLayerEnabled(const char* layerName)const{
+bool Backend::isVulkanLayerEnabled(const char* layerName)const{
     return m_enabledExtensions.layers.find(layerName) != m_enabledExtensions.layers.end();
 }
 
-void DeviceManager::getEnabledVulkanInstanceExtensions(Vector<AString>& extensions)const{
+void Backend::getEnabledVulkanInstanceExtensions(Vector<AString>& extensions)const{
     extensions.clear();
     extensions.reserve(m_enabledExtensions.instance.size());
     for(const auto& ext : m_enabledExtensions.instance)
         extensions.push_back(ext);
 }
 
-void DeviceManager::getEnabledVulkanDeviceExtensions(Vector<AString>& extensions)const{
+void Backend::getEnabledVulkanDeviceExtensions(Vector<AString>& extensions)const{
     extensions.clear();
     extensions.reserve(m_enabledExtensions.device.size());
     for(const auto& [name, _] : m_enabledExtensions.device)
         extensions.push_back(name);
 }
 
-void DeviceManager::getEnabledVulkanLayers(Vector<AString>& layers)const{
+void Backend::getEnabledVulkanLayers(Vector<AString>& layers)const{
     layers.clear();
     layers.reserve(m_enabledExtensions.layers.size());
     for(const auto& ext : m_enabledExtensions.layers)
         layers.push_back(ext);
 }
 
-ITexture* DeviceManager::getCurrentBackBuffer(){
+ITexture* Backend::getCurrentBackBuffer(){
     if(m_swapChainIndex < m_swapChainImages.size())
         return m_swapChainImages[m_swapChainIndex].rhiHandle.get();
     return nullptr;
 }
 
-ITexture* DeviceManager::getBackBuffer(u32 index){
+ITexture* Backend::getBackBuffer(u32 index){
     if(index < m_swapChainImages.size())
         return m_swapChainImages[index].rhiHandle.get();
     return nullptr;
 }
 
-u32 DeviceManager::getCurrentBackBufferIndex(){
+u32 Backend::getCurrentBackBufferIndex(){
     return m_swapChainIndex;
 }
 
-u32 DeviceManager::getBackBufferCount(){
+u32 Backend::getBackBufferCount(){
     return static_cast<u32>(m_swapChainImages.size());
 }
 
-void DeviceManager::clearSemaphores(SemaphoreVector& semaphores){
+void Backend::clearSemaphores(SemaphoreVector& semaphores){
     if(m_vulkanDevice){
         for(auto& semaphore : semaphores){
             if(semaphore)
@@ -316,7 +322,7 @@ void DeviceManager::clearSemaphores(SemaphoreVector& semaphores){
     semaphores.clear();
 }
 
-bool DeviceManager::recreateSemaphores(SemaphoreVector& semaphores, const usize count, const AStringView operationName){
+bool Backend::recreateSemaphores(SemaphoreVector& semaphores, const usize count, const AStringView operationName){
     clearSemaphores(semaphores);
     semaphores.reserve(count);
 
@@ -341,10 +347,10 @@ bool DeviceManager::recreateSemaphores(SemaphoreVector& semaphores, const usize 
     return true;
 }
 
-void DeviceManager::resizeSwapChain(){
+void Backend::resizeSwapChain(){
     if(m_vulkanDevice){
         destroySwapChain();
-        if(!createSwapChain()){
+        if(!createVulkanSwapChain()){
             clearSemaphores(m_presentSemaphores);
             clearSemaphores(m_acquireSemaphores);
             return;
@@ -359,7 +365,7 @@ void DeviceManager::resizeSwapChain(){
             }
         }
 
-        const usize requiredAcquireSemaphores = Max<usize>(m_deviceParams.maxFramesInFlight, m_swapChainImages.size());
+        const usize requiredAcquireSemaphores = Max<usize>(m_maxFramesInFlight, m_swapChainImages.size());
         if(m_acquireSemaphores.size() != requiredAcquireSemaphores){
             if(!recreateSemaphores(m_acquireSemaphores, requiredAcquireSemaphores, "recreate acquire semaphores during resize")){
                 clearSemaphores(m_presentSemaphores);
@@ -386,7 +392,7 @@ void DeviceManager::resizeSwapChain(){
 // Instance creation
 
 
-void DeviceManager::initDefaultExtensions(){
+void Backend::initDefaultExtensions(){
     for(const auto* name : s_EnabledInstanceExts)
         m_enabledExtensions.instance.insert(name);
     for(const auto& e : m_enabledDeviceExts)
@@ -401,7 +407,7 @@ void DeviceManager::initDefaultExtensions(){
         m_rayTracingExtensions.insert({ e.name, e.feature });
 }
 
-bool DeviceManager::createInstance(){
+bool Backend::createVulkanInstance(){
     VkResult res = VK_SUCCESS;
 
     {
@@ -588,7 +594,7 @@ bool DeviceManager::createInstance(){
 // Debug callback
 
 
-void DeviceManager::installDebugCallback(){
+void Backend::installDebugCallback(){
     VkResult res = VK_SUCCESS;
 
     auto* createFunc = reinterpret_cast<PFN_vkCreateDebugReportCallbackEXT>(vkGetInstanceProcAddr(m_vulkanInstance, "vkCreateDebugReportCallbackEXT"));
@@ -613,7 +619,7 @@ void DeviceManager::installDebugCallback(){
 // Physical device selection
 
 
-bool DeviceManager::findQueueFamilies(VkPhysicalDevice physicalDevice){
+bool Backend::findQueueFamilies(VkPhysicalDevice physicalDevice){
     uint32_t queueFamilyCount = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, nullptr);
 
@@ -683,9 +689,9 @@ bool DeviceManager::findQueueFamilies(VkPhysicalDevice physicalDevice){
     return true;
 }
 
-bool DeviceManager::pickPhysicalDevice(){
-    VkFormat requestedFormat = __hidden_vulkan::ConvertFormat(m_deviceParams.swapChainFormat);
-    VkExtent2D requestedExtent = { m_deviceParams.backBufferWidth, m_deviceParams.backBufferHeight };
+bool Backend::pickPhysicalDevice(){
+    VkFormat requestedFormat = __hidden_vulkan::ConvertFormat(m_swapChainState.backBufferFormat);
+    VkExtent2D requestedExtent = { m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight };
 
     VkResult res = VK_SUCCESS;
 
@@ -866,7 +872,7 @@ bool DeviceManager::pickPhysicalDevice(){
 // Logical device creation
 
 
-bool DeviceManager::createDevice(){
+bool Backend::createVulkanDevice(){
     VkResult res = VK_SUCCESS;
 
     Alloc::ScratchArena<> scratchArena(32768);
@@ -1168,7 +1174,7 @@ bool DeviceManager::createDevice(){
 // Window surface creation
 
 
-bool DeviceManager::createWindowSurface(){
+bool Backend::createWindowSurface(){
     VkResult res = VK_SUCCESS;
 
 #ifdef NWB_PLATFORM_WINDOWS
@@ -1237,7 +1243,7 @@ bool DeviceManager::createWindowSurface(){
 // Swap chain management
 
 
-void DeviceManager::destroySwapChain(){
+void Backend::destroySwapChain(){
     if(m_vulkanDevice)
         vkDeviceWaitIdle(m_vulkanDevice);
 
@@ -1249,12 +1255,12 @@ void DeviceManager::destroySwapChain(){
     m_swapChainImages.clear();
 }
 
-bool DeviceManager::createSwapChain(){
+bool Backend::createVulkanSwapChain(){
     VkResult res = VK_SUCCESS;
 
     destroySwapChain();
 
-    m_swapChainFormat.format = __hidden_vulkan::ConvertFormat(m_deviceParams.swapChainFormat);
+    m_swapChainFormat.format = __hidden_vulkan::ConvertFormat(m_swapChainState.backBufferFormat);
     m_swapChainFormat.colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 
     VkSurfaceCapabilitiesKHR surfaceCaps{};
@@ -1269,16 +1275,16 @@ bool DeviceManager::createSwapChain(){
         extent = surfaceCaps.currentExtent;
     }
     else{
-        extent.width = Max(surfaceCaps.minImageExtent.width, Min(surfaceCaps.maxImageExtent.width, m_deviceParams.backBufferWidth));
-        extent.height = Max(surfaceCaps.minImageExtent.height, Min(surfaceCaps.maxImageExtent.height, m_deviceParams.backBufferHeight));
+        extent.width = Max(surfaceCaps.minImageExtent.width, Min(surfaceCaps.maxImageExtent.width, m_swapChainState.backBufferWidth));
+        extent.height = Max(surfaceCaps.minImageExtent.height, Min(surfaceCaps.maxImageExtent.height, m_swapChainState.backBufferHeight));
     }
     if(extent.width == 0 || extent.height == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Surface extent is invalid ({}x{})."), extent.width, extent.height);
         return false;
     }
 
-    m_deviceParams.backBufferWidth = extent.width;
-    m_deviceParams.backBufferHeight = extent.height;
+    m_swapChainState.backBufferWidth = extent.width;
+    m_swapChainState.backBufferHeight = extent.height;
 
     uint32_t presentModeCount = 0;
     res = vkGetPhysicalDeviceSurfacePresentModesKHR(m_vulkanPhysicalDevice, m_windowSurface, &presentModeCount, nullptr);
@@ -1296,7 +1302,7 @@ bool DeviceManager::createSwapChain(){
         return false;
     }
 
-    const VkPresentModeKHR requestedPresentMode = m_deviceParams.vsyncEnabled ? VK_PRESENT_MODE_FIFO_KHR : VK_PRESENT_MODE_IMMEDIATE_KHR;
+    const VkPresentModeKHR requestedPresentMode = m_swapChainState.vsyncEnabled ? VK_PRESENT_MODE_FIFO_KHR : VK_PRESENT_MODE_IMMEDIATE_KHR;
     VkPresentModeKHR selectedPresentMode = requestedPresentMode;
     bool presentModeFound = false;
     for(const auto& mode : presentModes){
@@ -1440,9 +1446,9 @@ bool DeviceManager::createSwapChain(){
         sci.image = image;
 
         TextureDesc textureDesc;
-        textureDesc.width = m_deviceParams.backBufferWidth;
-        textureDesc.height = m_deviceParams.backBufferHeight;
-        textureDesc.format = m_deviceParams.swapChainFormat;
+        textureDesc.width = m_swapChainState.backBufferWidth;
+        textureDesc.height = m_swapChainState.backBufferHeight;
+        textureDesc.format = m_swapChainState.backBufferFormat;
         textureDesc.initialState = ResourceStates::Present;
         textureDesc.keepInitialState = true;
         textureDesc.isRenderTarget = true;
@@ -1467,22 +1473,23 @@ bool DeviceManager::createSwapChain(){
 // High-level lifecycle methods
 
 
-bool DeviceManager::createInstanceInternal(){
+bool Backend::createInstance(){
     if(m_deviceParams.enableDebugRuntime){
         m_enabledExtensions.instance.insert("VK_EXT_debug_report");
         m_enabledExtensions.layers.insert("VK_LAYER_KHRONOS_validation");
     }
 
-    return createInstance();
+    return createVulkanInstance();
 }
 
-bool DeviceManager::createDeviceInternal(){
+bool Backend::createDevice(){
     if(m_deviceParams.enableDebugRuntime)
         installDebugCallback();
 
-    if(m_deviceParams.maxFramesInFlight == 0){
+    m_maxFramesInFlight = m_deviceParams.maxFramesInFlight;
+    if(m_maxFramesInFlight == 0){
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: maxFramesInFlight was 0; clamping to 1."));
-        m_deviceParams.maxFramesInFlight = 1;
+        m_maxFramesInFlight = 1;
     }
 
     for(const auto& name : m_deviceParams.requiredVulkanDeviceExtensions)
@@ -1490,12 +1497,8 @@ bool DeviceManager::createDeviceInternal(){
     for(const auto& name : m_deviceParams.optionalVulkanDeviceExtensions)
         m_optionalExtensions.device.insert({ name, DeviceExtensionFeature::None });
 
+    m_swapChainState.backBufferFormat = __hidden_vulkan::GetBackBufferFormat(m_deviceParams);
     if(!m_deviceParams.headlessDevice){
-        if(m_deviceParams.swapChainFormat == Format::RGBA8_UNORM_SRGB)
-            m_deviceParams.swapChainFormat = Format::BGRA8_UNORM_SRGB;
-        else if(m_deviceParams.swapChainFormat == Format::RGBA8_UNORM)
-            m_deviceParams.swapChainFormat = Format::BGRA8_UNORM;
-
         if(!createWindowSurface())
             return false;
     }
@@ -1503,7 +1506,7 @@ bool DeviceManager::createDeviceInternal(){
         return false;
     if(!findQueueFamilies(m_vulkanPhysicalDevice))
         return false;
-    if(!createDevice())
+    if(!createVulkanDevice())
         return false;
 
     Alloc::ScratchArena<> scratchArena(32768);
@@ -1546,8 +1549,8 @@ bool DeviceManager::createDeviceInternal(){
     return true;
 }
 
-bool DeviceManager::createSwapChainInternal(){
-    if(!createSwapChain())
+bool Backend::createSwapChain(){
+    if(!createVulkanSwapChain())
         return false;
 
     usize const numPresentSemaphores = m_swapChainImages.size();
@@ -1556,8 +1559,8 @@ bool DeviceManager::createSwapChainInternal(){
         return false;
     }
 
-    usize const numAcquireSemaphores = (m_deviceParams.maxFramesInFlight > m_swapChainImages.size())
-        ? m_deviceParams.maxFramesInFlight : m_swapChainImages.size();
+    usize const numAcquireSemaphores = (m_maxFramesInFlight > m_swapChainImages.size())
+        ? m_maxFramesInFlight : m_swapChainImages.size();
     if(!recreateSemaphores(m_acquireSemaphores, numAcquireSemaphores, "create acquire semaphores")){
         clearSemaphores(m_presentSemaphores);
         destroySwapChain();
@@ -1570,7 +1573,7 @@ bool DeviceManager::createSwapChainInternal(){
     return true;
 }
 
-void DeviceManager::destroyDeviceAndSwapChain(){
+void Backend::destroy(){
     if(m_rhiDevice)
         m_rhiDevice->waitForIdle();
 
@@ -1615,7 +1618,7 @@ void DeviceManager::destroyDeviceAndSwapChain(){
 // Frame management
 
 
-bool DeviceManager::beginFrame(){
+bool Backend::beginFrame(const BackBufferResizeCallbacks& callbacks){
     VkResult res = VK_SUCCESS;
     VkSemaphore semaphore = VK_NULL_HANDLE;
 
@@ -1645,7 +1648,8 @@ bool DeviceManager::beginFrame(){
             );
 
         if((res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR) && attempt < s_MaxRetryCountAcquireNextImage - 1){
-            backBufferResizing();
+            if(callbacks.beforeResize)
+                callbacks.beforeResize(callbacks.userData);
 
             VkSurfaceCapabilitiesKHR surfaceCaps;
             const VkResult surfaceResult = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_vulkanPhysicalDevice, m_windowSurface, &surfaceCaps);
@@ -1655,16 +1659,17 @@ bool DeviceManager::beginFrame(){
             }
 
             if(surfaceCaps.currentExtent.width != UINT32_MAX && surfaceCaps.currentExtent.height != UINT32_MAX){
-                m_deviceParams.backBufferWidth = surfaceCaps.currentExtent.width;
-                m_deviceParams.backBufferHeight = surfaceCaps.currentExtent.height;
+                m_swapChainState.backBufferWidth = surfaceCaps.currentExtent.width;
+                m_swapChainState.backBufferHeight = surfaceCaps.currentExtent.height;
             }
             else{
-                m_deviceParams.backBufferWidth = Max(surfaceCaps.minImageExtent.width, Min(surfaceCaps.maxImageExtent.width, m_deviceParams.backBufferWidth));
-                m_deviceParams.backBufferHeight = Max(surfaceCaps.minImageExtent.height, Min(surfaceCaps.maxImageExtent.height, m_deviceParams.backBufferHeight));
+                m_swapChainState.backBufferWidth = Max(surfaceCaps.minImageExtent.width, Min(surfaceCaps.maxImageExtent.width, m_swapChainState.backBufferWidth));
+                m_swapChainState.backBufferHeight = Max(surfaceCaps.minImageExtent.height, Min(surfaceCaps.maxImageExtent.height, m_swapChainState.backBufferHeight));
             }
 
             resizeSwapChain();
-            backBufferResized();
+            if(callbacks.afterResize)
+                callbacks.afterResize(callbacks.userData);
         }
         else
             break;
@@ -1685,7 +1690,7 @@ bool DeviceManager::beginFrame(){
     return false;
 }
 
-bool DeviceManager::present(){
+bool Backend::present(){
     VkResult res = VK_SUCCESS;
 
     if(!m_swapChain || m_presentSemaphores.empty() || m_swapChainImages.empty()){
@@ -1716,8 +1721,8 @@ bool DeviceManager::present(){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Queue present failed. {}"), ResultToString(res));
         return false;
     }
-    
-    while(m_framesInFlight.size() >= m_deviceParams.maxFramesInFlight){
+
+    while(m_framesInFlight.size() >= m_maxFramesInFlight){
         auto query = m_framesInFlight.front();
         m_framesInFlight.pop();
         m_rhiDevice->waitEventQuery(query.get());
@@ -1749,7 +1754,7 @@ bool DeviceManager::present(){
 // Adapter enumeration
 
 
-bool DeviceManager::enumerateAdapters(Vector<AdapterInfo>& outAdapters){
+bool Backend::enumerateAdapters(Vector<AdapterInfo>& outAdapters){
     VkResult res = VK_SUCCESS;
 
     if(!m_vulkanInstance){

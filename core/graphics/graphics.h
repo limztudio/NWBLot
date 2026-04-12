@@ -6,12 +6,19 @@
 
 
 #include "common.h"
+#include "render_pass.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_CORE_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class IGraphicsBackend;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -84,13 +91,51 @@ public:
 
 public:
     bool init(const Common::FrameData& data);
+    bool createHeadlessDevice();
+    bool createInstance(const InstanceParameters& params);
     bool runFrame();
     void updateWindowState(u32 width, u32 height, bool windowVisible, bool windowIsInFocus);
     void destroy();
 
 public:
-    [[nodiscard]] IDeviceManager* getDeviceManager()const noexcept{ return m_deviceManager.get(); }
     [[nodiscard]] IDevice* getDevice()const noexcept;
+    [[nodiscard]] bool enumerateAdapters(Vector<AdapterInfo>& outAdapters);
+
+    void addRenderPassToFront(IRenderPass& pass);
+    void addRenderPassToBack(IRenderPass& pass);
+    void removeRenderPass(IRenderPass& pass);
+
+    [[nodiscard]] const tchar* getRendererString()const;
+    [[nodiscard]] GraphicsAPI::Enum getGraphicsAPI()const;
+    [[nodiscard]] f64 getPreviousFrameTimestamp()const;
+    [[nodiscard]] bool isVsyncEnabled()const;
+    void setVSyncEnabled(bool enabled);
+    void reportLiveObjects()const;
+
+    void getWindowDimensions(i32& width, i32& height)const;
+    void getDPIScaleInfo(f32& x, f32& y)const;
+    [[nodiscard]] const tchar* getWindowTitle()const;
+    void setWindowTitle(NotNull<const tchar*> title);
+
+    [[nodiscard]] ITexture* getCurrentBackBuffer()const;
+    [[nodiscard]] ITexture* getBackBuffer(u32 index)const;
+    [[nodiscard]] u32 getCurrentBackBufferIndex()const;
+    [[nodiscard]] u32 getBackBufferCount()const;
+    [[nodiscard]] IFramebuffer* getCurrentFramebuffer()const;
+    [[nodiscard]] IFramebuffer* getFramebuffer(u32 index)const;
+
+    [[nodiscard]] bool isVulkanInstanceExtensionEnabled(const char* extensionName)const;
+    [[nodiscard]] bool isVulkanDeviceExtensionEnabled(const char* extensionName)const;
+    [[nodiscard]] bool isVulkanLayerEnabled(const char* layerName)const;
+    void getEnabledVulkanInstanceExtensions(Vector<AString>& extensions)const;
+    void getEnabledVulkanDeviceExtensions(Vector<AString>& extensions)const;
+    void getEnabledVulkanLayers(Vector<AString>& layers)const;
+
+    void keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods);
+    void keyboardCharInput(u32 unicode, i32 mods);
+    void mousePosUpdate(f64 xpos, f64 ypos);
+    void mouseButtonUpdate(i32 button, i32 action, i32 mods);
+    void mouseScrollUpdate(f64 xoffset, f64 yoffset);
 
     [[nodiscard]] BufferHandle createBuffer(const BufferDesc& desc)const;
     [[nodiscard]] TextureHandle createTexture(const TextureDesc& desc)const;
@@ -112,13 +157,55 @@ public:
 
 
 private:
+    [[nodiscard]] IGraphicsBackend& ensureBackend();
+    [[nodiscard]] IGraphicsBackend& requireBackend()const noexcept;
+    [[nodiscard]] bool shouldRenderUnfocused()const;
+
+    void backBufferResizing();
+    void backBufferResized();
+    void displayScaleChanged();
+
+    void animate(f64 elapsedTime);
+    void render();
+    void updateAverageFrameTime(f64 elapsedTime);
+    bool animateRenderPresent();
+    static void BackBufferResizingCallback(void* userData);
+    static void BackBufferResizedCallback(void* userData);
+
+private:
     GraphicsAllocator& m_allocator;
     Alloc::ThreadPool& m_threadPool;
     Alloc::JobSystem& m_jobSystem;
     DeviceCreationParameters m_deviceCreationParams;
+    SwapChainRuntimeState m_swapChainState;
 
 private:
-    UniquePtr<IDeviceManager> m_deviceManager;
+    UniquePtr<IGraphicsBackend> m_backend;
+
+    bool m_skipRenderOnFirstFrame = false;
+    bool m_hasPresentedFrame = false;
+    bool m_windowVisible = false;
+    bool m_windowIsInFocus = true;
+
+    List<IRenderPass*> m_renderPasses;
+    Timer m_previousFrameTimestamp = {};
+    f32 m_dpiScaleFactorX = 1.f;
+    f32 m_dpiScaleFactorY = 1.f;
+    f32 m_prevDPIScaleFactorX = 0.f;
+    f32 m_prevDPIScaleFactorY = 0.f;
+    bool m_requestedVSync = false;
+    bool m_instanceCreated = false;
+
+    f64 m_averageFrameTime = 0.0;
+    f64 m_averageTimeUpdateInterval = s_AverageFrameTimeUpdateIntervalSeconds;
+    f64 m_frameTimeSum = 0.0;
+    i32 m_numberOfAccumulatedFrames = 0;
+
+    u32 m_frameIndex = 0;
+
+    Vector<FramebufferHandle> m_swapChainFramebuffers;
+
+    BasicString<tchar> m_windowTitle;
 };
 
 
@@ -129,4 +216,3 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

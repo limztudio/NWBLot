@@ -196,18 +196,12 @@ bool Frame::mainLoop(){
             const u32 width = windowVisible ? static_cast<u32>(rect.right - rect.left) : 0;
             const u32 height = windowVisible ? static_cast<u32>(rect.bottom - rect.top) : 0;
             const bool windowIsInFocus = GetForegroundWindow() == data<Common::WinFrame>().hwnd();
-            m_graphics.updateWindowState(width, height, windowVisible, windowIsInFocus);
-
-            if(auto* deviceManager = m_graphics.getDeviceManager()){
-                const tchar* title = deviceManager->getWindowTitle();
-                if(title && m_appliedWindowTitle != title){
-                    m_appliedWindowTitle = title;
+            if(const tchar* title = syncGraphicsWindowState(width, height, windowVisible, windowIsInFocus)){
 #ifdef NWB_UNICODE
-                    SetWindowTextW(data<Common::WinFrame>().hwnd(), m_appliedWindowTitle.c_str());
+                SetWindowTextW(data<Common::WinFrame>().hwnd(), title);
 #else
-                    SetWindowTextA(data<Common::WinFrame>().hwnd(), m_appliedWindowTitle.c_str());
+                SetWindowTextA(data<Common::WinFrame>().hwnd(), title);
 #endif
-                }
             }
 
             Timer currentTime(TimerNow());

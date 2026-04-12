@@ -629,48 +629,52 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
 
     VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
     if(!pso->m_usesDescriptorHeap){
-        if(desc.globalBindingLayouts.size() == 1){
-            auto* layout = checked_cast<BindingLayout*>(desc.globalBindingLayouts[0].get());
-            if(layout)
-                pipelineLayout = layout->m_pipelineLayout;
+        if(desc.globalBindingLayouts.empty()){
+            if(!__hidden_vulkan::CreatePipelineLayout(m_context, nullptr, 0, 0, pipelineLayout, NWB_TEXT("ray tracing pipeline"))){
+                DestroyArenaObject(m_context.objectArena, pso);
+                return nullptr;
+            }
+            pso->m_ownsPipelineLayout = true;
         }
-        else if(desc.globalBindingLayouts.size() > 1){
+        else if(desc.globalBindingLayouts.size() == 1){
+            auto* layout = checked_cast<BindingLayout*>(desc.globalBindingLayouts[0].get());
+            if(!layout){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: binding layout is invalid"));
+                DestroyArenaObject(m_context.objectArena, pso);
+                return nullptr;
+            }
+            pipelineLayout = layout->m_pipelineLayout;
+            pso->m_pushConstantByteSize = layout->m_pushConstantByteSize;
+        }
+        else{
             Vector<VkDescriptorSetLayout, Alloc::ScratchAllocator<VkDescriptorSetLayout>> allDescriptorSetLayouts{ Alloc::ScratchAllocator<VkDescriptorSetLayout>(scratchArena) };
             u32 pushConstantByteSize = 0;
             for(u32 i = 0; i < static_cast<u32>(desc.globalBindingLayouts.size()); ++i){
                 auto* bl = checked_cast<BindingLayout*>(desc.globalBindingLayouts[i].get());
-                if(!bl)
-                    continue;
-                const BindingLayoutDesc& bindingLayoutDesc = bl->getBindingLayoutDesc();
-                for(const auto& item : bindingLayoutDesc.bindings){
-                    if(item.type == ResourceType::PushConstants)
-                        pushConstantByteSize = Max<u32>(pushConstantByteSize, item.size);
-                }
-                for(const auto& dsl : bl->m_descriptorSetLayouts)
-                    allDescriptorSetLayouts.push_back(dsl);
-            }
-
-            if(!allDescriptorSetLayouts.empty()){
-                VkPushConstantRange pushConstantRange = {};
-                if(pushConstantByteSize > 0){
-                    pushConstantRange.stageFlags = VK_SHADER_STAGE_ALL;
-                    pushConstantRange.offset = 0;
-                    pushConstantRange.size = pushConstantByteSize;
-                }
-
-                VkPipelineLayoutCreateInfo layoutInfo = __hidden_vulkan::MakeVkStruct<VkPipelineLayoutCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO);
-                layoutInfo.setLayoutCount = static_cast<u32>(allDescriptorSetLayouts.size());
-                layoutInfo.pSetLayouts = allDescriptorSetLayouts.data();
-                layoutInfo.pushConstantRangeCount = pushConstantByteSize > 0 ? 1u : 0u;
-                layoutInfo.pPushConstantRanges = pushConstantByteSize > 0 ? &pushConstantRange : nullptr;
-                res = vkCreatePipelineLayout(m_context.device, &layoutInfo, m_context.allocationCallbacks, &pipelineLayout);
-                if(res != VK_SUCCESS){
-                    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create pipeline layout for ray tracing pipeline: {}"), ResultToString(res));
+                if(!bl){
+                    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: binding layout {} is invalid"), i);
                     DestroyArenaObject(m_context.objectArena, pso);
                     return nullptr;
                 }
-                pso->m_ownsPipelineLayout = true;
+                const BindingLayoutDesc& bindingLayoutDesc = bl->getBindingLayoutDesc();
+                pushConstantByteSize = Max<u32>(pushConstantByteSize, __hidden_vulkan::GetPushConstantByteSize(bindingLayoutDesc));
+                for(const auto& dsl : bl->m_descriptorSetLayouts)
+                    allDescriptorSetLayouts.push_back(dsl);
             }
+            pso->m_pushConstantByteSize = pushConstantByteSize;
+
+            if(!__hidden_vulkan::CreatePipelineLayout(
+                m_context,
+                allDescriptorSetLayouts.data(),
+                static_cast<u32>(allDescriptorSetLayouts.size()),
+                pushConstantByteSize,
+                pipelineLayout,
+                NWB_TEXT("ray tracing pipeline")))
+            {
+                DestroyArenaObject(m_context.objectArena, pso);
+                return nullptr;
+            }
+            pso->m_ownsPipelineLayout = true;
         }
     }
     pso->m_pipelineLayout = pipelineLayout;
@@ -1487,9 +1491,33 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
         return;
 
     auto* sbt = checked_cast<ShaderTable*>(state.shaderTable);
+    if(!sbt->m_pipeline){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to dispatch rays: shader table has no ray tracing pipeline"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to dispatch rays: shader table has no ray tracing pipeline"));
+        return;
+    }
     if(!sbt->m_raygenBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to dispatch rays: ray generation shader is not set"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to dispatch rays: ray generation shader is not set"));
+        return;
+    }
+    if(args.width == 0 || args.height == 0 || args.depth == 0)
+        return;
+
+    const u64 widthHeight = static_cast<u64>(args.width) * args.height;
+    const u64 invocationCount = widthHeight * args.depth;
+    if((args.height != 0 && widthHeight / args.height != args.width)
+        || (args.depth != 0 && invocationCount / args.depth != widthHeight)
+        || invocationCount > m_context.rayTracingPipelineProperties.maxRayDispatchInvocationCount)
+    {
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Failed to dispatch rays: dispatch dimensions ({}, {}, {}) exceed ray dispatch limit {}"),
+            args.width,
+            args.height,
+            args.depth,
+            m_context.rayTracingPipelineProperties.maxRayDispatchInvocationCount
+        );
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to dispatch rays: dispatch dimensions exceed ray dispatch limit"));
         return;
     }
 

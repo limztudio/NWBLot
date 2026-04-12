@@ -17,6 +17,12 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct VulkanContext;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace __hidden_vulkan{
     VkAccessFlags2 GetVkAccessFlags(ResourceStates::Mask state);
     VkPipelineStageFlags2 GetVkPipelineStageFlags(ResourceStates::Mask state);
@@ -33,6 +39,9 @@ namespace __hidden_vulkan{
     bool IsTextureSliceInBounds(const TextureDesc& desc, const TextureSlice& slice);
     bool IsBufferRangeInBounds(const BufferDesc& desc, u64 offsetBytes, u64 sizeBytes);
     bool BufferRangesOverlap(u64 firstOffsetBytes, u64 firstSizeBytes, u64 secondOffsetBytes, u64 secondSizeBytes);
+    u32 GetPushConstantByteSize(const BindingLayoutDesc& desc);
+    bool ValidatePushConstantByteSize(const VulkanContext& context, u32 byteSize, const tchar* operationName);
+    bool CreatePipelineLayout(const VulkanContext& context, const VkDescriptorSetLayout* setLayouts, u32 setLayoutCount, u32 pushConstantByteSize, VkPipelineLayout& outLayout, const tchar* operationName);
     VkDescriptorType ConvertDescriptorType(ResourceType::Enum type);
     VkShaderStageFlags ConvertShaderStages(ShaderType::Mask stages);
     VkComponentTypeKHR ConvertCoopVecDataType(CooperativeVectorDataType::Enum type);
@@ -825,6 +834,7 @@ private:
     bool m_usesDescriptorHeap = false;
     FixedVector<DescriptorHeapPushRange, s_MaxBindingLayouts> m_descriptorHeapPushRanges;
     u32 m_descriptorHeapPushDataSize = 0;
+    u32 m_pushConstantByteSize = 0;
 
     const VulkanContext& m_context;
 };
@@ -857,6 +867,7 @@ private:
     bool m_usesDescriptorHeap = false;
     FixedVector<DescriptorHeapPushRange, s_MaxBindingLayouts> m_descriptorHeapPushRanges;
     u32 m_descriptorHeapPushDataSize = 0;
+    u32 m_pushConstantByteSize = 0;
 
     const VulkanContext& m_context;
 };
@@ -891,6 +902,7 @@ private:
     bool m_usesDescriptorHeap = false;
     FixedVector<DescriptorHeapPushRange, s_MaxBindingLayouts> m_descriptorHeapPushRanges;
     u32 m_descriptorHeapPushDataSize = 0;
+    u32 m_pushConstantByteSize = 0;
 
     const VulkanContext& m_context;
 };
@@ -925,6 +937,7 @@ private:
     bool m_usesDescriptorHeap = false;
     FixedVector<DescriptorHeapPushRange, s_MaxBindingLayouts> m_descriptorHeapPushRanges;
     u32 m_descriptorHeapPushDataSize = 0;
+    u32 m_pushConstantByteSize = 0;
     Vector<u8, Alloc::CustomAllocator<u8>> m_shaderGroupHandles;
 
     const VulkanContext& m_context;
@@ -1019,6 +1032,7 @@ private:
     VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
     Vector<VkDescriptorSetLayout, Alloc::CustomAllocator<VkDescriptorSetLayout>> m_descriptorSetLayouts;
     bool m_descriptorHeapCompatible = false;
+    u32 m_pushConstantByteSize = 0;
     Vector<DescriptorHeapBindingMeta, Alloc::CustomAllocator<DescriptorHeapBindingMeta>> m_descriptorHeapBindings;
 
     const VulkanContext& m_context;

@@ -103,6 +103,26 @@ constexpr bool IsDescriptorHeapCompatibleType(ResourceType::Enum type){
     }
 }
 
+constexpr bool IsSupportedDescriptorBindingType(ResourceType::Enum type){
+    switch(type){
+    case ResourceType::Texture_SRV:
+    case ResourceType::Texture_UAV:
+    case ResourceType::TypedBuffer_SRV:
+    case ResourceType::TypedBuffer_UAV:
+    case ResourceType::StructuredBuffer_SRV:
+    case ResourceType::StructuredBuffer_UAV:
+    case ResourceType::ConstantBuffer:
+    case ResourceType::VolatileConstantBuffer:
+    case ResourceType::Sampler:
+    case ResourceType::RawBuffer_SRV:
+    case ResourceType::RawBuffer_UAV:
+    case ResourceType::RayTracingAccelStruct:
+        return true;
+    default:
+        return false;
+    }
+}
+
 constexpr u32 AlignUpU32(const u32 value, const u32 alignment){
     if(alignment == 0)
         return value;
@@ -116,6 +136,75 @@ constexpr u32 NormalizeDescriptorTableCapacity(const u32 capacity){
 bool ResolveDescriptorBufferRange(const BindingSetItem& item, const Buffer& buffer, BufferRange& outRange){
     outRange = item.range.resolve(buffer.getDescription());
     return outRange.byteSize > 0;
+}
+
+u32 GetPushConstantByteSize(const BindingLayoutDesc& desc){
+    u32 pushConstantByteSize = 0;
+    for(const auto& item : desc.bindings){
+        if(item.type == ResourceType::PushConstants)
+            pushConstantByteSize = Max<u32>(pushConstantByteSize, item.size);
+    }
+    return pushConstantByteSize;
+}
+
+bool ValidatePushConstantByteSize(const VulkanContext& context, const u32 byteSize, const tchar* operationName){
+    if(byteSize == 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: push constant size is zero"), operationName);
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed push constant operation: size is zero"));
+        return false;
+    }
+    if((byteSize & 3u) != 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: push constant size is not 4-byte aligned"), operationName);
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed push constant operation: size is not 4-byte aligned"));
+        return false;
+    }
+    if(byteSize > context.physicalDeviceProperties.limits.maxPushConstantsSize){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Failed to {}: push constant size {} exceeds device limit {}"),
+            operationName,
+            byteSize,
+            context.physicalDeviceProperties.limits.maxPushConstantsSize
+        );
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed push constant operation: size exceeds device limit"));
+        return false;
+    }
+    return true;
+}
+
+bool CreatePipelineLayout(
+    const VulkanContext& context,
+    const VkDescriptorSetLayout* setLayouts,
+    const u32 setLayoutCount,
+    const u32 pushConstantByteSize,
+    VkPipelineLayout& outLayout,
+    const tchar* operationName)
+{
+    outLayout = VK_NULL_HANDLE;
+
+    VkPushConstantRange pushConstantRange = {};
+    if(pushConstantByteSize > 0){
+        if(!ValidatePushConstantByteSize(context, pushConstantByteSize, operationName))
+            return false;
+
+        pushConstantRange.stageFlags = VK_SHADER_STAGE_ALL;
+        pushConstantRange.offset = 0;
+        pushConstantRange.size = pushConstantByteSize;
+    }
+
+    VkPipelineLayoutCreateInfo layoutInfo = MakeVkStruct<VkPipelineLayoutCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO);
+    layoutInfo.setLayoutCount = setLayoutCount;
+    layoutInfo.pSetLayouts = setLayoutCount > 0 ? setLayouts : nullptr;
+    layoutInfo.pushConstantRangeCount = pushConstantByteSize > 0 ? 1u : 0u;
+    layoutInfo.pPushConstantRanges = pushConstantByteSize > 0 ? &pushConstantRange : nullptr;
+
+    const VkResult res = vkCreatePipelineLayout(context.device, &layoutInfo, context.allocationCallbacks, &outLayout);
+    if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create pipeline layout for {}: {}"), operationName, ResultToString(res));
+        outLayout = VK_NULL_HANDLE;
+        return false;
+    }
+
+    return true;
 }
 
 u32 FindMemoryTypeIndex(const VulkanContext& context, const u32 typeBits, const VkMemoryPropertyFlags properties){
@@ -190,9 +279,9 @@ VkImageViewCreateInfo BuildImageViewCreateInfo(Texture& texture, const BindingSe
     return viewInfo;
 }
 
-const BindingLayoutItem* FindLayoutBinding(const BindingLayoutDesc& desc, const u32 slot){
+const BindingLayoutItem* FindLayoutBinding(const BindingLayoutDesc& desc, const u32 slot, const ResourceType::Enum type){
     for(const auto& binding : desc.bindings){
-        if(binding.slot == slot)
+        if(binding.slot == slot && binding.type == type)
             return &binding;
     }
 
@@ -733,11 +822,39 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
     Vector<VkDescriptorSetLayoutBinding, Alloc::ScratchAllocator<VkDescriptorSetLayoutBinding>> bindings{ Alloc::ScratchAllocator<VkDescriptorSetLayoutBinding>(scratchArena) };
     bindings.reserve(desc.bindings.size());
 
-    u32 pushConstantByteSize = 0;
-    for(const auto& item : desc.bindings){
-        if(item.type == ResourceType::PushConstants){
-            pushConstantByteSize = item.size;
+    for(usize i = 0; i < desc.bindings.size(); ++i){
+        const auto& item = desc.bindings[i];
+        if(item.type == ResourceType::None)
             continue;
+        if(item.type == ResourceType::PushConstants){
+            if(!__hidden_vulkan::ValidatePushConstantByteSize(m_context, item.size, NWB_TEXT("create binding layout"))){
+                DestroyArenaObject(m_context.objectArena, layout);
+                return nullptr;
+            }
+            continue;
+        }
+        if(item.getArraySize() == 0){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor set layout: binding slot {} has zero descriptors"), item.slot);
+            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create descriptor set layout: binding has zero descriptors"));
+            DestroyArenaObject(m_context.objectArena, layout);
+            return nullptr;
+        }
+        if(!__hidden_vulkan::IsSupportedDescriptorBindingType(item.type)){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Vulkan: Failed to create descriptor set layout: binding slot {} has unsupported resource type {}"),
+                item.slot,
+                static_cast<u32>(item.type)
+            );
+            DestroyArenaObject(m_context.objectArena, layout);
+            return nullptr;
+        }
+        for(usize j = 0; j < i; ++j){
+            const auto& previous = desc.bindings[j];
+            if(previous.type != ResourceType::None && previous.type != ResourceType::PushConstants && previous.slot == item.slot){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor set layout: duplicate binding slot {}"), item.slot);
+                DestroyArenaObject(m_context.objectArena, layout);
+                return nullptr;
+            }
         }
         VkDescriptorSetLayoutBinding binding = {};
         binding.binding = item.slot;
@@ -747,6 +864,8 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
         binding.pImmutableSamplers = nullptr;
         bindings.push_back(binding);
     }
+    const u32 pushConstantByteSize = __hidden_vulkan::GetPushConstantByteSize(desc);
+    layout->m_pushConstantByteSize = pushConstantByteSize;
 
     VkDescriptorSetLayoutCreateInfo layoutInfo = __hidden_vulkan::MakeVkStruct<VkDescriptorSetLayoutCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO);
     layoutInfo.bindingCount = static_cast<u32>(bindings.size());
@@ -840,7 +959,25 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
     bindingFlags.reserve(desc.registerSpaces.size());
 
     const u32 maxCapacity = __hidden_vulkan::NormalizeDescriptorTableCapacity(desc.maxCapacity);
-    for(const auto& item : desc.registerSpaces){
+    for(usize i = 0; i < desc.registerSpaces.size(); ++i){
+        const auto& item = desc.registerSpaces[i];
+        if(!__hidden_vulkan::IsDescriptorHeapCompatibleType(item.type)){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Vulkan: Failed to create bindless layout: register space slot {} has unsupported resource type {}"),
+                item.slot,
+                static_cast<u32>(item.type)
+            );
+            DestroyArenaObject(m_context.objectArena, layout);
+            return nullptr;
+        }
+        for(usize j = 0; j < i; ++j){
+            if(desc.registerSpaces[j].slot == item.slot){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create bindless layout: duplicate register space slot {}"), item.slot);
+                DestroyArenaObject(m_context.objectArena, layout);
+                return nullptr;
+            }
+        }
+
         VkDescriptorSetLayoutBinding binding = {};
         binding.binding = item.slot;
         binding.descriptorType = __hidden_vulkan::ConvertDescriptorType(item.type);
@@ -1129,7 +1266,7 @@ void Device::resizeDescriptorTable(IDescriptorTable* m_descriptorTable, u32 newS
     poolSizes.push_back(storageTexelSize);
 
     VkDescriptorPoolCreateInfo poolInfo = __hidden_vulkan::MakeVkStruct<VkDescriptorPoolCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO);
-    poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT | VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
+    poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
     poolInfo.maxSets = newSize;
     poolInfo.poolSizeCount = static_cast<u32>(poolSizes.size());
     poolInfo.pPoolSizes = poolSizes.data();
@@ -1182,6 +1319,40 @@ bool Device::writeDescriptorTable(IDescriptorTable* m_descriptorTable, const Bin
             item.slot,
             item.arrayElement,
             table->m_capacity
+        );
+        return false;
+    }
+    if(!table->m_layout){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write descriptor table slot {}: descriptor table has no binding layout"), item.slot);
+        return false;
+    }
+
+    const BindingLayoutItem* layoutBinding = nullptr;
+    if(table->m_layout->m_isBindless){
+        for(const auto& binding : table->m_layout->m_bindlessDesc.registerSpaces){
+            if(binding.slot == item.slot && binding.type == item.type){
+                layoutBinding = &binding;
+                break;
+            }
+        }
+    }
+    else
+        layoutBinding = __hidden_vulkan::FindLayoutBinding(table->m_layout->m_desc, item.slot, item.type);
+
+    if(!layoutBinding){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Failed to write descriptor table slot {}: layout does not contain resource type {} at that slot"),
+            item.slot,
+            static_cast<u32>(item.type)
+        );
+        return false;
+    }
+    if(!table->m_layout->m_isBindless && item.arrayElement >= layoutBinding->getArraySize()){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Failed to write descriptor table slot {}: array element {} exceeds layout array size {}"),
+            item.slot,
+            item.arrayElement,
+            layoutBinding->getArraySize()
         );
         return false;
     }
@@ -1368,9 +1539,13 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLa
         if(!item.resourceHandle)
             continue;
 
-        const BindingLayoutItem* layoutBinding = __hidden_vulkan::FindLayoutBinding(layout->m_desc, item.slot);
+        const BindingLayoutItem* layoutBinding = __hidden_vulkan::FindLayoutBinding(layout->m_desc, item.slot, item.type);
         if(!layoutBinding){
-            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Ignoring binding set item for unknown slot {}"), item.slot);
+            NWB_LOGGER_WARNING(
+                NWB_TEXT("Vulkan: Ignoring binding set item for slot {}: layout does not contain resource type {} at that slot"),
+                item.slot,
+                static_cast<u32>(item.type)
+            );
             continue;
         }
         if(item.arrayElement >= layoutBinding->getArraySize()){

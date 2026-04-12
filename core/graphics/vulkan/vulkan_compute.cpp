@@ -90,48 +90,52 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
 
     VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
     if(!pso->m_usesDescriptorHeap){
-        if(desc.bindingLayouts.size() == 1){
-            auto* layout = checked_cast<BindingLayout*>(desc.bindingLayouts[0].get());
-            if(layout)
-                pipelineLayout = layout->m_pipelineLayout;
+        if(desc.bindingLayouts.empty()){
+            if(!__hidden_vulkan::CreatePipelineLayout(m_context, nullptr, 0, 0, pipelineLayout, NWB_TEXT("compute pipeline"))){
+                DestroyArenaObject(m_context.objectArena, pso);
+                return nullptr;
+            }
+            pso->m_ownsPipelineLayout = true;
         }
-        else if(desc.bindingLayouts.size() > 1){
+        else if(desc.bindingLayouts.size() == 1){
+            auto* layout = checked_cast<BindingLayout*>(desc.bindingLayouts[0].get());
+            if(!layout){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create compute pipeline: binding layout is invalid"));
+                DestroyArenaObject(m_context.objectArena, pso);
+                return nullptr;
+            }
+            pipelineLayout = layout->m_pipelineLayout;
+            pso->m_pushConstantByteSize = layout->m_pushConstantByteSize;
+        }
+        else{
             Vector<VkDescriptorSetLayout, Alloc::ScratchAllocator<VkDescriptorSetLayout>> allDescriptorSetLayouts{ Alloc::ScratchAllocator<VkDescriptorSetLayout>(scratchArena) };
             u32 pushConstantByteSize = 0;
             for(u32 i = 0; i < static_cast<u32>(desc.bindingLayouts.size()); ++i){
                 auto* bl = checked_cast<BindingLayout*>(desc.bindingLayouts[i].get());
-                if(!bl)
-                    continue;
-                const BindingLayoutDesc& bindingLayoutDesc = bl->getBindingLayoutDesc();
-                for(const auto& item : bindingLayoutDesc.bindings){
-                    if(item.type == ResourceType::PushConstants)
-                        pushConstantByteSize = Max<u32>(pushConstantByteSize, item.size);
-                }
-                for(const auto& dsl : bl->m_descriptorSetLayouts)
-                    allDescriptorSetLayouts.push_back(dsl);
-            }
-
-            if(!allDescriptorSetLayouts.empty()){
-                VkPushConstantRange pushConstantRange = {};
-                if(pushConstantByteSize > 0){
-                    pushConstantRange.stageFlags = VK_SHADER_STAGE_ALL;
-                    pushConstantRange.offset = 0;
-                    pushConstantRange.size = pushConstantByteSize;
-                }
-
-                VkPipelineLayoutCreateInfo layoutInfo = __hidden_vulkan::MakeVkStruct<VkPipelineLayoutCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO);
-                layoutInfo.setLayoutCount = static_cast<u32>(allDescriptorSetLayouts.size());
-                layoutInfo.pSetLayouts = allDescriptorSetLayouts.data();
-                layoutInfo.pushConstantRangeCount = pushConstantByteSize > 0 ? 1u : 0u;
-                layoutInfo.pPushConstantRanges = pushConstantByteSize > 0 ? &pushConstantRange : nullptr;
-                res = vkCreatePipelineLayout(m_context.device, &layoutInfo, m_context.allocationCallbacks, &pipelineLayout);
-                if(res != VK_SUCCESS){
-                    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create pipeline layout for compute pipeline: {}"), ResultToString(res));
+                if(!bl){
+                    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create compute pipeline: binding layout {} is invalid"), i);
                     DestroyArenaObject(m_context.objectArena, pso);
                     return nullptr;
                 }
-                pso->m_ownsPipelineLayout = true;
+                const BindingLayoutDesc& bindingLayoutDesc = bl->getBindingLayoutDesc();
+                pushConstantByteSize = Max<u32>(pushConstantByteSize, __hidden_vulkan::GetPushConstantByteSize(bindingLayoutDesc));
+                for(const auto& dsl : bl->m_descriptorSetLayouts)
+                    allDescriptorSetLayouts.push_back(dsl);
             }
+            pso->m_pushConstantByteSize = pushConstantByteSize;
+
+            if(!__hidden_vulkan::CreatePipelineLayout(
+                m_context,
+                allDescriptorSetLayouts.data(),
+                static_cast<u32>(allDescriptorSetLayouts.size()),
+                pushConstantByteSize,
+                pipelineLayout,
+                NWB_TEXT("compute pipeline")))
+            {
+                DestroyArenaObject(m_context.objectArena, pso);
+                return nullptr;
+            }
+            pso->m_ownsPipelineLayout = true;
         }
     }
     pso->m_pipelineLayout = pipelineLayout;
@@ -188,10 +192,37 @@ void CommandList::setComputeState(const ComputeState& state){
 }
 
 void CommandList::dispatch(u32 groupsX, u32 groupsY, u32 groupsZ){
+    if(groupsX == 0 || groupsY == 0 || groupsZ == 0)
+        return;
+    if(!m_currentComputeState.pipeline){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to dispatch compute: no compute pipeline is bound"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to dispatch compute: no compute pipeline is bound"));
+        return;
+    }
+    const auto& limits = m_context.physicalDeviceProperties.limits;
+    if(groupsX > limits.maxComputeWorkGroupCount[0] || groupsY > limits.maxComputeWorkGroupCount[1] || groupsZ > limits.maxComputeWorkGroupCount[2]){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Failed to dispatch compute: group counts ({}, {}, {}) exceed device limits ({}, {}, {})"),
+            groupsX,
+            groupsY,
+            groupsZ,
+            limits.maxComputeWorkGroupCount[0],
+            limits.maxComputeWorkGroupCount[1],
+            limits.maxComputeWorkGroupCount[2]
+        );
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to dispatch compute: group counts exceed device limits"));
+        return;
+    }
+
     vkCmdDispatch(m_currentCmdBuf->m_cmdBuf, groupsX, groupsY, groupsZ);
 }
 
 void CommandList::dispatchIndirect(u32 offsetBytes){
+    if(!m_currentComputeState.pipeline){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to dispatch compute indirect: no compute pipeline is bound"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to dispatch compute indirect: no compute pipeline is bound"));
+        return;
+    }
     if(!validateIndirectBuffer(m_currentComputeState.indirectParams, offsetBytes, sizeof(DispatchIndirectArguments), 1, NWB_TEXT("dispatchIndirect")))
         return;
     auto* buffer = checked_cast<Buffer*>(m_currentComputeState.indirectParams);

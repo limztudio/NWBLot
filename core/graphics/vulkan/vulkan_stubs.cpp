@@ -44,25 +44,47 @@ void CommandList::setSamplerFeedbackTextureState(ISamplerFeedbackTexture* textur
 
 
 void CommandList::setPushConstants(const void* data, usize byteSize){
+    if(byteSize == 0)
+        return;
+    if(!data){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: CommandList::setPushConstants: data is null"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: CommandList::setPushConstants: data is null"));
+        return;
+    }
+    if(byteSize > UINT32_MAX){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: CommandList::setPushConstants: byte size exceeds uint32 range"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: CommandList::setPushConstants: byte size exceeds uint32 range"));
+        return;
+    }
+
+    const u32 pushConstantByteSize = static_cast<u32>(byteSize);
+    if(!__hidden_vulkan::ValidatePushConstantByteSize(m_context, pushConstantByteSize, NWB_TEXT("set push constants")))
+        return;
+
     VkPipelineLayout layout = VK_NULL_HANDLE;
+    u32 pipelinePushConstantByteSize = 0;
 
     if(m_currentGraphicsState.pipeline){
         auto* gp = checked_cast<GraphicsPipeline*>(m_currentGraphicsState.pipeline);
         layout = gp->m_pipelineLayout;
+        pipelinePushConstantByteSize = gp->m_pushConstantByteSize;
     }
     else if(m_currentComputeState.pipeline){
         auto* cp = checked_cast<ComputePipeline*>(m_currentComputeState.pipeline);
         layout = cp->m_pipelineLayout;
+        pipelinePushConstantByteSize = cp->m_pushConstantByteSize;
     }
     else if(m_currentMeshletState.pipeline){
         auto* mp = checked_cast<MeshletPipeline*>(m_currentMeshletState.pipeline);
         layout = mp->m_pipelineLayout;
+        pipelinePushConstantByteSize = mp->m_pushConstantByteSize;
     }
     else if(m_currentRayTracingState.shaderTable){
         auto* rtp = m_currentRayTracingState.shaderTable->getPipeline();
         if(rtp){
             auto* rtpImpl = checked_cast<RayTracingPipeline*>(rtp);
             layout = rtpImpl->m_pipelineLayout;
+            pipelinePushConstantByteSize = rtpImpl->m_pushConstantByteSize;
         }
     }
 
@@ -71,8 +93,22 @@ void CommandList::setPushConstants(const void* data, usize byteSize){
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: CommandList::setPushConstants: no active pipeline layout"));
         return;
     }
+    if(pipelinePushConstantByteSize == 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: CommandList::setPushConstants: active pipeline layout has no push constant range"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: CommandList::setPushConstants: active pipeline layout has no push constant range"));
+        return;
+    }
+    if(pushConstantByteSize > pipelinePushConstantByteSize){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: CommandList::setPushConstants: byte size {} exceeds active pipeline push constant range {}"),
+            pushConstantByteSize,
+            pipelinePushConstantByteSize
+        );
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: CommandList::setPushConstants: byte size exceeds active pipeline push constant range"));
+        return;
+    }
 
-    vkCmdPushConstants(m_currentCmdBuf->m_cmdBuf, layout, VK_SHADER_STAGE_ALL, 0, static_cast<u32>(byteSize), data);
+    vkCmdPushConstants(m_currentCmdBuf->m_cmdBuf, layout, VK_SHADER_STAGE_ALL, 0, pushConstantByteSize, data);
 }
 
 
@@ -83,6 +119,16 @@ void CommandList::setPushConstants(const void* data, usize byteSize){
 void CommandList::drawIndexedIndirect(u32 offsetBytes, u32 drawCount){
     if(drawCount == 0)
         return;
+    if(!m_renderPassActive || !m_currentGraphicsState.pipeline){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to draw indexed indirect: no graphics pipeline and active render pass are bound"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to draw indexed indirect: no graphics pipeline and active render pass are bound"));
+        return;
+    }
+    if(!m_currentGraphicsState.indexBuffer.buffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to draw indexed indirect: no index buffer is bound"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to draw indexed indirect: no index buffer is bound"));
+        return;
+    }
     if(drawCount > m_context.physicalDeviceProperties.limits.maxDrawIndirectCount){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to draw indexed indirect: draw count exceeds device limit"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to draw indexed indirect: draw count exceeds device limit"));

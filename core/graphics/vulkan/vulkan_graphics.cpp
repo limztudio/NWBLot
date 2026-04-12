@@ -244,6 +244,50 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     pso->m_desc = desc;
     pso->m_framebufferInfo = fbinfo;
 
+    if(!desc.VS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create graphics pipeline: vertex shader is required"));
+        DestroyArenaObject(m_context.objectArena, pso);
+        return nullptr;
+    }
+
+    const bool hasTessellationControlShader = static_cast<bool>(desc.HS);
+    const bool hasTessellationEvaluationShader = static_cast<bool>(desc.DS);
+    const bool usesTessellation = hasTessellationControlShader || hasTessellationEvaluationShader
+        || desc.primType == PrimitiveType::PatchList
+        || desc.patchControlPoints > 0;
+
+    if(hasTessellationControlShader != hasTessellationEvaluationShader){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create graphics pipeline: tessellation control and evaluation shaders must both be provided"));
+        DestroyArenaObject(m_context.objectArena, pso);
+        return nullptr;
+    }
+    if(usesTessellation){
+        if(!hasTessellationControlShader || !hasTessellationEvaluationShader){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create graphics pipeline: patch topology requires tessellation shaders"));
+            DestroyArenaObject(m_context.objectArena, pso);
+            return nullptr;
+        }
+        if(desc.primType != PrimitiveType::PatchList){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create graphics pipeline: tessellation shaders require patch-list topology"));
+            DestroyArenaObject(m_context.objectArena, pso);
+            return nullptr;
+        }
+        if(desc.patchControlPoints == 0){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create graphics pipeline: tessellation patch control point count is zero"));
+            DestroyArenaObject(m_context.objectArena, pso);
+            return nullptr;
+        }
+        if(desc.patchControlPoints > m_context.physicalDeviceProperties.limits.maxTessellationPatchSize){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Vulkan: Failed to create graphics pipeline: patch control point count {} exceeds device limit {}"),
+                desc.patchControlPoints,
+                m_context.physicalDeviceProperties.limits.maxTessellationPatchSize
+            );
+            DestroyArenaObject(m_context.objectArena, pso);
+            return nullptr;
+        }
+    }
+
     // Step 1: Collect shader stages
     Vector<VkPipelineShaderStageCreateInfo, Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>> shaderStages{ Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>(scratchArena) };
     Vector<VkSpecializationInfo, Alloc::ScratchAllocator<VkSpecializationInfo>> specInfos{ Alloc::ScratchAllocator<VkSpecializationInfo>(scratchArena) };
@@ -386,48 +430,52 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     // Step 10: Pipeline layout from binding layouts
     pso->m_pipelineLayout = VK_NULL_HANDLE;
     if(!pso->m_usesDescriptorHeap){
-        Vector<VkDescriptorSetLayout, Alloc::ScratchAllocator<VkDescriptorSetLayout>> allDescriptorSetLayouts{ Alloc::ScratchAllocator<VkDescriptorSetLayout>(scratchArena) };
-        u32 pushConstantByteSize = 0;
-        for(u32 i = 0; i < static_cast<u32>(desc.bindingLayouts.size()); ++i){
-            auto* bl = checked_cast<BindingLayout*>(desc.bindingLayouts[i].get());
-            if(!bl)
-                continue;
-            const BindingLayoutDesc& bindingLayoutDesc = bl->getBindingLayoutDesc();
-            for(const auto& item : bindingLayoutDesc.bindings){
-                if(item.type == ResourceType::PushConstants)
-                    pushConstantByteSize = Max<u32>(pushConstantByteSize, item.size);
+        if(desc.bindingLayouts.empty()){
+            if(!__hidden_vulkan::CreatePipelineLayout(m_context, nullptr, 0, 0, pso->m_pipelineLayout, NWB_TEXT("graphics pipeline"))){
+                DestroyArenaObject(m_context.objectArena, pso);
+                return nullptr;
             }
-            for(const auto& dsl : bl->m_descriptorSetLayouts)
-                allDescriptorSetLayouts.push_back(dsl);
+            pso->m_ownsPipelineLayout = true;
         }
-
-        if(desc.bindingLayouts.size() == 1){
+        else if(desc.bindingLayouts.size() == 1){
             auto* bl = checked_cast<BindingLayout*>(desc.bindingLayouts[0].get());
-            if(bl)
-                pso->m_pipelineLayout = bl->m_pipelineLayout;
+            if(!bl){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create graphics pipeline: binding layout is invalid"));
+                DestroyArenaObject(m_context.objectArena, pso);
+                return nullptr;
+            }
+            pso->m_pipelineLayout = bl->m_pipelineLayout;
+            pso->m_pushConstantByteSize = bl->m_pushConstantByteSize;
         }
-        else if(desc.bindingLayouts.size() > 1){
-            if(!allDescriptorSetLayouts.empty()){
-                VkPushConstantRange pushConstantRange = {};
-                if(pushConstantByteSize > 0){
-                    pushConstantRange.stageFlags = VK_SHADER_STAGE_ALL;
-                    pushConstantRange.offset = 0;
-                    pushConstantRange.size = pushConstantByteSize;
-                }
-
-                VkPipelineLayoutCreateInfo layoutInfo = __hidden_vulkan::MakeVkStruct<VkPipelineLayoutCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO);
-                layoutInfo.setLayoutCount = static_cast<uint32_t>(allDescriptorSetLayouts.size());
-                layoutInfo.pSetLayouts = allDescriptorSetLayouts.data();
-                layoutInfo.pushConstantRangeCount = pushConstantByteSize > 0 ? 1u : 0u;
-                layoutInfo.pPushConstantRanges = pushConstantByteSize > 0 ? &pushConstantRange : nullptr;
-                res = vkCreatePipelineLayout(m_context.device, &layoutInfo, m_context.allocationCallbacks, &pso->m_pipelineLayout);
-                if(res != VK_SUCCESS){
-                    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create pipeline layout for graphics pipeline: {}"), ResultToString(res));
+        else{
+            Vector<VkDescriptorSetLayout, Alloc::ScratchAllocator<VkDescriptorSetLayout>> allDescriptorSetLayouts{ Alloc::ScratchAllocator<VkDescriptorSetLayout>(scratchArena) };
+            u32 pushConstantByteSize = 0;
+            for(u32 i = 0; i < static_cast<u32>(desc.bindingLayouts.size()); ++i){
+                auto* bl = checked_cast<BindingLayout*>(desc.bindingLayouts[i].get());
+                if(!bl){
+                    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create graphics pipeline: binding layout {} is invalid"), i);
                     DestroyArenaObject(m_context.objectArena, pso);
                     return nullptr;
                 }
-                pso->m_ownsPipelineLayout = true;
+                const BindingLayoutDesc& bindingLayoutDesc = bl->getBindingLayoutDesc();
+                pushConstantByteSize = Max<u32>(pushConstantByteSize, __hidden_vulkan::GetPushConstantByteSize(bindingLayoutDesc));
+                for(const auto& dsl : bl->m_descriptorSetLayouts)
+                    allDescriptorSetLayouts.push_back(dsl);
             }
+            pso->m_pushConstantByteSize = pushConstantByteSize;
+
+            if(!__hidden_vulkan::CreatePipelineLayout(
+                m_context,
+                allDescriptorSetLayouts.data(),
+                static_cast<u32>(allDescriptorSetLayouts.size()),
+                pushConstantByteSize,
+                pso->m_pipelineLayout,
+                NWB_TEXT("graphics pipeline")))
+            {
+                DestroyArenaObject(m_context.objectArena, pso);
+                return nullptr;
+            }
+            pso->m_ownsPipelineLayout = true;
         }
     }
 
@@ -761,16 +809,63 @@ void CommandList::setGraphicsState(const GraphicsState& state){
 }
 
 void CommandList::draw(const DrawArguments& args){
+    if(args.vertexCount == 0 || args.instanceCount == 0)
+        return;
+    if(!m_renderPassActive || !m_currentGraphicsState.pipeline){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to draw: no graphics pipeline and active render pass are bound"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to draw: no graphics pipeline and active render pass are bound"));
+        return;
+    }
+
     vkCmdDraw(m_currentCmdBuf->m_cmdBuf, args.vertexCount, args.instanceCount, args.startVertexLocation, args.startInstanceLocation);
 }
 
 void CommandList::drawIndexed(const DrawArguments& args){
+    if(args.vertexCount == 0 || args.instanceCount == 0)
+        return;
+    if(!m_renderPassActive || !m_currentGraphicsState.pipeline){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to draw indexed: no graphics pipeline and active render pass are bound"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to draw indexed: no graphics pipeline and active render pass are bound"));
+        return;
+    }
+    if(!m_currentGraphicsState.indexBuffer.buffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to draw indexed: no index buffer is bound"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to draw indexed: no index buffer is bound"));
+        return;
+    }
+
+    auto* ib = checked_cast<Buffer*>(m_currentGraphicsState.indexBuffer.buffer);
+    u32 indexSizeBytes = 0;
+    if(m_currentGraphicsState.indexBuffer.format == Format::R16_UINT)
+        indexSizeBytes = sizeof(u16);
+    else if(m_currentGraphicsState.indexBuffer.format == Format::R32_UINT)
+        indexSizeBytes = sizeof(u32);
+    else{
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to draw indexed: index buffer format must be R16_UINT or R32_UINT"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to draw indexed: index buffer format must be R16_UINT or R32_UINT"));
+        return;
+    }
+
+    const u64 indexByteOffset = static_cast<u64>(m_currentGraphicsState.indexBuffer.offset)
+        + static_cast<u64>(args.startIndexLocation) * indexSizeBytes;
+    const u64 indexByteSize = static_cast<u64>(args.vertexCount) * indexSizeBytes;
+    if(!__hidden_vulkan::IsBufferRangeInBounds(ib->m_desc, indexByteOffset, indexByteSize)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to draw indexed: requested index range is outside the index buffer"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to draw indexed: requested index range is outside the index buffer"));
+        return;
+    }
+
     vkCmdDrawIndexed(m_currentCmdBuf->m_cmdBuf, args.vertexCount, args.instanceCount, args.startIndexLocation, args.startVertexLocation, args.startInstanceLocation);
 }
 
 void CommandList::drawIndirect(u32 offsetBytes, u32 drawCount){
     if(drawCount == 0)
         return;
+    if(!m_renderPassActive || !m_currentGraphicsState.pipeline){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to draw indirect: no graphics pipeline and active render pass are bound"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to draw indirect: no graphics pipeline and active render pass are bound"));
+        return;
+    }
     if(drawCount > m_context.physicalDeviceProperties.limits.maxDrawIndirectCount){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to draw indirect: draw count exceeds device limit"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to draw indirect: draw count exceeds device limit"));

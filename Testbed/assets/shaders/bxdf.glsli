@@ -1,3 +1,6 @@
+#ifndef NWB_PROJECT_BXDF_GLSLI
+#define NWB_PROJECT_BXDF_GLSLI
+
 #ifndef NWB_PROJECT_BXDF
 #define NWB_PROJECT_BXDF 0
 #endif
@@ -5,7 +8,6 @@
 #ifndef NWB_PROJECT_TINT
 #define NWB_PROJECT_TINT 0
 #endif
-
 
 vec3 nwbProjectApplyBxdf(vec3 color){
 #if NWB_PROJECT_BXDF == 0
@@ -27,10 +29,12 @@ vec3 nwbProjectApplyTint(vec3 color){
 #endif
 }
 
-vec3 nwbProjectShadeVertex(vec3 color){
+vec3 nwbProjectBxdfVertex(vec3 color){
     return clamp(nwbProjectApplyBxdf(color), vec3(0.0), vec3(1.0));
 }
 
-vec3 nwbProjectShadePixel(vec3 color){
+vec3 nwbProjectBxdfPixel(vec3 color){
     return clamp(nwbProjectApplyTint(nwbProjectApplyBxdf(color)), vec3(0.0), vec3(1.0));
 }
+
+#endif

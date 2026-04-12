@@ -1,0 +1,10 @@
+#version 460
+
+#include "bxdf.glsli"
+
+layout(location = 0) in vec3 inColor;
+layout(location = 0) out vec4 outColor;
+
+void main(){
+    outColor = vec4(clamp(nwbProjectBxdfPixel(inColor), vec3(0.0), vec3(1.0)), 1.0);
+}

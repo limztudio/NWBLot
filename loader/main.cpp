@@ -57,6 +57,15 @@ struct UpdateCallbackContext{
     NWB::IProjectEntryCallbacks* callbacks = nullptr;
 };
 
+struct CommonInitializerGuard{
+    bool active = false;
+
+    ~CommonInitializerGuard(){
+        if(active)
+            NWB::Core::Common::Initializer::instance().finalize();
+    }
+};
+
 bool ProjectTickCallback(void* userData, f32 delta){
     NWB_FATAL_ASSERT_MSG(userData, NWB_TEXT("ProjectTickCallback received null user data"));
     auto* updateContext = static_cast<UpdateCallbackContext*>(userData);
@@ -275,9 +284,11 @@ static int EntryPoint(isize argc, CharT** argv, void* inst){
     }
 
     try{
-        NWB::Core::Common::Initializer::instance().initialize();
+        __hidden_loader::CommonInitializerGuard commonInitializerGuard;
+        if(!NWB::Core::Common::Initializer::instance().initialize())
+            return -1;
+        commonInitializerGuard.active = true;
         ret = MainLogic(MakeNotNull(logAddress.c_str()), inst);
-        NWB::Core::Common::Initializer::instance().finalize();
     }
     catch(...){
         return -1;

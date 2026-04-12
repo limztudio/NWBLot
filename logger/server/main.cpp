@@ -19,6 +19,31 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_logserver{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct CommonInitializerGuard{
+    bool active = false;
+
+    ~CommonInitializerGuard(){
+        if(active)
+            NWB::Core::Common::Initializer::instance().finalize();
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static int MainLogic(u16 logPort, void* inst){
     {
         NWB::Log::Server logger;
@@ -78,9 +103,11 @@ static int EntryPoint(isize argc, tchar** argv, void* inst){
     }
 
     try{
-        NWB::Core::Common::Initializer::instance().initialize();
+        __hidden_logserver::CommonInitializerGuard commonInitializerGuard;
+        if(!NWB::Core::Common::Initializer::instance().initialize())
+            return -1;
+        commonInitializerGuard.active = true;
         ret = MainLogic(logPort, inst);
-        NWB::Core::Common::Initializer::instance().finalize();
     }
     catch(...){
         return -1;

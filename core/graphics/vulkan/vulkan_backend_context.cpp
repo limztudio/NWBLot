@@ -1042,6 +1042,7 @@ bool BackendContext::createVulkanDevice(){
         || !requireFeature(supportedCoreFeatures.geometryShader, "geometryShader")
         || !requireFeature(supportedCoreFeatures.imageCubeArray, "imageCubeArray")
         || !requireFeature(supportedCoreFeatures.shaderInt16, "shaderInt16")
+        || !requireFeature(supportedCoreFeatures.depthClamp, "depthClamp")
         || !requireFeature(supportedCoreFeatures.fillModeNonSolid, "fillModeNonSolid")
         || !requireFeature(supportedCoreFeatures.fragmentStoresAndAtomics, "fragmentStoresAndAtomics")
         || !requireFeature(supportedCoreFeatures.dualSrcBlend, "dualSrcBlend")
@@ -1123,6 +1124,7 @@ bool BackendContext::createVulkanDevice(){
     coreDeviceFeatures.geometryShader = supportedCoreFeatures.geometryShader;
     coreDeviceFeatures.imageCubeArray = supportedCoreFeatures.imageCubeArray;
     coreDeviceFeatures.shaderInt16 = supportedCoreFeatures.shaderInt16;
+    coreDeviceFeatures.depthClamp = supportedCoreFeatures.depthClamp;
     coreDeviceFeatures.fillModeNonSolid = supportedCoreFeatures.fillModeNonSolid;
     coreDeviceFeatures.fragmentStoresAndAtomics = supportedCoreFeatures.fragmentStoresAndAtomics;
     coreDeviceFeatures.dualSrcBlend = supportedCoreFeatures.dualSrcBlend;

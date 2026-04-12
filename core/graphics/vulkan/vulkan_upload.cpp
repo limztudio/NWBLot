@@ -67,17 +67,29 @@ UploadManager::~UploadManager(){
         chunks.clear();
 }
 
-void UploadManager::trimChunkPoolLocked(){
+void UploadManager::trimChunkPoolLocked(const u64* completedVersions){
     if(m_memoryLimit == 0)
         return;
 
-    while(m_chunkPoolBytes > m_memoryLimit && !m_chunkPool.empty()){
-        auto& chunk = m_chunkPool.front();
+    auto it = m_chunkPool.begin();
+    while(m_chunkPoolBytes > m_memoryLimit && it != m_chunkPool.end()){
+        BufferChunkPtr& chunk = *it;
+        if(!chunk){
+            it = m_chunkPool.erase(it);
+            continue;
+        }
+
+        const u32 chunkQueueIndex = static_cast<u32>(chunk->queueID);
+        if(chunkQueueIndex >= static_cast<u32>(CommandQueue::kCount) || chunk->version > completedVersions[chunkQueueIndex]){
+            ++it;
+            continue;
+        }
+
         if(m_chunkPoolBytes >= chunk->size)
             m_chunkPoolBytes -= chunk->size;
         else
             m_chunkPoolBytes = 0;
-        m_chunkPool.pop_front();
+        it = m_chunkPool.erase(it);
     }
 }
 
@@ -155,6 +167,10 @@ void UploadManager::submitChunks(CommandQueue::Enum queueID, u64 submittedVersio
     if(queueIndex >= static_cast<u32>(CommandQueue::kCount) || !submittedOwners || submittedOwnerCount == 0)
         return;
 
+    u64 completedVersions[static_cast<u32>(CommandQueue::kCount)]{};
+    for(u32 i = 0; i < static_cast<u32>(CommandQueue::kCount); ++i)
+        completedVersions[i] = m_device.queueGetCompletedInstance(static_cast<CommandQueue::Enum>(i));
+
     ScopedLock lock(m_mutex);
     auto& activeChunks = m_activeChunks[queueIndex];
 
@@ -188,13 +204,18 @@ void UploadManager::submitChunks(CommandQueue::Enum queueID, u64 submittedVersio
         it = activeChunks.erase(it);
     }
 
-    trimChunkPoolLocked();
+    trimChunkPoolLocked(completedVersions);
 }
 
 void UploadManager::discardChunks(CommandQueue::Enum queueID, TrackedCommandBuffer* owner, u64 reusableVersion){
     const u32 queueIndex = static_cast<u32>(queueID);
     if(queueIndex >= static_cast<u32>(CommandQueue::kCount) || !owner)
         return;
+
+    u64 completedVersions[static_cast<u32>(CommandQueue::kCount)]{};
+    for(u32 i = 0; i < static_cast<u32>(CommandQueue::kCount); ++i)
+        completedVersions[i] = m_device.queueGetCompletedInstance(static_cast<CommandQueue::Enum>(i));
+    completedVersions[queueIndex] = Max(completedVersions[queueIndex], reusableVersion);
 
     ScopedLock lock(m_mutex);
     auto& activeChunks = m_activeChunks[queueIndex];
@@ -222,7 +243,7 @@ void UploadManager::discardChunks(CommandQueue::Enum queueID, TrackedCommandBuff
         it = activeChunks.erase(it);
     }
 
-    trimChunkPoolLocked();
+    trimChunkPoolLocked(completedVersions);
 }
 
 

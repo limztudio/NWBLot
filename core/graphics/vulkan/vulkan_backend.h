@@ -362,7 +362,7 @@ public:
 
 
 private:
-    void trimChunkPoolLocked();
+    void trimChunkPoolLocked(const u64* completedVersions);
 
     Device& m_device;
     u64 m_defaultChunkSize;

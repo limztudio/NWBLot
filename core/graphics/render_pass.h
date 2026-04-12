@@ -19,7 +19,7 @@ NWB_CORE_BEGIN
 
 class Graphics;
 
-class IRenderPass : public IInputEventHandler{
+class IRenderPass{
 public:
     explicit IRenderPass(Graphics& graphics)
         : m_graphics(graphics)

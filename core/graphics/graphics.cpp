@@ -4,6 +4,7 @@
 
 #include "graphics.h"
 
+#include <core/input/input.h>
 #include <logger/client/logger.h>
 
 #include "vulkan/vulkan_backend_context.h"
@@ -259,8 +260,6 @@ void Graphics::updateWindowState(u32 width, u32 height, bool windowVisible, bool
 void Graphics::destroy(){
     waitAllJobs();
 
-    for(auto* renderPass : m_renderPasses)
-        m_input.removeHandler(*renderPass);
     m_renderPasses.clear();
 
     if(m_backend){
@@ -285,7 +284,6 @@ bool Graphics::enumerateAdapters(Vector<AdapterInfo>& outAdapters){
 void Graphics::addRenderPassToFront(IRenderPass& pass){
     m_renderPasses.remove(&pass);
     m_renderPasses.push_front(&pass);
-    m_input.addHandlerToFront(pass);
 
     pass.backBufferResizing();
     pass.backBufferResized(m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight, m_deviceCreationParams.swapChainSampleCount);
@@ -294,7 +292,6 @@ void Graphics::addRenderPassToFront(IRenderPass& pass){
 void Graphics::addRenderPassToBack(IRenderPass& pass){
     m_renderPasses.remove(&pass);
     m_renderPasses.push_back(&pass);
-    m_input.addHandlerToBack(pass);
 
     pass.backBufferResizing();
     pass.backBufferResized(m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight, m_deviceCreationParams.swapChainSampleCount);
@@ -302,7 +299,6 @@ void Graphics::addRenderPassToBack(IRenderPass& pass){
 
 void Graphics::removeRenderPass(IRenderPass& pass){
     m_renderPasses.remove(&pass);
-    m_input.removeHandler(pass);
 }
 
 const tchar* Graphics::getRendererString()const{

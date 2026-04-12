@@ -9,7 +9,6 @@
 
 #include <core/common/common.h>
 #include <core/alloc/alloc.h>
-#include <core/input/input.h>
 
 #include "basic.h"
 #include "shader_param.h"

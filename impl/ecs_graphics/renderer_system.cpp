@@ -498,14 +498,18 @@ void RendererSystem::renderGeometryPass(Core::ICommandList& commandList, Core::I
     if(!gBufferFramebuffer)
         return;
 
-    struct GeometryPassDrawItem{
+    struct MeshGeometryPassDrawItem{
         Name geometryKey = NAME_NONE;
-        Name materialKey = NAME_NONE;
+        MaterialPipelineKey pipelineKey;
+    };
+    struct ComputeGeometryPassDrawItem{
+        Name geometryKey = NAME_NONE;
+        MaterialPipelineKey pipelineKey;
     };
 
     Core::Alloc::ScratchArena<> scratchArena;
-    Vector<GeometryPassDrawItem, Core::Alloc::ScratchAllocator<GeometryPassDrawItem>> meshDrawItems{Core::Alloc::ScratchAllocator<GeometryPassDrawItem>(scratchArena)};
-    Vector<GeometryPassDrawItem, Core::Alloc::ScratchAllocator<GeometryPassDrawItem>> computeDrawItems{Core::Alloc::ScratchAllocator<GeometryPassDrawItem>(scratchArena)};
+    Vector<MeshGeometryPassDrawItem, Core::Alloc::ScratchAllocator<MeshGeometryPassDrawItem>> meshDrawItems{Core::Alloc::ScratchAllocator<MeshGeometryPassDrawItem>(scratchArena)};
+    Vector<ComputeGeometryPassDrawItem, Core::Alloc::ScratchAllocator<ComputeGeometryPassDrawItem>> computeDrawItems{Core::Alloc::ScratchAllocator<ComputeGeometryPassDrawItem>(scratchArena)};
 
     auto rendererView = m_world.view<RendererComponent>();
     const Core::FramebufferInfo& framebufferInfo = gBufferFramebuffer->getFramebufferInfo();
@@ -531,9 +535,9 @@ void RendererSystem::renderGeometryPass(Core::ICommandList& commandList, Core::I
         if(!pipelineResources)
             continue;
 
-        GeometryPassDrawItem drawItem;
-        drawItem.geometryKey = geometry->geometryName;
-        drawItem.materialKey = renderer.material.name();
+        MaterialPipelineKey pipelineKey;
+        pipelineKey.material = renderer.material.name();
+        pipelineKey.framebufferInfo = framebufferInfo;
 
         switch(pipelineResources->renderPath){
         case RenderPath::MeshShader:{
@@ -541,6 +545,9 @@ void RendererSystem::renderGeometryPass(Core::ICommandList& commandList, Core::I
                 continue;
             if(!ensureMeshBindingSet(*geometry))
                 continue;
+            MeshGeometryPassDrawItem drawItem;
+            drawItem.geometryKey = geometry->geometryName;
+            drawItem.pipelineKey = pipelineKey;
             meshDrawItems.push_back(drawItem);
             break;
         }
@@ -549,6 +556,9 @@ void RendererSystem::renderGeometryPass(Core::ICommandList& commandList, Core::I
                 continue;
             if(!ensureComputeBindingSet(*geometry))
                 continue;
+            ComputeGeometryPassDrawItem drawItem;
+            drawItem.geometryKey = geometry->geometryName;
+            drawItem.pipelineKey = pipelineKey;
             computeDrawItems.push_back(drawItem);
             break;
         }
@@ -558,16 +568,12 @@ void RendererSystem::renderGeometryPass(Core::ICommandList& commandList, Core::I
         }
     }
 
-    for(const GeometryPassDrawItem& drawItem : meshDrawItems){
+    for(const MeshGeometryPassDrawItem& drawItem : meshDrawItems){
         const auto foundGeometry = m_geometryMeshes.find(drawItem.geometryKey);
         if(foundGeometry == m_geometryMeshes.end())
             continue;
 
-        MaterialPipelineKey pipelineKey;
-        pipelineKey.material = drawItem.materialKey;
-        pipelineKey.framebufferInfo = framebufferInfo;
-
-        const auto foundPipeline = m_materialPipelines.find(pipelineKey);
+        const auto foundPipeline = m_materialPipelines.find(drawItem.pipelineKey);
         if(foundPipeline == m_materialPipelines.end())
             continue;
 
@@ -593,16 +599,12 @@ void RendererSystem::renderGeometryPass(Core::ICommandList& commandList, Core::I
         commandList.dispatchMesh(geometry.dispatchGroupCount);
     }
 
-    for(const GeometryPassDrawItem& drawItem : computeDrawItems){
+    for(const ComputeGeometryPassDrawItem& drawItem : computeDrawItems){
         const auto foundGeometry = m_geometryMeshes.find(drawItem.geometryKey);
         if(foundGeometry == m_geometryMeshes.end())
             continue;
 
-        MaterialPipelineKey pipelineKey;
-        pipelineKey.material = drawItem.materialKey;
-        pipelineKey.framebufferInfo = framebufferInfo;
-
-        const auto foundPipeline = m_materialPipelines.find(pipelineKey);
+        const auto foundPipeline = m_materialPipelines.find(drawItem.pipelineKey);
         if(foundPipeline == m_materialPipelines.end())
             continue;
 
@@ -773,7 +775,8 @@ bool RendererSystem::ensureGeometryLoaded(const Core::Assets::AssetRef<Geometry>
         return false;
     }
 
-    Vector<u32> expandedIndices;
+    Core::Alloc::ScratchArena<> scratchArena;
+    Vector<u32, Core::Alloc::ScratchAllocator<u32>> expandedIndices{Core::Alloc::ScratchAllocator<u32>(scratchArena)};
     expandedIndices.resize(createdGeometry.indexCount);
     if(geometry.use32BitIndices()){
         const u32* indexData = reinterpret_cast<const u32*>(geometry.indexData().data());

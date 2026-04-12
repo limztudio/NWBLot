@@ -24,6 +24,7 @@ Updated: 2026-03-29
 18. The compute-emulation path still intentionally uses the internal `engine/graphics/mesh_emulation_vs` bridge and the device-manager render-pass integration; those are runtime requirements, not leftovers from the removed material-facing `VS + PS` path.
 19. ECS renderer material assets expose only `mesh` and `ps` stages. Do not add a user-authored `cs` or `task` stage for this path; the cooker derives the internal compute-emulation stage from the mesh shader source automatically.
 20. In the ECS renderer geometry pass, once material/framebuffer render-path selection is cached, bucket draw work by path first and run path-specific submission loops; do not keep branching on render path inside the hot per-draw submission section.
+21. `Core::Filesystem::VolumeSession::pushDataDeferred()` copies payload bytes into the staged volume immediately; caller-local temporary buffers only need to stay alive for the duration of the call, so reuse/scratch-backed staging payload buffers are valid there.
 
 ## Scheduler Architecture
 

@@ -1597,6 +1597,8 @@ static bool AppendPreparedShadersToVolume(
     VirtualPathHashSet& inOutSeenVirtualPathHashes,
     Vector<Core::ShaderArchive::Record>& outShaderIndexRecords
 ){
+    Vector<u8> cookedBytecode;
+
     for(PreparedShaderEntry& preparedEntry : preparedEntries){
         Core::ShaderCook::ShaderEntry& entry = preparedEntry.entry;
         const Name shaderName = ToName(entry.name);
@@ -1631,7 +1633,6 @@ static bool AppendPreparedShadersToVolume(
                 entry,
                 variantName
             );
-            Vector<u8> cookedBytecode;
             if(!GetVariantBytecode(
                 entry,
                 variantName,
@@ -1696,6 +1697,8 @@ static bool AppendMaterialAssetsToVolume(
     VirtualPathHashSet& inOutSeenVirtualPathHashes
 ){
     MaterialAssetCodec materialCodec;
+    Vector<u8> materialBinary;
+
     for(const MaterialEntry& materialEntry : materialEntries){
         const NameHash materialVirtualPathHash = materialEntry.virtualPath.hash();
         if(!inOutSeenVirtualPathHashes.insert(materialVirtualPathHash).second){
@@ -1721,7 +1724,6 @@ static bool AppendMaterialAssetsToVolume(
             }
         }
 
-        Vector<u8> materialBinary;
         if(!materialCodec.serialize(cookedMaterial, materialBinary)){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("ShaderAssetCooker: failed to serialize material '{}'"),
@@ -1748,6 +1750,8 @@ static bool AppendGeometryAssetsToVolume(
     VirtualPathHashSet& inOutSeenVirtualPathHashes
 ){
     GeometryAssetCodec geometryCodec;
+    Vector<u8> geometryBinary;
+
     for(const GeometryEntry& geometryEntry : geometryEntries){
         const NameHash geometryVirtualPathHash = geometryEntry.virtualPath.hash();
         if(!inOutSeenVirtualPathHashes.insert(geometryVirtualPathHash).second){
@@ -1767,7 +1771,6 @@ static bool AppendGeometryAssetsToVolume(
             return false;
         }
 
-        Vector<u8> geometryBinary;
         if(!geometryCodec.serialize(cookedGeometry, geometryBinary)){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("ShaderAssetCooker: failed to serialize geometry '{}'"),

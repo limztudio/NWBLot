@@ -131,6 +131,10 @@ static bool CollectDependencies(const Path& startPath, const ShaderCook::CookVec
 
     Deque<Path, Alloc::ScratchAllocator<Path>> pending{Alloc::ScratchAllocator<Path>(scratchArena)};
     pending.push_back(startPath);
+    AString sourceText;
+    AString line;
+    AString includeName;
+    Path includePath;
 
     while(!pending.empty()){
         Path dependencyPath = Move(pending.back());
@@ -150,7 +154,7 @@ static bool CollectDependencies(const Path& startPath, const ShaderCook::CookVec
         if(!inOutVisitedPaths.insert(canonicalPathKey).second)
             continue;
 
-        AString sourceText;
+        sourceText.clear();
         if(!ReadTextFile(absolutePath, sourceText)){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("Failed to read dependency '{}'"),
@@ -163,15 +167,13 @@ static bool CollectDependencies(const Path& startPath, const ShaderCook::CookVec
         inOutDependencies.push_back(absolutePath);
 
         AStringStream sourceStream(sourceText);
-        AString line;
         while(ReadTextLine(sourceStream, line)){
             TrimTrailingCarriageReturn(line);
 
-            AString includeName;
+            includeName.clear();
             if(!ExtractIncludeName(line, includeName))
                 continue;
 
-            Path includePath;
             if(!ResolveIncludeFile(includeName, absolutePath.parent_path(), includeDirectories, includePath)){
                 NWB_LOGGER_ERROR(
                     NWB_TEXT("Unable to resolve include '{}' from '{}'"),

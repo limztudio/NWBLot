@@ -112,6 +112,7 @@ void CommandList::clearState(){
 void CommandList::copyTextureToBuffer(IBuffer* _dest, u64 destOffsetBytes, u32 destRowPitch, ITexture* _src, const TextureSlice& srcSlice){
     auto* dest = checked_cast<Buffer*>(_dest);
     auto* src = checked_cast<Texture*>(_src);
+    const TextureSlice resolvedSrc = srcSlice.resolve(src->m_desc);
 
     const FormatInfo& formatInfo = GetFormatInfo(src->m_desc.format);
     VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -120,16 +121,30 @@ void CommandList::copyTextureToBuffer(IBuffer* _dest, u64 destOffsetBytes, u32 d
     if(formatInfo.hasStencil)
         aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
 
+    if(formatInfo.blockSize == 0 || formatInfo.bytesPerBlock == 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to buffer: invalid row pitch"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to buffer: invalid row pitch"));
+        return;
+    }
+
+    const u32 blocksX = Max<u32>((resolvedSrc.width + formatInfo.blockSize - 1) / formatInfo.blockSize, 1u);
+    const u32 naturalRowPitch = blocksX * formatInfo.bytesPerBlock;
+    if(destRowPitch > 0 && (destRowPitch < naturalRowPitch || (destRowPitch % formatInfo.bytesPerBlock) != 0)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to buffer: invalid row pitch"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to buffer: invalid row pitch"));
+        return;
+    }
+
     VkBufferImageCopy region{};
     region.bufferOffset = destOffsetBytes;
-    region.bufferRowLength = destRowPitch > 0 ? (destRowPitch / formatInfo.bytesPerBlock) : 0;
+    region.bufferRowLength = destRowPitch > 0 ? (destRowPitch / formatInfo.bytesPerBlock) * formatInfo.blockSize : 0;
     region.bufferImageHeight = 0;
     region.imageSubresource.aspectMask = aspectMask;
-    region.imageSubresource.mipLevel = srcSlice.mipLevel;
-    region.imageSubresource.baseArrayLayer = srcSlice.arraySlice;
+    region.imageSubresource.mipLevel = resolvedSrc.mipLevel;
+    region.imageSubresource.baseArrayLayer = resolvedSrc.arraySlice;
     region.imageSubresource.layerCount = 1;
-    region.imageOffset = { static_cast<int32_t>(srcSlice.x), static_cast<int32_t>(srcSlice.y), static_cast<int32_t>(srcSlice.z) };
-    region.imageExtent = { srcSlice.width, srcSlice.height, srcSlice.depth };
+    region.imageOffset = { static_cast<int32_t>(resolvedSrc.x), static_cast<int32_t>(resolvedSrc.y), static_cast<int32_t>(resolvedSrc.z) };
+    region.imageExtent = { resolvedSrc.width, resolvedSrc.height, resolvedSrc.depth };
 
     vkCmdCopyImageToBuffer(m_currentCmdBuf->m_cmdBuf, src->m_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dest->m_buffer, 1, &region);
 

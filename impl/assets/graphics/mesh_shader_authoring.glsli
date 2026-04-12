@@ -43,6 +43,7 @@ layout(push_constant) uniform NwbMeshPushConstants{
     uvec4 dispatch;
     vec4 viewportRect;
     vec4 scissorRect;
+    vec4 viewParams;
 } g_NwbMeshPushConstants;
 
 #if NWB_MESH_SHADER_EMULATION_COMPUTE
@@ -84,6 +85,10 @@ uint nwbMeshActiveTriangleCount(){
 
 bool nwbMeshInvocationActive(){
     return nwbMeshGroupThreadID() < nwbMeshActiveTriangleCount();
+}
+
+vec4 nwbMeshViewParams(){
+    return g_NwbMeshPushConstants.viewParams;
 }
 
 uint nwbMeshTriangleIndex(){

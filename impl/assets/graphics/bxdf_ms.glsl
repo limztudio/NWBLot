@@ -24,11 +24,12 @@ mat3 nwbEngineBuildRotationX(float angle){
 }
 
 vec4 nwbEngineBuildClipPosition(vec3 worldPosition){
-    const mat3 rotY = nwbEngineBuildRotationY(0.82);
-    const mat3 rotX = nwbEngineBuildRotationX(0.94);
+    const vec4 viewParams = nwbMeshViewParams();
+    const mat3 rotY = nwbEngineBuildRotationY(viewParams.x);
+    const mat3 rotX = nwbEngineBuildRotationX(viewParams.y);
 
     vec3 p = rotY * (rotX * worldPosition);
-    p.z += 2.2;
+    p.z += viewParams.z;
 
     const float invZ = 1.0 / p.z;
     const float ndcX = p.x * invZ;

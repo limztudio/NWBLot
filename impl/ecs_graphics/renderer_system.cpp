@@ -41,6 +41,9 @@ static constexpr u32 s_AvboitPhysicalSlices = 64u;
 static constexpr f32 s_AvboitExtinctionFixedScale = 4096.f;
 static constexpr f32 s_AvboitSelfOcclusionSliceBias = 2.f;
 static constexpr usize s_AvboitControlWordCount = 8u;
+static constexpr f32 s_DefaultMeshViewRotationY = 0.82f;
+static constexpr f32 s_DefaultMeshViewRotationX = 0.94f;
+static constexpr f32 s_DefaultMeshViewDepthOffset = 2.2f;
 
 
 struct ShaderDrivenPushConstants{
@@ -50,6 +53,7 @@ struct ShaderDrivenPushConstants{
     u32 padding1 = 0;
     f32 viewportRect[4] = {};
     f32 scissorRect[4] = {};
+    f32 viewParams[4] = {};
 };
 
 struct AvboitPushConstants{
@@ -69,9 +73,10 @@ struct EmulatedVertex{
     f32 padding = 0.f;
 };
 
-static_assert(sizeof(ShaderDrivenPushConstants) == 48, "ShaderDrivenPushConstants layout must stay stable");
+static_assert(sizeof(ShaderDrivenPushConstants) == 64, "ShaderDrivenPushConstants layout must stay stable");
 static_assert(sizeof(AvboitPushConstants) == 48, "AvboitPushConstants layout must stay stable");
-static_assert(sizeof(TransparentDrawPushConstants) == 96, "TransparentDrawPushConstants layout must stay stable");
+static_assert(sizeof(TransparentDrawPushConstants) == 112, "TransparentDrawPushConstants layout must stay stable");
+static_assert(sizeof(TransparentDrawPushConstants) <= Core::s_MaxPushConstantSize, "Transparent draw push constants must fit the portable push constant budget");
 static_assert(sizeof(EmulatedVertex) == s_EmulatedVertexStride, "EmulatedVertex layout must match the mesh emulation shader");
 
 
@@ -309,6 +314,9 @@ static u32 ComputeDispatchGroupCount(const u32 triangleCount){
 static ShaderDrivenPushConstants BuildShaderDrivenPushConstants(const u32 triangleCount, const Core::ViewportState& viewportState){
     ShaderDrivenPushConstants pushConstants;
     pushConstants.triangleCount = triangleCount;
+    pushConstants.viewParams[0] = s_DefaultMeshViewRotationY;
+    pushConstants.viewParams[1] = s_DefaultMeshViewRotationX;
+    pushConstants.viewParams[2] = s_DefaultMeshViewDepthOffset;
 
     if(viewportState.viewports.empty())
         return pushConstants;

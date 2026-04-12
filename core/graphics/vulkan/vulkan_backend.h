@@ -350,7 +350,7 @@ public:
         u64* pOffset,
         void** pCpuVA,
         CommandQueue::Enum queueID,
-        u64 currentVersion,
+        u64 completedVersion,
         u32 alignment = s_DefaultUploadSuballocationAlignment);
     void submitChunks(CommandQueue::Enum queueID, u64 submittedVersion);
 

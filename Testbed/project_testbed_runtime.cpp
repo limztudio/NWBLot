@@ -27,7 +27,7 @@ NotNullUniquePtr<NWB::Core::ECS::World> ProjectTestbed::createInitialWorldOrDie(
 
 NWB::Core::ECSGraphics::RendererSystem& ProjectTestbed::requireRendererSystemOrDie(NWB::Core::ECS::World& world){
     auto* rendererSystem = world.getSystem<NWB::Core::ECSGraphics::RendererSystem>();
-    NWB_ASSERT_MSG(rendererSystem, "ProjectTestbed initialization failed: renderer system is missing in initial world");
+    NWB_FATAL_ASSERT_MSG(rendererSystem, NWB_TEXT("ProjectTestbed initialization failed: renderer system is missing in initial world"));
     return *rendererSystem;
 }
 
@@ -54,9 +54,11 @@ bool ProjectTestbed::onStartup(){
     renderer.geometry = cubeGeometry;
     renderer.material = cubeMaterial;
 
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ProjectTestbed: startup scene created"));
     return true;
 }
 void ProjectTestbed::onShutdown(){
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ProjectTestbed: shutdown"));
 }
 
 
@@ -68,4 +70,3 @@ bool ProjectTestbed::onUpdate(f32 delta){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

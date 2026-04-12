@@ -479,7 +479,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void CommandList::beginRenderPass(IFramebuffer* _framebuffer, const RenderPassParameters& params){
+void CommandList::beginDynamicRendering(IFramebuffer* _framebuffer, const RenderPassParameters& params){
     auto* fb = checked_cast<Framebuffer*>(_framebuffer);
     if(!fb)
         return;
@@ -564,8 +564,12 @@ void CommandList::beginRenderPass(IFramebuffer* _framebuffer, const RenderPassPa
     vkCmdBeginRendering(m_currentCmdBuf->m_cmdBuf, &renderingInfo);
 }
 
-void CommandList::endRenderPass(){
+void CommandList::endDynamicRendering(){
     vkCmdEndRendering(m_currentCmdBuf->m_cmdBuf);
+}
+
+void CommandList::endRenderPass(){
+    endActiveRenderPass();
 }
 
 void CommandList::ensureGraphicsRenderPass(IFramebuffer* framebuffer){
@@ -583,7 +587,7 @@ void CommandList::ensureGraphicsRenderPass(IFramebuffer* framebuffer){
     }
 
     RenderPassParameters params = {};
-    beginRenderPass(framebuffer, params);
+    beginDynamicRendering(framebuffer, params);
     m_renderPassActive = true;
     m_renderPassFramebuffer = framebuffer;
 }
@@ -592,7 +596,7 @@ void CommandList::endActiveRenderPass(){
     if(!m_renderPassActive)
         return;
 
-    endRenderPass();
+    endDynamicRendering();
     m_renderPassActive = false;
     m_renderPassFramebuffer = nullptr;
 }
@@ -680,6 +684,7 @@ void CommandList::drawIndexed(const DrawArguments& args){
 
 void CommandList::drawIndirect(u32 offsetBytes, u32 drawCount){
     if(!m_currentGraphicsState.indirectParams){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: No indirect buffer bound for drawIndirect"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: No indirect buffer bound for drawIndirect"));
         return;
     }
@@ -696,4 +701,3 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

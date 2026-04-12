@@ -1803,7 +1803,7 @@ bool ShaderAssetCooker::cook(const Core::Assets::AssetCookOptions& options){
     environment.configuration = options.configuration;
     environment.repoRoot = options.repoRoot.empty() ? Path(".") : Path(options.repoRoot.c_str());
     environment.assetRoots.reserve(options.assetRoots.size());
-    for(const CompactString& assetRoot : options.assetRoots)
+    for(const AString& assetRoot : options.assetRoots)
         environment.assetRoots.push_back(Path(assetRoot.c_str()));
     environment.outputDirectory = Path(options.outputDirectory.c_str());
     environment.cacheDirectory = options.cacheDirectory.empty() ? Path() : Path(options.cacheDirectory.c_str());
@@ -1812,7 +1812,7 @@ bool ShaderAssetCooker::cook(const Core::Assets::AssetCookOptions& options){
     if(!cookShaderAssets(environment, result))
         return false;
 
-    NWB_LOGGER_INFO(
+    NWB_LOGGER_ESSENTIAL_INFO(
         NWB_TEXT("Graphics asset cook complete [{}] - volume='{}', files={}, segments={}, mount='{}'"),
         StringConvert(options.configuration.c_str()),
         StringConvert(result.volumeName.c_str()),

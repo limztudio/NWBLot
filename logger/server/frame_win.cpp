@@ -229,6 +229,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                 COLORREF textColor;
                 COLORREF bgColor;
                 switch(curData.second()){
+                case Log::Type::EssentialInfo:
                 case Log::Type::Info:
                     if(dis->itemID & 1){
                         textColor = RGB(80, 80, 80);
@@ -247,6 +248,16 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                     else{
                         textColor = RGB(0, 0, 0);
                         bgColor = RGB(170, 170, 0);
+                    }
+                    break;
+                case Log::Type::CriticalWarning:
+                    if(dis->itemID & 1){
+                        textColor = RGB(255, 255, 255);
+                        bgColor = RGB(200, 100, 0);
+                    }
+                    else{
+                        textColor = RGB(240, 240, 240);
+                        bgColor = RGB(170, 80, 0);
                     }
                     break;
                 case Log::Type::Error:

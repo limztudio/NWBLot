@@ -96,7 +96,7 @@ Frame::Frame(void* inst, u16 width, u16 height)
     )
     , m_projectThreadPool(queryProjectWorkerThreadCount(), Alloc::CoreAffinity::Any)
     , m_projectJobSystem(m_projectThreadPool)
-    , m_graphics(m_graphicsAllocator, m_graphicsThreadPool, m_graphicsJobSystem)
+    , m_graphics(m_graphicsAllocator, m_graphicsThreadPool, m_graphicsJobSystem, m_input)
 {
     auto& frameData = data<Common::FrameData>();
     frameData.width() = width;
@@ -110,8 +110,10 @@ Frame::~Frame(){
 
 
 bool Frame::startup(){
-    if(!m_graphics.init(data<Common::FrameData>()))
+    if(!m_graphics.init(data<Common::FrameData>())){
+        NWB_LOGGER_ERROR(NWB_TEXT("Frame: graphics initialization failed"));
         return false;
+    }
 
     return true;
 }
@@ -120,14 +122,32 @@ void Frame::cleanup(){
 }
 bool Frame::update(f32 delta){
     if(m_projectUpdateCallback){
-        if(!m_projectUpdateCallback(m_projectUpdateUserData, delta))
+        if(!m_projectUpdateCallback(m_projectUpdateUserData, delta)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Frame: project update callback returned false"));
             return false;
+        }
     }
 
-    return m_graphics.runFrame();
+    if(!m_graphics.runFrame()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Frame: graphics frame update failed"));
+        return false;
+    }
+
+    return true;
 }
 bool Frame::render(){
     return true;
+}
+
+const tchar* Frame::syncGraphicsWindowState(u32 width, u32 height, bool windowVisible, bool windowIsInFocus){
+    m_graphics.updateWindowState(width, height, windowVisible, windowIsInFocus);
+
+    const tchar* title = m_graphics.getWindowTitle();
+    if(!title || m_appliedWindowTitle == title)
+        return nullptr;
+
+    m_appliedWindowTitle = title;
+    return m_appliedWindowTitle.c_str();
 }
 
 
@@ -138,4 +158,3 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

@@ -16,7 +16,44 @@ NWB_LOG_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Client::s_SendSwitch = false;
+namespace __hidden_logger_client{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static void BuildPayload(const MessageType& msg, Vector<u8>& outPayload){
+    const auto& [time, type, str] = msg;
+    const usize strBytes = str.size() * sizeof(tchar);
+    const usize payloadSize = sizeof(decltype(time)) + sizeof(decltype(type)) + strBytes + sizeof(tchar);
+
+    outPayload.resize(payloadSize);
+
+    u8* ptr = outPayload.data();
+    {
+        NWB_MEMCPY(ptr, sizeof(decltype(time)), &time, sizeof(decltype(time)));
+        ptr += static_cast<isize>(sizeof(decltype(time)));
+    }
+    {
+        NWB_MEMCPY(ptr, sizeof(decltype(type)), &type, sizeof(decltype(type)));
+        ptr += static_cast<isize>(sizeof(decltype(type)));
+    }
+    {
+        if(strBytes){
+            NWB_MEMCPY(ptr, strBytes, str.c_str(), strBytes);
+            ptr += static_cast<isize>(strBytes);
+        }
+
+        constexpr tchar nullTerminator = 0;
+        NWB_MEMCPY(ptr, sizeof(nullTerminator), &nullTerminator, sizeof(nullTerminator));
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
 
 
 bool Client::globalInit(){
@@ -28,50 +65,12 @@ bool Client::globalInit(){
 
     return true;
 }
-usize Client::sendCallback(void* contents, usize size, usize nmemb, Client* _this){
-    (void)size;
-    (void)nmemb;
-
-    const auto thisPtr = MakeNotNull(_this);
-    const auto contentsPtr = MakeNotNull(contents);
-
-    if(s_SendSwitch){
-        s_SendSwitch = false;
-        return 0;
-    }
-
-    MessageType msg;
-    if(!thisPtr->try_dequeue(msg))
-        return 0;
-
-    auto* ptr = reinterpret_cast<u8*>(contentsPtr.get());
-
-    const auto& [time, type, str] = msg;
-    {
-        NWB_MEMCPY(ptr, sizeof(decltype(time)), &time, sizeof(decltype(time)));
-        ptr += static_cast<isize>(sizeof(decltype(time)));
-    }
-    {
-        NWB_MEMCPY(ptr, sizeof(decltype(type)), &type, sizeof(decltype(type)));
-        ptr += static_cast<isize>(sizeof(decltype(type)));
-    }
-    {
-        NWB_MEMCPY(ptr, str.size() * sizeof(tchar), str.c_str(), str.size() * sizeof(tchar));
-        ptr += static_cast<isize>(str.size() * sizeof(tchar));
-
-        (*reinterpret_cast<tchar*>(ptr)) = 0;
-        ptr += sizeof(tchar);
-    }
-
-    auto sizeWritten = static_cast<usize>(ptr - reinterpret_cast<u8*>(contentsPtr.get()));
-
-    s_SendSwitch = true;
-    return sizeWritten;
-}
 
 
 Client::Client()
     : m_curl(nullptr)
+    , m_pendingPayload()
+    , m_hasPendingPayload(false)
     , m_msgCount(0)
 {}
 Client::~Client(){
@@ -99,45 +98,61 @@ bool Client::internalInit(NotNull<const char*> url){
         return false;
     }
 
-    ret = curl_easy_setopt(curlHandle, CURLOPT_READFUNCTION, sendCallback);
-    if(ret != CURLE_OK){
-        enqueue(StringFormat(NWB_TEXT("Failed to set write callback on {}: {}"), CLIENT_NAME, StringConvert(curl_easy_strerror(ret))), Type::Fatal);
-        return false;
-    }
-
-    ret = curl_easy_setopt(curlHandle, CURLOPT_READDATA, this);
-    if(ret != CURLE_OK){
-        enqueue(StringFormat(NWB_TEXT("Failed to set write data on {}: {}"), CLIENT_NAME, StringConvert(curl_easy_strerror(ret))), Type::Fatal);
-        return false;
-    }
-
     ret = curl_easy_setopt(curlHandle, CURLOPT_POST, 1);
     if(ret != CURLE_OK){
         enqueue(StringFormat(NWB_TEXT("Failed to set post on {}: {}"), CLIENT_NAME, StringConvert(curl_easy_strerror(ret))), Type::Fatal);
         return false;
     }
 
-    ret = curl_easy_setopt(curlHandle, CURLOPT_POSTFIELDSIZE, -1);
-    if(ret != CURLE_OK){
-        enqueue(StringFormat(NWB_TEXT("Failed to set file size on {}: {}"), CLIENT_NAME, StringConvert(curl_easy_strerror(ret))), Type::Fatal);
-        return false;
-    }
-
     return true;
 }
 bool Client::internalUpdate(){
-    if(!m_msgCount.load(std::memory_order_relaxed))
-        return true;
+    if(!m_hasPendingPayload){
+        if(!m_msgCount.load(std::memory_order_relaxed))
+            return true;
+
+        MessageType msg;
+        if(!try_dequeue(msg))
+            return true;
+
+        __hidden_logger_client::BuildPayload(msg, m_pendingPayload);
+        m_hasPendingPayload = true;
+    }
+
+    auto scheduleRetry = [this](){
+        if(this->m_exit.load(std::memory_order_acquire))
+            return;
+
+        SleepMS(100);
+        if(this->m_exit.load(std::memory_order_acquire))
+            return;
+
+        this->m_semaphore.release();
+    };
 
     CURL* const curlHandle = static_cast<CURL*>(m_curl);
     CURLcode ret;
 
-    ret = curl_easy_perform(curlHandle);
+    ret = curl_easy_setopt(curlHandle, CURLOPT_POSTFIELDS, reinterpret_cast<char*>(m_pendingPayload.data()));
     if(ret != CURLE_OK){
-        enqueue(StringFormat(NWB_TEXT("Failed to perform on {}: {}"), CLIENT_NAME, StringConvert(curl_easy_strerror(ret))), Type::Error);
+        scheduleRetry();
         return true;
     }
 
+    ret = curl_easy_setopt(curlHandle, CURLOPT_POSTFIELDSIZE_LARGE, static_cast<curl_off_t>(m_pendingPayload.size()));
+    if(ret != CURLE_OK){
+        scheduleRetry();
+        return true;
+    }
+
+    ret = curl_easy_perform(curlHandle);
+    if(ret != CURLE_OK){
+        scheduleRetry();
+        return true;
+    }
+
+    m_pendingPayload.clear();
+    m_hasPendingPayload = false;
     return true;
 }
 

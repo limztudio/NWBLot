@@ -105,7 +105,7 @@
       "name": "linux-clang-x64",
       "inherits": [
         "linux-clang-base",
-        "variant-engine",
+        "variant-testbed",
         "output-full"
       ]
     },
@@ -115,11 +115,15 @@
         "linux-clang-base",
         "variant-engine",
         "output-engine"
-      ],
-      "cacheVariables": {
-        "NWB_BUILD_LOGSERVER": "OFF",
-        "NWB_BUILD_RESOURCE_COOKER": "OFF"
-      }
+      ]
+    },
+    {
+      "name": "linux-clang-testbed-x64",
+      "inherits": [
+        "linux-clang-base",
+        "variant-testbed",
+        "output-testbed"
+      ]
     }
   ],
   "buildPresets": [
@@ -196,6 +200,21 @@
     {
       "name": "linux-clang-engine-fin",
       "configurePreset": "linux-clang-engine-x64",
+      "configuration": "fin"
+    },
+    {
+      "name": "linux-clang-testbed-dbg",
+      "configurePreset": "linux-clang-testbed-x64",
+      "configuration": "dbg"
+    },
+    {
+      "name": "linux-clang-testbed-opt",
+      "configurePreset": "linux-clang-testbed-x64",
+      "configuration": "opt"
+    },
+    {
+      "name": "linux-clang-testbed-fin",
+      "configurePreset": "linux-clang-testbed-x64",
       "configuration": "fin"
     }
   ]

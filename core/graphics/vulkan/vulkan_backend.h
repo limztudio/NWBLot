@@ -1204,6 +1204,7 @@ public:
     virtual void open()override;
     virtual void close()override;
     virtual void clearState()override;
+    virtual void endRenderPass()override;
 
     virtual void setResourceStatesForBindingSet(IBindingSet* bindingSet)override;
     virtual void setEnableAutomaticBarriers(bool enable)override;
@@ -1289,8 +1290,8 @@ private:
         u32 pushDataSize,
         const BindingSetVector& bindings);
 
-    void beginRenderPass(IFramebuffer* framebuffer, const RenderPassParameters& params);
-    void endRenderPass();
+    void beginDynamicRendering(IFramebuffer* framebuffer, const RenderPassParameters& params);
+    void endDynamicRendering();
     void ensureGraphicsRenderPass(IFramebuffer* framebuffer);
     void endActiveRenderPass();
 
@@ -1477,4 +1478,3 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

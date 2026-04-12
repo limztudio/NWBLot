@@ -33,17 +33,27 @@ static bool AssignCompactString(const AStringView source, const char* label, Com
     return false;
 }
 
-static bool AssignCompactStrings(const Vector<AString>& source, const char* label, Vector<CompactString>& outValues, AString& outError){
+static bool AssignString(const AStringView source, AString& outValue, AString& outError){
+    if(HasEmbeddedNull(source)){
+        outError = "path-like command line values must not contain embedded nulls";
+        outValue.clear();
+        return false;
+    }
+
+    outValue.assign(source.data(), source.size());
+    return true;
+}
+
+static bool AssignStrings(const Vector<AString>& source, Vector<AString>& outValues, AString& outError){
     outValues.clear();
     outValues.reserve(source.size());
     for(const AString& value : source){
-        CompactString compactValue;
-        if(!compactValue.assign(value)){
-            outError = StringFormat("{} exceeds CompactString capacity ({})", label, CompactString::s_MaxLength);
+        if(HasEmbeddedNull(value)){
+            outError = "path-like command line values must not contain embedded nulls";
             outValues.clear();
             return false;
         }
-        outValues.push_back(compactValue);
+        outValues.push_back(value);
     }
     return true;
 }
@@ -102,13 +112,13 @@ bool ParseCommandLine(const int argc, char** argv, CookOptions& outOptions, AStr
         return false;
     }
 
-    if(!__hidden_resource_cooker::AssignCompactString(parsedOptions.repoRoot, "--repo-root", outOptions.repoRoot, outError))
+    if(!__hidden_resource_cooker::AssignString(parsedOptions.repoRoot, outOptions.repoRoot, outError))
         return false;
-    if(!__hidden_resource_cooker::AssignCompactStrings(parsedOptions.assetRoots, "--asset-root", outOptions.assetRoots, outError))
+    if(!__hidden_resource_cooker::AssignStrings(parsedOptions.assetRoots, outOptions.assetRoots, outError))
         return false;
-    if(!__hidden_resource_cooker::AssignCompactString(parsedOptions.outputDirectory, "--output-directory", outOptions.outputDirectory, outError))
+    if(!__hidden_resource_cooker::AssignString(parsedOptions.outputDirectory, outOptions.outputDirectory, outError))
         return false;
-    if(!__hidden_resource_cooker::AssignCompactString(parsedOptions.cacheDirectory, "--cache-directory", outOptions.cacheDirectory, outError))
+    if(!__hidden_resource_cooker::AssignString(parsedOptions.cacheDirectory, outOptions.cacheDirectory, outError))
         return false;
     if(!__hidden_resource_cooker::AssignCompactString(parsedOptions.configuration, "--configuration", outOptions.configuration, outError))
         return false;
@@ -129,4 +139,3 @@ void PrintUsage(){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

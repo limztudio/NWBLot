@@ -116,8 +116,10 @@ Object RayTracingPipeline::getNativeHandle(ObjectType objectType){
 RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStructDesc& desc){
     VkResult res = VK_SUCCESS;
 
-    if(!m_context.extensions.KHR_acceleration_structure)
+    if(!m_context.extensions.KHR_acceleration_structure){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Acceleration structure extension is required to create ray tracing acceleration structures."));
         return nullptr;
+    }
 
     auto* as = NewArenaObject<AccelStruct>(m_context.objectArena, m_context);
     as->m_desc = desc;
@@ -135,6 +137,7 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
     as->m_buffer = createBuffer(bufferDesc);
 
     if(!as->m_buffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate acceleration structure storage buffer"));
         DestroyArenaObject(m_context.objectArena, as);
         return nullptr;
     }
@@ -147,6 +150,7 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
 
     res = vkCreateAccelerationStructureKHR(m_context.device, &createInfo, m_context.allocationCallbacks, &as->m_accelStruct);
     if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create acceleration structure: {}"), ResultToString(res));
         DestroyArenaObject(m_context.objectArena, as);
         return nullptr;
     }
@@ -161,8 +165,10 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
 RayTracingOpacityMicromapHandle Device::createOpacityMicromap(const RayTracingOpacityMicromapDesc& desc){
     VkResult res = VK_SUCCESS;
 
-    if(!m_context.extensions.EXT_opacity_micromap)
+    if(!m_context.extensions.EXT_opacity_micromap){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Opacity micromap extension is required to create opacity micromaps."));
         return nullptr;
+    }
 
     VkBuildMicromapFlagBitsEXT buildFlags = static_cast<VkBuildMicromapFlagBitsEXT>(0);
     if(desc.flags & RayTracingOpacityMicromapBuildFlags::FastTrace)
@@ -193,6 +199,7 @@ RayTracingOpacityMicromapHandle Device::createOpacityMicromap(const RayTracingOp
     om->m_dataBuffer = createBuffer(bufferDesc);
 
     if(!om->m_dataBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate opacity micromap storage buffer"));
         DestroyArenaObject(m_context.objectArena, om);
         return nullptr;
     }
@@ -207,6 +214,7 @@ RayTracingOpacityMicromapHandle Device::createOpacityMicromap(const RayTracingOp
 
     res = vkCreateMicromapEXT(m_context.device, &createInfo, m_context.allocationCallbacks, &om->m_micromap);
     if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create opacity micromap: {}"), ResultToString(res));
         DestroyArenaObject(m_context.objectArena, om);
         return nullptr;
     }
@@ -337,22 +345,31 @@ RayTracingClusterOperationSizeInfo Device::getClusterOperationSizeInfo(const Ray
 }
 
 bool Device::bindAccelStructMemory(IRayTracingAccelStruct* _as, IHeap* heap, u64 offset){
-    if(!_as || !heap)
+    if(!_as){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind acceleration structure memory: acceleration structure is null"));
         return false;
+    }
+    if(!heap){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind acceleration structure memory: heap is null"));
+        return false;
+    }
 
     auto* as = checked_cast<AccelStruct*>(_as);
 
     if(as->m_buffer)
         return bindBufferMemory(as->m_buffer.get(), heap, offset);
 
+    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind acceleration structure memory: storage buffer is null"));
     return false;
 }
 
 RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipelineDesc& desc){
     VkResult res = VK_SUCCESS;
 
-    if(!m_context.extensions.KHR_ray_tracing_pipeline)
+    if(!m_context.extensions.KHR_ray_tracing_pipeline){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Ray tracing pipeline extension is required to create ray tracing pipelines."));
         return nullptr;
+    }
 
     auto* pso = NewArenaObject<RayTracingPipeline>(m_context.objectArena, m_context, *this);
     pso->m_desc = desc;
@@ -441,6 +458,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
     }
 
     if(stages.empty() || groups.empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: no shader stages or groups were provided"));
         DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
@@ -517,6 +535,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
 
     res = vkCreateRayTracingPipelinesKHR(m_context.device, VK_NULL_HANDLE, m_context.pipelineCache, 1, &createInfo, m_context.allocationCallbacks, &pso->m_pipeline);
     if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: {}"), ResultToString(res));
         DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
@@ -537,6 +556,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
         pso->m_shaderGroupHandles.data()
     );
     if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to retrieve ray tracing shader group handles: {}"), ResultToString(res));
         DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
@@ -590,8 +610,10 @@ void ShaderTable::allocateSBTBuffer(BufferHandle& outBuffer, u64 sbtSize){
 }
 
 void ShaderTable::setRayGenerationShader(const Name& exportName, IBindingSet* /*bindings*/){
-    if(!m_pipeline)
+    if(!m_pipeline){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to set ray generation shader: shader table has no pipeline"));
         return;
+    }
 
     u32 handleSize = m_context.rayTracingPipelineProperties.shaderGroupHandleSize;
     u32 handleAlignment = m_context.rayTracingPipelineProperties.shaderGroupHandleAlignment;
@@ -600,19 +622,23 @@ void ShaderTable::setRayGenerationShader(const Name& exportName, IBindingSet* /*
     u64 sbtSize = (handleSizeAligned + baseAlignment - 1) & ~(static_cast<u64>(baseAlignment) - 1);
 
     allocateSBTBuffer(m_raygenBuffer, sbtSize);
-    if(!m_raygenBuffer)
+    if(!m_raygenBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate ray generation SBT buffer"));
         return;
+    }
 
     m_raygenOffset = 0;
 
     u32 groupIndex = findGroupIndex(exportName);
     if(groupIndex == UINT32_MAX){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Ray generation export not found in pipeline"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Ray generation export not found in pipeline"));
         return;
     }
 
     void* mapped = m_device.mapBuffer(m_raygenBuffer.get(), CpuAccessMode::Write);
     if(!mapped){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map ray generation SBT buffer"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to map ray generation SBT buffer"));
         return;
     }
@@ -636,12 +662,14 @@ u32 ShaderTable::addMissShader(const Name& exportName, IBindingSet* /*bindings*/
     BufferHandle newBuffer;
     allocateSBTBuffer(newBuffer, sbtSize);
     if(!newBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate miss SBT buffer"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to allocate miss SBT buffer"));
         return m_missCount;
     }
 
     void* mapped = m_device.mapBuffer(newBuffer.get(), CpuAccessMode::Write);
     if(!mapped){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map miss SBT buffer"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to map miss SBT buffer"));
         return m_missCount;
     }
@@ -649,6 +677,7 @@ u32 ShaderTable::addMissShader(const Name& exportName, IBindingSet* /*bindings*/
     if(m_missBuffer && m_missCount > 0){
         void* oldMapped = m_device.mapBuffer(m_missBuffer.get(), CpuAccessMode::Read);
         if(!oldMapped){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map previous miss SBT buffer"));
             NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to map previous miss SBT buffer"));
             m_device.unmapBuffer(newBuffer.get());
             return m_missCount;
@@ -661,6 +690,7 @@ u32 ShaderTable::addMissShader(const Name& exportName, IBindingSet* /*bindings*/
     u32 groupIndex = findGroupIndex(exportName);
     if(groupIndex == UINT32_MAX){
         m_device.unmapBuffer(newBuffer.get());
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Miss shader export not found in pipeline"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Miss shader export not found in pipeline"));
         return m_missCount;
     }
@@ -689,12 +719,14 @@ u32 ShaderTable::addHitGroup(const Name& exportName, IBindingSet* /*bindings*/){
     BufferHandle newBuffer;
     allocateSBTBuffer(newBuffer, sbtSize);
     if(!newBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate hit SBT buffer"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to allocate hit SBT buffer"));
         return m_hitCount;
     }
 
     void* mapped = m_device.mapBuffer(newBuffer.get(), CpuAccessMode::Write);
     if(!mapped){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map hit SBT buffer"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to map hit SBT buffer"));
         return m_hitCount;
     }
@@ -702,6 +734,7 @@ u32 ShaderTable::addHitGroup(const Name& exportName, IBindingSet* /*bindings*/){
     if(m_hitBuffer && m_hitCount > 0){
         void* oldMapped = m_device.mapBuffer(m_hitBuffer.get(), CpuAccessMode::Read);
         if(!oldMapped){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map previous hit SBT buffer"));
             NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to map previous hit SBT buffer"));
             m_device.unmapBuffer(newBuffer.get());
             return m_hitCount;
@@ -714,6 +747,7 @@ u32 ShaderTable::addHitGroup(const Name& exportName, IBindingSet* /*bindings*/){
     u32 groupIndex = findGroupIndex(exportName);
     if(groupIndex == UINT32_MAX){
         m_device.unmapBuffer(newBuffer.get());
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Hit group export not found in pipeline"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Hit group export not found in pipeline"));
         return m_hitCount;
     }
@@ -742,12 +776,14 @@ u32 ShaderTable::addCallableShader(const Name& exportName, IBindingSet* /*bindin
     BufferHandle newBuffer;
     allocateSBTBuffer(newBuffer, sbtSize);
     if(!newBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate callable SBT buffer"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to allocate callable SBT buffer"));
         return m_callableCount;
     }
 
     void* mapped = m_device.mapBuffer(newBuffer.get(), CpuAccessMode::Write);
     if(!mapped){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map callable SBT buffer"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to map callable SBT buffer"));
         return m_callableCount;
     }
@@ -755,6 +791,7 @@ u32 ShaderTable::addCallableShader(const Name& exportName, IBindingSet* /*bindin
     if(m_callableBuffer && m_callableCount > 0){
         void* oldMapped = m_device.mapBuffer(m_callableBuffer.get(), CpuAccessMode::Read);
         if(!oldMapped){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map previous callable SBT buffer"));
             NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to map previous callable SBT buffer"));
             m_device.unmapBuffer(newBuffer.get());
             return m_callableCount;
@@ -767,6 +804,7 @@ u32 ShaderTable::addCallableShader(const Name& exportName, IBindingSet* /*bindin
     u32 groupIndex = findGroupIndex(exportName);
     if(groupIndex == UINT32_MAX){
         m_device.unmapBuffer(newBuffer.get());
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Callable shader export not found in pipeline"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Callable shader export not found in pipeline"));
         return m_callableCount;
     }
@@ -834,7 +872,15 @@ void CommandList::setRayTracingState(const RayTracingState& state){
 
 
 void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* _as, const RayTracingGeometryDesc* pGeometries, usize numGeometries, RayTracingAccelStructBuildFlags::Mask buildFlags){
-    if(!_as || !pGeometries || numGeometries == 0)
+    if(!_as){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: acceleration structure is null"));
+        return;
+    }
+    if(!pGeometries && numGeometries > 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: geometry data is null"));
+        return;
+    }
+    if(numGeometries == 0)
         return;
 
     if(!m_context.extensions.KHR_acceleration_structure)
@@ -941,6 +987,7 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* _as, const
     if(sizeInfo.buildScratchSize > 0){
         scratchBuffer = m_device.createBuffer(scratchDesc);
         if(!scratchBuffer){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate BLAS scratch buffer"));
             NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to allocate BLAS scratch buffer"));
             return;
         }
@@ -1066,7 +1113,15 @@ void CommandList::compactBottomLevelAccelStructs(){
 }
 
 void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* _as, const RayTracingInstanceDesc* pInstances, usize numInstances, RayTracingAccelStructBuildFlags::Mask buildFlags){
-    if(!_as || !pInstances || numInstances == 0)
+    if(!_as){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS: acceleration structure is null"));
+        return;
+    }
+    if(!pInstances && numInstances > 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS: instance data is null"));
+        return;
+    }
+    if(numInstances == 0)
         return;
 
     if(!m_context.extensions.KHR_acceleration_structure)
@@ -1082,11 +1137,14 @@ void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* _as, const Ra
     instanceBufferDesc.debugName = "TLAS_InstanceBuffer";
 
     BufferHandle instanceBuffer = m_device.createBuffer(instanceBufferDesc);
-    if(!instanceBuffer)
+    if(!instanceBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate TLAS instance buffer"));
         return;
+    }
 
     auto* mappedInstances = static_cast<VkAccelerationStructureInstanceKHR*>(m_device.mapBuffer(instanceBuffer.get(), CpuAccessMode::Write));
     if(!mappedInstances){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map TLAS instance buffer"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to map TLAS instance buffer"));
         return;
     }
@@ -1160,6 +1218,7 @@ void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* _as, const Ra
     if(sizeInfo.buildScratchSize > 0){
         scratchBuffer = m_device.createBuffer(scratchDesc);
         if(!scratchBuffer){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate TLAS scratch buffer"));
             NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to allocate TLAS scratch buffer"));
             return;
         }
@@ -1179,6 +1238,11 @@ void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* _as, const Ra
 void CommandList::buildOpacityMicromap(IRayTracingOpacityMicromap* _omm, const RayTracingOpacityMicromapDesc& ommDesc){
     if(!m_context.extensions.EXT_opacity_micromap)
         return;
+
+    if(!_omm){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build opacity micromap: micromap is null"));
+        return;
+    }
 
     auto* omm = checked_cast<OpacityMicromap*>(_omm);
 
@@ -1230,8 +1294,10 @@ void CommandList::buildOpacityMicromap(IRayTracingOpacityMicromap* _omm, const R
         scratchDesc.canHaveUAVs = true;
 
         BufferHandle scratchBuffer = m_device.createBuffer(scratchDesc);
-        if(!scratchBuffer)
+        if(!scratchBuffer){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate opacity micromap scratch buffer"));
             return;
+        }
 
         buildInfo.scratchData.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(scratchBuffer.get());
 
@@ -1300,4 +1366,3 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

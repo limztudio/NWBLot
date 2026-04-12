@@ -57,15 +57,24 @@ static AString DescribeAvailableCookers(const HashMap<Name, UniquePtr<IAssetCook
 
 
 bool AssetCookerRegistry::registerCooker(UniquePtr<IAssetCooker>&& cooker){
-    if(!cooker)
+    if(!cooker){
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetCookerRegistry: rejected null cooker registration"));
         return false;
+    }
 
     const Name typeName = cooker->assetType();
-    if(!typeName)
+    if(!typeName){
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetCookerRegistry: rejected cooker registration with empty asset type"));
         return false;
+    }
 
-    if(m_assetCookers.find(typeName) != m_assetCookers.end())
+    if(m_assetCookers.find(typeName) != m_assetCookers.end()){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("AssetCookerRegistry: cooker for type '{}' is already registered"),
+            StringConvert(typeName.c_str())
+        );
         return false;
+    }
 
     m_assetCookers[typeName] = Move(cooker);
     return true;
@@ -89,6 +98,10 @@ bool AssetCookerRegistry::cook(const AssetCookOptions& options)const{
             IAssetCooker& onlyCooker = *onlyCookerEntry.second;
             AssetCookOptions resolvedOptions = options;
             resolvedOptions.assetType = onlyCooker.assetTypeText();
+            NWB_LOGGER_INFO(
+                NWB_TEXT("AssetCookerRegistry: selected only registered asset cooker '{}'"),
+                StringConvert(resolvedOptions.assetType.c_str())
+            );
             return onlyCooker.cook(resolvedOptions);
         }
 

@@ -294,8 +294,10 @@ TextureHandle Device::createTexture(const TextureDesc& d){
 }
 
 MemoryRequirements Device::getTextureMemoryRequirements(ITexture* _texture){
-    if(!_texture)
+    if(!_texture){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get texture memory requirements: texture is null"));
         return {};
+    }
 
     auto* texture = static_cast<Texture*>(_texture);
 
@@ -311,28 +313,41 @@ MemoryRequirements Device::getTextureMemoryRequirements(ITexture* _texture){
 bool Device::bindTextureMemory(ITexture* _texture, IHeap* heap, u64 offset){
     VkResult res = VK_SUCCESS;
 
-    if(!_texture)
+    if(!_texture){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind texture memory: texture is null"));
         return false;
+    }
 
     auto* texture = static_cast<Texture*>(_texture);
     auto* vkHeap = checked_cast<Heap*>(heap);
 
-    if(!vkHeap || vkHeap->m_memory == VK_NULL_HANDLE)
+    if(!vkHeap || vkHeap->m_memory == VK_NULL_HANDLE){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind texture memory: heap is invalid"));
         return false;
+    }
 
     texture->m_memory = VK_NULL_HANDLE;
 
     res = vkBindImageMemory(m_context.device, texture->m_image, vkHeap->m_memory, offset);
-    return res == VK_SUCCESS;
+    if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind texture memory: {}"), ResultToString(res));
+        return false;
+    }
+
+    return true;
 }
 
 TextureHandle Device::createHandleForNativeTexture(ObjectType objectType, Object _texture, const TextureDesc& desc){
-    if(objectType != ObjectTypes::VK_Image)
+    if(objectType != ObjectTypes::VK_Image){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create texture handle for native texture: object type is not VK_Image"));
         return nullptr;
+    }
 
     auto* nativeImage = static_cast<VkImage>(static_cast<VkImage_T*>(_texture));
-    if(nativeImage == VK_NULL_HANDLE)
+    if(nativeImage == VK_NULL_HANDLE){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create texture handle for native texture: image handle is null"));
         return nullptr;
+    }
 
     auto* texture = NewArenaObject<Texture>(m_context.objectArena, m_context, m_allocator);
     texture->m_desc = desc;
@@ -604,6 +619,7 @@ void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, co
     void* cpuVA = nullptr;
 
     if(!uploadMgr->suballocateBuffer(dataSize, &stagingBuffer, &stagingOffset, &cpuVA, 0)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to suballocate staging buffer for writeTexture"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to suballocate staging buffer for writeTexture"));
         return;
     }
@@ -683,4 +699,3 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

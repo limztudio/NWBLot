@@ -70,6 +70,28 @@ private:
         Core::ShaderHandle computeShader;
     };
 
+    struct DeferredFrameTargets{
+        u32 width = 0;
+        u32 height = 0;
+        Core::Format::Enum albedoFormat = Core::Format::UNKNOWN;
+        Core::Format::Enum depthFormat = Core::Format::UNKNOWN;
+        Core::TextureHandle albedo;
+        Core::TextureHandle depth;
+        Core::FramebufferHandle framebuffer;
+        Core::BindingSetHandle compositeBindingSet;
+
+        [[nodiscard]] bool valid()const noexcept{
+            return width > 0
+                && height > 0
+                && albedoFormat != Core::Format::UNKNOWN
+                && depthFormat != Core::Format::UNKNOWN
+                && albedo != nullptr
+                && depth != nullptr
+                && framebuffer != nullptr
+                && compositeBindingSet != nullptr;
+        }
+    };
+
 
 public:
     using ShaderPathResolveCallback = Function<bool(const Name& shaderName, AStringView variantName, const Name& stageName, Name& outVirtualPath)>;
@@ -99,7 +121,14 @@ private:
     [[nodiscard]] bool ensureComputeEmulationResources();
     [[nodiscard]] bool ensureMeshBindingSet(GeometryResources& geometry);
     [[nodiscard]] bool ensureComputeBindingSet(GeometryResources& geometry);
+    [[nodiscard]] bool ensureDeferredFrameTargets(Core::IFramebuffer* presentationFramebuffer, DeferredFrameTargets*& outTargets);
+    [[nodiscard]] bool ensureDeferredCompositeResources();
+    [[nodiscard]] bool ensureDeferredCompositePipeline(Core::IFramebuffer* presentationFramebuffer);
     [[nodiscard]] bool ensureRendererPipeline(const RendererComponent& renderer, Core::IFramebuffer* framebuffer, MaterialPipelineResources*& outResources);
+    void resetDeferredFrameTargets();
+    void clearDeferredTargets(Core::ICommandList& commandList, DeferredFrameTargets& targets);
+    void renderGeometryPass(Core::ICommandList& commandList, Core::IFramebuffer* gBufferFramebuffer);
+    [[nodiscard]] bool renderDeferredComposite(Core::ICommandList& commandList, DeferredFrameTargets& targets, Core::IFramebuffer* presentationFramebuffer);
     void logMaterialRenderPathDecision(const Name& materialKey, RenderPath renderPath, bool meshSupported);
     [[nodiscard]] bool ensureShaderLoaded(
         Core::ShaderHandle& outShader,
@@ -122,8 +151,14 @@ private:
     HashMap<Name, RenderPath, Hasher<Name>, EqualTo<Name>> m_loggedMaterialPaths;
     Core::BindingLayoutHandle m_meshBindingLayout;
     Core::BindingLayoutHandle m_computeBindingLayout;
+    Core::BindingLayoutHandle m_deferredCompositeBindingLayout;
+    Core::SamplerHandle m_deferredSampler;
     Core::ShaderHandle m_emulationVertexShader;
+    Core::ShaderHandle m_deferredCompositeVertexShader;
+    Core::ShaderHandle m_deferredCompositePixelShader;
     Core::InputLayoutHandle m_emulationInputLayout;
+    Core::GraphicsPipelineHandle m_deferredCompositePipeline;
+    DeferredFrameTargets m_deferredTargets;
 };
 
 
@@ -134,4 +169,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

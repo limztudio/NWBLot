@@ -8,6 +8,7 @@
 #include <core/global.h>
 
 #include <core/common/common.h>
+#include <core/input/input.h>
 #include <core/graphics/graphics.h>
 
 
@@ -63,6 +64,9 @@ public:
     [[nodiscard]] inline Graphics& graphics(){ return m_graphics; }
     [[nodiscard]] inline const Graphics& graphics()const{ return m_graphics; }
 
+    [[nodiscard]] inline InputDispatcher& input(){ return m_input; }
+    [[nodiscard]] inline const InputDispatcher& input()const{ return m_input; }
+
     [[nodiscard]] inline Alloc::CustomArena& projectObjectArena(){ return m_projectObjectArena; }
     [[nodiscard]] inline const Alloc::CustomArena& projectObjectArena()const{ return m_projectObjectArena; }
 
@@ -74,6 +78,8 @@ public:
 
     [[nodiscard]] inline BasicString<tchar>& appliedWindowTitle(){ return m_appliedWindowTitle; }
     [[nodiscard]] inline const BasicString<tchar>& appliedWindowTitle()const{ return m_appliedWindowTitle; }
+
+    [[nodiscard]] const tchar* syncGraphicsWindowState(u32 width, u32 height, bool windowVisible, bool windowIsInFocus);
 
 
 private:
@@ -90,6 +96,7 @@ private:
     GraphicsAllocator m_graphicsAllocator;
     Alloc::ThreadPool m_graphicsThreadPool;
     Alloc::JobSystem m_graphicsJobSystem;
+    InputDispatcher m_input;
 
     Alloc::CustomArena m_projectObjectArena;
     Alloc::ThreadPool m_projectThreadPool;

@@ -74,11 +74,6 @@ static bool TryMapCompilerToSourceLanguage(const AStringView compiler, shaderc_s
         return true;
     }
 
-    if(compiler == "dxc" || compiler == "hlsl"){
-        outLanguage = shaderc_source_language_hlsl;
-        return true;
-    }
-
     return false;
 }
 
@@ -283,4 +278,3 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

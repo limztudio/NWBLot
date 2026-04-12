@@ -41,9 +41,7 @@ class Client : public IClient, public BaseUpdateIfQueued<Client, CLIENT_NAME>{
 
 
 private:
-    static bool s_SendSwitch;
     static bool globalInit();
-    static usize sendCallback(void* contents, usize size, usize nmemb, Client* _this);
 
 
 public:
@@ -82,6 +80,8 @@ protected:
 
 private:
     void* m_curl;
+    Vector<u8> m_pendingPayload;
+    bool m_hasPendingPayload;
 
 private:
     Atomic<i32> m_msgCount;

@@ -143,6 +143,9 @@ inline T DurationInNS(const Timer& current, const Timer& late = __hidden_timer::
     return std::chrono::duration_cast<std::chrono::duration<T, std::ratio<1, 1000000000>>>(current - late).count();
 }
 inline TimerDelta DurationInTimeDelta(const Timer& current, const Timer& late = __hidden_timer::s_VeryBegining)noexcept{
+    if(current < late)
+        return TimerDelta(0);
+
     return TimerDelta(DurationInMS<i64>(current, late));
 }
 

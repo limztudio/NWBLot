@@ -16,6 +16,10 @@ target_link_libraries(testbed PRIVATE
     nwb_logclient
 )
 
+if(TARGET nwb_logserver)
+    add_dependencies(testbed nwb_logserver)
+endif()
+
 if(TARGET nwb_resource_cooker)
     add_dependencies(testbed nwb_resource_cooker)
     add_custom_command(TARGET testbed POST_BUILD

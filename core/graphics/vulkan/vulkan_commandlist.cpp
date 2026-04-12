@@ -4,6 +4,8 @@
 
 #include "vulkan_backend.h"
 
+#include <logger/client/logger.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -38,6 +40,7 @@ void CommandList::open(){
 
     Queue* queue = m_device.getQueue(m_desc.queueType);
     if(!queue){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Requested queue is not available"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Requested queue is not available"));
         m_currentCmdBuf = nullptr;
         return;
@@ -45,6 +48,7 @@ void CommandList::open(){
 
     m_currentCmdBuf = queue->getOrCreateCommandBuffer();
     if(!m_currentCmdBuf || m_currentCmdBuf->m_cmdBuf == VK_NULL_HANDLE){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to acquire command buffer"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to acquire command buffer"));
         m_currentCmdBuf = nullptr;
         return;
@@ -55,6 +59,7 @@ void CommandList::open(){
 
     res = vkBeginCommandBuffer(m_currentCmdBuf->m_cmdBuf, &beginInfo);
     if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to begin command buffer recording: {}"), ResultToString(res));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to begin command buffer recording"));
         m_currentCmdBuf = nullptr;
         return;
@@ -76,6 +81,7 @@ void CommandList::close(){
 
     res = vkEndCommandBuffer(m_currentCmdBuf->m_cmdBuf);
     if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to end command buffer recording: {}"), ResultToString(res));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to end command buffer recording"));
         m_currentCmdBuf.reset();
         clearState();
@@ -139,4 +145,3 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

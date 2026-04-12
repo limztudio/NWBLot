@@ -231,6 +231,7 @@ ShaderHandle ShaderLibrary::getShader(const Name& entryName, ShaderType::Mask sh
     shader->m_bytecode = m_bytecode;
 
     if(shader->m_bytecode.empty() || (shader->m_bytecode.size() & 3) != 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Invalid shader library bytecode payload for entry '{}'"), StringConvert(entryName.c_str()));
         DestroyArenaObject(m_context.objectArena, shader);
         return nullptr;
     }
@@ -295,8 +296,10 @@ ShaderHandle Device::createShader(const ShaderDesc& d, const void* binary, usize
 ShaderHandle Device::createShaderSpecialization(IShader* baseShader, const ShaderSpecialization* constants, u32 numConstants){
     VkResult res = VK_SUCCESS;
 
-    if(!baseShader)
+    if(!baseShader){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create shader specialization: base shader is null"));
         return nullptr;
+    }
 
     auto* base = static_cast<Shader*>(baseShader);
     auto* shader = NewArenaObject<Shader>(m_context.objectArena, m_context);
@@ -369,8 +372,10 @@ InputLayout::InputLayout(const VulkanContext& context)
 
 
 InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 attributeCount, IShader*){
-    if(attributeCount > 0 && !d)
+    if(attributeCount > 0 && !d){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create input layout: attribute data is null for {} attributes"), attributeCount);
         return nullptr;
+    }
 
     auto* layout = NewArenaObject<InputLayout>(m_context.objectArena, m_context);
     if(attributeCount > 0)
@@ -511,4 +516,3 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

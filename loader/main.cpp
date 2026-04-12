@@ -11,8 +11,8 @@
 #include <CLI.hpp>
 
 #include <global/global.h>
-
 #include <global/command.h>
+#include <global/filesystem.h>
 
 #include <logger/client/logger.h>
 #include <core/common/common.h>
@@ -22,6 +22,7 @@
 #include <core/assets/asset_auto_registration.h>
 #include <core/graphics/shader_archive.h>
 #include <core/filesystem/filesystem.h>
+#include <core/filesystem/volume_naming.h>
 
 #include "project_entry.h"
 
@@ -47,6 +48,7 @@ struct CallbackShutdownGuard{
             callbacks->onShutdown();
         }
         catch(...){
+            NWB_LOGGER_ERROR(NWB_TEXT("Project shutdown callback threw an exception"));
         }
     }
 };
@@ -56,13 +58,47 @@ struct UpdateCallbackContext{
 };
 
 bool ProjectTickCallback(void* userData, f32 delta){
-    NWB_ASSERT(userData);
+    NWB_FATAL_ASSERT_MSG(userData, NWB_TEXT("ProjectTickCallback received null user data"));
     auto* updateContext = static_cast<UpdateCallbackContext*>(userData);
-    NWB_ASSERT(updateContext->callbacks);
+    NWB_FATAL_ASSERT_MSG(updateContext->callbacks, NWB_TEXT("ProjectTickCallback received null callbacks"));
     return updateContext->callbacks->onUpdate(delta);
 }
 
+bool HasGraphicsVolumeSegment(const Path& mountDirectory){
+    ErrorCode errorCode;
+    if(!IsDirectory(mountDirectory, errorCode) || errorCode)
+        return false;
+
+    const Path segmentPath = mountDirectory / NWB::Core::Filesystem::MakeVolumeSegmentFileName("graphics", 0);
+    errorCode.clear();
+    return FileExists(segmentPath, errorCode) && !errorCode;
+}
+
 Path ResolveShaderMountDirectory(){
+    ErrorCode errorCode;
+    Path currentDirectory;
+    if(GetCurrentPath(currentDirectory, errorCode)){
+        const Path currentResDirectory = currentDirectory / "res";
+        if(HasGraphicsVolumeSegment(currentResDirectory))
+            return currentResDirectory;
+    }
+
+    Path executableDirectory;
+    if(!GetExecutableDirectory(executableDirectory))
+        return Path("res");
+
+    const Path executableResDirectory = executableDirectory / "res";
+    if(HasGraphicsVolumeSegment(executableResDirectory))
+        return executableResDirectory;
+
+    const Path parentDirectory = executableDirectory.parent_path();
+    if(parentDirectory.empty())
+        return Path("res");
+
+    const Path parentResDirectory = parentDirectory / "res";
+    if(HasGraphicsVolumeSegment(parentResDirectory))
+        return parentResDirectory;
+
     return Path("res");
 }
 
@@ -112,6 +148,7 @@ static int MainLogic(NotNull<const char*> logAddress, void* inst){
         if(!logger.init(logAddress))
             return -1;
         NWB_LOGGER_REGISTER(&logger);
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: connected to log server '{}'"), StringConvert(logAddress.get()));
 
         try{
             const NWB::ProjectFrameClientSize frameClientSize = NWB::QueryProjectFrameClientSize();
@@ -124,11 +161,13 @@ static int MainLogic(NotNull<const char*> logAddress, void* inst){
 
             if(!frame.init())
                 return -1;
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: frame initialized ({}x{})"), frameClientSize.width, frameClientSize.height);
 
             NWB::Core::Filesystem::VolumeSession graphicsVolume(frame.projectObjectArena());
             const Path shaderMountDirectory = __hidden_loader::ResolveShaderMountDirectory();
             if(!graphicsVolume.load("graphics", shaderMountDirectory))
                 return -1;
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: mounted graphics volume from '{}'"), PathToString<tchar>(shaderMountDirectory));
 
             __hidden_loader::VolumeAssetBinarySource assetBinarySource(graphicsVolume);
 
@@ -173,15 +212,22 @@ static int MainLogic(NotNull<const char*> logAddress, void* inst){
             __hidden_loader::UpdateCallbackContext updateCallbackContext{ callbacks.get() };
 
             callbackShutdownGuard.active = true;
-            if(!callbacks->onStartup())
+            if(!callbacks->onStartup()){
+                NWB_LOGGER_FATAL(NWB_TEXT("Project startup callback returned false"));
                 return -1;
+            }
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: project startup complete"));
             frame.setProjectUpdateCallback(&__hidden_loader::ProjectTickCallback, &updateCallbackContext);
 
-            if(!frame.showFrame())
+            if(!frame.showFrame()){
+                NWB_LOGGER_ERROR(NWB_TEXT("Loader: frame show failed"));
                 return -1;
+            }
 
-            if(!frame.mainLoop())
+            if(!frame.mainLoop()){
+                NWB_LOGGER_ERROR(NWB_TEXT("Loader: frame main loop failed"));
                 return -1;
+            }
         }
         catch(const GeneralException& e){
             NWB_LOGGER_FATAL(NWB_TEXT("Exception: {}"), StringConvert(e.what()));
@@ -266,4 +312,3 @@ int main(int argc, char** argv){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

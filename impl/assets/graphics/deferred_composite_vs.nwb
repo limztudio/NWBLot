@@ -4,4 +4,3 @@ asset.compiler = "glslang";
 asset.stage = "vs";
 asset.target_profile = "vs";
 asset.entry_point = "main";
-asset.include_roots = ["engine/graphics"];

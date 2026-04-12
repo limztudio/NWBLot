@@ -882,10 +882,14 @@ DescriptorTableHandle Device::createDescriptorTable(IBindingLayout* _layout){
     Alloc::ScratchArena<> scratchArena;
 
     auto* layout = checked_cast<BindingLayout*>(_layout);
-    if(!layout)
+    if(!layout){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor table: binding layout is invalid"));
         return nullptr;
-    if(layout->m_descriptorSetLayouts.empty())
+    }
+    if(layout->m_descriptorSetLayouts.empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor table: binding layout has no descriptor set layouts"));
         return nullptr;
+    }
 
     auto* table = NewArenaObject<DescriptorTable>(m_context.objectArena, m_context);
     table->m_layout = layout;
@@ -1038,13 +1042,19 @@ void Device::resizeDescriptorTable(IDescriptorTable* m_descriptorTable, u32 newS
 
 bool Device::writeDescriptorTable(IDescriptorTable* m_descriptorTable, const BindingSetItem& item){
     auto* table = checked_cast<DescriptorTable*>(m_descriptorTable);
-    if(!table)
+    if(!table){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write descriptor table: descriptor table is invalid"));
         return false;
-    if(!item.resourceHandle)
+    }
+    if(!item.resourceHandle){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write descriptor table slot {}: resource handle is null"), item.slot);
         return false;
+    }
 
-    if(table->m_descriptorSets.empty())
+    if(table->m_descriptorSets.empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write descriptor table slot {}: descriptor table has no descriptor sets"), item.slot);
         return false;
+    }
 
     VkWriteDescriptorSet write = __hidden_vulkan::MakeVkStruct<VkWriteDescriptorSet>(VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET);
     write.dstSet = table->m_descriptorSets[0];
@@ -1065,8 +1075,10 @@ bool Device::writeDescriptorTable(IDescriptorTable* m_descriptorTable, const Bin
     case ResourceType::RawBuffer_SRV:
     case ResourceType::RawBuffer_UAV:{
         auto* buffer = checked_cast<Buffer*>(item.resourceHandle);
-        if(!buffer)
+        if(!buffer){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write descriptor table slot {}: buffer resource is invalid"), item.slot);
             return false;
+        }
         bufferInfo.buffer = buffer->m_buffer;
         bufferInfo.offset = item.range.byteOffset;
         bufferInfo.range = item.range.byteSize > 0 ? item.range.byteSize : VK_WHOLE_SIZE;
@@ -1076,9 +1088,15 @@ bool Device::writeDescriptorTable(IDescriptorTable* m_descriptorTable, const Bin
     case ResourceType::Texture_SRV:
     case ResourceType::Texture_UAV:{
         auto* texture = checked_cast<Texture*>(item.resourceHandle);
-        if(!texture)
+        if(!texture){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write descriptor table slot {}: texture resource is invalid"), item.slot);
             return false;
+        }
         imageInfo.imageView = texture->getView(item.subresources, item.dimension, item.format, false);
+        if(imageInfo.imageView == VK_NULL_HANDLE){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write descriptor table slot {}: texture image view is null"), item.slot);
+            return false;
+        }
         imageInfo.imageLayout = item.type == ResourceType::Texture_UAV ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         write.pImageInfo = &imageInfo;
         break;
@@ -1086,33 +1104,46 @@ bool Device::writeDescriptorTable(IDescriptorTable* m_descriptorTable, const Bin
     case ResourceType::TypedBuffer_SRV:
     case ResourceType::TypedBuffer_UAV:{
         auto* buffer = checked_cast<Buffer*>(item.resourceHandle);
-        if(!buffer)
+        if(!buffer){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write descriptor table slot {}: typed buffer resource is invalid"), item.slot);
             return false;
+        }
         const Format::Enum viewFormat = item.format != Format::UNKNOWN ? item.format : buffer->m_desc.format;
         texelBufferView = buffer->getView(viewFormat, item.range.byteOffset, item.range.byteSize);
-        if(texelBufferView == VK_NULL_HANDLE)
+        if(texelBufferView == VK_NULL_HANDLE){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write descriptor table slot {}: typed buffer view is null"), item.slot);
             return false;
+        }
         write.pTexelBufferView = &texelBufferView;
         break;
     }
     case ResourceType::Sampler:{
         auto* sampler = checked_cast<Sampler*>(item.resourceHandle);
-        if(!sampler)
+        if(!sampler){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write descriptor table slot {}: sampler resource is invalid"), item.slot);
             return false;
+        }
         imageInfo.sampler = sampler->m_sampler;
         write.pImageInfo = &imageInfo;
         break;
     }
     case ResourceType::RayTracingAccelStruct:{
         auto* as = checked_cast<AccelStruct*>(item.resourceHandle);
-        if(!as)
+        if(!as){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write descriptor table slot {}: acceleration structure resource is invalid"), item.slot);
             return false;
+        }
         asInfo.accelerationStructureCount = 1;
         asInfo.pAccelerationStructures = &as->m_accelStruct;
         write.pNext = &asInfo;
         break;
     }
     default:
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Failed to write descriptor table slot {}: unsupported resource type {}"),
+            item.slot,
+            static_cast<u32>(item.type)
+        );
         return false;
     }
 
@@ -1123,8 +1154,10 @@ bool Device::writeDescriptorTable(IDescriptorTable* m_descriptorTable, const Bin
 
 BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLayout* _layout){
     auto* layout = checked_cast<BindingLayout*>(_layout);
-    if(!layout)
+    if(!layout){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create binding set: binding layout is invalid"));
         return nullptr;
+    }
 
     auto* bindingSet = NewArenaObject<BindingSet>(m_context.objectArena, m_context);
     bindingSet->m_desc = desc;
@@ -1138,12 +1171,14 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLa
 
     bindingSet->m_descriptorTable = checked_cast<DescriptorTable*>(tableHandle.get());
     if(!bindingSet->m_descriptorTable){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create binding set: descriptor table type is invalid"));
         DestroyArenaObject(m_context.objectArena, bindingSet);
         return nullptr;
     }
 
     bindingSet->m_descriptorSets = bindingSet->m_descriptorTable->m_descriptorSets;
     if(bindingSet->m_descriptorSets.empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create binding set: descriptor table has no descriptor sets"));
         DestroyArenaObject(m_context.objectArena, bindingSet);
         return nullptr;
     }
@@ -1221,8 +1256,10 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLa
         case ResourceType::RawBuffer_SRV:
         case ResourceType::RawBuffer_UAV:{
             auto* buffer = checked_cast<Buffer*>(item.resourceHandle);
-            if(!buffer)
+            if(!buffer){
+                NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Ignoring binding set item for slot {}: buffer resource is invalid"), item.slot);
                 continue;
+            }
             VkDescriptorBufferInfo bufInfo = {};
             bufInfo.buffer = buffer->m_buffer;
             bufInfo.offset = item.range.byteOffset;
@@ -1235,10 +1272,16 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLa
         case ResourceType::Texture_SRV:
         case ResourceType::Texture_UAV:{
             auto* texture = checked_cast<Texture*>(item.resourceHandle);
-            if(!texture)
+            if(!texture){
+                NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Ignoring binding set item for slot {}: texture resource is invalid"), item.slot);
                 continue;
+            }
             VkDescriptorImageInfo imgInfo = {};
             imgInfo.imageView = texture->getView(item.subresources, item.dimension, item.format, false);
+            if(imgInfo.imageView == VK_NULL_HANDLE){
+                NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Ignoring binding set item for slot {}: texture image view is null"), item.slot);
+                continue;
+            }
             imgInfo.imageLayout = item.type == ResourceType::Texture_UAV ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
             imageInfos.push_back(imgInfo);
             write.pImageInfo = &imageInfos.back();
@@ -1247,8 +1290,10 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLa
         }
         case ResourceType::Sampler:{
             auto* sampler = checked_cast<Sampler*>(item.resourceHandle);
-            if(!sampler)
+            if(!sampler){
+                NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Ignoring binding set item for slot {}: sampler resource is invalid"), item.slot);
                 continue;
+            }
             VkDescriptorImageInfo imgInfo = {};
             imgInfo.sampler = sampler->m_sampler;
             imageInfos.push_back(imgInfo);
@@ -1259,12 +1304,16 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLa
         case ResourceType::TypedBuffer_SRV:
         case ResourceType::TypedBuffer_UAV:{
             auto* buffer = checked_cast<Buffer*>(item.resourceHandle);
-            if(!buffer)
+            if(!buffer){
+                NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Ignoring binding set item for slot {}: typed buffer resource is invalid"), item.slot);
                 continue;
+            }
             const Format::Enum viewFormat = item.format != Format::UNKNOWN ? item.format : buffer->m_desc.format;
             VkBufferView view = buffer->getView(viewFormat, item.range.byteOffset, item.range.byteSize);
-            if(view == VK_NULL_HANDLE)
+            if(view == VK_NULL_HANDLE){
+                NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Ignoring binding set item for slot {}: typed buffer view is null"), item.slot);
                 continue;
+            }
             texelBufferViews.push_back(view);
             write.pTexelBufferView = &texelBufferViews.back();
             writes.push_back(write);
@@ -1272,8 +1321,10 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLa
         }
         case ResourceType::RayTracingAccelStruct:{
             auto* as = checked_cast<AccelStruct*>(item.resourceHandle);
-            if(!as)
+            if(!as){
+                NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Ignoring binding set item for slot {}: acceleration structure resource is invalid"), item.slot);
                 continue;
+            }
             VkWriteDescriptorSetAccelerationStructureKHR asWrite = __hidden_vulkan::MakeVkStruct<VkWriteDescriptorSetAccelerationStructureKHR>(VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR);
             asWrite.accelerationStructureCount = 1;
             asWrite.pAccelerationStructures = &as->m_accelStruct;
@@ -1283,6 +1334,11 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLa
             break;
         }
         default:
+            NWB_LOGGER_WARNING(
+                NWB_TEXT("Vulkan: Ignoring binding set item for slot {}: unsupported resource type {}"),
+                item.slot,
+                static_cast<u32>(item.type)
+            );
             break;
         }
 
@@ -1365,4 +1421,3 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

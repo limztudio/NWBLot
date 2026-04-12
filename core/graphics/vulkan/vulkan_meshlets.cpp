@@ -16,6 +16,31 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_vulkan_meshlets{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+constexpr VkCullModeFlags ConvertCullMode(RasterCullMode::Enum cullMode){
+    switch(cullMode){
+    case RasterCullMode::Back:  return VK_CULL_MODE_BACK_BIT;
+    case RasterCullMode::Front: return VK_CULL_MODE_FRONT_BIT;
+    case RasterCullMode::None:  return VK_CULL_MODE_NONE;
+    default: return VK_CULL_MODE_BACK_BIT;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 MeshletPipeline::MeshletPipeline(const VulkanContext& context)
     : RefCounter<IMeshletPipeline>(context.threadPool)
     , m_context(context)
@@ -160,7 +185,7 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     rasterizer.depthClampEnable = VK_FALSE;
     rasterizer.rasterizerDiscardEnable = VK_FALSE;
     rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
-    rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+    rasterizer.cullMode = __hidden_vulkan_meshlets::ConvertCullMode(desc.renderState.rasterState.cullMode);
     rasterizer.frontFace = desc.renderState.rasterState.frontCounterClockwise ? VK_FRONT_FACE_COUNTER_CLOCKWISE : VK_FRONT_FACE_CLOCKWISE;
     rasterizer.depthBiasEnable = desc.renderState.rasterState.depthBias != 0 ? VK_TRUE : VK_FALSE;
     rasterizer.depthBiasConstantFactor = static_cast<f32>(desc.renderState.rasterState.depthBias);
@@ -283,9 +308,38 @@ void CommandList::setMeshletState(const MeshletState& state){
             }
         }
     }
+
+    if(!state.viewport.viewports.empty()){
+        const auto& vp = state.viewport.viewports[0];
+        VkViewport viewport{};
+        viewport.x = vp.minX;
+        viewport.y = vp.maxY;
+        viewport.width = vp.maxX - vp.minX;
+        viewport.height = -(vp.maxY - vp.minY);
+        viewport.minDepth = vp.minZ;
+        viewport.maxDepth = vp.maxZ;
+        vkCmdSetViewport(m_currentCmdBuf->m_cmdBuf, 0, 1, &viewport);
+
+        VkRect2D scissor{};
+        if(!state.viewport.scissorRects.empty()){
+            const auto& sr = state.viewport.scissorRects[0];
+            scissor.offset = { static_cast<int32_t>(sr.minX), static_cast<int32_t>(sr.minY) };
+            scissor.extent = { static_cast<uint32_t>(sr.maxX - sr.minX), static_cast<uint32_t>(sr.maxY - sr.minY) };
+        }
+        else{
+            scissor.offset = { static_cast<int32_t>(vp.minX), static_cast<int32_t>(vp.minY) };
+            scissor.extent = { static_cast<uint32_t>(vp.maxX - vp.minX), static_cast<uint32_t>(vp.maxY - vp.minY) };
+        }
+        vkCmdSetScissor(m_currentCmdBuf->m_cmdBuf, 0, 1, &scissor);
+    }
 }
 
 void CommandList::dispatchMesh(u32 groupsX, u32 groupsY, u32 groupsZ){
+    if(!vkCmdDrawMeshTasksEXT){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Mesh shader dispatch requested, but vkCmdDrawMeshTasksEXT is unavailable."));
+        return;
+    }
+
     vkCmdDrawMeshTasksEXT(m_currentCmdBuf->m_cmdBuf, groupsX, groupsY, groupsZ);
 }
 
@@ -297,4 +351,3 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

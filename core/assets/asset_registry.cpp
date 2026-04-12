@@ -17,19 +17,28 @@ NWB_ASSETS_BEGIN
 
 
 bool AssetRegistry::registerCodec(UniquePtr<IAssetCodec>&& codec, const bool replaceExisting){
-    if(!codec)
+    if(!codec){
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetRegistry: rejected null codec registration"));
         return false;
+    }
 
     const Name typeName = codec->assetType();
-    if(!typeName)
+    if(!typeName){
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetRegistry: rejected codec registration with empty asset type"));
         return false;
+    }
 
     ScopedLock lock(m_mutex);
 
     const auto found = m_codecs.find(typeName);
     if(found != m_codecs.end()){
-        if(!replaceExisting)
+        if(!replaceExisting){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("AssetRegistry: codec for type '{}' is already registered"),
+                StringConvert(typeName.c_str())
+            );
             return false;
+        }
 
         found.value() = Move(codec);
         return true;
@@ -88,4 +97,3 @@ NWB_ASSETS_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

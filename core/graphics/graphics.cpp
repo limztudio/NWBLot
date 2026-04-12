@@ -6,7 +6,7 @@
 
 #include <logger/client/logger.h>
 
-#include "vulkan/vulkan_device_manager.h"
+#include "vulkan/vulkan_backend_context.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -88,6 +88,27 @@ static void AddVulkanDeviceExtensionOnce(Vector<AString>& extensions, const char
     extensions.push_back(extensionName);
 }
 
+static void CopyInstanceParameters(DeviceCreationParameters& dst, const InstanceParameters& src){
+    static_cast<InstanceParameters&>(dst) = src;
+}
+
+static UniquePtr<IGraphicsBackend> CreateDefaultBackend(
+    const DeviceCreationParameters& deviceParams,
+    SwapChainRuntimeState& swapChainState,
+    GraphicsAllocator& allocator,
+    Alloc::ThreadPool& threadPool
+)
+{
+    return UniquePtr<IGraphicsBackend>(new Vulkan::BackendContext(deviceParams, swapChainState, allocator, threadPool));
+}
+
+static const Vulkan::IBackendQueries* GetVulkanBackendQueries(const IGraphicsBackend* backend){
+    if(!backend || backend->getGraphicsAPI() != GraphicsAPI::VULKAN)
+        return nullptr;
+
+    return static_cast<const Vulkan::IBackendQueries*>(backend->queryInterface(Vulkan::s_BackendQueriesInterfaceID));
+}
+
 constexpr bool IsFp16CoopVecFormat(const CooperativeVectorMatMulFormatCombo& combo){
     return combo.inputType == CooperativeVectorDataType::Float16 &&
            combo.inputInterpretation == CooperativeVectorDataType::Float16 &&
@@ -105,62 +126,416 @@ constexpr bool IsFp16CoopVecFormat(const CooperativeVectorMatMulFormatCombo& com
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-IDeviceManager* IDeviceManager::create(GraphicsAPI::Enum api, const DeviceCreationParameters& params){
-    switch(api){
-    case GraphicsAPI::VULKAN:
-        return new Vulkan::DeviceManager(params);
-    default:
-        NWB_LOGGER_ERROR(NWB_TEXT("DeviceManager: Unsupported graphics API."));
-        return nullptr;
-    }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Graphics::Graphics(GraphicsAllocator& allocator, Alloc::ThreadPool& threadPool, Alloc::JobSystem& jobSystem)
+Graphics::Graphics(GraphicsAllocator& allocator, Alloc::ThreadPool& threadPool, Alloc::JobSystem& jobSystem, InputDispatcher& input)
     : m_allocator(allocator)
     , m_threadPool(threadPool)
     , m_jobSystem(jobSystem)
+    , m_input(input)
 {
-    m_deviceCreationParams.allocator = &m_allocator;
-    m_deviceCreationParams.threadPool = &m_threadPool;
+    m_swapChainState.backBufferFormat = m_deviceCreationParams.swapChainFormat;
+    syncInputMousePositionScale();
     __hidden_graphics::AddVulkanDeviceExtensionOnce(m_deviceCreationParams.optionalVulkanDeviceExtensions, "VK_NV_cooperative_vector");
-    m_deviceManager.reset(IDeviceManager::create(GraphicsAPI::VULKAN, m_deviceCreationParams));
-    NWB_ASSERT_MSG(m_deviceManager != nullptr, NWB_TEXT("Graphics: DeviceManager creation failed."));
+    m_backend = __hidden_graphics::CreateDefaultBackend(m_deviceCreationParams, m_swapChainState, m_allocator, m_threadPool);
+    NWB_FATAL_ASSERT_MSG(m_backend != nullptr, NWB_TEXT("Graphics: Vulkan backend creation failed."));
 }
 Graphics::~Graphics(){
     destroy();
 }
 
+IGraphicsBackend& Graphics::ensureBackend(){
+    if(!m_backend)
+        m_backend = __hidden_graphics::CreateDefaultBackend(m_deviceCreationParams, m_swapChainState, m_allocator, m_threadPool);
+
+    NWB_FATAL_ASSERT_MSG(m_backend != nullptr, NWB_TEXT("Graphics: Vulkan backend creation failed."));
+    return *m_backend;
+}
+
+IGraphicsBackend& Graphics::requireBackend()const noexcept{
+    NWB_FATAL_ASSERT_MSG(m_backend != nullptr, NWB_TEXT("Graphics requires a valid backend."));
+    return *m_backend;
+}
+
 bool Graphics::init(const Common::FrameData& data){
-    NWB_ASSERT_MSG(m_deviceManager != nullptr, NWB_TEXT("Graphics::init requires a valid DeviceManager."));
-    return m_deviceManager->createWindowDeviceAndSwapChain(data);
+    m_deviceCreationParams.headlessDevice = false;
+    m_hasPresentedFrame = false;
+
+    m_swapChainState.backBufferWidth = data.width();
+    m_swapChainState.backBufferHeight = data.height();
+    m_swapChainState.backBufferFormat = m_deviceCreationParams.swapChainFormat;
+
+    IGraphicsBackend& backend = ensureBackend();
+    backend.setPlatformFrameParam(data.frameParam());
+
+    if(!m_instanceCreated){
+        if(!backend.createInstance())
+            return false;
+        m_instanceCreated = true;
+    }
+
+    if(!backend.createDevice())
+        return false;
+
+    if(!backend.createSwapChain())
+        return false;
+
+    m_swapChainState.backBufferWidth = 0;
+    m_swapChainState.backBufferHeight = 0;
+    updateWindowState(data.width(), data.height(), true, true);
+    m_previousFrameTimestamp = TimerNow();
+
+    NWB_LOGGER_ESSENTIAL_INFO(
+        NWB_TEXT("Graphics: window device and swap chain created ({}x{})"),
+        data.width(),
+        data.height()
+    );
+    return true;
+}
+
+bool Graphics::createHeadlessDevice(){
+    m_deviceCreationParams.headlessDevice = true;
+    m_hasPresentedFrame = false;
+
+    IGraphicsBackend& backend = ensureBackend();
+    if(!m_instanceCreated){
+        if(!backend.createInstance())
+            return false;
+        m_instanceCreated = true;
+    }
+
+    if(!backend.createDevice())
+        return false;
+
+    m_previousFrameTimestamp = TimerNow();
+
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Graphics: headless device created"));
+    return true;
+}
+
+bool Graphics::createInstance(const InstanceParameters& params){
+    __hidden_graphics::CopyInstanceParameters(m_deviceCreationParams, params);
+
+    if(!ensureBackend().createInstance())
+        return false;
+
+    m_instanceCreated = true;
+    return true;
 }
 
 bool Graphics::runFrame(){
-    NWB_ASSERT_MSG(m_deviceManager != nullptr, NWB_TEXT("Graphics::runFrame requires a valid DeviceManager."));
-    return m_deviceManager->runFrame();
+    return animateRenderPresent();
 }
 
 void Graphics::updateWindowState(u32 width, u32 height, bool windowVisible, bool windowIsInFocus){
-    NWB_ASSERT_MSG(m_deviceManager != nullptr, NWB_TEXT("Graphics::updateWindowState requires a valid DeviceManager."));
-    m_deviceManager->updateWindowState(width, height, windowVisible, windowIsInFocus);
+    m_windowVisible = windowVisible;
+    m_windowIsInFocus = windowIsInFocus;
+
+    if(!m_windowVisible)
+        return;
+
+    if(width == 0 || height == 0){
+        m_windowVisible = false;
+        return;
+    }
+
+    if(
+        static_cast<i32>(m_swapChainState.backBufferWidth) != static_cast<i32>(width)
+        || static_cast<i32>(m_swapChainState.backBufferHeight) != static_cast<i32>(height)
+        || (m_swapChainState.vsyncEnabled != m_requestedVSync && getGraphicsAPI() == GraphicsAPI::VULKAN)
+    )
+    {
+        backBufferResizing();
+
+        m_swapChainState.backBufferWidth = width;
+        m_swapChainState.backBufferHeight = height;
+        m_swapChainState.vsyncEnabled = m_requestedVSync;
+
+        requireBackend().resizeSwapChain();
+        backBufferResized();
+    }
+
+    m_swapChainState.vsyncEnabled = m_requestedVSync;
 }
 
 void Graphics::destroy(){
     waitAllJobs();
 
-    if(m_deviceManager){
-        m_deviceManager->shutdown();
-        m_deviceManager.reset();
+    for(auto* renderPass : m_renderPasses)
+        m_input.removeHandler(*renderPass);
+    m_renderPasses.clear();
+
+    if(m_backend){
+        m_swapChainFramebuffers.clear();
+        m_backend->destroy();
+        m_instanceCreated = false;
+        m_backend.reset();
     }
 }
 
 IDevice* Graphics::getDevice()const noexcept{
-    NWB_ASSERT_MSG(m_deviceManager != nullptr, NWB_TEXT("Graphics::getDevice requires a valid DeviceManager."));
-    return m_deviceManager->getDevice();
+    return requireBackend().getDevice();
+}
+
+bool Graphics::enumerateAdapters(Vector<AdapterInfo>& outAdapters){
+    if(!m_backend)
+        return false;
+
+    return m_backend->enumerateAdapters(outAdapters);
+}
+
+void Graphics::addRenderPassToFront(IRenderPass& pass){
+    m_renderPasses.remove(&pass);
+    m_renderPasses.push_front(&pass);
+    m_input.addHandlerToFront(pass);
+
+    pass.backBufferResizing();
+    pass.backBufferResized(m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight, m_deviceCreationParams.swapChainSampleCount);
+}
+
+void Graphics::addRenderPassToBack(IRenderPass& pass){
+    m_renderPasses.remove(&pass);
+    m_renderPasses.push_back(&pass);
+    m_input.addHandlerToBack(pass);
+
+    pass.backBufferResizing();
+    pass.backBufferResized(m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight, m_deviceCreationParams.swapChainSampleCount);
+}
+
+void Graphics::removeRenderPass(IRenderPass& pass){
+    m_renderPasses.remove(&pass);
+    m_input.removeHandler(pass);
+}
+
+const tchar* Graphics::getRendererString()const{
+    return requireBackend().getRendererString();
+}
+
+GraphicsAPI::Enum Graphics::getGraphicsAPI()const{
+    return requireBackend().getGraphicsAPI();
+}
+
+f64 Graphics::getPreviousFrameTimestamp()const{
+    return DurationInSeconds<f64>(m_previousFrameTimestamp);
+}
+
+bool Graphics::isVsyncEnabled()const{
+    return m_swapChainState.vsyncEnabled;
+}
+
+void Graphics::setVSyncEnabled(bool enabled){
+    m_requestedVSync = enabled;
+}
+
+void Graphics::reportLiveObjects()const{
+    if(m_backend)
+        m_backend->reportLiveObjects();
+}
+
+void Graphics::getWindowDimensions(i32& width, i32& height)const{
+    width = m_swapChainState.backBufferWidth;
+    height = m_swapChainState.backBufferHeight;
+}
+
+void Graphics::getDPIScaleInfo(f32& x, f32& y)const{
+    x = m_dpiScaleFactorX;
+    y = m_dpiScaleFactorY;
+}
+
+const tchar* Graphics::getWindowTitle()const{
+    return m_windowTitle.c_str();
+}
+
+void Graphics::setWindowTitle(NotNull<const tchar*> title){
+    if(m_windowTitle == title.get())
+        return;
+
+    m_windowTitle = title.get();
+}
+
+ITexture* Graphics::getCurrentBackBuffer()const{
+    return requireBackend().getCurrentBackBuffer();
+}
+
+ITexture* Graphics::getBackBuffer(u32 index)const{
+    return requireBackend().getBackBuffer(index);
+}
+
+u32 Graphics::getCurrentBackBufferIndex()const{
+    return requireBackend().getCurrentBackBufferIndex();
+}
+
+u32 Graphics::getBackBufferCount()const{
+    return requireBackend().getBackBufferCount();
+}
+
+IFramebuffer* Graphics::getCurrentFramebuffer()const{
+    return getFramebuffer(getCurrentBackBufferIndex());
+}
+
+IFramebuffer* Graphics::getFramebuffer(u32 index)const{
+    if(index < m_swapChainFramebuffers.size())
+        return m_swapChainFramebuffers[index].get();
+    return nullptr;
+}
+
+bool Graphics::isVulkanInstanceExtensionEnabled(const char* extensionName)const{
+    const Vulkan::IBackendQueries* queries = __hidden_graphics::GetVulkanBackendQueries(m_backend.get());
+    return queries && queries->isInstanceExtensionEnabled(extensionName);
+}
+
+bool Graphics::isVulkanDeviceExtensionEnabled(const char* extensionName)const{
+    const Vulkan::IBackendQueries* queries = __hidden_graphics::GetVulkanBackendQueries(m_backend.get());
+    return queries && queries->isDeviceExtensionEnabled(extensionName);
+}
+
+bool Graphics::isVulkanLayerEnabled(const char* layerName)const{
+    const Vulkan::IBackendQueries* queries = __hidden_graphics::GetVulkanBackendQueries(m_backend.get());
+    return queries && queries->isLayerEnabled(layerName);
+}
+
+void Graphics::getEnabledVulkanInstanceExtensions(Vector<AString>& extensions)const{
+    if(const Vulkan::IBackendQueries* queries = __hidden_graphics::GetVulkanBackendQueries(m_backend.get())){
+        queries->getEnabledInstanceExtensions(extensions);
+        return;
+    }
+
+    extensions.clear();
+}
+
+void Graphics::getEnabledVulkanDeviceExtensions(Vector<AString>& extensions)const{
+    if(const Vulkan::IBackendQueries* queries = __hidden_graphics::GetVulkanBackendQueries(m_backend.get())){
+        queries->getEnabledDeviceExtensions(extensions);
+        return;
+    }
+
+    extensions.clear();
+}
+
+void Graphics::getEnabledVulkanLayers(Vector<AString>& layers)const{
+    if(const Vulkan::IBackendQueries* queries = __hidden_graphics::GetVulkanBackendQueries(m_backend.get())){
+        queries->getEnabledLayers(layers);
+        return;
+    }
+
+    layers.clear();
+}
+
+void Graphics::backBufferResizing(){
+    m_swapChainFramebuffers.clear();
+
+    for(auto* renderPass : m_renderPasses)
+        renderPass->backBufferResizing();
+}
+
+void Graphics::backBufferResized(){
+    for(auto* renderPass : m_renderPasses)
+        renderPass->backBufferResized(m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight, m_deviceCreationParams.swapChainSampleCount);
+
+    const u32 backBufferCount = getBackBufferCount();
+    m_swapChainFramebuffers.resize(backBufferCount);
+    for(u32 index = 0; index < backBufferCount; ++index)
+        m_swapChainFramebuffers[index] = getDevice()->createFramebuffer(FramebufferDesc().addColorAttachment(getBackBuffer(index)));
+
+    NWB_LOGGER_INFO(NWB_TEXT("Graphics: Back buffer resized to {}x{}"), m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight);
+}
+
+void Graphics::displayScaleChanged(){
+    syncInputMousePositionScale();
+
+    for(auto* renderPass : m_renderPasses)
+        renderPass->displayScaleChanged(m_dpiScaleFactorX, m_dpiScaleFactorY);
+}
+
+void Graphics::animate(f64 elapsedTime){
+    for(auto* renderPass : m_renderPasses){
+        renderPass->animate(static_cast<f32>(elapsedTime));
+        renderPass->setLatewarpOptions();
+    }
+}
+
+void Graphics::render(){
+    IFramebuffer* framebuffer = getCurrentFramebuffer();
+
+    for(auto* renderPass : m_renderPasses)
+        renderPass->render(framebuffer);
+}
+
+void Graphics::updateAverageFrameTime(f64 elapsedTime){
+    m_frameTimeSum += elapsedTime;
+    m_numberOfAccumulatedFrames += 1;
+
+    if(m_frameTimeSum > m_averageTimeUpdateInterval && m_numberOfAccumulatedFrames > 0){
+        m_averageFrameTime = m_frameTimeSum / static_cast<f64>(m_numberOfAccumulatedFrames);
+        m_numberOfAccumulatedFrames = 0;
+        m_frameTimeSum = 0.0;
+    }
+}
+
+void Graphics::syncInputMousePositionScale(){
+    if(m_deviceCreationParams.supportExplicitDisplayScaling)
+        m_input.setMousePositionScale(1.f, 1.f);
+    else
+        m_input.setMousePositionScale(m_dpiScaleFactorX, m_dpiScaleFactorY);
+}
+
+bool Graphics::shouldRenderUnfocused()const{
+    for(auto it = m_renderPasses.crbegin(); it != m_renderPasses.crend(); ++it){
+        if((*it)->shouldRenderUnfocused())
+            return true;
+    }
+    return false;
+}
+
+void Graphics::BackBufferResizingCallback(void* userData){
+    if(auto* graphics = static_cast<Graphics*>(userData))
+        graphics->backBufferResizing();
+}
+
+void Graphics::BackBufferResizedCallback(void* userData){
+    if(auto* graphics = static_cast<Graphics*>(userData))
+        graphics->backBufferResized();
+}
+
+bool Graphics::animateRenderPresent(){
+    Timer now = TimerNow();
+    const f64 elapsedTime = DurationInSeconds<f64>(now, m_previousFrameTimestamp);
+    const bool shouldBootstrapWindowPresentation = !m_hasPresentedFrame;
+
+    if(m_windowVisible && (m_windowIsInFocus || shouldRenderUnfocused() || shouldBootstrapWindowPresentation)){
+        if(m_prevDPIScaleFactorX != m_dpiScaleFactorX || m_prevDPIScaleFactorY != m_dpiScaleFactorY){
+            displayScaleChanged();
+            m_prevDPIScaleFactorX = m_dpiScaleFactorX;
+            m_prevDPIScaleFactorY = m_dpiScaleFactorY;
+        }
+
+        animate(elapsedTime);
+
+        if(m_frameIndex > 0 || !m_skipRenderOnFirstFrame){
+            const BackBufferResizeCallbacks resizeCallbacks = {
+                this,
+                &Graphics::BackBufferResizingCallback,
+                &Graphics::BackBufferResizedCallback,
+            };
+            if(requireBackend().beginFrame(resizeCallbacks)){
+                render();
+
+                if(!requireBackend().present())
+                    return false;
+
+                m_hasPresentedFrame = true;
+            }
+        }
+    }
+
+    yield();
+
+    if(IDevice* device = getDevice())
+        device->runGarbageCollection();
+
+    updateAverageFrameTime(elapsedTime);
+    m_previousFrameTimestamp = now;
+
+    ++m_frameIndex;
+    return true;
 }
 
 BufferHandle Graphics::createBuffer(const BufferDesc& desc)const{
@@ -175,8 +550,13 @@ BufferHandle Graphics::setupBuffer(const BufferSetupDesc& desc)const{
     IDevice* device = getDevice();
 
     BufferHandle buffer = device->createBuffer(desc.bufferDesc);
-    if(!buffer)
+    if(!buffer){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Graphics: failed to create setup buffer '{}'"),
+            StringConvert(desc.bufferDesc.debugName.c_str())
+        );
         return {};
+    }
 
     if(!desc.data || desc.dataSize == 0)
         return buffer;
@@ -184,8 +564,13 @@ BufferHandle Graphics::setupBuffer(const BufferSetupDesc& desc)const{
     CommandListParameters cmdParams;
     cmdParams.setQueueType(desc.queue);
     CommandListHandle commandList = device->createCommandList(cmdParams);
-    if(!commandList)
+    if(!commandList){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Graphics: failed to create upload command list for buffer '{}'"),
+            StringConvert(desc.bufferDesc.debugName.c_str())
+        );
         return {};
+    }
 
     commandList->open();
     commandList->writeBuffer(buffer.get(), desc.data, desc.dataSize, desc.destOffsetBytes);
@@ -199,8 +584,13 @@ TextureHandle Graphics::setupTexture(const TextureSetupDesc& desc)const{
     IDevice* device = getDevice();
 
     TextureHandle texture = device->createTexture(desc.textureDesc);
-    if(!texture)
+    if(!texture){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Graphics: failed to create setup texture '{}'"),
+            StringConvert(desc.textureDesc.name.c_str())
+        );
         return {};
+    }
 
     if(!desc.data || desc.uploadDataSize == 0)
         return texture;
@@ -208,8 +598,13 @@ TextureHandle Graphics::setupTexture(const TextureSetupDesc& desc)const{
     CommandListParameters cmdParams;
     cmdParams.setQueueType(desc.queue);
     CommandListHandle commandList = device->createCommandList(cmdParams);
-    if(!commandList)
+    if(!commandList){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Graphics: failed to create upload command list for texture '{}'"),
+            StringConvert(desc.textureDesc.name.c_str())
+        );
         return {};
+    }
 
     commandList->open();
     commandList->writeTexture(texture.get(), desc.arraySlice, desc.mipLevel, desc.data, desc.rowPitch, desc.depthPitch);
@@ -237,8 +632,13 @@ Graphics::MeshResource Graphics::setupMesh(const MeshSetupDesc& desc)const{
         vertexSetup.queue = desc.queue;
 
         output.vertexBuffer = setupBuffer(vertexSetup);
-        if(!output.vertexBuffer)
+        if(!output.vertexBuffer){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Graphics: failed to set up mesh vertex buffer '{}'"),
+                StringConvert(desc.vertexBufferName.c_str())
+            );
             return MeshResource{};
+        }
     }
 
     if(desc.indexData && desc.indexDataSize > 0){
@@ -255,8 +655,13 @@ Graphics::MeshResource Graphics::setupMesh(const MeshSetupDesc& desc)const{
         indexSetup.queue = desc.queue;
 
         output.indexBuffer = setupBuffer(indexSetup);
-        if(!output.indexBuffer)
+        if(!output.indexBuffer){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Graphics: failed to set up mesh index buffer '{}'"),
+                StringConvert(desc.indexBufferName.c_str())
+            );
             return MeshResource{};
+        }
     }
 
     if(output.vertexStride > 0 && desc.vertexDataSize > 0)
@@ -381,4 +786,3 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

@@ -136,7 +136,7 @@ Device::Device(const DeviceDesc& desc)
             m_context.extensions.NV_cooperative_vector = true;
         else if(NWB_STRCMP(ext, VK_NV_CLUSTER_ACCELERATION_STRUCTURE_EXTENSION_NAME) == 0)
             m_context.extensions.NV_cluster_acceleration_structure = true;
-        else if(NWB_STRCMP(ext, VK_EXT_MESH_SHADER_EXTENSION_NAME) == 0 || NWB_STRCMP(ext, VK_NV_MESH_SHADER_EXTENSION_NAME) == 0)
+        else if(NWB_STRCMP(ext, VK_EXT_MESH_SHADER_EXTENSION_NAME) == 0)
             m_context.extensions.EXT_mesh_shader = true;
         else if(NWB_STRCMP(ext, VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME) == 0)
             m_context.extensions.KHR_fragment_shading_rate = true;
@@ -180,13 +180,28 @@ Device::Device(const DeviceDesc& desc)
     }
 
     if(m_context.extensions.EXT_descriptor_heap){
+        if(
+            !vkGetPhysicalDeviceDescriptorSizeEXT
+            || !vkWriteResourceDescriptorsEXT
+            || !vkWriteSamplerDescriptorsEXT
+            || !vkCmdBindResourceHeapEXT
+            || !vkCmdBindSamplerHeapEXT
+            || !vkCmdPushDataEXT
+        )
+        {
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Descriptor heap entry points are unavailable, falling back to descriptor sets."));
+            m_context.extensions.EXT_descriptor_heap = false;
+        }
+    }
+
+    if(m_context.extensions.EXT_descriptor_heap){
         VkPhysicalDeviceProperties2 props2 = __hidden_vulkan::MakeVkStruct<VkPhysicalDeviceProperties2>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2);
         m_context.descriptorHeapProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_PROPERTIES_EXT;
         props2.pNext = &m_context.descriptorHeapProperties;
         vkGetPhysicalDeviceProperties2(m_context.physicalDevice, &props2);
 
         if(!m_descriptorHeapManager.initialize()){
-            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Descriptor heap initialization failed, falling back to descriptor sets."));
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Descriptor heap initialization failed, falling back to descriptor sets."));
             m_context.extensions.EXT_descriptor_heap = false;
         }
     }
@@ -277,8 +292,10 @@ CommandListHandle Device::createCommandList(const CommandListParameters& params)
 
 u64 Device::executeCommandLists(ICommandList* const* pCommandLists, usize numCommandLists, CommandQueue::Enum executionQueue){
     Queue* queue = getQueue(executionQueue);
-    if(!queue)
+    if(!queue){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to execute command lists: requested queue is not available"));
         return 0;
+    }
 
     return queue->submit(pCommandLists, numCommandLists);
 }
@@ -288,11 +305,11 @@ bool Device::waitForIdle(){
 
     res = vkDeviceWaitIdle(m_context.device);
     if(res == VK_ERROR_DEVICE_LOST){
-        NWB_LOGGER_INFO(NWB_TEXT("Vulkan: Device was lost during waitForIdle."));
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Device was lost during waitForIdle."));
         return false;
     }
     else if(res != VK_SUCCESS){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to wait for device idle. {}"), ResultToString(res));
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to wait for device idle. {}"), ResultToString(res));
         return false;
     }
 
@@ -335,7 +352,7 @@ bool Device::queryFeatureSupport(Feature::Enum feature, void*, usize){
     case Feature::CooperativeVectorTraining:
         return m_context.extensions.NV_cooperative_vector && m_context.coopVecFeatures.cooperativeVectorTraining;
     case Feature::Meshlets:
-        return m_context.extensions.EXT_mesh_shader;
+        return m_context.extensions.EXT_mesh_shader && vkCmdDrawMeshTasksEXT;
     case Feature::VariableRateShading:
         return m_context.extensions.KHR_fragment_shading_rate;
     case Feature::VirtualResources:
@@ -600,4 +617,3 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

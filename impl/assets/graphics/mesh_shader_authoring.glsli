@@ -26,10 +26,13 @@ struct NwbMeshGeneratedVertex{
 
 #define NWB_MESH_BUILD_VERTEX_SIGNATURE NwbMeshGeneratedVertex nwbProjectBuildMeshVertex(uint triangleIndex, uint corner, NwbMeshSourceVertex source)
 
+const uint NWB_MESH_SOURCE_VERTEX_SCALAR_STRIDE = 6u;
+
 layout(local_size_x = NWB_MESH_SHADER_GROUP_SIZE_X) in;
 
+// Geometry vertices are uploaded as tightly packed position+color floats (24 bytes), so decode them manually.
 layout(std430, binding = 0) readonly buffer NwbMeshSourceVerticesBuffer{
-    NwbMeshSourceVertex nwbMeshSourceVertices[];
+    float nwbMeshSourceVertexScalars[];
 };
 
 layout(std430, binding = 1) readonly buffer NwbMeshSourceIndicesBuffer{
@@ -37,7 +40,9 @@ layout(std430, binding = 1) readonly buffer NwbMeshSourceIndicesBuffer{
 };
 
 layout(push_constant) uniform NwbMeshPushConstants{
-    uint triangleCount;
+    uvec4 dispatch;
+    vec4 viewportRect;
+    vec4 scissorRect;
 } g_NwbMeshPushConstants;
 
 #if NWB_MESH_SHADER_EMULATION_COMPUTE
@@ -62,9 +67,13 @@ uint nwbMeshBaseTriangle(){
     return nwbMeshGroupID() * NWB_MESH_SHADER_GROUP_SIZE_X;
 }
 
+uint nwbMeshTriangleCount(){
+    return g_NwbMeshPushConstants.dispatch.x;
+}
+
 uint nwbMeshRemainingTriangles(){
-    return g_NwbMeshPushConstants.triangleCount > nwbMeshBaseTriangle()
-        ? (g_NwbMeshPushConstants.triangleCount - nwbMeshBaseTriangle())
+    return nwbMeshTriangleCount() > nwbMeshBaseTriangle()
+        ? (nwbMeshTriangleCount() - nwbMeshBaseTriangle())
         : 0u
     ;
 }
@@ -83,8 +92,103 @@ uint nwbMeshTriangleIndex(){
 
 NwbMeshSourceVertex nwbMeshLoadSourceVertex(const uint triangleIndex, const uint corner){
     const uint indexBase = triangleIndex * 3u;
-    return nwbMeshSourceVertices[nwbMeshSourceIndices[indexBase + corner]];
+    const uint sourceVertexIndex = nwbMeshSourceIndices[indexBase + corner];
+    const uint scalarBase = sourceVertexIndex * NWB_MESH_SOURCE_VERTEX_SCALAR_STRIDE;
+
+    NwbMeshSourceVertex sourceVertex;
+    sourceVertex.position = vec3(
+        nwbMeshSourceVertexScalars[scalarBase + 0u],
+        nwbMeshSourceVertexScalars[scalarBase + 1u],
+        nwbMeshSourceVertexScalars[scalarBase + 2u]
+    );
+    sourceVertex.color = vec3(
+        nwbMeshSourceVertexScalars[scalarBase + 3u],
+        nwbMeshSourceVertexScalars[scalarBase + 4u],
+        nwbMeshSourceVertexScalars[scalarBase + 5u]
+    );
+    return sourceVertex;
 }
+
+#if NWB_MESH_SHADER_EMULATION_COMPUTE
+bool nwbMeshScissorCullEnabled(){
+    return g_NwbMeshPushConstants.dispatch.y != 0u;
+}
+
+bool nwbMeshAllOutsideClipPlane(const vec4 a, const vec4 b, const vec4 c){
+    if(a.x < -a.w && b.x < -b.w && c.x < -c.w)
+        return true;
+    if(a.x > a.w && b.x > b.w && c.x > c.w)
+        return true;
+    if(a.y < -a.w && b.y < -b.w && c.y < -c.w)
+        return true;
+    if(a.y > a.w && b.y > b.w && c.y > c.w)
+        return true;
+    if(a.z < 0.0 && b.z < 0.0 && c.z < 0.0)
+        return true;
+    if(a.z > a.w && b.z > b.w && c.z > c.w)
+        return true;
+
+    return false;
+}
+
+bool nwbMeshInsideClipVolume(const vec4 p){
+    return p.w > 0.0
+        && p.x >= -p.w
+        && p.x <= p.w
+        && p.y >= -p.w
+        && p.y <= p.w
+        && p.z >= 0.0
+        && p.z <= p.w
+    ;
+}
+
+vec2 nwbMeshClipToFramebuffer(const vec4 p){
+    const vec2 viewportMin = g_NwbMeshPushConstants.viewportRect.xy;
+    const vec2 viewportMax = g_NwbMeshPushConstants.viewportRect.zw;
+    const vec2 viewportSize = viewportMax - viewportMin;
+    const vec2 ndc = p.xy / p.w;
+
+    return vec2(
+        viewportMin.x + (ndc.x * 0.5 + 0.5) * viewportSize.x,
+        viewportMax.y - (ndc.y * 0.5 + 0.5) * viewportSize.y
+    );
+}
+
+bool nwbMeshAllOutsideScissor(const vec4 a, const vec4 b, const vec4 c){
+    if(!nwbMeshScissorCullEnabled())
+        return false;
+    if(!nwbMeshInsideClipVolume(a) || !nwbMeshInsideClipVolume(b) || !nwbMeshInsideClipVolume(c))
+        return false;
+
+    const vec2 p0 = nwbMeshClipToFramebuffer(a);
+    const vec2 p1 = nwbMeshClipToFramebuffer(b);
+    const vec2 p2 = nwbMeshClipToFramebuffer(c);
+    const vec2 triMin = min(p0, min(p1, p2));
+    const vec2 triMax = max(p0, max(p1, p2));
+    const vec4 scissorRect = g_NwbMeshPushConstants.scissorRect;
+
+    return triMax.x < scissorRect.x
+        || triMin.x > scissorRect.z
+        || triMax.y < scissorRect.y
+        || triMin.y > scissorRect.w
+    ;
+}
+
+bool nwbMeshTriangleCulled(const NwbMeshGeneratedVertex vertices[3]){
+    const vec4 a = vertices[0].position;
+    const vec4 b = vertices[1].position;
+    const vec4 c = vertices[2].position;
+    return nwbMeshAllOutsideClipPlane(a, b, c) || nwbMeshAllOutsideScissor(a, b, c);
+}
+
+NwbMeshGeneratedVertex nwbMeshCulledVertex(){
+    NwbMeshGeneratedVertex vertex;
+    vertex.position = vec4(2.0, 2.0, 0.0, 1.0);
+    vertex.color = vec3(0.0);
+    vertex.padding = 0.0;
+    return vertex;
+}
+#endif
 
 NWB_MESH_BUILD_VERTEX_SIGNATURE;
 
@@ -100,26 +204,34 @@ void main(){
     const uint triangleIndex = nwbMeshTriangleIndex();
     const uint vertexBase = nwbMeshGroupThreadID() * 3u;
 
+    NwbMeshGeneratedVertex generatedVertices[3];
     for(uint corner = 0u; corner < 3u; ++corner){
-        const NwbMeshGeneratedVertex generatedVertex = nwbProjectBuildMeshVertex(
+        generatedVertices[corner] = nwbProjectBuildMeshVertex(
             triangleIndex,
             corner,
             nwbMeshLoadSourceVertex(triangleIndex, corner)
         );
-
-#if NWB_MESH_SHADER_EMULATION_COMPUTE
-        nwbMeshGeneratedVertices[triangleIndex * 3u + corner] = generatedVertex;
-#else
-        const uint outputVertex = vertexBase + corner;
-        gl_MeshVerticesEXT[outputVertex].gl_Position = generatedVertex.position;
-        outColor[outputVertex] = generatedVertex.color;
-#endif
     }
 
-#if !NWB_MESH_SHADER_EMULATION_COMPUTE
+#if NWB_MESH_SHADER_EMULATION_COMPUTE
+    if(nwbMeshTriangleCulled(generatedVertices)){
+        const NwbMeshGeneratedVertex culledVertex = nwbMeshCulledVertex();
+        for(uint corner = 0u; corner < 3u; ++corner)
+            nwbMeshGeneratedVertices[triangleIndex * 3u + corner] = culledVertex;
+        return;
+    }
+
+    for(uint corner = 0u; corner < 3u; ++corner)
+        nwbMeshGeneratedVertices[triangleIndex * 3u + corner] = generatedVertices[corner];
+#else
+    for(uint corner = 0u; corner < 3u; ++corner){
+        const uint outputVertex = vertexBase + corner;
+        gl_MeshVerticesEXT[outputVertex].gl_Position = generatedVertices[corner].position;
+        outColor[outputVertex] = generatedVertices[corner].color;
+    }
+
     gl_PrimitiveTriangleIndicesEXT[nwbMeshGroupThreadID()] = uvec3(vertexBase + 0u, vertexBase + 1u, vertexBase + 2u);
 #endif
 }
 
 #endif
-

@@ -107,18 +107,33 @@
 #endif
 
 #if defined(NWB_DEBUG)
+#define NWB_OCCUR_INFO true
+#define NWB_OCCUR_ESSENTIAL_INFO true
 #define NWB_OCCUR_ASSERT true
+#define NWB_OCCUR_FATAL_ASSERT true
 #define NWB_OCCUR_WARNING true
+#define NWB_OCCUR_CRITICAL_WARNING true
+#define NWB_OCCUR_ERROR true
 #define NWB_HARDBREAK NWB_DEBUGTRAP
 #define NWB_SOFTBREAK NWB_DEBUGTRAP
 #elif defined(NWB_OPTIMIZE)
+#define NWB_OCCUR_INFO true
+#define NWB_OCCUR_ESSENTIAL_INFO true
 #define NWB_OCCUR_ASSERT false
+#define NWB_OCCUR_FATAL_ASSERT true
 #define NWB_OCCUR_WARNING true
+#define NWB_OCCUR_CRITICAL_WARNING true
+#define NWB_OCCUR_ERROR true
 #define NWB_HARDBREAK
 #define NWB_SOFTBREAK NWB_DEBUGTRAP
 #else
+#define NWB_OCCUR_INFO false
+#define NWB_OCCUR_ESSENTIAL_INFO true
 #define NWB_OCCUR_ASSERT false
+#define NWB_OCCUR_FATAL_ASSERT true
 #define NWB_OCCUR_WARNING false
+#define NWB_OCCUR_CRITICAL_WARNING true
+#define NWB_OCCUR_ERROR true
 #define NWB_HARDBREAK
 #define NWB_SOFTBREAK
 #endif
@@ -193,4 +208,3 @@
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

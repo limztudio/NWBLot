@@ -50,7 +50,7 @@ static void SignalHandler(i32){
 void Frame::print(BasicStringView<tchar> str, Log::Type type){
     ScopedLock lock(__hidden_frame::s_PrintMutex);
 
-    auto& stream = (type == Log::Type::Error || type == Log::Type::Fatal) ? NWB_TCERR : NWB_TCOUT;
+    auto& stream = Log::MessageTypeWritesToErrorStream(type) ? NWB_TCERR : NWB_TCOUT;
     stream << str << static_cast<tchar>('\n');
     stream.flush();
 }

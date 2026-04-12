@@ -89,6 +89,10 @@ typename AssetPool<TAsset>::HandleType AssetPool<TAsset>::insert(UniquePtr<Asset
         m_freeIndices.pop_back();
     }
     else{
+        if(m_slots.size() >= static_cast<usize>(HandleType::s_InvalidIndex)){
+            NWB_ASSERT_MSG(false, NWB_TEXT("AssetPool exceeded maximum handle count"));
+            return HandleType{};
+        }
         m_slots.push_back(Slot{});
         index = static_cast<u32>(m_slots.size() - 1);
     }

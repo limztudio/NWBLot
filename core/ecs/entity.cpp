@@ -76,6 +76,10 @@ EntityID EntityManager::create(){
         m_freeIndices.pop_front();
     }
     else{
+        if(m_generations.size() >= static_cast<usize>(__hidden_ecs::ENTITY_INVALID_INDEX)){
+            NWB_ASSERT_MSG(false, NWB_TEXT("EntityManager exceeded maximum entity count"));
+            return ENTITY_ID_INVALID;
+        }
         index = static_cast<u32>(m_generations.size());
         m_generations.push_back(0);
     }

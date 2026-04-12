@@ -22,10 +22,16 @@ namespace __hidden_logger_client{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void BuildPayload(const MessageType& msg, Vector<u8>& outPayload){
+static bool BuildPayload(const MessageType& msg, Vector<u8>& outPayload){
     const auto& [time, type, str] = msg;
+    constexpr usize fixedPayloadBytes = sizeof(decltype(time)) + sizeof(decltype(type)) + sizeof(tchar);
+    if(str.size() > (Limit<usize>::s_Max - fixedPayloadBytes) / sizeof(tchar)){
+        outPayload.clear();
+        return false;
+    }
+
     const usize strBytes = str.size() * sizeof(tchar);
-    const usize payloadSize = sizeof(decltype(time)) + sizeof(decltype(type)) + strBytes + sizeof(tchar);
+    const usize payloadSize = fixedPayloadBytes + strBytes;
 
     outPayload.resize(payloadSize);
 
@@ -47,6 +53,8 @@ static void BuildPayload(const MessageType& msg, Vector<u8>& outPayload){
         constexpr tchar nullTerminator = 0;
         NWB_MEMCPY(ptr, sizeof(nullTerminator), &nullTerminator, sizeof(nullTerminator));
     }
+
+    return true;
 }
 
 
@@ -115,7 +123,15 @@ bool Client::internalUpdate(){
         if(!try_dequeue(msg))
             return true;
 
-        __hidden_logger_client::BuildPayload(msg, m_pendingPayload);
+        if(!__hidden_logger_client::BuildPayload(msg, m_pendingPayload)){
+            const MessageType fallbackMsg = MakeTuple(
+                Timer{},
+                Type::Error,
+                TString(NWB_TEXT("Logger client dropped an oversized message"))
+            );
+            if(!__hidden_logger_client::BuildPayload(fallbackMsg, m_pendingPayload))
+                return true;
+        }
         m_hasPendingPayload = true;
     }
 
@@ -132,6 +148,11 @@ bool Client::internalUpdate(){
 
     CURL* const curlHandle = static_cast<CURL*>(m_curl);
     CURLcode ret;
+    if(m_pendingPayload.size() > static_cast<usize>(Limit<curl_off_t>::s_Max)){
+        m_pendingPayload.clear();
+        m_hasPendingPayload = false;
+        return true;
+    }
 
     ret = curl_easy_setopt(curlHandle, CURLOPT_POSTFIELDS, reinterpret_cast<char*>(m_pendingPayload.data()));
     if(ret != CURLE_OK){

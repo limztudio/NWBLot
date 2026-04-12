@@ -113,17 +113,31 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
     }
 
     auto*& info = reinterpret_cast<__hidden_logger::ConnectionInfo*&>(conCls);
+    auto freeConnectionInfo = [&](){
+        Core::Alloc::CoreFree(info->buffer, "ConnectionInfo buffer freed at Server::requestCallback");
+        Core::Alloc::CoreFree(info, "ConnectionInfo freed at Server::requestCallback");
+        info = nullptr;
+    };
 
     if(uploadDataSize){
         const auto uploadDataPtr = MakeNotNull(upload_data);
-        info->buffer = reinterpret_cast<u8*>(Core::Alloc::CoreRealloc(info->buffer, info->size + uploadDataSize, "ConnectionInfo buffer reallocated at Server::requestCallback"));
-        if(!info->buffer){
-            thisPtr->enqueue(StringFormat(NWB_TEXT("Failed to reallocate a buffer on {}"), SERVER_NAME), Type::Fatal);
+        if(uploadDataSize > static_cast<size_t>(Limit<usize>::s_Max) || info->size > Limit<usize>::s_Max - static_cast<usize>(uploadDataSize)){
+            thisPtr->enqueue(StringFormat(NWB_TEXT("Received an oversized message on {}"), SERVER_NAME), Type::Error);
+            freeConnectionInfo();
             return MHD_NO;
         }
 
-        NWB_MEMCPY(info->buffer + info->size, uploadDataSize, uploadDataPtr.get(), uploadDataSize);
-        info->size += uploadDataSize;
+        const usize appendSize = static_cast<usize>(uploadDataSize);
+        auto* newBuffer = reinterpret_cast<u8*>(Core::Alloc::CoreRealloc(info->buffer, info->size + appendSize, "ConnectionInfo buffer reallocated at Server::requestCallback"));
+        if(!newBuffer){
+            thisPtr->enqueue(StringFormat(NWB_TEXT("Failed to reallocate a buffer on {}"), SERVER_NAME), Type::Fatal);
+            freeConnectionInfo();
+            return MHD_NO;
+        }
+
+        info->buffer = newBuffer;
+        NWB_MEMCPY(info->buffer + info->size, appendSize, uploadDataPtr.get(), appendSize);
+        info->size += appendSize;
         uploadDataSize = 0;
         return MHD_YES;
     }

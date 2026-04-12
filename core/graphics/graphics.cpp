@@ -29,6 +29,141 @@ using UploadBytesAllocator = Alloc::CustomAllocator<u8>;
 using UploadBytes = Vector<u8, UploadBytesAllocator>;
 
 
+static bool ComputeTextureUploadByteSize(const Graphics::TextureSetupDesc& desc, usize& outRequiredBytes){
+    outRequiredBytes = 0;
+
+    const TextureDesc& textureDesc = desc.textureDesc;
+    if(textureDesc.width == 0 || textureDesc.height == 0 || textureDesc.depth == 0 || textureDesc.mipLevels == 0 || textureDesc.arraySize == 0)
+        return false;
+    if(textureDesc.sampleCount != 1)
+        return false;
+    if(desc.mipLevel >= textureDesc.mipLevels || desc.arraySlice >= textureDesc.arraySize)
+        return false;
+    if(static_cast<usize>(textureDesc.format) >= static_cast<usize>(Format::kCount))
+        return false;
+
+    const FormatInfo& formatInfo = GetFormatInfo(textureDesc.format);
+    if(formatInfo.blockSize == 0 || formatInfo.bytesPerBlock == 0)
+        return false;
+
+    const u32 width = Max<u32>(1u, textureDesc.width >> desc.mipLevel);
+    const u32 height = Max<u32>(1u, textureDesc.height >> desc.mipLevel);
+    const u32 depth = Max<u32>(1u, textureDesc.depth >> desc.mipLevel);
+
+    const u64 blockWidth = (static_cast<u64>(width) + formatInfo.blockSize - 1u) / formatInfo.blockSize;
+    const u64 blockHeight = (static_cast<u64>(height) + formatInfo.blockSize - 1u) / formatInfo.blockSize;
+    if(blockWidth > Limit<u64>::s_Max / formatInfo.bytesPerBlock)
+        return false;
+
+    const u64 naturalRowPitch = blockWidth * formatInfo.bytesPerBlock;
+    const u64 effectiveRowPitch = desc.rowPitch != 0 ? static_cast<u64>(desc.rowPitch) : naturalRowPitch;
+    if(effectiveRowPitch == 0 || effectiveRowPitch < naturalRowPitch || (effectiveRowPitch % formatInfo.bytesPerBlock) != 0)
+        return false;
+    if(blockHeight > Limit<u64>::s_Max / effectiveRowPitch)
+        return false;
+
+    const u64 packedSlicePitch = effectiveRowPitch * blockHeight;
+    const u64 effectiveDepthPitch = desc.depthPitch != 0 ? static_cast<u64>(desc.depthPitch) : packedSlicePitch;
+    if(effectiveDepthPitch == 0 || effectiveDepthPitch < packedSlicePitch || (effectiveDepthPitch % effectiveRowPitch) != 0)
+        return false;
+
+    if(depth > 1 && static_cast<u64>(depth - 1) > (Limit<u64>::s_Max - packedSlicePitch) / effectiveDepthPitch)
+        return false;
+
+    const u64 requiredBytes = depth > 1
+        ? effectiveDepthPitch * static_cast<u64>(depth - 1) + packedSlicePitch
+        : packedSlicePitch;
+    if(requiredBytes > static_cast<u64>(Limit<usize>::s_Max))
+        return false;
+
+    outRequiredBytes = static_cast<usize>(requiredBytes);
+    return true;
+}
+
+static bool ValidateBufferSetupUpload(const Graphics::BufferSetupDesc& desc){
+    if(desc.dataSize == 0)
+        return true;
+    if(!desc.data){
+        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to set up buffer '{}': upload data is null"), StringConvert(desc.bufferDesc.debugName.c_str()));
+        return false;
+    }
+    if(desc.destOffsetBytes > desc.bufferDesc.byteSize || static_cast<u64>(desc.dataSize) > desc.bufferDesc.byteSize - desc.destOffsetBytes){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Graphics: failed to set up buffer '{}': upload range offset {} size {} exceeds buffer size {}"),
+            StringConvert(desc.bufferDesc.debugName.c_str()),
+            desc.destOffsetBytes,
+            static_cast<u64>(desc.dataSize),
+            desc.bufferDesc.byteSize
+        );
+        return false;
+    }
+
+    return true;
+}
+
+static bool ValidateTextureSetupUpload(const Graphics::TextureSetupDesc& desc){
+    if(!desc.data && desc.uploadDataSize == 0)
+        return true;
+    if(!desc.data || desc.uploadDataSize == 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to set up texture '{}': upload data and size must both be provided"), StringConvert(desc.textureDesc.name.c_str()));
+        return false;
+    }
+
+    usize requiredBytes = 0;
+    if(!ComputeTextureUploadByteSize(desc, requiredBytes)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to set up texture '{}': invalid upload layout"), StringConvert(desc.textureDesc.name.c_str()));
+        return false;
+    }
+    if(desc.uploadDataSize < requiredBytes){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Graphics: failed to set up texture '{}': upload data size {} is smaller than required size {}"),
+            StringConvert(desc.textureDesc.name.c_str()),
+            desc.uploadDataSize,
+            requiredBytes
+        );
+        return false;
+    }
+
+    return true;
+}
+
+static bool ValidateMeshSetupDesc(const Graphics::MeshSetupDesc& desc){
+    if(!desc.vertexData || desc.vertexDataSize == 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to set up mesh '{}': vertex data is missing"), StringConvert(desc.vertexBufferName.c_str()));
+        return false;
+    }
+    if(desc.vertexStride == 0 || (desc.vertexDataSize % static_cast<usize>(desc.vertexStride)) != 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to set up mesh '{}': vertex data size is not aligned to vertex stride"), StringConvert(desc.vertexBufferName.c_str()));
+        return false;
+    }
+
+    const usize vertexCount = desc.vertexDataSize / static_cast<usize>(desc.vertexStride);
+    if(vertexCount > static_cast<usize>(Limit<u32>::s_Max)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to set up mesh '{}': vertex count exceeds u32 range"), StringConvert(desc.vertexBufferName.c_str()));
+        return false;
+    }
+
+    if((desc.indexData == nullptr) != (desc.indexDataSize == 0)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to set up mesh '{}': index data and size must both be provided"), StringConvert(desc.indexBufferName.c_str()));
+        return false;
+    }
+    if(desc.indexDataSize > 0){
+        const usize indexStride = desc.use32BitIndices ? sizeof(u32) : sizeof(u16);
+        if((desc.indexDataSize % indexStride) != 0){
+            NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to set up mesh '{}': index data size is not aligned to index stride"), StringConvert(desc.indexBufferName.c_str()));
+            return false;
+        }
+        const usize indexCount = desc.indexDataSize / indexStride;
+        if(indexCount > static_cast<usize>(Limit<u32>::s_Max)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to set up mesh '{}': index count exceeds u32 range"), StringConvert(desc.indexBufferName.c_str()));
+            return false;
+        }
+    }
+
+    return true;
+}
+
+
 struct BufferSetupJobData{
     Graphics::BufferSetupDesc setupDesc;
     UploadBytes uploadBytes;
@@ -544,6 +679,8 @@ TextureHandle Graphics::createTexture(const TextureDesc& desc)const{
 
 BufferHandle Graphics::setupBuffer(const BufferSetupDesc& desc)const{
     IDevice* device = getDevice();
+    if(!__hidden_graphics::ValidateBufferSetupUpload(desc))
+        return {};
 
     BufferHandle buffer = device->createBuffer(desc.bufferDesc);
     if(!buffer){
@@ -578,6 +715,8 @@ BufferHandle Graphics::setupBuffer(const BufferSetupDesc& desc)const{
 
 TextureHandle Graphics::setupTexture(const TextureSetupDesc& desc)const{
     IDevice* device = getDevice();
+    if(!__hidden_graphics::ValidateTextureSetupUpload(desc))
+        return {};
 
     TextureHandle texture = device->createTexture(desc.textureDesc);
     if(!texture){
@@ -611,6 +750,9 @@ TextureHandle Graphics::setupTexture(const TextureSetupDesc& desc)const{
 }
 
 Graphics::MeshResource Graphics::setupMesh(const MeshSetupDesc& desc)const{
+    if(!__hidden_graphics::ValidateMeshSetupDesc(desc))
+        return {};
+
     MeshResource output;
     output.vertexStride = desc.vertexStride;
 
@@ -673,6 +815,11 @@ Graphics::MeshResource Graphics::setupMesh(const MeshSetupDesc& desc)const{
 }
 
 Graphics::JobHandle Graphics::setupBufferAsync(const BufferSetupDesc& desc, BufferHandle& outBuffer){
+    if(!__hidden_graphics::ValidateBufferSetupUpload(desc)){
+        outBuffer = nullptr;
+        return {};
+    }
+
     auto payload = MakeCustomUnique<__hidden_graphics::BufferSetupJobData>(
         m_allocator.getObjectArena(),
         m_allocator.getObjectArena(),
@@ -691,6 +838,11 @@ Graphics::JobHandle Graphics::setupBufferAsync(const BufferSetupDesc& desc, Buff
 }
 
 Graphics::JobHandle Graphics::setupTextureAsync(const TextureSetupDesc& desc, TextureHandle& outTexture){
+    if(!__hidden_graphics::ValidateTextureSetupUpload(desc)){
+        outTexture = nullptr;
+        return {};
+    }
+
     auto payload = MakeCustomUnique<__hidden_graphics::TextureSetupJobData>(
         m_allocator.getObjectArena(),
         m_allocator.getObjectArena(),
@@ -709,6 +861,11 @@ Graphics::JobHandle Graphics::setupTextureAsync(const TextureSetupDesc& desc, Te
 }
 
 Graphics::JobHandle Graphics::setupMeshAsync(const MeshSetupDesc& desc, MeshResource& outMesh){
+    if(!__hidden_graphics::ValidateMeshSetupDesc(desc)){
+        outMesh = {};
+        return {};
+    }
+
     auto payload = MakeCustomUnique<__hidden_graphics::MeshSetupJobData>(
         m_allocator.getObjectArena(),
         m_allocator.getObjectArena(),

@@ -30,6 +30,102 @@ VkDeviceAddress GetBufferDeviceAddress(IBuffer* _buffer, u64 offset){
     return buffer->m_deviceAddress + offset;
 }
 
+bool GetRayTracingIndexType(Format::Enum format, VkIndexType& indexType){
+    if(format == Format::R16_UINT){
+        indexType = VK_INDEX_TYPE_UINT16;
+        return true;
+    }
+    if(format == Format::R32_UINT){
+        indexType = VK_INDEX_TYPE_UINT32;
+        return true;
+    }
+
+    return false;
+}
+
+bool FillBlasGeometryForSizeQuery(const RayTracingGeometryDesc& geomDesc, VkAccelerationStructureGeometryKHR& geometry, u32& primitiveCount, const tchar* operation, bool requireBuffers){
+    geometry = MakeVkStruct<VkAccelerationStructureGeometryKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR);
+    primitiveCount = 0;
+
+    if(geomDesc.geometryType == RayTracingGeometryType::Triangles){
+        const auto& triangles = geomDesc.geometryData.triangles;
+        const VkFormat vertexFormat = ConvertFormat(triangles.vertexFormat);
+        if(vertexFormat == VK_FORMAT_UNDEFINED){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: triangle vertex format is invalid"), operation);
+            return false;
+        }
+        if(requireBuffers && !triangles.vertexBuffer){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: triangle vertex buffer is null"), operation);
+            return false;
+        }
+        if(triangles.vertexCount > 0 && triangles.vertexStride == 0){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: triangle vertex stride is zero"), operation);
+            return false;
+        }
+
+        geometry.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
+        geometry.geometry.triangles.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
+        geometry.geometry.triangles.vertexFormat = vertexFormat;
+        geometry.geometry.triangles.vertexStride = triangles.vertexStride;
+        geometry.geometry.triangles.maxVertex = triangles.vertexCount > 0 ? triangles.vertexCount - 1 : 0;
+
+        if(triangles.indexBuffer){
+            if(!GetRayTracingIndexType(triangles.indexFormat, geometry.geometry.triangles.indexType)){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: triangle index format must be R16_UINT or R32_UINT"), operation);
+                return false;
+            }
+            primitiveCount = triangles.indexCount / s_TrianglesPerPrimitive;
+        }
+        else{
+            geometry.geometry.triangles.indexType = VK_INDEX_TYPE_NONE_KHR;
+            primitiveCount = triangles.vertexCount / s_TrianglesPerPrimitive;
+        }
+    }
+    else if(geomDesc.geometryType == RayTracingGeometryType::AABBs){
+        const auto& aabbs = geomDesc.geometryData.aabbs;
+        if(requireBuffers && !aabbs.buffer){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: AABB buffer is null"), operation);
+            return false;
+        }
+        if(aabbs.count > 0 && aabbs.stride == 0){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: AABB stride is zero"), operation);
+            return false;
+        }
+
+        geometry.geometryType = VK_GEOMETRY_TYPE_AABBS_KHR;
+        geometry.geometry.aabbs.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_AABBS_DATA_KHR;
+        geometry.geometry.aabbs.stride = aabbs.stride;
+        primitiveCount = aabbs.count;
+    }
+    else{
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: geometry type is not supported by the Vulkan backend"), operation);
+        return false;
+    }
+
+    geometry.flags = 0;
+    if(geomDesc.flags & RayTracingGeometryFlags::Opaque)
+        geometry.flags |= VK_GEOMETRY_OPAQUE_BIT_KHR;
+    if(geomDesc.flags & RayTracingGeometryFlags::NoDuplicateAnyHitInvocation)
+        geometry.flags |= VK_GEOMETRY_NO_DUPLICATE_ANY_HIT_INVOCATION_BIT_KHR;
+
+    return true;
+}
+
+VkBuildAccelerationStructureFlagsKHR ConvertAccelStructBuildFlags(RayTracingAccelStructBuildFlags::Mask buildFlags, bool allowCompaction){
+    VkBuildAccelerationStructureFlagsKHR flags = 0;
+
+    if(buildFlags & RayTracingAccelStructBuildFlags::AllowUpdate)
+        flags |= VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR;
+    if(allowCompaction && (buildFlags & RayTracingAccelStructBuildFlags::AllowCompaction))
+        flags |= VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_COMPACTION_BIT_KHR;
+    if(buildFlags & RayTracingAccelStructBuildFlags::PreferFastTrace)
+        flags |= VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
+    if(buildFlags & RayTracingAccelStructBuildFlags::PreferFastBuild)
+        flags |= VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR;
+
+    return flags;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -126,11 +222,67 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
 
     VkAccelerationStructureTypeKHR asType = desc.isTopLevel ?  VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR :  VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
 
+    u64 accelStructSize = s_DefaultTopLevelASBufferSize;
+    if(desc.isTopLevel && desc.topLevelMaxInstances > 0){
+        if(desc.topLevelMaxInstances > UINT32_MAX){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create acceleration structure: TLAS instance capacity exceeds Vulkan limit"));
+            DestroyArenaObject(m_context.objectArena, as);
+            return nullptr;
+        }
+
+        VkAccelerationStructureGeometryKHR geometry = __hidden_vulkan::MakeVkStruct<VkAccelerationStructureGeometryKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR);
+        geometry.geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR;
+        geometry.geometry.instances.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
+        geometry.geometry.instances.arrayOfPointers = VK_FALSE;
+
+        VkAccelerationStructureBuildGeometryInfoKHR buildInfo = __hidden_vulkan::MakeVkStruct<VkAccelerationStructureBuildGeometryInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR);
+        buildInfo.type = asType;
+        buildInfo.flags = __hidden_vulkan::ConvertAccelStructBuildFlags(desc.buildFlags, false);
+        buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
+        buildInfo.geometryCount = 1;
+        buildInfo.pGeometries = &geometry;
+
+        u32 primitiveCount = static_cast<u32>(desc.topLevelMaxInstances);
+        VkAccelerationStructureBuildSizesInfoKHR sizeInfo = __hidden_vulkan::MakeVkStruct<VkAccelerationStructureBuildSizesInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR);
+        vkGetAccelerationStructureBuildSizesKHR(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &primitiveCount, &sizeInfo);
+        if(sizeInfo.accelerationStructureSize > 0)
+            accelStructSize = sizeInfo.accelerationStructureSize;
+    }
+    else if(!desc.isTopLevel && !desc.bottomLevelGeometries.empty()){
+        if(desc.bottomLevelGeometries.size() > UINT32_MAX){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create BLAS: geometry count exceeds Vulkan limit"));
+            DestroyArenaObject(m_context.objectArena, as);
+            return nullptr;
+        }
+
+        Alloc::ScratchArena<> scratchArena(s_RayTracingScratchArenaBytes);
+        Vector<VkAccelerationStructureGeometryKHR, Alloc::ScratchAllocator<VkAccelerationStructureGeometryKHR>> geometries{ Alloc::ScratchAllocator<VkAccelerationStructureGeometryKHR>(scratchArena) };
+        Vector<uint32_t, Alloc::ScratchAllocator<uint32_t>> primitiveCounts{ Alloc::ScratchAllocator<uint32_t>(scratchArena) };
+        geometries.resize(desc.bottomLevelGeometries.size());
+        primitiveCounts.resize(desc.bottomLevelGeometries.size());
+
+        for(usize i = 0; i < desc.bottomLevelGeometries.size(); ++i){
+            if(!__hidden_vulkan::FillBlasGeometryForSizeQuery(desc.bottomLevelGeometries[i], geometries[i], primitiveCounts[i], NWB_TEXT("create BLAS"), false)){
+                DestroyArenaObject(m_context.objectArena, as);
+                return nullptr;
+            }
+        }
+
+        VkAccelerationStructureBuildGeometryInfoKHR buildInfo = __hidden_vulkan::MakeVkStruct<VkAccelerationStructureBuildGeometryInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR);
+        buildInfo.type = asType;
+        buildInfo.flags = __hidden_vulkan::ConvertAccelStructBuildFlags(desc.buildFlags, true);
+        buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
+        buildInfo.geometryCount = static_cast<u32>(geometries.size());
+        buildInfo.pGeometries = geometries.data();
+
+        VkAccelerationStructureBuildSizesInfoKHR sizeInfo = __hidden_vulkan::MakeVkStruct<VkAccelerationStructureBuildSizesInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR);
+        vkGetAccelerationStructureBuildSizesKHR(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, primitiveCounts.data(), &sizeInfo);
+        if(sizeInfo.accelerationStructureSize > 0)
+            accelStructSize = sizeInfo.accelerationStructureSize;
+    }
+
     BufferDesc bufferDesc;
-    bufferDesc.byteSize = desc.topLevelMaxInstances > 0 ? 
-        desc.topLevelMaxInstances * sizeof(VkAccelerationStructureInstanceKHR) * s_DefaultTlasBufferSizeMultiplier : // Estimate for TLAS
-        s_DefaultTopLevelASBufferSize
-    ;
+    bufferDesc.byteSize = accelStructSize;
     bufferDesc.isAccelStructStorage = true;
     bufferDesc.debugName = "AccelStructBuffer";
 
@@ -886,6 +1038,10 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* _as, const
     }
     if(numGeometries == 0)
         return;
+    if(numGeometries > UINT32_MAX){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: geometry count exceeds Vulkan limit"));
+        return;
+    }
 
     if(!m_context.extensions.KHR_acceleration_structure)
         return;
@@ -901,6 +1057,13 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* _as, const
     geometries.resize(numGeometries);
     rangeInfos.resize(numGeometries);
     primitiveCounts.resize(numGeometries);
+
+    for(usize i = 0; i < numGeometries; ++i){
+        VkAccelerationStructureGeometryKHR validationGeometry = {};
+        u32 validationPrimitiveCount = 0;
+        if(!__hidden_vulkan::FillBlasGeometryForSizeQuery(pGeometries[i], validationGeometry, validationPrimitiveCount, NWB_TEXT("build BLAS"), true))
+            return;
+    }
 
     auto buildGeometry = [&](usize i){
         const auto& geomDesc = pGeometries[i];
@@ -920,7 +1083,7 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* _as, const
             geometry.geometry.triangles.maxVertex = triangles.vertexCount > 0 ? triangles.vertexCount - 1 : 0;
 
             if(triangles.indexBuffer){
-                geometry.geometry.triangles.indexType = triangles.indexFormat == Format::R16_UINT ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32;
+                __hidden_vulkan::GetRayTracingIndexType(triangles.indexFormat, geometry.geometry.triangles.indexType);
                 geometry.geometry.triangles.indexData.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(triangles.indexBuffer, triangles.indexOffset);
                 primitiveCount = triangles.indexCount / s_TrianglesPerPrimitive;
             }
@@ -963,17 +1126,7 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* _as, const
 
     VkAccelerationStructureBuildGeometryInfoKHR buildInfo = __hidden_vulkan::MakeVkStruct<VkAccelerationStructureBuildGeometryInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR);
     buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
-    buildInfo.flags = 0;
-
-    if(buildFlags & RayTracingAccelStructBuildFlags::AllowUpdate)
-        buildInfo.flags |= VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR;
-    if(buildFlags & RayTracingAccelStructBuildFlags::AllowCompaction)
-        buildInfo.flags |= VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_COMPACTION_BIT_KHR;
-    if(buildFlags & RayTracingAccelStructBuildFlags::PreferFastTrace)
-        buildInfo.flags |= VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
-    if(buildFlags & RayTracingAccelStructBuildFlags::PreferFastBuild)
-        buildInfo.flags |= VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR;
-
+    buildInfo.flags = __hidden_vulkan::ConvertAccelStructBuildFlags(buildFlags, true);
     buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
     buildInfo.dstAccelerationStructure = as->m_accelStruct;
     buildInfo.geometryCount = static_cast<u32>(geometries.size());
@@ -981,6 +1134,13 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* _as, const
 
     VkAccelerationStructureBuildSizesInfoKHR sizeInfo = __hidden_vulkan::MakeVkStruct<VkAccelerationStructureBuildSizesInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR);
     vkGetAccelerationStructureBuildSizesKHR(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, primitiveCounts.data(), &sizeInfo);
+
+    auto* asBuffer = checked_cast<Buffer*>(as->m_buffer.get());
+    if(!asBuffer || asBuffer->m_desc.byteSize < sizeInfo.accelerationStructureSize){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: acceleration structure storage is too small"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to build BLAS: acceleration structure storage is too small"));
+        return;
+    }
 
     BufferDesc scratchDesc;
     scratchDesc.byteSize = sizeInfo.buildScratchSize;
@@ -1127,6 +1287,10 @@ void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* _as, const Ra
     }
     if(numInstances == 0)
         return;
+    if(numInstances > UINT32_MAX){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS: instance count exceeds Vulkan limit"));
+        return;
+    }
 
     if(!m_context.extensions.KHR_acceleration_structure)
         return;
@@ -1195,15 +1359,7 @@ void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* _as, const Ra
 
     VkAccelerationStructureBuildGeometryInfoKHR buildInfo = __hidden_vulkan::MakeVkStruct<VkAccelerationStructureBuildGeometryInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR);
     buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
-    buildInfo.flags = 0;
-
-    if(buildFlags & RayTracingAccelStructBuildFlags::AllowUpdate)
-        buildInfo.flags |= VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR;
-    if(buildFlags & RayTracingAccelStructBuildFlags::PreferFastTrace)
-        buildInfo.flags |= VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
-    if(buildFlags & RayTracingAccelStructBuildFlags::PreferFastBuild)
-        buildInfo.flags |= VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR;
-
+    buildInfo.flags = __hidden_vulkan::ConvertAccelStructBuildFlags(buildFlags, false);
     buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
     buildInfo.dstAccelerationStructure = as->m_accelStruct;
     buildInfo.geometryCount = 1;
@@ -1212,6 +1368,13 @@ void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* _as, const Ra
     auto primitiveCount = static_cast<uint32_t>(numInstances);
     VkAccelerationStructureBuildSizesInfoKHR sizeInfo = __hidden_vulkan::MakeVkStruct<VkAccelerationStructureBuildSizesInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR);
     vkGetAccelerationStructureBuildSizesKHR(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &primitiveCount, &sizeInfo);
+
+    auto* asBuffer = checked_cast<Buffer*>(as->m_buffer.get());
+    if(!asBuffer || asBuffer->m_desc.byteSize < sizeInfo.accelerationStructureSize){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS: acceleration structure storage is too small"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to build TLAS: acceleration structure storage is too small"));
+        return;
+    }
 
     BufferDesc scratchDesc;
     scratchDesc.byteSize = sizeInfo.buildScratchSize;

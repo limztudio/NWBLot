@@ -28,6 +28,7 @@ target_sources(nwb_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/basic.h"
     "${CMAKE_CURRENT_LIST_DIR}/common.h"
     "${CMAKE_CURRENT_LIST_DIR}/graphics.h"
+    "${CMAKE_CURRENT_LIST_DIR}/render_pass.h"
     "${CMAKE_CURRENT_LIST_DIR}/shader_archive.h"
     "${CMAKE_CURRENT_LIST_DIR}/shader_param.h"
     "${CMAKE_CURRENT_LIST_DIR}/shader_cook.h"

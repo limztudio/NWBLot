@@ -773,6 +773,13 @@ void ShaderTable::setRayGenerationShader(const Name& exportName, IBindingSet* /*
     u32 handleSizeAligned = (handleSize + handleAlignment - 1) & ~(handleAlignment - 1);
     u64 sbtSize = (handleSizeAligned + baseAlignment - 1) & ~(static_cast<u64>(baseAlignment) - 1);
 
+    u32 groupIndex = findGroupIndex(exportName);
+    if(groupIndex == UINT32_MAX){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Ray generation export not found in pipeline"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Ray generation export not found in pipeline"));
+        return;
+    }
+
     allocateSBTBuffer(m_raygenBuffer, sbtSize);
     if(!m_raygenBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate ray generation SBT buffer"));
@@ -780,13 +787,6 @@ void ShaderTable::setRayGenerationShader(const Name& exportName, IBindingSet* /*
     }
 
     m_raygenOffset = 0;
-
-    u32 groupIndex = findGroupIndex(exportName);
-    if(groupIndex == UINT32_MAX){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Ray generation export not found in pipeline"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Ray generation export not found in pipeline"));
-        return;
-    }
 
     void* mapped = m_device.mapBuffer(m_raygenBuffer.get(), CpuAccessMode::Write);
     if(!mapped){
@@ -1487,6 +1487,11 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
         return;
 
     auto* sbt = checked_cast<ShaderTable*>(state.shaderTable);
+    if(!sbt->m_raygenBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to dispatch rays: ray generation shader is not set"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to dispatch rays: ray generation shader is not set"));
+        return;
+    }
 
     VkStridedDeviceAddressRegionKHR raygenRegion = {};
     VkStridedDeviceAddressRegionKHR missRegion = {};

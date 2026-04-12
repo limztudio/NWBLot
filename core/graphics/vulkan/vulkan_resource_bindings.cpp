@@ -113,6 +113,11 @@ constexpr u32 NormalizeDescriptorTableCapacity(const u32 capacity){
     return capacity > 0 ? capacity : 1u;
 }
 
+bool ResolveDescriptorBufferRange(const BindingSetItem& item, const Buffer& buffer, BufferRange& outRange){
+    outRange = item.range.resolve(buffer.getDescription());
+    return outRange.byteSize > 0;
+}
+
 u32 FindMemoryTypeIndex(const VulkanContext& context, const u32 typeBits, const VkMemoryPropertyFlags properties){
     for(u32 i = 0; i < context.memoryProperties.memoryTypeCount; ++i){
         if((typeBits & (1u << i)) && (context.memoryProperties.memoryTypes[i].propertyFlags & properties) == properties)
@@ -496,12 +501,11 @@ bool DescriptorHeapManager::writeDescriptor(const BindingSetItem& item, const De
         auto* buffer = checked_cast<Buffer*>(item.resourceHandle);
         if(!buffer)
             return false;
-        const BufferDesc& bufferDesc = buffer->getDescription();
-        if(item.range.byteOffset > bufferDesc.byteSize)
+        BufferRange range;
+        if(!__hidden_vulkan::ResolveDescriptorBufferRange(item, *buffer, range))
             return false;
-        addressRange.address = static_cast<VkDeviceAddress>(buffer->getGpuVirtualAddress()) + item.range.byteOffset;
-        const u64 remainingBytes = bufferDesc.byteSize - item.range.byteOffset;
-        addressRange.size = item.range.byteSize > 0 ? Min<u64>(item.range.byteSize, remainingBytes) : remainingBytes;
+        addressRange.address = static_cast<VkDeviceAddress>(buffer->getGpuVirtualAddress()) + range.byteOffset;
+        addressRange.size = range.byteSize;
         resourceInfo.data.pAddressRange = &addressRange;
         break;
     }
@@ -511,13 +515,16 @@ bool DescriptorHeapManager::writeDescriptor(const BindingSetItem& item, const De
         if(!buffer)
             return false;
         const BufferDesc& bufferDesc = buffer->getDescription();
-        if(item.range.byteOffset > bufferDesc.byteSize)
+        BufferRange range;
+        if(!__hidden_vulkan::ResolveDescriptorBufferRange(item, *buffer, range))
             return false;
         const Format::Enum viewFormat = item.format != Format::UNKNOWN ? item.format : bufferDesc.format;
-        texelInfo.format = ConvertFormat(viewFormat);
-        texelInfo.addressRange.address = static_cast<VkDeviceAddress>(buffer->getGpuVirtualAddress()) + item.range.byteOffset;
-        const u64 remainingBytes = bufferDesc.byteSize - item.range.byteOffset;
-        texelInfo.addressRange.size = item.range.byteSize > 0 ? Min<u64>(item.range.byteSize, remainingBytes) : remainingBytes;
+        const VkFormat vkFormat = ConvertFormat(viewFormat);
+        if(vkFormat == VK_FORMAT_UNDEFINED)
+            return false;
+        texelInfo.format = vkFormat;
+        texelInfo.addressRange.address = static_cast<VkDeviceAddress>(buffer->getGpuVirtualAddress()) + range.byteOffset;
+        texelInfo.addressRange.size = range.byteSize;
         resourceInfo.data.pTexelBuffer = &texelInfo;
         break;
     }
@@ -1200,9 +1207,14 @@ bool Device::writeDescriptorTable(IDescriptorTable* m_descriptorTable, const Bin
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write descriptor table slot {}: buffer resource is invalid"), item.slot);
             return false;
         }
+        BufferRange range;
+        if(!__hidden_vulkan::ResolveDescriptorBufferRange(item, *buffer, range)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write descriptor table slot {}: buffer range is empty or outside the buffer"), item.slot);
+            return false;
+        }
         bufferInfo.buffer = buffer->m_buffer;
-        bufferInfo.offset = item.range.byteOffset;
-        bufferInfo.range = item.range.byteSize > 0 ? item.range.byteSize : VK_WHOLE_SIZE;
+        bufferInfo.offset = range.byteOffset;
+        bufferInfo.range = range.byteSize;
         write.pBufferInfo = &bufferInfo;
         break;
     }
@@ -1382,10 +1394,15 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLa
                 NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Ignoring binding set item for slot {}: buffer resource is invalid"), item.slot);
                 continue;
             }
+            BufferRange range;
+            if(!__hidden_vulkan::ResolveDescriptorBufferRange(item, *buffer, range)){
+                NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Ignoring binding set item for slot {}: buffer range is empty or outside the buffer"), item.slot);
+                continue;
+            }
             VkDescriptorBufferInfo bufInfo = {};
             bufInfo.buffer = buffer->m_buffer;
-            bufInfo.offset = item.range.byteOffset;
-            bufInfo.range = item.range.byteSize > 0 ? item.range.byteSize : VK_WHOLE_SIZE;
+            bufInfo.offset = range.byteOffset;
+            bufInfo.range = range.byteSize;
             bufferInfos.push_back(bufInfo);
             write.pBufferInfo = &bufferInfos.back();
             writes.push_back(write);

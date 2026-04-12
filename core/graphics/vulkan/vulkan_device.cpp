@@ -144,11 +144,15 @@ Device::Device(const DeviceDesc& desc)
             m_context.extensions.NV_ray_tracing_invocation_reorder = true;
     }
 
-    if(m_context.extensions.KHR_ray_tracing_pipeline){
+    {
         VkPhysicalDeviceProperties2 props2 = __hidden_vulkan::MakeVkStruct<VkPhysicalDeviceProperties2>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2);
-        m_context.rayTracingPipelineProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR;
+        void* pNext = nullptr;
 
-        void* pNext = &m_context.rayTracingPipelineProperties;
+        if(m_context.extensions.KHR_ray_tracing_pipeline){
+            m_context.rayTracingPipelineProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR;
+            m_context.rayTracingPipelineProperties.pNext = pNext;
+            pNext = &m_context.rayTracingPipelineProperties;
+        }
 
         if(m_context.extensions.KHR_acceleration_structure){
             m_context.accelStructProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_PROPERTIES_KHR;
@@ -168,8 +172,10 @@ Device::Device(const DeviceDesc& desc)
             pNext = &m_context.coopVecProperties;
         }
 
-        props2.pNext = pNext;
-        vkGetPhysicalDeviceProperties2(m_context.physicalDevice, &props2);
+        if(pNext){
+            props2.pNext = pNext;
+            vkGetPhysicalDeviceProperties2(m_context.physicalDevice, &props2);
+        }
     }
 
     if(m_context.extensions.NV_cooperative_vector){

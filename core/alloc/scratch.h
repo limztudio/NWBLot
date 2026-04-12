@@ -51,7 +51,7 @@ private:
             return ret;
         }
         inline bool deallocate(usize size){
-            const bool isValidRequest = (m_remaining + size) <= m_size;
+            const bool isValidRequest = m_remaining <= m_size && size <= (m_size - m_remaining);
             NWB_ASSERT(isValidRequest);
             if(!isValidRequest)
                 return false;
@@ -163,6 +163,8 @@ public:
 
         auto& bucket = m_bucket[bucketIndex];
         NWB_ASSERT_MSG(bucket.last != nullptr, NWB_TEXT("Attempted to deallocate before allocating"));
+        if(!bucket.last)
+            return;
 
         size = Alignment(align, size);
         bucket.last->deallocate(size);

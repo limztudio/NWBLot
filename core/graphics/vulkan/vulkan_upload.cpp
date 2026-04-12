@@ -65,19 +65,17 @@ UploadManager::~UploadManager(){
     m_chunkPool.clear();
     for(auto& chunks : m_activeChunks)
         chunks.clear();
-    for(auto& chunk : m_currentChunks)
-        chunk.reset();
 }
 
-bool UploadManager::suballocateBuffer(u64 size, Buffer** pBuffer, u64* pOffset, void** pCpuVA, CommandQueue::Enum queueID, u64 completedVersion, u32 alignment){
-    if(!pBuffer || !pOffset)
+bool UploadManager::suballocateBuffer(u64 size, Buffer** pBuffer, u64* pOffset, void** pCpuVA, TrackedCommandBuffer* owner, CommandQueue::Enum queueID, u64 completedVersion, u32 alignment){
+    if(!pBuffer || !pOffset || !owner)
         return false;
     const u32 queueIndex = static_cast<u32>(queueID);
     if(queueIndex >= static_cast<u32>(CommandQueue::kCount))
         return false;
 
     ScopedLock lock(m_mutex);
-    auto& currentChunk = m_currentChunks[queueIndex];
+    auto& activeChunks = m_activeChunks[queueIndex];
 
     const auto trySuballocateFromChunk = [&](BufferChunk& chunk) -> bool {
         u64 alignedOffset = 0;
@@ -96,8 +94,10 @@ bool UploadManager::suballocateBuffer(u64 size, Buffer** pBuffer, u64* pOffset, 
         return true;
     };
 
-    if(currentChunk && trySuballocateFromChunk(*currentChunk))
-        return true;
+    for(auto it = activeChunks.rbegin(); it != activeChunks.rend(); ++it){
+        if((*it)->owner == owner && trySuballocateFromChunk(**it))
+            return true;
+    }
 
     for(auto it = m_chunkPool.begin(); it != m_chunkPool.end(); ++it){
         BufferChunkPtr& pooledChunk = *it;
@@ -106,9 +106,10 @@ bool UploadManager::suballocateBuffer(u64 size, Buffer** pBuffer, u64* pOffset, 
                 m_chunkPoolBytes -= pooledChunk->size;
             else
                 m_chunkPoolBytes = 0;
-            m_activeChunks[queueIndex].push_back(Move(pooledChunk));
-            currentChunk = m_activeChunks[queueIndex].back();
+            activeChunks.push_back(Move(pooledChunk));
+            BufferChunkPtr& currentChunk = activeChunks.back();
             m_chunkPool.erase(it);
+            currentChunk->owner = owner;
             currentChunk->allocated = 0;
             currentChunk->version = completedVersion;
 
@@ -128,33 +129,50 @@ bool UploadManager::suballocateBuffer(u64 size, Buffer** pBuffer, u64* pOffset, 
     if(!bufferHandle)
         return false;
 
-    m_activeChunks[queueIndex].push_back(MakeRefCount<BufferChunk>(m_device.m_context.threadPool, Move(bufferHandle), queueID, chunkSize));
-    currentChunk = m_activeChunks[queueIndex].back();
+    activeChunks.push_back(MakeRefCount<BufferChunk>(m_device.m_context.threadPool, Move(bufferHandle), owner, queueID, chunkSize));
+    BufferChunkPtr& currentChunk = activeChunks.back();
     currentChunk->version = completedVersion;
 
     return trySuballocateFromChunk(*currentChunk);
 }
 
-void UploadManager::submitChunks(CommandQueue::Enum queueID, u64 submittedVersion){
+void UploadManager::submitChunks(CommandQueue::Enum queueID, u64 submittedVersion, TrackedCommandBuffer* const* submittedOwners, usize submittedOwnerCount){
     const u32 queueIndex = static_cast<u32>(queueID);
-    if(queueIndex >= static_cast<u32>(CommandQueue::kCount))
+    if(queueIndex >= static_cast<u32>(CommandQueue::kCount) || !submittedOwners || submittedOwnerCount == 0)
         return;
 
     ScopedLock lock(m_mutex);
     auto& activeChunks = m_activeChunks[queueIndex];
 
-    for(auto& chunk : activeChunks){
-        if(!chunk)
+    const auto ownsSubmittedChunk = [&](TrackedCommandBuffer* owner) -> bool {
+        for(usize i = 0; i < submittedOwnerCount; ++i){
+            if(submittedOwners[i] == owner)
+                return true;
+        }
+        return false;
+    };
+
+    auto it = activeChunks.begin();
+    while(it != activeChunks.end()){
+        BufferChunkPtr& chunk = *it;
+        if(!chunk){
+            it = activeChunks.erase(it);
             continue;
+        }
+        if(!ownsSubmittedChunk(chunk->owner)){
+            ++it;
+            continue;
+        }
+
+        chunk->owner = nullptr;
         chunk->version = submittedVersion;
         if(m_chunkPoolBytes > UINT64_MAX - chunk->size)
             m_chunkPoolBytes = UINT64_MAX;
         else
             m_chunkPoolBytes += chunk->size;
         m_chunkPool.push_back(Move(chunk));
+        it = activeChunks.erase(it);
     }
-    activeChunks.clear();
-    m_currentChunks[queueIndex].reset();
 
     if(m_memoryLimit > 0){
         while(m_chunkPoolBytes > m_memoryLimit && !m_chunkPool.empty()){

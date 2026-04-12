@@ -578,14 +578,27 @@ u64 Device::executeCommandLists(ICommandList* const* pCommandLists, usize numCom
         return 0;
     }
 
+    Alloc::ScratchArena<> scratchArena;
+    Vector<TrackedCommandBuffer*, Alloc::ScratchAllocator<TrackedCommandBuffer*>> submittedOwners{ Alloc::ScratchAllocator<TrackedCommandBuffer*>(scratchArena) };
+    if(pCommandLists && numCommandLists > 0){
+        submittedOwners.reserve(numCommandLists);
+        for(usize i = 0; i < numCommandLists; ++i){
+            if(!pCommandLists[i])
+                continue;
+            auto* cmdList = checked_cast<CommandList*>(pCommandLists[i]);
+            if(cmdList && cmdList->m_currentCmdBuf)
+                submittedOwners.push_back(cmdList->m_currentCmdBuf.get());
+        }
+    }
+
     bool submittedWork = false;
     const u64 submittedID = queue->submit(pCommandLists, numCommandLists, &submittedWork);
 
-    if(submittedWork && pCommandLists && numCommandLists > 0){
+    if(submittedWork && !submittedOwners.empty()){
         if(m_uploadManager)
-            m_uploadManager->submitChunks(executionQueue, submittedID);
+            m_uploadManager->submitChunks(executionQueue, submittedID, submittedOwners.data(), submittedOwners.size());
         if(m_scratchManager)
-            m_scratchManager->submitChunks(executionQueue, submittedID);
+            m_scratchManager->submitChunks(executionQueue, submittedID, submittedOwners.data(), submittedOwners.size());
     }
 
     return submittedID;

@@ -320,14 +320,16 @@ class UploadManager final : NoCopy{
 private:
     struct BufferChunk final : public RefCounter<IResource>{
         BufferHandle buffer;
+        TrackedCommandBuffer* owner;
         CommandQueue::Enum queueID;
         u64 size;
         u64 allocated;
         u64 version;
 
-        BufferChunk(Alloc::ThreadPool& pool, BufferHandle buf, CommandQueue::Enum queue, u64 sz)
+        BufferChunk(Alloc::ThreadPool& pool, BufferHandle buf, TrackedCommandBuffer* chunkOwner, CommandQueue::Enum queue, u64 sz)
             : RefCounter<IResource>(pool)
             , buffer(Move(buf))
+            , owner(chunkOwner)
             , queueID(queue)
             , size(sz)
             , allocated(0)
@@ -349,10 +351,11 @@ public:
         Buffer** pBuffer,
         u64* pOffset,
         void** pCpuVA,
+        TrackedCommandBuffer* owner,
         CommandQueue::Enum queueID,
         u64 completedVersion,
         u32 alignment = s_DefaultUploadSuballocationAlignment);
-    void submitChunks(CommandQueue::Enum queueID, u64 submittedVersion);
+    void submitChunks(CommandQueue::Enum queueID, u64 submittedVersion, TrackedCommandBuffer* const* submittedOwners, usize submittedOwnerCount);
 
 
 private:
@@ -365,7 +368,6 @@ private:
 
     BufferChunkList m_chunkPool;
     BufferChunkList m_activeChunks[static_cast<u32>(CommandQueue::kCount)];
-    BufferChunkPtr m_currentChunks[static_cast<u32>(CommandQueue::kCount)];
 };
 
 
@@ -1243,6 +1245,7 @@ struct RenderPassParameters{
 };
 
 class CommandList final : public RefCounter<ICommandList>, NoCopy{
+    friend class Device;
     friend class Queue;
 
 

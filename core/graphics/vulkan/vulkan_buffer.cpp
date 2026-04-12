@@ -458,7 +458,7 @@ void CommandList::writeBuffer(IBuffer* _buffer, const void* data, usize dataSize
 
     const u64 completedUploadVersion = m_device.queueGetCompletedInstance(m_desc.queueType);
 
-    if(!uploadMgr->suballocateBuffer(dataSize, &stagingBuffer, &stagingOffset, &cpuVA, m_desc.queueType, completedUploadVersion)){
+    if(!uploadMgr->suballocateBuffer(dataSize, &stagingBuffer, &stagingOffset, &cpuVA, m_currentCmdBuf.get(), m_desc.queueType, completedUploadVersion)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to suballocate staging buffer for writeBuffer"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to suballocate staging buffer for writeBuffer"));
         return;
@@ -474,7 +474,7 @@ void CommandList::writeBuffer(IBuffer* _buffer, const void* data, usize dataSize
     vkCmdCopyBuffer(m_currentCmdBuf->m_cmdBuf, stagingBuffer->m_buffer, buffer->m_buffer, 1, &region);
 
     m_currentCmdBuf->m_referencedResources.push_back(_buffer);
-    m_currentCmdBuf->m_referencedResources.push_back(stagingBuffer);
+    m_currentCmdBuf->m_referencedStagingBuffers.push_back(stagingBuffer);
 }
 
 void CommandList::clearBufferUInt(IBuffer* _buffer, u32 clearValue){

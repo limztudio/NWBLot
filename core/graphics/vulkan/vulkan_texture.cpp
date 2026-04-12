@@ -1034,7 +1034,7 @@ void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, co
 
     const u64 completedUploadVersion = m_device.queueGetCompletedInstance(m_desc.queueType);
 
-    if(!uploadMgr->suballocateBuffer(dataSize, &stagingBuffer, &stagingOffset, &cpuVA, m_desc.queueType, completedUploadVersion)){
+    if(!uploadMgr->suballocateBuffer(dataSize, &stagingBuffer, &stagingOffset, &cpuVA, m_currentCmdBuf.get(), m_desc.queueType, completedUploadVersion)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to suballocate staging buffer for writeTexture"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to suballocate staging buffer for writeTexture"));
         return;

@@ -149,6 +149,28 @@ bool AlignUpU32Checked(const u32 value, const u32 alignment, u32& outValue){
     return true;
 }
 
+template<typename PoolSizeVector>
+bool AddDescriptorPoolSize(PoolSizeVector& poolSizes, const VkDescriptorType type, const u32 count){
+    if(count == 0)
+        return true;
+
+    for(auto& poolSize : poolSizes){
+        if(poolSize.type == type){
+            if(poolSize.descriptorCount > UINT32_MAX - count)
+                return false;
+
+            poolSize.descriptorCount += count;
+            return true;
+        }
+    }
+
+    VkDescriptorPoolSize poolSize = {};
+    poolSize.type = type;
+    poolSize.descriptorCount = count;
+    poolSizes.push_back(poolSize);
+    return true;
+}
+
 constexpr u32 NormalizeDescriptorTableCapacity(const u32 capacity){
     return capacity > 0 ? capacity : 1u;
 }
@@ -383,6 +405,14 @@ bool DescriptorHeapManager::tryEnablePipeline(
         const auto& heapBindings = layout->getDescriptorHeapBindings();
         if(heapBindings.empty())
             continue;
+        if(heapBindings.size() > UINT32_MAX / sizeof(u32))
+            return false;
+
+        const u32 pushDataBytes = static_cast<u32>(heapBindings.size() * sizeof(u32));
+        if(outPushDataSize > UINT32_MAX - pushDataBytes)
+            return false;
+        if(outPushDataSize + pushDataBytes > context.descriptorHeapProperties.maxPushDataSize)
+            return false;
 
         DescriptorHeapPushRange pushRange{};
         pushRange.bindingSetIndex = i;
@@ -408,12 +438,10 @@ bool DescriptorHeapManager::tryEnablePipeline(
             hasAnyDescriptors = true;
         }
 
-        outPushDataSize += pushRange.pushWordCount * sizeof(u32);
+        outPushDataSize += pushDataBytes;
     }
 
     if(!hasAnyDescriptors)
-        return false;
-    if(outPushDataSize > context.descriptorHeapProperties.maxPushDataSize)
         return false;
 
     outFlags2 = {};
@@ -896,6 +924,11 @@ BindingSet::~BindingSet(){
 BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
     VkResult res = VK_SUCCESS;
 
+    if(desc.bindings.size() > UINT32_MAX){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor set layout: binding count exceeds Vulkan limit"));
+        return nullptr;
+    }
+
     Alloc::ScratchArena<> scratchArena;
 
     auto* layout = NewArenaObject<BindingLayout>(m_context.objectArena, m_context);
@@ -1138,27 +1171,14 @@ DescriptorTableHandle Device::createDescriptorTable(IBindingLayout* _layout){
     Vector<VkDescriptorPoolSize, Alloc::ScratchAllocator<VkDescriptorPoolSize>> poolSizes{ Alloc::ScratchAllocator<VkDescriptorPoolSize>(scratchArena) };
     poolSizes.reserve(8);
 
-    auto addPoolSize = [&](VkDescriptorType type, u32 count){
-        if(count == 0)
-            return;
-
-        for(auto& poolSize : poolSizes){
-            if(poolSize.type == type){
-                poolSize.descriptorCount += count;
-                return;
-            }
-        }
-
-        VkDescriptorPoolSize poolSize = {};
-        poolSize.type = type;
-        poolSize.descriptorCount = count;
-        poolSizes.push_back(poolSize);
-    };
-
     if(layout->m_isBindless){
         for(const auto& item : layout->m_bindlessDesc.registerSpaces){
             const VkDescriptorType type = __hidden_vulkan::ConvertDescriptorType(item.type);
-            addPoolSize(type, descriptorTableCapacity);
+            if(!__hidden_vulkan::AddDescriptorPoolSize(poolSizes, type, descriptorTableCapacity)){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor table: descriptor pool size overflows"));
+                DestroyArenaObject(m_context.objectArena, table);
+                return nullptr;
+            }
         }
     }
     else{
@@ -1167,7 +1187,11 @@ DescriptorTableHandle Device::createDescriptorTable(IBindingLayout* _layout){
                 continue;
 
             const VkDescriptorType type = __hidden_vulkan::ConvertDescriptorType(item.type);
-            addPoolSize(type, item.getArraySize() > 0 ? item.getArraySize() : 1u);
+            if(!__hidden_vulkan::AddDescriptorPoolSize(poolSizes, type, item.getArraySize() > 0 ? item.getArraySize() : 1u)){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor table: descriptor pool size overflows"));
+                DestroyArenaObject(m_context.objectArena, table);
+                return nullptr;
+            }
         }
     }
 
@@ -1263,25 +1287,13 @@ void Device::resizeDescriptorTable(IDescriptorTable* m_descriptorTable, u32 newS
         Vector<VkDescriptorPoolSize, Alloc::ScratchAllocator<VkDescriptorPoolSize>> poolSizes{ Alloc::ScratchAllocator<VkDescriptorPoolSize>(scratchArena) };
         poolSizes.reserve(table->m_layout->m_bindlessDesc.registerSpaces.size());
 
-        auto addPoolSize = [&](VkDescriptorType type, u32 count){
-            if(count == 0)
+        for(const auto& item : table->m_layout->m_bindlessDesc.registerSpaces){
+            if(!__hidden_vulkan::AddDescriptorPoolSize(poolSizes, __hidden_vulkan::ConvertDescriptorType(item.type), newSize)){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to resize descriptor table: descriptor pool size overflows"));
+                (void)keepContents;
                 return;
-
-            for(auto& poolSize : poolSizes){
-                if(poolSize.type == type){
-                    poolSize.descriptorCount += count;
-                    return;
-                }
             }
-
-            VkDescriptorPoolSize poolSize = {};
-            poolSize.type = type;
-            poolSize.descriptorCount = count;
-            poolSizes.push_back(poolSize);
-        };
-
-        for(const auto& item : table->m_layout->m_bindlessDesc.registerSpaces)
-            addPoolSize(__hidden_vulkan::ConvertDescriptorType(item.type), newSize);
+        }
 
         if(poolSizes.empty()){
             VkDescriptorPoolSize fallback = {};

@@ -83,7 +83,7 @@ bool HasGraphicsVolumeSegment(const Path& mountDirectory){
     return FileExists(segmentPath, errorCode) && !errorCode;
 }
 
-Path ResolveShaderMountDirectory(){
+Path ResolveResourceMountDirectory(){
     ErrorCode errorCode;
     Path currentDirectory;
     if(GetCurrentPath(currentDirectory, errorCode)){
@@ -167,16 +167,17 @@ static int MainLogic(NotNull<const char*> logAddress, void* inst){
             }
 
             NWB::Core::Frame frame(inst, frameClientSize.width, frameClientSize.height);
+            const Path resourceMountDirectory = __hidden_loader::ResolveResourceMountDirectory();
+            frame.graphics().setPipelineCacheDirectory(resourceMountDirectory);
 
             if(!frame.init())
                 return -1;
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: frame initialized ({}x{})"), frameClientSize.width, frameClientSize.height);
 
             NWB::Core::Filesystem::VolumeSession graphicsVolume(frame.projectObjectArena());
-            const Path shaderMountDirectory = __hidden_loader::ResolveShaderMountDirectory();
-            if(!graphicsVolume.load("graphics", shaderMountDirectory))
+            if(!graphicsVolume.load("graphics", resourceMountDirectory))
                 return -1;
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: mounted graphics volume from '{}'"), PathToString<tchar>(shaderMountDirectory));
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: mounted graphics volume from '{}'"), PathToString<tchar>(resourceMountDirectory));
 
             __hidden_loader::VolumeAssetBinarySource assetBinarySource(graphicsVolume);
 

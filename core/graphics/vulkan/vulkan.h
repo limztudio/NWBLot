@@ -67,6 +67,7 @@ struct DeviceDesc{
     bool logBufferLifetime = false;
 
     AString vulkanLibraryName;
+    Path pipelineCacheDirectory;
 
 
     explicit DeviceDesc(GraphicsAllocator& allocatorRef, Alloc::ThreadPool& threadPoolRef)

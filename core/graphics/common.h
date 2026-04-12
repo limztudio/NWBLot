@@ -3833,6 +3833,8 @@ struct DeviceCreationParameters : public InstanceParameters{
     Vector<AString> requiredVulkanDeviceExtensions;
     Vector<AString> optionalVulkanDeviceExtensions;
     Vector<usize> ignoredVulkanValidationMessageLocations;
+
+    Path pipelineCacheDirectory;
 };
 
 struct SwapChainRuntimeState{

@@ -1562,6 +1562,7 @@ bool BackendContext::createDevice(){
     deviceDesc.aftermathEnabled = m_deviceParams.enableAftermath;
     deviceDesc.logBufferLifetime = m_deviceParams.logBufferLifetime;
     deviceDesc.vulkanLibraryName = m_deviceParams.vulkanLibraryName;
+    deviceDesc.pipelineCacheDirectory = m_deviceParams.pipelineCacheDirectory;
     deviceDesc.systemMemoryAllocator = &m_allocator.getSystemMemoryAllocator();
 
     m_rhiDevice = CreateDevice(deviceDesc);

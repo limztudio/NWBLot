@@ -1500,6 +1500,11 @@ public:
 
 
 private:
+    [[nodiscard]] bool loadPipelineCacheData(Vector<u8>& outData);
+    void savePipelineCacheData();
+
+
+private:
     // Aftermath must be first due to reverse destruction order
     // Queues will destroy CommandLists which will unregister from m_aftermathCrashDumpHelper in their destructors
     bool m_aftermathEnabled = false;
@@ -1510,6 +1515,8 @@ private:
     VulkanContext m_context;
     VulkanAllocator m_allocator;
     DescriptorHeapManager m_descriptorHeapManager;
+    Path m_pipelineCacheDirectory;
+    AString m_pipelineCacheVolumeName;
     CustomUniquePtr<Queue> m_queues[static_cast<u32>(CommandQueue::kCount)];
 
     CustomUniquePtr<UploadManager> m_uploadManager;

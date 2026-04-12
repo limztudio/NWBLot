@@ -94,6 +94,7 @@ public:
     bool init(const Common::FrameData& data);
     bool createHeadlessDevice();
     bool createInstance(const InstanceParameters& params);
+    void setPipelineCacheDirectory(const Path& directory);
     bool runFrame();
     void updateWindowState(u32 width, u32 height, bool windowVisible, bool windowIsInFocus);
     void destroy();

@@ -40,6 +40,7 @@ target_sources(nwb_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_shader_compiler.h"
 )
 target_link_libraries(nwb_graphics PUBLIC nwb_logclient nwb_assets nwb_common nwb_input nwb::volk)
+target_link_libraries(nwb_graphics PRIVATE nwb_filesystem)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_link_libraries(nwb_graphics PRIVATE nwb::x11)

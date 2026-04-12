@@ -357,6 +357,10 @@ bool Graphics::createInstance(const InstanceParameters& params){
     return true;
 }
 
+void Graphics::setPipelineCacheDirectory(const Path& directory){
+    m_deviceCreationParams.pipelineCacheDirectory = directory;
+}
+
 bool Graphics::runFrame(){
     return animateRenderPresent();
 }

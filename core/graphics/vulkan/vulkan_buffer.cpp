@@ -16,6 +16,35 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_vulkan{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool IsBufferRangeInBounds(const BufferDesc& desc, u64 offsetBytes, u64 sizeBytes){
+    return offsetBytes <= desc.byteSize && sizeBytes <= desc.byteSize - offsetBytes;
+}
+
+bool BufferRangesOverlap(u64 firstOffsetBytes, u64 firstSizeBytes, u64 secondOffsetBytes, u64 secondSizeBytes){
+    if(firstSizeBytes == 0 || secondSizeBytes == 0)
+        return false;
+
+    const u64 firstEnd = firstOffsetBytes + firstSizeBytes;
+    const u64 secondEnd = secondOffsetBytes + secondSizeBytes;
+    return firstOffsetBytes < secondEnd && secondOffsetBytes < firstEnd;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 Buffer::Buffer(const VulkanContext& context, VulkanAllocator& allocator)
     : RefCounter<IBuffer>(context.threadPool)
     , m_versionTracking(Alloc::CustomAllocator<u64>(context.objectArena))
@@ -327,6 +356,17 @@ void CommandList::writeBuffer(IBuffer* _buffer, const void* data, usize dataSize
         return;
 
     auto* buffer = checked_cast<Buffer*>(_buffer);
+    const BufferDesc& desc = buffer->getDescription();
+    if(!__hidden_vulkan::IsBufferRangeInBounds(desc, destOffsetBytes, static_cast<u64>(dataSize))){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Failed to write buffer: destination offset {} size {} is outside buffer size {}"),
+            destOffsetBytes,
+            static_cast<u64>(dataSize),
+            desc.byteSize
+        );
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to write buffer: destination range is outside the buffer"));
+        return;
+    }
 
     UploadManager* uploadMgr = m_device.m_uploadManager.get();
     Buffer* stagingBuffer = nullptr;
@@ -360,8 +400,41 @@ void CommandList::clearBufferUInt(IBuffer* _buffer, u32 clearValue){
 }
 
 void CommandList::copyBuffer(IBuffer* _dest, u64 destOffsetBytes, IBuffer* _src, u64 srcOffsetBytes, u64 dataSizeBytes){
+    if(!_dest || !_src || dataSizeBytes == 0)
+        return;
+
     auto* dest = checked_cast<Buffer*>(_dest);
     auto* src = checked_cast<Buffer*>(_src);
+    const BufferDesc& destDesc = dest->getDescription();
+    const BufferDesc& srcDesc = src->getDescription();
+
+    if(!__hidden_vulkan::IsBufferRangeInBounds(destDesc, destOffsetBytes, dataSizeBytes)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Failed to copy buffer: destination offset {} size {} is outside buffer size {}"),
+            destOffsetBytes,
+            dataSizeBytes,
+            destDesc.byteSize
+        );
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy buffer: destination range is outside the buffer"));
+        return;
+    }
+
+    if(!__hidden_vulkan::IsBufferRangeInBounds(srcDesc, srcOffsetBytes, dataSizeBytes)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Failed to copy buffer: source offset {} size {} is outside buffer size {}"),
+            srcOffsetBytes,
+            dataSizeBytes,
+            srcDesc.byteSize
+        );
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy buffer: source range is outside the buffer"));
+        return;
+    }
+
+    if(dest->m_buffer == src->m_buffer && __hidden_vulkan::BufferRangesOverlap(destOffsetBytes, dataSizeBytes, srcOffsetBytes, dataSizeBytes)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy buffer: source and destination ranges overlap in the same buffer"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy buffer: source and destination ranges overlap in the same buffer"));
+        return;
+    }
 
     VkBufferCopy region{};
     region.srcOffset = srcOffsetBytes;

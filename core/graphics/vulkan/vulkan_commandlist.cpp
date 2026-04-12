@@ -112,7 +112,18 @@ void CommandList::clearState(){
 void CommandList::copyTextureToBuffer(IBuffer* _dest, u64 destOffsetBytes, u32 destRowPitch, ITexture* _src, const TextureSlice& srcSlice){
     auto* dest = checked_cast<Buffer*>(_dest);
     auto* src = checked_cast<Texture*>(_src);
+    if(!dest || !src){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to buffer: resource is invalid"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to buffer: resource is invalid"));
+        return;
+    }
+
     const TextureSlice resolvedSrc = srcSlice.resolve(src->m_desc);
+    if(resolvedSrc.width == 0 || resolvedSrc.height == 0 || resolvedSrc.depth == 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to buffer: source region is empty"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to buffer: source region is empty"));
+        return;
+    }
 
     const FormatInfo& formatInfo = GetFormatInfo(src->m_desc.format);
     VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -128,10 +139,27 @@ void CommandList::copyTextureToBuffer(IBuffer* _dest, u64 destOffsetBytes, u32 d
     }
 
     const u32 blocksX = Max<u32>((resolvedSrc.width + formatInfo.blockSize - 1) / formatInfo.blockSize, 1u);
-    const u32 naturalRowPitch = blocksX * formatInfo.bytesPerBlock;
+    const u32 blocksY = Max<u32>((resolvedSrc.height + formatInfo.blockSize - 1) / formatInfo.blockSize, 1u);
+    const u64 naturalRowPitch = static_cast<u64>(blocksX) * formatInfo.bytesPerBlock;
     if(destRowPitch > 0 && (destRowPitch < naturalRowPitch || (destRowPitch % formatInfo.bytesPerBlock) != 0)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to buffer: invalid row pitch"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to buffer: invalid row pitch"));
+        return;
+    }
+
+    const u64 effectiveRowPitch = destRowPitch > 0 ? destRowPitch : naturalRowPitch;
+    const u64 requiredSize = static_cast<u64>(resolvedSrc.depth - 1) * effectiveRowPitch * blocksY
+        + static_cast<u64>(blocksY - 1) * effectiveRowPitch
+        + naturalRowPitch;
+    const BufferDesc& destDesc = dest->getDescription();
+    if(destOffsetBytes > destDesc.byteSize || requiredSize > destDesc.byteSize - destOffsetBytes){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Failed to copy texture to buffer: destination offset {} size {} is outside buffer size {}"),
+            destOffsetBytes,
+            requiredSize,
+            destDesc.byteSize
+        );
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to buffer: destination range is outside the buffer"));
         return;
     }
 

@@ -31,12 +31,32 @@ CommandList::CommandList(Device& device, const CommandListParameters& params)
         m_device.getAftermathCrashDumpHelper().registerAftermathMarkerTracker(m_aftermathMarkerTracker);
 }
 CommandList::~CommandList(){
+    discardUnsubmittedUploadChunks();
+
     if(m_device.isAftermathEnabled())
         m_device.getAftermathCrashDumpHelper().unRegisterAftermathMarkerTracker(m_aftermathMarkerTracker);
 }
 
+void CommandList::discardUnsubmittedUploadChunks(){
+    if(!m_currentCmdBuf)
+        return;
+    if(!m_device.m_uploadManager && !m_device.m_scratchManager)
+        return;
+
+    TrackedCommandBuffer* owner = m_currentCmdBuf.get();
+    const u64 reusableVersion = m_device.queueGetCompletedInstance(m_desc.queueType);
+
+    if(m_device.m_uploadManager)
+        m_device.m_uploadManager->discardChunks(m_desc.queueType, owner, reusableVersion);
+    if(m_device.m_scratchManager)
+        m_device.m_scratchManager->discardChunks(m_desc.queueType, owner, reusableVersion);
+}
+
 void CommandList::open(){
     VkResult res = VK_SUCCESS;
+
+    discardUnsubmittedUploadChunks();
+    m_currentCmdBuf.reset();
 
     Queue* queue = m_device.getQueue(m_desc.queueType);
     if(!queue){
@@ -61,6 +81,7 @@ void CommandList::open(){
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to begin command buffer recording: {}"), ResultToString(res));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to begin command buffer recording"));
+        discardUnsubmittedUploadChunks();
         m_currentCmdBuf = nullptr;
         return;
     }
@@ -83,6 +104,7 @@ void CommandList::close(){
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to end command buffer recording: {}"), ResultToString(res));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to end command buffer recording"));
+        discardUnsubmittedUploadChunks();
         m_currentCmdBuf.reset();
         clearState();
         return;

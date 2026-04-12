@@ -67,6 +67,20 @@ UploadManager::~UploadManager(){
         chunks.clear();
 }
 
+void UploadManager::trimChunkPoolLocked(){
+    if(m_memoryLimit == 0)
+        return;
+
+    while(m_chunkPoolBytes > m_memoryLimit && !m_chunkPool.empty()){
+        auto& chunk = m_chunkPool.front();
+        if(m_chunkPoolBytes >= chunk->size)
+            m_chunkPoolBytes -= chunk->size;
+        else
+            m_chunkPoolBytes = 0;
+        m_chunkPool.pop_front();
+    }
+}
+
 bool UploadManager::suballocateBuffer(u64 size, Buffer** pBuffer, u64* pOffset, void** pCpuVA, TrackedCommandBuffer* owner, CommandQueue::Enum queueID, u64 completedVersion, u32 alignment){
     if(!pBuffer || !pOffset || !owner)
         return false;
@@ -174,16 +188,41 @@ void UploadManager::submitChunks(CommandQueue::Enum queueID, u64 submittedVersio
         it = activeChunks.erase(it);
     }
 
-    if(m_memoryLimit > 0){
-        while(m_chunkPoolBytes > m_memoryLimit && !m_chunkPool.empty()){
-            auto& chunk = m_chunkPool.front();
-            if(m_chunkPoolBytes >= chunk->size)
-                m_chunkPoolBytes -= chunk->size;
-            else
-                m_chunkPoolBytes = 0;
-            m_chunkPool.pop_front();
+    trimChunkPoolLocked();
+}
+
+void UploadManager::discardChunks(CommandQueue::Enum queueID, TrackedCommandBuffer* owner, u64 reusableVersion){
+    const u32 queueIndex = static_cast<u32>(queueID);
+    if(queueIndex >= static_cast<u32>(CommandQueue::kCount) || !owner)
+        return;
+
+    ScopedLock lock(m_mutex);
+    auto& activeChunks = m_activeChunks[queueIndex];
+
+    auto it = activeChunks.begin();
+    while(it != activeChunks.end()){
+        BufferChunkPtr& chunk = *it;
+        if(!chunk){
+            it = activeChunks.erase(it);
+            continue;
         }
+        if(chunk->owner != owner){
+            ++it;
+            continue;
+        }
+
+        chunk->owner = nullptr;
+        chunk->allocated = 0;
+        chunk->version = reusableVersion;
+        if(m_chunkPoolBytes > UINT64_MAX - chunk->size)
+            m_chunkPoolBytes = UINT64_MAX;
+        else
+            m_chunkPoolBytes += chunk->size;
+        m_chunkPool.push_back(Move(chunk));
+        it = activeChunks.erase(it);
     }
+
+    trimChunkPoolLocked();
 }
 
 

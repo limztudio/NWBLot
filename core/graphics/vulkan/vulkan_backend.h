@@ -356,9 +356,12 @@ public:
         u64 completedVersion,
         u32 alignment = s_DefaultUploadSuballocationAlignment);
     void submitChunks(CommandQueue::Enum queueID, u64 submittedVersion, TrackedCommandBuffer* const* submittedOwners, usize submittedOwnerCount);
+    void discardChunks(CommandQueue::Enum queueID, TrackedCommandBuffer* owner, u64 reusableVersion);
 
 
 private:
+    void trimChunkPoolLocked();
+
     Device& m_device;
     u64 m_defaultChunkSize;
     u64 m_memoryLimit;
@@ -1349,6 +1352,7 @@ private:
     bool ensureGraphicsRenderPass(IFramebuffer* framebuffer);
     void endActiveRenderPass();
     bool validateIndirectBuffer(IBuffer* buffer, u64 offsetBytes, u64 commandSizeBytes, u32 commandCount, const tchar* commandName)const;
+    void discardUnsubmittedUploadChunks();
 
 
 private:

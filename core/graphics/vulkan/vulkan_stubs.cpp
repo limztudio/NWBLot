@@ -19,20 +19,23 @@ NWB_VULKAN_BEGIN
 
 void CommandList::clearSamplerFeedbackTexture(ISamplerFeedbackTexture* texture){
     (void)texture;
-    // Sampler feedback is a DX12-specific feature with no Vulkan equivalent
+    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear sampler feedback texture: sampler feedback is not supported by this backend"));
+    NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Sampler feedback is not supported by this backend"));
 }
 
 void CommandList::decodeSamplerFeedbackTexture(IBuffer* buffer, ISamplerFeedbackTexture* texture, Format::Enum format){
     (void)buffer;
     (void)texture;
     (void)format;
-    // Sampler feedback is a DX12-specific feature with no Vulkan equivalent
+    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to decode sampler feedback texture: sampler feedback is not supported by this backend"));
+    NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Sampler feedback is not supported by this backend"));
 }
 
 void CommandList::setSamplerFeedbackTextureState(ISamplerFeedbackTexture* texture, ResourceStates::Mask stateBits){
     (void)texture;
     (void)stateBits;
-    // Sampler feedback is a DX12-specific feature with no Vulkan equivalent
+    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to set sampler feedback texture state: sampler feedback is not supported by this backend"));
+    NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Sampler feedback is not supported by this backend"));
 }
 
 
@@ -486,12 +489,35 @@ const CommandListParameters& CommandList::getDescription(){
 
 
 void Device::getTextureTiling(ITexture* _texture, u32* numTiles, PackedMipDesc* desc, TileShape* tileShape, u32* subresourceTilingsNum, SubresourceTiling* subresourceTilings){
+    auto clearOutputs = [&](){
+        if(numTiles)
+            *numTiles = 0;
+        if(desc)
+            *desc = {};
+        if(tileShape)
+            *tileShape = {};
+        if(subresourceTilingsNum)
+            *subresourceTilingsNum = 0;
+    };
+
     if(!_texture){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get texture tiling: texture is null"));
+        clearOutputs();
+        return;
+    }
+    if(!queryFeatureSupport(Feature::VirtualResources)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get texture tiling: virtual/tiled resources are not supported by this backend"));
+        clearOutputs();
         return;
     }
 
     auto* texture = checked_cast<Texture*>(_texture);
+    if(!texture->m_desc.isTiled){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get texture tiling: texture is not tiled"));
+        clearOutputs();
+        return;
+    }
+
     u32 numStandardMips = 0;
     u32 tileWidth = 1;
     u32 tileHeight = 1;
@@ -595,6 +621,14 @@ void Device::updateTextureTileMappings(ITexture* texture, const TextureTilesMapp
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to update texture tile mappings: texture is null"));
         return;
     }
+    if(!queryFeatureSupport(Feature::VirtualResources)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to update texture tile mappings: virtual/tiled resources are not supported by this backend"));
+        return;
+    }
+    if(!checked_cast<Texture*>(texture)->m_desc.isTiled){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to update texture tile mappings: texture is not tiled"));
+        return;
+    }
     if(!tileMappings && numTileMappings > 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to update texture tile mappings: mappings are null"));
         return;
@@ -611,13 +645,20 @@ void Device::updateTextureTileMappings(ITexture* texture, const TextureTilesMapp
     queue->updateTextureTileMappings(texture, tileMappings, numTileMappings);
 }
 
-SamplerFeedbackTextureHandle Device::createSamplerFeedbackTexture(ITexture* /*pairedTexture*/, const SamplerFeedbackTextureDesc& /*desc*/){
-    // Sampler feedback is a DX12-specific feature with no Vulkan equivalent
+SamplerFeedbackTextureHandle Device::createSamplerFeedbackTexture(ITexture* pairedTexture, const SamplerFeedbackTextureDesc& desc){
+    (void)pairedTexture;
+    (void)desc;
+    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create sampler feedback texture: sampler feedback is not supported by this backend"));
+    NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Sampler feedback is not supported by this backend"));
     return nullptr;
 }
 
-SamplerFeedbackTextureHandle Device::createSamplerFeedbackForNativeTexture(ObjectType /*objectType*/, Object /*texture*/, ITexture* /*pairedTexture*/){
-    // Sampler feedback is a DX12-specific feature with no Vulkan equivalent
+SamplerFeedbackTextureHandle Device::createSamplerFeedbackForNativeTexture(ObjectType objectType, Object texture, ITexture* pairedTexture){
+    (void)objectType;
+    (void)texture;
+    (void)pairedTexture;
+    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create sampler feedback texture for native texture: sampler feedback is not supported by this backend"));
+    NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Sampler feedback is not supported by this backend"));
     return nullptr;
 }
 

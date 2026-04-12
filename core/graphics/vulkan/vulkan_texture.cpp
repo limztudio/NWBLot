@@ -248,6 +248,11 @@ StagingTexture::~StagingTexture(){
 TextureHandle Device::createTexture(const TextureDesc& d){
     VkResult res = VK_SUCCESS;
 
+    if(d.isTiled){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create tiled texture: virtual/tiled resources are not supported by this backend"));
+        return nullptr;
+    }
+
     auto* texture = NewArenaObject<Texture>(m_context.objectArena, m_context, m_allocator);
     texture->m_desc = d;
 

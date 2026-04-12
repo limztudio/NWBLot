@@ -355,8 +355,10 @@ bool Device::queryFeatureSupport(Feature::Enum feature, void*, usize){
         return m_context.extensions.EXT_mesh_shader && vkCmdDrawMeshTasksEXT;
     case Feature::VariableRateShading:
         return m_context.extensions.KHR_fragment_shading_rate;
+    case Feature::SamplerFeedback:
+        return false;
     case Feature::VirtualResources:
-        return true;
+        return false;
     case Feature::ComputeQueue:
         return m_queues[static_cast<u32>(CommandQueue::Compute)] != nullptr;
     case Feature::CopyQueue:

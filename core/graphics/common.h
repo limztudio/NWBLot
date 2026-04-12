@@ -1953,7 +1953,7 @@ struct RayTracingClusterOperationSizeInfo{
 };
 
 struct RayTracingClusterOperationMoveParams{
-    RayTracingClusterOperationMoveType::Enum type;
+    RayTracingClusterOperationMoveType::Enum type = RayTracingClusterOperationMoveType::BottomLevel;
     u32 maxBytes = 0;
 };
 
@@ -1995,9 +1995,9 @@ struct RayTracingClusterOperationParams{
     // Maximum number of acceleration structures (or templates) to build/instantiate/move
     u32 maxArgCount = 0;
 
-    RayTracingClusterOperationType::Enum type;
-    RayTracingClusterOperationMode::Enum mode;
-    RayTracingClusterOperationFlags::Mask flags;
+    RayTracingClusterOperationType::Enum type = RayTracingClusterOperationType::Move;
+    RayTracingClusterOperationMode::Enum mode = RayTracingClusterOperationMode::ImplicitDestinations;
+    RayTracingClusterOperationFlags::Mask flags = RayTracingClusterOperationFlags::None;
 
     RayTracingClusterOperationMoveParams move;
     RayTracingClusterOperationClasBuildParams clas;

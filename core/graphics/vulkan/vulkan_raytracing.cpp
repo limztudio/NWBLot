@@ -836,6 +836,10 @@ Object ShaderTable::getNativeHandle(ObjectType objectType){
 
 void CommandList::setRayTracingState(const RayTracingState& state){
     endActiveRenderPass();
+    commitBarriers();
+    m_currentGraphicsState = {};
+    m_currentComputeState = {};
+    m_currentMeshletState = {};
     m_currentRayTracingState = state;
 
     if(!state.shaderTable)

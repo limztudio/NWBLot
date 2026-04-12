@@ -386,6 +386,8 @@ FormatSupport::Mask Device::queryFormatSupport(Format::Enum format){
         support |= FormatSupport::DepthStencil;
     if(features & VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT)
         support |= FormatSupport::RenderTarget;
+    if(features & VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BLEND_BIT)
+        support |= FormatSupport::Blendable;
     if(features & VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT)
         support |= FormatSupport::ShaderUavStore;
     if(features & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT)

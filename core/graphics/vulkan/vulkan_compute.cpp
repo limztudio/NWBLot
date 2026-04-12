@@ -158,6 +158,10 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
 
 void CommandList::setComputeState(const ComputeState& state){
     endActiveRenderPass();
+    commitBarriers();
+    m_currentGraphicsState = {};
+    m_currentMeshletState = {};
+    m_currentRayTracingState = {};
     m_currentComputeState = state;
 
     auto* pipeline = checked_cast<ComputePipeline*>(state.pipeline);

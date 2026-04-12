@@ -603,6 +603,10 @@ void CommandList::endActiveRenderPass(){
 
 void CommandList::setGraphicsState(const GraphicsState& state){
     ensureGraphicsRenderPass(state.framebuffer);
+    commitBarriers();
+    m_currentComputeState = {};
+    m_currentMeshletState = {};
+    m_currentRayTracingState = {};
     m_currentGraphicsState = state;
 
     auto* pipeline = checked_cast<GraphicsPipeline*>(state.pipeline);

@@ -1,0 +1,99 @@
+#ifndef NWB_AVBOIT_COMMON_GLSLI
+#define NWB_AVBOIT_COMMON_GLSLI
+
+const uint NWB_AVBOIT_WARP_INVALID = 0xffffffffu;
+const float NWB_AVBOIT_ALPHA_EPSILON = 0.0001;
+
+layout(push_constant) uniform NwbAvboitDrawPushConstants{
+    uvec4 nwbMeshDispatch;
+    vec4 nwbMeshViewportRect;
+    vec4 nwbMeshScissorRect;
+    uvec4 nwbAvboitFrame;
+    uvec4 nwbAvboitVolume;
+    vec4 nwbAvboitParams;
+} g_NwbAvboitDraw;
+
+uint nwbAvboitFullWidth(){
+    return g_NwbAvboitDraw.nwbAvboitFrame.x;
+}
+
+uint nwbAvboitFullHeight(){
+    return g_NwbAvboitDraw.nwbAvboitFrame.y;
+}
+
+uint nwbAvboitLowWidth(){
+    return g_NwbAvboitDraw.nwbAvboitFrame.z;
+}
+
+uint nwbAvboitLowHeight(){
+    return g_NwbAvboitDraw.nwbAvboitFrame.w;
+}
+
+uint nwbAvboitVirtualSliceCount(){
+    return g_NwbAvboitDraw.nwbAvboitVolume.x;
+}
+
+uint nwbAvboitPhysicalSliceCount(){
+    return g_NwbAvboitDraw.nwbAvboitVolume.y;
+}
+
+uint nwbAvboitVolumeVoxelCount(){
+    return g_NwbAvboitDraw.nwbAvboitVolume.z;
+}
+
+uint nwbAvboitCoverageWordCount(){
+    return g_NwbAvboitDraw.nwbAvboitVolume.w;
+}
+
+float nwbAvboitMaterialAlpha(){
+    return clamp(g_NwbAvboitDraw.nwbAvboitParams.x, 0.0, 1.0);
+}
+
+float nwbAvboitExtinctionFixedScale(){
+    return max(g_NwbAvboitDraw.nwbAvboitParams.y, 1.0);
+}
+
+float nwbAvboitSelfOcclusionSliceBias(){
+    return max(g_NwbAvboitDraw.nwbAvboitParams.z, 0.0);
+}
+
+uint nwbAvboitVirtualSliceFromDepth(float depth){
+    const float clampedDepth = clamp(depth, 0.0, 0.999999);
+    return min(uint(floor(clampedDepth * float(nwbAvboitVirtualSliceCount()))), nwbAvboitVirtualSliceCount() - 1u);
+}
+
+uint nwbAvboitLowPixelIndex(uvec2 lowPixel){
+    return lowPixel.y * nwbAvboitLowWidth() + lowPixel.x;
+}
+
+uint nwbAvboitVolumeIndex(uvec2 lowPixel, uint physicalSlice){
+    return (physicalSlice * nwbAvboitLowHeight() + lowPixel.y) * nwbAvboitLowWidth() + lowPixel.x;
+}
+
+uvec2 nwbAvboitLowPixelFromFragCoord(vec2 fragCoord){
+    const vec2 normalized = clamp(fragCoord / max(vec2(float(nwbAvboitFullWidth()), float(nwbAvboitFullHeight())), vec2(1.0)), vec2(0.0), vec2(0.999999));
+    return min(uvec2(normalized * vec2(float(nwbAvboitLowWidth()), float(nwbAvboitLowHeight()))), uvec2(nwbAvboitLowWidth() - 1u, nwbAvboitLowHeight() - 1u));
+}
+
+float nwbAvboitOpaqueDepth(texture2D opaqueDepth, sampler pointSampler, vec2 fragCoord){
+    const vec2 uv = clamp(fragCoord / max(vec2(float(nwbAvboitFullWidth()), float(nwbAvboitFullHeight())), vec2(1.0)), vec2(0.0), vec2(1.0));
+    return texture(sampler2D(opaqueDepth, pointSampler), uv).r;
+}
+
+float nwbAvboitExtinctionFromAlpha(float alpha){
+    return -log(max(1.0 - clamp(alpha, 0.0, 1.0), NWB_AVBOIT_ALPHA_EPSILON));
+}
+
+uint nwbAvboitPackExtinction(float extinction){
+    return uint(clamp(ceil(extinction * nwbAvboitExtinctionFixedScale()), 0.0, 65535.0));
+}
+
+float nwbAvboitUnpackExtinction(uint packedValue){
+    return float(packedValue) / nwbAvboitExtinctionFixedScale();
+}
+
+float nwbAvboitUnpackTransmittance(uint packedValue){
+    return clamp(float(packedValue) / 65535.0, 0.0, 1.0);
+}
+
+#endif

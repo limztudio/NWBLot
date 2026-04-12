@@ -1,0 +1,56 @@
+#ifndef NWB_AVBOIT_COMPUTE_COMMON_GLSLI
+#define NWB_AVBOIT_COMPUTE_COMMON_GLSLI
+
+const uint NWB_AVBOIT_WARP_INVALID = 0xffffffffu;
+
+layout(push_constant) uniform NwbAvboitComputePushConstants{
+    uvec4 nwbAvboitFrame;
+    uvec4 nwbAvboitVolume;
+    vec4 nwbAvboitParams;
+} g_NwbAvboitCompute;
+
+uint nwbAvboitFullWidth(){
+    return g_NwbAvboitCompute.nwbAvboitFrame.x;
+}
+
+uint nwbAvboitFullHeight(){
+    return g_NwbAvboitCompute.nwbAvboitFrame.y;
+}
+
+uint nwbAvboitLowWidth(){
+    return g_NwbAvboitCompute.nwbAvboitFrame.z;
+}
+
+uint nwbAvboitLowHeight(){
+    return g_NwbAvboitCompute.nwbAvboitFrame.w;
+}
+
+uint nwbAvboitVirtualSliceCount(){
+    return g_NwbAvboitCompute.nwbAvboitVolume.x;
+}
+
+uint nwbAvboitPhysicalSliceCount(){
+    return g_NwbAvboitCompute.nwbAvboitVolume.y;
+}
+
+uint nwbAvboitVolumeVoxelCount(){
+    return g_NwbAvboitCompute.nwbAvboitVolume.z;
+}
+
+uint nwbAvboitCoverageWordCount(){
+    return g_NwbAvboitCompute.nwbAvboitVolume.w;
+}
+
+float nwbAvboitExtinctionFixedScale(){
+    return max(g_NwbAvboitCompute.nwbAvboitParams.y, 1.0);
+}
+
+uint nwbAvboitVolumeIndex(uvec2 lowPixel, uint physicalSlice){
+    return (physicalSlice * nwbAvboitLowHeight() + lowPixel.y) * nwbAvboitLowWidth() + lowPixel.x;
+}
+
+float nwbAvboitUnpackExtinction(uint packedValue){
+    return float(packedValue) / nwbAvboitExtinctionFixedScale();
+}
+
+#endif

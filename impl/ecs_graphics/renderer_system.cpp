@@ -11,6 +11,9 @@
 #include <impl/assets_graphics/shader_asset.h>
 #include <impl/assets_graphics/shader_stage_names.h>
 
+#include <cmath>
+#include <cstdlib>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -32,6 +35,12 @@ static constexpr u32 s_PositionColorVertexStride = sizeof(f32) * 6u;
 static constexpr u32 s_EmulatedVertexStride = sizeof(f32) * 8u;
 static constexpr u32 s_TrianglesPerWorkgroup = 32u;
 static constexpr Core::TextureSubresourceSet s_FramebufferSubresources = Core::TextureSubresourceSet(0, 1, 0, 1);
+static constexpr u32 s_AvboitDownsample = 8u;
+static constexpr u32 s_AvboitVirtualSlices = 128u;
+static constexpr u32 s_AvboitPhysicalSlices = 64u;
+static constexpr f32 s_AvboitExtinctionFixedScale = 4096.f;
+static constexpr f32 s_AvboitSelfOcclusionSliceBias = 2.f;
+static constexpr usize s_AvboitControlWordCount = 8u;
 
 
 struct ShaderDrivenPushConstants{
@@ -43,6 +52,17 @@ struct ShaderDrivenPushConstants{
     f32 scissorRect[4] = {};
 };
 
+struct AvboitPushConstants{
+    u32 frame[4] = {};
+    u32 volume[4] = {};
+    f32 params[4] = {};
+};
+
+struct TransparentDrawPushConstants{
+    ShaderDrivenPushConstants mesh;
+    AvboitPushConstants avboit;
+};
+
 struct EmulatedVertex{
     f32 position[4];
     f32 color[3];
@@ -50,6 +70,8 @@ struct EmulatedVertex{
 };
 
 static_assert(sizeof(ShaderDrivenPushConstants) == 48, "ShaderDrivenPushConstants layout must stay stable");
+static_assert(sizeof(AvboitPushConstants) == 48, "AvboitPushConstants layout must stay stable");
+static_assert(sizeof(TransparentDrawPushConstants) == 96, "TransparentDrawPushConstants layout must stay stable");
 static_assert(sizeof(EmulatedVertex) == s_EmulatedVertexStride, "EmulatedVertex layout must match the mesh emulation shader");
 
 
@@ -85,6 +107,31 @@ static const Name& DeferredCompositeVertexShaderName(){
 
 static const Name& DeferredCompositePixelShaderName(){
     static const Name s("engine/graphics/deferred_composite_ps");
+    return s;
+}
+
+static const Name& AvboitOccupancyPixelShaderName(){
+    static const Name s("engine/graphics/avboit_occupancy_ps");
+    return s;
+}
+
+static const Name& AvboitDepthWarpComputeShaderName(){
+    static const Name s("engine/graphics/avboit_depth_warp_cs");
+    return s;
+}
+
+static const Name& AvboitExtinctionPixelShaderName(){
+    static const Name s("engine/graphics/avboit_extinction_ps");
+    return s;
+}
+
+static const Name& AvboitIntegrateComputeShaderName(){
+    static const Name s("engine/graphics/avboit_integrate_cs");
+    return s;
+}
+
+static const Name& AvboitAccumulatePixelShaderName(){
+    static const Name s("engine/graphics/avboit_accumulate_ps");
     return s;
 }
 
@@ -124,6 +171,54 @@ static Core::Format::Enum SelectGBufferDepthFormat(Core::IDevice& device){
     return Core::Format::UNKNOWN;
 }
 
+static Core::Format::Enum SelectAvboitAccumColorFormat(Core::IDevice& device){
+    constexpr Core::Format::Enum candidates[] = {
+        Core::Format::RGBA16_FLOAT,
+        Core::Format::RGBA8_UNORM,
+    };
+    constexpr Core::FormatSupport::Mask requiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::RenderTarget | Core::FormatSupport::Blendable;
+
+    for(const Core::Format::Enum format : candidates){
+        if(SupportsFormat(device, format, requiredSupport))
+            return format;
+    }
+
+    return Core::Format::UNKNOWN;
+}
+
+static Core::Format::Enum SelectAvboitAccumExtinctionFormat(Core::IDevice& device){
+    constexpr Core::Format::Enum candidates[] = {
+        Core::Format::R16_FLOAT,
+        Core::Format::R32_FLOAT,
+        Core::Format::RGBA16_FLOAT,
+        Core::Format::R8_UNORM,
+        Core::Format::RGBA8_UNORM,
+    };
+    constexpr Core::FormatSupport::Mask requiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::RenderTarget | Core::FormatSupport::Blendable;
+
+    for(const Core::Format::Enum format : candidates){
+        if(SupportsFormat(device, format, requiredSupport))
+            return format;
+    }
+
+    return Core::Format::UNKNOWN;
+}
+
+static Core::Format::Enum SelectAvboitLowRasterFormat(Core::IDevice& device){
+    constexpr Core::Format::Enum candidates[] = {
+        Core::Format::R8_UNORM,
+        Core::Format::RGBA8_UNORM,
+    };
+    constexpr Core::FormatSupport::Mask requiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::RenderTarget;
+
+    for(const Core::Format::Enum format : candidates){
+        if(SupportsFormat(device, format, requiredSupport))
+            return format;
+    }
+
+    return Core::Format::UNKNOWN;
+}
+
 static Core::RenderState BuildGeometryRenderState(){
     Core::RenderState renderState;
     renderState.depthStencilState
@@ -133,6 +228,58 @@ static Core::RenderState BuildGeometryRenderState(){
     ;
     renderState.rasterState.enableDepthClip();
     return renderState;
+}
+
+static Core::BlendState::RenderTarget BuildAdditiveBlendTarget(const Core::ColorMask::Mask colorWriteMask = Core::ColorMask::All){
+    Core::BlendState::RenderTarget target;
+    target
+        .enableBlend()
+        .setSrcBlend(Core::BlendFactor::One)
+        .setDestBlend(Core::BlendFactor::One)
+        .setBlendOp(Core::BlendOp::Add)
+        .setSrcBlendAlpha(Core::BlendFactor::One)
+        .setDestBlendAlpha(Core::BlendFactor::One)
+        .setBlendOpAlpha(Core::BlendOp::Add)
+        .setColorWriteMask(colorWriteMask)
+    ;
+    return target;
+}
+
+static Core::RenderState BuildAvboitVoxelRenderState(){
+    Core::RenderState renderState;
+    renderState.depthStencilState.disableDepthTest().disableDepthWrite();
+    renderState.rasterState.enableDepthClip().setCullNone();
+    renderState.blendState.targets[0].setColorWriteMask(Core::ColorMask::None);
+    return renderState;
+}
+
+static Core::RenderState BuildAvboitAccumulateRenderState(){
+    Core::RenderState renderState;
+    renderState.depthStencilState
+        .enableDepthTest()
+        .disableDepthWrite()
+        .setDepthFunc(Core::ComparisonFunc::LessOrEqual)
+    ;
+    renderState.rasterState.enableDepthClip().setCullNone();
+    renderState.blendState
+        .setRenderTarget(0, BuildAdditiveBlendTarget())
+        .setRenderTarget(1, BuildAdditiveBlendTarget(Core::ColorMask::Red))
+    ;
+    return renderState;
+}
+
+static Core::RenderState BuildRenderStateForPass(const RendererSystem::MaterialPipelinePass pass){
+    switch(pass){
+    case RendererSystem::MaterialPipelinePass::Opaque:
+        return BuildGeometryRenderState();
+    case RendererSystem::MaterialPipelinePass::AvboitOccupancy:
+    case RendererSystem::MaterialPipelinePass::AvboitExtinction:
+        return BuildAvboitVoxelRenderState();
+    case RendererSystem::MaterialPipelinePass::AvboitAccumulate:
+        return BuildAvboitAccumulateRenderState();
+    default:
+        return BuildGeometryRenderState();
+    }
 }
 
 static Core::RenderState BuildCompositeRenderState(){
@@ -184,6 +331,86 @@ static ShaderDrivenPushConstants BuildShaderDrivenPushConstants(const u32 triang
     return pushConstants;
 }
 
+static bool IsTransparentText(const AStringView text){
+    const AString normalized = CanonicalizeText(AString(text));
+    return normalized == "transparent"
+        || normalized == "translucent"
+        || normalized == "blend"
+        || normalized == "alpha"
+        || normalized == "avboit"
+        || normalized == "true"
+        || normalized == "1"
+    ;
+}
+
+static bool ParseAlphaValue(const AStringView text, f32& outAlpha){
+    AString temp(text);
+    char* end = nullptr;
+    const f32 parsed = std::strtof(temp.c_str(), &end);
+    if(end == temp.c_str())
+        return false;
+    if(!std::isfinite(parsed))
+        return false;
+
+    while(end && *end != '\0'){
+        if(!IsAsciiSpace(*end))
+            return false;
+        ++end;
+    }
+
+    outAlpha = Max(0.f, Min(1.f, parsed));
+    return true;
+}
+
+static bool FindMaterialParameter(const Material& material, const AStringView keyText, CompactString& outValue){
+    CompactString key;
+    if(!key.assign(keyText))
+        return false;
+
+    const auto found = material.parameters().find(key);
+    if(found == material.parameters().end())
+        return false;
+
+    outValue = found.value();
+    return true;
+}
+
+static AvboitPushConstants BuildAvboitPushConstants(const RendererSystem::AvboitFrameTargets& targets, const f32 alpha){
+    AvboitPushConstants pushConstants;
+    pushConstants.frame[0] = targets.fullWidth;
+    pushConstants.frame[1] = targets.fullHeight;
+    pushConstants.frame[2] = targets.lowWidth;
+    pushConstants.frame[3] = targets.lowHeight;
+    pushConstants.volume[0] = targets.virtualSliceCount;
+    pushConstants.volume[1] = targets.physicalSliceCount;
+    pushConstants.volume[2] = targets.lowWidth * targets.lowHeight * targets.physicalSliceCount;
+    pushConstants.volume[3] = (targets.virtualSliceCount + 31u) / 32u;
+    pushConstants.params[0] = alpha;
+    pushConstants.params[1] = s_AvboitExtinctionFixedScale;
+    pushConstants.params[2] = s_AvboitSelfOcclusionSliceBias;
+    pushConstants.params[3] = 0.f;
+    return pushConstants;
+}
+
+static TransparentDrawPushConstants BuildTransparentDrawPushConstants(
+    const u32 triangleCount,
+    const Core::ViewportState& viewportState,
+    const RendererSystem::AvboitFrameTargets& targets,
+    const f32 alpha
+){
+    TransparentDrawPushConstants pushConstants;
+    pushConstants.mesh = BuildShaderDrivenPushConstants(triangleCount, viewportState);
+    pushConstants.avboit = BuildAvboitPushConstants(targets, alpha);
+    return pushConstants;
+}
+
+static u32 DispatchGroupCount1D(const u32 itemCount, const u32 groupSize){
+    return itemCount == 0
+        ? 0
+        : (itemCount + groupSize - 1u) / groupSize
+    ;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -196,6 +423,7 @@ static ShaderDrivenPushConstants BuildShaderDrivenPushConstants(const u32 triang
 
 usize RendererSystem::MaterialPipelineKeyHasher::operator()(const MaterialPipelineKey& key)const{
     usize seed = Hasher<Name>{}(key.material);
+    seed ^= Hasher<u32>{}(static_cast<u32>(key.pass)) + static_cast<usize>(0x9e3779b97f4a7c15ull) + (seed << 6) + (seed >> 2);
     seed ^= static_cast<usize>(key.framebufferInfo.depthFormat) + static_cast<usize>(0x9e3779b97f4a7c15ull) + (seed << 6) + (seed >> 2);
     seed ^= Hasher<u32>{}(key.framebufferInfo.sampleCount) + static_cast<usize>(0x9e3779b97f4a7c15ull) + (seed << 6) + (seed >> 2);
     seed ^= Hasher<u32>{}(key.framebufferInfo.sampleQuality) + static_cast<usize>(0x9e3779b97f4a7c15ull) + (seed << 6) + (seed >> 2);
@@ -206,7 +434,7 @@ usize RendererSystem::MaterialPipelineKeyHasher::operator()(const MaterialPipeli
 }
 
 bool RendererSystem::MaterialPipelineKeyEqualTo::operator()(const MaterialPipelineKey& lhs, const MaterialPipelineKey& rhs)const{
-    return lhs.material == rhs.material && lhs.framebufferInfo == rhs.framebufferInfo;
+    return lhs.material == rhs.material && lhs.pass == rhs.pass && lhs.framebufferInfo == rhs.framebufferInfo;
 }
 
 
@@ -253,8 +481,20 @@ void RendererSystem::render(Core::IFramebuffer* framebuffer){
     commandList->open();
 
     clearDeferredTargets(*commandList, *deferredTargets);
-    renderGeometryPass(*commandList, deferredTargets->framebuffer.get());
+    renderMaterialPass(
+        *commandList,
+        deferredTargets->framebuffer.get(),
+        MaterialPipelinePass::Opaque,
+        false,
+        nullptr,
+        nullptr
+    );
     commandList->endRenderPass();
+
+    clearAvboitTargets(*commandList, deferredTargets->avboit);
+    if(hasTransparentRenderers())
+        renderAvboitPasses(*commandList, *deferredTargets);
+
     commandList->setResourceStatesForBindingSet(deferredTargets->compositeBindingSet.get());
     commandList->commitBarriers();
     if(!renderDeferredComposite(*commandList, *deferredTargets, framebuffer)){
@@ -297,8 +537,15 @@ bool RendererSystem::ensureDeferredFrameTargets(Core::IFramebuffer* presentation
     Core::IDevice* device = m_graphics.getDevice();
     const Core::Format::Enum albedoFormat = __hidden_ecs_graphics::SelectGBufferAlbedoFormat(*device);
     const Core::Format::Enum depthFormat = __hidden_ecs_graphics::SelectGBufferDepthFormat(*device);
+    const Core::Format::Enum avboitLowRasterFormat = __hidden_ecs_graphics::SelectAvboitLowRasterFormat(*device);
+    const Core::Format::Enum avboitAccumColorFormat = __hidden_ecs_graphics::SelectAvboitAccumColorFormat(*device);
+    const Core::Format::Enum avboitAccumExtinctionFormat = __hidden_ecs_graphics::SelectAvboitAccumExtinctionFormat(*device);
     if(albedoFormat == Core::Format::UNKNOWN || depthFormat == Core::Format::UNKNOWN){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to find supported deferred framebuffer formats"));
+        return false;
+    }
+    if(avboitLowRasterFormat == Core::Format::UNKNOWN || avboitAccumColorFormat == Core::Format::UNKNOWN || avboitAccumExtinctionFormat == Core::Format::UNKNOWN){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to find supported AVBOIT framebuffer formats"));
         return false;
     }
 
@@ -306,13 +553,18 @@ bool RendererSystem::ensureDeferredFrameTargets(Core::IFramebuffer* presentation
         && m_deferredTargets.width == presentationInfo.width
         && m_deferredTargets.height == presentationInfo.height
         && m_deferredTargets.albedoFormat == albedoFormat
-        && m_deferredTargets.depthFormat == depthFormat)
+        && m_deferredTargets.depthFormat == depthFormat
+        && m_deferredTargets.avboit.lowRasterFormat == avboitLowRasterFormat
+        && m_deferredTargets.avboit.accumColorFormat == avboitAccumColorFormat
+        && m_deferredTargets.avboit.accumExtinctionFormat == avboitAccumExtinctionFormat)
     {
         outTargets = &m_deferredTargets;
         return true;
     }
 
     if(!ensureDeferredCompositeResources())
+        return false;
+    if(!ensureAvboitResources())
         return false;
 
     resetDeferredFrameTargets();
@@ -364,6 +616,224 @@ bool RendererSystem::ensureDeferredFrameTargets(Core::IFramebuffer* presentation
         return false;
     }
 
+    AvboitFrameTargets avboitTargets;
+    avboitTargets.fullWidth = createdTargets.width;
+    avboitTargets.fullHeight = createdTargets.height;
+    avboitTargets.lowWidth = Max(1u, (createdTargets.width + __hidden_ecs_graphics::s_AvboitDownsample - 1u) / __hidden_ecs_graphics::s_AvboitDownsample);
+    avboitTargets.lowHeight = Max(1u, (createdTargets.height + __hidden_ecs_graphics::s_AvboitDownsample - 1u) / __hidden_ecs_graphics::s_AvboitDownsample);
+    avboitTargets.virtualSliceCount = __hidden_ecs_graphics::s_AvboitVirtualSlices;
+    avboitTargets.physicalSliceCount = __hidden_ecs_graphics::s_AvboitPhysicalSlices;
+    avboitTargets.lowRasterFormat = avboitLowRasterFormat;
+    avboitTargets.accumColorFormat = avboitAccumColorFormat;
+    avboitTargets.accumExtinctionFormat = avboitAccumExtinctionFormat;
+
+    Core::TextureDesc lowRasterDesc;
+    lowRasterDesc
+        .setWidth(avboitTargets.lowWidth)
+        .setHeight(avboitTargets.lowHeight)
+        .setFormat(avboitTargets.lowRasterFormat)
+        .setInRenderTarget(true)
+        .setName("engine/avboit/low_raster")
+        .setClearValue(Core::Color(0.f, 0.f, 0.f, 0.f))
+    ;
+    avboitTargets.lowRasterTarget = m_graphics.createTexture(lowRasterDesc);
+    if(!avboitTargets.lowRasterTarget){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT low-resolution raster target"));
+        return false;
+    }
+
+    Core::TextureDesc accumColorDesc;
+    accumColorDesc
+        .setWidth(avboitTargets.fullWidth)
+        .setHeight(avboitTargets.fullHeight)
+        .setFormat(avboitTargets.accumColorFormat)
+        .setInRenderTarget(true)
+        .setName("engine/avboit/accum_color")
+        .setClearValue(Core::Color(0.f, 0.f, 0.f, 0.f))
+    ;
+    avboitTargets.accumColor = m_graphics.createTexture(accumColorDesc);
+    if(!avboitTargets.accumColor){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT accumulated color target"));
+        return false;
+    }
+
+    Core::TextureDesc accumExtinctionDesc;
+    accumExtinctionDesc
+        .setWidth(avboitTargets.fullWidth)
+        .setHeight(avboitTargets.fullHeight)
+        .setFormat(avboitTargets.accumExtinctionFormat)
+        .setInRenderTarget(true)
+        .setName("engine/avboit/accum_extinction")
+        .setClearValue(Core::Color(0.f, 0.f, 0.f, 0.f))
+    ;
+    avboitTargets.accumExtinction = m_graphics.createTexture(accumExtinctionDesc);
+    if(!avboitTargets.accumExtinction){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT accumulated extinction target"));
+        return false;
+    }
+
+    Core::FramebufferDesc lowFramebufferDesc;
+    lowFramebufferDesc.addColorAttachment(avboitTargets.lowRasterTarget.get(), __hidden_ecs_graphics::s_FramebufferSubresources);
+    avboitTargets.lowFramebuffer = device->createFramebuffer(lowFramebufferDesc);
+    if(!avboitTargets.lowFramebuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT low-resolution framebuffer"));
+        return false;
+    }
+
+    Core::FramebufferDesc accumulationFramebufferDesc;
+    accumulationFramebufferDesc
+        .addColorAttachment(avboitTargets.accumColor.get(), __hidden_ecs_graphics::s_FramebufferSubresources)
+        .addColorAttachment(avboitTargets.accumExtinction.get(), __hidden_ecs_graphics::s_FramebufferSubresources)
+        .setDepthAttachment(
+            Core::FramebufferAttachment()
+                .setTexture(createdTargets.depth.get())
+                .setSubresources(__hidden_ecs_graphics::s_FramebufferSubresources)
+                .setReadOnly(true)
+        )
+    ;
+    avboitTargets.accumulationFramebuffer = device->createFramebuffer(accumulationFramebufferDesc);
+    if(!avboitTargets.accumulationFramebuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT accumulation framebuffer"));
+        return false;
+    }
+
+    const u32 coverageWordCount = (avboitTargets.virtualSliceCount + 31u) / 32u;
+    const u64 coverageBytes = static_cast<u64>(coverageWordCount) * sizeof(u32);
+    const u64 depthWarpBytes = static_cast<u64>(avboitTargets.virtualSliceCount) * sizeof(u32);
+    const u64 volumeVoxelCount = static_cast<u64>(avboitTargets.lowWidth) * avboitTargets.lowHeight * avboitTargets.physicalSliceCount;
+    const u64 volumeBytes = volumeVoxelCount * sizeof(u32);
+
+    Core::BufferDesc coverageDesc;
+    coverageDesc
+        .setByteSize(coverageBytes)
+        .setStructStride(sizeof(u32))
+        .setCanHaveUAVs(true)
+        .setDebugName("engine/avboit/depth_coverage")
+    ;
+    avboitTargets.coverageBuffer = m_graphics.createBuffer(coverageDesc);
+    if(!avboitTargets.coverageBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT coverage buffer"));
+        return false;
+    }
+
+    Core::BufferDesc depthWarpDesc;
+    depthWarpDesc
+        .setByteSize(depthWarpBytes)
+        .setStructStride(sizeof(u32))
+        .setCanHaveUAVs(true)
+        .setDebugName("engine/avboit/depth_warp_lut")
+    ;
+    avboitTargets.depthWarpBuffer = m_graphics.createBuffer(depthWarpDesc);
+    if(!avboitTargets.depthWarpBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT depth warp buffer"));
+        return false;
+    }
+
+    Core::BufferDesc controlDesc;
+    controlDesc
+        .setByteSize(static_cast<u64>(__hidden_ecs_graphics::s_AvboitControlWordCount) * sizeof(u32))
+        .setStructStride(sizeof(u32))
+        .setCanHaveUAVs(true)
+        .setDebugName("engine/avboit/control")
+    ;
+    avboitTargets.controlBuffer = m_graphics.createBuffer(controlDesc);
+    if(!avboitTargets.controlBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT control buffer"));
+        return false;
+    }
+
+    Core::BufferDesc extinctionDesc;
+    extinctionDesc
+        .setByteSize(volumeBytes)
+        .setStructStride(sizeof(u32))
+        .setCanHaveUAVs(true)
+        .setDebugName("engine/avboit/extinction_volume")
+    ;
+    avboitTargets.extinctionBuffer = m_graphics.createBuffer(extinctionDesc);
+    if(!avboitTargets.extinctionBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT extinction volume"));
+        return false;
+    }
+
+    Core::BufferDesc transmittanceDesc;
+    transmittanceDesc
+        .setByteSize(volumeBytes)
+        .setStructStride(sizeof(u32))
+        .setCanHaveUAVs(true)
+        .setDebugName("engine/avboit/transmittance_volume")
+    ;
+    avboitTargets.transmittanceBuffer = m_graphics.createBuffer(transmittanceDesc);
+    if(!avboitTargets.transmittanceBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT transmittance volume"));
+        return false;
+    }
+
+    Core::BindingSetDesc occupancyBindingSetDesc;
+    occupancyBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
+        0,
+        createdTargets.depth.get(),
+        createdTargets.depthFormat,
+        __hidden_ecs_graphics::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    occupancyBindingSetDesc.addItem(Core::BindingSetItem::Sampler(1, m_deferredSampler.get()));
+    occupancyBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(2, avboitTargets.coverageBuffer.get()));
+    avboitTargets.occupancyBindingSet = device->createBindingSet(occupancyBindingSetDesc, m_avboitOccupancyBindingLayout.get());
+    if(!avboitTargets.occupancyBindingSet){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT occupancy binding set"));
+        return false;
+    }
+
+    Core::BindingSetDesc depthWarpBindingSetDesc;
+    depthWarpBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(0, avboitTargets.coverageBuffer.get()));
+    depthWarpBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(1, avboitTargets.depthWarpBuffer.get()));
+    depthWarpBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(2, avboitTargets.controlBuffer.get()));
+    avboitTargets.depthWarpBindingSet = device->createBindingSet(depthWarpBindingSetDesc, m_avboitDepthWarpBindingLayout.get());
+    if(!avboitTargets.depthWarpBindingSet){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT depth-warp binding set"));
+        return false;
+    }
+
+    Core::BindingSetDesc extinctionBindingSetDesc;
+    extinctionBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
+        0,
+        createdTargets.depth.get(),
+        createdTargets.depthFormat,
+        __hidden_ecs_graphics::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    extinctionBindingSetDesc.addItem(Core::BindingSetItem::Sampler(1, m_deferredSampler.get()));
+    extinctionBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(2, avboitTargets.depthWarpBuffer.get()));
+    extinctionBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(3, avboitTargets.controlBuffer.get()));
+    extinctionBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(4, avboitTargets.extinctionBuffer.get()));
+    avboitTargets.extinctionBindingSet = device->createBindingSet(extinctionBindingSetDesc, m_avboitExtinctionBindingLayout.get());
+    if(!avboitTargets.extinctionBindingSet){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT extinction binding set"));
+        return false;
+    }
+
+    Core::BindingSetDesc integrateBindingSetDesc;
+    integrateBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(0, avboitTargets.extinctionBuffer.get()));
+    integrateBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(1, avboitTargets.transmittanceBuffer.get()));
+    integrateBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(2, avboitTargets.controlBuffer.get()));
+    avboitTargets.integrateBindingSet = device->createBindingSet(integrateBindingSetDesc, m_avboitIntegrateBindingLayout.get());
+    if(!avboitTargets.integrateBindingSet){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT integration binding set"));
+        return false;
+    }
+
+    Core::BindingSetDesc accumulateBindingSetDesc;
+    accumulateBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(0, avboitTargets.depthWarpBuffer.get()));
+    accumulateBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(1, avboitTargets.transmittanceBuffer.get()));
+    accumulateBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(2, avboitTargets.controlBuffer.get()));
+    avboitTargets.accumulateBindingSet = device->createBindingSet(accumulateBindingSetDesc, m_avboitAccumulateBindingLayout.get());
+    if(!avboitTargets.accumulateBindingSet){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT accumulation binding set"));
+        return false;
+    }
+
+    createdTargets.avboit = Move(avboitTargets);
+
     Core::BindingSetDesc bindingSetDesc;
     bindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
         0,
@@ -372,7 +842,21 @@ bool RendererSystem::ensureDeferredFrameTargets(Core::IFramebuffer* presentation
         __hidden_ecs_graphics::s_FramebufferSubresources,
         Core::TextureDimension::Texture2D
     ));
-    bindingSetDesc.addItem(Core::BindingSetItem::Sampler(1, m_deferredSampler.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
+        1,
+        createdTargets.avboit.accumColor.get(),
+        createdTargets.avboit.accumColorFormat,
+        __hidden_ecs_graphics::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    bindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
+        2,
+        createdTargets.avboit.accumExtinction.get(),
+        createdTargets.avboit.accumExtinctionFormat,
+        __hidden_ecs_graphics::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    bindingSetDesc.addItem(Core::BindingSetItem::Sampler(3, m_deferredSampler.get()));
     createdTargets.compositeBindingSet = device->createBindingSet(bindingSetDesc, m_deferredCompositeBindingLayout.get());
     if(!createdTargets.compositeBindingSet){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred composite binding set"));
@@ -383,11 +867,13 @@ bool RendererSystem::ensureDeferredFrameTargets(Core::IFramebuffer* presentation
     outTargets = &m_deferredTargets;
 
     NWB_LOGGER_ESSENTIAL_INFO(
-        NWB_TEXT("RendererSystem: deferred rendering targets ready ({}x{}, albedo {}, depth {})"),
+        NWB_TEXT("RendererSystem: deferred rendering targets ready ({}x{}, albedo {}, depth {}, AVBOIT color {}, extinction {})"),
         m_deferredTargets.width,
         m_deferredTargets.height,
         StringConvert(Core::GetFormatInfo(m_deferredTargets.albedoFormat).name),
-        StringConvert(Core::GetFormatInfo(m_deferredTargets.depthFormat).name)
+        StringConvert(Core::GetFormatInfo(m_deferredTargets.depthFormat).name),
+        StringConvert(Core::GetFormatInfo(m_deferredTargets.avboit.accumColorFormat).name),
+        StringConvert(Core::GetFormatInfo(m_deferredTargets.avboit.accumExtinctionFormat).name)
     );
     return true;
 }
@@ -399,7 +885,9 @@ bool RendererSystem::ensureDeferredCompositeResources(){
         Core::BindingLayoutDesc bindingLayoutDesc;
         bindingLayoutDesc.setVisibility(Core::ShaderType::Pixel);
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(0, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Sampler(1, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(1, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(2, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Sampler(3, 1));
 
         m_deferredCompositeBindingLayout = device->createBindingLayout(bindingLayoutDesc);
         if(!m_deferredCompositeBindingLayout){
@@ -471,6 +959,193 @@ bool RendererSystem::ensureDeferredCompositePipeline(Core::IFramebuffer* present
     return true;
 }
 
+bool RendererSystem::ensureAvboitResources(){
+    Core::IDevice* device = m_graphics.getDevice();
+
+    if(!m_deferredSampler){
+        Core::SamplerDesc samplerDesc;
+        samplerDesc
+            .setAllFilters(false)
+            .setAllAddressModes(Core::SamplerAddressMode::Clamp)
+        ;
+        m_deferredSampler = device->createSampler(samplerDesc);
+        if(!m_deferredSampler){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shared point sampler for AVBOIT"));
+            return false;
+        }
+    }
+
+    if(!m_avboitEmptyBindingLayout){
+        Core::BindingLayoutDesc bindingLayoutDesc;
+        bindingLayoutDesc.setVisibility(Core::ShaderType::Pixel);
+
+        m_avboitEmptyBindingLayout = device->createBindingLayout(bindingLayoutDesc);
+        if(!m_avboitEmptyBindingLayout){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT empty binding layout"));
+            return false;
+        }
+    }
+
+    if(!m_avboitOccupancyBindingLayout){
+        Core::BindingLayoutDesc bindingLayoutDesc;
+        bindingLayoutDesc.setVisibility(Core::ShaderType::Pixel);
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(0, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Sampler(1, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(2, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(__hidden_ecs_graphics::TransparentDrawPushConstants)));
+
+        m_avboitOccupancyBindingLayout = device->createBindingLayout(bindingLayoutDesc);
+        if(!m_avboitOccupancyBindingLayout){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT occupancy binding layout"));
+            return false;
+        }
+    }
+
+    if(!m_avboitDepthWarpBindingLayout){
+        Core::BindingLayoutDesc bindingLayoutDesc;
+        bindingLayoutDesc.setVisibility(Core::ShaderType::Compute);
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(0, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(1, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(2, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(__hidden_ecs_graphics::AvboitPushConstants)));
+
+        m_avboitDepthWarpBindingLayout = device->createBindingLayout(bindingLayoutDesc);
+        if(!m_avboitDepthWarpBindingLayout){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT depth-warp binding layout"));
+            return false;
+        }
+    }
+
+    if(!m_avboitExtinctionBindingLayout){
+        Core::BindingLayoutDesc bindingLayoutDesc;
+        bindingLayoutDesc.setVisibility(Core::ShaderType::Pixel);
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(0, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Sampler(1, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(2, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(3, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(4, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(__hidden_ecs_graphics::TransparentDrawPushConstants)));
+
+        m_avboitExtinctionBindingLayout = device->createBindingLayout(bindingLayoutDesc);
+        if(!m_avboitExtinctionBindingLayout){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT extinction binding layout"));
+            return false;
+        }
+    }
+
+    if(!m_avboitIntegrateBindingLayout){
+        Core::BindingLayoutDesc bindingLayoutDesc;
+        bindingLayoutDesc.setVisibility(Core::ShaderType::Compute);
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(0, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(1, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(2, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(__hidden_ecs_graphics::AvboitPushConstants)));
+
+        m_avboitIntegrateBindingLayout = device->createBindingLayout(bindingLayoutDesc);
+        if(!m_avboitIntegrateBindingLayout){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT integration binding layout"));
+            return false;
+        }
+    }
+
+    if(!m_avboitAccumulateBindingLayout){
+        Core::BindingLayoutDesc bindingLayoutDesc;
+        bindingLayoutDesc.setVisibility(Core::ShaderType::Pixel);
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(0, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(1, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(2, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(__hidden_ecs_graphics::TransparentDrawPushConstants)));
+
+        m_avboitAccumulateBindingLayout = device->createBindingLayout(bindingLayoutDesc);
+        if(!m_avboitAccumulateBindingLayout){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT accumulation binding layout"));
+            return false;
+        }
+    }
+
+    if(!ensureShaderLoaded(
+        m_avboitOccupancyPixelShader,
+        __hidden_ecs_graphics::AvboitOccupancyPixelShaderName(),
+        Core::ShaderArchive::s_DefaultVariant,
+        Core::ShaderType::Pixel,
+        "ECSGraphics_AvboitOccupancyPS"
+    ))
+        return false;
+
+    if(!ensureShaderLoaded(
+        m_avboitDepthWarpComputeShader,
+        __hidden_ecs_graphics::AvboitDepthWarpComputeShaderName(),
+        Core::ShaderArchive::s_DefaultVariant,
+        Core::ShaderType::Compute,
+        "ECSGraphics_AvboitDepthWarpCS"
+    ))
+        return false;
+
+    if(!ensureShaderLoaded(
+        m_avboitExtinctionPixelShader,
+        __hidden_ecs_graphics::AvboitExtinctionPixelShaderName(),
+        Core::ShaderArchive::s_DefaultVariant,
+        Core::ShaderType::Pixel,
+        "ECSGraphics_AvboitExtinctionPS"
+    ))
+        return false;
+
+    if(!ensureShaderLoaded(
+        m_avboitIntegrateComputeShader,
+        __hidden_ecs_graphics::AvboitIntegrateComputeShaderName(),
+        Core::ShaderArchive::s_DefaultVariant,
+        Core::ShaderType::Compute,
+        "ECSGraphics_AvboitIntegrateCS"
+    ))
+        return false;
+
+    if(!ensureShaderLoaded(
+        m_avboitAccumulatePixelShader,
+        __hidden_ecs_graphics::AvboitAccumulatePixelShaderName(),
+        Core::ShaderArchive::s_DefaultVariant,
+        Core::ShaderType::Pixel,
+        "ECSGraphics_AvboitAccumulatePS"
+    ))
+        return false;
+
+    return true;
+}
+
+bool RendererSystem::ensureAvboitPipelines(AvboitFrameTargets& targets){
+    if(!ensureAvboitResources())
+        return false;
+
+    Core::IDevice* device = m_graphics.getDevice();
+
+    if(!m_avboitDepthWarpPipeline){
+        Core::ComputePipelineDesc pipelineDesc;
+        pipelineDesc
+            .setComputeShader(m_avboitDepthWarpComputeShader.get())
+            .addBindingLayout(m_avboitDepthWarpBindingLayout.get())
+        ;
+        m_avboitDepthWarpPipeline = device->createComputePipeline(pipelineDesc);
+        if(!m_avboitDepthWarpPipeline){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT depth-warp pipeline"));
+            return false;
+        }
+    }
+
+    if(!m_avboitIntegratePipeline){
+        Core::ComputePipelineDesc pipelineDesc;
+        pipelineDesc
+            .setComputeShader(m_avboitIntegrateComputeShader.get())
+            .addBindingLayout(m_avboitIntegrateBindingLayout.get())
+        ;
+        m_avboitIntegratePipeline = device->createComputePipeline(pipelineDesc);
+        if(!m_avboitIntegratePipeline){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT integration pipeline"));
+            return false;
+        }
+    }
+
+    return targets.valid();
+}
+
 void RendererSystem::resetDeferredFrameTargets(){
     m_deferredTargets = DeferredFrameTargets{};
 }
@@ -478,11 +1153,19 @@ void RendererSystem::resetDeferredFrameTargets(){
 void RendererSystem::clearDeferredTargets(Core::ICommandList& commandList, DeferredFrameTargets& targets){
     if(targets.albedo){
         commandList.setTextureState(targets.albedo.get(), __hidden_ecs_graphics::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
-        commandList.clearTextureFloat(targets.albedo.get(), __hidden_ecs_graphics::s_FramebufferSubresources, __hidden_ecs_graphics::s_ClearColor);
     }
 
     if(targets.depth){
         commandList.setTextureState(targets.depth.get(), __hidden_ecs_graphics::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
+    }
+
+    commandList.commitBarriers();
+
+    if(targets.albedo){
+        commandList.clearTextureFloat(targets.albedo.get(), __hidden_ecs_graphics::s_FramebufferSubresources, __hidden_ecs_graphics::s_ClearColor);
+    }
+
+    if(targets.depth){
         commandList.clearDepthStencilTexture(
             targets.depth.get(),
             __hidden_ecs_graphics::s_FramebufferSubresources,
@@ -494,17 +1177,101 @@ void RendererSystem::clearDeferredTargets(Core::ICommandList& commandList, Defer
     }
 }
 
-void RendererSystem::renderGeometryPass(Core::ICommandList& commandList, Core::IFramebuffer* gBufferFramebuffer){
-    if(!gBufferFramebuffer)
+void RendererSystem::clearAvboitTargets(Core::ICommandList& commandList, AvboitFrameTargets& targets){
+    if(targets.lowRasterTarget){
+        commandList.setTextureState(targets.lowRasterTarget.get(), __hidden_ecs_graphics::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
+    }
+
+    if(targets.accumColor){
+        commandList.setTextureState(targets.accumColor.get(), __hidden_ecs_graphics::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
+    }
+
+    if(targets.accumExtinction){
+        commandList.setTextureState(targets.accumExtinction.get(), __hidden_ecs_graphics::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
+    }
+
+    if(targets.coverageBuffer){
+        commandList.setBufferState(targets.coverageBuffer.get(), Core::ResourceStates::CopyDest);
+    }
+
+    if(targets.depthWarpBuffer){
+        commandList.setBufferState(targets.depthWarpBuffer.get(), Core::ResourceStates::CopyDest);
+    }
+
+    if(targets.controlBuffer){
+        commandList.setBufferState(targets.controlBuffer.get(), Core::ResourceStates::CopyDest);
+    }
+
+    if(targets.extinctionBuffer){
+        commandList.setBufferState(targets.extinctionBuffer.get(), Core::ResourceStates::CopyDest);
+    }
+
+    if(targets.transmittanceBuffer){
+        commandList.setBufferState(targets.transmittanceBuffer.get(), Core::ResourceStates::CopyDest);
+    }
+
+    commandList.commitBarriers();
+
+    if(targets.lowRasterTarget){
+        commandList.clearTextureFloat(targets.lowRasterTarget.get(), __hidden_ecs_graphics::s_FramebufferSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
+    }
+
+    if(targets.accumColor){
+        commandList.clearTextureFloat(targets.accumColor.get(), __hidden_ecs_graphics::s_FramebufferSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
+    }
+
+    if(targets.accumExtinction){
+        commandList.clearTextureFloat(targets.accumExtinction.get(), __hidden_ecs_graphics::s_FramebufferSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
+    }
+
+    if(targets.coverageBuffer){
+        commandList.clearBufferUInt(targets.coverageBuffer.get(), 0u);
+    }
+
+    if(targets.depthWarpBuffer){
+        commandList.clearBufferUInt(targets.depthWarpBuffer.get(), 0u);
+    }
+
+    if(targets.controlBuffer){
+        commandList.clearBufferUInt(targets.controlBuffer.get(), 0u);
+    }
+
+    if(targets.extinctionBuffer){
+        commandList.clearBufferUInt(targets.extinctionBuffer.get(), 0u);
+    }
+
+    if(targets.transmittanceBuffer){
+        commandList.clearBufferUInt(targets.transmittanceBuffer.get(), 0u);
+    }
+}
+
+void RendererSystem::renderMaterialPass(
+    Core::ICommandList& commandList,
+    Core::IFramebuffer* framebuffer,
+    const MaterialPipelinePass pass,
+    const bool transparent,
+    Core::IBindingSet* passBindingSet,
+    const AvboitFrameTargets* avboitTargets
+){
+    if(!framebuffer)
         return;
+    if(pass != MaterialPipelinePass::Opaque && (!passBindingSet || !avboitTargets || !avboitTargets->valid()))
+        return;
+
+    if(passBindingSet){
+        commandList.setResourceStatesForBindingSet(passBindingSet);
+        commandList.commitBarriers();
+    }
 
     struct MeshGeometryPassDrawItem{
         Name geometryKey = NAME_NONE;
         MaterialPipelineKey pipelineKey;
+        f32 alpha = 1.f;
     };
     struct ComputeGeometryPassDrawItem{
         Name geometryKey = NAME_NONE;
         MaterialPipelineKey pipelineKey;
+        f32 alpha = 1.f;
     };
 
     Core::Alloc::ScratchArena<> scratchArena;
@@ -512,15 +1279,21 @@ void RendererSystem::renderGeometryPass(Core::ICommandList& commandList, Core::I
     Vector<ComputeGeometryPassDrawItem, Core::Alloc::ScratchAllocator<ComputeGeometryPassDrawItem>> computeDrawItems{Core::Alloc::ScratchAllocator<ComputeGeometryPassDrawItem>(scratchArena)};
 
     auto rendererView = m_world.view<RendererComponent>();
-    const Core::FramebufferInfo& framebufferInfo = gBufferFramebuffer->getFramebufferInfo();
+    const Core::FramebufferInfo& framebufferInfo = framebuffer->getFramebufferInfo();
 
     Core::ViewportState viewportState;
-    viewportState.addViewportAndScissorRect(gBufferFramebuffer->getFramebufferInfo().getViewport());
+    viewportState.addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
 
     for(auto&& [entity, renderer] : rendererView){
         (void)entity;
 
         if(!renderer.visible)
+            continue;
+
+        MaterialSurfaceInfo* materialInfo = nullptr;
+        if(!ensureMaterialSurfaceInfo(renderer.material, materialInfo))
+            continue;
+        if(!materialInfo || !materialInfo->valid || materialInfo->transparent != transparent)
             continue;
 
         GeometryResources* geometry = nullptr;
@@ -530,7 +1303,7 @@ void RendererSystem::renderGeometryPass(Core::ICommandList& commandList, Core::I
             continue;
 
         MaterialPipelineResources* pipelineResources = nullptr;
-        if(!ensureRendererPipeline(renderer, gBufferFramebuffer, pipelineResources))
+        if(!ensureRendererPipeline(renderer, framebuffer, pass, pipelineResources))
             continue;
         if(!pipelineResources)
             continue;
@@ -538,6 +1311,7 @@ void RendererSystem::renderGeometryPass(Core::ICommandList& commandList, Core::I
         MaterialPipelineKey pipelineKey;
         pipelineKey.material = renderer.material.name();
         pipelineKey.framebufferInfo = framebufferInfo;
+        pipelineKey.pass = pass;
 
         switch(pipelineResources->renderPath){
         case RenderPath::MeshShader:{
@@ -548,6 +1322,7 @@ void RendererSystem::renderGeometryPass(Core::ICommandList& commandList, Core::I
             MeshGeometryPassDrawItem drawItem;
             drawItem.geometryKey = geometry->geometryName;
             drawItem.pipelineKey = pipelineKey;
+            drawItem.alpha = materialInfo->alpha;
             meshDrawItems.push_back(drawItem);
             break;
         }
@@ -559,6 +1334,7 @@ void RendererSystem::renderGeometryPass(Core::ICommandList& commandList, Core::I
             ComputeGeometryPassDrawItem drawItem;
             drawItem.geometryKey = geometry->geometryName;
             drawItem.pipelineKey = pipelineKey;
+            drawItem.alpha = materialInfo->alpha;
             computeDrawItems.push_back(drawItem);
             break;
         }
@@ -587,15 +1363,24 @@ void RendererSystem::renderGeometryPass(Core::ICommandList& commandList, Core::I
 
         Core::MeshletState meshletState;
         meshletState.setPipeline(pipelineResources.meshletPipeline.get());
-        meshletState.setFramebuffer(gBufferFramebuffer);
+        meshletState.setFramebuffer(framebuffer);
         meshletState.setViewport(viewportState);
         meshletState.addBindingSet(geometry.meshBindingSet.get());
+        if(passBindingSet)
+            meshletState.addBindingSet(passBindingSet);
 
         commandList.setMeshletState(meshletState);
 
-        const __hidden_ecs_graphics::ShaderDrivenPushConstants pushConstants =
-            __hidden_ecs_graphics::BuildShaderDrivenPushConstants(geometry.triangleCount, viewportState);
-        commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
+        if(pass == MaterialPipelinePass::Opaque){
+            const __hidden_ecs_graphics::ShaderDrivenPushConstants pushConstants =
+                __hidden_ecs_graphics::BuildShaderDrivenPushConstants(geometry.triangleCount, viewportState);
+            commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
+        }
+        else{
+            const __hidden_ecs_graphics::TransparentDrawPushConstants pushConstants =
+                __hidden_ecs_graphics::BuildTransparentDrawPushConstants(geometry.triangleCount, viewportState, *avboitTargets, drawItem.alpha);
+            commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
+        }
         commandList.dispatchMesh(geometry.dispatchGroupCount);
     }
 
@@ -632,7 +1417,7 @@ void RendererSystem::renderGeometryPass(Core::ICommandList& commandList, Core::I
 
         Core::GraphicsState graphicsState;
         graphicsState.setPipeline(pipelineResources.emulationPipeline.get());
-        graphicsState.setFramebuffer(gBufferFramebuffer);
+        graphicsState.setFramebuffer(framebuffer);
         graphicsState.setViewport(viewportState);
         graphicsState.addVertexBuffer(
             Core::VertexBufferBinding()
@@ -640,13 +1425,103 @@ void RendererSystem::renderGeometryPass(Core::ICommandList& commandList, Core::I
                 .setSlot(0)
                 .setOffset(0)
         );
+        if(passBindingSet){
+            graphicsState.addBindingSet(nullptr);
+            graphicsState.addBindingSet(passBindingSet);
+        }
 
         commandList.setGraphicsState(graphicsState);
+
+        if(pass != MaterialPipelinePass::Opaque){
+            const __hidden_ecs_graphics::TransparentDrawPushConstants transparentPushConstants =
+                __hidden_ecs_graphics::BuildTransparentDrawPushConstants(geometry.triangleCount, viewportState, *avboitTargets, drawItem.alpha);
+            commandList.setPushConstants(&transparentPushConstants, sizeof(transparentPushConstants));
+        }
 
         Core::DrawArguments drawArgs;
         drawArgs.setVertexCount(geometry.indexCount);
         commandList.draw(drawArgs);
     }
+}
+
+void RendererSystem::renderAvboitPasses(Core::ICommandList& commandList, DeferredFrameTargets& targets){
+    AvboitFrameTargets& avboitTargets = targets.avboit;
+    if(!avboitTargets.valid())
+        return;
+    if(!ensureAvboitPipelines(avboitTargets))
+        return;
+
+    renderMaterialPass(
+        commandList,
+        avboitTargets.lowFramebuffer.get(),
+        MaterialPipelinePass::AvboitOccupancy,
+        true,
+        avboitTargets.occupancyBindingSet.get(),
+        &avboitTargets
+    );
+    commandList.endRenderPass();
+
+    dispatchAvboitDepthWarp(commandList, avboitTargets);
+
+    renderMaterialPass(
+        commandList,
+        avboitTargets.lowFramebuffer.get(),
+        MaterialPipelinePass::AvboitExtinction,
+        true,
+        avboitTargets.extinctionBindingSet.get(),
+        &avboitTargets
+    );
+    commandList.endRenderPass();
+
+    dispatchAvboitIntegration(commandList, avboitTargets);
+
+    renderMaterialPass(
+        commandList,
+        avboitTargets.accumulationFramebuffer.get(),
+        MaterialPipelinePass::AvboitAccumulate,
+        true,
+        avboitTargets.accumulateBindingSet.get(),
+        &avboitTargets
+    );
+    commandList.endRenderPass();
+}
+
+void RendererSystem::dispatchAvboitDepthWarp(Core::ICommandList& commandList, AvboitFrameTargets& targets){
+    if(!m_avboitDepthWarpPipeline || !targets.depthWarpBindingSet)
+        return;
+
+    commandList.setResourceStatesForBindingSet(targets.depthWarpBindingSet.get());
+    commandList.commitBarriers();
+
+    Core::ComputeState computeState;
+    computeState.setPipeline(m_avboitDepthWarpPipeline.get());
+    computeState.addBindingSet(targets.depthWarpBindingSet.get());
+    commandList.setComputeState(computeState);
+
+    const __hidden_ecs_graphics::AvboitPushConstants pushConstants =
+        __hidden_ecs_graphics::BuildAvboitPushConstants(targets, 1.f);
+    commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
+    commandList.dispatch(1, 1, 1);
+}
+
+void RendererSystem::dispatchAvboitIntegration(Core::ICommandList& commandList, AvboitFrameTargets& targets){
+    if(!m_avboitIntegratePipeline || !targets.integrateBindingSet)
+        return;
+
+    commandList.setResourceStatesForBindingSet(targets.integrateBindingSet.get());
+    commandList.commitBarriers();
+
+    Core::ComputeState computeState;
+    computeState.setPipeline(m_avboitIntegratePipeline.get());
+    computeState.addBindingSet(targets.integrateBindingSet.get());
+    commandList.setComputeState(computeState);
+
+    const __hidden_ecs_graphics::AvboitPushConstants pushConstants =
+        __hidden_ecs_graphics::BuildAvboitPushConstants(targets, 1.f);
+    commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
+
+    const u32 pixelCount = targets.lowWidth * targets.lowHeight;
+    commandList.dispatch(__hidden_ecs_graphics::DispatchGroupCount1D(pixelCount, 64u), 1, 1);
 }
 
 bool RendererSystem::renderDeferredComposite(Core::ICommandList& commandList, DeferredFrameTargets& targets, Core::IFramebuffer* presentationFramebuffer){
@@ -814,6 +1689,83 @@ bool RendererSystem::ensureGeometryLoaded(const Core::Assets::AssetRef<Geometry>
     return outGeometry->valid();
 }
 
+bool RendererSystem::ensureMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset, MaterialSurfaceInfo*& outInfo){
+    outInfo = nullptr;
+
+    const Name materialPath = materialAsset.name();
+    if(!materialPath){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: renderer material is empty"));
+        return false;
+    }
+
+    const auto foundInfo = m_materialSurfaceInfos.find(materialPath);
+    if(foundInfo != m_materialSurfaceInfos.end()){
+        outInfo = &foundInfo.value();
+        return outInfo->valid;
+    }
+
+    UniquePtr<Core::Assets::IAsset> loadedAsset;
+    if(!m_assetManager.loadSync(Material::AssetTypeName(), materialPath, loadedAsset)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("RendererSystem: failed to load material '{}'"),
+            StringConvert(materialPath.c_str())
+        );
+        return false;
+    }
+    if(!loadedAsset || loadedAsset->assetType() != Material::AssetTypeName()){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("RendererSystem: asset '{}' is not a material"),
+            StringConvert(materialPath.c_str())
+        );
+        return false;
+    }
+
+    const Material& material = static_cast<const Material&>(*loadedAsset);
+
+    MaterialSurfaceInfo createdInfo;
+    createdInfo.materialName = materialPath;
+    createdInfo.shaderVariant = material.shaderVariant().empty()
+        ? AString(Core::ShaderArchive::s_DefaultVariant)
+        : material.shaderVariant()
+    ;
+    createdInfo.valid = true;
+
+    __hidden_ecs_graphics::TryFindShaderForStage(material, Core::ShaderType::Pixel, createdInfo.pixelShader);
+    __hidden_ecs_graphics::TryFindShaderForStage(material, Core::ShaderType::Mesh, createdInfo.meshShader);
+
+    CompactString alphaText;
+    if(__hidden_ecs_graphics::FindMaterialParameter(material, AStringView("alpha"), alphaText)
+        || __hidden_ecs_graphics::FindMaterialParameter(material, AStringView("opacity"), alphaText))
+    {
+        f32 parsedAlpha = 1.f;
+        if(__hidden_ecs_graphics::ParseAlphaValue(AStringView(alphaText.c_str()), parsedAlpha))
+            createdInfo.alpha = parsedAlpha;
+        else{
+            NWB_LOGGER_WARNING(
+                NWB_TEXT("RendererSystem: material '{}' has invalid alpha '{}'; using 1.0"),
+                StringConvert(materialPath.c_str()),
+                StringConvert(alphaText.c_str())
+            );
+        }
+    }
+
+    CompactString modeText;
+    if(__hidden_ecs_graphics::FindMaterialParameter(material, AStringView("render_mode"), modeText)
+        || __hidden_ecs_graphics::FindMaterialParameter(material, AStringView("alpha_mode"), modeText)
+        || __hidden_ecs_graphics::FindMaterialParameter(material, AStringView("transparency"), modeText))
+    {
+        createdInfo.transparent = __hidden_ecs_graphics::IsTransparentText(AStringView(modeText.c_str()));
+    }
+    if(createdInfo.alpha < 0.999f)
+        createdInfo.transparent = true;
+
+    auto [it, inserted] = m_materialSurfaceInfos.emplace(materialPath, MaterialSurfaceInfo{});
+    (void)inserted;
+    it.value() = Move(createdInfo);
+    outInfo = &it.value();
+    return outInfo->valid;
+}
+
 bool RendererSystem::ensureMeshShaderResources(){
     if(m_meshBindingLayout)
         return true;
@@ -822,7 +1774,7 @@ bool RendererSystem::ensureMeshShaderResources(){
     bindingLayoutDesc.setVisibility(Core::ShaderType::Amplification | Core::ShaderType::Mesh);
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(0, 1));
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(1, 1));
-    bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(__hidden_ecs_graphics::ShaderDrivenPushConstants)));
+    bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(__hidden_ecs_graphics::TransparentDrawPushConstants)));
 
     Core::IDevice* device = m_graphics.getDevice();
     m_meshBindingLayout = device->createBindingLayout(bindingLayoutDesc);
@@ -966,7 +1918,7 @@ bool RendererSystem::ensureComputeBindingSet(GeometryResources& geometry){
 }
 
 
-bool RendererSystem::ensureRendererPipeline(const RendererComponent& renderer, Core::IFramebuffer* framebuffer, MaterialPipelineResources*& outResources){
+bool RendererSystem::ensureRendererPipeline(const RendererComponent& renderer, Core::IFramebuffer* framebuffer, const MaterialPipelinePass pass, MaterialPipelineResources*& outResources){
     outResources = nullptr;
 
     if(!framebuffer)
@@ -981,6 +1933,7 @@ bool RendererSystem::ensureRendererPipeline(const RendererComponent& renderer, C
     MaterialPipelineKey pipelineKey;
     pipelineKey.material = materialKey;
     pipelineKey.framebufferInfo = framebuffer->getFramebufferInfo();
+    pipelineKey.pass = pass;
 
     auto [it, inserted] = m_materialPipelines.emplace(pipelineKey, MaterialPipelineResources{});
     MaterialPipelineResources& resources = it.value();
@@ -1006,51 +1959,92 @@ bool RendererSystem::ensureRendererPipeline(const RendererComponent& renderer, C
             m_materialPipelines.erase(pipelineKey);
     };
 
-    UniquePtr<Core::Assets::IAsset> loadedAsset;
-    if(!m_assetManager.loadSync(Material::AssetTypeName(), materialKey, loadedAsset)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("RendererSystem: failed to load material '{}'"),
-            StringConvert(materialKey.c_str())
-        );
+    MaterialSurfaceInfo* materialInfo = nullptr;
+    if(!ensureMaterialSurfaceInfo(renderer.material, materialInfo)){
         removeFailedEntry();
         return false;
     }
-    if(!loadedAsset || loadedAsset->assetType() != Material::AssetTypeName()){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("RendererSystem: asset '{}' is not a material"),
-            StringConvert(materialKey.c_str())
-        );
+    if(!materialInfo || !materialInfo->valid){
         removeFailedEntry();
         return false;
     }
 
-    const Material& material = static_cast<const Material&>(*loadedAsset);
-    const AStringView shaderVariant = material.shaderVariant().empty() ? AStringView(Core::ShaderArchive::s_DefaultVariant) : AStringView(material.shaderVariant());
+    const AStringView shaderVariant = materialInfo->shaderVariant.empty()
+        ? AStringView(Core::ShaderArchive::s_DefaultVariant)
+        : AStringView(materialInfo->shaderVariant)
+    ;
 
-    Core::Assets::AssetRef<Shader> pixelShaderAsset;
-    Core::Assets::AssetRef<Shader> meshShaderAsset;
+    const bool hasPixelShader = materialInfo->pixelShader.valid();
+    const bool hasMeshShader = materialInfo->meshShader.valid();
+    Core::ShaderHandle passPixelShader;
 
-    const bool hasPixelShader = __hidden_ecs_graphics::TryFindShaderForStage(material, Core::ShaderType::Pixel, pixelShaderAsset);
-    const bool hasMeshShader = __hidden_ecs_graphics::TryFindShaderForStage(material, Core::ShaderType::Mesh, meshShaderAsset);
+    switch(pass){
+    case MaterialPipelinePass::Opaque:
+        break;
+    case MaterialPipelinePass::AvboitOccupancy:
+        if(!ensureAvboitResources()){
+            removeFailedEntry();
+            return false;
+        }
+        passPixelShader = m_avboitOccupancyPixelShader;
+        break;
+    case MaterialPipelinePass::AvboitExtinction:
+        if(!ensureAvboitResources()){
+            removeFailedEntry();
+            return false;
+        }
+        passPixelShader = m_avboitExtinctionPixelShader;
+        break;
+    case MaterialPipelinePass::AvboitAccumulate:
+        if(!ensureAvboitResources()){
+            removeFailedEntry();
+            return false;
+        }
+        passPixelShader = m_avboitAccumulatePixelShader;
+        break;
+    default:
+        break;
+    }
 
     Core::IDevice* device = m_graphics.getDevice();
-    const Core::RenderState geometryRenderState = __hidden_ecs_graphics::BuildGeometryRenderState();
+    const Core::RenderState renderState = __hidden_ecs_graphics::BuildRenderStateForPass(pass);
 
     auto tryBuildMeshPipeline = [&]() -> bool{
-        if(!hasMeshShader || !hasPixelShader)
+        if(!hasMeshShader)
+            return false;
+        if(pass == MaterialPipelinePass::Opaque && !hasPixelShader)
             return false;
         if(!ensureMeshShaderResources())
             return false;
-        if(!ensureShaderLoaded(resources.meshShader, meshShaderAsset.name(), shaderVariant, Core::ShaderType::Mesh, "ECSGraphics_RendererMesh"))
+        if(!ensureShaderLoaded(resources.meshShader, materialInfo->meshShader.name(), shaderVariant, Core::ShaderType::Mesh, "ECSGraphics_RendererMesh"))
             return false;
-        if(!ensureShaderLoaded(resources.pixelShader, pixelShaderAsset.name(), shaderVariant, Core::ShaderType::Pixel, "ECSGraphics_RendererPS"))
-            return false;
+        if(pass == MaterialPipelinePass::Opaque){
+            if(!ensureShaderLoaded(resources.pixelShader, materialInfo->pixelShader.name(), shaderVariant, Core::ShaderType::Pixel, "ECSGraphics_RendererPS"))
+                return false;
+        }
+        else{
+            resources.pixelShader = passPixelShader;
+        }
 
         Core::MeshletPipelineDesc pipelineDesc;
         pipelineDesc.setMeshShader(resources.meshShader.get());
         pipelineDesc.setPixelShader(resources.pixelShader.get());
-        pipelineDesc.setRenderState(geometryRenderState);
+        pipelineDesc.setRenderState(renderState);
         pipelineDesc.addBindingLayout(m_meshBindingLayout.get());
+        switch(pass){
+        case MaterialPipelinePass::AvboitOccupancy:
+            pipelineDesc.addBindingLayout(m_avboitOccupancyBindingLayout.get());
+            break;
+        case MaterialPipelinePass::AvboitExtinction:
+            pipelineDesc.addBindingLayout(m_avboitExtinctionBindingLayout.get());
+            break;
+        case MaterialPipelinePass::AvboitAccumulate:
+            pipelineDesc.addBindingLayout(m_avboitAccumulateBindingLayout.get());
+            break;
+        case MaterialPipelinePass::Opaque:
+        default:
+            break;
+        }
 
         resources.meshletPipeline = device->createMeshletPipeline(pipelineDesc, framebuffer->getFramebufferInfo());
         if(!resources.meshletPipeline){
@@ -1066,14 +2060,16 @@ bool RendererSystem::ensureRendererPipeline(const RendererComponent& renderer, C
     };
 
     auto tryBuildComputePipeline = [&]() -> bool{
-        if(!hasMeshShader || !hasPixelShader)
+        if(!hasMeshShader)
+            return false;
+        if(pass == MaterialPipelinePass::Opaque && !hasPixelShader)
             return false;
         if(!ensureComputeEmulationResources())
             return false;
         const Name& meshComputeArchiveStageName = ShaderStageNames::MeshComputeArchiveStageName();
         if(!ensureShaderLoaded(
             resources.computeShader,
-            meshShaderAsset.name(),
+            materialInfo->meshShader.name(),
             shaderVariant,
             Core::ShaderType::Compute,
             "ECSGraphics_RendererCS",
@@ -1081,8 +2077,13 @@ bool RendererSystem::ensureRendererPipeline(const RendererComponent& renderer, C
         {
             return false;
         }
-        if(!ensureShaderLoaded(resources.pixelShader, pixelShaderAsset.name(), shaderVariant, Core::ShaderType::Pixel, "ECSGraphics_RendererPS"))
-            return false;
+        if(pass == MaterialPipelinePass::Opaque){
+            if(!ensureShaderLoaded(resources.pixelShader, materialInfo->pixelShader.name(), shaderVariant, Core::ShaderType::Pixel, "ECSGraphics_RendererPS"))
+                return false;
+        }
+        else{
+            resources.pixelShader = passPixelShader;
+        }
 
         Core::ComputePipelineDesc computeDesc;
         computeDesc.setComputeShader(resources.computeShader.get());
@@ -1100,7 +2101,24 @@ bool RendererSystem::ensureRendererPipeline(const RendererComponent& renderer, C
         emulationDesc.setInputLayout(m_emulationInputLayout.get());
         emulationDesc.setVertexShader(m_emulationVertexShader.get());
         emulationDesc.setPixelShader(resources.pixelShader.get());
-        emulationDesc.setRenderState(geometryRenderState);
+        emulationDesc.setRenderState(renderState);
+        switch(pass){
+        case MaterialPipelinePass::AvboitOccupancy:
+            emulationDesc.addBindingLayout(m_avboitEmptyBindingLayout.get());
+            emulationDesc.addBindingLayout(m_avboitOccupancyBindingLayout.get());
+            break;
+        case MaterialPipelinePass::AvboitExtinction:
+            emulationDesc.addBindingLayout(m_avboitEmptyBindingLayout.get());
+            emulationDesc.addBindingLayout(m_avboitExtinctionBindingLayout.get());
+            break;
+        case MaterialPipelinePass::AvboitAccumulate:
+            emulationDesc.addBindingLayout(m_avboitEmptyBindingLayout.get());
+            emulationDesc.addBindingLayout(m_avboitAccumulateBindingLayout.get());
+            break;
+        case MaterialPipelinePass::Opaque:
+        default:
+            break;
+        }
         resources.emulationPipeline = device->createGraphicsPipeline(emulationDesc, framebuffer->getFramebufferInfo());
         if(!resources.emulationPipeline){
             NWB_LOGGER_ERROR(
@@ -1116,7 +2134,7 @@ bool RendererSystem::ensureRendererPipeline(const RendererComponent& renderer, C
     };
 
     const bool meshSupported = device->queryFeatureSupport(Core::Feature::Meshlets);
-    if(!hasPixelShader){
+    if(pass == MaterialPipelinePass::Opaque && !hasPixelShader){
         NWB_LOGGER_ERROR(
             NWB_TEXT("RendererSystem: material '{}' requires a pixel shader"),
             StringConvert(materialKey.c_str())
@@ -1161,6 +2179,23 @@ bool RendererSystem::ensureRendererPipeline(const RendererComponent& renderer, C
     logMaterialRenderPathDecision(materialKey, resources.renderPath, meshSupported);
     outResources = &resources;
     return true;
+}
+
+bool RendererSystem::hasTransparentRenderers(){
+    auto rendererView = m_world.view<RendererComponent>();
+    for(auto&& [entity, renderer] : rendererView){
+        (void)entity;
+        if(!renderer.visible)
+            continue;
+
+        MaterialSurfaceInfo* materialInfo = nullptr;
+        if(!ensureMaterialSurfaceInfo(renderer.material, materialInfo))
+            continue;
+        if(materialInfo && materialInfo->valid && materialInfo->transparent)
+            return true;
+    }
+
+    return false;
 }
 
 void RendererSystem::logMaterialRenderPathDecision(const Name& materialKey, const RenderPath renderPath, const bool meshSupported){

@@ -214,7 +214,43 @@ public:
 
 
 private:
+    enum class HandlerMutationType : u8{
+        AddFront,
+        AddBack,
+        Remove,
+    };
+
+    struct HandlerMutation{
+        HandlerMutationType type = HandlerMutationType::Remove;
+        IInputEventHandler* handler = nullptr;
+    };
+
+    template<typename DispatchFunc>
+    void dispatchToHandlers(DispatchFunc&& dispatchFunc){
+        ++m_dispatchDepth;
+
+        for(auto it = m_handlers.crbegin(); it != m_handlers.crend(); ++it){
+            IInputEventHandler* handler = *it;
+            if(isHandlerPendingRemoval(*handler))
+                continue;
+            if(dispatchFunc(*handler))
+                break;
+        }
+
+        --m_dispatchDepth;
+        if(m_dispatchDepth == 0)
+            applyPendingHandlerMutations();
+    }
+
+    void queueOrApplyHandlerMutation(HandlerMutationType type, IInputEventHandler& handler);
+    void applyPendingHandlerMutations();
+    bool isHandlerPendingRemoval(const IInputEventHandler& handler)const;
+
+
+private:
     List<IInputEventHandler*> m_handlers;
+    Vector<HandlerMutation> m_pendingHandlerMutations;
+    u32 m_dispatchDepth = 0;
     f32 m_mousePositionScaleX = 1.f;
     f32 m_mousePositionScaleY = 1.f;
 };

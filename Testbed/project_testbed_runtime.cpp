@@ -20,7 +20,7 @@ namespace{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ShouldCreateTransparentRenderer(){
+bool ShouldCreateTransparentRenderers(){
     const char* scene = std::getenv("NWB_TESTBED_SCENE");
     if(!scene || scene[0] == '\0')
         return true;
@@ -79,25 +79,32 @@ bool ProjectTestbed::onStartup(){
     (void)m_rendererSystem;
 
     const NWB::Core::Assets::AssetRef<NWB::Impl::Geometry> cubeGeometry(Name("project/meshes/cube"));
+    const NWB::Core::Assets::AssetRef<NWB::Impl::Geometry> sphereGeometry(Name("project/meshes/sphere"));
+    const NWB::Core::Assets::AssetRef<NWB::Impl::Geometry> tetrahedronGeometry(Name("project/meshes/tetrahedron"));
     const NWB::Core::Assets::AssetRef<NWB::Impl::Material> cubeMaterial(Name("project/materials/mat_test"));
-    const NWB::Core::Assets::AssetRef<NWB::Impl::Material> transparentCubeMaterial(Name("project/materials/mat_transparent"));
+    const NWB::Core::Assets::AssetRef<NWB::Impl::Material> transparentMaterial(Name("project/materials/mat_transparent"));
 
     auto cubeEntity = m_world->createEntity();
     auto& renderer = cubeEntity.addComponent<NWB::Core::ECSGraphics::RendererComponent>();
     renderer.geometry = cubeGeometry;
     renderer.material = cubeMaterial;
 
-    const bool includeTransparentRenderer = ShouldCreateTransparentRenderer();
-    if(includeTransparentRenderer){
-        auto transparentCubeEntity = m_world->createEntity();
-        auto& transparentRenderer = transparentCubeEntity.addComponent<NWB::Core::ECSGraphics::RendererComponent>();
-        transparentRenderer.geometry = cubeGeometry;
-        transparentRenderer.material = transparentCubeMaterial;
+    const bool includeTransparentRenderers = ShouldCreateTransparentRenderers();
+    if(includeTransparentRenderers){
+        auto sphereEntity = m_world->createEntity();
+        auto& sphereRenderer = sphereEntity.addComponent<NWB::Core::ECSGraphics::RendererComponent>();
+        sphereRenderer.geometry = sphereGeometry;
+        sphereRenderer.material = transparentMaterial;
+
+        auto tetrahedronEntity = m_world->createEntity();
+        auto& tetrahedronRenderer = tetrahedronEntity.addComponent<NWB::Core::ECSGraphics::RendererComponent>();
+        tetrahedronRenderer.geometry = tetrahedronGeometry;
+        tetrahedronRenderer.material = transparentMaterial;
     }
 
     NWB_LOGGER_ESSENTIAL_INFO(
         NWB_TEXT("ProjectTestbed: startup scene created ({})"),
-        includeTransparentRenderer ? NWB_TEXT("mixed opaque/transparent") : NWB_TEXT("opaque-only")
+        includeTransparentRenderers ? NWB_TEXT("opaque cube with transparent sphere/tetrahedron") : NWB_TEXT("opaque-only cube")
     );
     return true;
 }

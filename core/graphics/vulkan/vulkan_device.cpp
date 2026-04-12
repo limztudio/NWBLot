@@ -27,6 +27,7 @@ namespace __hidden_vulkan{
 static constexpr AStringView s_PipelineCacheVirtualPath = "vulkan/pipeline_cache.bin";
 static constexpr u64 s_PipelineCacheVolumeSegmentSize = 16ull * 1024ull * 1024ull;
 static constexpr u64 s_PipelineCacheVolumeMetadataSize = 4ull * 1024ull;
+static constexpr usize s_PipelineCacheDataMaxAttempts = 4;
 
 
 template<typename T>
@@ -102,6 +103,51 @@ static bool ValidatePipelineCacheData(const Vector<u8>& cacheData, const VkPhysi
         return false;
 
     return true;
+}
+
+static bool RetrievePipelineCacheData(VkDevice device, VkPipelineCache pipelineCache, Vector<u8>& outData){
+    outData.clear();
+
+    for(usize attempt = 0; attempt < s_PipelineCacheDataMaxAttempts; ++attempt){
+        size_t cacheSize = 0;
+        VkResult res = vkGetPipelineCacheData(device, pipelineCache, &cacheSize, nullptr);
+        if(res != VK_SUCCESS){
+            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to query pipeline cache data size. {}"), ResultToString(res));
+            return false;
+        }
+        if(cacheSize == 0)
+            return true;
+        if(cacheSize > static_cast<size_t>(Limit<usize>::s_Max)){
+            NWB_LOGGER_WARNING(
+                NWB_TEXT("Vulkan: Pipeline cache data size {} exceeds runtime buffer limit {}."),
+                static_cast<u64>(cacheSize),
+                static_cast<u64>(Limit<usize>::s_Max)
+            );
+            return false;
+        }
+
+        Vector<u8> cacheData(static_cast<usize>(cacheSize), 0);
+        size_t retrievedSize = cacheSize;
+        res = vkGetPipelineCacheData(device, pipelineCache, &retrievedSize, cacheData.data());
+        if(res == VK_SUCCESS){
+            if(retrievedSize > cacheSize || retrievedSize > static_cast<size_t>(Limit<usize>::s_Max)){
+                NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Driver returned an invalid pipeline cache data size while serializing."));
+                return false;
+            }
+
+            cacheData.resize(static_cast<usize>(retrievedSize));
+            outData = Move(cacheData);
+            return true;
+        }
+        if(res == VK_INCOMPLETE)
+            continue;
+
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to retrieve pipeline cache data. {}"), ResultToString(res));
+        return false;
+    }
+
+    NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Pipeline cache data kept changing while serializing."));
+    return false;
 }
 
 
@@ -443,40 +489,12 @@ void Device::savePipelineCacheData(){
     if(m_pipelineCacheDirectory.empty() || m_pipelineCacheVolumeName.empty() || !m_context.pipelineCache)
         return;
 
-    size_t cacheSize = 0;
-    VkResult res = vkGetPipelineCacheData(m_context.device, m_context.pipelineCache, &cacheSize, nullptr);
-    if(res != VK_SUCCESS){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to query pipeline cache data size. {}"), ResultToString(res));
+    Vector<u8> cacheData;
+    if(!__hidden_vulkan::RetrievePipelineCacheData(m_context.device, m_context.pipelineCache, cacheData))
         return;
-    }
-    if(cacheSize == 0)
+    if(cacheData.empty())
         return;
-    if(cacheSize > static_cast<size_t>(Limit<usize>::s_Max)){
-        NWB_LOGGER_WARNING(
-            NWB_TEXT("Vulkan: Pipeline cache data size {} exceeds runtime buffer limit {}."),
-            static_cast<u64>(cacheSize),
-            static_cast<u64>(Limit<usize>::s_Max)
-        );
-        return;
-    }
 
-    Vector<u8> cacheData(static_cast<usize>(cacheSize), 0);
-    res = vkGetPipelineCacheData(m_context.device, m_context.pipelineCache, &cacheSize, cacheData.data());
-    if(res == VK_INCOMPLETE){
-        if(cacheSize == 0 || cacheSize > static_cast<size_t>(Limit<usize>::s_Max)){
-            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Pipeline cache data changed to an unsupported size while serializing."));
-            return;
-        }
-
-        cacheData.assign(static_cast<usize>(cacheSize), 0);
-        res = vkGetPipelineCacheData(m_context.device, m_context.pipelineCache, &cacheSize, cacheData.data());
-    }
-    if(res != VK_SUCCESS){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to retrieve pipeline cache data. {}"), ResultToString(res));
-        return;
-    }
-
-    cacheData.resize(static_cast<usize>(cacheSize));
     if(!__hidden_vulkan::ValidatePipelineCacheData(cacheData, m_context.physicalDeviceProperties)){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Driver returned incompatible pipeline cache data; skipping runtime cache write."));
         return;

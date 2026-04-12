@@ -37,6 +37,7 @@ VkDescriptorType ConvertDescriptorType(ResourceType::Enum type){
     case ResourceType::StructuredBuffer_UAV:
         return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
     case ResourceType::ConstantBuffer:
+    case ResourceType::VolatileConstantBuffer:
         return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     case ResourceType::Sampler:
         return VK_DESCRIPTOR_TYPE_SAMPLER;
@@ -92,6 +93,7 @@ constexpr bool IsDescriptorHeapCompatibleType(ResourceType::Enum type){
     case ResourceType::StructuredBuffer_SRV:
     case ResourceType::StructuredBuffer_UAV:
     case ResourceType::ConstantBuffer:
+    case ResourceType::VolatileConstantBuffer:
     case ResourceType::Sampler:
     case ResourceType::RawBuffer_SRV:
     case ResourceType::RawBuffer_UAV:
@@ -482,6 +484,7 @@ bool DescriptorHeapManager::writeDescriptor(const BindingSetItem& item, const De
 
     switch(item.type){
     case ResourceType::ConstantBuffer:
+    case ResourceType::VolatileConstantBuffer:
     case ResourceType::StructuredBuffer_SRV:
     case ResourceType::StructuredBuffer_UAV:
     case ResourceType::RawBuffer_SRV:
@@ -1070,6 +1073,7 @@ bool Device::writeDescriptorTable(IDescriptorTable* m_descriptorTable, const Bin
 
     switch(item.type){
     case ResourceType::ConstantBuffer:
+    case ResourceType::VolatileConstantBuffer:
     case ResourceType::StructuredBuffer_SRV:
     case ResourceType::StructuredBuffer_UAV:
     case ResourceType::RawBuffer_SRV:
@@ -1251,6 +1255,7 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLa
 
         switch(item.type){
         case ResourceType::ConstantBuffer:
+        case ResourceType::VolatileConstantBuffer:
         case ResourceType::StructuredBuffer_SRV:
         case ResourceType::StructuredBuffer_UAV:
         case ResourceType::RawBuffer_SRV:

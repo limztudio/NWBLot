@@ -33,6 +33,7 @@ namespace __hidden_vulkan{
     VkImageType TextureDimensionToImageType(TextureDimension::Enum dimension);
     VkImageViewType TextureDimensionToViewType(TextureDimension::Enum dimension);
     VkSampleCountFlagBits GetSampleCount(u32 sampleCount);
+    bool IsSupportedSampleCount(u32 sampleCount);
     VkImageUsageFlags PickImageUsage(const TextureDesc& desc);
     VkImageCreateFlags PickImageFlags(const TextureDesc& desc);
     u64 ComputeStagingTextureOffset(const TextureDesc& desc, const TextureSlice& slice, usize* outRowPitch = nullptr, u32* outBufferRowLength = nullptr, u32* outBufferImageHeight = nullptr);

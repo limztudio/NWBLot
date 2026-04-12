@@ -324,7 +324,12 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
     case RayTracingClusterOperationType::ClasBuild:
     case RayTracingClusterOperationType::ClasBuildTemplates:
     case RayTracingClusterOperationType::ClasInstantiateTemplates:{
-        clusterInput.vertexFormat = __hidden_vulkan::ConvertFormat(opDesc.params.clas.vertexFormat);
+        const VkFormat vertexFormat = __hidden_vulkan::ConvertFormat(opDesc.params.clas.vertexFormat);
+        if(vertexFormat == VK_FORMAT_UNDEFINED){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to execute cluster operation: vertex format is unsupported"));
+            return;
+        }
+        clusterInput.vertexFormat = vertexFormat;
         clusterInput.maxGeometryIndexValue = opDesc.params.clas.maxGeometryIndex;
         clusterInput.maxClusterUniqueGeometryCount = opDesc.params.clas.maxUniqueGeometryCount;
         clusterInput.maxClusterTriangleCount = opDesc.params.clas.maxTriangleCount;
@@ -485,8 +490,8 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
         }
 
         if(m_enableAutomaticBarriers){
-            setBufferState(convertDesc.src.buffer, ResourceStates::ShaderResource);
-            setBufferState(convertDesc.dst.buffer, ResourceStates::UnorderedAccess);
+            setBufferState(convertDesc.src.buffer, ResourceStates::ConvertCoopVecMatrixInput);
+            setBufferState(convertDesc.dst.buffer, ResourceStates::ConvertCoopVecMatrixOutput);
         }
 
         validDescs.push_back(&convertDesc);

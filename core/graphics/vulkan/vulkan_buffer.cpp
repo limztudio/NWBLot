@@ -180,6 +180,12 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
         usageFlags |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
     if(d.isAccelStructStorage)
         usageFlags |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR;
+    if(m_context.extensions.EXT_opacity_micromap){
+        if(d.isAccelStructBuildInput)
+            usageFlags |= VK_BUFFER_USAGE_MICROMAP_BUILD_INPUT_READ_ONLY_BIT_EXT;
+        if(d.isAccelStructStorage)
+            usageFlags |= VK_BUFFER_USAGE_MICROMAP_STORAGE_BIT_EXT;
+    }
     if(m_context.extensions.buffer_device_address)
         usageFlags |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 

@@ -248,6 +248,8 @@ VkSamplerAddressMode ConvertSamplerAddressMode(const SamplerAddressMode::Enum mo
 }
 
 VkSamplerCreateInfo BuildSamplerCreateInfo(const SamplerDesc& desc){
+    const f32 maxAnisotropy = desc.maxAnisotropy >= 1.f ? desc.maxAnisotropy : 1.f;
+
     VkSamplerCreateInfo samplerInfo{};
     samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
     samplerInfo.magFilter = desc.magFilter ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
@@ -257,8 +259,8 @@ VkSamplerCreateInfo BuildSamplerCreateInfo(const SamplerDesc& desc){
     samplerInfo.addressModeV = ConvertSamplerAddressMode(desc.addressV);
     samplerInfo.addressModeW = ConvertSamplerAddressMode(desc.addressW);
     samplerInfo.mipLodBias = desc.mipBias;
-    samplerInfo.anisotropyEnable = desc.maxAnisotropy > 1.f ? VK_TRUE : VK_FALSE;
-    samplerInfo.maxAnisotropy = desc.maxAnisotropy;
+    samplerInfo.anisotropyEnable = maxAnisotropy > 1.f ? VK_TRUE : VK_FALSE;
+    samplerInfo.maxAnisotropy = maxAnisotropy;
     samplerInfo.compareEnable = desc.reductionType == SamplerReductionType::Comparison ? VK_TRUE : VK_FALSE;
     samplerInfo.compareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
     samplerInfo.minLod = 0.f;
@@ -267,11 +269,30 @@ VkSamplerCreateInfo BuildSamplerCreateInfo(const SamplerDesc& desc){
     return samplerInfo;
 }
 
-VkImageViewCreateInfo BuildImageViewCreateInfo(Texture& texture, const BindingSetItem& item){
+bool BuildImageViewCreateInfo(Texture& texture, const BindingSetItem& item, VkImageViewCreateInfo& outViewInfo){
     const TextureDesc& textureDesc = texture.getDescription();
     TextureDimension::Enum dimension = item.dimension != TextureDimension::Unknown ? item.dimension : textureDesc.dimension;
     Format::Enum format = item.format != Format::UNKNOWN ? item.format : textureDesc.format;
     TextureSubresourceSet subresources = item.subresources.resolve(textureDesc, false);
+    if(subresources.numMipLevels == 0 || subresources.numArraySlices == 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor image view: subresource range is invalid"));
+        return false;
+    }
+
+    const VkFormat vkFormat = ConvertFormat(format);
+    if(vkFormat == VK_FORMAT_UNDEFINED){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor image view: format is unsupported"));
+        return false;
+    }
+
+    if(dimension == TextureDimension::TextureCube && subresources.numArraySlices != 6){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor image view: cube views must include exactly 6 array layers"));
+        return false;
+    }
+    if(dimension == TextureDimension::TextureCubeArray && (subresources.numArraySlices < 6 || (subresources.numArraySlices % 6) != 0)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor image view: cube array views must include a positive multiple of 6 array layers"));
+        return false;
+    }
 
     const FormatInfo& formatInfo = GetFormatInfo(format);
     VkImageAspectFlags aspectMask = 0;
@@ -282,21 +303,21 @@ VkImageViewCreateInfo BuildImageViewCreateInfo(Texture& texture, const BindingSe
     if(!formatInfo.hasDepth && !formatInfo.hasStencil)
         aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 
-    VkImageViewCreateInfo viewInfo{};
-    viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    viewInfo.image = static_cast<VkImage>(static_cast<VkImage_T*>(texture.getNativeHandle(ObjectTypes::VK_Image)));
-    viewInfo.viewType = TextureDimensionToViewType(dimension);
-    viewInfo.format = ConvertFormat(format);
-    viewInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-    viewInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-    viewInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-    viewInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-    viewInfo.subresourceRange.aspectMask = aspectMask;
-    viewInfo.subresourceRange.baseMipLevel = subresources.baseMipLevel;
-    viewInfo.subresourceRange.levelCount = subresources.numMipLevels;
-    viewInfo.subresourceRange.baseArrayLayer = subresources.baseArraySlice;
-    viewInfo.subresourceRange.layerCount = subresources.numArraySlices;
-    return viewInfo;
+    outViewInfo = {};
+    outViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    outViewInfo.image = static_cast<VkImage>(static_cast<VkImage_T*>(texture.getNativeHandle(ObjectTypes::VK_Image)));
+    outViewInfo.viewType = TextureDimensionToViewType(dimension);
+    outViewInfo.format = vkFormat;
+    outViewInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+    outViewInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+    outViewInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+    outViewInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+    outViewInfo.subresourceRange.aspectMask = aspectMask;
+    outViewInfo.subresourceRange.baseMipLevel = subresources.baseMipLevel;
+    outViewInfo.subresourceRange.levelCount = subresources.numMipLevels;
+    outViewInfo.subresourceRange.baseArrayLayer = subresources.baseArraySlice;
+    outViewInfo.subresourceRange.layerCount = subresources.numArraySlices;
+    return true;
 }
 
 const BindingLayoutItem* FindLayoutBinding(const BindingLayoutDesc& desc, const u32 slot, const ResourceType::Enum type){
@@ -685,7 +706,8 @@ bool DescriptorHeapManager::writeDescriptor(const BindingSetItem& item, const De
         const TextureSubresourceSet subresources = item.subresources.resolve(texture->getDescription(), false);
         if(subresources.numMipLevels == 0 || subresources.numArraySlices == 0)
             return false;
-        imageViewInfo = __hidden_vulkan::BuildImageViewCreateInfo(*texture, item);
+        if(!__hidden_vulkan::BuildImageViewCreateInfo(*texture, item, imageViewInfo))
+            return false;
         imageInfo.pView = &imageViewInfo;
         imageInfo.layout = item.type == ResourceType::Texture_UAV ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         resourceInfo.data.pImage = &imageInfo;

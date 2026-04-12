@@ -262,6 +262,10 @@ ResourceStates::Mask StateTracker::getTextureState(ITexture* texture, ArraySlice
     if(it != m_textureStates.end())
         return it.value();
 
+    const TextureDesc& desc = texture->getDescription();
+    if(desc.keepInitialState)
+        return desc.initialState;
+
     return ResourceStates::Unknown;
 }
 
@@ -276,6 +280,10 @@ ResourceStates::Mask StateTracker::getBufferState(IBuffer* buffer)const{
     auto it = m_bufferStates.find(buffer);
     if(it != m_bufferStates.end())
         return it.value();
+
+    const BufferDesc& desc = buffer->getDescription();
+    if(desc.keepInitialState)
+        return desc.initialState;
 
     return ResourceStates::Unknown;
 }

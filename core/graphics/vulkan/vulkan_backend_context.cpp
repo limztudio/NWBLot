@@ -705,6 +705,10 @@ bool BackendContext::findQueueFamilies(VkPhysicalDevice physicalDevice){
 
 bool BackendContext::pickPhysicalDevice(){
     VkFormat requestedFormat = __hidden_vulkan::ConvertFormat(m_swapChainState.backBufferFormat);
+    if(!m_deviceParams.headlessDevice && requestedFormat == VK_FORMAT_UNDEFINED){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Requested swapchain format is unsupported"));
+        return false;
+    }
     VkExtent2D requestedExtent = { m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight };
 
     VkResult res = VK_SUCCESS;
@@ -1277,6 +1281,10 @@ bool BackendContext::createVulkanSwapChain(){
     destroySwapChain();
 
     m_swapChainFormat.format = __hidden_vulkan::ConvertFormat(m_swapChainState.backBufferFormat);
+    if(m_swapChainFormat.format == VK_FORMAT_UNDEFINED){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create swapchain: back buffer format is unsupported"));
+        return false;
+    }
     m_swapChainFormat.colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 
     VkSurfaceCapabilitiesKHR surfaceCaps{};

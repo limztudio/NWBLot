@@ -119,6 +119,65 @@ VkImageCreateFlags PickImageFlags(const TextureDesc& desc){
     return flags;
 }
 
+u32 GetMaxMipLevels(const TextureDesc& desc){
+    const u32 depth = desc.dimension == TextureDimension::Texture3D ? desc.depth : 1u;
+    u32 maxExtent = Max(Max(desc.width, desc.height), depth);
+    u32 levels = 1;
+    while(maxExtent > 1){
+        maxExtent >>= 1;
+        ++levels;
+    }
+    return levels;
+}
+
+bool ValidateTextureShape(const TextureDesc& desc, const tchar* operationName){
+    const u32 maxMipLevels = GetMaxMipLevels(desc);
+    if(desc.mipLevels > maxMipLevels){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Failed to {}: mip levels {} exceed maximum {} for texture dimensions {}x{}x{}"),
+            operationName,
+            desc.mipLevels,
+            maxMipLevels,
+            desc.width,
+            desc.height,
+            desc.depth
+        );
+        return false;
+    }
+
+    if(desc.dimension == TextureDimension::TextureCube || desc.dimension == TextureDimension::TextureCubeArray){
+        if(desc.width != desc.height){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: cube textures must have equal width and height"), operationName);
+            return false;
+        }
+        if(desc.dimension == TextureDimension::TextureCube && desc.arraySize != 6){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: cube textures must have exactly 6 array layers"), operationName);
+            return false;
+        }
+        if(desc.dimension == TextureDimension::TextureCubeArray && (desc.arraySize < 6 || (desc.arraySize % 6) != 0)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: cube texture arrays must have a positive multiple of 6 array layers"), operationName);
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool ValidateTextureViewShape(const TextureDesc& desc, const TextureDimension::Enum dimension, const TextureSubresourceSet& subresources){
+    (void)desc;
+
+    if(dimension == TextureDimension::TextureCube && subresources.numArraySlices != 6){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create image view: cube views must include exactly 6 array layers"));
+        return false;
+    }
+    if(dimension == TextureDimension::TextureCubeArray && (subresources.numArraySlices < 6 || (subresources.numArraySlices % 6) != 0)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create image view: cube array views must include a positive multiple of 6 array layers"));
+        return false;
+    }
+
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -179,6 +238,16 @@ VkImageView Texture::getView(const TextureSubresourceSet& subresources, TextureD
 
     VkImageViewType viewType = __hidden_vulkan::TextureDimensionToViewType(dimension);
     VkFormat vkFormat = ConvertFormat(format);
+    if(vkFormat == VK_FORMAT_UNDEFINED){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create image view: format is unsupported"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create image view: format is unsupported"));
+        return VK_NULL_HANDLE;
+    }
+
+    if(!__hidden_vulkan::ValidateTextureViewShape(m_desc, dimension, resolvedSubresources)){
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create image view: invalid view shape"));
+        return VK_NULL_HANDLE;
+    }
 
     const FormatInfo& formatInfo = GetFormatInfo(format);
     VkImageAspectFlags aspectMask = 0;
@@ -309,6 +378,10 @@ TextureHandle Device::createTexture(const TextureDesc& d){
     if(d.sampleCount != 1 && d.mipLevels != 1){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create multisampled texture: mip levels must be 1"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create multisampled texture: mip levels must be 1"));
+        return nullptr;
+    }
+    if(!__hidden_vulkan::ValidateTextureShape(d, NWB_TEXT("create texture"))){
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create texture: invalid texture shape"));
         return nullptr;
     }
 
@@ -448,6 +521,8 @@ TextureHandle Device::createHandleForNativeTexture(ObjectType objectType, Object
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create texture handle for native multisampled texture: mip levels must be 1"));
         return nullptr;
     }
+    if(!__hidden_vulkan::ValidateTextureShape(desc, NWB_TEXT("create texture handle for native texture")))
+        return nullptr;
 
     auto* texture = NewArenaObject<Texture>(m_context.objectArena, m_context, m_allocator);
     texture->m_desc = desc;
@@ -474,12 +549,19 @@ TextureHandle Device::createHandleForNativeTexture(ObjectType objectType, Object
 SamplerHandle Device::createSampler(const SamplerDesc& d){
     VkResult res = VK_SUCCESS;
 
-    auto* sampler = NewArenaObject<Sampler>(m_context.objectArena, m_context);
-    sampler->m_desc = d;
+    SamplerDesc normalizedDesc = d;
+    const f32 maxSupportedAnisotropy = Max(m_context.physicalDeviceProperties.limits.maxSamplerAnisotropy, 1.f);
+    if(!(normalizedDesc.maxAnisotropy >= 1.f))
+        normalizedDesc.maxAnisotropy = 1.f;
+    if(normalizedDesc.maxAnisotropy > maxSupportedAnisotropy)
+        normalizedDesc.maxAnisotropy = maxSupportedAnisotropy;
 
-    VkFilter minFilter = d.minFilter ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
-    VkFilter magFilter = d.magFilter ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
-    VkSamplerMipmapMode mipFilter = d.mipFilter ? VK_SAMPLER_MIPMAP_MODE_LINEAR : VK_SAMPLER_MIPMAP_MODE_NEAREST;
+    auto* sampler = NewArenaObject<Sampler>(m_context.objectArena, m_context);
+    sampler->m_desc = normalizedDesc;
+
+    VkFilter minFilter = normalizedDesc.minFilter ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
+    VkFilter magFilter = normalizedDesc.magFilter ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
+    VkSamplerMipmapMode mipFilter = normalizedDesc.mipFilter ? VK_SAMPLER_MIPMAP_MODE_LINEAR : VK_SAMPLER_MIPMAP_MODE_NEAREST;
 
     auto convertAddressMode = [](SamplerAddressMode::Enum mode) -> VkSamplerAddressMode {
         switch(mode){
@@ -497,13 +579,13 @@ SamplerHandle Device::createSampler(const SamplerDesc& d){
     samplerInfo.magFilter = magFilter;
     samplerInfo.minFilter = minFilter;
     samplerInfo.mipmapMode = mipFilter;
-    samplerInfo.addressModeU = convertAddressMode(d.addressU);
-    samplerInfo.addressModeV = convertAddressMode(d.addressV);
-    samplerInfo.addressModeW = convertAddressMode(d.addressW);
-    samplerInfo.mipLodBias = d.mipBias;
-    samplerInfo.anisotropyEnable = d.maxAnisotropy > 1.f ? VK_TRUE : VK_FALSE;
-    samplerInfo.maxAnisotropy = d.maxAnisotropy;
-    samplerInfo.compareEnable = d.reductionType == SamplerReductionType::Comparison ? VK_TRUE : VK_FALSE;
+    samplerInfo.addressModeU = convertAddressMode(normalizedDesc.addressU);
+    samplerInfo.addressModeV = convertAddressMode(normalizedDesc.addressV);
+    samplerInfo.addressModeW = convertAddressMode(normalizedDesc.addressW);
+    samplerInfo.mipLodBias = normalizedDesc.mipBias;
+    samplerInfo.anisotropyEnable = normalizedDesc.maxAnisotropy > 1.f ? VK_TRUE : VK_FALSE;
+    samplerInfo.maxAnisotropy = normalizedDesc.maxAnisotropy;
+    samplerInfo.compareEnable = normalizedDesc.reductionType == SamplerReductionType::Comparison ? VK_TRUE : VK_FALSE;
     samplerInfo.compareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
     samplerInfo.minLod = 0.f;
     samplerInfo.maxLod = VK_LOD_CLAMP_NONE;

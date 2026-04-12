@@ -415,7 +415,7 @@ RayTracingOpacityMicromapHandle Device::createOpacityMicromap(const RayTracingOp
     BufferDesc bufferDesc;
     bufferDesc.canHaveUAVs = true;
     bufferDesc.byteSize = buildSize.micromapSize;
-    bufferDesc.initialState = ResourceStates::AccelStructBuildBlas;
+    bufferDesc.initialState = ResourceStates::OpacityMicromapWrite;
     bufferDesc.keepInitialState = true;
     bufferDesc.isAccelStructStorage = true;
     bufferDesc.debugName = desc.debugName;
@@ -537,7 +537,12 @@ RayTracingClusterOperationSizeInfo Device::getClusterOperationSizeInfo(const Ray
     case RayTracingClusterOperationType::ClasBuild:
     case RayTracingClusterOperationType::ClasBuildTemplates:
     case RayTracingClusterOperationType::ClasInstantiateTemplates:{
-        clusterInput.vertexFormat = __hidden_vulkan::ConvertFormat(params.clas.vertexFormat);
+        const VkFormat vertexFormat = __hidden_vulkan::ConvertFormat(params.clas.vertexFormat);
+        if(vertexFormat == VK_FORMAT_UNDEFINED){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to query cluster operation sizes: vertex format is unsupported"));
+            return info;
+        }
+        clusterInput.vertexFormat = vertexFormat;
         clusterInput.maxGeometryIndexValue = params.clas.maxGeometryIndex;
         clusterInput.maxClusterUniqueGeometryCount = params.clas.maxUniqueGeometryCount;
         clusterInput.maxClusterTriangleCount = params.clas.maxTriangleCount;

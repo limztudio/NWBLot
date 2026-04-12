@@ -84,7 +84,7 @@ private:
     bool m_hasPendingPayload;
 
 private:
-    Atomic<i32> m_msgCount;
+    Atomic<usize> m_msgCount;
 };
 
 

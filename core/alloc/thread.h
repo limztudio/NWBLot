@@ -305,7 +305,7 @@ public:
             return;
         }
 
-        const usize maxChunks = (count + effectiveGrainSize - 1) / effectiveGrainSize;
+        const usize maxChunks = 1 + ((count - 1) / effectiveGrainSize);
         const usize totalThreads = static_cast<usize>(m_threadCount) + 1;
         const usize numChunks = computeChunkCount(maxChunks, totalThreads);
 

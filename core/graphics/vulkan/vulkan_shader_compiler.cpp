@@ -250,6 +250,13 @@ bool VulkanShaderCompiler::compileVariant(const ShaderCompilerRequest& request, 
     }
 
     const usize spirvWordCount = static_cast<usize>(result.cend() - result.cbegin());
+    if(spirvWordCount > Limit<usize>::s_Max / sizeof(u32)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Shader compile failed for '{}' (variant '{}') : bytecode size overflows"),
+            StringConvert(request.shaderName),
+            StringConvert(request.variantName)
+        );
+        return false;
+    }
     const usize spirvSize = spirvWordCount * sizeof(u32);
     if(spirvSize == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Shader compile failed for '{}' (variant '{}') : compiled bytecode is empty"),

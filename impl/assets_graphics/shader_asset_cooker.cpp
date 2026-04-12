@@ -769,6 +769,10 @@ static bool ParseGeometryMeta(const DiscoveredNwbFile& discoveredFile, const Cor
             NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': vertex_data contains a value outside the f32 range"), PathToString<tchar>(discoveredFile.filePath));
             return false;
         }
+        if(outEntry.vertexData.size() > Limit<usize>::s_Max - sizeof(f32)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': vertex_data byte size overflows"), PathToString<tchar>(discoveredFile.filePath));
+            return false;
+        }
 
         AppendPOD(outEntry.vertexData, static_cast<f32>(numericValue));
         return true;
@@ -803,12 +807,20 @@ static bool ParseGeometryMeta(const DiscoveredNwbFile& discoveredFile, const Cor
                 NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': index_data contains a value that exceeds u32"), PathToString<tchar>(discoveredFile.filePath));
                 return false;
             }
+            if(outEntry.indexData.size() > Limit<usize>::s_Max - sizeof(u32)){
+                NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': index_data byte size overflows"), PathToString<tchar>(discoveredFile.filePath));
+                return false;
+            }
             AppendPOD(outEntry.indexData, static_cast<u32>(numericValue));
             return true;
         }
 
         if(numericValue > static_cast<f64>(Limit<u16>::s_Max)){
             NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': index_data contains a value that exceeds u16"), PathToString<tchar>(discoveredFile.filePath));
+            return false;
+        }
+        if(outEntry.indexData.size() > Limit<usize>::s_Max - sizeof(u16)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': index_data byte size overflows"), PathToString<tchar>(discoveredFile.filePath));
             return false;
         }
         AppendPOD(outEntry.indexData, static_cast<u16>(numericValue));
@@ -1488,6 +1500,10 @@ static bool PrepareShaderEntriesForCook(
     ErrorCode errorCode;
 
     outPreparedPlan.preparedEntries.clear();
+    if(inOutShaderEntries.size() > Limit<usize>::s_Max / 2u){
+        NWB_LOGGER_ERROR(NWB_TEXT("ShaderAssetCooker: prepared shader entry reserve count overflows"));
+        return false;
+    }
     outPreparedPlan.preparedEntries.reserve(inOutShaderEntries.size() * 2u);
     outPreparedPlan.plannedFileCount = 1; // shader archive index
 

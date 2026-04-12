@@ -268,10 +268,18 @@ bool GeometryAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
     AppendPOD(outBinary, static_cast<u64>(geometry.vertexData().size()));
     AppendPOD(outBinary, static_cast<u64>(geometry.indexData().size()));
     const usize vertexBegin = outBinary.size();
+    if(geometry.vertexData().size() > Limit<usize>::s_Max - vertexBegin){
+        NWB_LOGGER_ERROR(NWB_TEXT("GeometryAssetCodec::serialize failed: vertex payload size overflows output binary"));
+        return false;
+    }
     outBinary.resize(vertexBegin + geometry.vertexData().size());
     NWB_MEMCPY(outBinary.data() + vertexBegin, geometry.vertexData().size(), geometry.vertexData().data(), geometry.vertexData().size());
 
     const usize indexBegin = outBinary.size();
+    if(geometry.indexData().size() > Limit<usize>::s_Max - indexBegin){
+        NWB_LOGGER_ERROR(NWB_TEXT("GeometryAssetCodec::serialize failed: index payload size overflows output binary"));
+        return false;
+    }
     outBinary.resize(indexBegin + geometry.indexData().size());
     NWB_MEMCPY(outBinary.data() + indexBegin, geometry.indexData().size(), geometry.indexData().data(), geometry.indexData().size());
     return true;

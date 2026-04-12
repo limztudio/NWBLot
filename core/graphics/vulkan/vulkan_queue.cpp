@@ -575,9 +575,27 @@ void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapp
         MappingBindCounts& counts = mappingCounts[i];
         counts.opaqueBase = totalOpaqueBinds;
         counts.imageBase = totalImageBinds;
+        if(counts.opaqueCount > Limit<usize>::s_Max - totalOpaqueBinds){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to update texture tile mappings: opaque sparse bind count overflows"));
+            return;
+        }
+        if(counts.imageCount > Limit<usize>::s_Max - totalImageBinds){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to update texture tile mappings: image sparse bind count overflows"));
+            return;
+        }
         totalOpaqueBinds += counts.opaqueCount;
         totalImageBinds += counts.imageCount;
     }
+
+    if(totalOpaqueBinds > static_cast<usize>(Limit<u32>::s_Max) || totalImageBinds > static_cast<usize>(Limit<u32>::s_Max)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to update texture tile mappings: sparse bind count exceeds Vulkan limit"));
+        return;
+    }
+    if(totalOpaqueBinds > Limit<usize>::s_Max - totalImageBinds){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to update texture tile mappings: total sparse bind count overflows"));
+        return;
+    }
+    const usize totalBindings = totalOpaqueBinds + totalImageBinds;
 
     sparseMemoryBinds.resize(totalOpaqueBinds);
     sparseImageMemoryBinds.resize(totalImageBinds);
@@ -626,7 +644,6 @@ void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapp
         }
     };
 
-    const usize totalBindings = totalOpaqueBinds + totalImageBinds;
     if(useParallelPool && totalBindings >= s_ParallelTileMappingThreshold)
         workerPool.parallelFor(static_cast<usize>(0), mappingCount, s_TileMappingGrainSize, buildMappingBinds);
     else{
@@ -670,4 +687,3 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

@@ -820,10 +820,26 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
     u32 handleSize = m_context.rayTracingPipelineProperties.shaderGroupHandleSize;
     u32 handleAlignment = m_context.rayTracingPipelineProperties.shaderGroupHandleAlignment;
 
+    if(handleAlignment == 0 || (handleAlignment & (handleAlignment - 1u)) != 0u){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: shader group handle alignment is invalid"));
+        DestroyArenaObject(m_context.objectArena, pso);
+        return nullptr;
+    }
+    if(handleSize > Limit<u32>::s_Max - (handleAlignment - 1u)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: shader group handle size alignment overflows"));
+        DestroyArenaObject(m_context.objectArena, pso);
+        return nullptr;
+    }
     u32 handleSizeAligned = (handleSize + handleAlignment - 1) & ~(handleAlignment - 1);
     u32 groupCount = static_cast<u32>(groups.size());
+    if(handleSizeAligned == 0 || static_cast<usize>(groupCount) > Limit<usize>::s_Max / static_cast<usize>(handleSizeAligned)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: shader group handle table size overflows"));
+        DestroyArenaObject(m_context.objectArena, pso);
+        return nullptr;
+    }
 
-    pso->m_shaderGroupHandles.resize(groupCount * handleSizeAligned);
+    const usize shaderGroupHandleBytes = static_cast<usize>(groupCount) * static_cast<usize>(handleSizeAligned);
+    pso->m_shaderGroupHandles.resize(shaderGroupHandleBytes);
     res = vkGetRayTracingShaderGroupHandlesKHR(
         m_context.device,
         pso->m_pipeline,

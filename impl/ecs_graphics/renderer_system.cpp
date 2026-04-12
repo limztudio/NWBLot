@@ -498,7 +498,17 @@ void RendererSystem::renderGeometryPass(Core::ICommandList& commandList, Core::I
     if(!gBufferFramebuffer)
         return;
 
+    struct GeometryPassDrawItem{
+        Name geometryKey = NAME_NONE;
+        Name materialKey = NAME_NONE;
+    };
+
+    Core::Alloc::ScratchArena<> scratchArena;
+    Vector<GeometryPassDrawItem, Core::Alloc::ScratchAllocator<GeometryPassDrawItem>> meshDrawItems{Core::Alloc::ScratchAllocator<GeometryPassDrawItem>(scratchArena)};
+    Vector<GeometryPassDrawItem, Core::Alloc::ScratchAllocator<GeometryPassDrawItem>> computeDrawItems{Core::Alloc::ScratchAllocator<GeometryPassDrawItem>(scratchArena)};
+
     auto rendererView = m_world.view<RendererComponent>();
+    const Core::FramebufferInfo& framebufferInfo = gBufferFramebuffer->getFramebufferInfo();
 
     Core::ViewportState viewportState;
     viewportState.addViewportAndScissorRect(gBufferFramebuffer->getFramebufferInfo().getViewport());
@@ -521,28 +531,17 @@ void RendererSystem::renderGeometryPass(Core::ICommandList& commandList, Core::I
         if(!pipelineResources)
             continue;
 
+        GeometryPassDrawItem drawItem;
+        drawItem.geometryKey = geometry->geometryName;
+        drawItem.materialKey = renderer.material.name();
+
         switch(pipelineResources->renderPath){
         case RenderPath::MeshShader:{
             if(!pipelineResources->meshletPipeline)
                 continue;
             if(!ensureMeshBindingSet(*geometry))
                 continue;
-
-            commandList.setBufferState(geometry->shaderVertexBuffer.get(), Core::ResourceStates::ShaderResource);
-            commandList.setBufferState(geometry->shaderIndexBuffer.get(), Core::ResourceStates::ShaderResource);
-
-            Core::MeshletState meshletState;
-            meshletState.setPipeline(pipelineResources->meshletPipeline.get());
-            meshletState.setFramebuffer(gBufferFramebuffer);
-            meshletState.setViewport(viewportState);
-            meshletState.addBindingSet(geometry->meshBindingSet.get());
-
-            commandList.setMeshletState(meshletState);
-
-            const __hidden_ecs_graphics::ShaderDrivenPushConstants pushConstants =
-                __hidden_ecs_graphics::BuildShaderDrivenPushConstants(geometry->triangleCount, viewportState);
-            commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
-            commandList.dispatchMesh(geometry->dispatchGroupCount);
+            meshDrawItems.push_back(drawItem);
             break;
         }
         case RenderPath::ComputeEmulation:{
@@ -550,46 +549,101 @@ void RendererSystem::renderGeometryPass(Core::ICommandList& commandList, Core::I
                 continue;
             if(!ensureComputeBindingSet(*geometry))
                 continue;
-
-            commandList.setBufferState(geometry->shaderVertexBuffer.get(), Core::ResourceStates::ShaderResource);
-            commandList.setBufferState(geometry->shaderIndexBuffer.get(), Core::ResourceStates::ShaderResource);
-            commandList.setBufferState(geometry->emulationVertexBuffer.get(), Core::ResourceStates::UnorderedAccess);
-
-            Core::ComputeState computeState;
-            computeState.setPipeline(pipelineResources->computePipeline.get());
-            computeState.addBindingSet(geometry->computeBindingSet.get());
-
-            commandList.setComputeState(computeState);
-
-            const __hidden_ecs_graphics::ShaderDrivenPushConstants pushConstants =
-                __hidden_ecs_graphics::BuildShaderDrivenPushConstants(geometry->triangleCount, viewportState);
-            commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
-            commandList.dispatch(geometry->dispatchGroupCount);
-
-            commandList.setBufferState(geometry->emulationVertexBuffer.get(), Core::ResourceStates::VertexBuffer);
-
-            Core::GraphicsState graphicsState;
-            graphicsState.setPipeline(pipelineResources->emulationPipeline.get());
-            graphicsState.setFramebuffer(gBufferFramebuffer);
-            graphicsState.setViewport(viewportState);
-            graphicsState.addVertexBuffer(
-                Core::VertexBufferBinding()
-                    .setBuffer(geometry->emulationVertexBuffer.get())
-                    .setSlot(0)
-                    .setOffset(0)
-            );
-
-            commandList.setGraphicsState(graphicsState);
-
-            Core::DrawArguments drawArgs;
-            drawArgs.setVertexCount(geometry->indexCount);
-            commandList.draw(drawArgs);
+            computeDrawItems.push_back(drawItem);
             break;
         }
         default:{
             break;
         }
         }
+    }
+
+    for(const GeometryPassDrawItem& drawItem : meshDrawItems){
+        const auto foundGeometry = m_geometryMeshes.find(drawItem.geometryKey);
+        if(foundGeometry == m_geometryMeshes.end())
+            continue;
+
+        MaterialPipelineKey pipelineKey;
+        pipelineKey.material = drawItem.materialKey;
+        pipelineKey.framebufferInfo = framebufferInfo;
+
+        const auto foundPipeline = m_materialPipelines.find(pipelineKey);
+        if(foundPipeline == m_materialPipelines.end())
+            continue;
+
+        GeometryResources& geometry = foundGeometry.value();
+        MaterialPipelineResources& pipelineResources = foundPipeline.value();
+        if(!geometry.valid() || !geometry.meshBindingSet || !pipelineResources.meshletPipeline)
+            continue;
+
+        commandList.setBufferState(geometry.shaderVertexBuffer.get(), Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(geometry.shaderIndexBuffer.get(), Core::ResourceStates::ShaderResource);
+
+        Core::MeshletState meshletState;
+        meshletState.setPipeline(pipelineResources.meshletPipeline.get());
+        meshletState.setFramebuffer(gBufferFramebuffer);
+        meshletState.setViewport(viewportState);
+        meshletState.addBindingSet(geometry.meshBindingSet.get());
+
+        commandList.setMeshletState(meshletState);
+
+        const __hidden_ecs_graphics::ShaderDrivenPushConstants pushConstants =
+            __hidden_ecs_graphics::BuildShaderDrivenPushConstants(geometry.triangleCount, viewportState);
+        commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
+        commandList.dispatchMesh(geometry.dispatchGroupCount);
+    }
+
+    for(const GeometryPassDrawItem& drawItem : computeDrawItems){
+        const auto foundGeometry = m_geometryMeshes.find(drawItem.geometryKey);
+        if(foundGeometry == m_geometryMeshes.end())
+            continue;
+
+        MaterialPipelineKey pipelineKey;
+        pipelineKey.material = drawItem.materialKey;
+        pipelineKey.framebufferInfo = framebufferInfo;
+
+        const auto foundPipeline = m_materialPipelines.find(pipelineKey);
+        if(foundPipeline == m_materialPipelines.end())
+            continue;
+
+        GeometryResources& geometry = foundGeometry.value();
+        MaterialPipelineResources& pipelineResources = foundPipeline.value();
+        if(!geometry.valid() || !geometry.computeBindingSet || !geometry.emulationVertexBuffer || !pipelineResources.computePipeline || !pipelineResources.emulationPipeline)
+            continue;
+
+        commandList.setBufferState(geometry.shaderVertexBuffer.get(), Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(geometry.shaderIndexBuffer.get(), Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(geometry.emulationVertexBuffer.get(), Core::ResourceStates::UnorderedAccess);
+
+        Core::ComputeState computeState;
+        computeState.setPipeline(pipelineResources.computePipeline.get());
+        computeState.addBindingSet(geometry.computeBindingSet.get());
+
+        commandList.setComputeState(computeState);
+
+        const __hidden_ecs_graphics::ShaderDrivenPushConstants pushConstants =
+            __hidden_ecs_graphics::BuildShaderDrivenPushConstants(geometry.triangleCount, viewportState);
+        commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
+        commandList.dispatch(geometry.dispatchGroupCount);
+
+        commandList.setBufferState(geometry.emulationVertexBuffer.get(), Core::ResourceStates::VertexBuffer);
+
+        Core::GraphicsState graphicsState;
+        graphicsState.setPipeline(pipelineResources.emulationPipeline.get());
+        graphicsState.setFramebuffer(gBufferFramebuffer);
+        graphicsState.setViewport(viewportState);
+        graphicsState.addVertexBuffer(
+            Core::VertexBufferBinding()
+                .setBuffer(geometry.emulationVertexBuffer.get())
+                .setSlot(0)
+                .setOffset(0)
+        );
+
+        commandList.setGraphicsState(graphicsState);
+
+        Core::DrawArguments drawArgs;
+        drawArgs.setVertexCount(geometry.indexCount);
+        commandList.draw(drawArgs);
     }
 }
 

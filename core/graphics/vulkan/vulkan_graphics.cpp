@@ -765,11 +765,13 @@ void CommandList::setGraphicsState(const GraphicsState& state){
             if(!binding.buffer){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind vertex buffer: buffer is null"));
                 NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to bind vertex buffer: buffer is null"));
+                m_currentGraphicsState = {};
                 return;
             }
             if(binding.slot >= s_MaxVertexAttributes){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind vertex buffer: slot is out of range"));
                 NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to bind vertex buffer: slot is out of range"));
+                m_currentGraphicsState = {};
                 return;
             }
 
@@ -777,11 +779,13 @@ void CommandList::setGraphicsState(const GraphicsState& state){
             if(!vb->m_desc.isVertexBuffer){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind vertex buffer: buffer was not created with vertex-buffer usage"));
                 NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to bind vertex buffer: buffer was not created with vertex-buffer usage"));
+                m_currentGraphicsState = {};
                 return;
             }
             if(!__hidden_vulkan::IsBufferRangeInBounds(vb->m_desc, binding.offset, 1)){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind vertex buffer: offset is outside the buffer"));
                 NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to bind vertex buffer: offset is outside the buffer"));
+                m_currentGraphicsState = {};
                 return;
             }
 
@@ -797,6 +801,7 @@ void CommandList::setGraphicsState(const GraphicsState& state){
         if(!ib->m_desc.isIndexBuffer){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind index buffer: buffer was not created with index-buffer usage"));
             NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to bind index buffer: buffer was not created with index-buffer usage"));
+            m_currentGraphicsState = {};
             return;
         }
 
@@ -813,17 +818,20 @@ void CommandList::setGraphicsState(const GraphicsState& state){
         else{
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind index buffer: format must be R16_UINT or R32_UINT"));
             NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to bind index buffer: format must be R16_UINT or R32_UINT"));
+            m_currentGraphicsState = {};
             return;
         }
 
         if((state.indexBuffer.offset % indexSizeBytes) != 0){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind index buffer: offset is not aligned to the index format"));
             NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to bind index buffer: offset is not aligned to the index format"));
+            m_currentGraphicsState = {};
             return;
         }
         if(!__hidden_vulkan::IsBufferRangeInBounds(ib->m_desc, state.indexBuffer.offset, indexSizeBytes)){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind index buffer: offset is outside the buffer"));
             NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to bind index buffer: offset is outside the buffer"));
+            m_currentGraphicsState = {};
             return;
         }
 

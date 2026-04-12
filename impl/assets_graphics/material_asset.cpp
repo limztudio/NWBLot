@@ -88,6 +88,11 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: material has no shader stages"));
         return false;
     }
+    constexpr usize shaderEntryBytes = sizeof(NameHash) * 2u;
+    if(cursor > binary.size() || shaderCount > (binary.size() - cursor) / shaderEntryBytes){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: shader count exceeds available data"));
+        return false;
+    }
     m_stageShaders.reserve(shaderCount);
 
     for(u32 i = 0; i < shaderCount; ++i){
@@ -118,6 +123,11 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
     u32 parameterCount = 0;
     if(!ReadPOD(binary, cursor, parameterCount)){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: missing parameter count"));
+        return false;
+    }
+    constexpr usize minParameterEntryBytes = sizeof(u32) * 2u;
+    if(cursor > binary.size() || parameterCount > (binary.size() - cursor) / minParameterEntryBytes){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: parameter count exceeds available data"));
         return false;
     }
     m_parameters.reserve(parameterCount);
@@ -315,4 +325,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

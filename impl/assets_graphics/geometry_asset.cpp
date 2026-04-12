@@ -187,27 +187,34 @@ bool Geometry::loadBinary(const Core::Assets::AssetBytes& binary){
         NWB_LOGGER_ERROR(NWB_TEXT("Geometry::loadBinary failed: geometry payload is empty"));
         return false;
     }
+    if(use32BitIndices > 1){
+        NWB_LOGGER_ERROR(NWB_TEXT("Geometry::loadBinary failed: invalid index-format flag"));
+        return false;
+    }
     if(vertexBytes > static_cast<u64>(Limit<usize>::s_Max) || indexBytes > static_cast<u64>(Limit<usize>::s_Max)){
         NWB_LOGGER_ERROR(NWB_TEXT("Geometry::loadBinary failed: geometry payload exceeds addressable size"));
+        return false;
+    }
+    const usize vertexByteCount = static_cast<usize>(vertexBytes);
+    const usize indexByteCount = static_cast<usize>(indexBytes);
+    if(cursor > binary.size() || vertexByteCount > binary.size() - cursor){
+        NWB_LOGGER_ERROR(NWB_TEXT("Geometry::loadBinary failed: malformed vertex payload"));
+        return false;
+    }
+    const usize indexBegin = cursor + vertexByteCount;
+    if(indexByteCount > binary.size() - indexBegin){
+        NWB_LOGGER_ERROR(NWB_TEXT("Geometry::loadBinary failed: malformed index payload"));
         return false;
     }
 
     m_vertexStride = vertexStride;
     m_use32BitIndices = (use32BitIndices != 0);
 
-    m_vertexData.resize(static_cast<usize>(vertexBytes));
-    if(cursor > binary.size() || binary.size() - cursor < m_vertexData.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Geometry::loadBinary failed: malformed vertex payload"));
-        return false;
-    }
+    m_vertexData.resize(vertexByteCount);
     NWB_MEMCPY(m_vertexData.data(), m_vertexData.size(), binary.data() + cursor, m_vertexData.size());
     cursor += m_vertexData.size();
 
-    m_indexData.resize(static_cast<usize>(indexBytes));
-    if(cursor > binary.size() || binary.size() - cursor < m_indexData.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Geometry::loadBinary failed: malformed index payload"));
-        return false;
-    }
+    m_indexData.resize(indexByteCount);
     NWB_MEMCPY(m_indexData.data(), m_indexData.size(), binary.data() + cursor, m_indexData.size());
     cursor += m_indexData.size();
 
@@ -284,4 +291,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

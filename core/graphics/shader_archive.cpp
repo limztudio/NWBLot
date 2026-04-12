@@ -184,7 +184,16 @@ bool ShaderArchive::serializeIndex(const Vector<Record>& records, Vector<u8>& ou
             NWB_LOGGER_ERROR(NWB_TEXT("ShaderArchive::serializeIndex failed: variant name exceeds u32 range"));
             return false;
         }
-        variantTextBinaryBytes += sizeof(u32) + record.variantName.size();
+        if(record.variantName.size() > Limit<usize>::s_Max - sizeof(u32)){
+            NWB_LOGGER_ERROR(NWB_TEXT("ShaderArchive::serializeIndex failed: variant name size overflows"));
+            return false;
+        }
+        const usize variantRecordBytes = sizeof(u32) + record.variantName.size();
+        if(variantTextBinaryBytes > Limit<usize>::s_Max - variantRecordBytes){
+            NWB_LOGGER_ERROR(NWB_TEXT("ShaderArchive::serializeIndex failed: variant text size overflows"));
+            return false;
+        }
+        variantTextBinaryBytes += variantRecordBytes;
 
         if(i == 0)
             continue;
@@ -210,7 +219,13 @@ bool ShaderArchive::serializeIndex(const Vector<Record>& records, Vector<u8>& ou
     header.version = __hidden_shader_archive::s_IndexVersion;
     header.recordCount = static_cast<u32>(sortedRecords.size());
 
-    outBinary.reserve(sizeof(header) + sortedRecords.size() * sizeof(__hidden_shader_archive::RecordHeaderDisk) + variantTextBinaryBytes);
+    const usize headerAndRecordBytes = sizeof(header) + sortedRecords.size() * sizeof(__hidden_shader_archive::RecordHeaderDisk);
+    if(headerAndRecordBytes > Limit<usize>::s_Max - variantTextBinaryBytes){
+        NWB_LOGGER_ERROR(NWB_TEXT("ShaderArchive::serializeIndex failed: output binary size overflow"));
+        return false;
+    }
+
+    outBinary.reserve(headerAndRecordBytes + variantTextBinaryBytes);
     AppendPOD(outBinary, header);
 
     for(const Record& record : sortedRecords){
@@ -336,4 +351,3 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

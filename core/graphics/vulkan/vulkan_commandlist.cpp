@@ -147,12 +147,12 @@ void CommandList::copyTextureToBuffer(IBuffer* _dest, u64 destOffsetBytes, u32 d
         return;
     }
 
-    const TextureSlice resolvedSrc = srcSlice.resolve(src->m_desc);
-    if(resolvedSrc.width == 0 || resolvedSrc.height == 0 || resolvedSrc.depth == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to buffer: source region is empty"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to buffer: source region is empty"));
+    if(!__hidden_vulkan::IsTextureSliceInBounds(src->m_desc, srcSlice)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to buffer: source slice is outside the texture"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to buffer: source slice is outside the texture"));
         return;
     }
+    const TextureSlice resolvedSrc = srcSlice.resolve(src->m_desc);
 
     const FormatInfo& formatInfo = GetFormatInfo(src->m_desc.format);
     VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;

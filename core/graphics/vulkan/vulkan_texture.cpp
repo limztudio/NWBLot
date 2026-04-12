@@ -145,6 +145,12 @@ VkImageView Texture::getView(const TextureSubresourceSet& subresources, TextureD
         format = m_desc.format;
 
     TextureSubresourceSet resolvedSubresources = subresources.resolve(m_desc, false);
+    if(resolvedSubresources.numMipLevels == 0 || resolvedSubresources.numArraySlices == 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create image view: invalid subresource range"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create image view: invalid subresource range"));
+        return VK_NULL_HANDLE;
+    }
+
     TextureViewKey key{
         resolvedSubresources,
         dimension,
@@ -243,6 +249,21 @@ TextureHandle Device::createTexture(const TextureDesc& d){
 
     if(d.isTiled){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create tiled texture: virtual/tiled resources are not supported by this backend"));
+        return nullptr;
+    }
+    if(d.width == 0 || d.height == 0 || d.depth == 0 || d.mipLevels == 0 || d.arraySize == 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create texture: dimensions, mip count, and array size must be nonzero"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create texture: dimensions, mip count, and array size must be nonzero"));
+        return nullptr;
+    }
+    if(ConvertFormat(d.format) == VK_FORMAT_UNDEFINED){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create texture: format is unsupported"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create texture: format is unsupported"));
+        return nullptr;
+    }
+    if(d.dimension == TextureDimension::Texture3D && d.arraySize != 1){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create 3D texture: array size must be 1"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create 3D texture: array size must be 1"));
         return nullptr;
     }
 
@@ -508,8 +529,24 @@ void CommandList::clearTextureUInt(ITexture* _texture, TextureSubresourceSet sub
 void CommandList::copyTexture(ITexture* _dest, const TextureSlice& destSlice, ITexture* _src, const TextureSlice& srcSlice){
     auto* dest = checked_cast<Texture*>(_dest);
     auto* src = checked_cast<Texture*>(_src);
+    if(!dest || !src){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture: resource is invalid"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture: resource is invalid"));
+        return;
+    }
+    if(!__hidden_vulkan::IsTextureSliceInBounds(dest->m_desc, destSlice) || !__hidden_vulkan::IsTextureSliceInBounds(src->m_desc, srcSlice)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture: slice is outside the texture"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture: slice is outside the texture"));
+        return;
+    }
+
     const TextureSlice resolvedDst = destSlice.resolve(dest->m_desc);
     const TextureSlice resolvedSrc = srcSlice.resolve(src->m_desc);
+    if(resolvedDst.width != resolvedSrc.width || resolvedDst.height != resolvedSrc.height || resolvedDst.depth != resolvedSrc.depth){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture: source and destination extents do not match"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture: source and destination extents do not match"));
+        return;
+    }
 
     VkImageCopy region{};
     const FormatInfo& srcFormatInfo = GetFormatInfo(src->m_desc.format);
@@ -547,9 +584,24 @@ void CommandList::copyTexture(ITexture* _dest, const TextureSlice& destSlice, IT
 void CommandList::copyTexture(IStagingTexture* dest, const TextureSlice& destSlice, ITexture* src, const TextureSlice& srcSlice){
     auto* staging = checked_cast<StagingTexture*>(dest);
     auto* texture = checked_cast<Texture*>(src);
+    if(!staging || !texture){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to staging texture: resource is invalid"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to staging texture: resource is invalid"));
+        return;
+    }
+    if(!__hidden_vulkan::IsTextureSliceInBounds(staging->m_desc, destSlice) || !__hidden_vulkan::IsTextureSliceInBounds(texture->m_desc, srcSlice)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to staging texture: slice is outside the texture"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to staging texture: slice is outside the texture"));
+        return;
+    }
 
     TextureSlice resolvedSrc = srcSlice.resolve(texture->m_desc);
     TextureSlice resolvedDst = destSlice.resolve(staging->m_desc);
+    if(resolvedSrc.width != resolvedDst.width || resolvedSrc.height != resolvedDst.height || resolvedSrc.depth != resolvedDst.depth){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to staging texture: source and destination extents do not match"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to staging texture: source and destination extents do not match"));
+        return;
+    }
 
     const FormatInfo& formatInfo = GetFormatInfo(texture->m_desc.format);
     u32 bufferRowLength = 0;
@@ -582,9 +634,24 @@ void CommandList::copyTexture(IStagingTexture* dest, const TextureSlice& destSli
 void CommandList::copyTexture(ITexture* dest, const TextureSlice& destSlice, IStagingTexture* src, const TextureSlice& srcSlice){
     auto* texture = checked_cast<Texture*>(dest);
     auto* staging = checked_cast<StagingTexture*>(src);
+    if(!texture || !staging){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy staging texture to texture: resource is invalid"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy staging texture to texture: resource is invalid"));
+        return;
+    }
+    if(!__hidden_vulkan::IsTextureSliceInBounds(texture->m_desc, destSlice) || !__hidden_vulkan::IsTextureSliceInBounds(staging->m_desc, srcSlice)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy staging texture to texture: slice is outside the texture"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy staging texture to texture: slice is outside the texture"));
+        return;
+    }
 
     TextureSlice resolvedDst = destSlice.resolve(texture->m_desc);
     TextureSlice resolvedSrc = srcSlice.resolve(staging->m_desc);
+    if(resolvedDst.width != resolvedSrc.width || resolvedDst.height != resolvedSrc.height || resolvedDst.depth != resolvedSrc.depth){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy staging texture to texture: source and destination extents do not match"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy staging texture to texture: source and destination extents do not match"));
+        return;
+    }
 
     const FormatInfo& formatInfo = GetFormatInfo(staging->m_desc.format);
     u32 bufferRowLength = 0;

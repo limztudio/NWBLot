@@ -188,19 +188,21 @@ const FormatInfo& GetFormatInfo(Format::Enum format)noexcept{
 TextureSlice TextureSlice::resolve(const TextureDesc& desc)const{
     TextureSlice ret(*this);
     NWB_ASSERT(mipLevel < desc.mipLevels);
-    
+    const MipLevel resolvedMipLevel = (desc.mipLevels > 0 && mipLevel < desc.mipLevels) ? mipLevel : 0;
+
+    const u32 mipWidth = Max(desc.width >> resolvedMipLevel, static_cast<u32>(1));
+    const u32 mipHeight = Max(desc.height >> resolvedMipLevel, static_cast<u32>(1));
+    const u32 mipDepth = desc.dimension == TextureDimension::Texture3D
+        ? Max(desc.depth >> resolvedMipLevel, static_cast<u32>(1))
+        : static_cast<u32>(1);
+
     if(width == static_cast<u32>(-1))
-        ret.width = Max(desc.width >> mipLevel, static_cast<u32>(1));
+        ret.width = x < mipWidth ? mipWidth - x : 0;
     if(height == static_cast<u32>(-1))
-        ret.height = Max(desc.height >> mipLevel, static_cast<u32>(1));
-    
-    if(depth == static_cast<u32>(-1)){
-        if(desc.dimension == TextureDimension::Texture3D)
-            ret.depth = Max(desc.depth >> mipLevel, static_cast<u32>(1));
-        else{
-            ret.depth = 1;
-        }
-    }
+        ret.height = y < mipHeight ? mipHeight - y : 0;
+
+    if(depth == static_cast<u32>(-1))
+        ret.depth = z < mipDepth ? mipDepth - z : 0;
 
     return ret;
 }

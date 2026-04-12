@@ -533,6 +533,9 @@ bool DescriptorHeapManager::writeDescriptor(const BindingSetItem& item, const De
         auto* texture = checked_cast<Texture*>(item.resourceHandle);
         if(!texture)
             return false;
+        const TextureSubresourceSet subresources = item.subresources.resolve(texture->getDescription(), false);
+        if(subresources.numMipLevels == 0 || subresources.numArraySlices == 0)
+            return false;
         imageViewInfo = __hidden_vulkan::BuildImageViewCreateInfo(*texture, item);
         imageInfo.pView = &imageViewInfo;
         imageInfo.layout = item.type == ResourceType::Texture_UAV ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;

@@ -26,7 +26,54 @@ static constexpr u64 AlignBufferOffset(u64 off){
     return ((off + (s_BufferAlignmentBytes - 1)) / s_BufferAlignmentBytes) * s_BufferAlignmentBytes;
 }
 
+bool IsTextureSliceInBounds(const TextureDesc& desc, const TextureSlice& slice){
+    if(desc.mipLevels == 0 || slice.mipLevel >= desc.mipLevels)
+        return false;
+    if(desc.arraySize == 0 || slice.arraySlice >= desc.arraySize)
+        return false;
+
+    const FormatInfo& formatInfo = GetFormatInfo(desc.format);
+    if(formatInfo.blockSize == 0 || formatInfo.bytesPerBlock == 0)
+        return false;
+
+    const u32 mipWidth = Max<u32>(desc.width >> slice.mipLevel, 1u);
+    const u32 mipHeight = Max<u32>(desc.height >> slice.mipLevel, 1u);
+    const u32 mipDepth = desc.dimension == TextureDimension::Texture3D
+        ? Max<u32>(desc.depth >> slice.mipLevel, 1u)
+        : 1u;
+
+    const TextureSlice resolved = slice.resolve(desc);
+    if(resolved.width == 0 || resolved.height == 0 || resolved.depth == 0)
+        return false;
+    if(resolved.x > mipWidth || resolved.width > mipWidth - resolved.x)
+        return false;
+    if(resolved.y > mipHeight || resolved.height > mipHeight - resolved.y)
+        return false;
+    if(resolved.z > mipDepth || resolved.depth > mipDepth - resolved.z)
+        return false;
+
+    const u32 blockSize = formatInfo.blockSize;
+    if((resolved.x % blockSize) != 0 || (resolved.y % blockSize) != 0)
+        return false;
+    if((resolved.width % blockSize) != 0 && resolved.x + resolved.width != mipWidth)
+        return false;
+    if((resolved.height % blockSize) != 0 && resolved.y + resolved.height != mipHeight)
+        return false;
+
+    return true;
+}
+
 u64 ComputeStagingTextureOffset(const TextureDesc& desc, const TextureSlice& slice, usize* outRowPitch, u32* outBufferRowLength, u32* outBufferImageHeight){
+    if(!IsTextureSliceInBounds(desc, slice)){
+        if(outRowPitch)
+            *outRowPitch = 0;
+        if(outBufferRowLength)
+            *outBufferRowLength = 0;
+        if(outBufferImageHeight)
+            *outBufferImageHeight = 0;
+        return 0;
+    }
+
     const TextureSlice resolved = slice.resolve(desc);
     const FormatInfo& formatInfo = GetFormatInfo(desc.format);
 
@@ -87,6 +134,17 @@ u64 ComputeStagingTextureOffset(const TextureDesc& desc, const TextureSlice& sli
 
 StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAccessMode::Enum cpuAccess){
     VkResult res = VK_SUCCESS;
+
+    if(d.width == 0 || d.height == 0 || d.depth == 0 || d.mipLevels == 0 || d.arraySize == 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create staging texture: dimensions, mip count, and array size must be nonzero"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging texture: dimensions, mip count, and array size must be nonzero"));
+        return nullptr;
+    }
+    if(d.dimension == TextureDimension::Texture3D && d.arraySize != 1){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create staging 3D texture: array size must be 1"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging 3D texture: array size must be 1"));
+        return nullptr;
+    }
 
     const FormatInfo& formatInfo = GetFormatInfo(d.format);
     if(formatInfo.blockSize == 0 || formatInfo.bytesPerBlock == 0){
@@ -214,6 +272,11 @@ void* Device::mapStagingTexture(IStagingTexture* tex, const TextureSlice& slice,
     }
 
     auto* staging = static_cast<StagingTexture*>(tex);
+    if(!__hidden_vulkan::IsTextureSliceInBounds(staging->m_desc, slice)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map staging texture: slice is outside the texture"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to map staging texture: slice is outside the texture"));
+        return nullptr;
+    }
 
     if(!staging->m_mappedMemory){
         res = vkMapMemory(m_context.device, staging->m_memory, 0, VK_WHOLE_SIZE, 0, &staging->m_mappedMemory);

@@ -350,7 +350,8 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
 
 
 void CommandList::setMeshletState(const MeshletState& state){
-    ensureGraphicsRenderPass(state.framebuffer);
+    if(!ensureGraphicsRenderPass(state.framebuffer))
+        return;
     commitBarriers();
     m_currentGraphicsState = {};
     m_currentComputeState = {};

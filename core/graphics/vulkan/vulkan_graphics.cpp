@@ -483,15 +483,15 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void CommandList::beginDynamicRendering(IFramebuffer* _framebuffer, const RenderPassParameters& params){
+bool CommandList::beginDynamicRendering(IFramebuffer* _framebuffer, const RenderPassParameters& params){
     auto* fb = checked_cast<Framebuffer*>(_framebuffer);
     if(!fb)
-        return;
+        return false;
 
     if(fb->m_framebufferInfo.width == 0 || fb->m_framebufferInfo.height == 0 || fb->m_framebufferInfo.arraySize == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to begin dynamic rendering: framebuffer dimensions are invalid"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to begin dynamic rendering: framebuffer dimensions are invalid"));
-        return;
+        return false;
     }
 
     const FramebufferDesc& fbDesc = fb->m_desc;
@@ -515,6 +515,11 @@ void CommandList::beginDynamicRendering(IFramebuffer* _framebuffer, const Render
             if(resolvedColorSubresources.numArraySlices == 1)
                 viewDimension = TextureDimension::Texture2D;
             VkImageView view = tex->getView(fbDesc.colorAttachments[i].subresources, viewDimension, Format::UNKNOWN);
+            if(view == VK_NULL_HANDLE){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to begin dynamic rendering: color attachment view is invalid"));
+                NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to begin dynamic rendering: color attachment view is invalid"));
+                return false;
+            }
 
             colorAttachments[numColorAttachments].sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
             colorAttachments[numColorAttachments].imageView = view;
@@ -545,6 +550,11 @@ void CommandList::beginDynamicRendering(IFramebuffer* _framebuffer, const Render
             ? TextureDimension::Texture2D
             : depthTex->m_desc.dimension;
         VkImageView depthView = depthTex->getView(fbDesc.depthAttachment.subresources, depthViewDimension, Format::UNKNOWN, true);
+        if(depthView == VK_NULL_HANDLE){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to begin dynamic rendering: depth/stencil attachment view is invalid"));
+            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to begin dynamic rendering: depth/stencil attachment view is invalid"));
+            return false;
+        }
 
         const FormatInfo& formatInfo = GetFormatInfo(depthTex->m_desc.format);
         if(formatInfo.hasDepth){
@@ -577,6 +587,7 @@ void CommandList::beginDynamicRendering(IFramebuffer* _framebuffer, const Render
         renderingInfo.pStencilAttachment = &stencilAttachment;
 
     vkCmdBeginRendering(m_currentCmdBuf->m_cmdBuf, &renderingInfo);
+    return true;
 }
 
 void CommandList::endDynamicRendering(){
@@ -587,12 +598,12 @@ void CommandList::endRenderPass(){
     endActiveRenderPass();
 }
 
-void CommandList::ensureGraphicsRenderPass(IFramebuffer* framebuffer){
+bool CommandList::ensureGraphicsRenderPass(IFramebuffer* framebuffer){
     if(!framebuffer)
-        return;
+        return true;
 
     if(m_renderPassActive && m_renderPassFramebuffer == framebuffer)
-        return;
+        return true;
 
     endActiveRenderPass();
 
@@ -602,9 +613,11 @@ void CommandList::ensureGraphicsRenderPass(IFramebuffer* framebuffer){
     }
 
     RenderPassParameters params = {};
-    beginDynamicRendering(framebuffer, params);
+    if(!beginDynamicRendering(framebuffer, params))
+        return false;
     m_renderPassActive = true;
     m_renderPassFramebuffer = framebuffer;
+    return true;
 }
 
 void CommandList::endActiveRenderPass(){
@@ -617,7 +630,8 @@ void CommandList::endActiveRenderPass(){
 }
 
 void CommandList::setGraphicsState(const GraphicsState& state){
-    ensureGraphicsRenderPass(state.framebuffer);
+    if(!ensureGraphicsRenderPass(state.framebuffer))
+        return;
     commitBarriers();
     m_currentComputeState = {};
     m_currentMeshletState = {};

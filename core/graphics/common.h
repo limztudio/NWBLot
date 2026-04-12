@@ -1228,7 +1228,16 @@ struct RasterState{
     constexpr RasterState& setQuadFillEnable(bool value){ quadFillEnable = value; return *this; }
     constexpr RasterState& enableQuadFill(){ quadFillEnable = true; return *this; }
     constexpr RasterState& disableQuadFill(){ quadFillEnable = false; return *this; }
-    constexpr RasterState& setSamplePositions(const i8* x, const i8* y, usize count){ for(usize i = 0; i < count; ++i){ samplePositionsX[i] = x[i]; samplePositionsY[i] = y[i]; } return *this; }
+    constexpr RasterState& setSamplePositions(const i8* x, const i8* y, usize count){
+        if(!x || !y)
+            return *this;
+        const usize samplePositionCount = count < 16 ? count : 16;
+        for(usize i = 0; i < samplePositionCount; ++i){
+            samplePositionsX[i] = x[i];
+            samplePositionsY[i] = y[i];
+        }
+        return *this;
+    }
 };
 
 

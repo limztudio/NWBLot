@@ -297,8 +297,11 @@ void* Device::mapBuffer(IBuffer* _buffer, CpuAccessMode::Enum){
     }
 
     buffer->m_mappedMemory = data;
-    if(!invalidateReadRange())
+    if(!invalidateReadRange()){
+        vkUnmapMemory(m_context.device, buffer->m_memory);
+        buffer->m_mappedMemory = nullptr;
         return nullptr;
+    }
     return data;
 }
 
@@ -346,6 +349,10 @@ bool Device::bindBufferMemory(IBuffer* _buffer, IHeap* heap, u64 offset){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind buffer memory: heap is invalid"));
         return false;
     }
+    if(!buffer->m_desc.isVirtual){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind buffer memory: buffer was not created as virtual"));
+        return false;
+    }
 
     // Binding to a heap means the heap owns the memory, not the buffer
     buffer->m_memory = VK_NULL_HANDLE;
@@ -354,6 +361,12 @@ bool Device::bindBufferMemory(IBuffer* _buffer, IHeap* heap, u64 offset){
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind buffer memory: {}"), ResultToString(res));
         return false;
+    }
+    if(m_context.extensions.buffer_device_address){
+        VkBufferDeviceAddressInfo addressInfo{};
+        addressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+        addressInfo.buffer = buffer->m_buffer;
+        buffer->m_deviceAddress = vkGetBufferDeviceAddress(m_context.device, &addressInfo);
     }
 
     return true;

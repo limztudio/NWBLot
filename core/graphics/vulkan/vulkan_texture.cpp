@@ -462,6 +462,10 @@ bool Device::bindTextureMemory(ITexture* _texture, IHeap* heap, u64 offset){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind texture memory: heap is invalid"));
         return false;
     }
+    if(!texture->m_desc.isVirtual){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind texture memory: texture was not created as virtual"));
+        return false;
+    }
 
     texture->m_memory = VK_NULL_HANDLE;
 

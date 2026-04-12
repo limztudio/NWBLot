@@ -63,7 +63,7 @@ namespace __hidden_asset_paths{
         const AString componentText = CanonicalizeText(PathToString(component));
         if(componentText.empty() || componentText == ".")
             continue;
-        if(componentText == "..")
+        if(componentText == ".." || componentText.find('/') != AString::npos)
             return false;
 
         if(hasComponent)
@@ -212,9 +212,9 @@ namespace __hidden_asset_paths{
         ++componentIt;
         for(; componentIt != virtualPathPath.end(); ++componentIt){
             const AString componentText = CanonicalizeText(PathToString(*componentIt));
-            if(componentText.empty() || componentText == "." || componentText == ".."){
+            if(componentText.empty() || componentText == "." || componentText == ".." || componentText.find('/') != AString::npos){
                 NWB_LOGGER_ERROR(
-                    NWB_TEXT("Assets: invalid virtual path '{}'; components must not be empty, '.' or '..'"),
+                    NWB_TEXT("Assets: invalid virtual path '{}'; components must not be empty, '.', '..' or contain path separators"),
                     StringConvert(virtualPath)
                 );
                 outResolvedPath.clear();

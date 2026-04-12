@@ -352,6 +352,7 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
     bufferDesc.byteSize = accelStructSize;
     bufferDesc.isAccelStructStorage = true;
     bufferDesc.debugName = "AccelStructBuffer";
+    bufferDesc.isVirtual = desc.isVirtual;
 
     as->m_buffer = createBuffer(bufferDesc);
 
@@ -376,7 +377,8 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
 
     VkAccelerationStructureDeviceAddressInfoKHR addressInfo = __hidden_vulkan::MakeVkStruct<VkAccelerationStructureDeviceAddressInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR);
     addressInfo.accelerationStructure = as->m_accelStruct;
-    as->m_deviceAddress = vkGetAccelerationStructureDeviceAddressKHR(m_context.device, &addressInfo);
+    if(!desc.isVirtual)
+        as->m_deviceAddress = vkGetAccelerationStructureDeviceAddressKHR(m_context.device, &addressInfo);
 
     return RayTracingAccelStructHandle(as, RayTracingAccelStructHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
@@ -584,8 +586,15 @@ bool Device::bindAccelStructMemory(IRayTracingAccelStruct* _as, IHeap* heap, u64
 
     auto* as = checked_cast<AccelStruct*>(_as);
 
-    if(as->m_buffer)
-        return bindBufferMemory(as->m_buffer.get(), heap, offset);
+    if(as->m_buffer){
+        if(!bindBufferMemory(as->m_buffer.get(), heap, offset))
+            return false;
+
+        VkAccelerationStructureDeviceAddressInfoKHR addressInfo = __hidden_vulkan::MakeVkStruct<VkAccelerationStructureDeviceAddressInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR);
+        addressInfo.accelerationStructure = as->m_accelStruct;
+        as->m_deviceAddress = vkGetAccelerationStructureDeviceAddressKHR(m_context.device, &addressInfo);
+        return true;
+    }
 
     NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind acceleration structure memory: storage buffer is null"));
     return false;
@@ -598,6 +607,23 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Ray tracing pipeline extension is required to create ray tracing pipelines."));
         return nullptr;
     }
+    if(desc.maxRecursionDepth > m_context.rayTracingPipelineProperties.maxRayRecursionDepth){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: max recursion depth {} exceeds device limit {}"),
+            desc.maxRecursionDepth,
+            m_context.rayTracingPipelineProperties.maxRayRecursionDepth
+        );
+        return nullptr;
+    }
+    if(desc.hitGroups.size() > (static_cast<usize>(-1) - desc.shaders.size()) / s_RayTracingHitGroupShaderStageCount){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: shader stage count overflows"));
+        return nullptr;
+    }
+    const usize maxShaderStages = desc.shaders.size() + desc.hitGroups.size() * s_RayTracingHitGroupShaderStageCount;
+    if(maxShaderStages > static_cast<usize>(UINT32_MAX)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: shader stage count exceeds Vulkan limit"));
+        return nullptr;
+    }
 
     auto* pso = NewArenaObject<RayTracingPipeline>(m_context.objectArena, m_context, *this);
     pso->m_desc = desc;
@@ -606,11 +632,26 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
 
     Vector<VkPipelineShaderStageCreateInfo, Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>> stages{ Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>(scratchArena) };
     Vector<VkRayTracingShaderGroupCreateInfoKHR, Alloc::ScratchAllocator<VkRayTracingShaderGroupCreateInfoKHR>> groups{ Alloc::ScratchAllocator<VkRayTracingShaderGroupCreateInfoKHR>(scratchArena) };
+    Vector<VkSpecializationInfo, Alloc::ScratchAllocator<VkSpecializationInfo>> specInfos{ Alloc::ScratchAllocator<VkSpecializationInfo>(scratchArena) };
     Vector<VkDescriptorSetAndBindingMappingEXT, Alloc::ScratchAllocator<VkDescriptorSetAndBindingMappingEXT>> descriptorHeapMappings{ Alloc::ScratchAllocator<VkDescriptorSetAndBindingMappingEXT>(scratchArena) };
     Vector<VkShaderDescriptorSetAndBindingMappingInfoEXT, Alloc::ScratchAllocator<VkShaderDescriptorSetAndBindingMappingInfoEXT>> descriptorHeapStageMappings{ Alloc::ScratchAllocator<VkShaderDescriptorSetAndBindingMappingInfoEXT>(scratchArena) };
 
-    stages.reserve(desc.shaders.size() + desc.hitGroups.size() * s_RayTracingHitGroupShaderStageCount);
+    stages.reserve(maxShaderStages);
     groups.reserve(desc.shaders.size() + desc.hitGroups.size());
+    specInfos.reserve(maxShaderStages);
+
+    auto addShaderSpecialization = [&](Shader* s, VkPipelineShaderStageCreateInfo& stageInfo){
+        if(s->m_specializationEntries.empty())
+            return;
+
+        VkSpecializationInfo specInfo{};
+        specInfo.mapEntryCount = static_cast<u32>(s->m_specializationEntries.size());
+        specInfo.pMapEntries = s->m_specializationEntries.data();
+        specInfo.dataSize = s->m_specializationData.size();
+        specInfo.pData = s->m_specializationData.data();
+        specInfos.push_back(specInfo);
+        stageInfo.pSpecializationInfo = &specInfos.back();
+    };
 
     for(const auto& shaderDesc : desc.shaders){
         if(!shaderDesc.shader)
@@ -635,6 +676,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
         default:
             continue;
         }
+        addShaderSpecialization(s, stageInfo);
 
         VkRayTracingShaderGroupCreateInfoKHR group = __hidden_vulkan::MakeVkStruct<VkRayTracingShaderGroupCreateInfoKHR>(VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR);
         group.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
@@ -661,6 +703,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
             stageInfo.stage = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
             stageInfo.module = s->m_shaderModule;
             stageInfo.pName = s->m_entryPointName.c_str();
+            addShaderSpecialization(s, stageInfo);
             group.closestHitShader = static_cast<u32>(stages.size());
             stages.push_back(stageInfo);
         }
@@ -670,6 +713,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
             stageInfo.stage = VK_SHADER_STAGE_ANY_HIT_BIT_KHR;
             stageInfo.module = s->m_shaderModule;
             stageInfo.pName = s->m_entryPointName.c_str();
+            addShaderSpecialization(s, stageInfo);
             group.anyHitShader = static_cast<u32>(stages.size());
             stages.push_back(stageInfo);
         }
@@ -679,6 +723,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
             stageInfo.stage = VK_SHADER_STAGE_INTERSECTION_BIT_KHR;
             stageInfo.module = s->m_shaderModule;
             stageInfo.pName = s->m_entryPointName.c_str();
+            addShaderSpecialization(s, stageInfo);
             group.intersectionShader = static_cast<u32>(stages.size());
             stages.push_back(stageInfo);
         }
@@ -819,7 +864,21 @@ u32 ShaderTable::findGroupIndex(const Name& exportName)const{
 
     u32 groupIndex = 0;
     for(const auto& shaderDesc : m_pipeline->m_desc.shaders){
-        if(shaderDesc.shader && shaderDesc.shader->getDescription().entryName == exportName)
+        if(!shaderDesc.shader)
+            continue;
+
+        const ShaderDesc& desc = shaderDesc.shader->getDescription();
+        switch(desc.shaderType){
+        case ShaderType::RayGeneration:
+        case ShaderType::Miss:
+        case ShaderType::Callable:
+            break;
+        default:
+            continue;
+        }
+
+        const Name shaderExportName = shaderDesc.exportName != NAME_NONE ? shaderDesc.exportName : desc.entryName;
+        if(shaderExportName == exportName)
             return groupIndex;
         ++groupIndex;
     }

@@ -248,7 +248,7 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
     bool foundMemoryType = false;
     u32 memoryTypeIndex = 0;
     for(u32 i = 0; i < m_context.memoryProperties.memoryTypeCount; ++i){
-        if((memRequirements.memoryTypeBits & (1 << i)) && (m_context.memoryProperties.memoryTypes[i].propertyFlags & memProps) == memProps){
+        if((memRequirements.memoryTypeBits & (1u << i)) && (m_context.memoryProperties.memoryTypes[i].propertyFlags & memProps) == memProps){
             memoryTypeIndex = i;
             foundMemoryType = true;
             break;
@@ -259,7 +259,7 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
     if(!foundMemoryType && cpuAccess == CpuAccessMode::Read){
         memProps = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
         for(u32 i = 0; i < m_context.memoryProperties.memoryTypeCount; ++i){
-            if((memRequirements.memoryTypeBits & (1 << i)) && (m_context.memoryProperties.memoryTypes[i].propertyFlags & memProps) == memProps){
+            if((memRequirements.memoryTypeBits & (1u << i)) && (m_context.memoryProperties.memoryTypes[i].propertyFlags & memProps) == memProps){
                 memoryTypeIndex = i;
                 foundMemoryType = true;
                 break;

@@ -95,6 +95,17 @@ private:
         Core::ShaderHandle computeShader;
     };
 
+    struct MaterialPassDrawItem{
+        Name geometryKey = NAME_NONE;
+        MaterialPipelineKey pipelineKey;
+        f32 alpha = 1.f;
+    };
+
+    using MaterialPassDrawItemVector = Vector<
+        MaterialPassDrawItem,
+        Core::Alloc::ScratchAllocator<MaterialPassDrawItem>
+    >;
+
 public:
     struct AvboitFrameTargets{
         u32 fullWidth = 0;
@@ -215,7 +226,39 @@ private:
     void resetDeferredFrameTargets();
     void clearDeferredTargets(Core::ICommandList& commandList, DeferredFrameTargets& targets);
     void clearAvboitTargets(Core::ICommandList& commandList, AvboitFrameTargets& targets);
-    void renderMaterialPass(Core::ICommandList& commandList, Core::IFramebuffer* framebuffer, MaterialPipelinePass pass, bool transparent, Core::IBindingSet* passBindingSet, const AvboitFrameTargets* avboitTargets);
+    void renderMaterialPass(
+        Core::ICommandList& commandList,
+        Core::IFramebuffer* framebuffer,
+        MaterialPipelinePass pass,
+        bool transparent,
+        Core::IBindingSet* passBindingSet,
+        const AvboitFrameTargets* avboitTargets
+    );
+    void gatherMaterialPassDrawItems(
+        Core::IFramebuffer* framebuffer,
+        MaterialPipelinePass pass,
+        bool transparent,
+        MaterialPassDrawItemVector& meshDrawItems,
+        MaterialPassDrawItemVector& computeDrawItems
+    );
+    void renderMeshMaterialPassDrawItems(
+        Core::ICommandList& commandList,
+        Core::IFramebuffer* framebuffer,
+        MaterialPipelinePass pass,
+        Core::IBindingSet* passBindingSet,
+        const AvboitFrameTargets* avboitTargets,
+        const Core::ViewportState& viewportState,
+        const MaterialPassDrawItemVector& drawItems
+    );
+    void renderComputeMaterialPassDrawItems(
+        Core::ICommandList& commandList,
+        Core::IFramebuffer* framebuffer,
+        MaterialPipelinePass pass,
+        Core::IBindingSet* passBindingSet,
+        const AvboitFrameTargets* avboitTargets,
+        const Core::ViewportState& viewportState,
+        const MaterialPassDrawItemVector& drawItems
+    );
     void renderAvboitPasses(Core::ICommandList& commandList, DeferredFrameTargets& targets);
     void dispatchAvboitDepthWarp(Core::ICommandList& commandList, AvboitFrameTargets& targets);
     void dispatchAvboitIntegration(Core::ICommandList& commandList, AvboitFrameTargets& targets);

@@ -1263,26 +1263,30 @@ void RendererSystem::renderMaterialPass(
         commandList.commitBarriers();
     }
 
-    struct MeshGeometryPassDrawItem{
-        Name geometryKey = NAME_NONE;
-        MaterialPipelineKey pipelineKey;
-        f32 alpha = 1.f;
-    };
-    struct ComputeGeometryPassDrawItem{
-        Name geometryKey = NAME_NONE;
-        MaterialPipelineKey pipelineKey;
-        f32 alpha = 1.f;
-    };
-
     Core::Alloc::ScratchArena<> scratchArena;
-    Vector<MeshGeometryPassDrawItem, Core::Alloc::ScratchAllocator<MeshGeometryPassDrawItem>> meshDrawItems{Core::Alloc::ScratchAllocator<MeshGeometryPassDrawItem>(scratchArena)};
-    Vector<ComputeGeometryPassDrawItem, Core::Alloc::ScratchAllocator<ComputeGeometryPassDrawItem>> computeDrawItems{Core::Alloc::ScratchAllocator<ComputeGeometryPassDrawItem>(scratchArena)};
-
-    auto rendererView = m_world.view<RendererComponent>();
-    const Core::FramebufferInfo& framebufferInfo = framebuffer->getFramebufferInfo();
+    MaterialPassDrawItemVector meshDrawItems{Core::Alloc::ScratchAllocator<MaterialPassDrawItem>(scratchArena)};
+    MaterialPassDrawItemVector computeDrawItems{Core::Alloc::ScratchAllocator<MaterialPassDrawItem>(scratchArena)};
 
     Core::ViewportState viewportState;
     viewportState.addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
+
+    gatherMaterialPassDrawItems(framebuffer, pass, transparent, meshDrawItems, computeDrawItems);
+    renderMeshMaterialPassDrawItems(commandList, framebuffer, pass, passBindingSet, avboitTargets, viewportState, meshDrawItems);
+    renderComputeMaterialPassDrawItems(commandList, framebuffer, pass, passBindingSet, avboitTargets, viewportState, computeDrawItems);
+}
+
+void RendererSystem::gatherMaterialPassDrawItems(
+    Core::IFramebuffer* framebuffer,
+    const MaterialPipelinePass pass,
+    const bool transparent,
+    MaterialPassDrawItemVector& meshDrawItems,
+    MaterialPassDrawItemVector& computeDrawItems
+){
+    if(!framebuffer)
+        return;
+
+    auto rendererView = m_world.view<RendererComponent>();
+    const Core::FramebufferInfo& framebufferInfo = framebuffer->getFramebufferInfo();
 
     for(auto&& [entity, renderer] : rendererView){
         (void)entity;
@@ -1319,7 +1323,7 @@ void RendererSystem::renderMaterialPass(
                 continue;
             if(!ensureMeshBindingSet(*geometry))
                 continue;
-            MeshGeometryPassDrawItem drawItem;
+            MaterialPassDrawItem drawItem;
             drawItem.geometryKey = geometry->geometryName;
             drawItem.pipelineKey = pipelineKey;
             drawItem.alpha = materialInfo->alpha;
@@ -1331,7 +1335,7 @@ void RendererSystem::renderMaterialPass(
                 continue;
             if(!ensureComputeBindingSet(*geometry))
                 continue;
-            ComputeGeometryPassDrawItem drawItem;
+            MaterialPassDrawItem drawItem;
             drawItem.geometryKey = geometry->geometryName;
             drawItem.pipelineKey = pipelineKey;
             drawItem.alpha = materialInfo->alpha;
@@ -1343,8 +1347,18 @@ void RendererSystem::renderMaterialPass(
         }
         }
     }
+}
 
-    for(const MeshGeometryPassDrawItem& drawItem : meshDrawItems){
+void RendererSystem::renderMeshMaterialPassDrawItems(
+    Core::ICommandList& commandList,
+    Core::IFramebuffer* framebuffer,
+    const MaterialPipelinePass pass,
+    Core::IBindingSet* passBindingSet,
+    const AvboitFrameTargets* avboitTargets,
+    const Core::ViewportState& viewportState,
+    const MaterialPassDrawItemVector& drawItems
+){
+    for(const MaterialPassDrawItem& drawItem : drawItems){
         const auto foundGeometry = m_geometryMeshes.find(drawItem.geometryKey);
         if(foundGeometry == m_geometryMeshes.end())
             continue;
@@ -1383,8 +1397,18 @@ void RendererSystem::renderMaterialPass(
         }
         commandList.dispatchMesh(geometry.dispatchGroupCount);
     }
+}
 
-    for(const ComputeGeometryPassDrawItem& drawItem : computeDrawItems){
+void RendererSystem::renderComputeMaterialPassDrawItems(
+    Core::ICommandList& commandList,
+    Core::IFramebuffer* framebuffer,
+    const MaterialPipelinePass pass,
+    Core::IBindingSet* passBindingSet,
+    const AvboitFrameTargets* avboitTargets,
+    const Core::ViewportState& viewportState,
+    const MaterialPassDrawItemVector& drawItems
+){
+    for(const MaterialPassDrawItem& drawItem : drawItems){
         const auto foundGeometry = m_geometryMeshes.find(drawItem.geometryKey);
         if(foundGeometry == m_geometryMeshes.end())
             continue;

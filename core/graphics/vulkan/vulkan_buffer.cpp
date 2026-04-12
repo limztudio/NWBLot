@@ -356,6 +356,31 @@ bool Device::bindBufferMemory(IBuffer* _buffer, IHeap* heap, u64 offset){
         return false;
     }
 
+    VkMemoryRequirements memRequirements;
+    vkGetBufferMemoryRequirements(m_context.device, buffer->m_buffer, &memRequirements);
+    if(vkHeap->m_memoryTypeIndex >= 32u || (memRequirements.memoryTypeBits & (1u << vkHeap->m_memoryTypeIndex)) == 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind buffer memory: heap memory type is incompatible with the buffer"));
+        return false;
+    }
+    const u64 alignment = Max<u64>(static_cast<u64>(memRequirements.alignment), 1u);
+    if((offset % alignment) != 0){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Failed to bind buffer memory: offset {} is not aligned to required alignment {}"),
+            offset,
+            alignment
+        );
+        return false;
+    }
+    if(offset > vkHeap->m_desc.capacity || static_cast<u64>(memRequirements.size) > vkHeap->m_desc.capacity - offset){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Failed to bind buffer memory: offset {} size {} exceeds heap capacity {}"),
+            offset,
+            static_cast<u64>(memRequirements.size),
+            vkHeap->m_desc.capacity
+        );
+        return false;
+    }
+
     // Binding to a heap means the heap owns the memory, not the buffer
     buffer->m_memory = VK_NULL_HANDLE;
 
@@ -383,6 +408,10 @@ BufferHandle Device::createHandleForNativeBuffer(ObjectType objectType, Object _
     auto* nativeBuffer = static_cast<VkBuffer_T*>(_buffer);
     if(nativeBuffer == VK_NULL_HANDLE){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer handle for native buffer: buffer handle is null"));
+        return nullptr;
+    }
+    if(desc.byteSize == 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer handle for native buffer: byte size is zero"));
         return nullptr;
     }
 

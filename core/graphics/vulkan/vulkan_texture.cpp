@@ -467,6 +467,31 @@ bool Device::bindTextureMemory(ITexture* _texture, IHeap* heap, u64 offset){
         return false;
     }
 
+    VkMemoryRequirements memRequirements;
+    vkGetImageMemoryRequirements(m_context.device, texture->m_image, &memRequirements);
+    if(vkHeap->m_memoryTypeIndex >= 32u || (memRequirements.memoryTypeBits & (1u << vkHeap->m_memoryTypeIndex)) == 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind texture memory: heap memory type is incompatible with the texture"));
+        return false;
+    }
+    const u64 alignment = Max<u64>(static_cast<u64>(memRequirements.alignment), 1u);
+    if((offset % alignment) != 0){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Failed to bind texture memory: offset {} is not aligned to required alignment {}"),
+            offset,
+            alignment
+        );
+        return false;
+    }
+    if(offset > vkHeap->m_desc.capacity || static_cast<u64>(memRequirements.size) > vkHeap->m_desc.capacity - offset){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Failed to bind texture memory: offset {} size {} exceeds heap capacity {}"),
+            offset,
+            static_cast<u64>(memRequirements.size),
+            vkHeap->m_desc.capacity
+        );
+        return false;
+    }
+
     texture->m_memory = VK_NULL_HANDLE;
 
     res = vkBindImageMemory(m_context.device, texture->m_image, vkHeap->m_memory, offset);

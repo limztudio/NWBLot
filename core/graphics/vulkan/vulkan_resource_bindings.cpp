@@ -889,6 +889,7 @@ BindingLayout::~BindingLayout(){
 DescriptorTable::DescriptorTable(const VulkanContext& context)
     : RefCounter<IDescriptorTable>(context.threadPool)
     , m_descriptorSets(Alloc::CustomAllocator<VkDescriptorSet>(context.objectArena))
+    , m_writtenItems(Alloc::CustomAllocator<BindingSetItem>(context.objectArena))
     , m_context(context)
 {}
 DescriptorTable::~DescriptorTable(){
@@ -1271,14 +1272,56 @@ void Device::resizeDescriptorTable(IDescriptorTable* m_descriptorTable, u32 newS
         }
     }
 
-    if(table->m_descriptorPool != VK_NULL_HANDLE){
-        vkDestroyDescriptorPool(m_context.device, table->m_descriptorPool, m_context.allocationCallbacks);
-        table->m_descriptorPool = VK_NULL_HANDLE;
-    }
-    table->m_descriptorSets.clear();
-    table->m_capacity = 0;
-
     Alloc::ScratchArena<> scratchArena;
+    using DescriptorSetVector = Vector<VkDescriptorSet, Alloc::CustomAllocator<VkDescriptorSet>>;
+    using WrittenItemVector = Vector<BindingSetItem, Alloc::CustomAllocator<BindingSetItem>>;
+
+    auto commitResize = [&](VkDescriptorPool newPool, DescriptorSetVector& newDescriptorSets, u32 newCapacity) -> bool{
+        VkDescriptorPool oldPool = table->m_descriptorPool;
+        const u32 oldCapacity = table->m_capacity;
+
+        DescriptorSetVector oldDescriptorSets{ Alloc::CustomAllocator<VkDescriptorSet>(m_context.objectArena) };
+        oldDescriptorSets = Move(table->m_descriptorSets);
+
+        WrittenItemVector oldWrittenItems{ Alloc::CustomAllocator<BindingSetItem>(m_context.objectArena) };
+        oldWrittenItems = Move(table->m_writtenItems);
+
+        table->m_descriptorPool = newPool;
+        table->m_descriptorSets = Move(newDescriptorSets);
+        table->m_capacity = newCapacity;
+        table->m_writtenItems.clear();
+
+        bool replaySucceeded = true;
+        if(keepContents){
+            for(const BindingSetItem& item : oldWrittenItems){
+                if(table->m_layout->m_isBindless && item.arrayElement >= newCapacity)
+                    continue;
+                if(!writeDescriptorTable(table, item)){
+                    replaySucceeded = false;
+                    break;
+                }
+            }
+        }
+
+        if(!replaySucceeded){
+            if(newPool != VK_NULL_HANDLE)
+                vkDestroyDescriptorPool(m_context.device, newPool, m_context.allocationCallbacks);
+
+            table->m_descriptorPool = oldPool;
+            table->m_descriptorSets = Move(oldDescriptorSets);
+            table->m_capacity = oldCapacity;
+            table->m_writtenItems = Move(oldWrittenItems);
+            return false;
+        }
+
+        if(!keepContents)
+            table->m_writtenItems.clear();
+
+        if(oldPool != VK_NULL_HANDLE)
+            vkDestroyDescriptorPool(m_context.device, oldPool, m_context.allocationCallbacks);
+
+        return true;
+    };
 
     if(table->m_layout->m_isBindless){
         if(table->m_layout->m_descriptorSetLayouts.empty())
@@ -1302,13 +1345,16 @@ void Device::resizeDescriptorTable(IDescriptorTable* m_descriptorTable, u32 newS
             poolSizes.push_back(fallback);
         }
 
+        VkDescriptorPool newPool = VK_NULL_HANDLE;
+        DescriptorSetVector newDescriptorSets{ Alloc::CustomAllocator<VkDescriptorSet>(m_context.objectArena) };
+
         VkDescriptorPoolCreateInfo poolInfo = __hidden_vulkan::MakeVkStruct<VkDescriptorPoolCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO);
         poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT | VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
         poolInfo.maxSets = 1;
         poolInfo.poolSizeCount = static_cast<u32>(poolSizes.size());
         poolInfo.pPoolSizes = poolSizes.data();
 
-        res = vkCreateDescriptorPool(m_context.device, &poolInfo, m_context.allocationCallbacks, &table->m_descriptorPool);
+        res = vkCreateDescriptorPool(m_context.device, &poolInfo, m_context.allocationCallbacks, &newPool);
         if(res != VK_SUCCESS){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create bindless descriptor pool for resize: {}"), ResultToString(res));
             (void)keepContents;
@@ -1316,7 +1362,7 @@ void Device::resizeDescriptorTable(IDescriptorTable* m_descriptorTable, u32 newS
         }
 
         VkDescriptorSetAllocateInfo allocInfo = __hidden_vulkan::MakeVkStruct<VkDescriptorSetAllocateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO);
-        allocInfo.descriptorPool = table->m_descriptorPool;
+        allocInfo.descriptorPool = newPool;
         allocInfo.descriptorSetCount = 1;
         allocInfo.pSetLayouts = table->m_layout->m_descriptorSetLayouts.data();
 
@@ -1328,17 +1374,16 @@ void Device::resizeDescriptorTable(IDescriptorTable* m_descriptorTable, u32 newS
             allocInfo.pNext = &variableDescriptorInfo;
         }
 
-        table->m_descriptorSets.resize(1);
-        res = vkAllocateDescriptorSets(m_context.device, &allocInfo, table->m_descriptorSets.data());
+        newDescriptorSets.resize(1);
+        res = vkAllocateDescriptorSets(m_context.device, &allocInfo, newDescriptorSets.data());
         if(res != VK_SUCCESS){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate bindless descriptor set during resize: {}"), ResultToString(res));
-            table->m_descriptorSets.clear();
+            vkDestroyDescriptorPool(m_context.device, newPool, m_context.allocationCallbacks);
             (void)keepContents;
             return;
         }
 
-        table->m_capacity = newSize;
-        (void)keepContents;
+        (void)commitResize(newPool, newDescriptorSets, newSize);
         return;
     }
 
@@ -1359,13 +1404,16 @@ void Device::resizeDescriptorTable(IDescriptorTable* m_descriptorTable, u32 newS
     poolSizes.push_back(uniformTexelSize);
     poolSizes.push_back(storageTexelSize);
 
+    VkDescriptorPool newPool = VK_NULL_HANDLE;
+    DescriptorSetVector newDescriptorSets{ Alloc::CustomAllocator<VkDescriptorSet>(m_context.objectArena) };
+
     VkDescriptorPoolCreateInfo poolInfo = __hidden_vulkan::MakeVkStruct<VkDescriptorPoolCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO);
     poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
     poolInfo.maxSets = newSize;
     poolInfo.poolSizeCount = static_cast<u32>(poolSizes.size());
     poolInfo.pPoolSizes = poolSizes.data();
 
-    res = vkCreateDescriptorPool(m_context.device, &poolInfo, m_context.allocationCallbacks, &table->m_descriptorPool);
+    res = vkCreateDescriptorPool(m_context.device, &poolInfo, m_context.allocationCallbacks, &newPool);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor pool for resize: {}"), ResultToString(res));
         return;
@@ -1375,21 +1423,20 @@ void Device::resizeDescriptorTable(IDescriptorTable* m_descriptorTable, u32 newS
         Vector<VkDescriptorSetLayout, Alloc::ScratchAllocator<VkDescriptorSetLayout>> layouts(newSize, table->m_layout->m_descriptorSetLayouts[0], Alloc::ScratchAllocator<VkDescriptorSetLayout>(scratchArena));
 
         VkDescriptorSetAllocateInfo allocInfo = __hidden_vulkan::MakeVkStruct<VkDescriptorSetAllocateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO);
-        allocInfo.descriptorPool = table->m_descriptorPool;
+        allocInfo.descriptorPool = newPool;
         allocInfo.descriptorSetCount = newSize;
         allocInfo.pSetLayouts = layouts.data();
 
-        table->m_descriptorSets.resize(newSize);
-        res = vkAllocateDescriptorSets(m_context.device, &allocInfo, table->m_descriptorSets.data());
+        newDescriptorSets.resize(newSize);
+        res = vkAllocateDescriptorSets(m_context.device, &allocInfo, newDescriptorSets.data());
         if(res != VK_SUCCESS){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate descriptor sets during resize: {}"), ResultToString(res));
-            table->m_descriptorSets.clear();
+            vkDestroyDescriptorPool(m_context.device, newPool, m_context.allocationCallbacks);
             return;
         }
     }
 
-    table->m_capacity = newSize;
-    (void)keepContents;
+    (void)commitResize(newPool, newDescriptorSets, newSize);
 }
 
 bool Device::writeDescriptorTable(IDescriptorTable* m_descriptorTable, const BindingSetItem& item){
@@ -1549,6 +1596,13 @@ bool Device::writeDescriptorTable(IDescriptorTable* m_descriptorTable, const Bin
     }
 
     vkUpdateDescriptorSets(m_context.device, 1, &write, 0, nullptr);
+    for(BindingSetItem& writtenItem : table->m_writtenItems){
+        if(writtenItem.slot == item.slot && writtenItem.arrayElement == item.arrayElement){
+            writtenItem = item;
+            return true;
+        }
+    }
+    table->m_writtenItems.push_back(item);
     return true;
 }
 

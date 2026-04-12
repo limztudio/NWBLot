@@ -446,8 +446,11 @@ Object Heap::getNativeHandle(ObjectType objectType){
 HeapHandle Device::createHeap(const HeapDesc& d){
     VkResult res = VK_SUCCESS;
 
-    auto* heap = NewArenaObject<Heap>(m_context.objectArena, m_context);
-    heap->m_desc = d;
+    if(d.capacity == 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create heap: capacity is zero"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create heap: capacity is zero"));
+        return nullptr;
+    }
 
     VkMemoryPropertyFlags memoryProperties = 0;
     bool isReadbackHeap = false;
@@ -462,6 +465,10 @@ HeapHandle Device::createHeap(const HeapDesc& d){
             memoryProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
             isReadbackHeap = true;
             break;
+        default:
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create heap: invalid heap type"));
+            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create heap: invalid heap type"));
+            return nullptr;
     }
 
     u32 memoryTypeIndex = UINT32_MAX;
@@ -484,9 +491,12 @@ HeapHandle Device::createHeap(const HeapDesc& d){
 
     if(memoryTypeIndex == UINT32_MAX){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to find suitable memory type for heap"));
-        DestroyArenaObject(m_context.objectArena, heap);
         return nullptr;
     }
+
+    auto* heap = NewArenaObject<Heap>(m_context.objectArena, m_context);
+    heap->m_desc = d;
+    heap->m_memoryTypeIndex = memoryTypeIndex;
 
     void* pNext = nullptr;
     VkMemoryAllocateFlagsInfo allocFlagsInfo{};

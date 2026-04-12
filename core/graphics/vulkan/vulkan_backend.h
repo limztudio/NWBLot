@@ -306,6 +306,7 @@ public:
 private:
     HeapDesc m_desc;
     VkDeviceMemory m_memory = VK_NULL_HANDLE;
+    u32 m_memoryTypeIndex = UINT32_MAX;
 
     const VulkanContext& m_context;
 };
@@ -1065,6 +1066,7 @@ public:
 private:
     RefCountPtr<BindingLayout, ArenaRefDeleter<BindingLayout>> m_layout;
     Vector<VkDescriptorSet, Alloc::CustomAllocator<VkDescriptorSet>> m_descriptorSets;
+    Vector<BindingSetItem, Alloc::CustomAllocator<BindingSetItem>> m_writtenItems;
     VkDescriptorPool m_descriptorPool = VK_NULL_HANDLE;
     u32 m_capacity = 0;
 

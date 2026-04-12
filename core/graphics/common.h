@@ -415,7 +415,7 @@ namespace HeapType{
 
 struct HeapDesc{
     u64 capacity = 0;
-    HeapType::Enum type;
+    HeapType::Enum type = HeapType::DeviceLocal;
     Name debugName;
 };
 

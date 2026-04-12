@@ -57,6 +57,67 @@ bool ComputeStridedRangeByteSize(u32 elementCount, u64 stride, u64 elementSize, 
     return true;
 }
 
+bool AlignUpU64Checked(u64 value, u32 alignment, u64& outAligned){
+    if(alignment == 0 || (alignment & (alignment - 1u)) != 0u)
+        return false;
+
+    const u64 mask = static_cast<u64>(alignment - 1u);
+    if(value > Limit<u64>::s_Max - mask)
+        return false;
+
+    outAligned = (value + mask) & ~mask;
+    return true;
+}
+
+bool ComputeRayTracingHandleLayout(const VulkanContext& context, u32& outHandleSize, u32& outHandleSizeAligned, u32& outBaseAlignment, const tchar* operation){
+    const u32 handleSize = context.rayTracingPipelineProperties.shaderGroupHandleSize;
+    const u32 handleAlignment = context.rayTracingPipelineProperties.shaderGroupHandleAlignment;
+    const u32 baseAlignment = context.rayTracingPipelineProperties.shaderGroupBaseAlignment;
+
+    if(handleAlignment == 0 || (handleAlignment & (handleAlignment - 1u)) != 0u){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: shader group handle alignment is invalid"), operation);
+        return false;
+    }
+    if(baseAlignment == 0 || (baseAlignment & (baseAlignment - 1u)) != 0u){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: shader group base alignment is invalid"), operation);
+        return false;
+    }
+    if(handleSize > Limit<u32>::s_Max - (handleAlignment - 1u)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: shader group handle size alignment overflows"), operation);
+        return false;
+    }
+
+    const u32 handleSizeAligned = (handleSize + handleAlignment - 1u) & ~(handleAlignment - 1u);
+    if(handleSizeAligned == 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: shader group handle size is invalid"), operation);
+        return false;
+    }
+
+    outHandleSize = handleSize;
+    outHandleSizeAligned = handleSizeAligned;
+    outBaseAlignment = baseAlignment;
+    return true;
+}
+
+bool ComputeShaderTableByteSize(u32 recordCount, u32 handleSizeAligned, u32 baseAlignment, u64& outByteSize, const tchar* operation){
+    if(recordCount == 0 || handleSizeAligned == 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: shader table record count or stride is invalid"), operation);
+        return false;
+    }
+    if(static_cast<u64>(recordCount) > Limit<u64>::s_Max / static_cast<u64>(handleSizeAligned)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: shader table size overflows"), operation);
+        return false;
+    }
+
+    const u64 rawSize = static_cast<u64>(recordCount) * static_cast<u64>(handleSizeAligned);
+    if(!AlignUpU64Checked(rawSize, baseAlignment, outByteSize)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: shader table alignment overflows"), operation);
+        return false;
+    }
+
+    return true;
+}
+
 bool ValidateAccelStructBuildInputRange(IBuffer* _buffer, u64 offset, u64 byteSize, const tchar* operation, const tchar* resourceName){
     auto* buffer = checked_cast<Buffer*>(_buffer);
     if(!buffer){
@@ -817,20 +878,14 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
         return nullptr;
     }
 
-    u32 handleSize = m_context.rayTracingPipelineProperties.shaderGroupHandleSize;
-    u32 handleAlignment = m_context.rayTracingPipelineProperties.shaderGroupHandleAlignment;
+    u32 handleSize = 0;
+    u32 handleSizeAligned = 0;
+    u32 baseAlignment = 0;
+    if(!__hidden_vulkan::ComputeRayTracingHandleLayout(m_context, handleSize, handleSizeAligned, baseAlignment, NWB_TEXT("create ray tracing pipeline"))){
+        DestroyArenaObject(m_context.objectArena, pso);
+        return nullptr;
+    }
 
-    if(handleAlignment == 0 || (handleAlignment & (handleAlignment - 1u)) != 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: shader group handle alignment is invalid"));
-        DestroyArenaObject(m_context.objectArena, pso);
-        return nullptr;
-    }
-    if(handleSize > Limit<u32>::s_Max - (handleAlignment - 1u)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: shader group handle size alignment overflows"));
-        DestroyArenaObject(m_context.objectArena, pso);
-        return nullptr;
-    }
-    u32 handleSizeAligned = (handleSize + handleAlignment - 1) & ~(handleAlignment - 1);
     u32 groupCount = static_cast<u32>(groups.size());
     if(handleSizeAligned == 0 || static_cast<usize>(groupCount) > Limit<usize>::s_Max / static_cast<usize>(handleSizeAligned)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: shader group handle table size overflows"));
@@ -922,11 +977,14 @@ void ShaderTable::setRayGenerationShader(const Name& exportName, IBindingSet* /*
         return;
     }
 
-    u32 handleSize = m_context.rayTracingPipelineProperties.shaderGroupHandleSize;
-    u32 handleAlignment = m_context.rayTracingPipelineProperties.shaderGroupHandleAlignment;
-    u32 baseAlignment = m_context.rayTracingPipelineProperties.shaderGroupBaseAlignment;
-    u32 handleSizeAligned = (handleSize + handleAlignment - 1) & ~(handleAlignment - 1);
-    u64 sbtSize = (handleSizeAligned + baseAlignment - 1) & ~(static_cast<u64>(baseAlignment) - 1);
+    u32 handleSize = 0;
+    u32 handleSizeAligned = 0;
+    u32 baseAlignment = 0;
+    if(!__hidden_vulkan::ComputeRayTracingHandleLayout(m_context, handleSize, handleSizeAligned, baseAlignment, NWB_TEXT("set ray generation shader")))
+        return;
+    u64 sbtSize = 0;
+    if(!__hidden_vulkan::ComputeShaderTableByteSize(1, handleSizeAligned, baseAlignment, sbtSize, NWB_TEXT("set ray generation shader")))
+        return;
 
     u32 groupIndex = findGroupIndex(exportName);
     if(groupIndex == UINT32_MAX){
@@ -955,16 +1013,24 @@ void ShaderTable::setRayGenerationShader(const Name& exportName, IBindingSet* /*
 }
 
 u32 ShaderTable::addMissShader(const Name& exportName, IBindingSet* /*bindings*/){
+    if(m_missCount == Limit<u32>::s_Max){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to add miss shader: shader table record count exceeds u32 range"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to add miss shader: shader table record count exceeds u32 range"));
+        return m_missCount;
+    }
     if(!m_pipeline)
         return m_missCount++;
 
-    u32 handleSize = m_context.rayTracingPipelineProperties.shaderGroupHandleSize;
-    u32 handleAlignment = m_context.rayTracingPipelineProperties.shaderGroupHandleAlignment;
-    u32 baseAlignment = m_context.rayTracingPipelineProperties.shaderGroupBaseAlignment;
-    u32 handleSizeAligned = (handleSize + handleAlignment - 1) & ~(handleAlignment - 1);
+    u32 handleSize = 0;
+    u32 handleSizeAligned = 0;
+    u32 baseAlignment = 0;
+    if(!__hidden_vulkan::ComputeRayTracingHandleLayout(m_context, handleSize, handleSizeAligned, baseAlignment, NWB_TEXT("add miss shader")))
+        return m_missCount;
 
     u32 newCount = m_missCount + 1;
-    u64 sbtSize = (static_cast<u64>(newCount) * handleSizeAligned + baseAlignment - 1) & ~(static_cast<u64>(baseAlignment) - 1);
+    u64 sbtSize = 0;
+    if(!__hidden_vulkan::ComputeShaderTableByteSize(newCount, handleSizeAligned, baseAlignment, sbtSize, NWB_TEXT("add miss shader")))
+        return m_missCount;
 
     BufferHandle newBuffer;
     allocateSBTBuffer(newBuffer, sbtSize);
@@ -1012,16 +1078,24 @@ u32 ShaderTable::addMissShader(const Name& exportName, IBindingSet* /*bindings*/
 }
 
 u32 ShaderTable::addHitGroup(const Name& exportName, IBindingSet* /*bindings*/){
+    if(m_hitCount == Limit<u32>::s_Max){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to add hit group: shader table record count exceeds u32 range"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to add hit group: shader table record count exceeds u32 range"));
+        return m_hitCount;
+    }
     if(!m_pipeline)
         return m_hitCount++;
 
-    u32 handleSize = m_context.rayTracingPipelineProperties.shaderGroupHandleSize;
-    u32 handleAlignment = m_context.rayTracingPipelineProperties.shaderGroupHandleAlignment;
-    u32 baseAlignment = m_context.rayTracingPipelineProperties.shaderGroupBaseAlignment;
-    u32 handleSizeAligned = (handleSize + handleAlignment - 1) & ~(handleAlignment - 1);
+    u32 handleSize = 0;
+    u32 handleSizeAligned = 0;
+    u32 baseAlignment = 0;
+    if(!__hidden_vulkan::ComputeRayTracingHandleLayout(m_context, handleSize, handleSizeAligned, baseAlignment, NWB_TEXT("add hit group")))
+        return m_hitCount;
 
     u32 newCount = m_hitCount + 1;
-    u64 sbtSize = (static_cast<u64>(newCount) * handleSizeAligned + baseAlignment - 1) & ~(static_cast<u64>(baseAlignment) - 1);
+    u64 sbtSize = 0;
+    if(!__hidden_vulkan::ComputeShaderTableByteSize(newCount, handleSizeAligned, baseAlignment, sbtSize, NWB_TEXT("add hit group")))
+        return m_hitCount;
 
     BufferHandle newBuffer;
     allocateSBTBuffer(newBuffer, sbtSize);
@@ -1069,16 +1143,24 @@ u32 ShaderTable::addHitGroup(const Name& exportName, IBindingSet* /*bindings*/){
 }
 
 u32 ShaderTable::addCallableShader(const Name& exportName, IBindingSet* /*bindings*/){
+    if(m_callableCount == Limit<u32>::s_Max){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to add callable shader: shader table record count exceeds u32 range"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to add callable shader: shader table record count exceeds u32 range"));
+        return m_callableCount;
+    }
     if(!m_pipeline)
         return m_callableCount++;
 
-    u32 handleSize = m_context.rayTracingPipelineProperties.shaderGroupHandleSize;
-    u32 handleAlignment = m_context.rayTracingPipelineProperties.shaderGroupHandleAlignment;
-    u32 baseAlignment = m_context.rayTracingPipelineProperties.shaderGroupBaseAlignment;
-    u32 handleSizeAligned = (handleSize + handleAlignment - 1) & ~(handleAlignment - 1);
+    u32 handleSize = 0;
+    u32 handleSizeAligned = 0;
+    u32 baseAlignment = 0;
+    if(!__hidden_vulkan::ComputeRayTracingHandleLayout(m_context, handleSize, handleSizeAligned, baseAlignment, NWB_TEXT("add callable shader")))
+        return m_callableCount;
 
     u32 newCount = m_callableCount + 1;
-    u64 sbtSize = (static_cast<u64>(newCount) * handleSizeAligned + baseAlignment - 1) & ~(static_cast<u64>(baseAlignment) - 1);
+    u64 sbtSize = 0;
+    if(!__hidden_vulkan::ComputeShaderTableByteSize(newCount, handleSizeAligned, baseAlignment, sbtSize, NWB_TEXT("add callable shader")))
+        return m_callableCount;
 
     BufferHandle newBuffer;
     allocateSBTBuffer(newBuffer, sbtSize);
@@ -1736,10 +1818,24 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
     VkStridedDeviceAddressRegionKHR hitRegion = {};
     VkStridedDeviceAddressRegionKHR callableRegion = {};
 
-    u32 handleSize = m_context.rayTracingPipelineProperties.shaderGroupHandleSize;
-    u32 handleAlignment = m_context.rayTracingPipelineProperties.shaderGroupHandleAlignment;
+    u32 handleSize = 0;
+    u32 handleSizeAligned = 0;
+    u32 baseAlignment = 0;
+    if(!__hidden_vulkan::ComputeRayTracingHandleLayout(m_context, handleSize, handleSizeAligned, baseAlignment, NWB_TEXT("dispatch rays"))){
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to dispatch rays: invalid shader group handle layout"));
+        return;
+    }
 
-    u32 handleSizeAligned = (handleSize + handleAlignment - 1) & ~(handleAlignment - 1);
+    auto computeRegionSize = [&](u32 recordCount, VkDeviceSize& outRegionSize, const tchar* regionName) -> bool{
+        if(static_cast<u64>(recordCount) > Limit<u64>::s_Max / static_cast<u64>(handleSizeAligned)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to dispatch rays: {} shader table region size overflows"), regionName);
+            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to dispatch rays: shader table region size overflows"));
+            return false;
+        }
+
+        outRegionSize = static_cast<u64>(recordCount) * static_cast<u64>(handleSizeAligned);
+        return true;
+    };
 
     if(sbt->m_raygenBuffer){
         raygenRegion.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(sbt->m_raygenBuffer.get(), sbt->m_raygenOffset);
@@ -1750,19 +1846,22 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
     if(sbt->m_missBuffer){
         missRegion.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(sbt->m_missBuffer.get(), sbt->m_missOffset);
         missRegion.stride = handleSizeAligned;
-        missRegion.size = sbt->m_missCount * handleSizeAligned;
+        if(!computeRegionSize(sbt->m_missCount, missRegion.size, NWB_TEXT("miss")))
+            return;
     }
 
     if(sbt->m_hitBuffer){
         hitRegion.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(sbt->m_hitBuffer.get(), sbt->m_hitOffset);
         hitRegion.stride = handleSizeAligned;
-        hitRegion.size = sbt->m_hitCount * handleSizeAligned;
+        if(!computeRegionSize(sbt->m_hitCount, hitRegion.size, NWB_TEXT("hit")))
+            return;
     }
 
     if(sbt->m_callableBuffer){
         callableRegion.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(sbt->m_callableBuffer.get(), sbt->m_callableOffset);
         callableRegion.stride = handleSizeAligned;
-        callableRegion.size = sbt->m_callableCount * handleSizeAligned;
+        if(!computeRegionSize(sbt->m_callableCount, callableRegion.size, NWB_TEXT("callable")))
+            return;
     }
 
     vkCmdTraceRaysKHR(m_currentCmdBuf->m_cmdBuf, &raygenRegion, &missRegion, &hitRegion, &callableRegion, args.width, args.height, args.depth);

@@ -340,17 +340,22 @@ template<typename Container>
 
 template<typename Container>
 [[nodiscard]] inline bool ReadString(const Container& binary, usize& inOutOffset, AString& outText){
+    usize cursor = inOutOffset;
     u32 textLength = 0;
-    if(!ReadPOD(binary, inOutOffset, textLength))
+    if(!ReadPOD(binary, cursor, textLength))
         return false;
 
-    if(inOutOffset > binary.size())
+    if(cursor > binary.size())
         return false;
-    if(binary.size() - inOutOffset < textLength)
+    if(binary.size() - cursor < textLength)
         return false;
 
-    outText.assign(reinterpret_cast<const char*>(binary.data() + inOutOffset), textLength);
-    inOutOffset += textLength;
+    AString text;
+    text.assign(reinterpret_cast<const char*>(binary.data() + cursor), textLength);
+    cursor += textLength;
+
+    outText = Move(text);
+    inOutOffset = cursor;
     return true;
 }
 template<typename Container>

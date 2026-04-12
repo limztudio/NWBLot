@@ -24,7 +24,7 @@ struct NwbMeshGeneratedVertex{
     float padding;
 };
 
-#define NWB_MESH_BUILD_VERTEX_SIGNATURE NwbMeshGeneratedVertex nwbProjectBuildMeshVertex(uint triangleIndex, uint corner, NwbMeshSourceVertex source)
+#define NWB_MESH_BUILD_VERTEX_SIGNATURE NwbMeshGeneratedVertex nwbMeshBuildVertex(uint triangleIndex, uint corner, NwbMeshSourceVertex source)
 
 const uint NWB_MESH_SOURCE_VERTEX_SCALAR_STRIDE = 6u;
 
@@ -206,7 +206,7 @@ void main(){
 
     NwbMeshGeneratedVertex generatedVertices[3];
     for(uint corner = 0u; corner < 3u; ++corner){
-        generatedVertices[corner] = nwbProjectBuildMeshVertex(
+        generatedVertices[corner] = nwbMeshBuildVertex(
             triangleIndex,
             corner,
             nwbMeshLoadSourceVertex(triangleIndex, corner)

@@ -224,6 +224,21 @@ static i32 TranslateMouseButton(UINT message, WPARAM wParam){
     }
 }
 
+static bool IsTextInputCodePoint(u32 unicode){
+    if(unicode < 32u || unicode == 127u)
+        return false;
+    if(unicode > 0x10ffffu)
+        return false;
+    if(unicode >= 0xd800u && unicode <= 0xdfffu)
+        return false;
+    return true;
+}
+
+static void DispatchUnicodeInput(Frame& frame, u32 unicode){
+    if(IsTextInputCodePoint(unicode))
+        frame.input().keyboardCharInput(unicode, TranslateModifiers());
+}
+
 static void CaptureMouse(HWND hwnd){
     if(GetCapture() != hwnd)
         SetCapture(hwnd);
@@ -276,15 +291,15 @@ static void DispatchCharInput(Frame& frame, WPARAM wParam){
                 + (codeUnit - 0xdc00u)
             ;
             highSurrogate = 0;
-            frame.input().keyboardCharInput(unicode, TranslateModifiers());
+            DispatchUnicodeInput(frame, unicode);
         }
         return;
     }
 
     highSurrogate = 0;
-    frame.input().keyboardCharInput(codeUnit, TranslateModifiers());
+    DispatchUnicodeInput(frame, codeUnit);
 #else
-    frame.input().keyboardCharInput(static_cast<u32>(wParam & 0xffu), TranslateModifiers());
+    DispatchUnicodeInput(frame, static_cast<u32>(wParam & 0xffu));
 #endif
 }
 
@@ -378,7 +393,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         {
             if(wParam == UNICODE_NOCHAR)
                 return TRUE;
-            _this->input().keyboardCharInput(static_cast<u32>(wParam), TranslateModifiers());
+            DispatchUnicodeInput(*_this, static_cast<u32>(wParam));
         }
         return 0;
 

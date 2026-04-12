@@ -454,7 +454,7 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
 }
 
 void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDesc const* convertDescs, usize numDescs){
-    if(!m_context.extensions.NV_cooperative_vector)
+    if(!m_context.extensions.NV_cooperative_vector || !m_context.coopVecFeatures.cooperativeVector)
         return;
 
     if(numDescs == 0)

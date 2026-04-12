@@ -522,7 +522,7 @@ CooperativeVectorDeviceFeatures Device::queryCoopVecFeatures(){
 
     CooperativeVectorDeviceFeatures output;
 
-    if(!m_context.extensions.NV_cooperative_vector)
+    if(!m_context.extensions.NV_cooperative_vector || !m_context.coopVecFeatures.cooperativeVector)
         return output;
 
     uint32_t propertyCount = 0;
@@ -560,8 +560,10 @@ CooperativeVectorDeviceFeatures Device::queryCoopVecFeatures(){
             fillMatMulFormat(i);
     }
 
-    output.trainingFloat16 = m_context.coopVecProperties.cooperativeVectorTrainingFloat16Accumulation != VK_FALSE;
-    output.trainingFloat32 = m_context.coopVecProperties.cooperativeVectorTrainingFloat32Accumulation != VK_FALSE;
+    output.trainingFloat16 = m_context.coopVecFeatures.cooperativeVectorTraining != VK_FALSE
+        && m_context.coopVecProperties.cooperativeVectorTrainingFloat16Accumulation != VK_FALSE;
+    output.trainingFloat32 = m_context.coopVecFeatures.cooperativeVectorTraining != VK_FALSE
+        && m_context.coopVecProperties.cooperativeVectorTrainingFloat32Accumulation != VK_FALSE;
 
     return output;
 }
@@ -569,7 +571,7 @@ CooperativeVectorDeviceFeatures Device::queryCoopVecFeatures(){
 usize Device::getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, i32 rows, i32 columns){
     VkResult res = VK_SUCCESS;
 
-    if(!m_context.extensions.NV_cooperative_vector)
+    if(!m_context.extensions.NV_cooperative_vector || !m_context.coopVecFeatures.cooperativeVector)
         return 0;
     if(rows <= 0 || columns <= 0)
         return 0;

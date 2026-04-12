@@ -4,6 +4,8 @@
 
 #include "vulkan_backend.h"
 
+#include <logger/client/logger.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -89,8 +91,14 @@ void CommandList::setTextureState(ITexture* _texture, TextureSubresourceSet subr
         return;
 
     auto* texture = checked_cast<Texture*>(_texture);
+    const TextureSubresourceSet resolvedSubresources = subresources.resolve(texture->m_desc, false);
+    if(resolvedSubresources.numMipLevels == 0 || resolvedSubresources.numArraySlices == 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to set texture state: invalid subresource range"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to set texture state: invalid subresource range"));
+        return;
+    }
 
-    ResourceStates::Mask oldState = m_stateTracker->getTextureState(_texture, subresources.baseArraySlice, subresources.baseMipLevel);
+    ResourceStates::Mask oldState = m_stateTracker->getTextureState(_texture, resolvedSubresources.baseArraySlice, resolvedSubresources.baseMipLevel);
     if(oldState == stateBits)
         return;
 
@@ -110,12 +118,12 @@ void CommandList::setTextureState(ITexture* _texture, TextureSubresourceSet subr
     if(formatInfo.hasStencil)
         aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
     barrier.subresourceRange.aspectMask = aspectMask;
-    barrier.subresourceRange.baseMipLevel = subresources.baseMipLevel;
-    barrier.subresourceRange.levelCount = subresources.numMipLevels;
-    barrier.subresourceRange.baseArrayLayer = subresources.baseArraySlice;
-    barrier.subresourceRange.layerCount = subresources.numArraySlices;
+    barrier.subresourceRange.baseMipLevel = resolvedSubresources.baseMipLevel;
+    barrier.subresourceRange.levelCount = resolvedSubresources.numMipLevels;
+    barrier.subresourceRange.baseArrayLayer = resolvedSubresources.baseArraySlice;
+    barrier.subresourceRange.layerCount = resolvedSubresources.numArraySlices;
 
-    m_stateTracker->beginTrackingTexture(_texture, subresources, stateBits);
+    m_stateTracker->beginTrackingTexture(_texture, resolvedSubresources, stateBits);
 
     if(!m_enableAutomaticBarriers){
         m_pendingImageBarriers.push_back(barrier);
@@ -316,4 +324,3 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

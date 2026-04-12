@@ -431,6 +431,12 @@ SamplerHandle Device::createSampler(const SamplerDesc& d){
 
 void CommandList::clearTextureFloat(ITexture* _texture, TextureSubresourceSet subresources, const Color& clearColor){
     auto* texture = checked_cast<Texture*>(_texture);
+    const TextureSubresourceSet resolvedSubresources = subresources.resolve(texture->m_desc, false);
+    if(resolvedSubresources.numMipLevels == 0 || resolvedSubresources.numArraySlices == 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear texture: invalid subresource range"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear texture: invalid subresource range"));
+        return;
+    }
 
     VkClearColorValue clearValue;
     clearValue.float32[0] = clearColor.r;
@@ -440,10 +446,10 @@ void CommandList::clearTextureFloat(ITexture* _texture, TextureSubresourceSet su
 
     VkImageSubresourceRange range{};
     range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    range.baseMipLevel = subresources.baseMipLevel;
-    range.levelCount = subresources.numMipLevels;
-    range.baseArrayLayer = subresources.baseArraySlice;
-    range.layerCount = subresources.numArraySlices;
+    range.baseMipLevel = resolvedSubresources.baseMipLevel;
+    range.levelCount = resolvedSubresources.numMipLevels;
+    range.baseArrayLayer = resolvedSubresources.baseArraySlice;
+    range.layerCount = resolvedSubresources.numArraySlices;
 
     vkCmdClearColorImage(m_currentCmdBuf->m_cmdBuf, texture->m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearValue, 1, &range);
     m_currentCmdBuf->m_referencedResources.push_back(_texture);
@@ -451,6 +457,15 @@ void CommandList::clearTextureFloat(ITexture* _texture, TextureSubresourceSet su
 
 void CommandList::clearDepthStencilTexture(ITexture* _texture, TextureSubresourceSet subresources, bool clearDepth, f32 depth, bool clearStencil, u8 stencil){
     auto* texture = checked_cast<Texture*>(_texture);
+    if(!clearDepth && !clearStencil)
+        return;
+
+    const TextureSubresourceSet resolvedSubresources = subresources.resolve(texture->m_desc, false);
+    if(resolvedSubresources.numMipLevels == 0 || resolvedSubresources.numArraySlices == 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture: invalid subresource range"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture: invalid subresource range"));
+        return;
+    }
 
     VkClearDepthStencilValue clearValue{};
     clearValue.depth = depth;
@@ -462,10 +477,10 @@ void CommandList::clearDepthStencilTexture(ITexture* _texture, TextureSubresourc
         range.aspectMask |= VK_IMAGE_ASPECT_DEPTH_BIT;
     if(clearStencil)
         range.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
-    range.baseMipLevel = subresources.baseMipLevel;
-    range.levelCount = subresources.numMipLevels;
-    range.baseArrayLayer = subresources.baseArraySlice;
-    range.layerCount = subresources.numArraySlices;
+    range.baseMipLevel = resolvedSubresources.baseMipLevel;
+    range.levelCount = resolvedSubresources.numMipLevels;
+    range.baseArrayLayer = resolvedSubresources.baseArraySlice;
+    range.layerCount = resolvedSubresources.numArraySlices;
 
     vkCmdClearDepthStencilImage(m_currentCmdBuf->m_cmdBuf, texture->m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearValue, 1, &range);
     m_currentCmdBuf->m_referencedResources.push_back(_texture);
@@ -473,6 +488,12 @@ void CommandList::clearDepthStencilTexture(ITexture* _texture, TextureSubresourc
 
 void CommandList::clearTextureUInt(ITexture* _texture, TextureSubresourceSet subresources, u32 clearColor){
     auto* texture = checked_cast<Texture*>(_texture);
+    const TextureSubresourceSet resolvedSubresources = subresources.resolve(texture->m_desc, false);
+    if(resolvedSubresources.numMipLevels == 0 || resolvedSubresources.numArraySlices == 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear texture: invalid subresource range"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear texture: invalid subresource range"));
+        return;
+    }
 
     VkClearColorValue clearValue;
     clearValue.uint32[0] = clearColor;
@@ -482,10 +503,10 @@ void CommandList::clearTextureUInt(ITexture* _texture, TextureSubresourceSet sub
 
     VkImageSubresourceRange range{};
     range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    range.baseMipLevel = subresources.baseMipLevel;
-    range.levelCount = subresources.numMipLevels;
-    range.baseArrayLayer = subresources.baseArraySlice;
-    range.layerCount = subresources.numArraySlices;
+    range.baseMipLevel = resolvedSubresources.baseMipLevel;
+    range.levelCount = resolvedSubresources.numMipLevels;
+    range.baseArrayLayer = resolvedSubresources.baseArraySlice;
+    range.layerCount = resolvedSubresources.numArraySlices;
 
     vkCmdClearColorImage(m_currentCmdBuf->m_cmdBuf, texture->m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearValue, 1, &range);
     m_currentCmdBuf->m_referencedResources.push_back(_texture);

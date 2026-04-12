@@ -466,6 +466,7 @@ void Device::queueSignalSemaphore(CommandQueue::Enum executionQueue, VkSemaphore
 u64 Device::queueGetCompletedInstance(CommandQueue::Enum queue){
     Queue* q = getQueue(queue);
     if(q){
+        ScopedLock lock(q->m_mutex);
         q->updateLastFinishedID();
         return q->m_lastFinishedID;
     }

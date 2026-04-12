@@ -300,6 +300,14 @@ ShaderHandle Device::createShaderSpecialization(IShader* baseShader, const Shade
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create shader specialization: base shader is null"));
         return nullptr;
     }
+    if(numConstants > 0 && !constants){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create shader specialization: constants are null for {} entries"), numConstants);
+        return nullptr;
+    }
+    if(numConstants > UINT32_MAX / sizeof(uint32_t)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create shader specialization: constant count {} is too large"), numConstants);
+        return nullptr;
+    }
 
     auto* base = static_cast<Shader*>(baseShader);
     auto* shader = NewArenaObject<Shader>(m_context.objectArena, m_context);
@@ -375,6 +383,59 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
     if(attributeCount > 0 && !d){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create input layout: attribute data is null for {} attributes"), attributeCount);
         return nullptr;
+    }
+    const auto& limits = m_context.physicalDeviceProperties.limits;
+    if(attributeCount > limits.maxVertexInputAttributes){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Failed to create input layout: attribute count {} exceeds device limit {}"),
+            attributeCount,
+            limits.maxVertexInputAttributes
+        );
+        return nullptr;
+    }
+    for(u32 i = 0; i < attributeCount; ++i){
+        const VertexAttributeDesc& attr = d[i];
+        if(ConvertFormat(attr.format) == VK_FORMAT_UNDEFINED){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create input layout: attribute {} has unsupported vertex format"), i);
+            return nullptr;
+        }
+        if(attr.arraySize == 0){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create input layout: attribute {} has zero array size"), i);
+            return nullptr;
+        }
+        if(attr.bufferIndex >= limits.maxVertexInputBindings){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Vulkan: Failed to create input layout: attribute {} buffer index {} exceeds device binding limit {}"),
+                i,
+                attr.bufferIndex,
+                limits.maxVertexInputBindings
+            );
+            return nullptr;
+        }
+        if(attr.offset > limits.maxVertexInputAttributeOffset){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Vulkan: Failed to create input layout: attribute {} offset {} exceeds device limit {}"),
+                i,
+                attr.offset,
+                limits.maxVertexInputAttributeOffset
+            );
+            return nullptr;
+        }
+
+        u64 stride = attr.elementStride;
+        if(stride == 0){
+            const FormatInfo& formatInfo = GetFormatInfo(attr.format);
+            stride = static_cast<u64>(formatInfo.bytesPerBlock) * attr.arraySize;
+        }
+        if(stride == 0 || stride > limits.maxVertexInputBindingStride){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Vulkan: Failed to create input layout: attribute {} stride {} is outside device limit {}"),
+                i,
+                stride,
+                limits.maxVertexInputBindingStride
+            );
+            return nullptr;
+        }
     }
 
     auto* layout = NewArenaObject<InputLayout>(m_context.objectArena, m_context);

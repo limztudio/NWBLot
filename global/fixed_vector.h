@@ -39,9 +39,9 @@ public:
     {}
     FixedVector(usize size)
         : base()
-        , current_size(size)
+        , current_size(0)
     {
-        NWB_ASSERT(size <= max_elements);
+        resize(size);
     }
     FixedVector(std::initializer_list<T> il)
         : current_size(0)
@@ -96,25 +96,36 @@ public:
         std::swap(current_size, other.current_size);
     }
 
-    constexpr void push_back(const T& value)noexcept{
+    constexpr void push_back(const T& value){
         NWB_ASSERT(current_size < max_elements);
+        if(current_size >= max_elements)
+            throw RuntimeException("FixedVector capacity exceeded");
+
         *(data() + current_size) = value;
         ++current_size;
     }
 
-    constexpr void push_back(T&& value)noexcept{
+    constexpr void push_back(T&& value){
         NWB_ASSERT(current_size < max_elements);
+        if(current_size >= max_elements)
+            throw RuntimeException("FixedVector capacity exceeded");
+
         *(data() + current_size) = Move(value);
         ++current_size;
     }
 
-    constexpr void pop_back()noexcept{
+    constexpr void pop_back(){
         NWB_ASSERT(current_size > 0);
+        if(current_size == 0)
+            throw RuntimeException("FixedVector pop_back on empty vector");
+
         --current_size;
     }
 
-    constexpr void resize(size_type new_size)noexcept{
+    constexpr void resize(size_type new_size){
         NWB_ASSERT(new_size <= max_elements);
+        if(new_size > max_elements)
+            throw RuntimeException("FixedVector size exceeds capacity");
 
         const size_type lo = current_size < new_size ? current_size : new_size;
         const size_type hi = current_size < new_size ? new_size : current_size;
@@ -127,6 +138,9 @@ public:
     template<typename... Args>
     constexpr reference emplace_back(Args&&... args){
         NWB_ASSERT(current_size < max_elements);
+        if(current_size >= max_elements)
+            throw RuntimeException("FixedVector capacity exceeded");
+
         T* slot = data() + current_size;
         *slot = T(Forward<Args>(args)...);
         ++current_size;
@@ -139,4 +153,3 @@ private:
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

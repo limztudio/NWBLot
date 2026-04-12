@@ -578,10 +578,10 @@ u64 Device::executeCommandLists(ICommandList* const* pCommandLists, usize numCom
         return 0;
     }
 
-    const u64 previousSubmittedID = queue->m_lastSubmittedID;
-    const u64 submittedID = queue->submit(pCommandLists, numCommandLists);
+    bool submittedWork = false;
+    const u64 submittedID = queue->submit(pCommandLists, numCommandLists, &submittedWork);
 
-    if(submittedID > previousSubmittedID && pCommandLists && numCommandLists > 0){
+    if(submittedWork && pCommandLists && numCommandLists > 0){
         if(m_uploadManager)
             m_uploadManager->submitChunks(executionQueue, submittedID);
         if(m_scratchManager)

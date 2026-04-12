@@ -202,10 +202,12 @@ void Queue::addSignalSemaphore(VkSemaphore semaphore, u64 value){
     m_signalSemaphoreValues.push_back(value);
 }
 
-u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
+u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd, bool* outSubmitted){
     VkResult res = VK_SUCCESS;
 
     ScopedLock lock(m_mutex);
+    if(outSubmitted)
+        *outSubmitted = false;
 
     Alloc::ScratchArena<> scratchArena;
 
@@ -359,6 +361,8 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
     for(auto& tracked : trackedBuffers){
         m_commandBuffersInFlight.push_back(Move(tracked));
     }
+    if(outSubmitted)
+        *outSubmitted = true;
 
     return submissionID;
 }

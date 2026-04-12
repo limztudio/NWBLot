@@ -223,7 +223,7 @@ public:
     void addWaitSemaphore(VkSemaphore semaphore, u64 value);
     void addSignalSemaphore(VkSemaphore semaphore, u64 value);
 
-    u64 submit(ICommandList* const* ppCmd, usize numCmd);
+    u64 submit(ICommandList* const* ppCmd, usize numCmd, bool* outSubmitted = nullptr);
     void updateTextureTileMappings(ITexture* texture, const TextureTilesMapping* tileMappings, u32 numTileMappings);
     void updateLastFinishedID();
 

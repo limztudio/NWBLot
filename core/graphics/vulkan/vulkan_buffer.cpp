@@ -84,10 +84,18 @@ VkBufferView Buffer::getView(Format::Enum format, u64 byteOffset, u64 byteSize){
     const VkFormat vkFormat = ConvertFormat(format);
     if(vkFormat == VK_FORMAT_UNDEFINED)
         return VK_NULL_HANDLE;
+    const FormatInfo& formatInfo = GetFormatInfo(format);
+    if(formatInfo.bytesPerBlock == 0)
+        return VK_NULL_HANDLE;
 
     if(byteOffset >= m_desc.byteSize)
         return VK_NULL_HANDLE;
     const u64 maxRange = m_desc.byteSize - byteOffset;
+    const u64 offsetAlignment = Max<u64>(m_context.physicalDeviceProperties.limits.minTexelBufferOffsetAlignment, 1u);
+    if((byteOffset % offsetAlignment) != 0)
+        return VK_NULL_HANDLE;
+    if((byteOffset % formatInfo.bytesPerBlock) != 0)
+        return VK_NULL_HANDLE;
 
     u64 resolvedSize = byteSize;
     if(resolvedSize == 0 || resolvedSize == VK_WHOLE_SIZE){
@@ -96,6 +104,10 @@ VkBufferView Buffer::getView(Format::Enum format, u64 byteOffset, u64 byteSize){
     else if(resolvedSize > maxRange)
         resolvedSize = maxRange;
     if(resolvedSize == 0)
+        return VK_NULL_HANDLE;
+    if((resolvedSize % formatInfo.bytesPerBlock) != 0)
+        return VK_NULL_HANDLE;
+    if((resolvedSize / formatInfo.bytesPerBlock) > m_context.physicalDeviceProperties.limits.maxTexelBufferElements)
         return VK_NULL_HANDLE;
 
     ScopedLock lock(m_bufferViewsMutex);
@@ -134,6 +146,17 @@ VkBufferView Buffer::getView(Format::Enum format, u64 byteOffset, u64 byteSize){
 BufferHandle Device::createBuffer(const BufferDesc& d){
     VkResult res = VK_SUCCESS;
 
+    if(d.byteSize == 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer: byte size is zero"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create buffer: byte size is zero"));
+        return nullptr;
+    }
+    if(d.isVolatile && d.maxVersions == 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create volatile buffer: maxVersions is zero"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create volatile buffer: maxVersions is zero"));
+        return nullptr;
+    }
+
     auto* buffer = NewArenaObject<Buffer>(m_context.objectArena, m_context, m_allocator);
     buffer->m_desc = d;
 
@@ -162,10 +185,20 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
 
     u64 size = d.byteSize;
 
-    if(d.isVolatile && d.maxVersions > 0){
-        u64 alignment = m_context.physicalDeviceProperties.limits.minUniformBufferOffsetAlignment;
-        size = (size + alignment - 1) & ~(alignment - 1);
-        size *= d.maxVersions;
+    if(d.isVolatile){
+        const u64 alignment = Max<u64>(m_context.physicalDeviceProperties.limits.minUniformBufferOffsetAlignment, 1u);
+        if(size > static_cast<u64>(-1) - (alignment - 1)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create volatile buffer: aligned size overflows"));
+            DestroyArenaObject(m_context.objectArena, buffer);
+            return nullptr;
+        }
+        const u64 alignedSize = (size + alignment - 1) & ~(alignment - 1);
+        if(alignedSize > static_cast<u64>(-1) / d.maxVersions){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create volatile buffer: versioned size overflows"));
+            DestroyArenaObject(m_context.objectArena, buffer);
+            return nullptr;
+        }
+        size = alignedSize * d.maxVersions;
 
         buffer->m_versionTracking.resize(d.maxVersions);
     }

@@ -22,6 +22,26 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_global_filesystem{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] inline bool CanRepresentStreamSize(const u64 byteCount)noexcept{
+    return byteCount <= static_cast<u64>(Limit<std::streamsize>::s_Max);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 using Path = std::filesystem::path;
 
 using DirectoryIterator = std::filesystem::directory_iterator;
@@ -218,6 +238,9 @@ struct StagedDirectoryPaths{
     if(!stream.is_open())
         return false;
 
+    if(!__hidden_global_filesystem::CanRepresentStreamSize(static_cast<u64>(content.size())))
+        return false;
+
     stream.write(content.data(), static_cast<std::streamsize>(content.size()));
     return stream.good();
 }
@@ -232,6 +255,8 @@ template<typename Container>
         return false;
 
     if(fileSize > static_cast<u64>(Limit<usize>::s_Max))
+        return false;
+    if(!__hidden_global_filesystem::CanRepresentStreamSize(fileSize))
         return false;
 
     std::ifstream stream(path, std::ifstream::binary);
@@ -255,6 +280,9 @@ template<typename Container>
     if(!stream.is_open())
         return false;
 
+    if(!__hidden_global_filesystem::CanRepresentStreamSize(static_cast<u64>(bytes.size())))
+        return false;
+
     if(!bytes.empty())
         stream.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
     return stream.good();
@@ -264,6 +292,9 @@ template<typename Container>
 template<typename Container, typename PodType>
 inline void AppendPOD(Container& outBinary, const PodType& value){
     const usize beginOffset = outBinary.size();
+    if(beginOffset > Limit<usize>::s_Max - sizeof(PodType))
+        throw RuntimeException("AppendPOD size overflow");
+
     outBinary.resize(beginOffset + sizeof(PodType));
     NWB_MEMCPY(outBinary.data() + beginOffset, sizeof(PodType), &value, sizeof(PodType));
 }
@@ -284,6 +315,8 @@ template<typename Container>
 [[nodiscard]] inline bool AppendString(Container& outBinary, const AStringView text){
     if(text.size() > Limit<u32>::s_Max)
         return false;
+    if(outBinary.size() > Limit<usize>::s_Max - sizeof(u32))
+        return false;
 
     const u32 textLength = static_cast<u32>(text.size());
     AppendPOD(outBinary, textLength);
@@ -291,6 +324,9 @@ template<typename Container>
         return true;
 
     const usize beginOffset = outBinary.size();
+    if(beginOffset > Limit<usize>::s_Max - textLength)
+        return false;
+
     outBinary.resize(beginOffset + textLength);
     NWB_MEMCPY(outBinary.data() + beginOffset, textLength, text.data(), textLength);
     return true;

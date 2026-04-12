@@ -81,6 +81,10 @@ namespace __hidden_metascript_parser{
     return false;
 }
 
+[[nodiscard]] bool AddUsizeOverflows(const usize lhs, const usize rhs){
+    return lhs > Limit<usize>::s_Max - rhs;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -607,12 +611,23 @@ private:
     bool validateBinaryOperation(const TokenType::Enum op, const Value& lhs, const Value& rhs, const u32 line, const u32 column){
         switch(op){
         case TokenType::Plus:
-            if((lhs.isNumeric() && rhs.isNumeric())
-                || (lhs.isString() && rhs.isString())
-                || (lhs.isList() && rhs.isList()))
-            {
+            if(lhs.isNumeric() && rhs.isNumeric()){
                 if(lhs.isInteger() && rhs.isInteger() && BinaryI64Overflows(op, lhs.asInteger(), rhs.asInteger())){
                     error(line, column, "integer overflow");
+                    return false;
+                }
+                return true;
+            }
+            if(lhs.isString() && rhs.isString()){
+                if(AddUsizeOverflows(lhs.asString().size(), rhs.asString().size())){
+                    error(line, column, "string concatenation size overflow");
+                    return false;
+                }
+                return true;
+            }
+            if(lhs.isList() && rhs.isList()){
+                if(AddUsizeOverflows(lhs.asList().size(), rhs.asList().size())){
+                    error(line, column, "list concatenation size overflow");
                     return false;
                 }
                 return true;
@@ -666,12 +681,24 @@ private:
         case TokenType::Equal:
             return true;
         case TokenType::PlusEqual:
-            if((target.isNumeric() && rhs.isNumeric())
-                || (target.isString() && rhs.isString())
-                || target.isList())
-            {
+            if(target.isNumeric() && rhs.isNumeric()){
                 if(target.isInteger() && rhs.isInteger() && BinaryI64Overflows(op, target.asInteger(), rhs.asInteger())){
                     error(line, column, "integer overflow");
+                    return false;
+                }
+                return true;
+            }
+            if(target.isString() && rhs.isString()){
+                if(AddUsizeOverflows(target.asString().size(), rhs.asString().size())){
+                    error(line, column, "string append size overflow");
+                    return false;
+                }
+                return true;
+            }
+            if(target.isList()){
+                const usize addedElements = rhs.isList() ? rhs.asList().size() : 1u;
+                if(AddUsizeOverflows(target.asList().size(), addedElements)){
+                    error(line, column, "list append size overflow");
                     return false;
                 }
                 return true;
@@ -904,4 +931,3 @@ NWB_METASCRIPT_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

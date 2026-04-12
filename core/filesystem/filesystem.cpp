@@ -81,6 +81,32 @@ static bool ValidVolumeName(AStringView name){
     return true;
 }
 
+static bool IsLegacyVolumeSegmentFileName(const AStringView fileName, const AStringView volumeName){
+    const AString prefix = StringFormat("{}_", volumeName);
+    constexpr AStringView suffix = ".vol";
+
+    if(fileName.size() <= prefix.size() + suffix.size())
+        return false;
+    if(fileName.substr(0, prefix.size()) != AStringView(prefix.data(), prefix.size()))
+        return false;
+    if(fileName.substr(fileName.size() - suffix.size(), suffix.size()) != suffix)
+        return false;
+
+    const AStringView indexText = fileName.substr(prefix.size(), fileName.size() - prefix.size() - suffix.size());
+    usize parsedIndex = 0;
+    for(const char ch : indexText){
+        if(!IsAsciiDigit(ch))
+            return false;
+
+        const usize digit = static_cast<usize>(ch - '0');
+        if(parsedIndex > (Limit<usize>::s_Max - digit) / 10u)
+            return false;
+        parsedIndex = parsedIndex * 10u + digit;
+    }
+
+    return true;
+}
+
 static bool AddNoOverflow(const u64 lhs, const u64 rhs, u64& out){
     if(lhs > Limit<u64>::s_Max - rhs)
         return false;
@@ -261,6 +287,24 @@ static bool MoveExistingVolumeSegments(const Path& fromDirectory, const Path& to
     if(!sourceExists)
         return true;
 
+    errorCode.clear();
+    if(!IsDirectory(fromDirectory, errorCode)){
+        if(errorCode){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Filesystem volume publish: failed to inspect output directory '{}': {}"),
+                PathToString<tchar>(fromDirectory),
+                StringConvert(errorCode.message())
+            );
+        }
+        else{
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Filesystem volume publish: output path '{}' is not a directory"),
+                PathToString<tchar>(fromDirectory)
+            );
+        }
+        return false;
+    }
+
     bool destinationCreated = false;
     const auto ensureDestination = [&]() -> bool {
         if(destinationCreated)
@@ -279,16 +323,13 @@ static bool MoveExistingVolumeSegments(const Path& fromDirectory, const Path& to
         return true;
     };
 
-    const AString segmentPrefix = StringFormat("{}_", volumeName);
     for(const auto& directoryEntry : DirectoryIterator(fromDirectory, errorCode)){
         if(errorCode)
             break;
 
         const Path currentPath = directoryEntry.path();
         const AString fileName = currentPath.filename().string();
-        const bool prefixMatch = fileName.starts_with(segmentPrefix);
-        const bool extensionMatch = currentPath.extension() == ".vol";
-        if(!prefixMatch || !extensionMatch)
+        if(!IsLegacyVolumeSegmentFileName(fileName, volumeName))
             continue;
 
         if(!ensureDestination())
@@ -463,16 +504,43 @@ static bool PromoteStagedVolume(const StagedVolumePaths& stagedPaths, const Path
 static bool RemoveExistingVolumeSegments(const Path& outputDirectory, const AString& volumeName){
     ErrorCode errorCode;
 
-    const AString segmentPrefix = StringFormat("{}_", volumeName);
+    const bool outputExists = FileExists(outputDirectory, errorCode);
+    if(errorCode){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Failed to query output directory '{}' : {}"),
+            PathToString<tchar>(outputDirectory),
+            StringConvert(errorCode.message())
+        );
+        return false;
+    }
+    if(!outputExists)
+        return true;
+
+    errorCode.clear();
+    if(!IsDirectory(outputDirectory, errorCode)){
+        if(errorCode){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Failed to inspect output directory '{}' : {}"),
+                PathToString<tchar>(outputDirectory),
+                StringConvert(errorCode.message())
+            );
+        }
+        else{
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Failed to remove old segments: output path '{}' is not a directory"),
+                PathToString<tchar>(outputDirectory)
+            );
+        }
+        return false;
+    }
+
     for(const auto& directoryEntry : DirectoryIterator(outputDirectory, errorCode)){
         if(errorCode)
             break;
 
         const Path currentPath = directoryEntry.path();
         const AString fileName = currentPath.filename().string();
-        const bool prefixMatch = fileName.starts_with(segmentPrefix);
-        const bool extensionMatch = currentPath.extension() == ".vol";
-        if(!prefixMatch || !extensionMatch)
+        if(!IsLegacyVolumeSegmentFileName(fileName, volumeName))
             continue;
 
         if(!RemoveFile(currentPath, errorCode)){

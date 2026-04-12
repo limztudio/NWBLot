@@ -251,17 +251,32 @@ Value& Value::operator+=(const Value& rhs){
     }
 
     if(m_type == ValueType::String && rhs.m_type == ValueType::String){
+        if(m_data.m_string->size() > Limit<usize>::s_Max - rhs.m_data.m_string->size()){
+            NWB_ASSERT_MSG(false, NWB_TEXT("string append size overflow"));
+            return *this;
+        }
+        m_data.m_string->reserve(m_data.m_string->size() + rhs.m_data.m_string->size());
         m_data.m_string->append(rhs.m_data.m_string->data(), rhs.m_data.m_string->size());
         return *this;
     }
 
     if(m_type == ValueType::List){
         if(rhs.m_type == ValueType::List){
+            if(m_data.m_list->size() > Limit<usize>::s_Max - rhs.m_data.m_list->size()){
+                NWB_ASSERT_MSG(false, NWB_TEXT("list append size overflow"));
+                return *this;
+            }
+            m_data.m_list->reserve(m_data.m_list->size() + rhs.m_data.m_list->size());
             for(const auto& elem : *rhs.m_data.m_list)
                 m_data.m_list->push_back(elem);
         }
-        else
+        else{
+            if(m_data.m_list->size() == Limit<usize>::s_Max){
+                NWB_ASSERT_MSG(false, NWB_TEXT("list append size overflow"));
+                return *this;
+            }
             m_data.m_list->push_back(rhs);
+        }
         return *this;
     }
 
@@ -543,4 +558,3 @@ NWB_METASCRIPT_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

@@ -320,7 +320,7 @@ static i32 DecodeUtf8CodePoint(const char* bytes, i32 length, u32& unicode){
     return 0;
 }
 
-static void DispatchTextInput(IDeviceManager& deviceManager, XKeyEvent keyEvent, i32 mods){
+static void DispatchTextInput(Graphics& graphics, XKeyEvent keyEvent, i32 mods){
     char buffer[64] = {};
     KeySym ignored = NoSymbol;
     const i32 byteCount = XLookupString(&keyEvent, buffer, static_cast<i32>(sizeof(buffer)), &ignored, nullptr);
@@ -340,21 +340,19 @@ static void DispatchTextInput(IDeviceManager& deviceManager, XKeyEvent keyEvent,
         if(unicode < 32 || unicode == 127)
             continue;
 
-        deviceManager.keyboardCharInput(unicode, mods);
+        graphics.keyboardCharInput(unicode, mods);
     }
 }
 
 static void DispatchKeyEvent(Frame& frame, const XKeyEvent& keyEvent, i32 action){
-    if(auto* deviceManager = frame.graphics().getDeviceManager()){
-        XKeyEvent translatedEvent = keyEvent;
-        const KeySym keySym = XLookupKeysym(&translatedEvent, 0);
-        const i32 key = TranslateKey(keySym);
-        const i32 mods = AdjustModifiersForKey(key, action, TranslateModifiers(keyEvent.state));
+    XKeyEvent translatedEvent = keyEvent;
+    const KeySym keySym = XLookupKeysym(&translatedEvent, 0);
+    const i32 key = TranslateKey(keySym);
+    const i32 mods = AdjustModifiersForKey(key, action, TranslateModifiers(keyEvent.state));
 
-        deviceManager->keyboardUpdate(key, static_cast<i32>(keyEvent.keycode), action, mods);
-        if(action != InputAction::Release)
-            DispatchTextInput(*deviceManager, translatedEvent, mods);
-    }
+    frame.graphics().keyboardUpdate(key, static_cast<i32>(keyEvent.keycode), action, mods);
+    if(action != InputAction::Release)
+        DispatchTextInput(frame.graphics(), translatedEvent, mods);
 }
 
 static bool ProcessEvent(Frame& frame, const XEvent& event){
@@ -416,18 +414,16 @@ static bool ProcessEvent(Frame& frame, const XEvent& event){
 
     case ButtonPress:
     {
-        if(auto* deviceManager = frame.graphics().getDeviceManager()){
-            f64 xoffset = 0.0;
-            f64 yoffset = 0.0;
-            if(TranslateScroll(event.xbutton.button, xoffset, yoffset)){
-                deviceManager->mouseScrollUpdate(xoffset, yoffset);
-                break;
-            }
-
-            const i32 button = TranslateMouseButton(event.xbutton.button);
-            if(button != -1)
-                deviceManager->mouseButtonUpdate(button, InputAction::Press, TranslateModifiers(event.xbutton.state));
+        f64 xoffset = 0.0;
+        f64 yoffset = 0.0;
+        if(TranslateScroll(event.xbutton.button, xoffset, yoffset)){
+            frame.graphics().mouseScrollUpdate(xoffset, yoffset);
+            break;
         }
+
+        const i32 button = TranslateMouseButton(event.xbutton.button);
+        if(button != -1)
+            frame.graphics().mouseButtonUpdate(button, InputAction::Press, TranslateModifiers(event.xbutton.state));
     }
     break;
 
@@ -438,22 +434,18 @@ static bool ProcessEvent(Frame& frame, const XEvent& event){
         if(TranslateScroll(event.xbutton.button, xoffset, yoffset))
             break;
 
-        if(auto* deviceManager = frame.graphics().getDeviceManager()){
-            const i32 button = TranslateMouseButton(event.xbutton.button);
-            if(button != -1)
-                deviceManager->mouseButtonUpdate(button, InputAction::Release, TranslateModifiers(event.xbutton.state));
-        }
+        const i32 button = TranslateMouseButton(event.xbutton.button);
+        if(button != -1)
+            frame.graphics().mouseButtonUpdate(button, InputAction::Release, TranslateModifiers(event.xbutton.state));
     }
     break;
 
     case MotionNotify:
-        if(auto* deviceManager = frame.graphics().getDeviceManager())
-            deviceManager->mousePosUpdate(static_cast<f64>(event.xmotion.x), static_cast<f64>(event.xmotion.y));
+        frame.graphics().mousePosUpdate(static_cast<f64>(event.xmotion.x), static_cast<f64>(event.xmotion.y));
         break;
 
     case EnterNotify:
-        if(auto* deviceManager = frame.graphics().getDeviceManager())
-            deviceManager->mousePosUpdate(static_cast<f64>(event.xcrossing.x), static_cast<f64>(event.xcrossing.y));
+        frame.graphics().mousePosUpdate(static_cast<f64>(event.xcrossing.x), static_cast<f64>(event.xcrossing.y));
         break;
 
     case MappingNotify:
@@ -600,13 +592,11 @@ bool RunX11Frame(Frame& frame){
             return false;
 
         frame.graphics().updateWindowState(width, height, windowVisible, windowIsInFocus);
-        if(auto* deviceManager = frame.graphics().getDeviceManager()){
-            const tchar* title = deviceManager->getWindowTitle();
-            if(title && frame.appliedWindowTitle() != title){
-                frame.appliedWindowTitle() = title;
-                XStoreName(GetX11Display(frameData), GetX11Window(frameData), frame.appliedWindowTitle().c_str());
-                XFlush(GetX11Display(frameData));
-            }
+        const tchar* title = frame.graphics().getWindowTitle();
+        if(title && frame.appliedWindowTitle() != title){
+            frame.appliedWindowTitle() = title;
+            XStoreName(GetX11Display(frameData), GetX11Window(frameData), frame.appliedWindowTitle().c_str());
+            XFlush(GetX11Display(frameData));
         }
 
         Timer currentTime(TimerNow());

@@ -157,7 +157,7 @@ RendererSystem::RendererSystem(
     Core::Assets::AssetManager& assetManager,
     ShaderPathResolveCallback shaderPathResolver
 )
-    : Core::IRenderPass(*graphics.getDeviceManager())
+    : Core::IRenderPass(graphics)
     , m_world(world)
     , m_graphics(graphics)
     , m_assetManager(assetManager)
@@ -189,7 +189,7 @@ void RendererSystem::render(Core::IFramebuffer* framebuffer){
 
     commandList->open();
 
-    Core::ITexture* backBuffer = getDeviceManager().getCurrentBackBuffer();
+    Core::ITexture* backBuffer = m_graphics.getCurrentBackBuffer();
     if(backBuffer)
         commandList->clearTextureFloat(backBuffer, Core::s_AllSubresources, __hidden_ecs_graphics::s_ClearColor);
 

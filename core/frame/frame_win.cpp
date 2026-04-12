@@ -198,16 +198,14 @@ bool Frame::mainLoop(){
             const bool windowIsInFocus = GetForegroundWindow() == data<Common::WinFrame>().hwnd();
             m_graphics.updateWindowState(width, height, windowVisible, windowIsInFocus);
 
-            if(auto* deviceManager = m_graphics.getDeviceManager()){
-                const tchar* title = deviceManager->getWindowTitle();
-                if(title && m_appliedWindowTitle != title){
-                    m_appliedWindowTitle = title;
+            const tchar* title = m_graphics.getWindowTitle();
+            if(title && m_appliedWindowTitle != title){
+                m_appliedWindowTitle = title;
 #ifdef NWB_UNICODE
-                    SetWindowTextW(data<Common::WinFrame>().hwnd(), m_appliedWindowTitle.c_str());
+                SetWindowTextW(data<Common::WinFrame>().hwnd(), m_appliedWindowTitle.c_str());
 #else
-                    SetWindowTextA(data<Common::WinFrame>().hwnd(), m_appliedWindowTitle.c_str());
+                SetWindowTextA(data<Common::WinFrame>().hwnd(), m_appliedWindowTitle.c_str());
 #endif
-                }
             }
 
             Timer currentTime(TimerNow());

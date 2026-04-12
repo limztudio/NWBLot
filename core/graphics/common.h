@@ -317,13 +317,13 @@ private:
 
 struct Color{
     f32 r, g, b, a;
-    
+
     constexpr Color()noexcept : r(0), g(0), b(0), a(0) {}
     constexpr Color(f32 c)noexcept : r(c), g(c), b(c), a(c) {}
     constexpr Color(f32 _r, f32 _g, f32 _b, f32 _a)noexcept : r(_r), g(_g), b(_b), a(_a) {}
 };
 inline bool operator==(const Color& lhs, const Color& rhs)noexcept{
-    return 
+    return
     (lhs.r == rhs.r)
     && (lhs.g == rhs.g)
     && (lhs.b == rhs.b)
@@ -337,16 +337,16 @@ struct Viewport{
     f32 minX, maxX;
     f32 minY, maxY;
     f32 minZ, maxZ;
-    
+
     constexpr Viewport()noexcept : minX(0), maxX(0), minY(0), maxY(0), minZ(0), maxZ(0) {}
     constexpr Viewport(f32 width, f32 height)noexcept : minX(0), maxX(width), minY(0), maxY(height), minZ(0), maxZ(1) {}
     constexpr Viewport(f32 _minX, f32 _maxX, f32 _minY, f32 _maxY, f32 _minZ, f32 _maxZ)noexcept : minX(_minX), maxX(_maxX), minY(_minY), maxY(_maxY), minZ(_minZ), maxZ(_maxZ) {}
-    
+
     [[nodiscard]] constexpr f32 width()const noexcept{ return maxX - minX; }
     [[nodiscard]] constexpr f32 height()const noexcept{ return maxY - minY; }
 };
 inline bool operator==(const Viewport& lhs, const Viewport& rhs)noexcept{
-    return 
+    return
     (lhs.minX == rhs.minX) && (lhs.maxX == rhs.maxX)
     && (lhs.minY == rhs.minY) && (lhs.maxY == rhs.maxY)
     && (lhs.minZ == rhs.minZ) && (lhs.maxZ == rhs.maxZ)
@@ -358,17 +358,17 @@ inline bool operator!=(const Viewport& lhs, const Viewport& rhs)noexcept{ return
 struct Rect{
     i32 minX, maxX;
     i32 minY, maxY;
-    
+
     constexpr Rect()noexcept : minX(0), maxX(0), minY(0), maxY(0) {}
     constexpr Rect(i32 width, i32 height)noexcept : minX(0), maxX(width), minY(0), maxY(height) {}
     constexpr Rect(i32 _minX, i32 _maxX, i32 _minY, i32 _maxY)noexcept : minX(_minX), maxX(_maxX), minY(_minY), maxY(_maxY) {}
     explicit Rect(const Viewport& viewport)noexcept : minX(static_cast<i32>(Floor(viewport.minX))), maxX(static_cast<i32>(Ceil(viewport.maxX))), minY(static_cast<i32>(Floor(viewport.minY))), maxY(static_cast<i32>(Ceil(viewport.maxY))) {}
-    
+
     [[nodiscard]] constexpr i32 width()const noexcept{ return maxX - minX; }
     [[nodiscard]] constexpr i32 height()const noexcept{ return maxY - minY; }
 };
 inline bool operator==(const Rect& lhs, const Rect& rhs)noexcept{
-    return 
+    return
     (lhs.minX == rhs.minX) && (lhs.maxX == rhs.maxX)
     && (lhs.minY == rhs.minY) && (lhs.maxY == rhs.maxY)
     ;
@@ -437,7 +437,7 @@ namespace Format{
         RGBA32_UINT,
         RGBA32_SINT,
         RGBA32_FLOAT,
-        
+
         D16,
         D24S8,
         X24G8_UINT,
@@ -459,7 +459,7 @@ namespace Format{
         BC6H_SFLOAT,
         BC7_UNORM,
         BC7_UNORM_SRGB,
-        
+
         ASTC_4x4_UNORM,
         ASTC_4x4_UNORM_SRGB,
         ASTC_4x4_FLOAT,
@@ -502,7 +502,7 @@ namespace Format{
         ASTC_12x12_UNORM,
         ASTC_12x12_UNORM_SRGB,
         ASTC_12x12_FLOAT,
-        
+
         kCount
     };
 };
@@ -539,23 +539,23 @@ const FormatInfo& GetFormatInfo(Format::Enum format)noexcept;
 namespace FormatSupport{
     enum Mask : u32{
         None = 0,
-        
+
         Buffer = 1 << 0,
         IndexBuffer = 1 << 1,
         VertexBuffer = 1 << 2,
-        
+
         Texture = 1 << 3,
         DepthStencil = 1 << 4,
         RenderTarget = 1 << 5,
         Blendable = 1 << 6,
-        
+
         ShaderLoad = 1 << 7,
         ShaderSample = 1 << 8,
         ShaderUavLoad = 1 << 9,
         ShaderUavStore = 1 << 10,
         ShaderAtomicCounter = 1 << 11,
     };
-    
+
     constexpr Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
     constexpr Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
     constexpr Mask& operator|=(Mask& lhs, Mask rhs)noexcept{ lhs = lhs | rhs; return lhs; }
@@ -656,7 +656,7 @@ namespace ResourceStates{
         ConvertCoopVecMatrixInput = 1 << 23,
         ConvertCoopVecMatrixOutput = 1 << 24,
     };
-    
+
     constexpr Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
     constexpr Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
     constexpr Mask& operator|=(Mask& lhs, Mask rhs)noexcept{ lhs = lhs | rhs; return lhs; }
@@ -687,7 +687,7 @@ namespace SharedResourceFlags{
         // D3D11, Vulkan: ignored
         Shared_CrossAdapter = 1 << 2,
     };
-    
+
     constexpr Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
     constexpr Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
     constexpr Mask& operator|=(Mask& lhs, Mask rhs)noexcept{ lhs = lhs | rhs; return lhs; }
@@ -709,31 +709,31 @@ struct TextureDesc{
     Format::Enum format = Format::UNKNOWN;
     TextureDimension::Enum dimension = TextureDimension::Enum::Texture2D;
     Name name;
-    
+
     bool isShaderResource = true; // Thi is initialised to 'true' for backward compatibility
     bool isRenderTarget = false;
     bool isUAV = false;
     bool isTypeless = false;
     bool isShadingRateSurface = false;
-    
+
     SharedResourceFlags::Mask sharedResourceFlags = SharedResourceFlags::None;
-    
+
     // Indicates that the texture is created with no backing memory,
     // and memory is bound to the texture later using bindTextureMemory.
     // On DX12, the texture resource is created at the time of memory binding.
     bool isVirtual = false;
     bool isTiled = false;
-    
+
     Color clearValue;
     bool useClearValue = false;
-    
+
     ResourceStates::Mask initialState = ResourceStates::Unknown;
-    
+
     // If keepInitialState is true, command lists that use the texture will automatically
-    // begin tracking the texture from the initial state and transition it to the initial state 
+    // begin tracking the texture from the initial state and transition it to the initial state
     // on command list close.
     bool keepInitialState = false;
-    
+
     constexpr TextureDesc& setWidth(u32 v)noexcept{ width = v; return *this; }
     constexpr TextureDesc& setHeight(u32 v)noexcept{ height = v; return *this; }
     constexpr TextureDesc& setDepth(u32 v)noexcept{ depth = v; return *this; }
@@ -757,18 +757,18 @@ struct TextureSlice{
     u32 x = 0;
     u32 y = 0;
     u32 z = 0;
-    
+
     // -1 means the entire dimension is part of the region
     // resolve() will translate these values into actual dimensions
     u32 width = static_cast<u32>(-1);
     u32 height = static_cast<u32>(-1);
     u32 depth = static_cast<u32>(-1);
-    
+
     MipLevel mipLevel = 0;
     ArraySlice arraySlice = 0;
-    
+
     [[nodiscard]] TextureSlice resolve(const TextureDesc& desc)const;
-    
+
     constexpr TextureSlice& setOrigin(u32 vx = 0, u32 vy = 0, u32 vz = 0){ x = vx; y = vy; z = vz; return *this; }
     constexpr TextureSlice& setWidth(u32 value){ width = value; return *this; }
     constexpr TextureSlice& setHeight(u32 value){ height = value; return *this; }
@@ -781,15 +781,15 @@ struct TextureSlice{
 struct TextureSubresourceSet{
     static constexpr auto AllMipLevels = static_cast<MipLevel>(-1);
     static constexpr auto AllArraySlices = static_cast<ArraySlice>(-1);
-    
+
     MipLevel baseMipLevel = 0;
     MipLevel numMipLevels = 1;
     ArraySlice baseArraySlice = 0;
     ArraySlice numArraySlices = 1;
-    
+
     [[nodiscard]] TextureSubresourceSet resolve(const TextureDesc& desc, bool singleMipLevel)const;
     [[nodiscard]] bool isEntireTexture(const TextureDesc& desc)const;
-    
+
     constexpr TextureSubresourceSet() = default;
     constexpr TextureSubresourceSet(MipLevel _baseMipLevel, MipLevel _numMipLevels, ArraySlice _baseArraySlice, ArraySlice _numArraySlices)
     : baseMipLevel(_baseMipLevel)
@@ -797,7 +797,7 @@ struct TextureSubresourceSet{
     , baseArraySlice(_baseArraySlice)
     , numArraySlices(_numArraySlices)
     {}
-    
+
     constexpr TextureSubresourceSet& setBaseMipLevel(MipLevel value){ baseMipLevel = value; return *this; }
     constexpr TextureSubresourceSet& setNumMipLevels(MipLevel value){ numMipLevels = value; return *this; }
     constexpr TextureSubresourceSet& setMipLevels(MipLevel base, MipLevel num){ baseMipLevel = base; numMipLevels = num; return *this; }
@@ -823,7 +823,7 @@ class ITexture : public IResource{
 
 public:
     [[nodiscard]] virtual const TextureDesc& getDescription()const = 0;
-    
+
     // Similar to getNativeObject, returns a native view for a specified set of subresources. Returns nullptr if unavailable.
     virtual Object getNativeView(ObjectType objectType, Format::Enum format = Format::UNKNOWN, TextureSubresourceSet subresources = s_AllSubresources, TextureDimension::Enum dimension = TextureDimension::Unknown, bool isReadOnlyDSV = false) = 0;
 };
@@ -902,7 +902,7 @@ class ISamplerFeedbackTexture : public IResource{
 
 public:
     [[nodiscard]] virtual const SamplerFeedbackTextureDesc& getDescription()const = 0;
-    
+
     virtual TextureHandle getPairedTexture() = 0;
 };
 typedef RefCountPtr<ISamplerFeedbackTexture, ArenaRefDeleter<ISamplerFeedbackTexture>> SamplerFeedbackTextureHandle;
@@ -920,7 +920,7 @@ struct VertexAttributeDesc{
     u32 elementStride = 0;
     Name name;
     bool isInstanced = false;
-    
+
     constexpr VertexAttributeDesc& setFormat(Format::Enum value){ format = value; return *this; }
     constexpr VertexAttributeDesc& setArraySize(u32 value){ arraySize = value; return *this; }
     constexpr VertexAttributeDesc& setBufferIndex(u32 value){ bufferIndex = value; return *this; }
@@ -977,7 +977,7 @@ struct BufferDesc{
     CpuAccessMode::Enum cpuAccess = CpuAccessMode::None;
 
     SharedResourceFlags::Mask sharedResourceFlags = SharedResourceFlags::None;
-    
+
     constexpr BufferDesc& setByteSize(u64 value){ byteSize = value; return *this; }
     constexpr BufferDesc& setStructStride(u32 value){ structStride = value; return *this; }
     constexpr BufferDesc& setMaxVersions(u32 value){ maxVersions = value; return *this; }
@@ -1010,7 +1010,7 @@ struct BufferDesc{
 struct BufferRange{
     u64 byteOffset = 0;
     u64 byteSize = 0;
-        
+
     BufferRange() = default;
     constexpr BufferRange(u64 _byteOffset, u64 _byteSize)
         : byteOffset(_byteOffset)
@@ -1045,7 +1045,7 @@ typedef RefCountPtr<IBuffer, ArenaRefDeleter<IBuffer>> BufferHandle;
 namespace ShaderType{
     enum Mask : u16{
         None            = 0x0000,
-        
+
         Compute         = 0x0020,
 
         Vertex          = 0x0001,
@@ -1067,7 +1067,7 @@ namespace ShaderType{
 
         All             = 0x3FFF,
     };
-    
+
     constexpr Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
     constexpr Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
     constexpr Mask& operator|=(Mask& lhs, Mask rhs)noexcept{ lhs = lhs | rhs; return lhs; }
@@ -1087,7 +1087,7 @@ namespace FastGeometryShaderFlags{
         OffsetTargetIndexByViewportIndex = 1 << 2,
         StrictApiOrder                   = 1 << 3,
     };
-    
+
     constexpr Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
     constexpr Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
     constexpr Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
@@ -1105,7 +1105,7 @@ struct CustomSemantic{
 
     Enum type;
     Name name;
-        
+
     constexpr CustomSemantic& setType(Enum value){ type = value; return *this; }
     constexpr CustomSemantic& setName(const Name& value){ name = value; return *this; }
 };
@@ -1245,7 +1245,7 @@ namespace ColorMask{
 
         All = 0xF,
     };
-    
+
     constexpr Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
     constexpr Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
     constexpr Mask& operator|=(Mask& lhs, Mask rhs)noexcept{ lhs = lhs | rhs; return lhs; }
@@ -1292,7 +1292,7 @@ namespace ColorMask{
         [[nodiscard]] bool usesConstantColor(u32 numTargets)const;
     };
     constexpr bool operator==(const BlendState::RenderTarget& lhs, const BlendState::RenderTarget& rhs)noexcept{
-        return 
+        return
             lhs.blendEnable == rhs.blendEnable
             && lhs.srcBlend == rhs.srcBlend
             && lhs.destBlend == rhs.destBlend
@@ -1326,7 +1326,7 @@ namespace RasterFillMode{
     enum Enum : u8{
         Solid,
         Wireframe,
-        
+
         // Vulkan names
         Fill = Solid,
         Line = Wireframe,
@@ -1360,7 +1360,7 @@ struct RasterState{
     bool quadFillEnable = false;
     char samplePositionsX[16]{};
     char samplePositionsY[16]{};
-    
+
     constexpr RasterState& setFillMode(RasterFillMode::Enum value){ fillMode = value; return *this; }
     constexpr RasterState& setFillSolid(){ fillMode = RasterFillMode::Solid; return *this; }
     constexpr RasterState& setFillWireframe(){ fillMode = RasterFillMode::Wireframe; return *this; }
@@ -1565,7 +1565,7 @@ struct FramebufferAttachment{
     TextureSubresourceSet subresources = TextureSubresourceSet(0, 1, 0, 1);
     Format::Enum format = Format::UNKNOWN;
     bool isReadOnly = false;
-        
+
     constexpr FramebufferAttachment& setTexture(ITexture* t){ texture = t; return *this; }
     constexpr FramebufferAttachment& setSubresources(TextureSubresourceSet value){ subresources = value; return *this; }
     constexpr FramebufferAttachment& setArraySlice(ArraySlice index){ subresources.baseArraySlice = index; subresources.numArraySlices = 1; return *this; }
@@ -1664,12 +1664,12 @@ namespace OpacityMicromapFormat{
 namespace RayTracingOpacityMicromapBuildFlags{
     enum Mask : u8{
         None = 0,
-        
+
         FastTrace = 1 << 0,
         FastBuild = 1 << 1,
         AllowCompaction = 1 << 2,
     };
-    
+
     constexpr Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
     constexpr Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
     constexpr Mask& operator|=(Mask& lhs, Mask rhs)noexcept{ lhs = lhs | rhs; return lhs; }
@@ -1707,7 +1707,7 @@ struct RayTracingOpacityMicromapDesc{
     // One NVAPI_D3D12_RAYTRACING_OPACITY_MICROMAP_DESC entry per OMM.
     IBuffer* perOmmDescs = nullptr;
     u64 perOmmDescsOffset = 0;
-    
+
     constexpr RayTracingOpacityMicromapDesc& setDebugName(const Name& value){ debugName = value; return *this; }
     constexpr RayTracingOpacityMicromapDesc& setTrackLiveness(bool value){ trackLiveness = value; return *this; }
     constexpr RayTracingOpacityMicromapDesc& setFlags(RayTracingOpacityMicromapBuildFlags::Mask value){ flags = value; return *this; }
@@ -1751,7 +1751,7 @@ namespace RayTracingGeometryFlags{
         Opaque = 1 << 0,
         NoDuplicateAnyHitInvocation = 1 << 1,
     };
-    
+
     constexpr Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
     constexpr Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
     constexpr Mask& operator|=(Mask& lhs, Mask rhs)noexcept{ lhs = lhs | rhs; return lhs; }
@@ -1781,7 +1781,7 @@ struct RayTracingGeometryAABB{
 };
 
 struct RayTracingGeometryTriangles{
-    IBuffer* indexBuffer = nullptr;   // make sure the first 2 fields in all Geometry 
+    IBuffer* indexBuffer = nullptr;   // make sure the first 2 fields in all Geometry
     IBuffer* vertexBuffer = nullptr;  // structs are IBuffer* for easier debugging
     Format::Enum indexFormat = Format::UNKNOWN;
     Format::Enum vertexFormat = Format::UNKNOWN;
@@ -1942,7 +1942,7 @@ namespace RayTracingInstanceFlags{
         ForceOMM2State = 1 << 4,
         DisableOMMs = 1 << 5,
     };
-    
+
     constexpr Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
     constexpr Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
     constexpr Mask& operator|=(Mask& lhs, Mask rhs)noexcept{ lhs = lhs | rhs; return lhs; }
@@ -2000,7 +2000,7 @@ namespace RayTracingAccelStructBuildFlags{
         // Only affects the validation layer, doesn't translate to Vk/DX12 AS build flags.
         AllowEmptyInstances = 0x80,
     };
-    
+
     constexpr Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
     constexpr Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
     constexpr Mask& operator|=(Mask& lhs, Mask rhs)noexcept{ lhs = lhs | rhs; return lhs; }
@@ -2085,7 +2085,7 @@ namespace RayTracingClusterOperationFlags{
         NoOverlap = 1 << 2,
         AllowOMM = 1 << 3,
     };
-    
+
     constexpr Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
     constexpr Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
     constexpr Mask& operator|=(Mask& lhs, Mask rhs)noexcept{ lhs = lhs | rhs; return lhs; }
@@ -2164,11 +2164,11 @@ struct RayTracingClusterOperationParams{
 struct RayTracingClusterOperationDesc{
     RayTracingClusterOperationParams params;
 
-    u64 scratchSizeInBytes = 0;                             // Size of scratch resource returned by getClusterOperationSizeInfo() scratchSizeInBytes 
+    u64 scratchSizeInBytes = 0;                             // Size of scratch resource returned by getClusterOperationSizeInfo() scratchSizeInBytes
 
     // Input Resources
     IBuffer* inIndirectArgCountBuffer = nullptr;            // Buffer containing the number of AS to build, instantiate, or move
-    u64 inIndirectArgCountOffsetInBytes = 0;                // Offset (in bytes) to where the count is in the inIndirectArgCountBuffer 
+    u64 inIndirectArgCountOffsetInBytes = 0;                // Offset (in bytes) to where the count is in the inIndirectArgCountBuffer
     IBuffer* inIndirectArgsBuffer = nullptr;                // Buffer of descriptor array of format IndirectTriangleClasArgs, IndirectTriangleTemplateArgs, IndirectInstantiateTemplateArgs
     u64 inIndirectArgsOffsetInBytes = 0;                    // Offset (in bytes) to where the descriptor array starts inIndirectArgsBuffer
 
@@ -2213,20 +2213,20 @@ namespace ResourceType{
 
 struct BindingLayoutItem{
     u32 slot;
-    
+
     ResourceType::Enum type : 8;
     u8 unused : 8;
     // Push constant byte size when (type == PushConstants)
     // Descriptor array size (1 or more) for all other resource types
     // Must be 1 for VolatileConstantBuffer
     u16 size : 16;
-    
+
     constexpr BindingLayoutItem& setSlot(u32 value){ slot = value; return *this; }
     constexpr BindingLayoutItem& setType(ResourceType::Enum value){ type = value; return *this; }
     constexpr BindingLayoutItem& setSize(u32 value){ size = static_cast<u16>(value); return *this; }
-    
+
     constexpr u32 getArraySize()const{ return (type == ResourceType::PushConstants) ? 1 : size; }
-    
+
 #define NWB_BINDING_LAYOUT_ITEM_INITIALIZER(TYPE_ENUM) \
     static constexpr BindingLayoutItem TYPE_ENUM(const u32 slot, const usize size){ \
         BindingLayoutItem ret{}; \
@@ -2259,7 +2259,7 @@ struct BindingLayoutItem{
 #undef NWB_BINDING_LAYOUT_ITEM_INITIALIZER
 };
 inline bool operator==(const BindingLayoutItem& lhs, const BindingLayoutItem& rhs){
-    return 
+    return
         lhs.slot == rhs.slot
         && lhs.type == rhs.type
         && lhs.size == rhs.size
@@ -2315,7 +2315,7 @@ struct BindingLayoutDesc{
 };
 
 // BindlessDescriptorType bridges the DX12 and Vulkan in supporting HLSL ResourceDescriptorHeap and SamplerDescriptorHeap
-// For DX12: 
+// For DX12:
 // - MutableSrvUavCbv, MutableCounters will enable D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED for the Root Signature
 // - MutableSampler will enable D3D12_ROOT_SIGNATURE_FLAG_SAMPLER_HEAP_DIRECTLY_INDEXED for the Root Signature
 // - The BindingLayout will be ignored in terms of setting a descriptor set. DescriptorIndexing should use GetDescriptorIndexInHeap()
@@ -2341,7 +2341,7 @@ namespace BindlessLayoutType{
 
 // Bindless layouts allow applications to attach a descriptor table to an unbounded
 // resource array in the shader. The size of the array is not known ahead of time.
-// The same table can be bound to multiple register spaces on DX12, in order to 
+// The same table can be bound to multiple register spaces on DX12, in order to
 // access different types of resources stored in the table through different arrays.
 // The `registerSpaces` vector specifies which spaces will the table be bound to,
 // with the table type (SRV or UAV) derived from the resource type assigned to each space.
@@ -2405,13 +2405,13 @@ struct BindingSetItem{
     // Default constructor that doesn't initialize anything for performance:
     // BindingSetItem's are stored in large statically sized arrays.
     BindingSetItem(){}
-    
+
     constexpr BindingSetItem& setArrayElement(u32 value){ arrayElement = value; return *this; }
     constexpr BindingSetItem& setFormat(Format::Enum value){ format = value; return *this; }
     constexpr BindingSetItem& setDimension(TextureDimension::Enum value){ dimension = value; return *this; }
     constexpr BindingSetItem& setSubresources(TextureSubresourceSet value){ subresources = value; return *this; }
     constexpr BindingSetItem& setRange(BufferRange value){ range = value; return *this; }
-    
+
     static BindingSetItem None(u32 slot = 0){
         BindingSetItem result;
         result.slot = slot;
@@ -2617,9 +2617,9 @@ static_assert(sizeof(BindingSetItem) == 40, "sizeof(BindingSetItem) is supposed 
 
 struct BindingSetDesc{
     Vector<BindingSetItem> bindings;
-       
+
     // Enables automatic liveness tracking of this binding set by nvrhi command lists.
-    // By setting trackLiveness to false, you take the responsibility of not releasing it 
+    // By setting trackLiveness to false, you take the responsibility of not releasing it
     // until all rendering commands using the binding set are finished.
     bool trackLiveness = true;
 
@@ -2683,13 +2683,13 @@ struct SinglePassStereoState{
     u8 renderTargetIndexOffset = 0;
     bool enabled = false;
     bool independentViewportMask = false;
-    
+
     constexpr SinglePassStereoState& setEnabled(bool value){ enabled = value; return *this; }
     constexpr SinglePassStereoState& setIndependentViewportMask(bool value){ independentViewportMask = value; return *this; }
     constexpr SinglePassStereoState& setRenderTargetIndexOffset(u16 value){ renderTargetIndexOffset = static_cast<u8>(value); return *this; }
 };
 inline bool operator==(const SinglePassStereoState& lhs, const SinglePassStereoState& rhs){
-    return 
+    return
         lhs.enabled == rhs.enabled
         && lhs.independentViewportMask == rhs.independentViewportMask
         && lhs.renderTargetIndexOffset == rhs.renderTargetIndexOffset
@@ -2743,7 +2743,7 @@ struct VariableRateShadingState{
     constexpr VariableRateShadingState& setImageCombiner(ShadingRateCombiner::Enum value){ imageCombiner = value; return *this; }
 };
 inline bool operator==(const VariableRateShadingState& lhs, const VariableRateShadingState& rhs){
-    return 
+    return
         lhs.enabled == rhs.enabled
         && lhs.shadingRate == rhs.shadingRate
         && lhs.pipelinePrimitiveCombiner == rhs.pipelinePrimitiveCombiner
@@ -2769,7 +2769,7 @@ struct GraphicsPipelineDesc{
     VariableRateShadingState shadingRateState;
 
     BindingLayoutVector bindingLayouts;
-        
+
     constexpr GraphicsPipelineDesc& setPrimType(PrimitiveType::Enum value){ primType = value; return *this; }
     constexpr GraphicsPipelineDesc& setPatchControlPoints(u32 value){ patchControlPoints = value; return *this; }
     GraphicsPipelineDesc& setInputLayout(IInputLayout* value){ inputLayout = value; return *this; }
@@ -2816,7 +2816,7 @@ typedef RefCountPtr<IComputePipeline, ArenaRefDeleter<IComputePipeline>> Compute
 
 struct MeshletPipelineDesc{
     PrimitiveType::Enum primType = PrimitiveType::TriangleList;
-        
+
     ShaderHandle AS;
     ShaderHandle MS;
     ShaderHandle PS;
@@ -2824,7 +2824,7 @@ struct MeshletPipelineDesc{
     RenderState renderState;
 
     BindingLayoutVector bindingLayouts;
-        
+
     constexpr MeshletPipelineDesc& setPrimType(PrimitiveType::Enum value){ primType = value; return *this; }
     MeshletPipelineDesc& setTaskShader(IShader* value){ AS = value; return *this; }
     MeshletPipelineDesc& setAmplificationShader(IShader* value){ AS = value; return *this; }
@@ -2860,13 +2860,13 @@ struct VertexBufferBinding{
     IBuffer* buffer = nullptr;
     u64 offset;
     u32 slot;
-    
+
     constexpr VertexBufferBinding& setBuffer(IBuffer* value){ buffer = value; return *this; }
     constexpr VertexBufferBinding& setSlot(u32 value){ slot = value; return *this; }
     constexpr VertexBufferBinding& setOffset(u64 value){ offset = value; return *this; }
 };
 inline bool operator==(const VertexBufferBinding& lhs, const VertexBufferBinding& rhs)noexcept{
-    return 
+    return
         lhs.buffer == rhs.buffer
         && lhs.offset == rhs.offset
         && lhs.slot == rhs.slot
@@ -2878,13 +2878,13 @@ struct IndexBufferBinding{
     IBuffer* buffer = nullptr;
     u32 offset;
     Format::Enum format;
-    
+
     constexpr IndexBufferBinding& setBuffer(IBuffer* value){ buffer = value; return *this; }
     constexpr IndexBufferBinding& setFormat(Format::Enum value){ format = value; return *this; }
     constexpr IndexBufferBinding& setOffset(u32 value){ offset = value; return *this; }
 };
 inline bool operator==(const IndexBufferBinding& lhs, const IndexBufferBinding& rhs)noexcept{
-    return 
+    return
         lhs.buffer == rhs.buffer
         && lhs.offset == rhs.offset
         && lhs.format == rhs.format
@@ -3014,7 +3014,7 @@ struct RayTracingPipelineShaderDesc{
     ShaderHandle shader;
     BindingLayoutHandle bindingLayout;
     Name exportName;
-    
+
     RayTracingPipelineShaderDesc& setShader(IShader* value){ shader = value; return *this; }
     RayTracingPipelineShaderDesc& setBindingLayout(IBindingLayout* value){ bindingLayout = value; return *this; }
     constexpr RayTracingPipelineShaderDesc& setExportName(const Name& value){ exportName = value; return *this; }
@@ -3027,7 +3027,7 @@ struct RayTracingPipelineHitGroupDesc{
     BindingLayoutHandle bindingLayout;
     Name exportName;
     bool isProceduralPrimitive = false;
-    
+
     RayTracingPipelineHitGroupDesc& setClosestHitShader(IShader* value){ closestHitShader = value; return *this; }
     RayTracingPipelineHitGroupDesc& setAnyHitShader(IShader* value){ anyHitShader = value; return *this; }
     RayTracingPipelineHitGroupDesc& setIntersectionShader(IShader* value){ intersectionShader = value; return *this; }
@@ -3245,7 +3245,7 @@ namespace CommandQueue{
         Graphics = 0,
         Compute,
         Copy,
-        
+
         kCount
     };
 };
@@ -3322,7 +3322,7 @@ public:
     virtual void close() = 0;
 
     // Resets the NVRHI state cache associated with the command list, clears some of the underlying API state.
-    // This method is mostly useful when switching from recording commands to the open command list using 
+    // This method is mostly useful when switching from recording commands to the open command list using
     // non-NVRHI code - see getNativeObject(...) - to recording further commands using NVRHI.
     virtual void clearState() = 0;
 
@@ -3390,7 +3390,7 @@ public:
     //   is called on a volatile buffer, a region of that buffer object (a single version) is suballocated, data
     //   is copied there, and subsequent uses of the buffer in the same command list will refer to that version.
     //   For non-volatile buffers, writes of 64 kB or smaller use vkCmdUpdateBuffer. Larger writes suballocate
-    //   a portion of the automatic upload buffer and copy the data to the real GPU buffer through that and 
+    //   a portion of the automatic upload buffer and copy the data to the real GPU buffer through that and
     //   vkCmdCopyBuffer.
     virtual void writeBuffer(IBuffer* b, const void* data, usize dataSize, u64 destOffsetBytes = 0) = 0;
 
@@ -3430,7 +3430,7 @@ public:
     // (setGraphicsState etc.) before using setPushConstants. Changing the state invalidates push constants.
     // - DX11: Push constants for all pipelines and command lists use a single buffer associated with the
     //   NVRHI context. This function maps to UpdateSubresource on that buffer.
-    // - DX12: Push constants map to root constants in the PSO/root signature. This function maps to 
+    // - DX12: Push constants map to root constants in the PSO/root signature. This function maps to
     //   SetGraphicsRoot32BitConstants for graphics or meshlet pipelines, and SetComputeRoot32BitConstants for
     //   compute or ray tracing pipelines.
     // - Vulkan: Push constants are just Vulkan push constants. This function maps to vkCmdPushConstants.
@@ -3473,7 +3473,7 @@ public:
     // - DX12: Maps to ExecuteIndirect with a predefined signature.
     // - Vulkan: Maps to vkCmdDrawIndirect.
     virtual void drawIndirect(u32 offsetBytes, u32 drawCount = 1) = 0;
-    
+
     // Draws one or multiple sets of indexed primitives using the parameters provided in the indirect buffer
     // specified in the prior call to setGraphicsState(...). The memory layout in the buffer is the same for all
     // graphics APIs and is described by the DrawIndexedIndirectArguments structure. If drawCount is more than 1,
@@ -3484,7 +3484,7 @@ public:
     // - DX12: Maps to ExecuteIndirect with a predefined signature.
     // - Vulkan: Maps to vkCmdDrawIndexedIndirect.
     virtual void drawIndexedIndirect(u32 offsetBytes, u32 drawCount = 1) = 0;
-    
+
     // Sets the specified compute state on the command list.
     // The state includes the pipeline (or individual shaders on DX11) and all resources bound to it.
     // See the members of ComputeState for more information.
@@ -3547,7 +3547,7 @@ public:
     // - DX12: Maps to NvAPI_D3D12_BuildRaytracingOpacityMicromapArray and requires NVAPI.
     // - Vulkan: Maps to vkCmdBuildMicromapsEXT.
     virtual void buildOpacityMicromap(IRayTracingOpacityMicromap* omm, const RayTracingOpacityMicromapDesc& desc) = 0;
-    
+
     // Builds or updates a bottom-level ray tracing acceleration structure (BLAS).
     // A temporary memory region for the build is suballocated using the scratch buffer manager attached to the
     // command list. The size of this memory region is determined automatically inside this function.
@@ -3566,7 +3566,7 @@ public:
     // If NVRHI is built with RTXMU enabled, all BLAS builds, updates and compactions are handled by RTXMU.
     // Note that RTXMU currently doesn't support OMM or LSS.
     virtual void buildBottomLevelAccelStruct(IRayTracingAccelStruct* as, const RayTracingGeometryDesc* pGeometries, usize numGeometries, RayTracingAccelStructBuildFlags::Mask buildFlags = RayTracingAccelStructBuildFlags::None) = 0;
-    
+
     // Compacts all bottom-level ray tracing acceleration structures (BLASes) that are currently available
     // for compaction. This process is handled by the RTXMU library. If NVRHI is built without RTXMU,
     // this function has no effect.
@@ -3649,7 +3649,7 @@ public:
 
     // Sets the necessary resource states for all non-permanent resources used in the binding set.
     virtual void setResourceStatesForBindingSet(IBindingSet* bindingSet) = 0;
-    
+
     // Sets the necessary resource states for all targets of the framebuffer.
     void setResourceStatesForFramebuffer(IFramebuffer& framebuffer);
 
@@ -3668,7 +3668,7 @@ public:
     virtual void setEnableUavBarriersForBuffer(IBuffer* buffer, bool enableBarriers) = 0;
 
     // Informs the command list state tracker of the current state of a texture or some of its subresources.
-    // This function must be called after opening the command list and before the first use of any textures 
+    // This function must be called after opening the command list and before the first use of any textures
     // that do not have the keepInitialState flag set, and that were not transitioned to a permanent state
     // previously using setPermanentTextureState(...).
     virtual void beginTrackingTextureState(ITexture* texture, TextureSubresourceSet subresources, ResourceStates::Mask stateBits) = 0;
@@ -3724,7 +3724,7 @@ public:
     // state is not allowed.
     // On DX11, always returns ResourceStates::Common.
     virtual ResourceStates::Mask getTextureSubresourceState(ITexture* texture, ArraySlice arraySlice, MipLevel mipLevel) = 0;
-    
+
     // Returns the current tracked state of a buffer.
     // See the comment to getTextureSubresourceState(...) for more information.
     virtual ResourceStates::Mask getBufferState(IBuffer* buffer) = 0;
@@ -3732,7 +3732,7 @@ public:
     // Returns the owning device, does NOT call AddRef on it.
     virtual IDevice* getDevice() = 0;
 
-    // Returns the CommandListParameters structure that was used to create the command list. 
+    // Returns the CommandListParameters structure that was used to create the command list.
     virtual const CommandListParameters& getDescription() = 0;
 };
 typedef RefCountPtr<ICommandList, ArenaRefDeleter<ICommandList>> CommandListHandle;
@@ -3766,7 +3766,7 @@ public:
 private:
     // Using a filesystem path to track the event stack since that automatically inserts "/" separators
     Path m_eventStack;
-    
+
     Array<usize, s_MaxAftermathEventStrings> m_eventHashes;
     usize m_oldestHashIndex;
     HashMap<usize, AString> m_eventStrings;
@@ -3780,7 +3780,7 @@ class AftermathCrashDumpHelper{
 public:
     AftermathCrashDumpHelper();
 
-    
+
 public:
     void registerAftermathMarkerTracker(AftermathMarkerTracker& tracker);
     void unRegisterAftermathMarkerTracker(AftermathMarkerTracker& tracker);
@@ -3839,12 +3839,12 @@ public:
     virtual ShaderHandle createShader(const ShaderDesc& d, const void* binary, usize binarySize) = 0;
     virtual ShaderHandle createShaderSpecialization(IShader* baseShader, const ShaderSpecialization* constants, u32 numConstants) = 0;
     virtual ShaderLibraryHandle createShaderLibrary(const void* binary, usize binarySize) = 0;
-    
+
     virtual SamplerHandle createSampler(const SamplerDesc& d) = 0;
 
     // Note: vertexShader is only necessary on D3D11, otherwise it may be null
     virtual InputLayoutHandle createInputLayout(const VertexAttributeDesc* d, u32 attributeCount, IShader* vertexShader) = 0;
-    
+
     // Event queries
     virtual EventQueryHandle createEventQuery() = 0;
     virtual void setEventQuery(IEventQuery* query, CommandQueue::Enum queue) = 0;
@@ -3861,17 +3861,17 @@ public:
 
     // Returns the API kind that the RHI backend is running on top of.
     virtual GraphicsAPI::Enum getGraphicsAPI() = 0;
-    
+
     virtual FramebufferHandle createFramebuffer(const FramebufferDesc& desc) = 0;
-    
+
     virtual GraphicsPipelineHandle createGraphicsPipeline(const GraphicsPipelineDesc& desc, FramebufferInfo const& fbinfo) = 0;
-    
+
     virtual ComputePipelineHandle createComputePipeline(const ComputePipelineDesc& desc) = 0;
 
     virtual MeshletPipelineHandle createMeshletPipeline(const MeshletPipelineDesc& desc, FramebufferInfo const& fbinfo) = 0;
 
     virtual RayTracingPipelineHandle createRayTracingPipeline(const RayTracingPipelineDesc& desc) = 0;
-    
+
     virtual BindingLayoutHandle createBindingLayout(const BindingLayoutDesc& desc) = 0;
     virtual BindingLayoutHandle createBindlessLayout(const BindlessLayoutDesc& desc) = 0;
 
@@ -3886,7 +3886,7 @@ public:
     virtual MemoryRequirements getAccelStructMemoryRequirements(IRayTracingAccelStruct* as) = 0;
     virtual RayTracingClusterOperationSizeInfo getClusterOperationSizeInfo(const RayTracingClusterOperationParams& params) = 0;
     virtual bool bindAccelStructMemory(IRayTracingAccelStruct* as, IHeap* heap, u64 offset) = 0;
-    
+
     virtual CommandListHandle createCommandList(const CommandListParameters& params = CommandListParameters()) = 0;
     virtual u64 executeCommandLists(ICommandList* const* pCommandLists, usize numCommandLists, CommandQueue::Enum executionQueue = CommandQueue::Graphics) = 0;
     virtual void queueWaitForCommandList(CommandQueue::Enum waitQueue, CommandQueue::Enum executionQueue, u64 instance) = 0;
@@ -3996,12 +3996,12 @@ struct DeviceCreationParameters : public InstanceParameters{
 // Render pass interface
 
 
-class IDeviceManager;
+class Graphics;
 
 class IRenderPass{
 public:
-    explicit IRenderPass(IDeviceManager& deviceManager)
-        : m_deviceManager(deviceManager)
+    explicit IRenderPass(Graphics& graphics)
+        : m_graphics(graphics)
     {}
     virtual ~IRenderPass() = default;
 
@@ -4021,146 +4021,11 @@ public:
     virtual bool mouseScrollUpdate(f64, f64){ return false; }
     virtual bool mouseButtonUpdate(i32, i32, i32){ return false; }
 
-    [[nodiscard]] IDeviceManager& getDeviceManager()const{ return m_deviceManager; }
+    [[nodiscard]] Graphics& getGraphics()const{ return m_graphics; }
 
 
 private:
-    IDeviceManager& m_deviceManager;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Device manager interface
-
-
-class IDeviceManager{
-protected:
-    explicit IDeviceManager(const DeviceCreationParameters& params);
-public:
-    virtual ~IDeviceManager() = default;
-
-
-public:
-    static IDeviceManager* create(GraphicsAPI::Enum api, const DeviceCreationParameters& params);
-
-    bool createHeadlessDevice();
-    bool createWindowDeviceAndSwapChain(const Common::FrameData& frameData);
-    bool createInstance(const InstanceParameters& params);
-
-    virtual bool enumerateAdapters(Vector<AdapterInfo>& outAdapters) = 0;
-
-    void addRenderPassToFront(IRenderPass& pass);
-    void addRenderPassToBack(IRenderPass& pass);
-    void removeRenderPass(IRenderPass& pass);
-
-    bool runFrame();
-    void updateWindowState(u32 width, u32 height, bool windowVisible, bool windowIsInFocus);
-
-    void getWindowDimensions(i32& width, i32& height);
-    void getDPIScaleInfo(f32& x, f32& y)const{
-        x = m_dpiScaleFactorX;
-        y = m_dpiScaleFactorY;
-    }
-
-    [[nodiscard]] virtual IDevice* getDevice()const = 0;
-    [[nodiscard]] virtual const tchar* getRendererString()const = 0;
-    [[nodiscard]] virtual GraphicsAPI::Enum getGraphicsAPI()const = 0;
-
-    [[nodiscard]] f64 getPreviousFrameTimestamp()const{ return DurationInSeconds<f64>(m_previousFrameTimestamp); }
-    [[nodiscard]] bool isVsyncEnabled()const{ return m_deviceParams.vsyncEnabled; }
-    virtual void reportLiveObjects(){}
-
-    virtual ITexture* getCurrentBackBuffer() = 0;
-    virtual ITexture* getBackBuffer(u32 index) = 0;
-    virtual u32 getCurrentBackBufferIndex() = 0;
-    virtual u32 getBackBufferCount() = 0;
-    IFramebuffer* getCurrentFramebuffer();
-    IFramebuffer* getFramebuffer(u32 index);
-
-    virtual void shutdown();
-
-    void setWindowTitle(NotNull<const tchar*> title);
-    const tchar* getWindowTitle();
-
-    virtual bool isVulkanInstanceExtensionEnabled(const char*)const{ return false; }
-    virtual bool isVulkanDeviceExtensionEnabled(const char*)const{ return false; }
-    virtual bool isVulkanLayerEnabled(const char*)const{ return false; }
-    virtual void getEnabledVulkanInstanceExtensions(Vector<AString>&)const{}
-    virtual void getEnabledVulkanDeviceExtensions(Vector<AString>&)const{}
-    virtual void getEnabledVulkanLayers(Vector<AString>&)const{}
-
-    void keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods);
-    void keyboardCharInput(u32 unicode, i32 mods);
-    void mousePosUpdate(f64 xpos, f64 ypos);
-    void mouseButtonUpdate(i32 button, i32 action, i32 mods);
-    void mouseScrollUpdate(f64 xoffset, f64 yoffset);
-
-
-protected:
-    void extractPlatformHandles(const Common::FrameData& frameData){
-        m_platformFrameParam = frameData.frameParam();
-    }
-    bool shouldRenderUnfocused()const;
-
-    void backBufferResizing();
-    void backBufferResized();
-    void displayScaleChanged();
-
-    void animate(f64 elapsedTime);
-    void render();
-    void updateAverageFrameTime(f64 elapsedTime);
-    bool animateRenderPresent();
-
-    virtual bool createInstanceInternal() = 0;
-    virtual bool createDeviceInternal() = 0;
-    virtual bool createSwapChainInternal() = 0;
-    virtual void destroyDeviceAndSwapChain() = 0;
-    virtual void resizeSwapChain() = 0;
-    virtual bool beginFrame() = 0;
-    virtual bool present() = 0;
-
-
-protected:
-    struct PipelineCallbacks{
-        Function<void(IDeviceManager&, u32)> beforeFrame = nullptr;
-        Function<void(IDeviceManager&, u32)> beforeAnimate = nullptr;
-        Function<void(IDeviceManager&, u32)> afterAnimate = nullptr;
-        Function<void(IDeviceManager&, u32)> beforeRender = nullptr;
-        Function<void(IDeviceManager&, u32)> afterRender = nullptr;
-        Function<void(IDeviceManager&, u32)> beforePresent = nullptr;
-        Function<void(IDeviceManager&, u32)> afterPresent = nullptr;
-    } m_callbacks;
-
-    bool m_skipRenderOnFirstFrame = false;
-    bool m_hasPresentedFrame = false;
-    bool m_windowVisible = false;
-    bool m_windowIsInFocus = true;
-
-    DeviceCreationParameters m_deviceParams;
-    bool m_enableRenderDuringWindowMovement = false;
-    bool m_isNvidia = false;
-    List<IRenderPass*> m_renderPasses;
-    Timer m_previousFrameTimestamp = {};
-    f32 m_dpiScaleFactorX = 1.f;
-    f32 m_dpiScaleFactorY = 1.f;
-    f32 m_prevDPIScaleFactorX = 0.f;
-    f32 m_prevDPIScaleFactorY = 0.f;
-    bool m_requestedVSync = false;
-    bool m_instanceCreated = false;
-
-    f64 m_averageFrameTime = 0.0;
-    f64 m_averageTimeUpdateInterval = s_AverageFrameTimeUpdateIntervalSeconds;
-    f64 m_frameTimeSum = 0.0;
-    i32 m_numberOfAccumulatedFrames = 0;
-
-    u32 m_frameIndex = 0;
-
-    Vector<FramebufferHandle> m_swapChainFramebuffers;
-
-    Common::FrameParam m_platformFrameParam = {};
-
-private:
-    BasicString<tchar> m_windowTitle;
+    Graphics& m_graphics;
 };
 
 
@@ -4199,8 +4064,8 @@ public:
 
 public:
     virtual bool compileVariant(const ShaderCompilerRequest& request, Vector<u8>& outBytecode) = 0;
-    
-    
+
+
 protected:
     Alloc::CustomArena& m_memoryArena;
 };

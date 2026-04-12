@@ -33,7 +33,17 @@ enum class DeviceExtensionFeature : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class DeviceManager final : public IDeviceManager{
+struct BackBufferResizeCallbacks{
+    void* userData = nullptr;
+    void (*beforeResize)(void*) = nullptr;
+    void (*afterResize)(void*) = nullptr;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class Backend final{
 private:
     using DeviceExtensionMap = HashMap<AString, DeviceExtensionFeature, Hasher<AString>, EqualTo<AString>, Alloc::CustomAllocator<Pair<const AString, DeviceExtensionFeature>>>;
 
@@ -62,48 +72,47 @@ private:
 
 
 public:
-    explicit DeviceManager(const DeviceCreationParameters& params);
+    explicit Backend(DeviceCreationParameters& params);
 
 
 public:
-    [[nodiscard]] virtual IDevice* getDevice()const override;
-    [[nodiscard]] virtual GraphicsAPI::Enum getGraphicsAPI()const override{ return GraphicsAPI::VULKAN; }
-    [[nodiscard]] virtual const tchar* getRendererString()const override;
+    [[nodiscard]] IDevice* getDevice()const;
+    [[nodiscard]] GraphicsAPI::Enum getGraphicsAPI()const{ return GraphicsAPI::VULKAN; }
+    [[nodiscard]] const tchar* getRendererString()const;
 
-    virtual bool enumerateAdapters(Vector<AdapterInfo>& outAdapters)override;
+    bool enumerateAdapters(Vector<AdapterInfo>& outAdapters);
     [[nodiscard]] bool isValidationMessageLocationIgnored(usize location)const;
 
-    virtual bool isVulkanInstanceExtensionEnabled(const char* extensionName)const override;
-    virtual bool isVulkanDeviceExtensionEnabled(const char* extensionName)const override;
-    virtual bool isVulkanLayerEnabled(const char* layerName)const override;
-    virtual void getEnabledVulkanInstanceExtensions(Vector<AString>& extensions)const override;
-    virtual void getEnabledVulkanDeviceExtensions(Vector<AString>& extensions)const override;
-    virtual void getEnabledVulkanLayers(Vector<AString>& layers)const override;
+    bool isVulkanInstanceExtensionEnabled(const char* extensionName)const;
+    bool isVulkanDeviceExtensionEnabled(const char* extensionName)const;
+    bool isVulkanLayerEnabled(const char* layerName)const;
+    void getEnabledVulkanInstanceExtensions(Vector<AString>& extensions)const;
+    void getEnabledVulkanDeviceExtensions(Vector<AString>& extensions)const;
+    void getEnabledVulkanLayers(Vector<AString>& layers)const;
 
-    virtual ITexture* getCurrentBackBuffer()override;
-    virtual ITexture* getBackBuffer(u32 index)override;
-    virtual u32 getCurrentBackBufferIndex()override;
-    virtual u32 getBackBufferCount()override;
+    ITexture* getCurrentBackBuffer();
+    ITexture* getBackBuffer(u32 index);
+    u32 getCurrentBackBufferIndex();
+    u32 getBackBufferCount();
 
-
-protected:
-    virtual bool createInstanceInternal()override;
-    virtual bool createDeviceInternal()override;
-    virtual bool createSwapChainInternal()override;
-    virtual void destroyDeviceAndSwapChain()override;
-    virtual void resizeSwapChain()override;
-    virtual bool beginFrame()override;
-    virtual bool present()override;
+    void setPlatformFrameParam(const Common::FrameParam& frameParam){ m_platformFrameParam = frameParam; }
+    bool createInstance();
+    bool createDevice();
+    bool createSwapChain();
+    void destroy();
+    void resizeSwapChain();
+    bool beginFrame(const BackBufferResizeCallbacks& callbacks);
+    bool present();
 
 private:
     void initDefaultExtensions();
-    bool createInstance();
+    bool createVulkanInstance();
     bool createWindowSurface();
     void installDebugCallback();
     bool pickPhysicalDevice();
     bool findQueueFamilies(VkPhysicalDevice physicalDevice);
-    bool createDevice();
-    bool createSwapChain();
+    bool createVulkanDevice();
+    bool createVulkanSwapChain();
     void destroySwapChain();
     void clearSemaphores(SemaphoreVector& semaphores);
     bool recreateSemaphores(SemaphoreVector& semaphores, usize count, AStringView operationName);
@@ -146,9 +155,11 @@ private:
 
 
 private:
+    DeviceCreationParameters& m_deviceParams;
     GraphicsAllocator& m_allocator;
     Alloc::ThreadPool& m_threadPool;
     Alloc::CustomArena& m_arena;
+    Common::FrameParam m_platformFrameParam = {};
 
 private:
     VulkanExtensionSet m_enabledExtensions;
@@ -204,4 +215,3 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

@@ -1013,7 +1013,7 @@ public:
 
 
 public:
-    [[nodiscard]] virtual u32 getCapacity()const override{ return static_cast<u32>(m_descriptorSets.size()); }
+    [[nodiscard]] virtual u32 getCapacity()const override{ return m_capacity; }
     [[nodiscard]] virtual u32 getFirstDescriptorIndexInHeap()const override{ return 0; }
 
     [[nodiscard]] virtual const BindingSetDesc* getDescription()const override{ return nullptr; }
@@ -1024,6 +1024,7 @@ private:
     RefCountPtr<BindingLayout, ArenaRefDeleter<BindingLayout>> m_layout;
     Vector<VkDescriptorSet, Alloc::CustomAllocator<VkDescriptorSet>> m_descriptorSets;
     VkDescriptorPool m_descriptorPool = VK_NULL_HANDLE;
+    u32 m_capacity = 0;
 
     const VulkanContext& m_context;
 };

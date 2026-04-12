@@ -109,6 +109,10 @@ constexpr u32 AlignUpU32(const u32 value, const u32 alignment){
     return value + (alignment - (value % alignment)) % alignment;
 }
 
+constexpr u32 NormalizeDescriptorTableCapacity(const u32 capacity){
+    return capacity > 0 ? capacity : 1u;
+}
+
 u32 FindMemoryTypeIndex(const VulkanContext& context, const u32 typeBits, const VkMemoryPropertyFlags properties){
     for(u32 i = 0; i < context.memoryProperties.memoryTypeCount; ++i){
         if((typeBits & (1u << i)) && (context.memoryProperties.memoryTypes[i].propertyFlags & properties) == properties)
@@ -825,11 +829,12 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
     Vector<VkDescriptorBindingFlags, Alloc::ScratchAllocator<VkDescriptorBindingFlags>> bindingFlags{ Alloc::ScratchAllocator<VkDescriptorBindingFlags>(scratchArena) };
     bindingFlags.reserve(desc.registerSpaces.size());
 
+    const u32 maxCapacity = __hidden_vulkan::NormalizeDescriptorTableCapacity(desc.maxCapacity);
     for(const auto& item : desc.registerSpaces){
         VkDescriptorSetLayoutBinding binding = {};
         binding.binding = item.slot;
         binding.descriptorType = __hidden_vulkan::ConvertDescriptorType(item.type);
-        binding.descriptorCount = desc.maxCapacity;
+        binding.descriptorCount = maxCapacity;
         binding.stageFlags = __hidden_vulkan::ConvertShaderStages(desc.visibility);
         binding.pImmutableSamplers = nullptr;
         bindings.push_back(binding);
@@ -896,6 +901,10 @@ DescriptorTableHandle Device::createDescriptorTable(IBindingLayout* _layout){
 
     auto* table = NewArenaObject<DescriptorTable>(m_context.objectArena, m_context);
     table->m_layout = layout;
+    const u32 descriptorTableCapacity = layout->m_isBindless
+        ? __hidden_vulkan::NormalizeDescriptorTableCapacity(layout->m_bindlessDesc.maxCapacity)
+        : 1u;
+    const bool useVariableDescriptorCount = layout->m_isBindless && !layout->m_bindlessDesc.registerSpaces.empty();
 
     Vector<VkDescriptorPoolSize, Alloc::ScratchAllocator<VkDescriptorPoolSize>> poolSizes{ Alloc::ScratchAllocator<VkDescriptorPoolSize>(scratchArena) };
     poolSizes.reserve(8);
@@ -920,7 +929,7 @@ DescriptorTableHandle Device::createDescriptorTable(IBindingLayout* _layout){
     if(layout->m_isBindless){
         for(const auto& item : layout->m_bindlessDesc.registerSpaces){
             const VkDescriptorType type = __hidden_vulkan::ConvertDescriptorType(item.type);
-            addPoolSize(type, layout->m_bindlessDesc.maxCapacity > 0 ? layout->m_bindlessDesc.maxCapacity : 1u);
+            addPoolSize(type, descriptorTableCapacity);
         }
     }
     else{
@@ -942,6 +951,8 @@ DescriptorTableHandle Device::createDescriptorTable(IBindingLayout* _layout){
 
     VkDescriptorPoolCreateInfo poolInfo = __hidden_vulkan::MakeVkStruct<VkDescriptorPoolCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO);
     poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+    if(layout->m_isBindless)
+        poolInfo.flags |= VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
     poolInfo.maxSets = static_cast<u32>(layout->m_descriptorSetLayouts.size());
     poolInfo.poolSizeCount = static_cast<u32>(poolSizes.size());
     poolInfo.pPoolSizes = poolSizes.data();
@@ -960,6 +971,15 @@ DescriptorTableHandle Device::createDescriptorTable(IBindingLayout* _layout){
         allocInfo.descriptorSetCount = static_cast<u32>(layout->m_descriptorSetLayouts.size());
         allocInfo.pSetLayouts = layout->m_descriptorSetLayouts.data();
 
+        VkDescriptorSetVariableDescriptorCountAllocateInfo variableDescriptorInfo =
+            __hidden_vulkan::MakeVkStruct<VkDescriptorSetVariableDescriptorCountAllocateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO);
+        u32 variableDescriptorCount = descriptorTableCapacity;
+        if(useVariableDescriptorCount){
+            variableDescriptorInfo.descriptorSetCount = 1;
+            variableDescriptorInfo.pDescriptorCounts = &variableDescriptorCount;
+            allocInfo.pNext = &variableDescriptorInfo;
+        }
+
         table->m_descriptorSets.resize(layout->m_descriptorSetLayouts.size());
         res = vkAllocateDescriptorSets(m_context.device, &allocInfo, table->m_descriptorSets.data());
 
@@ -972,6 +992,7 @@ DescriptorTableHandle Device::createDescriptorTable(IBindingLayout* _layout){
     }
 
     table->m_descriptorPool = pool;
+    table->m_capacity = descriptorTableCapacity;
 
     return DescriptorTableHandle(table, DescriptorTableHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
@@ -985,14 +1006,100 @@ void Device::resizeDescriptorTable(IDescriptorTable* m_descriptorTable, u32 newS
 
     if(!table->m_layout || newSize == 0)
         return;
+    if(table->m_layout->m_isBindless){
+        const u32 maxCapacity = __hidden_vulkan::NormalizeDescriptorTableCapacity(table->m_layout->m_bindlessDesc.maxCapacity);
+        if(newSize > maxCapacity){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Vulkan: Failed to resize bindless descriptor table to {} descriptors: layout max capacity is {}"),
+                newSize,
+                maxCapacity
+            );
+            return;
+        }
+    }
 
     if(table->m_descriptorPool != VK_NULL_HANDLE){
         vkDestroyDescriptorPool(m_context.device, table->m_descriptorPool, m_context.allocationCallbacks);
         table->m_descriptorPool = VK_NULL_HANDLE;
     }
     table->m_descriptorSets.clear();
+    table->m_capacity = 0;
 
     Alloc::ScratchArena<> scratchArena;
+
+    if(table->m_layout->m_isBindless){
+        if(table->m_layout->m_descriptorSetLayouts.empty())
+            return;
+
+        Vector<VkDescriptorPoolSize, Alloc::ScratchAllocator<VkDescriptorPoolSize>> poolSizes{ Alloc::ScratchAllocator<VkDescriptorPoolSize>(scratchArena) };
+        poolSizes.reserve(table->m_layout->m_bindlessDesc.registerSpaces.size());
+
+        auto addPoolSize = [&](VkDescriptorType type, u32 count){
+            if(count == 0)
+                return;
+
+            for(auto& poolSize : poolSizes){
+                if(poolSize.type == type){
+                    poolSize.descriptorCount += count;
+                    return;
+                }
+            }
+
+            VkDescriptorPoolSize poolSize = {};
+            poolSize.type = type;
+            poolSize.descriptorCount = count;
+            poolSizes.push_back(poolSize);
+        };
+
+        for(const auto& item : table->m_layout->m_bindlessDesc.registerSpaces)
+            addPoolSize(__hidden_vulkan::ConvertDescriptorType(item.type), newSize);
+
+        if(poolSizes.empty()){
+            VkDescriptorPoolSize fallback = {};
+            fallback.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            fallback.descriptorCount = newSize;
+            poolSizes.push_back(fallback);
+        }
+
+        VkDescriptorPoolCreateInfo poolInfo = __hidden_vulkan::MakeVkStruct<VkDescriptorPoolCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO);
+        poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT | VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
+        poolInfo.maxSets = 1;
+        poolInfo.poolSizeCount = static_cast<u32>(poolSizes.size());
+        poolInfo.pPoolSizes = poolSizes.data();
+
+        res = vkCreateDescriptorPool(m_context.device, &poolInfo, m_context.allocationCallbacks, &table->m_descriptorPool);
+        if(res != VK_SUCCESS){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create bindless descriptor pool for resize: {}"), ResultToString(res));
+            (void)keepContents;
+            return;
+        }
+
+        VkDescriptorSetAllocateInfo allocInfo = __hidden_vulkan::MakeVkStruct<VkDescriptorSetAllocateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO);
+        allocInfo.descriptorPool = table->m_descriptorPool;
+        allocInfo.descriptorSetCount = 1;
+        allocInfo.pSetLayouts = table->m_layout->m_descriptorSetLayouts.data();
+
+        VkDescriptorSetVariableDescriptorCountAllocateInfo variableDescriptorInfo =
+            __hidden_vulkan::MakeVkStruct<VkDescriptorSetVariableDescriptorCountAllocateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO);
+        if(!table->m_layout->m_bindlessDesc.registerSpaces.empty()){
+            variableDescriptorInfo.descriptorSetCount = 1;
+            variableDescriptorInfo.pDescriptorCounts = &newSize;
+            allocInfo.pNext = &variableDescriptorInfo;
+        }
+
+        table->m_descriptorSets.resize(1);
+        res = vkAllocateDescriptorSets(m_context.device, &allocInfo, table->m_descriptorSets.data());
+        if(res != VK_SUCCESS){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate bindless descriptor set during resize: {}"), ResultToString(res));
+            table->m_descriptorSets.clear();
+            (void)keepContents;
+            return;
+        }
+
+        table->m_capacity = newSize;
+        (void)keepContents;
+        return;
+    }
 
     Vector<VkDescriptorPoolSize, Alloc::ScratchAllocator<VkDescriptorPoolSize>> poolSizes{ Alloc::ScratchAllocator<VkDescriptorPoolSize>(scratchArena) };
     poolSizes.reserve(7);
@@ -1040,6 +1147,7 @@ void Device::resizeDescriptorTable(IDescriptorTable* m_descriptorTable, u32 newS
         }
     }
 
+    table->m_capacity = newSize;
     (void)keepContents;
 }
 
@@ -1056,6 +1164,15 @@ bool Device::writeDescriptorTable(IDescriptorTable* m_descriptorTable, const Bin
 
     if(table->m_descriptorSets.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write descriptor table slot {}: descriptor table has no descriptor sets"), item.slot);
+        return false;
+    }
+    if(table->m_layout && table->m_layout->m_isBindless && item.arrayElement >= table->m_capacity){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Failed to write descriptor table slot {}: array element {} exceeds bindless capacity {}"),
+            item.slot,
+            item.arrayElement,
+            table->m_capacity
+        );
         return false;
     }
 

@@ -209,7 +209,7 @@ Object Texture::getNativeHandle(ObjectType objectType){
 }
 
 Object Texture::getNativeView(ObjectType objectType, Format::Enum format, TextureSubresourceSet subresources, TextureDimension::Enum dimension, bool isReadOnlyDSV){
-    if(objectType == ObjectTypes::VK_ImageView || objectType == ObjectTypes::NWB_VK_Device)
+    if(objectType == ObjectTypes::VK_ImageView)
         return getView(subresources, dimension, format, isReadOnlyDSV);
     if(objectType == ObjectTypes::VK_Image)
         return getNativeHandle(objectType);

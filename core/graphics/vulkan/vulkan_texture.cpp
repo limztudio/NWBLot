@@ -116,7 +116,7 @@ VkImageCreateFlags PickImageFlags(const TextureDesc& desc){
 
 Texture::Texture(const VulkanContext& context, VulkanAllocator& allocator)
     : RefCounter<ITexture>(context.threadPool)
-    , m_views(0, Hasher<u64>(), EqualTo<u64>(), Alloc::CustomAllocator<Pair<const u64, VkImageView>>(context.objectArena))
+    , m_views(0, TextureViewKeyHasher(), EqualTo<TextureViewKey>(), Alloc::CustomAllocator<Pair<const TextureViewKey, VkImageView>>(context.objectArena))
     , m_context(context)
     , m_allocator(allocator)
 {}
@@ -135,18 +135,6 @@ Texture::~Texture(){
     }
 }
 
-u64 Texture::makeViewKey(const TextureSubresourceSet& subresources, TextureDimension::Enum dimension, Format::Enum format, bool isReadOnlyDSV)const{
-    u64 key = 0;
-    key |= static_cast<u64>(subresources.baseMipLevel) << s_TextureViewKeyBaseMipShift;
-    key |= static_cast<u64>(subresources.numMipLevels) << s_TextureViewKeyMipCountShift;
-    key |= static_cast<u64>(subresources.baseArraySlice) << s_TextureViewKeyBaseArraySliceShift;
-    key |= static_cast<u64>(subresources.numArraySlices) << s_TextureViewKeyArraySliceCountShift;
-    key |= static_cast<u64>(dimension) << s_TextureViewKeyDimensionShift;
-    key |= static_cast<u64>(format) << s_TextureViewKeyFormatShift;
-    key |= static_cast<u64>(isReadOnlyDSV ? 1 : 0) << s_TextureViewKeyReadOnlyDsvShift;
-    return key;
-}
-
 VkImageView Texture::getView(const TextureSubresourceSet& subresources, TextureDimension::Enum dimension, Format::Enum format, bool isReadOnlyDSV){
     VkResult res = VK_SUCCESS;
 
@@ -157,7 +145,12 @@ VkImageView Texture::getView(const TextureSubresourceSet& subresources, TextureD
         format = m_desc.format;
 
     TextureSubresourceSet resolvedSubresources = subresources.resolve(m_desc, false);
-    u64 key = makeViewKey(resolvedSubresources, dimension, format, isReadOnlyDSV);
+    TextureViewKey key{
+        resolvedSubresources,
+        dimension,
+        format,
+        isReadOnlyDSV
+    };
 
     auto it = m_views.find(key);
     if(it != m_views.end())
@@ -624,6 +617,18 @@ void CommandList::copyTexture(ITexture* dest, const TextureSlice& destSlice, ISt
 void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, const void* data, usize rowPitch, usize depthPitch){
     auto* dest = checked_cast<Texture*>(_dest);
     const TextureDesc& texDesc = dest->m_desc;
+
+    if(!data){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write texture: source data is null"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to write texture: source data is null"));
+        return;
+    }
+
+    if(mipLevel >= texDesc.mipLevels || arraySlice >= texDesc.arraySize){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write texture: subresource is out of bounds"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to write texture: subresource is out of bounds"));
+        return;
+    }
 
     auto width = Max<u32>(1u, texDesc.width >> mipLevel);
     auto height = Max<u32>(1u, texDesc.height >> mipLevel);

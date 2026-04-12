@@ -88,11 +88,16 @@ u64 ComputeStagingTextureOffset(const TextureDesc& desc, const TextureSlice& sli
 StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAccessMode::Enum cpuAccess){
     VkResult res = VK_SUCCESS;
 
+    const FormatInfo& formatInfo = GetFormatInfo(d.format);
+    if(formatInfo.blockSize == 0 || formatInfo.bytesPerBlock == 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create staging texture: invalid texture format"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging texture: invalid texture format"));
+        return nullptr;
+    }
+
     auto* staging = NewArenaObject<StagingTexture>(m_context.objectArena, m_context, m_allocator);
     staging->m_desc = d;
     staging->m_cpuAccess = cpuAccess;
-
-    const FormatInfo& formatInfo = GetFormatInfo(d.format);
 
     u64 totalSize = 0;
     for(u32 arraySlice = 0; arraySlice < d.arraySize; ++arraySlice){

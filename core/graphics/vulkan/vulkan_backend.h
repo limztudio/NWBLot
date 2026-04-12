@@ -418,6 +418,33 @@ private:
 // Texture
 
 
+struct TextureViewKey{
+    TextureSubresourceSet subresources;
+    TextureDimension::Enum dimension = TextureDimension::Unknown;
+    Format::Enum format = Format::UNKNOWN;
+    bool isReadOnlyDSV = false;
+};
+
+inline bool operator==(const TextureViewKey& lhs, const TextureViewKey& rhs)noexcept{
+    return lhs.subresources == rhs.subresources
+        && lhs.dimension == rhs.dimension
+        && lhs.format == rhs.format
+        && lhs.isReadOnlyDSV == rhs.isReadOnlyDSV
+        ;
+}
+
+struct TextureViewKeyHasher{
+    usize operator()(const TextureViewKey& value)const noexcept{
+        usize seed = 0;
+        __hidden_core::HashCombine(seed, value.subresources);
+        __hidden_core::HashCombine(seed, static_cast<u32>(value.dimension));
+        __hidden_core::HashCombine(seed, static_cast<u32>(value.format));
+        __hidden_core::HashCombine(seed, value.isReadOnlyDSV);
+        return seed;
+    }
+};
+
+
 class Texture final : public RefCounter<ITexture>, NoCopy{
     friend class Device;
     friend class CommandList;
@@ -436,10 +463,6 @@ public:
     virtual Object getNativeView(ObjectType objectType, Format::Enum format, TextureSubresourceSet subresources, TextureDimension::Enum dimension, bool isReadOnlyDSV)override;
 
     [[nodiscard]] VkImageView getView(const TextureSubresourceSet& subresources, TextureDimension::Enum dimension, Format::Enum format, bool isReadOnlyDSV = false);
- 
-
-private:
-    u64 makeViewKey(const TextureSubresourceSet& subresources, TextureDimension::Enum dimension, Format::Enum format, bool isReadOnlyDSV)const;
 
 
 private:
@@ -449,7 +472,7 @@ private:
     VkDeviceMemory m_memory = VK_NULL_HANDLE;
     VkImageCreateInfo m_imageInfo{};
 
-    HashMap<u64, VkImageView, Hasher<u64>, EqualTo<u64>, Alloc::CustomAllocator<Pair<const u64, VkImageView>>> m_views;
+    HashMap<TextureViewKey, VkImageView, TextureViewKeyHasher, EqualTo<TextureViewKey>, Alloc::CustomAllocator<Pair<const TextureViewKey, VkImageView>>> m_views;
 
     bool m_managed = true; // if true, owns the VkImage and memory
     u64 m_tileByteSize = 0; // for sparse/tiled resources

@@ -125,15 +125,6 @@ inline constexpr u32 s_RayTracingHitGroupShaderStageCount = 3;
 inline constexpr u32 s_TrianglesPerPrimitive = 3;
 inline constexpr u32 s_InstanceFieldMask24Bit = 0x00FFFFFF;
 
-// Texture view key packing.
-inline constexpr u32 s_TextureViewKeyBaseMipShift = 0;
-inline constexpr u32 s_TextureViewKeyMipCountShift = 8;
-inline constexpr u32 s_TextureViewKeyBaseArraySliceShift = 16;
-inline constexpr u32 s_TextureViewKeyArraySliceCountShift = 24;
-inline constexpr u32 s_TextureViewKeyDimensionShift = 32;
-inline constexpr u32 s_TextureViewKeyFormatShift = 40;
-inline constexpr u32 s_TextureViewKeyReadOnlyDsvShift = 48;
-
 // Scratch arena presets for transient Vulkan-side CPU allocations.
 inline constexpr usize s_GraphicsPipelineScratchArenaBytes = 2048;
 inline constexpr usize s_DescriptorBindingScratchArenaBytes = 4096;

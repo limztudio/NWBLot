@@ -88,6 +88,10 @@ static void AddVulkanDeviceExtensionOnce(Vector<AString>& extensions, const char
     extensions.push_back(extensionName);
 }
 
+static void CopyInstanceParameters(DeviceCreationParameters& dst, const InstanceParameters& src){
+    static_cast<InstanceParameters&>(dst) = src;
+}
+
 constexpr bool IsFp16CoopVecFormat(const CooperativeVectorMatMulFormatCombo& combo){
     return combo.inputType == CooperativeVectorDataType::Float16 &&
            combo.inputInterpretation == CooperativeVectorDataType::Float16 &&
@@ -120,22 +124,27 @@ Graphics::~Graphics(){
     destroy();
 }
 
+Vulkan::Backend& Graphics::ensureBackend(){
+    if(!m_backend)
+        m_backend.reset(new Vulkan::Backend(m_deviceCreationParams));
+
+    NWB_FATAL_ASSERT_MSG(m_backend != nullptr, NWB_TEXT("Graphics: Vulkan backend creation failed."));
+    return *m_backend;
+}
+
 Vulkan::Backend& Graphics::requireBackend()const noexcept{
     NWB_FATAL_ASSERT_MSG(m_backend != nullptr, NWB_TEXT("Graphics requires a valid backend."));
     return *m_backend;
 }
 
 bool Graphics::init(const Common::FrameData& data){
-    if(!m_backend)
-        m_backend.reset(new Vulkan::Backend(m_deviceCreationParams));
-
     m_deviceCreationParams.headlessDevice = false;
     m_hasPresentedFrame = false;
 
     m_deviceCreationParams.backBufferWidth = data.width();
     m_deviceCreationParams.backBufferHeight = data.height();
 
-    Vulkan::Backend& backend = requireBackend();
+    Vulkan::Backend& backend = ensureBackend();
     backend.setPlatformFrameParam(data.frameParam());
 
     if(!m_instanceCreated){
@@ -160,6 +169,36 @@ bool Graphics::init(const Common::FrameData& data){
         data.width(),
         data.height()
     );
+    return true;
+}
+
+bool Graphics::createHeadlessDevice(){
+    m_deviceCreationParams.headlessDevice = true;
+    m_hasPresentedFrame = false;
+
+    Vulkan::Backend& backend = ensureBackend();
+    if(!m_instanceCreated){
+        if(!backend.createInstance())
+            return false;
+        m_instanceCreated = true;
+    }
+
+    if(!backend.createDevice())
+        return false;
+
+    m_previousFrameTimestamp = TimerNow();
+
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Graphics: headless device created"));
+    return true;
+}
+
+bool Graphics::createInstance(const InstanceParameters& params){
+    __hidden_graphics::CopyInstanceParameters(m_deviceCreationParams, params);
+
+    if(!ensureBackend().createInstance())
+        return false;
+
+    m_instanceCreated = true;
     return true;
 }
 
@@ -214,6 +253,13 @@ IDevice* Graphics::getDevice()const noexcept{
     return requireBackend().getDevice();
 }
 
+bool Graphics::enumerateAdapters(Vector<AdapterInfo>& outAdapters){
+    if(!m_backend)
+        return false;
+
+    return m_backend->enumerateAdapters(outAdapters);
+}
+
 void Graphics::addRenderPassToFront(IRenderPass& pass){
     m_renderPasses.remove(&pass);
     m_renderPasses.push_front(&pass);
@@ -242,6 +288,21 @@ GraphicsAPI::Enum Graphics::getGraphicsAPI()const{
     return requireBackend().getGraphicsAPI();
 }
 
+f64 Graphics::getPreviousFrameTimestamp()const{
+    return DurationInSeconds<f64>(m_previousFrameTimestamp);
+}
+
+bool Graphics::isVsyncEnabled()const{
+    return m_deviceCreationParams.vsyncEnabled;
+}
+
+void Graphics::setVSyncEnabled(bool enabled){
+    m_requestedVSync = enabled;
+}
+
+void Graphics::reportLiveObjects()const{
+}
+
 void Graphics::getWindowDimensions(i32& width, i32& height)const{
     width = m_deviceCreationParams.backBufferWidth;
     height = m_deviceCreationParams.backBufferHeight;
@@ -253,9 +314,6 @@ void Graphics::getDPIScaleInfo(f32& x, f32& y)const{
 }
 
 const tchar* Graphics::getWindowTitle()const{
-    if(!m_backend)
-        return nullptr;
-
     return m_windowTitle.c_str();
 }
 
@@ -290,6 +348,45 @@ IFramebuffer* Graphics::getFramebuffer(u32 index)const{
     if(index < m_swapChainFramebuffers.size())
         return m_swapChainFramebuffers[index].get();
     return nullptr;
+}
+
+bool Graphics::isVulkanInstanceExtensionEnabled(const char* extensionName)const{
+    return m_backend && m_backend->isVulkanInstanceExtensionEnabled(extensionName);
+}
+
+bool Graphics::isVulkanDeviceExtensionEnabled(const char* extensionName)const{
+    return m_backend && m_backend->isVulkanDeviceExtensionEnabled(extensionName);
+}
+
+bool Graphics::isVulkanLayerEnabled(const char* layerName)const{
+    return m_backend && m_backend->isVulkanLayerEnabled(layerName);
+}
+
+void Graphics::getEnabledVulkanInstanceExtensions(Vector<AString>& extensions)const{
+    if(m_backend){
+        m_backend->getEnabledVulkanInstanceExtensions(extensions);
+        return;
+    }
+
+    extensions.clear();
+}
+
+void Graphics::getEnabledVulkanDeviceExtensions(Vector<AString>& extensions)const{
+    if(m_backend){
+        m_backend->getEnabledVulkanDeviceExtensions(extensions);
+        return;
+    }
+
+    extensions.clear();
+}
+
+void Graphics::getEnabledVulkanLayers(Vector<AString>& layers)const{
+    if(m_backend){
+        m_backend->getEnabledVulkanLayers(layers);
+        return;
+    }
+
+    layers.clear();
 }
 
 void Graphics::keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods){

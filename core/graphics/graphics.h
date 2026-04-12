@@ -92,12 +92,15 @@ public:
 
 public:
     bool init(const Common::FrameData& data);
+    bool createHeadlessDevice();
+    bool createInstance(const InstanceParameters& params);
     bool runFrame();
     void updateWindowState(u32 width, u32 height, bool windowVisible, bool windowIsInFocus);
     void destroy();
 
 public:
     [[nodiscard]] IDevice* getDevice()const noexcept;
+    [[nodiscard]] bool enumerateAdapters(Vector<AdapterInfo>& outAdapters);
 
     void addRenderPassToFront(IRenderPass& pass);
     void addRenderPassToBack(IRenderPass& pass);
@@ -105,6 +108,10 @@ public:
 
     [[nodiscard]] const tchar* getRendererString()const;
     [[nodiscard]] GraphicsAPI::Enum getGraphicsAPI()const;
+    [[nodiscard]] f64 getPreviousFrameTimestamp()const;
+    [[nodiscard]] bool isVsyncEnabled()const;
+    void setVSyncEnabled(bool enabled);
+    void reportLiveObjects()const;
 
     void getWindowDimensions(i32& width, i32& height)const;
     void getDPIScaleInfo(f32& x, f32& y)const;
@@ -117,6 +124,13 @@ public:
     [[nodiscard]] u32 getBackBufferCount()const;
     [[nodiscard]] IFramebuffer* getCurrentFramebuffer()const;
     [[nodiscard]] IFramebuffer* getFramebuffer(u32 index)const;
+
+    [[nodiscard]] bool isVulkanInstanceExtensionEnabled(const char* extensionName)const;
+    [[nodiscard]] bool isVulkanDeviceExtensionEnabled(const char* extensionName)const;
+    [[nodiscard]] bool isVulkanLayerEnabled(const char* layerName)const;
+    void getEnabledVulkanInstanceExtensions(Vector<AString>& extensions)const;
+    void getEnabledVulkanDeviceExtensions(Vector<AString>& extensions)const;
+    void getEnabledVulkanLayers(Vector<AString>& layers)const;
 
     void keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods);
     void keyboardCharInput(u32 unicode, i32 mods);
@@ -144,6 +158,7 @@ public:
 
 
 private:
+    [[nodiscard]] Vulkan::Backend& ensureBackend();
     [[nodiscard]] Vulkan::Backend& requireBackend()const noexcept;
     [[nodiscard]] bool shouldRenderUnfocused()const;
 

@@ -129,6 +129,26 @@ constexpr u32 AlignUpU32(const u32 value, const u32 alignment){
     return value + (alignment - (value % alignment)) % alignment;
 }
 
+bool AlignUpU32Checked(const u32 value, const u32 alignment, u32& outValue){
+    if(alignment == 0){
+        outValue = value;
+        return true;
+    }
+
+    const u32 remainder = value % alignment;
+    if(remainder == 0){
+        outValue = value;
+        return true;
+    }
+
+    const u32 addend = alignment - remainder;
+    if(value > UINT32_MAX - addend)
+        return false;
+
+    outValue = value + addend;
+    return true;
+}
+
 constexpr u32 NormalizeDescriptorTableCapacity(const u32 capacity){
     return capacity > 0 ? capacity : 1u;
 }
@@ -418,11 +438,33 @@ bool DescriptorHeapManager::initialize(){
     constexpr u32 s_TargetResourceHeapBytes = 32u * 1024u * 1024u;
     constexpr u32 s_TargetSamplerHeapBytes = 2u * 1024u * 1024u;
 
+    if(props.minResourceHeapReservedRange > UINT32_MAX || props.minSamplerHeapReservedRange > UINT32_MAX
+        || props.resourceHeapAlignment > UINT32_MAX || props.samplerHeapAlignment > UINT32_MAX)
+    {
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor heap properties exceed supported 32-bit heap offsets."));
+        return false;
+    }
+
     const u32 resourceReservedBytes = static_cast<u32>(props.minResourceHeapReservedRange);
     const u32 samplerReservedBytes = static_cast<u32>(props.minSamplerHeapReservedRange);
+    const u32 resourceMaxBytes = props.maxResourceHeapSize > UINT32_MAX ? UINT32_MAX : static_cast<u32>(props.maxResourceHeapSize);
+    const u32 samplerMaxBytes = props.maxSamplerHeapSize > UINT32_MAX ? UINT32_MAX : static_cast<u32>(props.maxSamplerHeapSize);
+    const u32 resourceAlignment = static_cast<u32>(props.resourceHeapAlignment);
+    const u32 samplerAlignment = static_cast<u32>(props.samplerHeapAlignment);
 
-    const u32 resourceCapacityBytes = Min(static_cast<u32>(props.maxResourceHeapSize), __hidden_vulkan::AlignUpU32(resourceReservedBytes + s_TargetResourceHeapBytes, static_cast<u32>(props.resourceHeapAlignment)));
-    const u32 samplerCapacityBytes = Min(static_cast<u32>(props.maxSamplerHeapSize), __hidden_vulkan::AlignUpU32(samplerReservedBytes + s_TargetSamplerHeapBytes, static_cast<u32>(props.samplerHeapAlignment)));
+    u32 resourceRequestedBytes = 0;
+    u32 samplerRequestedBytes = 0;
+    if(resourceReservedBytes > UINT32_MAX - s_TargetResourceHeapBytes
+        || samplerReservedBytes > UINT32_MAX - s_TargetSamplerHeapBytes
+        || !__hidden_vulkan::AlignUpU32Checked(resourceReservedBytes + s_TargetResourceHeapBytes, resourceAlignment, resourceRequestedBytes)
+        || !__hidden_vulkan::AlignUpU32Checked(samplerReservedBytes + s_TargetSamplerHeapBytes, samplerAlignment, samplerRequestedBytes))
+    {
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor heap requested capacity overflows 32-bit heap offsets."));
+        return false;
+    }
+
+    const u32 resourceCapacityBytes = Min(resourceMaxBytes, resourceRequestedBytes);
+    const u32 samplerCapacityBytes = Min(samplerMaxBytes, samplerRequestedBytes);
 
     if(resourceCapacityBytes <= resourceReservedBytes || samplerCapacityBytes <= samplerReservedBytes){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor heap properties do not allow creating usable global heaps."));
@@ -465,23 +507,29 @@ u32 DescriptorHeapManager::getDescriptorStride(const VkDescriptorType descriptor
     if(descriptorSize == 0)
         return 0;
 
-    u32 alignment = descriptorSize;
+    VkDeviceSize alignmentValue = descriptorSize;
     switch(descriptorType){
     case VK_DESCRIPTOR_TYPE_SAMPLER:
-        alignment = Max<u32>(alignment, static_cast<u32>(m_context.descriptorHeapProperties.samplerDescriptorAlignment));
+        alignmentValue = Max<VkDeviceSize>(alignmentValue, m_context.descriptorHeapProperties.samplerDescriptorAlignment);
         break;
     case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
     case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
     case VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER:
     case VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER:
-        alignment = Max<u32>(alignment, static_cast<u32>(m_context.descriptorHeapProperties.imageDescriptorAlignment));
+        alignmentValue = Max<VkDeviceSize>(alignmentValue, m_context.descriptorHeapProperties.imageDescriptorAlignment);
         break;
     default:
-        alignment = Max<u32>(alignment, static_cast<u32>(m_context.descriptorHeapProperties.bufferDescriptorAlignment));
+        alignmentValue = Max<VkDeviceSize>(alignmentValue, m_context.descriptorHeapProperties.bufferDescriptorAlignment);
         break;
     }
+    if(alignmentValue > UINT32_MAX)
+        return 0;
 
-    return __hidden_vulkan::AlignUpU32(descriptorSize, alignment);
+    u32 stride = 0;
+    if(!__hidden_vulkan::AlignUpU32Checked(descriptorSize, static_cast<u32>(alignmentValue), stride))
+        return 0;
+
+    return stride;
 }
 
 DescriptorHeapAllocation DescriptorHeapManager::allocate(const DescriptorHeapKind kind, const u32 sizeBytes, const u32 alignmentBytes){
@@ -499,16 +547,24 @@ DescriptorHeapAllocation DescriptorHeapManager::allocate(const DescriptorHeapKin
 
     for(usize i = 0; i < heap.freeRanges.size(); ++i){
         FreeRange range = heap.freeRanges[i];
-        const u32 alignedOffset = __hidden_vulkan::AlignUpU32(range.offsetBytes, alignmentBytes);
-        if(alignedOffset >= range.offsetBytes + range.sizeBytes)
+        if(range.sizeBytes > UINT32_MAX - range.offsetBytes)
+            continue;
+
+        u32 alignedOffset = 0;
+        if(!__hidden_vulkan::AlignUpU32Checked(range.offsetBytes, alignmentBytes, alignedOffset))
+            continue;
+
+        const u32 rangeEnd = range.offsetBytes + range.sizeBytes;
+        if(alignedOffset >= rangeEnd)
             continue;
 
         const u32 consumedPrefix = alignedOffset - range.offsetBytes;
         const u32 remainingBytes = range.sizeBytes - consumedPrefix;
         if(remainingBytes < sizeBytes)
             continue;
+        if(sizeBytes > UINT32_MAX - alignedOffset)
+            continue;
 
-        const u32 rangeEnd = range.offsetBytes + range.sizeBytes;
         const u32 allocEnd = alignedOffset + sizeBytes;
         heap.freeRanges.erase(heap.freeRanges.begin() + static_cast<isize>(i));
 
@@ -524,7 +580,11 @@ DescriptorHeapAllocation DescriptorHeapManager::allocate(const DescriptorHeapKin
         return result;
     }
 
-    const u32 alignedOffset = __hidden_vulkan::AlignUpU32(heap.writableOffsetBytes, alignmentBytes);
+    u32 alignedOffset = 0;
+    if(!__hidden_vulkan::AlignUpU32Checked(heap.writableOffsetBytes, alignmentBytes, alignedOffset)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor heap alignment overflows 32-bit offsets."));
+        return result;
+    }
     if(alignedOffset > heap.capacityBytes || sizeBytes > heap.capacityBytes - alignedOffset){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor heap is out of space (kind={}, requested={} bytes)."),
             kind == DescriptorHeapKind::Sampler ? NWB_TEXT("sampler") : NWB_TEXT("resource"),
@@ -1497,6 +1557,11 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLa
 
         for(usize i = 0; i < layout->m_descriptorHeapBindings.size(); ++i){
             const DescriptorHeapBindingMeta& meta = layout->m_descriptorHeapBindings[i];
+            if(meta.arraySize > UINT32_MAX / meta.descriptorStride){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate descriptor heap storage for binding slot {}: descriptor array size overflows"), meta.slot);
+                DestroyArenaObject(m_context.objectArena, bindingSet);
+                return nullptr;
+            }
             const u32 allocationSizeBytes = meta.arraySize * meta.descriptorStride;
             const DescriptorHeapAllocation allocation = m_context.descriptorHeapManager->allocate(meta.heapKind, allocationSizeBytes, meta.descriptorStride);
             if(!allocation.valid()){

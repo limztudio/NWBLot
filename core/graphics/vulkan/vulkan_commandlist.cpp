@@ -152,6 +152,11 @@ void CommandList::copyTextureToBuffer(IBuffer* _dest, u64 destOffsetBytes, u32 d
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to buffer: source slice is outside the texture"));
         return;
     }
+    if(src->m_desc.sampleCount != 1){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to buffer: source texture must be single-sampled"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to buffer: source texture must be single-sampled"));
+        return;
+    }
     const TextureSlice resolvedSrc = srcSlice.resolve(src->m_desc);
 
     const FormatInfo& formatInfo = GetFormatInfo(src->m_desc.format);
@@ -176,10 +181,37 @@ void CommandList::copyTextureToBuffer(IBuffer* _dest, u64 destOffsetBytes, u32 d
         return;
     }
 
+    u64 bufferRowLength = 0;
+    if(destRowPitch > 0){
+        bufferRowLength = (static_cast<u64>(destRowPitch) / formatInfo.bytesPerBlock) * formatInfo.blockSize;
+        if(bufferRowLength > UINT32_MAX){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to buffer: row pitch exceeds Vulkan buffer image copy limits"));
+            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to buffer: row pitch exceeds Vulkan buffer image copy limits"));
+            return;
+        }
+    }
+
     const u64 effectiveRowPitch = destRowPitch > 0 ? destRowPitch : naturalRowPitch;
-    const u64 requiredSize = static_cast<u64>(resolvedSrc.depth - 1) * effectiveRowPitch * blocksY
-        + static_cast<u64>(blocksY - 1) * effectiveRowPitch
-        + naturalRowPitch;
+    if(blocksY > UINT64_MAX / effectiveRowPitch){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to buffer: destination range size overflows"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to buffer: destination range size overflows"));
+        return;
+    }
+    const u64 slicePitch = effectiveRowPitch * blocksY;
+    const u64 depthOffset = static_cast<u64>(resolvedSrc.depth - 1);
+    if(depthOffset > UINT64_MAX / slicePitch){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to buffer: destination range size overflows"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to buffer: destination range size overflows"));
+        return;
+    }
+    const u64 depthBytes = depthOffset * slicePitch;
+    const u64 rowBytes = static_cast<u64>(blocksY - 1) * effectiveRowPitch;
+    if(depthBytes > UINT64_MAX - rowBytes || depthBytes + rowBytes > UINT64_MAX - naturalRowPitch){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to buffer: destination range size overflows"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to buffer: destination range size overflows"));
+        return;
+    }
+    const u64 requiredSize = depthBytes + rowBytes + naturalRowPitch;
     const BufferDesc& destDesc = dest->getDescription();
     if(destOffsetBytes > destDesc.byteSize || requiredSize > destDesc.byteSize - destOffsetBytes){
         NWB_LOGGER_ERROR(
@@ -194,7 +226,7 @@ void CommandList::copyTextureToBuffer(IBuffer* _dest, u64 destOffsetBytes, u32 d
 
     VkBufferImageCopy region{};
     region.bufferOffset = destOffsetBytes;
-    region.bufferRowLength = destRowPitch > 0 ? (destRowPitch / formatInfo.bytesPerBlock) * formatInfo.blockSize : 0;
+    region.bufferRowLength = static_cast<u32>(bufferRowLength);
     region.bufferImageHeight = 0;
     region.imageSubresource.aspectMask = aspectMask;
     region.imageSubresource.mipLevel = resolvedSrc.mipLevel;

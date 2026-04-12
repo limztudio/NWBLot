@@ -69,6 +69,21 @@ VkSampleCountFlagBits GetSampleCount(u32 sampleCount){
     }
 }
 
+bool IsSupportedSampleCount(u32 sampleCount){
+    switch(sampleCount){
+        case 1:
+        case 2:
+        case 4:
+        case 8:
+        case 16:
+        case 32:
+        case 64:
+            return true;
+        default:
+            return false;
+    }
+}
+
 VkImageUsageFlags PickImageUsage(const TextureDesc& desc){
     VkImageUsageFlags usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 
@@ -256,14 +271,44 @@ TextureHandle Device::createTexture(const TextureDesc& d){
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create texture: dimensions, mip count, and array size must be nonzero"));
         return nullptr;
     }
+    if(d.dimension == TextureDimension::Unknown){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create texture: texture dimension is unknown"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create texture: texture dimension is unknown"));
+        return nullptr;
+    }
     if(ConvertFormat(d.format) == VK_FORMAT_UNDEFINED){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create texture: format is unsupported"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create texture: format is unsupported"));
         return nullptr;
     }
+    if(!__hidden_vulkan::IsSupportedSampleCount(d.sampleCount)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create texture: sample count is unsupported"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create texture: sample count is unsupported"));
+        return nullptr;
+    }
+    if((d.dimension == TextureDimension::Texture1D || d.dimension == TextureDimension::Texture1DArray) && (d.height != 1 || d.depth != 1)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create 1D texture: height and depth must be 1"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create 1D texture: height and depth must be 1"));
+        return nullptr;
+    }
+    if(d.dimension != TextureDimension::Texture3D && d.depth != 1){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create non-3D texture: depth must be 1"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create non-3D texture: depth must be 1"));
+        return nullptr;
+    }
     if(d.dimension == TextureDimension::Texture3D && d.arraySize != 1){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create 3D texture: array size must be 1"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create 3D texture: array size must be 1"));
+        return nullptr;
+    }
+    if(d.dimension == TextureDimension::Texture3D && d.sampleCount != 1){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create 3D texture: sample count must be 1"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create 3D texture: sample count must be 1"));
+        return nullptr;
+    }
+    if(d.sampleCount != 1 && d.mipLevels != 1){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create multisampled texture: mip levels must be 1"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create multisampled texture: mip levels must be 1"));
         return nullptr;
     }
 
@@ -367,6 +412,42 @@ TextureHandle Device::createHandleForNativeTexture(ObjectType objectType, Object
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create texture handle for native texture: image handle is null"));
         return nullptr;
     }
+    if(desc.width == 0 || desc.height == 0 || desc.depth == 0 || desc.mipLevels == 0 || desc.arraySize == 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create texture handle for native texture: dimensions, mip count, and array size must be nonzero"));
+        return nullptr;
+    }
+    if(desc.dimension == TextureDimension::Unknown){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create texture handle for native texture: texture dimension is unknown"));
+        return nullptr;
+    }
+    if(ConvertFormat(desc.format) == VK_FORMAT_UNDEFINED){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create texture handle for native texture: format is unsupported"));
+        return nullptr;
+    }
+    if(!__hidden_vulkan::IsSupportedSampleCount(desc.sampleCount)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create texture handle for native texture: sample count is unsupported"));
+        return nullptr;
+    }
+    if((desc.dimension == TextureDimension::Texture1D || desc.dimension == TextureDimension::Texture1DArray) && (desc.height != 1 || desc.depth != 1)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create texture handle for native 1D texture: height and depth must be 1"));
+        return nullptr;
+    }
+    if(desc.dimension != TextureDimension::Texture3D && desc.depth != 1){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create texture handle for native non-3D texture: depth must be 1"));
+        return nullptr;
+    }
+    if(desc.dimension == TextureDimension::Texture3D && desc.arraySize != 1){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create texture handle for native 3D texture: array size must be 1"));
+        return nullptr;
+    }
+    if(desc.dimension == TextureDimension::Texture3D && desc.sampleCount != 1){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create texture handle for native 3D texture: sample count must be 1"));
+        return nullptr;
+    }
+    if(desc.sampleCount != 1 && desc.mipLevels != 1){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create texture handle for native multisampled texture: mip levels must be 1"));
+        return nullptr;
+    }
 
     auto* texture = NewArenaObject<Texture>(m_context.objectArena, m_context, m_allocator);
     texture->m_desc = desc;
@@ -445,6 +526,17 @@ SamplerHandle Device::createSampler(const SamplerDesc& d){
 
 void CommandList::clearTextureFloat(ITexture* _texture, TextureSubresourceSet subresources, const Color& clearColor){
     auto* texture = checked_cast<Texture*>(_texture);
+    if(!texture){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear texture: texture is null"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear texture: texture is null"));
+        return;
+    }
+    const FormatInfo& formatInfo = GetFormatInfo(texture->m_desc.format);
+    if(formatInfo.hasDepth || formatInfo.hasStencil){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear texture with color value: texture format is depth/stencil"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear texture with color value: texture format is depth/stencil"));
+        return;
+    }
     const TextureSubresourceSet resolvedSubresources = subresources.resolve(texture->m_desc, false);
     if(resolvedSubresources.numMipLevels == 0 || resolvedSubresources.numArraySlices == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear texture: invalid subresource range"));
@@ -473,6 +565,17 @@ void CommandList::clearDepthStencilTexture(ITexture* _texture, TextureSubresourc
     auto* texture = checked_cast<Texture*>(_texture);
     if(!clearDepth && !clearStencil)
         return;
+    if(!texture){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture: texture is null"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture: texture is null"));
+        return;
+    }
+    const FormatInfo& formatInfo = GetFormatInfo(texture->m_desc.format);
+    if((clearDepth && !formatInfo.hasDepth) || (clearStencil && !formatInfo.hasStencil)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture: requested aspect is not present in the texture format"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture: requested aspect is not present in the texture format"));
+        return;
+    }
 
     const TextureSubresourceSet resolvedSubresources = subresources.resolve(texture->m_desc, false);
     if(resolvedSubresources.numMipLevels == 0 || resolvedSubresources.numArraySlices == 0){
@@ -502,6 +605,17 @@ void CommandList::clearDepthStencilTexture(ITexture* _texture, TextureSubresourc
 
 void CommandList::clearTextureUInt(ITexture* _texture, TextureSubresourceSet subresources, u32 clearColor){
     auto* texture = checked_cast<Texture*>(_texture);
+    if(!texture){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear texture: texture is null"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear texture: texture is null"));
+        return;
+    }
+    const FormatInfo& formatInfo = GetFormatInfo(texture->m_desc.format);
+    if(formatInfo.hasDepth || formatInfo.hasStencil){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear texture with integer value: texture format is depth/stencil"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear texture with integer value: texture format is depth/stencil"));
+        return;
+    }
     const TextureSubresourceSet resolvedSubresources = subresources.resolve(texture->m_desc, false);
     if(resolvedSubresources.numMipLevels == 0 || resolvedSubresources.numArraySlices == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear texture: invalid subresource range"));
@@ -532,6 +646,11 @@ void CommandList::copyTexture(ITexture* _dest, const TextureSlice& destSlice, IT
     if(!dest || !src){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture: resource is invalid"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture: resource is invalid"));
+        return;
+    }
+    if(dest->m_desc.sampleCount != src->m_desc.sampleCount){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture: source and destination sample counts do not match"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture: source and destination sample counts do not match"));
         return;
     }
     if(!__hidden_vulkan::IsTextureSliceInBounds(dest->m_desc, destSlice) || !__hidden_vulkan::IsTextureSliceInBounds(src->m_desc, srcSlice)){
@@ -589,6 +708,16 @@ void CommandList::copyTexture(IStagingTexture* dest, const TextureSlice& destSli
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to staging texture: resource is invalid"));
         return;
     }
+    if(texture->m_desc.sampleCount != 1){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to staging texture: source texture must be single-sampled"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to staging texture: source texture must be single-sampled"));
+        return;
+    }
+    if(texture->m_desc.format != staging->m_desc.format){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to staging texture: source and destination formats do not match"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to staging texture: source and destination formats do not match"));
+        return;
+    }
     if(!__hidden_vulkan::IsTextureSliceInBounds(staging->m_desc, destSlice) || !__hidden_vulkan::IsTextureSliceInBounds(texture->m_desc, srcSlice)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to staging texture: slice is outside the texture"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to staging texture: slice is outside the texture"));
@@ -639,6 +768,16 @@ void CommandList::copyTexture(ITexture* dest, const TextureSlice& destSlice, ISt
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy staging texture to texture: resource is invalid"));
         return;
     }
+    if(texture->m_desc.sampleCount != 1){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy staging texture to texture: destination texture must be single-sampled"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy staging texture to texture: destination texture must be single-sampled"));
+        return;
+    }
+    if(texture->m_desc.format != staging->m_desc.format){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy staging texture to texture: source and destination formats do not match"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy staging texture to texture: source and destination formats do not match"));
+        return;
+    }
     if(!__hidden_vulkan::IsTextureSliceInBounds(texture->m_desc, destSlice) || !__hidden_vulkan::IsTextureSliceInBounds(staging->m_desc, srcSlice)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy staging texture to texture: slice is outside the texture"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy staging texture to texture: slice is outside the texture"));
@@ -683,7 +822,17 @@ void CommandList::copyTexture(ITexture* dest, const TextureSlice& destSlice, ISt
 
 void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, const void* data, usize rowPitch, usize depthPitch){
     auto* dest = checked_cast<Texture*>(_dest);
+    if(!dest){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write texture: destination texture is null"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to write texture: destination texture is null"));
+        return;
+    }
     const TextureDesc& texDesc = dest->m_desc;
+    if(texDesc.sampleCount != 1){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write texture: destination texture must be single-sampled"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to write texture: destination texture must be single-sampled"));
+        return;
+    }
 
     if(!data){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write texture: source data is null"));
@@ -712,6 +861,11 @@ void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, co
     const u32 blockHeight = (height + formatInfo.blockSize - 1) / formatInfo.blockSize;
     const usize naturalRowPitch = static_cast<usize>(blockWidth) * formatInfo.bytesPerBlock;
     const usize effectiveRowPitch = rowPitch != 0 ? rowPitch : naturalRowPitch;
+    if(blockHeight > UINT64_MAX / effectiveRowPitch){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write texture: texture pitch size overflows"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to write texture: texture pitch size overflows"));
+        return;
+    }
     const usize packedSlicePitch = effectiveRowPitch * blockHeight;
     const usize effectiveDepthPitch = depthPitch != 0 ? depthPitch : packedSlicePitch;
 
@@ -727,6 +881,26 @@ void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, co
         return;
     }
 
+    const usize bufferRowBlocks = effectiveRowPitch / formatInfo.bytesPerBlock;
+    const usize bufferImageBlocks = effectiveDepthPitch / effectiveRowPitch;
+    if(bufferRowBlocks > UINT64_MAX / formatInfo.blockSize || bufferImageBlocks > UINT64_MAX / formatInfo.blockSize){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write texture: row pitch or depth pitch exceeds Vulkan buffer image copy limits"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to write texture: row pitch or depth pitch exceeds Vulkan buffer image copy limits"));
+        return;
+    }
+    const usize bufferRowLength = bufferRowBlocks * formatInfo.blockSize;
+    const usize bufferImageHeight = bufferImageBlocks * formatInfo.blockSize;
+    if(bufferRowLength > UINT32_MAX || bufferImageHeight > UINT32_MAX){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write texture: row pitch or depth pitch exceeds Vulkan buffer image copy limits"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to write texture: row pitch or depth pitch exceeds Vulkan buffer image copy limits"));
+        return;
+    }
+
+    if(depth > 1 && static_cast<u64>(depth - 1) > (UINT64_MAX - packedSlicePitch) / effectiveDepthPitch){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write texture: upload size overflows"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to write texture: upload size overflows"));
+        return;
+    }
     const u64 dataSize = depth > 1
         ? static_cast<u64>(effectiveDepthPitch) * (depth - 1) + packedSlicePitch
         : packedSlicePitch;
@@ -772,8 +946,8 @@ void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, co
 
     VkBufferImageCopy region{};
     region.bufferOffset = stagingOffset;
-    region.bufferRowLength = static_cast<u32>((effectiveRowPitch / formatInfo.bytesPerBlock) * formatInfo.blockSize);
-    region.bufferImageHeight = static_cast<u32>((effectiveDepthPitch / effectiveRowPitch) * formatInfo.blockSize);
+    region.bufferRowLength = static_cast<u32>(bufferRowLength);
+    region.bufferImageHeight = static_cast<u32>(bufferImageHeight);
     region.imageSubresource.aspectMask = writeAspect;
     region.imageSubresource.mipLevel = mipLevel;
     region.imageSubresource.baseArrayLayer = arraySlice;
@@ -789,9 +963,35 @@ void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, co
 void CommandList::resolveTexture(ITexture* _dest, const TextureSubresourceSet& dstSubresources, ITexture* _src, const TextureSubresourceSet& srcSubresources){
     auto* dest = checked_cast<Texture*>(_dest);
     auto* src = checked_cast<Texture*>(_src);
+    if(!dest || !src){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to resolve texture: resource is invalid"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to resolve texture: resource is invalid"));
+        return;
+    }
+    if(src->m_desc.sampleCount <= 1 || dest->m_desc.sampleCount != 1){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to resolve texture: source must be multisampled and destination must be single-sampled"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to resolve texture: invalid sample counts"));
+        return;
+    }
+    if(ConvertFormat(src->m_desc.format) != ConvertFormat(dest->m_desc.format)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to resolve texture: source and destination formats do not match"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to resolve texture: source and destination formats do not match"));
+        return;
+    }
+    const FormatInfo& formatInfo = GetFormatInfo(src->m_desc.format);
+    if(formatInfo.hasDepth || formatInfo.hasStencil){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to resolve texture: depth/stencil resolves are not supported by this path"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to resolve texture: depth/stencil resolves are not supported by this path"));
+        return;
+    }
 
     const TextureSubresourceSet resolvedSrc = srcSubresources.resolve(src->m_desc, false);
     const TextureSubresourceSet resolvedDst = dstSubresources.resolve(dest->m_desc, false);
+    if(resolvedSrc.numMipLevels == 0 || resolvedSrc.numArraySlices == 0 || resolvedDst.numMipLevels == 0 || resolvedDst.numArraySlices == 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to resolve texture: invalid subresource range"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to resolve texture: invalid subresource range"));
+        return;
+    }
     if(resolvedSrc.numMipLevels != resolvedDst.numMipLevels || resolvedSrc.numArraySlices != resolvedDst.numArraySlices){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to resolve texture: source and destination subresources do not match"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to resolve texture: source and destination subresources do not match"));
@@ -805,6 +1005,17 @@ void CommandList::resolveTexture(ITexture* _dest, const TextureSubresourceSet& d
     for(MipLevel mipOffset = 0; mipOffset < resolvedSrc.numMipLevels; ++mipOffset){
         const MipLevel srcMipLevel = resolvedSrc.baseMipLevel + mipOffset;
         const MipLevel dstMipLevel = resolvedDst.baseMipLevel + mipOffset;
+        const u32 srcWidth = Max<u32>(1u, src->m_desc.width >> srcMipLevel);
+        const u32 srcHeight = Max<u32>(1u, src->m_desc.height >> srcMipLevel);
+        const u32 srcDepth = Max<u32>(1u, src->m_desc.depth >> srcMipLevel);
+        const u32 dstWidth = Max<u32>(1u, dest->m_desc.width >> dstMipLevel);
+        const u32 dstHeight = Max<u32>(1u, dest->m_desc.height >> dstMipLevel);
+        const u32 dstDepth = Max<u32>(1u, dest->m_desc.depth >> dstMipLevel);
+        if(srcWidth != dstWidth || srcHeight != dstHeight || srcDepth != dstDepth){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to resolve texture: source and destination mip extents do not match"));
+            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to resolve texture: source and destination mip extents do not match"));
+            return;
+        }
 
         VkImageResolve region{};
         region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -817,11 +1028,7 @@ void CommandList::resolveTexture(ITexture* _dest, const TextureSubresourceSet& d
         region.dstSubresource.baseArrayLayer = resolvedDst.baseArraySlice;
         region.dstSubresource.layerCount = resolvedDst.numArraySlices;
         region.dstOffset = { 0, 0, 0 };
-        region.extent = {
-            Max<u32>(1u, src->m_desc.width >> srcMipLevel),
-            Max<u32>(1u, src->m_desc.height >> srcMipLevel),
-            Max<u32>(1u, src->m_desc.depth >> srcMipLevel)
-        };
+        region.extent = { srcWidth, srcHeight, srcDepth };
         regions.push_back(region);
     }
 

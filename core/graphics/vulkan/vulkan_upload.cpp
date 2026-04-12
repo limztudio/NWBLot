@@ -32,10 +32,15 @@ bool UploadManager::suballocateBuffer(u64 size, Buffer** pBuffer, u64* pOffset, 
 
     ScopedLock lock(m_mutex);
 
-    if(alignment > 0)
-        size = (size + alignment - 1) & ~(static_cast<u64>(alignment) - 1);
+    if(alignment > 0){
+        const u64 alignmentMask = static_cast<u64>(alignment) - 1;
+        if(size > UINT64_MAX - alignmentMask)
+            return false;
 
-    if(m_currentChunk && (m_currentChunk->allocated + size <= m_currentChunk->size)){
+        size = (size + alignmentMask) & ~alignmentMask;
+    }
+
+    if(m_currentChunk && m_currentChunk->allocated <= m_currentChunk->size && size <= m_currentChunk->size - m_currentChunk->allocated){
         *pBuffer = static_cast<Buffer*>(m_currentChunk->buffer.get());
         *pOffset = m_currentChunk->allocated;
         if(pCpuVA)
@@ -95,7 +100,10 @@ void UploadManager::submitChunks(u64, u64 submittedVersion){
 
     if(m_currentChunk){
         m_currentChunk->version = submittedVersion;
-        m_chunkPoolBytes += m_currentChunk->size;
+        if(m_chunkPoolBytes > UINT64_MAX - m_currentChunk->size)
+            m_chunkPoolBytes = UINT64_MAX;
+        else
+            m_chunkPoolBytes += m_currentChunk->size;
         m_chunkPool.push_back(m_currentChunk);
         m_currentChunk.reset();
 
@@ -120,4 +128,3 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

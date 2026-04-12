@@ -159,11 +159,35 @@ void CommandList::buildTopLevelAccelStructFromBuffer(IRayTracingAccelStruct* _as
     }
     if(numInstances == 0)
         return;
+    if(numInstances > UINT32_MAX){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS from buffer: instance count exceeds Vulkan limit"));
+        return;
+    }
 
     if(!m_context.extensions.KHR_acceleration_structure)
         return;
 
     auto* as = checked_cast<AccelStruct*>(_as);
+    if(!as || !as->m_desc.isTopLevel){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS from buffer: acceleration structure is not top-level"));
+        return;
+    }
+
+    auto* instanceBufferImpl = checked_cast<Buffer*>(instanceBuffer);
+    if(!instanceBufferImpl){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS from buffer: instance buffer is invalid"));
+        return;
+    }
+    if(!instanceBufferImpl->m_desc.isAccelStructBuildInput){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS from buffer: instance buffer was not created with acceleration-structure build input usage"));
+        return;
+    }
+
+    const u64 instanceDataBytes = static_cast<u64>(numInstances) * sizeof(VkAccelerationStructureInstanceKHR);
+    if(!__hidden_vulkan::IsBufferRangeInBounds(instanceBufferImpl->m_desc, instanceBufferOffset, instanceDataBytes)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS from buffer: instance buffer range is outside the buffer"));
+        return;
+    }
 
     VkAccelerationStructureGeometryKHR geometry = __hidden_vulkan::MakeVkStruct<VkAccelerationStructureGeometryKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR);
     geometry.geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR;
@@ -190,6 +214,13 @@ void CommandList::buildTopLevelAccelStructFromBuffer(IRayTracingAccelStruct* _as
     auto primitiveCount = static_cast<uint32_t>(numInstances);
     VkAccelerationStructureBuildSizesInfoKHR sizeInfo = __hidden_vulkan::MakeVkStruct<VkAccelerationStructureBuildSizesInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR);
     vkGetAccelerationStructureBuildSizesKHR(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &primitiveCount, &sizeInfo);
+
+    auto* asBuffer = checked_cast<Buffer*>(as->m_buffer.get());
+    if(!asBuffer || asBuffer->m_desc.byteSize < sizeInfo.accelerationStructureSize){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS from buffer: acceleration structure storage is too small"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to build TLAS from buffer: acceleration structure storage is too small"));
+        return;
+    }
 
     BufferDesc scratchDesc;
     scratchDesc.byteSize = sizeInfo.buildScratchSize;
@@ -423,6 +454,10 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
 
     if(numDescs == 0)
         return;
+    if(!convertDescs){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to convert cooperative vector matrices: descriptors are null"));
+        return;
+    }
 
     Alloc::ScratchArena<> scratchArena;
 
@@ -433,6 +468,21 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
         const CooperativeVectorConvertMatrixLayoutDesc& convertDesc = convertDescs[i];
         if(!convertDesc.src.buffer || !convertDesc.dst.buffer)
             continue;
+
+        auto* srcBuffer = checked_cast<Buffer*>(convertDesc.src.buffer);
+        auto* dstBuffer = checked_cast<Buffer*>(convertDesc.dst.buffer);
+        if(!srcBuffer || !dstBuffer){
+            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Skipping cooperative vector matrix conversion: buffer is invalid"));
+            continue;
+        }
+        if(!__hidden_vulkan::IsBufferRangeInBounds(srcBuffer->m_desc, convertDesc.src.offset, convertDesc.src.size)){
+            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Skipping cooperative vector matrix conversion: source range is outside the buffer"));
+            continue;
+        }
+        if(!__hidden_vulkan::IsBufferRangeInBounds(dstBuffer->m_desc, convertDesc.dst.offset, convertDesc.dst.size)){
+            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Skipping cooperative vector matrix conversion: destination range is outside the buffer"));
+            continue;
+        }
 
         if(m_enableAutomaticBarriers){
             setBufferState(convertDesc.src.buffer, ResourceStates::ShaderResource);
@@ -482,6 +532,11 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
     }
 
     commitBarriers();
+
+    if(vkConvertDescs.size() > UINT32_MAX){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to convert cooperative vector matrices: descriptor count exceeds Vulkan limit"));
+        return;
+    }
 
     if(!vkConvertDescs.empty())
         vkCmdConvertCooperativeVectorMatrixNV(m_currentCmdBuf->m_cmdBuf, static_cast<u32>(vkConvertDescs.size()), vkConvertDescs.data());

@@ -43,6 +43,40 @@ bool GetRayTracingIndexType(Format::Enum format, VkIndexType& indexType){
     return false;
 }
 
+bool ComputeStridedRangeByteSize(u32 elementCount, u64 stride, u64 elementSize, u64& outByteSize){
+    if(elementCount == 0){
+        outByteSize = 0;
+        return true;
+    }
+
+    const u64 spanCount = static_cast<u64>(elementCount - 1);
+    if(stride != 0 && spanCount > (UINT64_MAX - elementSize) / stride)
+        return false;
+
+    outByteSize = spanCount * stride + elementSize;
+    return true;
+}
+
+bool ValidateAccelStructBuildInputRange(IBuffer* _buffer, u64 offset, u64 byteSize, const tchar* operation, const tchar* resourceName){
+    auto* buffer = checked_cast<Buffer*>(_buffer);
+    if(!buffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {} buffer is invalid"), operation, resourceName);
+        return false;
+    }
+
+    const BufferDesc& desc = buffer->getDescription();
+    if(!desc.isAccelStructBuildInput){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {} buffer was not created with acceleration-structure build input usage"), operation, resourceName);
+        return false;
+    }
+    if(!IsBufferRangeInBounds(desc, offset, byteSize)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {} buffer range is outside the buffer"), operation, resourceName);
+        return false;
+    }
+
+    return true;
+}
+
 bool FillBlasGeometryForSizeQuery(const RayTracingGeometryDesc& geomDesc, VkAccelerationStructureGeometryKHR& geometry, u32& primitiveCount, const tchar* operation, bool requireBuffers){
     geometry = MakeVkStruct<VkAccelerationStructureGeometryKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR);
     primitiveCount = 0;
@@ -62,6 +96,24 @@ bool FillBlasGeometryForSizeQuery(const RayTracingGeometryDesc& geomDesc, VkAcce
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: triangle vertex stride is zero"), operation);
             return false;
         }
+        const FormatInfo& vertexFormatInfo = GetFormatInfo(triangles.vertexFormat);
+        if(vertexFormatInfo.bytesPerBlock == 0){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: triangle vertex format size is invalid"), operation);
+            return false;
+        }
+        if(triangles.vertexCount > 0 && triangles.vertexStride < vertexFormatInfo.bytesPerBlock){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: triangle vertex stride is smaller than the vertex format size"), operation);
+            return false;
+        }
+        if(requireBuffers){
+            u64 vertexByteSize = 0;
+            if(!ComputeStridedRangeByteSize(triangles.vertexCount, triangles.vertexStride, vertexFormatInfo.bytesPerBlock, vertexByteSize)){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: triangle vertex buffer range overflows"), operation);
+                return false;
+            }
+            if(!ValidateAccelStructBuildInputRange(triangles.vertexBuffer, triangles.vertexOffset, vertexByteSize, operation, NWB_TEXT("triangle vertex")))
+                return false;
+        }
 
         geometry.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
         geometry.geometry.triangles.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
@@ -73,6 +125,12 @@ bool FillBlasGeometryForSizeQuery(const RayTracingGeometryDesc& geomDesc, VkAcce
             if(!GetRayTracingIndexType(triangles.indexFormat, geometry.geometry.triangles.indexType)){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: triangle index format must be R16_UINT or R32_UINT"), operation);
                 return false;
+            }
+            if(requireBuffers){
+                const u64 indexElementSize = triangles.indexFormat == Format::R16_UINT ? sizeof(u16) : sizeof(u32);
+                const u64 indexByteSize = static_cast<u64>(triangles.indexCount) * indexElementSize;
+                if(!ValidateAccelStructBuildInputRange(triangles.indexBuffer, triangles.indexOffset, indexByteSize, operation, NWB_TEXT("triangle index")))
+                    return false;
             }
             primitiveCount = triangles.indexCount / s_TrianglesPerPrimitive;
         }
@@ -90,6 +148,15 @@ bool FillBlasGeometryForSizeQuery(const RayTracingGeometryDesc& geomDesc, VkAcce
         if(aabbs.count > 0 && aabbs.stride == 0){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: AABB stride is zero"), operation);
             return false;
+        }
+        if(requireBuffers){
+            u64 aabbByteSize = 0;
+            if(!ComputeStridedRangeByteSize(aabbs.count, aabbs.stride, sizeof(RayTracingGeometryAABB), aabbByteSize)){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: AABB buffer range overflows"), operation);
+                return false;
+            }
+            if(!ValidateAccelStructBuildInputRange(aabbs.buffer, aabbs.offset, aabbByteSize, operation, NWB_TEXT("AABB")))
+                return false;
         }
 
         geometry.geometryType = VK_GEOMETRY_TYPE_AABBS_KHR;
@@ -319,6 +386,10 @@ RayTracingOpacityMicromapHandle Device::createOpacityMicromap(const RayTracingOp
 
     if(!m_context.extensions.EXT_opacity_micromap){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Opacity micromap extension is required to create opacity micromaps."));
+        return nullptr;
+    }
+    if(desc.counts.size() > UINT32_MAX){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create opacity micromap: usage-count count exceeds Vulkan limit"));
         return nullptr;
     }
 
@@ -1051,6 +1122,10 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* _as, const
         return;
 
     auto* as = checked_cast<AccelStruct*>(_as);
+    if(!as || as->m_desc.isTopLevel){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: acceleration structure is not bottom-level"));
+        return;
+    }
 
     Alloc::ScratchArena<> scratchArena(s_RayTracingScratchArenaBytes);
 
@@ -1300,6 +1375,17 @@ void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* _as, const Ra
         return;
 
     auto* as = checked_cast<AccelStruct*>(_as);
+    if(!as || !as->m_desc.isTopLevel){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS: acceleration structure is not top-level"));
+        return;
+    }
+    for(usize i = 0; i < numInstances; ++i){
+        auto* blas = checked_cast<AccelStruct*>(pInstances[i].bottomLevelAS);
+        if(!blas || blas->m_desc.isTopLevel || blas->m_deviceAddress == 0){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS: instance {} references an invalid bottom-level acceleration structure"), i);
+            return;
+        }
+    }
 
     u64 instanceBufferSize = numInstances * sizeof(VkAccelerationStructureInstanceKHR);
     BufferDesc instanceBufferDesc;
@@ -1416,6 +1502,44 @@ void CommandList::buildOpacityMicromap(IRayTracingOpacityMicromap* _omm, const R
     }
 
     auto* omm = checked_cast<OpacityMicromap*>(_omm);
+    if(!omm){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build opacity micromap: micromap is invalid"));
+        return;
+    }
+    if(ommDesc.counts.size() > UINT32_MAX){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build opacity micromap: usage-count count exceeds Vulkan limit"));
+        return;
+    }
+
+    u64 triangleDescBytes = 0;
+    for(const RayTracingOpacityMicromapUsageCount& count : ommDesc.counts){
+        const u64 countBytes = static_cast<u64>(count.count) * sizeof(VkMicromapTriangleEXT);
+        if(triangleDescBytes > UINT64_MAX - countBytes){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build opacity micromap: per-OMM descriptor size overflows"));
+            return;
+        }
+        triangleDescBytes += countBytes;
+    }
+
+    auto* inputBuffer = checked_cast<Buffer*>(ommDesc.inputBuffer);
+    if(!inputBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build opacity micromap: input buffer is invalid"));
+        return;
+    }
+    if(!__hidden_vulkan::IsBufferRangeInBounds(inputBuffer->m_desc, ommDesc.inputBufferOffset, 1)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build opacity micromap: input buffer offset is outside the buffer"));
+        return;
+    }
+
+    auto* perOmmDescs = checked_cast<Buffer*>(ommDesc.perOmmDescs);
+    if(!perOmmDescs){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build opacity micromap: per-OMM descriptor buffer is invalid"));
+        return;
+    }
+    if(triangleDescBytes > 0 && !__hidden_vulkan::IsBufferRangeInBounds(perOmmDescs->m_desc, ommDesc.perOmmDescsOffset, triangleDescBytes)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build opacity micromap: per-OMM descriptor range is outside the buffer"));
+        return;
+    }
 
     if(m_enableAutomaticBarriers){
         if(ommDesc.inputBuffer)
@@ -1456,6 +1580,12 @@ void CommandList::buildOpacityMicromap(IRayTracingOpacityMicromap* _omm, const R
 
     VkMicromapBuildSizesInfoEXT buildSize = __hidden_vulkan::MakeVkStruct<VkMicromapBuildSizesInfoEXT>(VK_STRUCTURE_TYPE_MICROMAP_BUILD_SIZES_INFO_EXT);
     vkGetMicromapBuildSizesEXT(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &buildSize);
+
+    auto* dataBuffer = checked_cast<Buffer*>(omm->m_dataBuffer.get());
+    if(!dataBuffer || dataBuffer->m_desc.byteSize < buildSize.micromapSize){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build opacity micromap: micromap storage is too small"));
+        return;
+    }
 
     if(buildSize.buildScratchSize != 0){
         BufferDesc scratchDesc;

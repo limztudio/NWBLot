@@ -26,6 +26,14 @@ static constexpr u64 AlignBufferOffset(u64 off){
     return ((off + (s_BufferAlignmentBytes - 1)) / s_BufferAlignmentBytes) * s_BufferAlignmentBytes;
 }
 
+bool AlignBufferOffsetChecked(u64 offset, u64& alignedOffset){
+    if(offset > UINT64_MAX - (s_BufferAlignmentBytes - 1))
+        return false;
+
+    alignedOffset = AlignBufferOffset(offset);
+    return true;
+}
+
 bool IsTextureSliceInBounds(const TextureDesc& desc, const TextureSlice& slice){
     if(desc.mipLevels == 0 || slice.mipLevel >= desc.mipLevels)
         return false;
@@ -90,10 +98,10 @@ u64 ComputeStagingTextureOffset(const TextureDesc& desc, const TextureSlice& sli
             const u32 mipHeight = Max<u32>(desc.height >> mip, 1u);
             const u32 mipDepth = Max<u32>(desc.depth >> mip, 1u);
 
-            const u32 blocksX = Max<u32>((mipWidth + formatInfo.blockSize - 1) / formatInfo.blockSize, 1u);
-            const u32 blocksY = Max<u32>((mipHeight + formatInfo.blockSize - 1) / formatInfo.blockSize, 1u);
+            const u64 blocksX = Max<u64>((static_cast<u64>(mipWidth) + formatInfo.blockSize - 1) / formatInfo.blockSize, 1ull);
+            const u64 blocksY = Max<u64>((static_cast<u64>(mipHeight) + formatInfo.blockSize - 1) / formatInfo.blockSize, 1ull);
 
-            const u64 sliceSize = static_cast<u64>(blocksX) * blocksY * formatInfo.bytesPerBlock;
+            const u64 sliceSize = blocksX * blocksY * formatInfo.bytesPerBlock;
             offset = AlignBufferOffset(offset + sliceSize * mipDepth);
         }
     }
@@ -101,8 +109,8 @@ u64 ComputeStagingTextureOffset(const TextureDesc& desc, const TextureSlice& sli
     const u32 mipWidth = Max<u32>(desc.width >> resolved.mipLevel, 1u);
     const u32 mipHeight = Max<u32>(desc.height >> resolved.mipLevel, 1u);
 
-    const u32 blocksX = Max<u32>((mipWidth + formatInfo.blockSize - 1) / formatInfo.blockSize, 1u);
-    const u32 blocksY = Max<u32>((mipHeight + formatInfo.blockSize - 1) / formatInfo.blockSize, 1u);
+    const u64 blocksX = Max<u64>((static_cast<u64>(mipWidth) + formatInfo.blockSize - 1) / formatInfo.blockSize, 1ull);
+    const u64 blocksY = Max<u64>((static_cast<u64>(mipHeight) + formatInfo.blockSize - 1) / formatInfo.blockSize, 1ull);
 
     const u64 rowPitch = static_cast<u64>(blocksX) * formatInfo.bytesPerBlock;
     const u64 slicePitch = rowPitch * blocksY;
@@ -110,9 +118,9 @@ u64 ComputeStagingTextureOffset(const TextureDesc& desc, const TextureSlice& sli
     if(outRowPitch)
         *outRowPitch = static_cast<usize>(rowPitch);
     if(outBufferRowLength)
-        *outBufferRowLength = blocksX * formatInfo.blockSize;
+        *outBufferRowLength = static_cast<u32>(blocksX * formatInfo.blockSize);
     if(outBufferImageHeight)
-        *outBufferImageHeight = blocksY * formatInfo.blockSize;
+        *outBufferImageHeight = static_cast<u32>(blocksY * formatInfo.blockSize);
 
     offset += static_cast<u64>(resolved.z) * slicePitch
             + static_cast<u64>(resolved.y / formatInfo.blockSize) * rowPitch
@@ -140,6 +148,26 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging texture: dimensions, mip count, and array size must be nonzero"));
         return nullptr;
     }
+    if(d.dimension == TextureDimension::Unknown){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create staging texture: texture dimension is unknown"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging texture: texture dimension is unknown"));
+        return nullptr;
+    }
+    if(d.sampleCount != 1){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create staging texture: sample count must be 1"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging texture: sample count must be 1"));
+        return nullptr;
+    }
+    if((d.dimension == TextureDimension::Texture1D || d.dimension == TextureDimension::Texture1DArray) && (d.height != 1 || d.depth != 1)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create staging 1D texture: height and depth must be 1"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging 1D texture: height and depth must be 1"));
+        return nullptr;
+    }
+    if(d.dimension != TextureDimension::Texture3D && d.depth != 1){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create non-3D staging texture: depth must be 1"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create non-3D staging texture: depth must be 1"));
+        return nullptr;
+    }
     if(d.dimension == TextureDimension::Texture3D && d.arraySize != 1){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create staging 3D texture: array size must be 1"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging 3D texture: array size must be 1"));
@@ -164,11 +192,36 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
             auto mipHeight = Max<u32>(d.height >> mip, 1u);
             auto mipDepth = Max<u32>(d.depth >> mip, 1u);
 
-            auto blocksX = Max<u32>((mipWidth + formatInfo.blockSize - 1) / formatInfo.blockSize, 1u);
-            auto blocksY = Max<u32>((mipHeight + formatInfo.blockSize - 1) / formatInfo.blockSize, 1u);
+            const u64 blocksX = Max<u64>((static_cast<u64>(mipWidth) + formatInfo.blockSize - 1) / formatInfo.blockSize, 1ull);
+            const u64 blocksY = Max<u64>((static_cast<u64>(mipHeight) + formatInfo.blockSize - 1) / formatInfo.blockSize, 1ull);
+            if(blocksX > UINT64_MAX / blocksY || blocksX * formatInfo.blockSize > UINT32_MAX || blocksY * formatInfo.blockSize > UINT32_MAX){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create staging texture: row layout exceeds Vulkan buffer image copy limits"));
+                NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging texture: row layout exceeds Vulkan buffer image copy limits"));
+                DestroyArenaObject(m_context.objectArena, staging);
+                return nullptr;
+            }
 
-            auto sliceSize = static_cast<u64>(blocksX) * blocksY * formatInfo.bytesPerBlock;
-            totalSize = __hidden_vulkan::AlignBufferOffset(totalSize + sliceSize * mipDepth);
+            const u64 blockCount = blocksX * blocksY;
+            if(blockCount > UINT64_MAX / formatInfo.bytesPerBlock){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create staging texture: mip size overflows"));
+                NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging texture: mip size overflows"));
+                DestroyArenaObject(m_context.objectArena, staging);
+                return nullptr;
+            }
+            const u64 sliceSize = blockCount * formatInfo.bytesPerBlock;
+            if(mipDepth > UINT64_MAX / sliceSize || totalSize > UINT64_MAX - sliceSize * mipDepth){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create staging texture: total size overflows"));
+                NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging texture: total size overflows"));
+                DestroyArenaObject(m_context.objectArena, staging);
+                return nullptr;
+            }
+            const u64 mipSize = sliceSize * mipDepth;
+            if(!__hidden_vulkan::AlignBufferOffsetChecked(totalSize + mipSize, totalSize)){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create staging texture: total size alignment overflows"));
+                NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging texture: total size alignment overflows"));
+                DestroyArenaObject(m_context.objectArena, staging);
+                return nullptr;
+            }
         }
     }
 

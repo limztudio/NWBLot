@@ -494,6 +494,8 @@ void CommandList::clearTextureUInt(ITexture* _texture, TextureSubresourceSet sub
 void CommandList::copyTexture(ITexture* _dest, const TextureSlice& destSlice, ITexture* _src, const TextureSlice& srcSlice){
     auto* dest = checked_cast<Texture*>(_dest);
     auto* src = checked_cast<Texture*>(_src);
+    const TextureSlice resolvedDst = destSlice.resolve(dest->m_desc);
+    const TextureSlice resolvedSrc = srcSlice.resolve(src->m_desc);
 
     VkImageCopy region{};
     const FormatInfo& srcFormatInfo = GetFormatInfo(src->m_desc.format);
@@ -511,16 +513,16 @@ void CommandList::copyTexture(ITexture* _dest, const TextureSlice& destSlice, IT
         dstAspect |= VK_IMAGE_ASPECT_STENCIL_BIT;
 
     region.srcSubresource.aspectMask = srcAspect;
-    region.srcSubresource.mipLevel = srcSlice.mipLevel;
-    region.srcSubresource.baseArrayLayer = srcSlice.arraySlice;
+    region.srcSubresource.mipLevel = resolvedSrc.mipLevel;
+    region.srcSubresource.baseArrayLayer = resolvedSrc.arraySlice;
     region.srcSubresource.layerCount = 1;
-    region.srcOffset = { static_cast<int32_t>(srcSlice.x), static_cast<int32_t>(srcSlice.y), static_cast<int32_t>(srcSlice.z) };
+    region.srcOffset = { static_cast<int32_t>(resolvedSrc.x), static_cast<int32_t>(resolvedSrc.y), static_cast<int32_t>(resolvedSrc.z) };
     region.dstSubresource.aspectMask = dstAspect;
-    region.dstSubresource.mipLevel = destSlice.mipLevel;
-    region.dstSubresource.baseArrayLayer = destSlice.arraySlice;
+    region.dstSubresource.mipLevel = resolvedDst.mipLevel;
+    region.dstSubresource.baseArrayLayer = resolvedDst.arraySlice;
     region.dstSubresource.layerCount = 1;
-    region.dstOffset = { static_cast<int32_t>(destSlice.x), static_cast<int32_t>(destSlice.y), static_cast<int32_t>(destSlice.z) };
-    region.extent = { destSlice.width, destSlice.height, destSlice.depth };
+    region.dstOffset = { static_cast<int32_t>(resolvedDst.x), static_cast<int32_t>(resolvedDst.y), static_cast<int32_t>(resolvedDst.z) };
+    region.extent = { resolvedDst.width, resolvedDst.height, resolvedDst.depth };
 
     vkCmdCopyImage(m_currentCmdBuf->m_cmdBuf, src->m_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dest->m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
@@ -695,20 +697,51 @@ void CommandList::resolveTexture(ITexture* _dest, const TextureSubresourceSet& d
     auto* dest = checked_cast<Texture*>(_dest);
     auto* src = checked_cast<Texture*>(_src);
 
-    VkImageResolve region{};
-    region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    region.srcSubresource.mipLevel = srcSubresources.baseMipLevel;
-    region.srcSubresource.baseArrayLayer = srcSubresources.baseArraySlice;
-    region.srcSubresource.layerCount = srcSubresources.numArraySlices;
-    region.srcOffset = { 0, 0, 0 };
-    region.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    region.dstSubresource.mipLevel = dstSubresources.baseMipLevel;
-    region.dstSubresource.baseArrayLayer = dstSubresources.baseArraySlice;
-    region.dstSubresource.layerCount = dstSubresources.numArraySlices;
-    region.dstOffset = { 0, 0, 0 };
-    region.extent = { Max<u32>(1u, src->m_desc.width >> srcSubresources.baseMipLevel), Max<u32>(1u, src->m_desc.height >> srcSubresources.baseMipLevel), 1 };
+    const TextureSubresourceSet resolvedSrc = srcSubresources.resolve(src->m_desc, false);
+    const TextureSubresourceSet resolvedDst = dstSubresources.resolve(dest->m_desc, false);
+    if(resolvedSrc.numMipLevels != resolvedDst.numMipLevels || resolvedSrc.numArraySlices != resolvedDst.numArraySlices){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to resolve texture: source and destination subresources do not match"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to resolve texture: source and destination subresources do not match"));
+        return;
+    }
 
-    vkCmdResolveImage(m_currentCmdBuf->m_cmdBuf, src->m_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dest->m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+    Alloc::ScratchArena<> scratchArena;
+    Vector<VkImageResolve, Alloc::ScratchAllocator<VkImageResolve>> regions{ Alloc::ScratchAllocator<VkImageResolve>(scratchArena) };
+    regions.reserve(resolvedSrc.numMipLevels);
+
+    for(MipLevel mipOffset = 0; mipOffset < resolvedSrc.numMipLevels; ++mipOffset){
+        const MipLevel srcMipLevel = resolvedSrc.baseMipLevel + mipOffset;
+        const MipLevel dstMipLevel = resolvedDst.baseMipLevel + mipOffset;
+
+        VkImageResolve region{};
+        region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        region.srcSubresource.mipLevel = srcMipLevel;
+        region.srcSubresource.baseArrayLayer = resolvedSrc.baseArraySlice;
+        region.srcSubresource.layerCount = resolvedSrc.numArraySlices;
+        region.srcOffset = { 0, 0, 0 };
+        region.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        region.dstSubresource.mipLevel = dstMipLevel;
+        region.dstSubresource.baseArrayLayer = resolvedDst.baseArraySlice;
+        region.dstSubresource.layerCount = resolvedDst.numArraySlices;
+        region.dstOffset = { 0, 0, 0 };
+        region.extent = {
+            Max<u32>(1u, src->m_desc.width >> srcMipLevel),
+            Max<u32>(1u, src->m_desc.height >> srcMipLevel),
+            Max<u32>(1u, src->m_desc.depth >> srcMipLevel)
+        };
+        regions.push_back(region);
+    }
+
+    if(!regions.empty()){
+        vkCmdResolveImage(
+            m_currentCmdBuf->m_cmdBuf,
+            src->m_image,
+            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            dest->m_image,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            static_cast<u32>(regions.size()),
+            regions.data());
+    }
 
     m_currentCmdBuf->m_referencedResources.push_back(_src);
     m_currentCmdBuf->m_referencedResources.push_back(_dest);

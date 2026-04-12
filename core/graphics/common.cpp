@@ -210,12 +210,13 @@ TextureSubresourceSet TextureSubresourceSet::resolve(const TextureDesc& desc, bo
     TextureSubresourceSet ret;
     ret.baseMipLevel = baseMipLevel;
 
+    const u32 availableMipLevels = baseMipLevel < desc.mipLevels ? desc.mipLevels - baseMipLevel : 0;
     if(singleMipLevel)
-        ret.numMipLevels = 1;
-    else{
-        auto lastMipLevelPlusOne = Min(baseMipLevel + numMipLevels, desc.mipLevels);
-        ret.numMipLevels = static_cast<MipLevel>(Max(static_cast<u32>(0), lastMipLevelPlusOne - baseMipLevel));
-    }
+        ret.numMipLevels = availableMipLevels > 0 ? 1 : 0;
+    else if(numMipLevels == AllMipLevels)
+        ret.numMipLevels = static_cast<MipLevel>(availableMipLevels);
+    else
+        ret.numMipLevels = static_cast<MipLevel>(Min<u32>(numMipLevels, availableMipLevels));
 
     switch(desc.dimension){
     case TextureDimension::Texture1DArray:
@@ -225,8 +226,11 @@ TextureSubresourceSet TextureSubresourceSet::resolve(const TextureDesc& desc, bo
     case TextureDimension::Texture2DMSArray:
     {
         ret.baseArraySlice = baseArraySlice;
-        auto lastArraySlicePlusOne = static_cast<i32>(Min(baseArraySlice + numArraySlices, desc.arraySize));
-        ret.numArraySlices = static_cast<ArraySlice>(Max(static_cast<i32>(0), lastArraySlicePlusOne - static_cast<i32>(baseArraySlice)));
+        const u32 availableArraySlices = baseArraySlice < desc.arraySize ? desc.arraySize - baseArraySlice : 0;
+        if(numArraySlices == AllArraySlices)
+            ret.numArraySlices = static_cast<ArraySlice>(availableArraySlices);
+        else
+            ret.numArraySlices = static_cast<ArraySlice>(Min<u32>(numArraySlices, availableArraySlices));
         break;
     }
     default: 
@@ -238,7 +242,9 @@ TextureSubresourceSet TextureSubresourceSet::resolve(const TextureDesc& desc, bo
     return ret;
 }
 bool TextureSubresourceSet::isEntireTexture(const TextureDesc& desc)const{
-    if(baseMipLevel > 0u || baseMipLevel + numMipLevels < desc.mipLevels)
+    const TextureSubresourceSet resolved = resolve(desc, false);
+
+    if(resolved.baseMipLevel > 0u || resolved.numMipLevels < desc.mipLevels)
         return false;
 
     switch(desc.dimension){
@@ -247,7 +253,7 @@ bool TextureSubresourceSet::isEntireTexture(const TextureDesc& desc)const{
     case TextureDimension::TextureCube:
     case TextureDimension::TextureCubeArray:
     case TextureDimension::Texture2DMSArray: 
-        if(baseArraySlice > 0u || baseArraySlice + numArraySlices < desc.arraySize)
+        if(resolved.baseArraySlice > 0u || resolved.numArraySlices < desc.arraySize)
             return false;
         break;
     default:

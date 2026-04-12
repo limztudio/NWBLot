@@ -670,13 +670,22 @@ bool ShaderCook::gatherShaderDependencies(const Path& sourcePath, const CookVect
     return __hidden_shader_cook::CollectDependencies(sourcePath, includeDirectories, visited, outDependencies, scratchArena);
 }
 
-void ShaderCook::expandDefineCombinations(const CookMap<AString, DefineEntry>& defineValues, CookVector<DefineCombo>& outCombinations){
+bool ShaderCook::expandDefineCombinations(const CookMap<AString, DefineEntry>& defineValues, CookVector<DefineCombo>& outCombinations){
     outCombinations.clear();
     outCombinations.push_back(DefineCombo(CookAllocator<Pair<const AString, AString>>(m_memoryArena)));
 
     for(const auto& entry : sortedDefineEntries(defineValues)){
         const AString& defineName = *entry.key;
         const CookVector<AString>& values = entry.value->values;
+        if(values.empty()){
+            outCombinations.clear();
+            return true;
+        }
+
+        if(outCombinations.size() > Limit<usize>::s_Max / values.size()){
+            outCombinations.clear();
+            return false;
+        }
 
         CookVector<DefineCombo> expanded{CookAllocator<DefineCombo>(m_memoryArena)};
         expanded.reserve(outCombinations.size() * values.size());
@@ -691,6 +700,8 @@ void ShaderCook::expandDefineCombinations(const CookMap<AString, DefineEntry>& d
 
         outCombinations = Move(expanded);
     }
+
+    return true;
 }
 
 AString ShaderCook::buildVariantName(const DefineCombo& combo){
@@ -854,4 +865,3 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

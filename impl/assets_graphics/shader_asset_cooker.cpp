@@ -1650,7 +1650,13 @@ static bool AppendPreparedShadersToVolume(
         }
 
         Core::ShaderCook::CookVector<Core::ShaderCook::DefineCombo> defineCombinations{Core::ShaderCook::CookAllocator<Core::ShaderCook::DefineCombo>(cookArena)};
-        shaderCook.expandDefineCombinations(entry.defineValues, defineCombinations);
+        if(!shaderCook.expandDefineCombinations(entry.defineValues, defineCombinations)){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("ShaderAssetCooker: variant combination count exceeds runtime limits for entry '{}'"),
+                StringConvert(entry.name)
+            );
+            return false;
+        }
         if(defineCombinations.empty())
             defineCombinations.push_back(Core::ShaderCook::DefineCombo(Core::ShaderCook::CookAllocator<Pair<const AString, AString>>(cookArena)));
 

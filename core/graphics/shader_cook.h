@@ -118,7 +118,7 @@ public:
 
     bool gatherShaderDependencies(const Path& sourcePath, const CookVector<Path>& includeDirectories, CookVector<Path>& outDependencies);
 
-    void expandDefineCombinations(const CookMap<AString, DefineEntry>& defineValues, CookVector<DefineCombo>& outCombinations);
+    bool expandDefineCombinations(const CookMap<AString, DefineEntry>& defineValues, CookVector<DefineCombo>& outCombinations);
 
     AString buildVariantName(const DefineCombo& combo);
     bool canonicalizeVariantSignature(AStringView variantSignature, AString& outCanonical);
@@ -167,4 +167,3 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

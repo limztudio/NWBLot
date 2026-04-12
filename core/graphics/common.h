@@ -3966,8 +3966,6 @@ struct DeviceCreationParameters : public InstanceParameters{
     bool allowModeSwitch = false;
     i32 windowPosX = s_WindowPositionAuto;
     i32 windowPosY = s_WindowPositionAuto;
-    u32 backBufferWidth = s_BackBufferWidth;
-    u32 backBufferHeight = s_BackBufferHeight;
     u32 refreshRate = 0;
     u32 swapChainBufferCount = s_SwapChainBufferCount;
     Format::Enum swapChainFormat = Format::RGBA8_UNORM_SRGB;
@@ -3975,7 +3973,6 @@ struct DeviceCreationParameters : public InstanceParameters{
     u32 swapChainSampleQuality = 0;
     u32 maxFramesInFlight = s_MaxFramesInFlight;
     bool enableNvrhiValidationLayer = false;
-    bool vsyncEnabled = false;
     bool enableRayTracingExtensions = false;
     bool enableComputeQueue = false;
     bool enableCopyQueue = false;
@@ -3983,12 +3980,16 @@ struct DeviceCreationParameters : public InstanceParameters{
     bool supportExplicitDisplayScaling = false;
     bool resizeWindowWithDisplayScale = false;
 
-    GraphicsAllocator* allocator = nullptr;
-    Alloc::ThreadPool* threadPool = nullptr;
-
     Vector<AString> requiredVulkanDeviceExtensions;
     Vector<AString> optionalVulkanDeviceExtensions;
     Vector<usize> ignoredVulkanValidationMessageLocations;
+};
+
+struct SwapChainRuntimeState{
+    u32 backBufferWidth = s_BackBufferWidth;
+    u32 backBufferHeight = s_BackBufferHeight;
+    Format::Enum backBufferFormat = Format::RGBA8_UNORM_SRGB;
+    bool vsyncEnabled = false;
 };
 
 

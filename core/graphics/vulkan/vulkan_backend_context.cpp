@@ -113,6 +113,17 @@ static void* GetOptionalDeviceFeatureStruct(OptionalDeviceFeatureSet& features, 
     }
 }
 
+static Format::Enum GetBackBufferFormat(const DeviceCreationParameters& params){
+    if(params.headlessDevice)
+        return params.swapChainFormat;
+
+    if(params.swapChainFormat == Format::RGBA8_UNORM_SRGB)
+        return Format::BGRA8_UNORM_SRGB;
+    if(params.swapChainFormat == Format::RGBA8_UNORM)
+        return Format::BGRA8_UNORM;
+    return params.swapChainFormat;
+}
+
 static bool SupportsRequestedValue(VkBool32 requested, VkBool32 supported){
     return requested != VK_TRUE || supported == VK_TRUE;
 }
@@ -204,21 +215,16 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL VulkanDebugCallback(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static GraphicsAllocator& RequireAllocator(const DeviceCreationParameters& params){
-    NWB_ASSERT_MSG(params.allocator, NWB_TEXT("Backend requires a valid GraphicsAllocator"));
-    return *params.allocator;
-}
-
-static Alloc::ThreadPool& RequireThreadPool(const DeviceCreationParameters& params){
-    NWB_ASSERT_MSG(params.threadPool, NWB_TEXT("Backend requires a valid worker ThreadPool"));
-    return *params.threadPool;
-}
-
-
-Backend::Backend(DeviceCreationParameters& params)
+Backend::Backend(
+    const DeviceCreationParameters& params,
+    SwapChainRuntimeState& swapChainState,
+    GraphicsAllocator& allocator,
+    Alloc::ThreadPool& threadPool
+)
     : m_deviceParams(params)
-    , m_allocator(RequireAllocator(params))
-    , m_threadPool(RequireThreadPool(params))
+    , m_swapChainState(swapChainState)
+    , m_allocator(allocator)
+    , m_threadPool(threadPool)
     , m_arena(m_allocator.getObjectArena())
     , m_enabledExtensions(m_arena)
     , m_optionalExtensions(m_arena)
@@ -359,7 +365,7 @@ void Backend::resizeSwapChain(){
             }
         }
 
-        const usize requiredAcquireSemaphores = Max<usize>(m_deviceParams.maxFramesInFlight, m_swapChainImages.size());
+        const usize requiredAcquireSemaphores = Max<usize>(m_maxFramesInFlight, m_swapChainImages.size());
         if(m_acquireSemaphores.size() != requiredAcquireSemaphores){
             if(!recreateSemaphores(m_acquireSemaphores, requiredAcquireSemaphores, "recreate acquire semaphores during resize")){
                 clearSemaphores(m_presentSemaphores);
@@ -684,8 +690,8 @@ bool Backend::findQueueFamilies(VkPhysicalDevice physicalDevice){
 }
 
 bool Backend::pickPhysicalDevice(){
-    VkFormat requestedFormat = __hidden_vulkan::ConvertFormat(m_deviceParams.swapChainFormat);
-    VkExtent2D requestedExtent = { m_deviceParams.backBufferWidth, m_deviceParams.backBufferHeight };
+    VkFormat requestedFormat = __hidden_vulkan::ConvertFormat(m_swapChainState.backBufferFormat);
+    VkExtent2D requestedExtent = { m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight };
 
     VkResult res = VK_SUCCESS;
 
@@ -1254,7 +1260,7 @@ bool Backend::createVulkanSwapChain(){
 
     destroySwapChain();
 
-    m_swapChainFormat.format = __hidden_vulkan::ConvertFormat(m_deviceParams.swapChainFormat);
+    m_swapChainFormat.format = __hidden_vulkan::ConvertFormat(m_swapChainState.backBufferFormat);
     m_swapChainFormat.colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 
     VkSurfaceCapabilitiesKHR surfaceCaps{};
@@ -1269,16 +1275,16 @@ bool Backend::createVulkanSwapChain(){
         extent = surfaceCaps.currentExtent;
     }
     else{
-        extent.width = Max(surfaceCaps.minImageExtent.width, Min(surfaceCaps.maxImageExtent.width, m_deviceParams.backBufferWidth));
-        extent.height = Max(surfaceCaps.minImageExtent.height, Min(surfaceCaps.maxImageExtent.height, m_deviceParams.backBufferHeight));
+        extent.width = Max(surfaceCaps.minImageExtent.width, Min(surfaceCaps.maxImageExtent.width, m_swapChainState.backBufferWidth));
+        extent.height = Max(surfaceCaps.minImageExtent.height, Min(surfaceCaps.maxImageExtent.height, m_swapChainState.backBufferHeight));
     }
     if(extent.width == 0 || extent.height == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Surface extent is invalid ({}x{})."), extent.width, extent.height);
         return false;
     }
 
-    m_deviceParams.backBufferWidth = extent.width;
-    m_deviceParams.backBufferHeight = extent.height;
+    m_swapChainState.backBufferWidth = extent.width;
+    m_swapChainState.backBufferHeight = extent.height;
 
     uint32_t presentModeCount = 0;
     res = vkGetPhysicalDeviceSurfacePresentModesKHR(m_vulkanPhysicalDevice, m_windowSurface, &presentModeCount, nullptr);
@@ -1296,7 +1302,7 @@ bool Backend::createVulkanSwapChain(){
         return false;
     }
 
-    const VkPresentModeKHR requestedPresentMode = m_deviceParams.vsyncEnabled ? VK_PRESENT_MODE_FIFO_KHR : VK_PRESENT_MODE_IMMEDIATE_KHR;
+    const VkPresentModeKHR requestedPresentMode = m_swapChainState.vsyncEnabled ? VK_PRESENT_MODE_FIFO_KHR : VK_PRESENT_MODE_IMMEDIATE_KHR;
     VkPresentModeKHR selectedPresentMode = requestedPresentMode;
     bool presentModeFound = false;
     for(const auto& mode : presentModes){
@@ -1440,9 +1446,9 @@ bool Backend::createVulkanSwapChain(){
         sci.image = image;
 
         TextureDesc textureDesc;
-        textureDesc.width = m_deviceParams.backBufferWidth;
-        textureDesc.height = m_deviceParams.backBufferHeight;
-        textureDesc.format = m_deviceParams.swapChainFormat;
+        textureDesc.width = m_swapChainState.backBufferWidth;
+        textureDesc.height = m_swapChainState.backBufferHeight;
+        textureDesc.format = m_swapChainState.backBufferFormat;
         textureDesc.initialState = ResourceStates::Present;
         textureDesc.keepInitialState = true;
         textureDesc.isRenderTarget = true;
@@ -1480,9 +1486,10 @@ bool Backend::createDevice(){
     if(m_deviceParams.enableDebugRuntime)
         installDebugCallback();
 
-    if(m_deviceParams.maxFramesInFlight == 0){
+    m_maxFramesInFlight = m_deviceParams.maxFramesInFlight;
+    if(m_maxFramesInFlight == 0){
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: maxFramesInFlight was 0; clamping to 1."));
-        m_deviceParams.maxFramesInFlight = 1;
+        m_maxFramesInFlight = 1;
     }
 
     for(const auto& name : m_deviceParams.requiredVulkanDeviceExtensions)
@@ -1490,12 +1497,8 @@ bool Backend::createDevice(){
     for(const auto& name : m_deviceParams.optionalVulkanDeviceExtensions)
         m_optionalExtensions.device.insert({ name, DeviceExtensionFeature::None });
 
+    m_swapChainState.backBufferFormat = __hidden_vulkan::GetBackBufferFormat(m_deviceParams);
     if(!m_deviceParams.headlessDevice){
-        if(m_deviceParams.swapChainFormat == Format::RGBA8_UNORM_SRGB)
-            m_deviceParams.swapChainFormat = Format::BGRA8_UNORM_SRGB;
-        else if(m_deviceParams.swapChainFormat == Format::RGBA8_UNORM)
-            m_deviceParams.swapChainFormat = Format::BGRA8_UNORM;
-
         if(!createWindowSurface())
             return false;
     }
@@ -1556,8 +1559,8 @@ bool Backend::createSwapChain(){
         return false;
     }
 
-    usize const numAcquireSemaphores = (m_deviceParams.maxFramesInFlight > m_swapChainImages.size())
-        ? m_deviceParams.maxFramesInFlight : m_swapChainImages.size();
+    usize const numAcquireSemaphores = (m_maxFramesInFlight > m_swapChainImages.size())
+        ? m_maxFramesInFlight : m_swapChainImages.size();
     if(!recreateSemaphores(m_acquireSemaphores, numAcquireSemaphores, "create acquire semaphores")){
         clearSemaphores(m_presentSemaphores);
         destroySwapChain();
@@ -1656,12 +1659,12 @@ bool Backend::beginFrame(const BackBufferResizeCallbacks& callbacks){
             }
 
             if(surfaceCaps.currentExtent.width != UINT32_MAX && surfaceCaps.currentExtent.height != UINT32_MAX){
-                m_deviceParams.backBufferWidth = surfaceCaps.currentExtent.width;
-                m_deviceParams.backBufferHeight = surfaceCaps.currentExtent.height;
+                m_swapChainState.backBufferWidth = surfaceCaps.currentExtent.width;
+                m_swapChainState.backBufferHeight = surfaceCaps.currentExtent.height;
             }
             else{
-                m_deviceParams.backBufferWidth = Max(surfaceCaps.minImageExtent.width, Min(surfaceCaps.maxImageExtent.width, m_deviceParams.backBufferWidth));
-                m_deviceParams.backBufferHeight = Max(surfaceCaps.minImageExtent.height, Min(surfaceCaps.maxImageExtent.height, m_deviceParams.backBufferHeight));
+                m_swapChainState.backBufferWidth = Max(surfaceCaps.minImageExtent.width, Min(surfaceCaps.maxImageExtent.width, m_swapChainState.backBufferWidth));
+                m_swapChainState.backBufferHeight = Max(surfaceCaps.minImageExtent.height, Min(surfaceCaps.maxImageExtent.height, m_swapChainState.backBufferHeight));
             }
 
             resizeSwapChain();
@@ -1719,7 +1722,7 @@ bool Backend::present(){
         return false;
     }
 
-    while(m_framesInFlight.size() >= m_deviceParams.maxFramesInFlight){
+    while(m_framesInFlight.size() >= m_maxFramesInFlight){
         auto query = m_framesInFlight.front();
         m_framesInFlight.pop();
         m_rhiDevice->waitEventQuery(query.get());

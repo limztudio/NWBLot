@@ -72,7 +72,12 @@ private:
 
 
 public:
-    explicit Backend(DeviceCreationParameters& params);
+    Backend(
+        const DeviceCreationParameters& params,
+        SwapChainRuntimeState& swapChainState,
+        GraphicsAllocator& allocator,
+        Alloc::ThreadPool& threadPool
+    );
 
 
 public:
@@ -155,7 +160,8 @@ private:
 
 
 private:
-    DeviceCreationParameters& m_deviceParams;
+    const DeviceCreationParameters& m_deviceParams;
+    SwapChainRuntimeState& m_swapChainState;
     GraphicsAllocator& m_allocator;
     Alloc::ThreadPool& m_threadPool;
     Alloc::CustomArena& m_arena;
@@ -201,6 +207,7 @@ private:
 
     ::Queue<EventQueryHandle, Alloc::CustomAllocator<EventQueryHandle>> m_framesInFlight;
     Vector<EventQueryHandle, Alloc::CustomAllocator<EventQueryHandle>> m_queryPool;
+    u32 m_maxFramesInFlight = s_MaxFramesInFlight;
 
     bool m_bufferDeviceAddressSupported = false;
     bool m_dynamicRenderingSupported = false;

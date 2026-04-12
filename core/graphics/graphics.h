@@ -178,6 +178,7 @@ private:
     Alloc::ThreadPool& m_threadPool;
     Alloc::JobSystem& m_jobSystem;
     DeviceCreationParameters m_deviceCreationParams;
+    SwapChainRuntimeState m_swapChainState;
 
 private:
     UniquePtr<Vulkan::Backend> m_backend;

@@ -114,10 +114,9 @@ Graphics::Graphics(GraphicsAllocator& allocator, Alloc::ThreadPool& threadPool, 
     , m_threadPool(threadPool)
     , m_jobSystem(jobSystem)
 {
-    m_deviceCreationParams.allocator = &m_allocator;
-    m_deviceCreationParams.threadPool = &m_threadPool;
+    m_swapChainState.backBufferFormat = m_deviceCreationParams.swapChainFormat;
     __hidden_graphics::AddVulkanDeviceExtensionOnce(m_deviceCreationParams.optionalVulkanDeviceExtensions, "VK_NV_cooperative_vector");
-    m_backend.reset(new Vulkan::Backend(m_deviceCreationParams));
+    m_backend.reset(new Vulkan::Backend(m_deviceCreationParams, m_swapChainState, m_allocator, m_threadPool));
     NWB_FATAL_ASSERT_MSG(m_backend != nullptr, NWB_TEXT("Graphics: Vulkan backend creation failed."));
 }
 Graphics::~Graphics(){
@@ -126,7 +125,7 @@ Graphics::~Graphics(){
 
 Vulkan::Backend& Graphics::ensureBackend(){
     if(!m_backend)
-        m_backend.reset(new Vulkan::Backend(m_deviceCreationParams));
+        m_backend.reset(new Vulkan::Backend(m_deviceCreationParams, m_swapChainState, m_allocator, m_threadPool));
 
     NWB_FATAL_ASSERT_MSG(m_backend != nullptr, NWB_TEXT("Graphics: Vulkan backend creation failed."));
     return *m_backend;
@@ -141,8 +140,9 @@ bool Graphics::init(const Common::FrameData& data){
     m_deviceCreationParams.headlessDevice = false;
     m_hasPresentedFrame = false;
 
-    m_deviceCreationParams.backBufferWidth = data.width();
-    m_deviceCreationParams.backBufferHeight = data.height();
+    m_swapChainState.backBufferWidth = data.width();
+    m_swapChainState.backBufferHeight = data.height();
+    m_swapChainState.backBufferFormat = m_deviceCreationParams.swapChainFormat;
 
     Vulkan::Backend& backend = ensureBackend();
     backend.setPlatformFrameParam(data.frameParam());
@@ -159,8 +159,8 @@ bool Graphics::init(const Common::FrameData& data){
     if(!backend.createSwapChain())
         return false;
 
-    m_deviceCreationParams.backBufferWidth = 0;
-    m_deviceCreationParams.backBufferHeight = 0;
+    m_swapChainState.backBufferWidth = 0;
+    m_swapChainState.backBufferHeight = 0;
     updateWindowState(data.width(), data.height(), true, true);
     m_previousFrameTimestamp = TimerNow();
 
@@ -219,22 +219,22 @@ void Graphics::updateWindowState(u32 width, u32 height, bool windowVisible, bool
     }
 
     if(
-        static_cast<i32>(m_deviceCreationParams.backBufferWidth) != static_cast<i32>(width)
-        || static_cast<i32>(m_deviceCreationParams.backBufferHeight) != static_cast<i32>(height)
-        || (m_deviceCreationParams.vsyncEnabled != m_requestedVSync && getGraphicsAPI() == GraphicsAPI::VULKAN)
+        static_cast<i32>(m_swapChainState.backBufferWidth) != static_cast<i32>(width)
+        || static_cast<i32>(m_swapChainState.backBufferHeight) != static_cast<i32>(height)
+        || (m_swapChainState.vsyncEnabled != m_requestedVSync && getGraphicsAPI() == GraphicsAPI::VULKAN)
     )
     {
         backBufferResizing();
 
-        m_deviceCreationParams.backBufferWidth = width;
-        m_deviceCreationParams.backBufferHeight = height;
-        m_deviceCreationParams.vsyncEnabled = m_requestedVSync;
+        m_swapChainState.backBufferWidth = width;
+        m_swapChainState.backBufferHeight = height;
+        m_swapChainState.vsyncEnabled = m_requestedVSync;
 
         requireBackend().resizeSwapChain();
         backBufferResized();
     }
 
-    m_deviceCreationParams.vsyncEnabled = m_requestedVSync;
+    m_swapChainState.vsyncEnabled = m_requestedVSync;
 }
 
 void Graphics::destroy(){
@@ -265,7 +265,7 @@ void Graphics::addRenderPassToFront(IRenderPass& pass){
     m_renderPasses.push_front(&pass);
 
     pass.backBufferResizing();
-    pass.backBufferResized(m_deviceCreationParams.backBufferWidth, m_deviceCreationParams.backBufferHeight, m_deviceCreationParams.swapChainSampleCount);
+    pass.backBufferResized(m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight, m_deviceCreationParams.swapChainSampleCount);
 }
 
 void Graphics::addRenderPassToBack(IRenderPass& pass){
@@ -273,7 +273,7 @@ void Graphics::addRenderPassToBack(IRenderPass& pass){
     m_renderPasses.push_back(&pass);
 
     pass.backBufferResizing();
-    pass.backBufferResized(m_deviceCreationParams.backBufferWidth, m_deviceCreationParams.backBufferHeight, m_deviceCreationParams.swapChainSampleCount);
+    pass.backBufferResized(m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight, m_deviceCreationParams.swapChainSampleCount);
 }
 
 void Graphics::removeRenderPass(IRenderPass& pass){
@@ -293,7 +293,7 @@ f64 Graphics::getPreviousFrameTimestamp()const{
 }
 
 bool Graphics::isVsyncEnabled()const{
-    return m_deviceCreationParams.vsyncEnabled;
+    return m_swapChainState.vsyncEnabled;
 }
 
 void Graphics::setVSyncEnabled(bool enabled){
@@ -304,8 +304,8 @@ void Graphics::reportLiveObjects()const{
 }
 
 void Graphics::getWindowDimensions(i32& width, i32& height)const{
-    width = m_deviceCreationParams.backBufferWidth;
-    height = m_deviceCreationParams.backBufferHeight;
+    width = m_swapChainState.backBufferWidth;
+    height = m_swapChainState.backBufferHeight;
 }
 
 void Graphics::getDPIScaleInfo(f32& x, f32& y)const{
@@ -453,14 +453,14 @@ void Graphics::backBufferResizing(){
 
 void Graphics::backBufferResized(){
     for(auto* renderPass : m_renderPasses)
-        renderPass->backBufferResized(m_deviceCreationParams.backBufferWidth, m_deviceCreationParams.backBufferHeight, m_deviceCreationParams.swapChainSampleCount);
+        renderPass->backBufferResized(m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight, m_deviceCreationParams.swapChainSampleCount);
 
     const u32 backBufferCount = getBackBufferCount();
     m_swapChainFramebuffers.resize(backBufferCount);
     for(u32 index = 0; index < backBufferCount; ++index)
         m_swapChainFramebuffers[index] = getDevice()->createFramebuffer(FramebufferDesc().addColorAttachment(getBackBuffer(index)));
 
-    NWB_LOGGER_INFO(NWB_TEXT("Graphics: Back buffer resized to {}x{}"), m_deviceCreationParams.backBufferWidth, m_deviceCreationParams.backBufferHeight);
+    NWB_LOGGER_INFO(NWB_TEXT("Graphics: Back buffer resized to {}x{}"), m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight);
 }
 
 void Graphics::displayScaleChanged(){

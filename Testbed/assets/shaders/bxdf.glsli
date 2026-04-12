@@ -14,8 +14,6 @@ vec3 nwbProjectApplyBxdf(vec3 color){
     return color;
 #elif NWB_PROJECT_BXDF == 1
     return sqrt(max(color, vec3(0.0)));
-#elif NWB_PROJECT_BXDF == 2
-    return color * color;
 #else
     return color;
 #endif

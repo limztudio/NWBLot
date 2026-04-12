@@ -877,8 +877,14 @@ void CommandList::drawIndexed(const DrawArguments& args){
         return;
     }
 
-    const u64 indexByteOffset = static_cast<u64>(m_currentGraphicsState.indexBuffer.offset)
-        + static_cast<u64>(args.startIndexLocation) * indexSizeBytes;
+    const u64 startIndexByteOffset = static_cast<u64>(args.startIndexLocation) * indexSizeBytes;
+    if(static_cast<u64>(m_currentGraphicsState.indexBuffer.offset) > Limit<u64>::s_Max - startIndexByteOffset){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to draw indexed: index byte offset overflows"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to draw indexed: index byte offset overflows"));
+        return;
+    }
+
+    const u64 indexByteOffset = static_cast<u64>(m_currentGraphicsState.indexBuffer.offset) + startIndexByteOffset;
     const u64 indexByteSize = static_cast<u64>(args.vertexCount) * indexSizeBytes;
     if(!__hidden_vulkan::IsBufferRangeInBounds(ib->m_desc, indexByteOffset, indexByteSize)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to draw indexed: requested index range is outside the index buffer"));

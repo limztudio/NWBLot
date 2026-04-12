@@ -172,9 +172,15 @@ void CommandList::copyTextureToBuffer(IBuffer* _dest, u64 destOffsetBytes, u32 d
         return;
     }
 
-    const u32 blocksX = Max<u32>((resolvedSrc.width + formatInfo.blockSize - 1) / formatInfo.blockSize, 1u);
-    const u32 blocksY = Max<u32>((resolvedSrc.height + formatInfo.blockSize - 1) / formatInfo.blockSize, 1u);
-    const u64 naturalRowPitch = static_cast<u64>(blocksX) * formatInfo.bytesPerBlock;
+    const u64 blocksX = Max<u64>((static_cast<u64>(resolvedSrc.width) + formatInfo.blockSize - 1u) / formatInfo.blockSize, 1ull);
+    const u64 blocksY = Max<u64>((static_cast<u64>(resolvedSrc.height) + formatInfo.blockSize - 1u) / formatInfo.blockSize, 1ull);
+    if(blocksX > Limit<u64>::s_Max / formatInfo.bytesPerBlock){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to buffer: natural row pitch overflows"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to buffer: natural row pitch overflows"));
+        return;
+    }
+
+    const u64 naturalRowPitch = blocksX * formatInfo.bytesPerBlock;
     if(destRowPitch > 0 && (destRowPitch < naturalRowPitch || (destRowPitch % formatInfo.bytesPerBlock) != 0)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to buffer: invalid row pitch"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to buffer: invalid row pitch"));

@@ -943,17 +943,23 @@ void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, co
         return;
     }
 
-    const u32 blockWidth = (width + formatInfo.blockSize - 1) / formatInfo.blockSize;
-    const u32 blockHeight = (height + formatInfo.blockSize - 1) / formatInfo.blockSize;
-    const usize naturalRowPitch = static_cast<usize>(blockWidth) * formatInfo.bytesPerBlock;
-    const usize effectiveRowPitch = rowPitch != 0 ? rowPitch : naturalRowPitch;
-    if(blockHeight > UINT64_MAX / effectiveRowPitch){
+    const u64 blockWidth = (static_cast<u64>(width) + formatInfo.blockSize - 1u) / formatInfo.blockSize;
+    const u64 blockHeight = (static_cast<u64>(height) + formatInfo.blockSize - 1u) / formatInfo.blockSize;
+    if(blockWidth > Limit<u64>::s_Max / formatInfo.bytesPerBlock){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write texture: natural row pitch overflows"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to write texture: natural row pitch overflows"));
+        return;
+    }
+
+    const u64 naturalRowPitch = blockWidth * formatInfo.bytesPerBlock;
+    const u64 effectiveRowPitch = rowPitch != 0 ? static_cast<u64>(rowPitch) : naturalRowPitch;
+    if(effectiveRowPitch == 0 || blockHeight > UINT64_MAX / effectiveRowPitch){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write texture: texture pitch size overflows"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to write texture: texture pitch size overflows"));
         return;
     }
-    const usize packedSlicePitch = effectiveRowPitch * blockHeight;
-    const usize effectiveDepthPitch = depthPitch != 0 ? depthPitch : packedSlicePitch;
+    const u64 packedSlicePitch = effectiveRowPitch * blockHeight;
+    const u64 effectiveDepthPitch = depthPitch != 0 ? static_cast<u64>(depthPitch) : packedSlicePitch;
 
     if(effectiveRowPitch < naturalRowPitch || (effectiveRowPitch % formatInfo.bytesPerBlock) != 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write texture: invalid row pitch"));
@@ -967,15 +973,15 @@ void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, co
         return;
     }
 
-    const usize bufferRowBlocks = effectiveRowPitch / formatInfo.bytesPerBlock;
-    const usize bufferImageBlocks = effectiveDepthPitch / effectiveRowPitch;
+    const u64 bufferRowBlocks = effectiveRowPitch / formatInfo.bytesPerBlock;
+    const u64 bufferImageBlocks = effectiveDepthPitch / effectiveRowPitch;
     if(bufferRowBlocks > UINT64_MAX / formatInfo.blockSize || bufferImageBlocks > UINT64_MAX / formatInfo.blockSize){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write texture: row pitch or depth pitch exceeds Vulkan buffer image copy limits"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to write texture: row pitch or depth pitch exceeds Vulkan buffer image copy limits"));
         return;
     }
-    const usize bufferRowLength = bufferRowBlocks * formatInfo.blockSize;
-    const usize bufferImageHeight = bufferImageBlocks * formatInfo.blockSize;
+    const u64 bufferRowLength = bufferRowBlocks * formatInfo.blockSize;
+    const u64 bufferImageHeight = bufferImageBlocks * formatInfo.blockSize;
     if(bufferRowLength > UINT32_MAX || bufferImageHeight > UINT32_MAX){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write texture: row pitch or depth pitch exceeds Vulkan buffer image copy limits"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to write texture: row pitch or depth pitch exceeds Vulkan buffer image copy limits"));
@@ -990,6 +996,11 @@ void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, co
     const u64 dataSize = depth > 1
         ? static_cast<u64>(effectiveDepthPitch) * (depth - 1) + packedSlicePitch
         : packedSlicePitch;
+    if(dataSize > static_cast<u64>(Limit<usize>::s_Max)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write texture: upload size exceeds addressable memory"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to write texture: upload size exceeds addressable memory"));
+        return;
+    }
 
     UploadManager* uploadMgr = m_device.m_uploadManager.get();
     Buffer* stagingBuffer = nullptr;

@@ -29,6 +29,8 @@ bool IsBufferRangeInBounds(const BufferDesc& desc, u64 offsetBytes, u64 sizeByte
 bool BufferRangesOverlap(u64 firstOffsetBytes, u64 firstSizeBytes, u64 secondOffsetBytes, u64 secondSizeBytes){
     if(firstSizeBytes == 0 || secondSizeBytes == 0)
         return false;
+    if(firstSizeBytes > Limit<u64>::s_Max - firstOffsetBytes || secondSizeBytes > Limit<u64>::s_Max - secondOffsetBytes)
+        return true;
 
     const u64 firstEnd = firstOffsetBytes + firstSizeBytes;
     const u64 secondEnd = secondOffsetBytes + secondSizeBytes;

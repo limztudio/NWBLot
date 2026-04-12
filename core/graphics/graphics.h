@@ -18,9 +18,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace Vulkan{
-    class Backend;
-};
+class IGraphicsBackend;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -159,8 +157,8 @@ public:
 
 
 private:
-    [[nodiscard]] Vulkan::Backend& ensureBackend();
-    [[nodiscard]] Vulkan::Backend& requireBackend()const noexcept;
+    [[nodiscard]] IGraphicsBackend& ensureBackend();
+    [[nodiscard]] IGraphicsBackend& requireBackend()const noexcept;
     [[nodiscard]] bool shouldRenderUnfocused()const;
 
     void backBufferResizing();
@@ -182,7 +180,7 @@ private:
     SwapChainRuntimeState m_swapChainState;
 
 private:
-    UniquePtr<Vulkan::Backend> m_backend;
+    UniquePtr<IGraphicsBackend> m_backend;
 
     bool m_skipRenderOnFirstFrame = false;
     bool m_hasPresentedFrame = false;

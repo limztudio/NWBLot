@@ -27,6 +27,7 @@ target_sources(nwb_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_shader_compiler.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/basic.h"
     "${CMAKE_CURRENT_LIST_DIR}/common.h"
+    "${CMAKE_CURRENT_LIST_DIR}/graphics_backend.h"
     "${CMAKE_CURRENT_LIST_DIR}/graphics.h"
     "${CMAKE_CURRENT_LIST_DIR}/render_pass.h"
     "${CMAKE_CURRENT_LIST_DIR}/shader_archive.h"

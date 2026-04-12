@@ -92,6 +92,16 @@ static void CopyInstanceParameters(DeviceCreationParameters& dst, const Instance
     static_cast<InstanceParameters&>(dst) = src;
 }
 
+static UniquePtr<IGraphicsBackend> CreateDefaultBackend(
+    const DeviceCreationParameters& deviceParams,
+    SwapChainRuntimeState& swapChainState,
+    GraphicsAllocator& allocator,
+    Alloc::ThreadPool& threadPool
+)
+{
+    return UniquePtr<IGraphicsBackend>(new Vulkan::Backend(deviceParams, swapChainState, allocator, threadPool));
+}
+
 constexpr bool IsFp16CoopVecFormat(const CooperativeVectorMatMulFormatCombo& combo){
     return combo.inputType == CooperativeVectorDataType::Float16 &&
            combo.inputInterpretation == CooperativeVectorDataType::Float16 &&
@@ -116,22 +126,22 @@ Graphics::Graphics(GraphicsAllocator& allocator, Alloc::ThreadPool& threadPool, 
 {
     m_swapChainState.backBufferFormat = m_deviceCreationParams.swapChainFormat;
     __hidden_graphics::AddVulkanDeviceExtensionOnce(m_deviceCreationParams.optionalVulkanDeviceExtensions, "VK_NV_cooperative_vector");
-    m_backend.reset(new Vulkan::Backend(m_deviceCreationParams, m_swapChainState, m_allocator, m_threadPool));
+    m_backend = __hidden_graphics::CreateDefaultBackend(m_deviceCreationParams, m_swapChainState, m_allocator, m_threadPool);
     NWB_FATAL_ASSERT_MSG(m_backend != nullptr, NWB_TEXT("Graphics: Vulkan backend creation failed."));
 }
 Graphics::~Graphics(){
     destroy();
 }
 
-Vulkan::Backend& Graphics::ensureBackend(){
+IGraphicsBackend& Graphics::ensureBackend(){
     if(!m_backend)
-        m_backend.reset(new Vulkan::Backend(m_deviceCreationParams, m_swapChainState, m_allocator, m_threadPool));
+        m_backend = __hidden_graphics::CreateDefaultBackend(m_deviceCreationParams, m_swapChainState, m_allocator, m_threadPool);
 
     NWB_FATAL_ASSERT_MSG(m_backend != nullptr, NWB_TEXT("Graphics: Vulkan backend creation failed."));
     return *m_backend;
 }
 
-Vulkan::Backend& Graphics::requireBackend()const noexcept{
+IGraphicsBackend& Graphics::requireBackend()const noexcept{
     NWB_FATAL_ASSERT_MSG(m_backend != nullptr, NWB_TEXT("Graphics requires a valid backend."));
     return *m_backend;
 }
@@ -144,7 +154,7 @@ bool Graphics::init(const Common::FrameData& data){
     m_swapChainState.backBufferHeight = data.height();
     m_swapChainState.backBufferFormat = m_deviceCreationParams.swapChainFormat;
 
-    Vulkan::Backend& backend = ensureBackend();
+    IGraphicsBackend& backend = ensureBackend();
     backend.setPlatformFrameParam(data.frameParam());
 
     if(!m_instanceCreated){
@@ -176,7 +186,7 @@ bool Graphics::createHeadlessDevice(){
     m_deviceCreationParams.headlessDevice = true;
     m_hasPresentedFrame = false;
 
-    Vulkan::Backend& backend = ensureBackend();
+    IGraphicsBackend& backend = ensureBackend();
     if(!m_instanceCreated){
         if(!backend.createInstance())
             return false;
@@ -301,6 +311,8 @@ void Graphics::setVSyncEnabled(bool enabled){
 }
 
 void Graphics::reportLiveObjects()const{
+    if(m_backend)
+        m_backend->reportLiveObjects();
 }
 
 void Graphics::getWindowDimensions(i32& width, i32& height)const{
@@ -526,7 +538,7 @@ bool Graphics::animateRenderPresent(){
         animate(elapsedTime);
 
         if(m_frameIndex > 0 || !m_skipRenderOnFirstFrame){
-            const Vulkan::BackBufferResizeCallbacks resizeCallbacks = {
+            const BackBufferResizeCallbacks resizeCallbacks = {
                 this,
                 &Graphics::BackBufferResizingCallback,
                 &Graphics::BackBufferResizedCallback,

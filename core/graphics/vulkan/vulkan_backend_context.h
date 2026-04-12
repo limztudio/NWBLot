@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include "../graphics_backend.h"
+
 #include "vulkan_backend.h"
 
 
@@ -33,17 +35,7 @@ enum class DeviceExtensionFeature : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct BackBufferResizeCallbacks{
-    void* userData = nullptr;
-    void (*beforeResize)(void*) = nullptr;
-    void (*afterResize)(void*) = nullptr;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class Backend final{
+class Backend final : public IGraphicsBackend{
 private:
     using DeviceExtensionMap = HashMap<AString, DeviceExtensionFeature, Hasher<AString>, EqualTo<AString>, Alloc::CustomAllocator<Pair<const AString, DeviceExtensionFeature>>>;
 
@@ -81,33 +73,33 @@ public:
 
 
 public:
-    [[nodiscard]] IDevice* getDevice()const;
-    [[nodiscard]] GraphicsAPI::Enum getGraphicsAPI()const{ return GraphicsAPI::VULKAN; }
-    [[nodiscard]] const tchar* getRendererString()const;
+    [[nodiscard]] IDevice* getDevice()const override;
+    [[nodiscard]] GraphicsAPI::Enum getGraphicsAPI()const override{ return GraphicsAPI::VULKAN; }
+    [[nodiscard]] const tchar* getRendererString()const override;
 
-    bool enumerateAdapters(Vector<AdapterInfo>& outAdapters);
+    bool enumerateAdapters(Vector<AdapterInfo>& outAdapters)override;
     [[nodiscard]] bool isValidationMessageLocationIgnored(usize location)const;
 
-    bool isVulkanInstanceExtensionEnabled(const char* extensionName)const;
-    bool isVulkanDeviceExtensionEnabled(const char* extensionName)const;
-    bool isVulkanLayerEnabled(const char* layerName)const;
-    void getEnabledVulkanInstanceExtensions(Vector<AString>& extensions)const;
-    void getEnabledVulkanDeviceExtensions(Vector<AString>& extensions)const;
-    void getEnabledVulkanLayers(Vector<AString>& layers)const;
+    bool isVulkanInstanceExtensionEnabled(const char* extensionName)const override;
+    bool isVulkanDeviceExtensionEnabled(const char* extensionName)const override;
+    bool isVulkanLayerEnabled(const char* layerName)const override;
+    void getEnabledVulkanInstanceExtensions(Vector<AString>& extensions)const override;
+    void getEnabledVulkanDeviceExtensions(Vector<AString>& extensions)const override;
+    void getEnabledVulkanLayers(Vector<AString>& layers)const override;
 
-    ITexture* getCurrentBackBuffer();
-    ITexture* getBackBuffer(u32 index);
-    u32 getCurrentBackBufferIndex();
-    u32 getBackBufferCount();
+    ITexture* getCurrentBackBuffer()override;
+    ITexture* getBackBuffer(u32 index)override;
+    u32 getCurrentBackBufferIndex()override;
+    u32 getBackBufferCount()override;
 
-    void setPlatformFrameParam(const Common::FrameParam& frameParam){ m_platformFrameParam = frameParam; }
-    bool createInstance();
-    bool createDevice();
-    bool createSwapChain();
-    void destroy();
-    void resizeSwapChain();
-    bool beginFrame(const BackBufferResizeCallbacks& callbacks);
-    bool present();
+    void setPlatformFrameParam(const Common::FrameParam& frameParam)override{ m_platformFrameParam = frameParam; }
+    bool createInstance()override;
+    bool createDevice()override;
+    bool createSwapChain()override;
+    void destroy()override;
+    void resizeSwapChain()override;
+    bool beginFrame(const BackBufferResizeCallbacks& callbacks)override;
+    bool present()override;
 
 private:
     void initDefaultExtensions();

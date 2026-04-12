@@ -129,7 +129,8 @@ static Core::RenderState BuildGeometryRenderState(){
     renderState.depthStencilState
         .enableDepthTest()
         .enableDepthWrite()
-        .setDepthFunc(Core::ComparisonFunc::LessOrEqual);
+        .setDepthFunc(Core::ComparisonFunc::LessOrEqual)
+    ;
     renderState.rasterState.enableDepthClip();
     return renderState;
 }
@@ -330,7 +331,8 @@ bool RendererSystem::ensureDeferredFrameTargets(Core::IFramebuffer* presentation
         .setFormat(createdTargets.albedoFormat)
         .setInRenderTarget(true)
         .setName("engine/deferred/gbuffer_albedo")
-        .setClearValue(__hidden_ecs_graphics::s_ClearColor);
+        .setClearValue(__hidden_ecs_graphics::s_ClearColor)
+    ;
     createdTargets.albedo = m_graphics.createTexture(albedoDesc);
     if(!createdTargets.albedo){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred albedo target"));
@@ -343,7 +345,8 @@ bool RendererSystem::ensureDeferredFrameTargets(Core::IFramebuffer* presentation
         .setHeight(createdTargets.height)
         .setFormat(createdTargets.depthFormat)
         .setInRenderTarget(true)
-        .setName("engine/deferred/depth");
+        .setName("engine/deferred/depth")
+    ;
     createdTargets.depth = m_graphics.createTexture(depthDesc);
     if(!createdTargets.depth){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred depth target"));
@@ -353,7 +356,8 @@ bool RendererSystem::ensureDeferredFrameTargets(Core::IFramebuffer* presentation
     Core::FramebufferDesc framebufferDesc;
     framebufferDesc
         .addColorAttachment(createdTargets.albedo.get(), __hidden_ecs_graphics::s_FramebufferSubresources)
-        .setDepthAttachment(createdTargets.depth.get(), __hidden_ecs_graphics::s_FramebufferSubresources);
+        .setDepthAttachment(createdTargets.depth.get(), __hidden_ecs_graphics::s_FramebufferSubresources)
+    ;
     createdTargets.framebuffer = device->createFramebuffer(framebufferDesc);
     if(!createdTargets.framebuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred framebuffer"));
@@ -408,7 +412,8 @@ bool RendererSystem::ensureDeferredCompositeResources(){
         Core::SamplerDesc samplerDesc;
         samplerDesc
             .setAllFilters(false)
-            .setAllAddressModes(Core::SamplerAddressMode::Clamp);
+            .setAllAddressModes(Core::SamplerAddressMode::Clamp)
+        ;
         m_deferredSampler = device->createSampler(samplerDesc);
         if(!m_deferredSampler){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred composite sampler"));
@@ -453,7 +458,8 @@ bool RendererSystem::ensureDeferredCompositePipeline(Core::IFramebuffer* present
         .setVertexShader(m_deferredCompositeVertexShader.get())
         .setPixelShader(m_deferredCompositePixelShader.get())
         .setRenderState(__hidden_ecs_graphics::BuildCompositeRenderState())
-        .addBindingLayout(m_deferredCompositeBindingLayout.get());
+        .addBindingLayout(m_deferredCompositeBindingLayout.get())
+    ;
 
     Core::IDevice* device = m_graphics.getDevice();
     m_deferredCompositePipeline = device->createGraphicsPipeline(pipelineDesc, framebufferInfo);
@@ -700,7 +706,8 @@ bool RendererSystem::ensureGeometryLoaded(const Core::Assets::AssetRef<Geometry>
     shaderVertexSetup.bufferDesc
         .setByteSize(static_cast<u64>(geometry.vertexData().size()))
         .setStructStride(geometry.vertexStride())
-        .setDebugName(shaderVertexBufferName);
+        .setDebugName(shaderVertexBufferName)
+    ;
     shaderVertexSetup.data = geometry.vertexData().data();
     shaderVertexSetup.dataSize = geometry.vertexData().size();
     createdGeometry.shaderVertexBuffer = m_graphics.setupBuffer(shaderVertexSetup);
@@ -729,7 +736,8 @@ bool RendererSystem::ensureGeometryLoaded(const Core::Assets::AssetRef<Geometry>
     shaderIndexSetup.bufferDesc
         .setByteSize(static_cast<u64>(expandedIndices.size() * sizeof(u32)))
         .setStructStride(sizeof(u32))
-        .setDebugName(shaderIndexBufferName);
+        .setDebugName(shaderIndexBufferName)
+    ;
     shaderIndexSetup.data = expandedIndices.data();
     shaderIndexSetup.dataSize = expandedIndices.size() * sizeof(u32);
     createdGeometry.shaderIndexBuffer = m_graphics.setupBuffer(shaderIndexSetup);
@@ -804,13 +812,15 @@ bool RendererSystem::ensureComputeEmulationResources(){
             .setBufferIndex(0)
             .setOffset(0)
             .setElementStride(__hidden_ecs_graphics::s_EmulatedVertexStride)
-            .setName("POSITION");
+            .setName("POSITION")
+        ;
         attributes[1]
             .setFormat(Core::Format::RGB32_FLOAT)
             .setBufferIndex(0)
             .setOffset(sizeof(f32) * 4u)
             .setElementStride(__hidden_ecs_graphics::s_EmulatedVertexStride)
-            .setName("COLOR");
+            .setName("COLOR")
+        ;
 
         Core::IDevice* device = m_graphics.getDevice();
         m_emulationInputLayout = device->createInputLayout(attributes, 2, m_emulationVertexShader.get());
@@ -868,7 +878,8 @@ bool RendererSystem::ensureComputeBindingSet(GeometryResources& geometry){
             .setStructStride(__hidden_ecs_graphics::s_EmulatedVertexStride)
             .setCanHaveUAVs(true)
             .setIsVertexBuffer(true)
-            .setDebugName(emulationVertexBufferName);
+            .setDebugName(emulationVertexBufferName)
+        ;
         geometry.emulationVertexBuffer = m_graphics.createBuffer(emulationVertexBufferDesc);
         if(!geometry.emulationVertexBuffer){
             NWB_LOGGER_ERROR(

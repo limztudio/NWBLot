@@ -97,6 +97,18 @@ Updated: 2026-04-09
   - `    : "..."`
   - `)`
   - `;`
+- For standalone multiline fluent/chained call statements, place the trailing `;` on its own line after the final chained call:
+  - Correct:
+  - `pipelineDesc`
+  - `    .setVertexShader(vs)`
+  - `    .setPixelShader(ps)`
+  - `    .addBindingLayout(layout)`
+  - `;`
+  - Wrong:
+  - `pipelineDesc`
+  - `    .setVertexShader(vs)`
+  - `    .setPixelShader(ps)`
+  - `    .addBindingLayout(layout);`
 - Do not use mixed styles like:
   - `foobar(a,`
   - `    b);`

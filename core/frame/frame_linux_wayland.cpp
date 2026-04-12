@@ -1010,11 +1010,8 @@ bool RunWaylandFrame(Frame& frame){
         windowVisible = context->visible && frameData.width() > 0 && frameData.height() > 0;
         windowIsInFocus = frameData.isActive();
 
-        frame.graphics().updateWindowState(frameData.width(), frameData.height(), windowVisible, windowIsInFocus);
-        const tchar* title = frame.graphics().getWindowTitle();
-        if(title && frame.appliedWindowTitle() != title){
-            frame.appliedWindowTitle() = title;
-            xdg_toplevel_set_title(context->toplevel, frame.appliedWindowTitle().c_str());
+        if(const tchar* title = frame.syncGraphicsWindowState(frameData.width(), frameData.height(), windowVisible, windowIsInFocus)){
+            xdg_toplevel_set_title(context->toplevel, title);
             wl_display_flush(context->display);
         }
 

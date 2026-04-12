@@ -591,11 +591,8 @@ bool RunX11Frame(Frame& frame){
         if(!QueryWindowState(frame, width, height, windowVisible, windowIsInFocus))
             return false;
 
-        frame.graphics().updateWindowState(width, height, windowVisible, windowIsInFocus);
-        const tchar* title = frame.graphics().getWindowTitle();
-        if(title && frame.appliedWindowTitle() != title){
-            frame.appliedWindowTitle() = title;
-            XStoreName(GetX11Display(frameData), GetX11Window(frameData), frame.appliedWindowTitle().c_str());
+        if(const tchar* title = frame.syncGraphicsWindowState(width, height, windowVisible, windowIsInFocus)){
+            XStoreName(GetX11Display(frameData), GetX11Window(frameData), title);
             XFlush(GetX11Display(frameData));
         }
 

@@ -2066,8 +2066,7 @@ struct BindingLayoutItem{
         BindingLayoutItem ret{}; \
         ret.slot = slot; \
         ret.type = ResourceType::TYPE_ENUM; \
-        ret.size = 1; \
-        (void)size; \
+        ret.size = static_cast<u16>(size); \
         return ret; \
     }
     NWB_BINDING_LAYOUT_ITEM_INITIALIZER(Texture_SRV)

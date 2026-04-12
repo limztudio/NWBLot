@@ -21,13 +21,13 @@ void main(){
     if(alpha <= 0.0)
         discard;
 
-    const float opaqueDepth = nwbAvboitOpaqueDepth(g_OpaqueDepth, g_PointSampler, gl_FragCoord.xy);
+    const float opaqueDepth = nwbAvboitOpaqueDepthFromLowFragCoord(g_OpaqueDepth, g_PointSampler, gl_FragCoord.xy);
     if(gl_FragCoord.z > opaqueDepth)
         discard;
 
     const uint virtualSlice = nwbAvboitVirtualSliceFromDepth(gl_FragCoord.z);
     const uint physicalSlice = min(g_DepthWarp[virtualSlice], g_Control[0] - 1u);
-    const uvec2 lowPixel = nwbAvboitLowPixelFromFragCoord(gl_FragCoord.xy);
+    const uvec2 lowPixel = nwbAvboitLowPixelFromLowFragCoord(gl_FragCoord.xy);
     const uint volumeIndex = nwbAvboitVolumeIndex(lowPixel, physicalSlice);
     if(volumeIndex >= nwbAvboitVolumeVoxelCount())
         discard;

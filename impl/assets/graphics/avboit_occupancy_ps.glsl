@@ -15,7 +15,7 @@ void main(){
     if(alpha <= 0.0)
         discard;
 
-    const float opaqueDepth = nwbAvboitOpaqueDepth(g_OpaqueDepth, g_PointSampler, gl_FragCoord.xy);
+    const float opaqueDepth = nwbAvboitOpaqueDepthFromLowFragCoord(g_OpaqueDepth, g_PointSampler, gl_FragCoord.xy);
     if(gl_FragCoord.z > opaqueDepth)
         discard;
 

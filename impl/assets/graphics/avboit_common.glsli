@@ -75,9 +75,23 @@ uvec2 nwbAvboitLowPixelFromFragCoord(vec2 fragCoord){
     return min(uvec2(normalized * vec2(float(nwbAvboitLowWidth()), float(nwbAvboitLowHeight()))), uvec2(nwbAvboitLowWidth() - 1u, nwbAvboitLowHeight() - 1u));
 }
 
+vec2 nwbAvboitFullUvFromLowFragCoord(vec2 fragCoord){
+    const vec2 lowSize = max(vec2(float(nwbAvboitLowWidth()), float(nwbAvboitLowHeight())), vec2(1.0));
+    return clamp(fragCoord / lowSize, vec2(0.0), vec2(1.0));
+}
+
+uvec2 nwbAvboitLowPixelFromLowFragCoord(vec2 fragCoord){
+    const vec2 lowMax = vec2(float(nwbAvboitLowWidth() - 1u), float(nwbAvboitLowHeight() - 1u));
+    return uvec2(clamp(fragCoord, vec2(0.0), lowMax));
+}
+
 float nwbAvboitOpaqueDepth(texture2D opaqueDepth, sampler pointSampler, vec2 fragCoord){
     const vec2 uv = clamp(fragCoord / max(vec2(float(nwbAvboitFullWidth()), float(nwbAvboitFullHeight())), vec2(1.0)), vec2(0.0), vec2(1.0));
     return texture(sampler2D(opaqueDepth, pointSampler), uv).r;
+}
+
+float nwbAvboitOpaqueDepthFromLowFragCoord(texture2D opaqueDepth, sampler pointSampler, vec2 fragCoord){
+    return texture(sampler2D(opaqueDepth, pointSampler), nwbAvboitFullUvFromLowFragCoord(fragCoord)).r;
 }
 
 float nwbAvboitExtinctionFromAlpha(float alpha){

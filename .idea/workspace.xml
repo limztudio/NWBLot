@@ -19,12 +19,12 @@
   </component>
   <component name="CMakeRunConfigurationManager">
     <generated>
+      <config projectName="NWBLot" targetName="testbed" />
       <config projectName="NWBLot" targetName="nwb_ecs" />
       <config projectName="NWBLot" targetName="nwb_alloc" />
       <config projectName="NWBLot" targetName="nwb_assets_graphics" />
-      <config projectName="NWBLot" targetName="testbed" />
-      <config projectName="NWBLot" targetName="nwb_logserver" />
       <config projectName="NWBLot" targetName="nwb_vendor_volk" />
+      <config projectName="NWBLot" targetName="nwb_logserver" />
       <config projectName="NWBLot" targetName="nwb_graphics_cook" />
       <config projectName="NWBLot" targetName="nwb_loader" />
       <config projectName="NWBLot" targetName="nwb_assets" />
@@ -33,37 +33,36 @@
       <config projectName="NWBLot" targetName="nwb_assets_graphics_cook" />
       <config projectName="NWBLot" targetName="nwb_frame" />
       <config projectName="NWBLot" targetName="nwb_logclient" />
+      <config projectName="NWBLot" targetName="nwb_vendor_tbbmalloc" />
+      <config projectName="NWBLot" targetName="nwb_vendor_tbb" />
       <config projectName="NWBLot" targetName="nwb_ecs_graphics" />
       <config projectName="NWBLot" targetName="nwb_metascript" />
+      <config projectName="NWBLot" targetName="nwb_vendor_zlib" />
       <config projectName="NWBLot" targetName="nwb_graphics" />
+      <config projectName="NWBLot" targetName="nwb_vendor_curl" />
+      <config projectName="NWBLot" targetName="nwb_vendor_microhttpd" />
       <config projectName="NWBLot" targetName="nwb_filesystem" />
     </generated>
   </component>
   <component name="CMakeSettings">
     <configurations>
-      <configuration PROFILE_NAME="linux-clang-x64 - linux-clang-dbg" ENABLED="true" FROM_PRESET="true" GENERATION_DIR="$PROJECT_DIR$/__cmake/build/linux-clang-x64" />
-      <configuration PROFILE_NAME="linux-clang-x64 - linux-clang-opt" ENABLED="true" FROM_PRESET="true" GENERATION_DIR="$PROJECT_DIR$/__cmake/build/linux-clang-x64" />
-      <configuration PROFILE_NAME="linux-clang-x64 - linux-clang-fin" ENABLED="true" FROM_PRESET="true" GENERATION_DIR="$PROJECT_DIR$/__cmake/build/linux-clang-x64" />
-      <configuration PROFILE_NAME="linux-clang-x64" ENABLED="false" FROM_PRESET="true" GENERATION_DIR="$PROJECT_DIR$/__cmake/build/linux-clang-x64" />
-      <configuration PROFILE_NAME="linux-clang-engine-x64" ENABLED="false" FROM_PRESET="true" GENERATION_DIR="$PROJECT_DIR$/__cmake/build/linux-clang-engine-x64" />
-      <configuration PROFILE_NAME="linux-clang-testbed-x64" ENABLED="false" FROM_PRESET="true" GENERATION_DIR="$PROJECT_DIR$/__cmake/build/linux-clang-testbed-x64" />
-      <configuration PROFILE_NAME="linux-clang-engine-x64 - linux-clang-engine-dbg" ENABLED="false" FROM_PRESET="true" GENERATION_DIR="$PROJECT_DIR$/__cmake/build/linux-clang-engine-x64" />
-      <configuration PROFILE_NAME="linux-clang-engine-x64 - linux-clang-engine-opt" ENABLED="false" FROM_PRESET="true" GENERATION_DIR="$PROJECT_DIR$/__cmake/build/linux-clang-engine-x64" />
-      <configuration PROFILE_NAME="linux-clang-engine-x64 - linux-clang-engine-fin" ENABLED="false" FROM_PRESET="true" GENERATION_DIR="$PROJECT_DIR$/__cmake/build/linux-clang-engine-x64" />
-      <configuration PROFILE_NAME="linux-clang-testbed-x64 - linux-clang-testbed-dbg" ENABLED="false" FROM_PRESET="true" GENERATION_DIR="$PROJECT_DIR$/__cmake/build/linux-clang-testbed-x64" />
-      <configuration PROFILE_NAME="linux-clang-testbed-x64 - linux-clang-testbed-opt" ENABLED="false" FROM_PRESET="true" GENERATION_DIR="$PROJECT_DIR$/__cmake/build/linux-clang-testbed-x64" />
-      <configuration PROFILE_NAME="linux-clang-testbed-x64 - linux-clang-testbed-fin" ENABLED="false" FROM_PRESET="true" GENERATION_DIR="$PROJECT_DIR$/__cmake/build/linux-clang-testbed-x64" />
+      <configuration PROFILE_NAME="windows-clang-testbed-x64 - windows-clang-testbed-dbg" ENABLED="true" FROM_PRESET="true" GENERATION_DIR="$PROJECT_DIR$/__cmake/build/windows-clang-testbed-x64" />
+      <configuration PROFILE_NAME="windows-clang-testbed-x64 - windows-clang-testbed-opt" ENABLED="true" FROM_PRESET="true" GENERATION_DIR="$PROJECT_DIR$/__cmake/build/windows-clang-testbed-x64" />
+      <configuration PROFILE_NAME="windows-clang-testbed-x64 - windows-clang-testbed-fin" ENABLED="true" FROM_PRESET="true" GENERATION_DIR="$PROJECT_DIR$/__cmake/build/windows-clang-testbed-x64" />
+      <configuration PROFILE_NAME="windows-clang-x64" ENABLED="false" FROM_PRESET="true" GENERATION_DIR="$PROJECT_DIR$/__cmake/build/windows-clang-x64" />
+      <configuration PROFILE_NAME="windows-clang-engine-x64" ENABLED="false" FROM_PRESET="true" GENERATION_DIR="$PROJECT_DIR$/__cmake/build/windows-clang-engine-x64" />
+      <configuration PROFILE_NAME="windows-clang-testbed-x64" ENABLED="false" FROM_PRESET="true" GENERATION_DIR="$PROJECT_DIR$/__cmake/build/windows-clang-testbed-x64" />
+      <configuration PROFILE_NAME="windows-clang-x64 - windows-clang-dbg" ENABLED="false" FROM_PRESET="true" GENERATION_DIR="$PROJECT_DIR$/__cmake/build/windows-clang-x64" />
+      <configuration PROFILE_NAME="windows-clang-x64 - windows-clang-opt" ENABLED="false" FROM_PRESET="true" GENERATION_DIR="$PROJECT_DIR$/__cmake/build/windows-clang-x64" />
+      <configuration PROFILE_NAME="windows-clang-x64 - windows-clang-fin" ENABLED="false" FROM_PRESET="true" GENERATION_DIR="$PROJECT_DIR$/__cmake/build/windows-clang-x64" />
+      <configuration PROFILE_NAME="windows-clang-engine-x64 - windows-clang-engine-dbg" ENABLED="false" FROM_PRESET="true" GENERATION_DIR="$PROJECT_DIR$/__cmake/build/windows-clang-engine-x64" />
+      <configuration PROFILE_NAME="windows-clang-engine-x64 - windows-clang-engine-opt" ENABLED="false" FROM_PRESET="true" GENERATION_DIR="$PROJECT_DIR$/__cmake/build/windows-clang-engine-x64" />
+      <configuration PROFILE_NAME="windows-clang-engine-x64 - windows-clang-engine-fin" ENABLED="false" FROM_PRESET="true" GENERATION_DIR="$PROJECT_DIR$/__cmake/build/windows-clang-engine-x64" />
     </configurations>
   </component>
   <component name="ChangeListManager">
     <list default="true" id="16cb6efc-7504-465a-8233-5acabd0ff4be" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.cozter/sessions/c93aeca0e5be.json" beforeDir="false" afterPath="$PROJECT_DIR$/.cozter/sessions/c93aeca0e5be.json" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/CMakePresets.json" beforeDir="false" afterPath="$PROJECT_DIR$/CMakePresets.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/core/graphics/common.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/core/graphics/common.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/core/graphics/common.h" beforeDir="false" afterPath="$PROJECT_DIR$/core/graphics/common.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/global/filesystem.h" beforeDir="false" afterPath="$PROJECT_DIR$/global/filesystem.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/loader/main.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/loader/main.cpp" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -76,9 +75,10 @@
   <component name="CopilotPersistence">
     <persistenceIdMap>
       <entry key="_A:/Workstation/NWBLot" value="3C27v9YBxMV9kgR5IhELmSt5Q57" />
+      <entry key="_B:/Workstation/NWBLot" value="3CDLshQUCGA9iQ66a6VfoGAafgg" />
     </persistenceIdMap>
   </component>
-  <component name="ExecutionTargetManager" SELECTED_TARGET="CMakeBuildProfile:linux-clang-x64 - linux-clang-dbg" />
+  <component name="ExecutionTargetManager" SELECTED_TARGET="CMakeBuildProfile:windows-clang-testbed-x64 - windows-clang-testbed-dbg" />
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
@@ -100,123 +100,148 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "CMake Application.nwb_logserver.executor": "Run",
-    "CMake Application.testbed.executor": "Run",
-    "Compound Run Configuration.testbed + logserver.executor": "Run",
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "RunOnceActivity.RadMigrateCodeStyle": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.cidr.known.project.marker": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "RunOnceActivity.readMode.enableVisualFormatting": "true",
-    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
-    "RunOnceActivity.west.config.association.type.startup.service": "true",
-    "cf.first.check.clang-format": "false",
-    "cidr.known.project.marker": "true",
-    "codeWithMe.voiceChat.enabledByDefault": "false",
-    "git-widget-placeholder": "main",
-    "ignore.virus.scanning.warn.message": "true",
-    "last_opened_file_path": "A:/Workstation/NWBLot",
-    "nodejs_package_manager_path": "npm",
-    "org.rust.first.attach.projects": "true",
-    "settings.editor.selected.configurable": "preferences.keymap",
-    "vue.rearranger.settings.migration": "true"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;CMake Application.nwb_logserver.executor&quot;: &quot;Run&quot;,
+    &quot;CMake Application.testbed.executor&quot;: &quot;Run&quot;,
+    &quot;Compound Run Configuration.testbed + logserver.executor&quot;: &quot;Run&quot;,
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.RadMigrateCodeStyle&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.cidr.known.project.marker&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.readMode.enableVisualFormatting&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.west.config.association.type.startup.service&quot;: &quot;true&quot;,
+    &quot;cf.first.check.clang-format&quot;: &quot;false&quot;,
+    &quot;cidr.known.project.marker&quot;: &quot;true&quot;,
+    &quot;codeWithMe.voiceChat.enabledByDefault&quot;: &quot;false&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;ignore.virus.scanning.warn.message&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;A:/Workstation/NWBLot&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;org.rust.first.attach.projects&quot;: &quot;true&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.keymap&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   }
-}]]></component>
+}</component>
   <component name="RunManager" selected="Compound.testbed + logserver">
-    <configuration default="true" type="CLionExternalRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true">
-      <method v="2">
-        <option name="CLION.EXTERNAL.BUILD" enabled="true" />
-      </method>
-    </configuration>
-    <configuration name="nwb_alloc" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="NWBLot" TARGET_NAME="nwb_alloc" CONFIG_NAME="linux-clang-x64 - linux-clang-dbg">
+    <configuration default="true" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
-    <configuration name="nwb_assets" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="NWBLot" TARGET_NAME="nwb_assets" CONFIG_NAME="linux-clang-x64 - linux-clang-dbg">
+    <configuration name="nwb_alloc" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="NWBLot" TARGET_NAME="nwb_alloc" CONFIG_NAME="windows-clang-testbed-x64 - windows-clang-testbed-dbg">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
-    <configuration name="nwb_assets_graphics" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="NWBLot" TARGET_NAME="nwb_assets_graphics" CONFIG_NAME="linux-clang-x64 - linux-clang-dbg">
+    <configuration name="nwb_assets" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="NWBLot" TARGET_NAME="nwb_assets" CONFIG_NAME="windows-clang-testbed-x64 - windows-clang-testbed-dbg">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
-    <configuration name="nwb_assets_graphics_cook" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="NWBLot" TARGET_NAME="nwb_assets_graphics_cook" CONFIG_NAME="linux-clang-x64 - linux-clang-dbg">
+    <configuration name="nwb_assets_graphics" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="NWBLot" TARGET_NAME="nwb_assets_graphics" CONFIG_NAME="windows-clang-testbed-x64 - windows-clang-testbed-dbg">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
-    <configuration name="nwb_common" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="NWBLot" TARGET_NAME="nwb_common" CONFIG_NAME="linux-clang-x64 - linux-clang-dbg">
+    <configuration name="nwb_assets_graphics_cook" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="NWBLot" TARGET_NAME="nwb_assets_graphics_cook" CONFIG_NAME="windows-clang-testbed-x64 - windows-clang-testbed-dbg">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
-    <configuration name="nwb_ecs" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="NWBLot" TARGET_NAME="nwb_ecs" CONFIG_NAME="linux-clang-x64 - linux-clang-dbg">
+    <configuration name="nwb_common" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="NWBLot" TARGET_NAME="nwb_common" CONFIG_NAME="windows-clang-testbed-x64 - windows-clang-testbed-dbg">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
-    <configuration name="nwb_ecs_graphics" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="NWBLot" TARGET_NAME="nwb_ecs_graphics" CONFIG_NAME="linux-clang-x64 - linux-clang-dbg">
+    <configuration name="nwb_ecs" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="NWBLot" TARGET_NAME="nwb_ecs" CONFIG_NAME="windows-clang-testbed-x64 - windows-clang-testbed-dbg">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
-    <configuration name="nwb_filesystem" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="NWBLot" TARGET_NAME="nwb_filesystem" CONFIG_NAME="linux-clang-x64 - linux-clang-dbg">
+    <configuration name="nwb_ecs_graphics" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="NWBLot" TARGET_NAME="nwb_ecs_graphics" CONFIG_NAME="windows-clang-testbed-x64 - windows-clang-testbed-dbg">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
-    <configuration name="nwb_frame" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="NWBLot" TARGET_NAME="nwb_frame" CONFIG_NAME="linux-clang-x64 - linux-clang-dbg">
+    <configuration name="nwb_filesystem" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="NWBLot" TARGET_NAME="nwb_filesystem" CONFIG_NAME="windows-clang-testbed-x64 - windows-clang-testbed-dbg">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
-    <configuration name="nwb_graphics" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="NWBLot" TARGET_NAME="nwb_graphics" CONFIG_NAME="linux-clang-x64 - linux-clang-dbg">
+    <configuration name="nwb_frame" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="NWBLot" TARGET_NAME="nwb_frame" CONFIG_NAME="windows-clang-testbed-x64 - windows-clang-testbed-dbg">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
-    <configuration name="nwb_graphics_cook" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="NWBLot" TARGET_NAME="nwb_graphics_cook" CONFIG_NAME="linux-clang-x64 - linux-clang-dbg">
+    <configuration name="nwb_graphics" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="NWBLot" TARGET_NAME="nwb_graphics" CONFIG_NAME="windows-clang-testbed-x64 - windows-clang-testbed-dbg">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
-    <configuration name="nwb_loader" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="NWBLot" TARGET_NAME="nwb_loader" CONFIG_NAME="linux-clang-x64 - linux-clang-dbg">
+    <configuration name="nwb_graphics_cook" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="NWBLot" TARGET_NAME="nwb_graphics_cook" CONFIG_NAME="windows-clang-testbed-x64 - windows-clang-testbed-dbg">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
-    <configuration name="nwb_logclient" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="NWBLot" TARGET_NAME="nwb_logclient" CONFIG_NAME="linux-clang-x64 - linux-clang-dbg">
+    <configuration name="nwb_loader" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="NWBLot" TARGET_NAME="nwb_loader" CONFIG_NAME="windows-clang-testbed-x64 - windows-clang-testbed-dbg">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
-    <configuration name="nwb_logserver" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="NWBLot" TARGET_NAME="nwb_logserver" CONFIG_NAME="linux-clang-x64 - linux-clang-dbg" RUN_TARGET_PROJECT_NAME="NWBLot" RUN_TARGET_NAME="nwb_logserver">
+    <configuration name="nwb_logclient" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="NWBLot" TARGET_NAME="nwb_logclient" CONFIG_NAME="windows-clang-testbed-x64 - windows-clang-testbed-dbg">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
-    <configuration name="nwb_metascript" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="NWBLot" TARGET_NAME="nwb_metascript" CONFIG_NAME="linux-clang-x64 - linux-clang-dbg">
+    <configuration name="nwb_logserver" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="NWBLot" TARGET_NAME="nwb_logserver" CONFIG_NAME="windows-clang-testbed-x64 - windows-clang-testbed-dbg" RUN_TARGET_PROJECT_NAME="NWBLot" RUN_TARGET_NAME="nwb_logserver">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
-    <configuration name="nwb_resource_cooker" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="NWBLot" TARGET_NAME="nwb_resource_cooker" CONFIG_NAME="linux-clang-x64 - linux-clang-dbg" RUN_TARGET_PROJECT_NAME="NWBLot" RUN_TARGET_NAME="nwb_resource_cooker">
+    <configuration name="nwb_metascript" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="NWBLot" TARGET_NAME="nwb_metascript" CONFIG_NAME="windows-clang-testbed-x64 - windows-clang-testbed-dbg">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
-    <configuration name="nwb_vendor_volk" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="NWBLot" TARGET_NAME="nwb_vendor_volk" CONFIG_NAME="linux-clang-x64 - linux-clang-dbg">
+    <configuration name="nwb_resource_cooker" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="NWBLot" TARGET_NAME="nwb_resource_cooker" CONFIG_NAME="windows-clang-testbed-x64 - windows-clang-testbed-dbg" RUN_TARGET_PROJECT_NAME="NWBLot" RUN_TARGET_NAME="nwb_resource_cooker">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
-    <configuration name="testbed" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" WORKING_DIR="file://$PROJECT_DIR$/__exec" PASS_PARENT_ENVS_2="true" PROJECT_NAME="NWBLot" TARGET_NAME="testbed" CONFIG_NAME="linux-clang-x64 - linux-clang-dbg" RUN_TARGET_PROJECT_NAME="NWBLot" RUN_TARGET_NAME="testbed">
+    <configuration name="nwb_vendor_curl" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="NWBLot" TARGET_NAME="nwb_vendor_curl" CONFIG_NAME="windows-clang-testbed-x64 - windows-clang-testbed-dbg">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="nwb_vendor_microhttpd" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="NWBLot" TARGET_NAME="nwb_vendor_microhttpd" CONFIG_NAME="windows-clang-testbed-x64 - windows-clang-testbed-dbg">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="nwb_vendor_tbb" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="NWBLot" TARGET_NAME="nwb_vendor_tbb" CONFIG_NAME="windows-clang-testbed-x64 - windows-clang-testbed-dbg">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="nwb_vendor_tbbmalloc" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="NWBLot" TARGET_NAME="nwb_vendor_tbbmalloc" CONFIG_NAME="windows-clang-testbed-x64 - windows-clang-testbed-dbg">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="nwb_vendor_volk" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="NWBLot" TARGET_NAME="nwb_vendor_volk" CONFIG_NAME="windows-clang-testbed-x64 - windows-clang-testbed-dbg">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="nwb_vendor_zlib" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="NWBLot" TARGET_NAME="nwb_vendor_zlib" CONFIG_NAME="windows-clang-testbed-x64 - windows-clang-testbed-dbg">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="testbed" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" WORKING_DIR="file://$PROJECT_DIR$/__exec" PASS_PARENT_ENVS_2="true" PROJECT_NAME="NWBLot" TARGET_NAME="testbed" CONFIG_NAME="windows-clang-testbed-x64 - windows-clang-testbed-dbg" RUN_TARGET_PROJECT_NAME="NWBLot" RUN_TARGET_NAME="testbed">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
@@ -227,7 +252,12 @@
       <method v="2" />
     </configuration>
     <list>
+      <item itemvalue="CMake Application.nwb_vendor_curl" />
+      <item itemvalue="CMake Application.nwb_vendor_microhttpd" />
+      <item itemvalue="CMake Application.nwb_vendor_tbb" />
+      <item itemvalue="CMake Application.nwb_vendor_tbbmalloc" />
       <item itemvalue="CMake Application.nwb_vendor_volk" />
+      <item itemvalue="CMake Application.nwb_vendor_zlib" />
       <item itemvalue="CMake Application.nwb_assets" />
       <item itemvalue="CMake Application.nwb_ecs" />
       <item itemvalue="CMake Application.nwb_ecs_graphics" />
@@ -264,6 +294,9 @@
       <workItem from="1775591690399" duration="189000" />
       <workItem from="1775829124226" duration="804000" />
       <workItem from="1775830114242" duration="2387000" />
+      <workItem from="1775915397495" duration="52000" />
+      <workItem from="1775915723105" duration="200000" />
+      <workItem from="1775916124990" duration="2063000" />
     </task>
     <servers />
   </component>

@@ -320,13 +320,15 @@ class UploadManager final : NoCopy{
 private:
     struct BufferChunk final : public RefCounter<IResource>{
         BufferHandle buffer;
+        CommandQueue::Enum queueID;
         u64 size;
         u64 allocated;
         u64 version;
 
-        BufferChunk(Alloc::ThreadPool& pool, BufferHandle buf, u64 sz)
+        BufferChunk(Alloc::ThreadPool& pool, BufferHandle buf, CommandQueue::Enum queue, u64 sz)
             : RefCounter<IResource>(pool)
             , buffer(Move(buf))
+            , queueID(queue)
             , size(sz)
             , allocated(0)
             , version(0)
@@ -345,9 +347,10 @@ public:
         Buffer** pBuffer,
         u64* pOffset,
         void** pCpuVA,
+        CommandQueue::Enum queueID,
         u64 currentVersion,
         u32 alignment = s_DefaultUploadSuballocationAlignment);
-    void submitChunks(u64, u64 submittedVersion);
+    void submitChunks(CommandQueue::Enum queueID, u64 submittedVersion);
 
 
 private:
@@ -359,7 +362,7 @@ private:
     u64 m_chunkPoolBytes = 0;
 
     List<RefCountPtr<BufferChunk>, Alloc::CustomAllocator<RefCountPtr<BufferChunk>>> m_chunkPool;
-    RefCountPtr<BufferChunk> m_currentChunk;
+    RefCountPtr<BufferChunk> m_currentChunks[static_cast<u32>(CommandQueue::kCount)];
 };
 
 

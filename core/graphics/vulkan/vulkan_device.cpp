@@ -578,7 +578,17 @@ u64 Device::executeCommandLists(ICommandList* const* pCommandLists, usize numCom
         return 0;
     }
 
-    return queue->submit(pCommandLists, numCommandLists);
+    const u64 previousSubmittedID = queue->m_lastSubmittedID;
+    const u64 submittedID = queue->submit(pCommandLists, numCommandLists);
+
+    if(submittedID > previousSubmittedID && pCommandLists && numCommandLists > 0){
+        if(m_uploadManager)
+            m_uploadManager->submitChunks(executionQueue, submittedID);
+        if(m_scratchManager)
+            m_scratchManager->submitChunks(executionQueue, submittedID);
+    }
+
+    return submittedID;
 }
 
 bool Device::waitForIdle(){

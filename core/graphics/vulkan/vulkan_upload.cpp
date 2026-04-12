@@ -60,14 +60,19 @@ UploadManager::UploadManager(Device& pParent, u64 defaultChunkSize, u64 memoryLi
 {}
 UploadManager::~UploadManager(){
     m_chunkPool.clear();
-    m_currentChunk.reset();
+    for(auto& chunk : m_currentChunks)
+        chunk.reset();
 }
 
-bool UploadManager::suballocateBuffer(u64 size, Buffer** pBuffer, u64* pOffset, void** pCpuVA, u64 currentVersion, u32 alignment){
+bool UploadManager::suballocateBuffer(u64 size, Buffer** pBuffer, u64* pOffset, void** pCpuVA, CommandQueue::Enum queueID, u64 currentVersion, u32 alignment){
     if(!pBuffer || !pOffset)
+        return false;
+    const u32 queueIndex = static_cast<u32>(queueID);
+    if(queueIndex >= static_cast<u32>(CommandQueue::kCount))
         return false;
 
     ScopedLock lock(m_mutex);
+    auto& currentChunk = m_currentChunks[queueIndex];
 
     const auto trySuballocateFromChunk = [&](BufferChunk& chunk) -> bool {
         u64 alignedOffset = 0;
@@ -86,21 +91,21 @@ bool UploadManager::suballocateBuffer(u64 size, Buffer** pBuffer, u64* pOffset, 
         return true;
     };
 
-    if(m_currentChunk && trySuballocateFromChunk(*m_currentChunk))
+    if(currentChunk && trySuballocateFromChunk(*currentChunk))
         return true;
 
     for(auto it = m_chunkPool.begin(); it != m_chunkPool.end(); ++it){
-        if((*it)->size >= size && (*it)->version < currentVersion){
-            m_currentChunk = *it;
+        if((*it)->queueID == queueID && (*it)->size >= size && (*it)->version < currentVersion){
+            currentChunk = *it;
             if(m_chunkPoolBytes >= (*it)->size)
                 m_chunkPoolBytes -= (*it)->size;
             else
                 m_chunkPoolBytes = 0;
             m_chunkPool.erase(it);
-            m_currentChunk->allocated = 0;
-            m_currentChunk->version = currentVersion;
+            currentChunk->allocated = 0;
+            currentChunk->version = currentVersion;
 
-            return trySuballocateFromChunk(*m_currentChunk);
+            return trySuballocateFromChunk(*currentChunk);
         }
     }
 
@@ -116,23 +121,28 @@ bool UploadManager::suballocateBuffer(u64 size, Buffer** pBuffer, u64* pOffset, 
     if(!bufferHandle)
         return false;
 
-    m_currentChunk = MakeRefCount<BufferChunk>(m_device.m_context.threadPool, Move(bufferHandle), chunkSize);
-    m_currentChunk->version = currentVersion;
+    currentChunk = MakeRefCount<BufferChunk>(m_device.m_context.threadPool, Move(bufferHandle), queueID, chunkSize);
+    currentChunk->version = currentVersion;
 
-    return trySuballocateFromChunk(*m_currentChunk);
+    return trySuballocateFromChunk(*currentChunk);
 }
 
-void UploadManager::submitChunks(u64, u64 submittedVersion){
-    ScopedLock lock(m_mutex);
+void UploadManager::submitChunks(CommandQueue::Enum queueID, u64 submittedVersion){
+    const u32 queueIndex = static_cast<u32>(queueID);
+    if(queueIndex >= static_cast<u32>(CommandQueue::kCount))
+        return;
 
-    if(m_currentChunk){
-        m_currentChunk->version = submittedVersion;
-        if(m_chunkPoolBytes > UINT64_MAX - m_currentChunk->size)
+    ScopedLock lock(m_mutex);
+    auto& currentChunk = m_currentChunks[queueIndex];
+
+    if(currentChunk){
+        currentChunk->version = submittedVersion;
+        if(m_chunkPoolBytes > UINT64_MAX - currentChunk->size)
             m_chunkPoolBytes = UINT64_MAX;
         else
-            m_chunkPoolBytes += m_currentChunk->size;
-        m_chunkPool.push_back(m_currentChunk);
-        m_currentChunk.reset();
+            m_chunkPoolBytes += currentChunk->size;
+        m_chunkPool.push_back(currentChunk);
+        currentChunk.reset();
 
         if(m_memoryLimit > 0){
             while(m_chunkPoolBytes > m_memoryLimit && !m_chunkPool.empty()){

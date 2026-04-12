@@ -456,7 +456,11 @@ void CommandList::writeBuffer(IBuffer* _buffer, const void* data, usize dataSize
     u64 stagingOffset = 0;
     void* cpuVA = nullptr;
 
-    if(!uploadMgr->suballocateBuffer(dataSize, &stagingBuffer, &stagingOffset, &cpuVA, 0)){
+    u64 uploadVersion = m_device.queueGetCompletedInstance(m_desc.queueType);
+    if(uploadVersion < Limit<u64>::s_Max)
+        ++uploadVersion;
+
+    if(!uploadMgr->suballocateBuffer(dataSize, &stagingBuffer, &stagingOffset, &cpuVA, m_desc.queueType, uploadVersion)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to suballocate staging buffer for writeBuffer"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to suballocate staging buffer for writeBuffer"));
         return;

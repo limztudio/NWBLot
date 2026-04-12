@@ -75,7 +75,7 @@ static void ConfigureCommandLineOptions(CLI::App& outApp, __hidden_resource_cook
         ->required();
     outApp.add_option("--output-directory", outOptions.outputDirectory, "Output volume directory path")
         ->required();
-    outApp.add_option("--cache-directory", outOptions.cacheDirectory, "Asset cache directory path");
+    outApp.add_option("--cache-directory", outOptions.cacheDirectory, "Asset cache root directory path");
     outApp.add_option("--configuration", outOptions.configuration, "Build configuration label");
     outApp.add_option("--asset-type", outOptions.assetType, "Asset cooker type (shader, ...)");
 }

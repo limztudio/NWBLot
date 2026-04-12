@@ -211,8 +211,28 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
 
     bool hasCommands = ppCmd && numCmd > 0;
     bool hasPendingSemaphores = !m_waitSemaphores.empty() || !m_signalSemaphores.empty();
+    auto clearPendingSemaphores = [this](){
+        m_waitSemaphores.clear();
+        m_waitSemaphoreValues.clear();
+        m_signalSemaphores.clear();
+        m_signalSemaphoreValues.clear();
+    };
+
     if(hasCommands && numCmd > UINT32_MAX){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: command list count exceeds Vulkan limit"));
+        clearPendingSemaphores();
+        return m_lastSubmittedID;
+    }
+    if(m_waitSemaphores.size() > static_cast<usize>(Limit<u32>::s_Max)
+        || m_signalSemaphores.size() >= static_cast<usize>(Limit<u32>::s_Max))
+    {
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: queued semaphore count exceeds Vulkan limit"));
+        clearPendingSemaphores();
+        return m_lastSubmittedID;
+    }
+    if((hasCommands || hasPendingSemaphores) && m_lastSubmittedID == Limit<u64>::s_Max){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: queue submission ID exhausted"));
+        clearPendingSemaphores();
         return m_lastSubmittedID;
     }
 
@@ -240,10 +260,7 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
 
     if(m_trackingSemaphore == VK_NULL_HANDLE){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Queue submission skipped because timeline semaphore is unavailable."));
-        m_waitSemaphores.clear();
-        m_waitSemaphoreValues.clear();
-        m_signalSemaphores.clear();
-        m_signalSemaphoreValues.clear();
+        clearPendingSemaphores();
 
         for(auto& tracked : trackedBuffers){
             if(!tracked)
@@ -314,10 +331,7 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
 
     res = vkQueueSubmit2(m_queue, 1, &submitInfo, submitFence);
 
-    m_waitSemaphores.clear();
-    m_waitSemaphoreValues.clear();
-    m_signalSemaphores.clear();
-    m_signalSemaphoreValues.clear();
+    clearPendingSemaphores();
 
     if(res != VK_SUCCESS){
         m_lastSubmittedID = submissionID - 1;

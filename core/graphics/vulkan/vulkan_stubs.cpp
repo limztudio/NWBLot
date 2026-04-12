@@ -613,6 +613,40 @@ void Device::getTextureTiling(ITexture* _texture, u32* numTiles, PackedMipDesc* 
         if(subresourceTilingsNum)
             *subresourceTilingsNum = 0;
     };
+    auto ceilDivU32 = [](const u32 value, const u32 divisor, u32& outValue){
+        if(divisor == 0)
+            return false;
+
+        outValue = value == 0 ? 0 : 1u + ((value - 1u) / divisor);
+        return true;
+    };
+    auto addTileCount = [](const u32 startTileIndex, const u32 widthInTiles, const u32 heightInTiles, const u32 depthInTiles, u32& outNextTileIndex){
+        u64 tileCount = widthInTiles;
+        if(heightInTiles != 0 && tileCount > Limit<u64>::s_Max / heightInTiles)
+            return false;
+        tileCount *= heightInTiles;
+        if(depthInTiles != 0 && tileCount > Limit<u64>::s_Max / depthInTiles)
+            return false;
+        tileCount *= depthInTiles;
+        if(tileCount > static_cast<u64>(Limit<u32>::s_Max - startTileIndex))
+            return false;
+
+        outNextTileIndex = startTileIndex + static_cast<u32>(tileCount);
+        return true;
+    };
+    auto checkedTileCount = [](const VkDeviceSize byteSize, const u64 tileByteSize, u32& outTileCount){
+        if(tileByteSize == 0){
+            outTileCount = 0;
+            return true;
+        }
+
+        const u64 tileCount = byteSize / tileByteSize;
+        if(tileCount > Limit<u32>::s_Max)
+            return false;
+
+        outTileCount = static_cast<u32>(tileCount);
+        return true;
+    };
 
     if(!_texture){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get texture tiling: texture is null"));
@@ -648,12 +682,21 @@ void Device::getTextureTiling(ITexture* _texture, u32* numTiles, PackedMipDesc* 
 
     if(!sparseReqs.empty()){
         numStandardMips = sparseReqs[0].imageMipTailFirstLod;
+        if(numStandardMips > texture->m_desc.mipLevels){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get texture tiling: sparse image mip tail exceeds texture mip levels"));
+            clearOutputs();
+            return;
+        }
 
         if(desc){
             desc->numStandardMips = numStandardMips;
             desc->numPackedMips = texture->m_desc.mipLevels - numStandardMips;
-            desc->startTileIndexInOverallResource = texture->m_tileByteSize > 0 ? static_cast<u32>(sparseReqs[0].imageMipTailOffset / texture->m_tileByteSize) : 0;
-            desc->numTilesForPackedMips = texture->m_tileByteSize > 0 ? static_cast<u32>(sparseReqs[0].imageMipTailSize / texture->m_tileByteSize) : 0;
+            if(!checkedTileCount(sparseReqs[0].imageMipTailOffset, texture->m_tileByteSize, desc->startTileIndexInOverallResource)
+                || !checkedTileCount(sparseReqs[0].imageMipTailSize, texture->m_tileByteSize, desc->numTilesForPackedMips)){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get texture tiling: packed mip tile range exceeds u32 limits"));
+                clearOutputs();
+                return;
+            }
         }
     }
 
@@ -686,6 +729,11 @@ void Device::getTextureTiling(ITexture* _texture, u32* numTiles, PackedMipDesc* 
         tileHeight = formatProps[0].imageGranularity.height;
         tileDepth = formatProps[0].imageGranularity.depth;
     }
+    if(tileWidth == 0 || tileHeight == 0 || tileDepth == 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get texture tiling: sparse image tile shape is invalid"));
+        clearOutputs();
+        return;
+    }
 
     if(tileShape){
         tileShape->widthInTexels = tileWidth;
@@ -703,9 +751,13 @@ void Device::getTextureTiling(ITexture* _texture, u32* numTiles, PackedMipDesc* 
 
         for(u32 i = 0; i < *subresourceTilingsNum; ++i){
             if(i < numStandardMips){
-                subresourceTilings[i].widthInTiles = (width + tileWidth - 1) / tileWidth;
-                subresourceTilings[i].heightInTiles = (height + tileHeight - 1) / tileHeight;
-                subresourceTilings[i].depthInTiles = (depth + tileDepth - 1) / tileDepth;
+                if(!ceilDivU32(width, tileWidth, subresourceTilings[i].widthInTiles)
+                    || !ceilDivU32(height, tileHeight, subresourceTilings[i].heightInTiles)
+                    || !ceilDivU32(depth, tileDepth, subresourceTilings[i].depthInTiles)){
+                    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get texture tiling: sparse image tile shape is invalid"));
+                    clearOutputs();
+                    return;
+                }
                 subresourceTilings[i].startTileIndexInOverallResource = startTileIndex;
             }
             else{
@@ -719,14 +771,28 @@ void Device::getTextureTiling(ITexture* _texture, u32* numTiles, PackedMipDesc* 
             height = Max(height / 2, tileHeight);
             depth = Max(depth / 2, tileDepth);
 
-            startTileIndex += subresourceTilings[i].widthInTiles * subresourceTilings[i].heightInTiles * subresourceTilings[i].depthInTiles;
+            if(!addTileCount(
+                startTileIndex,
+                subresourceTilings[i].widthInTiles,
+                subresourceTilings[i].heightInTiles,
+                subresourceTilings[i].depthInTiles,
+                startTileIndex
+            )){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get texture tiling: sparse image tile count exceeds u32 limits"));
+                clearOutputs();
+                return;
+            }
         }
     }
 
     if(numTiles){
         VkMemoryRequirements memReqs;
         vkGetImageMemoryRequirements(m_context.device, texture->m_image, &memReqs);
-        *numTiles = texture->m_tileByteSize > 0 ? static_cast<u32>(memReqs.size / texture->m_tileByteSize) : 0;
+        if(!checkedTileCount(memReqs.size, texture->m_tileByteSize, *numTiles)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get texture tiling: texture tile count exceeds u32 limits"));
+            clearOutputs();
+            return;
+        }
     }
 }
 

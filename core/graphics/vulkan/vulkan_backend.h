@@ -334,6 +334,8 @@ private:
             , version(0)
         {}
     };
+    using BufferChunkPtr = RefCountPtr<BufferChunk>;
+    using BufferChunkList = List<BufferChunkPtr, Alloc::CustomAllocator<BufferChunkPtr>>;
 
 
 public:
@@ -361,8 +363,9 @@ private:
     Futex m_mutex;
     u64 m_chunkPoolBytes = 0;
 
-    List<RefCountPtr<BufferChunk>, Alloc::CustomAllocator<RefCountPtr<BufferChunk>>> m_chunkPool;
-    RefCountPtr<BufferChunk> m_currentChunks[static_cast<u32>(CommandQueue::kCount)];
+    BufferChunkList m_chunkPool;
+    BufferChunkList m_activeChunks[static_cast<u32>(CommandQueue::kCount)];
+    BufferChunkPtr m_currentChunks[static_cast<u32>(CommandQueue::kCount)];
 };
 
 

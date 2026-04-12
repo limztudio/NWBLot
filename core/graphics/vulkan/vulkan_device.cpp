@@ -495,7 +495,26 @@ void Device::savePipelineCacheData(){
             StringConvert(m_pipelineCacheVolumeName),
             PathToString<tchar>(m_pipelineCacheDirectory)
         );
-        return;
+        if(!Filesystem::RemoveVolumeSegments(m_pipelineCacheDirectory, m_pipelineCacheVolumeName)){
+            NWB_LOGGER_WARNING(
+                NWB_TEXT("Vulkan: Failed to remove unusable pipeline cache runtime volume '{}'."),
+                StringConvert(m_pipelineCacheVolumeName)
+            );
+            return;
+        }
+        if(!__hidden_vulkan::MountPipelineCacheVolume(
+            m_pipelineCacheDirectory,
+            m_pipelineCacheVolumeName,
+            true,
+            Filesystem::VolumeUsage::RuntimeReadWrite,
+            volume
+        )){
+            NWB_LOGGER_WARNING(
+                NWB_TEXT("Vulkan: Failed to recreate pipeline cache runtime volume '{}'."),
+                StringConvert(m_pipelineCacheVolumeName)
+            );
+            return;
+        }
     }
 
     const Name cachePath(__hidden_vulkan::s_PipelineCacheVirtualPath);

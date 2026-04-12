@@ -501,7 +501,7 @@ static bool PromoteStagedVolume(const StagedVolumePaths& stagedPaths, const Path
     return true;
 }
 
-static bool RemoveExistingVolumeSegments(const Path& outputDirectory, const AString& volumeName){
+static bool RemoveExistingVolumeSegments(const Path& outputDirectory, const AStringView volumeName){
     ErrorCode errorCode;
 
     const bool outputExists = FileExists(outputDirectory, errorCode);
@@ -653,6 +653,15 @@ bool BuildVolume(const Path& outputDirectory, const VolumeBuildConfig& config, c
 
 bool PublishStagedVolume(const StagedDirectoryPaths& stagedPaths, const Path& outputDirectory, const AStringView volumeName, const usize segmentCount){
     return __hidden_filesystem::PromoteStagedVolume(stagedPaths, outputDirectory, volumeName, segmentCount);
+}
+
+bool RemoveVolumeSegments(const Path& outputDirectory, const AStringView volumeName){
+    if(!__hidden_filesystem::ValidVolumeName(volumeName)){
+        __hidden_filesystem::LogFailure(volumeName, "remove", "invalid volume name");
+        return false;
+    }
+
+    return __hidden_filesystem::RemoveExistingVolumeSegments(outputDirectory, volumeName);
 }
 
 

@@ -91,6 +91,7 @@ bool PublishStagedVolume(
     AStringView volumeName,
     usize segmentCount
 );
+bool RemoveVolumeSegments(const Path& outputDirectory, AStringView volumeName);
 
 
 class VolumeFileSystem : NoCopy{

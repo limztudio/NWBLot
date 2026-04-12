@@ -1,0 +1,46 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include "global.h"
+
+#include "../graphics_backend.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_VULKAN_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Opaque interface ID used through IGraphicsBackend::queryInterface because RTTI is disabled.
+inline constexpr GraphicsBackendInterfaceID s_BackendQueriesInterfaceID = 0xb4a49d6fd5c44331ull;
+
+class IBackendQueries{
+public:
+    virtual ~IBackendQueries() = default;
+
+
+public:
+    [[nodiscard]] virtual bool isInstanceExtensionEnabled(const char* extensionName)const = 0;
+    [[nodiscard]] virtual bool isDeviceExtensionEnabled(const char* extensionName)const = 0;
+    [[nodiscard]] virtual bool isLayerEnabled(const char* layerName)const = 0;
+    virtual void getEnabledInstanceExtensions(Vector<AString>& extensions)const = 0;
+    virtual void getEnabledDeviceExtensions(Vector<AString>& extensions)const = 0;
+    virtual void getEnabledLayers(Vector<AString>& layers)const = 0;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_VULKAN_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

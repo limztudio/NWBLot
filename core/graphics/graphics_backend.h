@@ -23,6 +23,8 @@ struct BackBufferResizeCallbacks{
     void (*afterResize)(void*) = nullptr;
 };
 
+using GraphicsBackendInterfaceID = u64;
+
 class IGraphicsBackend{
 public:
     virtual ~IGraphicsBackend() = default;
@@ -50,13 +52,8 @@ public:
     virtual bool present() = 0;
 
     virtual void reportLiveObjects(){}
-
-    [[nodiscard]] virtual bool isVulkanInstanceExtensionEnabled(const char*)const{ return false; }
-    [[nodiscard]] virtual bool isVulkanDeviceExtensionEnabled(const char*)const{ return false; }
-    [[nodiscard]] virtual bool isVulkanLayerEnabled(const char*)const{ return false; }
-    virtual void getEnabledVulkanInstanceExtensions(Vector<AString>& extensions)const{ extensions.clear(); }
-    virtual void getEnabledVulkanDeviceExtensions(Vector<AString>& extensions)const{ extensions.clear(); }
-    virtual void getEnabledVulkanLayers(Vector<AString>& layers)const{ layers.clear(); }
+    [[nodiscard]] virtual void* queryInterface(GraphicsBackendInterfaceID){ return nullptr; }
+    [[nodiscard]] virtual const void* queryInterface(GraphicsBackendInterfaceID)const{ return nullptr; }
 };
 
 

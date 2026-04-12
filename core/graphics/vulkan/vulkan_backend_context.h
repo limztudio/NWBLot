@@ -5,9 +5,8 @@
 #pragma once
 
 
-#include "../graphics_backend.h"
-
 #include "vulkan_backend.h"
+#include "vulkan_backend_queries.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -35,7 +34,7 @@ enum class DeviceExtensionFeature : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class Backend final : public IGraphicsBackend{
+class BackendContext final : public IGraphicsBackend, public IBackendQueries{
 private:
     using DeviceExtensionMap = HashMap<AString, DeviceExtensionFeature, Hasher<AString>, EqualTo<AString>, Alloc::CustomAllocator<Pair<const AString, DeviceExtensionFeature>>>;
 
@@ -64,7 +63,7 @@ private:
 
 
 public:
-    Backend(
+    BackendContext(
         const DeviceCreationParameters& params,
         SwapChainRuntimeState& swapChainState,
         GraphicsAllocator& allocator,
@@ -76,16 +75,18 @@ public:
     [[nodiscard]] IDevice* getDevice()const override;
     [[nodiscard]] GraphicsAPI::Enum getGraphicsAPI()const override{ return GraphicsAPI::VULKAN; }
     [[nodiscard]] const tchar* getRendererString()const override;
+    [[nodiscard]] void* queryInterface(GraphicsBackendInterfaceID interfaceID)override;
+    [[nodiscard]] const void* queryInterface(GraphicsBackendInterfaceID interfaceID)const override;
 
     bool enumerateAdapters(Vector<AdapterInfo>& outAdapters)override;
     [[nodiscard]] bool isValidationMessageLocationIgnored(usize location)const;
 
-    bool isVulkanInstanceExtensionEnabled(const char* extensionName)const override;
-    bool isVulkanDeviceExtensionEnabled(const char* extensionName)const override;
-    bool isVulkanLayerEnabled(const char* layerName)const override;
-    void getEnabledVulkanInstanceExtensions(Vector<AString>& extensions)const override;
-    void getEnabledVulkanDeviceExtensions(Vector<AString>& extensions)const override;
-    void getEnabledVulkanLayers(Vector<AString>& layers)const override;
+    bool isInstanceExtensionEnabled(const char* extensionName)const override;
+    bool isDeviceExtensionEnabled(const char* extensionName)const override;
+    bool isLayerEnabled(const char* layerName)const override;
+    void getEnabledInstanceExtensions(Vector<AString>& extensions)const override;
+    void getEnabledDeviceExtensions(Vector<AString>& extensions)const override;
+    void getEnabledLayers(Vector<AString>& layers)const override;
 
     ITexture* getCurrentBackBuffer()override;
     ITexture* getBackBuffer(u32 index)override;

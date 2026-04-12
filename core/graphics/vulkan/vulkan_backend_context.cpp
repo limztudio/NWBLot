@@ -196,7 +196,7 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL VulkanDebugCallback(
     (void)objType;
     (void)obj;
 
-    const auto* backend = static_cast<const Backend*>(userData);
+    const auto* backend = static_cast<const BackendContext*>(userData);
     if(backend && backend->isValidationMessageLocationIgnored(static_cast<usize>(location)))
         return VK_FALSE;
 
@@ -215,7 +215,7 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL VulkanDebugCallback(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Backend::Backend(
+BackendContext::BackendContext(
     const DeviceCreationParameters& params,
     SwapChainRuntimeState& swapChainState,
     GraphicsAllocator& allocator,
@@ -242,15 +242,29 @@ Backend::Backend(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-IDevice* Backend::getDevice()const{
+IDevice* BackendContext::getDevice()const{
     return m_rhiDevice.get();
 }
 
-const tchar* Backend::getRendererString()const{
+const tchar* BackendContext::getRendererString()const{
     return m_rendererString.c_str();
 }
 
-bool Backend::isValidationMessageLocationIgnored(usize location)const{
+void* BackendContext::queryInterface(GraphicsBackendInterfaceID interfaceID){
+    if(interfaceID == s_BackendQueriesInterfaceID)
+        return static_cast<IBackendQueries*>(this);
+
+    return IGraphicsBackend::queryInterface(interfaceID);
+}
+
+const void* BackendContext::queryInterface(GraphicsBackendInterfaceID interfaceID)const{
+    if(interfaceID == s_BackendQueriesInterfaceID)
+        return static_cast<const IBackendQueries*>(this);
+
+    return IGraphicsBackend::queryInterface(interfaceID);
+}
+
+bool BackendContext::isValidationMessageLocationIgnored(usize location)const{
     for(const auto& ignored : m_deviceParams.ignoredVulkanValidationMessageLocations){
         if(ignored == location)
             return true;
@@ -258,60 +272,60 @@ bool Backend::isValidationMessageLocationIgnored(usize location)const{
     return false;
 }
 
-bool Backend::isVulkanInstanceExtensionEnabled(const char* extensionName)const{
+bool BackendContext::isInstanceExtensionEnabled(const char* extensionName)const{
     return m_enabledExtensions.instance.find(extensionName) != m_enabledExtensions.instance.end();
 }
 
-bool Backend::isVulkanDeviceExtensionEnabled(const char* extensionName)const{
+bool BackendContext::isDeviceExtensionEnabled(const char* extensionName)const{
     return m_enabledExtensions.device.find(extensionName) != m_enabledExtensions.device.end();
 }
 
-bool Backend::isVulkanLayerEnabled(const char* layerName)const{
+bool BackendContext::isLayerEnabled(const char* layerName)const{
     return m_enabledExtensions.layers.find(layerName) != m_enabledExtensions.layers.end();
 }
 
-void Backend::getEnabledVulkanInstanceExtensions(Vector<AString>& extensions)const{
+void BackendContext::getEnabledInstanceExtensions(Vector<AString>& extensions)const{
     extensions.clear();
     extensions.reserve(m_enabledExtensions.instance.size());
     for(const auto& ext : m_enabledExtensions.instance)
         extensions.push_back(ext);
 }
 
-void Backend::getEnabledVulkanDeviceExtensions(Vector<AString>& extensions)const{
+void BackendContext::getEnabledDeviceExtensions(Vector<AString>& extensions)const{
     extensions.clear();
     extensions.reserve(m_enabledExtensions.device.size());
     for(const auto& [name, _] : m_enabledExtensions.device)
         extensions.push_back(name);
 }
 
-void Backend::getEnabledVulkanLayers(Vector<AString>& layers)const{
+void BackendContext::getEnabledLayers(Vector<AString>& layers)const{
     layers.clear();
     layers.reserve(m_enabledExtensions.layers.size());
     for(const auto& ext : m_enabledExtensions.layers)
         layers.push_back(ext);
 }
 
-ITexture* Backend::getCurrentBackBuffer(){
+ITexture* BackendContext::getCurrentBackBuffer(){
     if(m_swapChainIndex < m_swapChainImages.size())
         return m_swapChainImages[m_swapChainIndex].rhiHandle.get();
     return nullptr;
 }
 
-ITexture* Backend::getBackBuffer(u32 index){
+ITexture* BackendContext::getBackBuffer(u32 index){
     if(index < m_swapChainImages.size())
         return m_swapChainImages[index].rhiHandle.get();
     return nullptr;
 }
 
-u32 Backend::getCurrentBackBufferIndex(){
+u32 BackendContext::getCurrentBackBufferIndex(){
     return m_swapChainIndex;
 }
 
-u32 Backend::getBackBufferCount(){
+u32 BackendContext::getBackBufferCount(){
     return static_cast<u32>(m_swapChainImages.size());
 }
 
-void Backend::clearSemaphores(SemaphoreVector& semaphores){
+void BackendContext::clearSemaphores(SemaphoreVector& semaphores){
     if(m_vulkanDevice){
         for(auto& semaphore : semaphores){
             if(semaphore)
@@ -322,7 +336,7 @@ void Backend::clearSemaphores(SemaphoreVector& semaphores){
     semaphores.clear();
 }
 
-bool Backend::recreateSemaphores(SemaphoreVector& semaphores, const usize count, const AStringView operationName){
+bool BackendContext::recreateSemaphores(SemaphoreVector& semaphores, const usize count, const AStringView operationName){
     clearSemaphores(semaphores);
     semaphores.reserve(count);
 
@@ -347,7 +361,7 @@ bool Backend::recreateSemaphores(SemaphoreVector& semaphores, const usize count,
     return true;
 }
 
-void Backend::resizeSwapChain(){
+void BackendContext::resizeSwapChain(){
     if(m_vulkanDevice){
         destroySwapChain();
         if(!createVulkanSwapChain()){
@@ -392,7 +406,7 @@ void Backend::resizeSwapChain(){
 // Instance creation
 
 
-void Backend::initDefaultExtensions(){
+void BackendContext::initDefaultExtensions(){
     for(const auto* name : s_EnabledInstanceExts)
         m_enabledExtensions.instance.insert(name);
     for(const auto& e : m_enabledDeviceExts)
@@ -407,7 +421,7 @@ void Backend::initDefaultExtensions(){
         m_rayTracingExtensions.insert({ e.name, e.feature });
 }
 
-bool Backend::createVulkanInstance(){
+bool BackendContext::createVulkanInstance(){
     VkResult res = VK_SUCCESS;
 
     {
@@ -594,7 +608,7 @@ bool Backend::createVulkanInstance(){
 // Debug callback
 
 
-void Backend::installDebugCallback(){
+void BackendContext::installDebugCallback(){
     VkResult res = VK_SUCCESS;
 
     auto* createFunc = reinterpret_cast<PFN_vkCreateDebugReportCallbackEXT>(vkGetInstanceProcAddr(m_vulkanInstance, "vkCreateDebugReportCallbackEXT"));
@@ -619,7 +633,7 @@ void Backend::installDebugCallback(){
 // Physical device selection
 
 
-bool Backend::findQueueFamilies(VkPhysicalDevice physicalDevice){
+bool BackendContext::findQueueFamilies(VkPhysicalDevice physicalDevice){
     uint32_t queueFamilyCount = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, nullptr);
 
@@ -689,7 +703,7 @@ bool Backend::findQueueFamilies(VkPhysicalDevice physicalDevice){
     return true;
 }
 
-bool Backend::pickPhysicalDevice(){
+bool BackendContext::pickPhysicalDevice(){
     VkFormat requestedFormat = __hidden_vulkan::ConvertFormat(m_swapChainState.backBufferFormat);
     VkExtent2D requestedExtent = { m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight };
 
@@ -872,7 +886,7 @@ bool Backend::pickPhysicalDevice(){
 // Logical device creation
 
 
-bool Backend::createVulkanDevice(){
+bool BackendContext::createVulkanDevice(){
     VkResult res = VK_SUCCESS;
 
     Alloc::ScratchArena<> scratchArena(32768);
@@ -928,12 +942,12 @@ bool Backend::createVulkanDevice(){
 #endif
 
     const bool apiSupportsVulkan13 = physicalDeviceProperties.apiVersion >= VK_API_VERSION_1_3;
-    const bool coopVecExtensionEnabled = isVulkanDeviceExtensionEnabled(VK_NV_COOPERATIVE_VECTOR_EXTENSION_NAME);
-    const bool dynamicRenderingExtensionEnabled = isVulkanDeviceExtensionEnabled(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
-    const bool synchronization2ExtensionEnabled = isVulkanDeviceExtensionEnabled(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME);
-    const bool maintenance4ExtensionEnabled = isVulkanDeviceExtensionEnabled(VK_KHR_MAINTENANCE_4_EXTENSION_NAME);
+    const bool coopVecExtensionEnabled = isDeviceExtensionEnabled(VK_NV_COOPERATIVE_VECTOR_EXTENSION_NAME);
+    const bool dynamicRenderingExtensionEnabled = isDeviceExtensionEnabled(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
+    const bool synchronization2ExtensionEnabled = isDeviceExtensionEnabled(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME);
+    const bool maintenance4ExtensionEnabled = isDeviceExtensionEnabled(VK_KHR_MAINTENANCE_4_EXTENSION_NAME);
 
-    m_swapChainMutableFormatSupported = isVulkanDeviceExtensionEnabled(VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME);
+    m_swapChainMutableFormatSupported = isDeviceExtensionEnabled(VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME);
 
     constexpr usize kOptionalDeviceFeatureCount = static_cast<usize>(DeviceExtensionFeature::Count);
 
@@ -999,9 +1013,9 @@ bool Backend::createVulkanDevice(){
         m_enabledExtensions.device.erase(name);
     }
 
-    const bool synchronization2Enabled = apiSupportsVulkan13 || isVulkanDeviceExtensionEnabled(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME);
-    const bool maintenance4Enabled = apiSupportsVulkan13 || isVulkanDeviceExtensionEnabled(VK_KHR_MAINTENANCE_4_EXTENSION_NAME);
-    const bool dynamicRenderingEnabled = apiSupportsVulkan13 || isVulkanDeviceExtensionEnabled(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
+    const bool synchronization2Enabled = apiSupportsVulkan13 || isDeviceExtensionEnabled(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME);
+    const bool maintenance4Enabled = apiSupportsVulkan13 || isDeviceExtensionEnabled(VK_KHR_MAINTENANCE_4_EXTENSION_NAME);
+    const bool dynamicRenderingEnabled = apiSupportsVulkan13 || isDeviceExtensionEnabled(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
 
     {
         AStringStream ss;
@@ -1174,7 +1188,7 @@ bool Backend::createVulkanDevice(){
 // Window surface creation
 
 
-bool Backend::createWindowSurface(){
+bool BackendContext::createWindowSurface(){
     VkResult res = VK_SUCCESS;
 
 #ifdef NWB_PLATFORM_WINDOWS
@@ -1243,7 +1257,7 @@ bool Backend::createWindowSurface(){
 // Swap chain management
 
 
-void Backend::destroySwapChain(){
+void BackendContext::destroySwapChain(){
     if(m_vulkanDevice)
         vkDeviceWaitIdle(m_vulkanDevice);
 
@@ -1255,7 +1269,7 @@ void Backend::destroySwapChain(){
     m_swapChainImages.clear();
 }
 
-bool Backend::createVulkanSwapChain(){
+bool BackendContext::createVulkanSwapChain(){
     VkResult res = VK_SUCCESS;
 
     destroySwapChain();
@@ -1473,7 +1487,7 @@ bool Backend::createVulkanSwapChain(){
 // High-level lifecycle methods
 
 
-bool Backend::createInstance(){
+bool BackendContext::createInstance(){
     if(m_deviceParams.enableDebugRuntime){
         m_enabledExtensions.instance.insert("VK_EXT_debug_report");
         m_enabledExtensions.layers.insert("VK_LAYER_KHRONOS_validation");
@@ -1482,7 +1496,7 @@ bool Backend::createInstance(){
     return createVulkanInstance();
 }
 
-bool Backend::createDevice(){
+bool BackendContext::createDevice(){
     if(m_deviceParams.enableDebugRuntime)
         installDebugCallback();
 
@@ -1549,7 +1563,7 @@ bool Backend::createDevice(){
     return true;
 }
 
-bool Backend::createSwapChain(){
+bool BackendContext::createSwapChain(){
     if(!createVulkanSwapChain())
         return false;
 
@@ -1573,7 +1587,7 @@ bool Backend::createSwapChain(){
     return true;
 }
 
-void Backend::destroy(){
+void BackendContext::destroy(){
     if(m_rhiDevice)
         m_rhiDevice->waitForIdle();
 
@@ -1618,7 +1632,7 @@ void Backend::destroy(){
 // Frame management
 
 
-bool Backend::beginFrame(const BackBufferResizeCallbacks& callbacks){
+bool BackendContext::beginFrame(const BackBufferResizeCallbacks& callbacks){
     VkResult res = VK_SUCCESS;
     VkSemaphore semaphore = VK_NULL_HANDLE;
 
@@ -1690,7 +1704,7 @@ bool Backend::beginFrame(const BackBufferResizeCallbacks& callbacks){
     return false;
 }
 
-bool Backend::present(){
+bool BackendContext::present(){
     VkResult res = VK_SUCCESS;
 
     if(!m_swapChain || m_presentSemaphores.empty() || m_swapChainImages.empty()){
@@ -1754,7 +1768,7 @@ bool Backend::present(){
 // Adapter enumeration
 
 
-bool Backend::enumerateAdapters(Vector<AdapterInfo>& outAdapters){
+bool BackendContext::enumerateAdapters(Vector<AdapterInfo>& outAdapters){
     VkResult res = VK_SUCCESS;
 
     if(!m_vulkanInstance){

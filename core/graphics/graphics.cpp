@@ -99,7 +99,14 @@ static UniquePtr<IGraphicsBackend> CreateDefaultBackend(
     Alloc::ThreadPool& threadPool
 )
 {
-    return UniquePtr<IGraphicsBackend>(new Vulkan::Backend(deviceParams, swapChainState, allocator, threadPool));
+    return UniquePtr<IGraphicsBackend>(new Vulkan::BackendContext(deviceParams, swapChainState, allocator, threadPool));
+}
+
+static const Vulkan::IBackendQueries* GetVulkanBackendQueries(const IGraphicsBackend* backend){
+    if(!backend || backend->getGraphicsAPI() != GraphicsAPI::VULKAN)
+        return nullptr;
+
+    return static_cast<const Vulkan::IBackendQueries*>(backend->queryInterface(Vulkan::s_BackendQueriesInterfaceID));
 }
 
 constexpr bool IsFp16CoopVecFormat(const CooperativeVectorMatMulFormatCombo& combo){
@@ -363,20 +370,23 @@ IFramebuffer* Graphics::getFramebuffer(u32 index)const{
 }
 
 bool Graphics::isVulkanInstanceExtensionEnabled(const char* extensionName)const{
-    return m_backend && m_backend->isVulkanInstanceExtensionEnabled(extensionName);
+    const Vulkan::IBackendQueries* queries = __hidden_graphics::GetVulkanBackendQueries(m_backend.get());
+    return queries && queries->isInstanceExtensionEnabled(extensionName);
 }
 
 bool Graphics::isVulkanDeviceExtensionEnabled(const char* extensionName)const{
-    return m_backend && m_backend->isVulkanDeviceExtensionEnabled(extensionName);
+    const Vulkan::IBackendQueries* queries = __hidden_graphics::GetVulkanBackendQueries(m_backend.get());
+    return queries && queries->isDeviceExtensionEnabled(extensionName);
 }
 
 bool Graphics::isVulkanLayerEnabled(const char* layerName)const{
-    return m_backend && m_backend->isVulkanLayerEnabled(layerName);
+    const Vulkan::IBackendQueries* queries = __hidden_graphics::GetVulkanBackendQueries(m_backend.get());
+    return queries && queries->isLayerEnabled(layerName);
 }
 
 void Graphics::getEnabledVulkanInstanceExtensions(Vector<AString>& extensions)const{
-    if(m_backend){
-        m_backend->getEnabledVulkanInstanceExtensions(extensions);
+    if(const Vulkan::IBackendQueries* queries = __hidden_graphics::GetVulkanBackendQueries(m_backend.get())){
+        queries->getEnabledInstanceExtensions(extensions);
         return;
     }
 
@@ -384,8 +394,8 @@ void Graphics::getEnabledVulkanInstanceExtensions(Vector<AString>& extensions)co
 }
 
 void Graphics::getEnabledVulkanDeviceExtensions(Vector<AString>& extensions)const{
-    if(m_backend){
-        m_backend->getEnabledVulkanDeviceExtensions(extensions);
+    if(const Vulkan::IBackendQueries* queries = __hidden_graphics::GetVulkanBackendQueries(m_backend.get())){
+        queries->getEnabledDeviceExtensions(extensions);
         return;
     }
 
@@ -393,8 +403,8 @@ void Graphics::getEnabledVulkanDeviceExtensions(Vector<AString>& extensions)cons
 }
 
 void Graphics::getEnabledVulkanLayers(Vector<AString>& layers)const{
-    if(m_backend){
-        m_backend->getEnabledVulkanLayers(layers);
+    if(const Vulkan::IBackendQueries* queries = __hidden_graphics::GetVulkanBackendQueries(m_backend.get())){
+        queries->getEnabledLayers(layers);
         return;
     }
 

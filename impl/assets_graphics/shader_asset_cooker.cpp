@@ -765,6 +765,10 @@ static bool ParseGeometryMeta(const DiscoveredNwbFile& discoveredFile, const Cor
             NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': vertex_data must contain only finite numeric values"), PathToString<tchar>(discoveredFile.filePath));
             return false;
         }
+        if(numericValue < static_cast<f64>(Limit<f32>::s_Min) || numericValue > static_cast<f64>(Limit<f32>::s_Max)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': vertex_data contains a value outside the f32 range"), PathToString<tchar>(discoveredFile.filePath));
+            return false;
+        }
 
         AppendPOD(outEntry.vertexData, static_cast<f32>(numericValue));
         return true;
@@ -1212,7 +1216,16 @@ static bool GetVariantBytecode(
         EqualTo<AString>(),
         Core::Alloc::ScratchAllocator<Pair<const AString, AString>>(scratchArena)
     );
-    mergedDefines.reserve(defineCombo.size() + entry.implicitDefines.size());
+    if(defineCombo.size() > Limit<usize>::s_Max - entry.implicitDefines.size()){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("ShaderAssetCooker: define count overflow for entry '{}'"),
+            StringConvert(entry.name)
+        );
+        return false;
+    }
+
+    const usize mergedDefineCapacity = defineCombo.size() + entry.implicitDefines.size();
+    mergedDefines.reserve(mergedDefineCapacity);
     for(const auto& [defineName, value] : defineCombo)
         mergedDefines.insert_or_assign(defineName, value);
     for(const auto& [defineName, value] : entry.implicitDefines)
@@ -1224,6 +1237,13 @@ static bool GetVariantBytecode(
     compileDefines.reserve(mergedDefines.size());
     for(const auto& [defineName, value] : mergedDefines)
         compileDefines.push_back(Core::ShaderMacroDefinition{ AStringView(defineName), AStringView(value) });
+    if(compileDefines.size() > static_cast<usize>(Limit<u32>::s_Max)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("ShaderAssetCooker: entry '{}' has too many merged defines for shader compilation"),
+            StringConvert(entry.name)
+        );
+        return false;
+    }
 
     const Core::ShaderCompilerRequest compileRequest = {
         entry.name,

@@ -405,9 +405,9 @@ static TransparentDrawPushConstants BuildTransparentDrawPushConstants(
 }
 
 static u32 DispatchGroupCount1D(const u32 itemCount, const u32 groupSize){
-    return itemCount == 0
+    return itemCount == 0 || groupSize == 0
         ? 0
-        : (itemCount + groupSize - 1u) / groupSize
+        : ((itemCount - 1u) / groupSize) + 1u
     ;
 }
 
@@ -619,8 +619,20 @@ bool RendererSystem::ensureDeferredFrameTargets(Core::IFramebuffer* presentation
     AvboitFrameTargets avboitTargets;
     avboitTargets.fullWidth = createdTargets.width;
     avboitTargets.fullHeight = createdTargets.height;
-    avboitTargets.lowWidth = Max(1u, (createdTargets.width + __hidden_ecs_graphics::s_AvboitDownsample - 1u) / __hidden_ecs_graphics::s_AvboitDownsample);
-    avboitTargets.lowHeight = Max(1u, (createdTargets.height + __hidden_ecs_graphics::s_AvboitDownsample - 1u) / __hidden_ecs_graphics::s_AvboitDownsample);
+    const u64 lowWidth = Max(
+        1ull,
+        (static_cast<u64>(createdTargets.width) + __hidden_ecs_graphics::s_AvboitDownsample - 1ull) / __hidden_ecs_graphics::s_AvboitDownsample
+    );
+    const u64 lowHeight = Max(
+        1ull,
+        (static_cast<u64>(createdTargets.height) + __hidden_ecs_graphics::s_AvboitDownsample - 1ull) / __hidden_ecs_graphics::s_AvboitDownsample
+    );
+    if(lowWidth > Limit<u32>::s_Max || lowHeight > Limit<u32>::s_Max){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: AVBOIT low-resolution dimensions exceed u32 limits"));
+        return false;
+    }
+    avboitTargets.lowWidth = static_cast<u32>(lowWidth);
+    avboitTargets.lowHeight = static_cast<u32>(lowHeight);
     avboitTargets.virtualSliceCount = __hidden_ecs_graphics::s_AvboitVirtualSlices;
     avboitTargets.physicalSliceCount = __hidden_ecs_graphics::s_AvboitPhysicalSlices;
     avboitTargets.lowRasterFormat = avboitLowRasterFormat;
@@ -700,7 +712,16 @@ bool RendererSystem::ensureDeferredFrameTargets(Core::IFramebuffer* presentation
     const u32 coverageWordCount = (avboitTargets.virtualSliceCount + 31u) / 32u;
     const u64 coverageBytes = static_cast<u64>(coverageWordCount) * sizeof(u32);
     const u64 depthWarpBytes = static_cast<u64>(avboitTargets.virtualSliceCount) * sizeof(u32);
-    const u64 volumeVoxelCount = static_cast<u64>(avboitTargets.lowWidth) * avboitTargets.lowHeight * avboitTargets.physicalSliceCount;
+    const u64 lowPixelCount = static_cast<u64>(avboitTargets.lowWidth) * avboitTargets.lowHeight;
+    if(lowPixelCount > static_cast<u64>(Limit<u32>::s_Max)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: AVBOIT low-resolution pixel count exceeds u32 limits"));
+        return false;
+    }
+    if(avboitTargets.physicalSliceCount == 0 || lowPixelCount > static_cast<u64>(Limit<u32>::s_Max) / avboitTargets.physicalSliceCount){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: AVBOIT volume voxel count exceeds u32 limits"));
+        return false;
+    }
+    const u64 volumeVoxelCount = lowPixelCount * avboitTargets.physicalSliceCount;
     const u64 volumeBytes = volumeVoxelCount * sizeof(u32);
 
     Core::BufferDesc coverageDesc;
@@ -1627,7 +1648,16 @@ bool RendererSystem::ensureGeometryLoaded(const Core::Assets::AssetRef<Geometry>
         return false;
     }
 
-    createdGeometry.indexCount = static_cast<u32>(geometry.indexData().size() / indexStride);
+    const usize indexCount = geometry.indexData().size() / indexStride;
+    if(indexCount > static_cast<usize>(Limit<u32>::s_Max)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("RendererSystem: geometry '{}' index count exceeds u32 limits"),
+            StringConvert(geometryPath.c_str())
+        );
+        return false;
+    }
+
+    createdGeometry.indexCount = static_cast<u32>(indexCount);
     if(createdGeometry.indexCount == 0 || (createdGeometry.indexCount % 3u) != 0u){
         NWB_LOGGER_ERROR(
             NWB_TEXT("RendererSystem: geometry '{}' index count {} is incompatible with triangle-based mesh rendering"),
@@ -1688,14 +1718,23 @@ bool RendererSystem::ensureGeometryLoaded(const Core::Assets::AssetRef<Geometry>
             expandedIndices[i] = static_cast<u32>(indexData[i]);
     }
 
+    if(expandedIndices.size() > Limit<usize>::s_Max / sizeof(u32)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("RendererSystem: geometry '{}' expanded index buffer size overflows"),
+            StringConvert(geometryPath.c_str())
+        );
+        return false;
+    }
+    const usize expandedIndexBytes = expandedIndices.size() * sizeof(u32);
+
     Core::Graphics::BufferSetupDesc shaderIndexSetup;
     shaderIndexSetup.bufferDesc
-        .setByteSize(static_cast<u64>(expandedIndices.size() * sizeof(u32)))
+        .setByteSize(static_cast<u64>(expandedIndexBytes))
         .setStructStride(sizeof(u32))
         .setDebugName(shaderIndexBufferName)
     ;
     shaderIndexSetup.data = expandedIndices.data();
-    shaderIndexSetup.dataSize = expandedIndices.size() * sizeof(u32);
+    shaderIndexSetup.dataSize = expandedIndexBytes;
     createdGeometry.shaderIndexBuffer = m_graphics.setupBuffer(shaderIndexSetup);
     if(!createdGeometry.shaderIndexBuffer){
         NWB_LOGGER_ERROR(

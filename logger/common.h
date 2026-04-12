@@ -189,10 +189,13 @@ public:
             static_cast<T*>(this)->s_GlobalInit = true;
         }
 
-        auto ret = static_cast<T*>(this)->internalInit(Forward<ARGS>(args)...);
+        const bool ret = static_cast<T*>(this)->internalInit(Forward<ARGS>(args)...);
+        if(!ret)
+            return false;
+
         m_thread = Thread(T::globalUpdate, static_cast<T*>(this));
 
-        return ret;
+        return true;
     }
 
 public:

@@ -75,7 +75,7 @@ protected:
 private:
     void registerAccess(ComponentTypeId typeId, AccessMode::Enum mode);
 
-    FixedVector<ComponentAccess, 16> m_access;
+    Vector<ComponentAccess> m_access;
     bool m_enabled = true;
 };
 

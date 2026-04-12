@@ -63,6 +63,10 @@ static Futex g_ListMutex;
 
 static WNDPROC g_OrigListProc = nullptr;
 
+static bool IsMessageIndexValid(UINT itemID){
+    return static_cast<usize>(itemID) < g_Messages.size();
+}
+
 static LRESULT CALLBACK ListProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
     if(uMsg == WM_KEYDOWN && wParam == 'C' && (GetKeyState(VK_CONTROL) & 0x8000)){
         SendMessage(GetParent(hwnd), uMsg, wParam, lParam);
@@ -165,8 +169,8 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         case WM_MEASUREITEM:
         {
             auto* mis = reinterpret_cast<LPMEASUREITEMSTRUCT>(lParam);
-            if(mis->itemID >= 0 && mis->itemID < static_cast<decltype(mis->itemID)>(g_Messages.size())){
-                const auto& curStr = g_Messages[static_cast<u32>(mis->itemID)];
+            if(IsMessageIndexValid(mis->itemID)){
+                const auto& curStr = g_Messages[static_cast<usize>(mis->itemID)];
 
                 RECT rect;
                 GetClientRect(hwnd, &rect);
@@ -197,18 +201,27 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                         combined += msg.first();
                         combined += NWB_TEXT("\r\n");
                     }
+                    if(combined.size() > (Limit<usize>::s_Max / sizeof(tchar)) - 1u)
+                        return 0;
+
                     const usize byteSize = (combined.size() + 1) * sizeof(tchar);
                     if(OpenClipboard(hwnd)){
                         EmptyClipboard();
                         HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, byteSize);
                         if(hMem){
-                            NWB_MEMCPY(GlobalLock(hMem), byteSize, combined.c_str(), byteSize);
-                            GlobalUnlock(hMem);
+                            void* lockedMemory = GlobalLock(hMem);
+                            if(lockedMemory){
+                                NWB_MEMCPY(lockedMemory, byteSize, combined.c_str(), byteSize);
+                                GlobalUnlock(hMem);
 #if defined(UNICODE) || defined(_UNICODE)
-                            SetClipboardData(CF_UNICODETEXT, hMem);
+                                if(!SetClipboardData(CF_UNICODETEXT, hMem))
 #else
-                            SetClipboardData(CF_TEXT, hMem);
+                                if(!SetClipboardData(CF_TEXT, hMem))
 #endif
+                                    GlobalFree(hMem);
+                            }
+                            else
+                                GlobalFree(hMem);
                         }
                         CloseClipboard();
                     }
@@ -220,8 +233,8 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         case WM_DRAWITEM:
         {
             auto* dis = reinterpret_cast<LPDRAWITEMSTRUCT>(lParam);
-            if(dis->itemID >= 0 && dis->itemID < static_cast<decltype(dis->itemID)>(g_Messages.size())){
-                const auto& curData = g_Messages[static_cast<u32>(dis->itemID)];
+            if(IsMessageIndexValid(dis->itemID)){
+                const auto& curData = g_Messages[static_cast<usize>(dis->itemID)];
 
                 HDC hdc = dis->hDC;
                 RECT rect = dis->rcItem;

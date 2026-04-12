@@ -20,6 +20,71 @@ namespace __hidden_metascript_parser{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[[nodiscard]] bool NegateI64Overflows(const i64 value){
+    return value == Limit<i64>::s_Min;
+}
+
+[[nodiscard]] bool AddI64Overflows(const i64 lhs, const i64 rhs){
+    if(rhs > 0)
+        return lhs > Limit<i64>::s_Max - rhs;
+    if(rhs < 0)
+        return lhs < Limit<i64>::s_Min - rhs;
+    return false;
+}
+
+[[nodiscard]] bool SubtractI64Overflows(const i64 lhs, const i64 rhs){
+    if(rhs > 0)
+        return lhs < Limit<i64>::s_Min + rhs;
+    if(rhs < 0)
+        return lhs > Limit<i64>::s_Max + rhs;
+    return false;
+}
+
+[[nodiscard]] bool MultiplyI64Overflows(const i64 lhs, const i64 rhs){
+    if(lhs == 0 || rhs == 0)
+        return false;
+
+    if(lhs > 0){
+        if(rhs > 0)
+            return lhs > Limit<i64>::s_Max / rhs;
+        return rhs < Limit<i64>::s_Min / lhs;
+    }
+
+    if(rhs > 0)
+        return lhs < Limit<i64>::s_Min / rhs;
+
+    return rhs < Limit<i64>::s_Max / lhs;
+}
+
+[[nodiscard]] bool DivideI64Overflows(const i64 lhs, const i64 rhs){
+    return lhs == Limit<i64>::s_Min && rhs == -1;
+}
+
+[[nodiscard]] bool BinaryI64Overflows(const TokenType::Enum op, const i64 lhs, const i64 rhs){
+    switch(op){
+    case TokenType::Plus:
+    case TokenType::PlusEqual:
+        return AddI64Overflows(lhs, rhs);
+    case TokenType::Minus:
+    case TokenType::MinusEqual:
+        return SubtractI64Overflows(lhs, rhs);
+    case TokenType::Star:
+    case TokenType::StarEqual:
+        return MultiplyI64Overflows(lhs, rhs);
+    case TokenType::Slash:
+    case TokenType::SlashEqual:
+        return DivideI64Overflows(lhs, rhs);
+    default:
+        break;
+    }
+
+    return false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class Parser{
 public:
     Parser(MStringView source, Alloc::CustomArena& arena, MVector<ParseError>& errors, MStringMap<Value>& variables)
@@ -226,8 +291,13 @@ private:
             if(!m_errors.empty())
                 return Value(m_arena);
 
-            if(val.isInteger())
+            if(val.isInteger()){
+                if(NegateI64Overflows(val.asInteger())){
+                    error("integer overflow");
+                    return Value(m_arena);
+                }
                 return Value(-val.asInteger(), m_arena);
+            }
             if(val.isDouble())
                 return Value(-val.asDouble(), m_arena);
 
@@ -540,17 +610,33 @@ private:
             if((lhs.isNumeric() && rhs.isNumeric())
                 || (lhs.isString() && rhs.isString())
                 || (lhs.isList() && rhs.isList()))
+            {
+                if(lhs.isInteger() && rhs.isInteger() && BinaryI64Overflows(op, lhs.asInteger(), rhs.asInteger())){
+                    error(line, column, "integer overflow");
+                    return false;
+                }
                 return true;
+            }
             error(line, column, "operator '+' requires numeric, string, or list operands of matching types");
             return false;
         case TokenType::Minus:
-            if(lhs.isNumeric() && rhs.isNumeric())
+            if(lhs.isNumeric() && rhs.isNumeric()){
+                if(lhs.isInteger() && rhs.isInteger() && BinaryI64Overflows(op, lhs.asInteger(), rhs.asInteger())){
+                    error(line, column, "integer overflow");
+                    return false;
+                }
                 return true;
+            }
             error(line, column, "operator '-' requires numeric operands");
             return false;
         case TokenType::Star:
-            if(lhs.isNumeric() && rhs.isNumeric())
+            if(lhs.isNumeric() && rhs.isNumeric()){
+                if(lhs.isInteger() && rhs.isInteger() && BinaryI64Overflows(op, lhs.asInteger(), rhs.asInteger())){
+                    error(line, column, "integer overflow");
+                    return false;
+                }
                 return true;
+            }
             error(line, column, "operator '*' requires numeric operands");
             return false;
         case TokenType::Slash:
@@ -560,6 +646,10 @@ private:
             }
             if(isZero(rhs)){
                 error(line, column, "division by zero");
+                return false;
+            }
+            if(lhs.isInteger() && rhs.isInteger() && BinaryI64Overflows(op, lhs.asInteger(), rhs.asInteger())){
+                error(line, column, "integer overflow");
                 return false;
             }
             return true;
@@ -579,17 +669,33 @@ private:
             if((target.isNumeric() && rhs.isNumeric())
                 || (target.isString() && rhs.isString())
                 || target.isList())
+            {
+                if(target.isInteger() && rhs.isInteger() && BinaryI64Overflows(op, target.asInteger(), rhs.asInteger())){
+                    error(line, column, "integer overflow");
+                    return false;
+                }
                 return true;
+            }
             error(line, column, "operator '+=' requires numeric operands, string += string, or a list target");
             return false;
         case TokenType::MinusEqual:
-            if(target.isNumeric() && rhs.isNumeric())
+            if(target.isNumeric() && rhs.isNumeric()){
+                if(target.isInteger() && rhs.isInteger() && BinaryI64Overflows(op, target.asInteger(), rhs.asInteger())){
+                    error(line, column, "integer overflow");
+                    return false;
+                }
                 return true;
+            }
             error(line, column, "operator '-=' requires numeric operands");
             return false;
         case TokenType::StarEqual:
-            if(target.isNumeric() && rhs.isNumeric())
+            if(target.isNumeric() && rhs.isNumeric()){
+                if(target.isInteger() && rhs.isInteger() && BinaryI64Overflows(op, target.asInteger(), rhs.asInteger())){
+                    error(line, column, "integer overflow");
+                    return false;
+                }
                 return true;
+            }
             error(line, column, "operator '*=' requires numeric operands");
             return false;
         case TokenType::SlashEqual:
@@ -599,6 +705,10 @@ private:
             }
             if(isZero(rhs)){
                 error(line, column, "division by zero");
+                return false;
+            }
+            if(target.isInteger() && rhs.isInteger() && BinaryI64Overflows(op, target.asInteger(), rhs.asInteger())){
+                error(line, column, "integer overflow");
                 return false;
             }
             return true;
@@ -731,6 +841,11 @@ bool Document::parse(MStringView source){
 }
 
 bool Document::parse(IMetaReader& reader){
+    m_errors.clear();
+    m_assetType.clear();
+    m_assetVariable.clear();
+    m_variables.clear();
+
     try{
         constexpr usize chunkSize = 4096;
 
@@ -740,19 +855,21 @@ bool Document::parse(IMetaReader& reader){
         for(;;){
             const isize bytesRead = reader.read(chunk, chunkSize);
             if(bytesRead < 0){
-                m_errors.clear();
                 m_errors.push_back(ParseError{0, 0, MString("read error", MAllocator<MChar>(m_arena))});
                 return false;
             }
             if(bytesRead == 0)
                 break;
+            if(static_cast<usize>(bytesRead) > chunkSize){
+                m_errors.push_back(ParseError{0, 0, MString("reader returned more bytes than requested", MAllocator<MChar>(m_arena))});
+                return false;
+            }
             buffer.append(chunk, static_cast<usize>(bytesRead));
         }
 
         return parse(MStringView(buffer.data(), buffer.size()));
     }
     catch(const GeneralException& e){
-        m_errors.clear();
         m_errors.push_back(ParseError{0, 0, MString(e.what(), MAllocator<MChar>(m_arena))});
         return false;
     }

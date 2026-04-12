@@ -14,6 +14,58 @@ NWB_METASCRIPT_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] bool AddI64Overflows(const i64 lhs, const i64 rhs){
+    if(rhs > 0)
+        return lhs > Limit<i64>::s_Max - rhs;
+    if(rhs < 0)
+        return lhs < Limit<i64>::s_Min - rhs;
+    return false;
+}
+
+[[nodiscard]] bool SubtractI64Overflows(const i64 lhs, const i64 rhs){
+    if(rhs > 0)
+        return lhs < Limit<i64>::s_Min + rhs;
+    if(rhs < 0)
+        return lhs > Limit<i64>::s_Max + rhs;
+    return false;
+}
+
+[[nodiscard]] bool MultiplyI64Overflows(const i64 lhs, const i64 rhs){
+    if(lhs == 0 || rhs == 0)
+        return false;
+
+    if(lhs > 0){
+        if(rhs > 0)
+            return lhs > Limit<i64>::s_Max / rhs;
+        return rhs < Limit<i64>::s_Min / lhs;
+    }
+
+    if(rhs > 0)
+        return lhs < Limit<i64>::s_Min / rhs;
+
+    return rhs < Limit<i64>::s_Max / lhs;
+}
+
+[[nodiscard]] bool DivideI64Overflows(const i64 lhs, const i64 rhs){
+    return lhs == Limit<i64>::s_Min && rhs == -1;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 Value::Value(Alloc::CustomArena& arena)
     : m_arena(arena)
 {}
@@ -76,8 +128,13 @@ Value& Value::operator=(Value&& other)noexcept{
 
 
 Value Value::operator+(const Value& rhs)const{
-    if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer)
+    if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer){
+        if(AddI64Overflows(m_data.m_integer, rhs.m_data.m_integer)){
+            NWB_ASSERT_MSG(false, NWB_TEXT("integer overflow"));
+            return Value(m_arena);
+        }
         return Value(m_data.m_integer + rhs.m_data.m_integer, m_arena);
+    }
 
     if(isNumeric() && rhs.isNumeric())
         return Value(toDouble() + rhs.toDouble(), m_arena);
@@ -85,6 +142,10 @@ Value Value::operator+(const Value& rhs)const{
     if(m_type == ValueType::String && rhs.m_type == ValueType::String){
         const auto lsv = asString();
         const auto rsv = rhs.asString();
+        if(lsv.size() > Limit<usize>::s_Max - rsv.size()){
+            NWB_ASSERT_MSG(false, NWB_TEXT("string concatenation size overflow"));
+            return Value(m_arena);
+        }
 
         StringType result{MAllocator<MChar>(m_arena)};
         result.reserve(lsv.size() + rsv.size());
@@ -101,6 +162,10 @@ Value Value::operator+(const Value& rhs)const{
         Value v(m_arena);
         v.makeList();
         auto& dst = *v.m_data.m_list;
+        if(m_data.m_list->size() > Limit<usize>::s_Max - rhs.m_data.m_list->size()){
+            NWB_ASSERT_MSG(false, NWB_TEXT("list concatenation size overflow"));
+            return Value(m_arena);
+        }
         dst.reserve(m_data.m_list->size() + rhs.m_data.m_list->size());
         for(const auto& elem : *m_data.m_list)
             dst.push_back(elem);
@@ -114,8 +179,13 @@ Value Value::operator+(const Value& rhs)const{
 }
 
 Value Value::operator-(const Value& rhs)const{
-    if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer)
+    if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer){
+        if(SubtractI64Overflows(m_data.m_integer, rhs.m_data.m_integer)){
+            NWB_ASSERT_MSG(false, NWB_TEXT("integer overflow"));
+            return Value(m_arena);
+        }
         return Value(m_data.m_integer - rhs.m_data.m_integer, m_arena);
+    }
 
     if(isNumeric() && rhs.isNumeric())
         return Value(toDouble() - rhs.toDouble(), m_arena);
@@ -125,8 +195,13 @@ Value Value::operator-(const Value& rhs)const{
 }
 
 Value Value::operator*(const Value& rhs)const{
-    if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer)
+    if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer){
+        if(MultiplyI64Overflows(m_data.m_integer, rhs.m_data.m_integer)){
+            NWB_ASSERT_MSG(false, NWB_TEXT("integer overflow"));
+            return Value(m_arena);
+        }
         return Value(m_data.m_integer * rhs.m_data.m_integer, m_arena);
+    }
 
     if(isNumeric() && rhs.isNumeric())
         return Value(toDouble() * rhs.toDouble(), m_arena);
@@ -137,12 +212,22 @@ Value Value::operator*(const Value& rhs)const{
 
 Value Value::operator/(const Value& rhs)const{
     if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer){
-        NWB_ASSERT_MSG(rhs.m_data.m_integer != 0, NWB_TEXT("division by zero"));
+        if(rhs.m_data.m_integer == 0){
+            NWB_ASSERT_MSG(false, NWB_TEXT("division by zero"));
+            return Value(m_arena);
+        }
+        if(DivideI64Overflows(m_data.m_integer, rhs.m_data.m_integer)){
+            NWB_ASSERT_MSG(false, NWB_TEXT("integer overflow"));
+            return Value(m_arena);
+        }
         return Value(m_data.m_integer / rhs.m_data.m_integer, m_arena);
     }
 
     if(isNumeric() && rhs.isNumeric()){
-        NWB_ASSERT_MSG(rhs.toDouble() != 0.0, NWB_TEXT("division by zero"));
+        if(rhs.toDouble() == 0.0){
+            NWB_ASSERT_MSG(false, NWB_TEXT("division by zero"));
+            return Value(m_arena);
+        }
         return Value(toDouble() / rhs.toDouble(), m_arena);
     }
 
@@ -152,6 +237,10 @@ Value Value::operator/(const Value& rhs)const{
 
 Value& Value::operator+=(const Value& rhs){
     if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer){
+        if(AddI64Overflows(m_data.m_integer, rhs.m_data.m_integer)){
+            NWB_ASSERT_MSG(false, NWB_TEXT("integer overflow"));
+            return *this;
+        }
         m_data.m_integer += rhs.m_data.m_integer;
         return *this;
     }
@@ -182,6 +271,10 @@ Value& Value::operator+=(const Value& rhs){
 
 Value& Value::operator-=(const Value& rhs){
     if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer){
+        if(SubtractI64Overflows(m_data.m_integer, rhs.m_data.m_integer)){
+            NWB_ASSERT_MSG(false, NWB_TEXT("integer overflow"));
+            return *this;
+        }
         m_data.m_integer -= rhs.m_data.m_integer;
         return *this;
     }
@@ -197,6 +290,10 @@ Value& Value::operator-=(const Value& rhs){
 
 Value& Value::operator*=(const Value& rhs){
     if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer){
+        if(MultiplyI64Overflows(m_data.m_integer, rhs.m_data.m_integer)){
+            NWB_ASSERT_MSG(false, NWB_TEXT("integer overflow"));
+            return *this;
+        }
         m_data.m_integer *= rhs.m_data.m_integer;
         return *this;
     }
@@ -212,13 +309,23 @@ Value& Value::operator*=(const Value& rhs){
 
 Value& Value::operator/=(const Value& rhs){
     if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer){
-        NWB_ASSERT_MSG(rhs.m_data.m_integer != 0, NWB_TEXT("division by zero"));
+        if(rhs.m_data.m_integer == 0){
+            NWB_ASSERT_MSG(false, NWB_TEXT("division by zero"));
+            return *this;
+        }
+        if(DivideI64Overflows(m_data.m_integer, rhs.m_data.m_integer)){
+            NWB_ASSERT_MSG(false, NWB_TEXT("integer overflow"));
+            return *this;
+        }
         m_data.m_integer /= rhs.m_data.m_integer;
         return *this;
     }
 
     if(isNumeric() && rhs.isNumeric()){
-        NWB_ASSERT_MSG(rhs.toDouble() != 0.0, NWB_TEXT("division by zero"));
+        if(rhs.toDouble() == 0.0){
+            NWB_ASSERT_MSG(false, NWB_TEXT("division by zero"));
+            return *this;
+        }
         setDouble(toDouble() / rhs.toDouble());
         return *this;
     }

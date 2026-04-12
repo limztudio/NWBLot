@@ -35,12 +35,11 @@ public:
 private:
     static constexpr usize s_JobInlineStorageBytes = 384;
     static constexpr u32 s_WorkFirstDepthLimit = 8;
-    static constexpr u32 s_ReadyBatchCapacity = 256;
 
 
 private:
     using JobFunction = InplaceFunction<s_JobInlineStorageBytes>;
-    using ReadyBatch = FixedVector<JobHandle, s_ReadyBatchCapacity>;
+    using ReadyBatch = Vector<JobHandle>;
 
 
 private:
@@ -227,6 +226,8 @@ private:
             output = acquireNodeLocked(Move(task));
             JobNode* node = tryResolveNodeLocked(output);
             NWB_ASSERT_MSG(node != nullptr, NWB_TEXT("JobSystem created an invalid job node"));
+            if(!node)
+                return JobHandle{};
 
             u32 unresolved = 0;
             for(usize i = 0; i < dependencyCount; ++i){
@@ -261,7 +262,11 @@ private:
             m_freeNodes.pop_back();
         }
         else{
-            NWB_ASSERT_MSG(m_nodes.size() < static_cast<usize>(JobHandle::s_InvalidIndex), NWB_TEXT("JobSystem exceeded maximum number of trackable jobs"));
+            if(m_nodes.size() >= static_cast<usize>(JobHandle::s_InvalidIndex)){
+                NWB_ASSERT_MSG(false, NWB_TEXT("JobSystem exceeded maximum number of trackable jobs"));
+                return JobHandle{};
+            }
+
             index = static_cast<u32>(m_nodes.size());
             m_nodes.emplace_back(m_arena);
 
@@ -329,6 +334,12 @@ private:
     inline void enqueueExecutionBatch(const JobHandle* handles, usize handleCount){
         if(handleCount == 0)
             return;
+
+        if(m_pool.m_threadCount == 0){
+            for(usize i = 0; i < handleCount; ++i)
+                execute(handles[i]);
+            return;
+        }
 
         m_pool.enqueueBatch(handleCount, [this, handles](usize i){
             const JobHandle handle = handles[i];
@@ -401,7 +412,6 @@ private:
                         continue;
                     }
 
-                    NWB_ASSERT_MSG(readyJobs.size() < readyJobs.max_size(), NWB_TEXT("JobSystem ready batch capacity exceeded"));
                     readyJobs.push_back(dependentHandle);
                 }
             }

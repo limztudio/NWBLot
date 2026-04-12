@@ -1704,28 +1704,34 @@ bool RendererSystem::ensureGeometryLoaded(const Core::Assets::AssetRef<Geometry>
         return false;
     }
 
-    Core::Alloc::ScratchArena<> scratchArena;
-    Vector<u32, Core::Alloc::ScratchAllocator<u32>> expandedIndices{Core::Alloc::ScratchAllocator<u32>(scratchArena)};
-    expandedIndices.resize(createdGeometry.indexCount);
-    if(geometry.use32BitIndices()){
-        const u32* indexData = reinterpret_cast<const u32*>(geometry.indexData().data());
-        for(u32 i = 0; i < createdGeometry.indexCount; ++i)
-            expandedIndices[i] = indexData[i];
-    }
-    else{
-        const u16* indexData = reinterpret_cast<const u16*>(geometry.indexData().data());
-        for(u32 i = 0; i < createdGeometry.indexCount; ++i)
-            expandedIndices[i] = static_cast<u32>(indexData[i]);
-    }
-
-    if(expandedIndices.size() > Limit<usize>::s_Max / sizeof(u32)){
+    const usize expandedIndexCount = static_cast<usize>(createdGeometry.indexCount);
+    if(expandedIndexCount > Limit<usize>::s_Max / sizeof(u32)){
         NWB_LOGGER_ERROR(
             NWB_TEXT("RendererSystem: geometry '{}' expanded index buffer size overflows"),
             StringConvert(geometryPath.c_str())
         );
         return false;
     }
-    const usize expandedIndexBytes = expandedIndices.size() * sizeof(u32);
+    const usize expandedIndexBytes = expandedIndexCount * sizeof(u32);
+
+    Core::Alloc::ScratchArena<> scratchArena;
+    Vector<u32, Core::Alloc::ScratchAllocator<u32>> expandedIndices{Core::Alloc::ScratchAllocator<u32>(scratchArena)};
+    expandedIndices.resize(expandedIndexCount);
+    const u8* indexBytes = geometry.indexData().data();
+    if(geometry.use32BitIndices()){
+        for(u32 i = 0; i < createdGeometry.indexCount; ++i){
+            u32 indexValue = 0;
+            NWB_MEMCPY(&indexValue, sizeof(indexValue), indexBytes + static_cast<usize>(i) * sizeof(indexValue), sizeof(indexValue));
+            expandedIndices[i] = indexValue;
+        }
+    }
+    else{
+        for(u32 i = 0; i < createdGeometry.indexCount; ++i){
+            u16 indexValue = 0;
+            NWB_MEMCPY(&indexValue, sizeof(indexValue), indexBytes + static_cast<usize>(i) * sizeof(indexValue), sizeof(indexValue));
+            expandedIndices[i] = static_cast<u32>(indexValue);
+        }
+    }
 
     Core::Graphics::BufferSetupDesc shaderIndexSetup;
     shaderIndexSetup.bufferDesc

@@ -30,6 +30,20 @@ inline constexpr u32 s_SpirvMagic = 0x07230203u;
 inline constexpr u16 s_OpEntryPoint = 15u;
 inline constexpr usize s_SpirvHeaderWords = 5;
 
+using SpirvWordVector = Vector<u32, Alloc::ScratchAllocator<u32>>;
+
+inline bool CopySpirvWords(const void* binary, const usize binarySize, SpirvWordVector& outWords){
+    outWords.clear();
+
+    if(!binary || binarySize == 0 || (binarySize & 3) != 0)
+        return false;
+
+    const usize wordCount = binarySize / sizeof(u32);
+    outWords.resize(wordCount);
+    NWB_MEMCPY(outWords.data(), binarySize, binary, binarySize);
+    return true;
+}
+
 inline ShaderType::Mask ConvertExecutionModel(const u32 executionModel){
     switch(executionModel){
     case 0u: return ShaderType::Vertex;
@@ -53,7 +67,8 @@ inline ShaderType::Mask ConvertExecutionModel(const u32 executionModel){
 }
 
 inline EntryPointLookupResult ResolveEntryPointName(
-    const Vector<u8, Alloc::CustomAllocator<u8>>& bytecode,
+    const u32* words,
+    const usize wordCount,
     const Name& entryName,
     const ShaderType::Mask shaderType,
     AString& outEntryPointName)
@@ -63,14 +78,9 @@ inline EntryPointLookupResult ResolveEntryPointName(
     if(!entryName || shaderType == ShaderType::None)
         return EntryPointLookupResult::NotFound;
 
-    if(bytecode.empty() || (bytecode.size() & 3) != 0)
+    if(!words || wordCount < s_SpirvHeaderWords)
         return EntryPointLookupResult::InvalidSpirv;
 
-    const usize wordCount = bytecode.size() / sizeof(u32);
-    if(wordCount < s_SpirvHeaderWords)
-        return EntryPointLookupResult::InvalidSpirv;
-
-    const auto* words = reinterpret_cast<const u32*>(bytecode.data());
     if(words[0] != s_SpirvMagic)
         return EntryPointLookupResult::InvalidSpirv;
 
@@ -81,10 +91,10 @@ inline EntryPointLookupResult ResolveEntryPointName(
         if(instructionWordCount == 0)
             return EntryPointLookupResult::InvalidSpirv;
 
-        const usize nextInstructionIndex = instructionIndex + instructionWordCount;
-        if(nextInstructionIndex > wordCount)
+        if(static_cast<usize>(instructionWordCount) > wordCount - instructionIndex)
             return EntryPointLookupResult::InvalidSpirv;
 
+        const usize nextInstructionIndex = instructionIndex + instructionWordCount;
         if(opcode == s_OpEntryPoint){
             if(instructionWordCount <= 3)
                 return EntryPointLookupResult::InvalidSpirv;
@@ -121,13 +131,14 @@ inline EntryPointLookupResult ResolveEntryPointName(
 }
 
 inline bool ResolveShaderEntryPoint(
-    const Vector<u8, Alloc::CustomAllocator<u8>>& bytecode,
+    const u32* words,
+    const usize wordCount,
     const Name& entryName,
     const ShaderType::Mask shaderType,
     const char* errorContext,
     AString& outEntryPointName)
 {
-    const EntryPointLookupResult lookupResult = ResolveEntryPointName(bytecode, entryName, shaderType, outEntryPointName);
+    const EntryPointLookupResult lookupResult = ResolveEntryPointName(words, wordCount, entryName, shaderType, outEntryPointName);
     switch(lookupResult){
     case EntryPointLookupResult::Found:
         return true;
@@ -236,7 +247,15 @@ ShaderHandle ShaderLibrary::getShader(const Name& entryName, ShaderType::Mask sh
         return nullptr;
     }
 
-    if(!__hidden_vulkan_shader::ResolveShaderEntryPoint(shader->m_bytecode, entryName, shaderType, "shader library", shader->m_entryPointName)){
+    Alloc::ScratchArena<> scratchArena;
+    __hidden_vulkan_shader::SpirvWordVector spirvWords{ Alloc::ScratchAllocator<u32>(scratchArena) };
+    if(!__hidden_vulkan_shader::CopySpirvWords(shader->m_bytecode.data(), shader->m_bytecode.size(), spirvWords)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Invalid shader library bytecode payload for entry '{}'"), StringConvert(entryName.c_str()));
+        DestroyArenaObject(m_context.objectArena, shader);
+        return nullptr;
+    }
+
+    if(!__hidden_vulkan_shader::ResolveShaderEntryPoint(spirvWords.data(), spirvWords.size(), entryName, shaderType, "shader library", shader->m_entryPointName)){
         DestroyArenaObject(m_context.objectArena, shader);
         return nullptr;
     }
@@ -244,7 +263,7 @@ ShaderHandle ShaderLibrary::getShader(const Name& entryName, ShaderType::Mask sh
     VkShaderModuleCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     createInfo.codeSize = m_bytecode.size();
-    createInfo.pCode = reinterpret_cast<const uint32_t*>(m_bytecode.data());
+    createInfo.pCode = spirvWords.data();
 
     res = vkCreateShaderModule(m_context.device, &createInfo, m_context.allocationCallbacks, &shader->m_shaderModule);
     if(res != VK_SUCCESS){
@@ -273,7 +292,15 @@ ShaderHandle Device::createShader(const ShaderDesc& d, const void* binary, usize
     shader->m_desc = d;
     shader->m_bytecode.assign(static_cast<const u8*>(binary), static_cast<const u8*>(binary) + binarySize);
 
-    if(!__hidden_vulkan_shader::ResolveShaderEntryPoint(shader->m_bytecode, d.entryName, d.shaderType, "standalone shader", shader->m_entryPointName)){
+    Alloc::ScratchArena<> scratchArena;
+    __hidden_vulkan_shader::SpirvWordVector spirvWords{ Alloc::ScratchAllocator<u32>(scratchArena) };
+    if(!__hidden_vulkan_shader::CopySpirvWords(shader->m_bytecode.data(), shader->m_bytecode.size(), spirvWords)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Invalid shader bytecode payload"));
+        DestroyArenaObject(m_context.objectArena, shader);
+        return nullptr;
+    }
+
+    if(!__hidden_vulkan_shader::ResolveShaderEntryPoint(spirvWords.data(), spirvWords.size(), d.entryName, d.shaderType, "standalone shader", shader->m_entryPointName)){
         DestroyArenaObject(m_context.objectArena, shader);
         return nullptr;
     }
@@ -281,7 +308,7 @@ ShaderHandle Device::createShader(const ShaderDesc& d, const void* binary, usize
     VkShaderModuleCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     createInfo.codeSize = binarySize;
-    createInfo.pCode = reinterpret_cast<const uint32_t*>(binary);
+    createInfo.pCode = spirvWords.data();
 
     res = vkCreateShaderModule(m_context.device, &createInfo, m_context.allocationCallbacks, &shader->m_shaderModule);
     if(res != VK_SUCCESS){
@@ -315,10 +342,18 @@ ShaderHandle Device::createShaderSpecialization(IShader* baseShader, const Shade
     shader->m_bytecode = base->m_bytecode;
     shader->m_entryPointName = base->m_entryPointName;
 
+    Alloc::ScratchArena<> scratchArena;
+    __hidden_vulkan_shader::SpirvWordVector spirvWords{ Alloc::ScratchAllocator<u32>(scratchArena) };
+    if(!__hidden_vulkan_shader::CopySpirvWords(shader->m_bytecode.data(), shader->m_bytecode.size(), spirvWords)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Invalid shader bytecode payload for specialization"));
+        DestroyArenaObject(m_context.objectArena, shader);
+        return nullptr;
+    }
+
     VkShaderModuleCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     createInfo.codeSize = shader->m_bytecode.size();
-    createInfo.pCode = reinterpret_cast<const uint32_t*>(shader->m_bytecode.data());
+    createInfo.pCode = spirvWords.data();
 
     res = vkCreateShaderModule(m_context.device, &createInfo, m_context.allocationCallbacks, &shader->m_shaderModule);
     if(res != VK_SUCCESS){

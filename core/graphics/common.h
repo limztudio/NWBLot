@@ -3161,6 +3161,11 @@ public:
     // non-NVRHI code - see getNativeObject(...) - to recording further commands using NVRHI.
     virtual void clearState() = 0;
 
+    // Ends the currently active graphics render pass, if one is active.
+    // This is useful when a texture rendered earlier in the command list must be transitioned
+    // for sampling, storage, copy, or another non-attachment use before another graphics pass.
+    virtual void endRenderPass() = 0;
+
     // Clears some or all subresources of the given color texture using the provided color.
     // - DX11/12: The clear operation uses either an RTV or a UAV, depending on the texture usage flags
     //   (isRenderTarget and isUAV).

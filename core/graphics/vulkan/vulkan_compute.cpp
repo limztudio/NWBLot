@@ -192,11 +192,8 @@ void CommandList::dispatch(u32 groupsX, u32 groupsY, u32 groupsZ){
 }
 
 void CommandList::dispatchIndirect(u32 offsetBytes){
-    if(!m_currentComputeState.indirectParams){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: No indirect buffer bound for dispatchIndirect"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: No indirect buffer bound for dispatchIndirect"));
+    if(!validateIndirectBuffer(m_currentComputeState.indirectParams, offsetBytes, sizeof(DispatchIndirectArguments), 1, NWB_TEXT("dispatchIndirect")))
         return;
-    }
     auto* buffer = checked_cast<Buffer*>(m_currentComputeState.indirectParams);
     vkCmdDispatchIndirect(m_currentCmdBuf->m_cmdBuf, buffer->m_buffer, offsetBytes);
     m_currentCmdBuf->m_referencedResources.push_back(m_currentComputeState.indirectParams);

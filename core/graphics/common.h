@@ -2692,8 +2692,8 @@ typedef RefCountPtr<ITimerQuery, ArenaRefDeleter<ITimerQuery>> TimerQueryHandle;
 
 struct VertexBufferBinding{
     IBuffer* buffer = nullptr;
-    u64 offset;
-    u32 slot;
+    u64 offset = 0;
+    u32 slot = 0;
 
     constexpr VertexBufferBinding& setBuffer(IBuffer* value){ buffer = value; return *this; }
     constexpr VertexBufferBinding& setSlot(u32 value){ slot = value; return *this; }
@@ -2710,8 +2710,8 @@ inline bool operator!=(const VertexBufferBinding& lhs, const VertexBufferBinding
 
 struct IndexBufferBinding{
     IBuffer* buffer = nullptr;
-    u32 offset;
-    Format::Enum format;
+    u32 offset = 0;
+    Format::Enum format = Format::UNKNOWN;
 
     constexpr IndexBufferBinding& setBuffer(IBuffer* value){ buffer = value; return *this; }
     constexpr IndexBufferBinding& setFormat(Format::Enum value){ format = value; return *this; }

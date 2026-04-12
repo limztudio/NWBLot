@@ -30,6 +30,8 @@ namespace __hidden_vulkan{
     VkImageUsageFlags PickImageUsage(const TextureDesc& desc);
     VkImageCreateFlags PickImageFlags(const TextureDesc& desc);
     u64 ComputeStagingTextureOffset(const TextureDesc& desc, const TextureSlice& slice, usize* outRowPitch = nullptr, u32* outBufferRowLength = nullptr, u32* outBufferImageHeight = nullptr);
+    bool IsBufferRangeInBounds(const BufferDesc& desc, u64 offsetBytes, u64 sizeBytes);
+    bool BufferRangesOverlap(u64 firstOffsetBytes, u64 firstSizeBytes, u64 secondOffsetBytes, u64 secondSizeBytes);
     VkDescriptorType ConvertDescriptorType(ResourceType::Enum type);
     VkShaderStageFlags ConvertShaderStages(ShaderType::Mask stages);
     VkComponentTypeKHR ConvertCoopVecDataType(CooperativeVectorDataType::Enum type);
@@ -1319,6 +1321,7 @@ private:
     void endDynamicRendering();
     void ensureGraphicsRenderPass(IFramebuffer* framebuffer);
     void endActiveRenderPass();
+    bool validateIndirectBuffer(IBuffer* buffer, u64 offsetBytes, u64 commandSizeBytes, u32 commandCount, const tchar* commandName)const;
 
 
 private:

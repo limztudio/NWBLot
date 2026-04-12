@@ -109,6 +109,35 @@ void CommandList::clearState(){
     m_pendingCompactions.clear();
 }
 
+bool CommandList::validateIndirectBuffer(IBuffer* _buffer, u64 offsetBytes, u64 commandSizeBytes, u32 commandCount, const tchar* commandName)const{
+    if(!_buffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: No indirect buffer bound for {}"), commandName);
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: No indirect buffer bound"));
+        return false;
+    }
+
+    auto* buffer = checked_cast<Buffer*>(_buffer);
+    if(!buffer->m_desc.isDrawIndirectArgs){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to execute {}: buffer was not created with indirect-argument usage"), commandName);
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to execute indirect command: buffer was not created with indirect-argument usage"));
+        return false;
+    }
+    if((offsetBytes & 3u) != 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to execute {}: offset is not 4-byte aligned"), commandName);
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to execute indirect command: offset is not 4-byte aligned"));
+        return false;
+    }
+
+    const u64 totalBytes = commandSizeBytes * commandCount;
+    if(!__hidden_vulkan::IsBufferRangeInBounds(buffer->m_desc, offsetBytes, totalBytes)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to execute {}: indirect argument range is outside the buffer"), commandName);
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to execute indirect command: indirect argument range is outside the buffer"));
+        return false;
+    }
+
+    return true;
+}
+
 void CommandList::copyTextureToBuffer(IBuffer* _dest, u64 destOffsetBytes, u32 destRowPitch, ITexture* _src, const TextureSlice& srcSlice){
     auto* dest = checked_cast<Buffer*>(_dest);
     auto* src = checked_cast<Texture*>(_src);

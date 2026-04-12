@@ -394,6 +394,16 @@ void CommandList::writeBuffer(IBuffer* _buffer, const void* data, usize dataSize
 
 void CommandList::clearBufferUInt(IBuffer* _buffer, u32 clearValue){
     auto* buffer = checked_cast<Buffer*>(_buffer);
+    if(!buffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear buffer: buffer is null"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear buffer: buffer is null"));
+        return;
+    }
+    if((buffer->m_desc.byteSize & 3u) != 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear buffer: buffer size is not 4-byte aligned"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear buffer: buffer size is not 4-byte aligned"));
+        return;
+    }
 
     vkCmdFillBuffer(m_currentCmdBuf->m_cmdBuf, buffer->m_buffer, 0, VK_WHOLE_SIZE, clearValue);
     m_currentCmdBuf->m_referencedResources.push_back(_buffer);

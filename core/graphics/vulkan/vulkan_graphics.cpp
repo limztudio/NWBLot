@@ -148,6 +148,28 @@ constexpr VkPipelineColorBlendAttachmentState ConvertBlendState(const BlendState
     return state;
 }
 
+void SetGraphicsDynamicState(VkCommandBuffer commandBuffer, const GraphicsPipelineDesc& desc, const GraphicsState& state){
+    const RasterState& rasterState = desc.renderState.rasterState;
+    const DepthStencilState& depthStencilState = desc.renderState.depthStencilState;
+
+    vkCmdSetLineWidth(commandBuffer, s_DefaultRasterLineWidth);
+    vkCmdSetDepthBias(commandBuffer, static_cast<f32>(rasterState.depthBias), rasterState.depthBiasClamp, rasterState.slopeScaledDepthBias);
+
+    const f32 blendConstants[] = {
+        state.blendConstantColor.r,
+        state.blendConstantColor.g,
+        state.blendConstantColor.b,
+        state.blendConstantColor.a,
+    };
+    vkCmdSetBlendConstants(commandBuffer, blendConstants);
+    vkCmdSetDepthBounds(commandBuffer, 0.f, 1.f);
+    vkCmdSetStencilCompareMask(commandBuffer, VK_STENCIL_FACE_FRONT_AND_BACK, depthStencilState.stencilReadMask);
+    vkCmdSetStencilWriteMask(commandBuffer, VK_STENCIL_FACE_FRONT_AND_BACK, depthStencilState.stencilWriteMask);
+
+    const u8 stencilRef = depthStencilState.dynamicStencilRef ? state.dynamicStencilRefValue : depthStencilState.stencilRefValue;
+    vkCmdSetStencilReference(commandBuffer, VK_STENCIL_FACE_FRONT_AND_BACK, stencilRef);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -603,8 +625,10 @@ void CommandList::setGraphicsState(const GraphicsState& state){
     m_currentGraphicsState = state;
 
     auto* pipeline = checked_cast<GraphicsPipeline*>(state.pipeline);
-    if(pipeline)
+    if(pipeline){
         vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->m_pipeline);
+        __hidden_vulkan::SetGraphicsDynamicState(m_currentCmdBuf->m_cmdBuf, pipeline->m_desc, state);
+    }
 
     if(pipeline)
         retainBindingSets(state.bindings);
@@ -651,22 +675,73 @@ void CommandList::setGraphicsState(const GraphicsState& state){
 
     // Bind vertex buffers
     if(!state.vertexBuffers.empty()){
-        constexpr u32 kMaxVertexBuffers = s_MaxVertexAttributes;
-        VkBuffer vertexBuffers[kMaxVertexBuffers];
-        VkDeviceSize offsets[kMaxVertexBuffers];
-        auto count = Min(static_cast<u32>(state.vertexBuffers.size()), kMaxVertexBuffers);
-        for(u32 i = 0; i < count; ++i){
-            auto* vb = checked_cast<Buffer*>(state.vertexBuffers[i].buffer);
-            vertexBuffers[i] = vb->m_buffer;
-            offsets[i] = state.vertexBuffers[i].offset;
+        for(u32 i = 0; i < static_cast<u32>(state.vertexBuffers.size()); ++i){
+            const auto& binding = state.vertexBuffers[i];
+            if(!binding.buffer){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind vertex buffer: buffer is null"));
+                NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to bind vertex buffer: buffer is null"));
+                return;
+            }
+            if(binding.slot >= s_MaxVertexAttributes){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind vertex buffer: slot is out of range"));
+                NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to bind vertex buffer: slot is out of range"));
+                return;
+            }
+
+            auto* vb = checked_cast<Buffer*>(binding.buffer);
+            if(!vb->m_desc.isVertexBuffer){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind vertex buffer: buffer was not created with vertex-buffer usage"));
+                NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to bind vertex buffer: buffer was not created with vertex-buffer usage"));
+                return;
+            }
+            if(!__hidden_vulkan::IsBufferRangeInBounds(vb->m_desc, binding.offset, 1)){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind vertex buffer: offset is outside the buffer"));
+                NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to bind vertex buffer: offset is outside the buffer"));
+                return;
+            }
+
+            VkBuffer vertexBuffer = vb->m_buffer;
+            VkDeviceSize offset = binding.offset;
+            vkCmdBindVertexBuffers(m_currentCmdBuf->m_cmdBuf, binding.slot, 1, &vertexBuffer, &offset);
         }
-        vkCmdBindVertexBuffers(m_currentCmdBuf->m_cmdBuf, 0, count, vertexBuffers, offsets);
     }
 
     // Bind index buffer
     if(state.indexBuffer.buffer){
         auto* ib = checked_cast<Buffer*>(state.indexBuffer.buffer);
-        VkIndexType indexType = (state.indexBuffer.format == Format::R16_UINT) ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32;
+        if(!ib->m_desc.isIndexBuffer){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind index buffer: buffer was not created with index-buffer usage"));
+            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to bind index buffer: buffer was not created with index-buffer usage"));
+            return;
+        }
+
+        VkIndexType indexType;
+        u32 indexSizeBytes;
+        if(state.indexBuffer.format == Format::R16_UINT){
+            indexType = VK_INDEX_TYPE_UINT16;
+            indexSizeBytes = sizeof(u16);
+        }
+        else if(state.indexBuffer.format == Format::R32_UINT){
+            indexType = VK_INDEX_TYPE_UINT32;
+            indexSizeBytes = sizeof(u32);
+        }
+        else{
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind index buffer: format must be R16_UINT or R32_UINT"));
+            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to bind index buffer: format must be R16_UINT or R32_UINT"));
+            return;
+        }
+
+        if((state.indexBuffer.offset % indexSizeBytes) != 0){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind index buffer: offset is not aligned to the index format"));
+            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to bind index buffer: offset is not aligned to the index format"));
+            return;
+        }
+        if(!__hidden_vulkan::IsBufferRangeInBounds(ib->m_desc, state.indexBuffer.offset, indexSizeBytes)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind index buffer: offset is outside the buffer"));
+            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to bind index buffer: offset is outside the buffer"));
+            return;
+        }
+
         vkCmdBindIndexBuffer(m_currentCmdBuf->m_cmdBuf, ib->m_buffer, state.indexBuffer.offset, indexType);
     }
 }
@@ -680,11 +755,15 @@ void CommandList::drawIndexed(const DrawArguments& args){
 }
 
 void CommandList::drawIndirect(u32 offsetBytes, u32 drawCount){
-    if(!m_currentGraphicsState.indirectParams){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: No indirect buffer bound for drawIndirect"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: No indirect buffer bound for drawIndirect"));
+    if(drawCount == 0)
+        return;
+    if(drawCount > m_context.physicalDeviceProperties.limits.maxDrawIndirectCount){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to draw indirect: draw count exceeds device limit"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to draw indirect: draw count exceeds device limit"));
         return;
     }
+    if(!validateIndirectBuffer(m_currentGraphicsState.indirectParams, offsetBytes, sizeof(DrawIndirectArguments), drawCount, NWB_TEXT("drawIndirect")))
+        return;
     auto* indirectBuffer = checked_cast<Buffer*>(m_currentGraphicsState.indirectParams);
     vkCmdDrawIndirect(m_currentCmdBuf->m_cmdBuf, indirectBuffer->m_buffer, offsetBytes, drawCount, sizeof(DrawIndirectArguments));
     m_currentCmdBuf->m_referencedResources.push_back(m_currentGraphicsState.indirectParams);

@@ -81,11 +81,15 @@ void CommandList::setPushConstants(const void* data, usize byteSize){
 
 
 void CommandList::drawIndexedIndirect(u32 offsetBytes, u32 drawCount){
-    if(!m_currentGraphicsState.indirectParams){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: No indirect buffer bound for drawIndexedIndirect"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: No indirect buffer bound for drawIndexedIndirect"));
+    if(drawCount == 0)
+        return;
+    if(drawCount > m_context.physicalDeviceProperties.limits.maxDrawIndirectCount){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to draw indexed indirect: draw count exceeds device limit"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to draw indexed indirect: draw count exceeds device limit"));
         return;
     }
+    if(!validateIndirectBuffer(m_currentGraphicsState.indirectParams, offsetBytes, sizeof(DrawIndexedIndirectArguments), drawCount, NWB_TEXT("drawIndexedIndirect")))
+        return;
     auto* buffer = checked_cast<Buffer*>(m_currentGraphicsState.indirectParams);
     vkCmdDrawIndexedIndirect(m_currentCmdBuf->m_cmdBuf, buffer->m_buffer, offsetBytes, drawCount, sizeof(DrawIndexedIndirectArguments));
     m_currentCmdBuf->m_referencedResources.push_back(m_currentGraphicsState.indirectParams);

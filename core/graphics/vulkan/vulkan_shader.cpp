@@ -32,6 +32,28 @@ inline constexpr usize s_SpirvHeaderWords = 5;
 
 using SpirvWordVector = Vector<u32, Alloc::ScratchAllocator<u32>>;
 
+inline bool ComputeVertexAttributeBytes(const VertexAttributeDesc& attr, const u32 attributeIndex, u64& outBytes){
+    outBytes = 0;
+
+    const FormatInfo& formatInfo = GetFormatInfo(attr.format);
+    if(formatInfo.bytesPerBlock == 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create input layout: attribute {} has a zero-size vertex format"), attributeIndex);
+        return false;
+    }
+    if(attr.arraySize > Limit<u64>::s_Max / static_cast<u64>(formatInfo.bytesPerBlock)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create input layout: attribute {} byte size overflows"), attributeIndex);
+        return false;
+    }
+
+    outBytes = static_cast<u64>(formatInfo.bytesPerBlock) * static_cast<u64>(attr.arraySize);
+    if(outBytes == 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create input layout: attribute {} has zero byte size"), attributeIndex);
+        return false;
+    }
+
+    return true;
+}
+
 inline bool CopySpirvWords(const void* binary, const usize binarySize, SpirvWordVector& outWords){
     outWords.clear();
 
@@ -428,6 +450,22 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
         );
         return nullptr;
     }
+
+    struct VertexBindingBuildInfo{
+        u64 requiredStride = 0;
+        u32 explicitStride = 0;
+        bool hasExplicitStride = false;
+        bool isInstanced = false;
+    };
+
+    Alloc::ScratchArena<> scratchArena;
+    HashMap<u32, VertexBindingBuildInfo, Hasher<u32>, EqualTo<u32>, Alloc::ScratchAllocator<Pair<const u32, VertexBindingBuildInfo>>> bindingInfos(
+        0,
+        Hasher<u32>(),
+        EqualTo<u32>(),
+        Alloc::ScratchAllocator<Pair<const u32, VertexBindingBuildInfo>>(scratchArena)
+    );
+
     for(u32 i = 0; i < attributeCount; ++i){
         const VertexAttributeDesc& attr = d[i];
         if(ConvertFormat(attr.format) == VK_FORMAT_UNDEFINED){
@@ -457,17 +495,79 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
             return nullptr;
         }
 
-        u64 stride = attr.elementStride;
-        if(stride == 0){
-            const FormatInfo& formatInfo = GetFormatInfo(attr.format);
-            stride = static_cast<u64>(formatInfo.bytesPerBlock) * attr.arraySize;
+        u64 attributeBytes = 0;
+        if(!__hidden_vulkan_shader::ComputeVertexAttributeBytes(attr, i, attributeBytes))
+            return nullptr;
+        if(static_cast<u64>(attr.offset) > Limit<u64>::s_Max - attributeBytes){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create input layout: attribute {} offset plus size overflows"), i);
+            return nullptr;
         }
+
+        const u64 attributeEnd = static_cast<u64>(attr.offset) + attributeBytes;
+        if(attr.elementStride != 0 && attributeEnd > static_cast<u64>(attr.elementStride)){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Vulkan: Failed to create input layout: attribute {} extent {} exceeds explicit stride {}"),
+                i,
+                attributeEnd,
+                attr.elementStride
+            );
+            return nullptr;
+        }
+
+        auto bindingInfoIt = bindingInfos.find(attr.bufferIndex);
+        if(bindingInfoIt == bindingInfos.end()){
+            VertexBindingBuildInfo info{};
+            info.isInstanced = attr.isInstanced;
+            bindingInfos[attr.bufferIndex] = info;
+            bindingInfoIt = bindingInfos.find(attr.bufferIndex);
+        }
+
+        VertexBindingBuildInfo& bindingInfo = bindingInfoIt.value();
+        if(bindingInfo.isInstanced != attr.isInstanced){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Vulkan: Failed to create input layout: buffer binding {} mixes vertex and instance input rates"),
+                attr.bufferIndex
+            );
+            return nullptr;
+        }
+
+        bindingInfo.requiredStride = Max(bindingInfo.requiredStride, attributeEnd);
+        if(attr.elementStride != 0){
+            if(bindingInfo.hasExplicitStride && bindingInfo.explicitStride != attr.elementStride){
+                NWB_LOGGER_ERROR(
+                    NWB_TEXT("Vulkan: Failed to create input layout: buffer binding {} uses conflicting explicit strides {} and {}"),
+                    attr.bufferIndex,
+                    bindingInfo.explicitStride,
+                    attr.elementStride
+                );
+                return nullptr;
+            }
+
+            bindingInfo.explicitStride = attr.elementStride;
+            bindingInfo.hasExplicitStride = true;
+        }
+    }
+
+    for(const auto& [bufferIndex, bindingInfo] : bindingInfos){
+        const u64 stride = bindingInfo.hasExplicitStride
+            ? static_cast<u64>(bindingInfo.explicitStride)
+            : bindingInfo.requiredStride
+        ;
         if(stride == 0 || stride > limits.maxVertexInputBindingStride){
             NWB_LOGGER_ERROR(
-                NWB_TEXT("Vulkan: Failed to create input layout: attribute {} stride {} is outside device limit {}"),
-                i,
+                NWB_TEXT("Vulkan: Failed to create input layout: buffer binding {} stride {} is outside device limit {}"),
+                bufferIndex,
                 stride,
                 limits.maxVertexInputBindingStride
+            );
+            return nullptr;
+        }
+        if(bindingInfo.requiredStride > stride){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Vulkan: Failed to create input layout: buffer binding {} requires {} bytes but explicit stride is {}"),
+                bufferIndex,
+                bindingInfo.requiredStride,
+                stride
             );
             return nullptr;
         }
@@ -477,30 +577,14 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
     if(attributeCount > 0)
         layout->m_attributes.assign(d, d + attributeCount);
 
-    Alloc::ScratchArena<> scratchArena;
-
-    HashMap<u32, u32, Hasher<u32>, EqualTo<u32>, Alloc::ScratchAllocator<Pair<const u32, u32>>> bufferStrides(0, Hasher<u32>(), EqualTo<u32>(), Alloc::ScratchAllocator<Pair<const u32, u32>>(scratchArena));
-    HashMap<u32, bool, Hasher<u32>, EqualTo<u32>, Alloc::ScratchAllocator<Pair<const u32, bool>>> bufferInstanced(0, Hasher<u32>(), EqualTo<u32>(), Alloc::ScratchAllocator<Pair<const u32, bool>>(scratchArena));
-    for(const auto& attr : layout->m_attributes){
-        u32 stride = attr.elementStride;
-        if(stride == 0){
-            const FormatInfo& formatInfo = GetFormatInfo(attr.format);
-            stride = formatInfo.bytesPerBlock * attr.arraySize;
-        }
-
-        if(bufferStrides.find(attr.bufferIndex) == bufferStrides.end()){
-            bufferStrides[attr.bufferIndex] = stride;
-            bufferInstanced[attr.bufferIndex] = attr.isInstanced;
-        }
-        else
-            bufferStrides[attr.bufferIndex] = Max(bufferStrides[attr.bufferIndex], stride);
-    }
-
-    for(const auto& [bufferIndex, stride] : bufferStrides){
+    for(const auto& [bufferIndex, bindingInfo] : bindingInfos){
         VkVertexInputBindingDescription binding{};
         binding.binding = bufferIndex;
-        binding.stride = stride;
-        binding.inputRate = bufferInstanced[bufferIndex] ? VK_VERTEX_INPUT_RATE_INSTANCE : VK_VERTEX_INPUT_RATE_VERTEX;
+        binding.stride = bindingInfo.hasExplicitStride
+            ? bindingInfo.explicitStride
+            : static_cast<u32>(bindingInfo.requiredStride)
+        ;
+        binding.inputRate = bindingInfo.isInstanced ? VK_VERTEX_INPUT_RATE_INSTANCE : VK_VERTEX_INPUT_RATE_VERTEX;
         layout->m_bindings.push_back(binding);
     }
 

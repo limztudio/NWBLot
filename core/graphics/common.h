@@ -2239,7 +2239,7 @@ struct BindingSetItem{
     union{
         TextureSubresourceSet subresources; // valid for Texture_SRV, Texture_UAV
         BufferRange range; // valid for Buffer_SRV, Buffer_UAV, ConstantBuffer
-        u16 rawData[2];
+        u64 rawData[2];
     };
     static_assert(sizeof(TextureSubresourceSet) == 16, "sizeof(TextureSubresourceSet) is supposed to be 16 bytes");
     static_assert(sizeof(BufferRange) == 16, "sizeof(BufferRange) is supposed to be 16 bytes");
@@ -2447,6 +2447,7 @@ inline bool operator==(const BindingSetItem& lhs, const BindingSetItem& rhs){
     return
         lhs.resourceHandle == rhs.resourceHandle
         && lhs.slot == rhs.slot
+        && lhs.arrayElement == rhs.arrayElement
         && lhs.type == rhs.type
         && lhs.dimension == rhs.dimension
         && lhs.format == rhs.format
@@ -2469,6 +2470,8 @@ struct BindingSetDesc{
     constexpr BindingSetDesc& setTrackLiveness(bool value){ trackLiveness = value; return *this; }
 };
 inline bool operator==(const BindingSetDesc& lhs, const BindingSetDesc& rhs){
+    if(lhs.trackLiveness != rhs.trackLiveness)
+        return false;
     if(lhs.bindings.size() != rhs.bindings.size())
         return false;
     for(usize i = 0; i < lhs.bindings.size(); ++i){
@@ -3938,6 +3941,7 @@ struct hash<NWB::Core::BindingSetItem>{
         usize value = 0;
         NWB::Core::__hidden_core::HashCombine(value, s.resourceHandle);
         NWB::Core::__hidden_core::HashCombine(value, s.slot);
+        NWB::Core::__hidden_core::HashCombine(value, s.arrayElement);
         NWB::Core::__hidden_core::HashCombine(value, s.type);
         NWB::Core::__hidden_core::HashCombine(value, s.dimension);
         NWB::Core::__hidden_core::HashCombine(value, s.format);
@@ -3951,6 +3955,7 @@ template<>
 struct hash<NWB::Core::BindingSetDesc>{
     size_t operator()(NWB::Core::BindingSetDesc const& s)const noexcept{
         usize value = 0;
+        NWB::Core::__hidden_core::HashCombine(value, s.trackLiveness);
         for(const auto& item : s.bindings)
             NWB::Core::__hidden_core::HashCombine(value, item);
         return static_cast<size_t>(value);

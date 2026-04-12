@@ -315,20 +315,22 @@ template<typename Container>
 [[nodiscard]] inline bool AppendString(Container& outBinary, const AStringView text){
     if(text.size() > Limit<u32>::s_Max)
         return false;
-    if(outBinary.size() > Limit<usize>::s_Max - sizeof(u32))
+
+    const usize lengthOffset = outBinary.size();
+    if(lengthOffset > Limit<usize>::s_Max - sizeof(u32))
         return false;
 
     const u32 textLength = static_cast<u32>(text.size());
+    const usize textOffset = lengthOffset + sizeof(u32);
+    if(textOffset > Limit<usize>::s_Max - textLength)
+        return false;
+
     AppendPOD(outBinary, textLength);
     if(textLength == 0)
         return true;
 
-    const usize beginOffset = outBinary.size();
-    if(beginOffset > Limit<usize>::s_Max - textLength)
-        return false;
-
-    outBinary.resize(beginOffset + textLength);
-    NWB_MEMCPY(outBinary.data() + beginOffset, textLength, text.data(), textLength);
+    outBinary.resize(textOffset + textLength);
+    NWB_MEMCPY(outBinary.data() + textOffset, textLength, text.data(), textLength);
     return true;
 }
 template<typename Container>
@@ -353,10 +355,18 @@ template<typename Container>
 }
 template<typename Container>
 [[nodiscard]] inline bool ReadString(const Container& binary, usize& inOutOffset, CompactString& outText){
+    usize cursor = inOutOffset;
     AString text;
-    if(!ReadString(binary, inOutOffset, text))
+    if(!ReadString(binary, cursor, text))
         return false;
-    return outText.assign(text);
+
+    CompactString parsedText;
+    if(!parsedText.assign(text))
+        return false;
+
+    outText = parsedText;
+    inOutOffset = cursor;
+    return true;
 }
 
 

@@ -89,6 +89,7 @@ public:
 
 
 private:
+    [[nodiscard]] u64 allocateRequestId();
     void dispatchAsync(u64 requestId);
     void processRequest(u64 requestId);
 
@@ -111,4 +112,3 @@ NWB_ASSETS_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

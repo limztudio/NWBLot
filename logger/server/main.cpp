@@ -87,7 +87,7 @@ static int MainLogic(u16 logPort, void* inst){
 static int EntryPoint(isize argc, tchar** argv, void* inst){
     int ret;
 
-    u16 logPort;
+    u16 logPort = Get<static_cast<usize>(NWB::ArgCommand::LogPort)>(NWB::g_ArgDefault);
     {
         CLI::App app{ "logserver" };
 

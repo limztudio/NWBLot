@@ -261,14 +261,10 @@ static int EntryPoint(isize argc, CharT** argv, void* inst){
     {
         CLI::App app{ "loader" };
 
-        {
-            AString address;
-            NWB::ArgAddOption<NWB::ArgCommand::LogAddress>(app, address);
-            u16 port;
-            NWB::ArgAddOption<NWB::ArgCommand::LogPort>(app, port);
-
-            logAddress = StringFormat("{}:{}", address, port);
-        }
+        AString address = Get<static_cast<usize>(NWB::ArgCommand::LogAddress)>(NWB::g_ArgDefault);
+        u16 port = Get<static_cast<usize>(NWB::ArgCommand::LogPort)>(NWB::g_ArgDefault);
+        NWB::ArgAddOption<NWB::ArgCommand::LogAddress>(app, address);
+        NWB::ArgAddOption<NWB::ArgCommand::LogPort>(app, port);
 
         try{
             const bool hasValidArgv = argc > 0 && argv && argv[0];
@@ -281,6 +277,8 @@ static int EntryPoint(isize argc, CharT** argv, void* inst){
             app.exit(e, NWB_COUT, NWB_CERR);
             return -1;
         }
+
+        logAddress = StringFormat("{}:{}", address, port);
     }
 
     try{

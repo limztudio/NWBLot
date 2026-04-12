@@ -118,7 +118,7 @@ public:
 
         size = Alignment(align, size);
         if(size > bucket.size)
-            bucket.size = size << 1;
+            bucket.size = (size > (static_cast<usize>(-1) >> 1)) ? size : (size << 1);
 
         if(!bucket.head){
             bucket.head = new Chunk(align, bucket.size);
@@ -376,4 +376,3 @@ MakeStackonlyUnique(Args&&...) = delete;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

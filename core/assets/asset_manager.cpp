@@ -75,9 +75,9 @@ u64 AssetManager::enqueueLoad(const Name& assetType, const Name& virtualPath){
         return 0;
     }
 
-    const u64 requestId = m_nextRequestId.fetch_add(1, std::memory_order_relaxed);
+    const u64 requestId = allocateRequestId();
     if(requestId == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetManager: async load request id wrapped to zero"));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetManager: async load request ids are exhausted"));
         return 0;
     }
 
@@ -172,6 +172,19 @@ u64 AssetManager::completedRequestCount()const{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+u64 AssetManager::allocateRequestId(){
+    u64 requestId = m_nextRequestId.load(std::memory_order_relaxed);
+    for(;;){
+        if(requestId == 0)
+            return 0;
+
+        const u64 nextRequestId = requestId + 1;
+        if(m_nextRequestId.compare_exchange_weak(requestId, nextRequestId, std::memory_order_relaxed, std::memory_order_relaxed))
+            return requestId;
+    }
+}
 
 
 void AssetManager::dispatchAsync(const u64 requestId){

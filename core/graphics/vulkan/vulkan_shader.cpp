@@ -294,7 +294,7 @@ ShaderHandle ShaderLibrary::getShader(const Name& entryName, ShaderType::Mask sh
         return nullptr;
     }
 
-    m_shaders[key] = RefCountPtr<Shader, ArenaRefDeleter<Shader>>(shader, ArenaRefDeleter<Shader>(&m_context.objectArena));
+    m_shaders[key] = RefCountPtr<Shader, ArenaRefDeleter<Shader>>(shader, ArenaRefDeleter<Shader>(&m_context.objectArena), AdoptRef);
     return ShaderHandle(shader, ShaderHandle::deleter_type(&m_context.objectArena));
 }
 

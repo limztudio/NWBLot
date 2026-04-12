@@ -181,6 +181,9 @@ static constexpr FormatInfo s_FormatInfo[Format::kCount] = {
 
 const FormatInfo& GetFormatInfo(Format::Enum format)noexcept{
     NWB_ASSERT_MSG(static_cast<usize>(format) < static_cast<usize>(Format::kCount), NWB_TEXT("Format::Enum out of range"));
+    if(static_cast<usize>(format) >= static_cast<usize>(Format::kCount))
+        return s_FormatInfo[static_cast<u32>(Format::UNKNOWN)];
+
     return s_FormatInfo[static_cast<u32>(format)];
 }
 

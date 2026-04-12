@@ -320,6 +320,12 @@ FramebufferInfoEx::FramebufferInfoEx(const FramebufferDesc& desc) : FramebufferI
     if(desc.depthAttachment.valid()){
         const TextureDesc& textureDesc = desc.depthAttachment.texture->getDescription();
         TextureSubresourceSet const subresources = desc.depthAttachment.subresources.resolve(textureDesc, true);
+        if(subresources.numMipLevels == 0 || subresources.numArraySlices == 0){
+            width = 0;
+            height = 0;
+            arraySize = 0;
+            return;
+        }
         width = Max(textureDesc.width >> subresources.baseMipLevel, static_cast<u32>(1));
         height = Max(textureDesc.height >> subresources.baseMipLevel, static_cast<u32>(1));
         arraySize = subresources.numArraySlices;
@@ -327,6 +333,12 @@ FramebufferInfoEx::FramebufferInfoEx(const FramebufferDesc& desc) : FramebufferI
     else if(!desc.colorAttachments.empty() && desc.colorAttachments[0].valid()){
         const TextureDesc& textureDesc = desc.colorAttachments[0].texture->getDescription();
         TextureSubresourceSet const subresources = desc.colorAttachments[0].subresources.resolve(textureDesc, true);
+        if(subresources.numMipLevels == 0 || subresources.numArraySlices == 0){
+            width = 0;
+            height = 0;
+            arraySize = 0;
+            return;
+        }
         width = Max(textureDesc.width >> subresources.baseMipLevel, static_cast<u32>(1));
         height = Max(textureDesc.height >> subresources.baseMipLevel, static_cast<u32>(1));
         arraySize = subresources.numArraySlices;

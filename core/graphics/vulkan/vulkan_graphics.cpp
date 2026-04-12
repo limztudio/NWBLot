@@ -187,6 +187,7 @@ Object GraphicsPipeline::getNativeHandle(ObjectType objectType){
 FramebufferHandle Device::createFramebuffer(const FramebufferDesc& desc){
     auto* fb = NewArenaObject<Framebuffer>(m_context.objectArena, m_context);
     fb->m_desc = desc;
+    fb->m_framebufferInfo = FramebufferInfoEx(desc);
 
     constexpr u32 kMaxColorAttachments = s_MaxRenderTargets;
     const u32 colorAttachmentCount = Min<u32>(static_cast<u32>(desc.colorAttachments.size()), kMaxColorAttachments);
@@ -196,30 +197,11 @@ FramebufferHandle Device::createFramebuffer(const FramebufferDesc& desc){
     for(u32 i = 0; i < colorAttachmentCount; ++i){
         if(desc.colorAttachments[i].texture){
             fb->m_resources.push_back(desc.colorAttachments[i].texture);
-            auto* tex = checked_cast<Texture*>(desc.colorAttachments[i].texture);
-            fb->m_framebufferInfo.colorFormats.push_back(tex->m_desc.format);
-
-            if(fb->m_framebufferInfo.width == 0)
-                fb->m_framebufferInfo.width = tex->m_desc.width;
-            if(fb->m_framebufferInfo.height == 0)
-                fb->m_framebufferInfo.height = tex->m_desc.height;
         }
     }
 
     if(desc.depthAttachment.texture){
         fb->m_resources.push_back(desc.depthAttachment.texture);
-        auto* depthTex = checked_cast<Texture*>(desc.depthAttachment.texture);
-        fb->m_framebufferInfo.depthFormat = depthTex->m_desc.format;
-
-        if(fb->m_framebufferInfo.width == 0)
-            fb->m_framebufferInfo.width = depthTex->m_desc.width;
-        if(fb->m_framebufferInfo.height == 0)
-            fb->m_framebufferInfo.height = depthTex->m_desc.height;
-    }
-
-    if(!fb->m_resources.empty()){
-        auto* tex = checked_cast<Texture*>(fb->m_resources[0].get());
-        fb->m_framebufferInfo.sampleCount = tex->m_desc.sampleCount;
     }
 
     return FramebufferHandle(fb, FramebufferHandle::deleter_type(&m_context.objectArena), AdoptRef);
@@ -484,6 +466,12 @@ void CommandList::beginDynamicRendering(IFramebuffer* _framebuffer, const Render
     if(!fb)
         return;
 
+    if(fb->m_framebufferInfo.width == 0 || fb->m_framebufferInfo.height == 0 || fb->m_framebufferInfo.arraySize == 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to begin dynamic rendering: framebuffer dimensions are invalid"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to begin dynamic rendering: framebuffer dimensions are invalid"));
+        return;
+    }
+
     const FramebufferDesc& fbDesc = fb->m_desc;
 
     // Dynamic rendering (VK_KHR_dynamic_rendering)
@@ -500,8 +488,9 @@ void CommandList::beginDynamicRendering(IFramebuffer* _framebuffer, const Render
         if(fbDesc.colorAttachments[i].texture){
             auto* tex = checked_cast<Texture*>(fbDesc.colorAttachments[i].texture);
 
+            const TextureSubresourceSet resolvedColorSubresources = fbDesc.colorAttachments[i].subresources.resolve(tex->m_desc, true);
             TextureDimension::Enum viewDimension = tex->m_desc.dimension;
-            if(fbDesc.colorAttachments[i].subresources.numArraySlices == 1)
+            if(resolvedColorSubresources.numArraySlices == 1)
                 viewDimension = TextureDimension::Texture2D;
             VkImageView view = tex->getView(fbDesc.colorAttachments[i].subresources, viewDimension, Format::UNKNOWN);
 
@@ -529,7 +518,11 @@ void CommandList::beginDynamicRendering(IFramebuffer* _framebuffer, const Render
 
     if(fbDesc.depthAttachment.texture){
         auto* depthTex = checked_cast<Texture*>(fbDesc.depthAttachment.texture);
-        VkImageView depthView = depthTex->getView(fbDesc.depthAttachment.subresources, TextureDimension::Texture2D, Format::UNKNOWN, true);
+        const TextureSubresourceSet resolvedDepthSubresources = fbDesc.depthAttachment.subresources.resolve(depthTex->m_desc, true);
+        const TextureDimension::Enum depthViewDimension = resolvedDepthSubresources.numArraySlices == 1
+            ? TextureDimension::Texture2D
+            : depthTex->m_desc.dimension;
+        VkImageView depthView = depthTex->getView(fbDesc.depthAttachment.subresources, depthViewDimension, Format::UNKNOWN, true);
 
         const FormatInfo& formatInfo = GetFormatInfo(depthTex->m_desc.format);
         if(formatInfo.hasDepth){
@@ -553,7 +546,7 @@ void CommandList::beginDynamicRendering(IFramebuffer* _framebuffer, const Render
     VkRenderingInfo renderingInfo = __hidden_vulkan::MakeVkStruct<VkRenderingInfo>(VK_STRUCTURE_TYPE_RENDERING_INFO);
     renderingInfo.renderArea.offset = { 0, 0 };
     renderingInfo.renderArea.extent = { fb->m_framebufferInfo.width, fb->m_framebufferInfo.height };
-    renderingInfo.layerCount = 1;
+    renderingInfo.layerCount = fb->m_framebufferInfo.arraySize;
     renderingInfo.colorAttachmentCount = numColorAttachments;
     renderingInfo.pColorAttachments = colorAttachments;
     if(hasDepth)

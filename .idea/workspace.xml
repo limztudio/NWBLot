@@ -59,11 +59,6 @@
     <list default="true" id="16cb6efc-7504-465a-8233-5acabd0ff4be" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.cozter/sessions/c93aeca0e5be.json" beforeDir="false" afterPath="$PROJECT_DIR$/.cozter/sessions/c93aeca0e5be.json" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/CMakePresets.json" beforeDir="false" afterPath="$PROJECT_DIR$/CMakePresets.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/core/graphics/common.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/core/graphics/common.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/core/graphics/common.h" beforeDir="false" afterPath="$PROJECT_DIR$/core/graphics/common.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/global/filesystem.h" beforeDir="false" afterPath="$PROJECT_DIR$/global/filesystem.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/loader/main.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/loader/main.cpp" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -263,7 +258,7 @@
       <workItem from="1775591496047" duration="89000" />
       <workItem from="1775591690399" duration="189000" />
       <workItem from="1775829124226" duration="804000" />
-      <workItem from="1775830114242" duration="2387000" />
+      <workItem from="1775830114242" duration="6710000" />
     </task>
     <servers />
   </component>

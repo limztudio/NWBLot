@@ -211,6 +211,10 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd){
 
     bool hasCommands = ppCmd && numCmd > 0;
     bool hasPendingSemaphores = !m_waitSemaphores.empty() || !m_signalSemaphores.empty();
+    if(hasCommands && numCmd > UINT32_MAX){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: command list count exceeds Vulkan limit"));
+        return m_lastSubmittedID;
+    }
 
     Vector<TrackedCommandBufferPtr, Alloc::ScratchAllocator<TrackedCommandBufferPtr>> trackedBuffers{ Alloc::ScratchAllocator<TrackedCommandBufferPtr>(scratchArena) };
     Vector<VkCommandBuffer, Alloc::ScratchAllocator<VkCommandBuffer>> cmdBufs{ Alloc::ScratchAllocator<VkCommandBuffer>(scratchArena) };

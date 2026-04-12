@@ -463,6 +463,10 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to convert cooperative vector matrices: descriptors are null"));
         return;
     }
+    if(numDescs > UINT32_MAX){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to convert cooperative vector matrices: descriptor count exceeds Vulkan limit"));
+        return;
+    }
 
     Alloc::ScratchArena<> scratchArena;
 

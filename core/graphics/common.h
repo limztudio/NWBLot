@@ -1525,11 +1525,11 @@ namespace RayTracingOpacityMicromapBuildFlags{
 
 struct RayTracingOpacityMicromapUsageCount{
     // Number of OMMs with the specified subdivision level and format.
-    u32 count;
+    u32 count = 0;
     // Micro triangle count is 4^N, where N is the subdivision level.
-    u32 subdivisionLevel;
+    u32 subdivisionLevel = 0;
     // OMM input sub format.
-    OpacityMicromapFormat::Enum format;
+    OpacityMicromapFormat::Enum format = OpacityMicromapFormat::OC1_2_State;
 };
 
 struct RayTracingOpacityMicromapDesc{
@@ -1537,7 +1537,7 @@ struct RayTracingOpacityMicromapDesc{
     bool trackLiveness = true;
 
     // OMM flags. Applies to all OMMs in array.
-    RayTracingOpacityMicromapBuildFlags::Mask flags;
+    RayTracingOpacityMicromapBuildFlags::Mask flags = RayTracingOpacityMicromapBuildFlags::None;
     // OMM counts for each subdivision level and format combination in the inputs.
     Vector<RayTracingOpacityMicromapUsageCount> counts;
 

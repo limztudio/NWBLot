@@ -118,6 +118,50 @@ bool ComputeShaderTableByteSize(u32 recordCount, u32 handleSizeAligned, u32 base
     return true;
 }
 
+using MicromapUsageVector = Vector<VkMicromapUsageEXT, Alloc::ScratchAllocator<VkMicromapUsageEXT>>;
+
+VkOpacityMicromapFormatEXT ConvertOpacityMicromapFormat(const OpacityMicromapFormat::Enum format){
+    switch(format){
+    case OpacityMicromapFormat::OC1_2_State:
+        return VK_OPACITY_MICROMAP_FORMAT_2_STATE_EXT;
+    case OpacityMicromapFormat::OC1_4_State:
+        return VK_OPACITY_MICROMAP_FORMAT_4_STATE_EXT;
+    default:
+        return VK_OPACITY_MICROMAP_FORMAT_MAX_ENUM_EXT;
+    }
+}
+
+bool BuildOpacityMicromapUsageCounts(
+    const Vector<RayTracingOpacityMicromapUsageCount>& counts,
+    MicromapUsageVector& outUsageCounts,
+    const tchar* operation)
+{
+    outUsageCounts.clear();
+    outUsageCounts.resize(counts.size());
+
+    for(usize i = 0; i < counts.size(); ++i){
+        const RayTracingOpacityMicromapUsageCount& count = counts[i];
+        const VkOpacityMicromapFormatEXT format = ConvertOpacityMicromapFormat(count.format);
+        if(format == VK_OPACITY_MICROMAP_FORMAT_MAX_ENUM_EXT){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Vulkan: Failed to {}: opacity micromap usage count {} has invalid format {}"),
+                operation,
+                i,
+                static_cast<u32>(count.format)
+            );
+            outUsageCounts.clear();
+            return false;
+        }
+
+        VkMicromapUsageEXT& usageCount = outUsageCounts[i];
+        usageCount.count = count.count;
+        usageCount.subdivisionLevel = count.subdivisionLevel;
+        usageCount.format = static_cast<u32>(format);
+    }
+
+    return true;
+}
+
 bool ValidateAccelStructBuildInputRange(IBuffer* _buffer, u64 offset, u64 byteSize, const tchar* operation, const tchar* resourceName){
     auto* buffer = checked_cast<Buffer*>(_buffer);
     if(!buffer){
@@ -462,12 +506,17 @@ RayTracingOpacityMicromapHandle Device::createOpacityMicromap(const RayTracingOp
     else if(desc.flags & RayTracingOpacityMicromapBuildFlags::FastBuild)
         buildFlags = VK_BUILD_MICROMAP_PREFER_FAST_BUILD_BIT_EXT;
 
+    Alloc::ScratchArena<> scratchArena;
+    __hidden_vulkan::MicromapUsageVector usageCounts{ Alloc::ScratchAllocator<VkMicromapUsageEXT>(scratchArena) };
+    if(!__hidden_vulkan::BuildOpacityMicromapUsageCounts(desc.counts, usageCounts, NWB_TEXT("create opacity micromap")))
+        return nullptr;
+
     VkMicromapBuildInfoEXT buildInfo = __hidden_vulkan::MakeVkStruct<VkMicromapBuildInfoEXT>(VK_STRUCTURE_TYPE_MICROMAP_BUILD_INFO_EXT);
     buildInfo.type = VK_MICROMAP_TYPE_OPACITY_MICROMAP_EXT;
     buildInfo.flags = buildFlags;
     buildInfo.mode = VK_BUILD_MICROMAP_MODE_BUILD_EXT;
-    buildInfo.usageCountsCount = static_cast<u32>(desc.counts.size());
-    buildInfo.pUsageCounts = reinterpret_cast<const VkMicromapUsageEXT*>(desc.counts.data());
+    buildInfo.usageCountsCount = static_cast<u32>(usageCounts.size());
+    buildInfo.pUsageCounts = usageCounts.empty() ? nullptr : usageCounts.data();
 
     VkMicromapBuildSizesInfoEXT buildSize = __hidden_vulkan::MakeVkStruct<VkMicromapBuildSizesInfoEXT>(VK_STRUCTURE_TYPE_MICROMAP_BUILD_SIZES_INFO_EXT);
     vkGetMicromapBuildSizesEXT(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &buildSize);
@@ -1729,13 +1778,18 @@ void CommandList::buildOpacityMicromap(IRayTracingOpacityMicromap* _omm, const R
     else if(ommDesc.flags & RayTracingOpacityMicromapBuildFlags::FastBuild)
         buildFlags = VK_BUILD_MICROMAP_PREFER_FAST_BUILD_BIT_EXT;
 
+    Alloc::ScratchArena<> scratchArena;
+    __hidden_vulkan::MicromapUsageVector usageCounts{ Alloc::ScratchAllocator<VkMicromapUsageEXT>(scratchArena) };
+    if(!__hidden_vulkan::BuildOpacityMicromapUsageCounts(ommDesc.counts, usageCounts, NWB_TEXT("build opacity micromap")))
+        return;
+
     VkMicromapBuildInfoEXT buildInfo = __hidden_vulkan::MakeVkStruct<VkMicromapBuildInfoEXT>(VK_STRUCTURE_TYPE_MICROMAP_BUILD_INFO_EXT);
     buildInfo.type = VK_MICROMAP_TYPE_OPACITY_MICROMAP_EXT;
     buildInfo.flags = buildFlags;
     buildInfo.mode = VK_BUILD_MICROMAP_MODE_BUILD_EXT;
     buildInfo.dstMicromap = omm->m_micromap;
-    buildInfo.usageCountsCount = static_cast<u32>(ommDesc.counts.size());
-    buildInfo.pUsageCounts = reinterpret_cast<const VkMicromapUsageEXT*>(ommDesc.counts.data());
+    buildInfo.usageCountsCount = static_cast<u32>(usageCounts.size());
+    buildInfo.pUsageCounts = usageCounts.empty() ? nullptr : usageCounts.data();
     buildInfo.data.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(ommDesc.inputBuffer, ommDesc.inputBufferOffset);
     buildInfo.triangleArray.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(ommDesc.perOmmDescs, ommDesc.perOmmDescsOffset);
     buildInfo.triangleArrayStride = sizeof(VkMicromapTriangleEXT);

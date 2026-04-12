@@ -320,7 +320,7 @@ static i32 DecodeUtf8CodePoint(const char* bytes, i32 length, u32& unicode){
     return 0;
 }
 
-static void DispatchTextInput(Graphics& graphics, XKeyEvent keyEvent, i32 mods){
+static void DispatchTextInput(InputDispatcher& input, XKeyEvent keyEvent, i32 mods){
     char buffer[64] = {};
     KeySym ignored = NoSymbol;
     const i32 byteCount = XLookupString(&keyEvent, buffer, static_cast<i32>(sizeof(buffer)), &ignored, nullptr);
@@ -340,7 +340,7 @@ static void DispatchTextInput(Graphics& graphics, XKeyEvent keyEvent, i32 mods){
         if(unicode < 32 || unicode == 127)
             continue;
 
-        graphics.keyboardCharInput(unicode, mods);
+        input.keyboardCharInput(unicode, mods);
     }
 }
 
@@ -350,9 +350,9 @@ static void DispatchKeyEvent(Frame& frame, const XKeyEvent& keyEvent, i32 action
     const i32 key = TranslateKey(keySym);
     const i32 mods = AdjustModifiersForKey(key, action, TranslateModifiers(keyEvent.state));
 
-    frame.graphics().keyboardUpdate(key, static_cast<i32>(keyEvent.keycode), action, mods);
+    frame.input().keyboardUpdate(key, static_cast<i32>(keyEvent.keycode), action, mods);
     if(action != InputAction::Release)
-        DispatchTextInput(frame.graphics(), translatedEvent, mods);
+        DispatchTextInput(frame.input(), translatedEvent, mods);
 }
 
 static bool ProcessEvent(Frame& frame, const XEvent& event){
@@ -417,13 +417,13 @@ static bool ProcessEvent(Frame& frame, const XEvent& event){
         f64 xoffset = 0.0;
         f64 yoffset = 0.0;
         if(TranslateScroll(event.xbutton.button, xoffset, yoffset)){
-            frame.graphics().mouseScrollUpdate(xoffset, yoffset);
+            frame.input().mouseScrollUpdate(xoffset, yoffset);
             break;
         }
 
         const i32 button = TranslateMouseButton(event.xbutton.button);
         if(button != -1)
-            frame.graphics().mouseButtonUpdate(button, InputAction::Press, TranslateModifiers(event.xbutton.state));
+            frame.input().mouseButtonUpdate(button, InputAction::Press, TranslateModifiers(event.xbutton.state));
     }
     break;
 
@@ -436,16 +436,16 @@ static bool ProcessEvent(Frame& frame, const XEvent& event){
 
         const i32 button = TranslateMouseButton(event.xbutton.button);
         if(button != -1)
-            frame.graphics().mouseButtonUpdate(button, InputAction::Release, TranslateModifiers(event.xbutton.state));
+            frame.input().mouseButtonUpdate(button, InputAction::Release, TranslateModifiers(event.xbutton.state));
     }
     break;
 
     case MotionNotify:
-        frame.graphics().mousePosUpdate(static_cast<f64>(event.xmotion.x), static_cast<f64>(event.xmotion.y));
+        frame.input().mousePosUpdate(static_cast<f64>(event.xmotion.x), static_cast<f64>(event.xmotion.y));
         break;
 
     case EnterNotify:
-        frame.graphics().mousePosUpdate(static_cast<f64>(event.xcrossing.x), static_cast<f64>(event.xcrossing.y));
+        frame.input().mousePosUpdate(static_cast<f64>(event.xcrossing.x), static_cast<f64>(event.xcrossing.y));
         break;
 
     case MappingNotify:

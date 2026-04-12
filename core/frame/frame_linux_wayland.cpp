@@ -249,7 +249,7 @@ static void StopKeyRepeat(WaylandContext& context){
     context.repeatScancode = 0;
 }
 
-static void DispatchTextInput(Graphics& graphics, const WaylandContext& context, u32 keycode, i32 mods){
+static void DispatchTextInput(InputDispatcher& input, const WaylandContext& context, u32 keycode, i32 mods){
     if(!context.xkbState)
         return;
 
@@ -257,7 +257,7 @@ static void DispatchTextInput(Graphics& graphics, const WaylandContext& context,
     if(unicode < 32 || unicode == 127)
         return;
 
-    graphics.keyboardCharInput(unicode, mods);
+    input.keyboardCharInput(unicode, mods);
 }
 
 static void DispatchScroll(WaylandContext& context){
@@ -268,7 +268,7 @@ static void DispatchScroll(WaylandContext& context){
     f64 yoffset = context.scrollDiscreteY != 0 ? -static_cast<f64>(context.scrollDiscreteY) : (-context.scrollY / 120.0);
 
     if(xoffset != 0.0 || yoffset != 0.0)
-        context.frame->graphics().mouseScrollUpdate(xoffset, yoffset);
+        context.frame->input().mouseScrollUpdate(xoffset, yoffset);
 
     context.scrollX = 0.0;
     context.scrollY = 0.0;
@@ -470,7 +470,7 @@ static void OnPointerEnter(void* data, wl_pointer* pointer, u32 serial, wl_surfa
     (void)surface;
 
     auto& context = *static_cast<WaylandContext*>(data);
-    context.frame->graphics().mousePosUpdate(wl_fixed_to_double(sx), wl_fixed_to_double(sy));
+    context.frame->input().mousePosUpdate(wl_fixed_to_double(sx), wl_fixed_to_double(sy));
 }
 
 static void OnPointerLeave(void* data, wl_pointer* pointer, u32 serial, wl_surface* surface){
@@ -485,7 +485,7 @@ static void OnPointerMotion(void* data, wl_pointer* pointer, u32 time, wl_fixed_
     (void)time;
 
     auto& context = *static_cast<WaylandContext*>(data);
-    context.frame->graphics().mousePosUpdate(wl_fixed_to_double(sx), wl_fixed_to_double(sy));
+    context.frame->input().mousePosUpdate(wl_fixed_to_double(sx), wl_fixed_to_double(sy));
 }
 
 static void OnPointerButton(void* data, wl_pointer* pointer, u32 serial, u32 time, u32 button, u32 state){
@@ -496,7 +496,7 @@ static void OnPointerButton(void* data, wl_pointer* pointer, u32 serial, u32 tim
     auto& context = *static_cast<WaylandContext*>(data);
     const i32 translatedButton = TranslatePointerButton(button);
     if(translatedButton != -1){
-        context.frame->graphics().mouseButtonUpdate(
+        context.frame->input().mouseButtonUpdate(
             translatedButton,
             state == WL_POINTER_BUTTON_STATE_PRESSED ? InputAction::Press : InputAction::Release,
             TranslateModifiers(context)
@@ -648,8 +648,8 @@ static void OnKeyboardKey(void* data, wl_keyboard* keyboard, u32 serial, u32 tim
         xkb_state_update_key(context.xkbState, keycode, XKB_KEY_DOWN);
 
         const i32 mods = TranslateModifiers(context);
-        context.frame->graphics().keyboardUpdate(translatedKey, static_cast<i32>(key), InputAction::Press, mods);
-        DispatchTextInput(context.frame->graphics(), context, keycode, mods);
+        context.frame->input().keyboardUpdate(translatedKey, static_cast<i32>(key), InputAction::Press, mods);
+        DispatchTextInput(context.frame->input(), context, keycode, mods);
 
         if(context.repeatRate > 0
             && context.xkbKeymap
@@ -665,7 +665,7 @@ static void OnKeyboardKey(void* data, wl_keyboard* keyboard, u32 serial, u32 tim
         xkb_state_update_key(context.xkbState, keycode, XKB_KEY_UP);
 
         const i32 mods = TranslateModifiers(context);
-        context.frame->graphics().keyboardUpdate(translatedKey, static_cast<i32>(key), InputAction::Release, mods);
+        context.frame->input().keyboardUpdate(translatedKey, static_cast<i32>(key), InputAction::Release, mods);
 
         if(context.repeatPending && context.repeatKeycode == keycode)
             StopKeyRepeat(context);
@@ -857,8 +857,8 @@ static void ProcessKeyRepeat(WaylandContext& context){
     ;
     do{
         const i32 mods = TranslateModifiers(context);
-        context.frame->graphics().keyboardUpdate(context.repeatKey, context.repeatScancode, InputAction::Repeat, mods);
-        DispatchTextInput(context.frame->graphics(), context, context.repeatKeycode, mods);
+        context.frame->input().keyboardUpdate(context.repeatKey, context.repeatScancode, InputAction::Repeat, mods);
+        DispatchTextInput(context.frame->input(), context, context.repeatKeycode, mods);
 
         if(stepMs <= 0){
             StopKeyRepeat(context);

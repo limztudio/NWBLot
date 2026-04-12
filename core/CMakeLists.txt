@@ -3,6 +3,7 @@ add_subdirectory(common)
 add_subdirectory(metascript)
 add_subdirectory(assets)
 add_subdirectory(filesystem)
+add_subdirectory(input)
 add_subdirectory(graphics)
 add_subdirectory(ecs)
 

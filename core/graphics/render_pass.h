@@ -19,7 +19,7 @@ NWB_CORE_BEGIN
 
 class Graphics;
 
-class IRenderPass{
+class IRenderPass : public IInputEventHandler{
 public:
     explicit IRenderPass(Graphics& graphics)
         : m_graphics(graphics)
@@ -35,12 +35,6 @@ public:
     virtual void backBufferResizing(){}
     virtual void backBufferResized(u32, u32, u32){}
     virtual void displayScaleChanged(f32, f32){}
-
-    virtual bool keyboardUpdate(i32, i32, i32, i32){ return false; }
-    virtual bool keyboardCharInput(u32, i32){ return false; }
-    virtual bool mousePosUpdate(f64, f64){ return false; }
-    virtual bool mouseScrollUpdate(f64, f64){ return false; }
-    virtual bool mouseButtonUpdate(i32, i32, i32){ return false; }
 
     [[nodiscard]] Graphics& getGraphics()const{ return m_graphics; }
 

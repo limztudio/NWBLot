@@ -126,12 +126,14 @@ constexpr bool IsFp16CoopVecFormat(const CooperativeVectorMatMulFormatCombo& com
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Graphics::Graphics(GraphicsAllocator& allocator, Alloc::ThreadPool& threadPool, Alloc::JobSystem& jobSystem)
+Graphics::Graphics(GraphicsAllocator& allocator, Alloc::ThreadPool& threadPool, Alloc::JobSystem& jobSystem, InputDispatcher& input)
     : m_allocator(allocator)
     , m_threadPool(threadPool)
     , m_jobSystem(jobSystem)
+    , m_input(input)
 {
     m_swapChainState.backBufferFormat = m_deviceCreationParams.swapChainFormat;
+    syncInputMousePositionScale();
     __hidden_graphics::AddVulkanDeviceExtensionOnce(m_deviceCreationParams.optionalVulkanDeviceExtensions, "VK_NV_cooperative_vector");
     m_backend = __hidden_graphics::CreateDefaultBackend(m_deviceCreationParams, m_swapChainState, m_allocator, m_threadPool);
     NWB_FATAL_ASSERT_MSG(m_backend != nullptr, NWB_TEXT("Graphics: Vulkan backend creation failed."));
@@ -257,9 +259,12 @@ void Graphics::updateWindowState(u32 width, u32 height, bool windowVisible, bool
 void Graphics::destroy(){
     waitAllJobs();
 
+    for(auto* renderPass : m_renderPasses)
+        m_input.removeHandler(*renderPass);
+    m_renderPasses.clear();
+
     if(m_backend){
         m_swapChainFramebuffers.clear();
-        m_renderPasses.clear();
         m_backend->destroy();
         m_instanceCreated = false;
         m_backend.reset();
@@ -280,6 +285,7 @@ bool Graphics::enumerateAdapters(Vector<AdapterInfo>& outAdapters){
 void Graphics::addRenderPassToFront(IRenderPass& pass){
     m_renderPasses.remove(&pass);
     m_renderPasses.push_front(&pass);
+    m_input.addHandlerToFront(pass);
 
     pass.backBufferResizing();
     pass.backBufferResized(m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight, m_deviceCreationParams.swapChainSampleCount);
@@ -288,6 +294,7 @@ void Graphics::addRenderPassToFront(IRenderPass& pass){
 void Graphics::addRenderPassToBack(IRenderPass& pass){
     m_renderPasses.remove(&pass);
     m_renderPasses.push_back(&pass);
+    m_input.addHandlerToBack(pass);
 
     pass.backBufferResizing();
     pass.backBufferResized(m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight, m_deviceCreationParams.swapChainSampleCount);
@@ -295,6 +302,7 @@ void Graphics::addRenderPassToBack(IRenderPass& pass){
 
 void Graphics::removeRenderPass(IRenderPass& pass){
     m_renderPasses.remove(&pass);
+    m_input.removeHandler(pass);
 }
 
 const tchar* Graphics::getRendererString()const{
@@ -411,61 +419,6 @@ void Graphics::getEnabledVulkanLayers(Vector<AString>& layers)const{
     layers.clear();
 }
 
-void Graphics::keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods){
-    if(!m_backend || key == -1)
-        return;
-
-    for(auto it = m_renderPasses.crbegin(); it != m_renderPasses.crend(); ++it){
-        if((*it)->keyboardUpdate(key, scancode, action, mods))
-            break;
-    }
-}
-
-void Graphics::keyboardCharInput(u32 unicode, i32 mods){
-    if(!m_backend)
-        return;
-
-    for(auto it = m_renderPasses.crbegin(); it != m_renderPasses.crend(); ++it){
-        if((*it)->keyboardCharInput(unicode, mods))
-            break;
-    }
-}
-
-void Graphics::mousePosUpdate(f64 xpos, f64 ypos){
-    if(!m_backend)
-        return;
-
-    if(!m_deviceCreationParams.supportExplicitDisplayScaling){
-        xpos /= m_dpiScaleFactorX;
-        ypos /= m_dpiScaleFactorY;
-    }
-
-    for(auto it = m_renderPasses.crbegin(); it != m_renderPasses.crend(); ++it){
-        if((*it)->mousePosUpdate(xpos, ypos))
-            break;
-    }
-}
-
-void Graphics::mouseButtonUpdate(i32 button, i32 action, i32 mods){
-    if(!m_backend)
-        return;
-
-    for(auto it = m_renderPasses.crbegin(); it != m_renderPasses.crend(); ++it){
-        if((*it)->mouseButtonUpdate(button, action, mods))
-            break;
-    }
-}
-
-void Graphics::mouseScrollUpdate(f64 xoffset, f64 yoffset){
-    if(!m_backend)
-        return;
-
-    for(auto it = m_renderPasses.crbegin(); it != m_renderPasses.crend(); ++it){
-        if((*it)->mouseScrollUpdate(xoffset, yoffset))
-            break;
-    }
-}
-
 void Graphics::backBufferResizing(){
     m_swapChainFramebuffers.clear();
 
@@ -486,6 +439,8 @@ void Graphics::backBufferResized(){
 }
 
 void Graphics::displayScaleChanged(){
+    syncInputMousePositionScale();
+
     for(auto* renderPass : m_renderPasses)
         renderPass->displayScaleChanged(m_dpiScaleFactorX, m_dpiScaleFactorY);
 }
@@ -513,6 +468,13 @@ void Graphics::updateAverageFrameTime(f64 elapsedTime){
         m_numberOfAccumulatedFrames = 0;
         m_frameTimeSum = 0.0;
     }
+}
+
+void Graphics::syncInputMousePositionScale(){
+    if(m_deviceCreationParams.supportExplicitDisplayScaling)
+        m_input.setMousePositionScale(1.f, 1.f);
+    else
+        m_input.setMousePositionScale(m_dpiScaleFactorX, m_dpiScaleFactorY);
 }
 
 bool Graphics::shouldRenderUnfocused()const{

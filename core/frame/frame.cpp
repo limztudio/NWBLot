@@ -96,7 +96,7 @@ Frame::Frame(void* inst, u16 width, u16 height)
     )
     , m_projectThreadPool(queryProjectWorkerThreadCount(), Alloc::CoreAffinity::Any)
     , m_projectJobSystem(m_projectThreadPool)
-    , m_graphics(m_graphicsAllocator, m_graphicsThreadPool, m_graphicsJobSystem)
+    , m_graphics(m_graphicsAllocator, m_graphicsThreadPool, m_graphicsJobSystem, m_input)
 {
     auto& frameData = data<Common::FrameData>();
     frameData.width() = width;

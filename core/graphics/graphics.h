@@ -85,7 +85,7 @@ public:
 
 
 public:
-    Graphics(GraphicsAllocator& allocator, Alloc::ThreadPool& threadPool, Alloc::JobSystem& jobSystem);
+    Graphics(GraphicsAllocator& allocator, Alloc::ThreadPool& threadPool, Alloc::JobSystem& jobSystem, InputDispatcher& input);
     ~Graphics();
 
 
@@ -131,12 +131,6 @@ public:
     void getEnabledVulkanDeviceExtensions(Vector<AString>& extensions)const;
     void getEnabledVulkanLayers(Vector<AString>& layers)const;
 
-    void keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods);
-    void keyboardCharInput(u32 unicode, i32 mods);
-    void mousePosUpdate(f64 xpos, f64 ypos);
-    void mouseButtonUpdate(i32 button, i32 action, i32 mods);
-    void mouseScrollUpdate(f64 xoffset, f64 yoffset);
-
     [[nodiscard]] BufferHandle createBuffer(const BufferDesc& desc)const;
     [[nodiscard]] TextureHandle createTexture(const TextureDesc& desc)const;
 
@@ -168,6 +162,7 @@ private:
     void animate(f64 elapsedTime);
     void render();
     void updateAverageFrameTime(f64 elapsedTime);
+    void syncInputMousePositionScale();
     bool animateRenderPresent();
     static void BackBufferResizingCallback(void* userData);
     static void BackBufferResizedCallback(void* userData);
@@ -176,6 +171,7 @@ private:
     GraphicsAllocator& m_allocator;
     Alloc::ThreadPool& m_threadPool;
     Alloc::JobSystem& m_jobSystem;
+    InputDispatcher& m_input;
     DeviceCreationParameters m_deviceCreationParams;
     SwapChainRuntimeState m_swapChainState;
 

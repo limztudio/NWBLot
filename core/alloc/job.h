@@ -200,7 +200,7 @@ public:
     }
 
     inline void waitAll(){
-        i32 current;
+        usize current;
         while((current = m_pendingJobCount.load(std::memory_order_acquire)) > 0)
             m_pendingJobCount.wait(current, std::memory_order_relaxed);
     }
@@ -441,7 +441,7 @@ private:
     Vector<u32, JobFreeNodeAllocator> m_freeNodes;
 
     mutable Futex m_mutex;
-    Atomic<i32> m_pendingJobCount{ 0 };
+    Atomic<usize> m_pendingJobCount{ 0 };
 };
 
 

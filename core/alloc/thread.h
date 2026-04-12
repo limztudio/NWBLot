@@ -242,7 +242,7 @@ public:
 
         NWB_ASSERT_MSG(m_threadCount > 0, NWB_TEXT("enqueueBatch requires at least one worker thread"));
 
-        m_pendingCount.fetch_add(static_cast<i32>(taskCount), std::memory_order_release);
+        m_pendingCount.fetch_add(taskCount, std::memory_order_release);
         {
             ScopedLock lock(m_taskMutex);
             for(usize i = 0; i < taskCount; ++i)
@@ -330,7 +330,7 @@ public:
 
 private:
     inline void waitPending(){
-        i32 current;
+        usize current;
         while((current = m_pendingCount.load(std::memory_order_acquire)) > 0)
             m_pendingCount.wait(current, std::memory_order_relaxed);
     }
@@ -438,7 +438,7 @@ private:
     Futex m_taskMutex;
     Futex m_pfMutex;
     ConditionVariableAny m_taskAvailable;
-    Atomic<i32> m_pendingCount{ 0 };
+    Atomic<usize> m_pendingCount{ 0 };
     u32 m_threadCount;
 };
 

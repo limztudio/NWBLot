@@ -594,11 +594,35 @@ u64 Device::executeCommandLists(ICommandList* const* pCommandLists, usize numCom
     bool submittedWork = false;
     const u64 submittedID = queue->submit(pCommandLists, numCommandLists, &submittedWork);
 
-    if(submittedWork && !submittedOwners.empty()){
-        if(m_uploadManager)
-            m_uploadManager->submitChunks(executionQueue, submittedID, submittedOwners.data(), submittedOwners.size());
-        if(m_scratchManager)
-            m_scratchManager->submitChunks(executionQueue, submittedID, submittedOwners.data(), submittedOwners.size());
+    if(!submittedOwners.empty()){
+        if(submittedWork){
+            if(m_uploadManager)
+                m_uploadManager->submitChunks(executionQueue, submittedID, submittedOwners.data(), submittedOwners.size());
+            if(m_scratchManager)
+                m_scratchManager->submitChunks(executionQueue, submittedID, submittedOwners.data(), submittedOwners.size());
+        }
+        else{
+            const auto ownerStillRecorded = [&](TrackedCommandBuffer* owner) -> bool {
+                if(!owner || !pCommandLists)
+                    return false;
+                for(usize i = 0; i < numCommandLists; ++i){
+                    auto* cmdList = checked_cast<CommandList*>(pCommandLists[i]);
+                    if(cmdList && cmdList->m_currentCmdBuf.get() == owner)
+                        return true;
+                }
+                return false;
+            };
+
+            const u64 reusableVersion = queueGetCompletedInstance(executionQueue);
+            for(TrackedCommandBuffer* owner : submittedOwners){
+                if(ownerStillRecorded(owner))
+                    continue;
+                if(m_uploadManager)
+                    m_uploadManager->discardChunks(executionQueue, owner, reusableVersion);
+                if(m_scratchManager)
+                    m_scratchManager->discardChunks(executionQueue, owner, reusableVersion);
+            }
+        }
     }
 
     return submittedID;

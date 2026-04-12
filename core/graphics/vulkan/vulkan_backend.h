@@ -94,6 +94,7 @@ class Device;
 class Queue;
 class TrackedCommandBuffer;
 class DescriptorHeapManager;
+class EventQuery;
 
 class Buffer;
 class Texture;
@@ -194,6 +195,7 @@ private:
     Vector<VkAccelerationStructureKHR, Alloc::CustomAllocator<VkAccelerationStructureKHR>> m_referencedAccelStructHandles;
 
     VkFence m_signalFence = VK_NULL_HANDLE;
+    EventQuery* m_signalFenceQuery = nullptr;
 
     u64 m_recordingID = 0;
     u64 m_submissionID = 0;
@@ -1386,6 +1388,7 @@ private:
 class EventQuery final : public RefCounter<IEventQuery>, NoCopy{
     friend class Device;
     friend class CommandList;
+    friend class Queue;
 
 
 public:

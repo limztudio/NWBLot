@@ -237,6 +237,16 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd, bool* outSubmitted){
         clearPendingSemaphores();
         return m_lastSubmittedID;
     }
+    if(hasCommands){
+        for(usize i = 0; i < numCmd; ++i){
+            auto* cmdList = checked_cast<CommandList*>(ppCmd[i]);
+            if(cmdList && cmdList->m_currentCmdBuf && cmdList->m_desc.queueType != m_queueID){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: command list queue type does not match the execution queue"));
+                clearPendingSemaphores();
+                return m_lastSubmittedID;
+            }
+        }
+    }
 
     Vector<TrackedCommandBufferPtr, Alloc::ScratchAllocator<TrackedCommandBufferPtr>> trackedBuffers{ Alloc::ScratchAllocator<TrackedCommandBufferPtr>(scratchArena) };
     Vector<VkCommandBuffer, Alloc::ScratchAllocator<VkCommandBuffer>> cmdBufs{ Alloc::ScratchAllocator<VkCommandBuffer>(scratchArena) };
@@ -260,6 +270,13 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd, bool* outSubmitted){
     if(cmdBufs.empty() && !hasPendingSemaphores)
         return m_lastSubmittedID;
 
+    const auto clearTrackedSignalFence = [](TrackedCommandBuffer& tracked){
+        if(tracked.m_signalFenceQuery)
+            tracked.m_signalFenceQuery->m_started = false;
+        tracked.m_signalFence = VK_NULL_HANDLE;
+        tracked.m_signalFenceQuery = nullptr;
+    };
+
     if(m_trackingSemaphore == VK_NULL_HANDLE){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Queue submission skipped because timeline semaphore is unavailable."));
         clearPendingSemaphores();
@@ -268,6 +285,7 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd, bool* outSubmitted){
             if(!tracked)
                 continue;
             // Submission did not happen; drop references but do not destroy deferred handles here.
+            clearTrackedSignalFence(*tracked);
             tracked->m_referencedAccelStructHandles.clear();
             tracked->m_referencedResources.clear();
             tracked->m_referencedStagingBuffers.clear();
@@ -315,10 +333,15 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd, bool* outSubmitted){
     }
 
     VkFence submitFence = VK_NULL_HANDLE;
+    EventQuery* submitFenceQuery = nullptr;
     for(auto& tracked : trackedBuffers){
         if(tracked->m_signalFence != VK_NULL_HANDLE){
+            if(submitFenceQuery)
+                submitFenceQuery->m_started = false;
             submitFence = tracked->m_signalFence;
+            submitFenceQuery = tracked->m_signalFenceQuery;
             tracked->m_signalFence = VK_NULL_HANDLE;
+            tracked->m_signalFenceQuery = nullptr;
         }
     }
 
@@ -337,6 +360,8 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd, bool* outSubmitted){
 
     if(res != VK_SUCCESS){
         m_lastSubmittedID = submissionID - 1;
+        if(submitFenceQuery)
+            submitFenceQuery->m_started = false;
 
         if(res == VK_ERROR_DEVICE_LOST){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Device was lost during queue submission."));
@@ -357,6 +382,9 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd, bool* outSubmitted){
 
         return m_lastSubmittedID;
     }
+
+    if(submitFenceQuery)
+        submitFenceQuery->m_started = true;
 
     for(auto& tracked : trackedBuffers){
         m_commandBuffersInFlight.push_back(Move(tracked));

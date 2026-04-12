@@ -536,13 +536,9 @@ void CommandList::copyTexture(IStagingTexture* dest, const TextureSlice& destSli
     TextureSlice resolvedDst = destSlice.resolve(staging->m_desc);
 
     const FormatInfo& formatInfo = GetFormatInfo(texture->m_desc.format);
-
-    u64 bufferOffset = 0;
-    if(resolvedDst.mipLevel > 0 || resolvedDst.arraySlice > 0){
-        u32 rowPitch = ((resolvedDst.width + formatInfo.blockSize - 1) / formatInfo.blockSize) * formatInfo.bytesPerBlock;
-        u32 slicePitch = rowPitch * ((resolvedDst.height + formatInfo.blockSize - 1) / formatInfo.blockSize);
-        bufferOffset = static_cast<u64>(resolvedDst.z) * slicePitch + static_cast<u64>((resolvedDst.y + formatInfo.blockSize - 1) / formatInfo.blockSize) * rowPitch + static_cast<u64>((resolvedDst.x + formatInfo.blockSize - 1) / formatInfo.blockSize) * formatInfo.bytesPerBlock;
-    }
+    u32 bufferRowLength = 0;
+    u32 bufferImageHeight = 0;
+    const u64 bufferOffset = __hidden_vulkan::ComputeStagingTextureOffset(staging->m_desc, resolvedDst, nullptr, &bufferRowLength, &bufferImageHeight);
 
     VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     if(formatInfo.hasDepth)
@@ -552,8 +548,8 @@ void CommandList::copyTexture(IStagingTexture* dest, const TextureSlice& destSli
 
     VkBufferImageCopy region{};
     region.bufferOffset = bufferOffset;
-    region.bufferRowLength = 0; // tightly packed
-    region.bufferImageHeight = 0;
+    region.bufferRowLength = bufferRowLength;
+    region.bufferImageHeight = bufferImageHeight;
     region.imageSubresource.aspectMask = aspectMask;
     region.imageSubresource.mipLevel = resolvedSrc.mipLevel;
     region.imageSubresource.baseArrayLayer = resolvedSrc.arraySlice;
@@ -575,13 +571,9 @@ void CommandList::copyTexture(ITexture* dest, const TextureSlice& destSlice, ISt
     TextureSlice resolvedSrc = srcSlice.resolve(staging->m_desc);
 
     const FormatInfo& formatInfo = GetFormatInfo(staging->m_desc.format);
-
-    u64 bufferOffset = 0;
-    if(resolvedSrc.mipLevel > 0 || resolvedSrc.arraySlice > 0){
-        u32 rowPitch = ((resolvedSrc.width + formatInfo.blockSize - 1) / formatInfo.blockSize) * formatInfo.bytesPerBlock;
-        u32 slicePitch = rowPitch * ((resolvedSrc.height + formatInfo.blockSize - 1) / formatInfo.blockSize);
-        bufferOffset = static_cast<u64>(resolvedSrc.z) * slicePitch + static_cast<u64>((resolvedSrc.y + formatInfo.blockSize - 1) / formatInfo.blockSize) * rowPitch + static_cast<u64>((resolvedSrc.x + formatInfo.blockSize - 1) / formatInfo.blockSize) * formatInfo.bytesPerBlock;
-    }
+    u32 bufferRowLength = 0;
+    u32 bufferImageHeight = 0;
+    const u64 bufferOffset = __hidden_vulkan::ComputeStagingTextureOffset(staging->m_desc, resolvedSrc, nullptr, &bufferRowLength, &bufferImageHeight);
 
     VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     if(formatInfo.hasDepth)
@@ -591,8 +583,8 @@ void CommandList::copyTexture(ITexture* dest, const TextureSlice& destSlice, ISt
 
     VkBufferImageCopy region{};
     region.bufferOffset = bufferOffset;
-    region.bufferRowLength = 0; // tightly packed
-    region.bufferImageHeight = 0;
+    region.bufferRowLength = bufferRowLength;
+    region.bufferImageHeight = bufferImageHeight;
     region.imageSubresource.aspectMask = aspectMask;
     region.imageSubresource.mipLevel = resolvedDst.mipLevel;
     region.imageSubresource.baseArrayLayer = resolvedDst.arraySlice;
@@ -606,7 +598,7 @@ void CommandList::copyTexture(ITexture* dest, const TextureSlice& destSlice, ISt
     m_currentCmdBuf->m_referencedResources.push_back(src);
 }
 
-void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, const void* data, usize rowPitch, usize){
+void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, const void* data, usize rowPitch, usize depthPitch){
     auto* dest = checked_cast<Texture*>(_dest);
     const TextureDesc& texDesc = dest->m_desc;
 
@@ -615,8 +607,34 @@ void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, co
     auto depth = Max<u32>(1u, texDesc.depth >> mipLevel);
 
     const FormatInfo& formatInfo = GetFormatInfo(texDesc.format);
-    u32 blockHeight = (height + formatInfo.blockSize - 1) / formatInfo.blockSize;
-    u64 dataSize = u64(rowPitch) * blockHeight * depth;
+    if(formatInfo.blockSize == 0 || formatInfo.bytesPerBlock == 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write texture: invalid texture format"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to write texture: invalid texture format"));
+        return;
+    }
+
+    const u32 blockWidth = (width + formatInfo.blockSize - 1) / formatInfo.blockSize;
+    const u32 blockHeight = (height + formatInfo.blockSize - 1) / formatInfo.blockSize;
+    const usize naturalRowPitch = static_cast<usize>(blockWidth) * formatInfo.bytesPerBlock;
+    const usize effectiveRowPitch = rowPitch != 0 ? rowPitch : naturalRowPitch;
+    const usize packedSlicePitch = effectiveRowPitch * blockHeight;
+    const usize effectiveDepthPitch = depthPitch != 0 ? depthPitch : packedSlicePitch;
+
+    if(effectiveRowPitch < naturalRowPitch || (effectiveRowPitch % formatInfo.bytesPerBlock) != 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write texture: invalid row pitch"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to write texture: invalid row pitch"));
+        return;
+    }
+
+    if(effectiveDepthPitch < packedSlicePitch || (effectiveDepthPitch % effectiveRowPitch) != 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write texture: invalid depth pitch"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to write texture: invalid depth pitch"));
+        return;
+    }
+
+    const u64 dataSize = depth > 1
+        ? static_cast<u64>(effectiveDepthPitch) * (depth - 1) + packedSlicePitch
+        : packedSlicePitch;
 
     UploadManager* uploadMgr = m_device.m_uploadManager.get();
     Buffer* stagingBuffer = nullptr;
@@ -659,8 +677,8 @@ void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, co
 
     VkBufferImageCopy region{};
     region.bufferOffset = stagingOffset;
-    region.bufferRowLength = 0; // tightly packed
-    region.bufferImageHeight = 0;
+    region.bufferRowLength = static_cast<u32>((effectiveRowPitch / formatInfo.bytesPerBlock) * formatInfo.blockSize);
+    region.bufferImageHeight = static_cast<u32>((effectiveDepthPitch / effectiveRowPitch) * formatInfo.blockSize);
     region.imageSubresource.aspectMask = writeAspect;
     region.imageSubresource.mipLevel = mipLevel;
     region.imageSubresource.baseArrayLayer = arraySlice;

@@ -29,6 +29,7 @@ namespace __hidden_vulkan{
     VkSampleCountFlagBits GetSampleCount(u32 sampleCount);
     VkImageUsageFlags PickImageUsage(const TextureDesc& desc);
     VkImageCreateFlags PickImageFlags(const TextureDesc& desc);
+    u64 ComputeStagingTextureOffset(const TextureDesc& desc, const TextureSlice& slice, usize* outRowPitch = nullptr, u32* outBufferRowLength = nullptr, u32* outBufferImageHeight = nullptr);
     VkDescriptorType ConvertDescriptorType(ResourceType::Enum type);
     VkShaderStageFlags ConvertShaderStages(ShaderType::Mask stages);
     VkComponentTypeKHR ConvertCoopVecDataType(CooperativeVectorDataType::Enum type);
@@ -1228,7 +1229,7 @@ public:
     virtual void writeBuffer(IBuffer* buffer, const void* data, usize dataSize, u64 destOffsetBytes = 0)override;
     virtual void clearBufferUInt(IBuffer* buffer, u32 clearValue)override;
     virtual void copyBuffer(IBuffer* dest, u64 destOffsetBytes, IBuffer* src, u64 srcOffsetBytes, u64 dataSizeBytes)override;
-    virtual void writeTexture(ITexture* dest, u32 arraySlice, u32 mipLevel, const void* data, usize rowPitch, usize /*depthPitch*/ = 0)override;
+    virtual void writeTexture(ITexture* dest, u32 arraySlice, u32 mipLevel, const void* data, usize rowPitch, usize depthPitch = 0)override;
     virtual void resolveTexture(ITexture* dest, const TextureSubresourceSet& dstSubresources, ITexture* src, const TextureSubresourceSet& srcSubresources)override;
 
     virtual void clearSamplerFeedbackTexture(ISamplerFeedbackTexture* texture)override;

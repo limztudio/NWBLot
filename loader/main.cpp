@@ -272,8 +272,11 @@ static int EntryPoint(isize argc, CharT** argv, void* inst){
             const bool hasValidArgv = argc > 0 && argv && argv[0];
             if(hasValidArgv)
                 app.parse(static_cast<int>(argc), argv);
-            else
-                app.parse(std::vector<std::string>{});
+            else{
+                const CharT emptyProgramName[] = { CharT('\0') };
+                const CharT* emptyArgv[] = { emptyProgramName };
+                app.parse(1, emptyArgv);
+            }
         }
         catch(const CLI::ParseError& e){
             app.exit(e, NWB_COUT, NWB_CERR);

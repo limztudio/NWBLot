@@ -948,12 +948,7 @@ void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, co
     barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
     barrier.image = dest->m_image;
-    VkImageAspectFlags writeAspect = VK_IMAGE_ASPECT_COLOR_BIT;
-    if(formatInfo.hasDepth)
-        writeAspect = VK_IMAGE_ASPECT_DEPTH_BIT;
-    if(formatInfo.hasStencil)
-        writeAspect |= VK_IMAGE_ASPECT_STENCIL_BIT;
-
+    const VkImageAspectFlags writeAspect = __hidden_vulkan::GetImageAspectMask(formatInfo);
     barrier.subresourceRange.aspectMask = writeAspect;
     barrier.subresourceRange.baseMipLevel = mipLevel;
     barrier.subresourceRange.levelCount = 1;

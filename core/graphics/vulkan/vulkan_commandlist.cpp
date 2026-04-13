@@ -222,11 +222,7 @@ void CommandList::copyTextureToBuffer(IBuffer* _dest, u64 destOffsetBytes, u32 d
     const TextureSlice resolvedSrc = srcSlice.resolve(src->m_desc);
 
     const FormatInfo& formatInfo = GetFormatInfo(src->m_desc.format);
-    VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    if(formatInfo.hasDepth)
-        aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-    if(formatInfo.hasStencil)
-        aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+    const VkImageAspectFlags aspectMask = __hidden_vulkan::GetImageAspectMask(formatInfo);
 
     if(formatInfo.blockSize == 0 || formatInfo.bytesPerBlock == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to buffer: invalid row pitch"));

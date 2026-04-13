@@ -4,44 +4,9 @@
 
 #include "project_testbed.h"
 
-#include <cstdlib>
-#include <cstring>
 #include <stdexcept>
 
 #include <logger/client/logger.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-bool ShouldCreateTransparentRenderers(){
-    const char* scene = std::getenv("NWB_TESTBED_SCENE");
-    if(!scene || scene[0] == '\0')
-        return true;
-
-    if(std::strcmp(scene, "opaque") == 0 || std::strcmp(scene, "opaque-only") == 0)
-        return false;
-    if(std::strcmp(scene, "mixed") == 0 || std::strcmp(scene, "avboit") == 0 || std::strcmp(scene, "transparent") == 0)
-        return true;
-
-    NWB_LOGGER_WARNING(NWB_TEXT("ProjectTestbed: unknown NWB_TESTBED_SCENE='{}'; using mixed"), StringConvert(scene));
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NotNullUniquePtr<NWB::Core::ECS::World> ProjectTestbed::createInitialWorldOrDie(NWB::ProjectRuntimeContext& context){
@@ -89,22 +54,19 @@ bool ProjectTestbed::onStartup(){
     renderer.geometry = cubeGeometry;
     renderer.material = cubeMaterial;
 
-    const bool includeTransparentRenderers = ShouldCreateTransparentRenderers();
-    if(includeTransparentRenderers){
-        auto sphereEntity = m_world->createEntity();
-        auto& sphereRenderer = sphereEntity.addComponent<NWB::Core::ECSGraphics::RendererComponent>();
-        sphereRenderer.geometry = sphereGeometry;
-        sphereRenderer.material = transparentMaterial;
+    auto sphereEntity = m_world->createEntity();
+    auto& sphereRenderer = sphereEntity.addComponent<NWB::Core::ECSGraphics::RendererComponent>();
+    sphereRenderer.geometry = sphereGeometry;
+    sphereRenderer.material = transparentMaterial;
 
-        auto tetrahedronEntity = m_world->createEntity();
-        auto& tetrahedronRenderer = tetrahedronEntity.addComponent<NWB::Core::ECSGraphics::RendererComponent>();
-        tetrahedronRenderer.geometry = tetrahedronGeometry;
-        tetrahedronRenderer.material = transparentMaterial;
-    }
+    auto tetrahedronEntity = m_world->createEntity();
+    auto& tetrahedronRenderer = tetrahedronEntity.addComponent<NWB::Core::ECSGraphics::RendererComponent>();
+    tetrahedronRenderer.geometry = tetrahedronGeometry;
+    tetrahedronRenderer.material = transparentMaterial;
 
     NWB_LOGGER_ESSENTIAL_INFO(
         NWB_TEXT("ProjectTestbed: startup scene created ({})"),
-        includeTransparentRenderers ? NWB_TEXT("opaque cube with transparent sphere/tetrahedron") : NWB_TEXT("opaque-only cube")
+        NWB_TEXT("opaque cube with transparent sphere/tetrahedron")
     );
     return true;
 }

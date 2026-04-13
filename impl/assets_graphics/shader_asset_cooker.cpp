@@ -1306,7 +1306,8 @@ static bool ParseAssetMetadata(
                 discoveredNwbFile.virtualRoot.view(),
                 Path(shaderEntry.source),
                 shaderEntry.name
-            )){
+            ))
+            {
                 return false;
             }
 
@@ -1617,7 +1618,8 @@ static bool AppendPreparedShadersToVolume(
                 sourceChecksumHex,
                 shaderCook,
                 cookedBytecode
-            )){
+            ))
+            {
                 return false;
             }
 
@@ -1833,7 +1835,8 @@ bool ShaderAssetCooker::cookShaderAssets(const ShaderCookEnvironment& environmen
         parsedMetadata.includeMetadata,
         parsedMetadata.shaderEntries,
         preparedPlan
-    )){
+    ))
+    {
         return false;
     }
     if(!__hidden_assets::AddPlannedFileCount(static_cast<u64>(parsedMetadata.materialEntries.size()), preparedPlan.plannedFileCount))
@@ -1885,7 +1888,8 @@ bool ShaderAssetCooker::cookShaderAssets(const ShaderCookEnvironment& environmen
             volumeSession,
             seenVirtualPathHashes,
             shaderIndexRecords
-        )){
+        ))
+        {
             return false;
         }
 

@@ -82,7 +82,8 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
         shaderStages,
         descriptorHeapScratch,
         *pso,
-        scratchArena))
+        scratchArena
+    ))
     {
         DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
@@ -109,7 +110,8 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
         fbinfo.sampleCount,
         desc.renderState.blendState.alphaToCoverageEnable,
         multisampling,
-        NWB_TEXT("meshlet pipeline")))
+        NWB_TEXT("meshlet pipeline")
+    ))
     {
         DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;

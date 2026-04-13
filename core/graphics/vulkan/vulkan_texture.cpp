@@ -803,7 +803,8 @@ void CommandList::copyTexture(IStagingTexture* dest, const TextureSlice& destSli
         NWB_TEXT("source texture must be single-sampled"),
         staging,
         texture,
-        region))
+        region
+    ))
     {
         return;
     }
@@ -827,7 +828,8 @@ void CommandList::copyTexture(ITexture* dest, const TextureSlice& destSlice, ISt
         NWB_TEXT("destination texture must be single-sampled"),
         staging,
         texture,
-        region))
+        region
+    ))
     {
         return;
     }

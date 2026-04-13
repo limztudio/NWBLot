@@ -504,7 +504,8 @@ bool Device::createPipelineLayoutForBindingLayouts(
         static_cast<u32>(descriptorSetLayouts.size()),
         pushConstantByteSize,
         outPipelineLayout,
-        operationName))
+        operationName
+    ))
     {
         return false;
     }
@@ -724,7 +725,8 @@ bool DescriptorHeapManager::initialize(){
     constexpr u32 s_TargetSamplerHeapBytes = 2u * 1024u * 1024u;
 
     if(props.minResourceHeapReservedRange > UINT32_MAX || props.minSamplerHeapReservedRange > UINT32_MAX
-        || props.resourceHeapAlignment > UINT32_MAX || props.samplerHeapAlignment > UINT32_MAX)
+        || props.resourceHeapAlignment > UINT32_MAX || props.samplerHeapAlignment > UINT32_MAX
+    )
     {
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor heap properties exceed supported 32-bit heap offsets."));
         return false;
@@ -742,7 +744,8 @@ bool DescriptorHeapManager::initialize(){
     if(resourceReservedBytes > UINT32_MAX - s_TargetResourceHeapBytes
         || samplerReservedBytes > UINT32_MAX - s_TargetSamplerHeapBytes
         || !VulkanDetail::AlignUpU32Checked(resourceReservedBytes + s_TargetResourceHeapBytes, resourceAlignment, resourceRequestedBytes)
-        || !VulkanDetail::AlignUpU32Checked(samplerReservedBytes + s_TargetSamplerHeapBytes, samplerAlignment, samplerRequestedBytes))
+        || !VulkanDetail::AlignUpU32Checked(samplerReservedBytes + s_TargetSamplerHeapBytes, samplerAlignment, samplerRequestedBytes)
+    )
     {
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor heap requested capacity overflows 32-bit heap offsets."));
         return false;
@@ -1235,7 +1238,8 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
         static_cast<u32>(layout->m_descriptorSetLayouts.size()),
         pushConstantByteSize,
         layout->m_pipelineLayout,
-        NWB_TEXT("create binding layout")))
+        NWB_TEXT("create binding layout")
+    ))
     {
         DestroyArenaObject(m_context.objectArena, layout);
         return nullptr;
@@ -1357,7 +1361,8 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
         static_cast<u32>(layout->m_descriptorSetLayouts.size()),
         0,
         layout->m_pipelineLayout,
-        NWB_TEXT("create bindless layout")))
+        NWB_TEXT("create bindless layout")
+    ))
     {
         DestroyArenaObject(m_context.objectArena, layout);
         return nullptr;

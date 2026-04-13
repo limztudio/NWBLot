@@ -223,7 +223,8 @@ static void ReleaseMouseIfNoButtonIsDown(HWND hwnd){
         || (GetKeyState(VK_RBUTTON) & 0x8000)
         || (GetKeyState(VK_MBUTTON) & 0x8000)
         || (GetKeyState(VK_XBUTTON1) & 0x8000)
-        || (GetKeyState(VK_XBUTTON2) & 0x8000))
+        || (GetKeyState(VK_XBUTTON2) & 0x8000)
+    )
         return;
 
     ReleaseCapture();
@@ -283,7 +284,8 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
             wParam,
             [](){},
             [&](const bool isActive){ _this->data<Common::WinFrame>().isActive() = isActive; },
-            lifecycleResult))
+            lifecycleResult
+        ))
             return lifecycleResult;
 
         PAINTSTRUCT ps;

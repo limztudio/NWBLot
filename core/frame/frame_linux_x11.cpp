@@ -362,7 +362,8 @@ static bool ProcessEvent(Frame& frame, const XEvent& event){
             XPeekEvent(GetX11Display(frameData), &nextEvent);
             if(nextEvent.type == KeyPress
                 && nextEvent.xkey.keycode == event.xkey.keycode
-                && nextEvent.xkey.time == event.xkey.time)
+                && nextEvent.xkey.time == event.xkey.time
+            )
                 break;
         }
 

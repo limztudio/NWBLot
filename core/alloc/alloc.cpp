@@ -106,7 +106,8 @@ struct AffinityMasks : Core::Common::Initializerable{
         );
         if(!GetSystemCpuSetInformation(
             reinterpret_cast<PSYSTEM_CPU_SET_INFORMATION>(buffer.data()),
-            bufferSize, &bufferSize, GetCurrentProcess(), 0))
+            bufferSize, &bufferSize, GetCurrentProcess(), 0
+        ))
             return;
 
         u8 minEfficiency = 255;

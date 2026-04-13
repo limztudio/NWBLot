@@ -570,7 +570,8 @@ bool RendererSystem::ensureDeferredFrameTargets(Core::IFramebuffer* presentation
         && m_deferredTargets.depthFormat == depthFormat
         && m_deferredTargets.avboit.lowRasterFormat == avboitLowRasterFormat
         && m_deferredTargets.avboit.accumColorFormat == avboitAccumColorFormat
-        && m_deferredTargets.avboit.accumExtinctionFormat == avboitAccumExtinctionFormat)
+        && m_deferredTargets.avboit.accumExtinctionFormat == avboitAccumExtinctionFormat
+    )
     {
         outTargets = &m_deferredTargets;
         return true;
@@ -1790,7 +1791,8 @@ bool RendererSystem::ensureMaterialSurfaceInfo(const Core::Assets::AssetRef<Mate
 
     CompactString alphaText;
     if(__hidden_ecs_graphics::FindMaterialParameter(material, AStringView("alpha"), alphaText)
-        || __hidden_ecs_graphics::FindMaterialParameter(material, AStringView("opacity"), alphaText))
+        || __hidden_ecs_graphics::FindMaterialParameter(material, AStringView("opacity"), alphaText)
+    )
     {
         f32 parsedAlpha = 1.f;
         if(__hidden_ecs_graphics::ParseAlphaValue(AStringView(alphaText.c_str()), parsedAlpha))
@@ -1807,7 +1809,8 @@ bool RendererSystem::ensureMaterialSurfaceInfo(const Core::Assets::AssetRef<Mate
     CompactString modeText;
     if(__hidden_ecs_graphics::FindMaterialParameter(material, AStringView("render_mode"), modeText)
         || __hidden_ecs_graphics::FindMaterialParameter(material, AStringView("alpha_mode"), modeText)
-        || __hidden_ecs_graphics::FindMaterialParameter(material, AStringView("transparency"), modeText))
+        || __hidden_ecs_graphics::FindMaterialParameter(material, AStringView("transparency"), modeText)
+    )
     {
         createdInfo.transparent = __hidden_ecs_graphics::IsTransparentText(AStringView(modeText.c_str()));
     }
@@ -2127,7 +2130,8 @@ bool RendererSystem::ensureRendererPipeline(const RendererComponent& renderer, C
             shaderVariant,
             Core::ShaderType::Compute,
             "ECSGraphics_RendererCS",
-            &meshComputeArchiveStageName))
+            &meshComputeArchiveStageName
+        ))
         {
             return false;
         }

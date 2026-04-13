@@ -169,7 +169,8 @@ bool Geometry::loadBinary(const Core::Assets::AssetBytes& binary){
         || !ReadPOD(binary, cursor, vertexStride)
         || !ReadPOD(binary, cursor, use32BitIndices)
         || !ReadPOD(binary, cursor, vertexBytes)
-        || !ReadPOD(binary, cursor, indexBytes))
+        || !ReadPOD(binary, cursor, indexBytes)
+    )
     {
         NWB_LOGGER_ERROR(NWB_TEXT("Geometry::loadBinary failed: malformed header"));
         return false;

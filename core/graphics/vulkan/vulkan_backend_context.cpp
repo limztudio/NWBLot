@@ -658,7 +658,8 @@ bool BackendContext::findQueueFamilies(VkPhysicalDevice physicalDevice){
         if(m_computeQueueFamily == -1){
             if(queueFamily.queueCount > 0 &&
                 (queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT) &&
-                !(queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT))
+                !(queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
+            )
                 m_computeQueueFamily = i;
         }
 
@@ -666,7 +667,8 @@ bool BackendContext::findQueueFamilies(VkPhysicalDevice physicalDevice){
             if(queueFamily.queueCount > 0 &&
                 (queueFamily.queueFlags & VK_QUEUE_TRANSFER_BIT) &&
                 !(queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT) &&
-                !(queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT))
+                !(queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
+            )
                 m_transferQueueFamily = i;
         }
 
@@ -695,7 +697,7 @@ bool BackendContext::findQueueFamilies(VkPhysicalDevice physicalDevice){
         (m_presentQueueFamily == -1 && !m_deviceParams.headlessDevice) ||
         (m_computeQueueFamily == -1 && m_deviceParams.enableComputeQueue) ||
         (m_transferQueueFamily == -1 && m_deviceParams.enableCopyQueue)
-        )
+    )
     {
         return false;
     }
@@ -832,7 +834,8 @@ bool BackendContext::pickPhysicalDevice(){
                 }
 
                 if(surfaceCaps.minImageCount > m_deviceParams.swapChainBufferCount ||
-                    (surfaceCaps.maxImageCount < m_deviceParams.swapChainBufferCount && surfaceCaps.maxImageCount > 0))
+                    (surfaceCaps.maxImageCount < m_deviceParams.swapChainBufferCount && surfaceCaps.maxImageCount > 0)
+                )
                 {
                     errorStream << std::endl << "  - cannot support the requested swap chain image count";
                     deviceIsGood = false;
@@ -841,7 +844,8 @@ bool BackendContext::pickPhysicalDevice(){
                 if(surfaceCaps.minImageExtent.width > requestedExtent.width ||
                     surfaceCaps.minImageExtent.height > requestedExtent.height ||
                     surfaceCaps.maxImageExtent.width < requestedExtent.width ||
-                    surfaceCaps.maxImageExtent.height < requestedExtent.height)
+                    surfaceCaps.maxImageExtent.height < requestedExtent.height
+                )
                 {
                     errorStream << std::endl << "  - cannot support the requested swap chain size";
                     deviceIsGood = false;

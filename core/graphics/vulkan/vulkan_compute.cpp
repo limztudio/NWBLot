@@ -79,7 +79,8 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
         shaderStages,
         descriptorHeapScratch,
         *pso,
-        scratchArena))
+        scratchArena
+    ))
     {
         DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;

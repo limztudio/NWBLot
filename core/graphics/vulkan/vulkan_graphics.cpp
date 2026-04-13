@@ -238,7 +238,8 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
         shaderStages,
         descriptorHeapScratch,
         *pso,
-        scratchArena))
+        scratchArena
+    ))
     {
         DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
@@ -288,7 +289,8 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
         fbinfo.sampleCount,
         desc.renderState.blendState.alphaToCoverageEnable,
         multisampling,
-        NWB_TEXT("graphics pipeline")))
+        NWB_TEXT("graphics pipeline")
+    ))
     {
         DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;

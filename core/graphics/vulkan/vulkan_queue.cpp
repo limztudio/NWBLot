@@ -226,7 +226,8 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd, bool* outSubmitted){
         return m_lastSubmittedID;
     }
     if(m_waitSemaphores.size() > static_cast<usize>(Limit<u32>::s_Max)
-        || m_signalSemaphores.size() >= static_cast<usize>(Limit<u32>::s_Max))
+        || m_signalSemaphores.size() >= static_cast<usize>(Limit<u32>::s_Max)
+    )
     {
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: queued semaphore count exceeds Vulkan limit"));
         clearPendingSemaphores();

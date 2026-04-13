@@ -646,7 +646,9 @@ static void OnKeyboardKey(void* data, wl_keyboard* keyboard, u32 serial, u32 tim
 
         if(context.repeatRate > 0
             && context.xkbKeymap
-            && xkb_keymap_key_repeats(context.xkbKeymap, keycode) > 0){
+            && xkb_keymap_key_repeats(context.xkbKeymap, keycode) > 0
+        )
+        {
             context.repeatPending = true;
             context.repeatKeycode = keycode;
             context.repeatKey = translatedKey;

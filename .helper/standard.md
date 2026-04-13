@@ -1,7 +1,7 @@
 # NWBLot Inferred Code Standard
 
 Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_parties/`).  
-Updated: 2026-04-09
+Updated: 2026-04-13
 
 ## 1. File and module structure
 - Use lowercase `snake_case` filenames for C++ source and headers.
@@ -66,6 +66,23 @@ Updated: 2026-04-09
   - `    a,`
   - `    b,`
   - `);`
+- When a multiline call or expression is used directly inside a control-statement condition, put the outer closing parenthesis/parentheses on their own line:
+  - Correct:
+  - `if(!foobar(`
+  - `    aaa`
+  - `))`
+  - Correct:
+  - `if(`
+  - `    xx`
+  - `    && yy`
+  - `)`
+  - Wrong:
+  - `if(!foobar(`
+  - `    aaa))`
+  - Wrong:
+  - `if(`
+  - `    xx`
+  - `    && yy)`
 - For simple value-selection assignments, prefer the single-line ternary form:
   - Correct:
   - `value = cond ? valueA : valueB;`

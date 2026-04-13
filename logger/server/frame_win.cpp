@@ -90,7 +90,8 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                 }
             },
             [&](const bool isActive){ _this->data<WinFrame>().isActive() = isActive; },
-            lifecycleResult))
+            lifecycleResult
+        ))
             return lifecycleResult;
 
         switch(uMsg){

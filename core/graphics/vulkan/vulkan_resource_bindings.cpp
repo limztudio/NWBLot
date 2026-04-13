@@ -1228,24 +1228,15 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
     }
     layout->m_descriptorSetLayouts.push_back(setLayout);
 
-    VkPushConstantRange pushConstantRange = {};
-    bool hasPushConstants = pushConstantByteSize > 0;
-
-    if(hasPushConstants){
-        pushConstantRange.stageFlags = VK_SHADER_STAGE_ALL;
-        pushConstantRange.offset = 0;
-        pushConstantRange.size = pushConstantByteSize;
-    }
-
-    VkPipelineLayoutCreateInfo pipelineLayoutInfo = VulkanDetail::MakeVkStruct<VkPipelineLayoutCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO);
-    pipelineLayoutInfo.setLayoutCount = static_cast<u32>(layout->m_descriptorSetLayouts.size());
-    pipelineLayoutInfo.pSetLayouts = layout->m_descriptorSetLayouts.data();
-    pipelineLayoutInfo.pushConstantRangeCount = hasPushConstants ? 1 : 0;
-    pipelineLayoutInfo.pPushConstantRanges = hasPushConstants ? &pushConstantRange : nullptr;
-
-    res = vkCreatePipelineLayout(m_context.device, &pipelineLayoutInfo, m_context.allocationCallbacks, &layout->m_pipelineLayout);
-    if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create pipeline layout for binding layout: {}"), ResultToString(res));
+    const bool hasPushConstants = pushConstantByteSize > 0;
+    if(!VulkanDetail::CreatePipelineLayout(
+        m_context,
+        layout->m_descriptorSetLayouts.data(),
+        static_cast<u32>(layout->m_descriptorSetLayouts.size()),
+        pushConstantByteSize,
+        layout->m_pipelineLayout,
+        NWB_TEXT("create binding layout")))
+    {
         DestroyArenaObject(m_context.objectArena, layout);
         return nullptr;
     }
@@ -1360,14 +1351,14 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
     }
     layout->m_descriptorSetLayouts.push_back(setLayout);
 
-    VkPipelineLayoutCreateInfo pipelineLayoutInfo = VulkanDetail::MakeVkStruct<VkPipelineLayoutCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO);
-    pipelineLayoutInfo.setLayoutCount = static_cast<u32>(layout->m_descriptorSetLayouts.size());
-    pipelineLayoutInfo.pSetLayouts = layout->m_descriptorSetLayouts.data();
-
-    res = vkCreatePipelineLayout(m_context.device, &pipelineLayoutInfo, m_context.allocationCallbacks, &layout->m_pipelineLayout);
-
-    if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create pipeline layout for bindless layout: {}"), ResultToString(res));
+    if(!VulkanDetail::CreatePipelineLayout(
+        m_context,
+        layout->m_descriptorSetLayouts.data(),
+        static_cast<u32>(layout->m_descriptorSetLayouts.size()),
+        0,
+        layout->m_pipelineLayout,
+        NWB_TEXT("create bindless layout")))
+    {
         DestroyArenaObject(m_context.objectArena, layout);
         return nullptr;
     }

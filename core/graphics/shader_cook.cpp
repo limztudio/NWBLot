@@ -516,18 +516,6 @@ bool ShaderCook::parseDocument(const Path& nwbFilePath, Metascript::Document& ou
     return __hidden_shader_cook::ParseNwbDocument(nwbFilePath, outDoc);
 }
 
-bool ShaderCook::rejectVirtualPathOverrideField(const Path& nwbFilePath, const Metascript::Value& asset, const AStringView assetLabel){
-    if(!asset.findField("name"))
-        return true;
-
-    NWB_LOGGER_ERROR(
-        NWB_TEXT("{} meta '{}': field 'name' is no longer supported; virtual paths are derived from the asset file hierarchy"),
-        StringConvert(assetLabel),
-        PathToString<tchar>(nwbFilePath)
-    );
-    return false;
-}
-
 bool ShaderCook::validateDefaultVariant(const AStringView contextLabel, const AStringView defaultVariant, const CookMap<AString, DefineEntry>& defineValues){
     Alloc::ScratchArena<> validationArena;
     return __hidden_shader_cook::ValidateDefaultVariant(contextLabel, defaultVariant, defineValues, validationArena);
@@ -548,7 +536,7 @@ bool ShaderCook::parseShaderMeta(const Path& nwbFilePath, const Metascript::Docu
     if(!Assets::ResolvePairedSourcePathFromMetadata(nwbFilePath, outEntry.source))
         return false;
 
-    if(!rejectVirtualPathOverrideField(nwbFilePath, asset, "Shader"))
+    if(!Assets::RejectVirtualPathOverrideField(nwbFilePath, asset, "Shader"))
         return false;
     if(!__hidden_shader_cook::ParseCompactStringField(nwbFilePath, asset, "compiler", outEntry.compiler))
         return false;

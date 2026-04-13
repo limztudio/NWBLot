@@ -166,11 +166,13 @@ bool ValidateTextureViewShape(const TextureDesc& desc, const TextureDimension::E
 }
 
 VkImageAspectFlags GetImageAspectMask(const FormatInfo& formatInfo){
-    VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    VkImageAspectFlags aspectMask = 0;
     if(formatInfo.hasDepth)
-        aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+        aspectMask |= VK_IMAGE_ASPECT_DEPTH_BIT;
     if(formatInfo.hasStencil)
         aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+    if(aspectMask == 0)
+        aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     return aspectMask;
 }
 

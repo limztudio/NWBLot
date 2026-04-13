@@ -593,7 +593,7 @@ static bool ParseMaterialMeta(
         return false;
     }
 
-    if(!Core::ShaderCook::rejectVirtualPathOverrideField(discoveredFile.filePath, asset, "Material"))
+    if(!Core::Assets::RejectVirtualPathOverrideField(discoveredFile.filePath, asset, "Material"))
         return false;
     if(!Core::Assets::BuildDerivedAssetVirtualPath(discoveredFile.assetRoot, discoveredFile.virtualRoot, discoveredFile.filePath, outEntry.virtualPath))
         return false;
@@ -617,7 +617,7 @@ static bool ParseGeometryMeta(const DiscoveredNwbFile& discoveredFile, const Cor
         return false;
     }
 
-    if(!Core::ShaderCook::rejectVirtualPathOverrideField(discoveredFile.filePath, asset, "Geometry"))
+    if(!Core::Assets::RejectVirtualPathOverrideField(discoveredFile.filePath, asset, "Geometry"))
         return false;
     if(!Core::Assets::BuildDerivedAssetVirtualPath(discoveredFile.assetRoot, discoveredFile.virtualRoot, discoveredFile.filePath, outEntry.virtualPath))
         return false;

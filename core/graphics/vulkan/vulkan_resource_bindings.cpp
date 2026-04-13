@@ -120,6 +120,7 @@ bool BuildPipelineRenderingInfo(
     VkPipelineRenderingCreateInfo& outRenderingInfo,
     PipelineRenderingFormatVector& outColorFormats)
 {
+    outColorFormats.clear();
     outColorFormats.reserve(fbinfo.colorFormats.size());
     for(u32 i = 0; i < static_cast<u32>(fbinfo.colorFormats.size()); ++i){
         const VkFormat vkFormat = ConvertFormat(fbinfo.colorFormats[i]);

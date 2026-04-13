@@ -28,7 +28,6 @@ NWB_CORE_BEGIN
 
 namespace Metascript{
 class Document;
-class Value;
 }
 
 
@@ -112,8 +111,6 @@ public:
     bool parseShaderMeta(const Path& nwbFilePath, ShaderEntry& outEntry);
     bool parseIncludeMeta(const Path& nwbFilePath, const Metascript::Document& doc, IncludeEntry& outEntry);
     bool parseIncludeMeta(const Path& nwbFilePath, IncludeEntry& outEntry);
-
-    static bool rejectVirtualPathOverrideField(const Path& nwbFilePath, const Metascript::Value& asset, AStringView assetLabel);
 
     bool validateDefaultVariant(AStringView contextLabel, AStringView defaultVariant, const CookMap<AString, DefineEntry>& defineValues);
 

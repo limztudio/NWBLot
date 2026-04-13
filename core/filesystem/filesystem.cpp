@@ -79,7 +79,11 @@ StagedDirectoryCleanupGuard::StagedDirectoryCleanupGuard(const Path& directoryPa
 
 StagedDirectoryCleanupGuard::~StagedDirectoryCleanupGuard(){
     if(active)
-        CleanupStagedDirectoryBestEffort(directoryPath, operationName, label);
+        CleanupStagedDirectoryBestEffort(
+            directoryPath,
+            AStringView(operationName.data(), operationName.size()),
+            AStringView(label.data(), label.size())
+        );
 }
 
 
@@ -338,63 +342,34 @@ static bool TransferSegmentChunk(
     return transferStream(stream);
 }
 
-enum class SegmentTransferDirection : u8{
-    Read,
-    Write
-};
-
 template<typename SegmentPaths>
-static bool TransferSegmentBytesImpl(
+static bool TransferSegmentBytes(
     const AStringView volumeName,
     const SegmentPaths& segmentPaths,
     const usize segmentIndex,
     const std::streamoff streamOffset,
     const std::streamsize streamChunkSize,
     const u64 chunkBytes,
-    const SegmentTransferDirection direction,
-    u8** outputBytes,
-    const u8** inputBytes)
+    u8*& outputBytes)
 {
-    if(direction == SegmentTransferDirection::Read){
-        std::ifstream stream(segmentPaths[segmentIndex], std::ios::binary);
-        return TransferSegmentChunk(volumeName, segmentPaths, segmentIndex, streamOffset, "readBytes:open", "readBytes:seek", stream,
-            [](auto& stream, const std::streamoff offset){ stream.seekg(offset); },
-            [&](auto& stream){
-                stream.read(reinterpret_cast<char*>(*outputBytes), streamChunkSize);
-                if(stream.gcount() != streamChunkSize){
-                    NWB_LOGGER_WARNING(
-                        NWB_TEXT("Filesystem('{}'): readBytes failed on '{}': requested {} bytes, received {} bytes, errno {}"),
-                        StringConvert(volumeName),
-                        StringConvert(segmentPaths[segmentIndex].string()),
-                        static_cast<i64>(streamChunkSize),
-                        static_cast<i64>(stream.gcount()),
-                        StringConvert(LastErrnoMessage())
-                    );
-                    return false;
-                }
-
-                *outputBytes += chunkBytes;
-                return true;
-            });
-    }
-
-    std::fstream stream(segmentPaths[segmentIndex], std::ios::binary | std::ios::in | std::ios::out);
-    return TransferSegmentChunk(volumeName, segmentPaths, segmentIndex, streamOffset, "writeBytes:open", "writeBytes:seek", stream,
-        [](auto& stream, const std::streamoff offset){ stream.seekp(offset); },
+    std::ifstream stream(segmentPaths[segmentIndex], std::ios::binary);
+    return TransferSegmentChunk(volumeName, segmentPaths, segmentIndex, streamOffset, "readBytes:open", "readBytes:seek", stream,
+        [](auto& stream, const std::streamoff offset){ stream.seekg(offset); },
         [&](auto& stream){
-            stream.write(reinterpret_cast<const char*>(*inputBytes), streamChunkSize);
-            if(!stream.good()){
+            stream.read(reinterpret_cast<char*>(outputBytes), streamChunkSize);
+            if(stream.gcount() != streamChunkSize){
                 NWB_LOGGER_WARNING(
-                    NWB_TEXT("Filesystem('{}'): writeBytes failed on '{}': attempted {} bytes, errno {}"),
+                    NWB_TEXT("Filesystem('{}'): readBytes failed on '{}': requested {} bytes, received {} bytes, errno {}"),
                     StringConvert(volumeName),
                     StringConvert(segmentPaths[segmentIndex].string()),
                     static_cast<i64>(streamChunkSize),
+                    static_cast<i64>(stream.gcount()),
                     StringConvert(LastErrnoMessage())
                 );
                 return false;
             }
 
-            *inputBytes += chunkBytes;
+            outputBytes += chunkBytes;
             return true;
         });
 }
@@ -407,22 +382,27 @@ static bool TransferSegmentBytes(
     const std::streamoff streamOffset,
     const std::streamsize streamChunkSize,
     const u64 chunkBytes,
-    u8*& outputBytes)
-{
-    return TransferSegmentBytesImpl(volumeName, segmentPaths, segmentIndex, streamOffset, streamChunkSize, chunkBytes, SegmentTransferDirection::Read, &outputBytes, nullptr);
-}
-
-template<typename SegmentPaths>
-static bool TransferSegmentBytes(
-    const AStringView volumeName,
-    const SegmentPaths& segmentPaths,
-    const usize segmentIndex,
-    const std::streamoff streamOffset,
-    const std::streamsize streamChunkSize,
-    const u64 chunkBytes,
     const u8*& inputBytes)
 {
-    return TransferSegmentBytesImpl(volumeName, segmentPaths, segmentIndex, streamOffset, streamChunkSize, chunkBytes, SegmentTransferDirection::Write, nullptr, &inputBytes);
+    std::fstream stream(segmentPaths[segmentIndex], std::ios::binary | std::ios::in | std::ios::out);
+    return TransferSegmentChunk(volumeName, segmentPaths, segmentIndex, streamOffset, "writeBytes:open", "writeBytes:seek", stream,
+        [](auto& stream, const std::streamoff offset){ stream.seekp(offset); },
+        [&](auto& stream){
+            stream.write(reinterpret_cast<const char*>(inputBytes), streamChunkSize);
+            if(!stream.good()){
+                NWB_LOGGER_WARNING(
+                    NWB_TEXT("Filesystem('{}'): writeBytes failed on '{}': attempted {} bytes, errno {}"),
+                    StringConvert(volumeName),
+                    StringConvert(segmentPaths[segmentIndex].string()),
+                    static_cast<i64>(streamChunkSize),
+                    StringConvert(LastErrnoMessage())
+                );
+                return false;
+            }
+
+            inputBytes += chunkBytes;
+            return true;
+        });
 }
 
 static void* BuildArenaAlloc(usize size){ return NWB::Core::Alloc::CoreAlloc(size, "filesystem_build_volume"); }

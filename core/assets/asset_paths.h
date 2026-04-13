@@ -318,6 +318,19 @@ namespace __hidden_asset_paths{
     return true;
 }
 
+template<typename MetadataValue>
+[[nodiscard]] inline bool RejectVirtualPathOverrideField(const Path& nwbFilePath, const MetadataValue& asset, const AStringView assetLabel){
+    if(!asset.findField("name"))
+        return true;
+
+    NWB_LOGGER_ERROR(
+        NWB_TEXT("{} meta '{}': field 'name' is no longer supported; virtual paths are derived from the asset file hierarchy"),
+        StringConvert(assetLabel),
+        PathToString<tchar>(nwbFilePath)
+    );
+    return false;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

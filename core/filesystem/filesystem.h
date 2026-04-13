@@ -91,8 +91,8 @@ bool EnsureEmptyStagedDirectory(const Path& directoryPath, AStringView operation
 
 struct StagedDirectoryCleanupGuard{
     Path directoryPath;
-    AStringView operationName;
-    AStringView label;
+    AString operationName;
+    AString label;
     bool active = true;
 
     StagedDirectoryCleanupGuard(const Path& directoryPath, AStringView operationName, AStringView label = "stage directory");

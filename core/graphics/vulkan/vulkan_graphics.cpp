@@ -277,7 +277,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     rasterizer.cullMode = VulkanDetail::ConvertCullMode(desc.renderState.rasterState.cullMode);
     rasterizer.frontFace = desc.renderState.rasterState.frontCounterClockwise ? VK_FRONT_FACE_COUNTER_CLOCKWISE : VK_FRONT_FACE_CLOCKWISE;
     rasterizer.depthBiasEnable = desc.renderState.rasterState.depthBias != 0 ? VK_TRUE : VK_FALSE;
-    rasterizer.depthBiasConstantFactor = (f32)desc.renderState.rasterState.depthBias;
+    rasterizer.depthBiasConstantFactor = static_cast<f32>(desc.renderState.rasterState.depthBias);
     rasterizer.depthBiasClamp = desc.renderState.rasterState.depthBiasClamp;
     rasterizer.depthBiasSlopeFactor = desc.renderState.rasterState.slopeScaledDepthBias;
     rasterizer.lineWidth = s_DefaultRasterLineWidth;

@@ -697,8 +697,7 @@ bool BackendContext::findQueueFamilies(VkPhysicalDevice physicalDevice){
         (m_presentQueueFamily == -1 && !m_deviceParams.headlessDevice) ||
         (m_computeQueueFamily == -1 && m_deviceParams.enableComputeQueue) ||
         (m_transferQueueFamily == -1 && m_deviceParams.enableCopyQueue)
-    )
-    {
+    ){
         return false;
     }
 
@@ -835,8 +834,7 @@ bool BackendContext::pickPhysicalDevice(){
 
                 if(surfaceCaps.minImageCount > m_deviceParams.swapChainBufferCount ||
                     (surfaceCaps.maxImageCount < m_deviceParams.swapChainBufferCount && surfaceCaps.maxImageCount > 0)
-                )
-                {
+                ){
                     errorStream << std::endl << "  - cannot support the requested swap chain image count";
                     deviceIsGood = false;
                 }
@@ -845,8 +843,7 @@ bool BackendContext::pickPhysicalDevice(){
                     surfaceCaps.minImageExtent.height > requestedExtent.height ||
                     surfaceCaps.maxImageExtent.width < requestedExtent.width ||
                     surfaceCaps.maxImageExtent.height < requestedExtent.height
-                )
-                {
+                ){
                     errorStream << std::endl << "  - cannot support the requested swap chain size";
                     deviceIsGood = false;
                 }
@@ -1069,8 +1066,7 @@ bool BackendContext::createVulkanDevice(){
         || !requireFeature(supportedVulkan12Features.scalarBlockLayout, "scalarBlockLayout")
         || !requireFeature(dynamicRenderingEnabled ? dynamicRenderingFeatures.dynamicRendering : VK_FALSE, "dynamicRendering")
         || !requireFeature(synchronization2Enabled ? synchronization2Features.synchronization2 : VK_FALSE, "synchronization2")
-    )
-    {
+    ){
         return false;
     }
 

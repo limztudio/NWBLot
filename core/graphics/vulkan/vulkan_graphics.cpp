@@ -239,8 +239,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
         descriptorHeapScratch,
         *pso,
         scratchArena
-    ))
-    {
+    )){
         DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
@@ -290,8 +289,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
         desc.renderState.blendState.alphaToCoverageEnable,
         multisampling,
         NWB_TEXT("graphics pipeline")
-    ))
-    {
+    )){
         DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }

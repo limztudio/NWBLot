@@ -83,6 +83,22 @@ Updated: 2026-04-13
   - `if(`
   - `    xx`
   - `    && yy)`
+- When a multiline `if` condition opens a braced body, keep the condition closer on its own line and attach the opening brace to that same line:
+  - Correct:
+  - `if(`
+  - `    xx`
+  - `    && yy`
+  - `){`
+  - Correct:
+  - `if(!foobar(`
+  - `    aaa`
+  - `)){`
+  - Wrong:
+  - `if(`
+  - `    xx`
+  - `    && yy`
+  - `)`
+  - `{`
 - Exception: when the final argument of a multiline condition call is an inline lambda, keep the call/control closing parentheses on the lambda closing-brace line:
   - Correct:
   - `if(!foobar(`
@@ -90,6 +106,8 @@ Updated: 2026-04-13
   - `    [](){`
   - `        return bbb;`
   - `    }))`
+  - For a braced `if` body, append the opening brace to that same line:
+  - `    })){`
   - Wrong:
   - `if(!foobar(`
   - `    aaa,`

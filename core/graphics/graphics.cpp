@@ -429,8 +429,7 @@ void Graphics::updateWindowState(u32 width, u32 height, bool windowVisible, bool
         static_cast<i32>(m_swapChainState.backBufferWidth) != static_cast<i32>(width)
         || static_cast<i32>(m_swapChainState.backBufferHeight) != static_cast<i32>(height)
         || (m_swapChainState.vsyncEnabled != m_requestedVSync && getGraphicsAPI() == GraphicsAPI::VULKAN)
-    )
-    {
+    ){
         backBufferResizing();
 
         m_swapChainState.backBufferWidth = width;

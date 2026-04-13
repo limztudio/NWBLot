@@ -867,8 +867,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
         descriptorHeapScratch,
         *pso,
         scratchArena
-    ))
-    {
+    )){
         DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
@@ -1662,8 +1661,7 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
     if((args.height != 0 && widthHeight / args.height != args.width)
         || (args.depth != 0 && invocationCount / args.depth != widthHeight)
         || invocationCount > m_context.rayTracingPipelineProperties.maxRayDispatchInvocationCount
-    )
-    {
+    ){
         NWB_LOGGER_ERROR(
             NWB_TEXT("Vulkan: Failed to dispatch rays: dispatch dimensions ({}, {}, {}) exceed ray dispatch limit {}"),
             args.width,

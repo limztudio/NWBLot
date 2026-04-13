@@ -804,8 +804,7 @@ void CommandList::copyTexture(IStagingTexture* dest, const TextureSlice& destSli
         staging,
         texture,
         region
-    ))
-    {
+    )){
         return;
     }
 
@@ -829,8 +828,7 @@ void CommandList::copyTexture(ITexture* dest, const TextureSlice& destSlice, ISt
         staging,
         texture,
         region
-    ))
-    {
+    )){
         return;
     }
 

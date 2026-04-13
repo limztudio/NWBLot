@@ -816,8 +816,7 @@ bool BuildVolume(const Path& outputDirectory, const VolumeBuildConfig& config, c
         outputDirectory,
         config.volumeName,
         static_cast<usize>(outBuildInfo.segmentCount)
-    ))
-    {
+    )){
         return false;
     }
     stageDirectoryCleanup.dismiss();

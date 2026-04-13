@@ -505,8 +505,7 @@ bool Device::createPipelineLayoutForBindingLayouts(
         pushConstantByteSize,
         outPipelineLayout,
         operationName
-    ))
-    {
+    )){
         return false;
     }
 
@@ -726,8 +725,7 @@ bool DescriptorHeapManager::initialize(){
 
     if(props.minResourceHeapReservedRange > UINT32_MAX || props.minSamplerHeapReservedRange > UINT32_MAX
         || props.resourceHeapAlignment > UINT32_MAX || props.samplerHeapAlignment > UINT32_MAX
-    )
-    {
+    ){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor heap properties exceed supported 32-bit heap offsets."));
         return false;
     }
@@ -745,8 +743,7 @@ bool DescriptorHeapManager::initialize(){
         || samplerReservedBytes > UINT32_MAX - s_TargetSamplerHeapBytes
         || !VulkanDetail::AlignUpU32Checked(resourceReservedBytes + s_TargetResourceHeapBytes, resourceAlignment, resourceRequestedBytes)
         || !VulkanDetail::AlignUpU32Checked(samplerReservedBytes + s_TargetSamplerHeapBytes, samplerAlignment, samplerRequestedBytes)
-    )
-    {
+    ){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor heap requested capacity overflows 32-bit heap offsets."));
         return false;
     }
@@ -1239,8 +1236,7 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
         pushConstantByteSize,
         layout->m_pipelineLayout,
         NWB_TEXT("create binding layout")
-    ))
-    {
+    )){
         DestroyArenaObject(m_context.objectArena, layout);
         return nullptr;
     }
@@ -1362,8 +1358,7 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
         0,
         layout->m_pipelineLayout,
         NWB_TEXT("create bindless layout")
-    ))
-    {
+    )){
         DestroyArenaObject(m_context.objectArena, layout);
         return nullptr;
     }

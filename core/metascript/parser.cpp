@@ -152,8 +152,7 @@ private:
             && assignOp != TokenType::MinusEqual
             && assignOp != TokenType::StarEqual
             && assignOp != TokenType::SlashEqual
-        )
-        {
+        ){
             errorExpected("expected assignment operator");
             return false;
         }

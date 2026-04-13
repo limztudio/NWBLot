@@ -579,8 +579,7 @@ void Device::getTextureTiling(ITexture* _texture, u32* numTiles, PackedMipDesc* 
             desc->numPackedMips = texture->m_desc.mipLevels - numStandardMips;
             if(!checkedTileCount(sparseReqs[0].imageMipTailOffset, texture->m_tileByteSize, desc->startTileIndexInOverallResource)
                 || !checkedTileCount(sparseReqs[0].imageMipTailSize, texture->m_tileByteSize, desc->numTilesForPackedMips)
-            )
-            {
+            ){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get texture tiling: packed mip tile range exceeds u32 limits"));
                 clearOutputs();
                 return;
@@ -642,8 +641,7 @@ void Device::getTextureTiling(ITexture* _texture, u32* numTiles, PackedMipDesc* 
                 if(!ceilDivU32(width, tileWidth, subresourceTilings[i].widthInTiles)
                     || !ceilDivU32(height, tileHeight, subresourceTilings[i].heightInTiles)
                     || !ceilDivU32(depth, tileDepth, subresourceTilings[i].depthInTiles)
-                )
-                {
+                ){
                     NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get texture tiling: sparse image tile shape is invalid"));
                     clearOutputs();
                     return;
@@ -667,8 +665,7 @@ void Device::getTextureTiling(ITexture* _texture, u32* numTiles, PackedMipDesc* 
                 subresourceTilings[i].heightInTiles,
                 subresourceTilings[i].depthInTiles,
                 startTileIndex
-            ))
-            {
+            )){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get texture tiling: sparse image tile count exceeds u32 limits"));
                 clearOutputs();
                 return;

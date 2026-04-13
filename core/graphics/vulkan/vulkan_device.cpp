@@ -327,8 +327,7 @@ Device::Device(const DeviceDesc& desc)
             || !vkCmdBindResourceHeapEXT
             || !vkCmdBindSamplerHeapEXT
             || !vkCmdPushDataEXT
-        )
-        {
+        ){
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Descriptor heap entry points are unavailable, falling back to descriptor sets."));
             m_context.extensions.EXT_descriptor_heap = false;
         }
@@ -448,8 +447,7 @@ bool Device::loadPipelineCacheData(Vector<u8>& outData){
         false,
         Filesystem::VolumeUsage::RuntimeReadOnly,
         volume
-    ))
-    {
+    )){
         NWB_LOGGER_WARNING(
             NWB_TEXT("Vulkan: Failed to mount pipeline cache runtime volume '{}' from '{}'."),
             StringConvert(m_pipelineCacheVolumeName),
@@ -508,8 +506,7 @@ void Device::savePipelineCacheData(){
         true,
         Filesystem::VolumeUsage::RuntimeReadWrite,
         volume
-    ))
-    {
+    )){
         NWB_LOGGER_WARNING(
             NWB_TEXT("Vulkan: Failed to mount pipeline cache runtime volume '{}' for write at '{}'."),
             StringConvert(m_pipelineCacheVolumeName),
@@ -528,8 +525,7 @@ void Device::savePipelineCacheData(){
             true,
             Filesystem::VolumeUsage::RuntimeReadWrite,
             volume
-        ))
-        {
+        )){
             NWB_LOGGER_WARNING(
                 NWB_TEXT("Vulkan: Failed to recreate pipeline cache runtime volume '{}'."),
                 StringConvert(m_pipelineCacheVolumeName)

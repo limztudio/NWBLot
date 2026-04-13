@@ -80,8 +80,7 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
         descriptorHeapScratch,
         *pso,
         scratchArena
-    ))
-    {
+    )){
         DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }

@@ -106,6 +106,14 @@ static constexpr u64 s_VolumeMoveChunkBytes = 1024ull * 1024ull;
 static constexpr AStringView s_VolumePublishLogPrefix = "Filesystem volume publish";
 
 
+static AString FilesystemMutationFailureDetail(const ErrorCode& errorCode, const AStringView fallbackDetail){
+    if(errorCode)
+        return errorCode.message();
+
+    return AString(fallbackDetail.data(), fallbackDetail.size());
+}
+
+
 template<typename T>
 static bool CanRepresentU64(const u64 value){
     static_assert(IsArithmetic_V<T>, "CanRepresentU64 requires arithmetic target type");
@@ -480,7 +488,7 @@ static bool MoveExistingVolumeSegments(const Path& fromDirectory, const Path& to
         if(destinationCreated)
             return true;
 
-        if(!CreateDirectories(toDirectory, errorCode)){
+        if(!EnsureDirectories(toDirectory, errorCode)){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("Filesystem volume publish: failed to create backup directory '{}': {}"),
                 PathToString<tchar>(toDirectory),
@@ -566,7 +574,7 @@ static bool RestoreVolumeSegments(const Path& fromDirectory, const Path& toDirec
 
     if(fileNames.empty())
         return true;
-    if(!CreateDirectories(toDirectory, errorCode)){
+    if(!EnsureDirectories(toDirectory, errorCode)){
         NWB_LOGGER_WARNING(
             NWB_TEXT("Filesystem volume publish: failed to recreate output directory '{}' during rollback: {}"),
             PathToString<tchar>(toDirectory),
@@ -600,7 +608,7 @@ static bool MoveStagedVolumeSegments(const Path& fromDirectory, const Path& toDi
         NWB_LOGGER_ERROR(NWB_TEXT("Filesystem volume publish: staged volume '{}' did not produce any segments"), StringConvert(volumeName));
         return false;
     }
-    if(!CreateDirectories(toDirectory, errorCode)){
+    if(!EnsureDirectories(toDirectory, errorCode)){
         NWB_LOGGER_ERROR(
             NWB_TEXT("Filesystem volume publish: failed to create output directory '{}': {}"),
             PathToString<tchar>(toDirectory),
@@ -639,7 +647,7 @@ static void RemovePromotedVolumeSegmentsBestEffort(const Path& outputDirectory, 
             NWB_LOGGER_WARNING(
                 NWB_TEXT("Filesystem volume publish: failed to remove promoted segment '{}' after failed promotion: {}"),
                 PathToString<tchar>(segmentPath),
-                StringConvert(errorCode.message())
+                StringConvert(FilesystemMutationFailureDetail(errorCode, "segment was not present"))
             );
         }
     }
@@ -712,7 +720,7 @@ static bool RemoveExistingVolumeSegments(const Path& outputDirectory, const AStr
             NWB_LOGGER_ERROR(
                 NWB_TEXT("Failed to remove old segment '{}' : {}"),
                 PathToString<tchar>(currentPath),
-                StringConvert(errorCode.message())
+                StringConvert(FilesystemMutationFailureDetail(errorCode, "segment was not present"))
             );
             return false;
         }
@@ -746,7 +754,7 @@ static bool RemoveExistingVolumeSegments(const Path& outputDirectory, const AStr
             NWB_LOGGER_ERROR(
                 NWB_TEXT("Failed to remove old hashed segment '{}' : {}"),
                 PathToString<tchar>(hashedPath),
-                StringConvert(errorCode.message())
+                StringConvert(FilesystemMutationFailureDetail(errorCode, "segment was not present"))
             );
             return false;
         }
@@ -872,7 +880,7 @@ bool VolumeFileSystem::mount(const VolumeMountDesc& desc){
             return false;
         }
 
-        if(!CreateDirectories(m_mountDirectory, errorCode)){
+        if(!EnsureDirectories(m_mountDirectory, errorCode)){
             __hidden_filesystem::LogFailureWithFsError(m_volumeName, "mount:create_directories", m_mountDirectory, errorCode);
             return false;
         }
@@ -2025,7 +2033,12 @@ bool VolumeFileSystem::trimSegmentsForNextFreeOffsetLocked(){
     while(m_segmentPaths.size() > static_cast<usize>(requiredSegments)){
         const Path removePath = m_segmentPaths.back();
         if(!RemoveFile(removePath, errorCode)){
-            __hidden_filesystem::LogFailureWithPath(m_volumeName, "trimSegments:remove", removePath, "failed to remove segment");
+            if(errorCode){
+                __hidden_filesystem::LogFailureWithFsError(m_volumeName, "trimSegments:remove", removePath, errorCode);
+            }
+            else{
+                __hidden_filesystem::LogFailureWithPath(m_volumeName, "trimSegments:remove", removePath, "segment was not present");
+            }
             return false;
         }
         m_segmentPaths.pop_back();

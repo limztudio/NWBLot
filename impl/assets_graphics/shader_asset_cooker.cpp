@@ -293,7 +293,7 @@ static bool ResolveCookPaths(const ShaderCookEnvironment& environment, ResolvedC
         return false;
     }
 
-    if(!CreateDirectories(outPaths.cacheDirectory, errorCode)){
+    if(!EnsureDirectories(outPaths.cacheDirectory, errorCode)){
         NWB_LOGGER_ERROR(
             NWB_TEXT("ShaderAssetCooker: failed to create cache directory '{}': {}"),
             PathToString<tchar>(outPaths.cacheDirectory),
@@ -1205,7 +1205,7 @@ static bool GetVariantBytecode(
         return false;
 
     errorCode.clear();
-    if(!CreateDirectories(cachePaths.bytecodePath.parent_path(), errorCode)){
+    if(!EnsureDirectories(cachePaths.bytecodePath.parent_path(), errorCode)){
         NWB_LOGGER_ERROR(
             NWB_TEXT("ShaderAssetCooker: failed to create cache directory '{}': {}"),
             PathToString<tchar>(cachePaths.bytecodePath.parent_path()),

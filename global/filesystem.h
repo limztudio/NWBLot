@@ -147,19 +147,21 @@ struct StagedDirectoryPaths{
 
 
 [[nodiscard]] inline bool CreateDirectories(const Path& path, ErrorCode& outError)noexcept{
-    std::filesystem::create_directories(path, outError);
+    return std::filesystem::create_directories(path, outError);
+}
+
+[[nodiscard]] inline bool EnsureDirectories(const Path& path, ErrorCode& outError)noexcept{
+    (void)CreateDirectories(path, outError);
     return !outError;
 }
 
 
 [[nodiscard]] inline bool RemoveFile(const Path& path, ErrorCode& outError)noexcept{
-    std::filesystem::remove(path, outError);
-    return !outError;
+    return std::filesystem::remove(path, outError);
 }
 
-[[nodiscard]] inline bool RemoveAll(const Path& path, ErrorCode& outError)noexcept{
-    std::filesystem::remove_all(path, outError);
-    return !outError;
+[[nodiscard]] inline u64 RemoveAll(const Path& path, ErrorCode& outError)noexcept{
+    return static_cast<u64>(std::filesystem::remove_all(path, outError));
 }
 
 [[nodiscard]] inline bool RenamePath(const Path& from, const Path& to, ErrorCode& outError)noexcept{
@@ -176,7 +178,8 @@ struct StagedDirectoryPaths{
         return !outError;
 
     outError.clear();
-    return RemoveAll(path, outError);
+    (void)RemoveAll(path, outError);
+    return !outError;
 }
 
 [[nodiscard]] inline bool EnsureEmptyDirectory(const Path& path, ErrorCode& outError)noexcept{
@@ -184,7 +187,7 @@ struct StagedDirectoryPaths{
         return false;
 
     outError.clear();
-    return CreateDirectories(path, outError);
+    return EnsureDirectories(path, outError);
 }
 
 [[nodiscard]] inline StagedDirectoryPaths BuildStagedDirectoryPaths(const Path& outputDirectory, const AStringView stageToken){

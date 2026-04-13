@@ -117,27 +117,11 @@ void CommandList::setPushConstants(const void* data, usize byteSize){
 
 
 void CommandList::drawIndexedIndirect(u32 offsetBytes, u32 drawCount){
-    if(drawCount == 0)
+    Buffer* indirectBuffer = nullptr;
+    if(!prepareDrawIndirect(offsetBytes, drawCount, sizeof(DrawIndexedIndirectArguments), NWB_TEXT("draw indexed indirect"), NWB_TEXT("drawIndexedIndirect"), true, indirectBuffer))
         return;
-    if(!m_renderPassActive || !m_currentGraphicsState.pipeline){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to draw indexed indirect: no graphics pipeline and active render pass are bound"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to draw indexed indirect: no graphics pipeline and active render pass are bound"));
-        return;
-    }
-    if(!m_currentGraphicsState.indexBuffer.buffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to draw indexed indirect: no index buffer is bound"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to draw indexed indirect: no index buffer is bound"));
-        return;
-    }
-    if(drawCount > m_context.physicalDeviceProperties.limits.maxDrawIndirectCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to draw indexed indirect: draw count exceeds device limit"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to draw indexed indirect: draw count exceeds device limit"));
-        return;
-    }
-    if(!validateIndirectBuffer(m_currentGraphicsState.indirectParams, offsetBytes, sizeof(DrawIndexedIndirectArguments), drawCount, NWB_TEXT("drawIndexedIndirect")))
-        return;
-    auto* buffer = checked_cast<Buffer*>(m_currentGraphicsState.indirectParams);
-    vkCmdDrawIndexedIndirect(m_currentCmdBuf->m_cmdBuf, buffer->m_buffer, offsetBytes, drawCount, sizeof(DrawIndexedIndirectArguments));
+
+    vkCmdDrawIndexedIndirect(m_currentCmdBuf->m_cmdBuf, indirectBuffer->m_buffer, offsetBytes, drawCount, sizeof(DrawIndexedIndirectArguments));
     m_currentCmdBuf->m_referencedResources.push_back(m_currentGraphicsState.indirectParams);
 }
 
@@ -145,6 +129,51 @@ void CommandList::drawIndexedIndirect(u32 offsetBytes, u32 drawCount){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Ray Tracing (additional methods)
 
+
+bool CommandList::buildTopLevelAccelStructFromInstanceData(
+    IRayTracingAccelStruct* asInterface,
+    AccelStruct* as,
+    const VkDeviceAddress instanceDataAddress,
+    const usize numInstances,
+    const RayTracingAccelStructBuildFlags::Mask buildFlags,
+    const tchar* operationName)
+{
+    VkAccelerationStructureGeometryKHR geometry = __hidden_vulkan::MakeVkStruct<VkAccelerationStructureGeometryKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR);
+    geometry.geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR;
+    geometry.geometry.instances.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
+    geometry.geometry.instances.arrayOfPointers = VK_FALSE;
+    geometry.geometry.instances.data.deviceAddress = instanceDataAddress;
+
+    VkAccelerationStructureBuildGeometryInfoKHR buildInfo = __hidden_vulkan::MakeVkStruct<VkAccelerationStructureBuildGeometryInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR);
+    buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
+    buildInfo.flags = __hidden_vulkan::ConvertAccelStructBuildFlags(buildFlags, false);
+    buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
+    buildInfo.dstAccelerationStructure = as->m_accelStruct;
+    buildInfo.geometryCount = 1;
+    buildInfo.pGeometries = &geometry;
+
+    auto primitiveCount = static_cast<uint32_t>(numInstances);
+    VkAccelerationStructureBuildSizesInfoKHR sizeInfo = __hidden_vulkan::MakeVkStruct<VkAccelerationStructureBuildSizesInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR);
+    vkGetAccelerationStructureBuildSizesKHR(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &primitiveCount, &sizeInfo);
+
+    auto* asBuffer = checked_cast<Buffer*>(as->m_buffer.get());
+    if(!asBuffer || asBuffer->m_desc.byteSize < sizeInfo.accelerationStructureSize){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: acceleration structure storage is too small"), operationName);
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to build TLAS: acceleration structure storage is too small"));
+        return false;
+    }
+
+    if(!attachAccelStructBuildScratchBuffer(buildInfo, sizeInfo.buildScratchSize, "TLAS_BuildScratch", NWB_TEXT("allocate TLAS scratch buffer")))
+        return false;
+
+    VkAccelerationStructureBuildRangeInfoKHR rangeInfo = {};
+    rangeInfo.primitiveCount = primitiveCount;
+    const VkAccelerationStructureBuildRangeInfoKHR* pRangeInfo = &rangeInfo;
+    vkCmdBuildAccelerationStructuresKHR(m_currentCmdBuf->m_cmdBuf, 1, &buildInfo, &pRangeInfo);
+
+    m_currentCmdBuf->m_referencedResources.push_back(asInterface);
+    return true;
+}
 
 void CommandList::buildTopLevelAccelStructFromBuffer(IRayTracingAccelStruct* _as, IBuffer* instanceBuffer,
     u64 instanceBufferOffset, usize numInstances, RayTracingAccelStructBuildFlags::Mask buildFlags)
@@ -189,48 +218,10 @@ void CommandList::buildTopLevelAccelStructFromBuffer(IRayTracingAccelStruct* _as
         return;
     }
 
-    VkAccelerationStructureGeometryKHR geometry = __hidden_vulkan::MakeVkStruct<VkAccelerationStructureGeometryKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR);
-    geometry.geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR;
-    geometry.geometry.instances.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
-    geometry.geometry.instances.arrayOfPointers = VK_FALSE;
-    geometry.geometry.instances.data.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(instanceBuffer, instanceBufferOffset);
-
-    VkAccelerationStructureBuildGeometryInfoKHR buildInfo = __hidden_vulkan::MakeVkStruct<VkAccelerationStructureBuildGeometryInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR);
-    buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
-    buildInfo.flags = 0;
-
-    if(buildFlags & RayTracingAccelStructBuildFlags::AllowUpdate)
-        buildInfo.flags |= VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR;
-    if(buildFlags & RayTracingAccelStructBuildFlags::PreferFastTrace)
-        buildInfo.flags |= VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
-    if(buildFlags & RayTracingAccelStructBuildFlags::PreferFastBuild)
-        buildInfo.flags |= VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR;
-
-    buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
-    buildInfo.dstAccelerationStructure = as->m_accelStruct;
-    buildInfo.geometryCount = 1;
-    buildInfo.pGeometries = &geometry;
-
-    auto primitiveCount = static_cast<uint32_t>(numInstances);
-    VkAccelerationStructureBuildSizesInfoKHR sizeInfo = __hidden_vulkan::MakeVkStruct<VkAccelerationStructureBuildSizesInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR);
-    vkGetAccelerationStructureBuildSizesKHR(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &primitiveCount, &sizeInfo);
-
-    auto* asBuffer = checked_cast<Buffer*>(as->m_buffer.get());
-    if(!asBuffer || asBuffer->m_desc.byteSize < sizeInfo.accelerationStructureSize){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS from buffer: acceleration structure storage is too small"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to build TLAS from buffer: acceleration structure storage is too small"));
-        return;
-    }
-
-    if(!attachAccelStructBuildScratchBuffer(buildInfo, sizeInfo.buildScratchSize, "TLAS_BuildScratch", NWB_TEXT("allocate TLAS scratch buffer")))
+    const VkDeviceAddress instanceDataAddress = __hidden_vulkan::GetBufferDeviceAddress(instanceBuffer, instanceBufferOffset);
+    if(!buildTopLevelAccelStructFromInstanceData(_as, as, instanceDataAddress, numInstances, buildFlags, NWB_TEXT("build TLAS from buffer")))
         return;
 
-    VkAccelerationStructureBuildRangeInfoKHR rangeInfo = {};
-    rangeInfo.primitiveCount = primitiveCount;
-    const VkAccelerationStructureBuildRangeInfoKHR* pRangeInfo = &rangeInfo;
-    vkCmdBuildAccelerationStructuresKHR(m_currentCmdBuf->m_cmdBuf, 1, &buildInfo, &pRangeInfo);
-
-    m_currentCmdBuf->m_referencedResources.push_back(_as);
     m_currentCmdBuf->m_referencedResources.push_back(instanceBuffer);
 }
 

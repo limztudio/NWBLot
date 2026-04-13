@@ -336,6 +336,48 @@ MemoryRequirements Device::getBufferMemoryRequirements(IBuffer* _buffer){
     return result;
 }
 
+bool Device::validateHeapMemoryBinding(
+    IHeap* heap,
+    const VkMemoryRequirements& memoryRequirements,
+    const u64 offset,
+    const tchar* operationName,
+    const tchar* resourceName,
+    Heap*& outHeap)const
+{
+    outHeap = checked_cast<Heap*>(heap);
+
+    if(!outHeap || outHeap->m_memory == VK_NULL_HANDLE){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: heap is invalid"), operationName);
+        return false;
+    }
+    if(outHeap->m_memoryTypeIndex >= 32u || (memoryRequirements.memoryTypeBits & (1u << outHeap->m_memoryTypeIndex)) == 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: heap memory type is incompatible with the {}"), operationName, resourceName);
+        return false;
+    }
+    const u64 alignment = Max<u64>(static_cast<u64>(memoryRequirements.alignment), 1u);
+    if((offset % alignment) != 0){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Failed to {}: offset {} is not aligned to required alignment {}"),
+            operationName,
+            offset,
+            alignment
+        );
+        return false;
+    }
+    if(offset > outHeap->m_desc.capacity || static_cast<u64>(memoryRequirements.size) > outHeap->m_desc.capacity - offset){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Failed to {}: offset {} size {} exceeds heap capacity {}"),
+            operationName,
+            offset,
+            static_cast<u64>(memoryRequirements.size),
+            outHeap->m_desc.capacity
+        );
+        return false;
+    }
+
+    return true;
+}
+
 bool Device::bindBufferMemory(IBuffer* _buffer, IHeap* heap, u64 offset){
     VkResult res = VK_SUCCESS;
 
@@ -345,12 +387,6 @@ bool Device::bindBufferMemory(IBuffer* _buffer, IHeap* heap, u64 offset){
     }
 
     auto* buffer = static_cast<Buffer*>(_buffer);
-    auto* vkHeap = checked_cast<Heap*>(heap);
-
-    if(!vkHeap || vkHeap->m_memory == VK_NULL_HANDLE){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind buffer memory: heap is invalid"));
-        return false;
-    }
     if(!buffer->m_desc.isVirtual){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind buffer memory: buffer was not created as virtual"));
         return false;
@@ -358,28 +394,9 @@ bool Device::bindBufferMemory(IBuffer* _buffer, IHeap* heap, u64 offset){
 
     VkMemoryRequirements memRequirements;
     vkGetBufferMemoryRequirements(m_context.device, buffer->m_buffer, &memRequirements);
-    if(vkHeap->m_memoryTypeIndex >= 32u || (memRequirements.memoryTypeBits & (1u << vkHeap->m_memoryTypeIndex)) == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind buffer memory: heap memory type is incompatible with the buffer"));
+    Heap* vkHeap = nullptr;
+    if(!validateHeapMemoryBinding(heap, memRequirements, offset, NWB_TEXT("bind buffer memory"), NWB_TEXT("buffer"), vkHeap))
         return false;
-    }
-    const u64 alignment = Max<u64>(static_cast<u64>(memRequirements.alignment), 1u);
-    if((offset % alignment) != 0){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Vulkan: Failed to bind buffer memory: offset {} is not aligned to required alignment {}"),
-            offset,
-            alignment
-        );
-        return false;
-    }
-    if(offset > vkHeap->m_desc.capacity || static_cast<u64>(memRequirements.size) > vkHeap->m_desc.capacity - offset){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Vulkan: Failed to bind buffer memory: offset {} size {} exceeds heap capacity {}"),
-            offset,
-            static_cast<u64>(memRequirements.size),
-            vkHeap->m_desc.capacity
-        );
-        return false;
-    }
 
     // Binding to a heap means the heap owns the memory, not the buffer
     buffer->m_memory = VK_NULL_HANDLE;
@@ -434,6 +451,24 @@ BufferHandle Device::createHandleForNativeBuffer(ObjectType objectType, Object _
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+bool CommandList::prepareUploadStaging(const void* data, const usize dataSize, const tchar* operationName, Buffer*& outStagingBuffer, u64& outStagingOffset){
+    outStagingBuffer = nullptr;
+    outStagingOffset = 0;
+
+    UploadManager* uploadMgr = m_device.m_uploadManager.get();
+    void* cpuVA = nullptr;
+
+    const u64 completedUploadVersion = m_device.queueGetCompletedInstance(m_desc.queueType);
+    if(!uploadMgr->suballocateBuffer(static_cast<u64>(dataSize), &outStagingBuffer, &outStagingOffset, &cpuVA, m_currentCmdBuf.get(), m_desc.queueType, completedUploadVersion)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to suballocate staging buffer for {}"), operationName);
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to suballocate staging buffer"));
+        return false;
+    }
+
+    __hidden_vulkan::CopyHostMemory(taskPool(), cpuVA, data, dataSize);
+    return true;
+}
+
 void CommandList::writeBuffer(IBuffer* _buffer, const void* data, usize dataSize, u64 destOffsetBytes){
     if(!_buffer || !data || dataSize == 0)
         return;
@@ -451,20 +486,10 @@ void CommandList::writeBuffer(IBuffer* _buffer, const void* data, usize dataSize
         return;
     }
 
-    UploadManager* uploadMgr = m_device.m_uploadManager.get();
     Buffer* stagingBuffer = nullptr;
     u64 stagingOffset = 0;
-    void* cpuVA = nullptr;
-
-    const u64 completedUploadVersion = m_device.queueGetCompletedInstance(m_desc.queueType);
-
-    if(!uploadMgr->suballocateBuffer(dataSize, &stagingBuffer, &stagingOffset, &cpuVA, m_currentCmdBuf.get(), m_desc.queueType, completedUploadVersion)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to suballocate staging buffer for writeBuffer"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to suballocate staging buffer for writeBuffer"));
+    if(!prepareUploadStaging(data, dataSize, NWB_TEXT("writeBuffer"), stagingBuffer, stagingOffset))
         return;
-    }
-
-    __hidden_vulkan::CopyHostMemory(taskPool(), cpuVA, data, dataSize);
 
     VkBufferCopy region{};
     region.srcOffset = stagingOffset;

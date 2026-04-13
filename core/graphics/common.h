@@ -85,6 +85,16 @@ inline constexpr u32 s_MaxFramesInFlight = 2;
 inline constexpr f32 s_DepthClearValue = 1.0f;
 inline constexpr f64 s_AverageFrameTimeUpdateIntervalSeconds = 0.5;
 
+#define NWB_DEFINE_GRAPHICS_MASK_OPERATORS(MaskType) \
+    constexpr MaskType operator|(MaskType lhs, MaskType rhs)noexcept{ return static_cast<MaskType>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); } \
+    constexpr MaskType operator&(MaskType lhs, MaskType rhs)noexcept{ return static_cast<MaskType>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); } \
+    constexpr MaskType& operator|=(MaskType& lhs, MaskType rhs)noexcept{ lhs = lhs | rhs; return lhs; } \
+    constexpr MaskType& operator&=(MaskType& lhs, MaskType rhs)noexcept{ lhs = lhs & rhs; return lhs; } \
+    constexpr MaskType operator~(MaskType value)noexcept{ return static_cast<MaskType>(~static_cast<u32>(value)); } \
+    constexpr bool operator!(MaskType value)noexcept{ return static_cast<u32>(value) == 0; } \
+    constexpr bool operator==(MaskType lhs, MaskType rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); } \
+    constexpr bool operator!=(MaskType lhs, MaskType rhs)noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // System memory allocator callbacks
@@ -390,14 +400,7 @@ namespace FormatSupport{
         ShaderAtomicCounter = 1 << 11,
     };
 
-    constexpr Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
-    constexpr Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
-    constexpr Mask& operator|=(Mask& lhs, Mask rhs)noexcept{ lhs = lhs | rhs; return lhs; }
-    constexpr Mask& operator&=(Mask& lhs, Mask rhs)noexcept{ lhs = lhs & rhs; return lhs; }
-    constexpr Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
-    constexpr bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
-    constexpr bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
-    constexpr bool operator!=(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
+    NWB_DEFINE_GRAPHICS_MASK_OPERATORS(Mask)
 };
 
 
@@ -491,14 +494,7 @@ namespace ResourceStates{
         ConvertCoopVecMatrixOutput = 1 << 24,
     };
 
-    constexpr Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
-    constexpr Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
-    constexpr Mask& operator|=(Mask& lhs, Mask rhs)noexcept{ lhs = lhs | rhs; return lhs; }
-    constexpr Mask& operator&=(Mask& lhs, Mask rhs)noexcept{ lhs = lhs & rhs; return lhs; }
-    constexpr Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
-    constexpr bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
-    constexpr bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
-    constexpr bool operator!=(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
+    NWB_DEFINE_GRAPHICS_MASK_OPERATORS(Mask)
 };
 
 typedef u32 MipLevel;
@@ -522,14 +518,7 @@ namespace SharedResourceFlags{
         Shared_CrossAdapter = 1 << 2,
     };
 
-    constexpr Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
-    constexpr Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
-    constexpr Mask& operator|=(Mask& lhs, Mask rhs)noexcept{ lhs = lhs | rhs; return lhs; }
-    constexpr Mask& operator&=(Mask& lhs, Mask rhs)noexcept{ lhs = lhs & rhs; return lhs; }
-    constexpr Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
-    constexpr bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
-    constexpr bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
-    constexpr bool operator!=(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
+    NWB_DEFINE_GRAPHICS_MASK_OPERATORS(Mask)
 };
 
 struct TextureDesc{
@@ -902,14 +891,7 @@ namespace ShaderType{
         All             = 0x3FFF,
     };
 
-    constexpr Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
-    constexpr Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
-    constexpr Mask& operator|=(Mask& lhs, Mask rhs)noexcept{ lhs = lhs | rhs; return lhs; }
-    constexpr Mask& operator&=(Mask& lhs, Mask rhs)noexcept{ lhs = lhs & rhs; return lhs; }
-    constexpr Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
-    constexpr bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
-    constexpr bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
-    constexpr bool operator!=(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
+    NWB_DEFINE_GRAPHICS_MASK_OPERATORS(Mask)
 };
 
 namespace FastGeometryShaderFlags{
@@ -922,12 +904,7 @@ namespace FastGeometryShaderFlags{
         StrictApiOrder                   = 1 << 3,
     };
 
-    constexpr Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
-    constexpr Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
-    constexpr Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
-    constexpr bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
-    constexpr bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
-    constexpr bool operator!=(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
+    NWB_DEFINE_GRAPHICS_MASK_OPERATORS(Mask)
 };
 
 struct CustomSemantic{
@@ -1080,14 +1057,7 @@ namespace ColorMask{
         All = 0xF,
     };
 
-    constexpr Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
-    constexpr Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
-    constexpr Mask& operator|=(Mask& lhs, Mask rhs)noexcept{ lhs = lhs | rhs; return lhs; }
-    constexpr Mask& operator&=(Mask& lhs, Mask rhs)noexcept{ lhs = lhs & rhs; return lhs; }
-    constexpr Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
-    constexpr bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
-    constexpr bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
-    constexpr bool operator!=(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
+    NWB_DEFINE_GRAPHICS_MASK_OPERATORS(Mask)
 };
 
     struct BlendState{
@@ -1513,14 +1483,7 @@ namespace RayTracingOpacityMicromapBuildFlags{
         AllowCompaction = 1 << 2,
     };
 
-    constexpr Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
-    constexpr Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
-    constexpr Mask& operator|=(Mask& lhs, Mask rhs)noexcept{ lhs = lhs | rhs; return lhs; }
-    constexpr Mask& operator&=(Mask& lhs, Mask rhs)noexcept{ lhs = lhs & rhs; return lhs; }
-    constexpr Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
-    constexpr bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
-    constexpr bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
-    constexpr bool operator!=(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
+    NWB_DEFINE_GRAPHICS_MASK_OPERATORS(Mask)
 };
 
 struct RayTracingOpacityMicromapUsageCount{
@@ -1595,14 +1558,7 @@ namespace RayTracingGeometryFlags{
         NoDuplicateAnyHitInvocation = 1 << 1,
     };
 
-    constexpr Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
-    constexpr Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
-    constexpr Mask& operator|=(Mask& lhs, Mask rhs)noexcept{ lhs = lhs | rhs; return lhs; }
-    constexpr Mask& operator&=(Mask& lhs, Mask rhs)noexcept{ lhs = lhs & rhs; return lhs; }
-    constexpr Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
-    constexpr bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
-    constexpr bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
-    constexpr bool operator!=(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
+    NWB_DEFINE_GRAPHICS_MASK_OPERATORS(Mask)
 };
 
 namespace RayTracingGeometryType{
@@ -1786,14 +1742,7 @@ namespace RayTracingInstanceFlags{
         DisableOMMs = 1 << 5,
     };
 
-    constexpr Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
-    constexpr Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
-    constexpr Mask& operator|=(Mask& lhs, Mask rhs)noexcept{ lhs = lhs | rhs; return lhs; }
-    constexpr Mask& operator&=(Mask& lhs, Mask rhs)noexcept{ lhs = lhs & rhs; return lhs; }
-    constexpr Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
-    constexpr bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
-    constexpr bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
-    constexpr bool operator!=(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
+    NWB_DEFINE_GRAPHICS_MASK_OPERATORS(Mask)
 };
 
 struct RayTracingInstanceDesc{
@@ -1844,14 +1793,7 @@ namespace RayTracingAccelStructBuildFlags{
         AllowEmptyInstances = 0x80,
     };
 
-    constexpr Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
-    constexpr Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
-    constexpr Mask& operator|=(Mask& lhs, Mask rhs)noexcept{ lhs = lhs | rhs; return lhs; }
-    constexpr Mask& operator&=(Mask& lhs, Mask rhs)noexcept{ lhs = lhs & rhs; return lhs; }
-    constexpr Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
-    constexpr bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
-    constexpr bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
-    constexpr bool operator!=(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
+    NWB_DEFINE_GRAPHICS_MASK_OPERATORS(Mask)
 };
 
 struct RayTracingAccelStructDesc{
@@ -1929,14 +1871,7 @@ namespace RayTracingClusterOperationFlags{
         AllowOMM = 1 << 3,
     };
 
-    constexpr Mask operator|(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); }
-    constexpr Mask operator&(Mask lhs, Mask rhs)noexcept{ return static_cast<Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); }
-    constexpr Mask& operator|=(Mask& lhs, Mask rhs)noexcept{ lhs = lhs | rhs; return lhs; }
-    constexpr Mask& operator&=(Mask& lhs, Mask rhs)noexcept{ lhs = lhs & rhs; return lhs; }
-    constexpr Mask operator~(Mask value)noexcept{ return static_cast<Mask>(~static_cast<u32>(value)); }
-    constexpr bool operator!(Mask value)noexcept{ return static_cast<u32>(value) == 0; }
-    constexpr bool operator==(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); }
-    constexpr bool operator!=(Mask lhs, Mask rhs)noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
+    NWB_DEFINE_GRAPHICS_MASK_OPERATORS(Mask)
 };
 
 namespace RayTracingClusterOperationIndexFormat{
@@ -2254,192 +2189,91 @@ struct BindingSetItem{
     constexpr BindingSetItem& setSubresources(TextureSubresourceSet value){ subresources = value; return *this; }
     constexpr BindingSetItem& setRange(BufferRange value){ range = value; return *this; }
 
-    static BindingSetItem None(u32 slot = 0){
+    static BindingSetItem Base(u32 slot, ResourceType::Enum type, IResource* resourceHandle, Format::Enum format, TextureDimension::Enum dimension){
         BindingSetItem result;
         result.slot = slot;
         result.arrayElement = 0;
-        result.type = ResourceType::None;
-        result.resourceHandle = nullptr;
-        result.format = Format::UNKNOWN;
-        result.dimension = TextureDimension::Unknown;
+        result.type = type;
+        result.resourceHandle = resourceHandle;
+        result.format = format;
+        result.dimension = dimension;
         result.rawData[0] = 0;
         result.rawData[1] = 0;
         result.unused = 0;
         result.unused2 = 0;
         return result;
     }
+
+    static BindingSetItem None(u32 slot = 0){
+        return Base(slot, ResourceType::None, nullptr, Format::UNKNOWN, TextureDimension::Unknown);
+    }
     static BindingSetItem Texture_SRV(u32 slot, ITexture* texture, Format::Enum format = Format::UNKNOWN, TextureSubresourceSet subresources = s_AllSubresources, TextureDimension::Enum dimension = TextureDimension::Unknown){
-        BindingSetItem result;
-        result.slot = slot;
-        result.arrayElement = 0;
-        result.type = ResourceType::Texture_SRV;
-        result.resourceHandle = texture;
-        result.format = format;
-        result.dimension = dimension;
+        BindingSetItem result = Base(slot, ResourceType::Texture_SRV, texture, format, dimension);
         result.subresources = subresources;
-        result.unused = 0;
-        result.unused2 = 0;
         return result;
     }
     static BindingSetItem Texture_UAV(u32 slot, ITexture* texture, Format::Enum format = Format::UNKNOWN, TextureSubresourceSet subresources = TextureSubresourceSet(0, 1, 0, TextureSubresourceSet::AllArraySlices), TextureDimension::Enum dimension = TextureDimension::Unknown){
-        BindingSetItem result;
-        result.slot = slot;
-        result.arrayElement = 0;
-        result.type = ResourceType::Texture_UAV;
-        result.resourceHandle = texture;
-        result.format = format;
-        result.dimension = dimension;
+        BindingSetItem result = Base(slot, ResourceType::Texture_UAV, texture, format, dimension);
         result.subresources = subresources;
-        result.unused = 0;
-        result.unused2 = 0;
         return result;
     }
     static BindingSetItem TypedBuffer_SRV(u32 slot, IBuffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_EntireBuffer){
-        BindingSetItem result;
-        result.slot = slot;
-        result.arrayElement = 0;
-        result.type = ResourceType::TypedBuffer_SRV;
-        result.resourceHandle = buffer;
-        result.format = format;
-        result.dimension = TextureDimension::Unknown;
+        BindingSetItem result = Base(slot, ResourceType::TypedBuffer_SRV, buffer, format, TextureDimension::Unknown);
         result.range = range;
-        result.unused = 0;
-        result.unused2 = 0;
         return result;
     }
     static BindingSetItem TypedBuffer_UAV(u32 slot, IBuffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_EntireBuffer){
-        BindingSetItem result;
-        result.slot = slot;
-        result.arrayElement = 0;
-        result.type = ResourceType::TypedBuffer_UAV;
-        result.resourceHandle = buffer;
-        result.format = format;
-        result.dimension = TextureDimension::Unknown;
+        BindingSetItem result = Base(slot, ResourceType::TypedBuffer_UAV, buffer, format, TextureDimension::Unknown);
         result.range = range;
-        result.unused = 0;
-        result.unused2 = 0;
         return result;
     }
     static BindingSetItem ConstantBuffer(u32 slot, IBuffer* buffer, BufferRange range = s_EntireBuffer){
         bool isVolatile = buffer && buffer->getDescription().isVolatile;
 
-        BindingSetItem result;
-        result.slot = slot;
-        result.arrayElement = 0;
-        result.type = isVolatile ? ResourceType::VolatileConstantBuffer : ResourceType::ConstantBuffer;
-        result.resourceHandle = buffer;
-        result.format = Format::UNKNOWN;
-        result.dimension = TextureDimension::Unknown;
+        BindingSetItem result = Base(
+            slot,
+            isVolatile ? ResourceType::VolatileConstantBuffer : ResourceType::ConstantBuffer,
+            buffer,
+            Format::UNKNOWN,
+            TextureDimension::Unknown);
         result.range = range;
-        result.unused = 0;
-        result.unused2 = 0;
         return result;
     }
     static BindingSetItem Sampler(u32 slot, ISampler* sampler){
-        BindingSetItem result;
-        result.slot = slot;
-        result.arrayElement = 0;
-        result.type = ResourceType::Sampler;
-        result.resourceHandle = sampler;
-        result.format = Format::UNKNOWN;
-        result.dimension = TextureDimension::Unknown;
-        result.rawData[0] = 0;
-        result.rawData[1] = 0;
-        result.unused = 0;
-        result.unused2 = 0;
-        return result;
+        return Base(slot, ResourceType::Sampler, sampler, Format::UNKNOWN, TextureDimension::Unknown);
     }
     static BindingSetItem RayTracingAccelStruct(u32 slot, IRayTracingAccelStruct* as){
-        BindingSetItem result;
-        result.slot = slot;
-        result.arrayElement = 0;
-        result.type = ResourceType::RayTracingAccelStruct;
-        result.resourceHandle = as;
-        result.format = Format::UNKNOWN;
-        result.dimension = TextureDimension::Unknown;
-        result.rawData[0] = 0;
-        result.rawData[1] = 0;
-        result.unused = 0;
-        result.unused2 = 0;
-        return result;
+        return Base(slot, ResourceType::RayTracingAccelStruct, as, Format::UNKNOWN, TextureDimension::Unknown);
     }
     static BindingSetItem StructuredBuffer_SRV(u32 slot, IBuffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_EntireBuffer){
-        BindingSetItem result;
-        result.slot = slot;
-        result.arrayElement = 0;
-        result.type = ResourceType::StructuredBuffer_SRV;
-        result.resourceHandle = buffer;
-        result.format = format;
-        result.dimension = TextureDimension::Unknown;
+        BindingSetItem result = Base(slot, ResourceType::StructuredBuffer_SRV, buffer, format, TextureDimension::Unknown);
         result.range = range;
-        result.unused = 0;
-        result.unused2 = 0;
         return result;
     }
     static BindingSetItem StructuredBuffer_UAV(u32 slot, IBuffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_EntireBuffer){
-        BindingSetItem result;
-        result.slot = slot;
-        result.arrayElement = 0;
-        result.type = ResourceType::StructuredBuffer_UAV;
-        result.resourceHandle = buffer;
-        result.format = format;
-        result.dimension = TextureDimension::Unknown;
+        BindingSetItem result = Base(slot, ResourceType::StructuredBuffer_UAV, buffer, format, TextureDimension::Unknown);
         result.range = range;
-        result.unused = 0;
-        result.unused2 = 0;
         return result;
     }
     static BindingSetItem RawBuffer_SRV(u32 slot, IBuffer* buffer, BufferRange range = s_EntireBuffer){
-        BindingSetItem result;
-        result.slot = slot;
-        result.arrayElement = 0;
-        result.type = ResourceType::RawBuffer_SRV;
-        result.resourceHandle = buffer;
-        result.format = Format::UNKNOWN;
-        result.dimension = TextureDimension::Unknown;
+        BindingSetItem result = Base(slot, ResourceType::RawBuffer_SRV, buffer, Format::UNKNOWN, TextureDimension::Unknown);
         result.range = range;
-        result.unused = 0;
-        result.unused2 = 0;
         return result;
     }
     static BindingSetItem RawBuffer_UAV(u32 slot, IBuffer* buffer, BufferRange range = s_EntireBuffer){
-        BindingSetItem result;
-        result.slot = slot;
-        result.arrayElement = 0;
-        result.type = ResourceType::RawBuffer_UAV;
-        result.resourceHandle = buffer;
-        result.format = Format::UNKNOWN;
-        result.dimension = TextureDimension::Unknown;
+        BindingSetItem result = Base(slot, ResourceType::RawBuffer_UAV, buffer, Format::UNKNOWN, TextureDimension::Unknown);
         result.range = range;
-        result.unused = 0;
-        result.unused2 = 0;
         return result;
     }
     static BindingSetItem PushConstants(u32 slot, u32 byteSize){
-        BindingSetItem result;
-        result.slot = slot;
-        result.arrayElement = 0;
-        result.type = ResourceType::PushConstants;
-        result.resourceHandle = nullptr;
-        result.format = Format::UNKNOWN;
-        result.dimension = TextureDimension::Unknown;
+        BindingSetItem result = Base(slot, ResourceType::PushConstants, nullptr, Format::UNKNOWN, TextureDimension::Unknown);
         result.range.byteOffset = 0;
         result.range.byteSize = byteSize;
-        result.unused = 0;
-        result.unused2 = 0;
         return result;
     }
     static BindingSetItem SamplerFeedbackTexture_UAV(u32 slot, ISamplerFeedbackTexture* texture){
-        BindingSetItem result;
-        result.slot = slot;
-        result.arrayElement = 0;
-        result.type = ResourceType::SamplerFeedbackTexture_UAV;
-        result.resourceHandle = texture;
-        result.format = Format::UNKNOWN;
-        result.dimension = TextureDimension::Unknown;
+        BindingSetItem result = Base(slot, ResourceType::SamplerFeedbackTexture_UAV, texture, Format::UNKNOWN, TextureDimension::Unknown);
         result.subresources = s_AllSubresources;
-        result.unused = 0;
-        result.unused2 = 0;
         return result;
     }
 };
@@ -3896,6 +3730,8 @@ protected:
 
 
 NWB_CORE_END
+
+#undef NWB_DEFINE_GRAPHICS_MASK_OPERATORS
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

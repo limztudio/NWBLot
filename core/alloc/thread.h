@@ -196,6 +196,24 @@ private:
         return (maxChunks < targetChunks) ? maxChunks : targetChunks;
     }
 
+    template<typename Func>
+    static inline void runSerialRange(usize begin, usize end, const Func& func){
+        for(usize i = begin; i < end; ++i)
+            func(i);
+    }
+
+    template<typename Func>
+    inline void runParallelForChunks(usize begin, usize end, usize count, usize numChunks, const Func& func){
+        if(numChunks <= 1){
+            runSerialRange(begin, end, func);
+            return;
+        }
+
+        const usize chunkSize = count / numChunks;
+        const usize remainder = count % numChunks;
+        dispatchParallelFor(begin, end, func, numChunks, chunkSize, remainder);
+    }
+
 
 public:
     inline explicit ThreadPool(u32 threadCount, u64 affinityMask = 0, usize arenaSize = 0)
@@ -271,24 +289,12 @@ public:
         const usize count = end - begin;
 
         if(m_threadCount == 0 || count == 1){
-            for(usize i = begin; i < end; ++i)
-                func(i);
+            runSerialRange(begin, end, func);
             return;
         }
 
         const usize totalThreads = static_cast<usize>(m_threadCount) + 1;
-        const usize numChunks = computeChunkCount(count, totalThreads);
-
-        if(numChunks <= 1){
-            for(usize i = begin; i < end; ++i)
-                func(i);
-            return;
-        }
-
-        const usize chunkSize = count / numChunks;
-        const usize remainder = count % numChunks;
-
-        dispatchParallelFor(begin, end, func, numChunks, chunkSize, remainder);
+        runParallelForChunks(begin, end, count, computeChunkCount(count, totalThreads), func);
     }
 
     template<typename Func>
@@ -300,25 +306,13 @@ public:
         const usize effectiveGrainSize = grainSize > 0 ? grainSize : 1;
 
         if(m_threadCount == 0 || count <= effectiveGrainSize){
-            for(usize i = begin; i < end; ++i)
-                func(i);
+            runSerialRange(begin, end, func);
             return;
         }
 
         const usize maxChunks = 1 + ((count - 1) / effectiveGrainSize);
         const usize totalThreads = static_cast<usize>(m_threadCount) + 1;
-        const usize numChunks = computeChunkCount(maxChunks, totalThreads);
-
-        if(numChunks <= 1){
-            for(usize i = begin; i < end; ++i)
-                func(i);
-            return;
-        }
-
-        const usize chunkSize = count / numChunks;
-        const usize remainder = count % numChunks;
-
-        dispatchParallelFor(begin, end, func, numChunks, chunkSize, remainder);
+        runParallelForChunks(begin, end, count, computeChunkCount(maxChunks, totalThreads), func);
     }
 
 public:

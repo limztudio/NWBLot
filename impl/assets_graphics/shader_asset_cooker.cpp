@@ -43,6 +43,7 @@ namespace __hidden_assets{
 
 
 static constexpr AStringView s_VolumeName = "graphics";
+static constexpr AStringView s_CookerLogPrefix = "ShaderAssetCooker";
 static constexpr u64 s_DefaultSegmentSize = 16ull * 1024ull * 1024ull;
 static constexpr u64 s_DefaultMetadataSize = 512ull * 1024ull;
 
@@ -193,18 +194,6 @@ struct PreparedShaderPlan{
 };
 using StagedVolumePaths = StagedDirectoryPaths;
 
-static void RemoveDirectoryIfPresentBestEffort(const Path& directoryPath, const AStringView label);
-
-struct StageDirectoryCleanupGuard{
-    Path directoryPath;
-    bool active = true;
-
-    ~StageDirectoryCleanupGuard(){
-        if(active)
-            RemoveDirectoryIfPresentBestEffort(directoryPath, "stage directory");
-    }
-};
-
 static StagedVolumePaths BuildStagedVolumePaths(const Path& outputDirectory, const AStringView volumeName, const AStringView configurationSafeName){
     const AString outputHashHex = FormatHex64(ComputeFnv64Text(PathToString(outputDirectory)));
     const AString stageToken = StringFormat(
@@ -214,51 +203,6 @@ static StagedVolumePaths BuildStagedVolumePaths(const Path& outputDirectory, con
         outputHashHex
     );
     return BuildStagedDirectoryPaths(outputDirectory, stageToken);
-}
-
-static bool RemoveDirectoryIfPresent(const Path& directoryPath, const AStringView label){
-    ErrorCode errorCode;
-
-    if(!RemoveAllIfExists(directoryPath, errorCode)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("ShaderAssetCooker: failed to remove {} '{}': {}"),
-            StringConvert(label),
-            PathToString<tchar>(directoryPath),
-            StringConvert(errorCode.message())
-        );
-        return false;
-    }
-
-    return true;
-}
-
-static void RemoveDirectoryIfPresentBestEffort(const Path& directoryPath, const AStringView label){
-    ErrorCode errorCode;
-
-    if(!RemoveAllIfExists(directoryPath, errorCode) && errorCode){
-        NWB_LOGGER_WARNING(
-            NWB_TEXT("ShaderAssetCooker: failed to remove {} '{}': {}"),
-            StringConvert(label),
-            PathToString<tchar>(directoryPath),
-            StringConvert(errorCode.message())
-        );
-    }
-}
-
-static bool EnsureEmptyDirectory(const Path& directoryPath, const AStringView label){
-    ErrorCode errorCode;
-
-    if(!::EnsureEmptyDirectory(directoryPath, errorCode)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("ShaderAssetCooker: failed to create {} '{}': {}"),
-            StringConvert(label),
-            PathToString<tchar>(directoryPath),
-            StringConvert(errorCode.message())
-        );
-        return false;
-    }
-
-    return true;
 }
 
 static bool ResolveCookPaths(const ShaderCookEnvironment& environment, ResolvedCookPaths& outPaths){
@@ -446,18 +390,6 @@ static bool DiscoverNwbFiles(const Vector<Path>& assetRoots, Vector<DiscoveredNw
     );
 
     return true;
-}
-
-static bool RejectVirtualPathOverrideField(const Path& nwbFilePath, const Core::Metascript::Value& asset, const AStringView assetLabel){
-    if(!asset.findField("name"))
-        return true;
-
-    NWB_LOGGER_ERROR(
-        NWB_TEXT("{} meta '{}': field 'name' is no longer supported; virtual paths are derived from the asset file hierarchy"),
-        StringConvert(assetLabel),
-        PathToString<tchar>(nwbFilePath)
-    );
-    return false;
 }
 
 static bool ParseVariantField(
@@ -661,7 +593,7 @@ static bool ParseMaterialMeta(
         return false;
     }
 
-    if(!RejectVirtualPathOverrideField(discoveredFile.filePath, asset, "Material"))
+    if(!Core::ShaderCook::rejectVirtualPathOverrideField(discoveredFile.filePath, asset, "Material"))
         return false;
     if(!Core::Assets::BuildDerivedAssetVirtualPath(discoveredFile.assetRoot, discoveredFile.virtualRoot, discoveredFile.filePath, outEntry.virtualPath))
         return false;
@@ -685,7 +617,7 @@ static bool ParseGeometryMeta(const DiscoveredNwbFile& discoveredFile, const Cor
         return false;
     }
 
-    if(!RejectVirtualPathOverrideField(discoveredFile.filePath, asset, "Geometry"))
+    if(!Core::ShaderCook::rejectVirtualPathOverrideField(discoveredFile.filePath, asset, "Geometry"))
         return false;
     if(!Core::Assets::BuildDerivedAssetVirtualPath(discoveredFile.assetRoot, discoveredFile.virtualRoot, discoveredFile.filePath, outEntry.virtualPath))
         return false;
@@ -1929,10 +1861,10 @@ bool ShaderAssetCooker::cookShaderAssets(const ShaderCookEnvironment& environmen
         volumeConfig.volumeName,
         configurationSafeName
     );
-    if(!__hidden_assets::EnsureEmptyDirectory(stagedVolumePaths.stageDirectory, "stage directory"))
+    if(!Core::Filesystem::EnsureEmptyStagedDirectory(stagedVolumePaths.stageDirectory, __hidden_assets::s_CookerLogPrefix, "stage directory"))
         return false;
-    __hidden_assets::StageDirectoryCleanupGuard stageDirectoryCleanup{stagedVolumePaths.stageDirectory};
-    if(!__hidden_assets::RemoveDirectoryIfPresent(stagedVolumePaths.backupDirectory, "backup directory"))
+    Core::Filesystem::StagedDirectoryCleanupGuard stageDirectoryCleanup(stagedVolumePaths.stageDirectory, __hidden_assets::s_CookerLogPrefix);
+    if(!Core::Filesystem::RemoveStagedDirectoryIfPresent(stagedVolumePaths.backupDirectory, __hidden_assets::s_CookerLogPrefix, "backup directory"))
         return false;
 
     u64 stagedFileCount = 0;

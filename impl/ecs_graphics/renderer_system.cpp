@@ -144,6 +144,37 @@ static bool SupportsFormat(Core::IDevice& device, const Core::Format::Enum forma
     return (device.queryFormatSupport(format) & requiredSupport) == requiredSupport;
 }
 
+template<usize N>
+static Core::Format::Enum SelectSupportedFormat(
+    Core::IDevice& device,
+    const Core::Format::Enum (&candidates)[N],
+    const Core::FormatSupport::Mask requiredSupport)
+{
+    for(const Core::Format::Enum format : candidates){
+        if(SupportsFormat(device, format, requiredSupport))
+            return format;
+    }
+
+    return Core::Format::UNKNOWN;
+}
+
+static bool EnsurePointClampSampler(Core::IDevice& device, Core::SamplerHandle& sampler, const tchar* failureMessage){
+    if(sampler)
+        return true;
+
+    Core::SamplerDesc samplerDesc;
+    samplerDesc
+        .setAllFilters(false)
+        .setAllAddressModes(Core::SamplerAddressMode::Clamp)
+    ;
+    sampler = device.createSampler(samplerDesc);
+    if(sampler)
+        return true;
+
+    NWB_LOGGER_ERROR(NWB_TEXT("{}"), failureMessage);
+    return false;
+}
+
 static Core::Format::Enum SelectGBufferAlbedoFormat(Core::IDevice& device){
     constexpr Core::Format::Enum candidates[] = {
         Core::Format::RGBA16_FLOAT,
@@ -152,12 +183,7 @@ static Core::Format::Enum SelectGBufferAlbedoFormat(Core::IDevice& device){
     };
     constexpr Core::FormatSupport::Mask requiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::RenderTarget;
 
-    for(const Core::Format::Enum format : candidates){
-        if(SupportsFormat(device, format, requiredSupport))
-            return format;
-    }
-
-    return Core::Format::UNKNOWN;
+    return SelectSupportedFormat(device, candidates, requiredSupport);
 }
 
 static Core::Format::Enum SelectGBufferDepthFormat(Core::IDevice& device){
@@ -168,12 +194,7 @@ static Core::Format::Enum SelectGBufferDepthFormat(Core::IDevice& device){
     };
     constexpr Core::FormatSupport::Mask requiredSupport = Core::FormatSupport::DepthStencil;
 
-    for(const Core::Format::Enum format : candidates){
-        if(SupportsFormat(device, format, requiredSupport))
-            return format;
-    }
-
-    return Core::Format::UNKNOWN;
+    return SelectSupportedFormat(device, candidates, requiredSupport);
 }
 
 static Core::Format::Enum SelectAvboitAccumColorFormat(Core::IDevice& device){
@@ -183,12 +204,7 @@ static Core::Format::Enum SelectAvboitAccumColorFormat(Core::IDevice& device){
     };
     constexpr Core::FormatSupport::Mask requiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::RenderTarget | Core::FormatSupport::Blendable;
 
-    for(const Core::Format::Enum format : candidates){
-        if(SupportsFormat(device, format, requiredSupport))
-            return format;
-    }
-
-    return Core::Format::UNKNOWN;
+    return SelectSupportedFormat(device, candidates, requiredSupport);
 }
 
 static Core::Format::Enum SelectAvboitAccumExtinctionFormat(Core::IDevice& device){
@@ -201,12 +217,7 @@ static Core::Format::Enum SelectAvboitAccumExtinctionFormat(Core::IDevice& devic
     };
     constexpr Core::FormatSupport::Mask requiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::RenderTarget | Core::FormatSupport::Blendable;
 
-    for(const Core::Format::Enum format : candidates){
-        if(SupportsFormat(device, format, requiredSupport))
-            return format;
-    }
-
-    return Core::Format::UNKNOWN;
+    return SelectSupportedFormat(device, candidates, requiredSupport);
 }
 
 static Core::Format::Enum SelectAvboitLowRasterFormat(Core::IDevice& device){
@@ -216,12 +227,7 @@ static Core::Format::Enum SelectAvboitLowRasterFormat(Core::IDevice& device){
     };
     constexpr Core::FormatSupport::Mask requiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::RenderTarget;
 
-    for(const Core::Format::Enum format : candidates){
-        if(SupportsFormat(device, format, requiredSupport))
-            return format;
-    }
-
-    return Core::Format::UNKNOWN;
+    return SelectSupportedFormat(device, candidates, requiredSupport);
 }
 
 static Core::RenderState BuildGeometryRenderState(){
@@ -925,18 +931,8 @@ bool RendererSystem::ensureDeferredCompositeResources(){
         }
     }
 
-    if(!m_deferredSampler){
-        Core::SamplerDesc samplerDesc;
-        samplerDesc
-            .setAllFilters(false)
-            .setAllAddressModes(Core::SamplerAddressMode::Clamp)
-        ;
-        m_deferredSampler = device->createSampler(samplerDesc);
-        if(!m_deferredSampler){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred composite sampler"));
-            return false;
-        }
-    }
+    if(!__hidden_ecs_graphics::EnsurePointClampSampler(*device, m_deferredSampler, NWB_TEXT("RendererSystem: failed to create deferred composite sampler")))
+        return false;
 
     if(!ensureShaderLoaded(
         m_deferredCompositeVertexShader,
@@ -991,18 +987,8 @@ bool RendererSystem::ensureDeferredCompositePipeline(Core::IFramebuffer* present
 bool RendererSystem::ensureAvboitResources(){
     Core::IDevice* device = m_graphics.getDevice();
 
-    if(!m_deferredSampler){
-        Core::SamplerDesc samplerDesc;
-        samplerDesc
-            .setAllFilters(false)
-            .setAllAddressModes(Core::SamplerAddressMode::Clamp)
-        ;
-        m_deferredSampler = device->createSampler(samplerDesc);
-        if(!m_deferredSampler){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shared point sampler for AVBOIT"));
-            return false;
-        }
-    }
+    if(!__hidden_ecs_graphics::EnsurePointClampSampler(*device, m_deferredSampler, NWB_TEXT("RendererSystem: failed to create shared point sampler for AVBOIT")))
+        return false;
 
     if(!m_avboitEmptyBindingLayout){
         Core::BindingLayoutDesc bindingLayoutDesc;
@@ -1300,8 +1286,9 @@ void RendererSystem::renderMaterialPass(
     viewportState.addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
 
     gatherMaterialPassDrawItems(framebuffer, pass, transparent, meshDrawItems, computeDrawItems);
-    renderMeshMaterialPassDrawItems(commandList, framebuffer, pass, passBindingSet, avboitTargets, viewportState, meshDrawItems);
-    renderComputeMaterialPassDrawItems(commandList, framebuffer, pass, passBindingSet, avboitTargets, viewportState, computeDrawItems);
+    const MaterialPassDrawContext drawContext{ commandList, framebuffer, pass, passBindingSet, avboitTargets, viewportState };
+    renderMeshMaterialPassDrawItems(drawContext, meshDrawItems);
+    renderComputeMaterialPassDrawItems(drawContext, computeDrawItems);
 }
 
 void RendererSystem::gatherMaterialPassDrawItems(
@@ -1400,112 +1387,92 @@ bool RendererSystem::findMaterialPassDrawItemResources(
 }
 
 void RendererSystem::renderMeshMaterialPassDrawItems(
-    Core::ICommandList& commandList,
-    Core::IFramebuffer* framebuffer,
-    const MaterialPipelinePass pass,
-    Core::IBindingSet* passBindingSet,
-    const AvboitFrameTargets* avboitTargets,
-    const Core::ViewportState& viewportState,
+    const MaterialPassDrawContext& context,
     const MaterialPassDrawItemVector& drawItems
 ){
-    for(const MaterialPassDrawItem& drawItem : drawItems){
-        GeometryResources* geometry = nullptr;
-        MaterialPipelineResources* pipelineResources = nullptr;
-        if(!findMaterialPassDrawItemResources(drawItem, geometry, pipelineResources))
-            continue;
+    forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem& drawItem, GeometryResources& geometry, MaterialPipelineResources& pipelineResources){
+        if(!geometry.valid() || !geometry.meshBindingSet || !pipelineResources.meshletPipeline)
+            return;
 
-        if(!geometry->valid() || !geometry->meshBindingSet || !pipelineResources->meshletPipeline)
-            continue;
-
-        commandList.setBufferState(geometry->shaderVertexBuffer.get(), Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(geometry->shaderIndexBuffer.get(), Core::ResourceStates::ShaderResource);
+        context.commandList.setBufferState(geometry.shaderVertexBuffer.get(), Core::ResourceStates::ShaderResource);
+        context.commandList.setBufferState(geometry.shaderIndexBuffer.get(), Core::ResourceStates::ShaderResource);
 
         Core::MeshletState meshletState;
-        meshletState.setPipeline(pipelineResources->meshletPipeline.get());
-        meshletState.setFramebuffer(framebuffer);
-        meshletState.setViewport(viewportState);
-        meshletState.addBindingSet(geometry->meshBindingSet.get());
-        if(passBindingSet)
-            meshletState.addBindingSet(passBindingSet);
+        meshletState.setPipeline(pipelineResources.meshletPipeline.get());
+        meshletState.setFramebuffer(context.framebuffer);
+        meshletState.setViewport(context.viewportState);
+        meshletState.addBindingSet(geometry.meshBindingSet.get());
+        if(context.passBindingSet)
+            meshletState.addBindingSet(context.passBindingSet);
 
-        commandList.setMeshletState(meshletState);
+        context.commandList.setMeshletState(meshletState);
 
-        if(pass == MaterialPipelinePass::Opaque){
+        if(context.pass == MaterialPipelinePass::Opaque){
             const __hidden_ecs_graphics::ShaderDrivenPushConstants pushConstants =
-                __hidden_ecs_graphics::BuildShaderDrivenPushConstants(geometry->triangleCount, viewportState);
-            commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
+                __hidden_ecs_graphics::BuildShaderDrivenPushConstants(geometry.triangleCount, context.viewportState);
+            context.commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
         }
         else{
             const __hidden_ecs_graphics::TransparentDrawPushConstants pushConstants =
-                __hidden_ecs_graphics::BuildTransparentDrawPushConstants(geometry->triangleCount, viewportState, *avboitTargets, drawItem.alpha);
-            commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
+                __hidden_ecs_graphics::BuildTransparentDrawPushConstants(geometry.triangleCount, context.viewportState, *context.avboitTargets, drawItem.alpha);
+            context.commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
         }
-        commandList.dispatchMesh(geometry->dispatchGroupCount);
-    }
+        context.commandList.dispatchMesh(geometry.dispatchGroupCount);
+    });
 }
 
 void RendererSystem::renderComputeMaterialPassDrawItems(
-    Core::ICommandList& commandList,
-    Core::IFramebuffer* framebuffer,
-    const MaterialPipelinePass pass,
-    Core::IBindingSet* passBindingSet,
-    const AvboitFrameTargets* avboitTargets,
-    const Core::ViewportState& viewportState,
+    const MaterialPassDrawContext& context,
     const MaterialPassDrawItemVector& drawItems
 ){
-    for(const MaterialPassDrawItem& drawItem : drawItems){
-        GeometryResources* geometry = nullptr;
-        MaterialPipelineResources* pipelineResources = nullptr;
-        if(!findMaterialPassDrawItemResources(drawItem, geometry, pipelineResources))
-            continue;
+    forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem& drawItem, GeometryResources& geometry, MaterialPipelineResources& pipelineResources){
+        if(!geometry.valid() || !geometry.computeBindingSet || !geometry.emulationVertexBuffer || !pipelineResources.computePipeline || !pipelineResources.emulationPipeline)
+            return;
 
-        if(!geometry->valid() || !geometry->computeBindingSet || !geometry->emulationVertexBuffer || !pipelineResources->computePipeline || !pipelineResources->emulationPipeline)
-            continue;
-
-        commandList.setBufferState(geometry->shaderVertexBuffer.get(), Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(geometry->shaderIndexBuffer.get(), Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(geometry->emulationVertexBuffer.get(), Core::ResourceStates::UnorderedAccess);
+        context.commandList.setBufferState(geometry.shaderVertexBuffer.get(), Core::ResourceStates::ShaderResource);
+        context.commandList.setBufferState(geometry.shaderIndexBuffer.get(), Core::ResourceStates::ShaderResource);
+        context.commandList.setBufferState(geometry.emulationVertexBuffer.get(), Core::ResourceStates::UnorderedAccess);
 
         Core::ComputeState computeState;
-        computeState.setPipeline(pipelineResources->computePipeline.get());
-        computeState.addBindingSet(geometry->computeBindingSet.get());
+        computeState.setPipeline(pipelineResources.computePipeline.get());
+        computeState.addBindingSet(geometry.computeBindingSet.get());
 
-        commandList.setComputeState(computeState);
+        context.commandList.setComputeState(computeState);
 
         const __hidden_ecs_graphics::ShaderDrivenPushConstants pushConstants =
-            __hidden_ecs_graphics::BuildShaderDrivenPushConstants(geometry->triangleCount, viewportState);
-        commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
-        commandList.dispatch(geometry->dispatchGroupCount);
+            __hidden_ecs_graphics::BuildShaderDrivenPushConstants(geometry.triangleCount, context.viewportState);
+        context.commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
+        context.commandList.dispatch(geometry.dispatchGroupCount);
 
-        commandList.setBufferState(geometry->emulationVertexBuffer.get(), Core::ResourceStates::VertexBuffer);
+        context.commandList.setBufferState(geometry.emulationVertexBuffer.get(), Core::ResourceStates::VertexBuffer);
 
         Core::GraphicsState graphicsState;
-        graphicsState.setPipeline(pipelineResources->emulationPipeline.get());
-        graphicsState.setFramebuffer(framebuffer);
-        graphicsState.setViewport(viewportState);
+        graphicsState.setPipeline(pipelineResources.emulationPipeline.get());
+        graphicsState.setFramebuffer(context.framebuffer);
+        graphicsState.setViewport(context.viewportState);
         graphicsState.addVertexBuffer(
             Core::VertexBufferBinding()
-                .setBuffer(geometry->emulationVertexBuffer.get())
+                .setBuffer(geometry.emulationVertexBuffer.get())
                 .setSlot(0)
                 .setOffset(0)
         );
-        if(passBindingSet){
+        if(context.passBindingSet){
             graphicsState.addBindingSet(nullptr);
-            graphicsState.addBindingSet(passBindingSet);
+            graphicsState.addBindingSet(context.passBindingSet);
         }
 
-        commandList.setGraphicsState(graphicsState);
+        context.commandList.setGraphicsState(graphicsState);
 
-        if(pass != MaterialPipelinePass::Opaque){
+        if(context.pass != MaterialPipelinePass::Opaque){
             const __hidden_ecs_graphics::TransparentDrawPushConstants transparentPushConstants =
-                __hidden_ecs_graphics::BuildTransparentDrawPushConstants(geometry->triangleCount, viewportState, *avboitTargets, drawItem.alpha);
-            commandList.setPushConstants(&transparentPushConstants, sizeof(transparentPushConstants));
+                __hidden_ecs_graphics::BuildTransparentDrawPushConstants(geometry.triangleCount, context.viewportState, *context.avboitTargets, drawItem.alpha);
+            context.commandList.setPushConstants(&transparentPushConstants, sizeof(transparentPushConstants));
         }
 
         Core::DrawArguments drawArgs;
-        drawArgs.setVertexCount(geometry->indexCount);
-        commandList.draw(drawArgs);
-    }
+        drawArgs.setVertexCount(geometry.indexCount);
+        context.commandList.draw(drawArgs);
+    });
 }
 
 void RendererSystem::renderAvboitPasses(Core::ICommandList& commandList, DeferredFrameTargets& targets){
@@ -2046,15 +2013,17 @@ bool RendererSystem::ensureRendererPipeline(const RendererComponent& renderer, C
         if(inserted)
             m_materialPipelines.erase(pipelineKey);
     };
+    auto failMaterialPipeline = [&](){
+        removeFailedEntry();
+        return false;
+    };
 
     MaterialSurfaceInfo* materialInfo = nullptr;
     if(!ensureMaterialSurfaceInfo(renderer.material, materialInfo)){
-        removeFailedEntry();
-        return false;
+        return failMaterialPipeline();
     }
     if(!materialInfo || !materialInfo->valid){
-        removeFailedEntry();
-        return false;
+        return failMaterialPipeline();
     }
 
     const AStringView shaderVariant = materialInfo->shaderVariant.empty()
@@ -2071,22 +2040,19 @@ bool RendererSystem::ensureRendererPipeline(const RendererComponent& renderer, C
         break;
     case MaterialPipelinePass::AvboitOccupancy:
         if(!ensureAvboitResources()){
-            removeFailedEntry();
-            return false;
+            return failMaterialPipeline();
         }
         passPixelShader = m_avboitOccupancyPixelShader;
         break;
     case MaterialPipelinePass::AvboitExtinction:
         if(!ensureAvboitResources()){
-            removeFailedEntry();
-            return false;
+            return failMaterialPipeline();
         }
         passPixelShader = m_avboitExtinctionPixelShader;
         break;
     case MaterialPipelinePass::AvboitAccumulate:
         if(!ensureAvboitResources()){
-            removeFailedEntry();
-            return false;
+            return failMaterialPipeline();
         }
         passPixelShader = m_avboitAccumulatePixelShader;
         break;
@@ -2227,8 +2193,7 @@ bool RendererSystem::ensureRendererPipeline(const RendererComponent& renderer, C
             NWB_TEXT("RendererSystem: material '{}' requires a pixel shader"),
             StringConvert(materialKey.c_str())
         );
-        removeFailedEntry();
-        return false;
+        return failMaterialPipeline();
     }
 
     if(!hasMeshShader){
@@ -2236,8 +2201,7 @@ bool RendererSystem::ensureRendererPipeline(const RendererComponent& renderer, C
             NWB_TEXT("RendererSystem: material '{}' requires a mesh shader; compute emulation is derived internally from that mesh shader"),
             StringConvert(materialKey.c_str())
         );
-        removeFailedEntry();
-        return false;
+        return failMaterialPipeline();
     }
 
     if(meshSupported && hasMeshShader){
@@ -2246,8 +2210,7 @@ bool RendererSystem::ensureRendererPipeline(const RendererComponent& renderer, C
                 NWB_TEXT("RendererSystem: failed to create the required mesh rendering path for material '{}' on a mesh-capable device"),
                 StringConvert(materialKey.c_str())
             );
-            removeFailedEntry();
-            return false;
+            return failMaterialPipeline();
         }
 
         logMaterialRenderPathDecision(materialKey, resources.renderPath, meshSupported);
@@ -2260,8 +2223,7 @@ bool RendererSystem::ensureRendererPipeline(const RendererComponent& renderer, C
             NWB_TEXT("RendererSystem: failed to create compute-emulation rendering path for material '{}' from its mesh shader"),
             StringConvert(materialKey.c_str())
         );
-        removeFailedEntry();
-        return false;
+        return failMaterialPipeline();
     }
 
     logMaterialRenderPathDecision(materialKey, resources.renderPath, meshSupported);

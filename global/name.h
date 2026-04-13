@@ -149,6 +149,28 @@ inline void HashToDebugString(const NameHash& hash, CharT* dst, const usize dstS
     *writeCursor = CharT{};
 }
 
+#if defined(NWB_DEBUG)
+template<typename CharT>
+inline void CopyDebugName(const BasicStringView<CharT> text, char* dst, const usize dstSize){
+    if(dstSize == 0)
+        return;
+
+    if(HasEmbeddedNull(text)){
+        dst[0] = '\0';
+        return;
+    }
+
+    const usize copyMax = dstSize - 1;
+    const usize copyCount = text.size() < copyMax
+        ? text.size()
+        : copyMax
+    ;
+    for(usize i = 0; i < copyCount; ++i)
+        dst[i] = static_cast<char>(Canonicalize(text[i]));
+    dst[copyCount] = '\0';
+}
+#endif
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -225,18 +247,7 @@ public:
 #endif
     {
 #if defined(NWB_DEBUG)
-        if(HasEmbeddedNull(text)){
-            m_debugName[0] = '\0';
-            return;
-        }
-
-        const usize copyCount = text.size() < 255
-            ? text.size()
-            : static_cast<usize>(255)
-        ;
-        for(usize i = 0; i < copyCount; ++i)
-            m_debugName[i] = Canonicalize(text[i]);
-        m_debugName[copyCount] = '\0';
+        __hidden_name::CopyDebugName(text, m_debugName, 256);
 #endif
     }
     explicit Name(const WStringView text)
@@ -246,18 +257,7 @@ public:
 #endif
     {
 #if defined(NWB_DEBUG)
-        if(HasEmbeddedNull(text)){
-            m_debugName[0] = '\0';
-            return;
-        }
-
-        const usize copyCount = text.size() < 255
-            ? text.size()
-            : static_cast<usize>(255)
-        ;
-        for(usize i = 0; i < copyCount; ++i)
-            m_debugName[i] = static_cast<char>(Canonicalize(text[i]));
-        m_debugName[copyCount] = '\0';
+        __hidden_name::CopyDebugName(text, m_debugName, 256);
 #endif
     }
 

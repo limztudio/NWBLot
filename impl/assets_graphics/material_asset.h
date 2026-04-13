@@ -26,25 +26,17 @@ class Shader;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class Material final : public Core::Assets::IAsset{
+class Material final : public Core::Assets::TypedAsset<Material>{
 public:
-    static constexpr AStringView s_AssetTypeText = "material";
+    NWB_DEFINE_ASSET_TYPE("material")
 
 
 public:
-    Material()
-        : IAsset(AssetTypeName())
-    {}
+    Material() = default;
     explicit Material(const Name& virtualPath)
-        : IAsset(AssetTypeName(), virtualPath)
+        : Core::Assets::TypedAsset<Material>(virtualPath)
     {}
 
-
-public:
-    [[nodiscard]] static const Name& AssetTypeName(){
-        static const Name s_AssetType(s_AssetTypeText.data());
-        return s_AssetType;
-    }
 
 public:
     bool loadBinary(const Core::Assets::AssetBytes& binary);
@@ -71,11 +63,9 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class MaterialAssetCodec final : public Core::Assets::IAssetCodec{
+class MaterialAssetCodec final : public Core::Assets::TypedAssetCodec<Material>{
 public:
-    MaterialAssetCodec()
-        : IAssetCodec(Material::AssetTypeName())
-    {}
+    MaterialAssetCodec() = default;
 
 public:
     virtual bool deserialize(const Name& virtualPath, const Core::Assets::AssetBytes& binary, UniquePtr<Core::Assets::IAsset>& outAsset)const override;
@@ -92,4 +82,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

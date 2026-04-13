@@ -41,6 +41,24 @@ static bool AlignUploadOffsetChecked(const u64 value, const u32 alignment, u64& 
     return true;
 }
 
+struct SubmittedOwnersContext{
+    TrackedCommandBuffer* const* owners = nullptr;
+    usize count = 0;
+};
+
+static bool IsSubmittedOwner(TrackedCommandBuffer* owner, const void* context){
+    const auto& submitted = *static_cast<const SubmittedOwnersContext*>(context);
+    for(usize i = 0; i < submitted.count; ++i){
+        if(submitted.owners[i] == owner)
+            return true;
+    }
+    return false;
+}
+
+static bool IsMatchingOwner(TrackedCommandBuffer* owner, const void* context){
+    return owner == static_cast<TrackedCommandBuffer*>(const_cast<void*>(context));
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -91,6 +109,51 @@ void UploadManager::trimChunkPoolLocked(const u64* completedVersions){
             m_chunkPoolBytes = 0;
         it = m_chunkPool.erase(it);
     }
+}
+
+UploadManager::BufferChunkList::iterator UploadManager::recycleActiveChunkLocked(BufferChunkList& activeChunks, BufferChunkList::iterator it, const u64 version, const bool resetAllocated){
+    BufferChunkPtr& chunk = *it;
+    chunk->owner = nullptr;
+    if(resetAllocated)
+        chunk->allocated = 0;
+    chunk->version = version;
+
+    if(m_chunkPoolBytes > UINT64_MAX - chunk->size)
+        m_chunkPoolBytes = UINT64_MAX;
+    else
+        m_chunkPoolBytes += chunk->size;
+
+    m_chunkPool.push_back(Move(chunk));
+    return activeChunks.erase(it);
+}
+
+void UploadManager::recycleMatchingActiveChunks(
+    const u32 queueIndex,
+    const u64 version,
+    const bool resetAllocated,
+    const u64* completedVersions,
+    const ChunkRecyclePredicate predicate,
+    const void* predicateContext)
+{
+    ScopedLock lock(m_mutex);
+    auto& activeChunks = m_activeChunks[queueIndex];
+
+    auto it = activeChunks.begin();
+    while(it != activeChunks.end()){
+        BufferChunkPtr& chunk = *it;
+        if(!chunk){
+            it = activeChunks.erase(it);
+            continue;
+        }
+        if(!predicate(chunk->owner, predicateContext)){
+            ++it;
+            continue;
+        }
+
+        it = recycleActiveChunkLocked(activeChunks, it, version, resetAllocated);
+    }
+
+    trimChunkPoolLocked(completedVersions);
 }
 
 bool UploadManager::suballocateBuffer(u64 size, Buffer** pBuffer, u64* pOffset, void** pCpuVA, TrackedCommandBuffer* owner, CommandQueue::Enum queueID, u64 completedVersion, u32 alignment){
@@ -171,40 +234,8 @@ void UploadManager::submitChunks(CommandQueue::Enum queueID, u64 submittedVersio
     for(u32 i = 0; i < static_cast<u32>(CommandQueue::kCount); ++i)
         completedVersions[i] = m_device.queueGetCompletedInstance(static_cast<CommandQueue::Enum>(i));
 
-    ScopedLock lock(m_mutex);
-    auto& activeChunks = m_activeChunks[queueIndex];
-
-    const auto ownsSubmittedChunk = [&](TrackedCommandBuffer* owner) -> bool {
-        for(usize i = 0; i < submittedOwnerCount; ++i){
-            if(submittedOwners[i] == owner)
-                return true;
-        }
-        return false;
-    };
-
-    auto it = activeChunks.begin();
-    while(it != activeChunks.end()){
-        BufferChunkPtr& chunk = *it;
-        if(!chunk){
-            it = activeChunks.erase(it);
-            continue;
-        }
-        if(!ownsSubmittedChunk(chunk->owner)){
-            ++it;
-            continue;
-        }
-
-        chunk->owner = nullptr;
-        chunk->version = submittedVersion;
-        if(m_chunkPoolBytes > UINT64_MAX - chunk->size)
-            m_chunkPoolBytes = UINT64_MAX;
-        else
-            m_chunkPoolBytes += chunk->size;
-        m_chunkPool.push_back(Move(chunk));
-        it = activeChunks.erase(it);
-    }
-
-    trimChunkPoolLocked(completedVersions);
+    const __hidden_vulkan::SubmittedOwnersContext submittedContext{ submittedOwners, submittedOwnerCount };
+    recycleMatchingActiveChunks(queueIndex, submittedVersion, false, completedVersions, __hidden_vulkan::IsSubmittedOwner, &submittedContext);
 }
 
 void UploadManager::discardChunks(CommandQueue::Enum queueID, TrackedCommandBuffer* owner, u64 reusableVersion){
@@ -217,33 +248,7 @@ void UploadManager::discardChunks(CommandQueue::Enum queueID, TrackedCommandBuff
         completedVersions[i] = m_device.queueGetCompletedInstance(static_cast<CommandQueue::Enum>(i));
     completedVersions[queueIndex] = Max(completedVersions[queueIndex], reusableVersion);
 
-    ScopedLock lock(m_mutex);
-    auto& activeChunks = m_activeChunks[queueIndex];
-
-    auto it = activeChunks.begin();
-    while(it != activeChunks.end()){
-        BufferChunkPtr& chunk = *it;
-        if(!chunk){
-            it = activeChunks.erase(it);
-            continue;
-        }
-        if(chunk->owner != owner){
-            ++it;
-            continue;
-        }
-
-        chunk->owner = nullptr;
-        chunk->allocated = 0;
-        chunk->version = reusableVersion;
-        if(m_chunkPoolBytes > UINT64_MAX - chunk->size)
-            m_chunkPoolBytes = UINT64_MAX;
-        else
-            m_chunkPoolBytes += chunk->size;
-        m_chunkPool.push_back(Move(chunk));
-        it = activeChunks.erase(it);
-    }
-
-    trimChunkPoolLocked(completedVersions);
+    recycleMatchingActiveChunks(queueIndex, reusableVersion, true, completedVersions, __hidden_vulkan::IsMatchingOwner, owner);
 }
 
 

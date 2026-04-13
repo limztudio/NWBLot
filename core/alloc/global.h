@@ -145,6 +145,42 @@ constexpr void DeallocateCacheAligned(Arena& arena, T* const buffer, const usize
     arena.deallocate(buffer, alignSize, bytes);
 }
 
+template<typename Derived, typename T>
+class ArenaAllocatorOperations{
+public:
+    constexpr void deallocate(T* const buffer, const usize count)noexcept{
+        NWB_ASSERT_MSG((buffer != nullptr || count == 0), NWB_TEXT("null pointer cannot point to a block of non-zero size"));
+
+        static_cast<Derived&>(*this).arena().template deallocate<T>(buffer, count);
+    }
+
+    constexpr NWB_ALLOCATOR_PREFIX T* allocate(const usize count) NWB_ALLOCATOR_SUFFIX{
+        return static_cast<Derived&>(*this).arena().template allocate<T>(count);
+    }
+#if _HAS_CXX23
+    constexpr AllocationResult<T*> allocate_at_least(const usize count){ return { allocate(count), count }; }
+#endif
+};
+
+template<typename Derived, typename T>
+class CacheAlignedArenaAllocatorOperations{
+public:
+    usize max_size()const noexcept{
+        return MaxCacheAlignedAllocationCount<T>();
+    }
+
+    constexpr void deallocate(T* const buffer, const usize count)noexcept{
+        DeallocateCacheAligned(static_cast<Derived&>(*this).arena(), buffer, count);
+    }
+
+    constexpr NWB_ALLOCATOR_PREFIX T* allocate(const usize count) NWB_ALLOCATOR_SUFFIX{
+        return AllocateCacheAligned<T>(static_cast<Derived&>(*this).arena(), count);
+    }
+#if _HAS_CXX23
+    constexpr AllocationResult<T*> allocate_at_least(const usize count){ return { allocate(count), count }; }
+#endif
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

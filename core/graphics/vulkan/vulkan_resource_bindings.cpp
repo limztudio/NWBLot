@@ -91,9 +91,65 @@ bool ConfigurePipelineMultisampleState(
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: sample count {} is unsupported"), operationName, sampleCount);
         return false;
     }
-    outState.rasterizationSamples = GetSampleCount(sampleCount);
+    outState.rasterizationSamples = GetSampleCountFlagBits(sampleCount);
     outState.sampleShadingEnable = VK_FALSE;
     outState.alphaToCoverageEnable = alphaToCoverageEnable ? VK_TRUE : VK_FALSE;
+    return true;
+}
+
+void ConfigurePipelineDepthStencilState(
+    const DepthStencilState& state,
+    const bool includeStencilFaces,
+    VkPipelineDepthStencilStateCreateInfo& outState)
+{
+    outState = MakeVkStruct<VkPipelineDepthStencilStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO);
+    outState.depthTestEnable = state.depthTestEnable ? VK_TRUE : VK_FALSE;
+    outState.depthWriteEnable = state.depthWriteEnable ? VK_TRUE : VK_FALSE;
+    outState.depthCompareOp = ConvertCompareOp(state.depthFunc);
+    outState.depthBoundsTestEnable = VK_FALSE;
+    outState.stencilTestEnable = state.stencilEnable ? VK_TRUE : VK_FALSE;
+    if(includeStencilFaces){
+        outState.front = ConvertStencilOpState(state, state.frontFaceStencil);
+        outState.back = ConvertStencilOpState(state, state.backFaceStencil);
+    }
+}
+
+bool BuildPipelineRenderingInfo(
+    const FramebufferInfo& fbinfo,
+    const tchar* operationName,
+    VkPipelineRenderingCreateInfo& outRenderingInfo,
+    PipelineRenderingFormatVector& outColorFormats)
+{
+    outColorFormats.reserve(fbinfo.colorFormats.size());
+    for(u32 i = 0; i < static_cast<u32>(fbinfo.colorFormats.size()); ++i){
+        const VkFormat vkFormat = ConvertFormat(fbinfo.colorFormats[i]);
+        if(vkFormat == VK_FORMAT_UNDEFINED){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: color attachment format {} is unsupported"), operationName, i);
+            return false;
+        }
+        outColorFormats.push_back(vkFormat);
+    }
+
+    outRenderingInfo = MakeVkStruct<VkPipelineRenderingCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO);
+    outRenderingInfo.colorAttachmentCount = static_cast<u32>(outColorFormats.size());
+    outRenderingInfo.pColorAttachmentFormats = outColorFormats.data();
+    if(fbinfo.depthFormat != Format::UNKNOWN){
+        const VkFormat vkDepthFormat = ConvertFormat(fbinfo.depthFormat);
+        if(vkDepthFormat == VK_FORMAT_UNDEFINED){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: depth/stencil attachment format is unsupported"), operationName);
+            return false;
+        }
+        const FormatInfo& depthFormatInfo = GetFormatInfo(fbinfo.depthFormat);
+        if(!depthFormatInfo.hasDepth && !depthFormatInfo.hasStencil){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: depth/stencil attachment format has no depth or stencil aspect"), operationName);
+            return false;
+        }
+        if(depthFormatInfo.hasDepth)
+            outRenderingInfo.depthAttachmentFormat = vkDepthFormat;
+        if(depthFormatInfo.hasStencil)
+            outRenderingInfo.stencilAttachmentFormat = vkDepthFormat;
+    }
+
     return true;
 }
 
@@ -134,6 +190,20 @@ constexpr bool IsSupportedDescriptorBindingType(ResourceType::Enum type){
     case ResourceType::RawBuffer_SRV:
     case ResourceType::RawBuffer_UAV:
     case ResourceType::RayTracingAccelStruct:
+        return true;
+    default:
+        return false;
+    }
+}
+
+constexpr bool UsesDescriptorBufferInfo(ResourceType::Enum type){
+    switch(type){
+    case ResourceType::ConstantBuffer:
+    case ResourceType::VolatileConstantBuffer:
+    case ResourceType::StructuredBuffer_SRV:
+    case ResourceType::StructuredBuffer_UAV:
+    case ResourceType::RawBuffer_SRV:
+    case ResourceType::RawBuffer_UAV:
         return true;
     default:
         return false;
@@ -337,14 +407,7 @@ bool BuildImageViewCreateInfo(Texture& texture, const BindingSetItem& item, VkIm
         return false;
     }
 
-    const FormatInfo& formatInfo = GetFormatInfo(format);
-    VkImageAspectFlags aspectMask = 0;
-    if(formatInfo.hasDepth)
-        aspectMask |= VK_IMAGE_ASPECT_DEPTH_BIT;
-    if(formatInfo.hasStencil)
-        aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
-    if(!formatInfo.hasDepth && !formatInfo.hasStencil)
-        aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    const VkImageAspectFlags aspectMask = GetImageAspectMask(GetFormatInfo(format));
 
     outViewInfo = {};
     outViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -455,35 +518,30 @@ bool Device::configurePipelineBindings(
     const tchar* operationName,
     PipelineShaderStageVector& shaderStages,
     PipelineDescriptorHeapScratch& descriptorHeapScratch,
-    VkPipelineLayout& outPipelineLayout,
-    bool& outOwnsPipelineLayout,
-    bool& outUsesDescriptorHeap,
-    FixedVector<DescriptorHeapPushRange, s_MaxBindingLayouts>& outDescriptorHeapPushRanges,
-    u32& outDescriptorHeapPushDataSize,
-    u32& outPushConstantByteSize,
+    PipelineBindingState& outBindings,
     Alloc::ScratchArena<>& scratchArena)const
 {
-    outPipelineLayout = VK_NULL_HANDLE;
-    outOwnsPipelineLayout = false;
-    outPushConstantByteSize = 0;
+    outBindings.m_pipelineLayout = VK_NULL_HANDLE;
+    outBindings.m_ownsPipelineLayout = false;
+    outBindings.m_pushConstantByteSize = 0;
 
-    outUsesDescriptorHeap = DescriptorHeapManager::tryEnablePipeline(
+    outBindings.m_usesDescriptorHeap = DescriptorHeapManager::tryEnablePipeline(
         m_context,
         bindingLayouts,
         shaderStages,
-        outDescriptorHeapPushRanges,
-        outDescriptorHeapPushDataSize,
+        outBindings.m_descriptorHeapPushRanges,
+        outBindings.m_descriptorHeapPushDataSize,
         descriptorHeapScratch
     );
-    if(outUsesDescriptorHeap)
+    if(outBindings.m_usesDescriptorHeap)
         return true;
 
     return createPipelineLayoutForBindingLayouts(
         bindingLayouts,
         operationName,
-        outPipelineLayout,
-        outPushConstantByteSize,
-        outOwnsPipelineLayout,
+        outBindings.m_pipelineLayout,
+        outBindings.m_pushConstantByteSize,
+        outBindings.m_ownsPipelineLayout,
         scratchArena
     );
 }
@@ -866,13 +924,7 @@ bool DescriptorHeapManager::writeDescriptor(const BindingSetItem& item, const De
 
     resourceInfo.type = meta.descriptorType;
 
-    switch(item.type){
-    case ResourceType::ConstantBuffer:
-    case ResourceType::VolatileConstantBuffer:
-    case ResourceType::StructuredBuffer_SRV:
-    case ResourceType::StructuredBuffer_UAV:
-    case ResourceType::RawBuffer_SRV:
-    case ResourceType::RawBuffer_UAV:{
+    if(__hidden_vulkan::UsesDescriptorBufferInfo(item.type)){
         auto* buffer = checked_cast<Buffer*>(item.resourceHandle);
         if(!buffer)
             return false;
@@ -882,44 +934,46 @@ bool DescriptorHeapManager::writeDescriptor(const BindingSetItem& item, const De
         addressRange.address = static_cast<VkDeviceAddress>(buffer->getGpuVirtualAddress()) + range.byteOffset;
         addressRange.size = range.byteSize;
         resourceInfo.data.pAddressRange = &addressRange;
-        break;
     }
-    case ResourceType::TypedBuffer_SRV:
-    case ResourceType::TypedBuffer_UAV:{
-        auto* buffer = checked_cast<Buffer*>(item.resourceHandle);
-        if(!buffer)
+    else{
+        switch(item.type){
+        case ResourceType::TypedBuffer_SRV:
+        case ResourceType::TypedBuffer_UAV:{
+            auto* buffer = checked_cast<Buffer*>(item.resourceHandle);
+            if(!buffer)
+                return false;
+            const BufferDesc& bufferDesc = buffer->getDescription();
+            BufferRange range;
+            if(!__hidden_vulkan::ResolveDescriptorBufferRange(item, *buffer, range))
+                return false;
+            const Format::Enum viewFormat = item.format != Format::UNKNOWN ? item.format : bufferDesc.format;
+            const VkFormat vkFormat = ConvertFormat(viewFormat);
+            if(vkFormat == VK_FORMAT_UNDEFINED)
+                return false;
+            texelInfo.format = vkFormat;
+            texelInfo.addressRange.address = static_cast<VkDeviceAddress>(buffer->getGpuVirtualAddress()) + range.byteOffset;
+            texelInfo.addressRange.size = range.byteSize;
+            resourceInfo.data.pTexelBuffer = &texelInfo;
+            break;
+        }
+        case ResourceType::Texture_SRV:
+        case ResourceType::Texture_UAV:{
+            auto* texture = checked_cast<Texture*>(item.resourceHandle);
+            if(!texture)
+                return false;
+            const TextureSubresourceSet subresources = item.subresources.resolve(texture->getDescription(), false);
+            if(subresources.numMipLevels == 0 || subresources.numArraySlices == 0)
+                return false;
+            if(!__hidden_vulkan::BuildImageViewCreateInfo(*texture, item, imageViewInfo))
+                return false;
+            imageInfo.pView = &imageViewInfo;
+            imageInfo.layout = item.type == ResourceType::Texture_UAV ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            resourceInfo.data.pImage = &imageInfo;
+            break;
+        }
+        default:
             return false;
-        const BufferDesc& bufferDesc = buffer->getDescription();
-        BufferRange range;
-        if(!__hidden_vulkan::ResolveDescriptorBufferRange(item, *buffer, range))
-            return false;
-        const Format::Enum viewFormat = item.format != Format::UNKNOWN ? item.format : bufferDesc.format;
-        const VkFormat vkFormat = ConvertFormat(viewFormat);
-        if(vkFormat == VK_FORMAT_UNDEFINED)
-            return false;
-        texelInfo.format = vkFormat;
-        texelInfo.addressRange.address = static_cast<VkDeviceAddress>(buffer->getGpuVirtualAddress()) + range.byteOffset;
-        texelInfo.addressRange.size = range.byteSize;
-        resourceInfo.data.pTexelBuffer = &texelInfo;
-        break;
-    }
-    case ResourceType::Texture_SRV:
-    case ResourceType::Texture_UAV:{
-        auto* texture = checked_cast<Texture*>(item.resourceHandle);
-        if(!texture)
-            return false;
-        const TextureSubresourceSet subresources = item.subresources.resolve(texture->getDescription(), false);
-        if(subresources.numMipLevels == 0 || subresources.numArraySlices == 0)
-            return false;
-        if(!__hidden_vulkan::BuildImageViewCreateInfo(*texture, item, imageViewInfo))
-            return false;
-        imageInfo.pView = &imageViewInfo;
-        imageInfo.layout = item.type == ResourceType::Texture_UAV ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        resourceInfo.data.pImage = &imageInfo;
-        break;
-    }
-    default:
-        return false;
+        }
     }
 
     return vkWriteResourceDescriptorsEXT(m_context.device, 1, &resourceInfo, &dstRange) == VK_SUCCESS;
@@ -1687,13 +1741,7 @@ bool Device::writeDescriptorTable(IDescriptorTable* m_descriptorTable, const Bin
     VkBufferView texelBufferView = VK_NULL_HANDLE;
     VkWriteDescriptorSetAccelerationStructureKHR asInfo = __hidden_vulkan::MakeVkStruct<VkWriteDescriptorSetAccelerationStructureKHR>(VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR);
 
-    switch(item.type){
-    case ResourceType::ConstantBuffer:
-    case ResourceType::VolatileConstantBuffer:
-    case ResourceType::StructuredBuffer_SRV:
-    case ResourceType::StructuredBuffer_UAV:
-    case ResourceType::RawBuffer_SRV:
-    case ResourceType::RawBuffer_UAV:{
+    if(__hidden_vulkan::UsesDescriptorBufferInfo(item.type)){
         auto* buffer = checked_cast<Buffer*>(item.resourceHandle);
         if(!buffer){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write descriptor table slot {}: buffer resource is invalid"), item.slot);
@@ -1708,68 +1756,70 @@ bool Device::writeDescriptorTable(IDescriptorTable* m_descriptorTable, const Bin
         bufferInfo.offset = range.byteOffset;
         bufferInfo.range = range.byteSize;
         write.pBufferInfo = &bufferInfo;
-        break;
     }
-    case ResourceType::Texture_SRV:
-    case ResourceType::Texture_UAV:{
-        auto* texture = checked_cast<Texture*>(item.resourceHandle);
-        if(!texture){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write descriptor table slot {}: texture resource is invalid"), item.slot);
+    else{
+        switch(item.type){
+        case ResourceType::Texture_SRV:
+        case ResourceType::Texture_UAV:{
+            auto* texture = checked_cast<Texture*>(item.resourceHandle);
+            if(!texture){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write descriptor table slot {}: texture resource is invalid"), item.slot);
+                return false;
+            }
+            imageInfo.imageView = texture->getView(item.subresources, item.dimension, item.format, false);
+            if(imageInfo.imageView == VK_NULL_HANDLE){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write descriptor table slot {}: texture image view is null"), item.slot);
+                return false;
+            }
+            imageInfo.imageLayout = item.type == ResourceType::Texture_UAV ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            write.pImageInfo = &imageInfo;
+            break;
+        }
+        case ResourceType::TypedBuffer_SRV:
+        case ResourceType::TypedBuffer_UAV:{
+            auto* buffer = checked_cast<Buffer*>(item.resourceHandle);
+            if(!buffer){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write descriptor table slot {}: typed buffer resource is invalid"), item.slot);
+                return false;
+            }
+            const Format::Enum viewFormat = item.format != Format::UNKNOWN ? item.format : buffer->m_desc.format;
+            texelBufferView = buffer->getView(viewFormat, item.range.byteOffset, item.range.byteSize);
+            if(texelBufferView == VK_NULL_HANDLE){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write descriptor table slot {}: typed buffer view is null"), item.slot);
+                return false;
+            }
+            write.pTexelBufferView = &texelBufferView;
+            break;
+        }
+        case ResourceType::Sampler:{
+            auto* sampler = checked_cast<Sampler*>(item.resourceHandle);
+            if(!sampler){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write descriptor table slot {}: sampler resource is invalid"), item.slot);
+                return false;
+            }
+            imageInfo.sampler = sampler->m_sampler;
+            write.pImageInfo = &imageInfo;
+            break;
+        }
+        case ResourceType::RayTracingAccelStruct:{
+            auto* as = checked_cast<AccelStruct*>(item.resourceHandle);
+            if(!as){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write descriptor table slot {}: acceleration structure resource is invalid"), item.slot);
+                return false;
+            }
+            asInfo.accelerationStructureCount = 1;
+            asInfo.pAccelerationStructures = &as->m_accelStruct;
+            write.pNext = &asInfo;
+            break;
+        }
+        default:
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Vulkan: Failed to write descriptor table slot {}: unsupported resource type {}"),
+                item.slot,
+                static_cast<u32>(item.type)
+            );
             return false;
         }
-        imageInfo.imageView = texture->getView(item.subresources, item.dimension, item.format, false);
-        if(imageInfo.imageView == VK_NULL_HANDLE){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write descriptor table slot {}: texture image view is null"), item.slot);
-            return false;
-        }
-        imageInfo.imageLayout = item.type == ResourceType::Texture_UAV ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        write.pImageInfo = &imageInfo;
-        break;
-    }
-    case ResourceType::TypedBuffer_SRV:
-    case ResourceType::TypedBuffer_UAV:{
-        auto* buffer = checked_cast<Buffer*>(item.resourceHandle);
-        if(!buffer){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write descriptor table slot {}: typed buffer resource is invalid"), item.slot);
-            return false;
-        }
-        const Format::Enum viewFormat = item.format != Format::UNKNOWN ? item.format : buffer->m_desc.format;
-        texelBufferView = buffer->getView(viewFormat, item.range.byteOffset, item.range.byteSize);
-        if(texelBufferView == VK_NULL_HANDLE){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write descriptor table slot {}: typed buffer view is null"), item.slot);
-            return false;
-        }
-        write.pTexelBufferView = &texelBufferView;
-        break;
-    }
-    case ResourceType::Sampler:{
-        auto* sampler = checked_cast<Sampler*>(item.resourceHandle);
-        if(!sampler){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write descriptor table slot {}: sampler resource is invalid"), item.slot);
-            return false;
-        }
-        imageInfo.sampler = sampler->m_sampler;
-        write.pImageInfo = &imageInfo;
-        break;
-    }
-    case ResourceType::RayTracingAccelStruct:{
-        auto* as = checked_cast<AccelStruct*>(item.resourceHandle);
-        if(!as){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write descriptor table slot {}: acceleration structure resource is invalid"), item.slot);
-            return false;
-        }
-        asInfo.accelerationStructureCount = 1;
-        asInfo.pAccelerationStructures = &as->m_accelStruct;
-        write.pNext = &asInfo;
-        break;
-    }
-    default:
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Vulkan: Failed to write descriptor table slot {}: unsupported resource type {}"),
-            item.slot,
-            static_cast<u32>(item.type)
-        );
-        return false;
     }
 
     vkUpdateDescriptorSets(m_context.device, 1, &write, 0, nullptr);
@@ -1890,13 +1940,7 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLa
         write.descriptorCount = 1;
         write.descriptorType = __hidden_vulkan::ConvertDescriptorType(item.type);
 
-        switch(item.type){
-        case ResourceType::ConstantBuffer:
-        case ResourceType::VolatileConstantBuffer:
-        case ResourceType::StructuredBuffer_SRV:
-        case ResourceType::StructuredBuffer_UAV:
-        case ResourceType::RawBuffer_SRV:
-        case ResourceType::RawBuffer_UAV:{
+        if(__hidden_vulkan::UsesDescriptorBufferInfo(item.type)){
             auto* buffer = checked_cast<Buffer*>(item.resourceHandle);
             if(!buffer){
                 NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Ignoring binding set item for slot {}: buffer resource is invalid"), item.slot);
@@ -1914,79 +1958,81 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLa
             bufferInfos.push_back(bufInfo);
             write.pBufferInfo = &bufferInfos.back();
             writes.push_back(write);
-            break;
         }
-        case ResourceType::Texture_SRV:
-        case ResourceType::Texture_UAV:{
-            auto* texture = checked_cast<Texture*>(item.resourceHandle);
-            if(!texture){
-                NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Ignoring binding set item for slot {}: texture resource is invalid"), item.slot);
-                continue;
+        else{
+            switch(item.type){
+            case ResourceType::Texture_SRV:
+            case ResourceType::Texture_UAV:{
+                auto* texture = checked_cast<Texture*>(item.resourceHandle);
+                if(!texture){
+                    NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Ignoring binding set item for slot {}: texture resource is invalid"), item.slot);
+                    continue;
+                }
+                VkDescriptorImageInfo imgInfo = {};
+                imgInfo.imageView = texture->getView(item.subresources, item.dimension, item.format, false);
+                if(imgInfo.imageView == VK_NULL_HANDLE){
+                    NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Ignoring binding set item for slot {}: texture image view is null"), item.slot);
+                    continue;
+                }
+                imgInfo.imageLayout = item.type == ResourceType::Texture_UAV ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                imageInfos.push_back(imgInfo);
+                write.pImageInfo = &imageInfos.back();
+                writes.push_back(write);
+                break;
             }
-            VkDescriptorImageInfo imgInfo = {};
-            imgInfo.imageView = texture->getView(item.subresources, item.dimension, item.format, false);
-            if(imgInfo.imageView == VK_NULL_HANDLE){
-                NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Ignoring binding set item for slot {}: texture image view is null"), item.slot);
-                continue;
+            case ResourceType::Sampler:{
+                auto* sampler = checked_cast<Sampler*>(item.resourceHandle);
+                if(!sampler){
+                    NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Ignoring binding set item for slot {}: sampler resource is invalid"), item.slot);
+                    continue;
+                }
+                VkDescriptorImageInfo imgInfo = {};
+                imgInfo.sampler = sampler->m_sampler;
+                imageInfos.push_back(imgInfo);
+                write.pImageInfo = &imageInfos.back();
+                writes.push_back(write);
+                break;
             }
-            imgInfo.imageLayout = item.type == ResourceType::Texture_UAV ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-            imageInfos.push_back(imgInfo);
-            write.pImageInfo = &imageInfos.back();
-            writes.push_back(write);
-            break;
-        }
-        case ResourceType::Sampler:{
-            auto* sampler = checked_cast<Sampler*>(item.resourceHandle);
-            if(!sampler){
-                NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Ignoring binding set item for slot {}: sampler resource is invalid"), item.slot);
-                continue;
+            case ResourceType::TypedBuffer_SRV:
+            case ResourceType::TypedBuffer_UAV:{
+                auto* buffer = checked_cast<Buffer*>(item.resourceHandle);
+                if(!buffer){
+                    NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Ignoring binding set item for slot {}: typed buffer resource is invalid"), item.slot);
+                    continue;
+                }
+                const Format::Enum viewFormat = item.format != Format::UNKNOWN ? item.format : buffer->m_desc.format;
+                VkBufferView view = buffer->getView(viewFormat, item.range.byteOffset, item.range.byteSize);
+                if(view == VK_NULL_HANDLE){
+                    NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Ignoring binding set item for slot {}: typed buffer view is null"), item.slot);
+                    continue;
+                }
+                texelBufferViews.push_back(view);
+                write.pTexelBufferView = &texelBufferViews.back();
+                writes.push_back(write);
+                break;
             }
-            VkDescriptorImageInfo imgInfo = {};
-            imgInfo.sampler = sampler->m_sampler;
-            imageInfos.push_back(imgInfo);
-            write.pImageInfo = &imageInfos.back();
-            writes.push_back(write);
-            break;
-        }
-        case ResourceType::TypedBuffer_SRV:
-        case ResourceType::TypedBuffer_UAV:{
-            auto* buffer = checked_cast<Buffer*>(item.resourceHandle);
-            if(!buffer){
-                NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Ignoring binding set item for slot {}: typed buffer resource is invalid"), item.slot);
-                continue;
+            case ResourceType::RayTracingAccelStruct:{
+                auto* as = checked_cast<AccelStruct*>(item.resourceHandle);
+                if(!as){
+                    NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Ignoring binding set item for slot {}: acceleration structure resource is invalid"), item.slot);
+                    continue;
+                }
+                VkWriteDescriptorSetAccelerationStructureKHR asWrite = __hidden_vulkan::MakeVkStruct<VkWriteDescriptorSetAccelerationStructureKHR>(VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR);
+                asWrite.accelerationStructureCount = 1;
+                asWrite.pAccelerationStructures = &as->m_accelStruct;
+                asInfos.push_back(asWrite);
+                write.pNext = &asInfos.back();
+                writes.push_back(write);
+                break;
             }
-            const Format::Enum viewFormat = item.format != Format::UNKNOWN ? item.format : buffer->m_desc.format;
-            VkBufferView view = buffer->getView(viewFormat, item.range.byteOffset, item.range.byteSize);
-            if(view == VK_NULL_HANDLE){
-                NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Ignoring binding set item for slot {}: typed buffer view is null"), item.slot);
-                continue;
+            default:
+                NWB_LOGGER_WARNING(
+                    NWB_TEXT("Vulkan: Ignoring binding set item for slot {}: unsupported resource type {}"),
+                    item.slot,
+                    static_cast<u32>(item.type)
+                );
+                break;
             }
-            texelBufferViews.push_back(view);
-            write.pTexelBufferView = &texelBufferViews.back();
-            writes.push_back(write);
-            break;
-        }
-        case ResourceType::RayTracingAccelStruct:{
-            auto* as = checked_cast<AccelStruct*>(item.resourceHandle);
-            if(!as){
-                NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Ignoring binding set item for slot {}: acceleration structure resource is invalid"), item.slot);
-                continue;
-            }
-            VkWriteDescriptorSetAccelerationStructureKHR asWrite = __hidden_vulkan::MakeVkStruct<VkWriteDescriptorSetAccelerationStructureKHR>(VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR);
-            asWrite.accelerationStructureCount = 1;
-            asWrite.pAccelerationStructures = &as->m_accelStruct;
-            asInfos.push_back(asWrite);
-            write.pNext = &asInfos.back();
-            writes.push_back(write);
-            break;
-        }
-        default:
-            NWB_LOGGER_WARNING(
-                NWB_TEXT("Vulkan: Ignoring binding set item for slot {}: unsupported resource type {}"),
-                item.slot,
-                static_cast<u32>(item.type)
-            );
-            break;
         }
 
         if(layout->m_descriptorHeapCompatible && m_context.descriptorHeapManager){

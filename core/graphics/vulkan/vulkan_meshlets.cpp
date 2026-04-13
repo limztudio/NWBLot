@@ -81,12 +81,7 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
         NWB_TEXT("meshlet pipeline"),
         shaderStages,
         descriptorHeapScratch,
-        pso->m_pipelineLayout,
-        pso->m_ownsPipelineLayout,
-        pso->m_usesDescriptorHeap,
-        pso->m_descriptorHeapPushRanges,
-        pso->m_descriptorHeapPushDataSize,
-        pso->m_pushConstantByteSize,
+        *pso,
         scratchArena))
     {
         DestroyArenaObject(m_context.objectArena, pso);
@@ -120,12 +115,8 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
         return nullptr;
     }
 
-    VkPipelineDepthStencilStateCreateInfo depthStencil = __hidden_vulkan::MakeVkStruct<VkPipelineDepthStencilStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO);
-    depthStencil.depthTestEnable = desc.renderState.depthStencilState.depthTestEnable ? VK_TRUE : VK_FALSE;
-    depthStencil.depthWriteEnable = desc.renderState.depthStencilState.depthWriteEnable ? VK_TRUE : VK_FALSE;
-    depthStencil.depthCompareOp = __hidden_vulkan::ConvertCompareOp(desc.renderState.depthStencilState.depthFunc);
-    depthStencil.depthBoundsTestEnable = VK_FALSE;
-    depthStencil.stencilTestEnable = desc.renderState.depthStencilState.stencilEnable ? VK_TRUE : VK_FALSE;
+    VkPipelineDepthStencilStateCreateInfo depthStencil;
+    __hidden_vulkan::ConfigurePipelineDepthStencilState(desc.renderState.depthStencilState, false, depthStencil);
 
     Vector<VkPipelineColorBlendAttachmentState, Alloc::ScratchAllocator<VkPipelineColorBlendAttachmentState>> blendAttachments{ Alloc::ScratchAllocator<VkPipelineColorBlendAttachmentState>(scratchArena) };
     blendAttachments.reserve(fbinfo.colorFormats.size());
@@ -146,38 +137,11 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     dynamicState.dynamicStateCount = static_cast<u32>(LengthOf(dynamicStates));
     dynamicState.pDynamicStates = dynamicStates;
 
-    Vector<VkFormat, Alloc::ScratchAllocator<VkFormat>> colorFormats{ Alloc::ScratchAllocator<VkFormat>(scratchArena) };
-    colorFormats.reserve(fbinfo.colorFormats.size());
-    for(const auto& format : fbinfo.colorFormats){
-        const VkFormat vkFormat = ConvertFormat(format);
-        if(vkFormat == VK_FORMAT_UNDEFINED){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create meshlet pipeline: color attachment format is unsupported"));
-            DestroyArenaObject(m_context.objectArena, pso);
-            return nullptr;
-        }
-        colorFormats.push_back(vkFormat);
-    }
-
-    VkPipelineRenderingCreateInfo renderingInfo = __hidden_vulkan::MakeVkStruct<VkPipelineRenderingCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO);
-    renderingInfo.colorAttachmentCount = static_cast<u32>(colorFormats.size());
-    renderingInfo.pColorAttachmentFormats = colorFormats.data();
-    if(fbinfo.depthFormat != Format::UNKNOWN){
-        const VkFormat vkDepthFormat = ConvertFormat(fbinfo.depthFormat);
-        if(vkDepthFormat == VK_FORMAT_UNDEFINED){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create meshlet pipeline: depth/stencil attachment format is unsupported"));
-            DestroyArenaObject(m_context.objectArena, pso);
-            return nullptr;
-        }
-        const FormatInfo& depthFormatInfo = GetFormatInfo(fbinfo.depthFormat);
-        if(!depthFormatInfo.hasDepth && !depthFormatInfo.hasStencil){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create meshlet pipeline: depth/stencil attachment format has no depth or stencil aspect"));
-            DestroyArenaObject(m_context.objectArena, pso);
-            return nullptr;
-        }
-        if(depthFormatInfo.hasDepth)
-            renderingInfo.depthAttachmentFormat = vkDepthFormat;
-        if(depthFormatInfo.hasStencil)
-            renderingInfo.stencilAttachmentFormat = vkDepthFormat;
+    VkPipelineRenderingCreateInfo renderingInfo = {};
+    PipelineRenderingFormatVector colorFormats{ Alloc::ScratchAllocator<VkFormat>(scratchArena) };
+    if(!__hidden_vulkan::BuildPipelineRenderingInfo(fbinfo, NWB_TEXT("meshlet pipeline"), renderingInfo, colorFormats)){
+        DestroyArenaObject(m_context.objectArena, pso);
+        return nullptr;
     }
 
     VkGraphicsPipelineCreateInfo pipelineInfo = __hidden_vulkan::MakeVkStruct<VkGraphicsPipelineCreateInfo>(VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO);

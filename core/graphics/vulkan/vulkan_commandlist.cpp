@@ -166,6 +166,40 @@ bool CommandList::validateIndirectBuffer(IBuffer* _buffer, u64 offsetBytes, u64 
     return true;
 }
 
+bool CommandList::prepareDrawIndirect(
+    const u32 offsetBytes,
+    const u32 drawCount,
+    const u64 commandSizeBytes,
+    const tchar* operationLabel,
+    const tchar* commandName,
+    const bool requireIndexBuffer,
+    Buffer*& outIndirectBuffer)const
+{
+    outIndirectBuffer = nullptr;
+    if(drawCount == 0)
+        return false;
+    if(!m_renderPassActive || !m_currentGraphicsState.pipeline){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: no graphics pipeline and active render pass are bound"), operationLabel);
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: no graphics pipeline and active render pass are bound"), operationLabel);
+        return false;
+    }
+    if(requireIndexBuffer && !m_currentGraphicsState.indexBuffer.buffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: no index buffer is bound"), operationLabel);
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: no index buffer is bound"), operationLabel);
+        return false;
+    }
+    if(drawCount > m_context.physicalDeviceProperties.limits.maxDrawIndirectCount){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: draw count exceeds device limit"), operationLabel);
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: draw count exceeds device limit"), operationLabel);
+        return false;
+    }
+    if(!validateIndirectBuffer(m_currentGraphicsState.indirectParams, offsetBytes, commandSizeBytes, drawCount, commandName))
+        return false;
+
+    outIndirectBuffer = checked_cast<Buffer*>(m_currentGraphicsState.indirectParams);
+    return true;
+}
+
 void CommandList::copyTextureToBuffer(IBuffer* _dest, u64 destOffsetBytes, u32 destRowPitch, ITexture* _src, const TextureSlice& srcSlice){
     auto* dest = checked_cast<Buffer*>(_dest);
     auto* src = checked_cast<Texture*>(_src);

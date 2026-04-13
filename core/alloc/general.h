@@ -17,16 +17,16 @@ NWB_ALLOC_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename T>
-class GeneralAllocator{
-public:
-    static_assert(!IsConst_V<T>, "NWB::Core::Alloc::GeneralAllocator forbids containers of const elements because allocator<const T> is ill-formed.");
-    static_assert(!IsFunction_V<T>, "NWB::Core::Alloc::GeneralAllocator forbids allocators for function elements because of [allocator.requirements].");
-    static_assert(!IsReference_V<T>, "NWB::Core::Alloc::GeneralAllocator forbids allocators for reference elements because of [allocator.requirements].");
+namespace __hidden_alloc{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<template<typename> class Allocator, typename T>
+struct StatelessAllocatorTraits{
 public:
-    using _From_primary = GeneralAllocator;
+    using _From_primary = Allocator<T>;
     using value_type = T;
 
     using pointer = T*;
@@ -48,8 +48,26 @@ public:
 public:
     template<typename F>
     struct rebind{
-        using other = GeneralAllocator<F>;
+        using other = Allocator<F>;
     };
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename T>
+class GeneralAllocator : public __hidden_alloc::StatelessAllocatorTraits<GeneralAllocator, T>{
+public:
+    static_assert(!IsConst_V<T>, "NWB::Core::Alloc::GeneralAllocator forbids containers of const elements because allocator<const T> is ill-formed.");
+    static_assert(!IsFunction_V<T>, "NWB::Core::Alloc::GeneralAllocator forbids allocators for function elements because of [allocator.requirements].");
+    static_assert(!IsReference_V<T>, "NWB::Core::Alloc::GeneralAllocator forbids allocators for reference elements because of [allocator.requirements].");
 
 
 public:
@@ -109,38 +127,11 @@ inline bool operator!=(const GeneralAllocator<T>&, const GeneralAllocator<F>&)no
 
 
 template<typename T>
-class CacheAlignedAllocator{
+class CacheAlignedAllocator : public __hidden_alloc::StatelessAllocatorTraits<CacheAlignedAllocator, T>{
 public:
     static_assert(!IsConst_V<T>, "NWB::Core::Alloc::CacheAlignedAllocator forbids containers of const elements because allocator<const T> is ill-formed.");
     static_assert(!IsFunction_V<T>, "NWB::Core::Alloc::CacheAlignedAllocator forbids allocators for function elements because of [allocator.requirements].");
     static_assert(!IsReference_V<T>, "NWB::Core::Alloc::CacheAlignedAllocator forbids allocators for reference elements because of [allocator.requirements].");
-
-
-public:
-    using _From_primary = CacheAlignedAllocator;
-    using value_type = T;
-
-    using pointer = T*;
-    using const_pointer = const T*;
-
-    using void_pointer = void*;
-    using const_void_pointer = const void*;
-
-    using reference = T&;
-    using const_reference = const T&;
-
-    using size_type = usize;
-    using difference_type = isize;
-
-    using propagate_on_container_move_assignment = TrueType;
-    using is_always_equal = TrueType;
-
-
-public:
-    template<typename F>
-    struct rebind{
-        using other = CacheAlignedAllocator<F>;
-    };
 
 
 public:
@@ -155,7 +146,7 @@ public:
 
 public:
     usize max_size() const noexcept{
-        return (~usize(0) - CachelineSize()) / sizeof(value_type);
+        return (~usize(0) - CachelineSize()) / sizeof(T);
     }
 
     constexpr void deallocate(T* const buffer, const usize count)noexcept{
@@ -191,4 +182,3 @@ NWB_ALLOC_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

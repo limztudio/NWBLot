@@ -3,6 +3,7 @@
 
 
 #include "frame_linux_platform.h"
+#include "frame_input_helpers.h"
 
 #include <logger/client/logger.h>
 
@@ -149,97 +150,89 @@ static i32 TranslatePointerButton(u32 button){
     }
 }
 
+struct WaylandKeySymbols{
+    using value_type = xkb_keysym_t;
+
+    static constexpr value_type Key0 = XKB_KEY_0;
+    static constexpr value_type Key9 = XKB_KEY_9;
+    static constexpr value_type KeyA = XKB_KEY_A;
+    static constexpr value_type KeyZ = XKB_KEY_Z;
+    static constexpr value_type Keya = XKB_KEY_a;
+    static constexpr value_type Keyz = XKB_KEY_z;
+    static constexpr value_type F1 = XKB_KEY_F1;
+    static constexpr value_type F24 = XKB_KEY_F24;
+    static constexpr value_type KP0 = XKB_KEY_KP_0;
+    static constexpr value_type KP9 = XKB_KEY_KP_9;
+    static constexpr value_type ISOLeftTab = XKB_KEY_ISO_Left_Tab;
+    static constexpr value_type Grave = XKB_KEY_grave;
+    static constexpr value_type QuoteLeft = XKB_KEY_quoteleft;
+    static constexpr value_type Print = XKB_KEY_Print;
+    static constexpr value_type SysReq = XKB_KEY_Sys_Req;
+    static constexpr value_type AltL = XKB_KEY_Alt_L;
+    static constexpr value_type MetaL = XKB_KEY_Meta_L;
+    static constexpr value_type AltR = XKB_KEY_Alt_R;
+    static constexpr value_type MetaR = XKB_KEY_Meta_R;
+    static constexpr value_type SuperL = XKB_KEY_Super_L;
+    static constexpr value_type HyperL = XKB_KEY_Hyper_L;
+    static constexpr value_type SuperR = XKB_KEY_Super_R;
+    static constexpr value_type HyperR = XKB_KEY_Hyper_R;
+    static constexpr value_type Space = XKB_KEY_space;
+    static constexpr value_type Apostrophe = XKB_KEY_apostrophe;
+    static constexpr value_type Comma = XKB_KEY_comma;
+    static constexpr value_type Minus = XKB_KEY_minus;
+    static constexpr value_type Period = XKB_KEY_period;
+    static constexpr value_type Slash = XKB_KEY_slash;
+    static constexpr value_type Semicolon = XKB_KEY_semicolon;
+    static constexpr value_type Equal = XKB_KEY_equal;
+    static constexpr value_type BracketLeft = XKB_KEY_bracketleft;
+    static constexpr value_type Backslash = XKB_KEY_backslash;
+    static constexpr value_type BracketRight = XKB_KEY_bracketright;
+    static constexpr value_type Escape = XKB_KEY_Escape;
+    static constexpr value_type ReturnKey = XKB_KEY_Return;
+    static constexpr value_type Tab = XKB_KEY_Tab;
+    static constexpr value_type BackSpace = XKB_KEY_BackSpace;
+    static constexpr value_type Insert = XKB_KEY_Insert;
+    static constexpr value_type DeleteKey = XKB_KEY_Delete;
+    static constexpr value_type Right = XKB_KEY_Right;
+    static constexpr value_type Left = XKB_KEY_Left;
+    static constexpr value_type Down = XKB_KEY_Down;
+    static constexpr value_type Up = XKB_KEY_Up;
+    static constexpr value_type Prior = XKB_KEY_Prior;
+    static constexpr value_type Next = XKB_KEY_Next;
+    static constexpr value_type Home = XKB_KEY_Home;
+    static constexpr value_type End = XKB_KEY_End;
+    static constexpr value_type CapsLock = XKB_KEY_Caps_Lock;
+    static constexpr value_type ScrollLock = XKB_KEY_Scroll_Lock;
+    static constexpr value_type NumLock = XKB_KEY_Num_Lock;
+    static constexpr value_type Pause = XKB_KEY_Pause;
+    static constexpr value_type F25 = XKB_KEY_F25;
+    static constexpr value_type KPInsert = XKB_KEY_KP_Insert;
+    static constexpr value_type KPEnd = XKB_KEY_KP_End;
+    static constexpr value_type KPDown = XKB_KEY_KP_Down;
+    static constexpr value_type KPNext = XKB_KEY_KP_Next;
+    static constexpr value_type KPLeft = XKB_KEY_KP_Left;
+    static constexpr value_type KPBegin = XKB_KEY_KP_Begin;
+    static constexpr value_type KPRight = XKB_KEY_KP_Right;
+    static constexpr value_type KPHome = XKB_KEY_KP_Home;
+    static constexpr value_type KPUp = XKB_KEY_KP_Up;
+    static constexpr value_type KPPrior = XKB_KEY_KP_Prior;
+    static constexpr value_type KPDelete = XKB_KEY_KP_Delete;
+    static constexpr value_type KPDecimal = XKB_KEY_KP_Decimal;
+    static constexpr value_type KPDivide = XKB_KEY_KP_Divide;
+    static constexpr value_type KPMultiply = XKB_KEY_KP_Multiply;
+    static constexpr value_type KPSubtract = XKB_KEY_KP_Subtract;
+    static constexpr value_type KPAdd = XKB_KEY_KP_Add;
+    static constexpr value_type KPEnter = XKB_KEY_KP_Enter;
+    static constexpr value_type KPEqual = XKB_KEY_KP_Equal;
+    static constexpr value_type ShiftL = XKB_KEY_Shift_L;
+    static constexpr value_type ControlL = XKB_KEY_Control_L;
+    static constexpr value_type ShiftR = XKB_KEY_Shift_R;
+    static constexpr value_type ControlR = XKB_KEY_Control_R;
+    static constexpr value_type Menu = XKB_KEY_Menu;
+};
+
 static i32 TranslateKey(xkb_keysym_t keySym){
-    if(keySym >= XKB_KEY_0 && keySym <= XKB_KEY_9)
-        return static_cast<i32>(keySym);
-
-    if(keySym >= XKB_KEY_A && keySym <= XKB_KEY_Z)
-        return static_cast<i32>(keySym);
-
-    if(keySym >= XKB_KEY_a && keySym <= XKB_KEY_z)
-        return static_cast<i32>(Key::A + (keySym - XKB_KEY_a));
-
-    if(keySym >= XKB_KEY_F1 && keySym <= XKB_KEY_F24)
-        return static_cast<i32>(Key::F1 + (keySym - XKB_KEY_F1));
-
-    if(keySym >= XKB_KEY_KP_0 && keySym <= XKB_KEY_KP_9)
-        return static_cast<i32>(Key::Keypad0 + (keySym - XKB_KEY_KP_0));
-
-    if(keySym == XKB_KEY_ISO_Left_Tab)
-        return Key::Tab;
-    if(keySym == XKB_KEY_grave || keySym == XKB_KEY_quoteleft)
-        return Key::GraveAccent;
-    if(keySym == XKB_KEY_Print || keySym == XKB_KEY_Sys_Req)
-        return Key::PrintScreen;
-    if(keySym == XKB_KEY_Alt_L || keySym == XKB_KEY_Meta_L)
-        return Key::LeftAlt;
-    if(keySym == XKB_KEY_Alt_R || keySym == XKB_KEY_Meta_R)
-        return Key::RightAlt;
-    if(keySym == XKB_KEY_Super_L || keySym == XKB_KEY_Hyper_L)
-        return Key::LeftSuper;
-    if(keySym == XKB_KEY_Super_R || keySym == XKB_KEY_Hyper_R)
-        return Key::RightSuper;
-
-    switch(keySym){
-    case XKB_KEY_space: return Key::Space;
-    case XKB_KEY_apostrophe: return Key::Apostrophe;
-    case XKB_KEY_comma: return Key::Comma;
-    case XKB_KEY_minus: return Key::Minus;
-    case XKB_KEY_period: return Key::Period;
-    case XKB_KEY_slash: return Key::Slash;
-    case XKB_KEY_semicolon: return Key::Semicolon;
-    case XKB_KEY_equal: return Key::Equal;
-    case XKB_KEY_bracketleft: return Key::LeftBracket;
-    case XKB_KEY_backslash: return Key::Backslash;
-    case XKB_KEY_bracketright: return Key::RightBracket;
-
-    case XKB_KEY_Escape: return Key::Escape;
-    case XKB_KEY_Return: return Key::Enter;
-    case XKB_KEY_Tab: return Key::Tab;
-    case XKB_KEY_BackSpace: return Key::Backspace;
-    case XKB_KEY_Insert: return Key::Insert;
-    case XKB_KEY_Delete: return Key::Delete;
-    case XKB_KEY_Right: return Key::Right;
-    case XKB_KEY_Left: return Key::Left;
-    case XKB_KEY_Down: return Key::Down;
-    case XKB_KEY_Up: return Key::Up;
-    case XKB_KEY_Prior: return Key::PageUp;
-    case XKB_KEY_Next: return Key::PageDown;
-    case XKB_KEY_Home: return Key::Home;
-    case XKB_KEY_End: return Key::End;
-    case XKB_KEY_Caps_Lock: return Key::CapsLock;
-    case XKB_KEY_Scroll_Lock: return Key::ScrollLock;
-    case XKB_KEY_Num_Lock: return Key::NumLock;
-    case XKB_KEY_Pause: return Key::Pause;
-    case XKB_KEY_F25: return Key::F25;
-
-    case XKB_KEY_KP_Insert: return Key::Keypad0;
-    case XKB_KEY_KP_End: return Key::Keypad1;
-    case XKB_KEY_KP_Down: return Key::Keypad2;
-    case XKB_KEY_KP_Next: return Key::Keypad3;
-    case XKB_KEY_KP_Left: return Key::Keypad4;
-    case XKB_KEY_KP_Begin: return Key::Keypad5;
-    case XKB_KEY_KP_Right: return Key::Keypad6;
-    case XKB_KEY_KP_Home: return Key::Keypad7;
-    case XKB_KEY_KP_Up: return Key::Keypad8;
-    case XKB_KEY_KP_Prior: return Key::Keypad9;
-    case XKB_KEY_KP_Delete: return Key::KeypadDecimal;
-    case XKB_KEY_KP_Decimal: return Key::KeypadDecimal;
-    case XKB_KEY_KP_Divide: return Key::KeypadDivide;
-    case XKB_KEY_KP_Multiply: return Key::KeypadMultiply;
-    case XKB_KEY_KP_Subtract: return Key::KeypadSubtract;
-    case XKB_KEY_KP_Add: return Key::KeypadAdd;
-    case XKB_KEY_KP_Enter: return Key::KeypadEnter;
-    case XKB_KEY_KP_Equal: return Key::KeypadEqual;
-
-    case XKB_KEY_Shift_L: return Key::LeftShift;
-    case XKB_KEY_Control_L: return Key::LeftControl;
-    case XKB_KEY_Shift_R: return Key::RightShift;
-    case XKB_KEY_Control_R: return Key::RightControl;
-    case XKB_KEY_Menu: return Key::Menu;
-    default:
-        return Key::Unknown;
-    }
+    return TranslateLinuxKeySymbol<WaylandKeySymbols>(keySym);
 }
 
 static void StopKeyRepeat(WaylandContext& context){

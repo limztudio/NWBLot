@@ -203,56 +203,50 @@ private:
         return parseAdditive();
     }
 
-    Value parseAdditive(){
-        Value left = parseMultiplicative();
+    template<typename ParseNext, typename ApplyOperation>
+    Value parseBinaryExpression(ParseNext&& parseNext, const TokenType::Enum lhsOp, const TokenType::Enum rhsOp, ApplyOperation&& applyOperation){
+        Value left = parseNext();
         if(!m_errors.empty())
             return left;
 
-        while(m_current.type == TokenType::Plus || m_current.type == TokenType::Minus){
+        while(m_current.type == lhsOp || m_current.type == rhsOp){
             const auto op = m_current.type;
             const u32 opLine = m_current.line;
             const u32 opColumn = m_current.column;
             advance();
-            Value right = parseMultiplicative();
+            Value right = parseNext();
             if(!m_errors.empty())
                 return Value(m_arena);
 
             if(!validateBinaryOperation(op, left, right, opLine, opColumn))
                 return Value(m_arena);
 
-            if(op == TokenType::Plus)
-                left = left + right;
-            else
-                left = left - right;
+            left = applyOperation(op, left, right);
         }
 
         return left;
     }
 
+    Value parseAdditive(){
+        return parseBinaryExpression(
+            [&](){ return parseMultiplicative(); },
+            TokenType::Plus,
+            TokenType::Minus,
+            [](const TokenType::Enum op, const Value& left, const Value& right){
+                return op == TokenType::Plus ? left + right : left - right;
+            }
+        );
+    }
+
     Value parseMultiplicative(){
-        Value left = parseUnary();
-        if(!m_errors.empty())
-            return left;
-
-        while(m_current.type == TokenType::Star || m_current.type == TokenType::Slash){
-            const auto op = m_current.type;
-            const u32 opLine = m_current.line;
-            const u32 opColumn = m_current.column;
-            advance();
-            Value right = parseUnary();
-            if(!m_errors.empty())
-                return Value(m_arena);
-
-            if(!validateBinaryOperation(op, left, right, opLine, opColumn))
-                return Value(m_arena);
-
-            if(op == TokenType::Star)
-                left = left * right;
-            else
-                left = left / right;
-        }
-
-        return left;
+        return parseBinaryExpression(
+            [&](){ return parseUnary(); },
+            TokenType::Star,
+            TokenType::Slash,
+            [](const TokenType::Enum op, const Value& left, const Value& right){
+                return op == TokenType::Star ? left * right : left / right;
+            }
+        );
     }
 
     Value parseUnary(){

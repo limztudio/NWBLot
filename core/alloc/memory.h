@@ -84,7 +84,7 @@ private:
 
 
 template<typename T>
-class MemoryAllocator{
+class MemoryAllocator : public __hidden_alloc::ArenaAllocatorOperations<MemoryAllocator<T>, T>{
     template<typename F>
     friend class MemoryAllocator;
 
@@ -124,18 +124,7 @@ public:
 
 
 public:
-    constexpr void deallocate(T* const buffer, const usize count)noexcept{
-        NWB_ASSERT_MSG((buffer != nullptr || count == 0), NWB_TEXT("null pointer cannot point to a block of non-zero size"));
-
-        m_arena.deallocate<T>(buffer, count);
-    }
-
-    constexpr NWB_ALLOCATOR_PREFIX T* allocate(const usize count) NWB_ALLOCATOR_SUFFIX{
-        return m_arena.allocate<T>(count);
-    }
-#if _HAS_CXX23
-    constexpr AllocationResult<T*> allocate_at_least(const usize count){ return { allocate(count), count }; }
-#endif
+    [[nodiscard]] constexpr MemoryArena& arena()const noexcept{ return m_arena; }
 
 
 private:
@@ -151,7 +140,7 @@ inline bool operator!=(const MemoryAllocator<T>&, const MemoryAllocator<F>&)noex
 
 
 template<typename T>
-class MemoryCacheAlignedAllocator{
+class MemoryCacheAlignedAllocator : public __hidden_alloc::CacheAlignedArenaAllocatorOperations<MemoryCacheAlignedAllocator<T>, T>{
     template<typename F>
     friend class MemoryCacheAlignedAllocator;
 
@@ -191,20 +180,7 @@ public:
 
 
 public:
-    usize max_size()const noexcept{
-        return __hidden_alloc::MaxCacheAlignedAllocationCount<value_type>();
-    }
-
-    constexpr void deallocate(T* const buffer, const usize count)noexcept{
-        __hidden_alloc::DeallocateCacheAligned(m_arena, buffer, count);
-    }
-
-    constexpr NWB_ALLOCATOR_PREFIX T* allocate(const usize count) NWB_ALLOCATOR_SUFFIX{
-        return __hidden_alloc::AllocateCacheAligned<T>(m_arena, count);
-    }
-#if _HAS_CXX23
-    constexpr AllocationResult<T*> allocate_at_least(const usize count){ return { allocate(count), count }; }
-#endif
+    [[nodiscard]] constexpr MemoryArena& arena()const noexcept{ return m_arena; }
 
 
 private:

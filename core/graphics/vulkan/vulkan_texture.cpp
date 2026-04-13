@@ -56,19 +56,6 @@ VkImageViewType TextureDimensionToViewType(TextureDimension::Enum dimension){
     }
 }
 
-VkSampleCountFlagBits GetSampleCount(u32 sampleCount){
-    switch(sampleCount){
-        case 1: return VK_SAMPLE_COUNT_1_BIT;
-        case 2: return VK_SAMPLE_COUNT_2_BIT;
-        case 4: return VK_SAMPLE_COUNT_4_BIT;
-        case 8: return VK_SAMPLE_COUNT_8_BIT;
-        case 16: return VK_SAMPLE_COUNT_16_BIT;
-        case 32: return VK_SAMPLE_COUNT_32_BIT;
-        case 64: return VK_SAMPLE_COUNT_64_BIT;
-        default: return VK_SAMPLE_COUNT_1_BIT;
-    }
-}
-
 bool IsSupportedSampleCount(u32 sampleCount){
     switch(sampleCount){
         case 1:
@@ -178,6 +165,118 @@ bool ValidateTextureViewShape(const TextureDesc& desc, const TextureDimension::E
     return true;
 }
 
+VkImageAspectFlags GetImageAspectMask(const FormatInfo& formatInfo){
+    VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    if(formatInfo.hasDepth)
+        aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    if(formatInfo.hasStencil)
+        aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+    return aspectMask;
+}
+
+VkImageSubresourceRange BuildImageSubresourceRange(const TextureSubresourceSet& subresources, const VkImageAspectFlags aspectMask){
+    VkImageSubresourceRange range{};
+    range.aspectMask = aspectMask;
+    range.baseMipLevel = subresources.baseMipLevel;
+    range.levelCount = subresources.numMipLevels;
+    range.baseArrayLayer = subresources.baseArraySlice;
+    range.layerCount = subresources.numArraySlices;
+    return range;
+}
+
+VkBufferImageCopy BuildStagingTextureCopyRegion(const TextureDesc& stagingDesc, const TextureSlice& stagingSlice, const TextureSlice& imageSlice){
+    u32 bufferRowLength = 0;
+    u32 bufferImageHeight = 0;
+    const u64 bufferOffset = ComputeStagingTextureOffset(stagingDesc, stagingSlice, nullptr, &bufferRowLength, &bufferImageHeight);
+
+    VkBufferImageCopy region{};
+    region.bufferOffset = bufferOffset;
+    region.bufferRowLength = bufferRowLength;
+    region.bufferImageHeight = bufferImageHeight;
+    region.imageSubresource.aspectMask = GetImageAspectMask(GetFormatInfo(stagingDesc.format));
+    region.imageSubresource.mipLevel = imageSlice.mipLevel;
+    region.imageSubresource.baseArrayLayer = imageSlice.arraySlice;
+    region.imageSubresource.layerCount = 1;
+    region.imageOffset = { static_cast<i32>(imageSlice.x), static_cast<i32>(imageSlice.y), static_cast<i32>(imageSlice.z) };
+    region.imageExtent = { imageSlice.width, imageSlice.height, imageSlice.depth };
+    return region;
+}
+
+bool PrepareColorTextureClear(ITexture* textureResource, const TextureSubresourceSet subresources, const tchar* valueName, Texture*& outTexture, VkImageSubresourceRange& outRange){
+    outTexture = checked_cast<Texture*>(textureResource);
+    if(!outTexture){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear texture: texture is null"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear texture: texture is null"));
+        return false;
+    }
+
+    const TextureDesc& textureDesc = outTexture->getDescription();
+    const FormatInfo& formatInfo = GetFormatInfo(textureDesc.format);
+    if(formatInfo.hasDepth || formatInfo.hasStencil){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear texture with {}: texture format is depth/stencil"), valueName);
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear texture with {}: texture format is depth/stencil"), valueName);
+        return false;
+    }
+
+    const TextureSubresourceSet resolvedSubresources = subresources.resolve(textureDesc, false);
+    if(resolvedSubresources.numMipLevels == 0 || resolvedSubresources.numArraySlices == 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear texture: invalid subresource range"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear texture: invalid subresource range"));
+        return false;
+    }
+
+    outRange = BuildImageSubresourceRange(resolvedSubresources, VK_IMAGE_ASPECT_COLOR_BIT);
+    return true;
+}
+
+bool PrepareStagingTextureCopy(
+    IStagingTexture* stagingResource,
+    const TextureSlice& stagingSlice,
+    ITexture* textureResource,
+    const TextureSlice& textureSlice,
+    const tchar* operationName,
+    const tchar* singleSampleRequirement,
+    StagingTexture*& outStaging,
+    Texture*& outTexture,
+    VkBufferImageCopy& outRegion)
+{
+    outStaging = checked_cast<StagingTexture*>(stagingResource);
+    outTexture = checked_cast<Texture*>(textureResource);
+    if(!outStaging || !outTexture){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: resource is invalid"), operationName);
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: resource is invalid"), operationName);
+        return false;
+    }
+    const TextureDesc& stagingDesc = outStaging->getDescription();
+    const TextureDesc& textureDesc = outTexture->getDescription();
+    if(textureDesc.sampleCount != 1){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {}"), operationName, singleSampleRequirement);
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: {}"), operationName, singleSampleRequirement);
+        return false;
+    }
+    if(textureDesc.format != stagingDesc.format){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: source and destination formats do not match"), operationName);
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: source and destination formats do not match"), operationName);
+        return false;
+    }
+    if(!IsTextureSliceInBounds(stagingDesc, stagingSlice) || !IsTextureSliceInBounds(textureDesc, textureSlice)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: slice is outside the texture"), operationName);
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: slice is outside the texture"), operationName);
+        return false;
+    }
+
+    const TextureSlice resolvedStaging = stagingSlice.resolve(stagingDesc);
+    const TextureSlice resolvedTexture = textureSlice.resolve(textureDesc);
+    if(resolvedStaging.width != resolvedTexture.width || resolvedStaging.height != resolvedTexture.height || resolvedStaging.depth != resolvedTexture.depth){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: source and destination extents do not match"), operationName);
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: source and destination extents do not match"), operationName);
+        return false;
+    }
+
+    outRegion = BuildStagingTextureCopyRegion(stagingDesc, resolvedStaging, resolvedTexture);
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -249,14 +348,7 @@ VkImageView Texture::getView(const TextureSubresourceSet& subresources, TextureD
         return VK_NULL_HANDLE;
     }
 
-    const FormatInfo& formatInfo = GetFormatInfo(format);
-    VkImageAspectFlags aspectMask = 0;
-    if(formatInfo.hasDepth)
-        aspectMask |= VK_IMAGE_ASPECT_DEPTH_BIT;
-    if(formatInfo.hasStencil)
-        aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
-    if(!formatInfo.hasDepth && !formatInfo.hasStencil)
-        aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    const VkImageAspectFlags aspectMask = __hidden_vulkan::GetImageAspectMask(GetFormatInfo(format));
 
     VkImageViewCreateInfo viewInfo{};
     viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -392,7 +484,7 @@ TextureHandle Device::createTexture(const TextureDesc& d){
     VkFormat format = ConvertFormat(d.format);
     VkImageUsageFlags usage = __hidden_vulkan::PickImageUsage(d);
     VkImageCreateFlags flags = __hidden_vulkan::PickImageFlags(d);
-    VkSampleCountFlagBits sampleCount = __hidden_vulkan::GetSampleCount(d.sampleCount);
+    VkSampleCountFlagBits sampleCount = __hidden_vulkan::GetSampleCountFlagBits(d.sampleCount);
 
     texture->m_imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     texture->m_imageInfo.imageType = imageType;
@@ -456,12 +548,6 @@ bool Device::bindTextureMemory(ITexture* _texture, IHeap* heap, u64 offset){
     }
 
     auto* texture = static_cast<Texture*>(_texture);
-    auto* vkHeap = checked_cast<Heap*>(heap);
-
-    if(!vkHeap || vkHeap->m_memory == VK_NULL_HANDLE){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind texture memory: heap is invalid"));
-        return false;
-    }
     if(!texture->m_desc.isVirtual){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind texture memory: texture was not created as virtual"));
         return false;
@@ -469,28 +555,9 @@ bool Device::bindTextureMemory(ITexture* _texture, IHeap* heap, u64 offset){
 
     VkMemoryRequirements memRequirements;
     vkGetImageMemoryRequirements(m_context.device, texture->m_image, &memRequirements);
-    if(vkHeap->m_memoryTypeIndex >= 32u || (memRequirements.memoryTypeBits & (1u << vkHeap->m_memoryTypeIndex)) == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind texture memory: heap memory type is incompatible with the texture"));
+    Heap* vkHeap = nullptr;
+    if(!validateHeapMemoryBinding(heap, memRequirements, offset, NWB_TEXT("bind texture memory"), NWB_TEXT("texture"), vkHeap))
         return false;
-    }
-    const u64 alignment = Max<u64>(static_cast<u64>(memRequirements.alignment), 1u);
-    if((offset % alignment) != 0){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Vulkan: Failed to bind texture memory: offset {} is not aligned to required alignment {}"),
-            offset,
-            alignment
-        );
-        return false;
-    }
-    if(offset > vkHeap->m_desc.capacity || static_cast<u64>(memRequirements.size) > vkHeap->m_desc.capacity - offset){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Vulkan: Failed to bind texture memory: offset {} size {} exceeds heap capacity {}"),
-            offset,
-            static_cast<u64>(memRequirements.size),
-            vkHeap->m_desc.capacity
-        );
-        return false;
-    }
 
     texture->m_memory = VK_NULL_HANDLE;
 
@@ -566,7 +633,7 @@ TextureHandle Device::createHandleForNativeTexture(ObjectType objectType, Object
     texture->m_imageInfo.mipLevels = desc.mipLevels;
     texture->m_imageInfo.arrayLayers = desc.arraySize;
     texture->m_imageInfo.format = ConvertFormat(desc.format);
-    texture->m_imageInfo.samples = __hidden_vulkan::GetSampleCount(desc.sampleCount);
+    texture->m_imageInfo.samples = __hidden_vulkan::GetSampleCountFlagBits(desc.sampleCount);
 
     return TextureHandle(texture, TextureHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
@@ -588,37 +655,7 @@ SamplerHandle Device::createSampler(const SamplerDesc& d){
     auto* sampler = NewArenaObject<Sampler>(m_context.objectArena, m_context);
     sampler->m_desc = normalizedDesc;
 
-    VkFilter minFilter = normalizedDesc.minFilter ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
-    VkFilter magFilter = normalizedDesc.magFilter ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
-    VkSamplerMipmapMode mipFilter = normalizedDesc.mipFilter ? VK_SAMPLER_MIPMAP_MODE_LINEAR : VK_SAMPLER_MIPMAP_MODE_NEAREST;
-
-    auto convertAddressMode = [](SamplerAddressMode::Enum mode) -> VkSamplerAddressMode {
-        switch(mode){
-            case SamplerAddressMode::Clamp: return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-            case SamplerAddressMode::Wrap: return VK_SAMPLER_ADDRESS_MODE_REPEAT;
-            case SamplerAddressMode::Border: return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
-            case SamplerAddressMode::Mirror: return VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
-            case SamplerAddressMode::MirrorOnce: return VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
-            default: return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-        }
-    };
-
-    VkSamplerCreateInfo samplerInfo{};
-    samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-    samplerInfo.magFilter = magFilter;
-    samplerInfo.minFilter = minFilter;
-    samplerInfo.mipmapMode = mipFilter;
-    samplerInfo.addressModeU = convertAddressMode(normalizedDesc.addressU);
-    samplerInfo.addressModeV = convertAddressMode(normalizedDesc.addressV);
-    samplerInfo.addressModeW = convertAddressMode(normalizedDesc.addressW);
-    samplerInfo.mipLodBias = normalizedDesc.mipBias;
-    samplerInfo.anisotropyEnable = normalizedDesc.maxAnisotropy > 1.f ? VK_TRUE : VK_FALSE;
-    samplerInfo.maxAnisotropy = normalizedDesc.maxAnisotropy;
-    samplerInfo.compareEnable = normalizedDesc.reductionType == SamplerReductionType::Comparison ? VK_TRUE : VK_FALSE;
-    samplerInfo.compareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
-    samplerInfo.minLod = 0.f;
-    samplerInfo.maxLod = VK_LOD_CLAMP_NONE;
-    samplerInfo.borderColor = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
+    const VkSamplerCreateInfo samplerInfo = __hidden_vulkan::BuildSamplerCreateInfo(normalizedDesc);
 
     res = vkCreateSampler(m_context.device, &samplerInfo, m_context.allocationCallbacks, &sampler->m_sampler);
     if(res != VK_SUCCESS){
@@ -636,37 +673,16 @@ SamplerHandle Device::createSampler(const SamplerDesc& d){
 
 
 void CommandList::clearTextureFloat(ITexture* _texture, TextureSubresourceSet subresources, const Color& clearColor){
-    auto* texture = checked_cast<Texture*>(_texture);
-    if(!texture){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear texture: texture is null"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear texture: texture is null"));
+    Texture* texture = nullptr;
+    VkImageSubresourceRange range{};
+    if(!__hidden_vulkan::PrepareColorTextureClear(_texture, subresources, NWB_TEXT("color value"), texture, range))
         return;
-    }
-    const FormatInfo& formatInfo = GetFormatInfo(texture->m_desc.format);
-    if(formatInfo.hasDepth || formatInfo.hasStencil){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear texture with color value: texture format is depth/stencil"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear texture with color value: texture format is depth/stencil"));
-        return;
-    }
-    const TextureSubresourceSet resolvedSubresources = subresources.resolve(texture->m_desc, false);
-    if(resolvedSubresources.numMipLevels == 0 || resolvedSubresources.numArraySlices == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear texture: invalid subresource range"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear texture: invalid subresource range"));
-        return;
-    }
 
     VkClearColorValue clearValue;
     clearValue.float32[0] = clearColor.r;
     clearValue.float32[1] = clearColor.g;
     clearValue.float32[2] = clearColor.b;
     clearValue.float32[3] = clearColor.a;
-
-    VkImageSubresourceRange range{};
-    range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    range.baseMipLevel = resolvedSubresources.baseMipLevel;
-    range.levelCount = resolvedSubresources.numMipLevels;
-    range.baseArrayLayer = resolvedSubresources.baseArraySlice;
-    range.layerCount = resolvedSubresources.numArraySlices;
 
     vkCmdClearColorImage(m_currentCmdBuf->m_cmdBuf, texture->m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearValue, 1, &range);
     m_currentCmdBuf->m_referencedResources.push_back(_texture);
@@ -699,53 +715,28 @@ void CommandList::clearDepthStencilTexture(ITexture* _texture, TextureSubresourc
     clearValue.depth = depth;
     clearValue.stencil = stencil;
 
-    VkImageSubresourceRange range{};
-    range.aspectMask = 0;
+    VkImageAspectFlags aspectMask = 0;
     if(clearDepth)
-        range.aspectMask |= VK_IMAGE_ASPECT_DEPTH_BIT;
+        aspectMask |= VK_IMAGE_ASPECT_DEPTH_BIT;
     if(clearStencil)
-        range.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
-    range.baseMipLevel = resolvedSubresources.baseMipLevel;
-    range.levelCount = resolvedSubresources.numMipLevels;
-    range.baseArrayLayer = resolvedSubresources.baseArraySlice;
-    range.layerCount = resolvedSubresources.numArraySlices;
+        aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+    const VkImageSubresourceRange range = __hidden_vulkan::BuildImageSubresourceRange(resolvedSubresources, aspectMask);
 
     vkCmdClearDepthStencilImage(m_currentCmdBuf->m_cmdBuf, texture->m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearValue, 1, &range);
     m_currentCmdBuf->m_referencedResources.push_back(_texture);
 }
 
 void CommandList::clearTextureUInt(ITexture* _texture, TextureSubresourceSet subresources, u32 clearColor){
-    auto* texture = checked_cast<Texture*>(_texture);
-    if(!texture){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear texture: texture is null"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear texture: texture is null"));
+    Texture* texture = nullptr;
+    VkImageSubresourceRange range{};
+    if(!__hidden_vulkan::PrepareColorTextureClear(_texture, subresources, NWB_TEXT("integer value"), texture, range))
         return;
-    }
-    const FormatInfo& formatInfo = GetFormatInfo(texture->m_desc.format);
-    if(formatInfo.hasDepth || formatInfo.hasStencil){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear texture with integer value: texture format is depth/stencil"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear texture with integer value: texture format is depth/stencil"));
-        return;
-    }
-    const TextureSubresourceSet resolvedSubresources = subresources.resolve(texture->m_desc, false);
-    if(resolvedSubresources.numMipLevels == 0 || resolvedSubresources.numArraySlices == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear texture: invalid subresource range"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear texture: invalid subresource range"));
-        return;
-    }
 
     VkClearColorValue clearValue;
     clearValue.uint32[0] = clearColor;
     clearValue.uint32[1] = clearColor;
     clearValue.uint32[2] = clearColor;
     clearValue.uint32[3] = clearColor;
-
-    VkImageSubresourceRange range{};
-    range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    range.baseMipLevel = resolvedSubresources.baseMipLevel;
-    range.levelCount = resolvedSubresources.numMipLevels;
-    range.baseArrayLayer = resolvedSubresources.baseArraySlice;
-    range.layerCount = resolvedSubresources.numArraySlices;
 
     vkCmdClearColorImage(m_currentCmdBuf->m_cmdBuf, texture->m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearValue, 1, &range);
     m_currentCmdBuf->m_referencedResources.push_back(_texture);
@@ -779,26 +770,12 @@ void CommandList::copyTexture(ITexture* _dest, const TextureSlice& destSlice, IT
     }
 
     VkImageCopy region{};
-    const FormatInfo& srcFormatInfo = GetFormatInfo(src->m_desc.format);
-    VkImageAspectFlags srcAspect = VK_IMAGE_ASPECT_COLOR_BIT;
-    if(srcFormatInfo.hasDepth)
-        srcAspect = VK_IMAGE_ASPECT_DEPTH_BIT;
-    if(srcFormatInfo.hasStencil)
-        srcAspect |= VK_IMAGE_ASPECT_STENCIL_BIT;
-
-    const FormatInfo& dstFormatInfo = GetFormatInfo(dest->m_desc.format);
-    VkImageAspectFlags dstAspect = VK_IMAGE_ASPECT_COLOR_BIT;
-    if(dstFormatInfo.hasDepth)
-        dstAspect = VK_IMAGE_ASPECT_DEPTH_BIT;
-    if(dstFormatInfo.hasStencil)
-        dstAspect |= VK_IMAGE_ASPECT_STENCIL_BIT;
-
-    region.srcSubresource.aspectMask = srcAspect;
+    region.srcSubresource.aspectMask = __hidden_vulkan::GetImageAspectMask(GetFormatInfo(src->m_desc.format));
     region.srcSubresource.mipLevel = resolvedSrc.mipLevel;
     region.srcSubresource.baseArrayLayer = resolvedSrc.arraySlice;
     region.srcSubresource.layerCount = 1;
     region.srcOffset = { static_cast<int32_t>(resolvedSrc.x), static_cast<int32_t>(resolvedSrc.y), static_cast<int32_t>(resolvedSrc.z) };
-    region.dstSubresource.aspectMask = dstAspect;
+    region.dstSubresource.aspectMask = __hidden_vulkan::GetImageAspectMask(GetFormatInfo(dest->m_desc.format));
     region.dstSubresource.mipLevel = resolvedDst.mipLevel;
     region.dstSubresource.baseArrayLayer = resolvedDst.arraySlice;
     region.dstSubresource.layerCount = 1;
@@ -812,58 +789,22 @@ void CommandList::copyTexture(ITexture* _dest, const TextureSlice& destSlice, IT
 }
 
 void CommandList::copyTexture(IStagingTexture* dest, const TextureSlice& destSlice, ITexture* src, const TextureSlice& srcSlice){
-    auto* staging = checked_cast<StagingTexture*>(dest);
-    auto* texture = checked_cast<Texture*>(src);
-    if(!staging || !texture){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to staging texture: resource is invalid"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to staging texture: resource is invalid"));
-        return;
-    }
-    if(texture->m_desc.sampleCount != 1){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to staging texture: source texture must be single-sampled"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to staging texture: source texture must be single-sampled"));
-        return;
-    }
-    if(texture->m_desc.format != staging->m_desc.format){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to staging texture: source and destination formats do not match"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to staging texture: source and destination formats do not match"));
-        return;
-    }
-    if(!__hidden_vulkan::IsTextureSliceInBounds(staging->m_desc, destSlice) || !__hidden_vulkan::IsTextureSliceInBounds(texture->m_desc, srcSlice)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to staging texture: slice is outside the texture"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to staging texture: slice is outside the texture"));
-        return;
-    }
-
-    TextureSlice resolvedSrc = srcSlice.resolve(texture->m_desc);
-    TextureSlice resolvedDst = destSlice.resolve(staging->m_desc);
-    if(resolvedSrc.width != resolvedDst.width || resolvedSrc.height != resolvedDst.height || resolvedSrc.depth != resolvedDst.depth){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to staging texture: source and destination extents do not match"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to staging texture: source and destination extents do not match"));
-        return;
-    }
-
-    const FormatInfo& formatInfo = GetFormatInfo(texture->m_desc.format);
-    u32 bufferRowLength = 0;
-    u32 bufferImageHeight = 0;
-    const u64 bufferOffset = __hidden_vulkan::ComputeStagingTextureOffset(staging->m_desc, resolvedDst, nullptr, &bufferRowLength, &bufferImageHeight);
-
-    VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    if(formatInfo.hasDepth)
-        aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-    if(formatInfo.hasStencil)
-        aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
-
+    StagingTexture* staging = nullptr;
+    Texture* texture = nullptr;
     VkBufferImageCopy region{};
-    region.bufferOffset = bufferOffset;
-    region.bufferRowLength = bufferRowLength;
-    region.bufferImageHeight = bufferImageHeight;
-    region.imageSubresource.aspectMask = aspectMask;
-    region.imageSubresource.mipLevel = resolvedSrc.mipLevel;
-    region.imageSubresource.baseArrayLayer = resolvedSrc.arraySlice;
-    region.imageSubresource.layerCount = 1;
-    region.imageOffset = { static_cast<i32>(resolvedSrc.x), static_cast<i32>(resolvedSrc.y), static_cast<i32>(resolvedSrc.z) };
-    region.imageExtent = { resolvedSrc.width, resolvedSrc.height, resolvedSrc.depth };
+    if(!__hidden_vulkan::PrepareStagingTextureCopy(
+        dest,
+        destSlice,
+        src,
+        srcSlice,
+        NWB_TEXT("copy texture to staging texture"),
+        NWB_TEXT("source texture must be single-sampled"),
+        staging,
+        texture,
+        region))
+    {
+        return;
+    }
 
     vkCmdCopyImageToBuffer(m_currentCmdBuf->m_cmdBuf, texture->m_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, staging->m_buffer, 1, &region);
 
@@ -872,58 +813,22 @@ void CommandList::copyTexture(IStagingTexture* dest, const TextureSlice& destSli
 }
 
 void CommandList::copyTexture(ITexture* dest, const TextureSlice& destSlice, IStagingTexture* src, const TextureSlice& srcSlice){
-    auto* texture = checked_cast<Texture*>(dest);
-    auto* staging = checked_cast<StagingTexture*>(src);
-    if(!texture || !staging){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy staging texture to texture: resource is invalid"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy staging texture to texture: resource is invalid"));
-        return;
-    }
-    if(texture->m_desc.sampleCount != 1){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy staging texture to texture: destination texture must be single-sampled"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy staging texture to texture: destination texture must be single-sampled"));
-        return;
-    }
-    if(texture->m_desc.format != staging->m_desc.format){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy staging texture to texture: source and destination formats do not match"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy staging texture to texture: source and destination formats do not match"));
-        return;
-    }
-    if(!__hidden_vulkan::IsTextureSliceInBounds(texture->m_desc, destSlice) || !__hidden_vulkan::IsTextureSliceInBounds(staging->m_desc, srcSlice)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy staging texture to texture: slice is outside the texture"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy staging texture to texture: slice is outside the texture"));
-        return;
-    }
-
-    TextureSlice resolvedDst = destSlice.resolve(texture->m_desc);
-    TextureSlice resolvedSrc = srcSlice.resolve(staging->m_desc);
-    if(resolvedDst.width != resolvedSrc.width || resolvedDst.height != resolvedSrc.height || resolvedDst.depth != resolvedSrc.depth){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy staging texture to texture: source and destination extents do not match"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy staging texture to texture: source and destination extents do not match"));
-        return;
-    }
-
-    const FormatInfo& formatInfo = GetFormatInfo(staging->m_desc.format);
-    u32 bufferRowLength = 0;
-    u32 bufferImageHeight = 0;
-    const u64 bufferOffset = __hidden_vulkan::ComputeStagingTextureOffset(staging->m_desc, resolvedSrc, nullptr, &bufferRowLength, &bufferImageHeight);
-
-    VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    if(formatInfo.hasDepth)
-        aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-    if(formatInfo.hasStencil)
-        aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
-
+    StagingTexture* staging = nullptr;
+    Texture* texture = nullptr;
     VkBufferImageCopy region{};
-    region.bufferOffset = bufferOffset;
-    region.bufferRowLength = bufferRowLength;
-    region.bufferImageHeight = bufferImageHeight;
-    region.imageSubresource.aspectMask = aspectMask;
-    region.imageSubresource.mipLevel = resolvedDst.mipLevel;
-    region.imageSubresource.baseArrayLayer = resolvedDst.arraySlice;
-    region.imageSubresource.layerCount = 1;
-    region.imageOffset = { static_cast<i32>(resolvedDst.x), static_cast<i32>(resolvedDst.y), static_cast<i32>(resolvedDst.z) };
-    region.imageExtent = { resolvedDst.width, resolvedDst.height, resolvedDst.depth };
+    if(!__hidden_vulkan::PrepareStagingTextureCopy(
+        src,
+        srcSlice,
+        dest,
+        destSlice,
+        NWB_TEXT("copy staging texture to texture"),
+        NWB_TEXT("destination texture must be single-sampled"),
+        staging,
+        texture,
+        region))
+    {
+        return;
+    }
 
     vkCmdCopyBufferToImage(m_currentCmdBuf->m_cmdBuf, staging->m_buffer, texture->m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
@@ -1027,21 +932,11 @@ void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, co
         return;
     }
 
-    UploadManager* uploadMgr = m_device.m_uploadManager.get();
     Buffer* stagingBuffer = nullptr;
     u64 stagingOffset = 0;
-    void* cpuVA = nullptr;
-
-    const u64 completedUploadVersion = m_device.queueGetCompletedInstance(m_desc.queueType);
-
-    if(!uploadMgr->suballocateBuffer(dataSize, &stagingBuffer, &stagingOffset, &cpuVA, m_currentCmdBuf.get(), m_desc.queueType, completedUploadVersion)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to suballocate staging buffer for writeTexture"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to suballocate staging buffer for writeTexture"));
-        return;
-    }
-
     const usize uploadSize = static_cast<usize>(dataSize);
-    __hidden_vulkan::CopyHostMemory(taskPool(), cpuVA, data, uploadSize);
+    if(!prepareUploadStaging(data, uploadSize, NWB_TEXT("writeTexture"), stagingBuffer, stagingOffset))
+        return;
 
     VkImageMemoryBarrier2 barrier = __hidden_vulkan::MakeVkStruct<VkImageMemoryBarrier2>(VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2);
     barrier.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;

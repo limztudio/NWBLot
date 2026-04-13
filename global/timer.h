@@ -45,6 +45,44 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_timer{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct TimerDeltaParts{
+    i64 hours = 0;
+    i64 minutes = 0;
+    i64 seconds = 0;
+    i64 milliseconds = 0;
+};
+
+[[nodiscard]] inline TimerDeltaParts SplitTimerDelta(const TimerDelta& val){
+    auto duration = std::chrono::duration<i64, std::ratio<1, 1000>>(static_cast<i64>(val));
+    auto h = std::chrono::duration_cast<std::chrono::hours>(duration);
+    auto m = std::chrono::duration_cast<std::chrono::minutes>(duration % std::chrono::hours(1));
+    auto s = std::chrono::duration_cast<std::chrono::seconds>(duration % std::chrono::minutes(1));
+    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(duration % std::chrono::seconds(1));
+
+    TimerDeltaParts parts;
+    parts.hours = h.count();
+    parts.minutes = m.count();
+    parts.seconds = s.count();
+    parts.milliseconds = ms.count();
+    return parts;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace std{
 
 
@@ -56,13 +94,8 @@ struct formatter<TimerDelta>{
     constexpr auto parse(format_parse_context& ctx){ return ctx.begin(); }
     template<typename FormatContext>
     auto format(const TimerDelta& val, FormatContext& ctx)const{
-        auto duration = chrono::duration<i64, ratio<1, 1000>>(static_cast<i64>(val));
-        auto h = chrono::duration_cast<chrono::hours>(duration);
-        auto m = chrono::duration_cast<chrono::minutes>(duration % chrono::hours(1));
-        auto s = chrono::duration_cast<chrono::seconds>(duration % chrono::minutes(1));
-        auto ms = chrono::duration_cast<chrono::milliseconds>(duration % chrono::seconds(1));
-
-        return format_to(ctx.out(), "{:02}:{:02}:{:02}.{:03}", h.count(), m.count(), s.count(), ms.count());
+        const auto parts = __hidden_timer::SplitTimerDelta(val);
+        return format_to(ctx.out(), "{:02}:{:02}:{:02}.{:03}", parts.hours, parts.minutes, parts.seconds, parts.milliseconds);
     }
 };
 template<>
@@ -70,13 +103,8 @@ struct formatter<TimerDelta, wchar>{
     constexpr auto parse(wformat_parse_context& ctx){ return ctx.begin(); }
     template<typename FormatContext>
     auto format(const TimerDelta& val, FormatContext& ctx)const{
-        auto duration = chrono::duration<i64, ratio<1, 1000>>(static_cast<i64>(val));
-        auto h = chrono::duration_cast<chrono::hours>(duration);
-        auto m = chrono::duration_cast<chrono::minutes>(duration % chrono::hours(1));
-        auto s = chrono::duration_cast<chrono::seconds>(duration % chrono::minutes(1));
-        auto ms = chrono::duration_cast<chrono::milliseconds>(duration % chrono::seconds(1));
-
-        return format_to(ctx.out(), L"{:02}:{:02}:{:02}.{:03}", h.count(), m.count(), s.count(), ms.count());
+        const auto parts = __hidden_timer::SplitTimerDelta(val);
+        return format_to(ctx.out(), L"{:02}:{:02}:{:02}.{:03}", parts.hours, parts.minutes, parts.seconds, parts.milliseconds);
     }
 };
 
@@ -135,6 +163,13 @@ inline T DurationInSeconds(const Timer& current, const Timer& late = __hidden_ti
     return std::chrono::duration_cast<std::chrono::duration<T, std::ratio<1, 1>>>(current - late).count();
 }
 template<typename T>
+inline T ConsumeTimerDeltaSeconds(Timer& previous)noexcept{
+    const Timer current = TimerNow();
+    const T delta = DurationInSeconds<T>(current, previous);
+    previous = current;
+    return delta;
+}
+template<typename T>
 inline T DurationInMS(const Timer& current, const Timer& late = __hidden_timer::s_VeryBegining)noexcept{
     return std::chrono::duration_cast<std::chrono::duration<T, std::ratio<1, 1000>>>(current - late).count();
 }
@@ -151,4 +186,3 @@ inline TimerDelta DurationInTimeDelta(const Timer& current, const Timer& late = 
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

@@ -162,6 +162,15 @@ public:
     };
 
 private:
+    struct MaterialPassDrawContext{
+        Core::ICommandList& commandList;
+        Core::IFramebuffer* framebuffer = nullptr;
+        MaterialPipelinePass pass = MaterialPipelinePass::Opaque;
+        Core::IBindingSet* passBindingSet = nullptr;
+        const AvboitFrameTargets* avboitTargets = nullptr;
+        const Core::ViewportState& viewportState;
+    };
+
     struct DeferredFrameTargets{
         u32 width = 0;
         u32 height = 0;
@@ -246,22 +255,23 @@ private:
         GeometryResources*& outGeometry,
         MaterialPipelineResources*& outPipelineResources
     );
+    template<typename DrawItemHandler>
+    void forEachMaterialPassDrawItemResources(const MaterialPassDrawItemVector& drawItems, DrawItemHandler&& handler){
+        for(const MaterialPassDrawItem& drawItem : drawItems){
+            GeometryResources* geometry = nullptr;
+            MaterialPipelineResources* pipelineResources = nullptr;
+            if(!findMaterialPassDrawItemResources(drawItem, geometry, pipelineResources))
+                continue;
+
+            handler(drawItem, *geometry, *pipelineResources);
+        }
+    }
     void renderMeshMaterialPassDrawItems(
-        Core::ICommandList& commandList,
-        Core::IFramebuffer* framebuffer,
-        MaterialPipelinePass pass,
-        Core::IBindingSet* passBindingSet,
-        const AvboitFrameTargets* avboitTargets,
-        const Core::ViewportState& viewportState,
+        const MaterialPassDrawContext& context,
         const MaterialPassDrawItemVector& drawItems
     );
     void renderComputeMaterialPassDrawItems(
-        Core::ICommandList& commandList,
-        Core::IFramebuffer* framebuffer,
-        MaterialPipelinePass pass,
-        Core::IBindingSet* passBindingSet,
-        const AvboitFrameTargets* avboitTargets,
-        const Core::ViewportState& viewportState,
+        const MaterialPassDrawContext& context,
         const MaterialPassDrawItemVector& drawItems
     );
     void renderAvboitPasses(Core::ICommandList& commandList, DeferredFrameTargets& targets);

@@ -216,6 +216,54 @@ static UploadBytes CopyBytes(Alloc::CustomArena& arena, const void* data, usize 
     return bytes;
 }
 
+template<typename JobData, typename Desc, typename Output, typename Validate, typename ConfigurePayload, typename ExecutePayload>
+static Graphics::JobHandle SubmitSetupUploadJob(
+    Graphics& graphics,
+    Alloc::CustomArena& arena,
+    Alloc::JobSystem& jobSystem,
+    const Desc& desc,
+    Output& output,
+    Validate&& validate,
+    ConfigurePayload&& configurePayload,
+    ExecutePayload&& executePayload)
+{
+    if(!validate(desc)){
+        output = nullptr;
+        return {};
+    }
+
+    auto payload = MakeCustomUnique<JobData>(arena, arena, desc, output);
+    configurePayload(*payload, arena);
+
+    return jobSystem.submit([&graphics, payload = Move(payload), executePayload = Forward<ExecutePayload>(executePayload)]() mutable{
+        executePayload(graphics, *payload);
+    });
+}
+
+static void ConfigureBufferSetupPayload(BufferSetupJobData& payload, Alloc::CustomArena& arena){
+    payload.uploadBytes = CopyBytes(arena, payload.setupDesc.data, payload.setupDesc.dataSize);
+    payload.setupDesc.data = nullptr;
+    payload.setupDesc.dataSize = payload.uploadBytes.size();
+}
+
+static void ExecuteBufferSetupPayload(Graphics& graphics, BufferSetupJobData& payload){
+    payload.setupDesc.data = payload.uploadBytes.empty() ? nullptr : payload.uploadBytes.data();
+    payload.setupDesc.dataSize = payload.uploadBytes.size();
+    payload.outBuffer = graphics.setupBuffer(payload.setupDesc);
+}
+
+static void ConfigureTextureSetupPayload(TextureSetupJobData& payload, Alloc::CustomArena& arena){
+    payload.uploadBytes = CopyBytes(arena, payload.setupDesc.data, payload.setupDesc.uploadDataSize);
+    payload.setupDesc.data = nullptr;
+    payload.setupDesc.uploadDataSize = payload.uploadBytes.size();
+}
+
+static void ExecuteTextureSetupPayload(Graphics& graphics, TextureSetupJobData& payload){
+    payload.setupDesc.data = payload.uploadBytes.empty() ? nullptr : payload.uploadBytes.data();
+    payload.setupDesc.uploadDataSize = payload.uploadBytes.size();
+    payload.outTexture = graphics.setupTexture(payload.setupDesc);
+}
+
 static void AddVulkanDeviceExtensionOnce(Vector<AString>& extensions, const char* extensionName){
     for(const auto& extension : extensions){
         if(NWB_STRCMP(extension.c_str(), extensionName) == 0)
@@ -819,49 +867,29 @@ Graphics::MeshResource Graphics::setupMesh(const MeshSetupDesc& desc)const{
 }
 
 Graphics::JobHandle Graphics::setupBufferAsync(const BufferSetupDesc& desc, BufferHandle& outBuffer){
-    if(!__hidden_graphics::ValidateBufferSetupUpload(desc)){
-        outBuffer = nullptr;
-        return {};
-    }
-
-    auto payload = MakeCustomUnique<__hidden_graphics::BufferSetupJobData>(
+    return __hidden_graphics::SubmitSetupUploadJob<__hidden_graphics::BufferSetupJobData>(
+        *this,
         m_allocator.getObjectArena(),
-        m_allocator.getObjectArena(),
+        m_jobSystem,
         desc,
-        outBuffer
+        outBuffer,
+        __hidden_graphics::ValidateBufferSetupUpload,
+        __hidden_graphics::ConfigureBufferSetupPayload,
+        __hidden_graphics::ExecuteBufferSetupPayload
     );
-    payload->uploadBytes = __hidden_graphics::CopyBytes(m_allocator.getObjectArena(), desc.data, desc.dataSize);
-    payload->setupDesc.data = nullptr;
-    payload->setupDesc.dataSize = payload->uploadBytes.size();
-
-    return m_jobSystem.submit([this, payload = Move(payload)]() mutable{
-        payload->setupDesc.data = payload->uploadBytes.empty() ? nullptr : payload->uploadBytes.data();
-        payload->setupDesc.dataSize = payload->uploadBytes.size();
-        payload->outBuffer = setupBuffer(payload->setupDesc);
-    });
 }
 
 Graphics::JobHandle Graphics::setupTextureAsync(const TextureSetupDesc& desc, TextureHandle& outTexture){
-    if(!__hidden_graphics::ValidateTextureSetupUpload(desc)){
-        outTexture = nullptr;
-        return {};
-    }
-
-    auto payload = MakeCustomUnique<__hidden_graphics::TextureSetupJobData>(
+    return __hidden_graphics::SubmitSetupUploadJob<__hidden_graphics::TextureSetupJobData>(
+        *this,
         m_allocator.getObjectArena(),
-        m_allocator.getObjectArena(),
+        m_jobSystem,
         desc,
-        outTexture
+        outTexture,
+        __hidden_graphics::ValidateTextureSetupUpload,
+        __hidden_graphics::ConfigureTextureSetupPayload,
+        __hidden_graphics::ExecuteTextureSetupPayload
     );
-    payload->uploadBytes = __hidden_graphics::CopyBytes(m_allocator.getObjectArena(), desc.data, desc.uploadDataSize);
-    payload->setupDesc.data = nullptr;
-    payload->setupDesc.uploadDataSize = payload->uploadBytes.size();
-
-    return m_jobSystem.submit([this, payload = Move(payload)]() mutable{
-        payload->setupDesc.data = payload->uploadBytes.empty() ? nullptr : payload->uploadBytes.data();
-        payload->setupDesc.uploadDataSize = payload->uploadBytes.size();
-        payload->outTexture = setupTexture(payload->setupDesc);
-    });
 }
 
 Graphics::JobHandle Graphics::setupMeshAsync(const MeshSetupDesc& desc, MeshResource& outMesh){

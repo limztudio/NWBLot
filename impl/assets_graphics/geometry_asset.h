@@ -19,25 +19,17 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class Geometry final : public Core::Assets::IAsset{
+class Geometry final : public Core::Assets::TypedAsset<Geometry>{
 public:
-    static constexpr AStringView s_AssetTypeText = "geometry";
+    NWB_DEFINE_ASSET_TYPE("geometry")
 
 
 public:
-    Geometry()
-        : IAsset(AssetTypeName())
-    {}
+    Geometry() = default;
     explicit Geometry(const Name& virtualPath)
-        : IAsset(AssetTypeName(), virtualPath)
+        : Core::Assets::TypedAsset<Geometry>(virtualPath)
     {}
 
-
-public:
-    [[nodiscard]] static const Name& AssetTypeName(){
-        static const Name s_AssetType(s_AssetTypeText.data());
-        return s_AssetType;
-    }
 
 public:
     bool loadBinary(const Core::Assets::AssetBytes& binary);
@@ -65,11 +57,9 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class GeometryAssetCodec final : public Core::Assets::IAssetCodec{
+class GeometryAssetCodec final : public Core::Assets::TypedAssetCodec<Geometry>{
 public:
-    GeometryAssetCodec()
-        : IAssetCodec(Geometry::AssetTypeName())
-    {}
+    GeometryAssetCodec() = default;
 
 public:
     virtual bool deserialize(const Name& virtualPath, const Core::Assets::AssetBytes& binary, UniquePtr<Core::Assets::IAsset>& outAsset)const override;
@@ -86,4 +76,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

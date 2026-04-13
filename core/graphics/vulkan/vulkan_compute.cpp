@@ -78,12 +78,7 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
         NWB_TEXT("compute pipeline"),
         shaderStages,
         descriptorHeapScratch,
-        pso->m_pipelineLayout,
-        pso->m_ownsPipelineLayout,
-        pso->m_usesDescriptorHeap,
-        pso->m_descriptorHeapPushRanges,
-        pso->m_descriptorHeapPushDataSize,
-        pso->m_pushConstantByteSize,
+        *pso,
         scratchArena))
     {
         DestroyArenaObject(m_context.objectArena, pso);

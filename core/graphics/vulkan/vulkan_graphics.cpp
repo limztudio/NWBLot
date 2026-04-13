@@ -44,32 +44,6 @@ constexpr VkPolygonMode ConvertFillMode(RasterFillMode::Enum fillMode){
     }
 }
 
-constexpr VkStencilOp ConvertStencilOp(StencilOp::Enum stencilOp){
-    switch(stencilOp){
-    case StencilOp::Keep:              return VK_STENCIL_OP_KEEP;
-    case StencilOp::Zero:              return VK_STENCIL_OP_ZERO;
-    case StencilOp::Replace:           return VK_STENCIL_OP_REPLACE;
-    case StencilOp::IncrementAndClamp: return VK_STENCIL_OP_INCREMENT_AND_CLAMP;
-    case StencilOp::DecrementAndClamp: return VK_STENCIL_OP_DECREMENT_AND_CLAMP;
-    case StencilOp::Invert:            return VK_STENCIL_OP_INVERT;
-    case StencilOp::IncrementAndWrap:  return VK_STENCIL_OP_INCREMENT_AND_WRAP;
-    case StencilOp::DecrementAndWrap:  return VK_STENCIL_OP_DECREMENT_AND_WRAP;
-    default: return VK_STENCIL_OP_KEEP;
-    }
-}
-
-constexpr VkStencilOpState ConvertStencilOpState(const DepthStencilState& dsState, const DepthStencilState::StencilOpDesc& stencilDesc){
-    VkStencilOpState state = {};
-    state.failOp = ConvertStencilOp(stencilDesc.failOp);
-    state.passOp = ConvertStencilOp(stencilDesc.passOp);
-    state.depthFailOp = ConvertStencilOp(stencilDesc.depthFailOp);
-    state.compareOp = ConvertCompareOp(stencilDesc.stencilFunc);
-    state.compareMask = dsState.stencilReadMask;
-    state.writeMask = dsState.stencilWriteMask;
-    state.reference = dsState.stencilRefValue;
-    return state;
-}
-
 void SetGraphicsDynamicState(VkCommandBuffer commandBuffer, const GraphicsPipelineDesc& desc, const GraphicsState& state){
     const RasterState& rasterState = desc.renderState.rasterState;
     const DepthStencilState& depthStencilState = desc.renderState.depthStencilState;
@@ -263,12 +237,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
         NWB_TEXT("graphics pipeline"),
         shaderStages,
         descriptorHeapScratch,
-        pso->m_pipelineLayout,
-        pso->m_ownsPipelineLayout,
-        pso->m_usesDescriptorHeap,
-        pso->m_descriptorHeapPushRanges,
-        pso->m_descriptorHeapPushDataSize,
-        pso->m_pushConstantByteSize,
+        *pso,
         scratchArena))
     {
         DestroyArenaObject(m_context.objectArena, pso);
@@ -326,14 +295,8 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     }
 
     // Step 7: Depth/stencil state
-    VkPipelineDepthStencilStateCreateInfo depthStencil = __hidden_vulkan::MakeVkStruct<VkPipelineDepthStencilStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO);
-    depthStencil.depthTestEnable = desc.renderState.depthStencilState.depthTestEnable ? VK_TRUE : VK_FALSE;
-    depthStencil.depthWriteEnable = desc.renderState.depthStencilState.depthWriteEnable ? VK_TRUE : VK_FALSE;
-    depthStencil.depthCompareOp = __hidden_vulkan::ConvertCompareOp(desc.renderState.depthStencilState.depthFunc);
-    depthStencil.depthBoundsTestEnable = VK_FALSE;
-    depthStencil.stencilTestEnable = desc.renderState.depthStencilState.stencilEnable ? VK_TRUE : VK_FALSE;
-    depthStencil.front = __hidden_vulkan::ConvertStencilOpState(desc.renderState.depthStencilState, desc.renderState.depthStencilState.frontFaceStencil);
-    depthStencil.back = __hidden_vulkan::ConvertStencilOpState(desc.renderState.depthStencilState, desc.renderState.depthStencilState.backFaceStencil);
+    VkPipelineDepthStencilStateCreateInfo depthStencil;
+    __hidden_vulkan::ConfigurePipelineDepthStencilState(desc.renderState.depthStencilState, true, depthStencil);
 
     // Step 8: Color blend state
     VkPipelineColorBlendStateCreateInfo colorBlending = __hidden_vulkan::MakeVkStruct<VkPipelineColorBlendStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO);
@@ -364,37 +327,11 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     dynamicState.pDynamicStates = dynamicStates;
 
     // Step 10: Dynamic rendering info
-    VkPipelineRenderingCreateInfo renderingInfo = __hidden_vulkan::MakeVkStruct<VkPipelineRenderingCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO);
-    Vector<VkFormat, Alloc::ScratchAllocator<VkFormat>> colorFormats{ Alloc::ScratchAllocator<VkFormat>(scratchArena) };
-    colorFormats.reserve(fbinfo.colorFormats.size());
-    for(u32 i = 0; i < static_cast<u32>(fbinfo.colorFormats.size()); ++i){
-        const VkFormat vkFormat = ConvertFormat(fbinfo.colorFormats[i]);
-        if(vkFormat == VK_FORMAT_UNDEFINED){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create graphics pipeline: color attachment format {} is unsupported"), i);
-            DestroyArenaObject(m_context.objectArena, pso);
-            return nullptr;
-        }
-        colorFormats.push_back(vkFormat);
-    }
-    renderingInfo.colorAttachmentCount = static_cast<uint32_t>(colorFormats.size());
-    renderingInfo.pColorAttachmentFormats = colorFormats.data();
-    if(fbinfo.depthFormat != Format::UNKNOWN){
-        const VkFormat vkDepthFormat = ConvertFormat(fbinfo.depthFormat);
-        if(vkDepthFormat == VK_FORMAT_UNDEFINED){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create graphics pipeline: depth/stencil attachment format is unsupported"));
-            DestroyArenaObject(m_context.objectArena, pso);
-            return nullptr;
-        }
-        const FormatInfo& depthFormatInfo = GetFormatInfo(fbinfo.depthFormat);
-        if(!depthFormatInfo.hasDepth && !depthFormatInfo.hasStencil){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create graphics pipeline: depth/stencil attachment format has no depth or stencil aspect"));
-            DestroyArenaObject(m_context.objectArena, pso);
-            return nullptr;
-        }
-        if(depthFormatInfo.hasDepth)
-            renderingInfo.depthAttachmentFormat = vkDepthFormat;
-        if(depthFormatInfo.hasStencil)
-            renderingInfo.stencilAttachmentFormat = vkDepthFormat;
+    VkPipelineRenderingCreateInfo renderingInfo = {};
+    PipelineRenderingFormatVector colorFormats{ Alloc::ScratchAllocator<VkFormat>(scratchArena) };
+    if(!__hidden_vulkan::BuildPipelineRenderingInfo(fbinfo, NWB_TEXT("graphics pipeline"), renderingInfo, colorFormats)){
+        DestroyArenaObject(m_context.objectArena, pso);
+        return nullptr;
     }
 
     VkGraphicsPipelineCreateInfo pipelineInfo = __hidden_vulkan::MakeVkStruct<VkGraphicsPipelineCreateInfo>(VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO);
@@ -736,21 +673,10 @@ void CommandList::drawIndexed(const DrawArguments& args){
 }
 
 void CommandList::drawIndirect(u32 offsetBytes, u32 drawCount){
-    if(drawCount == 0)
+    Buffer* indirectBuffer = nullptr;
+    if(!prepareDrawIndirect(offsetBytes, drawCount, sizeof(DrawIndirectArguments), NWB_TEXT("draw indirect"), NWB_TEXT("drawIndirect"), false, indirectBuffer))
         return;
-    if(!m_renderPassActive || !m_currentGraphicsState.pipeline){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to draw indirect: no graphics pipeline and active render pass are bound"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to draw indirect: no graphics pipeline and active render pass are bound"));
-        return;
-    }
-    if(drawCount > m_context.physicalDeviceProperties.limits.maxDrawIndirectCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to draw indirect: draw count exceeds device limit"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to draw indirect: draw count exceeds device limit"));
-        return;
-    }
-    if(!validateIndirectBuffer(m_currentGraphicsState.indirectParams, offsetBytes, sizeof(DrawIndirectArguments), drawCount, NWB_TEXT("drawIndirect")))
-        return;
-    auto* indirectBuffer = checked_cast<Buffer*>(m_currentGraphicsState.indirectParams);
+
     vkCmdDrawIndirect(m_currentCmdBuf->m_cmdBuf, indirectBuffer->m_buffer, offsetBytes, drawCount, sizeof(DrawIndirectArguments));
     m_currentCmdBuf->m_referencedResources.push_back(m_currentGraphicsState.indirectParams);
 }

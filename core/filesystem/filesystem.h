@@ -85,6 +85,20 @@ bool BuildVolume(
     VolumeBuildInfo& outBuildInfo
 );
 
+bool RemoveStagedDirectoryIfPresent(const Path& directoryPath, AStringView operationName, AStringView label);
+void CleanupStagedDirectoryBestEffort(const Path& directoryPath, AStringView operationName, AStringView label);
+bool EnsureEmptyStagedDirectory(const Path& directoryPath, AStringView operationName, AStringView label);
+
+struct StagedDirectoryCleanupGuard{
+    Path directoryPath;
+    AStringView operationName;
+    AStringView label;
+    bool active = true;
+
+    StagedDirectoryCleanupGuard(const Path& directoryPath, AStringView operationName, AStringView label = "stage directory");
+    ~StagedDirectoryCleanupGuard();
+};
+
 bool PublishStagedVolume(
     const StagedDirectoryPaths& stagedPaths,
     const Path& outputDirectory,
@@ -224,4 +238,3 @@ NWB_FILESYSTEM_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

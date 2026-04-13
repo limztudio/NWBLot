@@ -22,6 +22,11 @@
         (void)lpCmdLine; \
         (void)nCmdShow; \
         return entryPoint(__argc, __wargv, hInstance); \
+    } \
+    int main(int argc, char** argv){ \
+        (void)argc; \
+        (void)argv; \
+        return entryPoint(__argc, __wargv, GetModuleHandleW(nullptr)); \
     }
 #else
 #define NWB_DEFINE_APPLICATION_ENTRY_POINT(entryPoint) \
@@ -30,6 +35,9 @@
         (void)lpCmdLine; \
         (void)nCmdShow; \
         return entryPoint(__argc, __argv, hInstance); \
+    } \
+    int main(int argc, char** argv){ \
+        return entryPoint(static_cast<isize>(argc), argv, GetModuleHandleA(nullptr)); \
     }
 #endif
 #elif defined(NWB_PLATFORM_LINUX)

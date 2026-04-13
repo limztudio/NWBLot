@@ -18,6 +18,7 @@ NWB_VULKAN_BEGIN
 
 
 struct VulkanContext;
+using PipelineRenderingFormatVector = Vector<VkFormat, Alloc::ScratchAllocator<VkFormat>>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -32,8 +33,8 @@ namespace __hidden_vulkan{
     extern VkDeviceAddress GetBufferDeviceAddress(IBuffer* _buffer, u64 offset = 0);
     VkImageType TextureDimensionToImageType(TextureDimension::Enum dimension);
     VkImageViewType TextureDimensionToViewType(TextureDimension::Enum dimension);
-    VkSampleCountFlagBits GetSampleCount(u32 sampleCount);
     bool IsSupportedSampleCount(u32 sampleCount);
+    VkImageAspectFlags GetImageAspectMask(const FormatInfo& formatInfo);
     VkImageUsageFlags PickImageUsage(const TextureDesc& desc);
     VkImageCreateFlags PickImageFlags(const TextureDesc& desc);
     u64 ComputeStagingTextureOffset(const TextureDesc& desc, const TextureSlice& slice, usize* outRowPitch = nullptr, u32* outBufferRowLength = nullptr, u32* outBufferImageHeight = nullptr);
@@ -44,6 +45,7 @@ namespace __hidden_vulkan{
     bool ValidatePushConstantByteSize(const VulkanContext& context, u32 byteSize, const tchar* operationName);
     bool CreatePipelineLayout(const VulkanContext& context, const VkDescriptorSetLayout* setLayouts, u32 setLayoutCount, u32 pushConstantByteSize, VkPipelineLayout& outLayout, const tchar* operationName);
     void DestroyPipelineAndOwnedLayout(VkDevice device, const VkAllocationCallbacks* allocationCallbacks, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout, bool& ownsPipelineLayout);
+    VkBuildAccelerationStructureFlagsKHR ConvertAccelStructBuildFlags(RayTracingAccelStructBuildFlags::Mask buildFlags, bool allowCompaction);
     bool BuildClusterOperationInputInfo(
         const RayTracingClusterOperationParams& params,
         VkClusterAccelerationStructureInputInfoNV& outInputInfo,
@@ -56,6 +58,7 @@ namespace __hidden_vulkan{
     VkComponentTypeKHR ConvertCoopVecDataType(CooperativeVectorDataType::Enum type);
     CooperativeVectorDataType::Enum ConvertCoopVecDataType(VkComponentTypeKHR type);
     VkCooperativeVectorMatrixLayoutNV ConvertCoopVecMatrixLayout(CooperativeVectorMatrixLayout::Enum layout);
+    bool BuildPipelineRenderingInfo(const FramebufferInfo& fbinfo, const tchar* operationName, VkPipelineRenderingCreateInfo& outRenderingInfo, PipelineRenderingFormatVector& outColorFormats);
 
     template<typename T>
     constexpr T MakeVkStruct(VkStructureType sType){
@@ -85,6 +88,32 @@ namespace __hidden_vulkan{
         case ComparisonFunc::Always:         return VK_COMPARE_OP_ALWAYS;
         default: return VK_COMPARE_OP_ALWAYS;
         }
+    }
+
+    constexpr VkStencilOp ConvertStencilOp(StencilOp::Enum stencilOp){
+        switch(stencilOp){
+        case StencilOp::Keep:              return VK_STENCIL_OP_KEEP;
+        case StencilOp::Zero:              return VK_STENCIL_OP_ZERO;
+        case StencilOp::Replace:           return VK_STENCIL_OP_REPLACE;
+        case StencilOp::IncrementAndClamp: return VK_STENCIL_OP_INCREMENT_AND_CLAMP;
+        case StencilOp::DecrementAndClamp: return VK_STENCIL_OP_DECREMENT_AND_CLAMP;
+        case StencilOp::Invert:            return VK_STENCIL_OP_INVERT;
+        case StencilOp::IncrementAndWrap:  return VK_STENCIL_OP_INCREMENT_AND_WRAP;
+        case StencilOp::DecrementAndWrap:  return VK_STENCIL_OP_DECREMENT_AND_WRAP;
+        default: return VK_STENCIL_OP_KEEP;
+        }
+    }
+
+    constexpr VkStencilOpState ConvertStencilOpState(const DepthStencilState& dsState, const DepthStencilState::StencilOpDesc& stencilDesc){
+        VkStencilOpState state = {};
+        state.failOp = ConvertStencilOp(stencilDesc.failOp);
+        state.passOp = ConvertStencilOp(stencilDesc.passOp);
+        state.depthFailOp = ConvertStencilOp(stencilDesc.depthFailOp);
+        state.compareOp = ConvertCompareOp(stencilDesc.stencilFunc);
+        state.compareMask = dsState.stencilReadMask;
+        state.writeMask = dsState.stencilWriteMask;
+        state.reference = dsState.stencilRefValue;
+        return state;
     }
 
     constexpr VkBlendFactor ConvertBlendFactor(BlendFactor::Enum blendFactor){
@@ -147,6 +176,11 @@ namespace __hidden_vulkan{
         const bool alphaToCoverageEnable,
         VkPipelineMultisampleStateCreateInfo& outState,
         const tchar* operationName);
+    void ConfigurePipelineDepthStencilState(
+        const DepthStencilState& state,
+        bool includeStencilFaces,
+        VkPipelineDepthStencilStateCreateInfo& outState);
+    VkSamplerCreateInfo BuildSamplerCreateInfo(const SamplerDesc& desc);
 
     inline void CopyHostMemory(
         Alloc::ThreadPool& workerPool,
@@ -432,6 +466,7 @@ private:
     };
     using BufferChunkPtr = RefCountPtr<BufferChunk>;
     using BufferChunkList = List<BufferChunkPtr, Alloc::CustomAllocator<BufferChunkPtr>>;
+    using ChunkRecyclePredicate = bool (*)(TrackedCommandBuffer* owner, const void* context);
 
 
 public:
@@ -455,6 +490,8 @@ public:
 
 private:
     void trimChunkPoolLocked(const u64* completedVersions);
+    BufferChunkList::iterator recycleActiveChunkLocked(BufferChunkList& activeChunks, BufferChunkList::iterator it, u64 version, bool resetAllocated);
+    void recycleMatchingActiveChunks(u32 queueIndex, u64 version, bool resetAllocated, const u64* completedVersions, ChunkRecyclePredicate predicate, const void* predicateContext);
 
     Device& m_device;
     u64 m_defaultChunkSize;
@@ -860,6 +897,15 @@ struct PipelineDescriptorHeapScratch{
     }
 };
 
+struct PipelineBindingState{
+    VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
+    bool m_ownsPipelineLayout = false;
+    bool m_usesDescriptorHeap = false;
+    FixedVector<DescriptorHeapPushRange, s_MaxBindingLayouts> m_descriptorHeapPushRanges;
+    u32 m_descriptorHeapPushDataSize = 0;
+    u32 m_pushConstantByteSize = 0;
+};
+
 class DescriptorHeapManager final : NoCopy{
 private:
     struct FreeRange{
@@ -941,7 +987,7 @@ private:
 // Graphics Pipeline
 
 
-class GraphicsPipeline final : public RefCounter<IGraphicsPipeline>, NoCopy{
+class GraphicsPipeline final : public RefCounter<IGraphicsPipeline>, public PipelineBindingState, NoCopy{
     friend class Device;
     friend class CommandList;
 
@@ -961,12 +1007,6 @@ private:
     GraphicsPipelineDesc m_desc;
     FramebufferInfo m_framebufferInfo;
     VkPipeline m_pipeline = VK_NULL_HANDLE;
-    VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
-    bool m_ownsPipelineLayout = false;
-    bool m_usesDescriptorHeap = false;
-    FixedVector<DescriptorHeapPushRange, s_MaxBindingLayouts> m_descriptorHeapPushRanges;
-    u32 m_descriptorHeapPushDataSize = 0;
-    u32 m_pushConstantByteSize = 0;
 
     const VulkanContext& m_context;
 };
@@ -976,7 +1016,7 @@ private:
 // Compute Pipeline
 
 
-class ComputePipeline final : public RefCounter<IComputePipeline>, NoCopy{
+class ComputePipeline final : public RefCounter<IComputePipeline>, public PipelineBindingState, NoCopy{
     friend class Device;
     friend class CommandList;
 
@@ -994,12 +1034,6 @@ public:
 private:
     ComputePipelineDesc m_desc;
     VkPipeline m_pipeline = VK_NULL_HANDLE;
-    VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
-    bool m_ownsPipelineLayout = false;
-    bool m_usesDescriptorHeap = false;
-    FixedVector<DescriptorHeapPushRange, s_MaxBindingLayouts> m_descriptorHeapPushRanges;
-    u32 m_descriptorHeapPushDataSize = 0;
-    u32 m_pushConstantByteSize = 0;
 
     const VulkanContext& m_context;
 };
@@ -1009,7 +1043,7 @@ private:
 // Meshlet Pipeline
 
 
-class MeshletPipeline final : public RefCounter<IMeshletPipeline>, NoCopy{
+class MeshletPipeline final : public RefCounter<IMeshletPipeline>, public PipelineBindingState, NoCopy{
     friend class Device;
     friend class CommandList;
 
@@ -1029,12 +1063,6 @@ private:
     MeshletPipelineDesc m_desc;
     FramebufferInfo m_framebufferInfo;
     VkPipeline m_pipeline = VK_NULL_HANDLE;
-    VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
-    bool m_ownsPipelineLayout = false;
-    bool m_usesDescriptorHeap = false;
-    FixedVector<DescriptorHeapPushRange, s_MaxBindingLayouts> m_descriptorHeapPushRanges;
-    u32 m_descriptorHeapPushDataSize = 0;
-    u32 m_pushConstantByteSize = 0;
 
     const VulkanContext& m_context;
 };
@@ -1044,7 +1072,7 @@ private:
 // Ray Tracing Pipeline
 
 
-class RayTracingPipeline final : public RefCounter<IRayTracingPipeline>, NoCopy{
+class RayTracingPipeline final : public RefCounter<IRayTracingPipeline>, public PipelineBindingState, NoCopy{
     friend class Device;
     friend class CommandList;
     friend class ShaderTable;
@@ -1064,12 +1092,6 @@ public:
 private:
     RayTracingPipelineDesc m_desc;
     VkPipeline m_pipeline = VK_NULL_HANDLE;
-    VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
-    bool m_ownsPipelineLayout = false;
-    bool m_usesDescriptorHeap = false;
-    FixedVector<DescriptorHeapPushRange, s_MaxBindingLayouts> m_descriptorHeapPushRanges;
-    u32 m_descriptorHeapPushDataSize = 0;
-    u32 m_pushConstantByteSize = 0;
     Vector<u8, Alloc::CustomAllocator<u8>> m_shaderGroupHandles;
 
     const VulkanContext& m_context;
@@ -1105,6 +1127,15 @@ public:
 
 private:
     void allocateSBTBuffer(BufferHandle& outBuffer, u64 sbtSize);
+    u32 appendShaderRecord(
+        const Name& exportName,
+        BufferHandle& buffer,
+        u64& offset,
+        u32& count,
+        const tchar* operationName,
+        const tchar* recordName,
+        const tchar* exportKind
+    );
     u32 findGroupIndex(const Name& exportName)const;
 
 
@@ -1479,6 +1510,15 @@ private:
     bool ensureGraphicsRenderPass(IFramebuffer* framebuffer);
     void endActiveRenderPass();
     bool validateIndirectBuffer(IBuffer* buffer, u64 offsetBytes, u64 commandSizeBytes, u32 commandCount, const tchar* commandName)const;
+    bool prepareDrawIndirect(u32 offsetBytes, u32 drawCount, u64 commandSizeBytes, const tchar* operationLabel, const tchar* commandName, bool requireIndexBuffer, Buffer*& outIndirectBuffer)const;
+    bool prepareUploadStaging(const void* data, usize dataSize, const tchar* operationName, Buffer*& outStagingBuffer, u64& outStagingOffset);
+    bool buildTopLevelAccelStructFromInstanceData(
+        IRayTracingAccelStruct* asInterface,
+        AccelStruct* as,
+        VkDeviceAddress instanceDataAddress,
+        usize numInstances,
+        RayTracingAccelStructBuildFlags::Mask buildFlags,
+        const tchar* operationName);
     [[nodiscard]] bool attachAccelStructBuildScratchBuffer(VkAccelerationStructureBuildGeometryInfoKHR& buildInfo, u64 buildScratchSize, const char* debugName, const tchar* operationName);
     void discardUnsubmittedUploadChunks();
 
@@ -1651,17 +1691,19 @@ private:
         u32& outPushConstantByteSize,
         bool& outOwnsPipelineLayout,
         Alloc::ScratchArena<>& scratchArena)const;
+    [[nodiscard]] bool validateHeapMemoryBinding(
+        IHeap* heap,
+        const VkMemoryRequirements& memoryRequirements,
+        u64 offset,
+        const tchar* operationName,
+        const tchar* resourceName,
+        Heap*& outHeap)const;
     [[nodiscard]] bool configurePipelineBindings(
         const BindingLayoutVector& bindingLayouts,
         const tchar* operationName,
         PipelineShaderStageVector& shaderStages,
         PipelineDescriptorHeapScratch& descriptorHeapScratch,
-        VkPipelineLayout& outPipelineLayout,
-        bool& outOwnsPipelineLayout,
-        bool& outUsesDescriptorHeap,
-        FixedVector<DescriptorHeapPushRange, s_MaxBindingLayouts>& outDescriptorHeapPushRanges,
-        u32& outDescriptorHeapPushDataSize,
-        u32& outPushConstantByteSize,
+        PipelineBindingState& outBindings,
         Alloc::ScratchArena<>& scratchArena)const;
     void appendPipelineShaderStage(
         IShader* shader,

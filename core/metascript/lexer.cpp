@@ -233,32 +233,17 @@ Token Lexer::readString(){
 
     while(!isAtEnd() && peek() != '"'){
         if(peek() == '\n' || peek() == '\r'){
-            Token tok;
-            tok.type = TokenType::Error;
-            tok.text = MStringView("newline in string literal");
-            tok.line = startLine;
-            tok.column = startColumn;
-            return tok;
+            return makeErrorToken(MStringView("newline in string literal"), startLine, startColumn);
         }
 
         if(peek() == '\\'){
             advance();
 
             if(isAtEnd()){
-                Token tok;
-                tok.type = TokenType::Error;
-                tok.text = MStringView("unterminated string literal");
-                tok.line = startLine;
-                tok.column = startColumn;
-                return tok;
+                return makeErrorToken(MStringView("unterminated string literal"), startLine, startColumn);
             }
             if(peek() == '\n' || peek() == '\r'){
-                Token tok;
-                tok.type = TokenType::Error;
-                tok.text = MStringView("newline in string literal");
-                tok.line = startLine;
-                tok.column = startColumn;
-                return tok;
+                return makeErrorToken(MStringView("newline in string literal"), startLine, startColumn);
             }
         }
 
@@ -300,11 +285,15 @@ Token Lexer::makeToken(TokenType::Enum type, usize length){
 }
 
 Token Lexer::makeErrorToken(MStringView message){
+    return makeErrorToken(message, m_line, m_column);
+}
+
+Token Lexer::makeErrorToken(MStringView message, const u32 line, const u32 column){
     Token tok;
     tok.type = TokenType::Error;
     tok.text = message;
-    tok.line = m_line;
-    tok.column = m_column;
+    tok.line = line;
+    tok.column = column;
     return tok;
 }
 
@@ -345,4 +334,3 @@ NWB_METASCRIPT_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

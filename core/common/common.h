@@ -6,6 +6,7 @@
 
 
 #include "global.h"
+#include <global/frame_data.h>
 #include <core/alloc/general.h>
 
 #include <regex>
@@ -138,21 +139,10 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-union FrameParam{
-    void* ptr[4];
-    u64 u64[4];
-    u32 u32[8];
-    u16 u16[16];
-    u8 u8[32];
-};
-class FrameData{
+using FrameParam = FrameParamStorage<4>;
+class FrameData : public BasicFrameData<4>{
 public:
-    inline FrameData() : m_data{}{}
-
-
-public:
-    inline FrameParam& frameParam(){ return m_data; }
-    inline const FrameParam& frameParam()const{ return m_data; }
+    using BasicFrameData<4>::BasicFrameData;
 
     inline u16& width(){ return m_data.u16[0]; }
     inline const u16& width()const{ return m_data.u16[0]; }
@@ -160,9 +150,6 @@ public:
     inline u16& height(){ return m_data.u16[1]; }
     inline const u16& height()const{ return m_data.u16[1]; }
 
-
-protected:
-    FrameParam m_data;
 };
 #if defined(NWB_PLATFORM_WINDOWS)
 #include <windows.h>
@@ -237,4 +224,3 @@ NWB_COMMON_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

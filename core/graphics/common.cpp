@@ -321,32 +321,30 @@ FramebufferInfo::FramebufferInfo(const FramebufferDesc& desc){
     }
 }
 
+static bool ResolveFramebufferAttachmentExtent(const FramebufferAttachment& attachment, u32& outWidth, u32& outHeight, u32& outArraySize){
+    const TextureDesc& textureDesc = attachment.texture->getDescription();
+    TextureSubresourceSet const subresources = attachment.subresources.resolve(textureDesc, true);
+    if(subresources.numMipLevels == 0 || subresources.numArraySlices == 0){
+        outWidth = 0;
+        outHeight = 0;
+        outArraySize = 0;
+        return false;
+    }
+
+    outWidth = Max(textureDesc.width >> subresources.baseMipLevel, static_cast<u32>(1));
+    outHeight = Max(textureDesc.height >> subresources.baseMipLevel, static_cast<u32>(1));
+    outArraySize = subresources.numArraySlices;
+    return true;
+}
+
 FramebufferInfoEx::FramebufferInfoEx(const FramebufferDesc& desc) : FramebufferInfo(desc){
     if(desc.depthAttachment.valid()){
-        const TextureDesc& textureDesc = desc.depthAttachment.texture->getDescription();
-        TextureSubresourceSet const subresources = desc.depthAttachment.subresources.resolve(textureDesc, true);
-        if(subresources.numMipLevels == 0 || subresources.numArraySlices == 0){
-            width = 0;
-            height = 0;
-            arraySize = 0;
+        if(!ResolveFramebufferAttachmentExtent(desc.depthAttachment, width, height, arraySize))
             return;
-        }
-        width = Max(textureDesc.width >> subresources.baseMipLevel, static_cast<u32>(1));
-        height = Max(textureDesc.height >> subresources.baseMipLevel, static_cast<u32>(1));
-        arraySize = subresources.numArraySlices;
     }
     else if(!desc.colorAttachments.empty() && desc.colorAttachments[0].valid()){
-        const TextureDesc& textureDesc = desc.colorAttachments[0].texture->getDescription();
-        TextureSubresourceSet const subresources = desc.colorAttachments[0].subresources.resolve(textureDesc, true);
-        if(subresources.numMipLevels == 0 || subresources.numArraySlices == 0){
-            width = 0;
-            height = 0;
-            arraySize = 0;
+        if(!ResolveFramebufferAttachmentExtent(desc.colorAttachments[0], width, height, arraySize))
             return;
-        }
-        width = Max(textureDesc.width >> subresources.baseMipLevel, static_cast<u32>(1));
-        height = Max(textureDesc.height >> subresources.baseMipLevel, static_cast<u32>(1));
-        arraySize = subresources.numArraySlices;
     }
 }
 

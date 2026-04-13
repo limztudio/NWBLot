@@ -128,7 +128,7 @@ inline CustomArena& DefaultArena(){
 
 
 template<typename T>
-class CustomAllocator{
+class CustomAllocator : public __hidden_alloc::ArenaAllocatorOperations<CustomAllocator<T>, T>{
     template<typename F>
     friend class CustomAllocator;
 
@@ -173,19 +173,6 @@ public:
 public:
     [[nodiscard]] constexpr CustomArena& arena()const noexcept{ return m_arena; }
 
-    constexpr void deallocate(T* const buffer, const usize count)noexcept{
-        NWB_ASSERT_MSG((buffer != nullptr || count == 0), NWB_TEXT("null pointer cannot point to a block of non-zero size"));
-
-        m_arena.deallocate<T>(buffer, count);
-    }
-
-    constexpr NWB_ALLOCATOR_PREFIX T* allocate(const usize count) NWB_ALLOCATOR_SUFFIX{
-        return m_arena.allocate<T>(count);
-    }
-#if _HAS_CXX23
-    constexpr AllocationResult<T*> allocate_at_least(const usize count){ return { allocate(count), count }; }
-#endif
-
 
 private:
     CustomArena& m_arena;
@@ -200,7 +187,7 @@ inline bool operator!=(const CustomAllocator<T>& lhs, const CustomAllocator<F>& 
 
 
 template<typename T>
-class CustomCacheAlignedAllocator{
+class CustomCacheAlignedAllocator : public __hidden_alloc::CacheAlignedArenaAllocatorOperations<CustomCacheAlignedAllocator<T>, T>{
     template<typename F>
     friend class CustomCacheAlignedAllocator;
 
@@ -244,21 +231,6 @@ public:
 
 public:
     [[nodiscard]] constexpr CustomArena& arena()const noexcept{ return m_arena; }
-
-    usize max_size()const noexcept{
-        return __hidden_alloc::MaxCacheAlignedAllocationCount<value_type>();
-    }
-
-    constexpr void deallocate(T* const buffer, const usize count)noexcept{
-        __hidden_alloc::DeallocateCacheAligned(m_arena, buffer, count);
-    }
-
-    constexpr NWB_ALLOCATOR_PREFIX T* allocate(const usize count) NWB_ALLOCATOR_SUFFIX{
-        return __hidden_alloc::AllocateCacheAligned<T>(m_arena, count);
-    }
-#if _HAS_CXX23
-    constexpr AllocationResult<T*> allocate_at_least(const usize count){ return { allocate(count), count }; }
-#endif
 
 
 private:

@@ -83,6 +83,7 @@ private:
     [[nodiscard]] Token readString();
     [[nodiscard]] Token makeToken(TokenType::Enum type, usize length);
     [[nodiscard]] Token makeErrorToken(MStringView message);
+    [[nodiscard]] Token makeErrorToken(MStringView message, u32 line, u32 column);
 
     [[nodiscard]] MChar peek()const;
     [[nodiscard]] MChar peekNext()const;
@@ -109,4 +110,3 @@ NWB_METASCRIPT_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

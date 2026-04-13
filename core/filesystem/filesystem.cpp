@@ -23,6 +23,69 @@ NWB_FILESYSTEM_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+bool RemoveStagedDirectoryIfPresent(const Path& directoryPath, const AStringView operationName, const AStringView label){
+    ErrorCode errorCode;
+
+    if(!RemoveAllIfExists(directoryPath, errorCode)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("{}: failed to remove {} '{}': {}"),
+            StringConvert(operationName),
+            StringConvert(label),
+            PathToString<tchar>(directoryPath),
+            StringConvert(errorCode.message())
+        );
+        return false;
+    }
+
+    return true;
+}
+
+void CleanupStagedDirectoryBestEffort(const Path& directoryPath, const AStringView operationName, const AStringView label){
+    ErrorCode errorCode;
+
+    if(!RemoveAllIfExists(directoryPath, errorCode) && errorCode){
+        NWB_LOGGER_WARNING(
+            NWB_TEXT("{}: failed to remove {} '{}': {}"),
+            StringConvert(operationName),
+            StringConvert(label),
+            PathToString<tchar>(directoryPath),
+            StringConvert(errorCode.message())
+        );
+    }
+}
+
+bool EnsureEmptyStagedDirectory(const Path& directoryPath, const AStringView operationName, const AStringView label){
+    ErrorCode errorCode;
+
+    if(!::EnsureEmptyDirectory(directoryPath, errorCode)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("{}: failed to create {} '{}': {}"),
+            StringConvert(operationName),
+            StringConvert(label),
+            PathToString<tchar>(directoryPath),
+            StringConvert(errorCode.message())
+        );
+        return false;
+    }
+
+    return true;
+}
+
+StagedDirectoryCleanupGuard::StagedDirectoryCleanupGuard(const Path& directoryPath, const AStringView operationName, const AStringView label)
+    : directoryPath(directoryPath)
+    , operationName(operationName)
+    , label(label)
+{}
+
+StagedDirectoryCleanupGuard::~StagedDirectoryCleanupGuard(){
+    if(active)
+        CleanupStagedDirectoryBestEffort(directoryPath, operationName, label);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace __hidden_filesystem{
 
 
@@ -32,6 +95,7 @@ namespace __hidden_filesystem{
 static constexpr u64 s_VolumeDefaultMetadataBytes = 512ull * 1024ull;
 static constexpr u64 s_VolumeMinMetadataBytes = 4ull * 1024ull;
 static constexpr u64 s_VolumeMoveChunkBytes = 1024ull * 1024ull;
+static constexpr AStringView s_VolumePublishLogPrefix = "Filesystem volume publish";
 
 
 template<typename T>
@@ -183,6 +247,184 @@ static void LogFailureWithFsError(AStringView volumeName, AStringView operation,
     );
 }
 
+template<typename SegmentPaths, typename ChunkFunc>
+static bool ForEachSegmentChunk(
+    const AStringView volumeName,
+    const AStringView operation,
+    const SegmentPaths& segmentPaths,
+    const u64 segmentSize,
+    const u64 offset,
+    const u64 byteCount,
+    ChunkFunc&& chunkFunc)
+{
+    if(segmentSize == 0){
+        LogFailure(volumeName, operation, "segment size is zero");
+        return false;
+    }
+
+    u64 endOffset = 0;
+    if(!AddNoOverflow(offset, byteCount, endOffset)){
+        LogFailure(volumeName, operation, "offset overflow");
+        return false;
+    }
+    if(static_cast<u64>(segmentPaths.size()) > Limit<u64>::s_Max / segmentSize){
+        LogFailure(volumeName, operation, "capacity overflow");
+        return false;
+    }
+    const u64 capacityBytes = static_cast<u64>(segmentPaths.size()) * segmentSize;
+    if(endOffset > capacityBytes){
+        NWB_LOGGER_WARNING(
+            NWB_TEXT("Filesystem('{}'): {} failed: range [{}..{}) exceeds capacity {}"),
+            StringConvert(volumeName),
+            StringConvert(operation),
+            offset,
+            endOffset,
+            capacityBytes
+        );
+        return false;
+    }
+
+    u64 currentOffset = offset;
+    u64 remainingBytes = byteCount;
+    while(remainingBytes > 0){
+        const usize segmentIndex = static_cast<usize>(currentOffset / segmentSize);
+        const u64 segmentOffset = currentOffset % segmentSize;
+        const u64 chunkBytes = Min(remainingBytes, segmentSize - segmentOffset);
+
+        std::streamoff streamOffset = 0;
+        std::streamsize streamChunkSize = 0;
+        if(!ToStreamOff(segmentOffset, streamOffset)){
+            LogFailure(volumeName, operation, "segment offset cannot be represented as stream offset");
+            return false;
+        }
+        if(!ToStreamSize(chunkBytes, streamChunkSize)){
+            LogFailure(volumeName, operation, "chunk size cannot be represented as stream size");
+            return false;
+        }
+
+        if(!chunkFunc(segmentIndex, streamOffset, streamChunkSize, chunkBytes))
+            return false;
+
+        currentOffset += chunkBytes;
+        remainingBytes -= chunkBytes;
+    }
+
+    return true;
+}
+
+template<typename SegmentPaths, typename Stream, typename SeekStream, typename TransferStream>
+static bool TransferSegmentChunk(
+    const AStringView volumeName,
+    const SegmentPaths& segmentPaths,
+    const usize segmentIndex,
+    const std::streamoff streamOffset,
+    const AStringView openOperation,
+    const AStringView seekOperation,
+    Stream& stream,
+    SeekStream&& seekStream,
+    TransferStream&& transferStream)
+{
+    if(!stream.is_open()){
+        LogFailureWithPath(volumeName, openOperation, segmentPaths[segmentIndex], LastErrnoMessage());
+        return false;
+    }
+
+    seekStream(stream, streamOffset);
+    if(!stream.good()){
+        LogFailureWithPath(volumeName, seekOperation, segmentPaths[segmentIndex], LastErrnoMessage());
+        return false;
+    }
+
+    return transferStream(stream);
+}
+
+enum class SegmentTransferDirection : u8{
+    Read,
+    Write
+};
+
+template<typename SegmentPaths>
+static bool TransferSegmentBytesImpl(
+    const AStringView volumeName,
+    const SegmentPaths& segmentPaths,
+    const usize segmentIndex,
+    const std::streamoff streamOffset,
+    const std::streamsize streamChunkSize,
+    const u64 chunkBytes,
+    const SegmentTransferDirection direction,
+    u8** outputBytes,
+    const u8** inputBytes)
+{
+    if(direction == SegmentTransferDirection::Read){
+        std::ifstream stream(segmentPaths[segmentIndex], std::ios::binary);
+        return TransferSegmentChunk(volumeName, segmentPaths, segmentIndex, streamOffset, "readBytes:open", "readBytes:seek", stream,
+            [](auto& stream, const std::streamoff offset){ stream.seekg(offset); },
+            [&](auto& stream){
+                stream.read(reinterpret_cast<char*>(*outputBytes), streamChunkSize);
+                if(stream.gcount() != streamChunkSize){
+                    NWB_LOGGER_WARNING(
+                        NWB_TEXT("Filesystem('{}'): readBytes failed on '{}': requested {} bytes, received {} bytes, errno {}"),
+                        StringConvert(volumeName),
+                        StringConvert(segmentPaths[segmentIndex].string()),
+                        static_cast<i64>(streamChunkSize),
+                        static_cast<i64>(stream.gcount()),
+                        StringConvert(LastErrnoMessage())
+                    );
+                    return false;
+                }
+
+                *outputBytes += chunkBytes;
+                return true;
+            });
+    }
+
+    std::fstream stream(segmentPaths[segmentIndex], std::ios::binary | std::ios::in | std::ios::out);
+    return TransferSegmentChunk(volumeName, segmentPaths, segmentIndex, streamOffset, "writeBytes:open", "writeBytes:seek", stream,
+        [](auto& stream, const std::streamoff offset){ stream.seekp(offset); },
+        [&](auto& stream){
+            stream.write(reinterpret_cast<const char*>(*inputBytes), streamChunkSize);
+            if(!stream.good()){
+                NWB_LOGGER_WARNING(
+                    NWB_TEXT("Filesystem('{}'): writeBytes failed on '{}': attempted {} bytes, errno {}"),
+                    StringConvert(volumeName),
+                    StringConvert(segmentPaths[segmentIndex].string()),
+                    static_cast<i64>(streamChunkSize),
+                    StringConvert(LastErrnoMessage())
+                );
+                return false;
+            }
+
+            *inputBytes += chunkBytes;
+            return true;
+        });
+}
+
+template<typename SegmentPaths>
+static bool TransferSegmentBytes(
+    const AStringView volumeName,
+    const SegmentPaths& segmentPaths,
+    const usize segmentIndex,
+    const std::streamoff streamOffset,
+    const std::streamsize streamChunkSize,
+    const u64 chunkBytes,
+    u8*& outputBytes)
+{
+    return TransferSegmentBytesImpl(volumeName, segmentPaths, segmentIndex, streamOffset, streamChunkSize, chunkBytes, SegmentTransferDirection::Read, &outputBytes, nullptr);
+}
+
+template<typename SegmentPaths>
+static bool TransferSegmentBytes(
+    const AStringView volumeName,
+    const SegmentPaths& segmentPaths,
+    const usize segmentIndex,
+    const std::streamoff streamOffset,
+    const std::streamsize streamChunkSize,
+    const u64 chunkBytes,
+    const u8*& inputBytes)
+{
+    return TransferSegmentBytesImpl(volumeName, segmentPaths, segmentIndex, streamOffset, streamChunkSize, chunkBytes, SegmentTransferDirection::Write, nullptr, &inputBytes);
+}
+
 static void* BuildArenaAlloc(usize size){ return NWB::Core::Alloc::CoreAlloc(size, "filesystem_build_volume"); }
 static void BuildArenaFree(void* ptr){ NWB::Core::Alloc::CoreFree(ptr, "filesystem_build_volume"); }
 static void* BuildArenaAllocAligned(usize size, usize align){
@@ -192,69 +434,13 @@ static void BuildArenaFreeAligned(void* ptr){ NWB::Core::Alloc::CoreFreeAligned(
 
 using StagedVolumePaths = StagedDirectoryPaths;
 
-static void RemoveDirectoryIfPresentBestEffort(const Path& directoryPath, const AStringView label);
 static bool RestoreVolumeSegments(const Path& fromDirectory, const Path& toDirectory, const Vector<Path>& fileNames);
-
-struct StageDirectoryCleanupGuard{
-    Path directoryPath;
-    bool active = true;
-
-    ~StageDirectoryCleanupGuard(){
-        if(active)
-            RemoveDirectoryIfPresentBestEffort(directoryPath, "stage directory");
-    }
-};
 
 static StagedVolumePaths BuildStagedVolumePaths(const Path& outputDirectory, const AStringView volumeName){
     AString stageKey = PathToString(outputDirectory);
     stageKey += '|';
     stageKey += volumeName;
     return BuildStagedDirectoryPaths(outputDirectory, StringFormat("volume_{}", FormatHex64(ComputeFnv64Text(stageKey))));
-}
-
-static bool RemoveDirectoryIfPresent(const Path& directoryPath, const AStringView label){
-    ErrorCode errorCode;
-
-    if(!RemoveAllIfExists(directoryPath, errorCode)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Filesystem volume publish: failed to remove {} '{}': {}"),
-            StringConvert(label),
-            PathToString<tchar>(directoryPath),
-            StringConvert(errorCode.message())
-        );
-        return false;
-    }
-
-    return true;
-}
-
-static void RemoveDirectoryIfPresentBestEffort(const Path& directoryPath, const AStringView label){
-    ErrorCode errorCode;
-
-    if(!RemoveAllIfExists(directoryPath, errorCode) && errorCode){
-        NWB_LOGGER_WARNING(
-            NWB_TEXT("Filesystem volume publish: failed to remove {} '{}': {}"),
-            StringConvert(label),
-            PathToString<tchar>(directoryPath),
-            StringConvert(errorCode.message())
-        );
-    }
-}
-
-static bool EnsureEmptyDirectory(const Path& directoryPath, const AStringView label){
-    ErrorCode errorCode;
-
-    if(!::EnsureEmptyDirectory(directoryPath, errorCode)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Filesystem volume publish: failed to create {} '{}': {}"),
-            StringConvert(label),
-            PathToString<tchar>(directoryPath),
-            StringConvert(errorCode.message())
-        );
-        return false;
-    }
-
-    return true;
 }
 
 static bool MoveExistingVolumeSegments(const Path& fromDirectory, const Path& toDirectory, const AStringView volumeName, Vector<Path>& outMovedFileNames){
@@ -271,7 +457,7 @@ static bool MoveExistingVolumeSegments(const Path& fromDirectory, const Path& to
             return;
         }
 
-        RemoveDirectoryIfPresentBestEffort(toDirectory, "backup directory");
+        CleanupStagedDirectoryBestEffort(toDirectory, s_VolumePublishLogPrefix, "backup directory");
         outMovedFileNames.clear();
     };
 
@@ -484,14 +670,14 @@ static bool PromoteStagedVolume(const StagedVolumePaths& stagedPaths, const Path
     if(!MoveStagedVolumeSegments(stagedPaths.stageDirectory, outputDirectory, volumeName, segmentCount, movedStageSegmentCount)){
         RemovePromotedVolumeSegmentsBestEffort(outputDirectory, volumeName, movedStageSegmentCount);
         if(RestoreVolumeSegments(stagedPaths.backupDirectory, outputDirectory, movedBackupFiles)){
-            RemoveDirectoryIfPresentBestEffort(stagedPaths.backupDirectory, "backup directory");
-            RemoveDirectoryIfPresentBestEffort(stagedPaths.stageDirectory, "stage directory");
+            CleanupStagedDirectoryBestEffort(stagedPaths.backupDirectory, s_VolumePublishLogPrefix, "backup directory");
+            CleanupStagedDirectoryBestEffort(stagedPaths.stageDirectory, s_VolumePublishLogPrefix, "stage directory");
         }
         return false;
     }
 
-    RemoveDirectoryIfPresentBestEffort(stagedPaths.backupDirectory, "backup directory");
-    RemoveDirectoryIfPresentBestEffort(stagedPaths.stageDirectory, "stage directory");
+    CleanupStagedDirectoryBestEffort(stagedPaths.backupDirectory, s_VolumePublishLogPrefix, "backup directory");
+    CleanupStagedDirectoryBestEffort(stagedPaths.stageDirectory, s_VolumePublishLogPrefix, "stage directory");
 
     return true;
 }
@@ -604,10 +790,10 @@ bool BuildVolume(const Path& outputDirectory, const VolumeBuildConfig& config, c
     outBuildInfo = {};
 
     const __hidden_filesystem::StagedVolumePaths stagedVolumePaths = __hidden_filesystem::BuildStagedVolumePaths(outputDirectory, config.volumeName);
-    if(!__hidden_filesystem::EnsureEmptyDirectory(stagedVolumePaths.stageDirectory, "stage directory"))
+    if(!EnsureEmptyStagedDirectory(stagedVolumePaths.stageDirectory, __hidden_filesystem::s_VolumePublishLogPrefix, "stage directory"))
         return false;
-    __hidden_filesystem::StageDirectoryCleanupGuard stageDirectoryCleanup{stagedVolumePaths.stageDirectory};
-    if(!__hidden_filesystem::RemoveDirectoryIfPresent(stagedVolumePaths.backupDirectory, "backup directory"))
+    StagedDirectoryCleanupGuard stageDirectoryCleanup(stagedVolumePaths.stageDirectory, __hidden_filesystem::s_VolumePublishLogPrefix);
+    if(!RemoveStagedDirectoryIfPresent(stagedVolumePaths.backupDirectory, __hidden_filesystem::s_VolumePublishLogPrefix, "backup directory"))
         return false;
 
     Alloc::CustomArena arena(
@@ -1699,99 +1885,22 @@ bool VolumeFileSystem::canFitMetadataForFileCountLocked(const u64 fileCount)cons
 bool VolumeFileSystem::readBytesLocked(const u64 offset, void* data, const u64 byteCount)const{
     if(byteCount == 0)
         return true;
-    if(data == nullptr || m_segmentSize == 0){
+    if(data == nullptr){
         __hidden_filesystem::LogFailure(m_volumeName, "readBytes", "invalid arguments");
         return false;
     }
 
-    u64 endOffset = 0;
-    if(!__hidden_filesystem::AddNoOverflow(offset, byteCount, endOffset)){
-        __hidden_filesystem::LogFailure(m_volumeName, "readBytes", "offset overflow");
-        return false;
-    }
-    if(static_cast<u64>(m_segmentPaths.size()) > Limit<u64>::s_Max / m_segmentSize){
-        __hidden_filesystem::LogFailure(m_volumeName, "readBytes", "capacity overflow");
-        return false;
-    }
-    const u64 capacityBytes = static_cast<u64>(m_segmentPaths.size()) * m_segmentSize;
-    if(endOffset > capacityBytes){
-        NWB_LOGGER_WARNING(
-            NWB_TEXT("Filesystem('{}'): readBytes failed: range [{}..{}) exceeds capacity {}"),
-            StringConvert(m_volumeName),
-            offset,
-            endOffset,
-            capacityBytes
-        );
-        return false;
-    }
-
     u8* outputBytes = static_cast<u8*>(data);
-    u64 currentOffset = offset;
-    u64 remainingBytes = byteCount;
-
-    while(remainingBytes > 0){
-        const usize segmentIndex = static_cast<usize>(currentOffset / m_segmentSize);
-        const u64 segmentOffset = currentOffset % m_segmentSize;
-        const u64 chunkBytes = Min(remainingBytes, m_segmentSize - segmentOffset);
-
-        std::ifstream stream(m_segmentPaths[segmentIndex], std::ios::binary);
-        if(!stream.is_open()){
-            __hidden_filesystem::LogFailureWithPath(
-                m_volumeName,
-                "readBytes:open",
-                m_segmentPaths[segmentIndex],
-                __hidden_filesystem::LastErrnoMessage()
-            );
-            return false;
-        }
-
-        std::streamoff streamOffset = 0;
-        std::streamsize streamChunkSize = 0;
-        if(!__hidden_filesystem::ToStreamOff(segmentOffset, streamOffset)){
-            __hidden_filesystem::LogFailure(m_volumeName, "readBytes", "segment offset cannot be represented as stream offset");
-            return false;
-        }
-        if(!__hidden_filesystem::ToStreamSize(chunkBytes, streamChunkSize)){
-            __hidden_filesystem::LogFailure(m_volumeName, "readBytes", "chunk size cannot be represented as stream size");
-            return false;
-        }
-
-        stream.seekg(streamOffset);
-        if(!stream.good()){
-            __hidden_filesystem::LogFailureWithPath(
-                m_volumeName,
-                "readBytes:seek",
-                m_segmentPaths[segmentIndex],
-                __hidden_filesystem::LastErrnoMessage()
-            );
-            return false;
-        }
-
-        stream.read(reinterpret_cast<char*>(outputBytes), streamChunkSize);
-        if(stream.gcount() != streamChunkSize){
-            NWB_LOGGER_WARNING(
-                NWB_TEXT("Filesystem('{}'): readBytes failed on '{}': requested {} bytes, received {} bytes, errno {}"),
-                StringConvert(m_volumeName),
-                StringConvert(m_segmentPaths[segmentIndex].string()),
-                static_cast<i64>(streamChunkSize),
-                static_cast<i64>(stream.gcount()),
-                StringConvert(__hidden_filesystem::LastErrnoMessage())
-            );
-            return false;
-        }
-
-        outputBytes += chunkBytes;
-        currentOffset += chunkBytes;
-        remainingBytes -= chunkBytes;
-    }
-
-    return true;
+    return __hidden_filesystem::ForEachSegmentChunk(m_volumeName, "readBytes", m_segmentPaths, m_segmentSize, offset, byteCount,
+        [&](const usize segmentIndex, const std::streamoff streamOffset, const std::streamsize streamChunkSize, const u64 chunkBytes){
+        return __hidden_filesystem::TransferSegmentBytes(m_volumeName, m_segmentPaths, segmentIndex, streamOffset, streamChunkSize, chunkBytes, outputBytes);
+    });
 }
 
 bool VolumeFileSystem::writeBytesLocked(const u64 offset, const void* data, const u64 byteCount){
     if(byteCount == 0)
         return true;
-    if(data == nullptr || m_segmentSize == 0){
+    if(data == nullptr){
         __hidden_filesystem::LogFailure(m_volumeName, "writeBytes", "invalid arguments");
         return false;
     }
@@ -1807,65 +1916,10 @@ bool VolumeFileSystem::writeBytesLocked(const u64 offset, const void* data, cons
     }
 
     const u8* inputBytes = static_cast<const u8*>(data);
-    u64 currentOffset = offset;
-    u64 remainingBytes = byteCount;
-
-    while(remainingBytes > 0){
-        const usize segmentIndex = static_cast<usize>(currentOffset / m_segmentSize);
-        const u64 segmentOffset = currentOffset % m_segmentSize;
-        const u64 chunkBytes = Min(remainingBytes, m_segmentSize - segmentOffset);
-
-        std::fstream stream(m_segmentPaths[segmentIndex], std::ios::binary | std::ios::in | std::ios::out);
-        if(!stream.is_open()){
-            __hidden_filesystem::LogFailureWithPath(
-                m_volumeName,
-                "writeBytes:open",
-                m_segmentPaths[segmentIndex],
-                __hidden_filesystem::LastErrnoMessage()
-            );
-            return false;
-        }
-
-        std::streamoff streamOffset = 0;
-        std::streamsize streamChunkSize = 0;
-        if(!__hidden_filesystem::ToStreamOff(segmentOffset, streamOffset)){
-            __hidden_filesystem::LogFailure(m_volumeName, "writeBytes", "segment offset cannot be represented as stream offset");
-            return false;
-        }
-        if(!__hidden_filesystem::ToStreamSize(chunkBytes, streamChunkSize)){
-            __hidden_filesystem::LogFailure(m_volumeName, "writeBytes", "chunk size cannot be represented as stream size");
-            return false;
-        }
-
-        stream.seekp(streamOffset);
-        if(!stream.good()){
-            __hidden_filesystem::LogFailureWithPath(
-                m_volumeName,
-                "writeBytes:seek",
-                m_segmentPaths[segmentIndex],
-                __hidden_filesystem::LastErrnoMessage()
-            );
-            return false;
-        }
-
-        stream.write(reinterpret_cast<const char*>(inputBytes), streamChunkSize);
-        if(!stream.good()){
-            NWB_LOGGER_WARNING(
-                NWB_TEXT("Filesystem('{}'): writeBytes failed on '{}': attempted {} bytes, errno {}"),
-                StringConvert(m_volumeName),
-                StringConvert(m_segmentPaths[segmentIndex].string()),
-                static_cast<i64>(streamChunkSize),
-                StringConvert(__hidden_filesystem::LastErrnoMessage())
-            );
-            return false;
-        }
-
-        inputBytes += chunkBytes;
-        currentOffset += chunkBytes;
-        remainingBytes -= chunkBytes;
-    }
-
-    return true;
+    return __hidden_filesystem::ForEachSegmentChunk(m_volumeName, "writeBytes", m_segmentPaths, m_segmentSize, offset, byteCount,
+        [&](const usize segmentIndex, const std::streamoff streamOffset, const std::streamsize streamChunkSize, const u64 chunkBytes){
+        return __hidden_filesystem::TransferSegmentBytes(m_volumeName, m_segmentPaths, segmentIndex, streamOffset, streamChunkSize, chunkBytes, inputBytes);
+    });
 }
 
 bool VolumeFileSystem::moveBytesLocked(const u64 destinationOffset, const u64 sourceOffset, const u64 byteCount){

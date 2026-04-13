@@ -254,14 +254,17 @@ namespace __hidden_asset_paths{
     ErrorCode errorCode;
     Path matchedSourcePath;
     usize matchCount = 0;
+    const auto logDirectoryScanError = [&](){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Meta '{}': failed to scan metadata directory '{}': {}"),
+            PathToString<tchar>(nwbFilePath),
+            PathToString<tchar>(parentDirectory),
+            StringConvert(errorCode.message())
+        );
+    };
     for(const auto& dirEntry : DirectoryIterator(parentDirectory, errorCode)){
         if(errorCode){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Meta '{}': failed to scan metadata directory '{}': {}"),
-                PathToString<tchar>(nwbFilePath),
-                PathToString<tchar>(parentDirectory),
-                StringConvert(errorCode.message())
-            );
+            logDirectoryScanError();
             return false;
         }
 
@@ -298,12 +301,7 @@ namespace __hidden_asset_paths{
     }
 
     if(errorCode){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Meta '{}': failed to scan metadata directory '{}': {}"),
-            PathToString<tchar>(nwbFilePath),
-            PathToString<tchar>(parentDirectory),
-            StringConvert(errorCode.message())
-        );
+        logDirectoryScanError();
         return false;
     }
 

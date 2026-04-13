@@ -16,6 +16,48 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_vulkan_allocator{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline void ChainDedicatedAllocation(
+    const VkDeviceSize allocationSize,
+    const VkBuffer buffer,
+    const VkImage image,
+    VkMemoryDedicatedAllocateInfo& outDedicatedInfo,
+    void*& inOutPNext)
+{
+    if(allocationSize < s_LargeBufferThreshold)
+        return;
+
+    outDedicatedInfo.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO;
+    outDedicatedInfo.buffer = buffer;
+    outDedicatedInfo.image = image;
+    outDedicatedInfo.pNext = inOutPNext;
+    inOutPNext = &outDedicatedInfo;
+}
+
+inline VkMemoryAllocateInfo BuildMemoryAllocateInfo(const VkDeviceSize allocationSize, const u32 memoryTypeIndex, void* pNext){
+    VkMemoryAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocInfo.allocationSize = allocationSize;
+    allocInfo.memoryTypeIndex = memoryTypeIndex;
+    allocInfo.pNext = pNext;
+    return allocInfo;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 VulkanAllocator::VulkanAllocator(const VulkanContext& context)
     : m_context(context)
 {}
@@ -69,19 +111,9 @@ VkResult VulkanAllocator::allocateBufferMemory(Buffer* buffer, bool enableDevice
 
     // Use dedicated allocation for large buffers (improves performance)
     VkMemoryDedicatedAllocateInfo dedicatedInfo{};
-    if(memRequirements.size >= s_LargeBufferThreshold){
-        dedicatedInfo.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO;
-        dedicatedInfo.buffer = buffer->m_buffer;
-        dedicatedInfo.image = VK_NULL_HANDLE;
-        dedicatedInfo.pNext = pNext;
-        pNext = &dedicatedInfo;
-    }
+    __hidden_vulkan_allocator::ChainDedicatedAllocation(memRequirements.size, buffer->m_buffer, VK_NULL_HANDLE, dedicatedInfo, pNext);
 
-    VkMemoryAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    allocInfo.allocationSize = memRequirements.size;
-    allocInfo.memoryTypeIndex = memoryTypeIndex;
-    allocInfo.pNext = pNext;
+    const VkMemoryAllocateInfo allocInfo = __hidden_vulkan_allocator::BuildMemoryAllocateInfo(memRequirements.size, memoryTypeIndex, pNext);
 
     res = vkAllocateMemory(m_context.device, &allocInfo, m_context.allocationCallbacks, &buffer->m_memory);
     if(res != VK_SUCCESS)
@@ -124,19 +156,9 @@ VkResult VulkanAllocator::allocateTextureMemory(Texture* texture){
 
     // Dedicated texture allocations can help very large resources, but are expensive for small textures.
     VkMemoryDedicatedAllocateInfo dedicatedInfo{};
-    if(memRequirements.size >= s_LargeBufferThreshold){
-        dedicatedInfo.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO;
-        dedicatedInfo.image = texture->m_image;
-        dedicatedInfo.buffer = VK_NULL_HANDLE;
-        dedicatedInfo.pNext = pNext;
-        pNext = &dedicatedInfo;
-    }
+    __hidden_vulkan_allocator::ChainDedicatedAllocation(memRequirements.size, VK_NULL_HANDLE, texture->m_image, dedicatedInfo, pNext);
 
-    VkMemoryAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    allocInfo.allocationSize = memRequirements.size;
-    allocInfo.memoryTypeIndex = memoryTypeIndex;
-    allocInfo.pNext = pNext;
+    const VkMemoryAllocateInfo allocInfo = __hidden_vulkan_allocator::BuildMemoryAllocateInfo(memRequirements.size, memoryTypeIndex, pNext);
 
     res = vkAllocateMemory(m_context.device, &allocInfo, m_context.allocationCallbacks, &texture->m_memory);
     if(res != VK_SUCCESS)

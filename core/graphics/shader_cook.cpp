@@ -222,6 +222,14 @@ static bool ValidateDefaultVariant(const AStringView contextLabel, const AString
 
     HashSet<AString, Hasher<AString>, EqualTo<AString>, Alloc::ScratchAllocator<AString>> seenDefines{Alloc::ScratchAllocator<AString>(scratchArena)};
     usize begin = 0;
+    const auto logInvalidAssignment = [&](const AString& segment){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Meta '{}': default variant '{}' has invalid assignment '{}'"),
+            StringConvert(contextLabel),
+            StringConvert(defaultVariant),
+            StringConvert(segment)
+        );
+    };
     while(begin < defaultVariant.size()){
         usize segmentEnd = defaultVariant.find(';', begin);
         if(segmentEnd == AString::npos)
@@ -239,24 +247,14 @@ static bool ValidateDefaultVariant(const AStringView contextLabel, const AString
 
         const usize equalPos = segment.find('=');
         if(equalPos == AString::npos || equalPos == 0 || equalPos + 1 >= segment.size()){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Meta '{}': default variant '{}' has invalid assignment '{}'"),
-                StringConvert(contextLabel),
-                StringConvert(defaultVariant),
-                StringConvert(segment)
-            );
+            logInvalidAssignment(segment);
             return false;
         }
 
         const AString defineName = Trim(AStringView(segment).substr(0, equalPos));
         const AString defineValue = Trim(AStringView(segment).substr(equalPos + 1));
         if(defineName.empty() || defineValue.empty()){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Meta '{}': default variant '{}' has invalid assignment '{}'"),
-                StringConvert(contextLabel),
-                StringConvert(defaultVariant),
-                StringConvert(segment)
-            );
+            logInvalidAssignment(segment);
             return false;
         }
 
@@ -322,18 +320,6 @@ static bool ValidateDefaultVariant(const AStringView contextLabel, const AString
 // .nwb metadata parsing helpers
 
 
-static bool RejectVirtualPathOverrideField(const Path& nwbFilePath, const Metascript::Value& asset, const AStringView assetLabel){
-    if(!asset.findField("name"))
-        return true;
-
-    NWB_LOGGER_ERROR(
-        NWB_TEXT("{} meta '{}': field 'name' is no longer supported; virtual paths are derived from the asset file hierarchy"),
-        StringConvert(assetLabel),
-        PathToString<tchar>(nwbFilePath)
-    );
-    return false;
-}
-
 static bool ParseNwbDocument(const Path& nwbFilePath, Metascript::Document& outDoc){
     AString metaText;
     if(!ReadTextFile(nwbFilePath, metaText)){
@@ -386,17 +372,17 @@ static bool ParseDefaultVariant(const Path& nwbFilePath, const Metascript::Value
     return true;
 }
 
-static bool ParseStringField(
+static bool FindOptionalStringField(
     const Path& nwbFilePath,
     const Metascript::Value& asset,
     const AStringView fieldName,
-    AString& outValue,
-    const bool canonicalize
+    const Metascript::Value*& outFieldValue
 ){
-    const auto* fieldValue = asset.findField(fieldName);
-    if(!fieldValue)
+    outFieldValue = asset.findField(fieldName);
+    if(!outFieldValue)
         return true;
-    if(!fieldValue->isString()){
+
+    if(!outFieldValue->isString()){
         NWB_LOGGER_ERROR(
             NWB_TEXT("Meta '{}': field '{}' must be a string"),
             PathToString<tchar>(nwbFilePath),
@@ -404,6 +390,22 @@ static bool ParseStringField(
         );
         return false;
     }
+
+    return true;
+}
+
+static bool ParseStringField(
+    const Path& nwbFilePath,
+    const Metascript::Value& asset,
+    const AStringView fieldName,
+    AString& outValue,
+    const bool canonicalize
+){
+    const Metascript::Value* fieldValue = nullptr;
+    if(!FindOptionalStringField(nwbFilePath, asset, fieldName, fieldValue))
+        return false;
+    if(!fieldValue)
+        return true;
 
     outValue = fieldValue->copyString();
     if(canonicalize)
@@ -418,17 +420,11 @@ static bool ParseCompactStringField(
     CompactString& outValue
 )
 {
-    const auto* fieldValue = asset.findField(fieldName);
+    const Metascript::Value* fieldValue = nullptr;
+    if(!FindOptionalStringField(nwbFilePath, asset, fieldName, fieldValue))
+        return false;
     if(!fieldValue)
         return true;
-    if(!fieldValue->isString()){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Meta '{}': field '{}' must be a string"),
-            PathToString<tchar>(nwbFilePath),
-            StringConvert(fieldName)
-        );
-        return false;
-    }
 
     const AStringView fieldText(fieldValue->asString().data(), fieldValue->asString().size());
     if(!outValue.assign(fieldText)){
@@ -520,6 +516,18 @@ bool ShaderCook::parseDocument(const Path& nwbFilePath, Metascript::Document& ou
     return __hidden_shader_cook::ParseNwbDocument(nwbFilePath, outDoc);
 }
 
+bool ShaderCook::rejectVirtualPathOverrideField(const Path& nwbFilePath, const Metascript::Value& asset, const AStringView assetLabel){
+    if(!asset.findField("name"))
+        return true;
+
+    NWB_LOGGER_ERROR(
+        NWB_TEXT("{} meta '{}': field 'name' is no longer supported; virtual paths are derived from the asset file hierarchy"),
+        StringConvert(assetLabel),
+        PathToString<tchar>(nwbFilePath)
+    );
+    return false;
+}
+
 bool ShaderCook::validateDefaultVariant(const AStringView contextLabel, const AStringView defaultVariant, const CookMap<AString, DefineEntry>& defineValues){
     Alloc::ScratchArena<> validationArena;
     return __hidden_shader_cook::ValidateDefaultVariant(contextLabel, defaultVariant, defineValues, validationArena);
@@ -540,7 +548,7 @@ bool ShaderCook::parseShaderMeta(const Path& nwbFilePath, const Metascript::Docu
     if(!Assets::ResolvePairedSourcePathFromMetadata(nwbFilePath, outEntry.source))
         return false;
 
-    if(!__hidden_shader_cook::RejectVirtualPathOverrideField(nwbFilePath, asset, "Shader"))
+    if(!rejectVirtualPathOverrideField(nwbFilePath, asset, "Shader"))
         return false;
     if(!__hidden_shader_cook::ParseCompactStringField(nwbFilePath, asset, "compiler", outEntry.compiler))
         return false;

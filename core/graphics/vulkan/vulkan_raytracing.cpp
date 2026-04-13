@@ -865,12 +865,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
         NWB_TEXT("ray tracing pipeline"),
         stages,
         descriptorHeapScratch,
-        pso->m_pipelineLayout,
-        pso->m_ownsPipelineLayout,
-        pso->m_usesDescriptorHeap,
-        pso->m_descriptorHeapPushRanges,
-        pso->m_descriptorHeapPushDataSize,
-        pso->m_pushConstantByteSize,
+        *pso,
         scratchArena))
     {
         DestroyArenaObject(m_context.objectArena, pso);
@@ -977,6 +972,79 @@ u32 ShaderTable::findGroupIndex(const Name& exportName)const{
     return UINT32_MAX;
 }
 
+u32 ShaderTable::appendShaderRecord(
+    const Name& exportName,
+    BufferHandle& buffer,
+    u64& offset,
+    u32& count,
+    const tchar* operationName,
+    const tchar* recordName,
+    const tchar* exportKind
+){
+    if(count == Limit<u32>::s_Max){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: shader table record count exceeds u32 range"), operationName);
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to add shader table record: record count exceeds u32 range"));
+        return count;
+    }
+    if(!m_pipeline)
+        return count++;
+
+    u32 handleSize = 0;
+    u32 handleSizeAligned = 0;
+    u32 baseAlignment = 0;
+    if(!__hidden_vulkan::ComputeRayTracingHandleLayout(m_context, handleSize, handleSizeAligned, baseAlignment, operationName))
+        return count;
+
+    const u32 newCount = count + 1;
+    u64 sbtSize = 0;
+    if(!__hidden_vulkan::ComputeShaderTableByteSize(newCount, handleSizeAligned, baseAlignment, sbtSize, operationName))
+        return count;
+
+    BufferHandle newBuffer;
+    allocateSBTBuffer(newBuffer, sbtSize);
+    if(!newBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate {} SBT buffer"), recordName);
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to allocate shader table buffer"));
+        return count;
+    }
+
+    void* mapped = m_device.mapBuffer(newBuffer.get(), CpuAccessMode::Write);
+    if(!mapped){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map {} SBT buffer"), recordName);
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to map shader table buffer"));
+        return count;
+    }
+
+    if(buffer && count > 0){
+        void* oldMapped = m_device.mapBuffer(buffer.get(), CpuAccessMode::Read);
+        if(!oldMapped){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map previous {} SBT buffer"), recordName);
+            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to map previous shader table buffer"));
+            m_device.unmapBuffer(newBuffer.get());
+            return count;
+        }
+        const usize copySize = static_cast<usize>(count) * handleSizeAligned;
+        __hidden_vulkan::CopyHostMemory(taskPool(), mapped, oldMapped, copySize);
+        m_device.unmapBuffer(buffer.get());
+    }
+
+    const u32 groupIndex = findGroupIndex(exportName);
+    if(groupIndex == UINT32_MAX){
+        m_device.unmapBuffer(newBuffer.get());
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: {} export not found in pipeline"), exportKind);
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Shader table export not found in pipeline"));
+        return count;
+    }
+
+    auto* dst = static_cast<u8*>(mapped) + count * handleSizeAligned;
+    NWB_MEMCPY(dst, handleSizeAligned, m_pipeline->m_shaderGroupHandles.data() + groupIndex * handleSizeAligned, handleSize);
+    m_device.unmapBuffer(newBuffer.get());
+
+    buffer = newBuffer;
+    offset = 0;
+    return count++;
+}
+
 void ShaderTable::allocateSBTBuffer(BufferHandle& outBuffer, u64 sbtSize){
     BufferDesc bufferDesc;
     bufferDesc.byteSize = sbtSize;
@@ -1029,198 +1097,15 @@ void ShaderTable::setRayGenerationShader(const Name& exportName, IBindingSet* /*
 }
 
 u32 ShaderTable::addMissShader(const Name& exportName, IBindingSet* /*bindings*/){
-    if(m_missCount == Limit<u32>::s_Max){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to add miss shader: shader table record count exceeds u32 range"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to add miss shader: shader table record count exceeds u32 range"));
-        return m_missCount;
-    }
-    if(!m_pipeline)
-        return m_missCount++;
-
-    u32 handleSize = 0;
-    u32 handleSizeAligned = 0;
-    u32 baseAlignment = 0;
-    if(!__hidden_vulkan::ComputeRayTracingHandleLayout(m_context, handleSize, handleSizeAligned, baseAlignment, NWB_TEXT("add miss shader")))
-        return m_missCount;
-
-    u32 newCount = m_missCount + 1;
-    u64 sbtSize = 0;
-    if(!__hidden_vulkan::ComputeShaderTableByteSize(newCount, handleSizeAligned, baseAlignment, sbtSize, NWB_TEXT("add miss shader")))
-        return m_missCount;
-
-    BufferHandle newBuffer;
-    allocateSBTBuffer(newBuffer, sbtSize);
-    if(!newBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate miss SBT buffer"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to allocate miss SBT buffer"));
-        return m_missCount;
-    }
-
-    void* mapped = m_device.mapBuffer(newBuffer.get(), CpuAccessMode::Write);
-    if(!mapped){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map miss SBT buffer"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to map miss SBT buffer"));
-        return m_missCount;
-    }
-
-    if(m_missBuffer && m_missCount > 0){
-        void* oldMapped = m_device.mapBuffer(m_missBuffer.get(), CpuAccessMode::Read);
-        if(!oldMapped){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map previous miss SBT buffer"));
-            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to map previous miss SBT buffer"));
-            m_device.unmapBuffer(newBuffer.get());
-            return m_missCount;
-        }
-        const usize copySize = static_cast<usize>(m_missCount) * handleSizeAligned;
-        __hidden_vulkan::CopyHostMemory(taskPool(), mapped, oldMapped, copySize);
-        m_device.unmapBuffer(m_missBuffer.get());
-    }
-
-    u32 groupIndex = findGroupIndex(exportName);
-    if(groupIndex == UINT32_MAX){
-        m_device.unmapBuffer(newBuffer.get());
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Miss shader export not found in pipeline"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Miss shader export not found in pipeline"));
-        return m_missCount;
-    }
-
-    auto* dst = static_cast<u8*>(mapped) + m_missCount * handleSizeAligned;
-    NWB_MEMCPY(dst, handleSizeAligned, m_pipeline->m_shaderGroupHandles.data() + groupIndex * handleSizeAligned, handleSize);
-    m_device.unmapBuffer(newBuffer.get());
-
-    m_missBuffer = newBuffer;
-    m_missOffset = 0;
-    return m_missCount++;
+    return appendShaderRecord(exportName, m_missBuffer, m_missOffset, m_missCount, NWB_TEXT("add miss shader"), NWB_TEXT("miss"), NWB_TEXT("Miss shader"));
 }
 
 u32 ShaderTable::addHitGroup(const Name& exportName, IBindingSet* /*bindings*/){
-    if(m_hitCount == Limit<u32>::s_Max){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to add hit group: shader table record count exceeds u32 range"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to add hit group: shader table record count exceeds u32 range"));
-        return m_hitCount;
-    }
-    if(!m_pipeline)
-        return m_hitCount++;
-
-    u32 handleSize = 0;
-    u32 handleSizeAligned = 0;
-    u32 baseAlignment = 0;
-    if(!__hidden_vulkan::ComputeRayTracingHandleLayout(m_context, handleSize, handleSizeAligned, baseAlignment, NWB_TEXT("add hit group")))
-        return m_hitCount;
-
-    u32 newCount = m_hitCount + 1;
-    u64 sbtSize = 0;
-    if(!__hidden_vulkan::ComputeShaderTableByteSize(newCount, handleSizeAligned, baseAlignment, sbtSize, NWB_TEXT("add hit group")))
-        return m_hitCount;
-
-    BufferHandle newBuffer;
-    allocateSBTBuffer(newBuffer, sbtSize);
-    if(!newBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate hit SBT buffer"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to allocate hit SBT buffer"));
-        return m_hitCount;
-    }
-
-    void* mapped = m_device.mapBuffer(newBuffer.get(), CpuAccessMode::Write);
-    if(!mapped){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map hit SBT buffer"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to map hit SBT buffer"));
-        return m_hitCount;
-    }
-
-    if(m_hitBuffer && m_hitCount > 0){
-        void* oldMapped = m_device.mapBuffer(m_hitBuffer.get(), CpuAccessMode::Read);
-        if(!oldMapped){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map previous hit SBT buffer"));
-            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to map previous hit SBT buffer"));
-            m_device.unmapBuffer(newBuffer.get());
-            return m_hitCount;
-        }
-        const usize copySize = static_cast<usize>(m_hitCount) * handleSizeAligned;
-        __hidden_vulkan::CopyHostMemory(taskPool(), mapped, oldMapped, copySize);
-        m_device.unmapBuffer(m_hitBuffer.get());
-    }
-
-    u32 groupIndex = findGroupIndex(exportName);
-    if(groupIndex == UINT32_MAX){
-        m_device.unmapBuffer(newBuffer.get());
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Hit group export not found in pipeline"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Hit group export not found in pipeline"));
-        return m_hitCount;
-    }
-
-    auto* dst = static_cast<u8*>(mapped) + m_hitCount * handleSizeAligned;
-    NWB_MEMCPY(dst, handleSizeAligned, m_pipeline->m_shaderGroupHandles.data() + groupIndex * handleSizeAligned, handleSize);
-    m_device.unmapBuffer(newBuffer.get());
-
-    m_hitBuffer = newBuffer;
-    m_hitOffset = 0;
-    return m_hitCount++;
+    return appendShaderRecord(exportName, m_hitBuffer, m_hitOffset, m_hitCount, NWB_TEXT("add hit group"), NWB_TEXT("hit"), NWB_TEXT("Hit group"));
 }
 
 u32 ShaderTable::addCallableShader(const Name& exportName, IBindingSet* /*bindings*/){
-    if(m_callableCount == Limit<u32>::s_Max){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to add callable shader: shader table record count exceeds u32 range"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to add callable shader: shader table record count exceeds u32 range"));
-        return m_callableCount;
-    }
-    if(!m_pipeline)
-        return m_callableCount++;
-
-    u32 handleSize = 0;
-    u32 handleSizeAligned = 0;
-    u32 baseAlignment = 0;
-    if(!__hidden_vulkan::ComputeRayTracingHandleLayout(m_context, handleSize, handleSizeAligned, baseAlignment, NWB_TEXT("add callable shader")))
-        return m_callableCount;
-
-    u32 newCount = m_callableCount + 1;
-    u64 sbtSize = 0;
-    if(!__hidden_vulkan::ComputeShaderTableByteSize(newCount, handleSizeAligned, baseAlignment, sbtSize, NWB_TEXT("add callable shader")))
-        return m_callableCount;
-
-    BufferHandle newBuffer;
-    allocateSBTBuffer(newBuffer, sbtSize);
-    if(!newBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate callable SBT buffer"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to allocate callable SBT buffer"));
-        return m_callableCount;
-    }
-
-    void* mapped = m_device.mapBuffer(newBuffer.get(), CpuAccessMode::Write);
-    if(!mapped){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map callable SBT buffer"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to map callable SBT buffer"));
-        return m_callableCount;
-    }
-
-    if(m_callableBuffer && m_callableCount > 0){
-        void* oldMapped = m_device.mapBuffer(m_callableBuffer.get(), CpuAccessMode::Read);
-        if(!oldMapped){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map previous callable SBT buffer"));
-            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to map previous callable SBT buffer"));
-            m_device.unmapBuffer(newBuffer.get());
-            return m_callableCount;
-        }
-        const usize copySize = static_cast<usize>(m_callableCount) * handleSizeAligned;
-        __hidden_vulkan::CopyHostMemory(taskPool(), mapped, oldMapped, copySize);
-        m_device.unmapBuffer(m_callableBuffer.get());
-    }
-
-    u32 groupIndex = findGroupIndex(exportName);
-    if(groupIndex == UINT32_MAX){
-        m_device.unmapBuffer(newBuffer.get());
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Callable shader export not found in pipeline"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Callable shader export not found in pipeline"));
-        return m_callableCount;
-    }
-
-    auto* dst = static_cast<u8*>(mapped) + m_callableCount * handleSizeAligned;
-    NWB_MEMCPY(dst, handleSizeAligned, m_pipeline->m_shaderGroupHandles.data() + groupIndex * handleSizeAligned, handleSize);
-    m_device.unmapBuffer(newBuffer.get());
-
-    m_callableBuffer = newBuffer;
-    m_callableOffset = 0;
-    return m_callableCount++;
+    return appendShaderRecord(exportName, m_callableBuffer, m_callableOffset, m_callableCount, NWB_TEXT("add callable shader"), NWB_TEXT("callable"), NWB_TEXT("Callable shader"));
 }
 
 void ShaderTable::clearMissShaders(){ m_missCount = 0; m_missBuffer = nullptr; }
@@ -1617,41 +1502,11 @@ void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* _as, const Ra
 
     m_device.unmapBuffer(instanceBuffer.get());
 
-    VkAccelerationStructureGeometryKHR geometry = __hidden_vulkan::MakeVkStruct<VkAccelerationStructureGeometryKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR);
-    geometry.geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR;
-    geometry.geometry.instances.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
-    geometry.geometry.instances.arrayOfPointers = VK_FALSE;
-    geometry.geometry.instances.data.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(instanceBuffer.get());
-
-    VkAccelerationStructureBuildGeometryInfoKHR buildInfo = __hidden_vulkan::MakeVkStruct<VkAccelerationStructureBuildGeometryInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR);
-    buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
-    buildInfo.flags = __hidden_vulkan::ConvertAccelStructBuildFlags(buildFlags, false);
-    buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
-    buildInfo.dstAccelerationStructure = as->m_accelStruct;
-    buildInfo.geometryCount = 1;
-    buildInfo.pGeometries = &geometry;
-
-    auto primitiveCount = static_cast<uint32_t>(numInstances);
-    VkAccelerationStructureBuildSizesInfoKHR sizeInfo = __hidden_vulkan::MakeVkStruct<VkAccelerationStructureBuildSizesInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR);
-    vkGetAccelerationStructureBuildSizesKHR(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &primitiveCount, &sizeInfo);
-
-    auto* asBuffer = checked_cast<Buffer*>(as->m_buffer.get());
-    if(!asBuffer || asBuffer->m_desc.byteSize < sizeInfo.accelerationStructureSize){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS: acceleration structure storage is too small"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to build TLAS: acceleration structure storage is too small"));
+    const VkDeviceAddress instanceDataAddress = __hidden_vulkan::GetBufferDeviceAddress(instanceBuffer.get());
+    if(!buildTopLevelAccelStructFromInstanceData(_as, as, instanceDataAddress, numInstances, buildFlags, NWB_TEXT("build TLAS")))
         return;
-    }
-
-    if(!attachAccelStructBuildScratchBuffer(buildInfo, sizeInfo.buildScratchSize, "TLAS_BuildScratch", NWB_TEXT("allocate TLAS scratch buffer")))
-        return;
-
-    VkAccelerationStructureBuildRangeInfoKHR rangeInfo = {};
-    rangeInfo.primitiveCount = primitiveCount;
-    const VkAccelerationStructureBuildRangeInfoKHR* pRangeInfo = &rangeInfo;
-    vkCmdBuildAccelerationStructuresKHR(m_currentCmdBuf->m_cmdBuf, 1, &buildInfo, &pRangeInfo);
 
     m_currentCmdBuf->m_referencedStagingBuffers.push_back(Move(instanceBuffer));
-    m_currentCmdBuf->m_referencedResources.push_back(_as);
 }
 
 void CommandList::buildOpacityMicromap(IRayTracingOpacityMicromap* _omm, const RayTracingOpacityMicromapDesc& ommDesc){

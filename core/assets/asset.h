@@ -23,6 +23,17 @@ using AssetBytes = Vector<u8>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#define NWB_DEFINE_ASSET_TYPE(assetTypeLiteral) \
+    static constexpr AStringView s_AssetTypeText = assetTypeLiteral; \
+    [[nodiscard]] static const Name& AssetTypeName(){ \
+        static const Name s_AssetType(s_AssetTypeText.data()); \
+        return s_AssetType; \
+    }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class IAsset{
 protected:
     IAsset() = delete;
@@ -44,6 +55,17 @@ public:
 private:
     Name m_assetType = NAME_NONE;
     Name m_virtualPath = NAME_NONE;
+};
+
+template<typename AssetT>
+class TypedAsset : public IAsset{
+protected:
+    TypedAsset()
+        : IAsset(AssetT::AssetTypeName())
+    {}
+    explicit TypedAsset(const Name& virtualPath)
+        : IAsset(AssetT::AssetTypeName(), virtualPath)
+    {}
 };
 
 
@@ -79,9 +101,16 @@ private:
     Name m_assetType = NAME_NONE;
 };
 
+template<typename AssetT>
+class TypedAssetCodec : public IAssetCodec{
+protected:
+    TypedAssetCodec()
+        : IAssetCodec(AssetT::AssetTypeName())
+    {}
+};
+
 
 NWB_ASSETS_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

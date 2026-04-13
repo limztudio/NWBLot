@@ -21,6 +21,7 @@
 
 
 #include <windows.h>
+#include <global/win32_message_loop.h>
 
 #include "frame.h"
 
@@ -77,6 +78,21 @@ static LRESULT CALLBACK ListProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 
 static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
     if(auto* _this = g_Frame){
+        LRESULT lifecycleResult = 0;
+        if(HandleWin32FrameLifecycleMessage(
+            hwnd,
+            uMsg,
+            wParam,
+            [](){
+                if(g_Font){
+                    DeleteObject(g_Font);
+                    g_Font = nullptr;
+                }
+            },
+            [&](const bool isActive){ _this->data<WinFrame>().isActive() = isActive; },
+            lifecycleResult))
+            return lifecycleResult;
+
         switch(uMsg){
         case WM_CREATE:
         {
@@ -115,34 +131,6 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
             else{
                 SendMessage(g_ListHwnd, WM_SETFONT, reinterpret_cast<WPARAM>(g_Font), TRUE);
                 g_OrigListProc = reinterpret_cast<WNDPROC>(SetWindowLongPtr(g_ListHwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(ListProc)));
-            }
-        }
-        return 0;
-
-        case WM_DESTROY:
-        {
-            if(g_Font){
-                DeleteObject(g_Font);
-                g_Font = nullptr;
-            }
-            PostQuitMessage(0);
-        }
-        return 0;
-        case WM_CLOSE:
-        {
-            DestroyWindow(hwnd);
-        }
-        return 0;
-
-        case WM_ACTIVATE:
-        {
-            switch(LOWORD(wParam)){
-            case WA_INACTIVE:
-                _this->data<WinFrame>().isActive() = false;
-                break;
-            default:
-                _this->data<WinFrame>().isActive() = true;
-                break;
             }
         }
         return 0;
@@ -388,33 +376,20 @@ bool Frame::showFrame(){
     return true;
 }
 bool Frame::mainLoop(){
-    MSG message = {};
-
     Timer lateTime(TimerNow());
 
     for(;;){
-        if(data<__hidden_frame::WinFrame>().isActive()){
-            while(PeekMessage(&message, nullptr, 0, 0, PM_REMOVE)){
-                if(message.message == WM_QUIT)
-                    return true;
-
-                TranslateMessage(&message);
-                DispatchMessage(&message);
-            }
-        }
-        else{
-            if(GetMessage(&message, nullptr, 0, 0) <= 0)
-                return true;
-
-            TranslateMessage(&message);
-            DispatchMessage(&message);
+        switch(PumpWin32FrameMessages([&](){ return data<__hidden_frame::WinFrame>().isActive(); })){
+        case Win32MessagePumpResult::Quit:
+            return true;
+        case Win32MessagePumpResult::SkipUpdate:
             continue;
+        case Win32MessagePumpResult::Continue:
+            break;
         }
 
         {
-            Timer currentTime(TimerNow());
-            auto timeDifference = DurationInSeconds<f32>(currentTime, lateTime);
-            lateTime = currentTime;
+            const f32 timeDifference = ConsumeTimerDeltaSeconds<f32>(lateTime);
 
             if(!update(timeDifference))
                 break;

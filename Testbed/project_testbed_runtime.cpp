@@ -43,26 +43,22 @@ ProjectTestbed::~ProjectTestbed(){
 bool ProjectTestbed::onStartup(){
     (void)m_rendererSystem;
 
-    const NWB::Core::Assets::AssetRef<NWB::Impl::Geometry> cubeGeometry(Name("project/meshes/cube"));
-    const NWB::Core::Assets::AssetRef<NWB::Impl::Geometry> sphereGeometry(Name("project/meshes/sphere"));
-    const NWB::Core::Assets::AssetRef<NWB::Impl::Geometry> tetrahedronGeometry(Name("project/meshes/tetrahedron"));
-    const NWB::Core::Assets::AssetRef<NWB::Impl::Material> cubeMaterial(Name("project/materials/mat_test"));
-    const NWB::Core::Assets::AssetRef<NWB::Impl::Material> transparentMaterial(Name("project/materials/mat_transparent"));
+    using TestbedGeometryRef = NWB::Core::Assets::AssetRef<NWB::Impl::Geometry>;
+    using TestbedMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
 
-    auto cubeEntity = m_world->createEntity();
-    auto& renderer = cubeEntity.addComponent<NWB::Core::ECSGraphics::RendererComponent>();
-    renderer.geometry = cubeGeometry;
-    renderer.material = cubeMaterial;
+    const auto addRendererEntity = [this](const TestbedGeometryRef& geometry, const TestbedMaterialRef& material){
+        auto entity = m_world->createEntity();
+        auto& renderer = entity.addComponent<NWB::Core::ECSGraphics::RendererComponent>();
+        renderer.geometry = geometry;
+        renderer.material = material;
+    };
 
-    auto sphereEntity = m_world->createEntity();
-    auto& sphereRenderer = sphereEntity.addComponent<NWB::Core::ECSGraphics::RendererComponent>();
-    sphereRenderer.geometry = sphereGeometry;
-    sphereRenderer.material = transparentMaterial;
+    const TestbedMaterialRef cubeMaterial(Name("project/materials/mat_test"));
+    const TestbedMaterialRef transparentMaterial(Name("project/materials/mat_transparent"));
 
-    auto tetrahedronEntity = m_world->createEntity();
-    auto& tetrahedronRenderer = tetrahedronEntity.addComponent<NWB::Core::ECSGraphics::RendererComponent>();
-    tetrahedronRenderer.geometry = tetrahedronGeometry;
-    tetrahedronRenderer.material = transparentMaterial;
+    addRendererEntity(TestbedGeometryRef(Name("project/meshes/cube")), cubeMaterial);
+    addRendererEntity(TestbedGeometryRef(Name("project/meshes/sphere")), transparentMaterial);
+    addRendererEntity(TestbedGeometryRef(Name("project/meshes/tetrahedron")), transparentMaterial);
 
     NWB_LOGGER_ESSENTIAL_INFO(
         NWB_TEXT("ProjectTestbed: startup scene created ({})"),

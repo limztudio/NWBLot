@@ -51,8 +51,10 @@ Updated: 2026-04-13
 - Keep control statements compact; single-line guard clauses are common.
 - Constructor initializer lists are split across lines with leading commas.
 - Heavy use of visual separators and blank lines between logical blocks.
-- Prefer two blank lines between adjacent function definitions in the same class/struct implementation when they are part of the same logical area.
-- Use `////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////` between function definitions only when crossing a strong boundary:
+- Long slash separator lines (`////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////`) are flush-left file-scope separators. Do not indent them to split categories inside a class, struct, namespace body, or function.
+- Prefer two newline terminators (one blank line) between adjacent function definitions in the same class/struct implementation when they are part of the same logical area.
+- When crossing a strong category boundary inside an indented scope, use three newline terminators (two blank lines) instead of an indented slash separator.
+- Use `////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////` between file-scope function definitions only when crossing a strong boundary:
   - changing to a clearly different function category/personality, or
   - moving between definitions of different classes/structs in the same `.cpp`.
 - Prefer pre-increment/decrement (`++p`, `--p`) over post-increment/decrement (`p++`, `p--`) when behavior is equivalent.

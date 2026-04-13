@@ -86,7 +86,7 @@ static void ConfigureCommandLineOptions(CLI::App& outApp, __hidden_resource_cook
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ParseCommandLine(const int argc, char** argv, CookOptions& outOptions, AString& outError){
+CommandLineParseResult::Enum ParseCommandLine(const int argc, char** argv, CookOptions& outOptions, AString& outError){
     outOptions = {};
     outError.clear();
 
@@ -95,7 +95,7 @@ bool ParseCommandLine(const int argc, char** argv, CookOptions& outOptions, AStr
             if(argv[i] == nullptr)
                 continue;
             if(AStringView(argv[i]) == "/?")
-                return false;
+                return CommandLineParseResult::Help;
         }
     }
 
@@ -109,27 +109,27 @@ bool ParseCommandLine(const int argc, char** argv, CookOptions& outOptions, AStr
         NWB::ArgParseApp(app, argc, argv);
     }
     catch(const CLI::CallForHelp&){
-        return false;
+        return CommandLineParseResult::Help;
     }
     catch(const CLI::ParseError& e){
         outError = e.what();
-        return false;
+        return CommandLineParseResult::Error;
     }
 
     if(!__hidden_resource_cooker::AssignString(parsedOptions.repoRoot, outOptions.repoRoot, outError))
-        return false;
+        return CommandLineParseResult::Error;
     if(!__hidden_resource_cooker::AssignStrings(parsedOptions.assetRoots, outOptions.assetRoots, outError))
-        return false;
+        return CommandLineParseResult::Error;
     if(!__hidden_resource_cooker::AssignString(parsedOptions.outputDirectory, outOptions.outputDirectory, outError))
-        return false;
+        return CommandLineParseResult::Error;
     if(!__hidden_resource_cooker::AssignString(parsedOptions.cacheDirectory, outOptions.cacheDirectory, outError))
-        return false;
+        return CommandLineParseResult::Error;
     if(!__hidden_resource_cooker::AssignCompactString(parsedOptions.configuration, "--configuration", outOptions.configuration, outError))
-        return false;
+        return CommandLineParseResult::Error;
     if(!__hidden_resource_cooker::AssignCompactString(parsedOptions.assetType, "--asset-type", outOptions.assetType, outError))
-        return false;
+        return CommandLineParseResult::Error;
 
-    return true;
+    return CommandLineParseResult::Success;
 }
 
 

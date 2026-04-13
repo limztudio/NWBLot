@@ -51,11 +51,12 @@ int ResourceCookerMain(int argc, char** argv){
 
         CookOptions options;
         AString errorMessage;
-        if(!ParseCommandLine(argc, argv, options, errorMessage)){
+        const CommandLineParseResult::Enum parseResult = ParseCommandLine(argc, argv, options, errorMessage);
+        if(parseResult != CommandLineParseResult::Success){
             if(!errorMessage.empty())
-                NWB_LOGGER_ERROR(NWB_TEXT("Failed to parse command line: {}"), StringConvert(errorMessage));
+                NWB_LOGGER_WARNING(NWB_TEXT("Failed to parse command line: {}"), StringConvert(errorMessage));
             PrintUsage();
-            return -1;
+            return parseResult == CommandLineParseResult::Help ? 0 : -1;
         }
 
         const char* requestedAssetType = options.assetType.empty() ? "auto" : options.assetType.c_str();

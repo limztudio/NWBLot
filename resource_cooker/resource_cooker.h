@@ -18,9 +18,21 @@ using CookOptions = NWB::Core::Assets::AssetCookOptions;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace CommandLineParseResult{
+    enum Enum : u8{
+        Success,
+        Help,
+        Error,
+    };
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 int ResourceCookerMain(int argc, char** argv);
 
-bool ParseCommandLine(int argc, char** argv, CookOptions& outOptions, AString& outError);
+CommandLineParseResult::Enum ParseCommandLine(int argc, char** argv, CookOptions& outOptions, AString& outError);
 void PrintUsage();
 
 

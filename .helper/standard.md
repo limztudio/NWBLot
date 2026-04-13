@@ -83,6 +83,20 @@ Updated: 2026-04-13
   - `if(`
   - `    xx`
   - `    && yy)`
+- Exception: when the final argument of a multiline condition call is an inline lambda, keep the call/control closing parentheses on the lambda closing-brace line:
+  - Correct:
+  - `if(!foobar(`
+  - `    aaa,`
+  - `    [](){`
+  - `        return bbb;`
+  - `    }))`
+  - Wrong:
+  - `if(!foobar(`
+  - `    aaa,`
+  - `    [](){`
+  - `        return bbb;`
+  - `    }`
+  - `))`
 - For simple value-selection assignments, prefer the single-line ternary form:
   - Correct:
   - `value = cond ? valueA : valueB;`

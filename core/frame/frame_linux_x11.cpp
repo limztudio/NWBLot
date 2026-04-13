@@ -3,6 +3,7 @@
 
 
 #include "frame_linux_platform.h"
+#include "frame_input_helpers.h"
 
 #include <X11/XKBlib.h>
 #include <X11/keysym.h>
@@ -92,37 +93,6 @@ static i32 TranslateModifiers(u32 state){
         mods |= InputModifier::NumLock;
 
     return mods;
-}
-
-static i32 AdjustModifiersForKey(i32 key, i32 action, i32 mods){
-    switch(key){
-    case Key::LeftShift:
-    case Key::RightShift:
-        return action == InputAction::Release
-            ? (mods & ~InputModifier::Shift)
-            : (mods | InputModifier::Shift)
-        ;
-    case Key::LeftControl:
-    case Key::RightControl:
-        return action == InputAction::Release
-            ? (mods & ~InputModifier::Control)
-            : (mods | InputModifier::Control)
-        ;
-    case Key::LeftAlt:
-    case Key::RightAlt:
-        return action == InputAction::Release
-            ? (mods & ~InputModifier::Alt)
-            : (mods | InputModifier::Alt)
-        ;
-    case Key::LeftSuper:
-    case Key::RightSuper:
-        return action == InputAction::Release
-            ? (mods & ~InputModifier::Super)
-            : (mods | InputModifier::Super)
-        ;
-    default:
-        return mods;
-    }
 }
 
 static i32 TranslateMouseButton(u32 button){

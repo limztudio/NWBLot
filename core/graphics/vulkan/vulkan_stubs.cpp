@@ -222,22 +222,8 @@ void CommandList::buildTopLevelAccelStructFromBuffer(IRayTracingAccelStruct* _as
         return;
     }
 
-    BufferDesc scratchDesc;
-    scratchDesc.byteSize = sizeInfo.buildScratchSize;
-    scratchDesc.structStride = 1;
-    scratchDesc.debugName = "TLAS_BuildScratch";
-
-    BufferHandle scratchBuffer;
-    if(sizeInfo.buildScratchSize > 0){
-        scratchBuffer = m_device.createBuffer(scratchDesc);
-        if(!scratchBuffer){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate TLAS scratch buffer"));
-            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to allocate TLAS scratch buffer"));
-            return;
-        }
-        buildInfo.scratchData.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(scratchBuffer.get());
-        m_currentCmdBuf->m_referencedStagingBuffers.push_back(scratchBuffer);
-    }
+    if(!attachAccelStructBuildScratchBuffer(buildInfo, sizeInfo.buildScratchSize, "TLAS_BuildScratch", NWB_TEXT("allocate TLAS scratch buffer")))
+        return;
 
     VkAccelerationStructureBuildRangeInfoKHR rangeInfo = {};
     rangeInfo.primitiveCount = primitiveCount;
@@ -252,103 +238,12 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
     if(!m_context.extensions.NV_cluster_acceleration_structure)
         return;
 
-    VkClusterAccelerationStructureOpTypeNV opType;
-    switch(opDesc.params.type){
-    case RayTracingClusterOperationType::Move:
-        opType = VK_CLUSTER_ACCELERATION_STRUCTURE_OP_TYPE_MOVE_OBJECTS_NV;
-        break;
-    case RayTracingClusterOperationType::ClasBuild:
-        opType = VK_CLUSTER_ACCELERATION_STRUCTURE_OP_TYPE_BUILD_TRIANGLE_CLUSTER_NV;
-        break;
-    case RayTracingClusterOperationType::ClasBuildTemplates:
-        opType = VK_CLUSTER_ACCELERATION_STRUCTURE_OP_TYPE_BUILD_TRIANGLE_CLUSTER_TEMPLATE_NV;
-        break;
-    case RayTracingClusterOperationType::ClasInstantiateTemplates:
-        opType = VK_CLUSTER_ACCELERATION_STRUCTURE_OP_TYPE_INSTANTIATE_TRIANGLE_CLUSTER_NV;
-        break;
-    case RayTracingClusterOperationType::BlasBuild:
-        opType = VK_CLUSTER_ACCELERATION_STRUCTURE_OP_TYPE_BUILD_CLUSTERS_BOTTOM_LEVEL_NV;
-        break;
-    default:
+    VkClusterAccelerationStructureInputInfoNV inputInfo{};
+    VkClusterAccelerationStructureMoveObjectsInputNV moveInput{};
+    VkClusterAccelerationStructureTriangleClusterInputNV clusterInput{};
+    VkClusterAccelerationStructureClustersBottomLevelInputNV blasInput{};
+    if(!__hidden_vulkan::BuildClusterOperationInputInfo(opDesc.params, inputInfo, moveInput, clusterInput, blasInput, NWB_TEXT("execute cluster operation")))
         return;
-    }
-
-    VkClusterAccelerationStructureOpModeNV opMode;
-    switch(opDesc.params.mode){
-    case RayTracingClusterOperationMode::ImplicitDestinations:
-        opMode = VK_CLUSTER_ACCELERATION_STRUCTURE_OP_MODE_IMPLICIT_DESTINATIONS_NV;
-        break;
-    case RayTracingClusterOperationMode::ExplicitDestinations:
-        opMode = VK_CLUSTER_ACCELERATION_STRUCTURE_OP_MODE_EXPLICIT_DESTINATIONS_NV;
-        break;
-    case RayTracingClusterOperationMode::GetSizes:
-        opMode = VK_CLUSTER_ACCELERATION_STRUCTURE_OP_MODE_COMPUTE_SIZES_NV;
-        break;
-    default:
-        return;
-    }
-
-    VkBuildAccelerationStructureFlagsKHR opFlags = 0;
-    if(opDesc.params.flags & RayTracingClusterOperationFlags::FastTrace)
-        opFlags |= VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
-    if(!(opDesc.params.flags & RayTracingClusterOperationFlags::FastTrace) && (opDesc.params.flags & RayTracingClusterOperationFlags::FastBuild))
-        opFlags |= VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR;
-    if(opDesc.params.flags & RayTracingClusterOperationFlags::AllowOMM)
-        opFlags |= VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_OPACITY_MICROMAP_UPDATE_EXT;
-
-    VkClusterAccelerationStructureInputInfoNV inputInfo = __hidden_vulkan::MakeVkStruct<VkClusterAccelerationStructureInputInfoNV>(VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_INPUT_INFO_NV);
-    inputInfo.maxAccelerationStructureCount = opDesc.params.maxArgCount;
-    inputInfo.flags = opFlags;
-    inputInfo.opType = opType;
-    inputInfo.opMode = opMode;
-
-    VkClusterAccelerationStructureMoveObjectsInputNV moveInput = __hidden_vulkan::MakeVkStruct<VkClusterAccelerationStructureMoveObjectsInputNV>(VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_MOVE_OBJECTS_INPUT_NV);
-    VkClusterAccelerationStructureTriangleClusterInputNV clusterInput = __hidden_vulkan::MakeVkStruct<VkClusterAccelerationStructureTriangleClusterInputNV>(VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_TRIANGLE_CLUSTER_INPUT_NV);
-    VkClusterAccelerationStructureClustersBottomLevelInputNV blasInput = __hidden_vulkan::MakeVkStruct<VkClusterAccelerationStructureClustersBottomLevelInputNV>(VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_CLUSTERS_BOTTOM_LEVEL_INPUT_NV);
-
-    switch(opDesc.params.type){
-    case RayTracingClusterOperationType::Move:{
-        VkClusterAccelerationStructureTypeNV moveType;
-        switch(opDesc.params.move.type){
-        case RayTracingClusterOperationMoveType::BottomLevel:  moveType = VK_CLUSTER_ACCELERATION_STRUCTURE_TYPE_CLUSTERS_BOTTOM_LEVEL_NV; break;
-        case RayTracingClusterOperationMoveType::ClusterLevel: moveType = VK_CLUSTER_ACCELERATION_STRUCTURE_TYPE_TRIANGLE_CLUSTER_NV; break;
-        case RayTracingClusterOperationMoveType::Template:     moveType = VK_CLUSTER_ACCELERATION_STRUCTURE_TYPE_TRIANGLE_CLUSTER_TEMPLATE_NV; break;
-        default: moveType = VK_CLUSTER_ACCELERATION_STRUCTURE_TYPE_CLUSTERS_BOTTOM_LEVEL_NV; break;
-        }
-        moveInput.type = moveType;
-        moveInput.noMoveOverlap = (opDesc.params.flags & RayTracingClusterOperationFlags::NoOverlap) ? VK_TRUE : VK_FALSE;
-        moveInput.maxMovedBytes = opDesc.params.move.maxBytes;
-        inputInfo.opInput.pMoveObjects = &moveInput;
-        break;
-    }
-    case RayTracingClusterOperationType::ClasBuild:
-    case RayTracingClusterOperationType::ClasBuildTemplates:
-    case RayTracingClusterOperationType::ClasInstantiateTemplates:{
-        const VkFormat vertexFormat = __hidden_vulkan::ConvertFormat(opDesc.params.clas.vertexFormat);
-        if(vertexFormat == VK_FORMAT_UNDEFINED){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to execute cluster operation: vertex format is unsupported"));
-            return;
-        }
-        clusterInput.vertexFormat = vertexFormat;
-        clusterInput.maxGeometryIndexValue = opDesc.params.clas.maxGeometryIndex;
-        clusterInput.maxClusterUniqueGeometryCount = opDesc.params.clas.maxUniqueGeometryCount;
-        clusterInput.maxClusterTriangleCount = opDesc.params.clas.maxTriangleCount;
-        clusterInput.maxClusterVertexCount = opDesc.params.clas.maxVertexCount;
-        clusterInput.maxTotalTriangleCount = opDesc.params.clas.maxTotalTriangleCount;
-        clusterInput.maxTotalVertexCount = opDesc.params.clas.maxTotalVertexCount;
-        clusterInput.minPositionTruncateBitCount = opDesc.params.clas.minPositionTruncateBitCount;
-        inputInfo.opInput.pTriangleClusters = &clusterInput;
-        break;
-    }
-    case RayTracingClusterOperationType::BlasBuild:{
-        blasInput.maxClusterCountPerAccelerationStructure = opDesc.params.blas.maxClasPerBlasCount;
-        blasInput.maxTotalClusterCount = opDesc.params.blas.maxTotalClasCount;
-        inputInfo.opInput.pClustersBottomLevel = &blasInput;
-        break;
-    }
-    default:
-        break;
-    }
 
     auto* indirectArgCountBuffer = opDesc.inIndirectArgCountBuffer ? checked_cast<Buffer*>(opDesc.inIndirectArgCountBuffer) : nullptr;
     auto* indirectArgsBuffer = opDesc.inIndirectArgsBuffer ? checked_cast<Buffer*>(opDesc.inIndirectArgsBuffer) : nullptr;

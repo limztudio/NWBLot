@@ -1378,6 +1378,27 @@ void RendererSystem::gatherMaterialPassDrawItems(
     }
 }
 
+bool RendererSystem::findMaterialPassDrawItemResources(
+    const MaterialPassDrawItem& drawItem,
+    GeometryResources*& outGeometry,
+    MaterialPipelineResources*& outPipelineResources)
+{
+    outGeometry = nullptr;
+    outPipelineResources = nullptr;
+
+    const auto foundGeometry = m_geometryMeshes.find(drawItem.geometryKey);
+    if(foundGeometry == m_geometryMeshes.end())
+        return false;
+
+    const auto foundPipeline = m_materialPipelines.find(drawItem.pipelineKey);
+    if(foundPipeline == m_materialPipelines.end())
+        return false;
+
+    outGeometry = &foundGeometry.value();
+    outPipelineResources = &foundPipeline.value();
+    return true;
+}
+
 void RendererSystem::renderMeshMaterialPassDrawItems(
     Core::ICommandList& commandList,
     Core::IFramebuffer* framebuffer,
@@ -1388,27 +1409,22 @@ void RendererSystem::renderMeshMaterialPassDrawItems(
     const MaterialPassDrawItemVector& drawItems
 ){
     for(const MaterialPassDrawItem& drawItem : drawItems){
-        const auto foundGeometry = m_geometryMeshes.find(drawItem.geometryKey);
-        if(foundGeometry == m_geometryMeshes.end())
+        GeometryResources* geometry = nullptr;
+        MaterialPipelineResources* pipelineResources = nullptr;
+        if(!findMaterialPassDrawItemResources(drawItem, geometry, pipelineResources))
             continue;
 
-        const auto foundPipeline = m_materialPipelines.find(drawItem.pipelineKey);
-        if(foundPipeline == m_materialPipelines.end())
+        if(!geometry->valid() || !geometry->meshBindingSet || !pipelineResources->meshletPipeline)
             continue;
 
-        GeometryResources& geometry = foundGeometry.value();
-        MaterialPipelineResources& pipelineResources = foundPipeline.value();
-        if(!geometry.valid() || !geometry.meshBindingSet || !pipelineResources.meshletPipeline)
-            continue;
-
-        commandList.setBufferState(geometry.shaderVertexBuffer.get(), Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(geometry.shaderIndexBuffer.get(), Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(geometry->shaderVertexBuffer.get(), Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(geometry->shaderIndexBuffer.get(), Core::ResourceStates::ShaderResource);
 
         Core::MeshletState meshletState;
-        meshletState.setPipeline(pipelineResources.meshletPipeline.get());
+        meshletState.setPipeline(pipelineResources->meshletPipeline.get());
         meshletState.setFramebuffer(framebuffer);
         meshletState.setViewport(viewportState);
-        meshletState.addBindingSet(geometry.meshBindingSet.get());
+        meshletState.addBindingSet(geometry->meshBindingSet.get());
         if(passBindingSet)
             meshletState.addBindingSet(passBindingSet);
 
@@ -1416,15 +1432,15 @@ void RendererSystem::renderMeshMaterialPassDrawItems(
 
         if(pass == MaterialPipelinePass::Opaque){
             const __hidden_ecs_graphics::ShaderDrivenPushConstants pushConstants =
-                __hidden_ecs_graphics::BuildShaderDrivenPushConstants(geometry.triangleCount, viewportState);
+                __hidden_ecs_graphics::BuildShaderDrivenPushConstants(geometry->triangleCount, viewportState);
             commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
         }
         else{
             const __hidden_ecs_graphics::TransparentDrawPushConstants pushConstants =
-                __hidden_ecs_graphics::BuildTransparentDrawPushConstants(geometry.triangleCount, viewportState, *avboitTargets, drawItem.alpha);
+                __hidden_ecs_graphics::BuildTransparentDrawPushConstants(geometry->triangleCount, viewportState, *avboitTargets, drawItem.alpha);
             commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
         }
-        commandList.dispatchMesh(geometry.dispatchGroupCount);
+        commandList.dispatchMesh(geometry->dispatchGroupCount);
     }
 }
 
@@ -1438,43 +1454,38 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
     const MaterialPassDrawItemVector& drawItems
 ){
     for(const MaterialPassDrawItem& drawItem : drawItems){
-        const auto foundGeometry = m_geometryMeshes.find(drawItem.geometryKey);
-        if(foundGeometry == m_geometryMeshes.end())
+        GeometryResources* geometry = nullptr;
+        MaterialPipelineResources* pipelineResources = nullptr;
+        if(!findMaterialPassDrawItemResources(drawItem, geometry, pipelineResources))
             continue;
 
-        const auto foundPipeline = m_materialPipelines.find(drawItem.pipelineKey);
-        if(foundPipeline == m_materialPipelines.end())
+        if(!geometry->valid() || !geometry->computeBindingSet || !geometry->emulationVertexBuffer || !pipelineResources->computePipeline || !pipelineResources->emulationPipeline)
             continue;
 
-        GeometryResources& geometry = foundGeometry.value();
-        MaterialPipelineResources& pipelineResources = foundPipeline.value();
-        if(!geometry.valid() || !geometry.computeBindingSet || !geometry.emulationVertexBuffer || !pipelineResources.computePipeline || !pipelineResources.emulationPipeline)
-            continue;
-
-        commandList.setBufferState(geometry.shaderVertexBuffer.get(), Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(geometry.shaderIndexBuffer.get(), Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(geometry.emulationVertexBuffer.get(), Core::ResourceStates::UnorderedAccess);
+        commandList.setBufferState(geometry->shaderVertexBuffer.get(), Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(geometry->shaderIndexBuffer.get(), Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(geometry->emulationVertexBuffer.get(), Core::ResourceStates::UnorderedAccess);
 
         Core::ComputeState computeState;
-        computeState.setPipeline(pipelineResources.computePipeline.get());
-        computeState.addBindingSet(geometry.computeBindingSet.get());
+        computeState.setPipeline(pipelineResources->computePipeline.get());
+        computeState.addBindingSet(geometry->computeBindingSet.get());
 
         commandList.setComputeState(computeState);
 
         const __hidden_ecs_graphics::ShaderDrivenPushConstants pushConstants =
-            __hidden_ecs_graphics::BuildShaderDrivenPushConstants(geometry.triangleCount, viewportState);
+            __hidden_ecs_graphics::BuildShaderDrivenPushConstants(geometry->triangleCount, viewportState);
         commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
-        commandList.dispatch(geometry.dispatchGroupCount);
+        commandList.dispatch(geometry->dispatchGroupCount);
 
-        commandList.setBufferState(geometry.emulationVertexBuffer.get(), Core::ResourceStates::VertexBuffer);
+        commandList.setBufferState(geometry->emulationVertexBuffer.get(), Core::ResourceStates::VertexBuffer);
 
         Core::GraphicsState graphicsState;
-        graphicsState.setPipeline(pipelineResources.emulationPipeline.get());
+        graphicsState.setPipeline(pipelineResources->emulationPipeline.get());
         graphicsState.setFramebuffer(framebuffer);
         graphicsState.setViewport(viewportState);
         graphicsState.addVertexBuffer(
             Core::VertexBufferBinding()
-                .setBuffer(geometry.emulationVertexBuffer.get())
+                .setBuffer(geometry->emulationVertexBuffer.get())
                 .setSlot(0)
                 .setOffset(0)
         );
@@ -1487,12 +1498,12 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
 
         if(pass != MaterialPipelinePass::Opaque){
             const __hidden_ecs_graphics::TransparentDrawPushConstants transparentPushConstants =
-                __hidden_ecs_graphics::BuildTransparentDrawPushConstants(geometry.triangleCount, viewportState, *avboitTargets, drawItem.alpha);
+                __hidden_ecs_graphics::BuildTransparentDrawPushConstants(geometry->triangleCount, viewportState, *avboitTargets, drawItem.alpha);
             commandList.setPushConstants(&transparentPushConstants, sizeof(transparentPushConstants));
         }
 
         Core::DrawArguments drawArgs;
-        drawArgs.setVertexCount(geometry.indexCount);
+        drawArgs.setVertexCount(geometry->indexCount);
         commandList.draw(drawArgs);
     }
 }

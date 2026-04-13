@@ -3,6 +3,7 @@
 
 
 #include "value.h"
+#include "integer_overflow.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -14,53 +15,7 @@ NWB_METASCRIPT_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] bool AddI64Overflows(const i64 lhs, const i64 rhs){
-    if(rhs > 0)
-        return lhs > Limit<i64>::s_Max - rhs;
-    if(rhs < 0)
-        return lhs < Limit<i64>::s_Min - rhs;
-    return false;
-}
-
-[[nodiscard]] bool SubtractI64Overflows(const i64 lhs, const i64 rhs){
-    if(rhs > 0)
-        return lhs < Limit<i64>::s_Min + rhs;
-    if(rhs < 0)
-        return lhs > Limit<i64>::s_Max + rhs;
-    return false;
-}
-
-[[nodiscard]] bool MultiplyI64Overflows(const i64 lhs, const i64 rhs){
-    if(lhs == 0 || rhs == 0)
-        return false;
-
-    if(lhs > 0){
-        if(rhs > 0)
-            return lhs > Limit<i64>::s_Max / rhs;
-        return rhs < Limit<i64>::s_Min / lhs;
-    }
-
-    if(rhs > 0)
-        return lhs < Limit<i64>::s_Min / rhs;
-
-    return rhs < Limit<i64>::s_Max / lhs;
-}
-
-[[nodiscard]] bool DivideI64Overflows(const i64 lhs, const i64 rhs){
-    return lhs == Limit<i64>::s_Min && rhs == -1;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
+using namespace __hidden_metascript;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

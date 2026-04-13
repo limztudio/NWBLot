@@ -81,19 +81,7 @@ public:
     }
     template<typename T>
     inline T* allocate(usize count){
-        static_assert(sizeof(T) > 0, "value_type must be complete before calling allocate.");
-        const usize bytes = SizeOf<sizeof(T)>(count);
-
-        T* output = nullptr;
-        if(bytes){
-            if(IsConstantEvaluated())
-                output = reinterpret_cast<T*>(allocate(1, bytes));
-            else{
-                constexpr usize alignSize = alignof(T);
-                output = reinterpret_cast<T*>(allocate(alignSize, bytes));
-            }
-        }
-        return output;
+        return __hidden_alloc::AllocateTyped<T>(*this, count);
     }
 
     inline void deallocate(void* p, usize align, usize size){
@@ -103,17 +91,7 @@ public:
     }
     template<typename T>
     inline void deallocate(void* p, usize count){
-        static_assert(sizeof(T) > 0, "value_type must be complete before calling allocate.");
-        const usize bytes = SizeOf<sizeof(T)>(count);
-
-        if(bytes){
-            if(IsConstantEvaluated())
-                deallocate(p, 1, bytes);
-            else{
-                constexpr usize alignSize = alignof(T);
-                deallocate(p, alignSize, bytes);
-            }
-        }
+        __hidden_alloc::DeallocateTyped<T>(*this, p, count);
     }
 
 
@@ -268,27 +246,15 @@ public:
     [[nodiscard]] constexpr CustomArena& arena()const noexcept{ return m_arena; }
 
     usize max_size()const noexcept{
-        return (~usize(0) - CachelineSize()) / sizeof(value_type);
+        return __hidden_alloc::MaxCacheAlignedAllocationCount<value_type>();
     }
 
     constexpr void deallocate(T* const buffer, const usize count)noexcept{
-        NWB_ASSERT_MSG((buffer != nullptr || count == 0), NWB_TEXT("null pointer cannot point to a block of non-zero size"));
-
-        const usize bytes = sizeof(T) * count;
-        if(!bytes)
-            return;
-
-        const usize alignSize = Max(CachelineSize(), static_cast<usize>(alignof(T)));
-        m_arena.deallocate(buffer, alignSize, bytes);
+        __hidden_alloc::DeallocateCacheAligned(m_arena, buffer, count);
     }
 
     constexpr NWB_ALLOCATOR_PREFIX T* allocate(const usize count) NWB_ALLOCATOR_SUFFIX{
-        const usize bytes = SizeOf<sizeof(T)>(count);
-        if(!bytes)
-            return nullptr;
-
-        const usize alignSize = Max(CachelineSize(), static_cast<usize>(alignof(T)));
-        return reinterpret_cast<T*>(m_arena.allocate(alignSize, bytes));
+        return __hidden_alloc::AllocateCacheAligned<T>(m_arena, count);
     }
 #if _HAS_CXX23
     constexpr AllocationResult<T*> allocate_at_least(const usize count){ return { allocate(count), count }; }

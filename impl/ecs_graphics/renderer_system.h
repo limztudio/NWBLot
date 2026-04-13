@@ -241,6 +241,11 @@ private:
         MaterialPassDrawItemVector& meshDrawItems,
         MaterialPassDrawItemVector& computeDrawItems
     );
+    [[nodiscard]] bool findMaterialPassDrawItemResources(
+        const MaterialPassDrawItem& drawItem,
+        GeometryResources*& outGeometry,
+        MaterialPipelineResources*& outPipelineResources
+    );
     void renderMeshMaterialPassDrawItems(
         Core::ICommandList& commandList,
         Core::IFramebuffer* framebuffer,

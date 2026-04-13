@@ -1,6 +1,7 @@
 nwb_declare_static_library(nwb_frame)
 target_sources(nwb_frame PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/frame.h"
+    "${CMAKE_CURRENT_LIST_DIR}/frame_input_helpers.h"
     "${CMAKE_CURRENT_LIST_DIR}/frame.cpp"
 )
 

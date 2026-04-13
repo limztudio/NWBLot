@@ -74,75 +74,33 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
 
     Vector<VkPipelineShaderStageCreateInfo, Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>> shaderStages{ Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>(scratchArena) };
     shaderStages.push_back(shaderStage);
-    Vector<VkDescriptorSetAndBindingMappingEXT, Alloc::ScratchAllocator<VkDescriptorSetAndBindingMappingEXT>> descriptorHeapMappings{ Alloc::ScratchAllocator<VkDescriptorSetAndBindingMappingEXT>(scratchArena) };
-    Vector<VkShaderDescriptorSetAndBindingMappingInfoEXT, Alloc::ScratchAllocator<VkShaderDescriptorSetAndBindingMappingInfoEXT>> descriptorHeapStageMappings{ Alloc::ScratchAllocator<VkShaderDescriptorSetAndBindingMappingInfoEXT>(scratchArena) };
-    VkPipelineCreateFlags2CreateInfo descriptorHeapFlags2{};
+    PipelineDescriptorHeapScratch descriptorHeapScratch{ scratchArena };
     pso->m_usesDescriptorHeap = DescriptorHeapManager::tryEnablePipeline(
         m_context,
         desc.bindingLayouts,
         shaderStages,
         pso->m_descriptorHeapPushRanges,
         pso->m_descriptorHeapPushDataSize,
-        descriptorHeapFlags2,
-        descriptorHeapMappings,
-        descriptorHeapStageMappings
+        descriptorHeapScratch
     );
 
     VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
-    if(!pso->m_usesDescriptorHeap){
-        if(desc.bindingLayouts.empty()){
-            if(!__hidden_vulkan::CreatePipelineLayout(m_context, nullptr, 0, 0, pipelineLayout, NWB_TEXT("compute pipeline"))){
-                DestroyArenaObject(m_context.objectArena, pso);
-                return nullptr;
-            }
-            pso->m_ownsPipelineLayout = true;
-        }
-        else if(desc.bindingLayouts.size() == 1){
-            auto* layout = checked_cast<BindingLayout*>(desc.bindingLayouts[0].get());
-            if(!layout){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create compute pipeline: binding layout is invalid"));
-                DestroyArenaObject(m_context.objectArena, pso);
-                return nullptr;
-            }
-            pipelineLayout = layout->m_pipelineLayout;
-            pso->m_pushConstantByteSize = layout->m_pushConstantByteSize;
-        }
-        else{
-            Vector<VkDescriptorSetLayout, Alloc::ScratchAllocator<VkDescriptorSetLayout>> allDescriptorSetLayouts{ Alloc::ScratchAllocator<VkDescriptorSetLayout>(scratchArena) };
-            u32 pushConstantByteSize = 0;
-            for(u32 i = 0; i < static_cast<u32>(desc.bindingLayouts.size()); ++i){
-                auto* bl = checked_cast<BindingLayout*>(desc.bindingLayouts[i].get());
-                if(!bl){
-                    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create compute pipeline: binding layout {} is invalid"), i);
-                    DestroyArenaObject(m_context.objectArena, pso);
-                    return nullptr;
-                }
-                const BindingLayoutDesc& bindingLayoutDesc = bl->getBindingLayoutDesc();
-                pushConstantByteSize = Max<u32>(pushConstantByteSize, __hidden_vulkan::GetPushConstantByteSize(bindingLayoutDesc));
-                for(const auto& dsl : bl->m_descriptorSetLayouts)
-                    allDescriptorSetLayouts.push_back(dsl);
-            }
-            pso->m_pushConstantByteSize = pushConstantByteSize;
-
-            if(!__hidden_vulkan::CreatePipelineLayout(
-                m_context,
-                allDescriptorSetLayouts.data(),
-                static_cast<u32>(allDescriptorSetLayouts.size()),
-                pushConstantByteSize,
-                pipelineLayout,
-                NWB_TEXT("compute pipeline")))
-            {
-                DestroyArenaObject(m_context.objectArena, pso);
-                return nullptr;
-            }
-            pso->m_ownsPipelineLayout = true;
-        }
+    if(!pso->m_usesDescriptorHeap && !createPipelineLayoutForBindingLayouts(
+        desc.bindingLayouts,
+        NWB_TEXT("compute pipeline"),
+        pipelineLayout,
+        pso->m_pushConstantByteSize,
+        pso->m_ownsPipelineLayout,
+        scratchArena))
+    {
+        DestroyArenaObject(m_context.objectArena, pso);
+        return nullptr;
     }
     pso->m_pipelineLayout = pipelineLayout;
 
     VkComputePipelineCreateInfo pipelineInfo = __hidden_vulkan::MakeVkStruct<VkComputePipelineCreateInfo>(VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO);
     if(pso->m_usesDescriptorHeap)
-        pipelineInfo.pNext = &descriptorHeapFlags2;
+        pipelineInfo.pNext = descriptorHeapScratch.pNext();
     pipelineInfo.stage = shaderStages[0];
     pipelineInfo.layout = pso->m_usesDescriptorHeap ? VK_NULL_HANDLE : pipelineLayout;
 
@@ -172,23 +130,8 @@ void CommandList::setComputeState(const ComputeState& state){
     if(pipeline)
         vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline->m_pipeline);
 
-    if(pipeline){
-        retainBindingSets(state.bindings);
-    }
-
-    if(pipeline && pipeline->m_usesDescriptorHeap)
-        bindDescriptorHeapState(true, pipeline->m_descriptorHeapPushRanges, pipeline->m_descriptorHeapPushDataSize, state.bindings);
-    else if(state.bindings.size() > 0 && pipeline && pipeline->m_pipelineLayout != VK_NULL_HANDLE){
-        for(usize i = 0; i < state.bindings.size(); ++i){
-            if(state.bindings[i]){
-                auto* bindingSet = checked_cast<BindingSet*>(state.bindings[i]);
-                if(!bindingSet->m_descriptorSets.empty())
-                    vkCmdBindDescriptorSets(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_COMPUTE,
-                        pipeline->m_pipelineLayout, static_cast<u32>(i), 
-                        static_cast<u32>(bindingSet->m_descriptorSets.size()), bindingSet->m_descriptorSets.data(), 0, nullptr);
-            }
-        }
-    }
+    if(pipeline)
+        bindPipelineBindingSets(VK_PIPELINE_BIND_POINT_COMPUTE, pipeline->m_pipelineLayout, pipeline->m_usesDescriptorHeap, pipeline->m_descriptorHeapPushRanges, pipeline->m_descriptorHeapPushDataSize, state.bindings);
 }
 
 void CommandList::dispatch(u32 groupsX, u32 groupsY, u32 groupsZ){

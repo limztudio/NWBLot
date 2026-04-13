@@ -80,27 +80,25 @@ VkShaderStageFlags ConvertShaderStages(ShaderType::Mask stages){
     return flags;
 }
 
-constexpr DescriptorHeapKind GetDescriptorHeapKind(ResourceType::Enum type){
-    return type == ResourceType::Sampler ? DescriptorHeapKind::Sampler : DescriptorHeapKind::Resource;
-}
-
-constexpr bool IsDescriptorHeapCompatibleType(ResourceType::Enum type){
-    switch(type){
-    case ResourceType::Texture_SRV:
-    case ResourceType::Texture_UAV:
-    case ResourceType::TypedBuffer_SRV:
-    case ResourceType::TypedBuffer_UAV:
-    case ResourceType::StructuredBuffer_SRV:
-    case ResourceType::StructuredBuffer_UAV:
-    case ResourceType::ConstantBuffer:
-    case ResourceType::VolatileConstantBuffer:
-    case ResourceType::Sampler:
-    case ResourceType::RawBuffer_SRV:
-    case ResourceType::RawBuffer_UAV:
-        return true;
-    default:
+bool ConfigurePipelineMultisampleState(
+    const u32 sampleCount,
+    const bool alphaToCoverageEnable,
+    VkPipelineMultisampleStateCreateInfo& outState,
+    const tchar* operationName)
+{
+    outState = MakeVkStruct<VkPipelineMultisampleStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO);
+    if(!IsSupportedSampleCount(sampleCount)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: sample count {} is unsupported"), operationName, sampleCount);
         return false;
     }
+    outState.rasterizationSamples = GetSampleCount(sampleCount);
+    outState.sampleShadingEnable = VK_FALSE;
+    outState.alphaToCoverageEnable = alphaToCoverageEnable ? VK_TRUE : VK_FALSE;
+    return true;
+}
+
+constexpr DescriptorHeapKind GetDescriptorHeapKind(ResourceType::Enum type){
+    return type == ResourceType::Sampler ? DescriptorHeapKind::Sampler : DescriptorHeapKind::Resource;
 }
 
 constexpr bool IsSupportedDescriptorBindingType(ResourceType::Enum type){
@@ -121,6 +119,10 @@ constexpr bool IsSupportedDescriptorBindingType(ResourceType::Enum type){
     default:
         return false;
     }
+}
+
+constexpr bool IsDescriptorHeapCompatibleType(ResourceType::Enum type){
+    return type != ResourceType::RayTracingAccelStruct && IsSupportedDescriptorBindingType(type);
 }
 
 constexpr u32 AlignUpU32(const u32 value, const u32 alignment){
@@ -361,6 +363,104 @@ const BindingLayoutItem* FindLayoutBinding(const BindingLayoutDesc& desc, const 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+bool Device::createPipelineLayoutForBindingLayouts(
+    const BindingLayoutVector& bindingLayouts,
+    const tchar* operationName,
+    VkPipelineLayout& outPipelineLayout,
+    u32& outPushConstantByteSize,
+    bool& outOwnsPipelineLayout,
+    Alloc::ScratchArena<>& scratchArena)const
+{
+    outPipelineLayout = VK_NULL_HANDLE;
+    outPushConstantByteSize = 0;
+    outOwnsPipelineLayout = false;
+
+    if(bindingLayouts.empty()){
+        if(!__hidden_vulkan::CreatePipelineLayout(m_context, nullptr, 0, 0, outPipelineLayout, operationName))
+            return false;
+
+        outOwnsPipelineLayout = true;
+        return true;
+    }
+
+    if(bindingLayouts.size() == 1){
+        auto* layout = checked_cast<BindingLayout*>(bindingLayouts[0].get());
+        if(!layout){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: binding layout is invalid"), operationName);
+            return false;
+        }
+
+        outPipelineLayout = layout->m_pipelineLayout;
+        outPushConstantByteSize = layout->m_pushConstantByteSize;
+        return true;
+    }
+
+    Vector<VkDescriptorSetLayout, Alloc::ScratchAllocator<VkDescriptorSetLayout>> descriptorSetLayouts{
+        Alloc::ScratchAllocator<VkDescriptorSetLayout>(scratchArena)
+    };
+    u32 pushConstantByteSize = 0;
+
+    for(u32 i = 0; i < static_cast<u32>(bindingLayouts.size()); ++i){
+        auto* layout = checked_cast<BindingLayout*>(bindingLayouts[i].get());
+        if(!layout){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: binding layout {} is invalid"), operationName, i);
+            return false;
+        }
+
+        pushConstantByteSize = Max<u32>(
+            pushConstantByteSize,
+            __hidden_vulkan::GetPushConstantByteSize(layout->getBindingLayoutDesc())
+        );
+        for(const auto& descriptorSetLayout : layout->m_descriptorSetLayouts)
+            descriptorSetLayouts.push_back(descriptorSetLayout);
+    }
+
+    if(!__hidden_vulkan::CreatePipelineLayout(
+        m_context,
+        descriptorSetLayouts.data(),
+        static_cast<u32>(descriptorSetLayouts.size()),
+        pushConstantByteSize,
+        outPipelineLayout,
+        operationName))
+    {
+        return false;
+    }
+
+    outPushConstantByteSize = pushConstantByteSize;
+    outOwnsPipelineLayout = true;
+    return true;
+}
+
+
+void Device::appendPipelineShaderStage(
+    IShader* shader,
+    const VkShaderStageFlagBits stage,
+    Vector<VkSpecializationInfo, Alloc::ScratchAllocator<VkSpecializationInfo>>& specializationInfos,
+    Vector<VkPipelineShaderStageCreateInfo, Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>>& shaderStages)const
+{
+    auto* s = checked_cast<Shader*>(shader);
+    VkPipelineShaderStageCreateInfo stageInfo = __hidden_vulkan::MakeVkStruct<VkPipelineShaderStageCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
+    stageInfo.stage = stage;
+    stageInfo.module = s->m_shaderModule;
+    stageInfo.pName = s->m_entryPointName.c_str();
+
+    if(!s->m_specializationEntries.empty()){
+        VkSpecializationInfo specInfo{};
+        specInfo.mapEntryCount = static_cast<u32>(s->m_specializationEntries.size());
+        specInfo.pMapEntries = s->m_specializationEntries.data();
+        specInfo.dataSize = s->m_specializationData.size();
+        specInfo.pData = s->m_specializationData.data();
+        specializationInfos.push_back(specInfo);
+        stageInfo.pSpecializationInfo = &specializationInfos.back();
+    }
+
+    shaderStages.push_back(stageInfo);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool DescriptorHeapManager::tryEnablePipeline(
     const VulkanContext& context,
     const BindingLayoutVector& bindingLayouts,
@@ -460,6 +560,26 @@ bool DescriptorHeapManager::tryEnablePipeline(
     }
 
     return true;
+}
+
+bool DescriptorHeapManager::tryEnablePipeline(
+    const VulkanContext& context,
+    const BindingLayoutVector& bindingLayouts,
+    Vector<VkPipelineShaderStageCreateInfo, Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>>& shaderStages,
+    FixedVector<DescriptorHeapPushRange, s_MaxBindingLayouts>& outPushRanges,
+    u32& outPushDataSize,
+    PipelineDescriptorHeapScratch& scratch
+)
+{
+    return tryEnablePipeline(
+        context,
+        bindingLayouts,
+        shaderStages,
+        outPushRanges,
+        outPushDataSize,
+        scratch.flags2,
+        scratch.mappings,
+        scratch.stageMappings);
 }
 
 
@@ -1837,6 +1957,45 @@ void CommandList::retainBindingSets(const BindingSetVector& bindings){
     for(const auto& binding : bindings){
         if(binding)
             m_currentCmdBuf->m_referencedResources.push_back(binding);
+    }
+}
+
+void CommandList::bindPipelineBindingSets(
+    const VkPipelineBindPoint bindPoint,
+    const VkPipelineLayout pipelineLayout,
+    const bool usesDescriptorHeap,
+    const FixedVector<DescriptorHeapPushRange, s_MaxBindingLayouts>& pushRanges,
+    const u32 pushDataSize,
+    const BindingSetVector& bindings)
+{
+    retainBindingSets(bindings);
+
+    if(usesDescriptorHeap){
+        bindDescriptorHeapState(true, pushRanges, pushDataSize, bindings);
+        return;
+    }
+
+    if(bindings.empty() || pipelineLayout == VK_NULL_HANDLE)
+        return;
+
+    for(usize i = 0; i < bindings.size(); ++i){
+        if(!bindings[i])
+            continue;
+
+        auto* bindingSet = checked_cast<BindingSet*>(bindings[i]);
+        if(bindingSet->m_descriptorSets.empty())
+            continue;
+
+        vkCmdBindDescriptorSets(
+            m_currentCmdBuf->m_cmdBuf,
+            bindPoint,
+            pipelineLayout,
+            static_cast<u32>(i),
+            static_cast<u32>(bindingSet->m_descriptorSets.size()),
+            bindingSet->m_descriptorSets.data(),
+            0,
+            nullptr
+        );
     }
 }
 

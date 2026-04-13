@@ -43,6 +43,13 @@ namespace __hidden_vulkan{
     u32 GetPushConstantByteSize(const BindingLayoutDesc& desc);
     bool ValidatePushConstantByteSize(const VulkanContext& context, u32 byteSize, const tchar* operationName);
     bool CreatePipelineLayout(const VulkanContext& context, const VkDescriptorSetLayout* setLayouts, u32 setLayoutCount, u32 pushConstantByteSize, VkPipelineLayout& outLayout, const tchar* operationName);
+    bool BuildClusterOperationInputInfo(
+        const RayTracingClusterOperationParams& params,
+        VkClusterAccelerationStructureInputInfoNV& outInputInfo,
+        VkClusterAccelerationStructureMoveObjectsInputNV& outMoveInput,
+        VkClusterAccelerationStructureTriangleClusterInputNV& outClusterInput,
+        VkClusterAccelerationStructureClustersBottomLevelInputNV& outBlasInput,
+        const tchar* operationName);
     VkDescriptorType ConvertDescriptorType(ResourceType::Enum type);
     VkShaderStageFlags ConvertShaderStages(ShaderType::Mask stages);
     VkComponentTypeKHR ConvertCoopVecDataType(CooperativeVectorDataType::Enum type);
@@ -55,6 +62,90 @@ namespace __hidden_vulkan{
         output.sType = sType;
         return output;
     }
+
+    constexpr VkCullModeFlags ConvertCullMode(RasterCullMode::Enum cullMode){
+        switch(cullMode){
+        case RasterCullMode::Back:  return VK_CULL_MODE_BACK_BIT;
+        case RasterCullMode::Front: return VK_CULL_MODE_FRONT_BIT;
+        case RasterCullMode::None:  return VK_CULL_MODE_NONE;
+        default: return VK_CULL_MODE_BACK_BIT;
+        }
+    }
+
+    constexpr VkCompareOp ConvertCompareOp(ComparisonFunc::Enum compareFunc){
+        switch(compareFunc){
+        case ComparisonFunc::Never:          return VK_COMPARE_OP_NEVER;
+        case ComparisonFunc::Less:           return VK_COMPARE_OP_LESS;
+        case ComparisonFunc::Equal:          return VK_COMPARE_OP_EQUAL;
+        case ComparisonFunc::LessOrEqual:    return VK_COMPARE_OP_LESS_OR_EQUAL;
+        case ComparisonFunc::Greater:        return VK_COMPARE_OP_GREATER;
+        case ComparisonFunc::NotEqual:       return VK_COMPARE_OP_NOT_EQUAL;
+        case ComparisonFunc::GreaterOrEqual: return VK_COMPARE_OP_GREATER_OR_EQUAL;
+        case ComparisonFunc::Always:         return VK_COMPARE_OP_ALWAYS;
+        default: return VK_COMPARE_OP_ALWAYS;
+        }
+    }
+
+    constexpr VkBlendFactor ConvertBlendFactor(BlendFactor::Enum blendFactor){
+        switch(blendFactor){
+        case BlendFactor::Zero:             return VK_BLEND_FACTOR_ZERO;
+        case BlendFactor::One:              return VK_BLEND_FACTOR_ONE;
+        case BlendFactor::SrcColor:         return VK_BLEND_FACTOR_SRC_COLOR;
+        case BlendFactor::InvSrcColor:      return VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR;
+        case BlendFactor::SrcAlpha:         return VK_BLEND_FACTOR_SRC_ALPHA;
+        case BlendFactor::InvSrcAlpha:      return VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+        case BlendFactor::DstAlpha:         return VK_BLEND_FACTOR_DST_ALPHA;
+        case BlendFactor::InvDstAlpha:      return VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
+        case BlendFactor::DstColor:         return VK_BLEND_FACTOR_DST_COLOR;
+        case BlendFactor::InvDstColor:      return VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR;
+        case BlendFactor::SrcAlphaSaturate: return VK_BLEND_FACTOR_SRC_ALPHA_SATURATE;
+        case BlendFactor::ConstantColor:    return VK_BLEND_FACTOR_CONSTANT_COLOR;
+        case BlendFactor::InvConstantColor: return VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_COLOR;
+        case BlendFactor::Src1Color:        return VK_BLEND_FACTOR_SRC1_COLOR;
+        case BlendFactor::InvSrc1Color:     return VK_BLEND_FACTOR_ONE_MINUS_SRC1_COLOR;
+        case BlendFactor::Src1Alpha:        return VK_BLEND_FACTOR_SRC1_ALPHA;
+        case BlendFactor::InvSrc1Alpha:     return VK_BLEND_FACTOR_ONE_MINUS_SRC1_ALPHA;
+        default: return VK_BLEND_FACTOR_ZERO;
+        }
+    }
+
+    constexpr VkBlendOp ConvertBlendOp(BlendOp::Enum blendOp){
+        switch(blendOp){
+        case BlendOp::Add:             return VK_BLEND_OP_ADD;
+        case BlendOp::Subtract:        return VK_BLEND_OP_SUBTRACT;
+        case BlendOp::ReverseSubtract: return VK_BLEND_OP_REVERSE_SUBTRACT;
+        case BlendOp::Min:             return VK_BLEND_OP_MIN;
+        case BlendOp::Max:             return VK_BLEND_OP_MAX;
+        default: return VK_BLEND_OP_ADD;
+        }
+    }
+
+    constexpr VkPipelineColorBlendAttachmentState ConvertBlendState(const BlendState::RenderTarget& target){
+        VkPipelineColorBlendAttachmentState state = {};
+        state.blendEnable = target.blendEnable ? VK_TRUE : VK_FALSE;
+        state.srcColorBlendFactor = ConvertBlendFactor(target.srcBlend);
+        state.dstColorBlendFactor = ConvertBlendFactor(target.destBlend);
+        state.colorBlendOp = ConvertBlendOp(target.blendOp);
+        state.srcAlphaBlendFactor = ConvertBlendFactor(target.srcBlendAlpha);
+        state.dstAlphaBlendFactor = ConvertBlendFactor(target.destBlendAlpha);
+        state.alphaBlendOp = ConvertBlendOp(target.blendOpAlpha);
+        state.colorWriteMask = 0;
+        if(target.colorWriteMask & ColorMask::Red)
+            state.colorWriteMask |= VK_COLOR_COMPONENT_R_BIT;
+        if(target.colorWriteMask & ColorMask::Green)
+            state.colorWriteMask |= VK_COLOR_COMPONENT_G_BIT;
+        if(target.colorWriteMask & ColorMask::Blue)
+            state.colorWriteMask |= VK_COLOR_COMPONENT_B_BIT;
+        if(target.colorWriteMask & ColorMask::Alpha)
+            state.colorWriteMask |= VK_COLOR_COMPONENT_A_BIT;
+        return state;
+    }
+
+    bool ConfigurePipelineMultisampleState(
+        const u32 sampleCount,
+        const bool alphaToCoverageEnable,
+        VkPipelineMultisampleStateCreateInfo& outState,
+        const tchar* operationName);
 
     inline void CopyHostMemory(
         Alloc::ThreadPool& workerPool,
@@ -750,6 +841,22 @@ struct DescriptorHeapPushRange{
     u32 pushWordCount = 0;
 };
 
+struct PipelineDescriptorHeapScratch{
+    Vector<VkDescriptorSetAndBindingMappingEXT, Alloc::ScratchAllocator<VkDescriptorSetAndBindingMappingEXT>> mappings;
+    Vector<VkShaderDescriptorSetAndBindingMappingInfoEXT, Alloc::ScratchAllocator<VkShaderDescriptorSetAndBindingMappingInfoEXT>> stageMappings;
+    VkPipelineCreateFlags2CreateInfo flags2{};
+
+    explicit PipelineDescriptorHeapScratch(Alloc::ScratchArena<>& scratchArena)
+        : mappings(Alloc::ScratchAllocator<VkDescriptorSetAndBindingMappingEXT>(scratchArena))
+        , stageMappings(Alloc::ScratchAllocator<VkShaderDescriptorSetAndBindingMappingInfoEXT>(scratchArena))
+    {}
+
+    const void* pNext(const void* next = nullptr){
+        flags2.pNext = next;
+        return &flags2;
+    }
+};
+
 class DescriptorHeapManager final : NoCopy{
 private:
     struct FreeRange{
@@ -784,6 +891,13 @@ public:
         VkPipelineCreateFlags2CreateInfo& outFlags2,
         Vector<VkDescriptorSetAndBindingMappingEXT, Alloc::ScratchAllocator<VkDescriptorSetAndBindingMappingEXT>>& outMappings,
         Vector<VkShaderDescriptorSetAndBindingMappingInfoEXT, Alloc::ScratchAllocator<VkShaderDescriptorSetAndBindingMappingInfoEXT>>& outStageMappings);
+    static bool tryEnablePipeline(
+        const VulkanContext& context,
+        const BindingLayoutVector& bindingLayouts,
+        Vector<VkPipelineShaderStageCreateInfo, Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>>& shaderStages,
+        FixedVector<DescriptorHeapPushRange, s_MaxBindingLayouts>& outPushRanges,
+        u32& outPushDataSize,
+        PipelineDescriptorHeapScratch& scratch);
 
 
 public:
@@ -1342,18 +1456,27 @@ public:
 
 private:
     void retainBindingSets(const BindingSetVector& bindings);
+    void bindPipelineBindingSets(
+        VkPipelineBindPoint bindPoint,
+        VkPipelineLayout pipelineLayout,
+        bool usesDescriptorHeap,
+        const FixedVector<DescriptorHeapPushRange, s_MaxBindingLayouts>& pushRanges,
+        u32 pushDataSize,
+        const BindingSetVector& bindings);
 
     void bindDescriptorHeapState(
         bool usesDescriptorHeap,
         const FixedVector<DescriptorHeapPushRange, s_MaxBindingLayouts>& pushRanges,
         u32 pushDataSize,
         const BindingSetVector& bindings);
+    void setViewportState(const ViewportState& viewport);
 
     bool beginDynamicRendering(IFramebuffer* framebuffer, const RenderPassParameters& params);
     void endDynamicRendering();
     bool ensureGraphicsRenderPass(IFramebuffer* framebuffer);
     void endActiveRenderPass();
     bool validateIndirectBuffer(IBuffer* buffer, u64 offsetBytes, u64 commandSizeBytes, u32 commandCount, const tchar* commandName)const;
+    [[nodiscard]] bool attachAccelStructBuildScratchBuffer(VkAccelerationStructureBuildGeometryInfoKHR& buildInfo, u64 buildScratchSize, const char* debugName, const tchar* operationName);
     void discardUnsubmittedUploadChunks();
 
 
@@ -1518,6 +1641,18 @@ public:
 private:
     [[nodiscard]] bool loadPipelineCacheData(Vector<u8>& outData);
     void savePipelineCacheData();
+    [[nodiscard]] bool createPipelineLayoutForBindingLayouts(
+        const BindingLayoutVector& bindingLayouts,
+        const tchar* operationName,
+        VkPipelineLayout& outPipelineLayout,
+        u32& outPushConstantByteSize,
+        bool& outOwnsPipelineLayout,
+        Alloc::ScratchArena<>& scratchArena)const;
+    void appendPipelineShaderStage(
+        IShader* shader,
+        VkShaderStageFlagBits stage,
+        Vector<VkSpecializationInfo, Alloc::ScratchAllocator<VkSpecializationInfo>>& specializationInfos,
+        Vector<VkPipelineShaderStageCreateInfo, Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>>& shaderStages)const;
 
 
 private:

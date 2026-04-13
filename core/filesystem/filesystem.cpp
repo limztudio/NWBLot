@@ -323,15 +323,7 @@ static bool MoveExistingVolumeSegments(const Path& fromDirectory, const Path& to
         return true;
     };
 
-    for(const auto& directoryEntry : DirectoryIterator(fromDirectory, errorCode)){
-        if(errorCode)
-            break;
-
-        const Path currentPath = directoryEntry.path();
-        const AString fileName = currentPath.filename().string();
-        if(!IsLegacyVolumeSegmentFileName(fileName, volumeName))
-            continue;
-
+    const auto moveSegmentToBackup = [&](const Path& currentPath) -> bool{
         if(!ensureDestination())
             return false;
         if(!RenamePath(currentPath, toDirectory / currentPath.filename(), errorCode)){
@@ -345,6 +337,20 @@ static bool MoveExistingVolumeSegments(const Path& fromDirectory, const Path& to
         }
 
         outMovedFileNames.push_back(currentPath.filename());
+        return true;
+    };
+
+    for(const auto& directoryEntry : DirectoryIterator(fromDirectory, errorCode)){
+        if(errorCode)
+            break;
+
+        const Path currentPath = directoryEntry.path();
+        const AString fileName = currentPath.filename().string();
+        if(!IsLegacyVolumeSegmentFileName(fileName, volumeName))
+            continue;
+
+        if(!moveSegmentToBackup(currentPath))
+            return false;
     }
     if(errorCode){
         NWB_LOGGER_ERROR(
@@ -372,19 +378,8 @@ static bool MoveExistingVolumeSegments(const Path& fromDirectory, const Path& to
         if(!exists)
             break;
 
-        if(!ensureDestination())
+        if(!moveSegmentToBackup(currentPath))
             return false;
-        if(!RenamePath(currentPath, toDirectory / currentPath.filename(), errorCode)){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Filesystem volume publish: failed to move existing segment '{}' to backup: {}"),
-                PathToString<tchar>(currentPath),
-                StringConvert(errorCode.message())
-            );
-            rollbackMovedFiles();
-            return false;
-        }
-
-        outMovedFileNames.push_back(currentPath.filename());
 
         if(segmentIndex == Limit<usize>::s_Max){
             NWB_LOGGER_ERROR(NWB_TEXT("Filesystem volume publish: segment index overflow while backing up existing volume"));

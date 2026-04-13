@@ -298,6 +298,115 @@ VkBuildAccelerationStructureFlagsKHR ConvertAccelStructBuildFlags(RayTracingAcce
     return flags;
 }
 
+bool BuildClusterOperationInputInfo(
+    const RayTracingClusterOperationParams& params,
+    VkClusterAccelerationStructureInputInfoNV& outInputInfo,
+    VkClusterAccelerationStructureMoveObjectsInputNV& outMoveInput,
+    VkClusterAccelerationStructureTriangleClusterInputNV& outClusterInput,
+    VkClusterAccelerationStructureClustersBottomLevelInputNV& outBlasInput,
+    const tchar* operationName)
+{
+    VkClusterAccelerationStructureOpTypeNV opType;
+    switch(params.type){
+    case RayTracingClusterOperationType::Move:
+        opType = VK_CLUSTER_ACCELERATION_STRUCTURE_OP_TYPE_MOVE_OBJECTS_NV;
+        break;
+    case RayTracingClusterOperationType::ClasBuild:
+        opType = VK_CLUSTER_ACCELERATION_STRUCTURE_OP_TYPE_BUILD_TRIANGLE_CLUSTER_NV;
+        break;
+    case RayTracingClusterOperationType::ClasBuildTemplates:
+        opType = VK_CLUSTER_ACCELERATION_STRUCTURE_OP_TYPE_BUILD_TRIANGLE_CLUSTER_TEMPLATE_NV;
+        break;
+    case RayTracingClusterOperationType::ClasInstantiateTemplates:
+        opType = VK_CLUSTER_ACCELERATION_STRUCTURE_OP_TYPE_INSTANTIATE_TRIANGLE_CLUSTER_NV;
+        break;
+    case RayTracingClusterOperationType::BlasBuild:
+        opType = VK_CLUSTER_ACCELERATION_STRUCTURE_OP_TYPE_BUILD_CLUSTERS_BOTTOM_LEVEL_NV;
+        break;
+    default:
+        return false;
+    }
+
+    VkClusterAccelerationStructureOpModeNV opMode;
+    switch(params.mode){
+    case RayTracingClusterOperationMode::ImplicitDestinations:
+        opMode = VK_CLUSTER_ACCELERATION_STRUCTURE_OP_MODE_IMPLICIT_DESTINATIONS_NV;
+        break;
+    case RayTracingClusterOperationMode::ExplicitDestinations:
+        opMode = VK_CLUSTER_ACCELERATION_STRUCTURE_OP_MODE_EXPLICIT_DESTINATIONS_NV;
+        break;
+    case RayTracingClusterOperationMode::GetSizes:
+        opMode = VK_CLUSTER_ACCELERATION_STRUCTURE_OP_MODE_COMPUTE_SIZES_NV;
+        break;
+    default:
+        return false;
+    }
+
+    VkBuildAccelerationStructureFlagsKHR opFlags = 0;
+    if(params.flags & RayTracingClusterOperationFlags::FastTrace)
+        opFlags |= VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
+    if(!(params.flags & RayTracingClusterOperationFlags::FastTrace) && (params.flags & RayTracingClusterOperationFlags::FastBuild))
+        opFlags |= VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR;
+    if(params.flags & RayTracingClusterOperationFlags::AllowOMM)
+        opFlags |= VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_OPACITY_MICROMAP_UPDATE_EXT;
+
+    outInputInfo = MakeVkStruct<VkClusterAccelerationStructureInputInfoNV>(VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_INPUT_INFO_NV);
+    outInputInfo.maxAccelerationStructureCount = params.maxArgCount;
+    outInputInfo.flags = opFlags;
+    outInputInfo.opType = opType;
+    outInputInfo.opMode = opMode;
+
+    outMoveInput = MakeVkStruct<VkClusterAccelerationStructureMoveObjectsInputNV>(VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_MOVE_OBJECTS_INPUT_NV);
+    outClusterInput = MakeVkStruct<VkClusterAccelerationStructureTriangleClusterInputNV>(VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_TRIANGLE_CLUSTER_INPUT_NV);
+    outBlasInput = MakeVkStruct<VkClusterAccelerationStructureClustersBottomLevelInputNV>(VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_CLUSTERS_BOTTOM_LEVEL_INPUT_NV);
+
+    switch(params.type){
+    case RayTracingClusterOperationType::Move:{
+        VkClusterAccelerationStructureTypeNV moveType;
+        switch(params.move.type){
+        case RayTracingClusterOperationMoveType::BottomLevel:  moveType = VK_CLUSTER_ACCELERATION_STRUCTURE_TYPE_CLUSTERS_BOTTOM_LEVEL_NV; break;
+        case RayTracingClusterOperationMoveType::ClusterLevel: moveType = VK_CLUSTER_ACCELERATION_STRUCTURE_TYPE_TRIANGLE_CLUSTER_NV; break;
+        case RayTracingClusterOperationMoveType::Template:     moveType = VK_CLUSTER_ACCELERATION_STRUCTURE_TYPE_TRIANGLE_CLUSTER_TEMPLATE_NV; break;
+        default: moveType = VK_CLUSTER_ACCELERATION_STRUCTURE_TYPE_CLUSTERS_BOTTOM_LEVEL_NV; break;
+        }
+        outMoveInput.type = moveType;
+        outMoveInput.noMoveOverlap = (params.flags & RayTracingClusterOperationFlags::NoOverlap) ? VK_TRUE : VK_FALSE;
+        outMoveInput.maxMovedBytes = params.move.maxBytes;
+        outInputInfo.opInput.pMoveObjects = &outMoveInput;
+        break;
+    }
+    case RayTracingClusterOperationType::ClasBuild:
+    case RayTracingClusterOperationType::ClasBuildTemplates:
+    case RayTracingClusterOperationType::ClasInstantiateTemplates:{
+        const VkFormat vertexFormat = ConvertFormat(params.clas.vertexFormat);
+        if(vertexFormat == VK_FORMAT_UNDEFINED){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: vertex format is unsupported"), operationName);
+            return false;
+        }
+        outClusterInput.vertexFormat = vertexFormat;
+        outClusterInput.maxGeometryIndexValue = params.clas.maxGeometryIndex;
+        outClusterInput.maxClusterUniqueGeometryCount = params.clas.maxUniqueGeometryCount;
+        outClusterInput.maxClusterTriangleCount = params.clas.maxTriangleCount;
+        outClusterInput.maxClusterVertexCount = params.clas.maxVertexCount;
+        outClusterInput.maxTotalTriangleCount = params.clas.maxTotalTriangleCount;
+        outClusterInput.maxTotalVertexCount = params.clas.maxTotalVertexCount;
+        outClusterInput.minPositionTruncateBitCount = params.clas.minPositionTruncateBitCount;
+        outInputInfo.opInput.pTriangleClusters = &outClusterInput;
+        break;
+    }
+    case RayTracingClusterOperationType::BlasBuild:{
+        outBlasInput.maxClusterCountPerAccelerationStructure = params.blas.maxClasPerBlasCount;
+        outBlasInput.maxTotalClusterCount = params.blas.maxTotalClasCount;
+        outInputInfo.opInput.pClustersBottomLevel = &outBlasInput;
+        break;
+    }
+    default:
+        break;
+    }
+
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -577,103 +686,12 @@ RayTracingClusterOperationSizeInfo Device::getClusterOperationSizeInfo(const Ray
 
     RayTracingClusterOperationSizeInfo info;
 
-    VkClusterAccelerationStructureOpTypeNV opType;
-    switch(params.type){
-    case RayTracingClusterOperationType::Move:
-        opType = VK_CLUSTER_ACCELERATION_STRUCTURE_OP_TYPE_MOVE_OBJECTS_NV;
-        break;
-    case RayTracingClusterOperationType::ClasBuild:
-        opType = VK_CLUSTER_ACCELERATION_STRUCTURE_OP_TYPE_BUILD_TRIANGLE_CLUSTER_NV;
-        break;
-    case RayTracingClusterOperationType::ClasBuildTemplates:
-        opType = VK_CLUSTER_ACCELERATION_STRUCTURE_OP_TYPE_BUILD_TRIANGLE_CLUSTER_TEMPLATE_NV;
-        break;
-    case RayTracingClusterOperationType::ClasInstantiateTemplates:
-        opType = VK_CLUSTER_ACCELERATION_STRUCTURE_OP_TYPE_INSTANTIATE_TRIANGLE_CLUSTER_NV;
-        break;
-    case RayTracingClusterOperationType::BlasBuild:
-        opType = VK_CLUSTER_ACCELERATION_STRUCTURE_OP_TYPE_BUILD_CLUSTERS_BOTTOM_LEVEL_NV;
-        break;
-    default:
+    VkClusterAccelerationStructureInputInfoNV inputInfo{};
+    VkClusterAccelerationStructureMoveObjectsInputNV moveInput{};
+    VkClusterAccelerationStructureTriangleClusterInputNV clusterInput{};
+    VkClusterAccelerationStructureClustersBottomLevelInputNV blasInput{};
+    if(!__hidden_vulkan::BuildClusterOperationInputInfo(params, inputInfo, moveInput, clusterInput, blasInput, NWB_TEXT("query cluster operation sizes")))
         return info;
-    }
-
-    VkClusterAccelerationStructureOpModeNV opMode;
-    switch(params.mode){
-    case RayTracingClusterOperationMode::ImplicitDestinations:
-        opMode = VK_CLUSTER_ACCELERATION_STRUCTURE_OP_MODE_IMPLICIT_DESTINATIONS_NV;
-        break;
-    case RayTracingClusterOperationMode::ExplicitDestinations:
-        opMode = VK_CLUSTER_ACCELERATION_STRUCTURE_OP_MODE_EXPLICIT_DESTINATIONS_NV;
-        break;
-    case RayTracingClusterOperationMode::GetSizes:
-        opMode = VK_CLUSTER_ACCELERATION_STRUCTURE_OP_MODE_COMPUTE_SIZES_NV;
-        break;
-    default:
-        return info;
-    }
-
-    VkBuildAccelerationStructureFlagsKHR opFlags = 0;
-    if(params.flags & RayTracingClusterOperationFlags::FastTrace)
-        opFlags |= VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
-    if(!(params.flags & RayTracingClusterOperationFlags::FastTrace) && (params.flags & RayTracingClusterOperationFlags::FastBuild))
-        opFlags |= VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR;
-    if(params.flags & RayTracingClusterOperationFlags::AllowOMM)
-        opFlags |= VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_OPACITY_MICROMAP_UPDATE_EXT;
-
-    VkClusterAccelerationStructureInputInfoNV inputInfo = __hidden_vulkan::MakeVkStruct<VkClusterAccelerationStructureInputInfoNV>(VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_INPUT_INFO_NV);
-    inputInfo.maxAccelerationStructureCount = params.maxArgCount;
-    inputInfo.flags = opFlags;
-    inputInfo.opType = opType;
-    inputInfo.opMode = opMode;
-
-    VkClusterAccelerationStructureMoveObjectsInputNV moveInput = __hidden_vulkan::MakeVkStruct<VkClusterAccelerationStructureMoveObjectsInputNV>(VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_MOVE_OBJECTS_INPUT_NV);
-    VkClusterAccelerationStructureTriangleClusterInputNV clusterInput = __hidden_vulkan::MakeVkStruct<VkClusterAccelerationStructureTriangleClusterInputNV>(VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_TRIANGLE_CLUSTER_INPUT_NV);
-    VkClusterAccelerationStructureClustersBottomLevelInputNV blasInput = __hidden_vulkan::MakeVkStruct<VkClusterAccelerationStructureClustersBottomLevelInputNV>(VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_CLUSTERS_BOTTOM_LEVEL_INPUT_NV);
-
-    switch(params.type){
-    case RayTracingClusterOperationType::Move:{
-        VkClusterAccelerationStructureTypeNV moveType;
-        switch(params.move.type){
-        case RayTracingClusterOperationMoveType::BottomLevel:  moveType = VK_CLUSTER_ACCELERATION_STRUCTURE_TYPE_CLUSTERS_BOTTOM_LEVEL_NV; break;
-        case RayTracingClusterOperationMoveType::ClusterLevel: moveType = VK_CLUSTER_ACCELERATION_STRUCTURE_TYPE_TRIANGLE_CLUSTER_NV; break;
-        case RayTracingClusterOperationMoveType::Template:     moveType = VK_CLUSTER_ACCELERATION_STRUCTURE_TYPE_TRIANGLE_CLUSTER_TEMPLATE_NV; break;
-        default: moveType = VK_CLUSTER_ACCELERATION_STRUCTURE_TYPE_CLUSTERS_BOTTOM_LEVEL_NV; break;
-        }
-        moveInput.type = moveType;
-        moveInput.noMoveOverlap = (params.flags & RayTracingClusterOperationFlags::NoOverlap) ? VK_TRUE : VK_FALSE;
-        moveInput.maxMovedBytes = params.move.maxBytes;
-        inputInfo.opInput.pMoveObjects = &moveInput;
-        break;
-    }
-    case RayTracingClusterOperationType::ClasBuild:
-    case RayTracingClusterOperationType::ClasBuildTemplates:
-    case RayTracingClusterOperationType::ClasInstantiateTemplates:{
-        const VkFormat vertexFormat = __hidden_vulkan::ConvertFormat(params.clas.vertexFormat);
-        if(vertexFormat == VK_FORMAT_UNDEFINED){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to query cluster operation sizes: vertex format is unsupported"));
-            return info;
-        }
-        clusterInput.vertexFormat = vertexFormat;
-        clusterInput.maxGeometryIndexValue = params.clas.maxGeometryIndex;
-        clusterInput.maxClusterUniqueGeometryCount = params.clas.maxUniqueGeometryCount;
-        clusterInput.maxClusterTriangleCount = params.clas.maxTriangleCount;
-        clusterInput.maxClusterVertexCount = params.clas.maxVertexCount;
-        clusterInput.maxTotalTriangleCount = params.clas.maxTotalTriangleCount;
-        clusterInput.maxTotalVertexCount = params.clas.maxTotalVertexCount;
-        clusterInput.minPositionTruncateBitCount = params.clas.minPositionTruncateBitCount;
-        inputInfo.opInput.pTriangleClusters = &clusterInput;
-        break;
-    }
-    case RayTracingClusterOperationType::BlasBuild:{
-        blasInput.maxClusterCountPerAccelerationStructure = params.blas.maxClasPerBlasCount;
-        blasInput.maxTotalClusterCount = params.blas.maxTotalClasCount;
-        inputInfo.opInput.pClustersBottomLevel = &blasInput;
-        break;
-    }
-    default:
-        break;
-    }
 
     VkAccelerationStructureBuildSizesInfoKHR vkSizeInfo = __hidden_vulkan::MakeVkStruct<VkAccelerationStructureBuildSizesInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR);
     vkGetClusterAccelerationStructureBuildSizesNV(m_context.device, &inputInfo, &vkSizeInfo);
@@ -743,8 +761,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
     Vector<VkPipelineShaderStageCreateInfo, Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>> stages{ Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>(scratchArena) };
     Vector<VkRayTracingShaderGroupCreateInfoKHR, Alloc::ScratchAllocator<VkRayTracingShaderGroupCreateInfoKHR>> groups{ Alloc::ScratchAllocator<VkRayTracingShaderGroupCreateInfoKHR>(scratchArena) };
     Vector<VkSpecializationInfo, Alloc::ScratchAllocator<VkSpecializationInfo>> specInfos{ Alloc::ScratchAllocator<VkSpecializationInfo>(scratchArena) };
-    Vector<VkDescriptorSetAndBindingMappingEXT, Alloc::ScratchAllocator<VkDescriptorSetAndBindingMappingEXT>> descriptorHeapMappings{ Alloc::ScratchAllocator<VkDescriptorSetAndBindingMappingEXT>(scratchArena) };
-    Vector<VkShaderDescriptorSetAndBindingMappingInfoEXT, Alloc::ScratchAllocator<VkShaderDescriptorSetAndBindingMappingInfoEXT>> descriptorHeapStageMappings{ Alloc::ScratchAllocator<VkShaderDescriptorSetAndBindingMappingInfoEXT>(scratchArena) };
+    PipelineDescriptorHeapScratch descriptorHeapScratch{ scratchArena };
 
     stages.reserve(maxShaderStages);
     groups.reserve(desc.shaders.size() + desc.hitGroups.size());
@@ -846,73 +863,32 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
         return nullptr;
     }
 
-    VkPipelineCreateFlags2CreateInfo descriptorHeapFlags2{};
     pso->m_usesDescriptorHeap = DescriptorHeapManager::tryEnablePipeline(
         m_context,
         desc.globalBindingLayouts,
         stages,
         pso->m_descriptorHeapPushRanges,
         pso->m_descriptorHeapPushDataSize,
-        descriptorHeapFlags2,
-        descriptorHeapMappings,
-        descriptorHeapStageMappings
+        descriptorHeapScratch
     );
 
     VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
-    if(!pso->m_usesDescriptorHeap){
-        if(desc.globalBindingLayouts.empty()){
-            if(!__hidden_vulkan::CreatePipelineLayout(m_context, nullptr, 0, 0, pipelineLayout, NWB_TEXT("ray tracing pipeline"))){
-                DestroyArenaObject(m_context.objectArena, pso);
-                return nullptr;
-            }
-            pso->m_ownsPipelineLayout = true;
-        }
-        else if(desc.globalBindingLayouts.size() == 1){
-            auto* layout = checked_cast<BindingLayout*>(desc.globalBindingLayouts[0].get());
-            if(!layout){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: binding layout is invalid"));
-                DestroyArenaObject(m_context.objectArena, pso);
-                return nullptr;
-            }
-            pipelineLayout = layout->m_pipelineLayout;
-            pso->m_pushConstantByteSize = layout->m_pushConstantByteSize;
-        }
-        else{
-            Vector<VkDescriptorSetLayout, Alloc::ScratchAllocator<VkDescriptorSetLayout>> allDescriptorSetLayouts{ Alloc::ScratchAllocator<VkDescriptorSetLayout>(scratchArena) };
-            u32 pushConstantByteSize = 0;
-            for(u32 i = 0; i < static_cast<u32>(desc.globalBindingLayouts.size()); ++i){
-                auto* bl = checked_cast<BindingLayout*>(desc.globalBindingLayouts[i].get());
-                if(!bl){
-                    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: binding layout {} is invalid"), i);
-                    DestroyArenaObject(m_context.objectArena, pso);
-                    return nullptr;
-                }
-                const BindingLayoutDesc& bindingLayoutDesc = bl->getBindingLayoutDesc();
-                pushConstantByteSize = Max<u32>(pushConstantByteSize, __hidden_vulkan::GetPushConstantByteSize(bindingLayoutDesc));
-                for(const auto& dsl : bl->m_descriptorSetLayouts)
-                    allDescriptorSetLayouts.push_back(dsl);
-            }
-            pso->m_pushConstantByteSize = pushConstantByteSize;
-
-            if(!__hidden_vulkan::CreatePipelineLayout(
-                m_context,
-                allDescriptorSetLayouts.data(),
-                static_cast<u32>(allDescriptorSetLayouts.size()),
-                pushConstantByteSize,
-                pipelineLayout,
-                NWB_TEXT("ray tracing pipeline")))
-            {
-                DestroyArenaObject(m_context.objectArena, pso);
-                return nullptr;
-            }
-            pso->m_ownsPipelineLayout = true;
-        }
+    if(!pso->m_usesDescriptorHeap && !createPipelineLayoutForBindingLayouts(
+        desc.globalBindingLayouts,
+        NWB_TEXT("ray tracing pipeline"),
+        pipelineLayout,
+        pso->m_pushConstantByteSize,
+        pso->m_ownsPipelineLayout,
+        scratchArena))
+    {
+        DestroyArenaObject(m_context.objectArena, pso);
+        return nullptr;
     }
     pso->m_pipelineLayout = pipelineLayout;
 
     VkRayTracingPipelineCreateInfoKHR createInfo = __hidden_vulkan::MakeVkStruct<VkRayTracingPipelineCreateInfoKHR>(VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR);
     if(pso->m_usesDescriptorHeap)
-        createInfo.pNext = &descriptorHeapFlags2;
+        createInfo.pNext = descriptorHeapScratch.pNext();
     createInfo.stageCount = static_cast<u32>(stages.size());
     createInfo.pStages = stages.data();
     createInfo.groupCount = static_cast<u32>(groups.size());
@@ -1291,22 +1267,34 @@ void CommandList::setRayTracingState(const RayTracingState& state){
 
     vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, pipeline->m_pipeline);
 
-    retainBindingSets(state.bindings);
+    bindPipelineBindingSets(VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, pipeline->m_pipelineLayout, pipeline->m_usesDescriptorHeap, pipeline->m_descriptorHeapPushRanges, pipeline->m_descriptorHeapPushDataSize, state.bindings);
+}
 
-    if(pipeline->m_usesDescriptorHeap)
-        bindDescriptorHeapState(true, pipeline->m_descriptorHeapPushRanges, pipeline->m_descriptorHeapPushDataSize, state.bindings);
-    else if(state.bindings.size() > 0 && pipeline->m_pipelineLayout != VK_NULL_HANDLE){
-        for(usize i = 0; i < state.bindings.size(); ++i){
-            if(state.bindings[i]){
-                auto* bindingSet = checked_cast<BindingSet*>(state.bindings[i]);
-                if(!bindingSet->m_descriptorSets.empty())
-                    vkCmdBindDescriptorSets(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
-                        pipeline->m_pipelineLayout, static_cast<u32>(i),
-                        static_cast<u32>(bindingSet->m_descriptorSets.size()),
-                        bindingSet->m_descriptorSets.data(), 0, nullptr);
-            }
-        }
+
+bool CommandList::attachAccelStructBuildScratchBuffer(
+    VkAccelerationStructureBuildGeometryInfoKHR& buildInfo,
+    const u64 buildScratchSize,
+    const char* debugName,
+    const tchar* operationName)
+{
+    if(buildScratchSize == 0)
+        return true;
+
+    BufferDesc scratchDesc;
+    scratchDesc.byteSize = buildScratchSize;
+    scratchDesc.structStride = 1;
+    scratchDesc.debugName = debugName;
+
+    BufferHandle scratchBuffer = m_device.createBuffer(scratchDesc);
+    if(!scratchBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}"), operationName);
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to allocate acceleration structure scratch buffer"));
+        return false;
     }
+
+    buildInfo.scratchData.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(scratchBuffer.get());
+    m_currentCmdBuf->m_referencedStagingBuffers.push_back(Move(scratchBuffer));
+    return true;
 }
 
 
@@ -1432,22 +1420,8 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* _as, const
         return;
     }
 
-    BufferDesc scratchDesc;
-    scratchDesc.byteSize = sizeInfo.buildScratchSize;
-    scratchDesc.structStride = 1;
-    scratchDesc.debugName = "AS_BuildScratch";
-
-    BufferHandle scratchBuffer;
-    if(sizeInfo.buildScratchSize > 0){
-        scratchBuffer = m_device.createBuffer(scratchDesc);
-        if(!scratchBuffer){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate BLAS scratch buffer"));
-            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to allocate BLAS scratch buffer"));
-            return;
-        }
-        buildInfo.scratchData.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(scratchBuffer.get());
-        m_currentCmdBuf->m_referencedStagingBuffers.push_back(scratchBuffer);
-    }
+    if(!attachAccelStructBuildScratchBuffer(buildInfo, sizeInfo.buildScratchSize, "AS_BuildScratch", NWB_TEXT("allocate BLAS scratch buffer")))
+        return;
 
     const VkAccelerationStructureBuildRangeInfoKHR* pRangeInfos = rangeInfos.data();
     vkCmdBuildAccelerationStructuresKHR(m_currentCmdBuf->m_cmdBuf, 1, &buildInfo, &pRangeInfos);
@@ -1677,22 +1651,8 @@ void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* _as, const Ra
         return;
     }
 
-    BufferDesc scratchDesc;
-    scratchDesc.byteSize = sizeInfo.buildScratchSize;
-    scratchDesc.structStride = 1;
-    scratchDesc.debugName = "TLAS_BuildScratch";
-
-    BufferHandle scratchBuffer;
-    if(sizeInfo.buildScratchSize > 0){
-        scratchBuffer = m_device.createBuffer(scratchDesc);
-        if(!scratchBuffer){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate TLAS scratch buffer"));
-            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to allocate TLAS scratch buffer"));
-            return;
-        }
-        buildInfo.scratchData.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(scratchBuffer.get());
-        m_currentCmdBuf->m_referencedStagingBuffers.push_back(Move(scratchBuffer));
-    }
+    if(!attachAccelStructBuildScratchBuffer(buildInfo, sizeInfo.buildScratchSize, "TLAS_BuildScratch", NWB_TEXT("allocate TLAS scratch buffer")))
+        return;
 
     VkAccelerationStructureBuildRangeInfoKHR rangeInfo = {};
     rangeInfo.primitiveCount = primitiveCount;

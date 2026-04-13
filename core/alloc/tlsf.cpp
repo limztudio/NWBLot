@@ -19,6 +19,8 @@
 #define tlsf_decl static
 #endif
 
+static int (*const tlsf_report)(const char*, ...) = printf;
+
 /*
 ** Architecture-specific bit manipulation routines.
 **
@@ -242,7 +244,7 @@ enum tlsf_private
 
 #if defined (TLSF_64BIT)
 	/*
-	** TODO: We can increase this to support larger sizes, at the expense
+	** This can be increased to support larger sizes, at the expense
 	** of more overhead in the TLSF structure.
 	*/
 	FL_INDEX_MAX = 32,
@@ -503,7 +505,7 @@ static size_t adjust_request_size(size_t size, size_t align)
 		const size_t aligned = align_up(size, align);
 
 		/* aligned sized must not exceed block_size_max or we'll go out of bounds on sl_bitmap */
-		if (aligned < block_size_max) 
+		if (aligned < block_size_max)
 		{
 			adjust = tlsf_max(aligned, block_size_min);
 		}
@@ -764,9 +766,9 @@ static block_header_t* block_locate_free(control_t* control, size_t size)
 	if (size)
 	{
 		mapping_search(size, &fl, &sl);
-		
+
 		/*
-		** mapping_search can futz with the size, so for excessively large sizes it can sometimes wind up 
+		** mapping_search can futz with the size, so for excessively large sizes it can sometimes wind up
 		** with indices that are off the end of the block array.
 		** So, we protect against that here, since this is the only callsite of mapping_search.
 		** Note that we don't need to check sl, since it comes from a modulo operation that guarantees it's always in range.
@@ -904,7 +906,7 @@ int tlsf_check(tlsf_t tlsf)
 static void default_walker(void* ptr, size_t size, int used, void* user)
 {
 	(void)user;
-	printf("\t%p %s size: %x (%p)\n", ptr, used ? "used" : "free", (unsigned int)size, block_from_ptr(ptr));
+	tlsf_report("\t%p %s size: %x (%p)\n", ptr, used ? "used" : "free", (unsigned int)size, block_from_ptr(ptr));
 }
 
 void tlsf_walk_pool(pool_t pool, tlsf_walker walker, void* user)
@@ -993,7 +995,7 @@ pool_t tlsf_add_pool(tlsf_t tlsf, void* mem, size_t bytes)
 
 	if (((ptrdiff_t)mem % ALIGN_SIZE) != 0)
 	{
-		printf("tlsf_add_pool: Memory must be aligned by %u bytes.\n",
+		tlsf_report("tlsf_add_pool: Memory must be aligned by %u bytes.\n",
 			(unsigned int)ALIGN_SIZE);
 		return 0;
 	}
@@ -1001,11 +1003,11 @@ pool_t tlsf_add_pool(tlsf_t tlsf, void* mem, size_t bytes)
 	if (pool_bytes < block_size_min || pool_bytes > block_size_max)
 	{
 #if defined (TLSF_64BIT)
-		printf("tlsf_add_pool: Memory size must be between 0x%x and 0x%x00 bytes.\n", 
+		tlsf_report("tlsf_add_pool: Memory size must be between 0x%x and 0x%x00 bytes.\n",
 			(unsigned int)(pool_overhead + block_size_min),
 			(unsigned int)((pool_overhead + block_size_max) / 256));
 #else
-		printf("tlsf_add_pool: Memory size must be between %u and %u bytes.\n", 
+		tlsf_report("tlsf_add_pool: Memory size must be between %u and %u bytes.\n",
 			(unsigned int)(pool_overhead + block_size_min),
 			(unsigned int)(pool_overhead + block_size_max));
 #endif
@@ -1073,7 +1075,7 @@ int test_ffs_fls()
 
 	if (rv)
 	{
-		printf("test_ffs_fls: %x ffs/fls tests failed.\n", rv);
+		tlsf_report("test_ffs_fls: %x ffs/fls tests failed.\n", rv);
 	}
 	return rv;
 }
@@ -1090,7 +1092,7 @@ tlsf_t tlsf_create(void* mem)
 
 	if (((tlsfptr_t)mem % ALIGN_SIZE) != 0)
 	{
-		printf("tlsf_create: Memory must be aligned to %u bytes.\n",
+		tlsf_report("tlsf_create: Memory must be aligned to %u bytes.\n",
 			(unsigned int)ALIGN_SIZE);
 		return 0;
 	}
@@ -1247,7 +1249,7 @@ void* tlsf_realloc(tlsf_t tlsf, void* ptr, size_t size)
 			if (p)
 			{
 				const size_t minsize = tlsf_min(cursize, size);
-				memcpy(p, ptr, minsize);
+				NWB_MEMCPY(p, minsize, ptr, minsize);
 				tlsf_free(tlsf, ptr);
 			}
 		}

@@ -36,21 +36,31 @@ namespace __hidden_loader{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct CallbackShutdownGuard{
-    NWB::IProjectEntryCallbacks* callbacks = nullptr;
-    bool active = false;
+class CallbackShutdownGuard : NoCopy{
+public:
+    explicit CallbackShutdownGuard(NWB::IProjectEntryCallbacks* callbacks)
+        : m_callbacks(callbacks)
+    {}
 
     ~CallbackShutdownGuard(){
-        if(!active || !callbacks)
+        if(!m_active || !m_callbacks)
             return;
 
         try{
-            callbacks->onShutdown();
+            m_callbacks->onShutdown();
         }
         catch(...){
             NWB_LOGGER_ERROR(NWB_TEXT("Project shutdown callback threw an exception"));
         }
     }
+
+    void activate(){
+        m_active = true;
+    }
+
+private:
+    NWB::IProjectEntryCallbacks* m_callbacks = nullptr;
+    bool m_active = false;
 };
 
 struct UpdateCallbackContext{
@@ -212,7 +222,7 @@ static int MainLogic(NotNull<const char*> logAddress, void* inst){
             __hidden_loader::CallbackShutdownGuard callbackShutdownGuard{ callbacks.get() };
             __hidden_loader::UpdateCallbackContext updateCallbackContext{ callbacks.get() };
 
-            callbackShutdownGuard.active = true;
+            callbackShutdownGuard.activate();
             if(!callbacks->onStartup()){
                 NWB_LOGGER_FATAL(NWB_TEXT("Project startup callback returned false"));
                 return -1;

@@ -72,18 +72,22 @@ bool EnsureEmptyStagedDirectory(const Path& directoryPath, const AStringView ope
 }
 
 StagedDirectoryCleanupGuard::StagedDirectoryCleanupGuard(const Path& directoryPath, const AStringView operationName, const AStringView label)
-    : directoryPath(directoryPath)
-    , operationName(operationName)
-    , label(label)
+    : m_directoryPath(directoryPath)
+    , m_operationName(operationName)
+    , m_label(label)
 {}
 
 StagedDirectoryCleanupGuard::~StagedDirectoryCleanupGuard(){
-    if(active)
+    if(m_active)
         CleanupStagedDirectoryBestEffort(
-            directoryPath,
-            AStringView(operationName.data(), operationName.size()),
-            AStringView(label.data(), label.size())
+            m_directoryPath,
+            AStringView(m_operationName.data(), m_operationName.size()),
+            AStringView(m_label.data(), m_label.size())
         );
+}
+
+void StagedDirectoryCleanupGuard::dismiss(){
+    m_active = false;
 }
 
 
@@ -343,7 +347,7 @@ static bool TransferSegmentChunk(
 }
 
 template<typename SegmentPaths>
-static bool TransferSegmentBytes(
+static bool ReadSegmentBytes(
     const AStringView volumeName,
     const SegmentPaths& segmentPaths,
     const usize segmentIndex,
@@ -375,7 +379,7 @@ static bool TransferSegmentBytes(
 }
 
 template<typename SegmentPaths>
-static bool TransferSegmentBytes(
+static bool WriteSegmentBytes(
     const AStringView volumeName,
     const SegmentPaths& segmentPaths,
     const usize segmentIndex,
@@ -807,7 +811,7 @@ bool BuildVolume(const Path& outputDirectory, const VolumeBuildConfig& config, c
     )){
         return false;
     }
-    stageDirectoryCleanup.active = false;
+    stageDirectoryCleanup.dismiss();
 
     return true;
 }
@@ -1873,7 +1877,7 @@ bool VolumeFileSystem::readBytesLocked(const u64 offset, void* data, const u64 b
     u8* outputBytes = static_cast<u8*>(data);
     return __hidden_filesystem::ForEachSegmentChunk(m_volumeName, "readBytes", m_segmentPaths, m_segmentSize, offset, byteCount,
         [&](const usize segmentIndex, const std::streamoff streamOffset, const std::streamsize streamChunkSize, const u64 chunkBytes){
-        return __hidden_filesystem::TransferSegmentBytes(m_volumeName, m_segmentPaths, segmentIndex, streamOffset, streamChunkSize, chunkBytes, outputBytes);
+        return __hidden_filesystem::ReadSegmentBytes(m_volumeName, m_segmentPaths, segmentIndex, streamOffset, streamChunkSize, chunkBytes, outputBytes);
     });
 }
 
@@ -1898,7 +1902,7 @@ bool VolumeFileSystem::writeBytesLocked(const u64 offset, const void* data, cons
     const u8* inputBytes = static_cast<const u8*>(data);
     return __hidden_filesystem::ForEachSegmentChunk(m_volumeName, "writeBytes", m_segmentPaths, m_segmentSize, offset, byteCount,
         [&](const usize segmentIndex, const std::streamoff streamOffset, const std::streamsize streamChunkSize, const u64 chunkBytes){
-        return __hidden_filesystem::TransferSegmentBytes(m_volumeName, m_segmentPaths, segmentIndex, streamOffset, streamChunkSize, chunkBytes, inputBytes);
+        return __hidden_filesystem::WriteSegmentBytes(m_volumeName, m_segmentPaths, segmentIndex, streamOffset, streamChunkSize, chunkBytes, inputBytes);
     });
 }
 

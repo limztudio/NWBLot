@@ -89,14 +89,18 @@ bool RemoveStagedDirectoryIfPresent(const Path& directoryPath, AStringView opera
 void CleanupStagedDirectoryBestEffort(const Path& directoryPath, AStringView operationName, AStringView label);
 bool EnsureEmptyStagedDirectory(const Path& directoryPath, AStringView operationName, AStringView label);
 
-struct StagedDirectoryCleanupGuard{
-    Path directoryPath;
-    AString operationName;
-    AString label;
-    bool active = true;
-
+class StagedDirectoryCleanupGuard : NoCopy{
+public:
     StagedDirectoryCleanupGuard(const Path& directoryPath, AStringView operationName, AStringView label = "stage directory");
     ~StagedDirectoryCleanupGuard();
+
+    void dismiss();
+
+private:
+    Path m_directoryPath;
+    AString m_operationName;
+    AString m_label;
+    bool m_active = true;
 };
 
 bool PublishStagedVolume(

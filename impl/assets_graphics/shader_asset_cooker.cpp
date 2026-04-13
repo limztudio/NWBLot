@@ -1915,7 +1915,7 @@ bool ShaderAssetCooker::cookShaderAssets(const ShaderCookEnvironment& environmen
 
     if(!Core::Filesystem::PublishStagedVolume(stagedVolumePaths, resolvedPaths.outputDirectory, volumeConfig.volumeName, stagedSegmentCount))
         return false;
-    stageDirectoryCleanup.active = false;
+    stageDirectoryCleanup.dismiss();
 
     if(!outResult.volumeName.assign(__hidden_assets::s_VolumeName)){
         NWB_LOGGER_ERROR(NWB_TEXT("ShaderAssetCooker: volume name exceeds CompactString capacity"));

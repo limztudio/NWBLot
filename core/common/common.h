@@ -105,6 +105,35 @@ private:
     decltype(m_items)::iterator m_cursor;
 };
 
+class InitializerGuard : NoCopy{
+public:
+    ~InitializerGuard(){ finalize(); }
+
+
+public:
+    [[nodiscard]] bool initialize(){
+        if(m_active)
+            return true;
+
+        if(!Initializer::instance().initialize())
+            return false;
+
+        m_active = true;
+        return true;
+    }
+    void finalize(){
+        if(!m_active)
+            return;
+
+        Initializer::instance().finalize();
+        m_active = false;
+    }
+
+
+private:
+    bool m_active = false;
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -97,6 +97,25 @@ bool ConfigurePipelineMultisampleState(
     return true;
 }
 
+void DestroyPipelineAndOwnedLayout(
+    const VkDevice device,
+    const VkAllocationCallbacks* allocationCallbacks,
+    VkPipeline& pipeline,
+    VkPipelineLayout& pipelineLayout,
+    bool& ownsPipelineLayout)
+{
+    if(pipeline){
+        vkDestroyPipeline(device, pipeline, allocationCallbacks);
+        pipeline = VK_NULL_HANDLE;
+    }
+
+    if(ownsPipelineLayout && pipelineLayout != VK_NULL_HANDLE){
+        vkDestroyPipelineLayout(device, pipelineLayout, allocationCallbacks);
+        pipelineLayout = VK_NULL_HANDLE;
+        ownsPipelineLayout = false;
+    }
+}
+
 constexpr DescriptorHeapKind GetDescriptorHeapKind(ResourceType::Enum type){
     return type == ResourceType::Sampler ? DescriptorHeapKind::Sampler : DescriptorHeapKind::Resource;
 }
@@ -431,12 +450,50 @@ bool Device::createPipelineLayoutForBindingLayouts(
     return true;
 }
 
+bool Device::configurePipelineBindings(
+    const BindingLayoutVector& bindingLayouts,
+    const tchar* operationName,
+    PipelineShaderStageVector& shaderStages,
+    PipelineDescriptorHeapScratch& descriptorHeapScratch,
+    VkPipelineLayout& outPipelineLayout,
+    bool& outOwnsPipelineLayout,
+    bool& outUsesDescriptorHeap,
+    FixedVector<DescriptorHeapPushRange, s_MaxBindingLayouts>& outDescriptorHeapPushRanges,
+    u32& outDescriptorHeapPushDataSize,
+    u32& outPushConstantByteSize,
+    Alloc::ScratchArena<>& scratchArena)const
+{
+    outPipelineLayout = VK_NULL_HANDLE;
+    outOwnsPipelineLayout = false;
+    outPushConstantByteSize = 0;
+
+    outUsesDescriptorHeap = DescriptorHeapManager::tryEnablePipeline(
+        m_context,
+        bindingLayouts,
+        shaderStages,
+        outDescriptorHeapPushRanges,
+        outDescriptorHeapPushDataSize,
+        descriptorHeapScratch
+    );
+    if(outUsesDescriptorHeap)
+        return true;
+
+    return createPipelineLayoutForBindingLayouts(
+        bindingLayouts,
+        operationName,
+        outPipelineLayout,
+        outPushConstantByteSize,
+        outOwnsPipelineLayout,
+        scratchArena
+    );
+}
+
 
 void Device::appendPipelineShaderStage(
     IShader* shader,
     const VkShaderStageFlagBits stage,
-    Vector<VkSpecializationInfo, Alloc::ScratchAllocator<VkSpecializationInfo>>& specializationInfos,
-    Vector<VkPipelineShaderStageCreateInfo, Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>>& shaderStages)const
+    PipelineSpecializationInfoVector& specializationInfos,
+    PipelineShaderStageVector& shaderStages)const
 {
     auto* s = checked_cast<Shader*>(shader);
     VkPipelineShaderStageCreateInfo stageInfo = __hidden_vulkan::MakeVkStruct<VkPipelineShaderStageCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
@@ -464,7 +521,7 @@ void Device::appendPipelineShaderStage(
 bool DescriptorHeapManager::tryEnablePipeline(
     const VulkanContext& context,
     const BindingLayoutVector& bindingLayouts,
-    Vector<VkPipelineShaderStageCreateInfo, Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>>& shaderStages,
+    PipelineShaderStageVector& shaderStages,
     FixedVector<DescriptorHeapPushRange, s_MaxBindingLayouts>& outPushRanges,
     u32& outPushDataSize,
     VkPipelineCreateFlags2CreateInfo& outFlags2,
@@ -565,7 +622,7 @@ bool DescriptorHeapManager::tryEnablePipeline(
 bool DescriptorHeapManager::tryEnablePipeline(
     const VulkanContext& context,
     const BindingLayoutVector& bindingLayouts,
-    Vector<VkPipelineShaderStageCreateInfo, Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>>& shaderStages,
+    PipelineShaderStageVector& shaderStages,
     FixedVector<DescriptorHeapPushRange, s_MaxBindingLayouts>& outPushRanges,
     u32& outPushDataSize,
     PipelineDescriptorHeapScratch& scratch

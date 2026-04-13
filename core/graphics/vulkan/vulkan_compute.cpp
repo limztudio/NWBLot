@@ -21,16 +21,13 @@ ComputePipeline::ComputePipeline(const VulkanContext& context)
     , m_context(context)
 {}
 ComputePipeline::~ComputePipeline(){
-    if(m_pipeline){
-        vkDestroyPipeline(m_context.device, m_pipeline, m_context.allocationCallbacks);
-        m_pipeline = VK_NULL_HANDLE;
-    }
-
-    if(m_ownsPipelineLayout && m_pipelineLayout != VK_NULL_HANDLE){
-        vkDestroyPipelineLayout(m_context.device, m_pipelineLayout, m_context.allocationCallbacks);
-        m_pipelineLayout = VK_NULL_HANDLE;
-        m_ownsPipelineLayout = false;
-    }
+    __hidden_vulkan::DestroyPipelineAndOwnedLayout(
+        m_context.device,
+        m_context.allocationCallbacks,
+        m_pipeline,
+        m_pipelineLayout,
+        m_ownsPipelineLayout
+    );
 }
 
 Object ComputePipeline::getNativeHandle(ObjectType objectType){
@@ -72,37 +69,32 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
         shaderStage.pSpecializationInfo = &specInfo;
     }
 
-    Vector<VkPipelineShaderStageCreateInfo, Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>> shaderStages{ Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>(scratchArena) };
+    PipelineShaderStageVector shaderStages{ Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>(scratchArena) };
     shaderStages.push_back(shaderStage);
     PipelineDescriptorHeapScratch descriptorHeapScratch{ scratchArena };
-    pso->m_usesDescriptorHeap = DescriptorHeapManager::tryEnablePipeline(
-        m_context,
-        desc.bindingLayouts,
-        shaderStages,
-        pso->m_descriptorHeapPushRanges,
-        pso->m_descriptorHeapPushDataSize,
-        descriptorHeapScratch
-    );
 
-    VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
-    if(!pso->m_usesDescriptorHeap && !createPipelineLayoutForBindingLayouts(
+    if(!configurePipelineBindings(
         desc.bindingLayouts,
         NWB_TEXT("compute pipeline"),
-        pipelineLayout,
-        pso->m_pushConstantByteSize,
+        shaderStages,
+        descriptorHeapScratch,
+        pso->m_pipelineLayout,
         pso->m_ownsPipelineLayout,
+        pso->m_usesDescriptorHeap,
+        pso->m_descriptorHeapPushRanges,
+        pso->m_descriptorHeapPushDataSize,
+        pso->m_pushConstantByteSize,
         scratchArena))
     {
         DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
-    pso->m_pipelineLayout = pipelineLayout;
 
     VkComputePipelineCreateInfo pipelineInfo = __hidden_vulkan::MakeVkStruct<VkComputePipelineCreateInfo>(VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO);
     if(pso->m_usesDescriptorHeap)
         pipelineInfo.pNext = descriptorHeapScratch.pNext();
     pipelineInfo.stage = shaderStages[0];
-    pipelineInfo.layout = pso->m_usesDescriptorHeap ? VK_NULL_HANDLE : pipelineLayout;
+    pipelineInfo.layout = pso->m_usesDescriptorHeap ? VK_NULL_HANDLE : pso->m_pipelineLayout;
 
     res = vkCreateComputePipelines(m_context.device, m_context.pipelineCache, 1, &pipelineInfo, m_context.allocationCallbacks, &pso->m_pipeline);
     if(res != VK_SUCCESS){

@@ -468,16 +468,13 @@ RayTracingPipeline::RayTracingPipeline(const VulkanContext& context, Device& dev
     , m_device(device)
 {}
 RayTracingPipeline::~RayTracingPipeline(){
-    if(m_pipeline){
-        vkDestroyPipeline(m_context.device, m_pipeline, m_context.allocationCallbacks);
-        m_pipeline = VK_NULL_HANDLE;
-    }
-
-    if(m_ownsPipelineLayout && m_pipelineLayout != VK_NULL_HANDLE){
-        vkDestroyPipelineLayout(m_context.device, m_pipelineLayout, m_context.allocationCallbacks);
-        m_pipelineLayout = VK_NULL_HANDLE;
-        m_ownsPipelineLayout = false;
-    }
+    __hidden_vulkan::DestroyPipelineAndOwnedLayout(
+        m_context.device,
+        m_context.allocationCallbacks,
+        m_pipeline,
+        m_pipelineLayout,
+        m_ownsPipelineLayout
+    );
 }
 
 Object RayTracingPipeline::getNativeHandle(ObjectType objectType){
@@ -758,9 +755,9 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
 
     Alloc::ScratchArena<> scratchArena(s_RayTracingScratchArenaBytes);
 
-    Vector<VkPipelineShaderStageCreateInfo, Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>> stages{ Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>(scratchArena) };
+    PipelineShaderStageVector stages{ Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>(scratchArena) };
     Vector<VkRayTracingShaderGroupCreateInfoKHR, Alloc::ScratchAllocator<VkRayTracingShaderGroupCreateInfoKHR>> groups{ Alloc::ScratchAllocator<VkRayTracingShaderGroupCreateInfoKHR>(scratchArena) };
-    Vector<VkSpecializationInfo, Alloc::ScratchAllocator<VkSpecializationInfo>> specInfos{ Alloc::ScratchAllocator<VkSpecializationInfo>(scratchArena) };
+    PipelineSpecializationInfoVector specInfos{ Alloc::ScratchAllocator<VkSpecializationInfo>(scratchArena) };
     PipelineDescriptorHeapScratch descriptorHeapScratch{ scratchArena };
 
     stages.reserve(maxShaderStages);
@@ -863,28 +860,22 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
         return nullptr;
     }
 
-    pso->m_usesDescriptorHeap = DescriptorHeapManager::tryEnablePipeline(
-        m_context,
-        desc.globalBindingLayouts,
-        stages,
-        pso->m_descriptorHeapPushRanges,
-        pso->m_descriptorHeapPushDataSize,
-        descriptorHeapScratch
-    );
-
-    VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
-    if(!pso->m_usesDescriptorHeap && !createPipelineLayoutForBindingLayouts(
+    if(!configurePipelineBindings(
         desc.globalBindingLayouts,
         NWB_TEXT("ray tracing pipeline"),
-        pipelineLayout,
-        pso->m_pushConstantByteSize,
+        stages,
+        descriptorHeapScratch,
+        pso->m_pipelineLayout,
         pso->m_ownsPipelineLayout,
+        pso->m_usesDescriptorHeap,
+        pso->m_descriptorHeapPushRanges,
+        pso->m_descriptorHeapPushDataSize,
+        pso->m_pushConstantByteSize,
         scratchArena))
     {
         DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
-    pso->m_pipelineLayout = pipelineLayout;
 
     VkRayTracingPipelineCreateInfoKHR createInfo = __hidden_vulkan::MakeVkStruct<VkRayTracingPipelineCreateInfoKHR>(VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR);
     if(pso->m_usesDescriptorHeap)
@@ -894,7 +885,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
     createInfo.groupCount = static_cast<u32>(groups.size());
     createInfo.pGroups = groups.data();
     createInfo.maxPipelineRayRecursionDepth = desc.maxRecursionDepth;
-    createInfo.layout = pso->m_usesDescriptorHeap ? VK_NULL_HANDLE : pipelineLayout;
+    createInfo.layout = pso->m_usesDescriptorHeap ? VK_NULL_HANDLE : pso->m_pipelineLayout;
 
     res = vkCreateRayTracingPipelinesKHR(m_context.device, VK_NULL_HANDLE, m_context.pipelineCache, 1, &createInfo, m_context.allocationCallbacks, &pso->m_pipeline);
     if(res != VK_SUCCESS){

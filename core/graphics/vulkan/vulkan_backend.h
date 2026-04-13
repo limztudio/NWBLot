@@ -43,6 +43,7 @@ namespace __hidden_vulkan{
     u32 GetPushConstantByteSize(const BindingLayoutDesc& desc);
     bool ValidatePushConstantByteSize(const VulkanContext& context, u32 byteSize, const tchar* operationName);
     bool CreatePipelineLayout(const VulkanContext& context, const VkDescriptorSetLayout* setLayouts, u32 setLayoutCount, u32 pushConstantByteSize, VkPipelineLayout& outLayout, const tchar* operationName);
+    void DestroyPipelineAndOwnedLayout(VkDevice device, const VkAllocationCallbacks* allocationCallbacks, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout, bool& ownsPipelineLayout);
     bool BuildClusterOperationInputInfo(
         const RayTracingClusterOperationParams& params,
         VkClusterAccelerationStructureInputInfoNV& outInputInfo,
@@ -840,6 +841,8 @@ struct DescriptorHeapPushRange{
     u32 pushOffsetBytes = 0;
     u32 pushWordCount = 0;
 };
+using PipelineShaderStageVector = Vector<VkPipelineShaderStageCreateInfo, Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>>;
+using PipelineSpecializationInfoVector = Vector<VkSpecializationInfo, Alloc::ScratchAllocator<VkSpecializationInfo>>;
 
 struct PipelineDescriptorHeapScratch{
     Vector<VkDescriptorSetAndBindingMappingEXT, Alloc::ScratchAllocator<VkDescriptorSetAndBindingMappingEXT>> mappings;
@@ -885,7 +888,7 @@ public:
     static bool tryEnablePipeline(
         const VulkanContext& context,
         const BindingLayoutVector& bindingLayouts,
-        Vector<VkPipelineShaderStageCreateInfo, Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>>& shaderStages,
+        PipelineShaderStageVector& shaderStages,
         FixedVector<DescriptorHeapPushRange, s_MaxBindingLayouts>& outPushRanges,
         u32& outPushDataSize,
         VkPipelineCreateFlags2CreateInfo& outFlags2,
@@ -894,7 +897,7 @@ public:
     static bool tryEnablePipeline(
         const VulkanContext& context,
         const BindingLayoutVector& bindingLayouts,
-        Vector<VkPipelineShaderStageCreateInfo, Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>>& shaderStages,
+        PipelineShaderStageVector& shaderStages,
         FixedVector<DescriptorHeapPushRange, s_MaxBindingLayouts>& outPushRanges,
         u32& outPushDataSize,
         PipelineDescriptorHeapScratch& scratch);
@@ -1648,11 +1651,23 @@ private:
         u32& outPushConstantByteSize,
         bool& outOwnsPipelineLayout,
         Alloc::ScratchArena<>& scratchArena)const;
+    [[nodiscard]] bool configurePipelineBindings(
+        const BindingLayoutVector& bindingLayouts,
+        const tchar* operationName,
+        PipelineShaderStageVector& shaderStages,
+        PipelineDescriptorHeapScratch& descriptorHeapScratch,
+        VkPipelineLayout& outPipelineLayout,
+        bool& outOwnsPipelineLayout,
+        bool& outUsesDescriptorHeap,
+        FixedVector<DescriptorHeapPushRange, s_MaxBindingLayouts>& outDescriptorHeapPushRanges,
+        u32& outDescriptorHeapPushDataSize,
+        u32& outPushConstantByteSize,
+        Alloc::ScratchArena<>& scratchArena)const;
     void appendPipelineShaderStage(
         IShader* shader,
         VkShaderStageFlagBits stage,
-        Vector<VkSpecializationInfo, Alloc::ScratchAllocator<VkSpecializationInfo>>& specializationInfos,
-        Vector<VkPipelineShaderStageCreateInfo, Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>>& shaderStages)const;
+        PipelineSpecializationInfoVector& specializationInfos,
+        PipelineShaderStageVector& shaderStages)const;
 
 
 private:

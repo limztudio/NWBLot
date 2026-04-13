@@ -21,16 +21,13 @@ MeshletPipeline::MeshletPipeline(const VulkanContext& context)
     , m_context(context)
 {}
 MeshletPipeline::~MeshletPipeline(){
-    if(m_pipeline){
-        vkDestroyPipeline(m_context.device, m_pipeline, m_context.allocationCallbacks);
-        m_pipeline = VK_NULL_HANDLE;
-    }
-
-    if(m_ownsPipelineLayout && m_pipelineLayout != VK_NULL_HANDLE){
-        vkDestroyPipelineLayout(m_context.device, m_pipelineLayout, m_context.allocationCallbacks);
-        m_pipelineLayout = VK_NULL_HANDLE;
-        m_ownsPipelineLayout = false;
-    }
+    __hidden_vulkan::DestroyPipelineAndOwnedLayout(
+        m_context.device,
+        m_context.allocationCallbacks,
+        m_pipeline,
+        m_pipelineLayout,
+        m_ownsPipelineLayout
+    );
 }
 Object MeshletPipeline::getNativeHandle(ObjectType objectType){
     if(objectType == ObjectTypes::VK_Pipeline)
@@ -59,8 +56,8 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     auto* pso = NewArenaObject<MeshletPipeline>(m_context.objectArena, m_context);
     pso->m_desc = desc;
 
-    Vector<VkPipelineShaderStageCreateInfo, Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>> shaderStages{ Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>(scratchArena) };
-    Vector<VkSpecializationInfo, Alloc::ScratchAllocator<VkSpecializationInfo>> specInfos{ Alloc::ScratchAllocator<VkSpecializationInfo>(scratchArena) };
+    PipelineShaderStageVector shaderStages{ Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>(scratchArena) };
+    PipelineSpecializationInfoVector specInfos{ Alloc::ScratchAllocator<VkSpecializationInfo>(scratchArena) };
     PipelineDescriptorHeapScratch descriptorHeapScratch{ scratchArena };
     shaderStages.reserve(s_MeshletPipelineStageReserveCount); // Task (optional), Mesh, Fragment
     specInfos.reserve(s_MeshletPipelineStageReserveCount);
@@ -79,28 +76,22 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     if(desc.PS)
         appendPipelineShaderStage(desc.PS.get(), VK_SHADER_STAGE_FRAGMENT_BIT, specInfos, shaderStages);
 
-    pso->m_usesDescriptorHeap = DescriptorHeapManager::tryEnablePipeline(
-        m_context,
-        desc.bindingLayouts,
-        shaderStages,
-        pso->m_descriptorHeapPushRanges,
-        pso->m_descriptorHeapPushDataSize,
-        descriptorHeapScratch
-    );
-
-    VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
-    if(!pso->m_usesDescriptorHeap && !createPipelineLayoutForBindingLayouts(
+    if(!configurePipelineBindings(
         desc.bindingLayouts,
         NWB_TEXT("meshlet pipeline"),
-        pipelineLayout,
-        pso->m_pushConstantByteSize,
+        shaderStages,
+        descriptorHeapScratch,
+        pso->m_pipelineLayout,
         pso->m_ownsPipelineLayout,
+        pso->m_usesDescriptorHeap,
+        pso->m_descriptorHeapPushRanges,
+        pso->m_descriptorHeapPushDataSize,
+        pso->m_pushConstantByteSize,
         scratchArena))
     {
         DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
-    pso->m_pipelineLayout = pipelineLayout;
 
     VkPipelineRasterizationStateCreateInfo rasterizer = __hidden_vulkan::MakeVkStruct<VkPipelineRasterizationStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO);
     rasterizer.depthClampEnable = VK_FALSE;
@@ -204,7 +195,7 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     pipelineInfo.pDepthStencilState = &depthStencil;
     pipelineInfo.pColorBlendState = &colorBlending;
     pipelineInfo.pDynamicState = &dynamicState;
-    pipelineInfo.layout = pso->m_usesDescriptorHeap ? VK_NULL_HANDLE : pipelineLayout;
+    pipelineInfo.layout = pso->m_usesDescriptorHeap ? VK_NULL_HANDLE : pso->m_pipelineLayout;
     pipelineInfo.renderPass = VK_NULL_HANDLE;
 
     res = vkCreateGraphicsPipelines(m_context.device, m_context.pipelineCache, 1, &pipelineInfo, m_context.allocationCallbacks, &pso->m_pipeline);

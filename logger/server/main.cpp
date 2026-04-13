@@ -19,31 +19,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_logserver{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct CommonInitializerGuard{
-    bool active = false;
-
-    ~CommonInitializerGuard(){
-        if(active)
-            NWB::Core::Common::Initializer::instance().finalize();
-    }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 static int MainLogic(u16 logPort, void* inst){
     {
         NWB::Log::Server logger;
@@ -103,10 +78,9 @@ static int EntryPoint(isize argc, tchar** argv, void* inst){
     }
 
     try{
-        __hidden_logserver::CommonInitializerGuard commonInitializerGuard;
-        if(!NWB::Core::Common::Initializer::instance().initialize())
+        NWB::Core::Common::InitializerGuard commonInitializerGuard;
+        if(!commonInitializerGuard.initialize())
             return -1;
-        commonInitializerGuard.active = true;
         ret = MainLogic(logPort, inst);
     }
     catch(...){
@@ -116,28 +90,9 @@ static int EntryPoint(isize argc, tchar** argv, void* inst){
     return ret;
 }
 
-#if defined(NWB_PLATFORM_WINDOWS)
-#include <windows.h>
-#if defined(NWB_UNICODE)
-int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nCmdShow){
-    (void)hPrevInstance;
-    (void)lpCmdLine;
-    (void)nCmdShow;
-    return EntryPoint(__argc, __wargv, hInstance);
-}
-#else
-int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nCmdShow){
-    (void)hPrevInstance;
-    (void)lpCmdLine;
-    (void)nCmdShow;
-    return EntryPoint(__argc, __argv, hInstance);
-}
-#endif
-#else
-int main(int argc, char** argv){
-    return EntryPoint(argc, argv, nullptr);
-}
-#endif
+#include <global/application_entry.h>
+
+NWB_DEFINE_APPLICATION_ENTRY_POINT(EntryPoint)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -23,15 +23,6 @@ static void ResourceCookFree(void* ptr){ NWB::Core::Alloc::CoreFree(ptr, "resour
 static void* ResourceCookAllocAligned(usize size, usize align){ return NWB::Core::Alloc::CoreAllocAligned(size, align, "resource_cook"); }
 static void ResourceCookFreeAligned(void* ptr){ NWB::Core::Alloc::CoreFreeAligned(ptr, "resource_cook"); }
 
-struct CommonInitializerGuard{
-    bool active = false;
-
-    ~CommonInitializerGuard(){
-        if(active)
-            NWB::Core::Common::Initializer::instance().finalize();
-    }
-};
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -44,10 +35,9 @@ struct CommonInitializerGuard{
 
 int ResourceCookerMain(int argc, char** argv){
     try{
-        __hidden_resource_cooker::CommonInitializerGuard commonInitializerGuard;
-        if(!NWB::Core::Common::Initializer::instance().initialize())
+        NWB::Core::Common::InitializerGuard commonInitializerGuard;
+        if(!commonInitializerGuard.initialize())
             return -1;
-        commonInitializerGuard.active = true;
 
         NWB::Core::Alloc::CustomArena cookArena(
             __hidden_resource_cooker::ResourceCookAlloc,

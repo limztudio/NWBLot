@@ -107,16 +107,13 @@ GraphicsPipeline::GraphicsPipeline(const VulkanContext& context)
     , m_context(context)
 {}
 GraphicsPipeline::~GraphicsPipeline(){
-    if(m_pipeline){
-        vkDestroyPipeline(m_context.device, m_pipeline, m_context.allocationCallbacks);
-        m_pipeline = VK_NULL_HANDLE;
-    }
-
-    if(m_ownsPipelineLayout && m_pipelineLayout != VK_NULL_HANDLE){
-        vkDestroyPipelineLayout(m_context.device, m_pipelineLayout, m_context.allocationCallbacks);
-        m_pipelineLayout = VK_NULL_HANDLE;
-        m_ownsPipelineLayout = false;
-    }
+    __hidden_vulkan::DestroyPipelineAndOwnedLayout(
+        m_context.device,
+        m_context.allocationCallbacks,
+        m_pipeline,
+        m_pipelineLayout,
+        m_ownsPipelineLayout
+    );
 }
 Object GraphicsPipeline::getNativeHandle(ObjectType objectType){
     if(objectType == ObjectTypes::VK_Pipeline)
@@ -238,8 +235,8 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     }
 
     // Step 1: Collect shader stages
-    Vector<VkPipelineShaderStageCreateInfo, Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>> shaderStages{ Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>(scratchArena) };
-    Vector<VkSpecializationInfo, Alloc::ScratchAllocator<VkSpecializationInfo>> specInfos{ Alloc::ScratchAllocator<VkSpecializationInfo>(scratchArena) };
+    PipelineShaderStageVector shaderStages{ Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>(scratchArena) };
+    PipelineSpecializationInfoVector specInfos{ Alloc::ScratchAllocator<VkSpecializationInfo>(scratchArena) };
     PipelineDescriptorHeapScratch descriptorHeapScratch{ scratchArena };
     shaderStages.reserve(5);
     specInfos.reserve(5);
@@ -261,14 +258,22 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
         return nullptr;
     }
 
-    pso->m_usesDescriptorHeap = DescriptorHeapManager::tryEnablePipeline(
-        m_context,
+    if(!configurePipelineBindings(
         desc.bindingLayouts,
+        NWB_TEXT("graphics pipeline"),
         shaderStages,
+        descriptorHeapScratch,
+        pso->m_pipelineLayout,
+        pso->m_ownsPipelineLayout,
+        pso->m_usesDescriptorHeap,
         pso->m_descriptorHeapPushRanges,
         pso->m_descriptorHeapPushDataSize,
-        descriptorHeapScratch
-    );
+        pso->m_pushConstantByteSize,
+        scratchArena))
+    {
+        DestroyArenaObject(m_context.objectArena, pso);
+        return nullptr;
+    }
 
     // Step 2: Vertex input state from InputLayout
     VkPipelineVertexInputStateCreateInfo vertexInputInfo = __hidden_vulkan::MakeVkStruct<VkPipelineVertexInputStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO);
@@ -358,21 +363,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     dynamicState.dynamicStateCount = static_cast<uint32_t>(LengthOf(dynamicStates));
     dynamicState.pDynamicStates = dynamicStates;
 
-    // Step 10: Pipeline layout from binding layouts
-    pso->m_pipelineLayout = VK_NULL_HANDLE;
-    if(!pso->m_usesDescriptorHeap && !createPipelineLayoutForBindingLayouts(
-        desc.bindingLayouts,
-        NWB_TEXT("graphics pipeline"),
-        pso->m_pipelineLayout,
-        pso->m_pushConstantByteSize,
-        pso->m_ownsPipelineLayout,
-        scratchArena))
-    {
-        DestroyArenaObject(m_context.objectArena, pso);
-        return nullptr;
-    }
-
-    // Step 11: Dynamic rendering info
+    // Step 10: Dynamic rendering info
     VkPipelineRenderingCreateInfo renderingInfo = __hidden_vulkan::MakeVkStruct<VkPipelineRenderingCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO);
     Vector<VkFormat, Alloc::ScratchAllocator<VkFormat>> colorFormats{ Alloc::ScratchAllocator<VkFormat>(scratchArena) };
     colorFormats.reserve(fbinfo.colorFormats.size());

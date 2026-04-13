@@ -53,23 +53,29 @@ static bool EnvEquals(const char* name, const char* value){
 }
 #endif
 
+static void AppendBackend(Common::LinuxFrameBackend::Enum (&outOrder)[2], usize& count, const Common::LinuxFrameBackend::Enum backend){
+    NWB_ASSERT(count < LengthOf(outOrder));
+    outOrder[count] = backend;
+    ++count;
+}
+
 static usize BuildBackendOrder(Common::LinuxFrameBackend::Enum (&outOrder)[2]){
     usize count = 0;
 
     const char* requestedBackend = std::getenv("NWB_LINUX_BACKEND");
     if(requestedBackend){
         if(NWB_STRCMP(requestedBackend, "x11") == 0){
-            outOrder[count++] = Common::LinuxFrameBackend::Enum::X11;
+            AppendBackend(outOrder, count, Common::LinuxFrameBackend::Enum::X11);
 #if defined(NWB_WITH_WAYLAND)
-            outOrder[count++] = Common::LinuxFrameBackend::Enum::Wayland;
+            AppendBackend(outOrder, count, Common::LinuxFrameBackend::Enum::Wayland);
 #endif
             return count;
         }
 
 #if defined(NWB_WITH_WAYLAND)
         if(NWB_STRCMP(requestedBackend, "wayland") == 0){
-            outOrder[count++] = Common::LinuxFrameBackend::Enum::Wayland;
-            outOrder[count++] = Common::LinuxFrameBackend::Enum::X11;
+            AppendBackend(outOrder, count, Common::LinuxFrameBackend::Enum::Wayland);
+            AppendBackend(outOrder, count, Common::LinuxFrameBackend::Enum::X11);
             return count;
         }
 #endif
@@ -83,15 +89,15 @@ static usize BuildBackendOrder(Common::LinuxFrameBackend::Enum (&outOrder)[2]){
         || HasEnvValue("WAYLAND_DISPLAY")
         ;
     if(preferWayland){
-        outOrder[count++] = Common::LinuxFrameBackend::Enum::Wayland;
-        outOrder[count++] = Common::LinuxFrameBackend::Enum::X11;
+        AppendBackend(outOrder, count, Common::LinuxFrameBackend::Enum::Wayland);
+        AppendBackend(outOrder, count, Common::LinuxFrameBackend::Enum::X11);
         return count;
     }
 #endif
 
-    outOrder[count++] = Common::LinuxFrameBackend::Enum::X11;
+    AppendBackend(outOrder, count, Common::LinuxFrameBackend::Enum::X11);
 #if defined(NWB_WITH_WAYLAND)
-    outOrder[count++] = Common::LinuxFrameBackend::Enum::Wayland;
+    AppendBackend(outOrder, count, Common::LinuxFrameBackend::Enum::Wayland);
 #endif
     return count;
 }

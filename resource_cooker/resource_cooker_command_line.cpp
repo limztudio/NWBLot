@@ -6,6 +6,8 @@
 
 #include <CLI.hpp>
 
+#include <global/command.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -88,11 +90,13 @@ bool ParseCommandLine(const int argc, char** argv, CookOptions& outOptions, AStr
     outOptions = {};
     outError.clear();
 
-    for(int i = 1; i < argc; ++i){
-        if(argv[i] == nullptr)
-            continue;
-        if(AStringView(argv[i]) == "/?")
-            return false;
+    if(NWB::ArgHasValidArgv(argc, argv)){
+        for(int i = 1; i < argc; ++i){
+            if(argv[i] == nullptr)
+                continue;
+            if(AStringView(argv[i]) == "/?")
+                return false;
+        }
     }
 
     __hidden_resource_cooker::ParsedCookOptions parsedOptions;
@@ -102,7 +106,7 @@ bool ParseCommandLine(const int argc, char** argv, CookOptions& outOptions, AStr
     ConfigureCommandLineOptions(app, parsedOptions);
 
     try{
-        app.parse(argc, argv);
+        NWB::ArgParseApp(app, argc, argv);
     }
     catch(const CLI::CallForHelp&){
         return false;

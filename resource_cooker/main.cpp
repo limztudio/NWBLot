@@ -18,7 +18,9 @@ static int RunResourceCooker(const int argc, char** argv){
     }
     NWB_LOGGER_REGISTER(&logger);
 
-    return ResourceCookerMain(argc, argv);
+    const int ret = ResourceCookerMain(argc, argv);
+    NWB_LOGGER_REGISTER(nullptr);
+    return ret;
 }
 
 static int EntryPoint(const isize argc, char** argv, void*){

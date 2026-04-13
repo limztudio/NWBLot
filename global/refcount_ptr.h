@@ -271,7 +271,7 @@ namespace std{
 
 template<typename T, typename D>
 struct hash<RefCountPtr<T, D>>{
-    size_t operator()(const RefCountPtr<T, D>& x) const noexcept{ return std::hash<typename RefCountPtr<T, D>::pointer>()(x.get()); }
+    size_t operator()(const RefCountPtr<T, D>& x)const noexcept{ return std::hash<typename RefCountPtr<T, D>::pointer>()(x.get()); }
 };
 
 template<typename T, typename D>

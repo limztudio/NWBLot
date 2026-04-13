@@ -306,7 +306,7 @@ namespace std{
 
 template<typename T, typename D>
 struct hash<UniquePtr<T, D>>{
-    size_t operator()(const UniquePtr<T, D>& x) const noexcept{ return std::hash<typename UniquePtr<T, D>::pointer>()(x.get()); }
+    size_t operator()(const UniquePtr<T, D>& x)const noexcept{ return std::hash<typename UniquePtr<T, D>::pointer>()(x.get()); }
 };
 
 template<typename T, typename D>

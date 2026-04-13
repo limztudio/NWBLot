@@ -4,5 +4,7 @@
 *.cxx text eol=crlf
 *.h text eol=crlf
 *.hpp text eol=crlf
+*.glsl text eol=crlf
+*.glsli text eol=crlf
 
 3rd_parties/** -text

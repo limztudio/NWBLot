@@ -145,7 +145,7 @@ public:
 
 
 public:
-    usize max_size() const noexcept{
+    usize max_size()const noexcept{
         return (~usize(0) - CachelineSize()) / sizeof(T);
     }
 

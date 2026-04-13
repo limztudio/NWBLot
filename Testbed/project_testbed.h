@@ -22,7 +22,7 @@ private:
 
 public:
     explicit ProjectTestbed(NWB::ProjectRuntimeContext& context);
-    virtual ~ProjectTestbed() override;
+    virtual ~ProjectTestbed()override;
 
 public:
     virtual bool onStartup()override;

@@ -269,14 +269,7 @@ static int EntryPoint(isize argc, CharT** argv, void* inst){
         NWB::ArgAddOption<NWB::ArgCommand::LogPort>(app, port);
 
         try{
-            const bool hasValidArgv = argc > 0 && argv && argv[0];
-            if(hasValidArgv)
-                app.parse(static_cast<int>(argc), argv);
-            else{
-                const CharT emptyProgramName[] = { CharT('\0') };
-                const CharT* emptyArgv[] = { emptyProgramName };
-                app.parse(1, emptyArgv);
-            }
+            NWB::ArgParseApp(app, argc, argv);
         }
         catch(const CLI::ParseError& e){
             app.exit(e, NWB_COUT, NWB_CERR);

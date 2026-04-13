@@ -69,7 +69,7 @@ static int EntryPoint(isize argc, tchar** argv, void* inst){
         NWB::ArgAddOption<NWB::ArgCommand::LogPort>(app, logPort);
 
         try{
-            app.parse(static_cast<int>(argc), argv);
+            NWB::ArgParseApp(app, argc, argv);
         }
         catch(const CLI::ParseError& e){
             app.exit(e, NWB_COUT, NWB_CERR);

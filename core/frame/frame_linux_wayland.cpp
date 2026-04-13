@@ -361,16 +361,16 @@ static void DestroyWaylandContext(Common::LinuxFrame& frameData){
 static void OnRegistryGlobal(void* data, wl_registry* registry, u32 name, const char* interface, u32 version){
     auto& context = *static_cast<WaylandContext*>(data);
 
-    if(std::strcmp(interface, wl_compositor_interface.name) == 0){
+    if(NWB_STRCMP(interface, wl_compositor_interface.name) == 0){
         const u32 bindVersion = version < 4 ? version : 4;
         context.compositor = static_cast<wl_compositor*>(wl_registry_bind(registry, name, &wl_compositor_interface, bindVersion));
     }
-    else if(std::strcmp(interface, wl_seat_interface.name) == 0){
+    else if(NWB_STRCMP(interface, wl_seat_interface.name) == 0){
         const u32 bindVersion = version < 5 ? version : 5;
         context.seat = static_cast<wl_seat*>(wl_registry_bind(registry, name, &wl_seat_interface, bindVersion));
         context.seatVersion = bindVersion;
     }
-    else if(std::strcmp(interface, xdg_wm_base_interface.name) == 0){
+    else if(NWB_STRCMP(interface, xdg_wm_base_interface.name) == 0){
         const u32 bindVersion = version < 1 ? version : 1;
         context.wmBase = static_cast<xdg_wm_base*>(wl_registry_bind(registry, name, &xdg_wm_base_interface, bindVersion));
     }

@@ -49,7 +49,7 @@ static bool HasEnvValue(const char* name){
 
 static bool EnvEquals(const char* name, const char* value){
     const char* current = std::getenv(name);
-    return current && std::strcmp(current, value) == 0;
+    return current && NWB_STRCMP(current, value) == 0;
 }
 #endif
 
@@ -58,7 +58,7 @@ static usize BuildBackendOrder(Common::LinuxFrameBackend::Enum (&outOrder)[2]){
 
     const char* requestedBackend = std::getenv("NWB_LINUX_BACKEND");
     if(requestedBackend){
-        if(std::strcmp(requestedBackend, "x11") == 0){
+        if(NWB_STRCMP(requestedBackend, "x11") == 0){
             outOrder[count++] = Common::LinuxFrameBackend::Enum::X11;
 #if defined(NWB_WITH_WAYLAND)
             outOrder[count++] = Common::LinuxFrameBackend::Enum::Wayland;
@@ -67,7 +67,7 @@ static usize BuildBackendOrder(Common::LinuxFrameBackend::Enum (&outOrder)[2]){
         }
 
 #if defined(NWB_WITH_WAYLAND)
-        if(std::strcmp(requestedBackend, "wayland") == 0){
+        if(NWB_STRCMP(requestedBackend, "wayland") == 0){
             outOrder[count++] = Common::LinuxFrameBackend::Enum::Wayland;
             outOrder[count++] = Common::LinuxFrameBackend::Enum::X11;
             return count;

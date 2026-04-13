@@ -17,8 +17,8 @@ NWB_ALLOC_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-extern u64 QueryAffinityMask(CoreAffinity type);
-extern u32 QueryCoreCount(CoreAffinity type);
+extern u64 QueryAffinityMask(CoreAffinity::Enum type);
+extern u32 QueryCoreCount(CoreAffinity::Enum type);
 extern void SetCurrentThreadAffinity(u64 mask);
 
 
@@ -229,7 +229,7 @@ public:
             });
         }
     }
-    inline explicit ThreadPool(u32 threadCount, CoreAffinity affinity, usize arenaSize = 0)
+    inline explicit ThreadPool(u32 threadCount, CoreAffinity::Enum affinity, usize arenaSize = 0)
         : ThreadPool(threadCount, QueryAffinityMask(affinity), arenaSize)
     {}
 

@@ -70,7 +70,7 @@ void InputDispatcher::mouseScrollUpdate(f64 xoffset, f64 yoffset){
     });
 }
 
-void InputDispatcher::queueOrApplyHandlerMutation(HandlerMutationType type, IInputEventHandler& handler){
+void InputDispatcher::queueOrApplyHandlerMutation(HandlerMutationType::Enum type, IInputEventHandler& handler){
     if(m_dispatchDepth > 0){
         m_pendingHandlerMutations.push_back({ type, &handler });
         return;

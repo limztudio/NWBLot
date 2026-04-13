@@ -18,16 +18,18 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-enum class DeviceExtensionFeature : u8{
-    None = 0,
-    AccelerationStructure,
-    RayTracingPipeline,
-    RayQuery,
-    MeshShader,
-    FragmentShadingRate,
-    MutableDescriptorType,
-    DescriptorHeap,
-    Count,
+namespace DeviceExtensionFeature{
+    enum Enum : u8{
+        None = 0,
+        AccelerationStructure,
+        RayTracingPipeline,
+        RayQuery,
+        MeshShader,
+        FragmentShadingRate,
+        MutableDescriptorType,
+        DescriptorHeap,
+        Count,
+    };
 };
 
 
@@ -36,11 +38,11 @@ enum class DeviceExtensionFeature : u8{
 
 class BackendContext final : public IGraphicsBackend, public IBackendQueries{
 private:
-    using DeviceExtensionMap = HashMap<AString, DeviceExtensionFeature, Hasher<AString>, EqualTo<AString>, Alloc::CustomAllocator<Pair<const AString, DeviceExtensionFeature>>>;
+    using DeviceExtensionMap = HashMap<AString, DeviceExtensionFeature::Enum, Hasher<AString>, EqualTo<AString>, Alloc::CustomAllocator<Pair<const AString, DeviceExtensionFeature::Enum>>>;
 
     struct ExtEntry{
         const char* name;
-        DeviceExtensionFeature feature = DeviceExtensionFeature::None;
+        DeviceExtensionFeature::Enum feature = DeviceExtensionFeature::None;
     };
 
     struct VulkanExtensionSet{
@@ -51,7 +53,7 @@ private:
         explicit VulkanExtensionSet(Alloc::CustomArena& arena)
             : instance(0, Hasher<AString>(), EqualTo<AString>(), Alloc::CustomAllocator<AString>(arena))
             , layers(0, Hasher<AString>(), EqualTo<AString>(), Alloc::CustomAllocator<AString>(arena))
-            , device(0, Hasher<AString>(), EqualTo<AString>(), Alloc::CustomAllocator<Pair<const AString, DeviceExtensionFeature>>(arena))
+            , device(0, Hasher<AString>(), EqualTo<AString>(), Alloc::CustomAllocator<Pair<const AString, DeviceExtensionFeature::Enum>>(arena))
         {}
     };
 

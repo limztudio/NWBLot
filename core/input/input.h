@@ -198,6 +198,15 @@ public:
 };
 
 
+namespace HandlerMutationType{
+    enum Enum : u8{
+        AddFront,
+        AddBack,
+        Remove,
+    };
+};
+
+
 class InputDispatcher{
 public:
     void addHandlerToFront(IInputEventHandler& handler);
@@ -214,14 +223,8 @@ public:
 
 
 private:
-    enum class HandlerMutationType : u8{
-        AddFront,
-        AddBack,
-        Remove,
-    };
-
     struct HandlerMutation{
-        HandlerMutationType type = HandlerMutationType::Remove;
+        HandlerMutationType::Enum type = HandlerMutationType::Remove;
         IInputEventHandler* handler = nullptr;
     };
 
@@ -242,7 +245,7 @@ private:
             applyPendingHandlerMutations();
     }
 
-    void queueOrApplyHandlerMutation(HandlerMutationType type, IInputEventHandler& handler);
+    void queueOrApplyHandlerMutation(HandlerMutationType::Enum type, IInputEventHandler& handler);
     void applyPendingHandlerMutations();
     bool isHandlerPendingRemoval(const IInputEventHandler& handler)const;
 

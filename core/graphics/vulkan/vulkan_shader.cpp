@@ -19,11 +19,13 @@ NWB_VULKAN_BEGIN
 namespace __hidden_vulkan_shader{
 
 
-enum class EntryPointLookupResult : u8{
-    Found,
-    NotFound,
-    InvalidSpirv,
-    Ambiguous,
+namespace EntryPointLookupResult{
+    enum Enum : u8{
+        Found,
+        NotFound,
+        InvalidSpirv,
+        Ambiguous,
+    };
 };
 
 inline constexpr u32 s_SpirvMagic = 0x07230203u;
@@ -88,7 +90,7 @@ inline ShaderType::Mask ConvertExecutionModel(const u32 executionModel){
     }
 }
 
-inline EntryPointLookupResult ResolveEntryPointName(
+inline EntryPointLookupResult::Enum ResolveEntryPointName(
     const u32* words,
     const usize wordCount,
     const Name& entryName,
@@ -160,7 +162,7 @@ inline bool ResolveShaderEntryPoint(
     const char* errorContext,
     AString& outEntryPointName)
 {
-    const EntryPointLookupResult lookupResult = ResolveEntryPointName(words, wordCount, entryName, shaderType, outEntryPointName);
+    const EntryPointLookupResult::Enum lookupResult = ResolveEntryPointName(words, wordCount, entryName, shaderType, outEntryPointName);
     switch(lookupResult){
     case EntryPointLookupResult::Found:
         return true;

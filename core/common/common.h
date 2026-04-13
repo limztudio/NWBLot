@@ -165,18 +165,20 @@ public:
     inline const HWND& hwnd()const{ return reinterpret_cast<const HWND&>(m_data.ptr[2]); }
 };
 #elif defined(NWB_PLATFORM_LINUX)
-enum class LinuxFrameBackend : u8{
-    None = 0,
-    X11,
-    Wayland,
+namespace LinuxFrameBackend{
+    enum Enum : u8{
+        None = 0,
+        X11,
+        Wayland,
+    };
 };
 class LinuxFrame : public FrameData{
 public:
     inline bool& isActive(){ return reinterpret_cast<bool&>(m_data.u8[4]); }
     inline const bool& isActive()const{ return reinterpret_cast<const bool&>(m_data.u8[4]); }
 
-    inline LinuxFrameBackend& backend(){ return reinterpret_cast<LinuxFrameBackend&>(m_data.u8[5]); }
-    inline const LinuxFrameBackend& backend()const{ return reinterpret_cast<const LinuxFrameBackend&>(m_data.u8[5]); }
+    inline LinuxFrameBackend::Enum& backend(){ return reinterpret_cast<LinuxFrameBackend::Enum&>(m_data.u8[5]); }
+    inline const LinuxFrameBackend::Enum& backend()const{ return reinterpret_cast<const LinuxFrameBackend::Enum&>(m_data.u8[5]); }
 
     inline void*& nativeDisplay(){ return reinterpret_cast<void*&>(m_data.ptr[1]); }
     inline void* const& nativeDisplay()const{ return reinterpret_cast<void* const&>(m_data.ptr[1]); }

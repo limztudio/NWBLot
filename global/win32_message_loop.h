@@ -23,10 +23,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-enum class Win32MessagePumpResult{
-    Continue,
-    SkipUpdate,
-    Quit
+namespace Win32MessagePumpResult{
+    enum Enum : u8{
+        Continue,
+        SkipUpdate,
+        Quit
+    };
 };
 
 template<typename OnDestroyFunc, typename SetActiveFunc>
@@ -59,7 +61,7 @@ template<typename OnDestroyFunc, typename SetActiveFunc>
 
 
 template<typename IsActiveFunc>
-[[nodiscard]] inline Win32MessagePumpResult PumpWin32FrameMessages(IsActiveFunc&& isActive){
+[[nodiscard]] inline Win32MessagePumpResult::Enum PumpWin32FrameMessages(IsActiveFunc&& isActive){
     MSG message = {};
 
     if(isActive()){

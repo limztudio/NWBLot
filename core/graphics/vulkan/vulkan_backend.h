@@ -849,14 +849,16 @@ private:
 // Descriptor Heap
 
 
-enum class DescriptorHeapKind : u8{
-    None = 0,
-    Resource,
-    Sampler,
+namespace DescriptorHeapKind{
+    enum Enum : u8{
+        None = 0,
+        Resource,
+        Sampler,
+    };
 };
 
 struct DescriptorHeapAllocation{
-    DescriptorHeapKind kind = DescriptorHeapKind::None;
+    DescriptorHeapKind::Enum kind = DescriptorHeapKind::None;
     u32 offsetBytes = 0;
     u32 sizeBytes = 0;
 
@@ -866,7 +868,7 @@ struct DescriptorHeapAllocation{
 struct DescriptorHeapBindingMeta{
     ResourceType::Enum resourceType = ResourceType::None;
     VkDescriptorType descriptorType = VK_DESCRIPTOR_TYPE_MAX_ENUM;
-    DescriptorHeapKind heapKind = DescriptorHeapKind::None;
+    DescriptorHeapKind::Enum heapKind = DescriptorHeapKind::None;
     u32 slot = 0;
     u32 arraySize = 0;
     u32 descriptorSize = 0;
@@ -964,7 +966,7 @@ public:
     [[nodiscard]] const VkBindHeapInfoEXT& getResourceBindInfo()const{ return m_resourceHeap.bindInfo; }
     [[nodiscard]] const VkBindHeapInfoEXT& getSamplerBindInfo()const{ return m_samplerHeap.bindInfo; }
 
-    [[nodiscard]] DescriptorHeapAllocation allocate(DescriptorHeapKind kind, u32 sizeBytes, u32 alignmentBytes);
+    [[nodiscard]] DescriptorHeapAllocation allocate(DescriptorHeapKind::Enum kind, u32 sizeBytes, u32 alignmentBytes);
     void free(const DescriptorHeapAllocation& allocation);
 
     bool writeDescriptor(const BindingSetItem& item, const DescriptorHeapBindingMeta& meta, u32 dstOffsetBytes);

@@ -29,8 +29,8 @@ NWB_ALLOC_BEGIN
 
 extern usize CachelineSize();
 
-extern u64 QueryAffinityMask(CoreAffinity type);
-extern u32 QueryCoreCount(CoreAffinity type);
+extern u64 QueryAffinityMask(CoreAffinity::Enum type);
+extern u32 QueryCoreCount(CoreAffinity::Enum type);
 extern void SetCurrentThreadAffinity(u64 mask);
 
 

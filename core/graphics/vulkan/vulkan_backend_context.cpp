@@ -97,7 +97,7 @@ static OptionalDeviceFeatureSet MakeRequestedOptionalDeviceFeatures(){
     return features;
 }
 
-static void* GetOptionalDeviceFeatureStruct(OptionalDeviceFeatureSet& features, DeviceExtensionFeature feature){
+static void* GetOptionalDeviceFeatureStruct(OptionalDeviceFeatureSet& features, DeviceExtensionFeature::Enum feature){
     switch(feature){
     case DeviceExtensionFeature::AccelerationStructure: return &features.accelerationStructure;
     case DeviceExtensionFeature::RayTracingPipeline: return &features.rayTracingPipeline;
@@ -128,7 +128,7 @@ static bool SupportsRequestedValue(VkBool32 requested, VkBool32 supported){
     return requested != VK_TRUE || supported == VK_TRUE;
 }
 
-static bool SupportsRequestedOptionalDeviceFeature(const OptionalDeviceFeatureSet& requested, const OptionalDeviceFeatureSet& supported, DeviceExtensionFeature feature){
+static bool SupportsRequestedOptionalDeviceFeature(const OptionalDeviceFeatureSet& requested, const OptionalDeviceFeatureSet& supported, DeviceExtensionFeature::Enum feature){
     switch(feature){
     case DeviceExtensionFeature::AccelerationStructure:
         return SupportsRequestedValue(requested.accelerationStructure.accelerationStructure, supported.accelerationStructure.accelerationStructure);
@@ -167,7 +167,7 @@ static void AppendFeatureStruct(void*& pNext, void* feature){
     pNext = feature;
 }
 
-static void AppendOptionalDeviceFeature(void*& pNext, OptionalDeviceFeatureSet& features, DeviceExtensionFeature feature, bool* appended){
+static void AppendOptionalDeviceFeature(void*& pNext, OptionalDeviceFeatureSet& features, DeviceExtensionFeature::Enum feature, bool* appended){
     if(feature == DeviceExtensionFeature::None || feature == DeviceExtensionFeature::Count)
         return;
 
@@ -228,7 +228,7 @@ BackendContext::BackendContext(
     , m_arena(m_allocator.getObjectArena())
     , m_enabledExtensions(m_arena)
     , m_optionalExtensions(m_arena)
-    , m_rayTracingExtensions(0, Hasher<AString>(), EqualTo<AString>(), Alloc::CustomAllocator<Pair<const AString, DeviceExtensionFeature>>(m_arena))
+    , m_rayTracingExtensions(0, Hasher<AString>(), EqualTo<AString>(), Alloc::CustomAllocator<Pair<const AString, DeviceExtensionFeature::Enum>>(m_arena))
     , m_swapChainImages(Alloc::CustomAllocator<SwapChainImage>(m_arena))
     , m_acquireSemaphores(Alloc::CustomAllocator<VkSemaphore>(m_arena))
     , m_presentSemaphores(Alloc::CustomAllocator<VkSemaphore>(m_arena))
@@ -445,15 +445,15 @@ bool BackendContext::createVulkanInstance(){
         frame.frameParam() = m_platformFrameParam;
 
         switch(frame.backend()){
-        case Common::LinuxFrameBackend::X11:
+        case Common::LinuxFrameBackend::Enum::X11:
             m_enabledExtensions.instance.insert(VK_KHR_XLIB_SURFACE_EXTENSION_NAME);
             break;
 #if defined(NWB_WITH_WAYLAND)
-        case Common::LinuxFrameBackend::Wayland:
+        case Common::LinuxFrameBackend::Enum::Wayland:
             m_enabledExtensions.instance.insert(VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME);
             break;
 #endif
-        case Common::LinuxFrameBackend::None:
+        case Common::LinuxFrameBackend::Enum::None:
         default:
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot create a Linux surface without a valid native window backend."));
             return false;
@@ -1217,7 +1217,7 @@ bool BackendContext::createWindowSurface(){
     frame.frameParam() = m_platformFrameParam;
 
     switch(frame.backend()){
-    case Common::LinuxFrameBackend::X11:
+    case Common::LinuxFrameBackend::Enum::X11:
     {
         VkXlibSurfaceCreateInfoKHR createInfo = {};
         createInfo.sType = VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR;
@@ -1232,7 +1232,7 @@ bool BackendContext::createWindowSurface(){
         return true;
     }
 #if defined(NWB_WITH_WAYLAND)
-    case Common::LinuxFrameBackend::Wayland:
+    case Common::LinuxFrameBackend::Enum::Wayland:
     {
         VkWaylandSurfaceCreateInfoKHR createInfo = {};
         createInfo.sType = VK_STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR;
@@ -1247,7 +1247,7 @@ bool BackendContext::createWindowSurface(){
         return true;
     }
 #endif
-    case Common::LinuxFrameBackend::None:
+    case Common::LinuxFrameBackend::Enum::None:
     default:
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Unsupported Linux window backend for surface creation."));
         return false;

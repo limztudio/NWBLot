@@ -35,10 +35,12 @@ NWB_ALLOC_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-enum class CoreAffinity : u8{
-    Any,
-    Performance,
-    Efficiency,
+namespace CoreAffinity{
+    enum Enum : u8{
+        Any,
+        Performance,
+        Efficiency,
+    };
 };
 
 

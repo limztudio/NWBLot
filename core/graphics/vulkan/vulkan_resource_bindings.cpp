@@ -173,7 +173,7 @@ void DestroyPipelineAndOwnedLayout(
     }
 }
 
-constexpr DescriptorHeapKind GetDescriptorHeapKind(ResourceType::Enum type){
+constexpr DescriptorHeapKind::Enum GetDescriptorHeapKind(ResourceType::Enum type){
     return type == ResourceType::Sampler ? DescriptorHeapKind::Sampler : DescriptorHeapKind::Resource;
 }
 
@@ -817,7 +817,7 @@ u32 DescriptorHeapManager::getDescriptorStride(const VkDescriptorType descriptor
     return stride;
 }
 
-DescriptorHeapAllocation DescriptorHeapManager::allocate(const DescriptorHeapKind kind, const u32 sizeBytes, const u32 alignmentBytes){
+DescriptorHeapAllocation DescriptorHeapManager::allocate(const DescriptorHeapKind::Enum kind, const u32 sizeBytes, const u32 alignmentBytes){
     DescriptorHeapAllocation result{};
     if(!m_enabled || kind == DescriptorHeapKind::None || sizeBytes == 0)
         return result;

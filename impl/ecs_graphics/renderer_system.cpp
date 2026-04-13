@@ -279,14 +279,14 @@ static Core::RenderState BuildAvboitAccumulateRenderState(){
     return renderState;
 }
 
-static Core::RenderState BuildRenderStateForPass(const RendererSystem::MaterialPipelinePass pass){
+static Core::RenderState BuildRenderStateForPass(const MaterialPipelinePass::Enum pass){
     switch(pass){
-    case RendererSystem::MaterialPipelinePass::Opaque:
+    case MaterialPipelinePass::Opaque:
         return BuildGeometryRenderState();
-    case RendererSystem::MaterialPipelinePass::AvboitOccupancy:
-    case RendererSystem::MaterialPipelinePass::AvboitExtinction:
+    case MaterialPipelinePass::AvboitOccupancy:
+    case MaterialPipelinePass::AvboitExtinction:
         return BuildAvboitVoxelRenderState();
-    case RendererSystem::MaterialPipelinePass::AvboitAccumulate:
+    case MaterialPipelinePass::AvboitAccumulate:
         return BuildAvboitAccumulateRenderState();
     default:
         return BuildGeometryRenderState();
@@ -1263,7 +1263,7 @@ void RendererSystem::clearAvboitTargets(Core::ICommandList& commandList, AvboitF
 void RendererSystem::renderMaterialPass(
     Core::ICommandList& commandList,
     Core::IFramebuffer* framebuffer,
-    const MaterialPipelinePass pass,
+    const MaterialPipelinePass::Enum pass,
     const bool transparent,
     Core::IBindingSet* passBindingSet,
     const AvboitFrameTargets* avboitTargets
@@ -1293,7 +1293,7 @@ void RendererSystem::renderMaterialPass(
 
 void RendererSystem::gatherMaterialPassDrawItems(
     Core::IFramebuffer* framebuffer,
-    const MaterialPipelinePass pass,
+    const MaterialPipelinePass::Enum pass,
     const bool transparent,
     MaterialPassDrawItemVector& meshDrawItems,
     MaterialPassDrawItemVector& computeDrawItems
@@ -1973,7 +1973,7 @@ bool RendererSystem::ensureComputeBindingSet(GeometryResources& geometry){
 }
 
 
-bool RendererSystem::ensureRendererPipeline(const RendererComponent& renderer, Core::IFramebuffer* framebuffer, const MaterialPipelinePass pass, MaterialPipelineResources*& outResources){
+bool RendererSystem::ensureRendererPipeline(const RendererComponent& renderer, Core::IFramebuffer* framebuffer, const MaterialPipelinePass::Enum pass, MaterialPipelineResources*& outResources){
     outResources = nullptr;
 
     if(!framebuffer)
@@ -2248,7 +2248,7 @@ bool RendererSystem::hasTransparentRenderers(){
     return false;
 }
 
-void RendererSystem::logMaterialRenderPathDecision(const Name& materialKey, const RenderPath renderPath, const bool meshSupported){
+void RendererSystem::logMaterialRenderPathDecision(const Name& materialKey, const RenderPath::Enum renderPath, const bool meshSupported){
     const auto foundLoggedPath = m_loggedMaterialPaths.find(materialKey);
     if(foundLoggedPath != m_loggedMaterialPaths.end() && foundLoggedPath.value() == renderPath)
         return;

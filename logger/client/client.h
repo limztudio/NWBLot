@@ -23,8 +23,8 @@ public:
 
 
 public:
-    virtual void enqueue(TString&& str, Type type = Type::Info) = 0;
-    virtual void enqueue(const TString& str, Type type = Type::Info) = 0;
+    virtual void enqueue(TString&& str, Type::Enum type = Type::Info) = 0;
+    virtual void enqueue(const TString& str, Type::Enum type = Type::Info) = 0;
 };
 
 
@@ -50,8 +50,8 @@ public:
 
 
 public:
-    virtual void enqueue(TString&& str, Type type = Type::Info)override{ BaseType::enqueue(Move(str), type); }
-    virtual void enqueue(const TString& str, Type type = Type::Info)override{ BaseType::enqueue(str, type); }
+    virtual void enqueue(TString&& str, Type::Enum type = Type::Info)override{ BaseType::enqueue(Move(str), type); }
+    virtual void enqueue(const TString& str, Type::Enum type = Type::Info)override{ BaseType::enqueue(str, type); }
 
 
 protected:
@@ -110,8 +110,8 @@ public:
 
 
 public:
-    virtual void enqueue(TString&& str, Type type = Type::Info)override{ BaseType::enqueue(Move(str), type); }
-    virtual void enqueue(const TString& str, Type type = Type::Info)override{ BaseType::enqueue(str, type); }
+    virtual void enqueue(TString&& str, Type::Enum type = Type::Info)override{ BaseType::enqueue(Move(str), type); }
+    virtual void enqueue(const TString& str, Type::Enum type = Type::Info)override{ BaseType::enqueue(str, type); }
 
 
 protected:

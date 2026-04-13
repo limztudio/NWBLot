@@ -58,7 +58,7 @@ public:
 static Frame* g_Frame = nullptr;
 static HFONT g_Font = nullptr;
 static HWND g_ListHwnd = nullptr;
-static Deque<Pair<BasicString<tchar>, Log::Type>> g_Messages;
+static Deque<Pair<BasicString<tchar>, Log::Type::Enum>> g_Messages;
 
 static Futex g_ListMutex;
 
@@ -398,7 +398,7 @@ bool Frame::mainLoop(){
     return false;
 }
 
-void Frame::print(BasicStringView<tchar> str, Log::Type type){
+void Frame::print(BasicStringView<tchar> str, Log::Type::Enum type){
     ScopedLock lock(__hidden_frame::g_ListMutex);
 
     __hidden_frame::g_Messages.emplace_back(BasicString<tchar>(str), type);

@@ -123,7 +123,7 @@ public:
         m_nodes.reserve(reserveCount);
         m_freeNodes.reserve(reserveCount);
     }
-    inline explicit JobSystem(u32 threadCount, CoreAffinity affinity, usize arenaSize = 0)
+    inline explicit JobSystem(u32 threadCount, CoreAffinity::Enum affinity, usize arenaSize = 0)
         : m_ownedPool(MakeUnique<ThreadPool>(threadCount, affinity, arenaSize))
         , m_pool(*m_ownedPool)
         , m_arena(resolveArenaSize(threadCount, arenaSize))

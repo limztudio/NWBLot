@@ -39,7 +39,7 @@ using FrameData = BasicFrameData<2>;
 
 class Frame{
 public:
-    static void print(BasicStringView<tchar> str, Log::Type type);
+    static void print(BasicStringView<tchar> str, Log::Type::Enum type);
 
 
 public:

@@ -27,25 +27,32 @@ class Shader;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class RendererSystem final : public Core::ECS::ISystem, public Core::IRenderPass{
-public:
-    enum class MaterialPipelinePass : u8{
+namespace MaterialPipelinePass{
+    enum Enum : u8{
         Opaque,
         AvboitOccupancy,
         AvboitExtinction,
         AvboitAccumulate,
     };
+};
 
-private:
-    enum class RenderPath : u8{
+namespace RenderPath{
+    enum Enum : u8{
         MeshShader,
         ComputeEmulation,
     };
+};
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class RendererSystem final : public Core::ECS::ISystem, public Core::IRenderPass{
+private:
     struct MaterialPipelineKey{
         Name material = NAME_NONE;
         Core::FramebufferInfo framebufferInfo;
-        MaterialPipelinePass pass = MaterialPipelinePass::Opaque;
+        MaterialPipelinePass::Enum pass = MaterialPipelinePass::Opaque;
     };
     struct MaterialPipelineKeyHasher{
         usize operator()(const MaterialPipelineKey& key)const;
@@ -86,7 +93,7 @@ private:
     };
 
     struct MaterialPipelineResources{
-        RenderPath renderPath = RenderPath::MeshShader;
+        RenderPath::Enum renderPath = RenderPath::MeshShader;
         Core::GraphicsPipelineHandle emulationPipeline;
         Core::MeshletPipelineHandle meshletPipeline;
         Core::ComputePipelineHandle computePipeline;
@@ -165,7 +172,7 @@ private:
     struct MaterialPassDrawContext{
         Core::ICommandList& commandList;
         Core::IFramebuffer* framebuffer = nullptr;
-        MaterialPipelinePass pass = MaterialPipelinePass::Opaque;
+        MaterialPipelinePass::Enum pass = MaterialPipelinePass::Opaque;
         Core::IBindingSet* passBindingSet = nullptr;
         const AvboitFrameTargets* avboitTargets = nullptr;
         const Core::ViewportState& viewportState;
@@ -230,7 +237,7 @@ private:
     [[nodiscard]] bool ensureDeferredCompositePipeline(Core::IFramebuffer* presentationFramebuffer);
     [[nodiscard]] bool ensureAvboitResources();
     [[nodiscard]] bool ensureAvboitPipelines(AvboitFrameTargets& targets);
-    [[nodiscard]] bool ensureRendererPipeline(const RendererComponent& renderer, Core::IFramebuffer* framebuffer, MaterialPipelinePass pass, MaterialPipelineResources*& outResources);
+    [[nodiscard]] bool ensureRendererPipeline(const RendererComponent& renderer, Core::IFramebuffer* framebuffer, MaterialPipelinePass::Enum pass, MaterialPipelineResources*& outResources);
     [[nodiscard]] bool hasTransparentRenderers();
     void resetDeferredFrameTargets();
     void clearDeferredTargets(Core::ICommandList& commandList, DeferredFrameTargets& targets);
@@ -238,14 +245,14 @@ private:
     void renderMaterialPass(
         Core::ICommandList& commandList,
         Core::IFramebuffer* framebuffer,
-        MaterialPipelinePass pass,
+        MaterialPipelinePass::Enum pass,
         bool transparent,
         Core::IBindingSet* passBindingSet,
         const AvboitFrameTargets* avboitTargets
     );
     void gatherMaterialPassDrawItems(
         Core::IFramebuffer* framebuffer,
-        MaterialPipelinePass pass,
+        MaterialPipelinePass::Enum pass,
         bool transparent,
         MaterialPassDrawItemVector& meshDrawItems,
         MaterialPassDrawItemVector& computeDrawItems
@@ -278,7 +285,7 @@ private:
     void dispatchAvboitDepthWarp(Core::ICommandList& commandList, AvboitFrameTargets& targets);
     void dispatchAvboitIntegration(Core::ICommandList& commandList, AvboitFrameTargets& targets);
     [[nodiscard]] bool renderDeferredComposite(Core::ICommandList& commandList, DeferredFrameTargets& targets, Core::IFramebuffer* presentationFramebuffer);
-    void logMaterialRenderPathDecision(const Name& materialKey, RenderPath renderPath, bool meshSupported);
+    void logMaterialRenderPathDecision(const Name& materialKey, RenderPath::Enum renderPath, bool meshSupported);
     [[nodiscard]] bool ensureShaderLoaded(
         Core::ShaderHandle& outShader,
         const Name& shaderName,
@@ -298,7 +305,7 @@ private:
     HashMap<Name, GeometryResources, Hasher<Name>, EqualTo<Name>> m_geometryMeshes;
     HashMap<Name, MaterialSurfaceInfo, Hasher<Name>, EqualTo<Name>> m_materialSurfaceInfos;
     HashMap<MaterialPipelineKey, MaterialPipelineResources, MaterialPipelineKeyHasher, MaterialPipelineKeyEqualTo> m_materialPipelines;
-    HashMap<Name, RenderPath, Hasher<Name>, EqualTo<Name>> m_loggedMaterialPaths;
+    HashMap<Name, RenderPath::Enum, Hasher<Name>, EqualTo<Name>> m_loggedMaterialPaths;
     Core::BindingLayoutHandle m_meshBindingLayout;
     Core::BindingLayoutHandle m_computeBindingLayout;
     Core::BindingLayoutHandle m_deferredCompositeBindingLayout;

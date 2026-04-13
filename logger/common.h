@@ -19,23 +19,25 @@ NWB_LOG_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-enum class Type : u8{
-    Info,
-    EssentialInfo,
-    Warning,
-    CriticalWarning,
-    Error,
-    Fatal,
+namespace Type{
+    enum Enum : u8{
+        Info,
+        EssentialInfo,
+        Warning,
+        CriticalWarning,
+        Error,
+        Fatal,
+    };
 };
 
-using MessageType = Tuple<Timer, Type, TString>;
+using MessageType = Tuple<Timer, Type::Enum, TString>;
 using MessageQueue = ParallelQueue<MessageType>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline const tchar* MessageTypeToString(Type type){
+[[nodiscard]] inline const tchar* MessageTypeToString(Type::Enum type){
     switch(type){
     case Type::Info:
         return NWB_TEXT("INFO");
@@ -53,7 +55,7 @@ using MessageQueue = ParallelQueue<MessageType>;
     return NWB_TEXT("UNKNOWN");
 }
 
-[[nodiscard]] inline bool MessageTypeWritesToErrorStream(Type type){
+[[nodiscard]] inline bool MessageTypeWritesToErrorStream(Type::Enum type){
     switch(type){
     case Type::CriticalWarning:
     case Type::Error:
@@ -199,8 +201,8 @@ public:
     }
 
 public:
-    inline void enqueue(TString&& str, Type type = Type::Info){ return static_cast<T*>(this)->T::enqueue(MakeTuple(TimerNow(), type, Move(str))); }
-    inline void enqueue(const TString& str, Type type = Type::Info){ return static_cast<T*>(this)->T::enqueue(MakeTuple(TimerNow(), type, str)); }
+    inline void enqueue(TString&& str, Type::Enum type = Type::Info){ return static_cast<T*>(this)->T::enqueue(MakeTuple(TimerNow(), type, Move(str))); }
+    inline void enqueue(const TString& str, Type::Enum type = Type::Info){ return static_cast<T*>(this)->T::enqueue(MakeTuple(TimerNow(), type, str)); }
 
 
 protected:

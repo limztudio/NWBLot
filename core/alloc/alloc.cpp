@@ -94,7 +94,7 @@ struct AffinityMasks : Core::Common::Initializerable{
     void finalize()override{}
 
 #if defined(NWB_PLATFORM_WINDOWS)
-    void queryMask(u64& outMask, CoreAffinity type){
+    void queryMask(u64& outMask, CoreAffinity::Enum type){
         ULONG bufferSize = 0;
         GetSystemCpuSetInformation(nullptr, 0, &bufferSize, GetCurrentProcess(), 0);
         if(bufferSize == 0)
@@ -165,7 +165,7 @@ usize CachelineSize(){ return __hidden_alloc::s_CacheSize.size; }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-u64 QueryAffinityMask(CoreAffinity type){
+u64 QueryAffinityMask(CoreAffinity::Enum type){
     switch(type){
     case CoreAffinity::Performance: return __hidden_alloc::s_AffinityMasks.performance;
     case CoreAffinity::Efficiency: return __hidden_alloc::s_AffinityMasks.efficiency;
@@ -173,7 +173,7 @@ u64 QueryAffinityMask(CoreAffinity type){
     }
 }
 
-u32 QueryCoreCount(CoreAffinity type){
+u32 QueryCoreCount(CoreAffinity::Enum type){
     u64 mask = QueryAffinityMask(type);
     if(mask == 0)
         return static_cast<u32>(Thread::hardware_concurrency());

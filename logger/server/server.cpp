@@ -63,7 +63,7 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
         const auto* ptr = reinterpret_cast<const u8*>(contents);
         usize sizeLeft = totalSize;
 
-        if(sizeLeft < sizeof(Timer) + sizeof(Type) + sizeof(tchar)){
+        if(sizeLeft < sizeof(Timer) + sizeof(Type::Enum) + sizeof(tchar)){
             thisPtr->enqueue(StringFormat(NWB_TEXT("Received a truncated message on {}"), SERVER_NAME), Type::Error);
             return;
         }
@@ -75,7 +75,7 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
             sizeLeft -= sizeof(decltype(time));
         }
 
-        Type type{};
+        Type::Enum type{};
         {
             NWB_MEMCPY(&type, sizeof(decltype(type)), ptr, sizeof(decltype(type)));
             ptr += sizeof(decltype(type));

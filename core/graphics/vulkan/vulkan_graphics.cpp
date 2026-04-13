@@ -16,7 +16,7 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_vulkan{
+namespace VulkanDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -81,7 +81,7 @@ GraphicsPipeline::GraphicsPipeline(const VulkanContext& context)
     , m_context(context)
 {}
 GraphicsPipeline::~GraphicsPipeline(){
-    __hidden_vulkan::DestroyPipelineAndOwnedLayout(
+    VulkanDetail::DestroyPipelineAndOwnedLayout(
         m_context.device,
         m_context.allocationCallbacks,
         m_pipeline,
@@ -245,7 +245,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     }
 
     // Step 2: Vertex input state from InputLayout
-    VkPipelineVertexInputStateCreateInfo vertexInputInfo = __hidden_vulkan::MakeVkStruct<VkPipelineVertexInputStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO);
+    VkPipelineVertexInputStateCreateInfo vertexInputInfo = VulkanDetail::MakeVkStruct<VkPipelineVertexInputStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO);
 
     if(desc.inputLayout){
         auto* layout = checked_cast<InputLayout*>(desc.inputLayout.get());
@@ -257,24 +257,24 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     }
 
     // Step 3: Input assembly
-    VkPipelineInputAssemblyStateCreateInfo inputAssembly = __hidden_vulkan::MakeVkStruct<VkPipelineInputAssemblyStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO);
-    inputAssembly.topology = __hidden_vulkan::ConvertPrimitiveTopology(desc.primType);
+    VkPipelineInputAssemblyStateCreateInfo inputAssembly = VulkanDetail::MakeVkStruct<VkPipelineInputAssemblyStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO);
+    inputAssembly.topology = VulkanDetail::ConvertPrimitiveTopology(desc.primType);
     inputAssembly.primitiveRestartEnable = VK_FALSE;
 
-    VkPipelineTessellationStateCreateInfo tessellationState = __hidden_vulkan::MakeVkStruct<VkPipelineTessellationStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO);
+    VkPipelineTessellationStateCreateInfo tessellationState = VulkanDetail::MakeVkStruct<VkPipelineTessellationStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO);
     tessellationState.patchControlPoints = desc.patchControlPoints;
 
     // Step 4: Viewport and scissor (dynamic)
-    VkPipelineViewportStateCreateInfo viewportState = __hidden_vulkan::MakeVkStruct<VkPipelineViewportStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO);
+    VkPipelineViewportStateCreateInfo viewportState = VulkanDetail::MakeVkStruct<VkPipelineViewportStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO);
     viewportState.viewportCount = 1;
     viewportState.scissorCount = 1;
 
     // Step 5: Rasterization state
-    VkPipelineRasterizationStateCreateInfo rasterizer = __hidden_vulkan::MakeVkStruct<VkPipelineRasterizationStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO);
+    VkPipelineRasterizationStateCreateInfo rasterizer = VulkanDetail::MakeVkStruct<VkPipelineRasterizationStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO);
     rasterizer.depthClampEnable = desc.renderState.rasterState.depthClipEnable ? VK_FALSE : VK_TRUE;
     rasterizer.rasterizerDiscardEnable = VK_FALSE;
-    rasterizer.polygonMode = __hidden_vulkan::ConvertFillMode(desc.renderState.rasterState.fillMode);
-    rasterizer.cullMode = __hidden_vulkan::ConvertCullMode(desc.renderState.rasterState.cullMode);
+    rasterizer.polygonMode = VulkanDetail::ConvertFillMode(desc.renderState.rasterState.fillMode);
+    rasterizer.cullMode = VulkanDetail::ConvertCullMode(desc.renderState.rasterState.cullMode);
     rasterizer.frontFace = desc.renderState.rasterState.frontCounterClockwise ? VK_FRONT_FACE_COUNTER_CLOCKWISE : VK_FRONT_FACE_CLOCKWISE;
     rasterizer.depthBiasEnable = desc.renderState.rasterState.depthBias != 0 ? VK_TRUE : VK_FALSE;
     rasterizer.depthBiasConstantFactor = (f32)desc.renderState.rasterState.depthBias;
@@ -284,7 +284,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
 
     // Step 6: Multisample state
     VkPipelineMultisampleStateCreateInfo multisampling;
-    if(!__hidden_vulkan::ConfigurePipelineMultisampleState(
+    if(!VulkanDetail::ConfigurePipelineMultisampleState(
         fbinfo.sampleCount,
         desc.renderState.blendState.alphaToCoverageEnable,
         multisampling,
@@ -296,15 +296,15 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
 
     // Step 7: Depth/stencil state
     VkPipelineDepthStencilStateCreateInfo depthStencil;
-    __hidden_vulkan::ConfigurePipelineDepthStencilState(desc.renderState.depthStencilState, true, depthStencil);
+    VulkanDetail::ConfigurePipelineDepthStencilState(desc.renderState.depthStencilState, true, depthStencil);
 
     // Step 8: Color blend state
-    VkPipelineColorBlendStateCreateInfo colorBlending = __hidden_vulkan::MakeVkStruct<VkPipelineColorBlendStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO);
+    VkPipelineColorBlendStateCreateInfo colorBlending = VulkanDetail::MakeVkStruct<VkPipelineColorBlendStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO);
     colorBlending.logicOpEnable = VK_FALSE;
     Vector<VkPipelineColorBlendAttachmentState, Alloc::ScratchAllocator<VkPipelineColorBlendAttachmentState>> blendAttachments{ Alloc::ScratchAllocator<VkPipelineColorBlendAttachmentState>(scratchArena) };
     blendAttachments.reserve(fbinfo.colorFormats.size());
     for(u32 i = 0; i < static_cast<u32>(fbinfo.colorFormats.size()); ++i){
-        blendAttachments.push_back(__hidden_vulkan::ConvertBlendState(desc.renderState.blendState.targets[i]));
+        blendAttachments.push_back(VulkanDetail::ConvertBlendState(desc.renderState.blendState.targets[i]));
     }
     colorBlending.attachmentCount = static_cast<uint32_t>(blendAttachments.size());
     colorBlending.pAttachments = blendAttachments.data();
@@ -322,19 +322,19 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
         VK_DYNAMIC_STATE_STENCIL_REFERENCE,
     };
 
-    VkPipelineDynamicStateCreateInfo dynamicState = __hidden_vulkan::MakeVkStruct<VkPipelineDynamicStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO);
+    VkPipelineDynamicStateCreateInfo dynamicState = VulkanDetail::MakeVkStruct<VkPipelineDynamicStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO);
     dynamicState.dynamicStateCount = static_cast<uint32_t>(LengthOf(dynamicStates));
     dynamicState.pDynamicStates = dynamicStates;
 
     // Step 10: Dynamic rendering info
     VkPipelineRenderingCreateInfo renderingInfo = {};
     PipelineRenderingFormatVector colorFormats{ Alloc::ScratchAllocator<VkFormat>(scratchArena) };
-    if(!__hidden_vulkan::BuildPipelineRenderingInfo(fbinfo, NWB_TEXT("graphics pipeline"), renderingInfo, colorFormats)){
+    if(!VulkanDetail::BuildPipelineRenderingInfo(fbinfo, NWB_TEXT("graphics pipeline"), renderingInfo, colorFormats)){
         DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
 
-    VkGraphicsPipelineCreateInfo pipelineInfo = __hidden_vulkan::MakeVkStruct<VkGraphicsPipelineCreateInfo>(VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO);
+    VkGraphicsPipelineCreateInfo pipelineInfo = VulkanDetail::MakeVkStruct<VkGraphicsPipelineCreateInfo>(VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO);
     if(pso->m_usesDescriptorHeap){
         pipelineInfo.pNext = descriptorHeapScratch.pNext(m_context.extensions.KHR_dynamic_rendering ? &renderingInfo : nullptr);
     }
@@ -424,8 +424,8 @@ bool CommandList::beginDynamicRendering(IFramebuffer* _framebuffer, const Render
         }
     }
 
-    VkRenderingAttachmentInfo depthAttachment = __hidden_vulkan::MakeVkStruct<VkRenderingAttachmentInfo>(VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO);
-    VkRenderingAttachmentInfo stencilAttachment = __hidden_vulkan::MakeVkStruct<VkRenderingAttachmentInfo>(VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO);
+    VkRenderingAttachmentInfo depthAttachment = VulkanDetail::MakeVkStruct<VkRenderingAttachmentInfo>(VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO);
+    VkRenderingAttachmentInfo stencilAttachment = VulkanDetail::MakeVkStruct<VkRenderingAttachmentInfo>(VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO);
     bool hasDepth = false;
     bool hasStencil = false;
 
@@ -461,7 +461,7 @@ bool CommandList::beginDynamicRendering(IFramebuffer* _framebuffer, const Render
         }
     }
 
-    VkRenderingInfo renderingInfo = __hidden_vulkan::MakeVkStruct<VkRenderingInfo>(VK_STRUCTURE_TYPE_RENDERING_INFO);
+    VkRenderingInfo renderingInfo = VulkanDetail::MakeVkStruct<VkRenderingInfo>(VK_STRUCTURE_TYPE_RENDERING_INFO);
     renderingInfo.renderArea.offset = { 0, 0 };
     renderingInfo.renderArea.extent = { fb->m_framebufferInfo.width, fb->m_framebufferInfo.height };
     renderingInfo.layerCount = fb->m_framebufferInfo.arraySize;
@@ -527,7 +527,7 @@ void CommandList::setGraphicsState(const GraphicsState& state){
     auto* pipeline = checked_cast<GraphicsPipeline*>(state.pipeline);
     if(pipeline){
         vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->m_pipeline);
-        __hidden_vulkan::SetGraphicsDynamicState(m_currentCmdBuf->m_cmdBuf, pipeline->m_desc, state);
+        VulkanDetail::SetGraphicsDynamicState(m_currentCmdBuf->m_cmdBuf, pipeline->m_desc, state);
     }
 
     if(pipeline)
@@ -559,7 +559,7 @@ void CommandList::setGraphicsState(const GraphicsState& state){
                 m_currentGraphicsState = {};
                 return;
             }
-            if(!__hidden_vulkan::IsBufferRangeInBounds(vb->m_desc, binding.offset, 1)){
+            if(!VulkanDetail::IsBufferRangeInBounds(vb->m_desc, binding.offset, 1)){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind vertex buffer: offset is outside the buffer"));
                 NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to bind vertex buffer: offset is outside the buffer"));
                 m_currentGraphicsState = {};
@@ -605,7 +605,7 @@ void CommandList::setGraphicsState(const GraphicsState& state){
             m_currentGraphicsState = {};
             return;
         }
-        if(!__hidden_vulkan::IsBufferRangeInBounds(ib->m_desc, state.indexBuffer.offset, indexSizeBytes)){
+        if(!VulkanDetail::IsBufferRangeInBounds(ib->m_desc, state.indexBuffer.offset, indexSizeBytes)){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind index buffer: offset is outside the buffer"));
             NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to bind index buffer: offset is outside the buffer"));
             m_currentGraphicsState = {};
@@ -663,7 +663,7 @@ void CommandList::drawIndexed(const DrawArguments& args){
 
     const u64 indexByteOffset = static_cast<u64>(m_currentGraphicsState.indexBuffer.offset) + startIndexByteOffset;
     const u64 indexByteSize = static_cast<u64>(args.vertexCount) * indexSizeBytes;
-    if(!__hidden_vulkan::IsBufferRangeInBounds(ib->m_desc, indexByteOffset, indexByteSize)){
+    if(!VulkanDetail::IsBufferRangeInBounds(ib->m_desc, indexByteOffset, indexByteSize)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to draw indexed: requested index range is outside the index buffer"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to draw indexed: requested index range is outside the index buffer"));
         return;

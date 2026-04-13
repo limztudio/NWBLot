@@ -32,7 +32,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_frame{
+namespace FrameDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -420,7 +420,7 @@ bool Frame::init(){
     {
         wc.cbSize = sizeof(WNDCLASSEX);
         wc.style = CS_HREDRAW | CS_VREDRAW;
-        wc.lpfnWndProc = __hidden_frame::WinProc;
+        wc.lpfnWndProc = FrameDetail::WinProc;
         wc.hInstance = data<Common::WinFrame>().instance();
         wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
         wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW);
@@ -519,12 +519,12 @@ bool Frame::mainLoop(){
 }
 
 void Frame::setupPlatform(void* inst){
-    __hidden_frame::g_Frame = this;
+    FrameDetail::g_Frame = this;
     data<Common::WinFrame>().isActive() = false;
     data<Common::WinFrame>().instance() = reinterpret_cast<HINSTANCE>(inst);
 }
 void Frame::cleanupPlatform(){
-    __hidden_frame::g_Frame = nullptr;
+    FrameDetail::g_Frame = nullptr;
 }
 
 

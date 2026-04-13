@@ -17,7 +17,7 @@ NWB_ECS_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ecs{
+namespace ECSDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -125,7 +125,7 @@ class View{
 
 
 public:
-    using IteratorType = __hidden_ecs::ViewIterator<Ts...>;
+    using IteratorType = ECSDetail::ViewIterator<Ts...>;
     using ComponentTuple = Tuple<ComponentPool<Ts>*...>;
 
 
@@ -155,7 +155,7 @@ public:
         for(usize i = 0; i < m_count; ++i){
             EntityID entityId = entityAt(i);
             if(entityId.valid() && allHave(entityId))
-                applyFunc(func, entityId, __hidden_ecs::IndexSequenceFor<Ts...>{});
+                applyFunc(func, entityId, ECSDetail::IndexSequenceFor<Ts...>{});
         }
     }
 
@@ -168,7 +168,7 @@ public:
             [this, &func](usize i){
                 EntityID entityId = entityAt(i);
                 if(entityId.valid() && allHave(entityId))
-                    applyFunc(func, entityId, __hidden_ecs::IndexSequenceFor<Ts...>{});
+                    applyFunc(func, entityId, ECSDetail::IndexSequenceFor<Ts...>{});
             }
         );
     }
@@ -180,14 +180,14 @@ private:
         m_anchorPoolIndex = 0;
         m_count = Limit<usize>::s_Max;
 
-        initializeAnchorImpl(__hidden_ecs::IndexSequenceFor<Ts...>{});
+        initializeAnchorImpl(ECSDetail::IndexSequenceFor<Ts...>{});
 
         if(!m_valid)
             m_count = 0;
     }
 
     template<usize... Is>
-    void initializeAnchorImpl(__hidden_ecs::IndexSequence<Is...>){
+    void initializeAnchorImpl(ECSDetail::IndexSequence<Is...>){
         (updateAnchor<Is>(), ...);
     }
 
@@ -207,27 +207,27 @@ private:
     }
 
     EntityID entityAt(usize denseIndex)const{
-        return entityAtImpl(denseIndex, __hidden_ecs::IndexSequenceFor<Ts...>{});
+        return entityAtImpl(denseIndex, ECSDetail::IndexSequenceFor<Ts...>{});
     }
 
     template<usize... Is>
-    EntityID entityAtImpl(usize denseIndex, __hidden_ecs::IndexSequence<Is...>)const{
+    EntityID entityAtImpl(usize denseIndex, ECSDetail::IndexSequence<Is...>)const{
         EntityID result = ENTITY_ID_INVALID;
         (void)((m_anchorPoolIndex == Is ? (result = Get<Is>(m_pools)->m_dense[denseIndex], true) : false) || ...);
         return result;
     }
 
     bool allHave(EntityID entityId)const{
-        return allHaveImpl(entityId, __hidden_ecs::IndexSequenceFor<Ts...>{});
+        return allHaveImpl(entityId, ECSDetail::IndexSequenceFor<Ts...>{});
     }
 
     template<usize... Is>
-    bool allHaveImpl(EntityID entityId, __hidden_ecs::IndexSequence<Is...>)const{
+    bool allHaveImpl(EntityID entityId, ECSDetail::IndexSequence<Is...>)const{
         return ((Get<Is>(m_pools) != nullptr && Get<Is>(m_pools)->has(entityId)) && ...);
     }
 
     template<typename Func, usize... Is>
-    void applyFunc(Func& func, EntityID entityId, __hidden_ecs::IndexSequence<Is...>)const{
+    void applyFunc(Func& func, EntityID entityId, ECSDetail::IndexSequence<Is...>)const{
         func(entityId, Get<Is>(m_pools)->get(entityId)...);
     }
 

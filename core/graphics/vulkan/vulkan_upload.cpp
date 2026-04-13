@@ -14,7 +14,7 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_vulkan{
+namespace VulkanDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -168,7 +168,7 @@ bool UploadManager::suballocateBuffer(u64 size, Buffer** pBuffer, u64* pOffset, 
 
     const auto trySuballocateFromChunk = [&](BufferChunk& chunk) -> bool {
         u64 alignedOffset = 0;
-        if(!__hidden_vulkan::AlignUploadOffsetChecked(chunk.allocated, alignment, alignedOffset))
+        if(!VulkanDetail::AlignUploadOffsetChecked(chunk.allocated, alignment, alignedOffset))
             return false;
         if(alignedOffset > chunk.size || size > chunk.size - alignedOffset)
             return false;
@@ -234,8 +234,8 @@ void UploadManager::submitChunks(CommandQueue::Enum queueID, u64 submittedVersio
     for(u32 i = 0; i < static_cast<u32>(CommandQueue::kCount); ++i)
         completedVersions[i] = m_device.queueGetCompletedInstance(static_cast<CommandQueue::Enum>(i));
 
-    const __hidden_vulkan::SubmittedOwnersContext submittedContext{ submittedOwners, submittedOwnerCount };
-    recycleMatchingActiveChunks(queueIndex, submittedVersion, false, completedVersions, __hidden_vulkan::IsSubmittedOwner, &submittedContext);
+    const VulkanDetail::SubmittedOwnersContext submittedContext{ submittedOwners, submittedOwnerCount };
+    recycleMatchingActiveChunks(queueIndex, submittedVersion, false, completedVersions, VulkanDetail::IsSubmittedOwner, &submittedContext);
 }
 
 void UploadManager::discardChunks(CommandQueue::Enum queueID, TrackedCommandBuffer* owner, u64 reusableVersion){
@@ -248,7 +248,7 @@ void UploadManager::discardChunks(CommandQueue::Enum queueID, TrackedCommandBuff
         completedVersions[i] = m_device.queueGetCompletedInstance(static_cast<CommandQueue::Enum>(i));
     completedVersions[queueIndex] = Max(completedVersions[queueIndex], reusableVersion);
 
-    recycleMatchingActiveChunks(queueIndex, reusableVersion, true, completedVersions, __hidden_vulkan::IsMatchingOwner, owner);
+    recycleMatchingActiveChunks(queueIndex, reusableVersion, true, completedVersions, VulkanDetail::IsMatchingOwner, owner);
 }
 
 

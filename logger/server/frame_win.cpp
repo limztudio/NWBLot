@@ -35,7 +35,7 @@ NWB_LOG_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_frame{
+namespace FrameDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -319,15 +319,15 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 
 
 Frame::Frame(void* inst){
-    __hidden_frame::g_Frame = this;
+    FrameDetail::g_Frame = this;
 
-    data<__hidden_frame::WinFrame>().instance() = reinterpret_cast<HINSTANCE>(inst);
+    data<FrameDetail::WinFrame>().instance() = reinterpret_cast<HINSTANCE>(inst);
 }
 Frame::~Frame(){
     cleanup();
 
-    __hidden_frame::g_Messages.clear();
-    __hidden_frame::g_Frame = nullptr;
+    FrameDetail::g_Messages.clear();
+    FrameDetail::g_Frame = nullptr;
 }
 
 bool Frame::init(){
@@ -340,8 +340,8 @@ bool Frame::init(){
     {
         wc.cbSize = sizeof(WNDCLASSEX);
         wc.style = CS_HREDRAW | CS_VREDRAW;
-        wc.lpfnWndProc = __hidden_frame::WinProc;
-        wc.hInstance = data<__hidden_frame::WinFrame>().instance();
+        wc.lpfnWndProc = FrameDetail::WinProc;
+        wc.hInstance = data<FrameDetail::WinFrame>().instance();
         wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
         wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW);
         wc.lpszClassName = ClassName;
@@ -349,7 +349,7 @@ bool Frame::init(){
     if(!RegisterClassEx(&wc))
         return false;
 
-    data<__hidden_frame::WinFrame>().hwnd() = CreateWindowEx(
+    data<FrameDetail::WinFrame>().hwnd() = CreateWindowEx(
         StyleEx,
         wc.lpszClassName,
         AppName,
@@ -363,7 +363,7 @@ bool Frame::init(){
         wc.hInstance,
         nullptr
     );
-    if(!data<__hidden_frame::WinFrame>().hwnd())
+    if(!data<FrameDetail::WinFrame>().hwnd())
         return false;
 
     if(!startup())
@@ -372,14 +372,14 @@ bool Frame::init(){
     return true;
 }
 bool Frame::showFrame(){
-    ShowWindow(data<__hidden_frame::WinFrame>().hwnd(), SW_SHOW);
+    ShowWindow(data<FrameDetail::WinFrame>().hwnd(), SW_SHOW);
     return true;
 }
 bool Frame::mainLoop(){
     Timer lateTime(TimerNow());
 
     for(;;){
-        switch(PumpWin32FrameMessages([&](){ return data<__hidden_frame::WinFrame>().isActive(); })){
+        switch(PumpWin32FrameMessages([&](){ return data<FrameDetail::WinFrame>().isActive(); })){
         case Win32MessagePumpResult::Quit:
             return true;
         case Win32MessagePumpResult::SkipUpdate:
@@ -399,14 +399,14 @@ bool Frame::mainLoop(){
 }
 
 void Frame::print(BasicStringView<tchar> str, Log::Type::Enum type){
-    ScopedLock lock(__hidden_frame::g_ListMutex);
+    ScopedLock lock(FrameDetail::g_ListMutex);
 
-    __hidden_frame::g_Messages.emplace_back(BasicString<tchar>(str), type);
-    SendMessage(__hidden_frame::g_ListHwnd, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(__hidden_frame::g_Messages[__hidden_frame::g_Messages.size() - 1].first().c_str()));
+    FrameDetail::g_Messages.emplace_back(BasicString<tchar>(str), type);
+    SendMessage(FrameDetail::g_ListHwnd, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(FrameDetail::g_Messages[FrameDetail::g_Messages.size() - 1].first().c_str()));
 
-    auto numItem = SendMessage(__hidden_frame::g_ListHwnd, LB_GETCOUNT, 0, 0);
+    auto numItem = SendMessage(FrameDetail::g_ListHwnd, LB_GETCOUNT, 0, 0);
     if(numItem > 0)
-        SendMessage(__hidden_frame::g_ListHwnd, LB_SETCURSEL, numItem - 1, 0);
+        SendMessage(FrameDetail::g_ListHwnd, LB_SETCURSEL, numItem - 1, 0);
 }
 
 

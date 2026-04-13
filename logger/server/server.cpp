@@ -22,7 +22,7 @@ NWB_LOG_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_logger{
+namespace LoggerDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -100,7 +100,7 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
     };
 
     if(!conCls){
-        auto* info = reinterpret_cast<__hidden_logger::ConnectionInfo*>(Core::Alloc::CoreAlloc(sizeof(__hidden_logger::ConnectionInfo), "ConnectionInfo allocated at Server::requestCallback"));
+        auto* info = reinterpret_cast<LoggerDetail::ConnectionInfo*>(Core::Alloc::CoreAlloc(sizeof(LoggerDetail::ConnectionInfo), "ConnectionInfo allocated at Server::requestCallback"));
         if(!info){
             thisPtr->enqueue(StringFormat(NWB_TEXT("Failed to allocate on {}"), SERVER_NAME), Type::Fatal);
             return MHD_NO;
@@ -112,7 +112,7 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
         return MHD_YES;
     }
 
-    auto*& info = reinterpret_cast<__hidden_logger::ConnectionInfo*&>(conCls);
+    auto*& info = reinterpret_cast<LoggerDetail::ConnectionInfo*&>(conCls);
     auto freeConnectionInfo = [&](){
         Core::Alloc::CoreFree(info->buffer, "ConnectionInfo buffer freed at Server::requestCallback");
         Core::Alloc::CoreFree(info, "ConnectionInfo freed at Server::requestCallback");

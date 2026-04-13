@@ -16,7 +16,7 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_vulkan{
+namespace VulkanDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -459,7 +459,7 @@ bool Device::createPipelineLayoutForBindingLayouts(
     outOwnsPipelineLayout = false;
 
     if(bindingLayouts.empty()){
-        if(!__hidden_vulkan::CreatePipelineLayout(m_context, nullptr, 0, 0, outPipelineLayout, operationName))
+        if(!VulkanDetail::CreatePipelineLayout(m_context, nullptr, 0, 0, outPipelineLayout, operationName))
             return false;
 
         outOwnsPipelineLayout = true;
@@ -492,13 +492,13 @@ bool Device::createPipelineLayoutForBindingLayouts(
 
         pushConstantByteSize = Max<u32>(
             pushConstantByteSize,
-            __hidden_vulkan::GetPushConstantByteSize(layout->getBindingLayoutDesc())
+            VulkanDetail::GetPushConstantByteSize(layout->getBindingLayoutDesc())
         );
         for(const auto& descriptorSetLayout : layout->m_descriptorSetLayouts)
             descriptorSetLayouts.push_back(descriptorSetLayout);
     }
 
-    if(!__hidden_vulkan::CreatePipelineLayout(
+    if(!VulkanDetail::CreatePipelineLayout(
         m_context,
         descriptorSetLayouts.data(),
         static_cast<u32>(descriptorSetLayouts.size()),
@@ -555,7 +555,7 @@ void Device::appendPipelineShaderStage(
     PipelineShaderStageVector& shaderStages)const
 {
     auto* s = checked_cast<Shader*>(shader);
-    VkPipelineShaderStageCreateInfo stageInfo = __hidden_vulkan::MakeVkStruct<VkPipelineShaderStageCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
+    VkPipelineShaderStageCreateInfo stageInfo = VulkanDetail::MakeVkStruct<VkPipelineShaderStageCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
     stageInfo.stage = stage;
     stageInfo.module = s->m_shaderModule;
     stageInfo.pName = s->m_entryPointName.c_str();
@@ -741,8 +741,8 @@ bool DescriptorHeapManager::initialize(){
     u32 samplerRequestedBytes = 0;
     if(resourceReservedBytes > UINT32_MAX - s_TargetResourceHeapBytes
         || samplerReservedBytes > UINT32_MAX - s_TargetSamplerHeapBytes
-        || !__hidden_vulkan::AlignUpU32Checked(resourceReservedBytes + s_TargetResourceHeapBytes, resourceAlignment, resourceRequestedBytes)
-        || !__hidden_vulkan::AlignUpU32Checked(samplerReservedBytes + s_TargetSamplerHeapBytes, samplerAlignment, samplerRequestedBytes))
+        || !VulkanDetail::AlignUpU32Checked(resourceReservedBytes + s_TargetResourceHeapBytes, resourceAlignment, resourceRequestedBytes)
+        || !VulkanDetail::AlignUpU32Checked(samplerReservedBytes + s_TargetSamplerHeapBytes, samplerAlignment, samplerRequestedBytes))
     {
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor heap requested capacity overflows 32-bit heap offsets."));
         return false;
@@ -811,7 +811,7 @@ u32 DescriptorHeapManager::getDescriptorStride(const VkDescriptorType descriptor
         return 0;
 
     u32 stride = 0;
-    if(!__hidden_vulkan::AlignUpU32Checked(descriptorSize, static_cast<u32>(alignmentValue), stride))
+    if(!VulkanDetail::AlignUpU32Checked(descriptorSize, static_cast<u32>(alignmentValue), stride))
         return 0;
 
     return stride;
@@ -836,7 +836,7 @@ DescriptorHeapAllocation DescriptorHeapManager::allocate(const DescriptorHeapKin
             continue;
 
         u32 alignedOffset = 0;
-        if(!__hidden_vulkan::AlignUpU32Checked(range.offsetBytes, alignmentBytes, alignedOffset))
+        if(!VulkanDetail::AlignUpU32Checked(range.offsetBytes, alignmentBytes, alignedOffset))
             continue;
 
         const u32 rangeEnd = range.offsetBytes + range.sizeBytes;
@@ -866,7 +866,7 @@ DescriptorHeapAllocation DescriptorHeapManager::allocate(const DescriptorHeapKin
     }
 
     u32 alignedOffset = 0;
-    if(!__hidden_vulkan::AlignUpU32Checked(heap.writableOffsetBytes, alignmentBytes, alignedOffset)){
+    if(!VulkanDetail::AlignUpU32Checked(heap.writableOffsetBytes, alignmentBytes, alignedOffset)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor heap alignment overflows 32-bit offsets."));
         return result;
     }
@@ -913,24 +913,24 @@ bool DescriptorHeapManager::writeDescriptor(const BindingSetItem& item, const De
         if(!sampler)
             return false;
 
-        const VkSamplerCreateInfo samplerInfo = __hidden_vulkan::BuildSamplerCreateInfo(sampler->getDescription());
+        const VkSamplerCreateInfo samplerInfo = VulkanDetail::BuildSamplerCreateInfo(sampler->getDescription());
         return vkWriteSamplerDescriptorsEXT(m_context.device, 1, &samplerInfo, &dstRange) == VK_SUCCESS;
     }
 
-    VkResourceDescriptorInfoEXT resourceInfo = __hidden_vulkan::MakeVkStruct<VkResourceDescriptorInfoEXT>(VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT);
-    VkImageDescriptorInfoEXT imageInfo = __hidden_vulkan::MakeVkStruct<VkImageDescriptorInfoEXT>(VK_STRUCTURE_TYPE_IMAGE_DESCRIPTOR_INFO_EXT);
+    VkResourceDescriptorInfoEXT resourceInfo = VulkanDetail::MakeVkStruct<VkResourceDescriptorInfoEXT>(VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT);
+    VkImageDescriptorInfoEXT imageInfo = VulkanDetail::MakeVkStruct<VkImageDescriptorInfoEXT>(VK_STRUCTURE_TYPE_IMAGE_DESCRIPTOR_INFO_EXT);
     VkImageViewCreateInfo imageViewInfo{};
-    VkTexelBufferDescriptorInfoEXT texelInfo = __hidden_vulkan::MakeVkStruct<VkTexelBufferDescriptorInfoEXT>(VK_STRUCTURE_TYPE_TEXEL_BUFFER_DESCRIPTOR_INFO_EXT);
+    VkTexelBufferDescriptorInfoEXT texelInfo = VulkanDetail::MakeVkStruct<VkTexelBufferDescriptorInfoEXT>(VK_STRUCTURE_TYPE_TEXEL_BUFFER_DESCRIPTOR_INFO_EXT);
     VkDeviceAddressRangeEXT addressRange{};
 
     resourceInfo.type = meta.descriptorType;
 
-    if(__hidden_vulkan::UsesDescriptorBufferInfo(item.type)){
+    if(VulkanDetail::UsesDescriptorBufferInfo(item.type)){
         auto* buffer = checked_cast<Buffer*>(item.resourceHandle);
         if(!buffer)
             return false;
         BufferRange range;
-        if(!__hidden_vulkan::ResolveDescriptorBufferRange(item, *buffer, range))
+        if(!VulkanDetail::ResolveDescriptorBufferRange(item, *buffer, range))
             return false;
         addressRange.address = static_cast<VkDeviceAddress>(buffer->getGpuVirtualAddress()) + range.byteOffset;
         addressRange.size = range.byteSize;
@@ -945,7 +945,7 @@ bool DescriptorHeapManager::writeDescriptor(const BindingSetItem& item, const De
                 return false;
             const BufferDesc& bufferDesc = buffer->getDescription();
             BufferRange range;
-            if(!__hidden_vulkan::ResolveDescriptorBufferRange(item, *buffer, range))
+            if(!VulkanDetail::ResolveDescriptorBufferRange(item, *buffer, range))
                 return false;
             const Format::Enum viewFormat = item.format != Format::UNKNOWN ? item.format : bufferDesc.format;
             const VkFormat vkFormat = ConvertFormat(viewFormat);
@@ -965,7 +965,7 @@ bool DescriptorHeapManager::writeDescriptor(const BindingSetItem& item, const De
             const TextureSubresourceSet subresources = item.subresources.resolve(texture->getDescription(), false);
             if(subresources.numMipLevels == 0 || subresources.numArraySlices == 0)
                 return false;
-            if(!__hidden_vulkan::BuildImageViewCreateInfo(*texture, item, imageViewInfo))
+            if(!VulkanDetail::BuildImageViewCreateInfo(*texture, item, imageViewInfo))
                 return false;
             imageInfo.pView = &imageViewInfo;
             imageInfo.layout = item.type == ResourceType::Texture_UAV ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
@@ -1000,7 +1000,7 @@ bool DescriptorHeapManager::initializeHeap(HeapStorage& heap, const CompactStrin
     VkMemoryRequirements memRequirements{};
     vkGetBufferMemoryRequirements(m_context.device, heap.buffer, &memRequirements);
 
-    const u32 memoryTypeIndex = __hidden_vulkan::FindMemoryTypeIndex(
+    const u32 memoryTypeIndex = VulkanDetail::FindMemoryTypeIndex(
         m_context,
         memRequirements.memoryTypeBits,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
@@ -1175,7 +1175,7 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
         if(item.type == ResourceType::None)
             continue;
         if(item.type == ResourceType::PushConstants){
-            if(!__hidden_vulkan::ValidatePushConstantByteSize(m_context, item.size, NWB_TEXT("create binding layout"))){
+            if(!VulkanDetail::ValidatePushConstantByteSize(m_context, item.size, NWB_TEXT("create binding layout"))){
                 DestroyArenaObject(m_context.objectArena, layout);
                 return nullptr;
             }
@@ -1187,7 +1187,7 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
             DestroyArenaObject(m_context.objectArena, layout);
             return nullptr;
         }
-        if(!__hidden_vulkan::IsSupportedDescriptorBindingType(item.type)){
+        if(!VulkanDetail::IsSupportedDescriptorBindingType(item.type)){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("Vulkan: Failed to create descriptor set layout: binding slot {} has unsupported resource type {}"),
                 item.slot,
@@ -1206,16 +1206,16 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
         }
         VkDescriptorSetLayoutBinding binding = {};
         binding.binding = item.slot;
-        binding.descriptorType = __hidden_vulkan::ConvertDescriptorType(item.type);
+        binding.descriptorType = VulkanDetail::ConvertDescriptorType(item.type);
         binding.descriptorCount = item.getArraySize();
-        binding.stageFlags = __hidden_vulkan::ConvertShaderStages(desc.visibility);
+        binding.stageFlags = VulkanDetail::ConvertShaderStages(desc.visibility);
         binding.pImmutableSamplers = nullptr;
         bindings.push_back(binding);
     }
-    const u32 pushConstantByteSize = __hidden_vulkan::GetPushConstantByteSize(desc);
+    const u32 pushConstantByteSize = VulkanDetail::GetPushConstantByteSize(desc);
     layout->m_pushConstantByteSize = pushConstantByteSize;
 
-    VkDescriptorSetLayoutCreateInfo layoutInfo = __hidden_vulkan::MakeVkStruct<VkDescriptorSetLayoutCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO);
+    VkDescriptorSetLayoutCreateInfo layoutInfo = VulkanDetail::MakeVkStruct<VkDescriptorSetLayoutCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO);
     layoutInfo.bindingCount = static_cast<u32>(bindings.size());
     layoutInfo.pBindings = bindings.data();
 
@@ -1237,7 +1237,7 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
         pushConstantRange.size = pushConstantByteSize;
     }
 
-    VkPipelineLayoutCreateInfo pipelineLayoutInfo = __hidden_vulkan::MakeVkStruct<VkPipelineLayoutCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO);
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo = VulkanDetail::MakeVkStruct<VkPipelineLayoutCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO);
     pipelineLayoutInfo.setLayoutCount = static_cast<u32>(layout->m_descriptorSetLayouts.size());
     pipelineLayoutInfo.pSetLayouts = layout->m_descriptorSetLayouts.data();
     pipelineLayoutInfo.pushConstantRangeCount = hasPushConstants ? 1 : 0;
@@ -1259,12 +1259,12 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
                 if(item.type == ResourceType::PushConstants || item.type == ResourceType::None)
                     continue;
 
-                if(!__hidden_vulkan::IsDescriptorHeapCompatibleType(item.type)){
+                if(!VulkanDetail::IsDescriptorHeapCompatibleType(item.type)){
                     compatible = false;
                     break;
                 }
 
-                const VkDescriptorType descriptorType = __hidden_vulkan::ConvertDescriptorType(item.type);
+                const VkDescriptorType descriptorType = VulkanDetail::ConvertDescriptorType(item.type);
                 const u32 descriptorSize = m_descriptorHeapManager.getDescriptorSize(descriptorType);
                 const u32 descriptorStride = m_descriptorHeapManager.getDescriptorStride(descriptorType);
                 if(descriptorSize == 0 || descriptorStride == 0){
@@ -1275,7 +1275,7 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
                 DescriptorHeapBindingMeta meta{};
                 meta.resourceType = item.type;
                 meta.descriptorType = descriptorType;
-                meta.heapKind = __hidden_vulkan::GetDescriptorHeapKind(item.type);
+                meta.heapKind = VulkanDetail::GetDescriptorHeapKind(item.type);
                 meta.slot = item.slot;
                 meta.arraySize = item.getArraySize();
                 meta.descriptorSize = descriptorSize;
@@ -1306,10 +1306,10 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
     Vector<VkDescriptorBindingFlags, Alloc::ScratchAllocator<VkDescriptorBindingFlags>> bindingFlags{ Alloc::ScratchAllocator<VkDescriptorBindingFlags>(scratchArena) };
     bindingFlags.reserve(desc.registerSpaces.size());
 
-    const u32 maxCapacity = __hidden_vulkan::NormalizeDescriptorTableCapacity(desc.maxCapacity);
+    const u32 maxCapacity = VulkanDetail::NormalizeDescriptorTableCapacity(desc.maxCapacity);
     for(usize i = 0; i < desc.registerSpaces.size(); ++i){
         const auto& item = desc.registerSpaces[i];
-        if(!__hidden_vulkan::IsDescriptorHeapCompatibleType(item.type)){
+        if(!VulkanDetail::IsDescriptorHeapCompatibleType(item.type)){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("Vulkan: Failed to create bindless layout: register space slot {} has unsupported resource type {}"),
                 item.slot,
@@ -1328,9 +1328,9 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
 
         VkDescriptorSetLayoutBinding binding = {};
         binding.binding = item.slot;
-        binding.descriptorType = __hidden_vulkan::ConvertDescriptorType(item.type);
+        binding.descriptorType = VulkanDetail::ConvertDescriptorType(item.type);
         binding.descriptorCount = maxCapacity;
-        binding.stageFlags = __hidden_vulkan::ConvertShaderStages(desc.visibility);
+        binding.stageFlags = VulkanDetail::ConvertShaderStages(desc.visibility);
         binding.pImmutableSamplers = nullptr;
         bindings.push_back(binding);
 
@@ -1341,11 +1341,11 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
     if(!bindingFlags.empty())
         bindingFlags.back() |= VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT;
 
-    VkDescriptorSetLayoutBindingFlagsCreateInfo bindingFlagsInfo = __hidden_vulkan::MakeVkStruct<VkDescriptorSetLayoutBindingFlagsCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO);
+    VkDescriptorSetLayoutBindingFlagsCreateInfo bindingFlagsInfo = VulkanDetail::MakeVkStruct<VkDescriptorSetLayoutBindingFlagsCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO);
     bindingFlagsInfo.bindingCount = static_cast<u32>(bindingFlags.size());
     bindingFlagsInfo.pBindingFlags = bindingFlags.data();
 
-    VkDescriptorSetLayoutCreateInfo layoutInfo = __hidden_vulkan::MakeVkStruct<VkDescriptorSetLayoutCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO);
+    VkDescriptorSetLayoutCreateInfo layoutInfo = VulkanDetail::MakeVkStruct<VkDescriptorSetLayoutCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO);
     layoutInfo.pNext = &bindingFlagsInfo;
     layoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
     layoutInfo.bindingCount = static_cast<u32>(bindings.size());
@@ -1360,7 +1360,7 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
     }
     layout->m_descriptorSetLayouts.push_back(setLayout);
 
-    VkPipelineLayoutCreateInfo pipelineLayoutInfo = __hidden_vulkan::MakeVkStruct<VkPipelineLayoutCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO);
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo = VulkanDetail::MakeVkStruct<VkPipelineLayoutCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO);
     pipelineLayoutInfo.setLayoutCount = static_cast<u32>(layout->m_descriptorSetLayouts.size());
     pipelineLayoutInfo.pSetLayouts = layout->m_descriptorSetLayouts.data();
 
@@ -1397,7 +1397,7 @@ DescriptorTableHandle Device::createDescriptorTable(IBindingLayout* _layout){
     auto* table = NewArenaObject<DescriptorTable>(m_context.objectArena, m_context);
     table->m_layout = layout;
     const u32 descriptorTableCapacity = layout->m_isBindless
-        ? __hidden_vulkan::NormalizeDescriptorTableCapacity(layout->m_bindlessDesc.maxCapacity)
+        ? VulkanDetail::NormalizeDescriptorTableCapacity(layout->m_bindlessDesc.maxCapacity)
         : 1u;
     const bool useVariableDescriptorCount = layout->m_isBindless && !layout->m_bindlessDesc.registerSpaces.empty();
 
@@ -1406,8 +1406,8 @@ DescriptorTableHandle Device::createDescriptorTable(IBindingLayout* _layout){
 
     if(layout->m_isBindless){
         for(const auto& item : layout->m_bindlessDesc.registerSpaces){
-            const VkDescriptorType type = __hidden_vulkan::ConvertDescriptorType(item.type);
-            if(!__hidden_vulkan::AddDescriptorPoolSize(poolSizes, type, descriptorTableCapacity)){
+            const VkDescriptorType type = VulkanDetail::ConvertDescriptorType(item.type);
+            if(!VulkanDetail::AddDescriptorPoolSize(poolSizes, type, descriptorTableCapacity)){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor table: descriptor pool size overflows"));
                 DestroyArenaObject(m_context.objectArena, table);
                 return nullptr;
@@ -1419,8 +1419,8 @@ DescriptorTableHandle Device::createDescriptorTable(IBindingLayout* _layout){
             if(item.type == ResourceType::PushConstants || item.type == ResourceType::None)
                 continue;
 
-            const VkDescriptorType type = __hidden_vulkan::ConvertDescriptorType(item.type);
-            if(!__hidden_vulkan::AddDescriptorPoolSize(poolSizes, type, item.getArraySize() > 0 ? item.getArraySize() : 1u)){
+            const VkDescriptorType type = VulkanDetail::ConvertDescriptorType(item.type);
+            if(!VulkanDetail::AddDescriptorPoolSize(poolSizes, type, item.getArraySize() > 0 ? item.getArraySize() : 1u)){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor table: descriptor pool size overflows"));
                 DestroyArenaObject(m_context.objectArena, table);
                 return nullptr;
@@ -1435,7 +1435,7 @@ DescriptorTableHandle Device::createDescriptorTable(IBindingLayout* _layout){
         poolSizes.push_back(fallback);
     }
 
-    VkDescriptorPoolCreateInfo poolInfo = __hidden_vulkan::MakeVkStruct<VkDescriptorPoolCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO);
+    VkDescriptorPoolCreateInfo poolInfo = VulkanDetail::MakeVkStruct<VkDescriptorPoolCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO);
     poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
     if(layout->m_isBindless)
         poolInfo.flags |= VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
@@ -1452,13 +1452,13 @@ DescriptorTableHandle Device::createDescriptorTable(IBindingLayout* _layout){
     }
 
     if(!layout->m_descriptorSetLayouts.empty()){
-        VkDescriptorSetAllocateInfo allocInfo = __hidden_vulkan::MakeVkStruct<VkDescriptorSetAllocateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO);
+        VkDescriptorSetAllocateInfo allocInfo = VulkanDetail::MakeVkStruct<VkDescriptorSetAllocateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO);
         allocInfo.descriptorPool = pool;
         allocInfo.descriptorSetCount = static_cast<u32>(layout->m_descriptorSetLayouts.size());
         allocInfo.pSetLayouts = layout->m_descriptorSetLayouts.data();
 
         VkDescriptorSetVariableDescriptorCountAllocateInfo variableDescriptorInfo =
-            __hidden_vulkan::MakeVkStruct<VkDescriptorSetVariableDescriptorCountAllocateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO);
+            VulkanDetail::MakeVkStruct<VkDescriptorSetVariableDescriptorCountAllocateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO);
         u32 variableDescriptorCount = descriptorTableCapacity;
         if(useVariableDescriptorCount){
             variableDescriptorInfo.descriptorSetCount = 1;
@@ -1493,7 +1493,7 @@ void Device::resizeDescriptorTable(IDescriptorTable* m_descriptorTable, u32 newS
     if(!table->m_layout || newSize == 0)
         return;
     if(table->m_layout->m_isBindless){
-        const u32 maxCapacity = __hidden_vulkan::NormalizeDescriptorTableCapacity(table->m_layout->m_bindlessDesc.maxCapacity);
+        const u32 maxCapacity = VulkanDetail::NormalizeDescriptorTableCapacity(table->m_layout->m_bindlessDesc.maxCapacity);
         if(newSize > maxCapacity){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("Vulkan: Failed to resize bindless descriptor table to {} descriptors: layout max capacity is {}"),
@@ -1563,7 +1563,7 @@ void Device::resizeDescriptorTable(IDescriptorTable* m_descriptorTable, u32 newS
         poolSizes.reserve(table->m_layout->m_bindlessDesc.registerSpaces.size());
 
         for(const auto& item : table->m_layout->m_bindlessDesc.registerSpaces){
-            if(!__hidden_vulkan::AddDescriptorPoolSize(poolSizes, __hidden_vulkan::ConvertDescriptorType(item.type), newSize)){
+            if(!VulkanDetail::AddDescriptorPoolSize(poolSizes, VulkanDetail::ConvertDescriptorType(item.type), newSize)){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to resize descriptor table: descriptor pool size overflows"));
                 (void)keepContents;
                 return;
@@ -1580,7 +1580,7 @@ void Device::resizeDescriptorTable(IDescriptorTable* m_descriptorTable, u32 newS
         VkDescriptorPool newPool = VK_NULL_HANDLE;
         DescriptorSetVector newDescriptorSets{ Alloc::CustomAllocator<VkDescriptorSet>(m_context.objectArena) };
 
-        VkDescriptorPoolCreateInfo poolInfo = __hidden_vulkan::MakeVkStruct<VkDescriptorPoolCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO);
+        VkDescriptorPoolCreateInfo poolInfo = VulkanDetail::MakeVkStruct<VkDescriptorPoolCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO);
         poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT | VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
         poolInfo.maxSets = 1;
         poolInfo.poolSizeCount = static_cast<u32>(poolSizes.size());
@@ -1593,13 +1593,13 @@ void Device::resizeDescriptorTable(IDescriptorTable* m_descriptorTable, u32 newS
             return;
         }
 
-        VkDescriptorSetAllocateInfo allocInfo = __hidden_vulkan::MakeVkStruct<VkDescriptorSetAllocateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO);
+        VkDescriptorSetAllocateInfo allocInfo = VulkanDetail::MakeVkStruct<VkDescriptorSetAllocateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO);
         allocInfo.descriptorPool = newPool;
         allocInfo.descriptorSetCount = 1;
         allocInfo.pSetLayouts = table->m_layout->m_descriptorSetLayouts.data();
 
         VkDescriptorSetVariableDescriptorCountAllocateInfo variableDescriptorInfo =
-            __hidden_vulkan::MakeVkStruct<VkDescriptorSetVariableDescriptorCountAllocateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO);
+            VulkanDetail::MakeVkStruct<VkDescriptorSetVariableDescriptorCountAllocateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO);
         if(!table->m_layout->m_bindlessDesc.registerSpaces.empty()){
             variableDescriptorInfo.descriptorSetCount = 1;
             variableDescriptorInfo.pDescriptorCounts = &newSize;
@@ -1639,7 +1639,7 @@ void Device::resizeDescriptorTable(IDescriptorTable* m_descriptorTable, u32 newS
     VkDescriptorPool newPool = VK_NULL_HANDLE;
     DescriptorSetVector newDescriptorSets{ Alloc::CustomAllocator<VkDescriptorSet>(m_context.objectArena) };
 
-    VkDescriptorPoolCreateInfo poolInfo = __hidden_vulkan::MakeVkStruct<VkDescriptorPoolCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO);
+    VkDescriptorPoolCreateInfo poolInfo = VulkanDetail::MakeVkStruct<VkDescriptorPoolCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO);
     poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
     poolInfo.maxSets = newSize;
     poolInfo.poolSizeCount = static_cast<u32>(poolSizes.size());
@@ -1654,7 +1654,7 @@ void Device::resizeDescriptorTable(IDescriptorTable* m_descriptorTable, u32 newS
     if(!table->m_layout->m_descriptorSetLayouts.empty()){
         Vector<VkDescriptorSetLayout, Alloc::ScratchAllocator<VkDescriptorSetLayout>> layouts(newSize, table->m_layout->m_descriptorSetLayouts[0], Alloc::ScratchAllocator<VkDescriptorSetLayout>(scratchArena));
 
-        VkDescriptorSetAllocateInfo allocInfo = __hidden_vulkan::MakeVkStruct<VkDescriptorSetAllocateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO);
+        VkDescriptorSetAllocateInfo allocInfo = VulkanDetail::MakeVkStruct<VkDescriptorSetAllocateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO);
         allocInfo.descriptorPool = newPool;
         allocInfo.descriptorSetCount = newSize;
         allocInfo.pSetLayouts = layouts.data();
@@ -1710,7 +1710,7 @@ bool Device::writeDescriptorTable(IDescriptorTable* m_descriptorTable, const Bin
         }
     }
     else
-        layoutBinding = __hidden_vulkan::FindLayoutBinding(table->m_layout->m_desc, item.slot, item.type);
+        layoutBinding = VulkanDetail::FindLayoutBinding(table->m_layout->m_desc, item.slot, item.type);
 
     if(!layoutBinding){
         NWB_LOGGER_ERROR(
@@ -1730,26 +1730,26 @@ bool Device::writeDescriptorTable(IDescriptorTable* m_descriptorTable, const Bin
         return false;
     }
 
-    VkWriteDescriptorSet write = __hidden_vulkan::MakeVkStruct<VkWriteDescriptorSet>(VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET);
+    VkWriteDescriptorSet write = VulkanDetail::MakeVkStruct<VkWriteDescriptorSet>(VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET);
     write.dstSet = table->m_descriptorSets[0];
     write.dstBinding = item.slot;
     write.dstArrayElement = item.arrayElement;
     write.descriptorCount = 1;
-    write.descriptorType = __hidden_vulkan::ConvertDescriptorType(item.type);
+    write.descriptorType = VulkanDetail::ConvertDescriptorType(item.type);
 
     VkDescriptorBufferInfo bufferInfo = {};
     VkDescriptorImageInfo imageInfo = {};
     VkBufferView texelBufferView = VK_NULL_HANDLE;
-    VkWriteDescriptorSetAccelerationStructureKHR asInfo = __hidden_vulkan::MakeVkStruct<VkWriteDescriptorSetAccelerationStructureKHR>(VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR);
+    VkWriteDescriptorSetAccelerationStructureKHR asInfo = VulkanDetail::MakeVkStruct<VkWriteDescriptorSetAccelerationStructureKHR>(VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR);
 
-    if(__hidden_vulkan::UsesDescriptorBufferInfo(item.type)){
+    if(VulkanDetail::UsesDescriptorBufferInfo(item.type)){
         auto* buffer = checked_cast<Buffer*>(item.resourceHandle);
         if(!buffer){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write descriptor table slot {}: buffer resource is invalid"), item.slot);
             return false;
         }
         BufferRange range;
-        if(!__hidden_vulkan::ResolveDescriptorBufferRange(item, *buffer, range)){
+        if(!VulkanDetail::ResolveDescriptorBufferRange(item, *buffer, range)){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write descriptor table slot {}: buffer range is empty or outside the buffer"), item.slot);
             return false;
         }
@@ -1920,7 +1920,7 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLa
         if(!item.resourceHandle)
             continue;
 
-        const BindingLayoutItem* layoutBinding = __hidden_vulkan::FindLayoutBinding(layout->m_desc, item.slot, item.type);
+        const BindingLayoutItem* layoutBinding = VulkanDetail::FindLayoutBinding(layout->m_desc, item.slot, item.type);
         if(!layoutBinding){
             NWB_LOGGER_WARNING(
                 NWB_TEXT("Vulkan: Ignoring binding set item for slot {}: layout does not contain resource type {} at that slot"),
@@ -1934,21 +1934,21 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLa
             continue;
         }
 
-        VkWriteDescriptorSet write = __hidden_vulkan::MakeVkStruct<VkWriteDescriptorSet>(VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET);
+        VkWriteDescriptorSet write = VulkanDetail::MakeVkStruct<VkWriteDescriptorSet>(VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET);
         write.dstSet = bindingSet->m_descriptorSets[0];
         write.dstBinding = item.slot;
         write.dstArrayElement = item.arrayElement;
         write.descriptorCount = 1;
-        write.descriptorType = __hidden_vulkan::ConvertDescriptorType(item.type);
+        write.descriptorType = VulkanDetail::ConvertDescriptorType(item.type);
 
-        if(__hidden_vulkan::UsesDescriptorBufferInfo(item.type)){
+        if(VulkanDetail::UsesDescriptorBufferInfo(item.type)){
             auto* buffer = checked_cast<Buffer*>(item.resourceHandle);
             if(!buffer){
                 NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Ignoring binding set item for slot {}: buffer resource is invalid"), item.slot);
                 continue;
             }
             BufferRange range;
-            if(!__hidden_vulkan::ResolveDescriptorBufferRange(item, *buffer, range)){
+            if(!VulkanDetail::ResolveDescriptorBufferRange(item, *buffer, range)){
                 NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Ignoring binding set item for slot {}: buffer range is empty or outside the buffer"), item.slot);
                 continue;
             }
@@ -2018,7 +2018,7 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLa
                     NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Ignoring binding set item for slot {}: acceleration structure resource is invalid"), item.slot);
                     continue;
                 }
-                VkWriteDescriptorSetAccelerationStructureKHR asWrite = __hidden_vulkan::MakeVkStruct<VkWriteDescriptorSetAccelerationStructureKHR>(VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR);
+                VkWriteDescriptorSetAccelerationStructureKHR asWrite = VulkanDetail::MakeVkStruct<VkWriteDescriptorSetAccelerationStructureKHR>(VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR);
                 asWrite.accelerationStructureCount = 1;
                 asWrite.pAccelerationStructures = &as->m_accelStruct;
                 asInfos.push_back(asWrite);

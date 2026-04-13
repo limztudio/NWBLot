@@ -14,7 +14,7 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_vulkan{
+namespace VulkanDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -364,7 +364,7 @@ VkCooperativeVectorMatrixLayoutNV ConvertCoopVecMatrixLayout(CooperativeVectorMa
 
 
 VkFormat ConvertFormat(Format::Enum format){
-    return __hidden_vulkan::ConvertFormat(format);
+    return VulkanDetail::ConvertFormat(format);
 }
 
 const tchar* ResultToString(VkResult result){

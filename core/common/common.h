@@ -17,7 +17,7 @@ NWB_COMMON_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_common{
+namespace CommonDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -61,7 +61,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class Initializerable : public __hidden_common::BaseInitializerable{
+class Initializerable : public CommonDetail::BaseInitializerable{
 public:
     Initializerable();
 };
@@ -98,11 +98,11 @@ public:
 public:
     inline void enqueue(Initializerable* item){ m_cursor = m_items.emplace_after(m_cursor, item, false); }
     template<typename INITIALIZE, typename FINALIZE>
-    inline void enqueue(INITIALIZE&& initialize, FINALIZE&& finalize){ m_cursor = m_items.emplace_after(m_cursor, new __hidden_common::FunctionalInitializerable(Forward<INITIALIZE>(initialize), Forward<FINALIZE>(finalize)), true); }
+    inline void enqueue(INITIALIZE&& initialize, FINALIZE&& finalize){ m_cursor = m_items.emplace_after(m_cursor, new CommonDetail::FunctionalInitializerable(Forward<INITIALIZE>(initialize), Forward<FINALIZE>(finalize)), true); }
 
 
 private:
-    ForwardList<Pair<__hidden_common::BaseInitializerable*, bool>> m_items;
+    ForwardList<Pair<CommonDetail::BaseInitializerable*, bool>> m_items;
     decltype(m_items)::iterator m_cursor;
 };
 

@@ -30,7 +30,7 @@ using SystemTypeId = usize;
 
 template<typename T>
 inline SystemTypeId SystemType(){
-    return __hidden_ecs::TypeCounter<__hidden_ecs::EcsTypeTag>::id<Decay_T<T>>();
+    return ECSDetail::TypeCounter<ECSDetail::EcsTypeTag>::id<Decay_T<T>>();
 }
 
 

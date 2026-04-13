@@ -17,7 +17,7 @@ NWB_ECS_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ecs{
+namespace ECSDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -45,12 +45,12 @@ struct EntityID{
     inline constexpr EntityID() : id(~0u){}
     inline constexpr explicit EntityID(u32 _id) : id(_id){}
     inline constexpr EntityID(u32 index, u32 generation)
-        : id((generation & __hidden_ecs::ENTITY_GENERATION_MASK) << __hidden_ecs::ENTITY_INDEX_BITS | (index & __hidden_ecs::ENTITY_INDEX_MASK))
+        : id((generation & ECSDetail::ENTITY_GENERATION_MASK) << ECSDetail::ENTITY_INDEX_BITS | (index & ECSDetail::ENTITY_INDEX_MASK))
     {}
 
-    inline constexpr u32 index()const{ return id & __hidden_ecs::ENTITY_INDEX_MASK; }
-    inline constexpr u32 generation()const{ return (id >> __hidden_ecs::ENTITY_INDEX_BITS) & __hidden_ecs::ENTITY_GENERATION_MASK; }
-    inline constexpr bool valid()const{ return index() != __hidden_ecs::ENTITY_INVALID_INDEX; }
+    inline constexpr u32 index()const{ return id & ECSDetail::ENTITY_INDEX_MASK; }
+    inline constexpr u32 generation()const{ return (id >> ECSDetail::ENTITY_INDEX_BITS) & ECSDetail::ENTITY_GENERATION_MASK; }
+    inline constexpr bool valid()const{ return index() != ECSDetail::ENTITY_INVALID_INDEX; }
 };
 inline constexpr bool operator==(const EntityID& lhs, const EntityID& rhs){ return lhs.id == rhs.id; }
 inline constexpr bool operator!=(const EntityID& lhs, const EntityID& rhs){ return lhs.id != rhs.id; }

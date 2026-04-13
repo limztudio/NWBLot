@@ -58,7 +58,7 @@ public:
     }
     template<typename T>
     inline T* allocate(usize count){
-        return __hidden_alloc::AllocateTyped<T>(*this, count);
+        return AllocDetail::AllocateTyped<T>(*this, count);
     }
 
     inline void deallocate(void* p, usize align, usize size){
@@ -68,7 +68,7 @@ public:
     }
     template<typename T>
     inline void deallocate(void* p, usize count){
-        __hidden_alloc::DeallocateTyped<T>(*this, p, count);
+        AllocDetail::DeallocateTyped<T>(*this, p, count);
     }
 
 
@@ -84,7 +84,7 @@ private:
 
 
 template<typename T>
-class MemoryAllocator : public __hidden_alloc::ArenaAllocatorOperations<MemoryAllocator<T>, T>{
+class MemoryAllocator : public AllocDetail::ArenaAllocatorOperations<MemoryAllocator<T>, T>{
     template<typename F>
     friend class MemoryAllocator;
 
@@ -140,7 +140,7 @@ inline bool operator!=(const MemoryAllocator<T>&, const MemoryAllocator<F>&)noex
 
 
 template<typename T>
-class MemoryCacheAlignedAllocator : public __hidden_alloc::CacheAlignedArenaAllocatorOperations<MemoryCacheAlignedAllocator<T>, T>{
+class MemoryCacheAlignedAllocator : public AllocDetail::CacheAlignedArenaAllocatorOperations<MemoryCacheAlignedAllocator<T>, T>{
     template<typename F>
     friend class MemoryCacheAlignedAllocator;
 

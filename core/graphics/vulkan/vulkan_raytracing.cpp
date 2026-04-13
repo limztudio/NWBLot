@@ -16,7 +16,7 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_vulkan{
+namespace VulkanDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -468,7 +468,7 @@ RayTracingPipeline::RayTracingPipeline(const VulkanContext& context, Device& dev
     , m_device(device)
 {}
 RayTracingPipeline::~RayTracingPipeline(){
-    __hidden_vulkan::DestroyPipelineAndOwnedLayout(
+    VulkanDetail::DestroyPipelineAndOwnedLayout(
         m_context.device,
         m_context.allocationCallbacks,
         m_pipeline,
@@ -508,20 +508,20 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
             return nullptr;
         }
 
-        VkAccelerationStructureGeometryKHR geometry = __hidden_vulkan::MakeVkStruct<VkAccelerationStructureGeometryKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR);
+        VkAccelerationStructureGeometryKHR geometry = VulkanDetail::MakeVkStruct<VkAccelerationStructureGeometryKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR);
         geometry.geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR;
         geometry.geometry.instances.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
         geometry.geometry.instances.arrayOfPointers = VK_FALSE;
 
-        VkAccelerationStructureBuildGeometryInfoKHR buildInfo = __hidden_vulkan::MakeVkStruct<VkAccelerationStructureBuildGeometryInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR);
+        VkAccelerationStructureBuildGeometryInfoKHR buildInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildGeometryInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR);
         buildInfo.type = asType;
-        buildInfo.flags = __hidden_vulkan::ConvertAccelStructBuildFlags(desc.buildFlags, false);
+        buildInfo.flags = VulkanDetail::ConvertAccelStructBuildFlags(desc.buildFlags, false);
         buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
         buildInfo.geometryCount = 1;
         buildInfo.pGeometries = &geometry;
 
         u32 primitiveCount = static_cast<u32>(desc.topLevelMaxInstances);
-        VkAccelerationStructureBuildSizesInfoKHR sizeInfo = __hidden_vulkan::MakeVkStruct<VkAccelerationStructureBuildSizesInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR);
+        VkAccelerationStructureBuildSizesInfoKHR sizeInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildSizesInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR);
         vkGetAccelerationStructureBuildSizesKHR(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &primitiveCount, &sizeInfo);
         if(sizeInfo.accelerationStructureSize > 0)
             accelStructSize = sizeInfo.accelerationStructureSize;
@@ -540,20 +540,20 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
         primitiveCounts.resize(desc.bottomLevelGeometries.size());
 
         for(usize i = 0; i < desc.bottomLevelGeometries.size(); ++i){
-            if(!__hidden_vulkan::FillBlasGeometryForSizeQuery(desc.bottomLevelGeometries[i], geometries[i], primitiveCounts[i], NWB_TEXT("create BLAS"), false)){
+            if(!VulkanDetail::FillBlasGeometryForSizeQuery(desc.bottomLevelGeometries[i], geometries[i], primitiveCounts[i], NWB_TEXT("create BLAS"), false)){
                 DestroyArenaObject(m_context.objectArena, as);
                 return nullptr;
             }
         }
 
-        VkAccelerationStructureBuildGeometryInfoKHR buildInfo = __hidden_vulkan::MakeVkStruct<VkAccelerationStructureBuildGeometryInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR);
+        VkAccelerationStructureBuildGeometryInfoKHR buildInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildGeometryInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR);
         buildInfo.type = asType;
-        buildInfo.flags = __hidden_vulkan::ConvertAccelStructBuildFlags(desc.buildFlags, true);
+        buildInfo.flags = VulkanDetail::ConvertAccelStructBuildFlags(desc.buildFlags, true);
         buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
         buildInfo.geometryCount = static_cast<u32>(geometries.size());
         buildInfo.pGeometries = geometries.data();
 
-        VkAccelerationStructureBuildSizesInfoKHR sizeInfo = __hidden_vulkan::MakeVkStruct<VkAccelerationStructureBuildSizesInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR);
+        VkAccelerationStructureBuildSizesInfoKHR sizeInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildSizesInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR);
         vkGetAccelerationStructureBuildSizesKHR(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, primitiveCounts.data(), &sizeInfo);
         if(sizeInfo.accelerationStructureSize > 0)
             accelStructSize = sizeInfo.accelerationStructureSize;
@@ -573,7 +573,7 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
         return nullptr;
     }
 
-    VkAccelerationStructureCreateInfoKHR createInfo = __hidden_vulkan::MakeVkStruct<VkAccelerationStructureCreateInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR);
+    VkAccelerationStructureCreateInfoKHR createInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureCreateInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR);
     createInfo.buffer = checked_cast<Buffer*>(as->m_buffer.get())->m_buffer;
     createInfo.offset = 0;
     createInfo.size = bufferDesc.byteSize;
@@ -586,7 +586,7 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
         return nullptr;
     }
 
-    VkAccelerationStructureDeviceAddressInfoKHR addressInfo = __hidden_vulkan::MakeVkStruct<VkAccelerationStructureDeviceAddressInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR);
+    VkAccelerationStructureDeviceAddressInfoKHR addressInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureDeviceAddressInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR);
     addressInfo.accelerationStructure = as->m_accelStruct;
     if(!desc.isVirtual)
         as->m_deviceAddress = vkGetAccelerationStructureDeviceAddressKHR(m_context.device, &addressInfo);
@@ -613,18 +613,18 @@ RayTracingOpacityMicromapHandle Device::createOpacityMicromap(const RayTracingOp
         buildFlags = VK_BUILD_MICROMAP_PREFER_FAST_BUILD_BIT_EXT;
 
     Alloc::ScratchArena<> scratchArena;
-    __hidden_vulkan::MicromapUsageVector usageCounts{ Alloc::ScratchAllocator<VkMicromapUsageEXT>(scratchArena) };
-    if(!__hidden_vulkan::BuildOpacityMicromapUsageCounts(desc.counts, usageCounts, NWB_TEXT("create opacity micromap")))
+    VulkanDetail::MicromapUsageVector usageCounts{ Alloc::ScratchAllocator<VkMicromapUsageEXT>(scratchArena) };
+    if(!VulkanDetail::BuildOpacityMicromapUsageCounts(desc.counts, usageCounts, NWB_TEXT("create opacity micromap")))
         return nullptr;
 
-    VkMicromapBuildInfoEXT buildInfo = __hidden_vulkan::MakeVkStruct<VkMicromapBuildInfoEXT>(VK_STRUCTURE_TYPE_MICROMAP_BUILD_INFO_EXT);
+    VkMicromapBuildInfoEXT buildInfo = VulkanDetail::MakeVkStruct<VkMicromapBuildInfoEXT>(VK_STRUCTURE_TYPE_MICROMAP_BUILD_INFO_EXT);
     buildInfo.type = VK_MICROMAP_TYPE_OPACITY_MICROMAP_EXT;
     buildInfo.flags = buildFlags;
     buildInfo.mode = VK_BUILD_MICROMAP_MODE_BUILD_EXT;
     buildInfo.usageCountsCount = static_cast<u32>(usageCounts.size());
     buildInfo.pUsageCounts = usageCounts.empty() ? nullptr : usageCounts.data();
 
-    VkMicromapBuildSizesInfoEXT buildSize = __hidden_vulkan::MakeVkStruct<VkMicromapBuildSizesInfoEXT>(VK_STRUCTURE_TYPE_MICROMAP_BUILD_SIZES_INFO_EXT);
+    VkMicromapBuildSizesInfoEXT buildSize = VulkanDetail::MakeVkStruct<VkMicromapBuildSizesInfoEXT>(VK_STRUCTURE_TYPE_MICROMAP_BUILD_SIZES_INFO_EXT);
     vkGetMicromapBuildSizesEXT(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &buildSize);
 
     auto* om = NewArenaObject<OpacityMicromap>(m_context.objectArena, m_context);
@@ -647,7 +647,7 @@ RayTracingOpacityMicromapHandle Device::createOpacityMicromap(const RayTracingOp
 
     auto* buffer = checked_cast<Buffer*>(om->m_dataBuffer.get());
 
-    VkMicromapCreateInfoEXT createInfo = __hidden_vulkan::MakeVkStruct<VkMicromapCreateInfoEXT>(VK_STRUCTURE_TYPE_MICROMAP_CREATE_INFO_EXT);
+    VkMicromapCreateInfoEXT createInfo = VulkanDetail::MakeVkStruct<VkMicromapCreateInfoEXT>(VK_STRUCTURE_TYPE_MICROMAP_CREATE_INFO_EXT);
     createInfo.type = VK_MICROMAP_TYPE_OPACITY_MICROMAP_EXT;
     createInfo.buffer = buffer->m_buffer;
     createInfo.size = buildSize.micromapSize;
@@ -687,10 +687,10 @@ RayTracingClusterOperationSizeInfo Device::getClusterOperationSizeInfo(const Ray
     VkClusterAccelerationStructureMoveObjectsInputNV moveInput{};
     VkClusterAccelerationStructureTriangleClusterInputNV clusterInput{};
     VkClusterAccelerationStructureClustersBottomLevelInputNV blasInput{};
-    if(!__hidden_vulkan::BuildClusterOperationInputInfo(params, inputInfo, moveInput, clusterInput, blasInput, NWB_TEXT("query cluster operation sizes")))
+    if(!VulkanDetail::BuildClusterOperationInputInfo(params, inputInfo, moveInput, clusterInput, blasInput, NWB_TEXT("query cluster operation sizes")))
         return info;
 
-    VkAccelerationStructureBuildSizesInfoKHR vkSizeInfo = __hidden_vulkan::MakeVkStruct<VkAccelerationStructureBuildSizesInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR);
+    VkAccelerationStructureBuildSizesInfoKHR vkSizeInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildSizesInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR);
     vkGetClusterAccelerationStructureBuildSizesNV(m_context.device, &inputInfo, &vkSizeInfo);
 
     info.resultMaxSizeInBytes = vkSizeInfo.accelerationStructureSize;
@@ -715,7 +715,7 @@ bool Device::bindAccelStructMemory(IRayTracingAccelStruct* _as, IHeap* heap, u64
         if(!bindBufferMemory(as->m_buffer.get(), heap, offset))
             return false;
 
-        VkAccelerationStructureDeviceAddressInfoKHR addressInfo = __hidden_vulkan::MakeVkStruct<VkAccelerationStructureDeviceAddressInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR);
+        VkAccelerationStructureDeviceAddressInfoKHR addressInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureDeviceAddressInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR);
         addressInfo.accelerationStructure = as->m_accelStruct;
         as->m_deviceAddress = vkGetAccelerationStructureDeviceAddressKHR(m_context.device, &addressInfo);
         return true;
@@ -783,7 +783,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
 
         auto* s = checked_cast<Shader*>(shaderDesc.shader.get());
 
-        VkPipelineShaderStageCreateInfo stageInfo = __hidden_vulkan::MakeVkStruct<VkPipelineShaderStageCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
+        VkPipelineShaderStageCreateInfo stageInfo = VulkanDetail::MakeVkStruct<VkPipelineShaderStageCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
         stageInfo.module = s->m_shaderModule;
         stageInfo.pName = s->m_entryPointName.c_str();
 
@@ -802,7 +802,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
         }
         addShaderSpecialization(s, stageInfo);
 
-        VkRayTracingShaderGroupCreateInfoKHR group = __hidden_vulkan::MakeVkStruct<VkRayTracingShaderGroupCreateInfoKHR>(VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR);
+        VkRayTracingShaderGroupCreateInfoKHR group = VulkanDetail::MakeVkStruct<VkRayTracingShaderGroupCreateInfoKHR>(VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR);
         group.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
         group.generalShader = static_cast<u32>(stages.size());
         group.closestHitShader = VK_SHADER_UNUSED_KHR;
@@ -814,7 +814,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
     }
 
     for(const auto& hitGroup : desc.hitGroups){
-        VkRayTracingShaderGroupCreateInfoKHR group = __hidden_vulkan::MakeVkStruct<VkRayTracingShaderGroupCreateInfoKHR>(VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR);
+        VkRayTracingShaderGroupCreateInfoKHR group = VulkanDetail::MakeVkStruct<VkRayTracingShaderGroupCreateInfoKHR>(VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR);
         group.type = hitGroup.isProceduralPrimitive ? VK_RAY_TRACING_SHADER_GROUP_TYPE_PROCEDURAL_HIT_GROUP_KHR : VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR;
         group.generalShader = VK_SHADER_UNUSED_KHR;
         group.closestHitShader = VK_SHADER_UNUSED_KHR;
@@ -823,7 +823,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
 
         if(hitGroup.closestHitShader){
             auto* s = checked_cast<Shader*>(hitGroup.closestHitShader.get());
-            VkPipelineShaderStageCreateInfo stageInfo = __hidden_vulkan::MakeVkStruct<VkPipelineShaderStageCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
+            VkPipelineShaderStageCreateInfo stageInfo = VulkanDetail::MakeVkStruct<VkPipelineShaderStageCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
             stageInfo.stage = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
             stageInfo.module = s->m_shaderModule;
             stageInfo.pName = s->m_entryPointName.c_str();
@@ -833,7 +833,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
         }
         if(hitGroup.anyHitShader){
             auto* s = checked_cast<Shader*>(hitGroup.anyHitShader.get());
-            VkPipelineShaderStageCreateInfo stageInfo = __hidden_vulkan::MakeVkStruct<VkPipelineShaderStageCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
+            VkPipelineShaderStageCreateInfo stageInfo = VulkanDetail::MakeVkStruct<VkPipelineShaderStageCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
             stageInfo.stage = VK_SHADER_STAGE_ANY_HIT_BIT_KHR;
             stageInfo.module = s->m_shaderModule;
             stageInfo.pName = s->m_entryPointName.c_str();
@@ -843,7 +843,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
         }
         if(hitGroup.intersectionShader){
             auto* s = checked_cast<Shader*>(hitGroup.intersectionShader.get());
-            VkPipelineShaderStageCreateInfo stageInfo = __hidden_vulkan::MakeVkStruct<VkPipelineShaderStageCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
+            VkPipelineShaderStageCreateInfo stageInfo = VulkanDetail::MakeVkStruct<VkPipelineShaderStageCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
             stageInfo.stage = VK_SHADER_STAGE_INTERSECTION_BIT_KHR;
             stageInfo.module = s->m_shaderModule;
             stageInfo.pName = s->m_entryPointName.c_str();
@@ -872,7 +872,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
         return nullptr;
     }
 
-    VkRayTracingPipelineCreateInfoKHR createInfo = __hidden_vulkan::MakeVkStruct<VkRayTracingPipelineCreateInfoKHR>(VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR);
+    VkRayTracingPipelineCreateInfoKHR createInfo = VulkanDetail::MakeVkStruct<VkRayTracingPipelineCreateInfoKHR>(VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR);
     if(pso->m_usesDescriptorHeap)
         createInfo.pNext = descriptorHeapScratch.pNext();
     createInfo.stageCount = static_cast<u32>(stages.size());
@@ -892,7 +892,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
     u32 handleSize = 0;
     u32 handleSizeAligned = 0;
     u32 baseAlignment = 0;
-    if(!__hidden_vulkan::ComputeRayTracingHandleLayout(m_context, handleSize, handleSizeAligned, baseAlignment, NWB_TEXT("create ray tracing pipeline"))){
+    if(!VulkanDetail::ComputeRayTracingHandleLayout(m_context, handleSize, handleSizeAligned, baseAlignment, NWB_TEXT("create ray tracing pipeline"))){
         DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
@@ -992,12 +992,12 @@ u32 ShaderTable::appendShaderRecord(
     u32 handleSize = 0;
     u32 handleSizeAligned = 0;
     u32 baseAlignment = 0;
-    if(!__hidden_vulkan::ComputeRayTracingHandleLayout(m_context, handleSize, handleSizeAligned, baseAlignment, operationName))
+    if(!VulkanDetail::ComputeRayTracingHandleLayout(m_context, handleSize, handleSizeAligned, baseAlignment, operationName))
         return count;
 
     const u32 newCount = count + 1;
     u64 sbtSize = 0;
-    if(!__hidden_vulkan::ComputeShaderTableByteSize(newCount, handleSizeAligned, baseAlignment, sbtSize, operationName))
+    if(!VulkanDetail::ComputeShaderTableByteSize(newCount, handleSizeAligned, baseAlignment, sbtSize, operationName))
         return count;
 
     BufferHandle newBuffer;
@@ -1024,7 +1024,7 @@ u32 ShaderTable::appendShaderRecord(
             return count;
         }
         const usize copySize = static_cast<usize>(count) * handleSizeAligned;
-        __hidden_vulkan::CopyHostMemory(taskPool(), mapped, oldMapped, copySize);
+        VulkanDetail::CopyHostMemory(taskPool(), mapped, oldMapped, copySize);
         m_device.unmapBuffer(buffer.get());
     }
 
@@ -1064,10 +1064,10 @@ void ShaderTable::setRayGenerationShader(const Name& exportName, IBindingSet* /*
     u32 handleSize = 0;
     u32 handleSizeAligned = 0;
     u32 baseAlignment = 0;
-    if(!__hidden_vulkan::ComputeRayTracingHandleLayout(m_context, handleSize, handleSizeAligned, baseAlignment, NWB_TEXT("set ray generation shader")))
+    if(!VulkanDetail::ComputeRayTracingHandleLayout(m_context, handleSize, handleSizeAligned, baseAlignment, NWB_TEXT("set ray generation shader")))
         return;
     u64 sbtSize = 0;
-    if(!__hidden_vulkan::ComputeShaderTableByteSize(1, handleSizeAligned, baseAlignment, sbtSize, NWB_TEXT("set ray generation shader")))
+    if(!VulkanDetail::ComputeShaderTableByteSize(1, handleSizeAligned, baseAlignment, sbtSize, NWB_TEXT("set ray generation shader")))
         return;
 
     u32 groupIndex = findGroupIndex(exportName);
@@ -1168,7 +1168,7 @@ bool CommandList::attachAccelStructBuildScratchBuffer(
         return false;
     }
 
-    buildInfo.scratchData.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(scratchBuffer.get());
+    buildInfo.scratchData.deviceAddress = VulkanDetail::GetBufferDeviceAddress(scratchBuffer.get());
     m_currentCmdBuf->m_referencedStagingBuffers.push_back(Move(scratchBuffer));
     return true;
 }
@@ -1215,14 +1215,14 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* _as, const
     for(usize i = 0; i < numGeometries; ++i){
         VkAccelerationStructureGeometryKHR validationGeometry = {};
         u32 validationPrimitiveCount = 0;
-        if(!__hidden_vulkan::FillBlasGeometryForSizeQuery(pGeometries[i], validationGeometry, validationPrimitiveCount, NWB_TEXT("build BLAS"), true))
+        if(!VulkanDetail::FillBlasGeometryForSizeQuery(pGeometries[i], validationGeometry, validationPrimitiveCount, NWB_TEXT("build BLAS"), true))
             return;
     }
 
     auto buildGeometry = [&](usize i){
         const auto& geomDesc = pGeometries[i];
 
-        VkAccelerationStructureGeometryKHR geometry = __hidden_vulkan::MakeVkStruct<VkAccelerationStructureGeometryKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR);
+        VkAccelerationStructureGeometryKHR geometry = VulkanDetail::MakeVkStruct<VkAccelerationStructureGeometryKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR);
         VkAccelerationStructureBuildRangeInfoKHR rangeInfo = {};
         u32 primitiveCount = 0;
 
@@ -1232,13 +1232,13 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* _as, const
             geometry.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
             geometry.geometry.triangles.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
             geometry.geometry.triangles.vertexFormat = ConvertFormat(triangles.vertexFormat);
-            geometry.geometry.triangles.vertexData.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(triangles.vertexBuffer, triangles.vertexOffset);
+            geometry.geometry.triangles.vertexData.deviceAddress = VulkanDetail::GetBufferDeviceAddress(triangles.vertexBuffer, triangles.vertexOffset);
             geometry.geometry.triangles.vertexStride = triangles.vertexStride;
             geometry.geometry.triangles.maxVertex = triangles.vertexCount > 0 ? triangles.vertexCount - 1 : 0;
 
             if(triangles.indexBuffer){
-                __hidden_vulkan::GetRayTracingIndexType(triangles.indexFormat, geometry.geometry.triangles.indexType);
-                geometry.geometry.triangles.indexData.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(triangles.indexBuffer, triangles.indexOffset);
+                VulkanDetail::GetRayTracingIndexType(triangles.indexFormat, geometry.geometry.triangles.indexType);
+                geometry.geometry.triangles.indexData.deviceAddress = VulkanDetail::GetBufferDeviceAddress(triangles.indexBuffer, triangles.indexOffset);
                 primitiveCount = triangles.indexCount / s_TrianglesPerPrimitive;
             }
             else{
@@ -1253,7 +1253,7 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* _as, const
 
             geometry.geometryType = VK_GEOMETRY_TYPE_AABBS_KHR;
             geometry.geometry.aabbs.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_AABBS_DATA_KHR;
-            geometry.geometry.aabbs.data.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(aabbs.buffer, aabbs.offset);
+            geometry.geometry.aabbs.data.deviceAddress = VulkanDetail::GetBufferDeviceAddress(aabbs.buffer, aabbs.offset);
             geometry.geometry.aabbs.stride = aabbs.stride;
 
             primitiveCount = aabbs.count;
@@ -1278,15 +1278,15 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* _as, const
             buildGeometry(i);
     }
 
-    VkAccelerationStructureBuildGeometryInfoKHR buildInfo = __hidden_vulkan::MakeVkStruct<VkAccelerationStructureBuildGeometryInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR);
+    VkAccelerationStructureBuildGeometryInfoKHR buildInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildGeometryInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR);
     buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
-    buildInfo.flags = __hidden_vulkan::ConvertAccelStructBuildFlags(buildFlags, true);
+    buildInfo.flags = VulkanDetail::ConvertAccelStructBuildFlags(buildFlags, true);
     buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
     buildInfo.dstAccelerationStructure = as->m_accelStruct;
     buildInfo.geometryCount = static_cast<u32>(geometries.size());
     buildInfo.pGeometries = geometries.data();
 
-    VkAccelerationStructureBuildSizesInfoKHR sizeInfo = __hidden_vulkan::MakeVkStruct<VkAccelerationStructureBuildSizesInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR);
+    VkAccelerationStructureBuildSizesInfoKHR sizeInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildSizesInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR);
     vkGetAccelerationStructureBuildSizesKHR(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, primitiveCounts.data(), &sizeInfo);
 
     auto* asBuffer = checked_cast<Buffer*>(as->m_buffer.get());
@@ -1345,7 +1345,7 @@ void CommandList::compactBottomLevelAccelStructs(){
         if(!compactBuffer)
             continue;
 
-        VkAccelerationStructureCreateInfoKHR createInfo = __hidden_vulkan::MakeVkStruct<VkAccelerationStructureCreateInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR);
+        VkAccelerationStructureCreateInfoKHR createInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureCreateInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR);
         createInfo.buffer = checked_cast<Buffer*>(compactBuffer.get())->m_buffer;
         createInfo.size = compactedSize;
         createInfo.type = as->m_desc.isTopLevel
@@ -1358,7 +1358,7 @@ void CommandList::compactBottomLevelAccelStructs(){
         if(res != VK_SUCCESS)
             continue;
 
-        VkCopyAccelerationStructureInfoKHR copyInfo = __hidden_vulkan::MakeVkStruct<VkCopyAccelerationStructureInfoKHR>(VK_STRUCTURE_TYPE_COPY_ACCELERATION_STRUCTURE_INFO_KHR);
+        VkCopyAccelerationStructureInfoKHR copyInfo = VulkanDetail::MakeVkStruct<VkCopyAccelerationStructureInfoKHR>(VK_STRUCTURE_TYPE_COPY_ACCELERATION_STRUCTURE_INFO_KHR);
         copyInfo.src  = as->m_accelStruct; // original (still the copy source)
         copyInfo.dst  = newAS;
         copyInfo.mode = VK_COPY_ACCELERATION_STRUCTURE_MODE_COMPACT_KHR;
@@ -1370,7 +1370,7 @@ void CommandList::compactBottomLevelAccelStructs(){
         as->m_accelStruct = newAS;
         as->m_buffer = Move(compactBuffer);
 
-        VkAccelerationStructureDeviceAddressInfoKHR addrInfo = __hidden_vulkan::MakeVkStruct<VkAccelerationStructureDeviceAddressInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR);
+        VkAccelerationStructureDeviceAddressInfoKHR addrInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureDeviceAddressInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR);
         addrInfo.accelerationStructure = as->m_accelStruct;
         as->m_deviceAddress = vkGetAccelerationStructureDeviceAddressKHR(m_context.device, &addrInfo);
 
@@ -1384,7 +1384,7 @@ void CommandList::compactBottomLevelAccelStructs(){
         if(as->m_compactionQueryPool != VK_NULL_HANDLE || as->m_compacted)
             continue;
 
-        VkQueryPoolCreateInfo queryPoolInfo = __hidden_vulkan::MakeVkStruct<VkQueryPoolCreateInfo>(VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO);
+        VkQueryPoolCreateInfo queryPoolInfo = VulkanDetail::MakeVkStruct<VkQueryPoolCreateInfo>(VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO);
         queryPoolInfo.queryType  = VK_QUERY_TYPE_ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR;
         queryPoolInfo.queryCount = s_SingleQueryCount;
 
@@ -1502,7 +1502,7 @@ void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* _as, const Ra
 
     m_device.unmapBuffer(instanceBuffer.get());
 
-    const VkDeviceAddress instanceDataAddress = __hidden_vulkan::GetBufferDeviceAddress(instanceBuffer.get());
+    const VkDeviceAddress instanceDataAddress = VulkanDetail::GetBufferDeviceAddress(instanceBuffer.get());
     if(!buildTopLevelAccelStructFromInstanceData(_as, as, instanceDataAddress, numInstances, buildFlags, NWB_TEXT("build TLAS")))
         return;
 
@@ -1543,7 +1543,7 @@ void CommandList::buildOpacityMicromap(IRayTracingOpacityMicromap* _omm, const R
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build opacity micromap: input buffer is invalid"));
         return;
     }
-    if(!__hidden_vulkan::IsBufferRangeInBounds(inputBuffer->m_desc, ommDesc.inputBufferOffset, 1)){
+    if(!VulkanDetail::IsBufferRangeInBounds(inputBuffer->m_desc, ommDesc.inputBufferOffset, 1)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build opacity micromap: input buffer offset is outside the buffer"));
         return;
     }
@@ -1553,7 +1553,7 @@ void CommandList::buildOpacityMicromap(IRayTracingOpacityMicromap* _omm, const R
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build opacity micromap: per-OMM descriptor buffer is invalid"));
         return;
     }
-    if(triangleDescBytes > 0 && !__hidden_vulkan::IsBufferRangeInBounds(perOmmDescs->m_desc, ommDesc.perOmmDescsOffset, triangleDescBytes)){
+    if(triangleDescBytes > 0 && !VulkanDetail::IsBufferRangeInBounds(perOmmDescs->m_desc, ommDesc.perOmmDescsOffset, triangleDescBytes)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build opacity micromap: per-OMM descriptor range is outside the buffer"));
         return;
     }
@@ -1585,22 +1585,22 @@ void CommandList::buildOpacityMicromap(IRayTracingOpacityMicromap* _omm, const R
         buildFlags = VK_BUILD_MICROMAP_PREFER_FAST_BUILD_BIT_EXT;
 
     Alloc::ScratchArena<> scratchArena;
-    __hidden_vulkan::MicromapUsageVector usageCounts{ Alloc::ScratchAllocator<VkMicromapUsageEXT>(scratchArena) };
-    if(!__hidden_vulkan::BuildOpacityMicromapUsageCounts(ommDesc.counts, usageCounts, NWB_TEXT("build opacity micromap")))
+    VulkanDetail::MicromapUsageVector usageCounts{ Alloc::ScratchAllocator<VkMicromapUsageEXT>(scratchArena) };
+    if(!VulkanDetail::BuildOpacityMicromapUsageCounts(ommDesc.counts, usageCounts, NWB_TEXT("build opacity micromap")))
         return;
 
-    VkMicromapBuildInfoEXT buildInfo = __hidden_vulkan::MakeVkStruct<VkMicromapBuildInfoEXT>(VK_STRUCTURE_TYPE_MICROMAP_BUILD_INFO_EXT);
+    VkMicromapBuildInfoEXT buildInfo = VulkanDetail::MakeVkStruct<VkMicromapBuildInfoEXT>(VK_STRUCTURE_TYPE_MICROMAP_BUILD_INFO_EXT);
     buildInfo.type = VK_MICROMAP_TYPE_OPACITY_MICROMAP_EXT;
     buildInfo.flags = buildFlags;
     buildInfo.mode = VK_BUILD_MICROMAP_MODE_BUILD_EXT;
     buildInfo.dstMicromap = omm->m_micromap;
     buildInfo.usageCountsCount = static_cast<u32>(usageCounts.size());
     buildInfo.pUsageCounts = usageCounts.empty() ? nullptr : usageCounts.data();
-    buildInfo.data.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(ommDesc.inputBuffer, ommDesc.inputBufferOffset);
-    buildInfo.triangleArray.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(ommDesc.perOmmDescs, ommDesc.perOmmDescsOffset);
+    buildInfo.data.deviceAddress = VulkanDetail::GetBufferDeviceAddress(ommDesc.inputBuffer, ommDesc.inputBufferOffset);
+    buildInfo.triangleArray.deviceAddress = VulkanDetail::GetBufferDeviceAddress(ommDesc.perOmmDescs, ommDesc.perOmmDescsOffset);
     buildInfo.triangleArrayStride = sizeof(VkMicromapTriangleEXT);
 
-    VkMicromapBuildSizesInfoEXT buildSize = __hidden_vulkan::MakeVkStruct<VkMicromapBuildSizesInfoEXT>(VK_STRUCTURE_TYPE_MICROMAP_BUILD_SIZES_INFO_EXT);
+    VkMicromapBuildSizesInfoEXT buildSize = VulkanDetail::MakeVkStruct<VkMicromapBuildSizesInfoEXT>(VK_STRUCTURE_TYPE_MICROMAP_BUILD_SIZES_INFO_EXT);
     vkGetMicromapBuildSizesEXT(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &buildSize);
 
     auto* dataBuffer = checked_cast<Buffer*>(omm->m_dataBuffer.get());
@@ -1622,7 +1622,7 @@ void CommandList::buildOpacityMicromap(IRayTracingOpacityMicromap* _omm, const R
             return;
         }
 
-        buildInfo.scratchData.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(scratchBuffer.get());
+        buildInfo.scratchData.deviceAddress = VulkanDetail::GetBufferDeviceAddress(scratchBuffer.get());
 
         vkCmdBuildMicromapsEXT(m_currentCmdBuf->m_cmdBuf, 1, &buildInfo);
 
@@ -1681,7 +1681,7 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
     u32 handleSize = 0;
     u32 handleSizeAligned = 0;
     u32 baseAlignment = 0;
-    if(!__hidden_vulkan::ComputeRayTracingHandleLayout(m_context, handleSize, handleSizeAligned, baseAlignment, NWB_TEXT("dispatch rays"))){
+    if(!VulkanDetail::ComputeRayTracingHandleLayout(m_context, handleSize, handleSizeAligned, baseAlignment, NWB_TEXT("dispatch rays"))){
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to dispatch rays: invalid shader group handle layout"));
         return;
     }
@@ -1698,27 +1698,27 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
     };
 
     if(sbt->m_raygenBuffer){
-        raygenRegion.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(sbt->m_raygenBuffer.get(), sbt->m_raygenOffset);
+        raygenRegion.deviceAddress = VulkanDetail::GetBufferDeviceAddress(sbt->m_raygenBuffer.get(), sbt->m_raygenOffset);
         raygenRegion.stride = handleSizeAligned;
         raygenRegion.size = handleSizeAligned;
     }
 
     if(sbt->m_missBuffer){
-        missRegion.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(sbt->m_missBuffer.get(), sbt->m_missOffset);
+        missRegion.deviceAddress = VulkanDetail::GetBufferDeviceAddress(sbt->m_missBuffer.get(), sbt->m_missOffset);
         missRegion.stride = handleSizeAligned;
         if(!computeRegionSize(sbt->m_missCount, missRegion.size, NWB_TEXT("miss")))
             return;
     }
 
     if(sbt->m_hitBuffer){
-        hitRegion.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(sbt->m_hitBuffer.get(), sbt->m_hitOffset);
+        hitRegion.deviceAddress = VulkanDetail::GetBufferDeviceAddress(sbt->m_hitBuffer.get(), sbt->m_hitOffset);
         hitRegion.stride = handleSizeAligned;
         if(!computeRegionSize(sbt->m_hitCount, hitRegion.size, NWB_TEXT("hit")))
             return;
     }
 
     if(sbt->m_callableBuffer){
-        callableRegion.deviceAddress = __hidden_vulkan::GetBufferDeviceAddress(sbt->m_callableBuffer.get(), sbt->m_callableOffset);
+        callableRegion.deviceAddress = VulkanDetail::GetBufferDeviceAddress(sbt->m_callableBuffer.get(), sbt->m_callableOffset);
         callableRegion.stride = handleSizeAligned;
         if(!computeRegionSize(sbt->m_callableCount, callableRegion.size, NWB_TEXT("callable")))
             return;

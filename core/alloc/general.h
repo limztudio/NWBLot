@@ -17,7 +17,7 @@ NWB_ALLOC_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_alloc{
+namespace AllocDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -63,7 +63,7 @@ public:
 
 
 template<typename T>
-class GeneralAllocator : public __hidden_alloc::StatelessAllocatorTraits<GeneralAllocator, T>{
+class GeneralAllocator : public AllocDetail::StatelessAllocatorTraits<GeneralAllocator, T>{
 public:
     static_assert(!IsConst_V<T>, "NWB::Core::Alloc::GeneralAllocator forbids containers of const elements because allocator<const T> is ill-formed.");
     static_assert(!IsFunction_V<T>, "NWB::Core::Alloc::GeneralAllocator forbids allocators for function elements because of [allocator.requirements].");
@@ -127,7 +127,7 @@ inline bool operator!=(const GeneralAllocator<T>&, const GeneralAllocator<F>&)no
 
 
 template<typename T>
-class CacheAlignedAllocator : public __hidden_alloc::StatelessAllocatorTraits<CacheAlignedAllocator, T>{
+class CacheAlignedAllocator : public AllocDetail::StatelessAllocatorTraits<CacheAlignedAllocator, T>{
 public:
     static_assert(!IsConst_V<T>, "NWB::Core::Alloc::CacheAlignedAllocator forbids containers of const elements because allocator<const T> is ill-formed.");
     static_assert(!IsFunction_V<T>, "NWB::Core::Alloc::CacheAlignedAllocator forbids allocators for function elements because of [allocator.requirements].");

@@ -13,7 +13,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_unique_ptr{
+namespace UniquePtrDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -24,7 +24,7 @@ class Storage{
 public:
     typedef Deleter deleter_type;
     typedef T element_type;
-    typedef typename __hidden_smart_ptr::UniquePointerType<element_type, deleter_type>::type pointer;
+    typedef typename SmartPtrDetail::UniquePointerType<element_type, deleter_type>::type pointer;
 
 
 protected:
@@ -74,14 +74,14 @@ private:
 
 
 template<typename T, typename Deleter = DefaultDeleter<T>>
-class UniquePtr : private __hidden_unique_ptr::Storage<T, Deleter>{
+class UniquePtr : private UniquePtrDetail::Storage<T, Deleter>{
     static_assert(!IsRValueReference<Deleter>::value, "The supplied Deleter cannot be a r-value reference.");
 public:
     typedef Deleter deleter_type;
     typedef T element_type;
     typedef UniquePtr<element_type, deleter_type> this_type;
-    typedef typename __hidden_smart_ptr::UniquePointerType<element_type, deleter_type>::type pointer;
-    typedef __hidden_unique_ptr::Storage<element_type, deleter_type> base_type;
+    typedef typename SmartPtrDetail::UniquePointerType<element_type, deleter_type>::type pointer;
+    typedef UniquePtrDetail::Storage<element_type, deleter_type> base_type;
 
 
 public:
@@ -141,13 +141,13 @@ public:
     void swap(this_type& x)noexcept{ base_type::swapStorage(x); }
 };
 template<typename T, typename Deleter>
-class UniquePtr<T[], Deleter> : private __hidden_unique_ptr::Storage<T, Deleter>{
+class UniquePtr<T[], Deleter> : private UniquePtrDetail::Storage<T, Deleter>{
 public:
     typedef Deleter deleter_type;
     typedef T element_type;
     typedef UniquePtr<element_type[], deleter_type> this_type;
-    typedef typename __hidden_smart_ptr::UniquePointerType<element_type, deleter_type>::type pointer;
-    typedef __hidden_unique_ptr::Storage<element_type, deleter_type> base_type;
+    typedef typename SmartPtrDetail::UniquePointerType<element_type, deleter_type>::type pointer;
+    typedef UniquePtrDetail::Storage<element_type, deleter_type> base_type;
 
 
 public:
@@ -157,19 +157,19 @@ public:
     constexpr UniquePtr(std::nullptr_t)noexcept : base_type(pointer()){
         static_assert(!IsPointer<deleter_type>::value, "UniquePtr deleter default-constructed with null pointer. Use a different constructor or change your deleter to a class.");
     }
-    template<typename P, typename = EnableIf_T<__hidden_smart_ptr::IsArrayCvConvertible<P, pointer>::value>>
+    template<typename P, typename = EnableIf_T<SmartPtrDetail::IsArrayCvConvertible<P, pointer>::value>>
     explicit UniquePtr(P pArray)noexcept : base_type(pArray){
         static_assert(!IsPointer<deleter_type>::value, "UniquePtr deleter default-constructed with null pointer. Use a different constructor or change your deleter to a class.");
     }
     template<typename P>
-    UniquePtr(P pArray, typename Conditional<IsLValueReference<deleter_type>::value, deleter_type, typename AddLValueReference<const deleter_type>::type>::type deleter, typename EnableIf<__hidden_smart_ptr::IsArrayCvConvertible<P, pointer>::value>::type* = 0)noexcept : base_type(pArray, deleter){}
+    UniquePtr(P pArray, typename Conditional<IsLValueReference<deleter_type>::value, deleter_type, typename AddLValueReference<const deleter_type>::type>::type deleter, typename EnableIf<SmartPtrDetail::IsArrayCvConvertible<P, pointer>::value>::type* = 0)noexcept : base_type(pArray, deleter){}
     template<typename P>
-    UniquePtr(P pArray, typename RemoveReference<deleter_type>::type&& deleter, EnableIf_T<__hidden_smart_ptr::IsArrayCvConvertible<P, pointer>::value>* = 0)noexcept : base_type(pArray, Move(deleter)){
+    UniquePtr(P pArray, typename RemoveReference<deleter_type>::type&& deleter, EnableIf_T<SmartPtrDetail::IsArrayCvConvertible<P, pointer>::value>* = 0)noexcept : base_type(pArray, Move(deleter)){
         static_assert(!IsLValueReference<deleter_type>::value, "deleter_type reference refers to an rvalue deleter. The reference will probably become invalid before used. Change the deleter_type to not be a reference or construct with permanent deleter.");
     }
     UniquePtr(this_type&& x)noexcept : base_type(x.release(), Forward<deleter_type>(x.get_deleter())){}
     template<typename U, typename E>
-    UniquePtr(UniquePtr<U, E>&& u, typename EnableIf<__hidden_smart_ptr::IsSafeArrayConversion<T, pointer, U, typename UniquePtr<U, E>::pointer>::value && IsConvertible<E, deleter_type>::value && (!IsLValueReference<deleter_type>::value || IsSame<E, deleter_type>::value)>::type* = 0)noexcept : base_type(u.release(), Forward<E>(u.get_deleter())){}
+    UniquePtr(UniquePtr<U, E>&& u, typename EnableIf<SmartPtrDetail::IsSafeArrayConversion<T, pointer, U, typename UniquePtr<U, E>::pointer>::value && IsConvertible<E, deleter_type>::value && (!IsLValueReference<deleter_type>::value || IsSame<E, deleter_type>::value)>::type* = 0)noexcept : base_type(u.release(), Forward<E>(u.get_deleter())){}
     UniquePtr(const this_type&) = delete;
     UniquePtr& operator=(const this_type&) = delete;
     UniquePtr& operator=(pointer pArray) = delete;
@@ -184,7 +184,7 @@ public:
         return *this;
     }
     template<typename U, typename E>
-    typename EnableIf<__hidden_smart_ptr::IsSafeArrayConversion<T, pointer, U, typename UniquePtr<U, E>::pointer>::value&& IsAssignable<deleter_type&, E&&>::value, this_type&>::type operator=(UniquePtr<U, E>&& u)noexcept{
+    typename EnableIf<SmartPtrDetail::IsSafeArrayConversion<T, pointer, U, typename UniquePtr<U, E>::pointer>::value&& IsAssignable<deleter_type&, E&&>::value, this_type&>::type operator=(UniquePtr<U, E>&& u)noexcept{
         reset(u.release());
         get_deleter() = Move(Forward<E>(u.get_deleter()));
         return *this;

@@ -8,7 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_call_traits{
+namespace CallTraitsDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -42,7 +42,7 @@ public:
 	typedef T value_type;
 	typedef T& reference;
 	typedef const T& const_reference;
-	typedef typename __hidden_call_traits::Implementation0<T, IsPointer<T>::value, IsArithmetic<T>::value>::param_type param_type;
+	typedef typename CallTraitsDetail::Implementation0<T, IsPointer<T>::value, IsArithmetic<T>::value>::param_type param_type;
 };
 template<typename T>
 struct CallTraits<T&>{

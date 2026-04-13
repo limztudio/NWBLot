@@ -80,7 +80,7 @@ void CommandList::open(){
         return;
     }
 
-    VkCommandBufferBeginInfo beginInfo = __hidden_vulkan::MakeVkStruct<VkCommandBufferBeginInfo>(VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO);
+    VkCommandBufferBeginInfo beginInfo = VulkanDetail::MakeVkStruct<VkCommandBufferBeginInfo>(VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO);
     beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
     res = vkBeginCommandBuffer(m_currentCmdBuf->m_cmdBuf, &beginInfo);
@@ -157,7 +157,7 @@ bool CommandList::validateIndirectBuffer(IBuffer* _buffer, u64 offsetBytes, u64 
     }
 
     const u64 totalBytes = commandSizeBytes * commandCount;
-    if(!__hidden_vulkan::IsBufferRangeInBounds(buffer->m_desc, offsetBytes, totalBytes)){
+    if(!VulkanDetail::IsBufferRangeInBounds(buffer->m_desc, offsetBytes, totalBytes)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to execute {}: indirect argument range is outside the buffer"), commandName);
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to execute indirect command: indirect argument range is outside the buffer"));
         return false;
@@ -209,7 +209,7 @@ void CommandList::copyTextureToBuffer(IBuffer* _dest, u64 destOffsetBytes, u32 d
         return;
     }
 
-    if(!__hidden_vulkan::IsTextureSliceInBounds(src->m_desc, srcSlice)){
+    if(!VulkanDetail::IsTextureSliceInBounds(src->m_desc, srcSlice)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to buffer: source slice is outside the texture"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to buffer: source slice is outside the texture"));
         return;
@@ -222,7 +222,7 @@ void CommandList::copyTextureToBuffer(IBuffer* _dest, u64 destOffsetBytes, u32 d
     const TextureSlice resolvedSrc = srcSlice.resolve(src->m_desc);
 
     const FormatInfo& formatInfo = GetFormatInfo(src->m_desc.format);
-    const VkImageAspectFlags aspectMask = __hidden_vulkan::GetImageAspectMask(formatInfo);
+    const VkImageAspectFlags aspectMask = VulkanDetail::GetImageAspectMask(formatInfo);
 
     if(formatInfo.blockSize == 0 || formatInfo.bytesPerBlock == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to buffer: invalid row pitch"));

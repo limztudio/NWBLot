@@ -24,7 +24,7 @@ using PipelineRenderingFormatVector = Vector<VkFormat, Alloc::ScratchAllocator<V
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_vulkan{
+namespace VulkanDetail{
     VkAccessFlags2 GetVkAccessFlags(ResourceStates::Mask state);
     VkPipelineStageFlags2 GetVkPipelineStageFlags(ResourceStates::Mask state);
     VkImageLayout GetVkImageLayout(ResourceStates::Mask state);
@@ -516,7 +516,7 @@ class Buffer final : public RefCounter<IBuffer>, NoCopy{
     friend class UploadManager;
     friend class ShaderTable;
 
-    friend VkDeviceAddress __hidden_vulkan::GetBufferDeviceAddress(IBuffer* _buffer, u64 offset);
+    friend VkDeviceAddress VulkanDetail::GetBufferDeviceAddress(IBuffer* _buffer, u64 offset);
 
 
 public:
@@ -592,10 +592,10 @@ inline bool operator==(const TextureViewKey& lhs, const TextureViewKey& rhs)noex
 struct TextureViewKeyHasher{
     usize operator()(const TextureViewKey& value)const noexcept{
         usize seed = 0;
-        __hidden_core::HashCombine(seed, value.subresources);
-        __hidden_core::HashCombine(seed, static_cast<u32>(value.dimension));
-        __hidden_core::HashCombine(seed, static_cast<u32>(value.format));
-        __hidden_core::HashCombine(seed, value.isReadOnlyDSV);
+        CoreDetail::HashCombine(seed, value.subresources);
+        CoreDetail::HashCombine(seed, static_cast<u32>(value.dimension));
+        CoreDetail::HashCombine(seed, static_cast<u32>(value.format));
+        CoreDetail::HashCombine(seed, value.isReadOnlyDSV);
         return seed;
     }
 };

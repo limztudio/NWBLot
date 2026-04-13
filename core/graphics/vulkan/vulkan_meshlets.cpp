@@ -21,7 +21,7 @@ MeshletPipeline::MeshletPipeline(const VulkanContext& context)
     , m_context(context)
 {}
 MeshletPipeline::~MeshletPipeline(){
-    __hidden_vulkan::DestroyPipelineAndOwnedLayout(
+    VulkanDetail::DestroyPipelineAndOwnedLayout(
         m_context.device,
         m_context.allocationCallbacks,
         m_pipeline,
@@ -88,11 +88,11 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
         return nullptr;
     }
 
-    VkPipelineRasterizationStateCreateInfo rasterizer = __hidden_vulkan::MakeVkStruct<VkPipelineRasterizationStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO);
+    VkPipelineRasterizationStateCreateInfo rasterizer = VulkanDetail::MakeVkStruct<VkPipelineRasterizationStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO);
     rasterizer.depthClampEnable = VK_FALSE;
     rasterizer.rasterizerDiscardEnable = VK_FALSE;
     rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
-    rasterizer.cullMode = __hidden_vulkan::ConvertCullMode(desc.renderState.rasterState.cullMode);
+    rasterizer.cullMode = VulkanDetail::ConvertCullMode(desc.renderState.rasterState.cullMode);
     rasterizer.frontFace = desc.renderState.rasterState.frontCounterClockwise ? VK_FRONT_FACE_COUNTER_CLOCKWISE : VK_FRONT_FACE_CLOCKWISE;
     rasterizer.depthBiasEnable = desc.renderState.rasterState.depthBias != 0 ? VK_TRUE : VK_FALSE;
     rasterizer.depthBiasConstantFactor = static_cast<f32>(desc.renderState.rasterState.depthBias);
@@ -100,12 +100,12 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     rasterizer.depthBiasSlopeFactor = desc.renderState.rasterState.slopeScaledDepthBias;
     rasterizer.lineWidth = s_DefaultRasterLineWidth;
 
-    VkPipelineViewportStateCreateInfo viewportState = __hidden_vulkan::MakeVkStruct<VkPipelineViewportStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO);
+    VkPipelineViewportStateCreateInfo viewportState = VulkanDetail::MakeVkStruct<VkPipelineViewportStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO);
     viewportState.viewportCount = 1;
     viewportState.scissorCount = 1;
 
     VkPipelineMultisampleStateCreateInfo multisampling;
-    if(!__hidden_vulkan::ConfigurePipelineMultisampleState(
+    if(!VulkanDetail::ConfigurePipelineMultisampleState(
         fbinfo.sampleCount,
         desc.renderState.blendState.alphaToCoverageEnable,
         multisampling,
@@ -116,15 +116,15 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     }
 
     VkPipelineDepthStencilStateCreateInfo depthStencil;
-    __hidden_vulkan::ConfigurePipelineDepthStencilState(desc.renderState.depthStencilState, false, depthStencil);
+    VulkanDetail::ConfigurePipelineDepthStencilState(desc.renderState.depthStencilState, false, depthStencil);
 
     Vector<VkPipelineColorBlendAttachmentState, Alloc::ScratchAllocator<VkPipelineColorBlendAttachmentState>> blendAttachments{ Alloc::ScratchAllocator<VkPipelineColorBlendAttachmentState>(scratchArena) };
     blendAttachments.reserve(fbinfo.colorFormats.size());
     for(u32 i = 0; i < fbinfo.colorFormats.size(); ++i){
-        blendAttachments.push_back(__hidden_vulkan::ConvertBlendState(desc.renderState.blendState.targets[i]));
+        blendAttachments.push_back(VulkanDetail::ConvertBlendState(desc.renderState.blendState.targets[i]));
     }
 
-    VkPipelineColorBlendStateCreateInfo colorBlending = __hidden_vulkan::MakeVkStruct<VkPipelineColorBlendStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO);
+    VkPipelineColorBlendStateCreateInfo colorBlending = VulkanDetail::MakeVkStruct<VkPipelineColorBlendStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO);
     colorBlending.attachmentCount = static_cast<u32>(blendAttachments.size());
     colorBlending.pAttachments = blendAttachments.data();
 
@@ -133,18 +133,18 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
         VK_DYNAMIC_STATE_SCISSOR,
     };
 
-    VkPipelineDynamicStateCreateInfo dynamicState = __hidden_vulkan::MakeVkStruct<VkPipelineDynamicStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO);
+    VkPipelineDynamicStateCreateInfo dynamicState = VulkanDetail::MakeVkStruct<VkPipelineDynamicStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO);
     dynamicState.dynamicStateCount = static_cast<u32>(LengthOf(dynamicStates));
     dynamicState.pDynamicStates = dynamicStates;
 
     VkPipelineRenderingCreateInfo renderingInfo = {};
     PipelineRenderingFormatVector colorFormats{ Alloc::ScratchAllocator<VkFormat>(scratchArena) };
-    if(!__hidden_vulkan::BuildPipelineRenderingInfo(fbinfo, NWB_TEXT("meshlet pipeline"), renderingInfo, colorFormats)){
+    if(!VulkanDetail::BuildPipelineRenderingInfo(fbinfo, NWB_TEXT("meshlet pipeline"), renderingInfo, colorFormats)){
         DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
 
-    VkGraphicsPipelineCreateInfo pipelineInfo = __hidden_vulkan::MakeVkStruct<VkGraphicsPipelineCreateInfo>(VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO);
+    VkGraphicsPipelineCreateInfo pipelineInfo = VulkanDetail::MakeVkStruct<VkGraphicsPipelineCreateInfo>(VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO);
     if(pso->m_usesDescriptorHeap)
         pipelineInfo.pNext = descriptorHeapScratch.pNext(&renderingInfo);
     else

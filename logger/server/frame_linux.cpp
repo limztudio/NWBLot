@@ -24,7 +24,7 @@ NWB_LOG_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_frame{
+namespace FrameDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -48,7 +48,7 @@ static void SignalHandler(i32){
 
 
 void Frame::print(BasicStringView<tchar> str, Log::Type::Enum type){
-    ScopedLock lock(__hidden_frame::s_PrintMutex);
+    ScopedLock lock(FrameDetail::s_PrintMutex);
 
     auto& stream = Log::MessageTypeWritesToErrorStream(type) ? NWB_TCERR : NWB_TCOUT;
     stream << str << static_cast<tchar>('\n');
@@ -62,11 +62,11 @@ Frame::~Frame(){
 }
 
 bool Frame::init(){
-    __hidden_frame::s_ShouldExit = 0;
+    FrameDetail::s_ShouldExit = 0;
 
-    if(!SetSignalHandler(ProcessSignal::Interrupt, __hidden_frame::SignalHandler))
+    if(!SetSignalHandler(ProcessSignal::Interrupt, FrameDetail::SignalHandler))
         return false;
-    if(!SetSignalHandler(ProcessSignal::Terminate, __hidden_frame::SignalHandler))
+    if(!SetSignalHandler(ProcessSignal::Terminate, FrameDetail::SignalHandler))
         return false;
 
     return startup();
@@ -78,7 +78,7 @@ bool Frame::showFrame(){
 bool Frame::mainLoop(){
     Timer lateTime(TimerNow());
 
-    while(!__hidden_frame::s_ShouldExit){
+    while(!FrameDetail::s_ShouldExit){
         Timer currentTime(TimerNow());
         const f32 delta = DurationInSeconds<f32>(currentTime, lateTime);
         lateTime = currentTime;

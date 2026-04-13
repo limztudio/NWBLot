@@ -25,7 +25,7 @@ using MessageTypeId = usize;
 
 template<typename T>
 inline MessageTypeId MessageType(){
-    return __hidden_ecs::TypeCounter<__hidden_ecs::MessageTypeTag>::id<Decay_T<T>>();
+    return ECSDetail::TypeCounter<ECSDetail::MessageTypeTag>::id<Decay_T<T>>();
 }
 
 

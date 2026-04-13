@@ -98,7 +98,7 @@ constexpr auto MakeConstWString(const wchar(&str)[N]){ return ConstWString<N>(st
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_basic_string{
+namespace BasicStringDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -179,7 +179,7 @@ inline void AppendUtf8CodePoint(AString& out, u32 codePoint){
 
 
 #if defined(NWB_UNICODE)
-template<typename In> requires __hidden_basic_string::FromCharView<In>
+template<typename In> requires BasicStringDetail::FromCharView<In>
 inline TString StringConvert(const In& raw){
     AStringView src(raw);
     if(src.empty())
@@ -203,7 +203,7 @@ inline TString StringConvert(const In& raw){
 template<typename In>
 inline TString StringConvert(const In& src){ return TString(src); }
 #else
-template<typename In> requires __hidden_basic_string::FromWcharView<In>
+template<typename In> requires BasicStringDetail::FromWcharView<In>
 inline TString StringConvert(const In& raw){
     const WStringView src(raw);
     if(src.empty())
@@ -216,7 +216,7 @@ inline TString StringConvert(const In& raw){
     WideCharToMultiByte(CP_UTF8, 0, src.data(), static_cast<int>(src.length()), dst.data(), len, nullptr, nullptr);
     return dst;
 #else
-    return __hidden_basic_string::WideToUtf8(src);
+    return BasicStringDetail::WideToUtf8(src);
 #endif
 }
 

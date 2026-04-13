@@ -29,7 +29,7 @@ static constexpr AStringView s_NwbExtension = ".nwb";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_asset_paths{
+namespace AssetPathsDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -130,7 +130,7 @@ namespace __hidden_asset_paths{
     outVirtualRoot.clear();
 
     AStringView virtualRootText;
-    if(!__hidden_asset_paths::ResolveAssetRootVirtualRootText(assetRoot, virtualRootText))
+    if(!AssetPathsDetail::ResolveAssetRootVirtualRootText(assetRoot, virtualRootText))
         return false;
     if(!outVirtualRoot.assign(virtualRootText)){
         NWB_LOGGER_ERROR(
@@ -144,7 +144,7 @@ namespace __hidden_asset_paths{
 }
 
 [[nodiscard]] inline bool BuildDerivedAssetVirtualPath(const Path& assetRoot, const AStringView virtualRoot, const Path& sourceOrMetaPath, AString& outVirtualPath){
-    return __hidden_asset_paths::BuildDerivedAssetVirtualPathText(assetRoot, virtualRoot, sourceOrMetaPath, outVirtualPath);
+    return AssetPathsDetail::BuildDerivedAssetVirtualPathText(assetRoot, virtualRoot, sourceOrMetaPath, outVirtualPath);
 }
 
 [[nodiscard]] inline bool BuildDerivedAssetVirtualPath(
@@ -156,7 +156,7 @@ namespace __hidden_asset_paths{
     outVirtualPath = NAME_NONE;
 
     AString virtualPathText;
-    if(!__hidden_asset_paths::BuildDerivedAssetVirtualPathText(assetRoot, virtualRoot, sourceOrMetaPath, virtualPathText))
+    if(!AssetPathsDetail::BuildDerivedAssetVirtualPathText(assetRoot, virtualRoot, sourceOrMetaPath, virtualPathText))
         return false;
 
     outVirtualPath = Name(AStringView(virtualPathText));
@@ -182,7 +182,7 @@ namespace __hidden_asset_paths{
 
 [[nodiscard]] inline bool HasReservedAssetVirtualRoot(const AStringView virtualPath){
     CompactString virtualRoot;
-    if(!__hidden_asset_paths::ExtractAssetVirtualRoot(virtualPath, virtualRoot))
+    if(!AssetPathsDetail::ExtractAssetVirtualRoot(virtualPath, virtualRoot))
         return false;
 
     return virtualRoot.view() == s_EngineVirtualRoot
@@ -198,7 +198,7 @@ namespace __hidden_asset_paths{
         return false;
 
     CompactString requestedVirtualRoot;
-    if(!__hidden_asset_paths::ExtractAssetVirtualRoot(virtualPath, requestedVirtualRoot))
+    if(!AssetPathsDetail::ExtractAssetVirtualRoot(virtualPath, requestedVirtualRoot))
         return false;
 
     for(const Path& assetRoot : assetRoots){

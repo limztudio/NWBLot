@@ -39,7 +39,7 @@ static int EntryPoint(const isize argc, wchar** argv, void*){
             continue;
         }
 
-        utf8Args.push_back(__hidden_basic_string::WideToUtf8(WStringView(argv[i])));
+        utf8Args.push_back(BasicStringDetail::WideToUtf8(WStringView(argv[i])));
         utf8Argv.push_back(utf8Args.back().data());
     }
 

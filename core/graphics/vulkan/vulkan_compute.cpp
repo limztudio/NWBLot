@@ -21,7 +21,7 @@ ComputePipeline::ComputePipeline(const VulkanContext& context)
     , m_context(context)
 {}
 ComputePipeline::~ComputePipeline(){
-    __hidden_vulkan::DestroyPipelineAndOwnedLayout(
+    VulkanDetail::DestroyPipelineAndOwnedLayout(
         m_context.device,
         m_context.allocationCallbacks,
         m_pipeline,
@@ -55,7 +55,7 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
 
     auto* cs = checked_cast<Shader*>(desc.CS.get());
 
-    VkPipelineShaderStageCreateInfo shaderStage = __hidden_vulkan::MakeVkStruct<VkPipelineShaderStageCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
+    VkPipelineShaderStageCreateInfo shaderStage = VulkanDetail::MakeVkStruct<VkPipelineShaderStageCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
     shaderStage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
     shaderStage.module = cs->m_shaderModule;
     shaderStage.pName = cs->m_entryPointName.c_str();
@@ -85,7 +85,7 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
         return nullptr;
     }
 
-    VkComputePipelineCreateInfo pipelineInfo = __hidden_vulkan::MakeVkStruct<VkComputePipelineCreateInfo>(VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO);
+    VkComputePipelineCreateInfo pipelineInfo = VulkanDetail::MakeVkStruct<VkComputePipelineCreateInfo>(VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO);
     if(pso->m_usesDescriptorHeap)
         pipelineInfo.pNext = descriptorHeapScratch.pNext();
     pipelineInfo.stage = shaderStages[0];

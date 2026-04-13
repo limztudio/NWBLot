@@ -28,7 +28,7 @@ using FalseType = BoolConstant<false>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_type_properties{
+namespace TypePropertiesDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -72,7 +72,7 @@ inline constexpr bool IsCompleteType_V = IsCompleteType<T, void>::value;
 
 
 template<typename T>
-struct IsReferenceWrapper : public __hidden_type_properties::IsReferenceWrapper<typename RemoveCV<T>::type>{};
+struct IsReferenceWrapper : public TypePropertiesDetail::IsReferenceWrapper<typename RemoveCV<T>::type>{};
 
 template<typename T>
 struct RemoveReferenceWrapper{ typedef T type; };

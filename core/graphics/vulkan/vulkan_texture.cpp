@@ -16,7 +16,7 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_vulkan{
+namespace VulkanDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -337,7 +337,7 @@ VkImageView Texture::getView(const TextureSubresourceSet& subresources, TextureD
     if(it != m_views.end())
         return it.value();
 
-    VkImageViewType viewType = __hidden_vulkan::TextureDimensionToViewType(dimension);
+    VkImageViewType viewType = VulkanDetail::TextureDimensionToViewType(dimension);
     VkFormat vkFormat = ConvertFormat(format);
     if(vkFormat == VK_FORMAT_UNDEFINED){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create image view: format is unsupported"));
@@ -345,12 +345,12 @@ VkImageView Texture::getView(const TextureSubresourceSet& subresources, TextureD
         return VK_NULL_HANDLE;
     }
 
-    if(!__hidden_vulkan::ValidateTextureViewShape(m_desc, dimension, resolvedSubresources)){
+    if(!VulkanDetail::ValidateTextureViewShape(m_desc, dimension, resolvedSubresources)){
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create image view: invalid view shape"));
         return VK_NULL_HANDLE;
     }
 
-    const VkImageAspectFlags aspectMask = __hidden_vulkan::GetImageAspectMask(GetFormatInfo(format));
+    const VkImageAspectFlags aspectMask = VulkanDetail::GetImageAspectMask(GetFormatInfo(format));
 
     VkImageViewCreateInfo viewInfo{};
     viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -444,7 +444,7 @@ TextureHandle Device::createTexture(const TextureDesc& d){
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create texture: format is unsupported"));
         return nullptr;
     }
-    if(!__hidden_vulkan::IsSupportedSampleCount(d.sampleCount)){
+    if(!VulkanDetail::IsSupportedSampleCount(d.sampleCount)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create texture: sample count is unsupported"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create texture: sample count is unsupported"));
         return nullptr;
@@ -474,7 +474,7 @@ TextureHandle Device::createTexture(const TextureDesc& d){
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create multisampled texture: mip levels must be 1"));
         return nullptr;
     }
-    if(!__hidden_vulkan::ValidateTextureShape(d, NWB_TEXT("create texture"))){
+    if(!VulkanDetail::ValidateTextureShape(d, NWB_TEXT("create texture"))){
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create texture: invalid texture shape"));
         return nullptr;
     }
@@ -482,11 +482,11 @@ TextureHandle Device::createTexture(const TextureDesc& d){
     auto* texture = NewArenaObject<Texture>(m_context.objectArena, m_context, m_allocator);
     texture->m_desc = d;
 
-    VkImageType imageType = __hidden_vulkan::TextureDimensionToImageType(d.dimension);
+    VkImageType imageType = VulkanDetail::TextureDimensionToImageType(d.dimension);
     VkFormat format = ConvertFormat(d.format);
-    VkImageUsageFlags usage = __hidden_vulkan::PickImageUsage(d);
-    VkImageCreateFlags flags = __hidden_vulkan::PickImageFlags(d);
-    VkSampleCountFlagBits sampleCount = __hidden_vulkan::GetSampleCountFlagBits(d.sampleCount);
+    VkImageUsageFlags usage = VulkanDetail::PickImageUsage(d);
+    VkImageCreateFlags flags = VulkanDetail::PickImageFlags(d);
+    VkSampleCountFlagBits sampleCount = VulkanDetail::GetSampleCountFlagBits(d.sampleCount);
 
     texture->m_imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     texture->m_imageInfo.imageType = imageType;
@@ -595,7 +595,7 @@ TextureHandle Device::createHandleForNativeTexture(ObjectType objectType, Object
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create texture handle for native texture: format is unsupported"));
         return nullptr;
     }
-    if(!__hidden_vulkan::IsSupportedSampleCount(desc.sampleCount)){
+    if(!VulkanDetail::IsSupportedSampleCount(desc.sampleCount)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create texture handle for native texture: sample count is unsupported"));
         return nullptr;
     }
@@ -619,7 +619,7 @@ TextureHandle Device::createHandleForNativeTexture(ObjectType objectType, Object
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create texture handle for native multisampled texture: mip levels must be 1"));
         return nullptr;
     }
-    if(!__hidden_vulkan::ValidateTextureShape(desc, NWB_TEXT("create texture handle for native texture")))
+    if(!VulkanDetail::ValidateTextureShape(desc, NWB_TEXT("create texture handle for native texture")))
         return nullptr;
 
     auto* texture = NewArenaObject<Texture>(m_context.objectArena, m_context, m_allocator);
@@ -628,14 +628,14 @@ TextureHandle Device::createHandleForNativeTexture(ObjectType objectType, Object
     texture->m_managed = false;
 
     texture->m_imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-    texture->m_imageInfo.imageType = __hidden_vulkan::TextureDimensionToImageType(desc.dimension);
+    texture->m_imageInfo.imageType = VulkanDetail::TextureDimensionToImageType(desc.dimension);
     texture->m_imageInfo.extent.width = desc.width;
     texture->m_imageInfo.extent.height = desc.height;
     texture->m_imageInfo.extent.depth = desc.depth;
     texture->m_imageInfo.mipLevels = desc.mipLevels;
     texture->m_imageInfo.arrayLayers = desc.arraySize;
     texture->m_imageInfo.format = ConvertFormat(desc.format);
-    texture->m_imageInfo.samples = __hidden_vulkan::GetSampleCountFlagBits(desc.sampleCount);
+    texture->m_imageInfo.samples = VulkanDetail::GetSampleCountFlagBits(desc.sampleCount);
 
     return TextureHandle(texture, TextureHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
@@ -657,7 +657,7 @@ SamplerHandle Device::createSampler(const SamplerDesc& d){
     auto* sampler = NewArenaObject<Sampler>(m_context.objectArena, m_context);
     sampler->m_desc = normalizedDesc;
 
-    const VkSamplerCreateInfo samplerInfo = __hidden_vulkan::BuildSamplerCreateInfo(normalizedDesc);
+    const VkSamplerCreateInfo samplerInfo = VulkanDetail::BuildSamplerCreateInfo(normalizedDesc);
 
     res = vkCreateSampler(m_context.device, &samplerInfo, m_context.allocationCallbacks, &sampler->m_sampler);
     if(res != VK_SUCCESS){
@@ -677,7 +677,7 @@ SamplerHandle Device::createSampler(const SamplerDesc& d){
 void CommandList::clearTextureFloat(ITexture* _texture, TextureSubresourceSet subresources, const Color& clearColor){
     Texture* texture = nullptr;
     VkImageSubresourceRange range{};
-    if(!__hidden_vulkan::PrepareColorTextureClear(_texture, subresources, NWB_TEXT("color value"), texture, range))
+    if(!VulkanDetail::PrepareColorTextureClear(_texture, subresources, NWB_TEXT("color value"), texture, range))
         return;
 
     VkClearColorValue clearValue;
@@ -722,7 +722,7 @@ void CommandList::clearDepthStencilTexture(ITexture* _texture, TextureSubresourc
         aspectMask |= VK_IMAGE_ASPECT_DEPTH_BIT;
     if(clearStencil)
         aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
-    const VkImageSubresourceRange range = __hidden_vulkan::BuildImageSubresourceRange(resolvedSubresources, aspectMask);
+    const VkImageSubresourceRange range = VulkanDetail::BuildImageSubresourceRange(resolvedSubresources, aspectMask);
 
     vkCmdClearDepthStencilImage(m_currentCmdBuf->m_cmdBuf, texture->m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearValue, 1, &range);
     m_currentCmdBuf->m_referencedResources.push_back(_texture);
@@ -731,7 +731,7 @@ void CommandList::clearDepthStencilTexture(ITexture* _texture, TextureSubresourc
 void CommandList::clearTextureUInt(ITexture* _texture, TextureSubresourceSet subresources, u32 clearColor){
     Texture* texture = nullptr;
     VkImageSubresourceRange range{};
-    if(!__hidden_vulkan::PrepareColorTextureClear(_texture, subresources, NWB_TEXT("integer value"), texture, range))
+    if(!VulkanDetail::PrepareColorTextureClear(_texture, subresources, NWB_TEXT("integer value"), texture, range))
         return;
 
     VkClearColorValue clearValue;
@@ -757,7 +757,7 @@ void CommandList::copyTexture(ITexture* _dest, const TextureSlice& destSlice, IT
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture: source and destination sample counts do not match"));
         return;
     }
-    if(!__hidden_vulkan::IsTextureSliceInBounds(dest->m_desc, destSlice) || !__hidden_vulkan::IsTextureSliceInBounds(src->m_desc, srcSlice)){
+    if(!VulkanDetail::IsTextureSliceInBounds(dest->m_desc, destSlice) || !VulkanDetail::IsTextureSliceInBounds(src->m_desc, srcSlice)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture: slice is outside the texture"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture: slice is outside the texture"));
         return;
@@ -772,12 +772,12 @@ void CommandList::copyTexture(ITexture* _dest, const TextureSlice& destSlice, IT
     }
 
     VkImageCopy region{};
-    region.srcSubresource.aspectMask = __hidden_vulkan::GetImageAspectMask(GetFormatInfo(src->m_desc.format));
+    region.srcSubresource.aspectMask = VulkanDetail::GetImageAspectMask(GetFormatInfo(src->m_desc.format));
     region.srcSubresource.mipLevel = resolvedSrc.mipLevel;
     region.srcSubresource.baseArrayLayer = resolvedSrc.arraySlice;
     region.srcSubresource.layerCount = 1;
     region.srcOffset = { static_cast<int32_t>(resolvedSrc.x), static_cast<int32_t>(resolvedSrc.y), static_cast<int32_t>(resolvedSrc.z) };
-    region.dstSubresource.aspectMask = __hidden_vulkan::GetImageAspectMask(GetFormatInfo(dest->m_desc.format));
+    region.dstSubresource.aspectMask = VulkanDetail::GetImageAspectMask(GetFormatInfo(dest->m_desc.format));
     region.dstSubresource.mipLevel = resolvedDst.mipLevel;
     region.dstSubresource.baseArrayLayer = resolvedDst.arraySlice;
     region.dstSubresource.layerCount = 1;
@@ -794,7 +794,7 @@ void CommandList::copyTexture(IStagingTexture* dest, const TextureSlice& destSli
     StagingTexture* staging = nullptr;
     Texture* texture = nullptr;
     VkBufferImageCopy region{};
-    if(!__hidden_vulkan::PrepareStagingTextureCopy(
+    if(!VulkanDetail::PrepareStagingTextureCopy(
         dest,
         destSlice,
         src,
@@ -818,7 +818,7 @@ void CommandList::copyTexture(ITexture* dest, const TextureSlice& destSlice, ISt
     StagingTexture* staging = nullptr;
     Texture* texture = nullptr;
     VkBufferImageCopy region{};
-    if(!__hidden_vulkan::PrepareStagingTextureCopy(
+    if(!VulkanDetail::PrepareStagingTextureCopy(
         src,
         srcSlice,
         dest,
@@ -940,7 +940,7 @@ void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, co
     if(!prepareUploadStaging(data, uploadSize, NWB_TEXT("writeTexture"), stagingBuffer, stagingOffset))
         return;
 
-    VkImageMemoryBarrier2 barrier = __hidden_vulkan::MakeVkStruct<VkImageMemoryBarrier2>(VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2);
+    VkImageMemoryBarrier2 barrier = VulkanDetail::MakeVkStruct<VkImageMemoryBarrier2>(VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2);
     barrier.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
     barrier.srcAccessMask = VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT;
     barrier.dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
@@ -948,14 +948,14 @@ void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, co
     barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
     barrier.image = dest->m_image;
-    const VkImageAspectFlags writeAspect = __hidden_vulkan::GetImageAspectMask(formatInfo);
+    const VkImageAspectFlags writeAspect = VulkanDetail::GetImageAspectMask(formatInfo);
     barrier.subresourceRange.aspectMask = writeAspect;
     barrier.subresourceRange.baseMipLevel = mipLevel;
     barrier.subresourceRange.levelCount = 1;
     barrier.subresourceRange.baseArrayLayer = arraySlice;
     barrier.subresourceRange.layerCount = 1;
 
-    VkDependencyInfo depInfo = __hidden_vulkan::MakeVkStruct<VkDependencyInfo>(VK_STRUCTURE_TYPE_DEPENDENCY_INFO);
+    VkDependencyInfo depInfo = VulkanDetail::MakeVkStruct<VkDependencyInfo>(VK_STRUCTURE_TYPE_DEPENDENCY_INFO);
     depInfo.imageMemoryBarrierCount = 1;
     depInfo.pImageMemoryBarriers = &barrier;
     vkCmdPipelineBarrier2(m_currentCmdBuf->m_cmdBuf, &depInfo);

@@ -71,7 +71,7 @@ void CommandList::commitBarriers(){
     if(m_pendingImageBarriers.empty() && m_pendingBufferBarriers.empty())
         return;
 
-    VkDependencyInfo depInfo = __hidden_vulkan::MakeVkStruct<VkDependencyInfo>(VK_STRUCTURE_TYPE_DEPENDENCY_INFO);
+    VkDependencyInfo depInfo = VulkanDetail::MakeVkStruct<VkDependencyInfo>(VK_STRUCTURE_TYPE_DEPENDENCY_INFO);
     depInfo.imageMemoryBarrierCount = static_cast<u32>(m_pendingImageBarriers.size());
     depInfo.pImageMemoryBarriers = m_pendingImageBarriers.data();
     depInfo.bufferMemoryBarrierCount = static_cast<u32>(m_pendingBufferBarriers.size());
@@ -102,17 +102,17 @@ void CommandList::setTextureState(ITexture* _texture, TextureSubresourceSet subr
     if(oldState == stateBits)
         return;
 
-    VkImageMemoryBarrier2 barrier = __hidden_vulkan::MakeVkStruct<VkImageMemoryBarrier2>(VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2);
-    barrier.srcStageMask = __hidden_vulkan::GetVkPipelineStageFlags(oldState != ResourceStates::Unknown ? oldState : ResourceStates::Common);
-    barrier.srcAccessMask = __hidden_vulkan::GetVkAccessFlags(oldState != ResourceStates::Unknown ? oldState : ResourceStates::Common);
-    barrier.dstStageMask = __hidden_vulkan::GetVkPipelineStageFlags(stateBits);
-    barrier.dstAccessMask = __hidden_vulkan::GetVkAccessFlags(stateBits);
-    barrier.oldLayout = oldState != ResourceStates::Unknown ? __hidden_vulkan::GetVkImageLayout(oldState) : VK_IMAGE_LAYOUT_UNDEFINED;
-    barrier.newLayout = __hidden_vulkan::GetVkImageLayout(stateBits);
+    VkImageMemoryBarrier2 barrier = VulkanDetail::MakeVkStruct<VkImageMemoryBarrier2>(VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2);
+    barrier.srcStageMask = VulkanDetail::GetVkPipelineStageFlags(oldState != ResourceStates::Unknown ? oldState : ResourceStates::Common);
+    barrier.srcAccessMask = VulkanDetail::GetVkAccessFlags(oldState != ResourceStates::Unknown ? oldState : ResourceStates::Common);
+    barrier.dstStageMask = VulkanDetail::GetVkPipelineStageFlags(stateBits);
+    barrier.dstAccessMask = VulkanDetail::GetVkAccessFlags(stateBits);
+    barrier.oldLayout = oldState != ResourceStates::Unknown ? VulkanDetail::GetVkImageLayout(oldState) : VK_IMAGE_LAYOUT_UNDEFINED;
+    barrier.newLayout = VulkanDetail::GetVkImageLayout(stateBits);
     barrier.image = texture->m_image;
 
     const FormatInfo& formatInfo = GetFormatInfo(texture->m_desc.format);
-    barrier.subresourceRange.aspectMask = __hidden_vulkan::GetImageAspectMask(formatInfo);
+    barrier.subresourceRange.aspectMask = VulkanDetail::GetImageAspectMask(formatInfo);
     barrier.subresourceRange.baseMipLevel = resolvedSubresources.baseMipLevel;
     barrier.subresourceRange.levelCount = resolvedSubresources.numMipLevels;
     barrier.subresourceRange.baseArrayLayer = resolvedSubresources.baseArraySlice;
@@ -125,7 +125,7 @@ void CommandList::setTextureState(ITexture* _texture, TextureSubresourceSet subr
         return;
     }
 
-    VkDependencyInfo depInfo = __hidden_vulkan::MakeVkStruct<VkDependencyInfo>(VK_STRUCTURE_TYPE_DEPENDENCY_INFO);
+    VkDependencyInfo depInfo = VulkanDetail::MakeVkStruct<VkDependencyInfo>(VK_STRUCTURE_TYPE_DEPENDENCY_INFO);
     depInfo.imageMemoryBarrierCount = 1;
     depInfo.pImageMemoryBarriers = &barrier;
 
@@ -145,11 +145,11 @@ void CommandList::setBufferState(IBuffer* _buffer, ResourceStates::Mask stateBit
     if(oldState == stateBits)
         return;
 
-    VkBufferMemoryBarrier2 barrier = __hidden_vulkan::MakeVkStruct<VkBufferMemoryBarrier2>(VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2);
-    barrier.srcStageMask = __hidden_vulkan::GetVkPipelineStageFlags(oldState != ResourceStates::Unknown ? oldState : ResourceStates::Common);
-    barrier.srcAccessMask = __hidden_vulkan::GetVkAccessFlags(oldState != ResourceStates::Unknown ? oldState : ResourceStates::Common);
-    barrier.dstStageMask = __hidden_vulkan::GetVkPipelineStageFlags(stateBits);
-    barrier.dstAccessMask = __hidden_vulkan::GetVkAccessFlags(stateBits);
+    VkBufferMemoryBarrier2 barrier = VulkanDetail::MakeVkStruct<VkBufferMemoryBarrier2>(VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2);
+    barrier.srcStageMask = VulkanDetail::GetVkPipelineStageFlags(oldState != ResourceStates::Unknown ? oldState : ResourceStates::Common);
+    barrier.srcAccessMask = VulkanDetail::GetVkAccessFlags(oldState != ResourceStates::Unknown ? oldState : ResourceStates::Common);
+    barrier.dstStageMask = VulkanDetail::GetVkPipelineStageFlags(stateBits);
+    barrier.dstAccessMask = VulkanDetail::GetVkAccessFlags(stateBits);
     barrier.buffer = buffer->m_buffer;
     barrier.offset = 0;
     barrier.size = VK_WHOLE_SIZE;
@@ -161,7 +161,7 @@ void CommandList::setBufferState(IBuffer* _buffer, ResourceStates::Mask stateBit
         return;
     }
 
-    VkDependencyInfo depInfo = __hidden_vulkan::MakeVkStruct<VkDependencyInfo>(VK_STRUCTURE_TYPE_DEPENDENCY_INFO);
+    VkDependencyInfo depInfo = VulkanDetail::MakeVkStruct<VkDependencyInfo>(VK_STRUCTURE_TYPE_DEPENDENCY_INFO);
     depInfo.bufferMemoryBarrierCount = 1;
     depInfo.pBufferMemoryBarriers = &barrier;
 

@@ -24,7 +24,7 @@ class CustomArena;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_custom_allocator{
+namespace CustomAllocatorDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -81,7 +81,7 @@ public:
     }
     template<typename T>
     inline T* allocate(usize count){
-        return __hidden_alloc::AllocateTyped<T>(*this, count);
+        return AllocDetail::AllocateTyped<T>(*this, count);
     }
 
     inline void deallocate(void* p, usize align, usize size){
@@ -91,7 +91,7 @@ public:
     }
     template<typename T>
     inline void deallocate(void* p, usize count){
-        __hidden_alloc::DeallocateTyped<T>(*this, p, count);
+        AllocDetail::DeallocateTyped<T>(*this, p, count);
     }
 
 
@@ -106,7 +106,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_custom_allocator{
+namespace CustomAllocatorDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -128,7 +128,7 @@ inline CustomArena& DefaultArena(){
 
 
 template<typename T>
-class CustomAllocator : public __hidden_alloc::ArenaAllocatorOperations<CustomAllocator<T>, T>{
+class CustomAllocator : public AllocDetail::ArenaAllocatorOperations<CustomAllocator<T>, T>{
     template<typename F>
     friend class CustomAllocator;
 
@@ -159,7 +159,7 @@ public:
 
 public:
     CustomAllocator()noexcept
-        : m_arena(__hidden_custom_allocator::DefaultArena())
+        : m_arena(CustomAllocatorDetail::DefaultArena())
     {}
     constexpr CustomAllocator(CustomArena& arena)noexcept : m_arena(arena){}
     constexpr CustomAllocator(const CustomAllocator&)noexcept = default;
@@ -187,7 +187,7 @@ inline bool operator!=(const CustomAllocator<T>& lhs, const CustomAllocator<F>& 
 
 
 template<typename T>
-class CustomCacheAlignedAllocator : public __hidden_alloc::CacheAlignedArenaAllocatorOperations<CustomCacheAlignedAllocator<T>, T>{
+class CustomCacheAlignedAllocator : public AllocDetail::CacheAlignedArenaAllocatorOperations<CustomCacheAlignedAllocator<T>, T>{
     template<typename F>
     friend class CustomCacheAlignedAllocator;
 
@@ -218,7 +218,7 @@ public:
 
 public:
     CustomCacheAlignedAllocator()noexcept
-        : m_arena(__hidden_custom_allocator::DefaultArena())
+        : m_arena(CustomAllocatorDetail::DefaultArena())
     {}
     constexpr CustomCacheAlignedAllocator(CustomArena& arena)noexcept : m_arena(arena){}
     constexpr CustomCacheAlignedAllocator(const CustomCacheAlignedAllocator&)noexcept = default;

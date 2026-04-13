@@ -25,7 +25,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_frame{
+namespace FrameDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -170,12 +170,12 @@ bool Frame::init(){
     auto& frameData = data<Common::LinuxFrame>();
 
     Common::LinuxFrameBackend::Enum backendOrder[2] = {};
-    const usize backendCount = __hidden_frame::BuildBackendOrder(backendOrder);
+    const usize backendCount = FrameDetail::BuildBackendOrder(backendOrder);
     for(usize i = 0; i < backendCount; ++i){
         const Common::LinuxFrameBackend::Enum backend = backendOrder[i];
-        if(__hidden_frame::TryInitBackend(*this, backend)){
+        if(FrameDetail::TryInitBackend(*this, backend)){
             frameData.backend() = backend;
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Frame: Using Linux {} backend."), StringConvert(__hidden_frame::BackendName(backend)));
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Frame: Using Linux {} backend."), StringConvert(FrameDetail::BackendName(backend)));
 
             if(!startup())
                 return false;
@@ -183,17 +183,17 @@ bool Frame::init(){
             return true;
         }
 
-        NWB_LOGGER_WARNING(NWB_TEXT("Frame: Failed to initialize Linux {} backend."), StringConvert(__hidden_frame::BackendName(backend)));
+        NWB_LOGGER_WARNING(NWB_TEXT("Frame: Failed to initialize Linux {} backend."), StringConvert(FrameDetail::BackendName(backend)));
     }
 
     NWB_LOGGER_FATAL(NWB_TEXT("Frame: Failed to initialize any Linux window backend."));
     return false;
 }
 bool Frame::showFrame(){
-    return __hidden_frame::ShowBackendFrame(*this, data<Common::LinuxFrame>().backend());
+    return FrameDetail::ShowBackendFrame(*this, data<Common::LinuxFrame>().backend());
 }
 bool Frame::mainLoop(){
-    return __hidden_frame::RunBackendFrame(*this, data<Common::LinuxFrame>().backend());
+    return FrameDetail::RunBackendFrame(*this, data<Common::LinuxFrame>().backend());
 }
 
 void Frame::setupPlatform(void* inst){
@@ -209,7 +209,7 @@ void Frame::setupPlatform(void* inst){
 }
 void Frame::cleanupPlatform(){
     auto& frameData = data<Common::LinuxFrame>();
-    __hidden_frame::CleanupBackendFrame(*this, frameData.backend());
+    FrameDetail::CleanupBackendFrame(*this, frameData.backend());
 
     frameData.isActive() = false;
     frameData.backend() = Common::LinuxFrameBackend::Enum::None;

@@ -22,7 +22,7 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_vulkan{
+namespace VulkanDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -551,8 +551,8 @@ bool BackendContext::createVulkanInstance(){
         NWB_LOGGER_INFO(NWB_TEXT("{}"), StringConvert(ss.str()));
     }
 
-    auto instanceExtVec = __hidden_vulkan::StringSetToVector(m_enabledExtensions.instance, scratchArena);
-    auto layerVec = __hidden_vulkan::StringSetToVector(m_enabledExtensions.layers, scratchArena);
+    auto instanceExtVec = VulkanDetail::StringSetToVector(m_enabledExtensions.instance, scratchArena);
+    auto layerVec = VulkanDetail::StringSetToVector(m_enabledExtensions.layers, scratchArena);
 
     VkApplicationInfo applicationInfo = {};
     applicationInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -618,7 +618,7 @@ void BackendContext::installDebugCallback(){
     VkDebugReportCallbackCreateInfoEXT createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;
     createInfo.flags = VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT | VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT;
-    createInfo.pfnCallback = __hidden_vulkan::VulkanDebugCallback;
+    createInfo.pfnCallback = VulkanDetail::VulkanDebugCallback;
     createInfo.pUserData = this;
 
     res = createFunc(m_vulkanInstance, &createInfo, nullptr, &m_debugReportCallback);
@@ -704,7 +704,7 @@ bool BackendContext::findQueueFamilies(VkPhysicalDevice physicalDevice){
 }
 
 bool BackendContext::pickPhysicalDevice(){
-    VkFormat requestedFormat = __hidden_vulkan::ConvertFormat(m_swapChainState.backBufferFormat);
+    VkFormat requestedFormat = VulkanDetail::ConvertFormat(m_swapChainState.backBufferFormat);
     if(!m_deviceParams.headlessDevice && requestedFormat == VK_FORMAT_UNDEFINED){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Requested swapchain format is unsupported"));
         return false;
@@ -957,44 +957,44 @@ bool BackendContext::createVulkanDevice(){
 
     void* pNext = nullptr;
 
-    VkPhysicalDeviceFeatures2 physicalDeviceFeatures2 = __hidden_vulkan::MakeVkStruct<VkPhysicalDeviceFeatures2>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2);
+    VkPhysicalDeviceFeatures2 physicalDeviceFeatures2 = VulkanDetail::MakeVkStruct<VkPhysicalDeviceFeatures2>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2);
 
-    __hidden_vulkan::OptionalDeviceFeatureSet requestedOptionalFeatures = __hidden_vulkan::MakeRequestedOptionalDeviceFeatures();
-    __hidden_vulkan::OptionalDeviceFeatureSet supportedOptionalFeatures;
+    VulkanDetail::OptionalDeviceFeatureSet requestedOptionalFeatures = VulkanDetail::MakeRequestedOptionalDeviceFeatures();
+    VulkanDetail::OptionalDeviceFeatureSet supportedOptionalFeatures;
 
-    VkPhysicalDeviceVulkan11Features supportedVulkan11Features = __hidden_vulkan::MakeVkFeatureStruct<VkPhysicalDeviceVulkan11Features>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES);
-    __hidden_vulkan::AppendFeatureStruct(pNext, &supportedVulkan11Features);
+    VkPhysicalDeviceVulkan11Features supportedVulkan11Features = VulkanDetail::MakeVkFeatureStruct<VkPhysicalDeviceVulkan11Features>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES);
+    VulkanDetail::AppendFeatureStruct(pNext, &supportedVulkan11Features);
 
-    VkPhysicalDeviceVulkan12Features supportedVulkan12Features = __hidden_vulkan::MakeVkFeatureStruct<VkPhysicalDeviceVulkan12Features>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES);
-    __hidden_vulkan::AppendFeatureStruct(pNext, &supportedVulkan12Features);
+    VkPhysicalDeviceVulkan12Features supportedVulkan12Features = VulkanDetail::MakeVkFeatureStruct<VkPhysicalDeviceVulkan12Features>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES);
+    VulkanDetail::AppendFeatureStruct(pNext, &supportedVulkan12Features);
 
     VkPhysicalDeviceBufferDeviceAddressFeatures bufferDeviceAddressFeatures =
-        __hidden_vulkan::MakeVkFeatureStruct<VkPhysicalDeviceBufferDeviceAddressFeatures>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES);
-    __hidden_vulkan::AppendFeatureStruct(pNext, &bufferDeviceAddressFeatures);
+        VulkanDetail::MakeVkFeatureStruct<VkPhysicalDeviceBufferDeviceAddressFeatures>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES);
+    VulkanDetail::AppendFeatureStruct(pNext, &bufferDeviceAddressFeatures);
 
     VkPhysicalDeviceSynchronization2Features synchronization2Features =
-        __hidden_vulkan::MakeVkFeatureStruct<VkPhysicalDeviceSynchronization2Features>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES);
+        VulkanDetail::MakeVkFeatureStruct<VkPhysicalDeviceSynchronization2Features>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES);
     if(apiSupportsVulkan13 || synchronization2ExtensionEnabled)
-        __hidden_vulkan::AppendFeatureStruct(pNext, &synchronization2Features);
+        VulkanDetail::AppendFeatureStruct(pNext, &synchronization2Features);
 
     VkPhysicalDeviceMaintenance4Features maintenance4Features =
-        __hidden_vulkan::MakeVkFeatureStruct<VkPhysicalDeviceMaintenance4Features>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_4_FEATURES);
+        VulkanDetail::MakeVkFeatureStruct<VkPhysicalDeviceMaintenance4Features>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_4_FEATURES);
     if(apiSupportsVulkan13 || maintenance4ExtensionEnabled)
-        __hidden_vulkan::AppendFeatureStruct(pNext, &maintenance4Features);
+        VulkanDetail::AppendFeatureStruct(pNext, &maintenance4Features);
 
     VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeatures =
-        __hidden_vulkan::MakeVkFeatureStruct<VkPhysicalDeviceDynamicRenderingFeatures>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES);
+        VulkanDetail::MakeVkFeatureStruct<VkPhysicalDeviceDynamicRenderingFeatures>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES);
     if(apiSupportsVulkan13 || dynamicRenderingExtensionEnabled)
-        __hidden_vulkan::AppendFeatureStruct(pNext, &dynamicRenderingFeatures);
+        VulkanDetail::AppendFeatureStruct(pNext, &dynamicRenderingFeatures);
 
     VkPhysicalDeviceCooperativeVectorFeaturesNV cooperativeVectorFeatures =
-        __hidden_vulkan::MakeVkFeatureStruct<VkPhysicalDeviceCooperativeVectorFeaturesNV>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_VECTOR_FEATURES_NV);
+        VulkanDetail::MakeVkFeatureStruct<VkPhysicalDeviceCooperativeVectorFeaturesNV>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_VECTOR_FEATURES_NV);
     if(coopVecExtensionEnabled)
-        __hidden_vulkan::AppendFeatureStruct(pNext, &cooperativeVectorFeatures);
+        VulkanDetail::AppendFeatureStruct(pNext, &cooperativeVectorFeatures);
 
     bool queriedOptionalFeatures[kOptionalDeviceFeatureCount] = {};
     for(const auto& [_, feature] : m_enabledExtensions.device)
-        __hidden_vulkan::AppendOptionalDeviceFeature(pNext, supportedOptionalFeatures, feature, queriedOptionalFeatures);
+        VulkanDetail::AppendOptionalDeviceFeature(pNext, supportedOptionalFeatures, feature, queriedOptionalFeatures);
 
     physicalDeviceFeatures2.pNext = pNext;
     vkGetPhysicalDeviceFeatures2(m_vulkanPhysicalDevice, &physicalDeviceFeatures2);
@@ -1004,7 +1004,7 @@ bool BackendContext::createVulkanDevice(){
     for(const auto& [name, feature] : m_enabledExtensions.device){
         if(feature == DeviceExtensionFeature::None)
             continue;
-        if(__hidden_vulkan::SupportsRequestedOptionalDeviceFeature(requestedOptionalFeatures, supportedOptionalFeatures, feature))
+        if(VulkanDetail::SupportsRequestedOptionalDeviceFeature(requestedOptionalFeatures, supportedOptionalFeatures, feature))
             continue;
         unsupportedFeatureExtensions.push_back(name);
     }
@@ -1072,7 +1072,7 @@ bool BackendContext::createVulkanDevice(){
 
     m_dynamicRenderingSupported = true;
     m_synchronization2Supported = true;
-    __hidden_vulkan::FinalizeOptionalDeviceFeatureEnablement(requestedOptionalFeatures, supportedOptionalFeatures);
+    VulkanDetail::FinalizeOptionalDeviceFeatureEnablement(requestedOptionalFeatures, supportedOptionalFeatures);
 
     HashSet<i32, Hasher<i32>, EqualTo<i32>, Alloc::ScratchAllocator<i32>> uniqueQueueFamilies(0, Hasher<i32>(), EqualTo<i32>(), Alloc::ScratchAllocator<i32>(scratchArena));
     uniqueQueueFamilies.insert(m_graphicsQueueFamily);
@@ -1096,7 +1096,7 @@ bool BackendContext::createVulkanDevice(){
         queueDesc.push_back(queueInfo);
     }
 
-    VkPhysicalDeviceVulkan13Features vulkan13features = __hidden_vulkan::MakeVkFeatureStruct<VkPhysicalDeviceVulkan13Features>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES);
+    VkPhysicalDeviceVulkan13Features vulkan13features = VulkanDetail::MakeVkFeatureStruct<VkPhysicalDeviceVulkan13Features>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES);
     vulkan13features.synchronization2 = synchronization2Features.synchronization2;
     vulkan13features.maintenance4 = maintenance4Features.maintenance4;
     vulkan13features.dynamicRendering = dynamicRenderingFeatures.dynamicRendering;
@@ -1104,21 +1104,21 @@ bool BackendContext::createVulkanDevice(){
     pNext = nullptr;
     bool enabledOptionalFeatures[kOptionalDeviceFeatureCount] = {};
     for(const auto& [_, feature] : m_enabledExtensions.device)
-        __hidden_vulkan::AppendOptionalDeviceFeature(pNext, requestedOptionalFeatures, feature, enabledOptionalFeatures);
+        VulkanDetail::AppendOptionalDeviceFeature(pNext, requestedOptionalFeatures, feature, enabledOptionalFeatures);
 
     if(!apiSupportsVulkan13 && dynamicRenderingEnabled)
-        __hidden_vulkan::AppendFeatureStruct(pNext, &dynamicRenderingFeatures);
+        VulkanDetail::AppendFeatureStruct(pNext, &dynamicRenderingFeatures);
 
     if(!apiSupportsVulkan13 && synchronization2Enabled)
-        __hidden_vulkan::AppendFeatureStruct(pNext, &synchronization2Features);
+        VulkanDetail::AppendFeatureStruct(pNext, &synchronization2Features);
 
     if(coopVecExtensionEnabled && cooperativeVectorFeatures.cooperativeVector)
-        __hidden_vulkan::AppendFeatureStruct(pNext, &cooperativeVectorFeatures);
+        VulkanDetail::AppendFeatureStruct(pNext, &cooperativeVectorFeatures);
 
     if(apiSupportsVulkan13)
-        __hidden_vulkan::AppendFeatureStruct(pNext, &vulkan13features);
+        VulkanDetail::AppendFeatureStruct(pNext, &vulkan13features);
     else if(maintenance4Enabled && maintenance4Features.maintenance4 == VK_TRUE)
-        __hidden_vulkan::AppendFeatureStruct(pNext, &maintenance4Features);
+        VulkanDetail::AppendFeatureStruct(pNext, &maintenance4Features);
 
     VkPhysicalDeviceFeatures coreDeviceFeatures = {};
     coreDeviceFeatures.shaderImageGatherExtended = supportedCoreFeatures.shaderImageGatherExtended;
@@ -1137,11 +1137,11 @@ bool BackendContext::createVulkanDevice(){
     coreDeviceFeatures.shaderStorageImageWriteWithoutFormat = supportedCoreFeatures.shaderStorageImageWriteWithoutFormat;
     coreDeviceFeatures.shaderStorageImageReadWithoutFormat = supportedCoreFeatures.shaderStorageImageReadWithoutFormat;
 
-    VkPhysicalDeviceVulkan11Features vulkan11features = __hidden_vulkan::MakeVkFeatureStruct<VkPhysicalDeviceVulkan11Features>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES);
+    VkPhysicalDeviceVulkan11Features vulkan11features = VulkanDetail::MakeVkFeatureStruct<VkPhysicalDeviceVulkan11Features>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES);
     vulkan11features.storageBuffer16BitAccess = supportedVulkan11Features.storageBuffer16BitAccess;
     vulkan11features.pNext = pNext;
 
-    VkPhysicalDeviceVulkan12Features vulkan12features = __hidden_vulkan::MakeVkFeatureStruct<VkPhysicalDeviceVulkan12Features>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES);
+    VkPhysicalDeviceVulkan12Features vulkan12features = VulkanDetail::MakeVkFeatureStruct<VkPhysicalDeviceVulkan12Features>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES);
     vulkan12features.descriptorIndexing = supportedVulkan12Features.descriptorIndexing;
     vulkan12features.runtimeDescriptorArray = supportedVulkan12Features.runtimeDescriptorArray;
     vulkan12features.descriptorBindingPartiallyBound = supportedVulkan12Features.descriptorBindingPartiallyBound;
@@ -1153,7 +1153,7 @@ bool BackendContext::createVulkanDevice(){
     vulkan12features.scalarBlockLayout = supportedVulkan12Features.scalarBlockLayout;
     vulkan12features.pNext = &vulkan11features;
 
-    auto extVec = __hidden_vulkan::StringMapKeysToVector(m_enabledExtensions.device, scratchArena);
+    auto extVec = VulkanDetail::StringMapKeysToVector(m_enabledExtensions.device, scratchArena);
 
     VkDeviceCreateInfo deviceCreateInfo = {};
     deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -1280,7 +1280,7 @@ bool BackendContext::createVulkanSwapChain(){
 
     destroySwapChain();
 
-    m_swapChainFormat.format = __hidden_vulkan::ConvertFormat(m_swapChainState.backBufferFormat);
+    m_swapChainFormat.format = VulkanDetail::ConvertFormat(m_swapChainState.backBufferFormat);
     if(m_swapChainFormat.format == VK_FORMAT_UNDEFINED){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create swapchain: back buffer format is unsupported"));
         return false;
@@ -1521,7 +1521,7 @@ bool BackendContext::createDevice(){
     for(const auto& name : m_deviceParams.optionalVulkanDeviceExtensions)
         m_optionalExtensions.device.insert({ name, DeviceExtensionFeature::None });
 
-    m_swapChainState.backBufferFormat = __hidden_vulkan::GetBackBufferFormat(m_deviceParams);
+    m_swapChainState.backBufferFormat = VulkanDetail::GetBackBufferFormat(m_deviceParams);
     if(!m_deviceParams.headlessDevice){
         if(!createWindowSurface())
             return false;
@@ -1535,8 +1535,8 @@ bool BackendContext::createDevice(){
 
     Alloc::ScratchArena<> scratchArena(32768);
 
-    auto vecInstanceExt = __hidden_vulkan::StringSetToVector(m_enabledExtensions.instance, scratchArena);
-    auto vecDeviceExt = __hidden_vulkan::StringMapKeysToVector(m_enabledExtensions.device, scratchArena);
+    auto vecInstanceExt = VulkanDetail::StringSetToVector(m_enabledExtensions.instance, scratchArena);
+    auto vecDeviceExt = VulkanDetail::StringMapKeysToVector(m_enabledExtensions.device, scratchArena);
 
     DeviceDesc deviceDesc(m_allocator, m_threadPool);
     deviceDesc.instance = m_vulkanInstance;

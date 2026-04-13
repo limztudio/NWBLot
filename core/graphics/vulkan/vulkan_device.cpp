@@ -18,7 +18,7 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_vulkan{
+namespace VulkanDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -230,9 +230,9 @@ Device::Device(const DeviceDesc& desc)
     if(!desc.allocationCallbacks && desc.systemMemoryAllocator && desc.systemMemoryAllocator->valid()){
         m_allocationCallbacksStorage = {};
         m_allocationCallbacksStorage.pUserData = const_cast<SystemMemoryAllocator*>(desc.systemMemoryAllocator);
-        m_allocationCallbacksStorage.pfnAllocation = __hidden_vulkan::VulkanSystemAllocation;
-        m_allocationCallbacksStorage.pfnReallocation = __hidden_vulkan::VulkanSystemReallocation;
-        m_allocationCallbacksStorage.pfnFree = __hidden_vulkan::VulkanSystemFree;
+        m_allocationCallbacksStorage.pfnAllocation = VulkanDetail::VulkanSystemAllocation;
+        m_allocationCallbacksStorage.pfnReallocation = VulkanDetail::VulkanSystemReallocation;
+        m_allocationCallbacksStorage.pfnFree = VulkanDetail::VulkanSystemFree;
         m_allocationCallbacksStorage.pfnInternalAllocation = nullptr;
         m_allocationCallbacksStorage.pfnInternalFree = nullptr;
         m_context.allocationCallbacks = &m_allocationCallbacksStorage;
@@ -240,7 +240,7 @@ Device::Device(const DeviceDesc& desc)
 
     vkGetPhysicalDeviceProperties(m_context.physicalDevice, &m_context.physicalDeviceProperties);
     vkGetPhysicalDeviceMemoryProperties(m_context.physicalDevice, &m_context.memoryProperties);
-    m_pipelineCacheVolumeName = __hidden_vulkan::MakePipelineCacheVolumeName(m_context.physicalDeviceProperties);
+    m_pipelineCacheVolumeName = VulkanDetail::MakePipelineCacheVolumeName(m_context.physicalDeviceProperties);
 
     m_context.extensions.buffer_device_address = desc.bufferDeviceAddressSupported;
     m_context.extensions.KHR_dynamic_rendering = desc.dynamicRenderingSupported;
@@ -279,7 +279,7 @@ Device::Device(const DeviceDesc& desc)
     }
 
     {
-        VkPhysicalDeviceProperties2 props2 = __hidden_vulkan::MakeVkStruct<VkPhysicalDeviceProperties2>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2);
+        VkPhysicalDeviceProperties2 props2 = VulkanDetail::MakeVkStruct<VkPhysicalDeviceProperties2>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2);
         void* pNext = nullptr;
 
         if(m_context.extensions.KHR_ray_tracing_pipeline){
@@ -313,7 +313,7 @@ Device::Device(const DeviceDesc& desc)
     }
 
     if(m_context.extensions.NV_cooperative_vector){
-        VkPhysicalDeviceFeatures2 features2 = __hidden_vulkan::MakeVkStruct<VkPhysicalDeviceFeatures2>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2);
+        VkPhysicalDeviceFeatures2 features2 = VulkanDetail::MakeVkStruct<VkPhysicalDeviceFeatures2>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2);
         m_context.coopVecFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_VECTOR_FEATURES_NV;
         features2.pNext = &m_context.coopVecFeatures;
         vkGetPhysicalDeviceFeatures2(m_context.physicalDevice, &features2);
@@ -335,7 +335,7 @@ Device::Device(const DeviceDesc& desc)
     }
 
     if(m_context.extensions.EXT_descriptor_heap){
-        VkPhysicalDeviceProperties2 props2 = __hidden_vulkan::MakeVkStruct<VkPhysicalDeviceProperties2>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2);
+        VkPhysicalDeviceProperties2 props2 = VulkanDetail::MakeVkStruct<VkPhysicalDeviceProperties2>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2);
         m_context.descriptorHeapProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_PROPERTIES_EXT;
         props2.pNext = &m_context.descriptorHeapProperties;
         vkGetPhysicalDeviceProperties2(m_context.physicalDevice, &props2);
@@ -349,7 +349,7 @@ Device::Device(const DeviceDesc& desc)
     Vector<u8> pipelineCacheInitialData;
     (void)loadPipelineCacheData(pipelineCacheInitialData);
 
-    VkPipelineCacheCreateInfo cacheInfo = __hidden_vulkan::MakeVkStruct<VkPipelineCacheCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO);
+    VkPipelineCacheCreateInfo cacheInfo = VulkanDetail::MakeVkStruct<VkPipelineCacheCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO);
     if(!pipelineCacheInitialData.empty()){
         cacheInfo.initialDataSize = pipelineCacheInitialData.size();
         cacheInfo.pInitialData = pipelineCacheInitialData.data();
@@ -370,7 +370,7 @@ Device::Device(const DeviceDesc& desc)
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to create pipeline cache. {}"), ResultToString(res));
     }
 
-    VkDescriptorSetLayoutCreateInfo emptyLayoutInfo = __hidden_vulkan::MakeVkStruct<VkDescriptorSetLayoutCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO);
+    VkDescriptorSetLayoutCreateInfo emptyLayoutInfo = VulkanDetail::MakeVkStruct<VkDescriptorSetLayoutCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO);
     emptyLayoutInfo.bindingCount = 0;
     emptyLayoutInfo.pBindings = nullptr;
     res = vkCreateDescriptorSetLayout(m_context.device, &emptyLayoutInfo, m_context.allocationCallbacks, &m_context.emptyDescriptorSetLayout);
@@ -438,11 +438,11 @@ bool Device::loadPipelineCacheData(Vector<u8>& outData){
     outData.clear();
     if(m_pipelineCacheDirectory.empty() || m_pipelineCacheVolumeName.empty())
         return false;
-    if(!__hidden_vulkan::RuntimeCacheVolumeExists(m_pipelineCacheDirectory, m_pipelineCacheVolumeName))
+    if(!VulkanDetail::RuntimeCacheVolumeExists(m_pipelineCacheDirectory, m_pipelineCacheVolumeName))
         return false;
 
     Filesystem::VolumeFileSystem volume(m_context.objectArena);
-    if(!__hidden_vulkan::MountPipelineCacheVolume(
+    if(!VulkanDetail::MountPipelineCacheVolume(
         m_pipelineCacheDirectory,
         m_pipelineCacheVolumeName,
         false,
@@ -457,7 +457,7 @@ bool Device::loadPipelineCacheData(Vector<u8>& outData){
         return false;
     }
 
-    const Name cachePath(__hidden_vulkan::s_PipelineCacheVirtualPath);
+    const Name cachePath(VulkanDetail::s_PipelineCacheVirtualPath);
     if(!volume.fileExists(cachePath))
         return false;
     if(!volume.readFile(cachePath, outData)){
@@ -468,7 +468,7 @@ bool Device::loadPipelineCacheData(Vector<u8>& outData){
         );
         return false;
     }
-    if(!__hidden_vulkan::ValidatePipelineCacheData(outData, m_context.physicalDeviceProperties)){
+    if(!VulkanDetail::ValidatePipelineCacheData(outData, m_context.physicalDeviceProperties)){
         outData.clear();
         NWB_LOGGER_WARNING(
             NWB_TEXT("Vulkan: Ignoring incompatible pipeline cache data in runtime volume '{}'."),
@@ -490,18 +490,18 @@ void Device::savePipelineCacheData(){
         return;
 
     Vector<u8> cacheData;
-    if(!__hidden_vulkan::RetrievePipelineCacheData(m_context.device, m_context.pipelineCache, cacheData))
+    if(!VulkanDetail::RetrievePipelineCacheData(m_context.device, m_context.pipelineCache, cacheData))
         return;
     if(cacheData.empty())
         return;
 
-    if(!__hidden_vulkan::ValidatePipelineCacheData(cacheData, m_context.physicalDeviceProperties)){
+    if(!VulkanDetail::ValidatePipelineCacheData(cacheData, m_context.physicalDeviceProperties)){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Driver returned incompatible pipeline cache data; skipping runtime cache write."));
         return;
     }
 
     Filesystem::VolumeFileSystem volume(m_context.objectArena);
-    if(!__hidden_vulkan::MountPipelineCacheVolume(
+    if(!VulkanDetail::MountPipelineCacheVolume(
         m_pipelineCacheDirectory,
         m_pipelineCacheVolumeName,
         true,
@@ -520,7 +520,7 @@ void Device::savePipelineCacheData(){
             );
             return;
         }
-        if(!__hidden_vulkan::MountPipelineCacheVolume(
+        if(!VulkanDetail::MountPipelineCacheVolume(
             m_pipelineCacheDirectory,
             m_pipelineCacheVolumeName,
             true,
@@ -535,7 +535,7 @@ void Device::savePipelineCacheData(){
         }
     }
 
-    const Name cachePath(__hidden_vulkan::s_PipelineCacheVirtualPath);
+    const Name cachePath(VulkanDetail::s_PipelineCacheVirtualPath);
     if(!volume.writeFile(cachePath, cacheData)){
         NWB_LOGGER_WARNING(
             NWB_TEXT("Vulkan: Failed to write pipeline cache data to runtime volume '{}'."),
@@ -879,11 +879,11 @@ CooperativeVectorDeviceFeatures Device::queryCoopVecFeatures(){
     auto fillMatMulFormat = [&](usize i){
         const auto& prop = properties[i];
         CooperativeVectorMatMulFormatCombo& combo = output.matMulFormats[i];
-        combo.inputType = __hidden_vulkan::ConvertCoopVecDataType(static_cast<VkComponentTypeKHR>(prop.inputType));
-        combo.inputInterpretation = __hidden_vulkan::ConvertCoopVecDataType(static_cast<VkComponentTypeKHR>(prop.inputInterpretation));
-        combo.matrixInterpretation = __hidden_vulkan::ConvertCoopVecDataType(static_cast<VkComponentTypeKHR>(prop.matrixInterpretation));
-        combo.biasInterpretation = __hidden_vulkan::ConvertCoopVecDataType(static_cast<VkComponentTypeKHR>(prop.biasInterpretation));
-        combo.outputType = __hidden_vulkan::ConvertCoopVecDataType(static_cast<VkComponentTypeKHR>(prop.resultType));
+        combo.inputType = VulkanDetail::ConvertCoopVecDataType(static_cast<VkComponentTypeKHR>(prop.inputType));
+        combo.inputInterpretation = VulkanDetail::ConvertCoopVecDataType(static_cast<VkComponentTypeKHR>(prop.inputInterpretation));
+        combo.matrixInterpretation = VulkanDetail::ConvertCoopVecDataType(static_cast<VkComponentTypeKHR>(prop.matrixInterpretation));
+        combo.biasInterpretation = VulkanDetail::ConvertCoopVecDataType(static_cast<VkComponentTypeKHR>(prop.biasInterpretation));
+        combo.outputType = VulkanDetail::ConvertCoopVecDataType(static_cast<VkComponentTypeKHR>(prop.resultType));
         combo.transposeSupported = prop.transpose != VK_FALSE;
     };
 
@@ -921,18 +921,18 @@ usize Device::getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, Coopera
     if(dataTypeSize > (Limit<usize>::s_Max / elementCount))
         return 0;
 
-    VkConvertCooperativeVectorMatrixInfoNV convertInfo = __hidden_vulkan::MakeVkStruct<VkConvertCooperativeVectorMatrixInfoNV>(VK_STRUCTURE_TYPE_CONVERT_COOPERATIVE_VECTOR_MATRIX_INFO_NV);
+    VkConvertCooperativeVectorMatrixInfoNV convertInfo = VulkanDetail::MakeVkStruct<VkConvertCooperativeVectorMatrixInfoNV>(VK_STRUCTURE_TYPE_CONVERT_COOPERATIVE_VECTOR_MATRIX_INFO_NV);
     convertInfo.srcSize = dataTypeSize * elementCount;
     convertInfo.srcData.hostAddress = nullptr;
     convertInfo.pDstSize = &dstSize;
     convertInfo.dstData.hostAddress = nullptr;
-    convertInfo.srcComponentType = __hidden_vulkan::ConvertCoopVecDataType(type);
+    convertInfo.srcComponentType = VulkanDetail::ConvertCoopVecDataType(type);
     convertInfo.dstComponentType = convertInfo.srcComponentType;
     convertInfo.numRows = static_cast<u32>(rows);
     convertInfo.numColumns = static_cast<u32>(columns);
     convertInfo.srcLayout = VK_COOPERATIVE_VECTOR_MATRIX_LAYOUT_ROW_MAJOR_NV;
     convertInfo.srcStride = dataTypeSize * columns;
-    convertInfo.dstLayout = __hidden_vulkan::ConvertCoopVecMatrixLayout(layout);
+    convertInfo.dstLayout = VulkanDetail::ConvertCoopVecMatrixLayout(layout);
     convertInfo.dstStride = GetCooperativeVectorOptimalMatrixStride(type, layout, rows, columns);
 
     res = vkConvertCooperativeVectorMatrixNV(m_context.device, &convertInfo);

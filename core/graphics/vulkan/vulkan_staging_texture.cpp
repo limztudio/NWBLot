@@ -16,7 +16,7 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_vulkan{
+namespace VulkanDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -216,7 +216,7 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
                 return nullptr;
             }
             const u64 mipSize = sliceSize * mipDepth;
-            if(!__hidden_vulkan::AlignBufferOffsetChecked(totalSize + mipSize, totalSize)){
+            if(!VulkanDetail::AlignBufferOffsetChecked(totalSize + mipSize, totalSize)){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create staging texture: total size alignment overflows"));
                 NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging texture: total size alignment overflows"));
                 DestroyArenaObject(m_context.objectArena, staging);
@@ -325,7 +325,7 @@ void* Device::mapStagingTexture(IStagingTexture* tex, const TextureSlice& slice,
     }
 
     auto* staging = static_cast<StagingTexture*>(tex);
-    if(!__hidden_vulkan::IsTextureSliceInBounds(staging->m_desc, slice)){
+    if(!VulkanDetail::IsTextureSliceInBounds(staging->m_desc, slice)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map staging texture: slice is outside the texture"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to map staging texture: slice is outside the texture"));
         return nullptr;
@@ -340,7 +340,7 @@ void* Device::mapStagingTexture(IStagingTexture* tex, const TextureSlice& slice,
     }
 
     usize rowPitch = 0;
-    const u64 offset = __hidden_vulkan::ComputeStagingTextureOffset(staging->m_desc, slice, &rowPitch);
+    const u64 offset = VulkanDetail::ComputeStagingTextureOffset(staging->m_desc, slice, &rowPitch);
     if(outRowPitch)
         *outRowPitch = rowPitch;
 

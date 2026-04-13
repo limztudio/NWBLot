@@ -16,7 +16,7 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_vulkan{
+namespace VulkanDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -118,7 +118,7 @@ VkBufferView Buffer::getView(Format::Enum format, u64 byteOffset, u64 byteSize){
             return viewEntry.view;
     }
 
-    VkBufferViewCreateInfo viewInfo = __hidden_vulkan::MakeVkStruct<VkBufferViewCreateInfo>(VK_STRUCTURE_TYPE_BUFFER_VIEW_CREATE_INFO);
+    VkBufferViewCreateInfo viewInfo = VulkanDetail::MakeVkStruct<VkBufferViewCreateInfo>(VK_STRUCTURE_TYPE_BUFFER_VIEW_CREATE_INFO);
     viewInfo.buffer = m_buffer;
     viewInfo.format = vkFormat;
     viewInfo.offset = byteOffset;
@@ -273,7 +273,7 @@ void* Device::mapBuffer(IBuffer* _buffer, CpuAccessMode::Enum){
         if(buffer->m_desc.cpuAccess != CpuAccessMode::Read)
             return true;
 
-        VkMappedMemoryRange range = __hidden_vulkan::MakeVkStruct<VkMappedMemoryRange>(VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE);
+        VkMappedMemoryRange range = VulkanDetail::MakeVkStruct<VkMappedMemoryRange>(VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE);
         range.memory = buffer->m_memory;
         range.offset = 0;
         range.size = VK_WHOLE_SIZE;
@@ -465,7 +465,7 @@ bool CommandList::prepareUploadStaging(const void* data, const usize dataSize, c
         return false;
     }
 
-    __hidden_vulkan::CopyHostMemory(taskPool(), cpuVA, data, dataSize);
+    VulkanDetail::CopyHostMemory(taskPool(), cpuVA, data, dataSize);
     return true;
 }
 
@@ -475,7 +475,7 @@ void CommandList::writeBuffer(IBuffer* _buffer, const void* data, usize dataSize
 
     auto* buffer = checked_cast<Buffer*>(_buffer);
     const BufferDesc& desc = buffer->getDescription();
-    if(!__hidden_vulkan::IsBufferRangeInBounds(desc, destOffsetBytes, static_cast<u64>(dataSize))){
+    if(!VulkanDetail::IsBufferRangeInBounds(desc, destOffsetBytes, static_cast<u64>(dataSize))){
         NWB_LOGGER_ERROR(
             NWB_TEXT("Vulkan: Failed to write buffer: destination offset {} size {} is outside buffer size {}"),
             destOffsetBytes,
@@ -528,7 +528,7 @@ void CommandList::copyBuffer(IBuffer* _dest, u64 destOffsetBytes, IBuffer* _src,
     const BufferDesc& destDesc = dest->getDescription();
     const BufferDesc& srcDesc = src->getDescription();
 
-    if(!__hidden_vulkan::IsBufferRangeInBounds(destDesc, destOffsetBytes, dataSizeBytes)){
+    if(!VulkanDetail::IsBufferRangeInBounds(destDesc, destOffsetBytes, dataSizeBytes)){
         NWB_LOGGER_ERROR(
             NWB_TEXT("Vulkan: Failed to copy buffer: destination offset {} size {} is outside buffer size {}"),
             destOffsetBytes,
@@ -539,7 +539,7 @@ void CommandList::copyBuffer(IBuffer* _dest, u64 destOffsetBytes, IBuffer* _src,
         return;
     }
 
-    if(!__hidden_vulkan::IsBufferRangeInBounds(srcDesc, srcOffsetBytes, dataSizeBytes)){
+    if(!VulkanDetail::IsBufferRangeInBounds(srcDesc, srcOffsetBytes, dataSizeBytes)){
         NWB_LOGGER_ERROR(
             NWB_TEXT("Vulkan: Failed to copy buffer: source offset {} size {} is outside buffer size {}"),
             srcOffsetBytes,
@@ -550,7 +550,7 @@ void CommandList::copyBuffer(IBuffer* _dest, u64 destOffsetBytes, IBuffer* _src,
         return;
     }
 
-    if(dest->m_buffer == src->m_buffer && __hidden_vulkan::BufferRangesOverlap(destOffsetBytes, dataSizeBytes, srcOffsetBytes, dataSizeBytes)){
+    if(dest->m_buffer == src->m_buffer && VulkanDetail::BufferRangesOverlap(destOffsetBytes, dataSizeBytes, srcOffsetBytes, dataSizeBytes)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy buffer: source and destination ranges overlap in the same buffer"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy buffer: source and destination ranges overlap in the same buffer"));
         return;

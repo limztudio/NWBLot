@@ -18,7 +18,7 @@ class CompressedPair;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_compressed_pair{
+namespace CompressedPairDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -240,10 +240,10 @@ public:
 
 
 template<typename T1, typename T2>
-class CompressedPair : private __hidden_compressed_pair::SelectedImplementation<T1, T2>
+class CompressedPair : private CompressedPairDetail::SelectedImplementation<T1, T2>
 {
 private:
-	typedef __hidden_compressed_pair::SelectedImplementation<T1, T2> base;
+	typedef CompressedPairDetail::SelectedImplementation<T1, T2> base;
 
 
 public:

@@ -18,7 +18,7 @@ struct NameHash;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_name{
+namespace NameDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -60,8 +60,8 @@ inline constexpr NameHash ComputeNameHash(const CharT* str){
         return {};
 
     NameHash hash = {};
-    for(u32 i = 0; i < __hidden_name::s_HashLaneCount; ++i)
-        hash.qwords[i] = FNV1a64(str, __hidden_name::LANE_SEEDS[i]);
+    for(u32 i = 0; i < NameDetail::s_HashLaneCount; ++i)
+        hash.qwords[i] = FNV1a64(str, NameDetail::LANE_SEEDS[i]);
     return hash;
 }
 
@@ -71,14 +71,14 @@ inline NameHash ComputeNameHash(const BasicStringView<CharT> text){
         return {};
 
     NameHash hash = {};
-    for(u32 i = 0; i < __hidden_name::s_HashLaneCount; ++i)
-        hash.qwords[i] = UpdateFnv64TextCanonical(__hidden_name::LANE_SEEDS[i], text);
+    for(u32 i = 0; i < NameDetail::s_HashLaneCount; ++i)
+        hash.qwords[i] = UpdateFnv64TextCanonical(NameDetail::LANE_SEEDS[i], text);
     return hash;
 }
 
 
 [[nodiscard]] inline constexpr bool LessNameHash(const NameHash& lhs, const NameHash& rhs){
-    for(u32 i = 0; i < __hidden_name::s_HashLaneCount; ++i){
+    for(u32 i = 0; i < NameDetail::s_HashLaneCount; ++i){
         if(lhs.qwords[i] < rhs.qwords[i])
             return true;
         if(lhs.qwords[i] > rhs.qwords[i])
@@ -92,7 +92,7 @@ inline NameHash ComputeNameHash(const BasicStringView<CharT> text){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_name{
+namespace NameDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -182,7 +182,7 @@ inline void CopyDebugName(const BasicStringView<CharT> text, char* dst, const us
 
 
 inline constexpr bool operator==(const NameHash& a, const NameHash& b){
-    return __hidden_name::EqualHash(a, b);
+    return NameDetail::EqualHash(a, b);
 }
 inline constexpr bool operator!=(const NameHash& a, const NameHash& b){
     return !(a == b);
@@ -237,7 +237,7 @@ public:
 #endif
     {
 #if defined(NWB_DEBUG)
-        __hidden_name::HashToDebugString(m_hash, m_debugName, 256);
+        NameDetail::HashToDebugString(m_hash, m_debugName, 256);
 #endif
     }
     explicit Name(const AStringView text)
@@ -247,7 +247,7 @@ public:
 #endif
     {
 #if defined(NWB_DEBUG)
-        __hidden_name::CopyDebugName(text, m_debugName, 256);
+        NameDetail::CopyDebugName(text, m_debugName, 256);
 #endif
     }
     explicit Name(const WStringView text)
@@ -257,14 +257,14 @@ public:
 #endif
     {
 #if defined(NWB_DEBUG)
-        __hidden_name::CopyDebugName(text, m_debugName, 256);
+        NameDetail::CopyDebugName(text, m_debugName, 256);
 #endif
     }
 
 
 public:
     [[nodiscard]] constexpr explicit operator bool()const{
-        return !__hidden_name::IsZeroHash(m_hash);
+        return !NameDetail::IsZeroHash(m_hash);
     }
     [[nodiscard]] constexpr const NameHash& hash()const{ return m_hash; }
 
@@ -272,8 +272,8 @@ public:
 #if defined(NWB_DEBUG)
         return m_debugName;
 #else
-        thread_local static char buf[(16 * __hidden_name::s_HashLaneCount) + (__hidden_name::s_HashLaneCount - 1) + 1];
-        __hidden_name::HashToDebugString(m_hash, buf, sizeof(buf));
+        thread_local static char buf[(16 * NameDetail::s_HashLaneCount) + (NameDetail::s_HashLaneCount - 1) + 1];
+        NameDetail::HashToDebugString(m_hash, buf, sizeof(buf));
         return buf;
 #endif
     }
@@ -321,7 +321,7 @@ template<typename CharT>
 }
 
 
-namespace __hidden_name{
+namespace NameDetail{
 
 
 inline u64 UpdateFnv64U64(u64 hash, const u64 value){
@@ -343,13 +343,13 @@ template<typename CharT>
 
     NameHash derivedHash = {};
     static constexpr char s_DerivePrefix[] = "nwb/name/derive";
-    for(u32 lane = 0; lane < __hidden_name::s_HashLaneCount; ++lane){
+    for(u32 lane = 0; lane < NameDetail::s_HashLaneCount; ++lane){
         u64 laneHash = UpdateFnv64(
             FNV64_OFFSET_BASIS,
             reinterpret_cast<const u8*>(s_DerivePrefix),
             sizeof(s_DerivePrefix) - 1
         );
-        laneHash = __hidden_name::UpdateFnv64U64(laneHash, baseName.hash().qwords[lane]);
+        laneHash = NameDetail::UpdateFnv64U64(laneHash, baseName.hash().qwords[lane]);
         laneHash = UpdateFnv64TextCanonical(laneHash, suffix);
         derivedHash.qwords[lane] = laneHash;
     }
@@ -416,14 +416,14 @@ namespace std{
 template<>
 struct hash<Name>{
     usize operator()(const Name& name)const{
-        return __hidden_name::HashValue(name.m_hash);
+        return NameDetail::HashValue(name.m_hash);
     }
 };
 
 template<>
 struct hash<NameHash>{
     usize operator()(const NameHash& h)const{
-        return __hidden_name::HashValue(h);
+        return NameDetail::HashValue(h);
     }
 };
 

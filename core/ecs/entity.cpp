@@ -14,7 +14,7 @@ NWB_ECS_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ecs{
+namespace ECSDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -57,7 +57,7 @@ static Alloc::CustomArena& DefaultECSArena(){
 
 
 EntityManager::EntityManager()
-    : EntityManager(__hidden_ecs::DefaultECSArena())
+    : EntityManager(ECSDetail::DefaultECSArena())
 {}
 EntityManager::EntityManager(Alloc::CustomArena& arena)
     : m_generations(GenerationAllocator(arena))
@@ -76,7 +76,7 @@ EntityID EntityManager::create(){
         m_freeIndices.pop_front();
     }
     else{
-        if(m_generations.size() >= static_cast<usize>(__hidden_ecs::ENTITY_INVALID_INDEX)){
+        if(m_generations.size() >= static_cast<usize>(ECSDetail::ENTITY_INVALID_INDEX)){
             NWB_ASSERT_MSG(false, NWB_TEXT("EntityManager exceeded maximum entity count"));
             return ENTITY_ID_INVALID;
         }
@@ -94,7 +94,7 @@ void EntityManager::destroy(EntityID entityId){
         return;
 
     const u32 index = entityId.index();
-    m_generations[index] = (m_generations[index] + 1) & __hidden_ecs::ENTITY_GENERATION_MASK;
+    m_generations[index] = (m_generations[index] + 1) & ECSDetail::ENTITY_GENERATION_MASK;
     m_freeIndices.push_back(index);
     --m_aliveCount;
 }

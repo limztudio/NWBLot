@@ -42,7 +42,7 @@ void Device::setEventQuery(IEventQuery* _query, CommandQueue::Enum queue){
 
     Queue* q = getQueue(queue);
     if(q){
-        VkSubmitInfo submitInfo = __hidden_vulkan::MakeVkStruct<VkSubmitInfo>(VK_STRUCTURE_TYPE_SUBMIT_INFO);
+        VkSubmitInfo submitInfo = VulkanDetail::MakeVkStruct<VkSubmitInfo>(VK_STRUCTURE_TYPE_SUBMIT_INFO);
         ScopedLock lock(q->m_mutex);
         res = vkQueueSubmit(q->m_queue, 1, &submitInfo, query->m_fence);
         if(res != VK_SUCCESS){
@@ -197,12 +197,12 @@ void CommandList::beginMarker(const AStringView name){
     const AString markerName(name);
 
     if(m_context.extensions.EXT_debug_utils){
-        VkDebugUtilsLabelEXT label = __hidden_vulkan::MakeVkStruct<VkDebugUtilsLabelEXT>(VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT);
+        VkDebugUtilsLabelEXT label = VulkanDetail::MakeVkStruct<VkDebugUtilsLabelEXT>(VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT);
         label.pLabelName = markerName.c_str();
         vkCmdBeginDebugUtilsLabelEXT(m_currentCmdBuf->m_cmdBuf, &label);
     }
     else if(m_context.extensions.EXT_debug_marker){
-        VkDebugMarkerMarkerInfoEXT markerInfo = __hidden_vulkan::MakeVkStruct<VkDebugMarkerMarkerInfoEXT>(VK_STRUCTURE_TYPE_DEBUG_MARKER_MARKER_INFO_EXT);
+        VkDebugMarkerMarkerInfoEXT markerInfo = VulkanDetail::MakeVkStruct<VkDebugMarkerMarkerInfoEXT>(VK_STRUCTURE_TYPE_DEBUG_MARKER_MARKER_INFO_EXT);
         markerInfo.pMarkerName = markerName.c_str();
         vkCmdDebugMarkerBeginEXT(m_currentCmdBuf->m_cmdBuf, &markerInfo);
     }

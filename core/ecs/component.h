@@ -23,7 +23,7 @@ using ComponentTypeId = usize;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ecs{
+namespace ECSDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -64,7 +64,7 @@ struct ViewIterator;
 
 template<typename T>
 inline ComponentTypeId ComponentType(){
-    return __hidden_ecs::TypeCounter<__hidden_ecs::EcsTypeTag>::id<Decay_T<T>>();
+    return ECSDetail::TypeCounter<ECSDetail::EcsTypeTag>::id<Decay_T<T>>();
 }
 
 template<typename... Ts>
@@ -94,7 +94,7 @@ public:
 template<typename T>
 class ComponentPool : public IComponentPool{
     template<typename... Ts>
-    friend struct __hidden_ecs::ViewIterator;
+    friend struct ECSDetail::ViewIterator;
     template<typename... Ts>
     friend class View;
 

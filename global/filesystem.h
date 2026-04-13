@@ -22,7 +22,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_global_filesystem{
+namespace GlobalFilesystemDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -238,7 +238,7 @@ struct StagedDirectoryPaths{
     if(!stream.is_open())
         return false;
 
-    if(!__hidden_global_filesystem::CanRepresentStreamSize(static_cast<u64>(content.size())))
+    if(!GlobalFilesystemDetail::CanRepresentStreamSize(static_cast<u64>(content.size())))
         return false;
 
     stream.write(content.data(), static_cast<std::streamsize>(content.size()));
@@ -256,7 +256,7 @@ template<typename Container>
 
     if(fileSize > static_cast<u64>(Limit<usize>::s_Max))
         return false;
-    if(!__hidden_global_filesystem::CanRepresentStreamSize(fileSize))
+    if(!GlobalFilesystemDetail::CanRepresentStreamSize(fileSize))
         return false;
 
     std::ifstream stream(path, std::ifstream::binary);
@@ -280,7 +280,7 @@ template<typename Container>
     if(!stream.is_open())
         return false;
 
-    if(!__hidden_global_filesystem::CanRepresentStreamSize(static_cast<u64>(bytes.size())))
+    if(!GlobalFilesystemDetail::CanRepresentStreamSize(static_cast<u64>(bytes.size())))
         return false;
 
     if(!bytes.empty())

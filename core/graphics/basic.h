@@ -60,11 +60,11 @@ struct Object{
         u64 integer;
         void* pointer;
     };
-    
-    
+
+
     constexpr Object(u64 i)noexcept : integer(i){}
     constexpr Object(void* p)noexcept : pointer(p){}
-    
+
     template<typename T>
     explicit operator T*()const noexcept{ return static_cast<T*>(pointer); }
 };
@@ -83,19 +83,19 @@ class IResource : public Alloc::ITaskScheduler{
 protected:
     inline explicit IResource(Alloc::ThreadPool& pool)noexcept : Alloc::ITaskScheduler(pool){}
     virtual ~IResource()noexcept = default;
-    
-    
+
+
 public:
     IResource(const IResource&) = delete;
     IResource(IResource&&) = delete;
     IResource& operator=(const IResource&) = delete;
     IResource& operator=(IResource&&) = delete;
 
-    
+
 public:
     virtual u32 addReference()noexcept = 0;
     virtual u32 release()noexcept = 0;
-    
+
     virtual Object getNativeHandle(ObjectType type){ (void)type; return nullptr; }
 };
 

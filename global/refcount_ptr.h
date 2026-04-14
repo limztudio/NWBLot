@@ -99,7 +99,7 @@ public:
 
     ~RefCountPtr()noexcept{ reset(); }
 
-    
+
 public:
     this_type& operator=(this_type&& x)noexcept{
         if(this != &x){
@@ -158,7 +158,7 @@ public:
 
     explicit operator bool()const noexcept{ return (mPair.first() != pointer()); }
 
-    
+
 public:
     u32 reset(pointer pValue = pointer())noexcept{
         u32 ref = 0;
@@ -178,7 +178,7 @@ public:
         }
         return ref;
     }
-    
+
     pointer release()noexcept{
         return std::exchange(mPair.first(), pointer());
     }
@@ -195,7 +195,7 @@ public:
     deleter_type& get_deleter()noexcept{ return mPair.second(); }
     const deleter_type& get_deleter()const noexcept{ return mPair.second(); }
 
-    
+
 protected:
     static void internalAddRef(pointer p)noexcept{
         if(p)
@@ -214,7 +214,7 @@ protected:
         return newCount;
     }
 
-    
+
 protected:
     CompressedPair<pointer, deleter_type> mPair;
 };
@@ -239,10 +239,10 @@ public:
         }
         return old - 1;
     }
-    
+
     u32 getReferenceCount()const noexcept{ return m_referenceCount.load(std::memory_order_relaxed); }
-    
-    
+
+
 private:
     Atomic<u32> m_referenceCount{1};
 };

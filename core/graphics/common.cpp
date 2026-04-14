@@ -238,7 +238,7 @@ TextureSubresourceSet TextureSubresourceSet::resolve(const TextureDesc& desc, bo
             ret.numArraySlices = static_cast<ArraySlice>(Min<u32>(numArraySlices, availableArraySlices));
         break;
     }
-    default: 
+    default:
         ret.baseArraySlice = 0;
         ret.numArraySlices = 1;
         break;
@@ -257,14 +257,14 @@ bool TextureSubresourceSet::isEntireTexture(const TextureDesc& desc)const{
     case TextureDimension::Texture2DArray:
     case TextureDimension::TextureCube:
     case TextureDimension::TextureCubeArray:
-    case TextureDimension::Texture2DMSArray: 
+    case TextureDimension::Texture2DMSArray:
         if(resolved.baseArraySlice > 0u || resolved.numArraySlices < desc.arraySize)
             return false;
         break;
     default:
         break;
     }
-    
+
     return true;
 }
 
@@ -272,7 +272,7 @@ bool TextureSubresourceSet::isEntireTexture(const TextureDesc& desc)const{
 BufferRange BufferRange::resolve(const BufferDesc& desc)const{
     BufferRange ret;
     ret.byteOffset = Min(byteOffset, desc.byteSize);
-    
+
     if(!byteSize)
         ret.byteSize = desc.byteSize - ret.byteOffset;
     else
@@ -283,7 +283,7 @@ BufferRange BufferRange::resolve(const BufferDesc& desc)const{
 
 
 bool BlendState::RenderTarget::usesConstantColor()const{
-    return 
+    return
         srcBlend == BlendFactor::ConstantColor || srcBlend == BlendFactor::OneMinusConstantColor
         || destBlend == BlendFactor::ConstantColor || destBlend == BlendFactor::OneMinusConstantColor
         || srcBlendAlpha == BlendFactor::ConstantColor || srcBlendAlpha == BlendFactor::OneMinusConstantColor
@@ -385,7 +385,7 @@ usize GetCooperativeVectorDataTypeSize(CooperativeVectorDataType::Enum type){
 
 usize GetCooperativeVectorOptimalMatrixStride(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, u32 rows, u32 columns){
     const usize dataTypeSize = GetCooperativeVectorDataTypeSize(type);
-        
+
     switch(layout){
     case CooperativeVectorMatrixLayout::RowMajor:
         return dataTypeSize * columns;
@@ -407,7 +407,7 @@ void ICommandList::setResourceStatesForFramebuffer(IFramebuffer& framebuffer){
 
     if(desc.depthAttachment.valid())
         setTextureState(desc.depthAttachment.texture, desc.depthAttachment.subresources, desc.depthAttachment.isReadOnly ? ResourceStates::DepthRead : ResourceStates::DepthWrite);
-        
+
     if(desc.shadingRateAttachment.valid())
         setTextureState(desc.shadingRateAttachment.texture, desc.shadingRateAttachment.subresources, ResourceStates::ShadingRateSurface);
 }
@@ -468,7 +468,7 @@ void AftermathCrashDumpHelper::registerAftermathMarkerTracker(AftermathMarkerTra
 void AftermathCrashDumpHelper::unRegisterAftermathMarkerTracker(AftermathMarkerTracker& tracker){
     if(m_destroyedMarkerTrackers.size() >= s_NumDestroyedMarkerTrackers)
         m_destroyedMarkerTrackers.pop_front();
-    
+
     m_destroyedMarkerTrackers.push_back(tracker);
     m_markerTrackers.erase(&tracker);
 }

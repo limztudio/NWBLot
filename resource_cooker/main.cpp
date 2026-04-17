@@ -45,7 +45,7 @@ static int EntryPoint(const isize argc, wchar** argv, void*){
         utf8Argv.push_back(utf8Args.back().data());
     }
 
-    return RunResourceCooker(static_cast<int>(utf8Argv.size()), utf8Argv.data());
+    return EntryPoint(static_cast<isize>(utf8Argv.size()), utf8Argv.data(), nullptr);
 }
 #endif
 

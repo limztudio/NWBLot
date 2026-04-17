@@ -365,7 +365,8 @@ namespace SourceMathInternal{
 
     // Fix-up for 4th Vector parameter: pass in-register for ARM, ARM64, and
     // vector call; by reference otherwise.
-#if (defined(_M_ARM) || defined(_M_ARM64) || defined(_M_HYBRID_X86_ARM64) || defined(_M_ARM64EC) || _MATH_VECTORCALL_ || __arm__ || __aarch64__) \
+#if (defined(_M_ARM) || defined(_M_ARM64) || defined(_M_HYBRID_X86_ARM64) \
+    || defined(_M_ARM64EC) || _MATH_VECTORCALL_ || __arm__ || __aarch64__) \
     && !defined(_MATH_NO_INTRINSICS_)
     typedef const Vector VectorArg2;
 #else
@@ -506,6 +507,7 @@ namespace SourceMathInternal{
     {
         // NWB stores matrices as columns in `r[0..3]`.
     #ifdef _MATH_NO_INTRINSICS_
+        union{
             Vector r[4];
             struct{
                 float _11, _12, _13, _14;
@@ -534,7 +536,7 @@ namespace SourceMathInternal{
 
         // Constructor accepts NWB's four internal matrix columns in order.
         constexpr Matrix(VectorArg Column0, VectorArg Column1, VectorArg Column2, VectorConstArg Column3)noexcept
-            : r{ Column0, Column1, Column2, Column3 } {}
+            : r{ Column0, Column1, Column2, Column3 }{}
         Matrix(float m00, float m01, float m02, float m03,
             float m10, float m11, float m12, float m13,
             float m20, float m21, float m22, float m23,
@@ -567,7 +569,7 @@ namespace SourceMathInternal{
         friend Matrix     MathCallConv     operator*(float S, FXMMATRIX M)noexcept;
     };
 
-        // 2D Vector; 32 bit floating point components
+    // 2D Vector; 32 bit floating point components
     struct Float2{
         float x;
         float y;
@@ -580,8 +582,10 @@ namespace SourceMathInternal{
         Float2(Float2&&) = default;
         Float2& operator=(Float2&&) = default;
 
-        constexpr Float2(float _x, float _y)noexcept : x(_x), y(_y) {}
-        explicit Float2(_In_reads_(2) const float* pArray)noexcept : x(pArray[0]), y(pArray[1]) {}
+        constexpr Float2(float _x, float _y)noexcept
+            : x(_x), y(_y){}
+        explicit Float2(_In_reads_(2) const float* pArray)noexcept
+            : x(pArray[0]), y(pArray[1]){}
 
     #if(__cplusplus >= 202002L)
         bool operator==(const Float2&)const = default;
@@ -594,7 +598,7 @@ namespace SourceMathInternal{
         using Float2::Float2;
     };
 
-        // 2D Vector; 32 bit signed integer components
+    // 2D Vector; 32 bit signed integer components
     struct Int2{
         int32_t x;
         int32_t y;
@@ -607,8 +611,10 @@ namespace SourceMathInternal{
         Int2(Int2&&) = default;
         Int2& operator=(Int2&&) = default;
 
-        constexpr Int2(int32_t _x, int32_t _y)noexcept : x(_x), y(_y) {}
-        explicit Int2(_In_reads_(2) const int32_t* pArray)noexcept : x(pArray[0]), y(pArray[1]) {}
+        constexpr Int2(int32_t _x, int32_t _y)noexcept
+            : x(_x), y(_y){}
+        explicit Int2(_In_reads_(2) const int32_t* pArray)noexcept
+            : x(pArray[0]), y(pArray[1]){}
 
     #if(__cplusplus >= 202002L)
         bool operator==(const Int2&)const = default;
@@ -629,8 +635,10 @@ namespace SourceMathInternal{
         UInt2(UInt2&&) = default;
         UInt2& operator=(UInt2&&) = default;
 
-        constexpr UInt2(uint32_t _x, uint32_t _y)noexcept : x(_x), y(_y) {}
-        explicit UInt2(_In_reads_(2) const uint32_t* pArray)noexcept : x(pArray[0]), y(pArray[1]) {}
+        constexpr UInt2(uint32_t _x, uint32_t _y)noexcept
+            : x(_x), y(_y){}
+        explicit UInt2(_In_reads_(2) const uint32_t* pArray)noexcept
+            : x(pArray[0]), y(pArray[1]){}
 
     #if(__cplusplus >= 202002L)
         bool operator==(const UInt2&)const = default;
@@ -638,7 +646,7 @@ namespace SourceMathInternal{
     #endif
     };
 
-        // 3D Vector; 32 bit floating point components
+    // 3D Vector; 32 bit floating point components
     struct Float3{
         float x;
         float y;
@@ -652,8 +660,10 @@ namespace SourceMathInternal{
         Float3(Float3&&) = default;
         Float3& operator=(Float3&&) = default;
 
-        constexpr Float3(float _x, float _y, float _z)noexcept : x(_x), y(_y), z(_z) {}
-        explicit Float3(_In_reads_(3) const float* pArray)noexcept : x(pArray[0]), y(pArray[1]), z(pArray[2]) {}
+        constexpr Float3(float _x, float _y, float _z)noexcept
+            : x(_x), y(_y), z(_z){}
+        explicit Float3(_In_reads_(3) const float* pArray)noexcept
+            : x(pArray[0]), y(pArray[1]), z(pArray[2]){}
     };
 
     // 3D Vector; 32 bit floating point components aligned on a 16 byte boundary
@@ -661,7 +671,7 @@ namespace SourceMathInternal{
         using Float3::Float3;
     };
 
-        // 3D Vector; 32 bit signed integer components
+    // 3D Vector; 32 bit signed integer components
     struct Int3{
         int32_t x;
         int32_t y;
@@ -675,8 +685,10 @@ namespace SourceMathInternal{
         Int3(Int3&&) = default;
         Int3& operator=(Int3&&) = default;
 
-        constexpr Int3(int32_t _x, int32_t _y, int32_t _z)noexcept : x(_x), y(_y), z(_z) {}
-        explicit Int3(_In_reads_(3) const int32_t* pArray)noexcept : x(pArray[0]), y(pArray[1]), z(pArray[2]) {}
+        constexpr Int3(int32_t _x, int32_t _y, int32_t _z)noexcept
+            : x(_x), y(_y), z(_z){}
+        explicit Int3(_In_reads_(3) const int32_t* pArray)noexcept
+            : x(pArray[0]), y(pArray[1]), z(pArray[2]){}
 
     #if(__cplusplus >= 202002L)
         bool operator==(const Int3&)const = default;
@@ -698,8 +710,10 @@ namespace SourceMathInternal{
         UInt3(UInt3&&) = default;
         UInt3& operator=(UInt3&&) = default;
 
-        constexpr UInt3(uint32_t _x, uint32_t _y, uint32_t _z)noexcept : x(_x), y(_y), z(_z) {}
-        explicit UInt3(_In_reads_(3) const uint32_t* pArray)noexcept : x(pArray[0]), y(pArray[1]), z(pArray[2]) {}
+        constexpr UInt3(uint32_t _x, uint32_t _y, uint32_t _z)noexcept
+            : x(_x), y(_y), z(_z){}
+        explicit UInt3(_In_reads_(3) const uint32_t* pArray)noexcept
+            : x(pArray[0]), y(pArray[1]), z(pArray[2]){}
 
     #if(__cplusplus >= 202002L)
         bool operator==(const UInt3&)const = default;
@@ -707,7 +721,7 @@ namespace SourceMathInternal{
     #endif
     };
 
-        // 4D Vector; 32 bit floating point components
+    // 4D Vector; 32 bit floating point components
     struct Float4{
         float x;
         float y;
@@ -722,8 +736,10 @@ namespace SourceMathInternal{
         Float4(Float4&&) = default;
         Float4& operator=(Float4&&) = default;
 
-        constexpr Float4(float _x, float _y, float _z, float _w)noexcept : x(_x), y(_y), z(_z), w(_w) {}
-        explicit Float4(_In_reads_(4) const float* pArray)noexcept : x(pArray[0]), y(pArray[1]), z(pArray[2]), w(pArray[3]) {}
+        constexpr Float4(float _x, float _y, float _z, float _w)noexcept
+            : x(_x), y(_y), z(_z), w(_w){}
+        explicit Float4(_In_reads_(4) const float* pArray)noexcept
+            : x(pArray[0]), y(pArray[1]), z(pArray[2]), w(pArray[3]){}
 
     #if(__cplusplus >= 202002L)
         bool operator==(const Float4&)const = default;
@@ -736,7 +752,7 @@ namespace SourceMathInternal{
         using Float4::Float4;
     };
 
-        // 4D Vector; 32 bit signed integer components
+    // 4D Vector; 32 bit signed integer components
     struct Int4{
         int32_t x;
         int32_t y;
@@ -751,8 +767,10 @@ namespace SourceMathInternal{
         Int4(Int4&&) = default;
         Int4& operator=(Int4&&) = default;
 
-        constexpr Int4(int32_t _x, int32_t _y, int32_t _z, int32_t _w)noexcept : x(_x), y(_y), z(_z), w(_w) {}
-        explicit Int4(_In_reads_(4) const int32_t* pArray)noexcept : x(pArray[0]), y(pArray[1]), z(pArray[2]), w(pArray[3]) {}
+        constexpr Int4(int32_t _x, int32_t _y, int32_t _z, int32_t _w)noexcept
+            : x(_x), y(_y), z(_z), w(_w){}
+        explicit Int4(_In_reads_(4) const int32_t* pArray)noexcept
+            : x(pArray[0]), y(pArray[1]), z(pArray[2]), w(pArray[3]){}
 
     #if(__cplusplus >= 202002L)
         bool operator==(const Int4&)const = default;
@@ -775,8 +793,10 @@ namespace SourceMathInternal{
         UInt4(UInt4&&) = default;
         UInt4& operator=(UInt4&&) = default;
 
-        constexpr UInt4(uint32_t _x, uint32_t _y, uint32_t _z, uint32_t _w)noexcept : x(_x), y(_y), z(_z), w(_w) {}
-        explicit UInt4(_In_reads_(4) const uint32_t* pArray)noexcept : x(pArray[0]), y(pArray[1]), z(pArray[2]), w(pArray[3]) {}
+        constexpr UInt4(uint32_t _x, uint32_t _y, uint32_t _z, uint32_t _w)noexcept
+            : x(_x), y(_y), z(_z), w(_w){}
+        explicit UInt4(_In_reads_(4) const uint32_t* pArray)noexcept
+            : x(pArray[0]), y(pArray[1]), z(pArray[2]), w(pArray[3]){}
 
     #if(__cplusplus >= 202002L)
         bool operator==(const UInt4&)const = default;
@@ -792,7 +812,7 @@ namespace SourceMathInternal{
 #pragma clang diagnostic ignored "-Wunsafe-buffer-usage"
 #endif
 
-        // 3x4 affine matrix stored as the top three mathematical rows at the
+    // 3x4 affine matrix stored as the top three mathematical rows at the
     // memory boundary. This is the preferred compact format for NWB's
     // column-vector convention.
     struct Float3x4{
@@ -818,17 +838,32 @@ namespace SourceMathInternal{
             float m10, float m11, float m12, float m13,
             float m20, float m21, float m22, float m23)noexcept
             : _11(m00), _12(m01), _13(m02), _14(m03),
-            _21(m10), _22(m11), _23(m12), _24(m13),
-            _31(m20), _32(m21), _33(m22), _34(m23)
-{}
+              _21(m10), _22(m11), _23(m12), _24(m13),
+              _31(m20), _32(m21), _33(m22), _34(m23){}
         explicit Float3x4(_In_reads_(12) const float* pArray)noexcept;
 
         float  operator()(size_t Row, size_t Column)const noexcept { return m[Row][Column]; }
         float& operator()(size_t Row, size_t Column)noexcept { return m[Row][Column]; }
 
     #if(__cplusplus >= 202002L)
-        bool operator==(const Float3x4&)const = default;
-        auto operator<=>(const Float3x4&)const = default;
+        bool operator==(const Float3x4& rhs)const noexcept{
+            for(size_t index = 0; index < 12; ++index){
+                if(f[index] != rhs.f[index])
+                    return false;
+            }
+
+            return true;
+        }
+
+        std::partial_ordering operator<=>(const Float3x4& rhs)const noexcept{
+            for(size_t index = 0; index < 12; ++index){
+                const std::partial_ordering comparison = f[index] <=> rhs.f[index];
+                if(comparison != 0)
+                    return comparison;
+            }
+
+            return std::partial_ordering::equivalent;
+        }
     #endif
     };
 
@@ -997,8 +1032,20 @@ namespace SourceMathInternal{
 #endif
 
     Vector    MathCallConv     VectorSwizzle(VectorArg V, uint32_t E0, uint32_t E1, uint32_t E2, uint32_t E3)noexcept;
-    Vector    MathCallConv     VectorPermute(VectorArg V1, VectorArg V2, uint32_t PermuteX, uint32_t PermuteY, uint32_t PermuteZ, uint32_t PermuteW)noexcept;
-    Vector    MathCallConv     VectorSelectControl(uint32_t VectorIndex0, uint32_t VectorIndex1, uint32_t VectorIndex2, uint32_t VectorIndex3)noexcept;
+    Vector    MathCallConv     VectorPermute(
+        VectorArg V1,
+        VectorArg V2,
+        uint32_t PermuteX,
+        uint32_t PermuteY,
+        uint32_t PermuteZ,
+        uint32_t PermuteW
+    )noexcept;
+    Vector    MathCallConv     VectorSelectControl(
+        uint32_t VectorIndex0,
+        uint32_t VectorIndex1,
+        uint32_t VectorIndex2,
+        uint32_t VectorIndex3
+    )noexcept;
     Vector    MathCallConv     VectorSelect(VectorArg V1, VectorArg V2, VectorArg Control)noexcept;
     Vector    MathCallConv     VectorMergeXY(VectorArg V1, VectorArg V2)noexcept;
     Vector    MathCallConv     VectorMergeZW(VectorArg V1, VectorArg V2)noexcept;
@@ -1100,12 +1147,48 @@ namespace SourceMathInternal{
     Vector    MathCallConv     VectorATan2Est(VectorArg Y, VectorArg X)noexcept;
     Vector    MathCallConv     VectorLerp(VectorArg V0, VectorArg V1, float t)noexcept;
     Vector    MathCallConv     VectorLerpV(VectorArg V0, VectorArg V1, VectorArg T)noexcept;
-    Vector    MathCallConv     VectorHermite(VectorArg Position0, VectorArg Tangent0, VectorArg Position1, VectorArg2 Tangent1, float t)noexcept;
-    Vector    MathCallConv     VectorHermiteV(VectorArg Position0, VectorArg Tangent0, VectorArg Position1, VectorArg2 Tangent1, VectorArg3 T)noexcept;
-    Vector    MathCallConv     VectorCatmullRom(VectorArg Position0, VectorArg Position1, VectorArg Position2, VectorArg2 Position3, float t)noexcept;
-    Vector    MathCallConv     VectorCatmullRomV(VectorArg Position0, VectorArg Position1, VectorArg Position2, VectorArg2 Position3, VectorArg3 T)noexcept;
-    Vector    MathCallConv     VectorBaryCentric(VectorArg Position0, VectorArg Position1, VectorArg Position2, float f, float g)noexcept;
-    Vector    MathCallConv     VectorBaryCentricV(VectorArg Position0, VectorArg Position1, VectorArg Position2, VectorArg2 F, VectorArg3 G)noexcept;
+    Vector    MathCallConv     VectorHermite(
+        VectorArg Position0,
+        VectorArg Tangent0,
+        VectorArg Position1,
+        VectorArg2 Tangent1,
+        float t
+    )noexcept;
+    Vector    MathCallConv     VectorHermiteV(
+        VectorArg Position0,
+        VectorArg Tangent0,
+        VectorArg Position1,
+        VectorArg2 Tangent1,
+        VectorArg3 T
+    )noexcept;
+    Vector    MathCallConv     VectorCatmullRom(
+        VectorArg Position0,
+        VectorArg Position1,
+        VectorArg Position2,
+        VectorArg2 Position3,
+        float t
+    )noexcept;
+    Vector    MathCallConv     VectorCatmullRomV(
+        VectorArg Position0,
+        VectorArg Position1,
+        VectorArg Position2,
+        VectorArg2 Position3,
+        VectorArg3 T
+    )noexcept;
+    Vector    MathCallConv     VectorBaryCentric(
+        VectorArg Position0,
+        VectorArg Position1,
+        VectorArg Position2,
+        float f,
+        float g
+    )noexcept;
+    Vector    MathCallConv     VectorBaryCentricV(
+        VectorArg Position0,
+        VectorArg Position1,
+        VectorArg Position2,
+        VectorArg2 F,
+        VectorArg3 G
+    )noexcept;
 
     // 2D vector operations
 
@@ -1146,22 +1229,39 @@ namespace SourceMathInternal{
     Vector    MathCallConv     Vector2AngleBetweenNormals(VectorArg N1, VectorArg N2)noexcept;
     Vector    MathCallConv     Vector2AngleBetweenVectors(VectorArg V1, VectorArg V2)noexcept;
     Vector    MathCallConv     Vector2LinePointDistance(VectorArg LinePoint1, VectorArg LinePoint2, VectorArg Point)noexcept;
-    Vector    MathCallConv     Vector2IntersectLine(VectorArg Line1Point1, VectorArg Line1Point2, VectorArg Line2Point1, VectorArg2 Line2Point2)noexcept;
+    Vector    MathCallConv     Vector2IntersectLine(
+        VectorArg Line1Point1,
+        VectorArg Line1Point2,
+        VectorArg Line2Point1,
+        VectorArg2 Line2Point2
+    )noexcept;
     Vector    MathCallConv     Vector2Transform(VectorArg V, FXMMATRIX M)noexcept;
-    Float4*   MathCallConv     Vector2TransformStream(_Out_writes_bytes_(sizeof(Float4) + OutputStride * (VectorCount - 1)) Float4* pOutputStream,
+    Float4*   MathCallConv     Vector2TransformStream(
+        _Out_writes_bytes_(sizeof(Float4) + OutputStride * (VectorCount - 1)) Float4* pOutputStream,
         _In_ size_t OutputStride,
         _In_reads_bytes_(sizeof(Float2) + InputStride * (VectorCount - 1)) const Float2* pInputStream,
-        _In_ size_t InputStride, _In_ size_t VectorCount, _In_ FXMMATRIX M)noexcept;
+        _In_ size_t InputStride,
+        _In_ size_t VectorCount,
+        _In_ FXMMATRIX M
+    )noexcept;
     Vector    MathCallConv     Vector2TransformCoord(VectorArg V, FXMMATRIX M)noexcept;
-    Float2*   MathCallConv     Vector2TransformCoordStream(_Out_writes_bytes_(sizeof(Float2) + OutputStride * (VectorCount - 1)) Float2* pOutputStream,
+    Float2*   MathCallConv     Vector2TransformCoordStream(
+        _Out_writes_bytes_(sizeof(Float2) + OutputStride * (VectorCount - 1)) Float2* pOutputStream,
         _In_ size_t OutputStride,
         _In_reads_bytes_(sizeof(Float2) + InputStride * (VectorCount - 1)) const Float2* pInputStream,
-        _In_ size_t InputStride, _In_ size_t VectorCount, _In_ FXMMATRIX M)noexcept;
+        _In_ size_t InputStride,
+        _In_ size_t VectorCount,
+        _In_ FXMMATRIX M
+    )noexcept;
     Vector    MathCallConv     Vector2TransformNormal(VectorArg V, FXMMATRIX M)noexcept;
-    Float2*   MathCallConv     Vector2TransformNormalStream(_Out_writes_bytes_(sizeof(Float2) + OutputStride * (VectorCount - 1)) Float2* pOutputStream,
+    Float2*   MathCallConv     Vector2TransformNormalStream(
+        _Out_writes_bytes_(sizeof(Float2) + OutputStride * (VectorCount - 1)) Float2* pOutputStream,
         _In_ size_t OutputStride,
         _In_reads_bytes_(sizeof(Float2) + InputStride * (VectorCount - 1)) const Float2* pInputStream,
-        _In_ size_t InputStride, _In_ size_t VectorCount, _In_ FXMMATRIX M)noexcept;
+        _In_ size_t InputStride,
+        _In_ size_t VectorCount,
+        _In_ FXMMATRIX M
+    )noexcept;
 
     // 3D vector operations
 
@@ -1202,40 +1302,97 @@ namespace SourceMathInternal{
     Vector    MathCallConv     Vector3AngleBetweenNormals(VectorArg N1, VectorArg N2)noexcept;
     Vector    MathCallConv     Vector3AngleBetweenVectors(VectorArg V1, VectorArg V2)noexcept;
     Vector    MathCallConv     Vector3LinePointDistance(VectorArg LinePoint1, VectorArg LinePoint2, VectorArg Point)noexcept;
-    void        MathCallConv     Vector3ComponentsFromNormal(_Out_ Vector* pParallel, _Out_ Vector* pPerpendicular, _In_ VectorArg V, _In_ VectorArg Normal)noexcept;
+    void        MathCallConv     Vector3ComponentsFromNormal(
+        _Out_ Vector* pParallel,
+        _Out_ Vector* pPerpendicular,
+        _In_ VectorArg V,
+        _In_ VectorArg Normal
+    )noexcept;
     Vector    MathCallConv     Vector3Rotate(VectorArg V, VectorArg RotationQuaternion)noexcept;
     Vector    MathCallConv     Vector3InverseRotate(VectorArg V, VectorArg RotationQuaternion)noexcept;
     Vector    MathCallConv     Vector3Transform(VectorArg V, FXMMATRIX M)noexcept;
-    Float4*   MathCallConv     Vector3TransformStream(_Out_writes_bytes_(sizeof(Float4) + OutputStride * (VectorCount - 1)) Float4* pOutputStream,
+    Float4*   MathCallConv     Vector3TransformStream(
+        _Out_writes_bytes_(sizeof(Float4) + OutputStride * (VectorCount - 1)) Float4* pOutputStream,
         _In_ size_t OutputStride,
         _In_reads_bytes_(sizeof(Float3) + InputStride * (VectorCount - 1)) const Float3* pInputStream,
-        _In_ size_t InputStride, _In_ size_t VectorCount, _In_ FXMMATRIX M)noexcept;
+        _In_ size_t InputStride,
+        _In_ size_t VectorCount,
+        _In_ FXMMATRIX M
+    )noexcept;
     Vector    MathCallConv     Vector3TransformCoord(VectorArg V, FXMMATRIX M)noexcept;
-    Float3*   MathCallConv     Vector3TransformCoordStream(_Out_writes_bytes_(sizeof(Float3) + OutputStride * (VectorCount - 1)) Float3* pOutputStream,
+    Float3*   MathCallConv     Vector3TransformCoordStream(
+        _Out_writes_bytes_(sizeof(Float3) + OutputStride * (VectorCount - 1)) Float3* pOutputStream,
         _In_ size_t OutputStride,
         _In_reads_bytes_(sizeof(Float3) + InputStride * (VectorCount - 1)) const Float3* pInputStream,
-        _In_ size_t InputStride, _In_ size_t VectorCount, _In_ FXMMATRIX M)noexcept;
+        _In_ size_t InputStride,
+        _In_ size_t VectorCount,
+        _In_ FXMMATRIX M
+    )noexcept;
     Vector    MathCallConv     Vector3TransformNormal(VectorArg V, FXMMATRIX M)noexcept;
-    Float3*   MathCallConv     Vector3TransformNormalStream(_Out_writes_bytes_(sizeof(Float3) + OutputStride * (VectorCount - 1)) Float3* pOutputStream,
+    Float3*   MathCallConv     Vector3TransformNormalStream(
+        _Out_writes_bytes_(sizeof(Float3) + OutputStride * (VectorCount - 1)) Float3* pOutputStream,
         _In_ size_t OutputStride,
         _In_reads_bytes_(sizeof(Float3) + InputStride * (VectorCount - 1)) const Float3* pInputStream,
-        _In_ size_t InputStride, _In_ size_t VectorCount, _In_ FXMMATRIX M)noexcept;
-    Vector    MathCallConv     Vector3Project(VectorArg V, float ViewportX, float ViewportY, float ViewportWidth, float ViewportHeight, float ViewportMinZ, float ViewportMaxZ,
-        FXMMATRIX Projection, CXMMATRIX View, CXMMATRIX World)noexcept;
-    Float3*   MathCallConv     Vector3ProjectStream(_Out_writes_bytes_(sizeof(Float3) + OutputStride * (VectorCount - 1)) Float3* pOutputStream,
+        _In_ size_t InputStride,
+        _In_ size_t VectorCount,
+        _In_ FXMMATRIX M
+    )noexcept;
+    Vector    MathCallConv     Vector3Project(
+        VectorArg V,
+        float ViewportX,
+        float ViewportY,
+        float ViewportWidth,
+        float ViewportHeight,
+        float ViewportMinZ,
+        float ViewportMaxZ,
+        FXMMATRIX Projection,
+        CXMMATRIX View,
+        CXMMATRIX World
+    )noexcept;
+    Float3*   MathCallConv     Vector3ProjectStream(
+        _Out_writes_bytes_(sizeof(Float3) + OutputStride * (VectorCount - 1)) Float3* pOutputStream,
         _In_ size_t OutputStride,
         _In_reads_bytes_(sizeof(Float3) + InputStride * (VectorCount - 1)) const Float3* pInputStream,
-        _In_ size_t InputStride, _In_ size_t VectorCount,
-        _In_ float ViewportX, _In_ float ViewportY, _In_ float ViewportWidth, _In_ float ViewportHeight, _In_ float ViewportMinZ, _In_ float ViewportMaxZ,
-        _In_ FXMMATRIX Projection, _In_ CXMMATRIX View, _In_ CXMMATRIX World)noexcept;
-    Vector    MathCallConv     Vector3Unproject(VectorArg V, float ViewportX, float ViewportY, float ViewportWidth, float ViewportHeight, float ViewportMinZ, float ViewportMaxZ,
-        FXMMATRIX Projection, CXMMATRIX View, CXMMATRIX World)noexcept;
-    Float3*   MathCallConv     Vector3UnprojectStream(_Out_writes_bytes_(sizeof(Float3) + OutputStride * (VectorCount - 1)) Float3* pOutputStream,
+        _In_ size_t InputStride,
+        _In_ size_t VectorCount,
+        _In_ float ViewportX,
+        _In_ float ViewportY,
+        _In_ float ViewportWidth,
+        _In_ float ViewportHeight,
+        _In_ float ViewportMinZ,
+        _In_ float ViewportMaxZ,
+        _In_ FXMMATRIX Projection,
+        _In_ CXMMATRIX View,
+        _In_ CXMMATRIX World
+    )noexcept;
+    Vector    MathCallConv     Vector3Unproject(
+        VectorArg V,
+        float ViewportX,
+        float ViewportY,
+        float ViewportWidth,
+        float ViewportHeight,
+        float ViewportMinZ,
+        float ViewportMaxZ,
+        FXMMATRIX Projection,
+        CXMMATRIX View,
+        CXMMATRIX World
+    )noexcept;
+    Float3*   MathCallConv     Vector3UnprojectStream(
+        _Out_writes_bytes_(sizeof(Float3) + OutputStride * (VectorCount - 1)) Float3* pOutputStream,
         _In_ size_t OutputStride,
         _In_reads_bytes_(sizeof(Float3) + InputStride * (VectorCount - 1)) const Float3* pInputStream,
-        _In_ size_t InputStride, _In_ size_t VectorCount,
-        _In_ float ViewportX, _In_ float ViewportY, _In_ float ViewportWidth, _In_ float ViewportHeight, _In_ float ViewportMinZ, _In_ float ViewportMaxZ,
-        _In_ FXMMATRIX Projection, _In_ CXMMATRIX View, _In_ CXMMATRIX World)noexcept;
+        _In_ size_t InputStride,
+        _In_ size_t VectorCount,
+        _In_ float ViewportX,
+        _In_ float ViewportY,
+        _In_ float ViewportWidth,
+        _In_ float ViewportHeight,
+        _In_ float ViewportMinZ,
+        _In_ float ViewportMaxZ,
+        _In_ FXMMATRIX Projection,
+        _In_ CXMMATRIX View,
+        _In_ CXMMATRIX World
+    )noexcept;
 
     // 4D vector operations
 
@@ -1276,10 +1433,14 @@ namespace SourceMathInternal{
     Vector    MathCallConv     Vector4AngleBetweenNormals(VectorArg N1, VectorArg N2)noexcept;
     Vector    MathCallConv     Vector4AngleBetweenVectors(VectorArg V1, VectorArg V2)noexcept;
     Vector    MathCallConv     Vector4Transform(VectorArg V, FXMMATRIX M)noexcept;
-    Float4*   MathCallConv     Vector4TransformStream(_Out_writes_bytes_(sizeof(Float4) + OutputStride * (VectorCount - 1)) Float4* pOutputStream,
+    Float4*   MathCallConv     Vector4TransformStream(
+        _Out_writes_bytes_(sizeof(Float4) + OutputStride * (VectorCount - 1)) Float4* pOutputStream,
         _In_ size_t OutputStride,
         _In_reads_bytes_(sizeof(Float4) + InputStride * (VectorCount - 1)) const Float4* pInputStream,
-        _In_ size_t InputStride, _In_ size_t VectorCount, _In_ FXMMATRIX M)noexcept;
+        _In_ size_t InputStride,
+        _In_ size_t VectorCount,
+        _In_ FXMMATRIX M
+    )noexcept;
 
     // Matrix operations
 
@@ -1295,7 +1456,12 @@ namespace SourceMathInternal{
     Vector    MathCallConv     MatrixDeterminant(FXMMATRIX M)noexcept;
 
     _Success_(return)
-        bool        MathCallConv     MatrixDecompose(_Out_ Vector* outScale, _Out_ Vector* outRotQuat, _Out_ Vector* outTrans, _In_ FXMMATRIX M)noexcept;
+        bool        MathCallConv     MatrixDecompose(
+            _Out_ Vector* outScale,
+            _Out_ Vector* outRotQuat,
+            _Out_ Vector* outTrans,
+            _In_ FXMMATRIX M
+        )noexcept;
 
     Matrix    MathCallConv     MatrixIdentity()noexcept;
     Matrix    MathCallConv     MatrixSet(float m00, float m01, float m02, float m03,
@@ -1323,10 +1489,26 @@ namespace SourceMathInternal{
     Matrix    MathCallConv     MatrixRotationQuaternion(VectorArg Quaternion)noexcept;
     Matrix    MathCallConv     MatrixTransformation2D(VectorArg ScalingOrigin, float ScalingOrientation, VectorArg Scaling,
         VectorArg RotationOrigin, float Rotation, VectorArg2 Translation)noexcept;
-    Matrix    MathCallConv     MatrixTransformation(VectorArg ScalingOrigin, VectorArg ScalingOrientationQuaternion, VectorArg Scaling,
-        VectorArg2 RotationOrigin, VectorArg3 RotationQuaternion, VectorArg3 Translation)noexcept;
-    Matrix    MathCallConv     MatrixAffineTransformation2D(VectorArg Scaling, VectorArg RotationOrigin, float Rotation, VectorArg Translation)noexcept;
-    Matrix    MathCallConv     MatrixAffineTransformation(VectorArg Scaling, VectorArg RotationOrigin, VectorArg RotationQuaternion, VectorArg2 Translation)noexcept;
+    Matrix    MathCallConv     MatrixTransformation(
+        VectorArg ScalingOrigin,
+        VectorArg ScalingOrientationQuaternion,
+        VectorArg Scaling,
+        VectorArg2 RotationOrigin,
+        VectorArg3 RotationQuaternion,
+        VectorArg3 Translation
+    )noexcept;
+    Matrix    MathCallConv     MatrixAffineTransformation2D(
+        VectorArg Scaling,
+        VectorArg RotationOrigin,
+        float Rotation,
+        VectorArg Translation
+    )noexcept;
+    Matrix    MathCallConv     MatrixAffineTransformation(
+        VectorArg Scaling,
+        VectorArg RotationOrigin,
+        VectorArg RotationQuaternion,
+        VectorArg2 Translation
+    )noexcept;
     Matrix    MathCallConv     MatrixReflect(VectorArg ReflectionPlane)noexcept;
     Matrix    MathCallConv     MatrixShadow(VectorArg ShadowPlane, VectorArg LightPosition)noexcept;
 
@@ -1338,12 +1520,40 @@ namespace SourceMathInternal{
     Matrix    MathCallConv     MatrixPerspectiveRH(float ViewWidth, float ViewHeight, float NearZ, float FarZ)noexcept;
     Matrix    MathCallConv     MatrixPerspectiveFovLH(float FovAngleY, float AspectRatio, float NearZ, float FarZ)noexcept;
     Matrix    MathCallConv     MatrixPerspectiveFovRH(float FovAngleY, float AspectRatio, float NearZ, float FarZ)noexcept;
-    Matrix    MathCallConv     MatrixPerspectiveOffCenterLH(float ViewLeft, float ViewRight, float ViewBottom, float ViewTop, float NearZ, float FarZ)noexcept;
-    Matrix    MathCallConv     MatrixPerspectiveOffCenterRH(float ViewLeft, float ViewRight, float ViewBottom, float ViewTop, float NearZ, float FarZ)noexcept;
+    Matrix    MathCallConv     MatrixPerspectiveOffCenterLH(
+        float ViewLeft,
+        float ViewRight,
+        float ViewBottom,
+        float ViewTop,
+        float NearZ,
+        float FarZ
+    )noexcept;
+    Matrix    MathCallConv     MatrixPerspectiveOffCenterRH(
+        float ViewLeft,
+        float ViewRight,
+        float ViewBottom,
+        float ViewTop,
+        float NearZ,
+        float FarZ
+    )noexcept;
     Matrix    MathCallConv     MatrixOrthographicLH(float ViewWidth, float ViewHeight, float NearZ, float FarZ)noexcept;
     Matrix    MathCallConv     MatrixOrthographicRH(float ViewWidth, float ViewHeight, float NearZ, float FarZ)noexcept;
-    Matrix    MathCallConv     MatrixOrthographicOffCenterLH(float ViewLeft, float ViewRight, float ViewBottom, float ViewTop, float NearZ, float FarZ)noexcept;
-    Matrix    MathCallConv     MatrixOrthographicOffCenterRH(float ViewLeft, float ViewRight, float ViewBottom, float ViewTop, float NearZ, float FarZ)noexcept;
+    Matrix    MathCallConv     MatrixOrthographicOffCenterLH(
+        float ViewLeft,
+        float ViewRight,
+        float ViewBottom,
+        float ViewTop,
+        float NearZ,
+        float FarZ
+    )noexcept;
+    Matrix    MathCallConv     MatrixOrthographicOffCenterRH(
+        float ViewLeft,
+        float ViewRight,
+        float ViewBottom,
+        float ViewTop,
+        float NearZ,
+        float FarZ
+    )noexcept;
 
 
     // Quaternion operations
@@ -1370,9 +1580,23 @@ namespace SourceMathInternal{
     Vector    MathCallConv     QuaternionSlerpV(VectorArg Q0, VectorArg Q1, VectorArg T)noexcept;
     Vector    MathCallConv     QuaternionSquad(VectorArg Q0, VectorArg Q1, VectorArg Q2, VectorArg2 Q3, float t)noexcept;
     Vector    MathCallConv     QuaternionSquadV(VectorArg Q0, VectorArg Q1, VectorArg Q2, VectorArg2 Q3, VectorArg3 T)noexcept;
-    void        MathCallConv     QuaternionSquadSetup(_Out_ Vector* pA, _Out_ Vector* pB, _Out_ Vector* pC, _In_ VectorArg Q0, _In_ VectorArg Q1, _In_ VectorArg Q2, _In_ VectorArg2 Q3)noexcept;
+    void        MathCallConv     QuaternionSquadSetup(
+        _Out_ Vector* pA,
+        _Out_ Vector* pB,
+        _Out_ Vector* pC,
+        _In_ VectorArg Q0,
+        _In_ VectorArg Q1,
+        _In_ VectorArg Q2,
+        _In_ VectorArg2 Q3
+    )noexcept;
     Vector    MathCallConv     QuaternionBaryCentric(VectorArg Q0, VectorArg Q1, VectorArg Q2, float f, float g)noexcept;
-    Vector    MathCallConv     QuaternionBaryCentricV(VectorArg Q0, VectorArg Q1, VectorArg Q2, VectorArg2 F, VectorArg3 G)noexcept;
+    Vector    MathCallConv     QuaternionBaryCentricV(
+        VectorArg Q0,
+        VectorArg Q1,
+        VectorArg Q2,
+        VectorArg2 F,
+        VectorArg3 G
+    )noexcept;
 
     Vector    MathCallConv     QuaternionIdentity()noexcept;
 
@@ -1405,16 +1629,25 @@ namespace SourceMathInternal{
     Vector    MathCallConv     PlaneNormalizeEst(VectorArg P)noexcept;
     Vector    MathCallConv     PlaneNormalize(VectorArg P)noexcept;
     Vector    MathCallConv     PlaneIntersectLine(VectorArg P, VectorArg LinePoint1, VectorArg LinePoint2)noexcept;
-    void        MathCallConv     PlaneIntersectPlane(_Out_ Vector* pLinePoint1, _Out_ Vector* pLinePoint2, _In_ VectorArg P1, _In_ VectorArg P2)noexcept;
+    void        MathCallConv     PlaneIntersectPlane(
+        _Out_ Vector* pLinePoint1,
+        _Out_ Vector* pLinePoint2,
+        _In_ VectorArg P1,
+        _In_ VectorArg P2
+    )noexcept;
 
     // Transforms a plane given an inverse transpose matrix
     Vector    MathCallConv     PlaneTransform(VectorArg P, FXMMATRIX ITM)noexcept;
 
     // Transforms an array of planes given an inverse transpose matrix
-    Float4*   MathCallConv     PlaneTransformStream(_Out_writes_bytes_(sizeof(Float4) + OutputStride * (PlaneCount - 1)) Float4* pOutputStream,
+    Float4*   MathCallConv     PlaneTransformStream(
+        _Out_writes_bytes_(sizeof(Float4) + OutputStride * (PlaneCount - 1)) Float4* pOutputStream,
         _In_ size_t OutputStride,
         _In_reads_bytes_(sizeof(Float4) + InputStride * (PlaneCount - 1)) const Float4* pInputStream,
-        _In_ size_t InputStride, _In_ size_t PlaneCount, _In_ FXMMATRIX ITM)noexcept;
+        _In_ size_t InputStride,
+        _In_ size_t PlaneCount,
+        _In_ FXMMATRIX ITM
+    )noexcept;
 
     Vector    MathCallConv     PlaneFromPointNormal(VectorArg Point, VectorArg Normal)noexcept;
     Vector    MathCallConv     PlaneFromPoints(VectorArg Point1, VectorArg Point2, VectorArg Point3)noexcept;
@@ -1533,12 +1766,22 @@ namespace SourceMathInternal{
 
         // Fast path for permutes that read XY from the first vector, ZW from the second.
         template<uint32_t Shuffle> struct PermuteHelper<Shuffle, false, false, true, true>{
-            static Vector     MathCallConv     Permute(VectorArg v1, VectorArg v2)noexcept { return _mm_shuffle_ps(v1, v2, Shuffle); }
+            static Vector     MathCallConv     Permute(
+                VectorArg v1,
+                VectorArg v2
+            )noexcept{
+                return _mm_shuffle_ps(v1, v2, Shuffle);
+            }
         };
 
         // Fast path for permutes that read XY from the second vector, ZW from the first.
         template<uint32_t Shuffle> struct PermuteHelper<Shuffle, true, true, false, false>{
-            static Vector     MathCallConv     Permute(VectorArg v1, VectorArg v2)noexcept { return _mm_shuffle_ps(v2, v1, Shuffle); }
+            static Vector     MathCallConv     Permute(
+                VectorArg v1,
+                VectorArg v2
+            )noexcept{
+                return _mm_shuffle_ps(v2, v1, Shuffle);
+            }
         };
     }
 
@@ -1573,28 +1816,123 @@ namespace SourceMathInternal{
     template<> constexpr Vector MathCallConv     VectorPermute<4, 5, 6, 7>(VectorArg, VectorArg V2)noexcept { return V2; }
 
 #if defined(_MATH_SSE_INTRINSICS_) && !defined(_MATH_NO_INTRINSICS_)
-    template<> inline Vector      MathCallConv     VectorPermute<0, 1, 4, 5>(VectorArg V1, VectorArg V2)noexcept { return _mm_movelh_ps(V1, V2); }
-    template<> inline Vector      MathCallConv     VectorPermute<6, 7, 2, 3>(VectorArg V1, VectorArg V2)noexcept { return _mm_movehl_ps(V1, V2); }
-    template<> inline Vector      MathCallConv     VectorPermute<0, 4, 1, 5>(VectorArg V1, VectorArg V2)noexcept { return _mm_unpacklo_ps(V1, V2); }
-    template<> inline Vector      MathCallConv     VectorPermute<2, 6, 3, 7>(VectorArg V1, VectorArg V2)noexcept { return _mm_unpackhi_ps(V1, V2); }
-    template<> inline Vector      MathCallConv     VectorPermute<2, 3, 6, 7>(VectorArg V1, VectorArg V2)noexcept { return _mm_castpd_ps(_mm_unpackhi_pd(_mm_castps_pd(V1), _mm_castps_pd(V2))); }
+    template<> inline Vector      MathCallConv     VectorPermute<0, 1, 4, 5>(
+        VectorArg V1,
+        VectorArg V2
+    )noexcept{
+        return _mm_movelh_ps(V1, V2);
+    }
+    template<> inline Vector      MathCallConv     VectorPermute<6, 7, 2, 3>(
+        VectorArg V1,
+        VectorArg V2
+    )noexcept{
+        return _mm_movehl_ps(V1, V2);
+    }
+    template<> inline Vector      MathCallConv     VectorPermute<0, 4, 1, 5>(
+        VectorArg V1,
+        VectorArg V2
+    )noexcept{
+        return _mm_unpacklo_ps(V1, V2);
+    }
+    template<> inline Vector      MathCallConv     VectorPermute<2, 6, 3, 7>(
+        VectorArg V1,
+        VectorArg V2
+    )noexcept{
+        return _mm_unpackhi_ps(V1, V2);
+    }
+    template<> inline Vector      MathCallConv     VectorPermute<2, 3, 6, 7>(
+        VectorArg V1,
+        VectorArg V2
+    )noexcept{
+        return _mm_castpd_ps(_mm_unpackhi_pd(_mm_castps_pd(V1), _mm_castps_pd(V2)));
+    }
 #endif
 
 #if defined(_MATH_SSE4_INTRINSICS_) && !defined(_MATH_NO_INTRINSICS_)
-    template<> inline Vector      MathCallConv     VectorPermute<4, 1, 2, 3>(VectorArg V1, VectorArg V2)noexcept { return _mm_blend_ps(V1, V2, 0x1); }
-    template<> inline Vector      MathCallConv     VectorPermute<0, 5, 2, 3>(VectorArg V1, VectorArg V2)noexcept { return _mm_blend_ps(V1, V2, 0x2); }
-    template<> inline Vector      MathCallConv     VectorPermute<4, 5, 2, 3>(VectorArg V1, VectorArg V2)noexcept { return _mm_blend_ps(V1, V2, 0x3); }
-    template<> inline Vector      MathCallConv     VectorPermute<0, 1, 6, 3>(VectorArg V1, VectorArg V2)noexcept { return _mm_blend_ps(V1, V2, 0x4); }
-    template<> inline Vector      MathCallConv     VectorPermute<4, 1, 6, 3>(VectorArg V1, VectorArg V2)noexcept { return _mm_blend_ps(V1, V2, 0x5); }
-    template<> inline Vector      MathCallConv     VectorPermute<0, 5, 6, 3>(VectorArg V1, VectorArg V2)noexcept { return _mm_blend_ps(V1, V2, 0x6); }
-    template<> inline Vector      MathCallConv     VectorPermute<4, 5, 6, 3>(VectorArg V1, VectorArg V2)noexcept { return _mm_blend_ps(V1, V2, 0x7); }
-    template<> inline Vector      MathCallConv     VectorPermute<0, 1, 2, 7>(VectorArg V1, VectorArg V2)noexcept { return _mm_blend_ps(V1, V2, 0x8); }
-    template<> inline Vector      MathCallConv     VectorPermute<4, 1, 2, 7>(VectorArg V1, VectorArg V2)noexcept { return _mm_blend_ps(V1, V2, 0x9); }
-    template<> inline Vector      MathCallConv     VectorPermute<0, 5, 2, 7>(VectorArg V1, VectorArg V2)noexcept { return _mm_blend_ps(V1, V2, 0xA); }
-    template<> inline Vector      MathCallConv     VectorPermute<4, 5, 2, 7>(VectorArg V1, VectorArg V2)noexcept { return _mm_blend_ps(V1, V2, 0xB); }
-    template<> inline Vector      MathCallConv     VectorPermute<0, 1, 6, 7>(VectorArg V1, VectorArg V2)noexcept { return _mm_blend_ps(V1, V2, 0xC); }
-    template<> inline Vector      MathCallConv     VectorPermute<4, 1, 6, 7>(VectorArg V1, VectorArg V2)noexcept { return _mm_blend_ps(V1, V2, 0xD); }
-    template<> inline Vector      MathCallConv     VectorPermute<0, 5, 6, 7>(VectorArg V1, VectorArg V2)noexcept { return _mm_blend_ps(V1, V2, 0xE); }
+    template<> inline Vector      MathCallConv     VectorPermute<4, 1, 2, 3>(
+        VectorArg V1,
+        VectorArg V2
+    )noexcept{
+        return _mm_blend_ps(V1, V2, 0x1);
+    }
+    template<> inline Vector      MathCallConv     VectorPermute<0, 5, 2, 3>(
+        VectorArg V1,
+        VectorArg V2
+    )noexcept{
+        return _mm_blend_ps(V1, V2, 0x2);
+    }
+    template<> inline Vector      MathCallConv     VectorPermute<4, 5, 2, 3>(
+        VectorArg V1,
+        VectorArg V2
+    )noexcept{
+        return _mm_blend_ps(V1, V2, 0x3);
+    }
+    template<> inline Vector      MathCallConv     VectorPermute<0, 1, 6, 3>(
+        VectorArg V1,
+        VectorArg V2
+    )noexcept{
+        return _mm_blend_ps(V1, V2, 0x4);
+    }
+    template<> inline Vector      MathCallConv     VectorPermute<4, 1, 6, 3>(
+        VectorArg V1,
+        VectorArg V2
+    )noexcept{
+        return _mm_blend_ps(V1, V2, 0x5);
+    }
+    template<> inline Vector      MathCallConv     VectorPermute<0, 5, 6, 3>(
+        VectorArg V1,
+        VectorArg V2
+    )noexcept{
+        return _mm_blend_ps(V1, V2, 0x6);
+    }
+    template<> inline Vector      MathCallConv     VectorPermute<4, 5, 6, 3>(
+        VectorArg V1,
+        VectorArg V2
+    )noexcept{
+        return _mm_blend_ps(V1, V2, 0x7);
+    }
+    template<> inline Vector      MathCallConv     VectorPermute<0, 1, 2, 7>(
+        VectorArg V1,
+        VectorArg V2
+    )noexcept{
+        return _mm_blend_ps(V1, V2, 0x8);
+    }
+    template<> inline Vector      MathCallConv     VectorPermute<4, 1, 2, 7>(
+        VectorArg V1,
+        VectorArg V2
+    )noexcept{
+        return _mm_blend_ps(V1, V2, 0x9);
+    }
+    template<> inline Vector      MathCallConv     VectorPermute<0, 5, 2, 7>(
+        VectorArg V1,
+        VectorArg V2
+    )noexcept{
+        return _mm_blend_ps(V1, V2, 0xA);
+    }
+    template<> inline Vector      MathCallConv     VectorPermute<4, 5, 2, 7>(
+        VectorArg V1,
+        VectorArg V2
+    )noexcept{
+        return _mm_blend_ps(V1, V2, 0xB);
+    }
+    template<> inline Vector      MathCallConv     VectorPermute<0, 1, 6, 7>(
+        VectorArg V1,
+        VectorArg V2
+    )noexcept{
+        return _mm_blend_ps(V1, V2, 0xC);
+    }
+    template<> inline Vector      MathCallConv     VectorPermute<4, 1, 6, 7>(
+        VectorArg V1,
+        VectorArg V2
+    )noexcept{
+        return _mm_blend_ps(V1, V2, 0xD);
+    }
+    template<> inline Vector      MathCallConv     VectorPermute<0, 5, 6, 7>(
+        VectorArg V1,
+        VectorArg V2
+    )noexcept{
+        return _mm_blend_ps(V1, V2, 0xE);
+    }
 #endif
 
 #if defined(_MATH_ARM_NEON_INTRINSICS_) && !defined(_MATH_NO_INTRINSICS_)
@@ -1603,37 +1941,157 @@ namespace SourceMathInternal{
     // The mirror cases are not spelled out here as the programmer can always swap the arguments
     // (i.e. prefer permutes where the X element comes from the V1 vector instead of the V2 vector)
 
-    template<> inline Vector      MathCallConv     VectorPermute<0, 1, 4, 5>(VectorArg V1, VectorArg V2)noexcept { return vcombine_f32(vget_low_f32(V1), vget_low_f32(V2)); }
-    template<> inline Vector      MathCallConv     VectorPermute<1, 0, 4, 5>(VectorArg V1, VectorArg V2)noexcept { return vcombine_f32(vrev64_f32(vget_low_f32(V1)), vget_low_f32(V2)); }
-    template<> inline Vector      MathCallConv     VectorPermute<0, 1, 5, 4>(VectorArg V1, VectorArg V2)noexcept { return vcombine_f32(vget_low_f32(V1), vrev64_f32(vget_low_f32(V2))); }
-    template<> inline Vector      MathCallConv     VectorPermute<1, 0, 5, 4>(VectorArg V1, VectorArg V2)noexcept { return vcombine_f32(vrev64_f32(vget_low_f32(V1)), vrev64_f32(vget_low_f32(V2))); }
+    template<> inline Vector      MathCallConv     VectorPermute<0, 1, 4, 5>(
+        VectorArg V1,
+        VectorArg V2
+    )noexcept{
+        return vcombine_f32(vget_low_f32(V1), vget_low_f32(V2));
+    }
+    template<> inline Vector      MathCallConv     VectorPermute<1, 0, 4, 5>(
+        VectorArg V1,
+        VectorArg V2
+    )noexcept{
+        return vcombine_f32(vrev64_f32(vget_low_f32(V1)), vget_low_f32(V2));
+    }
+    template<> inline Vector      MathCallConv     VectorPermute<0, 1, 5, 4>(
+        VectorArg V1,
+        VectorArg V2
+    )noexcept{
+        return vcombine_f32(vget_low_f32(V1), vrev64_f32(vget_low_f32(V2)));
+    }
+    template<> inline Vector      MathCallConv     VectorPermute<1, 0, 5, 4>(
+        VectorArg V1,
+        VectorArg V2
+    )noexcept{
+        return vcombine_f32(vrev64_f32(vget_low_f32(V1)), vrev64_f32(vget_low_f32(V2)));
+    }
 
-    template<> inline Vector      MathCallConv     VectorPermute<2, 3, 6, 7>(VectorArg V1, VectorArg V2)noexcept { return vcombine_f32(vget_high_f32(V1), vget_high_f32(V2)); }
-    template<> inline Vector      MathCallConv     VectorPermute<3, 2, 6, 7>(VectorArg V1, VectorArg V2)noexcept { return vcombine_f32(vrev64_f32(vget_high_f32(V1)), vget_high_f32(V2)); }
-    template<> inline Vector      MathCallConv     VectorPermute<2, 3, 7, 6>(VectorArg V1, VectorArg V2)noexcept { return vcombine_f32(vget_high_f32(V1), vrev64_f32(vget_high_f32(V2))); }
-    template<> inline Vector      MathCallConv     VectorPermute<3, 2, 7, 6>(VectorArg V1, VectorArg V2)noexcept { return vcombine_f32(vrev64_f32(vget_high_f32(V1)), vrev64_f32(vget_high_f32(V2))); }
+    template<> inline Vector      MathCallConv     VectorPermute<2, 3, 6, 7>(
+        VectorArg V1,
+        VectorArg V2
+    )noexcept{
+        return vcombine_f32(vget_high_f32(V1), vget_high_f32(V2));
+    }
+    template<> inline Vector      MathCallConv     VectorPermute<3, 2, 6, 7>(
+        VectorArg V1,
+        VectorArg V2
+    )noexcept{
+        return vcombine_f32(vrev64_f32(vget_high_f32(V1)), vget_high_f32(V2));
+    }
+    template<> inline Vector      MathCallConv     VectorPermute<2, 3, 7, 6>(
+        VectorArg V1,
+        VectorArg V2
+    )noexcept{
+        return vcombine_f32(vget_high_f32(V1), vrev64_f32(vget_high_f32(V2)));
+    }
+    template<> inline Vector      MathCallConv     VectorPermute<3, 2, 7, 6>(
+        VectorArg V1,
+        VectorArg V2
+    )noexcept{
+        return vcombine_f32(vrev64_f32(vget_high_f32(V1)), vrev64_f32(vget_high_f32(V2)));
+    }
 
-    template<> inline Vector      MathCallConv     VectorPermute<0, 1, 6, 7>(VectorArg V1, VectorArg V2)noexcept { return vcombine_f32(vget_low_f32(V1), vget_high_f32(V2)); }
-    template<> inline Vector      MathCallConv     VectorPermute<1, 0, 6, 7>(VectorArg V1, VectorArg V2)noexcept { return vcombine_f32(vrev64_f32(vget_low_f32(V1)), vget_high_f32(V2)); }
-    template<> inline Vector      MathCallConv     VectorPermute<0, 1, 7, 6>(VectorArg V1, VectorArg V2)noexcept { return vcombine_f32(vget_low_f32(V1), vrev64_f32(vget_high_f32(V2))); }
-    template<> inline Vector      MathCallConv     VectorPermute<1, 0, 7, 6>(VectorArg V1, VectorArg V2)noexcept { return vcombine_f32(vrev64_f32(vget_low_f32(V1)), vrev64_f32(vget_high_f32(V2))); }
+    template<> inline Vector      MathCallConv     VectorPermute<0, 1, 6, 7>(
+        VectorArg V1,
+        VectorArg V2
+    )noexcept{
+        return vcombine_f32(vget_low_f32(V1), vget_high_f32(V2));
+    }
+    template<> inline Vector      MathCallConv     VectorPermute<1, 0, 6, 7>(
+        VectorArg V1,
+        VectorArg V2
+    )noexcept{
+        return vcombine_f32(vrev64_f32(vget_low_f32(V1)), vget_high_f32(V2));
+    }
+    template<> inline Vector      MathCallConv     VectorPermute<0, 1, 7, 6>(
+        VectorArg V1,
+        VectorArg V2
+    )noexcept{
+        return vcombine_f32(vget_low_f32(V1), vrev64_f32(vget_high_f32(V2)));
+    }
+    template<> inline Vector      MathCallConv     VectorPermute<1, 0, 7, 6>(
+        VectorArg V1,
+        VectorArg V2
+    )noexcept{
+        return vcombine_f32(vrev64_f32(vget_low_f32(V1)), vrev64_f32(vget_high_f32(V2)));
+    }
 
-    template<> inline Vector      MathCallConv     VectorPermute<3, 2, 4, 5>(VectorArg V1, VectorArg V2)noexcept { return vcombine_f32(vrev64_f32(vget_high_f32(V1)), vget_low_f32(V2)); }
-    template<> inline Vector      MathCallConv     VectorPermute<2, 3, 5, 4>(VectorArg V1, VectorArg V2)noexcept { return vcombine_f32(vget_high_f32(V1), vrev64_f32(vget_low_f32(V2))); }
-    template<> inline Vector      MathCallConv     VectorPermute<3, 2, 5, 4>(VectorArg V1, VectorArg V2)noexcept { return vcombine_f32(vrev64_f32(vget_high_f32(V1)), vrev64_f32(vget_low_f32(V2))); }
+    template<> inline Vector      MathCallConv     VectorPermute<3, 2, 4, 5>(
+        VectorArg V1,
+        VectorArg V2
+    )noexcept{
+        return vcombine_f32(vrev64_f32(vget_high_f32(V1)), vget_low_f32(V2));
+    }
+    template<> inline Vector      MathCallConv     VectorPermute<2, 3, 5, 4>(
+        VectorArg V1,
+        VectorArg V2
+    )noexcept{
+        return vcombine_f32(vget_high_f32(V1), vrev64_f32(vget_low_f32(V2)));
+    }
+    template<> inline Vector      MathCallConv     VectorPermute<3, 2, 5, 4>(
+        VectorArg V1,
+        VectorArg V2
+    )noexcept{
+        return vcombine_f32(vrev64_f32(vget_high_f32(V1)), vrev64_f32(vget_low_f32(V2)));
+    }
 
-    template<> inline Vector      MathCallConv     VectorPermute<0, 4, 2, 6>(VectorArg V1, VectorArg V2)noexcept { return vtrnq_f32(V1, V2).val[0]; }
-    template<> inline Vector      MathCallConv     VectorPermute<1, 5, 3, 7>(VectorArg V1, VectorArg V2)noexcept { return vtrnq_f32(V1, V2).val[1]; }
+    template<> inline Vector      MathCallConv     VectorPermute<0, 4, 2, 6>(
+        VectorArg V1,
+        VectorArg V2
+    )noexcept{
+        return vtrnq_f32(V1, V2).val[0];
+    }
+    template<> inline Vector      MathCallConv     VectorPermute<1, 5, 3, 7>(
+        VectorArg V1,
+        VectorArg V2
+    )noexcept{
+        return vtrnq_f32(V1, V2).val[1];
+    }
 
-    template<> inline Vector      MathCallConv     VectorPermute<0, 4, 1, 5>(VectorArg V1, VectorArg V2)noexcept { return vzipq_f32(V1, V2).val[0]; }
-    template<> inline Vector      MathCallConv     VectorPermute<2, 6, 3, 7>(VectorArg V1, VectorArg V2)noexcept { return vzipq_f32(V1, V2).val[1]; }
+    template<> inline Vector      MathCallConv     VectorPermute<0, 4, 1, 5>(
+        VectorArg V1,
+        VectorArg V2
+    )noexcept{
+        return vzipq_f32(V1, V2).val[0];
+    }
+    template<> inline Vector      MathCallConv     VectorPermute<2, 6, 3, 7>(
+        VectorArg V1,
+        VectorArg V2
+    )noexcept{
+        return vzipq_f32(V1, V2).val[1];
+    }
 
-    template<> inline Vector      MathCallConv     VectorPermute<0, 2, 4, 6>(VectorArg V1, VectorArg V2)noexcept { return vuzpq_f32(V1, V2).val[0]; }
-    template<> inline Vector      MathCallConv     VectorPermute<1, 3, 5, 7>(VectorArg V1, VectorArg V2)noexcept { return vuzpq_f32(V1, V2).val[1]; }
+    template<> inline Vector      MathCallConv     VectorPermute<0, 2, 4, 6>(
+        VectorArg V1,
+        VectorArg V2
+    )noexcept{
+        return vuzpq_f32(V1, V2).val[0];
+    }
+    template<> inline Vector      MathCallConv     VectorPermute<1, 3, 5, 7>(
+        VectorArg V1,
+        VectorArg V2
+    )noexcept{
+        return vuzpq_f32(V1, V2).val[1];
+    }
 
-    template<> inline Vector      MathCallConv     VectorPermute<1, 2, 3, 4>(VectorArg V1, VectorArg V2)noexcept { return vextq_f32(V1, V2, 1); }
-    template<> inline Vector      MathCallConv     VectorPermute<2, 3, 4, 5>(VectorArg V1, VectorArg V2)noexcept { return vextq_f32(V1, V2, 2); }
-    template<> inline Vector      MathCallConv     VectorPermute<3, 4, 5, 6>(VectorArg V1, VectorArg V2)noexcept { return vextq_f32(V1, V2, 3); }
+    template<> inline Vector      MathCallConv     VectorPermute<1, 2, 3, 4>(
+        VectorArg V1,
+        VectorArg V2
+    )noexcept{
+        return vextq_f32(V1, V2, 1);
+    }
+    template<> inline Vector      MathCallConv     VectorPermute<2, 3, 4, 5>(
+        VectorArg V1,
+        VectorArg V2
+    )noexcept{
+        return vextq_f32(V1, V2, 2);
+    }
+    template<> inline Vector      MathCallConv     VectorPermute<3, 4, 5, 6>(
+        VectorArg V1,
+        VectorArg V2
+    )noexcept{
+        return vextq_f32(V1, V2, 3);
+    }
 
 #endif // _MATH_ARM_NEON_INTRINSICS_ && !_MATH_NO_INTRINSICS_
 
@@ -1659,10 +2117,26 @@ namespace SourceMathInternal{
     template<> constexpr Vector MathCallConv VectorSwizzle<0, 1, 2, 3>(VectorArg V)noexcept { return V; }
 
 #if defined(_MATH_SSE_INTRINSICS_) && !defined(_MATH_NO_INTRINSICS_)
-    template<> inline Vector      MathCallConv     VectorSwizzle<0, 1, 0, 1>(VectorArg V)noexcept { return _mm_movelh_ps(V, V); }
-    template<> inline Vector      MathCallConv     VectorSwizzle<2, 3, 2, 3>(VectorArg V)noexcept { return _mm_movehl_ps(V, V); }
-    template<> inline Vector      MathCallConv     VectorSwizzle<0, 0, 1, 1>(VectorArg V)noexcept { return _mm_unpacklo_ps(V, V); }
-    template<> inline Vector      MathCallConv     VectorSwizzle<2, 2, 3, 3>(VectorArg V)noexcept { return _mm_unpackhi_ps(V, V); }
+    template<> inline Vector      MathCallConv     VectorSwizzle<0, 1, 0, 1>(
+        VectorArg V
+    )noexcept{
+        return _mm_movelh_ps(V, V);
+    }
+    template<> inline Vector      MathCallConv     VectorSwizzle<2, 3, 2, 3>(
+        VectorArg V
+    )noexcept{
+        return _mm_movehl_ps(V, V);
+    }
+    template<> inline Vector      MathCallConv     VectorSwizzle<0, 0, 1, 1>(
+        VectorArg V
+    )noexcept{
+        return _mm_unpacklo_ps(V, V);
+    }
+    template<> inline Vector      MathCallConv     VectorSwizzle<2, 2, 3, 3>(
+        VectorArg V
+    )noexcept{
+        return _mm_unpackhi_ps(V, V);
+    }
 #endif
 
 #if defined(_MATH_SSE3_INTRINSICS_) && !defined(_MATH_NO_INTRINSICS_)
@@ -1671,37 +2145,121 @@ namespace SourceMathInternal{
 #endif
 
 #if defined(_MATH_AVX2_INTRINSICS_) && !defined(_MATH_NO_INTRINSICS_) && defined(_MATH_FAVOR_INTEL_)
-    template<> inline Vector      MathCallConv     VectorSwizzle<0, 0, 0, 0>(VectorArg V)noexcept { return _mm_broadcastss_ps(V); }
+    template<> inline Vector      MathCallConv     VectorSwizzle<0, 0, 0, 0>(
+        VectorArg V
+    )noexcept{
+        return _mm_broadcastss_ps(V);
+    }
 #endif
 
 #if defined(_MATH_ARM_NEON_INTRINSICS_) && !defined(_MATH_NO_INTRINSICS_)
 
-    template<> inline Vector      MathCallConv     VectorSwizzle<0, 0, 0, 0>(VectorArg V)noexcept { return vdupq_lane_f32(vget_low_f32(V), 0); }
-    template<> inline Vector      MathCallConv     VectorSwizzle<1, 1, 1, 1>(VectorArg V)noexcept { return vdupq_lane_f32(vget_low_f32(V), 1); }
-    template<> inline Vector      MathCallConv     VectorSwizzle<2, 2, 2, 2>(VectorArg V)noexcept { return vdupq_lane_f32(vget_high_f32(V), 0); }
-    template<> inline Vector      MathCallConv     VectorSwizzle<3, 3, 3, 3>(VectorArg V)noexcept { return vdupq_lane_f32(vget_high_f32(V), 1); }
+    template<> inline Vector      MathCallConv     VectorSwizzle<0, 0, 0, 0>(
+        VectorArg V
+    )noexcept{
+        return vdupq_lane_f32(vget_low_f32(V), 0);
+    }
+    template<> inline Vector      MathCallConv     VectorSwizzle<1, 1, 1, 1>(
+        VectorArg V
+    )noexcept{
+        return vdupq_lane_f32(vget_low_f32(V), 1);
+    }
+    template<> inline Vector      MathCallConv     VectorSwizzle<2, 2, 2, 2>(
+        VectorArg V
+    )noexcept{
+        return vdupq_lane_f32(vget_high_f32(V), 0);
+    }
+    template<> inline Vector      MathCallConv     VectorSwizzle<3, 3, 3, 3>(
+        VectorArg V
+    )noexcept{
+        return vdupq_lane_f32(vget_high_f32(V), 1);
+    }
 
     template<> inline Vector      MathCallConv     VectorSwizzle<1, 0, 3, 2>(VectorArg V)noexcept { return vrev64q_f32(V); }
 
-    template<> inline Vector      MathCallConv     VectorSwizzle<0, 1, 0, 1>(VectorArg V)noexcept { float32x2_t vt = vget_low_f32(V); return vcombine_f32(vt, vt); }
-    template<> inline Vector      MathCallConv     VectorSwizzle<2, 3, 2, 3>(VectorArg V)noexcept { float32x2_t vt = vget_high_f32(V); return vcombine_f32(vt, vt); }
-    template<> inline Vector      MathCallConv     VectorSwizzle<1, 0, 1, 0>(VectorArg V)noexcept { float32x2_t vt = vrev64_f32(vget_low_f32(V)); return vcombine_f32(vt, vt); }
-    template<> inline Vector      MathCallConv     VectorSwizzle<3, 2, 3, 2>(VectorArg V)noexcept { float32x2_t vt = vrev64_f32(vget_high_f32(V)); return vcombine_f32(vt, vt); }
+    template<> inline Vector      MathCallConv     VectorSwizzle<0, 1, 0, 1>(
+        VectorArg V
+    )noexcept{
+        float32x2_t vt = vget_low_f32(V);
+        return vcombine_f32(vt, vt);
+    }
+    template<> inline Vector      MathCallConv     VectorSwizzle<2, 3, 2, 3>(
+        VectorArg V
+    )noexcept{
+        float32x2_t vt = vget_high_f32(V);
+        return vcombine_f32(vt, vt);
+    }
+    template<> inline Vector      MathCallConv     VectorSwizzle<1, 0, 1, 0>(
+        VectorArg V
+    )noexcept{
+        float32x2_t vt = vrev64_f32(vget_low_f32(V));
+        return vcombine_f32(vt, vt);
+    }
+    template<> inline Vector      MathCallConv     VectorSwizzle<3, 2, 3, 2>(
+        VectorArg V
+    )noexcept{
+        float32x2_t vt = vrev64_f32(vget_high_f32(V));
+        return vcombine_f32(vt, vt);
+    }
 
-    template<> inline Vector      MathCallConv     VectorSwizzle<0, 1, 3, 2>(VectorArg V)noexcept { return vcombine_f32(vget_low_f32(V), vrev64_f32(vget_high_f32(V))); }
-    template<> inline Vector      MathCallConv     VectorSwizzle<1, 0, 2, 3>(VectorArg V)noexcept { return vcombine_f32(vrev64_f32(vget_low_f32(V)), vget_high_f32(V)); }
-    template<> inline Vector      MathCallConv     VectorSwizzle<2, 3, 1, 0>(VectorArg V)noexcept { return vcombine_f32(vget_high_f32(V), vrev64_f32(vget_low_f32(V))); }
-    template<> inline Vector      MathCallConv     VectorSwizzle<3, 2, 0, 1>(VectorArg V)noexcept { return vcombine_f32(vrev64_f32(vget_high_f32(V)), vget_low_f32(V)); }
-    template<> inline Vector      MathCallConv     VectorSwizzle<3, 2, 1, 0>(VectorArg V)noexcept { return vcombine_f32(vrev64_f32(vget_high_f32(V)), vrev64_f32(vget_low_f32(V))); }
+    template<> inline Vector      MathCallConv     VectorSwizzle<0, 1, 3, 2>(
+        VectorArg V
+    )noexcept{
+        return vcombine_f32(vget_low_f32(V), vrev64_f32(vget_high_f32(V)));
+    }
+    template<> inline Vector      MathCallConv     VectorSwizzle<1, 0, 2, 3>(
+        VectorArg V
+    )noexcept{
+        return vcombine_f32(vrev64_f32(vget_low_f32(V)), vget_high_f32(V));
+    }
+    template<> inline Vector      MathCallConv     VectorSwizzle<2, 3, 1, 0>(
+        VectorArg V
+    )noexcept{
+        return vcombine_f32(vget_high_f32(V), vrev64_f32(vget_low_f32(V)));
+    }
+    template<> inline Vector      MathCallConv     VectorSwizzle<3, 2, 0, 1>(
+        VectorArg V
+    )noexcept{
+        return vcombine_f32(vrev64_f32(vget_high_f32(V)), vget_low_f32(V));
+    }
+    template<> inline Vector      MathCallConv     VectorSwizzle<3, 2, 1, 0>(
+        VectorArg V
+    )noexcept{
+        return vcombine_f32(vrev64_f32(vget_high_f32(V)), vrev64_f32(vget_low_f32(V)));
+    }
 
-    template<> inline Vector      MathCallConv     VectorSwizzle<0, 0, 2, 2>(VectorArg V)noexcept { return vtrnq_f32(V, V).val[0]; }
-    template<> inline Vector      MathCallConv     VectorSwizzle<1, 1, 3, 3>(VectorArg V)noexcept { return vtrnq_f32(V, V).val[1]; }
+    template<> inline Vector      MathCallConv     VectorSwizzle<0, 0, 2, 2>(
+        VectorArg V
+    )noexcept{
+        return vtrnq_f32(V, V).val[0];
+    }
+    template<> inline Vector      MathCallConv     VectorSwizzle<1, 1, 3, 3>(
+        VectorArg V
+    )noexcept{
+        return vtrnq_f32(V, V).val[1];
+    }
 
-    template<> inline Vector      MathCallConv     VectorSwizzle<0, 0, 1, 1>(VectorArg V)noexcept { return vzipq_f32(V, V).val[0]; }
-    template<> inline Vector      MathCallConv     VectorSwizzle<2, 2, 3, 3>(VectorArg V)noexcept { return vzipq_f32(V, V).val[1]; }
+    template<> inline Vector      MathCallConv     VectorSwizzle<0, 0, 1, 1>(
+        VectorArg V
+    )noexcept{
+        return vzipq_f32(V, V).val[0];
+    }
+    template<> inline Vector      MathCallConv     VectorSwizzle<2, 2, 3, 3>(
+        VectorArg V
+    )noexcept{
+        return vzipq_f32(V, V).val[1];
+    }
 
-    template<> inline Vector      MathCallConv     VectorSwizzle<0, 2, 0, 2>(VectorArg V)noexcept { return vuzpq_f32(V, V).val[0]; }
-    template<> inline Vector      MathCallConv     VectorSwizzle<1, 3, 1, 3>(VectorArg V)noexcept { return vuzpq_f32(V, V).val[1]; }
+    template<> inline Vector      MathCallConv     VectorSwizzle<0, 2, 0, 2>(
+        VectorArg V
+    )noexcept{
+        return vuzpq_f32(V, V).val[0];
+    }
+    template<> inline Vector      MathCallConv     VectorSwizzle<1, 3, 1, 3>(
+        VectorArg V
+    )noexcept{
+        return vuzpq_f32(V, V).val[1];
+    }
 
     template<> inline Vector      MathCallConv     VectorSwizzle<1, 2, 3, 0>(VectorArg V)noexcept { return vextq_f32(V, V, 1); }
     template<> inline Vector      MathCallConv     VectorSwizzle<2, 3, 0, 1>(VectorArg V)noexcept { return vextq_f32(V, V, 2); }
@@ -1753,16 +2311,46 @@ namespace SourceMathInternal{
 #endif
 
     MATH_GLOBAL_CONST VectorF32 g_SinCoefficients0 = { { { -0.16666667f, +0.0083333310f, -0.00019840874f, +2.7525562e-06f } } };
-    MATH_GLOBAL_CONST VectorF32 g_SinCoefficients1 = { { { -2.3889859e-08f, -0.16665852f /*Est1*/, +0.0083139502f /*Est2*/, -0.00018524670f /*Est3*/ } } };
+    MATH_GLOBAL_CONST VectorF32 g_SinCoefficients1 = { { {
+        -2.3889859e-08f,
+        -0.16665852f /*Est1*/,
+        +0.0083139502f /*Est2*/,
+        -0.00018524670f /*Est3*/
+    } } };
     MATH_GLOBAL_CONST VectorF32 g_CosCoefficients0 = { { { -0.5f, +0.041666638f, -0.0013888378f, +2.4760495e-05f } } };
-    MATH_GLOBAL_CONST VectorF32 g_CosCoefficients1 = { { { -2.6051615e-07f, -0.49992746f /*Est1*/, +0.041493919f /*Est2*/, -0.0012712436f /*Est3*/ } } };
+    MATH_GLOBAL_CONST VectorF32 g_CosCoefficients1 = { { {
+        -2.6051615e-07f,
+        -0.49992746f /*Est1*/,
+        +0.041493919f /*Est2*/,
+        -0.0012712436f /*Est3*/
+    } } };
     MATH_GLOBAL_CONST VectorF32 g_TanCoefficients0 = { { { 1.0f, 0.333333333f, 0.133333333f, 5.396825397e-2f } } };
-    MATH_GLOBAL_CONST VectorF32 g_TanCoefficients1 = { { { 2.186948854e-2f, 8.863235530e-3f, 3.592128167e-3f, 1.455834485e-3f } } };
-    MATH_GLOBAL_CONST VectorF32 g_TanCoefficients2 = { { { 5.900274264e-4f, 2.391290764e-4f, 9.691537707e-5f, 3.927832950e-5f } } };
+    MATH_GLOBAL_CONST VectorF32 g_TanCoefficients1 = { { {
+        2.186948854e-2f,
+        8.863235530e-3f,
+        3.592128167e-3f,
+        1.455834485e-3f
+    } } };
+    MATH_GLOBAL_CONST VectorF32 g_TanCoefficients2 = { { {
+        5.900274264e-4f,
+        2.391290764e-4f,
+        9.691537707e-5f,
+        3.927832950e-5f
+    } } };
     MATH_GLOBAL_CONST VectorF32 g_ArcCoefficients0 = { { { +1.5707963050f, -0.2145988016f, +0.0889789874f, -0.0501743046f } } };
     MATH_GLOBAL_CONST VectorF32 g_ArcCoefficients1 = { { { +0.0308918810f, -0.0170881256f, +0.0066700901f, -0.0012624911f } } };
-    MATH_GLOBAL_CONST VectorF32 g_ATanCoefficients0 = { { { -0.3333314528f, +0.1999355085f, -0.1420889944f, +0.1065626393f } } };
-    MATH_GLOBAL_CONST VectorF32 g_ATanCoefficients1 = { { { -0.0752896400f, +0.0429096138f, -0.0161657367f, +0.0028662257f } } };
+    MATH_GLOBAL_CONST VectorF32 g_ATanCoefficients0 = { { {
+        -0.3333314528f,
+        +0.1999355085f,
+        -0.1420889944f,
+        +0.1065626393f
+    } } };
+    MATH_GLOBAL_CONST VectorF32 g_ATanCoefficients1 = { { {
+        -0.0752896400f,
+        +0.0429096138f,
+        -0.0161657367f,
+        +0.0028662257f
+    } } };
     MATH_GLOBAL_CONST VectorF32 g_ATanEstCoefficients0 = { { { +0.999866f, +0.999866f, +0.999866f, +0.999866f } } };
     MATH_GLOBAL_CONST VectorF32 g_ATanEstCoefficients1 = { { { -0.3302995f, +0.180141f, -0.085133f, +0.0208351f } } };
     MATH_GLOBAL_CONST VectorF32 g_TanEstCoefficients = { { { 2.484f, -1.954923183e-1f, 2.467401101f, MATH_1DIVPI } } };
@@ -1813,11 +2401,26 @@ namespace SourceMathInternal{
     MATH_GLOBAL_CONST VectorU32 g_MaskA8R8G8B8 = { { { 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000 } } };
     MATH_GLOBAL_CONST VectorU32 g_FlipA8R8G8B8 = { { { 0x00000000, 0x00000000, 0x00000000, 0x80000000 } } };
     MATH_GLOBAL_CONST VectorF32 g_FixAA8R8G8B8 = { { { 0.0f, 0.0f, 0.0f, float(0x80000000U) } } };
-    MATH_GLOBAL_CONST VectorF32 g_NormalizeA8R8G8B8 = { { { 1.0f / (255.0f * float(0x10000)), 1.0f / (255.0f * float(0x100)), 1.0f / 255.0f, 1.0f / (255.0f * float(0x1000000)) } } };
+    MATH_GLOBAL_CONST VectorF32 g_NormalizeA8R8G8B8 = { { {
+        1.0f / (255.0f * float(0x10000)),
+        1.0f / (255.0f * float(0x100)),
+        1.0f / 255.0f,
+        1.0f / (255.0f * float(0x1000000))
+    } } };
     MATH_GLOBAL_CONST VectorU32 g_MaskA2B10G10R10 = { { { 0x000003FF, 0x000FFC00, 0x3FF00000, 0xC0000000 } } };
     MATH_GLOBAL_CONST VectorU32 g_FlipA2B10G10R10 = { { { 0x00000200, 0x00080000, 0x20000000, 0x80000000 } } };
-    MATH_GLOBAL_CONST VectorF32 g_FixAA2B10G10R10 = { { { -512.0f, -512.0f * float(0x400), -512.0f * float(0x100000), float(0x80000000U) } } };
-    MATH_GLOBAL_CONST VectorF32 g_NormalizeA2B10G10R10 = { { { 1.0f / 511.0f, 1.0f / (511.0f * float(0x400)), 1.0f / (511.0f * float(0x100000)), 1.0f / (3.0f * float(0x40000000)) } } };
+    MATH_GLOBAL_CONST VectorF32 g_FixAA2B10G10R10 = { { {
+        -512.0f,
+        -512.0f * float(0x400),
+        -512.0f * float(0x100000),
+        float(0x80000000U)
+    } } };
+    MATH_GLOBAL_CONST VectorF32 g_NormalizeA2B10G10R10 = { { {
+        1.0f / 511.0f,
+        1.0f / (511.0f * float(0x400)),
+        1.0f / (511.0f * float(0x100000)),
+        1.0f / (3.0f * float(0x40000000))
+    } } };
     MATH_GLOBAL_CONST VectorU32 g_MaskX16Y16 = { { { 0x0000FFFF, 0xFFFF0000, 0x00000000, 0x00000000 } } };
     MATH_GLOBAL_CONST VectorI32 g_FlipX16Y16 = { { { 0x00008000, 0x00000000, 0x00000000, 0x00000000 } } };
     MATH_GLOBAL_CONST VectorF32 g_FixX16Y16 = { { { -32768.0f, 0.0f, 0.0f, 0.0f } } };
@@ -1825,7 +2428,12 @@ namespace SourceMathInternal{
     MATH_GLOBAL_CONST VectorU32 g_MaskX16Y16Z16W16 = { { { 0x0000FFFF, 0x0000FFFF, 0xFFFF0000, 0xFFFF0000 } } };
     MATH_GLOBAL_CONST VectorI32 g_FlipX16Y16Z16W16 = { { { 0x00008000, 0x00008000, 0x00000000, 0x00000000 } } };
     MATH_GLOBAL_CONST VectorF32 g_FixX16Y16Z16W16 = { { { -32768.0f, -32768.0f, 0.0f, 0.0f } } };
-    MATH_GLOBAL_CONST VectorF32 g_NormalizeX16Y16Z16W16 = { { { 1.0f / 32767.0f, 1.0f / 32767.0f, 1.0f / (32767.0f * 65536.0f), 1.0f / (32767.0f * 65536.0f) } } };
+    MATH_GLOBAL_CONST VectorF32 g_NormalizeX16Y16Z16W16 = { { {
+        1.0f / 32767.0f,
+        1.0f / 32767.0f,
+        1.0f / (32767.0f * 65536.0f),
+        1.0f / (32767.0f * 65536.0f)
+    } } };
     MATH_GLOBAL_CONST VectorF32 g_NoFraction = { { { 8388608.0f, 8388608.0f, 8388608.0f, 8388608.0f } } };
     MATH_GLOBAL_CONST VectorI32 g_MaskByte = { { { 0x000000FF, 0x000000FF, 0x000000FF, 0x000000FF } } };
     MATH_GLOBAL_CONST VectorF32 g_NegateX = { { { -1.0f, 1.0f, 1.0f, 1.0f } } };
@@ -1851,14 +2459,39 @@ namespace SourceMathInternal{
     MATH_GLOBAL_CONST VectorI32 g_XorDec4 = { { { 0x200, 0x200 << 10, 0x200 << 20, 0 } } };
     MATH_GLOBAL_CONST VectorF32 g_AddUDec4 = { { { 0, 0, 0, 32768.0f * 65536.0f } } };
     MATH_GLOBAL_CONST VectorF32 g_AddDec4 = { { { -512.0f, -512.0f * 1024.0f, -512.0f * 1024.0f * 1024.0f, 0 } } };
-    MATH_GLOBAL_CONST VectorF32 g_MulDec4 = { { { 1.0f, 1.0f / 1024.0f, 1.0f / (1024.0f * 1024.0f), 1.0f / (1024.0f * 1024.0f * 1024.0f) } } };
+    MATH_GLOBAL_CONST VectorF32 g_MulDec4 = { { {
+        1.0f,
+        1.0f / 1024.0f,
+        1.0f / (1024.0f * 1024.0f),
+        1.0f / (1024.0f * 1024.0f * 1024.0f)
+    } } };
     MATH_GLOBAL_CONST VectorU32 g_MaskByte4 = { { { 0xFF, 0xFF00, 0xFF0000, 0xFF000000 } } };
     MATH_GLOBAL_CONST VectorI32 g_XorByte4 = { { { 0x80, 0x8000, 0x800000, 0x00000000 } } };
     MATH_GLOBAL_CONST VectorF32 g_AddByte4 = { { { -128.0f, -128.0f * 256.0f, -128.0f * 65536.0f, 0 } } };
-    MATH_GLOBAL_CONST VectorF32 g_FixUnsigned = { { { 32768.0f * 65536.0f, 32768.0f * 65536.0f, 32768.0f * 65536.0f, 32768.0f * 65536.0f } } };
-    MATH_GLOBAL_CONST VectorF32 g_MaxInt = { { { 65536.0f * 32768.0f - 128.0f, 65536.0f * 32768.0f - 128.0f, 65536.0f * 32768.0f - 128.0f, 65536.0f * 32768.0f - 128.0f } } };
-    MATH_GLOBAL_CONST VectorF32 g_MaxUInt = { { { 65536.0f * 65536.0f - 256.0f, 65536.0f * 65536.0f - 256.0f, 65536.0f * 65536.0f - 256.0f, 65536.0f * 65536.0f - 256.0f } } };
-    MATH_GLOBAL_CONST VectorF32 g_UnsignedFix = { { { 32768.0f * 65536.0f, 32768.0f * 65536.0f, 32768.0f * 65536.0f, 32768.0f * 65536.0f } } };
+    MATH_GLOBAL_CONST VectorF32 g_FixUnsigned = { { {
+        32768.0f * 65536.0f,
+        32768.0f * 65536.0f,
+        32768.0f * 65536.0f,
+        32768.0f * 65536.0f
+    } } };
+    MATH_GLOBAL_CONST VectorF32 g_MaxInt = { { {
+        65536.0f * 32768.0f - 128.0f,
+        65536.0f * 32768.0f - 128.0f,
+        65536.0f * 32768.0f - 128.0f,
+        65536.0f * 32768.0f - 128.0f
+    } } };
+    MATH_GLOBAL_CONST VectorF32 g_MaxUInt = { { {
+        65536.0f * 65536.0f - 256.0f,
+        65536.0f * 65536.0f - 256.0f,
+        65536.0f * 65536.0f - 256.0f,
+        65536.0f * 65536.0f - 256.0f
+    } } };
+    MATH_GLOBAL_CONST VectorF32 g_UnsignedFix = { { {
+        32768.0f * 65536.0f,
+        32768.0f * 65536.0f,
+        32768.0f * 65536.0f,
+        32768.0f * 65536.0f
+    } } };
     MATH_GLOBAL_CONST VectorF32 g_srgbScale = { { { 12.92f, 12.92f, 12.92f, 1.0f } } };
     MATH_GLOBAL_CONST VectorF32 g_srgbA = { { { 0.055f, 0.055f, 0.055f, 0.0f } } };
     MATH_GLOBAL_CONST VectorF32 g_srgbA1 = { { { 1.055f, 1.055f, 1.055f, 1.0f } } };

@@ -70,7 +70,7 @@
 #endif
 
 #if defined(NWB_DEBUG)
-#define NWB_INLINE
+#define NWB_INLINE inline
 #elif defined(NWB_OPTIMIZE) || defined(NWB_FINAL)
 #if NWB_COMPILER_FRONTEND_MSVC
 #define NWB_INLINE __forceinline

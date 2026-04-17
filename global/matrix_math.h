@@ -50,9 +50,17 @@ struct SimdMatrix{
     }
 
     // Columns under NWB's column-vector convention. `matrix[3]` is translation.
-    [[nodiscard]] SimdVector& operator[](const usize index)noexcept{ return m_value.r[index]; }
-    [[nodiscard]] const SimdVector& operator[](const usize index)const noexcept{ return m_value.r[index]; }
-    [[nodiscard]] const SourceMath::Matrix& nativeMatrix()const noexcept{ return m_value; }
+    [[nodiscard]] SimdVector& operator[](const usize index)noexcept{
+        return m_value.r[index];
+    }
+
+    [[nodiscard]] const SimdVector& operator[](const usize index)const noexcept{
+        return m_value.r[index];
+    }
+
+    [[nodiscard]] const SourceMath::Matrix& nativeMatrix()const noexcept{
+        return m_value;
+    }
 };
 
 using MatrixArg = const SimdMatrix&;

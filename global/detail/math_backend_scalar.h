@@ -91,16 +91,49 @@ NWB_INLINE void StoreF32(NotNull<f32*> outValues, const Float4Reg& value)noexcep
     return AddF32(MulF32(lhs, rhs), addend);
 }
 
-[[nodiscard]] NWB_INLINE Float4Reg SplatXF32(const Float4Reg& value)noexcept{ return SetF32(value.lanes[0], value.lanes[0], value.lanes[0], value.lanes[0]); }
-[[nodiscard]] NWB_INLINE Float4Reg SplatYF32(const Float4Reg& value)noexcept{ return SetF32(value.lanes[1], value.lanes[1], value.lanes[1], value.lanes[1]); }
-[[nodiscard]] NWB_INLINE Float4Reg SplatZF32(const Float4Reg& value)noexcept{ return SetF32(value.lanes[2], value.lanes[2], value.lanes[2], value.lanes[2]); }
-[[nodiscard]] NWB_INLINE Float4Reg SplatWF32(const Float4Reg& value)noexcept{ return SetF32(value.lanes[3], value.lanes[3], value.lanes[3], value.lanes[3]); }
-[[nodiscard]] NWB_INLINE f32 ExtractXF32(const Float4Reg& value)noexcept{ return value.lanes[0]; }
-[[nodiscard]] NWB_INLINE f32 ExtractYF32(const Float4Reg& value)noexcept{ return value.lanes[1]; }
-[[nodiscard]] NWB_INLINE f32 ExtractZF32(const Float4Reg& value)noexcept{ return value.lanes[2]; }
-[[nodiscard]] NWB_INLINE f32 ExtractWF32(const Float4Reg& value)noexcept{ return value.lanes[3]; }
-[[nodiscard]] NWB_INLINE f32 Dot3F32(const Float4Reg& lhs, const Float4Reg& rhs)noexcept{ return lhs.lanes[0] * rhs.lanes[0] + lhs.lanes[1] * rhs.lanes[1] + lhs.lanes[2] * rhs.lanes[2]; }
-[[nodiscard]] NWB_INLINE f32 Dot4F32(const Float4Reg& lhs, const Float4Reg& rhs)noexcept{ return lhs.lanes[0] * rhs.lanes[0] + lhs.lanes[1] * rhs.lanes[1] + lhs.lanes[2] * rhs.lanes[2] + lhs.lanes[3] * rhs.lanes[3]; }
+[[nodiscard]] NWB_INLINE Float4Reg SplatXF32(const Float4Reg& value)noexcept{
+    return SetF32(value.lanes[0], value.lanes[0], value.lanes[0], value.lanes[0]);
+}
+
+[[nodiscard]] NWB_INLINE Float4Reg SplatYF32(const Float4Reg& value)noexcept{
+    return SetF32(value.lanes[1], value.lanes[1], value.lanes[1], value.lanes[1]);
+}
+
+[[nodiscard]] NWB_INLINE Float4Reg SplatZF32(const Float4Reg& value)noexcept{
+    return SetF32(value.lanes[2], value.lanes[2], value.lanes[2], value.lanes[2]);
+}
+
+[[nodiscard]] NWB_INLINE Float4Reg SplatWF32(const Float4Reg& value)noexcept{
+    return SetF32(value.lanes[3], value.lanes[3], value.lanes[3], value.lanes[3]);
+}
+
+[[nodiscard]] NWB_INLINE f32 ExtractXF32(const Float4Reg& value)noexcept{
+    return value.lanes[0];
+}
+
+[[nodiscard]] NWB_INLINE f32 ExtractYF32(const Float4Reg& value)noexcept{
+    return value.lanes[1];
+}
+
+[[nodiscard]] NWB_INLINE f32 ExtractZF32(const Float4Reg& value)noexcept{
+    return value.lanes[2];
+}
+
+[[nodiscard]] NWB_INLINE f32 ExtractWF32(const Float4Reg& value)noexcept{
+    return value.lanes[3];
+}
+
+[[nodiscard]] NWB_INLINE f32 Dot3F32(const Float4Reg& lhs, const Float4Reg& rhs)noexcept{
+    return lhs.lanes[0] * rhs.lanes[0] + lhs.lanes[1] * rhs.lanes[1] + lhs.lanes[2] * rhs.lanes[2];
+}
+
+[[nodiscard]] NWB_INLINE f32 Dot4F32(const Float4Reg& lhs, const Float4Reg& rhs)noexcept{
+    return lhs.lanes[0] * rhs.lanes[0]
+        + lhs.lanes[1] * rhs.lanes[1]
+        + lhs.lanes[2] * rhs.lanes[2]
+        + lhs.lanes[3] * rhs.lanes[3];
+}
+
 NWB_INLINE void Transpose4x4F32(Float4Reg& c0, Float4Reg& c1, Float4Reg& c2, Float4Reg& c3)noexcept{
     const Float4Reg oldC0 = c0;
     const Float4Reg oldC1 = c1;
@@ -182,16 +215,49 @@ NWB_INLINE void StoreF64(NotNull<f64*> outValues, const Double4Reg& value)noexce
     return AddF64(MulF64(lhs, rhs), addend);
 }
 
-[[nodiscard]] NWB_INLINE Double4Reg SplatXF64(const Double4Reg& value)noexcept{ return SetF64(value.lanes[0], value.lanes[0], value.lanes[0], value.lanes[0]); }
-[[nodiscard]] NWB_INLINE Double4Reg SplatYF64(const Double4Reg& value)noexcept{ return SetF64(value.lanes[1], value.lanes[1], value.lanes[1], value.lanes[1]); }
-[[nodiscard]] NWB_INLINE Double4Reg SplatZF64(const Double4Reg& value)noexcept{ return SetF64(value.lanes[2], value.lanes[2], value.lanes[2], value.lanes[2]); }
-[[nodiscard]] NWB_INLINE Double4Reg SplatWF64(const Double4Reg& value)noexcept{ return SetF64(value.lanes[3], value.lanes[3], value.lanes[3], value.lanes[3]); }
-[[nodiscard]] NWB_INLINE f64 ExtractXF64(const Double4Reg& value)noexcept{ return value.lanes[0]; }
-[[nodiscard]] NWB_INLINE f64 ExtractYF64(const Double4Reg& value)noexcept{ return value.lanes[1]; }
-[[nodiscard]] NWB_INLINE f64 ExtractZF64(const Double4Reg& value)noexcept{ return value.lanes[2]; }
-[[nodiscard]] NWB_INLINE f64 ExtractWF64(const Double4Reg& value)noexcept{ return value.lanes[3]; }
-[[nodiscard]] NWB_INLINE f64 Dot3F64(const Double4Reg& lhs, const Double4Reg& rhs)noexcept{ return lhs.lanes[0] * rhs.lanes[0] + lhs.lanes[1] * rhs.lanes[1] + lhs.lanes[2] * rhs.lanes[2]; }
-[[nodiscard]] NWB_INLINE f64 Dot4F64(const Double4Reg& lhs, const Double4Reg& rhs)noexcept{ return lhs.lanes[0] * rhs.lanes[0] + lhs.lanes[1] * rhs.lanes[1] + lhs.lanes[2] * rhs.lanes[2] + lhs.lanes[3] * rhs.lanes[3]; }
+[[nodiscard]] NWB_INLINE Double4Reg SplatXF64(const Double4Reg& value)noexcept{
+    return SetF64(value.lanes[0], value.lanes[0], value.lanes[0], value.lanes[0]);
+}
+
+[[nodiscard]] NWB_INLINE Double4Reg SplatYF64(const Double4Reg& value)noexcept{
+    return SetF64(value.lanes[1], value.lanes[1], value.lanes[1], value.lanes[1]);
+}
+
+[[nodiscard]] NWB_INLINE Double4Reg SplatZF64(const Double4Reg& value)noexcept{
+    return SetF64(value.lanes[2], value.lanes[2], value.lanes[2], value.lanes[2]);
+}
+
+[[nodiscard]] NWB_INLINE Double4Reg SplatWF64(const Double4Reg& value)noexcept{
+    return SetF64(value.lanes[3], value.lanes[3], value.lanes[3], value.lanes[3]);
+}
+
+[[nodiscard]] NWB_INLINE f64 ExtractXF64(const Double4Reg& value)noexcept{
+    return value.lanes[0];
+}
+
+[[nodiscard]] NWB_INLINE f64 ExtractYF64(const Double4Reg& value)noexcept{
+    return value.lanes[1];
+}
+
+[[nodiscard]] NWB_INLINE f64 ExtractZF64(const Double4Reg& value)noexcept{
+    return value.lanes[2];
+}
+
+[[nodiscard]] NWB_INLINE f64 ExtractWF64(const Double4Reg& value)noexcept{
+    return value.lanes[3];
+}
+
+[[nodiscard]] NWB_INLINE f64 Dot3F64(const Double4Reg& lhs, const Double4Reg& rhs)noexcept{
+    return lhs.lanes[0] * rhs.lanes[0] + lhs.lanes[1] * rhs.lanes[1] + lhs.lanes[2] * rhs.lanes[2];
+}
+
+[[nodiscard]] NWB_INLINE f64 Dot4F64(const Double4Reg& lhs, const Double4Reg& rhs)noexcept{
+    return lhs.lanes[0] * rhs.lanes[0]
+        + lhs.lanes[1] * rhs.lanes[1]
+        + lhs.lanes[2] * rhs.lanes[2]
+        + lhs.lanes[3] * rhs.lanes[3];
+}
+
 NWB_INLINE void Transpose4x4F64(Double4Reg& c0, Double4Reg& c1, Double4Reg& c2, Double4Reg& c3)noexcept{
     const Double4Reg oldC0 = c0;
     const Double4Reg oldC1 = c1;

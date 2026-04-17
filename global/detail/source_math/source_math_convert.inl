@@ -187,12 +187,12 @@ inline Vector MathCallConv ConvertVectorFloatToUInt
     Vector vValue = g_UnsignedFix;
     // Too large for a signed integer?
     Vector vMask = _mm_cmpge_ps(vResult, vValue);
-    // Zero for number's lower than 0x80000000, 32768.0f*65536.0f otherwise
+    // Zero for numbers lower than 0x80000000, 32768.0f*65536.0f otherwise
     vValue = _mm_and_ps(vValue, vMask);
     // Perform fixup only on numbers too large (Keeps low bit precision)
     vResult = _mm_sub_ps(vResult, vValue);
     __m128i vResulti = _mm_cvttps_epi32(vResult);
-    // Convert from signed to unsigned pnly if greater than 0x80000000
+    // Convert from signed to unsigned only if greater than 0x80000000
     vMask = _mm_and_ps(vMask, g_NegativeZero);
     vResult = _mm_xor_ps(_mm_castsi128_ps(vResulti), vMask);
     // On those that are too large, set to 0xFFFFFFFF
@@ -1021,12 +1021,12 @@ inline void MathCallConv StoreUInt2
     Vector vValue = g_UnsignedFix;
     // Too large for a signed integer?
     Vector vMask = _mm_cmpge_ps(vResult, vValue);
-    // Zero for number's lower than 0x80000000, 32768.0f*65536.0f otherwise
+    // Zero for numbers lower than 0x80000000, 32768.0f*65536.0f otherwise
     vValue = _mm_and_ps(vValue, vMask);
     // Perform fixup only on numbers too large (Keeps low bit precision)
     vResult = _mm_sub_ps(vResult, vValue);
     __m128i vResulti = _mm_cvttps_epi32(vResult);
-    // Convert from signed to unsigned pnly if greater than 0x80000000
+    // Convert from signed to unsigned only if greater than 0x80000000
     vMask = _mm_and_ps(vMask, g_NegativeZero);
     vResult = _mm_xor_ps(_mm_castsi128_ps(vResulti), vMask);
     // On those that are too large, set to 0xFFFFFFFF
@@ -1197,12 +1197,12 @@ inline void MathCallConv StoreUInt3
     Vector vValue = g_UnsignedFix;
     // Too large for a signed integer?
     Vector vMask = _mm_cmpge_ps(vResult, vValue);
-    // Zero for number's lower than 0x80000000, 32768.0f*65536.0f otherwise
+    // Zero for numbers lower than 0x80000000, 32768.0f*65536.0f otherwise
     vValue = _mm_and_ps(vValue, vMask);
     // Perform fixup only on numbers too large (Keeps low bit precision)
     vResult = _mm_sub_ps(vResult, vValue);
     __m128i vResulti = _mm_cvttps_epi32(vResult);
-    // Convert from signed to unsigned pnly if greater than 0x80000000
+    // Convert from signed to unsigned only if greater than 0x80000000
     vMask = _mm_and_ps(vMask, g_NegativeZero);
     vResult = _mm_xor_ps(_mm_castsi128_ps(vResulti), vMask);
     // On those that are too large, set to 0xFFFFFFFF
@@ -1351,12 +1351,12 @@ inline void MathCallConv StoreUInt4
     Vector vValue = g_UnsignedFix;
     // Too large for a signed integer?
     Vector vMask = _mm_cmpge_ps(vResult, vValue);
-    // Zero for number's lower than 0x80000000, 32768.0f*65536.0f otherwise
+    // Zero for numbers lower than 0x80000000, 32768.0f*65536.0f otherwise
     vValue = _mm_and_ps(vValue, vMask);
     // Perform fixup only on numbers too large (Keeps low bit precision)
     vResult = _mm_sub_ps(vResult, vValue);
     __m128i vResulti = _mm_cvttps_epi32(vResult);
-    // Convert from signed to unsigned pnly if greater than 0x80000000
+    // Convert from signed to unsigned only if greater than 0x80000000
     vMask = _mm_and_ps(vMask, g_NegativeZero);
     vResult = _mm_xor_ps(_mm_castsi128_ps(vResulti), vMask);
     // On those that are too large, set to 0xFFFFFFFF

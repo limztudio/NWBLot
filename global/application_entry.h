@@ -28,6 +28,10 @@ namespace ApplicationEntryDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+using UnicodeEntryPointFn = int(*)(isize, wchar**, void*);
+using AnsiEntryPointFn = int(*)(isize, char**, void*);
+
+
 class WindowsCommandLineArgs final{
 public:
     WindowsCommandLineArgs(){
@@ -76,10 +80,10 @@ template<typename EntryPoint>
         (void)hPrevInstance; \
         (void)lpCmdLine; \
         (void)nCmdShow; \
-        return ApplicationEntryDetail::InvokeWindowsUnicodeEntryPoint(entryPoint, hInstance); \
+        return ApplicationEntryDetail::InvokeWindowsUnicodeEntryPoint(static_cast<ApplicationEntryDetail::UnicodeEntryPointFn>(entryPoint), hInstance); \
     } \
     int main(int, char**){ \
-        return ApplicationEntryDetail::InvokeWindowsUnicodeEntryPoint(entryPoint, GetModuleHandleW(nullptr)); \
+        return ApplicationEntryDetail::InvokeWindowsUnicodeEntryPoint(static_cast<ApplicationEntryDetail::UnicodeEntryPointFn>(entryPoint), GetModuleHandleW(nullptr)); \
     }
 #else
 #define NWB_DEFINE_APPLICATION_ENTRY_POINT(entryPoint) \
@@ -87,16 +91,16 @@ template<typename EntryPoint>
         (void)hPrevInstance; \
         (void)lpCmdLine; \
         (void)nCmdShow; \
-        return entryPoint(__argc, __argv, hInstance); \
+        return static_cast<ApplicationEntryDetail::AnsiEntryPointFn>(entryPoint)(static_cast<isize>(__argc), __argv, hInstance); \
     } \
     int main(int argc, char** argv){ \
-        return entryPoint(static_cast<isize>(argc), argv, GetModuleHandleA(nullptr)); \
+        return static_cast<ApplicationEntryDetail::AnsiEntryPointFn>(entryPoint)(static_cast<isize>(argc), argv, GetModuleHandleA(nullptr)); \
     }
 #endif
 #elif defined(NWB_PLATFORM_LINUX)
 #define NWB_DEFINE_APPLICATION_ENTRY_POINT(entryPoint) \
     int main(int argc, char** argv){ \
-        return entryPoint(static_cast<isize>(argc), argv, nullptr); \
+        return static_cast<int(*)(isize, char**, void*)>(entryPoint)(static_cast<isize>(argc), argv, nullptr); \
     }
 #endif
 

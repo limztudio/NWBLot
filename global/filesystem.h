@@ -7,6 +7,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <sstream>
 
 #if defined(NWB_PLATFORM_WINDOWS)
 #include <windows.h>
@@ -15,8 +16,8 @@
 #include "basic_string.h"
 #include "compact_string.h"
 #include "generic.h"
-#include "type.h"
 #include "limit.h"
+#include "type.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -28,8 +29,14 @@ namespace GlobalFilesystemDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+using InputFileStream = std::ifstream;
+using OutputFileStream = std::ofstream;
+using StringOutputStream = std::ostringstream;
+using StreamSize = std::streamsize;
+
+
 [[nodiscard]] inline bool CanRepresentStreamSize(const u64 byteCount)noexcept{
-    return byteCount <= static_cast<u64>(Limit<std::streamsize>::s_Max);
+    return byteCount <= static_cast<u64>(Limit<StreamSize>::s_Max);
 }
 
 
@@ -208,7 +215,12 @@ struct StagedDirectoryPaths{
 }
 
 
-[[nodiscard]] inline bool ResolveAbsolutePath(const Path& baseDirectory, const AStringView relativeOrAbsolute, Path& outPath, ErrorCode& outError){
+[[nodiscard]] inline bool ResolveAbsolutePath(
+    const Path& baseDirectory,
+    const AStringView relativeOrAbsolute,
+    Path& outPath,
+    ErrorCode& outError
+){
     if(relativeOrAbsolute.empty())
         return false;
 
@@ -226,25 +238,28 @@ struct StagedDirectoryPaths{
 
 
 [[nodiscard]] inline bool ReadTextFile(const Path& path, AString& outText){
-    std::ifstream stream(path, std::ifstream::binary);
+    GlobalFilesystemDetail::InputFileStream stream(path, GlobalFilesystemDetail::InputFileStream::binary);
     if(!stream.is_open())
         return false;
 
-    std::ostringstream ss;
+    GlobalFilesystemDetail::StringOutputStream ss;
     ss << stream.rdbuf();
     outText = ss.str();
     return stream.good() || stream.eof();
 }
 
 [[nodiscard]] inline bool WriteTextFile(const Path& path, const AStringView content){
-    std::ofstream stream(path, std::ofstream::binary | std::ofstream::trunc);
+    GlobalFilesystemDetail::OutputFileStream stream(
+        path,
+        GlobalFilesystemDetail::OutputFileStream::binary | GlobalFilesystemDetail::OutputFileStream::trunc
+    );
     if(!stream.is_open())
         return false;
 
     if(!GlobalFilesystemDetail::CanRepresentStreamSize(static_cast<u64>(content.size())))
         return false;
 
-    stream.write(content.data(), static_cast<std::streamsize>(content.size()));
+    stream.write(content.data(), static_cast<GlobalFilesystemDetail::StreamSize>(content.size()));
     return stream.good();
 }
 
@@ -262,7 +277,7 @@ template<typename Container>
     if(!GlobalFilesystemDetail::CanRepresentStreamSize(fileSize))
         return false;
 
-    std::ifstream stream(path, std::ifstream::binary);
+    GlobalFilesystemDetail::InputFileStream stream(path, GlobalFilesystemDetail::InputFileStream::binary);
     if(!stream.is_open())
         return false;
 
@@ -270,24 +285,31 @@ template<typename Container>
     if(fileSize == 0)
         return true;
 
-    stream.read(reinterpret_cast<char*>(outBytes.data()), static_cast<std::streamsize>(fileSize));
+    stream.read(reinterpret_cast<char*>(outBytes.data()), static_cast<GlobalFilesystemDetail::StreamSize>(fileSize));
     if(stream.good())
         return true;
 
-    return stream.eof() && stream.gcount() == static_cast<std::streamsize>(fileSize);
+    return stream.eof() && stream.gcount() == static_cast<GlobalFilesystemDetail::StreamSize>(fileSize);
 }
 
 template<typename Container>
 [[nodiscard]] inline bool WriteBinaryFile(const Path& path, const Container& bytes){
-    std::ofstream stream(path, std::ofstream::binary | std::ofstream::trunc);
+    GlobalFilesystemDetail::OutputFileStream stream(
+        path,
+        GlobalFilesystemDetail::OutputFileStream::binary | GlobalFilesystemDetail::OutputFileStream::trunc
+    );
     if(!stream.is_open())
         return false;
 
     if(!GlobalFilesystemDetail::CanRepresentStreamSize(static_cast<u64>(bytes.size())))
         return false;
 
-    if(!bytes.empty())
-        stream.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+    if(!bytes.empty()){
+        stream.write(
+            reinterpret_cast<const char*>(bytes.data()),
+            static_cast<GlobalFilesystemDetail::StreamSize>(bytes.size())
+        );
+    }
     return stream.good();
 }
 
@@ -336,6 +358,7 @@ template<typename Container>
     NWB_MEMCPY(outBinary.data() + textOffset, textLength, text.data(), textLength);
     return true;
 }
+
 template<typename Container>
 [[nodiscard]] inline bool AppendString(Container& outBinary, const CompactString& text){
     return AppendString(outBinary, text.view());
@@ -361,6 +384,7 @@ template<typename Container>
     inOutOffset = cursor;
     return true;
 }
+
 template<typename Container>
 [[nodiscard]] inline bool ReadString(const Container& binary, usize& inOutOffset, CompactString& outText){
     usize cursor = inOutOffset;

@@ -51,7 +51,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace MathBackend{
+namespace MathBackendDetail{
 
 #define NWB_MATH_FRAGMENT_INCLUDE 1
 #include "detail/math_backend_scalar.h"
@@ -71,43 +71,46 @@ namespace Current = Scalar;
 
 }
 
-
 struct Float4{
-    MathBackend::Current::Float4Reg m_value;
+    MathBackendDetail::Current::Float4Reg m_value;
 
     Float4()noexcept
-        : m_value(MathBackend::Current::SetZeroF32())
+        : m_value(MathBackendDetail::Current::SetZeroF32())
     {
     }
-    explicit Float4(const MathBackend::Current::Float4Reg value)noexcept
+    explicit Float4(const MathBackendDetail::Current::Float4Reg value)noexcept
         : m_value(value)
     {
     }
     Float4(const f32 x, const f32 y, const f32 z, const f32 w)noexcept
-        : m_value(MathBackend::Current::SetF32(x, y, z, w))
+        : m_value(MathBackendDetail::Current::SetF32(x, y, z, w))
     {
     }
 
-    [[nodiscard]] static Float4 Zero()noexcept{ return Float4(0.0f, 0.0f, 0.0f, 0.0f); }
+    [[nodiscard]] static Float4 Zero()noexcept{
+        return Float4(0.0f, 0.0f, 0.0f, 0.0f);
+    }
 };
 
 struct Double4{
-    MathBackend::Current::Double4Reg m_value;
+    MathBackendDetail::Current::Double4Reg m_value;
 
     Double4()noexcept
-        : m_value(MathBackend::Current::SetZeroF64())
+        : m_value(MathBackendDetail::Current::SetZeroF64())
     {
     }
-    explicit Double4(const MathBackend::Current::Double4Reg value)noexcept
+    explicit Double4(const MathBackendDetail::Current::Double4Reg value)noexcept
         : m_value(value)
     {
     }
     Double4(const f64 x, const f64 y, const f64 z, const f64 w)noexcept
-        : m_value(MathBackend::Current::SetF64(x, y, z, w))
+        : m_value(MathBackendDetail::Current::SetF64(x, y, z, w))
     {
     }
 
-    [[nodiscard]] static Double4 Zero()noexcept{ return Double4(0.0, 0.0, 0.0, 0.0); }
+    [[nodiscard]] static Double4 Zero()noexcept{
+        return Double4(0.0, 0.0, 0.0, 0.0);
+    }
 };
 
 // Column-oriented 4x4 matrix. `c3` is the translation column under NWB's
@@ -268,11 +271,11 @@ struct Double4x4{
 
 
 [[nodiscard]] NWB_INLINE Float4 LoadFloat4(NotNull<const f32*> values)noexcept{
-    return Float4(MathBackend::Current::LoadF32(values));
+    return Float4(MathBackendDetail::Current::LoadF32(values));
 }
 
 [[nodiscard]] NWB_INLINE Double4 LoadDouble4(NotNull<const f64*> values)noexcept{
-    return Double4(MathBackend::Current::LoadF64(values));
+    return Double4(MathBackendDetail::Current::LoadF64(values));
 }
 
 // Raw pointer matrix loads in this lightweight layer use four contiguous
@@ -300,11 +303,11 @@ struct Double4x4{
 }
 
 NWB_INLINE void StoreFloat4(NotNull<f32*> outValues, const Float4& value)noexcept{
-    MathBackend::Current::StoreF32(outValues, value.m_value);
+    MathBackendDetail::Current::StoreF32(outValues, value.m_value);
 }
 
 NWB_INLINE void StoreDouble4(NotNull<f64*> outValues, const Double4& value)noexcept{
-    MathBackend::Current::StoreF64(outValues, value.m_value);
+    MathBackendDetail::Current::StoreF64(outValues, value.m_value);
 }
 
 // Raw pointer matrix stores in this lightweight layer write four contiguous
@@ -329,41 +332,57 @@ NWB_INLINE void StoreDouble4x4(NotNull<f64*> outValues, const Double4x4& value)n
 
 
 [[nodiscard]] NWB_INLINE Float4 operator+(const Float4& lhs, const Float4& rhs)noexcept{
-    return Float4(MathBackend::Current::AddF32(lhs.m_value, rhs.m_value));
+    return Float4(MathBackendDetail::Current::AddF32(lhs.m_value, rhs.m_value));
 }
 
 [[nodiscard]] NWB_INLINE Float4 operator-(const Float4& lhs, const Float4& rhs)noexcept{
-    return Float4(MathBackend::Current::SubF32(lhs.m_value, rhs.m_value));
+    return Float4(MathBackendDetail::Current::SubF32(lhs.m_value, rhs.m_value));
 }
 
 [[nodiscard]] NWB_INLINE Float4 operator*(const Float4& lhs, const Float4& rhs)noexcept{
-    return Float4(MathBackend::Current::MulF32(lhs.m_value, rhs.m_value));
+    return Float4(MathBackendDetail::Current::MulF32(lhs.m_value, rhs.m_value));
 }
 
 [[nodiscard]] NWB_INLINE Float4 operator/(const Float4& lhs, const Float4& rhs)noexcept{
-    return Float4(MathBackend::Current::DivF32(lhs.m_value, rhs.m_value));
+    return Float4(MathBackendDetail::Current::DivF32(lhs.m_value, rhs.m_value));
 }
-[[nodiscard]] NWB_INLINE Float4 operator-(const Float4& value)noexcept{ return Float4(0.0f, 0.0f, 0.0f, 0.0f) - value; }
-[[nodiscard]] NWB_INLINE Float4 operator*(const Float4& lhs, const f32 rhs)noexcept{ return lhs * Float4(rhs, rhs, rhs, rhs); }
-[[nodiscard]] NWB_INLINE Float4 operator*(const f32 lhs, const Float4& rhs)noexcept{ return Float4(lhs, lhs, lhs, lhs) * rhs; }
-[[nodiscard]] NWB_INLINE Float4 operator/(const Float4& lhs, const f32 rhs)noexcept{ return lhs / Float4(rhs, rhs, rhs, rhs); }
+
+[[nodiscard]] NWB_INLINE Float4 operator-(const Float4& value)noexcept{
+    return Float4(0.0f, 0.0f, 0.0f, 0.0f) - value;
+}
+
+[[nodiscard]] NWB_INLINE Float4 operator*(const Float4& lhs, const f32 rhs)noexcept{
+    return lhs * Float4(rhs, rhs, rhs, rhs);
+}
+
+[[nodiscard]] NWB_INLINE Float4 operator*(const f32 lhs, const Float4& rhs)noexcept{
+    return Float4(lhs, lhs, lhs, lhs) * rhs;
+}
+
+[[nodiscard]] NWB_INLINE Float4 operator/(const Float4& lhs, const f32 rhs)noexcept{
+    return lhs / Float4(rhs, rhs, rhs, rhs);
+}
 
 [[nodiscard]] NWB_INLINE Double4 operator+(const Double4& lhs, const Double4& rhs)noexcept{
-    return Double4(MathBackend::Current::AddF64(lhs.m_value, rhs.m_value));
+    return Double4(MathBackendDetail::Current::AddF64(lhs.m_value, rhs.m_value));
 }
 
 [[nodiscard]] NWB_INLINE Double4 operator-(const Double4& lhs, const Double4& rhs)noexcept{
-    return Double4(MathBackend::Current::SubF64(lhs.m_value, rhs.m_value));
+    return Double4(MathBackendDetail::Current::SubF64(lhs.m_value, rhs.m_value));
 }
 
 [[nodiscard]] NWB_INLINE Double4 operator*(const Double4& lhs, const Double4& rhs)noexcept{
-    return Double4(MathBackend::Current::MulF64(lhs.m_value, rhs.m_value));
+    return Double4(MathBackendDetail::Current::MulF64(lhs.m_value, rhs.m_value));
 }
 
 [[nodiscard]] NWB_INLINE Double4 operator/(const Double4& lhs, const Double4& rhs)noexcept{
-    return Double4(MathBackend::Current::DivF64(lhs.m_value, rhs.m_value));
+    return Double4(MathBackendDetail::Current::DivF64(lhs.m_value, rhs.m_value));
 }
-[[nodiscard]] NWB_INLINE Double4 operator-(const Double4& value)noexcept{ return Double4(0.0, 0.0, 0.0, 0.0) - value; }
+
+[[nodiscard]] NWB_INLINE Double4 operator-(const Double4& value)noexcept{
+    return Double4(0.0, 0.0, 0.0, 0.0) - value;
+}
+
 [[nodiscard]] NWB_INLINE Double4 operator*(const Double4& lhs, const f64 rhs)noexcept{
     return lhs * Double4(rhs, rhs, rhs, rhs);
 }
@@ -377,31 +396,53 @@ NWB_INLINE void StoreDouble4x4(NotNull<f64*> outValues, const Double4x4& value)n
 }
 
 
-[[nodiscard]] NWB_INLINE f32 GetX(const Float4& value)noexcept{ return MathBackend::Current::ExtractXF32(value.m_value); }
-[[nodiscard]] NWB_INLINE f32 GetY(const Float4& value)noexcept{ return MathBackend::Current::ExtractYF32(value.m_value); }
-[[nodiscard]] NWB_INLINE f32 GetZ(const Float4& value)noexcept{ return MathBackend::Current::ExtractZF32(value.m_value); }
-[[nodiscard]] NWB_INLINE f32 GetW(const Float4& value)noexcept{ return MathBackend::Current::ExtractWF32(value.m_value); }
+[[nodiscard]] NWB_INLINE f32 GetX(const Float4& value)noexcept{
+    return MathBackendDetail::Current::ExtractXF32(value.m_value);
+}
 
-[[nodiscard]] NWB_INLINE f64 GetX(const Double4& value)noexcept{ return MathBackend::Current::ExtractXF64(value.m_value); }
-[[nodiscard]] NWB_INLINE f64 GetY(const Double4& value)noexcept{ return MathBackend::Current::ExtractYF64(value.m_value); }
-[[nodiscard]] NWB_INLINE f64 GetZ(const Double4& value)noexcept{ return MathBackend::Current::ExtractZF64(value.m_value); }
-[[nodiscard]] NWB_INLINE f64 GetW(const Double4& value)noexcept{ return MathBackend::Current::ExtractWF64(value.m_value); }
+[[nodiscard]] NWB_INLINE f32 GetY(const Float4& value)noexcept{
+    return MathBackendDetail::Current::ExtractYF32(value.m_value);
+}
+
+[[nodiscard]] NWB_INLINE f32 GetZ(const Float4& value)noexcept{
+    return MathBackendDetail::Current::ExtractZF32(value.m_value);
+}
+
+[[nodiscard]] NWB_INLINE f32 GetW(const Float4& value)noexcept{
+    return MathBackendDetail::Current::ExtractWF32(value.m_value);
+}
+
+[[nodiscard]] NWB_INLINE f64 GetX(const Double4& value)noexcept{
+    return MathBackendDetail::Current::ExtractXF64(value.m_value);
+}
+
+[[nodiscard]] NWB_INLINE f64 GetY(const Double4& value)noexcept{
+    return MathBackendDetail::Current::ExtractYF64(value.m_value);
+}
+
+[[nodiscard]] NWB_INLINE f64 GetZ(const Double4& value)noexcept{
+    return MathBackendDetail::Current::ExtractZF64(value.m_value);
+}
+
+[[nodiscard]] NWB_INLINE f64 GetW(const Double4& value)noexcept{
+    return MathBackendDetail::Current::ExtractWF64(value.m_value);
+}
 
 
 [[nodiscard]] NWB_INLINE f32 Dot3(const Float4& lhs, const Float4& rhs)noexcept{
-    return MathBackend::Current::Dot3F32(lhs.m_value, rhs.m_value);
+    return MathBackendDetail::Current::Dot3F32(lhs.m_value, rhs.m_value);
 }
 
 [[nodiscard]] NWB_INLINE f32 Dot4(const Float4& lhs, const Float4& rhs)noexcept{
-    return MathBackend::Current::Dot4F32(lhs.m_value, rhs.m_value);
+    return MathBackendDetail::Current::Dot4F32(lhs.m_value, rhs.m_value);
 }
 
 [[nodiscard]] NWB_INLINE f64 Dot3(const Double4& lhs, const Double4& rhs)noexcept{
-    return MathBackend::Current::Dot3F64(lhs.m_value, rhs.m_value);
+    return MathBackendDetail::Current::Dot3F64(lhs.m_value, rhs.m_value);
 }
 
 [[nodiscard]] NWB_INLINE f64 Dot4(const Double4& lhs, const Double4& rhs)noexcept{
-    return MathBackend::Current::Dot4F64(lhs.m_value, rhs.m_value);
+    return MathBackendDetail::Current::Dot4F64(lhs.m_value, rhs.m_value);
 }
 
 
@@ -436,8 +477,13 @@ NWB_INLINE void StoreDouble4x4(NotNull<f64*> outValues, const Double4x4& value)n
 }
 
 
-[[nodiscard]] NWB_INLINE f32 Length3(const Float4& value)noexcept{ return Sqrt(Dot3(value, value)); }
-[[nodiscard]] NWB_INLINE f64 Length3(const Double4& value)noexcept{ return Sqrt(Dot3(value, value)); }
+[[nodiscard]] NWB_INLINE f32 Length3(const Float4& value)noexcept{
+    return Sqrt(Dot3(value, value));
+}
+
+[[nodiscard]] NWB_INLINE f64 Length3(const Double4& value)noexcept{
+    return Sqrt(Dot3(value, value));
+}
 
 [[nodiscard]] NWB_INLINE Float4 Normalize3(const Float4& value)noexcept{
     const f32 length = Length3(value);
@@ -475,18 +521,48 @@ NWB_INLINE void StoreDouble4x4(NotNull<f64*> outValues, const Double4x4& value)n
 
 
 [[nodiscard]] NWB_INLINE Float4 Transform(const Float4x4& matrix, const Float4& vector)noexcept{
-    auto result = MathBackend::Current::MulF32(matrix.c0.m_value, MathBackend::Current::SplatXF32(vector.m_value));
-    result = MathBackend::Current::MulAddF32(matrix.c1.m_value, MathBackend::Current::SplatYF32(vector.m_value), result);
-    result = MathBackend::Current::MulAddF32(matrix.c2.m_value, MathBackend::Current::SplatZF32(vector.m_value), result);
-    result = MathBackend::Current::MulAddF32(matrix.c3.m_value, MathBackend::Current::SplatWF32(vector.m_value), result);
+    auto result = MathBackendDetail::Current::MulF32(
+        matrix.c0.m_value,
+        MathBackendDetail::Current::SplatXF32(vector.m_value)
+    );
+    result = MathBackendDetail::Current::MulAddF32(
+        matrix.c1.m_value,
+        MathBackendDetail::Current::SplatYF32(vector.m_value),
+        result
+    );
+    result = MathBackendDetail::Current::MulAddF32(
+        matrix.c2.m_value,
+        MathBackendDetail::Current::SplatZF32(vector.m_value),
+        result
+    );
+    result = MathBackendDetail::Current::MulAddF32(
+        matrix.c3.m_value,
+        MathBackendDetail::Current::SplatWF32(vector.m_value),
+        result
+    );
     return Float4(result);
 }
 
 [[nodiscard]] NWB_INLINE Double4 Transform(const Double4x4& matrix, const Double4& vector)noexcept{
-    auto result = MathBackend::Current::MulF64(matrix.c0.m_value, MathBackend::Current::SplatXF64(vector.m_value));
-    result = MathBackend::Current::MulAddF64(matrix.c1.m_value, MathBackend::Current::SplatYF64(vector.m_value), result);
-    result = MathBackend::Current::MulAddF64(matrix.c2.m_value, MathBackend::Current::SplatZF64(vector.m_value), result);
-    result = MathBackend::Current::MulAddF64(matrix.c3.m_value, MathBackend::Current::SplatWF64(vector.m_value), result);
+    auto result = MathBackendDetail::Current::MulF64(
+        matrix.c0.m_value,
+        MathBackendDetail::Current::SplatXF64(vector.m_value)
+    );
+    result = MathBackendDetail::Current::MulAddF64(
+        matrix.c1.m_value,
+        MathBackendDetail::Current::SplatYF64(vector.m_value),
+        result
+    );
+    result = MathBackendDetail::Current::MulAddF64(
+        matrix.c2.m_value,
+        MathBackendDetail::Current::SplatZF64(vector.m_value),
+        result
+    );
+    result = MathBackendDetail::Current::MulAddF64(
+        matrix.c3.m_value,
+        MathBackendDetail::Current::SplatWF64(vector.m_value),
+        result
+    );
     return Double4(result);
 }
 
@@ -539,7 +615,7 @@ NWB_INLINE void StoreDouble4x4(NotNull<f64*> outValues, const Double4x4& value)n
     auto c1 = matrix.c1.m_value;
     auto c2 = matrix.c2.m_value;
     auto c3 = matrix.c3.m_value;
-    MathBackend::Current::Transpose4x4F32(c0, c1, c2, c3);
+    MathBackendDetail::Current::Transpose4x4F32(c0, c1, c2, c3);
     return Float4x4(
         Float4(c0),
         Float4(c1),
@@ -553,7 +629,7 @@ NWB_INLINE void StoreDouble4x4(NotNull<f64*> outValues, const Double4x4& value)n
     auto c1 = matrix.c1.m_value;
     auto c2 = matrix.c2.m_value;
     auto c3 = matrix.c3.m_value;
-    MathBackend::Current::Transpose4x4F64(c0, c1, c2, c3);
+    MathBackendDetail::Current::Transpose4x4F64(c0, c1, c2, c3);
     return Double4x4(
         Double4(c0),
         Double4(c1),

@@ -19,17 +19,28 @@ target_link_libraries(nwb_math_scalar_tests PRIVATE
 add_test(NAME nwb_math_scalar_tests COMMAND nwb_math_scalar_tests)
 
 
-nwb_declare_executable(nwb_math_sse_tests)
-target_sources(nwb_math_sse_tests PRIVATE
-    "${CMAKE_CURRENT_LIST_DIR}/math_tests.cpp"
-)
-target_compile_options(nwb_math_sse_tests PRIVATE
-    -mno-avx2
-    -mno-fma
-    -mno-f16c
-    -msse4.2
-)
-target_link_libraries(nwb_math_sse_tests PRIVATE
-    nwb_common
-)
-add_test(NAME nwb_math_sse_tests COMMAND nwb_math_sse_tests)
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
+    nwb_declare_executable(nwb_math_sse_tests)
+    target_sources(nwb_math_sse_tests PRIVATE
+        "${CMAKE_CURRENT_LIST_DIR}/math_tests.cpp"
+    )
+    if(NWB_COMPILER_FRONTEND_MSVC)
+        target_compile_options(nwb_math_sse_tests PRIVATE
+            /clang:-mno-avx2
+            /clang:-mno-fma
+            /clang:-mno-f16c
+            /clang:-msse4.2
+        )
+    else()
+        target_compile_options(nwb_math_sse_tests PRIVATE
+            -mno-avx2
+            -mno-fma
+            -mno-f16c
+            -msse4.2
+        )
+    endif()
+    target_link_libraries(nwb_math_sse_tests PRIVATE
+        nwb_common
+    )
+    add_test(NAME nwb_math_sse_tests COMMAND nwb_math_sse_tests)
+endif()

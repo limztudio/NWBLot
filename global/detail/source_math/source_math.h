@@ -158,7 +158,47 @@
 #endif
 #endif // !_MATH_NO_INTRINSICS_
 
+#ifndef __has_include
+#define __has_include(x) 0
+#endif
+
+#if __has_include(<sal.h>)
+#include <sal.h>
+#elif __has_include("sal.h")
 #include "sal.h"
+#else
+#ifndef _Use_decl_annotations_
+#define _Use_decl_annotations_
+#endif
+#ifndef _Analysis_assume_
+#define _Analysis_assume_(expr) ((void)0)
+#endif
+#ifndef _In_
+#define _In_
+#endif
+#ifndef _In_reads_
+#define _In_reads_(size)
+#endif
+#ifndef _In_reads_bytes_
+#define _In_reads_bytes_(size)
+#endif
+#ifndef _Out_
+#define _Out_
+#endif
+#ifndef _Out_opt_
+#define _Out_opt_
+#endif
+#ifndef _Out_writes_
+#define _Out_writes_(size)
+#endif
+#ifndef _Out_writes_bytes_
+#define _Out_writes_bytes_(size)
+#endif
+#ifndef _Success_
+#define _Success_(expr)
+#endif
+#endif
+
 #include <assert.h>
 
 #ifdef _MSC_VER
@@ -1728,7 +1768,7 @@ namespace SourceMathInternal{
     template<class T> inline T Min(T a, T b)noexcept { return (a < b) ? a : b; }
     template<class T> inline T Max(T a, T b)noexcept { return (a > b) ? a : b; }
 
-    
+
 #if defined(_MATH_SSE_INTRINSICS_) && !defined(_MATH_NO_INTRINSICS_)
 
 // PermuteHelper internal template (SSE only)
@@ -2095,7 +2135,7 @@ namespace SourceMathInternal{
 
 #endif // _MATH_ARM_NEON_INTRINSICS_ && !_MATH_NO_INTRINSICS_
 
-    
+
     // General swizzle template
     template<uint32_t SwizzleX, uint32_t SwizzleY, uint32_t SwizzleZ, uint32_t SwizzleW>
     inline Vector     MathCallConv     VectorSwizzle(VectorArg V)noexcept{
@@ -2267,7 +2307,7 @@ namespace SourceMathInternal{
 
 #endif // _MATH_ARM_NEON_INTRINSICS_ && !_MATH_NO_INTRINSICS_
 
-    
+
     template<uint32_t Elements>
     inline Vector     MathCallConv     VectorShiftLeft(VectorArg V1, VectorArg V2)noexcept{
         static_assert(Elements < 4, "Elements template parameter out of range");
@@ -2585,7 +2625,7 @@ namespace SourceMathInternal{
     #endif
     }
 
-    
+
     inline Vector MathCallConv VectorSplatConstant(int32_t IntConstant, uint32_t DivExponent)noexcept{
         assert(IntConstant >= -16 && IntConstant <= 15);
         assert(DivExponent < 32);
@@ -2623,7 +2663,7 @@ namespace SourceMathInternal{
     #endif
     }
 
-    
+
     inline Vector MathCallConv VectorSplatConstantInt(int32_t IntConstant)noexcept{
         assert(IntConstant >= -16 && IntConstant <= 15);
     #if defined(_MATH_NO_INTRINSICS_)

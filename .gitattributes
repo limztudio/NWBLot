@@ -4,6 +4,7 @@
 *.cxx text eol=crlf
 *.h text eol=crlf
 *.hpp text eol=crlf
+*.inl text eol=crlf whitespace=blank-at-eol,space-before-tab,cr-at-eol,-blank-at-eof
 *.glsl text eol=crlf
 *.glsli text eol=crlf
 

@@ -82,7 +82,7 @@ struct RawUInt4{
 
 [[nodiscard]] static i32 AsSInt(const u32 value)noexcept{
     i32 result = 0;
-    std::memcpy(&result, &value, sizeof(result));
+    NWB_MEMCPY(&result, sizeof(result), &value, sizeof(value));
     return result;
 }
 

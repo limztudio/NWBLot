@@ -19,6 +19,10 @@ Updated: 2026-04-13
 ## 2. Namespace style
 - Use namespace wrapper macros (`NWB_BEGIN`, `NWB_CORE_BEGIN`, `NWB_VULKAN_BEGIN`, etc.) instead of raw namespace blocks in module public files.
 - End wrapped namespaces with corresponding `*_END` macros.
+- Exception: the global math facade headers (`global/simplemath.h`, `global/math.h`, `global/matrix_math.h`, `global/sh_math.h`) intentionally live at global scope.
+  - Do not wrap those headers with `NWB_BEGIN`/`NWB_END`.
+  - Keep their public math entry points in global scope.
+  - Use narrow raw namespaces there only when they are part of the math API shape (for example `SH`).
 - Put private/internal helpers in `namespace __hidden_<module>{ ... }`.
   - The `<module>` suffix should match the file or logical module name (e.g., `__hidden_shader_cook`, `__hidden_vulkan_shader`, `__hidden_assets`).
   - `__hidden_*` namespaces are for translation-unit-local implementation details that should not be called by outside code.

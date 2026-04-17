@@ -26,6 +26,7 @@ option(NWB_BUILD_RESOURCE_COOKER "Build the resource cooker tool." ON)
 option(NWB_BUILD_LOGSERVER "Build the log server app." ${NWB_BUILD_LOGSERVER_DEFAULT})
 option(NWB_BUILD_LOADER "Build the loader static library." ${NWB_BUILD_LOADER_DEFAULT})
 option(NWB_BUILD_TESTBED "Build the testbed app." ${WIN32})
+option(NWB_BUILD_TESTS "Build internal validation executables." OFF)
 option(NWB_ENABLE_WAYLAND "Build the native Wayland backend on Linux when dependencies are available." ${NWB_ENABLE_WAYLAND_DEFAULT})
 
 add_subdirectory(3rd_parties)
@@ -58,6 +59,11 @@ endif()
 
 if((WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "Linux") AND NWB_BUILD_TESTBED)
     add_subdirectory(Testbed)
+endif()
+
+if(NWB_BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
 endif()
 
 message(STATUS "Configured NWBLot for ${CMAKE_SYSTEM_NAME} (${NWB_OUTPUT_ARCH}) with ${NWB_COMPILER_DESCRIPTION}")

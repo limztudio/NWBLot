@@ -1,6 +1,6 @@
 # NWBLot Notes
 
-Updated: 2026-03-29
+Updated: 2026-04-17
 
 ## Important Rules
 
@@ -25,6 +25,17 @@ Updated: 2026-03-29
 19. ECS renderer material assets expose only `mesh` and `ps` stages. Do not add a user-authored `cs` or `task` stage for this path; the cooker derives the internal compute-emulation stage from the mesh shader source automatically.
 20. In the ECS renderer geometry pass, once material/framebuffer render-path selection is cached, bucket draw work by path first and run path-specific submission loops; do not keep branching on render path inside the hot per-draw submission section.
 21. `Core::Filesystem::VolumeSession::pushDataDeferred()` copies payload bytes into the staged volume immediately; caller-local temporary buffers only need to stay alive for the duration of the call, so reuse/scratch-backed staging payload buffers are valid there.
+22. The public math API in `global/` lives directly under `NWB`, not `NWB::Math`, and it uses column-vector transform semantics by design: matrices store columns, translation lives in the fourth column, and `result = M * v`; do not mix row-vector formulas into this layer without an explicit transpose/convention bridge.
+23. The math subsystem lives under `global/`, with internal implementation detail under `global/detail/`; keep math in the global/domain layer instead of a separate top-level `math/` tree.
+24. The `global/detail/source_math/` layer enforces NWB's column-vector semantics: explicit load/store/set helpers transpose at the boundary, semantic transform builders keep the imported runtime result, and the public multiply wrappers expose column-order composition without extra adapter logic in `global/matrix_math.h`.
+25. The public math layer in `global/` must not depend on an external upstream math checkout at include time; the imported source snapshot lives under `global/detail/source_math/`, and the public wrapper should only include that local copy.
+26. The vendored math snapshot under `global/detail/source_math/` is NWB-owned after import: keep its surface naming free of `XM*`/`_XM_*` identifiers so the internal implementation does not leak upstream branding back into the project.
+27. Keep math headers domain-split inside `global/`, and expose the public math API directly in `NWB`: `global/math.h` is the NWB-native float/double math layer, and `global/matrix_math.h` is the imported SIMD/source-math boundary layer. Do not reintroduce `compat_math.h`, shim forwarding headers, or the old `Float4x3` / `LoadFloat4x3*` / `StoreFloat4x3*` compatibility surface. `Float3x4` is the only compact affine boundary format we keep.
+28. In the NWB-native math layer, keep lane extraction, dot helpers, and 4x4 transpose operations backend-local; do not spill SIMD registers to temporary stack arrays unless the API is explicitly storing into caller-provided memory.
+29. The vendored `global/detail/source_math/` snapshot already includes most of the old DirectXMath Extensions-style specialization work (`SSE3`, `SSE4`, `AVX2`, `FMA3`, `F16C`, plus specialized permute/swizzle fast paths); when optimizing this layer, check what is already merged before copying extension code a second time.
+30. Spherical harmonics support belongs in the math domain as CPU/core SH routines only; keep the imported basis/rotation/light-evaluation code under `global/detail/source_sh_math/`, and leave API-specific cubemap projection helpers out of core math until a graphics-domain integration is intentionally designed.
+31. In `global/detail/source_math/`, do not transpose `MatrixTranslation*`, axis-rotation builders, or the projection builders just because the imported literals look row-style. NWB stores internal matrix columns in `r[0..3]`, `Vector3TransformCoord` / `Vector4Transform` evaluate `result = M * v`, and those builders already place translation/basis data in the correct internal columns. Only row-assembled helpers like `MatrixSet` and `MatrixLookTo*` need an explicit transpose bridge.
+32. In `global/detail/source_math/source_math_vector.inl`, cached `M.r[0..3]` temporaries are matrix columns, not rows. Keep the variable naming/commentary aligned with the column-vector convention so future ports do not accidentally reintroduce row-space reasoning into the stream transform paths.
 
 ## Scheduler Architecture
 
@@ -65,5 +76,11 @@ Updated: 2026-03-29
 3. Treat `EntityID` as a lightweight ID and `Entity` as the component operation surface.
 4. Do not introduce ad-hoc or project-local ECS wrappers for this role.
 
+## Math Matrix Layout
 
+1. In `global/detail/source_math`, NWB matrix math stores basis/translation as columns in `Matrix::r[0..3]`.
+2. Use the `g_IdentityC*` / `g_NegIdentityC*` aliases in column-semantic matrix code.
+3. If a helper assembles row-equivalent data first, make that explicit in the helper name/comment and transpose only at the boundary back into NWB's internal column layout.
+4. In `global/detail/source_math/source_math_vector.inl`, the project/unproject path must compose world/view/projection as `Projection * View * World` before transforming coordinates. The old `World * View * Projection` order is a row-vector leftover and breaks NWB's column-vector convention.
+5. Compact affine matrix boundaries are convention-sensitive: `Float3x4` / `AlignedFloat3x4` are already the preferred affine snapshots for NWB's internal column matrix. Do not add an extra transpose in `Load/StoreFloat3x4*`, or translation/basis data will round-trip incorrectly.
 

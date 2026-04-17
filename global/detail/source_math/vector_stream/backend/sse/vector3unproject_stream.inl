@@ -1,0 +1,562 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] inline Vector Vector3UnprojectRefinedReciprocalSse(Vector W)noexcept{
+    Vector reciprocal = _mm_rcp_ps(W);
+    reciprocal = _mm_mul_ps(reciprocal, MATH_FNMADD_PS(W, reciprocal, g_Two.v));
+    reciprocal = _mm_mul_ps(reciprocal, MATH_FNMADD_PS(W, reciprocal, g_Two.v));
+    return reciprocal;
+}
+
+_Use_decl_annotations_
+inline Float3* MathCallConv Vector3UnprojectStreamSse
+(
+    Float3* pOutputStream,
+    size_t          OutputStride,
+    const Float3* pInputStream,
+    size_t          InputStride,
+    size_t          VectorCount,
+    float           ViewportX,
+    float           ViewportY,
+    float           ViewportWidth,
+    float           ViewportHeight,
+    float           ViewportMinZ,
+    float           ViewportMaxZ,
+    FXMMATRIX       Projection,
+    CXMMATRIX       View,
+    CXMMATRIX       World
+)noexcept{
+    static const VectorF32 D = { { { -1.0f, 1.0f, 0.0f, 0.0f } } };
+
+    Vector Scale = VectorSet(ViewportWidth * 0.5f, -ViewportHeight * 0.5f, ViewportMaxZ - ViewportMinZ, 1.0f);
+    Scale = VectorReciprocal(Scale);
+
+    Vector Offset = VectorSet(-ViewportX, -ViewportY, -ViewportMinZ, 0.0f);
+    Offset = MATH_FMADD_PS(Scale, Offset, D);
+
+    Matrix Transform = BuildProjectTransformColumns(Projection, View, World);
+    Transform = MatrixInverse(nullptr, Transform);
+
+    const uint8_t* pInputVector = reinterpret_cast<const uint8_t*>(pInputStream);
+    uint8_t* pOutputVector = reinterpret_cast<uint8_t*>(pOutputStream);
+    bool usedStreamingStores = false;
+
+    size_t i = 0;
+    const size_t four = VectorCount >> 2;
+    if(four > 0){
+        if(InputStride == sizeof(Float3)){
+            const bool inputAligned = !(reinterpret_cast<uintptr_t>(pInputVector) & 0xF);
+            if(OutputStride == sizeof(Float3)){
+                if(!(reinterpret_cast<uintptr_t>(pOutputStream) & 0xF) &&
+                    ((VectorCount * sizeof(Float3)) >= SourceMathInternal::MATH_CACHE_LINE_SIZE)){
+                    // Packed input, aligned & packed output
+                    usedStreamingStores = true;
+                    if(inputAligned){
+                        for(size_t j = 0; j < four; ++j){
+                            __m128 V1 = _mm_load_ps(reinterpret_cast<const float*>(pInputVector));
+                            __m128 L2 = _mm_load_ps(reinterpret_cast<const float*>(pInputVector + 16));
+                            __m128 L3 = _mm_load_ps(reinterpret_cast<const float*>(pInputVector + 32));
+                            pInputVector += sizeof(Float3) * 4;
+
+                            // Unpack the 4 vectors (.w components are junk)
+                            MATH3UNPACK3INTO4(V1, L2, L3);
+
+                            // Result 1
+                            V1 = MATH_FMADD_PS(V1, Scale, Offset);
+
+                            Vector Z = MATH_PERMUTE_PS(V1, _MM_SHUFFLE(2, 2, 2, 2));
+                            Vector Y = MATH_PERMUTE_PS(V1, _MM_SHUFFLE(1, 1, 1, 1));
+                            Vector X = MATH_PERMUTE_PS(V1, _MM_SHUFFLE(0, 0, 0, 0));
+
+                            Vector vTemp = MATH_FMADD_PS(Z, Transform.r[2], Transform.r[3]);
+                            vTemp = MATH_FMADD_PS(Y, Transform.r[1], vTemp);
+                            vTemp = MATH_FMADD_PS(X, Transform.r[0], vTemp);
+                            Vector W;
+
+                            W = MATH_PERMUTE_PS(vTemp, _MM_SHUFFLE(3, 3, 3, 3));
+                            V1 = _mm_mul_ps(vTemp, Vector3UnprojectRefinedReciprocalSse(W));
+
+                            // Result 2
+                            V2 = MATH_FMADD_PS(V2, Scale, Offset);
+
+                            Z = MATH_PERMUTE_PS(V2, _MM_SHUFFLE(2, 2, 2, 2));
+                            Y = MATH_PERMUTE_PS(V2, _MM_SHUFFLE(1, 1, 1, 1));
+                            X = MATH_PERMUTE_PS(V2, _MM_SHUFFLE(0, 0, 0, 0));
+
+                            vTemp = MATH_FMADD_PS(Z, Transform.r[2], Transform.r[3]);
+                            vTemp = MATH_FMADD_PS(Y, Transform.r[1], vTemp);
+                            vTemp = MATH_FMADD_PS(X, Transform.r[0], vTemp);
+
+                            W = MATH_PERMUTE_PS(vTemp, _MM_SHUFFLE(3, 3, 3, 3));
+                            V2 = _mm_mul_ps(vTemp, Vector3UnprojectRefinedReciprocalSse(W));
+
+                            // Result 3
+                            V3 = MATH_FMADD_PS(V3, Scale, Offset);
+
+                            Z = MATH_PERMUTE_PS(V3, _MM_SHUFFLE(2, 2, 2, 2));
+                            Y = MATH_PERMUTE_PS(V3, _MM_SHUFFLE(1, 1, 1, 1));
+                            X = MATH_PERMUTE_PS(V3, _MM_SHUFFLE(0, 0, 0, 0));
+
+                            vTemp = MATH_FMADD_PS(Z, Transform.r[2], Transform.r[3]);
+                            vTemp = MATH_FMADD_PS(Y, Transform.r[1], vTemp);
+                            vTemp = MATH_FMADD_PS(X, Transform.r[0], vTemp);
+
+                            W = MATH_PERMUTE_PS(vTemp, _MM_SHUFFLE(3, 3, 3, 3));
+                            V3 = _mm_mul_ps(vTemp, Vector3UnprojectRefinedReciprocalSse(W));
+
+                            // Result 4
+                            V4 = MATH_FMADD_PS(V4, Scale, Offset);
+
+                            Z = MATH_PERMUTE_PS(V4, _MM_SHUFFLE(2, 2, 2, 2));
+                            Y = MATH_PERMUTE_PS(V4, _MM_SHUFFLE(1, 1, 1, 1));
+                            X = MATH_PERMUTE_PS(V4, _MM_SHUFFLE(0, 0, 0, 0));
+
+                            vTemp = MATH_FMADD_PS(Z, Transform.r[2], Transform.r[3]);
+                            vTemp = MATH_FMADD_PS(Y, Transform.r[1], vTemp);
+                            vTemp = MATH_FMADD_PS(X, Transform.r[0], vTemp);
+
+                            W = MATH_PERMUTE_PS(vTemp, _MM_SHUFFLE(3, 3, 3, 3));
+                            V4 = _mm_mul_ps(vTemp, Vector3UnprojectRefinedReciprocalSse(W));
+
+                            // Pack and store the vectors
+                            MATH3PACK4INTO3(vTemp);
+                            MATH_STREAM_PS(reinterpret_cast<float*>(pOutputVector), V1);
+                            MATH_STREAM_PS(reinterpret_cast<float*>(pOutputVector + 16), vTemp);
+                            MATH_STREAM_PS(reinterpret_cast<float*>(pOutputVector + 32), V3);
+                            pOutputVector += sizeof(Float3) * 4;
+                            i += 4;
+                        }
+                    }else{
+                        for(size_t j = 0; j < four; ++j){
+                            __m128 V1 = _mm_loadu_ps(reinterpret_cast<const float*>(pInputVector));
+                            __m128 L2 = _mm_loadu_ps(reinterpret_cast<const float*>(pInputVector + 16));
+                            __m128 L3 = _mm_loadu_ps(reinterpret_cast<const float*>(pInputVector + 32));
+                            pInputVector += sizeof(Float3) * 4;
+
+                            // Unpack the 4 vectors (.w components are junk)
+                            MATH3UNPACK3INTO4(V1, L2, L3);
+
+                            // Result 1
+                            V1 = MATH_FMADD_PS(V1, Scale, Offset);
+
+                            Vector Z = MATH_PERMUTE_PS(V1, _MM_SHUFFLE(2, 2, 2, 2));
+                            Vector Y = MATH_PERMUTE_PS(V1, _MM_SHUFFLE(1, 1, 1, 1));
+                            Vector X = MATH_PERMUTE_PS(V1, _MM_SHUFFLE(0, 0, 0, 0));
+
+                            Vector vTemp = MATH_FMADD_PS(Z, Transform.r[2], Transform.r[3]);
+                            vTemp = MATH_FMADD_PS(Y, Transform.r[1], vTemp);
+                            vTemp = MATH_FMADD_PS(X, Transform.r[0], vTemp);
+                            Vector W;
+
+                            W = MATH_PERMUTE_PS(vTemp, _MM_SHUFFLE(3, 3, 3, 3));
+                            V1 = _mm_mul_ps(vTemp, Vector3UnprojectRefinedReciprocalSse(W));
+
+                            // Result 2
+                            V2 = MATH_FMADD_PS(V2, Scale, Offset);
+
+                            Z = MATH_PERMUTE_PS(V2, _MM_SHUFFLE(2, 2, 2, 2));
+                            Y = MATH_PERMUTE_PS(V2, _MM_SHUFFLE(1, 1, 1, 1));
+                            X = MATH_PERMUTE_PS(V2, _MM_SHUFFLE(0, 0, 0, 0));
+
+                            vTemp = MATH_FMADD_PS(Z, Transform.r[2], Transform.r[3]);
+                            vTemp = MATH_FMADD_PS(Y, Transform.r[1], vTemp);
+                            vTemp = MATH_FMADD_PS(X, Transform.r[0], vTemp);
+
+                            W = MATH_PERMUTE_PS(vTemp, _MM_SHUFFLE(3, 3, 3, 3));
+                            V2 = _mm_mul_ps(vTemp, Vector3UnprojectRefinedReciprocalSse(W));
+
+                            // Result 3
+                            V3 = MATH_FMADD_PS(V3, Scale, Offset);
+
+                            Z = MATH_PERMUTE_PS(V3, _MM_SHUFFLE(2, 2, 2, 2));
+                            Y = MATH_PERMUTE_PS(V3, _MM_SHUFFLE(1, 1, 1, 1));
+                            X = MATH_PERMUTE_PS(V3, _MM_SHUFFLE(0, 0, 0, 0));
+
+                            vTemp = MATH_FMADD_PS(Z, Transform.r[2], Transform.r[3]);
+                            vTemp = MATH_FMADD_PS(Y, Transform.r[1], vTemp);
+                            vTemp = MATH_FMADD_PS(X, Transform.r[0], vTemp);
+
+                            W = MATH_PERMUTE_PS(vTemp, _MM_SHUFFLE(3, 3, 3, 3));
+                            V3 = _mm_mul_ps(vTemp, Vector3UnprojectRefinedReciprocalSse(W));
+
+                            // Result 4
+                            V4 = MATH_FMADD_PS(V4, Scale, Offset);
+
+                            Z = MATH_PERMUTE_PS(V4, _MM_SHUFFLE(2, 2, 2, 2));
+                            Y = MATH_PERMUTE_PS(V4, _MM_SHUFFLE(1, 1, 1, 1));
+                            X = MATH_PERMUTE_PS(V4, _MM_SHUFFLE(0, 0, 0, 0));
+
+                            vTemp = MATH_FMADD_PS(Z, Transform.r[2], Transform.r[3]);
+                            vTemp = MATH_FMADD_PS(Y, Transform.r[1], vTemp);
+                            vTemp = MATH_FMADD_PS(X, Transform.r[0], vTemp);
+
+                            W = MATH_PERMUTE_PS(vTemp, _MM_SHUFFLE(3, 3, 3, 3));
+                            V4 = _mm_mul_ps(vTemp, Vector3UnprojectRefinedReciprocalSse(W));
+
+                            // Pack and store the vectors
+                            MATH3PACK4INTO3(vTemp);
+                            MATH_STREAM_PS(reinterpret_cast<float*>(pOutputVector), V1);
+                            MATH_STREAM_PS(reinterpret_cast<float*>(pOutputVector + 16), vTemp);
+                            MATH_STREAM_PS(reinterpret_cast<float*>(pOutputVector + 32), V3);
+                            pOutputVector += sizeof(Float3) * 4;
+                            i += 4;
+                        }
+                    }
+                }else{
+                    // Packed input, unaligned & packed output
+                    if(inputAligned){
+                        for(size_t j = 0; j < four; ++j){
+                            __m128 V1 = _mm_load_ps(reinterpret_cast<const float*>(pInputVector));
+                            __m128 L2 = _mm_load_ps(reinterpret_cast<const float*>(pInputVector + 16));
+                            __m128 L3 = _mm_load_ps(reinterpret_cast<const float*>(pInputVector + 32));
+                            pInputVector += sizeof(Float3) * 4;
+
+                            // Unpack the 4 vectors (.w components are junk)
+                            MATH3UNPACK3INTO4(V1, L2, L3);
+
+                            // Result 1
+                            V1 = MATH_FMADD_PS(V1, Scale, Offset);
+
+                            Vector Z = MATH_PERMUTE_PS(V1, _MM_SHUFFLE(2, 2, 2, 2));
+                            Vector Y = MATH_PERMUTE_PS(V1, _MM_SHUFFLE(1, 1, 1, 1));
+                            Vector X = MATH_PERMUTE_PS(V1, _MM_SHUFFLE(0, 0, 0, 0));
+
+                            Vector vTemp = MATH_FMADD_PS(Z, Transform.r[2], Transform.r[3]);
+                            vTemp = MATH_FMADD_PS(Y, Transform.r[1], vTemp);
+                            vTemp = MATH_FMADD_PS(X, Transform.r[0], vTemp);
+                            Vector W;
+
+                            W = MATH_PERMUTE_PS(vTemp, _MM_SHUFFLE(3, 3, 3, 3));
+                            V1 = _mm_mul_ps(vTemp, Vector3UnprojectRefinedReciprocalSse(W));
+
+                            // Result 2
+                            V2 = MATH_FMADD_PS(V2, Scale, Offset);
+
+                            Z = MATH_PERMUTE_PS(V2, _MM_SHUFFLE(2, 2, 2, 2));
+                            Y = MATH_PERMUTE_PS(V2, _MM_SHUFFLE(1, 1, 1, 1));
+                            X = MATH_PERMUTE_PS(V2, _MM_SHUFFLE(0, 0, 0, 0));
+
+                            vTemp = MATH_FMADD_PS(Z, Transform.r[2], Transform.r[3]);
+                            vTemp = MATH_FMADD_PS(Y, Transform.r[1], vTemp);
+                            vTemp = MATH_FMADD_PS(X, Transform.r[0], vTemp);
+
+                            W = MATH_PERMUTE_PS(vTemp, _MM_SHUFFLE(3, 3, 3, 3));
+                            V2 = _mm_mul_ps(vTemp, Vector3UnprojectRefinedReciprocalSse(W));
+
+                            // Result 3
+                            V3 = MATH_FMADD_PS(V3, Scale, Offset);
+
+                            Z = MATH_PERMUTE_PS(V3, _MM_SHUFFLE(2, 2, 2, 2));
+                            Y = MATH_PERMUTE_PS(V3, _MM_SHUFFLE(1, 1, 1, 1));
+                            X = MATH_PERMUTE_PS(V3, _MM_SHUFFLE(0, 0, 0, 0));
+
+                            vTemp = MATH_FMADD_PS(Z, Transform.r[2], Transform.r[3]);
+                            vTemp = MATH_FMADD_PS(Y, Transform.r[1], vTemp);
+                            vTemp = MATH_FMADD_PS(X, Transform.r[0], vTemp);
+
+                            W = MATH_PERMUTE_PS(vTemp, _MM_SHUFFLE(3, 3, 3, 3));
+                            V3 = _mm_mul_ps(vTemp, Vector3UnprojectRefinedReciprocalSse(W));
+
+                            // Result 4
+                            V4 = MATH_FMADD_PS(V4, Scale, Offset);
+
+                            Z = MATH_PERMUTE_PS(V4, _MM_SHUFFLE(2, 2, 2, 2));
+                            Y = MATH_PERMUTE_PS(V4, _MM_SHUFFLE(1, 1, 1, 1));
+                            X = MATH_PERMUTE_PS(V4, _MM_SHUFFLE(0, 0, 0, 0));
+
+                            vTemp = MATH_FMADD_PS(Z, Transform.r[2], Transform.r[3]);
+                            vTemp = MATH_FMADD_PS(Y, Transform.r[1], vTemp);
+                            vTemp = MATH_FMADD_PS(X, Transform.r[0], vTemp);
+
+                            W = MATH_PERMUTE_PS(vTemp, _MM_SHUFFLE(3, 3, 3, 3));
+                            V4 = _mm_mul_ps(vTemp, Vector3UnprojectRefinedReciprocalSse(W));
+
+                            // Pack and store the vectors
+                            MATH3PACK4INTO3(vTemp);
+                            _mm_storeu_ps(reinterpret_cast<float*>(pOutputVector), V1);
+                            _mm_storeu_ps(reinterpret_cast<float*>(pOutputVector + 16), vTemp);
+                            _mm_storeu_ps(reinterpret_cast<float*>(pOutputVector + 32), V3);
+                            pOutputVector += sizeof(Float3) * 4;
+                            i += 4;
+                        }
+                    }else{
+                        for(size_t j = 0; j < four; ++j){
+                            __m128 V1 = _mm_loadu_ps(reinterpret_cast<const float*>(pInputVector));
+                            __m128 L2 = _mm_loadu_ps(reinterpret_cast<const float*>(pInputVector + 16));
+                            __m128 L3 = _mm_loadu_ps(reinterpret_cast<const float*>(pInputVector + 32));
+                            pInputVector += sizeof(Float3) * 4;
+
+                            // Unpack the 4 vectors (.w components are junk)
+                            MATH3UNPACK3INTO4(V1, L2, L3);
+
+                            // Result 1
+                            V1 = MATH_FMADD_PS(V1, Scale, Offset);
+
+                            Vector Z = MATH_PERMUTE_PS(V1, _MM_SHUFFLE(2, 2, 2, 2));
+                            Vector Y = MATH_PERMUTE_PS(V1, _MM_SHUFFLE(1, 1, 1, 1));
+                            Vector X = MATH_PERMUTE_PS(V1, _MM_SHUFFLE(0, 0, 0, 0));
+
+                            Vector vTemp = MATH_FMADD_PS(Z, Transform.r[2], Transform.r[3]);
+                            vTemp = MATH_FMADD_PS(Y, Transform.r[1], vTemp);
+                            vTemp = MATH_FMADD_PS(X, Transform.r[0], vTemp);
+                            Vector W;
+
+                            W = MATH_PERMUTE_PS(vTemp, _MM_SHUFFLE(3, 3, 3, 3));
+                            V1 = _mm_mul_ps(vTemp, Vector3UnprojectRefinedReciprocalSse(W));
+
+                            // Result 2
+                            V2 = MATH_FMADD_PS(V2, Scale, Offset);
+
+                            Z = MATH_PERMUTE_PS(V2, _MM_SHUFFLE(2, 2, 2, 2));
+                            Y = MATH_PERMUTE_PS(V2, _MM_SHUFFLE(1, 1, 1, 1));
+                            X = MATH_PERMUTE_PS(V2, _MM_SHUFFLE(0, 0, 0, 0));
+
+                            vTemp = MATH_FMADD_PS(Z, Transform.r[2], Transform.r[3]);
+                            vTemp = MATH_FMADD_PS(Y, Transform.r[1], vTemp);
+                            vTemp = MATH_FMADD_PS(X, Transform.r[0], vTemp);
+
+                            W = MATH_PERMUTE_PS(vTemp, _MM_SHUFFLE(3, 3, 3, 3));
+                            V2 = _mm_mul_ps(vTemp, Vector3UnprojectRefinedReciprocalSse(W));
+
+                            // Result 3
+                            V3 = MATH_FMADD_PS(V3, Scale, Offset);
+
+                            Z = MATH_PERMUTE_PS(V3, _MM_SHUFFLE(2, 2, 2, 2));
+                            Y = MATH_PERMUTE_PS(V3, _MM_SHUFFLE(1, 1, 1, 1));
+                            X = MATH_PERMUTE_PS(V3, _MM_SHUFFLE(0, 0, 0, 0));
+
+                            vTemp = MATH_FMADD_PS(Z, Transform.r[2], Transform.r[3]);
+                            vTemp = MATH_FMADD_PS(Y, Transform.r[1], vTemp);
+                            vTemp = MATH_FMADD_PS(X, Transform.r[0], vTemp);
+
+                            W = MATH_PERMUTE_PS(vTemp, _MM_SHUFFLE(3, 3, 3, 3));
+                            V3 = _mm_mul_ps(vTemp, Vector3UnprojectRefinedReciprocalSse(W));
+
+                            // Result 4
+                            V4 = MATH_FMADD_PS(V4, Scale, Offset);
+
+                            Z = MATH_PERMUTE_PS(V4, _MM_SHUFFLE(2, 2, 2, 2));
+                            Y = MATH_PERMUTE_PS(V4, _MM_SHUFFLE(1, 1, 1, 1));
+                            X = MATH_PERMUTE_PS(V4, _MM_SHUFFLE(0, 0, 0, 0));
+
+                            vTemp = MATH_FMADD_PS(Z, Transform.r[2], Transform.r[3]);
+                            vTemp = MATH_FMADD_PS(Y, Transform.r[1], vTemp);
+                            vTemp = MATH_FMADD_PS(X, Transform.r[0], vTemp);
+
+                            W = MATH_PERMUTE_PS(vTemp, _MM_SHUFFLE(3, 3, 3, 3));
+                            V4 = _mm_mul_ps(vTemp, Vector3UnprojectRefinedReciprocalSse(W));
+
+                            // Pack and store the vectors
+                            MATH3PACK4INTO3(vTemp);
+                            _mm_storeu_ps(reinterpret_cast<float*>(pOutputVector), V1);
+                            _mm_storeu_ps(reinterpret_cast<float*>(pOutputVector + 16), vTemp);
+                            _mm_storeu_ps(reinterpret_cast<float*>(pOutputVector + 32), V3);
+                            pOutputVector += sizeof(Float3) * 4;
+                            i += 4;
+                        }
+                    }
+                }
+            }else{
+                // Packed input, unpacked output
+                if(inputAligned){
+                    for(size_t j = 0; j < four; ++j){
+                        __m128 V1 = _mm_load_ps(reinterpret_cast<const float*>(pInputVector));
+                        __m128 L2 = _mm_load_ps(reinterpret_cast<const float*>(pInputVector + 16));
+                        __m128 L3 = _mm_load_ps(reinterpret_cast<const float*>(pInputVector + 32));
+                        pInputVector += sizeof(Float3) * 4;
+
+                        // Unpack the 4 vectors (.w components are junk)
+                        MATH3UNPACK3INTO4(V1, L2, L3);
+
+                        // Result 1
+                        V1 = MATH_FMADD_PS(V1, Scale, Offset);
+
+                        Vector Z = MATH_PERMUTE_PS(V1, _MM_SHUFFLE(2, 2, 2, 2));
+                        Vector Y = MATH_PERMUTE_PS(V1, _MM_SHUFFLE(1, 1, 1, 1));
+                        Vector X = MATH_PERMUTE_PS(V1, _MM_SHUFFLE(0, 0, 0, 0));
+
+                        Vector vTemp = MATH_FMADD_PS(Z, Transform.r[2], Transform.r[3]);
+                        vTemp = MATH_FMADD_PS(Y, Transform.r[1], vTemp);
+                        vTemp = MATH_FMADD_PS(X, Transform.r[0], vTemp);
+                        Vector W;
+
+                        W = MATH_PERMUTE_PS(vTemp, _MM_SHUFFLE(3, 3, 3, 3));
+                        vTemp = _mm_mul_ps(vTemp, Vector3UnprojectRefinedReciprocalSse(W));
+
+                        StoreFloat3(reinterpret_cast<Float3*>(pOutputVector), vTemp);
+                        pOutputVector += OutputStride;
+
+                        // Result 2
+                        V2 = MATH_FMADD_PS(V2, Scale, Offset);
+
+                        Z = MATH_PERMUTE_PS(V2, _MM_SHUFFLE(2, 2, 2, 2));
+                        Y = MATH_PERMUTE_PS(V2, _MM_SHUFFLE(1, 1, 1, 1));
+                        X = MATH_PERMUTE_PS(V2, _MM_SHUFFLE(0, 0, 0, 0));
+
+                        vTemp = MATH_FMADD_PS(Z, Transform.r[2], Transform.r[3]);
+                        vTemp = MATH_FMADD_PS(Y, Transform.r[1], vTemp);
+                        vTemp = MATH_FMADD_PS(X, Transform.r[0], vTemp);
+
+                        W = MATH_PERMUTE_PS(vTemp, _MM_SHUFFLE(3, 3, 3, 3));
+                        vTemp = _mm_mul_ps(vTemp, Vector3UnprojectRefinedReciprocalSse(W));
+
+                        StoreFloat3(reinterpret_cast<Float3*>(pOutputVector), vTemp);
+                        pOutputVector += OutputStride;
+
+                        // Result 3
+                        V3 = MATH_FMADD_PS(V3, Scale, Offset);
+
+                        Z = MATH_PERMUTE_PS(V3, _MM_SHUFFLE(2, 2, 2, 2));
+                        Y = MATH_PERMUTE_PS(V3, _MM_SHUFFLE(1, 1, 1, 1));
+                        X = MATH_PERMUTE_PS(V3, _MM_SHUFFLE(0, 0, 0, 0));
+
+                        vTemp = MATH_FMADD_PS(Z, Transform.r[2], Transform.r[3]);
+                        vTemp = MATH_FMADD_PS(Y, Transform.r[1], vTemp);
+                        vTemp = MATH_FMADD_PS(X, Transform.r[0], vTemp);
+
+                        W = MATH_PERMUTE_PS(vTemp, _MM_SHUFFLE(3, 3, 3, 3));
+                        vTemp = _mm_mul_ps(vTemp, Vector3UnprojectRefinedReciprocalSse(W));
+
+                        StoreFloat3(reinterpret_cast<Float3*>(pOutputVector), vTemp);
+                        pOutputVector += OutputStride;
+
+                        // Result 4
+                        V4 = MATH_FMADD_PS(V4, Scale, Offset);
+
+                        Z = MATH_PERMUTE_PS(V4, _MM_SHUFFLE(2, 2, 2, 2));
+                        Y = MATH_PERMUTE_PS(V4, _MM_SHUFFLE(1, 1, 1, 1));
+                        X = MATH_PERMUTE_PS(V4, _MM_SHUFFLE(0, 0, 0, 0));
+
+                        vTemp = MATH_FMADD_PS(Z, Transform.r[2], Transform.r[3]);
+                        vTemp = MATH_FMADD_PS(Y, Transform.r[1], vTemp);
+                        vTemp = MATH_FMADD_PS(X, Transform.r[0], vTemp);
+
+                        W = MATH_PERMUTE_PS(vTemp, _MM_SHUFFLE(3, 3, 3, 3));
+                        vTemp = _mm_mul_ps(vTemp, Vector3UnprojectRefinedReciprocalSse(W));
+
+                        StoreFloat3(reinterpret_cast<Float3*>(pOutputVector), vTemp);
+                        pOutputVector += OutputStride;
+
+                        i += 4;
+                    }
+                }else{
+                    for(size_t j = 0; j < four; ++j){
+                        __m128 V1 = _mm_loadu_ps(reinterpret_cast<const float*>(pInputVector));
+                        __m128 L2 = _mm_loadu_ps(reinterpret_cast<const float*>(pInputVector + 16));
+                        __m128 L3 = _mm_loadu_ps(reinterpret_cast<const float*>(pInputVector + 32));
+                        pInputVector += sizeof(Float3) * 4;
+
+                        // Unpack the 4 vectors (.w components are junk)
+                        MATH3UNPACK3INTO4(V1, L2, L3);
+
+                        // Result 1
+                        V1 = MATH_FMADD_PS(V1, Scale, Offset);
+
+                        Vector Z = MATH_PERMUTE_PS(V1, _MM_SHUFFLE(2, 2, 2, 2));
+                        Vector Y = MATH_PERMUTE_PS(V1, _MM_SHUFFLE(1, 1, 1, 1));
+                        Vector X = MATH_PERMUTE_PS(V1, _MM_SHUFFLE(0, 0, 0, 0));
+
+                        Vector vTemp = MATH_FMADD_PS(Z, Transform.r[2], Transform.r[3]);
+                        vTemp = MATH_FMADD_PS(Y, Transform.r[1], vTemp);
+                        vTemp = MATH_FMADD_PS(X, Transform.r[0], vTemp);
+
+                        Vector W = MATH_PERMUTE_PS(vTemp, _MM_SHUFFLE(3, 3, 3, 3));
+                        vTemp = _mm_mul_ps(vTemp, Vector3UnprojectRefinedReciprocalSse(W));
+
+                        StoreFloat3(reinterpret_cast<Float3*>(pOutputVector), vTemp);
+                        pOutputVector += OutputStride;
+
+                        // Result 2
+                        V2 = MATH_FMADD_PS(V2, Scale, Offset);
+
+                        Z = MATH_PERMUTE_PS(V2, _MM_SHUFFLE(2, 2, 2, 2));
+                        Y = MATH_PERMUTE_PS(V2, _MM_SHUFFLE(1, 1, 1, 1));
+                        X = MATH_PERMUTE_PS(V2, _MM_SHUFFLE(0, 0, 0, 0));
+
+                        vTemp = MATH_FMADD_PS(Z, Transform.r[2], Transform.r[3]);
+                        vTemp = MATH_FMADD_PS(Y, Transform.r[1], vTemp);
+                        vTemp = MATH_FMADD_PS(X, Transform.r[0], vTemp);
+
+                        W = MATH_PERMUTE_PS(vTemp, _MM_SHUFFLE(3, 3, 3, 3));
+                        vTemp = _mm_mul_ps(vTemp, Vector3UnprojectRefinedReciprocalSse(W));
+
+                        StoreFloat3(reinterpret_cast<Float3*>(pOutputVector), vTemp);
+                        pOutputVector += OutputStride;
+
+                        // Result 3
+                        V3 = MATH_FMADD_PS(V3, Scale, Offset);
+
+                        Z = MATH_PERMUTE_PS(V3, _MM_SHUFFLE(2, 2, 2, 2));
+                        Y = MATH_PERMUTE_PS(V3, _MM_SHUFFLE(1, 1, 1, 1));
+                        X = MATH_PERMUTE_PS(V3, _MM_SHUFFLE(0, 0, 0, 0));
+
+                        vTemp = MATH_FMADD_PS(Z, Transform.r[2], Transform.r[3]);
+                        vTemp = MATH_FMADD_PS(Y, Transform.r[1], vTemp);
+                        vTemp = MATH_FMADD_PS(X, Transform.r[0], vTemp);
+
+                        W = MATH_PERMUTE_PS(vTemp, _MM_SHUFFLE(3, 3, 3, 3));
+                        vTemp = _mm_mul_ps(vTemp, Vector3UnprojectRefinedReciprocalSse(W));
+
+                        StoreFloat3(reinterpret_cast<Float3*>(pOutputVector), vTemp);
+                        pOutputVector += OutputStride;
+
+                        // Result 4
+                        V4 = MATH_FMADD_PS(V4, Scale, Offset);
+
+                        Z = MATH_PERMUTE_PS(V4, _MM_SHUFFLE(2, 2, 2, 2));
+                        Y = MATH_PERMUTE_PS(V4, _MM_SHUFFLE(1, 1, 1, 1));
+                        X = MATH_PERMUTE_PS(V4, _MM_SHUFFLE(0, 0, 0, 0));
+
+                        vTemp = MATH_FMADD_PS(Z, Transform.r[2], Transform.r[3]);
+                        vTemp = MATH_FMADD_PS(Y, Transform.r[1], vTemp);
+                        vTemp = MATH_FMADD_PS(X, Transform.r[0], vTemp);
+
+                        W = MATH_PERMUTE_PS(vTemp, _MM_SHUFFLE(3, 3, 3, 3));
+                        vTemp = _mm_mul_ps(vTemp, Vector3UnprojectRefinedReciprocalSse(W));
+
+                        StoreFloat3(reinterpret_cast<Float3*>(pOutputVector), vTemp);
+                        pOutputVector += OutputStride;
+
+                        i += 4;
+                    }
+                }
+            }
+        }
+    }
+
+    for(; i < VectorCount; ++i){
+        Vector V = LoadFloat3(reinterpret_cast<const Float3*>(pInputVector));
+        pInputVector += InputStride;
+        V = MATH_FMADD_PS(V, Scale, Offset);
+
+        Vector Z = MATH_PERMUTE_PS(V, _MM_SHUFFLE(2, 2, 2, 2));
+        Vector Y = MATH_PERMUTE_PS(V, _MM_SHUFFLE(1, 1, 1, 1));
+        Vector X = MATH_PERMUTE_PS(V, _MM_SHUFFLE(0, 0, 0, 0));
+
+        Vector vTemp = MATH_FMADD_PS(Z, Transform.r[2], Transform.r[3]);
+        vTemp = MATH_FMADD_PS(Y, Transform.r[1], vTemp);
+        vTemp = MATH_FMADD_PS(X, Transform.r[0], vTemp);
+
+        Vector W = MATH_PERMUTE_PS(vTemp, _MM_SHUFFLE(3, 3, 3, 3));
+        vTemp = _mm_mul_ps(vTemp, Vector3UnprojectRefinedReciprocalSse(W));
+
+        StoreFloat3(reinterpret_cast<Float3*>(pOutputVector), vTemp);
+        pOutputVector += OutputStride;
+    }
+
+    if(usedStreamingStores)
+        MATH_SFENCE();
+
+    return pOutputStream;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -384,7 +384,7 @@ namespace SourceMathInternal{
     };
 #endif // _MATH_NO_INTRINSICS_
 
-        // Vector intrinsic: Four 32 bit floating point components aligned on a 16 byte
+    // Vector intrinsic: Four 32 bit floating point components aligned on a 16 byte
     // boundary and mapped to hardware vector registers
 #if defined(_MATH_SSE_INTRINSICS_) && !defined(_MATH_NO_INTRINSICS_)
     using Vector = __m128;
@@ -425,7 +425,7 @@ namespace SourceMathInternal{
     // Fix-up for(7th+) Vector parameters to pass by reference
     typedef const Vector& VectorConstArg;
 
-        // Conversion types for constants
+    // Conversion types for constants
     MATH_ALIGNED_STRUCT(16) VectorF32{
         union{
             float f[4];
@@ -495,7 +495,7 @@ namespace SourceMathInternal{
     #endif
     };
 
-        // Vector operators
+    // Vector operators
 
 #ifndef _MATH_NO_VECTOR_OVERLOADS_
     Vector    MathCallConv     operator+(VectorArg V)noexcept;
@@ -518,7 +518,7 @@ namespace SourceMathInternal{
     Vector    MathCallConv     operator/(VectorArg V, float S)noexcept;
 #endif /* !_MATH_NO_VECTOR_OVERLOADS_ */
 
-        // Matrix type: Sixteen 32 bit floating point components aligned on a
+    // Matrix type: Sixteen 32 bit floating point components aligned on a
     // 16 byte boundary and mapped to four hardware vector registers.
     //
     // NWB stores the matrix basis/translation as columns in `r[0..3]`.

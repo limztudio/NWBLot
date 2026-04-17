@@ -1768,13 +1768,13 @@ inline Matrix MathCallConv MatrixPerspectiveRH
     vTemp = vValues;
     vTemp = _mm_and_ps(vTemp, g_MaskY);
     M.r[1] = vTemp;
-    // x=fRange,y=-fRange * NearZ,0,-1.0f
+    // x=fRange,y=fRange * NearZ,0,-1.0f
     vValues = _mm_shuffle_ps(vValues, g_NegIdentityC3, _MM_SHUFFLE(3, 2, 3, 2));
     // 0,0,fRange,-1.0f
     vTemp = _mm_setzero_ps();
     vTemp = _mm_shuffle_ps(vTemp, vValues, _MM_SHUFFLE(3, 0, 0, 0));
     M.r[2] = vTemp;
-    // 0,0,-fRange * NearZ,0
+    // 0,0,fRange * NearZ,0
     vTemp = _mm_shuffle_ps(vTemp, vValues, _MM_SHUFFLE(2, 1, 0, 0));
     M.r[3] = vTemp;
     return M;
@@ -1932,7 +1932,7 @@ inline Matrix MathCallConv MatrixPerspectiveFovRH
     vTemp = vValues;
     vTemp = _mm_and_ps(vTemp, g_MaskY);
     M.r[1] = vTemp;
-    // x=fRange,y=-fRange * NearZ,0,-1.0f
+    // x=fRange,y=fRange * NearZ,0,-1.0f
     vTemp = _mm_setzero_ps();
     vValues = _mm_shuffle_ps(vValues, g_NegIdentityC3, _MM_SHUFFLE(3, 2, 3, 2));
     // 0,0,fRange,-1.0f
@@ -2012,7 +2012,7 @@ inline Matrix MathCallConv MatrixPerspectiveOffCenterLH
     vTemp = vValues;
     vTemp = _mm_and_ps(vTemp, g_MaskY);
     M.r[1] = vTemp;
-    // 0,0,fRange,1.0f
+    // -(ViewLeft + ViewRight)*ReciprocalWidth,-(ViewTop + ViewBottom)*ReciprocalHeight,fRange,1.0f
     M.r[2] = VectorSet(-(ViewLeft + ViewRight) * ReciprocalWidth,
         -(ViewTop + ViewBottom) * ReciprocalHeight,
         fRange,
@@ -2091,12 +2091,12 @@ inline Matrix MathCallConv MatrixPerspectiveOffCenterRH
     vTemp = vValues;
     vTemp = _mm_and_ps(vTemp, g_MaskY);
     M.r[1] = vTemp;
-    // 0,0,fRange,1.0f
+    // (ViewLeft + ViewRight)*ReciprocalWidth,(ViewTop + ViewBottom)*ReciprocalHeight,fRange,-1.0f
     M.r[2] = VectorSet((ViewLeft + ViewRight) * ReciprocalWidth,
         (ViewTop + ViewBottom) * ReciprocalHeight,
         fRange,
         -1.0f);
-    // 0,0,-fRange * NearZ,0.0f
+    // 0,0,fRange * NearZ,0.0f
     vValues = _mm_and_ps(vValues, g_MaskZ);
     M.r[3] = vValues;
     return M;
@@ -2388,7 +2388,7 @@ inline Matrix MathCallConv MatrixOrthographicOffCenterRH
     vTemp = vValues;
     vTemp = _mm_and_ps(vTemp, g_MaskZ);
     M.r[2] = vTemp;
-    // -(ViewLeft + ViewRight)*fReciprocalWidth,-(ViewTop + ViewBottom)*fReciprocalHeight,fRange*-NearZ,1.0f
+    // -(ViewLeft + ViewRight)*fReciprocalWidth,-(ViewTop + ViewBottom)*fReciprocalHeight,fRange*NearZ,1.0f
     vValues = _mm_mul_ps(vValues, rMem2);
     M.r[3] = vValues;
     return M;

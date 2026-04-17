@@ -144,12 +144,14 @@ struct ProjectViewportTransform{
         const float viewportMinZ,
         const float viewportMaxZ
     )noexcept
-        : scaleX(viewportWidth * 0.5f),
-          scaleY(-viewportHeight * 0.5f),
-          scaleZ(viewportMaxZ - viewportMinZ),
-          offsetX(viewportX + (viewportWidth * 0.5f)),
-          offsetY(viewportY + (viewportHeight * 0.5f)),
-          offsetZ(viewportMinZ){}
+        : scaleX(viewportWidth * 0.5f)
+        , scaleY(-viewportHeight * 0.5f)
+        , scaleZ(viewportMaxZ - viewportMinZ)
+        , offsetX(viewportX + (viewportWidth * 0.5f))
+        , offsetY(viewportY + (viewportHeight * 0.5f))
+        , offsetZ(viewportMinZ)
+    {
+    }
 
     inline void Apply(
         const float transformedX,
@@ -183,12 +185,14 @@ struct UnprojectViewportTransform{
         const float viewportMinZ,
         const float viewportMaxZ
     )noexcept
-        : scaleX(2.0f / viewportWidth),
-          scaleY(-2.0f / viewportHeight),
-          scaleZ(1.0f / (viewportMaxZ - viewportMinZ)),
-          offsetX(((-2.0f / viewportWidth) * viewportX) - 1.0f),
-          offsetY(((2.0f / viewportHeight) * viewportY) + 1.0f),
-          offsetZ((-1.0f / (viewportMaxZ - viewportMinZ)) * viewportMinZ){}
+        : scaleX(2.0f / viewportWidth)
+        , scaleY(-2.0f / viewportHeight)
+        , scaleZ(1.0f / (viewportMaxZ - viewportMinZ))
+        , offsetX(((-2.0f / viewportWidth) * viewportX) - 1.0f)
+        , offsetY(((2.0f / viewportHeight) * viewportY) + 1.0f)
+        , offsetZ((-1.0f / (viewportMaxZ - viewportMinZ)) * viewportMinZ)
+    {
+    }
 
     inline void Apply(
         const float inputX,

@@ -586,7 +586,7 @@ inline void MathCallConv VectorGetIntYPtr(uint32_t* y, VectorArg V)noexcept{
 #endif
 }
 
-// Store the Z component into a 32 bit integer locaCantion in memory.
+// Store the Z component into a 32 bit integer location in memory.
 _Use_decl_annotations_
 inline void MathCallConv VectorGetIntZPtr(uint32_t* z, VectorArg V)noexcept{
     assert(z != nullptr);

@@ -527,7 +527,7 @@ static void TestMatrixBuilders(TestContext& context){
         { 0.0f, 0.0f, 0.0f, 1.0f },
     } };
     CheckMatrixRowsNear(context, translation, expectedTranslation, s_FloatEpsilon, __FILE__, __LINE__);
-    CheckMatrixRowsNear(context, StoreMatrixRows(MatrixTranslationFromVector(MakeVector(4.0f, -5.0f, 6.0f, 1.0f))), expectedTranslation, s_FloatEpsilon, __FILE__, __LINE__);
+    CheckMatrixRowsNear(context, StoreMatrixRows(::MatrixTranslationFromVector(MakeVector(4.0f, -5.0f, 6.0f, 1.0f))), expectedTranslation, s_FloatEpsilon, __FILE__, __LINE__);
 
     const FloatRows4x4 scaling = StoreMatrixRows(MatrixScaling(2.0f, 3.0f, 4.0f));
     const FloatRows4x4 expectedScaling = { {
@@ -537,7 +537,7 @@ static void TestMatrixBuilders(TestContext& context){
         { 0.0f, 0.0f, 0.0f, 1.0f },
     } };
     CheckMatrixRowsNear(context, scaling, expectedScaling, s_FloatEpsilon, __FILE__, __LINE__);
-    CheckMatrixRowsNear(context, StoreMatrixRows(MatrixScalingFromVector(MakeVector(2.0f, 3.0f, 4.0f, 1.0f))), expectedScaling, s_FloatEpsilon, __FILE__, __LINE__);
+    CheckMatrixRowsNear(context, StoreMatrixRows(::MatrixScalingFromVector(MakeVector(2.0f, 3.0f, 4.0f, 1.0f))), expectedScaling, s_FloatEpsilon, __FILE__, __LINE__);
 
     const f32 halfPi = 1.57079632679f;
     const Float4Data rxResult = StoreVector(Vector4Transform(MakeVector(0.0f, 1.0f, 0.0f, 0.0f), MatrixRotationX(halfPi)));
@@ -551,7 +551,7 @@ static void TestMatrixBuilders(TestContext& context){
 
     const SimdVector angles = MakeVector(0.3f, -0.2f, 0.5f, 0.0f);
     const SimdMatrix rpyFromScalars = MatrixRotationRollPitchYaw(0.3f, -0.2f, 0.5f);
-    const SimdMatrix rpyFromVector = MatrixRotationRollPitchYawFromVector(angles);
+    const SimdMatrix rpyFromVector = ::MatrixRotationRollPitchYawFromVector(angles);
     CheckMatrixRowsNear(context, StoreMatrixRows(rpyFromScalars), StoreMatrixRows(rpyFromVector), s_FloatEpsilon, __FILE__, __LINE__);
     CheckMatrixRowsNear(
         context,
@@ -563,23 +563,23 @@ static void TestMatrixBuilders(TestContext& context){
     );
 
     const SimdVector quaternion = SourceMath::QuaternionRotationRollPitchYaw(0.3f, -0.2f, 0.5f);
-    CheckMatrixRowsNear(context, StoreMatrixRows(rpyFromScalars), StoreMatrixRows(MatrixRotationQuaternion(quaternion)), s_FloatEpsilon, __FILE__, __LINE__);
+    CheckMatrixRowsNear(context, StoreMatrixRows(rpyFromScalars), StoreMatrixRows(::MatrixRotationQuaternion(quaternion)), s_FloatEpsilon, __FILE__, __LINE__);
     const SimdVector rotatedByQuaternion = SourceMath::Vector3Rotate(MakeVector(1.0f, -2.0f, 3.0f, 0.0f), quaternion);
-    const Float4Data rotatedByMatrix = StoreVector(Vector3TransformNormal(MakeVector(1.0f, -2.0f, 3.0f, 0.0f), MatrixRotationQuaternion(quaternion)));
+    const Float4Data rotatedByMatrix = StoreVector(Vector3TransformNormal(MakeVector(1.0f, -2.0f, 3.0f, 0.0f), ::MatrixRotationQuaternion(quaternion)));
     CheckFloat4Near(context, StoreVector(rotatedByQuaternion), rotatedByMatrix.x, rotatedByMatrix.y, rotatedByMatrix.z, rotatedByMatrix.w, s_FloatLooseEpsilon, __FILE__, __LINE__);
     CheckFloat4Near(context, StoreVector(SourceMath::Vector3InverseRotate(rotatedByQuaternion, quaternion)), 1.0f, -2.0f, 3.0f, 0.0f, s_FloatLooseEpsilon, __FILE__, __LINE__);
 
     const SimdVector axis = MakeVector(1.0f, 2.0f, 3.0f, 0.0f);
     CheckMatrixRowsNear(
         context,
-        StoreMatrixRows(MatrixRotationNormal(SourceMath::Vector3Normalize(axis), 0.7f)),
-        StoreMatrixRows(MatrixRotationAxis(axis, 0.7f)),
+        StoreMatrixRows(::MatrixRotationNormal(SourceMath::Vector3Normalize(axis), 0.7f)),
+        StoreMatrixRows(::MatrixRotationAxis(axis, 0.7f)),
         s_FloatLooseEpsilon,
         __FILE__,
         __LINE__
     );
 
-    const FloatRows4x4 reflected = StoreMatrixRows(MatrixReflect(MakeVector(0.0f, 1.0f, 0.0f, 0.0f)));
+    const FloatRows4x4 reflected = StoreMatrixRows(::MatrixReflect(MakeVector(0.0f, 1.0f, 0.0f, 0.0f)));
     const FloatRows4x4 expectedReflect = { {
         { 1.0f, 0.0f, 0.0f, 0.0f },
         { 0.0f, -1.0f, 0.0f, 0.0f },
@@ -588,7 +588,7 @@ static void TestMatrixBuilders(TestContext& context){
     } };
     CheckMatrixRowsNear(context, reflected, expectedReflect, s_FloatLooseEpsilon, __FILE__, __LINE__);
 
-    const SimdMatrix shadow = MatrixShadow(MakeVector(0.0f, 1.0f, 0.0f, 0.0f), MakeVector(0.0f, -1.0f, 0.0f, 0.0f));
+    const SimdMatrix shadow = ::MatrixShadow(MakeVector(0.0f, 1.0f, 0.0f, 0.0f), MakeVector(0.0f, -1.0f, 0.0f, 0.0f));
     const Float4Data shadowedRaw = StoreVector(Vector4Transform(MakeVector(2.0f, 3.0f, 4.0f, 1.0f), shadow));
     CheckFloat4Near(
         context,
@@ -606,10 +606,10 @@ static void TestMatrixBuilders(TestContext& context){
     const SimdVector focus = MakeVector(6.0f, 5.0f, 2.0f, 1.0f);
     const SimdVector up = MakeVector(0.0f, 1.0f, 0.0f, 0.0f);
     const SimdVector direction = SourceMath::VectorSubtract(focus, eye);
-    const SimdMatrix lookAtLh = MatrixLookAtLH(eye, focus, up);
-    const SimdMatrix lookToLh = MatrixLookToLH(eye, direction, up);
-    const SimdMatrix lookAtRh = MatrixLookAtRH(eye, focus, up);
-    const SimdMatrix lookToRh = MatrixLookToRH(eye, direction, up);
+    const SimdMatrix lookAtLh = ::MatrixLookAtLH(eye, focus, up);
+    const SimdMatrix lookToLh = ::MatrixLookToLH(eye, direction, up);
+    const SimdMatrix lookAtRh = ::MatrixLookAtRH(eye, focus, up);
+    const SimdMatrix lookToRh = ::MatrixLookToRH(eye, direction, up);
     CheckMatrixRowsNear(context, StoreMatrixRows(lookAtLh), StoreMatrixRows(lookToLh), s_FloatLooseEpsilon, __FILE__, __LINE__);
     CheckMatrixRowsNear(context, StoreMatrixRows(lookAtRh), StoreMatrixRows(lookToRh), s_FloatLooseEpsilon, __FILE__, __LINE__);
     const f32 focusDistance = StoreVector(SourceMath::Vector3Length(direction)).x;
@@ -717,7 +717,7 @@ static void TestMatrixRelations(TestContext& context){
 
     const SimdVector tensorA = MakeVector(1.0f, 2.0f, 3.0f, 4.0f);
     const SimdVector tensorB = MakeVector(-1.0f, 5.0f, 7.0f, 9.0f);
-    const FloatRows4x4 tensorRows = StoreMatrixRows(MatrixVectorTensorProduct(tensorA, tensorB));
+    const FloatRows4x4 tensorRows = StoreMatrixRows(::MatrixVectorTensorProduct(tensorA, tensorB));
     const FloatRows4x4 expectedTensor = { {
         { -1.0f, 5.0f, 7.0f, 9.0f },
         { -2.0f, 10.0f, 14.0f, 18.0f },
@@ -733,7 +733,7 @@ static void TestMatrixRelations(TestContext& context){
     CheckFloat4Near(context, StoreVector(outScale), 2.0f, 3.0f, 4.0f, 0.0f, s_FloatLooseEpsilon, __FILE__, __LINE__);
     CheckFloat4Near(context, StoreVector(outTranslation), 4.0f, -5.0f, 6.0f, 1.0f, s_FloatLooseEpsilon, __FILE__, __LINE__);
 
-    const SimdMatrix reconstructed = MatrixAffineTransformation(outScale, SourceMath::VectorZero(), outRotation, outTranslation);
+    const SimdMatrix reconstructed = ::MatrixAffineTransformation(outScale, SourceMath::VectorZero(), outRotation, outTranslation);
     CheckMatrixRowsNear(context, StoreMatrixRows(reconstructed), rowsA, 2.0e-3f, __FILE__, __LINE__);
 }
 
@@ -743,20 +743,20 @@ static void TestMatrixTransformationHelpers(TestContext& context){
     const SimdVector translation2d = MakeVector(4.0f, -5.0f, 0.0f, 0.0f);
     const f32 rotation = 0.25f;
 
-    const SimdMatrix helper2d = MatrixTransformation2D(zero, 0.0f, scale2d, zero, rotation, translation2d);
+    const SimdMatrix helper2d = ::MatrixTransformation2D(zero, 0.0f, scale2d, zero, rotation, translation2d);
     const SimdMatrix manual2d = Compose(Compose(MatrixTranslation(4.0f, -5.0f, 0.0f), MatrixRotationZ(rotation)), MatrixScaling(2.0f, 3.0f, 1.0f));
     const Float4Data point2d = StoreVector(Vector2TransformCoord(MakeVector(1.0f, 2.0f, 0.0f, 1.0f), helper2d));
     const Float4Data point2dManual = StoreVector(Vector2TransformCoord(MakeVector(1.0f, 2.0f, 0.0f, 1.0f), manual2d));
     CheckFloat4Near(context, point2d, point2dManual.x, point2dManual.y, point2dManual.z, point2dManual.w, s_FloatLooseEpsilon, __FILE__, __LINE__);
 
-    const SimdMatrix affine2d = MatrixAffineTransformation2D(scale2d, zero, rotation, translation2d);
+    const SimdMatrix affine2d = ::MatrixAffineTransformation2D(scale2d, zero, rotation, translation2d);
     const Float4Data affine2dPoint = StoreVector(Vector2TransformCoord(MakeVector(1.0f, 2.0f, 0.0f, 1.0f), affine2d));
     CheckFloat4Near(context, affine2dPoint, point2dManual.x, point2dManual.y, point2dManual.z, point2dManual.w, s_FloatLooseEpsilon, __FILE__, __LINE__);
 
     const SimdVector scalingOrigin2d = MakeVector(-2.0f, 1.0f, 0.0f, 1.0f);
     const SimdVector rotationOrigin2d = MakeVector(3.0f, -4.0f, 0.0f, 1.0f);
     const f32 scalingOrientation2d = -0.35f;
-    const SimdMatrix helper2dComplex = MatrixTransformation2D(
+    const SimdMatrix helper2dComplex = ::MatrixTransformation2D(
         scalingOrigin2d,
         scalingOrientation2d,
         scale2d,
@@ -794,7 +794,7 @@ static void TestMatrixTransformationHelpers(TestContext& context){
     const Float4Data complex2dManualPoint = StoreVector(Vector2TransformCoord(MakeVector(-1.5f, 0.75f, 0.0f, 1.0f), manual2dComplex));
     CheckFloat4Near(context, complex2dPoint, complex2dManualPoint.x, complex2dManualPoint.y, complex2dManualPoint.z, complex2dManualPoint.w, s_FloatLooseEpsilon, __FILE__, __LINE__);
 
-    const SimdMatrix affine2dComplex = MatrixAffineTransformation2D(scale2d, rotationOrigin2d, rotation, translation2d);
+    const SimdMatrix affine2dComplex = ::MatrixAffineTransformation2D(scale2d, rotationOrigin2d, rotation, translation2d);
     const SimdMatrix affine2dComplexManual = Compose(
         Compose(
             Compose(
@@ -813,9 +813,9 @@ static void TestMatrixTransformationHelpers(TestContext& context){
     const SimdVector scaling = MakeVector(1.5f, 2.0f, 2.5f, 0.0f);
     const SimdVector rotationQuaternion = SourceMath::QuaternionRotationRollPitchYaw(0.2f, -0.3f, 0.4f);
     const SimdVector translation = MakeVector(7.0f, -8.0f, 9.0f, 1.0f);
-    const SimdMatrix helper3d = MatrixTransformation(zero, SourceMath::QuaternionIdentity(), scaling, zero, rotationQuaternion, translation);
-    const SimdMatrix affine3d = MatrixAffineTransformation(scaling, zero, rotationQuaternion, translation);
-    const SimdMatrix manual3d = Compose(Compose(MatrixTranslation(7.0f, -8.0f, 9.0f), MatrixRotationQuaternion(rotationQuaternion)), MatrixScaling(1.5f, 2.0f, 2.5f));
+    const SimdMatrix helper3d = ::MatrixTransformation(zero, SourceMath::QuaternionIdentity(), scaling, zero, rotationQuaternion, translation);
+    const SimdMatrix affine3d = ::MatrixAffineTransformation(scaling, zero, rotationQuaternion, translation);
+    const SimdMatrix manual3d = Compose(Compose(MatrixTranslation(7.0f, -8.0f, 9.0f), ::MatrixRotationQuaternion(rotationQuaternion)), MatrixScaling(1.5f, 2.0f, 2.5f));
     const Float4Data helperPoint = StoreVector(Vector3TransformCoord(MakeVector(1.0f, 2.0f, 3.0f, 1.0f), helper3d));
     const Float4Data affinePoint = StoreVector(Vector3TransformCoord(MakeVector(1.0f, 2.0f, 3.0f, 1.0f), affine3d));
     const Float4Data manualPoint = StoreVector(Vector3TransformCoord(MakeVector(1.0f, 2.0f, 3.0f, 1.0f), manual3d));
@@ -825,7 +825,7 @@ static void TestMatrixTransformationHelpers(TestContext& context){
     const SimdVector scalingOrigin3d = MakeVector(-2.0f, 1.0f, 0.5f, 1.0f);
     const SimdVector scalingOrientation3d = SourceMath::QuaternionRotationRollPitchYaw(-0.15f, 0.45f, -0.2f);
     const SimdVector rotationOrigin3d = MakeVector(3.0f, -4.0f, 5.0f, 1.0f);
-    const SimdMatrix helper3dComplex = MatrixTransformation(
+    const SimdMatrix helper3dComplex = ::MatrixTransformation(
         scalingOrigin3d,
         scalingOrientation3d,
         scaling,
@@ -843,18 +843,18 @@ static void TestMatrixTransformationHelpers(TestContext& context){
                                 MatrixTranslation(7.0f, -8.0f, 9.0f),
                                 MatrixTranslation(3.0f, -4.0f, 5.0f)
                             ),
-                            MatrixRotationQuaternion(rotationQuaternion)
+                            ::MatrixRotationQuaternion(rotationQuaternion)
                         ),
                         MatrixTranslation(-3.0f, 4.0f, -5.0f)
                     ),
                     MatrixTranslation(-2.0f, 1.0f, 0.5f)
                 ),
-                MatrixRotationQuaternion(scalingOrientation3d)
+                ::MatrixRotationQuaternion(scalingOrientation3d)
             ),
             MatrixScaling(1.5f, 2.0f, 2.5f)
         ),
         Compose(
-            MatrixTranspose(MatrixRotationQuaternion(scalingOrientation3d)),
+            MatrixTranspose(::MatrixRotationQuaternion(scalingOrientation3d)),
             MatrixTranslation(2.0f, -1.0f, -0.5f)
         )
     );
@@ -863,7 +863,7 @@ static void TestMatrixTransformationHelpers(TestContext& context){
     const Float4Data complex3dManualPoint = StoreVector(Vector3TransformCoord(MakeVector(-1.25f, 0.5f, 2.75f, 1.0f), manual3dComplex));
     CheckFloat4Near(context, complex3dPoint, complex3dManualPoint.x, complex3dManualPoint.y, complex3dManualPoint.z, complex3dManualPoint.w, 3.0e-3f, __FILE__, __LINE__);
 
-    const SimdMatrix affine3dComplex = MatrixAffineTransformation(scaling, rotationOrigin3d, rotationQuaternion, translation);
+    const SimdMatrix affine3dComplex = ::MatrixAffineTransformation(scaling, rotationOrigin3d, rotationQuaternion, translation);
     const SimdMatrix affine3dComplexManual = Compose(
         Compose(
             Compose(
@@ -871,7 +871,7 @@ static void TestMatrixTransformationHelpers(TestContext& context){
                     MatrixTranslation(7.0f, -8.0f, 9.0f),
                     MatrixTranslation(3.0f, -4.0f, 5.0f)
                 ),
-                MatrixRotationQuaternion(rotationQuaternion)
+                ::MatrixRotationQuaternion(rotationQuaternion)
             ),
             MatrixTranslation(-3.0f, 4.0f, -5.0f)
         ),
@@ -931,13 +931,13 @@ static void TestMatrixTransforms(TestContext& context){
     )), "MatrixIsInfinite", __FILE__, __LINE__);
 
     const SimdVector sourceQuaternion = SourceMath::QuaternionRotationRollPitchYaw(0.25f, -0.35f, 0.45f);
-    const SimdVector reconstructedQuaternion = QuaternionRotationMatrix(MatrixRotationQuaternion(sourceQuaternion));
+    const SimdVector reconstructedQuaternion = QuaternionRotationMatrix(::MatrixRotationQuaternion(sourceQuaternion));
     CheckQuaternionEquivalent(context, sourceQuaternion, reconstructedQuaternion, 2.0e-3f, __FILE__, __LINE__);
 }
 
 static void TestMatrixProjectAndStreams(TestContext& context){
     const SimdMatrix world = Compose(MatrixTranslation(2.0f, -1.0f, 5.0f), MatrixRotationY(0.25f));
-    const SimdMatrix view = MatrixLookAtLH(
+    const SimdMatrix view = ::MatrixLookAtLH(
         MakeVector(0.0f, 0.0f, -10.0f, 1.0f),
         MakeVector(0.0f, 0.0f, 0.0f, 1.0f),
         MakeVector(0.0f, 1.0f, 0.0f, 0.0f)

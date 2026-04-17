@@ -8,6 +8,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "scalar_transform_common.inl"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 _Use_decl_annotations_
 inline Float2* MathCallConv Vector2TransformCoordStreamScalar
 (
@@ -26,30 +32,21 @@ inline Float2* MathCallConv Vector2TransformCoordStreamScalar
     uint8_t* pOutputVector = reinterpret_cast<uint8_t*>(pOutputStream);
 
 #if defined(_MATH_NO_INTRINSICS_)
-    const float m00 = M.r[0].vector4_f32[0];
-    const float m10 = M.r[0].vector4_f32[1];
-    const float m30 = M.r[0].vector4_f32[3];
-    const float m01 = M.r[1].vector4_f32[0];
-    const float m11 = M.r[1].vector4_f32[1];
-    const float m31 = M.r[1].vector4_f32[3];
-    const float m03 = M.r[3].vector4_f32[0];
-    const float m13 = M.r[3].vector4_f32[1];
-    const float m33 = M.r[3].vector4_f32[3];
+    const ScalarVectorStreamDetail::MatrixColumns transform(M);
 
-    if((InputStride == sizeof(Float2)) && (OutputStride == sizeof(Float2))){
+    if(ScalarVectorStreamDetail::HasTightStride<Float2, Float2>(InputStride, OutputStride)){
         const Float2* input = pInputStream;
         Float2* output = pOutputStream;
 
         for(size_t i = 0; i < VectorCount; ++i){
             const float x = input->x;
             const float y = input->y;
-            const float transformedX = (x * m00) + (y * m01) + m03;
-            const float transformedY = (x * m10) + (y * m11) + m13;
-            const float w = (x * m30) + (y * m31) + m33;
-            const float reciprocalW = 1.0f / w;
-
-            output->x = transformedX * reciprocalW;
-            output->y = transformedY * reciprocalW;
+            float transformedZ;
+            float reciprocalW;
+            transform.Transform2(x, y, output->x, output->y, transformedZ, reciprocalW);
+            reciprocalW = 1.0f / reciprocalW;
+            output->x *= reciprocalW;
+            output->y *= reciprocalW;
 
             ++input;
             ++output;
@@ -63,13 +60,12 @@ inline Float2* MathCallConv Vector2TransformCoordStreamScalar
         auto* output = reinterpret_cast<Float2*>(pOutputVector);
         const float x = input->x;
         const float y = input->y;
-        const float transformedX = (x * m00) + (y * m01) + m03;
-        const float transformedY = (x * m10) + (y * m11) + m13;
-        const float w = (x * m30) + (y * m31) + m33;
-        const float reciprocalW = 1.0f / w;
-
-        output->x = transformedX * reciprocalW;
-        output->y = transformedY * reciprocalW;
+        float transformedZ;
+        float reciprocalW;
+        transform.Transform2(x, y, output->x, output->y, transformedZ, reciprocalW);
+        reciprocalW = 1.0f / reciprocalW;
+        output->x *= reciprocalW;
+        output->y *= reciprocalW;
 
         pInputVector += InputStride;
         pOutputVector += OutputStride;

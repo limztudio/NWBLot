@@ -8,6 +8,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "scalar_transform_common.inl"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 _Use_decl_annotations_
 inline Float3* MathCallConv Vector3UnprojectStreamScalar
 (
@@ -37,46 +43,32 @@ inline Float3* MathCallConv Vector3UnprojectStreamScalar
     uint8_t* pOutputVector = reinterpret_cast<uint8_t*>(pOutputStream);
 
 #if defined(_MATH_NO_INTRINSICS_)
-    const float m00 = Transform.r[0].vector4_f32[0];
-    const float m10 = Transform.r[0].vector4_f32[1];
-    const float m20 = Transform.r[0].vector4_f32[2];
-    const float m30 = Transform.r[0].vector4_f32[3];
-    const float m01 = Transform.r[1].vector4_f32[0];
-    const float m11 = Transform.r[1].vector4_f32[1];
-    const float m21 = Transform.r[1].vector4_f32[2];
-    const float m31 = Transform.r[1].vector4_f32[3];
-    const float m02 = Transform.r[2].vector4_f32[0];
-    const float m12 = Transform.r[2].vector4_f32[1];
-    const float m22 = Transform.r[2].vector4_f32[2];
-    const float m32 = Transform.r[2].vector4_f32[3];
-    const float m03 = Transform.r[3].vector4_f32[0];
-    const float m13 = Transform.r[3].vector4_f32[1];
-    const float m23 = Transform.r[3].vector4_f32[2];
-    const float m33 = Transform.r[3].vector4_f32[3];
-    const float scaleX = 2.0f / ViewportWidth;
-    const float scaleY = -2.0f / ViewportHeight;
-    const float scaleZ = 1.0f / (ViewportMaxZ - ViewportMinZ);
-    const float offsetX = (scaleX * -ViewportX) - 1.0f;
-    const float offsetY = (scaleY * -ViewportY) + 1.0f;
-    const float offsetZ = scaleZ * -ViewportMinZ;
+    const ScalarVectorStreamDetail::MatrixColumns transform(Transform);
+    const ScalarVectorStreamDetail::UnprojectViewportTransform viewport(
+        ViewportX,
+        ViewportY,
+        ViewportWidth,
+        ViewportHeight,
+        ViewportMinZ,
+        ViewportMaxZ
+    );
 
-    if((InputStride == sizeof(Float3)) && (OutputStride == sizeof(Float3))){
+    if(ScalarVectorStreamDetail::HasTightStride<Float3, Float3>(InputStride, OutputStride)){
         const Float3* input = pInputStream;
         Float3* output = pOutputStream;
 
         for(size_t i = 0; i < VectorCount; ++i){
-            const float x = (input->x * scaleX) + offsetX;
-            const float y = (input->y * scaleY) + offsetY;
-            const float z = (input->z * scaleZ) + offsetZ;
-            const float transformedX = (x * m00) + (y * m01) + (z * m02) + m03;
-            const float transformedY = (x * m10) + (y * m11) + (z * m12) + m13;
-            const float transformedZ = (x * m20) + (y * m21) + (z * m22) + m23;
-            const float w = (x * m30) + (y * m31) + (z * m32) + m33;
-            const float reciprocalW = 1.0f / w;
+            float x;
+            float y;
+            float z;
+            viewport.Apply(input->x, input->y, input->z, x, y, z);
 
-            output->x = transformedX * reciprocalW;
-            output->y = transformedY * reciprocalW;
-            output->z = transformedZ * reciprocalW;
+            float reciprocalW;
+            transform.Transform3(x, y, z, output->x, output->y, output->z, reciprocalW);
+            reciprocalW = 1.0f / reciprocalW;
+            output->x *= reciprocalW;
+            output->y *= reciprocalW;
+            output->z *= reciprocalW;
 
             ++input;
             ++output;
@@ -88,18 +80,17 @@ inline Float3* MathCallConv Vector3UnprojectStreamScalar
     for(size_t i = 0; i < VectorCount; ++i){
         const auto* input = reinterpret_cast<const Float3*>(pInputVector);
         auto* output = reinterpret_cast<Float3*>(pOutputVector);
-        const float x = (input->x * scaleX) + offsetX;
-        const float y = (input->y * scaleY) + offsetY;
-        const float z = (input->z * scaleZ) + offsetZ;
-        const float transformedX = (x * m00) + (y * m01) + (z * m02) + m03;
-        const float transformedY = (x * m10) + (y * m11) + (z * m12) + m13;
-        const float transformedZ = (x * m20) + (y * m21) + (z * m22) + m23;
-        const float w = (x * m30) + (y * m31) + (z * m32) + m33;
-        const float reciprocalW = 1.0f / w;
+        float x;
+        float y;
+        float z;
+        viewport.Apply(input->x, input->y, input->z, x, y, z);
 
-        output->x = transformedX * reciprocalW;
-        output->y = transformedY * reciprocalW;
-        output->z = transformedZ * reciprocalW;
+        float reciprocalW;
+        transform.Transform3(x, y, z, output->x, output->y, output->z, reciprocalW);
+        reciprocalW = 1.0f / reciprocalW;
+        output->x *= reciprocalW;
+        output->y *= reciprocalW;
+        output->z *= reciprocalW;
 
         pInputVector += InputStride;
         pOutputVector += OutputStride;

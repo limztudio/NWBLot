@@ -8,6 +8,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "scalar_transform_common.inl"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 _Use_decl_annotations_
 inline Float2* MathCallConv Vector2TransformNormalStreamScalar
 (
@@ -26,12 +32,9 @@ inline Float2* MathCallConv Vector2TransformNormalStreamScalar
     uint8_t* pOutputVector = reinterpret_cast<uint8_t*>(pOutputStream);
 
 #if defined(_MATH_NO_INTRINSICS_)
-    const float m00 = M.r[0].vector4_f32[0];
-    const float m10 = M.r[0].vector4_f32[1];
-    const float m01 = M.r[1].vector4_f32[0];
-    const float m11 = M.r[1].vector4_f32[1];
+    const ScalarVectorStreamDetail::MatrixColumns transform(M);
 
-    if((InputStride == sizeof(Float2)) && (OutputStride == sizeof(Float2))){
+    if(ScalarVectorStreamDetail::HasTightStride<Float2, Float2>(InputStride, OutputStride)){
         const Float2* input = pInputStream;
         Float2* output = pOutputStream;
 
@@ -39,8 +42,7 @@ inline Float2* MathCallConv Vector2TransformNormalStreamScalar
             const float x = input->x;
             const float y = input->y;
 
-            output->x = (x * m00) + (y * m01);
-            output->y = (x * m10) + (y * m11);
+            transform.Transform2Normal(x, y, output->x, output->y);
 
             ++input;
             ++output;
@@ -55,8 +57,7 @@ inline Float2* MathCallConv Vector2TransformNormalStreamScalar
         const float x = input->x;
         const float y = input->y;
 
-        output->x = (x * m00) + (y * m01);
-        output->y = (x * m10) + (y * m11);
+        transform.Transform2Normal(x, y, output->x, output->y);
 
         pInputVector += InputStride;
         pOutputVector += OutputStride;

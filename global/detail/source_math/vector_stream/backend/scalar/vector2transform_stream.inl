@@ -8,6 +8,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "scalar_transform_common.inl"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 _Use_decl_annotations_
 inline Float4* MathCallConv Vector2TransformStreamScalar
 (
@@ -26,20 +32,9 @@ inline Float4* MathCallConv Vector2TransformStreamScalar
     uint8_t* pOutputVector = reinterpret_cast<uint8_t*>(pOutputStream);
 
 #if defined(_MATH_NO_INTRINSICS_)
-    const float m00 = M.r[0].vector4_f32[0];
-    const float m10 = M.r[0].vector4_f32[1];
-    const float m20 = M.r[0].vector4_f32[2];
-    const float m30 = M.r[0].vector4_f32[3];
-    const float m01 = M.r[1].vector4_f32[0];
-    const float m11 = M.r[1].vector4_f32[1];
-    const float m21 = M.r[1].vector4_f32[2];
-    const float m31 = M.r[1].vector4_f32[3];
-    const float m03 = M.r[3].vector4_f32[0];
-    const float m13 = M.r[3].vector4_f32[1];
-    const float m23 = M.r[3].vector4_f32[2];
-    const float m33 = M.r[3].vector4_f32[3];
+    const ScalarVectorStreamDetail::MatrixColumns transform(M);
 
-    if((InputStride == sizeof(Float2)) && (OutputStride == sizeof(Float4))){
+    if(ScalarVectorStreamDetail::HasTightStride<Float2, Float4>(InputStride, OutputStride)){
         const Float2* input = pInputStream;
         Float4* output = pOutputStream;
 
@@ -47,10 +42,7 @@ inline Float4* MathCallConv Vector2TransformStreamScalar
             const float x = input->x;
             const float y = input->y;
 
-            output->x = (x * m00) + (y * m01) + m03;
-            output->y = (x * m10) + (y * m11) + m13;
-            output->z = (x * m20) + (y * m21) + m23;
-            output->w = (x * m30) + (y * m31) + m33;
+            transform.Transform2(x, y, output->x, output->y, output->z, output->w);
 
             ++input;
             ++output;
@@ -65,10 +57,7 @@ inline Float4* MathCallConv Vector2TransformStreamScalar
         const float x = input->x;
         const float y = input->y;
 
-        output->x = (x * m00) + (y * m01) + m03;
-        output->y = (x * m10) + (y * m11) + m13;
-        output->z = (x * m20) + (y * m21) + m23;
-        output->w = (x * m30) + (y * m31) + m33;
+        transform.Transform2(x, y, output->x, output->y, output->z, output->w);
 
         pInputVector += InputStride;
         pOutputVector += OutputStride;

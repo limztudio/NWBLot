@@ -8,6 +8,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "scalar_transform_common.inl"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 _Use_decl_annotations_
 inline Float3* MathCallConv Vector3TransformNormalStreamScalar
 (
@@ -26,17 +32,9 @@ inline Float3* MathCallConv Vector3TransformNormalStreamScalar
     uint8_t* pOutputVector = reinterpret_cast<uint8_t*>(pOutputStream);
 
 #if defined(_MATH_NO_INTRINSICS_)
-    const float m00 = M.r[0].vector4_f32[0];
-    const float m10 = M.r[0].vector4_f32[1];
-    const float m20 = M.r[0].vector4_f32[2];
-    const float m01 = M.r[1].vector4_f32[0];
-    const float m11 = M.r[1].vector4_f32[1];
-    const float m21 = M.r[1].vector4_f32[2];
-    const float m02 = M.r[2].vector4_f32[0];
-    const float m12 = M.r[2].vector4_f32[1];
-    const float m22 = M.r[2].vector4_f32[2];
+    const ScalarVectorStreamDetail::MatrixColumns transform(M);
 
-    if((InputStride == sizeof(Float3)) && (OutputStride == sizeof(Float3))){
+    if(ScalarVectorStreamDetail::HasTightStride<Float3, Float3>(InputStride, OutputStride)){
         const Float3* input = pInputStream;
         Float3* output = pOutputStream;
 
@@ -45,9 +43,7 @@ inline Float3* MathCallConv Vector3TransformNormalStreamScalar
             const float y = input->y;
             const float z = input->z;
 
-            output->x = (x * m00) + (y * m01) + (z * m02);
-            output->y = (x * m10) + (y * m11) + (z * m12);
-            output->z = (x * m20) + (y * m21) + (z * m22);
+            transform.Transform3Normal(x, y, z, output->x, output->y, output->z);
 
             ++input;
             ++output;
@@ -63,9 +59,7 @@ inline Float3* MathCallConv Vector3TransformNormalStreamScalar
         const float y = input->y;
         const float z = input->z;
 
-        output->x = (x * m00) + (y * m01) + (z * m02);
-        output->y = (x * m10) + (y * m11) + (z * m12);
-        output->z = (x * m20) + (y * m21) + (z * m22);
+        transform.Transform3Normal(x, y, z, output->x, output->y, output->z);
 
         pInputVector += InputStride;
         pOutputVector += OutputStride;

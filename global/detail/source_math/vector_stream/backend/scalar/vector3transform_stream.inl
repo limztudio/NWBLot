@@ -17,6 +17,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "scalar_transform_common.inl"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 _Use_decl_annotations_
 inline Float4* MathCallConv Vector3TransformStreamScalar
 (
@@ -35,24 +41,9 @@ inline Float4* MathCallConv Vector3TransformStreamScalar
     uint8_t* pOutputVector = reinterpret_cast<uint8_t*>(pOutputStream);
 
 #if defined(_MATH_NO_INTRINSICS_)
-    const float m00 = M.r[0].vector4_f32[0];
-    const float m10 = M.r[0].vector4_f32[1];
-    const float m20 = M.r[0].vector4_f32[2];
-    const float m30 = M.r[0].vector4_f32[3];
-    const float m01 = M.r[1].vector4_f32[0];
-    const float m11 = M.r[1].vector4_f32[1];
-    const float m21 = M.r[1].vector4_f32[2];
-    const float m31 = M.r[1].vector4_f32[3];
-    const float m02 = M.r[2].vector4_f32[0];
-    const float m12 = M.r[2].vector4_f32[1];
-    const float m22 = M.r[2].vector4_f32[2];
-    const float m32 = M.r[2].vector4_f32[3];
-    const float m03 = M.r[3].vector4_f32[0];
-    const float m13 = M.r[3].vector4_f32[1];
-    const float m23 = M.r[3].vector4_f32[2];
-    const float m33 = M.r[3].vector4_f32[3];
+    const ScalarVectorStreamDetail::MatrixColumns transform(M);
 
-    if((InputStride == sizeof(Float3)) && (OutputStride == sizeof(Float4))){
+    if(ScalarVectorStreamDetail::HasTightStride<Float3, Float4>(InputStride, OutputStride)){
         const Float3* input = pInputStream;
         Float4* output = pOutputStream;
 
@@ -61,10 +52,7 @@ inline Float4* MathCallConv Vector3TransformStreamScalar
             const float y = input->y;
             const float z = input->z;
 
-            output->x = (x * m00) + (y * m01) + (z * m02) + m03;
-            output->y = (x * m10) + (y * m11) + (z * m12) + m13;
-            output->z = (x * m20) + (y * m21) + (z * m22) + m23;
-            output->w = (x * m30) + (y * m31) + (z * m32) + m33;
+            transform.Transform3(x, y, z, output->x, output->y, output->z, output->w);
 
             ++input;
             ++output;
@@ -80,10 +68,7 @@ inline Float4* MathCallConv Vector3TransformStreamScalar
         const float y = input->y;
         const float z = input->z;
 
-        output->x = (x * m00) + (y * m01) + (z * m02) + m03;
-        output->y = (x * m10) + (y * m11) + (z * m12) + m13;
-        output->z = (x * m20) + (y * m21) + (z * m22) + m23;
-        output->w = (x * m30) + (y * m31) + (z * m32) + m33;
+        transform.Transform3(x, y, z, output->x, output->y, output->z, output->w);
 
         pInputVector += InputStride;
         pOutputVector += OutputStride;

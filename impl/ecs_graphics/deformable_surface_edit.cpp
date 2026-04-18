@@ -21,6 +21,13 @@ namespace __hidden_deformable_surface_edit{
 
 static constexpr f32 s_Epsilon = 0.000001f;
 static constexpr f32 s_FrameEpsilon = 0.00000001f;
+static constexpr f32 s_BarycentricSumEpsilon = 0.001f;
+static constexpr f32 s_RestFrameLengthSquaredEpsilon = 0.000001f;
+static constexpr f32 s_RestFrameUnitLengthSquaredEpsilon = 0.01f;
+static constexpr f32 s_RestFrameOrthogonalityEpsilon = 0.01f;
+static constexpr f32 s_TangentHandednessEpsilon = 0.000001f;
+static constexpr f32 s_TangentHandednessUnitEpsilon = 0.001f;
+static constexpr f32 s_TriangleAreaLengthSquaredEpsilon = 0.000000000001f;
 
 struct Vec3{
     f32 x = 0.0f;
@@ -75,6 +82,14 @@ struct WallVertexFrame{
     return AbsF32(value - 1.0f) <= 0.001f;
 }
 
+[[nodiscard]] bool NearlySignedOne(const f32 value){
+    return AbsF32(AbsF32(value) - 1.0f) <= s_TangentHandednessUnitEpsilon;
+}
+
+[[nodiscard]] bool NearlyUnitLengthSquared(const f32 value){
+    return AbsF32(value - 1.0f) <= s_RestFrameUnitLengthSquaredEpsilon;
+}
+
 [[nodiscard]] bool IsFiniteFloat2(const Float2Data& value){
     return IsFinite(value.x) && IsFinite(value.y);
 }
@@ -87,12 +102,65 @@ struct WallVertexFrame{
     return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z) && IsFinite(value.w);
 }
 
-[[nodiscard]] bool ValidRestVertex(const DeformableVertexRest& vertex){
-    return IsFiniteFloat3(vertex.position)
-        && IsFiniteFloat3(vertex.normal)
-        && IsFiniteFloat4(vertex.tangent)
-        && IsFiniteFloat2(vertex.uv0)
-        && IsFiniteFloat4(vertex.color0)
+[[nodiscard]] f32 LengthSquared3(const f32 x, const f32 y, const f32 z){
+    return (x * x) + (y * y) + (z * z);
+}
+
+[[nodiscard]] f32 DotFloat3(const Float3Data& lhs, const Float3Data& rhs){
+    return (lhs.x * rhs.x) + (lhs.y * rhs.y) + (lhs.z * rhs.z);
+}
+
+[[nodiscard]] Float3Data SubtractFloat3(const Float3Data& lhs, const Float3Data& rhs){
+    return Float3Data(lhs.x - rhs.x, lhs.y - rhs.y, lhs.z - rhs.z);
+}
+
+[[nodiscard]] Float3Data CrossFloat3(const Float3Data& lhs, const Float3Data& rhs){
+    return Float3Data(
+        (lhs.y * rhs.z) - (lhs.z * rhs.y),
+        (lhs.z * rhs.x) - (lhs.x * rhs.z),
+        (lhs.x * rhs.y) - (lhs.y * rhs.x)
+    );
+}
+
+[[nodiscard]] bool ValidRestVertexFrame(const DeformableVertexRest& vertex){
+    if(!IsFiniteFloat3(vertex.position)
+        || !IsFiniteFloat3(vertex.normal)
+        || !IsFiniteFloat4(vertex.tangent)
+        || !IsFiniteFloat2(vertex.uv0)
+        || !IsFiniteFloat4(vertex.color0)
+    )
+        return false;
+
+    const f32 normalLengthSquared = LengthSquared3(vertex.normal.x, vertex.normal.y, vertex.normal.z);
+    const f32 tangentLengthSquared = LengthSquared3(vertex.tangent.x, vertex.tangent.y, vertex.tangent.z);
+    const Float3Data tangentVector(vertex.tangent.x, vertex.tangent.y, vertex.tangent.z);
+    const f32 tangentHandedness = AbsF32(vertex.tangent.w);
+    const Float3Data frameCross = CrossFloat3(vertex.normal, tangentVector);
+    const f32 frameCrossLengthSquared = LengthSquared3(frameCross.x, frameCross.y, frameCross.z);
+    if(normalLengthSquared <= s_RestFrameLengthSquaredEpsilon
+        || tangentLengthSquared <= s_RestFrameLengthSquaredEpsilon
+        || tangentHandedness <= s_TangentHandednessEpsilon
+        || !NearlySignedOne(vertex.tangent.w)
+        || frameCrossLengthSquared <= s_RestFrameLengthSquaredEpsilon
+    )
+        return false;
+
+    const f32 frameDot = DotFloat3(vertex.normal, tangentVector);
+    return NearlyUnitLengthSquared(normalLengthSquared)
+        && NearlyUnitLengthSquared(tangentLengthSquared)
+        && AbsF32(frameDot) <= s_RestFrameOrthogonalityEpsilon
+    ;
+}
+
+[[nodiscard]] bool ValidSourceBarycentric(const f32 (&bary)[3]){
+    const f32 barySum = bary[0] + bary[1] + bary[2];
+    return IsFinite(bary[0])
+        && IsFinite(bary[1])
+        && IsFinite(bary[2])
+        && bary[0] >= 0.0f
+        && bary[1] >= 0.0f
+        && bary[2] >= 0.0f
+        && AbsF32(barySum - 1.0f) <= s_BarycentricSumEpsilon
     ;
 }
 
@@ -111,7 +179,7 @@ struct WallVertexFrame{
 }
 
 [[nodiscard]] bool ValidSourceSample(const SourceSample& sample, const u32 sourceTriangleCount){
-    return sourceTriangleCount != 0u && sample.sourceTri < sourceTriangleCount && ValidBarycentric(sample.bary);
+    return sourceTriangleCount != 0u && sample.sourceTri < sourceTriangleCount && ValidSourceBarycentric(sample.bary);
 }
 
 [[nodiscard]] bool ValidMorphDelta(const DeformableMorphDelta& delta, const usize vertexCount){
@@ -120,6 +188,53 @@ struct WallVertexFrame{
         && IsFiniteFloat3(delta.deltaNormal)
         && IsFiniteFloat4(delta.deltaTangent)
     ;
+}
+
+[[nodiscard]] bool ValidTriangle(
+    const Vector<DeformableVertexRest>& restVertices,
+    const u32 a,
+    const u32 b,
+    const u32 c)
+{
+    if(a >= restVertices.size() || b >= restVertices.size() || c >= restVertices.size())
+        return false;
+    if(a == b || a == c || b == c)
+        return false;
+
+    const Float3Data ab = SubtractFloat3(restVertices[b].position, restVertices[a].position);
+    const Float3Data ac = SubtractFloat3(restVertices[c].position, restVertices[a].position);
+    const Float3Data areaCross = CrossFloat3(ab, ac);
+    const f32 areaLengthSquared = LengthSquared3(areaCross.x, areaCross.y, areaCross.z);
+    return areaLengthSquared > s_TriangleAreaLengthSquaredEpsilon;
+}
+
+[[nodiscard]] bool ValidMorphPayload(const Vector<DeformableMorph>& morphs, const usize vertexCount){
+    if(morphs.size() > static_cast<usize>(Limit<u32>::s_Max))
+        return false;
+
+    for(usize morphIndex = 0; morphIndex < morphs.size(); ++morphIndex){
+        const DeformableMorph& morph = morphs[morphIndex];
+        if(!morph.name || morph.deltas.empty())
+            return false;
+        if(morph.deltas.size() > static_cast<usize>(Limit<u32>::s_Max))
+            return false;
+
+        for(usize otherMorphIndex = morphIndex + 1u; otherMorphIndex < morphs.size(); ++otherMorphIndex){
+            if(morph.name == morphs[otherMorphIndex].name)
+                return false;
+        }
+
+        for(usize deltaIndex = 0; deltaIndex < morph.deltas.size(); ++deltaIndex){
+            const DeformableMorphDelta& delta = morph.deltas[deltaIndex];
+            if(!ValidMorphDelta(delta, vertexCount))
+                return false;
+            for(usize otherDeltaIndex = deltaIndex + 1u; otherDeltaIndex < morph.deltas.size(); ++otherDeltaIndex){
+                if(delta.vertexId == morph.deltas[otherDeltaIndex].vertexId)
+                    return false;
+            }
+        }
+    }
+    return true;
 }
 
 [[nodiscard]] bool ValidateRuntimePayloadArrays(
@@ -145,11 +260,17 @@ struct WallVertexFrame{
         return false;
 
     for(const DeformableVertexRest& vertex : restVertices){
-        if(!ValidRestVertex(vertex))
+        if(!ValidRestVertexFrame(vertex))
             return false;
     }
-    for(const u32 index : indices){
-        if(index >= restVertices.size())
+    for(usize indexBase = 0; indexBase < indices.size(); indexBase += 3u){
+        if(!ValidTriangle(
+                restVertices,
+                indices[indexBase + 0u],
+                indices[indexBase + 1u],
+                indices[indexBase + 2u]
+            )
+        )
             return false;
     }
     for(const SkinInfluence4& influence : skin){
@@ -160,13 +281,7 @@ struct WallVertexFrame{
         if(!ValidSourceSample(sample, sourceTriangleCount))
             return false;
     }
-    for(const DeformableMorph& morph : morphs){
-        for(const DeformableMorphDelta& delta : morph.deltas){
-            if(!ValidMorphDelta(delta, restVertices.size()))
-                return false;
-        }
-    }
-    return true;
+    return ValidMorphPayload(morphs, restVertices.size());
 }
 
 [[nodiscard]] Vec3 ToVec3(const Float3Data& value){
@@ -578,7 +693,7 @@ void CanonicalizeBoundaryLoopStart(Vector<EdgeRecord>& edges){
     wallVertex.tangent.z = tangent.z;
     wallVertex.tangent.w = TangentHandedness(wallVertex.tangent.w);
     wallVertex.uv0 = Float2Data(uvU, uvV);
-    if(!ValidRestVertex(wallVertex))
+    if(!ValidRestVertexFrame(wallVertex))
         return false;
 
     outVertex = static_cast<u32>(vertices.size());

@@ -24,6 +24,9 @@ namespace __hidden_deformable_runtime_mesh_cache{
 
 
 static constexpr RuntimeMeshDirtyFlags s_KnownDirtyFlags = RuntimeMeshDirtyFlag::All;
+static constexpr RuntimeMeshDirtyFlags s_GpuUploadHandledDirtyFlags =
+    RuntimeMeshDirtyFlag::TopologyDirty | RuntimeMeshDirtyFlag::AttributesDirty | RuntimeMeshDirtyFlag::GpuUploadDirty
+;
 
 [[nodiscard]] RuntimeMeshDirtyFlags SanitizeDirtyFlags(const RuntimeMeshDirtyFlags dirtyFlags){
     return static_cast<RuntimeMeshDirtyFlags>(dirtyFlags & s_KnownDirtyFlags);
@@ -186,7 +189,7 @@ bool DeformableRuntimeMeshCache::ensureRuntimeMesh(Core::ECS::EntityID entity, D
                     return false;
                 }
                 instance.dirtyFlags = static_cast<RuntimeMeshDirtyFlags>(
-                    instance.dirtyFlags & ~RuntimeMeshDirtyFlag::GpuUploadDirty
+                    instance.dirtyFlags & ~__hidden_deformable_runtime_mesh_cache::s_GpuUploadHandledDirtyFlags
                 );
             }
             return instance.valid();
@@ -224,7 +227,7 @@ bool DeformableRuntimeMeshCache::ensureRuntimeMesh(Core::ECS::EntityID entity, D
         return false;
     }
     instance.dirtyFlags = static_cast<RuntimeMeshDirtyFlags>(
-        instance.dirtyFlags & ~RuntimeMeshDirtyFlag::GpuUploadDirty
+        instance.dirtyFlags & ~__hidden_deformable_runtime_mesh_cache::s_GpuUploadHandledDirtyFlags
     );
 
     ++source->referenceCount;

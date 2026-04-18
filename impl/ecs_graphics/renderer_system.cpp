@@ -53,7 +53,7 @@ struct ShaderDrivenPushConstants{
     u32 triangleCount = 0;
     u32 scissorCullEnabled = 0;
     u32 instanceIndex = 0;
-    u32 padding1 = 0;
+    u32 sourceVertexLayout = 0;
     f32 viewportRect[4] = {};
     f32 scissorRect[4] = {};
     f32 viewRotation[4] = {};
@@ -452,7 +452,7 @@ static ShaderDrivenPushConstants BuildShaderDrivenPushConstants(
     ShaderDrivenPushConstants pushConstants;
     pushConstants.triangleCount = triangleCount;
     pushConstants.instanceIndex = instanceIndex;
-    pushConstants.padding1 = sourceVertexLayout;
+    pushConstants.sourceVertexLayout = sourceVertexLayout;
     CopyFloat4(pushConstants.viewRotation, viewState.viewRotation);
     CopyFloat4(pushConstants.viewPositionDepthBias, viewState.viewPositionDepthBias);
 

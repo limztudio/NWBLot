@@ -117,6 +117,50 @@ struct EdgeRecord{
     ;
 }
 
+[[nodiscard]] bool ValidateRuntimePayloadArrays(
+    const Vector<DeformableVertexRest>& restVertices,
+    const Vector<u32>& indices,
+    const Vector<SkinInfluence4>& skin,
+    const Vector<SourceSample>& sourceSamples,
+    const Vector<DeformableMorph>& morphs)
+{
+    if(restVertices.empty() || indices.empty())
+        return false;
+    if(restVertices.size() > static_cast<usize>(Limit<u32>::s_Max)
+        || indices.size() > static_cast<usize>(Limit<u32>::s_Max)
+        || (indices.size() % 3u) != 0u
+    )
+        return false;
+    if(!skin.empty() && skin.size() != restVertices.size())
+        return false;
+    if(!sourceSamples.empty() && sourceSamples.size() != restVertices.size())
+        return false;
+
+    for(const DeformableVertexRest& vertex : restVertices){
+        if(!ValidRestVertex(vertex))
+            return false;
+    }
+    for(const u32 index : indices){
+        if(index >= restVertices.size())
+            return false;
+    }
+    for(const SkinInfluence4& influence : skin){
+        if(!ValidSkinInfluence(influence))
+            return false;
+    }
+    for(const SourceSample& sample : sourceSamples){
+        if(!ValidSourceSample(sample))
+            return false;
+    }
+    for(const DeformableMorph& morph : morphs){
+        for(const DeformableMorphDelta& delta : morph.deltas){
+            if(!ValidMorphDelta(delta, restVertices.size()))
+                return false;
+        }
+    }
+    return true;
+}
+
 [[nodiscard]] Vec3 ToVec3(const Float3Data& value){
     return Vec3{ value.x, value.y, value.z };
 }
@@ -285,39 +329,13 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
 [[nodiscard]] bool ValidateRuntimePayload(const DeformableRuntimeMeshInstance& instance){
     if(!instance.entity.valid() || !instance.handle.valid() || instance.restVertices.empty() || instance.indices.empty())
         return false;
-    if(instance.restVertices.size() > static_cast<usize>(Limit<u32>::s_Max)
-        || instance.indices.size() > static_cast<usize>(Limit<u32>::s_Max)
-        || (instance.indices.size() % 3u) != 0u
-    )
-        return false;
-    if(!instance.skin.empty() && instance.skin.size() != instance.restVertices.size())
-        return false;
-    if(!instance.sourceSamples.empty() && instance.sourceSamples.size() != instance.restVertices.size())
-        return false;
-
-    for(const DeformableVertexRest& vertex : instance.restVertices){
-        if(!ValidRestVertex(vertex))
-            return false;
-    }
-    for(const u32 index : instance.indices){
-        if(index >= instance.restVertices.size())
-            return false;
-    }
-    for(const SkinInfluence4& skin : instance.skin){
-        if(!ValidSkinInfluence(skin))
-            return false;
-    }
-    for(const SourceSample& sample : instance.sourceSamples){
-        if(!ValidSourceSample(sample))
-            return false;
-    }
-    for(const DeformableMorph& morph : instance.morphs){
-        for(const DeformableMorphDelta& delta : morph.deltas){
-            if(!ValidMorphDelta(delta, instance.restVertices.size()))
-                return false;
-        }
-    }
-    return true;
+    return ValidateRuntimePayloadArrays(
+        instance.restVertices,
+        instance.indices,
+        instance.skin,
+        instance.sourceSamples,
+        instance.morphs
+    );
 }
 
 [[nodiscard]] bool ValidateParams(const DeformableRuntimeMeshInstance& instance, const DeformableHoleEditParams& params){
@@ -704,6 +722,16 @@ bool CommitDeformableRestSpaceHole(
             addedTriangleCount += 2u;
         }
     }
+
+    if(!__hidden_deformable_surface_edit::ValidateRuntimePayloadArrays(
+            newRestVertices,
+            newIndices,
+            newSkin,
+            newSourceSamples,
+            newMorphs
+        )
+    )
+        return false;
 
     instance.restVertices = Move(newRestVertices);
     instance.indices = Move(newIndices);

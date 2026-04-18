@@ -4,8 +4,6 @@
 
 #include "project_testbed.h"
 
-#include <stdexcept>
-
 #include <logger/client/logger.h>
 
 

@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_graphics/deformable_picking.h>
+#include <impl/ecs_graphics/deformable_surface_edit.h>
 
 #include <core/common/common.h>
 
@@ -98,6 +99,50 @@ static NWB::Impl::DeformableRuntimeMeshInstance MakeQuadMixedProvenanceInstance(
     instance.sourceSamples.push_back(MakeSourceSample(0u, 0.0f, 1.0f, 0.0f));
     instance.sourceSamples.push_back(MakeSourceSample(0u, 0.0f, 0.0f, 1.0f));
     instance.sourceSamples.push_back(MakeSourceSample(1u, 0.0f, 0.0f, 1.0f));
+    return instance;
+}
+
+static NWB::Impl::DeformableRuntimeMeshInstance MakeGridHoleInstance(){
+    NWB::Impl::DeformableRuntimeMeshInstance instance;
+    instance.entity = NWB::Core::ECS::EntityID(3u, 0u);
+    instance.handle.value = 44u;
+    instance.editRevision = 3u;
+    instance.dirtyFlags = NWB::Impl::RuntimeMeshDirtyFlag::None;
+
+    for(u32 y = 0; y < 4u; ++y){
+        for(u32 x = 0; x < 4u; ++x)
+            instance.restVertices.push_back(MakeVertex(-1.5f + static_cast<f32>(x), -1.5f + static_cast<f32>(y), 0.0f));
+    }
+
+    auto vertexIndex = [](const u32 x, const u32 y) -> u32{
+        return (y * 4u) + x;
+    };
+
+    for(u32 y = 0; y < 3u; ++y){
+        for(u32 x = 0; x < 3u; ++x){
+            const u32 v0 = vertexIndex(x, y);
+            const u32 v1 = vertexIndex(x + 1u, y);
+            const u32 v2 = vertexIndex(x + 1u, y + 1u);
+            const u32 v3 = vertexIndex(x, y + 1u);
+            instance.indices.push_back(v0);
+            instance.indices.push_back(v1);
+            instance.indices.push_back(v2);
+            instance.indices.push_back(v0);
+            instance.indices.push_back(v2);
+            instance.indices.push_back(v3);
+        }
+    }
+
+    instance.skin.resize(instance.restVertices.size());
+    for(NWB::Impl::SkinInfluence4& skin : instance.skin){
+        skin.joint[0] = 0u;
+        skin.weight[0] = 1.0f;
+    }
+
+    instance.sourceSamples.resize(instance.restVertices.size());
+    for(NWB::Impl::SourceSample& sample : instance.sourceSamples)
+        sample = MakeSourceSample(0u, 1.0f, 0.0f, 0.0f);
+
     return instance;
 }
 
@@ -426,6 +471,85 @@ static void TestPickingRejectsActiveEmptyMorph(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::BuildDeformablePickingVertices(instance, inputs, vertices));
 }
 
+static void TestRestSpaceHoleEditCreatesPerInstancePatch(TestContext& context){
+    NWB::Impl::DeformableRuntimeMeshInstance instance = MakeGridHoleInstance();
+    const usize oldVertexCount = instance.restVertices.size();
+    const usize oldIndexCount = instance.indices.size();
+
+    NWB::Impl::DeformableMorph morph;
+    morph.name = Name("boundary_lift");
+    NWB::Impl::DeformableMorphDelta delta;
+    delta.vertexId = 5u;
+    delta.deltaPosition = Float3Data(0.0f, 0.0f, 0.2f);
+    delta.deltaNormal = Float3Data(0.0f, 0.0f, 0.0f);
+    delta.deltaTangent = Float4Data(0.0f, 0.0f, 0.0f, 0.0f);
+    morph.deltas.push_back(delta);
+    instance.morphs.push_back(morph);
+
+    NWB::Impl::DeformableHoleEditParams params;
+    params.posedHit.entity = instance.entity;
+    params.posedHit.runtimeMesh = instance.handle;
+    params.posedHit.editRevision = instance.editRevision;
+    params.posedHit.triangle = 8u;
+    params.posedHit.bary[0] = 0.25f;
+    params.posedHit.bary[1] = 0.25f;
+    params.posedHit.bary[2] = 0.5f;
+    params.radius = 0.48f;
+    params.ellipseRatio = 1.0f;
+    params.depth = 0.25f;
+
+    NWB::Impl::DeformableHoleEditResult result;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::CommitDeformableRestSpaceHole(instance, params, &result));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, result.removedTriangleCount == 2u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, result.addedVertexCount == 4u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, result.addedTriangleCount == 8u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, result.editRevision == 4u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.editRevision == 4u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, (instance.dirtyFlags & NWB::Impl::RuntimeMeshDirtyFlag::All) == NWB::Impl::RuntimeMeshDirtyFlag::All);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.restVertices.size() == oldVertexCount + 4u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.indices.size() == oldIndexCount - 6u + 24u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.skin.size() == instance.restVertices.size());
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.sourceSamples.size() == instance.restVertices.size());
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.morphs.size() == 1u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.morphs[0].deltas.size() == 2u);
+
+    for(usize vertexIndex = oldVertexCount; vertexIndex < instance.restVertices.size(); ++vertexIndex)
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(instance.restVertices[vertexIndex].position.z, -0.25f));
+    for(const u32 index : instance.indices)
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, index < instance.restVertices.size());
+
+    bool foundTransferredMorph = false;
+    for(const NWB::Impl::DeformableMorphDelta& transferredDelta : instance.morphs[0].deltas){
+        if(transferredDelta.vertexId >= oldVertexCount && NearlyEqual(transferredDelta.deltaPosition.z, 0.2f))
+            foundTransferredMorph = true;
+    }
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, foundTransferredMorph);
+}
+
+static void TestRestSpaceHoleEditRejectsOpenBoundaryPatch(TestContext& context){
+    NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
+    const usize oldVertexCount = instance.restVertices.size();
+    const usize oldIndexCount = instance.indices.size();
+    const u32 oldRevision = instance.editRevision;
+
+    NWB::Impl::DeformableHoleEditParams params;
+    params.posedHit.entity = instance.entity;
+    params.posedHit.runtimeMesh = instance.handle;
+    params.posedHit.editRevision = instance.editRevision;
+    params.posedHit.triangle = 0u;
+    params.posedHit.bary[0] = 0.25f;
+    params.posedHit.bary[1] = 0.25f;
+    params.posedHit.bary[2] = 0.5f;
+    params.radius = 0.25f;
+    params.ellipseRatio = 1.0f;
+    params.depth = 0.25f;
+
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::CommitDeformableRestSpaceHole(instance, params));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.restVertices.size() == oldVertexCount);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.indices.size() == oldIndexCount);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.editRevision == oldRevision);
+}
+
 
 #undef NWB_ECS_GRAPHICS_TEST_CHECK
 
@@ -462,6 +586,8 @@ int main(){
     __hidden_ecs_graphics_tests::TestPickingVerticesIncludeMorphAndDisplacement(context);
     __hidden_ecs_graphics_tests::TestPickingRejectsInvalidMorphDelta(context);
     __hidden_ecs_graphics_tests::TestPickingRejectsActiveEmptyMorph(context);
+    __hidden_ecs_graphics_tests::TestRestSpaceHoleEditCreatesPerInstancePatch(context);
+    __hidden_ecs_graphics_tests::TestRestSpaceHoleEditRejectsOpenBoundaryPatch(context);
 
     if(context.failed != 0u){
         NWB_CERR << "ecs graphics tests failed: " << context.failed << " failed, " << context.passed << " passed\n";

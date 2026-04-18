@@ -112,10 +112,21 @@ vec3 nwbDeformerSafeNormalize(const vec3 value, const vec3 fallback){
     return lengthSquared > 0.00000001 ? value * inversesqrt(lengthSquared) : fallback;
 }
 
+vec3 nwbDeformerFallbackTangent(const vec3 normal){
+    const vec3 axis = abs(normal.z) < 0.999 ? vec3(0.0, 0.0, 1.0) : vec3(0.0, 1.0, 0.0);
+    return normalize(cross(axis, normal));
+}
+
 void nwbDeformerOrthonormalizeFrame(inout vec3 normal, inout vec4 tangent, const vec3 fallbackNormal, const vec3 fallbackTangent){
-    normal = nwbDeformerSafeNormalize(normal, fallbackNormal);
-    tangent.xyz -= normal * dot(tangent.xyz, normal);
-    tangent.xyz = nwbDeformerSafeNormalize(tangent.xyz, fallbackTangent);
+    normal = nwbDeformerSafeNormalize(normal, nwbDeformerSafeNormalize(fallbackNormal, vec3(0.0, 0.0, 1.0)));
+
+    vec3 projectedTangent = tangent.xyz - (normal * dot(tangent.xyz, normal));
+    if(dot(projectedTangent, projectedTangent) <= 0.00000001)
+        projectedTangent = fallbackTangent - (normal * dot(fallbackTangent, normal));
+    if(dot(projectedTangent, projectedTangent) <= 0.00000001)
+        projectedTangent = nwbDeformerFallbackTangent(normal);
+
+    tangent.xyz = nwbDeformerSafeNormalize(projectedTangent, nwbDeformerFallbackTangent(normal));
 }
 
 void nwbDeformerApplySkin(const uint vertexId, inout vec3 position, inout vec3 normal, inout vec4 tangent){

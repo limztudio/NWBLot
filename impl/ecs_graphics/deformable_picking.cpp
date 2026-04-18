@@ -494,6 +494,8 @@ bool BuildDeformablePickingVertices(
 
         __hidden_deformable_picking::ApplyDisplacement(displacement, vertex);
         __hidden_deformable_picking::ApplyTransform(inputs.transform, vertex);
+        if(!DeformableValidation::ValidRestVertexFrame(vertex))
+            return false;
     }
 
     return true;

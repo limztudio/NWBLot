@@ -681,6 +681,27 @@ static void TestPickingRejectsActiveEmptyMorph(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::BuildDeformablePickingVertices(instance, inputs, vertices));
 }
 
+static void TestPickingRejectsNonFiniteEvaluatedVertices(TestContext& context){
+    NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
+
+    NWB::Impl::DeformableMorph morph;
+    morph.name = Name("overflow");
+    NWB::Impl::DeformableMorphDelta delta;
+    delta.vertexId = 0u;
+    delta.deltaPosition = Float3Data(std::numeric_limits<f32>::max(), 0.0f, 0.0f);
+    morph.deltas.push_back(delta);
+    instance.morphs.push_back(morph);
+
+    NWB::Impl::DeformableMorphWeightsComponent weights;
+    weights.weights.push_back(NWB::Impl::DeformableMorphWeight{ Name("overflow"), 2.0f });
+
+    NWB::Impl::DeformablePickingInputs inputs;
+    inputs.morphWeights = &weights;
+
+    Vector<NWB::Impl::DeformableVertexRest> vertices;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::BuildDeformablePickingVertices(instance, inputs, vertices));
+}
+
 static void TestRestSpaceHoleEditCreatesPerInstancePatch(TestContext& context){
     NWB::Impl::DeformableRuntimeMeshInstance instance = MakeGridHoleInstance();
     const usize oldVertexCount = instance.restVertices.size();
@@ -1017,6 +1038,7 @@ int main(){
     __hidden_ecs_graphics_tests::TestPickingRejectsInvalidDisplacementDescriptor(context);
     __hidden_ecs_graphics_tests::TestPickingRejectsInvalidMorphDelta(context);
     __hidden_ecs_graphics_tests::TestPickingRejectsActiveEmptyMorph(context);
+    __hidden_ecs_graphics_tests::TestPickingRejectsNonFiniteEvaluatedVertices(context);
     __hidden_ecs_graphics_tests::TestRestSpaceHoleEditCreatesPerInstancePatch(context);
     __hidden_ecs_graphics_tests::TestRestSpaceHoleEditRejectsOpenBoundaryPatch(context);
     __hidden_ecs_graphics_tests::TestRestSpaceHoleEditRejectsDegenerateHitFrame(context);

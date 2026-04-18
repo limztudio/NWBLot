@@ -252,6 +252,22 @@ static void TestRestSampleRejectsOutOfRangeProvenance(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::ResolveDeformableRestSurfaceSample(instance, 0u, bary, sample));
 }
 
+static void TestRestSampleCanonicalizesEdgeTolerance(TestContext& context){
+    const NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
+    const f32 bary[3] = { -0.0000005f, 0.5000005f, 0.5f };
+
+    NWB::Impl::SourceSample sample;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::ResolveDeformableRestSurfaceSample(instance, 0u, bary, sample));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, sample.sourceTri == 9u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, sample.bary[0] >= 0.0f);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, sample.bary[1] >= 0.0f);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, sample.bary[2] >= 0.0f);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(sample.bary[0] + sample.bary[1] + sample.bary[2], 1.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(sample.bary[0], 0.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(sample.bary[1], 0.5f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(sample.bary[2], 0.5f));
+}
+
 static void TestPickingVerticesRejectInvalidIndexRange(TestContext& context){
     NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
     instance.indices[2] = 99u;
@@ -876,6 +892,7 @@ int main(){
     __hidden_ecs_graphics_tests::TestMixedProvenanceFallsBackToRestTriangle(context);
     __hidden_ecs_graphics_tests::TestRestSampleRejectsMalformedIndexPayload(context);
     __hidden_ecs_graphics_tests::TestRestSampleRejectsOutOfRangeProvenance(context);
+    __hidden_ecs_graphics_tests::TestRestSampleCanonicalizesEdgeTolerance(context);
     __hidden_ecs_graphics_tests::TestPickingVerticesRejectInvalidIndexRange(context);
     __hidden_ecs_graphics_tests::TestPickingVerticesRejectNonFiniteRestData(context);
     __hidden_ecs_graphics_tests::TestRaycastReturnsPoseAndRestHit(context);

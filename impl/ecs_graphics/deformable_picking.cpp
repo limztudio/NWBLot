@@ -24,6 +24,7 @@ namespace __hidden_deformable_picking{
 
 static constexpr f32 s_Epsilon = 0.000001f;
 static constexpr f32 s_FrameEpsilon = 0.00000001f;
+static constexpr f32 s_BarycentricSumEpsilon = 0.001f;
 static constexpr f32 s_SkinWeightSumEpsilon = 0.001f;
 
 struct Vec3{
@@ -81,9 +82,9 @@ struct Vec3{
     ;
 }
 
-[[nodiscard]] bool NearlyOne(const f32 value){
+[[nodiscard]] bool NearlyOne(const f32 value, const f32 epsilon){
     const f32 difference = value > 1.0f ? value - 1.0f : 1.0f - value;
-    return difference <= s_SkinWeightSumEpsilon;
+    return difference <= epsilon;
 }
 
 [[nodiscard]] bool ValidBarycentric(const f32 (&bary)[3]){
@@ -93,12 +94,23 @@ struct Vec3{
         && bary[0] >= -s_Epsilon
         && bary[1] >= -s_Epsilon
         && bary[2] >= -s_Epsilon
-        && NearlyOne(bary[0] + bary[1] + bary[2])
+        && NearlyOne(bary[0] + bary[1] + bary[2], s_BarycentricSumEpsilon)
+    ;
+}
+
+[[nodiscard]] bool ValidSourceBarycentric(const f32 (&bary)[3]){
+    return IsFinite(bary[0])
+        && IsFinite(bary[1])
+        && IsFinite(bary[2])
+        && bary[0] >= 0.0f
+        && bary[1] >= 0.0f
+        && bary[2] >= 0.0f
+        && NearlyOne(bary[0] + bary[1] + bary[2], s_BarycentricSumEpsilon)
     ;
 }
 
 [[nodiscard]] bool ValidSourceSample(const SourceSample& sample, const u32 sourceTriangleCount){
-    return sourceTriangleCount != 0u && sample.sourceTri < sourceTriangleCount && ValidBarycentric(sample.bary);
+    return sourceTriangleCount != 0u && sample.sourceTri < sourceTriangleCount && ValidSourceBarycentric(sample.bary);
 }
 
 [[nodiscard]] bool ValidRestVertex(const DeformableVertexRest& vertex){
@@ -110,11 +122,28 @@ struct Vec3{
     ;
 }
 
-void AssignCurrentTriangleSample(const u32 triangle, const f32 (&bary)[3], SourceSample& outSample){
+[[nodiscard]] bool NormalizeSourceBarycentric(const f32 (&bary)[3], f32 (&outBary)[3]){
+    if(!ValidBarycentric(bary))
+        return false;
+
+    outBary[0] = Clamp01(bary[0]);
+    outBary[1] = Clamp01(bary[1]);
+    outBary[2] = Clamp01(bary[2]);
+
+    const f32 barySum = outBary[0] + outBary[1] + outBary[2];
+    if(!IsFinite(barySum) || barySum <= s_Epsilon)
+        return false;
+
+    const f32 invBarySum = 1.0f / barySum;
+    outBary[0] *= invBarySum;
+    outBary[1] *= invBarySum;
+    outBary[2] *= invBarySum;
+    return ValidSourceBarycentric(outBary);
+}
+
+[[nodiscard]] bool AssignCurrentTriangleSample(const u32 triangle, const f32 (&bary)[3], SourceSample& outSample){
     outSample.sourceTri = triangle;
-    outSample.bary[0] = bary[0];
-    outSample.bary[1] = bary[1];
-    outSample.bary[2] = bary[2];
+    return NormalizeSourceBarycentric(bary, outSample.bary);
 }
 
 [[nodiscard]] Vec3 ToVec3(const Float3Data& value){
@@ -284,7 +313,7 @@ void OrthonormalizeFrame(
             return false;
     }
 
-    return NearlyOne(weightSum);
+    return NearlyOne(weightSum, s_SkinWeightSumEpsilon);
 }
 
 [[nodiscard]] bool ValidateJointPalette(
@@ -571,8 +600,7 @@ bool ResolveDeformableRestSurfaceSample(
         if(triangle >= triangleCount)
             return false;
 
-        __hidden_deformable_picking::AssignCurrentTriangleSample(triangle, bary, outSample);
-        return true;
+        return __hidden_deformable_picking::AssignCurrentTriangleSample(triangle, bary, outSample);
     }
     if(instance.sourceSamples.size() != instance.restVertices.size())
         return false;
@@ -591,19 +619,19 @@ bool ResolveDeformableRestSurfaceSample(
         if(triangle >= triangleCount)
             return false;
 
-        __hidden_deformable_picking::AssignCurrentTriangleSample(triangle, bary, outSample);
-        return true;
+        return __hidden_deformable_picking::AssignCurrentTriangleSample(triangle, bary, outSample);
     }
 
     outSample.sourceTri = sample0.sourceTri;
+    f32 rawBary[3] = {};
     for(u32 i = 0; i < 3u; ++i){
-        outSample.bary[i] =
+        rawBary[i] =
             (bary[0] * sample0.bary[i])
             + (bary[1] * sample1.bary[i])
             + (bary[2] * sample2.bary[i])
         ;
     }
-    return true;
+    return __hidden_deformable_picking::NormalizeSourceBarycentric(rawBary, outSample.bary);
 }
 
 bool RaycastDeformableRuntimeMesh(

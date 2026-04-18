@@ -487,6 +487,10 @@ bool BuildDeformablePickingVertices(
         || instance.indices.size() > static_cast<usize>(Limit<u32>::s_Max)
     )
         return false;
+    for(const u32 index : instance.indices){
+        if(index >= instance.restVertices.size())
+            return false;
+    }
 
     DeformableDisplacement displacement;
     if(!__hidden_deformable_picking::ResolveDisplacement(instance, inputs.displacement, displacement))

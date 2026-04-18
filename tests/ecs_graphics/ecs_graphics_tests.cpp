@@ -141,6 +141,17 @@ static void TestRestSampleRejectsMalformedIndexPayload(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::ResolveDeformableRestSurfaceSample(instance, 0u, bary, sample));
 }
 
+static void TestPickingVerticesRejectInvalidIndexRange(TestContext& context){
+    NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
+    instance.indices[2] = 99u;
+
+    Vector<NWB::Impl::DeformableVertexRest> vertices;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        !NWB::Impl::BuildDeformablePickingVertices(instance, NWB::Impl::DeformablePickingInputs{}, vertices)
+    );
+}
+
 static void TestRaycastReturnsPoseAndRestHit(TestContext& context){
     const NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
 
@@ -428,6 +439,7 @@ int main(){
     __hidden_ecs_graphics_tests::TestRestSampleInterpolation(context);
     __hidden_ecs_graphics_tests::TestMixedProvenanceFallsBackToRestTriangle(context);
     __hidden_ecs_graphics_tests::TestRestSampleRejectsMalformedIndexPayload(context);
+    __hidden_ecs_graphics_tests::TestPickingVerticesRejectInvalidIndexRange(context);
     __hidden_ecs_graphics_tests::TestRaycastReturnsPoseAndRestHit(context);
     __hidden_ecs_graphics_tests::TestPoseStableRestHitRecovery(context);
     __hidden_ecs_graphics_tests::TestPickingUsesEntityTransform(context);

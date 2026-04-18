@@ -293,6 +293,25 @@ bool DeformableRuntimeMeshCache::uploadRuntimeMeshBuffers(DeformableRuntimeMeshI
         );
         return false;
     }
+    if((instance.indices.size() % 3u) != 0u){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' index count {} is not a multiple of 3"),
+            StringConvert(instance.source.name().c_str()),
+            instance.indices.size()
+        );
+        return false;
+    }
+    for(const u32 index : instance.indices){
+        if(index >= instance.restVertices.size()){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' index {} exceeds {} vertices"),
+                StringConvert(instance.source.name().c_str()),
+                index,
+                instance.restVertices.size()
+            );
+            return false;
+        }
+    }
 
     usize restVertexBytes = 0;
     usize indexBytes = 0;

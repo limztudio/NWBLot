@@ -477,7 +477,13 @@ bool CommitDeformableRestSpaceHole(
         ? boundaryEdges.size() * 6u
         : 0u
     ;
-    newIndices.reserve(instance.indices.size() - removedIndexCount + wallIndexCount);
+    const usize keptIndexCount = instance.indices.size() - removedIndexCount;
+    if(wallIndexCount > Limit<usize>::s_Max - keptIndexCount
+        || keptIndexCount + wallIndexCount > static_cast<usize>(Limit<u32>::s_Max)
+    )
+        return false;
+
+    newIndices.reserve(keptIndexCount + wallIndexCount);
     for(usize triangle = 0; triangle < triangleCount; ++triangle){
         if(removeTriangle[triangle] != 0u)
             continue;
@@ -507,6 +513,8 @@ bool CommitDeformableRestSpaceHole(
             )
         ;
         innerVertex.position = __hidden_deformable_surface_edit::ToFloat3(position);
+        if(!__hidden_deformable_surface_edit::ValidRestVertex(innerVertex))
+            return false;
 
         outInnerVertex = static_cast<u32>(newRestVertices.size());
         newRestVertices.push_back(innerVertex);

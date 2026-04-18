@@ -48,7 +48,7 @@ bool ProjectTestbed::onStartup(){
 
     const auto addRendererEntity = [this](const TestbedGeometryRef& geometry, const TestbedMaterialRef& material){
         auto entity = m_world->createEntity();
-        entity.addComponent<NWB::Core::ECSGraphics::TransformComponent>();
+        entity.addComponent<NWB::Core::ECS::TransformComponent>();
         auto& renderer = entity.addComponent<NWB::Core::ECSGraphics::RendererComponent>();
         renderer.geometry = geometry;
         renderer.material = material;

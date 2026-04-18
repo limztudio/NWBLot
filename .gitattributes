@@ -1,9 +1,9 @@
-*.c text eol=crlf
-*.cc text eol=crlf
-*.cpp text eol=crlf
-*.cxx text eol=crlf
-*.h text eol=crlf
-*.hpp text eol=crlf
+*.c text eol=crlf whitespace=blank-at-eol,space-before-tab,cr-at-eol,-blank-at-eof
+*.cc text eol=crlf whitespace=blank-at-eol,space-before-tab,cr-at-eol,-blank-at-eof
+*.cpp text eol=crlf whitespace=blank-at-eol,space-before-tab,cr-at-eol,-blank-at-eof
+*.cxx text eol=crlf whitespace=blank-at-eol,space-before-tab,cr-at-eol,-blank-at-eof
+*.h text eol=crlf whitespace=blank-at-eol,space-before-tab,cr-at-eol,-blank-at-eof
+*.hpp text eol=crlf whitespace=blank-at-eol,space-before-tab,cr-at-eol,-blank-at-eof
 *.inl text eol=crlf whitespace=blank-at-eol,space-before-tab,cr-at-eol,-blank-at-eof
 *.glsl text eol=crlf
 *.glsli text eol=crlf

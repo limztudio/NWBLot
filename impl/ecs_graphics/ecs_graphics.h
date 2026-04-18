@@ -24,7 +24,6 @@ namespace ECSGraphics{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using TransformComponent = NWB::Impl::TransformComponent;
 using RendererComponent = NWB::Impl::RendererComponent;
 using RendererSystem = NWB::Impl::RendererSystem;
 

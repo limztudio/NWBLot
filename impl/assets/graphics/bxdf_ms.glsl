@@ -6,35 +6,19 @@
 #include "mesh_shader_authoring.glsli"
 #include "bxdf.glsli"
 
-mat3 nwbEngineBuildRotationY(float angle){
-    const float c = cos(angle);
-    const float s = sin(angle);
-    return mat3(
-        c,   0.0, s,
-        0.0, 1.0, 0.0,
-       -s,   0.0, c
-    );
-}
-
-mat3 nwbEngineBuildRotationX(float angle){
-    const float c = cos(angle);
-    const float s = sin(angle);
-    return mat3(
-        1.0, 0.0, 0.0,
-        0.0, c,   s,
-        0.0, -s,  c
-    );
+vec3 nwbEngineRotateVectorByQuaternion(vec3 value, vec4 rotation){
+    const vec3 twiceCross = 2.0 * cross(rotation.xyz, value);
+    return value + rotation.w * twiceCross + cross(rotation.xyz, twiceCross);
 }
 
 vec4 nwbEngineBuildClipPosition(vec3 worldPosition){
-    const vec4 viewParams = nwbMeshViewParams();
-    const mat3 rotY = nwbEngineBuildRotationY(viewParams.x);
-    const mat3 rotX = nwbEngineBuildRotationX(viewParams.y);
+    const vec4 viewRotation = nwbMeshViewRotation();
+    const vec4 viewPositionDepthBias = nwbMeshViewPositionDepthBias();
 
-    vec3 p = rotY * (rotX * worldPosition);
-    p.z += viewParams.z;
+    vec3 p = nwbEngineRotateVectorByQuaternion(worldPosition - viewPositionDepthBias.xyz, viewRotation);
+    p.z += viewPositionDepthBias.w;
 
-    const float invZ = 1.0 / p.z;
+    const float invZ = 1.0 / max(p.z, 0.0001);
     const float ndcX = p.x * invZ;
     const float ndcY = p.y * invZ;
     const float ndcZ = (p.z - 1.0) * 0.5;

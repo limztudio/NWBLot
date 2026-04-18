@@ -73,17 +73,21 @@ static void TestProjectAndMainCamera(TestContext& context){
     auto cameraEntity = testWorld.world.createEntity();
     auto& transform = cameraEntity.addComponent<NWB::Core::ECS::TransformComponent>();
     auto& camera = cameraEntity.addComponent<NWB::Core::ECS::CameraComponent>();
+    auto& controller = cameraEntity.addComponent<NWB::Core::ECS::FpsCameraControllerComponent>();
     project.mainCamera = cameraEntity.id();
 
     NWB_ECS_TEST_CHECK(context, projectEntity.hasComponent<NWB::Core::ECS::ProjectComponent>());
     NWB_ECS_TEST_CHECK(context, cameraEntity.hasComponent<NWB::Core::ECS::TransformComponent>());
     NWB_ECS_TEST_CHECK(context, cameraEntity.hasComponent<NWB::Core::ECS::CameraComponent>());
+    NWB_ECS_TEST_CHECK(context, cameraEntity.hasComponent<NWB::Core::ECS::FpsCameraControllerComponent>());
     NWB_ECS_TEST_CHECK(context, project.mainCamera == cameraEntity.id());
     NWB_ECS_TEST_CHECK(context, project.mainCamera.valid());
     NWB_ECS_TEST_CHECK(context, testWorld.world.entityCount() == 2);
 
     NWB_ECS_TEST_CHECK(context, (reinterpret_cast<usize>(&transform) % alignof(NWB::Core::ECS::TransformComponent)) == 0);
     NWB_ECS_TEST_CHECK(context, (reinterpret_cast<usize>(&camera) % alignof(NWB::Core::ECS::CameraComponent)) == 0);
+    const usize controllerAlignment = alignof(NWB::Core::ECS::FpsCameraControllerComponent);
+    NWB_ECS_TEST_CHECK(context, (reinterpret_cast<usize>(&controller) % controllerAlignment) == 0);
     NWB_ECS_TEST_CHECK(context, transform.position.x == 0.0f);
     NWB_ECS_TEST_CHECK(context, transform.position.y == 0.0f);
     NWB_ECS_TEST_CHECK(context, transform.position.z == 0.0f);
@@ -98,18 +102,30 @@ static void TestProjectAndMainCamera(TestContext& context){
     NWB_ECS_TEST_CHECK(context, camera.nearPlane > 0.0f);
     NWB_ECS_TEST_CHECK(context, camera.farPlane > camera.nearPlane);
     NWB_ECS_TEST_CHECK(context, camera.aspectRatio > 0.0f);
+    NWB_ECS_TEST_CHECK(context, controller.yawRadians == 0.0f);
+    NWB_ECS_TEST_CHECK(context, controller.pitchRadians == 0.0f);
+    NWB_ECS_TEST_CHECK(context, controller.moveSpeed > 0.0f);
+    NWB_ECS_TEST_CHECK(context, controller.boostMultiplier >= 1.0f);
+    NWB_ECS_TEST_CHECK(context, controller.mouseSensitivityRadiansPerPixel > 0.0f);
+    NWB_ECS_TEST_CHECK(context, controller.pitchLimitRadians > 0.0f);
 
     usize cameraViewCount = 0;
-    testWorld.world.view<NWB::Core::ECS::TransformComponent, NWB::Core::ECS::CameraComponent>().each(
+    testWorld.world.view<
+        NWB::Core::ECS::TransformComponent,
+        NWB::Core::ECS::CameraComponent,
+        NWB::Core::ECS::FpsCameraControllerComponent
+    >().each(
         [&context, &cameraViewCount, cameraEntityId = cameraEntity.id()](
             NWB::Core::ECS::EntityID entityId,
             NWB::Core::ECS::TransformComponent& viewTransform,
-            NWB::Core::ECS::CameraComponent& viewCamera
+            NWB::Core::ECS::CameraComponent& viewCamera,
+            NWB::Core::ECS::FpsCameraControllerComponent& viewController
         ){
             ++cameraViewCount;
             NWB_ECS_TEST_CHECK(context, entityId == cameraEntityId);
             NWB_ECS_TEST_CHECK(context, viewTransform.rotation.w == 1.0f);
             NWB_ECS_TEST_CHECK(context, viewCamera.aspectRatio > 0.0f);
+            NWB_ECS_TEST_CHECK(context, viewController.moveSpeed > 0.0f);
         }
     );
     NWB_ECS_TEST_CHECK(context, cameraViewCount == 1);
@@ -130,6 +146,9 @@ static void TestComponentLifetime(TestContext& context){
 
     entity.addComponent<NWB::Core::ECS::CameraComponent>();
     NWB_ECS_TEST_CHECK(context, entity.hasComponent<NWB::Core::ECS::CameraComponent>());
+
+    entity.addComponent<NWB::Core::ECS::FpsCameraControllerComponent>();
+    NWB_ECS_TEST_CHECK(context, entity.hasComponent<NWB::Core::ECS::FpsCameraControllerComponent>());
 
     entity.destroy();
     NWB_ECS_TEST_CHECK(context, !entity.alive());

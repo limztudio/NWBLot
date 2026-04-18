@@ -9,6 +9,7 @@
 #include "entity.h"
 #include "transform_component.h"
 #include "camera_component.h"
+#include "fps_camera_controller_component.h"
 #include "project_component.h"
 
 

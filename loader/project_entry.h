@@ -18,6 +18,7 @@ NWB_CORE_BEGIN
 
 
 class Graphics;
+class InputDispatcher;
 
 namespace ECS{
     class World;
@@ -58,6 +59,7 @@ struct ProjectRuntimeContext{
     using ShaderPathResolveCallback = Function<bool(const Name& shaderName, AStringView variantName, const Name& stageName, Name& outVirtualPath)>;
 
     Core::Graphics& graphics;
+    Core::InputDispatcher& input;
     Core::Alloc::CustomArena& objectArena;
     Core::Alloc::ThreadPool& threadPool;
     Core::Alloc::JobSystem& jobSystem;

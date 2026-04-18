@@ -198,6 +198,7 @@ static int MainLogic(NotNull<const char*> logAddress, void* inst){
 
             NWB::ProjectRuntimeContext context = {
                 frame.graphics(),
+                frame.input(),
                 frame.projectObjectArena(),
                 frame.projectThreadPool(),
                 frame.projectJobSystem(),

@@ -4,12 +4,16 @@
 
 #include "renderer_system.h"
 
+#include <core/ecs/camera_component.h>
+#include <core/ecs/project_component.h>
+#include <core/ecs/transform_component.h>
 #include <core/graphics/shader_archive.h>
 #include <logger/client/logger.h>
 #include <impl/assets_graphics/geometry_asset.h>
 #include <impl/assets_graphics/material_asset.h>
 #include <impl/assets_graphics/shader_asset.h>
 #include <impl/assets_graphics/shader_stage_names.h>
+#include <global/matrix_math.h>
 
 #include <cmath>
 #include <cstdlib>
@@ -53,7 +57,8 @@ struct ShaderDrivenPushConstants{
     u32 padding1 = 0;
     f32 viewportRect[4] = {};
     f32 scissorRect[4] = {};
-    f32 viewParams[4] = {};
+    f32 viewRotation[4] = {};
+    f32 viewPositionDepthBias[4] = {};
 };
 
 struct AvboitPushConstants{
@@ -73,10 +78,18 @@ struct EmulatedVertex{
     f32 padding = 0.f;
 };
 
-static_assert(sizeof(ShaderDrivenPushConstants) == 64, "ShaderDrivenPushConstants layout must stay stable");
+struct MeshViewState{
+    f32 viewRotation[4] = {};
+    f32 viewPositionDepthBias[4] = {};
+};
+
+static_assert(sizeof(ShaderDrivenPushConstants) == 80, "ShaderDrivenPushConstants layout must stay stable");
 static_assert(sizeof(AvboitPushConstants) == 48, "AvboitPushConstants layout must stay stable");
-static_assert(sizeof(TransparentDrawPushConstants) == 112, "TransparentDrawPushConstants layout must stay stable");
-static_assert(sizeof(TransparentDrawPushConstants) <= Core::s_MaxPushConstantSize, "Transparent draw push constants must fit the portable push constant budget");
+static_assert(sizeof(TransparentDrawPushConstants) == 128, "TransparentDrawPushConstants layout must stay stable");
+static_assert(
+    sizeof(TransparentDrawPushConstants) <= Core::s_MaxPushConstantSize,
+    "Transparent draw push constants must fit the portable push constant budget"
+);
 static_assert(sizeof(EmulatedVertex) == s_EmulatedVertexStride, "EmulatedVertex layout must match the mesh emulation shader");
 
 
@@ -317,12 +330,91 @@ static u32 ComputeDispatchGroupCount(const u32 triangleCount){
     ;
 }
 
-static ShaderDrivenPushConstants BuildShaderDrivenPushConstants(const u32 triangleCount, const Core::ViewportState& viewportState){
+static void CopyFloat4(f32 (&destination)[4], const f32 (&source)[4]){
+    destination[0] = source[0];
+    destination[1] = source[1];
+    destination[2] = source[2];
+    destination[3] = source[3];
+}
+
+static MeshViewState BuildDefaultMeshViewState(){
+    MeshViewState state;
+    Float4Data rotation;
+    SourceMath::StoreFloat4(
+        &rotation,
+        SourceMath::QuaternionRotationRollPitchYaw(s_DefaultMeshViewRotationX, s_DefaultMeshViewRotationY, 0.0f)
+    );
+
+    state.viewRotation[0] = rotation.x;
+    state.viewRotation[1] = rotation.y;
+    state.viewRotation[2] = rotation.z;
+    state.viewRotation[3] = rotation.w;
+    state.viewPositionDepthBias[3] = s_DefaultMeshViewDepthOffset;
+    return state;
+}
+
+static void ApplyCameraMeshViewState(MeshViewState& state, const Core::ECS::TransformComponent& transform){
+    state.viewRotation[0] = -transform.rotation.x;
+    state.viewRotation[1] = -transform.rotation.y;
+    state.viewRotation[2] = -transform.rotation.z;
+    state.viewRotation[3] = transform.rotation.w;
+    state.viewPositionDepthBias[0] = transform.position.x;
+    state.viewPositionDepthBias[1] = transform.position.y;
+    state.viewPositionDepthBias[2] = transform.position.z;
+    state.viewPositionDepthBias[3] = 0.0f;
+}
+
+static MeshViewState ResolveMeshViewState(Core::ECS::World& world){
+    MeshViewState state = BuildDefaultMeshViewState();
+
+    Core::ECS::EntityID mainCamera = Core::ECS::ENTITY_ID_INVALID;
+    bool foundProject = false;
+    world.view<Core::ECS::ProjectComponent>().each(
+        [&](Core::ECS::EntityID, Core::ECS::ProjectComponent& project){
+            if(foundProject)
+                return;
+
+            foundProject = true;
+            mainCamera = project.mainCamera;
+        }
+    );
+
+    MeshViewState fallbackCameraState = state;
+    bool foundFallbackCamera = false;
+    bool foundRequestedCamera = false;
+    world.view<Core::ECS::TransformComponent, Core::ECS::CameraComponent>().each(
+        [&](Core::ECS::EntityID entityId, Core::ECS::TransformComponent& transform, Core::ECS::CameraComponent& camera){
+            if(foundRequestedCamera)
+                return;
+
+            (void)camera;
+            if(!foundFallbackCamera){
+                __hidden_ecs_graphics::ApplyCameraMeshViewState(fallbackCameraState, transform);
+                foundFallbackCamera = true;
+            }
+            if(mainCamera.valid() && entityId == mainCamera){
+                __hidden_ecs_graphics::ApplyCameraMeshViewState(state, transform);
+                foundRequestedCamera = true;
+            }
+        }
+    );
+
+    if(foundRequestedCamera)
+        return state;
+    if(foundFallbackCamera)
+        return fallbackCameraState;
+    return state;
+}
+
+static ShaderDrivenPushConstants BuildShaderDrivenPushConstants(
+    const u32 triangleCount,
+    const Core::ViewportState& viewportState,
+    const MeshViewState& viewState
+){
     ShaderDrivenPushConstants pushConstants;
     pushConstants.triangleCount = triangleCount;
-    pushConstants.viewParams[0] = s_DefaultMeshViewRotationY;
-    pushConstants.viewParams[1] = s_DefaultMeshViewRotationX;
-    pushConstants.viewParams[2] = s_DefaultMeshViewDepthOffset;
+    CopyFloat4(pushConstants.viewRotation, viewState.viewRotation);
+    CopyFloat4(pushConstants.viewPositionDepthBias, viewState.viewPositionDepthBias);
 
     if(viewportState.viewports.empty())
         return pushConstants;
@@ -409,11 +501,12 @@ static AvboitPushConstants BuildAvboitPushConstants(const RendererSystem::Avboit
 static TransparentDrawPushConstants BuildTransparentDrawPushConstants(
     const u32 triangleCount,
     const Core::ViewportState& viewportState,
+    const MeshViewState& viewState,
     const RendererSystem::AvboitFrameTargets& targets,
     const f32 alpha
 ){
     TransparentDrawPushConstants pushConstants;
-    pushConstants.mesh = BuildShaderDrivenPushConstants(triangleCount, viewportState);
+    pushConstants.mesh = BuildShaderDrivenPushConstants(triangleCount, viewportState, viewState);
     pushConstants.avboit = BuildAvboitPushConstants(targets, alpha);
     return pushConstants;
 }
@@ -464,6 +557,9 @@ RendererSystem::RendererSystem(
     , m_assetManager(assetManager)
     , m_shaderPathResolver(Move(shaderPathResolver))
 {
+    readAccess<Core::ECS::ProjectComponent>();
+    readAccess<Core::ECS::TransformComponent>();
+    readAccess<Core::ECS::CameraComponent>();
     readAccess<RendererComponent>();
 }
 RendererSystem::~RendererSystem()
@@ -1390,6 +1486,8 @@ void RendererSystem::renderMeshMaterialPassDrawItems(
     const MaterialPassDrawContext& context,
     const MaterialPassDrawItemVector& drawItems
 ){
+    const __hidden_ecs_graphics::MeshViewState meshViewState = __hidden_ecs_graphics::ResolveMeshViewState(m_world);
+
     forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem& drawItem, GeometryResources& geometry, MaterialPipelineResources& pipelineResources){
         if(!geometry.valid() || !geometry.meshBindingSet || !pipelineResources.meshletPipeline)
             return;
@@ -1409,12 +1507,22 @@ void RendererSystem::renderMeshMaterialPassDrawItems(
 
         if(context.pass == MaterialPipelinePass::Opaque){
             const __hidden_ecs_graphics::ShaderDrivenPushConstants pushConstants =
-                __hidden_ecs_graphics::BuildShaderDrivenPushConstants(geometry.triangleCount, context.viewportState);
+                __hidden_ecs_graphics::BuildShaderDrivenPushConstants(
+                    geometry.triangleCount,
+                    context.viewportState,
+                    meshViewState
+                );
             context.commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
         }
         else{
             const __hidden_ecs_graphics::TransparentDrawPushConstants pushConstants =
-                __hidden_ecs_graphics::BuildTransparentDrawPushConstants(geometry.triangleCount, context.viewportState, *context.avboitTargets, drawItem.alpha);
+                __hidden_ecs_graphics::BuildTransparentDrawPushConstants(
+                    geometry.triangleCount,
+                    context.viewportState,
+                    meshViewState,
+                    *context.avboitTargets,
+                    drawItem.alpha
+                );
             context.commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
         }
         context.commandList.dispatchMesh(geometry.dispatchGroupCount);
@@ -1425,6 +1533,8 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
     const MaterialPassDrawContext& context,
     const MaterialPassDrawItemVector& drawItems
 ){
+    const __hidden_ecs_graphics::MeshViewState meshViewState = __hidden_ecs_graphics::ResolveMeshViewState(m_world);
+
     forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem& drawItem, GeometryResources& geometry, MaterialPipelineResources& pipelineResources){
         if(!geometry.valid() || !geometry.computeBindingSet || !geometry.emulationVertexBuffer || !pipelineResources.computePipeline || !pipelineResources.emulationPipeline)
             return;
@@ -1440,7 +1550,11 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
         context.commandList.setComputeState(computeState);
 
         const __hidden_ecs_graphics::ShaderDrivenPushConstants pushConstants =
-            __hidden_ecs_graphics::BuildShaderDrivenPushConstants(geometry.triangleCount, context.viewportState);
+            __hidden_ecs_graphics::BuildShaderDrivenPushConstants(
+                geometry.triangleCount,
+                context.viewportState,
+                meshViewState
+            );
         context.commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
         context.commandList.dispatch(geometry.dispatchGroupCount);
 
@@ -1465,7 +1579,13 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
 
         if(context.pass != MaterialPipelinePass::Opaque){
             const __hidden_ecs_graphics::TransparentDrawPushConstants transparentPushConstants =
-                __hidden_ecs_graphics::BuildTransparentDrawPushConstants(geometry.triangleCount, context.viewportState, *context.avboitTargets, drawItem.alpha);
+                __hidden_ecs_graphics::BuildTransparentDrawPushConstants(
+                    geometry.triangleCount,
+                    context.viewportState,
+                    meshViewState,
+                    *context.avboitTargets,
+                    drawItem.alpha
+                );
             context.commandList.setPushConstants(&transparentPushConstants, sizeof(transparentPushConstants));
         }
 

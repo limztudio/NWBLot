@@ -16,10 +16,83 @@ using TestbedGeometryRef = NWB::Core::Assets::AssetRef<NWB::Impl::Geometry>;
 using TestbedMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
 
 
+static constexpr f32 s_CameraStartDepth = 2.2f;
+static constexpr f32 s_CameraMoveEpsilon = 0.000001f;
+
+
+[[nodiscard]] static f32 KeyAxis(const bool negative, const bool positive){
+    return (positive ? 1.0f : 0.0f) - (negative ? 1.0f : 0.0f);
+}
+
+[[nodiscard]] static f32 ClampPitch(const f32 pitchRadians, const f32 pitchLimitRadians){
+    const f32 limit = Max(0.0f, pitchLimitRadians);
+    return Min(Max(pitchRadians, -limit), limit);
+}
+
+[[nodiscard]] static bool ResolveKeyIndex(const i32 key, usize& outIndex){
+    if(key < 0 || key > NWB::Core::Key::Menu)
+        return false;
+
+    outIndex = static_cast<usize>(key);
+    return true;
+}
+
+static void ApplyFpsCameraInput(
+    NWB::Core::ECS::TransformComponent& transform,
+    NWB::Core::ECS::FpsCameraControllerComponent& controller,
+    const f32 rightAxis,
+    const f32 forwardAxis,
+    const f32 verticalAxis,
+    const bool boosted,
+    const f32 mouseDeltaX,
+    const f32 mouseDeltaY,
+    const f32 delta
+){
+    controller.yawRadians += mouseDeltaX * controller.mouseSensitivityRadiansPerPixel;
+    controller.pitchRadians = ClampPitch(
+        controller.pitchRadians - mouseDeltaY * controller.mouseSensitivityRadiansPerPixel,
+        controller.pitchLimitRadians
+    );
+
+    const f32 sinYaw = Sin(controller.yawRadians);
+    const f32 cosYaw = Cos(controller.yawRadians);
+    const f32 sinPitch = Sin(controller.pitchRadians);
+    const f32 cosPitch = Cos(controller.pitchRadians);
+    const f32 forwardX = sinYaw * cosPitch;
+    const f32 forwardY = sinPitch;
+    const f32 forwardZ = cosYaw * cosPitch;
+    const f32 rightX = cosYaw;
+    const f32 rightZ = -sinYaw;
+
+    f32 moveX = rightAxis * rightX + forwardAxis * forwardX;
+    f32 moveY = verticalAxis + forwardAxis * forwardY;
+    f32 moveZ = rightAxis * rightZ + forwardAxis * forwardZ;
+    const f32 moveLengthSq = moveX * moveX + moveY * moveY + moveZ * moveZ;
+    if(moveLengthSq > s_CameraMoveEpsilon){
+        const f32 invMoveLength = 1.0f / Sqrt(moveLengthSq);
+        const f32 speed = controller.moveSpeed * (boosted ? controller.boostMultiplier : 1.0f);
+        const f32 moveScale = speed * Max(delta, 0.0f) * invMoveLength;
+        moveX *= moveScale;
+        moveY *= moveScale;
+        moveZ *= moveScale;
+
+        transform.position.x += moveX;
+        transform.position.y += moveY;
+        transform.position.z += moveZ;
+    }
+
+    SourceMath::StoreFloat4A(
+        &transform.rotation,
+        SourceMath::QuaternionRotationRollPitchYaw(controller.pitchRadians, controller.yawRadians, 0.0f)
+    );
+}
+
 [[nodiscard]] static NWB::Core::ECS::EntityID CreateMainCameraEntity(NWB::Core::ECS::World& world){
     auto cameraEntity = world.createEntity();
-    cameraEntity.addComponent<NWB::Core::ECS::TransformComponent>();
+    auto& transform = cameraEntity.addComponent<NWB::Core::ECS::TransformComponent>();
+    transform.position = AlignedFloat3Data(0.0f, 0.0f, -s_CameraStartDepth);
     cameraEntity.addComponent<NWB::Core::ECS::CameraComponent>();
+    cameraEntity.addComponent<NWB::Core::ECS::FpsCameraControllerComponent>();
     return cameraEntity.id();
 }
 
@@ -76,6 +149,7 @@ ProjectTestbed::ProjectTestbed(NWB::ProjectRuntimeContext& context)
 {}
 
 ProjectTestbed::~ProjectTestbed(){
+    unregisterInputHandler();
     NWB::DestroyInitialProjectWorld(m_context, m_world.owner());
 }
 
@@ -88,7 +162,8 @@ bool ProjectTestbed::onStartup(){
 
     auto projectEntity = m_world->createEntity();
     auto& project = projectEntity.addComponent<NWB::Core::ECS::ProjectComponent>();
-    project.mainCamera = __hidden_project_testbed_runtime::CreateMainCameraEntity(*m_world);
+    m_mainCamera = __hidden_project_testbed_runtime::CreateMainCameraEntity(*m_world);
+    project.mainCamera = m_mainCamera;
 
     const TestbedMaterialRef cubeMaterial(Name("project/materials/mat_test"));
     const TestbedMaterialRef transparentMaterial(Name("project/materials/mat_transparent"));
@@ -113,18 +188,169 @@ bool ProjectTestbed::onStartup(){
         NWB_TEXT("ProjectTestbed: startup scene created ({})"),
         NWB_TEXT("opaque cube with transparent sphere/tetrahedron")
     );
+    registerInputHandler();
     return true;
 }
 
 void ProjectTestbed::onShutdown(){
+    unregisterInputHandler();
+    clearInputState();
+    m_mainCamera = NWB::Core::ECS::ENTITY_ID_INVALID;
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ProjectTestbed: shutdown"));
 }
 
 
 bool ProjectTestbed::onUpdate(f32 delta){
+    updateMainCamera(delta);
     m_world->tick(delta);
 
     return true;
+}
+
+void ProjectTestbed::registerInputHandler(){
+    if(m_inputRegistered)
+        return;
+
+    m_context.input.addHandlerToBack(*this);
+    m_inputRegistered = true;
+}
+
+void ProjectTestbed::unregisterInputHandler(){
+    if(!m_inputRegistered)
+        return;
+
+    m_context.input.removeHandler(*this);
+    m_inputRegistered = false;
+}
+
+void ProjectTestbed::clearInputState(){
+    m_keyPressed.fill(false);
+    m_pendingMouseDeltaX = 0.0f;
+    m_pendingMouseDeltaY = 0.0f;
+    m_lastMouseX = 0.0;
+    m_lastMouseY = 0.0;
+    m_mouseLookActive = false;
+    m_mousePositionValid = false;
+}
+
+void ProjectTestbed::setKeyState(const i32 key, const bool pressed){
+    usize keyIndex = 0;
+    if(!__hidden_project_testbed_runtime::ResolveKeyIndex(key, keyIndex))
+        return;
+
+    m_keyPressed[keyIndex] = pressed;
+}
+
+bool ProjectTestbed::keyPressed(const i32 key)const{
+    usize keyIndex = 0;
+    if(!__hidden_project_testbed_runtime::ResolveKeyIndex(key, keyIndex))
+        return false;
+
+    return m_keyPressed[keyIndex];
+}
+
+void ProjectTestbed::updateMainCamera(const f32 delta){
+    const f32 mouseDeltaX = m_pendingMouseDeltaX;
+    const f32 mouseDeltaY = m_pendingMouseDeltaY;
+    m_pendingMouseDeltaX = 0.0f;
+    m_pendingMouseDeltaY = 0.0f;
+
+    if(!m_mainCamera.valid())
+        return;
+
+    const f32 rightAxis = __hidden_project_testbed_runtime::KeyAxis(
+        keyPressed(NWB::Core::Key::A),
+        keyPressed(NWB::Core::Key::D)
+    );
+    const f32 forwardAxis = __hidden_project_testbed_runtime::KeyAxis(
+        keyPressed(NWB::Core::Key::S),
+        keyPressed(NWB::Core::Key::W)
+    );
+    const f32 verticalAxis = __hidden_project_testbed_runtime::KeyAxis(
+        keyPressed(NWB::Core::Key::Q) || keyPressed(NWB::Core::Key::LeftControl) || keyPressed(NWB::Core::Key::RightControl),
+        keyPressed(NWB::Core::Key::E) || keyPressed(NWB::Core::Key::Space)
+    );
+    const bool boosted = keyPressed(NWB::Core::Key::LeftShift) || keyPressed(NWB::Core::Key::RightShift);
+
+    bool foundCamera = false;
+    m_world->view<
+        NWB::Core::ECS::TransformComponent,
+        NWB::Core::ECS::CameraComponent,
+        NWB::Core::ECS::FpsCameraControllerComponent
+    >().each(
+        [&](
+            NWB::Core::ECS::EntityID entityId,
+            NWB::Core::ECS::TransformComponent& transform,
+            NWB::Core::ECS::CameraComponent& camera,
+            NWB::Core::ECS::FpsCameraControllerComponent& controller
+        ){
+            if(foundCamera || entityId != m_mainCamera)
+                return;
+
+            (void)camera;
+            foundCamera = true;
+            __hidden_project_testbed_runtime::ApplyFpsCameraInput(
+                transform,
+                controller,
+                rightAxis,
+                forwardAxis,
+                verticalAxis,
+                boosted,
+                mouseDeltaX,
+                mouseDeltaY,
+                delta
+            );
+        }
+    );
+}
+
+bool ProjectTestbed::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods){
+    (void)scancode;
+    (void)mods;
+
+    if(action == NWB::Core::InputAction::Press || action == NWB::Core::InputAction::Repeat)
+        setKeyState(key, true);
+    else if(action == NWB::Core::InputAction::Release)
+        setKeyState(key, false);
+
+    return false;
+}
+
+bool ProjectTestbed::mousePosUpdate(const f64 xpos, const f64 ypos){
+    if(!m_mouseLookActive){
+        m_mousePositionValid = false;
+        return false;
+    }
+
+    if(!m_mousePositionValid){
+        m_lastMouseX = xpos;
+        m_lastMouseY = ypos;
+        m_mousePositionValid = true;
+        return false;
+    }
+
+    m_pendingMouseDeltaX += static_cast<f32>(xpos - m_lastMouseX);
+    m_pendingMouseDeltaY += static_cast<f32>(ypos - m_lastMouseY);
+    m_lastMouseX = xpos;
+    m_lastMouseY = ypos;
+    return false;
+}
+
+bool ProjectTestbed::mouseButtonUpdate(const i32 button, const i32 action, const i32 mods){
+    (void)mods;
+
+    if(button != NWB::Core::MouseButton::Right)
+        return false;
+
+    if(action == NWB::Core::InputAction::Press){
+        m_mouseLookActive = true;
+        m_mousePositionValid = false;
+    }
+    else if(action == NWB::Core::InputAction::Release){
+        m_mouseLookActive = false;
+        m_mousePositionValid = false;
+    }
+    return false;
 }
 
 

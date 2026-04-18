@@ -623,15 +623,17 @@ bool DeformerSystem::dispatchRuntimeMesh(
     const bool hasActiveSkin = !skinInfluences.empty() && !jointMatrices.empty();
     const bool hasDisplacement = __hidden_deformer_system::ActiveDisplacement(resolvedDisplacement);
     if(!hasActiveMorphs && !hasActiveSkin && !hasDisplacement){
+        const bool deformerInputDirty = (instance.dirtyFlags & RuntimeMeshDirtyFlag::DeformerInputDirty) != 0u;
         const auto foundResources = m_runtimeResources.find(instance.handle.value);
-        if(foundResources == m_runtimeResources.end()){
+        if(foundResources == m_runtimeResources.end() && !deformerInputDirty){
             instance.dirtyFlags = static_cast<RuntimeMeshDirtyFlags>(
                 instance.dirtyFlags & ~RuntimeMeshDirtyFlag::DeformerInputDirty
             );
             return false;
         }
 
-        m_runtimeResources.erase(instance.handle.value);
+        if(foundResources != m_runtimeResources.end())
+            m_runtimeResources.erase(instance.handle.value);
         return copyRestToDeformed(commandList, instance);
     }
     if(!ensurePipeline())

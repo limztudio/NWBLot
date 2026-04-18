@@ -274,6 +274,31 @@ static void TestPickingRejectsNonAffineJointPalette(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::RaycastDeformableRuntimeMesh(instance, inputs, ray, hit));
 }
 
+static void TestPickingRejectsUnusedNonAffineJointPalette(TestContext& context){
+    NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
+    instance.skin.resize(instance.restVertices.size());
+    for(NWB::Impl::SkinInfluence4& skin : instance.skin){
+        skin.joint[0] = 0u;
+        skin.weight[0] = 1.0f;
+    }
+
+    NWB::Impl::DeformableJointPaletteComponent joints;
+    joints.joints.resize(2u);
+    joints.joints[0] = NWB::Impl::DeformableJointMatrix{};
+    joints.joints[1] = NWB::Impl::DeformableJointMatrix{};
+    joints.joints[1].column1 = Float4Data(0.0f, 1.0f, 0.0f, 0.25f);
+
+    NWB::Impl::DeformablePickingInputs inputs;
+    inputs.jointPalette = &joints;
+
+    NWB::Impl::DeformablePickingRay ray;
+    ray.origin = Float3Data(0.0f, 0.0f, 1.0f);
+    ray.direction = Float3Data(0.0f, 0.0f, -1.0f);
+
+    NWB::Impl::DeformablePosedHit hit;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::RaycastDeformableRuntimeMesh(instance, inputs, ray, hit));
+}
+
 static void TestPickingRejectsInvalidSkinWeights(TestContext& context){
     NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
     instance.skin.resize(instance.restVertices.size());
@@ -354,6 +379,7 @@ int main(){
     __hidden_ecs_graphics_tests::TestPickingUsesEntityTransform(context);
     __hidden_ecs_graphics_tests::TestPickingIgnoresJointPaletteForUnskinnedMesh(context);
     __hidden_ecs_graphics_tests::TestPickingRejectsNonAffineJointPalette(context);
+    __hidden_ecs_graphics_tests::TestPickingRejectsUnusedNonAffineJointPalette(context);
     __hidden_ecs_graphics_tests::TestPickingRejectsInvalidSkinWeights(context);
     __hidden_ecs_graphics_tests::TestPickingVerticesIncludeMorphAndDisplacement(context);
 

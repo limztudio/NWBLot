@@ -268,6 +268,20 @@ void OrthonormalizeFrame(
     return NearlyOne(weightSum);
 }
 
+[[nodiscard]] bool ValidateJointPalette(
+    const DeformableRuntimeMeshInstance& instance,
+    const DeformableJointPaletteComponent* jointPalette)
+{
+    if(instance.skin.empty() || !jointPalette || jointPalette->joints.empty())
+        return true;
+
+    for(const DeformableJointMatrix& joint : jointPalette->joints){
+        if(!IsAffineJointMatrix(joint))
+            return false;
+    }
+    return true;
+}
+
 [[nodiscard]] bool ApplySkin(
     const DeformableRuntimeMeshInstance& instance,
     const DeformableJointPaletteComponent* jointPalette,
@@ -470,6 +484,8 @@ bool BuildDeformablePickingVertices(
 
     DeformableDisplacement displacement;
     if(!__hidden_deformable_picking::ResolveDisplacement(instance, inputs.displacement, displacement))
+        return false;
+    if(!__hidden_deformable_picking::ValidateJointPalette(instance, inputs.jointPalette))
         return false;
 
     outVertices = instance.restVertices;

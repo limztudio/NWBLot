@@ -276,6 +276,8 @@ void OrthonormalizeFrame(
 {
     if(!jointPalette || jointPalette->joints.empty())
         return true;
+    if(instance.skin.empty())
+        return true;
     if(instance.skin.size() != instance.restVertices.size() || vertexId >= instance.skin.size())
         return false;
 

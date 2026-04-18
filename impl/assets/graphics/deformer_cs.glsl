@@ -117,16 +117,23 @@ vec3 nwbDeformerFallbackTangent(const vec3 normal){
     return normalize(cross(axis, normal));
 }
 
-void nwbDeformerOrthonormalizeFrame(inout vec3 normal, inout vec4 tangent, const vec3 fallbackNormal, const vec3 fallbackTangent){
+float nwbDeformerTangentHandedness(const float handedness, const float fallbackHandedness){
+    if(abs(handedness) > 0.000001)
+        return handedness < 0.0 ? -1.0 : 1.0;
+    return fallbackHandedness < 0.0 ? -1.0 : 1.0;
+}
+
+void nwbDeformerOrthonormalizeFrame(inout vec3 normal, inout vec4 tangent, const vec3 fallbackNormal, const vec4 fallbackTangent){
     normal = nwbDeformerSafeNormalize(normal, nwbDeformerSafeNormalize(fallbackNormal, vec3(0.0, 0.0, 1.0)));
 
     vec3 projectedTangent = tangent.xyz - (normal * dot(tangent.xyz, normal));
     if(dot(projectedTangent, projectedTangent) <= 0.00000001)
-        projectedTangent = fallbackTangent - (normal * dot(fallbackTangent, normal));
+        projectedTangent = fallbackTangent.xyz - (normal * dot(fallbackTangent.xyz, normal));
     if(dot(projectedTangent, projectedTangent) <= 0.00000001)
         projectedTangent = nwbDeformerFallbackTangent(normal);
 
     tangent.xyz = nwbDeformerSafeNormalize(projectedTangent, nwbDeformerFallbackTangent(normal));
+    tangent.w = nwbDeformerTangentHandedness(tangent.w, fallbackTangent.w);
 }
 
 void nwbDeformerApplySkin(const uint vertexId, inout vec3 position, inout vec3 normal, inout vec4 tangent){
@@ -201,7 +208,7 @@ void main(){
         nwbDeformerRestVertexScalars[restBase + 11u]
     );
     const vec3 restNormal = normal;
-    const vec3 restTangent = tangent.xyz;
+    const vec4 restTangent = tangent;
 
     for(uint morphIndex = 0u; morphIndex < nwbDeformerMorphCount(); ++morphIndex){
         const NwbDeformerMorphRange morph = nwbDeformerMorphRanges[morphIndex];
@@ -218,7 +225,7 @@ void main(){
 
     nwbDeformerOrthonormalizeFrame(normal, tangent, restNormal, restTangent);
     const vec3 preSkinNormal = normal;
-    const vec3 preSkinTangent = tangent.xyz;
+    const vec4 preSkinTangent = tangent;
     nwbDeformerApplySkin(vertexId, position, normal, tangent);
     nwbDeformerOrthonormalizeFrame(normal, tangent, preSkinNormal, preSkinTangent);
     nwbDeformerApplyDisplacement(position, normal, uv0);

@@ -196,8 +196,7 @@ void OrthonormalizeFrame(
 [[nodiscard]] bool ApplyMorphs(
     const DeformableRuntimeMeshInstance& instance,
     const DeformableMorphWeightsComponent* weights,
-    const u32 vertexId,
-    DeformableVertexRest& vertex)
+    Vector<DeformableVertexRest>& vertices)
 {
     for(const DeformableMorph& morph : instance.morphs){
         f32 weight = 0.0f;
@@ -207,9 +206,10 @@ void OrthonormalizeFrame(
             continue;
 
         for(const DeformableMorphDelta& delta : morph.deltas){
-            if(delta.vertexId != vertexId)
-                continue;
+            if(delta.vertexId >= vertices.size())
+                return false;
 
+            DeformableVertexRest& vertex = vertices[delta.vertexId];
             vertex.position.x += weight * delta.deltaPosition.x;
             vertex.position.y += weight * delta.deltaPosition.y;
             vertex.position.z += weight * delta.deltaPosition.z;
@@ -441,18 +441,13 @@ bool BuildDeformablePickingVertices(
         return false;
 
     outVertices = instance.restVertices;
+    if(!__hidden_deformable_picking::ApplyMorphs(instance, inputs.morphWeights, outVertices))
+        return false;
+
     for(usize vertexIndex = 0; vertexIndex < outVertices.size(); ++vertexIndex){
         DeformableVertexRest& vertex = outVertices[vertexIndex];
         const Vec3 restNormal = __hidden_deformable_picking::ToVec3(vertex.normal);
         const Float4Data restTangent = vertex.tangent;
-
-        if(!__hidden_deformable_picking::ApplyMorphs(
-            instance,
-            inputs.morphWeights,
-            static_cast<u32>(vertexIndex),
-            vertex
-        ))
-            return false;
 
         Vec3 normal = __hidden_deformable_picking::ToVec3(vertex.normal);
         __hidden_deformable_picking::OrthonormalizeFrame(normal, vertex.tangent, restNormal, restTangent);

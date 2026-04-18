@@ -59,14 +59,28 @@ struct DoubleColumns4x4{
     f64 v[16];
 };
 
+struct DoubleRows4x4{
+    f64 m[4][4];
+};
+
 
 [[nodiscard]] static SimdVector MakeVector(const f32 x, const f32 y, const f32 z, const f32 w)noexcept{
     return SourceMath::VectorSet(x, y, z, w);
 }
 
+[[nodiscard]] static DoubleSimdVector MakeDoubleVector(const f64 x, const f64 y, const f64 z, const f64 w)noexcept{
+    return DoubleSimdVectorSet(x, y, z, w);
+}
+
 [[nodiscard]] static SourceMath::Float4 StoreVector(const SimdVector value)noexcept{
     SourceMath::Float4 result{};
     SourceMath::StoreFloat4(&result, value);
+    return result;
+}
+
+[[nodiscard]] static Double4Data StoreDoubleVector(const DoubleSimdVector& value)noexcept{
+    Double4Data result{};
+    StoreDouble4Data(result, value);
     return result;
 }
 
@@ -96,6 +110,40 @@ struct RawUInt4{
     SourceMath::StoreFloat4(&column1, matrix[1]);
     SourceMath::StoreFloat4(&column2, matrix[2]);
     SourceMath::StoreFloat4(&column3, matrix[3]);
+
+    result.m[0][0] = column0.x;
+    result.m[0][1] = column1.x;
+    result.m[0][2] = column2.x;
+    result.m[0][3] = column3.x;
+
+    result.m[1][0] = column0.y;
+    result.m[1][1] = column1.y;
+    result.m[1][2] = column2.y;
+    result.m[1][3] = column3.y;
+
+    result.m[2][0] = column0.z;
+    result.m[2][1] = column1.z;
+    result.m[2][2] = column2.z;
+    result.m[2][3] = column3.z;
+
+    result.m[3][0] = column0.w;
+    result.m[3][1] = column1.w;
+    result.m[3][2] = column2.w;
+    result.m[3][3] = column3.w;
+
+    return result;
+}
+
+[[nodiscard]] static DoubleRows4x4 StoreDoubleMatrixRows(DoubleMatrixArg matrix)noexcept{
+    DoubleRows4x4 result{};
+    Double4Data column0{};
+    Double4Data column1{};
+    Double4Data column2{};
+    Double4Data column3{};
+    StoreDouble4Data(column0, matrix[0]);
+    StoreDouble4Data(column1, matrix[1]);
+    StoreDouble4Data(column2, matrix[2]);
+    StoreDouble4Data(column3, matrix[3]);
 
     result.m[0][0] = column0.x;
     result.m[0][1] = column1.x;
@@ -162,6 +210,20 @@ struct RawUInt4{
     return result;
 }
 
+[[nodiscard]] static DoubleRows4x4 MultiplyDoubleRows(const DoubleRows4x4& lhs, const DoubleRows4x4& rhs)noexcept{
+    DoubleRows4x4 result{};
+    for(usize row = 0; row < 4; ++row){
+        for(usize column = 0; column < 4; ++column){
+            f64 value = 0.0;
+            for(usize i = 0; i < 4; ++i)
+                value += lhs.m[row][i] * rhs.m[i][column];
+
+            result.m[row][column] = value;
+        }
+    }
+    return result;
+}
+
 [[nodiscard]] static FloatRows4x4 TransposeRows(const FloatRows4x4& value)noexcept{
     FloatRows4x4 result{};
     for(usize row = 0; row < 4; ++row){
@@ -171,8 +233,32 @@ struct RawUInt4{
     return result;
 }
 
+[[nodiscard]] static DoubleRows4x4 TransposeDoubleRows(const DoubleRows4x4& value)noexcept{
+    DoubleRows4x4 result{};
+    for(usize row = 0; row < 4; ++row){
+        for(usize column = 0; column < 4; ++column)
+            result.m[row][column] = value.m[column][row];
+    }
+    return result;
+}
+
 [[nodiscard]] static SourceMath::Float4 TransformRows(const FloatRows4x4& matrix, const f32 x, const f32 y, const f32 z, const f32 w)noexcept{
     SourceMath::Float4 result{};
+    result.x = matrix.m[0][0] * x + matrix.m[0][1] * y + matrix.m[0][2] * z + matrix.m[0][3] * w;
+    result.y = matrix.m[1][0] * x + matrix.m[1][1] * y + matrix.m[1][2] * z + matrix.m[1][3] * w;
+    result.z = matrix.m[2][0] * x + matrix.m[2][1] * y + matrix.m[2][2] * z + matrix.m[2][3] * w;
+    result.w = matrix.m[3][0] * x + matrix.m[3][1] * y + matrix.m[3][2] * z + matrix.m[3][3] * w;
+    return result;
+}
+
+[[nodiscard]] static Double4Data TransformDoubleRows(
+    const DoubleRows4x4& matrix,
+    const f64 x,
+    const f64 y,
+    const f64 z,
+    const f64 w
+)noexcept{
+    Double4Data result{};
     result.x = matrix.m[0][0] * x + matrix.m[0][1] * y + matrix.m[0][2] * z + matrix.m[0][3] * w;
     result.y = matrix.m[1][0] * x + matrix.m[1][1] * y + matrix.m[1][2] * z + matrix.m[1][3] * w;
     result.z = matrix.m[2][0] * x + matrix.m[2][1] * y + matrix.m[2][2] * z + matrix.m[2][3] * w;
@@ -197,6 +283,51 @@ static void CheckFloat4Near(
     context.checkNearFloat(value.w, w, epsilon, "w", file, line);
 }
 
+static void CheckDouble4Near(
+    TestContext& context,
+    const Double4Data& value,
+    const f64 x,
+    const f64 y,
+    const f64 z,
+    const f64 w,
+    const f64 epsilon,
+    const char* file,
+    const int line
+){
+    context.checkNearDouble(value.x, x, epsilon, "x", file, line);
+    context.checkNearDouble(value.y, y, epsilon, "y", file, line);
+    context.checkNearDouble(value.z, z, epsilon, "z", file, line);
+    context.checkNearDouble(value.w, w, epsilon, "w", file, line);
+}
+
+static void CheckDouble2Near(
+    TestContext& context,
+    const Double2Data& value,
+    const f64 x,
+    const f64 y,
+    const f64 epsilon,
+    const char* file,
+    const int line
+){
+    context.checkNearDouble(value.x, x, epsilon, "x", file, line);
+    context.checkNearDouble(value.y, y, epsilon, "y", file, line);
+}
+
+static void CheckDouble3Near(
+    TestContext& context,
+    const Double3Data& value,
+    const f64 x,
+    const f64 y,
+    const f64 z,
+    const f64 epsilon,
+    const char* file,
+    const int line
+){
+    context.checkNearDouble(value.x, x, epsilon, "x", file, line);
+    context.checkNearDouble(value.y, y, epsilon, "y", file, line);
+    context.checkNearDouble(value.z, z, epsilon, "z", file, line);
+}
+
 static void CheckVectorNear(
     TestContext& context,
     const SimdVector value,
@@ -209,6 +340,20 @@ static void CheckVectorNear(
     const int line
 ){
     CheckFloat4Near(context, StoreVector(value), x, y, z, w, epsilon, file, line);
+}
+
+static void CheckDoubleVectorNear(
+    TestContext& context,
+    const DoubleSimdVector& value,
+    const f64 x,
+    const f64 y,
+    const f64 z,
+    const f64 w,
+    const f64 epsilon,
+    const char* file,
+    const int line
+){
+    CheckDouble4Near(context, StoreDoubleVector(value), x, y, z, w, epsilon, file, line);
 }
 
 static void CheckRawUInt4Equal(
@@ -284,6 +429,34 @@ static void CheckMatrix3x4Near(
     }
 }
 
+static void CheckDoubleMatrix3x4Near(
+    TestContext& context,
+    const Double3x4Data& value,
+    const Double3x4Data& expected,
+    const f64 epsilon,
+    const char* file,
+    const int line
+){
+    for(usize row = 0; row < 3; ++row){
+        for(usize column = 0; column < 4; ++column)
+            context.checkNearDouble(value.m[row][column], expected.m[row][column], epsilon, "double matrix3x4", file, line);
+    }
+}
+
+static void CheckDoubleMatrixRowsNear(
+    TestContext& context,
+    const DoubleRows4x4& value,
+    const DoubleRows4x4& expected,
+    const f64 epsilon,
+    const char* file,
+    const int line
+){
+    for(usize row = 0; row < 4; ++row){
+        for(usize column = 0; column < 4; ++column)
+            context.checkNearDouble(value.m[row][column], expected.m[row][column], epsilon, "double matrix", file, line);
+    }
+}
+
 static void CheckQuaternionEquivalent(
     TestContext& context,
     const SimdVector lhs,
@@ -309,6 +482,31 @@ static void CheckQuaternionEquivalent(
     context.checkTrue(Min(directDelta, negatedDelta) <= epsilon * 4.0f, "quaternion equivalent", file, line);
 }
 
+static void CheckDoubleQuaternionEquivalent(
+    TestContext& context,
+    const DoubleSimdVector& lhs,
+    const DoubleSimdVector& rhs,
+    const f64 epsilon,
+    const char* file,
+    const int line
+){
+    const Double4Data lhsStored = StoreDoubleVector(lhs);
+    const Double4Data rhsStored = StoreDoubleVector(rhs);
+
+    const f64 directDelta =
+        std::fabs(lhsStored.x - rhsStored.x) +
+        std::fabs(lhsStored.y - rhsStored.y) +
+        std::fabs(lhsStored.z - rhsStored.z) +
+        std::fabs(lhsStored.w - rhsStored.w);
+    const f64 negatedDelta =
+        std::fabs(lhsStored.x + rhsStored.x) +
+        std::fabs(lhsStored.y + rhsStored.y) +
+        std::fabs(lhsStored.z + rhsStored.z) +
+        std::fabs(lhsStored.w + rhsStored.w);
+
+    context.checkTrue(Min(directDelta, negatedDelta) <= epsilon * 4.0, "double quaternion equivalent", file, line);
+}
+
 static void FillSequence(f32* values, const usize count, const f32 scale, const f32 bias){
     for(usize i = 0; i < count; ++i)
         values[i] = bias + scale * static_cast<f32>(i + 1);
@@ -321,6 +519,10 @@ template<typename T>
 
 [[nodiscard]] static SimdMatrix Compose(MatrixArg lhs, MatrixArg rhs)noexcept{
     return MatrixMultiply(lhs, rhs);
+}
+
+[[nodiscard]] static DoubleSimdMatrix ComposeDouble(DoubleMatrixArg lhs, DoubleMatrixArg rhs)noexcept{
+    return DoubleSimdMatrixMultiply(lhs, rhs);
 }
 
 static void TestNativeFloatMath(TestContext& context){
@@ -473,6 +675,1492 @@ static void TestNativeDoubleMath(TestContext& context){
         context.checkNearDouble(storedAgain.v[i], columns.v[i], s_DoubleEpsilon, "StoreDouble4x4", __FILE__, __LINE__);
 }
 
+static void TestSourceMathDoubleSimd(TestContext& context){
+    const DoubleSimdVector lhs = MakeDoubleVector(1.0, 2.0, 3.0, 4.0);
+    const DoubleSimdVector rhs = MakeDoubleVector(-2.0, 5.0, -6.0, 8.0);
+    CheckDoubleVectorNear(context, lhs, 1.0, 2.0, 3.0, 4.0, s_DoubleEpsilon, __FILE__, __LINE__);
+    CheckDoubleVectorNear(context, DoubleSimdVectorAdd(lhs, rhs), -1.0, 7.0, -3.0, 12.0, s_DoubleEpsilon, __FILE__, __LINE__);
+    CheckDoubleVectorNear(
+        context,
+        DoubleSimdVectorSubtract(lhs, rhs),
+        3.0,
+        -3.0,
+        9.0,
+        -4.0,
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+    CheckDoubleVectorNear(
+        context,
+        DoubleSimdVectorMultiply(lhs, rhs),
+        -2.0,
+        10.0,
+        -18.0,
+        32.0,
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+    CheckDoubleVectorNear(
+        context,
+        DoubleSimdVectorDivide(rhs, MakeDoubleVector(2.0, 5.0, -3.0, 4.0)),
+        -1.0,
+        1.0,
+        2.0,
+        2.0,
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+    CheckDoubleVectorNear(
+        context,
+        DoubleSimdVectorMultiplyAdd(lhs, rhs, DoubleSimdVectorReplicate(1.0)),
+        -1.0,
+        11.0,
+        -17.0,
+        33.0,
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+    CheckDoubleVectorNear(context, DoubleSimdVectorNegate(lhs), -1.0, -2.0, -3.0, -4.0, s_DoubleEpsilon, __FILE__, __LINE__);
+    CheckDoubleVectorNear(context, DoubleSimdVectorScale(lhs, 0.5), 0.5, 1.0, 1.5, 2.0, s_DoubleEpsilon, __FILE__, __LINE__);
+    CheckDoubleVectorNear(
+        context,
+        DoubleSimdVectorSqrt(MakeDoubleVector(1.0, 4.0, 9.0, 16.0)),
+        1.0,
+        2.0,
+        3.0,
+        4.0,
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+    CheckDoubleVectorNear(
+        context,
+        DoubleSimdVectorAbs(MakeDoubleVector(-1.0, 2.0, -3.0, 4.0)),
+        1.0,
+        2.0,
+        3.0,
+        4.0,
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+
+    const f64 scalar = 12.5;
+    f64 scalarOut = 0.0;
+    StoreDoubleData(scalarOut, LoadDoubleData(scalar));
+    context.checkNearDouble(scalarOut, scalar, s_DoubleEpsilon, "LoadDoubleData/StoreDoubleData", __FILE__, __LINE__);
+    const Double2Data double2Input(9.0, -10.0);
+    const Double3Data double3Input(11.0, -12.0, 13.0);
+    const Double4Data double4Input(14.0, -15.0, 16.0, -17.0);
+    const AlignedDouble2Data alignedDouble2Input(18.0, -19.0);
+    const AlignedDouble3Data alignedDouble3Input(20.0, -21.0, 22.0);
+    const AlignedDouble4Data alignedDouble4Input(23.0, -24.0, 25.0, -26.0);
+    CheckDoubleVectorNear(context, LoadDouble2Data(double2Input), 9.0, -10.0, 0.0, 0.0, s_DoubleEpsilon, __FILE__, __LINE__);
+    CheckDoubleVectorNear(context, LoadDouble3Data(double3Input), 11.0, -12.0, 13.0, 0.0, s_DoubleEpsilon, __FILE__, __LINE__);
+    CheckDoubleVectorNear(
+        context,
+        LoadDouble4Data(double4Input),
+        14.0,
+        -15.0,
+        16.0,
+        -17.0,
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+    CheckDoubleVectorNear(
+        context,
+        LoadDouble2AData(alignedDouble2Input),
+        18.0,
+        -19.0,
+        0.0,
+        0.0,
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+    CheckDoubleVectorNear(
+        context,
+        LoadDouble3AData(alignedDouble3Input),
+        20.0,
+        -21.0,
+        22.0,
+        0.0,
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+    CheckDoubleVectorNear(
+        context,
+        LoadDouble4AData(alignedDouble4Input),
+        23.0,
+        -24.0,
+        25.0,
+        -26.0,
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+    Double2Data double2Output{};
+    Double3Data double3Output{};
+    AlignedDouble2Data alignedDouble2Output{};
+    AlignedDouble3Data alignedDouble3Output{};
+    AlignedDouble4Data alignedDouble4Output{};
+    StoreDouble2Data(double2Output, lhs);
+    StoreDouble3Data(double3Output, lhs);
+    StoreDouble2AData(alignedDouble2Output, lhs);
+    StoreDouble3AData(alignedDouble3Output, lhs);
+    StoreDouble4AData(alignedDouble4Output, lhs);
+    CheckDouble2Near(context, double2Output, 1.0, 2.0, s_DoubleEpsilon, __FILE__, __LINE__);
+    CheckDouble3Near(context, double3Output, 1.0, 2.0, 3.0, s_DoubleEpsilon, __FILE__, __LINE__);
+    CheckDouble2Near(context, alignedDouble2Output, 1.0, 2.0, s_DoubleEpsilon, __FILE__, __LINE__);
+    CheckDouble3Near(context, alignedDouble3Output, 1.0, 2.0, 3.0, s_DoubleEpsilon, __FILE__, __LINE__);
+    CheckDouble4Near(context, alignedDouble4Output, 1.0, 2.0, 3.0, 4.0, s_DoubleEpsilon, __FILE__, __LINE__);
+    context.checkNearDouble(
+        DoubleSimdVectorGetByIndex(lhs, 2),
+        3.0,
+        s_DoubleEpsilon,
+        "DoubleSimdVectorGetByIndex",
+        __FILE__,
+        __LINE__
+    );
+    context.checkNearDouble(DoubleSimdVectorGetW(lhs), 4.0, s_DoubleEpsilon, "DoubleSimdVectorGetW", __FILE__, __LINE__);
+    CheckDoubleVectorNear(context, DoubleSimdVectorSplatX(lhs), 1.0, 1.0, 1.0, 1.0, s_DoubleEpsilon, __FILE__, __LINE__);
+    CheckDoubleVectorNear(context, DoubleSimdVectorSplatY(lhs), 2.0, 2.0, 2.0, 2.0, s_DoubleEpsilon, __FILE__, __LINE__);
+    CheckDoubleVectorNear(context, DoubleSimdVectorSplatZ(lhs), 3.0, 3.0, 3.0, 3.0, s_DoubleEpsilon, __FILE__, __LINE__);
+    CheckDoubleVectorNear(context, DoubleSimdVectorSplatW(lhs), 4.0, 4.0, 4.0, 4.0, s_DoubleEpsilon, __FILE__, __LINE__);
+    CheckDoubleVectorNear(
+        context,
+        DoubleSimdVector2Dot(lhs, rhs),
+        8.0,
+        8.0,
+        8.0,
+        8.0,
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+    CheckDoubleVectorNear(
+        context,
+        DoubleSimdVector2Cross(lhs, rhs),
+        0.0,
+        0.0,
+        9.0,
+        0.0,
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+    CheckDoubleVectorNear(
+        context,
+        DoubleSimdVector2LengthSq(MakeDoubleVector(3.0, 4.0, 0.0, 0.0)),
+        25.0,
+        25.0,
+        25.0,
+        25.0,
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+    CheckDoubleVectorNear(
+        context,
+        DoubleSimdVector2Length(MakeDoubleVector(3.0, 4.0, 0.0, 0.0)),
+        5.0,
+        5.0,
+        5.0,
+        5.0,
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+    CheckDoubleVectorNear(
+        context,
+        DoubleSimdVector2Normalize(MakeDoubleVector(3.0, 4.0, 0.0, 0.0)),
+        0.6,
+        0.8,
+        0.0,
+        0.0,
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+    CheckDoubleVectorNear(
+        context,
+        DoubleSimdVector3Dot(lhs, rhs),
+        -10.0,
+        -10.0,
+        -10.0,
+        -10.0,
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+    CheckDoubleVectorNear(
+        context,
+        DoubleSimdVector4Dot(lhs, rhs),
+        22.0,
+        22.0,
+        22.0,
+        22.0,
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+    CheckDoubleVectorNear(
+        context,
+        DoubleSimdVector3Cross(lhs, rhs),
+        -27.0,
+        0.0,
+        9.0,
+        0.0,
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+    CheckDoubleVectorNear(
+        context,
+        DoubleSimdVector3LengthSq(MakeDoubleVector(0.0, 3.0, 4.0, 9.0)),
+        25.0,
+        25.0,
+        25.0,
+        25.0,
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+    CheckDoubleVectorNear(
+        context,
+        DoubleSimdVector3Normalize(MakeDoubleVector(0.0, 3.0, 4.0, 0.0)),
+        0.0,
+        0.6,
+        0.8,
+        0.0,
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+    CheckDoubleVectorNear(
+        context,
+        DoubleSimdVector4LengthSq(MakeDoubleVector(1.0, 2.0, 2.0, 4.0)),
+        25.0,
+        25.0,
+        25.0,
+        25.0,
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+    CheckDoubleVectorNear(
+        context,
+        DoubleSimdVector4Length(MakeDoubleVector(1.0, 2.0, 2.0, 4.0)),
+        5.0,
+        5.0,
+        5.0,
+        5.0,
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+    CheckDoubleVectorNear(
+        context,
+        DoubleSimdVector4Normalize(MakeDoubleVector(1.0, 2.0, 2.0, 4.0)),
+        0.2,
+        0.4,
+        0.4,
+        0.8,
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+
+    const f64 halfPi = 1.57079632679489661923;
+    CheckDoubleVectorNear(
+        context,
+        DoubleSimdVector4Transform(MakeDoubleVector(0.0, 1.0, 0.0, 0.0), DoubleSimdMatrixRotationX(halfPi)),
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+    CheckDoubleVectorNear(
+        context,
+        DoubleSimdVector4Transform(MakeDoubleVector(0.0, 0.0, 1.0, 0.0), DoubleSimdMatrixRotationY(halfPi)),
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+    CheckDoubleVectorNear(
+        context,
+        DoubleSimdVector4Transform(MakeDoubleVector(1.0, 0.0, 0.0, 0.0), DoubleSimdMatrixRotationZ(halfPi)),
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+
+    const DoubleSimdMatrix matrixA = ComposeDouble(
+        ComposeDouble(DoubleSimdMatrixTranslation(4.0, -5.0, 6.0), DoubleSimdMatrixRotationZ(0.4)),
+        DoubleSimdMatrixScaling(2.0, 3.0, 4.0)
+    );
+    const DoubleSimdMatrix matrixB = ComposeDouble(
+        DoubleSimdMatrixTranslation(-2.0, 1.0, 0.5),
+        DoubleSimdMatrixRotationY(-0.3)
+    );
+    const DoubleRows4x4 rowsA = StoreDoubleMatrixRows(matrixA);
+    const DoubleRows4x4 rowsB = StoreDoubleMatrixRows(matrixB);
+    const DoubleRows4x4 expectedSetRows = { {
+        { 1.0, 2.0, 3.0, 4.0 },
+        { 5.0, 6.0, 7.0, 8.0 },
+        { 9.0, 10.0, 11.0, 12.0 },
+        { 13.0, 14.0, 15.0, 16.0 },
+    } };
+    const DoubleRows4x4 expectedZeroRows = {};
+    CheckDoubleMatrixRowsNear(
+        context,
+        StoreDoubleMatrixRows(DoubleSimdMatrixZero()),
+        expectedZeroRows,
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+    CheckDoubleMatrixRowsNear(
+        context,
+        StoreDoubleMatrixRows(DoubleSimdMatrixSet(
+            1.0, 2.0, 3.0, 4.0,
+            5.0, 6.0, 7.0, 8.0,
+            9.0, 10.0, 11.0, 12.0,
+            13.0, 14.0, 15.0, 16.0
+        )),
+        expectedSetRows,
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+    CheckDoubleMatrixRowsNear(
+        context,
+        StoreDoubleMatrixRows(DoubleSimdMatrixSetColumns(
+            MakeDoubleVector(1.0, 5.0, 9.0, 13.0),
+            MakeDoubleVector(2.0, 6.0, 10.0, 14.0),
+            MakeDoubleVector(3.0, 7.0, 11.0, 15.0),
+            MakeDoubleVector(4.0, 8.0, 12.0, 16.0)
+        )),
+        expectedSetRows,
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+    context.checkTrue(DoubleSimdMatrixIsIdentity(DoubleSimdMatrixIdentity()), "DoubleSimdMatrixIsIdentity", __FILE__, __LINE__);
+    context.checkTrue(!DoubleSimdMatrixIsIdentity(DoubleSimdMatrixZero()), "!DoubleSimdMatrixIsIdentity", __FILE__, __LINE__);
+    context.checkTrue(DoubleSimdMatrixIsNaN(DoubleSimdMatrixSet(
+        std::numeric_limits<f64>::quiet_NaN(), 0.0, 0.0, 0.0,
+        0.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 1.0, 0.0,
+        0.0, 0.0, 0.0, 1.0
+    )), "DoubleSimdMatrixIsNaN", __FILE__, __LINE__);
+    context.checkTrue(DoubleSimdMatrixIsInfinite(DoubleSimdMatrixSet(
+        std::numeric_limits<f64>::infinity(), 0.0, 0.0, 0.0,
+        0.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 1.0, 0.0,
+        0.0, 0.0, 0.0, 1.0
+    )), "DoubleSimdMatrixIsInfinite", __FILE__, __LINE__);
+    CheckDoubleMatrixRowsNear(
+        context,
+        StoreDoubleMatrixRows(DoubleSimdMatrixTranslationFromVector(MakeDoubleVector(4.0, -5.0, 6.0, 0.0))),
+        StoreDoubleMatrixRows(DoubleSimdMatrixTranslation(4.0, -5.0, 6.0)),
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+    CheckDoubleMatrixRowsNear(
+        context,
+        StoreDoubleMatrixRows(DoubleSimdMatrixScalingFromVector(MakeDoubleVector(2.0, 3.0, 4.0, 0.0))),
+        StoreDoubleMatrixRows(DoubleSimdMatrixScaling(2.0, 3.0, 4.0)),
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+    CheckDoubleMatrixRowsNear(
+        context,
+        StoreDoubleMatrixRows(DoubleSimdMatrixRotationNormal(MakeDoubleVector(0.0, 0.0, 1.0, 0.0), halfPi)),
+        StoreDoubleMatrixRows(DoubleSimdMatrixRotationAxis(MakeDoubleVector(0.0, 0.0, 2.0, 0.0), halfPi)),
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+    CheckDoubleMatrixRowsNear(
+        context,
+        StoreDoubleMatrixRows(DoubleSimdMatrixMultiply(matrixA, matrixB)),
+        MultiplyDoubleRows(rowsA, rowsB),
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+    CheckDoubleMatrixRowsNear(
+        context,
+        StoreDoubleMatrixRows(DoubleSimdMatrixTranspose(matrixA)),
+        TransposeDoubleRows(rowsA),
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+    CheckDoubleMatrixRowsNear(
+        context,
+        StoreDoubleMatrixRows(DoubleSimdMatrixMultiplyTranspose(matrixA, matrixB)),
+        TransposeDoubleRows(MultiplyDoubleRows(rowsA, rowsB)),
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+
+    const DoubleRows4x4 tensorRows = StoreDoubleMatrixRows(DoubleSimdMatrixVectorTensorProduct(lhs, rhs));
+    const DoubleRows4x4 expectedTensor = { {
+        { -2.0, 5.0, -6.0, 8.0 },
+        { -4.0, 10.0, -12.0, 16.0 },
+        { -6.0, 15.0, -18.0, 24.0 },
+        { -8.0, 20.0, -24.0, 32.0 },
+    } };
+    CheckDoubleMatrixRowsNear(context, tensorRows, expectedTensor, s_DoubleEpsilon, __FILE__, __LINE__);
+
+    const Double4Data transformed2 = StoreDoubleVector(
+        DoubleSimdVector2Transform(MakeDoubleVector(1.0, 2.0, 0.0, 1.0), matrixA)
+    );
+    const Double4Data expected2 = TransformDoubleRows(rowsA, 1.0, 2.0, 0.0, 1.0);
+    CheckDouble4Near(
+        context,
+        transformed2,
+        expected2.x,
+        expected2.y,
+        expected2.z,
+        expected2.w,
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+    CheckDouble4Near(
+        context,
+        StoreDoubleVector(DoubleSimdVector2TransformCoord(MakeDoubleVector(1.0, 2.0, 0.0, 1.0), matrixA)),
+        expected2.x / expected2.w,
+        expected2.y / expected2.w,
+        expected2.z / expected2.w,
+        1.0,
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+
+    const Double4Data transformed2Normal = StoreDoubleVector(
+        DoubleSimdVector2TransformNormal(MakeDoubleVector(1.0, 2.0, 0.0, 0.0), matrixA)
+    );
+    const Double4Data expected2Normal = TransformDoubleRows(rowsA, 1.0, 2.0, 0.0, 0.0);
+    CheckDouble4Near(
+        context,
+        transformed2Normal,
+        expected2Normal.x,
+        expected2Normal.y,
+        expected2Normal.z,
+        expected2Normal.w,
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+
+    const Double4Data transformedPoint = StoreDoubleVector(
+        DoubleSimdVector3TransformCoord(MakeDoubleVector(1.0, 2.0, 3.0, 1.0), matrixA)
+    );
+    const Double4Data expectedPoint = TransformDoubleRows(rowsA, 1.0, 2.0, 3.0, 1.0);
+    CheckDouble4Near(
+        context,
+        StoreDoubleVector(DoubleSimdVector3Transform(MakeDoubleVector(1.0, 2.0, 3.0, 1.0), matrixA)),
+        expectedPoint.x,
+        expectedPoint.y,
+        expectedPoint.z,
+        expectedPoint.w,
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+    CheckDouble4Near(
+        context,
+        transformedPoint,
+        expectedPoint.x,
+        expectedPoint.y,
+        expectedPoint.z,
+        expectedPoint.w,
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+
+    const Double4Data transformedNormal = StoreDoubleVector(
+        DoubleSimdVector3TransformNormal(MakeDoubleVector(1.0, 2.0, 3.0, 0.0), matrixA)
+    );
+    const Double4Data expectedNormal = TransformDoubleRows(rowsA, 1.0, 2.0, 3.0, 0.0);
+    CheckDouble4Near(
+        context,
+        transformedNormal,
+        expectedNormal.x,
+        expectedNormal.y,
+        expectedNormal.z,
+        expectedNormal.w,
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+
+    const Double2Data streamInput2[2] = {
+        Double2Data(1.0, 2.0),
+        Double2Data(-3.0, 4.0),
+    };
+    Double4Data transformed2Stream[2]{};
+    DoubleSimdVector2TransformStream(
+        MakeNotNull(&transformed2Stream[0]),
+        sizeof(Double4Data),
+        MakeNotNull(&streamInput2[0]),
+        sizeof(Double2Data),
+        2,
+        matrixA
+    );
+    for(usize index = 0; index < 2; ++index){
+        const Double4Data expected = TransformDoubleRows(rowsA, streamInput2[index].x, streamInput2[index].y, 0.0, 1.0);
+        CheckDouble4Near(
+            context,
+            transformed2Stream[index],
+            expected.x,
+            expected.y,
+            expected.z,
+            expected.w,
+            s_DoubleEpsilon,
+            __FILE__,
+            __LINE__
+        );
+    }
+
+    Double2Data transformed2CoordStream[2]{};
+    Double2Data transformed2NormalStream[2]{};
+    DoubleSimdVector2TransformCoordStream(
+        MakeNotNull(&transformed2CoordStream[0]),
+        sizeof(Double2Data),
+        MakeNotNull(&streamInput2[0]),
+        sizeof(Double2Data),
+        2,
+        matrixA
+    );
+    DoubleSimdVector2TransformNormalStream(
+        MakeNotNull(&transformed2NormalStream[0]),
+        sizeof(Double2Data),
+        MakeNotNull(&streamInput2[0]),
+        sizeof(Double2Data),
+        2,
+        matrixA
+    );
+    for(usize index = 0; index < 2; ++index){
+        const Double4Data expectedCoord = TransformDoubleRows(rowsA, streamInput2[index].x, streamInput2[index].y, 0.0, 1.0);
+        const Double4Data expectedNormalStream = TransformDoubleRows(
+            rowsA,
+            streamInput2[index].x,
+            streamInput2[index].y,
+            0.0,
+            0.0
+        );
+        CheckDouble2Near(
+            context,
+            transformed2CoordStream[index],
+            expectedCoord.x / expectedCoord.w,
+            expectedCoord.y / expectedCoord.w,
+            s_DoubleEpsilon,
+            __FILE__,
+            __LINE__
+        );
+        CheckDouble2Near(
+            context,
+            transformed2NormalStream[index],
+            expectedNormalStream.x,
+            expectedNormalStream.y,
+            s_DoubleEpsilon,
+            __FILE__,
+            __LINE__
+        );
+    }
+
+    const Double3Data streamInput3[2] = {
+        Double3Data(1.0, 2.0, 3.0),
+        Double3Data(-3.0, 4.0, -5.0),
+    };
+    Double4Data transformed3Stream[2]{};
+    Double3Data transformed3CoordStream[2]{};
+    Double3Data transformed3NormalStream[2]{};
+    DoubleSimdVector3TransformStream(
+        MakeNotNull(&transformed3Stream[0]),
+        sizeof(Double4Data),
+        MakeNotNull(&streamInput3[0]),
+        sizeof(Double3Data),
+        2,
+        matrixA
+    );
+    DoubleSimdVector3TransformCoordStream(
+        MakeNotNull(&transformed3CoordStream[0]),
+        sizeof(Double3Data),
+        MakeNotNull(&streamInput3[0]),
+        sizeof(Double3Data),
+        2,
+        matrixA
+    );
+    DoubleSimdVector3TransformNormalStream(
+        MakeNotNull(&transformed3NormalStream[0]),
+        sizeof(Double3Data),
+        MakeNotNull(&streamInput3[0]),
+        sizeof(Double3Data),
+        2,
+        matrixA
+    );
+    for(usize index = 0; index < 2; ++index){
+        const Double4Data expectedTransform = TransformDoubleRows(
+            rowsA,
+            streamInput3[index].x,
+            streamInput3[index].y,
+            streamInput3[index].z,
+            1.0
+        );
+        const Double4Data expectedNormalStream = TransformDoubleRows(
+            rowsA,
+            streamInput3[index].x,
+            streamInput3[index].y,
+            streamInput3[index].z,
+            0.0
+        );
+        CheckDouble4Near(
+            context,
+            transformed3Stream[index],
+            expectedTransform.x,
+            expectedTransform.y,
+            expectedTransform.z,
+            expectedTransform.w,
+            s_DoubleEpsilon,
+            __FILE__,
+            __LINE__
+        );
+        CheckDouble3Near(
+            context,
+            transformed3CoordStream[index],
+            expectedTransform.x / expectedTransform.w,
+            expectedTransform.y / expectedTransform.w,
+            expectedTransform.z / expectedTransform.w,
+            s_DoubleEpsilon,
+            __FILE__,
+            __LINE__
+        );
+        CheckDouble3Near(
+            context,
+            transformed3NormalStream[index],
+            expectedNormalStream.x,
+            expectedNormalStream.y,
+            expectedNormalStream.z,
+            s_DoubleEpsilon,
+            __FILE__,
+            __LINE__
+        );
+    }
+
+    const Double4Data streamInput4[2] = {
+        Double4Data(1.0, 2.0, 3.0, 1.0),
+        Double4Data(-3.0, 4.0, -5.0, 0.5),
+    };
+    Double4Data transformed4Stream[2]{};
+    DoubleSimdVector4TransformStream(
+        MakeNotNull(&transformed4Stream[0]),
+        sizeof(Double4Data),
+        MakeNotNull(&streamInput4[0]),
+        sizeof(Double4Data),
+        2,
+        matrixA
+    );
+    for(usize index = 0; index < 2; ++index){
+        const Double4Data expected = TransformDoubleRows(
+            rowsA,
+            streamInput4[index].x,
+            streamInput4[index].y,
+            streamInput4[index].z,
+            streamInput4[index].w
+        );
+        CheckDouble4Near(
+            context,
+            transformed4Stream[index],
+            expected.x,
+            expected.y,
+            expected.z,
+            expected.w,
+            s_DoubleEpsilon,
+            __FILE__,
+            __LINE__
+        );
+    }
+
+    const DoubleSimdVector determinant = DoubleSimdMatrixDeterminant(matrixA);
+    context.checkNearDouble(
+        StoreDoubleVector(determinant).x,
+        24.0,
+        s_DoubleEpsilon,
+        "DoubleSimdMatrixDeterminant",
+        __FILE__,
+        __LINE__
+    );
+
+    DoubleSimdVector inverseDeterminant = DoubleSimdVectorZero();
+    const DoubleSimdMatrix inverse = DoubleSimdMatrixInverse(&inverseDeterminant, matrixA);
+    CheckDoubleMatrixRowsNear(
+        context,
+        StoreDoubleMatrixRows(DoubleSimdMatrixMultiply(matrixA, inverse)),
+        StoreDoubleMatrixRows(DoubleSimdMatrixIdentity()),
+        1.0e-8,
+        __FILE__,
+        __LINE__
+    );
+    context.checkNearDouble(
+        StoreDoubleVector(inverseDeterminant).x,
+        24.0,
+        s_DoubleEpsilon,
+        "DoubleSimdMatrixInverse determinant",
+        __FILE__,
+        __LINE__
+    );
+
+    const DoubleSimdVector angles = MakeDoubleVector(0.3, -0.2, 0.5, 0.0);
+    const DoubleSimdMatrix rpy = DoubleSimdMatrixRotationRollPitchYaw(
+        DoubleSimdVectorGetX(angles),
+        DoubleSimdVectorGetY(angles),
+        DoubleSimdVectorGetZ(angles)
+    );
+    const DoubleSimdMatrix manualRpy = ComposeDouble(
+        ComposeDouble(DoubleSimdMatrixRotationZ(0.5), DoubleSimdMatrixRotationX(0.3)),
+        DoubleSimdMatrixRotationY(-0.2)
+    );
+    CheckDoubleMatrixRowsNear(
+        context,
+        StoreDoubleMatrixRows(rpy),
+        StoreDoubleMatrixRows(manualRpy),
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+    CheckDoubleMatrixRowsNear(
+        context,
+        StoreDoubleMatrixRows(DoubleSimdMatrixRotationRollPitchYawFromVector(angles)),
+        StoreDoubleMatrixRows(rpy),
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+    const DoubleSimdVector quaternion = DoubleSimdQuaternionRotationRollPitchYaw(0.3, -0.2, 0.5);
+    CheckDoubleVectorNear(
+        context,
+        DoubleSimdQuaternionIdentity(),
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+    CheckDoubleVectorNear(
+        context,
+        DoubleSimdQuaternionConjugate(MakeDoubleVector(0.1, -0.2, 0.3, 0.4)),
+        -0.1,
+        0.2,
+        -0.3,
+        0.4,
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+    CheckDoubleVectorNear(
+        context,
+        DoubleSimdQuaternionMultiply(DoubleSimdQuaternionIdentity(), quaternion),
+        StoreDoubleVector(quaternion).x,
+        StoreDoubleVector(quaternion).y,
+        StoreDoubleVector(quaternion).z,
+        StoreDoubleVector(quaternion).w,
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+    CheckDoubleVectorNear(
+        context,
+        DoubleSimdQuaternionNormalize(MakeDoubleVector(0.0, 0.0, 0.0, 2.0)),
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+    CheckDoubleQuaternionEquivalent(
+        context,
+        DoubleSimdQuaternionRotationNormal(MakeDoubleVector(0.0, 0.0, 1.0, 0.0), halfPi),
+        DoubleSimdQuaternionRotationAxis(MakeDoubleVector(0.0, 0.0, 2.0, 0.0), halfPi),
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+    CheckDoubleQuaternionEquivalent(
+        context,
+        DoubleSimdQuaternionRotationRollPitchYawFromVector(angles),
+        quaternion,
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+    CheckDoubleMatrixRowsNear(
+        context,
+        StoreDoubleMatrixRows(rpy),
+        StoreDoubleMatrixRows(DoubleSimdMatrixRotationQuaternion(quaternion)),
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+    CheckDoubleQuaternionEquivalent(
+        context,
+        quaternion,
+        DoubleSimdQuaternionRotationMatrix(DoubleSimdMatrixRotationQuaternion(quaternion)),
+        1.0e-8,
+        __FILE__,
+        __LINE__
+    );
+
+    DoubleSimdVector outScale = DoubleSimdVectorZero();
+    DoubleSimdVector outRotation = DoubleSimdVectorZero();
+    DoubleSimdVector outTranslation = DoubleSimdVectorZero();
+    context.checkTrue(
+        DoubleSimdMatrixDecompose(outScale, outRotation, outTranslation, matrixA),
+        "DoubleSimdMatrixDecompose",
+        __FILE__,
+        __LINE__
+    );
+    CheckDoubleVectorNear(context, outScale, 2.0, 3.0, 4.0, 0.0, s_DoubleEpsilon, __FILE__, __LINE__);
+    CheckDoubleVectorNear(context, outTranslation, 4.0, -5.0, 6.0, 1.0, s_DoubleEpsilon, __FILE__, __LINE__);
+    CheckDoubleMatrixRowsNear(
+        context,
+        StoreDoubleMatrixRows(DoubleSimdMatrixAffineTransformation(
+            outScale,
+            DoubleSimdVectorZero(),
+            outRotation,
+            outTranslation
+        )),
+        rowsA,
+        1.0e-8,
+        __FILE__,
+        __LINE__
+    );
+
+    const DoubleRows4x4 reflected = StoreDoubleMatrixRows(
+        DoubleSimdMatrixReflect(MakeDoubleVector(0.0, 1.0, 0.0, 0.0))
+    );
+    const DoubleRows4x4 expectedReflect = { {
+        { 1.0, 0.0, 0.0, 0.0 },
+        { 0.0, -1.0, 0.0, 0.0 },
+        { 0.0, 0.0, 1.0, 0.0 },
+        { 0.0, 0.0, 0.0, 1.0 },
+    } };
+    CheckDoubleMatrixRowsNear(context, reflected, expectedReflect, s_DoubleEpsilon, __FILE__, __LINE__);
+
+    const DoubleSimdMatrix shadow = DoubleSimdMatrixShadow(
+        MakeDoubleVector(0.0, 1.0, 0.0, 0.0),
+        MakeDoubleVector(0.0, -1.0, 0.0, 0.0)
+    );
+    const Double4Data shadowedRaw = StoreDoubleVector(
+        DoubleSimdVector4Transform(MakeDoubleVector(2.0, 3.0, 4.0, 1.0), shadow)
+    );
+    CheckDouble4Near(
+        context,
+        Double4Data(
+            shadowedRaw.x / shadowedRaw.w,
+            shadowedRaw.y / shadowedRaw.w,
+            shadowedRaw.z / shadowedRaw.w,
+            1.0
+        ),
+        2.0,
+        0.0,
+        4.0,
+        1.0,
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+
+    DoubleSimdVector planeDeterminant = DoubleSimdVectorZero();
+    const DoubleSimdMatrix translatedPlaneInverse = DoubleSimdMatrixInverse(
+        &planeDeterminant,
+        DoubleSimdMatrixTranslation(0.0, 5.0, 0.0)
+    );
+    CheckDoubleVectorNear(
+        context,
+        DoubleSimdPlaneTransform(
+            MakeDoubleVector(0.0, 1.0, 0.0, 0.0),
+            DoubleSimdMatrixTranspose(translatedPlaneInverse)
+        ),
+        0.0,
+        1.0,
+        0.0,
+        -5.0,
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+
+    const Double4Data planeStreamInput[2] = {
+        Double4Data(0.0, 1.0, 0.0, 0.0),
+        Double4Data(1.0, 0.0, 0.0, -2.0),
+    };
+    Double4Data planeStreamOutput[2]{};
+    DoubleSimdPlaneTransformStream(
+        MakeNotNull(&planeStreamOutput[0]),
+        sizeof(Double4Data),
+        MakeNotNull(&planeStreamInput[0]),
+        sizeof(Double4Data),
+        2,
+        DoubleSimdMatrixTranspose(translatedPlaneInverse)
+    );
+    CheckDouble4Near(context, planeStreamOutput[0], 0.0, 1.0, 0.0, -5.0, s_DoubleEpsilon, __FILE__, __LINE__);
+    CheckDouble4Near(context, planeStreamOutput[1], 1.0, 0.0, 0.0, -2.0, s_DoubleEpsilon, __FILE__, __LINE__);
+    CheckDoubleVectorNear(
+        context,
+        DoubleSimdPlaneDot(MakeDoubleVector(0.0, 2.0, 0.0, -4.0), MakeDoubleVector(0.0, 3.0, 0.0, 1.0)),
+        2.0,
+        2.0,
+        2.0,
+        2.0,
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+    CheckDoubleVectorNear(
+        context,
+        DoubleSimdPlaneNormalize(MakeDoubleVector(0.0, 2.0, 0.0, -4.0)),
+        0.0,
+        1.0,
+        0.0,
+        -2.0,
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+
+    const DoubleSimdVector zero = DoubleSimdVectorZero();
+    const DoubleSimdVector scale2d = MakeDoubleVector(2.0, 3.0, 1.0, 0.0);
+    const DoubleSimdVector translation2d = MakeDoubleVector(4.0, -5.0, 0.0, 0.0);
+    const f64 rotation = 0.25;
+    const DoubleSimdMatrix helper2d = DoubleSimdMatrixTransformation2D(
+        zero,
+        0.0,
+        scale2d,
+        zero,
+        rotation,
+        translation2d
+    );
+    const DoubleSimdMatrix manual2d = ComposeDouble(
+        ComposeDouble(
+            DoubleSimdMatrixTranslation(4.0, -5.0, 0.0),
+            DoubleSimdMatrixRotationZ(rotation)
+        ),
+        DoubleSimdMatrixScaling(2.0, 3.0, 1.0)
+    );
+    CheckDoubleMatrixRowsNear(
+        context,
+        StoreDoubleMatrixRows(helper2d),
+        StoreDoubleMatrixRows(manual2d),
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+    CheckDoubleMatrixRowsNear(
+        context,
+        StoreDoubleMatrixRows(DoubleSimdMatrixAffineTransformation2D(scale2d, zero, rotation, translation2d)),
+        StoreDoubleMatrixRows(manual2d),
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+
+    const DoubleSimdVector scalingOrigin2d = MakeDoubleVector(-2.0, 1.0, 0.0, 1.0);
+    const DoubleSimdVector rotationOrigin2d = MakeDoubleVector(3.0, -4.0, 0.0, 1.0);
+    const f64 scalingOrientation2d = -0.35;
+    const DoubleSimdMatrix helper2dComplex = DoubleSimdMatrixTransformation2D(
+        scalingOrigin2d,
+        scalingOrientation2d,
+        scale2d,
+        rotationOrigin2d,
+        rotation,
+        translation2d
+    );
+    const DoubleSimdMatrix manual2dComplex = ComposeDouble(
+        ComposeDouble(
+            ComposeDouble(
+                ComposeDouble(
+                    ComposeDouble(
+                        ComposeDouble(
+                            ComposeDouble(
+                                DoubleSimdMatrixTranslation(4.0, -5.0, 0.0),
+                                DoubleSimdMatrixTranslation(3.0, -4.0, 0.0)
+                            ),
+                            DoubleSimdMatrixRotationZ(rotation)
+                        ),
+                        DoubleSimdMatrixTranslation(-3.0, 4.0, 0.0)
+                    ),
+                    DoubleSimdMatrixTranslation(-2.0, 1.0, 0.0)
+                ),
+                DoubleSimdMatrixRotationZ(scalingOrientation2d)
+            ),
+            DoubleSimdMatrixScaling(2.0, 3.0, 1.0)
+        ),
+        ComposeDouble(
+            DoubleSimdMatrixTranspose(DoubleSimdMatrixRotationZ(scalingOrientation2d)),
+            DoubleSimdMatrixTranslation(2.0, -1.0, 0.0)
+        )
+    );
+    CheckDoubleMatrixRowsNear(
+        context,
+        StoreDoubleMatrixRows(helper2dComplex),
+        StoreDoubleMatrixRows(manual2dComplex),
+        1.0e-8,
+        __FILE__,
+        __LINE__
+    );
+    const DoubleSimdVector complex2dPoint = MakeDoubleVector(-1.5, 0.75, 0.0, 1.0);
+    const Double4Data complex2dManualPoint = StoreDoubleVector(
+        DoubleSimdVector2TransformCoord(complex2dPoint, manual2dComplex)
+    );
+    CheckDoubleVectorNear(
+        context,
+        DoubleSimdVector2TransformCoord(complex2dPoint, helper2dComplex),
+        complex2dManualPoint.x,
+        complex2dManualPoint.y,
+        complex2dManualPoint.z,
+        complex2dManualPoint.w,
+        1.0e-8,
+        __FILE__,
+        __LINE__
+    );
+    const DoubleSimdMatrix affine2dComplex = DoubleSimdMatrixAffineTransformation2D(
+        scale2d,
+        rotationOrigin2d,
+        rotation,
+        translation2d
+    );
+    const DoubleSimdMatrix affine2dComplexManual = ComposeDouble(
+        ComposeDouble(
+            ComposeDouble(
+                ComposeDouble(
+                    DoubleSimdMatrixTranslation(4.0, -5.0, 0.0),
+                    DoubleSimdMatrixTranslation(3.0, -4.0, 0.0)
+                ),
+                DoubleSimdMatrixRotationZ(rotation)
+            ),
+            DoubleSimdMatrixTranslation(-3.0, 4.0, 0.0)
+        ),
+        DoubleSimdMatrixScaling(2.0, 3.0, 1.0)
+    );
+    CheckDoubleMatrixRowsNear(
+        context,
+        StoreDoubleMatrixRows(affine2dComplex),
+        StoreDoubleMatrixRows(affine2dComplexManual),
+        1.0e-8,
+        __FILE__,
+        __LINE__
+    );
+
+    const DoubleSimdVector scaling = MakeDoubleVector(1.5, 2.0, 2.5, 0.0);
+    const DoubleSimdVector rotationQuaternion = DoubleSimdQuaternionRotationRollPitchYaw(0.2, -0.3, 0.4);
+    const DoubleSimdVector translation = MakeDoubleVector(7.0, -8.0, 9.0, 1.0);
+    const DoubleSimdMatrix helper3d = DoubleSimdMatrixTransformation(
+        zero,
+        DoubleSimdQuaternionIdentity(),
+        scaling,
+        zero,
+        rotationQuaternion,
+        translation
+    );
+    const DoubleSimdMatrix manual3d = ComposeDouble(
+        ComposeDouble(
+            DoubleSimdMatrixTranslation(7.0, -8.0, 9.0),
+            DoubleSimdMatrixRotationQuaternion(rotationQuaternion)
+        ),
+        DoubleSimdMatrixScaling(1.5, 2.0, 2.5)
+    );
+    CheckDoubleMatrixRowsNear(
+        context,
+        StoreDoubleMatrixRows(helper3d),
+        StoreDoubleMatrixRows(manual3d),
+        1.0e-8,
+        __FILE__,
+        __LINE__
+    );
+    CheckDoubleMatrixRowsNear(
+        context,
+        StoreDoubleMatrixRows(DoubleSimdMatrixAffineTransformation(scaling, zero, rotationQuaternion, translation)),
+        StoreDoubleMatrixRows(manual3d),
+        1.0e-8,
+        __FILE__,
+        __LINE__
+    );
+
+    const DoubleSimdVector scalingOrigin3d = MakeDoubleVector(-2.0, 1.0, 0.5, 1.0);
+    const DoubleSimdVector scalingOrientation3d = DoubleSimdQuaternionRotationRollPitchYaw(-0.15, 0.45, -0.2);
+    const DoubleSimdVector rotationOrigin3d = MakeDoubleVector(3.0, -4.0, 5.0, 1.0);
+    const DoubleSimdMatrix helper3dComplex = DoubleSimdMatrixTransformation(
+        scalingOrigin3d,
+        scalingOrientation3d,
+        scaling,
+        rotationOrigin3d,
+        rotationQuaternion,
+        translation
+    );
+    const DoubleSimdMatrix manual3dComplex = ComposeDouble(
+        ComposeDouble(
+            ComposeDouble(
+                ComposeDouble(
+                    ComposeDouble(
+                        ComposeDouble(
+                            ComposeDouble(
+                                DoubleSimdMatrixTranslation(7.0, -8.0, 9.0),
+                                DoubleSimdMatrixTranslation(3.0, -4.0, 5.0)
+                            ),
+                            DoubleSimdMatrixRotationQuaternion(rotationQuaternion)
+                        ),
+                        DoubleSimdMatrixTranslation(-3.0, 4.0, -5.0)
+                    ),
+                    DoubleSimdMatrixTranslation(-2.0, 1.0, 0.5)
+                ),
+                DoubleSimdMatrixRotationQuaternion(scalingOrientation3d)
+            ),
+            DoubleSimdMatrixScaling(1.5, 2.0, 2.5)
+        ),
+        ComposeDouble(
+            DoubleSimdMatrixTranspose(DoubleSimdMatrixRotationQuaternion(scalingOrientation3d)),
+            DoubleSimdMatrixTranslation(2.0, -1.0, -0.5)
+        )
+    );
+    CheckDoubleMatrixRowsNear(
+        context,
+        StoreDoubleMatrixRows(helper3dComplex),
+        StoreDoubleMatrixRows(manual3dComplex),
+        1.0e-8,
+        __FILE__,
+        __LINE__
+    );
+    const DoubleSimdVector complex3dPoint = MakeDoubleVector(-1.25, 0.5, 2.75, 1.0);
+    const Double4Data complex3dManualPoint = StoreDoubleVector(
+        DoubleSimdVector3TransformCoord(complex3dPoint, manual3dComplex)
+    );
+    CheckDoubleVectorNear(
+        context,
+        DoubleSimdVector3TransformCoord(complex3dPoint, helper3dComplex),
+        complex3dManualPoint.x,
+        complex3dManualPoint.y,
+        complex3dManualPoint.z,
+        complex3dManualPoint.w,
+        1.0e-8,
+        __FILE__,
+        __LINE__
+    );
+    const DoubleSimdMatrix affine3dComplex = DoubleSimdMatrixAffineTransformation(
+        scaling,
+        rotationOrigin3d,
+        rotationQuaternion,
+        translation
+    );
+    const DoubleSimdMatrix affine3dComplexManual = ComposeDouble(
+        ComposeDouble(
+            ComposeDouble(
+                ComposeDouble(
+                    DoubleSimdMatrixTranslation(7.0, -8.0, 9.0),
+                    DoubleSimdMatrixTranslation(3.0, -4.0, 5.0)
+                ),
+                DoubleSimdMatrixRotationQuaternion(rotationQuaternion)
+            ),
+            DoubleSimdMatrixTranslation(-3.0, 4.0, -5.0)
+        ),
+        DoubleSimdMatrixScaling(1.5, 2.0, 2.5)
+    );
+    CheckDoubleMatrixRowsNear(
+        context,
+        StoreDoubleMatrixRows(affine3dComplex),
+        StoreDoubleMatrixRows(affine3dComplexManual),
+        1.0e-8,
+        __FILE__,
+        __LINE__
+    );
+
+    const DoubleSimdVector eye = MakeDoubleVector(3.0, 4.0, -5.0, 1.0);
+    const DoubleSimdVector focus = MakeDoubleVector(6.0, 5.0, 2.0, 1.0);
+    const DoubleSimdVector up = MakeDoubleVector(0.0, 1.0, 0.0, 0.0);
+    const DoubleSimdVector direction = DoubleSimdVectorSubtract(focus, eye);
+    const DoubleSimdMatrix lookAt = DoubleSimdMatrixLookAtLH(eye, focus, up);
+    const DoubleSimdMatrix lookTo = DoubleSimdMatrixLookToLH(eye, direction, up);
+    const DoubleSimdMatrix lookAtRh = DoubleSimdMatrixLookAtRH(eye, focus, up);
+    const DoubleSimdMatrix lookToRh = DoubleSimdMatrixLookToRH(eye, direction, up);
+    CheckDoubleMatrixRowsNear(
+        context,
+        StoreDoubleMatrixRows(lookAt),
+        StoreDoubleMatrixRows(lookTo),
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+    CheckDoubleMatrixRowsNear(
+        context,
+        StoreDoubleMatrixRows(lookAtRh),
+        StoreDoubleMatrixRows(lookToRh),
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+    const f64 focusDistance = StoreDoubleVector(DoubleSimdVector3Length(direction)).x;
+    CheckDoubleVectorNear(
+        context,
+        DoubleSimdVector3TransformCoord(eye, lookAt),
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        1.0e-8,
+        __FILE__,
+        __LINE__
+    );
+    CheckDoubleVectorNear(
+        context,
+        DoubleSimdVector3TransformCoord(focus, lookAt),
+        0.0,
+        0.0,
+        focusDistance,
+        1.0,
+        1.0e-8,
+        __FILE__,
+        __LINE__
+    );
+    CheckDoubleVectorNear(
+        context,
+        DoubleSimdVector3TransformCoord(focus, lookAtRh),
+        0.0,
+        0.0,
+        -focusDistance,
+        1.0,
+        1.0e-8,
+        __FILE__,
+        __LINE__
+    );
+
+    const f64 nearZ = 0.5;
+    const f64 farZ = 50.0;
+    const f64 viewWidth = 8.0;
+    const f64 viewHeight = 6.0;
+    CheckDoubleMatrixRowsNear(
+        context,
+        StoreDoubleMatrixRows(DoubleSimdMatrixPerspectiveLH(viewWidth, viewHeight, nearZ, farZ)),
+        StoreDoubleMatrixRows(DoubleSimdMatrixPerspectiveOffCenterLH(
+            -viewWidth * 0.5,
+            viewWidth * 0.5,
+            -viewHeight * 0.5,
+            viewHeight * 0.5,
+            nearZ,
+            farZ
+        )),
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+    CheckDoubleMatrixRowsNear(
+        context,
+        StoreDoubleMatrixRows(DoubleSimdMatrixPerspectiveRH(viewWidth, viewHeight, nearZ, farZ)),
+        StoreDoubleMatrixRows(DoubleSimdMatrixPerspectiveOffCenterRH(
+            -viewWidth * 0.5,
+            viewWidth * 0.5,
+            -viewHeight * 0.5,
+            viewHeight * 0.5,
+            nearZ,
+            farZ
+        )),
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+    CheckDoubleMatrixRowsNear(
+        context,
+        StoreDoubleMatrixRows(DoubleSimdMatrixOrthographicLH(viewWidth, viewHeight, nearZ, farZ)),
+        StoreDoubleMatrixRows(DoubleSimdMatrixOrthographicOffCenterLH(
+            -viewWidth * 0.5,
+            viewWidth * 0.5,
+            -viewHeight * 0.5,
+            viewHeight * 0.5,
+            nearZ,
+            farZ
+        )),
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+    CheckDoubleMatrixRowsNear(
+        context,
+        StoreDoubleMatrixRows(DoubleSimdMatrixOrthographicRH(viewWidth, viewHeight, nearZ, farZ)),
+        StoreDoubleMatrixRows(DoubleSimdMatrixOrthographicOffCenterRH(
+            -viewWidth * 0.5,
+            viewWidth * 0.5,
+            -viewHeight * 0.5,
+            viewHeight * 0.5,
+            nearZ,
+            farZ
+        )),
+        s_DoubleEpsilon,
+        __FILE__,
+        __LINE__
+    );
+
+    const DoubleSimdMatrix perspective = DoubleSimdMatrixPerspectiveFovLH(1.1, 16.0 / 9.0, nearZ, farZ);
+    const DoubleSimdMatrix perspectiveRh = DoubleSimdMatrixPerspectiveFovRH(1.1, 16.0 / 9.0, nearZ, farZ);
+    CheckDoubleVectorNear(
+        context,
+        DoubleSimdVector3TransformCoord(MakeDoubleVector(0.0, 0.0, nearZ, 1.0), perspective),
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        1.0e-8,
+        __FILE__,
+        __LINE__
+    );
+    CheckDoubleVectorNear(
+        context,
+        DoubleSimdVector3TransformCoord(MakeDoubleVector(0.0, 0.0, farZ, 1.0), perspective),
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+        1.0e-8,
+        __FILE__,
+        __LINE__
+    );
+    CheckDoubleVectorNear(
+        context,
+        DoubleSimdVector3TransformCoord(MakeDoubleVector(0.0, 0.0, -nearZ, 1.0), perspectiveRh),
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        1.0e-8,
+        __FILE__,
+        __LINE__
+    );
+    CheckDoubleVectorNear(
+        context,
+        DoubleSimdVector3TransformCoord(MakeDoubleVector(0.0, 0.0, -farZ, 1.0), perspectiveRh),
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+        1.0e-8,
+        __FILE__,
+        __LINE__
+    );
+
+    const DoubleSimdMatrix world = DoubleSimdMatrixTranslation(1.0, -2.0, 3.0);
+    const DoubleSimdMatrix view = DoubleSimdMatrixLookAtLH(
+        MakeDoubleVector(0.0, 0.0, -10.0, 1.0),
+        MakeDoubleVector(0.0, 0.0, 0.0, 1.0),
+        up
+    );
+    const DoubleSimdVector sourcePoint = MakeDoubleVector(2.0, 3.0, 4.0, 1.0);
+    const DoubleSimdVector projected = DoubleSimdVector3Project(
+        sourcePoint,
+        10.0,
+        20.0,
+        800.0,
+        600.0,
+        0.0,
+        1.0,
+        perspective,
+        view,
+        world
+    );
+    const DoubleSimdVector unprojected = DoubleSimdVector3Unproject(
+        projected,
+        10.0,
+        20.0,
+        800.0,
+        600.0,
+        0.0,
+        1.0,
+        perspective,
+        view,
+        world
+    );
+    CheckDoubleVectorNear(context, unprojected, 2.0, 3.0, 4.0, 1.0, 1.0e-8, __FILE__, __LINE__);
+
+    const Double3Data projectStreamInput[1] = {
+        Double3Data(2.0, 3.0, 4.0),
+    };
+    Double3Data projectStreamOutput[1]{};
+    DoubleSimdVector3ProjectStream(
+        MakeNotNull(&projectStreamOutput[0]),
+        sizeof(Double3Data),
+        MakeNotNull(&projectStreamInput[0]),
+        sizeof(Double3Data),
+        1,
+        10.0,
+        20.0,
+        800.0,
+        600.0,
+        0.0,
+        1.0,
+        perspective,
+        view,
+        world
+    );
+    const Double4Data projectedStored = StoreDoubleVector(projected);
+    CheckDouble3Near(
+        context,
+        projectStreamOutput[0],
+        projectedStored.x,
+        projectedStored.y,
+        projectedStored.z,
+        1.0e-8,
+        __FILE__,
+        __LINE__
+    );
+
+    Double3Data unprojectStreamOutput[1]{};
+    DoubleSimdVector3UnprojectStream(
+        MakeNotNull(&unprojectStreamOutput[0]),
+        sizeof(Double3Data),
+        MakeNotNull(static_cast<const Double3Data*>(&projectStreamOutput[0])),
+        sizeof(Double3Data),
+        1,
+        10.0,
+        20.0,
+        800.0,
+        600.0,
+        0.0,
+        1.0,
+        perspective,
+        view,
+        world
+    );
+    CheckDouble3Near(context, unprojectStreamOutput[0], 2.0, 3.0, 4.0, 1.0e-8, __FILE__, __LINE__);
+}
+
 static void TestMatrixBoundary(TestContext& context){
     const Float3x4Data original3x4(
         1.0f, 2.0f, 3.0f, 10.0f,
@@ -493,6 +2181,26 @@ static void TestMatrixBoundary(TestContext& context){
     AlignedFloat3x4Data alignedRoundtrip3x4{};
     StoreFloat3x4A(alignedRoundtrip3x4, alignedMatrix3x4);
     CheckMatrix3x4Near(context, alignedRoundtrip3x4, aligned3x4, s_FloatEpsilon, __FILE__, __LINE__);
+
+    const Double3x4Data originalDouble3x4(
+        1.0, 2.0, 3.0, 10.0,
+        4.0, 5.0, 6.0, 11.0,
+        7.0, 8.0, 9.0, 12.0
+    );
+    const DoubleSimdMatrix doubleMatrix3x4 = LoadDouble3x4(originalDouble3x4);
+    Double3x4Data roundtripDouble3x4{};
+    StoreDouble3x4(roundtripDouble3x4, doubleMatrix3x4);
+    CheckDoubleMatrix3x4Near(context, roundtripDouble3x4, originalDouble3x4, s_DoubleEpsilon, __FILE__, __LINE__);
+
+    const AlignedDouble3x4Data alignedDouble3x4(
+        3.0, 1.0, 4.0, 7.0,
+        1.0, 5.0, 9.0, 8.0,
+        2.0, 6.0, 5.0, 9.0
+    );
+    const DoubleSimdMatrix alignedDoubleMatrix3x4 = LoadDouble3x4A(alignedDouble3x4);
+    AlignedDouble3x4Data alignedRoundtripDouble3x4{};
+    StoreDouble3x4A(alignedRoundtripDouble3x4, alignedDoubleMatrix3x4);
+    CheckDoubleMatrix3x4Near(context, alignedRoundtripDouble3x4, alignedDouble3x4, s_DoubleEpsilon, __FILE__, __LINE__);
 }
 
 static void TestMatrixBuilders(TestContext& context){
@@ -1730,6 +3438,7 @@ int main(){
     TestContext context;
     TestNativeFloatMath(context);
     TestNativeDoubleMath(context);
+    TestSourceMathDoubleSimd(context);
     TestMatrixBoundary(context);
     TestMatrixBuilders(context);
     TestMatrixRelations(context);

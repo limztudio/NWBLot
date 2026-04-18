@@ -22,6 +22,8 @@ using VectorArg = SourceMath::VectorArg;
 using VectorArg2 = SourceMath::VectorArg2;
 using VectorArg3 = SourceMath::VectorArg3;
 using VectorConstArg = SourceMath::VectorConstArg;
+using DoubleSimdVector = SourceMath::DoubleVector;
+using DoubleVectorArg = SourceMath::DoubleVectorArg;
 
 using Float2Data = SourceMath::Float2;
 using Float3Data = SourceMath::Float3;
@@ -29,9 +31,17 @@ using Float4Data = SourceMath::Float4;
 using AlignedFloat2Data = SourceMath::AlignedFloat2;
 using AlignedFloat3Data = SourceMath::AlignedFloat3;
 using AlignedFloat4Data = SourceMath::AlignedFloat4;
+using Double2Data = SourceMath::Double2;
+using Double3Data = SourceMath::Double3;
+using Double4Data = SourceMath::Double4;
+using AlignedDouble2Data = SourceMath::AlignedDouble2;
+using AlignedDouble3Data = SourceMath::AlignedDouble3;
+using AlignedDouble4Data = SourceMath::AlignedDouble4;
 
 using Float3x4Data = SourceMath::Float3x4;
 using AlignedFloat3x4Data = SourceMath::AlignedFloat3x4;
+using Double3x4Data = SourceMath::Double3x4;
+using AlignedDouble3x4Data = SourceMath::AlignedDouble3x4;
 
 
 struct SimdMatrix{
@@ -64,6 +74,1006 @@ struct SimdMatrix{
 };
 
 using MatrixArg = const SimdMatrix&;
+
+
+struct DoubleSimdMatrix{
+    SourceMath::DoubleMatrix m_value;
+
+    DoubleSimdMatrix()noexcept = default;
+    explicit DoubleSimdMatrix(const SourceMath::DoubleMatrix& value)noexcept
+        : m_value(value)
+    {
+    }
+    DoubleSimdMatrix(
+        DoubleVectorArg column0,
+        DoubleVectorArg column1,
+        DoubleVectorArg column2,
+        DoubleVectorArg column3
+    )noexcept{
+        m_value.r[0] = column0;
+        m_value.r[1] = column1;
+        m_value.r[2] = column2;
+        m_value.r[3] = column3;
+    }
+
+    // Columns under NWB's column-vector convention. `matrix[3]` is translation.
+    [[nodiscard]] DoubleSimdVector& operator[](const usize index)noexcept{
+        return m_value.r[index];
+    }
+
+    [[nodiscard]] const DoubleSimdVector& operator[](const usize index)const noexcept{
+        return m_value.r[index];
+    }
+
+    [[nodiscard]] const SourceMath::DoubleMatrix& nativeMatrix()const noexcept{
+        return m_value;
+    }
+};
+
+using DoubleMatrixArg = const DoubleSimdMatrix&;
+
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdVectorZero()noexcept{
+    return SourceMath::DoubleVectorZero();
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdVectorSet(
+    const f64 x,
+    const f64 y,
+    const f64 z,
+    const f64 w
+)noexcept{
+    return SourceMath::DoubleVectorSet(x, y, z, w);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdVectorReplicate(const f64 value)noexcept{
+    return SourceMath::DoubleVectorReplicate(value);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector LoadDoubleData(const f64& source)noexcept{
+    return SourceMath::LoadDouble(&source);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector LoadDouble2Data(const Double2Data& source)noexcept{
+    return SourceMath::LoadDouble2(&source);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector LoadDouble3Data(const Double3Data& source)noexcept{
+    return SourceMath::LoadDouble3(&source);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector LoadDouble4Data(const Double4Data& source)noexcept{
+    return SourceMath::LoadDouble4(&source);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector LoadDouble2AData(const AlignedDouble2Data& source)noexcept{
+    return SourceMath::LoadDouble2A(&source);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector LoadDouble3AData(const AlignedDouble3Data& source)noexcept{
+    return SourceMath::LoadDouble3A(&source);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector LoadDouble4AData(const AlignedDouble4Data& source)noexcept{
+    return SourceMath::LoadDouble4A(&source);
+}
+
+NWB_INLINE void StoreDouble2Data(Double2Data& destination, DoubleVectorArg vector)noexcept{
+    SourceMath::StoreDouble2(&destination, vector);
+}
+
+NWB_INLINE void StoreDouble3Data(Double3Data& destination, DoubleVectorArg vector)noexcept{
+    SourceMath::StoreDouble3(&destination, vector);
+}
+
+NWB_INLINE void StoreDouble4Data(Double4Data& destination, DoubleVectorArg vector)noexcept{
+    SourceMath::StoreDouble4(&destination, vector);
+}
+
+NWB_INLINE void StoreDoubleData(f64& destination, DoubleVectorArg vector)noexcept{
+    SourceMath::StoreDouble(&destination, vector);
+}
+
+NWB_INLINE void StoreDouble2AData(AlignedDouble2Data& destination, DoubleVectorArg vector)noexcept{
+    SourceMath::StoreDouble2A(&destination, vector);
+}
+
+NWB_INLINE void StoreDouble3AData(AlignedDouble3Data& destination, DoubleVectorArg vector)noexcept{
+    SourceMath::StoreDouble3A(&destination, vector);
+}
+
+NWB_INLINE void StoreDouble4AData(AlignedDouble4Data& destination, DoubleVectorArg vector)noexcept{
+    SourceMath::StoreDouble4A(&destination, vector);
+}
+
+// Preferred compact affine load path for NWB's column-vector convention.
+[[nodiscard]] NWB_INLINE DoubleSimdMatrix LoadDouble3x4(const Double3x4Data& source)noexcept{
+    return DoubleSimdMatrix(SourceMath::LoadDouble3x4(&source));
+}
+
+// Preferred compact affine load path for NWB's column-vector convention.
+[[nodiscard]] NWB_INLINE DoubleSimdMatrix LoadDouble3x4A(const AlignedDouble3x4Data& source)noexcept{
+    return DoubleSimdMatrix(SourceMath::LoadDouble3x4A(&source));
+}
+
+// Preferred compact affine store path for NWB's column-vector convention.
+NWB_INLINE void StoreDouble3x4(Double3x4Data& destination, DoubleMatrixArg matrix)noexcept{
+    SourceMath::StoreDouble3x4(&destination, matrix.m_value);
+}
+
+// Preferred compact affine store path for NWB's column-vector convention.
+NWB_INLINE void StoreDouble3x4A(AlignedDouble3x4Data& destination, DoubleMatrixArg matrix)noexcept{
+    SourceMath::StoreDouble3x4A(&destination, matrix.m_value);
+}
+
+[[nodiscard]] NWB_INLINE f64 DoubleSimdVectorGetX(DoubleVectorArg vector)noexcept{
+    return SourceMath::DoubleVectorGetX(vector);
+}
+
+[[nodiscard]] NWB_INLINE f64 DoubleSimdVectorGetY(DoubleVectorArg vector)noexcept{
+    return SourceMath::DoubleVectorGetY(vector);
+}
+
+[[nodiscard]] NWB_INLINE f64 DoubleSimdVectorGetZ(DoubleVectorArg vector)noexcept{
+    return SourceMath::DoubleVectorGetZ(vector);
+}
+
+[[nodiscard]] NWB_INLINE f64 DoubleSimdVectorGetW(DoubleVectorArg vector)noexcept{
+    return SourceMath::DoubleVectorGetW(vector);
+}
+
+[[nodiscard]] NWB_INLINE f64 DoubleSimdVectorGetByIndex(DoubleVectorArg vector, const usize index)noexcept{
+    return SourceMath::DoubleVectorGetByIndex(vector, index);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdVectorSplatX(DoubleVectorArg vector)noexcept{
+    return SourceMath::DoubleVectorSplatX(vector);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdVectorSplatY(DoubleVectorArg vector)noexcept{
+    return SourceMath::DoubleVectorSplatY(vector);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdVectorSplatZ(DoubleVectorArg vector)noexcept{
+    return SourceMath::DoubleVectorSplatZ(vector);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdVectorSplatW(DoubleVectorArg vector)noexcept{
+    return SourceMath::DoubleVectorSplatW(vector);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdVectorAdd(DoubleVectorArg lhs, DoubleVectorArg rhs)noexcept{
+    return SourceMath::DoubleVectorAdd(lhs, rhs);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdVectorSubtract(DoubleVectorArg lhs, DoubleVectorArg rhs)noexcept{
+    return SourceMath::DoubleVectorSubtract(lhs, rhs);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdVectorMultiply(DoubleVectorArg lhs, DoubleVectorArg rhs)noexcept{
+    return SourceMath::DoubleVectorMultiply(lhs, rhs);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdVectorDivide(DoubleVectorArg lhs, DoubleVectorArg rhs)noexcept{
+    return SourceMath::DoubleVectorDivide(lhs, rhs);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdVectorMultiplyAdd(
+    DoubleVectorArg lhs,
+    DoubleVectorArg rhs,
+    DoubleVectorArg addend
+)noexcept{
+    return SourceMath::DoubleVectorMultiplyAdd(lhs, rhs, addend);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdVectorNegate(DoubleVectorArg vector)noexcept{
+    return SourceMath::DoubleVectorNegate(vector);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdVectorScale(DoubleVectorArg vector, const f64 scaleFactor)noexcept{
+    return SourceMath::DoubleVectorScale(vector, scaleFactor);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdVectorSqrt(DoubleVectorArg vector)noexcept{
+    return SourceMath::DoubleVectorSqrt(vector);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdVectorAbs(DoubleVectorArg vector)noexcept{
+    return SourceMath::DoubleVectorAbs(vector);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdVector2Dot(DoubleVectorArg lhs, DoubleVectorArg rhs)noexcept{
+    return SourceMath::DoubleVector2Dot(lhs, rhs);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdVector2Cross(DoubleVectorArg lhs, DoubleVectorArg rhs)noexcept{
+    return SourceMath::DoubleVector2Cross(lhs, rhs);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdVector2LengthSq(DoubleVectorArg vector)noexcept{
+    return SourceMath::DoubleVector2LengthSq(vector);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdVector2Length(DoubleVectorArg vector)noexcept{
+    return SourceMath::DoubleVector2Length(vector);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdVector2Normalize(DoubleVectorArg vector)noexcept{
+    return SourceMath::DoubleVector2Normalize(vector);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdVector3Dot(DoubleVectorArg lhs, DoubleVectorArg rhs)noexcept{
+    return SourceMath::DoubleVector3Dot(lhs, rhs);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdVector4Dot(DoubleVectorArg lhs, DoubleVectorArg rhs)noexcept{
+    return SourceMath::DoubleVector4Dot(lhs, rhs);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdVector3Cross(DoubleVectorArg lhs, DoubleVectorArg rhs)noexcept{
+    return SourceMath::DoubleVector3Cross(lhs, rhs);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdVector3LengthSq(DoubleVectorArg vector)noexcept{
+    return SourceMath::DoubleVector3LengthSq(vector);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdVector3Length(DoubleVectorArg vector)noexcept{
+    return SourceMath::DoubleVector3Length(vector);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdVector3Normalize(DoubleVectorArg vector)noexcept{
+    return SourceMath::DoubleVector3Normalize(vector);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdVector4LengthSq(DoubleVectorArg vector)noexcept{
+    return SourceMath::DoubleVector4LengthSq(vector);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdVector4Length(DoubleVectorArg vector)noexcept{
+    return SourceMath::DoubleVector4Length(vector);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdVector4Normalize(DoubleVectorArg vector)noexcept{
+    return SourceMath::DoubleVector4Normalize(vector);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdVector2Transform(DoubleVectorArg vector, DoubleMatrixArg matrix)noexcept{
+    return SourceMath::DoubleVector2Transform(vector, matrix.m_value);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdVector2TransformCoord(
+    DoubleVectorArg vector,
+    DoubleMatrixArg matrix
+)noexcept{
+    return SourceMath::DoubleVector2TransformCoord(vector, matrix.m_value);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdVector2TransformNormal(
+    DoubleVectorArg vector,
+    DoubleMatrixArg matrix
+)noexcept{
+    return SourceMath::DoubleVector2TransformNormal(vector, matrix.m_value);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdVector4Transform(DoubleVectorArg vector, DoubleMatrixArg matrix)noexcept{
+    return SourceMath::DoubleVector4Transform(vector, matrix.m_value);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdVector3Transform(DoubleVectorArg vector, DoubleMatrixArg matrix)noexcept{
+    return SourceMath::DoubleVector3Transform(vector, matrix.m_value);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdVector3TransformCoord(
+    DoubleVectorArg vector,
+    DoubleMatrixArg matrix
+)noexcept{
+    return SourceMath::DoubleVector3TransformCoord(vector, matrix.m_value);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdVector3TransformNormal(
+    DoubleVectorArg vector,
+    DoubleMatrixArg matrix
+)noexcept{
+    return SourceMath::DoubleVector3TransformNormal(vector, matrix.m_value);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdVector3Project(
+    DoubleVectorArg vector,
+    const f64 viewportX,
+    const f64 viewportY,
+    const f64 viewportWidth,
+    const f64 viewportHeight,
+    const f64 viewportMinZ,
+    const f64 viewportMaxZ,
+    DoubleMatrixArg projection,
+    DoubleMatrixArg view,
+    DoubleMatrixArg world
+)noexcept{
+    return SourceMath::DoubleVector3Project(
+        vector,
+        viewportX,
+        viewportY,
+        viewportWidth,
+        viewportHeight,
+        viewportMinZ,
+        viewportMaxZ,
+        projection.m_value,
+        view.m_value,
+        world.m_value
+    );
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdVector3Unproject(
+    DoubleVectorArg vector,
+    const f64 viewportX,
+    const f64 viewportY,
+    const f64 viewportWidth,
+    const f64 viewportHeight,
+    const f64 viewportMinZ,
+    const f64 viewportMaxZ,
+    DoubleMatrixArg projection,
+    DoubleMatrixArg view,
+    DoubleMatrixArg world
+)noexcept{
+    return SourceMath::DoubleVector3Unproject(
+        vector,
+        viewportX,
+        viewportY,
+        viewportWidth,
+        viewportHeight,
+        viewportMinZ,
+        viewportMaxZ,
+        projection.m_value,
+        view.m_value,
+        world.m_value
+    );
+}
+
+NWB_INLINE Double4Data* DoubleSimdVector2TransformStream(
+    NotNull<Double4Data*> outputStream,
+    const usize outputStride,
+    NotNull<const Double2Data*> inputStream,
+    const usize inputStride,
+    const usize vectorCount,
+    DoubleMatrixArg matrix
+)noexcept{
+    return SourceMath::DoubleVector2TransformStream(
+        outputStream.get(),
+        outputStride,
+        inputStream.get(),
+        inputStride,
+        vectorCount,
+        matrix.m_value
+    );
+}
+
+NWB_INLINE Double2Data* DoubleSimdVector2TransformCoordStream(
+    NotNull<Double2Data*> outputStream,
+    const usize outputStride,
+    NotNull<const Double2Data*> inputStream,
+    const usize inputStride,
+    const usize vectorCount,
+    DoubleMatrixArg matrix
+)noexcept{
+    return SourceMath::DoubleVector2TransformCoordStream(
+        outputStream.get(),
+        outputStride,
+        inputStream.get(),
+        inputStride,
+        vectorCount,
+        matrix.m_value
+    );
+}
+
+NWB_INLINE Double2Data* DoubleSimdVector2TransformNormalStream(
+    NotNull<Double2Data*> outputStream,
+    const usize outputStride,
+    NotNull<const Double2Data*> inputStream,
+    const usize inputStride,
+    const usize vectorCount,
+    DoubleMatrixArg matrix
+)noexcept{
+    return SourceMath::DoubleVector2TransformNormalStream(
+        outputStream.get(),
+        outputStride,
+        inputStream.get(),
+        inputStride,
+        vectorCount,
+        matrix.m_value
+    );
+}
+
+NWB_INLINE Double4Data* DoubleSimdVector3TransformStream(
+    NotNull<Double4Data*> outputStream,
+    const usize outputStride,
+    NotNull<const Double3Data*> inputStream,
+    const usize inputStride,
+    const usize vectorCount,
+    DoubleMatrixArg matrix
+)noexcept{
+    return SourceMath::DoubleVector3TransformStream(
+        outputStream.get(),
+        outputStride,
+        inputStream.get(),
+        inputStride,
+        vectorCount,
+        matrix.m_value
+    );
+}
+
+NWB_INLINE Double3Data* DoubleSimdVector3TransformCoordStream(
+    NotNull<Double3Data*> outputStream,
+    const usize outputStride,
+    NotNull<const Double3Data*> inputStream,
+    const usize inputStride,
+    const usize vectorCount,
+    DoubleMatrixArg matrix
+)noexcept{
+    return SourceMath::DoubleVector3TransformCoordStream(
+        outputStream.get(),
+        outputStride,
+        inputStream.get(),
+        inputStride,
+        vectorCount,
+        matrix.m_value
+    );
+}
+
+NWB_INLINE Double3Data* DoubleSimdVector3TransformNormalStream(
+    NotNull<Double3Data*> outputStream,
+    const usize outputStride,
+    NotNull<const Double3Data*> inputStream,
+    const usize inputStride,
+    const usize vectorCount,
+    DoubleMatrixArg matrix
+)noexcept{
+    return SourceMath::DoubleVector3TransformNormalStream(
+        outputStream.get(),
+        outputStride,
+        inputStream.get(),
+        inputStride,
+        vectorCount,
+        matrix.m_value
+    );
+}
+
+NWB_INLINE Double3Data* DoubleSimdVector3ProjectStream(
+    NotNull<Double3Data*> outputStream,
+    const usize outputStride,
+    NotNull<const Double3Data*> inputStream,
+    const usize inputStride,
+    const usize vectorCount,
+    const f64 viewportX,
+    const f64 viewportY,
+    const f64 viewportWidth,
+    const f64 viewportHeight,
+    const f64 viewportMinZ,
+    const f64 viewportMaxZ,
+    DoubleMatrixArg projection,
+    DoubleMatrixArg view,
+    DoubleMatrixArg world
+)noexcept{
+    return SourceMath::DoubleVector3ProjectStream(
+        outputStream.get(),
+        outputStride,
+        inputStream.get(),
+        inputStride,
+        vectorCount,
+        viewportX,
+        viewportY,
+        viewportWidth,
+        viewportHeight,
+        viewportMinZ,
+        viewportMaxZ,
+        projection.m_value,
+        view.m_value,
+        world.m_value
+    );
+}
+
+NWB_INLINE Double3Data* DoubleSimdVector3UnprojectStream(
+    NotNull<Double3Data*> outputStream,
+    const usize outputStride,
+    NotNull<const Double3Data*> inputStream,
+    const usize inputStride,
+    const usize vectorCount,
+    const f64 viewportX,
+    const f64 viewportY,
+    const f64 viewportWidth,
+    const f64 viewportHeight,
+    const f64 viewportMinZ,
+    const f64 viewportMaxZ,
+    DoubleMatrixArg projection,
+    DoubleMatrixArg view,
+    DoubleMatrixArg world
+)noexcept{
+    return SourceMath::DoubleVector3UnprojectStream(
+        outputStream.get(),
+        outputStride,
+        inputStream.get(),
+        inputStride,
+        vectorCount,
+        viewportX,
+        viewportY,
+        viewportWidth,
+        viewportHeight,
+        viewportMinZ,
+        viewportMaxZ,
+        projection.m_value,
+        view.m_value,
+        world.m_value
+    );
+}
+
+NWB_INLINE Double4Data* DoubleSimdVector4TransformStream(
+    NotNull<Double4Data*> outputStream,
+    const usize outputStride,
+    NotNull<const Double4Data*> inputStream,
+    const usize inputStride,
+    const usize vectorCount,
+    DoubleMatrixArg matrix
+)noexcept{
+    return SourceMath::DoubleVector4TransformStream(
+        outputStream.get(),
+        outputStride,
+        inputStream.get(),
+        inputStride,
+        vectorCount,
+        matrix.m_value
+    );
+}
+
+[[nodiscard]] NWB_INLINE bool DoubleSimdMatrixIsNaN(DoubleMatrixArg matrix)noexcept{
+    return SourceMath::DoubleMatrixIsNaN(matrix.m_value);
+}
+
+[[nodiscard]] NWB_INLINE bool DoubleSimdMatrixIsInfinite(DoubleMatrixArg matrix)noexcept{
+    return SourceMath::DoubleMatrixIsInfinite(matrix.m_value);
+}
+
+[[nodiscard]] NWB_INLINE bool DoubleSimdMatrixIsIdentity(DoubleMatrixArg matrix)noexcept{
+    return SourceMath::DoubleMatrixIsIdentity(matrix.m_value);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdMatrix DoubleSimdMatrixMultiply(DoubleMatrixArg lhs, DoubleMatrixArg rhs)noexcept{
+    return DoubleSimdMatrix(SourceMath::DoubleMatrixMultiply(lhs.m_value, rhs.m_value));
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdMatrix DoubleSimdMatrixMultiplyTranspose(DoubleMatrixArg lhs, DoubleMatrixArg rhs)noexcept{
+    return DoubleSimdMatrix(SourceMath::DoubleMatrixMultiplyTranspose(lhs.m_value, rhs.m_value));
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdMatrix DoubleSimdMatrixTranspose(DoubleMatrixArg matrix)noexcept{
+    return DoubleSimdMatrix(SourceMath::DoubleMatrixTranspose(matrix.m_value));
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdMatrix DoubleSimdMatrixInverse(
+    DoubleSimdVector* determinant,
+    DoubleMatrixArg matrix
+)noexcept{
+    return DoubleSimdMatrix(SourceMath::DoubleMatrixInverse(determinant, matrix.m_value));
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdMatrixDeterminant(DoubleMatrixArg matrix)noexcept{
+    return SourceMath::DoubleMatrixDeterminant(matrix.m_value);
+}
+
+[[nodiscard]] NWB_INLINE bool DoubleSimdMatrixDecompose(
+    DoubleSimdVector& outScale,
+    DoubleSimdVector& outRotQuat,
+    DoubleSimdVector& outTrans,
+    DoubleMatrixArg matrix
+)noexcept{
+    return SourceMath::DoubleMatrixDecompose(&outScale, &outRotQuat, &outTrans, matrix.m_value);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdMatrix DoubleSimdMatrixVectorTensorProduct(DoubleVectorArg lhs, DoubleVectorArg rhs)noexcept{
+    return DoubleSimdMatrix(SourceMath::DoubleMatrixVectorTensorProduct(lhs, rhs));
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdMatrix DoubleSimdMatrixZero()noexcept{
+    return DoubleSimdMatrix(SourceMath::DoubleMatrixZero());
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdMatrix DoubleSimdMatrixIdentity()noexcept{
+    return DoubleSimdMatrix(SourceMath::DoubleMatrixIdentity());
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdMatrix DoubleSimdMatrixSetColumns(
+    DoubleVectorArg column0,
+    DoubleVectorArg column1,
+    DoubleVectorArg column2,
+    DoubleVectorArg column3
+)noexcept{
+    return DoubleSimdMatrix(SourceMath::DoubleMatrixSetColumns(column0, column1, column2, column3));
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdMatrix DoubleSimdMatrixSet(
+    const f64 m00, const f64 m01, const f64 m02, const f64 m03,
+    const f64 m10, const f64 m11, const f64 m12, const f64 m13,
+    const f64 m20, const f64 m21, const f64 m22, const f64 m23,
+    const f64 m30, const f64 m31, const f64 m32, const f64 m33
+)noexcept{
+    return DoubleSimdMatrix(SourceMath::DoubleMatrixSet(
+        m00, m01, m02, m03,
+        m10, m11, m12, m13,
+        m20, m21, m22, m23,
+        m30, m31, m32, m33
+    ));
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdMatrix DoubleSimdMatrixTranslation(
+    const f64 offsetX,
+    const f64 offsetY,
+    const f64 offsetZ
+)noexcept{
+    return DoubleSimdMatrix(SourceMath::DoubleMatrixTranslation(offsetX, offsetY, offsetZ));
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdMatrix DoubleSimdMatrixTranslationFromVector(DoubleVectorArg offset)noexcept{
+    return DoubleSimdMatrix(SourceMath::DoubleMatrixTranslationFromVector(offset));
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdMatrix DoubleSimdMatrixScaling(
+    const f64 scaleX,
+    const f64 scaleY,
+    const f64 scaleZ
+)noexcept{
+    return DoubleSimdMatrix(SourceMath::DoubleMatrixScaling(scaleX, scaleY, scaleZ));
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdMatrix DoubleSimdMatrixScalingFromVector(DoubleVectorArg scale)noexcept{
+    return DoubleSimdMatrix(SourceMath::DoubleMatrixScalingFromVector(scale));
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdMatrix DoubleSimdMatrixRotationX(const f64 angle)noexcept{
+    return DoubleSimdMatrix(SourceMath::DoubleMatrixRotationX(angle));
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdMatrix DoubleSimdMatrixRotationY(const f64 angle)noexcept{
+    return DoubleSimdMatrix(SourceMath::DoubleMatrixRotationY(angle));
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdMatrix DoubleSimdMatrixRotationZ(const f64 angle)noexcept{
+    return DoubleSimdMatrix(SourceMath::DoubleMatrixRotationZ(angle));
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdMatrix DoubleSimdMatrixRotationRollPitchYaw(
+    const f64 pitch,
+    const f64 yaw,
+    const f64 roll
+)noexcept{
+    return DoubleSimdMatrix(SourceMath::DoubleMatrixRotationRollPitchYaw(pitch, yaw, roll));
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdMatrix DoubleSimdMatrixRotationRollPitchYawFromVector(DoubleVectorArg angles)noexcept{
+    return DoubleSimdMatrix(SourceMath::DoubleMatrixRotationRollPitchYawFromVector(angles));
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdMatrix DoubleSimdMatrixRotationNormal(DoubleVectorArg normalAxis, const f64 angle)noexcept{
+    return DoubleSimdMatrix(SourceMath::DoubleMatrixRotationNormal(normalAxis, angle));
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdMatrix DoubleSimdMatrixRotationAxis(DoubleVectorArg axis, const f64 angle)noexcept{
+    return DoubleSimdMatrix(SourceMath::DoubleMatrixRotationAxis(axis, angle));
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdMatrix DoubleSimdMatrixRotationQuaternion(DoubleVectorArg quaternion)noexcept{
+    return DoubleSimdMatrix(SourceMath::DoubleMatrixRotationQuaternion(quaternion));
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdMatrix DoubleSimdMatrixTransformation2D(
+    DoubleVectorArg scalingOrigin,
+    const f64 scalingOrientation,
+    DoubleVectorArg scaling,
+    DoubleVectorArg rotationOrigin,
+    const f64 rotation,
+    DoubleVectorArg translation
+)noexcept{
+    return DoubleSimdMatrix(SourceMath::DoubleMatrixTransformation2D(
+        scalingOrigin,
+        scalingOrientation,
+        scaling,
+        rotationOrigin,
+        rotation,
+        translation
+    ));
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdMatrix DoubleSimdMatrixTransformation(
+    DoubleVectorArg scalingOrigin,
+    DoubleVectorArg scalingOrientationQuaternion,
+    DoubleVectorArg scaling,
+    DoubleVectorArg rotationOrigin,
+    DoubleVectorArg rotationQuaternion,
+    DoubleVectorArg translation
+)noexcept{
+    return DoubleSimdMatrix(SourceMath::DoubleMatrixTransformation(
+        scalingOrigin,
+        scalingOrientationQuaternion,
+        scaling,
+        rotationOrigin,
+        rotationQuaternion,
+        translation
+    ));
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdMatrix DoubleSimdMatrixAffineTransformation2D(
+    DoubleVectorArg scaling,
+    DoubleVectorArg rotationOrigin,
+    const f64 rotation,
+    DoubleVectorArg translation
+)noexcept{
+    return DoubleSimdMatrix(SourceMath::DoubleMatrixAffineTransformation2D(scaling, rotationOrigin, rotation, translation));
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdMatrix DoubleSimdMatrixAffineTransformation(
+    DoubleVectorArg scaling,
+    DoubleVectorArg rotationOrigin,
+    DoubleVectorArg rotationQuaternion,
+    DoubleVectorArg translation
+)noexcept{
+    return DoubleSimdMatrix(SourceMath::DoubleMatrixAffineTransformation(
+        scaling,
+        rotationOrigin,
+        rotationQuaternion,
+        translation
+    ));
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdMatrix DoubleSimdMatrixReflect(DoubleVectorArg reflectionPlane)noexcept{
+    return DoubleSimdMatrix(SourceMath::DoubleMatrixReflect(reflectionPlane));
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdMatrix DoubleSimdMatrixShadow(
+    DoubleVectorArg shadowPlane,
+    DoubleVectorArg lightPosition
+)noexcept{
+    return DoubleSimdMatrix(SourceMath::DoubleMatrixShadow(shadowPlane, lightPosition));
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdMatrix DoubleSimdMatrixLookAtLH(
+    DoubleVectorArg eyePosition,
+    DoubleVectorArg focusPosition,
+    DoubleVectorArg upDirection
+)noexcept{
+    return DoubleSimdMatrix(SourceMath::DoubleMatrixLookAtLH(eyePosition, focusPosition, upDirection));
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdMatrix DoubleSimdMatrixLookAtRH(
+    DoubleVectorArg eyePosition,
+    DoubleVectorArg focusPosition,
+    DoubleVectorArg upDirection
+)noexcept{
+    return DoubleSimdMatrix(SourceMath::DoubleMatrixLookAtRH(eyePosition, focusPosition, upDirection));
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdMatrix DoubleSimdMatrixLookToLH(
+    DoubleVectorArg eyePosition,
+    DoubleVectorArg eyeDirection,
+    DoubleVectorArg upDirection
+)noexcept{
+    return DoubleSimdMatrix(SourceMath::DoubleMatrixLookToLH(eyePosition, eyeDirection, upDirection));
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdMatrix DoubleSimdMatrixLookToRH(
+    DoubleVectorArg eyePosition,
+    DoubleVectorArg eyeDirection,
+    DoubleVectorArg upDirection
+)noexcept{
+    return DoubleSimdMatrix(SourceMath::DoubleMatrixLookToRH(eyePosition, eyeDirection, upDirection));
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdMatrix DoubleSimdMatrixPerspectiveLH(
+    const f64 viewWidth,
+    const f64 viewHeight,
+    const f64 nearZ,
+    const f64 farZ
+)noexcept{
+    return DoubleSimdMatrix(SourceMath::DoubleMatrixPerspectiveLH(viewWidth, viewHeight, nearZ, farZ));
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdMatrix DoubleSimdMatrixPerspectiveRH(
+    const f64 viewWidth,
+    const f64 viewHeight,
+    const f64 nearZ,
+    const f64 farZ
+)noexcept{
+    return DoubleSimdMatrix(SourceMath::DoubleMatrixPerspectiveRH(viewWidth, viewHeight, nearZ, farZ));
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdMatrix DoubleSimdMatrixPerspectiveFovLH(
+    const f64 fovAngleY,
+    const f64 aspectRatio,
+    const f64 nearZ,
+    const f64 farZ
+)noexcept{
+    return DoubleSimdMatrix(SourceMath::DoubleMatrixPerspectiveFovLH(fovAngleY, aspectRatio, nearZ, farZ));
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdMatrix DoubleSimdMatrixPerspectiveFovRH(
+    const f64 fovAngleY,
+    const f64 aspectRatio,
+    const f64 nearZ,
+    const f64 farZ
+)noexcept{
+    return DoubleSimdMatrix(SourceMath::DoubleMatrixPerspectiveFovRH(fovAngleY, aspectRatio, nearZ, farZ));
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdMatrix DoubleSimdMatrixPerspectiveOffCenterLH(
+    const f64 viewLeft,
+    const f64 viewRight,
+    const f64 viewBottom,
+    const f64 viewTop,
+    const f64 nearZ,
+    const f64 farZ
+)noexcept{
+    return DoubleSimdMatrix(SourceMath::DoubleMatrixPerspectiveOffCenterLH(
+        viewLeft,
+        viewRight,
+        viewBottom,
+        viewTop,
+        nearZ,
+        farZ
+    ));
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdMatrix DoubleSimdMatrixPerspectiveOffCenterRH(
+    const f64 viewLeft,
+    const f64 viewRight,
+    const f64 viewBottom,
+    const f64 viewTop,
+    const f64 nearZ,
+    const f64 farZ
+)noexcept{
+    return DoubleSimdMatrix(SourceMath::DoubleMatrixPerspectiveOffCenterRH(
+        viewLeft,
+        viewRight,
+        viewBottom,
+        viewTop,
+        nearZ,
+        farZ
+    ));
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdMatrix DoubleSimdMatrixOrthographicLH(
+    const f64 viewWidth,
+    const f64 viewHeight,
+    const f64 nearZ,
+    const f64 farZ
+)noexcept{
+    return DoubleSimdMatrix(SourceMath::DoubleMatrixOrthographicLH(viewWidth, viewHeight, nearZ, farZ));
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdMatrix DoubleSimdMatrixOrthographicRH(
+    const f64 viewWidth,
+    const f64 viewHeight,
+    const f64 nearZ,
+    const f64 farZ
+)noexcept{
+    return DoubleSimdMatrix(SourceMath::DoubleMatrixOrthographicRH(viewWidth, viewHeight, nearZ, farZ));
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdMatrix DoubleSimdMatrixOrthographicOffCenterLH(
+    const f64 viewLeft,
+    const f64 viewRight,
+    const f64 viewBottom,
+    const f64 viewTop,
+    const f64 nearZ,
+    const f64 farZ
+)noexcept{
+    return DoubleSimdMatrix(SourceMath::DoubleMatrixOrthographicOffCenterLH(
+        viewLeft,
+        viewRight,
+        viewBottom,
+        viewTop,
+        nearZ,
+        farZ
+    ));
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdMatrix DoubleSimdMatrixOrthographicOffCenterRH(
+    const f64 viewLeft,
+    const f64 viewRight,
+    const f64 viewBottom,
+    const f64 viewTop,
+    const f64 nearZ,
+    const f64 farZ
+)noexcept{
+    return DoubleSimdMatrix(SourceMath::DoubleMatrixOrthographicOffCenterRH(
+        viewLeft,
+        viewRight,
+        viewBottom,
+        viewTop,
+        nearZ,
+        farZ
+    ));
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdQuaternionRotationMatrix(DoubleMatrixArg matrix)noexcept{
+    return SourceMath::DoubleQuaternionRotationMatrix(matrix.m_value);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdQuaternionIdentity()noexcept{
+    return SourceMath::DoubleQuaternionIdentity();
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdQuaternionConjugate(DoubleVectorArg quaternion)noexcept{
+    return SourceMath::DoubleQuaternionConjugate(quaternion);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdQuaternionMultiply(
+    DoubleVectorArg lhs,
+    DoubleVectorArg rhs
+)noexcept{
+    return SourceMath::DoubleQuaternionMultiply(lhs, rhs);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdQuaternionNormalize(DoubleVectorArg quaternion)noexcept{
+    return SourceMath::DoubleQuaternionNormalize(quaternion);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdQuaternionRotationNormal(
+    DoubleVectorArg normalAxis,
+    const f64 angle
+)noexcept{
+    return SourceMath::DoubleQuaternionRotationNormal(normalAxis, angle);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdQuaternionRotationAxis(
+    DoubleVectorArg axis,
+    const f64 angle
+)noexcept{
+    return SourceMath::DoubleQuaternionRotationAxis(axis, angle);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdQuaternionRotationRollPitchYaw(
+    const f64 pitch,
+    const f64 yaw,
+    const f64 roll
+)noexcept{
+    return SourceMath::DoubleQuaternionRotationRollPitchYaw(pitch, yaw, roll);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdQuaternionRotationRollPitchYawFromVector(
+    DoubleVectorArg angles
+)noexcept{
+    return SourceMath::DoubleQuaternionRotationRollPitchYawFromVector(angles);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdPlaneDot(DoubleVectorArg plane, DoubleVectorArg vector)noexcept{
+    return SourceMath::DoublePlaneDot(plane, vector);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdPlaneNormalize(DoubleVectorArg plane)noexcept{
+    return SourceMath::DoublePlaneNormalize(plane);
+}
+
+[[nodiscard]] NWB_INLINE DoubleSimdVector DoubleSimdPlaneTransform(
+    DoubleVectorArg plane,
+    DoubleMatrixArg inverseTransposeMatrix
+)noexcept{
+    return SourceMath::DoublePlaneTransform(plane, inverseTransposeMatrix.m_value);
+}
+
+NWB_INLINE Double4Data* DoubleSimdPlaneTransformStream(
+    NotNull<Double4Data*> outputStream,
+    const usize outputStride,
+    NotNull<const Double4Data*> inputStream,
+    const usize inputStride,
+    const usize planeCount,
+    DoubleMatrixArg inverseTransposeMatrix
+)noexcept{
+    return SourceMath::DoublePlaneTransformStream(
+        outputStream.get(),
+        outputStride,
+        inputStream.get(),
+        inputStride,
+        planeCount,
+        inverseTransposeMatrix.m_value
+    );
+}
 
 // Preferred compact affine load path for NWB's column-vector convention.
 [[nodiscard]] NWB_INLINE SimdMatrix LoadFloat3x4(const Float3x4Data& source)noexcept{

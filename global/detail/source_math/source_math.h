@@ -913,6 +913,225 @@ namespace SourceMathInternal{
         using Float3x4::Float3x4;
     };
 
+    // Double-precision vector intrinsic: Four 64 bit floating point
+    // components mapped to the native double SIMD width where available.
+#if defined(_MATH_AVX_INTRINSICS_) && !defined(_MATH_NO_INTRINSICS_)
+    using DoubleVector = __m256d;
+#elif defined(_MATH_SSE_INTRINSICS_) && !defined(_MATH_NO_INTRINSICS_)
+    MATH_ALIGNED_STRUCT(16) DoubleVector{
+        __m128d lo;
+        __m128d hi;
+    };
+#elif defined(_MATH_ARM_NEON_INTRINSICS_) && !defined(_MATH_NO_INTRINSICS_) && (defined(__aarch64__) || defined(_M_ARM64))
+    MATH_ALIGNED_STRUCT(16) DoubleVector{
+        float64x2_t lo;
+        float64x2_t hi;
+    };
+#else
+    struct DoubleVector{
+        double vector4_f64[4];
+    };
+#endif
+
+    typedef const DoubleVector& DoubleVectorArg;
+
+    // 2D Vector; 64 bit floating point components
+    struct Double2{
+        double x;
+        double y;
+
+        Double2() = default;
+
+        Double2(const Double2&) = default;
+        Double2& operator=(const Double2&) = default;
+
+        Double2(Double2&&) = default;
+        Double2& operator=(Double2&&) = default;
+
+        constexpr Double2(double _x, double _y)noexcept
+            : x(_x), y(_y){}
+        explicit Double2(_In_reads_(2) const double* pArray)noexcept
+            : x(pArray[0]), y(pArray[1]){}
+
+    #if(__cplusplus >= 202002L)
+        bool operator==(const Double2&)const = default;
+        auto operator<=>(const Double2&)const = default;
+    #endif
+    };
+
+    MATH_ALIGNED_STRUCT(16) AlignedDouble2 : public Double2{
+        using Double2::Double2;
+    };
+
+    // 3D Vector; 64 bit floating point components
+    struct Double3{
+        double x;
+        double y;
+        double z;
+
+        Double3() = default;
+
+        Double3(const Double3&) = default;
+        Double3& operator=(const Double3&) = default;
+
+        Double3(Double3&&) = default;
+        Double3& operator=(Double3&&) = default;
+
+        constexpr Double3(double _x, double _y, double _z)noexcept
+            : x(_x), y(_y), z(_z){}
+        explicit Double3(_In_reads_(3) const double* pArray)noexcept
+            : x(pArray[0]), y(pArray[1]), z(pArray[2]){}
+    };
+
+    MATH_ALIGNED_STRUCT(16) AlignedDouble3 : public Double3{
+        using Double3::Double3;
+    };
+
+    // 4D Vector; 64 bit floating point components
+    struct Double4{
+        double x;
+        double y;
+        double z;
+        double w;
+
+        Double4() = default;
+
+        Double4(const Double4&) = default;
+        Double4& operator=(const Double4&) = default;
+
+        Double4(Double4&&) = default;
+        Double4& operator=(Double4&&) = default;
+
+        constexpr Double4(double _x, double _y, double _z, double _w)noexcept
+            : x(_x), y(_y), z(_z), w(_w){}
+        explicit Double4(_In_reads_(4) const double* pArray)noexcept
+            : x(pArray[0]), y(pArray[1]), z(pArray[2]), w(pArray[3]){}
+
+    #if(__cplusplus >= 202002L)
+        bool operator==(const Double4&)const = default;
+        auto operator<=>(const Double4&)const = default;
+    #endif
+    };
+
+#if defined(_MATH_AVX_INTRINSICS_) && !defined(_MATH_NO_INTRINSICS_)
+    MATH_ALIGNED_STRUCT(32) AlignedDouble4 : public Double4{
+#else
+    MATH_ALIGNED_STRUCT(16) AlignedDouble4 : public Double4{
+#endif
+        using Double4::Double4;
+    };
+
+    // 3x4 affine matrix stored as the top three mathematical rows at the
+    // memory boundary. This is the preferred compact format for NWB's
+    // column-vector convention.
+    struct Double3x4{
+        union{
+            struct{
+                double _11, _12, _13, _14;
+                double _21, _22, _23, _24;
+                double _31, _32, _33, _34;
+            };
+            double m[3][4];
+            double f[12];
+        };
+
+        Double3x4() = default;
+
+        Double3x4(const Double3x4&) = default;
+        Double3x4& operator=(const Double3x4&) = default;
+
+        Double3x4(Double3x4&&) = default;
+        Double3x4& operator=(Double3x4&&) = default;
+
+        constexpr Double3x4(double m00, double m01, double m02, double m03,
+            double m10, double m11, double m12, double m13,
+            double m20, double m21, double m22, double m23)noexcept
+            : _11(m00), _12(m01), _13(m02), _14(m03),
+              _21(m10), _22(m11), _23(m12), _24(m13),
+              _31(m20), _32(m21), _33(m22), _34(m23){}
+        explicit Double3x4(_In_reads_(12) const double* pArray)noexcept
+            : _11(pArray[0]), _12(pArray[1]), _13(pArray[2]), _14(pArray[3]),
+              _21(pArray[4]), _22(pArray[5]), _23(pArray[6]), _24(pArray[7]),
+              _31(pArray[8]), _32(pArray[9]), _33(pArray[10]), _34(pArray[11]){}
+
+        double  operator()(size_t Row, size_t Column)const noexcept { return m[Row][Column]; }
+        double& operator()(size_t Row, size_t Column)noexcept { return m[Row][Column]; }
+
+    #if(__cplusplus >= 202002L)
+        bool operator==(const Double3x4& rhs)const noexcept{
+            for(size_t index = 0; index < 12; ++index){
+                if(f[index] != rhs.f[index])
+                    return false;
+            }
+
+            return true;
+        }
+
+        std::partial_ordering operator<=>(const Double3x4& rhs)const noexcept{
+            for(size_t index = 0; index < 12; ++index){
+                const std::partial_ordering comparison = f[index] <=> rhs.f[index];
+                if(comparison != 0)
+                    return comparison;
+            }
+
+            return std::partial_ordering::equivalent;
+        }
+    #endif
+    };
+
+    // 3x4 affine matrix stored as the top three mathematical rows at the
+    // memory boundary, aligned for double SIMD loads.
+#if defined(_MATH_AVX_INTRINSICS_) && !defined(_MATH_NO_INTRINSICS_)
+    MATH_ALIGNED_STRUCT(32) AlignedDouble3x4 : public Double3x4{
+#else
+    MATH_ALIGNED_STRUCT(16) AlignedDouble3x4 : public Double3x4{
+#endif
+        using Double3x4::Double3x4;
+    };
+
+    // Column-oriented 4x4 matrix stored as four double SIMD columns.
+#if defined(_MATH_AVX_INTRINSICS_) && !defined(_MATH_NO_INTRINSICS_)
+    MATH_ALIGNED_STRUCT(32) DoubleMatrix
+#else
+    MATH_ALIGNED_STRUCT(16) DoubleMatrix
+#endif
+    {
+        DoubleVector r[4];
+
+        DoubleMatrix() = default;
+
+        DoubleMatrix(const DoubleMatrix&) = default;
+        DoubleMatrix& operator=(const DoubleMatrix&) = default;
+
+        DoubleMatrix(DoubleMatrix&&) = default;
+        DoubleMatrix& operator=(DoubleMatrix&&) = default;
+
+        DoubleMatrix(
+            DoubleVectorArg column0,
+            DoubleVectorArg column1,
+            DoubleVectorArg column2,
+            DoubleVectorArg column3
+        )noexcept
+            : r{ column0, column1, column2, column3 }{}
+
+        DoubleMatrix operator+()const noexcept { return *this; }
+        DoubleMatrix operator-()const noexcept;
+
+        DoubleMatrix& MathCallConv operator+=(const DoubleMatrix& matrix)noexcept;
+        DoubleMatrix& MathCallConv operator-=(const DoubleMatrix& matrix)noexcept;
+        DoubleMatrix& MathCallConv operator*=(const DoubleMatrix& matrix)noexcept;
+        DoubleMatrix& operator*=(double scalar)noexcept;
+        DoubleMatrix& operator/=(double scalar)noexcept;
+
+        DoubleMatrix MathCallConv operator+(const DoubleMatrix& matrix)const noexcept;
+        DoubleMatrix MathCallConv operator-(const DoubleMatrix& matrix)const noexcept;
+        DoubleMatrix MathCallConv operator*(const DoubleMatrix& matrix)const noexcept;
+        DoubleMatrix operator*(double scalar)const noexcept;
+        DoubleMatrix operator/(double scalar)const noexcept;
+
+        friend DoubleMatrix MathCallConv operator*(double scalar, const DoubleMatrix& matrix)noexcept;
+    };
+
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif
@@ -2684,6 +2903,7 @@ namespace SourceMathInternal{
 #include "source_math_vector.inl"
 #include "source_math_matrix.inl"
 #include "source_math_misc.inl"
+#include "source_math_double.inl"
 
 #ifdef __clang__
 #pragma clang diagnostic pop

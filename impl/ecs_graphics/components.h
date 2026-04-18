@@ -8,6 +8,7 @@
 #include "../global.h"
 
 #include <core/assets/asset_ref.h>
+#include <global/matrix_math.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -21,6 +22,24 @@ NWB_IMPL_BEGIN
 
 class Geometry;
 class Material;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct TransformComponent{
+    Float3Data position = Float3Data(0.f, 0.f, 0.f);
+    // Unit quaternion in x/y/z/w order.
+    Float4Data rotation = Float4Data(0.f, 0.f, 0.f, 1.f);
+    Float3Data scale = Float3Data(1.f, 1.f, 1.f);
+};
+
+static_assert(IsStandardLayout_V<TransformComponent>, "TransformComponent must stay layout-stable for ECS storage");
+static_assert(IsTriviallyCopyable_V<TransformComponent>, "TransformComponent must stay cheap to move in dense ECS storage");
+static_assert(
+    sizeof(TransformComponent) == sizeof(Float3Data) + sizeof(Float4Data) + sizeof(Float3Data),
+    "TransformComponent must not grow hidden cached state"
+);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

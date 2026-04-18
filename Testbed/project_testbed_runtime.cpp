@@ -48,6 +48,7 @@ bool ProjectTestbed::onStartup(){
 
     const auto addRendererEntity = [this](const TestbedGeometryRef& geometry, const TestbedMaterialRef& material){
         auto entity = m_world->createEntity();
+        entity.addComponent<NWB::Core::ECSGraphics::TransformComponent>();
         auto& renderer = entity.addComponent<NWB::Core::ECSGraphics::RendererComponent>();
         renderer.geometry = geometry;
         renderer.material = material;
@@ -66,6 +67,7 @@ bool ProjectTestbed::onStartup(){
     );
     return true;
 }
+
 void ProjectTestbed::onShutdown(){
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ProjectTestbed: shutdown"));
 }

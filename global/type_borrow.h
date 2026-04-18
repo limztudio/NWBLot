@@ -8,6 +8,7 @@
 #include <compare>
 #include <memory>
 #include <iterator>
+#include <type_traits>
 #include <utility>
 
 
@@ -133,6 +134,16 @@ template<class T>
 using IsScalar = std::is_scalar<T>;
 template<class T>
 inline constexpr bool IsScalar_V = std::is_scalar_v<T>;
+
+template<class T>
+using IsStandardLayout = std::is_standard_layout<T>;
+template<class T>
+inline constexpr bool IsStandardLayout_V = std::is_standard_layout_v<T>;
+
+template<class T>
+using IsTriviallyCopyable = std::is_trivially_copyable<T>;
+template<class T>
+inline constexpr bool IsTriviallyCopyable_V = std::is_trivially_copyable_v<T>;
 
 template<class T>
 using IsArithmetic = std::is_arithmetic<T>;

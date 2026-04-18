@@ -4,6 +4,8 @@
 
 #include "deformable_geometry_asset.h"
 
+#include "deformable_geometry_validation.h"
+
 #include <core/alloc/scratch.h>
 #include <core/assets/asset_auto_registration.h>
 #include <logger/client/logger.h>
@@ -27,14 +29,6 @@ namespace __hidden_assets{
 static constexpr u32 s_DeformableGeometryMagic = 0x44474F31u; // DGO1
 static constexpr u32 s_DeformableGeometryVersionV1 = 1u;
 static constexpr u32 s_DeformableGeometryVersion = 2u;
-static constexpr f32 s_BarycentricSumEpsilon = 0.001f;
-static constexpr f32 s_SkinWeightSumEpsilon = 0.001f;
-static constexpr f32 s_RestFrameLengthSquaredEpsilon = 0.000001f;
-static constexpr f32 s_RestFrameUnitLengthSquaredEpsilon = 0.01f;
-static constexpr f32 s_RestFrameOrthogonalityEpsilon = 0.01f;
-static constexpr f32 s_TangentHandednessEpsilon = 0.000001f;
-static constexpr f32 s_TangentHandednessUnitEpsilon = 0.001f;
-static constexpr f32 s_TriangleAreaLengthSquaredEpsilon = 0.000000000001f;
 
 
 UniquePtr<Core::Assets::IAssetCodec> CreateDeformableGeometryAssetCodec(){
@@ -102,58 +96,6 @@ template<typename T>
     return true;
 }
 
-[[nodiscard]] bool IsFiniteFloat2(const Float2Data& value){
-    return IsFinite(value.x) && IsFinite(value.y);
-}
-
-[[nodiscard]] bool IsFiniteFloat3(const Float3Data& value){
-    return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z);
-}
-
-[[nodiscard]] bool IsFiniteFloat4(const Float4Data& value){
-    return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z) && IsFinite(value.w);
-}
-
-[[nodiscard]] f32 LengthSquared3(const f32 x, const f32 y, const f32 z){
-    return (x * x) + (y * y) + (z * z);
-}
-
-[[nodiscard]] f32 AbsF32(const f32 value){
-    return value < 0.f ? -value : value;
-}
-
-[[nodiscard]] f32 Dot3(const Float3Data& lhs, const Float3Data& rhs){
-    return (lhs.x * rhs.x) + (lhs.y * rhs.y) + (lhs.z * rhs.z);
-}
-
-[[nodiscard]] Float3Data Subtract3(const Float3Data& lhs, const Float3Data& rhs){
-    return Float3Data(lhs.x - rhs.x, lhs.y - rhs.y, lhs.z - rhs.z);
-}
-
-[[nodiscard]] Float3Data Cross3(const Float3Data& lhs, const Float3Data& rhs){
-    return Float3Data(
-        (lhs.y * rhs.z) - (lhs.z * rhs.y),
-        (lhs.z * rhs.x) - (lhs.x * rhs.z),
-        (lhs.x * rhs.y) - (lhs.y * rhs.x)
-    );
-}
-
-[[nodiscard]] bool NearlyOne(const f32 value){
-    const f32 difference = value > 1.f ? value - 1.f : 1.f - value;
-    return difference <= s_BarycentricSumEpsilon;
-}
-
-[[nodiscard]] bool NearlySignedOne(const f32 value){
-    const f32 magnitude = value < 0.f ? -value : value;
-    const f32 difference = magnitude > 1.f ? magnitude - 1.f : 1.f - magnitude;
-    return difference <= s_TangentHandednessUnitEpsilon;
-}
-
-[[nodiscard]] bool NearlyUnitLengthSquared(const f32 value){
-    const f32 difference = value > 1.f ? value - 1.f : 1.f - value;
-    return difference <= s_RestFrameUnitLengthSquaredEpsilon;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -197,12 +139,7 @@ bool DeformableGeometry::validatePayload()const{
 
     for(usize i = 0; i < m_restVertices.size(); ++i){
         const DeformableVertexRest& vertex = m_restVertices[i];
-        if(!__hidden_assets::IsFiniteFloat3(vertex.position)
-            || !__hidden_assets::IsFiniteFloat3(vertex.normal)
-            || !__hidden_assets::IsFiniteFloat4(vertex.tangent)
-            || !__hidden_assets::IsFiniteFloat2(vertex.uv0)
-            || !__hidden_assets::IsFiniteFloat4(vertex.color0)
-        ){
+        if(!DeformableValidation::ValidRestVertex(vertex)){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' rest vertex {} contains non-finite data"),
                 geometryPathText,
@@ -210,21 +147,7 @@ bool DeformableGeometry::validatePayload()const{
             );
             return false;
         }
-        const f32 normalLengthSquared = __hidden_assets::LengthSquared3(vertex.normal.x, vertex.normal.y, vertex.normal.z);
-        const f32 tangentLengthSquared = __hidden_assets::LengthSquared3(vertex.tangent.x, vertex.tangent.y, vertex.tangent.z);
-        const Float3Data tangentVector(vertex.tangent.x, vertex.tangent.y, vertex.tangent.z);
-        const f32 tangentHandedness = vertex.tangent.w < 0.f ? -vertex.tangent.w : vertex.tangent.w;
-        const Float3Data frameCross = __hidden_assets::Cross3(
-            vertex.normal,
-            tangentVector
-        );
-        const f32 frameCrossLengthSquared = __hidden_assets::LengthSquared3(frameCross.x, frameCross.y, frameCross.z);
-        if(normalLengthSquared <= __hidden_assets::s_RestFrameLengthSquaredEpsilon
-            || tangentLengthSquared <= __hidden_assets::s_RestFrameLengthSquaredEpsilon
-            || tangentHandedness <= __hidden_assets::s_TangentHandednessEpsilon
-            || !__hidden_assets::NearlySignedOne(vertex.tangent.w)
-            || frameCrossLengthSquared <= __hidden_assets::s_RestFrameLengthSquaredEpsilon
-        ){
+        if(!DeformableValidation::ValidRestVertexFrameBasis(vertex)){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' rest vertex {} has a degenerate normal/tangent frame"),
                 geometryPathText,
@@ -232,11 +155,7 @@ bool DeformableGeometry::validatePayload()const{
             );
             return false;
         }
-        const f32 frameDot = __hidden_assets::Dot3(vertex.normal, tangentVector);
-        if(!__hidden_assets::NearlyUnitLengthSquared(normalLengthSquared)
-            || !__hidden_assets::NearlyUnitLengthSquared(tangentLengthSquared)
-            || __hidden_assets::AbsF32(frameDot) > __hidden_assets::s_RestFrameOrthogonalityEpsilon
-        ){
+        if(!DeformableValidation::ValidRestVertexFrame(vertex)){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' rest vertex {} has an invalid normal/tangent frame"),
                 geometryPathText,
@@ -270,11 +189,7 @@ bool DeformableGeometry::validatePayload()const{
             return false;
         }
 
-        const Float3Data ab = __hidden_assets::Subtract3(m_restVertices[b].position, m_restVertices[a].position);
-        const Float3Data ac = __hidden_assets::Subtract3(m_restVertices[c].position, m_restVertices[a].position);
-        const Float3Data areaCross = __hidden_assets::Cross3(ab, ac);
-        const f32 areaLengthSquared = __hidden_assets::LengthSquared3(areaCross.x, areaCross.y, areaCross.z);
-        if(areaLengthSquared <= __hidden_assets::s_TriangleAreaLengthSquaredEpsilon){
+        if(!DeformableValidation::ValidTriangle(m_restVertices, a, b, c)){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' triangle {} has zero area"),
                 geometryPathText,
@@ -294,27 +209,11 @@ bool DeformableGeometry::validatePayload()const{
         return false;
     }
     for(usize i = 0; i < m_skin.size(); ++i){
-        const SkinInfluence4& skin = m_skin[i];
-        f32 weightSum = 0.f;
-        for(u32 weightIndex = 0; weightIndex < 4u; ++weightIndex){
-            if(!IsFinite(skin.weight[weightIndex]) || skin.weight[weightIndex] < 0.f){
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("DeformableGeometry::validatePayload failed: '{}' skin weight {} for vertex {} is invalid"),
-                    geometryPathText,
-                    weightIndex,
-                    i
-                );
-                return false;
-            }
-            weightSum += skin.weight[weightIndex];
-        }
-        const f32 weightDifference = weightSum > 1.f ? weightSum - 1.f : 1.f - weightSum;
-        if(weightDifference > __hidden_assets::s_SkinWeightSumEpsilon){
+        if(!DeformableValidation::ValidSkinInfluence(m_skin[i])){
             NWB_LOGGER_ERROR(
-                NWB_TEXT("DeformableGeometry::validatePayload failed: '{}' skin weights for vertex {} sum to {}"),
+                NWB_TEXT("DeformableGeometry::validatePayload failed: '{}' skin weights for vertex {} are invalid"),
                 geometryPathText,
-                i,
-                weightSum
+                i
             );
             return false;
         }
@@ -332,16 +231,7 @@ bool DeformableGeometry::validatePayload()const{
     }
     for(usize i = 0; i < m_sourceSamples.size(); ++i){
         const SourceSample& sample = m_sourceSamples[i];
-        const f32 barySum = sample.bary[0] + sample.bary[1] + sample.bary[2];
-        if(sample.sourceTri >= triangleCount
-            || !IsFinite(sample.bary[0])
-            || !IsFinite(sample.bary[1])
-            || !IsFinite(sample.bary[2])
-            || sample.bary[0] < 0.f
-            || sample.bary[1] < 0.f
-            || sample.bary[2] < 0.f
-            || !__hidden_assets::NearlyOne(barySum)
-        ){
+        if(!DeformableValidation::ValidSourceSample(sample, static_cast<u32>(triangleCount))){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' source sample {} is invalid"),
                 geometryPathText,
@@ -351,35 +241,9 @@ bool DeformableGeometry::validatePayload()const{
         }
     }
 
-    if(m_displacement.mode != DeformableDisplacementMode::None
-        && m_displacement.mode != DeformableDisplacementMode::ScalarUvRamp
-    ){
+    if(!ValidDeformableDisplacementDescriptor(m_displacement)){
         NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' has unsupported displacement mode {}"),
-            geometryPathText,
-            m_displacement.mode
-        );
-        return false;
-    }
-    if(m_displacement.padding0 != 0u || m_displacement.padding1 != 0u){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' displacement padding is not zeroed"),
-            geometryPathText
-        );
-        return false;
-    }
-    if(m_displacement.mode == DeformableDisplacementMode::None){
-        if(!IsFinite(m_displacement.amplitude) || m_displacement.amplitude != 0.0f){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' inactive displacement must have zero amplitude"),
-                geometryPathText
-            );
-            return false;
-        }
-    }
-    else if(!IsFinite(m_displacement.amplitude)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' displacement amplitude is invalid"),
+            NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' displacement descriptor is invalid"),
             geometryPathText
         );
         return false;
@@ -448,11 +312,7 @@ bool DeformableGeometry::validatePayload()const{
         );
         seenDeltaVertices.reserve(morph.deltas.size());
         for(const DeformableMorphDelta& delta : morph.deltas){
-            if(delta.vertexId >= m_restVertices.size()
-                || !__hidden_assets::IsFiniteFloat3(delta.deltaPosition)
-                || !__hidden_assets::IsFiniteFloat3(delta.deltaNormal)
-                || !__hidden_assets::IsFiniteFloat4(delta.deltaTangent)
-            ){
+            if(!DeformableValidation::ValidMorphDelta(delta, m_restVertices.size())){
                 NWB_LOGGER_ERROR(
                     NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' morph '{}' contains an invalid delta"),
                     geometryPathText,

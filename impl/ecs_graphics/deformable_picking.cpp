@@ -6,7 +6,7 @@
 
 #include "renderer_system.h"
 
-#include <core/alloc/scratch.h>
+#include <impl/assets_graphics/deformable_geometry_validation.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -26,13 +26,6 @@ namespace __hidden_deformable_picking{
 
 static constexpr f32 s_Epsilon = 0.000001f;
 static constexpr f32 s_FrameEpsilon = 0.00000001f;
-static constexpr f32 s_BarycentricSumEpsilon = 0.001f;
-static constexpr f32 s_SkinWeightSumEpsilon = 0.001f;
-static constexpr f32 s_RestFrameLengthSquaredEpsilon = 0.000001f;
-static constexpr f32 s_RestFrameUnitLengthSquaredEpsilon = 0.01f;
-static constexpr f32 s_RestFrameOrthogonalityEpsilon = 0.01f;
-static constexpr f32 s_TangentHandednessEpsilon = 0.000001f;
-static constexpr f32 s_TangentHandednessUnitEpsilon = 0.001f;
 
 struct Vec3{
     f32 x = 0.0f;
@@ -41,38 +34,14 @@ struct Vec3{
 };
 
 [[nodiscard]] bool ActiveWeight(const f32 value){
-    return value > s_Epsilon || value < -s_Epsilon;
-}
-
-[[nodiscard]] f32 AbsF32(const f32 value){
-    return value < 0.0f ? -value : value;
-}
-
-[[nodiscard]] f32 Clamp01(const f32 value){
-    if(value < 0.0f)
-        return 0.0f;
-    if(value > 1.0f)
-        return 1.0f;
-    return value;
-}
-
-[[nodiscard]] bool IsFiniteVec3(const Float3Data& value){
-    return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z);
-}
-
-[[nodiscard]] bool IsFiniteVec2(const Float2Data& value){
-    return IsFinite(value.x) && IsFinite(value.y);
-}
-
-[[nodiscard]] bool IsFiniteVec4(const Float4Data& value){
-    return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z) && IsFinite(value.w);
+    return DeformableValidation::ActiveWeight(value);
 }
 
 [[nodiscard]] bool IsAffineJointMatrix(const DeformableJointMatrix& matrix){
-    return IsFiniteVec4(matrix.column0)
-        && IsFiniteVec4(matrix.column1)
-        && IsFiniteVec4(matrix.column2)
-        && IsFiniteVec4(matrix.column3)
+    return DeformableValidation::IsFiniteFloat4(matrix.column0)
+        && DeformableValidation::IsFiniteFloat4(matrix.column1)
+        && DeformableValidation::IsFiniteFloat4(matrix.column2)
+        && DeformableValidation::IsFiniteFloat4(matrix.column3)
         && !ActiveWeight(matrix.column0.w)
         && !ActiveWeight(matrix.column1.w)
         && !ActiveWeight(matrix.column2.w)
@@ -81,134 +50,17 @@ struct Vec3{
 }
 
 [[nodiscard]] bool IsFiniteRay(const DeformablePickingRay& ray){
-    return IsFiniteVec3(ray.origin)
-        && IsFiniteVec3(ray.direction)
+    return DeformableValidation::IsFiniteFloat3(ray.origin)
+        && DeformableValidation::IsFiniteFloat3(ray.direction)
         && IsFinite(ray.minDistance)
         && IsFinite(ray.maxDistance)
         && ray.minDistance <= ray.maxDistance
     ;
 }
 
-[[nodiscard]] bool NearlyOne(const f32 value, const f32 epsilon){
-    const f32 difference = value > 1.0f ? value - 1.0f : 1.0f - value;
-    return difference <= epsilon;
-}
-
-[[nodiscard]] bool NearlySignedOne(const f32 value){
-    return AbsF32(AbsF32(value) - 1.0f) <= s_TangentHandednessUnitEpsilon;
-}
-
-[[nodiscard]] bool NearlyUnitLengthSquared(const f32 value){
-    return AbsF32(value - 1.0f) <= s_RestFrameUnitLengthSquaredEpsilon;
-}
-
-[[nodiscard]] bool ValidBarycentric(const f32 (&bary)[3]){
-    return IsFinite(bary[0])
-        && IsFinite(bary[1])
-        && IsFinite(bary[2])
-        && bary[0] >= -s_Epsilon
-        && bary[1] >= -s_Epsilon
-        && bary[2] >= -s_Epsilon
-        && NearlyOne(bary[0] + bary[1] + bary[2], s_BarycentricSumEpsilon)
-    ;
-}
-
-[[nodiscard]] bool ValidSourceBarycentric(const f32 (&bary)[3]){
-    return IsFinite(bary[0])
-        && IsFinite(bary[1])
-        && IsFinite(bary[2])
-        && bary[0] >= 0.0f
-        && bary[1] >= 0.0f
-        && bary[2] >= 0.0f
-        && NearlyOne(bary[0] + bary[1] + bary[2], s_BarycentricSumEpsilon)
-    ;
-}
-
-[[nodiscard]] bool ValidSourceSample(const SourceSample& sample, const u32 sourceTriangleCount){
-    return sourceTriangleCount != 0u && sample.sourceTri < sourceTriangleCount && ValidSourceBarycentric(sample.bary);
-}
-
-[[nodiscard]] bool ValidMorphDelta(const DeformableMorphDelta& delta, const usize vertexCount){
-    return delta.vertexId < vertexCount
-        && IsFiniteVec3(delta.deltaPosition)
-        && IsFiniteVec3(delta.deltaNormal)
-        && IsFiniteVec4(delta.deltaTangent)
-    ;
-}
-
-[[nodiscard]] bool ValidRestVertex(const DeformableVertexRest& vertex){
-    return IsFiniteVec3(vertex.position)
-        && IsFiniteVec3(vertex.normal)
-        && IsFiniteVec4(vertex.tangent)
-        && IsFiniteVec2(vertex.uv0)
-        && IsFiniteVec4(vertex.color0)
-    ;
-}
-
-[[nodiscard]] bool ValidRestVertexFrame(const DeformableVertexRest& vertex){
-    if(!ValidRestVertex(vertex))
-        return false;
-
-    const f32 normalLengthSquared =
-        (vertex.normal.x * vertex.normal.x)
-        + (vertex.normal.y * vertex.normal.y)
-        + (vertex.normal.z * vertex.normal.z)
-    ;
-    const f32 tangentLengthSquared =
-        (vertex.tangent.x * vertex.tangent.x)
-        + (vertex.tangent.y * vertex.tangent.y)
-        + (vertex.tangent.z * vertex.tangent.z)
-    ;
-    const f32 tangentHandedness = AbsF32(vertex.tangent.w);
-    const f32 frameCrossX = (vertex.normal.y * vertex.tangent.z) - (vertex.normal.z * vertex.tangent.y);
-    const f32 frameCrossY = (vertex.normal.z * vertex.tangent.x) - (vertex.normal.x * vertex.tangent.z);
-    const f32 frameCrossZ = (vertex.normal.x * vertex.tangent.y) - (vertex.normal.y * vertex.tangent.x);
-    const f32 frameCrossLengthSquared =
-        (frameCrossX * frameCrossX)
-        + (frameCrossY * frameCrossY)
-        + (frameCrossZ * frameCrossZ)
-    ;
-    if(normalLengthSquared <= s_RestFrameLengthSquaredEpsilon
-        || tangentLengthSquared <= s_RestFrameLengthSquaredEpsilon
-        || tangentHandedness <= s_TangentHandednessEpsilon
-        || !NearlySignedOne(vertex.tangent.w)
-        || frameCrossLengthSquared <= s_RestFrameLengthSquaredEpsilon
-    )
-        return false;
-
-    const f32 frameDot =
-        (vertex.normal.x * vertex.tangent.x)
-        + (vertex.normal.y * vertex.tangent.y)
-        + (vertex.normal.z * vertex.tangent.z)
-    ;
-    return NearlyUnitLengthSquared(normalLengthSquared)
-        && NearlyUnitLengthSquared(tangentLengthSquared)
-        && AbsF32(frameDot) <= s_RestFrameOrthogonalityEpsilon
-    ;
-}
-
-[[nodiscard]] bool NormalizeSourceBarycentric(const f32 (&bary)[3], f32 (&outBary)[3]){
-    if(!ValidBarycentric(bary))
-        return false;
-
-    outBary[0] = Clamp01(bary[0]);
-    outBary[1] = Clamp01(bary[1]);
-    outBary[2] = Clamp01(bary[2]);
-
-    const f32 barySum = outBary[0] + outBary[1] + outBary[2];
-    if(!IsFinite(barySum) || barySum <= s_Epsilon)
-        return false;
-
-    const f32 invBarySum = 1.0f / barySum;
-    outBary[0] *= invBarySum;
-    outBary[1] *= invBarySum;
-    outBary[2] *= invBarySum;
-    return ValidSourceBarycentric(outBary);
-}
-
 [[nodiscard]] bool AssignCurrentTriangleSample(const u32 triangle, const f32 (&bary)[3], SourceSample& outSample){
     outSample.sourceTri = triangle;
-    return NormalizeSourceBarycentric(bary, outSample.bary);
+    return DeformableValidation::NormalizeSourceBarycentric(bary, outSample.bary);
 }
 
 [[nodiscard]] Vec3 ToVec3(const Float3Data& value){
@@ -256,7 +108,7 @@ struct Vec3{
 }
 
 [[nodiscard]] Vec3 FallbackTangent(const Vec3& normal){
-    const Vec3 axis = AbsF32(normal.z) < 0.999f
+    const Vec3 axis = DeformableValidation::AbsF32(normal.z) < 0.999f
         ? Vec3{ 0.0f, 0.0f, 1.0f }
         : Vec3{ 0.0f, 1.0f, 0.0f }
     ;
@@ -284,7 +136,7 @@ void OrthonormalizeFrame(
     tangent.x = projectedTangent.x;
     tangent.y = projectedTangent.y;
     tangent.z = projectedTangent.z;
-    tangent.w = AbsF32(tangent.w) > s_Epsilon
+    tangent.w = DeformableValidation::AbsF32(tangent.w) > s_Epsilon
         ? (tangent.w < 0.0f ? -1.0f : 1.0f)
         : (fallbackTangent.w < 0.0f ? -1.0f : 1.0f)
     ;
@@ -327,11 +179,7 @@ void OrthonormalizeFrame(
             return false;
 
         for(const DeformableMorphDelta& delta : morph.deltas){
-            if(delta.vertexId >= vertices.size()
-                || !IsFiniteVec3(delta.deltaPosition)
-                || !IsFiniteVec3(delta.deltaNormal)
-                || !IsFiniteVec4(delta.deltaTangent)
-            )
+            if(!DeformableValidation::ValidMorphDelta(delta, vertices.size()))
                 return false;
 
             DeformableVertexRest& vertex = vertices[delta.vertexId];
@@ -366,65 +214,11 @@ void OrthonormalizeFrame(
     };
 }
 
-[[nodiscard]] bool ValidateSkinInfluence(const SkinInfluence4& skin){
-    f32 weightSum = 0.0f;
-    for(u32 influenceIndex = 0; influenceIndex < 4u; ++influenceIndex){
-        const f32 weight = skin.weight[influenceIndex];
-        if(!IsFinite(weight) || weight < 0.0f)
-            return false;
-
-        weightSum += weight;
-        if(!IsFinite(weightSum))
-            return false;
-    }
-
-    return NearlyOne(weightSum, s_SkinWeightSumEpsilon);
-}
-
-[[nodiscard]] bool ValidateMorphPayload(const Vector<DeformableMorph>& morphs, const usize vertexCount){
-    if(morphs.size() > static_cast<usize>(Limit<u32>::s_Max))
-        return false;
-
-    Core::Alloc::ScratchArena<> scratchArena;
-    HashSet<NameHash, Hasher<NameHash>, EqualTo<NameHash>, Core::Alloc::ScratchAllocator<NameHash>> seenMorphNames(
-        0,
-        Hasher<NameHash>(),
-        EqualTo<NameHash>(),
-        Core::Alloc::ScratchAllocator<NameHash>(scratchArena)
-    );
-    seenMorphNames.reserve(morphs.size());
-
-    for(const DeformableMorph& morph : morphs){
-        if(!morph.name || morph.deltas.empty())
-            return false;
-        if(morph.deltas.size() > static_cast<usize>(Limit<u32>::s_Max))
-            return false;
-        if(!seenMorphNames.insert(morph.name.hash()).second)
-            return false;
-
-        HashSet<u32, Hasher<u32>, EqualTo<u32>, Core::Alloc::ScratchAllocator<u32>> seenDeltaVertices(
-            0,
-            Hasher<u32>(),
-            EqualTo<u32>(),
-            Core::Alloc::ScratchAllocator<u32>(scratchArena)
-        );
-        seenDeltaVertices.reserve(morph.deltas.size());
-
-        for(const DeformableMorphDelta& delta : morph.deltas){
-            if(!ValidMorphDelta(delta, vertexCount))
-                return false;
-            if(!seenDeltaVertices.insert(delta.vertexId).second)
-                return false;
-        }
-    }
-    return true;
-}
-
 [[nodiscard]] bool ValidatePickingRuntimePayload(const DeformableRuntimeMeshInstance& instance){
     if(!instance.skin.empty() && instance.skin.size() != instance.restVertices.size())
         return false;
     for(const SkinInfluence4& skin : instance.skin){
-        if(!ValidateSkinInfluence(skin))
+        if(!DeformableValidation::ValidSkinInfluence(skin))
             return false;
     }
 
@@ -433,11 +227,11 @@ void OrthonormalizeFrame(
     if(!instance.sourceSamples.empty() && instance.sourceTriangleCount == 0u)
         return false;
     for(const SourceSample& sample : instance.sourceSamples){
-        if(!ValidSourceSample(sample, instance.sourceTriangleCount))
+        if(!DeformableValidation::ValidSourceSample(sample, instance.sourceTriangleCount))
             return false;
     }
 
-    return ValidateMorphPayload(instance.morphs, instance.restVertices.size());
+    return DeformableValidation::ValidMorphPayload(instance.morphs, instance.restVertices.size());
 }
 
 [[nodiscard]] bool ValidateJointPalette(
@@ -468,7 +262,7 @@ void OrthonormalizeFrame(
         return false;
 
     const SkinInfluence4& skin = instance.skin[vertexId];
-    if(!ValidateSkinInfluence(skin))
+    if(!DeformableValidation::ValidSkinInfluence(skin))
         return false;
 
     Vec3 skinnedPosition;
@@ -535,7 +329,7 @@ void ApplyDisplacement(const DeformableDisplacement& displacement, DeformableVer
     if(displacement.mode != DeformableDisplacementMode::ScalarUvRamp)
         return;
 
-    const f32 offset = Clamp01(vertex.uv0.x) * displacement.amplitude;
+    const f32 offset = DeformableValidation::Clamp01(vertex.uv0.x) * displacement.amplitude;
     if(!ActiveWeight(offset))
         return;
 
@@ -606,7 +400,7 @@ void ApplyTransform(const Core::ECS::TransformComponent* transform, DeformableVe
     const Vec3 edge1 = Subtract(c, a);
     const Vec3 p = Cross(direction, edge1);
     const f32 determinant = Dot(edge0, p);
-    if(AbsF32(determinant) <= s_Epsilon)
+    if(DeformableValidation::AbsF32(determinant) <= s_Epsilon)
         return false;
 
     const f32 invDeterminant = 1.0f / determinant;
@@ -658,7 +452,7 @@ bool BuildDeformablePickingVertices(
     if(!__hidden_deformable_picking::ValidatePickingRuntimePayload(instance))
         return false;
     for(const DeformableVertexRest& vertex : instance.restVertices){
-        if(!__hidden_deformable_picking::ValidRestVertexFrame(vertex))
+        if(!DeformableValidation::ValidRestVertexFrame(vertex))
             return false;
     }
     for(const u32 index : instance.indices){
@@ -712,7 +506,7 @@ bool ResolveDeformableRestSurfaceSample(
     SourceSample& outSample)
 {
     outSample = SourceSample{};
-    if(!__hidden_deformable_picking::ValidBarycentric(bary))
+    if(!DeformableValidation::ValidLooseBarycentric(bary))
         return false;
     if(instance.indices.empty() || (instance.indices.size() % 3u) != 0u)
         return false;
@@ -738,9 +532,9 @@ bool ResolveDeformableRestSurfaceSample(
     const SourceSample& sample0 = instance.sourceSamples[vertexIndices[0]];
     const SourceSample& sample1 = instance.sourceSamples[vertexIndices[1]];
     const SourceSample& sample2 = instance.sourceSamples[vertexIndices[2]];
-    if(!__hidden_deformable_picking::ValidSourceSample(sample0, instance.sourceTriangleCount)
-        || !__hidden_deformable_picking::ValidSourceSample(sample1, instance.sourceTriangleCount)
-        || !__hidden_deformable_picking::ValidSourceSample(sample2, instance.sourceTriangleCount)
+    if(!DeformableValidation::ValidSourceSample(sample0, instance.sourceTriangleCount)
+        || !DeformableValidation::ValidSourceSample(sample1, instance.sourceTriangleCount)
+        || !DeformableValidation::ValidSourceSample(sample2, instance.sourceTriangleCount)
     )
         return false;
     if(sample0.sourceTri != sample1.sourceTri || sample0.sourceTri != sample2.sourceTri){
@@ -761,7 +555,7 @@ bool ResolveDeformableRestSurfaceSample(
             + (bary[2] * sample2.bary[i])
         ;
     }
-    return __hidden_deformable_picking::NormalizeSourceBarycentric(rawBary, outSample.bary);
+    return DeformableValidation::NormalizeSourceBarycentric(rawBary, outSample.bary);
 }
 
 bool RaycastDeformableRuntimeMesh(
@@ -892,3 +686,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

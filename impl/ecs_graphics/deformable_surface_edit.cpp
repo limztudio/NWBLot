@@ -4,7 +4,7 @@
 
 #include "deformable_surface_edit.h"
 
-#include <core/alloc/scratch.h>
+#include <impl/assets_graphics/deformable_geometry_validation.h>
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -24,12 +24,6 @@ namespace __hidden_deformable_surface_edit{
 static constexpr f32 s_Epsilon = 0.000001f;
 static constexpr f32 s_FrameEpsilon = 0.00000001f;
 static constexpr f32 s_BarycentricSumEpsilon = 0.001f;
-static constexpr f32 s_RestFrameLengthSquaredEpsilon = 0.000001f;
-static constexpr f32 s_RestFrameUnitLengthSquaredEpsilon = 0.01f;
-static constexpr f32 s_RestFrameOrthogonalityEpsilon = 0.01f;
-static constexpr f32 s_TangentHandednessEpsilon = 0.000001f;
-static constexpr f32 s_TangentHandednessUnitEpsilon = 0.001f;
-static constexpr f32 s_TriangleAreaLengthSquaredEpsilon = 0.000000000001f;
 
 struct Vec3{
     f32 x = 0.0f;
@@ -60,194 +54,8 @@ struct WallVertexFrame{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] f32 AbsF32(const f32 value){
-    return value < 0.0f ? -value : value;
-}
-
 [[nodiscard]] bool ActiveLength(const f32 value){
     return value > s_Epsilon;
-}
-
-[[nodiscard]] bool ValidBarycentric(const f32 (&bary)[3]){
-    const f32 barySum = bary[0] + bary[1] + bary[2];
-    return IsFinite(bary[0])
-        && IsFinite(bary[1])
-        && IsFinite(bary[2])
-        && bary[0] >= -s_Epsilon
-        && bary[1] >= -s_Epsilon
-        && bary[2] >= -s_Epsilon
-        && AbsF32(barySum - 1.0f) <= 0.001f
-    ;
-}
-
-[[nodiscard]] bool NearlyOne(const f32 value){
-    return AbsF32(value - 1.0f) <= 0.001f;
-}
-
-[[nodiscard]] bool NearlySignedOne(const f32 value){
-    return AbsF32(AbsF32(value) - 1.0f) <= s_TangentHandednessUnitEpsilon;
-}
-
-[[nodiscard]] bool NearlyUnitLengthSquared(const f32 value){
-    return AbsF32(value - 1.0f) <= s_RestFrameUnitLengthSquaredEpsilon;
-}
-
-[[nodiscard]] bool IsFiniteFloat2(const Float2Data& value){
-    return IsFinite(value.x) && IsFinite(value.y);
-}
-
-[[nodiscard]] bool IsFiniteFloat3(const Float3Data& value){
-    return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z);
-}
-
-[[nodiscard]] bool IsFiniteFloat4(const Float4Data& value){
-    return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z) && IsFinite(value.w);
-}
-
-[[nodiscard]] f32 LengthSquared3(const f32 x, const f32 y, const f32 z){
-    return (x * x) + (y * y) + (z * z);
-}
-
-[[nodiscard]] f32 DotFloat3(const Float3Data& lhs, const Float3Data& rhs){
-    return (lhs.x * rhs.x) + (lhs.y * rhs.y) + (lhs.z * rhs.z);
-}
-
-[[nodiscard]] Float3Data SubtractFloat3(const Float3Data& lhs, const Float3Data& rhs){
-    return Float3Data(lhs.x - rhs.x, lhs.y - rhs.y, lhs.z - rhs.z);
-}
-
-[[nodiscard]] Float3Data CrossFloat3(const Float3Data& lhs, const Float3Data& rhs){
-    return Float3Data(
-        (lhs.y * rhs.z) - (lhs.z * rhs.y),
-        (lhs.z * rhs.x) - (lhs.x * rhs.z),
-        (lhs.x * rhs.y) - (lhs.y * rhs.x)
-    );
-}
-
-[[nodiscard]] bool ValidRestVertexFrame(const DeformableVertexRest& vertex){
-    if(!IsFiniteFloat3(vertex.position)
-        || !IsFiniteFloat3(vertex.normal)
-        || !IsFiniteFloat4(vertex.tangent)
-        || !IsFiniteFloat2(vertex.uv0)
-        || !IsFiniteFloat4(vertex.color0)
-    )
-        return false;
-
-    const f32 normalLengthSquared = LengthSquared3(vertex.normal.x, vertex.normal.y, vertex.normal.z);
-    const f32 tangentLengthSquared = LengthSquared3(vertex.tangent.x, vertex.tangent.y, vertex.tangent.z);
-    const Float3Data tangentVector(vertex.tangent.x, vertex.tangent.y, vertex.tangent.z);
-    const f32 tangentHandedness = AbsF32(vertex.tangent.w);
-    const Float3Data frameCross = CrossFloat3(vertex.normal, tangentVector);
-    const f32 frameCrossLengthSquared = LengthSquared3(frameCross.x, frameCross.y, frameCross.z);
-    if(normalLengthSquared <= s_RestFrameLengthSquaredEpsilon
-        || tangentLengthSquared <= s_RestFrameLengthSquaredEpsilon
-        || tangentHandedness <= s_TangentHandednessEpsilon
-        || !NearlySignedOne(vertex.tangent.w)
-        || frameCrossLengthSquared <= s_RestFrameLengthSquaredEpsilon
-    )
-        return false;
-
-    const f32 frameDot = DotFloat3(vertex.normal, tangentVector);
-    return NearlyUnitLengthSquared(normalLengthSquared)
-        && NearlyUnitLengthSquared(tangentLengthSquared)
-        && AbsF32(frameDot) <= s_RestFrameOrthogonalityEpsilon
-    ;
-}
-
-[[nodiscard]] bool ValidSourceBarycentric(const f32 (&bary)[3]){
-    const f32 barySum = bary[0] + bary[1] + bary[2];
-    return IsFinite(bary[0])
-        && IsFinite(bary[1])
-        && IsFinite(bary[2])
-        && bary[0] >= 0.0f
-        && bary[1] >= 0.0f
-        && bary[2] >= 0.0f
-        && AbsF32(barySum - 1.0f) <= s_BarycentricSumEpsilon
-    ;
-}
-
-[[nodiscard]] bool ValidSkinInfluence(const SkinInfluence4& skin){
-    f32 weightSum = 0.0f;
-    for(u32 influenceIndex = 0; influenceIndex < 4u; ++influenceIndex){
-        const f32 weight = skin.weight[influenceIndex];
-        if(!IsFinite(weight) || weight < 0.0f)
-            return false;
-
-        weightSum += weight;
-        if(!IsFinite(weightSum))
-            return false;
-    }
-    return NearlyOne(weightSum);
-}
-
-[[nodiscard]] bool ValidSourceSample(const SourceSample& sample, const u32 sourceTriangleCount){
-    return sourceTriangleCount != 0u && sample.sourceTri < sourceTriangleCount && ValidSourceBarycentric(sample.bary);
-}
-
-[[nodiscard]] bool ValidMorphDelta(const DeformableMorphDelta& delta, const usize vertexCount){
-    return delta.vertexId < vertexCount
-        && IsFiniteFloat3(delta.deltaPosition)
-        && IsFiniteFloat3(delta.deltaNormal)
-        && IsFiniteFloat4(delta.deltaTangent)
-    ;
-}
-
-[[nodiscard]] bool ValidTriangle(
-    const Vector<DeformableVertexRest>& restVertices,
-    const u32 a,
-    const u32 b,
-    const u32 c)
-{
-    if(a >= restVertices.size() || b >= restVertices.size() || c >= restVertices.size())
-        return false;
-    if(a == b || a == c || b == c)
-        return false;
-
-    const Float3Data ab = SubtractFloat3(restVertices[b].position, restVertices[a].position);
-    const Float3Data ac = SubtractFloat3(restVertices[c].position, restVertices[a].position);
-    const Float3Data areaCross = CrossFloat3(ab, ac);
-    const f32 areaLengthSquared = LengthSquared3(areaCross.x, areaCross.y, areaCross.z);
-    return areaLengthSquared > s_TriangleAreaLengthSquaredEpsilon;
-}
-
-[[nodiscard]] bool ValidMorphPayload(const Vector<DeformableMorph>& morphs, const usize vertexCount){
-    if(morphs.size() > static_cast<usize>(Limit<u32>::s_Max))
-        return false;
-
-    Core::Alloc::ScratchArena<> scratchArena;
-    HashSet<NameHash, Hasher<NameHash>, EqualTo<NameHash>, Core::Alloc::ScratchAllocator<NameHash>> seenMorphNames(
-        0,
-        Hasher<NameHash>(),
-        EqualTo<NameHash>(),
-        Core::Alloc::ScratchAllocator<NameHash>(scratchArena)
-    );
-    seenMorphNames.reserve(morphs.size());
-
-    for(usize morphIndex = 0; morphIndex < morphs.size(); ++morphIndex){
-        const DeformableMorph& morph = morphs[morphIndex];
-        if(!morph.name || morph.deltas.empty())
-            return false;
-        if(morph.deltas.size() > static_cast<usize>(Limit<u32>::s_Max))
-            return false;
-        if(!seenMorphNames.insert(morph.name.hash()).second)
-            return false;
-
-        HashSet<u32, Hasher<u32>, EqualTo<u32>, Core::Alloc::ScratchAllocator<u32>> seenDeltaVertices(
-            0,
-            Hasher<u32>(),
-            EqualTo<u32>(),
-            Core::Alloc::ScratchAllocator<u32>(scratchArena)
-        );
-        seenDeltaVertices.reserve(morph.deltas.size());
-
-        for(const DeformableMorphDelta& delta : morph.deltas){
-            if(!ValidMorphDelta(delta, vertexCount))
-                return false;
-            if(!seenDeltaVertices.insert(delta.vertexId).second)
-                return false;
-        }
-    }
-    return true;
 }
 
 [[nodiscard]] bool ValidateRuntimePayloadArrays(
@@ -273,11 +81,11 @@ struct WallVertexFrame{
         return false;
 
     for(const DeformableVertexRest& vertex : restVertices){
-        if(!ValidRestVertexFrame(vertex))
+        if(!DeformableValidation::ValidRestVertexFrame(vertex))
             return false;
     }
     for(usize indexBase = 0; indexBase < indices.size(); indexBase += 3u){
-        if(!ValidTriangle(
+        if(!DeformableValidation::ValidTriangle(
                 restVertices,
                 indices[indexBase + 0u],
                 indices[indexBase + 1u],
@@ -287,14 +95,14 @@ struct WallVertexFrame{
             return false;
     }
     for(const SkinInfluence4& influence : skin){
-        if(!ValidSkinInfluence(influence))
+        if(!DeformableValidation::ValidSkinInfluence(influence))
             return false;
     }
     for(const SourceSample& sample : sourceSamples){
-        if(!ValidSourceSample(sample, sourceTriangleCount))
+        if(!DeformableValidation::ValidSourceSample(sample, sourceTriangleCount))
             return false;
     }
-    return ValidMorphPayload(morphs, restVertices.size());
+    return DeformableValidation::ValidMorphPayload(morphs, restVertices.size());
 }
 
 [[nodiscard]] Vec3 ToVec3(const Float3Data& value){
@@ -346,7 +154,7 @@ struct WallVertexFrame{
 }
 
 [[nodiscard]] Vec3 FallbackTangent(const Vec3& normal){
-    const Vec3 axis = AbsF32(normal.z) < 0.999f
+    const Vec3 axis = DeformableValidation::AbsF32(normal.z) < 0.999f
         ? Vec3{ 0.0f, 0.0f, 1.0f }
         : Vec3{ 0.0f, 1.0f, 0.0f }
     ;
@@ -462,7 +270,7 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
     return LengthSquared(outFrame.normal) > s_FrameEpsilon
         && LengthSquared(outFrame.tangent) > s_FrameEpsilon
         && LengthSquared(outFrame.bitangent) > s_FrameEpsilon
-        && AbsF32(Dot(outFrame.normal, outFrame.tangent)) <= 0.001f
+        && DeformableValidation::AbsF32(Dot(outFrame.normal, outFrame.tangent)) <= 0.001f
     ;
 }
 
@@ -483,9 +291,9 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
 
 [[nodiscard]] bool MatchingSourceSample(const SourceSample& lhs, const SourceSample& rhs){
     return lhs.sourceTri == rhs.sourceTri
-        && AbsF32(lhs.bary[0] - rhs.bary[0]) <= s_BarycentricSumEpsilon
-        && AbsF32(lhs.bary[1] - rhs.bary[1]) <= s_BarycentricSumEpsilon
-        && AbsF32(lhs.bary[2] - rhs.bary[2]) <= s_BarycentricSumEpsilon
+        && DeformableValidation::AbsF32(lhs.bary[0] - rhs.bary[0]) <= s_BarycentricSumEpsilon
+        && DeformableValidation::AbsF32(lhs.bary[1] - rhs.bary[1]) <= s_BarycentricSumEpsilon
+        && DeformableValidation::AbsF32(lhs.bary[2] - rhs.bary[2]) <= s_BarycentricSumEpsilon
     ;
 }
 
@@ -501,7 +309,7 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
 }
 
 [[nodiscard]] bool ValidateParams(const DeformableRuntimeMeshInstance& instance, const DeformableHoleEditParams& params){
-    if(!ValidBarycentric(params.posedHit.bary))
+    if(!DeformableValidation::ValidLooseBarycentric(params.posedHit.bary))
         return false;
     if(params.posedHit.entity != instance.entity)
         return false;
@@ -626,7 +434,7 @@ void CanonicalizeBoundaryLoopStart(Vector<EdgeRecord>& edges){
         return false;
 
     const f32 signedArea = ProjectedSignedLoopArea(instance, frame, outOrderedEdges);
-    if(!IsFinite(signedArea) || AbsF32(signedArea) <= s_FrameEpsilon)
+    if(!IsFinite(signedArea) || DeformableValidation::AbsF32(signedArea) <= s_FrameEpsilon)
         return false;
     if(signedArea < 0.0f)
         ReverseBoundaryLoop(outOrderedEdges);
@@ -695,7 +503,7 @@ void CanonicalizeBoundaryLoopStart(Vector<EdgeRecord>& edges){
     outFrame.tangent = tangent;
     return LengthSquared(outFrame.normal) > s_FrameEpsilon
         && LengthSquared(outFrame.tangent) > s_FrameEpsilon
-        && AbsF32(Dot(outFrame.normal, outFrame.tangent)) <= 0.001f
+        && DeformableValidation::AbsF32(Dot(outFrame.normal, outFrame.tangent)) <= 0.001f
     ;
 }
 
@@ -727,7 +535,7 @@ void CanonicalizeBoundaryLoopStart(Vector<EdgeRecord>& edges){
     wallVertex.tangent.z = tangent.z;
     wallVertex.tangent.w = TangentHandedness(wallVertex.tangent.w);
     wallVertex.uv0 = Float2Data(uvU, uvV);
-    if(!ValidRestVertexFrame(wallVertex))
+    if(!DeformableValidation::ValidRestVertexFrame(wallVertex))
         return false;
 
     outVertex = static_cast<u32>(vertices.size());
@@ -1040,3 +848,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

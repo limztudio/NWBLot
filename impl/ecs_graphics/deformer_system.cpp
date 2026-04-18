@@ -7,6 +7,7 @@
 #include "renderer_system.h"
 
 #include <core/graphics/shader_archive.h>
+#include <impl/assets_graphics/deformable_geometry_validation.h>
 #include <impl/assets_graphics/shader_asset.h>
 #include <logger/client/logger.h>
 
@@ -28,8 +29,6 @@ namespace __hidden_deformer_system{
 
 static constexpr u32 s_DeformerGroupSize = 64u;
 static constexpr u32 s_DeformableVertexScalarStride = sizeof(DeformableVertexRest) / sizeof(f32);
-static constexpr f32 s_ActiveMorphWeightEpsilon = 0.000001f;
-static constexpr f32 s_SkinWeightSumEpsilon = 0.001f;
 
 struct DeformerPushConstants{
     u32 vertexCount = 0;
@@ -56,16 +55,11 @@ static const Name& StageNameFromShaderType(const Core::ShaderType::Mask shaderTy
 }
 
 static bool ActiveWeight(const f32 weight){
-    return weight > s_ActiveMorphWeightEpsilon || weight < -s_ActiveMorphWeightEpsilon;
+    return DeformableValidation::ActiveWeight(weight);
 }
 
 static bool ActiveDisplacement(const DeformableDisplacement& displacement){
     return displacement.mode != DeformableDisplacementMode::None && ActiveWeight(displacement.amplitude);
-}
-
-static bool NearlyOne(const f32 value){
-    const f32 difference = value > 1.0f ? value - 1.0f : 1.0f - value;
-    return difference <= s_SkinWeightSumEpsilon;
 }
 
 static bool ResolveDisplacement(
@@ -110,19 +104,11 @@ static bool ResolveDisplacement(
     return true;
 }
 
-static bool IsFiniteFloat4Data(const Float4Data& value){
-    return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z) && IsFinite(value.w);
-}
-
-static bool IsFiniteFloat3Data(const Float3Data& value){
-    return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z);
-}
-
 static bool IsAffineJointMatrix(const DeformableJointMatrix& matrix){
-    return IsFiniteFloat4Data(matrix.column0)
-        && IsFiniteFloat4Data(matrix.column1)
-        && IsFiniteFloat4Data(matrix.column2)
-        && IsFiniteFloat4Data(matrix.column3)
+    return DeformableValidation::IsFiniteFloat4(matrix.column0)
+        && DeformableValidation::IsFiniteFloat4(matrix.column1)
+        && DeformableValidation::IsFiniteFloat4(matrix.column2)
+        && DeformableValidation::IsFiniteFloat4(matrix.column3)
         && !ActiveWeight(matrix.column0.w)
         && !ActiveWeight(matrix.column1.w)
         && !ActiveWeight(matrix.column2.w)
@@ -230,11 +216,7 @@ static bool BuildMorphPayload(
         HashCombine(outSignature, static_cast<usize>(range.deltaCount));
 
         for(const DeformableMorphDelta& delta : morph.deltas){
-            if(delta.vertexId >= instance.restVertices.size()
-                || !IsFiniteFloat3Data(delta.deltaPosition)
-                || !IsFiniteFloat3Data(delta.deltaNormal)
-                || !IsFiniteFloat4Data(delta.deltaTangent)
-            ){
+            if(!DeformableValidation::ValidMorphDelta(delta, instance.restVertices.size())){
                 NWB_LOGGER_ERROR(
                     NWB_TEXT("DeformerSystem: morph '{}' on runtime mesh '{}' contains an invalid delta"),
                     StringConvert(morph.name.c_str()),
@@ -297,30 +279,19 @@ static bool BuildSkinPayload(
     outSkinInfluences.reserve(instance.skin.size());
     for(usize vertexIndex = 0; vertexIndex < instance.skin.size(); ++vertexIndex){
         const SkinInfluence4& sourceSkin = instance.skin[vertexIndex];
+        if(!DeformableValidation::ValidSkinInfluence(sourceSkin)){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("DeformerSystem: runtime mesh '{}' vertex {} has invalid skin weights"),
+                instance.handle.value,
+                vertexIndex
+            );
+            return false;
+        }
+
         DeformerSystem::DeformerSkinInfluenceGpu gpuSkin;
-        f32 weightSum = 0.0f;
         for(u32 influenceIndex = 0; influenceIndex < 4u; ++influenceIndex){
             const u32 joint = static_cast<u32>(sourceSkin.joint[influenceIndex]);
             const f32 weight = sourceSkin.weight[influenceIndex];
-            if(!IsFinite(weight) || weight < 0.0f){
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("DeformerSystem: runtime mesh '{}' vertex {} skin weight {} is invalid"),
-                    instance.handle.value,
-                    vertexIndex,
-                    influenceIndex
-                );
-                return false;
-            }
-
-            weightSum += weight;
-            if(!IsFinite(weightSum)){
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("DeformerSystem: runtime mesh '{}' vertex {} skin weight sum is invalid"),
-                    instance.handle.value,
-                    vertexIndex
-                );
-                return false;
-            }
             if(ActiveWeight(weight) && joint >= jointPalette->joints.size()){
                 NWB_LOGGER_ERROR(
                     NWB_TEXT("DeformerSystem: runtime mesh '{}' vertex {} references joint {} outside palette size {}"),
@@ -333,15 +304,6 @@ static bool BuildSkinPayload(
             }
             gpuSkin.joint[influenceIndex] = joint;
             gpuSkin.weight[influenceIndex] = weight;
-        }
-        if(!NearlyOne(weightSum)){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("DeformerSystem: runtime mesh '{}' vertex {} skin weights sum to {}"),
-                instance.handle.value,
-                vertexIndex,
-                weightSum
-            );
-            return false;
         }
         outSkinInfluences.push_back(gpuSkin);
     }
@@ -1084,3 +1046,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

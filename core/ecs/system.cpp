@@ -83,6 +83,13 @@ void SystemScheduler::rebuild(){
     //  - One does not write a component that the other reads
 
     Alloc::ScratchArena<> scratchArena(4096);
+    using ScratchComponentTypeAllocator = Alloc::ScratchAllocator<ComponentTypeId>;
+    using ComponentAccessSet = HashSet<
+        ComponentTypeId,
+        Hasher<ComponentTypeId>,
+        EqualTo<ComponentTypeId>,
+        ScratchComponentTypeAllocator
+    >;
 
     Vector<u8, Alloc::ScratchAllocator<u8>> assigned(
         m_allSystems.size(), 0,
@@ -93,8 +100,18 @@ void SystemScheduler::rebuild(){
     while(numAssigned < m_allSystems.size()){
         Stage stage{SystemAllocator(m_arena)};
 
-        HashSet<ComponentTypeId, Hasher<ComponentTypeId>, EqualTo<ComponentTypeId>, Alloc::ScratchAllocator<ComponentTypeId>> stageWrites(0, Hasher<ComponentTypeId>(), EqualTo<ComponentTypeId>(), Alloc::ScratchAllocator<ComponentTypeId>(scratchArena));
-        HashSet<ComponentTypeId, Hasher<ComponentTypeId>, EqualTo<ComponentTypeId>, Alloc::ScratchAllocator<ComponentTypeId>> stageReads(0, Hasher<ComponentTypeId>(), EqualTo<ComponentTypeId>(), Alloc::ScratchAllocator<ComponentTypeId>(scratchArena));
+        ComponentAccessSet stageWrites(
+            0,
+            Hasher<ComponentTypeId>(),
+            EqualTo<ComponentTypeId>(),
+            ScratchComponentTypeAllocator(scratchArena)
+        );
+        ComponentAccessSet stageReads(
+            0,
+            Hasher<ComponentTypeId>(),
+            EqualTo<ComponentTypeId>(),
+            ScratchComponentTypeAllocator(scratchArena)
+        );
 
         for(usize i = 0; i < m_allSystems.size(); ++i){
             if(assigned[i])

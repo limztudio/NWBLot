@@ -30,6 +30,13 @@ class World : NoCopy, public Alloc::ITaskScheduler{
 
 private:
     using PoolMapAllocator = Alloc::CustomAllocator<Pair<const ComponentTypeId, UniquePtr<IComponentPool>>>;
+    using PoolMap = HashMap<
+        ComponentTypeId,
+        UniquePtr<IComponentPool>,
+        Hasher<ComponentTypeId>,
+        EqualTo<ComponentTypeId>,
+        PoolMapAllocator
+    >;
 
     struct SystemEntry{
         SystemTypeId typeId;
@@ -213,7 +220,7 @@ private:
     Alloc::CustomArena& m_arena;
 
     EntityManager m_entityManager;
-    HashMap<ComponentTypeId, UniquePtr<IComponentPool>, Hasher<ComponentTypeId>, EqualTo<ComponentTypeId>, PoolMapAllocator> m_pools;
+    PoolMap m_pools;
     Vector<SystemEntry, SystemVectorAllocator> m_systems;
     SystemScheduler m_scheduler;
     MessageBus m_messageBus;

@@ -45,7 +45,10 @@ struct EntityID{
     inline constexpr EntityID() : id(~0u){}
     inline constexpr explicit EntityID(u32 _id) : id(_id){}
     inline constexpr EntityID(u32 index, u32 generation)
-        : id((generation & ECSDetail::ENTITY_GENERATION_MASK) << ECSDetail::ENTITY_INDEX_BITS | (index & ECSDetail::ENTITY_INDEX_MASK))
+        : id(
+            ((generation & ECSDetail::ENTITY_GENERATION_MASK) << ECSDetail::ENTITY_INDEX_BITS)
+            | (index & ECSDetail::ENTITY_INDEX_MASK)
+        )
     {}
 
     inline constexpr u32 index()const{ return id & ECSDetail::ENTITY_INDEX_MASK; }

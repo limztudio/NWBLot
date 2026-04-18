@@ -34,7 +34,8 @@ inline MessageTypeId MessageType(){
 
 class MessageBus : NoCopy{
 private:
-    using ChannelMapAllocator = Alloc::CustomAllocator<Pair<const MessageTypeId, UniquePtr<class IMessageChannel>>>;
+    class IMessageChannel;
+    using ChannelMapAllocator = Alloc::CustomAllocator<Pair<const MessageTypeId, UniquePtr<IMessageChannel>>>;
 
 
 private:
@@ -105,6 +106,14 @@ private:
         ParallelQueue<UniquePtr<T>, PendingAllocator> m_pending;
         Vector<T, Alloc::CustomAllocator<T>> m_readBuffer;
     };
+
+    using ChannelMap = HashMap<
+        MessageTypeId,
+        UniquePtr<IMessageChannel>,
+        Hasher<MessageTypeId>,
+        EqualTo<MessageTypeId>,
+        ChannelMapAllocator
+    >;
 
 
 public:
@@ -212,7 +221,7 @@ private:
 private:
     Alloc::CustomArena& m_arena;
     mutable Futex m_channelsMutex;
-    HashMap<MessageTypeId, UniquePtr<IMessageChannel>, Hasher<MessageTypeId>, EqualTo<MessageTypeId>, ChannelMapAllocator> m_channels;
+    ChannelMap m_channels;
 };
 
 

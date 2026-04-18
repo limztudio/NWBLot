@@ -16,6 +16,9 @@ using TestbedMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
 
 static constexpr f32 s_CameraStartDepth = 2.2f;
 static constexpr f32 s_CameraMoveEpsilon = 0.000001f;
+static constexpr f32 s_DefaultDirectionalLightPitch = -0.65f;
+static constexpr f32 s_DefaultDirectionalLightYaw = 0.65f;
+static constexpr f32 s_DefaultDirectionalLightIntensity = 2.0f;
 
 
 [[nodiscard]] static f32 KeyAxis(const bool negative, const bool positive){
@@ -178,6 +181,24 @@ static void ApplyFpsCameraInputToControlledCamera(
     return cameraEntity.id();
 }
 
+static void CreateDefaultDirectionalLightEntity(NWB::Core::ECS::World& world){
+    auto lightEntity = world.createEntity();
+    auto& transform = lightEntity.addComponent<NWB::Core::ECS::TransformComponent>();
+    SourceMath::StoreFloat4A(
+        &transform.rotation,
+        SourceMath::QuaternionRotationRollPitchYaw(
+            s_DefaultDirectionalLightPitch,
+            s_DefaultDirectionalLightYaw,
+            0.0f
+        )
+    );
+
+    auto& light = lightEntity.addComponent<NWB::Core::ECS::LightComponent>();
+    light.type = NWB::Core::ECS::LightType::Directional;
+    light.color = AlignedFloat3Data(1.0f, 0.96f, 0.88f);
+    light.intensity = s_DefaultDirectionalLightIntensity;
+}
+
 static void CreateRendererEntity(
     NWB::Core::ECS::World& world,
     const TestbedGeometryRef& geometry,
@@ -245,6 +266,7 @@ bool ProjectTestbed::onStartup(){
     auto projectEntity = m_world->createEntity();
     auto& project = projectEntity.addComponent<NWB::Core::ECS::ProjectComponent>();
     project.mainCamera = __hidden_project_testbed_runtime::CreateMainCameraEntity(*m_world);
+    __hidden_project_testbed_runtime::CreateDefaultDirectionalLightEntity(*m_world);
 
     const TestbedMaterialRef cubeMaterial(Name("project/materials/mat_test"));
     const TestbedMaterialRef transparentMaterial(Name("project/materials/mat_transparent"));
@@ -267,7 +289,7 @@ bool ProjectTestbed::onStartup(){
 
     NWB_LOGGER_ESSENTIAL_INFO(
         NWB_TEXT("ProjectTestbed: startup scene created ({})"),
-        NWB_TEXT("opaque cube with transparent sphere/tetrahedron")
+        NWB_TEXT("directional light, opaque cube, transparent sphere/tetrahedron")
     );
     registerInputHandler();
     return true;

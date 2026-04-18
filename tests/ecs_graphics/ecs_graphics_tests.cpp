@@ -8,6 +8,8 @@
 
 #include <global/compile.h>
 
+#include <limits>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -211,6 +213,29 @@ static void TestPickingRejectsNonAffineJointPalette(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::RaycastDeformableRuntimeMesh(instance, inputs, ray, hit));
 }
 
+static void TestPickingRejectsInvalidSkinWeights(TestContext& context){
+    NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
+    instance.skin.resize(instance.restVertices.size());
+    for(NWB::Impl::SkinInfluence4& skin : instance.skin){
+        skin.joint[0] = 0u;
+        skin.weight[0] = 1.0f;
+    }
+    instance.skin[0].weight[0] = std::numeric_limits<f32>::quiet_NaN();
+
+    NWB::Impl::DeformableJointPaletteComponent joints;
+    joints.joints.resize(1u);
+
+    NWB::Impl::DeformablePickingInputs inputs;
+    inputs.jointPalette = &joints;
+
+    NWB::Impl::DeformablePickingRay ray;
+    ray.origin = Float3Data(0.0f, 0.0f, 1.0f);
+    ray.direction = Float3Data(0.0f, 0.0f, -1.0f);
+
+    NWB::Impl::DeformablePosedHit hit;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::RaycastDeformableRuntimeMesh(instance, inputs, ray, hit));
+}
+
 static void TestPickingVerticesIncludeMorphAndDisplacement(TestContext& context){
     NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
     instance.displacement.mode = NWB::Impl::DeformableDisplacementMode::ScalarUvRamp;
@@ -266,6 +291,7 @@ int main(){
     __hidden_ecs_graphics_tests::TestRaycastReturnsPoseAndRestHit(context);
     __hidden_ecs_graphics_tests::TestPoseStableRestHitRecovery(context);
     __hidden_ecs_graphics_tests::TestPickingRejectsNonAffineJointPalette(context);
+    __hidden_ecs_graphics_tests::TestPickingRejectsInvalidSkinWeights(context);
     __hidden_ecs_graphics_tests::TestPickingVerticesIncludeMorphAndDisplacement(context);
 
     if(context.failed != 0u){

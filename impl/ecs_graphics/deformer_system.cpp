@@ -29,6 +29,7 @@ namespace __hidden_deformer_system{
 static constexpr u32 s_DeformerGroupSize = 64u;
 static constexpr u32 s_DeformableVertexScalarStride = sizeof(DeformableVertexRest) / sizeof(f32);
 static constexpr f32 s_ActiveMorphWeightEpsilon = 0.000001f;
+static constexpr f32 s_SkinWeightSumEpsilon = 0.001f;
 
 struct DeformerPushConstants{
     u32 vertexCount = 0;
@@ -60,6 +61,11 @@ static bool ActiveWeight(const f32 weight){
 
 static bool ActiveDisplacement(const DeformableDisplacement& displacement){
     return displacement.mode != DeformableDisplacementMode::None && ActiveWeight(displacement.amplitude);
+}
+
+static bool NearlyOne(const f32 value){
+    const f32 difference = value > 1.0f ? value - 1.0f : 1.0f - value;
+    return difference <= s_SkinWeightSumEpsilon;
 }
 
 static bool ResolveDisplacement(
@@ -260,9 +266,29 @@ static bool BuildSkinPayload(
     for(usize vertexIndex = 0; vertexIndex < instance.skin.size(); ++vertexIndex){
         const SkinInfluence4& sourceSkin = instance.skin[vertexIndex];
         DeformerSystem::DeformerSkinInfluenceGpu gpuSkin;
+        f32 weightSum = 0.0f;
         for(u32 influenceIndex = 0; influenceIndex < 4u; ++influenceIndex){
             const u32 joint = static_cast<u32>(sourceSkin.joint[influenceIndex]);
             const f32 weight = sourceSkin.weight[influenceIndex];
+            if(!IsFinite(weight) || weight < 0.0f){
+                NWB_LOGGER_ERROR(
+                    NWB_TEXT("DeformerSystem: runtime mesh '{}' vertex {} skin weight {} is invalid"),
+                    instance.handle.value,
+                    vertexIndex,
+                    influenceIndex
+                );
+                return false;
+            }
+
+            weightSum += weight;
+            if(!IsFinite(weightSum)){
+                NWB_LOGGER_ERROR(
+                    NWB_TEXT("DeformerSystem: runtime mesh '{}' vertex {} skin weight sum is invalid"),
+                    instance.handle.value,
+                    vertexIndex
+                );
+                return false;
+            }
             if(ActiveWeight(weight) && joint >= jointPalette->joints.size()){
                 NWB_LOGGER_ERROR(
                     NWB_TEXT("DeformerSystem: runtime mesh '{}' vertex {} references joint {} outside palette size {}"),
@@ -275,6 +301,15 @@ static bool BuildSkinPayload(
             }
             gpuSkin.joint[influenceIndex] = joint;
             gpuSkin.weight[influenceIndex] = weight;
+        }
+        if(!NearlyOne(weightSum)){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("DeformerSystem: runtime mesh '{}' vertex {} skin weights sum to {}"),
+                instance.handle.value,
+                vertexIndex,
+                weightSum
+            );
+            return false;
         }
         outSkinInfluences.push_back(gpuSkin);
     }

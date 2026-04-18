@@ -24,6 +24,7 @@ namespace __hidden_deformable_picking{
 
 static constexpr f32 s_Epsilon = 0.000001f;
 static constexpr f32 s_FrameEpsilon = 0.00000001f;
+static constexpr f32 s_SkinWeightSumEpsilon = 0.001f;
 
 struct Vec3{
     f32 x = 0.0f;
@@ -78,7 +79,7 @@ struct Vec3{
 
 [[nodiscard]] bool NearlyOne(const f32 value){
     const f32 difference = value > 1.0f ? value - 1.0f : 1.0f - value;
-    return difference <= 0.001f;
+    return difference <= s_SkinWeightSumEpsilon;
 }
 
 [[nodiscard]] bool ValidBarycentric(const f32 (&bary)[3]){
@@ -252,6 +253,21 @@ void OrthonormalizeFrame(
     };
 }
 
+[[nodiscard]] bool ValidateSkinInfluence(const SkinInfluence4& skin){
+    f32 weightSum = 0.0f;
+    for(u32 influenceIndex = 0; influenceIndex < 4u; ++influenceIndex){
+        const f32 weight = skin.weight[influenceIndex];
+        if(!IsFinite(weight) || weight < 0.0f)
+            return false;
+
+        weightSum += weight;
+        if(!IsFinite(weightSum))
+            return false;
+    }
+
+    return NearlyOne(weightSum);
+}
+
 [[nodiscard]] bool ApplySkin(
     const DeformableRuntimeMeshInstance& instance,
     const DeformableJointPaletteComponent* jointPalette,
@@ -264,6 +280,9 @@ void OrthonormalizeFrame(
         return false;
 
     const SkinInfluence4& skin = instance.skin[vertexId];
+    if(!ValidateSkinInfluence(skin))
+        return false;
+
     Vec3 skinnedPosition;
     Vec3 skinnedNormal;
     Vec3 skinnedTangent;

@@ -121,16 +121,39 @@ static void HashCombine(usize& seed, const usize value){
     ;
 }
 
-static f32 ResolveMorphWeight(const DeformableMorphWeightsComponent* weights, const Name& morphName){
+static bool ResolveMorphWeight(
+    const DeformableRuntimeMeshInstance& instance,
+    const DeformableMorphWeightsComponent* weights,
+    const Name& morphName,
+    f32& outWeight)
+{
+    outWeight = 0.0f;
     if(!weights || !morphName)
-        return 0.0f;
+        return true;
 
-    f32 resolvedWeight = 0.0f;
     for(const DeformableMorphWeight& weight : weights->weights){
-        if(weight.morph == morphName)
-            resolvedWeight += weight.weight;
+        if(weight.morph != morphName)
+            continue;
+        if(!IsFinite(weight.weight)){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("DeformerSystem: runtime mesh '{}' morph '{}' weight is invalid"),
+                instance.handle.value,
+                StringConvert(morphName.c_str())
+            );
+            return false;
+        }
+
+        outWeight += weight.weight;
+        if(!IsFinite(outWeight)){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("DeformerSystem: runtime mesh '{}' morph '{}' accumulated weight is invalid"),
+                instance.handle.value,
+                StringConvert(morphName.c_str())
+            );
+            return false;
+        }
     }
-    return resolvedWeight;
+    return true;
 }
 
 static Float4Data ExpandFloat3Delta(const Float3Data& value){
@@ -149,7 +172,9 @@ static bool BuildMorphPayload(
     outSignature = 0;
 
     for(const DeformableMorph& morph : instance.morphs){
-        const f32 weight = ResolveMorphWeight(morphWeights, morph.name);
+        f32 weight = 0.0f;
+        if(!ResolveMorphWeight(instance, morphWeights, morph.name, weight))
+            return false;
         if(!ActiveWeight(weight))
             continue;
         if(morph.deltas.size() > static_cast<usize>(Limit<u32>::s_Max)

@@ -64,6 +64,28 @@ public:
         );
     }
 
+    template<typename T>
+    [[nodiscard]] T* tryGetComponent(EntityID entityId){
+        if(!m_entityManager.alive(entityId))
+            return nullptr;
+
+        auto* pool = getPool<T>();
+        if(!pool || !pool->has(entityId))
+            return nullptr;
+        return &pool->get(entityId);
+    }
+
+    template<typename T>
+    [[nodiscard]] const T* tryGetComponent(EntityID entityId)const{
+        if(!m_entityManager.alive(entityId))
+            return nullptr;
+
+        const auto* pool = getPool<T>();
+        if(!pool || !pool->has(entityId))
+            return nullptr;
+        return &pool->get(entityId);
+    }
+
 
 public:
     template<typename T, typename... Args>

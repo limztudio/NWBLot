@@ -6,16 +6,11 @@
 #include "mesh_shader_authoring.glsli"
 #include "bxdf.glsli"
 
-vec3 nwbEngineRotateVectorByQuaternion(vec3 value, vec4 rotation){
-    const vec3 twiceCross = 2.0 * cross(rotation.xyz, value);
-    return value + rotation.w * twiceCross + cross(rotation.xyz, twiceCross);
-}
-
 vec4 nwbEngineBuildClipPosition(vec3 worldPosition){
     const vec4 viewRotation = nwbMeshViewRotation();
     const vec4 viewPositionDepthBias = nwbMeshViewPositionDepthBias();
 
-    vec3 p = nwbEngineRotateVectorByQuaternion(worldPosition - viewPositionDepthBias.xyz, viewRotation);
+    vec3 p = nwbMeshRotateVectorByQuaternion(worldPosition - viewPositionDepthBias.xyz, viewRotation);
     p.z += viewPositionDepthBias.w;
 
     const float invZ = 1.0 / max(p.z, 0.0001);
@@ -27,7 +22,7 @@ vec4 nwbEngineBuildClipPosition(vec3 worldPosition){
 
 NWB_MESH_BUILD_VERTEX_SIGNATURE{
     NwbMeshGeneratedVertex generatedVertex;
-    generatedVertex.position = nwbEngineBuildClipPosition(source.position);
+    generatedVertex.position = nwbEngineBuildClipPosition(nwbMeshTransformPosition(source.position));
     generatedVertex.color = clamp(nwbProjectBxdfVertex(source.color), vec3(0.0), vec3(1.0));
     generatedVertex.padding = 0.0;
     return generatedVertex;

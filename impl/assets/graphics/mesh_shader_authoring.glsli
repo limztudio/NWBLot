@@ -27,6 +27,12 @@ struct NwbMeshGeneratedVertex{
     float padding;
 };
 
+struct NwbMeshInstanceData{
+    vec4 rotation;
+    vec4 translation;
+    vec4 scale;
+};
+
 #define NWB_MESH_BUILD_VERTEX_SIGNATURE NwbMeshGeneratedVertex nwbMeshBuildVertex(uint triangleIndex, uint corner, NwbMeshSourceVertex source)
 
 const uint NWB_MESH_SOURCE_VERTEX_SCALAR_STRIDE = 6u;
@@ -40,6 +46,10 @@ layout(std430, binding = 0) readonly buffer NwbMeshSourceVerticesBuffer{
 
 layout(std430, binding = 1) readonly buffer NwbMeshSourceIndicesBuffer{
     uint nwbMeshSourceIndices[];
+};
+
+layout(std430, binding = 3) readonly buffer NwbMeshInstancesBuffer{
+    NwbMeshInstanceData nwbMeshInstances[];
 };
 
 layout(push_constant) uniform NwbMeshPushConstants{
@@ -74,6 +84,10 @@ uint nwbMeshBaseTriangle(){
 
 uint nwbMeshTriangleCount(){
     return g_NwbMeshPushConstants.dispatch.x;
+}
+
+uint nwbMeshInstanceIndex(){
+    return g_NwbMeshPushConstants.dispatch.z;
 }
 
 uint nwbMeshRemainingTriangles(){
@@ -120,6 +134,22 @@ NwbMeshSourceVertex nwbMeshLoadSourceVertex(const uint triangleIndex, const uint
         nwbMeshSourceVertexScalars[scalarBase + 5u]
     );
     return sourceVertex;
+}
+
+vec3 nwbMeshRotateVectorByQuaternion(vec3 value, vec4 rotation){
+    const vec3 twiceCross = 2.0 * cross(rotation.xyz, value);
+    return value + rotation.w * twiceCross + cross(rotation.xyz, twiceCross);
+}
+
+NwbMeshInstanceData nwbMeshLoadInstance(){
+    return nwbMeshInstances[nwbMeshInstanceIndex()];
+}
+
+vec3 nwbMeshTransformPosition(vec3 localPosition){
+    const NwbMeshInstanceData instance = nwbMeshLoadInstance();
+    return nwbMeshRotateVectorByQuaternion(localPosition * instance.scale.xyz, instance.rotation)
+        + instance.translation.xyz
+    ;
 }
 
 #if NWB_MESH_SHADER_EMULATION_COMPUTE

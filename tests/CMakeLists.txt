@@ -1,2 +1,5 @@
 add_subdirectory(ecs)
 add_subdirectory(math)
+if(TARGET nwb_assets_graphics_cook)
+    add_subdirectory(assets_graphics)
+endif()

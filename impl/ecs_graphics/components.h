@@ -20,7 +20,35 @@ NWB_IMPL_BEGIN
 
 
 class Geometry;
+class DeformableGeometry;
 class Material;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace RuntimeMeshDirtyFlag{
+    enum Enum : u8{
+        None = 0,
+        TopologyDirty = 1u << 0u,
+        AttributesDirty = 1u << 1u,
+        DeformerInputDirty = 1u << 2u,
+        GpuUploadDirty = 1u << 3u,
+        All = TopologyDirty | AttributesDirty | DeformerInputDirty | GpuUploadDirty,
+    };
+};
+using RuntimeMeshDirtyFlags = u8;
+
+struct RuntimeMeshHandle{
+    u64 value = 0;
+
+    [[nodiscard]] bool valid()const{ return value != 0u; }
+    [[nodiscard]] explicit operator bool()const{ return valid(); }
+    void reset(){ value = 0; }
+};
+
+[[nodiscard]] inline bool operator==(const RuntimeMeshHandle& lhs, const RuntimeMeshHandle& rhs){ return lhs.value == rhs.value; }
+[[nodiscard]] inline bool operator!=(const RuntimeMeshHandle& lhs, const RuntimeMeshHandle& rhs){ return !(lhs == rhs); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -29,6 +57,17 @@ class Material;
 struct RendererComponent{
     Core::Assets::AssetRef<Geometry> geometry;
     Core::Assets::AssetRef<Material> material;
+    bool visible = true;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct DeformableRendererComponent{
+    Core::Assets::AssetRef<DeformableGeometry> deformableGeometry;
+    Core::Assets::AssetRef<Material> material;
+    RuntimeMeshHandle runtimeMesh;
     bool visible = true;
 };
 

@@ -7,6 +7,7 @@
 
 #include "components.h"
 
+#include <core/alloc/scratch.h>
 #include <core/ecs/world.h>
 #include <core/assets/asset_manager.h>
 #include <core/graphics/graphics.h>
@@ -47,8 +48,21 @@ namespace RenderPath{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct InstanceGpuData{
+    f32 rotation[4] = { 0.f, 0.f, 0.f, 1.f };
+    f32 translation[4] = { 0.f, 0.f, 0.f, 0.f };
+    f32 scale[4] = { 1.f, 1.f, 1.f, 0.f };
+};
+static_assert(sizeof(InstanceGpuData) == sizeof(f32) * 12u, "InstanceGpuData layout must match the mesh shaders");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class RendererSystem final : public Core::ECS::ISystem, public Core::IRenderPass{
 private:
+    class DeformableRuntimeCache;
+
     struct MaterialPipelineKey{
         Name material = NAME_NONE;
         Core::FramebufferInfo framebufferInfo;
@@ -105,12 +119,17 @@ private:
     struct MaterialPassDrawItem{
         Name geometryKey = NAME_NONE;
         MaterialPipelineKey pipelineKey;
+        u32 instanceIndex = 0;
         f32 alpha = 1.f;
     };
 
     using MaterialPassDrawItemVector = Vector<
         MaterialPassDrawItem,
         Core::Alloc::ScratchAllocator<MaterialPassDrawItem>
+    >;
+    using InstanceGpuDataVector = Vector<
+        InstanceGpuData,
+        Core::Alloc::ScratchAllocator<InstanceGpuData>
     >;
 
 public:
@@ -225,7 +244,17 @@ public:
     virtual void backBufferResized(u32 width, u32 height, u32 sampleCount)override;
 
 
+public:
+    [[nodiscard]] RuntimeMeshHandle deformableRuntimeMeshHandle(Core::ECS::EntityID entity)const;
+    [[nodiscard]] u32 deformableRuntimeMeshEditRevision(RuntimeMeshHandle handle)const;
+    [[nodiscard]] bool bumpDeformableRuntimeMeshRevision(
+        RuntimeMeshHandle handle,
+        RuntimeMeshDirtyFlags dirtyFlags = RuntimeMeshDirtyFlag::All
+    );
+
+
 private:
+    void updateDeformableRuntimeMeshes(Core::ECS::World& world);
     [[nodiscard]] bool ensureGeometryLoaded(const Core::Assets::AssetRef<Geometry>& geometryAsset, GeometryResources*& outGeometry);
     [[nodiscard]] bool ensureMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset, MaterialSurfaceInfo*& outInfo);
     [[nodiscard]] bool ensureMeshShaderResources();
@@ -255,8 +284,13 @@ private:
         MaterialPipelinePass::Enum pass,
         bool transparent,
         MaterialPassDrawItemVector& meshDrawItems,
-        MaterialPassDrawItemVector& computeDrawItems
+        MaterialPassDrawItemVector& computeDrawItems,
+        InstanceGpuDataVector& instanceData
     );
+    [[nodiscard]] usize visibleRendererCount();
+    [[nodiscard]] bool ensureInstanceBufferCapacity(usize instanceCount);
+    [[nodiscard]] bool uploadInstanceBuffer(Core::ICommandList& commandList, const InstanceGpuDataVector& instanceData);
+    void invalidateGeometryBindingSets();
     [[nodiscard]] bool findMaterialPassDrawItemResources(
         const MaterialPassDrawItem& drawItem,
         GeometryResources*& outGeometry,
@@ -316,6 +350,7 @@ private:
     Core::BindingLayoutHandle m_avboitIntegrateBindingLayout;
     Core::BindingLayoutHandle m_avboitAccumulateBindingLayout;
     Core::SamplerHandle m_deferredSampler;
+    Core::BufferHandle m_instanceBuffer;
     Core::ShaderHandle m_emulationVertexShader;
     Core::ShaderHandle m_deferredCompositeVertexShader;
     Core::ShaderHandle m_deferredCompositePixelShader;
@@ -329,6 +364,8 @@ private:
     Core::ComputePipelineHandle m_avboitDepthWarpPipeline;
     Core::ComputePipelineHandle m_avboitIntegratePipeline;
     DeferredFrameTargets m_deferredTargets;
+    UniquePtr<DeformableRuntimeCache> m_deformableRuntimeCache;
+    usize m_instanceBufferCapacity = 0;
 };
 
 

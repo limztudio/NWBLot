@@ -9,14 +9,12 @@
 #include <core/ecs/transform_component.h>
 #include <core/graphics/shader_archive.h>
 #include <logger/client/logger.h>
+#include <impl/assets_graphics/deformable_geometry_asset.h>
 #include <impl/assets_graphics/geometry_asset.h>
 #include <impl/assets_graphics/material_asset.h>
 #include <impl/assets_graphics/shader_asset.h>
 #include <impl/assets_graphics/shader_stage_names.h>
 #include <global/matrix_math.h>
-
-#include <cmath>
-#include <cstdlib>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -53,7 +51,7 @@ static constexpr f32 s_DefaultMeshViewDepthOffset = 2.2f;
 struct ShaderDrivenPushConstants{
     u32 triangleCount = 0;
     u32 scissorCullEnabled = 0;
-    u32 padding0 = 0;
+    u32 instanceIndex = 0;
     u32 padding1 = 0;
     f32 viewportRect[4] = {};
     f32 scissorRect[4] = {};
@@ -115,6 +113,11 @@ static const Name& StageNameFromShaderType(const Core::ShaderType::Mask shaderTy
 
 static const Name& MeshEmulationVertexShaderName(){
     static const Name s("engine/graphics/mesh_emulation_vs");
+    return s;
+}
+
+static const Name& InstanceBufferName(){
+    static const Name s("ecs_graphics/instance_data");
     return s;
 }
 
@@ -337,6 +340,34 @@ static void CopyFloat4(f32 (&destination)[4], const f32 (&source)[4]){
     destination[3] = source[3];
 }
 
+static usize NextInstanceBufferCapacity(const usize currentCapacity, const usize requiredCapacity){
+    usize capacity = Max<usize>(currentCapacity, 1u);
+    while(capacity < requiredCapacity){
+        if(capacity > (Limit<usize>::s_Max / 2u))
+            return requiredCapacity;
+        capacity *= 2u;
+    }
+    return capacity;
+}
+
+static InstanceGpuData BuildInstanceGpuData(const Core::ECS::TransformComponent* transform){
+    InstanceGpuData data;
+    if(!transform)
+        return data;
+
+    data.rotation[0] = transform->rotation.x;
+    data.rotation[1] = transform->rotation.y;
+    data.rotation[2] = transform->rotation.z;
+    data.rotation[3] = transform->rotation.w;
+    data.translation[0] = transform->position.x;
+    data.translation[1] = transform->position.y;
+    data.translation[2] = transform->position.z;
+    data.scale[0] = transform->scale.x;
+    data.scale[1] = transform->scale.y;
+    data.scale[2] = transform->scale.z;
+    return data;
+}
+
 static MeshViewState BuildDefaultMeshViewState(){
     MeshViewState state;
     Float4Data rotation;
@@ -408,11 +439,13 @@ static MeshViewState ResolveMeshViewState(Core::ECS::World& world){
 
 static ShaderDrivenPushConstants BuildShaderDrivenPushConstants(
     const u32 triangleCount,
+    const u32 instanceIndex,
     const Core::ViewportState& viewportState,
     const MeshViewState& viewState
 ){
     ShaderDrivenPushConstants pushConstants;
     pushConstants.triangleCount = triangleCount;
+    pushConstants.instanceIndex = instanceIndex;
     CopyFloat4(pushConstants.viewRotation, viewState.viewRotation);
     CopyFloat4(pushConstants.viewPositionDepthBias, viewState.viewPositionDepthBias);
 
@@ -450,21 +483,22 @@ static bool IsTransparentText(const AStringView text){
 }
 
 static bool ParseAlphaValue(const AStringView text, f32& outAlpha){
-    AString temp(text);
-    char* end = nullptr;
-    const f32 parsed = std::strtof(temp.c_str(), &end);
-    if(end == temp.c_str())
-        return false;
-    if(!std::isfinite(parsed))
+    const char* begin = text.data();
+    const char* end = begin + text.size();
+    while(begin < end && IsAsciiSpace(*begin))
+        ++begin;
+    while(end > begin && IsAsciiSpace(*(end - 1)))
+        --end;
+    if(begin == end)
         return false;
 
-    while(end && *end != '\0'){
-        if(!IsAsciiSpace(*end))
-            return false;
-        ++end;
-    }
+    f64 parsed = 0.0;
+    if(!ParseF64FromChars(begin, end, parsed) || !IsFinite(parsed))
+        return false;
+    if(parsed < static_cast<f64>(Limit<f32>::s_Min) || parsed > static_cast<f64>(Limit<f32>::s_Max))
+        return false;
 
-    outAlpha = Max(0.f, Min(1.f, parsed));
+    outAlpha = static_cast<f32>(Max<f64>(0.0, Min<f64>(1.0, parsed)));
     return true;
 }
 
@@ -500,13 +534,14 @@ static AvboitPushConstants BuildAvboitPushConstants(const RendererSystem::Avboit
 
 static TransparentDrawPushConstants BuildTransparentDrawPushConstants(
     const u32 triangleCount,
+    const u32 instanceIndex,
     const Core::ViewportState& viewportState,
     const MeshViewState& viewState,
     const RendererSystem::AvboitFrameTargets& targets,
     const f32 alpha
 ){
     TransparentDrawPushConstants pushConstants;
-    pushConstants.mesh = BuildShaderDrivenPushConstants(triangleCount, viewportState, viewState);
+    pushConstants.mesh = BuildShaderDrivenPushConstants(triangleCount, instanceIndex, viewportState, viewState);
     pushConstants.avboit = BuildAvboitPushConstants(targets, alpha);
     return pushConstants;
 }
@@ -522,6 +557,422 @@ static u32 DispatchGroupCount1D(const u32 itemCount, const u32 groupSize){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class RendererSystem::DeformableRuntimeCache final{
+private:
+    struct DeformableGeometrySource{
+        Name sourceName = NAME_NONE;
+        UniquePtr<Core::Assets::IAsset> asset;
+        u32 referenceCount = 0;
+
+        [[nodiscard]] const DeformableGeometry* geometry()const{
+            if(!asset || asset->assetType() != DeformableGeometry::AssetTypeName())
+                return nullptr;
+            return static_cast<const DeformableGeometry*>(asset.get());
+        }
+    };
+
+    struct RuntimeMeshInstance{
+        Core::ECS::EntityID entity = Core::ECS::ENTITY_ID_INVALID;
+        RuntimeMeshHandle handle;
+        Core::Assets::AssetRef<DeformableGeometry> source;
+        Vector<DeformableVertexRest> restVertices;
+        Vector<u32> indices;
+        Vector<SkinInfluence4> skin;
+        Vector<SourceSample> sourceSamples;
+        Core::BufferHandle restVertexBuffer;
+        Core::BufferHandle indexBuffer;
+        Core::BufferHandle deformedVertexBuffer;
+        u32 editRevision = 0;
+        RuntimeMeshDirtyFlags dirtyFlags = RuntimeMeshDirtyFlag::All;
+
+        [[nodiscard]] bool valid()const{
+            return entity.valid()
+                && handle.valid()
+                && source.valid()
+                && !restVertices.empty()
+                && !indices.empty()
+                && restVertexBuffer != nullptr
+                && indexBuffer != nullptr
+                && deformedVertexBuffer != nullptr;
+        }
+    };
+
+
+public:
+    DeformableRuntimeCache(Core::Graphics& graphics, Core::Assets::AssetManager& assetManager)
+        : m_graphics(graphics)
+        , m_assetManager(assetManager)
+    {}
+
+
+public:
+    void update(Core::ECS::World& world){
+        Core::Alloc::ScratchArena<> scratchArena;
+        HashSet<
+            Core::ECS::EntityID,
+            Hasher<Core::ECS::EntityID>,
+            EqualTo<Core::ECS::EntityID>,
+            Core::Alloc::ScratchAllocator<Core::ECS::EntityID>
+        > activeEntities(
+            0,
+            Hasher<Core::ECS::EntityID>(),
+            EqualTo<Core::ECS::EntityID>(),
+            Core::Alloc::ScratchAllocator<Core::ECS::EntityID>(scratchArena)
+        );
+        activeEntities.reserve(world.entityCount());
+
+        world.view<DeformableRendererComponent>().each(
+            [&](Core::ECS::EntityID entity, DeformableRendererComponent& component){
+                activeEntities.insert(entity);
+                if(!ensureRuntimeMesh(entity, component))
+                    component.runtimeMesh.reset();
+            }
+        );
+
+        Vector<
+            Core::ECS::EntityID,
+            Core::Alloc::ScratchAllocator<Core::ECS::EntityID>
+        > staleEntities{Core::Alloc::ScratchAllocator<Core::ECS::EntityID>(scratchArena)};
+        staleEntities.reserve(m_instances.size());
+        for(const auto& [entity, instance] : m_instances){
+            (void)instance;
+            if(activeEntities.find(entity) == activeEntities.end())
+                staleEntities.push_back(entity);
+        }
+        for(const Core::ECS::EntityID entity : staleEntities)
+            releaseRuntimeMesh(entity);
+    }
+
+    [[nodiscard]] RuntimeMeshHandle handleForEntity(const Core::ECS::EntityID entity)const{
+        const auto found = m_instances.find(entity);
+        if(found == m_instances.end())
+            return RuntimeMeshHandle{};
+        return found.value().handle;
+    }
+
+    [[nodiscard]] u32 editRevision(const RuntimeMeshHandle handle)const{
+        const RuntimeMeshInstance* instance = findInstance(handle);
+        return instance ? instance->editRevision : 0u;
+    }
+
+    [[nodiscard]] bool bumpEditRevision(const RuntimeMeshHandle handle, const RuntimeMeshDirtyFlags dirtyFlags){
+        if(!handle.valid())
+            return false;
+
+        RuntimeMeshInstance* instance = findInstance(handle);
+        if(!instance)
+            return false;
+        if(instance->editRevision == Limit<u32>::s_Max){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("RendererSystem: deformable runtime mesh '{}' edit revision overflowed"),
+                instance->handle.value
+            );
+            return false;
+        }
+
+        ++instance->editRevision;
+        instance->dirtyFlags = static_cast<RuntimeMeshDirtyFlags>(instance->dirtyFlags | dirtyFlags);
+        return true;
+    }
+
+
+private:
+    [[nodiscard]] bool ensureRuntimeMesh(Core::ECS::EntityID entity, DeformableRendererComponent& component){
+        const Name sourceName = component.deformableGeometry.name();
+        if(!sourceName){
+            releaseRuntimeMesh(entity);
+            component.runtimeMesh.reset();
+            return false;
+        }
+
+        const auto foundInstance = m_instances.find(entity);
+        if(foundInstance != m_instances.end()){
+            RuntimeMeshInstance& instance = foundInstance.value();
+            if(instance.source.name() == sourceName){
+                component.runtimeMesh = instance.handle;
+                if((instance.dirtyFlags & RuntimeMeshDirtyFlag::GpuUploadDirty) != 0u){
+                    if(!uploadRuntimeMeshBuffers(instance)){
+                        releaseRuntimeMesh(entity);
+                        component.runtimeMesh.reset();
+                        return false;
+                    }
+                    instance.dirtyFlags = static_cast<RuntimeMeshDirtyFlags>(
+                        instance.dirtyFlags & ~RuntimeMeshDirtyFlag::GpuUploadDirty
+                    );
+                }
+                return instance.valid();
+            }
+
+            releaseRuntimeMesh(entity);
+            component.runtimeMesh.reset();
+        }
+
+        DeformableGeometrySource* source = nullptr;
+        if(!ensureSourceLoaded(component.deformableGeometry, source))
+            return false;
+        const DeformableGeometry* geometry = source ? source->geometry() : nullptr;
+        if(!geometry)
+            return false;
+
+        RuntimeMeshInstance instance;
+        instance.entity = entity;
+        instance.handle = allocateHandle();
+        if(!instance.handle.valid()){
+            eraseUnusedSource(sourceName);
+            return false;
+        }
+        instance.source = component.deformableGeometry;
+        instance.restVertices = geometry->restVertices();
+        instance.indices = geometry->indices();
+        instance.skin = geometry->skin();
+        instance.sourceSamples = geometry->sourceSamples();
+        instance.dirtyFlags = RuntimeMeshDirtyFlag::All;
+
+        if(!uploadRuntimeMeshBuffers(instance)){
+            eraseUnusedSource(sourceName);
+            return false;
+        }
+        instance.dirtyFlags = static_cast<RuntimeMeshDirtyFlags>(
+            instance.dirtyFlags & ~RuntimeMeshDirtyFlag::GpuUploadDirty
+        );
+
+        ++source->referenceCount;
+        const RuntimeMeshHandle handle = instance.handle;
+        auto [it, inserted] = m_instances.emplace(entity, RuntimeMeshInstance{});
+        (void)inserted;
+        it.value() = Move(instance);
+        m_handleToEntity.emplace(handle.value, entity);
+        component.runtimeMesh = handle;
+        return it.value().valid();
+    }
+
+    [[nodiscard]] bool ensureSourceLoaded(
+        const Core::Assets::AssetRef<DeformableGeometry>& sourceAsset,
+        DeformableGeometrySource*& outSource)
+    {
+        outSource = nullptr;
+
+        const Name sourceName = sourceAsset.name();
+        if(!sourceName){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: deformable renderer source asset is empty"));
+            return false;
+        }
+
+        const auto foundSource = m_sources.find(sourceName);
+        if(foundSource != m_sources.end()){
+            outSource = &foundSource.value();
+            return outSource->geometry() != nullptr;
+        }
+
+        UniquePtr<Core::Assets::IAsset> loadedAsset;
+        if(!m_assetManager.loadSync(DeformableGeometry::AssetTypeName(), sourceName, loadedAsset)){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("RendererSystem: failed to load deformable geometry '{}'"),
+                StringConvert(sourceName.c_str())
+            );
+            return false;
+        }
+        if(!loadedAsset || loadedAsset->assetType() != DeformableGeometry::AssetTypeName()){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("RendererSystem: asset '{}' is not deformable geometry"),
+                StringConvert(sourceName.c_str())
+            );
+            return false;
+        }
+
+        DeformableGeometrySource source;
+        source.sourceName = sourceName;
+        source.asset = Move(loadedAsset);
+
+        auto [it, inserted] = m_sources.emplace(sourceName, DeformableGeometrySource{});
+        (void)inserted;
+        it.value() = Move(source);
+        outSource = &it.value();
+        return outSource->geometry() != nullptr;
+    }
+
+    [[nodiscard]] bool uploadRuntimeMeshBuffers(RuntimeMeshInstance& instance){
+        if(instance.restVertices.empty() || instance.indices.empty()){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("RendererSystem: deformable runtime mesh '{}' has incomplete rest/index payload"),
+                StringConvert(instance.source.name().c_str())
+            );
+            return false;
+        }
+
+        usize restVertexBytes = 0;
+        usize indexBytes = 0;
+        if(!computePayloadBytes(instance.restVertices.size(), sizeof(DeformableVertexRest), restVertexBytes, "rest vertices"))
+            return false;
+        if(!computePayloadBytes(instance.indices.size(), sizeof(u32), indexBytes, "indices"))
+            return false;
+
+        const Name restVertexBufferName = deriveRuntimeBufferName(instance, AStringView("rest_vb"));
+        const Name indexBufferName = deriveRuntimeBufferName(instance, AStringView("index"));
+        const Name deformedVertexBufferName = deriveRuntimeBufferName(instance, AStringView("deformed_vb"));
+        if(!restVertexBufferName || !indexBufferName || !deformedVertexBufferName)
+            return false;
+
+        Core::Graphics::BufferSetupDesc restVertexSetup;
+        restVertexSetup.bufferDesc
+            .setByteSize(static_cast<u64>(restVertexBytes))
+            .setStructStride(sizeof(DeformableVertexRest))
+            .setDebugName(restVertexBufferName)
+        ;
+        restVertexSetup.data = instance.restVertices.data();
+        restVertexSetup.dataSize = restVertexBytes;
+        instance.restVertexBuffer = m_graphics.setupBuffer(restVertexSetup);
+        if(!instance.restVertexBuffer){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("RendererSystem: failed to create deformable rest vertex buffer for '{}'"),
+                StringConvert(instance.source.name().c_str())
+            );
+            return false;
+        }
+
+        Core::Graphics::BufferSetupDesc indexSetup;
+        indexSetup.bufferDesc
+            .setByteSize(static_cast<u64>(indexBytes))
+            .setStructStride(sizeof(u32))
+            .setDebugName(indexBufferName)
+        ;
+        indexSetup.data = instance.indices.data();
+        indexSetup.dataSize = indexBytes;
+        instance.indexBuffer = m_graphics.setupBuffer(indexSetup);
+        if(!instance.indexBuffer){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("RendererSystem: failed to create deformable index buffer for '{}'"),
+                StringConvert(instance.source.name().c_str())
+            );
+            return false;
+        }
+
+        Core::Graphics::BufferSetupDesc deformedVertexSetup;
+        deformedVertexSetup.bufferDesc
+            .setByteSize(static_cast<u64>(restVertexBytes))
+            .setStructStride(sizeof(DeformableVertexRest))
+            .setCanHaveUAVs(true)
+            .setIsVertexBuffer(true)
+            .setDebugName(deformedVertexBufferName)
+        ;
+        deformedVertexSetup.data = instance.restVertices.data();
+        deformedVertexSetup.dataSize = restVertexBytes;
+        instance.deformedVertexBuffer = m_graphics.setupBuffer(deformedVertexSetup);
+        if(!instance.deformedVertexBuffer){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("RendererSystem: failed to create deformable deformed vertex buffer for '{}'"),
+                StringConvert(instance.source.name().c_str())
+            );
+            return false;
+        }
+
+        return true;
+    }
+
+    [[nodiscard]] RuntimeMeshHandle allocateHandle(){
+        while(m_nextHandleValue != 0u){
+            RuntimeMeshHandle handle;
+            handle.value = m_nextHandleValue++;
+            if(m_handleToEntity.find(handle.value) == m_handleToEntity.end())
+                return handle;
+        }
+
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: deformable runtime mesh handle space exhausted"));
+        return RuntimeMeshHandle{};
+    }
+
+    [[nodiscard]] RuntimeMeshInstance* findInstance(const RuntimeMeshHandle handle){
+        const auto foundEntity = m_handleToEntity.find(handle.value);
+        if(foundEntity == m_handleToEntity.end())
+            return nullptr;
+        const auto foundInstance = m_instances.find(foundEntity.value());
+        if(foundInstance == m_instances.end())
+            return nullptr;
+        return &foundInstance.value();
+    }
+
+    [[nodiscard]] const RuntimeMeshInstance* findInstance(const RuntimeMeshHandle handle)const{
+        const auto foundEntity = m_handleToEntity.find(handle.value);
+        if(foundEntity == m_handleToEntity.end())
+            return nullptr;
+        const auto foundInstance = m_instances.find(foundEntity.value());
+        if(foundInstance == m_instances.end())
+            return nullptr;
+        return &foundInstance.value();
+    }
+
+    void releaseRuntimeMesh(const Core::ECS::EntityID entity){
+        const auto foundInstance = m_instances.find(entity);
+        if(foundInstance == m_instances.end())
+            return;
+
+        const RuntimeMeshInstance& instance = foundInstance.value();
+        m_handleToEntity.erase(instance.handle.value);
+        releaseSource(instance.source.name());
+        m_instances.erase(entity);
+    }
+
+    void releaseSource(const Name& sourceName){
+        const auto foundSource = m_sources.find(sourceName);
+        if(foundSource == m_sources.end())
+            return;
+
+        DeformableGeometrySource& source = foundSource.value();
+        if(source.referenceCount > 0u)
+            --source.referenceCount;
+        if(source.referenceCount == 0u)
+            m_sources.erase(sourceName);
+    }
+
+    void eraseUnusedSource(const Name& sourceName){
+        const auto foundSource = m_sources.find(sourceName);
+        if(foundSource != m_sources.end() && foundSource.value().referenceCount == 0u)
+            m_sources.erase(sourceName);
+    }
+
+    [[nodiscard]] Name deriveRuntimeBufferName(const RuntimeMeshInstance& instance, const AStringView suffix)const{
+        const AString derivedSuffix = StringFormat(
+            ":runtime_{}_revision_{}_{}",
+            instance.entity.id,
+            instance.editRevision,
+            suffix
+        );
+        return DeriveName(instance.source.name(), derivedSuffix);
+    }
+
+    [[nodiscard]] bool computePayloadBytes(
+        const usize count,
+        const usize stride,
+        usize& outBytes,
+        const char* label)const
+    {
+        outBytes = 0;
+        if(stride == 0u || count > Limit<usize>::s_Max / stride){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("RendererSystem: deformable runtime mesh '{}' payload byte size overflows"),
+                StringConvert(AString(label))
+            );
+            return false;
+        }
+
+        outBytes = count * stride;
+        return true;
+    }
+
+
+private:
+    Core::Graphics& m_graphics;
+    Core::Assets::AssetManager& m_assetManager;
+    HashMap<Name, DeformableGeometrySource, Hasher<Name>, EqualTo<Name>> m_sources;
+    HashMap<Core::ECS::EntityID, RuntimeMeshInstance, Hasher<Core::ECS::EntityID>, EqualTo<Core::ECS::EntityID>> m_instances;
+    HashMap<u64, Core::ECS::EntityID, Hasher<u64>, EqualTo<u64>> m_handleToEntity;
+    u64 m_nextHandleValue = 1u;
 };
 
 
@@ -556,19 +1007,21 @@ RendererSystem::RendererSystem(
     , m_graphics(graphics)
     , m_assetManager(assetManager)
     , m_shaderPathResolver(Move(shaderPathResolver))
+    , m_deformableRuntimeCache(MakeUnique<DeformableRuntimeCache>(graphics, assetManager))
 {
     readAccess<Core::ECS::ProjectComponent>();
     readAccess<Core::ECS::TransformComponent>();
     readAccess<Core::ECS::CameraComponent>();
     readAccess<RendererComponent>();
+    writeAccess<DeformableRendererComponent>();
 }
 RendererSystem::~RendererSystem()
 {}
 
 
 void RendererSystem::update(Core::ECS::World& world, f32 delta){
-    (void)world;
     (void)delta;
+    updateDeformableRuntimeMeshes(world);
 }
 
 void RendererSystem::render(Core::IFramebuffer* framebuffer){
@@ -587,6 +1040,8 @@ void RendererSystem::render(Core::IFramebuffer* framebuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create render command list"));
         return;
     }
+    if(!ensureInstanceBufferCapacity(visibleRendererCount()))
+        return;
 
     commandList->open();
 
@@ -630,6 +1085,32 @@ void RendererSystem::backBufferResized(u32 width, u32 height, u32 sampleCount){
     m_materialPipelines.clear();
     m_deferredCompositePipeline.reset();
     resetDeferredFrameTargets();
+}
+
+RuntimeMeshHandle RendererSystem::deformableRuntimeMeshHandle(const Core::ECS::EntityID entity)const{
+    return m_deformableRuntimeCache
+        ? m_deformableRuntimeCache->handleForEntity(entity)
+        : RuntimeMeshHandle{}
+    ;
+}
+
+u32 RendererSystem::deformableRuntimeMeshEditRevision(const RuntimeMeshHandle handle)const{
+    return m_deformableRuntimeCache
+        ? m_deformableRuntimeCache->editRevision(handle)
+        : 0u
+    ;
+}
+
+bool RendererSystem::bumpDeformableRuntimeMeshRevision(
+    const RuntimeMeshHandle handle,
+    const RuntimeMeshDirtyFlags dirtyFlags)
+{
+    return m_deformableRuntimeCache && m_deformableRuntimeCache->bumpEditRevision(handle, dirtyFlags);
+}
+
+void RendererSystem::updateDeformableRuntimeMeshes(Core::ECS::World& world){
+    if(m_deformableRuntimeCache)
+        m_deformableRuntimeCache->update(world);
 }
 
 bool RendererSystem::ensureDeferredFrameTargets(Core::IFramebuffer* presentationFramebuffer, DeferredFrameTargets*& outTargets){
@@ -1377,11 +1858,15 @@ void RendererSystem::renderMaterialPass(
     Core::Alloc::ScratchArena<> scratchArena;
     MaterialPassDrawItemVector meshDrawItems{Core::Alloc::ScratchAllocator<MaterialPassDrawItem>(scratchArena)};
     MaterialPassDrawItemVector computeDrawItems{Core::Alloc::ScratchAllocator<MaterialPassDrawItem>(scratchArena)};
+    InstanceGpuDataVector instanceData{Core::Alloc::ScratchAllocator<InstanceGpuData>(scratchArena)};
 
     Core::ViewportState viewportState;
     viewportState.addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
 
-    gatherMaterialPassDrawItems(framebuffer, pass, transparent, meshDrawItems, computeDrawItems);
+    gatherMaterialPassDrawItems(framebuffer, pass, transparent, meshDrawItems, computeDrawItems, instanceData);
+    if(!uploadInstanceBuffer(commandList, instanceData))
+        return;
+
     const MaterialPassDrawContext drawContext{ commandList, framebuffer, pass, passBindingSet, avboitTargets, viewportState };
     renderMeshMaterialPassDrawItems(drawContext, meshDrawItems);
     renderComputeMaterialPassDrawItems(drawContext, computeDrawItems);
@@ -1392,19 +1877,27 @@ void RendererSystem::gatherMaterialPassDrawItems(
     const MaterialPipelinePass::Enum pass,
     const bool transparent,
     MaterialPassDrawItemVector& meshDrawItems,
-    MaterialPassDrawItemVector& computeDrawItems
+    MaterialPassDrawItemVector& computeDrawItems,
+    InstanceGpuDataVector& instanceData
 ){
     if(!framebuffer)
         return;
+
+    const usize rendererCapacity = m_world.entityCount();
+    meshDrawItems.reserve(rendererCapacity);
+    computeDrawItems.reserve(rendererCapacity);
+    instanceData.reserve(rendererCapacity);
 
     auto rendererView = m_world.view<RendererComponent>();
     const Core::FramebufferInfo& framebufferInfo = framebuffer->getFramebufferInfo();
 
     for(auto&& [entity, renderer] : rendererView){
-        (void)entity;
-
         if(!renderer.visible)
             continue;
+
+        const Core::ECS::TransformComponent* transform =
+            m_world.tryGetComponent<Core::ECS::TransformComponent>(entity)
+        ;
 
         MaterialSurfaceInfo* materialInfo = nullptr;
         if(!ensureMaterialSurfaceInfo(renderer.material, materialInfo))
@@ -1429,35 +1922,124 @@ void RendererSystem::gatherMaterialPassDrawItems(
         pipelineKey.framebufferInfo = framebufferInfo;
         pipelineKey.pass = pass;
 
+        auto appendInstance = [&]() -> u32{
+            if(instanceData.size() >= static_cast<usize>(Limit<u32>::s_Max)){
+                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: renderer instance count exceeds u32 limits"));
+                return Limit<u32>::s_Max;
+            }
+
+            const u32 instanceIndex = static_cast<u32>(instanceData.size());
+            instanceData.push_back(__hidden_ecs_graphics::BuildInstanceGpuData(transform));
+            return instanceIndex;
+        };
+
+        auto appendDrawItem = [&](MaterialPassDrawItemVector& drawItems) -> bool{
+            const u32 instanceIndex = appendInstance();
+            if(instanceIndex == Limit<u32>::s_Max)
+                return false;
+
+            MaterialPassDrawItem drawItem;
+            drawItem.geometryKey = geometry->geometryName;
+            drawItem.pipelineKey = pipelineKey;
+            drawItem.instanceIndex = instanceIndex;
+            drawItem.alpha = materialInfo->alpha;
+            drawItems.push_back(drawItem);
+            return true;
+        };
+
         switch(pipelineResources->renderPath){
         case RenderPath::MeshShader:{
             if(!pipelineResources->meshletPipeline)
                 continue;
-            if(!ensureMeshBindingSet(*geometry))
+            if(!appendDrawItem(meshDrawItems))
                 continue;
-            MaterialPassDrawItem drawItem;
-            drawItem.geometryKey = geometry->geometryName;
-            drawItem.pipelineKey = pipelineKey;
-            drawItem.alpha = materialInfo->alpha;
-            meshDrawItems.push_back(drawItem);
             break;
         }
         case RenderPath::ComputeEmulation:{
             if(!pipelineResources->computePipeline || !pipelineResources->emulationPipeline)
                 continue;
-            if(!ensureComputeBindingSet(*geometry))
+            if(!appendDrawItem(computeDrawItems))
                 continue;
-            MaterialPassDrawItem drawItem;
-            drawItem.geometryKey = geometry->geometryName;
-            drawItem.pipelineKey = pipelineKey;
-            drawItem.alpha = materialInfo->alpha;
-            computeDrawItems.push_back(drawItem);
             break;
         }
         default:{
             break;
         }
         }
+    }
+}
+
+usize RendererSystem::visibleRendererCount(){
+    usize count = 0;
+    m_world.view<RendererComponent>().each([&](Core::ECS::EntityID entityId, RendererComponent& renderer){
+        (void)entityId;
+        if(renderer.visible)
+            ++count;
+    });
+    return count;
+}
+
+bool RendererSystem::ensureInstanceBufferCapacity(const usize instanceCount){
+    if(instanceCount == 0)
+        return true;
+    if(instanceCount > static_cast<usize>(Limit<u32>::s_Max)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: instance buffer request exceeds u32 instance-index limits"));
+        return false;
+    }
+    if(m_instanceBuffer && m_instanceBufferCapacity >= instanceCount)
+        return true;
+
+    const usize capacity = __hidden_ecs_graphics::NextInstanceBufferCapacity(m_instanceBufferCapacity, instanceCount);
+    if(capacity > Limit<usize>::s_Max / sizeof(InstanceGpuData)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: instance buffer capacity overflows addressable memory"));
+        return false;
+    }
+
+    Core::BufferDesc instanceBufferDesc;
+    instanceBufferDesc
+        .setByteSize(static_cast<u64>(capacity * sizeof(InstanceGpuData)))
+        .setStructStride(sizeof(InstanceGpuData))
+        .setDebugName(__hidden_ecs_graphics::InstanceBufferName())
+        .enableAutomaticStateTracking(Core::ResourceStates::Common)
+    ;
+    Core::BufferHandle instanceBuffer = m_graphics.createBuffer(instanceBufferDesc);
+    if(!instanceBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create instance data buffer"));
+        return false;
+    }
+
+    m_instanceBuffer = Move(instanceBuffer);
+    m_instanceBufferCapacity = capacity;
+    invalidateGeometryBindingSets();
+    return true;
+}
+
+bool RendererSystem::uploadInstanceBuffer(Core::ICommandList& commandList, const InstanceGpuDataVector& instanceData){
+    if(instanceData.empty())
+        return true;
+    if(!ensureInstanceBufferCapacity(instanceData.size()))
+        return false;
+    if(!m_instanceBuffer)
+        return false;
+
+    if(instanceData.size() > Limit<usize>::s_Max / sizeof(InstanceGpuData)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: instance data upload size overflows"));
+        return false;
+    }
+
+    commandList.setBufferState(m_instanceBuffer.get(), Core::ResourceStates::CopyDest);
+    commandList.commitBarriers();
+    commandList.writeBuffer(m_instanceBuffer.get(), instanceData.data(), instanceData.size() * sizeof(InstanceGpuData));
+    commandList.setBufferState(m_instanceBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.commitBarriers();
+    return true;
+}
+
+void RendererSystem::invalidateGeometryBindingSets(){
+    for(auto it = m_geometryMeshes.begin(); it != m_geometryMeshes.end(); ++it){
+        GeometryResources& geometry = it.value();
+        geometry.meshBindingSet = nullptr;
+        geometry.computeBindingSet = nullptr;
     }
 }
 
@@ -1489,11 +2071,14 @@ void RendererSystem::renderMeshMaterialPassDrawItems(
     const __hidden_ecs_graphics::MeshViewState meshViewState = __hidden_ecs_graphics::ResolveMeshViewState(m_world);
 
     forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem& drawItem, GeometryResources& geometry, MaterialPipelineResources& pipelineResources){
-        if(!geometry.valid() || !geometry.meshBindingSet || !pipelineResources.meshletPipeline)
+        if(!geometry.valid() || !pipelineResources.meshletPipeline || !m_instanceBuffer)
+            return;
+        if(!ensureMeshBindingSet(geometry))
             return;
 
         context.commandList.setBufferState(geometry.shaderVertexBuffer.get(), Core::ResourceStates::ShaderResource);
         context.commandList.setBufferState(geometry.shaderIndexBuffer.get(), Core::ResourceStates::ShaderResource);
+        context.commandList.setBufferState(m_instanceBuffer.get(), Core::ResourceStates::ShaderResource);
 
         Core::MeshletState meshletState;
         meshletState.setPipeline(pipelineResources.meshletPipeline.get());
@@ -1509,6 +2094,7 @@ void RendererSystem::renderMeshMaterialPassDrawItems(
             const __hidden_ecs_graphics::ShaderDrivenPushConstants pushConstants =
                 __hidden_ecs_graphics::BuildShaderDrivenPushConstants(
                     geometry.triangleCount,
+                    drawItem.instanceIndex,
                     context.viewportState,
                     meshViewState
                 );
@@ -1518,6 +2104,7 @@ void RendererSystem::renderMeshMaterialPassDrawItems(
             const __hidden_ecs_graphics::TransparentDrawPushConstants pushConstants =
                 __hidden_ecs_graphics::BuildTransparentDrawPushConstants(
                     geometry.triangleCount,
+                    drawItem.instanceIndex,
                     context.viewportState,
                     meshViewState,
                     *context.avboitTargets,
@@ -1536,11 +2123,16 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
     const __hidden_ecs_graphics::MeshViewState meshViewState = __hidden_ecs_graphics::ResolveMeshViewState(m_world);
 
     forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem& drawItem, GeometryResources& geometry, MaterialPipelineResources& pipelineResources){
-        if(!geometry.valid() || !geometry.computeBindingSet || !geometry.emulationVertexBuffer || !pipelineResources.computePipeline || !pipelineResources.emulationPipeline)
+        if(!geometry.valid() || !pipelineResources.computePipeline || !pipelineResources.emulationPipeline || !m_instanceBuffer)
+            return;
+        if(!ensureComputeBindingSet(geometry))
+            return;
+        if(!geometry.computeBindingSet || !geometry.emulationVertexBuffer)
             return;
 
         context.commandList.setBufferState(geometry.shaderVertexBuffer.get(), Core::ResourceStates::ShaderResource);
         context.commandList.setBufferState(geometry.shaderIndexBuffer.get(), Core::ResourceStates::ShaderResource);
+        context.commandList.setBufferState(m_instanceBuffer.get(), Core::ResourceStates::ShaderResource);
         context.commandList.setBufferState(geometry.emulationVertexBuffer.get(), Core::ResourceStates::UnorderedAccess);
 
         Core::ComputeState computeState;
@@ -1552,6 +2144,7 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
         const __hidden_ecs_graphics::ShaderDrivenPushConstants pushConstants =
             __hidden_ecs_graphics::BuildShaderDrivenPushConstants(
                 geometry.triangleCount,
+                drawItem.instanceIndex,
                 context.viewportState,
                 meshViewState
             );
@@ -1581,6 +2174,7 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
             const __hidden_ecs_graphics::TransparentDrawPushConstants transparentPushConstants =
                 __hidden_ecs_graphics::BuildTransparentDrawPushConstants(
                     geometry.triangleCount,
+                    drawItem.instanceIndex,
                     context.viewportState,
                     meshViewState,
                     *context.avboitTargets,
@@ -1949,6 +2543,7 @@ bool RendererSystem::ensureMeshShaderResources(){
     bindingLayoutDesc.setVisibility(Core::ShaderType::Amplification | Core::ShaderType::Mesh);
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(0, 1));
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(1, 1));
+    bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(3, 1));
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(__hidden_ecs_graphics::TransparentDrawPushConstants)));
 
     Core::IDevice* device = m_graphics.getDevice();
@@ -1968,6 +2563,7 @@ bool RendererSystem::ensureComputeEmulationResources(){
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(0, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(1, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(2, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(3, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(__hidden_ecs_graphics::ShaderDrivenPushConstants)));
 
         Core::IDevice* device = m_graphics.getDevice();
@@ -2022,10 +2618,17 @@ bool RendererSystem::ensureMeshBindingSet(GeometryResources& geometry){
         return true;
     if(!ensureMeshShaderResources())
         return false;
+    if(!m_instanceBuffer){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("RendererSystem: mesh binding set requires an instance buffer")
+        );
+        return false;
+    }
 
     Core::BindingSetDesc bindingSetDesc;
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(0, geometry.shaderVertexBuffer.get()));
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(1, geometry.shaderIndexBuffer.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(3, m_instanceBuffer.get()));
 
     Core::IDevice* device = m_graphics.getDevice();
     geometry.meshBindingSet = device->createBindingSet(bindingSetDesc, m_meshBindingLayout.get());
@@ -2045,6 +2648,12 @@ bool RendererSystem::ensureComputeBindingSet(GeometryResources& geometry){
         return true;
     if(!ensureComputeEmulationResources())
         return false;
+    if(!m_instanceBuffer){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("RendererSystem: compute binding set requires an instance buffer")
+        );
+        return false;
+    }
 
     if(!geometry.emulationVertexBuffer){
         const Name emulationVertexBufferName = DeriveName(geometry.geometryName, AStringView(":emulation_vb"));
@@ -2078,6 +2687,7 @@ bool RendererSystem::ensureComputeBindingSet(GeometryResources& geometry){
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(0, geometry.shaderVertexBuffer.get()));
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(1, geometry.shaderIndexBuffer.get()));
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(2, geometry.emulationVertexBuffer.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(3, m_instanceBuffer.get()));
 
     Core::IDevice* device = m_graphics.getDevice();
     geometry.computeBindingSet = device->createBindingSet(bindingSetDesc, m_computeBindingLayout.get());

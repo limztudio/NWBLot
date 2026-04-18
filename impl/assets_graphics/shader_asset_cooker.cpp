@@ -9,6 +9,7 @@
 
 
 #include "shader_asset_cooker.h"
+#include "deformable_geometry_asset.h"
 #include "geometry_asset.h"
 #include "material_asset.h"
 #include "shader_asset.h"
@@ -132,6 +133,15 @@ struct GeometryEntry{
     Vector<u8> vertexData;
     Vector<u8> indexData;
 };
+struct DeformableGeometryEntry{
+    Name virtualPath = NAME_NONE;
+    Vector<DeformableVertexRest> restVertices;
+    Vector<u32> indices;
+    Vector<SkinInfluence4> skin;
+    Vector<SourceSample> sourceSamples;
+    Vector<DeformableMorph> morphs;
+    bool use32BitIndices = true;
+};
 struct MaterialEntry{
     Name virtualPath = NAME_NONE;
     AString shaderVariant = Core::ShaderArchive::s_DefaultVariant;
@@ -176,6 +186,7 @@ struct ParsedAssetMetadata{
     IncludeMetadataMap includeMetadata;
     ShaderEntryVector shaderEntries;
     Vector<GeometryEntry> geometryEntries;
+    Vector<DeformableGeometryEntry> deformableGeometryEntries;
     Vector<MaterialEntry> materialEntries;
 
     explicit ParsedAssetMetadata(Core::ShaderCook::CookArena& arena)
@@ -803,6 +814,617 @@ static bool BuildGeometryAsset(const GeometryEntry& geometryEntry, Geometry& out
     return outGeometry.validatePayload();
 }
 
+static const Core::Metascript::Value* FindField(const Core::Metascript::Value& map, const AStringView fieldName){
+    return map.findField(Core::Metascript::MStringView(fieldName.data(), fieldName.size()));
+}
+
+static bool ParseFiniteF32Value(
+    const Path& nwbFilePath,
+    const Core::Metascript::Value& value,
+    const AStringView label,
+    f32& outValue
+){
+    if(!value.isNumeric()){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Deformable geometry meta '{}': '{}' must contain only numeric values"),
+            PathToString<tchar>(nwbFilePath),
+            StringConvert(AString(label))
+        );
+        return false;
+    }
+
+    const f64 numericValue = value.toDouble();
+    if(!IsFinite(numericValue)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Deformable geometry meta '{}': '{}' must contain only finite numeric values"),
+            PathToString<tchar>(nwbFilePath),
+            StringConvert(AString(label))
+        );
+        return false;
+    }
+    if(numericValue < static_cast<f64>(Limit<f32>::s_Min) || numericValue > static_cast<f64>(Limit<f32>::s_Max)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Deformable geometry meta '{}': '{}' contains a value outside the f32 range"),
+            PathToString<tchar>(nwbFilePath),
+            StringConvert(AString(label))
+        );
+        return false;
+    }
+
+    outValue = static_cast<f32>(numericValue);
+    return true;
+}
+
+static bool ParseU32Value(const Path& nwbFilePath, const Core::Metascript::Value& value, const AStringView label, u32& outValue){
+    if(!value.isNumeric()){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Deformable geometry meta '{}': '{}' must contain only integer values"),
+            PathToString<tchar>(nwbFilePath),
+            StringConvert(AString(label))
+        );
+        return false;
+    }
+
+    const f64 numericValue = value.toDouble();
+    if(!IsFinite(numericValue) || numericValue < 0.0 || numericValue != Floor(numericValue)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Deformable geometry meta '{}': '{}' contains a non-integer or negative value"),
+            PathToString<tchar>(nwbFilePath),
+            StringConvert(AString(label))
+        );
+        return false;
+    }
+    if(numericValue > static_cast<f64>(Limit<u32>::s_Max)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Deformable geometry meta '{}': '{}' contains a value that exceeds u32"),
+            PathToString<tchar>(nwbFilePath),
+            StringConvert(AString(label))
+        );
+        return false;
+    }
+
+    outValue = static_cast<u32>(numericValue);
+    return true;
+}
+
+static bool ParseU16Value(const Path& nwbFilePath, const Core::Metascript::Value& value, const AStringView label, u16& outValue){
+    u32 parsed = 0;
+    if(!ParseU32Value(nwbFilePath, value, label, parsed))
+        return false;
+    if(parsed > Limit<u16>::s_Max){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Deformable geometry meta '{}': '{}' contains a value that exceeds u16"),
+            PathToString<tchar>(nwbFilePath),
+            StringConvert(AString(label))
+        );
+        return false;
+    }
+
+    outValue = static_cast<u16>(parsed);
+    return true;
+}
+
+template<usize ComponentCount>
+static bool ParseF32Tuple(
+    const Path& nwbFilePath,
+    const Core::Metascript::Value& value,
+    const AStringView label,
+    f32 (&outValues)[ComponentCount]
+){
+    if(!value.isList() || value.asList().size() != ComponentCount){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Deformable geometry meta '{}': '{}' must be a {}-component list"),
+            PathToString<tchar>(nwbFilePath),
+            StringConvert(AString(label)),
+            ComponentCount
+        );
+        return false;
+    }
+
+    const auto& list = value.asList();
+    for(usize i = 0; i < ComponentCount; ++i){
+        const AString componentLabel = StringFormat("{}[{}]", label, i);
+        if(!ParseFiniteF32Value(nwbFilePath, list[i], componentLabel, outValues[i]))
+            return false;
+    }
+    return true;
+}
+
+template<usize ComponentCount>
+static bool ParseU16Tuple(
+    const Path& nwbFilePath,
+    const Core::Metascript::Value& value,
+    const AStringView label,
+    u16 (&outValues)[ComponentCount]
+){
+    if(!value.isList() || value.asList().size() != ComponentCount){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Deformable geometry meta '{}': '{}' must be a {}-component integer list"),
+            PathToString<tchar>(nwbFilePath),
+            StringConvert(AString(label)),
+            ComponentCount
+        );
+        return false;
+    }
+
+    const auto& list = value.asList();
+    for(usize i = 0; i < ComponentCount; ++i){
+        const AString componentLabel = StringFormat("{}[{}]", label, i);
+        if(!ParseU16Value(nwbFilePath, list[i], componentLabel, outValues[i]))
+            return false;
+    }
+    return true;
+}
+
+template<typename ElementT, usize ComponentCount>
+static bool ParseFloatListField(
+    const Path& nwbFilePath,
+    const Core::Metascript::Value& asset,
+    const AStringView fieldName,
+    Vector<ElementT>& outValues
+){
+    outValues.clear();
+
+    const Core::Metascript::Value* field = FindField(asset, fieldName);
+    if(!field || !field->isList()){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Deformable geometry meta '{}': '{}' must be a list"),
+            PathToString<tchar>(nwbFilePath),
+            StringConvert(AString(fieldName))
+        );
+        return false;
+    }
+
+    outValues.reserve(field->asList().size());
+    for(usize i = 0; i < field->asList().size(); ++i){
+        const AString label = StringFormat("{}[{}]", fieldName, i);
+        f32 tuple[ComponentCount] = {};
+        if(!ParseF32Tuple(nwbFilePath, field->asList()[i], label, tuple))
+            return false;
+
+        ElementT element;
+        element.x = tuple[0];
+        element.y = tuple[1];
+        if constexpr(ComponentCount >= 3u)
+            element.z = tuple[2];
+        if constexpr(ComponentCount >= 4u)
+            element.w = tuple[3];
+        outValues.push_back(element);
+    }
+
+    if(outValues.empty()){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Deformable geometry meta '{}': '{}' must not be empty"),
+            PathToString<tchar>(nwbFilePath),
+            StringConvert(AString(fieldName))
+        );
+        return false;
+    }
+
+    return true;
+}
+
+static bool ParseU32ListField(
+    const Path& nwbFilePath,
+    const Core::Metascript::Value& map,
+    const AStringView fieldName,
+    Vector<u32>& outValues
+){
+    outValues.clear();
+
+    const Core::Metascript::Value* field = FindField(map, fieldName);
+    if(!field || !field->isList()){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Deformable geometry meta '{}': '{}' must be a list"),
+            PathToString<tchar>(nwbFilePath),
+            StringConvert(AString(fieldName))
+        );
+        return false;
+    }
+
+    outValues.reserve(field->asList().size());
+    for(usize i = 0; i < field->asList().size(); ++i){
+        u32 value = 0;
+        const AString label = StringFormat("{}[{}]", fieldName, i);
+        if(!ParseU32Value(nwbFilePath, field->asList()[i], label, value))
+            return false;
+        outValues.push_back(value);
+    }
+
+    return true;
+}
+
+static bool IsExplicitEmptyOptionalField(const Core::Metascript::Value& value){
+    return (value.isList() && value.asList().empty()) || (value.isMap() && value.asMap().empty());
+}
+
+static bool AppendU32Recursive(
+    const Path& nwbFilePath,
+    const Core::Metascript::Value& value,
+    const AStringView label,
+    Vector<u32>& outValues
+){
+    if(value.isList()){
+        for(usize i = 0; i < value.asList().size(); ++i){
+            const AString childLabel = StringFormat("{}[{}]", label, i);
+            if(!AppendU32Recursive(nwbFilePath, value.asList()[i], childLabel, outValues))
+                return false;
+        }
+        return true;
+    }
+
+    u32 index = 0;
+    if(!ParseU32Value(nwbFilePath, value, label, index))
+        return false;
+    outValues.push_back(index);
+    return true;
+}
+
+static bool ParseDeformableIndexType(
+    const Path& nwbFilePath,
+    const Core::Metascript::Value& asset,
+    bool& outUse32BitIndices
+){
+    outUse32BitIndices = true;
+
+    const Core::Metascript::Value* indexType = FindField(asset, "index_type");
+    if(!indexType || !indexType->isString()){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Deformable geometry meta '{}': 'index_type' must be 'u16' or 'u32'"),
+            PathToString<tchar>(nwbFilePath)
+        );
+        return false;
+    }
+
+    const AStringView indexTypeText(indexType->asString().data(), indexType->asString().size());
+    if(indexTypeText == "u16"){
+        outUse32BitIndices = false;
+        return true;
+    }
+    if(indexTypeText == "u32"){
+        outUse32BitIndices = true;
+        return true;
+    }
+
+    NWB_LOGGER_ERROR(
+        NWB_TEXT("Deformable geometry meta '{}': unsupported index_type '{}'"),
+        PathToString<tchar>(nwbFilePath),
+        StringConvert(AString(indexTypeText))
+    );
+    return false;
+}
+
+static bool ParseDeformableIndexField(
+    const Path& nwbFilePath,
+    const Core::Metascript::Value& asset,
+    const bool use32BitIndices,
+    Vector<u32>& outIndices
+){
+    outIndices.clear();
+
+    const Core::Metascript::Value* field = FindField(asset, "indices");
+    if(!field || !field->isList()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': 'indices' must be a list"), PathToString<tchar>(nwbFilePath));
+        return false;
+    }
+    if(!AppendU32Recursive(nwbFilePath, *field, "indices", outIndices))
+        return false;
+    if(outIndices.empty()){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Deformable geometry meta '{}': 'indices' must not be empty"),
+            PathToString<tchar>(nwbFilePath)
+        );
+        return false;
+    }
+    if(!use32BitIndices){
+        for(const u32 index : outIndices){
+            if(index > Limit<u16>::s_Max){
+                NWB_LOGGER_ERROR(
+                    NWB_TEXT("Deformable geometry meta '{}': 'indices' contains a value that exceeds u16 index_type"),
+                    PathToString<tchar>(nwbFilePath)
+                );
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+static bool BuildDeformableRestVertices(
+    const Path& nwbFilePath,
+    const Vector<Float3Data>& positions,
+    const Vector<Float3Data>& normals,
+    const Vector<Float4Data>& tangents,
+    const Vector<Float2Data>& uv0,
+    const Vector<Float4Data>& colors,
+    Vector<DeformableVertexRest>& outVertices
+){
+    if(positions.size() != normals.size()
+        || positions.size() != tangents.size()
+        || positions.size() != uv0.size()
+        || positions.size() != colors.size()
+    ){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Deformable geometry meta '{}': rest vertex stream counts must match"),
+            PathToString<tchar>(nwbFilePath)
+        );
+        return false;
+    }
+
+    outVertices.resize(positions.size());
+    for(usize i = 0; i < positions.size(); ++i){
+        outVertices[i].position = positions[i];
+        outVertices[i].normal = normals[i];
+        outVertices[i].tangent = tangents[i];
+        outVertices[i].uv0 = uv0[i];
+        outVertices[i].color0 = colors[i];
+    }
+    return true;
+}
+
+static void BuildDefaultDeformableColors(const usize vertexCount, Vector<Float4Data>& outColors){
+    outColors.resize(vertexCount);
+    for(Float4Data& color : outColors)
+        color = Float4Data(1.f, 1.f, 1.f, 1.f);
+}
+
+static bool ParseSkinInfluences(
+    const Path& nwbFilePath,
+    const Core::Metascript::Value& asset,
+    const usize vertexCount,
+    Vector<SkinInfluence4>& outSkin
+){
+    outSkin.clear();
+
+    const Core::Metascript::Value* skin = FindField(asset, "skin");
+    if(!skin)
+        return true;
+    if(!skin->isMap()){
+        if(IsExplicitEmptyOptionalField(*skin))
+            return true;
+
+        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': 'skin' must be a map"), PathToString<tchar>(nwbFilePath));
+        return false;
+    }
+    if(skin->asMap().empty())
+        return true;
+
+    const Core::Metascript::Value* joints = FindField(*skin, "joints0");
+    const Core::Metascript::Value* weights = FindField(*skin, "weights0");
+    if(!joints || !joints->isList() || !weights || !weights->isList()){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Deformable geometry meta '{}': 'skin' requires 'joints0' and 'weights0' lists"),
+            PathToString<tchar>(nwbFilePath)
+        );
+        return false;
+    }
+    if(joints->asList().size() != vertexCount || weights->asList().size() != vertexCount){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Deformable geometry meta '{}': skin streams must match vertex count"),
+            PathToString<tchar>(nwbFilePath)
+        );
+        return false;
+    }
+
+    outSkin.resize(vertexCount);
+    for(usize i = 0; i < vertexCount; ++i){
+        const AString jointLabel = StringFormat("skin.joints0[{}]", i);
+        const AString weightLabel = StringFormat("skin.weights0[{}]", i);
+        if(!ParseU16Tuple(nwbFilePath, joints->asList()[i], jointLabel, outSkin[i].joint))
+            return false;
+        if(!ParseF32Tuple(nwbFilePath, weights->asList()[i], weightLabel, outSkin[i].weight))
+            return false;
+    }
+
+    return true;
+}
+
+static bool ParseSourceSamples(
+    const Path& nwbFilePath,
+    const Core::Metascript::Value& asset,
+    const usize vertexCount,
+    Vector<SourceSample>& outSourceSamples
+){
+    outSourceSamples.clear();
+
+    const Core::Metascript::Value* sourceSamples = FindField(asset, "source_samples");
+    if(!sourceSamples)
+        return true;
+    if(!sourceSamples->isMap()){
+        if(IsExplicitEmptyOptionalField(*sourceSamples))
+            return true;
+
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Deformable geometry meta '{}': 'source_samples' must be a map"),
+            PathToString<tchar>(nwbFilePath)
+        );
+        return false;
+    }
+    if(sourceSamples->asMap().empty())
+        return true;
+
+    Vector<u32> sourceTri;
+    Vector<Float3Data> bary;
+    if(!ParseU32ListField(nwbFilePath, *sourceSamples, "source_tri", sourceTri))
+        return false;
+    if(!ParseFloatListField<Float3Data, 3u>(nwbFilePath, *sourceSamples, "bary", bary))
+        return false;
+    if(sourceTri.size() != vertexCount || bary.size() != vertexCount){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Deformable geometry meta '{}': source samples must match vertex count"),
+            PathToString<tchar>(nwbFilePath)
+        );
+        return false;
+    }
+
+    outSourceSamples.resize(vertexCount);
+    for(usize i = 0; i < vertexCount; ++i){
+        outSourceSamples[i].sourceTri = sourceTri[i];
+        outSourceSamples[i].bary[0] = bary[i].x;
+        outSourceSamples[i].bary[1] = bary[i].y;
+        outSourceSamples[i].bary[2] = bary[i].z;
+    }
+    return true;
+}
+
+static bool ParseMorphs(
+    const Path& nwbFilePath,
+    const Core::Metascript::Value& asset,
+    Vector<DeformableMorph>& outMorphs
+){
+    outMorphs.clear();
+
+    const Core::Metascript::Value* morphs = FindField(asset, "morphs");
+    if(!morphs)
+        return true;
+    if(!morphs->isMap()){
+        if(IsExplicitEmptyOptionalField(*morphs))
+            return true;
+
+        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': 'morphs' must be a map"), PathToString<tchar>(nwbFilePath));
+        return false;
+    }
+
+    outMorphs.reserve(morphs->asMap().size());
+    for(const auto& [morphName, morphValue] : morphs->asMap()){
+        const AStringView morphNameView(morphName.data(), morphName.size());
+        const Name morphNameId = ToName(morphNameView);
+        if(!morphNameId){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Deformable geometry meta '{}': morph names must not be empty"),
+                PathToString<tchar>(nwbFilePath)
+            );
+            return false;
+        }
+        if(!morphValue.isMap()){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Deformable geometry meta '{}': morph '{}' must be a map"),
+                PathToString<tchar>(nwbFilePath),
+                StringConvert(AString(morphNameView))
+            );
+            return false;
+        }
+
+        Vector<u32> vertexIds;
+        Vector<Float3Data> deltaPositions;
+        Vector<Float3Data> deltaNormals;
+        Vector<Float4Data> deltaTangents;
+        if(!ParseU32ListField(nwbFilePath, morphValue, "vertex_ids", vertexIds))
+            return false;
+        if(!ParseFloatListField<Float3Data, 3u>(nwbFilePath, morphValue, "delta_position", deltaPositions))
+            return false;
+        if(!ParseFloatListField<Float3Data, 3u>(nwbFilePath, morphValue, "delta_normal", deltaNormals))
+            return false;
+        if(!FindField(morphValue, "delta_tangent")){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Deformable geometry meta '{}': morph '{}' requires 'delta_tangent' list"),
+                PathToString<tchar>(nwbFilePath),
+                StringConvert(AString(morphNameView))
+            );
+            return false;
+        }
+        if(!ParseFloatListField<Float4Data, 4u>(nwbFilePath, morphValue, "delta_tangent", deltaTangents))
+            return false;
+        if(vertexIds.empty()
+            || vertexIds.size() != deltaPositions.size()
+            || vertexIds.size() != deltaNormals.size()
+            || vertexIds.size() != deltaTangents.size()
+        ){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Deformable geometry meta '{}': morph '{}' stream counts must match and must not be empty"),
+                PathToString<tchar>(nwbFilePath),
+                StringConvert(AString(morphNameView))
+            );
+            return false;
+        }
+
+        DeformableMorph morph;
+        morph.name = morphNameId;
+        morph.deltas.resize(vertexIds.size());
+        for(usize i = 0; i < vertexIds.size(); ++i){
+            morph.deltas[i].vertexId = vertexIds[i];
+            morph.deltas[i].deltaPosition = deltaPositions[i];
+            morph.deltas[i].deltaNormal = deltaNormals[i];
+            morph.deltas[i].deltaTangent = deltaTangents[i];
+        }
+        outMorphs.push_back(Move(morph));
+    }
+
+    return true;
+}
+
+static bool ParseDeformableGeometryMeta(
+    const DiscoveredNwbFile& discoveredFile,
+    const Core::Metascript::Document& doc,
+    DeformableGeometryEntry& outEntry
+){
+    outEntry = {};
+
+    const Core::Metascript::Value& asset = doc.asset();
+    if(!asset.isMap()){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Deformable geometry meta '{}': asset is not a map"),
+            PathToString<tchar>(discoveredFile.filePath)
+        );
+        return false;
+    }
+
+    if(!Core::Assets::RejectVirtualPathOverrideField(discoveredFile.filePath, asset, "DeformableGeometry"))
+        return false;
+    if(!Core::Assets::BuildDerivedAssetVirtualPath(
+        discoveredFile.assetRoot,
+        discoveredFile.virtualRoot,
+        discoveredFile.filePath,
+        outEntry.virtualPath
+    ))
+        return false;
+
+    Vector<Float3Data> positions;
+    Vector<Float3Data> normals;
+    Vector<Float4Data> tangents;
+    Vector<Float2Data> uv0;
+    Vector<Float4Data> colors;
+    if(!ParseDeformableIndexType(discoveredFile.filePath, asset, outEntry.use32BitIndices))
+        return false;
+    if(!ParseFloatListField<Float3Data, 3u>(discoveredFile.filePath, asset, "positions", positions))
+        return false;
+    if(!ParseFloatListField<Float3Data, 3u>(discoveredFile.filePath, asset, "normals", normals))
+        return false;
+    if(!ParseFloatListField<Float4Data, 4u>(discoveredFile.filePath, asset, "tangents", tangents))
+        return false;
+    if(!ParseFloatListField<Float2Data, 2u>(discoveredFile.filePath, asset, "uv0", uv0))
+        return false;
+    const Core::Metascript::Value* colorsField = FindField(asset, "colors");
+    if(colorsField && !IsExplicitEmptyOptionalField(*colorsField)){
+        if(!ParseFloatListField<Float4Data, 4u>(discoveredFile.filePath, asset, "colors", colors))
+            return false;
+    }else
+        BuildDefaultDeformableColors(positions.size(), colors);
+    if(!BuildDeformableRestVertices(discoveredFile.filePath, positions, normals, tangents, uv0, colors, outEntry.restVertices))
+        return false;
+    if(!ParseDeformableIndexField(discoveredFile.filePath, asset, outEntry.use32BitIndices, outEntry.indices))
+        return false;
+    if(!ParseSkinInfluences(discoveredFile.filePath, asset, outEntry.restVertices.size(), outEntry.skin))
+        return false;
+    if(!ParseSourceSamples(discoveredFile.filePath, asset, outEntry.restVertices.size(), outEntry.sourceSamples))
+        return false;
+    if(!ParseMorphs(discoveredFile.filePath, asset, outEntry.morphs))
+        return false;
+
+    return true;
+}
+
+static bool BuildDeformableGeometryAsset(DeformableGeometryEntry& geometryEntry, DeformableGeometry& outGeometry){
+    outGeometry = DeformableGeometry(geometryEntry.virtualPath);
+
+    outGeometry.setRestVertices(Move(geometryEntry.restVertices));
+    outGeometry.setIndices(Move(geometryEntry.indices));
+    outGeometry.setSkin(Move(geometryEntry.skin));
+    outGeometry.setSourceSamples(Move(geometryEntry.sourceSamples));
+    outGeometry.setMorphs(Move(geometryEntry.morphs));
+    return outGeometry.validatePayload();
+}
+
 static bool BuildIncludeDirectories(const Path& repoRoot, const Vector<Path>& assetRoots, const Core::ShaderCook::ShaderEntry& entry, Core::ShaderCook::CookVector<Path>& outIncludeDirectories){
     Core::Alloc::ScratchArena<> scratchArena;
     ErrorCode errorCode;
@@ -956,7 +1578,9 @@ static bool NormalizeMaterialVariant(
 ){
     outNormalizedVariant.clear();
 
-    const AString contextLabel = StringFormat("{} [{}]", materialEntry.virtualPath.c_str(), stageName.c_str());
+    const AString materialPathText(materialEntry.virtualPath.c_str());
+    const AString stageNameText(stageName.c_str());
+    const AString contextLabel = StringFormat("{} [{}]", materialPathText, stageNameText);
     const AStringView requestedVariant = materialEntry.shaderVariant.empty()
         ? Core::ShaderArchive::s_DefaultVariant
         : AStringView(materialEntry.shaderVariant)
@@ -1265,6 +1889,7 @@ static bool ParseAssetMetadata(
     outMetadata.shaderEntries.reserve(nwbFiles.size());
     outMetadata.materialEntries.reserve(nwbFiles.size());
     outMetadata.geometryEntries.reserve(nwbFiles.size());
+    outMetadata.deformableGeometryEntries.reserve(nwbFiles.size());
 
     HashSet<
         PreparedShaderKey,
@@ -1399,6 +2024,25 @@ static bool ParseAssetMetadata(
             continue;
         }
 
+        if(assetType == DeformableGeometry::AssetTypeName()){
+            DeformableGeometryEntry geometryEntry;
+            if(!ParseDeformableGeometryMeta(discoveredNwbFile, doc, geometryEntry))
+                return false;
+
+            if(geometryEntry.virtualPath){
+                const NameHash geometryPathHash = geometryEntry.virtualPath.hash();
+                if(!seenPropertyAssetPathHashes.insert(geometryPathHash).second){
+                    NWB_LOGGER_ERROR(
+                        NWB_TEXT("ShaderAssetCooker: duplicate property asset virtual path '{}'"),
+                        StringConvert(geometryEntry.virtualPath.c_str())
+                    );
+                    return false;
+                }
+                outMetadata.deformableGeometryEntries.push_back(Move(geometryEntry));
+            }
+            continue;
+        }
+
         NWB_LOGGER_ERROR(
             NWB_TEXT("ShaderAssetCooker: unsupported asset type '{}' in meta '{}'"),
             StringConvert(rawAssetTypeText),
@@ -1409,9 +2053,13 @@ static bool ParseAssetMetadata(
 
     if(outMetadata.shaderEntries.empty()){
         if(!outMetadata.materialEntries.empty() || !outMetadata.geometryEntries.empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("ShaderAssetCooker: geometry or material assets were found, but no shader entries were cooked for this graphics volume"));
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("ShaderAssetCooker: material and static geometry assets require at least one shader entry")
+            );
             return false;
         }
+        if(!outMetadata.deformableGeometryEntries.empty())
+            return true;
 
         NWB_LOGGER_ERROR(NWB_TEXT("ShaderAssetCooker: no shader entries found in asset roots"));
         return false;
@@ -1765,6 +2413,53 @@ static bool AppendGeometryAssetsToVolume(
     return true;
 }
 
+static bool AppendDeformableGeometryAssetsToVolume(
+    Vector<DeformableGeometryEntry>& geometryEntries,
+    Core::Filesystem::VolumeSession& volumeSession,
+    VirtualPathHashSet& inOutSeenVirtualPathHashes
+){
+    DeformableGeometryAssetCodec geometryCodec;
+    Vector<u8> geometryBinary;
+
+    for(DeformableGeometryEntry& geometryEntry : geometryEntries){
+        const NameHash geometryVirtualPathHash = geometryEntry.virtualPath.hash();
+        if(!inOutSeenVirtualPathHashes.insert(geometryVirtualPathHash).second){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("ShaderAssetCooker: duplicate deformable geometry virtual path '{}'"),
+                StringConvert(geometryEntry.virtualPath.c_str())
+            );
+            return false;
+        }
+
+        DeformableGeometry cookedGeometry;
+        if(!BuildDeformableGeometryAsset(geometryEntry, cookedGeometry)){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("ShaderAssetCooker: failed to build deformable geometry '{}'"),
+                StringConvert(geometryEntry.virtualPath.c_str())
+            );
+            return false;
+        }
+
+        if(!geometryCodec.serialize(cookedGeometry, geometryBinary)){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("ShaderAssetCooker: failed to serialize deformable geometry '{}'"),
+                StringConvert(geometryEntry.virtualPath.c_str())
+            );
+            return false;
+        }
+
+        if(!volumeSession.pushDataDeferred(geometryEntry.virtualPath, geometryBinary)){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("ShaderAssetCooker: failed to push deformable geometry '{}'"),
+                StringConvert(geometryEntry.virtualPath.c_str())
+            );
+            return false;
+        }
+    }
+
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1840,6 +2535,11 @@ bool ShaderAssetCooker::cookShaderAssets(const ShaderCookEnvironment& environmen
         return false;
     if(!__hidden_assets::AddPlannedFileCount(static_cast<u64>(parsedMetadata.geometryEntries.size()), preparedPlan.plannedFileCount))
         return false;
+    if(!__hidden_assets::AddPlannedFileCount(
+        static_cast<u64>(parsedMetadata.deformableGeometryEntries.size()),
+        preparedPlan.plannedFileCount
+    ))
+        return false;
 
     if(!__hidden_assets::ValidateAndNormalizeMaterials(shaderCook, preparedPlan.preparedEntries, parsedMetadata.materialEntries))
         return false;
@@ -1902,6 +2602,12 @@ bool ShaderAssetCooker::cookShaderAssets(const ShaderCookEnvironment& environmen
         if(!__hidden_assets::AppendMaterialAssetsToVolume(parsedMetadata.materialEntries, volumeSession, seenVirtualPathHashes))
             return false;
         if(!__hidden_assets::AppendGeometryAssetsToVolume(parsedMetadata.geometryEntries, volumeSession, seenVirtualPathHashes))
+            return false;
+        if(!__hidden_assets::AppendDeformableGeometryAssetsToVolume(
+            parsedMetadata.deformableGeometryEntries,
+            volumeSession,
+            seenVirtualPathHashes
+        ))
             return false;
 
         if(!volumeSession.flush()){

@@ -202,10 +202,14 @@ static void CreateDefaultDirectionalLightEntity(NWB::Core::ECS::World& world){
 static void CreateRendererEntity(
     NWB::Core::ECS::World& world,
     const TestbedGeometryRef& geometry,
-    const TestbedMaterialRef& material
+    const TestbedMaterialRef& material,
+    const AlignedFloat3Data& position,
+    const f32 uniformScale
 ){
     auto entity = world.createEntity();
-    entity.addComponent<NWB::Core::ECS::TransformComponent>();
+    auto& transform = entity.addComponent<NWB::Core::ECS::TransformComponent>();
+    transform.position = position;
+    transform.scale = AlignedFloat3Data(uniformScale, uniformScale, uniformScale);
 
     auto& renderer = entity.addComponent<NWB::Core::ECSGraphics::RendererComponent>();
     renderer.geometry = geometry;
@@ -274,22 +278,35 @@ bool ProjectTestbed::onStartup(){
     __hidden_project_testbed_runtime::CreateRendererEntity(
         *m_world,
         TestbedGeometryRef(Name("project/meshes/cube")),
-        cubeMaterial
+        cubeMaterial,
+        AlignedFloat3Data(-0.55f, 0.0f, 0.0f),
+        0.65f
+    );
+    __hidden_project_testbed_runtime::CreateRendererEntity(
+        *m_world,
+        TestbedGeometryRef(Name("project/meshes/cube")),
+        cubeMaterial,
+        AlignedFloat3Data(0.55f, 0.0f, 0.0f),
+        0.9f
     );
     __hidden_project_testbed_runtime::CreateRendererEntity(
         *m_world,
         TestbedGeometryRef(Name("project/meshes/sphere")),
-        transparentMaterial
+        transparentMaterial,
+        AlignedFloat3Data(1.45f, 0.0f, 0.0f),
+        0.75f
     );
     __hidden_project_testbed_runtime::CreateRendererEntity(
         *m_world,
         TestbedGeometryRef(Name("project/meshes/tetrahedron")),
-        transparentMaterial
+        transparentMaterial,
+        AlignedFloat3Data(-1.45f, 0.0f, 0.0f),
+        0.8f
     );
 
     NWB_LOGGER_ESSENTIAL_INFO(
         NWB_TEXT("ProjectTestbed: startup scene created ({})"),
-        NWB_TEXT("directional light, opaque cube, transparent sphere/tetrahedron")
+        NWB_TEXT("directional light, two shared cube instances, transparent sphere/tetrahedron")
     );
     registerInputHandler();
     return true;

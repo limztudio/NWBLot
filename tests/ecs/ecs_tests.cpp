@@ -211,9 +211,12 @@ static void TestComponentLifetime(TestContext& context){
     entity.addComponent<NWB::Core::ECS::TransformComponent>();
     NWB_ECS_TEST_CHECK(context, entity.alive());
     NWB_ECS_TEST_CHECK(context, entity.hasComponent<NWB::Core::ECS::TransformComponent>());
+    NWB_ECS_TEST_CHECK(context, testWorld.world.tryGetComponent<NWB::Core::ECS::TransformComponent>(entityId) != nullptr);
+    NWB_ECS_TEST_CHECK(context, testWorld.world.tryGetComponent<NWB::Core::ECS::CameraComponent>(entityId) == nullptr);
 
     entity.removeComponent<NWB::Core::ECS::TransformComponent>();
     NWB_ECS_TEST_CHECK(context, !entity.hasComponent<NWB::Core::ECS::TransformComponent>());
+    NWB_ECS_TEST_CHECK(context, testWorld.world.tryGetComponent<NWB::Core::ECS::TransformComponent>(entityId) == nullptr);
 
     entity.addComponent<NWB::Core::ECS::CameraComponent>();
     NWB_ECS_TEST_CHECK(context, entity.hasComponent<NWB::Core::ECS::CameraComponent>());

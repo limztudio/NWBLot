@@ -31,6 +31,7 @@ using RendererComponent = NWB::Impl::RendererComponent;
 using RendererSystem = NWB::Impl::RendererSystem;
 using RuntimeMeshDirtyFlags = NWB::Impl::RuntimeMeshDirtyFlags;
 using RuntimeMeshHandle = NWB::Impl::RuntimeMeshHandle;
+namespace RuntimeMeshDirtyFlag = NWB::Impl::RuntimeMeshDirtyFlag;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

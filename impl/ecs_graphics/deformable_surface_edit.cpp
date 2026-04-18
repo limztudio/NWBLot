@@ -4,6 +4,8 @@
 
 #include "deformable_surface_edit.h"
 
+#include <core/alloc/scratch.h>
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -212,26 +214,37 @@ struct WallVertexFrame{
     if(morphs.size() > static_cast<usize>(Limit<u32>::s_Max))
         return false;
 
+    Core::Alloc::ScratchArena<> scratchArena;
+    HashSet<NameHash, Hasher<NameHash>, EqualTo<NameHash>, Core::Alloc::ScratchAllocator<NameHash>> seenMorphNames(
+        0,
+        Hasher<NameHash>(),
+        EqualTo<NameHash>(),
+        Core::Alloc::ScratchAllocator<NameHash>(scratchArena)
+    );
+    seenMorphNames.reserve(morphs.size());
+
     for(usize morphIndex = 0; morphIndex < morphs.size(); ++morphIndex){
         const DeformableMorph& morph = morphs[morphIndex];
         if(!morph.name || morph.deltas.empty())
             return false;
         if(morph.deltas.size() > static_cast<usize>(Limit<u32>::s_Max))
             return false;
+        if(!seenMorphNames.insert(morph.name.hash()).second)
+            return false;
 
-        for(usize otherMorphIndex = morphIndex + 1u; otherMorphIndex < morphs.size(); ++otherMorphIndex){
-            if(morph.name == morphs[otherMorphIndex].name)
-                return false;
-        }
+        HashSet<u32, Hasher<u32>, EqualTo<u32>, Core::Alloc::ScratchAllocator<u32>> seenDeltaVertices(
+            0,
+            Hasher<u32>(),
+            EqualTo<u32>(),
+            Core::Alloc::ScratchAllocator<u32>(scratchArena)
+        );
+        seenDeltaVertices.reserve(morph.deltas.size());
 
-        for(usize deltaIndex = 0; deltaIndex < morph.deltas.size(); ++deltaIndex){
-            const DeformableMorphDelta& delta = morph.deltas[deltaIndex];
+        for(const DeformableMorphDelta& delta : morph.deltas){
             if(!ValidMorphDelta(delta, vertexCount))
                 return false;
-            for(usize otherDeltaIndex = deltaIndex + 1u; otherDeltaIndex < morph.deltas.size(); ++otherDeltaIndex){
-                if(delta.vertexId == morph.deltas[otherDeltaIndex].vertexId)
-                    return false;
-            }
+            if(!seenDeltaVertices.insert(delta.vertexId).second)
+                return false;
         }
     }
     return true;

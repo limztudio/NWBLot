@@ -37,6 +37,21 @@ static constexpr f32 s_CameraMoveEpsilon = 0.000001f;
     return true;
 }
 
+[[nodiscard]] static NWB::Core::ECS::EntityID ResolveProjectMainCamera(NWB::Core::ECS::World& world){
+    NWB::Core::ECS::EntityID mainCamera = NWB::Core::ECS::ENTITY_ID_INVALID;
+    bool foundProject = false;
+    world.view<NWB::Core::ECS::ProjectComponent>().each(
+        [&](NWB::Core::ECS::EntityID, NWB::Core::ECS::ProjectComponent& project){
+            if(foundProject)
+                return;
+
+            foundProject = true;
+            mainCamera = project.mainCamera;
+        }
+    );
+    return mainCamera;
+}
+
 static void ApplyFpsCameraInput(
     NWB::Core::ECS::TransformComponent& transform,
     NWB::Core::ECS::FpsCameraControllerComponent& controller,
@@ -84,6 +99,75 @@ static void ApplyFpsCameraInput(
     SourceMath::StoreFloat4A(
         &transform.rotation,
         SourceMath::QuaternionRotationRollPitchYaw(controller.pitchRadians, controller.yawRadians, 0.0f)
+    );
+}
+
+static void ApplyFpsCameraInputToControlledCamera(
+    NWB::Core::ECS::World& world,
+    const f32 rightAxis,
+    const f32 forwardAxis,
+    const f32 verticalAxis,
+    const bool boosted,
+    const f32 mouseDeltaX,
+    const f32 mouseDeltaY,
+    const f32 delta
+){
+    const NWB::Core::ECS::EntityID requestedCamera = ResolveProjectMainCamera(world);
+    NWB::Core::ECS::TransformComponent* fallbackTransform = nullptr;
+    NWB::Core::ECS::FpsCameraControllerComponent* fallbackController = nullptr;
+    bool appliedRequestedCamera = false;
+
+    world.view<
+        NWB::Core::ECS::TransformComponent,
+        NWB::Core::ECS::CameraComponent,
+        NWB::Core::ECS::FpsCameraControllerComponent
+    >().each(
+        [&](
+            NWB::Core::ECS::EntityID entityId,
+            NWB::Core::ECS::TransformComponent& transform,
+            NWB::Core::ECS::CameraComponent& camera,
+            NWB::Core::ECS::FpsCameraControllerComponent& controller
+        ){
+            if(appliedRequestedCamera)
+                return;
+
+            (void)camera;
+            if(!fallbackTransform){
+                fallbackTransform = &transform;
+                fallbackController = &controller;
+            }
+            if(requestedCamera.valid() && entityId == requestedCamera){
+                ApplyFpsCameraInput(
+                    transform,
+                    controller,
+                    rightAxis,
+                    forwardAxis,
+                    verticalAxis,
+                    boosted,
+                    mouseDeltaX,
+                    mouseDeltaY,
+                    delta
+                );
+                appliedRequestedCamera = true;
+            }
+        }
+    );
+
+    if(appliedRequestedCamera)
+        return;
+    if(!fallbackTransform || !fallbackController)
+        return;
+
+    ApplyFpsCameraInput(
+        *fallbackTransform,
+        *fallbackController,
+        rightAxis,
+        forwardAxis,
+        verticalAxis,
+        boosted,
+        mouseDeltaX,
+        mouseDeltaY,
+        delta
     );
 }
 
@@ -162,8 +246,7 @@ bool ProjectTestbed::onStartup(){
 
     auto projectEntity = m_world->createEntity();
     auto& project = projectEntity.addComponent<NWB::Core::ECS::ProjectComponent>();
-    m_mainCamera = __hidden_project_testbed_runtime::CreateMainCameraEntity(*m_world);
-    project.mainCamera = m_mainCamera;
+    project.mainCamera = __hidden_project_testbed_runtime::CreateMainCameraEntity(*m_world);
 
     const TestbedMaterialRef cubeMaterial(Name("project/materials/mat_test"));
     const TestbedMaterialRef transparentMaterial(Name("project/materials/mat_transparent"));
@@ -195,7 +278,6 @@ bool ProjectTestbed::onStartup(){
 void ProjectTestbed::onShutdown(){
     unregisterInputHandler();
     clearInputState();
-    m_mainCamera = NWB::Core::ECS::ENTITY_ID_INVALID;
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ProjectTestbed: shutdown"));
 }
 
@@ -255,9 +337,6 @@ void ProjectTestbed::updateMainCamera(const f32 delta){
     m_pendingMouseDeltaX = 0.0f;
     m_pendingMouseDeltaY = 0.0f;
 
-    if(!m_mainCamera.valid())
-        return;
-
     const f32 rightAxis = __hidden_project_testbed_runtime::KeyAxis(
         keyPressed(NWB::Core::Key::A),
         keyPressed(NWB::Core::Key::D)
@@ -272,35 +351,15 @@ void ProjectTestbed::updateMainCamera(const f32 delta){
     );
     const bool boosted = keyPressed(NWB::Core::Key::LeftShift) || keyPressed(NWB::Core::Key::RightShift);
 
-    bool foundCamera = false;
-    m_world->view<
-        NWB::Core::ECS::TransformComponent,
-        NWB::Core::ECS::CameraComponent,
-        NWB::Core::ECS::FpsCameraControllerComponent
-    >().each(
-        [&](
-            NWB::Core::ECS::EntityID entityId,
-            NWB::Core::ECS::TransformComponent& transform,
-            NWB::Core::ECS::CameraComponent& camera,
-            NWB::Core::ECS::FpsCameraControllerComponent& controller
-        ){
-            if(foundCamera || entityId != m_mainCamera)
-                return;
-
-            (void)camera;
-            foundCamera = true;
-            __hidden_project_testbed_runtime::ApplyFpsCameraInput(
-                transform,
-                controller,
-                rightAxis,
-                forwardAxis,
-                verticalAxis,
-                boosted,
-                mouseDeltaX,
-                mouseDeltaY,
-                delta
-            );
-        }
+    __hidden_project_testbed_runtime::ApplyFpsCameraInputToControlledCamera(
+        *m_world,
+        rightAxis,
+        forwardAxis,
+        verticalAxis,
+        boosted,
+        mouseDeltaX,
+        mouseDeltaY,
+        delta
     );
 }
 

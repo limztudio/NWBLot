@@ -29,6 +29,19 @@ static constexpr RuntimeMeshDirtyFlags s_KnownDirtyFlags = RuntimeMeshDirtyFlag:
     return static_cast<RuntimeMeshDirtyFlags>(dirtyFlags & s_KnownDirtyFlags);
 }
 
+[[nodiscard]] RuntimeMeshDirtyFlags ExpandDirtyFlags(const RuntimeMeshDirtyFlags dirtyFlags){
+    RuntimeMeshDirtyFlags expanded = SanitizeDirtyFlags(dirtyFlags);
+    if((expanded & (RuntimeMeshDirtyFlag::TopologyDirty | RuntimeMeshDirtyFlag::AttributesDirty)) != 0u){
+        expanded = static_cast<RuntimeMeshDirtyFlags>(
+            expanded | RuntimeMeshDirtyFlag::GpuUploadDirty | RuntimeMeshDirtyFlag::DeformerInputDirty
+        );
+    }
+    else if((expanded & RuntimeMeshDirtyFlag::GpuUploadDirty) != 0u){
+        expanded = static_cast<RuntimeMeshDirtyFlags>(expanded | RuntimeMeshDirtyFlag::DeformerInputDirty);
+    }
+    return expanded;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -128,10 +141,10 @@ bool DeformableRuntimeMeshCache::bumpEditRevision(const RuntimeMeshHandle handle
     DeformableRuntimeMeshInstance* instance = findInstance(handle);
     if(!instance)
         return false;
-    const RuntimeMeshDirtyFlags sanitizedDirtyFlags =
-        __hidden_deformable_runtime_mesh_cache::SanitizeDirtyFlags(dirtyFlags)
+    const RuntimeMeshDirtyFlags expandedDirtyFlags =
+        __hidden_deformable_runtime_mesh_cache::ExpandDirtyFlags(dirtyFlags)
     ;
-    if(sanitizedDirtyFlags == RuntimeMeshDirtyFlag::None){
+    if(expandedDirtyFlags == RuntimeMeshDirtyFlag::None){
         NWB_LOGGER_ERROR(
             NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' revision bump requires dirty flags"),
             instance->handle.value
@@ -148,7 +161,7 @@ bool DeformableRuntimeMeshCache::bumpEditRevision(const RuntimeMeshHandle handle
 
     ++instance->editRevision;
     instance->dirtyFlags = static_cast<RuntimeMeshDirtyFlags>(
-        instance->dirtyFlags | sanitizedDirtyFlags
+        instance->dirtyFlags | expandedDirtyFlags
     );
     return true;
 }

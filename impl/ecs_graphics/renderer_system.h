@@ -271,7 +271,6 @@ private:
     [[nodiscard]] bool ensureDeferredCompositePipeline(Core::IFramebuffer* presentationFramebuffer);
     [[nodiscard]] bool ensureAvboitResources();
     [[nodiscard]] bool ensureAvboitPipelines(AvboitFrameTargets& targets);
-    [[nodiscard]] bool ensureRendererPipeline(const RendererComponent& renderer, Core::IFramebuffer* framebuffer, MaterialPipelinePass::Enum pass, MaterialPipelineResources*& outResources);
     [[nodiscard]] bool ensureRendererPipeline(const Core::Assets::AssetRef<Material>& materialAsset, Core::IFramebuffer* framebuffer, MaterialPipelinePass::Enum pass, MaterialPipelineResources*& outResources);
     [[nodiscard]] bool hasTransparentRenderers();
     void resetDeferredFrameTargets();

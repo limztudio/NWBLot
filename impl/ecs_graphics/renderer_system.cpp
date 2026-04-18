@@ -2453,15 +2453,6 @@ bool RendererSystem::ensureComputeBindingSet(GeometryResources& geometry){
 
 
 bool RendererSystem::ensureRendererPipeline(
-    const RendererComponent& renderer,
-    Core::IFramebuffer* framebuffer,
-    const MaterialPipelinePass::Enum pass,
-    MaterialPipelineResources*& outResources)
-{
-    return ensureRendererPipeline(renderer.material, framebuffer, pass, outResources);
-}
-
-bool RendererSystem::ensureRendererPipeline(
     const Core::Assets::AssetRef<Material>& materialAsset,
     Core::IFramebuffer* framebuffer,
     const MaterialPipelinePass::Enum pass,

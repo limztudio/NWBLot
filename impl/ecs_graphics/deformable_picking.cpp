@@ -55,11 +55,15 @@ struct Vec3{
     return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z) && IsFinite(value.w);
 }
 
-[[nodiscard]] bool IsFiniteJointMatrix(const DeformableJointMatrix& matrix){
+[[nodiscard]] bool IsAffineJointMatrix(const DeformableJointMatrix& matrix){
     return IsFiniteVec4(matrix.column0)
         && IsFiniteVec4(matrix.column1)
         && IsFiniteVec4(matrix.column2)
         && IsFiniteVec4(matrix.column3)
+        && !ActiveWeight(matrix.column0.w)
+        && !ActiveWeight(matrix.column1.w)
+        && !ActiveWeight(matrix.column2.w)
+        && !ActiveWeight(matrix.column3.w - 1.0f)
     ;
 }
 
@@ -263,7 +267,7 @@ void OrthonormalizeFrame(
         const u32 joint = static_cast<u32>(skin.joint[influenceIndex]);
         if(!ActiveWeight(weight))
             continue;
-        if(joint >= jointPalette->joints.size() || !IsFiniteJointMatrix(jointPalette->joints[joint]))
+        if(joint >= jointPalette->joints.size() || !IsAffineJointMatrix(jointPalette->joints[joint]))
             return false;
 
         const DeformableJointMatrix& matrix = jointPalette->joints[joint];

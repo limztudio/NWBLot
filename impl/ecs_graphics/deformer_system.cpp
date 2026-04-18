@@ -74,6 +74,13 @@ static bool ResolveDisplacement(
     DeformableDisplacement& outDisplacement)
 {
     outDisplacement = instance.displacement;
+    if(!ValidDeformableDisplacementDescriptor(outDisplacement)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("DeformerSystem: runtime mesh '{}' has an invalid displacement descriptor"),
+            instance.handle.value
+        );
+        return false;
+    }
     if(outDisplacement.mode == DeformableDisplacementMode::None)
         return true;
     if(component && !component->enabled){

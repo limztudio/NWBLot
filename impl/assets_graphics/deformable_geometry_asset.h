@@ -62,6 +62,16 @@ static_assert(IsStandardLayout_V<DeformableDisplacement>, "DeformableDisplacemen
 static_assert(IsTriviallyCopyable_V<DeformableDisplacement>, "DeformableDisplacement must stay binary-serializable");
 static_assert(sizeof(DeformableDisplacement) == sizeof(f32) * 4u, "DeformableDisplacement binary layout drifted");
 
+[[nodiscard]] inline bool ValidDeformableDisplacementDescriptor(const DeformableDisplacement& displacement){
+    if(displacement.padding0 != 0u || displacement.padding1 != 0u)
+        return false;
+    if(displacement.mode == DeformableDisplacementMode::None)
+        return IsFinite(displacement.amplitude) && displacement.amplitude == 0.0f;
+    if(displacement.mode == DeformableDisplacementMode::ScalarUvRamp)
+        return IsFinite(displacement.amplitude);
+    return false;
+}
+
 struct DeformableMorphDelta{
     u32 vertexId = 0;
     Float3Data deltaPosition;

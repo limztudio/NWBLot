@@ -356,6 +356,8 @@ void OrthonormalizeFrame(
     DeformableDisplacement& outDisplacement)
 {
     outDisplacement = instance.displacement;
+    if(!ValidDeformableDisplacementDescriptor(outDisplacement))
+        return false;
     if(outDisplacement.mode == DeformableDisplacementMode::None)
         return true;
     if(component && !component->enabled)

@@ -480,6 +480,38 @@ static void TestPickingVerticesIncludeMorphAndDisplacement(TestContext& context)
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertices[2].position.z, 2.0f));
 }
 
+static void TestPickingRejectsInvalidDisplacementDescriptor(TestContext& context){
+    Vector<NWB::Impl::DeformableVertexRest> vertices;
+
+    {
+        NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
+        instance.displacement.mode = 99u;
+        instance.displacement.amplitude = 1.0f;
+        NWB_ECS_GRAPHICS_TEST_CHECK(
+            context,
+            !NWB::Impl::BuildDeformablePickingVertices(instance, NWB::Impl::DeformablePickingInputs{}, vertices)
+        );
+    }
+
+    {
+        NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
+        instance.displacement.amplitude = 1.0f;
+        NWB_ECS_GRAPHICS_TEST_CHECK(
+            context,
+            !NWB::Impl::BuildDeformablePickingVertices(instance, NWB::Impl::DeformablePickingInputs{}, vertices)
+        );
+    }
+
+    {
+        NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
+        instance.displacement.padding0 = 1u;
+        NWB_ECS_GRAPHICS_TEST_CHECK(
+            context,
+            !NWB::Impl::BuildDeformablePickingVertices(instance, NWB::Impl::DeformablePickingInputs{}, vertices)
+        );
+    }
+}
+
 static void TestPickingRejectsInvalidMorphDelta(TestContext& context){
     NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
 
@@ -644,6 +676,20 @@ static void TestRestSpaceHoleEditRejectsInvalidAttributeStreams(TestContext& con
     CheckHoleEditUnchanged(context, instance, oldVertexCount, oldIndexCount, oldRevision);
 }
 
+static void TestRestSpaceHoleEditRejectsInvalidDisplacementDescriptor(TestContext& context){
+    NWB::Impl::DeformableRuntimeMeshInstance instance = MakeGridHoleInstance();
+    const usize oldVertexCount = instance.restVertices.size();
+    const usize oldIndexCount = instance.indices.size();
+    const u32 oldRevision = instance.editRevision;
+    instance.displacement.mode = 99u;
+    instance.displacement.amplitude = 1.0f;
+
+    const NWB::Impl::DeformableHoleEditParams params = MakeGridHoleEditParams(instance);
+
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::CommitDeformableRestSpaceHole(instance, params));
+    CheckHoleEditUnchanged(context, instance, oldVertexCount, oldIndexCount, oldRevision);
+}
+
 static void TestRestSpaceHoleEditRejectsStaleOrMismatchedHit(TestContext& context){
     {
         NWB::Impl::DeformableRuntimeMeshInstance instance = MakeGridHoleInstance();
@@ -716,6 +762,7 @@ int main(){
     __hidden_ecs_graphics_tests::TestPickingRejectsUnusedNonAffineJointPalette(context);
     __hidden_ecs_graphics_tests::TestPickingRejectsInvalidSkinWeights(context);
     __hidden_ecs_graphics_tests::TestPickingVerticesIncludeMorphAndDisplacement(context);
+    __hidden_ecs_graphics_tests::TestPickingRejectsInvalidDisplacementDescriptor(context);
     __hidden_ecs_graphics_tests::TestPickingRejectsInvalidMorphDelta(context);
     __hidden_ecs_graphics_tests::TestPickingRejectsActiveEmptyMorph(context);
     __hidden_ecs_graphics_tests::TestRestSpaceHoleEditCreatesPerInstancePatch(context);
@@ -723,6 +770,7 @@ int main(){
     __hidden_ecs_graphics_tests::TestRestSpaceHoleEditRejectsDegenerateHitFrame(context);
     __hidden_ecs_graphics_tests::TestRestSpaceHoleEditRejectsNonFiniteWallVertices(context);
     __hidden_ecs_graphics_tests::TestRestSpaceHoleEditRejectsInvalidAttributeStreams(context);
+    __hidden_ecs_graphics_tests::TestRestSpaceHoleEditRejectsInvalidDisplacementDescriptor(context);
     __hidden_ecs_graphics_tests::TestRestSpaceHoleEditRejectsStaleOrMismatchedHit(context);
 
     if(context.failed != 0u){

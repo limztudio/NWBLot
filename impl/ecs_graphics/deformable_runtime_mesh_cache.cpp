@@ -314,6 +314,13 @@ bool DeformableRuntimeMeshCache::uploadRuntimeMeshBuffers(DeformableRuntimeMeshI
         );
         return false;
     }
+    if(!ValidDeformableDisplacementDescriptor(instance.displacement)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' has an invalid displacement descriptor"),
+            StringConvert(instance.source.name().c_str())
+        );
+        return false;
+    }
     for(usize vertexIndex = 0; vertexIndex < instance.restVertices.size(); ++vertexIndex){
         if(!__hidden_deformable_runtime_mesh_cache::IsFiniteRestVertex(instance.restVertices[vertexIndex])){
             NWB_LOGGER_ERROR(

@@ -329,6 +329,8 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
 [[nodiscard]] bool ValidateRuntimePayload(const DeformableRuntimeMeshInstance& instance){
     if(!instance.entity.valid() || !instance.handle.valid() || instance.restVertices.empty() || instance.indices.empty())
         return false;
+    if(!ValidDeformableDisplacementDescriptor(instance.displacement))
+        return false;
     return ValidateRuntimePayloadArrays(
         instance.restVertices,
         instance.indices,

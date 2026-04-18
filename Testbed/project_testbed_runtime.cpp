@@ -298,21 +298,21 @@ NotNullUniquePtr<NWB::Core::ECS::World> ProjectTestbed::createInitialWorldOrDie(
     return MakeNotNullUnique(Move(world));
 }
 
-NWB::Core::ECSGraphics::RendererSystem& ProjectTestbed::requireRendererSystemOrDie(NWB::Core::ECS::World& world){
+void ProjectTestbed::verifyRendererSystemOrDie(NWB::Core::ECS::World& world){
     auto* rendererSystem = world.getSystem<NWB::Core::ECSGraphics::RendererSystem>();
     NWB_FATAL_ASSERT_MSG(
         rendererSystem,
         NWB_TEXT("ProjectTestbed initialization failed: renderer system is missing in initial world")
     );
-    return *rendererSystem;
 }
 
 
 ProjectTestbed::ProjectTestbed(NWB::ProjectRuntimeContext& context)
     : m_context(context)
     , m_world(createInitialWorldOrDie(context))
-    , m_rendererSystem(requireRendererSystemOrDie(*m_world))
-{}
+{
+    verifyRendererSystemOrDie(*m_world);
+}
 
 ProjectTestbed::~ProjectTestbed(){
     unregisterInputHandler();
@@ -321,8 +321,6 @@ ProjectTestbed::~ProjectTestbed(){
 
 
 bool ProjectTestbed::onStartup(){
-    (void)m_rendererSystem;
-
     using TestbedGeometryRef = __hidden_project_testbed_runtime::TestbedGeometryRef;
     using TestbedDeformableGeometryRef = __hidden_project_testbed_runtime::TestbedDeformableGeometryRef;
     using TestbedMaterialRef = __hidden_project_testbed_runtime::TestbedMaterialRef;

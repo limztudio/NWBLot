@@ -18,7 +18,7 @@
 class ProjectTestbed final : public NWB::IProjectEntryCallbacks, public NWB::Core::IInputEventHandler{
 private:
     static NotNullUniquePtr<NWB::Core::ECS::World> createInitialWorldOrDie(NWB::ProjectRuntimeContext& context);
-    static NWB::Core::ECSGraphics::RendererSystem& requireRendererSystemOrDie(NWB::Core::ECS::World& world);
+    static void verifyRendererSystemOrDie(NWB::Core::ECS::World& world);
 
 private:
     void registerInputHandler();
@@ -52,7 +52,6 @@ private:
 
     NWB::ProjectRuntimeContext& m_context;
     NotNullUniquePtr<NWB::Core::ECS::World> m_world;
-    NWB::Core::ECSGraphics::RendererSystem& m_rendererSystem;
     NWB::Core::ECS::EntityID m_deformableMorphEntity = NWB::Core::ECS::ENTITY_ID_INVALID;
     f32 m_deformableMorphTime = 0.0f;
     f32 m_deformableDisplacementScale = 1.0f;

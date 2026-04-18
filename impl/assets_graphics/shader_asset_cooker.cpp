@@ -139,6 +139,7 @@ struct DeformableGeometryEntry{
     Vector<u32> indices;
     Vector<SkinInfluence4> skin;
     Vector<SourceSample> sourceSamples;
+    DeformableDisplacement displacement;
     Vector<DeformableMorph> morphs;
     bool use32BitIndices = true;
 };
@@ -1267,6 +1268,85 @@ static bool ParseSourceSamples(
     return true;
 }
 
+static bool ParseRequiredStringField(
+    const Path& nwbFilePath,
+    const Core::Metascript::Value& map,
+    const AStringView fieldName,
+    AString& outText)
+{
+    outText.clear();
+
+    const Core::Metascript::Value* field = FindField(map, fieldName);
+    if(!field || !field->isString()){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Deformable geometry meta '{}': '{}' must be a string"),
+            PathToString<tchar>(nwbFilePath),
+            StringConvert(AString(fieldName))
+        );
+        return false;
+    }
+
+    outText = CanonicalizeText(field->copyString());
+    if(outText.empty()){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Deformable geometry meta '{}': '{}' must not be empty"),
+            PathToString<tchar>(nwbFilePath),
+            StringConvert(AString(fieldName))
+        );
+        return false;
+    }
+    return true;
+}
+
+static bool ParseDisplacement(
+    const Path& nwbFilePath,
+    const Core::Metascript::Value& asset,
+    DeformableDisplacement& outDisplacement)
+{
+    outDisplacement = DeformableDisplacement{};
+
+    const Core::Metascript::Value* displacement = FindField(asset, "displacement");
+    if(!displacement)
+        return true;
+    if(!displacement->isMap()){
+        if(IsExplicitEmptyOptionalField(*displacement))
+            return true;
+
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Deformable geometry meta '{}': 'displacement' must be a map"),
+            PathToString<tchar>(nwbFilePath)
+        );
+        return false;
+    }
+    if(displacement->asMap().empty())
+        return true;
+
+    AString space;
+    AString mode;
+    AString field;
+    if(!ParseRequiredStringField(nwbFilePath, *displacement, "space", space))
+        return false;
+    if(!ParseRequiredStringField(nwbFilePath, *displacement, "mode", mode))
+        return false;
+    if(!ParseRequiredStringField(nwbFilePath, *displacement, "field", field))
+        return false;
+
+    const Core::Metascript::Value* amplitude = FindField(*displacement, "amplitude");
+    if(!amplitude || !ParseFiniteF32Value(nwbFilePath, *amplitude, "displacement.amplitude", outDisplacement.amplitude))
+        return false;
+
+    if(space != "tangent" || mode != "scalar" || field != "uv_ramp"){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Deformable geometry meta '{}': displacement supports only space='tangent', mode='scalar', field='uv_ramp'"),
+            PathToString<tchar>(nwbFilePath)
+        );
+        return false;
+    }
+
+    outDisplacement.mode = DeformableDisplacementMode::ScalarUvRamp;
+    return true;
+}
+
 static bool ParseMorphs(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
@@ -1408,6 +1488,8 @@ static bool ParseDeformableGeometryMeta(
         return false;
     if(!ParseSourceSamples(discoveredFile.filePath, asset, outEntry.restVertices.size(), outEntry.sourceSamples))
         return false;
+    if(!ParseDisplacement(discoveredFile.filePath, asset, outEntry.displacement))
+        return false;
     if(!ParseMorphs(discoveredFile.filePath, asset, outEntry.morphs))
         return false;
 
@@ -1421,6 +1503,7 @@ static bool BuildDeformableGeometryAsset(DeformableGeometryEntry& geometryEntry,
     outGeometry.setIndices(Move(geometryEntry.indices));
     outGeometry.setSkin(Move(geometryEntry.skin));
     outGeometry.setSourceSamples(Move(geometryEntry.sourceSamples));
+    outGeometry.setDisplacement(geometryEntry.displacement);
     outGeometry.setMorphs(Move(geometryEntry.morphs));
     return outGeometry.validatePayload();
 }

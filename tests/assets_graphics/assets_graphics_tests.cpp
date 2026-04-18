@@ -321,6 +321,13 @@ asset.skin = {
     ],
 };
 
+asset.displacement = {
+    "space": "tangent",
+    "mode": "scalar",
+    "field": "uv_ramp",
+    "amplitude": 0.125,
+};
+
 asset.morphs = {
     "lift": {
         "vertex_ids": [1, 2],
@@ -753,10 +760,15 @@ static NWB::Impl::DeformableGeometry BuildValidDeformableGeometry(){
     morphs[0].deltas.push_back(MakeMorphDelta(1u, 0.25f));
     morphs[0].deltas.push_back(MakeMorphDelta(2u, 0.5f));
 
+    NWB::Impl::DeformableDisplacement displacement;
+    displacement.mode = NWB::Impl::DeformableDisplacementMode::ScalarUvRamp;
+    displacement.amplitude = 0.125f;
+
     geometry.setRestVertices(Move(vertices));
     geometry.setIndices(Move(indices));
     geometry.setSkin(Move(skin));
     geometry.setSourceSamples(Move(sourceSamples));
+    geometry.setDisplacement(displacement);
     geometry.setMorphs(Move(morphs));
     return geometry;
 }
@@ -801,6 +813,11 @@ static void TestDeformableGeometryCodecRoundTrip(TestContext& context){
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.indices().size() == 6u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skin().size() == 4u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.sourceSamples().size() == 4u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(
+        context,
+        loadedGeometry.displacement().mode == NWB::Impl::DeformableDisplacementMode::ScalarUvRamp
+    );
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.displacement().amplitude == 0.125f);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs().size() == 1u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs()[0].name == Name("lift"));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs()[0].deltas.size() == 2u);
@@ -828,6 +845,10 @@ static void TestMinimalDeformableGeometryCodecRoundTrip(TestContext& context){
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.indices().size() == 3u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skin().empty());
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.sourceSamples().empty());
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(
+        context,
+        loadedGeometry.displacement().mode == NWB::Impl::DeformableDisplacementMode::None
+    );
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs().empty());
 }
 
@@ -1152,6 +1173,11 @@ static void TestDeformableGeometryCookerFullAsset(TestContext& context){
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.sourceSamples().size() == 4u);
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.sourceSamples()[3].sourceTri == 1u);
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.sourceSamples()[3].bary[2] == 1.f);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(
+            context,
+            loadedGeometry.displacement().mode == NWB::Impl::DeformableDisplacementMode::ScalarUvRamp
+        );
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.displacement().amplitude == 0.125f);
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs().size() == 1u);
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs()[0].name == Name("lift"));
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs()[0].deltas.size() == 2u);
@@ -1336,6 +1362,22 @@ static void TestDeformableGeometryValidationFailures(TestContext& context){
 
     {
         NWB::Impl::DeformableGeometry geometry = BuildValidDeformableGeometry();
+        NWB::Impl::DeformableDisplacement displacement = geometry.displacement();
+        displacement.mode = 99u;
+        geometry.setDisplacement(displacement);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !geometry.validatePayload());
+    }
+
+    {
+        NWB::Impl::DeformableGeometry geometry = BuildValidDeformableGeometry();
+        NWB::Impl::DeformableDisplacement displacement;
+        displacement.amplitude = 0.25f;
+        geometry.setDisplacement(displacement);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !geometry.validatePayload());
+    }
+
+    {
+        NWB::Impl::DeformableGeometry geometry = BuildValidDeformableGeometry();
         Vector<NWB::Impl::DeformableMorph> morphs = geometry.morphs();
         morphs[0].deltas[1].vertexId = morphs[0].deltas[0].vertexId;
         geometry.setMorphs(Move(morphs));
@@ -1351,7 +1393,7 @@ static void TestDeformableGeometryValidationFailures(TestContext& context){
     }
 
     NWB_LOGGER_REGISTER(nullptr);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 17u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 19u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("degenerate normal/tangent frame")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("invalid normal/tangent frame")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("triangle 0 is degenerate")));

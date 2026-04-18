@@ -111,6 +111,7 @@ private:
         const Vector<DeformerMorphDeltaGpu>& morphDeltas,
         const Vector<DeformerSkinInfluenceGpu>& skinInfluences,
         const Vector<DeformableJointMatrix>& jointPalette,
+        bool hasDisplacement,
         usize morphSignature,
         RuntimeResources*& outResources
     );

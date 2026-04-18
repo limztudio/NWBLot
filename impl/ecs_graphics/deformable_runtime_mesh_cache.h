@@ -30,6 +30,7 @@ struct DeformableRuntimeMeshInstance{
     Vector<u32> indices;
     Vector<SkinInfluence4> skin;
     Vector<SourceSample> sourceSamples;
+    DeformableDisplacement displacement;
     Vector<DeformableMorph> morphs;
     Core::BufferHandle restVertexBuffer;
     Core::BufferHandle indexBuffer;

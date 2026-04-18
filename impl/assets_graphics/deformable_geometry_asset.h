@@ -45,6 +45,23 @@ struct SourceSample{
 static_assert(IsStandardLayout_V<SourceSample>, "SourceSample must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<SourceSample>, "SourceSample must stay binary-serializable");
 
+namespace DeformableDisplacementMode{
+    enum Enum : u32{
+        None = 0,
+        ScalarUvRamp = 1,
+    };
+};
+
+struct DeformableDisplacement{
+    u32 mode = DeformableDisplacementMode::None;
+    f32 amplitude = 0.0f;
+    u32 padding0 = 0;
+    u32 padding1 = 0;
+};
+static_assert(IsStandardLayout_V<DeformableDisplacement>, "DeformableDisplacement must stay binary-serializable");
+static_assert(IsTriviallyCopyable_V<DeformableDisplacement>, "DeformableDisplacement must stay binary-serializable");
+static_assert(sizeof(DeformableDisplacement) == sizeof(f32) * 4u, "DeformableDisplacement binary layout drifted");
+
 struct DeformableMorphDelta{
     u32 vertexId = 0;
     Float3Data deltaPosition;
@@ -84,12 +101,14 @@ public:
     void setIndices(Vector<u32>&& indices){ m_indices = Move(indices); }
     void setSkin(Vector<SkinInfluence4>&& skin){ m_skin = Move(skin); }
     void setSourceSamples(Vector<SourceSample>&& sourceSamples){ m_sourceSamples = Move(sourceSamples); }
+    void setDisplacement(const DeformableDisplacement& displacement){ m_displacement = displacement; }
     void setMorphs(Vector<DeformableMorph>&& morphs){ m_morphs = Move(morphs); }
 
     [[nodiscard]] const Vector<DeformableVertexRest>& restVertices()const{ return m_restVertices; }
     [[nodiscard]] const Vector<u32>& indices()const{ return m_indices; }
     [[nodiscard]] const Vector<SkinInfluence4>& skin()const{ return m_skin; }
     [[nodiscard]] const Vector<SourceSample>& sourceSamples()const{ return m_sourceSamples; }
+    [[nodiscard]] const DeformableDisplacement& displacement()const{ return m_displacement; }
     [[nodiscard]] const Vector<DeformableMorph>& morphs()const{ return m_morphs; }
 
 
@@ -98,6 +117,7 @@ private:
     Vector<u32> m_indices;
     Vector<SkinInfluence4> m_skin;
     Vector<SourceSample> m_sourceSamples;
+    DeformableDisplacement m_displacement;
     Vector<DeformableMorph> m_morphs;
 };
 

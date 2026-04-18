@@ -25,7 +25,8 @@ namespace __hidden_assets{
 
 
 static constexpr u32 s_DeformableGeometryMagic = 0x44474F31u; // DGO1
-static constexpr u32 s_DeformableGeometryVersion = 1u;
+static constexpr u32 s_DeformableGeometryVersionV1 = 1u;
+static constexpr u32 s_DeformableGeometryVersion = 2u;
 static constexpr f32 s_BarycentricSumEpsilon = 0.001f;
 static constexpr f32 s_SkinWeightSumEpsilon = 0.001f;
 static constexpr f32 s_RestFrameLengthSquaredEpsilon = 0.000001f;
@@ -350,6 +351,40 @@ bool DeformableGeometry::validatePayload()const{
         }
     }
 
+    if(m_displacement.mode != DeformableDisplacementMode::None
+        && m_displacement.mode != DeformableDisplacementMode::ScalarUvRamp
+    ){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' has unsupported displacement mode {}"),
+            geometryPathText,
+            m_displacement.mode
+        );
+        return false;
+    }
+    if(m_displacement.padding0 != 0u || m_displacement.padding1 != 0u){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' displacement padding is not zeroed"),
+            geometryPathText
+        );
+        return false;
+    }
+    if(m_displacement.mode == DeformableDisplacementMode::None){
+        if(!IsFinite(m_displacement.amplitude) || m_displacement.amplitude != 0.0f){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' inactive displacement must have zero amplitude"),
+                geometryPathText
+            );
+            return false;
+        }
+    }
+    else if(!IsFinite(m_displacement.amplitude)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' displacement amplitude is invalid"),
+            geometryPathText
+        );
+        return false;
+    }
+
     if(m_morphs.size() > static_cast<usize>(Limit<u32>::s_Max)){
         NWB_LOGGER_ERROR(
             NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' morph count exceeds u32 limits"),
@@ -453,6 +488,7 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
     m_indices.clear();
     m_skin.clear();
     m_sourceSamples.clear();
+    m_displacement = DeformableDisplacement{};
     m_morphs.clear();
 
     usize cursor = 0;
@@ -479,7 +515,7 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: invalid magic"));
         return false;
     }
-    if(version != __hidden_assets::s_DeformableGeometryVersion){
+    if(version != __hidden_assets::s_DeformableGeometryVersionV1 && version != __hidden_assets::s_DeformableGeometryVersion){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: unsupported version {}"), version);
         return false;
     }
@@ -551,6 +587,12 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
             return false;
         m_morphs.push_back(Move(morph));
     }
+    if(version >= __hidden_assets::s_DeformableGeometryVersion){
+        if(!ReadPOD(binary, cursor, m_displacement)){
+            NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: malformed displacement descriptor"));
+            return false;
+        }
+    }
 
     if(cursor != binary.size()){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: trailing bytes detected"));
@@ -621,6 +663,7 @@ bool DeformableGeometryAssetCodec::serialize(const Core::Assets::IAsset& asset, 
         if(!__hidden_assets::AppendVectorPayload(outBinary, morph.deltas, NWB_TEXT("morph deltas")))
             return false;
     }
+    AppendPOD(outBinary, geometry.displacement());
 
     return true;
 }

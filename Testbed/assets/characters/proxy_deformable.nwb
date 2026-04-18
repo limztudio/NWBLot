@@ -59,6 +59,12 @@ asset.skin = {
         [1.0, 0.0, 0.0, 0.0],
     ],
 };
+asset.displacement = {
+    "space": "tangent",
+    "mode": "scalar",
+    "field": "uv_ramp",
+    "amplitude": 0.08,
+};
 asset.morphs = {
     "lift": {
         "vertex_ids": [2, 3],

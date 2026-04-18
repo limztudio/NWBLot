@@ -84,6 +84,14 @@ uint nwbDeformerJointCount(){
     return g_NwbDeformerPushConstants.payload1.y;
 }
 
+float nwbDeformerDisplacementAmplitude(){
+    return uintBitsToFloat(g_NwbDeformerPushConstants.payload1.z);
+}
+
+uint nwbDeformerDisplacementMode(){
+    return g_NwbDeformerPushConstants.payload1.w;
+}
+
 void nwbDeformerCopyRestPayload(const uint vertexId, const uint restBase, const uint deformedBase){
     for(uint i = 0u; i < nwbDeformerRestScalarStride(); ++i)
         nwbDeformerDeformedVertexScalars[deformedBase + i] = nwbDeformerRestVertexScalars[restBase + i];
@@ -141,6 +149,18 @@ void nwbDeformerApplySkin(const uint vertexId, inout vec3 position, inout vec3 n
     tangent.xyz = skinnedTangent;
 }
 
+void nwbDeformerApplyDisplacement(inout vec3 position, const vec3 normal, const vec2 uv0){
+    const uint scalarUvRampMode = 1u;
+    if(nwbDeformerDisplacementMode() != scalarUvRampMode)
+        return;
+
+    const float amplitude = nwbDeformerDisplacementAmplitude();
+    if(abs(amplitude) <= 0.000001)
+        return;
+
+    position += normal * (clamp(uv0.x, 0.0, 1.0) * amplitude);
+}
+
 void main(){
     const uint vertexId = gl_GlobalInvocationID.x;
     if(vertexId >= nwbDeformerVertexCount())
@@ -165,6 +185,10 @@ void main(){
         nwbDeformerRestVertexScalars[restBase + 8u],
         nwbDeformerRestVertexScalars[restBase + 9u]
     );
+    const vec2 uv0 = vec2(
+        nwbDeformerRestVertexScalars[restBase + 10u],
+        nwbDeformerRestVertexScalars[restBase + 11u]
+    );
     const vec3 restNormal = normal;
     const vec3 restTangent = tangent.xyz;
 
@@ -186,6 +210,7 @@ void main(){
     const vec3 preSkinTangent = tangent.xyz;
     nwbDeformerApplySkin(vertexId, position, normal, tangent);
     nwbDeformerOrthonormalizeFrame(normal, tangent, preSkinNormal, preSkinTangent);
+    nwbDeformerApplyDisplacement(position, normal, uv0);
 
     nwbDeformerCopyRestPayload(vertexId, restBase, deformedBase);
     nwbDeformerDeformedVertexScalars[deformedBase + 0u] = position.x;

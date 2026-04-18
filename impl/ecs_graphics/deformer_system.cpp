@@ -37,8 +37,8 @@ struct DeformerPushConstants{
     u32 deformedScalarStride = 0;
     u32 skinCount = 0;
     u32 jointCount = 0;
-    u32 padding0 = 0;
-    u32 padding1 = 0;
+    f32 displacementAmplitude = 0.0f;
+    u32 displacementMode = DeformableDisplacementMode::None;
 };
 static_assert(sizeof(DeformerPushConstants) == 32, "Deformer push constants layout must stay shader-compatible");
 
@@ -56,6 +56,10 @@ static const Name& StageNameFromShaderType(const Core::ShaderType::Mask shaderTy
 
 static bool ActiveWeight(const f32 weight){
     return weight > s_ActiveMorphWeightEpsilon || weight < -s_ActiveMorphWeightEpsilon;
+}
+
+static bool ActiveDisplacement(const DeformableDisplacement& displacement){
+    return displacement.mode != DeformableDisplacementMode::None && ActiveWeight(displacement.amplitude);
 }
 
 static bool IsFiniteFloat4Data(const Float4Data& value){
@@ -548,7 +552,8 @@ bool DeformerSystem::dispatchRuntimeMesh(
 
     const bool hasActiveMorphs = !morphRanges.empty();
     const bool hasActiveSkin = !skinInfluences.empty() && !jointMatrices.empty();
-    if(!hasActiveMorphs && !hasActiveSkin){
+    const bool hasDisplacement = __hidden_deformer_system::ActiveDisplacement(instance.displacement);
+    if(!hasActiveMorphs && !hasActiveSkin && !hasDisplacement){
         const auto foundResources = m_runtimeResources.find(instance.handle.value);
         if(foundResources == m_runtimeResources.end()){
             instance.dirtyFlags = static_cast<RuntimeMeshDirtyFlags>(
@@ -566,7 +571,16 @@ bool DeformerSystem::dispatchRuntimeMesh(
         return false;
 
     RuntimeResources* resources = nullptr;
-    if(!ensureRuntimeResources(instance, morphRanges, morphDeltas, skinInfluences, jointMatrices, morphSignature, resources))
+    if(!ensureRuntimeResources(
+        instance,
+        morphRanges,
+        morphDeltas,
+        skinInfluences,
+        jointMatrices,
+        hasDisplacement,
+        morphSignature,
+        resources
+    ))
         return false;
     if(!resources
         || !resources->bindingSet
@@ -629,6 +643,8 @@ bool DeformerSystem::dispatchRuntimeMesh(
     pushConstants.deformedScalarStride = __hidden_deformer_system::s_DeformableVertexScalarStride;
     pushConstants.skinCount = static_cast<u32>(skinInfluences.size());
     pushConstants.jointCount = static_cast<u32>(jointMatrices.size());
+    pushConstants.displacementAmplitude = hasDisplacement ? instance.displacement.amplitude : 0.0f;
+    pushConstants.displacementMode = hasDisplacement ? instance.displacement.mode : DeformableDisplacementMode::None;
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
     commandList.dispatch(__hidden_deformer_system::DispatchGroupCount(pushConstants.vertexCount), 1, 1);
 
@@ -670,13 +686,14 @@ bool DeformerSystem::ensureRuntimeResources(
     const Vector<DeformerMorphDeltaGpu>& morphDeltas,
     const Vector<DeformerSkinInfluenceGpu>& skinInfluences,
     const Vector<DeformableJointMatrix>& jointPalette,
+    const bool hasDisplacement,
     const usize morphSignature,
     RuntimeResources*& outResources)
 {
     outResources = nullptr;
     const bool hasActiveMorphs = !morphRanges.empty() && !morphDeltas.empty();
     const bool hasActiveSkin = !skinInfluences.empty() && !jointPalette.empty();
-    if(!hasActiveMorphs && !hasActiveSkin)
+    if(!hasActiveMorphs && !hasActiveSkin && !hasDisplacement)
         return false;
     if(morphRanges.empty() != morphDeltas.empty()){
         NWB_LOGGER_ERROR(

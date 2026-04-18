@@ -185,6 +185,23 @@ static void TestPoseStableRestHitRecovery(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(hit.restSample.bary[0], 0.25f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(hit.restSample.bary[1], 0.25f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(hit.restSample.bary[2], 0.5f));
+
+    joints.joints[0].column0 = Float4Data(0.0f, 1.0f, 0.0f, 0.0f);
+    joints.joints[0].column1 = Float4Data(-1.0f, 0.0f, 0.0f, 0.0f);
+    joints.joints[0].column2 = Float4Data(0.0f, 0.0f, 1.0f, 0.0f);
+    joints.joints[0].column3 = Float4Data(1.25f, -0.5f, 0.0f, 1.0f);
+
+    ray.origin = Float3Data(1.25f, -0.4f, 1.0f);
+
+    NWB::Impl::DeformablePosedHit rotatedHit;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::RaycastDeformableRuntimeMesh(instance, inputs, ray, rotatedHit));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(rotatedHit.position.x, 1.25f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(rotatedHit.position.y, -0.4f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(rotatedHit.position.z, 0.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, rotatedHit.restSample.sourceTri == 9u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(rotatedHit.restSample.bary[0], 0.2f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(rotatedHit.restSample.bary[1], 0.3f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(rotatedHit.restSample.bary[2], 0.5f));
 }
 
 static void TestPickingUsesEntityTransform(TestContext& context){

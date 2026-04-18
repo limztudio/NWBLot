@@ -685,12 +685,8 @@ bool DeformerSystem::dispatchRuntimeMesh(
     if(!hasActiveMorphs && !hasActiveSkin && !hasDisplacement){
         const bool deformerInputDirty = (instance.dirtyFlags & RuntimeMeshDirtyFlag::DeformerInputDirty) != 0u;
         const auto foundResources = m_runtimeResources.find(instance.handle.value);
-        if(foundResources == m_runtimeResources.end() && !deformerInputDirty){
-            instance.dirtyFlags = static_cast<RuntimeMeshDirtyFlags>(
-                instance.dirtyFlags & ~RuntimeMeshDirtyFlag::DeformerInputDirty
-            );
+        if(foundResources == m_runtimeResources.end() && !deformerInputDirty)
             return false;
-        }
 
         if(foundResources != m_runtimeResources.end())
             m_runtimeResources.erase(instance.handle.value);

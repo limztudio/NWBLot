@@ -4,6 +4,7 @@
 
 #include "deformer_system.h"
 
+#include "deformable_runtime_helpers.h"
 #include "renderer_system.h"
 
 #include <core/graphics/shader_archive.h>
@@ -54,66 +55,44 @@ static const Name& StageNameFromShaderType(const Core::ShaderType::Mask shaderTy
     }
 }
 
-static bool ActiveWeight(const f32 weight){
-    return DeformableValidation::ActiveWeight(weight);
-}
-
-static bool ActiveDisplacement(const DeformableDisplacement& displacement){
-    return displacement.mode != DeformableDisplacementMode::None && ActiveWeight(displacement.amplitude);
-}
-
-static bool ResolveDisplacement(
+static bool ResolveDeformerDisplacement(
     const DeformableRuntimeMeshInstance& instance,
     const DeformableDisplacementComponent* component,
     DeformableDisplacement& outDisplacement)
 {
-    outDisplacement = instance.displacement;
-    if(!ValidDeformableDisplacementDescriptor(outDisplacement)){
+    DeformableRuntime::DisplacementResolveFailure::Enum failure =
+        DeformableRuntime::DisplacementResolveFailure::None
+    ;
+    if(DeformableRuntime::ResolveEffectiveDisplacement(instance.displacement, component, outDisplacement, failure))
+        return true;
+
+    switch(failure){
+    case DeformableRuntime::DisplacementResolveFailure::Descriptor:
         NWB_LOGGER_ERROR(
             NWB_TEXT("DeformerSystem: runtime mesh '{}' has an invalid displacement descriptor"),
             instance.handle.value
         );
-        return false;
-    }
-    if(outDisplacement.mode == DeformableDisplacementMode::None)
-        return true;
-    if(component && !component->enabled){
-        outDisplacement = DeformableDisplacement{};
-        return true;
-    }
-
-    const f32 scale = component ? component->amplitudeScale : 1.0f;
-    if(!IsFinite(scale)){
+        break;
+    case DeformableRuntime::DisplacementResolveFailure::Scale:
         NWB_LOGGER_ERROR(
             NWB_TEXT("DeformerSystem: runtime mesh '{}' displacement amplitude scale is invalid"),
             instance.handle.value
         );
-        return false;
-    }
-
-    outDisplacement.amplitude *= scale;
-    if(!IsFinite(outDisplacement.amplitude)){
+        break;
+    case DeformableRuntime::DisplacementResolveFailure::Amplitude:
         NWB_LOGGER_ERROR(
             NWB_TEXT("DeformerSystem: runtime mesh '{}' effective displacement amplitude is invalid"),
             instance.handle.value
         );
-        return false;
+        break;
+    default:
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("DeformerSystem: runtime mesh '{}' failed to resolve displacement"),
+            instance.handle.value
+        );
+        break;
     }
-    if(!ActiveWeight(outDisplacement.amplitude))
-        outDisplacement = DeformableDisplacement{};
-    return true;
-}
-
-static bool IsAffineJointMatrix(const DeformableJointMatrix& matrix){
-    return DeformableValidation::IsFiniteFloat4(matrix.column0)
-        && DeformableValidation::IsFiniteFloat4(matrix.column1)
-        && DeformableValidation::IsFiniteFloat4(matrix.column2)
-        && DeformableValidation::IsFiniteFloat4(matrix.column3)
-        && !ActiveWeight(matrix.column0.w)
-        && !ActiveWeight(matrix.column1.w)
-        && !ActiveWeight(matrix.column2.w)
-        && !ActiveWeight(matrix.column3.w - 1.0f)
-    ;
+    return false;
 }
 
 static u32 DispatchGroupCount(const u32 vertexCount){
@@ -185,7 +164,7 @@ static bool BuildMorphPayload(
         f32 weight = 0.0f;
         if(!ResolveMorphWeight(instance, morphWeights, morph.name, weight))
             return false;
-        if(!ActiveWeight(weight))
+        if(!DeformableRuntime::ActiveWeight(weight))
             continue;
         if(morph.deltas.empty()){
             NWB_LOGGER_ERROR(
@@ -266,7 +245,7 @@ static bool BuildSkinPayload(
     }
 
     for(usize jointIndex = 0; jointIndex < jointPalette->joints.size(); ++jointIndex){
-        if(!IsAffineJointMatrix(jointPalette->joints[jointIndex])){
+        if(!DeformableRuntime::IsAffineJointMatrix(jointPalette->joints[jointIndex])){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("DeformerSystem: runtime mesh '{}' joint palette entry {} is not a finite affine matrix"),
                 instance.handle.value,
@@ -292,7 +271,7 @@ static bool BuildSkinPayload(
         for(u32 influenceIndex = 0; influenceIndex < 4u; ++influenceIndex){
             const u32 joint = static_cast<u32>(sourceSkin.joint[influenceIndex]);
             const f32 weight = sourceSkin.weight[influenceIndex];
-            if(ActiveWeight(weight) && joint >= jointPalette->joints.size()){
+            if(DeformableRuntime::ActiveWeight(weight) && joint >= jointPalette->joints.size()){
                 NWB_LOGGER_ERROR(
                     NWB_TEXT("DeformerSystem: runtime mesh '{}' vertex {} references joint {} outside palette size {}"),
                     instance.handle.value,
@@ -356,9 +335,18 @@ static Core::BufferHandle SetupStructuredBuffer(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static_assert(sizeof(DeformerSystem::DeformerMorphRangeGpu) == sizeof(f32) * 4u, "Deformer morph range GPU layout drifted");
-static_assert(sizeof(DeformerSystem::DeformerMorphDeltaGpu) == sizeof(f32) * 16u, "Deformer morph delta GPU layout drifted");
-static_assert(sizeof(DeformerSystem::DeformerSkinInfluenceGpu) == sizeof(f32) * 8u, "Deformer skin influence GPU layout drifted");
+static_assert(
+    sizeof(DeformerSystem::DeformerMorphRangeGpu) == sizeof(f32) * 4u,
+    "Deformer morph range GPU layout drifted"
+);
+static_assert(
+    sizeof(DeformerSystem::DeformerMorphDeltaGpu) == sizeof(f32) * 16u,
+    "Deformer morph delta GPU layout drifted"
+);
+static_assert(
+    sizeof(DeformerSystem::DeformerSkinInfluenceGpu) == sizeof(f32) * 8u,
+    "Deformer skin influence GPU layout drifted"
+);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -492,7 +480,12 @@ bool DeformerSystem::ensurePipeline(){
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(3, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(4, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(5, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(__hidden_deformer_system::DeformerPushConstants)));
+        bindingLayoutDesc.addItem(
+            Core::BindingLayoutItem::PushConstants(
+                0,
+                sizeof(__hidden_deformer_system::DeformerPushConstants)
+            )
+        );
 
         m_bindingLayout = device->createBindingLayout(bindingLayoutDesc);
         if(!m_bindingLayout){
@@ -645,12 +638,12 @@ bool DeformerSystem::dispatchRuntimeMesh(
         return false;
 
     DeformableDisplacement resolvedDisplacement;
-    if(!__hidden_deformer_system::ResolveDisplacement(instance, displacement, resolvedDisplacement))
+    if(!__hidden_deformer_system::ResolveDeformerDisplacement(instance, displacement, resolvedDisplacement))
         return false;
 
     const bool hasActiveMorphs = !morphRanges.empty();
     const bool hasActiveSkin = !skinInfluences.empty() && !jointMatrices.empty();
-    const bool hasDisplacement = __hidden_deformer_system::ActiveDisplacement(resolvedDisplacement);
+    const bool hasDisplacement = DeformableRuntime::ActiveDisplacement(resolvedDisplacement);
     if(!hasActiveMorphs && !hasActiveSkin && !hasDisplacement){
         const bool deformerInputDirty = (instance.dirtyFlags & RuntimeMeshDirtyFlag::DeformerInputDirty) != 0u;
         const auto foundResources = m_runtimeResources.find(instance.handle.value);

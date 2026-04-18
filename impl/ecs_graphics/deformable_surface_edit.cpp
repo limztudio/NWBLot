@@ -4,6 +4,8 @@
 
 #include "deformable_surface_edit.h"
 
+#include "deformable_runtime_helpers.h"
+
 #include <impl/assets_graphics/deformable_geometry_validation.h>
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -21,15 +23,7 @@ namespace __hidden_deformable_surface_edit{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr f32 s_Epsilon = 0.000001f;
-static constexpr f32 s_FrameEpsilon = 0.00000001f;
-static constexpr f32 s_BarycentricSumEpsilon = 0.001f;
-
-struct Vec3{
-    f32 x = 0.0f;
-    f32 y = 0.0f;
-    f32 z = 0.0f;
-};
+using namespace DeformableRuntime;
 
 struct HoleFrame{
     Vec3 center;
@@ -54,66 +48,6 @@ struct WallVertexFrame{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool ActiveLength(const f32 value){
-    return value > s_Epsilon;
-}
-
-[[nodiscard]] Vec3 ToVec3(const Float3Data& value){
-    return Vec3{ value.x, value.y, value.z };
-}
-
-[[nodiscard]] Float3Data ToFloat3(const Vec3& value){
-    return Float3Data(value.x, value.y, value.z);
-}
-
-[[nodiscard]] Vec3 Add(const Vec3& lhs, const Vec3& rhs){
-    return Vec3{ lhs.x + rhs.x, lhs.y + rhs.y, lhs.z + rhs.z };
-}
-
-[[nodiscard]] Vec3 Subtract(const Vec3& lhs, const Vec3& rhs){
-    return Vec3{ lhs.x - rhs.x, lhs.y - rhs.y, lhs.z - rhs.z };
-}
-
-[[nodiscard]] Vec3 Scale(const Vec3& value, const f32 scale){
-    return Vec3{ value.x * scale, value.y * scale, value.z * scale };
-}
-
-[[nodiscard]] f32 Dot(const Vec3& lhs, const Vec3& rhs){
-    return (lhs.x * rhs.x) + (lhs.y * rhs.y) + (lhs.z * rhs.z);
-}
-
-[[nodiscard]] Vec3 Cross(const Vec3& lhs, const Vec3& rhs){
-    return Vec3{
-        (lhs.y * rhs.z) - (lhs.z * rhs.y),
-        (lhs.z * rhs.x) - (lhs.x * rhs.z),
-        (lhs.x * rhs.y) - (lhs.y * rhs.x),
-    };
-}
-
-[[nodiscard]] f32 LengthSquared(const Vec3& value){
-    return Dot(value, value);
-}
-
-[[nodiscard]] f32 Length(const Vec3& value){
-    return Sqrt(LengthSquared(value));
-}
-
-[[nodiscard]] Vec3 Normalize(const Vec3& value, const Vec3& fallback){
-    const f32 lengthSquared = LengthSquared(value);
-    if(lengthSquared <= s_FrameEpsilon)
-        return fallback;
-
-    return Scale(value, 1.0f / Sqrt(lengthSquared));
-}
-
-[[nodiscard]] Vec3 FallbackTangent(const Vec3& normal){
-    const Vec3 axis = DeformableValidation::AbsF32(normal.z) < 0.999f
-        ? Vec3{ 0.0f, 0.0f, 1.0f }
-        : Vec3{ 0.0f, 1.0f, 0.0f }
-    ;
-    return Normalize(Cross(axis, normal), Vec3{ 1.0f, 0.0f, 0.0f });
-}
-
 [[nodiscard]] Vec3 BarycentricPoint(
     const DeformableRuntimeMeshInstance& instance,
     const u32 (&indices)[3],
@@ -130,24 +64,6 @@ struct WallVertexFrame{
     const Vec3 b = ToVec3(instance.restVertices[indices[1]].position);
     const Vec3 c = ToVec3(instance.restVertices[indices[2]].position);
     return Scale(Add(Add(a, b), c), 1.0f / 3.0f);
-}
-
-[[nodiscard]] bool ValidateTriangleIndex(
-    const DeformableRuntimeMeshInstance& instance,
-    const u32 triangle,
-    u32 (&outIndices)[3])
-{
-    const usize indexBase = static_cast<usize>(triangle) * 3u;
-    if(indexBase > instance.indices.size() || instance.indices.size() - indexBase < 3u)
-        return false;
-
-    outIndices[0] = instance.indices[indexBase + 0u];
-    outIndices[1] = instance.indices[indexBase + 1u];
-    outIndices[2] = instance.indices[indexBase + 2u];
-    return outIndices[0] < instance.restVertices.size()
-        && outIndices[1] < instance.restVertices.size()
-        && outIndices[2] < instance.restVertices.size()
-    ;
 }
 
 [[nodiscard]] u64 MakeEdgeKey(const u32 a, const u32 b){
@@ -244,9 +160,9 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
 
 [[nodiscard]] bool MatchingSourceSample(const SourceSample& lhs, const SourceSample& rhs){
     return lhs.sourceTri == rhs.sourceTri
-        && DeformableValidation::AbsF32(lhs.bary[0] - rhs.bary[0]) <= s_BarycentricSumEpsilon
-        && DeformableValidation::AbsF32(lhs.bary[1] - rhs.bary[1]) <= s_BarycentricSumEpsilon
-        && DeformableValidation::AbsF32(lhs.bary[2] - rhs.bary[2]) <= s_BarycentricSumEpsilon
+        && DeformableValidation::AbsF32(lhs.bary[0] - rhs.bary[0]) <= DeformableValidation::s_BarycentricSumEpsilon
+        && DeformableValidation::AbsF32(lhs.bary[1] - rhs.bary[1]) <= DeformableValidation::s_BarycentricSumEpsilon
+        && DeformableValidation::AbsF32(lhs.bary[2] - rhs.bary[2]) <= DeformableValidation::s_BarycentricSumEpsilon
     ;
 }
 
@@ -416,10 +332,6 @@ void CanonicalizeBoundaryLoopStart(Vector<EdgeRecord>& edges){
     return true;
 }
 
-[[nodiscard]] f32 TangentHandedness(const f32 value){
-    return value < 0.0f ? -1.0f : 1.0f;
-}
-
 [[nodiscard]] Vec3 ProjectedEdgeDirection(
     const Vector<DeformableVertexRest>& vertices,
     const HoleFrame& frame,
@@ -538,7 +450,7 @@ bool CommitDeformableRestSpaceHole(
 
     const usize triangleCount = instance.indices.size() / 3u;
     u32 hitTriangleIndices[3] = {};
-    if(!__hidden_deformable_surface_edit::ValidateTriangleIndex(instance, params.posedHit.triangle, hitTriangleIndices))
+    if(!DeformableRuntime::ValidateTriangleIndex(instance, params.posedHit.triangle, hitTriangleIndices))
         return false;
 
     __hidden_deformable_surface_edit::HoleFrame frame;
@@ -553,7 +465,7 @@ bool CommitDeformableRestSpaceHole(
     u32 removedTriangleCount = 0;
     for(usize triangle = 0; triangle < triangleCount; ++triangle){
         u32 indices[3] = {};
-        if(!__hidden_deformable_surface_edit::ValidateTriangleIndex(instance, static_cast<u32>(triangle), indices))
+        if(!DeformableRuntime::ValidateTriangleIndex(instance, static_cast<u32>(triangle), indices))
             return false;
 
         const bool selectedTriangle = triangle == static_cast<usize>(params.posedHit.triangle);
@@ -572,7 +484,7 @@ bool CommitDeformableRestSpaceHole(
     edges.reserve(instance.indices.size());
     for(usize triangle = 0; triangle < triangleCount; ++triangle){
         u32 indices[3] = {};
-        if(!__hidden_deformable_surface_edit::ValidateTriangleIndex(instance, static_cast<u32>(triangle), indices))
+        if(!DeformableRuntime::ValidateTriangleIndex(instance, static_cast<u32>(triangle), indices))
             return false;
 
         __hidden_deformable_surface_edit::RegisterFullEdge(edges, indices[0], indices[1]);
@@ -584,7 +496,7 @@ bool CommitDeformableRestSpaceHole(
             continue;
 
         u32 indices[3] = {};
-        if(!__hidden_deformable_surface_edit::ValidateTriangleIndex(instance, static_cast<u32>(triangle), indices))
+        if(!DeformableRuntime::ValidateTriangleIndex(instance, static_cast<u32>(triangle), indices))
             return false;
 
         if(!__hidden_deformable_surface_edit::RegisterRemovedEdge(edges, indices[0], indices[1])
@@ -629,7 +541,7 @@ bool CommitDeformableRestSpaceHole(
     Vector<DeformableMorph> newMorphs = instance.morphs;
     Vector<u32> newIndices;
     const usize removedIndexCount = static_cast<usize>(removedTriangleCount) * 3u;
-    const usize wallIndexCount = __hidden_deformable_surface_edit::ActiveLength(params.depth)
+    const usize wallIndexCount = DeformableRuntime::ActiveLength(params.depth)
         ? orderedBoundaryEdges.size() * 6u
         : 0u
     ;
@@ -652,7 +564,7 @@ bool CommitDeformableRestSpaceHole(
 
     u32 addedTriangleCount = 0;
     u32 addedVertexCount = 0;
-    if(__hidden_deformable_surface_edit::ActiveLength(params.depth)){
+    if(DeformableRuntime::ActiveLength(params.depth)){
         const usize boundaryVertexCount = orderedBoundaryEdges.size();
         Vector<f32> boundaryU;
         boundaryU.resize(boundaryVertexCount, 0.0f);
@@ -662,27 +574,27 @@ bool CommitDeformableRestSpaceHole(
             boundaryU[edgeIndex] = boundaryLength;
 
             const __hidden_deformable_surface_edit::EdgeRecord& edge = orderedBoundaryEdges[edgeIndex];
-            __hidden_deformable_surface_edit::Vec3 edgeDelta =
-                __hidden_deformable_surface_edit::Subtract(
-                    __hidden_deformable_surface_edit::ToVec3(newRestVertices[edge.b].position),
-                    __hidden_deformable_surface_edit::ToVec3(newRestVertices[edge.a].position)
+            DeformableRuntime::Vec3 edgeDelta =
+                DeformableRuntime::Subtract(
+                    DeformableRuntime::ToVec3(newRestVertices[edge.b].position),
+                    DeformableRuntime::ToVec3(newRestVertices[edge.a].position)
                 )
             ;
-            edgeDelta = __hidden_deformable_surface_edit::Subtract(
+            edgeDelta = DeformableRuntime::Subtract(
                 edgeDelta,
-                __hidden_deformable_surface_edit::Scale(frame.normal, __hidden_deformable_surface_edit::Dot(edgeDelta, frame.normal))
+                DeformableRuntime::Scale(frame.normal, DeformableRuntime::Dot(edgeDelta, frame.normal))
             )
             ;
 
-            const f32 edgeLength = __hidden_deformable_surface_edit::Length(edgeDelta);
-            if(!IsFinite(edgeLength) || !__hidden_deformable_surface_edit::ActiveLength(edgeLength))
+            const f32 edgeLength = DeformableRuntime::Length(edgeDelta);
+            if(!IsFinite(edgeLength) || !DeformableRuntime::ActiveLength(edgeLength))
                 return false;
             boundaryLength += edgeLength;
             if(!IsFinite(boundaryLength))
                 return false;
         }
 
-        if(!__hidden_deformable_surface_edit::ActiveLength(boundaryLength))
+        if(!DeformableRuntime::ActiveLength(boundaryLength))
             return false;
 
         Vector<u32> rimVertices;
@@ -705,13 +617,13 @@ bool CommitDeformableRestSpaceHole(
             )
                 return false;
 
-            const __hidden_deformable_surface_edit::Vec3 rimPosition =
-                __hidden_deformable_surface_edit::ToVec3(newRestVertices[edge.a].position)
+            const DeformableRuntime::Vec3 rimPosition =
+                DeformableRuntime::ToVec3(newRestVertices[edge.a].position)
             ;
-            const __hidden_deformable_surface_edit::Vec3 innerPosition =
-                __hidden_deformable_surface_edit::Subtract(
+            const DeformableRuntime::Vec3 innerPosition =
+                DeformableRuntime::Subtract(
                     rimPosition,
-                    __hidden_deformable_surface_edit::Scale(frame.normal, params.depth)
+                    DeformableRuntime::Scale(frame.normal, params.depth)
                 )
             ;
             const f32 uvU = boundaryU[edgeIndex] / boundaryLength;

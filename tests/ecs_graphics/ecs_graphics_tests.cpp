@@ -413,6 +413,10 @@ static void TestRaycastReturnsPoseAndRestHit(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, hit.runtimeMesh == instance.handle);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, hit.editRevision == 7u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, hit.triangle == 0u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(hit.bary[0], 0.25f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(hit.bary[1], 0.25f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(hit.bary[2], 0.5f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(hit.bary[0] + hit.bary[1] + hit.bary[2], 1.0f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(hit.distance, 1.0f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(hit.position.x, 0.0f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(hit.position.y, 0.0f));
@@ -751,7 +755,10 @@ static void TestRestSpaceHoleEditCreatesPerInstancePatch(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, result.addedTriangleCount == 8u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, result.editRevision == 4u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.editRevision == 4u);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, (instance.dirtyFlags & NWB::Impl::RuntimeMeshDirtyFlag::All) == NWB::Impl::RuntimeMeshDirtyFlag::All);
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        (instance.dirtyFlags & NWB::Impl::RuntimeMeshDirtyFlag::All) == NWB::Impl::RuntimeMeshDirtyFlag::All
+    );
     NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.restVertices.size() == oldVertexCount + 8u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.indices.size() == oldIndexCount - 6u + 24u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.skin.size() == instance.restVertices.size());

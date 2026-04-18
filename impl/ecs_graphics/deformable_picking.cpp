@@ -4,9 +4,8 @@
 
 #include "deformable_picking.h"
 
+#include "deformable_runtime_helpers.h"
 #include "renderer_system.h"
-
-#include <impl/assets_graphics/deformable_geometry_validation.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -24,30 +23,7 @@ namespace __hidden_deformable_picking{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr f32 s_Epsilon = 0.000001f;
-static constexpr f32 s_FrameEpsilon = 0.00000001f;
-
-struct Vec3{
-    f32 x = 0.0f;
-    f32 y = 0.0f;
-    f32 z = 0.0f;
-};
-
-[[nodiscard]] bool ActiveWeight(const f32 value){
-    return DeformableValidation::ActiveWeight(value);
-}
-
-[[nodiscard]] bool IsAffineJointMatrix(const DeformableJointMatrix& matrix){
-    return DeformableValidation::IsFiniteFloat4(matrix.column0)
-        && DeformableValidation::IsFiniteFloat4(matrix.column1)
-        && DeformableValidation::IsFiniteFloat4(matrix.column2)
-        && DeformableValidation::IsFiniteFloat4(matrix.column3)
-        && !ActiveWeight(matrix.column0.w)
-        && !ActiveWeight(matrix.column1.w)
-        && !ActiveWeight(matrix.column2.w)
-        && !ActiveWeight(matrix.column3.w - 1.0f)
-    ;
-}
+using namespace DeformableRuntime;
 
 [[nodiscard]] bool IsFiniteRay(const DeformablePickingRay& ray){
     return DeformableValidation::IsFiniteFloat3(ray.origin)
@@ -61,58 +37,6 @@ struct Vec3{
 [[nodiscard]] bool AssignCurrentTriangleSample(const u32 triangle, const f32 (&bary)[3], SourceSample& outSample){
     outSample.sourceTri = triangle;
     return DeformableValidation::NormalizeSourceBarycentric(bary, outSample.bary);
-}
-
-[[nodiscard]] Vec3 ToVec3(const Float3Data& value){
-    return Vec3{ value.x, value.y, value.z };
-}
-
-[[nodiscard]] Float3Data ToFloat3(const Vec3& value){
-    return Float3Data(value.x, value.y, value.z);
-}
-
-[[nodiscard]] Vec3 Add(const Vec3& lhs, const Vec3& rhs){
-    return Vec3{ lhs.x + rhs.x, lhs.y + rhs.y, lhs.z + rhs.z };
-}
-
-[[nodiscard]] Vec3 Subtract(const Vec3& lhs, const Vec3& rhs){
-    return Vec3{ lhs.x - rhs.x, lhs.y - rhs.y, lhs.z - rhs.z };
-}
-
-[[nodiscard]] Vec3 Scale(const Vec3& value, const f32 scalar){
-    return Vec3{ value.x * scalar, value.y * scalar, value.z * scalar };
-}
-
-[[nodiscard]] f32 Dot(const Vec3& lhs, const Vec3& rhs){
-    return (lhs.x * rhs.x) + (lhs.y * rhs.y) + (lhs.z * rhs.z);
-}
-
-[[nodiscard]] Vec3 Cross(const Vec3& lhs, const Vec3& rhs){
-    return Vec3{
-        (lhs.y * rhs.z) - (lhs.z * rhs.y),
-        (lhs.z * rhs.x) - (lhs.x * rhs.z),
-        (lhs.x * rhs.y) - (lhs.y * rhs.x),
-    };
-}
-
-[[nodiscard]] f32 LengthSquared(const Vec3& value){
-    return Dot(value, value);
-}
-
-[[nodiscard]] Vec3 Normalize(const Vec3& value, const Vec3& fallback){
-    const f32 lengthSquared = LengthSquared(value);
-    if(lengthSquared <= s_FrameEpsilon)
-        return fallback;
-
-    return Scale(value, 1.0f / Sqrt(lengthSquared));
-}
-
-[[nodiscard]] Vec3 FallbackTangent(const Vec3& normal){
-    const Vec3 axis = DeformableValidation::AbsF32(normal.z) < 0.999f
-        ? Vec3{ 0.0f, 0.0f, 1.0f }
-        : Vec3{ 0.0f, 1.0f, 0.0f }
-    ;
-    return Normalize(Cross(axis, normal), Vec3{ 1.0f, 0.0f, 0.0f });
 }
 
 void OrthonormalizeFrame(
@@ -136,10 +60,9 @@ void OrthonormalizeFrame(
     tangent.x = projectedTangent.x;
     tangent.y = projectedTangent.y;
     tangent.z = projectedTangent.z;
-    tangent.w = DeformableValidation::AbsF32(tangent.w) > s_Epsilon
-        ? (tangent.w < 0.0f ? -1.0f : 1.0f)
-        : (fallbackTangent.w < 0.0f ? -1.0f : 1.0f)
-    ;
+    tangent.w = TangentHandedness(
+        DeformableValidation::AbsF32(tangent.w) > s_Epsilon ? tangent.w : fallbackTangent.w
+    );
 }
 
 [[nodiscard]] bool ResolveMorphWeight(
@@ -277,34 +200,6 @@ void OrthonormalizeFrame(
     return true;
 }
 
-[[nodiscard]] bool ResolveDisplacement(
-    const DeformableRuntimeMeshInstance& instance,
-    const DeformableDisplacementComponent* component,
-    DeformableDisplacement& outDisplacement)
-{
-    outDisplacement = instance.displacement;
-    if(!ValidDeformableDisplacementDescriptor(outDisplacement))
-        return false;
-    if(outDisplacement.mode == DeformableDisplacementMode::None)
-        return true;
-    if(component && !component->enabled)
-        outDisplacement = DeformableDisplacement{};
-
-    if(outDisplacement.mode == DeformableDisplacementMode::None)
-        return true;
-
-    const f32 scale = component ? component->amplitudeScale : 1.0f;
-    if(!IsFinite(scale))
-        return false;
-
-    outDisplacement.amplitude *= scale;
-    if(!IsFinite(outDisplacement.amplitude))
-        return false;
-    if(!ActiveWeight(outDisplacement.amplitude))
-        outDisplacement = DeformableDisplacement{};
-    return true;
-}
-
 void ApplyDisplacement(const DeformableDisplacement& displacement, DeformableVertexRest& vertex){
     if(displacement.mode != DeformableDisplacementMode::ScalarUvRamp)
         return;
@@ -316,12 +211,6 @@ void ApplyDisplacement(const DeformableDisplacement& displacement, DeformableVer
     vertex.position.x += vertex.normal.x * offset;
     vertex.position.y += vertex.normal.y * offset;
     vertex.position.z += vertex.normal.z * offset;
-}
-
-[[nodiscard]] Vec3 RotateByQuaternion(const Vec3& value, const AlignedFloat4Data& rotation){
-    const Vec3 q{ rotation.x, rotation.y, rotation.z };
-    const Vec3 twiceCross = Scale(Cross(q, value), 2.0f);
-    return Add(Add(value, Scale(twiceCross, rotation.w)), Cross(q, twiceCross));
 }
 
 void ApplyTransform(const Core::ECS::TransformComponent* transform, DeformableVertexRest& vertex){
@@ -347,24 +236,6 @@ void ApplyTransform(const Core::ECS::TransformComponent* transform, DeformableVe
     vertex.tangent.x = tangent.x;
     vertex.tangent.y = tangent.y;
     vertex.tangent.z = tangent.z;
-}
-
-[[nodiscard]] bool ValidateTriangleIndex(
-    const DeformableRuntimeMeshInstance& instance,
-    const u32 triangle,
-    u32 (&outIndices)[3])
-{
-    const usize indexBase = static_cast<usize>(triangle) * 3u;
-    if(indexBase > instance.indices.size() || instance.indices.size() - indexBase < 3u)
-        return false;
-
-    outIndices[0] = instance.indices[indexBase + 0u];
-    outIndices[1] = instance.indices[indexBase + 1u];
-    outIndices[2] = instance.indices[indexBase + 2u];
-    return outIndices[0] < instance.restVertices.size()
-        && outIndices[1] < instance.restVertices.size()
-        && outIndices[2] < instance.restVertices.size()
-    ;
 }
 
 [[nodiscard]] bool IntersectTriangle(
@@ -411,7 +282,7 @@ void ApplyTransform(const Core::ECS::TransformComponent* transform, DeformableVe
 
 };
 
-using __hidden_deformable_picking::Vec3;
+using DeformableRuntime::Vec3;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -435,7 +306,7 @@ bool BuildDeformablePickingVertices(
         return false;
 
     DeformableDisplacement displacement;
-    if(!__hidden_deformable_picking::ResolveDisplacement(instance, inputs.displacement, displacement))
+    if(!DeformableRuntime::ResolveEffectiveDisplacement(instance.displacement, inputs.displacement, displacement))
         return false;
     if(!__hidden_deformable_picking::ValidateJointPalette(instance, inputs.jointPalette))
         return false;
@@ -446,12 +317,12 @@ bool BuildDeformablePickingVertices(
 
     for(usize vertexIndex = 0; vertexIndex < outVertices.size(); ++vertexIndex){
         DeformableVertexRest& vertex = outVertices[vertexIndex];
-        const Vec3 restNormal = __hidden_deformable_picking::ToVec3(vertex.normal);
+        const Vec3 restNormal = DeformableRuntime::ToVec3(vertex.normal);
         const Float4Data restTangent = vertex.tangent;
 
-        Vec3 normal = __hidden_deformable_picking::ToVec3(vertex.normal);
+        Vec3 normal = DeformableRuntime::ToVec3(vertex.normal);
         __hidden_deformable_picking::OrthonormalizeFrame(normal, vertex.tangent, restNormal, restTangent);
-        vertex.normal = __hidden_deformable_picking::ToFloat3(normal);
+        vertex.normal = DeformableRuntime::ToFloat3(normal);
 
         const Vec3 preSkinNormal = normal;
         const Float4Data preSkinTangent = vertex.tangent;
@@ -462,9 +333,9 @@ bool BuildDeformablePickingVertices(
             vertex
         ))
             return false;
-        normal = __hidden_deformable_picking::ToVec3(vertex.normal);
+        normal = DeformableRuntime::ToVec3(vertex.normal);
         __hidden_deformable_picking::OrthonormalizeFrame(normal, vertex.tangent, preSkinNormal, preSkinTangent);
-        vertex.normal = __hidden_deformable_picking::ToFloat3(normal);
+        vertex.normal = DeformableRuntime::ToFloat3(normal);
 
         __hidden_deformable_picking::ApplyDisplacement(displacement, vertex);
         __hidden_deformable_picking::ApplyTransform(inputs.transform, vertex);
@@ -488,7 +359,7 @@ bool ResolveDeformableRestSurfaceSample(
         return false;
 
     u32 vertexIndices[3] = {};
-    if(!__hidden_deformable_picking::ValidateTriangleIndex(instance, triangle, vertexIndices))
+    if(!DeformableRuntime::ValidateTriangleIndex(instance, triangle, vertexIndices))
         return false;
 
     const usize triangleCount = instance.indices.size() / 3u;
@@ -544,12 +415,12 @@ bool RaycastDeformableRuntimeMesh(
     if(!instance.entity.valid() || !instance.handle.valid() || !__hidden_deformable_picking::IsFiniteRay(ray))
         return false;
 
-    const Vec3 rayOrigin = __hidden_deformable_picking::ToVec3(ray.origin);
-    const Vec3 rayDirection = __hidden_deformable_picking::Normalize(
-        __hidden_deformable_picking::ToVec3(ray.direction),
+    const Vec3 rayOrigin = DeformableRuntime::ToVec3(ray.origin);
+    const Vec3 rayDirection = DeformableRuntime::Normalize(
+        DeformableRuntime::ToVec3(ray.direction),
         Vec3{}
     );
-    if(__hidden_deformable_picking::LengthSquared(rayDirection) <= __hidden_deformable_picking::s_FrameEpsilon)
+    if(DeformableRuntime::LengthSquared(rayDirection) <= DeformableRuntime::s_FrameEpsilon)
         return false;
 
     Vector<DeformableVertexRest> posedVertices;
@@ -562,12 +433,12 @@ bool RaycastDeformableRuntimeMesh(
     DeformablePosedHit closestHit;
     for(usize triangleIndex = 0; triangleIndex < triangleCount; ++triangleIndex){
         u32 vertexIndices[3] = {};
-        if(!__hidden_deformable_picking::ValidateTriangleIndex(instance, static_cast<u32>(triangleIndex), vertexIndices))
+        if(!DeformableRuntime::ValidateTriangleIndex(instance, static_cast<u32>(triangleIndex), vertexIndices))
             return false;
 
-        const Vec3 a = __hidden_deformable_picking::ToVec3(posedVertices[vertexIndices[0]].position);
-        const Vec3 b = __hidden_deformable_picking::ToVec3(posedVertices[vertexIndices[1]].position);
-        const Vec3 c = __hidden_deformable_picking::ToVec3(posedVertices[vertexIndices[2]].position);
+        const Vec3 a = DeformableRuntime::ToVec3(posedVertices[vertexIndices[0]].position);
+        const Vec3 b = DeformableRuntime::ToVec3(posedVertices[vertexIndices[1]].position);
+        const Vec3 c = DeformableRuntime::ToVec3(posedVertices[vertexIndices[2]].position);
 
         f32 distance = 0.0f;
         f32 bary[3] = {};
@@ -576,19 +447,23 @@ bool RaycastDeformableRuntimeMesh(
         if(distance < ray.minDistance || distance > closestDistance)
             continue;
 
-        SourceSample restSample;
-        if(!ResolveDeformableRestSurfaceSample(instance, static_cast<u32>(triangleIndex), bary, restSample))
+        f32 hitBary[3] = {};
+        if(!DeformableValidation::NormalizeSourceBarycentric(bary, hitBary))
             continue;
 
-        const Vec3 edge0 = __hidden_deformable_picking::Subtract(b, a);
-        const Vec3 edge1 = __hidden_deformable_picking::Subtract(c, a);
-        const Vec3 normal = __hidden_deformable_picking::Normalize(
-            __hidden_deformable_picking::Cross(edge0, edge1),
+        SourceSample restSample;
+        if(!ResolveDeformableRestSurfaceSample(instance, static_cast<u32>(triangleIndex), hitBary, restSample))
+            continue;
+
+        const Vec3 edge0 = DeformableRuntime::Subtract(b, a);
+        const Vec3 edge1 = DeformableRuntime::Subtract(c, a);
+        const Vec3 normal = DeformableRuntime::Normalize(
+            DeformableRuntime::Cross(edge0, edge1),
             Vec3{ 0.0f, 0.0f, 1.0f }
         );
-        const Vec3 position = __hidden_deformable_picking::Add(
+        const Vec3 position = DeformableRuntime::Add(
             rayOrigin,
-            __hidden_deformable_picking::Scale(rayDirection, distance)
+            DeformableRuntime::Scale(rayDirection, distance)
         );
 
         closestDistance = distance;
@@ -596,12 +471,12 @@ bool RaycastDeformableRuntimeMesh(
         closestHit.runtimeMesh = instance.handle;
         closestHit.editRevision = instance.editRevision;
         closestHit.triangle = static_cast<u32>(triangleIndex);
-        closestHit.bary[0] = bary[0];
-        closestHit.bary[1] = bary[1];
-        closestHit.bary[2] = bary[2];
+        closestHit.bary[0] = hitBary[0];
+        closestHit.bary[1] = hitBary[1];
+        closestHit.bary[2] = hitBary[2];
         closestHit.distance = distance;
-        closestHit.position = __hidden_deformable_picking::ToFloat3(position);
-        closestHit.normal = __hidden_deformable_picking::ToFloat3(normal);
+        closestHit.position = DeformableRuntime::ToFloat3(position);
+        closestHit.normal = DeformableRuntime::ToFloat3(normal);
         closestHit.restSample = restSample;
         foundHit = true;
     }

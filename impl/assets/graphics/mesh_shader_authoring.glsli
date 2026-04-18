@@ -44,7 +44,7 @@ struct NwbMeshInstanceData{
 
 const uint NWB_MESH_SOURCE_VERTEX_SCALAR_STRIDE = 6u;
 const uint NWB_MESH_SOURCE_VERTEX_LAYOUT_POSITION_COLOR = 0u;
-const uint NWB_MESH_SOURCE_VERTEX_LAYOUT_DEFORMABLE_REST = 1u;
+const uint NWB_MESH_SOURCE_VERTEX_LAYOUT_DEFORMABLE_VERTEX = 1u;
 const uint NWB_MESH_DEFORMABLE_VERTEX_SCALAR_STRIDE = 16u;
 
 layout(local_size_x = NWB_MESH_SHADER_GROUP_SIZE_X) in;
@@ -137,7 +137,7 @@ uint nwbMeshTriangleIndex(){
 NwbMeshSourceVertex nwbMeshLoadSourceVertex(const uint triangleIndex, const uint corner){
     const uint indexBase = triangleIndex * 3u;
     const uint sourceVertexIndex = nwbMeshSourceIndices[indexBase + corner];
-    const bool deformableLayout = nwbMeshSourceVertexLayout() == NWB_MESH_SOURCE_VERTEX_LAYOUT_DEFORMABLE_REST;
+    const bool deformableLayout = nwbMeshSourceVertexLayout() == NWB_MESH_SOURCE_VERTEX_LAYOUT_DEFORMABLE_VERTEX;
     const uint scalarStride = deformableLayout
         ? NWB_MESH_DEFORMABLE_VERTEX_SCALAR_STRIDE
         : NWB_MESH_SOURCE_VERTEX_SCALAR_STRIDE

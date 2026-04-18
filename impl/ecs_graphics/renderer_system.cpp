@@ -34,7 +34,7 @@ namespace __hidden_ecs_graphics{
 static constexpr Core::Color s_ClearColor = Core::Color(0.07f, 0.09f, 0.13f, 1.f);
 static constexpr u32 s_PositionColorVertexStride = sizeof(f32) * 6u;
 static constexpr u32 s_MeshSourceLayoutPositionColor = 0u;
-static constexpr u32 s_MeshSourceLayoutDeformableRest = 1u;
+static constexpr u32 s_MeshSourceLayoutDeformableVertex = 1u;
 static constexpr u32 s_EmulatedVertexStride = sizeof(f32) * 20u;
 static constexpr u32 s_TrianglesPerWorkgroup = 32u;
 static constexpr Core::TextureSubresourceSet s_FramebufferSubresources = Core::TextureSubresourceSet(0, 1, 0, 1);
@@ -2145,7 +2145,7 @@ bool RendererSystem::ensureDeformableGeometryResources(const DeformableRuntimeMe
     createdGeometry.indexCount = static_cast<u32>(instance.indices.size());
     createdGeometry.triangleCount = createdGeometry.indexCount / 3u;
     createdGeometry.dispatchGroupCount = __hidden_ecs_graphics::ComputeDispatchGroupCount(createdGeometry.triangleCount);
-    createdGeometry.sourceVertexLayout = __hidden_ecs_graphics::s_MeshSourceLayoutDeformableRest;
+    createdGeometry.sourceVertexLayout = __hidden_ecs_graphics::s_MeshSourceLayoutDeformableVertex;
     createdGeometry.runtimeMesh = instance.handle;
     createdGeometry.runtimeEditRevision = instance.editRevision;
     if(createdGeometry.dispatchGroupCount == 0){

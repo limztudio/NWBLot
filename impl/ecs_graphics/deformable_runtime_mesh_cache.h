@@ -89,7 +89,13 @@ private:
     void releaseSource(const Name& sourceName);
     void eraseUnusedSource(const Name& sourceName);
     [[nodiscard]] Name deriveRuntimeBufferName(const DeformableRuntimeMeshInstance& instance, AStringView suffix)const;
-    [[nodiscard]] bool computePayloadBytes(usize count, usize stride, usize& outBytes, const char* label)const;
+    [[nodiscard]] bool computePayloadBytes(
+        const DeformableRuntimeMeshInstance& instance,
+        usize count,
+        usize stride,
+        usize& outBytes,
+        const char* label
+    )const;
 
 
 private:

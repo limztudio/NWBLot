@@ -17,6 +17,28 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_deformable_runtime_mesh_cache{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static constexpr RuntimeMeshDirtyFlags s_KnownDirtyFlags = RuntimeMeshDirtyFlag::All;
+
+[[nodiscard]] RuntimeMeshDirtyFlags SanitizeDirtyFlags(const RuntimeMeshDirtyFlags dirtyFlags){
+    return static_cast<RuntimeMeshDirtyFlags>(dirtyFlags & s_KnownDirtyFlags);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 const DeformableGeometry* DeformableRuntimeMeshCache::DeformableGeometrySource::geometry()const{
     if(!asset || asset->assetType() != DeformableGeometry::AssetTypeName())
         return nullptr;
@@ -106,6 +128,16 @@ bool DeformableRuntimeMeshCache::bumpEditRevision(const RuntimeMeshHandle handle
     DeformableRuntimeMeshInstance* instance = findInstance(handle);
     if(!instance)
         return false;
+    const RuntimeMeshDirtyFlags sanitizedDirtyFlags =
+        __hidden_deformable_runtime_mesh_cache::SanitizeDirtyFlags(dirtyFlags)
+    ;
+    if(sanitizedDirtyFlags == RuntimeMeshDirtyFlag::None){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' revision bump requires dirty flags"),
+            instance->handle.value
+        );
+        return false;
+    }
     if(instance->editRevision == Limit<u32>::s_Max){
         NWB_LOGGER_ERROR(
             NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' edit revision overflowed"),
@@ -115,7 +147,9 @@ bool DeformableRuntimeMeshCache::bumpEditRevision(const RuntimeMeshHandle handle
     }
 
     ++instance->editRevision;
-    instance->dirtyFlags = static_cast<RuntimeMeshDirtyFlags>(instance->dirtyFlags | dirtyFlags);
+    instance->dirtyFlags = static_cast<RuntimeMeshDirtyFlags>(
+        instance->dirtyFlags | sanitizedDirtyFlags
+    );
     return true;
 }
 
@@ -244,9 +278,21 @@ bool DeformableRuntimeMeshCache::uploadRuntimeMeshBuffers(DeformableRuntimeMeshI
 
     usize restVertexBytes = 0;
     usize indexBytes = 0;
-    if(!computePayloadBytes(instance.restVertices.size(), sizeof(DeformableVertexRest), restVertexBytes, "rest vertices"))
+    if(!computePayloadBytes(
+        instance,
+        instance.restVertices.size(),
+        sizeof(DeformableVertexRest),
+        restVertexBytes,
+        "rest vertices"
+    ))
         return false;
-    if(!computePayloadBytes(instance.indices.size(), sizeof(u32), indexBytes, "indices"))
+    if(!computePayloadBytes(
+        instance,
+        instance.indices.size(),
+        sizeof(u32),
+        indexBytes,
+        "indices"
+    ))
         return false;
 
     const Name restVertexBufferName = deriveRuntimeBufferName(instance, AStringView("rest_vb"));
@@ -363,6 +409,7 @@ Name DeformableRuntimeMeshCache::deriveRuntimeBufferName(const DeformableRuntime
 }
 
 bool DeformableRuntimeMeshCache::computePayloadBytes(
+    const DeformableRuntimeMeshInstance& instance,
     const usize count,
     const usize stride,
     usize& outBytes,
@@ -371,7 +418,8 @@ bool DeformableRuntimeMeshCache::computePayloadBytes(
     outBytes = 0;
     if(stride == 0u || count > Limit<usize>::s_Max / stride){
         NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' payload byte size overflows"),
+            NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' '{}' payload byte size overflows"),
+            StringConvert(instance.source.name().c_str()),
             StringConvert(AString(label))
         );
         return false;

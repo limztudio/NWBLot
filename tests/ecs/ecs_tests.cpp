@@ -131,6 +131,77 @@ static void TestProjectAndMainCamera(TestContext& context){
     NWB_ECS_TEST_CHECK(context, cameraViewCount == 1);
 }
 
+static void TestLightComponents(TestContext& context){
+    TestWorld testWorld;
+
+    auto directionalEntity = testWorld.world.createEntity();
+    auto& directionalTransform = directionalEntity.addComponent<NWB::Core::ECS::TransformComponent>();
+    auto& directionalLight = directionalEntity.addComponent<NWB::Core::ECS::LightComponent>();
+
+    NWB_ECS_TEST_CHECK(context, directionalEntity.hasComponent<NWB::Core::ECS::TransformComponent>());
+    NWB_ECS_TEST_CHECK(context, directionalEntity.hasComponent<NWB::Core::ECS::LightComponent>());
+    NWB_ECS_TEST_CHECK(context, directionalLight.type == NWB::Core::ECS::LightType::Directional);
+    NWB_ECS_TEST_CHECK(context, directionalLight.color.x == 1.0f);
+    NWB_ECS_TEST_CHECK(context, directionalLight.color.y == 1.0f);
+    NWB_ECS_TEST_CHECK(context, directionalLight.color.z == 1.0f);
+    NWB_ECS_TEST_CHECK(context, directionalLight.intensity > 0.0f);
+    NWB_ECS_TEST_CHECK(context, directionalLight.range > 0.0f);
+    NWB_ECS_TEST_CHECK(context, directionalTransform.rotation.w == 1.0f);
+
+    auto pointEntity = testWorld.world.createEntity();
+    auto& pointTransform = pointEntity.addComponent<NWB::Core::ECS::TransformComponent>();
+    auto& pointLight = pointEntity.addComponent<NWB::Core::ECS::LightComponent>();
+    pointTransform.position = AlignedFloat3Data(1.0f, 2.0f, 3.0f);
+    pointLight.type = NWB::Core::ECS::LightType::Point;
+    pointLight.color = AlignedFloat3Data(1.0f, 0.75f, 0.5f);
+    pointLight.intensity = 4.0f;
+    pointLight.range = 12.0f;
+
+    NWB_ECS_TEST_CHECK(context, pointEntity.hasComponent<NWB::Core::ECS::TransformComponent>());
+    NWB_ECS_TEST_CHECK(context, pointEntity.hasComponent<NWB::Core::ECS::LightComponent>());
+    NWB_ECS_TEST_CHECK(context, pointLight.type == NWB::Core::ECS::LightType::Point);
+    NWB_ECS_TEST_CHECK(context, pointLight.color.x == 1.0f);
+    NWB_ECS_TEST_CHECK(context, pointLight.color.y == 0.75f);
+    NWB_ECS_TEST_CHECK(context, pointLight.color.z == 0.5f);
+    NWB_ECS_TEST_CHECK(context, pointLight.intensity == 4.0f);
+    NWB_ECS_TEST_CHECK(context, pointLight.range == 12.0f);
+
+    NWB_ECS_TEST_CHECK(context, (reinterpret_cast<usize>(&directionalLight) % alignof(NWB::Core::ECS::LightComponent)) == 0);
+    NWB_ECS_TEST_CHECK(context, (reinterpret_cast<usize>(&pointLight) % alignof(NWB::Core::ECS::LightComponent)) == 0);
+
+    usize lightViewCount = 0;
+    usize directionalLightCount = 0;
+    usize pointLightCount = 0;
+    testWorld.world.view<
+        NWB::Core::ECS::TransformComponent,
+        NWB::Core::ECS::LightComponent
+    >().each(
+        [&context, &lightViewCount, &directionalLightCount, &pointLightCount, pointEntityId = pointEntity.id()](
+            NWB::Core::ECS::EntityID entityId,
+            NWB::Core::ECS::TransformComponent& viewTransform,
+            NWB::Core::ECS::LightComponent& viewLight
+        ){
+            ++lightViewCount;
+            if(viewLight.type == NWB::Core::ECS::LightType::Directional){
+                ++directionalLightCount;
+                NWB_ECS_TEST_CHECK(context, viewLight.intensity > 0.0f);
+            }
+            else if(viewLight.type == NWB::Core::ECS::LightType::Point){
+                ++pointLightCount;
+                NWB_ECS_TEST_CHECK(context, entityId == pointEntityId);
+                NWB_ECS_TEST_CHECK(context, viewTransform.position.x == 1.0f);
+                NWB_ECS_TEST_CHECK(context, viewLight.range > 0.0f);
+            }
+            else{
+                NWB_ECS_TEST_CHECK(context, false);
+            }
+        }
+    );
+    NWB_ECS_TEST_CHECK(context, lightViewCount == 2);
+    NWB_ECS_TEST_CHECK(context, directionalLightCount == 1);
+    NWB_ECS_TEST_CHECK(context, pointLightCount == 1);
+}
+
 static void TestComponentLifetime(TestContext& context){
     TestWorld testWorld;
 
@@ -149,6 +220,12 @@ static void TestComponentLifetime(TestContext& context){
 
     entity.addComponent<NWB::Core::ECS::FpsCameraControllerComponent>();
     NWB_ECS_TEST_CHECK(context, entity.hasComponent<NWB::Core::ECS::FpsCameraControllerComponent>());
+
+    entity.addComponent<NWB::Core::ECS::LightComponent>();
+    NWB_ECS_TEST_CHECK(context, entity.hasComponent<NWB::Core::ECS::LightComponent>());
+
+    entity.removeComponent<NWB::Core::ECS::LightComponent>();
+    NWB_ECS_TEST_CHECK(context, !entity.hasComponent<NWB::Core::ECS::LightComponent>());
 
     entity.destroy();
     NWB_ECS_TEST_CHECK(context, !entity.alive());
@@ -181,6 +258,7 @@ int main(){
 
     __hidden_ecs_tests::TestContext context;
     __hidden_ecs_tests::TestProjectAndMainCamera(context);
+    __hidden_ecs_tests::TestLightComponents(context);
     __hidden_ecs_tests::TestComponentLifetime(context);
 
     if(context.failed != 0){

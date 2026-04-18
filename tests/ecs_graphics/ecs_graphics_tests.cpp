@@ -375,6 +375,26 @@ static void TestPickingRejectsInvalidMorphDelta(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::BuildDeformablePickingVertices(instance, inputs, vertices));
 }
 
+static void TestPickingRejectsActiveEmptyMorph(TestContext& context){
+    NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
+
+    NWB::Impl::DeformableMorph morph;
+    morph.name = Name("empty");
+    instance.morphs.push_back(morph);
+
+    NWB::Impl::DeformableMorphWeightsComponent weights;
+    weights.weights.push_back(NWB::Impl::DeformableMorphWeight{ Name("empty"), 1.0f });
+
+    NWB::Impl::DeformablePickingInputs inputs;
+    inputs.morphWeights = &weights;
+
+    Vector<NWB::Impl::DeformableVertexRest> vertices;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::BuildDeformablePickingVertices(instance, inputs, vertices));
+
+    weights.weights[0].weight = 0.0f;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::BuildDeformablePickingVertices(instance, inputs, vertices));
+}
+
 
 #undef NWB_ECS_GRAPHICS_TEST_CHECK
 
@@ -407,6 +427,7 @@ int main(){
     __hidden_ecs_graphics_tests::TestPickingRejectsInvalidSkinWeights(context);
     __hidden_ecs_graphics_tests::TestPickingVerticesIncludeMorphAndDisplacement(context);
     __hidden_ecs_graphics_tests::TestPickingRejectsInvalidMorphDelta(context);
+    __hidden_ecs_graphics_tests::TestPickingRejectsActiveEmptyMorph(context);
 
     if(context.failed != 0u){
         NWB_CERR << "ecs graphics tests failed: " << context.failed << " failed, " << context.passed << " passed\n";

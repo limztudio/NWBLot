@@ -216,6 +216,8 @@ void OrthonormalizeFrame(
             return false;
         if(!ActiveWeight(weight))
             continue;
+        if(morph.deltas.empty())
+            return false;
 
         for(const DeformableMorphDelta& delta : morph.deltas){
             if(delta.vertexId >= vertices.size()

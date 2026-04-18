@@ -194,6 +194,14 @@ static bool BuildMorphPayload(
             return false;
         if(!ActiveWeight(weight))
             continue;
+        if(morph.deltas.empty()){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("DeformerSystem: active morph '{}' on runtime mesh '{}' has no deltas"),
+                StringConvert(morph.name.c_str()),
+                instance.handle.value
+            );
+            return false;
+        }
         if(morph.deltas.size() > static_cast<usize>(Limit<u32>::s_Max)
             || outDeltas.size() > static_cast<usize>(Limit<u32>::s_Max) - morph.deltas.size()
         ){

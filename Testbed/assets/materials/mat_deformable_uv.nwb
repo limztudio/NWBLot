@@ -1,0 +1,6 @@
+material asset;
+
+asset.shaders = {
+    "ps": "project/shaders/uv_debug_ps",
+    "mesh": "engine/graphics/bxdf_ms",
+};

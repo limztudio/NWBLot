@@ -104,6 +104,12 @@ vec3 nwbDeformerSafeNormalize(const vec3 value, const vec3 fallback){
     return lengthSquared > 0.00000001 ? value * inversesqrt(lengthSquared) : fallback;
 }
 
+void nwbDeformerOrthonormalizeFrame(inout vec3 normal, inout vec4 tangent, const vec3 fallbackNormal, const vec3 fallbackTangent){
+    normal = nwbDeformerSafeNormalize(normal, fallbackNormal);
+    tangent.xyz -= normal * dot(tangent.xyz, normal);
+    tangent.xyz = nwbDeformerSafeNormalize(tangent.xyz, fallbackTangent);
+}
+
 void nwbDeformerApplySkin(const uint vertexId, inout vec3 position, inout vec3 normal, inout vec4 tangent){
     if(nwbDeformerSkinCount() != nwbDeformerVertexCount() || nwbDeformerJointCount() == 0u)
         return;
@@ -131,8 +137,8 @@ void nwbDeformerApplySkin(const uint vertexId, inout vec3 position, inout vec3 n
         return;
 
     position = skinnedPosition;
-    normal = nwbDeformerSafeNormalize(skinnedNormal, normal);
-    tangent.xyz = nwbDeformerSafeNormalize(skinnedTangent, tangent.xyz);
+    normal = skinnedNormal;
+    tangent.xyz = skinnedTangent;
 }
 
 void main(){
@@ -159,6 +165,8 @@ void main(){
         nwbDeformerRestVertexScalars[restBase + 8u],
         nwbDeformerRestVertexScalars[restBase + 9u]
     );
+    const vec3 restNormal = normal;
+    const vec3 restTangent = tangent.xyz;
 
     for(uint morphIndex = 0u; morphIndex < nwbDeformerMorphCount(); ++morphIndex){
         const NwbDeformerMorphRange morph = nwbDeformerMorphRanges[morphIndex];
@@ -173,7 +181,11 @@ void main(){
         }
     }
 
+    nwbDeformerOrthonormalizeFrame(normal, tangent, restNormal, restTangent);
+    const vec3 preSkinNormal = normal;
+    const vec3 preSkinTangent = tangent.xyz;
     nwbDeformerApplySkin(vertexId, position, normal, tangent);
+    nwbDeformerOrthonormalizeFrame(normal, tangent, preSkinNormal, preSkinTangent);
 
     nwbDeformerCopyRestPayload(vertexId, restBase, deformedBase);
     nwbDeformerDeformedVertexScalars[deformedBase + 0u] = position.x;

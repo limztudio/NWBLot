@@ -330,6 +330,7 @@ bool ProjectTestbed::onStartup(){
 
     const TestbedMaterialRef cubeMaterial(Name("project/materials/mat_test"));
     const TestbedMaterialRef transparentMaterial(Name("project/materials/mat_transparent"));
+    const TestbedMaterialRef deformableUvMaterial(Name("project/materials/mat_deformable_uv"));
 
     __hidden_project_testbed_runtime::CreateRendererEntity(
         *m_world,
@@ -362,7 +363,7 @@ bool ProjectTestbed::onStartup(){
     m_deformableMorphEntity = __hidden_project_testbed_runtime::CreateDeformableRendererEntity(
         *m_world,
         TestbedDeformableGeometryRef(Name("project/characters/proxy_deformable")),
-        cubeMaterial,
+        deformableUvMaterial,
         AlignedFloat3Data(0.0f, 0.85f, 0.0f),
         0.8f
     );

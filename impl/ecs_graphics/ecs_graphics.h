@@ -6,6 +6,7 @@
 
 
 #include "components.h"
+#include "deformer_system.h"
 #include "renderer_system.h"
 
 
@@ -25,8 +26,11 @@ namespace ECSGraphics{
 
 
 using DeformableRendererComponent = NWB::Impl::DeformableRendererComponent;
+using DeformableMorphWeight = NWB::Impl::DeformableMorphWeight;
+using DeformableMorphWeightsComponent = NWB::Impl::DeformableMorphWeightsComponent;
 using DeformableRuntimeMeshCache = NWB::Impl::DeformableRuntimeMeshCache;
 using DeformableRuntimeMeshInstance = NWB::Impl::DeformableRuntimeMeshInstance;
+using DeformerSystem = NWB::Impl::DeformerSystem;
 using RendererComponent = NWB::Impl::RendererComponent;
 using RendererSystem = NWB::Impl::RendererSystem;
 using RuntimeMeshDirtyFlags = NWB::Impl::RuntimeMeshDirtyFlags;

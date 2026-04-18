@@ -64,6 +64,19 @@ struct RendererComponent{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct DeformableMorphWeight{
+    Name morph = NAME_NONE;
+    f32 weight = 0.0f;
+};
+
+struct DeformableMorphWeightsComponent{
+    Vector<DeformableMorphWeight> weights;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 struct DeformableRendererComponent{
     Core::Assets::AssetRef<DeformableGeometry> deformableGeometry;
     Core::Assets::AssetRef<Material> material;

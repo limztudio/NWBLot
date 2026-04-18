@@ -11,6 +11,7 @@ namespace __hidden_project_testbed_runtime{
 
 
 using TestbedGeometryRef = NWB::Core::Assets::AssetRef<NWB::Impl::Geometry>;
+using TestbedDeformableGeometryRef = NWB::Core::Assets::AssetRef<NWB::Impl::DeformableGeometry>;
 using TestbedMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
 
 
@@ -216,6 +217,29 @@ static void CreateRendererEntity(
     renderer.material = material;
 }
 
+[[nodiscard]] static NWB::Core::ECS::EntityID CreateDeformableRendererEntity(
+    NWB::Core::ECS::World& world,
+    const TestbedDeformableGeometryRef& geometry,
+    const TestbedMaterialRef& material,
+    const AlignedFloat3Data& position,
+    const f32 uniformScale
+){
+    auto entity = world.createEntity();
+    auto& transform = entity.addComponent<NWB::Core::ECS::TransformComponent>();
+    transform.position = position;
+    transform.scale = AlignedFloat3Data(uniformScale, uniformScale, uniformScale);
+
+    auto& renderer = entity.addComponent<NWB::Core::ECSGraphics::DeformableRendererComponent>();
+    renderer.deformableGeometry = geometry;
+    renderer.material = material;
+
+    auto& morphWeights = entity.addComponent<NWB::Core::ECSGraphics::DeformableMorphWeightsComponent>();
+    morphWeights.weights.resize(1u);
+    morphWeights.weights[0].morph = Name("lift");
+    morphWeights.weights[0].weight = 0.0f;
+    return entity.id();
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -265,6 +289,7 @@ bool ProjectTestbed::onStartup(){
     (void)m_rendererSystem;
 
     using TestbedGeometryRef = __hidden_project_testbed_runtime::TestbedGeometryRef;
+    using TestbedDeformableGeometryRef = __hidden_project_testbed_runtime::TestbedDeformableGeometryRef;
     using TestbedMaterialRef = __hidden_project_testbed_runtime::TestbedMaterialRef;
 
     auto projectEntity = m_world->createEntity();
@@ -303,10 +328,17 @@ bool ProjectTestbed::onStartup(){
         AlignedFloat3Data(-1.45f, 0.0f, 0.0f),
         0.8f
     );
+    m_deformableMorphEntity = __hidden_project_testbed_runtime::CreateDeformableRendererEntity(
+        *m_world,
+        TestbedDeformableGeometryRef(Name("project/characters/proxy_deformable")),
+        cubeMaterial,
+        AlignedFloat3Data(0.0f, 0.85f, 0.0f),
+        0.8f
+    );
 
     NWB_LOGGER_ESSENTIAL_INFO(
         NWB_TEXT("ProjectTestbed: startup scene created ({})"),
-        NWB_TEXT("directional light, two shared cube instances, transparent sphere/tetrahedron")
+        NWB_TEXT("directional light, two shared cube instances, transparent sphere/tetrahedron, animated deformable proxy")
     );
     registerInputHandler();
     return true;
@@ -321,6 +353,7 @@ void ProjectTestbed::onShutdown(){
 
 bool ProjectTestbed::onUpdate(f32 delta){
     updateMainCamera(delta);
+    updateDeformableMorph(delta);
     m_world->tick(delta);
 
     return true;
@@ -398,6 +431,20 @@ void ProjectTestbed::updateMainCamera(const f32 delta){
         mouseDeltaY,
         delta
     );
+}
+
+void ProjectTestbed::updateDeformableMorph(const f32 delta){
+    if(!m_deformableMorphEntity.valid())
+        return;
+
+    auto* morphWeights =
+        m_world->tryGetComponent<NWB::Core::ECSGraphics::DeformableMorphWeightsComponent>(m_deformableMorphEntity)
+    ;
+    if(!morphWeights || morphWeights->weights.empty())
+        return;
+
+    m_deformableMorphTime += Max(delta, 0.0f);
+    morphWeights->weights[0].weight = 0.5f + 0.5f * Sin(m_deformableMorphTime * 1.35f);
 }
 
 bool ProjectTestbed::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods){

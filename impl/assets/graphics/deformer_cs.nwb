@@ -1,0 +1,7 @@
+shader asset;
+
+asset.compiler = "glslang";
+asset.stage = "cs";
+asset.target_profile = "cs";
+asset.entry_point = "main";
+asset.include_roots = ["engine/graphics"];

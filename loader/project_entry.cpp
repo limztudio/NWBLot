@@ -33,18 +33,29 @@ bool CreateInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Core::E
         return false;
     }
 
-    world->addSystem<Core::ECSGraphics::RendererSystem>(
+    auto& rendererSystem = world->addSystem<Core::ECSGraphics::RendererSystem>(
         *world,
         context.graphics,
         context.assetManager,
         context.shaderPathResolver
     );
-    auto* rendererSystem = world->getSystem<Core::ECSGraphics::RendererSystem>();
-    if(!rendererSystem){
+    if(!world->getSystem<Core::ECSGraphics::RendererSystem>()){
         NWB_LOGGER_FATAL(NWB_TEXT("CreateInitialProjectWorld failed: core renderer system was not created"));
         return false;
     }
-    context.graphics.addRenderPassToBack(*rendererSystem);
+    auto& deformerSystem = world->addSystem<Core::ECSGraphics::DeformerSystem>(
+        *world,
+        context.graphics,
+        context.assetManager,
+        rendererSystem,
+        context.shaderPathResolver
+    );
+    if(!world->getSystem<Core::ECSGraphics::DeformerSystem>()){
+        NWB_LOGGER_FATAL(NWB_TEXT("CreateInitialProjectWorld failed: core deformer system was not created"));
+        return false;
+    }
+    context.graphics.addRenderPassToBack(deformerSystem);
+    context.graphics.addRenderPassToBack(rendererSystem);
 
     outWorld = Move(world);
 
@@ -57,12 +68,19 @@ void DestroyInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Core::
         return;
     }
 
+    auto* deformerSystem = world->getSystem<Core::ECSGraphics::DeformerSystem>();
+    if(!deformerSystem){
+        NWB_LOGGER_FATAL(NWB_TEXT("DestroyInitialProjectWorld failed: core deformer system is null"));
+        return;
+    }
+
     auto* rendererSystem = world->getSystem<Core::ECSGraphics::RendererSystem>();
     if(!rendererSystem){
         NWB_LOGGER_FATAL(NWB_TEXT("DestroyInitialProjectWorld failed: core renderer system is null"));
         return;
     }
 
+    context.graphics.removeRenderPass(*deformerSystem);
     context.graphics.removeRenderPass(*rendererSystem);
     world->clear();
     world.reset();

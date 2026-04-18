@@ -46,4 +46,20 @@ asset.source_samples = {
 };
 
 asset.skin = {};
-asset.morphs = {};
+asset.morphs = {
+    "lift": {
+        "vertex_ids": [2, 3],
+        "delta_position": [
+            [0.0, 0.0, 0.35],
+            [0.0, 0.0, 0.35],
+        ],
+        "delta_normal": [
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+        ],
+        "delta_tangent": [
+            [0.0, 0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0, 0.0],
+        ],
+    },
+};

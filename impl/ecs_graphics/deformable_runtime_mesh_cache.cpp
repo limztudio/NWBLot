@@ -202,6 +202,7 @@ bool DeformableRuntimeMeshCache::ensureRuntimeMesh(Core::ECS::EntityID entity, D
     instance.indices = geometry->indices();
     instance.skin = geometry->skin();
     instance.sourceSamples = geometry->sourceSamples();
+    instance.morphs = geometry->morphs();
     instance.dirtyFlags = RuntimeMeshDirtyFlag::All;
 
     if(!uploadRuntimeMeshBuffers(instance)){

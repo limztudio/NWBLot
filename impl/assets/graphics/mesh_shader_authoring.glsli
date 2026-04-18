@@ -36,6 +36,9 @@ struct NwbMeshInstanceData{
 #define NWB_MESH_BUILD_VERTEX_SIGNATURE NwbMeshGeneratedVertex nwbMeshBuildVertex(uint triangleIndex, uint corner, NwbMeshSourceVertex source)
 
 const uint NWB_MESH_SOURCE_VERTEX_SCALAR_STRIDE = 6u;
+const uint NWB_MESH_SOURCE_VERTEX_LAYOUT_POSITION_COLOR = 0u;
+const uint NWB_MESH_SOURCE_VERTEX_LAYOUT_DEFORMABLE_REST = 1u;
+const uint NWB_MESH_DEFORMABLE_VERTEX_SCALAR_STRIDE = 16u;
 
 layout(local_size_x = NWB_MESH_SHADER_GROUP_SIZE_X) in;
 
@@ -90,6 +93,10 @@ uint nwbMeshInstanceIndex(){
     return g_NwbMeshPushConstants.dispatch.z;
 }
 
+uint nwbMeshSourceVertexLayout(){
+    return g_NwbMeshPushConstants.dispatch.w;
+}
+
 uint nwbMeshRemainingTriangles(){
     return nwbMeshTriangleCount() > nwbMeshBaseTriangle()
         ? (nwbMeshTriangleCount() - nwbMeshBaseTriangle())
@@ -120,7 +127,13 @@ uint nwbMeshTriangleIndex(){
 NwbMeshSourceVertex nwbMeshLoadSourceVertex(const uint triangleIndex, const uint corner){
     const uint indexBase = triangleIndex * 3u;
     const uint sourceVertexIndex = nwbMeshSourceIndices[indexBase + corner];
-    const uint scalarBase = sourceVertexIndex * NWB_MESH_SOURCE_VERTEX_SCALAR_STRIDE;
+    const bool deformableLayout = nwbMeshSourceVertexLayout() == NWB_MESH_SOURCE_VERTEX_LAYOUT_DEFORMABLE_REST;
+    const uint scalarStride = deformableLayout
+        ? NWB_MESH_DEFORMABLE_VERTEX_SCALAR_STRIDE
+        : NWB_MESH_SOURCE_VERTEX_SCALAR_STRIDE
+    ;
+    const uint colorBaseOffset = deformableLayout ? 12u : 3u;
+    const uint scalarBase = sourceVertexIndex * scalarStride;
 
     NwbMeshSourceVertex sourceVertex;
     sourceVertex.position = vec3(
@@ -129,9 +142,9 @@ NwbMeshSourceVertex nwbMeshLoadSourceVertex(const uint triangleIndex, const uint
         nwbMeshSourceVertexScalars[scalarBase + 2u]
     );
     sourceVertex.color = vec3(
-        nwbMeshSourceVertexScalars[scalarBase + 3u],
-        nwbMeshSourceVertexScalars[scalarBase + 4u],
-        nwbMeshSourceVertexScalars[scalarBase + 5u]
+        nwbMeshSourceVertexScalars[scalarBase + colorBaseOffset + 0u],
+        nwbMeshSourceVertexScalars[scalarBase + colorBaseOffset + 1u],
+        nwbMeshSourceVertexScalars[scalarBase + colorBaseOffset + 2u]
     );
     return sourceVertex;
 }

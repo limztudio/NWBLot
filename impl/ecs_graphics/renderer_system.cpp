@@ -33,6 +33,8 @@ namespace __hidden_ecs_graphics{
 
 static constexpr Core::Color s_ClearColor = Core::Color(0.07f, 0.09f, 0.13f, 1.f);
 static constexpr u32 s_PositionColorVertexStride = sizeof(f32) * 6u;
+static constexpr u32 s_MeshSourceLayoutPositionColor = 0u;
+static constexpr u32 s_MeshSourceLayoutDeformableRest = 1u;
 static constexpr u32 s_EmulatedVertexStride = sizeof(f32) * 8u;
 static constexpr u32 s_TrianglesPerWorkgroup = 32u;
 static constexpr Core::TextureSubresourceSet s_FramebufferSubresources = Core::TextureSubresourceSet(0, 1, 0, 1);
@@ -439,12 +441,14 @@ static MeshViewState ResolveMeshViewState(Core::ECS::World& world){
 static ShaderDrivenPushConstants BuildShaderDrivenPushConstants(
     const u32 triangleCount,
     const u32 instanceIndex,
+    const u32 sourceVertexLayout,
     const Core::ViewportState& viewportState,
     const MeshViewState& viewState
 ){
     ShaderDrivenPushConstants pushConstants;
     pushConstants.triangleCount = triangleCount;
     pushConstants.instanceIndex = instanceIndex;
+    pushConstants.padding1 = sourceVertexLayout;
     CopyFloat4(pushConstants.viewRotation, viewState.viewRotation);
     CopyFloat4(pushConstants.viewPositionDepthBias, viewState.viewPositionDepthBias);
 
@@ -534,13 +538,14 @@ static AvboitPushConstants BuildAvboitPushConstants(const RendererSystem::Avboit
 static TransparentDrawPushConstants BuildTransparentDrawPushConstants(
     const u32 triangleCount,
     const u32 instanceIndex,
+    const u32 sourceVertexLayout,
     const Core::ViewportState& viewportState,
     const MeshViewState& viewState,
     const RendererSystem::AvboitFrameTargets& targets,
     const f32 alpha
 ){
     TransparentDrawPushConstants pushConstants;
-    pushConstants.mesh = BuildShaderDrivenPushConstants(triangleCount, instanceIndex, viewportState, viewState);
+    pushConstants.mesh = BuildShaderDrivenPushConstants(triangleCount, instanceIndex, sourceVertexLayout, viewportState, viewState);
     pushConstants.avboit = BuildAvboitPushConstants(targets, alpha);
     return pushConstants;
 }
@@ -691,9 +696,24 @@ bool RendererSystem::bumpDeformableRuntimeMeshRevision(
     return m_deformableRuntimeCache && m_deformableRuntimeCache->bumpEditRevision(handle, dirtyFlags);
 }
 
+DeformableRuntimeMeshInstance* RendererSystem::findDeformableRuntimeMesh(const RuntimeMeshHandle handle){
+    return m_deformableRuntimeCache
+        ? m_deformableRuntimeCache->findInstance(handle)
+        : nullptr
+    ;
+}
+
+const DeformableRuntimeMeshInstance* RendererSystem::findDeformableRuntimeMesh(const RuntimeMeshHandle handle)const{
+    return m_deformableRuntimeCache
+        ? m_deformableRuntimeCache->findInstance(handle)
+        : nullptr
+    ;
+}
+
 void RendererSystem::updateDeformableRuntimeMeshes(Core::ECS::World& world){
     if(m_deformableRuntimeCache)
         m_deformableRuntimeCache->update(world);
+    pruneDeformableGeometryResources();
 }
 
 bool RendererSystem::ensureDeferredFrameTargets(Core::IFramebuffer* presentationFramebuffer, DeferredFrameTargets*& outTargets){
@@ -1471,37 +1491,34 @@ void RendererSystem::gatherMaterialPassDrawItems(
     computeDrawItems.reserve(rendererCapacity);
     instanceData.reserve(rendererCapacity);
 
-    auto rendererView = m_world.view<RendererComponent>();
     const Core::FramebufferInfo& framebufferInfo = framebuffer->getFramebufferInfo();
 
-    for(auto&& [entity, renderer] : rendererView){
-        if(!renderer.visible)
-            continue;
+    auto appendDrawForGeometry = [&](
+        const Core::ECS::EntityID entity,
+        const Core::Assets::AssetRef<Material>& material,
+        GeometryResources& geometry
+    ) -> bool{
+        if(!geometry.valid())
+            return false;
 
         const Core::ECS::TransformComponent* transform =
             m_world.tryGetComponent<Core::ECS::TransformComponent>(entity)
         ;
 
         MaterialSurfaceInfo* materialInfo = nullptr;
-        if(!ensureMaterialSurfaceInfo(renderer.material, materialInfo))
-            continue;
+        if(!ensureMaterialSurfaceInfo(material, materialInfo))
+            return false;
         if(!materialInfo || !materialInfo->valid || materialInfo->transparent != transparent)
-            continue;
-
-        GeometryResources* geometry = nullptr;
-        if(!ensureGeometryLoaded(renderer.geometry, geometry))
-            continue;
-        if(!geometry || !geometry->valid())
-            continue;
+            return false;
 
         MaterialPipelineResources* pipelineResources = nullptr;
-        if(!ensureRendererPipeline(renderer, framebuffer, pass, pipelineResources))
-            continue;
+        if(!ensureRendererPipeline(material, framebuffer, pass, pipelineResources))
+            return false;
         if(!pipelineResources)
-            continue;
+            return false;
 
         MaterialPipelineKey pipelineKey;
-        pipelineKey.material = renderer.material.name();
+        pipelineKey.material = material.name();
         pipelineKey.framebufferInfo = framebufferInfo;
         pipelineKey.pass = pass;
 
@@ -1522,7 +1539,7 @@ void RendererSystem::gatherMaterialPassDrawItems(
                 return false;
 
             MaterialPassDrawItem drawItem;
-            drawItem.geometryKey = geometry->geometryName;
+            drawItem.geometryKey = geometry.geometryName;
             drawItem.pipelineKey = pipelineKey;
             drawItem.instanceIndex = instanceIndex;
             drawItem.alpha = materialInfo->alpha;
@@ -1533,28 +1550,56 @@ void RendererSystem::gatherMaterialPassDrawItems(
         switch(pipelineResources->renderPath){
         case RenderPath::MeshShader:{
             if(!pipelineResources->meshletPipeline)
-                continue;
-            if(!appendDrawItem(meshDrawItems))
-                continue;
-            break;
+                return false;
+            return appendDrawItem(meshDrawItems);
         }
         case RenderPath::ComputeEmulation:{
             if(!pipelineResources->computePipeline || !pipelineResources->emulationPipeline)
-                continue;
-            if(!appendDrawItem(computeDrawItems))
-                continue;
-            break;
+                return false;
+            return appendDrawItem(computeDrawItems);
         }
-        default:{
-            break;
+        default:
+            return false;
         }
-        }
+    };
+
+    auto rendererView = m_world.view<RendererComponent>();
+    for(auto&& [entity, renderer] : rendererView){
+        if(!renderer.visible)
+            continue;
+
+        GeometryResources* geometry = nullptr;
+        if(!ensureGeometryLoaded(renderer.geometry, geometry))
+            continue;
+        if(geometry)
+            appendDrawForGeometry(entity, renderer.material, *geometry);
+    }
+
+    auto deformableRendererView = m_world.view<DeformableRendererComponent>();
+    for(auto&& [entity, renderer] : deformableRendererView){
+        if(!renderer.visible || !renderer.runtimeMesh.valid())
+            continue;
+
+        DeformableRuntimeMeshInstance* instance = findDeformableRuntimeMesh(renderer.runtimeMesh);
+        if(!instance || !instance->valid())
+            continue;
+
+        GeometryResources* geometry = nullptr;
+        if(!ensureDeformableGeometryResources(*instance, geometry))
+            continue;
+        if(geometry)
+            appendDrawForGeometry(entity, renderer.material, *geometry);
     }
 }
 
 usize RendererSystem::visibleRendererCount(){
     usize count = 0;
     m_world.view<RendererComponent>().each([&](Core::ECS::EntityID entityId, RendererComponent& renderer){
+        (void)entityId;
+        if(renderer.visible)
+            ++count;
+    });
+    m_world.view<DeformableRendererComponent>().each([&](Core::ECS::EntityID entityId, DeformableRendererComponent& renderer){
         (void)entityId;
         if(renderer.visible)
             ++count;
@@ -1678,6 +1723,7 @@ void RendererSystem::renderMeshMaterialPassDrawItems(
                 __hidden_ecs_graphics::BuildShaderDrivenPushConstants(
                     geometry.triangleCount,
                     drawItem.instanceIndex,
+                    geometry.sourceVertexLayout,
                     context.viewportState,
                     meshViewState
                 );
@@ -1688,6 +1734,7 @@ void RendererSystem::renderMeshMaterialPassDrawItems(
                 __hidden_ecs_graphics::BuildTransparentDrawPushConstants(
                     geometry.triangleCount,
                     drawItem.instanceIndex,
+                    geometry.sourceVertexLayout,
                     context.viewportState,
                     meshViewState,
                     *context.avboitTargets,
@@ -1728,6 +1775,7 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
             __hidden_ecs_graphics::BuildShaderDrivenPushConstants(
                 geometry.triangleCount,
                 drawItem.instanceIndex,
+                geometry.sourceVertexLayout,
                 context.viewportState,
                 meshViewState
             );
@@ -1758,6 +1806,7 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
                 __hidden_ecs_graphics::BuildTransparentDrawPushConstants(
                     geometry.triangleCount,
                     drawItem.instanceIndex,
+                    geometry.sourceVertexLayout,
                     context.viewportState,
                     meshViewState,
                     *context.avboitTargets,
@@ -1921,6 +1970,7 @@ bool RendererSystem::ensureGeometryLoaded(const Core::Assets::AssetRef<Geometry>
 
     GeometryResources createdGeometry;
     createdGeometry.geometryName = geometryPath;
+    createdGeometry.sourceVertexLayout = __hidden_ecs_graphics::s_MeshSourceLayoutPositionColor;
 
     const usize indexStride = geometry.use32BitIndices() ? sizeof(u32) : sizeof(u16);
     if(geometry.indexData().size() == 0 || (geometry.indexData().size() % indexStride) != 0u){
@@ -2039,6 +2089,97 @@ bool RendererSystem::ensureGeometryLoaded(const Core::Assets::AssetRef<Geometry>
 
     outGeometry = &it.value();
     return outGeometry->valid();
+}
+
+bool RendererSystem::ensureDeformableGeometryResources(const DeformableRuntimeMeshInstance& instance, GeometryResources*& outGeometry){
+    outGeometry = nullptr;
+
+    if(!instance.valid())
+        return false;
+    if(instance.restVertices.size() > static_cast<usize>(Limit<u32>::s_Max)
+        || instance.indices.size() > static_cast<usize>(Limit<u32>::s_Max)
+    ){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("RendererSystem: deformable runtime mesh '{}' exceeds renderer u32 limits"),
+            instance.handle.value
+        );
+        return false;
+    }
+    if((instance.indices.size() % 3u) != 0u){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("RendererSystem: deformable runtime mesh '{}' has non-triangle index count {}"),
+            instance.handle.value,
+            instance.indices.size()
+        );
+        return false;
+    }
+
+    const AString runtimeSuffix = StringFormat(
+        ":runtime_{}_revision_{}_deformed_draw",
+        instance.handle.value,
+        instance.editRevision
+    );
+    const Name geometryKey = DeriveName(instance.source.name(), runtimeSuffix);
+    if(!geometryKey){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("RendererSystem: failed to derive draw resource key for deformable runtime mesh '{}'"),
+            instance.handle.value
+        );
+        return false;
+    }
+
+    const auto foundGeometry = m_geometryMeshes.find(geometryKey);
+    if(foundGeometry != m_geometryMeshes.end()){
+        outGeometry = &foundGeometry.value();
+        return outGeometry->valid();
+    }
+
+    GeometryResources createdGeometry;
+    createdGeometry.geometryName = geometryKey;
+    createdGeometry.shaderVertexBuffer = instance.deformedVertexBuffer;
+    createdGeometry.shaderIndexBuffer = instance.indexBuffer;
+    createdGeometry.indexCount = static_cast<u32>(instance.indices.size());
+    createdGeometry.triangleCount = createdGeometry.indexCount / 3u;
+    createdGeometry.dispatchGroupCount = __hidden_ecs_graphics::ComputeDispatchGroupCount(createdGeometry.triangleCount);
+    createdGeometry.sourceVertexLayout = __hidden_ecs_graphics::s_MeshSourceLayoutDeformableRest;
+    createdGeometry.runtimeMesh = instance.handle;
+    createdGeometry.runtimeEditRevision = instance.editRevision;
+    if(createdGeometry.dispatchGroupCount == 0){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("RendererSystem: deformable runtime mesh '{}' produced no dispatch groups"),
+            instance.handle.value
+        );
+        return false;
+    }
+
+    auto [it, inserted] = m_geometryMeshes.emplace(geometryKey, GeometryResources{});
+    (void)inserted;
+    it.value() = Move(createdGeometry);
+
+    outGeometry = &it.value();
+    return outGeometry->valid();
+}
+
+void RendererSystem::pruneDeformableGeometryResources(){
+    if(!m_deformableRuntimeCache || m_geometryMeshes.empty())
+        return;
+
+    Core::Alloc::ScratchArena<> scratchArena;
+    Vector<Name, Core::Alloc::ScratchAllocator<Name>> staleKeys{
+        Core::Alloc::ScratchAllocator<Name>(scratchArena)
+    };
+
+    for(const auto& [geometryKey, geometry] : m_geometryMeshes){
+        if(!geometry.runtimeMesh.valid())
+            continue;
+
+        const DeformableRuntimeMeshInstance* instance = m_deformableRuntimeCache->findInstance(geometry.runtimeMesh);
+        if(!instance || instance->editRevision != geometry.runtimeEditRevision)
+            staleKeys.push_back(geometryKey);
+    }
+
+    for(const Name& key : staleKeys)
+        m_geometryMeshes.erase(key);
 }
 
 bool RendererSystem::ensureMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset, MaterialSurfaceInfo*& outInfo){
@@ -2286,13 +2427,27 @@ bool RendererSystem::ensureComputeBindingSet(GeometryResources& geometry){
 }
 
 
-bool RendererSystem::ensureRendererPipeline(const RendererComponent& renderer, Core::IFramebuffer* framebuffer, const MaterialPipelinePass::Enum pass, MaterialPipelineResources*& outResources){
+bool RendererSystem::ensureRendererPipeline(
+    const RendererComponent& renderer,
+    Core::IFramebuffer* framebuffer,
+    const MaterialPipelinePass::Enum pass,
+    MaterialPipelineResources*& outResources)
+{
+    return ensureRendererPipeline(renderer.material, framebuffer, pass, outResources);
+}
+
+bool RendererSystem::ensureRendererPipeline(
+    const Core::Assets::AssetRef<Material>& materialAsset,
+    Core::IFramebuffer* framebuffer,
+    const MaterialPipelinePass::Enum pass,
+    MaterialPipelineResources*& outResources)
+{
     outResources = nullptr;
 
     if(!framebuffer)
         return false;
 
-    const Name materialKey = renderer.material.name();
+    const Name materialKey = materialAsset.name();
     if(!materialKey){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: renderer material is empty"));
         return false;
@@ -2332,7 +2487,7 @@ bool RendererSystem::ensureRendererPipeline(const RendererComponent& renderer, C
     };
 
     MaterialSurfaceInfo* materialInfo = nullptr;
-    if(!ensureMaterialSurfaceInfo(renderer.material, materialInfo)){
+    if(!ensureMaterialSurfaceInfo(materialAsset, materialInfo)){
         return failMaterialPipeline();
     }
     if(!materialInfo || !materialInfo->valid){
@@ -2545,16 +2700,30 @@ bool RendererSystem::ensureRendererPipeline(const RendererComponent& renderer, C
 }
 
 bool RendererSystem::hasTransparentRenderers(){
+    auto materialIsTransparent = [&](const Core::Assets::AssetRef<Material>& material) -> bool{
+        MaterialSurfaceInfo* materialInfo = nullptr;
+        if(!ensureMaterialSurfaceInfo(material, materialInfo))
+            return false;
+        return materialInfo && materialInfo->valid && materialInfo->transparent;
+    };
+
     auto rendererView = m_world.view<RendererComponent>();
     for(auto&& [entity, renderer] : rendererView){
         (void)entity;
         if(!renderer.visible)
             continue;
 
-        MaterialSurfaceInfo* materialInfo = nullptr;
-        if(!ensureMaterialSurfaceInfo(renderer.material, materialInfo))
+        if(materialIsTransparent(renderer.material))
+            return true;
+    }
+
+    auto deformableRendererView = m_world.view<DeformableRendererComponent>();
+    for(auto&& [entity, renderer] : deformableRendererView){
+        (void)entity;
+        if(!renderer.visible)
             continue;
-        if(materialInfo && materialInfo->valid && materialInfo->transparent)
+
+        if(materialIsTransparent(renderer.material))
             return true;
     }
 

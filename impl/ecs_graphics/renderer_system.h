@@ -83,6 +83,9 @@ private:
         u32 indexCount = 0;
         u32 triangleCount = 0;
         u32 dispatchGroupCount = 0;
+        u32 sourceVertexLayout = 0;
+        RuntimeMeshHandle runtimeMesh;
+        u32 runtimeEditRevision = 0;
 
         [[nodiscard]] bool valid()const noexcept{
             return geometryName != NAME_NONE
@@ -249,11 +252,15 @@ public:
         RuntimeMeshHandle handle,
         RuntimeMeshDirtyFlags dirtyFlags = RuntimeMeshDirtyFlag::All
     );
+    [[nodiscard]] DeformableRuntimeMeshInstance* findDeformableRuntimeMesh(RuntimeMeshHandle handle);
+    [[nodiscard]] const DeformableRuntimeMeshInstance* findDeformableRuntimeMesh(RuntimeMeshHandle handle)const;
 
 
 private:
     void updateDeformableRuntimeMeshes(Core::ECS::World& world);
     [[nodiscard]] bool ensureGeometryLoaded(const Core::Assets::AssetRef<Geometry>& geometryAsset, GeometryResources*& outGeometry);
+    [[nodiscard]] bool ensureDeformableGeometryResources(const DeformableRuntimeMeshInstance& instance, GeometryResources*& outGeometry);
+    void pruneDeformableGeometryResources();
     [[nodiscard]] bool ensureMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset, MaterialSurfaceInfo*& outInfo);
     [[nodiscard]] bool ensureMeshShaderResources();
     [[nodiscard]] bool ensureComputeEmulationResources();
@@ -265,6 +272,7 @@ private:
     [[nodiscard]] bool ensureAvboitResources();
     [[nodiscard]] bool ensureAvboitPipelines(AvboitFrameTargets& targets);
     [[nodiscard]] bool ensureRendererPipeline(const RendererComponent& renderer, Core::IFramebuffer* framebuffer, MaterialPipelinePass::Enum pass, MaterialPipelineResources*& outResources);
+    [[nodiscard]] bool ensureRendererPipeline(const Core::Assets::AssetRef<Material>& materialAsset, Core::IFramebuffer* framebuffer, MaterialPipelinePass::Enum pass, MaterialPipelineResources*& outResources);
     [[nodiscard]] bool hasTransparentRenderers();
     void resetDeferredFrameTargets();
     void clearDeferredTargets(Core::ICommandList& commandList, DeferredFrameTargets& targets);

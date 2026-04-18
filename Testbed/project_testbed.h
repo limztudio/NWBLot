@@ -55,6 +55,7 @@ private:
     NWB::Core::ECSGraphics::RendererSystem& m_rendererSystem;
     NWB::Core::ECS::EntityID m_deformableMorphEntity = NWB::Core::ECS::ENTITY_ID_INVALID;
     f32 m_deformableMorphTime = 0.0f;
+    f32 m_deformableDisplacementScale = 1.0f;
     Array<bool, s_KeyStateCount> m_keyPressed = {};
     f32 m_pendingMouseDeltaX = 0.0f;
     f32 m_pendingMouseDeltaY = 0.0f;

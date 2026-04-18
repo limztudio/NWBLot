@@ -102,7 +102,8 @@ private:
         Core::ICommandList& commandList,
         DeformableRuntimeMeshInstance& instance,
         const DeformableMorphWeightsComponent* morphWeights,
-        const DeformableJointPaletteComponent* jointPalette
+        const DeformableJointPaletteComponent* jointPalette,
+        const DeformableDisplacementComponent* displacement
     );
     [[nodiscard]] bool copyRestToDeformed(Core::ICommandList& commandList, DeformableRuntimeMeshInstance& instance);
     [[nodiscard]] bool ensureRuntimeResources(

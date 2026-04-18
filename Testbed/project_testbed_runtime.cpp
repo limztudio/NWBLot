@@ -268,6 +268,10 @@ static void UpdateProxySkinPalette(
 
     auto& jointPalette = entity.addComponent<NWB::Core::ECSGraphics::DeformableJointPaletteComponent>();
     UpdateProxySkinPalette(jointPalette, 0.0f);
+
+    auto& displacement = entity.addComponent<NWB::Core::ECSGraphics::DeformableDisplacementComponent>();
+    displacement.amplitudeScale = 1.0f;
+    displacement.enabled = true;
     return entity.id();
 }
 
@@ -482,6 +486,21 @@ void ProjectTestbed::updateDeformableMorph(const f32 delta){
     ;
     if(jointPalette)
         __hidden_project_testbed_runtime::UpdateProxySkinPalette(*jointPalette, m_deformableMorphTime);
+
+    auto* displacement =
+        m_world->tryGetComponent<NWB::Core::ECSGraphics::DeformableDisplacementComponent>(m_deformableMorphEntity)
+    ;
+    if(displacement){
+        const f32 displacementAxis = __hidden_project_testbed_runtime::KeyAxis(
+            keyPressed(NWB::Core::Key::Z),
+            keyPressed(NWB::Core::Key::X)
+        );
+        if(displacementAxis != 0.0f)
+            m_deformableDisplacementScale = Max(0.0f, m_deformableDisplacementScale + displacementAxis * Max(delta, 0.0f));
+
+        displacement->enabled = !keyPressed(NWB::Core::Key::C);
+        displacement->amplitudeScale = m_deformableDisplacementScale;
+    }
 }
 
 bool ProjectTestbed::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods){

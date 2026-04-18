@@ -62,6 +62,34 @@ static bool ActiveDisplacement(const DeformableDisplacement& displacement){
     return displacement.mode != DeformableDisplacementMode::None && ActiveWeight(displacement.amplitude);
 }
 
+static bool ResolveDisplacement(
+    const DeformableRuntimeMeshInstance& instance,
+    const DeformableDisplacementComponent* component,
+    DeformableDisplacement& outDisplacement)
+{
+    outDisplacement = instance.displacement;
+    if(outDisplacement.mode == DeformableDisplacementMode::None)
+        return true;
+    if(component && !component->enabled){
+        outDisplacement = DeformableDisplacement{};
+        return true;
+    }
+
+    const f32 scale = component ? component->amplitudeScale : 1.0f;
+    if(!IsFinite(scale)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("DeformerSystem: runtime mesh '{}' displacement amplitude scale is invalid"),
+            instance.handle.value
+        );
+        return false;
+    }
+
+    outDisplacement.amplitude *= scale;
+    if(!ActiveWeight(outDisplacement.amplitude))
+        outDisplacement = DeformableDisplacement{};
+    return true;
+}
+
 static bool IsFiniteFloat4Data(const Float4Data& value){
     return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z) && IsFinite(value.w);
 }
@@ -291,6 +319,7 @@ DeformerSystem::DeformerSystem(
     readAccess<DeformableRendererComponent>();
     readAccess<DeformableMorphWeightsComponent>();
     readAccess<DeformableJointPaletteComponent>();
+    readAccess<DeformableDisplacementComponent>();
 }
 
 DeformerSystem::~DeformerSystem()
@@ -378,7 +407,10 @@ void DeformerSystem::render(Core::IFramebuffer* framebuffer){
         const DeformableJointPaletteComponent* jointPalette =
             m_world.tryGetComponent<DeformableJointPaletteComponent>(entity)
         ;
-        if(dispatchRuntimeMesh(*commandList, *instance, morphWeights, jointPalette))
+        const DeformableDisplacementComponent* displacement =
+            m_world.tryGetComponent<DeformableDisplacementComponent>(entity)
+        ;
+        if(dispatchRuntimeMesh(*commandList, *instance, morphWeights, jointPalette, displacement))
             submittedWork = true;
     }
     commandList->close();
@@ -529,7 +561,8 @@ bool DeformerSystem::dispatchRuntimeMesh(
     Core::ICommandList& commandList,
     DeformableRuntimeMeshInstance& instance,
     const DeformableMorphWeightsComponent* morphWeights,
-    const DeformableJointPaletteComponent* jointPalette)
+    const DeformableJointPaletteComponent* jointPalette,
+    const DeformableDisplacementComponent* displacement)
 {
     if(instance.restVertices.size() > static_cast<usize>(Limit<u32>::s_Max)){
         NWB_LOGGER_ERROR(
@@ -550,9 +583,13 @@ bool DeformerSystem::dispatchRuntimeMesh(
     if(!__hidden_deformer_system::BuildSkinPayload(instance, jointPalette, skinInfluences, jointMatrices))
         return false;
 
+    DeformableDisplacement resolvedDisplacement;
+    if(!__hidden_deformer_system::ResolveDisplacement(instance, displacement, resolvedDisplacement))
+        return false;
+
     const bool hasActiveMorphs = !morphRanges.empty();
     const bool hasActiveSkin = !skinInfluences.empty() && !jointMatrices.empty();
-    const bool hasDisplacement = __hidden_deformer_system::ActiveDisplacement(instance.displacement);
+    const bool hasDisplacement = __hidden_deformer_system::ActiveDisplacement(resolvedDisplacement);
     if(!hasActiveMorphs && !hasActiveSkin && !hasDisplacement){
         const auto foundResources = m_runtimeResources.find(instance.handle.value);
         if(foundResources == m_runtimeResources.end()){
@@ -643,8 +680,8 @@ bool DeformerSystem::dispatchRuntimeMesh(
     pushConstants.deformedScalarStride = __hidden_deformer_system::s_DeformableVertexScalarStride;
     pushConstants.skinCount = static_cast<u32>(skinInfluences.size());
     pushConstants.jointCount = static_cast<u32>(jointMatrices.size());
-    pushConstants.displacementAmplitude = hasDisplacement ? instance.displacement.amplitude : 0.0f;
-    pushConstants.displacementMode = hasDisplacement ? instance.displacement.mode : DeformableDisplacementMode::None;
+    pushConstants.displacementAmplitude = hasDisplacement ? resolvedDisplacement.amplitude : 0.0f;
+    pushConstants.displacementMode = hasDisplacement ? resolvedDisplacement.mode : DeformableDisplacementMode::None;
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
     commandList.dispatch(__hidden_deformer_system::DispatchGroupCount(pushConstants.vertexCount), 1, 1);
 

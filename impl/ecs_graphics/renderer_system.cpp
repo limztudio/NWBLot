@@ -35,7 +35,7 @@ static constexpr Core::Color s_ClearColor = Core::Color(0.07f, 0.09f, 0.13f, 1.f
 static constexpr u32 s_PositionColorVertexStride = sizeof(f32) * 6u;
 static constexpr u32 s_MeshSourceLayoutPositionColor = 0u;
 static constexpr u32 s_MeshSourceLayoutDeformableRest = 1u;
-static constexpr u32 s_EmulatedVertexStride = sizeof(f32) * 8u;
+static constexpr u32 s_EmulatedVertexStride = sizeof(f32) * 20u;
 static constexpr u32 s_TrianglesPerWorkgroup = 32u;
 static constexpr Core::TextureSubresourceSet s_FramebufferSubresources = Core::TextureSubresourceSet(0, 1, 0, 1);
 static constexpr u32 s_AvboitDownsample = 8u;
@@ -73,8 +73,12 @@ struct TransparentDrawPushConstants{
 
 struct EmulatedVertex{
     f32 position[4];
-    f32 color[3];
-    f32 padding = 0.f;
+    f32 normal[3];
+    f32 padding0 = 0.f;
+    f32 tangent[4];
+    f32 uv0[2];
+    f32 padding1[2] = {};
+    f32 color[4];
 };
 
 struct MeshViewState{
@@ -2310,7 +2314,7 @@ bool RendererSystem::ensureComputeEmulationResources(){
     }
 
     if(!m_emulationInputLayout){
-        Core::VertexAttributeDesc attributes[2];
+        Core::VertexAttributeDesc attributes[5];
         attributes[0]
             .setFormat(Core::Format::RGBA32_FLOAT)
             .setBufferIndex(0)
@@ -2323,11 +2327,32 @@ bool RendererSystem::ensureComputeEmulationResources(){
             .setBufferIndex(0)
             .setOffset(sizeof(f32) * 4u)
             .setElementStride(__hidden_ecs_graphics::s_EmulatedVertexStride)
+            .setName("NORMAL")
+        ;
+        attributes[2]
+            .setFormat(Core::Format::RGBA32_FLOAT)
+            .setBufferIndex(0)
+            .setOffset(sizeof(f32) * 8u)
+            .setElementStride(__hidden_ecs_graphics::s_EmulatedVertexStride)
+            .setName("TANGENT")
+        ;
+        attributes[3]
+            .setFormat(Core::Format::RG32_FLOAT)
+            .setBufferIndex(0)
+            .setOffset(sizeof(f32) * 12u)
+            .setElementStride(__hidden_ecs_graphics::s_EmulatedVertexStride)
+            .setName("TEXCOORD")
+        ;
+        attributes[4]
+            .setFormat(Core::Format::RGBA32_FLOAT)
+            .setBufferIndex(0)
+            .setOffset(sizeof(f32) * 16u)
+            .setElementStride(__hidden_ecs_graphics::s_EmulatedVertexStride)
             .setName("COLOR")
         ;
 
         Core::IDevice* device = m_graphics.getDevice();
-        m_emulationInputLayout = device->createInputLayout(attributes, 2, m_emulationVertexShader.get());
+        m_emulationInputLayout = device->createInputLayout(attributes, 5, m_emulationVertexShader.get());
         if(!m_emulationInputLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute-emulation input layout"));
             return false;

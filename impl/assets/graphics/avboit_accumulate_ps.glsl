@@ -15,7 +15,7 @@ layout(std430, set = 1, binding = 2) readonly buffer NwbAvboitControlBuffer{
     uint g_Control[];
 };
 
-layout(location = 0) in vec3 inColor;
+layout(location = 0) in vec4 inColor;
 layout(location = 0) out vec4 outAccumColor;
 layout(location = 1) out vec4 outAccumExtinction;
 
@@ -40,7 +40,7 @@ void main(){
     ;
     const float weightedAlpha = alpha * transmittance;
 
-    outAccumColor = vec4(clamp(inColor, vec3(0.0), vec3(1.0)) * weightedAlpha, weightedAlpha);
+    outAccumColor = vec4(clamp(inColor.rgb, vec3(0.0), vec3(1.0)) * weightedAlpha, weightedAlpha);
     outAccumExtinction = vec4(nwbAvboitExtinctionFromAlpha(alpha), 0.0, 0.0, 0.0);
 }
 

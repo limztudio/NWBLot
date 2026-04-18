@@ -5,11 +5,14 @@
 
 #include "bxdf.glsli"
 
-layout(location = 0) in vec3 inColor;
+layout(location = 0) in vec4 inColor;
+layout(location = 1) in vec3 inNormal;
+layout(location = 2) in vec4 inTangent;
+layout(location = 3) in vec2 inUv0;
 layout(location = 0) out vec4 outColor;
 
 void main(){
-    outColor = vec4(clamp(nwbProjectBxdfPixel(inColor), vec3(0.0), vec3(1.0)), 1.0);
+    outColor = vec4(clamp(nwbProjectBxdfPixel(inColor.rgb), vec3(0.0), vec3(1.0)), inColor.a);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

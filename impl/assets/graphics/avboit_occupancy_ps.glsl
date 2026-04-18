@@ -11,7 +11,7 @@ layout(std430, set = 1, binding = 2) buffer NwbAvboitCoverageBuffer{
     uint g_CoverageWords[];
 };
 
-layout(location = 0) in vec3 inColor;
+layout(location = 0) in vec4 inColor;
 
 void main(){
     const float alpha = nwbAvboitMaterialAlpha();

@@ -18,13 +18,20 @@
 
 struct NwbMeshSourceVertex{
     vec3 position;
-    vec3 color;
+    vec3 normal;
+    vec4 tangent;
+    vec2 uv0;
+    vec4 color;
 };
 
 struct NwbMeshGeneratedVertex{
     vec4 position;
-    vec3 color;
-    float padding;
+    vec3 normal;
+    float padding0;
+    vec4 tangent;
+    vec2 uv0;
+    vec2 padding1;
+    vec4 color;
 };
 
 struct NwbMeshInstanceData{
@@ -70,7 +77,10 @@ layout(std430, binding = 2) buffer NwbMeshGeneratedVerticesBuffer{
 #else
 layout(triangles) out;
 layout(max_vertices = NWB_MESH_SHADER_GROUP_SIZE_X * 3, max_primitives = NWB_MESH_SHADER_GROUP_SIZE_X) out;
-layout(location = 0) out vec3 outColor[];
+layout(location = 0) out vec4 outColor[];
+layout(location = 1) out vec3 outNormal[];
+layout(location = 2) out vec4 outTangent[];
+layout(location = 3) out vec2 outUv0[];
 #endif
 
 uint nwbMeshGroupThreadID(){
@@ -132,7 +142,6 @@ NwbMeshSourceVertex nwbMeshLoadSourceVertex(const uint triangleIndex, const uint
         ? NWB_MESH_DEFORMABLE_VERTEX_SCALAR_STRIDE
         : NWB_MESH_SOURCE_VERTEX_SCALAR_STRIDE
     ;
-    const uint colorBaseOffset = deformableLayout ? 12u : 3u;
     const uint scalarBase = sourceVertexIndex * scalarStride;
 
     NwbMeshSourceVertex sourceVertex;
@@ -141,11 +150,40 @@ NwbMeshSourceVertex nwbMeshLoadSourceVertex(const uint triangleIndex, const uint
         nwbMeshSourceVertexScalars[scalarBase + 1u],
         nwbMeshSourceVertexScalars[scalarBase + 2u]
     );
-    sourceVertex.color = vec3(
-        nwbMeshSourceVertexScalars[scalarBase + colorBaseOffset + 0u],
-        nwbMeshSourceVertexScalars[scalarBase + colorBaseOffset + 1u],
-        nwbMeshSourceVertexScalars[scalarBase + colorBaseOffset + 2u]
-    );
+    if(deformableLayout){
+        sourceVertex.normal = vec3(
+            nwbMeshSourceVertexScalars[scalarBase + 3u],
+            nwbMeshSourceVertexScalars[scalarBase + 4u],
+            nwbMeshSourceVertexScalars[scalarBase + 5u]
+        );
+        sourceVertex.tangent = vec4(
+            nwbMeshSourceVertexScalars[scalarBase + 6u],
+            nwbMeshSourceVertexScalars[scalarBase + 7u],
+            nwbMeshSourceVertexScalars[scalarBase + 8u],
+            nwbMeshSourceVertexScalars[scalarBase + 9u]
+        );
+        sourceVertex.uv0 = vec2(
+            nwbMeshSourceVertexScalars[scalarBase + 10u],
+            nwbMeshSourceVertexScalars[scalarBase + 11u]
+        );
+        sourceVertex.color = vec4(
+            nwbMeshSourceVertexScalars[scalarBase + 12u],
+            nwbMeshSourceVertexScalars[scalarBase + 13u],
+            nwbMeshSourceVertexScalars[scalarBase + 14u],
+            nwbMeshSourceVertexScalars[scalarBase + 15u]
+        );
+    }
+    else{
+        sourceVertex.normal = vec3(0.0, 0.0, 1.0);
+        sourceVertex.tangent = vec4(1.0, 0.0, 0.0, 1.0);
+        sourceVertex.uv0 = vec2(0.0);
+        sourceVertex.color = vec4(
+            nwbMeshSourceVertexScalars[scalarBase + 3u],
+            nwbMeshSourceVertexScalars[scalarBase + 4u],
+            nwbMeshSourceVertexScalars[scalarBase + 5u],
+            1.0
+        );
+    }
     return sourceVertex;
 }
 
@@ -163,6 +201,11 @@ vec3 nwbMeshTransformPosition(vec3 localPosition){
     return nwbMeshRotateVectorByQuaternion(localPosition * instance.scale.xyz, instance.rotation)
         + instance.translation.xyz
     ;
+}
+
+vec3 nwbMeshTransformDirection(vec3 localDirection){
+    const NwbMeshInstanceData instance = nwbMeshLoadInstance();
+    return normalize(nwbMeshRotateVectorByQuaternion(localDirection, instance.rotation));
 }
 
 #if NWB_MESH_SHADER_EMULATION_COMPUTE
@@ -240,8 +283,12 @@ bool nwbMeshTriangleCulled(const NwbMeshGeneratedVertex vertices[3]){
 NwbMeshGeneratedVertex nwbMeshCulledVertex(){
     NwbMeshGeneratedVertex vertex;
     vertex.position = vec4(2.0, 2.0, 0.0, 1.0);
-    vertex.color = vec3(0.0);
-    vertex.padding = 0.0;
+    vertex.normal = vec3(0.0, 0.0, 1.0);
+    vertex.padding0 = 0.0;
+    vertex.tangent = vec4(1.0, 0.0, 0.0, 1.0);
+    vertex.uv0 = vec2(0.0);
+    vertex.padding1 = vec2(0.0);
+    vertex.color = vec4(0.0);
     return vertex;
 }
 #endif
@@ -284,6 +331,9 @@ void main(){
         const uint outputVertex = vertexBase + corner;
         gl_MeshVerticesEXT[outputVertex].gl_Position = generatedVertices[corner].position;
         outColor[outputVertex] = generatedVertices[corner].color;
+        outNormal[outputVertex] = generatedVertices[corner].normal;
+        outTangent[outputVertex] = generatedVertices[corner].tangent;
+        outUv0[outputVertex] = generatedVertices[corner].uv0;
     }
 
     gl_PrimitiveTriangleIndicesEXT[nwbMeshGroupThreadID()] = uvec3(vertexBase + 0u, vertexBase + 1u, vertexBase + 2u);

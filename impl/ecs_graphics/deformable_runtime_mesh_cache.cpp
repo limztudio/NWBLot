@@ -27,6 +27,14 @@ static constexpr RuntimeMeshDirtyFlags s_KnownDirtyFlags = RuntimeMeshDirtyFlag:
 static constexpr RuntimeMeshDirtyFlags s_GpuUploadHandledDirtyFlags =
     RuntimeMeshDirtyFlag::TopologyDirty | RuntimeMeshDirtyFlag::AttributesDirty | RuntimeMeshDirtyFlag::GpuUploadDirty
 ;
+static constexpr f32 s_BarycentricSumEpsilon = 0.001f;
+static constexpr f32 s_SkinWeightSumEpsilon = 0.001f;
+static constexpr f32 s_RestFrameLengthSquaredEpsilon = 0.000001f;
+static constexpr f32 s_RestFrameUnitLengthSquaredEpsilon = 0.01f;
+static constexpr f32 s_RestFrameOrthogonalityEpsilon = 0.01f;
+static constexpr f32 s_TangentHandednessEpsilon = 0.000001f;
+static constexpr f32 s_TangentHandednessUnitEpsilon = 0.001f;
+static constexpr f32 s_TriangleAreaLengthSquaredEpsilon = 0.000000000001f;
 
 [[nodiscard]] RuntimeMeshDirtyFlags SanitizeDirtyFlags(const RuntimeMeshDirtyFlags dirtyFlags){
     return static_cast<RuntimeMeshDirtyFlags>(dirtyFlags & s_KnownDirtyFlags);
@@ -64,6 +72,306 @@ static constexpr RuntimeMeshDirtyFlags s_GpuUploadHandledDirtyFlags =
         && IsFiniteFloat2(vertex.uv0)
         && IsFiniteFloat4(vertex.color0)
     ;
+}
+
+[[nodiscard]] f32 AbsF32(const f32 value){
+    return value < 0.0f ? -value : value;
+}
+
+[[nodiscard]] f32 LengthSquared3(const f32 x, const f32 y, const f32 z){
+    return (x * x) + (y * y) + (z * z);
+}
+
+[[nodiscard]] f32 Dot3(const Float3Data& lhs, const Float3Data& rhs){
+    return (lhs.x * rhs.x) + (lhs.y * rhs.y) + (lhs.z * rhs.z);
+}
+
+[[nodiscard]] Float3Data Subtract3(const Float3Data& lhs, const Float3Data& rhs){
+    return Float3Data(lhs.x - rhs.x, lhs.y - rhs.y, lhs.z - rhs.z);
+}
+
+[[nodiscard]] Float3Data Cross3(const Float3Data& lhs, const Float3Data& rhs){
+    return Float3Data(
+        (lhs.y * rhs.z) - (lhs.z * rhs.y),
+        (lhs.z * rhs.x) - (lhs.x * rhs.z),
+        (lhs.x * rhs.y) - (lhs.y * rhs.x)
+    );
+}
+
+[[nodiscard]] bool NearlyOne(const f32 value, const f32 epsilon){
+    return AbsF32(value - 1.0f) <= epsilon;
+}
+
+[[nodiscard]] bool NearlySignedOne(const f32 value){
+    return AbsF32(AbsF32(value) - 1.0f) <= s_TangentHandednessUnitEpsilon;
+}
+
+[[nodiscard]] bool NearlyUnitLengthSquared(const f32 value){
+    return AbsF32(value - 1.0f) <= s_RestFrameUnitLengthSquaredEpsilon;
+}
+
+[[nodiscard]] bool ValidRestVertexFrame(const DeformableVertexRest& vertex){
+    if(!IsFiniteRestVertex(vertex))
+        return false;
+
+    const f32 normalLengthSquared = LengthSquared3(vertex.normal.x, vertex.normal.y, vertex.normal.z);
+    const f32 tangentLengthSquared = LengthSquared3(vertex.tangent.x, vertex.tangent.y, vertex.tangent.z);
+    const Float3Data tangentVector(vertex.tangent.x, vertex.tangent.y, vertex.tangent.z);
+    const f32 tangentHandedness = AbsF32(vertex.tangent.w);
+    const Float3Data frameCross = Cross3(vertex.normal, tangentVector);
+    const f32 frameCrossLengthSquared = LengthSquared3(frameCross.x, frameCross.y, frameCross.z);
+    if(normalLengthSquared <= s_RestFrameLengthSquaredEpsilon
+        || tangentLengthSquared <= s_RestFrameLengthSquaredEpsilon
+        || tangentHandedness <= s_TangentHandednessEpsilon
+        || !NearlySignedOne(vertex.tangent.w)
+        || frameCrossLengthSquared <= s_RestFrameLengthSquaredEpsilon
+    )
+        return false;
+
+    const f32 frameDot = Dot3(vertex.normal, tangentVector);
+    return NearlyUnitLengthSquared(normalLengthSquared)
+        && NearlyUnitLengthSquared(tangentLengthSquared)
+        && AbsF32(frameDot) <= s_RestFrameOrthogonalityEpsilon
+    ;
+}
+
+[[nodiscard]] bool ValidBarycentric(const f32 (&bary)[3]){
+    const f32 barySum = bary[0] + bary[1] + bary[2];
+    return IsFinite(bary[0])
+        && IsFinite(bary[1])
+        && IsFinite(bary[2])
+        && bary[0] >= 0.0f
+        && bary[1] >= 0.0f
+        && bary[2] >= 0.0f
+        && NearlyOne(barySum, s_BarycentricSumEpsilon)
+    ;
+}
+
+[[nodiscard]] bool ValidSourceSample(const SourceSample& sample, const u32 sourceTriangleCount){
+    return sourceTriangleCount != 0u && sample.sourceTri < sourceTriangleCount && ValidBarycentric(sample.bary);
+}
+
+[[nodiscard]] bool ValidSkinInfluence(const SkinInfluence4& skin){
+    f32 weightSum = 0.0f;
+    for(u32 influenceIndex = 0; influenceIndex < 4u; ++influenceIndex){
+        const f32 weight = skin.weight[influenceIndex];
+        if(!IsFinite(weight) || weight < 0.0f)
+            return false;
+
+        weightSum += weight;
+        if(!IsFinite(weightSum))
+            return false;
+    }
+    return NearlyOne(weightSum, s_SkinWeightSumEpsilon);
+}
+
+[[nodiscard]] bool ValidMorphDelta(const DeformableMorphDelta& delta, const usize vertexCount){
+    return delta.vertexId < vertexCount
+        && IsFiniteFloat3(delta.deltaPosition)
+        && IsFiniteFloat3(delta.deltaNormal)
+        && IsFiniteFloat4(delta.deltaTangent)
+    ;
+}
+
+[[nodiscard]] bool ValidateRuntimeMeshUploadPayload(const DeformableRuntimeMeshInstance& instance){
+    const TString sourceText = instance.source.name()
+        ? StringConvert(instance.source.name().c_str())
+        : TString(NWB_TEXT("<unnamed>"))
+    ;
+
+    if(instance.restVertices.empty() || instance.indices.empty()){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' has incomplete rest/index payload"),
+            sourceText
+        );
+        return false;
+    }
+    if(instance.restVertices.size() > static_cast<usize>(Limit<u32>::s_Max)
+        || instance.indices.size() > static_cast<usize>(Limit<u32>::s_Max)
+    ){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' exceeds u32 vertex/index count limits"),
+            sourceText
+        );
+        return false;
+    }
+    if((instance.indices.size() % 3u) != 0u){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' index count {} is not a multiple of 3"),
+            sourceText,
+            instance.indices.size()
+        );
+        return false;
+    }
+    if(!ValidDeformableDisplacementDescriptor(instance.displacement)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' has an invalid displacement descriptor"),
+            sourceText
+        );
+        return false;
+    }
+
+    for(usize vertexIndex = 0; vertexIndex < instance.restVertices.size(); ++vertexIndex){
+        if(!ValidRestVertexFrame(instance.restVertices[vertexIndex])){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' rest vertex {} has invalid data or frame"),
+                sourceText,
+                vertexIndex
+            );
+            return false;
+        }
+    }
+
+    for(const u32 index : instance.indices){
+        if(index >= instance.restVertices.size()){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' index {} exceeds {} vertices"),
+                sourceText,
+                index,
+                instance.restVertices.size()
+            );
+            return false;
+        }
+    }
+    for(usize indexBase = 0; indexBase < instance.indices.size(); indexBase += 3u){
+        const u32 a = instance.indices[indexBase + 0u];
+        const u32 b = instance.indices[indexBase + 1u];
+        const u32 c = instance.indices[indexBase + 2u];
+        if(a == b || a == c || b == c){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' triangle {} is degenerate"),
+                sourceText,
+                indexBase / 3u
+            );
+            return false;
+        }
+
+        const Float3Data ab = Subtract3(instance.restVertices[b].position, instance.restVertices[a].position);
+        const Float3Data ac = Subtract3(instance.restVertices[c].position, instance.restVertices[a].position);
+        const Float3Data areaCross = Cross3(ab, ac);
+        const f32 areaLengthSquared = LengthSquared3(areaCross.x, areaCross.y, areaCross.z);
+        if(areaLengthSquared <= s_TriangleAreaLengthSquaredEpsilon){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' triangle {} has zero area"),
+                sourceText,
+                indexBase / 3u
+            );
+            return false;
+        }
+    }
+
+    if(!instance.skin.empty() && instance.skin.size() != instance.restVertices.size()){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' skin count {} does not match vertex count {}"),
+            sourceText,
+            instance.skin.size(),
+            instance.restVertices.size()
+        );
+        return false;
+    }
+    for(usize vertexIndex = 0; vertexIndex < instance.skin.size(); ++vertexIndex){
+        if(!ValidSkinInfluence(instance.skin[vertexIndex])){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' skin influence {} is invalid"),
+                sourceText,
+                vertexIndex
+            );
+            return false;
+        }
+    }
+
+    if(!instance.sourceSamples.empty() && instance.sourceSamples.size() != instance.restVertices.size()){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' source sample count {} does not match vertex count {}"),
+            sourceText,
+            instance.sourceSamples.size(),
+            instance.restVertices.size()
+        );
+        return false;
+    }
+    for(usize vertexIndex = 0; vertexIndex < instance.sourceSamples.size(); ++vertexIndex){
+        if(!ValidSourceSample(instance.sourceSamples[vertexIndex], instance.sourceTriangleCount)){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' source sample {} is invalid"),
+                sourceText,
+                vertexIndex
+            );
+            return false;
+        }
+    }
+
+    if(instance.morphs.size() > static_cast<usize>(Limit<u32>::s_Max)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' morph count exceeds u32 limits"),
+            sourceText
+        );
+        return false;
+    }
+    if(instance.morphs.empty())
+        return true;
+
+    Core::Alloc::ScratchArena<> scratchArena;
+    HashSet<NameHash, Hasher<NameHash>, EqualTo<NameHash>, Core::Alloc::ScratchAllocator<NameHash>> seenMorphNames(
+        0,
+        Hasher<NameHash>(),
+        EqualTo<NameHash>(),
+        Core::Alloc::ScratchAllocator<NameHash>(scratchArena)
+    );
+    seenMorphNames.reserve(instance.morphs.size());
+    for(const DeformableMorph& morph : instance.morphs){
+        if(!morph.name || morph.deltas.empty()){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' has an unnamed or empty morph"),
+                sourceText
+            );
+            return false;
+        }
+        if(!seenMorphNames.insert(morph.name.hash()).second){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' contains duplicate morph '{}'"),
+                sourceText,
+                StringConvert(morph.name.c_str())
+            );
+            return false;
+        }
+        if(morph.deltas.size() > static_cast<usize>(Limit<u32>::s_Max)){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' morph '{}' delta count exceeds u32 limits"),
+                sourceText,
+                StringConvert(morph.name.c_str())
+            );
+            return false;
+        }
+
+        HashSet<u32, Hasher<u32>, EqualTo<u32>, Core::Alloc::ScratchAllocator<u32>> seenDeltaVertices(
+            0,
+            Hasher<u32>(),
+            EqualTo<u32>(),
+            Core::Alloc::ScratchAllocator<u32>(scratchArena)
+        );
+        seenDeltaVertices.reserve(morph.deltas.size());
+        for(const DeformableMorphDelta& delta : morph.deltas){
+            if(!ValidMorphDelta(delta, instance.restVertices.size())){
+                NWB_LOGGER_ERROR(
+                    NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' morph '{}' contains an invalid delta"),
+                    sourceText,
+                    StringConvert(morph.name.c_str())
+                );
+                return false;
+            }
+            if(!seenDeltaVertices.insert(delta.vertexId).second){
+                NWB_LOGGER_ERROR(
+                    NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' morph '{}' has duplicate vertex {}"),
+                    sourceText,
+                    StringConvert(morph.name.c_str()),
+                    delta.vertexId
+                );
+                return false;
+            }
+        }
+    }
+
+    return true;
 }
 
 
@@ -308,49 +616,8 @@ bool DeformableRuntimeMeshCache::ensureSourceLoaded(
 }
 
 bool DeformableRuntimeMeshCache::uploadRuntimeMeshBuffers(DeformableRuntimeMeshInstance& instance){
-    if(instance.restVertices.empty() || instance.indices.empty()){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' has incomplete rest/index payload"),
-            StringConvert(instance.source.name().c_str())
-        );
+    if(!__hidden_deformable_runtime_mesh_cache::ValidateRuntimeMeshUploadPayload(instance))
         return false;
-    }
-    if(!ValidDeformableDisplacementDescriptor(instance.displacement)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' has an invalid displacement descriptor"),
-            StringConvert(instance.source.name().c_str())
-        );
-        return false;
-    }
-    for(usize vertexIndex = 0; vertexIndex < instance.restVertices.size(); ++vertexIndex){
-        if(!__hidden_deformable_runtime_mesh_cache::IsFiniteRestVertex(instance.restVertices[vertexIndex])){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' rest vertex {} contains non-finite data"),
-                StringConvert(instance.source.name().c_str()),
-                vertexIndex
-            );
-            return false;
-        }
-    }
-    if((instance.indices.size() % 3u) != 0u){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' index count {} is not a multiple of 3"),
-            StringConvert(instance.source.name().c_str()),
-            instance.indices.size()
-        );
-        return false;
-    }
-    for(const u32 index : instance.indices){
-        if(index >= instance.restVertices.size()){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' index {} exceeds {} vertices"),
-                StringConvert(instance.source.name().c_str()),
-                index,
-                instance.restVertices.size()
-            );
-            return false;
-        }
-    }
 
     usize restVertexBytes = 0;
     usize indexBytes = 0;

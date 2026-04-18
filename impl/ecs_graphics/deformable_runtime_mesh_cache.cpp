@@ -45,6 +45,27 @@ static constexpr RuntimeMeshDirtyFlags s_GpuUploadHandledDirtyFlags =
     return expanded;
 }
 
+[[nodiscard]] bool IsFiniteFloat2(const Float2Data& value){
+    return IsFinite(value.x) && IsFinite(value.y);
+}
+
+[[nodiscard]] bool IsFiniteFloat3(const Float3Data& value){
+    return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z);
+}
+
+[[nodiscard]] bool IsFiniteFloat4(const Float4Data& value){
+    return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z) && IsFinite(value.w);
+}
+
+[[nodiscard]] bool IsFiniteRestVertex(const DeformableVertexRest& vertex){
+    return IsFiniteFloat3(vertex.position)
+        && IsFiniteFloat3(vertex.normal)
+        && IsFiniteFloat4(vertex.tangent)
+        && IsFiniteFloat2(vertex.uv0)
+        && IsFiniteFloat4(vertex.color0)
+    ;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -292,6 +313,16 @@ bool DeformableRuntimeMeshCache::uploadRuntimeMeshBuffers(DeformableRuntimeMeshI
             StringConvert(instance.source.name().c_str())
         );
         return false;
+    }
+    for(usize vertexIndex = 0; vertexIndex < instance.restVertices.size(); ++vertexIndex){
+        if(!__hidden_deformable_runtime_mesh_cache::IsFiniteRestVertex(instance.restVertices[vertexIndex])){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' rest vertex {} contains non-finite data"),
+                StringConvert(instance.source.name().c_str()),
+                vertexIndex
+            );
+            return false;
+        }
     }
     if((instance.indices.size() % 3u) != 0u){
         NWB_LOGGER_ERROR(

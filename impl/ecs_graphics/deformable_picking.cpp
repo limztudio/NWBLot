@@ -52,6 +52,10 @@ struct Vec3{
     return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z);
 }
 
+[[nodiscard]] bool IsFiniteVec2(const Float2Data& value){
+    return IsFinite(value.x) && IsFinite(value.y);
+}
+
 [[nodiscard]] bool IsFiniteVec4(const Float4Data& value){
     return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z) && IsFinite(value.w);
 }
@@ -95,6 +99,15 @@ struct Vec3{
 
 [[nodiscard]] bool ValidSourceSample(const SourceSample& sample){
     return ValidBarycentric(sample.bary);
+}
+
+[[nodiscard]] bool ValidRestVertex(const DeformableVertexRest& vertex){
+    return IsFiniteVec3(vertex.position)
+        && IsFiniteVec3(vertex.normal)
+        && IsFiniteVec4(vertex.tangent)
+        && IsFiniteVec2(vertex.uv0)
+        && IsFiniteVec4(vertex.color0)
+    ;
 }
 
 void AssignCurrentTriangleSample(const u32 triangle, const f32 (&bary)[3], SourceSample& outSample){
@@ -487,6 +500,10 @@ bool BuildDeformablePickingVertices(
         || instance.indices.size() > static_cast<usize>(Limit<u32>::s_Max)
     )
         return false;
+    for(const DeformableVertexRest& vertex : instance.restVertices){
+        if(!__hidden_deformable_picking::ValidRestVertex(vertex))
+            return false;
+    }
     for(const u32 index : instance.indices){
         if(index >= instance.restVertices.size())
             return false;

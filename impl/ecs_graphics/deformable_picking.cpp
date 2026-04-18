@@ -26,6 +26,11 @@ static constexpr f32 s_Epsilon = 0.000001f;
 static constexpr f32 s_FrameEpsilon = 0.00000001f;
 static constexpr f32 s_BarycentricSumEpsilon = 0.001f;
 static constexpr f32 s_SkinWeightSumEpsilon = 0.001f;
+static constexpr f32 s_RestFrameLengthSquaredEpsilon = 0.000001f;
+static constexpr f32 s_RestFrameUnitLengthSquaredEpsilon = 0.01f;
+static constexpr f32 s_RestFrameOrthogonalityEpsilon = 0.01f;
+static constexpr f32 s_TangentHandednessEpsilon = 0.000001f;
+static constexpr f32 s_TangentHandednessUnitEpsilon = 0.001f;
 
 struct Vec3{
     f32 x = 0.0f;
@@ -87,6 +92,14 @@ struct Vec3{
     return difference <= epsilon;
 }
 
+[[nodiscard]] bool NearlySignedOne(const f32 value){
+    return AbsF32(AbsF32(value) - 1.0f) <= s_TangentHandednessUnitEpsilon;
+}
+
+[[nodiscard]] bool NearlyUnitLengthSquared(const f32 value){
+    return AbsF32(value - 1.0f) <= s_RestFrameUnitLengthSquaredEpsilon;
+}
+
 [[nodiscard]] bool ValidBarycentric(const f32 (&bary)[3]){
     return IsFinite(bary[0])
         && IsFinite(bary[1])
@@ -119,6 +132,48 @@ struct Vec3{
         && IsFiniteVec4(vertex.tangent)
         && IsFiniteVec2(vertex.uv0)
         && IsFiniteVec4(vertex.color0)
+    ;
+}
+
+[[nodiscard]] bool ValidRestVertexFrame(const DeformableVertexRest& vertex){
+    if(!ValidRestVertex(vertex))
+        return false;
+
+    const f32 normalLengthSquared =
+        (vertex.normal.x * vertex.normal.x)
+        + (vertex.normal.y * vertex.normal.y)
+        + (vertex.normal.z * vertex.normal.z)
+    ;
+    const f32 tangentLengthSquared =
+        (vertex.tangent.x * vertex.tangent.x)
+        + (vertex.tangent.y * vertex.tangent.y)
+        + (vertex.tangent.z * vertex.tangent.z)
+    ;
+    const f32 tangentHandedness = AbsF32(vertex.tangent.w);
+    const f32 frameCrossX = (vertex.normal.y * vertex.tangent.z) - (vertex.normal.z * vertex.tangent.y);
+    const f32 frameCrossY = (vertex.normal.z * vertex.tangent.x) - (vertex.normal.x * vertex.tangent.z);
+    const f32 frameCrossZ = (vertex.normal.x * vertex.tangent.y) - (vertex.normal.y * vertex.tangent.x);
+    const f32 frameCrossLengthSquared =
+        (frameCrossX * frameCrossX)
+        + (frameCrossY * frameCrossY)
+        + (frameCrossZ * frameCrossZ)
+    ;
+    if(normalLengthSquared <= s_RestFrameLengthSquaredEpsilon
+        || tangentLengthSquared <= s_RestFrameLengthSquaredEpsilon
+        || tangentHandedness <= s_TangentHandednessEpsilon
+        || !NearlySignedOne(vertex.tangent.w)
+        || frameCrossLengthSquared <= s_RestFrameLengthSquaredEpsilon
+    )
+        return false;
+
+    const f32 frameDot =
+        (vertex.normal.x * vertex.tangent.x)
+        + (vertex.normal.y * vertex.tangent.y)
+        + (vertex.normal.z * vertex.tangent.z)
+    ;
+    return NearlyUnitLengthSquared(normalLengthSquared)
+        && NearlyUnitLengthSquared(tangentLengthSquared)
+        && AbsF32(frameDot) <= s_RestFrameOrthogonalityEpsilon
     ;
 }
 
@@ -532,7 +587,7 @@ bool BuildDeformablePickingVertices(
     )
         return false;
     for(const DeformableVertexRest& vertex : instance.restVertices){
-        if(!__hidden_deformable_picking::ValidRestVertex(vertex))
+        if(!__hidden_deformable_picking::ValidRestVertexFrame(vertex))
             return false;
     }
     for(const u32 index : instance.indices){

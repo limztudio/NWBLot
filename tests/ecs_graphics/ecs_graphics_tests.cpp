@@ -280,14 +280,38 @@ static void TestPickingVerticesRejectInvalidIndexRange(TestContext& context){
 }
 
 static void TestPickingVerticesRejectNonFiniteRestData(TestContext& context){
-    NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
-    instance.restVertices[1].position.x = std::numeric_limits<f32>::quiet_NaN();
+    {
+        NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
+        instance.restVertices[1].position.x = std::numeric_limits<f32>::quiet_NaN();
 
-    Vector<NWB::Impl::DeformableVertexRest> vertices;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        !NWB::Impl::BuildDeformablePickingVertices(instance, NWB::Impl::DeformablePickingInputs{}, vertices)
-    );
+        Vector<NWB::Impl::DeformableVertexRest> vertices;
+        NWB_ECS_GRAPHICS_TEST_CHECK(
+            context,
+            !NWB::Impl::BuildDeformablePickingVertices(instance, NWB::Impl::DeformablePickingInputs{}, vertices)
+        );
+    }
+
+    {
+        NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
+        instance.restVertices[1].normal = Float3Data(0.0f, 0.0f, 0.0f);
+
+        Vector<NWB::Impl::DeformableVertexRest> vertices;
+        NWB_ECS_GRAPHICS_TEST_CHECK(
+            context,
+            !NWB::Impl::BuildDeformablePickingVertices(instance, NWB::Impl::DeformablePickingInputs{}, vertices)
+        );
+    }
+
+    {
+        NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
+        instance.restVertices[1].tangent = Float4Data(0.0f, 0.0f, 1.0f, 1.0f);
+
+        Vector<NWB::Impl::DeformableVertexRest> vertices;
+        NWB_ECS_GRAPHICS_TEST_CHECK(
+            context,
+            !NWB::Impl::BuildDeformablePickingVertices(instance, NWB::Impl::DeformablePickingInputs{}, vertices)
+        );
+    }
 }
 
 static void TestRaycastReturnsPoseAndRestHit(TestContext& context){

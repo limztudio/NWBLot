@@ -237,6 +237,7 @@ bool DeformableRuntimeMeshCache::ensureRuntimeMesh(Core::ECS::EntityID entity, D
     instance.source = component.deformableGeometry;
     instance.restVertices = geometry->restVertices();
     instance.indices = geometry->indices();
+    instance.sourceTriangleCount = static_cast<u32>(geometry->indices().size() / 3u);
     instance.skin = geometry->skin();
     instance.sourceSamples = geometry->sourceSamples();
     instance.displacement = geometry->displacement();

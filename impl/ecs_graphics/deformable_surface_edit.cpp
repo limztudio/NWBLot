@@ -105,8 +105,8 @@ struct EdgeRecord{
     return NearlyOne(weightSum);
 }
 
-[[nodiscard]] bool ValidSourceSample(const SourceSample& sample){
-    return ValidBarycentric(sample.bary);
+[[nodiscard]] bool ValidSourceSample(const SourceSample& sample, const u32 sourceTriangleCount){
+    return sourceTriangleCount != 0u && sample.sourceTri < sourceTriangleCount && ValidBarycentric(sample.bary);
 }
 
 [[nodiscard]] bool ValidMorphDelta(const DeformableMorphDelta& delta, const usize vertexCount){
@@ -120,6 +120,7 @@ struct EdgeRecord{
 [[nodiscard]] bool ValidateRuntimePayloadArrays(
     const Vector<DeformableVertexRest>& restVertices,
     const Vector<u32>& indices,
+    const u32 sourceTriangleCount,
     const Vector<SkinInfluence4>& skin,
     const Vector<SourceSample>& sourceSamples,
     const Vector<DeformableMorph>& morphs)
@@ -135,6 +136,8 @@ struct EdgeRecord{
         return false;
     if(!sourceSamples.empty() && sourceSamples.size() != restVertices.size())
         return false;
+    if(!sourceSamples.empty() && sourceTriangleCount == 0u)
+        return false;
 
     for(const DeformableVertexRest& vertex : restVertices){
         if(!ValidRestVertex(vertex))
@@ -149,7 +152,7 @@ struct EdgeRecord{
             return false;
     }
     for(const SourceSample& sample : sourceSamples){
-        if(!ValidSourceSample(sample))
+        if(!ValidSourceSample(sample, sourceTriangleCount))
             return false;
     }
     for(const DeformableMorph& morph : morphs){
@@ -334,6 +337,7 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
     return ValidateRuntimePayloadArrays(
         instance.restVertices,
         instance.indices,
+        instance.sourceTriangleCount,
         instance.skin,
         instance.sourceSamples,
         instance.morphs
@@ -389,6 +393,27 @@ void ReverseBoundaryLoop(Vector<EdgeRecord>& edges){
         reversedEdges.push_back(edge);
     }
     edges = Move(reversedEdges);
+}
+
+void CanonicalizeBoundaryLoopStart(Vector<EdgeRecord>& edges){
+    if(edges.empty())
+        return;
+
+    usize startEdgeIndex = 0u;
+    for(usize edgeIndex = 1u; edgeIndex < edges.size(); ++edgeIndex){
+        const EdgeRecord& edge = edges[edgeIndex];
+        const EdgeRecord& startEdge = edges[startEdgeIndex];
+        if(edge.a < startEdge.a || (edge.a == startEdge.a && edge.b < startEdge.b))
+            startEdgeIndex = edgeIndex;
+    }
+    if(startEdgeIndex == 0u)
+        return;
+
+    Vector<EdgeRecord> rotatedEdges;
+    rotatedEdges.reserve(edges.size());
+    for(usize edgeOffset = 0u; edgeOffset < edges.size(); ++edgeOffset)
+        rotatedEdges.push_back(edges[(startEdgeIndex + edgeOffset) % edges.size()]);
+    edges = Move(rotatedEdges);
 }
 
 [[nodiscard]] bool BuildOrderedBoundaryLoop(
@@ -447,6 +472,7 @@ void ReverseBoundaryLoop(Vector<EdgeRecord>& edges){
         return false;
     if(signedArea < 0.0f)
         ReverseBoundaryLoop(outOrderedEdges);
+    CanonicalizeBoundaryLoopStart(outOrderedEdges);
     return true;
 }
 
@@ -776,6 +802,7 @@ bool CommitDeformableRestSpaceHole(
     if(!__hidden_deformable_surface_edit::ValidateRuntimePayloadArrays(
             newRestVertices,
             newIndices,
+            instance.sourceTriangleCount,
             newSkin,
             newSourceSamples,
             newMorphs

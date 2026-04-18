@@ -28,6 +28,7 @@ struct DeformableRuntimeMeshInstance{
     Core::Assets::AssetRef<DeformableGeometry> source;
     Vector<DeformableVertexRest> restVertices;
     Vector<u32> indices;
+    u32 sourceTriangleCount = 0;
     Vector<SkinInfluence4> skin;
     Vector<SourceSample> sourceSamples;
     DeformableDisplacement displacement;
@@ -44,6 +45,7 @@ struct DeformableRuntimeMeshInstance{
             && source.valid()
             && !restVertices.empty()
             && !indices.empty()
+            && (sourceSamples.empty() || sourceTriangleCount != 0u)
             && restVertexBuffer != nullptr
             && indexBuffer != nullptr
             && deformedVertexBuffer != nullptr;

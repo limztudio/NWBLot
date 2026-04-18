@@ -69,6 +69,7 @@ static NWB::Impl::DeformableRuntimeMeshInstance MakeTriangleInstance(){
     instance.entity = NWB::Core::ECS::EntityID(1u, 0u);
     instance.handle.value = 42u;
     instance.editRevision = 7u;
+    instance.sourceTriangleCount = 10u;
     instance.restVertices.push_back(MakeVertex(-1.0f, -1.0f, 0.0f, 0.0f));
     instance.restVertices.push_back(MakeVertex(1.0f, -1.0f, 0.0f, 0.5f));
     instance.restVertices.push_back(MakeVertex(0.0f, 1.0f, 0.0f, 1.0f));
@@ -85,6 +86,7 @@ static NWB::Impl::DeformableRuntimeMeshInstance MakeQuadMixedProvenanceInstance(
     NWB::Impl::DeformableRuntimeMeshInstance instance;
     instance.entity = NWB::Core::ECS::EntityID(2u, 0u);
     instance.handle.value = 43u;
+    instance.sourceTriangleCount = 2u;
     instance.restVertices.push_back(MakeVertex(-1.0f, -1.0f, 0.0f));
     instance.restVertices.push_back(MakeVertex(1.0f, -1.0f, 0.0f));
     instance.restVertices.push_back(MakeVertex(1.0f, 1.0f, 0.0f));
@@ -107,6 +109,7 @@ static NWB::Impl::DeformableRuntimeMeshInstance MakeGridHoleInstance(){
     instance.entity = NWB::Core::ECS::EntityID(3u, 0u);
     instance.handle.value = 44u;
     instance.editRevision = 3u;
+    instance.sourceTriangleCount = 1u;
     instance.dirtyFlags = NWB::Impl::RuntimeMeshDirtyFlag::None;
 
     for(u32 y = 0; y < 4u; ++y){
@@ -233,6 +236,16 @@ static void TestMixedProvenanceFallsBackToRestTriangle(TestContext& context){
 static void TestRestSampleRejectsMalformedIndexPayload(TestContext& context){
     NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
     instance.indices.push_back(0u);
+
+    const f32 bary[3] = { 0.25f, 0.25f, 0.5f };
+    NWB::Impl::SourceSample sample;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::ResolveDeformableRestSurfaceSample(instance, 0u, bary, sample));
+}
+
+static void TestRestSampleRejectsOutOfRangeProvenance(TestContext& context){
+    NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
+    for(NWB::Impl::SourceSample& sample : instance.sourceSamples)
+        sample.sourceTri = 99u;
 
     const f32 bary[3] = { 0.25f, 0.25f, 0.5f };
     NWB::Impl::SourceSample sample;
@@ -588,6 +601,16 @@ static void TestRestSpaceHoleEditCreatesPerInstancePatch(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.sourceSamples.size() == instance.restVertices.size());
     NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.morphs.size() == 1u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.morphs[0].deltas.size() > 1u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(instance.restVertices[oldVertexCount + 0u].position.x, -0.5f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(instance.restVertices[oldVertexCount + 0u].position.y, -0.5f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(instance.restVertices[oldVertexCount + 1u].position.x, 0.5f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(instance.restVertices[oldVertexCount + 1u].position.y, -0.5f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(instance.restVertices[oldVertexCount + 2u].position.x, 0.5f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(instance.restVertices[oldVertexCount + 2u].position.y, -0.5f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(instance.restVertices[oldVertexCount + 2u].position.z, -0.25f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(instance.restVertices[oldVertexCount + 3u].position.x, -0.5f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(instance.restVertices[oldVertexCount + 3u].position.y, -0.5f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(instance.restVertices[oldVertexCount + 3u].position.z, -0.25f));
 
     u32 rimVertexCount = 0u;
     u32 innerVertexCount = 0u;
@@ -664,16 +687,31 @@ static void TestRestSpaceHoleEditRejectsNonFiniteWallVertices(TestContext& conte
 }
 
 static void TestRestSpaceHoleEditRejectsInvalidAttributeStreams(TestContext& context){
-    NWB::Impl::DeformableRuntimeMeshInstance instance = MakeGridHoleInstance();
-    const usize oldVertexCount = instance.restVertices.size();
-    const usize oldIndexCount = instance.indices.size();
-    const u32 oldRevision = instance.editRevision;
-    instance.skin[0].weight[0] = 0.5f;
+    {
+        NWB::Impl::DeformableRuntimeMeshInstance instance = MakeGridHoleInstance();
+        const usize oldVertexCount = instance.restVertices.size();
+        const usize oldIndexCount = instance.indices.size();
+        const u32 oldRevision = instance.editRevision;
+        instance.skin[0].weight[0] = 0.5f;
 
-    const NWB::Impl::DeformableHoleEditParams params = MakeGridHoleEditParams(instance);
+        const NWB::Impl::DeformableHoleEditParams params = MakeGridHoleEditParams(instance);
 
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::CommitDeformableRestSpaceHole(instance, params));
-    CheckHoleEditUnchanged(context, instance, oldVertexCount, oldIndexCount, oldRevision);
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::CommitDeformableRestSpaceHole(instance, params));
+        CheckHoleEditUnchanged(context, instance, oldVertexCount, oldIndexCount, oldRevision);
+    }
+
+    {
+        NWB::Impl::DeformableRuntimeMeshInstance instance = MakeGridHoleInstance();
+        const usize oldVertexCount = instance.restVertices.size();
+        const usize oldIndexCount = instance.indices.size();
+        const u32 oldRevision = instance.editRevision;
+        instance.sourceSamples[0].sourceTri = 99u;
+
+        const NWB::Impl::DeformableHoleEditParams params = MakeGridHoleEditParams(instance);
+
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::CommitDeformableRestSpaceHole(instance, params));
+        CheckHoleEditUnchanged(context, instance, oldVertexCount, oldIndexCount, oldRevision);
+    }
 }
 
 static void TestRestSpaceHoleEditRejectsInvalidDisplacementDescriptor(TestContext& context){
@@ -776,6 +814,7 @@ int main(){
     __hidden_ecs_graphics_tests::TestRestSampleInterpolation(context);
     __hidden_ecs_graphics_tests::TestMixedProvenanceFallsBackToRestTriangle(context);
     __hidden_ecs_graphics_tests::TestRestSampleRejectsMalformedIndexPayload(context);
+    __hidden_ecs_graphics_tests::TestRestSampleRejectsOutOfRangeProvenance(context);
     __hidden_ecs_graphics_tests::TestPickingVerticesRejectInvalidIndexRange(context);
     __hidden_ecs_graphics_tests::TestPickingVerticesRejectNonFiniteRestData(context);
     __hidden_ecs_graphics_tests::TestRaycastReturnsPoseAndRestHit(context);

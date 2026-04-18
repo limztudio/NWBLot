@@ -97,8 +97,8 @@ struct Vec3{
     ;
 }
 
-[[nodiscard]] bool ValidSourceSample(const SourceSample& sample){
-    return ValidBarycentric(sample.bary);
+[[nodiscard]] bool ValidSourceSample(const SourceSample& sample, const u32 sourceTriangleCount){
+    return sourceTriangleCount != 0u && sample.sourceTri < sourceTriangleCount && ValidBarycentric(sample.bary);
 }
 
 [[nodiscard]] bool ValidRestVertex(const DeformableVertexRest& vertex){
@@ -576,13 +576,15 @@ bool ResolveDeformableRestSurfaceSample(
     }
     if(instance.sourceSamples.size() != instance.restVertices.size())
         return false;
+    if(instance.sourceTriangleCount == 0u)
+        return false;
 
     const SourceSample& sample0 = instance.sourceSamples[vertexIndices[0]];
     const SourceSample& sample1 = instance.sourceSamples[vertexIndices[1]];
     const SourceSample& sample2 = instance.sourceSamples[vertexIndices[2]];
-    if(!__hidden_deformable_picking::ValidSourceSample(sample0)
-        || !__hidden_deformable_picking::ValidSourceSample(sample1)
-        || !__hidden_deformable_picking::ValidSourceSample(sample2)
+    if(!__hidden_deformable_picking::ValidSourceSample(sample0, instance.sourceTriangleCount)
+        || !__hidden_deformable_picking::ValidSourceSample(sample1, instance.sourceTriangleCount)
+        || !__hidden_deformable_picking::ValidSourceSample(sample2, instance.sourceTriangleCount)
     )
         return false;
     if(sample0.sourceTri != sample1.sourceTri || sample0.sourceTri != sample2.sourceTri){

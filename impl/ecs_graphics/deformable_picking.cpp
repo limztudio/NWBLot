@@ -536,6 +536,8 @@ bool ResolveDeformableRestSurfaceSample(
     outSample = SourceSample{};
     if(!__hidden_deformable_picking::ValidBarycentric(bary))
         return false;
+    if(instance.indices.empty() || (instance.indices.size() % 3u) != 0u)
+        return false;
 
     u32 vertexIndices[3] = {};
     if(!__hidden_deformable_picking::ValidateTriangleIndex(instance, triangle, vertexIndices))

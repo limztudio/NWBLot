@@ -132,6 +132,15 @@ static void TestMixedProvenanceFallsBackToRestTriangle(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(hit.restSample.bary[2], 0.5f));
 }
 
+static void TestRestSampleRejectsMalformedIndexPayload(TestContext& context){
+    NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
+    instance.indices.push_back(0u);
+
+    const f32 bary[3] = { 0.25f, 0.25f, 0.5f };
+    NWB::Impl::SourceSample sample;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::ResolveDeformableRestSurfaceSample(instance, 0u, bary, sample));
+}
+
 static void TestRaycastReturnsPoseAndRestHit(TestContext& context){
     const NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
 
@@ -418,6 +427,7 @@ int main(){
     __hidden_ecs_graphics_tests::TestContext context;
     __hidden_ecs_graphics_tests::TestRestSampleInterpolation(context);
     __hidden_ecs_graphics_tests::TestMixedProvenanceFallsBackToRestTriangle(context);
+    __hidden_ecs_graphics_tests::TestRestSampleRejectsMalformedIndexPayload(context);
     __hidden_ecs_graphics_tests::TestRaycastReturnsPoseAndRestHit(context);
     __hidden_ecs_graphics_tests::TestPoseStableRestHitRecovery(context);
     __hidden_ecs_graphics_tests::TestPickingUsesEntityTransform(context);

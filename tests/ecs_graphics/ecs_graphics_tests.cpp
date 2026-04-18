@@ -576,6 +576,31 @@ static void TestRestSpaceHoleEditRejectsNonFiniteWallVertices(TestContext& conte
     NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.editRevision == oldRevision);
 }
 
+static void TestRestSpaceHoleEditRejectsInvalidAttributeStreams(TestContext& context){
+    NWB::Impl::DeformableRuntimeMeshInstance instance = MakeGridHoleInstance();
+    const usize oldVertexCount = instance.restVertices.size();
+    const usize oldIndexCount = instance.indices.size();
+    const u32 oldRevision = instance.editRevision;
+    instance.skin[0].weight[0] = 0.5f;
+
+    NWB::Impl::DeformableHoleEditParams params;
+    params.posedHit.entity = instance.entity;
+    params.posedHit.runtimeMesh = instance.handle;
+    params.posedHit.editRevision = instance.editRevision;
+    params.posedHit.triangle = 8u;
+    params.posedHit.bary[0] = 0.25f;
+    params.posedHit.bary[1] = 0.25f;
+    params.posedHit.bary[2] = 0.5f;
+    params.radius = 0.48f;
+    params.ellipseRatio = 1.0f;
+    params.depth = 0.25f;
+
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::CommitDeformableRestSpaceHole(instance, params));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.restVertices.size() == oldVertexCount);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.indices.size() == oldIndexCount);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.editRevision == oldRevision);
+}
+
 
 #undef NWB_ECS_GRAPHICS_TEST_CHECK
 
@@ -615,6 +640,7 @@ int main(){
     __hidden_ecs_graphics_tests::TestRestSpaceHoleEditCreatesPerInstancePatch(context);
     __hidden_ecs_graphics_tests::TestRestSpaceHoleEditRejectsOpenBoundaryPatch(context);
     __hidden_ecs_graphics_tests::TestRestSpaceHoleEditRejectsNonFiniteWallVertices(context);
+    __hidden_ecs_graphics_tests::TestRestSpaceHoleEditRejectsInvalidAttributeStreams(context);
 
     if(context.failed != 0u){
         NWB_CERR << "ecs graphics tests failed: " << context.failed << " failed, " << context.passed << " passed\n";

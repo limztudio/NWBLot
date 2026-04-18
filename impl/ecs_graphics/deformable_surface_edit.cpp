@@ -66,6 +66,10 @@ struct EdgeRecord{
     ;
 }
 
+[[nodiscard]] bool NearlyOne(const f32 value){
+    return AbsF32(value - 1.0f) <= 0.001f;
+}
+
 [[nodiscard]] bool IsFiniteFloat2(const Float2Data& value){
     return IsFinite(value.x) && IsFinite(value.y);
 }
@@ -84,6 +88,32 @@ struct EdgeRecord{
         && IsFiniteFloat4(vertex.tangent)
         && IsFiniteFloat2(vertex.uv0)
         && IsFiniteFloat4(vertex.color0)
+    ;
+}
+
+[[nodiscard]] bool ValidSkinInfluence(const SkinInfluence4& skin){
+    f32 weightSum = 0.0f;
+    for(u32 influenceIndex = 0; influenceIndex < 4u; ++influenceIndex){
+        const f32 weight = skin.weight[influenceIndex];
+        if(!IsFinite(weight) || weight < 0.0f)
+            return false;
+
+        weightSum += weight;
+        if(!IsFinite(weightSum))
+            return false;
+    }
+    return NearlyOne(weightSum);
+}
+
+[[nodiscard]] bool ValidSourceSample(const SourceSample& sample){
+    return ValidBarycentric(sample.bary);
+}
+
+[[nodiscard]] bool ValidMorphDelta(const DeformableMorphDelta& delta, const usize vertexCount){
+    return delta.vertexId < vertexCount
+        && IsFiniteFloat3(delta.deltaPosition)
+        && IsFiniteFloat3(delta.deltaNormal)
+        && IsFiniteFloat4(delta.deltaTangent)
     ;
 }
 
@@ -257,6 +287,20 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
     for(const u32 index : instance.indices){
         if(index >= instance.restVertices.size())
             return false;
+    }
+    for(const SkinInfluence4& skin : instance.skin){
+        if(!ValidSkinInfluence(skin))
+            return false;
+    }
+    for(const SourceSample& sample : instance.sourceSamples){
+        if(!ValidSourceSample(sample))
+            return false;
+    }
+    for(const DeformableMorph& morph : instance.morphs){
+        for(const DeformableMorphDelta& delta : morph.deltas){
+            if(!ValidMorphDelta(delta, instance.restVertices.size()))
+                return false;
+        }
     }
     return true;
 }

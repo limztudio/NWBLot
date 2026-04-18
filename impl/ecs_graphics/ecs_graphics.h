@@ -24,8 +24,13 @@ namespace ECSGraphics{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+using DeformableRendererComponent = NWB::Impl::DeformableRendererComponent;
+using DeformableRuntimeMeshCache = NWB::Impl::DeformableRuntimeMeshCache;
+using DeformableRuntimeMeshInstance = NWB::Impl::DeformableRuntimeMeshInstance;
 using RendererComponent = NWB::Impl::RendererComponent;
 using RendererSystem = NWB::Impl::RendererSystem;
+using RuntimeMeshDirtyFlags = NWB::Impl::RuntimeMeshDirtyFlags;
+using RuntimeMeshHandle = NWB::Impl::RuntimeMeshHandle;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

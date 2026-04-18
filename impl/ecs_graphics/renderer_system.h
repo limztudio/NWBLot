@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "components.h"
+#include "deformable_runtime_mesh_cache.h"
 
 #include <core/alloc/scratch.h>
 #include <core/ecs/world.h>
@@ -61,8 +61,6 @@ static_assert(sizeof(InstanceGpuData) == sizeof(f32) * 12u, "InstanceGpuData lay
 
 class RendererSystem final : public Core::ECS::ISystem, public Core::IRenderPass{
 private:
-    class DeformableRuntimeCache;
-
     struct MaterialPipelineKey{
         Name material = NAME_NONE;
         Core::FramebufferInfo framebufferInfo;
@@ -364,7 +362,7 @@ private:
     Core::ComputePipelineHandle m_avboitDepthWarpPipeline;
     Core::ComputePipelineHandle m_avboitIntegratePipeline;
     DeferredFrameTargets m_deferredTargets;
-    UniquePtr<DeformableRuntimeCache> m_deformableRuntimeCache;
+    UniquePtr<DeformableRuntimeMeshCache> m_deformableRuntimeCache;
     usize m_instanceBufferCapacity = 0;
 };
 

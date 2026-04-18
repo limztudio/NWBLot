@@ -268,6 +268,53 @@ static constexpr f32 s_TriangleAreaLengthSquaredEpsilon = 0.000000000001f;
     return areaLengthSquared > s_TriangleAreaLengthSquaredEpsilon;
 }
 
+[[nodiscard]] inline bool ValidRuntimePayloadArrays(
+    const Vector<DeformableVertexRest>& restVertices,
+    const Vector<u32>& indices,
+    const u32 sourceTriangleCount,
+    const Vector<SkinInfluence4>& skin,
+    const Vector<SourceSample>& sourceSamples,
+    const Vector<DeformableMorph>& morphs)
+{
+    if(restVertices.empty() || indices.empty())
+        return false;
+    if(restVertices.size() > static_cast<usize>(Limit<u32>::s_Max)
+        || indices.size() > static_cast<usize>(Limit<u32>::s_Max)
+        || (indices.size() % 3u) != 0u
+    )
+        return false;
+    if(!skin.empty() && skin.size() != restVertices.size())
+        return false;
+    if(!sourceSamples.empty() && sourceSamples.size() != restVertices.size())
+        return false;
+    if(!sourceSamples.empty() && sourceTriangleCount == 0u)
+        return false;
+
+    for(const DeformableVertexRest& vertex : restVertices){
+        if(!ValidRestVertexFrame(vertex))
+            return false;
+    }
+    for(usize indexBase = 0; indexBase < indices.size(); indexBase += 3u){
+        if(!ValidTriangle(
+                restVertices,
+                indices[indexBase + 0u],
+                indices[indexBase + 1u],
+                indices[indexBase + 2u]
+            )
+        )
+            return false;
+    }
+    for(const SkinInfluence4& influence : skin){
+        if(!ValidSkinInfluence(influence))
+            return false;
+    }
+    for(const SourceSample& sample : sourceSamples){
+        if(!ValidSourceSample(sample, sourceTriangleCount))
+            return false;
+    }
+    return ValidMorphPayload(morphs, restVertices.size());
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

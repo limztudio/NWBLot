@@ -214,26 +214,6 @@ void OrthonormalizeFrame(
     };
 }
 
-[[nodiscard]] bool ValidatePickingRuntimePayload(const DeformableRuntimeMeshInstance& instance){
-    if(!instance.skin.empty() && instance.skin.size() != instance.restVertices.size())
-        return false;
-    for(const SkinInfluence4& skin : instance.skin){
-        if(!DeformableValidation::ValidSkinInfluence(skin))
-            return false;
-    }
-
-    if(!instance.sourceSamples.empty() && instance.sourceSamples.size() != instance.restVertices.size())
-        return false;
-    if(!instance.sourceSamples.empty() && instance.sourceTriangleCount == 0u)
-        return false;
-    for(const SourceSample& sample : instance.sourceSamples){
-        if(!DeformableValidation::ValidSourceSample(sample, instance.sourceTriangleCount))
-            return false;
-    }
-
-    return DeformableValidation::ValidMorphPayload(instance.morphs, instance.restVertices.size());
-}
-
 [[nodiscard]] bool ValidateJointPalette(
     const DeformableRuntimeMeshInstance& instance,
     const DeformableJointPaletteComponent* jointPalette)
@@ -443,22 +423,16 @@ bool BuildDeformablePickingVertices(
     Vector<DeformableVertexRest>& outVertices)
 {
     outVertices.clear();
-    if(instance.restVertices.empty() || instance.indices.empty() || (instance.indices.size() % 3u) != 0u)
-        return false;
-    if(instance.restVertices.size() > static_cast<usize>(Limit<u32>::s_Max)
-        || instance.indices.size() > static_cast<usize>(Limit<u32>::s_Max)
+    if(!DeformableValidation::ValidRuntimePayloadArrays(
+            instance.restVertices,
+            instance.indices,
+            instance.sourceTriangleCount,
+            instance.skin,
+            instance.sourceSamples,
+            instance.morphs
+        )
     )
         return false;
-    if(!__hidden_deformable_picking::ValidatePickingRuntimePayload(instance))
-        return false;
-    for(const DeformableVertexRest& vertex : instance.restVertices){
-        if(!DeformableValidation::ValidRestVertexFrame(vertex))
-            return false;
-    }
-    for(const u32 index : instance.indices){
-        if(index >= instance.restVertices.size())
-            return false;
-    }
 
     DeformableDisplacement displacement;
     if(!__hidden_deformable_picking::ResolveDisplacement(instance, inputs.displacement, displacement))

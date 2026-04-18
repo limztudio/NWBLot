@@ -58,53 +58,6 @@ struct WallVertexFrame{
     return value > s_Epsilon;
 }
 
-[[nodiscard]] bool ValidateRuntimePayloadArrays(
-    const Vector<DeformableVertexRest>& restVertices,
-    const Vector<u32>& indices,
-    const u32 sourceTriangleCount,
-    const Vector<SkinInfluence4>& skin,
-    const Vector<SourceSample>& sourceSamples,
-    const Vector<DeformableMorph>& morphs)
-{
-    if(restVertices.empty() || indices.empty())
-        return false;
-    if(restVertices.size() > static_cast<usize>(Limit<u32>::s_Max)
-        || indices.size() > static_cast<usize>(Limit<u32>::s_Max)
-        || (indices.size() % 3u) != 0u
-    )
-        return false;
-    if(!skin.empty() && skin.size() != restVertices.size())
-        return false;
-    if(!sourceSamples.empty() && sourceSamples.size() != restVertices.size())
-        return false;
-    if(!sourceSamples.empty() && sourceTriangleCount == 0u)
-        return false;
-
-    for(const DeformableVertexRest& vertex : restVertices){
-        if(!DeformableValidation::ValidRestVertexFrame(vertex))
-            return false;
-    }
-    for(usize indexBase = 0; indexBase < indices.size(); indexBase += 3u){
-        if(!DeformableValidation::ValidTriangle(
-                restVertices,
-                indices[indexBase + 0u],
-                indices[indexBase + 1u],
-                indices[indexBase + 2u]
-            )
-        )
-            return false;
-    }
-    for(const SkinInfluence4& influence : skin){
-        if(!DeformableValidation::ValidSkinInfluence(influence))
-            return false;
-    }
-    for(const SourceSample& sample : sourceSamples){
-        if(!DeformableValidation::ValidSourceSample(sample, sourceTriangleCount))
-            return false;
-    }
-    return DeformableValidation::ValidMorphPayload(morphs, restVertices.size());
-}
-
 [[nodiscard]] Vec3 ToVec3(const Float3Data& value){
     return Vec3{ value.x, value.y, value.z };
 }
@@ -279,7 +232,7 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
         return false;
     if(!ValidDeformableDisplacementDescriptor(instance.displacement))
         return false;
-    return ValidateRuntimePayloadArrays(
+    return DeformableValidation::ValidRuntimePayloadArrays(
         instance.restVertices,
         instance.indices,
         instance.sourceTriangleCount,
@@ -812,7 +765,7 @@ bool CommitDeformableRestSpaceHole(
         }
     }
 
-    if(!__hidden_deformable_surface_edit::ValidateRuntimePayloadArrays(
+    if(!DeformableValidation::ValidRuntimePayloadArrays(
             newRestVertices,
             newIndices,
             instance.sourceTriangleCount,

@@ -338,6 +338,30 @@ static void TestPickingVerticesRejectInvalidIndexRange(TestContext& context){
     );
 }
 
+static void TestPickingVerticesRejectDegenerateTriangle(TestContext& context){
+    {
+        NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
+        instance.indices[2] = instance.indices[1];
+
+        Vector<NWB::Impl::DeformableVertexRest> vertices;
+        NWB_ECS_GRAPHICS_TEST_CHECK(
+            context,
+            !NWB::Impl::BuildDeformablePickingVertices(instance, NWB::Impl::DeformablePickingInputs{}, vertices)
+        );
+    }
+
+    {
+        NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
+        instance.restVertices[2].position = instance.restVertices[0].position;
+
+        Vector<NWB::Impl::DeformableVertexRest> vertices;
+        NWB_ECS_GRAPHICS_TEST_CHECK(
+            context,
+            !NWB::Impl::BuildDeformablePickingVertices(instance, NWB::Impl::DeformablePickingInputs{}, vertices)
+        );
+    }
+}
+
 static void TestPickingVerticesRejectNonFiniteRestData(TestContext& context){
     {
         NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
@@ -1026,6 +1050,7 @@ int main(){
     __hidden_ecs_graphics_tests::TestRestSampleRejectsOutOfRangeProvenance(context);
     __hidden_ecs_graphics_tests::TestRestSampleCanonicalizesEdgeTolerance(context);
     __hidden_ecs_graphics_tests::TestPickingVerticesRejectInvalidIndexRange(context);
+    __hidden_ecs_graphics_tests::TestPickingVerticesRejectDegenerateTriangle(context);
     __hidden_ecs_graphics_tests::TestPickingVerticesRejectNonFiniteRestData(context);
     __hidden_ecs_graphics_tests::TestRaycastReturnsPoseAndRestHit(context);
     __hidden_ecs_graphics_tests::TestPoseStableRestHitRecovery(context);
@@ -1059,3 +1084,4 @@ int main(){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

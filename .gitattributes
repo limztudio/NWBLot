@@ -5,7 +5,7 @@
 *.h text eol=crlf whitespace=blank-at-eol,space-before-tab,cr-at-eol,-blank-at-eof
 *.hpp text eol=crlf whitespace=blank-at-eol,space-before-tab,cr-at-eol,-blank-at-eof
 *.inl text eol=crlf whitespace=blank-at-eol,space-before-tab,cr-at-eol,-blank-at-eof
-*.glsl text eol=crlf
-*.glsli text eol=crlf
+*.glsl text eol=crlf whitespace=blank-at-eol,space-before-tab,cr-at-eol,-blank-at-eof
+*.glsli text eol=crlf whitespace=blank-at-eol,space-before-tab,cr-at-eol,-blank-at-eof
 
 3rd_parties/** -text

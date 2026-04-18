@@ -9,6 +9,43 @@
 #include <logger/client/logger.h>
 
 
+namespace __hidden_project_testbed_runtime{
+
+
+using TestbedGeometryRef = NWB::Core::Assets::AssetRef<NWB::Impl::Geometry>;
+using TestbedMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
+
+
+[[nodiscard]] static NWB::Core::ECS::EntityID CreateMainCameraEntity(NWB::Core::ECS::World& world){
+    auto cameraEntity = world.createEntity();
+    cameraEntity.addComponent<NWB::Core::ECS::TransformComponent>();
+    cameraEntity.addComponent<NWB::Core::ECS::CameraComponent>();
+    return cameraEntity.id();
+}
+
+static void CreateRendererEntity(
+    NWB::Core::ECS::World& world,
+    const TestbedGeometryRef& geometry,
+    const TestbedMaterialRef& material
+){
+    auto entity = world.createEntity();
+    entity.addComponent<NWB::Core::ECS::TransformComponent>();
+
+    auto& renderer = entity.addComponent<NWB::Core::ECSGraphics::RendererComponent>();
+    renderer.geometry = geometry;
+    renderer.material = material;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NotNullUniquePtr<NWB::Core::ECS::World> ProjectTestbed::createInitialWorldOrDie(NWB::ProjectRuntimeContext& context){
     UniquePtr<NWB::Core::ECS::World> world;
     if(!NWB::CreateInitialProjectWorld(context, world)){
@@ -24,7 +61,10 @@ NotNullUniquePtr<NWB::Core::ECS::World> ProjectTestbed::createInitialWorldOrDie(
 
 NWB::Core::ECSGraphics::RendererSystem& ProjectTestbed::requireRendererSystemOrDie(NWB::Core::ECS::World& world){
     auto* rendererSystem = world.getSystem<NWB::Core::ECSGraphics::RendererSystem>();
-    NWB_FATAL_ASSERT_MSG(rendererSystem, NWB_TEXT("ProjectTestbed initialization failed: renderer system is missing in initial world"));
+    NWB_FATAL_ASSERT_MSG(
+        rendererSystem,
+        NWB_TEXT("ProjectTestbed initialization failed: renderer system is missing in initial world")
+    );
     return *rendererSystem;
 }
 
@@ -43,23 +83,31 @@ ProjectTestbed::~ProjectTestbed(){
 bool ProjectTestbed::onStartup(){
     (void)m_rendererSystem;
 
-    using TestbedGeometryRef = NWB::Core::Assets::AssetRef<NWB::Impl::Geometry>;
-    using TestbedMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
+    using TestbedGeometryRef = __hidden_project_testbed_runtime::TestbedGeometryRef;
+    using TestbedMaterialRef = __hidden_project_testbed_runtime::TestbedMaterialRef;
 
-    const auto addRendererEntity = [this](const TestbedGeometryRef& geometry, const TestbedMaterialRef& material){
-        auto entity = m_world->createEntity();
-        entity.addComponent<NWB::Core::ECS::TransformComponent>();
-        auto& renderer = entity.addComponent<NWB::Core::ECSGraphics::RendererComponent>();
-        renderer.geometry = geometry;
-        renderer.material = material;
-    };
+    auto projectEntity = m_world->createEntity();
+    auto& project = projectEntity.addComponent<NWB::Core::ECS::ProjectComponent>();
+    project.mainCamera = __hidden_project_testbed_runtime::CreateMainCameraEntity(*m_world);
 
     const TestbedMaterialRef cubeMaterial(Name("project/materials/mat_test"));
     const TestbedMaterialRef transparentMaterial(Name("project/materials/mat_transparent"));
 
-    addRendererEntity(TestbedGeometryRef(Name("project/meshes/cube")), cubeMaterial);
-    addRendererEntity(TestbedGeometryRef(Name("project/meshes/sphere")), transparentMaterial);
-    addRendererEntity(TestbedGeometryRef(Name("project/meshes/tetrahedron")), transparentMaterial);
+    __hidden_project_testbed_runtime::CreateRendererEntity(
+        *m_world,
+        TestbedGeometryRef(Name("project/meshes/cube")),
+        cubeMaterial
+    );
+    __hidden_project_testbed_runtime::CreateRendererEntity(
+        *m_world,
+        TestbedGeometryRef(Name("project/meshes/sphere")),
+        transparentMaterial
+    );
+    __hidden_project_testbed_runtime::CreateRendererEntity(
+        *m_world,
+        TestbedGeometryRef(Name("project/meshes/tetrahedron")),
+        transparentMaterial
+    );
 
     NWB_LOGGER_ESSENTIAL_INFO(
         NWB_TEXT("ProjectTestbed: startup scene created ({})"),

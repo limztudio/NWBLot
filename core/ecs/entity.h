@@ -22,6 +22,7 @@ class Entity{
 
 
 public:
+    [[nodiscard]] EntityID id()const{ return m_entity; }
     [[nodiscard]] bool alive()const{ return m_world.alive(m_entity); }
 
     void destroy(){ m_world.destroyEntity(m_entity); }

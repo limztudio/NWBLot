@@ -42,8 +42,14 @@ static_assert(
     (sizeof(TransformComponent) % alignof(TransformComponent)) == 0,
     "TransformComponent array stride must keep every element SIMD-aligned"
 );
-static_assert((offsetof(TransformComponent, position) % alignof(AlignedFloat3Data)) == 0, "TransformComponent::position must stay aligned");
-static_assert((offsetof(TransformComponent, rotation) % alignof(AlignedFloat4Data)) == 0, "TransformComponent::rotation must stay aligned");
+static_assert(
+    (offsetof(TransformComponent, position) % alignof(AlignedFloat3Data)) == 0,
+    "TransformComponent::position must stay aligned"
+);
+static_assert(
+    (offsetof(TransformComponent, rotation) % alignof(AlignedFloat4Data)) == 0,
+    "TransformComponent::rotation must stay aligned"
+);
 static_assert(
     (offsetof(TransformComponent, scale) % alignof(AlignedFloat3Data)) == 0,
     "TransformComponent::scale must stay aligned"

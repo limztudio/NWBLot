@@ -7,6 +7,8 @@ target_sources(nwb_ecs PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/entity.h"
     "${CMAKE_CURRENT_LIST_DIR}/component.h"
     "${CMAKE_CURRENT_LIST_DIR}/transform_component.h"
+    "${CMAKE_CURRENT_LIST_DIR}/camera_component.h"
+    "${CMAKE_CURRENT_LIST_DIR}/project_component.h"
     "${CMAKE_CURRENT_LIST_DIR}/system.h"
     "${CMAKE_CURRENT_LIST_DIR}/query.h"
     "${CMAKE_CURRENT_LIST_DIR}/message_bus.h"

@@ -85,6 +85,13 @@ static bool ResolveDisplacement(
     }
 
     outDisplacement.amplitude *= scale;
+    if(!IsFinite(outDisplacement.amplitude)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("DeformerSystem: runtime mesh '{}' effective displacement amplitude is invalid"),
+            instance.handle.value
+        );
+        return false;
+    }
     if(!ActiveWeight(outDisplacement.amplitude))
         outDisplacement = DeformableDisplacement{};
     return true;

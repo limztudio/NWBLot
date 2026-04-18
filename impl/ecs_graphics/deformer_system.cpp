@@ -107,6 +107,10 @@ static bool IsFiniteFloat4Data(const Float4Data& value){
     return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z) && IsFinite(value.w);
 }
 
+static bool IsFiniteFloat3Data(const Float3Data& value){
+    return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z);
+}
+
 static bool IsAffineJointMatrix(const DeformableJointMatrix& matrix){
     return IsFiniteFloat4Data(matrix.column0)
         && IsFiniteFloat4Data(matrix.column1)
@@ -211,6 +215,19 @@ static bool BuildMorphPayload(
         HashCombine(outSignature, static_cast<usize>(range.deltaCount));
 
         for(const DeformableMorphDelta& delta : morph.deltas){
+            if(delta.vertexId >= instance.restVertices.size()
+                || !IsFiniteFloat3Data(delta.deltaPosition)
+                || !IsFiniteFloat3Data(delta.deltaNormal)
+                || !IsFiniteFloat4Data(delta.deltaTangent)
+            ){
+                NWB_LOGGER_ERROR(
+                    NWB_TEXT("DeformerSystem: morph '{}' on runtime mesh '{}' contains an invalid delta"),
+                    StringConvert(morph.name.c_str()),
+                    instance.handle.value
+                );
+                return false;
+            }
+
             DeformerSystem::DeformerMorphDeltaGpu gpuDelta;
             gpuDelta.vertexId = delta.vertexId;
             gpuDelta.deltaPosition = ExpandFloat3Delta(delta.deltaPosition);

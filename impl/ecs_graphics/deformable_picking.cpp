@@ -218,7 +218,11 @@ void OrthonormalizeFrame(
             continue;
 
         for(const DeformableMorphDelta& delta : morph.deltas){
-            if(delta.vertexId >= vertices.size())
+            if(delta.vertexId >= vertices.size()
+                || !IsFiniteVec3(delta.deltaPosition)
+                || !IsFiniteVec3(delta.deltaNormal)
+                || !IsFiniteVec4(delta.deltaTangent)
+            )
                 return false;
 
             DeformableVertexRest& vertex = vertices[delta.vertexId];

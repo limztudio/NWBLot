@@ -351,6 +351,30 @@ static void TestPickingVerticesIncludeMorphAndDisplacement(TestContext& context)
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertices[2].position.z, 2.0f));
 }
 
+static void TestPickingRejectsInvalidMorphDelta(TestContext& context){
+    NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
+
+    NWB::Impl::DeformableMorph morph;
+    morph.name = Name("broken");
+    NWB::Impl::DeformableMorphDelta delta;
+    delta.vertexId = 99u;
+    morph.deltas.push_back(delta);
+    instance.morphs.push_back(morph);
+
+    NWB::Impl::DeformableMorphWeightsComponent weights;
+    weights.weights.push_back(NWB::Impl::DeformableMorphWeight{ Name("broken"), 1.0f });
+
+    NWB::Impl::DeformablePickingInputs inputs;
+    inputs.morphWeights = &weights;
+
+    Vector<NWB::Impl::DeformableVertexRest> vertices;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::BuildDeformablePickingVertices(instance, inputs, vertices));
+
+    instance.morphs[0].deltas[0].vertexId = 0u;
+    instance.morphs[0].deltas[0].deltaPosition.x = std::numeric_limits<f32>::quiet_NaN();
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::BuildDeformablePickingVertices(instance, inputs, vertices));
+}
+
 
 #undef NWB_ECS_GRAPHICS_TEST_CHECK
 
@@ -382,6 +406,7 @@ int main(){
     __hidden_ecs_graphics_tests::TestPickingRejectsUnusedNonAffineJointPalette(context);
     __hidden_ecs_graphics_tests::TestPickingRejectsInvalidSkinWeights(context);
     __hidden_ecs_graphics_tests::TestPickingVerticesIncludeMorphAndDisplacement(context);
+    __hidden_ecs_graphics_tests::TestPickingRejectsInvalidMorphDelta(context);
 
     if(context.failed != 0u){
         NWB_CERR << "ecs graphics tests failed: " << context.failed << " failed, " << context.passed << " passed\n";

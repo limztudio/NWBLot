@@ -10,6 +10,8 @@
 #include <core/assets/asset_ref.h>
 #include <global/matrix_math.h>
 
+#include <cstddef>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -28,17 +30,27 @@ class Material;
 
 
 struct TransformComponent{
-    Float3Data position = Float3Data(0.f, 0.f, 0.f);
+    AlignedFloat3Data position = AlignedFloat3Data(0.f, 0.f, 0.f);
     // Unit quaternion in x/y/z/w order.
-    Float4Data rotation = Float4Data(0.f, 0.f, 0.f, 1.f);
-    Float3Data scale = Float3Data(1.f, 1.f, 1.f);
+    AlignedFloat4Data rotation = AlignedFloat4Data(0.f, 0.f, 0.f, 1.f);
+    AlignedFloat3Data scale = AlignedFloat3Data(1.f, 1.f, 1.f);
 };
 
 static_assert(IsStandardLayout_V<TransformComponent>, "TransformComponent must stay layout-stable for ECS storage");
 static_assert(IsTriviallyCopyable_V<TransformComponent>, "TransformComponent must stay cheap to move in dense ECS storage");
 static_assert(
-    sizeof(TransformComponent) == sizeof(Float3Data) + sizeof(Float4Data) + sizeof(Float3Data),
-    "TransformComponent must not grow hidden cached state"
+    alignof(TransformComponent) >= alignof(AlignedFloat4Data),
+    "TransformComponent must stay aligned for SIMD component loads"
+);
+static_assert(
+    sizeof(TransformComponent) == sizeof(AlignedFloat3Data) + sizeof(AlignedFloat4Data) + sizeof(AlignedFloat3Data),
+    "TransformComponent must only contain aligned decomposed transform state"
+);
+static_assert((offsetof(TransformComponent, position) % alignof(AlignedFloat3Data)) == 0, "TransformComponent::position must stay aligned");
+static_assert((offsetof(TransformComponent, rotation) % alignof(AlignedFloat4Data)) == 0, "TransformComponent::rotation must stay aligned");
+static_assert(
+    (offsetof(TransformComponent, scale) % alignof(AlignedFloat3Data)) == 0,
+    "TransformComponent::scale must stay aligned"
 );
 
 

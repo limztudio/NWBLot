@@ -199,7 +199,7 @@ void DeformerSystem::render(Core::IFramebuffer* framebuffer){
         Hasher<u64>,
         EqualTo<u64>,
         Core::Alloc::ScratchAllocator<u64>
-    > activeHandles(
+    > liveHandles(
         0,
         Hasher<u64>(),
         EqualTo<u64>(),
@@ -208,15 +208,16 @@ void DeformerSystem::render(Core::IFramebuffer* framebuffer){
 
     m_world.view<DeformableRendererComponent>().each(
         [&](Core::ECS::EntityID entity, DeformableRendererComponent& renderer){
-            if(!renderer.visible || !renderer.runtimeMesh.valid())
+            if(!renderer.runtimeMesh.valid())
                 return;
 
             DeformableRuntimeMeshInstance* instance = m_rendererSystem.findDeformableRuntimeMesh(renderer.runtimeMesh);
             if(!instance || !instance->valid())
                 return;
 
-            candidates.push_back(entity);
-            activeHandles.insert(renderer.runtimeMesh.value);
+            liveHandles.insert(renderer.runtimeMesh.value);
+            if(renderer.visible)
+                candidates.push_back(entity);
         }
     );
 
@@ -224,12 +225,12 @@ void DeformerSystem::render(Core::IFramebuffer* framebuffer){
         Core::Alloc::ScratchAllocator<u64>(scratchArena)
     };
     for(const auto& [handle, resources] : m_runtimeResources){
-        const bool active = activeHandles.find(handle) != activeHandles.end();
-        const DeformableRuntimeMeshInstance* instance = active
+        const bool live = liveHandles.find(handle) != liveHandles.end();
+        const DeformableRuntimeMeshInstance* instance = live
             ? m_rendererSystem.findDeformableRuntimeMesh(resources.handle)
             : nullptr
         ;
-        if(!active || !instance || instance->editRevision != resources.editRevision)
+        if(!live || !instance || instance->editRevision != resources.editRevision)
             staleResources.push_back(handle);
     }
     for(const u64 handle : staleResources)

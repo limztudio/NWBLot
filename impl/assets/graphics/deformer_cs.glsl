@@ -19,6 +19,18 @@ struct NwbDeformerMorphDelta{
     vec4 deltaTangent;
 };
 
+struct NwbDeformerSkinInfluence{
+    uvec4 joint;
+    vec4 weight;
+};
+
+struct NwbDeformerJointMatrix{
+    vec4 column0;
+    vec4 column1;
+    vec4 column2;
+    vec4 column3;
+};
+
 layout(std430, binding = 0) readonly buffer NwbDeformerRestVerticesBuffer{
     float nwbDeformerRestVertexScalars[];
 };
@@ -35,29 +47,92 @@ layout(std430, binding = 3) readonly buffer NwbDeformerMorphDeltasBuffer{
     NwbDeformerMorphDelta nwbDeformerMorphDeltas[];
 };
 
+layout(std430, binding = 4) readonly buffer NwbDeformerSkinInfluencesBuffer{
+    NwbDeformerSkinInfluence nwbDeformerSkinInfluences[];
+};
+
+layout(std430, binding = 5) readonly buffer NwbDeformerJointPaletteBuffer{
+    NwbDeformerJointMatrix nwbDeformerJointPalette[];
+};
+
 layout(push_constant) uniform NwbDeformerPushConstants{
-    uvec4 payload;
+    uvec4 payload0;
+    uvec4 payload1;
 } g_NwbDeformerPushConstants;
 
 uint nwbDeformerVertexCount(){
-    return g_NwbDeformerPushConstants.payload.x;
+    return g_NwbDeformerPushConstants.payload0.x;
 }
 
 uint nwbDeformerMorphCount(){
-    return g_NwbDeformerPushConstants.payload.y;
+    return g_NwbDeformerPushConstants.payload0.y;
 }
 
 uint nwbDeformerRestScalarStride(){
-    return g_NwbDeformerPushConstants.payload.z;
+    return g_NwbDeformerPushConstants.payload0.z;
 }
 
 uint nwbDeformerDeformedScalarStride(){
-    return g_NwbDeformerPushConstants.payload.w;
+    return g_NwbDeformerPushConstants.payload0.w;
+}
+
+uint nwbDeformerSkinCount(){
+    return g_NwbDeformerPushConstants.payload1.x;
+}
+
+uint nwbDeformerJointCount(){
+    return g_NwbDeformerPushConstants.payload1.y;
 }
 
 void nwbDeformerCopyRestPayload(const uint vertexId, const uint restBase, const uint deformedBase){
     for(uint i = 0u; i < nwbDeformerRestScalarStride(); ++i)
         nwbDeformerDeformedVertexScalars[deformedBase + i] = nwbDeformerRestVertexScalars[restBase + i];
+}
+
+mat4 nwbDeformerLoadJointMatrix(const uint jointId){
+    const NwbDeformerJointMatrix jointMatrix = nwbDeformerJointPalette[jointId];
+    return mat4(
+        jointMatrix.column0,
+        jointMatrix.column1,
+        jointMatrix.column2,
+        jointMatrix.column3
+    );
+}
+
+vec3 nwbDeformerSafeNormalize(const vec3 value, const vec3 fallback){
+    const float lengthSquared = dot(value, value);
+    return lengthSquared > 0.00000001 ? value * inversesqrt(lengthSquared) : fallback;
+}
+
+void nwbDeformerApplySkin(const uint vertexId, inout vec3 position, inout vec3 normal, inout vec4 tangent){
+    if(nwbDeformerSkinCount() != nwbDeformerVertexCount() || nwbDeformerJointCount() == 0u)
+        return;
+
+    const NwbDeformerSkinInfluence skin = nwbDeformerSkinInfluences[vertexId];
+    vec3 skinnedPosition = vec3(0.0);
+    vec3 skinnedNormal = vec3(0.0);
+    vec3 skinnedTangent = vec3(0.0);
+    float totalWeight = 0.0;
+
+    for(uint influenceIndex = 0u; influenceIndex < 4u; ++influenceIndex){
+        const float weight = skin.weight[influenceIndex];
+        const uint jointId = skin.joint[influenceIndex];
+        if(abs(weight) <= 0.000001 || jointId >= nwbDeformerJointCount())
+            continue;
+
+        const mat4 jointMatrix = nwbDeformerLoadJointMatrix(jointId);
+        skinnedPosition += weight * (jointMatrix * vec4(position, 1.0)).xyz;
+        skinnedNormal += weight * (mat3(jointMatrix) * normal);
+        skinnedTangent += weight * (mat3(jointMatrix) * tangent.xyz);
+        totalWeight += weight;
+    }
+
+    if(abs(totalWeight) <= 0.000001)
+        return;
+
+    position = skinnedPosition;
+    normal = nwbDeformerSafeNormalize(skinnedNormal, normal);
+    tangent.xyz = nwbDeformerSafeNormalize(skinnedTangent, tangent.xyz);
 }
 
 void main(){
@@ -97,6 +172,8 @@ void main(){
             tangent += morph.weight * delta.deltaTangent;
         }
     }
+
+    nwbDeformerApplySkin(vertexId, position, normal, tangent);
 
     nwbDeformerCopyRestPayload(vertexId, restBase, deformedBase);
     nwbDeformerDeformedVertexScalars[deformedBase + 0u] = position.x;

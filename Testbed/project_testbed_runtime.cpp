@@ -20,6 +20,8 @@ static constexpr f32 s_CameraMoveEpsilon = 0.000001f;
 static constexpr f32 s_DefaultDirectionalLightPitch = -0.65f;
 static constexpr f32 s_DefaultDirectionalLightYaw = 0.65f;
 static constexpr f32 s_DefaultDirectionalLightIntensity = 2.0f;
+static constexpr f32 s_DeformableSkinPivotY = -0.5f;
+static constexpr f32 s_DeformableSkinMaxAngle = 0.45f;
 
 
 [[nodiscard]] static f32 KeyAxis(const bool negative, const bool positive){
@@ -217,6 +219,32 @@ static void CreateRendererEntity(
     renderer.material = material;
 }
 
+[[nodiscard]] static NWB::Core::ECSGraphics::DeformableJointMatrix BuildProxySkinJoint(const f32 angleRadians){
+    const f32 sinAngle = Sin(angleRadians);
+    const f32 cosAngle = Cos(angleRadians);
+
+    NWB::Core::ECSGraphics::DeformableJointMatrix joint;
+    joint.column0 = Float4Data(1.0f, 0.0f, 0.0f, 0.0f);
+    joint.column1 = Float4Data(0.0f, cosAngle, sinAngle, 0.0f);
+    joint.column2 = Float4Data(0.0f, -sinAngle, cosAngle, 0.0f);
+    joint.column3 = Float4Data(
+        0.0f,
+        s_DeformableSkinPivotY * (1.0f - cosAngle),
+        -s_DeformableSkinPivotY * sinAngle,
+        1.0f
+    );
+    return joint;
+}
+
+static void UpdateProxySkinPalette(
+    NWB::Core::ECSGraphics::DeformableJointPaletteComponent& jointPalette,
+    const f32 timeSeconds)
+{
+    jointPalette.joints.resize(2u);
+    jointPalette.joints[0] = NWB::Core::ECSGraphics::DeformableJointMatrix{};
+    jointPalette.joints[1] = BuildProxySkinJoint(s_DeformableSkinMaxAngle * Sin(timeSeconds * 0.9f));
+}
+
 [[nodiscard]] static NWB::Core::ECS::EntityID CreateDeformableRendererEntity(
     NWB::Core::ECS::World& world,
     const TestbedDeformableGeometryRef& geometry,
@@ -237,6 +265,9 @@ static void CreateRendererEntity(
     morphWeights.weights.resize(1u);
     morphWeights.weights[0].morph = Name("lift");
     morphWeights.weights[0].weight = 0.0f;
+
+    auto& jointPalette = entity.addComponent<NWB::Core::ECSGraphics::DeformableJointPaletteComponent>();
+    UpdateProxySkinPalette(jointPalette, 0.0f);
     return entity.id();
 }
 
@@ -437,14 +468,19 @@ void ProjectTestbed::updateDeformableMorph(const f32 delta){
     if(!m_deformableMorphEntity.valid())
         return;
 
+    m_deformableMorphTime += Max(delta, 0.0f);
+
     auto* morphWeights =
         m_world->tryGetComponent<NWB::Core::ECSGraphics::DeformableMorphWeightsComponent>(m_deformableMorphEntity)
     ;
-    if(!morphWeights || morphWeights->weights.empty())
-        return;
+    if(morphWeights && !morphWeights->weights.empty())
+        morphWeights->weights[0].weight = 0.5f + 0.5f * Sin(m_deformableMorphTime * 1.35f);
 
-    m_deformableMorphTime += Max(delta, 0.0f);
-    morphWeights->weights[0].weight = 0.5f + 0.5f * Sin(m_deformableMorphTime * 1.35f);
+    auto* jointPalette =
+        m_world->tryGetComponent<NWB::Core::ECSGraphics::DeformableJointPaletteComponent>(m_deformableMorphEntity)
+    ;
+    if(jointPalette)
+        __hidden_project_testbed_runtime::UpdateProxySkinPalette(*jointPalette, m_deformableMorphTime);
 }
 
 bool ProjectTestbed::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods){

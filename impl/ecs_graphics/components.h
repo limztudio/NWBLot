@@ -8,6 +8,7 @@
 #include "../global.h"
 
 #include <core/assets/asset_ref.h>
+#include <global/matrix_math.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -71,6 +72,24 @@ struct DeformableMorphWeight{
 
 struct DeformableMorphWeightsComponent{
     Vector<DeformableMorphWeight> weights;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct DeformableJointMatrix{
+    Float4Data column0 = Float4Data(1.0f, 0.0f, 0.0f, 0.0f);
+    Float4Data column1 = Float4Data(0.0f, 1.0f, 0.0f, 0.0f);
+    Float4Data column2 = Float4Data(0.0f, 0.0f, 1.0f, 0.0f);
+    Float4Data column3 = Float4Data(0.0f, 0.0f, 0.0f, 1.0f);
+};
+static_assert(IsStandardLayout_V<DeformableJointMatrix>, "DeformableJointMatrix must stay GPU-uploadable");
+static_assert(IsTriviallyCopyable_V<DeformableJointMatrix>, "DeformableJointMatrix must stay GPU-uploadable");
+static_assert(sizeof(DeformableJointMatrix) == sizeof(f32) * 16u, "DeformableJointMatrix GPU layout drifted");
+
+struct DeformableJointPaletteComponent{
+    Vector<DeformableJointMatrix> joints;
 };
 
 

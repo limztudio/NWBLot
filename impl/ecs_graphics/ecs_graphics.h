@@ -26,6 +26,8 @@ namespace ECSGraphics{
 
 
 using DeformableRendererComponent = NWB::Impl::DeformableRendererComponent;
+using DeformableJointMatrix = NWB::Impl::DeformableJointMatrix;
+using DeformableJointPaletteComponent = NWB::Impl::DeformableJointPaletteComponent;
 using DeformableMorphWeight = NWB::Impl::DeformableMorphWeight;
 using DeformableMorphWeightsComponent = NWB::Impl::DeformableMorphWeightsComponent;
 using DeformableRuntimeMeshCache = NWB::Impl::DeformableRuntimeMeshCache;

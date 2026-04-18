@@ -45,6 +45,11 @@ public:
         Float4Data deltaTangent;
     };
 
+    struct DeformerSkinInfluenceGpu{
+        u32 joint[4] = {};
+        f32 weight[4] = {};
+    };
+
 
 private:
     struct RuntimeResources{
@@ -53,9 +58,13 @@ private:
         u32 vertexCount = 0;
         u32 morphCount = 0;
         u32 deltaCount = 0;
+        u32 skinCount = 0;
+        u32 jointCount = 0;
         usize morphSignature = 0;
         Core::BufferHandle morphRangeBuffer;
         Core::BufferHandle morphDeltaBuffer;
+        Core::BufferHandle skinBuffer;
+        Core::BufferHandle jointPaletteBuffer;
         Core::BindingSetHandle bindingSet;
     };
 
@@ -92,16 +101,20 @@ private:
     [[nodiscard]] bool dispatchRuntimeMesh(
         Core::ICommandList& commandList,
         DeformableRuntimeMeshInstance& instance,
-        const DeformableMorphWeightsComponent* morphWeights
+        const DeformableMorphWeightsComponent* morphWeights,
+        const DeformableJointPaletteComponent* jointPalette
     );
     [[nodiscard]] bool copyRestToDeformed(Core::ICommandList& commandList, DeformableRuntimeMeshInstance& instance);
     [[nodiscard]] bool ensureRuntimeResources(
         DeformableRuntimeMeshInstance& instance,
         const Vector<DeformerMorphRangeGpu>& morphRanges,
         const Vector<DeformerMorphDeltaGpu>& morphDeltas,
+        const Vector<DeformerSkinInfluenceGpu>& skinInfluences,
+        const Vector<DeformableJointMatrix>& jointPalette,
         usize morphSignature,
         RuntimeResources*& outResources
     );
+    [[nodiscard]] bool ensureDefaultDeformerBuffers();
 
 
 private:
@@ -115,6 +128,10 @@ private:
     Core::BindingLayoutHandle m_bindingLayout;
     Core::ShaderHandle m_computeShader;
     Core::ComputePipelineHandle m_computePipeline;
+    Core::BufferHandle m_defaultMorphRangeBuffer;
+    Core::BufferHandle m_defaultMorphDeltaBuffer;
+    Core::BufferHandle m_defaultSkinBuffer;
+    Core::BufferHandle m_defaultJointPaletteBuffer;
 };
 
 

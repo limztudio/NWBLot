@@ -42,6 +42,11 @@ struct EdgeRecord{
     u32 removedCount = 0;
 };
 
+struct WallVertexFrame{
+    Vec3 normal;
+    Vec3 tangent;
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -198,6 +203,10 @@ struct EdgeRecord{
 
 [[nodiscard]] f32 LengthSquared(const Vec3& value){
     return Dot(value, value);
+}
+
+[[nodiscard]] f32 Length(const Vec3& value){
+    return Sqrt(LengthSquared(value));
 }
 
 [[nodiscard]] Vec3 Normalize(const Vec3& value, const Vec3& fallback){
@@ -501,6 +510,46 @@ void CanonicalizeBoundaryLoopStart(Vector<EdgeRecord>& edges){
     return value < 0.0f ? -1.0f : 1.0f;
 }
 
+[[nodiscard]] Vec3 ProjectedEdgeDirection(
+    const Vector<DeformableVertexRest>& vertices,
+    const HoleFrame& frame,
+    const EdgeRecord& edge)
+{
+    Vec3 direction = Subtract(ToVec3(vertices[edge.b].position), ToVec3(vertices[edge.a].position));
+    direction = Subtract(direction, Scale(frame.normal, Dot(direction, frame.normal)));
+    return Normalize(direction, frame.tangent);
+}
+
+[[nodiscard]] bool BuildWallVertexFrame(
+    const Vector<DeformableVertexRest>& vertices,
+    const HoleFrame& frame,
+    const EdgeRecord& previousEdge,
+    const EdgeRecord& currentEdge,
+    WallVertexFrame& outFrame)
+{
+    const Vec3 previousDirection = ProjectedEdgeDirection(vertices, frame, previousEdge);
+    const Vec3 currentDirection = ProjectedEdgeDirection(vertices, frame, currentEdge);
+    const Vec3 previousInward = Normalize(Cross(frame.normal, previousDirection), frame.bitangent);
+    const Vec3 currentInward = Normalize(Cross(frame.normal, currentDirection), previousInward);
+    Vec3 normal = Normalize(Add(previousInward, currentInward), currentInward);
+
+    const Vec3 position = ToVec3(vertices[currentEdge.a].position);
+    const Vec3 centerOffset = Subtract(frame.center, position);
+    if(Dot(normal, centerOffset) < 0.0f)
+        normal = Scale(normal, -1.0f);
+
+    Vec3 tangent = Cross(frame.normal, normal);
+    tangent = Subtract(tangent, Scale(normal, Dot(tangent, normal)));
+    tangent = Normalize(tangent, currentDirection);
+
+    outFrame.normal = normal;
+    outFrame.tangent = tangent;
+    return LengthSquared(outFrame.normal) > s_FrameEpsilon
+        && LengthSquared(outFrame.tangent) > s_FrameEpsilon
+        && AbsF32(Dot(outFrame.normal, outFrame.tangent)) <= 0.001f
+    ;
+}
+
 [[nodiscard]] bool AppendWallVertex(
     Vector<DeformableVertexRest>& vertices,
     Vector<SkinInfluence4>& skin,
@@ -694,83 +743,81 @@ bool CommitDeformableRestSpaceHole(
     u32 addedTriangleCount = 0;
     u32 addedVertexCount = 0;
     if(__hidden_deformable_surface_edit::ActiveLength(params.depth)){
-        for(const __hidden_deformable_surface_edit::EdgeRecord& edge : orderedBoundaryEdges){
-            const __hidden_deformable_surface_edit::Vec3 outerAPosition =
+        const usize boundaryVertexCount = orderedBoundaryEdges.size();
+        Vector<f32> boundaryU;
+        boundaryU.resize(boundaryVertexCount, 0.0f);
+
+        f32 boundaryLength = 0.0f;
+        for(usize edgeIndex = 0; edgeIndex < boundaryVertexCount; ++edgeIndex){
+            boundaryU[edgeIndex] = boundaryLength;
+
+            const __hidden_deformable_surface_edit::EdgeRecord& edge = orderedBoundaryEdges[edgeIndex];
+            __hidden_deformable_surface_edit::Vec3 edgeDelta =
+                __hidden_deformable_surface_edit::Subtract(
+                    __hidden_deformable_surface_edit::ToVec3(newRestVertices[edge.b].position),
+                    __hidden_deformable_surface_edit::ToVec3(newRestVertices[edge.a].position)
+                )
+            ;
+            edgeDelta = __hidden_deformable_surface_edit::Subtract(
+                edgeDelta,
+                __hidden_deformable_surface_edit::Scale(frame.normal, __hidden_deformable_surface_edit::Dot(edgeDelta, frame.normal))
+            )
+            ;
+
+            const f32 edgeLength = __hidden_deformable_surface_edit::Length(edgeDelta);
+            if(!IsFinite(edgeLength) || !__hidden_deformable_surface_edit::ActiveLength(edgeLength))
+                return false;
+            boundaryLength += edgeLength;
+            if(!IsFinite(boundaryLength))
+                return false;
+        }
+
+        if(!__hidden_deformable_surface_edit::ActiveLength(boundaryLength))
+            return false;
+
+        Vector<u32> rimVertices;
+        Vector<u32> innerVertices;
+        rimVertices.resize(boundaryVertexCount, 0u);
+        innerVertices.resize(boundaryVertexCount, 0u);
+
+        for(usize edgeIndex = 0; edgeIndex < boundaryVertexCount; ++edgeIndex){
+            const usize previousEdgeIndex = edgeIndex == 0u ? boundaryVertexCount - 1u : edgeIndex - 1u;
+            const __hidden_deformable_surface_edit::EdgeRecord& edge = orderedBoundaryEdges[edgeIndex];
+
+            __hidden_deformable_surface_edit::WallVertexFrame vertexFrame;
+            if(!__hidden_deformable_surface_edit::BuildWallVertexFrame(
+                    newRestVertices,
+                    frame,
+                    orderedBoundaryEdges[previousEdgeIndex],
+                    edge,
+                    vertexFrame
+                )
+            )
+                return false;
+
+            const __hidden_deformable_surface_edit::Vec3 rimPosition =
                 __hidden_deformable_surface_edit::ToVec3(newRestVertices[edge.a].position)
             ;
-            const __hidden_deformable_surface_edit::Vec3 outerBPosition =
-                __hidden_deformable_surface_edit::ToVec3(newRestVertices[edge.b].position)
-            ;
-            __hidden_deformable_surface_edit::Vec3 edgeDirection =
-                __hidden_deformable_surface_edit::Subtract(outerBPosition, outerAPosition)
-            ;
-            edgeDirection = __hidden_deformable_surface_edit::Subtract(
-                edgeDirection,
-                __hidden_deformable_surface_edit::Scale(frame.normal, __hidden_deformable_surface_edit::Dot(edgeDirection, frame.normal))
-            );
-            edgeDirection = __hidden_deformable_surface_edit::Normalize(edgeDirection, frame.tangent);
-
-            const __hidden_deformable_surface_edit::Vec3 wallNormal =
-                __hidden_deformable_surface_edit::Normalize(
-                    __hidden_deformable_surface_edit::Cross(frame.normal, edgeDirection),
-                    frame.bitangent
-                )
-            ;
-            const __hidden_deformable_surface_edit::Vec3 innerAPosition =
+            const __hidden_deformable_surface_edit::Vec3 innerPosition =
                 __hidden_deformable_surface_edit::Subtract(
-                    outerAPosition,
+                    rimPosition,
                     __hidden_deformable_surface_edit::Scale(frame.normal, params.depth)
                 )
             ;
-            const __hidden_deformable_surface_edit::Vec3 innerBPosition =
-                __hidden_deformable_surface_edit::Subtract(
-                    outerBPosition,
-                    __hidden_deformable_surface_edit::Scale(frame.normal, params.depth)
-                )
-            ;
+            const f32 uvU = boundaryU[edgeIndex] / boundaryLength;
 
-            u32 rimA = 0;
-            u32 rimB = 0;
-            u32 innerB = 0;
-            u32 innerA = 0;
             if(!__hidden_deformable_surface_edit::AppendWallVertex(
                     newRestVertices,
                     newSkin,
                     newSourceSamples,
                     newMorphs,
                     edge.a,
-                    outerAPosition,
-                    wallNormal,
-                    edgeDirection,
+                    rimPosition,
+                    vertexFrame.normal,
+                    vertexFrame.tangent,
+                    uvU,
                     0.0f,
-                    0.0f,
-                    rimA
-                )
-                || !__hidden_deformable_surface_edit::AppendWallVertex(
-                    newRestVertices,
-                    newSkin,
-                    newSourceSamples,
-                    newMorphs,
-                    edge.b,
-                    outerBPosition,
-                    wallNormal,
-                    edgeDirection,
-                    1.0f,
-                    0.0f,
-                    rimB
-                )
-                || !__hidden_deformable_surface_edit::AppendWallVertex(
-                    newRestVertices,
-                    newSkin,
-                    newSourceSamples,
-                    newMorphs,
-                    edge.b,
-                    innerBPosition,
-                    wallNormal,
-                    edgeDirection,
-                    1.0f,
-                    1.0f,
-                    innerB
+                    rimVertices[edgeIndex]
                 )
                 || !__hidden_deformable_surface_edit::AppendWallVertex(
                     newRestVertices,
@@ -778,15 +825,25 @@ bool CommitDeformableRestSpaceHole(
                     newSourceSamples,
                     newMorphs,
                     edge.a,
-                    innerAPosition,
-                    wallNormal,
-                    edgeDirection,
-                    0.0f,
+                    innerPosition,
+                    vertexFrame.normal,
+                    vertexFrame.tangent,
+                    uvU,
                     1.0f,
-                    innerA
+                    innerVertices[edgeIndex]
                 )
             )
                 return false;
+
+            addedVertexCount += 2u;
+        }
+
+        for(usize edgeIndex = 0; edgeIndex < boundaryVertexCount; ++edgeIndex){
+            const usize nextEdgeIndex = (edgeIndex + 1u) % boundaryVertexCount;
+            const u32 rimA = rimVertices[edgeIndex];
+            const u32 rimB = rimVertices[nextEdgeIndex];
+            const u32 innerB = innerVertices[nextEdgeIndex];
+            const u32 innerA = innerVertices[edgeIndex];
 
             newIndices.push_back(rimA);
             newIndices.push_back(rimB);
@@ -794,7 +851,6 @@ bool CommitDeformableRestSpaceHole(
             newIndices.push_back(rimA);
             newIndices.push_back(innerB);
             newIndices.push_back(innerA);
-            addedVertexCount += 4u;
             addedTriangleCount += 2u;
         }
     }

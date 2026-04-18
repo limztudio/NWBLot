@@ -590,12 +590,12 @@ static void TestRestSpaceHoleEditCreatesPerInstancePatch(TestContext& context){
     NWB::Impl::DeformableHoleEditResult result;
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::CommitDeformableRestSpaceHole(instance, params, &result));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, result.removedTriangleCount == 2u);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, result.addedVertexCount == 16u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, result.addedVertexCount == 8u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, result.addedTriangleCount == 8u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, result.editRevision == 4u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.editRevision == 4u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, (instance.dirtyFlags & NWB::Impl::RuntimeMeshDirtyFlag::All) == NWB::Impl::RuntimeMeshDirtyFlag::All);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.restVertices.size() == oldVertexCount + 16u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.restVertices.size() == oldVertexCount + 8u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.indices.size() == oldIndexCount - 6u + 24u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.skin.size() == instance.restVertices.size());
     NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.sourceSamples.size() == instance.restVertices.size());
@@ -603,12 +603,12 @@ static void TestRestSpaceHoleEditCreatesPerInstancePatch(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.morphs[0].deltas.size() > 1u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(instance.restVertices[oldVertexCount + 0u].position.x, -0.5f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(instance.restVertices[oldVertexCount + 0u].position.y, -0.5f));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(instance.restVertices[oldVertexCount + 1u].position.x, 0.5f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(instance.restVertices[oldVertexCount + 1u].position.x, -0.5f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(instance.restVertices[oldVertexCount + 1u].position.y, -0.5f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(instance.restVertices[oldVertexCount + 1u].position.z, -0.25f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(instance.restVertices[oldVertexCount + 2u].position.x, 0.5f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(instance.restVertices[oldVertexCount + 2u].position.y, -0.5f));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(instance.restVertices[oldVertexCount + 2u].position.z, -0.25f));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(instance.restVertices[oldVertexCount + 3u].position.x, -0.5f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(instance.restVertices[oldVertexCount + 3u].position.x, 0.5f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(instance.restVertices[oldVertexCount + 3u].position.y, -0.5f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(instance.restVertices[oldVertexCount + 3u].position.z, -0.25f));
 
@@ -624,7 +624,7 @@ static void TestRestSpaceHoleEditCreatesPerInstancePatch(TestContext& context){
         NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertex.normal.z, 0.0f));
         NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertex.tangent.z, 0.0f));
         NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertex.tangent.w, 1.0f));
-        NWB_ECS_GRAPHICS_TEST_CHECK(context, vertex.uv0.x == 0.0f || vertex.uv0.x == 1.0f);
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, vertex.uv0.x >= 0.0f && vertex.uv0.x < 1.0f);
         NWB_ECS_GRAPHICS_TEST_CHECK(context, vertex.uv0.y == 0.0f || vertex.uv0.y == 1.0f);
         const f32 inwardDot =
             (vertex.normal.x * (holeCenter.x - vertex.position.x))
@@ -633,8 +633,8 @@ static void TestRestSpaceHoleEditCreatesPerInstancePatch(TestContext& context){
         ;
         NWB_ECS_GRAPHICS_TEST_CHECK(context, inwardDot > 0.0f);
     }
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, rimVertexCount == 8u);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, innerVertexCount == 8u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, rimVertexCount == 4u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, innerVertexCount == 4u);
     for(const u32 index : instance.indices)
         NWB_ECS_GRAPHICS_TEST_CHECK(context, index < instance.restVertices.size());
 

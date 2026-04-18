@@ -78,6 +78,27 @@ static NWB::Impl::DeformableRuntimeMeshInstance MakeTriangleInstance(){
     return instance;
 }
 
+static NWB::Impl::DeformableRuntimeMeshInstance MakeQuadMixedProvenanceInstance(){
+    NWB::Impl::DeformableRuntimeMeshInstance instance;
+    instance.entity = NWB::Core::ECS::EntityID(2u, 0u);
+    instance.handle.value = 43u;
+    instance.restVertices.push_back(MakeVertex(-1.0f, -1.0f, 0.0f));
+    instance.restVertices.push_back(MakeVertex(1.0f, -1.0f, 0.0f));
+    instance.restVertices.push_back(MakeVertex(1.0f, 1.0f, 0.0f));
+    instance.restVertices.push_back(MakeVertex(-1.0f, 1.0f, 0.0f));
+    instance.indices.push_back(0u);
+    instance.indices.push_back(1u);
+    instance.indices.push_back(2u);
+    instance.indices.push_back(0u);
+    instance.indices.push_back(2u);
+    instance.indices.push_back(3u);
+    instance.sourceSamples.push_back(MakeSourceSample(0u, 1.0f, 0.0f, 0.0f));
+    instance.sourceSamples.push_back(MakeSourceSample(0u, 0.0f, 1.0f, 0.0f));
+    instance.sourceSamples.push_back(MakeSourceSample(0u, 0.0f, 0.0f, 1.0f));
+    instance.sourceSamples.push_back(MakeSourceSample(1u, 0.0f, 0.0f, 1.0f));
+    return instance;
+}
+
 static void TestRestSampleInterpolation(TestContext& context){
     const NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
     const f32 bary[3] = { 0.25f, 0.25f, 0.5f };
@@ -88,6 +109,25 @@ static void TestRestSampleInterpolation(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(sample.bary[0], 0.25f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(sample.bary[1], 0.25f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(sample.bary[2], 0.5f));
+}
+
+static void TestMixedProvenanceFallsBackToRestTriangle(TestContext& context){
+    const NWB::Impl::DeformableRuntimeMeshInstance instance = MakeQuadMixedProvenanceInstance();
+
+    NWB::Impl::DeformablePickingRay ray;
+    ray.origin = Float3Data(-0.5f, 0.5f, 1.0f);
+    ray.direction = Float3Data(0.0f, 0.0f, -1.0f);
+
+    NWB::Impl::DeformablePosedHit hit;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Impl::RaycastDeformableRuntimeMesh(instance, NWB::Impl::DeformablePickingInputs{}, ray, hit)
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, hit.triangle == 1u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, hit.restSample.sourceTri == 1u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(hit.restSample.bary[0], 0.25f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(hit.restSample.bary[1], 0.25f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(hit.restSample.bary[2], 0.5f));
 }
 
 static void TestRaycastReturnsPoseAndRestHit(TestContext& context){
@@ -222,6 +262,7 @@ int main(){
 
     __hidden_ecs_graphics_tests::TestContext context;
     __hidden_ecs_graphics_tests::TestRestSampleInterpolation(context);
+    __hidden_ecs_graphics_tests::TestMixedProvenanceFallsBackToRestTriangle(context);
     __hidden_ecs_graphics_tests::TestRaycastReturnsPoseAndRestHit(context);
     __hidden_ecs_graphics_tests::TestPoseStableRestHitRecovery(context);
     __hidden_ecs_graphics_tests::TestPickingRejectsNonAffineJointPalette(context);

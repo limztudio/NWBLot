@@ -96,6 +96,13 @@ struct Vec3{
     return ValidBarycentric(sample.bary);
 }
 
+void AssignCurrentTriangleSample(const u32 triangle, const f32 (&bary)[3], SourceSample& outSample){
+    outSample.sourceTri = triangle;
+    outSample.bary[0] = bary[0];
+    outSample.bary[1] = bary[1];
+    outSample.bary[2] = bary[2];
+}
+
 [[nodiscard]] Vec3 ToVec3(const Float3Data& value){
     return Vec3{ value.x, value.y, value.z };
 }
@@ -496,10 +503,7 @@ bool ResolveDeformableRestSurfaceSample(
         if(triangle >= triangleCount)
             return false;
 
-        outSample.sourceTri = triangle;
-        outSample.bary[0] = bary[0];
-        outSample.bary[1] = bary[1];
-        outSample.bary[2] = bary[2];
+        __hidden_deformable_picking::AssignCurrentTriangleSample(triangle, bary, outSample);
         return true;
     }
     if(instance.sourceSamples.size() != instance.restVertices.size())
@@ -513,8 +517,13 @@ bool ResolveDeformableRestSurfaceSample(
         || !__hidden_deformable_picking::ValidSourceSample(sample2)
     )
         return false;
-    if(sample0.sourceTri != sample1.sourceTri || sample0.sourceTri != sample2.sourceTri)
-        return false;
+    if(sample0.sourceTri != sample1.sourceTri || sample0.sourceTri != sample2.sourceTri){
+        if(triangle >= triangleCount)
+            return false;
+
+        __hidden_deformable_picking::AssignCurrentTriangleSample(triangle, bary, outSample);
+        return true;
+    }
 
     outSample.sourceTri = sample0.sourceTri;
     for(u32 i = 0; i < 3u; ++i){

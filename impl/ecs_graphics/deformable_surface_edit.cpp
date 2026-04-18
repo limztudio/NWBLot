@@ -341,9 +341,9 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
 [[nodiscard]] bool ValidateParams(const DeformableRuntimeMeshInstance& instance, const DeformableHoleEditParams& params){
     if(!ValidBarycentric(params.posedHit.bary))
         return false;
-    if(params.posedHit.entity.valid() && params.posedHit.entity != instance.entity)
+    if(params.posedHit.entity != instance.entity)
         return false;
-    if(params.posedHit.runtimeMesh.valid() && params.posedHit.runtimeMesh != instance.handle)
+    if(params.posedHit.runtimeMesh != instance.handle)
         return false;
     if(params.posedHit.editRevision != instance.editRevision)
         return false;
@@ -358,7 +358,44 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
     ;
 }
 
-[[nodiscard]] bool BoundaryEdgesFormSingleLoop(const Vector<EdgeRecord>& boundaryEdges){
+[[nodiscard]] f32 ProjectedSignedLoopArea(
+    const DeformableRuntimeMeshInstance& instance,
+    const HoleFrame& frame,
+    const Vector<EdgeRecord>& orderedEdges)
+{
+    f32 signedArea = 0.0f;
+    for(const EdgeRecord& edge : orderedEdges){
+        const Vec3 aOffset = Subtract(ToVec3(instance.restVertices[edge.a].position), frame.center);
+        const Vec3 bOffset = Subtract(ToVec3(instance.restVertices[edge.b].position), frame.center);
+        const f32 ax = Dot(aOffset, frame.tangent);
+        const f32 ay = Dot(aOffset, frame.bitangent);
+        const f32 bx = Dot(bOffset, frame.tangent);
+        const f32 by = Dot(bOffset, frame.bitangent);
+        signedArea += (ax * by) - (bx * ay);
+    }
+    return signedArea * 0.5f;
+}
+
+void ReverseBoundaryLoop(Vector<EdgeRecord>& edges){
+    Vector<EdgeRecord> reversedEdges;
+    reversedEdges.reserve(edges.size());
+    for(usize edgeIndex = edges.size(); edgeIndex > 0u; --edgeIndex){
+        EdgeRecord edge = edges[edgeIndex - 1u];
+        const u32 a = edge.a;
+        edge.a = edge.b;
+        edge.b = a;
+        reversedEdges.push_back(edge);
+    }
+    edges = Move(reversedEdges);
+}
+
+[[nodiscard]] bool BuildOrderedBoundaryLoop(
+    const Vector<EdgeRecord>& boundaryEdges,
+    const DeformableRuntimeMeshInstance& instance,
+    const HoleFrame& frame,
+    Vector<EdgeRecord>& outOrderedEdges)
+{
+    outOrderedEdges.clear();
     if(boundaryEdges.empty())
         return false;
 
@@ -367,10 +404,10 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
 
     const u32 startVertex = boundaryEdges[0].a;
     u32 currentVertex = startVertex;
-    usize visitedCount = 0;
-    while(visitedCount < boundaryEdges.size()){
+    outOrderedEdges.reserve(boundaryEdges.size());
+    while(outOrderedEdges.size() < boundaryEdges.size()){
         usize nextEdgeIndex = Limit<usize>::s_Max;
-        u32 nextVertex = 0;
+        EdgeRecord nextEdge;
         for(usize edgeIndex = 0; edgeIndex < boundaryEdges.size(); ++edgeIndex){
             if(visitedEdges[edgeIndex] != 0u)
                 continue;
@@ -378,12 +415,14 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
             const EdgeRecord& edge = boundaryEdges[edgeIndex];
             if(edge.a == currentVertex){
                 nextEdgeIndex = edgeIndex;
-                nextVertex = edge.b;
+                nextEdge = edge;
                 break;
             }
             if(edge.b == currentVertex){
                 nextEdgeIndex = edgeIndex;
-                nextVertex = edge.a;
+                nextEdge = edge;
+                nextEdge.a = edge.b;
+                nextEdge.b = edge.a;
                 break;
             }
         }
@@ -392,13 +431,21 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
             return false;
 
         visitedEdges[nextEdgeIndex] = 1u;
-        ++visitedCount;
-        currentVertex = nextVertex;
-        if(currentVertex == startVertex)
-            return visitedCount == boundaryEdges.size();
+        outOrderedEdges.push_back(nextEdge);
+        currentVertex = nextEdge.b;
+        if(currentVertex == startVertex && outOrderedEdges.size() != boundaryEdges.size())
+            return false;
     }
 
-    return false;
+    if(currentVertex != startVertex)
+        return false;
+
+    const f32 signedArea = ProjectedSignedLoopArea(instance, frame, outOrderedEdges);
+    if(!IsFinite(signedArea) || AbsF32(signedArea) <= s_FrameEpsilon)
+        return false;
+    if(signedArea < 0.0f)
+        ReverseBoundaryLoop(outOrderedEdges);
+    return true;
 }
 
 [[nodiscard]] bool TransferMorphDeltasForCopiedVertex(
@@ -585,7 +632,8 @@ bool CommitDeformableRestSpaceHole(
         if(degree != 2u)
             return false;
     }
-    if(!__hidden_deformable_surface_edit::BoundaryEdgesFormSingleLoop(boundaryEdges))
+    Vector<__hidden_deformable_surface_edit::EdgeRecord> orderedBoundaryEdges;
+    if(!__hidden_deformable_surface_edit::BuildOrderedBoundaryLoop(boundaryEdges, instance, frame, orderedBoundaryEdges))
         return false;
 
     Vector<DeformableVertexRest> newRestVertices = instance.restVertices;
@@ -595,7 +643,7 @@ bool CommitDeformableRestSpaceHole(
     Vector<u32> newIndices;
     const usize removedIndexCount = static_cast<usize>(removedTriangleCount) * 3u;
     const usize wallIndexCount = __hidden_deformable_surface_edit::ActiveLength(params.depth)
-        ? boundaryEdges.size() * 6u
+        ? orderedBoundaryEdges.size() * 6u
         : 0u
     ;
     const usize keptIndexCount = instance.indices.size() - removedIndexCount;
@@ -618,7 +666,7 @@ bool CommitDeformableRestSpaceHole(
     u32 addedTriangleCount = 0;
     u32 addedVertexCount = 0;
     if(__hidden_deformable_surface_edit::ActiveLength(params.depth)){
-        for(const __hidden_deformable_surface_edit::EdgeRecord& edge : boundaryEdges){
+        for(const __hidden_deformable_surface_edit::EdgeRecord& edge : orderedBoundaryEdges){
             const __hidden_deformable_surface_edit::Vec3 outerAPosition =
                 __hidden_deformable_surface_edit::ToVec3(newRestVertices[edge.a].position)
             ;

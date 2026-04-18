@@ -146,6 +146,59 @@ static NWB::Impl::DeformableRuntimeMeshInstance MakeGridHoleInstance(){
     return instance;
 }
 
+static NWB::Impl::DeformableHoleEditParams MakeHoleEditParams(
+    const NWB::Impl::DeformableRuntimeMeshInstance& instance,
+    const u32 triangle,
+    const f32 radius,
+    const f32 depth)
+{
+    NWB::Impl::DeformableHoleEditParams params;
+    params.posedHit.entity = instance.entity;
+    params.posedHit.runtimeMesh = instance.handle;
+    params.posedHit.editRevision = instance.editRevision;
+    params.posedHit.triangle = triangle;
+    params.posedHit.bary[0] = 0.25f;
+    params.posedHit.bary[1] = 0.25f;
+    params.posedHit.bary[2] = 0.5f;
+    params.radius = radius;
+    params.ellipseRatio = 1.0f;
+    params.depth = depth;
+    return params;
+}
+
+static NWB::Impl::DeformableHoleEditParams MakeGridHoleEditParams(
+    const NWB::Impl::DeformableRuntimeMeshInstance& instance)
+{
+    return MakeHoleEditParams(instance, 8u, 0.48f, 0.25f);
+}
+
+static Float3Data RestHitPosition(
+    const NWB::Impl::DeformableRuntimeMeshInstance& instance,
+    const NWB::Impl::DeformableHoleEditParams& params)
+{
+    const usize indexBase = static_cast<usize>(params.posedHit.triangle) * 3u;
+    const Float3Data& a = instance.restVertices[instance.indices[indexBase + 0u]].position;
+    const Float3Data& b = instance.restVertices[instance.indices[indexBase + 1u]].position;
+    const Float3Data& c = instance.restVertices[instance.indices[indexBase + 2u]].position;
+    return Float3Data(
+        (params.posedHit.bary[0] * a.x) + (params.posedHit.bary[1] * b.x) + (params.posedHit.bary[2] * c.x),
+        (params.posedHit.bary[0] * a.y) + (params.posedHit.bary[1] * b.y) + (params.posedHit.bary[2] * c.y),
+        (params.posedHit.bary[0] * a.z) + (params.posedHit.bary[1] * b.z) + (params.posedHit.bary[2] * c.z)
+    );
+}
+
+static void CheckHoleEditUnchanged(
+    TestContext& context,
+    const NWB::Impl::DeformableRuntimeMeshInstance& instance,
+    const usize oldVertexCount,
+    const usize oldIndexCount,
+    const u32 oldRevision)
+{
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.restVertices.size() == oldVertexCount);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.indices.size() == oldIndexCount);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.editRevision == oldRevision);
+}
+
 static void TestRestSampleInterpolation(TestContext& context){
     const NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
     const f32 bary[3] = { 0.25f, 0.25f, 0.5f };
@@ -486,17 +539,8 @@ static void TestRestSpaceHoleEditCreatesPerInstancePatch(TestContext& context){
     morph.deltas.push_back(delta);
     instance.morphs.push_back(morph);
 
-    NWB::Impl::DeformableHoleEditParams params;
-    params.posedHit.entity = instance.entity;
-    params.posedHit.runtimeMesh = instance.handle;
-    params.posedHit.editRevision = instance.editRevision;
-    params.posedHit.triangle = 8u;
-    params.posedHit.bary[0] = 0.25f;
-    params.posedHit.bary[1] = 0.25f;
-    params.posedHit.bary[2] = 0.5f;
-    params.radius = 0.48f;
-    params.ellipseRatio = 1.0f;
-    params.depth = 0.25f;
+    const NWB::Impl::DeformableHoleEditParams params = MakeGridHoleEditParams(instance);
+    const Float3Data holeCenter = RestHitPosition(instance, params);
 
     NWB::Impl::DeformableHoleEditResult result;
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::CommitDeformableRestSpaceHole(instance, params, &result));
@@ -527,6 +571,12 @@ static void TestRestSpaceHoleEditCreatesPerInstancePatch(TestContext& context){
         NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertex.tangent.w, 1.0f));
         NWB_ECS_GRAPHICS_TEST_CHECK(context, vertex.uv0.x == 0.0f || vertex.uv0.x == 1.0f);
         NWB_ECS_GRAPHICS_TEST_CHECK(context, vertex.uv0.y == 0.0f || vertex.uv0.y == 1.0f);
+        const f32 inwardDot =
+            (vertex.normal.x * (holeCenter.x - vertex.position.x))
+            + (vertex.normal.y * (holeCenter.y - vertex.position.y))
+            + (vertex.normal.z * (holeCenter.z - vertex.position.z))
+        ;
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, inwardDot > 0.0f);
     }
     NWB_ECS_GRAPHICS_TEST_CHECK(context, rimVertexCount == 8u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, innerVertexCount == 8u);
@@ -547,22 +597,10 @@ static void TestRestSpaceHoleEditRejectsOpenBoundaryPatch(TestContext& context){
     const usize oldIndexCount = instance.indices.size();
     const u32 oldRevision = instance.editRevision;
 
-    NWB::Impl::DeformableHoleEditParams params;
-    params.posedHit.entity = instance.entity;
-    params.posedHit.runtimeMesh = instance.handle;
-    params.posedHit.editRevision = instance.editRevision;
-    params.posedHit.triangle = 0u;
-    params.posedHit.bary[0] = 0.25f;
-    params.posedHit.bary[1] = 0.25f;
-    params.posedHit.bary[2] = 0.5f;
-    params.radius = 0.25f;
-    params.ellipseRatio = 1.0f;
-    params.depth = 0.25f;
+    const NWB::Impl::DeformableHoleEditParams params = MakeHoleEditParams(instance, 0u, 0.25f, 0.25f);
 
     NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::CommitDeformableRestSpaceHole(instance, params));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.restVertices.size() == oldVertexCount);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.indices.size() == oldIndexCount);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.editRevision == oldRevision);
+    CheckHoleEditUnchanged(context, instance, oldVertexCount, oldIndexCount, oldRevision);
 }
 
 static void TestRestSpaceHoleEditRejectsDegenerateHitFrame(TestContext& context){
@@ -572,22 +610,10 @@ static void TestRestSpaceHoleEditRejectsDegenerateHitFrame(TestContext& context)
     const usize oldIndexCount = instance.indices.size();
     const u32 oldRevision = instance.editRevision;
 
-    NWB::Impl::DeformableHoleEditParams params;
-    params.posedHit.entity = instance.entity;
-    params.posedHit.runtimeMesh = instance.handle;
-    params.posedHit.editRevision = instance.editRevision;
-    params.posedHit.triangle = 8u;
-    params.posedHit.bary[0] = 0.25f;
-    params.posedHit.bary[1] = 0.25f;
-    params.posedHit.bary[2] = 0.5f;
-    params.radius = 0.48f;
-    params.ellipseRatio = 1.0f;
-    params.depth = 0.25f;
+    const NWB::Impl::DeformableHoleEditParams params = MakeGridHoleEditParams(instance);
 
     NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::CommitDeformableRestSpaceHole(instance, params));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.restVertices.size() == oldVertexCount);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.indices.size() == oldIndexCount);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.editRevision == oldRevision);
+    CheckHoleEditUnchanged(context, instance, oldVertexCount, oldIndexCount, oldRevision);
 }
 
 static void TestRestSpaceHoleEditRejectsNonFiniteWallVertices(TestContext& context){
@@ -598,22 +624,11 @@ static void TestRestSpaceHoleEditRejectsNonFiniteWallVertices(TestContext& conte
     const usize oldIndexCount = instance.indices.size();
     const u32 oldRevision = instance.editRevision;
 
-    NWB::Impl::DeformableHoleEditParams params;
-    params.posedHit.entity = instance.entity;
-    params.posedHit.runtimeMesh = instance.handle;
-    params.posedHit.editRevision = instance.editRevision;
-    params.posedHit.triangle = 8u;
-    params.posedHit.bary[0] = 0.25f;
-    params.posedHit.bary[1] = 0.25f;
-    params.posedHit.bary[2] = 0.5f;
-    params.radius = 0.48f;
-    params.ellipseRatio = 1.0f;
+    NWB::Impl::DeformableHoleEditParams params = MakeGridHoleEditParams(instance);
     params.depth = Limit<f32>::s_Max;
 
     NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::CommitDeformableRestSpaceHole(instance, params));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.restVertices.size() == oldVertexCount);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.indices.size() == oldIndexCount);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.editRevision == oldRevision);
+    CheckHoleEditUnchanged(context, instance, oldVertexCount, oldIndexCount, oldRevision);
 }
 
 static void TestRestSpaceHoleEditRejectsInvalidAttributeStreams(TestContext& context){
@@ -623,22 +638,48 @@ static void TestRestSpaceHoleEditRejectsInvalidAttributeStreams(TestContext& con
     const u32 oldRevision = instance.editRevision;
     instance.skin[0].weight[0] = 0.5f;
 
-    NWB::Impl::DeformableHoleEditParams params;
-    params.posedHit.entity = instance.entity;
-    params.posedHit.runtimeMesh = instance.handle;
-    params.posedHit.editRevision = instance.editRevision;
-    params.posedHit.triangle = 8u;
-    params.posedHit.bary[0] = 0.25f;
-    params.posedHit.bary[1] = 0.25f;
-    params.posedHit.bary[2] = 0.5f;
-    params.radius = 0.48f;
-    params.ellipseRatio = 1.0f;
-    params.depth = 0.25f;
+    const NWB::Impl::DeformableHoleEditParams params = MakeGridHoleEditParams(instance);
 
     NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::CommitDeformableRestSpaceHole(instance, params));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.restVertices.size() == oldVertexCount);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.indices.size() == oldIndexCount);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.editRevision == oldRevision);
+    CheckHoleEditUnchanged(context, instance, oldVertexCount, oldIndexCount, oldRevision);
+}
+
+static void TestRestSpaceHoleEditRejectsStaleOrMismatchedHit(TestContext& context){
+    {
+        NWB::Impl::DeformableRuntimeMeshInstance instance = MakeGridHoleInstance();
+        const usize oldVertexCount = instance.restVertices.size();
+        const usize oldIndexCount = instance.indices.size();
+        const u32 oldRevision = instance.editRevision;
+        NWB::Impl::DeformableHoleEditParams params = MakeGridHoleEditParams(instance);
+        params.posedHit.entity = NWB::Core::ECS::ENTITY_ID_INVALID;
+
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::CommitDeformableRestSpaceHole(instance, params));
+        CheckHoleEditUnchanged(context, instance, oldVertexCount, oldIndexCount, oldRevision);
+    }
+
+    {
+        NWB::Impl::DeformableRuntimeMeshInstance instance = MakeGridHoleInstance();
+        const usize oldVertexCount = instance.restVertices.size();
+        const usize oldIndexCount = instance.indices.size();
+        const u32 oldRevision = instance.editRevision;
+        NWB::Impl::DeformableHoleEditParams params = MakeGridHoleEditParams(instance);
+        params.posedHit.runtimeMesh.reset();
+
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::CommitDeformableRestSpaceHole(instance, params));
+        CheckHoleEditUnchanged(context, instance, oldVertexCount, oldIndexCount, oldRevision);
+    }
+
+    {
+        NWB::Impl::DeformableRuntimeMeshInstance instance = MakeGridHoleInstance();
+        const usize oldVertexCount = instance.restVertices.size();
+        const usize oldIndexCount = instance.indices.size();
+        const u32 oldRevision = instance.editRevision;
+        NWB::Impl::DeformableHoleEditParams params = MakeGridHoleEditParams(instance);
+        ++params.posedHit.editRevision;
+
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::CommitDeformableRestSpaceHole(instance, params));
+        CheckHoleEditUnchanged(context, instance, oldVertexCount, oldIndexCount, oldRevision);
+    }
 }
 
 
@@ -682,6 +723,7 @@ int main(){
     __hidden_ecs_graphics_tests::TestRestSpaceHoleEditRejectsDegenerateHitFrame(context);
     __hidden_ecs_graphics_tests::TestRestSpaceHoleEditRejectsNonFiniteWallVertices(context);
     __hidden_ecs_graphics_tests::TestRestSpaceHoleEditRejectsInvalidAttributeStreams(context);
+    __hidden_ecs_graphics_tests::TestRestSpaceHoleEditRejectsStaleOrMismatchedHit(context);
 
     if(context.failed != 0u){
         NWB_CERR << "ecs graphics tests failed: " << context.failed << " failed, " << context.passed << " passed\n";

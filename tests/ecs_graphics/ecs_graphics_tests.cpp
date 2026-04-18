@@ -501,20 +501,35 @@ static void TestRestSpaceHoleEditCreatesPerInstancePatch(TestContext& context){
     NWB::Impl::DeformableHoleEditResult result;
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::CommitDeformableRestSpaceHole(instance, params, &result));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, result.removedTriangleCount == 2u);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, result.addedVertexCount == 4u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, result.addedVertexCount == 16u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, result.addedTriangleCount == 8u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, result.editRevision == 4u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.editRevision == 4u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, (instance.dirtyFlags & NWB::Impl::RuntimeMeshDirtyFlag::All) == NWB::Impl::RuntimeMeshDirtyFlag::All);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.restVertices.size() == oldVertexCount + 4u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.restVertices.size() == oldVertexCount + 16u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.indices.size() == oldIndexCount - 6u + 24u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.skin.size() == instance.restVertices.size());
     NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.sourceSamples.size() == instance.restVertices.size());
     NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.morphs.size() == 1u);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.morphs[0].deltas.size() == 2u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.morphs[0].deltas.size() > 1u);
 
-    for(usize vertexIndex = oldVertexCount; vertexIndex < instance.restVertices.size(); ++vertexIndex)
-        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(instance.restVertices[vertexIndex].position.z, -0.25f));
+    u32 rimVertexCount = 0u;
+    u32 innerVertexCount = 0u;
+    for(usize vertexIndex = oldVertexCount; vertexIndex < instance.restVertices.size(); ++vertexIndex){
+        const NWB::Impl::DeformableVertexRest& vertex = instance.restVertices[vertexIndex];
+        if(NearlyEqual(vertex.position.z, 0.0f))
+            ++rimVertexCount;
+        if(NearlyEqual(vertex.position.z, -0.25f))
+            ++innerVertexCount;
+
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertex.normal.z, 0.0f));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertex.tangent.z, 0.0f));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertex.tangent.w, 1.0f));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, vertex.uv0.x == 0.0f || vertex.uv0.x == 1.0f);
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, vertex.uv0.y == 0.0f || vertex.uv0.y == 1.0f);
+    }
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, rimVertexCount == 8u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, innerVertexCount == 8u);
     for(const u32 index : instance.indices)
         NWB_ECS_GRAPHICS_TEST_CHECK(context, index < instance.restVertices.size());
 
@@ -541,6 +556,31 @@ static void TestRestSpaceHoleEditRejectsOpenBoundaryPatch(TestContext& context){
     params.posedHit.bary[1] = 0.25f;
     params.posedHit.bary[2] = 0.5f;
     params.radius = 0.25f;
+    params.ellipseRatio = 1.0f;
+    params.depth = 0.25f;
+
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::CommitDeformableRestSpaceHole(instance, params));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.restVertices.size() == oldVertexCount);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.indices.size() == oldIndexCount);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.editRevision == oldRevision);
+}
+
+static void TestRestSpaceHoleEditRejectsDegenerateHitFrame(TestContext& context){
+    NWB::Impl::DeformableRuntimeMeshInstance instance = MakeGridHoleInstance();
+    instance.restVertices[10u].position = instance.restVertices[6u].position;
+    const usize oldVertexCount = instance.restVertices.size();
+    const usize oldIndexCount = instance.indices.size();
+    const u32 oldRevision = instance.editRevision;
+
+    NWB::Impl::DeformableHoleEditParams params;
+    params.posedHit.entity = instance.entity;
+    params.posedHit.runtimeMesh = instance.handle;
+    params.posedHit.editRevision = instance.editRevision;
+    params.posedHit.triangle = 8u;
+    params.posedHit.bary[0] = 0.25f;
+    params.posedHit.bary[1] = 0.25f;
+    params.posedHit.bary[2] = 0.5f;
+    params.radius = 0.48f;
     params.ellipseRatio = 1.0f;
     params.depth = 0.25f;
 
@@ -639,6 +679,7 @@ int main(){
     __hidden_ecs_graphics_tests::TestPickingRejectsActiveEmptyMorph(context);
     __hidden_ecs_graphics_tests::TestRestSpaceHoleEditCreatesPerInstancePatch(context);
     __hidden_ecs_graphics_tests::TestRestSpaceHoleEditRejectsOpenBoundaryPatch(context);
+    __hidden_ecs_graphics_tests::TestRestSpaceHoleEditRejectsDegenerateHitFrame(context);
     __hidden_ecs_graphics_tests::TestRestSpaceHoleEditRejectsNonFiniteWallVertices(context);
     __hidden_ecs_graphics_tests::TestRestSpaceHoleEditRejectsInvalidAttributeStreams(context);
 

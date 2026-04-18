@@ -104,6 +104,41 @@ static NWB::Impl::DeformableRuntimeMeshInstance MakeQuadMixedProvenanceInstance(
     return instance;
 }
 
+static NWB::Impl::DeformableRuntimeMeshInstance MakeOutOfRangeMixedProvenanceInstance(){
+    NWB::Impl::DeformableRuntimeMeshInstance instance;
+    instance.entity = NWB::Core::ECS::EntityID(20u, 0u);
+    instance.handle.value = 45u;
+    instance.sourceTriangleCount = 2u;
+    instance.restVertices.push_back(MakeVertex(-1.0f, -1.0f, 0.0f));
+    instance.restVertices.push_back(MakeVertex(1.0f, -1.0f, 0.0f));
+    instance.restVertices.push_back(MakeVertex(0.0f, 1.0f, 0.0f));
+    instance.restVertices.push_back(MakeVertex(1.5f, -1.0f, 0.0f));
+    instance.restVertices.push_back(MakeVertex(2.5f, -1.0f, 0.0f));
+    instance.restVertices.push_back(MakeVertex(2.0f, 1.0f, 0.0f));
+    instance.restVertices.push_back(MakeVertex(3.0f, -1.0f, 0.0f));
+    instance.restVertices.push_back(MakeVertex(5.0f, -1.0f, 0.0f));
+    instance.restVertices.push_back(MakeVertex(4.0f, 1.0f, 0.0f));
+    instance.indices.push_back(0u);
+    instance.indices.push_back(1u);
+    instance.indices.push_back(2u);
+    instance.indices.push_back(3u);
+    instance.indices.push_back(4u);
+    instance.indices.push_back(5u);
+    instance.indices.push_back(6u);
+    instance.indices.push_back(7u);
+    instance.indices.push_back(8u);
+    instance.sourceSamples.push_back(MakeSourceSample(0u, 1.0f, 0.0f, 0.0f));
+    instance.sourceSamples.push_back(MakeSourceSample(0u, 0.0f, 1.0f, 0.0f));
+    instance.sourceSamples.push_back(MakeSourceSample(0u, 0.0f, 0.0f, 1.0f));
+    instance.sourceSamples.push_back(MakeSourceSample(1u, 1.0f, 0.0f, 0.0f));
+    instance.sourceSamples.push_back(MakeSourceSample(1u, 0.0f, 1.0f, 0.0f));
+    instance.sourceSamples.push_back(MakeSourceSample(1u, 0.0f, 0.0f, 1.0f));
+    instance.sourceSamples.push_back(MakeSourceSample(0u, 1.0f, 0.0f, 0.0f));
+    instance.sourceSamples.push_back(MakeSourceSample(1u, 0.0f, 1.0f, 0.0f));
+    instance.sourceSamples.push_back(MakeSourceSample(1u, 0.0f, 0.0f, 1.0f));
+    return instance;
+}
+
 static NWB::Impl::DeformableRuntimeMeshInstance MakeGridHoleInstance(){
     NWB::Impl::DeformableRuntimeMeshInstance instance;
     instance.entity = NWB::Core::ECS::EntityID(3u, 0u);
@@ -163,6 +198,12 @@ static NWB::Impl::DeformableHoleEditParams MakeHoleEditParams(
     params.posedHit.bary[0] = 0.25f;
     params.posedHit.bary[1] = 0.25f;
     params.posedHit.bary[2] = 0.5f;
+    (void)NWB::Impl::ResolveDeformableRestSurfaceSample(
+        instance,
+        triangle,
+        params.posedHit.bary,
+        params.posedHit.restSample
+    );
     params.radius = radius;
     params.ellipseRatio = 1.0f;
     params.depth = depth;
@@ -231,6 +272,24 @@ static void TestMixedProvenanceFallsBackToRestTriangle(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(hit.restSample.bary[0], 0.25f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(hit.restSample.bary[1], 0.25f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(hit.restSample.bary[2], 0.5f));
+}
+
+static void TestMixedProvenanceRejectsRuntimeTriangleOutsideSourceRange(TestContext& context){
+    const NWB::Impl::DeformableRuntimeMeshInstance instance = MakeOutOfRangeMixedProvenanceInstance();
+    const f32 bary[3] = { 0.25f, 0.25f, 0.5f };
+
+    NWB::Impl::SourceSample sample;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::ResolveDeformableRestSurfaceSample(instance, 2u, bary, sample));
+
+    NWB::Impl::DeformablePickingRay ray;
+    ray.origin = Float3Data(4.0f, 0.0f, 1.0f);
+    ray.direction = Float3Data(0.0f, 0.0f, -1.0f);
+
+    NWB::Impl::DeformablePosedHit hit;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        !NWB::Impl::RaycastDeformableRuntimeMesh(instance, NWB::Impl::DeformablePickingInputs{}, ray, hit)
+    );
 }
 
 static void TestRestSampleRejectsMalformedIndexPayload(TestContext& context){
@@ -490,6 +549,12 @@ static void TestPickingRejectsInvalidSkinWeights(TestContext& context){
     }
     instance.skin[0].weight[0] = std::numeric_limits<f32>::quiet_NaN();
 
+    Vector<NWB::Impl::DeformableVertexRest> vertices;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        !NWB::Impl::BuildDeformablePickingVertices(instance, NWB::Impl::DeformablePickingInputs{}, vertices)
+    );
+
     NWB::Impl::DeformableJointPaletteComponent joints;
     joints.joints.resize(1u);
 
@@ -575,13 +640,18 @@ static void TestPickingRejectsInvalidMorphDelta(TestContext& context){
     morph.deltas.push_back(delta);
     instance.morphs.push_back(morph);
 
+    Vector<NWB::Impl::DeformableVertexRest> vertices;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        !NWB::Impl::BuildDeformablePickingVertices(instance, NWB::Impl::DeformablePickingInputs{}, vertices)
+    );
+
     NWB::Impl::DeformableMorphWeightsComponent weights;
     weights.weights.push_back(NWB::Impl::DeformableMorphWeight{ Name("broken"), 1.0f });
 
     NWB::Impl::DeformablePickingInputs inputs;
     inputs.morphWeights = &weights;
 
-    Vector<NWB::Impl::DeformableVertexRest> vertices;
     NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::BuildDeformablePickingVertices(instance, inputs, vertices));
 
     instance.morphs[0].deltas[0].vertexId = 0u;
@@ -596,17 +666,19 @@ static void TestPickingRejectsActiveEmptyMorph(TestContext& context){
     morph.name = Name("empty");
     instance.morphs.push_back(morph);
 
+    Vector<NWB::Impl::DeformableVertexRest> vertices;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        !NWB::Impl::BuildDeformablePickingVertices(instance, NWB::Impl::DeformablePickingInputs{}, vertices)
+    );
+
     NWB::Impl::DeformableMorphWeightsComponent weights;
     weights.weights.push_back(NWB::Impl::DeformableMorphWeight{ Name("empty"), 1.0f });
 
     NWB::Impl::DeformablePickingInputs inputs;
     inputs.morphWeights = &weights;
 
-    Vector<NWB::Impl::DeformableVertexRest> vertices;
     NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::BuildDeformablePickingVertices(instance, inputs, vertices));
-
-    weights.weights[0].weight = 0.0f;
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::BuildDeformablePickingVertices(instance, inputs, vertices));
 }
 
 static void TestRestSpaceHoleEditCreatesPerInstancePatch(TestContext& context){
@@ -766,6 +838,20 @@ static void TestRestSpaceHoleEditRejectsInvalidAttributeStreams(TestContext& con
         NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::CommitDeformableRestSpaceHole(instance, params));
         CheckHoleEditUnchanged(context, instance, oldVertexCount, oldIndexCount, oldRevision);
     }
+
+    {
+        NWB::Impl::DeformableRuntimeMeshInstance instance = MakeGridHoleInstance();
+        const usize oldVertexCount = instance.restVertices.size();
+        const usize oldIndexCount = instance.indices.size();
+        const u32 oldRevision = instance.editRevision;
+        NWB::Impl::DeformableHoleEditParams params = MakeGridHoleEditParams(instance);
+        params.posedHit.restSample.bary[0] = 0.0f;
+        params.posedHit.restSample.bary[1] = 1.0f;
+        params.posedHit.restSample.bary[2] = 0.0f;
+
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::CommitDeformableRestSpaceHole(instance, params));
+        CheckHoleEditUnchanged(context, instance, oldVertexCount, oldIndexCount, oldRevision);
+    }
 }
 
 static void TestRestSpaceHoleEditRejectsMalformedRuntimePayload(TestContext& context){
@@ -914,6 +1000,7 @@ int main(){
     __hidden_ecs_graphics_tests::TestContext context;
     __hidden_ecs_graphics_tests::TestRestSampleInterpolation(context);
     __hidden_ecs_graphics_tests::TestMixedProvenanceFallsBackToRestTriangle(context);
+    __hidden_ecs_graphics_tests::TestMixedProvenanceRejectsRuntimeTriangleOutsideSourceRange(context);
     __hidden_ecs_graphics_tests::TestRestSampleRejectsMalformedIndexPayload(context);
     __hidden_ecs_graphics_tests::TestRestSampleRejectsOutOfRangeProvenance(context);
     __hidden_ecs_graphics_tests::TestRestSampleCanonicalizesEdgeTolerance(context);

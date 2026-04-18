@@ -6,6 +6,8 @@
 
 #include "renderer_system.h"
 
+#include <core/alloc/scratch.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -124,6 +126,14 @@ struct Vec3{
 
 [[nodiscard]] bool ValidSourceSample(const SourceSample& sample, const u32 sourceTriangleCount){
     return sourceTriangleCount != 0u && sample.sourceTri < sourceTriangleCount && ValidSourceBarycentric(sample.bary);
+}
+
+[[nodiscard]] bool ValidMorphDelta(const DeformableMorphDelta& delta, const usize vertexCount){
+    return delta.vertexId < vertexCount
+        && IsFiniteVec3(delta.deltaPosition)
+        && IsFiniteVec3(delta.deltaNormal)
+        && IsFiniteVec4(delta.deltaTangent)
+    ;
 }
 
 [[nodiscard]] bool ValidRestVertex(const DeformableVertexRest& vertex){
@@ -371,6 +381,65 @@ void OrthonormalizeFrame(
     return NearlyOne(weightSum, s_SkinWeightSumEpsilon);
 }
 
+[[nodiscard]] bool ValidateMorphPayload(const Vector<DeformableMorph>& morphs, const usize vertexCount){
+    if(morphs.size() > static_cast<usize>(Limit<u32>::s_Max))
+        return false;
+
+    Core::Alloc::ScratchArena<> scratchArena;
+    HashSet<NameHash, Hasher<NameHash>, EqualTo<NameHash>, Core::Alloc::ScratchAllocator<NameHash>> seenMorphNames(
+        0,
+        Hasher<NameHash>(),
+        EqualTo<NameHash>(),
+        Core::Alloc::ScratchAllocator<NameHash>(scratchArena)
+    );
+    seenMorphNames.reserve(morphs.size());
+
+    for(const DeformableMorph& morph : morphs){
+        if(!morph.name || morph.deltas.empty())
+            return false;
+        if(morph.deltas.size() > static_cast<usize>(Limit<u32>::s_Max))
+            return false;
+        if(!seenMorphNames.insert(morph.name.hash()).second)
+            return false;
+
+        HashSet<u32, Hasher<u32>, EqualTo<u32>, Core::Alloc::ScratchAllocator<u32>> seenDeltaVertices(
+            0,
+            Hasher<u32>(),
+            EqualTo<u32>(),
+            Core::Alloc::ScratchAllocator<u32>(scratchArena)
+        );
+        seenDeltaVertices.reserve(morph.deltas.size());
+
+        for(const DeformableMorphDelta& delta : morph.deltas){
+            if(!ValidMorphDelta(delta, vertexCount))
+                return false;
+            if(!seenDeltaVertices.insert(delta.vertexId).second)
+                return false;
+        }
+    }
+    return true;
+}
+
+[[nodiscard]] bool ValidatePickingRuntimePayload(const DeformableRuntimeMeshInstance& instance){
+    if(!instance.skin.empty() && instance.skin.size() != instance.restVertices.size())
+        return false;
+    for(const SkinInfluence4& skin : instance.skin){
+        if(!ValidateSkinInfluence(skin))
+            return false;
+    }
+
+    if(!instance.sourceSamples.empty() && instance.sourceSamples.size() != instance.restVertices.size())
+        return false;
+    if(!instance.sourceSamples.empty() && instance.sourceTriangleCount == 0u)
+        return false;
+    for(const SourceSample& sample : instance.sourceSamples){
+        if(!ValidSourceSample(sample, instance.sourceTriangleCount))
+            return false;
+    }
+
+    return ValidateMorphPayload(instance.morphs, instance.restVertices.size());
+}
+
 [[nodiscard]] bool ValidateJointPalette(
     const DeformableRuntimeMeshInstance& instance,
     const DeformableJointPaletteComponent* jointPalette)
@@ -586,6 +655,8 @@ bool BuildDeformablePickingVertices(
         || instance.indices.size() > static_cast<usize>(Limit<u32>::s_Max)
     )
         return false;
+    if(!__hidden_deformable_picking::ValidatePickingRuntimePayload(instance))
+        return false;
     for(const DeformableVertexRest& vertex : instance.restVertices){
         if(!__hidden_deformable_picking::ValidRestVertexFrame(vertex))
             return false;
@@ -654,6 +725,8 @@ bool ResolveDeformableRestSurfaceSample(
     if(instance.sourceSamples.empty()){
         if(triangle >= triangleCount)
             return false;
+        if(instance.sourceTriangleCount != 0u && triangle >= instance.sourceTriangleCount)
+            return false;
 
         return __hidden_deformable_picking::AssignCurrentTriangleSample(triangle, bary, outSample);
     }
@@ -672,6 +745,8 @@ bool ResolveDeformableRestSurfaceSample(
         return false;
     if(sample0.sourceTri != sample1.sourceTri || sample0.sourceTri != sample2.sourceTri){
         if(triangle >= triangleCount)
+            return false;
+        if(triangle >= instance.sourceTriangleCount)
             return false;
 
         return __hidden_deformable_picking::AssignCurrentTriangleSample(triangle, bary, outSample);

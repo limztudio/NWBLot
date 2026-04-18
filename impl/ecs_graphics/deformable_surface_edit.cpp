@@ -481,6 +481,25 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
     );
 }
 
+[[nodiscard]] bool MatchingSourceSample(const SourceSample& lhs, const SourceSample& rhs){
+    return lhs.sourceTri == rhs.sourceTri
+        && AbsF32(lhs.bary[0] - rhs.bary[0]) <= s_BarycentricSumEpsilon
+        && AbsF32(lhs.bary[1] - rhs.bary[1]) <= s_BarycentricSumEpsilon
+        && AbsF32(lhs.bary[2] - rhs.bary[2]) <= s_BarycentricSumEpsilon
+    ;
+}
+
+[[nodiscard]] bool ValidateHitRestSample(
+    const DeformableRuntimeMeshInstance& instance,
+    const DeformablePosedHit& hit)
+{
+    SourceSample resolvedSample;
+    if(!ResolveDeformableRestSurfaceSample(instance, hit.triangle, hit.bary, resolvedSample))
+        return false;
+
+    return MatchingSourceSample(hit.restSample, resolvedSample);
+}
+
 [[nodiscard]] bool ValidateParams(const DeformableRuntimeMeshInstance& instance, const DeformableHoleEditParams& params){
     if(!ValidBarycentric(params.posedHit.bary))
         return false;
@@ -489,6 +508,8 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
     if(params.posedHit.runtimeMesh != instance.handle)
         return false;
     if(params.posedHit.editRevision != instance.editRevision)
+        return false;
+    if(!ValidateHitRestSample(instance, params.posedHit))
         return false;
     return IsFinite(params.radius)
         && IsFinite(params.ellipseRatio)

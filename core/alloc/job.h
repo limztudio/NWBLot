@@ -200,9 +200,11 @@ public:
     }
 
     inline void waitAll(){
-        usize current;
-        while((current = m_pendingJobCount.load(std::memory_order_acquire)) > 0)
+        usize current = m_pendingJobCount.load(std::memory_order_acquire);
+        while(current > 0){
             m_pendingJobCount.wait(current, std::memory_order_relaxed);
+            current = m_pendingJobCount.load(std::memory_order_acquire);
+        }
     }
 
     inline bool isComplete(JobHandle handle)const{

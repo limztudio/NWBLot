@@ -10,6 +10,8 @@ set_target_properties(testbed PROPERTIES
     VS_DEBUGGER_WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}"
 )
 target_link_libraries(testbed PRIVATE
+    nwb_common
+    nwb_alloc
     nwb_loader
     nwb_scene
     nwb_ecs_graphics

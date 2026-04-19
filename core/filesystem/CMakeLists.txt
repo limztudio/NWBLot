@@ -5,4 +5,4 @@ target_sources(nwb_filesystem PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/filesystem.h"
     "${CMAKE_CURRENT_LIST_DIR}/volume_naming.h"
 )
-target_link_libraries(nwb_filesystem PUBLIC nwb_alloc)
+target_link_libraries(nwb_filesystem PUBLIC nwb_common nwb_alloc)

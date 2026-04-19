@@ -6,5 +6,6 @@ target_link_libraries(nwb_scene_tests PRIVATE
     nwb_scene
     nwb_ecs
     nwb_common
+    nwb_alloc
 )
 add_test(NAME nwb_scene_tests COMMAND nwb_scene_tests)

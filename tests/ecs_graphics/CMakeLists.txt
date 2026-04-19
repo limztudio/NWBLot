@@ -6,5 +6,6 @@ target_link_libraries(nwb_ecs_graphics_tests PRIVATE
     nwb_ecs_graphics
     nwb_scene
     nwb_common
+    nwb_alloc
 )
 add_test(NAME nwb_ecs_graphics_tests COMMAND nwb_ecs_graphics_tests)

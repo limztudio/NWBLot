@@ -8,6 +8,7 @@
 #include "renderer_system.h"
 
 #include <core/alloc/scratch.h>
+#include <core/ecs/world.h>
 #include <core/graphics/shader_archive.h>
 #include <impl/assets_graphics/deformable_geometry_validation.h>
 #include <impl/assets_graphics/shader_asset.h>
@@ -492,8 +493,10 @@ void DeformerSystem::render(Core::IFramebuffer* framebuffer){
     }
     commandList->close();
 
-    if(submittedWork)
-        device->executeCommandList(commandList.get());
+    if(submittedWork){
+        Core::ICommandList* commandLists[] = { commandList.get() };
+        device->executeCommandLists(commandLists, 1);
+    }
 }
 
 bool DeformerSystem::ensurePipeline(){

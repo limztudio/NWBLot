@@ -8,7 +8,7 @@
 #include "deformable_runtime_mesh_cache.h"
 
 #include <core/alloc/scratch.h>
-#include <core/ecs/world.h>
+#include <core/ecs/system.h>
 #include <core/assets/asset_manager.h>
 #include <core/graphics/graphics.h>
 

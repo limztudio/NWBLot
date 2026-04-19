@@ -28,8 +28,8 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 endif()
 
 target_link_libraries(nwb_frame PUBLIC
-    nwb_alloc
     nwb_common
+    nwb_alloc
     nwb_graphics
 )
 target_link_libraries(nwb_frame PRIVATE nwb_logclient)

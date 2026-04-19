@@ -60,7 +60,7 @@ public:
     template<typename... Ts>
     View<Ts...> view(){
         return View<Ts...>(
-            MakeTuple(assurePool<Ts>()...)
+            MakeTuple(getPool<Ts>()...)
         );
     }
 

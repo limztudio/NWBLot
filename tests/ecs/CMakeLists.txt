@@ -5,5 +5,6 @@ target_sources(nwb_ecs_tests PRIVATE
 target_link_libraries(nwb_ecs_tests PRIVATE
     nwb_ecs
     nwb_common
+    nwb_alloc
 )
 add_test(NAME nwb_ecs_tests COMMAND nwb_ecs_tests)

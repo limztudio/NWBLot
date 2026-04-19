@@ -17,13 +17,9 @@ NWB_FILESYSTEM_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline AString MakeLegacyVolumeSegmentFileName(const AStringView volumeName, const usize segmentIndex){
-    return StringFormat("{}_{}.vol", volumeName, segmentIndex);
-}
-
 [[nodiscard]] inline u64 HashVolumeSegmentFileName(const AStringView volumeName, const usize segmentIndex){
-    const AString legacyFileName = MakeLegacyVolumeSegmentFileName(volumeName, segmentIndex);
-    return ComputeFnv64Bytes(legacyFileName.data(), legacyFileName.size());
+    const AString hashSeed = StringFormat("{}_{}.vol", volumeName, segmentIndex);
+    return ComputeFnv64Bytes(hashSeed.data(), hashSeed.size());
 }
 
 [[nodiscard]] inline AString MakeVolumeSegmentFileName(const AStringView volumeName, const usize segmentIndex){

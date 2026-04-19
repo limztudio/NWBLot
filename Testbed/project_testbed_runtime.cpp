@@ -64,24 +64,6 @@ static constexpr f32 s_AccessoryUniformScale = 0.16f;
     return Min(Max(depth, 0.04f), 0.45f);
 }
 
-[[nodiscard]] static bool TanHalfFov(const f32 verticalFovRadians, f32& outTanHalfFov){
-    outTanHalfFov = 0.0f;
-    if(!IsFinite(verticalFovRadians))
-        return false;
-
-    const f32 halfFov = verticalFovRadians * 0.5f;
-    const f32 sinHalfFov = Sin(halfFov);
-    const f32 cosHalfFov = Cos(halfFov);
-    if(!IsFinite(sinHalfFov)
-        || !IsFinite(cosHalfFov)
-        || (cosHalfFov > -0.000001f && cosHalfFov < 0.000001f)
-    )
-        return false;
-
-    outTanHalfFov = sinHalfFov / cosHalfFov;
-    return IsFinite(outTanHalfFov) && outTanHalfFov > 0.0f;
-}
-
 [[nodiscard]] static bool ResolveKeyIndex(const i32 key, usize& outIndex){
     if(key < 0 || key > NWB::Core::Key::Menu)
         return false;
@@ -90,19 +72,8 @@ static constexpr f32 s_AccessoryUniformScale = 0.16f;
     return true;
 }
 
-[[nodiscard]] static NWB::Core::ECS::EntityID ResolveSceneMainCamera(NWB::Core::ECS::World& world){
-    NWB::Core::ECS::EntityID mainCamera = NWB::Core::ECS::ENTITY_ID_INVALID;
-    bool foundScene = false;
-    world.view<NWB::Core::Scene::SceneComponent>().each(
-        [&](NWB::Core::ECS::EntityID, NWB::Core::Scene::SceneComponent& scene){
-            if(foundScene)
-                return;
-
-            foundScene = true;
-            mainCamera = scene.mainCamera;
-        }
-    );
-    return mainCamera;
+[[nodiscard]] static bool FiniteFloat3(const AlignedFloat3Data& value){
+    return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z);
 }
 
 [[nodiscard]] static EditorVec3 NormalizeVec3(const EditorVec3& value, const EditorVec3& fallback){
@@ -111,11 +82,15 @@ static constexpr f32 s_AccessoryUniformScale = 0.16f;
         return fallback;
 
     const f32 invLength = 1.0f / Sqrt(lengthSq);
-    return EditorVec3{
+    if(!IsFinite(invLength))
+        return fallback;
+
+    const EditorVec3 normalized{
         value.x * invLength,
         value.y * invLength,
         value.z * invLength
     };
+    return FiniteFloat3(normalized) ? normalized : fallback;
 }
 
 [[nodiscard]] static EditorVec3 RotateDirectionByQuaternion(
@@ -137,70 +112,55 @@ static constexpr f32 s_AccessoryUniformScale = 0.16f;
     const f64 cursorX,
     const f64 cursorY,
     NWB::Core::ECSGraphics::DeformablePickingRay& outRay){
-    const NWB::Core::ECS::EntityID mainCamera = ResolveSceneMainCamera(world);
-    NWB::Core::Scene::TransformComponent* cameraTransform = nullptr;
-    NWB::Core::Scene::CameraComponent* cameraComponent = nullptr;
-    bool foundFallbackCamera = false;
-    bool foundRequestedCamera = false;
-
-    world.view<NWB::Core::Scene::TransformComponent, NWB::Core::Scene::CameraComponent>().each(
-        [&](
-            NWB::Core::ECS::EntityID entity,
-            NWB::Core::Scene::TransformComponent& transform,
-            NWB::Core::Scene::CameraComponent& camera
-        ){
-            if(foundRequestedCamera)
-                return;
-
-            if(!foundFallbackCamera){
-                cameraTransform = &transform;
-                cameraComponent = &camera;
-                foundFallbackCamera = true;
-            }
-            if(mainCamera.valid() && entity == mainCamera){
-                cameraTransform = &transform;
-                cameraComponent = &camera;
-                foundRequestedCamera = true;
-            }
-        }
-    );
-    if(!foundFallbackCamera || !cameraTransform || !cameraComponent)
+    const NWB::ProjectFrameClientSize clientSize = NWB::QueryProjectFrameClientSize();
+    if(clientSize.width == 0u || clientSize.height == 0u || !IsFinite(cursorX) || !IsFinite(cursorY))
         return false;
 
-    const NWB::ProjectFrameClientSize clientSize = NWB::QueryProjectFrameClientSize();
-    const f32 width = static_cast<f32>(clientSize.width != 0u ? clientSize.width : 1u);
-    const f32 height = static_cast<f32>(clientSize.height != 0u ? clientSize.height : 1u);
-    const f32 ndcX = (2.0f * static_cast<f32>(cursorX) / width) - 1.0f;
-    const f32 ndcY = 1.0f - (2.0f * static_cast<f32>(cursorY) / height);
+    const f32 width = static_cast<f32>(clientSize.width);
+    const f32 height = static_cast<f32>(clientSize.height);
     const f32 framebufferAspect = width / height;
-    const f32 aspect = IsFinite(cameraComponent->aspectRatio()) && cameraComponent->aspectRatio() > 0.0f
-        ? cameraComponent->aspectRatio()
-        : framebufferAspect
+    const NWB::Core::Scene::SceneCameraView cameraView =
+        NWB::Core::Scene::ResolveSceneCameraView(world, framebufferAspect)
     ;
-    f32 tanHalfFov = 0.0f;
-    if(!TanHalfFov(cameraComponent->verticalFovRadians(), tanHalfFov)
-        || !IsFinite(cameraComponent->nearPlane())
-        || !IsFinite(cameraComponent->farPlane())
-        || cameraComponent->nearPlane() < 0.0f
-        || cameraComponent->nearPlane() >= cameraComponent->farPlane()
-    )
+    if(!cameraView.valid())
+        return false;
+
+    const f32 cursorXF32 = static_cast<f32>(cursorX);
+    const f32 cursorYF32 = static_cast<f32>(cursorY);
+    if(!IsFinite(cursorXF32) || !IsFinite(cursorYF32))
+        return false;
+
+    const f32 ndcX = (2.0f * cursorXF32 / width) - 1.0f;
+    const f32 ndcY = 1.0f - (2.0f * cursorYF32 / height);
+    if(!IsFinite(ndcX) || !IsFinite(ndcY))
+        return false;
+
+    const NWB::Core::Scene::CameraProjectionData& projectionData = cameraView.projectionData;
+    const f32 horizontalScale = projectionData.tanHalfVerticalFov * projectionData.aspectRatio;
+    const f32 localX = ndcX * horizontalScale;
+    const f32 localY = ndcY * projectionData.tanHalfVerticalFov;
+    if(!IsFinite(horizontalScale) || !IsFinite(localX) || !IsFinite(localY))
         return false;
 
     EditorVec3 localDirection{
-        ndcX * tanHalfFov * aspect,
-        ndcY * tanHalfFov,
+        localX,
+        localY,
         1.0f
     };
     localDirection = NormalizeVec3(localDirection, EditorVec3{ 0.0f, 0.0f, 1.0f });
     const EditorVec3 worldDirection = NormalizeVec3(
-        RotateDirectionByQuaternion(localDirection, cameraTransform->rotation),
+        RotateDirectionByQuaternion(localDirection, cameraView.transform->rotation),
         EditorVec3{ 0.0f, 0.0f, 1.0f }
     );
 
-    outRay.setOrigin(Float3Data(cameraTransform->position.x, cameraTransform->position.y, cameraTransform->position.z));
+    outRay.setOrigin(Float3Data(
+        cameraView.transform->position.x,
+        cameraView.transform->position.y,
+        cameraView.transform->position.z
+    ));
     outRay.setDirection(Float3Data(worldDirection.x, worldDirection.y, worldDirection.z));
-    outRay.setMinDistance(cameraComponent->nearPlane());
-    outRay.setMaxDistance(cameraComponent->farPlane());
+    outRay.setMinDistance(cameraView.camera->nearPlane());
+    outRay.setMaxDistance(cameraView.camera->farPlane());
     return true;
 }
 
@@ -215,9 +175,22 @@ static void ApplyFlyCameraInput(
     const f32 mouseDeltaY,
     const f32 delta
 ){
-    yawRadians += mouseDeltaX * s_FlyCameraMouseSensitivityRadiansPerPixel;
+    if(!IsFinite(yawRadians))
+        yawRadians = 0.0f;
+    if(!IsFinite(pitchRadians))
+        pitchRadians = 0.0f;
+
+    const f32 safeMouseDeltaX = IsFinite(mouseDeltaX) ? mouseDeltaX : 0.0f;
+    const f32 safeMouseDeltaY = IsFinite(mouseDeltaY) ? mouseDeltaY : 0.0f;
+    const f32 safeRightAxis = IsFinite(rightAxis) ? Min(Max(rightAxis, -1.0f), 1.0f) : 0.0f;
+    const f32 safeForwardAxis = IsFinite(forwardAxis) ? Min(Max(forwardAxis, -1.0f), 1.0f) : 0.0f;
+    const f32 safeDelta = IsFinite(delta) ? Max(delta, 0.0f) : 0.0f;
+
+    yawRadians += safeMouseDeltaX * s_FlyCameraMouseSensitivityRadiansPerPixel;
+    if(!IsFinite(yawRadians))
+        yawRadians = 0.0f;
     pitchRadians = ClampPitch(
-        pitchRadians - mouseDeltaY * s_FlyCameraMouseSensitivityRadiansPerPixel,
+        pitchRadians - safeMouseDeltaY * s_FlyCameraMouseSensitivityRadiansPerPixel,
         s_FlyCameraPitchLimitRadians
     );
 
@@ -225,23 +198,33 @@ static void ApplyFlyCameraInput(
         &transform.rotation,
         SourceMath::QuaternionRotationRollPitchYaw(pitchRadians, yawRadians, 0.0f)
     );
+    if(!FiniteFloat3(transform.position))
+        transform.position = AlignedFloat3Data(0.0f, 0.0f, 0.0f);
 
-    const f32 moveLengthSq = rightAxis * rightAxis + forwardAxis * forwardAxis;
+    const f32 moveLengthSq = safeRightAxis * safeRightAxis + safeForwardAxis * safeForwardAxis;
     if(moveLengthSq > s_CameraMoveEpsilon){
         const f32 invMoveLength = 1.0f / Sqrt(moveLengthSq);
         const f32 speed = s_FlyCameraMoveSpeed * (boosted ? s_FlyCameraBoostMultiplier : 1.0f);
-        const f32 moveScale = speed * Max(delta, 0.0f) * invMoveLength;
+        const f32 moveScale = speed * safeDelta * invMoveLength;
+        if(!IsFinite(moveScale))
+            return;
 
-        const AlignedFloat3Data localMove(rightAxis * moveScale, 0.0f, forwardAxis * moveScale);
+        const AlignedFloat3Data localMove(safeRightAxis * moveScale, 0.0f, safeForwardAxis * moveScale);
         AlignedFloat3Data worldMove;
         SourceMath::StoreFloat3A(
             &worldMove,
             SourceMath::Vector3Rotate(SourceMath::LoadFloat3A(&localMove), SourceMath::LoadFloat4A(&transform.rotation))
         );
+        if(!FiniteFloat3(worldMove))
+            return;
 
-        transform.position.x += worldMove.x;
-        transform.position.y += worldMove.y;
-        transform.position.z += worldMove.z;
+        const AlignedFloat3Data newPosition(
+            transform.position.x + worldMove.x,
+            transform.position.y + worldMove.y,
+            transform.position.z + worldMove.z
+        );
+        if(FiniteFloat3(newPosition))
+            transform.position = newPosition;
     }
 }
 
@@ -256,49 +239,12 @@ static void ApplyFlyCameraInputToMainCamera(
     const f32 mouseDeltaY,
     const f32 delta
 ){
-    const NWB::Core::ECS::EntityID requestedCamera = ResolveSceneMainCamera(world);
-    NWB::Core::Scene::TransformComponent* fallbackTransform = nullptr;
-    bool appliedRequestedCamera = false;
-
-    world.view<
-        NWB::Core::Scene::TransformComponent,
-        NWB::Core::Scene::CameraComponent
-    >().each(
-        [&](
-            NWB::Core::ECS::EntityID entityId,
-            NWB::Core::Scene::TransformComponent& transform,
-            NWB::Core::Scene::CameraComponent& camera
-        ){
-            if(appliedRequestedCamera)
-                return;
-
-            (void)camera;
-            if(!fallbackTransform)
-                fallbackTransform = &transform;
-            if(requestedCamera.valid() && entityId == requestedCamera){
-                ApplyFlyCameraInput(
-                    transform,
-                    yawRadians,
-                    pitchRadians,
-                    rightAxis,
-                    forwardAxis,
-                    boosted,
-                    mouseDeltaX,
-                    mouseDeltaY,
-                    delta
-                );
-                appliedRequestedCamera = true;
-            }
-        }
-    );
-
-    if(appliedRequestedCamera)
-        return;
-    if(!fallbackTransform)
+    const NWB::Core::Scene::SceneCameraView cameraView = NWB::Core::Scene::ResolveSceneCameraView(world);
+    if(!cameraView.valid())
         return;
 
     ApplyFlyCameraInput(
-        *fallbackTransform,
+        *cameraView.transform,
         yawRadians,
         pitchRadians,
         rightAxis,
@@ -354,8 +300,13 @@ static void CreateRendererEntity(
 }
 
 [[nodiscard]] static NWB::Core::ECSGraphics::DeformableJointMatrix BuildProxySkinJoint(const f32 angleRadians){
-    const f32 sinAngle = Sin(angleRadians);
-    const f32 cosAngle = Cos(angleRadians);
+    const f32 safeAngleRadians = IsFinite(angleRadians) ? angleRadians : 0.0f;
+    f32 sinAngle = Sin(safeAngleRadians);
+    f32 cosAngle = Cos(safeAngleRadians);
+    if(!IsFinite(sinAngle) || !IsFinite(cosAngle)){
+        sinAngle = 0.0f;
+        cosAngle = 1.0f;
+    }
 
     NWB::Core::ECSGraphics::DeformableJointMatrix joint;
     joint.column0 = AlignedFloat4Data(1.0f, 0.0f, 0.0f, 0.0f);
@@ -372,11 +323,13 @@ static void CreateRendererEntity(
 
 static void UpdateProxySkinPalette(
     NWB::Core::ECSGraphics::DeformableJointPaletteComponent& jointPalette,
-    const f32 timeSeconds)
-{
+    const f32 timeSeconds
+){
+    const f32 safeTimeSeconds = IsFinite(timeSeconds) ? timeSeconds : 0.0f;
+
     jointPalette.joints.resize(2u);
     jointPalette.joints[0] = NWB::Core::ECSGraphics::DeformableJointMatrix{};
-    jointPalette.joints[1] = BuildProxySkinJoint(s_DeformableSkinMaxAngle * Sin(timeSeconds * 0.9f));
+    jointPalette.joints[1] = BuildProxySkinJoint(s_DeformableSkinMaxAngle * Sin(safeTimeSeconds * 0.9f));
 }
 
 [[nodiscard]] static NWB::Core::ECS::EntityID CreateDeformableRendererEntity(
@@ -556,9 +509,11 @@ void ProjectTestbed::onShutdown(){
 
 
 bool ProjectTestbed::onUpdate(f32 delta){
-    updateMainCamera(delta);
-    updateDeformableMorph(delta);
-    m_world->tick(delta);
+    const f32 safeDelta = IsFinite(delta) ? Max(delta, 0.0f) : 0.0f;
+
+    updateMainCamera(safeDelta);
+    updateDeformableMorph(safeDelta);
+    m_world->tick(safeDelta);
     attachPendingSurfaceEditAccessory();
     updateSurfaceEditAccessories();
 
@@ -643,13 +598,21 @@ void ProjectTestbed::updateDeformableMorph(const f32 delta){
     if(!m_deformableMorphEntity.valid())
         return;
 
-    m_deformableMorphTime += Max(delta, 0.0f);
+    const f32 safeDelta = IsFinite(delta) ? Max(delta, 0.0f) : 0.0f;
+    if(!IsFinite(m_deformableMorphTime))
+        m_deformableMorphTime = 0.0f;
+
+    m_deformableMorphTime += safeDelta;
+    if(!IsFinite(m_deformableMorphTime))
+        m_deformableMorphTime = 0.0f;
 
     auto* morphWeights =
         m_world->tryGetComponent<NWB::Core::ECSGraphics::DeformableMorphWeightsComponent>(m_deformableMorphEntity)
     ;
-    if(morphWeights && !morphWeights->weights.empty())
-        morphWeights->weights[0].weight = 0.5f + 0.5f * Sin(m_deformableMorphTime * 1.35f);
+    if(morphWeights && !morphWeights->weights.empty()){
+        const f32 morphWeight = 0.5f + 0.5f * Sin(m_deformableMorphTime * 1.35f);
+        morphWeights->weights[0].weight = IsFinite(morphWeight) ? morphWeight : 0.5f;
+    }
 
     auto* jointPalette =
         m_world->tryGetComponent<NWB::Core::ECSGraphics::DeformableJointPaletteComponent>(m_deformableMorphEntity)
@@ -661,12 +624,18 @@ void ProjectTestbed::updateDeformableMorph(const f32 delta){
         m_world->tryGetComponent<NWB::Core::ECSGraphics::DeformableDisplacementComponent>(m_deformableMorphEntity)
     ;
     if(displacement){
+        if(!IsFinite(m_deformableDisplacementScale))
+            m_deformableDisplacementScale = 1.0f;
+
         const f32 displacementAxis = __hidden_project_testbed_runtime::KeyAxis(
             keyPressed(NWB::Core::Key::Z),
             keyPressed(NWB::Core::Key::X)
         );
-        if(displacementAxis != 0.0f)
-            m_deformableDisplacementScale = Max(0.0f, m_deformableDisplacementScale + displacementAxis * Max(delta, 0.0f));
+        if(displacementAxis != 0.0f){
+            const f32 displacementScale = m_deformableDisplacementScale + displacementAxis * safeDelta;
+            if(IsFinite(displacementScale))
+                m_deformableDisplacementScale = Max(0.0f, displacementScale);
+        }
 
         displacement->enabled = !keyPressed(NWB::Core::Key::C);
         displacement->amplitudeScale = m_deformableDisplacementScale;
@@ -1013,6 +982,12 @@ bool ProjectTestbed::keyboardUpdate(const i32 key, const i32 scancode, const i32
 }
 
 bool ProjectTestbed::mousePosUpdate(const f64 xpos, const f64 ypos){
+    if(!IsFinite(xpos) || !IsFinite(ypos)){
+        m_cursorPositionValid = false;
+        m_mousePositionValid = false;
+        return false;
+    }
+
     m_cursorX = xpos;
     m_cursorY = ypos;
     m_cursorPositionValid = true;
@@ -1029,8 +1004,18 @@ bool ProjectTestbed::mousePosUpdate(const f64 xpos, const f64 ypos){
         return false;
     }
 
-    m_pendingMouseDeltaX += static_cast<f32>(xpos - m_lastMouseX);
-    m_pendingMouseDeltaY += static_cast<f32>(ypos - m_lastMouseY);
+    const f32 deltaX = static_cast<f32>(xpos - m_lastMouseX);
+    const f32 deltaY = static_cast<f32>(ypos - m_lastMouseY);
+    const f32 pendingDeltaX = m_pendingMouseDeltaX + deltaX;
+    const f32 pendingDeltaY = m_pendingMouseDeltaY + deltaY;
+    if(IsFinite(deltaX)
+        && IsFinite(deltaY)
+        && IsFinite(pendingDeltaX)
+        && IsFinite(pendingDeltaY)
+    ){
+        m_pendingMouseDeltaX = pendingDeltaX;
+        m_pendingMouseDeltaY = pendingDeltaY;
+    }
     m_lastMouseX = xpos;
     m_lastMouseY = ypos;
     return false;

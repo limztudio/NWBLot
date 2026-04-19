@@ -24,7 +24,7 @@ static int MainLogic(u16 logPort, void* inst){
         NWB::Log::Server logger;
         if(!logger.init(logPort, NWB_TEXT("logserver")))
             return -1;
-        NWB_LOGGER_REGISTER(&logger);
+        NWB::Log::ServerLoggerRegistrationGuard loggerRegistrationGuard(logger);
         logger.enqueue(StringFormat(NWB_TEXT("Log server: listening on port {}"), logPort), NWB::Log::Type::EssentialInfo);
 
         try{
@@ -45,11 +45,9 @@ static int MainLogic(u16 logPort, void* inst){
             }
         }
         catch(const GeneralException& e){
-            NWB_LOGGER.enqueue(StringFormat(NWB_TEXT("Exception: {}"), StringConvert(e.what())), NWB::Log::Type::Fatal);
-            NWB_LOGGER_REGISTER(nullptr);
+            logger.enqueue(StringFormat(NWB_TEXT("Exception: {}"), StringConvert(e.what())), NWB::Log::Type::Fatal);
             return -1;
         }
-        NWB_LOGGER_REGISTER(nullptr);
     }
 
     return 0;
@@ -60,34 +58,31 @@ static int MainLogic(u16 logPort, void* inst){
 
 
 static int EntryPoint(isize argc, tchar** argv, void* inst){
-    int ret;
-
-    u16 logPort = Get<static_cast<usize>(NWB::ArgCommand::LogPort)>(NWB::g_ArgDefault);
-    {
-        CLI::App app{ "logserver" };
-
-        NWB::ArgAddOption<NWB::ArgCommand::LogPort>(app, logPort);
-
-        try{
-            NWB::ArgParseApp(app, argc, argv);
-        }
-        catch(const CLI::ParseError& e){
-            app.exit(e, NWB_COUT, NWB_CERR);
-            return -1;
-        }
-    }
-
     try{
         NWB::Core::Common::InitializerGuard commonInitializerGuard;
         if(!commonInitializerGuard.initialize())
             return -1;
-        ret = MainLogic(logPort, inst);
+
+        u16 logPort = Get<static_cast<usize>(NWB::ArgCommand::LogPort)>(NWB::g_ArgDefault);
+        {
+            CLI::App app{ "logserver" };
+
+            NWB::ArgAddOption<NWB::ArgCommand::LogPort>(app, logPort);
+
+            try{
+                NWB::ArgParseApp(app, argc, argv);
+            }
+            catch(const CLI::ParseError& e){
+                app.exit(e, NWB_COUT, NWB_CERR);
+                return -1;
+            }
+        }
+
+        return MainLogic(logPort, inst);
     }
     catch(...){
         return -1;
     }
-
-    return ret;
 }
 
 #include <global/application_entry.h>

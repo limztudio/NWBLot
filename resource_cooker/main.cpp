@@ -4,6 +4,7 @@
 
 #include "resource_cooker.h"
 
+#include <core/common/common.h>
 #include <logger/client/logger.h>
 
 
@@ -16,36 +17,63 @@ static int RunResourceCooker(const int argc, char** argv){
         NWB_CERR << "[resource_cooker] logger.init() failed\n";
         return -1;
     }
-    NWB_LOGGER_REGISTER(&logger);
+    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     const int ret = ResourceCookerMain(argc, argv);
-    NWB_LOGGER_REGISTER(nullptr);
     return ret;
 }
 
+[[nodiscard]] static bool InitializeResourceCookerCommon(
+    NWB::Core::Common::InitializerGuard& commonInitializerGuard
+){
+    if(commonInitializerGuard.initialize())
+        return true;
+
+    NWB_CERR << "[resource_cooker] common initialization failed\n";
+    return false;
+}
+
 static int EntryPoint(const isize argc, char** argv, void*){
-    return RunResourceCooker(static_cast<int>(argc), argv);
+    try{
+        NWB::Core::Common::InitializerGuard commonInitializerGuard;
+        if(!InitializeResourceCookerCommon(commonInitializerGuard))
+            return -1;
+
+        return RunResourceCooker(static_cast<int>(argc), argv);
+    }
+    catch(...){
+        return -1;
+    }
 }
 
 #if defined(NWB_UNICODE)
 static int EntryPoint(const isize argc, wchar** argv, void*){
-    Vector<AString> utf8Args;
-    Vector<char*> utf8Argv;
-    const usize argCount = argc > 0 ? static_cast<usize>(argc) : 0;
-    utf8Args.reserve(argCount);
-    utf8Argv.reserve(argCount);
+    try{
+        NWB::Core::Common::InitializerGuard commonInitializerGuard;
+        if(!InitializeResourceCookerCommon(commonInitializerGuard))
+            return -1;
 
-    for(usize i = 0; i < argCount; ++i){
-        if(argv == nullptr || argv[i] == nullptr){
-            utf8Argv.push_back(nullptr);
-            continue;
+        Vector<AString> utf8Args;
+        Vector<char*> utf8Argv;
+        const usize argCount = argc > 0 ? static_cast<usize>(argc) : 0;
+        utf8Args.reserve(argCount);
+        utf8Argv.reserve(argCount);
+
+        for(usize i = 0; i < argCount; ++i){
+            if(argv == nullptr || argv[i] == nullptr){
+                utf8Argv.push_back(nullptr);
+                continue;
+            }
+
+            utf8Args.push_back(BasicStringDetail::WideToUtf8(WStringView(argv[i])));
+            utf8Argv.push_back(utf8Args.back().data());
         }
 
-        utf8Args.push_back(BasicStringDetail::WideToUtf8(WStringView(argv[i])));
-        utf8Argv.push_back(utf8Args.back().data());
+        return RunResourceCooker(static_cast<int>(utf8Argv.size()), utf8Argv.data());
     }
-
-    return EntryPoint(static_cast<isize>(utf8Argv.size()), utf8Argv.data(), nullptr);
+    catch(...){
+        return -1;
+    }
 }
 #endif
 

@@ -38,13 +38,32 @@ constexpr void IgnoreMessage(ARGS&&...){}
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_LOG_END
+class ClientLoggerRegistrationGuard final : NoCopy{
+public:
+    explicit ClientLoggerRegistrationGuard(IClient& logger)
+        : m_previous(LoggerDetail::g_Logger)
+    {
+        LoggerDetail::g_Logger = &logger;
+    }
+    ClientLoggerRegistrationGuard(ClientLoggerRegistrationGuard&&) = delete;
+    ~ClientLoggerRegistrationGuard(){
+        LoggerDetail::g_Logger = m_previous;
+    }
+
+
+private:
+    IClient* m_previous = nullptr;
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#define NWB_LOGGER_REGISTER(inst) ::NWB::Log::LoggerDetail::g_Logger = inst
+NWB_LOG_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 #if NWB_OCCUR_INFO
 #define NWB_LOGGER_INFO(...) { NWB_FATAL_ASSERT(::NWB::Log::LoggerDetail::g_Logger != nullptr); ::NWB::Log::LoggerDetail::g_Logger->enqueue(StringFormat(__VA_ARGS__), ::NWB::Log::Type::Info); }

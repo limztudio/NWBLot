@@ -77,15 +77,28 @@ extern Server* g_Logger;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_LOG_END
+class ServerLoggerRegistrationGuard final : NoCopy{
+public:
+    explicit ServerLoggerRegistrationGuard(Server& logger)
+        : m_previous(LoggerDetail::g_Logger)
+    {
+        LoggerDetail::g_Logger = &logger;
+    }
+    ServerLoggerRegistrationGuard(ServerLoggerRegistrationGuard&&) = delete;
+    ~ServerLoggerRegistrationGuard(){
+        LoggerDetail::g_Logger = m_previous;
+    }
+
+
+private:
+    Server* m_previous = nullptr;
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#define NWB_LOGGER_REGISTER(inst) NWB::Log::LoggerDetail::g_Logger = inst
-
-#define NWB_LOGGER NWB_ASSERT(NWB::Log::LoggerDetail::g_Logger != nullptr);(*NWB::Log::LoggerDetail::g_Logger)
+NWB_LOG_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

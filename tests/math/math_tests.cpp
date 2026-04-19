@@ -7,8 +7,9 @@
 #include <global/matrix_math.h>
 #include <global/sh_math.h>
 
+#include <core/common/common.h>
+
 #include <cmath>
-#include <cstring>
 #include <limits>
 
 
@@ -3432,7 +3433,16 @@ static void TestShMath(TestContext& context){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-int main(){
+static int EntryPoint(const isize argc, tchar** argv, void*){
+    (void)argc;
+    (void)argv;
+
+    NWB::Core::Common::InitializerGuard commonInitializerGuard;
+    if(!commonInitializerGuard.initialize()){
+        NWB_CERR << "math tests failed: common initialization failed\n";
+        return 1;
+    }
+
     using namespace __hidden_math_tests;
 
     TestContext context;
@@ -3459,6 +3469,11 @@ int main(){
     NWB_COUT << "math tests passed: " << context.passed << '\n';
     return 0;
 }
+
+
+#include <global/application_entry.h>
+
+NWB_DEFINE_APPLICATION_ENTRY_POINT(EntryPoint)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

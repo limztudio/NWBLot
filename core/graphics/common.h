@@ -533,7 +533,7 @@ struct TextureDesc{
     TextureDimension::Enum dimension = TextureDimension::Enum::Texture2D;
     Name name;
 
-    bool isShaderResource = true; // Thi is initialised to 'true' for backward compatibility
+    bool isShaderResource = true;
     bool isRenderTarget = false;
     bool isUAV = false;
     bool isTypeless = false;
@@ -3598,10 +3598,6 @@ public:
     virtual bool isAftermathEnabled() = 0;
     virtual AftermathCrashDumpHelper& getAftermathCrashDumpHelper() = 0;
 
-    // Front-end for executeCommandLists(..., 1) for compatibility and convenience
-    u64 executeCommandList(ICommandList* commandList, CommandQueue::Enum executionQueue = CommandQueue::Graphics){
-        return executeCommandLists(&commandList, 1, executionQueue);
-    }
 };
 typedef RefCountPtr<IDevice, ArenaRefDeleter<IDevice>> DeviceHandle;
 
@@ -3862,3 +3858,4 @@ struct hash<NWB::Core::VariableRateShadingState>{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

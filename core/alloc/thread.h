@@ -324,9 +324,11 @@ public:
 
 private:
     inline void waitPending(){
-        usize current;
-        while((current = m_pendingCount.load(std::memory_order_acquire)) > 0)
+        usize current = m_pendingCount.load(std::memory_order_acquire);
+        while(current > 0){
             m_pendingCount.wait(current, std::memory_order_relaxed);
+            current = m_pendingCount.load(std::memory_order_acquire);
+        }
     }
 
     inline bool hasParallelWork()const{
@@ -375,9 +377,11 @@ private:
 
         done.wait();
 
-        i32 activeWorkers = 0;
-        while((activeWorkers = desc.activeWorkers.load(std::memory_order_acquire)) > 0)
+        i32 activeWorkers = desc.activeWorkers.load(std::memory_order_acquire);
+        while(activeWorkers > 0){
             desc.activeWorkers.wait(activeWorkers, std::memory_order_relaxed);
+            activeWorkers = desc.activeWorkers.load(std::memory_order_acquire);
+        }
 
         m_pfWork.store(nullptr, std::memory_order_release);
     }

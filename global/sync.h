@@ -15,7 +15,6 @@
 #include <float.h>
 #endif
 
-#include <tbb/mutex.h>
 #include <tbb/spin_mutex.h>
 #include <tbb/queuing_mutex.h>
 #include <tbb/spin_rw_mutex.h>
@@ -48,9 +47,15 @@ using std::this_thread::yield;
 
 inline void machine_pause(i32 delay){
 #if defined(__ARM_ARCH_7A__) || defined(__aarch64__)
-    while(delay-- > 0){ __asm__ __volatile__("isb sy" ::: "memory"); }
+    while(delay > 0){
+        __asm__ __volatile__("isb sy" ::: "memory");
+        --delay;
+    }
 #elif defined(__SSE__)
-    while(delay-- > 0){ _mm_pause(); }
+    while(delay > 0){
+        _mm_pause();
+        --delay;
+    }
 #else /* Generic */
     (void)delay; // suppress without including _template_helpers.h
     yield();
@@ -61,7 +66,6 @@ inline void machine_pause(i32 delay){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using Mutex = tbb::mutex; // Legacy compatibility alias; prefer Futex for new code.
 using RecursiveMutex = std::recursive_mutex;
 using SpinMutex = tbb::spin_mutex;
 using QueuingMutex = tbb::queuing_mutex;
@@ -103,8 +107,11 @@ public:
             machine_pause(1 << i);
         }
 
-        while(m_state.exchange(s_LockedContended, std::memory_order_acquire) != s_Unlocked)
+        u32 previousState = m_state.exchange(s_LockedContended, std::memory_order_acquire);
+        while(previousState != s_Unlocked){
             m_state.wait(s_LockedContended, std::memory_order_relaxed);
+            previousState = m_state.exchange(s_LockedContended, std::memory_order_acquire);
+        }
     }
 
     bool try_lock(){

@@ -20,22 +20,18 @@
 // Return true if any entry in the matrix is NaN
 inline bool MathCallConv MatrixIsNaN(FXMMATRIX M)noexcept{
 #if defined(_MATH_NO_INTRINSICS_)
-    size_t i = 16;
     const uint32_t* pWork = reinterpret_cast<const uint32_t*>(&M.m[0][0]);
-    do{
-    // Fetch value into integer unit
-        uint32_t uTest = pWork[0];
+    for(size_t i = 0; i < 16; ++i){
+        // Fetch value into integer unit
+        uint32_t uTest = pWork[i];
         // Remove sign
         uTest &= 0x7FFFFFFFU;
         // NaN is 0x7F800001 through 0x7FFFFFFF inclusive
         uTest -= 0x7F800001U;
-        if(uTest < 0x007FFFFFU){
-            break;      // NaN found
-        }
-        ++pWork;        // Next entry
+        if(uTest < 0x007FFFFFU)
+            return true;
     }
-    while(--i);
-    return (i != 0);      // i == 0 if nothing matched
+    return false;
 #elif defined(_MATH_ARM_NEON_INTRINSICS_)
     // Load in registers
     float32x4_t vX = M.r[0];
@@ -86,21 +82,17 @@ inline bool MathCallConv MatrixIsNaN(FXMMATRIX M)noexcept{
 // Return true if any entry in the matrix is +/-INF
 inline bool MathCallConv MatrixIsInfinite(FXMMATRIX M)noexcept{
 #if defined(_MATH_NO_INTRINSICS_)
-    size_t i = 16;
     const uint32_t* pWork = reinterpret_cast<const uint32_t*>(&M.m[0][0]);
-    do{
-    // Fetch value into integer unit
-        uint32_t uTest = pWork[0];
+    for(size_t i = 0; i < 16; ++i){
+        // Fetch value into integer unit
+        uint32_t uTest = pWork[i];
         // Remove sign
         uTest &= 0x7FFFFFFFU;
         // INF is 0x7F800000
-        if(uTest == 0x7F800000U){
-            break;      // INF found
-        }
-        ++pWork;        // Next entry
+        if(uTest == 0x7F800000U)
+            return true;
     }
-    while(--i);
-    return (i != 0);      // i == 0 if nothing matched
+    return false;
 #elif defined(_MATH_ARM_NEON_INTRINSICS_)
     // Load in registers
     float32x4_t vX = M.r[0];

@@ -4,9 +4,8 @@
 
 #include "renderer_system.h"
 
-#include <core/scene/camera_component.h>
-#include <core/scene/scene_component.h>
-#include <core/scene/transform_component.h>
+#include <core/ecs/world.h>
+#include <core/scene/scene.h>
 #include <core/graphics/shader_archive.h>
 #include <logger/client/logger.h>
 #include <impl/assets_graphics/geometry_asset.h>
@@ -423,58 +422,19 @@ static MeshViewBasis BuildTransformMeshViewBasis(const Core::Scene::TransformCom
     return basis;
 }
 
-static bool TanHalfFov(const f32 verticalFovRadians, f32& outTanHalfFov){
-    outTanHalfFov = 0.0f;
-    if(!IsFinite(verticalFovRadians))
-        return false;
-
-    const f32 halfFov = verticalFovRadians * 0.5f;
-    const f32 sinHalfFov = Sin(halfFov);
-    const f32 cosHalfFov = Cos(halfFov);
-    if(!IsFinite(sinHalfFov)
-        || !IsFinite(cosHalfFov)
-        || (cosHalfFov > -0.000001f && cosHalfFov < 0.000001f)
-    )
-        return false;
-
-    outTanHalfFov = sinHalfFov / cosHalfFov;
-    return IsFinite(outTanHalfFov) && outTanHalfFov > 0.0f;
-}
-
-static f32 ResolveCameraAspectRatio(const Core::Scene::CameraComponent& camera, const f32 fallbackAspectRatio){
-    if(IsFinite(camera.aspectRatio()) && camera.aspectRatio() > 0.0f)
-        return camera.aspectRatio();
-    if(IsFinite(fallbackAspectRatio) && fallbackAspectRatio > 0.0f)
-        return fallbackAspectRatio;
-    return 1.0f;
-}
-
 static void BuildCameraProjectionParams(
     const Core::Scene::CameraComponent& camera,
     const f32 fallbackAspectRatio,
     AlignedFloat4Data& outProjectionParams
 ){
-    Core::Scene::CameraComponent fallbackCamera;
-    const f32 nearPlane = IsFinite(camera.nearPlane()) && camera.nearPlane() > 0.0f
-        ? camera.nearPlane()
-        : fallbackCamera.nearPlane()
-    ;
-    const f32 farPlane = IsFinite(camera.farPlane()) && camera.farPlane() > nearPlane
-        ? camera.farPlane()
-        : Max(fallbackCamera.farPlane(), nearPlane + 1.0f)
-    ;
-    const f32 aspectRatio = ResolveCameraAspectRatio(camera, fallbackAspectRatio);
-    f32 tanHalfFov = 0.0f;
-    if(!TanHalfFov(camera.verticalFovRadians(), tanHalfFov))
-        TanHalfFov(fallbackCamera.verticalFovRadians(), tanHalfFov);
+    if(Core::Scene::TryBuildCameraProjectionParams(camera, fallbackAspectRatio, outProjectionParams))
+        return;
 
-    const f32 depthRange = farPlane - nearPlane;
-    outProjectionParams = AlignedFloat4Data(
-        1.0f / (tanHalfFov * aspectRatio),
-        1.0f / tanHalfFov,
-        farPlane / depthRange,
-        -(nearPlane * farPlane) / depthRange
-    );
+    Core::Scene::CameraComponent fallbackCamera;
+    if(Core::Scene::TryBuildCameraProjectionParams(fallbackCamera, fallbackAspectRatio, outProjectionParams))
+        return;
+
+    outProjectionParams = AlignedFloat4Data(1.0f, 1.0f, 1.0f, 0.0f);
 }
 
 static void StoreProjectedViewColumn(
@@ -565,62 +525,22 @@ static MeshViewState BuildDefaultMeshViewState(const f32 fallbackAspectRatio){
 static void ApplyCameraMeshViewState(
     MeshViewState& state,
     const Core::Scene::TransformComponent& transform,
-    const Core::Scene::CameraComponent& camera,
-    const f32 fallbackAspectRatio
+    const Core::Scene::CameraProjectionData& projectionData
 ){
-    AlignedFloat4Data projectionParams;
-    BuildCameraProjectionParams(camera, fallbackAspectRatio, projectionParams);
-    StoreWorldToClipMatrix(state.worldToClip, BuildTransformMeshViewBasis(transform), projectionParams);
+    StoreWorldToClipMatrix(state.worldToClip, BuildTransformMeshViewBasis(transform), projectionData.projectionParams);
 }
 
 static MeshViewState ResolveMeshViewState(Core::ECS::World& world, const f32 fallbackAspectRatio){
     MeshViewState state = BuildDefaultMeshViewState(fallbackAspectRatio);
 
-    Core::ECS::EntityID mainCamera = Core::ECS::ENTITY_ID_INVALID;
-    bool foundScene = false;
-    world.view<Core::Scene::SceneComponent>().each(
-        [&](Core::ECS::EntityID, Core::Scene::SceneComponent& scene){
-            if(foundScene)
-                return;
+    const Core::Scene::SceneCameraView cameraView = Core::Scene::ResolveSceneCameraView(world, fallbackAspectRatio);
+    if(cameraView.valid())
+        __hidden_ecs_graphics::ApplyCameraMeshViewState(
+            state,
+            *cameraView.transform,
+            cameraView.projectionData
+        );
 
-            foundScene = true;
-            mainCamera = scene.mainCamera;
-        }
-    );
-
-    MeshViewState fallbackCameraState = state;
-    bool foundFallbackCamera = false;
-    bool foundRequestedCamera = false;
-    world.view<Core::Scene::TransformComponent, Core::Scene::CameraComponent>().each(
-        [&](Core::ECS::EntityID entityId, Core::Scene::TransformComponent& transform, Core::Scene::CameraComponent& camera){
-            if(foundRequestedCamera)
-                return;
-
-            if(!foundFallbackCamera){
-                __hidden_ecs_graphics::ApplyCameraMeshViewState(
-                    fallbackCameraState,
-                    transform,
-                    camera,
-                    fallbackAspectRatio
-                );
-                foundFallbackCamera = true;
-            }
-            if(mainCamera.valid() && entityId == mainCamera){
-                __hidden_ecs_graphics::ApplyCameraMeshViewState(
-                    state,
-                    transform,
-                    camera,
-                    fallbackAspectRatio
-                );
-                foundRequestedCamera = true;
-            }
-        }
-    );
-
-    if(foundRequestedCamera)
-        return state;
-    if(foundFallbackCamera)
-        return fallbackCameraState;
     return state;
 }
 
@@ -839,7 +759,8 @@ void RendererSystem::render(Core::IFramebuffer* framebuffer){
     }
 
     commandList->close();
-    device->executeCommandList(commandList.get());
+    Core::ICommandList* commandLists[] = { commandList.get() };
+    device->executeCommandLists(commandLists, 1);
 }
 
 void RendererSystem::backBufferResizing(){

@@ -1823,7 +1823,10 @@ static void TestRestSpaceHoleEditRejectsStaleOrMismatchedHit(TestContext& contex
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-int main(){
+static int EntryPoint(const isize argc, tchar** argv, void*){
+    (void)argc;
+    (void)argv;
+
     NWB::Core::Common::InitializerGuard commonInitializerGuard;
     if(!commonInitializerGuard.initialize()){
         NWB_CERR << "ecs graphics tests failed: common initialization failed\n";
@@ -1881,6 +1884,11 @@ int main(){
     NWB_COUT << "ecs graphics tests passed: " << context.passed << '\n';
     return 0;
 }
+
+
+#include <global/application_entry.h>
+
+NWB_DEFINE_APPLICATION_ENTRY_POINT(EntryPoint)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

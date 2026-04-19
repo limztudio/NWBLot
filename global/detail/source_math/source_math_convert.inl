@@ -26,13 +26,11 @@ inline Vector MathCallConv ConvertVectorIntToFloat
     assert(DivExponent < 32);
 #if defined(_MATH_NO_INTRINSICS_)
     float fScale = 1.0f / static_cast<float>(1U << DivExponent);
-    uint32_t ElementIndex = 0;
     Vector Result;
-    do{
-        auto iTemp = static_cast<int32_t>(VInt.vector4_u32[ElementIndex]);
-        Result.vector4_f32[ElementIndex] = static_cast<float>(iTemp)* fScale;
+    for(uint32_t elementIndex = 0; elementIndex < 4; ++elementIndex){
+        auto iTemp = static_cast<int32_t>(VInt.vector4_u32[elementIndex]);
+        Result.vector4_f32[elementIndex] = static_cast<float>(iTemp)* fScale;
     }
-    while(++ElementIndex < 4);
     return Result;
 #elif defined(_MATH_ARM_NEON_INTRINSICS_)
     float fScale = 1.0f / static_cast<float>(1U << DivExponent);
@@ -59,11 +57,10 @@ inline Vector MathCallConv ConvertVectorFloatToInt
 #if defined(_MATH_NO_INTRINSICS_)
     // Get the scalar factor.
     auto fScale = static_cast<float>(1U << MulExponent);
-    uint32_t ElementIndex = 0;
     Vector Result;
-    do{
+    for(uint32_t elementIndex = 0; elementIndex < 4; ++elementIndex){
         int32_t iResult;
-        float fTemp = VFloat.vector4_f32[ElementIndex] * fScale;
+        float fTemp = VFloat.vector4_f32[elementIndex] * fScale;
         if(fTemp <= -(65536.0f * 32768.0f)){
             iResult = (-0x7FFFFFFF) - 1;
         }else if(fTemp > (65536.0f * 32768.0f) - 128.0f){
@@ -71,9 +68,8 @@ inline Vector MathCallConv ConvertVectorFloatToInt
         }else{
             iResult = static_cast<int32_t>(fTemp);
         }
-        Result.vector4_u32[ElementIndex] = static_cast<uint32_t>(iResult);
+        Result.vector4_u32[elementIndex] = static_cast<uint32_t>(iResult);
     }
-    while(++ElementIndex < 4);
     return Result;
 #elif defined(_MATH_ARM_NEON_INTRINSICS_)
     float32x4_t vResult = vmulq_n_f32(VFloat, static_cast<float>(1U << MulExponent));
@@ -109,12 +105,10 @@ inline Vector MathCallConv ConvertVectorUIntToFloat
     assert(DivExponent < 32);
 #if defined(_MATH_NO_INTRINSICS_)
     float fScale = 1.0f / static_cast<float>(1U << DivExponent);
-    uint32_t ElementIndex = 0;
     Vector Result;
-    do{
-        Result.vector4_f32[ElementIndex] = static_cast<float>(VUInt.vector4_u32[ElementIndex])* fScale;
+    for(uint32_t elementIndex = 0; elementIndex < 4; ++elementIndex){
+        Result.vector4_f32[elementIndex] = static_cast<float>(VUInt.vector4_u32[elementIndex])* fScale;
     }
-    while(++ElementIndex < 4);
     return Result;
 #elif defined(_MATH_ARM_NEON_INTRINSICS_)
     float fScale = 1.0f / static_cast<float>(1U << DivExponent);
@@ -151,11 +145,10 @@ inline Vector MathCallConv ConvertVectorFloatToUInt
 #if defined(_MATH_NO_INTRINSICS_)
     // Get the scalar factor.
     auto fScale = static_cast<float>(1U << MulExponent);
-    uint32_t ElementIndex = 0;
     Vector Result;
-    do{
+    for(uint32_t elementIndex = 0; elementIndex < 4; ++elementIndex){
         uint32_t uResult;
-        float fTemp = VFloat.vector4_f32[ElementIndex] * fScale;
+        float fTemp = VFloat.vector4_f32[elementIndex] * fScale;
         if(fTemp <= 0.0f){
             uResult = 0;
         }else if(fTemp >= (65536.0f * 65536.0f)){
@@ -163,9 +156,8 @@ inline Vector MathCallConv ConvertVectorFloatToUInt
         }else{
             uResult = static_cast<uint32_t>(fTemp);
         }
-        Result.vector4_u32[ElementIndex] = uResult;
+        Result.vector4_u32[elementIndex] = uResult;
     }
-    while(++ElementIndex < 4);
     return Result;
 #elif defined(_MATH_ARM_NEON_INTRINSICS_)
     float32x4_t vResult = vmulq_n_f32(VFloat, static_cast<float>(1U << MulExponent));

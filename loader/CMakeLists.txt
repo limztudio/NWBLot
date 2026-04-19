@@ -9,6 +9,7 @@ target_sources(nwb_loader PRIVATE
 target_link_libraries(nwb_loader PRIVATE
     nwb_assets
     nwb_common
+    nwb_alloc
     nwb_ecs_graphics
     nwb_filesystem
     nwb_frame

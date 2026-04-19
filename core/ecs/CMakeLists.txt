@@ -13,4 +13,4 @@ target_sources(nwb_ecs PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/world.h"
     "${CMAKE_CURRENT_LIST_DIR}/ecs.h"
 )
-target_link_libraries(nwb_ecs PUBLIC nwb_alloc)
+target_link_libraries(nwb_ecs PUBLIC nwb_common nwb_alloc)

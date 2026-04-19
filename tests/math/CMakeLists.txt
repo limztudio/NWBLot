@@ -4,6 +4,7 @@ target_sources(nwb_math_tests PRIVATE
 )
 target_link_libraries(nwb_math_tests PRIVATE
     nwb_common
+    nwb_alloc
 )
 add_test(NAME nwb_math_tests COMMAND nwb_math_tests)
 
@@ -15,6 +16,7 @@ target_sources(nwb_math_scalar_tests PRIVATE
 target_compile_definitions(nwb_math_scalar_tests PRIVATE NWB_MATH_FORCE_SCALAR=1)
 target_link_libraries(nwb_math_scalar_tests PRIVATE
     nwb_common
+    nwb_alloc
 )
 add_test(NAME nwb_math_scalar_tests COMMAND nwb_math_scalar_tests)
 
@@ -28,6 +30,10 @@ target_sources(nwb_math_no_intrinsics_tests PRIVATE
 target_compile_definitions(nwb_math_no_intrinsics_tests PRIVATE
     NWB_MATH_FORCE_SCALAR=1
     _MATH_NO_INTRINSICS_=1
+)
+target_link_libraries(nwb_math_no_intrinsics_tests PRIVATE
+    nwb_common
+    nwb_alloc
 )
 add_test(NAME nwb_math_no_intrinsics_tests COMMAND nwb_math_no_intrinsics_tests)
 
@@ -54,6 +60,7 @@ if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
     endif()
     target_link_libraries(nwb_math_sse_tests PRIVATE
         nwb_common
+        nwb_alloc
     )
     add_test(NAME nwb_math_sse_tests COMMAND nwb_math_sse_tests)
 endif()

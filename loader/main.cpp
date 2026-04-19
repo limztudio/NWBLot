@@ -157,7 +157,7 @@ static int MainLogic(NotNull<const char*> logAddress, void* inst){
         NWB::Log::Client logger;
         if(!logger.init(logAddress))
             return -1;
-        NWB_LOGGER_REGISTER(&logger);
+        NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: connected to log server '{}'"), StringConvert(logAddress.get()));
 
         try{
@@ -243,10 +243,8 @@ static int MainLogic(NotNull<const char*> logAddress, void* inst){
         }
         catch(const GeneralException& e){
             NWB_LOGGER_FATAL(NWB_TEXT("Exception: {}"), StringConvert(e.what()));
-            NWB_LOGGER_REGISTER(nullptr);
             return -1;
         }
-        NWB_LOGGER_REGISTER(nullptr);
     }
 
     return 0;
@@ -258,39 +256,36 @@ static int MainLogic(NotNull<const char*> logAddress, void* inst){
 
 template<typename CharT>
 static int EntryPoint(isize argc, CharT** argv, void* inst){
-    int ret;
-
-    AString logAddress;
-    {
-        CLI::App app{ "loader" };
-
-        AString address = Get<static_cast<usize>(NWB::ArgCommand::LogAddress)>(NWB::g_ArgDefault);
-        u16 port = Get<static_cast<usize>(NWB::ArgCommand::LogPort)>(NWB::g_ArgDefault);
-        NWB::ArgAddOption<NWB::ArgCommand::LogAddress>(app, address);
-        NWB::ArgAddOption<NWB::ArgCommand::LogPort>(app, port);
-
-        try{
-            NWB::ArgParseApp(app, argc, argv);
-        }
-        catch(const CLI::ParseError& e){
-            app.exit(e, NWB_COUT, NWB_CERR);
-            return -1;
-        }
-
-        logAddress = StringFormat("{}:{}", address, port);
-    }
-
     try{
         NWB::Core::Common::InitializerGuard commonInitializerGuard;
         if(!commonInitializerGuard.initialize())
             return -1;
-        ret = MainLogic(MakeNotNull(logAddress.c_str()), inst);
+
+        AString logAddress;
+        {
+            CLI::App app{ "loader" };
+
+            AString address = Get<static_cast<usize>(NWB::ArgCommand::LogAddress)>(NWB::g_ArgDefault);
+            u16 port = Get<static_cast<usize>(NWB::ArgCommand::LogPort)>(NWB::g_ArgDefault);
+            NWB::ArgAddOption<NWB::ArgCommand::LogAddress>(app, address);
+            NWB::ArgAddOption<NWB::ArgCommand::LogPort>(app, port);
+
+            try{
+                NWB::ArgParseApp(app, argc, argv);
+            }
+            catch(const CLI::ParseError& e){
+                app.exit(e, NWB_COUT, NWB_CERR);
+                return -1;
+            }
+
+            logAddress = StringFormat("{}:{}", address, port);
+        }
+
+        return MainLogic(MakeNotNull(logAddress.c_str()), inst);
     }
     catch(...){
         return -1;
     }
-
-    return ret;
 }
 
 

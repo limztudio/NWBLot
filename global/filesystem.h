@@ -31,7 +31,9 @@ namespace GlobalFilesystemDetail{
 
 using InputFileStream = std::ifstream;
 using OutputFileStream = std::ofstream;
+using FileStream = std::fstream;
 using StringOutputStream = std::ostringstream;
+using StreamOffset = std::streamoff;
 using StreamSize = std::streamsize;
 
 

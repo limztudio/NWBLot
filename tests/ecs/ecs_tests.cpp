@@ -39,7 +39,11 @@ struct TestContext{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static usize s_ECSTestAllocationCalls = 0;
+
+
 static void* ECSTestAlloc(usize size){
+    ++s_ECSTestAllocationCalls;
     return NWB::Core::Alloc::CoreAlloc(size, "NWB::Tests::ECS::Alloc");
 }
 
@@ -48,6 +52,7 @@ static void ECSTestFree(void* ptr){
 }
 
 static void* ECSTestAllocAligned(usize size, usize align){
+    ++s_ECSTestAllocationCalls;
     return NWB::Core::Alloc::CoreAllocAligned(size, align, "NWB::Tests::ECS::AllocAligned");
 }
 
@@ -158,6 +163,29 @@ static void TestComponentStorageAndView(TestContext& context){
     NWB_ECS_TEST_CHECK(context, viewCount == 1);
 }
 
+static void TestEmptyViewDoesNotAllocateComponentPools(TestContext& context){
+    TestWorld testWorld;
+
+    const usize allocationCallsBefore = s_ECSTestAllocationCalls;
+    usize singleViewCount = 0;
+    usize multiViewCount = 0;
+
+    testWorld.world.view<PositionComponent>().each(
+        [&singleViewCount](NWB::Core::ECS::EntityID, PositionComponent&){
+            ++singleViewCount;
+        }
+    );
+    testWorld.world.view<PositionComponent, VelocityComponent>().each(
+        [&multiViewCount](NWB::Core::ECS::EntityID, PositionComponent&, VelocityComponent&){
+            ++multiViewCount;
+        }
+    );
+
+    NWB_ECS_TEST_CHECK(context, singleViewCount == 0);
+    NWB_ECS_TEST_CHECK(context, multiViewCount == 0);
+    NWB_ECS_TEST_CHECK(context, s_ECSTestAllocationCalls == allocationCallsBefore);
+}
+
 static void TestComponentLifetime(TestContext& context){
     TestWorld testWorld;
 
@@ -251,7 +279,10 @@ static void TestSystemTick(TestContext& context){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-int main(){
+static int EntryPoint(const isize argc, tchar** argv, void*){
+    (void)argc;
+    (void)argv;
+
     NWB::Core::Common::InitializerGuard commonInitializerGuard;
     if(!commonInitializerGuard.initialize()){
         NWB_CERR << "ecs tests failed: common initialization failed\n";
@@ -260,6 +291,7 @@ int main(){
 
     __hidden_ecs_tests::TestContext context;
     __hidden_ecs_tests::TestComponentStorageAndView(context);
+    __hidden_ecs_tests::TestEmptyViewDoesNotAllocateComponentPools(context);
     __hidden_ecs_tests::TestComponentLifetime(context);
     __hidden_ecs_tests::TestMessageBus(context);
     __hidden_ecs_tests::TestSystemTick(context);
@@ -272,6 +304,11 @@ int main(){
     NWB_COUT << "ecs tests passed: " << context.passed << '\n';
     return 0;
 }
+
+
+#include <global/application_entry.h>
+
+NWB_DEFINE_APPLICATION_ENTRY_POINT(EntryPoint)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

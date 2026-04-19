@@ -759,7 +759,8 @@ BufferHandle Graphics::setupBuffer(const BufferSetupDesc& desc)const{
     commandList->open();
     commandList->writeBuffer(buffer.get(), desc.data, desc.dataSize, desc.destOffsetBytes);
     commandList->close();
-    device->executeCommandList(commandList.get(), desc.queue);
+    ICommandList* commandLists[] = { commandList.get() };
+    device->executeCommandLists(commandLists, 1, desc.queue);
 
     return buffer;
 }
@@ -795,7 +796,8 @@ TextureHandle Graphics::setupTexture(const TextureSetupDesc& desc)const{
     commandList->open();
     commandList->writeTexture(texture.get(), desc.arraySlice, desc.mipLevel, desc.data, desc.rowPitch, desc.depthPitch);
     commandList->close();
-    device->executeCommandList(commandList.get(), desc.queue);
+    ICommandList* commandLists[] = { commandList.get() };
+    device->executeCommandLists(commandLists, 1, desc.queue);
 
     return texture;
 }

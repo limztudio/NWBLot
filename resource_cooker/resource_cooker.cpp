@@ -5,7 +5,6 @@
 #include "resource_cooker.h"
 
 #include <logger/client/logger.h>
-#include <core/common/common.h>
 #include <core/assets/asset_auto_registration.h>
 
 
@@ -35,10 +34,6 @@ static void ResourceCookFreeAligned(void* ptr){ NWB::Core::Alloc::CoreFreeAligne
 
 int ResourceCookerMain(int argc, char** argv){
     try{
-        NWB::Core::Common::InitializerGuard commonInitializerGuard;
-        if(!commonInitializerGuard.initialize())
-            return -1;
-
         NWB::Core::Alloc::CustomArena cookArena(
             __hidden_resource_cooker::ResourceCookAlloc,
             __hidden_resource_cooker::ResourceCookFree,

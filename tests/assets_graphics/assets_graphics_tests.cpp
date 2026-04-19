@@ -863,7 +863,7 @@ static void TestMinimalDeformableGeometryCodecRoundTrip(TestContext& context){
 static void TestDeformableGeometryCodecRejectsOldBinaryVersion(TestContext& context){
 #if defined(NWB_FINAL)
     CapturingLogger logger;
-    NWB_LOGGER_REGISTER(&logger);
+    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     NWB::Impl::DeformableGeometry geometry = BuildMinimalDeformableGeometry();
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, geometry.validatePayload());
@@ -876,8 +876,6 @@ static void TestDeformableGeometryCodecRejectsOldBinaryVersion(TestContext& cont
     UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !codec.deserialize(geometry.virtualPath(), binary, loadedAsset));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !loadedAsset);
-
-    NWB_LOGGER_REGISTER(nullptr);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 1u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("unsupported version 1")));
 #else
@@ -888,7 +886,7 @@ static void TestDeformableGeometryCodecRejectsOldBinaryVersion(TestContext& cont
 static void TestDeformableGeometryCodecRejectsMalformedCounts(TestContext& context){
 #if defined(NWB_FINAL)
     CapturingLogger logger;
-    NWB_LOGGER_REGISTER(&logger);
+    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     NWB::Impl::DeformableGeometry geometry = BuildMinimalDeformableGeometry();
     NWB::Impl::DeformableGeometryAssetCodec codec;
@@ -902,8 +900,6 @@ static void TestDeformableGeometryCodecRejectsMalformedCounts(TestContext& conte
     UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !codec.deserialize(geometry.virtualPath(), binary, loadedAsset));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !loadedAsset);
-
-    NWB_LOGGER_REGISTER(nullptr);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 1u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("payload counts exceed u32 limits")));
 #else
@@ -914,7 +910,7 @@ static void TestDeformableGeometryCodecRejectsMalformedCounts(TestContext& conte
 static void TestDeformableGeometryCodecRejectsMalformedDependentCounts(TestContext& context){
 #if defined(NWB_FINAL)
     CapturingLogger logger;
-    NWB_LOGGER_REGISTER(&logger);
+    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     NWB::Impl::DeformableGeometry geometry = BuildValidDeformableGeometry();
     NWB::Impl::DeformableGeometryAssetCodec codec;
@@ -959,8 +955,6 @@ static void TestDeformableGeometryCodecRejectsMalformedDependentCounts(TestConte
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !codec.deserialize(geometry.virtualPath(), malformed, loadedAsset));
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !loadedAsset);
     }
-
-    NWB_LOGGER_REGISTER(nullptr);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 3u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("skin count must be empty or match vertex count")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("source sample count must be empty or match vertex count")));
@@ -972,7 +966,7 @@ static void TestDeformableGeometryCodecRejectsMalformedDependentCounts(TestConte
 
 static void TestDeformableGeometryCookerMinimalAsset(TestContext& context){
     CapturingLogger logger;
-    NWB_LOGGER_REGISTER(&logger);
+    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
     Path root;
@@ -989,7 +983,6 @@ static void TestDeformableGeometryCookerMinimalAsset(TestContext& context){
     if(!cooked){
         ErrorCode errorCode;
         (void)RemoveAllIfExists(root, errorCode);
-        NWB_LOGGER_REGISTER(nullptr);
         return;
     }
 
@@ -1027,13 +1020,12 @@ static void TestDeformableGeometryCookerMinimalAsset(TestContext& context){
 
     ErrorCode errorCode;
     (void)RemoveAllIfExists(root, errorCode);
-    NWB_LOGGER_REGISTER(nullptr);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 0u);
 }
 
 static void TestDeformableGeometryCookerU32IndexType(TestContext& context){
     CapturingLogger logger;
-    NWB_LOGGER_REGISTER(&logger);
+    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
     Path root;
@@ -1050,7 +1042,6 @@ static void TestDeformableGeometryCookerU32IndexType(TestContext& context){
     if(!cooked){
         ErrorCode errorCode;
         (void)RemoveAllIfExists(root, errorCode);
-        NWB_LOGGER_REGISTER(nullptr);
         return;
     }
 
@@ -1081,13 +1072,12 @@ static void TestDeformableGeometryCookerU32IndexType(TestContext& context){
 
     ErrorCode errorCode;
     (void)RemoveAllIfExists(root, errorCode);
-    NWB_LOGGER_REGISTER(nullptr);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 0u);
 }
 
 static void TestDeformableGeometryCookerExplicitEmptyOptionalLists(TestContext& context){
     CapturingLogger logger;
-    NWB_LOGGER_REGISTER(&logger);
+    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
     auto expectCookedDefaultOptionals = [&](const AStringView metaText, const AStringView caseName){
@@ -1146,14 +1136,12 @@ static void TestDeformableGeometryCookerExplicitEmptyOptionalLists(TestContext& 
 
     expectCookedDefaultOptionals(s_EmptyListOptionalDeformableMeta, "empty_optional_lists");
     expectCookedDefaultOptionals(s_EmptyMapOptionalDeformableMeta, "empty_optional_maps");
-
-    NWB_LOGGER_REGISTER(nullptr);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 0u);
 }
 
 static void TestDeformableGeometryCookerFullAsset(TestContext& context){
     CapturingLogger logger;
-    NWB_LOGGER_REGISTER(&logger);
+    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
     Path root;
@@ -1170,7 +1158,6 @@ static void TestDeformableGeometryCookerFullAsset(TestContext& context){
     if(!cooked){
         ErrorCode errorCode;
         (void)RemoveAllIfExists(root, errorCode);
-        NWB_LOGGER_REGISTER(nullptr);
         return;
     }
 
@@ -1220,14 +1207,13 @@ static void TestDeformableGeometryCookerFullAsset(TestContext& context){
 
     ErrorCode errorCode;
     (void)RemoveAllIfExists(root, errorCode);
-    NWB_LOGGER_REGISTER(nullptr);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 0u);
 }
 
 static void TestDeformableGeometryCookerValidationFailures(TestContext& context){
 #if defined(NWB_FINAL)
     CapturingLogger logger;
-    NWB_LOGGER_REGISTER(&logger);
+    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
     auto expectCookFailure = [&](const AStringView metaText, const AStringView caseName){
@@ -1251,8 +1237,6 @@ static void TestDeformableGeometryCookerValidationFailures(TestContext& context)
     expectCookFailure(s_MismatchedSourceSamplesDeformableMeta, "mismatched_source_samples");
     expectCookFailure(s_MismatchedMorphDeformableMeta, "mismatched_morph");
     expectCookFailure(s_MissingMorphTangentDeformableMeta, "missing_morph_tangent");
-
-    NWB_LOGGER_REGISTER(nullptr);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() >= 6u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("rest vertex stream counts must match")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("'index_type' must be 'u16' or 'u32'")));
@@ -1271,7 +1255,7 @@ static void TestDeformableGeometryCookerValidationFailures(TestContext& context)
 static void TestDeformableGeometryValidationFailures(TestContext& context){
 #if defined(NWB_FINAL)
     CapturingLogger logger;
-    NWB_LOGGER_REGISTER(&logger);
+    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     {
         NWB::Impl::DeformableGeometry geometry = BuildValidDeformableGeometry();
@@ -1424,8 +1408,6 @@ static void TestDeformableGeometryValidationFailures(TestContext& context){
         geometry.setMorphs(Move(morphs));
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !geometry.validatePayload());
     }
-
-    NWB_LOGGER_REGISTER(nullptr);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 19u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("degenerate normal/tangent frame")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("invalid normal/tangent frame")));
@@ -1449,7 +1431,10 @@ static void TestDeformableGeometryValidationFailures(TestContext& context){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-int main(){
+static int EntryPoint(const isize argc, tchar** argv, void*){
+    (void)argc;
+    (void)argv;
+
     NWB::Core::Common::InitializerGuard commonInitializerGuard;
     if(!commonInitializerGuard.initialize()){
         NWB_CERR << "assets graphics tests failed: common initialization failed\n";
@@ -1483,6 +1468,11 @@ int main(){
     NWB_COUT << "assets graphics tests passed: " << context.passed << '\n';
     return 0;
 }
+
+
+#include <global/application_entry.h>
+
+NWB_DEFINE_APPLICATION_ENTRY_POINT(EntryPoint)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

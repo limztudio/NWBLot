@@ -6,6 +6,7 @@ target_compile_definitions(nwb_assets_graphics_tests PRIVATE NWB_COOK=1)
 target_link_libraries(nwb_assets_graphics_tests PRIVATE
     nwb_assets_graphics_cook
     nwb_common
+    nwb_alloc
 )
 add_test(NAME nwb_assets_graphics_tests COMMAND nwb_assets_graphics_tests)
 set_tests_properties(nwb_assets_graphics_tests PROPERTIES RUN_SERIAL TRUE)

@@ -10,8 +10,6 @@
 #include <core/alloc/core.h>
 
 #include <cerrno>
-#include <cstring>
-#include <fstream>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -143,10 +141,6 @@ static bool IsAsciiAlphaNumeric(const char ch){
         || (ch >= 'a' && ch <= 'z');
 }
 
-static bool IsAsciiDigit(const char ch){
-    return ch >= '0' && ch <= '9';
-}
-
 static bool ValidVolumeName(AStringView name){
     if(name.empty())
         return false;
@@ -156,32 +150,6 @@ static bool ValidVolumeName(AStringView name){
         if(alphaNum || ch == '_' || ch == '-')
             continue;
         return false;
-    }
-
-    return true;
-}
-
-static bool IsLegacyVolumeSegmentFileName(const AStringView fileName, const AStringView volumeName){
-    const AString prefix = StringFormat("{}_", volumeName);
-    constexpr AStringView suffix = ".vol";
-
-    if(fileName.size() <= prefix.size() + suffix.size())
-        return false;
-    if(fileName.substr(0, prefix.size()) != AStringView(prefix.data(), prefix.size()))
-        return false;
-    if(fileName.substr(fileName.size() - suffix.size(), suffix.size()) != suffix)
-        return false;
-
-    const AStringView indexText = fileName.substr(prefix.size(), fileName.size() - prefix.size() - suffix.size());
-    usize parsedIndex = 0;
-    for(const char ch : indexText){
-        if(!IsAsciiDigit(ch))
-            return false;
-
-        const usize digit = static_cast<usize>(ch - '0');
-        if(parsedIndex > (Limit<usize>::s_Max - digit) / 10u)
-            return false;
-        parsedIndex = parsedIndex * 10u + digit;
     }
 
     return true;
@@ -203,17 +171,17 @@ static u64 DefaultMetadataBytes(const u64 segmentSize){
     return output;
 }
 
-static bool ToStreamOff(const u64 value, std::streamoff& out){
-    if(!CanRepresentU64<std::streamoff>(value))
+static bool ToStreamOff(const u64 value, GlobalFilesystemDetail::StreamOffset& out){
+    if(!CanRepresentU64<GlobalFilesystemDetail::StreamOffset>(value))
         return false;
-    out = static_cast<std::streamoff>(value);
+    out = static_cast<GlobalFilesystemDetail::StreamOffset>(value);
     return true;
 }
 
-static bool ToStreamSize(const u64 value, std::streamsize& out){
-    if(!CanRepresentU64<std::streamsize>(value))
+static bool ToStreamSize(const u64 value, GlobalFilesystemDetail::StreamSize& out){
+    if(!CanRepresentU64<GlobalFilesystemDetail::StreamSize>(value))
         return false;
-    out = static_cast<std::streamsize>(value);
+    out = static_cast<GlobalFilesystemDetail::StreamSize>(value);
     return true;
 }
 
@@ -307,8 +275,8 @@ static bool ForEachSegmentChunk(
         const u64 segmentOffset = currentOffset % segmentSize;
         const u64 chunkBytes = Min(remainingBytes, segmentSize - segmentOffset);
 
-        std::streamoff streamOffset = 0;
-        std::streamsize streamChunkSize = 0;
+        GlobalFilesystemDetail::StreamOffset streamOffset = 0;
+        GlobalFilesystemDetail::StreamSize streamChunkSize = 0;
         if(!ToStreamOff(segmentOffset, streamOffset)){
             LogFailure(volumeName, operation, "segment offset cannot be represented as stream offset");
             return false;
@@ -333,7 +301,7 @@ static bool TransferSegmentChunk(
     const AStringView volumeName,
     const SegmentPaths& segmentPaths,
     const usize segmentIndex,
-    const std::streamoff streamOffset,
+    const GlobalFilesystemDetail::StreamOffset streamOffset,
     const AStringView openOperation,
     const AStringView seekOperation,
     Stream& stream,
@@ -359,14 +327,24 @@ static bool ReadSegmentBytes(
     const AStringView volumeName,
     const SegmentPaths& segmentPaths,
     const usize segmentIndex,
-    const std::streamoff streamOffset,
-    const std::streamsize streamChunkSize,
+    const GlobalFilesystemDetail::StreamOffset streamOffset,
+    const GlobalFilesystemDetail::StreamSize streamChunkSize,
     const u64 chunkBytes,
     u8*& outputBytes)
 {
-    std::ifstream stream(segmentPaths[segmentIndex], std::ios::binary);
-    return TransferSegmentChunk(volumeName, segmentPaths, segmentIndex, streamOffset, "readBytes:open", "readBytes:seek", stream,
-        [](auto& stream, const std::streamoff offset){ stream.seekg(offset); },
+    GlobalFilesystemDetail::InputFileStream stream(
+        segmentPaths[segmentIndex],
+        GlobalFilesystemDetail::InputFileStream::binary
+    );
+    return TransferSegmentChunk(
+        volumeName,
+        segmentPaths,
+        segmentIndex,
+        streamOffset,
+        "readBytes:open",
+        "readBytes:seek",
+        stream,
+        [](auto& stream, const GlobalFilesystemDetail::StreamOffset offset){ stream.seekg(offset); },
         [&](auto& stream){
             stream.read(reinterpret_cast<char*>(outputBytes), streamChunkSize);
             if(stream.gcount() != streamChunkSize){
@@ -383,7 +361,8 @@ static bool ReadSegmentBytes(
 
             outputBytes += chunkBytes;
             return true;
-        });
+        }
+    );
 }
 
 template<typename SegmentPaths>
@@ -391,14 +370,26 @@ static bool WriteSegmentBytes(
     const AStringView volumeName,
     const SegmentPaths& segmentPaths,
     const usize segmentIndex,
-    const std::streamoff streamOffset,
-    const std::streamsize streamChunkSize,
+    const GlobalFilesystemDetail::StreamOffset streamOffset,
+    const GlobalFilesystemDetail::StreamSize streamChunkSize,
     const u64 chunkBytes,
     const u8*& inputBytes)
 {
-    std::fstream stream(segmentPaths[segmentIndex], std::ios::binary | std::ios::in | std::ios::out);
-    return TransferSegmentChunk(volumeName, segmentPaths, segmentIndex, streamOffset, "writeBytes:open", "writeBytes:seek", stream,
-        [](auto& stream, const std::streamoff offset){ stream.seekp(offset); },
+    GlobalFilesystemDetail::FileStream stream(
+        segmentPaths[segmentIndex],
+        GlobalFilesystemDetail::FileStream::binary
+            | GlobalFilesystemDetail::FileStream::in
+            | GlobalFilesystemDetail::FileStream::out
+    );
+    return TransferSegmentChunk(
+        volumeName,
+        segmentPaths,
+        segmentIndex,
+        streamOffset,
+        "writeBytes:open",
+        "writeBytes:seek",
+        stream,
+        [](auto& stream, const GlobalFilesystemDetail::StreamOffset offset){ stream.seekp(offset); },
         [&](auto& stream){
             stream.write(reinterpret_cast<const char*>(inputBytes), streamChunkSize);
             if(!stream.good()){
@@ -414,7 +405,8 @@ static bool WriteSegmentBytes(
 
             inputBytes += chunkBytes;
             return true;
-        });
+        }
+    );
 }
 
 static void* BuildArenaAlloc(usize size){ return NWB::Core::Alloc::CoreAlloc(size, "filesystem_build_volume"); }
@@ -518,29 +510,6 @@ static bool MoveExistingVolumeSegments(const Path& fromDirectory, const Path& to
         return true;
     };
 
-    for(const auto& directoryEntry : DirectoryIterator(fromDirectory, errorCode)){
-        if(errorCode)
-            break;
-
-        const Path currentPath = directoryEntry.path();
-        const AString fileName = currentPath.filename().string();
-        if(!IsLegacyVolumeSegmentFileName(fileName, volumeName))
-            continue;
-
-        if(!moveSegmentToBackup(currentPath))
-            return false;
-    }
-    if(errorCode){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Filesystem volume publish: failed to iterate output directory '{}': {}"),
-            PathToString<tchar>(fromDirectory),
-            StringConvert(errorCode.message())
-        );
-        rollbackMovedFiles();
-        return false;
-    }
-
-    errorCode.clear();
     for(usize segmentIndex = 0;; ++segmentIndex){
         const Path currentPath = fromDirectory / MakeVolumeSegmentFileName(volumeName, segmentIndex);
         const bool exists = FileExists(currentPath, errorCode);
@@ -707,34 +676,6 @@ static bool RemoveExistingVolumeSegments(const Path& outputDirectory, const AStr
         return false;
     }
 
-    for(const auto& directoryEntry : DirectoryIterator(outputDirectory, errorCode)){
-        if(errorCode)
-            break;
-
-        const Path currentPath = directoryEntry.path();
-        const AString fileName = currentPath.filename().string();
-        if(!IsLegacyVolumeSegmentFileName(fileName, volumeName))
-            continue;
-
-        if(!RemoveFile(currentPath, errorCode)){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Failed to remove old segment '{}' : {}"),
-                PathToString<tchar>(currentPath),
-                StringConvert(FilesystemMutationFailureDetail(errorCode, "segment was not present"))
-            );
-            return false;
-        }
-    }
-    if(errorCode){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Failed to iterate output directory '{}' : {}"),
-            PathToString<tchar>(outputDirectory),
-            StringConvert(errorCode.message())
-        );
-        return false;
-    }
-
-    errorCode.clear();
     for(usize segmentIndex = 0;; ++segmentIndex){
         const Path hashedPath = outputDirectory / MakeVolumeSegmentFileName(volumeName, segmentIndex);
 
@@ -1415,116 +1356,6 @@ bool VolumeFileSystem::scanSegmentsLocked(){
         }
     }
 
-    if(!m_segmentPaths.empty())
-        return true;
-
-    Vector<Pair<usize, Path>> sortedSegments;
-    HashSet<usize> seenIndices;
-    const AString prefix = m_volumeName + "_";
-    constexpr AStringView suffix = ".vol";
-
-    errorCode.clear();
-    DirectoryIterator directoryIt(m_mountDirectory, errorCode);
-    DirectoryIterator end;
-
-    if(errorCode){
-        __hidden_filesystem::LogFailureWithFsError(m_volumeName, "scanSegments:open_directory", m_mountDirectory, errorCode);
-        return false;
-    }
-
-    for(; directoryIt != end; directoryIt.increment(errorCode)){
-        if(errorCode){
-            __hidden_filesystem::LogFailureWithFsError(m_volumeName, "scanSegments:iterate", m_mountDirectory, errorCode);
-            return false;
-        }
-
-        errorCode.clear();
-        const bool isRegularFile = IsRegularFile(directoryIt->path(), errorCode);
-        if(errorCode){
-            __hidden_filesystem::LogFailureWithFsError(m_volumeName, "scanSegments:is_regular_file", directoryIt->path(), errorCode);
-            return false;
-        }
-        if(!isRegularFile)
-            continue;
-
-        const AString fileName = directoryIt->path().filename().string();
-        if(fileName.size() <= prefix.size() + suffix.size())
-            continue;
-        if(fileName.compare(0, prefix.size(), prefix) != 0)
-            continue;
-        if(fileName.compare(fileName.size() - suffix.size(), suffix.size(), suffix) != 0)
-            continue;
-
-        const AString indexString = fileName.substr(prefix.size(), fileName.size() - prefix.size() - suffix.size());
-        if(indexString.empty())
-            continue;
-
-        bool numeric = true;
-        for(const char ch : indexString){
-            if(__hidden_filesystem::IsAsciiDigit(ch))
-                continue;
-            numeric = false;
-            break;
-        }
-        if(!numeric)
-            continue;
-
-        usize index = 0;
-        try{
-            const u64 parsed = Stoull(indexString);
-            if(parsed > static_cast<u64>(Limit<usize>::s_Max))
-                continue;
-            index = static_cast<usize>(parsed);
-        }
-        catch(...){
-            continue;
-        }
-
-        if(seenIndices.find(index) != seenIndices.end())
-        {
-            NWB_LOGGER_WARNING(
-                NWB_TEXT("Filesystem('{}'): scanSegments failed: duplicate segment index {}"),
-                StringConvert(m_volumeName),
-                index
-            );
-            return false;
-        }
-        seenIndices.insert(index);
-
-        sortedSegments.push_back(MakePair(index, directoryIt->path()));
-    }
-
-    if(sortedSegments.empty())
-        return true;
-
-    Sort(
-        sortedSegments.begin(),
-        sortedSegments.end(),
-        [](const Pair<usize, Path>& lhs, const Pair<usize, Path>& rhs){
-            return lhs.first() < rhs.first();
-        }
-    );
-
-    if(sortedSegments.front().first() != 0){
-        __hidden_filesystem::LogFailure(m_volumeName, "scanSegments", "segment index 0 is missing");
-        return false;
-    }
-
-    usize expectedIndex = 0;
-    for(const auto& segment : sortedSegments){
-        if(segment.first() != expectedIndex){
-            NWB_LOGGER_WARNING(
-                NWB_TEXT("Filesystem('{}'): scanSegments failed: expected segment index {}, found {}"),
-                StringConvert(m_volumeName),
-                expectedIndex,
-                segment.first()
-            );
-            return false;
-        }
-        m_segmentPaths.push_back(segment.second());
-        ++expectedIndex;
-    }
-
     return true;
 }
 
@@ -1544,7 +1375,10 @@ bool VolumeFileSystem::createSegmentLocked(const usize segmentIndex){
     }
 
     const Path path = segmentPath(segmentIndex);
-    std::ofstream stream(path, std::ios::binary | std::ios::trunc);
+    GlobalFilesystemDetail::OutputFileStream stream(
+        path,
+        GlobalFilesystemDetail::OutputFileStream::binary | GlobalFilesystemDetail::OutputFileStream::trunc
+    );
     if(!stream.is_open()){
         __hidden_filesystem::LogFailureWithPath(
             m_volumeName,
@@ -1555,7 +1389,7 @@ bool VolumeFileSystem::createSegmentLocked(const usize segmentIndex){
         return false;
     }
 
-    std::streamoff streamOffset = 0;
+    GlobalFilesystemDetail::StreamOffset streamOffset = 0;
     if(!__hidden_filesystem::ToStreamOff(m_segmentSize - 1, streamOffset)){
         NWB_LOGGER_WARNING(
             NWB_TEXT("Filesystem('{}'): createSegment failed: segment size {} cannot be represented as stream offset"),
@@ -1883,10 +1717,30 @@ bool VolumeFileSystem::readBytesLocked(const u64 offset, void* data, const u64 b
     }
 
     u8* outputBytes = static_cast<u8*>(data);
-    return __hidden_filesystem::ForEachSegmentChunk(m_volumeName, "readBytes", m_segmentPaths, m_segmentSize, offset, byteCount,
-        [&](const usize segmentIndex, const std::streamoff streamOffset, const std::streamsize streamChunkSize, const u64 chunkBytes){
-        return __hidden_filesystem::ReadSegmentBytes(m_volumeName, m_segmentPaths, segmentIndex, streamOffset, streamChunkSize, chunkBytes, outputBytes);
-    });
+    return __hidden_filesystem::ForEachSegmentChunk(
+        m_volumeName,
+        "readBytes",
+        m_segmentPaths,
+        m_segmentSize,
+        offset,
+        byteCount,
+        [&](
+            const usize segmentIndex,
+            const GlobalFilesystemDetail::StreamOffset streamOffset,
+            const GlobalFilesystemDetail::StreamSize streamChunkSize,
+            const u64 chunkBytes
+        ){
+            return __hidden_filesystem::ReadSegmentBytes(
+                m_volumeName,
+                m_segmentPaths,
+                segmentIndex,
+                streamOffset,
+                streamChunkSize,
+                chunkBytes,
+                outputBytes
+            );
+        }
+    );
 }
 
 bool VolumeFileSystem::writeBytesLocked(const u64 offset, const void* data, const u64 byteCount){
@@ -1908,10 +1762,30 @@ bool VolumeFileSystem::writeBytesLocked(const u64 offset, const void* data, cons
     }
 
     const u8* inputBytes = static_cast<const u8*>(data);
-    return __hidden_filesystem::ForEachSegmentChunk(m_volumeName, "writeBytes", m_segmentPaths, m_segmentSize, offset, byteCount,
-        [&](const usize segmentIndex, const std::streamoff streamOffset, const std::streamsize streamChunkSize, const u64 chunkBytes){
-        return __hidden_filesystem::WriteSegmentBytes(m_volumeName, m_segmentPaths, segmentIndex, streamOffset, streamChunkSize, chunkBytes, inputBytes);
-    });
+    return __hidden_filesystem::ForEachSegmentChunk(
+        m_volumeName,
+        "writeBytes",
+        m_segmentPaths,
+        m_segmentSize,
+        offset,
+        byteCount,
+        [&](
+            const usize segmentIndex,
+            const GlobalFilesystemDetail::StreamOffset streamOffset,
+            const GlobalFilesystemDetail::StreamSize streamChunkSize,
+            const u64 chunkBytes
+        ){
+            return __hidden_filesystem::WriteSegmentBytes(
+                m_volumeName,
+                m_segmentPaths,
+                segmentIndex,
+                streamOffset,
+                streamChunkSize,
+                chunkBytes,
+                inputBytes
+            );
+        }
+    );
 }
 
 bool VolumeFileSystem::moveBytesLocked(const u64 destinationOffset, const u64 sourceOffset, const u64 byteCount){

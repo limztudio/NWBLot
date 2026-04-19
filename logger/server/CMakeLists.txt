@@ -18,5 +18,5 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         "${CMAKE_CURRENT_LIST_DIR}/frame_linux.cpp"
     )
 endif()
-target_link_libraries(nwb_logserver PRIVATE nwb::microhttpd nwb_alloc nwb_common nwb::cli11_headers)
+target_link_libraries(nwb_logserver PRIVATE nwb::microhttpd nwb_common nwb_alloc nwb::cli11_headers)
 

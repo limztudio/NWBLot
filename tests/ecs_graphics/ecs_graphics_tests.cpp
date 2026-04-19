@@ -1132,6 +1132,24 @@ static void TestSurfaceEditFlowAttachesAndPersistsAccessory(TestContext& context
     NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::CommitHole(instance, session, mismatchedEllipseParams));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.editRevision == 0u);
 
+    NWB::Impl::DeformableHoleEditParams epsilonMismatchedParams = params;
+    epsilonMismatchedParams.ellipseRatio += 0.00001f;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::CommitHole(instance, session, epsilonMismatchedParams));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.editRevision == 0u);
+
+    NWB::Impl::DeformableHoleEditParams epsilonMismatchedHitParams = params;
+    epsilonMismatchedHitParams.posedHit.bary[0] += 0.00001f;
+    epsilonMismatchedHitParams.posedHit.bary[1] -= 0.00001f;
+    epsilonMismatchedHitParams.posedHit.restSample.bary[0] += 0.00001f;
+    epsilonMismatchedHitParams.posedHit.restSample.bary[1] -= 0.00001f;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::CommitHole(instance, session, epsilonMismatchedHitParams));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.editRevision == 0u);
+
+    NWB::Impl::DeformableHoleEditParams signedZeroMismatchedHitParams = params;
+    signedZeroMismatchedHitParams.posedHit.normal.x = -0.0f;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::CommitHole(instance, session, signedZeroMismatchedHitParams));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.editRevision == 0u);
+
     NWB::Impl::DeformableHoleEditResult result;
     NWB::Impl::DeformableSurfaceEditRecord record;
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::CommitHole(instance, session, params, &result, &record));
@@ -1299,13 +1317,14 @@ static void TestSurfaceEditFlowAttachesAndPersistsAccessory(TestContext& context
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(baseTransform.scale.y, 0.12f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(baseTransform.scale.z, 0.12f));
 
-    instance.indices.push_back(0u);
-    instance.indices.push_back(1u);
-    instance.indices.push_back(5u);
+    NWB::Impl::DeformableRuntimeMeshInstance strayWallTriangleInstance = instance;
+    strayWallTriangleInstance.indices.push_back(0u);
+    strayWallTriangleInstance.indices.push_back(1u);
+    strayWallTriangleInstance.indices.push_back(5u);
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        NWB::Impl::ResolveAccessoryAttachmentTransform(
-            instance,
+        !NWB::Impl::ResolveAccessoryAttachmentTransform(
+            strayWallTriangleInstance,
             NWB::Impl::DeformablePickingInputs{},
             attachment,
             baseTransform

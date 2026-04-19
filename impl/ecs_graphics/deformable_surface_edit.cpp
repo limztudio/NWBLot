@@ -221,33 +221,45 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
     ;
 }
 
-[[nodiscard]] bool MatchingFloat3Data(const Float3Data& lhs, const Float3Data& rhs, const f32 epsilon){
-    return DeformableValidation::AbsF32(lhs.x - rhs.x) <= epsilon
-        && DeformableValidation::AbsF32(lhs.y - rhs.y) <= epsilon
-        && DeformableValidation::AbsF32(lhs.z - rhs.z) <= epsilon
+[[nodiscard]] bool ExactF32(const f32 lhs, const f32 rhs){
+    return NWB_MEMCMP(&lhs, &rhs, sizeof(lhs)) == 0;
+}
+
+[[nodiscard]] bool ExactFloat3Data(const Float3Data& lhs, const Float3Data& rhs){
+    return ExactF32(lhs.x, rhs.x)
+        && ExactF32(lhs.y, rhs.y)
+        && ExactF32(lhs.z, rhs.z)
     ;
 }
 
-[[nodiscard]] bool MatchingPosedHit(const DeformablePosedHit& lhs, const DeformablePosedHit& rhs){
+[[nodiscard]] bool ExactSourceSample(const SourceSample& lhs, const SourceSample& rhs){
+    return lhs.sourceTri == rhs.sourceTri
+        && ExactF32(lhs.bary[0], rhs.bary[0])
+        && ExactF32(lhs.bary[1], rhs.bary[1])
+        && ExactF32(lhs.bary[2], rhs.bary[2])
+    ;
+}
+
+[[nodiscard]] bool ExactPosedHit(const DeformablePosedHit& lhs, const DeformablePosedHit& rhs){
     return lhs.entity == rhs.entity
         && lhs.runtimeMesh == rhs.runtimeMesh
         && lhs.editRevision == rhs.editRevision
         && lhs.triangle == rhs.triangle
-        && DeformableValidation::AbsF32(lhs.bary[0] - rhs.bary[0]) <= DeformableValidation::s_BarycentricSumEpsilon
-        && DeformableValidation::AbsF32(lhs.bary[1] - rhs.bary[1]) <= DeformableValidation::s_BarycentricSumEpsilon
-        && DeformableValidation::AbsF32(lhs.bary[2] - rhs.bary[2]) <= DeformableValidation::s_BarycentricSumEpsilon
-        && DeformableValidation::AbsF32(lhs.distance - rhs.distance) <= DeformableValidation::s_BarycentricSumEpsilon
-        && MatchingFloat3Data(lhs.position, rhs.position, DeformableValidation::s_BarycentricSumEpsilon)
-        && MatchingFloat3Data(lhs.normal, rhs.normal, DeformableValidation::s_RestFrameOrthogonalityEpsilon)
-        && MatchingSourceSample(lhs.restSample, rhs.restSample)
+        && ExactF32(lhs.bary[0], rhs.bary[0])
+        && ExactF32(lhs.bary[1], rhs.bary[1])
+        && ExactF32(lhs.bary[2], rhs.bary[2])
+        && ExactF32(lhs.distance, rhs.distance)
+        && ExactFloat3Data(lhs.position, rhs.position)
+        && ExactFloat3Data(lhs.normal, rhs.normal)
+        && ExactSourceSample(lhs.restSample, rhs.restSample)
     ;
 }
 
-[[nodiscard]] bool MatchingHoleEditParams(const DeformableHoleEditParams& lhs, const DeformableHoleEditParams& rhs){
-    return MatchingPosedHit(lhs.posedHit, rhs.posedHit)
-        && DeformableValidation::AbsF32(lhs.radius - rhs.radius) <= DeformableValidation::s_BarycentricSumEpsilon
-        && DeformableValidation::AbsF32(lhs.ellipseRatio - rhs.ellipseRatio) <= DeformableValidation::s_BarycentricSumEpsilon
-        && DeformableValidation::AbsF32(lhs.depth - rhs.depth) <= DeformableValidation::s_BarycentricSumEpsilon
+[[nodiscard]] bool ExactHoleEditParams(const DeformableHoleEditParams& lhs, const DeformableHoleEditParams& rhs){
+    return ExactPosedHit(lhs.posedHit, rhs.posedHit)
+        && ExactF32(lhs.radius, rhs.radius)
+        && ExactF32(lhs.ellipseRatio, rhs.ellipseRatio)
+        && ExactF32(lhs.depth, rhs.depth)
     ;
 }
 
@@ -340,7 +352,7 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
 {
     return ValidateSurfaceEditSession(instance, session)
         && ValidateParams(instance, params)
-        && MatchingPosedHit(session.hit, params.posedHit)
+        && ExactPosedHit(session.hit, params.posedHit)
     ;
 }
 
@@ -351,7 +363,7 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
 {
     return ValidateSurfaceEditSessionParams(instance, session, params)
         && session.previewed
-        && MatchingHoleEditParams(session.previewParams, params)
+        && ExactHoleEditParams(session.previewParams, params)
     ;
 }
 
@@ -448,15 +460,8 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
         return false;
 
     const usize wallPairCount = wallVertexCount / 2u;
-    const usize lastIndexBase = instance.indices.size() - wallIndexCount;
-    if(RuntimeMeshWallTrianglePairsMatchAt(instance, lastIndexBase, firstWallVertex, wallPairCount))
-        return true;
-
-    for(usize indexBase = 0u; indexBase < lastIndexBase; indexBase += 3u){
-        if(RuntimeMeshWallTrianglePairsMatchAt(instance, indexBase, firstWallVertex, wallPairCount))
-            return true;
-    }
-    return false;
+    const usize indexBase = instance.indices.size() - wallIndexCount;
+    return RuntimeMeshWallTrianglePairsMatchAt(instance, indexBase, firstWallVertex, wallPairCount);
 }
 
 [[nodiscard]] bool RuntimeMeshHasWallTrianglePairs(

@@ -7,10 +7,10 @@ target_sources(nwb_resource_cooker PRIVATE
 )
 target_link_libraries(nwb_resource_cooker PRIVATE
     nwb_assets
+    nwb_common
     nwb_alloc
     nwb_filesystem
     nwb_logclient
-    nwb_common
     nwb::tbb
     nwb_metascript
     nwb_graphics

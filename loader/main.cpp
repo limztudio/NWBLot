@@ -67,6 +67,11 @@ struct UpdateCallbackContext{
     NWB::IProjectEntryCallbacks* callbacks = nullptr;
 };
 
+struct LoaderOptions{
+    AString logAddress;
+    bool enableGpuDebug = false;
+};
+
 bool ProjectTickCallback(void* userData, f32 delta){
     NWB_FATAL_ASSERT_MSG(userData, NWB_TEXT("ProjectTickCallback received null user data"));
     auto* updateContext = static_cast<UpdateCallbackContext*>(userData);
@@ -142,6 +147,32 @@ bool LoadShaderArchiveRecords(
     return NWB::Core::ShaderArchive::deserializeIndex(indexBinary, outRecords);
 }
 
+void AddDebugCommandLineOptions(CLI::App& app, LoaderOptions& options){
+#if defined(NWB_DEBUG)
+    app.add_flag("--gpudbg", options.enableGpuDebug, "Enable Vulkan validation layer");
+#else
+    (void)app;
+    (void)options;
+#endif
+}
+
+bool ApplyGraphicsOptions(NWB::Core::Graphics& graphics, const LoaderOptions& options){
+#if defined(NWB_DEBUG)
+    if(options.enableGpuDebug){
+        if(!graphics.setDebugRuntimeEnabled(true)){
+            NWB_LOGGER_FATAL(NWB_TEXT("Loader: GPU debug runtime must be enabled before graphics initialization"));
+            return false;
+        }
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: GPU debug validation enabled"));
+    }
+#else
+    (void)graphics;
+    (void)options;
+#endif
+
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -152,13 +183,13 @@ bool LoadShaderArchiveRecords(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static int MainLogic(NotNull<const char*> logAddress, void* inst){
+static int MainLogic(const __hidden_loader::LoaderOptions& options, void* inst){
     {
         NWB::Log::Client logger;
-        if(!logger.init(logAddress))
+        if(!logger.init(MakeNotNull(options.logAddress.c_str())))
             return -1;
         NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: connected to log server '{}'"), StringConvert(logAddress.get()));
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: connected to log server '{}'"), StringConvert(options.logAddress.c_str()));
 
         try{
             const NWB::ProjectFrameClientSize frameClientSize = NWB::QueryProjectFrameClientSize();
@@ -170,6 +201,8 @@ static int MainLogic(NotNull<const char*> logAddress, void* inst){
             NWB::Core::Frame frame(inst, frameClientSize.width, frameClientSize.height);
             const Path resourceMountDirectory = __hidden_loader::ResolveResourceMountDirectory();
             frame.graphics().setPipelineCacheDirectory(resourceMountDirectory);
+            if(!__hidden_loader::ApplyGraphicsOptions(frame.graphics(), options))
+                return -1;
 
             if(!frame.init())
                 return -1;
@@ -261,7 +294,7 @@ static int EntryPoint(isize argc, CharT** argv, void* inst){
         if(!commonInitializerGuard.initialize())
             return -1;
 
-        AString logAddress;
+        __hidden_loader::LoaderOptions options;
         {
             CLI::App app{ "loader" };
 
@@ -269,6 +302,7 @@ static int EntryPoint(isize argc, CharT** argv, void* inst){
             u16 port = Get<static_cast<usize>(NWB::ArgCommand::LogPort)>(NWB::g_ArgDefault);
             NWB::ArgAddOption<NWB::ArgCommand::LogAddress>(app, address);
             NWB::ArgAddOption<NWB::ArgCommand::LogPort>(app, port);
+            __hidden_loader::AddDebugCommandLineOptions(app, options);
 
             try{
                 NWB::ArgParseApp(app, argc, argv);
@@ -278,10 +312,10 @@ static int EntryPoint(isize argc, CharT** argv, void* inst){
                 return -1;
             }
 
-            logAddress = StringFormat("{}:{}", address, port);
+            options.logAddress = StringFormat("{}:{}", address, port);
         }
 
-        return MainLogic(MakeNotNull(logAddress.c_str()), inst);
+        return MainLogic(options, inst);
     }
     catch(...){
         return -1;

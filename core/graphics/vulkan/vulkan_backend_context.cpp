@@ -128,6 +128,78 @@ static bool SupportsRequestedValue(VkBool32 requested, VkBool32 supported){
     return requested != VK_TRUE || supported == VK_TRUE;
 }
 
+static const char* BoolToString(bool value){
+    return value ? "yes" : "no";
+}
+
+static AString VulkanVersionToString(u32 version){
+    AStringStream ss;
+    ss << VK_API_VERSION_MAJOR(version)
+       << "."
+       << VK_API_VERSION_MINOR(version)
+       << "."
+       << VK_API_VERSION_PATCH(version);
+    if(VK_API_VERSION_VARIANT(version) != 0)
+        ss << " variant " << VK_API_VERSION_VARIANT(version);
+    return ss.str();
+}
+
+static const char* PhysicalDeviceTypeToString(VkPhysicalDeviceType type){
+    switch(type){
+    case VK_PHYSICAL_DEVICE_TYPE_OTHER: return "other";
+    case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU: return "integrated GPU";
+    case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU: return "discrete GPU";
+    case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU: return "virtual GPU";
+    case VK_PHYSICAL_DEVICE_TYPE_CPU: return "CPU";
+    default: return "unknown";
+    }
+}
+
+static const char* SwapChainFormatToString(VkFormat format){
+    switch(format){
+    case VK_FORMAT_R8G8B8A8_UNORM: return "VK_FORMAT_R8G8B8A8_UNORM";
+    case VK_FORMAT_R8G8B8A8_SRGB: return "VK_FORMAT_R8G8B8A8_SRGB";
+    case VK_FORMAT_B8G8R8A8_UNORM: return "VK_FORMAT_B8G8R8A8_UNORM";
+    case VK_FORMAT_B8G8R8A8_SRGB: return "VK_FORMAT_B8G8R8A8_SRGB";
+    default: return "unknown";
+    }
+}
+
+static const char* ColorSpaceToString(VkColorSpaceKHR colorSpace){
+    switch(colorSpace){
+    case VK_COLOR_SPACE_SRGB_NONLINEAR_KHR: return "VK_COLOR_SPACE_SRGB_NONLINEAR_KHR";
+    default: return "unknown";
+    }
+}
+
+static const char* PresentModeToString(VkPresentModeKHR mode){
+    switch(mode){
+    case VK_PRESENT_MODE_IMMEDIATE_KHR: return "VK_PRESENT_MODE_IMMEDIATE_KHR";
+    case VK_PRESENT_MODE_MAILBOX_KHR: return "VK_PRESENT_MODE_MAILBOX_KHR";
+    case VK_PRESENT_MODE_FIFO_KHR: return "VK_PRESENT_MODE_FIFO_KHR";
+    case VK_PRESENT_MODE_FIFO_RELAXED_KHR: return "VK_PRESENT_MODE_FIFO_RELAXED_KHR";
+    default: return "unknown";
+    }
+}
+
+static u64 GetDeviceLocalMemoryBytes(VkPhysicalDevice physicalDevice){
+    VkPhysicalDeviceMemoryProperties memoryProperties;
+    vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memoryProperties);
+
+    u64 bytes = 0;
+    for(uint32_t heapIndex = 0; heapIndex < memoryProperties.memoryHeapCount; ++heapIndex){
+        const VkMemoryHeap& heap = memoryProperties.memoryHeaps[heapIndex];
+        if(heap.flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT)
+            bytes += static_cast<u64>(heap.size);
+    }
+
+    return bytes;
+}
+
+static u64 BytesToMiB(u64 bytes){
+    return bytes / (1024ull * 1024ull);
+}
+
 static bool SupportsRequestedOptionalDeviceFeature(const OptionalDeviceFeatureSet& requested, const OptionalDeviceFeatureSet& supported, DeviceExtensionFeature::Enum feature){
     switch(feature){
     case DeviceExtensionFeature::AccelerationStructure:
@@ -584,6 +656,18 @@ bool BackendContext::createVulkanInstance(){
         return false;
     }
 
+    if(m_deviceParams.enableDebugRuntime){
+        AStringStream ss;
+        ss << "Vulkan GPU debug: instance setup"
+           << "\n    Vulkan API: " << VulkanDetail::VulkanVersionToString(applicationInfo.apiVersion)
+           << "\n    validation layer enabled: " << VulkanDetail::BoolToString(isLayerEnabled("VK_LAYER_KHRONOS_validation"))
+           << "\n    debug report extension enabled: " << VulkanDetail::BoolToString(isInstanceExtensionEnabled(VK_EXT_DEBUG_REPORT_EXTENSION_NAME))
+           << "\n    debug utils extension enabled: " << VulkanDetail::BoolToString(isInstanceExtensionEnabled(VK_EXT_DEBUG_UTILS_EXTENSION_NAME))
+           << "\n    enabled instance extensions: " << m_enabledExtensions.instance.size()
+           << "\n    enabled layers: " << m_enabledExtensions.layers.size();
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("{}"), StringConvert(ss.str()));
+    }
+
     VkInstanceCreateInfo createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     createInfo.pApplicationInfo = &applicationInfo;
@@ -612,8 +696,10 @@ void BackendContext::installDebugCallback(){
     VkResult res = VK_SUCCESS;
 
     auto* createFunc = reinterpret_cast<PFN_vkCreateDebugReportCallbackEXT>(vkGetInstanceProcAddr(m_vulkanInstance, "vkCreateDebugReportCallbackEXT"));
-    if(!createFunc)
+    if(!createFunc){
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan GPU debug: vkCreateDebugReportCallbackEXT is unavailable; validation messages will not be routed to the logger."));
         return;
+    }
 
     VkDebugReportCallbackCreateInfoEXT createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;
@@ -625,6 +711,9 @@ void BackendContext::installDebugCallback(){
     if(res != VK_SUCCESS){
         m_debugReportCallback = VK_NULL_HANDLE;
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to install debug callback. {}"), ResultToString(res));
+    }
+    else{
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Vulkan GPU debug: debug report callback installed."));
     }
 }
 
@@ -1184,6 +1273,48 @@ bool BackendContext::createVulkanDevice(){
 
     m_bufferDeviceAddressSupported = vulkan12features.bufferDeviceAddress == VK_TRUE;
 
+    if(m_deviceParams.enableDebugRuntime){
+        const u64 deviceLocalMemoryMiB = VulkanDetail::BytesToMiB(VulkanDetail::GetDeviceLocalMemoryBytes(m_vulkanPhysicalDevice));
+
+        AStringStream ss;
+        ss << "Vulkan GPU debug: selected device"
+           << "\n    name: " << physicalDeviceProperties.deviceName
+           << "\n    type: " << VulkanDetail::PhysicalDeviceTypeToString(physicalDeviceProperties.deviceType)
+           << "\n    vendor/device id: 0x" << std::hex << physicalDeviceProperties.vendorID << "/0x" << physicalDeviceProperties.deviceID << std::dec
+           << "\n    Vulkan API: " << VulkanDetail::VulkanVersionToString(physicalDeviceProperties.apiVersion)
+           << "\n    driver version: " << physicalDeviceProperties.driverVersion
+           << "\n    device-local memory: " << deviceLocalMemoryMiB << " MiB"
+           << "\n    queue families: graphics=" << m_graphicsQueueFamily;
+
+        if(m_deviceParams.headlessDevice)
+            ss << " present=headless";
+        else
+            ss << " present=" << m_presentQueueFamily;
+
+        if(m_deviceParams.enableComputeQueue)
+            ss << " compute=" << m_computeQueueFamily;
+        else
+            ss << " compute=not-requested";
+
+        if(m_deviceParams.enableCopyQueue)
+            ss << " transfer=" << m_transferQueueFamily;
+        else
+            ss << " transfer=not-requested";
+
+        ss << "\n    key features: dynamicRendering=" << VulkanDetail::BoolToString(m_dynamicRenderingSupported)
+           << " synchronization2=" << VulkanDetail::BoolToString(m_synchronization2Supported)
+           << " bufferDeviceAddress=" << VulkanDetail::BoolToString(m_bufferDeviceAddressSupported)
+           << " maintenance4=" << VulkanDetail::BoolToString(maintenance4Enabled && maintenance4Features.maintenance4 == VK_TRUE)
+           << "\n    optional paths: debugMarker=" << VulkanDetail::BoolToString(isDeviceExtensionEnabled(VK_EXT_DEBUG_MARKER_EXTENSION_NAME))
+           << " descriptorHeap=" << VulkanDetail::BoolToString(isDeviceExtensionEnabled(VK_EXT_DESCRIPTOR_HEAP_EXTENSION_NAME))
+           << " meshShader=" << VulkanDetail::BoolToString(isDeviceExtensionEnabled(VK_EXT_MESH_SHADER_EXTENSION_NAME))
+           << " rayTracingPipeline=" << VulkanDetail::BoolToString(isDeviceExtensionEnabled(VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME))
+           << " rayQuery=" << VulkanDetail::BoolToString(isDeviceExtensionEnabled(VK_KHR_RAY_QUERY_EXTENSION_NAME))
+           << " cooperativeVector=" << VulkanDetail::BoolToString(coopVecExtensionEnabled && cooperativeVectorFeatures.cooperativeVector == VK_TRUE)
+           << "\n    enabled device extensions: " << m_enabledExtensions.device.size();
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("{}"), StringConvert(ss.str()));
+    }
+
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Vulkan: created device '{}'"), m_rendererString);
 
     return true;
@@ -1489,6 +1620,24 @@ bool BackendContext::createVulkanSwapChain(){
     }
 
     m_swapChainIndex = 0;
+
+    if(m_deviceParams.enableDebugRuntime){
+        AStringStream ss;
+        ss << "Vulkan GPU debug: swap chain"
+           << "\n    extent: " << extent.width << "x" << extent.height
+           << "\n    format: " << VulkanDetail::SwapChainFormatToString(m_swapChainFormat.format)
+           << " (" << static_cast<i32>(m_swapChainFormat.format) << ")"
+           << "\n    color space: " << VulkanDetail::ColorSpaceToString(m_swapChainFormat.colorSpace)
+           << " (" << static_cast<i32>(m_swapChainFormat.colorSpace) << ")"
+           << "\n    present mode: " << VulkanDetail::PresentModeToString(selectedPresentMode)
+           << " (" << static_cast<i32>(selectedPresentMode) << ")"
+           << "\n    requested images: " << m_deviceParams.swapChainBufferCount
+           << "\n    created images: " << imageCount
+           << "\n    mutable format: " << VulkanDetail::BoolToString(m_swapChainMutableFormatSupported)
+           << "\n    queue sharing: " << (enableSwapChainSharing ? "concurrent" : "exclusive");
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("{}"), StringConvert(ss.str()));
+    }
+
     return true;
 }
 
@@ -1499,7 +1648,7 @@ bool BackendContext::createVulkanSwapChain(){
 
 bool BackendContext::createInstance(){
     if(m_deviceParams.enableDebugRuntime){
-        m_enabledExtensions.instance.insert("VK_EXT_debug_report");
+        m_enabledExtensions.instance.insert(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
         m_enabledExtensions.layers.insert("VK_LAYER_KHRONOS_validation");
     }
 

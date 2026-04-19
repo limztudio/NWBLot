@@ -272,8 +272,20 @@ static void AddVulkanDeviceExtensionOnce(Vector<AString>& extensions, const char
     extensions.push_back(extensionName);
 }
 
-static void CopyInstanceParameters(DeviceCreationParameters& dst, const InstanceParameters& src){
+static constexpr bool CanEnableDebugRuntime(){
+#if defined(NWB_DEBUG)
+    return true;
+#else
+    return false;
+#endif
+}
+
+static bool CopyInstanceParameters(DeviceCreationParameters& dst, const InstanceParameters& src){
+    if(src.enableDebugRuntime && !CanEnableDebugRuntime())
+        return false;
+
     static_cast<InstanceParameters&>(dst) = src;
+    return true;
 }
 
 static UniquePtr<IGraphicsBackend> CreateDefaultBackend(
@@ -396,12 +408,25 @@ bool Graphics::createHeadlessDevice(){
 }
 
 bool Graphics::createInstance(const InstanceParameters& params){
-    __hidden_graphics::CopyInstanceParameters(m_deviceCreationParams, params);
+    if(!__hidden_graphics::CopyInstanceParameters(m_deviceCreationParams, params)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: debug runtime is only available in dbg builds"));
+        return false;
+    }
 
     if(!ensureBackend().createInstance())
         return false;
 
     m_instanceCreated = true;
+    return true;
+}
+
+bool Graphics::setDebugRuntimeEnabled(bool enabled){
+    if(enabled && !__hidden_graphics::CanEnableDebugRuntime())
+        return false;
+    if(m_instanceCreated && m_deviceCreationParams.enableDebugRuntime != enabled)
+        return false;
+
+    m_deviceCreationParams.enableDebugRuntime = enabled;
     return true;
 }
 

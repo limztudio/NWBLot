@@ -49,11 +49,12 @@ namespace RenderPath{
 
 
 struct InstanceGpuData{
-    f32 rotation[4] = { 0.f, 0.f, 0.f, 1.f };
-    f32 translation[4] = { 0.f, 0.f, 0.f, 0.f };
-    f32 scale[4] = { 1.f, 1.f, 1.f, 0.f };
+    AlignedFloat4Data rotation = AlignedFloat4Data(0.f, 0.f, 0.f, 1.f);
+    AlignedFloat4Data translation = AlignedFloat4Data(0.f, 0.f, 0.f, 0.f);
+    AlignedFloat4Data scale = AlignedFloat4Data(1.f, 1.f, 1.f, 0.f);
 };
 static_assert(sizeof(InstanceGpuData) == sizeof(f32) * 12u, "InstanceGpuData layout must match the mesh shaders");
+static_assert(alignof(InstanceGpuData) >= alignof(AlignedFloat4Data), "InstanceGpuData must stay SIMD-aligned");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -196,6 +197,7 @@ private:
         Core::IBindingSet* passBindingSet = nullptr;
         const AvboitFrameTargets* avboitTargets = nullptr;
         const Core::ViewportState& viewportState;
+        f32 meshViewAspectRatio = 1.f;
     };
 
     struct DeferredFrameTargets{
@@ -294,6 +296,7 @@ private:
     );
     [[nodiscard]] usize visibleRendererCount();
     [[nodiscard]] bool ensureInstanceBufferCapacity(usize instanceCount);
+    [[nodiscard]] bool ensureMeshViewBuffer(Core::ICommandList& commandList, f32 fallbackAspectRatio);
     [[nodiscard]] bool uploadInstanceBuffer(Core::ICommandList& commandList, const InstanceGpuDataVector& instanceData);
     void invalidateGeometryBindingSets();
     [[nodiscard]] bool findMaterialPassDrawItemResources(
@@ -356,6 +359,7 @@ private:
     Core::BindingLayoutHandle m_avboitAccumulateBindingLayout;
     Core::SamplerHandle m_deferredSampler;
     Core::BufferHandle m_instanceBuffer;
+    Core::BufferHandle m_meshViewBuffer;
     Core::ShaderHandle m_emulationVertexShader;
     Core::ShaderHandle m_deferredCompositeVertexShader;
     Core::ShaderHandle m_deferredCompositePixelShader;

@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "entity_id.h"
+#include "global.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -17,16 +17,36 @@ NWB_ECS_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct ProjectComponent{
-    EntityID mainCamera = ENTITY_ID_INVALID;
+namespace ECSDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct ComponentTypeTag{};
+struct SystemTypeTag{};
+struct MessageTypeTag{};
+
+
+template<typename Tag>
+class TypeCounter{
+public:
+    template<typename T>
+    static usize id(){
+        static const usize value = s_NextId++;
+        return value;
+    }
+
+
+private:
+    inline static Atomic<usize> s_NextId{ 0 };
 };
 
-static_assert(IsStandardLayout_V<ProjectComponent>, "ProjectComponent must stay layout-stable for ECS storage");
-static_assert(IsTriviallyCopyable_V<ProjectComponent>, "ProjectComponent must stay cheap to move in dense ECS storage");
-static_assert(
-    sizeof(ProjectComponent) == sizeof(EntityID),
-    "ProjectComponent must only contain shared project entity references"
-);
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -14,15 +14,26 @@ using TestbedGeometryRef = NWB::Core::Assets::AssetRef<NWB::Impl::Geometry>;
 using TestbedDeformableGeometryRef = NWB::Core::Assets::AssetRef<NWB::Impl::DeformableGeometry>;
 using TestbedMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
 
-struct EditorVec3{
-    f32 x = 0.0f;
-    f32 y = 0.0f;
-    f32 z = 0.0f;
+struct EditorVec3 : public AlignedFloat3Data{
+    constexpr EditorVec3()noexcept
+        : AlignedFloat3Data(0.0f, 0.0f, 0.0f)
+    {}
+    constexpr EditorVec3(const f32 _x, const f32 _y, const f32 _z)noexcept
+        : AlignedFloat3Data(_x, _y, _z)
+    {}
 };
+static_assert(IsStandardLayout_V<EditorVec3>, "EditorVec3 must stay layout-stable");
+static_assert(IsTriviallyCopyable_V<EditorVec3>, "EditorVec3 must stay cheap to pass by value");
+static_assert(alignof(EditorVec3) >= alignof(AlignedFloat3Data), "EditorVec3 must stay SIMD-aligned");
+static_assert(sizeof(EditorVec3) == sizeof(AlignedFloat3Data), "EditorVec3 must stay one aligned float3 wide");
 
 
 static constexpr f32 s_CameraStartDepth = 2.2f;
 static constexpr f32 s_CameraMoveEpsilon = 0.000001f;
+static constexpr f32 s_FlyCameraMoveSpeed = 2.5f;
+static constexpr f32 s_FlyCameraBoostMultiplier = 4.0f;
+static constexpr f32 s_FlyCameraMouseSensitivityRadiansPerPixel = SourceMath::ConvertToRadians(0.12f);
+static constexpr f32 s_FlyCameraPitchLimitRadians = SourceMath::ConvertToRadians(89.0f);
 static constexpr f32 s_DefaultDirectionalLightPitch = -0.65f;
 static constexpr f32 s_DefaultDirectionalLightYaw = 0.65f;
 static constexpr f32 s_DefaultDirectionalLightIntensity = 2.0f;
@@ -79,16 +90,16 @@ static constexpr f32 s_AccessoryUniformScale = 0.16f;
     return true;
 }
 
-[[nodiscard]] static NWB::Core::ECS::EntityID ResolveProjectMainCamera(NWB::Core::ECS::World& world){
+[[nodiscard]] static NWB::Core::ECS::EntityID ResolveSceneMainCamera(NWB::Core::ECS::World& world){
     NWB::Core::ECS::EntityID mainCamera = NWB::Core::ECS::ENTITY_ID_INVALID;
-    bool foundProject = false;
-    world.view<NWB::Core::ECS::ProjectComponent>().each(
-        [&](NWB::Core::ECS::EntityID, NWB::Core::ECS::ProjectComponent& project){
-            if(foundProject)
+    bool foundScene = false;
+    world.view<NWB::Core::Scene::SceneComponent>().each(
+        [&](NWB::Core::ECS::EntityID, NWB::Core::Scene::SceneComponent& scene){
+            if(foundScene)
                 return;
 
-            foundProject = true;
-            mainCamera = project.mainCamera;
+            foundScene = true;
+            mainCamera = scene.mainCamera;
         }
     );
     return mainCamera;
@@ -110,11 +121,13 @@ static constexpr f32 s_AccessoryUniformScale = 0.16f;
 [[nodiscard]] static EditorVec3 RotateDirectionByQuaternion(
     const EditorVec3& value,
     const AlignedFloat4Data& rotation){
-    const Float3Data direction(value.x, value.y, value.z);
-    Float3Data rotatedDirection;
-    SourceMath::StoreFloat3(
+    AlignedFloat3Data rotatedDirection;
+    SourceMath::StoreFloat3A(
         &rotatedDirection,
-        SourceMath::Vector3Rotate(SourceMath::LoadFloat3(&direction), SourceMath::LoadFloat4A(&rotation))
+        SourceMath::Vector3Rotate(
+            SourceMath::LoadFloat3A(static_cast<const AlignedFloat3Data*>(&value)),
+            SourceMath::LoadFloat4A(&rotation)
+        )
     );
     return EditorVec3{ rotatedDirection.x, rotatedDirection.y, rotatedDirection.z };
 }
@@ -124,16 +137,16 @@ static constexpr f32 s_AccessoryUniformScale = 0.16f;
     const f64 cursorX,
     const f64 cursorY,
     NWB::Core::ECSGraphics::DeformablePickingRay& outRay){
-    const NWB::Core::ECS::EntityID mainCamera = ResolveProjectMainCamera(world);
-    NWB::Core::ECS::TransformComponent* cameraTransform = nullptr;
-    NWB::Core::ECS::CameraComponent* cameraComponent = nullptr;
+    const NWB::Core::ECS::EntityID mainCamera = ResolveSceneMainCamera(world);
+    NWB::Core::Scene::TransformComponent* cameraTransform = nullptr;
+    NWB::Core::Scene::CameraComponent* cameraComponent = nullptr;
     bool foundCamera = false;
 
-    world.view<NWB::Core::ECS::TransformComponent, NWB::Core::ECS::CameraComponent>().each(
+    world.view<NWB::Core::Scene::TransformComponent, NWB::Core::Scene::CameraComponent>().each(
         [&](
             NWB::Core::ECS::EntityID entity,
-            NWB::Core::ECS::TransformComponent& transform,
-            NWB::Core::ECS::CameraComponent& camera
+            NWB::Core::Scene::TransformComponent& transform,
+            NWB::Core::Scene::CameraComponent& camera
         ){
             if(foundCamera)
                 return;
@@ -153,13 +166,17 @@ static constexpr f32 s_AccessoryUniformScale = 0.16f;
     const f32 height = static_cast<f32>(clientSize.height != 0u ? clientSize.height : 1u);
     const f32 ndcX = (2.0f * static_cast<f32>(cursorX) / width) - 1.0f;
     const f32 ndcY = 1.0f - (2.0f * static_cast<f32>(cursorY) / height);
-    const f32 aspect = width / height;
+    const f32 framebufferAspect = width / height;
+    const f32 aspect = IsFinite(cameraComponent->aspectRatio()) && cameraComponent->aspectRatio() > 0.0f
+        ? cameraComponent->aspectRatio()
+        : framebufferAspect
+    ;
     f32 tanHalfFov = 0.0f;
-    if(!TanHalfFov(cameraComponent->verticalFovRadians, tanHalfFov)
-        || !IsFinite(cameraComponent->nearPlane)
-        || !IsFinite(cameraComponent->farPlane)
-        || cameraComponent->nearPlane < 0.0f
-        || cameraComponent->nearPlane >= cameraComponent->farPlane
+    if(!TanHalfFov(cameraComponent->verticalFovRadians(), tanHalfFov)
+        || !IsFinite(cameraComponent->nearPlane())
+        || !IsFinite(cameraComponent->farPlane())
+        || cameraComponent->nearPlane() < 0.0f
+        || cameraComponent->nearPlane() >= cameraComponent->farPlane()
     )
         return false;
 
@@ -174,104 +191,91 @@ static constexpr f32 s_AccessoryUniformScale = 0.16f;
         EditorVec3{ 0.0f, 0.0f, 1.0f }
     );
 
-    outRay.origin = Float3Data(cameraTransform->position.x, cameraTransform->position.y, cameraTransform->position.z);
-    outRay.direction = Float3Data(worldDirection.x, worldDirection.y, worldDirection.z);
-    outRay.minDistance = cameraComponent->nearPlane;
-    outRay.maxDistance = cameraComponent->farPlane;
+    outRay.setOrigin(Float3Data(cameraTransform->position.x, cameraTransform->position.y, cameraTransform->position.z));
+    outRay.setDirection(Float3Data(worldDirection.x, worldDirection.y, worldDirection.z));
+    outRay.setMinDistance(cameraComponent->nearPlane());
+    outRay.setMaxDistance(cameraComponent->farPlane());
     return true;
 }
 
-static void ApplyFpsCameraInput(
-    NWB::Core::ECS::TransformComponent& transform,
-    NWB::Core::ECS::FpsCameraControllerComponent& controller,
+static void ApplyFlyCameraInput(
+    NWB::Core::Scene::TransformComponent& transform,
+    f32& yawRadians,
+    f32& pitchRadians,
     const f32 rightAxis,
     const f32 forwardAxis,
-    const f32 verticalAxis,
     const bool boosted,
     const f32 mouseDeltaX,
     const f32 mouseDeltaY,
     const f32 delta
 ){
-    controller.yawRadians += mouseDeltaX * controller.mouseSensitivityRadiansPerPixel;
-    controller.pitchRadians = ClampPitch(
-        controller.pitchRadians - mouseDeltaY * controller.mouseSensitivityRadiansPerPixel,
-        controller.pitchLimitRadians
+    yawRadians += mouseDeltaX * s_FlyCameraMouseSensitivityRadiansPerPixel;
+    pitchRadians = ClampPitch(
+        pitchRadians - mouseDeltaY * s_FlyCameraMouseSensitivityRadiansPerPixel,
+        s_FlyCameraPitchLimitRadians
     );
-
-    const f32 sinYaw = Sin(controller.yawRadians);
-    const f32 cosYaw = Cos(controller.yawRadians);
-    const f32 sinPitch = Sin(controller.pitchRadians);
-    const f32 cosPitch = Cos(controller.pitchRadians);
-    const f32 forwardX = sinYaw * cosPitch;
-    const f32 forwardY = sinPitch;
-    const f32 forwardZ = cosYaw * cosPitch;
-    const f32 rightX = cosYaw;
-    const f32 rightZ = -sinYaw;
-
-    f32 moveX = rightAxis * rightX + forwardAxis * forwardX;
-    f32 moveY = verticalAxis + forwardAxis * forwardY;
-    f32 moveZ = rightAxis * rightZ + forwardAxis * forwardZ;
-    const f32 moveLengthSq = moveX * moveX + moveY * moveY + moveZ * moveZ;
-    if(moveLengthSq > s_CameraMoveEpsilon){
-        const f32 invMoveLength = 1.0f / Sqrt(moveLengthSq);
-        const f32 speed = controller.moveSpeed * (boosted ? controller.boostMultiplier : 1.0f);
-        const f32 moveScale = speed * Max(delta, 0.0f) * invMoveLength;
-        moveX *= moveScale;
-        moveY *= moveScale;
-        moveZ *= moveScale;
-
-        transform.position.x += moveX;
-        transform.position.y += moveY;
-        transform.position.z += moveZ;
-    }
 
     SourceMath::StoreFloat4A(
         &transform.rotation,
-        SourceMath::QuaternionRotationRollPitchYaw(controller.pitchRadians, controller.yawRadians, 0.0f)
+        SourceMath::QuaternionRotationRollPitchYaw(pitchRadians, yawRadians, 0.0f)
     );
+
+    const f32 moveLengthSq = rightAxis * rightAxis + forwardAxis * forwardAxis;
+    if(moveLengthSq > s_CameraMoveEpsilon){
+        const f32 invMoveLength = 1.0f / Sqrt(moveLengthSq);
+        const f32 speed = s_FlyCameraMoveSpeed * (boosted ? s_FlyCameraBoostMultiplier : 1.0f);
+        const f32 moveScale = speed * Max(delta, 0.0f) * invMoveLength;
+
+        const AlignedFloat3Data localMove(rightAxis * moveScale, 0.0f, forwardAxis * moveScale);
+        AlignedFloat3Data worldMove;
+        SourceMath::StoreFloat3A(
+            &worldMove,
+            SourceMath::Vector3Rotate(SourceMath::LoadFloat3A(&localMove), SourceMath::LoadFloat4A(&transform.rotation))
+        );
+
+        transform.position.x += worldMove.x;
+        transform.position.y += worldMove.y;
+        transform.position.z += worldMove.z;
+    }
 }
 
-static void ApplyFpsCameraInputToControlledCamera(
+static void ApplyFlyCameraInputToMainCamera(
     NWB::Core::ECS::World& world,
+    f32& yawRadians,
+    f32& pitchRadians,
     const f32 rightAxis,
     const f32 forwardAxis,
-    const f32 verticalAxis,
     const bool boosted,
     const f32 mouseDeltaX,
     const f32 mouseDeltaY,
     const f32 delta
 ){
-    const NWB::Core::ECS::EntityID requestedCamera = ResolveProjectMainCamera(world);
-    NWB::Core::ECS::TransformComponent* fallbackTransform = nullptr;
-    NWB::Core::ECS::FpsCameraControllerComponent* fallbackController = nullptr;
+    const NWB::Core::ECS::EntityID requestedCamera = ResolveSceneMainCamera(world);
+    NWB::Core::Scene::TransformComponent* fallbackTransform = nullptr;
     bool appliedRequestedCamera = false;
 
     world.view<
-        NWB::Core::ECS::TransformComponent,
-        NWB::Core::ECS::CameraComponent,
-        NWB::Core::ECS::FpsCameraControllerComponent
+        NWB::Core::Scene::TransformComponent,
+        NWB::Core::Scene::CameraComponent
     >().each(
         [&](
             NWB::Core::ECS::EntityID entityId,
-            NWB::Core::ECS::TransformComponent& transform,
-            NWB::Core::ECS::CameraComponent& camera,
-            NWB::Core::ECS::FpsCameraControllerComponent& controller
+            NWB::Core::Scene::TransformComponent& transform,
+            NWB::Core::Scene::CameraComponent& camera
         ){
             if(appliedRequestedCamera)
                 return;
 
             (void)camera;
-            if(!fallbackTransform){
+            if(!fallbackTransform)
                 fallbackTransform = &transform;
-                fallbackController = &controller;
-            }
             if(requestedCamera.valid() && entityId == requestedCamera){
-                ApplyFpsCameraInput(
+                ApplyFlyCameraInput(
                     transform,
-                    controller,
+                    yawRadians,
+                    pitchRadians,
                     rightAxis,
                     forwardAxis,
-                    verticalAxis,
                     boosted,
                     mouseDeltaX,
                     mouseDeltaY,
@@ -284,15 +288,15 @@ static void ApplyFpsCameraInputToControlledCamera(
 
     if(appliedRequestedCamera)
         return;
-    if(!fallbackTransform || !fallbackController)
+    if(!fallbackTransform)
         return;
 
-    ApplyFpsCameraInput(
+    ApplyFlyCameraInput(
         *fallbackTransform,
-        *fallbackController,
+        yawRadians,
+        pitchRadians,
         rightAxis,
         forwardAxis,
-        verticalAxis,
         boosted,
         mouseDeltaX,
         mouseDeltaY,
@@ -302,16 +306,15 @@ static void ApplyFpsCameraInputToControlledCamera(
 
 [[nodiscard]] static NWB::Core::ECS::EntityID CreateMainCameraEntity(NWB::Core::ECS::World& world){
     auto cameraEntity = world.createEntity();
-    auto& transform = cameraEntity.addComponent<NWB::Core::ECS::TransformComponent>();
+    auto& transform = cameraEntity.addComponent<NWB::Core::Scene::TransformComponent>();
     transform.position = AlignedFloat3Data(0.0f, 0.0f, -s_CameraStartDepth);
-    cameraEntity.addComponent<NWB::Core::ECS::CameraComponent>();
-    cameraEntity.addComponent<NWB::Core::ECS::FpsCameraControllerComponent>();
+    cameraEntity.addComponent<NWB::Core::Scene::CameraComponent>();
     return cameraEntity.id();
 }
 
 static void CreateDefaultDirectionalLightEntity(NWB::Core::ECS::World& world){
     auto lightEntity = world.createEntity();
-    auto& transform = lightEntity.addComponent<NWB::Core::ECS::TransformComponent>();
+    auto& transform = lightEntity.addComponent<NWB::Core::Scene::TransformComponent>();
     SourceMath::StoreFloat4A(
         &transform.rotation,
         SourceMath::QuaternionRotationRollPitchYaw(
@@ -321,10 +324,10 @@ static void CreateDefaultDirectionalLightEntity(NWB::Core::ECS::World& world){
         )
     );
 
-    auto& light = lightEntity.addComponent<NWB::Core::ECS::LightComponent>();
-    light.type = NWB::Core::ECS::LightType::Directional;
-    light.color = AlignedFloat3Data(1.0f, 0.96f, 0.88f);
-    light.intensity = s_DefaultDirectionalLightIntensity;
+    auto& light = lightEntity.addComponent<NWB::Core::Scene::LightComponent>();
+    light.type = NWB::Core::Scene::LightType::Directional;
+    light.setColor(AlignedFloat3Data(1.0f, 0.96f, 0.88f));
+    light.setIntensity(s_DefaultDirectionalLightIntensity);
 }
 
 static void CreateRendererEntity(
@@ -335,7 +338,7 @@ static void CreateRendererEntity(
     const f32 uniformScale
 ){
     auto entity = world.createEntity();
-    auto& transform = entity.addComponent<NWB::Core::ECS::TransformComponent>();
+    auto& transform = entity.addComponent<NWB::Core::Scene::TransformComponent>();
     transform.position = position;
     transform.scale = AlignedFloat3Data(uniformScale, uniformScale, uniformScale);
 
@@ -349,10 +352,10 @@ static void CreateRendererEntity(
     const f32 cosAngle = Cos(angleRadians);
 
     NWB::Core::ECSGraphics::DeformableJointMatrix joint;
-    joint.column0 = Float4Data(1.0f, 0.0f, 0.0f, 0.0f);
-    joint.column1 = Float4Data(0.0f, cosAngle, sinAngle, 0.0f);
-    joint.column2 = Float4Data(0.0f, -sinAngle, cosAngle, 0.0f);
-    joint.column3 = Float4Data(
+    joint.column0 = AlignedFloat4Data(1.0f, 0.0f, 0.0f, 0.0f);
+    joint.column1 = AlignedFloat4Data(0.0f, cosAngle, sinAngle, 0.0f);
+    joint.column2 = AlignedFloat4Data(0.0f, -sinAngle, cosAngle, 0.0f);
+    joint.column3 = AlignedFloat4Data(
         0.0f,
         s_DeformableSkinPivotY * (1.0f - cosAngle),
         -s_DeformableSkinPivotY * sinAngle,
@@ -378,7 +381,7 @@ static void UpdateProxySkinPalette(
     const f32 uniformScale
 ){
     auto entity = world.createEntity();
-    auto& transform = entity.addComponent<NWB::Core::ECS::TransformComponent>();
+    auto& transform = entity.addComponent<NWB::Core::Scene::TransformComponent>();
     transform.position = position;
     transform.scale = AlignedFloat3Data(uniformScale, uniformScale, uniformScale);
 
@@ -405,7 +408,7 @@ static void UpdateProxySkinPalette(
     const TestbedGeometryRef& geometry,
     const TestbedMaterialRef& material){
     auto entity = world.createEntity();
-    auto& transform = entity.addComponent<NWB::Core::ECS::TransformComponent>();
+    auto& transform = entity.addComponent<NWB::Core::Scene::TransformComponent>();
     transform.scale = AlignedFloat3Data(s_AccessoryUniformScale, s_AccessoryUniformScale, s_AccessoryUniformScale);
 
     auto& renderer = entity.addComponent<NWB::Core::ECSGraphics::RendererComponent>();
@@ -424,7 +427,7 @@ static void ResolvePickingInputs(
     outInputs.morphWeights = world.tryGetComponent<NWB::Core::ECSGraphics::DeformableMorphWeightsComponent>(entity);
     outInputs.jointPalette = world.tryGetComponent<NWB::Core::ECSGraphics::DeformableJointPaletteComponent>(entity);
     outInputs.displacement = world.tryGetComponent<NWB::Core::ECSGraphics::DeformableDisplacementComponent>(entity);
-    outInputs.transform = world.tryGetComponent<NWB::Core::ECS::TransformComponent>(entity);
+    outInputs.transform = world.tryGetComponent<NWB::Core::Scene::TransformComponent>(entity);
 }
 
 
@@ -477,9 +480,9 @@ bool ProjectTestbed::onStartup(){
     using TestbedDeformableGeometryRef = __hidden_project_testbed_runtime::TestbedDeformableGeometryRef;
     using TestbedMaterialRef = __hidden_project_testbed_runtime::TestbedMaterialRef;
 
-    auto projectEntity = m_world->createEntity();
-    auto& project = projectEntity.addComponent<NWB::Core::ECS::ProjectComponent>();
-    project.mainCamera = __hidden_project_testbed_runtime::CreateMainCameraEntity(*m_world);
+    auto sceneEntity = m_world->createEntity();
+    auto& scene = sceneEntity.addComponent<NWB::Core::Scene::SceneComponent>();
+    scene.mainCamera = __hidden_project_testbed_runtime::CreateMainCameraEntity(*m_world);
     __hidden_project_testbed_runtime::CreateDefaultDirectionalLightEntity(*m_world);
 
     const TestbedMaterialRef cubeMaterial(Name("project/materials/mat_test"));
@@ -609,17 +612,14 @@ void ProjectTestbed::updateMainCamera(const f32 delta){
         keyPressed(NWB::Core::Key::S),
         keyPressed(NWB::Core::Key::W)
     );
-    const f32 verticalAxis = __hidden_project_testbed_runtime::KeyAxis(
-        keyPressed(NWB::Core::Key::Q) || keyPressed(NWB::Core::Key::LeftControl) || keyPressed(NWB::Core::Key::RightControl),
-        keyPressed(NWB::Core::Key::E) || keyPressed(NWB::Core::Key::Space)
-    );
     const bool boosted = keyPressed(NWB::Core::Key::LeftShift) || keyPressed(NWB::Core::Key::RightShift);
 
-    __hidden_project_testbed_runtime::ApplyFpsCameraInputToControlledCamera(
+    __hidden_project_testbed_runtime::ApplyFlyCameraInputToMainCamera(
         *m_world,
+        m_mainCameraYawRadians,
+        m_mainCameraPitchRadians,
         rightAxis,
         forwardAxis,
-        verticalAxis,
         boosted,
         mouseDeltaX,
         mouseDeltaY,
@@ -668,12 +668,12 @@ void ProjectTestbed::updateSurfaceEditAccessories(){
 
     m_world->view<
         NWB::Core::ECSGraphics::DeformableAccessoryAttachmentComponent,
-        NWB::Core::ECS::TransformComponent,
+        NWB::Core::Scene::TransformComponent,
         NWB::Core::ECSGraphics::RendererComponent
     >().each(
         [&](NWB::Core::ECS::EntityID entity,
             NWB::Core::ECSGraphics::DeformableAccessoryAttachmentComponent& attachment,
-            NWB::Core::ECS::TransformComponent& transform,
+            NWB::Core::Scene::TransformComponent& transform,
             NWB::Core::ECSGraphics::RendererComponent& renderer)
         {
             (void)entity;
@@ -918,8 +918,8 @@ void ProjectTestbed::attachPendingSurfaceEditAccessory(){
     accessoryRecord.editRevision = attachment.editRevision;
     accessoryRecord.firstWallVertex = attachment.firstWallVertex;
     accessoryRecord.wallVertexCount = attachment.wallVertexCount;
-    accessoryRecord.normalOffset = attachment.normalOffset;
-    accessoryRecord.uniformScale = attachment.uniformScale;
+    accessoryRecord.normalOffset = attachment.normalOffset();
+    accessoryRecord.uniformScale = attachment.uniformScale();
 
     NWB::Core::ECSGraphics::DeformableSurfaceEditState candidateState = m_surfaceEditState;
     candidateState.edits.push_back(m_pendingSurfaceEditRecord);

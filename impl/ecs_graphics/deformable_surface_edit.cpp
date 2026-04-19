@@ -232,6 +232,13 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
     ;
 }
 
+[[nodiscard]] bool ExactFloat3Data(const AlignedFloat4Data& lhs, const AlignedFloat4Data& rhs){
+    return ExactF32(lhs.x, rhs.x)
+        && ExactF32(lhs.y, rhs.y)
+        && ExactF32(lhs.z, rhs.z)
+    ;
+}
+
 [[nodiscard]] bool ExactSourceSample(const SourceSample& lhs, const SourceSample& rhs){
     return lhs.sourceTri == rhs.sourceTri
         && ExactF32(lhs.bary[0], rhs.bary[0])
@@ -248,7 +255,7 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
         && ExactF32(lhs.bary[0], rhs.bary[0])
         && ExactF32(lhs.bary[1], rhs.bary[1])
         && ExactF32(lhs.bary[2], rhs.bary[2])
-        && ExactF32(lhs.distance, rhs.distance)
+        && ExactF32(lhs.distance(), rhs.distance())
         && ExactFloat3Data(lhs.position, rhs.position)
         && ExactFloat3Data(lhs.normal, rhs.normal)
         && ExactSourceSample(lhs.restSample, rhs.restSample)
@@ -276,8 +283,8 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
 
 [[nodiscard]] bool ValidatePosedHitFrame(const DeformablePosedHit& hit){
     const f32 normalLengthSquared = LengthSquared(ToVec3(hit.normal));
-    return IsFinite(hit.distance)
-        && hit.distance >= 0.0f
+    return IsFinite(hit.distance())
+        && hit.distance() >= 0.0f
         && DeformableValidation::IsFiniteFloat3(hit.position)
         && DeformableValidation::IsFiniteFloat3(hit.normal)
         && DeformableValidation::NearlyUnitLengthSquared(normalLengthSquared)
@@ -288,7 +295,7 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
     const DeformableRuntimeMeshInstance& instance,
     const DeformablePosedHit& hit)
 {
-    if(!DeformableValidation::ValidLooseBarycentric(hit.bary))
+    if(!DeformableValidation::ValidLooseBarycentric(hit.bary.values))
         return false;
     if(!ValidatePosedHitFrame(hit))
         return false;
@@ -377,7 +384,7 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
         return false;
 
     f32 hitBary[3] = {};
-    if(!DeformableValidation::NormalizeSourceBarycentric(params.posedHit.bary, hitBary))
+    if(!DeformableValidation::NormalizeSourceBarycentric(params.posedHit.bary.values, hitBary))
         return false;
     return BuildHoleFrame(instance, hitTriangleIndices, hitBary, outFrame);
 }
@@ -525,8 +532,8 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
             attachment.editRevision,
             attachment.firstWallVertex,
             attachment.wallVertexCount,
-            attachment.normalOffset,
-            attachment.uniformScale
+            attachment.normalOffset(),
+            attachment.uniformScale()
         )
     ;
 }
@@ -1535,10 +1542,10 @@ bool PreviewHole(
     if(!__hidden_deformable_surface_edit::BuildPreviewFrame(instance, params, frame))
         return false;
 
-    outPreview.center = DeformableRuntime::ToFloat3(frame.center);
-    outPreview.normal = DeformableRuntime::ToFloat3(frame.normal);
-    outPreview.tangent = DeformableRuntime::ToFloat3(frame.tangent);
-    outPreview.bitangent = DeformableRuntime::ToFloat3(frame.bitangent);
+    outPreview.center = DeformableRuntime::ToAlignedFloat4(frame.center, 1.0f);
+    outPreview.normal = DeformableRuntime::ToAlignedFloat4(frame.normal);
+    outPreview.tangent = DeformableRuntime::ToAlignedFloat4(frame.tangent);
+    outPreview.bitangent = DeformableRuntime::ToAlignedFloat4(frame.bitangent);
     outPreview.radius = params.radius;
     outPreview.ellipseRatio = params.ellipseRatio;
     outPreview.depth = params.depth;
@@ -1615,8 +1622,8 @@ bool AttachAccessory(
     outAttachment.editRevision = holeResult.editRevision;
     outAttachment.firstWallVertex = holeResult.firstWallVertex;
     outAttachment.wallVertexCount = holeResult.wallVertexCount;
-    outAttachment.normalOffset = normalOffset;
-    outAttachment.uniformScale = uniformScale;
+    outAttachment.setNormalOffset(normalOffset);
+    outAttachment.setUniformScale(uniformScale);
     return true;
 }
 
@@ -1624,7 +1631,7 @@ bool ResolveAccessoryAttachmentTransform(
     const DeformableRuntimeMeshInstance& instance,
     const DeformablePickingInputs& inputs,
     const DeformableAccessoryAttachmentComponent& attachment,
-    Core::ECS::TransformComponent& outTransform)
+    Core::Scene::TransformComponent& outTransform)
 {
     if(!__hidden_deformable_surface_edit::ValidAccessoryAttachment(attachment)
         || attachment.targetEntity != instance.entity
@@ -1685,7 +1692,7 @@ bool ResolveAccessoryAttachmentTransform(
 
     const DeformableRuntime::Vec3 accessoryPosition = DeformableRuntime::Add(
         rimCenter,
-        DeformableRuntime::Scale(normal, attachment.normalOffset)
+        DeformableRuntime::Scale(normal, attachment.normalOffset())
     );
     if(!__hidden_deformable_surface_edit::FiniteVec3(accessoryPosition))
         return false;
@@ -1700,7 +1707,8 @@ bool ResolveAccessoryAttachmentTransform(
 
     outTransform.position = AlignedFloat3Data(accessoryPosition.x, accessoryPosition.y, accessoryPosition.z);
     outTransform.rotation = __hidden_deformable_surface_edit::RotationFromFrame(tangent, normal);
-    outTransform.scale = AlignedFloat3Data(attachment.uniformScale, attachment.uniformScale, attachment.uniformScale);
+    const f32 uniformScale = attachment.uniformScale();
+    outTransform.scale = AlignedFloat3Data(uniformScale, uniformScale, uniformScale);
     return true;
 }
 
@@ -1810,7 +1818,7 @@ bool CommitDeformableRestSpaceHole(
         return false;
 
     f32 hitBary[3] = {};
-    if(!DeformableValidation::NormalizeSourceBarycentric(params.posedHit.bary, hitBary))
+    if(!DeformableValidation::NormalizeSourceBarycentric(params.posedHit.bary.values, hitBary))
         return false;
 
     __hidden_deformable_surface_edit::HoleFrame frame;

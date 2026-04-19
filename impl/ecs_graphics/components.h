@@ -11,6 +11,8 @@
 #include <core/ecs/entity_id.h>
 #include <global/matrix_math.h>
 
+#include <cstddef>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -84,14 +86,15 @@ struct DeformableMorphWeightsComponent{
 
 
 struct DeformableJointMatrix{
-    Float4Data column0 = Float4Data(1.0f, 0.0f, 0.0f, 0.0f);
-    Float4Data column1 = Float4Data(0.0f, 1.0f, 0.0f, 0.0f);
-    Float4Data column2 = Float4Data(0.0f, 0.0f, 1.0f, 0.0f);
-    Float4Data column3 = Float4Data(0.0f, 0.0f, 0.0f, 1.0f);
+    AlignedFloat4Data column0 = AlignedFloat4Data(1.0f, 0.0f, 0.0f, 0.0f);
+    AlignedFloat4Data column1 = AlignedFloat4Data(0.0f, 1.0f, 0.0f, 0.0f);
+    AlignedFloat4Data column2 = AlignedFloat4Data(0.0f, 0.0f, 1.0f, 0.0f);
+    AlignedFloat4Data column3 = AlignedFloat4Data(0.0f, 0.0f, 0.0f, 1.0f);
 };
 static_assert(IsStandardLayout_V<DeformableJointMatrix>, "DeformableJointMatrix must stay GPU-uploadable");
 static_assert(IsTriviallyCopyable_V<DeformableJointMatrix>, "DeformableJointMatrix must stay GPU-uploadable");
 static_assert(sizeof(DeformableJointMatrix) == sizeof(f32) * 16u, "DeformableJointMatrix GPU layout drifted");
+static_assert(alignof(DeformableJointMatrix) >= alignof(AlignedFloat4Data), "DeformableJointMatrix must stay SIMD-aligned");
 
 struct DeformableJointPaletteComponent{
     Vector<DeformableJointMatrix> joints;
@@ -121,14 +124,20 @@ struct DeformableRendererComponent{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct DeformableAccessoryAttachmentComponent{
+struct alignas(AlignedFloat4Data) DeformableAccessoryAttachmentComponent{
     Core::ECS::EntityID targetEntity = Core::ECS::ENTITY_ID_INVALID;
     RuntimeMeshHandle runtimeMesh;
     u32 editRevision = 0;
     u32 firstWallVertex = Limit<u32>::s_Max;
     u32 wallVertexCount = 0;
-    f32 normalOffset = 0.0f;
-    f32 uniformScale = 1.0f;
+    // x = normal offset, y = uniform scale.
+    AlignedFloat4Data placement = AlignedFloat4Data(0.0f, 1.0f, 0.0f, 0.0f);
+
+    [[nodiscard]] f32 normalOffset()const{ return placement.x; }
+    [[nodiscard]] f32 uniformScale()const{ return placement.y; }
+
+    void setNormalOffset(const f32 value){ placement.x = value; }
+    void setUniformScale(const f32 value){ placement.y = value; }
 };
 static_assert(
     IsStandardLayout_V<DeformableAccessoryAttachmentComponent>,
@@ -137,6 +146,14 @@ static_assert(
 static_assert(
     IsTriviallyCopyable_V<DeformableAccessoryAttachmentComponent>,
     "DeformableAccessoryAttachmentComponent must stay cheap to move in dense ECS storage"
+);
+static_assert(
+    alignof(DeformableAccessoryAttachmentComponent) >= alignof(AlignedFloat4Data),
+    "DeformableAccessoryAttachmentComponent must stay SIMD-aligned"
+);
+static_assert(
+    (offsetof(DeformableAccessoryAttachmentComponent, placement) % alignof(AlignedFloat4Data)) == 0,
+    "DeformableAccessoryAttachmentComponent::placement must stay aligned"
 );
 
 

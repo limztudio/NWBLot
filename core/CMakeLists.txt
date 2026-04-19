@@ -6,6 +6,7 @@ add_subdirectory(filesystem)
 add_subdirectory(input)
 add_subdirectory(graphics)
 add_subdirectory(ecs)
+add_subdirectory(scene)
 
 if(WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
     add_subdirectory(frame)

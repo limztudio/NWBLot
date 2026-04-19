@@ -28,12 +28,14 @@ namespace __hidden_deformable_picking{
 using namespace DeformableRuntime;
 
 [[nodiscard]] bool IsFiniteRay(const DeformablePickingRay& ray){
-    return DeformableValidation::IsFiniteFloat3(ray.origin)
-        && DeformableValidation::IsFiniteFloat3(ray.direction)
-        && IsFinite(ray.minDistance)
-        && IsFinite(ray.maxDistance)
-        && ray.minDistance >= 0.0f
-        && ray.minDistance <= ray.maxDistance
+    const f32 minDistance = ray.minDistance();
+    const f32 maxDistance = ray.maxDistance();
+    return DeformableValidation::IsFiniteFloat3(ray.origin())
+        && DeformableValidation::IsFiniteFloat3(ray.direction())
+        && IsFinite(minDistance)
+        && IsFinite(maxDistance)
+        && minDistance >= 0.0f
+        && minDistance <= maxDistance
     ;
 }
 
@@ -216,7 +218,7 @@ void ApplyDisplacement(const DeformableDisplacement& displacement, DeformableVer
     vertex.position.z += vertex.normal.z * offset;
 }
 
-void ApplyTransform(const Core::ECS::TransformComponent* transform, DeformableVertexRest& vertex){
+void ApplyTransform(const Core::Scene::TransformComponent* transform, DeformableVertexRest& vertex){
     if(!transform)
         return;
 
@@ -444,6 +446,16 @@ bool ResolveDeformableRestSurfaceSample(
     return DeformableValidation::NormalizeSourceBarycentric(rawBary, outSample.bary);
 }
 
+bool ResolveDeformableRestSurfaceSample(
+    const DeformableRuntimeMeshInstance& instance,
+    const u32 triangle,
+    const DeformableHitBarycentric& bary,
+    SourceSample& outSample)
+{
+    const f32 unpackedBary[3] = { bary[0], bary[1], bary[2] };
+    return ResolveDeformableRestSurfaceSample(instance, triangle, unpackedBary, outSample);
+}
+
 bool RaycastDeformableRuntimeMesh(
     const DeformableRuntimeMeshInstance& instance,
     const DeformablePickingInputs& inputs,
@@ -457,9 +469,9 @@ bool RaycastDeformableRuntimeMesh(
         return false;
 
     using DeformableRuntime::Vec3;
-    const Vec3 rayOrigin = DeformableRuntime::ToVec3(ray.origin);
+    const Vec3 rayOrigin = DeformableRuntime::ToVec3(ray.origin());
     const Vec3 rayDirection = DeformableRuntime::Normalize(
-        DeformableRuntime::ToVec3(ray.direction),
+        DeformableRuntime::ToVec3(ray.direction()),
         Vec3{}
     );
     if(DeformableRuntime::LengthSquared(rayDirection) <= DeformableRuntime::s_FrameEpsilon)
@@ -474,7 +486,8 @@ bool RaycastDeformableRuntimeMesh(
 
     const usize triangleCount = instance.indices.size() / 3u;
     bool foundHit = false;
-    f32 closestDistance = ray.maxDistance;
+    const f32 minDistance = ray.minDistance();
+    f32 closestDistance = ray.maxDistance();
     DeformablePosedHit closestHit;
     for(usize triangleIndex = 0; triangleIndex < triangleCount; ++triangleIndex){
         u32 vertexIndices[3] = {};
@@ -489,7 +502,7 @@ bool RaycastDeformableRuntimeMesh(
         f32 bary[3] = {};
         if(!__hidden_deformable_picking::IntersectTriangle(rayOrigin, rayDirection, a, b, c, distance, bary))
             continue;
-        if(distance < ray.minDistance || distance > closestDistance)
+        if(distance < minDistance || distance > closestDistance)
             continue;
 
         f32 hitBary[3] = {};
@@ -519,9 +532,9 @@ bool RaycastDeformableRuntimeMesh(
         closestHit.bary[0] = hitBary[0];
         closestHit.bary[1] = hitBary[1];
         closestHit.bary[2] = hitBary[2];
-        closestHit.distance = distance;
-        closestHit.position = DeformableRuntime::ToFloat3(position);
-        closestHit.normal = DeformableRuntime::ToFloat3(normal);
+        closestHit.setDistance(distance);
+        closestHit.position = DeformableRuntime::ToAlignedFloat4(position, 1.0f);
+        closestHit.normal = DeformableRuntime::ToAlignedFloat4(normal);
         closestHit.restSample = restSample;
         foundHit = true;
     }
@@ -541,7 +554,7 @@ bool RaycastVisibleDeformableRenderers(
 {
     outHit = DeformablePosedHit{};
     bool foundHit = false;
-    f32 closestDistance = ray.maxDistance;
+    f32 closestDistance = ray.maxDistance();
 
     world.view<DeformableRendererComponent>().each(
         [&](Core::ECS::EntityID entity, DeformableRendererComponent& renderer){
@@ -562,13 +575,13 @@ bool RaycastVisibleDeformableRenderers(
             inputs.morphWeights = world.tryGetComponent<DeformableMorphWeightsComponent>(entity);
             inputs.jointPalette = world.tryGetComponent<DeformableJointPaletteComponent>(entity);
             inputs.displacement = world.tryGetComponent<DeformableDisplacementComponent>(entity);
-            inputs.transform = world.tryGetComponent<Core::ECS::TransformComponent>(entity);
+            inputs.transform = world.tryGetComponent<Core::Scene::TransformComponent>(entity);
 
             DeformablePosedHit hit;
             if(!RaycastDeformableRuntimeMesh(*instance, inputs, ray, hit))
                 return;
-            if(!foundHit || hit.distance < closestDistance){
-                closestDistance = hit.distance;
+            if(!foundHit || hit.distance() < closestDistance){
+                closestDistance = hit.distance();
                 outHit = hit;
                 foundHit = true;
             }

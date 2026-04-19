@@ -6,6 +6,7 @@
 
 
 #include "entity_id.h"
+#include "type_id.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -29,26 +30,6 @@ namespace ECSDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Separate tag types ensure ECS type IDs and message type IDs live in independent counter spaces.
-struct EcsTypeTag{};
-struct MessageTypeTag{};
-
-
-template<typename Tag>
-class TypeCounter{
-public:
-    template<typename T>
-    static usize id(){
-        static const usize value = s_NextId++;
-        return value;
-    }
-
-
-private:
-    inline static Atomic<usize> s_NextId{ 0 };
-};
-
-
 template<typename... Ts>
 struct ViewIterator;
 
@@ -64,7 +45,7 @@ struct ViewIterator;
 
 template<typename T>
 inline ComponentTypeId ComponentType(){
-    return ECSDetail::TypeCounter<ECSDetail::EcsTypeTag>::id<Decay_T<T>>();
+    return ECSDetail::TypeCounter<ECSDetail::ComponentTypeTag>::id<Decay_T<T>>();
 }
 
 template<typename... Ts>

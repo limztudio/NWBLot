@@ -11,8 +11,6 @@ layout(push_constant) uniform NwbAvboitDrawPushConstants{
     uvec4 nwbMeshDispatch;
     vec4 nwbMeshViewportRect;
     vec4 nwbMeshScissorRect;
-    vec4 nwbMeshViewRotation;
-    vec4 nwbMeshViewPositionDepthBias;
     uvec4 nwbAvboitFrame;
     uvec4 nwbAvboitVolume;
     vec4 nwbAvboitParams;

@@ -1542,13 +1542,15 @@ typedef RefCountPtr<IRayTracingOpacityMicromap, ArenaRefDeleter<IRayTracingOpaci
 
 class IRayTracingAccelStruct;
 
-typedef f32 AffineTransform[12];
+using AffineTransform = AlignedFloat4Data[3];
 
 inline constexpr AffineTransform s_identityTransform = {
-    1.f, 0.f, 0.f, 0.f,
-    0.f, 1.f, 0.f, 0.f,
-    0.f, 0.f, 1.f, 0.f
+    AlignedFloat4Data(1.f, 0.f, 0.f, 0.f),
+    AlignedFloat4Data(0.f, 1.f, 0.f, 0.f),
+    AlignedFloat4Data(0.f, 0.f, 1.f, 0.f)
 };
+static_assert(sizeof(AffineTransform) == sizeof(f32) * 12u, "AffineTransform GPU layout drifted");
+static_assert(alignof(AffineTransform) >= alignof(AlignedFloat4Data), "AffineTransform must stay SIMD-aligned");
 
 namespace RayTracingGeometryFlags{
     enum Mask : u8{
@@ -3860,4 +3862,3 @@ struct hash<NWB::Core::VariableRateShadingState>{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

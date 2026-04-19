@@ -15,17 +15,26 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_ECS_BEGIN
+NWB_SCENE_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 struct alignas(AlignedFloat4Data) CameraComponent{
-    f32 verticalFovRadians = SourceMath::ConvertToRadians(60.0f);
-    f32 nearPlane = 0.1f;
-    f32 farPlane = 100.0f;
-    f32 aspectRatio = 1.0f;
+    // x = vertical FOV, y = near plane, z = far plane, w = aspect ratio.
+    // An aspect ratio of 0 lets renderers derive aspect from the active framebuffer.
+    AlignedFloat4Data projection = AlignedFloat4Data(SourceMath::ConvertToRadians(60.0f), 0.001f, 10000.0f, 0.0f);
+
+    [[nodiscard]] f32 verticalFovRadians()const{ return projection.x; }
+    [[nodiscard]] f32 nearPlane()const{ return projection.y; }
+    [[nodiscard]] f32 farPlane()const{ return projection.z; }
+    [[nodiscard]] f32 aspectRatio()const{ return projection.w; }
+
+    void setVerticalFovRadians(const f32 value){ projection.x = value; }
+    void setNearPlane(const f32 value){ projection.y = value; }
+    void setFarPlane(const f32 value){ projection.z = value; }
+    void setAspectRatio(const f32 value){ projection.w = value; }
 };
 
 static_assert(IsStandardLayout_V<CameraComponent>, "CameraComponent must stay layout-stable for ECS storage");
@@ -43,18 +52,15 @@ static_assert(
     "CameraComponent array stride must keep every element SIMD-aligned"
 );
 static_assert(
-    (offsetof(CameraComponent, verticalFovRadians) % alignof(f32)) == 0,
-    "CameraComponent::verticalFovRadians must stay aligned"
+    (offsetof(CameraComponent, projection) % alignof(AlignedFloat4Data)) == 0,
+    "CameraComponent::projection must stay aligned"
 );
-static_assert((offsetof(CameraComponent, nearPlane) % alignof(f32)) == 0, "CameraComponent::nearPlane must stay aligned");
-static_assert((offsetof(CameraComponent, farPlane) % alignof(f32)) == 0, "CameraComponent::farPlane must stay aligned");
-static_assert((offsetof(CameraComponent, aspectRatio) % alignof(f32)) == 0, "CameraComponent::aspectRatio must stay aligned");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_ECS_END
+NWB_SCENE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -5,8 +5,10 @@
 #pragma once
 
 
-#include "world.h"
-#include "entity.h"
+#include "transform_component.h"
+#include "camera_component.h"
+#include "light_component.h"
+#include "scene_component.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -41,11 +41,18 @@ namespace DisplacementResolveFailure{
     };
 };
 
-struct Vec3{
-    f32 x = 0.0f;
-    f32 y = 0.0f;
-    f32 z = 0.0f;
+struct Vec3 : public AlignedFloat3Data{
+    constexpr Vec3()noexcept
+        : AlignedFloat3Data(0.0f, 0.0f, 0.0f)
+    {}
+    constexpr Vec3(const f32 _x, const f32 _y, const f32 _z)noexcept
+        : AlignedFloat3Data(_x, _y, _z)
+    {}
 };
+static_assert(IsStandardLayout_V<Vec3>, "Vec3 must stay layout-stable");
+static_assert(IsTriviallyCopyable_V<Vec3>, "Vec3 must stay cheap to pass by value");
+static_assert(alignof(Vec3) >= alignof(AlignedFloat3Data), "Vec3 must stay SIMD-aligned");
+static_assert(sizeof(Vec3) == sizeof(AlignedFloat3Data), "Vec3 must stay one aligned float3 wide");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -89,8 +96,16 @@ struct Vec3{
     return Vec3{ value.x, value.y, value.z };
 }
 
+[[nodiscard]] inline Vec3 ToVec3(const AlignedFloat4Data& value){
+    return Vec3{ value.x, value.y, value.z };
+}
+
 [[nodiscard]] inline Float3Data ToFloat3(const Vec3& value){
     return Float3Data(value.x, value.y, value.z);
+}
+
+[[nodiscard]] inline AlignedFloat4Data ToAlignedFloat4(const Vec3& value, const f32 w = 0.0f){
+    return AlignedFloat4Data(value.x, value.y, value.z, w);
 }
 
 [[nodiscard]] inline Vec3 Add(const Vec3& lhs, const Vec3& rhs){

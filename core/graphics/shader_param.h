@@ -12,7 +12,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if !defined(__cplusplus)
+#if defined(__cplusplus)
+#include <core/global.h>
+#include <global/matrix_math.h>
+
+#include <cstddef>
+#else
 #include <core/global.h>
 
 #include <core/common/common.h>
@@ -55,7 +60,7 @@ struct IndirectInstanceDesc{
 #if !defined(__cplusplus)
     float4 transform[3];
 #else
-    f32 transform[12];
+    AlignedFloat4Data transform[3] = {};
 #endif
     u32 instanceID : 24;
     u32 instanceMask : 8;
@@ -63,6 +68,16 @@ struct IndirectInstanceDesc{
     u32 flags : 8;
     GpuVirtualAddress blasDeviceAddress;
 };
+#if defined(__cplusplus)
+static_assert(IsStandardLayout_V<IndirectInstanceDesc>, "IndirectInstanceDesc must stay GPU-uploadable");
+static_assert(IsTriviallyCopyable_V<IndirectInstanceDesc>, "IndirectInstanceDesc must stay GPU-uploadable");
+static_assert(sizeof(IndirectInstanceDesc) == 64u, "IndirectInstanceDesc GPU layout drifted");
+static_assert(alignof(IndirectInstanceDesc) >= alignof(AlignedFloat4Data), "IndirectInstanceDesc must stay SIMD-aligned");
+static_assert(
+    (offsetof(IndirectInstanceDesc, transform) % alignof(AlignedFloat4Data)) == 0,
+    "IndirectInstanceDesc::transform must stay SIMD-aligned"
+);
+#endif
 
 inline constexpr u32 s_ClasByteAlignment = 128;
 inline constexpr u32 s_ClasMaxTriangles = 256;
@@ -139,4 +154,3 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

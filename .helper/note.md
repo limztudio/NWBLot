@@ -1,6 +1,6 @@
 # NWBLot Notes
 
-Updated: 2026-04-17
+Updated: 2026-04-19
 
 ## Important Rules
 
@@ -36,6 +36,17 @@ Updated: 2026-04-17
 30. Spherical harmonics support belongs in the math domain as CPU/core SH routines only; keep the imported basis/rotation/light-evaluation code under `global/detail/source_sh_math/`, and leave API-specific cubemap projection helpers out of core math until a graphics-domain integration is intentionally designed.
 31. In `global/detail/source_math/`, do not transpose `MatrixTranslation*`, axis-rotation builders, or the projection builders just because the imported literals look row-style. NWB stores internal matrix columns in `r[0..3]`, `Vector3TransformCoord` / `Vector4Transform` evaluate `result = M * v`, and those builders already place translation/basis data in the correct internal columns. Only row-assembled helpers like `MatrixSet` and `MatrixLookTo*` need an explicit transpose bridge.
 32. In `global/detail/source_math/source_math_vector.inl`, cached `M.r[0..3]` temporaries are matrix columns, not rows. Keep the variable naming/commentary aligned with the column-vector convention so future ports do not accidentally reintroduce row-space reasoning into the stream transform paths.
+33. ECS mesh rendering gets projection terms from `CameraComponent` through the renderer-owned mesh view buffer. Do not hard-code near/far depth mapping inside material mesh shaders.
+34. ECS mesh rendering gets camera view/projection from `TransformComponent + CameraComponent` through the renderer-owned mesh view buffer. Do not couple renderer camera state to input/controller components such as `FpsCameraControllerComponent`.
+35. Input controller state such as fly-camera yaw, pitch, speed, and sensitivity is project/runtime state, not a core ECS rendering component. Keep core camera data limited to renderable camera properties.
+36. `CameraComponent` stores projection scalar inputs in one `AlignedFloat4Data` lane pack: x = vertical FOV, y = near plane, z = far plane, w = aspect ratio.
+37. Use aligned SIMD vector storage for persistent ECS/render-facing vec4 packs (`LightComponent` color+intensity, deformable joint columns, instance GPU data, mesh view matrices). Keep isolated scalar controls scalar when aligning would only add padding/cache cost.
+38. `core/ecs` owns ECS infrastructure only. Reusable scene/content components such as transform, camera, light, and scene state belong in `core/scene` under `NWB::Core::Scene`; do not add forwarding shims back into the ECS module.
+39. Keep ECS framework type identity domains split by responsibility: component, system, and message type counters belong in `core/ecs/type_id.h`, not in a content component header or one type domain's implementation file.
+40. Prefer `AlignedFloat4Data` for GPU-facing vec4 payloads and runtime ECS component packs. Do not rewrite serialized asset/source records or isolated scalar controls just to force SIMD alignment.
+41. Do not use project/runtime naming for scene data. The active scene camera entity is `SceneComponent::mainCamera` in `core/scene`, not a `ProjectComponent`.
+42. Ray-tracing affine transforms and deformable runtime picking/hit/preview payloads are vec4-lane data. Store them as aligned SIMD lanes, while preserving exact GPU byte sizes and keeping serialized AABB/source/edit records in their compact scalar layouts.
+43. Keep tests domain-owned too: `tests/ecs` validates generic ECS infrastructure with test-local components, while scene/content component coverage belongs in `tests/scene`.
 
 ## Scheduler Architecture
 
@@ -83,4 +94,3 @@ Updated: 2026-04-17
 3. If a helper assembles row-equivalent data first, make that explicit in the helper name/comment and transpose only at the boundary back into NWB's internal column layout.
 4. In `global/detail/source_math/source_math_vector.inl`, the project/unproject path must compose world/view/projection as `Projection * View * World` before transforming coordinates. The old `World * View * Projection` order is a row-vector leftover and breaks NWB's column-vector convention.
 5. Compact affine matrix boundaries are convention-sensitive: `Float3x4` / `AlignedFloat3x4` are already the preferred affine snapshots for NWB's internal column matrix. Do not add an extra transpose in `Load/StoreFloat3x4*`, or translation/basis data will round-trip incorrectly.
-

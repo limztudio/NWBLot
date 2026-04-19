@@ -66,9 +66,11 @@ layout(push_constant) uniform NwbMeshPushConstants{
     uvec4 dispatch;
     vec4 viewportRect;
     vec4 scissorRect;
-    vec4 viewRotation;
-    vec4 viewPositionDepthBias;
 } g_NwbMeshPushConstants;
+
+layout(std140, binding = 4) uniform NwbMeshViewBuffer{
+    mat4 g_NwbMeshWorldToClip;
+};
 
 #if NWB_MESH_SHADER_EMULATION_COMPUTE
 layout(std430, binding = 2) buffer NwbMeshGeneratedVerticesBuffer{
@@ -122,12 +124,12 @@ bool nwbMeshInvocationActive(){
     return nwbMeshGroupThreadID() < nwbMeshActiveTriangleCount();
 }
 
-vec4 nwbMeshViewRotation(){
-    return g_NwbMeshPushConstants.viewRotation;
+mat4 nwbMeshWorldToClip(){
+    return g_NwbMeshWorldToClip;
 }
 
-vec4 nwbMeshViewPositionDepthBias(){
-    return g_NwbMeshPushConstants.viewPositionDepthBias;
+vec4 nwbMeshTransformWorldToClip(vec3 worldPosition){
+    return nwbMeshWorldToClip() * vec4(worldPosition, 1.0);
 }
 
 uint nwbMeshTriangleIndex(){

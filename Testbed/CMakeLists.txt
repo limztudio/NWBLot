@@ -11,6 +11,7 @@ set_target_properties(testbed PROPERTIES
 )
 target_link_libraries(testbed PRIVATE
     nwb_loader
+    nwb_scene
     nwb_ecs_graphics
     "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_graphics>"
     nwb_logclient

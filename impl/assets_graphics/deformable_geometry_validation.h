@@ -63,6 +63,10 @@ static constexpr f32 s_TriangleAreaLengthSquaredEpsilon = 0.000000000001f;
     return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z);
 }
 
+[[nodiscard]] inline bool IsFiniteFloat3(const AlignedFloat4Data& value){
+    return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z);
+}
+
 [[nodiscard]] inline bool IsFiniteFloat4(const Float4Data& value){
     return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z) && IsFinite(value.w);
 }
@@ -155,11 +159,31 @@ static constexpr f32 s_TriangleAreaLengthSquaredEpsilon = 0.000000000001f;
     ;
 }
 
+[[nodiscard]] inline bool ValidBarycentric(const AlignedFloat4Data& bary, const f32 minimumBarycentric){
+    const f32 barySum = bary.x + bary.y + bary.z;
+    return IsFinite(bary.x)
+        && IsFinite(bary.y)
+        && IsFinite(bary.z)
+        && bary.x >= minimumBarycentric
+        && bary.y >= minimumBarycentric
+        && bary.z >= minimumBarycentric
+        && NearlyOne(barySum)
+    ;
+}
+
 [[nodiscard]] inline bool ValidSourceBarycentric(const f32 (&bary)[3]){
     return ValidBarycentric(bary, 0.0f);
 }
 
+[[nodiscard]] inline bool ValidSourceBarycentric(const AlignedFloat4Data& bary){
+    return ValidBarycentric(bary, 0.0f);
+}
+
 [[nodiscard]] inline bool ValidLooseBarycentric(const f32 (&bary)[3]){
+    return ValidBarycentric(bary, -s_Epsilon);
+}
+
+[[nodiscard]] inline bool ValidLooseBarycentric(const AlignedFloat4Data& bary){
     return ValidBarycentric(bary, -s_Epsilon);
 }
 
@@ -170,6 +194,25 @@ static constexpr f32 s_TriangleAreaLengthSquaredEpsilon = 0.000000000001f;
     outBary[0] = Clamp01(bary[0]);
     outBary[1] = Clamp01(bary[1]);
     outBary[2] = Clamp01(bary[2]);
+
+    const f32 barySum = outBary[0] + outBary[1] + outBary[2];
+    if(!IsFinite(barySum) || barySum <= s_Epsilon)
+        return false;
+
+    const f32 invBarySum = 1.0f / barySum;
+    outBary[0] *= invBarySum;
+    outBary[1] *= invBarySum;
+    outBary[2] *= invBarySum;
+    return ValidSourceBarycentric(outBary);
+}
+
+[[nodiscard]] inline bool NormalizeSourceBarycentric(const AlignedFloat4Data& bary, f32 (&outBary)[3]){
+    if(!ValidLooseBarycentric(bary))
+        return false;
+
+    outBary[0] = Clamp01(bary.x);
+    outBary[1] = Clamp01(bary.y);
+    outBary[2] = Clamp01(bary.z);
 
     const f32 barySum = outBary[0] + outBary[1] + outBary[2];
     if(!IsFinite(barySum) || barySum <= s_Epsilon)

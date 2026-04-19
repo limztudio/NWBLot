@@ -4,9 +4,9 @@
 
 #include "renderer_system.h"
 
-#include <core/ecs/camera_component.h>
-#include <core/ecs/project_component.h>
-#include <core/ecs/transform_component.h>
+#include <core/scene/camera_component.h>
+#include <core/scene/scene_component.h>
+#include <core/scene/transform_component.h>
 #include <core/graphics/shader_archive.h>
 #include <logger/client/logger.h>
 #include <impl/assets_graphics/geometry_asset.h>
@@ -44,8 +44,8 @@ static constexpr u32 s_AvboitPhysicalSlices = 64u;
 static constexpr f32 s_AvboitExtinctionFixedScale = 4096.f;
 static constexpr f32 s_AvboitSelfOcclusionSliceBias = 2.f;
 static constexpr usize s_AvboitControlWordCount = 8u;
-static constexpr f32 s_DefaultMeshViewRotationY = 0.82f;
-static constexpr f32 s_DefaultMeshViewRotationX = 0.94f;
+static constexpr f32 s_DefaultMeshViewYaw = 0.82f;
+static constexpr f32 s_DefaultMeshViewPitch = 0.94f;
 static constexpr f32 s_DefaultMeshViewDepthOffset = 2.2f;
 
 
@@ -54,16 +54,14 @@ struct ShaderDrivenPushConstants{
     u32 scissorCullEnabled = 0;
     u32 instanceIndex = 0;
     u32 sourceVertexLayout = 0;
-    f32 viewportRect[4] = {};
-    f32 scissorRect[4] = {};
-    f32 viewRotation[4] = {};
-    f32 viewPositionDepthBias[4] = {};
+    AlignedFloat4Data viewportRect = AlignedFloat4Data(0.f, 0.f, 0.f, 0.f);
+    AlignedFloat4Data scissorRect = AlignedFloat4Data(0.f, 0.f, 0.f, 0.f);
 };
 
 struct AvboitPushConstants{
     u32 frame[4] = {};
     u32 volume[4] = {};
-    f32 params[4] = {};
+    AlignedFloat4Data params = AlignedFloat4Data(0.f, 0.f, 0.f, 0.f);
 };
 
 struct TransparentDrawPushConstants{
@@ -72,28 +70,49 @@ struct TransparentDrawPushConstants{
 };
 
 struct EmulatedVertex{
-    f32 position[4];
-    f32 normal[3];
-    f32 padding0 = 0.f;
-    f32 tangent[4];
-    f32 uv0[2];
-    f32 padding1[2] = {};
-    f32 color[4];
+    AlignedFloat4Data position;
+    AlignedFloat4Data normal;
+    AlignedFloat4Data tangent;
+    AlignedFloat4Data uv0;
+    AlignedFloat4Data color;
+};
+
+struct MeshViewGpuData{
+    AlignedFloat4Data worldToClip[4] = {
+        AlignedFloat4Data(1.f, 0.f, 0.f, 0.f),
+        AlignedFloat4Data(0.f, 1.f, 0.f, 0.f),
+        AlignedFloat4Data(0.f, 0.f, 1.f, 0.f),
+        AlignedFloat4Data(0.f, 0.f, 0.f, 1.f),
+    };
 };
 
 struct MeshViewState{
-    f32 viewRotation[4] = {};
-    f32 viewPositionDepthBias[4] = {};
+    AlignedFloat4Data worldToClip[4] = {
+        AlignedFloat4Data(1.f, 0.f, 0.f, 0.f),
+        AlignedFloat4Data(0.f, 1.f, 0.f, 0.f),
+        AlignedFloat4Data(0.f, 0.f, 1.f, 0.f),
+        AlignedFloat4Data(0.f, 0.f, 0.f, 1.f),
+    };
 };
 
-static_assert(sizeof(ShaderDrivenPushConstants) == 80, "ShaderDrivenPushConstants layout must stay stable");
+struct MeshViewBasis{
+    AlignedFloat4Data right = AlignedFloat4Data(1.f, 0.f, 0.f, 0.f);
+    AlignedFloat4Data up = AlignedFloat4Data(0.f, 1.f, 0.f, 0.f);
+    AlignedFloat4Data forward = AlignedFloat4Data(0.f, 0.f, 1.f, 0.f);
+    AlignedFloat4Data positionDepthBias = AlignedFloat4Data(0.f, 0.f, 0.f, 0.f);
+};
+
+static_assert(sizeof(ShaderDrivenPushConstants) == 48, "ShaderDrivenPushConstants layout must stay stable");
 static_assert(sizeof(AvboitPushConstants) == 48, "AvboitPushConstants layout must stay stable");
-static_assert(sizeof(TransparentDrawPushConstants) == 128, "TransparentDrawPushConstants layout must stay stable");
+static_assert(sizeof(TransparentDrawPushConstants) == 96, "TransparentDrawPushConstants layout must stay stable");
 static_assert(
     sizeof(TransparentDrawPushConstants) <= Core::s_MaxPushConstantSize,
     "Transparent draw push constants must fit the portable push constant budget"
 );
 static_assert(sizeof(EmulatedVertex) == s_EmulatedVertexStride, "EmulatedVertex layout must match the mesh emulation shader");
+static_assert(alignof(EmulatedVertex) >= alignof(AlignedFloat4Data), "EmulatedVertex must stay SIMD-aligned");
+static_assert(sizeof(MeshViewGpuData) == sizeof(f32) * 16u, "MeshViewGpuData layout must match the mesh shaders");
+static_assert(alignof(MeshViewGpuData) >= alignof(AlignedFloat4Data), "MeshViewGpuData must stay SIMD-aligned");
 
 
 static const Name& StageNameFromShaderType(const Core::ShaderType::Mask shaderType){
@@ -123,6 +142,11 @@ static const Name& MeshEmulationVertexShaderName(){
 
 static const Name& InstanceBufferName(){
     static const Name s("ecs_graphics/instance_data");
+    return s;
+}
+
+static const Name& MeshViewBufferName(){
+    static const Name s("ecs_graphics/mesh_view_data");
     return s;
 }
 
@@ -338,13 +362,6 @@ static u32 ComputeDispatchGroupCount(const u32 triangleCount){
     ;
 }
 
-static void CopyFloat4(f32 (&destination)[4], const f32 (&source)[4]){
-    destination[0] = source[0];
-    destination[1] = source[1];
-    destination[2] = source[2];
-    destination[3] = source[3];
-}
-
 static usize NextInstanceBufferCapacity(const usize currentCapacity, const usize requiredCapacity){
     usize capacity = Max<usize>(currentCapacity, 1u);
     while(capacity < requiredCapacity){
@@ -355,81 +372,246 @@ static usize NextInstanceBufferCapacity(const usize currentCapacity, const usize
     return capacity;
 }
 
-static InstanceGpuData BuildInstanceGpuData(const Core::ECS::TransformComponent* transform){
+static InstanceGpuData BuildInstanceGpuData(const Core::Scene::TransformComponent* transform){
     InstanceGpuData data;
     if(!transform)
         return data;
 
-    data.rotation[0] = transform->rotation.x;
-    data.rotation[1] = transform->rotation.y;
-    data.rotation[2] = transform->rotation.z;
-    data.rotation[3] = transform->rotation.w;
-    data.translation[0] = transform->position.x;
-    data.translation[1] = transform->position.y;
-    data.translation[2] = transform->position.z;
-    data.scale[0] = transform->scale.x;
-    data.scale[1] = transform->scale.y;
-    data.scale[2] = transform->scale.z;
+    data.rotation = transform->rotation;
+    data.translation = AlignedFloat4Data(transform->position.x, transform->position.y, transform->position.z, 0.0f);
+    data.scale = AlignedFloat4Data(transform->scale.x, transform->scale.y, transform->scale.z, 0.0f);
     return data;
 }
 
-static MeshViewState BuildDefaultMeshViewState(){
-    MeshViewState state;
-    Float4Data rotation;
-    SourceMath::StoreFloat4(
-        &rotation,
-        SourceMath::QuaternionRotationRollPitchYaw(s_DefaultMeshViewRotationX, s_DefaultMeshViewRotationY, 0.0f)
-    );
+static f32 Float3Dot(const AlignedFloat4Data& lhs, const AlignedFloat4Data& rhs){
+    return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z;
+}
 
-    state.viewRotation[0] = rotation.x;
-    state.viewRotation[1] = rotation.y;
-    state.viewRotation[2] = rotation.z;
-    state.viewRotation[3] = rotation.w;
-    state.viewPositionDepthBias[3] = s_DefaultMeshViewDepthOffset;
+static void StoreRotatedBasisVector(
+    AlignedFloat4Data& outVector,
+    const AlignedFloat3Data& localVector,
+    const Core::Scene::TransformComponent& transform
+){
+    AlignedFloat3Data rotatedVector;
+    SourceMath::StoreFloat3A(
+        &rotatedVector,
+        SourceMath::Vector3Rotate(SourceMath::LoadFloat3A(&localVector), SourceMath::LoadFloat4A(&transform.rotation))
+    );
+    outVector = AlignedFloat4Data(rotatedVector.x, rotatedVector.y, rotatedVector.z, 0.0f);
+}
+
+static MeshViewBasis BuildDefaultMeshViewBasis(){
+    const f32 sinYaw = Sin(s_DefaultMeshViewYaw);
+    const f32 cosYaw = Cos(s_DefaultMeshViewYaw);
+    const f32 sinPitch = Sin(s_DefaultMeshViewPitch);
+    const f32 cosPitch = Cos(s_DefaultMeshViewPitch);
+
+    MeshViewBasis basis;
+    basis.right = AlignedFloat4Data(cosYaw, 0.0f, sinYaw, 0.0f);
+    basis.up = AlignedFloat4Data(sinYaw * sinPitch, cosPitch, -cosYaw * sinPitch, 0.0f);
+    basis.forward = AlignedFloat4Data(-sinYaw * cosPitch, sinPitch, cosYaw * cosPitch, 0.0f);
+    basis.positionDepthBias.w = s_DefaultMeshViewDepthOffset;
+    return basis;
+}
+
+static MeshViewBasis BuildTransformMeshViewBasis(const Core::Scene::TransformComponent& transform){
+    MeshViewBasis basis;
+    basis.positionDepthBias = AlignedFloat4Data(transform.position.x, transform.position.y, transform.position.z, 0.0f);
+    StoreRotatedBasisVector(basis.right, AlignedFloat3Data(1.0f, 0.0f, 0.0f), transform);
+    StoreRotatedBasisVector(basis.up, AlignedFloat3Data(0.0f, 1.0f, 0.0f), transform);
+    StoreRotatedBasisVector(basis.forward, AlignedFloat3Data(0.0f, 0.0f, 1.0f), transform);
+    return basis;
+}
+
+static bool TanHalfFov(const f32 verticalFovRadians, f32& outTanHalfFov){
+    outTanHalfFov = 0.0f;
+    if(!IsFinite(verticalFovRadians))
+        return false;
+
+    const f32 halfFov = verticalFovRadians * 0.5f;
+    const f32 sinHalfFov = Sin(halfFov);
+    const f32 cosHalfFov = Cos(halfFov);
+    if(!IsFinite(sinHalfFov)
+        || !IsFinite(cosHalfFov)
+        || (cosHalfFov > -0.000001f && cosHalfFov < 0.000001f)
+    )
+        return false;
+
+    outTanHalfFov = sinHalfFov / cosHalfFov;
+    return IsFinite(outTanHalfFov) && outTanHalfFov > 0.0f;
+}
+
+static f32 ResolveCameraAspectRatio(const Core::Scene::CameraComponent& camera, const f32 fallbackAspectRatio){
+    if(IsFinite(camera.aspectRatio()) && camera.aspectRatio() > 0.0f)
+        return camera.aspectRatio();
+    if(IsFinite(fallbackAspectRatio) && fallbackAspectRatio > 0.0f)
+        return fallbackAspectRatio;
+    return 1.0f;
+}
+
+static void BuildCameraProjectionParams(
+    const Core::Scene::CameraComponent& camera,
+    const f32 fallbackAspectRatio,
+    AlignedFloat4Data& outProjectionParams
+){
+    Core::Scene::CameraComponent fallbackCamera;
+    const f32 nearPlane = IsFinite(camera.nearPlane()) && camera.nearPlane() > 0.0f
+        ? camera.nearPlane()
+        : fallbackCamera.nearPlane()
+    ;
+    const f32 farPlane = IsFinite(camera.farPlane()) && camera.farPlane() > nearPlane
+        ? camera.farPlane()
+        : Max(fallbackCamera.farPlane(), nearPlane + 1.0f)
+    ;
+    const f32 aspectRatio = ResolveCameraAspectRatio(camera, fallbackAspectRatio);
+    f32 tanHalfFov = 0.0f;
+    if(!TanHalfFov(camera.verticalFovRadians(), tanHalfFov))
+        TanHalfFov(fallbackCamera.verticalFovRadians(), tanHalfFov);
+
+    const f32 depthRange = farPlane - nearPlane;
+    outProjectionParams = AlignedFloat4Data(
+        1.0f / (tanHalfFov * aspectRatio),
+        1.0f / tanHalfFov,
+        farPlane / depthRange,
+        -(nearPlane * farPlane) / depthRange
+    );
+}
+
+static void StoreProjectedViewColumn(
+    AlignedFloat4Data (&outWorldToClip)[4],
+    const usize columnIndex,
+    const f32 viewX,
+    const f32 viewY,
+    const f32 viewZ,
+    const f32 viewW,
+    const AlignedFloat4Data& projectionParams
+){
+    outWorldToClip[columnIndex] = AlignedFloat4Data(
+        viewX * projectionParams.x,
+        viewY * projectionParams.y,
+        viewZ * projectionParams.z + viewW * projectionParams.w,
+        viewZ
+    );
+}
+
+static void StoreWorldToClipMatrix(
+    AlignedFloat4Data (&outWorldToClip)[4],
+    const MeshViewBasis& basis,
+    const AlignedFloat4Data& projectionParams
+){
+    const f32 translationX = -Float3Dot(basis.positionDepthBias, basis.right);
+    const f32 translationY = -Float3Dot(basis.positionDepthBias, basis.up);
+    const f32 translationZ = -Float3Dot(basis.positionDepthBias, basis.forward) + basis.positionDepthBias.w;
+
+    StoreProjectedViewColumn(
+        outWorldToClip,
+        0u,
+        basis.right.x,
+        basis.up.x,
+        basis.forward.x,
+        0.0f,
+        projectionParams
+    );
+    StoreProjectedViewColumn(
+        outWorldToClip,
+        1u,
+        basis.right.y,
+        basis.up.y,
+        basis.forward.y,
+        0.0f,
+        projectionParams
+    );
+    StoreProjectedViewColumn(
+        outWorldToClip,
+        2u,
+        basis.right.z,
+        basis.up.z,
+        basis.forward.z,
+        0.0f,
+        projectionParams
+    );
+    StoreProjectedViewColumn(
+        outWorldToClip,
+        3u,
+        translationX,
+        translationY,
+        translationZ,
+        1.0f,
+        projectionParams
+    );
+}
+
+static f32 ExtentAspectRatio(const u32 width, const u32 height){
+    if(width == 0 || height == 0)
+        return 1.0f;
+
+    return static_cast<f32>(width) / static_cast<f32>(height);
+}
+
+static f32 FramebufferAspectRatio(const Core::IFramebuffer& framebuffer){
+    const Core::FramebufferInfoEx& framebufferInfo = framebuffer.getFramebufferInfo();
+    return ExtentAspectRatio(framebufferInfo.width, framebufferInfo.height);
+}
+
+static MeshViewState BuildDefaultMeshViewState(const f32 fallbackAspectRatio){
+    MeshViewState state;
+    Core::Scene::CameraComponent camera;
+    AlignedFloat4Data projectionParams;
+    BuildCameraProjectionParams(camera, fallbackAspectRatio, projectionParams);
+    StoreWorldToClipMatrix(state.worldToClip, BuildDefaultMeshViewBasis(), projectionParams);
     return state;
 }
 
-static void ApplyCameraMeshViewState(MeshViewState& state, const Core::ECS::TransformComponent& transform){
-    state.viewRotation[0] = -transform.rotation.x;
-    state.viewRotation[1] = -transform.rotation.y;
-    state.viewRotation[2] = -transform.rotation.z;
-    state.viewRotation[3] = transform.rotation.w;
-    state.viewPositionDepthBias[0] = transform.position.x;
-    state.viewPositionDepthBias[1] = transform.position.y;
-    state.viewPositionDepthBias[2] = transform.position.z;
-    state.viewPositionDepthBias[3] = 0.0f;
+static void ApplyCameraMeshViewState(
+    MeshViewState& state,
+    const Core::Scene::TransformComponent& transform,
+    const Core::Scene::CameraComponent& camera,
+    const f32 fallbackAspectRatio
+){
+    AlignedFloat4Data projectionParams;
+    BuildCameraProjectionParams(camera, fallbackAspectRatio, projectionParams);
+    StoreWorldToClipMatrix(state.worldToClip, BuildTransformMeshViewBasis(transform), projectionParams);
 }
 
-static MeshViewState ResolveMeshViewState(Core::ECS::World& world){
-    MeshViewState state = BuildDefaultMeshViewState();
+static MeshViewState ResolveMeshViewState(Core::ECS::World& world, const f32 fallbackAspectRatio){
+    MeshViewState state = BuildDefaultMeshViewState(fallbackAspectRatio);
 
     Core::ECS::EntityID mainCamera = Core::ECS::ENTITY_ID_INVALID;
-    bool foundProject = false;
-    world.view<Core::ECS::ProjectComponent>().each(
-        [&](Core::ECS::EntityID, Core::ECS::ProjectComponent& project){
-            if(foundProject)
+    bool foundScene = false;
+    world.view<Core::Scene::SceneComponent>().each(
+        [&](Core::ECS::EntityID, Core::Scene::SceneComponent& scene){
+            if(foundScene)
                 return;
 
-            foundProject = true;
-            mainCamera = project.mainCamera;
+            foundScene = true;
+            mainCamera = scene.mainCamera;
         }
     );
 
     MeshViewState fallbackCameraState = state;
     bool foundFallbackCamera = false;
     bool foundRequestedCamera = false;
-    world.view<Core::ECS::TransformComponent, Core::ECS::CameraComponent>().each(
-        [&](Core::ECS::EntityID entityId, Core::ECS::TransformComponent& transform, Core::ECS::CameraComponent& camera){
+    world.view<Core::Scene::TransformComponent, Core::Scene::CameraComponent>().each(
+        [&](Core::ECS::EntityID entityId, Core::Scene::TransformComponent& transform, Core::Scene::CameraComponent& camera){
             if(foundRequestedCamera)
                 return;
 
-            (void)camera;
             if(!foundFallbackCamera){
-                __hidden_ecs_graphics::ApplyCameraMeshViewState(fallbackCameraState, transform);
+                __hidden_ecs_graphics::ApplyCameraMeshViewState(
+                    fallbackCameraState,
+                    transform,
+                    camera,
+                    fallbackAspectRatio
+                );
                 foundFallbackCamera = true;
             }
             if(mainCamera.valid() && entityId == mainCamera){
-                __hidden_ecs_graphics::ApplyCameraMeshViewState(state, transform);
+                __hidden_ecs_graphics::ApplyCameraMeshViewState(
+                    state,
+                    transform,
+                    camera,
+                    fallbackAspectRatio
+                );
                 foundRequestedCamera = true;
             }
         }
@@ -446,34 +628,30 @@ static ShaderDrivenPushConstants BuildShaderDrivenPushConstants(
     const u32 triangleCount,
     const u32 instanceIndex,
     const u32 sourceVertexLayout,
-    const Core::ViewportState& viewportState,
-    const MeshViewState& viewState
+    const Core::ViewportState& viewportState
 ){
     ShaderDrivenPushConstants pushConstants;
     pushConstants.triangleCount = triangleCount;
     pushConstants.instanceIndex = instanceIndex;
     pushConstants.sourceVertexLayout = sourceVertexLayout;
-    CopyFloat4(pushConstants.viewRotation, viewState.viewRotation);
-    CopyFloat4(pushConstants.viewPositionDepthBias, viewState.viewPositionDepthBias);
 
     if(viewportState.viewports.empty())
         return pushConstants;
 
     const Core::Viewport& viewport = viewportState.viewports[0];
     pushConstants.scissorCullEnabled = 1;
-    pushConstants.viewportRect[0] = viewport.minX;
-    pushConstants.viewportRect[1] = viewport.minY;
-    pushConstants.viewportRect[2] = viewport.maxX;
-    pushConstants.viewportRect[3] = viewport.maxY;
+    pushConstants.viewportRect = AlignedFloat4Data(viewport.minX, viewport.minY, viewport.maxX, viewport.maxY);
 
     Core::Rect scissorRect(viewport);
     if(!viewportState.scissorRects.empty())
         scissorRect = viewportState.scissorRects[0];
 
-    pushConstants.scissorRect[0] = static_cast<f32>(scissorRect.minX);
-    pushConstants.scissorRect[1] = static_cast<f32>(scissorRect.minY);
-    pushConstants.scissorRect[2] = static_cast<f32>(scissorRect.maxX);
-    pushConstants.scissorRect[3] = static_cast<f32>(scissorRect.maxY);
+    pushConstants.scissorRect = AlignedFloat4Data(
+        static_cast<f32>(scissorRect.minX),
+        static_cast<f32>(scissorRect.minY),
+        static_cast<f32>(scissorRect.maxX),
+        static_cast<f32>(scissorRect.maxY)
+    );
     return pushConstants;
 }
 
@@ -532,10 +710,12 @@ static AvboitPushConstants BuildAvboitPushConstants(const RendererSystem::Avboit
     pushConstants.volume[1] = targets.physicalSliceCount;
     pushConstants.volume[2] = targets.lowWidth * targets.lowHeight * targets.physicalSliceCount;
     pushConstants.volume[3] = (targets.virtualSliceCount + 31u) / 32u;
-    pushConstants.params[0] = alpha;
-    pushConstants.params[1] = s_AvboitExtinctionFixedScale;
-    pushConstants.params[2] = s_AvboitSelfOcclusionSliceBias;
-    pushConstants.params[3] = 0.f;
+    pushConstants.params = AlignedFloat4Data(
+        alpha,
+        s_AvboitExtinctionFixedScale,
+        s_AvboitSelfOcclusionSliceBias,
+        0.f
+    );
     return pushConstants;
 }
 
@@ -544,12 +724,11 @@ static TransparentDrawPushConstants BuildTransparentDrawPushConstants(
     const u32 instanceIndex,
     const u32 sourceVertexLayout,
     const Core::ViewportState& viewportState,
-    const MeshViewState& viewState,
     const RendererSystem::AvboitFrameTargets& targets,
     const f32 alpha
 ){
     TransparentDrawPushConstants pushConstants;
-    pushConstants.mesh = BuildShaderDrivenPushConstants(triangleCount, instanceIndex, sourceVertexLayout, viewportState, viewState);
+    pushConstants.mesh = BuildShaderDrivenPushConstants(triangleCount, instanceIndex, sourceVertexLayout, viewportState);
     pushConstants.avboit = BuildAvboitPushConstants(targets, alpha);
     return pushConstants;
 }
@@ -601,9 +780,9 @@ RendererSystem::RendererSystem(
     , m_shaderPathResolver(Move(shaderPathResolver))
     , m_deformableRuntimeCache(MakeUnique<DeformableRuntimeMeshCache>(graphics, assetManager))
 {
-    readAccess<Core::ECS::ProjectComponent>();
-    readAccess<Core::ECS::TransformComponent>();
-    readAccess<Core::ECS::CameraComponent>();
+    readAccess<Core::Scene::SceneComponent>();
+    readAccess<Core::Scene::TransformComponent>();
+    readAccess<Core::Scene::CameraComponent>();
     readAccess<RendererComponent>();
     writeAccess<DeformableRendererComponent>();
 }
@@ -1470,11 +1649,18 @@ void RendererSystem::renderMaterialPass(
     Core::ViewportState viewportState;
     viewportState.addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
 
+    const f32 meshViewAspectRatio = avboitTargets
+        ? __hidden_ecs_graphics::ExtentAspectRatio(avboitTargets->fullWidth, avboitTargets->fullHeight)
+        : __hidden_ecs_graphics::FramebufferAspectRatio(*framebuffer)
+    ;
+    if(!ensureMeshViewBuffer(commandList, meshViewAspectRatio))
+        return;
+
     gatherMaterialPassDrawItems(framebuffer, pass, transparent, meshDrawItems, computeDrawItems, instanceData);
     if(!uploadInstanceBuffer(commandList, instanceData))
         return;
 
-    const MaterialPassDrawContext drawContext{ commandList, framebuffer, pass, passBindingSet, avboitTargets, viewportState };
+    const MaterialPassDrawContext drawContext{ commandList, framebuffer, pass, passBindingSet, avboitTargets, viewportState, meshViewAspectRatio };
     renderMeshMaterialPassDrawItems(drawContext, meshDrawItems);
     renderComputeMaterialPassDrawItems(drawContext, computeDrawItems);
 }
@@ -1505,8 +1691,8 @@ void RendererSystem::gatherMaterialPassDrawItems(
         if(!geometry.valid())
             return false;
 
-        const Core::ECS::TransformComponent* transform =
-            m_world.tryGetComponent<Core::ECS::TransformComponent>(entity)
+        const Core::Scene::TransformComponent* transform =
+            m_world.tryGetComponent<Core::Scene::TransformComponent>(entity)
         ;
 
         MaterialSurfaceInfo* materialInfo = nullptr;
@@ -1646,6 +1832,40 @@ bool RendererSystem::ensureInstanceBufferCapacity(const usize instanceCount){
     return true;
 }
 
+bool RendererSystem::ensureMeshViewBuffer(Core::ICommandList& commandList, const f32 fallbackAspectRatio){
+    if(!m_meshViewBuffer){
+        Core::BufferDesc meshViewBufferDesc;
+        meshViewBufferDesc
+            .setByteSize(sizeof(__hidden_ecs_graphics::MeshViewGpuData))
+            .setIsConstantBuffer(true)
+            .setDebugName(__hidden_ecs_graphics::MeshViewBufferName())
+            .enableAutomaticStateTracking(Core::ResourceStates::Common)
+        ;
+        Core::BufferHandle meshViewBuffer = m_graphics.createBuffer(meshViewBufferDesc);
+        if(!meshViewBuffer){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create mesh view buffer"));
+            return false;
+        }
+
+        m_meshViewBuffer = Move(meshViewBuffer);
+        invalidateGeometryBindingSets();
+    }
+
+    const __hidden_ecs_graphics::MeshViewState viewState =
+        __hidden_ecs_graphics::ResolveMeshViewState(m_world, fallbackAspectRatio)
+    ;
+    __hidden_ecs_graphics::MeshViewGpuData viewData;
+    for(usize i = 0; i < 4u; ++i)
+        viewData.worldToClip[i] = viewState.worldToClip[i];
+
+    commandList.setBufferState(m_meshViewBuffer.get(), Core::ResourceStates::CopyDest);
+    commandList.commitBarriers();
+    commandList.writeBuffer(m_meshViewBuffer.get(), &viewData, sizeof(viewData));
+    commandList.setBufferState(m_meshViewBuffer.get(), Core::ResourceStates::ConstantBuffer);
+    commandList.commitBarriers();
+    return true;
+}
+
 bool RendererSystem::uploadInstanceBuffer(Core::ICommandList& commandList, const InstanceGpuDataVector& instanceData){
     if(instanceData.empty())
         return true;
@@ -1700,10 +1920,8 @@ void RendererSystem::renderMeshMaterialPassDrawItems(
     const MaterialPassDrawContext& context,
     const MaterialPassDrawItemVector& drawItems
 ){
-    const __hidden_ecs_graphics::MeshViewState meshViewState = __hidden_ecs_graphics::ResolveMeshViewState(m_world);
-
     forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem& drawItem, GeometryResources& geometry, MaterialPipelineResources& pipelineResources){
-        if(!geometry.valid() || !pipelineResources.meshletPipeline || !m_instanceBuffer)
+        if(!geometry.valid() || !pipelineResources.meshletPipeline || !m_instanceBuffer || !m_meshViewBuffer)
             return;
         if(!ensureMeshBindingSet(geometry))
             return;
@@ -1711,6 +1929,7 @@ void RendererSystem::renderMeshMaterialPassDrawItems(
         context.commandList.setBufferState(geometry.shaderVertexBuffer.get(), Core::ResourceStates::ShaderResource);
         context.commandList.setBufferState(geometry.shaderIndexBuffer.get(), Core::ResourceStates::ShaderResource);
         context.commandList.setBufferState(m_instanceBuffer.get(), Core::ResourceStates::ShaderResource);
+        context.commandList.setBufferState(m_meshViewBuffer.get(), Core::ResourceStates::ConstantBuffer);
 
         Core::MeshletState meshletState;
         meshletState.setPipeline(pipelineResources.meshletPipeline.get());
@@ -1728,8 +1947,7 @@ void RendererSystem::renderMeshMaterialPassDrawItems(
                     geometry.triangleCount,
                     drawItem.instanceIndex,
                     geometry.sourceVertexLayout,
-                    context.viewportState,
-                    meshViewState
+                    context.viewportState
                 );
             context.commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
         }
@@ -1740,7 +1958,6 @@ void RendererSystem::renderMeshMaterialPassDrawItems(
                     drawItem.instanceIndex,
                     geometry.sourceVertexLayout,
                     context.viewportState,
-                    meshViewState,
                     *context.avboitTargets,
                     drawItem.alpha
                 );
@@ -1754,10 +1971,8 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
     const MaterialPassDrawContext& context,
     const MaterialPassDrawItemVector& drawItems
 ){
-    const __hidden_ecs_graphics::MeshViewState meshViewState = __hidden_ecs_graphics::ResolveMeshViewState(m_world);
-
     forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem& drawItem, GeometryResources& geometry, MaterialPipelineResources& pipelineResources){
-        if(!geometry.valid() || !pipelineResources.computePipeline || !pipelineResources.emulationPipeline || !m_instanceBuffer)
+        if(!geometry.valid() || !pipelineResources.computePipeline || !pipelineResources.emulationPipeline || !m_instanceBuffer || !m_meshViewBuffer)
             return;
         if(!ensureComputeBindingSet(geometry))
             return;
@@ -1767,6 +1982,7 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
         context.commandList.setBufferState(geometry.shaderVertexBuffer.get(), Core::ResourceStates::ShaderResource);
         context.commandList.setBufferState(geometry.shaderIndexBuffer.get(), Core::ResourceStates::ShaderResource);
         context.commandList.setBufferState(m_instanceBuffer.get(), Core::ResourceStates::ShaderResource);
+        context.commandList.setBufferState(m_meshViewBuffer.get(), Core::ResourceStates::ConstantBuffer);
         context.commandList.setBufferState(geometry.emulationVertexBuffer.get(), Core::ResourceStates::UnorderedAccess);
 
         Core::ComputeState computeState;
@@ -1780,8 +1996,7 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
                 geometry.triangleCount,
                 drawItem.instanceIndex,
                 geometry.sourceVertexLayout,
-                context.viewportState,
-                meshViewState
+                context.viewportState
             );
         context.commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
         context.commandList.dispatch(geometry.dispatchGroupCount);
@@ -1812,7 +2027,6 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
                     drawItem.instanceIndex,
                     geometry.sourceVertexLayout,
                     context.viewportState,
-                    meshViewState,
                     *context.avboitTargets,
                     drawItem.alpha
                 );
@@ -2272,6 +2486,7 @@ bool RendererSystem::ensureMeshShaderResources(){
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(0, 1));
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(1, 1));
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(3, 1));
+    bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(4, 1));
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(__hidden_ecs_graphics::TransparentDrawPushConstants)));
 
     Core::IDevice* device = m_graphics.getDevice();
@@ -2292,6 +2507,7 @@ bool RendererSystem::ensureComputeEmulationResources(){
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(1, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(2, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(3, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(4, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(__hidden_ecs_graphics::ShaderDrivenPushConstants)));
 
         Core::IDevice* device = m_graphics.getDevice();
@@ -2373,11 +2589,18 @@ bool RendererSystem::ensureMeshBindingSet(GeometryResources& geometry){
         );
         return false;
     }
+    if(!m_meshViewBuffer){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("RendererSystem: mesh binding set requires a mesh view buffer")
+        );
+        return false;
+    }
 
     Core::BindingSetDesc bindingSetDesc;
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(0, geometry.shaderVertexBuffer.get()));
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(1, geometry.shaderIndexBuffer.get()));
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(3, m_instanceBuffer.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(4, m_meshViewBuffer.get()));
 
     Core::IDevice* device = m_graphics.getDevice();
     geometry.meshBindingSet = device->createBindingSet(bindingSetDesc, m_meshBindingLayout.get());
@@ -2400,6 +2623,12 @@ bool RendererSystem::ensureComputeBindingSet(GeometryResources& geometry){
     if(!m_instanceBuffer){
         NWB_LOGGER_ERROR(
             NWB_TEXT("RendererSystem: compute binding set requires an instance buffer")
+        );
+        return false;
+    }
+    if(!m_meshViewBuffer){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("RendererSystem: compute binding set requires a mesh view buffer")
         );
         return false;
     }
@@ -2437,6 +2666,7 @@ bool RendererSystem::ensureComputeBindingSet(GeometryResources& geometry){
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(1, geometry.shaderIndexBuffer.get()));
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(2, geometry.emulationVertexBuffer.get()));
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(3, m_instanceBuffer.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(4, m_meshViewBuffer.get()));
 
     Core::IDevice* device = m_graphics.getDevice();
     geometry.computeBindingSet = device->createBindingSet(bindingSetDesc, m_computeBindingLayout.get());

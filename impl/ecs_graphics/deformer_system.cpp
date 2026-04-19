@@ -128,8 +128,12 @@ static bool ResolveMorphWeight(
     return false;
 }
 
-static Float4Data ExpandFloat3Delta(const Float3Data& value){
-    return Float4Data(value.x, value.y, value.z, 0.0f);
+static AlignedFloat4Data ExpandFloat3Delta(const Float3Data& value){
+    return AlignedFloat4Data(value.x, value.y, value.z, 0.0f);
+}
+
+static AlignedFloat4Data ExpandFloat4Delta(const Float4Data& value){
+    return AlignedFloat4Data(value.x, value.y, value.z, value.w);
 }
 
 template<typename MorphRangeVector, typename MorphDeltaVector>
@@ -210,10 +214,10 @@ static bool BuildMorphPayload(
             }
 
             DeformerSystem::DeformerMorphDeltaGpu gpuDelta;
-            gpuDelta.vertexId = delta.vertexId;
+            gpuDelta.vertex[0] = delta.vertexId;
             gpuDelta.deltaPosition = ExpandFloat3Delta(delta.deltaPosition);
             gpuDelta.deltaNormal = ExpandFloat3Delta(delta.deltaNormal);
-            gpuDelta.deltaTangent = delta.deltaTangent;
+            gpuDelta.deltaTangent = ExpandFloat4Delta(delta.deltaTangent);
             outDeltas.push_back(gpuDelta);
         }
     }
@@ -289,8 +293,13 @@ static bool BuildSkinPayload(
                 return false;
             }
             gpuSkin.joint[influenceIndex] = joint;
-            gpuSkin.weight[influenceIndex] = weight;
         }
+        gpuSkin.weight = AlignedFloat4Data(
+            sourceSkin.weight[0],
+            sourceSkin.weight[1],
+            sourceSkin.weight[2],
+            sourceSkin.weight[3]
+        );
         outSkinInfluences.push_back(gpuSkin);
     }
 
@@ -347,12 +356,24 @@ static_assert(
     "Deformer morph range GPU layout drifted"
 );
 static_assert(
+    alignof(DeformerSystem::DeformerMorphRangeGpu) >= alignof(AlignedFloat4Data),
+    "Deformer morph range GPU layout must stay SIMD-aligned"
+);
+static_assert(
     sizeof(DeformerSystem::DeformerMorphDeltaGpu) == sizeof(f32) * 16u,
     "Deformer morph delta GPU layout drifted"
 );
 static_assert(
+    alignof(DeformerSystem::DeformerMorphDeltaGpu) >= alignof(AlignedFloat4Data),
+    "Deformer morph delta GPU layout must stay SIMD-aligned"
+);
+static_assert(
     sizeof(DeformerSystem::DeformerSkinInfluenceGpu) == sizeof(f32) * 8u,
     "Deformer skin influence GPU layout drifted"
+);
+static_assert(
+    alignof(DeformerSystem::DeformerSkinInfluenceGpu) >= alignof(AlignedFloat4Data),
+    "Deformer skin influence GPU layout must stay SIMD-aligned"
 );
 
 

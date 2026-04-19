@@ -46,17 +46,20 @@ struct DeformableSurfaceEditSession{
     bool previewed = false;
 };
 
-struct DeformableHolePreview{
-    Float3Data center = Float3Data(0.0f, 0.0f, 0.0f);
-    Float3Data normal = Float3Data(0.0f, 0.0f, 1.0f);
-    Float3Data tangent = Float3Data(1.0f, 0.0f, 0.0f);
-    Float3Data bitangent = Float3Data(0.0f, 1.0f, 0.0f);
+struct alignas(AlignedFloat4Data) DeformableHolePreview{
+    AlignedFloat4Data center = AlignedFloat4Data(0.0f, 0.0f, 0.0f, 1.0f);
+    AlignedFloat4Data normal = AlignedFloat4Data(0.0f, 0.0f, 1.0f, 0.0f);
+    AlignedFloat4Data tangent = AlignedFloat4Data(1.0f, 0.0f, 0.0f, 0.0f);
+    AlignedFloat4Data bitangent = AlignedFloat4Data(0.0f, 1.0f, 0.0f, 0.0f);
     f32 radius = 0.0f;
     f32 ellipseRatio = 1.0f;
     f32 depth = 0.0f;
     u32 editRevision = 0;
     bool valid = false;
 };
+static_assert(IsStandardLayout_V<DeformableHolePreview>, "DeformableHolePreview must stay layout-stable");
+static_assert(IsTriviallyCopyable_V<DeformableHolePreview>, "DeformableHolePreview must stay cheap to copy");
+static_assert(alignof(DeformableHolePreview) >= alignof(AlignedFloat4Data), "DeformableHolePreview must stay SIMD-aligned");
 
 struct DeformableSurfaceHoleEditRecord{
     SourceSample restSample;
@@ -132,7 +135,7 @@ struct DeformableSurfaceEditState{
     const DeformableRuntimeMeshInstance& instance,
     const DeformablePickingInputs& inputs,
     const DeformableAccessoryAttachmentComponent& attachment,
-    Core::ECS::TransformComponent& outTransform
+    Core::Scene::TransformComponent& outTransform
 );
 [[nodiscard]] bool SerializeSurfaceEditState(
     const DeformableSurfaceEditState& state,

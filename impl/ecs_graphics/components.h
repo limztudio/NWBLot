@@ -8,6 +8,7 @@
 #include "../global.h"
 
 #include <core/assets/asset_ref.h>
+#include <core/ecs/entity_id.h>
 #include <global/matrix_math.h>
 
 
@@ -48,8 +49,12 @@ struct RuntimeMeshHandle{
     void reset(){ value = 0; }
 };
 
-[[nodiscard]] inline bool operator==(const RuntimeMeshHandle& lhs, const RuntimeMeshHandle& rhs){ return lhs.value == rhs.value; }
-[[nodiscard]] inline bool operator!=(const RuntimeMeshHandle& lhs, const RuntimeMeshHandle& rhs){ return !(lhs == rhs); }
+[[nodiscard]] inline bool operator==(const RuntimeMeshHandle& lhs, const RuntimeMeshHandle& rhs){
+    return lhs.value == rhs.value;
+}
+[[nodiscard]] inline bool operator!=(const RuntimeMeshHandle& lhs, const RuntimeMeshHandle& rhs){
+    return !(lhs == rhs);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -111,6 +116,28 @@ struct DeformableRendererComponent{
     RuntimeMeshHandle runtimeMesh;
     bool visible = true;
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct DeformableAccessoryAttachmentComponent{
+    Core::ECS::EntityID targetEntity = Core::ECS::ENTITY_ID_INVALID;
+    RuntimeMeshHandle runtimeMesh;
+    u32 editRevision = 0;
+    u32 firstWallVertex = Limit<u32>::s_Max;
+    u32 wallVertexCount = 0;
+    f32 normalOffset = 0.0f;
+    f32 uniformScale = 1.0f;
+};
+static_assert(
+    IsStandardLayout_V<DeformableAccessoryAttachmentComponent>,
+    "DeformableAccessoryAttachmentComponent must stay layout-stable for ECS storage"
+);
+static_assert(
+    IsTriviallyCopyable_V<DeformableAccessoryAttachmentComponent>,
+    "DeformableAccessoryAttachmentComponent must stay cheap to move in dense ECS storage"
+);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

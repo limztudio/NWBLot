@@ -8,6 +8,7 @@
 
 #include <core/alloc/scratch.h>
 #include <impl/assets_graphics/deformable_geometry_validation.h>
+#include <global/filesystem.h>
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -28,6 +29,9 @@ using namespace DeformableRuntime;
 
 static constexpr f32 s_WallRimTransferWeights[1] = { 1.0f };
 static constexpr f32 s_WallInnerInpaintWeights[3] = { 0.25f, 0.5f, 0.25f };
+static constexpr u32 s_SurfaceEditStateMagic = 0x53454631u; // SEF1
+static constexpr u32 s_SurfaceEditStateVersion = 2u;
+static constexpr u32 s_MinWallLoopVertexCount = 6u;
 
 struct HoleFrame{
     Vec3 center;
@@ -52,6 +56,37 @@ struct SkinWeightSample{
     u16 joint = 0;
     f32 weight = 0.0f;
 };
+
+[[nodiscard]] bool FiniteVec3(const Vec3& value){
+    return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z);
+}
+
+struct SurfaceEditStateHeader{
+    u32 magic = s_SurfaceEditStateMagic;
+    u32 version = s_SurfaceEditStateVersion;
+    u64 editCount = 0;
+    u64 accessoryCount = 0;
+};
+static_assert(IsStandardLayout_V<SurfaceEditStateHeader>, "SurfaceEditStateHeader must stay binary-serializable");
+static_assert(IsTriviallyCopyable_V<SurfaceEditStateHeader>, "SurfaceEditStateHeader must stay binary-serializable");
+
+struct SurfaceEditAccessoryRecordBinary{
+    u32 editRevision = 0;
+    u32 firstWallVertex = Limit<u32>::s_Max;
+    u32 wallVertexCount = 0;
+    f32 normalOffset = 0.0f;
+    f32 uniformScale = 1.0f;
+    NameHash geometryNameHash = {};
+    NameHash materialNameHash = {};
+};
+static_assert(
+    IsStandardLayout_V<SurfaceEditAccessoryRecordBinary>,
+    "SurfaceEditAccessoryRecordBinary must stay binary-serializable"
+);
+static_assert(
+    IsTriviallyCopyable_V<SurfaceEditAccessoryRecordBinary>,
+    "SurfaceEditAccessoryRecordBinary must stay binary-serializable"
+);
 
 using MorphDeltaLookup = HashMap<
     u32,
@@ -186,6 +221,28 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
     ;
 }
 
+[[nodiscard]] bool MatchingFloat3Data(const Float3Data& lhs, const Float3Data& rhs, const f32 epsilon){
+    return DeformableValidation::AbsF32(lhs.x - rhs.x) <= epsilon
+        && DeformableValidation::AbsF32(lhs.y - rhs.y) <= epsilon
+        && DeformableValidation::AbsF32(lhs.z - rhs.z) <= epsilon
+    ;
+}
+
+[[nodiscard]] bool MatchingPosedHit(const DeformablePosedHit& lhs, const DeformablePosedHit& rhs){
+    return lhs.entity == rhs.entity
+        && lhs.runtimeMesh == rhs.runtimeMesh
+        && lhs.editRevision == rhs.editRevision
+        && lhs.triangle == rhs.triangle
+        && DeformableValidation::AbsF32(lhs.bary[0] - rhs.bary[0]) <= DeformableValidation::s_BarycentricSumEpsilon
+        && DeformableValidation::AbsF32(lhs.bary[1] - rhs.bary[1]) <= DeformableValidation::s_BarycentricSumEpsilon
+        && DeformableValidation::AbsF32(lhs.bary[2] - rhs.bary[2]) <= DeformableValidation::s_BarycentricSumEpsilon
+        && DeformableValidation::AbsF32(lhs.distance - rhs.distance) <= DeformableValidation::s_BarycentricSumEpsilon
+        && MatchingFloat3Data(lhs.position, rhs.position, DeformableValidation::s_BarycentricSumEpsilon)
+        && MatchingFloat3Data(lhs.normal, rhs.normal, DeformableValidation::s_RestFrameOrthogonalityEpsilon)
+        && MatchingSourceSample(lhs.restSample, rhs.restSample)
+    ;
+}
+
 [[nodiscard]] bool ValidateHitRestSample(
     const DeformableRuntimeMeshInstance& instance,
     const DeformablePosedHit& hit)
@@ -226,15 +283,19 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
     return true;
 }
 
-[[nodiscard]] bool ValidateHoleShape(const DeformableHoleEditParams& params){
-    return IsFinite(params.radius)
-        && IsFinite(params.ellipseRatio)
-        && IsFinite(params.depth)
-        && IsFinite(params.radius * params.ellipseRatio)
-        && ActiveLength(params.radius)
-        && ActiveLength(params.radius * params.ellipseRatio)
-        && params.depth >= 0.0f
+[[nodiscard]] bool ValidateHoleShapeValues(const f32 radius, const f32 ellipseRatio, const f32 depth){
+    return IsFinite(radius)
+        && IsFinite(ellipseRatio)
+        && IsFinite(depth)
+        && IsFinite(radius * ellipseRatio)
+        && ActiveLength(radius)
+        && ActiveLength(radius * ellipseRatio)
+        && depth >= 0.0f
     ;
+}
+
+[[nodiscard]] bool ValidateHoleShape(const DeformableHoleEditParams& params){
+    return ValidateHoleShapeValues(params.radius, params.ellipseRatio, params.depth);
 }
 
 [[nodiscard]] bool ValidateParams(const DeformableRuntimeMeshInstance& instance, const DeformableHoleEditParams& params){
@@ -242,6 +303,438 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
         && ValidateHoleShape(params)
         && instance.editRevision != Limit<u32>::s_Max
     ;
+}
+
+[[nodiscard]] bool RuntimeMeshUploaded(const DeformableRuntimeMeshInstance& instance){
+    return (instance.dirtyFlags & RuntimeMeshDirtyFlag::GpuUploadDirty) == 0u;
+}
+
+[[nodiscard]] bool ValidateSurfaceEditSession(
+    const DeformableRuntimeMeshInstance& instance,
+    const DeformableSurfaceEditSession& session)
+{
+    return session.active
+        && session.entity == instance.entity
+        && session.runtimeMesh == instance.handle
+        && session.editRevision == instance.editRevision
+        && ValidateHitIdentity(instance, session.hit)
+    ;
+}
+
+[[nodiscard]] bool ValidateSurfaceEditSessionParams(
+    const DeformableRuntimeMeshInstance& instance,
+    const DeformableSurfaceEditSession& session,
+    const DeformableHoleEditParams& params)
+{
+    return ValidateSurfaceEditSession(instance, session)
+        && ValidateParams(instance, params)
+        && MatchingPosedHit(session.hit, params.posedHit)
+    ;
+}
+
+[[nodiscard]] bool BuildPreviewFrame(
+    const DeformableRuntimeMeshInstance& instance,
+    const DeformableHoleEditParams& params,
+    HoleFrame& outFrame)
+{
+    u32 hitTriangleIndices[3] = {};
+    if(!DeformableRuntime::ValidateTriangleIndex(instance, params.posedHit.triangle, hitTriangleIndices))
+        return false;
+
+    f32 hitBary[3] = {};
+    if(!DeformableValidation::NormalizeSourceBarycentric(params.posedHit.bary, hitBary))
+        return false;
+    return BuildHoleFrame(instance, hitTriangleIndices, hitBary, outFrame);
+}
+
+[[nodiscard]] bool ValidWallVertexSpan(const u32 firstVertex, const u32 vertexCount){
+    return firstVertex != Limit<u32>::s_Max
+        && vertexCount >= s_MinWallLoopVertexCount
+        && (vertexCount % 2u) == 0u
+        && vertexCount <= Limit<u32>::s_Max - firstVertex
+    ;
+}
+
+[[nodiscard]] bool ValidOptionalWallVertexSpan(const u32 firstVertex, const u32 vertexCount){
+    if(vertexCount == 0u)
+        return firstVertex == Limit<u32>::s_Max;
+
+    return ValidWallVertexSpan(firstVertex, vertexCount);
+}
+
+[[nodiscard]] bool ValidHoleEditResult(const DeformableHoleEditResult& result, const bool requireWall){
+    if(result.editRevision == 0u || result.removedTriangleCount == 0u)
+        return false;
+    if(!ValidOptionalWallVertexSpan(result.firstWallVertex, result.wallVertexCount))
+        return false;
+    if(result.wallVertexCount == 0u)
+        return !requireWall && result.addedTriangleCount == 0u;
+    if(result.wallVertexCount > result.addedVertexCount)
+        return false;
+    if(result.addedTriangleCount != result.wallVertexCount)
+        return false;
+    return true;
+}
+
+[[nodiscard]] bool RuntimeMeshWallTrianglePairsMatchAt(
+    const DeformableRuntimeMeshInstance& instance,
+    const usize indexBase,
+    const usize firstWallVertex,
+    const usize wallPairCount)
+{
+    for(usize pairIndex = 0u; pairIndex < wallPairCount; ++pairIndex){
+        const usize nextPairIndex = (pairIndex + 1u) % wallPairCount;
+        const u32 rimA = static_cast<u32>(firstWallVertex + (pairIndex * 2u));
+        const u32 innerA = rimA + 1u;
+        const u32 rimB = static_cast<u32>(firstWallVertex + (nextPairIndex * 2u));
+        const u32 innerB = rimB + 1u;
+        const usize pairIndexBase = indexBase + (pairIndex * 6u);
+
+        if(instance.indices[pairIndexBase + 0u] != rimA
+            || instance.indices[pairIndexBase + 1u] != rimB
+            || instance.indices[pairIndexBase + 2u] != innerB
+            || instance.indices[pairIndexBase + 3u] != rimA
+            || instance.indices[pairIndexBase + 4u] != innerB
+            || instance.indices[pairIndexBase + 5u] != innerA
+        )
+            return false;
+    }
+    return true;
+}
+
+[[nodiscard]] bool RuntimeMeshHasWallTrianglePairs(
+    const DeformableRuntimeMeshInstance& instance,
+    const u32 firstWallVertexValue,
+    const u32 wallVertexCountValue)
+{
+    if(!ValidWallVertexSpan(firstWallVertexValue, wallVertexCountValue))
+        return false;
+
+    const usize firstWallVertex = static_cast<usize>(firstWallVertexValue);
+    const usize wallVertexCount = static_cast<usize>(wallVertexCountValue);
+    if(firstWallVertex >= instance.restVertices.size()
+        || wallVertexCount > instance.restVertices.size() - firstWallVertex
+    )
+        return false;
+
+    if(wallVertexCount > Limit<usize>::s_Max / 3u)
+        return false;
+
+    const usize wallIndexCount = wallVertexCount * 3u;
+    if(wallIndexCount > instance.indices.size())
+        return false;
+
+    const usize wallPairCount = wallVertexCount / 2u;
+    const usize lastIndexBase = instance.indices.size() - wallIndexCount;
+    if(RuntimeMeshWallTrianglePairsMatchAt(instance, lastIndexBase, firstWallVertex, wallPairCount))
+        return true;
+
+    for(usize indexBase = 0u; indexBase < lastIndexBase; indexBase += 3u){
+        if(RuntimeMeshWallTrianglePairsMatchAt(instance, indexBase, firstWallVertex, wallPairCount))
+            return true;
+    }
+    return false;
+}
+
+[[nodiscard]] bool RuntimeMeshHasWallTrianglePairs(
+    const DeformableRuntimeMeshInstance& instance,
+    const DeformableHoleEditResult& result)
+{
+    return ValidHoleEditResult(result, true)
+        && RuntimeMeshHasWallTrianglePairs(instance, result.firstWallVertex, result.wallVertexCount)
+    ;
+}
+
+[[nodiscard]] bool ValidStoredRestFrame(const Float3Data& position, const Float3Data& normal){
+    const f32 normalLengthSquared = LengthSquared(ToVec3(normal));
+    return DeformableValidation::IsFiniteFloat3(position)
+        && DeformableValidation::IsFiniteFloat3(normal)
+        && DeformableValidation::NearlyUnitLengthSquared(normalLengthSquared)
+    ;
+}
+
+[[nodiscard]] bool ValidHoleRecord(const DeformableSurfaceHoleEditRecord& record){
+    return ValidateHoleShapeValues(record.radius, record.ellipseRatio, record.depth)
+        && record.baseEditRevision != Limit<u32>::s_Max
+        && record.restSample.sourceTri != Limit<u32>::s_Max
+        && DeformableValidation::ValidSourceBarycentric(record.restSample.bary)
+        && ValidStoredRestFrame(record.restPosition, record.restNormal)
+    ;
+}
+
+[[nodiscard]] bool ValidEditRecord(const DeformableSurfaceEditRecord& record){
+    if(record.type != DeformableSurfaceEditRecordType::Hole)
+        return false;
+    if(!ValidHoleRecord(record.hole))
+        return false;
+    if(record.result.editRevision != record.hole.baseEditRevision + 1u)
+        return false;
+    if(!ValidHoleEditResult(record.result, true))
+        return false;
+    return true;
+}
+
+[[nodiscard]] bool ValidAccessoryAttachmentValues(
+    const u32 editRevision,
+    const u32 firstWallVertex,
+    const u32 wallVertexCount,
+    const f32 normalOffset,
+    const f32 uniformScale)
+{
+    return editRevision != 0u
+        && ValidWallVertexSpan(firstWallVertex, wallVertexCount)
+        && IsFinite(normalOffset)
+        && normalOffset >= 0.0f
+        && IsFinite(uniformScale)
+        && uniformScale > 0.0f
+    ;
+}
+
+[[nodiscard]] bool ValidAccessoryAttachment(const DeformableAccessoryAttachmentComponent& attachment){
+    return attachment.targetEntity.valid()
+        && attachment.runtimeMesh.valid()
+        && ValidAccessoryAttachmentValues(
+            attachment.editRevision,
+            attachment.firstWallVertex,
+            attachment.wallVertexCount,
+            attachment.normalOffset,
+            attachment.uniformScale
+        )
+    ;
+}
+
+[[nodiscard]] bool ValidAccessoryRecord(const DeformableAccessoryAttachmentRecord& record){
+    return ValidAccessoryAttachmentValues(
+            record.editRevision,
+            record.firstWallVertex,
+            record.wallVertexCount,
+            record.normalOffset,
+            record.uniformScale
+        )
+        && record.geometry.valid()
+        && record.material.valid()
+    ;
+}
+
+[[nodiscard]] bool EditRecordMatchesAccessory(
+    const DeformableSurfaceEditRecord& record,
+    const DeformableAccessoryAttachmentRecord& accessory)
+{
+    return record.result.editRevision == accessory.editRevision
+        && record.result.firstWallVertex == accessory.firstWallVertex
+        && record.result.wallVertexCount == accessory.wallVertexCount
+    ;
+}
+
+[[nodiscard]] bool HasCommittedHoleForAttachment(
+    const Vector<DeformableSurfaceEditRecord>& edits,
+    const DeformableAccessoryAttachmentRecord& accessory)
+{
+    for(const DeformableSurfaceEditRecord& record : edits){
+        if(EditRecordMatchesAccessory(record, accessory))
+            return true;
+    }
+    return false;
+}
+
+[[nodiscard]] bool ValidSurfaceEditState(const DeformableSurfaceEditState& state){
+    u32 expectedBaseEditRevision = 0u;
+    for(const DeformableSurfaceEditRecord& record : state.edits){
+        if(!ValidEditRecord(record))
+            return false;
+        if(record.hole.baseEditRevision != expectedBaseEditRevision)
+            return false;
+        expectedBaseEditRevision = record.result.editRevision;
+    }
+    for(const DeformableAccessoryAttachmentRecord& accessory : state.accessories){
+        if(!ValidAccessoryRecord(accessory)
+            || !HasCommittedHoleForAttachment(state.edits, accessory)
+        )
+            return false;
+    }
+    return true;
+}
+
+[[nodiscard]] bool BuildAccessoryBinaryRecord(
+    const DeformableAccessoryAttachmentRecord& record,
+    SurfaceEditAccessoryRecordBinary& outRecord)
+{
+    outRecord = SurfaceEditAccessoryRecordBinary{};
+    if(!ValidAccessoryRecord(record))
+        return false;
+
+    outRecord.editRevision = record.editRevision;
+    outRecord.firstWallVertex = record.firstWallVertex;
+    outRecord.wallVertexCount = record.wallVertexCount;
+    outRecord.normalOffset = record.normalOffset;
+    outRecord.uniformScale = record.uniformScale;
+    outRecord.geometryNameHash = record.geometry.name().hash();
+    outRecord.materialNameHash = record.material.name().hash();
+    return true;
+}
+
+[[nodiscard]] bool BuildAccessoryRecord(
+    const SurfaceEditAccessoryRecordBinary& binary,
+    DeformableAccessoryAttachmentRecord& outRecord)
+{
+    outRecord = DeformableAccessoryAttachmentRecord{};
+    outRecord.editRevision = binary.editRevision;
+    outRecord.firstWallVertex = binary.firstWallVertex;
+    outRecord.wallVertexCount = binary.wallVertexCount;
+    outRecord.normalOffset = binary.normalOffset;
+    outRecord.uniformScale = binary.uniformScale;
+    outRecord.geometry = Core::Assets::AssetRef<Geometry>(Name(binary.geometryNameHash));
+    outRecord.material = Core::Assets::AssetRef<Material>(Name(binary.materialNameHash));
+    return ValidAccessoryRecord(outRecord);
+}
+
+[[nodiscard]] bool ComputeSurfaceEditStateBinarySize(
+    const u64 editCount,
+    const u64 accessoryCount,
+    usize& outSize)
+{
+    outSize = sizeof(SurfaceEditStateHeader);
+    if(editCount > static_cast<u64>(Limit<usize>::s_Max / sizeof(DeformableSurfaceEditRecord)))
+        return false;
+    if(accessoryCount > static_cast<u64>(Limit<usize>::s_Max / sizeof(SurfaceEditAccessoryRecordBinary)))
+        return false;
+
+    const usize editBytes = static_cast<usize>(editCount) * sizeof(DeformableSurfaceEditRecord);
+    const usize accessoryBytes = static_cast<usize>(accessoryCount) * sizeof(SurfaceEditAccessoryRecordBinary);
+    if(editBytes > Limit<usize>::s_Max - outSize)
+        return false;
+    outSize += editBytes;
+    if(accessoryBytes > Limit<usize>::s_Max - outSize)
+        return false;
+    outSize += accessoryBytes;
+    return true;
+}
+
+[[nodiscard]] AlignedFloat4Data RotationFromPositiveZToNormal(const Vec3& rawNormal){
+    if(!FiniteVec3(rawNormal))
+        return AlignedFloat4Data(0.0f, 0.0f, 0.0f, 1.0f);
+
+    Vec3 normal = Normalize(rawNormal, Vec3{ 0.0f, 0.0f, 1.0f });
+    if(!FiniteVec3(normal))
+        return AlignedFloat4Data(0.0f, 0.0f, 0.0f, 1.0f);
+
+    f32 dot = normal.z;
+    if(dot > 1.0f)
+        dot = 1.0f;
+    if(dot < -1.0f)
+        dot = -1.0f;
+
+    if(dot > 0.999f)
+        return AlignedFloat4Data(0.0f, 0.0f, 0.0f, 1.0f);
+    if(dot < -0.999f)
+        return AlignedFloat4Data(1.0f, 0.0f, 0.0f, 0.0f);
+
+    const Vec3 axis = Vec3{ -normal.y, normal.x, 0.0f };
+    const f32 scale = Sqrt((1.0f + dot) * 2.0f);
+    if(!IsFinite(scale) || scale <= s_FrameEpsilon)
+        return AlignedFloat4Data(0.0f, 0.0f, 0.0f, 1.0f);
+
+    const f32 invScale = 1.0f / scale;
+    return AlignedFloat4Data(axis.x * invScale, axis.y * invScale, axis.z * invScale, scale * 0.5f);
+}
+
+[[nodiscard]] AlignedFloat4Data NormalizeRotationQuaternion(
+    const AlignedFloat4Data& rotation,
+    const Vec3& fallbackNormal)
+{
+    const f32 lengthSquared =
+        (rotation.x * rotation.x)
+        + (rotation.y * rotation.y)
+        + (rotation.z * rotation.z)
+        + (rotation.w * rotation.w)
+    ;
+    if(!IsFinite(lengthSquared) || lengthSquared <= s_FrameEpsilon)
+        return RotationFromPositiveZToNormal(fallbackNormal);
+
+    const f32 invLength = 1.0f / Sqrt(lengthSquared);
+    return AlignedFloat4Data(
+        rotation.x * invLength,
+        rotation.y * invLength,
+        rotation.z * invLength,
+        rotation.w * invLength
+    );
+}
+
+[[nodiscard]] AlignedFloat4Data RotationFromFrame(const Vec3& rawTangent, const Vec3& rawNormal){
+    if(!FiniteVec3(rawNormal))
+        return AlignedFloat4Data(0.0f, 0.0f, 0.0f, 1.0f);
+
+    Vec3 normal = Normalize(rawNormal, Vec3{ 0.0f, 0.0f, 1.0f });
+    if(!FiniteVec3(normal))
+        return AlignedFloat4Data(0.0f, 0.0f, 0.0f, 1.0f);
+
+    Vec3 tangent = FiniteVec3(rawTangent)
+        ? Subtract(rawTangent, Scale(normal, Dot(rawTangent, normal)))
+        : FallbackTangent(normal)
+    ;
+    if(LengthSquared(tangent) <= s_FrameEpsilon)
+        tangent = FallbackTangent(normal);
+    tangent = Normalize(tangent, FallbackTangent(normal));
+
+    Vec3 bitangent = Cross(normal, tangent);
+    if(LengthSquared(bitangent) <= s_FrameEpsilon)
+        return RotationFromPositiveZToNormal(normal);
+    bitangent = Normalize(bitangent, Vec3{ 0.0f, 1.0f, 0.0f });
+
+    const f32 m00 = tangent.x;
+    const f32 m01 = bitangent.x;
+    const f32 m02 = normal.x;
+    const f32 m10 = tangent.y;
+    const f32 m11 = bitangent.y;
+    const f32 m12 = normal.y;
+    const f32 m20 = tangent.z;
+    const f32 m21 = bitangent.z;
+    const f32 m22 = normal.z;
+
+    AlignedFloat4Data rotation;
+    const f32 trace = m00 + m11 + m22;
+    if(trace > 0.0f){
+        const f32 scale = Sqrt(trace + 1.0f) * 2.0f;
+        if(!IsFinite(scale) || scale <= s_FrameEpsilon)
+            return RotationFromPositiveZToNormal(normal);
+
+        rotation.x = (m21 - m12) / scale;
+        rotation.y = (m02 - m20) / scale;
+        rotation.z = (m10 - m01) / scale;
+        rotation.w = 0.25f * scale;
+    }
+    else if(m00 > m11 && m00 > m22){
+        const f32 scale = Sqrt(1.0f + m00 - m11 - m22) * 2.0f;
+        if(!IsFinite(scale) || scale <= s_FrameEpsilon)
+            return RotationFromPositiveZToNormal(normal);
+
+        rotation.x = 0.25f * scale;
+        rotation.y = (m01 + m10) / scale;
+        rotation.z = (m02 + m20) / scale;
+        rotation.w = (m21 - m12) / scale;
+    }
+    else if(m11 > m22){
+        const f32 scale = Sqrt(1.0f + m11 - m00 - m22) * 2.0f;
+        if(!IsFinite(scale) || scale <= s_FrameEpsilon)
+            return RotationFromPositiveZToNormal(normal);
+
+        rotation.x = (m01 + m10) / scale;
+        rotation.y = 0.25f * scale;
+        rotation.z = (m12 + m21) / scale;
+        rotation.w = (m02 - m20) / scale;
+    }
+    else{
+        const f32 scale = Sqrt(1.0f + m22 - m00 - m11) * 2.0f;
+        if(!IsFinite(scale) || scale <= s_FrameEpsilon)
+            return RotationFromPositiveZToNormal(normal);
+
+        rotation.x = (m02 + m20) / scale;
+        rotation.y = (m12 + m21) / scale;
+        rotation.z = 0.25f * scale;
+        rotation.w = (m10 - m01) / scale;
+    }
+
+    return NormalizeRotationQuaternion(rotation, normal);
 }
 
 template<typename EdgeVector>
@@ -977,6 +1470,297 @@ template<typename AssignedSampleVector>
 
 
 
+bool BeginSurfaceEdit(
+    const DeformableRuntimeMeshInstance& instance,
+    const DeformablePosedHit& hit,
+    DeformableSurfaceEditSession& outSession)
+{
+    outSession = DeformableSurfaceEditSession{};
+    if(!__hidden_deformable_surface_edit::ValidateRuntimePayload(instance))
+        return false;
+    if(!__hidden_deformable_surface_edit::RuntimeMeshUploaded(instance))
+        return false;
+    if(!__hidden_deformable_surface_edit::ValidateHitIdentity(instance, hit))
+        return false;
+
+    outSession.entity = instance.entity;
+    outSession.runtimeMesh = instance.handle;
+    outSession.editRevision = instance.editRevision;
+    outSession.hit = hit;
+    outSession.active = true;
+    return true;
+}
+
+bool PreviewHole(
+    const DeformableRuntimeMeshInstance& instance,
+    const DeformableSurfaceEditSession& session,
+    const DeformableHoleEditParams& params,
+    DeformableHolePreview& outPreview)
+{
+    outPreview = DeformableHolePreview{};
+    if(!__hidden_deformable_surface_edit::ValidateRuntimePayload(instance)
+        || !__hidden_deformable_surface_edit::RuntimeMeshUploaded(instance)
+        || !__hidden_deformable_surface_edit::ValidateSurfaceEditSessionParams(instance, session, params)
+    )
+        return false;
+
+    __hidden_deformable_surface_edit::HoleFrame frame;
+    if(!__hidden_deformable_surface_edit::BuildPreviewFrame(instance, params, frame))
+        return false;
+
+    outPreview.center = DeformableRuntime::ToFloat3(frame.center);
+    outPreview.normal = DeformableRuntime::ToFloat3(frame.normal);
+    outPreview.tangent = DeformableRuntime::ToFloat3(frame.tangent);
+    outPreview.bitangent = DeformableRuntime::ToFloat3(frame.bitangent);
+    outPreview.radius = params.radius;
+    outPreview.ellipseRatio = params.ellipseRatio;
+    outPreview.depth = params.depth;
+    outPreview.editRevision = instance.editRevision;
+    outPreview.valid = true;
+    return true;
+}
+
+bool CommitHole(
+    DeformableRuntimeMeshInstance& instance,
+    const DeformableSurfaceEditSession& session,
+    const DeformableHoleEditParams& params,
+    DeformableHoleEditResult* outResult,
+    DeformableSurfaceEditRecord* outRecord)
+{
+    if(outResult)
+        *outResult = DeformableHoleEditResult{};
+    if(outRecord)
+        *outRecord = DeformableSurfaceEditRecord{};
+    if(!__hidden_deformable_surface_edit::ValidateRuntimePayload(instance)
+        || !__hidden_deformable_surface_edit::RuntimeMeshUploaded(instance)
+        || !__hidden_deformable_surface_edit::ValidateSurfaceEditSessionParams(instance, session, params)
+    )
+        return false;
+
+    __hidden_deformable_surface_edit::HoleFrame recordFrame;
+    if(outRecord && !__hidden_deformable_surface_edit::BuildPreviewFrame(instance, params, recordFrame))
+        return false;
+
+    DeformableHoleEditResult result;
+    if(!CommitDeformableRestSpaceHole(instance, params, &result))
+        return false;
+
+    if(outResult)
+        *outResult = result;
+    if(outRecord){
+        outRecord->type = DeformableSurfaceEditRecordType::Hole;
+        outRecord->hole.restSample = params.posedHit.restSample;
+        outRecord->hole.restPosition = DeformableRuntime::ToFloat3(recordFrame.center);
+        outRecord->hole.restNormal = DeformableRuntime::ToFloat3(recordFrame.normal);
+        outRecord->hole.baseEditRevision = session.editRevision;
+        outRecord->hole.radius = params.radius;
+        outRecord->hole.ellipseRatio = params.ellipseRatio;
+        outRecord->hole.depth = params.depth;
+        outRecord->result = result;
+    }
+    return true;
+}
+
+bool AttachAccessory(
+    const DeformableRuntimeMeshInstance& instance,
+    const DeformableHoleEditResult& holeResult,
+    const f32 normalOffset,
+    const f32 uniformScale,
+    DeformableAccessoryAttachmentComponent& outAttachment)
+{
+    outAttachment = DeformableAccessoryAttachmentComponent{};
+    if(!__hidden_deformable_surface_edit::ValidateRuntimePayload(instance)
+        || holeResult.editRevision > instance.editRevision
+        || !__hidden_deformable_surface_edit::ValidAccessoryAttachmentValues(
+            holeResult.editRevision,
+            holeResult.firstWallVertex,
+            holeResult.wallVertexCount,
+            normalOffset,
+            uniformScale
+        )
+        || !__hidden_deformable_surface_edit::RuntimeMeshHasWallTrianglePairs(instance, holeResult)
+    )
+        return false;
+
+    outAttachment.targetEntity = instance.entity;
+    outAttachment.runtimeMesh = instance.handle;
+    outAttachment.editRevision = holeResult.editRevision;
+    outAttachment.firstWallVertex = holeResult.firstWallVertex;
+    outAttachment.wallVertexCount = holeResult.wallVertexCount;
+    outAttachment.normalOffset = normalOffset;
+    outAttachment.uniformScale = uniformScale;
+    return true;
+}
+
+bool ResolveAccessoryAttachmentTransform(
+    const DeformableRuntimeMeshInstance& instance,
+    const DeformablePickingInputs& inputs,
+    const DeformableAccessoryAttachmentComponent& attachment,
+    Core::ECS::TransformComponent& outTransform)
+{
+    if(!__hidden_deformable_surface_edit::ValidAccessoryAttachment(attachment)
+        || attachment.targetEntity != instance.entity
+        || attachment.runtimeMesh != instance.handle
+        || attachment.editRevision > instance.editRevision
+        || !__hidden_deformable_surface_edit::RuntimeMeshUploaded(instance)
+        || !__hidden_deformable_surface_edit::RuntimeMeshHasWallTrianglePairs(
+            instance,
+            attachment.firstWallVertex,
+            attachment.wallVertexCount
+        )
+    )
+        return false;
+
+    Vector<DeformableVertexRest> posedVertices;
+    if(!BuildDeformablePickingVertices(instance, inputs, posedVertices))
+        return false;
+
+    const usize firstWallVertex = static_cast<usize>(attachment.firstWallVertex);
+    const usize wallVertexCount = static_cast<usize>(attachment.wallVertexCount);
+    if(firstWallVertex >= posedVertices.size() || wallVertexCount > posedVertices.size() - firstWallVertex)
+        return false;
+
+    DeformableRuntime::Vec3 rimCenter;
+    DeformableRuntime::Vec3 innerCenter;
+    DeformableRuntime::Vec3 firstRimPosition;
+    const usize wallPairCount = wallVertexCount / 2u;
+    for(usize pairIndex = 0u; pairIndex < wallPairCount; ++pairIndex){
+        const usize rimVertexIndex = firstWallVertex + (pairIndex * 2u);
+        const usize innerVertexIndex = rimVertexIndex + 1u;
+        const DeformableRuntime::Vec3 rimPosition =
+            DeformableRuntime::ToVec3(posedVertices[rimVertexIndex].position)
+        ;
+        if(pairIndex == 0u)
+            firstRimPosition = rimPosition;
+        rimCenter = DeformableRuntime::Add(
+            rimCenter,
+            rimPosition
+        );
+        innerCenter = DeformableRuntime::Add(
+            innerCenter,
+            DeformableRuntime::ToVec3(posedVertices[innerVertexIndex].position)
+        );
+    }
+
+    const f32 invWallPairCount = 1.0f / static_cast<f32>(wallPairCount);
+    rimCenter = DeformableRuntime::Scale(rimCenter, invWallPairCount);
+    innerCenter = DeformableRuntime::Scale(innerCenter, invWallPairCount);
+    DeformableRuntime::Vec3 normal = DeformableRuntime::Subtract(rimCenter, innerCenter);
+    normal = DeformableRuntime::Normalize(normal, DeformableRuntime::Vec3{ 0.0f, 0.0f, 1.0f });
+    if(!__hidden_deformable_surface_edit::FiniteVec3(normal)
+        || DeformableRuntime::LengthSquared(normal) <= DeformableRuntime::s_FrameEpsilon
+    )
+        return false;
+
+    const DeformableRuntime::Vec3 accessoryPosition = DeformableRuntime::Add(
+        rimCenter,
+        DeformableRuntime::Scale(normal, attachment.normalOffset)
+    );
+    if(!__hidden_deformable_surface_edit::FiniteVec3(accessoryPosition))
+        return false;
+
+    DeformableRuntime::Vec3 tangent = DeformableRuntime::Subtract(firstRimPosition, rimCenter);
+    tangent = DeformableRuntime::Subtract(
+        tangent,
+        DeformableRuntime::Scale(normal, DeformableRuntime::Dot(tangent, normal))
+    );
+    if(DeformableRuntime::LengthSquared(tangent) <= DeformableRuntime::s_FrameEpsilon)
+        tangent = DeformableRuntime::FallbackTangent(normal);
+
+    outTransform.position = AlignedFloat3Data(accessoryPosition.x, accessoryPosition.y, accessoryPosition.z);
+    outTransform.rotation = __hidden_deformable_surface_edit::RotationFromFrame(tangent, normal);
+    outTransform.scale = AlignedFloat3Data(attachment.uniformScale, attachment.uniformScale, attachment.uniformScale);
+    return true;
+}
+
+bool SerializeSurfaceEditState(
+    const DeformableSurfaceEditState& state,
+    Core::Assets::AssetBytes& outBinary)
+{
+    outBinary.clear();
+    usize binarySize = 0u;
+    if(!__hidden_deformable_surface_edit::ComputeSurfaceEditStateBinarySize(
+            static_cast<u64>(state.edits.size()),
+            static_cast<u64>(state.accessories.size()),
+            binarySize
+        )
+    )
+        return false;
+
+    if(!__hidden_deformable_surface_edit::ValidSurfaceEditState(state))
+        return false;
+
+    outBinary.reserve(binarySize);
+    __hidden_deformable_surface_edit::SurfaceEditStateHeader header;
+    header.editCount = static_cast<u64>(state.edits.size());
+    header.accessoryCount = static_cast<u64>(state.accessories.size());
+    AppendPOD(outBinary, header);
+    for(const DeformableSurfaceEditRecord& record : state.edits)
+        AppendPOD(outBinary, record);
+    for(const DeformableAccessoryAttachmentRecord& accessory : state.accessories){
+        __hidden_deformable_surface_edit::SurfaceEditAccessoryRecordBinary binaryRecord;
+        if(!__hidden_deformable_surface_edit::BuildAccessoryBinaryRecord(accessory, binaryRecord)){
+            outBinary.clear();
+            return false;
+        }
+        AppendPOD(outBinary, binaryRecord);
+    }
+    return outBinary.size() == binarySize;
+}
+
+bool DeserializeSurfaceEditState(
+    const Core::Assets::AssetBytes& binary,
+    DeformableSurfaceEditState& outState)
+{
+    outState = DeformableSurfaceEditState{};
+    usize cursor = 0;
+    __hidden_deformable_surface_edit::SurfaceEditStateHeader header;
+    if(!ReadPOD(binary, cursor, header)
+        || header.magic != __hidden_deformable_surface_edit::s_SurfaceEditStateMagic
+        || header.version != __hidden_deformable_surface_edit::s_SurfaceEditStateVersion
+    )
+        return false;
+
+    usize expectedSize = 0u;
+    if(!__hidden_deformable_surface_edit::ComputeSurfaceEditStateBinarySize(
+            header.editCount,
+            header.accessoryCount,
+            expectedSize
+        )
+        || expectedSize != binary.size()
+    )
+        return false;
+
+    outState.edits.resize(static_cast<usize>(header.editCount));
+    for(DeformableSurfaceEditRecord& record : outState.edits){
+        if(!ReadPOD(binary, cursor, record) || !__hidden_deformable_surface_edit::ValidEditRecord(record)){
+            outState = DeformableSurfaceEditState{};
+            return false;
+        }
+    }
+
+    outState.accessories.resize(static_cast<usize>(header.accessoryCount));
+    for(DeformableAccessoryAttachmentRecord& accessory : outState.accessories){
+        __hidden_deformable_surface_edit::SurfaceEditAccessoryRecordBinary binaryRecord;
+        if(!ReadPOD(binary, cursor, binaryRecord)
+            || !__hidden_deformable_surface_edit::BuildAccessoryRecord(binaryRecord, accessory)
+        ){
+            outState = DeformableSurfaceEditState{};
+            return false;
+        }
+    }
+
+    if(cursor != binary.size()){
+        outState = DeformableSurfaceEditState{};
+        return false;
+    }
+    if(!__hidden_deformable_surface_edit::ValidSurfaceEditState(outState)){
+        outState = DeformableSurfaceEditState{};
+        return false;
+    }
+    return true;
+}
+
 bool CommitDeformableRestSpaceHole(
     DeformableRuntimeMeshInstance& instance,
     const DeformableHoleEditParams& params,
@@ -985,6 +1769,7 @@ bool CommitDeformableRestSpaceHole(
     if(outResult)
         *outResult = DeformableHoleEditResult{};
     if(!__hidden_deformable_surface_edit::ValidateRuntimePayload(instance)
+        || !__hidden_deformable_surface_edit::RuntimeMeshUploaded(instance)
         || !__hidden_deformable_surface_edit::ValidateParams(instance, params)
     )
         return false;
@@ -1230,8 +2015,12 @@ bool CommitDeformableRestSpaceHole(
         );
     }
 
+    u32 firstWallVertex = Limit<u32>::s_Max;
+    u32 addedWallVertexCount = 0u;
     if(DeformableRuntime::ActiveLength(params.depth)){
         const usize boundaryVertexCount = orderedBoundaryEdges.size();
+        firstWallVertex = static_cast<u32>(newRestVertices.size());
+        addedWallVertexCount = static_cast<u32>(boundaryVertexCount * 2u);
         Vector<f32, Core::Alloc::ScratchAllocator<f32>> boundaryU{
             Core::Alloc::ScratchAllocator<f32>(scratchArena)
         };
@@ -1434,6 +2223,8 @@ bool CommitDeformableRestSpaceHole(
         outResult->addedVertexCount = addedVertexCount;
         outResult->addedTriangleCount = addedTriangleCount;
         outResult->editRevision = instance.editRevision;
+        outResult->firstWallVertex = firstWallVertex;
+        outResult->wallVertexCount = addedWallVertexCount;
     }
     return true;
 }

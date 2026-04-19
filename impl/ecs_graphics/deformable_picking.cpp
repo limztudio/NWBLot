@@ -359,6 +359,10 @@ bool BuildDeformablePickingVertices(
     const DeformablePickingInputs& inputs,
     Vector<DeformableVertexRest>& outVertices)
 {
+    outVertices.clear();
+    if((instance.dirtyFlags & RuntimeMeshDirtyFlag::GpuUploadDirty) != 0u)
+        return false;
+
     return __hidden_deformable_picking::BuildPickingVertices(instance, inputs, outVertices);
 }
 
@@ -431,6 +435,8 @@ bool RaycastDeformableRuntimeMesh(
 {
     outHit = DeformablePosedHit{};
     if(!instance.entity.valid() || !instance.handle.valid() || !__hidden_deformable_picking::IsFiniteRay(ray))
+        return false;
+    if((instance.dirtyFlags & RuntimeMeshDirtyFlag::GpuUploadDirty) != 0u)
         return false;
 
     using DeformableRuntime::Vec3;
@@ -529,6 +535,10 @@ bool RaycastVisibleDeformableRenderers(
                 rendererSystem.findDeformableRuntimeMesh(renderer.runtimeMesh)
             ;
             if(!instance)
+                return;
+            if(instance->entity != entity)
+                return;
+            if((instance->dirtyFlags & RuntimeMeshDirtyFlag::GpuUploadDirty) != 0u)
                 return;
 
             DeformablePickingInputs inputs;

@@ -107,6 +107,7 @@ static NWB::Impl::DeformableRuntimeMeshInstance MakeTriangleInstance(){
     instance.handle.value = 42u;
     instance.editRevision = 7u;
     instance.sourceTriangleCount = 10u;
+    instance.dirtyFlags = NWB::Impl::RuntimeMeshDirtyFlag::None;
     instance.restVertices.push_back(MakeVertex(-1.0f, -1.0f, 0.0f, 0.0f));
     instance.restVertices.push_back(MakeVertex(1.0f, -1.0f, 0.0f, 0.5f));
     instance.restVertices.push_back(MakeVertex(0.0f, 1.0f, 0.0f, 1.0f));
@@ -124,6 +125,7 @@ static NWB::Impl::DeformableRuntimeMeshInstance MakeQuadMixedProvenanceInstance(
     instance.entity = NWB::Core::ECS::EntityID(2u, 0u);
     instance.handle.value = 43u;
     instance.sourceTriangleCount = 2u;
+    instance.dirtyFlags = NWB::Impl::RuntimeMeshDirtyFlag::None;
     instance.restVertices.push_back(MakeVertex(-1.0f, -1.0f, 0.0f));
     instance.restVertices.push_back(MakeVertex(1.0f, -1.0f, 0.0f));
     instance.restVertices.push_back(MakeVertex(1.0f, 1.0f, 0.0f));
@@ -146,6 +148,7 @@ static NWB::Impl::DeformableRuntimeMeshInstance MakeOutOfRangeMixedProvenanceIns
     instance.entity = NWB::Core::ECS::EntityID(20u, 0u);
     instance.handle.value = 45u;
     instance.sourceTriangleCount = 2u;
+    instance.dirtyFlags = NWB::Impl::RuntimeMeshDirtyFlag::None;
     instance.restVertices.push_back(MakeVertex(-1.0f, -1.0f, 0.0f));
     instance.restVertices.push_back(MakeVertex(1.0f, -1.0f, 0.0f));
     instance.restVertices.push_back(MakeVertex(0.0f, 1.0f, 0.0f));
@@ -614,6 +617,28 @@ static void TestRaycastRejectsNegativeMinDistance(TestContext& context){
     );
 }
 
+static void TestRaycastRejectsUploadDirtyRuntimeMesh(TestContext& context){
+    NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
+    instance.dirtyFlags = NWB::Impl::RuntimeMeshDirtyFlag::GpuUploadDirty;
+
+    NWB::Impl::DeformablePickingRay ray;
+    ray.origin = Float3Data(0.0f, 0.0f, 1.0f);
+    ray.direction = Float3Data(0.0f, 0.0f, -1.0f);
+
+    NWB::Impl::DeformablePosedHit hit;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        !NWB::Impl::RaycastDeformableRuntimeMesh(instance, NWB::Impl::DeformablePickingInputs{}, ray, hit)
+    );
+
+    Vector<NWB::Impl::DeformableVertexRest> vertices;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        !NWB::Impl::BuildDeformablePickingVertices(instance, NWB::Impl::DeformablePickingInputs{}, vertices)
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, vertices.empty());
+}
+
 static void TestPoseStableRestHitRecovery(TestContext& context){
     NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
     AssignSingleJointSkin(instance, 0u);
@@ -1054,6 +1079,348 @@ static void TestRestSpaceHoleEditWallTrianglesKeepRecoverableProvenance(TestCont
     );
 }
 
+static void TestSurfaceEditFlowAttachesAndPersistsAccessory(TestContext& context){
+    NWB::Impl::DeformableRuntimeMeshInstance instance = MakeGridHoleInstance();
+    instance.editRevision = 0u;
+    const usize oldVertexCount = instance.restVertices.size();
+    const NWB::Impl::DeformableHoleEditParams params = MakeGridHoleEditParams(instance);
+
+    NWB::Impl::DeformableRuntimeMeshInstance dirtyInstance = MakeGridHoleInstance();
+    const NWB::Impl::DeformableHoleEditParams dirtyParams = MakeGridHoleEditParams(dirtyInstance);
+    dirtyInstance.dirtyFlags = NWB::Impl::RuntimeMeshDirtyFlag::GpuUploadDirty;
+    NWB::Impl::DeformableHoleEditResult dirtyResult;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        !NWB::Impl::CommitDeformableRestSpaceHole(dirtyInstance, dirtyParams, &dirtyResult)
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, dirtyResult.editRevision == 0u);
+    NWB::Impl::DeformableSurfaceEditSession dirtySession;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        !NWB::Impl::BeginSurfaceEdit(dirtyInstance, dirtyParams.posedHit, dirtySession)
+    );
+
+    NWB::Impl::DeformableSurfaceEditSession session;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::BeginSurfaceEdit(instance, params.posedHit, session));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, session.active);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, session.entity == instance.entity);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, session.runtimeMesh == instance.handle);
+
+    const NWB::Impl::DeformableHoleEditParams otherParams = MakeHoleEditParams(
+        instance,
+        0u,
+        params.radius,
+        params.depth
+    );
+    NWB::Impl::DeformableHolePreview preview;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::PreviewHole(instance, session, otherParams, preview));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !preview.valid);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::CommitHole(instance, session, otherParams));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::PreviewHole(instance, session, params, preview));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, preview.valid);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(preview.radius, params.radius));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(preview.ellipseRatio, params.ellipseRatio));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(preview.depth, params.depth));
+
+    NWB::Impl::DeformableHoleEditResult result;
+    NWB::Impl::DeformableSurfaceEditRecord record;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::CommitHole(instance, session, params, &result, &record));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, result.editRevision == instance.editRevision);
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        (instance.dirtyFlags & NWB::Impl::RuntimeMeshDirtyFlag::GpuUploadDirty) != 0u
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, result.firstWallVertex == oldVertexCount);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, result.wallVertexCount == 8u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, record.hole.baseEditRevision == params.posedHit.editRevision);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, record.hole.restSample.sourceTri == params.posedHit.restSample.sourceTri);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(record.hole.restPosition.x, params.posedHit.position.x));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(record.hole.restPosition.y, params.posedHit.position.y));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(record.hole.restPosition.z, params.posedHit.position.z));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(record.hole.restNormal.z, 1.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(record.hole.radius, params.radius));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(record.hole.depth, params.depth));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, record.result.firstWallVertex == result.firstWallVertex);
+
+    const Name mockGeometry("project/meshes/mock_earring");
+    const Name mockMaterial("project/materials/mat_test");
+    NWB::Impl::DeformableAccessoryAttachmentComponent attachment;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Impl::AttachAccessory(
+            instance,
+            result,
+            0.08f,
+            0.12f,
+            attachment
+        )
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, attachment.targetEntity == instance.entity);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, attachment.firstWallVertex == result.firstWallVertex);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, attachment.wallVertexCount == result.wallVertexCount);
+    NWB::Impl::DeformableAccessoryAttachmentComponent rejectedAttachment;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        !NWB::Impl::AttachAccessory(
+            instance,
+            result,
+            -0.01f,
+            0.12f,
+            rejectedAttachment
+        )
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !rejectedAttachment.targetEntity.valid());
+
+    NWB::Impl::DeformableHoleEditResult malformedResult = result;
+    malformedResult.wallVertexCount = 4u;
+    malformedResult.addedTriangleCount = 4u;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        !NWB::Impl::AttachAccessory(
+            instance,
+            malformedResult,
+            0.08f,
+            0.12f,
+            rejectedAttachment
+        )
+    );
+
+    malformedResult = result;
+    malformedResult.addedTriangleCount = 0u;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        !NWB::Impl::AttachAccessory(
+            instance,
+            malformedResult,
+            0.08f,
+            0.12f,
+            rejectedAttachment
+        )
+    );
+
+    malformedResult = result;
+    malformedResult.firstWallVertex = 0u;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        !NWB::Impl::AttachAccessory(
+            instance,
+            malformedResult,
+            0.08f,
+            0.12f,
+            rejectedAttachment
+        )
+    );
+
+    NWB::Impl::DeformableRuntimeMeshInstance malformedWallInstance = instance;
+    const usize wallIndexBase =
+        malformedWallInstance.indices.size() - (static_cast<usize>(result.addedTriangleCount) * 3u)
+    ;
+    malformedWallInstance.indices[wallIndexBase + 1u] = result.firstWallVertex + 1u;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        !NWB::Impl::AttachAccessory(
+            malformedWallInstance,
+            result,
+            0.08f,
+            0.12f,
+            rejectedAttachment
+        )
+    );
+
+    NWB::Core::ECS::TransformComponent baseTransform;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        !NWB::Impl::ResolveAccessoryAttachmentTransform(
+            instance,
+            NWB::Impl::DeformablePickingInputs{},
+            attachment,
+            baseTransform
+        )
+    );
+    instance.dirtyFlags = static_cast<NWB::Impl::RuntimeMeshDirtyFlags>(
+        instance.dirtyFlags & ~NWB::Impl::RuntimeMeshDirtyFlag::GpuUploadDirty
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Impl::ResolveAccessoryAttachmentTransform(
+            instance,
+            NWB::Impl::DeformablePickingInputs{},
+            attachment,
+            baseTransform
+        )
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(baseTransform.position.x, 0.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(baseTransform.position.y, 0.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(baseTransform.position.z, 0.08f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(baseTransform.scale.x, 0.12f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(baseTransform.scale.y, 0.12f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(baseTransform.scale.z, 0.12f));
+
+    instance.indices.push_back(0u);
+    instance.indices.push_back(1u);
+    instance.indices.push_back(5u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Impl::ResolveAccessoryAttachmentTransform(
+            instance,
+            NWB::Impl::DeformablePickingInputs{},
+            attachment,
+            baseTransform
+        )
+    );
+
+    NWB::Impl::DeformableAccessoryAttachmentComponent forgedAttachment = attachment;
+    forgedAttachment.firstWallVertex = 0u;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        !NWB::Impl::ResolveAccessoryAttachmentTransform(
+            instance,
+            NWB::Impl::DeformablePickingInputs{},
+            forgedAttachment,
+            baseTransform
+        )
+    );
+
+    NWB::Impl::DeformableRuntimeMeshInstance malformedWallResolveInstance = instance;
+    malformedWallResolveInstance.indices[wallIndexBase + 1u] = result.firstWallVertex + 1u;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        !NWB::Impl::ResolveAccessoryAttachmentTransform(
+            malformedWallResolveInstance,
+            NWB::Impl::DeformablePickingInputs{},
+            attachment,
+            baseTransform
+        )
+    );
+
+    ++instance.editRevision;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Impl::ResolveAccessoryAttachmentTransform(
+            instance,
+            NWB::Impl::DeformablePickingInputs{},
+            attachment,
+            baseTransform
+        )
+    );
+    forgedAttachment = attachment;
+    forgedAttachment.editRevision = instance.editRevision + 1u;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        !NWB::Impl::ResolveAccessoryAttachmentTransform(
+            instance,
+            NWB::Impl::DeformablePickingInputs{},
+            forgedAttachment,
+            baseTransform
+        )
+    );
+
+    NWB::Impl::DeformableJointPaletteComponent joints;
+    joints.joints.resize(1u);
+    joints.joints[0].column3 = Float4Data(2.0f, 0.0f, 0.0f, 1.0f);
+
+    NWB::Impl::DeformablePickingInputs translatedInputs;
+    translatedInputs.jointPalette = &joints;
+    NWB::Core::ECS::TransformComponent translatedTransform;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Impl::ResolveAccessoryAttachmentTransform(
+            instance,
+            translatedInputs,
+            attachment,
+            translatedTransform
+        )
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(translatedTransform.position.x, baseTransform.position.x + 2.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(translatedTransform.position.y, baseTransform.position.y));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(translatedTransform.position.z, baseTransform.position.z));
+
+    NWB::Impl::DeformableSurfaceEditState state;
+    NWB::Impl::DeformableAccessoryAttachmentRecord accessoryRecord;
+    accessoryRecord.geometry = NWB::Core::Assets::AssetRef<NWB::Impl::Geometry>(mockGeometry);
+    accessoryRecord.material = NWB::Core::Assets::AssetRef<NWB::Impl::Material>(mockMaterial);
+    accessoryRecord.editRevision = attachment.editRevision;
+    accessoryRecord.firstWallVertex = attachment.firstWallVertex;
+    accessoryRecord.wallVertexCount = attachment.wallVertexCount;
+    accessoryRecord.normalOffset = attachment.normalOffset;
+    accessoryRecord.uniformScale = attachment.uniformScale;
+    state.edits.push_back(record);
+    state.accessories.push_back(accessoryRecord);
+
+    NWB::Core::Assets::AssetBytes binary;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::SerializeSurfaceEditState(state, binary));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !binary.empty());
+
+    NWB::Impl::DeformableSurfaceEditState loadedState;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::DeserializeSurfaceEditState(binary, loadedState));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, loadedState.edits.size() == 1u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, loadedState.accessories.size() == 1u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, loadedState.edits[0].result.wallVertexCount == result.wallVertexCount);
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        loadedState.accessories[0].firstWallVertex == attachment.firstWallVertex
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        loadedState.accessories[0].wallVertexCount == attachment.wallVertexCount
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, loadedState.accessories[0].geometry.name() == mockGeometry);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, loadedState.accessories[0].material.name() == mockMaterial);
+
+    NWB::Impl::DeformableSurfaceEditState malformedState = state;
+    malformedState.edits[0].result.wallVertexCount = 7u;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::SerializeSurfaceEditState(malformedState, binary));
+
+    malformedState = state;
+    malformedState.accessories[0].normalOffset = -0.01f;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::SerializeSurfaceEditState(malformedState, binary));
+
+    malformedState = state;
+    malformedState.edits[0].result.wallVertexCount = 4u;
+    malformedState.edits[0].result.addedTriangleCount = 4u;
+    malformedState.accessories[0].wallVertexCount = 4u;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::SerializeSurfaceEditState(malformedState, binary));
+
+    malformedState = state;
+    malformedState.edits[0].result.addedTriangleCount = 0u;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::SerializeSurfaceEditState(malformedState, binary));
+
+    malformedState = state;
+    malformedState.accessories.clear();
+    malformedState.edits[0].result.firstWallVertex = Limit<u32>::s_Max;
+    malformedState.edits[0].result.wallVertexCount = 0u;
+    malformedState.edits[0].result.addedTriangleCount = 0u;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::SerializeSurfaceEditState(malformedState, binary));
+
+    malformedState = state;
+    malformedState.edits[0].hole.restSample.sourceTri = Limit<u32>::s_Max;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::SerializeSurfaceEditState(malformedState, binary));
+
+    malformedState = state;
+    ++malformedState.edits[0].hole.baseEditRevision;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::SerializeSurfaceEditState(malformedState, binary));
+
+    malformedState = state;
+    malformedState.edits[0].hole.baseEditRevision = 5u;
+    malformedState.edits[0].result.editRevision = 6u;
+    malformedState.accessories[0].editRevision = 6u;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::SerializeSurfaceEditState(malformedState, binary));
+
+    malformedState = state;
+    malformedState.edits[0].hole.restNormal = Float3Data(0.0f, 0.0f, 0.0f);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::SerializeSurfaceEditState(malformedState, binary));
+
+    malformedState = state;
+    ++malformedState.accessories[0].editRevision;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::SerializeSurfaceEditState(malformedState, binary));
+
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::SerializeSurfaceEditState(state, binary));
+    binary.push_back(0u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::DeserializeSurfaceEditState(binary, loadedState));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, loadedState.edits.empty());
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, loadedState.accessories.empty());
+}
+
 static void TestRestSpaceHoleEditSynthesizesProvenanceWhenSourceSamplesAreEmpty(TestContext& context){
     NWB::Impl::DeformableRuntimeMeshInstance instance = MakeGridHoleInstance();
     instance.sourceTriangleCount = static_cast<u32>(instance.indices.size() / 3u);
@@ -1409,6 +1776,7 @@ int main(){
     __hidden_ecs_graphics_tests::TestPickingVerticesRejectNonFiniteRestData(context);
     __hidden_ecs_graphics_tests::TestRaycastReturnsPoseAndRestHit(context);
     __hidden_ecs_graphics_tests::TestRaycastRejectsNegativeMinDistance(context);
+    __hidden_ecs_graphics_tests::TestRaycastRejectsUploadDirtyRuntimeMesh(context);
     __hidden_ecs_graphics_tests::TestPoseStableRestHitRecovery(context);
     __hidden_ecs_graphics_tests::TestPickingUsesEntityTransform(context);
     __hidden_ecs_graphics_tests::TestPickingIgnoresJointPaletteForUnskinnedMesh(context);
@@ -1423,6 +1791,7 @@ int main(){
     __hidden_ecs_graphics_tests::TestRestSpaceHoleEditCreatesPerInstancePatch(context);
     __hidden_ecs_graphics_tests::TestRestSpaceHoleEditTransfersAndInpaintsWallAttributes(context);
     __hidden_ecs_graphics_tests::TestRestSpaceHoleEditWallTrianglesKeepRecoverableProvenance(context);
+    __hidden_ecs_graphics_tests::TestSurfaceEditFlowAttachesAndPersistsAccessory(context);
     __hidden_ecs_graphics_tests::TestRestSpaceHoleEditSynthesizesProvenanceWhenSourceSamplesAreEmpty(context);
     __hidden_ecs_graphics_tests::TestRestSpaceHoleEditRejectsProvenanceSynthesisWithoutSourceTriangleCount(context);
     __hidden_ecs_graphics_tests::TestRestSpaceHoleEditMaterializesMixedFallbackProvenance(context);

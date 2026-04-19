@@ -14,6 +14,12 @@ using TestbedGeometryRef = NWB::Core::Assets::AssetRef<NWB::Impl::Geometry>;
 using TestbedDeformableGeometryRef = NWB::Core::Assets::AssetRef<NWB::Impl::DeformableGeometry>;
 using TestbedMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
 
+struct EditorVec3{
+    f32 x = 0.0f;
+    f32 y = 0.0f;
+    f32 z = 0.0f;
+};
+
 
 static constexpr f32 s_CameraStartDepth = 2.2f;
 static constexpr f32 s_CameraMoveEpsilon = 0.000001f;
@@ -22,6 +28,8 @@ static constexpr f32 s_DefaultDirectionalLightYaw = 0.65f;
 static constexpr f32 s_DefaultDirectionalLightIntensity = 2.0f;
 static constexpr f32 s_DeformableSkinPivotY = -0.5f;
 static constexpr f32 s_DeformableSkinMaxAngle = 0.45f;
+static constexpr f32 s_AccessoryNormalOffset = 0.08f;
+static constexpr f32 s_AccessoryUniformScale = 0.16f;
 
 
 [[nodiscard]] static f32 KeyAxis(const bool negative, const bool positive){
@@ -31,6 +39,32 @@ static constexpr f32 s_DeformableSkinMaxAngle = 0.45f;
 [[nodiscard]] static f32 ClampPitch(const f32 pitchRadians, const f32 pitchLimitRadians){
     const f32 limit = Max(0.0f, pitchLimitRadians);
     return Min(Max(pitchRadians, -limit), limit);
+}
+
+[[nodiscard]] static f32 ClampSurfaceEditRadius(const f32 radius){
+    return Min(Max(radius, 0.08f), 0.5f);
+}
+
+[[nodiscard]] static f32 ClampSurfaceEditDepth(const f32 depth){
+    return Min(Max(depth, 0.04f), 0.45f);
+}
+
+[[nodiscard]] static bool TanHalfFov(const f32 verticalFovRadians, f32& outTanHalfFov){
+    outTanHalfFov = 0.0f;
+    if(!IsFinite(verticalFovRadians))
+        return false;
+
+    const f32 halfFov = verticalFovRadians * 0.5f;
+    const f32 sinHalfFov = Sin(halfFov);
+    const f32 cosHalfFov = Cos(halfFov);
+    if(!IsFinite(sinHalfFov)
+        || !IsFinite(cosHalfFov)
+        || (cosHalfFov > -0.000001f && cosHalfFov < 0.000001f)
+    )
+        return false;
+
+    outTanHalfFov = sinHalfFov / cosHalfFov;
+    return IsFinite(outTanHalfFov) && outTanHalfFov > 0.0f;
 }
 
 [[nodiscard]] static bool ResolveKeyIndex(const i32 key, usize& outIndex){
@@ -54,6 +88,93 @@ static constexpr f32 s_DeformableSkinMaxAngle = 0.45f;
         }
     );
     return mainCamera;
+}
+
+[[nodiscard]] static EditorVec3 NormalizeVec3(const EditorVec3& value, const EditorVec3& fallback){
+    const f32 lengthSq = (value.x * value.x) + (value.y * value.y) + (value.z * value.z);
+    if(!IsFinite(lengthSq) || lengthSq <= 0.000001f)
+        return fallback;
+
+    const f32 invLength = 1.0f / Sqrt(lengthSq);
+    return EditorVec3{
+        value.x * invLength,
+        value.y * invLength,
+        value.z * invLength
+    };
+}
+
+[[nodiscard]] static EditorVec3 RotateDirectionByQuaternion(
+    const EditorVec3& value,
+    const AlignedFloat4Data& rotation){
+    const Float3Data direction(value.x, value.y, value.z);
+    Float3Data rotatedDirection;
+    SourceMath::StoreFloat3(
+        &rotatedDirection,
+        SourceMath::Vector3Rotate(SourceMath::LoadFloat3(&direction), SourceMath::LoadFloat4A(&rotation))
+    );
+    return EditorVec3{ rotatedDirection.x, rotatedDirection.y, rotatedDirection.z };
+}
+
+[[nodiscard]] static bool BuildEditorPickRay(
+    NWB::Core::ECS::World& world,
+    const f64 cursorX,
+    const f64 cursorY,
+    NWB::Core::ECSGraphics::DeformablePickingRay& outRay){
+    const NWB::Core::ECS::EntityID mainCamera = ResolveProjectMainCamera(world);
+    NWB::Core::ECS::TransformComponent* cameraTransform = nullptr;
+    NWB::Core::ECS::CameraComponent* cameraComponent = nullptr;
+    bool foundCamera = false;
+
+    world.view<NWB::Core::ECS::TransformComponent, NWB::Core::ECS::CameraComponent>().each(
+        [&](
+            NWB::Core::ECS::EntityID entity,
+            NWB::Core::ECS::TransformComponent& transform,
+            NWB::Core::ECS::CameraComponent& camera
+        ){
+            if(foundCamera)
+                return;
+            if(mainCamera.valid() && entity != mainCamera)
+                return;
+
+            cameraTransform = &transform;
+            cameraComponent = &camera;
+            foundCamera = true;
+        }
+    );
+    if(!foundCamera || !cameraTransform || !cameraComponent)
+        return false;
+
+    const NWB::ProjectFrameClientSize clientSize = NWB::QueryProjectFrameClientSize();
+    const f32 width = static_cast<f32>(clientSize.width != 0u ? clientSize.width : 1u);
+    const f32 height = static_cast<f32>(clientSize.height != 0u ? clientSize.height : 1u);
+    const f32 ndcX = (2.0f * static_cast<f32>(cursorX) / width) - 1.0f;
+    const f32 ndcY = 1.0f - (2.0f * static_cast<f32>(cursorY) / height);
+    const f32 aspect = width / height;
+    f32 tanHalfFov = 0.0f;
+    if(!TanHalfFov(cameraComponent->verticalFovRadians, tanHalfFov)
+        || !IsFinite(cameraComponent->nearPlane)
+        || !IsFinite(cameraComponent->farPlane)
+        || cameraComponent->nearPlane < 0.0f
+        || cameraComponent->nearPlane >= cameraComponent->farPlane
+    )
+        return false;
+
+    EditorVec3 localDirection{
+        ndcX * tanHalfFov * aspect,
+        ndcY * tanHalfFov,
+        1.0f
+    };
+    localDirection = NormalizeVec3(localDirection, EditorVec3{ 0.0f, 0.0f, 1.0f });
+    const EditorVec3 worldDirection = NormalizeVec3(
+        RotateDirectionByQuaternion(localDirection, cameraTransform->rotation),
+        EditorVec3{ 0.0f, 0.0f, 1.0f }
+    );
+
+    outRay.origin = Float3Data(cameraTransform->position.x, cameraTransform->position.y, cameraTransform->position.z);
+    outRay.direction = Float3Data(worldDirection.x, worldDirection.y, worldDirection.z);
+    outRay.minDistance = cameraComponent->nearPlane;
+    outRay.maxDistance = cameraComponent->farPlane;
+    return true;
 }
 
 static void ApplyFpsCameraInput(
@@ -275,6 +396,33 @@ static void UpdateProxySkinPalette(
     return entity.id();
 }
 
+[[nodiscard]] static NWB::Core::ECS::EntityID CreateAccessoryRendererEntity(
+    NWB::Core::ECS::World& world,
+    const TestbedGeometryRef& geometry,
+    const TestbedMaterialRef& material){
+    auto entity = world.createEntity();
+    auto& transform = entity.addComponent<NWB::Core::ECS::TransformComponent>();
+    transform.scale = AlignedFloat3Data(s_AccessoryUniformScale, s_AccessoryUniformScale, s_AccessoryUniformScale);
+
+    auto& renderer = entity.addComponent<NWB::Core::ECSGraphics::RendererComponent>();
+    renderer.geometry = geometry;
+    renderer.material = material;
+    renderer.visible = false;
+    entity.addComponent<NWB::Core::ECSGraphics::DeformableAccessoryAttachmentComponent>();
+    return entity.id();
+}
+
+static void ResolvePickingInputs(
+    NWB::Core::ECS::World& world,
+    const NWB::Core::ECS::EntityID entity,
+    NWB::Core::ECSGraphics::DeformablePickingInputs& outInputs){
+    outInputs = NWB::Core::ECSGraphics::DeformablePickingInputs{};
+    outInputs.morphWeights = world.tryGetComponent<NWB::Core::ECSGraphics::DeformableMorphWeightsComponent>(entity);
+    outInputs.jointPalette = world.tryGetComponent<NWB::Core::ECSGraphics::DeformableJointPaletteComponent>(entity);
+    outInputs.displacement = world.tryGetComponent<NWB::Core::ECSGraphics::DeformableDisplacementComponent>(entity);
+    outInputs.transform = world.tryGetComponent<NWB::Core::ECS::TransformComponent>(entity);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -374,6 +522,7 @@ bool ProjectTestbed::onStartup(){
         NWB_TEXT("ProjectTestbed: startup scene created ({})"),
         NWB_TEXT("directional light, two shared cube instances, transparent sphere/tetrahedron, animated deformable proxy")
     );
+    logSurfaceEditControls();
     registerInputHandler();
     return true;
 }
@@ -381,6 +530,7 @@ bool ProjectTestbed::onStartup(){
 void ProjectTestbed::onShutdown(){
     unregisterInputHandler();
     clearInputState();
+    clearSurfaceEditPreview();
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ProjectTestbed: shutdown"));
 }
 
@@ -389,6 +539,7 @@ bool ProjectTestbed::onUpdate(f32 delta){
     updateMainCamera(delta);
     updateDeformableMorph(delta);
     m_world->tick(delta);
+    updateSurfaceEditAccessories();
 
     return true;
 }
@@ -415,8 +566,11 @@ void ProjectTestbed::clearInputState(){
     m_pendingMouseDeltaY = 0.0f;
     m_lastMouseX = 0.0;
     m_lastMouseY = 0.0;
+    m_cursorX = 0.0;
+    m_cursorY = 0.0;
     m_mouseLookActive = false;
     m_mousePositionValid = false;
+    m_cursorPositionValid = false;
 }
 
 void ProjectTestbed::setKeyState(const i32 key, const bool pressed){
@@ -501,6 +655,270 @@ void ProjectTestbed::updateDeformableMorph(const f32 delta){
     }
 }
 
+void ProjectTestbed::updateSurfaceEditAccessories(){
+    auto* rendererSystem = m_world->getSystem<NWB::Core::ECSGraphics::RendererSystem>();
+    if(!rendererSystem)
+        return;
+
+    m_world->view<
+        NWB::Core::ECSGraphics::DeformableAccessoryAttachmentComponent,
+        NWB::Core::ECS::TransformComponent,
+        NWB::Core::ECSGraphics::RendererComponent
+    >().each(
+        [&](NWB::Core::ECS::EntityID entity,
+            NWB::Core::ECSGraphics::DeformableAccessoryAttachmentComponent& attachment,
+            NWB::Core::ECS::TransformComponent& transform,
+            NWB::Core::ECSGraphics::RendererComponent& renderer)
+        {
+            (void)entity;
+            const auto* instance = rendererSystem->findDeformableRuntimeMesh(attachment.runtimeMesh);
+            if(!instance){
+                renderer.visible = false;
+                return;
+            }
+
+            NWB::Core::ECSGraphics::DeformablePickingInputs inputs;
+            __hidden_project_testbed_runtime::ResolvePickingInputs(*m_world, attachment.targetEntity, inputs);
+            renderer.visible = NWB::Core::ECSGraphics::ResolveAccessoryAttachmentTransform(
+                *instance,
+                inputs,
+                attachment,
+                transform
+            );
+        }
+    );
+}
+
+void ProjectTestbed::clearSurfaceEditPreview(){
+    m_surfaceEditSession = NWB::Core::ECSGraphics::DeformableSurfaceEditSession{};
+    m_surfaceEditPreviewParams = NWB::Core::ECSGraphics::DeformableHoleEditParams{};
+    m_surfaceEditPreview = NWB::Core::ECSGraphics::DeformableHolePreview{};
+    m_surfaceEditPreviewActive = false;
+}
+
+bool ProjectTestbed::refreshSurfaceEditPreview(){
+    if(!m_surfaceEditPreviewActive)
+        return false;
+
+    auto* rendererSystem = m_world->getSystem<NWB::Core::ECSGraphics::RendererSystem>();
+    if(!rendererSystem){
+        clearSurfaceEditPreview();
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: renderer system is unavailable"));
+        return false;
+    }
+
+    auto* instance = rendererSystem->findDeformableRuntimeMesh(m_surfaceEditSession.runtimeMesh);
+    if(!instance){
+        clearSurfaceEditPreview();
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: preview runtime mesh is unavailable"));
+        return false;
+    }
+
+    m_surfaceEditPreviewParams.radius = m_surfaceEditRadius;
+    m_surfaceEditPreviewParams.depth = m_surfaceEditDepth;
+    if(!NWB::Core::ECSGraphics::PreviewHole(
+            *instance,
+            m_surfaceEditSession,
+            m_surfaceEditPreviewParams,
+            m_surfaceEditPreview
+        )
+    ){
+        clearSurfaceEditPreview();
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: preview expired"));
+        return false;
+    }
+
+    NWB_LOGGER_ESSENTIAL_INFO(
+        NWB_TEXT("Surface edit: preview radius={} depth={} rev={}"),
+        m_surfaceEditPreview.radius,
+        m_surfaceEditPreview.depth,
+        m_surfaceEditPreview.editRevision
+    );
+    return true;
+}
+
+void ProjectTestbed::previewSurfaceEditAtCursor(){
+    clearSurfaceEditPreview();
+
+    auto* rendererSystem = m_world->getSystem<NWB::Core::ECSGraphics::RendererSystem>();
+    if(!rendererSystem){
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: renderer system is unavailable"));
+        return;
+    }
+
+    NWB::Core::ECSGraphics::DeformablePickingRay ray;
+    const NWB::ProjectFrameClientSize clientSize = NWB::QueryProjectFrameClientSize();
+    const bool clientSizeValid = clientSize.width != 0u && clientSize.height != 0u;
+    const f64 fallbackCursorX = static_cast<f64>(clientSizeValid ? clientSize.width : 1u) * 0.5;
+    const f64 fallbackCursorY = static_cast<f64>(clientSizeValid ? clientSize.height : 1u) * 0.5;
+    const f64 cursorX = clientSizeValid && m_cursorPositionValid ? m_cursorX : fallbackCursorX;
+    const f64 cursorY = clientSizeValid && m_cursorPositionValid ? m_cursorY : fallbackCursorY;
+    if(!__hidden_project_testbed_runtime::BuildEditorPickRay(*m_world, cursorX, cursorY, ray)){
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: could not build editor pick ray"));
+        return;
+    }
+
+    NWB::Core::ECSGraphics::DeformablePosedHit hit;
+    if(!NWB::Core::ECSGraphics::RaycastVisibleDeformableRenderers(*m_world, *rendererSystem, ray, hit)){
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit: no deformable surface under cursor"));
+        return;
+    }
+
+    auto* instance = rendererSystem->findDeformableRuntimeMesh(hit.runtimeMesh);
+    if(!instance){
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: hit runtime mesh is unavailable"));
+        return;
+    }
+
+    NWB::Core::ECSGraphics::DeformableHoleEditParams params;
+    params.posedHit = hit;
+    params.radius = m_surfaceEditRadius;
+    params.ellipseRatio = 1.0f;
+    params.depth = m_surfaceEditDepth;
+
+    NWB::Core::ECSGraphics::DeformableSurfaceEditSession session;
+    NWB::Core::ECSGraphics::DeformableHolePreview preview;
+    if(!NWB::Core::ECSGraphics::BeginSurfaceEdit(*instance, hit, session)
+        || !NWB::Core::ECSGraphics::PreviewHole(*instance, session, params, preview)
+    ){
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: preview failed for the selected deformable surface"));
+        return;
+    }
+
+    m_surfaceEditSession = session;
+    m_surfaceEditPreviewParams = params;
+    m_surfaceEditPreview = preview;
+    m_surfaceEditPreviewActive = true;
+    NWB_LOGGER_ESSENTIAL_INFO(
+        NWB_TEXT("Surface edit: selected preview radius={} depth={} rev={}, press Enter to commit"),
+        m_surfaceEditPreview.radius,
+        m_surfaceEditPreview.depth,
+        m_surfaceEditPreview.editRevision
+    );
+}
+
+void ProjectTestbed::commitSurfaceEditPreview(){
+    if(!m_surfaceEditPreviewActive){
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit: click a deformable surface before committing"));
+        return;
+    }
+
+    auto* rendererSystem = m_world->getSystem<NWB::Core::ECSGraphics::RendererSystem>();
+    if(!rendererSystem){
+        clearSurfaceEditPreview();
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: renderer system is unavailable"));
+        return;
+    }
+
+    auto* instance = rendererSystem->findDeformableRuntimeMesh(m_surfaceEditSession.runtimeMesh);
+    if(!instance){
+        clearSurfaceEditPreview();
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: preview runtime mesh is unavailable"));
+        return;
+    }
+
+    m_surfaceEditPreviewParams.radius = m_surfaceEditRadius;
+    m_surfaceEditPreviewParams.depth = m_surfaceEditDepth;
+    NWB::Core::ECSGraphics::DeformableHoleEditResult result;
+    NWB::Core::ECSGraphics::DeformableSurfaceEditRecord record;
+    if(!NWB::Core::ECSGraphics::CommitHole(
+            *instance,
+            m_surfaceEditSession,
+            m_surfaceEditPreviewParams,
+            &result,
+            &record
+        )
+    ){
+        clearSurfaceEditPreview();
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: commit failed for the selected deformable surface"));
+        return;
+    }
+
+    NWB::Core::ECSGraphics::DeformableAccessoryAttachmentComponent attachment;
+    if(!NWB::Core::ECSGraphics::AttachAccessory(
+            *instance,
+            result,
+            __hidden_project_testbed_runtime::s_AccessoryNormalOffset,
+            __hidden_project_testbed_runtime::s_AccessoryUniformScale,
+            attachment
+        )
+    ){
+        clearSurfaceEditPreview();
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: accessory attachment failed"));
+        return;
+    }
+
+    const __hidden_project_testbed_runtime::TestbedGeometryRef accessoryGeometry(Name("project/meshes/mock_earring"));
+    const __hidden_project_testbed_runtime::TestbedMaterialRef accessoryMaterial(Name("project/materials/mat_test"));
+    NWB::Core::ECSGraphics::DeformableAccessoryAttachmentRecord accessoryRecord;
+    accessoryRecord.geometry = accessoryGeometry;
+    accessoryRecord.material = accessoryMaterial;
+    accessoryRecord.editRevision = attachment.editRevision;
+    accessoryRecord.firstWallVertex = attachment.firstWallVertex;
+    accessoryRecord.wallVertexCount = attachment.wallVertexCount;
+    accessoryRecord.normalOffset = attachment.normalOffset;
+    accessoryRecord.uniformScale = attachment.uniformScale;
+
+    NWB::Core::ECSGraphics::DeformableSurfaceEditState candidateState = m_surfaceEditState;
+    candidateState.edits.push_back(record);
+    candidateState.accessories.push_back(accessoryRecord);
+
+    NWB::Core::Assets::AssetBytes serializedState;
+    NWB::Core::ECSGraphics::DeformableSurfaceEditState loadedState;
+    if(!NWB::Core::ECSGraphics::SerializeSurfaceEditState(candidateState, serializedState)
+        || !NWB::Core::ECSGraphics::DeserializeSurfaceEditState(serializedState, loadedState)
+    ){
+        clearSurfaceEditPreview();
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: committed hole but persistence validation failed"));
+        return;
+    }
+
+    const NWB::Core::ECS::EntityID accessoryEntity =
+        __hidden_project_testbed_runtime::CreateAccessoryRendererEntity(
+            *m_world,
+            accessoryGeometry,
+            accessoryMaterial
+        )
+    ;
+
+    auto* attachmentComponent =
+        m_world->tryGetComponent<NWB::Core::ECSGraphics::DeformableAccessoryAttachmentComponent>(accessoryEntity)
+    ;
+    if(!attachmentComponent){
+        clearSurfaceEditPreview();
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: accessory entity is missing its attachment component"));
+        return;
+    }
+    *attachmentComponent = attachment;
+    m_surfaceEditState = Move(loadedState);
+
+    clearSurfaceEditPreview();
+    NWB_LOGGER_ESSENTIAL_INFO(
+        NWB_TEXT("Surface edit: committed hole rev={} radius={} depth={} accessory={} persisted={} bytes"),
+        result.editRevision,
+        record.hole.radius,
+        record.hole.depth,
+        accessoryEntity.id,
+        serializedState.size()
+    );
+}
+
+void ProjectTestbed::cancelSurfaceEditPreview(){
+    if(!m_surfaceEditPreviewActive)
+        return;
+
+    clearSurfaceEditPreview();
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit: preview cancelled"));
+}
+
+void ProjectTestbed::logSurfaceEditControls()const{
+    NWB_LOGGER_ESSENTIAL_INFO(
+        NWB_TEXT("Surface edit: left click preview, [/] radius={}, -/= depth={}, Enter commit earring, Escape cancel"),
+        m_surfaceEditRadius,
+        m_surfaceEditDepth
+    );
+}
+
 bool ProjectTestbed::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods){
     (void)scancode;
     (void)mods;
@@ -510,10 +928,37 @@ bool ProjectTestbed::keyboardUpdate(const i32 key, const i32 scancode, const i32
     else if(action == NWB::Core::InputAction::Release)
         setKeyState(key, false);
 
+    if(action == NWB::Core::InputAction::Press || action == NWB::Core::InputAction::Repeat){
+        if(key == NWB::Core::Key::LeftBracket || key == NWB::Core::Key::RightBracket){
+            const f32 delta = key == NWB::Core::Key::RightBracket ? 0.02f : -0.02f;
+            m_surfaceEditRadius = __hidden_project_testbed_runtime::ClampSurfaceEditRadius(
+                m_surfaceEditRadius + delta
+            );
+            if(!refreshSurfaceEditPreview())
+                logSurfaceEditControls();
+        }
+        else if(key == NWB::Core::Key::Minus || key == NWB::Core::Key::Equal){
+            const f32 delta = key == NWB::Core::Key::Equal ? 0.02f : -0.02f;
+            m_surfaceEditDepth = __hidden_project_testbed_runtime::ClampSurfaceEditDepth(m_surfaceEditDepth + delta);
+            if(!refreshSurfaceEditPreview())
+                logSurfaceEditControls();
+        }
+        else if(key == NWB::Core::Key::Enter || key == NWB::Core::Key::KeypadEnter){
+            commitSurfaceEditPreview();
+        }
+        else if(key == NWB::Core::Key::Escape){
+            cancelSurfaceEditPreview();
+        }
+    }
+
     return false;
 }
 
 bool ProjectTestbed::mousePosUpdate(const f64 xpos, const f64 ypos){
+    m_cursorX = xpos;
+    m_cursorY = ypos;
+    m_cursorPositionValid = true;
+
     if(!m_mouseLookActive){
         m_mousePositionValid = false;
         return false;
@@ -535,6 +980,12 @@ bool ProjectTestbed::mousePosUpdate(const f64 xpos, const f64 ypos){
 
 bool ProjectTestbed::mouseButtonUpdate(const i32 button, const i32 action, const i32 mods){
     (void)mods;
+
+    if(button == NWB::Core::MouseButton::Left){
+        if(action == NWB::Core::InputAction::Press)
+            previewSurfaceEditAtCursor();
+        return false;
+    }
 
     if(button != NWB::Core::MouseButton::Right)
         return false;

@@ -26,7 +26,7 @@ class RendererSystem;
 
 
 struct DeformablePickingRay{
-    Float3Data origin;
+    Float3Data origin = Float3Data(0.0f, 0.0f, 0.0f);
     Float3Data direction = Float3Data(0.0f, 0.0f, 1.0f);
     f32 minDistance = 0.0f;
     f32 maxDistance = Limit<f32>::s_Max;
@@ -46,7 +46,7 @@ struct DeformablePosedHit{
     u32 triangle = 0;
     f32 bary[3] = {};
     f32 distance = 0.0f;
-    Float3Data position;
+    Float3Data position = Float3Data(0.0f, 0.0f, 0.0f);
     Float3Data normal = Float3Data(0.0f, 0.0f, 1.0f);
     SourceSample restSample;
 };

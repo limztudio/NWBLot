@@ -28,6 +28,13 @@ private:
     [[nodiscard]] bool keyPressed(i32 key)const;
     void updateMainCamera(f32 delta);
     void updateDeformableMorph(f32 delta);
+    void updateSurfaceEditAccessories();
+    void clearSurfaceEditPreview();
+    bool refreshSurfaceEditPreview();
+    void previewSurfaceEditAtCursor();
+    void commitSurfaceEditPreview();
+    void cancelSurfaceEditPreview();
+    void logSurfaceEditControls()const;
 
 
 public:
@@ -53,16 +60,26 @@ private:
     NWB::ProjectRuntimeContext& m_context;
     NotNullUniquePtr<NWB::Core::ECS::World> m_world;
     NWB::Core::ECS::EntityID m_deformableMorphEntity = NWB::Core::ECS::ENTITY_ID_INVALID;
+    NWB::Core::ECSGraphics::DeformableSurfaceEditState m_surfaceEditState;
+    NWB::Core::ECSGraphics::DeformableSurfaceEditSession m_surfaceEditSession;
+    NWB::Core::ECSGraphics::DeformableHoleEditParams m_surfaceEditPreviewParams;
+    NWB::Core::ECSGraphics::DeformableHolePreview m_surfaceEditPreview;
     f32 m_deformableMorphTime = 0.0f;
     f32 m_deformableDisplacementScale = 1.0f;
+    f32 m_surfaceEditRadius = 0.24f;
+    f32 m_surfaceEditDepth = 0.18f;
     Array<bool, s_KeyStateCount> m_keyPressed = {};
     f32 m_pendingMouseDeltaX = 0.0f;
     f32 m_pendingMouseDeltaY = 0.0f;
     f64 m_lastMouseX = 0.0;
     f64 m_lastMouseY = 0.0;
+    f64 m_cursorX = 0.0;
+    f64 m_cursorY = 0.0;
     bool m_inputRegistered = false;
     bool m_mouseLookActive = false;
     bool m_mousePositionValid = false;
+    bool m_cursorPositionValid = false;
+    bool m_surfaceEditPreviewActive = false;
 };
 
 

@@ -286,7 +286,7 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
     NWB::Core::Common::InitializerGuard commonInitializerGuard;
     if(!commonInitializerGuard.initialize()){
         NWB_CERR << "ecs tests failed: common initialization failed\n";
-        return 1;
+        return -1;
     }
 
     __hidden_ecs_tests::TestContext context;
@@ -298,7 +298,7 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
 
     if(context.failed != 0){
         NWB_CERR << "ecs tests failed: " << context.failed << " of " << (context.passed + context.failed) << '\n';
-        return 1;
+        return -1;
     }
 
     NWB_COUT << "ecs tests passed: " << context.passed << '\n';

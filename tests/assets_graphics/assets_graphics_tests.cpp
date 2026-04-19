@@ -1438,7 +1438,7 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
     NWB::Core::Common::InitializerGuard commonInitializerGuard;
     if(!commonInitializerGuard.initialize()){
         NWB_CERR << "assets graphics tests failed: common initialization failed\n";
-        return 1;
+        return -1;
     }
 
     __hidden_assets_graphics_tests::TestContext context;
@@ -1462,7 +1462,7 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
             << (context.passed + context.failed)
             << '\n'
         ;
-        return 1;
+        return -1;
     }
 
     NWB_COUT << "assets graphics tests passed: " << context.passed << '\n';

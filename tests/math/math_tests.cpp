@@ -3440,7 +3440,7 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
     NWB::Core::Common::InitializerGuard commonInitializerGuard;
     if(!commonInitializerGuard.initialize()){
         NWB_CERR << "math tests failed: common initialization failed\n";
-        return 1;
+        return -1;
     }
 
     using namespace __hidden_math_tests;
@@ -3463,7 +3463,7 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
 
     if(context.failed != 0){
         NWB_CERR << "math tests failed: " << context.failed << " of " << (context.passed + context.failed) << '\n';
-        return 1;
+        return -1;
     }
 
     NWB_COUT << "math tests passed: " << context.passed << '\n';

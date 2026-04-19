@@ -1830,7 +1830,7 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
     NWB::Core::Common::InitializerGuard commonInitializerGuard;
     if(!commonInitializerGuard.initialize()){
         NWB_CERR << "ecs graphics tests failed: common initialization failed\n";
-        return 1;
+        return -1;
     }
 
     __hidden_ecs_graphics_tests::TestContext context;
@@ -1878,7 +1878,7 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
     __hidden_ecs_graphics_tests::TestRestSpaceHoleEditRejectsStaleOrMismatchedHit(context);
     if(context.failed != 0u){
         NWB_CERR << "ecs graphics tests failed: " << context.failed << " failed, " << context.passed << " passed\n";
-        return 1;
+        return -1;
     }
 
     NWB_COUT << "ecs graphics tests passed: " << context.passed << '\n';

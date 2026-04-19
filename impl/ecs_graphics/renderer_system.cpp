@@ -1660,7 +1660,7 @@ void RendererSystem::renderMaterialPass(
     if(!uploadInstanceBuffer(commandList, instanceData))
         return;
 
-    const MaterialPassDrawContext drawContext{ commandList, framebuffer, pass, passBindingSet, avboitTargets, viewportState, meshViewAspectRatio };
+    const MaterialPassDrawContext drawContext{ commandList, framebuffer, pass, passBindingSet, avboitTargets, viewportState };
     renderMeshMaterialPassDrawItems(drawContext, meshDrawItems);
     renderComputeMaterialPassDrawItems(drawContext, computeDrawItems);
 }

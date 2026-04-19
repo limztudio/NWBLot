@@ -140,7 +140,8 @@ static constexpr f32 s_AccessoryUniformScale = 0.16f;
     const NWB::Core::ECS::EntityID mainCamera = ResolveSceneMainCamera(world);
     NWB::Core::Scene::TransformComponent* cameraTransform = nullptr;
     NWB::Core::Scene::CameraComponent* cameraComponent = nullptr;
-    bool foundCamera = false;
+    bool foundFallbackCamera = false;
+    bool foundRequestedCamera = false;
 
     world.view<NWB::Core::Scene::TransformComponent, NWB::Core::Scene::CameraComponent>().each(
         [&](
@@ -148,17 +149,22 @@ static constexpr f32 s_AccessoryUniformScale = 0.16f;
             NWB::Core::Scene::TransformComponent& transform,
             NWB::Core::Scene::CameraComponent& camera
         ){
-            if(foundCamera)
-                return;
-            if(mainCamera.valid() && entity != mainCamera)
+            if(foundRequestedCamera)
                 return;
 
-            cameraTransform = &transform;
-            cameraComponent = &camera;
-            foundCamera = true;
+            if(!foundFallbackCamera){
+                cameraTransform = &transform;
+                cameraComponent = &camera;
+                foundFallbackCamera = true;
+            }
+            if(mainCamera.valid() && entity == mainCamera){
+                cameraTransform = &transform;
+                cameraComponent = &camera;
+                foundRequestedCamera = true;
+            }
         }
     );
-    if(!foundCamera || !cameraTransform || !cameraComponent)
+    if(!foundFallbackCamera || !cameraTransform || !cameraComponent)
         return false;
 
     const NWB::ProjectFrameClientSize clientSize = NWB::QueryProjectFrameClientSize();
@@ -461,6 +467,12 @@ void ProjectTestbed::verifyRendererSystemOrDie(NWB::Core::ECS::World& world){
     );
 }
 
+NWB::Core::ECSGraphics::RendererSystem& ProjectTestbed::rendererSystem(){
+    auto* system = m_world->getSystem<NWB::Core::ECSGraphics::RendererSystem>();
+    NWB_FATAL_ASSERT_MSG(system, NWB_TEXT("ProjectTestbed runtime invariant failed: renderer system is missing"));
+    return *system;
+}
+
 
 ProjectTestbed::ProjectTestbed(NWB::ProjectRuntimeContext& context)
     : m_context(context)
@@ -662,9 +674,7 @@ void ProjectTestbed::updateDeformableMorph(const f32 delta){
 }
 
 void ProjectTestbed::updateSurfaceEditAccessories(){
-    auto* rendererSystem = m_world->getSystem<NWB::Core::ECSGraphics::RendererSystem>();
-    if(!rendererSystem)
-        return;
+    auto& renderSystem = rendererSystem();
 
     m_world->view<
         NWB::Core::ECSGraphics::DeformableAccessoryAttachmentComponent,
@@ -677,7 +687,7 @@ void ProjectTestbed::updateSurfaceEditAccessories(){
             NWB::Core::ECSGraphics::RendererComponent& renderer)
         {
             (void)entity;
-            const auto* instance = rendererSystem->findDeformableRuntimeMesh(attachment.runtimeMesh);
+            const auto* instance = renderSystem.findDeformableRuntimeMesh(attachment.runtimeMesh);
             if(!instance){
                 renderer.visible = false;
                 return;
@@ -713,14 +723,7 @@ bool ProjectTestbed::refreshSurfaceEditPreview(){
     if(!m_surfaceEditPreviewActive)
         return false;
 
-    auto* rendererSystem = m_world->getSystem<NWB::Core::ECSGraphics::RendererSystem>();
-    if(!rendererSystem){
-        clearSurfaceEditPreview();
-        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: renderer system is unavailable"));
-        return false;
-    }
-
-    auto* instance = rendererSystem->findDeformableRuntimeMesh(m_surfaceEditSession.runtimeMesh);
+    auto* instance = rendererSystem().findDeformableRuntimeMesh(m_surfaceEditSession.runtimeMesh);
     if(!instance){
         clearSurfaceEditPreview();
         NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: preview runtime mesh is unavailable"));
@@ -760,11 +763,7 @@ void ProjectTestbed::previewSurfaceEditAtCursor(){
 
     clearSurfaceEditPreview();
 
-    auto* rendererSystem = m_world->getSystem<NWB::Core::ECSGraphics::RendererSystem>();
-    if(!rendererSystem){
-        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: renderer system is unavailable"));
-        return;
-    }
+    auto& renderSystem = rendererSystem();
 
     NWB::Core::ECSGraphics::DeformablePickingRay ray;
     const NWB::ProjectFrameClientSize clientSize = NWB::QueryProjectFrameClientSize();
@@ -779,12 +778,12 @@ void ProjectTestbed::previewSurfaceEditAtCursor(){
     }
 
     NWB::Core::ECSGraphics::DeformablePosedHit hit;
-    if(!NWB::Core::ECSGraphics::RaycastVisibleDeformableRenderers(*m_world, *rendererSystem, ray, hit)){
+    if(!NWB::Core::ECSGraphics::RaycastVisibleDeformableRenderers(*m_world, renderSystem, ray, hit)){
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit: no deformable surface under cursor"));
         return;
     }
 
-    auto* instance = rendererSystem->findDeformableRuntimeMesh(hit.runtimeMesh);
+    auto* instance = renderSystem.findDeformableRuntimeMesh(hit.runtimeMesh);
     if(!instance){
         NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: hit runtime mesh is unavailable"));
         return;
@@ -829,14 +828,7 @@ void ProjectTestbed::commitSurfaceEditPreview(){
         return;
     }
 
-    auto* rendererSystem = m_world->getSystem<NWB::Core::ECSGraphics::RendererSystem>();
-    if(!rendererSystem){
-        clearSurfaceEditPreview();
-        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: renderer system is unavailable"));
-        return;
-    }
-
-    auto* instance = rendererSystem->findDeformableRuntimeMesh(m_surfaceEditSession.runtimeMesh);
+    auto* instance = rendererSystem().findDeformableRuntimeMesh(m_surfaceEditSession.runtimeMesh);
     if(!instance){
         clearSurfaceEditPreview();
         NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: preview runtime mesh is unavailable"));
@@ -879,14 +871,7 @@ void ProjectTestbed::attachPendingSurfaceEditAccessory(){
     if(!m_pendingSurfaceEditAccessory)
         return;
 
-    auto* rendererSystem = m_world->getSystem<NWB::Core::ECSGraphics::RendererSystem>();
-    if(!rendererSystem){
-        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: renderer system is unavailable"));
-        clearPendingSurfaceEditAccessory();
-        return;
-    }
-
-    const auto* instance = rendererSystem->findDeformableRuntimeMesh(m_pendingSurfaceEditRuntimeMesh);
+    const auto* instance = rendererSystem().findDeformableRuntimeMesh(m_pendingSurfaceEditRuntimeMesh);
     if(!instance){
         NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: committed runtime mesh is unavailable"));
         clearPendingSurfaceEditAccessory();

@@ -22,6 +22,7 @@ private:
     static void verifyRendererSystemOrDie(NWB::Core::ECS::World& world);
 
 private:
+    NWB::Core::ECSGraphics::RendererSystem& rendererSystem();
     void registerInputHandler();
     void unregisterInputHandler();
     void clearInputState();

@@ -197,7 +197,6 @@ private:
         Core::IBindingSet* passBindingSet = nullptr;
         const AvboitFrameTargets* avboitTargets = nullptr;
         const Core::ViewportState& viewportState;
-        f32 meshViewAspectRatio = 1.f;
     };
 
     struct DeferredFrameTargets{

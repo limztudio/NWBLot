@@ -46,6 +46,7 @@ struct DeformableRuntimeMeshInstance{
             && !restVertices.empty()
             && !indices.empty()
             && (sourceSamples.empty() || sourceTriangleCount != 0u)
+            && (dirtyFlags & RuntimeMeshDirtyFlag::GpuUploadDirty) == 0u
             && restVertexBuffer != nullptr
             && indexBuffer != nullptr
             && deformedVertexBuffer != nullptr;

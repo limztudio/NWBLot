@@ -68,9 +68,25 @@ private:
         Core::BindingSetHandle bindingSet;
     };
 
+    struct RuntimePayloadViews{
+        const DeformerMorphRangeGpu* morphRanges = nullptr;
+        const DeformerMorphDeltaGpu* morphDeltas = nullptr;
+        const DeformerSkinInfluenceGpu* skinInfluences = nullptr;
+        const DeformableJointMatrix* jointPalette = nullptr;
+        usize morphRangeCount = 0;
+        usize morphDeltaCount = 0;
+        usize skinInfluenceCount = 0;
+        usize jointPaletteCount = 0;
+
+        [[nodiscard]] bool hasActiveMorphs()const{ return morphRangeCount != 0u && morphDeltaCount != 0u; }
+        [[nodiscard]] bool hasActiveSkin()const{ return skinInfluenceCount != 0u && jointPaletteCount != 0u; }
+    };
+
 
 public:
-    using ShaderPathResolveCallback = Function<bool(const Name& shaderName, AStringView variantName, const Name& stageName, Name& outVirtualPath)>;
+    using ShaderPathResolveCallback = Function<
+        bool(const Name& shaderName, AStringView variantName, const Name& stageName, Name& outVirtualPath)
+    >;
 
 
 public:
@@ -108,10 +124,7 @@ private:
     [[nodiscard]] bool copyRestToDeformed(Core::ICommandList& commandList, DeformableRuntimeMeshInstance& instance);
     [[nodiscard]] bool ensureRuntimeResources(
         DeformableRuntimeMeshInstance& instance,
-        const Vector<DeformerMorphRangeGpu>& morphRanges,
-        const Vector<DeformerMorphDeltaGpu>& morphDeltas,
-        const Vector<DeformerSkinInfluenceGpu>& skinInfluences,
-        const Vector<DeformableJointMatrix>& jointPalette,
+        const RuntimePayloadViews& payloadViews,
         bool hasDisplacement,
         usize morphSignature,
         RuntimeResources*& outResources

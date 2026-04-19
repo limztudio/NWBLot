@@ -702,6 +702,14 @@ static NWB::Impl::DeformableMorphDelta MakeMorphDelta(const u32 vertexId, const 
 }
 
 #if defined(NWB_FINAL)
+static bool OverwriteU32(NWB::Core::Assets::AssetBytes& binary, const usize offset, const u32 value){
+    if(offset > binary.size() || sizeof(value) > binary.size() - offset)
+        return false;
+
+    NWB_MEMCPY(binary.data() + offset, sizeof(value), &value, sizeof(value));
+    return true;
+}
+
 static bool OverwriteU64(NWB::Core::Assets::AssetBytes& binary, const usize offset, const u64 value){
     if(offset > binary.size() || sizeof(value) > binary.size() - offset)
         return false;
@@ -850,6 +858,31 @@ static void TestMinimalDeformableGeometryCodecRoundTrip(TestContext& context){
         loadedGeometry.displacement().mode == NWB::Impl::DeformableDisplacementMode::None
     );
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs().empty());
+}
+
+static void TestDeformableGeometryCodecRejectsOldBinaryVersion(TestContext& context){
+#if defined(NWB_FINAL)
+    CapturingLogger logger;
+    NWB_LOGGER_REGISTER(&logger);
+
+    NWB::Impl::DeformableGeometry geometry = BuildMinimalDeformableGeometry();
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, geometry.validatePayload());
+
+    NWB::Impl::DeformableGeometryAssetCodec codec;
+    NWB::Core::Assets::AssetBytes binary;
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, codec.serialize(geometry, binary));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, OverwriteU32(binary, sizeof(u32), 1u));
+
+    UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !codec.deserialize(geometry.virtualPath(), binary, loadedAsset));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !loadedAsset);
+
+    NWB_LOGGER_REGISTER(nullptr);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 1u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("unsupported version 1")));
+#else
+    (void)context;
+#endif
 }
 
 static void TestDeformableGeometryCodecRejectsMalformedCounts(TestContext& context){
@@ -1426,6 +1459,7 @@ int main(){
     __hidden_assets_graphics_tests::TestContext context;
     __hidden_assets_graphics_tests::TestDeformableGeometryCodecRoundTrip(context);
     __hidden_assets_graphics_tests::TestMinimalDeformableGeometryCodecRoundTrip(context);
+    __hidden_assets_graphics_tests::TestDeformableGeometryCodecRejectsOldBinaryVersion(context);
     __hidden_assets_graphics_tests::TestDeformableGeometryCodecRejectsMalformedCounts(context);
     __hidden_assets_graphics_tests::TestDeformableGeometryCodecRejectsMalformedDependentCounts(context);
     __hidden_assets_graphics_tests::TestDeformableGeometryCookerMinimalAsset(context);

@@ -27,7 +27,6 @@ namespace __hidden_assets{
 
 
 static constexpr u32 s_DeformableGeometryMagic = 0x44474F31u; // DGO1
-static constexpr u32 s_DeformableGeometryVersionV1 = 1u;
 static constexpr u32 s_DeformableGeometryVersion = 2u;
 
 
@@ -375,7 +374,7 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: invalid magic"));
         return false;
     }
-    if(version != __hidden_assets::s_DeformableGeometryVersionV1 && version != __hidden_assets::s_DeformableGeometryVersion){
+    if(version != __hidden_assets::s_DeformableGeometryVersion){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: unsupported version {}"), version);
         return false;
     }
@@ -447,11 +446,9 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
             return false;
         m_morphs.push_back(Move(morph));
     }
-    if(version >= __hidden_assets::s_DeformableGeometryVersion){
-        if(!ReadPOD(binary, cursor, m_displacement)){
-            NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: malformed displacement descriptor"));
-            return false;
-        }
+    if(!ReadPOD(binary, cursor, m_displacement)){
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: malformed displacement descriptor"));
+        return false;
     }
 
     if(cursor != binary.size()){

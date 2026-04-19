@@ -63,6 +63,28 @@ struct Vec3{
     return displacement.mode != DeformableDisplacementMode::None && ActiveWeight(displacement.amplitude);
 }
 
+[[nodiscard]] inline bool ResolveMorphWeightSum(
+    const DeformableMorphWeightsComponent* weights,
+    const Name& morphName,
+    f32& outWeight)
+{
+    outWeight = 0.0f;
+    if(!weights || !morphName)
+        return true;
+
+    for(const DeformableMorphWeight& weight : weights->weights){
+        if(weight.morph != morphName)
+            continue;
+        if(!IsFinite(weight.weight))
+            return false;
+
+        outWeight += weight.weight;
+        if(!IsFinite(outWeight))
+            return false;
+    }
+    return true;
+}
+
 [[nodiscard]] inline Vec3 ToVec3(const Float3Data& value){
     return Vec3{ value.x, value.y, value.z };
 }

@@ -7,6 +7,8 @@
 #include "deformable_runtime_helpers.h"
 #include "renderer_system.h"
 
+#include <core/alloc/scratch.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -30,6 +32,7 @@ using namespace DeformableRuntime;
         && DeformableValidation::IsFiniteFloat3(ray.direction)
         && IsFinite(ray.minDistance)
         && IsFinite(ray.maxDistance)
+        && ray.minDistance >= 0.0f
         && ray.minDistance <= ray.maxDistance
     ;
 }
@@ -37,6 +40,27 @@ using namespace DeformableRuntime;
 [[nodiscard]] bool AssignCurrentTriangleSample(const u32 triangle, const f32 (&bary)[3], SourceSample& outSample){
     outSample.sourceTri = triangle;
     return DeformableValidation::NormalizeSourceBarycentric(bary, outSample.bary);
+}
+
+[[nodiscard]] bool AssignStableCurrentTriangleSample(
+    const DeformableRuntimeMeshInstance& instance,
+    const u32 triangle,
+    const usize triangleCount,
+    const f32 (&bary)[3],
+    SourceSample& outSample)
+{
+    if(instance.editRevision != 0u)
+        return false;
+    if(instance.sourceTriangleCount == 0u)
+        return false;
+    if(triangle >= triangleCount)
+        return false;
+    if(triangleCount != static_cast<usize>(instance.sourceTriangleCount))
+        return false;
+    if(triangle >= instance.sourceTriangleCount)
+        return false;
+
+    return AssignCurrentTriangleSample(triangle, bary, outSample);
 }
 
 void OrthonormalizeFrame(
@@ -65,36 +89,15 @@ void OrthonormalizeFrame(
     );
 }
 
-[[nodiscard]] bool ResolveMorphWeight(
-    const DeformableMorphWeightsComponent* weights,
-    const Name& morphName,
-    f32& outWeight)
-{
-    outWeight = 0.0f;
-    if(!weights || !morphName)
-        return true;
-
-    for(const DeformableMorphWeight& weight : weights->weights){
-        if(weight.morph != morphName)
-            continue;
-        if(!IsFinite(weight.weight))
-            return false;
-
-        outWeight += weight.weight;
-        if(!IsFinite(outWeight))
-            return false;
-    }
-    return true;
-}
-
+template<typename VertexVector>
 [[nodiscard]] bool ApplyMorphs(
     const DeformableRuntimeMeshInstance& instance,
     const DeformableMorphWeightsComponent* weights,
-    Vector<DeformableVertexRest>& vertices)
+    VertexVector& vertices)
 {
     for(const DeformableMorph& morph : instance.morphs){
         f32 weight = 0.0f;
-        if(!ResolveMorphWeight(weights, morph.name, weight))
+        if(!ResolveMorphWeightSum(weights, morph.name, weight))
             return false;
         if(!ActiveWeight(weight))
             continue;
@@ -280,18 +283,11 @@ void ApplyTransform(const Core::ECS::TransformComponent* transform, DeformableVe
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-};
-
-using DeformableRuntime::Vec3;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-bool BuildDeformablePickingVertices(
+template<typename VertexVector>
+[[nodiscard]] bool BuildPickingVertices(
     const DeformableRuntimeMeshInstance& instance,
     const DeformablePickingInputs& inputs,
-    Vector<DeformableVertexRest>& outVertices)
+    VertexVector& outVertices)
 {
     outVertices.clear();
     if(!DeformableValidation::ValidRuntimePayloadArrays(
@@ -311,7 +307,9 @@ bool BuildDeformablePickingVertices(
     if(!__hidden_deformable_picking::ValidateJointPalette(instance, inputs.jointPalette))
         return false;
 
-    outVertices = instance.restVertices;
+    outVertices.reserve(instance.restVertices.size());
+    outVertices.assign(instance.restVertices.begin(), instance.restVertices.end());
+
     if(!__hidden_deformable_picking::ApplyMorphs(instance, inputs.morphWeights, outVertices))
         return false;
 
@@ -346,6 +344,24 @@ bool BuildDeformablePickingVertices(
     return true;
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool BuildDeformablePickingVertices(
+    const DeformableRuntimeMeshInstance& instance,
+    const DeformablePickingInputs& inputs,
+    Vector<DeformableVertexRest>& outVertices)
+{
+    return __hidden_deformable_picking::BuildPickingVertices(instance, inputs, outVertices);
+}
+
 bool ResolveDeformableRestSurfaceSample(
     const DeformableRuntimeMeshInstance& instance,
     const u32 triangle,
@@ -364,12 +380,13 @@ bool ResolveDeformableRestSurfaceSample(
 
     const usize triangleCount = instance.indices.size() / 3u;
     if(instance.sourceSamples.empty()){
-        if(triangle >= triangleCount)
-            return false;
-        if(instance.sourceTriangleCount != 0u && triangle >= instance.sourceTriangleCount)
-            return false;
-
-        return __hidden_deformable_picking::AssignCurrentTriangleSample(triangle, bary, outSample);
+        return __hidden_deformable_picking::AssignStableCurrentTriangleSample(
+            instance,
+            triangle,
+            triangleCount,
+            bary,
+            outSample
+        );
     }
     if(instance.sourceSamples.size() != instance.restVertices.size())
         return false;
@@ -385,12 +402,13 @@ bool ResolveDeformableRestSurfaceSample(
     )
         return false;
     if(sample0.sourceTri != sample1.sourceTri || sample0.sourceTri != sample2.sourceTri){
-        if(triangle >= triangleCount)
-            return false;
-        if(triangle >= instance.sourceTriangleCount)
-            return false;
-
-        return __hidden_deformable_picking::AssignCurrentTriangleSample(triangle, bary, outSample);
+        return __hidden_deformable_picking::AssignStableCurrentTriangleSample(
+            instance,
+            triangle,
+            triangleCount,
+            bary,
+            outSample
+        );
     }
 
     outSample.sourceTri = sample0.sourceTri;
@@ -415,6 +433,7 @@ bool RaycastDeformableRuntimeMesh(
     if(!instance.entity.valid() || !instance.handle.valid() || !__hidden_deformable_picking::IsFiniteRay(ray))
         return false;
 
+    using DeformableRuntime::Vec3;
     const Vec3 rayOrigin = DeformableRuntime::ToVec3(ray.origin);
     const Vec3 rayDirection = DeformableRuntime::Normalize(
         DeformableRuntime::ToVec3(ray.direction),
@@ -423,8 +442,11 @@ bool RaycastDeformableRuntimeMesh(
     if(DeformableRuntime::LengthSquared(rayDirection) <= DeformableRuntime::s_FrameEpsilon)
         return false;
 
-    Vector<DeformableVertexRest> posedVertices;
-    if(!BuildDeformablePickingVertices(instance, inputs, posedVertices))
+    Core::Alloc::ScratchArena<> scratchArena;
+    Vector<DeformableVertexRest, Core::Alloc::ScratchAllocator<DeformableVertexRest>> posedVertices{
+        Core::Alloc::ScratchAllocator<DeformableVertexRest>(scratchArena)
+    };
+    if(!__hidden_deformable_picking::BuildPickingVertices(instance, inputs, posedVertices))
         return false;
 
     const usize triangleCount = instance.indices.size() / 3u;
@@ -451,7 +473,7 @@ bool RaycastDeformableRuntimeMesh(
         if(!DeformableValidation::NormalizeSourceBarycentric(bary, hitBary))
             continue;
 
-        SourceSample restSample;
+        SourceSample restSample{};
         if(!ResolveDeformableRestSurfaceSample(instance, static_cast<u32>(triangleIndex), hitBary, restSample))
             continue;
 

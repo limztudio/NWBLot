@@ -55,7 +55,6 @@ using NWB::Impl::AttachAccessory;
 using NWB::Impl::BeginSurfaceEdit;
 using NWB::Impl::BuildDeformablePickingVertices;
 using NWB::Impl::CommitHole;
-using NWB::Impl::CommitDeformableRestSpaceHole;
 using NWB::Impl::DeserializeSurfaceEditState;
 using NWB::Impl::PreviewHole;
 using NWB::Impl::RaycastDeformableRuntimeMesh;

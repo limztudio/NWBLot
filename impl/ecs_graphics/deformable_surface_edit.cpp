@@ -317,6 +317,10 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
     return (instance.dirtyFlags & RuntimeMeshDirtyFlag::GpuUploadDirty) == 0u;
 }
 
+[[nodiscard]] bool ValidateUploadedRuntimePayload(const DeformableRuntimeMeshInstance& instance){
+    return ValidateRuntimePayload(instance) && RuntimeMeshUploaded(instance);
+}
+
 [[nodiscard]] bool ValidateSurfaceEditSession(
     const DeformableRuntimeMeshInstance& instance,
     const DeformableSurfaceEditSession& session)
@@ -567,6 +571,7 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
     }
     for(const DeformableAccessoryAttachmentRecord& accessory : state.accessories){
         if(!ValidAccessoryRecord(accessory)
+            || accessory.editRevision != expectedBaseEditRevision
             || !HasCommittedHoleForAttachment(state.edits, accessory)
         )
             return false;
@@ -1263,11 +1268,10 @@ void FillUnassignedFallbackSourceSamples(
 
 [[nodiscard]] bool TriangleHasRecoverableSourceSamples(
     const DeformableRuntimeMeshInstance& instance,
-    const u32 triangle,
-    const u32 sourceTriangleCount,
-    const Vector<SourceSample>& sourceSamples)
+    const u32 triangle)
 {
-    if(sourceSamples.size() != instance.restVertices.size() || sourceTriangleCount == 0u)
+    const Vector<SourceSample>& sourceSamples = instance.sourceSamples;
+    if(sourceSamples.size() != instance.restVertices.size() || instance.sourceTriangleCount == 0u)
         return false;
 
     u32 sourceVertices[3] = {};
@@ -1277,9 +1281,9 @@ void FillUnassignedFallbackSourceSamples(
     const SourceSample& sample0 = sourceSamples[sourceVertices[0]];
     const SourceSample& sample1 = sourceSamples[sourceVertices[1]];
     const SourceSample& sample2 = sourceSamples[sourceVertices[2]];
-    return DeformableValidation::ValidSourceSample(sample0, sourceTriangleCount)
-        && DeformableValidation::ValidSourceSample(sample1, sourceTriangleCount)
-        && DeformableValidation::ValidSourceSample(sample2, sourceTriangleCount)
+    return DeformableValidation::ValidSourceSample(sample0, instance.sourceTriangleCount)
+        && DeformableValidation::ValidSourceSample(sample1, instance.sourceTriangleCount)
+        && DeformableValidation::ValidSourceSample(sample2, instance.sourceTriangleCount)
         && sample0.sourceTri == sample1.sourceTri
         && sample0.sourceTri == sample2.sourceTri
     ;
@@ -1495,9 +1499,7 @@ bool BeginSurfaceEdit(
     DeformableSurfaceEditSession& outSession)
 {
     outSession = DeformableSurfaceEditSession{};
-    if(!__hidden_deformable_surface_edit::ValidateRuntimePayload(instance))
-        return false;
-    if(!__hidden_deformable_surface_edit::RuntimeMeshUploaded(instance))
+    if(!__hidden_deformable_surface_edit::ValidateUploadedRuntimePayload(instance))
         return false;
     if(!__hidden_deformable_surface_edit::ValidateHitIdentity(instance, hit))
         return false;
@@ -1519,8 +1521,7 @@ bool PreviewHole(
     outPreview = DeformableHolePreview{};
     session.previewParams = DeformableHoleEditParams{};
     session.previewed = false;
-    if(!__hidden_deformable_surface_edit::ValidateRuntimePayload(instance)
-        || !__hidden_deformable_surface_edit::RuntimeMeshUploaded(instance)
+    if(!__hidden_deformable_surface_edit::ValidateUploadedRuntimePayload(instance)
         || !__hidden_deformable_surface_edit::ValidateSurfaceEditSessionParams(instance, session, params)
     )
         return false;
@@ -1554,8 +1555,7 @@ bool CommitHole(
         *outResult = DeformableHoleEditResult{};
     if(outRecord)
         *outRecord = DeformableSurfaceEditRecord{};
-    if(!__hidden_deformable_surface_edit::ValidateRuntimePayload(instance)
-        || !__hidden_deformable_surface_edit::RuntimeMeshUploaded(instance)
+    if(!__hidden_deformable_surface_edit::ValidateUploadedRuntimePayload(instance)
         || !__hidden_deformable_surface_edit::ValidatePreviewedSurfaceEditSessionParams(instance, session, params)
     )
         return false;
@@ -1592,8 +1592,8 @@ bool AttachAccessory(
     DeformableAccessoryAttachmentComponent& outAttachment)
 {
     outAttachment = DeformableAccessoryAttachmentComponent{};
-    if(!__hidden_deformable_surface_edit::ValidateRuntimePayload(instance)
-        || holeResult.editRevision > instance.editRevision
+    if(!__hidden_deformable_surface_edit::ValidateUploadedRuntimePayload(instance)
+        || holeResult.editRevision != instance.editRevision
         || !__hidden_deformable_surface_edit::ValidAccessoryAttachmentValues(
             holeResult.editRevision,
             holeResult.firstWallVertex,
@@ -1624,8 +1624,8 @@ bool ResolveAccessoryAttachmentTransform(
     if(!__hidden_deformable_surface_edit::ValidAccessoryAttachment(attachment)
         || attachment.targetEntity != instance.entity
         || attachment.runtimeMesh != instance.handle
-        || attachment.editRevision > instance.editRevision
-        || !__hidden_deformable_surface_edit::RuntimeMeshUploaded(instance)
+        || attachment.editRevision != instance.editRevision
+        || !__hidden_deformable_surface_edit::ValidateUploadedRuntimePayload(instance)
         || !__hidden_deformable_surface_edit::RuntimeMeshHasWallTrianglePairs(
             instance,
             attachment.firstWallVertex,
@@ -1794,8 +1794,7 @@ bool CommitDeformableRestSpaceHole(
 {
     if(outResult)
         *outResult = DeformableHoleEditResult{};
-    if(!__hidden_deformable_surface_edit::ValidateRuntimePayload(instance)
-        || !__hidden_deformable_surface_edit::RuntimeMeshUploaded(instance)
+    if(!__hidden_deformable_surface_edit::ValidateUploadedRuntimePayload(instance)
         || !__hidden_deformable_surface_edit::ValidateParams(instance, params)
     )
         return false;
@@ -2006,9 +2005,7 @@ bool CommitDeformableRestSpaceHole(
             || (canMaterializeCurrentTriangleFallback
                 && !__hidden_deformable_surface_edit::TriangleHasRecoverableSourceSamples(
                     instance,
-                    static_cast<u32>(triangle),
-                    newSourceTriangleCount,
-                    newSourceSamples
+                    static_cast<u32>(triangle)
                 ))
         ;
         if(materializeFallbackProvenance){

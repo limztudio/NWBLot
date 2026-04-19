@@ -30,9 +30,11 @@ private:
     void updateDeformableMorph(f32 delta);
     void updateSurfaceEditAccessories();
     void clearSurfaceEditPreview();
+    void clearPendingSurfaceEditAccessory();
     bool refreshSurfaceEditPreview();
     void previewSurfaceEditAtCursor();
     void commitSurfaceEditPreview();
+    void attachPendingSurfaceEditAccessory();
     void cancelSurfaceEditPreview();
     void logSurfaceEditControls()const;
 
@@ -64,9 +66,13 @@ private:
     NWB::Core::ECSGraphics::DeformableSurfaceEditSession m_surfaceEditSession;
     NWB::Core::ECSGraphics::DeformableHoleEditParams m_surfaceEditPreviewParams;
     NWB::Core::ECSGraphics::DeformableHolePreview m_surfaceEditPreview;
+    NWB::Core::ECSGraphics::RuntimeMeshHandle m_pendingSurfaceEditRuntimeMesh;
+    NWB::Core::ECSGraphics::DeformableHoleEditResult m_pendingSurfaceEditResult;
+    NWB::Core::ECSGraphics::DeformableSurfaceEditRecord m_pendingSurfaceEditRecord;
     f32 m_deformableMorphTime = 0.0f;
     f32 m_deformableDisplacementScale = 1.0f;
     f32 m_surfaceEditRadius = 0.24f;
+    f32 m_surfaceEditEllipseRatio = 1.0f;
     f32 m_surfaceEditDepth = 0.18f;
     Array<bool, s_KeyStateCount> m_keyPressed = {};
     f32 m_pendingMouseDeltaX = 0.0f;
@@ -80,6 +86,7 @@ private:
     bool m_mousePositionValid = false;
     bool m_cursorPositionValid = false;
     bool m_surfaceEditPreviewActive = false;
+    bool m_pendingSurfaceEditAccessory = false;
 };
 
 

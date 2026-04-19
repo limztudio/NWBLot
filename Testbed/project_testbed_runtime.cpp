@@ -45,6 +45,10 @@ static constexpr f32 s_AccessoryUniformScale = 0.16f;
     return Min(Max(radius, 0.08f), 0.5f);
 }
 
+[[nodiscard]] static f32 ClampSurfaceEditEllipseRatio(const f32 ellipseRatio){
+    return Min(Max(ellipseRatio, 0.5f), 2.0f);
+}
+
 [[nodiscard]] static f32 ClampSurfaceEditDepth(const f32 depth){
     return Min(Max(depth, 0.04f), 0.45f);
 }
@@ -531,6 +535,7 @@ void ProjectTestbed::onShutdown(){
     unregisterInputHandler();
     clearInputState();
     clearSurfaceEditPreview();
+    clearPendingSurfaceEditAccessory();
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ProjectTestbed: shutdown"));
 }
 
@@ -539,6 +544,7 @@ bool ProjectTestbed::onUpdate(f32 delta){
     updateMainCamera(delta);
     updateDeformableMorph(delta);
     m_world->tick(delta);
+    attachPendingSurfaceEditAccessory();
     updateSurfaceEditAccessories();
 
     return true;
@@ -696,6 +702,13 @@ void ProjectTestbed::clearSurfaceEditPreview(){
     m_surfaceEditPreviewActive = false;
 }
 
+void ProjectTestbed::clearPendingSurfaceEditAccessory(){
+    m_pendingSurfaceEditRuntimeMesh = NWB::Core::ECSGraphics::RuntimeMeshHandle{};
+    m_pendingSurfaceEditResult = NWB::Core::ECSGraphics::DeformableHoleEditResult{};
+    m_pendingSurfaceEditRecord = NWB::Core::ECSGraphics::DeformableSurfaceEditRecord{};
+    m_pendingSurfaceEditAccessory = false;
+}
+
 bool ProjectTestbed::refreshSurfaceEditPreview(){
     if(!m_surfaceEditPreviewActive)
         return false;
@@ -715,6 +728,7 @@ bool ProjectTestbed::refreshSurfaceEditPreview(){
     }
 
     m_surfaceEditPreviewParams.radius = m_surfaceEditRadius;
+    m_surfaceEditPreviewParams.ellipseRatio = m_surfaceEditEllipseRatio;
     m_surfaceEditPreviewParams.depth = m_surfaceEditDepth;
     if(!NWB::Core::ECSGraphics::PreviewHole(
             *instance,
@@ -729,8 +743,9 @@ bool ProjectTestbed::refreshSurfaceEditPreview(){
     }
 
     NWB_LOGGER_ESSENTIAL_INFO(
-        NWB_TEXT("Surface edit: preview radius={} depth={} rev={}"),
+        NWB_TEXT("Surface edit: preview radius={} ellipse={} depth={} rev={}"),
         m_surfaceEditPreview.radius,
+        m_surfaceEditPreview.ellipseRatio,
         m_surfaceEditPreview.depth,
         m_surfaceEditPreview.editRevision
     );
@@ -738,6 +753,11 @@ bool ProjectTestbed::refreshSurfaceEditPreview(){
 }
 
 void ProjectTestbed::previewSurfaceEditAtCursor(){
+    if(m_pendingSurfaceEditAccessory){
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit: awaiting committed mesh upload before starting another edit"));
+        return;
+    }
+
     clearSurfaceEditPreview();
 
     auto* rendererSystem = m_world->getSystem<NWB::Core::ECSGraphics::RendererSystem>();
@@ -773,7 +793,7 @@ void ProjectTestbed::previewSurfaceEditAtCursor(){
     NWB::Core::ECSGraphics::DeformableHoleEditParams params;
     params.posedHit = hit;
     params.radius = m_surfaceEditRadius;
-    params.ellipseRatio = 1.0f;
+    params.ellipseRatio = m_surfaceEditEllipseRatio;
     params.depth = m_surfaceEditDepth;
 
     NWB::Core::ECSGraphics::DeformableSurfaceEditSession session;
@@ -790,14 +810,20 @@ void ProjectTestbed::previewSurfaceEditAtCursor(){
     m_surfaceEditPreview = preview;
     m_surfaceEditPreviewActive = true;
     NWB_LOGGER_ESSENTIAL_INFO(
-        NWB_TEXT("Surface edit: selected preview radius={} depth={} rev={}, press Enter to commit"),
+        NWB_TEXT("Surface edit: selected preview radius={} ellipse={} depth={} rev={}, press Enter to commit"),
         m_surfaceEditPreview.radius,
+        m_surfaceEditPreview.ellipseRatio,
         m_surfaceEditPreview.depth,
         m_surfaceEditPreview.editRevision
     );
 }
 
 void ProjectTestbed::commitSurfaceEditPreview(){
+    if(m_pendingSurfaceEditAccessory){
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit: awaiting committed mesh upload before another commit"));
+        return;
+    }
+
     if(!m_surfaceEditPreviewActive){
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit: click a deformable surface before committing"));
         return;
@@ -818,6 +844,7 @@ void ProjectTestbed::commitSurfaceEditPreview(){
     }
 
     m_surfaceEditPreviewParams.radius = m_surfaceEditRadius;
+    m_surfaceEditPreviewParams.ellipseRatio = m_surfaceEditEllipseRatio;
     m_surfaceEditPreviewParams.depth = m_surfaceEditDepth;
     NWB::Core::ECSGraphics::DeformableHoleEditResult result;
     NWB::Core::ECSGraphics::DeformableSurfaceEditRecord record;
@@ -834,17 +861,52 @@ void ProjectTestbed::commitSurfaceEditPreview(){
         return;
     }
 
+    m_pendingSurfaceEditRuntimeMesh = m_surfaceEditSession.runtimeMesh;
+    m_pendingSurfaceEditResult = result;
+    m_pendingSurfaceEditRecord = record;
+    m_pendingSurfaceEditAccessory = true;
+    clearSurfaceEditPreview();
+    NWB_LOGGER_ESSENTIAL_INFO(
+        NWB_TEXT("Surface edit: hole rev={} radius={} ellipse={} depth={}, awaiting mesh upload"),
+        result.editRevision,
+        record.hole.radius,
+        record.hole.ellipseRatio,
+        record.hole.depth
+    );
+}
+
+void ProjectTestbed::attachPendingSurfaceEditAccessory(){
+    if(!m_pendingSurfaceEditAccessory)
+        return;
+
+    auto* rendererSystem = m_world->getSystem<NWB::Core::ECSGraphics::RendererSystem>();
+    if(!rendererSystem){
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: renderer system is unavailable"));
+        clearPendingSurfaceEditAccessory();
+        return;
+    }
+
+    const auto* instance = rendererSystem->findDeformableRuntimeMesh(m_pendingSurfaceEditRuntimeMesh);
+    if(!instance){
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: committed runtime mesh is unavailable"));
+        clearPendingSurfaceEditAccessory();
+        return;
+    }
+
     NWB::Core::ECSGraphics::DeformableAccessoryAttachmentComponent attachment;
     if(!NWB::Core::ECSGraphics::AttachAccessory(
             *instance,
-            result,
+            m_pendingSurfaceEditResult,
             __hidden_project_testbed_runtime::s_AccessoryNormalOffset,
             __hidden_project_testbed_runtime::s_AccessoryUniformScale,
             attachment
         )
     ){
-        clearSurfaceEditPreview();
+        if((instance->dirtyFlags & NWB::Core::ECSGraphics::RuntimeMeshDirtyFlag::GpuUploadDirty) != 0u)
+            return;
+
         NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: accessory attachment failed"));
+        clearPendingSurfaceEditAccessory();
         return;
     }
 
@@ -860,7 +922,8 @@ void ProjectTestbed::commitSurfaceEditPreview(){
     accessoryRecord.uniformScale = attachment.uniformScale;
 
     NWB::Core::ECSGraphics::DeformableSurfaceEditState candidateState = m_surfaceEditState;
-    candidateState.edits.push_back(record);
+    candidateState.edits.push_back(m_pendingSurfaceEditRecord);
+    candidateState.accessories.clear();
     candidateState.accessories.push_back(accessoryRecord);
 
     NWB::Core::Assets::AssetBytes serializedState;
@@ -868,7 +931,7 @@ void ProjectTestbed::commitSurfaceEditPreview(){
     if(!NWB::Core::ECSGraphics::SerializeSurfaceEditState(candidateState, serializedState)
         || !NWB::Core::ECSGraphics::DeserializeSurfaceEditState(serializedState, loadedState)
     ){
-        clearSurfaceEditPreview();
+        clearPendingSurfaceEditAccessory();
         NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: committed hole but persistence validation failed"));
         return;
     }
@@ -885,22 +948,23 @@ void ProjectTestbed::commitSurfaceEditPreview(){
         m_world->tryGetComponent<NWB::Core::ECSGraphics::DeformableAccessoryAttachmentComponent>(accessoryEntity)
     ;
     if(!attachmentComponent){
-        clearSurfaceEditPreview();
+        clearPendingSurfaceEditAccessory();
         NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: accessory entity is missing its attachment component"));
         return;
     }
     *attachmentComponent = attachment;
     m_surfaceEditState = Move(loadedState);
 
-    clearSurfaceEditPreview();
     NWB_LOGGER_ESSENTIAL_INFO(
-        NWB_TEXT("Surface edit: committed hole rev={} radius={} depth={} accessory={} persisted={} bytes"),
-        result.editRevision,
-        record.hole.radius,
-        record.hole.depth,
+        NWB_TEXT("Surface edit: committed hole rev={} radius={} ellipse={} depth={} accessory={} persisted={} bytes"),
+        m_pendingSurfaceEditResult.editRevision,
+        m_pendingSurfaceEditRecord.hole.radius,
+        m_pendingSurfaceEditRecord.hole.ellipseRatio,
+        m_pendingSurfaceEditRecord.hole.depth,
         accessoryEntity.id,
         serializedState.size()
     );
+    clearPendingSurfaceEditAccessory();
 }
 
 void ProjectTestbed::cancelSurfaceEditPreview(){
@@ -913,8 +977,9 @@ void ProjectTestbed::cancelSurfaceEditPreview(){
 
 void ProjectTestbed::logSurfaceEditControls()const{
     NWB_LOGGER_ESSENTIAL_INFO(
-        NWB_TEXT("Surface edit: left click preview, [/] radius={}, -/= depth={}, Enter commit earring, Escape cancel"),
+        NWB_TEXT("Surface edit: left click preview, [/] radius={}, comma/period ellipse={}, -/= depth={}, Enter commit, Esc cancel"),
         m_surfaceEditRadius,
+        m_surfaceEditEllipseRatio,
         m_surfaceEditDepth
     );
 }
@@ -933,6 +998,14 @@ bool ProjectTestbed::keyboardUpdate(const i32 key, const i32 scancode, const i32
             const f32 delta = key == NWB::Core::Key::RightBracket ? 0.02f : -0.02f;
             m_surfaceEditRadius = __hidden_project_testbed_runtime::ClampSurfaceEditRadius(
                 m_surfaceEditRadius + delta
+            );
+            if(!refreshSurfaceEditPreview())
+                logSurfaceEditControls();
+        }
+        else if(key == NWB::Core::Key::Comma || key == NWB::Core::Key::Period){
+            const f32 delta = key == NWB::Core::Key::Period ? 0.05f : -0.05f;
+            m_surfaceEditEllipseRatio = __hidden_project_testbed_runtime::ClampSurfaceEditEllipseRatio(
+                m_surfaceEditEllipseRatio + delta
             );
             if(!refreshSurfaceEditPreview())
                 logSurfaceEditControls();

@@ -1127,6 +1127,11 @@ static void TestSurfaceEditFlowAttachesAndPersistsAccessory(TestContext& context
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(preview.ellipseRatio, params.ellipseRatio));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(preview.depth, params.depth));
 
+    NWB::Impl::DeformableHoleEditParams mismatchedEllipseParams = params;
+    mismatchedEllipseParams.ellipseRatio = 1.25f;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::CommitHole(instance, session, mismatchedEllipseParams));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.editRevision == 0u);
+
     NWB::Impl::DeformableHoleEditResult result;
     NWB::Impl::DeformableSurfaceEditRecord record;
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::CommitHole(instance, session, params, &result, &record));
@@ -1144,12 +1149,28 @@ static void TestSurfaceEditFlowAttachesAndPersistsAccessory(TestContext& context
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(record.hole.restPosition.z, params.posedHit.position.z));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(record.hole.restNormal.z, 1.0f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(record.hole.radius, params.radius));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(record.hole.ellipseRatio, params.ellipseRatio));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(record.hole.depth, params.depth));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, record.result.firstWallVertex == result.firstWallVertex);
 
     const Name mockGeometry("project/meshes/mock_earring");
     const Name mockMaterial("project/materials/mat_test");
     NWB::Impl::DeformableAccessoryAttachmentComponent attachment;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        !NWB::Impl::AttachAccessory(
+            instance,
+            result,
+            0.08f,
+            0.12f,
+            attachment
+        )
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !attachment.targetEntity.valid());
+
+    instance.dirtyFlags = static_cast<NWB::Impl::RuntimeMeshDirtyFlags>(
+        instance.dirtyFlags & ~NWB::Impl::RuntimeMeshDirtyFlag::GpuUploadDirty
+    );
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
         NWB::Impl::AttachAccessory(
@@ -1163,7 +1184,21 @@ static void TestSurfaceEditFlowAttachesAndPersistsAccessory(TestContext& context
     NWB_ECS_GRAPHICS_TEST_CHECK(context, attachment.targetEntity == instance.entity);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, attachment.firstWallVertex == result.firstWallVertex);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, attachment.wallVertexCount == result.wallVertexCount);
+
     NWB::Impl::DeformableAccessoryAttachmentComponent rejectedAttachment;
+    NWB::Impl::DeformableRuntimeMeshInstance futureInstance = instance;
+    ++futureInstance.editRevision;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        !NWB::Impl::AttachAccessory(
+            futureInstance,
+            result,
+            0.08f,
+            0.12f,
+            rejectedAttachment
+        )
+    );
+
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
         !NWB::Impl::AttachAccessory(
@@ -1233,6 +1268,9 @@ static void TestSurfaceEditFlowAttachesAndPersistsAccessory(TestContext& context
     );
 
     NWB::Core::ECS::TransformComponent baseTransform;
+    instance.dirtyFlags = static_cast<NWB::Impl::RuntimeMeshDirtyFlags>(
+        instance.dirtyFlags | NWB::Impl::RuntimeMeshDirtyFlag::GpuUploadDirty
+    );
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
         !NWB::Impl::ResolveAccessoryAttachmentTransform(
@@ -1298,11 +1336,12 @@ static void TestSurfaceEditFlowAttachesAndPersistsAccessory(TestContext& context
         )
     );
 
-    ++instance.editRevision;
+    NWB::Impl::DeformableRuntimeMeshInstance staleResolveInstance = instance;
+    ++staleResolveInstance.editRevision;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        NWB::Impl::ResolveAccessoryAttachmentTransform(
-            instance,
+        !NWB::Impl::ResolveAccessoryAttachmentTransform(
+            staleResolveInstance,
             NWB::Impl::DeformablePickingInputs{},
             attachment,
             baseTransform
@@ -1371,6 +1410,13 @@ static void TestSurfaceEditFlowAttachesAndPersistsAccessory(TestContext& context
     );
     NWB_ECS_GRAPHICS_TEST_CHECK(context, loadedState.accessories[0].geometry.name() == mockGeometry);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, loadedState.accessories[0].material.name() == mockMaterial);
+
+    NWB::Impl::DeformableSurfaceEditState staleAccessoryState = state;
+    NWB::Impl::DeformableSurfaceEditRecord laterRecord = record;
+    laterRecord.hole.baseEditRevision = record.result.editRevision;
+    laterRecord.result.editRevision = record.result.editRevision + 1u;
+    staleAccessoryState.edits.push_back(laterRecord);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::SerializeSurfaceEditState(staleAccessoryState, binary));
 
     NWB::Impl::DeformableSurfaceEditState malformedState = state;
     malformedState.edits[0].result.wallVertexCount = 7u;

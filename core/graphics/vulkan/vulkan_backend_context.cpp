@@ -571,7 +571,7 @@ bool BackendContext::createVulkanInstance(){
         AStringStream ss;
         ss << "Cannot create a Vulkan instance because the following required extension(s) are not supported:";
         for(const auto& ext : requiredExtensions)
-            ss << std::endl << "  - " << ext;
+            ss << "\n  - " << ext;
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: {}"), StringConvert(ss.str()));
         return false;
     }
@@ -610,7 +610,7 @@ bool BackendContext::createVulkanInstance(){
         AStringStream ss;
         ss << "Cannot create a Vulkan instance because the following required layer(s) are not supported:";
         for(const auto& ext : requiredLayers)
-            ss << std::endl << "  - " << ext;
+            ss << "\n  - " << ext;
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: {}"), StringConvert(ss.str()));
         return false;
     }
@@ -842,7 +842,7 @@ bool BackendContext::pickPhysicalDevice(){
         VkPhysicalDeviceProperties prop;
         vkGetPhysicalDeviceProperties(dev, &prop);
 
-        errorStream << std::endl << prop.deviceName << ":";
+        errorStream << "\n" << prop.deviceName << ":";
 
         HashSet<AString, Hasher<AString>, EqualTo<AString>, Alloc::ScratchAllocator<AString>> requiredExtensions(0, Hasher<AString>(), EqualTo<AString>(), Alloc::ScratchAllocator<AString>(scratchArena));
         for(const auto& [name, _] : m_enabledExtensions.device)
@@ -850,13 +850,13 @@ bool BackendContext::pickPhysicalDevice(){
         uint32_t extCount = 0;
         res = vkEnumerateDeviceExtensionProperties(dev, nullptr, &extCount, nullptr);
         if(res != VK_SUCCESS){
-            errorStream << std::endl << "  - failed to enumerate device extension count";
+            errorStream << "\n  - failed to enumerate device extension count";
             continue;
         }
         Vector<VkExtensionProperties, Alloc::ScratchAllocator<VkExtensionProperties>> deviceExtensions(extCount, Alloc::ScratchAllocator<VkExtensionProperties>(scratchArena));
         res = vkEnumerateDeviceExtensionProperties(dev, nullptr, &extCount, deviceExtensions.data());
         if(res != VK_SUCCESS){
-            errorStream << std::endl << "  - failed to enumerate device extensions";
+            errorStream << "\n  - failed to enumerate device extensions";
             continue;
         }
         for(const auto& ext : deviceExtensions)
@@ -866,23 +866,23 @@ bool BackendContext::pickPhysicalDevice(){
 
         if(!requiredExtensions.empty()){
             for(const auto& ext : requiredExtensions)
-                errorStream << std::endl << "  - missing " << ext;
+                errorStream << "\n  - missing " << ext;
             deviceIsGood = false;
         }
 
         VkPhysicalDeviceFeatures deviceFeatures;
         vkGetPhysicalDeviceFeatures(dev, &deviceFeatures);
         if(!deviceFeatures.samplerAnisotropy){
-            errorStream << std::endl << "  - does not support samplerAnisotropy";
+            errorStream << "\n  - does not support samplerAnisotropy";
             deviceIsGood = false;
         }
         if(!deviceFeatures.textureCompressionBC){
-            errorStream << std::endl << "  - does not support textureCompressionBC";
+            errorStream << "\n  - does not support textureCompressionBC";
             deviceIsGood = false;
         }
 
         if(!findQueueFamilies(dev)){
-            errorStream << std::endl << "  - does not support the necessary queue types";
+            errorStream << "\n  - does not support the necessary queue types";
             deviceIsGood = false;
         }
 
@@ -890,18 +890,18 @@ bool BackendContext::pickPhysicalDevice(){
             VkBool32 surfaceSupported = VK_FALSE;
             res = vkGetPhysicalDeviceSurfaceSupportKHR(dev, m_presentQueueFamily, m_windowSurface, &surfaceSupported);
             if(res != VK_SUCCESS){
-                errorStream << std::endl << "  - failed to query surface support";
+                errorStream << "\n  - failed to query surface support";
                 deviceIsGood = false;
             }
             else if(!surfaceSupported){
-                errorStream << std::endl << "  - does not support the window surface";
+                errorStream << "\n  - does not support the window surface";
                 deviceIsGood = false;
             }
             else{
                 VkSurfaceCapabilitiesKHR surfaceCaps;
                 res = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(dev, m_windowSurface, &surfaceCaps);
                 if(res != VK_SUCCESS){
-                    errorStream << std::endl << "  - failed to query surface capabilities";
+                    errorStream << "\n  - failed to query surface capabilities";
                     deviceIsGood = false;
                     continue;
                 }
@@ -909,14 +909,14 @@ bool BackendContext::pickPhysicalDevice(){
                 uint32_t fmtCount = 0;
                 res = vkGetPhysicalDeviceSurfaceFormatsKHR(dev, m_windowSurface, &fmtCount, nullptr);
                 if(res != VK_SUCCESS){
-                    errorStream << std::endl << "  - failed to query surface format count";
+                    errorStream << "\n  - failed to query surface format count";
                     deviceIsGood = false;
                     continue;
                 }
                 Vector<VkSurfaceFormatKHR, Alloc::ScratchAllocator<VkSurfaceFormatKHR>> surfaceFmts(fmtCount, Alloc::ScratchAllocator<VkSurfaceFormatKHR>(scratchArena));
                 res = vkGetPhysicalDeviceSurfaceFormatsKHR(dev, m_windowSurface, &fmtCount, surfaceFmts.data());
                 if(res != VK_SUCCESS){
-                    errorStream << std::endl << "  - failed to query surface formats";
+                    errorStream << "\n  - failed to query surface formats";
                     deviceIsGood = false;
                     continue;
                 }
@@ -924,7 +924,7 @@ bool BackendContext::pickPhysicalDevice(){
                 if(surfaceCaps.minImageCount > m_deviceParams.swapChainBufferCount ||
                     (surfaceCaps.maxImageCount < m_deviceParams.swapChainBufferCount && surfaceCaps.maxImageCount > 0)
                 ){
-                    errorStream << std::endl << "  - cannot support the requested swap chain image count";
+                    errorStream << "\n  - cannot support the requested swap chain image count";
                     deviceIsGood = false;
                 }
 
@@ -933,7 +933,7 @@ bool BackendContext::pickPhysicalDevice(){
                     surfaceCaps.maxImageExtent.width < requestedExtent.width ||
                     surfaceCaps.maxImageExtent.height < requestedExtent.height
                 ){
-                    errorStream << std::endl << "  - cannot support the requested swap chain size";
+                    errorStream << "\n  - cannot support the requested swap chain size";
                     deviceIsGood = false;
                 }
 
@@ -946,7 +946,7 @@ bool BackendContext::pickPhysicalDevice(){
                 }
 
                 if(!surfaceFormatPresent){
-                    errorStream << std::endl << "  - does not support the requested swap chain format";
+                    errorStream << "\n  - does not support the requested swap chain format";
                     deviceIsGood = false;
                 }
             }

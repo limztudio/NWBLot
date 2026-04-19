@@ -124,31 +124,31 @@ private:
     };
     static constexpr const char* s_OptionalInstanceExts[] = {
         VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
-        VK_EXT_SAMPLER_FILTER_MINMAX_EXTENSION_NAME,
     };
 
 
 private:
-    const ExtEntry m_enabledDeviceExts[1] = {
-        { VK_KHR_MAINTENANCE1_EXTENSION_NAME },
+    static constexpr ExtEntry s_EnabledDeviceExts[] = {
+        { VK_KHR_MAINTENANCE1_EXTENSION_NAME, DeviceExtensionFeature::None },
     };
-    const ExtEntry m_optionalDeviceExts[11] = {
-        { VK_EXT_DEBUG_MARKER_EXTENSION_NAME },
-        { VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME },
+    static constexpr ExtEntry s_OptionalDeviceExts[] = {
+        { VK_EXT_DEBUG_MARKER_EXTENSION_NAME, DeviceExtensionFeature::None },
+        { VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME, DeviceExtensionFeature::None },
         { VK_EXT_DESCRIPTOR_HEAP_EXTENSION_NAME, DeviceExtensionFeature::DescriptorHeap },
-        { VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME },
+        { VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME, DeviceExtensionFeature::None },
         { VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME, DeviceExtensionFeature::FragmentShadingRate },
-        { VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME },
-        { VK_KHR_MAINTENANCE_4_EXTENSION_NAME },
-        { VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME },
-        { VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME },
+        { VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME, DeviceExtensionFeature::None },
+        { VK_KHR_MAINTENANCE_4_EXTENSION_NAME, DeviceExtensionFeature::None },
+        { VK_EXT_SAMPLER_FILTER_MINMAX_EXTENSION_NAME, DeviceExtensionFeature::None },
+        { VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME, DeviceExtensionFeature::None },
+        { VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME, DeviceExtensionFeature::None },
         { VK_EXT_MESH_SHADER_EXTENSION_NAME, DeviceExtensionFeature::MeshShader },
         { VK_EXT_MUTABLE_DESCRIPTOR_TYPE_EXTENSION_NAME, DeviceExtensionFeature::MutableDescriptorType },
     };
-    const ExtEntry m_rayTracingExts[5] = {
+    static constexpr ExtEntry s_RayTracingExts[] = {
         { VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME, DeviceExtensionFeature::AccelerationStructure },
-        { VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME },
-        { VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME },
+        { VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME, DeviceExtensionFeature::None },
+        { VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME, DeviceExtensionFeature::None },
         { VK_KHR_RAY_QUERY_EXTENSION_NAME, DeviceExtensionFeature::RayQuery },
         { VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME, DeviceExtensionFeature::RayTracingPipeline },
     };

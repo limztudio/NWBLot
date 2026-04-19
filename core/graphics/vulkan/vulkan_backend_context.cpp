@@ -481,15 +481,15 @@ void BackendContext::resizeSwapChain(){
 void BackendContext::initDefaultExtensions(){
     for(const auto* name : s_EnabledInstanceExts)
         m_enabledExtensions.instance.insert(name);
-    for(const auto& e : m_enabledDeviceExts)
+    for(const auto& e : s_EnabledDeviceExts)
         m_enabledExtensions.device.insert({ e.name, e.feature });
 
     for(const auto* name : s_OptionalInstanceExts)
         m_optionalExtensions.instance.insert(name);
-    for(const auto& e : m_optionalDeviceExts)
+    for(const auto& e : s_OptionalDeviceExts)
         m_optionalExtensions.device.insert({ e.name, e.feature });
 
-    for(const auto& e : m_rayTracingExts)
+    for(const auto& e : s_RayTracingExts)
         m_rayTracingExtensions.insert({ e.name, e.feature });
 }
 

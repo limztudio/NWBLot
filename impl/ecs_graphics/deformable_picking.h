@@ -7,6 +7,7 @@
 
 #include "deformable_runtime_mesh_cache.h"
 
+#include <core/alloc/scratch.h>
 #include <core/ecs/transform_component.h>
 
 
@@ -59,6 +60,11 @@ struct DeformablePosedHit{
     const DeformableRuntimeMeshInstance& instance,
     const DeformablePickingInputs& inputs,
     Vector<DeformableVertexRest>& outVertices
+);
+[[nodiscard]] bool BuildDeformablePickingVertices(
+    const DeformableRuntimeMeshInstance& instance,
+    const DeformablePickingInputs& inputs,
+    Vector<DeformableVertexRest, Core::Alloc::ScratchAllocator<DeformableVertexRest>>& outVertices
 );
 [[nodiscard]] bool ResolveDeformableRestSurfaceSample(
     const DeformableRuntimeMeshInstance& instance,

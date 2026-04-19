@@ -243,6 +243,14 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
     ;
 }
 
+[[nodiscard]] bool MatchingHoleEditParams(const DeformableHoleEditParams& lhs, const DeformableHoleEditParams& rhs){
+    return MatchingPosedHit(lhs.posedHit, rhs.posedHit)
+        && DeformableValidation::AbsF32(lhs.radius - rhs.radius) <= DeformableValidation::s_BarycentricSumEpsilon
+        && DeformableValidation::AbsF32(lhs.ellipseRatio - rhs.ellipseRatio) <= DeformableValidation::s_BarycentricSumEpsilon
+        && DeformableValidation::AbsF32(lhs.depth - rhs.depth) <= DeformableValidation::s_BarycentricSumEpsilon
+    ;
+}
+
 [[nodiscard]] bool ValidateHitRestSample(
     const DeformableRuntimeMeshInstance& instance,
     const DeformablePosedHit& hit)
@@ -329,6 +337,17 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
     return ValidateSurfaceEditSession(instance, session)
         && ValidateParams(instance, params)
         && MatchingPosedHit(session.hit, params.posedHit)
+    ;
+}
+
+[[nodiscard]] bool ValidatePreviewedSurfaceEditSessionParams(
+    const DeformableRuntimeMeshInstance& instance,
+    const DeformableSurfaceEditSession& session,
+    const DeformableHoleEditParams& params)
+{
+    return ValidateSurfaceEditSessionParams(instance, session, params)
+        && session.previewed
+        && MatchingHoleEditParams(session.previewParams, params)
     ;
 }
 
@@ -1493,11 +1512,13 @@ bool BeginSurfaceEdit(
 
 bool PreviewHole(
     const DeformableRuntimeMeshInstance& instance,
-    const DeformableSurfaceEditSession& session,
+    DeformableSurfaceEditSession& session,
     const DeformableHoleEditParams& params,
     DeformableHolePreview& outPreview)
 {
     outPreview = DeformableHolePreview{};
+    session.previewParams = DeformableHoleEditParams{};
+    session.previewed = false;
     if(!__hidden_deformable_surface_edit::ValidateRuntimePayload(instance)
         || !__hidden_deformable_surface_edit::RuntimeMeshUploaded(instance)
         || !__hidden_deformable_surface_edit::ValidateSurfaceEditSessionParams(instance, session, params)
@@ -1517,6 +1538,8 @@ bool PreviewHole(
     outPreview.depth = params.depth;
     outPreview.editRevision = instance.editRevision;
     outPreview.valid = true;
+    session.previewParams = params;
+    session.previewed = true;
     return true;
 }
 
@@ -1533,7 +1556,7 @@ bool CommitHole(
         *outRecord = DeformableSurfaceEditRecord{};
     if(!__hidden_deformable_surface_edit::ValidateRuntimePayload(instance)
         || !__hidden_deformable_surface_edit::RuntimeMeshUploaded(instance)
-        || !__hidden_deformable_surface_edit::ValidateSurfaceEditSessionParams(instance, session, params)
+        || !__hidden_deformable_surface_edit::ValidatePreviewedSurfaceEditSessionParams(instance, session, params)
     )
         return false;
 
@@ -1611,7 +1634,10 @@ bool ResolveAccessoryAttachmentTransform(
     )
         return false;
 
-    Vector<DeformableVertexRest> posedVertices;
+    Core::Alloc::ScratchArena<> scratchArena;
+    Vector<DeformableVertexRest, Core::Alloc::ScratchAllocator<DeformableVertexRest>> posedVertices{
+        Core::Alloc::ScratchAllocator<DeformableVertexRest>(scratchArena)
+    };
     if(!BuildDeformablePickingVertices(instance, inputs, posedVertices))
         return false;
 

@@ -344,6 +344,19 @@ template<typename VertexVector>
     return true;
 }
 
+template<typename VertexVector>
+[[nodiscard]] bool BuildPickingVerticesIfReady(
+    const DeformableRuntimeMeshInstance& instance,
+    const DeformablePickingInputs& inputs,
+    VertexVector& outVertices)
+{
+    outVertices.clear();
+    if((instance.dirtyFlags & RuntimeMeshDirtyFlag::GpuUploadDirty) != 0u)
+        return false;
+
+    return BuildPickingVertices(instance, inputs, outVertices);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -359,11 +372,15 @@ bool BuildDeformablePickingVertices(
     const DeformablePickingInputs& inputs,
     Vector<DeformableVertexRest>& outVertices)
 {
-    outVertices.clear();
-    if((instance.dirtyFlags & RuntimeMeshDirtyFlag::GpuUploadDirty) != 0u)
-        return false;
+    return __hidden_deformable_picking::BuildPickingVerticesIfReady(instance, inputs, outVertices);
+}
 
-    return __hidden_deformable_picking::BuildPickingVertices(instance, inputs, outVertices);
+bool BuildDeformablePickingVertices(
+    const DeformableRuntimeMeshInstance& instance,
+    const DeformablePickingInputs& inputs,
+    Vector<DeformableVertexRest, Core::Alloc::ScratchAllocator<DeformableVertexRest>>& outVertices)
+{
+    return __hidden_deformable_picking::BuildPickingVerticesIfReady(instance, inputs, outVertices);
 }
 
 bool ResolveDeformableRestSurfaceSample(

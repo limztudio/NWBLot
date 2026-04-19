@@ -1103,8 +1103,11 @@ static void TestSurfaceEditFlowAttachesAndPersistsAccessory(TestContext& context
     NWB::Impl::DeformableSurfaceEditSession session;
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::BeginSurfaceEdit(instance, params.posedHit, session));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, session.active);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !session.previewed);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, session.entity == instance.entity);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, session.runtimeMesh == instance.handle);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::CommitHole(instance, session, params));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.editRevision == 0u);
 
     const NWB::Impl::DeformableHoleEditParams otherParams = MakeHoleEditParams(
         instance,
@@ -1115,8 +1118,10 @@ static void TestSurfaceEditFlowAttachesAndPersistsAccessory(TestContext& context
     NWB::Impl::DeformableHolePreview preview;
     NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::PreviewHole(instance, session, otherParams, preview));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, !preview.valid);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !session.previewed);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::CommitHole(instance, session, otherParams));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::PreviewHole(instance, session, params, preview));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, session.previewed);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, preview.valid);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(preview.radius, params.radius));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(preview.ellipseRatio, params.ellipseRatio));

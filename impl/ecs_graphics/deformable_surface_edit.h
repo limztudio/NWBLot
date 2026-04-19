@@ -41,7 +41,9 @@ struct DeformableSurfaceEditSession{
     RuntimeMeshHandle runtimeMesh;
     u32 editRevision = 0;
     DeformablePosedHit hit;
+    DeformableHoleEditParams previewParams;
     bool active = false;
+    bool previewed = false;
 };
 
 struct DeformableHolePreview{
@@ -108,7 +110,7 @@ struct DeformableSurfaceEditState{
 );
 [[nodiscard]] bool PreviewHole(
     const DeformableRuntimeMeshInstance& instance,
-    const DeformableSurfaceEditSession& session,
+    DeformableSurfaceEditSession& session,
     const DeformableHoleEditParams& params,
     DeformableHolePreview& outPreview
 );

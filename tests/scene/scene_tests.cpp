@@ -196,7 +196,7 @@ static void TestSceneCameraResolution(TestContext& context){
     NWB_SCENE_TEST_CHECK(context, invalidTransformFallbackCameraView.camera == firstCamera);
     secondTransform->rotation = AlignedFloat4Data(0.0f, 0.0f, 0.0f, 1.0f);
 
-    secondCamera->setVerticalFovRadians(SourceMath::ConvertToRadians(179.0f));
+    secondCamera->setVerticalFovRadians(SimpleMath::ConvertToRadians(179.0f));
     secondCamera->setAspectRatio(s_MaxF32);
     NWB::Core::Scene::SceneCameraView invalidProjectionFallbackCameraView =
         NWB::Core::Scene::ResolveSceneCameraView(testWorld.world)
@@ -207,7 +207,7 @@ static void TestSceneCameraResolution(TestContext& context){
     NWB_SCENE_TEST_CHECK(context, invalidProjectionFallbackCameraView.camera == firstCamera);
     *secondCamera = NWB::Core::Scene::CameraComponent{};
 
-    secondCamera->setVerticalFovRadians(SourceMath::ConvertToRadians(179.0f));
+    secondCamera->setVerticalFovRadians(SimpleMath::ConvertToRadians(179.0f));
     NWB::Core::Scene::SceneCameraView invalidFallbackAspectCameraView =
         NWB::Core::Scene::ResolveSceneCameraView(testWorld.world, s_MaxF32)
     ;
@@ -305,19 +305,19 @@ static void TestCameraProjectionHelpers(TestContext& context){
     NWB_SCENE_TEST_CHECK(context, !NWB::Core::Scene::TryBuildCameraProjectionParams(camera, 1.5f, projectionParams));
 
     camera = NWB::Core::Scene::CameraComponent{};
-    camera.setVerticalFovRadians(SourceMath::ConvertToRadians(179.0f));
+    camera.setVerticalFovRadians(SimpleMath::ConvertToRadians(179.0f));
     NWB_SCENE_TEST_CHECK(context, !NWB::Core::Scene::TryBuildCameraProjectionParams(camera, s_MaxF32, projectionParams));
 
     camera.setAspectRatio(s_MaxF32);
     NWB_SCENE_TEST_CHECK(context, !NWB::Core::Scene::TryBuildCameraProjectionData(camera, 1.5f, projectionData));
 
     camera = NWB::Core::Scene::CameraComponent{};
-    camera.setVerticalFovRadians(SourceMath::ConvertToRadians(180.0f));
+    camera.setVerticalFovRadians(SimpleMath::ConvertToRadians(180.0f));
     NWB_SCENE_TEST_CHECK(
         context,
         !NWB::Core::Scene::TryComputeCameraTanHalfVerticalFov(camera.verticalFovRadians(), tanHalfFov)
     );
-    camera.setVerticalFovRadians(SourceMath::ConvertToRadians(400.0f));
+    camera.setVerticalFovRadians(SimpleMath::ConvertToRadians(400.0f));
     NWB_SCENE_TEST_CHECK(
         context,
         !NWB::Core::Scene::TryComputeCameraTanHalfVerticalFov(camera.verticalFovRadians(), tanHalfFov)

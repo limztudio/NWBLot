@@ -9,7 +9,6 @@
 
 #include <core/assets/asset_ref.h>
 #include <core/ecs/entity_id.h>
-#include <global/matrix_math.h>
 
 #include <cstddef>
 

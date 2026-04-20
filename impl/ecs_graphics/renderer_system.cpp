@@ -12,7 +12,6 @@
 #include <impl/assets_graphics/material_asset.h>
 #include <impl/assets_graphics/shader_asset.h>
 #include <impl/assets_graphics/shader_stage_names.h>
-#include <global/matrix_math.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -391,11 +390,7 @@ static void StoreRotatedBasisVector(
     const AlignedFloat3Data& localVector,
     const Core::Scene::TransformComponent& transform
 ){
-    AlignedFloat3Data rotatedVector;
-    SourceMath::StoreFloat3A(
-        &rotatedVector,
-        SourceMath::Vector3Rotate(SourceMath::LoadFloat3A(&localVector), SourceMath::LoadFloat4A(&transform.rotation))
-    );
+    const AlignedFloat3Data rotatedVector = SimpleMath::Vector3Rotate(localVector, transform.rotation);
     outVector = AlignedFloat4Data(rotatedVector.x, rotatedVector.y, rotatedVector.z, 0.0f);
 }
 

@@ -14,7 +14,6 @@
 
 #if defined(__cplusplus)
 #include <core/global.h>
-#include <global/matrix_math.h>
 
 #include <cstddef>
 #else

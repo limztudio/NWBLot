@@ -7,8 +7,6 @@
 
 #include "global.h"
 
-#include <global/matrix_math.h>
-
 #include <cstddef>
 
 

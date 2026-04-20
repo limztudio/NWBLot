@@ -7,8 +7,6 @@
 
 #include "global.h"
 
-#include <global/matrix_math.h>
-
 #include <cstddef>
 
 
@@ -24,7 +22,7 @@ NWB_SCENE_BEGIN
 struct alignas(AlignedFloat4Data) CameraComponent{
     // x = vertical FOV, y = near plane, z = far plane, w = aspect ratio.
     // An aspect ratio of 0 lets renderers derive aspect from the active framebuffer.
-    AlignedFloat4Data projection = AlignedFloat4Data(SourceMath::ConvertToRadians(60.0f), 0.001f, 10000.0f, 0.0f);
+    AlignedFloat4Data projection = AlignedFloat4Data(SimpleMath::ConvertToRadians(60.0f), 0.001f, 10000.0f, 0.0f);
 
     [[nodiscard]] f32 verticalFovRadians()const{ return projection.x; }
     [[nodiscard]] f32 nearPlane()const{ return projection.y; }
@@ -78,7 +76,7 @@ static_assert(
     outTanHalfFov = 0.0f;
     if(!IsFinite(verticalFovRadians)
         || verticalFovRadians <= 0.0f
-        || verticalFovRadians >= SourceMath::MATH_PI
+        || verticalFovRadians >= SimpleMath::Pi
     )
         return false;
 

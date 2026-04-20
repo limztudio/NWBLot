@@ -32,8 +32,8 @@ static constexpr f32 s_CameraStartDepth = 2.2f;
 static constexpr f32 s_CameraMoveEpsilon = 0.000001f;
 static constexpr f32 s_FlyCameraMoveSpeed = 2.5f;
 static constexpr f32 s_FlyCameraBoostMultiplier = 4.0f;
-static constexpr f32 s_FlyCameraMouseSensitivityRadiansPerPixel = SourceMath::ConvertToRadians(0.12f);
-static constexpr f32 s_FlyCameraPitchLimitRadians = SourceMath::ConvertToRadians(89.0f);
+static constexpr f32 s_FlyCameraMouseSensitivityRadiansPerPixel = SimpleMath::ConvertToRadians(0.12f);
+static constexpr f32 s_FlyCameraPitchLimitRadians = SimpleMath::ConvertToRadians(89.0f);
 static constexpr f32 s_DefaultDirectionalLightPitch = -0.65f;
 static constexpr f32 s_DefaultDirectionalLightYaw = 0.65f;
 static constexpr f32 s_DefaultDirectionalLightIntensity = 2.0f;
@@ -96,13 +96,9 @@ static constexpr f32 s_AccessoryUniformScale = 0.16f;
 [[nodiscard]] static EditorVec3 RotateDirectionByQuaternion(
     const EditorVec3& value,
     const AlignedFloat4Data& rotation){
-    AlignedFloat3Data rotatedDirection;
-    SourceMath::StoreFloat3A(
-        &rotatedDirection,
-        SourceMath::Vector3Rotate(
-            SourceMath::LoadFloat3A(static_cast<const AlignedFloat3Data*>(&value)),
-            SourceMath::LoadFloat4A(&rotation)
-        )
+    const AlignedFloat3Data rotatedDirection = SimpleMath::Vector3Rotate(
+        static_cast<const AlignedFloat3Data&>(value),
+        rotation
     );
     return EditorVec3{ rotatedDirection.x, rotatedDirection.y, rotatedDirection.z };
 }
@@ -194,10 +190,7 @@ static void ApplyFlyCameraInput(
         s_FlyCameraPitchLimitRadians
     );
 
-    SourceMath::StoreFloat4A(
-        &transform.rotation,
-        SourceMath::QuaternionRotationRollPitchYaw(pitchRadians, yawRadians, 0.0f)
-    );
+    transform.rotation = SimpleMath::QuaternionRotationRollPitchYaw(pitchRadians, yawRadians, 0.0f);
     if(!FiniteFloat3(transform.position))
         transform.position = AlignedFloat3Data(0.0f, 0.0f, 0.0f);
 
@@ -210,11 +203,7 @@ static void ApplyFlyCameraInput(
             return;
 
         const AlignedFloat3Data localMove(safeRightAxis * moveScale, 0.0f, safeForwardAxis * moveScale);
-        AlignedFloat3Data worldMove;
-        SourceMath::StoreFloat3A(
-            &worldMove,
-            SourceMath::Vector3Rotate(SourceMath::LoadFloat3A(&localMove), SourceMath::LoadFloat4A(&transform.rotation))
-        );
+        const AlignedFloat3Data worldMove = SimpleMath::Vector3Rotate(localMove, transform.rotation);
         if(!FiniteFloat3(worldMove))
             return;
 
@@ -267,13 +256,10 @@ static void ApplyFlyCameraInputToMainCamera(
 static void CreateDefaultDirectionalLightEntity(NWB::Core::ECS::World& world){
     auto lightEntity = world.createEntity();
     auto& transform = lightEntity.addComponent<NWB::Core::Scene::TransformComponent>();
-    SourceMath::StoreFloat4A(
-        &transform.rotation,
-        SourceMath::QuaternionRotationRollPitchYaw(
-            s_DefaultDirectionalLightPitch,
-            s_DefaultDirectionalLightYaw,
-            0.0f
-        )
+    transform.rotation = SimpleMath::QuaternionRotationRollPitchYaw(
+        s_DefaultDirectionalLightPitch,
+        s_DefaultDirectionalLightYaw,
+        0.0f
     );
 
     auto& light = lightEntity.addComponent<NWB::Core::Scene::LightComponent>();

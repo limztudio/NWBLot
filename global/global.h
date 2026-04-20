@@ -19,8 +19,7 @@
 #include "hash_utils.h"
 #include "unique_ptr.h"
 #include "refcount_ptr.h"
-#include "math.h"
-#include "sh_math.h"
+#include "simplemath.h"
 #include "timer.h"
 
 

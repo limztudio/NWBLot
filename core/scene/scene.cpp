@@ -22,7 +22,7 @@ namespace __hidden_scene{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool SceneFloat3Finite(const AlignedFloat3Data& value){
+[[nodiscard]] bool SceneFloat3Finite(const Float4& value){
     const SIMDVector valueVector = LoadFloat(value);
     return !Vector3IsNaN(valueVector) && !Vector3IsInfinite(valueVector);
 }

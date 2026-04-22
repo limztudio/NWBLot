@@ -49,12 +49,12 @@ namespace RenderPath{
 
 
 struct InstanceGpuData{
-    AlignedFloat4Data rotation = AlignedFloat4Data(0.f, 0.f, 0.f, 1.f);
-    AlignedFloat4Data translation = AlignedFloat4Data(0.f, 0.f, 0.f, 0.f);
-    AlignedFloat4Data scale = AlignedFloat4Data(1.f, 1.f, 1.f, 0.f);
+    Float4 rotation = Float4(0.f, 0.f, 0.f, 1.f);
+    Float4 translation = Float4(0.f, 0.f, 0.f, 0.f);
+    Float4 scale = Float4(1.f, 1.f, 1.f, 0.f);
 };
 static_assert(sizeof(InstanceGpuData) == sizeof(f32) * 12u, "InstanceGpuData layout must match the mesh shaders");
-static_assert(alignof(InstanceGpuData) >= alignof(AlignedFloat4Data), "InstanceGpuData must stay SIMD-aligned");
+static_assert(alignof(InstanceGpuData) >= alignof(Float4), "InstanceGpuData must stay SIMD-aligned");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

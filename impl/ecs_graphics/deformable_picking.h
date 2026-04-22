@@ -28,30 +28,30 @@ class RendererSystem;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct alignas(AlignedFloat4Data) DeformablePickingRay{
+struct alignas(Float4) DeformablePickingRay{
     // xyz = origin, w = minimum hit distance.
-    AlignedFloat4Data originMinDistance = AlignedFloat4Data(0.0f, 0.0f, 0.0f, 0.0f);
+    Float4 originMinDistance = Float4(0.0f, 0.0f, 0.0f, 0.0f);
     // xyz = direction, w = maximum hit distance.
-    AlignedFloat4Data directionMaxDistance = AlignedFloat4Data(0.0f, 0.0f, 1.0f, Limit<f32>::s_Max);
+    Float4 directionMaxDistance = Float4(0.0f, 0.0f, 1.0f, Limit<f32>::s_Max);
 
-    [[nodiscard]] Float3Data origin()const{
-        return Float3Data(originMinDistance.x, originMinDistance.y, originMinDistance.z);
+    [[nodiscard]] Float3U origin()const{
+        return Float3U(originMinDistance.x, originMinDistance.y, originMinDistance.z);
     }
 
-    [[nodiscard]] Float3Data direction()const{
-        return Float3Data(directionMaxDistance.x, directionMaxDistance.y, directionMaxDistance.z);
+    [[nodiscard]] Float3U direction()const{
+        return Float3U(directionMaxDistance.x, directionMaxDistance.y, directionMaxDistance.z);
     }
 
     [[nodiscard]] f32 minDistance()const{ return originMinDistance.w; }
     [[nodiscard]] f32 maxDistance()const{ return directionMaxDistance.w; }
 
-    void setOrigin(const Float3Data& value){
+    void setOrigin(const Float3U& value){
         originMinDistance.x = value.x;
         originMinDistance.y = value.y;
         originMinDistance.z = value.z;
     }
 
-    void setDirection(const Float3Data& value){
+    void setDirection(const Float3U& value){
         directionMaxDistance.x = value.x;
         directionMaxDistance.y = value.y;
         directionMaxDistance.z = value.z;
@@ -62,8 +62,8 @@ struct alignas(AlignedFloat4Data) DeformablePickingRay{
 };
 static_assert(IsStandardLayout_V<DeformablePickingRay>, "DeformablePickingRay must stay layout-stable");
 static_assert(IsTriviallyCopyable_V<DeformablePickingRay>, "DeformablePickingRay must stay cheap to pass by value");
-static_assert(sizeof(DeformablePickingRay) == sizeof(AlignedFloat4Data) * 2u, "DeformablePickingRay layout drifted");
-static_assert(alignof(DeformablePickingRay) >= alignof(AlignedFloat4Data), "DeformablePickingRay must stay SIMD-aligned");
+static_assert(sizeof(DeformablePickingRay) == sizeof(Float4) * 2u, "DeformablePickingRay layout drifted");
+static_assert(alignof(DeformablePickingRay) >= alignof(Float4), "DeformablePickingRay must stay SIMD-aligned");
 
 struct DeformablePickingInputs{
     const DeformableMorphWeightsComponent* morphWeights = nullptr;
@@ -72,9 +72,9 @@ struct DeformablePickingInputs{
     const Core::Scene::TransformComponent* transform = nullptr;
 };
 
-struct alignas(AlignedFloat4Data) DeformableHitBarycentric{
+struct alignas(Float4) DeformableHitBarycentric{
     // xyz = barycentric coordinates, w = ray hit distance.
-    AlignedFloat4Data values = AlignedFloat4Data(0.0f, 0.0f, 0.0f, 0.0f);
+    Float4 values = Float4(0.0f, 0.0f, 0.0f, 0.0f);
 
     [[nodiscard]] f32& operator[](const usize index){
         NWB_ASSERT(index < 3u);
@@ -92,48 +92,48 @@ struct alignas(AlignedFloat4Data) DeformableHitBarycentric{
 static_assert(IsStandardLayout_V<DeformableHitBarycentric>, "DeformableHitBarycentric must stay layout-stable");
 static_assert(IsTriviallyCopyable_V<DeformableHitBarycentric>, "DeformableHitBarycentric must stay cheap to copy");
 static_assert(
-    sizeof(DeformableHitBarycentric) == sizeof(AlignedFloat4Data),
+    sizeof(DeformableHitBarycentric) == sizeof(Float4),
     "DeformableHitBarycentric must stay one aligned vector wide"
 );
 static_assert(
-    alignof(DeformableHitBarycentric) >= alignof(AlignedFloat4Data),
+    alignof(DeformableHitBarycentric) >= alignof(Float4),
     "DeformableHitBarycentric must stay SIMD-aligned"
 );
 
-struct alignas(AlignedFloat4Data) DeformablePosedHit{
+struct alignas(Float4) DeformablePosedHit{
     Core::ECS::EntityID entity = Core::ECS::ENTITY_ID_INVALID;
     RuntimeMeshHandle runtimeMesh;
     u32 editRevision = 0;
     u32 triangle = 0;
     DeformableHitBarycentric bary;
-    AlignedFloat4Data position = AlignedFloat4Data(0.0f, 0.0f, 0.0f, 1.0f);
-    AlignedFloat4Data normal = AlignedFloat4Data(0.0f, 0.0f, 1.0f, 0.0f);
+    Float4 position = Float4(0.0f, 0.0f, 0.0f, 1.0f);
+    Float4 normal = Float4(0.0f, 0.0f, 1.0f, 0.0f);
     SourceSample restSample;
 
     [[nodiscard]] f32 distance()const{ return bary.distance(); }
     void setDistance(const f32 value){ bary.setDistance(value); }
 
-    void setPosition(const Float3Data& value){
-        position = AlignedFloat4Data(value.x, value.y, value.z, 1.0f);
+    void setPosition(const Float3U& value){
+        position = Float4(value.x, value.y, value.z, 1.0f);
     }
 
-    void setNormal(const Float3Data& value){
-        normal = AlignedFloat4Data(value.x, value.y, value.z, 0.0f);
+    void setNormal(const Float3U& value){
+        normal = Float4(value.x, value.y, value.z, 0.0f);
     }
 };
 static_assert(IsStandardLayout_V<DeformablePosedHit>, "DeformablePosedHit must stay layout-stable");
 static_assert(IsTriviallyCopyable_V<DeformablePosedHit>, "DeformablePosedHit must stay cheap to copy");
-static_assert(alignof(DeformablePosedHit) >= alignof(AlignedFloat4Data), "DeformablePosedHit must stay SIMD-aligned");
+static_assert(alignof(DeformablePosedHit) >= alignof(Float4), "DeformablePosedHit must stay SIMD-aligned");
 static_assert(
-    (offsetof(DeformablePosedHit, bary) % alignof(AlignedFloat4Data)) == 0,
+    (offsetof(DeformablePosedHit, bary) % alignof(Float4)) == 0,
     "DeformablePosedHit::bary must stay SIMD-aligned"
 );
 static_assert(
-    (offsetof(DeformablePosedHit, position) % alignof(AlignedFloat4Data)) == 0,
+    (offsetof(DeformablePosedHit, position) % alignof(Float4)) == 0,
     "DeformablePosedHit::position must stay SIMD-aligned"
 );
 static_assert(
-    (offsetof(DeformablePosedHit, normal) % alignof(AlignedFloat4Data)) == 0,
+    (offsetof(DeformablePosedHit, normal) % alignof(Float4)) == 0,
     "DeformablePosedHit::normal must stay SIMD-aligned"
 );
 

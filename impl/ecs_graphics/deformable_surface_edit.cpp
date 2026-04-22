@@ -225,14 +225,14 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
     return NWB_MEMCMP(&lhs, &rhs, sizeof(lhs)) == 0;
 }
 
-[[nodiscard]] bool ExactFloat3Data(const Float3Data& lhs, const Float3Data& rhs){
+[[nodiscard]] bool ExactFloat3(const Float3U& lhs, const Float3U& rhs){
     return ExactF32(lhs.x, rhs.x)
         && ExactF32(lhs.y, rhs.y)
         && ExactF32(lhs.z, rhs.z)
     ;
 }
 
-[[nodiscard]] bool ExactFloat3Data(const AlignedFloat4Data& lhs, const AlignedFloat4Data& rhs){
+[[nodiscard]] bool ExactFloat3(const Float4& lhs, const Float4& rhs){
     return ExactF32(lhs.x, rhs.x)
         && ExactF32(lhs.y, rhs.y)
         && ExactF32(lhs.z, rhs.z)
@@ -256,8 +256,8 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
         && ExactF32(lhs.bary[1], rhs.bary[1])
         && ExactF32(lhs.bary[2], rhs.bary[2])
         && ExactF32(lhs.distance(), rhs.distance())
-        && ExactFloat3Data(lhs.position, rhs.position)
-        && ExactFloat3Data(lhs.normal, rhs.normal)
+        && ExactFloat3(lhs.position, rhs.position)
+        && ExactFloat3(lhs.normal, rhs.normal)
         && ExactSourceSample(lhs.restSample, rhs.restSample)
     ;
 }
@@ -480,7 +480,7 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
     ;
 }
 
-[[nodiscard]] bool ValidStoredRestFrame(const Float3Data& position, const Float3Data& normal){
+[[nodiscard]] bool ValidStoredRestFrame(const Float3U& position, const Float3U& normal){
     const f32 normalLengthSquared = LengthSquared(ToVec3(normal));
     return DeformableValidation::IsFiniteFloat3(position)
         && DeformableValidation::IsFiniteFloat3(normal)
@@ -646,13 +646,13 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
     return true;
 }
 
-[[nodiscard]] AlignedFloat4Data RotationFromPositiveZToNormal(const Vec3& rawNormal){
+[[nodiscard]] Float4 RotationFromPositiveZToNormal(const Vec3& rawNormal){
     if(!FiniteVec3(rawNormal))
-        return AlignedFloat4Data(0.0f, 0.0f, 0.0f, 1.0f);
+        return Float4(0.0f, 0.0f, 0.0f, 1.0f);
 
     Vec3 normal = Normalize(rawNormal, Vec3{ 0.0f, 0.0f, 1.0f });
     if(!FiniteVec3(normal))
-        return AlignedFloat4Data(0.0f, 0.0f, 0.0f, 1.0f);
+        return Float4(0.0f, 0.0f, 0.0f, 1.0f);
 
     f32 dot = normal.z;
     if(dot > 1.0f)
@@ -661,25 +661,25 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
         dot = -1.0f;
 
     if(dot > 0.999f)
-        return AlignedFloat4Data(0.0f, 0.0f, 0.0f, 1.0f);
+        return Float4(0.0f, 0.0f, 0.0f, 1.0f);
     if(dot < -0.999f)
-        return AlignedFloat4Data(1.0f, 0.0f, 0.0f, 0.0f);
+        return Float4(1.0f, 0.0f, 0.0f, 0.0f);
 
     const SIMDVector axis = VectorMultiply(VectorSwizzle<1, 0, 2, 3>(LoadVec3(normal)), VectorSet(-1.0f, 1.0f, 0.0f, 0.0f));
     const f32 scale = VectorGetX(VectorSqrt(VectorReplicate((1.0f + dot) * 2.0f)));
     if(!IsFinite(scale) || scale <= s_FrameEpsilon)
-        return AlignedFloat4Data(0.0f, 0.0f, 0.0f, 1.0f);
+        return Float4(0.0f, 0.0f, 0.0f, 1.0f);
 
     const f32 invScale = 1.0f / scale;
-    AlignedFloat4Data rotation;
+    Float4 rotation;
     SIMDVector rotationVector = VectorScale(axis, invScale);
     rotationVector = VectorSetW(rotationVector, scale * 0.5f);
     StoreFloat(rotationVector, &rotation);
     return rotation;
 }
 
-[[nodiscard]] AlignedFloat4Data NormalizeRotationQuaternion(
-    const AlignedFloat4Data& rotation,
+[[nodiscard]] Float4 NormalizeRotationQuaternion(
+    const Float4& rotation,
     const Vec3& fallbackNormal)
 {
     const SIMDVector rotationVector = LoadFloat(rotation);
@@ -687,18 +687,18 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
     if(!IsFinite(lengthSquared) || lengthSquared <= s_FrameEpsilon)
         return RotationFromPositiveZToNormal(fallbackNormal);
 
-    AlignedFloat4Data normalizedRotation;
+    Float4 normalizedRotation;
     StoreFloat(QuaternionNormalize(rotationVector), &normalizedRotation);
     return normalizedRotation;
 }
 
-[[nodiscard]] AlignedFloat4Data RotationFromFrame(const Vec3& rawTangent, const Vec3& rawNormal){
+[[nodiscard]] Float4 RotationFromFrame(const Vec3& rawTangent, const Vec3& rawNormal){
     if(!FiniteVec3(rawNormal))
-        return AlignedFloat4Data(0.0f, 0.0f, 0.0f, 1.0f);
+        return Float4(0.0f, 0.0f, 0.0f, 1.0f);
 
     Vec3 normal = Normalize(rawNormal, Vec3{ 0.0f, 0.0f, 1.0f });
     if(!FiniteVec3(normal))
-        return AlignedFloat4Data(0.0f, 0.0f, 0.0f, 1.0f);
+        return Float4(0.0f, 0.0f, 0.0f, 1.0f);
 
     Vec3 tangent = FiniteVec3(rawTangent)
         ? Subtract(rawTangent, Scale(normal, Dot(rawTangent, normal)))
@@ -729,7 +729,7 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
         m20, m21, m22, 0.0f,
         0.0f, 0.0f, 0.0f, 1.0f
     );
-    AlignedFloat4Data rotation;
+    Float4 rotation;
     StoreFloat(QuaternionRotationMatrix(rotationMatrix), &rotation);
 
     return NormalizeRotationQuaternion(rotation, normal);
@@ -1141,10 +1141,10 @@ template<usize sourceCount>
     const Vector<DeformableVertexRest>& vertices,
     const u32 (&sourceVertices)[sourceCount],
     const f32 (&sourceWeights)[sourceCount],
-    Float4Data& outColor)
+    Float4U& outColor)
 {
     static_assert(sourceCount > 0u, "color transfer requires source samples");
-    outColor = Float4Data(0.0f, 0.0f, 0.0f, 0.0f);
+    outColor = Float4U(0.0f, 0.0f, 0.0f, 0.0f);
 
     SIMDVector color = VectorZero();
     f32 weightSum = 0.0f;
@@ -1159,7 +1159,7 @@ template<usize sourceCount>
         if(vertex >= vertices.size())
             return false;
 
-        const Float4Data& sourceColor = vertices[vertex].color0;
+        const Float4U& sourceColor = vertices[vertex].color0;
         if(!DeformableValidation::IsFiniteFloat4(sourceColor))
             return false;
 
@@ -1378,7 +1378,7 @@ template<typename AssignedSampleVector>
     const u32 sourceVertex,
     const SkinInfluence4* wallSkin,
     const SourceSample& wallSourceSample,
-    const Float4Data& wallColor,
+    const Float4U& wallColor,
     const Vec3& position,
     const Vec3& normal,
     const Vec3& tangent,
@@ -1402,7 +1402,7 @@ template<typename AssignedSampleVector>
     wallVertex.tangent.y = tangent.y;
     wallVertex.tangent.z = tangent.z;
     wallVertex.tangent.w = TangentHandedness(wallVertex.tangent.w);
-    wallVertex.uv0 = Float2Data(uvU, uvV);
+    wallVertex.uv0 = Float2U(uvU, uvV);
     wallVertex.color0 = wallColor;
     if(!DeformableValidation::ValidRestVertexFrame(wallVertex))
         return false;
@@ -1480,10 +1480,10 @@ bool PreviewHole(
     if(!__hidden_deformable_surface_edit::BuildPreviewFrame(instance, params, frame))
         return false;
 
-    outPreview.center = DeformableRuntime::ToAlignedFloat4(frame.center, 1.0f);
-    outPreview.normal = DeformableRuntime::ToAlignedFloat4(frame.normal);
-    outPreview.tangent = DeformableRuntime::ToAlignedFloat4(frame.tangent);
-    outPreview.bitangent = DeformableRuntime::ToAlignedFloat4(frame.bitangent);
+    outPreview.center = DeformableRuntime::ToFloat4(frame.center, 1.0f);
+    outPreview.normal = DeformableRuntime::ToFloat4(frame.normal);
+    outPreview.tangent = DeformableRuntime::ToFloat4(frame.tangent);
+    outPreview.bitangent = DeformableRuntime::ToFloat4(frame.bitangent);
     outPreview.radius = params.radius;
     outPreview.ellipseRatio = params.ellipseRatio;
     outPreview.depth = params.depth;
@@ -1643,10 +1643,10 @@ bool ResolveAccessoryAttachmentTransform(
     if(DeformableRuntime::LengthSquared(tangent) <= DeformableRuntime::s_FrameEpsilon)
         tangent = DeformableRuntime::FallbackTangent(normal);
 
-    outTransform.position = AlignedFloat3Data(accessoryPosition.x, accessoryPosition.y, accessoryPosition.z);
+    outTransform.position = Float4(accessoryPosition.x, accessoryPosition.y, accessoryPosition.z);
     outTransform.rotation = __hidden_deformable_surface_edit::RotationFromFrame(tangent, normal);
     const f32 uniformScale = attachment.uniformScale();
-    outTransform.scale = AlignedFloat3Data(uniformScale, uniformScale, uniformScale);
+    outTransform.scale = Float4(uniformScale, uniformScale, uniformScale);
     return true;
 }
 
@@ -2069,8 +2069,8 @@ bool CommitDeformableRestSpaceHole(
                 edge.a,
                 edge.b,
             };
-            Float4Data rimColor;
-            Float4Data innerColor;
+            Float4U rimColor;
+            Float4U innerColor;
             if(!__hidden_deformable_surface_edit::BuildBlendedVertexColor(
                     newRestVertices,
                     rimAttributeVertex,

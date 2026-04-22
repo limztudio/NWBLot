@@ -41,25 +41,25 @@ namespace DisplacementResolveFailure{
     };
 };
 
-struct Vec3 : public AlignedFloat3Data{
+struct Vec3 : public Float4{
     constexpr Vec3()noexcept
-        : AlignedFloat3Data(0.0f, 0.0f, 0.0f)
+        : Float4(0.0f, 0.0f, 0.0f)
     {}
     constexpr Vec3(const f32 _x, const f32 _y, const f32 _z)noexcept
-        : AlignedFloat3Data(_x, _y, _z)
+        : Float4(_x, _y, _z)
     {}
 };
 static_assert(IsStandardLayout_V<Vec3>, "Vec3 must stay layout-stable");
 static_assert(IsTriviallyCopyable_V<Vec3>, "Vec3 must stay cheap to pass by value");
-static_assert(alignof(Vec3) >= alignof(AlignedFloat3Data), "Vec3 must stay SIMD-aligned");
-static_assert(sizeof(Vec3) == sizeof(AlignedFloat3Data), "Vec3 must stay one aligned float3 wide");
+static_assert(alignof(Vec3) >= alignof(Float4), "Vec3 must stay SIMD-aligned");
+static_assert(sizeof(Vec3) == sizeof(Float4), "Vec3 must stay one aligned float3 wide");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 [[nodiscard]] inline SIMDVector LoadVec3(const Vec3& value){
-    return LoadFloat(static_cast<const AlignedFloat3Data&>(value));
+    return LoadFloat(static_cast<const Float4&>(value));
 }
 
 [[nodiscard]] inline Vec3 StoreVec3(SIMDVector value){
@@ -106,27 +106,27 @@ static_assert(sizeof(Vec3) == sizeof(AlignedFloat3Data), "Vec3 must stay one ali
     return true;
 }
 
-[[nodiscard]] inline Vec3 ToVec3(const Float3Data& value){
+[[nodiscard]] inline Vec3 ToVec3(const Float3U& value){
     return Vec3{ value.x, value.y, value.z };
 }
 
-[[nodiscard]] inline Vec3 ToVec3(const AlignedFloat4Data& value){
+[[nodiscard]] inline Vec3 ToVec3(const Float4& value){
     return Vec3{ value.x, value.y, value.z };
 }
 
-[[nodiscard]] inline Float3Data ToFloat3(const Vec3& value){
-    return Float3Data(value.x, value.y, value.z);
+[[nodiscard]] inline Float3U ToFloat3(const Vec3& value){
+    return Float3U(value.x, value.y, value.z);
 }
 
-[[nodiscard]] inline AlignedFloat4Data ToAlignedFloat4(const Vec3& value, const f32 w = 0.0f){
-    return AlignedFloat4Data(value.x, value.y, value.z, w);
+[[nodiscard]] inline Float4 ToFloat4(const Vec3& value, const f32 w = 0.0f){
+    return Float4(value.x, value.y, value.z, w);
 }
 
-inline void AccumulateScaled(Float3Data& target, const Float3Data& source, const f32 scalar){
+inline void AccumulateScaled(Float3U& target, const Float3U& source, const f32 scalar){
     StoreFloat(VectorMultiplyAdd(LoadFloat(source), VectorReplicate(scalar), LoadFloat(target)), &target);
 }
 
-inline void AccumulateScaled(Float4Data& target, const Float4Data& source, const f32 scalar){
+inline void AccumulateScaled(Float4U& target, const Float4U& source, const f32 scalar){
     StoreFloat(VectorMultiplyAdd(LoadFloat(source), VectorReplicate(scalar), LoadFloat(target)), &target);
 }
 
@@ -179,7 +179,7 @@ inline void AccumulateScaled(Float4Data& target, const Float4Data& source, const
     return value < 0.0f ? -1.0f : 1.0f;
 }
 
-[[nodiscard]] inline Vec3 RotateByQuaternion(const Vec3& value, const AlignedFloat4Data& rotation){
+[[nodiscard]] inline Vec3 RotateByQuaternion(const Vec3& value, const Float4& rotation){
     return StoreVec3(Vector3Rotate(LoadVec3(value), LoadFloat(rotation)));
 }
 

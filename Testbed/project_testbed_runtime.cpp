@@ -14,18 +14,18 @@ using TestbedGeometryRef = NWB::Core::Assets::AssetRef<NWB::Impl::Geometry>;
 using TestbedDeformableGeometryRef = NWB::Core::Assets::AssetRef<NWB::Impl::DeformableGeometry>;
 using TestbedMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
 
-struct EditorVec3 : public AlignedFloat3Data{
+struct EditorVec3 : public Float4{
     constexpr EditorVec3()noexcept
-        : AlignedFloat3Data(0.0f, 0.0f, 0.0f)
+        : Float4(0.0f, 0.0f, 0.0f)
     {}
     constexpr EditorVec3(const f32 _x, const f32 _y, const f32 _z)noexcept
-        : AlignedFloat3Data(_x, _y, _z)
+        : Float4(_x, _y, _z)
     {}
 };
 static_assert(IsStandardLayout_V<EditorVec3>, "EditorVec3 must stay layout-stable");
 static_assert(IsTriviallyCopyable_V<EditorVec3>, "EditorVec3 must stay cheap to pass by value");
-static_assert(alignof(EditorVec3) >= alignof(AlignedFloat3Data), "EditorVec3 must stay SIMD-aligned");
-static_assert(sizeof(EditorVec3) == sizeof(AlignedFloat3Data), "EditorVec3 must stay one aligned float3 wide");
+static_assert(alignof(EditorVec3) >= alignof(Float4), "EditorVec3 must stay SIMD-aligned");
+static_assert(sizeof(EditorVec3) == sizeof(Float4), "EditorVec3 must stay one aligned float3 wide");
 
 
 static constexpr f32 s_CameraStartDepth = 2.2f;
@@ -72,13 +72,13 @@ static constexpr f32 s_AccessoryUniformScale = 0.16f;
     return true;
 }
 
-[[nodiscard]] static bool FiniteFloat3(const AlignedFloat3Data& value){
+[[nodiscard]] static bool FiniteFloat3(const Float4& value){
     const SIMDVector valueVector = LoadFloat(value);
     return !Vector3IsNaN(valueVector) && !Vector3IsInfinite(valueVector);
 }
 
 [[nodiscard]] static EditorVec3 NormalizeVec3(const EditorVec3& value, const EditorVec3& fallback){
-    const SIMDVector valueVector = LoadFloat(static_cast<const AlignedFloat3Data&>(value));
+    const SIMDVector valueVector = LoadFloat(static_cast<const Float4&>(value));
     const f32 lengthSq = VectorGetX(Vector3LengthSq(valueVector));
     if(!IsFinite(lengthSq) || lengthSq <= 0.000001f)
         return fallback;
@@ -90,10 +90,10 @@ static constexpr f32 s_AccessoryUniformScale = 0.16f;
 
 [[nodiscard]] static EditorVec3 RotateDirectionByQuaternion(
     const EditorVec3& value,
-    const AlignedFloat4Data& rotation){
+    const Float4& rotation){
     EditorVec3 rotatedDirection;
     StoreFloat(
-        Vector3Rotate(LoadFloat(static_cast<const AlignedFloat3Data&>(value)), LoadFloat(rotation)),
+        Vector3Rotate(LoadFloat(static_cast<const Float4&>(value)), LoadFloat(rotation)),
         &rotatedDirection
     );
     return rotatedDirection;
@@ -145,12 +145,12 @@ static constexpr f32 s_AccessoryUniformScale = 0.16f;
         EditorVec3{ 0.0f, 0.0f, 1.0f }
     );
 
-    outRay.setOrigin(Float3Data(
+    outRay.setOrigin(Float3U(
         cameraView.transform->position.x,
         cameraView.transform->position.y,
         cameraView.transform->position.z
     ));
-    outRay.setDirection(Float3Data(worldDirection.x, worldDirection.y, worldDirection.z));
+    outRay.setDirection(Float3U(worldDirection.x, worldDirection.y, worldDirection.z));
     outRay.setMinDistance(cameraView.camera->nearPlane());
     outRay.setMaxDistance(cameraView.camera->farPlane());
     return true;
@@ -188,7 +188,7 @@ static void ApplyFlyCameraInput(
 
     StoreFloat(QuaternionRotationRollPitchYaw(pitchRadians, yawRadians, 0.0f), &transform.rotation);
     if(!FiniteFloat3(transform.position))
-        transform.position = AlignedFloat3Data(0.0f, 0.0f, 0.0f);
+        transform.position = Float4(0.0f, 0.0f, 0.0f);
 
     const SIMDVector moveAxis = VectorSet(safeRightAxis, safeForwardAxis, 0.0f, 0.0f);
     const f32 moveLengthSq = VectorGetX(Vector2LengthSq(moveAxis));
@@ -199,13 +199,13 @@ static void ApplyFlyCameraInput(
         if(!IsFinite(moveScale))
             return;
 
-        const AlignedFloat3Data localMove(safeRightAxis * moveScale, 0.0f, safeForwardAxis * moveScale);
-        AlignedFloat3Data worldMove;
+        const Float4 localMove(safeRightAxis * moveScale, 0.0f, safeForwardAxis * moveScale);
+        Float4 worldMove;
         StoreFloat(Vector3Rotate(LoadFloat(localMove), LoadFloat(transform.rotation)), &worldMove);
         if(!FiniteFloat3(worldMove))
             return;
 
-        AlignedFloat3Data newPosition;
+        Float4 newPosition;
         StoreFloat(VectorAdd(LoadFloat(transform.position), LoadFloat(worldMove)), &newPosition);
         if(FiniteFloat3(newPosition))
             transform.position = newPosition;
@@ -243,7 +243,7 @@ static void ApplyFlyCameraInputToMainCamera(
 [[nodiscard]] static NWB::Core::ECS::EntityID CreateMainCameraEntity(NWB::Core::ECS::World& world){
     auto cameraEntity = world.createEntity();
     auto& transform = cameraEntity.addComponent<NWB::Core::Scene::TransformComponent>();
-    transform.position = AlignedFloat3Data(0.0f, 0.0f, -s_CameraStartDepth);
+    transform.position = Float4(0.0f, 0.0f, -s_CameraStartDepth);
     cameraEntity.addComponent<NWB::Core::Scene::CameraComponent>();
     return cameraEntity.id();
 }
@@ -258,7 +258,7 @@ static void CreateDefaultDirectionalLightEntity(NWB::Core::ECS::World& world){
 
     auto& light = lightEntity.addComponent<NWB::Core::Scene::LightComponent>();
     light.type = NWB::Core::Scene::LightType::Directional;
-    light.setColor(AlignedFloat3Data(1.0f, 0.96f, 0.88f));
+    light.setColor(Float4(1.0f, 0.96f, 0.88f));
     light.setIntensity(s_DefaultDirectionalLightIntensity);
 }
 
@@ -266,13 +266,13 @@ static void CreateRendererEntity(
     NWB::Core::ECS::World& world,
     const TestbedGeometryRef& geometry,
     const TestbedMaterialRef& material,
-    const AlignedFloat3Data& position,
+    const Float4& position,
     const f32 uniformScale
 ){
     auto entity = world.createEntity();
     auto& transform = entity.addComponent<NWB::Core::Scene::TransformComponent>();
     transform.position = position;
-    transform.scale = AlignedFloat3Data(uniformScale, uniformScale, uniformScale);
+    transform.scale = Float4(uniformScale, uniformScale, uniformScale);
 
     auto& renderer = entity.addComponent<NWB::Core::ECSGraphics::RendererComponent>();
     renderer.geometry = geometry;
@@ -292,10 +292,10 @@ static void CreateRendererEntity(
     }
 
     NWB::Core::ECSGraphics::DeformableJointMatrix joint;
-    joint.column0 = AlignedFloat4Data(1.0f, 0.0f, 0.0f, 0.0f);
-    joint.column1 = AlignedFloat4Data(0.0f, cosAngle, sinAngle, 0.0f);
-    joint.column2 = AlignedFloat4Data(0.0f, -sinAngle, cosAngle, 0.0f);
-    joint.column3 = AlignedFloat4Data(
+    joint.column0 = Float4(1.0f, 0.0f, 0.0f, 0.0f);
+    joint.column1 = Float4(0.0f, cosAngle, sinAngle, 0.0f);
+    joint.column2 = Float4(0.0f, -sinAngle, cosAngle, 0.0f);
+    joint.column3 = Float4(
         0.0f,
         s_DeformableSkinPivotY * (1.0f - cosAngle),
         -s_DeformableSkinPivotY * sinAngle,
@@ -320,13 +320,13 @@ static void UpdateProxySkinPalette(
     NWB::Core::ECS::World& world,
     const TestbedDeformableGeometryRef& geometry,
     const TestbedMaterialRef& material,
-    const AlignedFloat3Data& position,
+    const Float4& position,
     const f32 uniformScale
 ){
     auto entity = world.createEntity();
     auto& transform = entity.addComponent<NWB::Core::Scene::TransformComponent>();
     transform.position = position;
-    transform.scale = AlignedFloat3Data(uniformScale, uniformScale, uniformScale);
+    transform.scale = Float4(uniformScale, uniformScale, uniformScale);
 
     auto& renderer = entity.addComponent<NWB::Core::ECSGraphics::DeformableRendererComponent>();
     renderer.deformableGeometry = geometry;
@@ -352,7 +352,7 @@ static void UpdateProxySkinPalette(
     const TestbedMaterialRef& material){
     auto entity = world.createEntity();
     auto& transform = entity.addComponent<NWB::Core::Scene::TransformComponent>();
-    transform.scale = AlignedFloat3Data(s_AccessoryUniformScale, s_AccessoryUniformScale, s_AccessoryUniformScale);
+    transform.scale = Float4(s_AccessoryUniformScale, s_AccessoryUniformScale, s_AccessoryUniformScale);
 
     auto& renderer = entity.addComponent<NWB::Core::ECSGraphics::RendererComponent>();
     renderer.geometry = geometry;
@@ -442,35 +442,35 @@ bool ProjectTestbed::onStartup(){
         *m_world,
         TestbedGeometryRef(Name("project/meshes/cube")),
         cubeMaterial,
-        AlignedFloat3Data(-0.55f, 0.0f, 0.0f),
+        Float4(-0.55f, 0.0f, 0.0f),
         0.65f
     );
     __hidden_project_testbed_runtime::CreateRendererEntity(
         *m_world,
         TestbedGeometryRef(Name("project/meshes/cube")),
         cubeMaterial,
-        AlignedFloat3Data(0.55f, 0.0f, 0.0f),
+        Float4(0.55f, 0.0f, 0.0f),
         0.9f
     );
     __hidden_project_testbed_runtime::CreateRendererEntity(
         *m_world,
         TestbedGeometryRef(Name("project/meshes/sphere")),
         transparentMaterial,
-        AlignedFloat3Data(1.45f, 0.0f, 0.0f),
+        Float4(1.45f, 0.0f, 0.0f),
         0.75f
     );
     __hidden_project_testbed_runtime::CreateRendererEntity(
         *m_world,
         TestbedGeometryRef(Name("project/meshes/tetrahedron")),
         transparentMaterial,
-        AlignedFloat3Data(-1.45f, 0.0f, 0.0f),
+        Float4(-1.45f, 0.0f, 0.0f),
         0.8f
     );
     m_deformableMorphEntity = __hidden_project_testbed_runtime::CreateDeformableRendererEntity(
         *m_world,
         TestbedDeformableGeometryRef(Name("project/characters/proxy_deformable")),
         deformableUvMaterial,
-        AlignedFloat3Data(0.0f, 0.85f, 0.0f),
+        Float4(0.0f, 0.85f, 0.0f),
         0.8f
     );
 

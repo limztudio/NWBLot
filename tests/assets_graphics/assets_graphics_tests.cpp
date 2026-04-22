@@ -668,11 +668,11 @@ static NWB::Impl::DeformableVertexRest MakeRestVertex(
     const f32 v
 ){
     NWB::Impl::DeformableVertexRest vertex;
-    vertex.position = Float3Data(x, y, 0.f);
-    vertex.normal = Float3Data(0.f, 0.f, 1.f);
-    vertex.tangent = Float4Data(1.f, 0.f, 0.f, 1.f);
-    vertex.uv0 = Float2Data(u, v);
-    vertex.color0 = Float4Data(1.f, 1.f, 1.f, 1.f);
+    vertex.position = Float3U(x, y, 0.f);
+    vertex.normal = Float3U(0.f, 0.f, 1.f);
+    vertex.tangent = Float4U(1.f, 0.f, 0.f, 1.f);
+    vertex.uv0 = Float2U(u, v);
+    vertex.color0 = Float4U(1.f, 1.f, 1.f, 1.f);
     return vertex;
 }
 
@@ -695,9 +695,9 @@ static NWB::Impl::SourceSample MakeSourceSample(const u32 sourceTri, const f32 a
 static NWB::Impl::DeformableMorphDelta MakeMorphDelta(const u32 vertexId, const f32 zDelta){
     NWB::Impl::DeformableMorphDelta delta;
     delta.vertexId = vertexId;
-    delta.deltaPosition = Float3Data(0.f, 0.f, zDelta);
-    delta.deltaNormal = Float3Data(0.f, 0.f, 0.f);
-    delta.deltaTangent = Float4Data(0.f, 0.f, 0.f, 0.f);
+    delta.deltaPosition = Float3U(0.f, 0.f, zDelta);
+    delta.deltaNormal = Float3U(0.f, 0.f, 0.f);
+    delta.deltaTangent = Float4U(0.f, 0.f, 0.f, 0.f);
     return delta;
 }
 
@@ -1260,7 +1260,7 @@ static void TestDeformableGeometryValidationFailures(TestContext& context){
     {
         NWB::Impl::DeformableGeometry geometry = BuildValidDeformableGeometry();
         Vector<NWB::Impl::DeformableVertexRest> vertices = geometry.restVertices();
-        vertices[0].normal = Float3Data(0.f, 0.f, 0.f);
+        vertices[0].normal = Float3U(0.f, 0.f, 0.f);
         geometry.setRestVertices(Move(vertices));
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !geometry.validatePayload());
     }
@@ -1268,7 +1268,7 @@ static void TestDeformableGeometryValidationFailures(TestContext& context){
     {
         NWB::Impl::DeformableGeometry geometry = BuildValidDeformableGeometry();
         Vector<NWB::Impl::DeformableVertexRest> vertices = geometry.restVertices();
-        vertices[0].tangent = Float4Data(1.f, 0.f, 0.f, 0.f);
+        vertices[0].tangent = Float4U(1.f, 0.f, 0.f, 0.f);
         geometry.setRestVertices(Move(vertices));
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !geometry.validatePayload());
     }
@@ -1276,7 +1276,7 @@ static void TestDeformableGeometryValidationFailures(TestContext& context){
     {
         NWB::Impl::DeformableGeometry geometry = BuildValidDeformableGeometry();
         Vector<NWB::Impl::DeformableVertexRest> vertices = geometry.restVertices();
-        vertices[0].tangent = Float4Data(0.f, 0.f, 1.f, 1.f);
+        vertices[0].tangent = Float4U(0.f, 0.f, 1.f, 1.f);
         geometry.setRestVertices(Move(vertices));
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !geometry.validatePayload());
     }
@@ -1284,7 +1284,7 @@ static void TestDeformableGeometryValidationFailures(TestContext& context){
     {
         NWB::Impl::DeformableGeometry geometry = BuildValidDeformableGeometry();
         Vector<NWB::Impl::DeformableVertexRest> vertices = geometry.restVertices();
-        vertices[0].tangent = Float4Data(1.f, 0.f, 0.f, 2.f);
+        vertices[0].tangent = Float4U(1.f, 0.f, 0.f, 2.f);
         geometry.setRestVertices(Move(vertices));
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !geometry.validatePayload());
     }
@@ -1292,7 +1292,7 @@ static void TestDeformableGeometryValidationFailures(TestContext& context){
     {
         NWB::Impl::DeformableGeometry geometry = BuildValidDeformableGeometry();
         Vector<NWB::Impl::DeformableVertexRest> vertices = geometry.restVertices();
-        vertices[0].normal = Float3Data(0.f, 0.f, 2.f);
+        vertices[0].normal = Float3U(0.f, 0.f, 2.f);
         geometry.setRestVertices(Move(vertices));
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !geometry.validatePayload());
     }
@@ -1300,7 +1300,7 @@ static void TestDeformableGeometryValidationFailures(TestContext& context){
     {
         NWB::Impl::DeformableGeometry geometry = BuildValidDeformableGeometry();
         Vector<NWB::Impl::DeformableVertexRest> vertices = geometry.restVertices();
-        vertices[0].tangent = Float4Data(0.70710677f, 0.f, 0.70710677f, 1.f);
+        vertices[0].tangent = Float4U(0.70710677f, 0.f, 0.70710677f, 1.f);
         geometry.setRestVertices(Move(vertices));
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !geometry.validatePayload());
     }
@@ -1348,7 +1348,7 @@ static void TestDeformableGeometryValidationFailures(TestContext& context){
     {
         NWB::Impl::DeformableGeometry geometry = BuildValidDeformableGeometry();
         Vector<NWB::Impl::DeformableVertexRest> vertices = geometry.restVertices();
-        vertices[2].position = Float3Data(0.0f, -0.5f, 0.0f);
+        vertices[2].position = Float3U(0.0f, -0.5f, 0.0f);
         geometry.setRestVertices(Move(vertices));
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !geometry.validatePayload());
     }

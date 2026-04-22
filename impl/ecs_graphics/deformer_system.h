@@ -30,23 +30,23 @@ class Shader;
 
 class DeformerSystem final : public Core::ECS::ISystem, public Core::IRenderPass{
 public:
-    struct alignas(AlignedFloat4Data) DeformerMorphRangeGpu{
+    struct alignas(Float4) DeformerMorphRangeGpu{
         u32 firstDelta = 0;
         u32 deltaCount = 0;
         f32 weight = 0.0f;
         u32 padding = 0;
     };
 
-    struct alignas(AlignedFloat4Data) DeformerMorphDeltaGpu{
+    struct alignas(Float4) DeformerMorphDeltaGpu{
         u32 vertex[4] = {};
-        AlignedFloat4Data deltaPosition = AlignedFloat4Data(0.0f, 0.0f, 0.0f, 0.0f);
-        AlignedFloat4Data deltaNormal = AlignedFloat4Data(0.0f, 0.0f, 0.0f, 0.0f);
-        AlignedFloat4Data deltaTangent = AlignedFloat4Data(0.0f, 0.0f, 0.0f, 0.0f);
+        Float4 deltaPosition = Float4(0.0f, 0.0f, 0.0f, 0.0f);
+        Float4 deltaNormal = Float4(0.0f, 0.0f, 0.0f, 0.0f);
+        Float4 deltaTangent = Float4(0.0f, 0.0f, 0.0f, 0.0f);
     };
 
-    struct alignas(AlignedFloat4Data) DeformerSkinInfluenceGpu{
+    struct alignas(Float4) DeformerSkinInfluenceGpu{
         u32 joint[4] = {};
-        AlignedFloat4Data weight = AlignedFloat4Data(0.0f, 0.0f, 0.0f, 0.0f);
+        Float4 weight = Float4(0.0f, 0.0f, 0.0f, 0.0f);
     };
 
 

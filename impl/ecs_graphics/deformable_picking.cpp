@@ -68,9 +68,9 @@ using namespace DeformableRuntime;
 
 void OrthonormalizeFrame(
     Vec3& normal,
-    Float4Data& tangent,
+    Float4U& tangent,
     const Vec3& fallbackNormal,
-    const Float4Data& fallbackTangent)
+    const Float4U& fallbackTangent)
 {
     normal = Normalize(normal, Normalize(fallbackNormal, Vec3{ 0.0f, 0.0f, 1.0f }));
 
@@ -304,14 +304,14 @@ template<typename VertexVector>
     for(usize vertexIndex = 0; vertexIndex < outVertices.size(); ++vertexIndex){
         DeformableVertexRest& vertex = outVertices[vertexIndex];
         const Vec3 restNormal = DeformableRuntime::ToVec3(vertex.normal);
-        const Float4Data restTangent = vertex.tangent;
+        const Float4U restTangent = vertex.tangent;
 
         Vec3 normal = DeformableRuntime::ToVec3(vertex.normal);
         __hidden_deformable_picking::OrthonormalizeFrame(normal, vertex.tangent, restNormal, restTangent);
         vertex.normal = DeformableRuntime::ToFloat3(normal);
 
         const Vec3 preSkinNormal = normal;
-        const Float4Data preSkinTangent = vertex.tangent;
+        const Float4U preSkinTangent = vertex.tangent;
         if(!__hidden_deformable_picking::ApplySkin(
             instance,
             inputs.jointPalette,
@@ -519,8 +519,8 @@ bool RaycastDeformableRuntimeMesh(
         closestHit.bary[1] = hitBary[1];
         closestHit.bary[2] = hitBary[2];
         closestHit.setDistance(distance);
-        closestHit.position = DeformableRuntime::ToAlignedFloat4(position, 1.0f);
-        closestHit.normal = DeformableRuntime::ToAlignedFloat4(normal);
+        closestHit.position = DeformableRuntime::ToFloat4(position, 1.0f);
+        closestHit.normal = DeformableRuntime::ToFloat4(normal);
         closestHit.restSample = restSample;
         foundHit = true;
     }

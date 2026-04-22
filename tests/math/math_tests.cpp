@@ -82,21 +82,12 @@ static void TestVector3CrossMatchesGlslOrder(TestContext& context){
     NWB_MATH_TEST_CHECK(context, NearlyEqual3(Vector3Cross(a, b), -94.0f, -61.0f, 1.0f));
 }
 
-static void TestVector3RotateStillMatchesSimpleMath(TestContext& context){
-    const AlignedFloat4Data rotation = SimpleMath::QuaternionRotationAxis(
-        0.0f,
-        0.0f,
-        1.0f,
-        SimpleMath::ConvertToRadians(90.0f)
-    );
+static void TestVector3RotateQuarterTurn(TestContext& context){
+    const SIMDVector rotation = QuaternionRotationAxis(VectorSet(0.0f, 0.0f, 1.0f, 0.0f), s_PI * 0.5f);
     const SIMDVector value = VectorSet(1.0f, 0.0f, 0.0f, 0.0f);
-    const SIMDVector rotated = Vector3Rotate(value, LoadFloat(rotation));
-    const AlignedFloat3Data simpleRotated = SimpleMath::Vector3Rotate(Float3Data(1.0f, 0.0f, 0.0f), rotation);
+    const SIMDVector rotated = Vector3Rotate(value, rotation);
 
     NWB_MATH_TEST_CHECK(context, NearlyEqual3(rotated, 0.0f, 1.0f, 0.0f));
-    NWB_MATH_TEST_CHECK(context, NearlyEqual(VectorGetX(rotated), simpleRotated.x));
-    NWB_MATH_TEST_CHECK(context, NearlyEqual(VectorGetY(rotated), simpleRotated.y));
-    NWB_MATH_TEST_CHECK(context, NearlyEqual(VectorGetZ(rotated), simpleRotated.z));
 }
 
 static void TestVector4CrossBasisOrientation(TestContext& context){
@@ -132,7 +123,7 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
     __hidden_math_tests::TestContext context;
     __hidden_math_tests::TestVector2CrossMatchesGlslOrder(context);
     __hidden_math_tests::TestVector3CrossMatchesGlslOrder(context);
-    __hidden_math_tests::TestVector3RotateStillMatchesSimpleMath(context);
+    __hidden_math_tests::TestVector3RotateQuarterTurn(context);
     __hidden_math_tests::TestVector4CrossBasisOrientation(context);
 
     if(context.failed != 0){

@@ -19,10 +19,10 @@ NWB_SCENE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct alignas(AlignedFloat4Data) CameraComponent{
+struct alignas(Float4) CameraComponent{
     // x = vertical FOV, y = near plane, z = far plane, w = aspect ratio.
     // An aspect ratio of 0 lets renderers derive aspect from the active framebuffer.
-    AlignedFloat4Data projection = AlignedFloat4Data(60.0f * (s_PI / 180.0f), 0.001f, 10000.0f, 0.0f);
+    Float4 projection = Float4(60.0f * (s_PI / 180.0f), 0.001f, 10000.0f, 0.0f);
 
     [[nodiscard]] f32 verticalFovRadians()const{ return projection.x; }
     [[nodiscard]] f32 nearPlane()const{ return projection.y; }
@@ -35,8 +35,8 @@ struct alignas(AlignedFloat4Data) CameraComponent{
     void setAspectRatio(const f32 value){ projection.w = value; }
 };
 
-struct alignas(AlignedFloat4Data) CameraProjectionData{
-    AlignedFloat4Data projectionParams = AlignedFloat4Data(0.0f, 0.0f, 0.0f, 0.0f);
+struct alignas(Float4) CameraProjectionData{
+    Float4 projectionParams = Float4(0.0f, 0.0f, 0.0f, 0.0f);
     f32 aspectRatio = 1.0f;
     f32 tanHalfVerticalFov = 0.0f;
 };
@@ -44,11 +44,11 @@ struct alignas(AlignedFloat4Data) CameraProjectionData{
 static_assert(IsStandardLayout_V<CameraComponent>, "CameraComponent must stay layout-stable for ECS storage");
 static_assert(IsTriviallyCopyable_V<CameraComponent>, "CameraComponent must stay cheap to move in dense ECS storage");
 static_assert(
-    alignof(CameraComponent) >= alignof(AlignedFloat4Data),
+    alignof(CameraComponent) >= alignof(Float4),
     "CameraComponent must stay aligned for SIMD component loads"
 );
 static_assert(
-    sizeof(CameraComponent) == sizeof(AlignedFloat4Data),
+    sizeof(CameraComponent) == sizeof(Float4),
     "CameraComponent must stay one aligned vector wide"
 );
 static_assert(
@@ -56,13 +56,13 @@ static_assert(
     "CameraComponent array stride must keep every element SIMD-aligned"
 );
 static_assert(
-    (offsetof(CameraComponent, projection) % alignof(AlignedFloat4Data)) == 0,
+    (offsetof(CameraComponent, projection) % alignof(Float4)) == 0,
     "CameraComponent::projection must stay aligned"
 );
 static_assert(IsStandardLayout_V<CameraProjectionData>, "CameraProjectionData must stay layout-stable");
 static_assert(IsTriviallyCopyable_V<CameraProjectionData>, "CameraProjectionData must stay cheap to pass by value");
 static_assert(
-    alignof(CameraProjectionData) >= alignof(AlignedFloat4Data),
+    alignof(CameraProjectionData) >= alignof(Float4),
     "CameraProjectionData must keep projection params aligned"
 );
 
@@ -140,7 +140,7 @@ static_assert(
     CameraProjectionData projectionData;
     projectionData.aspectRatio = aspectRatio;
     projectionData.tanHalfVerticalFov = tanHalfFov;
-    projectionData.projectionParams = AlignedFloat4Data(
+    projectionData.projectionParams = Float4(
         1.0f / (tanHalfFov * aspectRatio),
         1.0f / tanHalfFov,
         camera.farPlane() / depthRange,
@@ -156,11 +156,11 @@ static_assert(
 [[nodiscard]] inline bool TryBuildCameraProjectionParams(
     const CameraComponent& camera,
     const f32 fallbackAspectRatio,
-    AlignedFloat4Data& outProjectionParams
+    Float4& outProjectionParams
 ){
     CameraProjectionData projectionData;
     if(!TryBuildCameraProjectionData(camera, fallbackAspectRatio, projectionData)){
-        outProjectionParams = AlignedFloat4Data(0.0f, 0.0f, 0.0f, 0.0f);
+        outProjectionParams = Float4(0.0f, 0.0f, 0.0f, 0.0f);
         return false;
     }
 

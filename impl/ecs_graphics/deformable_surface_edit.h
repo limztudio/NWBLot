@@ -46,11 +46,11 @@ struct DeformableSurfaceEditSession{
     bool previewed = false;
 };
 
-struct alignas(AlignedFloat4Data) DeformableHolePreview{
-    AlignedFloat4Data center = AlignedFloat4Data(0.0f, 0.0f, 0.0f, 1.0f);
-    AlignedFloat4Data normal = AlignedFloat4Data(0.0f, 0.0f, 1.0f, 0.0f);
-    AlignedFloat4Data tangent = AlignedFloat4Data(1.0f, 0.0f, 0.0f, 0.0f);
-    AlignedFloat4Data bitangent = AlignedFloat4Data(0.0f, 1.0f, 0.0f, 0.0f);
+struct alignas(Float4) DeformableHolePreview{
+    Float4 center = Float4(0.0f, 0.0f, 0.0f, 1.0f);
+    Float4 normal = Float4(0.0f, 0.0f, 1.0f, 0.0f);
+    Float4 tangent = Float4(1.0f, 0.0f, 0.0f, 0.0f);
+    Float4 bitangent = Float4(0.0f, 1.0f, 0.0f, 0.0f);
     f32 radius = 0.0f;
     f32 ellipseRatio = 1.0f;
     f32 depth = 0.0f;
@@ -59,12 +59,12 @@ struct alignas(AlignedFloat4Data) DeformableHolePreview{
 };
 static_assert(IsStandardLayout_V<DeformableHolePreview>, "DeformableHolePreview must stay layout-stable");
 static_assert(IsTriviallyCopyable_V<DeformableHolePreview>, "DeformableHolePreview must stay cheap to copy");
-static_assert(alignof(DeformableHolePreview) >= alignof(AlignedFloat4Data), "DeformableHolePreview must stay SIMD-aligned");
+static_assert(alignof(DeformableHolePreview) >= alignof(Float4), "DeformableHolePreview must stay SIMD-aligned");
 
 struct DeformableSurfaceHoleEditRecord{
     SourceSample restSample;
-    Float3Data restPosition = Float3Data(0.0f, 0.0f, 0.0f);
-    Float3Data restNormal = Float3Data(0.0f, 0.0f, 1.0f);
+    Float3U restPosition = Float3U(0.0f, 0.0f, 0.0f);
+    Float3U restNormal = Float3U(0.0f, 0.0f, 1.0f);
     u32 baseEditRevision = 0;
     f32 radius = 0.0f;
     f32 ellipseRatio = 1.0f;

@@ -55,22 +55,27 @@ static constexpr f32 s_TriangleAreaLengthSquaredEpsilon = 0.000000000001f;
     return value;
 }
 
-[[nodiscard]] inline bool IsFiniteFloat2(const Float2Data& value){
+[[nodiscard]] inline bool IsFiniteFloat2(const Float2U& value){
     const SIMDVector valueVector = LoadFloat(value);
     return !Vector2IsNaN(valueVector) && !Vector2IsInfinite(valueVector);
 }
 
-[[nodiscard]] inline bool IsFiniteFloat3(const Float3Data& value){
+[[nodiscard]] inline bool IsFiniteFloat3(const Float3U& value){
     const SIMDVector valueVector = LoadFloat(value);
     return !Vector3IsNaN(valueVector) && !Vector3IsInfinite(valueVector);
 }
 
-[[nodiscard]] inline bool IsFiniteFloat3(const AlignedFloat4Data& value){
+[[nodiscard]] inline bool IsFiniteFloat3(const Float4& value){
     const SIMDVector valueVector = LoadFloat(value);
     return !Vector3IsNaN(valueVector) && !Vector3IsInfinite(valueVector);
 }
 
-[[nodiscard]] inline bool IsFiniteFloat4(const Float4Data& value){
+[[nodiscard]] inline bool IsFiniteFloat4(const Float4U& value){
+    const SIMDVector valueVector = LoadFloat(value);
+    return !Vector4IsNaN(valueVector) && !Vector4IsInfinite(valueVector);
+}
+
+[[nodiscard]] inline bool IsFiniteFloat4(const Float4& value){
     const SIMDVector valueVector = LoadFloat(value);
     return !Vector4IsNaN(valueVector) && !Vector4IsInfinite(valueVector);
 }
@@ -79,18 +84,18 @@ static constexpr f32 s_TriangleAreaLengthSquaredEpsilon = 0.000000000001f;
     return VectorGetX(Vector3LengthSq(VectorSet(x, y, z, 0.0f)));
 }
 
-[[nodiscard]] inline f32 Dot3(const Float3Data& lhs, const Float3Data& rhs){
+[[nodiscard]] inline f32 Dot3(const Float3U& lhs, const Float3U& rhs){
     return VectorGetX(Vector3Dot(LoadFloat(lhs), LoadFloat(rhs)));
 }
 
-[[nodiscard]] inline Float3Data Subtract3(const Float3Data& lhs, const Float3Data& rhs){
-    Float3Data result;
+[[nodiscard]] inline Float3U Subtract3(const Float3U& lhs, const Float3U& rhs){
+    Float3U result;
     StoreFloat(VectorSubtract(LoadFloat(lhs), LoadFloat(rhs)), &result);
     return result;
 }
 
-[[nodiscard]] inline Float3Data Cross3(const Float3Data& lhs, const Float3Data& rhs){
-    Float3Data result;
+[[nodiscard]] inline Float3U Cross3(const Float3U& lhs, const Float3U& rhs){
+    Float3U result;
     StoreFloat(Vector3Cross(LoadFloat(lhs), LoadFloat(rhs)), &result);
     return result;
 }
@@ -122,9 +127,9 @@ static constexpr f32 s_TriangleAreaLengthSquaredEpsilon = 0.000000000001f;
 
     const f32 normalLengthSquared = LengthSquared3(vertex.normal.x, vertex.normal.y, vertex.normal.z);
     const f32 tangentLengthSquared = LengthSquared3(vertex.tangent.x, vertex.tangent.y, vertex.tangent.z);
-    const Float3Data tangentVector(vertex.tangent.x, vertex.tangent.y, vertex.tangent.z);
+    const Float3U tangentVector(vertex.tangent.x, vertex.tangent.y, vertex.tangent.z);
     const f32 tangentHandedness = AbsF32(vertex.tangent.w);
-    const Float3Data frameCross = Cross3(vertex.normal, tangentVector);
+    const Float3U frameCross = Cross3(vertex.normal, tangentVector);
     const f32 frameCrossLengthSquared = LengthSquared3(frameCross.x, frameCross.y, frameCross.z);
     if(normalLengthSquared <= s_RestFrameLengthSquaredEpsilon
         || tangentLengthSquared <= s_RestFrameLengthSquaredEpsilon
@@ -143,7 +148,7 @@ static constexpr f32 s_TriangleAreaLengthSquaredEpsilon = 0.000000000001f;
 
     const f32 normalLengthSquared = LengthSquared3(vertex.normal.x, vertex.normal.y, vertex.normal.z);
     const f32 tangentLengthSquared = LengthSquared3(vertex.tangent.x, vertex.tangent.y, vertex.tangent.z);
-    const Float3Data tangentVector(vertex.tangent.x, vertex.tangent.y, vertex.tangent.z);
+    const Float3U tangentVector(vertex.tangent.x, vertex.tangent.y, vertex.tangent.z);
     const f32 frameDot = Dot3(vertex.normal, tangentVector);
     return NearlyUnitLengthSquared(normalLengthSquared)
         && NearlyUnitLengthSquared(tangentLengthSquared)
@@ -161,7 +166,7 @@ static constexpr f32 s_TriangleAreaLengthSquaredEpsilon = 0.000000000001f;
     ;
 }
 
-[[nodiscard]] inline bool ValidBarycentric(const AlignedFloat4Data& bary, const f32 minimumBarycentric){
+[[nodiscard]] inline bool ValidBarycentric(const Float4& bary, const f32 minimumBarycentric){
     const SIMDVector baryVector = LoadFloat(bary);
     const f32 barySum = VectorGetX(Vector3Dot(baryVector, s_SIMDOne));
     return !Vector3IsNaN(baryVector)
@@ -175,7 +180,7 @@ static constexpr f32 s_TriangleAreaLengthSquaredEpsilon = 0.000000000001f;
     return ValidBarycentric(bary, 0.0f);
 }
 
-[[nodiscard]] inline bool ValidSourceBarycentric(const AlignedFloat4Data& bary){
+[[nodiscard]] inline bool ValidSourceBarycentric(const Float4& bary){
     return ValidBarycentric(bary, 0.0f);
 }
 
@@ -183,7 +188,7 @@ static constexpr f32 s_TriangleAreaLengthSquaredEpsilon = 0.000000000001f;
     return ValidBarycentric(bary, -s_Epsilon);
 }
 
-[[nodiscard]] inline bool ValidLooseBarycentric(const AlignedFloat4Data& bary){
+[[nodiscard]] inline bool ValidLooseBarycentric(const Float4& bary){
     return ValidBarycentric(bary, -s_Epsilon);
 }
 
@@ -203,7 +208,7 @@ static constexpr f32 s_TriangleAreaLengthSquaredEpsilon = 0.000000000001f;
     return ValidSourceBarycentric(outBary);
 }
 
-[[nodiscard]] inline bool NormalizeSourceBarycentric(const AlignedFloat4Data& bary, f32 (&outBary)[3]){
+[[nodiscard]] inline bool NormalizeSourceBarycentric(const Float4& bary, f32 (&outBary)[3]){
     if(!ValidLooseBarycentric(bary))
         return false;
 
@@ -293,9 +298,9 @@ static constexpr f32 s_TriangleAreaLengthSquaredEpsilon = 0.000000000001f;
     if(a == b || a == c || b == c)
         return false;
 
-    const Float3Data ab = Subtract3(restVertices[b].position, restVertices[a].position);
-    const Float3Data ac = Subtract3(restVertices[c].position, restVertices[a].position);
-    const Float3Data areaCross = Cross3(ab, ac);
+    const Float3U ab = Subtract3(restVertices[b].position, restVertices[a].position);
+    const Float3U ac = Subtract3(restVertices[c].position, restVertices[a].position);
+    const Float3U areaCross = Cross3(ab, ac);
     const f32 areaLengthSquared = LengthSquared3(areaCross.x, areaCross.y, areaCross.z);
     return areaLengthSquared > s_TriangleAreaLengthSquaredEpsilon;
 }

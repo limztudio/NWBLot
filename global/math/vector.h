@@ -2701,22 +2701,22 @@ NWB_INLINE SIMDVector SIMDCALL Vector2Normalize(SIMDVector value)noexcept{
     lengthSq = _mm_cmpneq_ps(lengthSq, s_SIMDInfinity);
     SIMDVector result = _mm_div_ps(value, length);
     result = _mm_and_ps(result, zeroMask);
-    return _mm_or_ps(_mm_andnot_ps(lengthSq, s_SIMDQNaN), _mm_and_ps(result, lengthSq));
+    return _mm_and_ps(_mm_or_ps(_mm_andnot_ps(lengthSq, s_SIMDQNaN), _mm_and_ps(result, lengthSq)), s_SIMDMaskXY);
 #else
     const SIMDVector lengthSq = Vector2LengthSq(value);
     const SIMDVector length = VectorSqrt(lengthSq);
     SIMDVector result = VectorDivide(value, length);
     result = VectorAndInt(result, VectorNotEqual(length, VectorZero()));
-    return VectorSelect(s_SIMDQNaN, result, VectorNotEqualInt(lengthSq, s_SIMDInfinity));
+    return VectorAndInt(VectorSelect(s_SIMDQNaN, result, VectorNotEqualInt(lengthSq, s_SIMDInfinity)), s_SIMDMaskXY);
 #endif
 }
 
 NWB_INLINE SIMDVector SIMDCALL Vector2NormalizeEst(SIMDVector value)noexcept{
 #if defined(NWB_HAS_SSE4)
     const SIMDVector lengthSq = _mm_dp_ps(value, value, 0x3F);
-    return _mm_mul_ps(value, _mm_rsqrt_ps(lengthSq));
+    return _mm_and_ps(_mm_mul_ps(value, _mm_rsqrt_ps(lengthSq)), s_SIMDMaskXY);
 #else
-    return VectorMultiply(value, Vector2ReciprocalLengthEst(value));
+    return VectorAndInt(VectorMultiply(value, Vector2ReciprocalLengthEst(value)), s_SIMDMaskXY);
 #endif
 }
 
@@ -2741,7 +2741,7 @@ NWB_INLINE SIMDVector SIMDCALL Vector2ClampLengthV(SIMDVector value, SIMDVector 
     SIMDVector clampedLength = VectorSelect(length, lengthMax, controlMax);
     clampedLength = VectorSelect(clampedLength, lengthMin, controlMin);
     SIMDVector result = VectorMultiply(normal, clampedLength);
-    return VectorSelect(result, value, VectorEqualInt(controlMax, controlMin));
+    return VectorAndInt(VectorSelect(result, value, VectorEqualInt(controlMax, controlMin)), s_SIMDMaskXY);
 }
 
 NWB_INLINE SIMDVector SIMDCALL Vector2ClampLength(SIMDVector value, f32 lengthMin, f32 lengthMax)noexcept{
@@ -2909,22 +2909,22 @@ NWB_INLINE SIMDVector SIMDCALL Vector3Normalize(SIMDVector value)noexcept{
     lengthSq = _mm_cmpneq_ps(lengthSq, s_SIMDInfinity);
     SIMDVector result = _mm_div_ps(value, length);
     result = _mm_and_ps(result, zeroMask);
-    return _mm_or_ps(_mm_andnot_ps(lengthSq, s_SIMDQNaN), _mm_and_ps(result, lengthSq));
+    return _mm_and_ps(_mm_or_ps(_mm_andnot_ps(lengthSq, s_SIMDQNaN), _mm_and_ps(result, lengthSq)), s_SIMDMask3);
 #else
     const SIMDVector lengthSq = Vector3LengthSq(value);
     const SIMDVector length = VectorSqrt(lengthSq);
     SIMDVector result = VectorDivide(value, length);
     result = VectorAndInt(result, VectorNotEqual(length, VectorZero()));
-    return VectorSelect(s_SIMDQNaN, result, VectorNotEqualInt(lengthSq, s_SIMDInfinity));
+    return VectorAndInt(VectorSelect(s_SIMDQNaN, result, VectorNotEqualInt(lengthSq, s_SIMDInfinity)), s_SIMDMask3);
 #endif
 }
 
 NWB_INLINE SIMDVector SIMDCALL Vector3NormalizeEst(SIMDVector value)noexcept{
 #if defined(NWB_HAS_SSE4)
     const SIMDVector lengthSq = _mm_dp_ps(value, value, 0x7F);
-    return _mm_mul_ps(value, _mm_rsqrt_ps(lengthSq));
+    return _mm_and_ps(_mm_mul_ps(value, _mm_rsqrt_ps(lengthSq)), s_SIMDMask3);
 #else
-    return VectorMultiply(value, Vector3ReciprocalLengthEst(value));
+    return VectorAndInt(VectorMultiply(value, Vector3ReciprocalLengthEst(value)), s_SIMDMask3);
 #endif
 }
 NWB_INLINE SIMDVector SIMDCALL Vector3ClampLengthV(SIMDVector value, SIMDVector lengthMin, SIMDVector lengthMax)noexcept{
@@ -2948,7 +2948,7 @@ NWB_INLINE SIMDVector SIMDCALL Vector3ClampLengthV(SIMDVector value, SIMDVector 
     SIMDVector clampedLength = VectorSelect(length, lengthMax, controlMax);
     clampedLength = VectorSelect(clampedLength, lengthMin, controlMin);
     SIMDVector result = VectorMultiply(normal, clampedLength);
-    return VectorSelect(result, value, VectorEqualInt(controlMax, controlMin));
+    return VectorAndInt(VectorSelect(result, value, VectorEqualInt(controlMax, controlMin)), s_SIMDMask3);
 }
 
 NWB_INLINE SIMDVector SIMDCALL Vector3ClampLength(SIMDVector value, f32 lengthMin, f32 lengthMax)noexcept{

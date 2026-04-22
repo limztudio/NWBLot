@@ -1,3 +1,4 @@
+add_subdirectory(math)
 add_subdirectory(ecs)
 add_subdirectory(scene)
 add_subdirectory(ecs_graphics)

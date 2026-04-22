@@ -147,7 +147,7 @@ inline void AccumulateScaled(Float4Data& target, const Float4Data& source, const
 }
 
 [[nodiscard]] inline Vec3 Cross(const Vec3& lhs, const Vec3& rhs){
-    return StoreVec3(Vector3Cross(LoadVec3(rhs), LoadVec3(lhs)));
+    return StoreVec3(Vector3Cross(LoadVec3(lhs), LoadVec3(rhs)));
 }
 
 [[nodiscard]] inline f32 LengthSquared(const Vec3& value){

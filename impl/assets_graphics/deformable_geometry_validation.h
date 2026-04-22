@@ -91,7 +91,7 @@ static constexpr f32 s_TriangleAreaLengthSquaredEpsilon = 0.000000000001f;
 
 [[nodiscard]] inline Float3Data Cross3(const Float3Data& lhs, const Float3Data& rhs){
     Float3Data result;
-    StoreFloat(Vector3Cross(LoadFloat(rhs), LoadFloat(lhs)), &result);
+    StoreFloat(Vector3Cross(LoadFloat(lhs), LoadFloat(rhs)), &result);
     return result;
 }
 

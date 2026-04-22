@@ -2635,9 +2635,9 @@ NWB_INLINE SIMDVector SIMDCALL Vector2Dot(SIMDVector v0, SIMDVector v1)noexcept{
 
 NWB_INLINE SIMDVector SIMDCALL Vector2Cross(SIMDVector v0, SIMDVector v1)noexcept{
 #if defined(NWB_HAS_SCALAR)
-    return VectorReplicate(v0.f[1] * v1.f[0] - v0.f[0] * v1.f[1]);
+    return VectorReplicate(v0.f[0] * v1.f[1] - v0.f[1] * v1.f[0]);
 #elif defined(NWB_HAS_NEON)
-    const float32x2_t negate = vcreate_f32(0x3F800000BF800000ull);
+    const float32x2_t negate = vcreate_f32(0xBF8000003F800000ull);
     float32x2_t result = vmul_f32(vget_low_f32(v0), vrev64_f32(vget_low_f32(v1)));
     result = vmul_f32(result, negate);
     result = vpadd_f32(result, result);
@@ -2646,7 +2646,7 @@ NWB_INLINE SIMDVector SIMDCALL Vector2Cross(SIMDVector v0, SIMDVector v1)noexcep
     SIMDVector result = VectorSwizzle<1, 0, 1, 0>(v1);
     result = VectorMultiply(result, v0);
     const SIMDVector temp = VectorSplatY(result);
-    result = _mm_sub_ss(temp, result);
+    result = _mm_sub_ss(result, temp);
     return VectorSplatX(result);
 #endif
 }
@@ -2855,7 +2855,9 @@ NWB_INLINE SIMDVector SIMDCALL Vector3Dot(SIMDVector v0, SIMDVector v1)noexcept{
 NWB_INLINE SIMDVector SIMDCALL Vector3Cross(SIMDVector v0, SIMDVector v1)noexcept{
     SIMDVector temp0 = VectorSwizzle<1, 2, 0, 3>(v0);
     SIMDVector temp1 = VectorSwizzle<2, 0, 1, 3>(v1);
-    SIMDVector result = VectorMultiply(VectorSwizzle<2, 0, 1, 3>(v0), VectorSwizzle<1, 2, 0, 3>(v1));
+    SIMDVector result = VectorMultiply(temp0, temp1);
+    temp0 = VectorSwizzle<2, 0, 1, 3>(v0);
+    temp1 = VectorSwizzle<1, 2, 0, 3>(v1);
     return VectorAndInt(VectorNegativeMultiplySubtract(temp0, temp1, result), s_SIMDMask3);
 }
 
@@ -2978,8 +2980,8 @@ NWB_INLINE SIMDVector SIMDCALL Vector3Refract(SIMDVector incident, SIMDVector no
 
 NWB_INLINE SIMDVector SIMDCALL Vector3Rotate(SIMDVector value, SIMDVector rotationQuaternion)noexcept{
     const SIMDVector q = VectorAndInt(rotationQuaternion, s_SIMDMask3);
-    const SIMDVector t = VectorScale(Vector3Cross(value, q), 2.0f);
-    return VectorAdd(VectorAdd(value, VectorMultiply(t, VectorSplatW(rotationQuaternion))), Vector3Cross(t, q));
+    const SIMDVector t = VectorScale(Vector3Cross(q, value), 2.0f);
+    return VectorAdd(VectorAdd(value, VectorMultiply(t, VectorSplatW(rotationQuaternion))), Vector3Cross(q, t));
 }
 
 NWB_INLINE SIMDVector SIMDCALL Vector3InverseRotate(SIMDVector value, SIMDVector rotationQuaternion)noexcept{

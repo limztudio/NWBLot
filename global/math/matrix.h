@@ -568,12 +568,12 @@ NWB_INLINE bool SIMDCALL MatrixDecompose(SIMDVector* outScale, SIMDVector* outRo
             std::fabs(VectorGetY(basis[a])),
             std::fabs(VectorGetZ(basis[a]))
         );
-        basis[b] = Vector3Cross(canonicalBasis[cc], basis[a]);
+        basis[b] = Vector3Cross(basis[a], canonicalBasis[cc]);
     }
     basis[b] = Vector3Normalize(basis[b]);
 
     if(scale[c] < epsilon)
-        basis[c] = Vector3Cross(basis[b], basis[a]);
+        basis[c] = Vector3Cross(basis[a], basis[b]);
     basis[c] = Vector3Normalize(basis[c]);
 
     SIMDMatrix basisAsRows{};
@@ -971,9 +971,9 @@ NWB_INLINE SIMDMatrix SIMDCALL MatrixLookToLH(SIMDVector eyePosition, SIMDVector
     NWB_ASSERT(!Vector3IsInfinite(upDirection));
 
     const SIMDVector r2 = Vector3Normalize(eyeDirection);
-    SIMDVector r0 = Vector3Cross(r2, upDirection);
+    SIMDVector r0 = Vector3Cross(upDirection, r2);
     r0 = Vector3Normalize(r0);
-    const SIMDVector r1 = Vector3Cross(r0, r2);
+    const SIMDVector r1 = Vector3Cross(r2, r0);
 
     const SIMDVector negEyePosition = VectorNegate(eyePosition);
     const SIMDVector d0 = Vector3Dot(r0, negEyePosition);

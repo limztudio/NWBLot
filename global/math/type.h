@@ -57,6 +57,42 @@ struct alignas(16) Float44{
     };
 };
 
+struct alignas(16) Int4{
+    union{
+        struct{
+            i32 x;
+            i32 y;
+            i32 z;
+            i32 w;
+        };
+        struct{
+            i32 r;
+            i32 g;
+            i32 b;
+            i32 a;
+        };
+        i32 raw[4];
+    };
+};
+
+struct alignas(16) UInt4{
+    union{
+        struct{
+            u32 x;
+            u32 y;
+            u32 z;
+            u32 w;
+        };
+        struct{
+            u32 r;
+            u32 g;
+            u32 b;
+            u32 a;
+        };
+        u32 raw[4];
+    };
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // unaligned
@@ -147,6 +183,98 @@ struct Float44U{
         Float4U rows[4];
         f32 m[4][4];
         f32 raw[16];
+    };
+};
+
+struct Int2U{
+    union{
+        struct{
+            i32 x;
+            i32 y;
+        };
+        struct{
+            i32 r;
+            i32 g;
+        };
+        i32 raw[2];
+    };
+};
+struct Int3U{
+    union{
+        struct{
+            i32 x;
+            i32 y;
+            i32 z;
+        };
+        struct{
+            i32 r;
+            i32 g;
+            i32 b;
+        };
+        i32 raw[3];
+    };
+};
+struct Int4U{
+    union{
+        struct{
+            i32 x;
+            i32 y;
+            i32 z;
+            i32 w;
+        };
+        struct{
+            i32 r;
+            i32 g;
+            i32 b;
+            i32 a;
+        };
+        i32 raw[4];
+    };
+};
+
+struct UInt2U{
+    union{
+        struct{
+            u32 x;
+            u32 y;
+        };
+        struct{
+            u32 r;
+            u32 g;
+        };
+        u32 raw[2];
+    };
+};
+struct UInt3U{
+    union{
+        struct{
+            u32 x;
+            u32 y;
+            u32 z;
+        };
+        struct{
+            u32 r;
+            u32 g;
+            u32 b;
+        };
+        u32 raw[3];
+    };
+};
+struct UInt4U{
+    union{
+        struct{
+            u32 x;
+            u32 y;
+            u32 z;
+            u32 w;
+        };
+        struct{
+            u32 r;
+            u32 g;
+            u32 b;
+            u32 a;
+        };
+        u32 raw[4];
     };
 };
 

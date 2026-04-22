@@ -8,15 +8,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(__SSE4_2__)
+#if defined(__SSE4_1__) || defined(__SSE4_2__)
 #define NWB_HAS_SSE4 1
 #endif
 
-#if defined(__FMA__)
+#if defined(__FMA__) || defined(__F16C__)
 #define NWB_HAS_FMA3 1
 #endif
 
-#if defined(__AVX2__)
+#if defined(__AVX__) || defined(__AVX2__)
 #define NWB_HAS_AVX2 1
 #endif
 
@@ -28,8 +28,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_HAS_AVX2) && !defined(NWB_HAS_FMA3)
-#define NWB_HAS_FMA3 1
+#if defined(NWB_HAS_AVX2) && !defined(NWB_HAS_SSE4)
+#define NWB_HAS_SSE4 1
 #endif
 
 #if defined(NWB_HAS_FMA3) && !defined(NWB_HAS_SSE4)
@@ -63,11 +63,10 @@
 #if defined(NWB_HAS_SSE4)
 #include <xmmintrin.h>
 #include <emmintrin.h>
-#include <pmmintrin.h>
 #include <smmintrin.h>
 #endif
 
-#if defined(NWB_HAS_FMA3)
+#if defined(NWB_HAS_FMA3) || defined(NWB_HAS_AVX2)
 #include <immintrin.h>
 #endif
 

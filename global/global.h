@@ -20,6 +20,7 @@
 #include "unique_ptr.h"
 #include "refcount_ptr.h"
 #include "simplemath.h"
+#include "simdmath.h"
 #include "timer.h"
 
 

@@ -8,19 +8,19 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(__SSE4_1__) || defined(__SSE4_2__)
+#if defined(__SSE4_1__) || defined(__SSE4_2__) || defined(_M_AVX) || defined(_M_AVX2) || (defined(_MSC_VER) && !defined(__clang__) && (defined(_M_X64) || defined(_M_AMD64) || (defined(_M_IX86_FP) && (_M_IX86_FP >= 2))))
 #define NWB_HAS_SSE4 1
 #endif
 
-#if defined(__FMA__) || defined(__F16C__)
+#if defined(__FMA__) || defined(__F16C__) || defined(_M_FMA) || defined(_M_F16C)
 #define NWB_HAS_FMA3 1
 #endif
 
-#if defined(__AVX__) || defined(__AVX2__)
+#if defined(__AVX__) || defined(__AVX2__) || defined(_M_AVX) || defined(_M_AVX2)
 #define NWB_HAS_AVX2 1
 #endif
 
-#if defined(__ARM_NEON) || defined(__ARM_NEON__)
+#if defined(__ARM_NEON) || defined(__ARM_NEON__) || defined(_M_ARM64) || defined(_M_ARM64EC)
 #define NWB_HAS_NEON 1
 #endif
 
@@ -71,7 +71,11 @@
 #endif
 
 #if defined(NWB_HAS_NEON)
+#if defined(_MSC_VER) && (defined(_M_ARM64) || defined(_M_ARM64EC))
 #include <arm64_neon.h>
+#else
+#include <arm_neon.h>
+#endif
 #endif
 
 

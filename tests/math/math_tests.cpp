@@ -7,6 +7,7 @@
 
 #include <cmath>
 #include <iostream>
+#include <limits>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -162,6 +163,19 @@ static void TestGlslNamedScalarFunctions(TestContext& context){
         static_cast<f32>(std::tanh(-1.0f)),
         0.0005f
     ));
+
+    const f32 infinity = std::numeric_limits<f32>::infinity();
+    NWB_MATH_TEST_CHECK(context, NearlyEqual4(
+        VectorTanH(VectorSet(50.0f, -50.0f, infinity, -infinity)),
+        1.0f,
+        -1.0f,
+        1.0f,
+        -1.0f
+    ));
+
+    const SIMDVector signedZeroTanH = VectorTanH(VectorSet(-0.0f, 0.0f, -0.0f, 0.0f));
+    NWB_MATH_TEST_CHECK(context, std::signbit(VectorGetX(signedZeroTanH)));
+    NWB_MATH_TEST_CHECK(context, !std::signbit(VectorGetY(signedZeroTanH)));
 }
 
 static void TestGlslRefractCriticalAngle(TestContext& context){

@@ -2229,8 +2229,11 @@ NWB_INLINE SIMDVector SIMDCALL VectorCosH(SIMDVector value)noexcept{
 }
 
 NWB_INLINE SIMDVector SIMDCALL VectorTanH(SIMDVector value)noexcept{
-    const SIMDVector e = VectorExp(VectorAdd(value, value));
-    return VectorDivide(VectorSubtract(e, s_SIMDOne), VectorAdd(e, s_SIMDOne));
+    const SIMDVector sign = VectorAndInt(value, s_SIMDNegativeZero);
+    const SIMDVector absValue = VectorAbs(value);
+    const SIMDVector e = VectorExp(VectorNegate(VectorAdd(absValue, absValue)));
+    const SIMDVector magnitude = VectorDivide(VectorSubtract(s_SIMDOne, e), VectorAdd(s_SIMDOne, e));
+    return VectorOrInt(magnitude, sign);
 }
 
 NWB_INLINE SIMDVector SIMDCALL VectorASin(SIMDVector value)noexcept{

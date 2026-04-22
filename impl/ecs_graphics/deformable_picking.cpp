@@ -112,35 +112,28 @@ template<typename VertexVector>
                 return false;
 
             DeformableVertexRest& vertex = vertices[delta.vertexId];
-            vertex.position.x += weight * delta.deltaPosition.x;
-            vertex.position.y += weight * delta.deltaPosition.y;
-            vertex.position.z += weight * delta.deltaPosition.z;
-            vertex.normal.x += weight * delta.deltaNormal.x;
-            vertex.normal.y += weight * delta.deltaNormal.y;
-            vertex.normal.z += weight * delta.deltaNormal.z;
-            vertex.tangent.x += weight * delta.deltaTangent.x;
-            vertex.tangent.y += weight * delta.deltaTangent.y;
-            vertex.tangent.z += weight * delta.deltaTangent.z;
-            vertex.tangent.w += weight * delta.deltaTangent.w;
+            AccumulateScaled(vertex.position, delta.deltaPosition, weight);
+            AccumulateScaled(vertex.normal, delta.deltaNormal, weight);
+            AccumulateScaled(vertex.tangent, delta.deltaTangent, weight);
         }
     }
     return true;
 }
 
 [[nodiscard]] Vec3 TransformJointPosition(const DeformableJointMatrix& matrix, const Vec3& position){
-    return Vec3{
-        (matrix.column0.x * position.x) + (matrix.column1.x * position.y) + (matrix.column2.x * position.z) + matrix.column3.x,
-        (matrix.column0.y * position.x) + (matrix.column1.y * position.y) + (matrix.column2.y * position.z) + matrix.column3.y,
-        (matrix.column0.z * position.x) + (matrix.column1.z * position.y) + (matrix.column2.z * position.z) + matrix.column3.z,
-    };
+    const SIMDVector positionVector = LoadVec3(position);
+    SIMDVector result = VectorMultiply(VectorSplatX(positionVector), LoadFloat(matrix.column0));
+    result = VectorMultiplyAdd(VectorSplatY(positionVector), LoadFloat(matrix.column1), result);
+    result = VectorMultiplyAdd(VectorSplatZ(positionVector), LoadFloat(matrix.column2), result);
+    return StoreVec3(VectorAdd(result, LoadFloat(matrix.column3)));
 }
 
 [[nodiscard]] Vec3 TransformJointDirection(const DeformableJointMatrix& matrix, const Vec3& direction){
-    return Vec3{
-        (matrix.column0.x * direction.x) + (matrix.column1.x * direction.y) + (matrix.column2.x * direction.z),
-        (matrix.column0.y * direction.x) + (matrix.column1.y * direction.y) + (matrix.column2.y * direction.z),
-        (matrix.column0.z * direction.x) + (matrix.column1.z * direction.y) + (matrix.column2.z * direction.z),
-    };
+    const SIMDVector directionVector = LoadVec3(direction);
+    SIMDVector result = VectorMultiply(VectorSplatX(directionVector), LoadFloat(matrix.column0));
+    result = VectorMultiplyAdd(VectorSplatY(directionVector), LoadFloat(matrix.column1), result);
+    result = VectorMultiplyAdd(VectorSplatZ(directionVector), LoadFloat(matrix.column2), result);
+    return StoreVec3(result);
 }
 
 [[nodiscard]] bool ValidateJointPalette(
@@ -214,24 +207,16 @@ void ApplyDisplacement(const DeformableDisplacement& displacement, DeformableVer
     if(!ActiveWeight(offset))
         return;
 
-    vertex.position.x += vertex.normal.x * offset;
-    vertex.position.y += vertex.normal.y * offset;
-    vertex.position.z += vertex.normal.z * offset;
+    AccumulateScaled(vertex.position, vertex.normal, offset);
 }
 
 void ApplyTransform(const Core::Scene::TransformComponent* transform, DeformableVertexRest& vertex){
     if(!transform)
         return;
 
-    Vec3 position = ToVec3(vertex.position);
-    position.x *= transform->scale.x;
-    position.y *= transform->scale.y;
-    position.z *= transform->scale.z;
-    position = RotateByQuaternion(position, transform->rotation);
-    position.x += transform->position.x;
-    position.y += transform->position.y;
-    position.z += transform->position.z;
-    vertex.position = ToFloat3(position);
+    SIMDVector position = VectorMultiply(LoadFloat(vertex.position), LoadFloat(transform->scale));
+    position = Vector3Rotate(position, LoadFloat(transform->rotation));
+    StoreFloat(VectorAdd(position, LoadFloat(transform->position)), &vertex.position);
 
     Vec3 normal = RotateByQuaternion(ToVec3(vertex.normal), transform->rotation);
     normal = Normalize(normal, Vec3{ 0.0f, 0.0f, 1.0f });

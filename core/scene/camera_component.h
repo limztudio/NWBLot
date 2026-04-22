@@ -22,7 +22,7 @@ NWB_SCENE_BEGIN
 struct alignas(AlignedFloat4Data) CameraComponent{
     // x = vertical FOV, y = near plane, z = far plane, w = aspect ratio.
     // An aspect ratio of 0 lets renderers derive aspect from the active framebuffer.
-    AlignedFloat4Data projection = AlignedFloat4Data(SimpleMath::ConvertToRadians(60.0f), 0.001f, 10000.0f, 0.0f);
+    AlignedFloat4Data projection = AlignedFloat4Data(60.0f * (s_PI / 180.0f), 0.001f, 10000.0f, 0.0f);
 
     [[nodiscard]] f32 verticalFovRadians()const{ return projection.x; }
     [[nodiscard]] f32 nearPlane()const{ return projection.y; }
@@ -76,13 +76,15 @@ static_assert(
     outTanHalfFov = 0.0f;
     if(!IsFinite(verticalFovRadians)
         || verticalFovRadians <= 0.0f
-        || verticalFovRadians >= SimpleMath::Pi
+        || verticalFovRadians >= s_PI
     )
         return false;
 
-    const f32 halfFov = verticalFovRadians * 0.5f;
-    const f32 sinHalfFov = Sin(halfFov);
-    const f32 cosHalfFov = Cos(halfFov);
+    SIMDVector sinHalfFovVector;
+    SIMDVector cosHalfFovVector;
+    VectorSinCos(&sinHalfFovVector, &cosHalfFovVector, VectorReplicate(verticalFovRadians * 0.5f));
+    const f32 sinHalfFov = VectorGetX(sinHalfFovVector);
+    const f32 cosHalfFov = VectorGetX(cosHalfFovVector);
     if(!IsFinite(sinHalfFov)
         || !IsFinite(cosHalfFov)
         || (cosHalfFov > -s_CameraFovCosEpsilon && cosHalfFov < s_CameraFovCosEpsilon)
@@ -109,18 +111,15 @@ static_assert(
 }
 
 [[nodiscard]] inline bool CameraProjectionDataValid(const CameraProjectionData& projectionData){
+    const SIMDVector projectionParams = LoadFloat(projectionData.projectionParams);
     return IsFinite(projectionData.aspectRatio)
         && IsFinite(projectionData.tanHalfVerticalFov)
-        && IsFinite(projectionData.projectionParams.x)
-        && IsFinite(projectionData.projectionParams.y)
-        && IsFinite(projectionData.projectionParams.z)
-        && IsFinite(projectionData.projectionParams.w)
+        && !Vector4IsNaN(projectionParams)
+        && !Vector4IsInfinite(projectionParams)
         && projectionData.aspectRatio > 0.0f
         && projectionData.tanHalfVerticalFov > 0.0f
-        && projectionData.projectionParams.x > 0.0f
-        && projectionData.projectionParams.y > 0.0f
-        && projectionData.projectionParams.z > 0.0f
-        && projectionData.projectionParams.w < 0.0f;
+        && Vector3Greater(projectionParams, VectorZero())
+        && VectorGetW(projectionParams) < 0.0f;
 }
 
 [[nodiscard]] inline bool TryBuildCameraProjectionData(

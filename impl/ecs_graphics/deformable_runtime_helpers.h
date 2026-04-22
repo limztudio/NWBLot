@@ -58,6 +58,20 @@ static_assert(sizeof(Vec3) == sizeof(AlignedFloat3Data), "Vec3 must stay one ali
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[[nodiscard]] inline SIMDVector LoadVec3(const Vec3& value){
+    return LoadFloat(static_cast<const AlignedFloat3Data&>(value));
+}
+
+[[nodiscard]] inline Vec3 StoreVec3(SIMDVector value){
+    Vec3 result;
+    StoreFloat(value, &result);
+    return result;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] inline bool ActiveWeight(const f32 value){
     return DeformableValidation::ActiveWeight(value);
 }
@@ -108,44 +122,49 @@ static_assert(sizeof(Vec3) == sizeof(AlignedFloat3Data), "Vec3 must stay one ali
     return AlignedFloat4Data(value.x, value.y, value.z, w);
 }
 
+inline void AccumulateScaled(Float3Data& target, const Float3Data& source, const f32 scalar){
+    StoreFloat(VectorMultiplyAdd(LoadFloat(source), VectorReplicate(scalar), LoadFloat(target)), &target);
+}
+
+inline void AccumulateScaled(Float4Data& target, const Float4Data& source, const f32 scalar){
+    StoreFloat(VectorMultiplyAdd(LoadFloat(source), VectorReplicate(scalar), LoadFloat(target)), &target);
+}
+
 [[nodiscard]] inline Vec3 Add(const Vec3& lhs, const Vec3& rhs){
-    return Vec3{ lhs.x + rhs.x, lhs.y + rhs.y, lhs.z + rhs.z };
+    return StoreVec3(VectorAdd(LoadVec3(lhs), LoadVec3(rhs)));
 }
 
 [[nodiscard]] inline Vec3 Subtract(const Vec3& lhs, const Vec3& rhs){
-    return Vec3{ lhs.x - rhs.x, lhs.y - rhs.y, lhs.z - rhs.z };
+    return StoreVec3(VectorSubtract(LoadVec3(lhs), LoadVec3(rhs)));
 }
 
 [[nodiscard]] inline Vec3 Scale(const Vec3& value, const f32 scalar){
-    return Vec3{ value.x * scalar, value.y * scalar, value.z * scalar };
+    return StoreVec3(VectorScale(LoadVec3(value), scalar));
 }
 
 [[nodiscard]] inline f32 Dot(const Vec3& lhs, const Vec3& rhs){
-    return (lhs.x * rhs.x) + (lhs.y * rhs.y) + (lhs.z * rhs.z);
+    return VectorGetX(Vector3Dot(LoadVec3(lhs), LoadVec3(rhs)));
 }
 
 [[nodiscard]] inline Vec3 Cross(const Vec3& lhs, const Vec3& rhs){
-    return Vec3{
-        (lhs.y * rhs.z) - (lhs.z * rhs.y),
-        (lhs.z * rhs.x) - (lhs.x * rhs.z),
-        (lhs.x * rhs.y) - (lhs.y * rhs.x),
-    };
+    return StoreVec3(Vector3Cross(LoadVec3(rhs), LoadVec3(lhs)));
 }
 
 [[nodiscard]] inline f32 LengthSquared(const Vec3& value){
-    return Dot(value, value);
+    return VectorGetX(Vector3LengthSq(LoadVec3(value)));
 }
 
 [[nodiscard]] inline f32 Length(const Vec3& value){
-    return Sqrt(LengthSquared(value));
+    return VectorGetX(Vector3Length(LoadVec3(value)));
 }
 
 [[nodiscard]] inline Vec3 Normalize(const Vec3& value, const Vec3& fallback){
-    const f32 lengthSquared = LengthSquared(value);
+    const SIMDVector valueVector = LoadVec3(value);
+    const f32 lengthSquared = VectorGetX(Vector3LengthSq(valueVector));
     if(lengthSquared <= s_FrameEpsilon)
         return fallback;
 
-    return Scale(value, 1.0f / Sqrt(lengthSquared));
+    return StoreVec3(Vector3Normalize(valueVector));
 }
 
 [[nodiscard]] inline Vec3 FallbackTangent(const Vec3& normal){
@@ -161,20 +180,16 @@ static_assert(sizeof(Vec3) == sizeof(AlignedFloat3Data), "Vec3 must stay one ali
 }
 
 [[nodiscard]] inline Vec3 RotateByQuaternion(const Vec3& value, const AlignedFloat4Data& rotation){
-    const Vec3 q{ rotation.x, rotation.y, rotation.z };
-    const Vec3 twiceCross = Scale(Cross(q, value), 2.0f);
-    return Add(Add(value, Scale(twiceCross, rotation.w)), Cross(q, twiceCross));
+    return StoreVec3(Vector3Rotate(LoadVec3(value), LoadFloat(rotation)));
 }
 
 [[nodiscard]] inline bool IsAffineJointMatrix(const DeformableJointMatrix& matrix){
+    const SIMDVector affineW = VectorSet(matrix.column0.w, matrix.column1.w, matrix.column2.w, matrix.column3.w);
     return DeformableValidation::IsFiniteFloat4(matrix.column0)
         && DeformableValidation::IsFiniteFloat4(matrix.column1)
         && DeformableValidation::IsFiniteFloat4(matrix.column2)
         && DeformableValidation::IsFiniteFloat4(matrix.column3)
-        && !ActiveWeight(matrix.column0.w)
-        && !ActiveWeight(matrix.column1.w)
-        && !ActiveWeight(matrix.column2.w)
-        && !ActiveWeight(matrix.column3.w - 1.0f)
+        && Vector4NearEqual(affineW, s_SIMDIdentityR3, VectorReplicate(DeformableValidation::s_Epsilon))
     ;
 }
 

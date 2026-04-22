@@ -56,39 +56,43 @@ static constexpr f32 s_TriangleAreaLengthSquaredEpsilon = 0.000000000001f;
 }
 
 [[nodiscard]] inline bool IsFiniteFloat2(const Float2Data& value){
-    return IsFinite(value.x) && IsFinite(value.y);
+    const SIMDVector valueVector = LoadFloat(value);
+    return !Vector2IsNaN(valueVector) && !Vector2IsInfinite(valueVector);
 }
 
 [[nodiscard]] inline bool IsFiniteFloat3(const Float3Data& value){
-    return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z);
+    const SIMDVector valueVector = LoadFloat(value);
+    return !Vector3IsNaN(valueVector) && !Vector3IsInfinite(valueVector);
 }
 
 [[nodiscard]] inline bool IsFiniteFloat3(const AlignedFloat4Data& value){
-    return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z);
+    const SIMDVector valueVector = LoadFloat(value);
+    return !Vector3IsNaN(valueVector) && !Vector3IsInfinite(valueVector);
 }
 
 [[nodiscard]] inline bool IsFiniteFloat4(const Float4Data& value){
-    return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z) && IsFinite(value.w);
+    const SIMDVector valueVector = LoadFloat(value);
+    return !Vector4IsNaN(valueVector) && !Vector4IsInfinite(valueVector);
 }
 
 [[nodiscard]] inline f32 LengthSquared3(const f32 x, const f32 y, const f32 z){
-    return (x * x) + (y * y) + (z * z);
+    return VectorGetX(Vector3LengthSq(VectorSet(x, y, z, 0.0f)));
 }
 
 [[nodiscard]] inline f32 Dot3(const Float3Data& lhs, const Float3Data& rhs){
-    return (lhs.x * rhs.x) + (lhs.y * rhs.y) + (lhs.z * rhs.z);
+    return VectorGetX(Vector3Dot(LoadFloat(lhs), LoadFloat(rhs)));
 }
 
 [[nodiscard]] inline Float3Data Subtract3(const Float3Data& lhs, const Float3Data& rhs){
-    return Float3Data(lhs.x - rhs.x, lhs.y - rhs.y, lhs.z - rhs.z);
+    Float3Data result;
+    StoreFloat(VectorSubtract(LoadFloat(lhs), LoadFloat(rhs)), &result);
+    return result;
 }
 
 [[nodiscard]] inline Float3Data Cross3(const Float3Data& lhs, const Float3Data& rhs){
-    return Float3Data(
-        (lhs.y * rhs.z) - (lhs.z * rhs.y),
-        (lhs.z * rhs.x) - (lhs.x * rhs.z),
-        (lhs.x * rhs.y) - (lhs.y * rhs.x)
-    );
+    Float3Data result;
+    StoreFloat(Vector3Cross(LoadFloat(rhs), LoadFloat(lhs)), &result);
+    return result;
 }
 
 [[nodiscard]] inline bool NearlyOne(const f32 value, const f32 epsilon = s_BarycentricSumEpsilon){
@@ -148,25 +152,21 @@ static constexpr f32 s_TriangleAreaLengthSquaredEpsilon = 0.000000000001f;
 }
 
 [[nodiscard]] inline bool ValidBarycentric(const f32 (&bary)[3], const f32 minimumBarycentric){
-    const f32 barySum = bary[0] + bary[1] + bary[2];
-    return IsFinite(bary[0])
-        && IsFinite(bary[1])
-        && IsFinite(bary[2])
-        && bary[0] >= minimumBarycentric
-        && bary[1] >= minimumBarycentric
-        && bary[2] >= minimumBarycentric
+    const SIMDVector baryVector = VectorSet(bary[0], bary[1], bary[2], 0.0f);
+    const f32 barySum = VectorGetX(Vector3Dot(baryVector, s_SIMDOne));
+    return !Vector3IsNaN(baryVector)
+        && !Vector3IsInfinite(baryVector)
+        && Vector3GreaterOrEqual(baryVector, VectorReplicate(minimumBarycentric))
         && NearlyOne(barySum)
     ;
 }
 
 [[nodiscard]] inline bool ValidBarycentric(const AlignedFloat4Data& bary, const f32 minimumBarycentric){
-    const f32 barySum = bary.x + bary.y + bary.z;
-    return IsFinite(bary.x)
-        && IsFinite(bary.y)
-        && IsFinite(bary.z)
-        && bary.x >= minimumBarycentric
-        && bary.y >= minimumBarycentric
-        && bary.z >= minimumBarycentric
+    const SIMDVector baryVector = LoadFloat(bary);
+    const f32 barySum = VectorGetX(Vector3Dot(baryVector, s_SIMDOne));
+    return !Vector3IsNaN(baryVector)
+        && !Vector3IsInfinite(baryVector)
+        && Vector3GreaterOrEqual(baryVector, VectorReplicate(minimumBarycentric))
         && NearlyOne(barySum)
     ;
 }
@@ -191,18 +191,15 @@ static constexpr f32 s_TriangleAreaLengthSquaredEpsilon = 0.000000000001f;
     if(!ValidLooseBarycentric(bary))
         return false;
 
-    outBary[0] = Clamp01(bary[0]);
-    outBary[1] = Clamp01(bary[1]);
-    outBary[2] = Clamp01(bary[2]);
-
-    const f32 barySum = outBary[0] + outBary[1] + outBary[2];
+    const SIMDVector clampedBary = VectorClamp(VectorSet(bary[0], bary[1], bary[2], 0.0f), VectorZero(), s_SIMDOne);
+    const f32 barySum = VectorGetX(Vector3Dot(clampedBary, s_SIMDOne));
     if(!IsFinite(barySum) || barySum <= s_Epsilon)
         return false;
 
-    const f32 invBarySum = 1.0f / barySum;
-    outBary[0] *= invBarySum;
-    outBary[1] *= invBarySum;
-    outBary[2] *= invBarySum;
+    const SIMDVector normalizedBary = VectorScale(clampedBary, 1.0f / barySum);
+    outBary[0] = VectorGetX(normalizedBary);
+    outBary[1] = VectorGetY(normalizedBary);
+    outBary[2] = VectorGetZ(normalizedBary);
     return ValidSourceBarycentric(outBary);
 }
 
@@ -210,18 +207,15 @@ static constexpr f32 s_TriangleAreaLengthSquaredEpsilon = 0.000000000001f;
     if(!ValidLooseBarycentric(bary))
         return false;
 
-    outBary[0] = Clamp01(bary.x);
-    outBary[1] = Clamp01(bary.y);
-    outBary[2] = Clamp01(bary.z);
-
-    const f32 barySum = outBary[0] + outBary[1] + outBary[2];
+    const SIMDVector clampedBary = VectorClamp(LoadFloat(bary), VectorZero(), s_SIMDOne);
+    const f32 barySum = VectorGetX(Vector3Dot(clampedBary, s_SIMDOne));
     if(!IsFinite(barySum) || barySum <= s_Epsilon)
         return false;
 
-    const f32 invBarySum = 1.0f / barySum;
-    outBary[0] *= invBarySum;
-    outBary[1] *= invBarySum;
-    outBary[2] *= invBarySum;
+    const SIMDVector normalizedBary = VectorScale(clampedBary, 1.0f / barySum);
+    outBary[0] = VectorGetX(normalizedBary);
+    outBary[1] = VectorGetY(normalizedBary);
+    outBary[2] = VectorGetZ(normalizedBary);
     return ValidSourceBarycentric(outBary);
 }
 
@@ -233,16 +227,11 @@ static constexpr f32 s_TriangleAreaLengthSquaredEpsilon = 0.000000000001f;
 }
 
 [[nodiscard]] inline bool ValidSkinInfluence(const SkinInfluence4& skin){
-    f32 weightSum = 0.0f;
-    for(u32 influenceIndex = 0; influenceIndex < 4u; ++influenceIndex){
-        const f32 weight = skin.weight[influenceIndex];
-        if(!IsFinite(weight) || weight < 0.0f)
-            return false;
+    const SIMDVector weights = VectorSet(skin.weight[0], skin.weight[1], skin.weight[2], skin.weight[3]);
+    const f32 weightSum = VectorGetX(Vector4Dot(weights, s_SIMDOne));
+    if(Vector4IsNaN(weights) || Vector4IsInfinite(weights) || !Vector4GreaterOrEqual(weights, VectorZero()))
+        return false;
 
-        weightSum += weight;
-        if(!IsFinite(weightSum))
-            return false;
-    }
     return NearlyOne(weightSum, s_SkinWeightSumEpsilon);
 }
 

@@ -58,7 +58,8 @@ struct SkinWeightSample{
 };
 
 [[nodiscard]] bool FiniteVec3(const Vec3& value){
-    return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z);
+    const SIMDVector valueVector = LoadVec3(value);
+    return !Vector3IsNaN(valueVector) && !Vector3IsInfinite(valueVector);
 }
 
 struct SurfaceEditStateHeader{
@@ -178,11 +179,10 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
     const DeformableVertexRest& vertex0 = instance.restVertices[triangleIndices[0]];
     const DeformableVertexRest& vertex1 = instance.restVertices[triangleIndices[1]];
     const DeformableVertexRest& vertex2 = instance.restVertices[triangleIndices[2]];
-    Vec3 tangent{
-        (bary[0] * vertex0.tangent.x) + (bary[1] * vertex1.tangent.x) + (bary[2] * vertex2.tangent.x),
-        (bary[0] * vertex0.tangent.y) + (bary[1] * vertex1.tangent.y) + (bary[2] * vertex2.tangent.y),
-        (bary[0] * vertex0.tangent.z) + (bary[1] * vertex1.tangent.z) + (bary[2] * vertex2.tangent.z),
-    };
+    SIMDVector tangentVector = VectorScale(LoadFloat(vertex0.tangent), bary[0]);
+    tangentVector = VectorMultiplyAdd(LoadFloat(vertex1.tangent), VectorReplicate(bary[1]), tangentVector);
+    tangentVector = VectorMultiplyAdd(LoadFloat(vertex2.tangent), VectorReplicate(bary[2]), tangentVector);
+    Vec3 tangent = StoreVec3(tangentVector);
     tangent = Subtract(tangent, Scale(outFrame.normal, Dot(tangent, outFrame.normal)));
     if(LengthSquared(tangent) <= s_FrameEpsilon)
         tangent = Subtract(edge0, Scale(outFrame.normal, Dot(edge0, outFrame.normal)));
@@ -665,35 +665,31 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
     if(dot < -0.999f)
         return AlignedFloat4Data(1.0f, 0.0f, 0.0f, 0.0f);
 
-    const Vec3 axis = Vec3{ -normal.y, normal.x, 0.0f };
-    const f32 scale = Sqrt((1.0f + dot) * 2.0f);
+    const SIMDVector axis = VectorMultiply(VectorSwizzle<1, 0, 2, 3>(LoadVec3(normal)), VectorSet(-1.0f, 1.0f, 0.0f, 0.0f));
+    const f32 scale = VectorGetX(VectorSqrt(VectorReplicate((1.0f + dot) * 2.0f)));
     if(!IsFinite(scale) || scale <= s_FrameEpsilon)
         return AlignedFloat4Data(0.0f, 0.0f, 0.0f, 1.0f);
 
     const f32 invScale = 1.0f / scale;
-    return AlignedFloat4Data(axis.x * invScale, axis.y * invScale, axis.z * invScale, scale * 0.5f);
+    AlignedFloat4Data rotation;
+    SIMDVector rotationVector = VectorScale(axis, invScale);
+    rotationVector = VectorSetW(rotationVector, scale * 0.5f);
+    StoreFloat(rotationVector, &rotation);
+    return rotation;
 }
 
 [[nodiscard]] AlignedFloat4Data NormalizeRotationQuaternion(
     const AlignedFloat4Data& rotation,
     const Vec3& fallbackNormal)
 {
-    const f32 lengthSquared =
-        (rotation.x * rotation.x)
-        + (rotation.y * rotation.y)
-        + (rotation.z * rotation.z)
-        + (rotation.w * rotation.w)
-    ;
+    const SIMDVector rotationVector = LoadFloat(rotation);
+    const f32 lengthSquared = VectorGetX(QuaternionLengthSq(rotationVector));
     if(!IsFinite(lengthSquared) || lengthSquared <= s_FrameEpsilon)
         return RotationFromPositiveZToNormal(fallbackNormal);
 
-    const f32 invLength = 1.0f / Sqrt(lengthSquared);
-    return AlignedFloat4Data(
-        rotation.x * invLength,
-        rotation.y * invLength,
-        rotation.z * invLength,
-        rotation.w * invLength
-    );
+    AlignedFloat4Data normalizedRotation;
+    StoreFloat(QuaternionNormalize(rotationVector), &normalizedRotation);
+    return normalizedRotation;
 }
 
 [[nodiscard]] AlignedFloat4Data RotationFromFrame(const Vec3& rawTangent, const Vec3& rawNormal){
@@ -727,48 +723,14 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
     const f32 m21 = bitangent.z;
     const f32 m22 = normal.z;
 
+    const SIMDMatrix rotationMatrix = MatrixSet(
+        m00, m01, m02, 0.0f,
+        m10, m11, m12, 0.0f,
+        m20, m21, m22, 0.0f,
+        0.0f, 0.0f, 0.0f, 1.0f
+    );
     AlignedFloat4Data rotation;
-    const f32 trace = m00 + m11 + m22;
-    if(trace > 0.0f){
-        const f32 scale = Sqrt(trace + 1.0f) * 2.0f;
-        if(!IsFinite(scale) || scale <= s_FrameEpsilon)
-            return RotationFromPositiveZToNormal(normal);
-
-        rotation.x = (m21 - m12) / scale;
-        rotation.y = (m02 - m20) / scale;
-        rotation.z = (m10 - m01) / scale;
-        rotation.w = 0.25f * scale;
-    }
-    else if(m00 > m11 && m00 > m22){
-        const f32 scale = Sqrt(1.0f + m00 - m11 - m22) * 2.0f;
-        if(!IsFinite(scale) || scale <= s_FrameEpsilon)
-            return RotationFromPositiveZToNormal(normal);
-
-        rotation.x = 0.25f * scale;
-        rotation.y = (m01 + m10) / scale;
-        rotation.z = (m02 + m20) / scale;
-        rotation.w = (m21 - m12) / scale;
-    }
-    else if(m11 > m22){
-        const f32 scale = Sqrt(1.0f + m11 - m00 - m22) * 2.0f;
-        if(!IsFinite(scale) || scale <= s_FrameEpsilon)
-            return RotationFromPositiveZToNormal(normal);
-
-        rotation.x = (m01 + m10) / scale;
-        rotation.y = 0.25f * scale;
-        rotation.z = (m12 + m21) / scale;
-        rotation.w = (m02 - m20) / scale;
-    }
-    else{
-        const f32 scale = Sqrt(1.0f + m22 - m00 - m11) * 2.0f;
-        if(!IsFinite(scale) || scale <= s_FrameEpsilon)
-            return RotationFromPositiveZToNormal(normal);
-
-        rotation.x = (m02 + m20) / scale;
-        rotation.y = (m12 + m21) / scale;
-        rotation.z = 0.25f * scale;
-        rotation.w = (m10 - m01) / scale;
-    }
+    StoreFloat(QuaternionRotationMatrix(rotationMatrix), &rotation);
 
     return NormalizeRotationQuaternion(rotation, normal);
 }
@@ -908,16 +870,10 @@ template<typename BoundaryEdgeVector, typename OrderedEdgeVector>
 }
 
 [[nodiscard]] bool ActiveMorphDelta(const DeformableMorphDelta& delta){
-    return ActiveWeight(delta.deltaPosition.x)
-        || ActiveWeight(delta.deltaPosition.y)
-        || ActiveWeight(delta.deltaPosition.z)
-        || ActiveWeight(delta.deltaNormal.x)
-        || ActiveWeight(delta.deltaNormal.y)
-        || ActiveWeight(delta.deltaNormal.z)
-        || ActiveWeight(delta.deltaTangent.x)
-        || ActiveWeight(delta.deltaTangent.y)
-        || ActiveWeight(delta.deltaTangent.z)
-        || ActiveWeight(delta.deltaTangent.w)
+    const SIMDVector epsilon = VectorReplicate(DeformableValidation::s_Epsilon);
+    return !Vector3LessOrEqual(VectorAbs(LoadFloat(delta.deltaPosition)), epsilon)
+        || !Vector3LessOrEqual(VectorAbs(LoadFloat(delta.deltaNormal)), epsilon)
+        || !Vector4LessOrEqual(VectorAbs(LoadFloat(delta.deltaTangent)), epsilon)
     ;
 }
 
@@ -926,16 +882,9 @@ void AccumulateMorphDelta(
     const DeformableMorphDelta& source,
     const f32 weight)
 {
-    target.deltaPosition.x += source.deltaPosition.x * weight;
-    target.deltaPosition.y += source.deltaPosition.y * weight;
-    target.deltaPosition.z += source.deltaPosition.z * weight;
-    target.deltaNormal.x += source.deltaNormal.x * weight;
-    target.deltaNormal.y += source.deltaNormal.y * weight;
-    target.deltaNormal.z += source.deltaNormal.z * weight;
-    target.deltaTangent.x += source.deltaTangent.x * weight;
-    target.deltaTangent.y += source.deltaTangent.y * weight;
-    target.deltaTangent.z += source.deltaTangent.z * weight;
-    target.deltaTangent.w += source.deltaTangent.w * weight;
+    AccumulateScaled(target.deltaPosition, source.deltaPosition, weight);
+    AccumulateScaled(target.deltaNormal, source.deltaNormal, weight);
+    AccumulateScaled(target.deltaTangent, source.deltaTangent, weight);
 }
 
 [[nodiscard]] bool BuildMorphDeltaLookup(
@@ -1197,6 +1146,7 @@ template<usize sourceCount>
     static_assert(sourceCount > 0u, "color transfer requires source samples");
     outColor = Float4Data(0.0f, 0.0f, 0.0f, 0.0f);
 
+    SIMDVector color = VectorZero();
     f32 weightSum = 0.0f;
     for(usize sourceIndex = 0u; sourceIndex < sourceCount; ++sourceIndex){
         const f32 sourceWeight = sourceWeights[sourceIndex];
@@ -1213,28 +1163,16 @@ template<usize sourceCount>
         if(!DeformableValidation::IsFiniteFloat4(sourceColor))
             return false;
 
-        outColor.x += sourceColor.x * sourceWeight;
-        outColor.y += sourceColor.y * sourceWeight;
-        outColor.z += sourceColor.z * sourceWeight;
-        outColor.w += sourceColor.w * sourceWeight;
+        color = VectorMultiplyAdd(LoadFloat(sourceColor), VectorReplicate(sourceWeight), color);
         weightSum += sourceWeight;
-        if(!IsFinite(outColor.x)
-            || !IsFinite(outColor.y)
-            || !IsFinite(outColor.z)
-            || !IsFinite(outColor.w)
-            || !IsFinite(weightSum)
-        )
+        if(Vector4IsNaN(color) || Vector4IsInfinite(color) || !IsFinite(weightSum))
             return false;
     }
 
     if(!ActiveWeight(weightSum))
         return false;
 
-    const f32 invWeightSum = 1.0f / weightSum;
-    outColor.x *= invWeightSum;
-    outColor.y *= invWeightSum;
-    outColor.z *= invWeightSum;
-    outColor.w *= invWeightSum;
+    StoreFloat(VectorScale(color, 1.0f / weightSum), &outColor);
     return DeformableValidation::IsFiniteFloat4(outColor);
 }
 

@@ -376,13 +376,13 @@ static InstanceGpuData BuildInstanceGpuData(const Core::Scene::TransformComponen
         return data;
 
     data.rotation = transform->rotation;
-    data.translation = AlignedFloat4Data(transform->position.x, transform->position.y, transform->position.z, 0.0f);
-    data.scale = AlignedFloat4Data(transform->scale.x, transform->scale.y, transform->scale.z, 0.0f);
+    StoreFloat(LoadFloat(transform->position), &data.translation);
+    StoreFloat(LoadFloat(transform->scale), &data.scale);
     return data;
 }
 
 static f32 Float3Dot(const AlignedFloat4Data& lhs, const AlignedFloat4Data& rhs){
-    return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z;
+    return VectorGetX(Vector3Dot(LoadFloat(lhs), LoadFloat(rhs)));
 }
 
 static void StoreRotatedBasisVector(
@@ -390,27 +390,35 @@ static void StoreRotatedBasisVector(
     const AlignedFloat3Data& localVector,
     const Core::Scene::TransformComponent& transform
 ){
-    const AlignedFloat3Data rotatedVector = SimpleMath::Vector3Rotate(localVector, transform.rotation);
-    outVector = AlignedFloat4Data(rotatedVector.x, rotatedVector.y, rotatedVector.z, 0.0f);
+    StoreFloat(Vector3Rotate(LoadFloat(localVector), LoadFloat(transform.rotation)), &outVector);
 }
 
 static MeshViewBasis BuildDefaultMeshViewBasis(){
-    const f32 sinYaw = Sin(s_DefaultMeshViewYaw);
-    const f32 cosYaw = Cos(s_DefaultMeshViewYaw);
-    const f32 sinPitch = Sin(s_DefaultMeshViewPitch);
-    const f32 cosPitch = Cos(s_DefaultMeshViewPitch);
+    SIMDVector sinAngles;
+    SIMDVector cosAngles;
+    VectorSinCos(&sinAngles, &cosAngles, VectorSet(s_DefaultMeshViewYaw, s_DefaultMeshViewPitch, 0.0f, 0.0f));
+    const f32 sinYaw = VectorGetX(sinAngles);
+    const f32 cosYaw = VectorGetX(cosAngles);
+    const f32 sinPitch = VectorGetY(sinAngles);
+    const f32 cosPitch = VectorGetY(cosAngles);
 
     MeshViewBasis basis;
     basis.right = AlignedFloat4Data(cosYaw, 0.0f, sinYaw, 0.0f);
-    basis.up = AlignedFloat4Data(sinYaw * sinPitch, cosPitch, -cosYaw * sinPitch, 0.0f);
-    basis.forward = AlignedFloat4Data(-sinYaw * cosPitch, sinPitch, cosYaw * cosPitch, 0.0f);
+    StoreFloat(
+        VectorMultiply(VectorSet(sinYaw, 1.0f, -cosYaw, 0.0f), VectorSet(sinPitch, cosPitch, sinPitch, 0.0f)),
+        &basis.up
+    );
+    StoreFloat(
+        VectorMultiply(VectorSet(-sinYaw, 1.0f, cosYaw, 0.0f), VectorSet(cosPitch, sinPitch, cosPitch, 0.0f)),
+        &basis.forward
+    );
     basis.positionDepthBias.w = s_DefaultMeshViewDepthOffset;
     return basis;
 }
 
 static MeshViewBasis BuildTransformMeshViewBasis(const Core::Scene::TransformComponent& transform){
     MeshViewBasis basis;
-    basis.positionDepthBias = AlignedFloat4Data(transform.position.x, transform.position.y, transform.position.z, 0.0f);
+    StoreFloat(LoadFloat(transform.position), &basis.positionDepthBias);
     StoreRotatedBasisVector(basis.right, AlignedFloat3Data(1.0f, 0.0f, 0.0f), transform);
     StoreRotatedBasisVector(basis.up, AlignedFloat3Data(0.0f, 1.0f, 0.0f), transform);
     StoreRotatedBasisVector(basis.forward, AlignedFloat3Data(0.0f, 0.0f, 1.0f), transform);
@@ -441,12 +449,11 @@ static void StoreProjectedViewColumn(
     const f32 viewW,
     const AlignedFloat4Data& projectionParams
 ){
-    outWorldToClip[columnIndex] = AlignedFloat4Data(
-        viewX * projectionParams.x,
-        viewY * projectionParams.y,
-        viewZ * projectionParams.z + viewW * projectionParams.w,
-        viewZ
-    );
+    const SIMDVector projection = LoadFloat(projectionParams);
+    SIMDVector column = VectorMultiply(VectorSet(viewX, viewY, viewZ, viewZ), projection);
+    column = VectorMultiplyAdd(VectorSet(0.0f, 0.0f, viewW, 0.0f), VectorSplatW(projection), column);
+    column = VectorSetW(column, viewZ);
+    StoreFloat(column, &outWorldToClip[columnIndex]);
 }
 
 static void StoreWorldToClipMatrix(

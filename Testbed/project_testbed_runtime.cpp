@@ -32,8 +32,8 @@ static constexpr f32 s_CameraStartDepth = 2.2f;
 static constexpr f32 s_CameraMoveEpsilon = 0.000001f;
 static constexpr f32 s_FlyCameraMoveSpeed = 2.5f;
 static constexpr f32 s_FlyCameraBoostMultiplier = 4.0f;
-static constexpr f32 s_FlyCameraMouseSensitivityRadiansPerPixel = SimpleMath::ConvertToRadians(0.12f);
-static constexpr f32 s_FlyCameraPitchLimitRadians = SimpleMath::ConvertToRadians(89.0f);
+static constexpr f32 s_FlyCameraMouseSensitivityRadiansPerPixel = 0.12f * (s_PI / 180.0f);
+static constexpr f32 s_FlyCameraPitchLimitRadians = 89.0f * (s_PI / 180.0f);
 static constexpr f32 s_DefaultDirectionalLightPitch = -0.65f;
 static constexpr f32 s_DefaultDirectionalLightYaw = 0.65f;
 static constexpr f32 s_DefaultDirectionalLightIntensity = 2.0f;
@@ -73,34 +73,30 @@ static constexpr f32 s_AccessoryUniformScale = 0.16f;
 }
 
 [[nodiscard]] static bool FiniteFloat3(const AlignedFloat3Data& value){
-    return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z);
+    const SIMDVector valueVector = LoadFloat(value);
+    return !Vector3IsNaN(valueVector) && !Vector3IsInfinite(valueVector);
 }
 
 [[nodiscard]] static EditorVec3 NormalizeVec3(const EditorVec3& value, const EditorVec3& fallback){
-    const f32 lengthSq = (value.x * value.x) + (value.y * value.y) + (value.z * value.z);
+    const SIMDVector valueVector = LoadFloat(static_cast<const AlignedFloat3Data&>(value));
+    const f32 lengthSq = VectorGetX(Vector3LengthSq(valueVector));
     if(!IsFinite(lengthSq) || lengthSq <= 0.000001f)
         return fallback;
 
-    const f32 invLength = 1.0f / Sqrt(lengthSq);
-    if(!IsFinite(invLength))
-        return fallback;
-
-    const EditorVec3 normalized{
-        value.x * invLength,
-        value.y * invLength,
-        value.z * invLength
-    };
+    EditorVec3 normalized;
+    StoreFloat(Vector3Normalize(valueVector), &normalized);
     return FiniteFloat3(normalized) ? normalized : fallback;
 }
 
 [[nodiscard]] static EditorVec3 RotateDirectionByQuaternion(
     const EditorVec3& value,
     const AlignedFloat4Data& rotation){
-    const AlignedFloat3Data rotatedDirection = SimpleMath::Vector3Rotate(
-        static_cast<const AlignedFloat3Data&>(value),
-        rotation
+    EditorVec3 rotatedDirection;
+    StoreFloat(
+        Vector3Rotate(LoadFloat(static_cast<const AlignedFloat3Data&>(value)), LoadFloat(rotation)),
+        &rotatedDirection
     );
-    return EditorVec3{ rotatedDirection.x, rotatedDirection.y, rotatedDirection.z };
+    return rotatedDirection;
 }
 
 [[nodiscard]] static bool BuildEditorPickRay(
@@ -190,28 +186,27 @@ static void ApplyFlyCameraInput(
         s_FlyCameraPitchLimitRadians
     );
 
-    transform.rotation = SimpleMath::QuaternionRotationRollPitchYaw(pitchRadians, yawRadians, 0.0f);
+    StoreFloat(QuaternionRotationRollPitchYaw(pitchRadians, yawRadians, 0.0f), &transform.rotation);
     if(!FiniteFloat3(transform.position))
         transform.position = AlignedFloat3Data(0.0f, 0.0f, 0.0f);
 
-    const f32 moveLengthSq = safeRightAxis * safeRightAxis + safeForwardAxis * safeForwardAxis;
+    const SIMDVector moveAxis = VectorSet(safeRightAxis, safeForwardAxis, 0.0f, 0.0f);
+    const f32 moveLengthSq = VectorGetX(Vector2LengthSq(moveAxis));
     if(moveLengthSq > s_CameraMoveEpsilon){
-        const f32 invMoveLength = 1.0f / Sqrt(moveLengthSq);
+        const f32 invMoveLength = VectorGetX(VectorReciprocalSqrt(VectorReplicate(moveLengthSq)));
         const f32 speed = s_FlyCameraMoveSpeed * (boosted ? s_FlyCameraBoostMultiplier : 1.0f);
         const f32 moveScale = speed * safeDelta * invMoveLength;
         if(!IsFinite(moveScale))
             return;
 
         const AlignedFloat3Data localMove(safeRightAxis * moveScale, 0.0f, safeForwardAxis * moveScale);
-        const AlignedFloat3Data worldMove = SimpleMath::Vector3Rotate(localMove, transform.rotation);
+        AlignedFloat3Data worldMove;
+        StoreFloat(Vector3Rotate(LoadFloat(localMove), LoadFloat(transform.rotation)), &worldMove);
         if(!FiniteFloat3(worldMove))
             return;
 
-        const AlignedFloat3Data newPosition(
-            transform.position.x + worldMove.x,
-            transform.position.y + worldMove.y,
-            transform.position.z + worldMove.z
-        );
+        AlignedFloat3Data newPosition;
+        StoreFloat(VectorAdd(LoadFloat(transform.position), LoadFloat(worldMove)), &newPosition);
         if(FiniteFloat3(newPosition))
             transform.position = newPosition;
     }
@@ -256,10 +251,9 @@ static void ApplyFlyCameraInputToMainCamera(
 static void CreateDefaultDirectionalLightEntity(NWB::Core::ECS::World& world){
     auto lightEntity = world.createEntity();
     auto& transform = lightEntity.addComponent<NWB::Core::Scene::TransformComponent>();
-    transform.rotation = SimpleMath::QuaternionRotationRollPitchYaw(
-        s_DefaultDirectionalLightPitch,
-        s_DefaultDirectionalLightYaw,
-        0.0f
+    StoreFloat(
+        QuaternionRotationRollPitchYaw(s_DefaultDirectionalLightPitch, s_DefaultDirectionalLightYaw, 0.0f),
+        &transform.rotation
     );
 
     auto& light = lightEntity.addComponent<NWB::Core::Scene::LightComponent>();
@@ -287,8 +281,11 @@ static void CreateRendererEntity(
 
 [[nodiscard]] static NWB::Core::ECSGraphics::DeformableJointMatrix BuildProxySkinJoint(const f32 angleRadians){
     const f32 safeAngleRadians = IsFinite(angleRadians) ? angleRadians : 0.0f;
-    f32 sinAngle = Sin(safeAngleRadians);
-    f32 cosAngle = Cos(safeAngleRadians);
+    SIMDVector sinAngleVector;
+    SIMDVector cosAngleVector;
+    VectorSinCos(&sinAngleVector, &cosAngleVector, VectorReplicate(safeAngleRadians));
+    f32 sinAngle = VectorGetX(sinAngleVector);
+    f32 cosAngle = VectorGetX(cosAngleVector);
     if(!IsFinite(sinAngle) || !IsFinite(cosAngle)){
         sinAngle = 0.0f;
         cosAngle = 1.0f;
@@ -315,7 +312,8 @@ static void UpdateProxySkinPalette(
 
     jointPalette.joints.resize(2u);
     jointPalette.joints[0] = NWB::Core::ECSGraphics::DeformableJointMatrix{};
-    jointPalette.joints[1] = BuildProxySkinJoint(s_DeformableSkinMaxAngle * Sin(safeTimeSeconds * 0.9f));
+    const f32 skinAngle = VectorGetX(VectorSin(VectorReplicate(safeTimeSeconds * 0.9f)));
+    jointPalette.joints[1] = BuildProxySkinJoint(s_DeformableSkinMaxAngle * skinAngle);
 }
 
 [[nodiscard]] static NWB::Core::ECS::EntityID CreateDeformableRendererEntity(
@@ -596,7 +594,9 @@ void ProjectTestbed::updateDeformableMorph(const f32 delta){
         m_world->tryGetComponent<NWB::Core::ECSGraphics::DeformableMorphWeightsComponent>(m_deformableMorphEntity)
     ;
     if(morphWeights && !morphWeights->weights.empty()){
-        const f32 morphWeight = 0.5f + 0.5f * Sin(m_deformableMorphTime * 1.35f);
+        const f32 morphWeight =
+            0.5f + 0.5f * VectorGetX(VectorSin(VectorReplicate(m_deformableMorphTime * 1.35f)))
+        ;
         morphWeights->weights[0].weight = IsFinite(morphWeight) ? morphWeight : 0.5f;
     }
 

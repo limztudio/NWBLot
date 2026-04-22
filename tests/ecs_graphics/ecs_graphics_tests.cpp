@@ -221,6 +221,21 @@ static NWB::Impl::DeformableRuntimeMeshInstance MakeGridHoleInstance(){
     return instance;
 }
 
+static Float3Data BarycentricPosition(
+    const Float3Data& a,
+    const Float3Data& b,
+    const Float3Data& c,
+    const NWB::Impl::DeformableHitBarycentric& bary)
+{
+    SIMDVector position = VectorScale(LoadFloat(a), bary[0]);
+    position = VectorMultiplyAdd(LoadFloat(b), VectorReplicate(bary[1]), position);
+    position = VectorMultiplyAdd(LoadFloat(c), VectorReplicate(bary[2]), position);
+
+    Float3Data result;
+    StoreFloat(position, &result);
+    return result;
+}
+
 static NWB::Impl::DeformableHoleEditParams MakeHoleEditParams(
     const NWB::Impl::DeformableRuntimeMeshInstance& instance,
     const u32 triangle,
@@ -239,11 +254,7 @@ static NWB::Impl::DeformableHoleEditParams MakeHoleEditParams(
     const Float3Data& a = instance.restVertices[instance.indices[indexBase + 0u]].position;
     const Float3Data& b = instance.restVertices[instance.indices[indexBase + 1u]].position;
     const Float3Data& c = instance.restVertices[instance.indices[indexBase + 2u]].position;
-    params.posedHit.setPosition(Float3Data(
-        (params.posedHit.bary[0] * a.x) + (params.posedHit.bary[1] * b.x) + (params.posedHit.bary[2] * c.x),
-        (params.posedHit.bary[0] * a.y) + (params.posedHit.bary[1] * b.y) + (params.posedHit.bary[2] * c.y),
-        (params.posedHit.bary[0] * a.z) + (params.posedHit.bary[1] * b.z) + (params.posedHit.bary[2] * c.z)
-    ));
+    params.posedHit.setPosition(BarycentricPosition(a, b, c, params.posedHit.bary));
     params.posedHit.setNormal(Float3Data(0.0f, 0.0f, 1.0f));
     params.posedHit.setDistance(1.0f);
     (void)NWB::Impl::ResolveDeformableRestSurfaceSample(
@@ -272,11 +283,7 @@ static Float3Data RestHitPosition(
     const Float3Data& a = instance.restVertices[instance.indices[indexBase + 0u]].position;
     const Float3Data& b = instance.restVertices[instance.indices[indexBase + 1u]].position;
     const Float3Data& c = instance.restVertices[instance.indices[indexBase + 2u]].position;
-    return Float3Data(
-        (params.posedHit.bary[0] * a.x) + (params.posedHit.bary[1] * b.x) + (params.posedHit.bary[2] * c.x),
-        (params.posedHit.bary[0] * a.y) + (params.posedHit.bary[1] * b.y) + (params.posedHit.bary[2] * c.y),
-        (params.posedHit.bary[0] * a.z) + (params.posedHit.bary[1] * b.z) + (params.posedHit.bary[2] * c.z)
-    );
+    return BarycentricPosition(a, b, c, params.posedHit.bary);
 }
 
 static void CheckHoleEditUnchanged(
@@ -497,7 +504,8 @@ static void TestRestSampleCanonicalizesEdgeTolerance(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, sample.bary[0] >= 0.0f);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, sample.bary[1] >= 0.0f);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, sample.bary[2] >= 0.0f);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(sample.bary[0] + sample.bary[1] + sample.bary[2], 1.0f));
+    const f32 sampleBarySum = VectorGetX(Vector3Dot(VectorSet(sample.bary[0], sample.bary[1], sample.bary[2], 0.0f), s_SIMDOne));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(sampleBarySum, 1.0f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(sample.bary[0], 0.0f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(sample.bary[1], 0.5f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(sample.bary[2], 0.5f));
@@ -592,7 +600,8 @@ static void TestRaycastReturnsPoseAndRestHit(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(hit.bary[0], 0.25f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(hit.bary[1], 0.25f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(hit.bary[2], 0.5f));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(hit.bary[0] + hit.bary[1] + hit.bary[2], 1.0f));
+    const f32 hitBarySum = VectorGetX(Vector3Dot(LoadFloat(hit.bary.values), s_SIMDOne));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(hitBarySum, 1.0f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(hit.distance(), 1.0f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(hit.position.x, 0.0f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(hit.position.y, 0.0f));
@@ -988,11 +997,12 @@ static void TestRestSpaceHoleEditCreatesPerInstancePatch(TestContext& context){
         NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertex.tangent.w, 1.0f));
         NWB_ECS_GRAPHICS_TEST_CHECK(context, vertex.uv0.x >= 0.0f && vertex.uv0.x < 1.0f);
         NWB_ECS_GRAPHICS_TEST_CHECK(context, vertex.uv0.y == 0.0f || vertex.uv0.y == 1.0f);
-        const f32 inwardDot =
-            (vertex.normal.x * (holeCenter.x - vertex.position.x))
-            + (vertex.normal.y * (holeCenter.y - vertex.position.y))
-            + (vertex.normal.z * (holeCenter.z - vertex.position.z))
-        ;
+        const f32 inwardDot = VectorGetX(
+            Vector3Dot(
+                LoadFloat(vertex.normal),
+                VectorSubtract(LoadFloat(holeCenter), LoadFloat(vertex.position))
+            )
+        );
         NWB_ECS_GRAPHICS_TEST_CHECK(context, inwardDot > 0.0f);
     }
     NWB_ECS_GRAPHICS_TEST_CHECK(context, rimVertexCount == 4u);
@@ -1395,9 +1405,12 @@ static void TestSurfaceEditFlowAttachesAndPersistsAccessory(TestContext& context
             translatedTransform
         )
     );
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(translatedTransform.position.x, baseTransform.position.x + 2.0f));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(translatedTransform.position.y, baseTransform.position.y));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(translatedTransform.position.z, baseTransform.position.z));
+    const SIMDVector translatedOffset =
+        VectorSubtract(LoadFloat(translatedTransform.position), LoadFloat(baseTransform.position))
+    ;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(VectorGetX(translatedOffset), 2.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(VectorGetY(translatedOffset), 0.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(VectorGetZ(translatedOffset), 0.0f));
 
     NWB::Impl::DeformableSurfaceEditState state;
     NWB::Impl::DeformableAccessoryAttachmentRecord accessoryRecord;

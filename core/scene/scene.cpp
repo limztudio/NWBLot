@@ -23,23 +23,18 @@ namespace __hidden_scene{
 
 
 [[nodiscard]] bool SceneFloat3Finite(const AlignedFloat3Data& value){
-    return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z);
+    const SIMDVector valueVector = LoadFloat(value);
+    return !Vector3IsNaN(valueVector) && !Vector3IsInfinite(valueVector);
 }
 
 [[nodiscard]] bool SceneCameraTransformValid(const TransformComponent& transform){
     constexpr f32 s_CameraRotationUnitLengthSquaredTolerance = 0.001f;
-    const f32 rotationLengthSquared =
-        transform.rotation.x * transform.rotation.x
-        + transform.rotation.y * transform.rotation.y
-        + transform.rotation.z * transform.rotation.z
-        + transform.rotation.w * transform.rotation.w
-    ;
+    const SIMDVector rotation = LoadFloat(transform.rotation);
+    const f32 rotationLengthSquared = VectorGetX(QuaternionLengthSq(rotation));
 
     return SceneFloat3Finite(transform.position)
-        && IsFinite(transform.rotation.x)
-        && IsFinite(transform.rotation.y)
-        && IsFinite(transform.rotation.z)
-        && IsFinite(transform.rotation.w)
+        && !QuaternionIsNaN(rotation)
+        && !QuaternionIsInfinite(rotation)
         && SceneFloat3Finite(transform.scale)
         && IsFinite(rotationLengthSquared)
         && rotationLengthSquared >= 1.0f - s_CameraRotationUnitLengthSquaredTolerance

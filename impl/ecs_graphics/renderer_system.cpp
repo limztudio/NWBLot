@@ -376,8 +376,8 @@ static InstanceGpuData BuildInstanceGpuData(const Core::Scene::TransformComponen
         return data;
 
     data.rotation = transform->rotation;
-    StoreFloat(LoadFloat(transform->position), &data.translation);
-    StoreFloat(LoadFloat(transform->scale), &data.scale);
+    data.translation = transform->position;
+    data.scale = transform->scale;
     return data;
 }
 
@@ -388,9 +388,9 @@ static f32 Float3Dot(const Float4& lhs, const Float4& rhs){
 static void StoreRotatedBasisVector(
     Float4& outVector,
     const Float4& localVector,
-    const Core::Scene::TransformComponent& transform
+    SIMDVector rotation
 ){
-    StoreFloat(Vector3Rotate(LoadFloat(localVector), LoadFloat(transform.rotation)), &outVector);
+    StoreFloat(Vector3Rotate(LoadFloat(localVector), rotation), &outVector);
 }
 
 static MeshViewBasis BuildDefaultMeshViewBasis(){
@@ -404,24 +404,19 @@ static MeshViewBasis BuildDefaultMeshViewBasis(){
 
     MeshViewBasis basis;
     basis.right = Float4(cosYaw, 0.0f, sinYaw, 0.0f);
-    StoreFloat(
-        VectorMultiply(VectorSet(sinYaw, 1.0f, -cosYaw, 0.0f), VectorSet(sinPitch, cosPitch, sinPitch, 0.0f)),
-        &basis.up
-    );
-    StoreFloat(
-        VectorMultiply(VectorSet(-sinYaw, 1.0f, cosYaw, 0.0f), VectorSet(cosPitch, sinPitch, cosPitch, 0.0f)),
-        &basis.forward
-    );
+    basis.up = Float4(sinYaw * sinPitch, cosPitch, -cosYaw * sinPitch, 0.0f);
+    basis.forward = Float4(-sinYaw * cosPitch, sinPitch, cosYaw * cosPitch, 0.0f);
     basis.positionDepthBias.w = s_DefaultMeshViewDepthOffset;
     return basis;
 }
 
 static MeshViewBasis BuildTransformMeshViewBasis(const Core::Scene::TransformComponent& transform){
     MeshViewBasis basis;
-    StoreFloat(LoadFloat(transform.position), &basis.positionDepthBias);
-    StoreRotatedBasisVector(basis.right, Float4(1.0f, 0.0f, 0.0f), transform);
-    StoreRotatedBasisVector(basis.up, Float4(0.0f, 1.0f, 0.0f), transform);
-    StoreRotatedBasisVector(basis.forward, Float4(0.0f, 0.0f, 1.0f), transform);
+    basis.positionDepthBias = transform.position;
+    const SIMDVector rotation = LoadFloat(transform.rotation);
+    StoreRotatedBasisVector(basis.right, Float4(1.0f, 0.0f, 0.0f), rotation);
+    StoreRotatedBasisVector(basis.up, Float4(0.0f, 1.0f, 0.0f), rotation);
+    StoreRotatedBasisVector(basis.forward, Float4(0.0f, 0.0f, 1.0f), rotation);
     return basis;
 }
 

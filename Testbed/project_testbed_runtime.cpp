@@ -72,31 +72,31 @@ static constexpr f32 s_AccessoryUniformScale = 0.16f;
     return true;
 }
 
-[[nodiscard]] static bool FiniteFloat3(const Float4& value){
-    const SIMDVector valueVector = LoadFloat(value);
-    return !Vector3IsNaN(valueVector) && !Vector3IsInfinite(valueVector);
+[[nodiscard]] static bool FiniteVector3(SIMDVector value){
+    return !Vector3IsNaN(value) && !Vector3IsInfinite(value);
 }
 
-[[nodiscard]] static EditorVec3 NormalizeVec3(const EditorVec3& value, const EditorVec3& fallback){
-    const SIMDVector valueVector = LoadFloat(static_cast<const Float4&>(value));
-    const f32 lengthSq = VectorGetX(Vector3LengthSq(valueVector));
+[[nodiscard]] static bool FiniteFloat3(const Float4& value){
+    return FiniteVector3(LoadFloat(value));
+}
+
+[[nodiscard]] static EditorVec3 NormalizeVec3(SIMDVector valueVector, const EditorVec3& fallback){
+    const SIMDVector lengthSqVector = Vector3LengthSq(valueVector);
+    const f32 lengthSq = VectorGetX(lengthSqVector);
     if(!IsFinite(lengthSq) || lengthSq <= 0.000001f)
         return fallback;
 
+    const SIMDVector normalizedVector = VectorMultiply(valueVector, VectorReciprocalSqrt(lengthSqVector));
+    if(!FiniteVector3(normalizedVector))
+        return fallback;
+
     EditorVec3 normalized;
-    StoreFloat(Vector3Normalize(valueVector), &normalized);
-    return FiniteFloat3(normalized) ? normalized : fallback;
+    StoreFloat(normalizedVector, &normalized);
+    return normalized;
 }
 
-[[nodiscard]] static EditorVec3 RotateDirectionByQuaternion(
-    const EditorVec3& value,
-    const Float4& rotation){
-    EditorVec3 rotatedDirection;
-    StoreFloat(
-        Vector3Rotate(LoadFloat(static_cast<const Float4&>(value)), LoadFloat(rotation)),
-        &rotatedDirection
-    );
-    return rotatedDirection;
+[[nodiscard]] static EditorVec3 NormalizeVec3(const EditorVec3& value, const EditorVec3& fallback){
+    return NormalizeVec3(LoadFloat(static_cast<const Float4&>(value)), fallback);
 }
 
 [[nodiscard]] static bool BuildEditorPickRay(
@@ -140,8 +140,12 @@ static constexpr f32 s_AccessoryUniformScale = 0.16f;
         1.0f
     };
     localDirection = NormalizeVec3(localDirection, EditorVec3{ 0.0f, 0.0f, 1.0f });
+    const SIMDVector worldDirectionVector = Vector3Rotate(
+        LoadFloat(static_cast<const Float4&>(localDirection)),
+        LoadFloat(cameraView.transform->rotation)
+    );
     const EditorVec3 worldDirection = NormalizeVec3(
-        RotateDirectionByQuaternion(localDirection, cameraView.transform->rotation),
+        worldDirectionVector,
         EditorVec3{ 0.0f, 0.0f, 1.0f }
     );
 
@@ -186,29 +190,29 @@ static void ApplyFlyCameraInput(
         s_FlyCameraPitchLimitRadians
     );
 
-    StoreFloat(QuaternionRotationRollPitchYaw(pitchRadians, yawRadians, 0.0f), &transform.rotation);
+    const SIMDVector rotation = QuaternionRotationRollPitchYaw(pitchRadians, yawRadians, 0.0f);
+    StoreFloat(rotation, &transform.rotation);
     if(!FiniteFloat3(transform.position))
         transform.position = Float4(0.0f, 0.0f, 0.0f);
 
     const SIMDVector moveAxis = VectorSet(safeRightAxis, safeForwardAxis, 0.0f, 0.0f);
-    const f32 moveLengthSq = VectorGetX(Vector2LengthSq(moveAxis));
+    const SIMDVector moveLengthSqVector = Vector2LengthSq(moveAxis);
+    const f32 moveLengthSq = VectorGetX(moveLengthSqVector);
     if(moveLengthSq > s_CameraMoveEpsilon){
-        const f32 invMoveLength = VectorGetX(VectorReciprocalSqrt(VectorReplicate(moveLengthSq)));
+        const f32 invMoveLength = VectorGetX(VectorReciprocalSqrt(moveLengthSqVector));
         const f32 speed = s_FlyCameraMoveSpeed * (boosted ? s_FlyCameraBoostMultiplier : 1.0f);
         const f32 moveScale = speed * safeDelta * invMoveLength;
         if(!IsFinite(moveScale))
             return;
 
         const Float4 localMove(safeRightAxis * moveScale, 0.0f, safeForwardAxis * moveScale);
-        Float4 worldMove;
-        StoreFloat(Vector3Rotate(LoadFloat(localMove), LoadFloat(transform.rotation)), &worldMove);
-        if(!FiniteFloat3(worldMove))
+        const SIMDVector worldMove = Vector3Rotate(LoadFloat(localMove), rotation);
+        if(!FiniteVector3(worldMove))
             return;
 
-        Float4 newPosition;
-        StoreFloat(VectorAdd(LoadFloat(transform.position), LoadFloat(worldMove)), &newPosition);
-        if(FiniteFloat3(newPosition))
-            transform.position = newPosition;
+        const SIMDVector newPosition = VectorAdd(LoadFloat(transform.position), worldMove);
+        if(FiniteVector3(newPosition))
+            StoreFloat(newPosition, &transform.position);
     }
 }
 

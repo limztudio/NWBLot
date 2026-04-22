@@ -160,11 +160,14 @@ inline void AccumulateScaled(Float4U& target, const Float4U& source, const f32 s
 
 [[nodiscard]] inline Vec3 Normalize(const Vec3& value, const Vec3& fallback){
     const SIMDVector valueVector = LoadVec3(value);
-    const f32 lengthSquared = VectorGetX(Vector3LengthSq(valueVector));
+    const SIMDVector lengthSquaredVector = Vector3LengthSq(valueVector);
+    const f32 lengthSquared = VectorGetX(lengthSquaredVector);
     if(lengthSquared <= s_FrameEpsilon)
         return fallback;
+    if(!IsFinite(lengthSquared))
+        return StoreVec3(Vector3Normalize(valueVector));
 
-    return StoreVec3(Vector3Normalize(valueVector));
+    return StoreVec3(VectorMultiply(valueVector, VectorReciprocalSqrt(lengthSquaredVector)));
 }
 
 [[nodiscard]] inline Vec3 FallbackTangent(const Vec3& normal){

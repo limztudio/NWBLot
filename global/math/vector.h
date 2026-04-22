@@ -1778,7 +1778,7 @@ NWB_INLINE SIMDVector SIMDCALL VectorCeiling(SIMDVector value)noexcept{
 }
 
 NWB_INLINE SIMDVector SIMDCALL VectorMod(SIMDVector v0, SIMDVector v1)noexcept{
-    const SIMDVector quotient = VectorTruncate(VectorDivide(v0, v1));
+    const SIMDVector quotient = VectorFloor(VectorDivide(v0, v1));
     return VectorNegativeMultiplySubtract(v1, quotient, v0);
 }
 
@@ -1919,7 +1919,7 @@ NWB_INLINE SIMDVector SIMDCALL VectorExpE(SIMDVector value)noexcept{
     return VectorExp2(VectorMultiply(s_SIMDLgE, value));
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorExp(SIMDVector value)noexcept{ return VectorExp2(value); }
+NWB_INLINE SIMDVector SIMDCALL VectorExp(SIMDVector value)noexcept{ return VectorExpE(value); }
 
 NWB_INLINE SIMDVector SIMDCALL VectorLog2(SIMDVector value)noexcept{
 #if defined(NWB_HAS_SSE4)
@@ -2059,7 +2059,7 @@ NWB_INLINE SIMDVector SIMDCALL VectorLogE(SIMDVector value)noexcept{
 #endif
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorLog(SIMDVector value)noexcept{ return VectorLog2(value); }
+NWB_INLINE SIMDVector SIMDCALL VectorLog(SIMDVector value)noexcept{ return VectorLogE(value); }
 
 NWB_INLINE SIMDVector SIMDCALL VectorPow(SIMDVector v0, SIMDVector v1)noexcept{
 #if defined(NWB_HAS_SCALAR)
@@ -2217,25 +2217,20 @@ NWB_INLINE SIMDVector SIMDCALL VectorTan(SIMDVector value)noexcept{
 }
 
 NWB_INLINE SIMDVector SIMDCALL VectorSinH(SIMDVector value)noexcept{
-    const SIMDVector scale = VectorReplicate(1.442695040888963f);
-    SIMDVector e1 = VectorExp(VectorMultiplyAdd(value, scale, s_SIMDNegativeOne));
-    SIMDVector e2 = VectorExp(VectorNegativeMultiplySubtract(value, scale, s_SIMDNegativeOne));
-    return VectorSubtract(e1, e2);
+    const SIMDVector e1 = VectorExp(value);
+    const SIMDVector e2 = VectorExp(VectorNegate(value));
+    return VectorMultiply(VectorSubtract(e1, e2), s_SIMDOneHalf);
 }
 
 NWB_INLINE SIMDVector SIMDCALL VectorCosH(SIMDVector value)noexcept{
-    const SIMDVector scale = VectorReplicate(1.442695040888963f);
-    SIMDVector e1 = VectorExp(VectorMultiplyAdd(value, scale, s_SIMDNegativeOne));
-    SIMDVector e2 = VectorExp(VectorNegativeMultiplySubtract(value, scale, s_SIMDNegativeOne));
-    return VectorAdd(e1, e2);
+    const SIMDVector e1 = VectorExp(value);
+    const SIMDVector e2 = VectorExp(VectorNegate(value));
+    return VectorMultiply(VectorAdd(e1, e2), s_SIMDOneHalf);
 }
 
 NWB_INLINE SIMDVector SIMDCALL VectorTanH(SIMDVector value)noexcept{
-    const SIMDVector scale = VectorReplicate(2.8853900817779268f);
-    SIMDVector e = VectorExp(VectorMultiply(value, scale));
-    e = VectorMultiplyAdd(e, s_SIMDOneHalf, s_SIMDOneHalf);
-    e = VectorReciprocal(e);
-    return VectorSubtract(s_SIMDOne, e);
+    const SIMDVector e = VectorExp(VectorAdd(value, value));
+    return VectorDivide(VectorSubtract(e, s_SIMDOne), VectorAdd(e, s_SIMDOne));
 }
 
 NWB_INLINE SIMDVector SIMDCALL VectorASin(SIMDVector value)noexcept{
@@ -2757,13 +2752,13 @@ NWB_INLINE SIMDVector SIMDCALL Vector2Reflect(SIMDVector incident, SIMDVector no
 NWB_INLINE SIMDVector SIMDCALL Vector2RefractV(SIMDVector incident, SIMDVector normal, SIMDVector refractionIndex)noexcept{
     const SIMDVector dot = Vector2Dot(incident, normal);
     SIMDVector r = VectorNegativeMultiplySubtract(dot, dot, s_SIMDOne);
-    r = VectorMultiply(r, refractionIndex);
-    r = VectorNegativeMultiplySubtract(r, refractionIndex, s_SIMDOne);
-    const SIMDVector mask = VectorGreater(r, s_SIMDZero);
-    r = VectorMultiplyAdd(refractionIndex, dot, VectorSqrt(r));
+    const SIMDVector refractionIndexSq = VectorMultiply(refractionIndex, refractionIndex);
+    r = VectorNegativeMultiplySubtract(r, refractionIndexSq, s_SIMDOne);
+    const SIMDVector totalInternalReflection = VectorLess(r, s_SIMDZero);
+    r = VectorMultiplyAdd(refractionIndex, dot, VectorSqrt(VectorMax(r, s_SIMDZero)));
     SIMDVector result = VectorMultiply(refractionIndex, incident);
     result = VectorNegativeMultiplySubtract(r, normal, result);
-    return VectorAndInt(result, mask);
+    return VectorSelect(result, VectorZero(), totalInternalReflection);
 }
 
 NWB_INLINE SIMDVector SIMDCALL Vector2Refract(SIMDVector incident, SIMDVector normal, f32 refractionIndex)noexcept{
@@ -2967,13 +2962,11 @@ NWB_INLINE SIMDVector SIMDCALL Vector3RefractV(SIMDVector incident, SIMDVector n
     SIMDVector r = VectorNegativeMultiplySubtract(dot, dot, s_SIMDOne);
     const SIMDVector refractionIndexSq = VectorMultiply(refractionIndex, refractionIndex);
     r = VectorNegativeMultiplySubtract(r, refractionIndexSq, s_SIMDOne);
-    SIMDVector result = VectorLessOrEqual(r, s_SIMDZero);
-    if((SIMDVectorDetail::MoveMask(result) & 0xFu) == 0xFu){
-        return VectorZero();
-    }
-    r = VectorMultiplyAdd(refractionIndex, dot, VectorSqrt(r));
-    result = VectorMultiply(refractionIndex, incident);
-    return VectorNegativeMultiplySubtract(r, normal, result);
+    const SIMDVector totalInternalReflection = VectorLess(r, s_SIMDZero);
+    r = VectorMultiplyAdd(refractionIndex, dot, VectorSqrt(VectorMax(r, s_SIMDZero)));
+    SIMDVector result = VectorMultiply(refractionIndex, incident);
+    result = VectorNegativeMultiplySubtract(r, normal, result);
+    return VectorSelect(result, VectorZero(), totalInternalReflection);
 }
 
 NWB_INLINE SIMDVector SIMDCALL Vector3Refract(SIMDVector incident, SIMDVector normal, f32 refractionIndex)noexcept{ return Vector3RefractV(incident, normal, VectorReplicate(refractionIndex)); }
@@ -3177,13 +3170,11 @@ NWB_INLINE SIMDVector SIMDCALL Vector4RefractV(SIMDVector incident, SIMDVector n
     SIMDVector r = VectorNegativeMultiplySubtract(dot, dot, s_SIMDOne);
     const SIMDVector refractionIndexSq = VectorMultiply(refractionIndex, refractionIndex);
     r = VectorNegativeMultiplySubtract(r, refractionIndexSq, s_SIMDOne);
-    SIMDVector result = VectorLessOrEqual(r, s_SIMDZero);
-    if((SIMDVectorDetail::MoveMask(result) & 0xFu) == 0xFu){
-        return VectorZero();
-    }
-    r = VectorMultiplyAdd(refractionIndex, dot, VectorSqrt(r));
-    result = VectorMultiply(refractionIndex, incident);
-    return VectorNegativeMultiplySubtract(r, normal, result);
+    const SIMDVector totalInternalReflection = VectorLess(r, s_SIMDZero);
+    r = VectorMultiplyAdd(refractionIndex, dot, VectorSqrt(VectorMax(r, s_SIMDZero)));
+    SIMDVector result = VectorMultiply(refractionIndex, incident);
+    result = VectorNegativeMultiplySubtract(r, normal, result);
+    return VectorSelect(result, VectorZero(), totalInternalReflection);
 }
 
 NWB_INLINE SIMDVector SIMDCALL Vector4Refract(SIMDVector incident, SIMDVector normal, f32 refractionIndex)noexcept{ return Vector4RefractV(incident, normal, VectorReplicate(refractionIndex)); }

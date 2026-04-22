@@ -51,6 +51,14 @@ static bool NearlyEqual3(SIMDVector value, const f32 x, const f32 y, const f32 z
     ;
 }
 
+static bool NearlyEqual4(SIMDVector value, const f32 x, const f32 y, const f32 z, const f32 w, const f32 epsilon = 0.00001f){
+    return NearlyEqual(VectorGetX(value), x, epsilon)
+        && NearlyEqual(VectorGetY(value), y, epsilon)
+        && NearlyEqual(VectorGetZ(value), z, epsilon)
+        && NearlyEqual(VectorGetW(value), w, epsilon)
+    ;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -100,6 +108,73 @@ static void TestVector4CrossBasisOrientation(TestContext& context){
     NWB_MATH_TEST_CHECK(context, NearlyEqual(VectorGetW(result), 1.0f));
 }
 
+static void TestGlslNamedScalarFunctions(TestContext& context){
+    const SIMDVector modResult = VectorMod(
+        VectorSet(5.5f, -5.5f, 5.5f, -5.5f),
+        VectorSet(2.0f, 2.0f, -2.0f, -2.0f)
+    );
+    NWB_MATH_TEST_CHECK(context, NearlyEqual4(modResult, 1.5f, 0.5f, -0.5f, -1.5f));
+
+    const SIMDVector expInput = VectorSet(1.0f, 2.0f, -1.0f, 0.5f);
+    const SIMDVector expResult = VectorExp(expInput);
+    NWB_MATH_TEST_CHECK(context, NearlyEqual4(
+        expResult,
+        static_cast<f32>(std::exp(1.0f)),
+        static_cast<f32>(std::exp(2.0f)),
+        static_cast<f32>(std::exp(-1.0f)),
+        static_cast<f32>(std::exp(0.5f)),
+        0.0005f
+    ));
+
+    const f32 e = static_cast<f32>(std::exp(1.0f));
+    const SIMDVector logResult = VectorLog(VectorSet(e, e * e, 1.0f, 0.25f));
+    NWB_MATH_TEST_CHECK(context, NearlyEqual4(
+        logResult,
+        1.0f,
+        2.0f,
+        0.0f,
+        static_cast<f32>(std::log(0.25f)),
+        0.0005f
+    ));
+
+    const SIMDVector hyperbolicInput = VectorSet(0.5f, -0.5f, 1.0f, -1.0f);
+    NWB_MATH_TEST_CHECK(context, NearlyEqual4(
+        VectorSinH(hyperbolicInput),
+        static_cast<f32>(std::sinh(0.5f)),
+        static_cast<f32>(std::sinh(-0.5f)),
+        static_cast<f32>(std::sinh(1.0f)),
+        static_cast<f32>(std::sinh(-1.0f)),
+        0.0005f
+    ));
+    NWB_MATH_TEST_CHECK(context, NearlyEqual4(
+        VectorCosH(hyperbolicInput),
+        static_cast<f32>(std::cosh(0.5f)),
+        static_cast<f32>(std::cosh(-0.5f)),
+        static_cast<f32>(std::cosh(1.0f)),
+        static_cast<f32>(std::cosh(-1.0f)),
+        0.0005f
+    ));
+    NWB_MATH_TEST_CHECK(context, NearlyEqual4(
+        VectorTanH(hyperbolicInput),
+        static_cast<f32>(std::tanh(0.5f)),
+        static_cast<f32>(std::tanh(-0.5f)),
+        static_cast<f32>(std::tanh(1.0f)),
+        static_cast<f32>(std::tanh(-1.0f)),
+        0.0005f
+    ));
+}
+
+static void TestGlslRefractCriticalAngle(TestContext& context){
+    const SIMDVector normal = VectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+    const SIMDVector criticalIncident = VectorSet(1.0f, 0.0f, 0.0f, 0.0f);
+    const SIMDVector totalInternalIncident = VectorSet(0.866025404f, -0.5f, 0.0f, 0.0f);
+
+    NWB_MATH_TEST_CHECK(context, NearlyEqual4(Vector2Refract(criticalIncident, normal, 1.0f), 1.0f, 0.0f, 0.0f, 0.0f));
+    NWB_MATH_TEST_CHECK(context, NearlyEqual4(Vector3Refract(criticalIncident, normal, 1.0f), 1.0f, 0.0f, 0.0f, 0.0f));
+    NWB_MATH_TEST_CHECK(context, NearlyEqual4(Vector4Refract(criticalIncident, normal, 1.0f), 1.0f, 0.0f, 0.0f, 0.0f));
+    NWB_MATH_TEST_CHECK(context, NearlyEqual4(Vector3Refract(totalInternalIncident, normal, 2.0f), 0.0f, 0.0f, 0.0f, 0.0f));
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -125,6 +200,8 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
     __hidden_math_tests::TestVector3CrossMatchesGlslOrder(context);
     __hidden_math_tests::TestVector3RotateQuarterTurn(context);
     __hidden_math_tests::TestVector4CrossBasisOrientation(context);
+    __hidden_math_tests::TestGlslNamedScalarFunctions(context);
+    __hidden_math_tests::TestGlslRefractCriticalAngle(context);
 
     if(context.failed != 0){
         NWB_CERR << "math tests failed: " << context.failed << " of " << (context.passed + context.failed) << '\n';

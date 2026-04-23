@@ -196,8 +196,7 @@ void AssetManager::dispatchAsync(const u64 requestId){
     if(asyncExecutor == nullptr)
         return;
 
-    const NotNull<IAssetAsyncExecutor*> requiredExecutor(asyncExecutor);
-    requiredExecutor->enqueue([this, requestId](){
+    asyncExecutor->enqueue([this, requestId](){
         processRequest(requestId);
     });
 }

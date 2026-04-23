@@ -297,7 +297,7 @@ static UniquePtr<IGraphicsBackend> CreateDefaultBackend(
     Alloc::ThreadPool& threadPool
 )
 {
-    return UniquePtr<IGraphicsBackend>(new Vulkan::BackendContext(deviceParams, swapChainState, allocator, threadPool));
+    return MakeUnique<Vulkan::BackendContext>(deviceParams, swapChainState, allocator, threadPool);
 }
 
 static const Vulkan::IBackendQueries* GetVulkanBackendQueries(const IGraphicsBackend* backend){

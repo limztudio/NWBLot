@@ -85,8 +85,8 @@ bool AssetRegistry::deserializeAssetByName(
         return false;
     }
 
-    const NotNull<const IAssetCodec*> codec(found.value().get());
-    return codec->deserialize(virtualPath, binary, outAsset);
+    const IAssetCodec& codec = *found.value();
+    return codec.deserialize(virtualPath, binary, outAsset);
 }
 
 

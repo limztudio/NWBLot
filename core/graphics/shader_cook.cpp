@@ -505,7 +505,7 @@ static bool ParseDefines(const Path& nwbFilePath, const Metascript::Value& asset
 ShaderCook::ShaderCook(CookArena& memoryArena)
     : m_memoryArena(memoryArena)
 {
-    m_compiler.reset(new Vulkan::VulkanShaderCompiler(m_memoryArena));
+    m_compiler = MakeUnique<Vulkan::VulkanShaderCompiler>(m_memoryArena);
 }
 
 

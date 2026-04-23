@@ -126,8 +126,14 @@ public:
             }
         }
 
-        auto* result = new shaderc_include_result{};
-        auto* payload = new IncludePayload{};
+        auto result = MakeUnique<shaderc_include_result>();
+        auto payload = MakeUnique<IncludePayload>();
+
+        const auto releaseResult = [&]() -> shaderc_include_result*{
+            result->user_data = payload.get();
+            payload.release();
+            return result.release();
+        };
 
         const auto makeErrorResult = [&](AString message) -> shaderc_include_result*{
             payload->content = Move(message);
@@ -135,8 +141,7 @@ public:
             result->source_name_length = 0;
             result->content = payload->content.c_str();
             result->content_length = payload->content.size();
-            result->user_data = payload;
-            return result;
+            return releaseResult();
         };
 
         if(!lookupError.empty())
@@ -156,8 +161,7 @@ public:
         result->source_name_length = payload->sourceName.size();
         result->content = payload->content.c_str();
         result->content_length = payload->content.size();
-        result->user_data = payload;
-        return result;
+        return releaseResult();
     }
 
     void ReleaseInclude(shaderc_include_result* data)override{

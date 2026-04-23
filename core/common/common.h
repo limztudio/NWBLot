@@ -123,7 +123,11 @@ public:
 public:
     inline void enqueue(Initializerable* item){ m_cursor = m_items.emplace_after(m_cursor, item, false); }
     template<typename INITIALIZE, typename FINALIZE>
-    inline void enqueue(INITIALIZE&& initialize, FINALIZE&& finalize){ m_cursor = m_items.emplace_after(m_cursor, new CommonDetail::FunctionalInitializerable(Forward<INITIALIZE>(initialize), Forward<FINALIZE>(finalize)), true); }
+    inline void enqueue(INITIALIZE&& initialize, FINALIZE&& finalize){
+        auto item = MakeUnique<CommonDetail::FunctionalInitializerable>(Forward<INITIALIZE>(initialize), Forward<FINALIZE>(finalize));
+        m_cursor = m_items.emplace_after(m_cursor, item.get(), true);
+        item.release();
+    }
 
 
 private:

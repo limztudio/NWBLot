@@ -89,15 +89,20 @@ private:
             m_readBuffer.clear();
 
             UniquePtr<T> message;
-            while(m_pending.try_pop(message))
+            bool hasMessage = m_pending.try_pop(message);
+            while(hasMessage){
                 m_readBuffer.push_back(Move(*message));
+                hasMessage = m_pending.try_pop(message);
+            }
         }
 
         virtual void clear()override{
             m_readBuffer.clear();
 
             UniquePtr<T> message;
-            while(m_pending.try_pop(message)){
+            bool hasMessage = m_pending.try_pop(message);
+            while(hasMessage){
+                hasMessage = m_pending.try_pop(message);
             }
         }
 

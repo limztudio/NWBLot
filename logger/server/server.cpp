@@ -49,6 +49,9 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
     (void)url;
     (void)version;
 
+    if(!cls || !connection || !method || !upload_data_size || !con_cls)
+        return MHD_NO;
+
     const auto methodPtr = MakeNotNull(method);
     if(NWB_STRCMP(methodPtr.get(), "POST") != 0)
         return MHD_NO;
@@ -120,6 +123,12 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
     };
 
     if(uploadDataSize){
+        if(!upload_data){
+            thisPtr->enqueue(StringFormat(NWB_TEXT("Received a malformed upload chunk on {}"), SERVER_NAME), Type::Error);
+            freeConnectionInfo();
+            return MHD_NO;
+        }
+
         const auto uploadDataPtr = MakeNotNull(upload_data);
         if(uploadDataSize > static_cast<size_t>(Limit<usize>::s_Max) || info->size > Limit<usize>::s_Max - static_cast<usize>(uploadDataSize)){
             thisPtr->enqueue(StringFormat(NWB_TEXT("Received an oversized message on {}"), SERVER_NAME), Type::Error);
@@ -146,12 +155,16 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
 
         char nullStr[] = "";
         auto* response = MHD_create_response_from_buffer(0, nullStr, MHD_RESPMEM_PERSISTENT);
-        auto ret = MHD_queue_response(connection, MHD_HTTP_OK, response);
+        if(!response){
+            thisPtr->enqueue(StringFormat(NWB_TEXT("Failed to create a response on {}"), SERVER_NAME), Type::Fatal);
+            freeConnectionInfo();
+            return MHD_NO;
+        }
+
+        const auto ret = MHD_queue_response(connection, MHD_HTTP_OK, response);
         MHD_destroy_response(response);
 
-        Core::Alloc::CoreFree(info->buffer, "ConnectionInfo buffer freed at Server::requestCallback");
-        Core::Alloc::CoreFree(info, "ConnectionInfo freed at Server::requestCallback");
-        info = nullptr;
+        freeConnectionInfo();
 
         return ret;
     }

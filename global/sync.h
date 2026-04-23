@@ -213,8 +213,11 @@ class MallocMutex : NoCopy{
 public:
     void lock(){
         AtomicBackOff backoff;
-        while(m_flag.test_and_set())
+        bool locked = m_flag.test_and_set();
+        while(locked){
             backoff.pause();
+            locked = m_flag.test_and_set();
+        }
     }
     bool try_lock(){ return (!m_flag.test_and_set()); }
     void unlock(){ m_flag.clear(std::memory_order_release); }

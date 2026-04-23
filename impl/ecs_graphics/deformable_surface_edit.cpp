@@ -61,6 +61,17 @@ struct SkinWeightSample{
     return DeformableValidation::FiniteVector(LoadFloat(value), 0x7u);
 }
 
+void ResolveTangentBitangentVectors(
+    const SIMDVector normalVector,
+    const SIMDVector tangentVector,
+    const SIMDVector fallbackTangent,
+    SIMDVector& outTangentVector,
+    SIMDVector& outBitangentVector)
+{
+    outTangentVector = DeformableRuntime::ResolveFrameTangent(normalVector, tangentVector, fallbackTangent);
+    outBitangentVector = DeformableRuntime::ResolveFrameBitangent(normalVector, outTangentVector, s_SIMDIdentityR1);
+}
+
 void ResolveStoredTangentBitangent(
     const SIMDVector normalVector,
     const SIMDVector tangentVector,
@@ -68,11 +79,17 @@ void ResolveStoredTangentBitangent(
     Float4& outTangent,
     Float4& outBitangent)
 {
-    StoreFloat(DeformableRuntime::ResolveFrameTangent(normalVector, tangentVector, fallbackTangent), &outTangent);
-    StoreFloat(
-        DeformableRuntime::ResolveFrameBitangent(normalVector, LoadFloat(outTangent), VectorSet(0.0f, 1.0f, 0.0f, 0.0f)),
-        &outBitangent
+    SIMDVector resolvedTangent{};
+    SIMDVector resolvedBitangent{};
+    ResolveTangentBitangentVectors(
+        normalVector,
+        tangentVector,
+        fallbackTangent,
+        resolvedTangent,
+        resolvedBitangent
     );
+    StoreFloat(resolvedTangent, &outTangent);
+    StoreFloat(resolvedBitangent, &outBitangent);
 }
 
 struct SurfaceEditStateHeader{
@@ -670,101 +687,99 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
     return true;
 }
 
-[[nodiscard]] Float4 RotationFromPositiveZToNormal(const Float4& rawNormal){
-    if(!FiniteVec3(rawNormal))
-        return Float4(0.0f, 0.0f, 0.0f, 1.0f);
+[[nodiscard]] SIMDVector RotationFromPositiveZToNormalVector(const SIMDVector rawNormalVector){
+    if(!DeformableValidation::FiniteVector(rawNormalVector, 0x7u))
+        return s_SIMDIdentityR3;
 
-    const SIMDVector normalVector = DeformableRuntime::Normalize(
-        LoadFloat(rawNormal),
-        VectorSet(0.0f, 0.0f, 1.0f, 0.0f)
-    );
-    Float4 normal;
-    StoreFloat(normalVector, &normal);
-    if(!FiniteVec3(normal))
-        return Float4(0.0f, 0.0f, 0.0f, 1.0f);
+    const SIMDVector normalVector = DeformableRuntime::Normalize(rawNormalVector, s_SIMDIdentityR2);
+    if(!DeformableValidation::FiniteVector(normalVector, 0x7u))
+        return s_SIMDIdentityR3;
 
-    f32 dot = normal.z;
+    f32 dot = VectorGetZ(normalVector);
     if(dot > 1.0f)
         dot = 1.0f;
     if(dot < -1.0f)
         dot = -1.0f;
 
     if(dot > 0.999f)
-        return Float4(0.0f, 0.0f, 0.0f, 1.0f);
+        return s_SIMDIdentityR3;
     if(dot < -0.999f)
-        return Float4(1.0f, 0.0f, 0.0f, 0.0f);
+        return s_SIMDIdentityR0;
 
     const SIMDVector axis = VectorMultiply(VectorSwizzle<1, 0, 2, 3>(normalVector), VectorSet(-1.0f, 1.0f, 0.0f, 0.0f));
     const f32 scale = VectorGetX(VectorSqrt(VectorReplicate((1.0f + dot) * 2.0f)));
     if(!IsFinite(scale) || scale <= s_FrameEpsilon)
-        return Float4(0.0f, 0.0f, 0.0f, 1.0f);
+        return s_SIMDIdentityR3;
 
-    const f32 invScale = 1.0f / scale;
+    SIMDVector rotationVector = VectorScale(axis, 1.0f / scale);
+    return VectorSetW(rotationVector, scale * 0.5f);
+}
+
+[[nodiscard]] Float4 RotationFromPositiveZToNormal(const Float4& rawNormal){
     Float4 rotation;
-    SIMDVector rotationVector = VectorScale(axis, invScale);
-    rotationVector = VectorSetW(rotationVector, scale * 0.5f);
-    StoreFloat(rotationVector, &rotation);
+    StoreFloat(RotationFromPositiveZToNormalVector(LoadFloat(rawNormal)), &rotation);
     return rotation;
+}
+
+[[nodiscard]] SIMDVector NormalizeRotationQuaternionVector(
+    const SIMDVector rotationVector,
+    const SIMDVector fallbackNormalVector)
+{
+    const f32 lengthSquared = VectorGetX(QuaternionLengthSq(rotationVector));
+    if(!IsFinite(lengthSquared) || lengthSquared <= s_FrameEpsilon)
+        return RotationFromPositiveZToNormalVector(fallbackNormalVector);
+
+    return QuaternionNormalize(rotationVector);
 }
 
 [[nodiscard]] Float4 NormalizeRotationQuaternion(
     const Float4& rotation,
     const Float4& fallbackNormal)
 {
-    const SIMDVector rotationVector = LoadFloat(rotation);
-    const f32 lengthSquared = VectorGetX(QuaternionLengthSq(rotationVector));
-    if(!IsFinite(lengthSquared) || lengthSquared <= s_FrameEpsilon)
-        return RotationFromPositiveZToNormal(fallbackNormal);
-
     Float4 normalizedRotation;
-    StoreFloat(QuaternionNormalize(rotationVector), &normalizedRotation);
+    StoreFloat(
+        NormalizeRotationQuaternionVector(LoadFloat(rotation), LoadFloat(fallbackNormal)),
+        &normalizedRotation
+    );
     return normalizedRotation;
 }
 
 [[nodiscard]] Float4 RotationFromFrame(const Float4& rawTangent, const Float4& rawNormal){
-    if(!FiniteVec3(rawNormal))
+    const SIMDVector rawNormalVector = LoadFloat(rawNormal);
+    if(!DeformableValidation::FiniteVector(rawNormalVector, 0x7u))
         return Float4(0.0f, 0.0f, 0.0f, 1.0f);
 
-    const SIMDVector normalVector = DeformableRuntime::Normalize(
-        LoadFloat(rawNormal),
-        VectorSet(0.0f, 0.0f, 1.0f, 0.0f)
-    );
-    Float4 normal;
-    StoreFloat(normalVector, &normal);
-    if(!FiniteVec3(normal))
+    const SIMDVector normalVector = DeformableRuntime::Normalize(rawNormalVector, s_SIMDIdentityR2);
+    if(!DeformableValidation::FiniteVector(normalVector, 0x7u))
         return Float4(0.0f, 0.0f, 0.0f, 1.0f);
 
     const SIMDVector fallbackTangent = DeformableRuntime::FallbackTangent(normalVector);
-    Float4 tangent;
-    Float4 bitangent;
-    ResolveStoredTangentBitangent(
+    const SIMDVector rawTangentVector = LoadFloat(rawTangent);
+    SIMDVector tangentVector{};
+    SIMDVector bitangentVector{};
+    ResolveTangentBitangentVectors(
         normalVector,
-        FiniteVec3(rawTangent) ? LoadFloat(rawTangent) : fallbackTangent,
+        DeformableValidation::FiniteVector(rawTangentVector, 0x7u) ? rawTangentVector : fallbackTangent,
         fallbackTangent,
-        tangent,
-        bitangent
+        tangentVector,
+        bitangentVector
     );
 
-    const f32 m00 = tangent.x;
-    const f32 m01 = bitangent.x;
-    const f32 m02 = normal.x;
-    const f32 m10 = tangent.y;
-    const f32 m11 = bitangent.y;
-    const f32 m12 = normal.y;
-    const f32 m20 = tangent.z;
-    const f32 m21 = bitangent.z;
-    const f32 m22 = normal.z;
+    SIMDMatrix basisAsRows{};
+    basisAsRows.v[0] = VectorAndInt(tangentVector, s_SIMDMask3);
+    basisAsRows.v[1] = VectorAndInt(bitangentVector, s_SIMDMask3);
+    basisAsRows.v[2] = VectorAndInt(normalVector, s_SIMDMask3);
+    basisAsRows.v[3] = s_SIMDIdentityR3;
 
-    const SIMDMatrix rotationMatrix = MatrixSet(
-        m00, m01, m02, 0.0f,
-        m10, m11, m12, 0.0f,
-        m20, m21, m22, 0.0f,
-        0.0f, 0.0f, 0.0f, 1.0f
-    );
     Float4 rotation;
-    StoreFloat(QuaternionRotationMatrix(rotationMatrix), &rotation);
-
-    return NormalizeRotationQuaternion(rotation, normal);
+    StoreFloat(
+        NormalizeRotationQuaternionVector(
+            QuaternionRotationMatrix(MatrixTranspose(basisAsRows)),
+            normalVector
+        ),
+        &rotation
+    );
+    return rotation;
 }
 
 template<typename EdgeVector>

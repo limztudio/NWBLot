@@ -92,6 +92,18 @@ uint nwbDeformerDisplacementMode(){
     return g_NwbDeformerPushConstants.payload1.w;
 }
 
+bool nwbDeformerFiniteFloat(const float value){
+    return !isnan(value) && !isinf(value);
+}
+
+bool nwbDeformerFiniteVec3(const vec3 value){
+    return !any(isnan(value)) && !any(isinf(value));
+}
+
+bool nwbDeformerFiniteVec4(const vec4 value){
+    return !any(isnan(value)) && !any(isinf(value));
+}
+
 void nwbDeformerCopyRestPayload(const uint vertexId, const uint restBase, const uint deformedBase){
     for(uint i = 0u; i < nwbDeformerRestScalarStride(); ++i)
         nwbDeformerDeformedVertexScalars[deformedBase + i] = nwbDeformerRestVertexScalars[restBase + i];
@@ -108,13 +120,29 @@ mat4 nwbDeformerLoadJointMatrix(const uint jointId){
 }
 
 vec3 nwbDeformerSafeNormalize(const vec3 value, const vec3 fallback){
+    if(!nwbDeformerFiniteVec3(value))
+        return fallback;
+
     const float lengthSquared = dot(value, value);
-    return lengthSquared > 0.00000001 ? value * inversesqrt(lengthSquared) : fallback;
+    return nwbDeformerFiniteFloat(lengthSquared) && lengthSquared > 0.00000001
+        ? value * inversesqrt(lengthSquared)
+        : fallback
+    ;
+}
+
+bool nwbDeformerValidFrameDirection(const vec3 value){
+    return nwbDeformerFiniteVec3(value)
+        && dot(value, value) > 0.00000001
+    ;
+}
+
+vec3 nwbDeformerProjectOntoFramePlane(const vec3 value, const vec3 normal){
+    return value - (normal * dot(value, normal));
 }
 
 vec3 nwbDeformerFallbackTangent(const vec3 normal){
     const vec3 axis = abs(normal.z) < 0.999 ? vec3(0.0, 0.0, 1.0) : vec3(0.0, 1.0, 0.0);
-    return normalize(cross(axis, normal));
+    return nwbDeformerSafeNormalize(cross(axis, normal), vec3(1.0, 0.0, 0.0));
 }
 
 float nwbDeformerTangentHandedness(const float handedness, const float fallbackHandedness){
@@ -123,16 +151,28 @@ float nwbDeformerTangentHandedness(const float handedness, const float fallbackH
     return fallbackHandedness < 0.0 ? -1.0 : 1.0;
 }
 
+vec3 nwbDeformerResolveFrameTangent(const vec3 normal, const vec3 tangent, const vec3 fallbackTangent){
+    const vec3 safeFallbackTangent = nwbDeformerFallbackTangent(normal);
+
+    vec3 projectedTangent = nwbDeformerFiniteVec3(tangent)
+        ? nwbDeformerProjectOntoFramePlane(tangent, normal)
+        : safeFallbackTangent
+    ;
+    if(!nwbDeformerValidFrameDirection(projectedTangent)){
+        projectedTangent = nwbDeformerFiniteVec3(fallbackTangent)
+            ? nwbDeformerProjectOntoFramePlane(fallbackTangent, normal)
+            : safeFallbackTangent
+        ;
+    }
+    if(!nwbDeformerValidFrameDirection(projectedTangent))
+        return safeFallbackTangent;
+
+    return nwbDeformerSafeNormalize(projectedTangent, safeFallbackTangent);
+}
+
 void nwbDeformerOrthonormalizeFrame(inout vec3 normal, inout vec4 tangent, const vec3 fallbackNormal, const vec4 fallbackTangent){
     normal = nwbDeformerSafeNormalize(normal, nwbDeformerSafeNormalize(fallbackNormal, vec3(0.0, 0.0, 1.0)));
-
-    vec3 projectedTangent = tangent.xyz - (normal * dot(tangent.xyz, normal));
-    if(dot(projectedTangent, projectedTangent) <= 0.00000001)
-        projectedTangent = fallbackTangent.xyz - (normal * dot(fallbackTangent.xyz, normal));
-    if(dot(projectedTangent, projectedTangent) <= 0.00000001)
-        projectedTangent = nwbDeformerFallbackTangent(normal);
-
-    tangent.xyz = nwbDeformerSafeNormalize(projectedTangent, nwbDeformerFallbackTangent(normal));
+    tangent.xyz = nwbDeformerResolveFrameTangent(normal, tangent.xyz, fallbackTangent.xyz);
     tangent.w = nwbDeformerTangentHandedness(tangent.w, fallbackTangent.w);
 }
 
@@ -207,6 +247,7 @@ void main(){
         nwbDeformerRestVertexScalars[restBase + 10u],
         nwbDeformerRestVertexScalars[restBase + 11u]
     );
+    const vec3 restPosition = position;
     const vec3 restNormal = normal;
     const vec4 restTangent = tangent;
 
@@ -223,12 +264,29 @@ void main(){
         }
     }
 
+    if(!nwbDeformerFiniteVec3(position))
+        position = restPosition;
+    if(!nwbDeformerFiniteVec3(normal))
+        normal = restNormal;
+    if(!nwbDeformerFiniteVec4(tangent))
+        tangent = restTangent;
+
     nwbDeformerOrthonormalizeFrame(normal, tangent, restNormal, restTangent);
+    const vec3 preSkinPosition = position;
     const vec3 preSkinNormal = normal;
     const vec4 preSkinTangent = tangent;
     nwbDeformerApplySkin(vertexId, position, normal, tangent);
+    if(!nwbDeformerFiniteVec3(position))
+        position = preSkinPosition;
+    if(!nwbDeformerFiniteVec3(normal))
+        normal = preSkinNormal;
+    if(!nwbDeformerFiniteVec4(tangent))
+        tangent = preSkinTangent;
     nwbDeformerOrthonormalizeFrame(normal, tangent, preSkinNormal, preSkinTangent);
+    const vec3 preDisplacementPosition = position;
     nwbDeformerApplyDisplacement(position, normal, uv0);
+    if(!nwbDeformerFiniteVec3(position))
+        position = preDisplacementPosition;
 
     nwbDeformerCopyRestPayload(vertexId, restBase, deformedBase);
     nwbDeformerDeformedVertexScalars[deformedBase + 0u] = position.x;

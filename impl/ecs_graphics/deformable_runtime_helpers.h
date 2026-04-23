@@ -64,12 +64,13 @@ namespace DisplacementResolveFailure{
 }
 
 [[nodiscard]] inline SIMDVector Normalize(SIMDVector value, SIMDVector fallback){
+    if(!DeformableValidation::FiniteVector(value, 0x7u))
+        return fallback;
+
     const SIMDVector lengthSquaredVector = Vector3LengthSq(value);
     const f32 lengthSquared = VectorGetX(lengthSquaredVector);
-    if(lengthSquared <= s_FrameEpsilon)
+    if(!IsFinite(lengthSquared) || lengthSquared <= s_FrameEpsilon)
         return fallback;
-    if(!IsFinite(lengthSquared))
-        return Vector3Normalize(value);
 
     return VectorMultiply(value, VectorReciprocalSqrt(lengthSquaredVector));
 }

@@ -46,6 +46,21 @@ static bool NearlyEqual(const f32 lhs, const f32 rhs, const f32 epsilon = 0.0000
     return difference <= epsilon;
 }
 
+static bool FiniteFloat3(const Float3U& value){
+    return IsFinite(value.x)
+        && IsFinite(value.y)
+        && IsFinite(value.z)
+    ;
+}
+
+static bool FiniteFloat4(const Float4U& value){
+    return IsFinite(value.x)
+        && IsFinite(value.y)
+        && IsFinite(value.z)
+        && IsFinite(value.w)
+    ;
+}
+
 static NWB::Impl::DeformableVertexRest MakeVertex(const f32 x, const f32 y, const f32 z, const f32 u = 0.0f){
     NWB::Impl::DeformableVertexRest vertex;
     vertex.position = Float3U(x, y, z);
@@ -935,6 +950,39 @@ static void TestPickingRejectsNonFiniteEvaluatedVertices(TestContext& context){
 
     Vector<NWB::Impl::DeformableVertexRest> vertices;
     NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::BuildDeformablePickingVertices(instance, inputs, vertices));
+}
+
+static void TestPickingRepairsOverflowedMorphFrame(TestContext& context){
+    NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
+
+    NWB::Impl::DeformableMorph morph;
+    morph.name = Name("frame_overflow");
+    NWB::Impl::DeformableMorphDelta delta{};
+    delta.vertexId = 0u;
+    delta.deltaPosition = Float3U(0.0f, 0.0f, 0.0f);
+    delta.deltaNormal = Float3U(Limit<f32>::s_Max, 0.0f, 0.0f);
+    delta.deltaTangent = Float4U(Limit<f32>::s_Max, 0.0f, 0.0f, Limit<f32>::s_Max);
+    morph.deltas.push_back(delta);
+    instance.morphs.push_back(morph);
+
+    NWB::Impl::DeformableMorphWeightsComponent weights;
+    weights.weights.push_back(NWB::Impl::DeformableMorphWeight{ Name("frame_overflow"), 2.0f });
+
+    NWB::Impl::DeformablePickingInputs inputs;
+    inputs.morphWeights = &weights;
+
+    Vector<NWB::Impl::DeformableVertexRest> vertices;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::BuildDeformablePickingVertices(instance, inputs, vertices));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, vertices.size() == 3u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, FiniteFloat3(vertices[0].normal));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, FiniteFloat4(vertices[0].tangent));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertices[0].normal.x, 0.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertices[0].normal.y, 0.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertices[0].normal.z, 1.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertices[0].tangent.x, 1.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertices[0].tangent.y, 0.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertices[0].tangent.z, 0.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertices[0].tangent.w, 1.0f));
 }
 
 static void TestRestSpaceHoleEditCreatesPerInstancePatch(TestContext& context){
@@ -1875,6 +1923,7 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
     __hidden_ecs_graphics_tests::TestPickingRejectsInvalidMorphDelta(context);
     __hidden_ecs_graphics_tests::TestPickingRejectsActiveEmptyMorph(context);
     __hidden_ecs_graphics_tests::TestPickingRejectsNonFiniteEvaluatedVertices(context);
+    __hidden_ecs_graphics_tests::TestPickingRepairsOverflowedMorphFrame(context);
     __hidden_ecs_graphics_tests::TestRestSpaceHoleEditCreatesPerInstancePatch(context);
     __hidden_ecs_graphics_tests::TestRestSpaceHoleEditTransfersAndInpaintsWallAttributes(context);
     __hidden_ecs_graphics_tests::TestRestSpaceHoleEditWallTrianglesKeepRecoverableProvenance(context);

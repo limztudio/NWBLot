@@ -162,7 +162,7 @@ static bool BuildMorphPayload(
         if(!ResolveMorphWeight(instance, morphWeights, morph.name, weight))
             return false;
         resolvedWeights.push_back(weight);
-        if(!DeformableRuntime::ActiveWeight(weight))
+        if(!DeformableValidation::ActiveWeight(weight))
             continue;
         if(morph.deltas.empty()){
             NWB_LOGGER_ERROR(
@@ -192,7 +192,7 @@ static bool BuildMorphPayload(
     for(usize morphIndex = 0u; morphIndex < instance.morphs.size(); ++morphIndex){
         const DeformableMorph& morph = instance.morphs[morphIndex];
         const f32 weight = resolvedWeights[morphIndex];
-        if(!DeformableRuntime::ActiveWeight(weight))
+        if(!DeformableValidation::ActiveWeight(weight))
             continue;
 
         DeformerSystem::DeformerMorphRangeGpu range;
@@ -283,7 +283,7 @@ static bool BuildSkinPayload(
         for(u32 influenceIndex = 0; influenceIndex < 4u; ++influenceIndex){
             const u32 joint = static_cast<u32>(sourceSkin.joint[influenceIndex]);
             const f32 weight = sourceSkin.weight[influenceIndex];
-            if(DeformableRuntime::ActiveWeight(weight) && joint >= jointPalette->joints.size()){
+            if(DeformableValidation::ActiveWeight(weight) && joint >= jointPalette->joints.size()){
                 NWB_LOGGER_ERROR(
                     NWB_TEXT("DeformerSystem: runtime mesh '{}' vertex {} references joint {} outside palette size {}"),
                     instance.handle.value,
@@ -683,7 +683,9 @@ bool DeformerSystem::dispatchRuntimeMesh(
 
     const bool hasActiveMorphs = !morphRanges.empty();
     const bool hasActiveSkin = !skinInfluences.empty() && !jointMatrices.empty();
-    const bool hasDisplacement = DeformableRuntime::ActiveDisplacement(resolvedDisplacement);
+    const bool hasDisplacement = resolvedDisplacement.mode != DeformableDisplacementMode::None
+        && DeformableValidation::ActiveWeight(resolvedDisplacement.amplitude)
+    ;
     if(!hasActiveMorphs && !hasActiveSkin && !hasDisplacement){
         const bool deformerInputDirty = (instance.dirtyFlags & RuntimeMeshDirtyFlag::DeformerInputDirty) != 0u;
         const auto foundResources = m_runtimeResources.find(instance.handle.value);

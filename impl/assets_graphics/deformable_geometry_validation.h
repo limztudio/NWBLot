@@ -76,141 +76,87 @@ struct MorphPayloadFailureInfo{
     return info;
 }
 
-[[nodiscard]] inline f32 AbsF32(const f32 value){
-    return value < 0.0f ? -value : value;
-}
-
 [[nodiscard]] inline bool ActiveWeight(const f32 value){
     return value > s_Epsilon || value < -s_Epsilon;
 }
 
-[[nodiscard]] inline f32 Clamp01(const f32 value){
-    if(value < 0.0f)
-        return 0.0f;
-    if(value > 1.0f)
-        return 1.0f;
-    return value;
-}
-
-[[nodiscard]] inline bool IsFiniteFloat2(const Float2U& value){
-    const SIMDVector valueVector = LoadFloat(value);
-    return !Vector2IsNaN(valueVector) && !Vector2IsInfinite(valueVector);
-}
-
-[[nodiscard]] inline bool IsFiniteFloat3(const Float3U& value){
-    const SIMDVector valueVector = LoadFloat(value);
-    return !Vector3IsNaN(valueVector) && !Vector3IsInfinite(valueVector);
-}
-
-[[nodiscard]] inline bool IsFiniteFloat3(const Float4& value){
-    const SIMDVector valueVector = LoadFloat(value);
-    return !Vector3IsNaN(valueVector) && !Vector3IsInfinite(valueVector);
-}
-
-[[nodiscard]] inline bool IsFiniteFloat4(const Float4U& value){
-    const SIMDVector valueVector = LoadFloat(value);
-    return !Vector4IsNaN(valueVector) && !Vector4IsInfinite(valueVector);
-}
-
-[[nodiscard]] inline bool IsFiniteFloat4(const Float4& value){
-    const SIMDVector valueVector = LoadFloat(value);
-    return !Vector4IsNaN(valueVector) && !Vector4IsInfinite(valueVector);
-}
-
-[[nodiscard]] inline f32 LengthSquared3(const f32 x, const f32 y, const f32 z){
-    return VectorGetX(Vector3LengthSq(VectorSet(x, y, z, 0.0f)));
-}
-
-[[nodiscard]] inline f32 Dot3(const Float3U& lhs, const Float3U& rhs){
-    return VectorGetX(Vector3Dot(LoadFloat(lhs), LoadFloat(rhs)));
-}
-
-[[nodiscard]] inline Float3U Subtract3(const Float3U& lhs, const Float3U& rhs){
-    Float3U result;
-    StoreFloat(VectorSubtract(LoadFloat(lhs), LoadFloat(rhs)), &result);
-    return result;
-}
-
-[[nodiscard]] inline Float3U Cross3(const Float3U& lhs, const Float3U& rhs){
-    Float3U result;
-    StoreFloat(Vector3Cross(LoadFloat(lhs), LoadFloat(rhs)), &result);
-    return result;
-}
-
-[[nodiscard]] inline bool NearlyOne(const f32 value, const f32 epsilon = s_BarycentricSumEpsilon){
-    return AbsF32(value - 1.0f) <= epsilon;
-}
-
-[[nodiscard]] inline bool NearlySignedOne(const f32 value){
-    return AbsF32(AbsF32(value) - 1.0f) <= s_TangentHandednessUnitEpsilon;
-}
-
-[[nodiscard]] inline bool NearlyUnitLengthSquared(const f32 value){
-    return AbsF32(value - 1.0f) <= s_RestFrameUnitLengthSquaredEpsilon;
+[[nodiscard]] inline bool FiniteVector(SIMDVector value, const u32 activeMask){
+    const SIMDVector invalid = VectorOrInt(VectorIsNaN(value), VectorIsInfinite(value));
+    return (VectorMoveMask(invalid) & activeMask) == 0u;
 }
 
 [[nodiscard]] inline bool ValidRestVertex(const DeformableVertexRest& vertex){
-    return IsFiniteFloat3(vertex.position)
-        && IsFiniteFloat3(vertex.normal)
-        && IsFiniteFloat4(vertex.tangent)
-        && IsFiniteFloat2(vertex.uv0)
-        && IsFiniteFloat4(vertex.color0)
+    const SIMDVector position = LoadFloat(vertex.position);
+    const SIMDVector normal = LoadFloat(vertex.normal);
+    const SIMDVector tangent = LoadFloat(vertex.tangent);
+    const SIMDVector uv0 = LoadFloat(vertex.uv0);
+    const SIMDVector color0 = LoadFloat(vertex.color0);
+    return FiniteVector(position, 0x7u)
+        && FiniteVector(normal, 0x7u)
+        && FiniteVector(tangent, 0xFu)
+        && FiniteVector(uv0, 0x3u)
+        && FiniteVector(color0, 0xFu)
     ;
 }
 
-[[nodiscard]] inline bool ValidRestVertexFrameBasis(const DeformableVertexRest& vertex){
-    if(!ValidRestVertex(vertex))
+[[nodiscard]] inline bool ValidRestVertexFrameImpl(const DeformableVertexRest& vertex, const bool requireUnitFrame){
+    const SIMDVector position = LoadFloat(vertex.position);
+    const SIMDVector normal = LoadFloat(vertex.normal);
+    const SIMDVector tangent = LoadFloat(vertex.tangent);
+    const SIMDVector uv0 = LoadFloat(vertex.uv0);
+    const SIMDVector color0 = LoadFloat(vertex.color0);
+    if(!FiniteVector(position, 0x7u)
+        || !FiniteVector(normal, 0x7u)
+        || !FiniteVector(tangent, 0xFu)
+        || !FiniteVector(uv0, 0x3u)
+        || !FiniteVector(color0, 0xFu)
+    )
         return false;
 
-    const f32 normalLengthSquared = LengthSquared3(vertex.normal.x, vertex.normal.y, vertex.normal.z);
-    const f32 tangentLengthSquared = LengthSquared3(vertex.tangent.x, vertex.tangent.y, vertex.tangent.z);
-    const Float3U tangentVector(vertex.tangent.x, vertex.tangent.y, vertex.tangent.z);
-    const f32 tangentHandedness = AbsF32(vertex.tangent.w);
-    const Float3U frameCross = Cross3(vertex.normal, tangentVector);
-    const f32 frameCrossLengthSquared = LengthSquared3(frameCross.x, frameCross.y, frameCross.z);
+    const f32 normalLengthSquared = VectorGetX(Vector3LengthSq(normal));
+    const f32 tangentLengthSquared = VectorGetX(Vector3LengthSq(tangent));
+    const f32 tangentHandedness = Abs(VectorGetW(tangent));
+    const f32 frameCrossLengthSquared = VectorGetX(Vector3LengthSq(Vector3Cross(normal, tangent)));
     if(normalLengthSquared <= s_RestFrameLengthSquaredEpsilon
         || tangentLengthSquared <= s_RestFrameLengthSquaredEpsilon
         || tangentHandedness <= s_TangentHandednessEpsilon
-        || !NearlySignedOne(vertex.tangent.w)
+        || Abs(tangentHandedness - 1.0f) > s_TangentHandednessUnitEpsilon
         || frameCrossLengthSquared <= s_RestFrameLengthSquaredEpsilon
     )
         return false;
 
-    return true;
+    if(!requireUnitFrame)
+        return true;
+
+    const f32 frameDot = VectorGetX(Vector3Dot(normal, tangent));
+    return Abs(normalLengthSquared - 1.0f) <= s_RestFrameUnitLengthSquaredEpsilon
+        && Abs(tangentLengthSquared - 1.0f) <= s_RestFrameUnitLengthSquaredEpsilon
+        && Abs(frameDot) <= s_RestFrameOrthogonalityEpsilon
+    ;
+}
+
+[[nodiscard]] inline bool ValidRestVertexFrameBasis(const DeformableVertexRest& vertex){
+    return ValidRestVertexFrameImpl(vertex, false);
 }
 
 [[nodiscard]] inline bool ValidRestVertexFrame(const DeformableVertexRest& vertex){
-    if(!ValidRestVertexFrameBasis(vertex))
-        return false;
+    return ValidRestVertexFrameImpl(vertex, true);
+}
 
-    const f32 normalLengthSquared = LengthSquared3(vertex.normal.x, vertex.normal.y, vertex.normal.z);
-    const f32 tangentLengthSquared = LengthSquared3(vertex.tangent.x, vertex.tangent.y, vertex.tangent.z);
-    const Float3U tangentVector(vertex.tangent.x, vertex.tangent.y, vertex.tangent.z);
-    const f32 frameDot = Dot3(vertex.normal, tangentVector);
-    return NearlyUnitLengthSquared(normalLengthSquared)
-        && NearlyUnitLengthSquared(tangentLengthSquared)
-        && AbsF32(frameDot) <= s_RestFrameOrthogonalityEpsilon
+[[nodiscard]] inline bool ValidBarycentric(SIMDVector baryVector, const f32 minimumBarycentric){
+    const f32 barySum = VectorGetX(Vector3Dot(baryVector, s_SIMDOne));
+    return FiniteVector(baryVector, 0x7u)
+        && Vector3GreaterOrEqual(baryVector, VectorReplicate(minimumBarycentric))
+        && Abs(barySum - 1.0f) <= s_BarycentricSumEpsilon
     ;
 }
 
 [[nodiscard]] inline bool ValidBarycentric(const f32 (&bary)[3], const f32 minimumBarycentric){
-    const SIMDVector baryVector = VectorSet(bary[0], bary[1], bary[2], 0.0f);
-    const f32 barySum = VectorGetX(Vector3Dot(baryVector, s_SIMDOne));
-    return !Vector3IsNaN(baryVector)
-        && !Vector3IsInfinite(baryVector)
-        && Vector3GreaterOrEqual(baryVector, VectorReplicate(minimumBarycentric))
-        && NearlyOne(barySum)
-    ;
+    return ValidBarycentric(VectorSet(bary[0], bary[1], bary[2], 0.0f), minimumBarycentric);
 }
 
 [[nodiscard]] inline bool ValidBarycentric(const Float4& bary, const f32 minimumBarycentric){
-    const SIMDVector baryVector = LoadFloat(bary);
-    const f32 barySum = VectorGetX(Vector3Dot(baryVector, s_SIMDOne));
-    return !Vector3IsNaN(baryVector)
-        && !Vector3IsInfinite(baryVector)
-        && Vector3GreaterOrEqual(baryVector, VectorReplicate(minimumBarycentric))
-        && NearlyOne(barySum)
-    ;
+    return ValidBarycentric(LoadFloat(bary), minimumBarycentric);
 }
 
 [[nodiscard]] inline bool ValidSourceBarycentric(const f32 (&bary)[3]){
@@ -230,35 +176,43 @@ struct MorphPayloadFailureInfo{
 }
 
 [[nodiscard]] inline bool NormalizeSourceBarycentric(const f32 (&bary)[3], f32 (&outBary)[3]){
-    if(!ValidLooseBarycentric(bary))
+    const SIMDVector baryVector = VectorSet(bary[0], bary[1], bary[2], 0.0f);
+    if(!ValidBarycentric(baryVector, -s_Epsilon))
         return false;
 
-    const SIMDVector clampedBary = VectorClamp(VectorSet(bary[0], bary[1], bary[2], 0.0f), VectorZero(), s_SIMDOne);
+    const SIMDVector clampedBary = VectorClamp(baryVector, VectorZero(), s_SIMDOne);
     const f32 barySum = VectorGetX(Vector3Dot(clampedBary, s_SIMDOne));
     if(!IsFinite(barySum) || barySum <= s_Epsilon)
         return false;
 
     const SIMDVector normalizedBary = VectorScale(clampedBary, 1.0f / barySum);
+    if(!ValidBarycentric(normalizedBary, 0.0f))
+        return false;
+
     outBary[0] = VectorGetX(normalizedBary);
     outBary[1] = VectorGetY(normalizedBary);
     outBary[2] = VectorGetZ(normalizedBary);
-    return ValidSourceBarycentric(outBary);
+    return true;
 }
 
 [[nodiscard]] inline bool NormalizeSourceBarycentric(const Float4& bary, f32 (&outBary)[3]){
-    if(!ValidLooseBarycentric(bary))
+    const SIMDVector baryVector = LoadFloat(bary);
+    if(!ValidBarycentric(baryVector, -s_Epsilon))
         return false;
 
-    const SIMDVector clampedBary = VectorClamp(LoadFloat(bary), VectorZero(), s_SIMDOne);
+    const SIMDVector clampedBary = VectorClamp(baryVector, VectorZero(), s_SIMDOne);
     const f32 barySum = VectorGetX(Vector3Dot(clampedBary, s_SIMDOne));
     if(!IsFinite(barySum) || barySum <= s_Epsilon)
         return false;
 
     const SIMDVector normalizedBary = VectorScale(clampedBary, 1.0f / barySum);
+    if(!ValidBarycentric(normalizedBary, 0.0f))
+        return false;
+
     outBary[0] = VectorGetX(normalizedBary);
     outBary[1] = VectorGetY(normalizedBary);
     outBary[2] = VectorGetZ(normalizedBary);
-    return ValidSourceBarycentric(outBary);
+    return true;
 }
 
 [[nodiscard]] inline bool ValidSourceSample(const SourceSample& sample, const u32 sourceTriangleCount){
@@ -271,17 +225,20 @@ struct MorphPayloadFailureInfo{
 [[nodiscard]] inline bool ValidSkinInfluence(const SkinInfluence4& skin){
     const SIMDVector weights = VectorSet(skin.weight[0], skin.weight[1], skin.weight[2], skin.weight[3]);
     const f32 weightSum = VectorGetX(Vector4Dot(weights, s_SIMDOne));
-    if(Vector4IsNaN(weights) || Vector4IsInfinite(weights) || !Vector4GreaterOrEqual(weights, VectorZero()))
+    if(!FiniteVector(weights, 0xFu) || !Vector4GreaterOrEqual(weights, VectorZero()))
         return false;
 
-    return NearlyOne(weightSum, s_SkinWeightSumEpsilon);
+    return Abs(weightSum - 1.0f) <= s_SkinWeightSumEpsilon;
 }
 
 [[nodiscard]] inline bool ValidMorphDelta(const DeformableMorphDelta& delta, const usize vertexCount){
+    const SIMDVector deltaPosition = LoadFloat(delta.deltaPosition);
+    const SIMDVector deltaNormal = LoadFloat(delta.deltaNormal);
+    const SIMDVector deltaTangent = LoadFloat(delta.deltaTangent);
     return delta.vertexId < vertexCount
-        && IsFiniteFloat3(delta.deltaPosition)
-        && IsFiniteFloat3(delta.deltaNormal)
-        && IsFiniteFloat4(delta.deltaTangent)
+        && FiniteVector(deltaPosition, 0x7u)
+        && FiniteVector(deltaNormal, 0x7u)
+        && FiniteVector(deltaTangent, 0xFu)
     ;
 }
 
@@ -356,10 +313,10 @@ struct MorphPayloadFailureInfo{
     if(a == b || a == c || b == c)
         return false;
 
-    const Float3U ab = Subtract3(restVertices[b].position, restVertices[a].position);
-    const Float3U ac = Subtract3(restVertices[c].position, restVertices[a].position);
-    const Float3U areaCross = Cross3(ab, ac);
-    const f32 areaLengthSquared = LengthSquared3(areaCross.x, areaCross.y, areaCross.z);
+    const SIMDVector aPosition = LoadFloat(restVertices[a].position);
+    const SIMDVector ab = VectorSubtract(LoadFloat(restVertices[b].position), aPosition);
+    const SIMDVector ac = VectorSubtract(LoadFloat(restVertices[c].position), aPosition);
+    const f32 areaLengthSquared = VectorGetX(Vector3LengthSq(Vector3Cross(ab, ac)));
     return areaLengthSquared > s_TriangleAreaLengthSquaredEpsilon;
 }
 

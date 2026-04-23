@@ -34,10 +34,10 @@ static constexpr u32 s_SurfaceEditStateVersion = 2u;
 static constexpr u32 s_MinWallLoopVertexCount = 6u;
 
 struct HoleFrame{
-    Vec3 center;
-    Vec3 normal;
-    Vec3 tangent;
-    Vec3 bitangent;
+    Float4 center;
+    Float4 normal;
+    Float4 tangent;
+    Float4 bitangent;
 };
 
 struct EdgeRecord{
@@ -48,8 +48,8 @@ struct EdgeRecord{
 };
 
 struct WallVertexFrame{
-    Vec3 normal;
-    Vec3 tangent;
+    Float4 normal;
+    Float4 tangent;
 };
 
 struct SkinWeightSample{
@@ -57,9 +57,8 @@ struct SkinWeightSample{
     f32 weight = 0.0f;
 };
 
-[[nodiscard]] bool FiniteVec3(const Vec3& value){
-    const SIMDVector valueVector = LoadVec3(value);
-    return !Vector3IsNaN(valueVector) && !Vector3IsInfinite(valueVector);
+[[nodiscard]] bool FiniteVec3(const Float4& value){
+    return DeformableValidation::FiniteVector(LoadFloat(value), 0x7u);
 }
 
 struct SurfaceEditStateHeader{
@@ -101,22 +100,28 @@ using MorphDeltaLookup = HashMap<
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Vec3 BarycentricPoint(
+[[nodiscard]] Float4 BarycentricPoint(
     const DeformableRuntimeMeshInstance& instance,
     const u32 (&indices)[3],
     const f32 (&bary)[3])
 {
-    const Vec3 a = ToVec3(instance.restVertices[indices[0]].position);
-    const Vec3 b = ToVec3(instance.restVertices[indices[1]].position);
-    const Vec3 c = ToVec3(instance.restVertices[indices[2]].position);
-    return Add(Add(Scale(a, bary[0]), Scale(b, bary[1])), Scale(c, bary[2]));
+    SIMDVector position = VectorScale(LoadFloat(instance.restVertices[indices[0]].position), bary[0]);
+    position = VectorMultiplyAdd(LoadFloat(instance.restVertices[indices[1]].position), VectorReplicate(bary[1]), position);
+    position = VectorMultiplyAdd(LoadFloat(instance.restVertices[indices[2]].position), VectorReplicate(bary[2]), position);
+    Float4 result;
+    StoreFloat(position, &result);
+    return result;
 }
 
-[[nodiscard]] Vec3 TriangleCentroid(const DeformableRuntimeMeshInstance& instance, const u32 (&indices)[3]){
-    const Vec3 a = ToVec3(instance.restVertices[indices[0]].position);
-    const Vec3 b = ToVec3(instance.restVertices[indices[1]].position);
-    const Vec3 c = ToVec3(instance.restVertices[indices[2]].position);
-    return Scale(Add(Add(a, b), c), 1.0f / 3.0f);
+[[nodiscard]] Float4 TriangleCentroid(const DeformableRuntimeMeshInstance& instance, const u32 (&indices)[3]){
+    SIMDVector centroid = VectorAdd(
+        VectorAdd(LoadFloat(instance.restVertices[indices[0]].position), LoadFloat(instance.restVertices[indices[1]].position)),
+        LoadFloat(instance.restVertices[indices[2]].position)
+    );
+    centroid = VectorScale(centroid, 1.0f / 3.0f);
+    Float4 result;
+    StoreFloat(centroid, &result);
+    return result;
 }
 
 [[nodiscard]] u64 MakeEdgeKey(const u32 a, const u32 b){
@@ -163,18 +168,18 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
     const f32 (&bary)[3],
     HoleFrame& outFrame)
 {
-    const Vec3 a = ToVec3(instance.restVertices[triangleIndices[0]].position);
-    const Vec3 b = ToVec3(instance.restVertices[triangleIndices[1]].position);
-    const Vec3 c = ToVec3(instance.restVertices[triangleIndices[2]].position);
-    const Vec3 edge0 = Subtract(b, a);
-    const Vec3 edge1 = Subtract(c, a);
+    const SIMDVector a = LoadFloat(instance.restVertices[triangleIndices[0]].position);
+    const SIMDVector b = LoadFloat(instance.restVertices[triangleIndices[1]].position);
+    const SIMDVector c = LoadFloat(instance.restVertices[triangleIndices[2]].position);
+    const SIMDVector edge0 = VectorSubtract(b, a);
+    const SIMDVector edge1 = VectorSubtract(c, a);
 
-    const Vec3 rawNormal = Cross(edge0, edge1);
-    if(LengthSquared(rawNormal) <= s_FrameEpsilon)
+    const SIMDVector rawNormal = Vector3Cross(edge0, edge1);
+    if(VectorGetX(Vector3LengthSq(rawNormal)) <= s_FrameEpsilon)
         return false;
 
     outFrame.center = BarycentricPoint(instance, triangleIndices, bary);
-    outFrame.normal = Normalize(rawNormal, Vec3{ 0.0f, 0.0f, 1.0f });
+    StoreFloat(DeformableRuntime::Normalize(rawNormal, VectorSet(0.0f, 0.0f, 1.0f, 0.0f)), &outFrame.normal);
 
     const DeformableVertexRest& vertex0 = instance.restVertices[triangleIndices[0]];
     const DeformableVertexRest& vertex1 = instance.restVertices[triangleIndices[1]];
@@ -182,19 +187,44 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
     SIMDVector tangentVector = VectorScale(LoadFloat(vertex0.tangent), bary[0]);
     tangentVector = VectorMultiplyAdd(LoadFloat(vertex1.tangent), VectorReplicate(bary[1]), tangentVector);
     tangentVector = VectorMultiplyAdd(LoadFloat(vertex2.tangent), VectorReplicate(bary[2]), tangentVector);
-    Vec3 tangent = StoreVec3(tangentVector);
-    tangent = Subtract(tangent, Scale(outFrame.normal, Dot(tangent, outFrame.normal)));
-    if(LengthSquared(tangent) <= s_FrameEpsilon)
-        tangent = Subtract(edge0, Scale(outFrame.normal, Dot(edge0, outFrame.normal)));
-    if(LengthSquared(tangent) <= s_FrameEpsilon)
-        tangent = FallbackTangent(outFrame.normal);
+    const SIMDVector normalVector = LoadFloat(outFrame.normal);
+    Float4 tangent;
+    StoreFloat(
+        VectorMultiplyAdd(
+            normalVector,
+            VectorReplicate(-VectorGetX(Vector3Dot(tangentVector, normalVector))),
+            tangentVector
+        ),
+        &tangent
+    );
+    if(VectorGetX(Vector3LengthSq(LoadFloat(tangent))) <= s_FrameEpsilon){
+        StoreFloat(
+            VectorMultiplyAdd(
+                normalVector,
+                VectorReplicate(-VectorGetX(Vector3Dot(edge0, normalVector))),
+                edge0
+            ),
+            &tangent
+        );
+    }
+    if(VectorGetX(Vector3LengthSq(LoadFloat(tangent))) <= s_FrameEpsilon)
+        StoreFloat(DeformableRuntime::FallbackTangent(normalVector), &tangent);
 
-    outFrame.tangent = Normalize(tangent, FallbackTangent(outFrame.normal));
-    outFrame.bitangent = Normalize(Cross(outFrame.normal, outFrame.tangent), Vec3{ 0.0f, 1.0f, 0.0f });
-    return LengthSquared(outFrame.normal) > s_FrameEpsilon
-        && LengthSquared(outFrame.tangent) > s_FrameEpsilon
-        && LengthSquared(outFrame.bitangent) > s_FrameEpsilon
-        && DeformableValidation::AbsF32(Dot(outFrame.normal, outFrame.tangent)) <= 0.001f
+    StoreFloat(
+        DeformableRuntime::Normalize(LoadFloat(tangent), DeformableRuntime::FallbackTangent(normalVector)),
+        &outFrame.tangent
+    );
+    StoreFloat(
+        DeformableRuntime::Normalize(
+            Vector3Cross(normalVector, LoadFloat(outFrame.tangent)),
+            VectorSet(0.0f, 1.0f, 0.0f, 0.0f)
+        ),
+        &outFrame.bitangent
+    );
+    return VectorGetX(Vector3LengthSq(LoadFloat(outFrame.normal))) > s_FrameEpsilon
+        && VectorGetX(Vector3LengthSq(LoadFloat(outFrame.tangent))) > s_FrameEpsilon
+        && VectorGetX(Vector3LengthSq(LoadFloat(outFrame.bitangent))) > s_FrameEpsilon
+        && Abs(VectorGetX(Vector3Dot(LoadFloat(outFrame.normal), LoadFloat(outFrame.tangent)))) <= 0.001f
     ;
 }
 
@@ -215,9 +245,9 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
 
 [[nodiscard]] bool MatchingSourceSample(const SourceSample& lhs, const SourceSample& rhs){
     return lhs.sourceTri == rhs.sourceTri
-        && DeformableValidation::AbsF32(lhs.bary[0] - rhs.bary[0]) <= DeformableValidation::s_BarycentricSumEpsilon
-        && DeformableValidation::AbsF32(lhs.bary[1] - rhs.bary[1]) <= DeformableValidation::s_BarycentricSumEpsilon
-        && DeformableValidation::AbsF32(lhs.bary[2] - rhs.bary[2]) <= DeformableValidation::s_BarycentricSumEpsilon
+        && Abs(lhs.bary[0] - rhs.bary[0]) <= DeformableValidation::s_BarycentricSumEpsilon
+        && Abs(lhs.bary[1] - rhs.bary[1]) <= DeformableValidation::s_BarycentricSumEpsilon
+        && Abs(lhs.bary[2] - rhs.bary[2]) <= DeformableValidation::s_BarycentricSumEpsilon
     ;
 }
 
@@ -282,12 +312,14 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
 }
 
 [[nodiscard]] bool ValidatePosedHitFrame(const DeformablePosedHit& hit){
-    const f32 normalLengthSquared = LengthSquared(ToVec3(hit.normal));
+    const SIMDVector position = LoadFloat(hit.position);
+    const SIMDVector normal = LoadFloat(hit.normal);
+    const f32 normalLengthSquared = VectorGetX(Vector3LengthSq(normal));
     return IsFinite(hit.distance())
         && hit.distance() >= 0.0f
-        && DeformableValidation::IsFiniteFloat3(hit.position)
-        && DeformableValidation::IsFiniteFloat3(hit.normal)
-        && DeformableValidation::NearlyUnitLengthSquared(normalLengthSquared)
+        && DeformableValidation::FiniteVector(position, 0x7u)
+        && DeformableValidation::FiniteVector(normal, 0x7u)
+        && Abs(normalLengthSquared - 1.0f) <= DeformableValidation::s_RestFrameUnitLengthSquaredEpsilon
     ;
 }
 
@@ -315,8 +347,8 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
         && IsFinite(ellipseRatio)
         && IsFinite(depth)
         && IsFinite(radius * ellipseRatio)
-        && ActiveLength(radius)
-        && ActiveLength(radius * ellipseRatio)
+        && radius > s_Epsilon
+        && (radius * ellipseRatio) > s_Epsilon
         && depth >= 0.0f
     ;
 }
@@ -481,10 +513,12 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
 }
 
 [[nodiscard]] bool ValidStoredRestFrame(const Float3U& position, const Float3U& normal){
-    const f32 normalLengthSquared = LengthSquared(ToVec3(normal));
-    return DeformableValidation::IsFiniteFloat3(position)
-        && DeformableValidation::IsFiniteFloat3(normal)
-        && DeformableValidation::NearlyUnitLengthSquared(normalLengthSquared)
+    const SIMDVector positionVector = LoadFloat(position);
+    const SIMDVector normalVector = LoadFloat(normal);
+    const f32 normalLengthSquared = VectorGetX(Vector3LengthSq(normalVector));
+    return DeformableValidation::FiniteVector(positionVector, 0x7u)
+        && DeformableValidation::FiniteVector(normalVector, 0x7u)
+        && Abs(normalLengthSquared - 1.0f) <= DeformableValidation::s_RestFrameUnitLengthSquaredEpsilon
     ;
 }
 
@@ -646,11 +680,16 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
     return true;
 }
 
-[[nodiscard]] Float4 RotationFromPositiveZToNormal(const Vec3& rawNormal){
+[[nodiscard]] Float4 RotationFromPositiveZToNormal(const Float4& rawNormal){
     if(!FiniteVec3(rawNormal))
         return Float4(0.0f, 0.0f, 0.0f, 1.0f);
 
-    Vec3 normal = Normalize(rawNormal, Vec3{ 0.0f, 0.0f, 1.0f });
+    const SIMDVector normalVector = DeformableRuntime::Normalize(
+        LoadFloat(rawNormal),
+        VectorSet(0.0f, 0.0f, 1.0f, 0.0f)
+    );
+    Float4 normal;
+    StoreFloat(normalVector, &normal);
     if(!FiniteVec3(normal))
         return Float4(0.0f, 0.0f, 0.0f, 1.0f);
 
@@ -665,7 +704,7 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
     if(dot < -0.999f)
         return Float4(1.0f, 0.0f, 0.0f, 0.0f);
 
-    const SIMDVector axis = VectorMultiply(VectorSwizzle<1, 0, 2, 3>(LoadVec3(normal)), VectorSet(-1.0f, 1.0f, 0.0f, 0.0f));
+    const SIMDVector axis = VectorMultiply(VectorSwizzle<1, 0, 2, 3>(normalVector), VectorSet(-1.0f, 1.0f, 0.0f, 0.0f));
     const f32 scale = VectorGetX(VectorSqrt(VectorReplicate((1.0f + dot) * 2.0f)));
     if(!IsFinite(scale) || scale <= s_FrameEpsilon)
         return Float4(0.0f, 0.0f, 0.0f, 1.0f);
@@ -680,7 +719,7 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
 
 [[nodiscard]] Float4 NormalizeRotationQuaternion(
     const Float4& rotation,
-    const Vec3& fallbackNormal)
+    const Float4& fallbackNormal)
 {
     const SIMDVector rotationVector = LoadFloat(rotation);
     const f32 lengthSquared = VectorGetX(QuaternionLengthSq(rotationVector));
@@ -692,26 +731,45 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
     return normalizedRotation;
 }
 
-[[nodiscard]] Float4 RotationFromFrame(const Vec3& rawTangent, const Vec3& rawNormal){
+[[nodiscard]] Float4 RotationFromFrame(const Float4& rawTangent, const Float4& rawNormal){
     if(!FiniteVec3(rawNormal))
         return Float4(0.0f, 0.0f, 0.0f, 1.0f);
 
-    Vec3 normal = Normalize(rawNormal, Vec3{ 0.0f, 0.0f, 1.0f });
+    const SIMDVector normalVector = DeformableRuntime::Normalize(
+        LoadFloat(rawNormal),
+        VectorSet(0.0f, 0.0f, 1.0f, 0.0f)
+    );
+    Float4 normal;
+    StoreFloat(normalVector, &normal);
     if(!FiniteVec3(normal))
         return Float4(0.0f, 0.0f, 0.0f, 1.0f);
 
-    Vec3 tangent = FiniteVec3(rawTangent)
-        ? Subtract(rawTangent, Scale(normal, Dot(rawTangent, normal)))
-        : FallbackTangent(normal)
-    ;
-    if(LengthSquared(tangent) <= s_FrameEpsilon)
-        tangent = FallbackTangent(normal);
-    tangent = Normalize(tangent, FallbackTangent(normal));
+    Float4 tangent;
+    if(FiniteVec3(rawTangent)){
+        StoreFloat(
+            VectorMultiplyAdd(
+                normalVector,
+                VectorReplicate(-VectorGetX(Vector3Dot(LoadFloat(rawTangent), normalVector))),
+                LoadFloat(rawTangent)
+            ),
+            &tangent
+        );
+    }
+    else
+        StoreFloat(DeformableRuntime::FallbackTangent(normalVector), &tangent);
+    if(VectorGetX(Vector3LengthSq(LoadFloat(tangent))) <= s_FrameEpsilon)
+        StoreFloat(DeformableRuntime::FallbackTangent(normalVector), &tangent);
+    StoreFloat(
+        DeformableRuntime::Normalize(LoadFloat(tangent), DeformableRuntime::FallbackTangent(normalVector)),
+        &tangent
+    );
 
-    Vec3 bitangent = Cross(normal, tangent);
-    if(LengthSquared(bitangent) <= s_FrameEpsilon)
+    SIMDVector bitangentVector = Vector3Cross(normalVector, LoadFloat(tangent));
+    if(VectorGetX(Vector3LengthSq(bitangentVector)) <= s_FrameEpsilon)
         return RotationFromPositiveZToNormal(normal);
-    bitangent = Normalize(bitangent, Vec3{ 0.0f, 1.0f, 0.0f });
+    bitangentVector = DeformableRuntime::Normalize(bitangentVector, VectorSet(0.0f, 1.0f, 0.0f, 0.0f));
+    Float4 bitangent;
+    StoreFloat(bitangentVector, &bitangent);
 
     const f32 m00 = tangent.x;
     const f32 m01 = bitangent.x;
@@ -743,12 +801,14 @@ template<typename EdgeVector>
 {
     f32 signedArea = 0.0f;
     for(const EdgeRecord& edge : orderedEdges){
-        const Vec3 aOffset = Subtract(ToVec3(instance.restVertices[edge.a].position), frame.center);
-        const Vec3 bOffset = Subtract(ToVec3(instance.restVertices[edge.b].position), frame.center);
-        const f32 ax = Dot(aOffset, frame.tangent);
-        const f32 ay = Dot(aOffset, frame.bitangent);
-        const f32 bx = Dot(bOffset, frame.tangent);
-        const f32 by = Dot(bOffset, frame.bitangent);
+        const SIMDVector aOffset = VectorSubtract(LoadFloat(instance.restVertices[edge.a].position), LoadFloat(frame.center));
+        const SIMDVector bOffset = VectorSubtract(LoadFloat(instance.restVertices[edge.b].position), LoadFloat(frame.center));
+        const SIMDVector tangent = LoadFloat(frame.tangent);
+        const SIMDVector bitangent = LoadFloat(frame.bitangent);
+        const f32 ax = VectorGetX(Vector3Dot(aOffset, tangent));
+        const f32 ay = VectorGetX(Vector3Dot(aOffset, bitangent));
+        const f32 bx = VectorGetX(Vector3Dot(bOffset, tangent));
+        const f32 by = VectorGetX(Vector3Dot(bOffset, bitangent));
         signedArea += (ax * by) - (bx * ay);
     }
     return signedArea * 0.5f;
@@ -861,7 +921,7 @@ template<typename BoundaryEdgeVector, typename OrderedEdgeVector>
         return false;
 
     const f32 signedArea = ProjectedSignedLoopArea(instance, frame, outOrderedEdges);
-    if(!IsFinite(signedArea) || DeformableValidation::AbsF32(signedArea) <= s_FrameEpsilon)
+    if(!IsFinite(signedArea) || Abs(signedArea) <= s_FrameEpsilon)
         return false;
     if(signedArea < 0.0f)
         ReverseBoundaryLoop(outOrderedEdges);
@@ -882,9 +942,18 @@ void AccumulateMorphDelta(
     const DeformableMorphDelta& source,
     const f32 weight)
 {
-    AccumulateScaled(target.deltaPosition, source.deltaPosition, weight);
-    AccumulateScaled(target.deltaNormal, source.deltaNormal, weight);
-    AccumulateScaled(target.deltaTangent, source.deltaTangent, weight);
+    StoreFloat(
+        VectorMultiplyAdd(LoadFloat(source.deltaPosition), VectorReplicate(weight), LoadFloat(target.deltaPosition)),
+        &target.deltaPosition
+    );
+    StoreFloat(
+        VectorMultiplyAdd(LoadFloat(source.deltaNormal), VectorReplicate(weight), LoadFloat(target.deltaNormal)),
+        &target.deltaNormal
+    );
+    StoreFloat(
+        VectorMultiplyAdd(LoadFloat(source.deltaTangent), VectorReplicate(weight), LoadFloat(target.deltaTangent)),
+        &target.deltaTangent
+    );
 }
 
 [[nodiscard]] bool BuildMorphDeltaLookup(
@@ -934,7 +1003,7 @@ template<usize sourceCount>
         const f32 weight = sourceWeights[sourceIndex];
         if(!IsFinite(weight) || weight < 0.0f)
             return false;
-        if(!ActiveWeight(weight))
+        if(!DeformableValidation::ActiveWeight(weight))
             continue;
 
         const DeformableMorphDelta* sourceDelta = FindMorphDelta(
@@ -1030,7 +1099,7 @@ template<typename EdgeVector, typename VertexVector>
 {
     if(!IsFinite(weight) || weight < 0.0f)
         return false;
-    if(!ActiveWeight(weight))
+    if(!DeformableValidation::ActiveWeight(weight))
         return true;
 
     for(u32 sampleIndex = 0u; sampleIndex < sampleCount; ++sampleIndex){
@@ -1059,7 +1128,7 @@ template<typename EdgeVector, typename VertexVector>
     u32 bestIndex = Limit<u32>::s_Max;
     for(u32 sampleIndex = 0u; sampleIndex < sampleCount; ++sampleIndex){
         const SkinWeightSample& sample = samples[sampleIndex];
-        if(!ActiveWeight(sample.weight))
+        if(!DeformableValidation::ActiveWeight(sample.weight))
             continue;
         if(bestIndex == Limit<u32>::s_Max || sample.weight > samples[bestIndex].weight)
             bestIndex = sampleIndex;
@@ -1090,7 +1159,7 @@ template<usize sourceCount>
         const f32 sourceWeight = sourceWeights[sourceIndex];
         if(!IsFinite(sourceWeight) || sourceWeight < 0.0f)
             return false;
-        if(!ActiveWeight(sourceWeight))
+        if(!DeformableValidation::ActiveWeight(sourceWeight))
             continue;
 
         const u32 vertex = sourceVertices[sourceIndex];
@@ -1126,7 +1195,7 @@ template<usize sourceCount>
             return false;
     }
 
-    if(!ActiveWeight(selectedWeightSum))
+    if(!DeformableValidation::ActiveWeight(selectedWeightSum))
         return false;
 
     const f32 invSelectedWeightSum = 1.0f / selectedWeightSum;
@@ -1152,7 +1221,7 @@ template<usize sourceCount>
         const f32 sourceWeight = sourceWeights[sourceIndex];
         if(!IsFinite(sourceWeight) || sourceWeight < 0.0f)
             return false;
-        if(!ActiveWeight(sourceWeight))
+        if(!DeformableValidation::ActiveWeight(sourceWeight))
             continue;
 
         const u32 vertex = sourceVertices[sourceIndex];
@@ -1160,20 +1229,21 @@ template<usize sourceCount>
             return false;
 
         const Float4U& sourceColor = vertices[vertex].color0;
-        if(!DeformableValidation::IsFiniteFloat4(sourceColor))
+        const SIMDVector sourceColorVector = LoadFloat(sourceColor);
+        if(!DeformableValidation::FiniteVector(sourceColorVector, 0xFu))
             return false;
 
-        color = VectorMultiplyAdd(LoadFloat(sourceColor), VectorReplicate(sourceWeight), color);
+        color = VectorMultiplyAdd(sourceColorVector, VectorReplicate(sourceWeight), color);
         weightSum += sourceWeight;
-        if(Vector4IsNaN(color) || Vector4IsInfinite(color) || !IsFinite(weightSum))
+        if(!DeformableValidation::FiniteVector(color, 0xFu) || !IsFinite(weightSum))
             return false;
     }
 
-    if(!ActiveWeight(weightSum))
+    if(!DeformableValidation::ActiveWeight(weightSum))
         return false;
 
     StoreFloat(VectorScale(color, 1.0f / weightSum), &outColor);
-    return DeformableValidation::IsFiniteFloat4(outColor);
+    return DeformableValidation::FiniteVector(LoadFloat(outColor), 0xFu);
 }
 
 [[nodiscard]] SourceSample MakeFallbackSourceSample(const u32 sourceTriangle, const u32 corner){
@@ -1331,14 +1401,26 @@ template<typename AssignedSampleVector>
     return true;
 }
 
-[[nodiscard]] Vec3 ProjectedEdgeDirection(
+[[nodiscard]] Float4 ProjectedEdgeDirection(
     const Vector<DeformableVertexRest>& vertices,
     const HoleFrame& frame,
     const EdgeRecord& edge)
 {
-    Vec3 direction = Subtract(ToVec3(vertices[edge.b].position), ToVec3(vertices[edge.a].position));
-    direction = Subtract(direction, Scale(frame.normal, Dot(direction, frame.normal)));
-    return Normalize(direction, frame.tangent);
+    Float4 direction;
+    StoreFloat(
+        VectorSubtract(LoadFloat(vertices[edge.b].position), LoadFloat(vertices[edge.a].position)),
+        &direction
+    );
+    StoreFloat(
+        VectorMultiplyAdd(
+            LoadFloat(frame.normal),
+            VectorReplicate(-VectorGetX(Vector3Dot(LoadFloat(direction), LoadFloat(frame.normal)))),
+            LoadFloat(direction)
+        ),
+        &direction
+    );
+    StoreFloat(DeformableRuntime::Normalize(LoadFloat(direction), LoadFloat(frame.tangent)), &direction);
+    return direction;
 }
 
 [[nodiscard]] bool BuildWallVertexFrame(
@@ -1348,26 +1430,43 @@ template<typename AssignedSampleVector>
     const EdgeRecord& currentEdge,
     WallVertexFrame& outFrame)
 {
-    const Vec3 previousDirection = ProjectedEdgeDirection(vertices, frame, previousEdge);
-    const Vec3 currentDirection = ProjectedEdgeDirection(vertices, frame, currentEdge);
-    const Vec3 previousInward = Normalize(Cross(frame.normal, previousDirection), frame.bitangent);
-    const Vec3 currentInward = Normalize(Cross(frame.normal, currentDirection), previousInward);
-    Vec3 normal = Normalize(Add(previousInward, currentInward), currentInward);
+    const Float4 previousDirection = ProjectedEdgeDirection(vertices, frame, previousEdge);
+    const Float4 currentDirection = ProjectedEdgeDirection(vertices, frame, currentEdge);
+    const SIMDVector previousInwardVector = DeformableRuntime::Normalize(
+        Vector3Cross(LoadFloat(frame.normal), LoadFloat(previousDirection)),
+        LoadFloat(frame.bitangent)
+    );
+    const SIMDVector currentInwardVector = DeformableRuntime::Normalize(
+        Vector3Cross(LoadFloat(frame.normal), LoadFloat(currentDirection)),
+        previousInwardVector
+    );
+    Float4 normal;
+    StoreFloat(
+        DeformableRuntime::Normalize(VectorAdd(previousInwardVector, currentInwardVector), currentInwardVector),
+        &normal
+    );
 
-    const Vec3 position = ToVec3(vertices[currentEdge.a].position);
-    const Vec3 centerOffset = Subtract(frame.center, position);
-    if(Dot(normal, centerOffset) < 0.0f)
-        normal = Scale(normal, -1.0f);
+    const SIMDVector centerOffset = VectorSubtract(LoadFloat(frame.center), LoadFloat(vertices[currentEdge.a].position));
+    if(VectorGetX(Vector3Dot(LoadFloat(normal), centerOffset)) < 0.0f)
+        StoreFloat(VectorScale(LoadFloat(normal), -1.0f), &normal);
 
-    Vec3 tangent = Cross(frame.normal, normal);
-    tangent = Subtract(tangent, Scale(normal, Dot(tangent, normal)));
-    tangent = Normalize(tangent, currentDirection);
+    Float4 tangent;
+    StoreFloat(Vector3Cross(LoadFloat(frame.normal), LoadFloat(normal)), &tangent);
+    StoreFloat(
+        VectorMultiplyAdd(
+            LoadFloat(normal),
+            VectorReplicate(-VectorGetX(Vector3Dot(LoadFloat(tangent), LoadFloat(normal)))),
+            LoadFloat(tangent)
+        ),
+        &tangent
+    );
+    StoreFloat(DeformableRuntime::Normalize(LoadFloat(tangent), LoadFloat(currentDirection)), &tangent);
 
     outFrame.normal = normal;
     outFrame.tangent = tangent;
-    return LengthSquared(outFrame.normal) > s_FrameEpsilon
-        && LengthSquared(outFrame.tangent) > s_FrameEpsilon
-        && DeformableValidation::AbsF32(Dot(outFrame.normal, outFrame.tangent)) <= 0.001f
+    return VectorGetX(Vector3LengthSq(LoadFloat(outFrame.normal))) > s_FrameEpsilon
+        && VectorGetX(Vector3LengthSq(LoadFloat(outFrame.tangent))) > s_FrameEpsilon
+        && Abs(VectorGetX(Vector3Dot(LoadFloat(outFrame.normal), LoadFloat(outFrame.tangent)))) <= 0.001f
     ;
 }
 
@@ -1379,9 +1478,9 @@ template<typename AssignedSampleVector>
     const SkinInfluence4* wallSkin,
     const SourceSample& wallSourceSample,
     const Float4U& wallColor,
-    const Vec3& position,
-    const Vec3& normal,
-    const Vec3& tangent,
+    const Float4& position,
+    const Float4& normal,
+    const Float4& tangent,
     const f32 uvU,
     const f32 uvV,
     u32& outVertex)
@@ -1396,12 +1495,12 @@ template<typename AssignedSampleVector>
         return false;
 
     DeformableVertexRest wallVertex = vertices[sourceVertex];
-    wallVertex.position = ToFloat3(position);
-    wallVertex.normal = ToFloat3(normal);
+    wallVertex.position = Float3U(position.x, position.y, position.z);
+    wallVertex.normal = Float3U(normal.x, normal.y, normal.z);
     wallVertex.tangent.x = tangent.x;
     wallVertex.tangent.y = tangent.y;
     wallVertex.tangent.z = tangent.z;
-    wallVertex.tangent.w = TangentHandedness(wallVertex.tangent.w);
+    wallVertex.tangent.w = wallVertex.tangent.w < 0.0f ? -1.0f : 1.0f;
     wallVertex.uv0 = Float2U(uvU, uvV);
     wallVertex.color0 = wallColor;
     if(!DeformableValidation::ValidRestVertexFrame(wallVertex))
@@ -1423,10 +1522,10 @@ template<typename AssignedSampleVector>
     const f32 radiusY,
     const u32 (&triangleIndices)[3])
 {
-    const Vec3 centroid = TriangleCentroid(instance, triangleIndices);
-    const Vec3 offset = Subtract(centroid, frame.center);
-    const f32 x = Dot(offset, frame.tangent) / radiusX;
-    const f32 y = Dot(offset, frame.bitangent) / radiusY;
+    const Float4 centroid = TriangleCentroid(instance, triangleIndices);
+    const SIMDVector offset = VectorSubtract(LoadFloat(centroid), LoadFloat(frame.center));
+    const f32 x = VectorGetX(Vector3Dot(offset, LoadFloat(frame.tangent))) / radiusX;
+    const f32 y = VectorGetX(Vector3Dot(offset, LoadFloat(frame.bitangent))) / radiusY;
     return ((x * x) + (y * y)) <= 1.0f;
 }
 
@@ -1480,10 +1579,10 @@ bool PreviewHole(
     if(!__hidden_deformable_surface_edit::BuildPreviewFrame(instance, params, frame))
         return false;
 
-    outPreview.center = DeformableRuntime::ToFloat4(frame.center, 1.0f);
-    outPreview.normal = DeformableRuntime::ToFloat4(frame.normal);
-    outPreview.tangent = DeformableRuntime::ToFloat4(frame.tangent);
-    outPreview.bitangent = DeformableRuntime::ToFloat4(frame.bitangent);
+    outPreview.center = Float4(frame.center.x, frame.center.y, frame.center.z, 1.0f);
+    outPreview.normal = Float4(frame.normal.x, frame.normal.y, frame.normal.z, 0.0f);
+    outPreview.tangent = Float4(frame.tangent.x, frame.tangent.y, frame.tangent.z, 0.0f);
+    outPreview.bitangent = Float4(frame.bitangent.x, frame.bitangent.y, frame.bitangent.z, 0.0f);
     outPreview.radius = params.radius;
     outPreview.ellipseRatio = params.ellipseRatio;
     outPreview.depth = params.depth;
@@ -1523,8 +1622,8 @@ bool CommitHole(
     if(outRecord){
         outRecord->type = DeformableSurfaceEditRecordType::Hole;
         outRecord->hole.restSample = params.posedHit.restSample;
-        outRecord->hole.restPosition = DeformableRuntime::ToFloat3(recordFrame.center);
-        outRecord->hole.restNormal = DeformableRuntime::ToFloat3(recordFrame.normal);
+        outRecord->hole.restPosition = Float3U(recordFrame.center.x, recordFrame.center.y, recordFrame.center.z);
+        outRecord->hole.restNormal = Float3U(recordFrame.normal.x, recordFrame.normal.y, recordFrame.normal.z);
         outRecord->hole.baseEditRevision = session.editRevision;
         outRecord->hole.radius = params.radius;
         outRecord->hole.ellipseRatio = params.ellipseRatio;
@@ -1596,52 +1695,56 @@ bool ResolveAccessoryAttachmentTransform(
     if(firstWallVertex >= posedVertices.size() || wallVertexCount > posedVertices.size() - firstWallVertex)
         return false;
 
-    DeformableRuntime::Vec3 rimCenter;
-    DeformableRuntime::Vec3 innerCenter;
-    DeformableRuntime::Vec3 firstRimPosition;
+    SIMDVector rimCenter = VectorZero();
+    SIMDVector innerCenter = VectorZero();
+    Float4 firstRimPosition;
     const usize wallPairCount = wallVertexCount / 2u;
     for(usize pairIndex = 0u; pairIndex < wallPairCount; ++pairIndex){
         const usize rimVertexIndex = firstWallVertex + (pairIndex * 2u);
         const usize innerVertexIndex = rimVertexIndex + 1u;
-        const DeformableRuntime::Vec3 rimPosition =
-            DeformableRuntime::ToVec3(posedVertices[rimVertexIndex].position)
-        ;
+        const SIMDVector rimPosition = LoadFloat(posedVertices[rimVertexIndex].position);
         if(pairIndex == 0u)
-            firstRimPosition = rimPosition;
-        rimCenter = DeformableRuntime::Add(
-            rimCenter,
-            rimPosition
-        );
-        innerCenter = DeformableRuntime::Add(
-            innerCenter,
-            DeformableRuntime::ToVec3(posedVertices[innerVertexIndex].position)
-        );
+            StoreFloat(rimPosition, &firstRimPosition);
+        rimCenter = VectorAdd(rimCenter, rimPosition);
+        innerCenter = VectorAdd(innerCenter, LoadFloat(posedVertices[innerVertexIndex].position));
     }
 
     const f32 invWallPairCount = 1.0f / static_cast<f32>(wallPairCount);
-    rimCenter = DeformableRuntime::Scale(rimCenter, invWallPairCount);
-    innerCenter = DeformableRuntime::Scale(innerCenter, invWallPairCount);
-    DeformableRuntime::Vec3 normal = DeformableRuntime::Subtract(rimCenter, innerCenter);
-    normal = DeformableRuntime::Normalize(normal, DeformableRuntime::Vec3{ 0.0f, 0.0f, 1.0f });
+    rimCenter = VectorScale(rimCenter, invWallPairCount);
+    innerCenter = VectorScale(innerCenter, invWallPairCount);
+    Float4 rimCenterStorage;
+    StoreFloat(rimCenter, &rimCenterStorage);
+    Float4 normal;
+    StoreFloat(VectorSubtract(rimCenter, innerCenter), &normal);
+    StoreFloat(
+        DeformableRuntime::Normalize(LoadFloat(normal), VectorSet(0.0f, 0.0f, 1.0f, 0.0f)),
+        &normal
+    );
     if(!__hidden_deformable_surface_edit::FiniteVec3(normal)
-        || DeformableRuntime::LengthSquared(normal) <= DeformableRuntime::s_FrameEpsilon
+        || VectorGetX(Vector3LengthSq(LoadFloat(normal))) <= DeformableRuntime::s_FrameEpsilon
     )
         return false;
 
-    const DeformableRuntime::Vec3 accessoryPosition = DeformableRuntime::Add(
-        rimCenter,
-        DeformableRuntime::Scale(normal, attachment.normalOffset())
+    Float4 accessoryPosition;
+    StoreFloat(
+        VectorMultiplyAdd(LoadFloat(normal), VectorReplicate(attachment.normalOffset()), rimCenter),
+        &accessoryPosition
     );
     if(!__hidden_deformable_surface_edit::FiniteVec3(accessoryPosition))
         return false;
 
-    DeformableRuntime::Vec3 tangent = DeformableRuntime::Subtract(firstRimPosition, rimCenter);
-    tangent = DeformableRuntime::Subtract(
-        tangent,
-        DeformableRuntime::Scale(normal, DeformableRuntime::Dot(tangent, normal))
+    Float4 tangent;
+    StoreFloat(VectorSubtract(LoadFloat(firstRimPosition), LoadFloat(rimCenterStorage)), &tangent);
+    StoreFloat(
+        VectorMultiplyAdd(
+            LoadFloat(normal),
+            VectorReplicate(-VectorGetX(Vector3Dot(LoadFloat(tangent), LoadFloat(normal)))),
+            LoadFloat(tangent)
+        ),
+        &tangent
     );
-    if(DeformableRuntime::LengthSquared(tangent) <= DeformableRuntime::s_FrameEpsilon)
-        tangent = DeformableRuntime::FallbackTangent(normal);
+    if(VectorGetX(Vector3LengthSq(LoadFloat(tangent))) <= DeformableRuntime::s_FrameEpsilon)
+        StoreFloat(DeformableRuntime::FallbackTangent(LoadFloat(normal)), &tangent);
 
     outTransform.position = Float4(accessoryPosition.x, accessoryPosition.y, accessoryPosition.z);
     outTransform.rotation = __hidden_deformable_surface_edit::RotationFromFrame(tangent, normal);
@@ -1902,7 +2005,7 @@ bool CommitDeformableRestSpaceHole(
     }
 
     usize wallVertexCount = 0u;
-    if(DeformableRuntime::ActiveLength(params.depth)){
+    if(params.depth > DeformableRuntime::s_Epsilon){
         if(orderedBoundaryEdges.size() > Limit<usize>::s_Max / 6u)
             return false;
 
@@ -1914,7 +2017,7 @@ bool CommitDeformableRestSpaceHole(
     }
 
     const usize removedIndexCount = static_cast<usize>(removedTriangleCount) * 3u;
-    const usize wallIndexCount = DeformableRuntime::ActiveLength(params.depth)
+    const usize wallIndexCount = params.depth > DeformableRuntime::s_Epsilon
         ? orderedBoundaryEdges.size() * 6u
         : 0u
     ;
@@ -1991,7 +2094,7 @@ bool CommitDeformableRestSpaceHole(
 
     u32 firstWallVertex = Limit<u32>::s_Max;
     u32 addedWallVertexCount = 0u;
-    if(DeformableRuntime::ActiveLength(params.depth)){
+    if(params.depth > DeformableRuntime::s_Epsilon){
         const usize boundaryVertexCount = orderedBoundaryEdges.size();
         firstWallVertex = static_cast<u32>(newRestVertices.size());
         addedWallVertexCount = static_cast<u32>(boundaryVertexCount * 2u);
@@ -2005,27 +2108,29 @@ bool CommitDeformableRestSpaceHole(
             boundaryU[edgeIndex] = boundaryLength;
 
             const __hidden_deformable_surface_edit::EdgeRecord& edge = orderedBoundaryEdges[edgeIndex];
-            DeformableRuntime::Vec3 edgeDelta =
-                DeformableRuntime::Subtract(
-                    DeformableRuntime::ToVec3(newRestVertices[edge.b].position),
-                    DeformableRuntime::ToVec3(newRestVertices[edge.a].position)
-                )
-            ;
-            edgeDelta = DeformableRuntime::Subtract(
-                edgeDelta,
-                DeformableRuntime::Scale(frame.normal, DeformableRuntime::Dot(edgeDelta, frame.normal))
-            )
-            ;
+            Float4 edgeDelta;
+            StoreFloat(
+                VectorSubtract(LoadFloat(newRestVertices[edge.b].position), LoadFloat(newRestVertices[edge.a].position)),
+                &edgeDelta
+            );
+            StoreFloat(
+                VectorMultiplyAdd(
+                    LoadFloat(frame.normal),
+                    VectorReplicate(-VectorGetX(Vector3Dot(LoadFloat(edgeDelta), LoadFloat(frame.normal)))),
+                    LoadFloat(edgeDelta)
+                ),
+                &edgeDelta
+            );
 
-            const f32 edgeLength = DeformableRuntime::Length(edgeDelta);
-            if(!IsFinite(edgeLength) || !DeformableRuntime::ActiveLength(edgeLength))
+            const f32 edgeLength = VectorGetX(Vector3Length(LoadFloat(edgeDelta)));
+            if(!IsFinite(edgeLength) || edgeLength <= DeformableRuntime::s_Epsilon)
                 return false;
             boundaryLength += edgeLength;
             if(!IsFinite(boundaryLength))
                 return false;
         }
 
-        if(!DeformableRuntime::ActiveLength(boundaryLength))
+        if(boundaryLength <= DeformableRuntime::s_Epsilon)
             return false;
 
         Vector<u32, Core::Alloc::ScratchAllocator<u32>> rimVertices{
@@ -2052,15 +2157,13 @@ bool CommitDeformableRestSpaceHole(
             )
                 return false;
 
-            const DeformableRuntime::Vec3 rimPosition =
-                DeformableRuntime::ToVec3(newRestVertices[edge.a].position)
-            ;
-            const DeformableRuntime::Vec3 innerPosition =
-                DeformableRuntime::Subtract(
-                    rimPosition,
-                    DeformableRuntime::Scale(frame.normal, params.depth)
-                )
-            ;
+            Float4 rimPosition;
+            StoreFloat(LoadFloat(newRestVertices[edge.a].position), &rimPosition);
+            Float4 innerPosition;
+            StoreFloat(
+                VectorMultiplyAdd(LoadFloat(frame.normal), VectorReplicate(-params.depth), LoadFloat(rimPosition)),
+                &innerPosition
+            );
             const f32 uvU = boundaryU[edgeIndex] / boundaryLength;
 
             const u32 rimAttributeVertex[1] = { edge.a };

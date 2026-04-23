@@ -319,7 +319,7 @@ NWB_INLINE void RankDecompose(usize& a, usize& b, usize& c, f32 x, f32 y, f32 z)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-}
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -330,14 +330,14 @@ NWB_INLINE bool SIMDCALL MatrixIsNaN(const SIMDMatrix& matrix)noexcept{
     SIMDVector mask = VectorOrInt(VectorIsNaN(matrix.v[0]), VectorIsNaN(matrix.v[1]));
     mask = VectorOrInt(mask, VectorIsNaN(matrix.v[2]));
     mask = VectorOrInt(mask, VectorIsNaN(matrix.v[3]));
-    return SIMDVectorDetail::MoveMask(mask) != 0;
+    return VectorMoveMask(mask) != 0;
 }
 
 NWB_INLINE bool SIMDCALL MatrixIsInfinite(const SIMDMatrix& matrix)noexcept{
     SIMDVector mask = VectorOrInt(VectorIsInfinite(matrix.v[0]), VectorIsInfinite(matrix.v[1]));
     mask = VectorOrInt(mask, VectorIsInfinite(matrix.v[2]));
     mask = VectorOrInt(mask, VectorIsInfinite(matrix.v[3]));
-    return SIMDVectorDetail::MoveMask(mask) != 0;
+    return VectorMoveMask(mask) != 0;
 }
 
 NWB_INLINE bool SIMDCALL MatrixIsIdentity(const SIMDMatrix& matrix)noexcept{
@@ -347,7 +347,7 @@ NWB_INLINE bool SIMDCALL MatrixIsIdentity(const SIMDMatrix& matrix)noexcept{
     SIMDVector mask3 = VectorEqual(matrix.v[3], s_SIMDIdentityR3);
     mask0 = VectorAndInt(mask0, mask1);
     mask2 = VectorAndInt(mask2, mask3);
-    return SIMDVectorDetail::MoveMask(VectorAndInt(mask0, mask2)) == 0xFu;
+    return VectorMoveMask(VectorAndInt(mask0, mask2)) == 0xFu;
 }
 
 

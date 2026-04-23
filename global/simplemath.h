@@ -40,6 +40,18 @@ template<typename T, typename Compare>
 }
 
 template<typename T>
+[[nodiscard]] constexpr NWB_INLINE T Abs(const T value){ return value < static_cast<T>(0) ? -value : value; }
+
+template<typename T>
+[[nodiscard]] constexpr NWB_INLINE T Saturate(const T value){
+    if(value < static_cast<T>(0))
+        return static_cast<T>(0);
+    if(value > static_cast<T>(1))
+        return static_cast<T>(1);
+    return value;
+}
+
+template<typename T>
 [[nodiscard]] constexpr NWB_INLINE T FloorLog2(const T x){ return (x == 1) ? 0 : (1 + FloorLog2<T>(x >> 1)); }
 template<typename T>
 [[nodiscard]] constexpr NWB_INLINE T CeilLog2(const T x){ return (x == 1) ? 0 : (FloorLog2<T>(x - 1) + 1); }

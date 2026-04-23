@@ -31,8 +31,8 @@ using namespace DeformableRuntime;
 [[nodiscard]] bool IsFiniteRay(const DeformablePickingRay& ray){
     const f32 minDistance = ray.minDistance();
     const f32 maxDistance = ray.maxDistance();
-    return DeformableValidation::IsFiniteFloat3(ray.origin())
-        && DeformableValidation::IsFiniteFloat3(ray.direction())
+    return DeformableValidation::FiniteVector(LoadFloat(ray.origin()), 0x7u)
+        && DeformableValidation::FiniteVector(LoadFloat(ray.direction()), 0x7u)
         && IsFinite(minDistance)
         && IsFinite(maxDistance)
         && minDistance >= 0.0f
@@ -67,29 +67,51 @@ using namespace DeformableRuntime;
 }
 
 void OrthonormalizeFrame(
-    Vec3& normal,
+    Float4& normal,
     Float4U& tangent,
-    const Vec3& fallbackNormal,
+    const Float4& fallbackNormal,
     const Float4U& fallbackTangent)
 {
-    normal = Normalize(normal, Normalize(fallbackNormal, Vec3{ 0.0f, 0.0f, 1.0f }));
+    SIMDVector normalVector = DeformableRuntime::Normalize(
+        LoadFloat(normal),
+        DeformableRuntime::Normalize(LoadFloat(fallbackNormal), VectorSet(0.0f, 0.0f, 1.0f, 0.0f))
+    );
+    StoreFloat(normalVector, &normal);
 
-    Vec3 tangentVector{ tangent.x, tangent.y, tangent.z };
-    Vec3 projectedTangent = Subtract(tangentVector, Scale(normal, Dot(tangentVector, normal)));
-    if(LengthSquared(projectedTangent) <= s_FrameEpsilon){
-        const Vec3 fallbackTangentVector{ fallbackTangent.x, fallbackTangent.y, fallbackTangent.z };
-        projectedTangent = Subtract(fallbackTangentVector, Scale(normal, Dot(fallbackTangentVector, normal)));
+    const SIMDVector tangentVector = VectorSet(tangent.x, tangent.y, tangent.z, 0.0f);
+    Float4 projectedTangent;
+    StoreFloat(
+        VectorMultiplyAdd(
+            normalVector,
+            VectorReplicate(-VectorGetX(Vector3Dot(tangentVector, normalVector))),
+            tangentVector
+        ),
+        &projectedTangent
+    );
+    if(VectorGetX(Vector3LengthSq(LoadFloat(projectedTangent))) <= s_FrameEpsilon){
+        const SIMDVector fallbackTangentVector =
+            VectorSet(fallbackTangent.x, fallbackTangent.y, fallbackTangent.z, 0.0f);
+        StoreFloat(
+            VectorMultiplyAdd(
+                normalVector,
+                VectorReplicate(-VectorGetX(Vector3Dot(fallbackTangentVector, normalVector))),
+                fallbackTangentVector
+            ),
+            &projectedTangent
+        );
     }
-    if(LengthSquared(projectedTangent) <= s_FrameEpsilon)
-        projectedTangent = FallbackTangent(normal);
+    if(VectorGetX(Vector3LengthSq(LoadFloat(projectedTangent))) <= s_FrameEpsilon)
+        StoreFloat(DeformableRuntime::FallbackTangent(normalVector), &projectedTangent);
 
-    projectedTangent = Normalize(projectedTangent, FallbackTangent(normal));
+    StoreFloat(
+        DeformableRuntime::Normalize(LoadFloat(projectedTangent), DeformableRuntime::FallbackTangent(normalVector)),
+        &projectedTangent
+    );
     tangent.x = projectedTangent.x;
     tangent.y = projectedTangent.y;
     tangent.z = projectedTangent.z;
-    tangent.w = TangentHandedness(
-        DeformableValidation::AbsF32(tangent.w) > s_Epsilon ? tangent.w : fallbackTangent.w
-    );
+    const f32 handedness = Abs(tangent.w) > s_Epsilon ? tangent.w : fallbackTangent.w;
+    tangent.w = handedness < 0.0f ? -1.0f : 1.0f;
 }
 
 template<typename VertexVector>
@@ -102,7 +124,7 @@ template<typename VertexVector>
         f32 weight = 0.0f;
         if(!ResolveMorphWeightSum(weights, morph.name, weight))
             return false;
-        if(!ActiveWeight(weight))
+        if(!DeformableValidation::ActiveWeight(weight))
             continue;
         if(morph.deltas.empty())
             return false;
@@ -112,28 +134,35 @@ template<typename VertexVector>
                 return false;
 
             DeformableVertexRest& vertex = vertices[delta.vertexId];
-            AccumulateScaled(vertex.position, delta.deltaPosition, weight);
-            AccumulateScaled(vertex.normal, delta.deltaNormal, weight);
-            AccumulateScaled(vertex.tangent, delta.deltaTangent, weight);
+            StoreFloat(
+                VectorMultiplyAdd(LoadFloat(delta.deltaPosition), VectorReplicate(weight), LoadFloat(vertex.position)),
+                &vertex.position
+            );
+            StoreFloat(
+                VectorMultiplyAdd(LoadFloat(delta.deltaNormal), VectorReplicate(weight), LoadFloat(vertex.normal)),
+                &vertex.normal
+            );
+            StoreFloat(
+                VectorMultiplyAdd(LoadFloat(delta.deltaTangent), VectorReplicate(weight), LoadFloat(vertex.tangent)),
+                &vertex.tangent
+            );
         }
     }
     return true;
 }
 
-[[nodiscard]] Vec3 TransformJointPosition(const DeformableJointMatrix& matrix, const Vec3& position){
-    const SIMDVector positionVector = LoadVec3(position);
+[[nodiscard]] SIMDVector TransformJointPosition(const DeformableJointMatrix& matrix, const SIMDVector positionVector){
     SIMDVector result = VectorMultiply(VectorSplatX(positionVector), LoadFloat(matrix.column0));
     result = VectorMultiplyAdd(VectorSplatY(positionVector), LoadFloat(matrix.column1), result);
     result = VectorMultiplyAdd(VectorSplatZ(positionVector), LoadFloat(matrix.column2), result);
-    return StoreVec3(VectorAdd(result, LoadFloat(matrix.column3)));
+    return VectorAdd(result, LoadFloat(matrix.column3));
 }
 
-[[nodiscard]] Vec3 TransformJointDirection(const DeformableJointMatrix& matrix, const Vec3& direction){
-    const SIMDVector directionVector = LoadVec3(direction);
+[[nodiscard]] SIMDVector TransformJointDirection(const DeformableJointMatrix& matrix, const SIMDVector directionVector){
     SIMDVector result = VectorMultiply(VectorSplatX(directionVector), LoadFloat(matrix.column0));
     result = VectorMultiplyAdd(VectorSplatY(directionVector), LoadFloat(matrix.column1), result);
     result = VectorMultiplyAdd(VectorSplatZ(directionVector), LoadFloat(matrix.column2), result);
-    return StoreVec3(result);
+    return result;
 }
 
 [[nodiscard]] bool ValidateJointPalette(
@@ -167,35 +196,49 @@ template<typename VertexVector>
     if(!DeformableValidation::ValidSkinInfluence(skin))
         return false;
 
-    Vec3 skinnedPosition;
-    Vec3 skinnedNormal;
-    Vec3 skinnedTangent;
+    SIMDVector skinnedPosition = VectorZero();
+    SIMDVector skinnedNormal = VectorZero();
+    SIMDVector skinnedTangent = VectorZero();
     f32 totalWeight = 0.0f;
 
     for(u32 influenceIndex = 0; influenceIndex < 4u; ++influenceIndex){
         const f32 weight = skin.weight[influenceIndex];
         const u32 joint = static_cast<u32>(skin.joint[influenceIndex]);
-        if(!ActiveWeight(weight))
+        if(!DeformableValidation::ActiveWeight(weight))
             continue;
         if(joint >= jointPalette->joints.size() || !IsAffineJointMatrix(jointPalette->joints[joint]))
             return false;
 
         const DeformableJointMatrix& matrix = jointPalette->joints[joint];
-        skinnedPosition = Add(skinnedPosition, Scale(TransformJointPosition(matrix, ToVec3(vertex.position)), weight));
-        skinnedNormal = Add(skinnedNormal, Scale(TransformJointDirection(matrix, ToVec3(vertex.normal)), weight));
-        const Vec3 tangentVector{ vertex.tangent.x, vertex.tangent.y, vertex.tangent.z };
-        skinnedTangent = Add(skinnedTangent, Scale(TransformJointDirection(matrix, tangentVector), weight));
+        const SIMDVector weightVector = VectorReplicate(weight);
+        skinnedPosition = VectorMultiplyAdd(
+            TransformJointPosition(matrix, LoadFloat(vertex.position)),
+            weightVector,
+            skinnedPosition
+        );
+        skinnedNormal = VectorMultiplyAdd(
+            TransformJointDirection(matrix, LoadFloat(vertex.normal)),
+            weightVector,
+            skinnedNormal
+        );
+        skinnedTangent = VectorMultiplyAdd(
+            TransformJointDirection(matrix, VectorSet(vertex.tangent.x, vertex.tangent.y, vertex.tangent.z, 0.0f)),
+            weightVector,
+            skinnedTangent
+        );
         totalWeight += weight;
     }
 
-    if(!ActiveWeight(totalWeight))
+    if(!DeformableValidation::ActiveWeight(totalWeight))
         return true;
 
-    vertex.position = ToFloat3(skinnedPosition);
-    vertex.normal = ToFloat3(skinnedNormal);
-    vertex.tangent.x = skinnedTangent.x;
-    vertex.tangent.y = skinnedTangent.y;
-    vertex.tangent.z = skinnedTangent.z;
+    StoreFloat(skinnedPosition, &vertex.position);
+    StoreFloat(skinnedNormal, &vertex.normal);
+    Float4 skinnedTangentStorage;
+    StoreFloat(skinnedTangent, &skinnedTangentStorage);
+    vertex.tangent.x = skinnedTangentStorage.x;
+    vertex.tangent.y = skinnedTangentStorage.y;
+    vertex.tangent.z = skinnedTangentStorage.z;
     return true;
 }
 
@@ -203,11 +246,14 @@ void ApplyDisplacement(const DeformableDisplacement& displacement, DeformableVer
     if(displacement.mode != DeformableDisplacementMode::ScalarUvRamp)
         return;
 
-    const f32 offset = DeformableValidation::Clamp01(vertex.uv0.x) * displacement.amplitude;
-    if(!ActiveWeight(offset))
+    const f32 offset = Saturate(vertex.uv0.x) * displacement.amplitude;
+    if(!DeformableValidation::ActiveWeight(offset))
         return;
 
-    AccumulateScaled(vertex.position, vertex.normal, offset);
+    StoreFloat(
+        VectorMultiplyAdd(LoadFloat(vertex.normal), VectorReplicate(offset), LoadFloat(vertex.position)),
+        &vertex.position
+    );
 }
 
 void ApplyTransform(const Core::Scene::TransformComponent* transform, DeformableVertexRest& vertex){
@@ -218,45 +264,56 @@ void ApplyTransform(const Core::Scene::TransformComponent* transform, Deformable
     position = Vector3Rotate(position, LoadFloat(transform->rotation));
     StoreFloat(VectorAdd(position, LoadFloat(transform->position)), &vertex.position);
 
-    Vec3 normal = RotateByQuaternion(ToVec3(vertex.normal), transform->rotation);
-    normal = Normalize(normal, Vec3{ 0.0f, 0.0f, 1.0f });
-    vertex.normal = ToFloat3(normal);
+    SIMDVector normalVector = Vector3Rotate(LoadFloat(vertex.normal), LoadFloat(transform->rotation));
+    normalVector = DeformableRuntime::Normalize(normalVector, VectorSet(0.0f, 0.0f, 1.0f, 0.0f));
+    Float4 normal;
+    StoreFloat(normalVector, &normal);
+    vertex.normal = Float3U(normal.x, normal.y, normal.z);
 
-    Vec3 tangent = RotateByQuaternion(Vec3{ vertex.tangent.x, vertex.tangent.y, vertex.tangent.z }, transform->rotation);
-    tangent = Normalize(tangent, FallbackTangent(normal));
+    const SIMDVector tangentVector = DeformableRuntime::Normalize(
+        Vector3Rotate(VectorSet(vertex.tangent.x, vertex.tangent.y, vertex.tangent.z, 0.0f), LoadFloat(transform->rotation)),
+        DeformableRuntime::FallbackTangent(normalVector)
+    );
+    Float4 tangent;
+    StoreFloat(tangentVector, &tangent);
     vertex.tangent.x = tangent.x;
     vertex.tangent.y = tangent.y;
     vertex.tangent.z = tangent.z;
 }
 
 [[nodiscard]] bool IntersectTriangle(
-    const Vec3& origin,
-    const Vec3& direction,
-    const Vec3& a,
-    const Vec3& b,
-    const Vec3& c,
+    const Float4& origin,
+    const Float4& direction,
+    const Float4& a,
+    const Float4& b,
+    const Float4& c,
     f32& outDistance,
     f32 (&outBary)[3])
 {
-    const Vec3 edge0 = Subtract(b, a);
-    const Vec3 edge1 = Subtract(c, a);
-    const Vec3 p = Cross(direction, edge1);
-    const f32 determinant = Dot(edge0, p);
-    if(DeformableValidation::AbsF32(determinant) <= s_Epsilon)
+    const SIMDVector originVector = LoadFloat(origin);
+    const SIMDVector directionVector = LoadFloat(direction);
+    const SIMDVector aVector = LoadFloat(a);
+    const SIMDVector bVector = LoadFloat(b);
+    const SIMDVector cVector = LoadFloat(c);
+    const SIMDVector edge0 = VectorSubtract(bVector, aVector);
+    const SIMDVector edge1 = VectorSubtract(cVector, aVector);
+    const SIMDVector p = Vector3Cross(directionVector, edge1);
+    const f32 determinant = VectorGetX(Vector3Dot(edge0, p));
+    if(Abs(determinant) <= s_Epsilon)
         return false;
 
     const f32 invDeterminant = 1.0f / determinant;
-    const Vec3 t = Subtract(origin, a);
-    const f32 u = Dot(t, p) * invDeterminant;
+    const SIMDVector t = VectorSubtract(originVector, aVector);
+    const f32 u = VectorGetX(Vector3Dot(t, p)) * invDeterminant;
     if(u < -s_Epsilon || u > 1.0f + s_Epsilon)
         return false;
 
-    const Vec3 q = Cross(t, edge0);
-    const f32 v = Dot(direction, q) * invDeterminant;
+    const SIMDVector q = Vector3Cross(t, edge0);
+    const f32 v = VectorGetX(Vector3Dot(directionVector, q)) * invDeterminant;
     if(v < -s_Epsilon || (u + v) > 1.0f + s_Epsilon)
         return false;
 
-    const f32 distance = Dot(edge1, q) * invDeterminant;
+    const f32 distance = VectorGetX(Vector3Dot(edge1, q)) * invDeterminant;
     if(!IsFinite(distance))
         return false;
 
@@ -303,14 +360,14 @@ template<typename VertexVector>
 
     for(usize vertexIndex = 0; vertexIndex < outVertices.size(); ++vertexIndex){
         DeformableVertexRest& vertex = outVertices[vertexIndex];
-        const Vec3 restNormal = DeformableRuntime::ToVec3(vertex.normal);
+        const Float4 restNormal(vertex.normal.x, vertex.normal.y, vertex.normal.z);
         const Float4U restTangent = vertex.tangent;
 
-        Vec3 normal = DeformableRuntime::ToVec3(vertex.normal);
+        Float4 normal(vertex.normal.x, vertex.normal.y, vertex.normal.z);
         __hidden_deformable_picking::OrthonormalizeFrame(normal, vertex.tangent, restNormal, restTangent);
-        vertex.normal = DeformableRuntime::ToFloat3(normal);
+        vertex.normal = Float3U(normal.x, normal.y, normal.z);
 
-        const Vec3 preSkinNormal = normal;
+        const Float4 preSkinNormal = normal;
         const Float4U preSkinTangent = vertex.tangent;
         if(!__hidden_deformable_picking::ApplySkin(
             instance,
@@ -319,9 +376,9 @@ template<typename VertexVector>
             vertex
         ))
             return false;
-        normal = DeformableRuntime::ToVec3(vertex.normal);
+        normal = Float4(vertex.normal.x, vertex.normal.y, vertex.normal.z);
         __hidden_deformable_picking::OrthonormalizeFrame(normal, vertex.tangent, preSkinNormal, preSkinTangent);
-        vertex.normal = DeformableRuntime::ToFloat3(normal);
+        vertex.normal = Float3U(normal.x, normal.y, normal.z);
 
         __hidden_deformable_picking::ApplyDisplacement(displacement, vertex);
         __hidden_deformable_picking::ApplyTransform(inputs.transform, vertex);
@@ -454,13 +511,14 @@ bool RaycastDeformableRuntimeMesh(
     if((instance.dirtyFlags & RuntimeMeshDirtyFlag::GpuUploadDirty) != 0u)
         return false;
 
-    using DeformableRuntime::Vec3;
-    const Vec3 rayOrigin = DeformableRuntime::ToVec3(ray.origin());
-    const Vec3 rayDirection = DeformableRuntime::Normalize(
-        DeformableRuntime::ToVec3(ray.direction()),
-        Vec3{}
+    const Float4 rayOrigin(ray.origin().x, ray.origin().y, ray.origin().z);
+    const SIMDVector rayDirectionVector = DeformableRuntime::Normalize(
+        VectorSet(ray.direction().x, ray.direction().y, ray.direction().z, 0.0f),
+        VectorZero()
     );
-    if(DeformableRuntime::LengthSquared(rayDirection) <= DeformableRuntime::s_FrameEpsilon)
+    Float4 rayDirection;
+    StoreFloat(rayDirectionVector, &rayDirection);
+    if(VectorGetX(Vector3LengthSq(rayDirectionVector)) <= DeformableRuntime::s_FrameEpsilon)
         return false;
 
     Core::Alloc::ScratchArena<> scratchArena;
@@ -480,9 +538,21 @@ bool RaycastDeformableRuntimeMesh(
         if(!DeformableRuntime::ValidateTriangleIndex(instance, static_cast<u32>(triangleIndex), vertexIndices))
             return false;
 
-        const Vec3 a = DeformableRuntime::ToVec3(posedVertices[vertexIndices[0]].position);
-        const Vec3 b = DeformableRuntime::ToVec3(posedVertices[vertexIndices[1]].position);
-        const Vec3 c = DeformableRuntime::ToVec3(posedVertices[vertexIndices[2]].position);
+        const Float4 a(
+            posedVertices[vertexIndices[0]].position.x,
+            posedVertices[vertexIndices[0]].position.y,
+            posedVertices[vertexIndices[0]].position.z
+        );
+        const Float4 b(
+            posedVertices[vertexIndices[1]].position.x,
+            posedVertices[vertexIndices[1]].position.y,
+            posedVertices[vertexIndices[1]].position.z
+        );
+        const Float4 c(
+            posedVertices[vertexIndices[2]].position.x,
+            posedVertices[vertexIndices[2]].position.y,
+            posedVertices[vertexIndices[2]].position.z
+        );
 
         f32 distance = 0.0f;
         f32 bary[3] = {};
@@ -499,15 +569,18 @@ bool RaycastDeformableRuntimeMesh(
         if(!ResolveDeformableRestSurfaceSample(instance, static_cast<u32>(triangleIndex), hitBary, restSample))
             continue;
 
-        const Vec3 edge0 = DeformableRuntime::Subtract(b, a);
-        const Vec3 edge1 = DeformableRuntime::Subtract(c, a);
-        const Vec3 normal = DeformableRuntime::Normalize(
-            DeformableRuntime::Cross(edge0, edge1),
-            Vec3{ 0.0f, 0.0f, 1.0f }
+        const SIMDVector aVector = LoadFloat(a);
+        const SIMDVector edge0 = VectorSubtract(LoadFloat(b), aVector);
+        const SIMDVector edge1 = VectorSubtract(LoadFloat(c), aVector);
+        Float4 normal;
+        StoreFloat(
+            DeformableRuntime::Normalize(Vector3Cross(edge0, edge1), VectorSet(0.0f, 0.0f, 1.0f, 0.0f)),
+            &normal
         );
-        const Vec3 position = DeformableRuntime::Add(
-            rayOrigin,
-            DeformableRuntime::Scale(rayDirection, distance)
+        Float4 position;
+        StoreFloat(
+            VectorMultiplyAdd(LoadFloat(rayDirection), VectorReplicate(distance), LoadFloat(rayOrigin)),
+            &position
         );
 
         closestDistance = distance;
@@ -519,8 +592,8 @@ bool RaycastDeformableRuntimeMesh(
         closestHit.bary[1] = hitBary[1];
         closestHit.bary[2] = hitBary[2];
         closestHit.setDistance(distance);
-        closestHit.position = DeformableRuntime::ToFloat4(position, 1.0f);
-        closestHit.normal = DeformableRuntime::ToFloat4(normal);
+        closestHit.position = Float4(position.x, position.y, position.z, 1.0f);
+        closestHit.normal = Float4(normal.x, normal.y, normal.z, 0.0f);
         closestHit.restSample = restSample;
         foundHit = true;
     }

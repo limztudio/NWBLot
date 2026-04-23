@@ -4,6 +4,8 @@
 
 #include "project_testbed.h"
 
+#include <cmath>
+
 #include <logger/client/logger.h>
 
 
@@ -97,6 +99,27 @@ static constexpr f32 s_AccessoryUniformScale = 0.16f;
 
 [[nodiscard]] static EditorVec3 NormalizeVec3(const EditorVec3& value, const EditorVec3& fallback){
     return NormalizeVec3(LoadFloat(static_cast<const Float4&>(value)), fallback);
+}
+
+static void ResolveFlyCameraAnglesFromTransform(
+    const NWB::Core::Scene::TransformComponent& transform,
+    f32& outYawRadians,
+    f32& outPitchRadians)
+{
+    const Float4 localForward(0.0f, 0.0f, 1.0f);
+    const EditorVec3 forward = NormalizeVec3(
+        Vector3Rotate(LoadFloat(localForward), LoadFloat(transform.rotation)),
+        EditorVec3{ 0.0f, 0.0f, 1.0f }
+    );
+    const f32 clampedForwardY = Min(Max(forward.y, -1.0f), 1.0f);
+    const f32 yawRadians = static_cast<f32>(std::atan2(forward.x, forward.z));
+    const f32 pitchRadians = static_cast<f32>(-std::asin(clampedForwardY));
+
+    outYawRadians = IsFinite(yawRadians) ? yawRadians : 0.0f;
+    outPitchRadians = IsFinite(pitchRadians)
+        ? ClampPitch(pitchRadians, s_FlyCameraPitchLimitRadians)
+        : 0.0f
+    ;
 }
 
 [[nodiscard]] static bool BuildEditorPickRay(
@@ -218,8 +241,6 @@ static void ApplyFlyCameraInput(
 
 static void ApplyFlyCameraInputToMainCamera(
     NWB::Core::ECS::World& world,
-    f32& yawRadians,
-    f32& pitchRadians,
     const f32 rightAxis,
     const f32 forwardAxis,
     const bool boosted,
@@ -231,6 +252,9 @@ static void ApplyFlyCameraInputToMainCamera(
     if(!cameraView.valid())
         return;
 
+    f32 yawRadians = 0.0f;
+    f32 pitchRadians = 0.0f;
+    ResolveFlyCameraAnglesFromTransform(*cameraView.transform, yawRadians, pitchRadians);
     ApplyFlyCameraInput(
         *cameraView.transform,
         yawRadians,
@@ -571,8 +595,6 @@ void ProjectTestbed::updateMainCamera(const f32 delta){
 
     __hidden_project_testbed_runtime::ApplyFlyCameraInputToMainCamera(
         *m_world,
-        m_mainCameraYawRadians,
-        m_mainCameraPitchRadians,
         rightAxis,
         forwardAxis,
         boosted,

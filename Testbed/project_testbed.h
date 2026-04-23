@@ -76,8 +76,6 @@ private:
     f32 m_surfaceEditRadius = 0.24f;
     f32 m_surfaceEditEllipseRatio = 1.0f;
     f32 m_surfaceEditDepth = 0.18f;
-    f32 m_mainCameraYawRadians = 0.0f;
-    f32 m_mainCameraPitchRadians = 0.0f;
     Array<bool, s_KeyStateCount> m_keyPressed = {};
     f32 m_pendingMouseDeltaX = 0.0f;
     f32 m_pendingMouseDeltaY = 0.0f;

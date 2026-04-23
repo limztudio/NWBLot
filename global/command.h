@@ -59,7 +59,7 @@ inline void ArgParseApp(CLI& cli, const isize argc, CharT** argv){
     }
 
     CharT emptyProgramName[] = { CharT('\0') };
-    CharT* emptyArgv[] = { emptyProgramName };
+    CharT* emptyArgv[] = { emptyProgramName, nullptr };
     cli.parse(1, emptyArgv);
 }
 

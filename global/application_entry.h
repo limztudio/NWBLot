@@ -60,9 +60,7 @@ template<typename EntryPoint>
     if(args.valid())
         return entryPoint(args.argc(), args.argv(), hInstance);
 
-    wchar emptyProgramName[] = L"";
-    wchar* emptyArgv[] = { emptyProgramName };
-    return entryPoint(static_cast<isize>(1), emptyArgv, hInstance);
+    return -1;
 }
 
 

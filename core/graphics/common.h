@@ -924,7 +924,7 @@ struct CustomSemantic{
 struct ShaderDesc{
     ShaderType::Mask shaderType = ShaderType::None;
     Name debugName;
-    Name entryName = "main";
+    AString entryName = "main";
 
     i32 hlslExtensionsUAV = -1;
 
@@ -937,7 +937,7 @@ struct ShaderDesc{
 
     constexpr ShaderDesc& setShaderType(ShaderType::Mask value){ shaderType = value; return *this; }
     constexpr ShaderDesc& setDebugName(const Name& value){ debugName = value; return *this; }
-    constexpr ShaderDesc& setEntryName(const Name& value){ entryName = value; return *this; }
+    ShaderDesc& setEntryName(const AStringView value){ entryName = AString(value); return *this; }
     constexpr ShaderDesc& setHlslExtensionsUAV(i32 value){ hlslExtensionsUAV = value; return *this; }
     constexpr ShaderDesc& setUseSpecificShaderExt(bool value){ useSpecificShaderExt = value; return *this; }
     constexpr ShaderDesc& setCustomSemantics(u32 count, CustomSemantic* data){ numCustomSemantics = count; pCustomSemantics = data; return *this; }
@@ -995,7 +995,7 @@ class IShaderLibrary : public IResource{
 
 public:
     virtual void getBytecode(const void** ppBytecode, usize* pSize)const = 0;
-    virtual ShaderHandle getShader(const Name& entryName, ShaderType::Mask shaderType) = 0;
+    virtual ShaderHandle getShader(AStringView entryName, ShaderType::Mask shaderType) = 0;
 };
 typedef RefCountPtr<IShaderLibrary, ArenaRefDeleter<IShaderLibrary>> ShaderLibraryHandle;
 

@@ -737,7 +737,7 @@ private:
 
 
 struct ShaderLibraryKey{
-    Name entryName = NAME_NONE;
+    AString entryName;
     ShaderType::Mask shaderType = ShaderType::None;
 };
 
@@ -749,7 +749,7 @@ inline bool operator==(const ShaderLibraryKey& lhs, const ShaderLibraryKey& rhs)
 
 struct ShaderLibraryKeyHasher{
     usize operator()(const ShaderLibraryKey& value)const noexcept{
-        usize seed = std::hash<Name>{}(value.entryName);
+        usize seed = Hasher<AString>{}(value.entryName);
         seed ^= static_cast<usize>(value.shaderType)
             + static_cast<usize>(0x9e3779b97f4a7c15ull)
             + (seed << 6)
@@ -770,7 +770,7 @@ public:
 
 public:
     virtual void getBytecode(const void** ppBytecode, usize* pSize)const override;
-    virtual ShaderHandle getShader(const Name& entryName, ShaderType::Mask shaderType)override;
+    virtual ShaderHandle getShader(AStringView entryName, ShaderType::Mask shaderType)override;
 
 
 private:

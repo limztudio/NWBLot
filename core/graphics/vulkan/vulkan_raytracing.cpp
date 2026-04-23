@@ -959,7 +959,7 @@ u32 ShaderTable::findGroupIndex(const Name& exportName)const{
             continue;
         }
 
-        const Name shaderExportName = shaderDesc.exportName != NAME_NONE ? shaderDesc.exportName : desc.entryName;
+        const Name shaderExportName = shaderDesc.exportName != NAME_NONE ? shaderDesc.exportName : ToName(desc.entryName);
         if(shaderExportName == exportName)
             return groupIndex;
         ++groupIndex;

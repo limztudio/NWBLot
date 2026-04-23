@@ -115,11 +115,12 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
         return MHD_YES;
     }
 
-    auto*& info = reinterpret_cast<LoggerDetail::ConnectionInfo*&>(conCls);
+    auto* info = static_cast<LoggerDetail::ConnectionInfo*>(conCls);
     auto freeConnectionInfo = [&](){
         Core::Alloc::CoreFree(info->buffer, "ConnectionInfo buffer freed at Server::requestCallback");
         Core::Alloc::CoreFree(info, "ConnectionInfo freed at Server::requestCallback");
         info = nullptr;
+        conCls = nullptr;
     };
 
     if(uploadDataSize){

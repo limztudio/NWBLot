@@ -210,17 +210,17 @@ public:
     inline LinuxFrameBackend::Enum& backend(){ return reinterpret_cast<LinuxFrameBackend::Enum&>(m_data.u8[5]); }
     inline const LinuxFrameBackend::Enum& backend()const{ return reinterpret_cast<const LinuxFrameBackend::Enum&>(m_data.u8[5]); }
 
-    inline void*& nativeDisplay(){ return reinterpret_cast<void*&>(m_data.ptr[1]); }
-    inline void* const& nativeDisplay()const{ return reinterpret_cast<void* const&>(m_data.ptr[1]); }
+    inline void*& nativeDisplay(){ return m_data.ptr[1]; }
+    inline void* const& nativeDisplay()const{ return m_data.ptr[1]; }
 
-    inline u64& nativeWindowHandle(){ return reinterpret_cast<u64&>(m_data.u64[2]); }
-    inline const u64& nativeWindowHandle()const{ return reinterpret_cast<const u64&>(m_data.u64[2]); }
+    inline u64& nativeWindowHandle(){ return m_data.u64[2]; }
+    inline const u64& nativeWindowHandle()const{ return m_data.u64[2]; }
 
-    inline void*& nativeState(){ return reinterpret_cast<void*&>(m_data.ptr[3]); }
-    inline void* const& nativeState()const{ return reinterpret_cast<void* const&>(m_data.ptr[3]); }
+    inline void*& nativeState(){ return m_data.ptr[3]; }
+    inline void* const& nativeState()const{ return m_data.ptr[3]; }
 
-    inline u64& nativeAuxValue(){ return reinterpret_cast<u64&>(m_data.u64[3]); }
-    inline const u64& nativeAuxValue()const{ return reinterpret_cast<const u64&>(m_data.u64[3]); }
+    inline u64& nativeAuxValue(){ return m_data.u64[3]; }
+    inline const u64& nativeAuxValue()const{ return m_data.u64[3]; }
 };
 #endif
 

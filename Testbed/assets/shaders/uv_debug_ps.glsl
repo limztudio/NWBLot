@@ -3,10 +3,13 @@
 
 #version 460
 
+#include "bxdf.glsli"
+
 layout(location = 0) in vec4 inColor;
 layout(location = 1) in vec3 inNormal;
 layout(location = 2) in vec4 inTangent;
 layout(location = 3) in vec2 inUv0;
+layout(location = 4) in vec3 inWorldPosition;
 layout(location = 0) out vec4 outColor;
 
 vec3 nwbProjectUvDebug(const vec2 uv0){
@@ -18,7 +21,11 @@ vec3 nwbProjectUvDebug(const vec2 uv0){
 }
 
 void main(){
-    outColor = vec4(clamp(nwbProjectUvDebug(inUv0), vec3(0.0), vec3(1.0)), inColor.a);
+    const vec3 baseColor = clamp(nwbProjectUvDebug(inUv0), vec3(0.0), vec3(1.0));
+    outColor = vec4(
+        clamp(nwbProjectApplyDirectionalDebugShading(baseColor, inNormal, inTangent, inWorldPosition), vec3(0.0), vec3(1.0)),
+        inColor.a
+    );
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

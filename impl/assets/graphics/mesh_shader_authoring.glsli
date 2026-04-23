@@ -32,6 +32,7 @@ struct NwbMeshGeneratedVertex{
     vec2 uv0;
     vec2 padding1;
     vec4 color;
+    vec4 worldPosition;
 };
 
 struct NwbMeshInstanceData{
@@ -68,9 +69,15 @@ layout(push_constant) uniform NwbMeshPushConstants{
     vec4 scissorRect;
 } g_NwbMeshPushConstants;
 
+#ifndef NWB_PROJECT_MESH_VIEW_BUFFER_DEFINED
+#define NWB_PROJECT_MESH_VIEW_BUFFER_DEFINED 1
 layout(std140, binding = 4) uniform NwbMeshViewBuffer{
     mat4 g_NwbMeshWorldToClip;
+    vec4 g_NwbMeshDirectionalLightDirection;
+    vec4 g_NwbMeshDirectionalLightColorIntensity;
+    vec4 g_NwbMeshCameraPosition;
 };
+#endif
 
 #if NWB_MESH_SHADER_EMULATION_COMPUTE
 layout(std430, binding = 2) buffer NwbMeshGeneratedVerticesBuffer{
@@ -83,6 +90,7 @@ layout(location = 0) out vec4 outColor[];
 layout(location = 1) out vec3 outNormal[];
 layout(location = 2) out vec4 outTangent[];
 layout(location = 3) out vec2 outUv0[];
+layout(location = 4) out vec3 outWorldPosition[];
 #endif
 
 uint nwbMeshGroupThreadID(){
@@ -291,6 +299,7 @@ NwbMeshGeneratedVertex nwbMeshCulledVertex(){
     vertex.uv0 = vec2(0.0);
     vertex.padding1 = vec2(0.0);
     vertex.color = vec4(0.0);
+    vertex.worldPosition = vec4(0.0, 0.0, 0.0, 1.0);
     return vertex;
 }
 #endif
@@ -336,6 +345,7 @@ void main(){
         outNormal[outputVertex] = generatedVertices[corner].normal;
         outTangent[outputVertex] = generatedVertices[corner].tangent;
         outUv0[outputVertex] = generatedVertices[corner].uv0;
+        outWorldPosition[outputVertex] = generatedVertices[corner].worldPosition.xyz;
     }
 
     gl_PrimitiveTriangleIndicesEXT[nwbMeshGroupThreadID()] = uvec3(vertexBase + 0u, vertexBase + 1u, vertexBase + 2u);

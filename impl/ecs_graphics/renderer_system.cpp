@@ -33,7 +33,7 @@ static constexpr Core::Color s_ClearColor = Core::Color(0.07f, 0.09f, 0.13f, 1.f
 static constexpr u32 s_PositionColorVertexStride = sizeof(f32) * 6u;
 static constexpr u32 s_MeshSourceLayoutPositionColor = 0u;
 static constexpr u32 s_MeshSourceLayoutDeformableVertex = 1u;
-static constexpr u32 s_EmulatedVertexStride = sizeof(f32) * 20u;
+static constexpr u32 s_EmulatedVertexStride = sizeof(f32) * 24u;
 static constexpr u32 s_TrianglesPerWorkgroup = 32u;
 static constexpr Core::TextureSubresourceSet s_FramebufferSubresources = Core::TextureSubresourceSet(0, 1, 0, 1);
 static constexpr u32 s_AvboitDownsample = 8u;
@@ -73,6 +73,7 @@ struct EmulatedVertex{
     Float4 tangent;
     Float4 uv0;
     Float4 color;
+    Float4 worldPosition;
 };
 
 struct MeshViewGpuData{
@@ -82,6 +83,9 @@ struct MeshViewGpuData{
         Float4(0.f, 0.f, 1.f, 0.f),
         Float4(0.f, 0.f, 0.f, 1.f),
     };
+    Float4 directionalLightDirection = Float4(0.f, 0.f, -1.f, 0.f);
+    Float4 directionalLightColorIntensity = Float4(1.f, 1.f, 1.f, 1.f);
+    Float4 cameraPosition = Float4(0.f, 0.f, 0.f, 1.f);
 };
 
 struct MeshViewState{
@@ -91,6 +95,9 @@ struct MeshViewState{
         Float4(0.f, 0.f, 1.f, 0.f),
         Float4(0.f, 0.f, 0.f, 1.f),
     };
+    Float4 directionalLightDirection = Float4(0.f, 0.f, -1.f, 0.f);
+    Float4 directionalLightColorIntensity = Float4(1.f, 1.f, 1.f, 1.f);
+    Float4 cameraPosition = Float4(0.f, 0.f, 0.f, 1.f);
 };
 
 struct MeshViewBasis{
@@ -109,7 +116,7 @@ static_assert(
 );
 static_assert(sizeof(EmulatedVertex) == s_EmulatedVertexStride, "EmulatedVertex layout must match the mesh emulation shader");
 static_assert(alignof(EmulatedVertex) >= alignof(Float4), "EmulatedVertex must stay SIMD-aligned");
-static_assert(sizeof(MeshViewGpuData) == sizeof(f32) * 16u, "MeshViewGpuData layout must match the mesh shaders");
+static_assert(sizeof(MeshViewGpuData) == sizeof(f32) * 28u, "MeshViewGpuData layout must match the mesh shaders");
 static_assert(alignof(MeshViewGpuData) >= alignof(Float4), "MeshViewGpuData must stay SIMD-aligned");
 
 
@@ -420,6 +427,63 @@ static MeshViewBasis BuildTransformMeshViewBasis(const Core::Scene::TransformCom
     return basis;
 }
 
+static void StoreDirectionalLightDirection(Float4& outDirection, const Float4& forward){
+    const SIMDVector lightDirection = VectorNegate(LoadFloat(forward));
+    const f32 lightDirectionLengthSquared = VectorGetX(Vector3LengthSq(lightDirection));
+    if(!IsFinite(lightDirectionLengthSquared) || lightDirectionLengthSquared <= 0.0001f){
+        outDirection = Float4(0.0f, 0.0f, -1.0f, 0.0f);
+        return;
+    }
+
+    StoreFloat(Vector3Normalize(lightDirection), &outDirection);
+    outDirection.w = 0.0f;
+}
+
+static void ApplyDefaultDirectionalLightMeshViewState(MeshViewState& state, const MeshViewBasis& basis){
+    StoreDirectionalLightDirection(state.directionalLightDirection, basis.forward);
+    state.directionalLightColorIntensity = Float4(1.0f, 1.0f, 1.0f, 1.0f);
+    state.cameraPosition = Float4(
+        basis.positionDepthBias.x,
+        basis.positionDepthBias.y,
+        basis.positionDepthBias.z,
+        1.0f
+    );
+}
+
+static bool TryApplyDirectionalLightMeshViewState(
+    MeshViewState& state,
+    const Core::Scene::TransformComponent& transform,
+    const Core::Scene::LightComponent& light)
+{
+    if(light.type != Core::Scene::LightType::Directional)
+        return false;
+
+    const SIMDVector rotation = LoadFloat(transform.rotation);
+    const f32 rotationLengthSquared = VectorGetX(QuaternionLengthSq(rotation));
+    if(QuaternionIsNaN(rotation)
+        || QuaternionIsInfinite(rotation)
+        || !IsFinite(rotationLengthSquared)
+        || rotationLengthSquared <= 0.0001f)
+    {
+        return false;
+    }
+
+    const SIMDVector lightColorIntensity = LoadFloat(light.colorIntensity);
+    if(Vector3IsNaN(lightColorIntensity)
+        || Vector3IsInfinite(lightColorIntensity)
+        || !IsFinite(light.intensity())
+        || light.intensity() <= 0.0f)
+    {
+        return false;
+    }
+
+    Float4 lightForward;
+    StoreRotatedBasisVector(lightForward, Float4(0.0f, 0.0f, 1.0f), rotation);
+    StoreDirectionalLightDirection(state.directionalLightDirection, lightForward);
+    state.directionalLightColorIntensity = light.colorIntensity;
+    return true;
+}
+
 static void BuildCameraProjectionParams(
     const Core::Scene::CameraComponent& camera,
     const f32 fallbackAspectRatio,
@@ -515,7 +579,9 @@ static MeshViewState BuildDefaultMeshViewState(const f32 fallbackAspectRatio){
     Core::Scene::CameraComponent camera;
     Float4 projectionParams;
     BuildCameraProjectionParams(camera, fallbackAspectRatio, projectionParams);
-    StoreWorldToClipMatrix(state.worldToClip, BuildDefaultMeshViewBasis(), projectionParams);
+    const MeshViewBasis defaultBasis = BuildDefaultMeshViewBasis();
+    StoreWorldToClipMatrix(state.worldToClip, defaultBasis, projectionParams);
+    ApplyDefaultDirectionalLightMeshViewState(state, defaultBasis);
     return state;
 }
 
@@ -525,6 +591,7 @@ static void ApplyCameraMeshViewState(
     const Core::Scene::CameraProjectionData& projectionData
 ){
     StoreWorldToClipMatrix(state.worldToClip, BuildTransformMeshViewBasis(transform), projectionData.projectionParams);
+    state.cameraPosition = Float4(transform.position.x, transform.position.y, transform.position.z, 1.0f);
 }
 
 static MeshViewState ResolveMeshViewState(Core::ECS::World& world, const f32 fallbackAspectRatio){
@@ -537,6 +604,14 @@ static MeshViewState ResolveMeshViewState(Core::ECS::World& world, const f32 fal
             *cameraView.transform,
             cameraView.projectionData
         );
+
+    const auto lightView = world.view<Core::Scene::TransformComponent, Core::Scene::LightComponent>();
+    for(auto it = lightView.begin(); it != lightView.end(); ++it){
+        auto&& [entity, transform, light] = *it;
+        (void)entity;
+        if(TryApplyDirectionalLightMeshViewState(state, transform, light))
+            break;
+    }
 
     return state;
 }
@@ -1775,6 +1850,9 @@ bool RendererSystem::ensureMeshViewBuffer(Core::ICommandList& commandList, const
     __hidden_ecs_graphics::MeshViewGpuData viewData;
     for(usize i = 0; i < 4u; ++i)
         viewData.worldToClip[i] = viewState.worldToClip[i];
+    viewData.directionalLightDirection = viewState.directionalLightDirection;
+    viewData.directionalLightColorIntensity = viewState.directionalLightColorIntensity;
+    viewData.cameraPosition = viewState.cameraPosition;
 
     commandList.setBufferState(m_meshViewBuffer.get(), Core::ResourceStates::CopyDest);
     commandList.commitBarriers();
@@ -1806,6 +1884,7 @@ bool RendererSystem::uploadInstanceBuffer(Core::ICommandList& commandList, const
 }
 
 void RendererSystem::invalidateGeometryBindingSets(){
+    m_emulationViewBindingSet = nullptr;
     for(auto it = m_geometryMeshes.begin(); it != m_geometryMeshes.end(); ++it){
         GeometryResources& geometry = it.value();
         geometry.meshBindingSet = nullptr;
@@ -1889,6 +1968,9 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
     const MaterialPassDrawContext& context,
     const MaterialPassDrawItemVector& drawItems
 ){
+    if(!m_meshViewBuffer || !ensureEmulationViewResources() || !m_emulationViewBindingSet)
+        return;
+
     forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem& drawItem, GeometryResources& geometry, MaterialPipelineResources& pipelineResources){
         if(!geometry.valid() || !pipelineResources.computePipeline || !pipelineResources.emulationPipeline || !m_instanceBuffer || !m_meshViewBuffer)
             return;
@@ -1931,10 +2013,9 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
                 .setSlot(0)
                 .setOffset(0)
         );
-        if(context.passBindingSet){
-            graphicsState.addBindingSet(nullptr);
+        graphicsState.addBindingSet(m_emulationViewBindingSet.get());
+        if(context.passBindingSet)
             graphicsState.addBindingSet(context.passBindingSet);
-        }
 
         context.commandList.setGraphicsState(graphicsState);
 
@@ -2400,7 +2481,7 @@ bool RendererSystem::ensureMeshShaderResources(){
         return true;
 
     Core::BindingLayoutDesc bindingLayoutDesc;
-    bindingLayoutDesc.setVisibility(Core::ShaderType::Amplification | Core::ShaderType::Mesh);
+    bindingLayoutDesc.setVisibility(Core::ShaderType::Amplification | Core::ShaderType::Mesh | Core::ShaderType::Pixel);
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(0, 1));
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(1, 1));
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(3, 1));
@@ -2448,7 +2529,7 @@ bool RendererSystem::ensureComputeEmulationResources(){
     }
 
     if(!m_emulationInputLayout){
-        Core::VertexAttributeDesc attributes[5];
+        Core::VertexAttributeDesc attributes[6];
         attributes[0]
             .setFormat(Core::Format::RGBA32_FLOAT)
             .setBufferIndex(0)
@@ -2484,13 +2565,54 @@ bool RendererSystem::ensureComputeEmulationResources(){
             .setElementStride(__hidden_ecs_graphics::s_EmulatedVertexStride)
             .setName("COLOR")
         ;
+        attributes[5]
+            .setFormat(Core::Format::RGBA32_FLOAT)
+            .setBufferIndex(0)
+            .setOffset(sizeof(f32) * 20u)
+            .setElementStride(__hidden_ecs_graphics::s_EmulatedVertexStride)
+            .setName("POSITION1")
+        ;
 
         Core::IDevice* device = m_graphics.getDevice();
-        m_emulationInputLayout = device->createInputLayout(attributes, 5, m_emulationVertexShader.get());
+        m_emulationInputLayout = device->createInputLayout(attributes, 6, m_emulationVertexShader.get());
         if(!m_emulationInputLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute-emulation input layout"));
             return false;
         }
+    }
+
+    return true;
+}
+
+bool RendererSystem::ensureEmulationViewResources(){
+    if(!m_meshViewBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: emulation view resources require a mesh view buffer"));
+        return false;
+    }
+
+    Core::IDevice* device = m_graphics.getDevice();
+    if(!m_emulationViewBindingLayout){
+        Core::BindingLayoutDesc bindingLayoutDesc;
+        bindingLayoutDesc.setVisibility(Core::ShaderType::Pixel);
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(4, 1));
+
+        m_emulationViewBindingLayout = device->createBindingLayout(bindingLayoutDesc);
+        if(!m_emulationViewBindingLayout){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create emulation view binding layout"));
+            return false;
+        }
+    }
+
+    if(m_emulationViewBindingSet)
+        return true;
+
+    Core::BindingSetDesc bindingSetDesc;
+    bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(4, m_meshViewBuffer.get()));
+
+    m_emulationViewBindingSet = device->createBindingSet(bindingSetDesc, m_emulationViewBindingLayout.get());
+    if(!m_emulationViewBindingSet){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create emulation view binding set"));
+        return false;
     }
 
     return true;
@@ -2770,6 +2892,8 @@ bool RendererSystem::ensureRendererPipeline(
         else{
             resources.pixelShader = passPixelShader;
         }
+        if(!ensureEmulationViewResources())
+            return false;
 
         Core::ComputePipelineDesc computeDesc;
         computeDesc.setComputeShader(resources.computeShader.get());
@@ -2788,6 +2912,7 @@ bool RendererSystem::ensureRendererPipeline(
         emulationDesc.setVertexShader(m_emulationVertexShader.get());
         emulationDesc.setPixelShader(resources.pixelShader.get());
         emulationDesc.setRenderState(renderState);
+        emulationDesc.addBindingLayout(m_emulationViewBindingLayout.get());
         switch(pass){
         case MaterialPipelinePass::AvboitOccupancy:
             emulationDesc.addBindingLayout(m_avboitEmptyBindingLayout.get());

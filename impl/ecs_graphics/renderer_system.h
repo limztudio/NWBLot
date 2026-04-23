@@ -297,6 +297,7 @@ private:
     [[nodiscard]] bool ensureInstanceBufferCapacity(usize instanceCount);
     [[nodiscard]] bool ensureMeshViewBuffer(Core::ICommandList& commandList, f32 fallbackAspectRatio);
     [[nodiscard]] bool uploadInstanceBuffer(Core::ICommandList& commandList, const InstanceGpuDataVector& instanceData);
+    [[nodiscard]] bool ensureEmulationViewResources();
     void invalidateGeometryBindingSets();
     [[nodiscard]] bool findMaterialPassDrawItemResources(
         const MaterialPassDrawItem& drawItem,
@@ -349,6 +350,7 @@ private:
     HashMap<Name, RenderPath::Enum, Hasher<Name>, EqualTo<Name>> m_loggedMaterialPaths;
     Core::BindingLayoutHandle m_meshBindingLayout;
     Core::BindingLayoutHandle m_computeBindingLayout;
+    Core::BindingLayoutHandle m_emulationViewBindingLayout;
     Core::BindingLayoutHandle m_deferredCompositeBindingLayout;
     Core::BindingLayoutHandle m_avboitEmptyBindingLayout;
     Core::BindingLayoutHandle m_avboitOccupancyBindingLayout;
@@ -359,6 +361,7 @@ private:
     Core::SamplerHandle m_deferredSampler;
     Core::BufferHandle m_instanceBuffer;
     Core::BufferHandle m_meshViewBuffer;
+    Core::BindingSetHandle m_emulationViewBindingSet;
     Core::ShaderHandle m_emulationVertexShader;
     Core::ShaderHandle m_deferredCompositeVertexShader;
     Core::ShaderHandle m_deferredCompositePixelShader;

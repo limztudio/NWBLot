@@ -12,6 +12,16 @@
 #define NWB_PROJECT_TINT 0
 #endif
 
+#ifndef NWB_PROJECT_MESH_VIEW_BUFFER_DEFINED
+#define NWB_PROJECT_MESH_VIEW_BUFFER_DEFINED 1
+layout(std140, binding = 4) uniform NwbMeshViewBuffer{
+    mat4 g_NwbMeshWorldToClip;
+    vec4 g_NwbMeshDirectionalLightDirection;
+    vec4 g_NwbMeshDirectionalLightColorIntensity;
+    vec4 g_NwbMeshCameraPosition;
+};
+#endif
+
 vec3 nwbProjectApplyBxdf(vec3 color){
 #if NWB_PROJECT_BXDF == 0
     return color;
@@ -36,6 +46,71 @@ vec3 nwbProjectBxdfVertex(vec3 color){
 
 vec3 nwbProjectBxdfPixel(vec3 color){
     return color;
+}
+
+vec3 nwbProjectSafeNormalize(vec3 value, vec3 fallback){
+    const float lengthSquared = dot(value, value);
+    return lengthSquared > 0.000001 ? (value * inversesqrt(lengthSquared)) : fallback;
+}
+
+vec3 nwbProjectDirectionalLightVector(){
+    return nwbProjectSafeNormalize(g_NwbMeshDirectionalLightDirection.xyz, vec3(0.0, 0.0, -1.0));
+}
+
+vec3 nwbProjectFallbackTangent(vec3 normal){
+    return abs(normal.z) < 0.999
+        ? nwbProjectSafeNormalize(cross(vec3(0.0, 0.0, 1.0), normal), vec3(1.0, 0.0, 0.0))
+        : vec3(1.0, 0.0, 0.0)
+    ;
+}
+
+vec3 nwbProjectOrthonormalTangent(vec3 tangent, vec3 normal){
+    const vec3 projectedTangent = tangent - normal * dot(tangent, normal);
+    return nwbProjectSafeNormalize(projectedTangent, nwbProjectFallbackTangent(normal));
+}
+
+vec3 nwbProjectDirectionalLightRadiance(){
+    return clamp(g_NwbMeshDirectionalLightColorIntensity.xyz, vec3(0.0), vec3(2.0))
+        * max(g_NwbMeshDirectionalLightColorIntensity.w, 0.0)
+    ;
+}
+
+vec3 nwbProjectApplyDirectionalDebugShading(vec3 baseColor, vec3 normal, vec4 tangent, vec3 worldPosition){
+    const vec3 normalVector = nwbProjectSafeNormalize(normal, vec3(0.0, 0.0, 1.0));
+    const vec3 tangentVector = nwbProjectOrthonormalTangent(tangent.xyz, normalVector);
+    const float tangentSign = tangent.w < 0.0 ? -1.0 : 1.0;
+    const vec3 bitangentVector = nwbProjectSafeNormalize(
+        cross(normalVector, tangentVector) * tangentSign,
+        cross(normalVector, nwbProjectFallbackTangent(normalVector))
+    );
+
+    const vec3 lightVector = nwbProjectDirectionalLightVector();
+    const vec3 viewVector = nwbProjectSafeNormalize(g_NwbMeshCameraPosition.xyz - worldPosition, lightVector);
+    const vec3 halfVector = nwbProjectSafeNormalize(lightVector + viewVector, lightVector);
+    const vec3 lightRadiance = nwbProjectDirectionalLightRadiance();
+
+    const float ndotlRaw = dot(normalVector, lightVector);
+    const float ndotl = max(ndotlRaw, 0.0);
+    const float ndotv = max(dot(normalVector, viewVector), 0.0);
+    const float wrappedDiffuse = max((ndotlRaw + 0.3) / 1.3, 0.0);
+    const float skyAmount = normalVector.z * 0.5 + 0.5;
+    const float rim = pow(1.0 - ndotv, 3.0);
+    const float specular = pow(max(dot(normalVector, halfVector), 0.0), 48.0);
+    const float tangentLobe = pow(max(abs(dot(tangentVector, halfVector)), 0.0), 18.0);
+    const float bitangentLobe = pow(max(abs(dot(bitangentVector, halfVector)), 0.0), 18.0);
+    const float backLight = max(dot(-normalVector, lightVector), 0.0);
+
+    const vec3 hemiAmbient = mix(vec3(0.05, 0.06, 0.08), vec3(0.22, 0.26, 0.32), skyAmount);
+    const vec3 diffuse = baseColor * (hemiAmbient + lightRadiance * (0.18 + 0.82 * wrappedDiffuse));
+    const vec3 specularColor = lightRadiance * mix(vec3(0.85), vec3(1.0, 0.92, 0.78), 0.65) * specular * (0.15 + 0.85 * ndotl);
+    const vec3 rimColor = mix(vec3(0.16, 0.30, 0.55), lightRadiance, 0.45) * rim * (0.2 + 0.8 * ndotl);
+    const vec3 frameCue = 0.08 * (
+        vec3(1.0, 0.35, 0.2) * tangentLobe
+        + vec3(0.2, 0.7, 1.0) * bitangentLobe
+    );
+    const vec3 backLightCue = vec3(0.05, 0.08, 0.14) * backLight;
+
+    return diffuse + specularColor + rimColor + frameCue + backLightCue;
 }
 
 #endif

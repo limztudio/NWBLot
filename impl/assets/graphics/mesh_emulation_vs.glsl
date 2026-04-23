@@ -8,11 +8,13 @@ layout(location = 1) in vec3 inNormal;
 layout(location = 2) in vec4 inTangent;
 layout(location = 3) in vec2 inUv0;
 layout(location = 4) in vec4 inColor;
+layout(location = 5) in vec4 inWorldPosition;
 
 layout(location = 0) out vec4 outColor;
 layout(location = 1) out vec3 outNormal;
 layout(location = 2) out vec4 outTangent;
 layout(location = 3) out vec2 outUv0;
+layout(location = 4) out vec3 outWorldPosition;
 
 void main(){
     gl_Position = inPosition;
@@ -20,6 +22,7 @@ void main(){
     outNormal = inNormal;
     outTangent = inTangent;
     outUv0 = inUv0;
+    outWorldPosition = inWorldPosition.xyz;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

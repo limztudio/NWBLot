@@ -41,7 +41,9 @@ bool IsTextureSliceInBounds(const TextureDesc& desc, const TextureSlice& slice){
         return false;
 
     const FormatInfo& formatInfo = GetFormatInfo(desc.format);
-    if(formatInfo.blockSize == 0 || formatInfo.bytesPerBlock == 0)
+    const u32 formatBlockWidth = GetFormatBlockWidth(formatInfo);
+    const u32 formatBlockHeight = GetFormatBlockHeight(formatInfo);
+    if(formatBlockWidth == 0 || formatBlockHeight == 0 || formatInfo.bytesPerBlock == 0)
         return false;
 
     const u32 mipWidth = Max<u32>(desc.width >> slice.mipLevel, 1u);
@@ -60,12 +62,11 @@ bool IsTextureSliceInBounds(const TextureDesc& desc, const TextureSlice& slice){
     if(resolved.z > mipDepth || resolved.depth > mipDepth - resolved.z)
         return false;
 
-    const u32 blockSize = formatInfo.blockSize;
-    if((resolved.x % blockSize) != 0 || (resolved.y % blockSize) != 0)
+    if((resolved.x % formatBlockWidth) != 0 || (resolved.y % formatBlockHeight) != 0)
         return false;
-    if((resolved.width % blockSize) != 0 && resolved.x + resolved.width != mipWidth)
+    if((resolved.width % formatBlockWidth) != 0 && resolved.x + resolved.width != mipWidth)
         return false;
-    if((resolved.height % blockSize) != 0 && resolved.y + resolved.height != mipHeight)
+    if((resolved.height % formatBlockHeight) != 0 && resolved.y + resolved.height != mipHeight)
         return false;
 
     return true;
@@ -84,6 +85,8 @@ u64 ComputeStagingTextureOffset(const TextureDesc& desc, const TextureSlice& sli
 
     const TextureSlice resolved = slice.resolve(desc);
     const FormatInfo& formatInfo = GetFormatInfo(desc.format);
+    const u32 formatBlockWidth = GetFormatBlockWidth(formatInfo);
+    const u32 formatBlockHeight = GetFormatBlockHeight(formatInfo);
 
     u64 offset = 0;
     bool found = false;
@@ -98,8 +101,8 @@ u64 ComputeStagingTextureOffset(const TextureDesc& desc, const TextureSlice& sli
             const u32 mipHeight = Max<u32>(desc.height >> mip, 1u);
             const u32 mipDepth = Max<u32>(desc.depth >> mip, 1u);
 
-            const u64 blocksX = Max<u64>((static_cast<u64>(mipWidth) + formatInfo.blockSize - 1) / formatInfo.blockSize, 1ull);
-            const u64 blocksY = Max<u64>((static_cast<u64>(mipHeight) + formatInfo.blockSize - 1) / formatInfo.blockSize, 1ull);
+            const u64 blocksX = Max<u64>((static_cast<u64>(mipWidth) + formatBlockWidth - 1) / formatBlockWidth, 1ull);
+            const u64 blocksY = Max<u64>((static_cast<u64>(mipHeight) + formatBlockHeight - 1) / formatBlockHeight, 1ull);
 
             const u64 sliceSize = blocksX * blocksY * formatInfo.bytesPerBlock;
             offset = AlignBufferOffset(offset + sliceSize * mipDepth);
@@ -109,8 +112,8 @@ u64 ComputeStagingTextureOffset(const TextureDesc& desc, const TextureSlice& sli
     const u32 mipWidth = Max<u32>(desc.width >> resolved.mipLevel, 1u);
     const u32 mipHeight = Max<u32>(desc.height >> resolved.mipLevel, 1u);
 
-    const u64 blocksX = Max<u64>((static_cast<u64>(mipWidth) + formatInfo.blockSize - 1) / formatInfo.blockSize, 1ull);
-    const u64 blocksY = Max<u64>((static_cast<u64>(mipHeight) + formatInfo.blockSize - 1) / formatInfo.blockSize, 1ull);
+    const u64 blocksX = Max<u64>((static_cast<u64>(mipWidth) + formatBlockWidth - 1) / formatBlockWidth, 1ull);
+    const u64 blocksY = Max<u64>((static_cast<u64>(mipHeight) + formatBlockHeight - 1) / formatBlockHeight, 1ull);
 
     const u64 rowPitch = static_cast<u64>(blocksX) * formatInfo.bytesPerBlock;
     const u64 slicePitch = rowPitch * blocksY;
@@ -118,13 +121,13 @@ u64 ComputeStagingTextureOffset(const TextureDesc& desc, const TextureSlice& sli
     if(outRowPitch)
         *outRowPitch = static_cast<usize>(rowPitch);
     if(outBufferRowLength)
-        *outBufferRowLength = static_cast<u32>(blocksX * formatInfo.blockSize);
+        *outBufferRowLength = static_cast<u32>(blocksX * formatBlockWidth);
     if(outBufferImageHeight)
-        *outBufferImageHeight = static_cast<u32>(blocksY * formatInfo.blockSize);
+        *outBufferImageHeight = static_cast<u32>(blocksY * formatBlockHeight);
 
     offset += static_cast<u64>(resolved.z) * slicePitch
-            + static_cast<u64>(resolved.y / formatInfo.blockSize) * rowPitch
-            + static_cast<u64>(resolved.x / formatInfo.blockSize) * formatInfo.bytesPerBlock
+            + static_cast<u64>(resolved.y / formatBlockHeight) * rowPitch
+            + static_cast<u64>(resolved.x / formatBlockWidth) * formatInfo.bytesPerBlock
     ;
 
     return offset;
@@ -175,7 +178,9 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
     }
 
     const FormatInfo& formatInfo = GetFormatInfo(d.format);
-    if(formatInfo.blockSize == 0 || formatInfo.bytesPerBlock == 0){
+    const u32 formatBlockWidth = GetFormatBlockWidth(formatInfo);
+    const u32 formatBlockHeight = GetFormatBlockHeight(formatInfo);
+    if(formatBlockWidth == 0 || formatBlockHeight == 0 || formatInfo.bytesPerBlock == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create staging texture: invalid texture format"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging texture: invalid texture format"));
         return nullptr;
@@ -192,9 +197,9 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
             auto mipHeight = Max<u32>(d.height >> mip, 1u);
             auto mipDepth = Max<u32>(d.depth >> mip, 1u);
 
-            const u64 blocksX = Max<u64>((static_cast<u64>(mipWidth) + formatInfo.blockSize - 1) / formatInfo.blockSize, 1ull);
-            const u64 blocksY = Max<u64>((static_cast<u64>(mipHeight) + formatInfo.blockSize - 1) / formatInfo.blockSize, 1ull);
-            if(blocksX > UINT64_MAX / blocksY || blocksX * formatInfo.blockSize > UINT32_MAX || blocksY * formatInfo.blockSize > UINT32_MAX){
+            const u64 blocksX = Max<u64>((static_cast<u64>(mipWidth) + formatBlockWidth - 1) / formatBlockWidth, 1ull);
+            const u64 blocksY = Max<u64>((static_cast<u64>(mipHeight) + formatBlockHeight - 1) / formatBlockHeight, 1ull);
+            if(blocksX > UINT64_MAX / blocksY || blocksX * formatBlockWidth > UINT32_MAX || blocksY * formatBlockHeight > UINT32_MAX){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create staging texture: row layout exceeds Vulkan buffer image copy limits"));
                 NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging texture: row layout exceeds Vulkan buffer image copy limits"));
                 DestroyArenaObject(m_context.objectArena, staging);

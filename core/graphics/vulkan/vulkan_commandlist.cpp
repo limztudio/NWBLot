@@ -228,14 +228,16 @@ void CommandList::copyTextureToBuffer(IBuffer* _dest, u64 destOffsetBytes, u32 d
         return;
     }
 
-    if(formatInfo.blockSize == 0 || formatInfo.bytesPerBlock == 0){
+    const u32 formatBlockWidth = GetFormatBlockWidth(formatInfo);
+    const u32 formatBlockHeight = GetFormatBlockHeight(formatInfo);
+    if(formatBlockWidth == 0 || formatBlockHeight == 0 || formatInfo.bytesPerBlock == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to buffer: invalid row pitch"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to buffer: invalid row pitch"));
         return;
     }
 
-    const u64 blocksX = Max<u64>((static_cast<u64>(resolvedSrc.width) + formatInfo.blockSize - 1u) / formatInfo.blockSize, 1ull);
-    const u64 blocksY = Max<u64>((static_cast<u64>(resolvedSrc.height) + formatInfo.blockSize - 1u) / formatInfo.blockSize, 1ull);
+    const u64 blocksX = Max<u64>((static_cast<u64>(resolvedSrc.width) + formatBlockWidth - 1u) / formatBlockWidth, 1ull);
+    const u64 blocksY = Max<u64>((static_cast<u64>(resolvedSrc.height) + formatBlockHeight - 1u) / formatBlockHeight, 1ull);
     if(blocksX > Limit<u64>::s_Max / formatInfo.bytesPerBlock){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to buffer: natural row pitch overflows"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to buffer: natural row pitch overflows"));
@@ -251,7 +253,7 @@ void CommandList::copyTextureToBuffer(IBuffer* _dest, u64 destOffsetBytes, u32 d
 
     u64 bufferRowLength = 0;
     if(destRowPitch > 0){
-        bufferRowLength = (static_cast<u64>(destRowPitch) / formatInfo.bytesPerBlock) * formatInfo.blockSize;
+        bufferRowLength = (static_cast<u64>(destRowPitch) / formatInfo.bytesPerBlock) * formatBlockWidth;
         if(bufferRowLength > UINT32_MAX){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to buffer: row pitch exceeds Vulkan buffer image copy limits"));
             NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to buffer: row pitch exceeds Vulkan buffer image copy limits"));

@@ -894,28 +894,30 @@ void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, co
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to write texture: combined depth/stencil buffer-image copies are not supported"));
         return;
     }
-    if(formatInfo.blockSize == 0 || formatInfo.bytesPerBlock == 0){
+    const u32 formatBlockWidth = GetFormatBlockWidth(formatInfo);
+    const u32 formatBlockHeight = GetFormatBlockHeight(formatInfo);
+    if(formatBlockWidth == 0 || formatBlockHeight == 0 || formatInfo.bytesPerBlock == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write texture: invalid texture format"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to write texture: invalid texture format"));
         return;
     }
 
-    const u64 blockWidth = (static_cast<u64>(width) + formatInfo.blockSize - 1u) / formatInfo.blockSize;
-    const u64 blockHeight = (static_cast<u64>(height) + formatInfo.blockSize - 1u) / formatInfo.blockSize;
-    if(blockWidth > Limit<u64>::s_Max / formatInfo.bytesPerBlock){
+    const u64 blockCountX = (static_cast<u64>(width) + formatBlockWidth - 1u) / formatBlockWidth;
+    const u64 blockCountY = (static_cast<u64>(height) + formatBlockHeight - 1u) / formatBlockHeight;
+    if(blockCountX > Limit<u64>::s_Max / formatInfo.bytesPerBlock){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write texture: natural row pitch overflows"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to write texture: natural row pitch overflows"));
         return;
     }
 
-    const u64 naturalRowPitch = blockWidth * formatInfo.bytesPerBlock;
+    const u64 naturalRowPitch = blockCountX * formatInfo.bytesPerBlock;
     const u64 effectiveRowPitch = rowPitch != 0 ? static_cast<u64>(rowPitch) : naturalRowPitch;
-    if(effectiveRowPitch == 0 || blockHeight > UINT64_MAX / effectiveRowPitch){
+    if(effectiveRowPitch == 0 || blockCountY > UINT64_MAX / effectiveRowPitch){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write texture: texture pitch size overflows"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to write texture: texture pitch size overflows"));
         return;
     }
-    const u64 packedSlicePitch = effectiveRowPitch * blockHeight;
+    const u64 packedSlicePitch = effectiveRowPitch * blockCountY;
     const u64 effectiveDepthPitch = depthPitch != 0 ? static_cast<u64>(depthPitch) : packedSlicePitch;
 
     if(effectiveRowPitch < naturalRowPitch || (effectiveRowPitch % formatInfo.bytesPerBlock) != 0){
@@ -932,13 +934,13 @@ void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, co
 
     const u64 bufferRowBlocks = effectiveRowPitch / formatInfo.bytesPerBlock;
     const u64 bufferImageBlocks = effectiveDepthPitch / effectiveRowPitch;
-    if(bufferRowBlocks > UINT64_MAX / formatInfo.blockSize || bufferImageBlocks > UINT64_MAX / formatInfo.blockSize){
+    if(bufferRowBlocks > UINT64_MAX / formatBlockWidth || bufferImageBlocks > UINT64_MAX / formatBlockHeight){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write texture: row pitch or depth pitch exceeds Vulkan buffer image copy limits"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to write texture: row pitch or depth pitch exceeds Vulkan buffer image copy limits"));
         return;
     }
-    const u64 bufferRowLength = bufferRowBlocks * formatInfo.blockSize;
-    const u64 bufferImageHeight = bufferImageBlocks * formatInfo.blockSize;
+    const u64 bufferRowLength = bufferRowBlocks * formatBlockWidth;
+    const u64 bufferImageHeight = bufferImageBlocks * formatBlockHeight;
     if(bufferRowLength > UINT32_MAX || bufferImageHeight > UINT32_MAX){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write texture: row pitch or depth pitch exceeds Vulkan buffer image copy limits"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to write texture: row pitch or depth pitch exceeds Vulkan buffer image copy limits"));

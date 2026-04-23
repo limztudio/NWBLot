@@ -7,6 +7,7 @@
 
 #include <core/common/common.h>
 #include <core/filesystem/filesystem.h>
+#include <core/graphics/common.h>
 
 #include <global/compile.h>
 
@@ -1418,6 +1419,24 @@ static void TestDeformableGeometryValidationFailures(TestContext& context){
 #endif
 }
 
+static void TestFormatBlockDimensions(TestContext& context){
+    const NWB::Core::FormatInfo& rgba8 = NWB::Core::GetFormatInfo(NWB::Core::Format::RGBA8_UNORM);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, NWB::Core::GetFormatBlockWidth(rgba8) == 1u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, NWB::Core::GetFormatBlockHeight(rgba8) == 1u);
+
+    const NWB::Core::FormatInfo& bc1 = NWB::Core::GetFormatInfo(NWB::Core::Format::BC1_UNORM);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, NWB::Core::GetFormatBlockWidth(bc1) == 4u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, NWB::Core::GetFormatBlockHeight(bc1) == 4u);
+
+    const NWB::Core::FormatInfo& astc8x5 = NWB::Core::GetFormatInfo(NWB::Core::Format::ASTC_8x5_UNORM);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, NWB::Core::GetFormatBlockWidth(astc8x5) == 8u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, NWB::Core::GetFormatBlockHeight(astc8x5) == 5u);
+
+    const NWB::Core::FormatInfo& astc12x10 = NWB::Core::GetFormatInfo(NWB::Core::Format::ASTC_12x10_FLOAT);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, NWB::Core::GetFormatBlockWidth(astc12x10) == 12u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, NWB::Core::GetFormatBlockHeight(astc12x10) == 10u);
+}
+
 
 #undef NWB_ASSETS_GRAPHICS_TEST_CHECK
 
@@ -1453,6 +1472,7 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
     __hidden_assets_graphics_tests::TestDeformableGeometryCookerFullAsset(context);
     __hidden_assets_graphics_tests::TestDeformableGeometryCookerValidationFailures(context);
     __hidden_assets_graphics_tests::TestDeformableGeometryValidationFailures(context);
+    __hidden_assets_graphics_tests::TestFormatBlockDimensions(context);
 
     if(context.failed != 0){
         NWB_CERR

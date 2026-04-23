@@ -379,6 +379,8 @@ struct FormatInfo{
 };
 
 const FormatInfo& GetFormatInfo(Format::Enum format)noexcept;
+[[nodiscard]] u32 GetFormatBlockWidth(const FormatInfo& formatInfo)noexcept;
+[[nodiscard]] u32 GetFormatBlockHeight(const FormatInfo& formatInfo)noexcept;
 
 namespace FormatSupport{
     enum Mask : u32{

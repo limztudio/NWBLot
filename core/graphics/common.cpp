@@ -187,6 +187,51 @@ const FormatInfo& GetFormatInfo(Format::Enum format)noexcept{
     return s_FormatInfo[static_cast<u32>(format)];
 }
 
+u32 GetFormatBlockWidth(const FormatInfo& formatInfo)noexcept{
+    return formatInfo.blockSize;
+}
+
+u32 GetFormatBlockHeight(const FormatInfo& formatInfo)noexcept{
+    switch(formatInfo.format){
+    case Format::ASTC_5x4_UNORM:
+    case Format::ASTC_5x4_UNORM_SRGB:
+    case Format::ASTC_5x4_FLOAT:
+        return 4u;
+
+    case Format::ASTC_6x5_UNORM:
+    case Format::ASTC_6x5_UNORM_SRGB:
+    case Format::ASTC_6x5_FLOAT:
+    case Format::ASTC_8x5_UNORM:
+    case Format::ASTC_8x5_UNORM_SRGB:
+    case Format::ASTC_8x5_FLOAT:
+    case Format::ASTC_10x5_UNORM:
+    case Format::ASTC_10x5_UNORM_SRGB:
+    case Format::ASTC_10x5_FLOAT:
+        return 5u;
+
+    case Format::ASTC_8x6_UNORM:
+    case Format::ASTC_8x6_UNORM_SRGB:
+    case Format::ASTC_8x6_FLOAT:
+    case Format::ASTC_10x6_UNORM:
+    case Format::ASTC_10x6_UNORM_SRGB:
+    case Format::ASTC_10x6_FLOAT:
+        return 6u;
+
+    case Format::ASTC_10x8_UNORM:
+    case Format::ASTC_10x8_UNORM_SRGB:
+    case Format::ASTC_10x8_FLOAT:
+        return 8u;
+
+    case Format::ASTC_12x10_UNORM:
+    case Format::ASTC_12x10_UNORM_SRGB:
+    case Format::ASTC_12x10_FLOAT:
+        return 10u;
+
+    default:
+        return formatInfo.blockSize;
+    }
+}
+
 
 TextureSlice TextureSlice::resolve(const TextureDesc& desc)const{
     TextureSlice ret(*this);

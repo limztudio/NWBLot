@@ -43,26 +43,28 @@ static bool ComputeTextureUploadByteSize(const Graphics::TextureSetupDesc& desc,
         return false;
 
     const FormatInfo& formatInfo = GetFormatInfo(textureDesc.format);
-    if(formatInfo.blockSize == 0 || formatInfo.bytesPerBlock == 0)
+    const u32 formatBlockWidth = GetFormatBlockWidth(formatInfo);
+    const u32 formatBlockHeight = GetFormatBlockHeight(formatInfo);
+    if(formatBlockWidth == 0 || formatBlockHeight == 0 || formatInfo.bytesPerBlock == 0)
         return false;
 
     const u32 width = Max<u32>(1u, textureDesc.width >> desc.mipLevel);
     const u32 height = Max<u32>(1u, textureDesc.height >> desc.mipLevel);
     const u32 depth = Max<u32>(1u, textureDesc.depth >> desc.mipLevel);
 
-    const u64 blockWidth = (static_cast<u64>(width) + formatInfo.blockSize - 1u) / formatInfo.blockSize;
-    const u64 blockHeight = (static_cast<u64>(height) + formatInfo.blockSize - 1u) / formatInfo.blockSize;
-    if(blockWidth > Limit<u64>::s_Max / formatInfo.bytesPerBlock)
+    const u64 blockCountX = (static_cast<u64>(width) + formatBlockWidth - 1u) / formatBlockWidth;
+    const u64 blockCountY = (static_cast<u64>(height) + formatBlockHeight - 1u) / formatBlockHeight;
+    if(blockCountX > Limit<u64>::s_Max / formatInfo.bytesPerBlock)
         return false;
 
-    const u64 naturalRowPitch = blockWidth * formatInfo.bytesPerBlock;
+    const u64 naturalRowPitch = blockCountX * formatInfo.bytesPerBlock;
     const u64 effectiveRowPitch = desc.rowPitch != 0 ? static_cast<u64>(desc.rowPitch) : naturalRowPitch;
     if(effectiveRowPitch == 0 || effectiveRowPitch < naturalRowPitch || (effectiveRowPitch % formatInfo.bytesPerBlock) != 0)
         return false;
-    if(blockHeight > Limit<u64>::s_Max / effectiveRowPitch)
+    if(blockCountY > Limit<u64>::s_Max / effectiveRowPitch)
         return false;
 
-    const u64 packedSlicePitch = effectiveRowPitch * blockHeight;
+    const u64 packedSlicePitch = effectiveRowPitch * blockCountY;
     const u64 effectiveDepthPitch = desc.depthPitch != 0 ? static_cast<u64>(desc.depthPitch) : packedSlicePitch;
     if(effectiveDepthPitch == 0 || effectiveDepthPitch < packedSlicePitch || (effectiveDepthPitch % effectiveRowPitch) != 0)
         return false;

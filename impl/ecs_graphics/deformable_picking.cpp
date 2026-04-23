@@ -28,6 +28,41 @@ namespace __hidden_deformable_picking{
 
 using namespace DeformableRuntime;
 
+[[nodiscard]] Float4 LoadVertexNormal(const DeformableVertexRest& vertex){
+    return Float4(vertex.normal.x, vertex.normal.y, vertex.normal.z, 0.0f);
+}
+
+[[nodiscard]] Float4 LoadVertexTangent(const DeformableVertexRest& vertex){
+    return Float4(vertex.tangent.x, vertex.tangent.y, vertex.tangent.z, vertex.tangent.w);
+}
+
+void StoreVertexFrame(const Float4& normal, const Float4& tangent, DeformableVertexRest& vertex){
+    vertex.normal = Float3U(normal.x, normal.y, normal.z);
+    vertex.tangent = Float4U(tangent.x, tangent.y, tangent.z, tangent.w);
+}
+
+void OrthonormalizeVertexFrame(
+    DeformableVertexRest& vertex,
+    const Float4& fallbackNormal,
+    const Float4& fallbackTangent,
+    Float4* outNormal = nullptr,
+    Float4* outTangent = nullptr)
+{
+    Float4 normal = LoadVertexNormal(vertex);
+    Float4 tangent = LoadVertexTangent(vertex);
+    SIMDVector normalVector = LoadFloat(normal);
+    SIMDVector tangentVector = LoadFloat(tangent);
+    DeformableRuntime::OrthonormalizeFrame(normalVector, tangentVector, LoadFloat(fallbackNormal), LoadFloat(fallbackTangent));
+    StoreFloat(normalVector, &normal);
+    StoreFloat(tangentVector, &tangent);
+    StoreVertexFrame(normal, tangent, vertex);
+
+    if(outNormal)
+        *outNormal = normal;
+    if(outTangent)
+        *outTangent = tangent;
+}
+
 [[nodiscard]] bool IsFiniteRay(const DeformablePickingRay& ray){
     const f32 minDistance = ray.minDistance();
     const f32 maxDistance = ray.maxDistance();
@@ -307,21 +342,13 @@ template<typename VertexVector>
 
     for(usize vertexIndex = 0; vertexIndex < outVertices.size(); ++vertexIndex){
         DeformableVertexRest& vertex = outVertices[vertexIndex];
-        const Float4 restNormal(vertex.normal.x, vertex.normal.y, vertex.normal.z);
-        const Float4 restTangent(vertex.tangent.x, vertex.tangent.y, vertex.tangent.z, vertex.tangent.w);
+        const Float4 restNormal = __hidden_deformable_picking::LoadVertexNormal(vertex);
+        const Float4 restTangent = __hidden_deformable_picking::LoadVertexTangent(vertex);
 
-        Float4 normal(vertex.normal.x, vertex.normal.y, vertex.normal.z);
-        Float4 tangent(vertex.tangent.x, vertex.tangent.y, vertex.tangent.z, vertex.tangent.w);
-        SIMDVector normalVector = LoadFloat(normal);
-        SIMDVector tangentVector = LoadFloat(tangent);
-        DeformableRuntime::OrthonormalizeFrame(normalVector, tangentVector, LoadFloat(restNormal), LoadFloat(restTangent));
-        StoreFloat(normalVector, &normal);
-        StoreFloat(tangentVector, &tangent);
-        vertex.normal = Float3U(normal.x, normal.y, normal.z);
-        vertex.tangent = Float4U(tangent.x, tangent.y, tangent.z, tangent.w);
+        Float4 preSkinNormal;
+        Float4 preSkinTangent;
+        __hidden_deformable_picking::OrthonormalizeVertexFrame(vertex, restNormal, restTangent, &preSkinNormal, &preSkinTangent);
 
-        const Float4 preSkinNormal = normal;
-        const Float4 preSkinTangent(tangent.x, tangent.y, tangent.z, tangent.w);
         if(!__hidden_deformable_picking::ApplySkin(
             instance,
             inputs.jointPalette,
@@ -329,15 +356,7 @@ template<typename VertexVector>
             vertex
         ))
             return false;
-        normal = Float4(vertex.normal.x, vertex.normal.y, vertex.normal.z);
-        tangent = Float4(vertex.tangent.x, vertex.tangent.y, vertex.tangent.z, vertex.tangent.w);
-        normalVector = LoadFloat(normal);
-        tangentVector = LoadFloat(tangent);
-        DeformableRuntime::OrthonormalizeFrame(normalVector, tangentVector, LoadFloat(preSkinNormal), LoadFloat(preSkinTangent));
-        StoreFloat(normalVector, &normal);
-        StoreFloat(tangentVector, &tangent);
-        vertex.normal = Float3U(normal.x, normal.y, normal.z);
-        vertex.tangent = Float4U(tangent.x, tangent.y, tangent.z, tangent.w);
+        __hidden_deformable_picking::OrthonormalizeVertexFrame(vertex, preSkinNormal, preSkinTangent);
 
         __hidden_deformable_picking::ApplyDisplacement(displacement, vertex);
         __hidden_deformable_picking::ApplyTransform(inputs.transform, vertex);

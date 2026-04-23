@@ -61,6 +61,20 @@ struct SkinWeightSample{
     return DeformableValidation::FiniteVector(LoadFloat(value), 0x7u);
 }
 
+void ResolveStoredTangentBitangent(
+    const SIMDVector normalVector,
+    const SIMDVector tangentVector,
+    const SIMDVector fallbackTangent,
+    Float4& outTangent,
+    Float4& outBitangent)
+{
+    StoreFloat(DeformableRuntime::ResolveFrameTangent(normalVector, tangentVector, fallbackTangent), &outTangent);
+    StoreFloat(
+        DeformableRuntime::ResolveFrameBitangent(normalVector, LoadFloat(outTangent), VectorSet(0.0f, 1.0f, 0.0f, 0.0f)),
+        &outBitangent
+    );
+}
+
 struct SurfaceEditStateHeader{
     u32 magic = s_SurfaceEditStateMagic;
     u32 version = s_SurfaceEditStateVersion;
@@ -196,11 +210,7 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
         tangentVector
     );
     const SIMDVector normalVector = LoadFloat(outFrame.normal);
-    StoreFloat(DeformableRuntime::ResolveFrameTangent(normalVector, tangentVector, edge0), &outFrame.tangent);
-    StoreFloat(
-        DeformableRuntime::ResolveFrameBitangent(normalVector, LoadFloat(outFrame.tangent), VectorSet(0.0f, 1.0f, 0.0f, 0.0f)),
-        &outFrame.bitangent
-    );
+    ResolveStoredTangentBitangent(normalVector, tangentVector, edge0, outFrame.tangent, outFrame.bitangent);
     return VectorGetX(Vector3LengthSq(LoadFloat(outFrame.normal))) > s_FrameEpsilon
         && VectorGetX(Vector3LengthSq(LoadFloat(outFrame.tangent))) > s_FrameEpsilon
         && VectorGetX(Vector3LengthSq(LoadFloat(outFrame.bitangent))) > s_FrameEpsilon
@@ -726,17 +736,14 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
 
     const SIMDVector fallbackTangent = DeformableRuntime::FallbackTangent(normalVector);
     Float4 tangent;
-    StoreFloat(
-        DeformableRuntime::ResolveFrameTangent(
-            normalVector,
-            FiniteVec3(rawTangent) ? LoadFloat(rawTangent) : fallbackTangent,
-            fallbackTangent
-        ),
-        &tangent
-    );
-
     Float4 bitangent;
-    StoreFloat(DeformableRuntime::ResolveFrameBitangent(normalVector, LoadFloat(tangent), VectorSet(0.0f, 1.0f, 0.0f, 0.0f)), &bitangent);
+    ResolveStoredTangentBitangent(
+        normalVector,
+        FiniteVec3(rawTangent) ? LoadFloat(rawTangent) : fallbackTangent,
+        fallbackTangent,
+        tangent,
+        bitangent
+    );
 
     const f32 m00 = tangent.x;
     const f32 m01 = bitangent.x;

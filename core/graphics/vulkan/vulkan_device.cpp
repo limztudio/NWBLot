@@ -276,6 +276,8 @@ Device::Device(const DeviceDesc& desc)
             m_context.extensions.NV_cooperative_vector = true;
         else if(NWB_STRCMP(ext, VK_NV_CLUSTER_ACCELERATION_STRUCTURE_EXTENSION_NAME) == 0)
             m_context.extensions.NV_cluster_acceleration_structure = true;
+        else if(NWB_STRCMP(ext, VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME) == 0)
+            m_context.extensions.NV_device_diagnostic_checkpoints = true;
         else if(NWB_STRCMP(ext, VK_EXT_MESH_SHADER_EXTENSION_NAME) == 0)
             m_context.extensions.EXT_mesh_shader = true;
         else if(NWB_STRCMP(ext, VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME) == 0)
@@ -292,6 +294,16 @@ Device::Device(const DeviceDesc& desc)
     if(m_context.extensions.EXT_debug_marker && (!vkCmdDebugMarkerBeginEXT || !vkCmdDebugMarkerEndEXT)){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Debug marker entry points are unavailable."));
         m_context.extensions.EXT_debug_marker = false;
+    }
+
+    if(m_context.extensions.NV_device_diagnostic_checkpoints && !vkCmdSetCheckpointNV){
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Device diagnostic checkpoint entry point is unavailable."));
+        m_context.extensions.NV_device_diagnostic_checkpoints = false;
+    }
+
+    if(m_aftermathEnabled && !m_context.extensions.NV_device_diagnostic_checkpoints){
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Aftermath marker checkpoints are disabled because VK_NV_device_diagnostic_checkpoints is unavailable."));
+        m_aftermathEnabled = false;
     }
 
     {

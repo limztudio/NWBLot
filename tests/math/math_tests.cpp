@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <core/common/common.h>
+
 #include <global/simdmath.h>
 #include <global/compile.h>
 
@@ -208,6 +210,12 @@ static void TestGlslRefractCriticalAngle(TestContext& context){
 static int EntryPoint(const isize argc, tchar** argv, void*){
     (void)argc;
     (void)argv;
+
+    NWB::Core::Common::InitializerGuard commonInitializerGuard;
+    if(!commonInitializerGuard.initialize()){
+        NWB_CERR << "math tests failed: common initialization failed\n";
+        return -1;
+    }
 
     __hidden_math_tests::TestContext context;
     __hidden_math_tests::TestVector2CrossMatchesGlslOrder(context);

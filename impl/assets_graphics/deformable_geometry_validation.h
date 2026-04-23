@@ -39,6 +39,43 @@ static constexpr f32 s_TriangleAreaLengthSquaredEpsilon = 0.000000000001f;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace MorphPayloadFailure{
+    enum Enum : u8{
+        None,
+        MorphCountLimit,
+        EmptyMorph,
+        DuplicateMorphName,
+        MorphDeltaCountLimit,
+        InvalidMorphDelta,
+        DuplicateMorphDeltaVertex,
+    };
+};
+
+struct MorphPayloadFailureInfo{
+    MorphPayloadFailure::Enum reason = MorphPayloadFailure::None;
+    usize morphIndex = 0;
+    usize deltaIndex = 0;
+    u32 vertexId = 0;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] inline MorphPayloadFailureInfo MakeMorphPayloadFailure(
+    const MorphPayloadFailure::Enum reason,
+    const usize morphIndex = 0,
+    const usize deltaIndex = 0,
+    const u32 vertexId = 0)
+{
+    MorphPayloadFailureInfo info;
+    info.reason = reason;
+    info.morphIndex = morphIndex;
+    info.deltaIndex = deltaIndex;
+    info.vertexId = vertexId;
+    return info;
+}
+
 [[nodiscard]] inline f32 AbsF32(const f32 value){
     return value < 0.0f ? -value : value;
 }
@@ -248,9 +285,14 @@ static constexpr f32 s_TriangleAreaLengthSquaredEpsilon = 0.000000000001f;
     ;
 }
 
-[[nodiscard]] inline bool ValidMorphPayload(const Vector<DeformableMorph>& morphs, const usize vertexCount){
+[[nodiscard]] inline MorphPayloadFailureInfo FindMorphPayloadFailure(
+    const Vector<DeformableMorph>& morphs,
+    const usize vertexCount)
+{
     if(morphs.size() > static_cast<usize>(Limit<u32>::s_Max))
-        return false;
+        return MakeMorphPayloadFailure(MorphPayloadFailure::MorphCountLimit);
+    if(morphs.empty())
+        return {};
 
     Core::Alloc::ScratchArena<> scratchArena;
     HashSet<NameHash, Hasher<NameHash>, EqualTo<NameHash>, Core::Alloc::ScratchAllocator<NameHash>> seenMorphNames(
@@ -261,13 +303,14 @@ static constexpr f32 s_TriangleAreaLengthSquaredEpsilon = 0.000000000001f;
     );
     seenMorphNames.reserve(morphs.size());
 
-    for(const DeformableMorph& morph : morphs){
+    for(usize morphIndex = 0; morphIndex < morphs.size(); ++morphIndex){
+        const DeformableMorph& morph = morphs[morphIndex];
         if(!morph.name || morph.deltas.empty())
-            return false;
+            return MakeMorphPayloadFailure(MorphPayloadFailure::EmptyMorph, morphIndex);
         if(morph.deltas.size() > static_cast<usize>(Limit<u32>::s_Max))
-            return false;
+            return MakeMorphPayloadFailure(MorphPayloadFailure::MorphDeltaCountLimit, morphIndex);
         if(!seenMorphNames.insert(morph.name.hash()).second)
-            return false;
+            return MakeMorphPayloadFailure(MorphPayloadFailure::DuplicateMorphName, morphIndex);
 
         HashSet<u32, Hasher<u32>, EqualTo<u32>, Core::Alloc::ScratchAllocator<u32>> seenDeltaVertices(
             0,
@@ -277,14 +320,29 @@ static constexpr f32 s_TriangleAreaLengthSquaredEpsilon = 0.000000000001f;
         );
         seenDeltaVertices.reserve(morph.deltas.size());
 
-        for(const DeformableMorphDelta& delta : morph.deltas){
+        for(usize deltaIndex = 0; deltaIndex < morph.deltas.size(); ++deltaIndex){
+            const DeformableMorphDelta& delta = morph.deltas[deltaIndex];
             if(!ValidMorphDelta(delta, vertexCount))
-                return false;
+                return MakeMorphPayloadFailure(
+                    MorphPayloadFailure::InvalidMorphDelta,
+                    morphIndex,
+                    deltaIndex,
+                    delta.vertexId
+                );
             if(!seenDeltaVertices.insert(delta.vertexId).second)
-                return false;
+                return MakeMorphPayloadFailure(
+                    MorphPayloadFailure::DuplicateMorphDeltaVertex,
+                    morphIndex,
+                    deltaIndex,
+                    delta.vertexId
+                );
         }
     }
-    return true;
+    return {};
+}
+
+[[nodiscard]] inline bool ValidMorphPayload(const Vector<DeformableMorph>& morphs, const usize vertexCount){
+    return FindMorphPayloadFailure(morphs, vertexCount).reason == MorphPayloadFailure::None;
 }
 
 [[nodiscard]] inline bool ValidTriangle(

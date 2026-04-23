@@ -1671,7 +1671,9 @@ public:
     [[nodiscard]] virtual CooperativeVectorDeviceFeatures queryCoopVecFeatures()override;
     virtual usize getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, i32 rows, i32 columns)override;
     [[nodiscard]] virtual Object getNativeQueue(ObjectType objectType, CommandQueue::Enum queue)override;
-    virtual bool isAftermathEnabled()override{ return m_aftermathEnabled; }
+    virtual bool isAftermathEnabled()override{
+        return m_aftermathEnabled && m_context.extensions.NV_device_diagnostic_checkpoints;
+    }
     [[nodiscard]] virtual AftermathCrashDumpHelper& getAftermathCrashDumpHelper()override;
 
     [[nodiscard]] virtual VkSemaphore getQueueSemaphore(CommandQueue::Enum queue)override;

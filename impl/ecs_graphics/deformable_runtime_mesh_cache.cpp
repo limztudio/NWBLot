@@ -170,75 +170,66 @@ static constexpr RuntimeMeshDirtyFlags s_GpuUploadHandledDirtyFlags =
         }
     }
 
-    if(instance.morphs.size() > static_cast<usize>(Limit<u32>::s_Max)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' morph count exceeds u32 limits"),
-            sourceText
-        );
-        return false;
-    }
-    if(instance.morphs.empty())
-        return true;
+    const DeformableValidation::MorphPayloadFailureInfo morphFailure =
+        DeformableValidation::FindMorphPayloadFailure(instance.morphs, instance.restVertices.size())
+    ;
+    if(morphFailure.reason != DeformableValidation::MorphPayloadFailure::None){
+        const DeformableMorph* morph = morphFailure.morphIndex < instance.morphs.size()
+            ? &instance.morphs[morphFailure.morphIndex]
+            : nullptr
+        ;
+        const TString morphNameText = (morph && morph->name)
+            ? StringConvert(morph->name.c_str())
+            : TString(NWB_TEXT("<unnamed>"))
+        ;
 
-    Core::Alloc::ScratchArena<> scratchArena;
-    HashSet<NameHash, Hasher<NameHash>, EqualTo<NameHash>, Core::Alloc::ScratchAllocator<NameHash>> seenMorphNames(
-        0,
-        Hasher<NameHash>(),
-        EqualTo<NameHash>(),
-        Core::Alloc::ScratchAllocator<NameHash>(scratchArena)
-    );
-    seenMorphNames.reserve(instance.morphs.size());
-    for(const DeformableMorph& morph : instance.morphs){
-        if(!morph.name || morph.deltas.empty()){
+        switch(morphFailure.reason){
+        case DeformableValidation::MorphPayloadFailure::MorphCountLimit:
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' morph count exceeds u32 limits"),
+                sourceText
+            );
+            break;
+        case DeformableValidation::MorphPayloadFailure::EmptyMorph:
             NWB_LOGGER_ERROR(
                 NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' has an unnamed or empty morph"),
                 sourceText
             );
-            return false;
-        }
-        if(!seenMorphNames.insert(morph.name.hash()).second){
+            break;
+        case DeformableValidation::MorphPayloadFailure::DuplicateMorphName:
             NWB_LOGGER_ERROR(
                 NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' contains duplicate morph '{}'"),
                 sourceText,
-                StringConvert(morph.name.c_str())
+                morphNameText
             );
-            return false;
-        }
-        if(morph.deltas.size() > static_cast<usize>(Limit<u32>::s_Max)){
+            break;
+        case DeformableValidation::MorphPayloadFailure::MorphDeltaCountLimit:
             NWB_LOGGER_ERROR(
                 NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' morph '{}' delta count exceeds u32 limits"),
                 sourceText,
-                StringConvert(morph.name.c_str())
+                morphNameText
             );
-            return false;
+            break;
+        case DeformableValidation::MorphPayloadFailure::InvalidMorphDelta:
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' morph '{}' delta {} is invalid"),
+                sourceText,
+                morphNameText,
+                morphFailure.deltaIndex
+            );
+            break;
+        case DeformableValidation::MorphPayloadFailure::DuplicateMorphDeltaVertex:
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' morph '{}' has duplicate vertex {}"),
+                sourceText,
+                morphNameText,
+                morphFailure.vertexId
+            );
+            break;
+        case DeformableValidation::MorphPayloadFailure::None:
+            break;
         }
-
-        HashSet<u32, Hasher<u32>, EqualTo<u32>, Core::Alloc::ScratchAllocator<u32>> seenDeltaVertices(
-            0,
-            Hasher<u32>(),
-            EqualTo<u32>(),
-            Core::Alloc::ScratchAllocator<u32>(scratchArena)
-        );
-        seenDeltaVertices.reserve(morph.deltas.size());
-        for(const DeformableMorphDelta& delta : morph.deltas){
-            if(!DeformableValidation::ValidMorphDelta(delta, instance.restVertices.size())){
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' morph '{}' contains an invalid delta"),
-                    sourceText,
-                    StringConvert(morph.name.c_str())
-                );
-                return false;
-            }
-            if(!seenDeltaVertices.insert(delta.vertexId).second){
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' morph '{}' has duplicate vertex {}"),
-                    sourceText,
-                    StringConvert(morph.name.c_str()),
-                    delta.vertexId
-                );
-                return false;
-            }
-        }
+        return false;
     }
 
     return true;

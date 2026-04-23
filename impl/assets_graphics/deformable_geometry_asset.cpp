@@ -6,7 +6,6 @@
 
 #include "deformable_geometry_validation.h"
 
-#include <core/alloc/scratch.h>
 #include <core/assets/asset_auto_registration.h>
 #include <logger/client/logger.h>
 
@@ -248,90 +247,67 @@ bool DeformableGeometry::validatePayload()const{
         return false;
     }
 
-    if(m_morphs.size() > static_cast<usize>(Limit<u32>::s_Max)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' morph count exceeds u32 limits"),
-            geometryPathText
-        );
-        return false;
-    }
-    if(m_morphs.empty())
-        return true;
+    const DeformableValidation::MorphPayloadFailureInfo morphFailure =
+        DeformableValidation::FindMorphPayloadFailure(m_morphs, m_restVertices.size())
+    ;
+    if(morphFailure.reason != DeformableValidation::MorphPayloadFailure::None){
+        const DeformableMorph* morph = morphFailure.morphIndex < m_morphs.size()
+            ? &m_morphs[morphFailure.morphIndex]
+            : nullptr
+        ;
+        const TString morphNameText = (morph && morph->name)
+            ? StringConvert(morph->name.c_str())
+            : TString(NWB_TEXT("<unnamed>"))
+        ;
 
-    Core::Alloc::ScratchArena<> scratchArena;
-    HashSet<
-        NameHash,
-        Hasher<NameHash>,
-        EqualTo<NameHash>,
-        Core::Alloc::ScratchAllocator<NameHash>
-    > seenMorphNames(
-        0,
-        Hasher<NameHash>(),
-        EqualTo<NameHash>(),
-        Core::Alloc::ScratchAllocator<NameHash>(scratchArena)
-    );
-    seenMorphNames.reserve(m_morphs.size());
-    for(usize morphIndex = 0; morphIndex < m_morphs.size(); ++morphIndex){
-        const DeformableMorph& morph = m_morphs[morphIndex];
-        if(!morph.name || morph.deltas.empty()){
+        switch(morphFailure.reason){
+        case DeformableValidation::MorphPayloadFailure::MorphCountLimit:
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' morph count exceeds u32 limits"),
+                geometryPathText
+            );
+            break;
+        case DeformableValidation::MorphPayloadFailure::EmptyMorph:
             NWB_LOGGER_ERROR(
                 NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' morph {} is unnamed or empty"),
                 geometryPathText,
-                morphIndex
+                morphFailure.morphIndex
             );
-            return false;
-        }
-        if(!seenMorphNames.insert(morph.name.hash()).second){
+            break;
+        case DeformableValidation::MorphPayloadFailure::DuplicateMorphName:
             NWB_LOGGER_ERROR(
                 NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' contains duplicate morph '{}'"),
                 geometryPathText,
-                StringConvert(morph.name.c_str())
+                morphNameText
             );
-            return false;
-        }
-        if(morph.deltas.size() > static_cast<usize>(Limit<u32>::s_Max)){
+            break;
+        case DeformableValidation::MorphPayloadFailure::MorphDeltaCountLimit:
             NWB_LOGGER_ERROR(
                 NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' morph '{}' delta count exceeds u32 limits"),
                 geometryPathText,
-                StringConvert(morph.name.c_str())
+                morphNameText
             );
-            return false;
+            break;
+        case DeformableValidation::MorphPayloadFailure::InvalidMorphDelta:
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' morph '{}' delta {} is invalid"),
+                geometryPathText,
+                morphNameText,
+                morphFailure.deltaIndex
+            );
+            break;
+        case DeformableValidation::MorphPayloadFailure::DuplicateMorphDeltaVertex:
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' morph '{}' has duplicate vertex {}"),
+                geometryPathText,
+                morphNameText,
+                morphFailure.vertexId
+            );
+            break;
+        case DeformableValidation::MorphPayloadFailure::None:
+            break;
         }
-
-        HashSet<
-            u32,
-            Hasher<u32>,
-            EqualTo<u32>,
-            Core::Alloc::ScratchAllocator<u32>
-        > seenDeltaVertices(
-            0,
-            Hasher<u32>(),
-            EqualTo<u32>(),
-            Core::Alloc::ScratchAllocator<u32>(scratchArena)
-        );
-        seenDeltaVertices.reserve(morph.deltas.size());
-        for(const DeformableMorphDelta& delta : morph.deltas){
-            if(!DeformableValidation::ValidMorphDelta(delta, m_restVertices.size())){
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' morph '{}' contains an invalid delta"),
-                    geometryPathText,
-                    StringConvert(morph.name.c_str())
-                );
-                return false;
-            }
-
-            if(!seenDeltaVertices.insert(delta.vertexId).second){
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT(
-                        "DeformableGeometry::validatePayload failed: geometry '{}' morph '{}' has duplicate vertex {}"
-                    ),
-                    geometryPathText,
-                    StringConvert(morph.name.c_str()),
-                    delta.vertexId
-                );
-                return false;
-            }
-        }
+        return false;
     }
 
     return true;

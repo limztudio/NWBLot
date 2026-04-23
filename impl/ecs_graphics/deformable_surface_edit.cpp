@@ -131,7 +131,7 @@ using MorphDeltaLookup = HashMap<
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Float4 BarycentricPoint(
+[[nodiscard]] SIMDVector BarycentricPoint(
     const DeformableRuntimeMeshInstance& instance,
     const u32 (&indices)[3],
     const f32 (&bary)[3])
@@ -139,20 +139,15 @@ using MorphDeltaLookup = HashMap<
     SIMDVector position = VectorScale(LoadFloat(instance.restVertices[indices[0]].position), bary[0]);
     position = VectorMultiplyAdd(LoadFloat(instance.restVertices[indices[1]].position), VectorReplicate(bary[1]), position);
     position = VectorMultiplyAdd(LoadFloat(instance.restVertices[indices[2]].position), VectorReplicate(bary[2]), position);
-    Float4 result;
-    StoreFloat(position, &result);
-    return result;
+    return position;
 }
 
-[[nodiscard]] Float4 TriangleCentroid(const DeformableRuntimeMeshInstance& instance, const u32 (&indices)[3]){
+[[nodiscard]] SIMDVector TriangleCentroid(const DeformableRuntimeMeshInstance& instance, const u32 (&indices)[3]){
     SIMDVector centroid = VectorAdd(
         VectorAdd(LoadFloat(instance.restVertices[indices[0]].position), LoadFloat(instance.restVertices[indices[1]].position)),
         LoadFloat(instance.restVertices[indices[2]].position)
     );
-    centroid = VectorScale(centroid, 1.0f / 3.0f);
-    Float4 result;
-    StoreFloat(centroid, &result);
-    return result;
+    return VectorScale(centroid, 1.0f / 3.0f);
 }
 
 [[nodiscard]] u64 MakeEdgeKey(const u32 a, const u32 b){
@@ -209,7 +204,7 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
     if(VectorGetX(Vector3LengthSq(rawNormal)) <= s_FrameEpsilon)
         return false;
 
-    outFrame.center = BarycentricPoint(instance, triangleIndices, bary);
+    StoreFloat(BarycentricPoint(instance, triangleIndices, bary), &outFrame.center);
     StoreFloat(DeformableRuntime::Normalize(rawNormal, VectorSet(0.0f, 0.0f, 1.0f, 0.0f)), &outFrame.normal);
 
     const DeformableVertexRest& vertex0 = instance.restVertices[triangleIndices[0]];
@@ -1504,8 +1499,9 @@ template<typename AssignedSampleVector>
     const f32 radiusY,
     const u32 (&triangleIndices)[3])
 {
-    const Float4 centroid = TriangleCentroid(instance, triangleIndices);
-    const SIMDVector offset = VectorSubtract(LoadFloat(centroid), LoadFloat(frame.center));
+    const SIMDVector centroid = TriangleCentroid(instance, triangleIndices);
+    const SIMDVector frameCenter = LoadFloat(frame.center);
+    const SIMDVector offset = VectorSubtract(centroid, frameCenter);
     const f32 x = VectorGetX(Vector3Dot(offset, LoadFloat(frame.tangent))) / radiusX;
     const f32 y = VectorGetX(Vector3Dot(offset, LoadFloat(frame.bitangent))) / radiusY;
     return ((x * x) + (y * y)) <= 1.0f;

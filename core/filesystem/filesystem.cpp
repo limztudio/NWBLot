@@ -1586,7 +1586,7 @@ bool VolumeFileSystem::loadMetadataLocked(){
             return false;
         }
 
-        loadedFiles[pathName] = FileRecord{ entry.offset, entry.size };
+        loadedFiles.emplace(pathName, FileRecord{ entry.offset, entry.size });
     }
 
     if(cursor != header.indexBytes){

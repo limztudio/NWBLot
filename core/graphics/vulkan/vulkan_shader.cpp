@@ -283,7 +283,10 @@ ShaderHandle ShaderLibrary::getShader(const AStringView entryName, ShaderType::M
         return nullptr;
     }
 
-    m_shaders[key] = RefCountPtr<Shader, ArenaRefDeleter<Shader>>(shader, ArenaRefDeleter<Shader>(&m_context.objectArena), AdoptRef);
+    m_shaders.emplace(
+        key,
+        RefCountPtr<Shader, ArenaRefDeleter<Shader>>(shader, ArenaRefDeleter<Shader>(&m_context.objectArena), AdoptRef)
+    );
     return ShaderHandle(shader, ShaderHandle::deleter_type(&m_context.objectArena));
 }
 
@@ -454,6 +457,7 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
         EqualTo<u32>(),
         Alloc::ScratchAllocator<Pair<const u32, VertexBindingBuildInfo>>(scratchArena)
     );
+    bindingInfos.reserve(attributeCount);
 
     for(u32 i = 0; i < attributeCount; ++i){
         const VertexAttributeDesc& attr = d[i];
@@ -503,15 +507,10 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
             return nullptr;
         }
 
-        auto bindingInfoIt = bindingInfos.find(attr.bufferIndex);
-        if(bindingInfoIt == bindingInfos.end()){
-            VertexBindingBuildInfo info{};
-            info.isInstanced = attr.isInstanced;
-            bindingInfos[attr.bufferIndex] = info;
-            bindingInfoIt = bindingInfos.find(attr.bufferIndex);
-        }
-
-        VertexBindingBuildInfo& bindingInfo = bindingInfoIt.value();
+        auto bindingInfoInsert = bindingInfos.emplace(attr.bufferIndex, VertexBindingBuildInfo{});
+        VertexBindingBuildInfo& bindingInfo = bindingInfoInsert.first.value();
+        if(bindingInfoInsert.second)
+            bindingInfo.isInstanced = attr.isInstanced;
         if(bindingInfo.isInstanced != attr.isInstanced){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("Vulkan: Failed to create input layout: buffer binding {} mixes vertex and instance input rates"),
@@ -566,6 +565,7 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
     if(attributeCount > 0)
         layout->m_attributes.assign(d, d + attributeCount);
 
+    layout->m_bindings.reserve(bindingInfos.size());
     for(const auto& [bufferIndex, bindingInfo] : bindingInfos){
         VkVertexInputBindingDescription binding{};
         binding.binding = bufferIndex;

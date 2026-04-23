@@ -395,7 +395,7 @@ VkImageView Texture::getView(const TextureSubresourceSet& subresources, TextureD
         return VK_NULL_HANDLE;
     }
 
-    m_views[key] = view;
+    m_views.emplace(key, view);
     return view;
 }
 

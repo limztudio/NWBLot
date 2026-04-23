@@ -249,8 +249,18 @@ inline HashMap<BasicString<T>, BasicString<T>> parseCommandLine(BasicStringView<
     std::match_results<typename BasicString<T>::const_iterator> match;
 
     typename BasicString<T>::const_iterator itrSearch(input.cbegin());
-    while(std::regex_search(itrSearch, input.cend(), match, regex)){
-        output[match[1].str()] = match[2].matched ? match[2].str() : match[3].str();
+    for(;;){
+        const bool matched = std::regex_search(itrSearch, input.cend(), match, regex);
+        if(!matched)
+            break;
+
+        BasicString<T> key = match[1].str();
+        BasicString<T> value = match[2].matched ? match[2].str() : match[3].str();
+        auto result = output.find(key);
+        if(result == output.end())
+            output.emplace(Move(key), Move(value));
+        else
+            result.value() = Move(value);
         itrSearch = match.suffix().first;
     }
 

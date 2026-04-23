@@ -1602,7 +1602,9 @@ bool BackendContext::createVulkanSwapChain(){
         return false;
     }
 
-    for(auto* image : images){
+    m_swapChainImages.reserve(imageCount);
+    for(uint32_t imageIndex = 0; imageIndex < imageCount; ++imageIndex){
+        const VkImage image = images[imageIndex];
         SwapChainImage sci;
         sci.image = image;
 

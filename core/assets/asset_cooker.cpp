@@ -68,7 +68,8 @@ bool AssetCookerRegistry::registerCooker(UniquePtr<IAssetCooker>&& cooker){
         return false;
     }
 
-    if(m_assetCookers.find(typeName) != m_assetCookers.end()){
+    auto registered = m_assetCookers.emplace(typeName, Move(cooker));
+    if(!registered.second){
         NWB_LOGGER_ERROR(
             NWB_TEXT("AssetCookerRegistry: cooker for type '{}' is already registered"),
             StringConvert(typeName.c_str())
@@ -76,7 +77,6 @@ bool AssetCookerRegistry::registerCooker(UniquePtr<IAssetCooker>&& cooker){
         return false;
     }
 
-    m_assetCookers[typeName] = Move(cooker);
     return true;
 }
 

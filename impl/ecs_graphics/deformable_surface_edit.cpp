@@ -188,32 +188,7 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
     tangentVector = VectorMultiplyAdd(LoadFloat(vertex1.tangent), VectorReplicate(bary[1]), tangentVector);
     tangentVector = VectorMultiplyAdd(LoadFloat(vertex2.tangent), VectorReplicate(bary[2]), tangentVector);
     const SIMDVector normalVector = LoadFloat(outFrame.normal);
-    Float4 tangent;
-    StoreFloat(
-        VectorMultiplyAdd(
-            normalVector,
-            VectorReplicate(-VectorGetX(Vector3Dot(tangentVector, normalVector))),
-            tangentVector
-        ),
-        &tangent
-    );
-    if(VectorGetX(Vector3LengthSq(LoadFloat(tangent))) <= s_FrameEpsilon){
-        StoreFloat(
-            VectorMultiplyAdd(
-                normalVector,
-                VectorReplicate(-VectorGetX(Vector3Dot(edge0, normalVector))),
-                edge0
-            ),
-            &tangent
-        );
-    }
-    if(VectorGetX(Vector3LengthSq(LoadFloat(tangent))) <= s_FrameEpsilon)
-        StoreFloat(DeformableRuntime::FallbackTangent(normalVector), &tangent);
-
-    StoreFloat(
-        DeformableRuntime::Normalize(LoadFloat(tangent), DeformableRuntime::FallbackTangent(normalVector)),
-        &outFrame.tangent
-    );
+    StoreFloat(DeformableRuntime::ResolveFrameTangent(normalVector, tangentVector, edge0), &outFrame.tangent);
     StoreFloat(
         DeformableRuntime::Normalize(
             Vector3Cross(normalVector, LoadFloat(outFrame.tangent)),
@@ -744,28 +719,19 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
     if(!FiniteVec3(normal))
         return Float4(0.0f, 0.0f, 0.0f, 1.0f);
 
+    const SIMDVector fallbackTangent = DeformableRuntime::FallbackTangent(normalVector);
     Float4 tangent;
-    if(FiniteVec3(rawTangent)){
-        StoreFloat(
-            VectorMultiplyAdd(
-                normalVector,
-                VectorReplicate(-VectorGetX(Vector3Dot(LoadFloat(rawTangent), normalVector))),
-                LoadFloat(rawTangent)
-            ),
-            &tangent
-        );
-    }
-    else
-        StoreFloat(DeformableRuntime::FallbackTangent(normalVector), &tangent);
-    if(VectorGetX(Vector3LengthSq(LoadFloat(tangent))) <= s_FrameEpsilon)
-        StoreFloat(DeformableRuntime::FallbackTangent(normalVector), &tangent);
     StoreFloat(
-        DeformableRuntime::Normalize(LoadFloat(tangent), DeformableRuntime::FallbackTangent(normalVector)),
+        DeformableRuntime::ResolveFrameTangent(
+            normalVector,
+            FiniteVec3(rawTangent) ? LoadFloat(rawTangent) : fallbackTangent,
+            fallbackTangent
+        ),
         &tangent
     );
 
     SIMDVector bitangentVector = Vector3Cross(normalVector, LoadFloat(tangent));
-    if(VectorGetX(Vector3LengthSq(bitangentVector)) <= s_FrameEpsilon)
+    if(!DeformableRuntime::ValidFrameDirection(bitangentVector))
         return RotationFromPositiveZToNormal(normal);
     bitangentVector = DeformableRuntime::Normalize(bitangentVector, VectorSet(0.0f, 1.0f, 0.0f, 0.0f));
     Float4 bitangent;
@@ -1408,18 +1374,13 @@ template<typename AssignedSampleVector>
 {
     Float4 direction;
     StoreFloat(
-        VectorSubtract(LoadFloat(vertices[edge.b].position), LoadFloat(vertices[edge.a].position)),
-        &direction
-    );
-    StoreFloat(
-        VectorMultiplyAdd(
+        DeformableRuntime::ResolveFrameTangent(
             LoadFloat(frame.normal),
-            VectorReplicate(-VectorGetX(Vector3Dot(LoadFloat(direction), LoadFloat(frame.normal)))),
-            LoadFloat(direction)
+            VectorSubtract(LoadFloat(vertices[edge.b].position), LoadFloat(vertices[edge.a].position)),
+            LoadFloat(frame.tangent)
         ),
         &direction
     );
-    StoreFloat(DeformableRuntime::Normalize(LoadFloat(direction), LoadFloat(frame.tangent)), &direction);
     return direction;
 }
 
@@ -1451,16 +1412,14 @@ template<typename AssignedSampleVector>
         StoreFloat(VectorScale(LoadFloat(normal), -1.0f), &normal);
 
     Float4 tangent;
-    StoreFloat(Vector3Cross(LoadFloat(frame.normal), LoadFloat(normal)), &tangent);
     StoreFloat(
-        VectorMultiplyAdd(
+        DeformableRuntime::ResolveFrameTangent(
             LoadFloat(normal),
-            VectorReplicate(-VectorGetX(Vector3Dot(LoadFloat(tangent), LoadFloat(normal)))),
-            LoadFloat(tangent)
+            Vector3Cross(LoadFloat(frame.normal), LoadFloat(normal)),
+            LoadFloat(currentDirection)
         ),
         &tangent
     );
-    StoreFloat(DeformableRuntime::Normalize(LoadFloat(tangent), LoadFloat(currentDirection)), &tangent);
 
     outFrame.normal = normal;
     outFrame.tangent = tangent;
@@ -1734,17 +1693,14 @@ bool ResolveAccessoryAttachmentTransform(
         return false;
 
     Float4 tangent;
-    StoreFloat(VectorSubtract(LoadFloat(firstRimPosition), LoadFloat(rimCenterStorage)), &tangent);
     StoreFloat(
-        VectorMultiplyAdd(
+        DeformableRuntime::ResolveFrameTangent(
             LoadFloat(normal),
-            VectorReplicate(-VectorGetX(Vector3Dot(LoadFloat(tangent), LoadFloat(normal)))),
-            LoadFloat(tangent)
+            VectorSubtract(LoadFloat(firstRimPosition), LoadFloat(rimCenterStorage)),
+            DeformableRuntime::FallbackTangent(LoadFloat(normal))
         ),
         &tangent
     );
-    if(VectorGetX(Vector3LengthSq(LoadFloat(tangent))) <= DeformableRuntime::s_FrameEpsilon)
-        StoreFloat(DeformableRuntime::FallbackTangent(LoadFloat(normal)), &tangent);
 
     outTransform.position = Float4(accessoryPosition.x, accessoryPosition.y, accessoryPosition.z);
     outTransform.rotation = __hidden_deformable_surface_edit::RotationFromFrame(tangent, normal);
@@ -2098,6 +2054,7 @@ bool CommitDeformableRestSpaceHole(
         const usize boundaryVertexCount = orderedBoundaryEdges.size();
         firstWallVertex = static_cast<u32>(newRestVertices.size());
         addedWallVertexCount = static_cast<u32>(boundaryVertexCount * 2u);
+        const SIMDVector frameNormal = LoadFloat(frame.normal);
         Vector<f32, Core::Alloc::ScratchAllocator<f32>> boundaryU{
             Core::Alloc::ScratchAllocator<f32>(scratchArena)
         };
@@ -2108,21 +2065,11 @@ bool CommitDeformableRestSpaceHole(
             boundaryU[edgeIndex] = boundaryLength;
 
             const __hidden_deformable_surface_edit::EdgeRecord& edge = orderedBoundaryEdges[edgeIndex];
-            Float4 edgeDelta;
-            StoreFloat(
+            const SIMDVector edgeDelta = DeformableRuntime::ProjectOntoFramePlane(
                 VectorSubtract(LoadFloat(newRestVertices[edge.b].position), LoadFloat(newRestVertices[edge.a].position)),
-                &edgeDelta
+                frameNormal
             );
-            StoreFloat(
-                VectorMultiplyAdd(
-                    LoadFloat(frame.normal),
-                    VectorReplicate(-VectorGetX(Vector3Dot(LoadFloat(edgeDelta), LoadFloat(frame.normal)))),
-                    LoadFloat(edgeDelta)
-                ),
-                &edgeDelta
-            );
-
-            const f32 edgeLength = VectorGetX(Vector3Length(LoadFloat(edgeDelta)));
+            const f32 edgeLength = VectorGetX(Vector3Length(edgeDelta));
             if(!IsFinite(edgeLength) || edgeLength <= DeformableRuntime::s_Epsilon)
                 return false;
             boundaryLength += edgeLength;

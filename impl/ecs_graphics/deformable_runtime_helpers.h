@@ -74,12 +74,45 @@ namespace DisplacementResolveFailure{
     return VectorMultiply(value, VectorReciprocalSqrt(lengthSquaredVector));
 }
 
+[[nodiscard]] inline bool ValidFrameDirection(SIMDVector value){
+    return DeformableValidation::FiniteVector(value, 0x7u)
+        && VectorGetX(Vector3LengthSq(value)) > s_FrameEpsilon
+    ;
+}
+
+[[nodiscard]] inline SIMDVector ProjectOntoFramePlane(SIMDVector value, SIMDVector normal){
+    return VectorMultiplyAdd(
+        normal,
+        VectorReplicate(-VectorGetX(Vector3Dot(value, normal))),
+        value
+    );
+}
+
 [[nodiscard]] inline SIMDVector FallbackTangent(SIMDVector normal){
     const SIMDVector axis = Abs(VectorGetZ(normal)) < 0.999f
         ? VectorSet(0.0f, 0.0f, 1.0f, 0.0f)
         : VectorSet(0.0f, 1.0f, 0.0f, 0.0f)
     ;
     return Normalize(Vector3Cross(axis, normal), VectorSet(1.0f, 0.0f, 0.0f, 0.0f));
+}
+
+[[nodiscard]] inline SIMDVector ResolveFrameTangent(SIMDVector normal, SIMDVector tangent, SIMDVector fallbackTangent){
+    const SIMDVector safeFallbackTangent = FallbackTangent(normal);
+
+    SIMDVector projectedTangent = DeformableValidation::FiniteVector(tangent, 0x7u)
+        ? ProjectOntoFramePlane(tangent, normal)
+        : safeFallbackTangent
+    ;
+    if(!ValidFrameDirection(projectedTangent)){
+        projectedTangent = DeformableValidation::FiniteVector(fallbackTangent, 0x7u)
+            ? ProjectOntoFramePlane(fallbackTangent, normal)
+            : safeFallbackTangent
+        ;
+    }
+    if(!ValidFrameDirection(projectedTangent))
+        return safeFallbackTangent;
+
+    return Normalize(projectedTangent, safeFallbackTangent);
 }
 
 [[nodiscard]] inline bool IsAffineJointMatrix(const DeformableJointMatrix& matrix){

@@ -31,8 +31,8 @@ using namespace DeformableRuntime;
 [[nodiscard]] bool IsFiniteRay(const DeformablePickingRay& ray){
     const f32 minDistance = ray.minDistance();
     const f32 maxDistance = ray.maxDistance();
-    return DeformableValidation::FiniteVector(LoadFloat(ray.origin()), 0x7u)
-        && DeformableValidation::FiniteVector(LoadFloat(ray.direction()), 0x7u)
+    return DeformableValidation::FiniteVector(LoadFloat(ray.originMinDistance), 0x7u)
+        && DeformableValidation::FiniteVector(LoadFloat(ray.directionMaxDistance), 0x7u)
         && IsFinite(minDistance)
         && IsFinite(maxDistance)
         && minDistance >= 0.0f
@@ -78,33 +78,13 @@ void OrthonormalizeFrame(
     );
     StoreFloat(normalVector, &normal);
 
-    const SIMDVector tangentVector = VectorSet(tangent.x, tangent.y, tangent.z, 0.0f);
     Float4 projectedTangent;
     StoreFloat(
-        VectorMultiplyAdd(
+        DeformableRuntime::ResolveFrameTangent(
             normalVector,
-            VectorReplicate(-VectorGetX(Vector3Dot(tangentVector, normalVector))),
-            tangentVector
+            VectorSet(tangent.x, tangent.y, tangent.z, 0.0f),
+            VectorSet(fallbackTangent.x, fallbackTangent.y, fallbackTangent.z, 0.0f)
         ),
-        &projectedTangent
-    );
-    if(VectorGetX(Vector3LengthSq(LoadFloat(projectedTangent))) <= s_FrameEpsilon){
-        const SIMDVector fallbackTangentVector =
-            VectorSet(fallbackTangent.x, fallbackTangent.y, fallbackTangent.z, 0.0f);
-        StoreFloat(
-            VectorMultiplyAdd(
-                normalVector,
-                VectorReplicate(-VectorGetX(Vector3Dot(fallbackTangentVector, normalVector))),
-                fallbackTangentVector
-            ),
-            &projectedTangent
-        );
-    }
-    if(VectorGetX(Vector3LengthSq(LoadFloat(projectedTangent))) <= s_FrameEpsilon)
-        StoreFloat(DeformableRuntime::FallbackTangent(normalVector), &projectedTangent);
-
-    StoreFloat(
-        DeformableRuntime::Normalize(LoadFloat(projectedTangent), DeformableRuntime::FallbackTangent(normalVector)),
         &projectedTangent
     );
     tangent.x = projectedTangent.x;
@@ -282,19 +262,14 @@ void ApplyTransform(const Core::Scene::TransformComponent* transform, Deformable
 }
 
 [[nodiscard]] bool IntersectTriangle(
-    const Float4& origin,
-    const Float4& direction,
-    const Float4& a,
-    const Float4& b,
-    const Float4& c,
+    const SIMDVector originVector,
+    const SIMDVector directionVector,
+    const SIMDVector aVector,
+    const SIMDVector bVector,
+    const SIMDVector cVector,
     f32& outDistance,
     f32 (&outBary)[3])
 {
-    const SIMDVector originVector = LoadFloat(origin);
-    const SIMDVector directionVector = LoadFloat(direction);
-    const SIMDVector aVector = LoadFloat(a);
-    const SIMDVector bVector = LoadFloat(b);
-    const SIMDVector cVector = LoadFloat(c);
     const SIMDVector edge0 = VectorSubtract(bVector, aVector);
     const SIMDVector edge1 = VectorSubtract(cVector, aVector);
     const SIMDVector p = Vector3Cross(directionVector, edge1);
@@ -511,14 +486,9 @@ bool RaycastDeformableRuntimeMesh(
     if((instance.dirtyFlags & RuntimeMeshDirtyFlag::GpuUploadDirty) != 0u)
         return false;
 
-    const Float4 rayOrigin(ray.origin().x, ray.origin().y, ray.origin().z);
-    const SIMDVector rayDirectionVector = DeformableRuntime::Normalize(
-        VectorSet(ray.direction().x, ray.direction().y, ray.direction().z, 0.0f),
-        VectorZero()
-    );
-    Float4 rayDirection;
-    StoreFloat(rayDirectionVector, &rayDirection);
-    if(VectorGetX(Vector3LengthSq(rayDirectionVector)) <= DeformableRuntime::s_FrameEpsilon)
+    const SIMDVector rayOriginVector = LoadFloat(ray.originMinDistance);
+    const SIMDVector rayDirectionVector = DeformableRuntime::Normalize(LoadFloat(ray.directionMaxDistance), VectorZero());
+    if(!DeformableRuntime::ValidFrameDirection(rayDirectionVector))
         return false;
 
     Core::Alloc::ScratchArena<> scratchArena;
@@ -538,25 +508,13 @@ bool RaycastDeformableRuntimeMesh(
         if(!DeformableRuntime::ValidateTriangleIndex(instance, static_cast<u32>(triangleIndex), vertexIndices))
             return false;
 
-        const Float4 a(
-            posedVertices[vertexIndices[0]].position.x,
-            posedVertices[vertexIndices[0]].position.y,
-            posedVertices[vertexIndices[0]].position.z
-        );
-        const Float4 b(
-            posedVertices[vertexIndices[1]].position.x,
-            posedVertices[vertexIndices[1]].position.y,
-            posedVertices[vertexIndices[1]].position.z
-        );
-        const Float4 c(
-            posedVertices[vertexIndices[2]].position.x,
-            posedVertices[vertexIndices[2]].position.y,
-            posedVertices[vertexIndices[2]].position.z
-        );
+        const SIMDVector aVector = LoadFloat(posedVertices[vertexIndices[0]].position);
+        const SIMDVector bVector = LoadFloat(posedVertices[vertexIndices[1]].position);
+        const SIMDVector cVector = LoadFloat(posedVertices[vertexIndices[2]].position);
 
         f32 distance = 0.0f;
         f32 bary[3] = {};
-        if(!__hidden_deformable_picking::IntersectTriangle(rayOrigin, rayDirection, a, b, c, distance, bary))
+        if(!__hidden_deformable_picking::IntersectTriangle(rayOriginVector, rayDirectionVector, aVector, bVector, cVector, distance, bary))
             continue;
         if(distance < minDistance || distance > closestDistance)
             continue;
@@ -569,9 +527,8 @@ bool RaycastDeformableRuntimeMesh(
         if(!ResolveDeformableRestSurfaceSample(instance, static_cast<u32>(triangleIndex), hitBary, restSample))
             continue;
 
-        const SIMDVector aVector = LoadFloat(a);
-        const SIMDVector edge0 = VectorSubtract(LoadFloat(b), aVector);
-        const SIMDVector edge1 = VectorSubtract(LoadFloat(c), aVector);
+        const SIMDVector edge0 = VectorSubtract(bVector, aVector);
+        const SIMDVector edge1 = VectorSubtract(cVector, aVector);
         Float4 normal;
         StoreFloat(
             DeformableRuntime::Normalize(Vector3Cross(edge0, edge1), VectorSet(0.0f, 0.0f, 1.0f, 0.0f)),
@@ -579,7 +536,7 @@ bool RaycastDeformableRuntimeMesh(
         );
         Float4 position;
         StoreFloat(
-            VectorMultiplyAdd(LoadFloat(rayDirection), VectorReplicate(distance), LoadFloat(rayOrigin)),
+            VectorMultiplyAdd(rayDirectionVector, VectorReplicate(distance), rayOriginVector),
             &position
         );
 

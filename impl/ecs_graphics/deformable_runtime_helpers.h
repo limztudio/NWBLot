@@ -41,35 +41,6 @@ namespace DisplacementResolveFailure{
     };
 };
 
-struct Vec3 : public AlignedFloat3Data{
-    constexpr Vec3()noexcept
-        : AlignedFloat3Data(0.0f, 0.0f, 0.0f)
-    {}
-    constexpr Vec3(const f32 _x, const f32 _y, const f32 _z)noexcept
-        : AlignedFloat3Data(_x, _y, _z)
-    {}
-};
-static_assert(IsStandardLayout_V<Vec3>, "Vec3 must stay layout-stable");
-static_assert(IsTriviallyCopyable_V<Vec3>, "Vec3 must stay cheap to pass by value");
-static_assert(alignof(Vec3) >= alignof(AlignedFloat3Data), "Vec3 must stay SIMD-aligned");
-static_assert(sizeof(Vec3) == sizeof(AlignedFloat3Data), "Vec3 must stay one aligned float3 wide");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] inline bool ActiveWeight(const f32 value){
-    return DeformableValidation::ActiveWeight(value);
-}
-
-[[nodiscard]] inline bool ActiveLength(const f32 value){
-    return value > s_Epsilon;
-}
-
-[[nodiscard]] inline bool ActiveDisplacement(const DeformableDisplacement& displacement){
-    return displacement.mode != DeformableDisplacementMode::None && ActiveWeight(displacement.amplitude);
-}
-
 [[nodiscard]] inline bool ResolveMorphWeightSum(
     const DeformableMorphWeightsComponent* weights,
     const Name& morphName,
@@ -92,89 +63,36 @@ static_assert(sizeof(Vec3) == sizeof(AlignedFloat3Data), "Vec3 must stay one ali
     return true;
 }
 
-[[nodiscard]] inline Vec3 ToVec3(const Float3Data& value){
-    return Vec3{ value.x, value.y, value.z };
-}
-
-[[nodiscard]] inline Vec3 ToVec3(const AlignedFloat4Data& value){
-    return Vec3{ value.x, value.y, value.z };
-}
-
-[[nodiscard]] inline Float3Data ToFloat3(const Vec3& value){
-    return Float3Data(value.x, value.y, value.z);
-}
-
-[[nodiscard]] inline AlignedFloat4Data ToAlignedFloat4(const Vec3& value, const f32 w = 0.0f){
-    return AlignedFloat4Data(value.x, value.y, value.z, w);
-}
-
-[[nodiscard]] inline Vec3 Add(const Vec3& lhs, const Vec3& rhs){
-    return Vec3{ lhs.x + rhs.x, lhs.y + rhs.y, lhs.z + rhs.z };
-}
-
-[[nodiscard]] inline Vec3 Subtract(const Vec3& lhs, const Vec3& rhs){
-    return Vec3{ lhs.x - rhs.x, lhs.y - rhs.y, lhs.z - rhs.z };
-}
-
-[[nodiscard]] inline Vec3 Scale(const Vec3& value, const f32 scalar){
-    return Vec3{ value.x * scalar, value.y * scalar, value.z * scalar };
-}
-
-[[nodiscard]] inline f32 Dot(const Vec3& lhs, const Vec3& rhs){
-    return (lhs.x * rhs.x) + (lhs.y * rhs.y) + (lhs.z * rhs.z);
-}
-
-[[nodiscard]] inline Vec3 Cross(const Vec3& lhs, const Vec3& rhs){
-    return Vec3{
-        (lhs.y * rhs.z) - (lhs.z * rhs.y),
-        (lhs.z * rhs.x) - (lhs.x * rhs.z),
-        (lhs.x * rhs.y) - (lhs.y * rhs.x),
-    };
-}
-
-[[nodiscard]] inline f32 LengthSquared(const Vec3& value){
-    return Dot(value, value);
-}
-
-[[nodiscard]] inline f32 Length(const Vec3& value){
-    return Sqrt(LengthSquared(value));
-}
-
-[[nodiscard]] inline Vec3 Normalize(const Vec3& value, const Vec3& fallback){
-    const f32 lengthSquared = LengthSquared(value);
+[[nodiscard]] inline SIMDVector Normalize(SIMDVector value, SIMDVector fallback){
+    const SIMDVector lengthSquaredVector = Vector3LengthSq(value);
+    const f32 lengthSquared = VectorGetX(lengthSquaredVector);
     if(lengthSquared <= s_FrameEpsilon)
         return fallback;
+    if(!IsFinite(lengthSquared))
+        return Vector3Normalize(value);
 
-    return Scale(value, 1.0f / Sqrt(lengthSquared));
+    return VectorMultiply(value, VectorReciprocalSqrt(lengthSquaredVector));
 }
 
-[[nodiscard]] inline Vec3 FallbackTangent(const Vec3& normal){
-    const Vec3 axis = DeformableValidation::AbsF32(normal.z) < 0.999f
-        ? Vec3{ 0.0f, 0.0f, 1.0f }
-        : Vec3{ 0.0f, 1.0f, 0.0f }
+[[nodiscard]] inline SIMDVector FallbackTangent(SIMDVector normal){
+    const SIMDVector axis = Abs(VectorGetZ(normal)) < 0.999f
+        ? VectorSet(0.0f, 0.0f, 1.0f, 0.0f)
+        : VectorSet(0.0f, 1.0f, 0.0f, 0.0f)
     ;
-    return Normalize(Cross(axis, normal), Vec3{ 1.0f, 0.0f, 0.0f });
-}
-
-[[nodiscard]] inline f32 TangentHandedness(const f32 value){
-    return value < 0.0f ? -1.0f : 1.0f;
-}
-
-[[nodiscard]] inline Vec3 RotateByQuaternion(const Vec3& value, const AlignedFloat4Data& rotation){
-    const Vec3 q{ rotation.x, rotation.y, rotation.z };
-    const Vec3 twiceCross = Scale(Cross(q, value), 2.0f);
-    return Add(Add(value, Scale(twiceCross, rotation.w)), Cross(q, twiceCross));
+    return Normalize(Vector3Cross(axis, normal), VectorSet(1.0f, 0.0f, 0.0f, 0.0f));
 }
 
 [[nodiscard]] inline bool IsAffineJointMatrix(const DeformableJointMatrix& matrix){
-    return DeformableValidation::IsFiniteFloat4(matrix.column0)
-        && DeformableValidation::IsFiniteFloat4(matrix.column1)
-        && DeformableValidation::IsFiniteFloat4(matrix.column2)
-        && DeformableValidation::IsFiniteFloat4(matrix.column3)
-        && !ActiveWeight(matrix.column0.w)
-        && !ActiveWeight(matrix.column1.w)
-        && !ActiveWeight(matrix.column2.w)
-        && !ActiveWeight(matrix.column3.w - 1.0f)
+    const SIMDVector column0 = LoadFloat(matrix.column0);
+    const SIMDVector column1 = LoadFloat(matrix.column1);
+    const SIMDVector column2 = LoadFloat(matrix.column2);
+    const SIMDVector column3 = LoadFloat(matrix.column3);
+    const SIMDVector affineW = VectorSet(matrix.column0.w, matrix.column1.w, matrix.column2.w, matrix.column3.w);
+    return DeformableValidation::FiniteVector(column0, 0xFu)
+        && DeformableValidation::FiniteVector(column1, 0xFu)
+        && DeformableValidation::FiniteVector(column2, 0xFu)
+        && DeformableValidation::FiniteVector(column3, 0xFu)
+        && Vector4NearEqual(affineW, s_SIMDIdentityR3, VectorReplicate(DeformableValidation::s_Epsilon))
     ;
 }
 
@@ -227,7 +145,7 @@ static_assert(sizeof(Vec3) == sizeof(AlignedFloat3Data), "Vec3 must stay one ali
         outFailure = DisplacementResolveFailure::Amplitude;
         return false;
     }
-    if(!ActiveWeight(outDisplacement.amplitude))
+    if(!DeformableValidation::ActiveWeight(outDisplacement.amplitude))
         outDisplacement = DeformableDisplacement{};
     return true;
 }

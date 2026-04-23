@@ -48,11 +48,11 @@ static bool NearlyEqual(const f32 lhs, const f32 rhs, const f32 epsilon = 0.0000
 
 static NWB::Impl::DeformableVertexRest MakeVertex(const f32 x, const f32 y, const f32 z, const f32 u = 0.0f){
     NWB::Impl::DeformableVertexRest vertex;
-    vertex.position = Float3Data(x, y, z);
-    vertex.normal = Float3Data(0.0f, 0.0f, 1.0f);
-    vertex.tangent = Float4Data(1.0f, 0.0f, 0.0f, 1.0f);
-    vertex.uv0 = Float2Data(u, 0.0f);
-    vertex.color0 = Float4Data(1.0f, 1.0f, 1.0f, 1.0f);
+    vertex.position = Float3U(x, y, z);
+    vertex.normal = Float3U(0.0f, 0.0f, 1.0f);
+    vertex.tangent = Float4U(1.0f, 0.0f, 0.0f, 1.0f);
+    vertex.uv0 = Float2U(u, 0.0f);
+    vertex.color0 = Float4U(1.0f, 1.0f, 1.0f, 1.0f);
     return vertex;
 }
 
@@ -221,6 +221,21 @@ static NWB::Impl::DeformableRuntimeMeshInstance MakeGridHoleInstance(){
     return instance;
 }
 
+static Float3U BarycentricPosition(
+    const Float3U& a,
+    const Float3U& b,
+    const Float3U& c,
+    const NWB::Impl::DeformableHitBarycentric& bary)
+{
+    SIMDVector position = VectorScale(LoadFloat(a), bary[0]);
+    position = VectorMultiplyAdd(LoadFloat(b), VectorReplicate(bary[1]), position);
+    position = VectorMultiplyAdd(LoadFloat(c), VectorReplicate(bary[2]), position);
+
+    Float3U result;
+    StoreFloat(position, &result);
+    return result;
+}
+
 static NWB::Impl::DeformableHoleEditParams MakeHoleEditParams(
     const NWB::Impl::DeformableRuntimeMeshInstance& instance,
     const u32 triangle,
@@ -236,15 +251,11 @@ static NWB::Impl::DeformableHoleEditParams MakeHoleEditParams(
     params.posedHit.bary[1] = 0.25f;
     params.posedHit.bary[2] = 0.5f;
     const usize indexBase = static_cast<usize>(triangle) * 3u;
-    const Float3Data& a = instance.restVertices[instance.indices[indexBase + 0u]].position;
-    const Float3Data& b = instance.restVertices[instance.indices[indexBase + 1u]].position;
-    const Float3Data& c = instance.restVertices[instance.indices[indexBase + 2u]].position;
-    params.posedHit.setPosition(Float3Data(
-        (params.posedHit.bary[0] * a.x) + (params.posedHit.bary[1] * b.x) + (params.posedHit.bary[2] * c.x),
-        (params.posedHit.bary[0] * a.y) + (params.posedHit.bary[1] * b.y) + (params.posedHit.bary[2] * c.y),
-        (params.posedHit.bary[0] * a.z) + (params.posedHit.bary[1] * b.z) + (params.posedHit.bary[2] * c.z)
-    ));
-    params.posedHit.setNormal(Float3Data(0.0f, 0.0f, 1.0f));
+    const Float3U& a = instance.restVertices[instance.indices[indexBase + 0u]].position;
+    const Float3U& b = instance.restVertices[instance.indices[indexBase + 1u]].position;
+    const Float3U& c = instance.restVertices[instance.indices[indexBase + 2u]].position;
+    params.posedHit.setPosition(BarycentricPosition(a, b, c, params.posedHit.bary));
+    params.posedHit.setNormal(Float3U(0.0f, 0.0f, 1.0f));
     params.posedHit.setDistance(1.0f);
     (void)NWB::Impl::ResolveDeformableRestSurfaceSample(
         instance,
@@ -264,19 +275,15 @@ static NWB::Impl::DeformableHoleEditParams MakeGridHoleEditParams(
     return MakeHoleEditParams(instance, 8u, 0.48f, 0.25f);
 }
 
-static Float3Data RestHitPosition(
+static Float3U RestHitPosition(
     const NWB::Impl::DeformableRuntimeMeshInstance& instance,
     const NWB::Impl::DeformableHoleEditParams& params)
 {
     const usize indexBase = static_cast<usize>(params.posedHit.triangle) * 3u;
-    const Float3Data& a = instance.restVertices[instance.indices[indexBase + 0u]].position;
-    const Float3Data& b = instance.restVertices[instance.indices[indexBase + 1u]].position;
-    const Float3Data& c = instance.restVertices[instance.indices[indexBase + 2u]].position;
-    return Float3Data(
-        (params.posedHit.bary[0] * a.x) + (params.posedHit.bary[1] * b.x) + (params.posedHit.bary[2] * c.x),
-        (params.posedHit.bary[0] * a.y) + (params.posedHit.bary[1] * b.y) + (params.posedHit.bary[2] * c.y),
-        (params.posedHit.bary[0] * a.z) + (params.posedHit.bary[1] * b.z) + (params.posedHit.bary[2] * c.z)
-    );
+    const Float3U& a = instance.restVertices[instance.indices[indexBase + 0u]].position;
+    const Float3U& b = instance.restVertices[instance.indices[indexBase + 1u]].position;
+    const Float3U& c = instance.restVertices[instance.indices[indexBase + 2u]].position;
+    return BarycentricPosition(a, b, c, params.posedHit.bary);
 }
 
 static void CheckHoleEditUnchanged(
@@ -376,8 +383,8 @@ static void TestMixedProvenanceFallsBackToRestTriangle(TestContext& context){
     const NWB::Impl::DeformableRuntimeMeshInstance instance = MakeQuadMixedProvenanceInstance();
 
     NWB::Impl::DeformablePickingRay ray;
-    ray.setOrigin(Float3Data(-0.5f, 0.5f, 1.0f));
-    ray.setDirection(Float3Data(0.0f, 0.0f, -1.0f));
+    ray.setOrigin(Float3U(-0.5f, 0.5f, 1.0f));
+    ray.setDirection(Float3U(0.0f, 0.0f, -1.0f));
 
     NWB::Impl::DeformablePosedHit hit;
     NWB_ECS_GRAPHICS_TEST_CHECK(
@@ -399,8 +406,8 @@ static void TestMixedProvenanceRejectsRuntimeTriangleOutsideSourceRange(TestCont
     NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::ResolveDeformableRestSurfaceSample(instance, 2u, bary, sample));
 
     NWB::Impl::DeformablePickingRay ray;
-    ray.setOrigin(Float3Data(4.0f, 0.0f, 1.0f));
-    ray.setDirection(Float3Data(0.0f, 0.0f, -1.0f));
+    ray.setOrigin(Float3U(4.0f, 0.0f, 1.0f));
+    ray.setDirection(Float3U(0.0f, 0.0f, -1.0f));
 
     NWB::Impl::DeformablePosedHit hit;
     NWB_ECS_GRAPHICS_TEST_CHECK(
@@ -497,7 +504,8 @@ static void TestRestSampleCanonicalizesEdgeTolerance(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, sample.bary[0] >= 0.0f);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, sample.bary[1] >= 0.0f);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, sample.bary[2] >= 0.0f);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(sample.bary[0] + sample.bary[1] + sample.bary[2], 1.0f));
+    const f32 sampleBarySum = VectorGetX(Vector3Dot(VectorSet(sample.bary[0], sample.bary[1], sample.bary[2], 0.0f), s_SIMDOne));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(sampleBarySum, 1.0f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(sample.bary[0], 0.0f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(sample.bary[1], 0.5f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(sample.bary[2], 0.5f));
@@ -552,7 +560,7 @@ static void TestPickingVerticesRejectNonFiniteRestData(TestContext& context){
 
     {
         NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
-        instance.restVertices[1].normal = Float3Data(0.0f, 0.0f, 0.0f);
+        instance.restVertices[1].normal = Float3U(0.0f, 0.0f, 0.0f);
 
         Vector<NWB::Impl::DeformableVertexRest> vertices;
         NWB_ECS_GRAPHICS_TEST_CHECK(
@@ -563,7 +571,7 @@ static void TestPickingVerticesRejectNonFiniteRestData(TestContext& context){
 
     {
         NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
-        instance.restVertices[1].tangent = Float4Data(0.0f, 0.0f, 1.0f, 1.0f);
+        instance.restVertices[1].tangent = Float4U(0.0f, 0.0f, 1.0f, 1.0f);
 
         Vector<NWB::Impl::DeformableVertexRest> vertices;
         NWB_ECS_GRAPHICS_TEST_CHECK(
@@ -577,8 +585,8 @@ static void TestRaycastReturnsPoseAndRestHit(TestContext& context){
     const NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
 
     NWB::Impl::DeformablePickingRay ray;
-    ray.setOrigin(Float3Data(0.0f, 0.0f, 1.0f));
-    ray.setDirection(Float3Data(0.0f, 0.0f, -1.0f));
+    ray.setOrigin(Float3U(0.0f, 0.0f, 1.0f));
+    ray.setDirection(Float3U(0.0f, 0.0f, -1.0f));
 
     NWB::Impl::DeformablePosedHit hit;
     NWB_ECS_GRAPHICS_TEST_CHECK(
@@ -592,7 +600,8 @@ static void TestRaycastReturnsPoseAndRestHit(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(hit.bary[0], 0.25f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(hit.bary[1], 0.25f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(hit.bary[2], 0.5f));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(hit.bary[0] + hit.bary[1] + hit.bary[2], 1.0f));
+    const f32 hitBarySum = VectorGetX(Vector3Dot(LoadFloat(hit.bary.values), s_SIMDOne));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(hitBarySum, 1.0f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(hit.distance(), 1.0f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(hit.position.x, 0.0f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(hit.position.y, 0.0f));
@@ -606,8 +615,8 @@ static void TestRaycastRejectsNegativeMinDistance(TestContext& context){
     const NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
 
     NWB::Impl::DeformablePickingRay ray;
-    ray.setOrigin(Float3Data(0.0f, 0.0f, -1.0f));
-    ray.setDirection(Float3Data(0.0f, 0.0f, 1.0f));
+    ray.setOrigin(Float3U(0.0f, 0.0f, -1.0f));
+    ray.setDirection(Float3U(0.0f, 0.0f, 1.0f));
     ray.setMinDistance(-2.0f);
     ray.setMaxDistance(1.0f);
 
@@ -623,8 +632,8 @@ static void TestRaycastRejectsUploadDirtyRuntimeMesh(TestContext& context){
     instance.dirtyFlags = NWB::Impl::RuntimeMeshDirtyFlag::GpuUploadDirty;
 
     NWB::Impl::DeformablePickingRay ray;
-    ray.setOrigin(Float3Data(0.0f, 0.0f, 1.0f));
-    ray.setDirection(Float3Data(0.0f, 0.0f, -1.0f));
+    ray.setOrigin(Float3U(0.0f, 0.0f, 1.0f));
+    ray.setDirection(Float3U(0.0f, 0.0f, -1.0f));
 
     NWB::Impl::DeformablePosedHit hit;
     NWB_ECS_GRAPHICS_TEST_CHECK(
@@ -646,17 +655,17 @@ static void TestPoseStableRestHitRecovery(TestContext& context){
 
     NWB::Impl::DeformableJointPaletteComponent joints;
     joints.joints.resize(1u);
-    joints.joints[0].column0 = AlignedFloat4Data(1.0f, 0.0f, 0.0f, 0.0f);
-    joints.joints[0].column1 = AlignedFloat4Data(0.0f, 1.0f, 0.0f, 0.0f);
-    joints.joints[0].column2 = AlignedFloat4Data(0.0f, 0.0f, 1.0f, 0.0f);
-    joints.joints[0].column3 = AlignedFloat4Data(2.0f, 0.0f, 0.0f, 1.0f);
+    joints.joints[0].column0 = Float4(1.0f, 0.0f, 0.0f, 0.0f);
+    joints.joints[0].column1 = Float4(0.0f, 1.0f, 0.0f, 0.0f);
+    joints.joints[0].column2 = Float4(0.0f, 0.0f, 1.0f, 0.0f);
+    joints.joints[0].column3 = Float4(2.0f, 0.0f, 0.0f, 1.0f);
 
     NWB::Impl::DeformablePickingInputs inputs;
     inputs.jointPalette = &joints;
 
     NWB::Impl::DeformablePickingRay ray;
-    ray.setOrigin(Float3Data(2.0f, 0.0f, 1.0f));
-    ray.setDirection(Float3Data(0.0f, 0.0f, -1.0f));
+    ray.setOrigin(Float3U(2.0f, 0.0f, 1.0f));
+    ray.setDirection(Float3U(0.0f, 0.0f, -1.0f));
 
     NWB::Impl::DeformablePosedHit hit;
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::RaycastDeformableRuntimeMesh(instance, inputs, ray, hit));
@@ -665,12 +674,12 @@ static void TestPoseStableRestHitRecovery(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(hit.restSample.bary[1], 0.25f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(hit.restSample.bary[2], 0.5f));
 
-    joints.joints[0].column0 = AlignedFloat4Data(0.0f, 1.0f, 0.0f, 0.0f);
-    joints.joints[0].column1 = AlignedFloat4Data(-1.0f, 0.0f, 0.0f, 0.0f);
-    joints.joints[0].column2 = AlignedFloat4Data(0.0f, 0.0f, 1.0f, 0.0f);
-    joints.joints[0].column3 = AlignedFloat4Data(1.25f, -0.5f, 0.0f, 1.0f);
+    joints.joints[0].column0 = Float4(0.0f, 1.0f, 0.0f, 0.0f);
+    joints.joints[0].column1 = Float4(-1.0f, 0.0f, 0.0f, 0.0f);
+    joints.joints[0].column2 = Float4(0.0f, 0.0f, 1.0f, 0.0f);
+    joints.joints[0].column3 = Float4(1.25f, -0.5f, 0.0f, 1.0f);
 
-    ray.setOrigin(Float3Data(1.25f, -0.4f, 1.0f));
+    ray.setOrigin(Float3U(1.25f, -0.4f, 1.0f));
 
     NWB::Impl::DeformablePosedHit rotatedHit;
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::RaycastDeformableRuntimeMesh(instance, inputs, ray, rotatedHit));
@@ -687,14 +696,14 @@ static void TestPickingUsesEntityTransform(TestContext& context){
     const NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
 
     NWB::Core::Scene::TransformComponent transform;
-    transform.position = AlignedFloat3Data(3.0f, 0.0f, 0.0f);
+    transform.position = Float4(3.0f, 0.0f, 0.0f);
 
     NWB::Impl::DeformablePickingInputs inputs;
     inputs.transform = &transform;
 
     NWB::Impl::DeformablePickingRay ray;
-    ray.setOrigin(Float3Data(3.0f, 0.0f, 1.0f));
-    ray.setDirection(Float3Data(0.0f, 0.0f, -1.0f));
+    ray.setOrigin(Float3U(3.0f, 0.0f, 1.0f));
+    ray.setDirection(Float3U(0.0f, 0.0f, -1.0f));
 
     NWB::Impl::DeformablePosedHit hit;
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::RaycastDeformableRuntimeMesh(instance, inputs, ray, hit));
@@ -711,14 +720,14 @@ static void TestPickingIgnoresJointPaletteForUnskinnedMesh(TestContext& context)
 
     NWB::Impl::DeformableJointPaletteComponent joints;
     joints.joints.resize(1u);
-    joints.joints[0].column0 = AlignedFloat4Data(1.0f, 0.0f, 0.0f, 0.25f);
+    joints.joints[0].column0 = Float4(1.0f, 0.0f, 0.0f, 0.25f);
 
     NWB::Impl::DeformablePickingInputs inputs;
     inputs.jointPalette = &joints;
 
     NWB::Impl::DeformablePickingRay ray;
-    ray.setOrigin(Float3Data(0.0f, 0.0f, 1.0f));
-    ray.setDirection(Float3Data(0.0f, 0.0f, -1.0f));
+    ray.setOrigin(Float3U(0.0f, 0.0f, 1.0f));
+    ray.setDirection(Float3U(0.0f, 0.0f, -1.0f));
 
     NWB::Impl::DeformablePosedHit hit;
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::RaycastDeformableRuntimeMesh(instance, inputs, ray, hit));
@@ -733,17 +742,17 @@ static void TestPickingRejectsNonAffineJointPalette(TestContext& context){
 
     NWB::Impl::DeformableJointPaletteComponent joints;
     joints.joints.resize(1u);
-    joints.joints[0].column0 = AlignedFloat4Data(1.0f, 0.0f, 0.0f, 0.25f);
-    joints.joints[0].column1 = AlignedFloat4Data(0.0f, 1.0f, 0.0f, 0.0f);
-    joints.joints[0].column2 = AlignedFloat4Data(0.0f, 0.0f, 1.0f, 0.0f);
-    joints.joints[0].column3 = AlignedFloat4Data(0.0f, 0.0f, 0.0f, 1.0f);
+    joints.joints[0].column0 = Float4(1.0f, 0.0f, 0.0f, 0.25f);
+    joints.joints[0].column1 = Float4(0.0f, 1.0f, 0.0f, 0.0f);
+    joints.joints[0].column2 = Float4(0.0f, 0.0f, 1.0f, 0.0f);
+    joints.joints[0].column3 = Float4(0.0f, 0.0f, 0.0f, 1.0f);
 
     NWB::Impl::DeformablePickingInputs inputs;
     inputs.jointPalette = &joints;
 
     NWB::Impl::DeformablePickingRay ray;
-    ray.setOrigin(Float3Data(0.0f, 0.0f, 1.0f));
-    ray.setDirection(Float3Data(0.0f, 0.0f, -1.0f));
+    ray.setOrigin(Float3U(0.0f, 0.0f, 1.0f));
+    ray.setDirection(Float3U(0.0f, 0.0f, -1.0f));
 
     NWB::Impl::DeformablePosedHit hit;
     NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::RaycastDeformableRuntimeMesh(instance, inputs, ray, hit));
@@ -757,14 +766,14 @@ static void TestPickingRejectsUnusedNonAffineJointPalette(TestContext& context){
     joints.joints.resize(2u);
     joints.joints[0] = NWB::Impl::DeformableJointMatrix{};
     joints.joints[1] = NWB::Impl::DeformableJointMatrix{};
-    joints.joints[1].column1 = AlignedFloat4Data(0.0f, 1.0f, 0.0f, 0.25f);
+    joints.joints[1].column1 = Float4(0.0f, 1.0f, 0.0f, 0.25f);
 
     NWB::Impl::DeformablePickingInputs inputs;
     inputs.jointPalette = &joints;
 
     NWB::Impl::DeformablePickingRay ray;
-    ray.setOrigin(Float3Data(0.0f, 0.0f, 1.0f));
-    ray.setDirection(Float3Data(0.0f, 0.0f, -1.0f));
+    ray.setOrigin(Float3U(0.0f, 0.0f, 1.0f));
+    ray.setDirection(Float3U(0.0f, 0.0f, -1.0f));
 
     NWB::Impl::DeformablePosedHit hit;
     NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::RaycastDeformableRuntimeMesh(instance, inputs, ray, hit));
@@ -788,8 +797,8 @@ static void TestPickingRejectsInvalidSkinWeights(TestContext& context){
     inputs.jointPalette = &joints;
 
     NWB::Impl::DeformablePickingRay ray;
-    ray.setOrigin(Float3Data(0.0f, 0.0f, 1.0f));
-    ray.setDirection(Float3Data(0.0f, 0.0f, -1.0f));
+    ray.setOrigin(Float3U(0.0f, 0.0f, 1.0f));
+    ray.setDirection(Float3U(0.0f, 0.0f, -1.0f));
 
     NWB::Impl::DeformablePosedHit hit;
     NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::RaycastDeformableRuntimeMesh(instance, inputs, ray, hit));
@@ -804,9 +813,9 @@ static void TestPickingVerticesIncludeMorphAndDisplacement(TestContext& context)
     morph.name = Name("raise");
     NWB::Impl::DeformableMorphDelta delta{};
     delta.vertexId = 0u;
-    delta.deltaPosition = Float3Data(0.0f, 0.0f, 1.0f);
-    delta.deltaNormal = Float3Data(0.0f, 0.0f, 0.0f);
-    delta.deltaTangent = Float4Data(0.0f, 0.0f, 0.0f, 0.0f);
+    delta.deltaPosition = Float3U(0.0f, 0.0f, 1.0f);
+    delta.deltaNormal = Float3U(0.0f, 0.0f, 0.0f);
+    delta.deltaTangent = Float4U(0.0f, 0.0f, 0.0f, 0.0f);
     morph.deltas.push_back(delta);
     instance.morphs.push_back(morph);
 
@@ -914,7 +923,7 @@ static void TestPickingRejectsNonFiniteEvaluatedVertices(TestContext& context){
     morph.name = Name("overflow");
     NWB::Impl::DeformableMorphDelta delta{};
     delta.vertexId = 0u;
-    delta.deltaPosition = Float3Data(Limit<f32>::s_Max, 0.0f, 0.0f);
+    delta.deltaPosition = Float3U(Limit<f32>::s_Max, 0.0f, 0.0f);
     morph.deltas.push_back(delta);
     instance.morphs.push_back(morph);
 
@@ -937,14 +946,14 @@ static void TestRestSpaceHoleEditCreatesPerInstancePatch(TestContext& context){
     morph.name = Name("boundary_lift");
     NWB::Impl::DeformableMorphDelta delta{};
     delta.vertexId = 5u;
-    delta.deltaPosition = Float3Data(0.0f, 0.0f, 0.2f);
-    delta.deltaNormal = Float3Data(0.0f, 0.0f, 0.0f);
-    delta.deltaTangent = Float4Data(0.0f, 0.0f, 0.0f, 0.0f);
+    delta.deltaPosition = Float3U(0.0f, 0.0f, 0.2f);
+    delta.deltaNormal = Float3U(0.0f, 0.0f, 0.0f);
+    delta.deltaTangent = Float4U(0.0f, 0.0f, 0.0f, 0.0f);
     morph.deltas.push_back(delta);
     instance.morphs.push_back(morph);
 
     const NWB::Impl::DeformableHoleEditParams params = MakeGridHoleEditParams(instance);
-    const Float3Data holeCenter = RestHitPosition(instance, params);
+    const Float3U holeCenter = RestHitPosition(instance, params);
 
     NWB::Impl::DeformableHoleEditResult result;
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::CommitDeformableRestSpaceHole(instance, params, &result));
@@ -988,11 +997,12 @@ static void TestRestSpaceHoleEditCreatesPerInstancePatch(TestContext& context){
         NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertex.tangent.w, 1.0f));
         NWB_ECS_GRAPHICS_TEST_CHECK(context, vertex.uv0.x >= 0.0f && vertex.uv0.x < 1.0f);
         NWB_ECS_GRAPHICS_TEST_CHECK(context, vertex.uv0.y == 0.0f || vertex.uv0.y == 1.0f);
-        const f32 inwardDot =
-            (vertex.normal.x * (holeCenter.x - vertex.position.x))
-            + (vertex.normal.y * (holeCenter.y - vertex.position.y))
-            + (vertex.normal.z * (holeCenter.z - vertex.position.z))
-        ;
+        const f32 inwardDot = VectorGetX(
+            Vector3Dot(
+                LoadFloat(vertex.normal),
+                VectorSubtract(LoadFloat(holeCenter), LoadFloat(vertex.position))
+            )
+        );
         NWB_ECS_GRAPHICS_TEST_CHECK(context, inwardDot > 0.0f);
     }
     NWB_ECS_GRAPHICS_TEST_CHECK(context, rimVertexCount == 4u);
@@ -1027,10 +1037,10 @@ static void TestRestSpaceHoleEditTransfersAndInpaintsWallAttributes(TestContext&
     instance.skin[6u] = MakeSingleJointSkin(joint1);
     instance.skin[10u] = MakeSingleJointSkin(joint2);
     instance.skin[9u] = MakeSingleJointSkin(joint3);
-    instance.restVertices[5u].color0 = Float4Data(1.0f, 0.0f, 0.0f, 1.0f);
-    instance.restVertices[6u].color0 = Float4Data(0.0f, 1.0f, 0.0f, 1.0f);
-    instance.restVertices[10u].color0 = Float4Data(1.0f, 1.0f, 0.0f, 1.0f);
-    instance.restVertices[9u].color0 = Float4Data(0.0f, 0.0f, 1.0f, 1.0f);
+    instance.restVertices[5u].color0 = Float4U(1.0f, 0.0f, 0.0f, 1.0f);
+    instance.restVertices[6u].color0 = Float4U(0.0f, 1.0f, 0.0f, 1.0f);
+    instance.restVertices[10u].color0 = Float4U(1.0f, 1.0f, 0.0f, 1.0f);
+    instance.restVertices[9u].color0 = Float4U(0.0f, 0.0f, 1.0f, 1.0f);
 
     NWB::Impl::DeformableHoleEditResult result;
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::CommitDeformableRestSpaceHole(instance, params, &result));
@@ -1048,8 +1058,8 @@ static void TestRestSpaceHoleEditTransfersAndInpaintsWallAttributes(TestContext&
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(SkinWeightForJoint(innerSkin1, joint0), 0.25f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(SkinWeightForJoint(innerSkin1, joint1), 0.5f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(SkinWeightForJoint(innerSkin1, joint2), 0.25f));
-    const Float4Data& rimColor0 = instance.restVertices[oldVertexCount + 0u].color0;
-    const Float4Data& innerColor0 = instance.restVertices[oldVertexCount + 1u].color0;
+    const Float4U& rimColor0 = instance.restVertices[oldVertexCount + 0u].color0;
+    const Float4U& innerColor0 = instance.restVertices[oldVertexCount + 1u].color0;
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(rimColor0.x, 1.0f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(rimColor0.y, 0.0f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(rimColor0.z, 0.0f));
@@ -1381,7 +1391,7 @@ static void TestSurfaceEditFlowAttachesAndPersistsAccessory(TestContext& context
 
     NWB::Impl::DeformableJointPaletteComponent joints;
     joints.joints.resize(1u);
-    joints.joints[0].column3 = AlignedFloat4Data(2.0f, 0.0f, 0.0f, 1.0f);
+    joints.joints[0].column3 = Float4(2.0f, 0.0f, 0.0f, 1.0f);
 
     NWB::Impl::DeformablePickingInputs translatedInputs;
     translatedInputs.jointPalette = &joints;
@@ -1395,9 +1405,12 @@ static void TestSurfaceEditFlowAttachesAndPersistsAccessory(TestContext& context
             translatedTransform
         )
     );
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(translatedTransform.position.x, baseTransform.position.x + 2.0f));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(translatedTransform.position.y, baseTransform.position.y));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(translatedTransform.position.z, baseTransform.position.z));
+    const SIMDVector translatedOffset =
+        VectorSubtract(LoadFloat(translatedTransform.position), LoadFloat(baseTransform.position))
+    ;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(VectorGetX(translatedOffset), 2.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(VectorGetY(translatedOffset), 0.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(VectorGetZ(translatedOffset), 0.0f));
 
     NWB::Impl::DeformableSurfaceEditState state;
     NWB::Impl::DeformableAccessoryAttachmentRecord accessoryRecord;
@@ -1478,7 +1491,7 @@ static void TestSurfaceEditFlowAttachesAndPersistsAccessory(TestContext& context
     NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::SerializeSurfaceEditState(malformedState, binary));
 
     malformedState = state;
-    malformedState.edits[0].hole.restNormal = Float3Data(0.0f, 0.0f, 0.0f);
+    malformedState.edits[0].hole.restNormal = Float3U(0.0f, 0.0f, 0.0f);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::SerializeSurfaceEditState(malformedState, binary));
 
     malformedState = state;
@@ -1658,7 +1671,7 @@ static void TestRestSpaceHoleEditRejectsMalformedRuntimePayload(TestContext& con
         const usize oldVertexCount = instance.restVertices.size();
         const usize oldIndexCount = instance.indices.size();
         const u32 oldRevision = instance.editRevision;
-        instance.restVertices[0u].normal = Float3Data(0.0f, 0.0f, 0.0f);
+        instance.restVertices[0u].normal = Float3U(0.0f, 0.0f, 0.0f);
 
         const NWB::Impl::DeformableHoleEditParams params = MakeGridHoleEditParams(instance);
 
@@ -1792,7 +1805,7 @@ static void TestRestSpaceHoleEditRejectsStaleOrMismatchedHit(TestContext& contex
         const usize oldIndexCount = instance.indices.size();
         const u32 oldRevision = instance.editRevision;
         NWB::Impl::DeformableHoleEditParams params = MakeGridHoleEditParams(instance);
-        params.posedHit.setNormal(Float3Data(0.0f, 0.0f, 0.0f));
+        params.posedHit.setNormal(Float3U(0.0f, 0.0f, 0.0f));
 
         NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::CommitDeformableRestSpaceHole(instance, params));
         CheckHoleEditUnchanged(context, instance, oldVertexCount, oldIndexCount, oldRevision);

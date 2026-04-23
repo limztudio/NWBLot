@@ -14,7 +14,6 @@
 
 #if defined(__cplusplus)
 #include <core/global.h>
-#include <global/matrix_math.h>
 
 #include <cstddef>
 #else
@@ -60,7 +59,7 @@ struct IndirectInstanceDesc{
 #if !defined(__cplusplus)
     float4 transform[3];
 #else
-    AlignedFloat4Data transform[3] = {};
+    Float4 transform[3] = {};
 #endif
     u32 instanceID : 24;
     u32 instanceMask : 8;
@@ -72,9 +71,9 @@ struct IndirectInstanceDesc{
 static_assert(IsStandardLayout_V<IndirectInstanceDesc>, "IndirectInstanceDesc must stay GPU-uploadable");
 static_assert(IsTriviallyCopyable_V<IndirectInstanceDesc>, "IndirectInstanceDesc must stay GPU-uploadable");
 static_assert(sizeof(IndirectInstanceDesc) == 64u, "IndirectInstanceDesc GPU layout drifted");
-static_assert(alignof(IndirectInstanceDesc) >= alignof(AlignedFloat4Data), "IndirectInstanceDesc must stay SIMD-aligned");
+static_assert(alignof(IndirectInstanceDesc) >= alignof(Float4), "IndirectInstanceDesc must stay SIMD-aligned");
 static_assert(
-    (offsetof(IndirectInstanceDesc, transform) % alignof(AlignedFloat4Data)) == 0,
+    (offsetof(IndirectInstanceDesc, transform) % alignof(Float4)) == 0,
     "IndirectInstanceDesc::transform must stay SIMD-aligned"
 );
 #endif

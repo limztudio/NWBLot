@@ -12,7 +12,6 @@
 #include <impl/assets_graphics/material_asset.h>
 #include <impl/assets_graphics/shader_asset.h>
 #include <impl/assets_graphics/shader_stage_names.h>
-#include <global/matrix_math.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -53,14 +52,14 @@ struct ShaderDrivenPushConstants{
     u32 scissorCullEnabled = 0;
     u32 instanceIndex = 0;
     u32 sourceVertexLayout = 0;
-    AlignedFloat4Data viewportRect = AlignedFloat4Data(0.f, 0.f, 0.f, 0.f);
-    AlignedFloat4Data scissorRect = AlignedFloat4Data(0.f, 0.f, 0.f, 0.f);
+    Float4 viewportRect = Float4(0.f, 0.f, 0.f, 0.f);
+    Float4 scissorRect = Float4(0.f, 0.f, 0.f, 0.f);
 };
 
 struct AvboitPushConstants{
     u32 frame[4] = {};
     u32 volume[4] = {};
-    AlignedFloat4Data params = AlignedFloat4Data(0.f, 0.f, 0.f, 0.f);
+    Float4 params = Float4(0.f, 0.f, 0.f, 0.f);
 };
 
 struct TransparentDrawPushConstants{
@@ -69,36 +68,36 @@ struct TransparentDrawPushConstants{
 };
 
 struct EmulatedVertex{
-    AlignedFloat4Data position;
-    AlignedFloat4Data normal;
-    AlignedFloat4Data tangent;
-    AlignedFloat4Data uv0;
-    AlignedFloat4Data color;
+    Float4 position;
+    Float4 normal;
+    Float4 tangent;
+    Float4 uv0;
+    Float4 color;
 };
 
 struct MeshViewGpuData{
-    AlignedFloat4Data worldToClip[4] = {
-        AlignedFloat4Data(1.f, 0.f, 0.f, 0.f),
-        AlignedFloat4Data(0.f, 1.f, 0.f, 0.f),
-        AlignedFloat4Data(0.f, 0.f, 1.f, 0.f),
-        AlignedFloat4Data(0.f, 0.f, 0.f, 1.f),
+    Float4 worldToClip[4] = {
+        Float4(1.f, 0.f, 0.f, 0.f),
+        Float4(0.f, 1.f, 0.f, 0.f),
+        Float4(0.f, 0.f, 1.f, 0.f),
+        Float4(0.f, 0.f, 0.f, 1.f),
     };
 };
 
 struct MeshViewState{
-    AlignedFloat4Data worldToClip[4] = {
-        AlignedFloat4Data(1.f, 0.f, 0.f, 0.f),
-        AlignedFloat4Data(0.f, 1.f, 0.f, 0.f),
-        AlignedFloat4Data(0.f, 0.f, 1.f, 0.f),
-        AlignedFloat4Data(0.f, 0.f, 0.f, 1.f),
+    Float4 worldToClip[4] = {
+        Float4(1.f, 0.f, 0.f, 0.f),
+        Float4(0.f, 1.f, 0.f, 0.f),
+        Float4(0.f, 0.f, 1.f, 0.f),
+        Float4(0.f, 0.f, 0.f, 1.f),
     };
 };
 
 struct MeshViewBasis{
-    AlignedFloat4Data right = AlignedFloat4Data(1.f, 0.f, 0.f, 0.f);
-    AlignedFloat4Data up = AlignedFloat4Data(0.f, 1.f, 0.f, 0.f);
-    AlignedFloat4Data forward = AlignedFloat4Data(0.f, 0.f, 1.f, 0.f);
-    AlignedFloat4Data positionDepthBias = AlignedFloat4Data(0.f, 0.f, 0.f, 0.f);
+    Float4 right = Float4(1.f, 0.f, 0.f, 0.f);
+    Float4 up = Float4(0.f, 1.f, 0.f, 0.f);
+    Float4 forward = Float4(0.f, 0.f, 1.f, 0.f);
+    Float4 positionDepthBias = Float4(0.f, 0.f, 0.f, 0.f);
 };
 
 static_assert(sizeof(ShaderDrivenPushConstants) == 48, "ShaderDrivenPushConstants layout must stay stable");
@@ -109,9 +108,9 @@ static_assert(
     "Transparent draw push constants must fit the portable push constant budget"
 );
 static_assert(sizeof(EmulatedVertex) == s_EmulatedVertexStride, "EmulatedVertex layout must match the mesh emulation shader");
-static_assert(alignof(EmulatedVertex) >= alignof(AlignedFloat4Data), "EmulatedVertex must stay SIMD-aligned");
+static_assert(alignof(EmulatedVertex) >= alignof(Float4), "EmulatedVertex must stay SIMD-aligned");
 static_assert(sizeof(MeshViewGpuData) == sizeof(f32) * 16u, "MeshViewGpuData layout must match the mesh shaders");
-static_assert(alignof(MeshViewGpuData) >= alignof(AlignedFloat4Data), "MeshViewGpuData must stay SIMD-aligned");
+static_assert(alignof(MeshViewGpuData) >= alignof(Float4), "MeshViewGpuData must stay SIMD-aligned");
 
 
 static const Name& StageNameFromShaderType(const Core::ShaderType::Mask shaderType){
@@ -377,55 +376,54 @@ static InstanceGpuData BuildInstanceGpuData(const Core::Scene::TransformComponen
         return data;
 
     data.rotation = transform->rotation;
-    data.translation = AlignedFloat4Data(transform->position.x, transform->position.y, transform->position.z, 0.0f);
-    data.scale = AlignedFloat4Data(transform->scale.x, transform->scale.y, transform->scale.z, 0.0f);
+    data.translation = transform->position;
+    data.scale = transform->scale;
     return data;
 }
 
-static f32 Float3Dot(const AlignedFloat4Data& lhs, const AlignedFloat4Data& rhs){
-    return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z;
+static f32 Float3Dot(const Float4& lhs, const Float4& rhs){
+    return VectorGetX(Vector3Dot(LoadFloat(lhs), LoadFloat(rhs)));
 }
 
 static void StoreRotatedBasisVector(
-    AlignedFloat4Data& outVector,
-    const AlignedFloat3Data& localVector,
-    const Core::Scene::TransformComponent& transform
+    Float4& outVector,
+    const Float4& localVector,
+    SIMDVector rotation
 ){
-    AlignedFloat3Data rotatedVector;
-    SourceMath::StoreFloat3A(
-        &rotatedVector,
-        SourceMath::Vector3Rotate(SourceMath::LoadFloat3A(&localVector), SourceMath::LoadFloat4A(&transform.rotation))
-    );
-    outVector = AlignedFloat4Data(rotatedVector.x, rotatedVector.y, rotatedVector.z, 0.0f);
+    StoreFloat(Vector3Rotate(LoadFloat(localVector), rotation), &outVector);
 }
 
 static MeshViewBasis BuildDefaultMeshViewBasis(){
-    const f32 sinYaw = Sin(s_DefaultMeshViewYaw);
-    const f32 cosYaw = Cos(s_DefaultMeshViewYaw);
-    const f32 sinPitch = Sin(s_DefaultMeshViewPitch);
-    const f32 cosPitch = Cos(s_DefaultMeshViewPitch);
+    SIMDVector sinAngles;
+    SIMDVector cosAngles;
+    VectorSinCos(&sinAngles, &cosAngles, VectorSet(s_DefaultMeshViewYaw, s_DefaultMeshViewPitch, 0.0f, 0.0f));
+    const f32 sinYaw = VectorGetX(sinAngles);
+    const f32 cosYaw = VectorGetX(cosAngles);
+    const f32 sinPitch = VectorGetY(sinAngles);
+    const f32 cosPitch = VectorGetY(cosAngles);
 
     MeshViewBasis basis;
-    basis.right = AlignedFloat4Data(cosYaw, 0.0f, sinYaw, 0.0f);
-    basis.up = AlignedFloat4Data(sinYaw * sinPitch, cosPitch, -cosYaw * sinPitch, 0.0f);
-    basis.forward = AlignedFloat4Data(-sinYaw * cosPitch, sinPitch, cosYaw * cosPitch, 0.0f);
+    basis.right = Float4(cosYaw, 0.0f, sinYaw, 0.0f);
+    basis.up = Float4(sinYaw * sinPitch, cosPitch, -cosYaw * sinPitch, 0.0f);
+    basis.forward = Float4(-sinYaw * cosPitch, sinPitch, cosYaw * cosPitch, 0.0f);
     basis.positionDepthBias.w = s_DefaultMeshViewDepthOffset;
     return basis;
 }
 
 static MeshViewBasis BuildTransformMeshViewBasis(const Core::Scene::TransformComponent& transform){
     MeshViewBasis basis;
-    basis.positionDepthBias = AlignedFloat4Data(transform.position.x, transform.position.y, transform.position.z, 0.0f);
-    StoreRotatedBasisVector(basis.right, AlignedFloat3Data(1.0f, 0.0f, 0.0f), transform);
-    StoreRotatedBasisVector(basis.up, AlignedFloat3Data(0.0f, 1.0f, 0.0f), transform);
-    StoreRotatedBasisVector(basis.forward, AlignedFloat3Data(0.0f, 0.0f, 1.0f), transform);
+    basis.positionDepthBias = transform.position;
+    const SIMDVector rotation = LoadFloat(transform.rotation);
+    StoreRotatedBasisVector(basis.right, Float4(1.0f, 0.0f, 0.0f), rotation);
+    StoreRotatedBasisVector(basis.up, Float4(0.0f, 1.0f, 0.0f), rotation);
+    StoreRotatedBasisVector(basis.forward, Float4(0.0f, 0.0f, 1.0f), rotation);
     return basis;
 }
 
 static void BuildCameraProjectionParams(
     const Core::Scene::CameraComponent& camera,
     const f32 fallbackAspectRatio,
-    AlignedFloat4Data& outProjectionParams
+    Float4& outProjectionParams
 ){
     if(Core::Scene::TryBuildCameraProjectionParams(camera, fallbackAspectRatio, outProjectionParams))
         return;
@@ -434,30 +432,29 @@ static void BuildCameraProjectionParams(
     if(Core::Scene::TryBuildCameraProjectionParams(fallbackCamera, fallbackAspectRatio, outProjectionParams))
         return;
 
-    outProjectionParams = AlignedFloat4Data(1.0f, 1.0f, 1.0f, 0.0f);
+    outProjectionParams = Float4(1.0f, 1.0f, 1.0f, 0.0f);
 }
 
 static void StoreProjectedViewColumn(
-    AlignedFloat4Data (&outWorldToClip)[4],
+    Float4 (&outWorldToClip)[4],
     const usize columnIndex,
     const f32 viewX,
     const f32 viewY,
     const f32 viewZ,
     const f32 viewW,
-    const AlignedFloat4Data& projectionParams
+    const Float4& projectionParams
 ){
-    outWorldToClip[columnIndex] = AlignedFloat4Data(
-        viewX * projectionParams.x,
-        viewY * projectionParams.y,
-        viewZ * projectionParams.z + viewW * projectionParams.w,
-        viewZ
-    );
+    const SIMDVector projection = LoadFloat(projectionParams);
+    SIMDVector column = VectorMultiply(VectorSet(viewX, viewY, viewZ, viewZ), projection);
+    column = VectorMultiplyAdd(VectorSet(0.0f, 0.0f, viewW, 0.0f), VectorSplatW(projection), column);
+    column = VectorSetW(column, viewZ);
+    StoreFloat(column, &outWorldToClip[columnIndex]);
 }
 
 static void StoreWorldToClipMatrix(
-    AlignedFloat4Data (&outWorldToClip)[4],
+    Float4 (&outWorldToClip)[4],
     const MeshViewBasis& basis,
-    const AlignedFloat4Data& projectionParams
+    const Float4& projectionParams
 ){
     const f32 translationX = -Float3Dot(basis.positionDepthBias, basis.right);
     const f32 translationY = -Float3Dot(basis.positionDepthBias, basis.up);
@@ -516,7 +513,7 @@ static f32 FramebufferAspectRatio(const Core::IFramebuffer& framebuffer){
 static MeshViewState BuildDefaultMeshViewState(const f32 fallbackAspectRatio){
     MeshViewState state;
     Core::Scene::CameraComponent camera;
-    AlignedFloat4Data projectionParams;
+    Float4 projectionParams;
     BuildCameraProjectionParams(camera, fallbackAspectRatio, projectionParams);
     StoreWorldToClipMatrix(state.worldToClip, BuildDefaultMeshViewBasis(), projectionParams);
     return state;
@@ -560,13 +557,13 @@ static ShaderDrivenPushConstants BuildShaderDrivenPushConstants(
 
     const Core::Viewport& viewport = viewportState.viewports[0];
     pushConstants.scissorCullEnabled = 1;
-    pushConstants.viewportRect = AlignedFloat4Data(viewport.minX, viewport.minY, viewport.maxX, viewport.maxY);
+    pushConstants.viewportRect = Float4(viewport.minX, viewport.minY, viewport.maxX, viewport.maxY);
 
     Core::Rect scissorRect(viewport);
     if(!viewportState.scissorRects.empty())
         scissorRect = viewportState.scissorRects[0];
 
-    pushConstants.scissorRect = AlignedFloat4Data(
+    pushConstants.scissorRect = Float4(
         static_cast<f32>(scissorRect.minX),
         static_cast<f32>(scissorRect.minY),
         static_cast<f32>(scissorRect.maxX),
@@ -630,7 +627,7 @@ static AvboitPushConstants BuildAvboitPushConstants(const RendererSystem::Avboit
     pushConstants.volume[1] = targets.physicalSliceCount;
     pushConstants.volume[2] = targets.lowWidth * targets.lowHeight * targets.physicalSliceCount;
     pushConstants.volume[3] = (targets.virtualSliceCount + 31u) / 32u;
-    pushConstants.params = AlignedFloat4Data(
+    pushConstants.params = Float4(
         alpha,
         s_AvboitExtinctionFixedScale,
         s_AvboitSelfOcclusionSliceBias,

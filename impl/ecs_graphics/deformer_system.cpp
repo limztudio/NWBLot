@@ -129,12 +129,12 @@ static bool ResolveMorphWeight(
     return false;
 }
 
-static AlignedFloat4Data ExpandFloat3Delta(const Float3Data& value){
-    return AlignedFloat4Data(value.x, value.y, value.z, 0.0f);
+static Float4 ExpandFloat3Delta(const Float3U& value){
+    return Float4(value.x, value.y, value.z, 0.0f);
 }
 
-static AlignedFloat4Data ExpandFloat4Delta(const Float4Data& value){
-    return AlignedFloat4Data(value.x, value.y, value.z, value.w);
+static Float4 ExpandFloat4Delta(const Float4U& value){
+    return Float4(value.x, value.y, value.z, value.w);
 }
 
 template<typename MorphRangeVector, typename MorphDeltaVector>
@@ -162,7 +162,7 @@ static bool BuildMorphPayload(
         if(!ResolveMorphWeight(instance, morphWeights, morph.name, weight))
             return false;
         resolvedWeights.push_back(weight);
-        if(!DeformableRuntime::ActiveWeight(weight))
+        if(!DeformableValidation::ActiveWeight(weight))
             continue;
         if(morph.deltas.empty()){
             NWB_LOGGER_ERROR(
@@ -192,7 +192,7 @@ static bool BuildMorphPayload(
     for(usize morphIndex = 0u; morphIndex < instance.morphs.size(); ++morphIndex){
         const DeformableMorph& morph = instance.morphs[morphIndex];
         const f32 weight = resolvedWeights[morphIndex];
-        if(!DeformableRuntime::ActiveWeight(weight))
+        if(!DeformableValidation::ActiveWeight(weight))
             continue;
 
         DeformerSystem::DeformerMorphRangeGpu range;
@@ -283,7 +283,7 @@ static bool BuildSkinPayload(
         for(u32 influenceIndex = 0; influenceIndex < 4u; ++influenceIndex){
             const u32 joint = static_cast<u32>(sourceSkin.joint[influenceIndex]);
             const f32 weight = sourceSkin.weight[influenceIndex];
-            if(DeformableRuntime::ActiveWeight(weight) && joint >= jointPalette->joints.size()){
+            if(DeformableValidation::ActiveWeight(weight) && joint >= jointPalette->joints.size()){
                 NWB_LOGGER_ERROR(
                     NWB_TEXT("DeformerSystem: runtime mesh '{}' vertex {} references joint {} outside palette size {}"),
                     instance.handle.value,
@@ -295,7 +295,7 @@ static bool BuildSkinPayload(
             }
             gpuSkin.joint[influenceIndex] = joint;
         }
-        gpuSkin.weight = AlignedFloat4Data(
+        gpuSkin.weight = Float4(
             sourceSkin.weight[0],
             sourceSkin.weight[1],
             sourceSkin.weight[2],
@@ -357,7 +357,7 @@ static_assert(
     "Deformer morph range GPU layout drifted"
 );
 static_assert(
-    alignof(DeformerSystem::DeformerMorphRangeGpu) >= alignof(AlignedFloat4Data),
+    alignof(DeformerSystem::DeformerMorphRangeGpu) >= alignof(Float4),
     "Deformer morph range GPU layout must stay SIMD-aligned"
 );
 static_assert(
@@ -365,7 +365,7 @@ static_assert(
     "Deformer morph delta GPU layout drifted"
 );
 static_assert(
-    alignof(DeformerSystem::DeformerMorphDeltaGpu) >= alignof(AlignedFloat4Data),
+    alignof(DeformerSystem::DeformerMorphDeltaGpu) >= alignof(Float4),
     "Deformer morph delta GPU layout must stay SIMD-aligned"
 );
 static_assert(
@@ -373,7 +373,7 @@ static_assert(
     "Deformer skin influence GPU layout drifted"
 );
 static_assert(
-    alignof(DeformerSystem::DeformerSkinInfluenceGpu) >= alignof(AlignedFloat4Data),
+    alignof(DeformerSystem::DeformerSkinInfluenceGpu) >= alignof(Float4),
     "Deformer skin influence GPU layout must stay SIMD-aligned"
 );
 
@@ -683,7 +683,9 @@ bool DeformerSystem::dispatchRuntimeMesh(
 
     const bool hasActiveMorphs = !morphRanges.empty();
     const bool hasActiveSkin = !skinInfluences.empty() && !jointMatrices.empty();
-    const bool hasDisplacement = DeformableRuntime::ActiveDisplacement(resolvedDisplacement);
+    const bool hasDisplacement = resolvedDisplacement.mode != DeformableDisplacementMode::None
+        && DeformableValidation::ActiveWeight(resolvedDisplacement.amplitude)
+    ;
     if(!hasActiveMorphs && !hasActiveSkin && !hasDisplacement){
         const bool deformerInputDirty = (instance.dirtyFlags & RuntimeMeshDirtyFlag::DeformerInputDirty) != 0u;
         const auto foundResources = m_runtimeResources.find(instance.handle.value);

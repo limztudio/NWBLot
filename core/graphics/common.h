@@ -1542,15 +1542,15 @@ typedef RefCountPtr<IRayTracingOpacityMicromap, ArenaRefDeleter<IRayTracingOpaci
 
 class IRayTracingAccelStruct;
 
-using AffineTransform = AlignedFloat4Data[3];
+using AffineTransform = Float4[3];
 
 inline constexpr AffineTransform s_identityTransform = {
-    AlignedFloat4Data(1.f, 0.f, 0.f, 0.f),
-    AlignedFloat4Data(0.f, 1.f, 0.f, 0.f),
-    AlignedFloat4Data(0.f, 0.f, 1.f, 0.f)
+    Float4(1.f, 0.f, 0.f, 0.f),
+    Float4(0.f, 1.f, 0.f, 0.f),
+    Float4(0.f, 0.f, 1.f, 0.f)
 };
 static_assert(sizeof(AffineTransform) == sizeof(f32) * 12u, "AffineTransform GPU layout drifted");
-static_assert(alignof(AffineTransform) >= alignof(AlignedFloat4Data), "AffineTransform must stay SIMD-aligned");
+static_assert(alignof(AffineTransform) >= alignof(Float4), "AffineTransform must stay SIMD-aligned");
 
 namespace RayTracingGeometryFlags{
     enum Mask : u8{

@@ -1133,11 +1133,11 @@ static bool ParseDeformableIndexField(
 
 static bool BuildDeformableRestVertices(
     const Path& nwbFilePath,
-    const Vector<Float3Data>& positions,
-    const Vector<Float3Data>& normals,
-    const Vector<Float4Data>& tangents,
-    const Vector<Float2Data>& uv0,
-    const Vector<Float4Data>& colors,
+    const Vector<Float3U>& positions,
+    const Vector<Float3U>& normals,
+    const Vector<Float4U>& tangents,
+    const Vector<Float2U>& uv0,
+    const Vector<Float4U>& colors,
     Vector<DeformableVertexRest>& outVertices
 ){
     if(positions.size() != normals.size()
@@ -1163,10 +1163,10 @@ static bool BuildDeformableRestVertices(
     return true;
 }
 
-static void BuildDefaultDeformableColors(const usize vertexCount, Vector<Float4Data>& outColors){
+static void BuildDefaultDeformableColors(const usize vertexCount, Vector<Float4U>& outColors){
     outColors.resize(vertexCount);
-    for(Float4Data& color : outColors)
-        color = Float4Data(1.f, 1.f, 1.f, 1.f);
+    for(Float4U& color : outColors)
+        color = Float4U(1.f, 1.f, 1.f, 1.f);
 }
 
 static bool ParseSkinInfluences(
@@ -1245,10 +1245,10 @@ static bool ParseSourceSamples(
         return true;
 
     Vector<u32> sourceTri;
-    Vector<Float3Data> bary;
+    Vector<Float3U> bary;
     if(!ParseU32ListField(nwbFilePath, *sourceSamples, "source_tri", sourceTri))
         return false;
-    if(!ParseFloatListField<Float3Data, 3u>(nwbFilePath, *sourceSamples, "bary", bary))
+    if(!ParseFloatListField<Float3U, 3u>(nwbFilePath, *sourceSamples, "bary", bary))
         return false;
     if(sourceTri.size() != vertexCount || bary.size() != vertexCount){
         NWB_LOGGER_ERROR(
@@ -1386,14 +1386,14 @@ static bool ParseMorphs(
         }
 
         Vector<u32> vertexIds;
-        Vector<Float3Data> deltaPositions;
-        Vector<Float3Data> deltaNormals;
-        Vector<Float4Data> deltaTangents;
+        Vector<Float3U> deltaPositions;
+        Vector<Float3U> deltaNormals;
+        Vector<Float4U> deltaTangents;
         if(!ParseU32ListField(nwbFilePath, morphValue, "vertex_ids", vertexIds))
             return false;
-        if(!ParseFloatListField<Float3Data, 3u>(nwbFilePath, morphValue, "delta_position", deltaPositions))
+        if(!ParseFloatListField<Float3U, 3u>(nwbFilePath, morphValue, "delta_position", deltaPositions))
             return false;
-        if(!ParseFloatListField<Float3Data, 3u>(nwbFilePath, morphValue, "delta_normal", deltaNormals))
+        if(!ParseFloatListField<Float3U, 3u>(nwbFilePath, morphValue, "delta_normal", deltaNormals))
             return false;
         if(!FindField(morphValue, "delta_tangent")){
             NWB_LOGGER_ERROR(
@@ -1403,7 +1403,7 @@ static bool ParseMorphs(
             );
             return false;
         }
-        if(!ParseFloatListField<Float4Data, 4u>(nwbFilePath, morphValue, "delta_tangent", deltaTangents))
+        if(!ParseFloatListField<Float4U, 4u>(nwbFilePath, morphValue, "delta_tangent", deltaTangents))
             return false;
         if(vertexIds.empty()
             || vertexIds.size() != deltaPositions.size()
@@ -1459,24 +1459,24 @@ static bool ParseDeformableGeometryMeta(
     ))
         return false;
 
-    Vector<Float3Data> positions;
-    Vector<Float3Data> normals;
-    Vector<Float4Data> tangents;
-    Vector<Float2Data> uv0;
-    Vector<Float4Data> colors;
+    Vector<Float3U> positions;
+    Vector<Float3U> normals;
+    Vector<Float4U> tangents;
+    Vector<Float2U> uv0;
+    Vector<Float4U> colors;
     if(!ParseDeformableIndexType(discoveredFile.filePath, asset, outEntry.use32BitIndices))
         return false;
-    if(!ParseFloatListField<Float3Data, 3u>(discoveredFile.filePath, asset, "positions", positions))
+    if(!ParseFloatListField<Float3U, 3u>(discoveredFile.filePath, asset, "positions", positions))
         return false;
-    if(!ParseFloatListField<Float3Data, 3u>(discoveredFile.filePath, asset, "normals", normals))
+    if(!ParseFloatListField<Float3U, 3u>(discoveredFile.filePath, asset, "normals", normals))
         return false;
-    if(!ParseFloatListField<Float4Data, 4u>(discoveredFile.filePath, asset, "tangents", tangents))
+    if(!ParseFloatListField<Float4U, 4u>(discoveredFile.filePath, asset, "tangents", tangents))
         return false;
-    if(!ParseFloatListField<Float2Data, 2u>(discoveredFile.filePath, asset, "uv0", uv0))
+    if(!ParseFloatListField<Float2U, 2u>(discoveredFile.filePath, asset, "uv0", uv0))
         return false;
     const Core::Metascript::Value* colorsField = FindField(asset, "colors");
     if(colorsField && !IsExplicitEmptyOptionalField(*colorsField)){
-        if(!ParseFloatListField<Float4Data, 4u>(discoveredFile.filePath, asset, "colors", colors))
+        if(!ParseFloatListField<Float4U, 4u>(discoveredFile.filePath, asset, "colors", colors))
             return false;
     }else
         BuildDefaultDeformableColors(positions.size(), colors);

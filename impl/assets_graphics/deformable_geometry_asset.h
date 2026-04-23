@@ -8,7 +8,6 @@
 #include "../global.h"
 
 #include <core/assets/asset.h>
-#include <global/matrix_math.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -21,11 +20,11 @@ NWB_IMPL_BEGIN
 
 
 struct DeformableVertexRest{
-    Float3Data position;
-    Float3Data normal;
-    Float4Data tangent;
-    Float2Data uv0;
-    Float4Data color0;
+    Float3U position;
+    Float3U normal;
+    Float4U tangent;
+    Float2U uv0;
+    Float4U color0;
 };
 static_assert(IsStandardLayout_V<DeformableVertexRest>, "DeformableVertexRest must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<DeformableVertexRest>, "DeformableVertexRest must stay binary-serializable");
@@ -74,9 +73,9 @@ static_assert(sizeof(DeformableDisplacement) == sizeof(f32) * 4u, "DeformableDis
 
 struct DeformableMorphDelta{
     u32 vertexId = 0;
-    Float3Data deltaPosition;
-    Float3Data deltaNormal;
-    Float4Data deltaTangent;
+    Float3U deltaPosition;
+    Float3U deltaNormal;
+    Float4U deltaTangent;
 };
 static_assert(IsStandardLayout_V<DeformableMorphDelta>, "DeformableMorphDelta must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<DeformableMorphDelta>, "DeformableMorphDelta must stay binary-serializable");

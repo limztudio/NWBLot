@@ -7,8 +7,6 @@
 
 #include "global.h"
 
-#include <global/matrix_math.h>
-
 #include <cstddef>
 
 
@@ -34,16 +32,16 @@ namespace LightType{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct alignas(AlignedFloat4Data) LightComponent{
+struct alignas(Float4) LightComponent{
     // x/y/z = color, w = intensity.
-    AlignedFloat4Data colorIntensity = AlignedFloat4Data(1.0f, 1.0f, 1.0f, 1.0f);
+    Float4 colorIntensity = Float4(1.0f, 1.0f, 1.0f, 1.0f);
     f32 range = 10.0f;
     LightType::Enum type = LightType::Directional;
 
-    [[nodiscard]] AlignedFloat3Data color()const{ return AlignedFloat3Data(colorIntensity.x, colorIntensity.y, colorIntensity.z); }
+    [[nodiscard]] Float4 color()const{ return Float4(colorIntensity.x, colorIntensity.y, colorIntensity.z); }
     [[nodiscard]] f32 intensity()const{ return colorIntensity.w; }
 
-    void setColor(const AlignedFloat3Data& value){
+    void setColor(const Float4& value){
         colorIntensity.x = value.x;
         colorIntensity.y = value.y;
         colorIntensity.z = value.z;
@@ -55,11 +53,11 @@ static_assert(sizeof(LightType::Enum) == sizeof(u8), "LightType must stay compac
 static_assert(IsStandardLayout_V<LightComponent>, "LightComponent must stay layout-stable for ECS storage");
 static_assert(IsTriviallyCopyable_V<LightComponent>, "LightComponent must stay cheap to move in dense ECS storage");
 static_assert(
-    alignof(LightComponent) >= alignof(AlignedFloat4Data),
+    alignof(LightComponent) >= alignof(Float4),
     "LightComponent must stay aligned for SIMD component loads"
 );
 static_assert(
-    sizeof(LightComponent) == (sizeof(AlignedFloat4Data) * 2),
+    sizeof(LightComponent) == (sizeof(Float4) * 2),
     "LightComponent must stay two aligned vectors wide"
 );
 static_assert(
@@ -67,7 +65,7 @@ static_assert(
     "LightComponent array stride must keep every element SIMD-aligned"
 );
 static_assert(
-    (offsetof(LightComponent, colorIntensity) % alignof(AlignedFloat4Data)) == 0,
+    (offsetof(LightComponent, colorIntensity) % alignof(Float4)) == 0,
     "LightComponent::colorIntensity must stay aligned"
 );
 static_assert((offsetof(LightComponent, range) % alignof(f32)) == 0, "LightComponent::range must stay aligned");

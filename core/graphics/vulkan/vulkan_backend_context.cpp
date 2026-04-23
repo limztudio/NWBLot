@@ -1669,6 +1669,8 @@ bool BackendContext::createDevice(){
         m_enabledExtensions.device.insert({ name, DeviceExtensionFeature::None });
     for(const auto& name : m_deviceParams.optionalVulkanDeviceExtensions)
         m_optionalExtensions.device.insert({ name, DeviceExtensionFeature::None });
+    if(m_deviceParams.enableAftermath)
+        m_optionalExtensions.device.insert({ VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME, DeviceExtensionFeature::None });
 
     m_swapChainState.backBufferFormat = VulkanDetail::GetBackBufferFormat(m_deviceParams);
     if(!m_deviceParams.headlessDevice){
@@ -1686,6 +1688,9 @@ bool BackendContext::createDevice(){
 
     auto vecInstanceExt = VulkanDetail::StringSetToVector(m_enabledExtensions.instance, scratchArena);
     auto vecDeviceExt = VulkanDetail::StringMapKeysToVector(m_enabledExtensions.device, scratchArena);
+    const bool aftermathCheckpointsEnabled = isDeviceExtensionEnabled(VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME);
+    if(m_deviceParams.enableAftermath && !aftermathCheckpointsEnabled)
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Aftermath marker checkpoints are disabled because VK_NV_device_diagnostic_checkpoints is unavailable."));
 
     DeviceDesc deviceDesc(m_allocator, m_threadPool);
     deviceDesc.instance = m_vulkanInstance;
@@ -1708,7 +1713,7 @@ bool BackendContext::createDevice(){
     deviceDesc.bufferDeviceAddressSupported = m_bufferDeviceAddressSupported;
     deviceDesc.dynamicRenderingSupported = m_dynamicRenderingSupported;
     deviceDesc.synchronization2Supported = m_synchronization2Supported;
-    deviceDesc.aftermathEnabled = m_deviceParams.enableAftermath;
+    deviceDesc.aftermathEnabled = m_deviceParams.enableAftermath && aftermathCheckpointsEnabled;
     deviceDesc.logBufferLifetime = m_deviceParams.logBufferLifetime;
     deviceDesc.vulkanLibraryName = m_deviceParams.vulkanLibraryName;
     deviceDesc.pipelineCacheDirectory = m_deviceParams.pipelineCacheDirectory;

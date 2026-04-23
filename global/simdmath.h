@@ -5,7 +5,12 @@
 #pragma once
 
 
-#include "source_math/source_math.h"
+#include "math/type.h"
+#include "math/constant.h"
+#include "math/convert.h"
+#include "math/vector.h"
+#include "math/quaternion.h"
+#include "math/matrix.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

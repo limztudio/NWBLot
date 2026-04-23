@@ -97,7 +97,7 @@ static void TestSceneAndMainCamera(TestContext& context){
         (reinterpret_cast<usize>(&transform) % alignof(NWB::Core::Scene::TransformComponent)) == 0
     );
     NWB_SCENE_TEST_CHECK(context, (reinterpret_cast<usize>(&camera) % alignof(NWB::Core::Scene::CameraComponent)) == 0);
-    NWB_SCENE_TEST_CHECK(context, (reinterpret_cast<usize>(&camera.projection) % alignof(AlignedFloat4Data)) == 0);
+    NWB_SCENE_TEST_CHECK(context, (reinterpret_cast<usize>(&camera.projection) % alignof(Float4)) == 0);
     NWB_SCENE_TEST_CHECK(context, transform.position.x == 0.0f);
     NWB_SCENE_TEST_CHECK(context, transform.position.y == 0.0f);
     NWB_SCENE_TEST_CHECK(context, transform.position.z == 0.0f);
@@ -186,7 +186,7 @@ static void TestSceneCameraResolution(TestContext& context){
     NWB_SCENE_TEST_CHECK(context, invalidRequestedFallbackCameraView.camera == firstCamera);
     secondCamera->setNearPlane(NWB::Core::Scene::CameraComponent{}.nearPlane());
 
-    secondTransform->rotation = AlignedFloat4Data(0.0f, 0.0f, 0.0f, 0.0f);
+    secondTransform->rotation = Float4(0.0f, 0.0f, 0.0f, 0.0f);
     NWB::Core::Scene::SceneCameraView invalidTransformFallbackCameraView =
         NWB::Core::Scene::ResolveSceneCameraView(testWorld.world)
     ;
@@ -194,9 +194,9 @@ static void TestSceneCameraResolution(TestContext& context){
     NWB_SCENE_TEST_CHECK(context, invalidTransformFallbackCameraView.entity == firstCameraEntity.id());
     NWB_SCENE_TEST_CHECK(context, invalidTransformFallbackCameraView.transform == firstTransform);
     NWB_SCENE_TEST_CHECK(context, invalidTransformFallbackCameraView.camera == firstCamera);
-    secondTransform->rotation = AlignedFloat4Data(0.0f, 0.0f, 0.0f, 1.0f);
+    secondTransform->rotation = Float4(0.0f, 0.0f, 0.0f, 1.0f);
 
-    secondCamera->setVerticalFovRadians(SourceMath::ConvertToRadians(179.0f));
+    secondCamera->setVerticalFovRadians(179.0f * (s_PI / 180.0f));
     secondCamera->setAspectRatio(s_MaxF32);
     NWB::Core::Scene::SceneCameraView invalidProjectionFallbackCameraView =
         NWB::Core::Scene::ResolveSceneCameraView(testWorld.world)
@@ -207,7 +207,7 @@ static void TestSceneCameraResolution(TestContext& context){
     NWB_SCENE_TEST_CHECK(context, invalidProjectionFallbackCameraView.camera == firstCamera);
     *secondCamera = NWB::Core::Scene::CameraComponent{};
 
-    secondCamera->setVerticalFovRadians(SourceMath::ConvertToRadians(179.0f));
+    secondCamera->setVerticalFovRadians(179.0f * (s_PI / 180.0f));
     NWB::Core::Scene::SceneCameraView invalidFallbackAspectCameraView =
         NWB::Core::Scene::ResolveSceneCameraView(testWorld.world, s_MaxF32)
     ;
@@ -217,7 +217,7 @@ static void TestSceneCameraResolution(TestContext& context){
     NWB_SCENE_TEST_CHECK(context, invalidFallbackAspectCameraView.camera == firstCamera);
     *secondCamera = NWB::Core::Scene::CameraComponent{};
 
-    secondTransform->rotation = AlignedFloat4Data(0.0f, 0.0f, 0.0f, 2.0f);
+    secondTransform->rotation = Float4(0.0f, 0.0f, 0.0f, 2.0f);
     NWB::Core::Scene::SceneCameraView nonUnitTransformFallbackCameraView =
         NWB::Core::Scene::ResolveSceneCameraView(testWorld.world)
     ;
@@ -225,11 +225,11 @@ static void TestSceneCameraResolution(TestContext& context){
     NWB_SCENE_TEST_CHECK(context, nonUnitTransformFallbackCameraView.entity == firstCameraEntity.id());
     NWB_SCENE_TEST_CHECK(context, nonUnitTransformFallbackCameraView.transform == firstTransform);
     NWB_SCENE_TEST_CHECK(context, nonUnitTransformFallbackCameraView.camera == firstCamera);
-    secondTransform->rotation = AlignedFloat4Data(0.0f, 0.0f, 0.0f, 1.0f);
+    secondTransform->rotation = Float4(0.0f, 0.0f, 0.0f, 1.0f);
 
     f32 nonFiniteScale = s_MaxF32;
     nonFiniteScale *= 2.0f;
-    secondTransform->scale = AlignedFloat3Data(nonFiniteScale, 1.0f, 1.0f);
+    secondTransform->scale = Float4(nonFiniteScale, 1.0f, 1.0f);
     NWB::Core::Scene::SceneCameraView nonFiniteScaleFallbackCameraView =
         NWB::Core::Scene::ResolveSceneCameraView(testWorld.world)
     ;
@@ -237,7 +237,7 @@ static void TestSceneCameraResolution(TestContext& context){
     NWB_SCENE_TEST_CHECK(context, nonFiniteScaleFallbackCameraView.entity == firstCameraEntity.id());
     NWB_SCENE_TEST_CHECK(context, nonFiniteScaleFallbackCameraView.transform == firstTransform);
     NWB_SCENE_TEST_CHECK(context, nonFiniteScaleFallbackCameraView.camera == firstCamera);
-    secondTransform->scale = AlignedFloat3Data(1.0f, 1.0f, 1.0f);
+    secondTransform->scale = Float4(1.0f, 1.0f, 1.0f);
 
     auto staleMainCameraEntity = testWorld.world.createEntity();
     scene.mainCamera = staleMainCameraEntity.id();
@@ -248,7 +248,7 @@ static void TestSceneCameraResolution(TestContext& context){
     NWB_SCENE_TEST_CHECK(context, staleFallbackCameraView.transform == firstTransform);
     NWB_SCENE_TEST_CHECK(context, staleFallbackCameraView.camera == firstCamera);
 
-    firstTransform->rotation = AlignedFloat4Data(0.0f, 0.0f, 0.0f, 2.0f);
+    firstTransform->rotation = Float4(0.0f, 0.0f, 0.0f, 2.0f);
     NWB::Core::Scene::SceneCameraView invalidFallbackSkippedCameraView =
         NWB::Core::Scene::ResolveSceneCameraView(testWorld.world)
     ;
@@ -273,7 +273,7 @@ static void TestCameraProjectionHelpers(TestContext& context){
     camera.setAspectRatio(2.0f);
     NWB_SCENE_TEST_CHECK(context, NWB::Core::Scene::ResolveCameraAspectRatio(camera, 1.5f) == 2.0f);
 
-    AlignedFloat4Data projectionParams;
+    Float4 projectionParams;
     NWB_SCENE_TEST_CHECK(context, NWB::Core::Scene::TryBuildCameraProjectionParams(camera, 1.5f, projectionParams));
     NWB_SCENE_TEST_CHECK(context, projectionParams.x > 0.0f);
     NWB_SCENE_TEST_CHECK(context, projectionParams.y > 0.0f);
@@ -305,19 +305,19 @@ static void TestCameraProjectionHelpers(TestContext& context){
     NWB_SCENE_TEST_CHECK(context, !NWB::Core::Scene::TryBuildCameraProjectionParams(camera, 1.5f, projectionParams));
 
     camera = NWB::Core::Scene::CameraComponent{};
-    camera.setVerticalFovRadians(SourceMath::ConvertToRadians(179.0f));
+    camera.setVerticalFovRadians(179.0f * (s_PI / 180.0f));
     NWB_SCENE_TEST_CHECK(context, !NWB::Core::Scene::TryBuildCameraProjectionParams(camera, s_MaxF32, projectionParams));
 
     camera.setAspectRatio(s_MaxF32);
     NWB_SCENE_TEST_CHECK(context, !NWB::Core::Scene::TryBuildCameraProjectionData(camera, 1.5f, projectionData));
 
     camera = NWB::Core::Scene::CameraComponent{};
-    camera.setVerticalFovRadians(SourceMath::ConvertToRadians(180.0f));
+    camera.setVerticalFovRadians(180.0f * (s_PI / 180.0f));
     NWB_SCENE_TEST_CHECK(
         context,
         !NWB::Core::Scene::TryComputeCameraTanHalfVerticalFov(camera.verticalFovRadians(), tanHalfFov)
     );
-    camera.setVerticalFovRadians(SourceMath::ConvertToRadians(400.0f));
+    camera.setVerticalFovRadians(400.0f * (s_PI / 180.0f));
     NWB_SCENE_TEST_CHECK(
         context,
         !NWB::Core::Scene::TryComputeCameraTanHalfVerticalFov(camera.verticalFovRadians(), tanHalfFov)
@@ -344,9 +344,9 @@ static void TestLightComponents(TestContext& context){
     auto pointEntity = testWorld.world.createEntity();
     auto& pointTransform = pointEntity.addComponent<NWB::Core::Scene::TransformComponent>();
     auto& pointLight = pointEntity.addComponent<NWB::Core::Scene::LightComponent>();
-    pointTransform.position = AlignedFloat3Data(1.0f, 2.0f, 3.0f);
+    pointTransform.position = Float4(1.0f, 2.0f, 3.0f);
     pointLight.type = NWB::Core::Scene::LightType::Point;
-    pointLight.setColor(AlignedFloat3Data(1.0f, 0.75f, 0.5f));
+    pointLight.setColor(Float4(1.0f, 0.75f, 0.5f));
     pointLight.setIntensity(4.0f);
     pointLight.range = 12.0f;
 

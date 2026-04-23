@@ -46,7 +46,7 @@ public:
     FixedVector(std::initializer_list<T> il)
         : current_size(0)
     {
-        for(auto i : il)
+        for(const T& i : il)
             push_back(i);
     }
 

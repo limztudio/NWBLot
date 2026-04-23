@@ -221,6 +221,7 @@ static bool ValidateDefaultVariant(const AStringView contextLabel, const AString
     }
 
     HashSet<AString, Hasher<AString>, EqualTo<AString>, Alloc::ScratchAllocator<AString>> seenDefines{Alloc::ScratchAllocator<AString>(scratchArena)};
+    seenDefines.reserve(defineValues.size());
     usize begin = 0;
     const auto logInvalidAssignment = [&](const AString& segment){
         NWB_LOGGER_ERROR(
@@ -359,11 +360,13 @@ static bool ParseDefaultVariant(const Path& nwbFilePath, const Metascript::Value
             }
             if(i > 0)
                 outDefaultVariant += ';';
-            outDefaultVariant += list[i].copyString();
+            const Metascript::MStringView variantText = list[i].asString();
+            outDefaultVariant.append(variantText.data(), variantText.size());
         }
     }
     else if(defaultVariantVal->isString()){
-        outDefaultVariant = defaultVariantVal->copyString();
+        const Metascript::MStringView variantText = defaultVariantVal->asString();
+        outDefaultVariant.assign(variantText.data(), variantText.size());
     }
     else{
         NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': default_variant must be a string or list of strings"), PathToString<tchar>(nwbFilePath));

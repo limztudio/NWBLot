@@ -432,11 +432,13 @@ static bool ParseVariantField(
             }
             if(i > 0)
                 rawVariant += ';';
-            rawVariant += list[i].copyString();
+            const Core::Metascript::MStringView variantText = list[i].asString();
+            rawVariant.append(variantText.data(), variantText.size());
         }
     }
     else if(variantValue->isString()){
-        rawVariant = variantValue->copyString();
+        const Core::Metascript::MStringView variantText = variantValue->asString();
+        rawVariant.assign(variantText.data(), variantText.size());
     }
     else{
         NWB_LOGGER_ERROR(

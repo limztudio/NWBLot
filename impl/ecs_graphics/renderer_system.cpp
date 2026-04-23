@@ -120,26 +120,6 @@ static_assert(sizeof(MeshViewGpuData) == sizeof(f32) * 28u, "MeshViewGpuData lay
 static_assert(alignof(MeshViewGpuData) >= alignof(Float4), "MeshViewGpuData must stay SIMD-aligned");
 
 
-static const Name& StageNameFromShaderType(const Core::ShaderType::Mask shaderType){
-    switch(shaderType){
-        case Core::ShaderType::Vertex: { static const Name s("vs"); return s; }
-        case Core::ShaderType::Hull: { static const Name s("hs"); return s; }
-        case Core::ShaderType::Domain: { static const Name s("ds"); return s; }
-        case Core::ShaderType::Geometry: { static const Name s("gs"); return s; }
-        case Core::ShaderType::Pixel: { static const Name s("ps"); return s; }
-        case Core::ShaderType::Compute: { static const Name s("cs"); return s; }
-        case Core::ShaderType::Amplification: { static const Name s("task"); return s; }
-        case Core::ShaderType::Mesh: { static const Name s("mesh"); return s; }
-        case Core::ShaderType::RayGeneration: { static const Name s("rgen"); return s; }
-        case Core::ShaderType::AnyHit: { static const Name s("rahit"); return s; }
-        case Core::ShaderType::ClosestHit: { static const Name s("rchit"); return s; }
-        case Core::ShaderType::Miss: { static const Name s("rmiss"); return s; }
-        case Core::ShaderType::Intersection: { static const Name s("rint"); return s; }
-        case Core::ShaderType::Callable: { static const Name s("rcall"); return s; }
-        default: return NAME_NONE;
-    }
-}
-
 static const Name& MeshEmulationVertexShaderName(){
     static const Name s("engine/graphics/mesh_emulation_vs");
     return s;
@@ -353,7 +333,7 @@ static Core::RenderState BuildCompositeRenderState(){
 static bool TryFindShaderForStage(const Material& material, const Core::ShaderType::Mask shaderType, Core::Assets::AssetRef<Shader>& outShaderAsset){
     outShaderAsset.reset();
 
-    const Name& stageName = StageNameFromShaderType(shaderType);
+    const Name& stageName = ShaderStageNames::ArchiveStageNameFromShaderType(shaderType);
     if(!stageName)
         return false;
 
@@ -3075,7 +3055,7 @@ bool RendererSystem::ensureShaderLoaded(
 
     const Name& stageName = archiveStageName
         ? *archiveStageName
-        : __hidden_ecs_graphics::StageNameFromShaderType(shaderType)
+        : ShaderStageNames::ArchiveStageNameFromShaderType(shaderType)
     ;
     if(!stageName){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: unsupported shader stage {}"), static_cast<u32>(shaderType));

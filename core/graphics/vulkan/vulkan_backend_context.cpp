@@ -836,6 +836,9 @@ bool BackendContext::pickPhysicalDevice(){
 
     Vector<VkPhysicalDevice, Alloc::ScratchAllocator<VkPhysicalDevice>> discreteGPUs((Alloc::ScratchAllocator<VkPhysicalDevice>(scratchArena)));
     Vector<VkPhysicalDevice, Alloc::ScratchAllocator<VkPhysicalDevice>> otherGPUs((Alloc::ScratchAllocator<VkPhysicalDevice>(scratchArena)));
+    const usize deviceCandidateCount = static_cast<usize>(lastDevice - firstDevice + 1);
+    discreteGPUs.reserve(deviceCandidateCount);
+    otherGPUs.reserve(deviceCandidateCount);
 
     for(i32 deviceIndex = firstDevice; deviceIndex <= lastDevice; ++deviceIndex){
         VkPhysicalDevice dev = devices[deviceIndex];
@@ -845,6 +848,7 @@ bool BackendContext::pickPhysicalDevice(){
         errorStream << "\n" << prop.deviceName << ":";
 
         HashSet<AString, Hasher<AString>, EqualTo<AString>, Alloc::ScratchAllocator<AString>> requiredExtensions(0, Hasher<AString>(), EqualTo<AString>(), Alloc::ScratchAllocator<AString>(scratchArena));
+        requiredExtensions.reserve(m_enabledExtensions.device.size());
         for(const auto& [name, _] : m_enabledExtensions.device)
             requiredExtensions.insert(name);
         uint32_t extCount = 0;
@@ -1164,6 +1168,7 @@ bool BackendContext::createVulkanDevice(){
     VulkanDetail::FinalizeOptionalDeviceFeatureEnablement(requestedOptionalFeatures, supportedOptionalFeatures);
 
     HashSet<i32, Hasher<i32>, EqualTo<i32>, Alloc::ScratchAllocator<i32>> uniqueQueueFamilies(0, Hasher<i32>(), EqualTo<i32>(), Alloc::ScratchAllocator<i32>(scratchArena));
+    uniqueQueueFamilies.reserve(4u);
     uniqueQueueFamilies.insert(m_graphicsQueueFamily);
 
     if(!m_deviceParams.headlessDevice)
@@ -1514,6 +1519,7 @@ bool BackendContext::createVulkanSwapChain(){
     }
 
     HashSet<uint32_t, Hasher<uint32_t>, EqualTo<uint32_t>, Alloc::ScratchAllocator<uint32_t>> uniqueQueues(0, Hasher<uint32_t>(), EqualTo<uint32_t>(), Alloc::ScratchAllocator<uint32_t>(scratchArena));
+    uniqueQueues.reserve(2u);
     uniqueQueues.insert(static_cast<uint32_t>(m_graphicsQueueFamily));
     uniqueQueues.insert(static_cast<uint32_t>(m_presentQueueFamily));
 

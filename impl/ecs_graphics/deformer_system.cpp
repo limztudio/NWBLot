@@ -12,6 +12,7 @@
 #include <core/graphics/shader_archive.h>
 #include <impl/assets_graphics/deformable_geometry_validation.h>
 #include <impl/assets_graphics/shader_asset.h>
+#include <impl/assets_graphics/shader_stage_names.h>
 #include <logger/client/logger.h>
 
 
@@ -48,13 +49,6 @@ static_assert(sizeof(DeformerPushConstants) == 32, "Deformer push constants layo
 static const Name& DeformerComputeShaderName(){
     static const Name s("engine/graphics/deformer_cs");
     return s;
-}
-
-static const Name& StageNameFromShaderType(const Core::ShaderType::Mask shaderType){
-    switch(shaderType){
-        case Core::ShaderType::Compute: { static const Name s("cs"); return s; }
-        default: return NAME_NONE;
-    }
 }
 
 static bool ResolveDeformerDisplacement(
@@ -563,7 +557,7 @@ bool DeformerSystem::ensureShaderLoaded(
         return false;
     }
 
-    const Name& stageName = __hidden_deformer_system::StageNameFromShaderType(shaderType);
+    const Name& stageName = ShaderStageNames::ArchiveStageNameFromShaderType(shaderType);
     if(!stageName){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: unsupported shader stage {}"), static_cast<u32>(shaderType));
         return false;

@@ -76,6 +76,7 @@ void SystemScheduler::clear(){
 
 void SystemScheduler::rebuild(){
     m_stages.clear();
+    m_stages.reserve(m_allSystems.size());
 
     // Determine parallel stages by analyzing read/write dependencies.
     // Two systems can share a stage if:
@@ -99,6 +100,7 @@ void SystemScheduler::rebuild(){
 
     while(numAssigned < m_allSystems.size()){
         Stage stage{SystemAllocator(m_arena)};
+        stage.reserve(m_allSystems.size() - numAssigned);
 
         ComponentAccessSet stageWrites(
             0,

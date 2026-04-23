@@ -222,7 +222,11 @@ void CommandList::copyTextureToBuffer(IBuffer* _dest, u64 destOffsetBytes, u32 d
     const TextureSlice resolvedSrc = srcSlice.resolve(src->m_desc);
 
     const FormatInfo& formatInfo = GetFormatInfo(src->m_desc.format);
-    const VkImageAspectFlags aspectMask = VulkanDetail::GetImageAspectMask(formatInfo);
+    VkImageAspectFlags aspectMask = 0;
+    if(!VulkanDetail::GetBufferImageCopyAspectMask(formatInfo, NWB_TEXT("copy texture to buffer"), aspectMask)){
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to buffer: combined depth/stencil buffer-image copies are not supported"));
+        return;
+    }
 
     if(formatInfo.blockSize == 0 || formatInfo.bytesPerBlock == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to buffer: invalid row pitch"));

@@ -176,6 +176,16 @@ VkImageAspectFlags GetImageAspectMask(const FormatInfo& formatInfo){
     return aspectMask;
 }
 
+bool GetBufferImageCopyAspectMask(const FormatInfo& formatInfo, const tchar* operationName, VkImageAspectFlags& outAspectMask){
+    outAspectMask = GetImageAspectMask(formatInfo);
+    if((outAspectMask & VK_IMAGE_ASPECT_DEPTH_BIT) != 0 && (outAspectMask & VK_IMAGE_ASPECT_STENCIL_BIT) != 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: combined depth/stencil formats are not supported by buffer-image copy paths"), operationName);
+        return false;
+    }
+
+    return true;
+}
+
 VkImageSubresourceRange BuildImageSubresourceRange(const TextureSubresourceSet& subresources, const VkImageAspectFlags aspectMask){
     VkImageSubresourceRange range{};
     range.aspectMask = aspectMask;
@@ -186,7 +196,12 @@ VkImageSubresourceRange BuildImageSubresourceRange(const TextureSubresourceSet& 
     return range;
 }
 
-VkBufferImageCopy BuildStagingTextureCopyRegion(const TextureDesc& stagingDesc, const TextureSlice& stagingSlice, const TextureSlice& imageSlice){
+VkBufferImageCopy BuildStagingTextureCopyRegion(
+    const TextureDesc& stagingDesc,
+    const TextureSlice& stagingSlice,
+    const TextureSlice& imageSlice,
+    const VkImageAspectFlags aspectMask)
+{
     u32 bufferRowLength = 0;
     u32 bufferImageHeight = 0;
     const u64 bufferOffset = ComputeStagingTextureOffset(stagingDesc, stagingSlice, nullptr, &bufferRowLength, &bufferImageHeight);
@@ -195,7 +210,7 @@ VkBufferImageCopy BuildStagingTextureCopyRegion(const TextureDesc& stagingDesc, 
     region.bufferOffset = bufferOffset;
     region.bufferRowLength = bufferRowLength;
     region.bufferImageHeight = bufferImageHeight;
-    region.imageSubresource.aspectMask = GetImageAspectMask(GetFormatInfo(stagingDesc.format));
+    region.imageSubresource.aspectMask = aspectMask;
     region.imageSubresource.mipLevel = imageSlice.mipLevel;
     region.imageSubresource.baseArrayLayer = imageSlice.arraySlice;
     region.imageSubresource.layerCount = 1;
@@ -261,6 +276,11 @@ bool PrepareStagingTextureCopy(
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: source and destination formats do not match"), operationName);
         return false;
     }
+    VkImageAspectFlags copyAspectMask = 0;
+    if(!GetBufferImageCopyAspectMask(GetFormatInfo(stagingDesc.format), operationName, copyAspectMask)){
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: combined depth/stencil buffer-image copies are not supported"), operationName);
+        return false;
+    }
     if(!IsTextureSliceInBounds(stagingDesc, stagingSlice) || !IsTextureSliceInBounds(textureDesc, textureSlice)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: slice is outside the texture"), operationName);
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: slice is outside the texture"), operationName);
@@ -275,7 +295,7 @@ bool PrepareStagingTextureCopy(
         return false;
     }
 
-    outRegion = BuildStagingTextureCopyRegion(stagingDesc, resolvedStaging, resolvedTexture);
+    outRegion = BuildStagingTextureCopyRegion(stagingDesc, resolvedStaging, resolvedTexture, copyAspectMask);
     return true;
 }
 
@@ -869,6 +889,11 @@ void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, co
     auto depth = Max<u32>(1u, texDesc.depth >> mipLevel);
 
     const FormatInfo& formatInfo = GetFormatInfo(texDesc.format);
+    VkImageAspectFlags copyAspectMask = 0;
+    if(!VulkanDetail::GetBufferImageCopyAspectMask(formatInfo, NWB_TEXT("write texture"), copyAspectMask)){
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to write texture: combined depth/stencil buffer-image copies are not supported"));
+        return;
+    }
     if(formatInfo.blockSize == 0 || formatInfo.bytesPerBlock == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write texture: invalid texture format"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to write texture: invalid texture format"));
@@ -964,7 +989,7 @@ void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, co
     region.bufferOffset = stagingOffset;
     region.bufferRowLength = static_cast<u32>(bufferRowLength);
     region.bufferImageHeight = static_cast<u32>(bufferImageHeight);
-    region.imageSubresource.aspectMask = writeAspect;
+    region.imageSubresource.aspectMask = copyAspectMask;
     region.imageSubresource.mipLevel = mipLevel;
     region.imageSubresource.baseArrayLayer = arraySlice;
     region.imageSubresource.layerCount = 1;

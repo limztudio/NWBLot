@@ -35,6 +35,7 @@ namespace VulkanDetail{
     VkImageViewType TextureDimensionToViewType(TextureDimension::Enum dimension);
     bool IsSupportedSampleCount(u32 sampleCount);
     VkImageAspectFlags GetImageAspectMask(const FormatInfo& formatInfo);
+    bool GetBufferImageCopyAspectMask(const FormatInfo& formatInfo, const tchar* operationName, VkImageAspectFlags& outAspectMask);
     VkImageUsageFlags PickImageUsage(const TextureDesc& desc);
     VkImageCreateFlags PickImageFlags(const TextureDesc& desc);
     u64 ComputeStagingTextureOffset(const TextureDesc& desc, const TextureSlice& slice, usize* outRowPitch = nullptr, u32* outBufferRowLength = nullptr, u32* outBufferImageHeight = nullptr);

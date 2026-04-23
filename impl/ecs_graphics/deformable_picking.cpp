@@ -66,34 +66,6 @@ using namespace DeformableRuntime;
     return AssignCurrentTriangleSample(triangle, bary, outSample);
 }
 
-void OrthonormalizeFrame(
-    Float4& normal,
-    Float4U& tangent,
-    const Float4& fallbackNormal,
-    const Float4U& fallbackTangent)
-{
-    SIMDVector normalVector = DeformableRuntime::Normalize(
-        LoadFloat(normal),
-        DeformableRuntime::Normalize(LoadFloat(fallbackNormal), VectorSet(0.0f, 0.0f, 1.0f, 0.0f))
-    );
-    StoreFloat(normalVector, &normal);
-
-    Float4 projectedTangent;
-    StoreFloat(
-        DeformableRuntime::ResolveFrameTangent(
-            normalVector,
-            VectorSet(tangent.x, tangent.y, tangent.z, 0.0f),
-            VectorSet(fallbackTangent.x, fallbackTangent.y, fallbackTangent.z, 0.0f)
-        ),
-        &projectedTangent
-    );
-    tangent.x = projectedTangent.x;
-    tangent.y = projectedTangent.y;
-    tangent.z = projectedTangent.z;
-    const f32 handedness = Abs(tangent.w) > s_Epsilon ? tangent.w : fallbackTangent.w;
-    tangent.w = handedness < 0.0f ? -1.0f : 1.0f;
-}
-
 template<typename VertexVector>
 [[nodiscard]] bool ApplyMorphs(
     const DeformableRuntimeMeshInstance& instance,
@@ -336,14 +308,20 @@ template<typename VertexVector>
     for(usize vertexIndex = 0; vertexIndex < outVertices.size(); ++vertexIndex){
         DeformableVertexRest& vertex = outVertices[vertexIndex];
         const Float4 restNormal(vertex.normal.x, vertex.normal.y, vertex.normal.z);
-        const Float4U restTangent = vertex.tangent;
+        const Float4 restTangent(vertex.tangent.x, vertex.tangent.y, vertex.tangent.z, vertex.tangent.w);
 
         Float4 normal(vertex.normal.x, vertex.normal.y, vertex.normal.z);
-        __hidden_deformable_picking::OrthonormalizeFrame(normal, vertex.tangent, restNormal, restTangent);
+        Float4 tangent(vertex.tangent.x, vertex.tangent.y, vertex.tangent.z, vertex.tangent.w);
+        SIMDVector normalVector = LoadFloat(normal);
+        SIMDVector tangentVector = LoadFloat(tangent);
+        DeformableRuntime::OrthonormalizeFrame(normalVector, tangentVector, LoadFloat(restNormal), LoadFloat(restTangent));
+        StoreFloat(normalVector, &normal);
+        StoreFloat(tangentVector, &tangent);
         vertex.normal = Float3U(normal.x, normal.y, normal.z);
+        vertex.tangent = Float4U(tangent.x, tangent.y, tangent.z, tangent.w);
 
         const Float4 preSkinNormal = normal;
-        const Float4U preSkinTangent = vertex.tangent;
+        const Float4 preSkinTangent(tangent.x, tangent.y, tangent.z, tangent.w);
         if(!__hidden_deformable_picking::ApplySkin(
             instance,
             inputs.jointPalette,
@@ -352,8 +330,14 @@ template<typename VertexVector>
         ))
             return false;
         normal = Float4(vertex.normal.x, vertex.normal.y, vertex.normal.z);
-        __hidden_deformable_picking::OrthonormalizeFrame(normal, vertex.tangent, preSkinNormal, preSkinTangent);
+        tangent = Float4(vertex.tangent.x, vertex.tangent.y, vertex.tangent.z, vertex.tangent.w);
+        normalVector = LoadFloat(normal);
+        tangentVector = LoadFloat(tangent);
+        DeformableRuntime::OrthonormalizeFrame(normalVector, tangentVector, LoadFloat(preSkinNormal), LoadFloat(preSkinTangent));
+        StoreFloat(normalVector, &normal);
+        StoreFloat(tangentVector, &tangent);
         vertex.normal = Float3U(normal.x, normal.y, normal.z);
+        vertex.tangent = Float4U(tangent.x, tangent.y, tangent.z, tangent.w);
 
         __hidden_deformable_picking::ApplyDisplacement(displacement, vertex);
         __hidden_deformable_picking::ApplyTransform(inputs.transform, vertex);

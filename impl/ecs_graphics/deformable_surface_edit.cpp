@@ -184,16 +184,21 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
     const DeformableVertexRest& vertex0 = instance.restVertices[triangleIndices[0]];
     const DeformableVertexRest& vertex1 = instance.restVertices[triangleIndices[1]];
     const DeformableVertexRest& vertex2 = instance.restVertices[triangleIndices[2]];
-    SIMDVector tangentVector = VectorScale(LoadFloat(vertex0.tangent), bary[0]);
-    tangentVector = VectorMultiplyAdd(LoadFloat(vertex1.tangent), VectorReplicate(bary[1]), tangentVector);
-    tangentVector = VectorMultiplyAdd(LoadFloat(vertex2.tangent), VectorReplicate(bary[2]), tangentVector);
+    SIMDVector tangentVector = VectorScale(VectorSet(vertex0.tangent.x, vertex0.tangent.y, vertex0.tangent.z, 0.0f), bary[0]);
+    tangentVector = VectorMultiplyAdd(
+        VectorSet(vertex1.tangent.x, vertex1.tangent.y, vertex1.tangent.z, 0.0f),
+        VectorReplicate(bary[1]),
+        tangentVector
+    );
+    tangentVector = VectorMultiplyAdd(
+        VectorSet(vertex2.tangent.x, vertex2.tangent.y, vertex2.tangent.z, 0.0f),
+        VectorReplicate(bary[2]),
+        tangentVector
+    );
     const SIMDVector normalVector = LoadFloat(outFrame.normal);
     StoreFloat(DeformableRuntime::ResolveFrameTangent(normalVector, tangentVector, edge0), &outFrame.tangent);
     StoreFloat(
-        DeformableRuntime::Normalize(
-            Vector3Cross(normalVector, LoadFloat(outFrame.tangent)),
-            VectorSet(0.0f, 1.0f, 0.0f, 0.0f)
-        ),
+        DeformableRuntime::ResolveFrameBitangent(normalVector, LoadFloat(outFrame.tangent), VectorSet(0.0f, 1.0f, 0.0f, 0.0f)),
         &outFrame.bitangent
     );
     return VectorGetX(Vector3LengthSq(LoadFloat(outFrame.normal))) > s_FrameEpsilon
@@ -730,12 +735,8 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
         &tangent
     );
 
-    SIMDVector bitangentVector = Vector3Cross(normalVector, LoadFloat(tangent));
-    if(!DeformableRuntime::ValidFrameDirection(bitangentVector))
-        return RotationFromPositiveZToNormal(normal);
-    bitangentVector = DeformableRuntime::Normalize(bitangentVector, VectorSet(0.0f, 1.0f, 0.0f, 0.0f));
     Float4 bitangent;
-    StoreFloat(bitangentVector, &bitangent);
+    StoreFloat(DeformableRuntime::ResolveFrameBitangent(normalVector, LoadFloat(tangent), VectorSet(0.0f, 1.0f, 0.0f, 0.0f)), &bitangent);
 
     const f32 m00 = tangent.x;
     const f32 m01 = bitangent.x;
@@ -1459,7 +1460,7 @@ template<typename AssignedSampleVector>
     wallVertex.tangent.x = tangent.x;
     wallVertex.tangent.y = tangent.y;
     wallVertex.tangent.z = tangent.z;
-    wallVertex.tangent.w = wallVertex.tangent.w < 0.0f ? -1.0f : 1.0f;
+    wallVertex.tangent.w = DeformableRuntime::TangentHandedness(wallVertex.tangent.w, 1.0f);
     wallVertex.uv0 = Float2U(uvU, uvV);
     wallVertex.color0 = wallColor;
     if(!DeformableValidation::ValidRestVertexFrame(wallVertex))

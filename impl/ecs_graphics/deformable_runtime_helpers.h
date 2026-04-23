@@ -96,6 +96,12 @@ namespace DisplacementResolveFailure{
     return Normalize(Vector3Cross(axis, normal), VectorSet(1.0f, 0.0f, 0.0f, 0.0f));
 }
 
+[[nodiscard]] inline f32 TangentHandedness(const f32 handedness, const f32 fallbackHandedness){
+    if(Abs(handedness) > s_Epsilon)
+        return handedness < 0.0f ? -1.0f : 1.0f;
+    return fallbackHandedness < 0.0f ? -1.0f : 1.0f;
+}
+
 [[nodiscard]] inline SIMDVector ResolveFrameTangent(SIMDVector normal, SIMDVector tangent, SIMDVector fallbackTangent){
     const SIMDVector safeFallbackTangent = FallbackTangent(normal);
 
@@ -113,6 +119,28 @@ namespace DisplacementResolveFailure{
         return safeFallbackTangent;
 
     return Normalize(projectedTangent, safeFallbackTangent);
+}
+
+[[nodiscard]] inline SIMDVector ResolveFrameBitangent(SIMDVector normal, SIMDVector tangent, SIMDVector fallbackBitangent){
+    const SIMDVector safeFallbackBitangent = Normalize(
+        DeformableValidation::FiniteVector(fallbackBitangent, 0x7u)
+            ? ProjectOntoFramePlane(fallbackBitangent, normal)
+            : Vector3Cross(normal, FallbackTangent(normal)),
+        VectorSet(0.0f, 1.0f, 0.0f, 0.0f)
+    );
+
+    SIMDVector bitangent = Vector3Cross(normal, tangent);
+    if(!ValidFrameDirection(bitangent))
+        bitangent = safeFallbackBitangent;
+    return Normalize(bitangent, safeFallbackBitangent);
+}
+
+inline void OrthonormalizeFrame(SIMDVector& normal, SIMDVector& tangent, const SIMDVector fallbackNormal, const SIMDVector fallbackTangent){
+    normal = Normalize(normal, Normalize(fallbackNormal, VectorSet(0.0f, 0.0f, 1.0f, 0.0f)));
+    tangent = VectorSetW(
+        ResolveFrameTangent(normal, tangent, fallbackTangent),
+        TangentHandedness(VectorGetW(tangent), VectorGetW(fallbackTangent))
+    );
 }
 
 [[nodiscard]] inline bool IsAffineJointMatrix(const DeformableJointMatrix& matrix){

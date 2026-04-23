@@ -8,6 +8,36 @@
 #include "platform.h"
 #include "type.h"
 
+#include <core/common/common.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace ApplicationEntryDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using UnicodeEntryPointFn = int(*)(isize, wchar**, void*);
+using AnsiEntryPointFn = int(*)(isize, char**, void*);
+
+template<typename EntryPoint, typename CharT>
+[[nodiscard]] inline int InvokeEntryPoint(EntryPoint entryPoint, const isize argc, CharT** argv, void* instance){
+    NWB::Core::Common::InitializerGuard commonInitializerGuard;
+    if(!commonInitializerGuard.initialize())
+        return -1;
+
+    return entryPoint(argc, argv, instance);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -26,10 +56,6 @@ namespace ApplicationEntryDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using UnicodeEntryPointFn = int(*)(isize, wchar**, void*);
-using AnsiEntryPointFn = int(*)(isize, char**, void*);
 
 
 class WindowsCommandLineArgs final{
@@ -56,9 +82,26 @@ private:
 
 template<typename EntryPoint>
 [[nodiscard]] inline int InvokeWindowsUnicodeEntryPoint(EntryPoint entryPoint, HINSTANCE hInstance){
+    NWB::Core::Common::InitializerGuard commonInitializerGuard;
+    if(!commonInitializerGuard.initialize())
+        return -1;
+
     WindowsCommandLineArgs args;
     if(args.valid())
         return entryPoint(args.argc(), args.argv(), hInstance);
+
+    return -1;
+}
+
+template<typename EntryPoint>
+[[nodiscard]] inline int InvokeWindowsUnicodeConsoleEntryPoint(EntryPoint entryPoint){
+    NWB::Core::Common::InitializerGuard commonInitializerGuard;
+    if(!commonInitializerGuard.initialize())
+        return -1;
+
+    WindowsCommandLineArgs args;
+    if(args.valid())
+        return entryPoint(args.argc(), args.argv(), GetModuleHandleW(nullptr));
 
     return -1;
 }
@@ -81,7 +124,7 @@ template<typename EntryPoint>
         return ApplicationEntryDetail::InvokeWindowsUnicodeEntryPoint(static_cast<ApplicationEntryDetail::UnicodeEntryPointFn>(entryPoint), hInstance); \
     } \
     int main(int, char**){ \
-        return ApplicationEntryDetail::InvokeWindowsUnicodeEntryPoint(static_cast<ApplicationEntryDetail::UnicodeEntryPointFn>(entryPoint), GetModuleHandleW(nullptr)); \
+        return ApplicationEntryDetail::InvokeWindowsUnicodeConsoleEntryPoint(static_cast<ApplicationEntryDetail::UnicodeEntryPointFn>(entryPoint)); \
     }
 #else
 #define NWB_DEFINE_APPLICATION_ENTRY_POINT(entryPoint) \
@@ -89,16 +132,16 @@ template<typename EntryPoint>
         (void)hPrevInstance; \
         (void)lpCmdLine; \
         (void)nCmdShow; \
-        return static_cast<ApplicationEntryDetail::AnsiEntryPointFn>(entryPoint)(static_cast<isize>(__argc), __argv, hInstance); \
+        return ApplicationEntryDetail::InvokeEntryPoint(static_cast<ApplicationEntryDetail::AnsiEntryPointFn>(entryPoint), static_cast<isize>(__argc), __argv, hInstance); \
     } \
     int main(int argc, char** argv){ \
-        return static_cast<ApplicationEntryDetail::AnsiEntryPointFn>(entryPoint)(static_cast<isize>(argc), argv, GetModuleHandleA(nullptr)); \
+        return ApplicationEntryDetail::InvokeEntryPoint(static_cast<ApplicationEntryDetail::AnsiEntryPointFn>(entryPoint), static_cast<isize>(argc), argv, GetModuleHandleA(nullptr)); \
     }
 #endif
 #elif defined(NWB_PLATFORM_LINUX)
 #define NWB_DEFINE_APPLICATION_ENTRY_POINT(entryPoint) \
     int main(int argc, char** argv){ \
-        return static_cast<int(*)(isize, char**, void*)>(entryPoint)(static_cast<isize>(argc), argv, nullptr); \
+        return ApplicationEntryDetail::InvokeEntryPoint(static_cast<int(*)(isize, char**, void*)>(entryPoint), static_cast<isize>(argc), argv, nullptr); \
     }
 #endif
 

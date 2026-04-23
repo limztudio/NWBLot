@@ -98,6 +98,27 @@ public:
         for(auto& cur : m_items)
             cur.first()->finalize();
     }
+    [[nodiscard]] inline bool acquire(){
+        if(m_activeCount > 0u){
+            ++m_activeCount;
+            return true;
+        }
+
+        if(!initialize())
+            return false;
+
+        m_activeCount = 1u;
+        return true;
+    }
+    inline void release(){
+        NWB_ASSERT(m_activeCount > 0u);
+        if(m_activeCount == 0u)
+            return;
+
+        --m_activeCount;
+        if(m_activeCount == 0u)
+            finalize();
+    }
 
 public:
     inline void enqueue(Initializerable* item){ m_cursor = m_items.emplace_after(m_cursor, item, false); }
@@ -108,6 +129,7 @@ public:
 private:
     ForwardList<Pair<CommonDetail::BaseInitializerable*, bool>> m_items;
     decltype(m_items)::iterator m_cursor;
+    usize m_activeCount = 0;
 };
 
 class InitializerGuard : NoCopy{
@@ -120,7 +142,7 @@ public:
         if(m_active)
             return true;
 
-        if(!Initializer::instance().initialize())
+        if(!Initializer::instance().acquire())
             return false;
 
         m_active = true;
@@ -130,7 +152,7 @@ public:
         if(!m_active)
             return;
 
-        Initializer::instance().finalize();
+        Initializer::instance().release();
         m_active = false;
     }
 

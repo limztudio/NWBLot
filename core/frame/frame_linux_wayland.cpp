@@ -305,9 +305,11 @@ static void DestroyWaylandContext(Common::LinuxFrame& frameData){
     if(!context){
         SetWaylandDisplay(frameData, nullptr);
         SetWaylandSurface(frameData, nullptr);
-        frameData.isActive() = false;
+        frameData.setActive(false);
         return;
     }
+
+    UniquePtr<WaylandContext> contextOwner(context);
 
     DestroyKeyboard(*context);
     DestroyPointer(*context);
@@ -349,12 +351,10 @@ static void DestroyWaylandContext(Common::LinuxFrame& frameData){
         context->xkbContext = nullptr;
     }
 
-    delete context;
-
     SetWaylandContext(frameData, nullptr);
     SetWaylandDisplay(frameData, nullptr);
     SetWaylandSurface(frameData, nullptr);
-    frameData.isActive() = false;
+    frameData.setActive(false);
 }
 
 static void OnRegistryGlobal(void* data, wl_registry* registry, u32 name, const char* interface, u32 version){
@@ -420,7 +420,7 @@ static void OnToplevelConfigure(void* data, xdg_toplevel* toplevel, i32 width, i
         }
     }
 
-    frameData.isActive() = activated;
+    frameData.setActive(activated);
 }
 
 static void OnToplevelClose(void* data, xdg_toplevel* toplevel){
@@ -610,7 +610,7 @@ static void OnKeyboardEnter(void* data, wl_keyboard* keyboard, u32 serial, wl_su
     (void)keys;
 
     auto& context = *static_cast<WaylandContext*>(data);
-    context.frame->data<Common::LinuxFrame>().isActive() = true;
+    context.frame->data<Common::LinuxFrame>().setActive(true);
 }
 
 static void OnKeyboardLeave(void* data, wl_keyboard* keyboard, u32 serial, wl_surface* surface){
@@ -619,7 +619,7 @@ static void OnKeyboardLeave(void* data, wl_keyboard* keyboard, u32 serial, wl_su
     (void)surface;
 
     auto& context = *static_cast<WaylandContext*>(data);
-    context.frame->data<Common::LinuxFrame>().isActive() = false;
+    context.frame->data<Common::LinuxFrame>().setActive(false);
     StopKeyRepeat(context);
 }
 
@@ -762,7 +762,7 @@ static void OnSeatCapabilities(void* data, wl_seat* seat, u32 capabilities){
     }
     else{
         DestroyKeyboard(context);
-        context.frame->data<Common::LinuxFrame>().isActive() = false;
+        context.frame->data<Common::LinuxFrame>().setActive(false);
     }
 }
 
@@ -871,9 +871,11 @@ bool InitWaylandFrame(Frame& frame){
 
     auto& frameData = frame.data<Common::LinuxFrame>();
 
-    auto* context = new WaylandContext();
+    auto contextOwner = MakeUnique<WaylandContext>();
+    auto* context = contextOwner.get();
     context->frame = &frame;
     SetWaylandContext(frameData, context);
+    contextOwner.release();
 
     context->display = wl_display_connect(nullptr);
     if(!context->display){

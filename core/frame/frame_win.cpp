@@ -283,7 +283,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
             uMsg,
             wParam,
             [](){},
-            [&](const bool isActive){ _this->data<Common::WinFrame>().isActive() = isActive; },
+            [&](const bool isActive){ _this->data<Common::WinFrame>().setActive(isActive); },
             lifecycleResult
         ))
             return lifecycleResult;
@@ -435,7 +435,7 @@ bool Frame::init(){
 
     RECT rc = { 0, 0, static_cast<i32>(data<Common::WinFrame>().width()), static_cast<i32>(data<Common::WinFrame>().height()) };
 
-    data<Common::WinFrame>().hwnd() = CreateWindowEx(
+    HWND hwnd = CreateWindowEx(
         StyleEx,
         wc.lpszClassName,
         AppName,
@@ -449,6 +449,7 @@ bool Frame::init(){
         wc.hInstance,
         nullptr
     );
+    data<Common::WinFrame>().setHwnd(hwnd);
     if(!data<Common::WinFrame>().hwnd()){
         NWB_LOGGER_FATAL(NWB_TEXT("Frame window creation failed"));
         return false;
@@ -456,7 +457,7 @@ bool Frame::init(){
 
     {
         if(!AdjustWindowRectEx(&rc, Style, FALSE, StyleEx)){
-            data<Common::WinFrame>().hwnd() = nullptr;
+            data<Common::WinFrame>().setHwnd(nullptr);
             NWB_LOGGER_FATAL(NWB_TEXT("Frame window adjustment failed"));
             return false;
         }
@@ -467,7 +468,7 @@ bool Frame::init(){
         const auto y = (GetSystemMetrics(SM_CYSCREEN) - actualHeight) >> 1;
 
         if(!MoveWindow(data<Common::WinFrame>().hwnd(), x, y, actualWidth, actualHeight, false)){
-            data<Common::WinFrame>().hwnd() = nullptr;
+            data<Common::WinFrame>().setHwnd(nullptr);
             NWB_LOGGER_FATAL(NWB_TEXT("Frame window moving failed"));
             return false;
         }
@@ -522,8 +523,8 @@ bool Frame::mainLoop(){
 
 void Frame::setupPlatform(void* inst){
     FrameDetail::g_Frame = this;
-    data<Common::WinFrame>().isActive() = false;
-    data<Common::WinFrame>().instance() = reinterpret_cast<HINSTANCE>(inst);
+    data<Common::WinFrame>().setActive(false);
+    data<Common::WinFrame>().setInstance(reinterpret_cast<HINSTANCE>(inst));
 }
 void Frame::cleanupPlatform(){
     FrameDetail::g_Frame = nullptr;

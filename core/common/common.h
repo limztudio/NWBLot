@@ -75,28 +75,38 @@ public:
 
 
 private:
+    struct InitializerItem{
+        CommonDetail::BaseInitializerable* item = nullptr;
+        UniquePtr<CommonDetail::BaseInitializerable> ownedItem;
+
+        explicit InitializerItem(CommonDetail::BaseInitializerable* value)
+            : item(value)
+        {}
+        template<typename T>
+        explicit InitializerItem(UniquePtr<T>&& value)
+            : item(value.get())
+            , ownedItem(Move(value))
+        {}
+    };
+
+
+private:
     Initializer()
         : m_cursor(m_items.before_begin())
     {}
-    ~Initializer(){
-        for(auto& cur : m_items){
-            if(cur.second())
-                delete cur.first();
-        }
-    }
 
 
 public:
     inline bool initialize(){
         for(auto& cur : m_items){
-            if(!cur.first()->initialize())
+            if(!cur.item->initialize())
                 return false;
         }
         return true;
     }
     inline void finalize(){
         for(auto& cur : m_items)
-            cur.first()->finalize();
+            cur.item->finalize();
     }
     [[nodiscard]] inline bool acquire(){
         if(m_activeCount > 0u){
@@ -121,17 +131,16 @@ public:
     }
 
 public:
-    inline void enqueue(Initializerable* item){ m_cursor = m_items.emplace_after(m_cursor, item, false); }
+    inline void enqueue(Initializerable* item){ m_cursor = m_items.emplace_after(m_cursor, item); }
     template<typename INITIALIZE, typename FINALIZE>
     inline void enqueue(INITIALIZE&& initialize, FINALIZE&& finalize){
         auto item = MakeUnique<CommonDetail::FunctionalInitializerable>(Forward<INITIALIZE>(initialize), Forward<FINALIZE>(finalize));
-        m_cursor = m_items.emplace_after(m_cursor, item.get(), true);
-        item.release();
+        m_cursor = m_items.emplace_after(m_cursor, Move(item));
     }
 
 
 private:
-    ForwardList<Pair<CommonDetail::BaseInitializerable*, bool>> m_items;
+    ForwardList<InitializerItem> m_items;
     decltype(m_items)::iterator m_cursor;
     usize m_activeCount = 0;
 };
@@ -185,14 +194,14 @@ public:
 #include <windows.h>
 class WinFrame : public FrameData{
 public:
-    inline bool& isActive(){ return reinterpret_cast<bool&>(m_data.u8[4]); }
-    inline const bool& isActive()const{ return reinterpret_cast<const bool&>(m_data.u8[4]); }
+    inline bool isActive()const{ return m_data.u8[4] != 0; }
+    inline void setActive(bool value){ m_data.u8[4] = value ? 1u : 0u; }
 
-    inline HINSTANCE& instance(){ return reinterpret_cast<HINSTANCE&>(m_data.ptr[1]); }
-    inline const HINSTANCE& instance()const{ return reinterpret_cast<const HINSTANCE&>(m_data.ptr[1]); }
+    inline HINSTANCE instance()const{ return static_cast<HINSTANCE>(m_data.ptr[1]); }
+    inline void setInstance(HINSTANCE value){ m_data.ptr[1] = value; }
 
-    inline HWND& hwnd(){ return reinterpret_cast<HWND&>(m_data.ptr[2]); }
-    inline const HWND& hwnd()const{ return reinterpret_cast<const HWND&>(m_data.ptr[2]); }
+    inline HWND hwnd()const{ return static_cast<HWND>(m_data.ptr[2]); }
+    inline void setHwnd(HWND value){ m_data.ptr[2] = value; }
 };
 #elif defined(NWB_PLATFORM_LINUX)
 namespace LinuxFrameBackend{
@@ -204,11 +213,11 @@ namespace LinuxFrameBackend{
 };
 class LinuxFrame : public FrameData{
 public:
-    inline bool& isActive(){ return reinterpret_cast<bool&>(m_data.u8[4]); }
-    inline const bool& isActive()const{ return reinterpret_cast<const bool&>(m_data.u8[4]); }
+    inline bool isActive()const{ return m_data.u8[4] != 0; }
+    inline void setActive(bool value){ m_data.u8[4] = value ? 1u : 0u; }
 
-    inline LinuxFrameBackend::Enum& backend(){ return reinterpret_cast<LinuxFrameBackend::Enum&>(m_data.u8[5]); }
-    inline const LinuxFrameBackend::Enum& backend()const{ return reinterpret_cast<const LinuxFrameBackend::Enum&>(m_data.u8[5]); }
+    inline LinuxFrameBackend::Enum backend()const{ return static_cast<LinuxFrameBackend::Enum>(m_data.u8[5]); }
+    inline void setBackend(LinuxFrameBackend::Enum value){ m_data.u8[5] = static_cast<u8>(value); }
 
     inline void*& nativeDisplay(){ return m_data.ptr[1]; }
     inline void* const& nativeDisplay()const{ return m_data.ptr[1]; }

@@ -43,14 +43,14 @@ namespace FrameDetail{
 
 class WinFrame : public FrameData{
 public:
-    inline bool& isActive(){ return reinterpret_cast<bool&>(m_data.u8[4]); }
-    inline const bool& isActive()const{ return reinterpret_cast<const bool&>(m_data.u8[4]); }
+    inline bool isActive()const{ return m_data.u8[4] != 0; }
+    inline void setActive(bool value){ m_data.u8[4] = value ? 1u : 0u; }
 
-    inline HINSTANCE& instance(){ return reinterpret_cast<HINSTANCE&>(m_data.ptr[0]); }
-    inline const HINSTANCE& instance()const{ return reinterpret_cast<const HINSTANCE&>(m_data.ptr[0]); }
+    inline HINSTANCE instance()const{ return static_cast<HINSTANCE>(m_data.ptr[0]); }
+    inline void setInstance(HINSTANCE value){ m_data.ptr[0] = value; }
 
-    inline HWND& hwnd(){ return reinterpret_cast<HWND&>(m_data.ptr[1]); }
-    inline const HWND& hwnd()const{ return reinterpret_cast<const HWND&>(m_data.ptr[1]); }
+    inline HWND hwnd()const{ return static_cast<HWND>(m_data.ptr[1]); }
+    inline void setHwnd(HWND value){ m_data.ptr[1] = value; }
 };
 
 
@@ -89,7 +89,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                     g_Font = nullptr;
                 }
             },
-            [&](const bool isActive){ _this->data<WinFrame>().isActive() = isActive; },
+            [&](const bool isActive){ _this->data<WinFrame>().setActive(isActive); },
             lifecycleResult
         ))
             return lifecycleResult;
@@ -322,7 +322,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 Frame::Frame(void* inst){
     FrameDetail::g_Frame = this;
 
-    data<FrameDetail::WinFrame>().instance() = reinterpret_cast<HINSTANCE>(inst);
+    data<FrameDetail::WinFrame>().setInstance(reinterpret_cast<HINSTANCE>(inst));
 }
 Frame::~Frame(){
     cleanup();
@@ -350,7 +350,7 @@ bool Frame::init(){
     if(!RegisterClassEx(&wc))
         return false;
 
-    data<FrameDetail::WinFrame>().hwnd() = CreateWindowEx(
+    HWND hwnd = CreateWindowEx(
         StyleEx,
         wc.lpszClassName,
         AppName,
@@ -364,6 +364,7 @@ bool Frame::init(){
         wc.hInstance,
         nullptr
     );
+    data<FrameDetail::WinFrame>().setHwnd(hwnd);
     if(!data<FrameDetail::WinFrame>().hwnd())
         return false;
 

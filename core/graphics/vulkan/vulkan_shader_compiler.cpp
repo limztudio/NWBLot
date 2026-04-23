@@ -168,8 +168,8 @@ public:
         if(!data)
             return;
 
-        delete static_cast<IncludePayload*>(data->user_data);
-        delete data;
+        [[maybe_unused]] UniquePtr<IncludePayload> payload(static_cast<IncludePayload*>(data->user_data));
+        [[maybe_unused]] UniquePtr<shaderc_include_result> result(data);
     }
 
 

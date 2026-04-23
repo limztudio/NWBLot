@@ -179,7 +179,7 @@ bool Frame::init(){
     for(usize i = 0; i < backendCount; ++i){
         const Common::LinuxFrameBackend::Enum backend = backendOrder[i];
         if(FrameDetail::TryInitBackend(*this, backend)){
-            frameData.backend() = backend;
+            frameData.setBackend(backend);
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Frame: Using Linux {} backend."), StringConvert(FrameDetail::BackendName(backend)));
 
             if(!startup())
@@ -205,8 +205,8 @@ void Frame::setupPlatform(void* inst){
     (void)inst;
 
     auto& frameData = data<Common::LinuxFrame>();
-    frameData.isActive() = false;
-    frameData.backend() = Common::LinuxFrameBackend::Enum::None;
+    frameData.setActive(false);
+    frameData.setBackend(Common::LinuxFrameBackend::Enum::None);
     frameData.nativeDisplay() = nullptr;
     frameData.nativeWindowHandle() = 0;
     frameData.nativeState() = nullptr;
@@ -216,8 +216,8 @@ void Frame::cleanupPlatform(){
     auto& frameData = data<Common::LinuxFrame>();
     FrameDetail::CleanupBackendFrame(*this, frameData.backend());
 
-    frameData.isActive() = false;
-    frameData.backend() = Common::LinuxFrameBackend::Enum::None;
+    frameData.setActive(false);
+    frameData.setBackend(Common::LinuxFrameBackend::Enum::None);
     frameData.nativeDisplay() = nullptr;
     frameData.nativeWindowHandle() = 0;
     frameData.nativeState() = nullptr;

@@ -334,11 +334,11 @@ static bool ProcessEvent(Frame& frame, const XEvent& event){
         return false;
 
     case FocusIn:
-        frameData.isActive() = true;
+        frameData.setActive(true);
         break;
 
     case FocusOut:
-        frameData.isActive() = false;
+        frameData.setActive(false);
         ResetKeyStates();
         break;
 
@@ -440,7 +440,7 @@ static bool QueryWindowState(Frame& frame, u32& width, u32& height, bool& window
 }
 
 static void ResetFrameData(Common::LinuxFrame& frameData){
-    frameData.isActive() = false;
+    frameData.setActive(false);
     SetX11Display(frameData, nullptr);
     SetX11Window(frameData, 0);
     SetDeleteWindowMessage(frameData, None);

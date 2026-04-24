@@ -3008,13 +3008,12 @@ bool RendererSystem::hasTransparentRenderers(){
 }
 
 void RendererSystem::logMaterialRenderPathDecision(const Name& materialKey, const RenderPath::Enum renderPath, const bool meshSupported){
-    const auto foundLoggedPath = m_loggedMaterialPaths.find(materialKey);
-    if(foundLoggedPath != m_loggedMaterialPaths.end() && foundLoggedPath.value() == renderPath)
-        return;
-
-    auto [it, inserted] = m_loggedMaterialPaths.emplace(materialKey, renderPath);
-    if(!inserted)
+    auto [it, inserted] = m_loggedMaterialPaths.try_emplace(materialKey, renderPath);
+    if(!inserted){
+        if(it.value() == renderPath)
+            return;
         it.value() = renderPath;
+    }
 
     switch(renderPath){
     case RenderPath::MeshShader:{

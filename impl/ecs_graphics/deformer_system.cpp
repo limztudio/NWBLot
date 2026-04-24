@@ -406,6 +406,7 @@ void DeformerSystem::render(Core::IFramebuffer* framebuffer){
     (void)framebuffer;
 
     Core::Alloc::ScratchArena<> scratchArena;
+    const bool trackLiveHandles = !m_runtimeResources.empty();
     Vector<
         Core::ECS::EntityID,
         Core::Alloc::ScratchAllocator<Core::ECS::EntityID>
@@ -423,7 +424,8 @@ void DeformerSystem::render(Core::IFramebuffer* framebuffer){
     );
     const usize entityCapacity = m_world.entityCount();
     candidates.reserve(entityCapacity);
-    liveHandles.reserve(entityCapacity);
+    if(trackLiveHandles)
+        liveHandles.reserve(entityCapacity);
 
     m_world.view<DeformableRendererComponent>().each(
         [&](Core::ECS::EntityID entity, DeformableRendererComponent& renderer){
@@ -434,27 +436,30 @@ void DeformerSystem::render(Core::IFramebuffer* framebuffer){
             if(!instance || !instance->valid())
                 return;
 
-            liveHandles.insert(renderer.runtimeMesh.value);
+            if(trackLiveHandles)
+                liveHandles.insert(renderer.runtimeMesh.value);
             if(renderer.visible)
                 candidates.push_back(entity);
         }
     );
 
-    Vector<u64, Core::Alloc::ScratchAllocator<u64>> staleResources{
-        Core::Alloc::ScratchAllocator<u64>(scratchArena)
-    };
-    staleResources.reserve(m_runtimeResources.size());
-    for(const auto& [handle, resources] : m_runtimeResources){
-        const bool live = liveHandles.find(handle) != liveHandles.end();
-        const DeformableRuntimeMeshInstance* instance = live
-            ? m_rendererSystem.findDeformableRuntimeMesh(resources.handle)
-            : nullptr
-        ;
-        if(!live || !instance || instance->editRevision != resources.editRevision)
-            staleResources.push_back(handle);
+    if(trackLiveHandles){
+        Vector<u64, Core::Alloc::ScratchAllocator<u64>> staleResources{
+            Core::Alloc::ScratchAllocator<u64>(scratchArena)
+        };
+        staleResources.reserve(m_runtimeResources.size());
+        for(const auto& [handle, resources] : m_runtimeResources){
+            const bool live = liveHandles.find(handle) != liveHandles.end();
+            const DeformableRuntimeMeshInstance* instance = live
+                ? m_rendererSystem.findDeformableRuntimeMesh(resources.handle)
+                : nullptr
+            ;
+            if(!live || !instance || instance->editRevision != resources.editRevision)
+                staleResources.push_back(handle);
+        }
+        for(const u64 handle : staleResources)
+            m_runtimeResources.erase(handle);
     }
-    for(const u64 handle : staleResources)
-        m_runtimeResources.erase(handle);
 
     if(candidates.empty())
         return;

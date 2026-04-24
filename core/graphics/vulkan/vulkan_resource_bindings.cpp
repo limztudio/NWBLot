@@ -1904,7 +1904,7 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLa
     if(layout->m_descriptorHeapCompatible && m_context.descriptorHeapManager){
         descriptorHeapMetaLookup.reserve(layout->m_descriptorHeapBindings.size());
         for(usize i = 0; i < layout->m_descriptorHeapBindings.size(); ++i)
-            descriptorHeapMetaLookup[layout->m_descriptorHeapBindings[i].slot] = i;
+            descriptorHeapMetaLookup.insert_or_assign(layout->m_descriptorHeapBindings[i].slot, i);
     }
 
     for(const auto& item : desc.bindings){

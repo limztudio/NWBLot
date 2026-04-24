@@ -260,6 +260,7 @@ DeformableRuntimeMeshCache::DeformableRuntimeMeshCache(Core::Graphics& graphics,
 
 void DeformableRuntimeMeshCache::update(Core::ECS::World& world){
     Core::Alloc::ScratchArena<> scratchArena;
+    const bool trackActiveEntities = !m_instances.empty();
     HashSet<
         Core::ECS::EntityID,
         Hasher<Core::ECS::EntityID>,
@@ -271,15 +272,20 @@ void DeformableRuntimeMeshCache::update(Core::ECS::World& world){
         EqualTo<Core::ECS::EntityID>(),
         Core::Alloc::ScratchAllocator<Core::ECS::EntityID>(scratchArena)
     );
-    activeEntities.reserve(world.entityCount());
+    if(trackActiveEntities)
+        activeEntities.reserve(world.entityCount());
 
     world.view<DeformableRendererComponent>().each(
         [&](Core::ECS::EntityID entity, DeformableRendererComponent& component){
-            activeEntities.insert(entity);
+            if(trackActiveEntities)
+                activeEntities.insert(entity);
             if(!ensureRuntimeMesh(entity, component))
                 component.runtimeMesh.reset();
         }
     );
+
+    if(!trackActiveEntities)
+        return;
 
     Vector<
         Core::ECS::EntityID,

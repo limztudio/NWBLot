@@ -1366,6 +1366,14 @@ public:
 
 
 private:
+    [[nodiscard]] bool getTransientTextureState(ITexture* texture, ArraySlice arraySlice, MipLevel mipLevel, ResourceStates::Mask& outState)const;
+    [[nodiscard]] bool getTransientBufferState(IBuffer* buffer, ResourceStates::Mask& outState)const;
+
+    void beginTrackingTransientTexture(ITexture* texture, TextureSubresourceSet subresources, ResourceStates::Mask state);
+    void beginTrackingTransientBuffer(IBuffer* buffer, ResourceStates::Mask state);
+
+
+private:
     GraphicsState m_graphicsState;
     ComputeState m_computeState;
     MeshletState m_meshletState;

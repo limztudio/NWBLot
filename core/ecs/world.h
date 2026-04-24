@@ -70,9 +70,7 @@ public:
             return nullptr;
 
         auto* pool = getPool<T>();
-        if(!pool || !pool->has(entityId))
-            return nullptr;
-        return &pool->get(entityId);
+        return pool ? pool->tryGet(entityId) : nullptr;
     }
 
     template<typename T>
@@ -81,9 +79,7 @@ public:
             return nullptr;
 
         const auto* pool = getPool<T>();
-        if(!pool || !pool->has(entityId))
-            return nullptr;
-        return &pool->get(entityId);
+        return pool ? pool->tryGet(entityId) : nullptr;
     }
 
 

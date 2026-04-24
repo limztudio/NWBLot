@@ -86,6 +86,22 @@ public:
     using ComponentAllocator = Alloc::CustomAllocator<T>;
 
 
+private:
+    [[nodiscard]] inline bool findDenseIndex(EntityID entityId, u32& outDenseIndex)const{
+        const u32 index = entityId.index();
+        if(index >= static_cast<u32>(m_sparse.size()))
+            return false;
+        const u32 denseIndex = m_sparse[index];
+        if(denseIndex >= static_cast<u32>(m_dense.size()))
+            return false;
+        if(m_dense[denseIndex] != entityId)
+            return false;
+
+        outDenseIndex = denseIndex;
+        return true;
+    }
+
+
 public:
     explicit ComponentPool(Alloc::CustomArena& arena)
         : m_typeId(ComponentType<T>())
@@ -120,23 +136,30 @@ public:
         NWB_ASSERT(has(entityId));
         return m_components[m_sparse[entityId.index()]];
     }
+    inline T* tryGet(EntityID entityId){
+        u32 denseIndex = 0;
+        if(!findDenseIndex(entityId, denseIndex))
+            return nullptr;
+        return &m_components[denseIndex];
+    }
+    inline const T* tryGet(EntityID entityId)const{
+        u32 denseIndex = 0;
+        if(!findDenseIndex(entityId, denseIndex))
+            return nullptr;
+        return &m_components[denseIndex];
+    }
 
     inline virtual bool has(EntityID entityId)const override{
-        const u32 index = entityId.index();
-        if(index >= static_cast<u32>(m_sparse.size()))
-            return false;
-        const u32 dense = m_sparse[index];
-        if(dense >= static_cast<u32>(m_dense.size()))
-            return false;
-        return m_dense[dense] == entityId;
+        u32 denseIndex = 0;
+        return findDenseIndex(entityId, denseIndex);
     }
 
     virtual void remove(EntityID entityId)override{
-        if(!has(entityId))
+        u32 denseIndex = 0;
+        if(!findDenseIndex(entityId, denseIndex))
             return;
 
         const u32 index = entityId.index();
-        const u32 denseIndex = m_sparse[index];
         const u32 lastDense = static_cast<u32>(m_dense.size()) - 1;
 
         if(denseIndex != lastDense){

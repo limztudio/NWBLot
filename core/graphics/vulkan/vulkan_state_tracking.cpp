@@ -98,7 +98,9 @@ void CommandList::setTextureState(ITexture* _texture, TextureSubresourceSet subr
         return;
     }
 
-    ResourceStates::Mask oldState = m_stateTracker->getTextureState(_texture, resolvedSubresources.baseArraySlice, resolvedSubresources.baseMipLevel);
+    ResourceStates::Mask oldState = ResourceStates::Unknown;
+    if(!m_stateTracker->getTransientTextureState(_texture, resolvedSubresources.baseArraySlice, resolvedSubresources.baseMipLevel, oldState))
+        return;
     if(oldState == stateBits)
         return;
 
@@ -118,7 +120,7 @@ void CommandList::setTextureState(ITexture* _texture, TextureSubresourceSet subr
     barrier.subresourceRange.baseArrayLayer = resolvedSubresources.baseArraySlice;
     barrier.subresourceRange.layerCount = resolvedSubresources.numArraySlices;
 
-    m_stateTracker->beginTrackingTexture(_texture, resolvedSubresources, stateBits);
+    m_stateTracker->beginTrackingTransientTexture(_texture, resolvedSubresources, stateBits);
 
     if(!m_enableAutomaticBarriers){
         m_pendingImageBarriers.push_back(barrier);
@@ -139,9 +141,12 @@ void CommandList::setBufferState(IBuffer* _buffer, ResourceStates::Mask stateBit
     if(m_stateTracker->isPermanentBuffer(_buffer))
         return;
 
+    ResourceStates::Mask oldState = ResourceStates::Unknown;
+    if(!m_stateTracker->getTransientBufferState(_buffer, oldState))
+        return;
+
     auto* buffer = checked_cast<Buffer*>(_buffer);
 
-    ResourceStates::Mask oldState = m_stateTracker->getBufferState(_buffer);
     if(oldState == stateBits)
         return;
 
@@ -154,7 +159,7 @@ void CommandList::setBufferState(IBuffer* _buffer, ResourceStates::Mask stateBit
     barrier.offset = 0;
     barrier.size = VK_WHOLE_SIZE;
 
-    m_stateTracker->beginTrackingBuffer(_buffer, stateBits);
+    m_stateTracker->beginTrackingTransientBuffer(_buffer, stateBits);
 
     if(!m_enableAutomaticBarriers){
         m_pendingBufferBarriers.push_back(barrier);
@@ -243,9 +248,6 @@ bool StateTracker::isPermanentBuffer(IBuffer* buffer)const{
 }
 
 ResourceStates::Mask StateTracker::getTextureState(ITexture* texture, ArraySlice arraySlice, MipLevel mipLevel)const{
-    (void)arraySlice;
-    (void)mipLevel;
-
     if(!texture)
         return ResourceStates::Unknown;
 
@@ -253,15 +255,8 @@ ResourceStates::Mask StateTracker::getTextureState(ITexture* texture, ArraySlice
     if(permIt != m_permanentTextureStates.end())
         return permIt.value();
 
-    auto it = m_textureStates.find(texture);
-    if(it != m_textureStates.end())
-        return it.value();
-
-    const TextureDesc& desc = texture->getDescription();
-    if(desc.keepInitialState)
-        return desc.initialState;
-
-    return ResourceStates::Unknown;
+    ResourceStates::Mask state = ResourceStates::Unknown;
+    return getTransientTextureState(texture, arraySlice, mipLevel, state) ? state : ResourceStates::Unknown;
 }
 
 ResourceStates::Mask StateTracker::getBufferState(IBuffer* buffer)const{
@@ -272,27 +267,57 @@ ResourceStates::Mask StateTracker::getBufferState(IBuffer* buffer)const{
     if(permIt != m_permanentBufferStates.end())
         return permIt.value();
 
+    ResourceStates::Mask state = ResourceStates::Unknown;
+    return getTransientBufferState(buffer, state) ? state : ResourceStates::Unknown;
+}
+
+bool StateTracker::getTransientTextureState(ITexture* texture, ArraySlice arraySlice, MipLevel mipLevel, ResourceStates::Mask& outState)const{
+    (void)arraySlice;
+    (void)mipLevel;
+
+    outState = ResourceStates::Unknown;
+    if(!texture)
+        return false;
+
+    auto it = m_textureStates.find(texture);
+    if(it != m_textureStates.end()){
+        outState = it.value();
+        return true;
+    }
+
+    const TextureDesc& desc = texture->getDescription();
+    if(desc.keepInitialState)
+        outState = desc.initialState;
+
+    return true;
+}
+
+bool StateTracker::getTransientBufferState(IBuffer* buffer, ResourceStates::Mask& outState)const{
+    outState = ResourceStates::Unknown;
+    if(!buffer)
+        return false;
+
     auto it = m_bufferStates.find(buffer);
-    if(it != m_bufferStates.end())
-        return it.value();
+    if(it != m_bufferStates.end()){
+        outState = it.value();
+        return true;
+    }
 
     const BufferDesc& desc = buffer->getDescription();
     if(desc.keepInitialState)
-        return desc.initialState;
+        outState = desc.initialState;
 
-    return ResourceStates::Unknown;
+    return true;
 }
 
 void StateTracker::beginTrackingTexture(ITexture* texture, TextureSubresourceSet subresources, ResourceStates::Mask state){
-    (void)subresources;
-
     if(!texture)
         return;
 
     if(m_permanentTextureStates.find(texture) != m_permanentTextureStates.end())
         return;
 
-    m_textureStates.insert_or_assign(texture, state);
+    beginTrackingTransientTexture(texture, subresources, state);
 }
 
 void StateTracker::beginTrackingBuffer(IBuffer* buffer, ResourceStates::Mask state){
@@ -302,6 +327,16 @@ void StateTracker::beginTrackingBuffer(IBuffer* buffer, ResourceStates::Mask sta
     if(m_permanentBufferStates.find(buffer) != m_permanentBufferStates.end())
         return;
 
+    beginTrackingTransientBuffer(buffer, state);
+}
+
+void StateTracker::beginTrackingTransientTexture(ITexture* texture, TextureSubresourceSet subresources, ResourceStates::Mask state){
+    (void)subresources;
+
+    m_textureStates.insert_or_assign(texture, state);
+}
+
+void StateTracker::beginTrackingTransientBuffer(IBuffer* buffer, ResourceStates::Mask state){
     m_bufferStates.insert_or_assign(buffer, state);
 }
 

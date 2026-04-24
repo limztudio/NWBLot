@@ -230,7 +230,7 @@ bool VulkanShaderCompiler::compileVariant(const ShaderCompilerRequest& request, 
     for(u32 i = 0; i < request.defineCount; ++i)
         options.AddMacroDefinition(AString(request.defines[i].name), AString(request.defines[i].value));
 
-    options.SetIncluder(std::make_unique<__hidden_vulkan_shader::ShaderFileIncluder>(request.includeDirectories));
+    options.SetIncluder(MakeStdUnique<__hidden_vulkan_shader::ShaderFileIncluder>(request.includeDirectories));
 
     shaderc::Compiler compiler;
     const AString inputFileName = PathToString(request.sourcePath);

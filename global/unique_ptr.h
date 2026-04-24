@@ -289,6 +289,22 @@ MakeUnique(Args&&...) = delete;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+template<typename T, typename... Args>
+inline typename EnableIf<!IsArray<T>::value, std::unique_ptr<T>>::type MakeStdUnique(Args&&... args){
+    return std::make_unique<T>(Forward<Args>(args)...);
+}
+template<typename T>
+inline typename EnableIf<IsUnboundedArray<T>::value, std::unique_ptr<T>>::type MakeStdUnique(usize n){
+    return std::make_unique<T>(n);
+}
+template<typename T, typename... Args>
+typename EnableIf<IsBoundedArray<T>::value>::type
+MakeStdUnique(Args&&...) = delete;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<typename T, typename Deleter>
 [[nodiscard]] inline NotNullUniquePtr<T, Deleter> MakeNotNullUnique(UniquePtr<T, Deleter>&& owner){
     return NotNullUniquePtr<T, Deleter>(Move(owner));

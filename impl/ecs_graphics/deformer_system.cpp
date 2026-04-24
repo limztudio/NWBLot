@@ -143,6 +143,9 @@ static bool BuildMorphPayload(
     outDeltas.clear();
     outSignature = 0;
 
+    if(!DeformableRuntime::HasMorphWeights(morphWeights))
+        return true;
+
     Core::Alloc::ScratchArena<> scratchArena;
     Vector<f32, Core::Alloc::ScratchAllocator<f32>> resolvedWeights{
         Core::Alloc::ScratchAllocator<f32>(scratchArena)

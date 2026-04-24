@@ -41,13 +41,17 @@ namespace DisplacementResolveFailure{
     };
 };
 
+[[nodiscard]] inline bool HasMorphWeights(const DeformableMorphWeightsComponent* weights){
+    return weights && !weights->weights.empty();
+}
+
 [[nodiscard]] inline bool ResolveMorphWeightSum(
     const DeformableMorphWeightsComponent* weights,
     const Name& morphName,
     f32& outWeight)
 {
     outWeight = 0.0f;
-    if(!weights || !morphName)
+    if(!HasMorphWeights(weights) || !morphName)
         return true;
 
     for(const DeformableMorphWeight& weight : weights->weights){

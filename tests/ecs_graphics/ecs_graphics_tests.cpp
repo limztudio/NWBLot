@@ -987,7 +987,7 @@ static void TestRestSpaceHoleEditCreatesPerInstancePatch(TestContext& context){
     NWB::Impl::DeformableHoleEditResult result;
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::CommitDeformableRestSpaceHole(instance, params, &result));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, result.removedTriangleCount == 2u);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, result.addedVertexCount == 8u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, result.addedVertexCount == 4u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, result.addedTriangleCount == 8u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, result.editRevision == 4u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.editRevision == 4u);
@@ -995,7 +995,7 @@ static void TestRestSpaceHoleEditCreatesPerInstancePatch(TestContext& context){
         context,
         (instance.dirtyFlags & NWB::Impl::RuntimeMeshDirtyFlag::All) == NWB::Impl::RuntimeMeshDirtyFlag::All
     );
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.restVertices.size() == oldVertexCount + 8u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.restVertices.size() == oldVertexCount + 4u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.indices.size() == oldIndexCount - 6u + 24u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.skin.size() == instance.restVertices.size());
     NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.sourceSamples.size() == instance.restVertices.size());
@@ -1003,21 +1003,14 @@ static void TestRestSpaceHoleEditCreatesPerInstancePatch(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.morphs[0].deltas.size() > 1u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(instance.restVertices[oldVertexCount + 0u].position.x, -0.5f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(instance.restVertices[oldVertexCount + 0u].position.y, -0.5f));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(instance.restVertices[oldVertexCount + 1u].position.x, -0.5f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(instance.restVertices[oldVertexCount + 0u].position.z, -0.25f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(instance.restVertices[oldVertexCount + 1u].position.x, 0.5f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(instance.restVertices[oldVertexCount + 1u].position.y, -0.5f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(instance.restVertices[oldVertexCount + 1u].position.z, -0.25f));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(instance.restVertices[oldVertexCount + 2u].position.x, 0.5f));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(instance.restVertices[oldVertexCount + 2u].position.y, -0.5f));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(instance.restVertices[oldVertexCount + 3u].position.x, 0.5f));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(instance.restVertices[oldVertexCount + 3u].position.y, -0.5f));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(instance.restVertices[oldVertexCount + 3u].position.z, -0.25f));
 
-    u32 rimVertexCount = 0u;
     u32 innerVertexCount = 0u;
     for(usize vertexIndex = oldVertexCount; vertexIndex < instance.restVertices.size(); ++vertexIndex){
         const NWB::Impl::DeformableVertexRest& vertex = instance.restVertices[vertexIndex];
-        if(NearlyEqual(vertex.position.z, 0.0f))
-            ++rimVertexCount;
         if(NearlyEqual(vertex.position.z, -0.25f))
             ++innerVertexCount;
 
@@ -1034,20 +1027,41 @@ static void TestRestSpaceHoleEditCreatesPerInstancePatch(TestContext& context){
         );
         NWB_ECS_GRAPHICS_TEST_CHECK(context, inwardDot > 0.0f);
     }
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, rimVertexCount == 4u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, innerVertexCount == 4u);
     for(const u32 index : instance.indices)
         NWB_ECS_GRAPHICS_TEST_CHECK(context, index < instance.restVertices.size());
+
+    const usize wallIndexBase = instance.indices.size() - (static_cast<usize>(result.addedTriangleCount) * 3u);
+    for(usize edgeIndex = 0u; edgeIndex < static_cast<usize>(result.wallVertexCount); ++edgeIndex){
+        const usize nextEdgeIndex = (edgeIndex + 1u) % static_cast<usize>(result.wallVertexCount);
+        const usize indexBase = wallIndexBase + (edgeIndex * 6u);
+        const u32 innerA = result.firstWallVertex + static_cast<u32>(edgeIndex);
+        const u32 innerB = result.firstWallVertex + static_cast<u32>(nextEdgeIndex);
+        const u32 rimA = instance.indices[indexBase + 0u];
+        const u32 rimB = instance.indices[indexBase + 1u];
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, rimA < oldVertexCount);
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, rimB < oldVertexCount);
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.indices[indexBase + 2u] == innerB);
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.indices[indexBase + 3u] == rimA);
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.indices[indexBase + 4u] == innerB);
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.indices[indexBase + 5u] == innerA);
+
+        const NWB::Impl::DeformableVertexRest& rimVertex = instance.restVertices[rimA];
+        const NWB::Impl::DeformableVertexRest& innerVertex = instance.restVertices[innerA];
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(rimVertex.position.x, innerVertex.position.x));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(rimVertex.position.y, innerVertex.position.y));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(rimVertex.position.z, innerVertex.position.z + params.depth));
+    }
 
     f32 rimDeltaZ = 0.0f;
     f32 innerDeltaZ = 0.0f;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        MorphDeltaPositionZForVertex(instance.morphs[0], static_cast<u32>(oldVertexCount + 0u), rimDeltaZ)
+        MorphDeltaPositionZForVertex(instance.morphs[0], 5u, rimDeltaZ)
     );
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        MorphDeltaPositionZForVertex(instance.morphs[0], static_cast<u32>(oldVertexCount + 1u), innerDeltaZ)
+        MorphDeltaPositionZForVertex(instance.morphs[0], static_cast<u32>(oldVertexCount + 0u), innerDeltaZ)
     );
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(rimDeltaZ, 0.2f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(innerDeltaZ, 0.1f));
@@ -1075,10 +1089,10 @@ static void TestRestSpaceHoleEditTransfersAndInpaintsWallAttributes(TestContext&
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::CommitDeformableRestSpaceHole(instance, params, &result));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, result.addedVertexCount != 0u);
 
-    const NWB::Impl::SkinInfluence4& rimSkin0 = instance.skin[oldVertexCount + 0u];
-    const NWB::Impl::SkinInfluence4& innerSkin0 = instance.skin[oldVertexCount + 1u];
-    const NWB::Impl::SkinInfluence4& rimSkin1 = instance.skin[oldVertexCount + 2u];
-    const NWB::Impl::SkinInfluence4& innerSkin1 = instance.skin[oldVertexCount + 3u];
+    const NWB::Impl::SkinInfluence4& rimSkin0 = instance.skin[5u];
+    const NWB::Impl::SkinInfluence4& innerSkin0 = instance.skin[oldVertexCount + 0u];
+    const NWB::Impl::SkinInfluence4& rimSkin1 = instance.skin[6u];
+    const NWB::Impl::SkinInfluence4& innerSkin1 = instance.skin[oldVertexCount + 1u];
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(SkinWeightForJoint(rimSkin0, joint0), 1.0f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(SkinWeightForJoint(innerSkin0, joint3), 0.25f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(SkinWeightForJoint(innerSkin0, joint0), 0.5f));
@@ -1087,8 +1101,8 @@ static void TestRestSpaceHoleEditTransfersAndInpaintsWallAttributes(TestContext&
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(SkinWeightForJoint(innerSkin1, joint0), 0.25f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(SkinWeightForJoint(innerSkin1, joint1), 0.5f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(SkinWeightForJoint(innerSkin1, joint2), 0.25f));
-    const Float4U& rimColor0 = instance.restVertices[oldVertexCount + 0u].color0;
-    const Float4U& innerColor0 = instance.restVertices[oldVertexCount + 1u].color0;
+    const Float4U& rimColor0 = instance.restVertices[5u].color0;
+    const Float4U& innerColor0 = instance.restVertices[oldVertexCount + 0u].color0;
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(rimColor0.x, 1.0f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(rimColor0.y, 0.0f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(rimColor0.z, 0.0f));
@@ -1199,7 +1213,7 @@ static void TestSurfaceEditFlowAttachesAndPersistsAccessory(TestContext& context
         (instance.dirtyFlags & NWB::Impl::RuntimeMeshDirtyFlag::GpuUploadDirty) != 0u
     );
     NWB_ECS_GRAPHICS_TEST_CHECK(context, result.firstWallVertex == oldVertexCount);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, result.wallVertexCount == 8u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, result.wallVertexCount == 4u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, record.hole.baseEditRevision == params.posedHit.editRevision);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, record.hole.restSample.sourceTri == params.posedHit.restSample.sourceTri);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(record.hole.restPosition.x, params.posedHit.position.x));

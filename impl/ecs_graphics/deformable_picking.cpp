@@ -81,6 +81,9 @@ template<typename VertexVector>
     const DeformableMorphWeightsComponent* weights,
     VertexVector& vertices)
 {
+    if(!HasMorphWeights(weights))
+        return true;
+
     for(const DeformableMorph& morph : instance.morphs){
         f32 weight = 0.0f;
         if(!ResolveMorphWeightSum(weights, morph.name, weight))

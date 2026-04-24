@@ -482,15 +482,15 @@ void BackendContext::initDefaultExtensions(){
     for(const auto* name : s_EnabledInstanceExts)
         m_enabledExtensions.instance.insert(name);
     for(const auto& e : s_EnabledDeviceExts)
-        m_enabledExtensions.device.insert({ e.name, e.feature });
+        m_enabledExtensions.device.emplace(e.name, e.feature);
 
     for(const auto* name : s_OptionalInstanceExts)
         m_optionalExtensions.instance.insert(name);
     for(const auto& e : s_OptionalDeviceExts)
-        m_optionalExtensions.device.insert({ e.name, e.feature });
+        m_optionalExtensions.device.emplace(e.name, e.feature);
 
     for(const auto& e : s_RayTracingExts)
-        m_rayTracingExtensions.insert({ e.name, e.feature });
+        m_rayTracingExtensions.emplace(e.name, e.feature);
 }
 
 bool BackendContext::createVulkanInstance(){
@@ -1011,18 +1011,18 @@ bool BackendContext::createVulkanDevice(){
         if(optIt != m_optionalExtensions.device.end()){
             if(name == VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME && m_deviceParams.headlessDevice)
                 continue;
-            m_enabledExtensions.device.insert({ name, optIt.value() });
+            m_enabledExtensions.device.emplace(name, optIt.value());
         }
 
         if(m_deviceParams.enableRayTracingExtensions){
             auto rtIt = m_rayTracingExtensions.find(name);
             if(rtIt != m_rayTracingExtensions.end())
-                m_enabledExtensions.device.insert({ name, rtIt.value() });
+                m_enabledExtensions.device.emplace(name, rtIt.value());
         }
     }
 
     if(!m_deviceParams.headlessDevice)
-        m_enabledExtensions.device.insert({ VK_KHR_SWAPCHAIN_EXTENSION_NAME, DeviceExtensionFeature::None });
+        m_enabledExtensions.device.emplace(VK_KHR_SWAPCHAIN_EXTENSION_NAME, DeviceExtensionFeature::None);
 
     VkPhysicalDeviceProperties physicalDeviceProperties;
     vkGetPhysicalDeviceProperties(m_vulkanPhysicalDevice, &physicalDeviceProperties);
@@ -1674,11 +1674,11 @@ bool BackendContext::createDevice(){
     }
 
     for(const auto& name : m_deviceParams.requiredVulkanDeviceExtensions)
-        m_enabledExtensions.device.insert({ name, DeviceExtensionFeature::None });
+        m_enabledExtensions.device.emplace(name, DeviceExtensionFeature::None);
     for(const auto& name : m_deviceParams.optionalVulkanDeviceExtensions)
-        m_optionalExtensions.device.insert({ name, DeviceExtensionFeature::None });
+        m_optionalExtensions.device.emplace(name, DeviceExtensionFeature::None);
     if(m_deviceParams.enableAftermath)
-        m_optionalExtensions.device.insert({ VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME, DeviceExtensionFeature::None });
+        m_optionalExtensions.device.emplace(VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME, DeviceExtensionFeature::None);
 
     m_swapChainState.backBufferFormat = VulkanDetail::GetBackBufferFormat(m_deviceParams);
     if(!m_deviceParams.headlessDevice){

@@ -111,7 +111,7 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
             return false;
         }
 
-        if(!m_stageShaders.insert({ stageName, shaderAsset }).second){
+        if(!m_stageShaders.emplace(stageName, shaderAsset).second){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("Material::loadBinary failed: duplicate shader stage '{}'"),
                 StringConvert(stageName.c_str())
@@ -144,7 +144,7 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
             return false;
         }
 
-        if(!m_parameters.insert({ key, value }).second){
+        if(!m_parameters.emplace(key, value).second){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("Material::loadBinary failed: duplicate parameter key '{}'"),
                 StringConvert(key.c_str())

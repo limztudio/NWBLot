@@ -519,7 +519,7 @@ static bool ParseMaterialStageShaders(
             return false;
         }
 
-        if(!outStageShaders.insert({ stageName, shaderAsset }).second){
+        if(!outStageShaders.emplace(stageName, shaderAsset).second){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("Material meta '{}': duplicate shader stage '{}'"),
                 PathToString<tchar>(nwbFilePath),
@@ -580,7 +580,7 @@ static bool ParseMaterialParameters(
             return false;
         }
 
-        if(!outParameters.insert({ key, value }).second){
+        if(!outParameters.emplace(key, value).second){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("Material meta '{}': duplicate parameter '{}'"),
                 PathToString<tchar>(nwbFilePath),
@@ -1728,7 +1728,7 @@ static bool ValidateAndNormalizeMaterials(
             ToName(preparedEntry.entry.name),
             ToName(preparedEntry.entry.archiveStage.view())
         };
-        if(!preparedShaderLookup.insert({ shaderKey, &preparedEntry }).second){
+        if(!preparedShaderLookup.emplace(shaderKey, &preparedEntry).second){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("ShaderAssetCooker: duplicate prepared shader key '{}' stage '{}'"),
                 StringConvert(preparedEntry.entry.name),

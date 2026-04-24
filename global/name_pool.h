@@ -36,7 +36,7 @@ public:
         if(HasEmbeddedNull(str))
             return NAME_NONE;
 
-        const AString canonical = CanonicalizeText(str);
+        AString canonical = CanonicalizeText(str);
         const Name name(str);
 
         ScopedLock lock(m_mutex);
@@ -54,8 +54,8 @@ public:
         }
 
         const usize newIndex = m_strings.size();
-        m_strings.push_back(canonical);
-        m_nameIndex.insert({ name.hash(), newIndex });
+        m_strings.push_back(Move(canonical));
+        m_nameIndex.emplace(name.hash(), newIndex);
         return name;
     }
     [[nodiscard]] Name store(const char* str){

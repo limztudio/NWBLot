@@ -627,15 +627,27 @@ static ShaderDrivenPushConstants BuildShaderDrivenPushConstants(
     return pushConstants;
 }
 
+static bool EqualsAsciiTokenIgnoreCase(const AStringView text, const AStringView expected){
+    if(text.size() != expected.size())
+        return false;
+
+    for(usize i = 0; i < text.size(); ++i){
+        const char ch = text[i];
+        const char lowered = (ch >= 'A' && ch <= 'Z') ? static_cast<char>(ch + ('a' - 'A')) : ch;
+        if(lowered != expected[i])
+            return false;
+    }
+    return true;
+}
+
 static bool IsTransparentText(const AStringView text){
-    const AString normalized = CanonicalizeText(AString(text));
-    return normalized == "transparent"
-        || normalized == "translucent"
-        || normalized == "blend"
-        || normalized == "alpha"
-        || normalized == "avboit"
-        || normalized == "true"
-        || normalized == "1"
+    return EqualsAsciiTokenIgnoreCase(text, "transparent")
+        || EqualsAsciiTokenIgnoreCase(text, "translucent")
+        || EqualsAsciiTokenIgnoreCase(text, "blend")
+        || EqualsAsciiTokenIgnoreCase(text, "alpha")
+        || EqualsAsciiTokenIgnoreCase(text, "avboit")
+        || EqualsAsciiTokenIgnoreCase(text, "true")
+        || EqualsAsciiTokenIgnoreCase(text, "1")
     ;
 }
 
@@ -2244,23 +2256,21 @@ bool RendererSystem::ensureGeometryLoaded(const Core::Assets::AssetRef<Geometry>
     }
     const usize expandedIndexBytes = expandedIndexCount * sizeof(u32);
 
+    const void* shaderIndexData = geometry.indexData().data();
+    usize shaderIndexDataSize = geometry.indexData().size();
+
     Core::Alloc::ScratchArena<> scratchArena;
     Vector<u32, Core::Alloc::ScratchAllocator<u32>> expandedIndices{Core::Alloc::ScratchAllocator<u32>(scratchArena)};
-    expandedIndices.resize(expandedIndexCount);
-    const u8* indexBytes = geometry.indexData().data();
-    if(geometry.use32BitIndices()){
-        for(u32 i = 0; i < createdGeometry.indexCount; ++i){
-            u32 indexValue = 0;
-            NWB_MEMCPY(&indexValue, sizeof(indexValue), indexBytes + static_cast<usize>(i) * sizeof(indexValue), sizeof(indexValue));
-            expandedIndices[i] = indexValue;
-        }
-    }
-    else{
+    if(!geometry.use32BitIndices()){
+        expandedIndices.resize(expandedIndexCount);
+        const u8* indexBytes = geometry.indexData().data();
         for(u32 i = 0; i < createdGeometry.indexCount; ++i){
             u16 indexValue = 0;
             NWB_MEMCPY(&indexValue, sizeof(indexValue), indexBytes + static_cast<usize>(i) * sizeof(indexValue), sizeof(indexValue));
             expandedIndices[i] = static_cast<u32>(indexValue);
         }
+        shaderIndexData = expandedIndices.data();
+        shaderIndexDataSize = expandedIndexBytes;
     }
 
     Core::Graphics::BufferSetupDesc shaderIndexSetup;
@@ -2269,8 +2279,8 @@ bool RendererSystem::ensureGeometryLoaded(const Core::Assets::AssetRef<Geometry>
         .setStructStride(sizeof(u32))
         .setDebugName(shaderIndexBufferName)
     ;
-    shaderIndexSetup.data = expandedIndices.data();
-    shaderIndexSetup.dataSize = expandedIndexBytes;
+    shaderIndexSetup.data = shaderIndexData;
+    shaderIndexSetup.dataSize = shaderIndexDataSize;
     createdGeometry.shaderIndexBuffer = m_graphics.setupBuffer(shaderIndexSetup);
     if(!createdGeometry.shaderIndexBuffer){
         NWB_LOGGER_ERROR(

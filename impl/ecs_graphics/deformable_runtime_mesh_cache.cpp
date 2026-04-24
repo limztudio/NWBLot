@@ -275,7 +275,7 @@ void DeformableRuntimeMeshCache::update(Core::ECS::World& world){
         Core::Alloc::ScratchAllocator<Core::ECS::EntityID>(scratchArena)
     );
     if(trackActiveEntities)
-        activeEntities.reserve(world.entityCount());
+        activeEntities.reserve(m_instances.size());
 
     world.view<DeformableRendererComponent>().each(
         [&](Core::ECS::EntityID entity, DeformableRendererComponent& component){

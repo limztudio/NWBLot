@@ -82,8 +82,8 @@ void World::clear(){
 
 void World::destroyEntityComponents(EntityID entityId){
     for(auto& [typeId, pool] : m_pools){
-        if(pool->has(entityId))
-            pool->remove(entityId);
+        (void)typeId;
+        pool->remove(entityId);
     }
 }
 

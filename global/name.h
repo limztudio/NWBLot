@@ -171,11 +171,15 @@ inline void HashToDebugString(const NameHash& hash, CharT* dst, const usize dstS
 
     CharT* writeCursor = dst;
     for(u32 i = 0; i < s_HashLaneCount; ++i){
-        if(i > 0)
-            *writeCursor++ = static_cast<CharT>('_');
+        if(i > 0){
+            *writeCursor = static_cast<CharT>('_');
+            ++writeCursor;
+        }
         const u64 value = hash.qwords[i];
-        for(i32 bitShift = 60; bitShift >= 0; bitShift -= 4)
-            *writeCursor++ = static_cast<CharT>(s_Hex[(value >> bitShift) & 0xF]);
+        for(i32 bitShift = 60; bitShift >= 0; bitShift -= 4){
+            *writeCursor = static_cast<CharT>(s_Hex[(value >> bitShift) & 0xF]);
+            ++writeCursor;
+        }
     }
     *writeCursor = CharT{};
 }

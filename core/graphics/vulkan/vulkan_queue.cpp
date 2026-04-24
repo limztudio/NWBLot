@@ -669,7 +669,8 @@ void Queue::updateTextureTileMappings(ITexture* textureResource, const TextureTi
                 bind.size = region.tilesNum * texture->m_tileByteSize;
                 bind.memory = deviceMemory;
                 bind.memoryOffset = deviceMemory ? mapping.byteOffsets[j] : 0;
-                sparseMemoryBinds[opaqueWrite++] = bind;
+                sparseMemoryBinds[opaqueWrite] = bind;
+                ++opaqueWrite;
             }
             else{
                 VkSparseImageMemoryBind bind = {};
@@ -684,7 +685,8 @@ void Queue::updateTextureTileMappings(ITexture* textureResource, const TextureTi
                 bind.extent.depth = region.depth * tileDepth;
                 bind.memory = deviceMemory;
                 bind.memoryOffset = deviceMemory ? mapping.byteOffsets[j] : 0;
-                sparseImageMemoryBinds[imageWrite++] = bind;
+                sparseImageMemoryBinds[imageWrite] = bind;
+                ++imageWrite;
             }
         }
     };

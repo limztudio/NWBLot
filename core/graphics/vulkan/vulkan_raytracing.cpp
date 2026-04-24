@@ -989,8 +989,11 @@ u32 ShaderTable::appendShaderRecord(
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to add shader table record: record count exceeds u32 range"));
         return count;
     }
-    if(!m_pipeline)
-        return count++;
+    if(!m_pipeline){
+        const u32 recordIndex = count;
+        ++count;
+        return recordIndex;
+    }
 
     u32 handleSize = 0;
     u32 handleSizeAligned = 0;
@@ -998,7 +1001,8 @@ u32 ShaderTable::appendShaderRecord(
     if(!VulkanDetail::ComputeRayTracingHandleLayout(m_context, handleSize, handleSizeAligned, baseAlignment, operationName))
         return count;
 
-    const u32 newCount = count + 1;
+    const u32 recordIndex = count;
+    const u32 newCount = recordIndex + 1;
     u64 sbtSize = 0;
     if(!VulkanDetail::ComputeShaderTableByteSize(newCount, handleSizeAligned, baseAlignment, sbtSize, operationName))
         return count;
@@ -1039,13 +1043,14 @@ u32 ShaderTable::appendShaderRecord(
         return count;
     }
 
-    auto* dst = static_cast<u8*>(mapped) + count * handleSizeAligned;
+    auto* dst = static_cast<u8*>(mapped) + recordIndex * handleSizeAligned;
     NWB_MEMCPY(dst, handleSizeAligned, m_pipeline->m_shaderGroupHandles.data() + groupIndex * handleSizeAligned, handleSize);
     m_device.unmapBuffer(newBuffer.get());
 
     buffer = newBuffer;
     offset = 0;
-    return count++;
+    ++count;
+    return recordIndex;
 }
 
 void ShaderTable::allocateSBTBuffer(BufferHandle& outBuffer, u64 sbtSize){
@@ -1413,8 +1418,10 @@ void CommandList::compactBottomLevelAccelStructs(){
     {
         usize dst = 0;
         for(usize i = 0; i < m_pendingCompactions.size(); ++i)
-            if(!m_pendingCompactions[i]->m_compacted)
-                m_pendingCompactions[dst++] = Move(m_pendingCompactions[i]);
+            if(!m_pendingCompactions[i]->m_compacted){
+                m_pendingCompactions[dst] = Move(m_pendingCompactions[i]);
+                ++dst;
+            }
         m_pendingCompactions.resize(dst);
     }
 }

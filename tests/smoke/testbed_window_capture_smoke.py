@@ -61,6 +61,53 @@ def wait_for_tcp_port(port, timeout_seconds):
     raise SmokeFailure(f"logserver did not open port {port}")
 
 
+def snapshot_log_files(directory, pattern):
+    try:
+        return {path: path.stat().st_size for path in directory.glob(pattern)}
+    except OSError:
+        return {}
+
+
+def read_log_delta(path, offset):
+    try:
+        size = path.stat().st_size
+        if size <= offset:
+            return ""
+
+        with path.open("rb") as log_file:
+            log_file.seek(offset)
+            return log_file.read().decode("utf-8", "replace")
+    except OSError:
+        return ""
+
+
+def collect_log_delta(directory, baseline, pattern):
+    chunks = []
+    try:
+        paths = sorted(directory.glob(pattern))
+    except OSError:
+        return ""
+
+    for path in paths:
+        chunks.append(read_log_delta(path, baseline.get(path, 0)))
+
+    return "\n".join(chunk for chunk in chunks if chunk)
+
+
+def wait_for_log_message(directory, baseline, pattern, needle, timeout_seconds):
+    deadline = time.monotonic() + timeout_seconds
+    last_text = ""
+    while time.monotonic() < deadline:
+        text = collect_log_delta(directory, baseline, pattern)
+        if needle in text:
+            return
+        if text:
+            last_text = text[-4000:]
+        time.sleep(0.1)
+
+    raise SmokeFailure(f"timed out waiting for log message '{needle}'\n{last_text}")
+
+
 def terminate_process(process, name):
     if process is None or process.poll() is not None:
         return
@@ -226,9 +273,94 @@ LinuxXImage._fields_ = [
 ]
 
 
+class LinuxXKeyEvent(ctypes.Structure):
+    _fields_ = [
+        ("type", ctypes.c_int),
+        ("serial", ctypes.c_ulong),
+        ("send_event", ctypes.c_int),
+        ("display", ctypes.c_void_p),
+        ("window", ctypes.c_ulong),
+        ("root", ctypes.c_ulong),
+        ("subwindow", ctypes.c_ulong),
+        ("time", ctypes.c_ulong),
+        ("x", ctypes.c_int),
+        ("y", ctypes.c_int),
+        ("x_root", ctypes.c_int),
+        ("y_root", ctypes.c_int),
+        ("state", ctypes.c_uint),
+        ("keycode", ctypes.c_uint),
+        ("same_screen", ctypes.c_int),
+    ]
+
+
+class LinuxXButtonEvent(ctypes.Structure):
+    _fields_ = [
+        ("type", ctypes.c_int),
+        ("serial", ctypes.c_ulong),
+        ("send_event", ctypes.c_int),
+        ("display", ctypes.c_void_p),
+        ("window", ctypes.c_ulong),
+        ("root", ctypes.c_ulong),
+        ("subwindow", ctypes.c_ulong),
+        ("time", ctypes.c_ulong),
+        ("x", ctypes.c_int),
+        ("y", ctypes.c_int),
+        ("x_root", ctypes.c_int),
+        ("y_root", ctypes.c_int),
+        ("state", ctypes.c_uint),
+        ("button", ctypes.c_uint),
+        ("same_screen", ctypes.c_int),
+    ]
+
+
+class LinuxXMotionEvent(ctypes.Structure):
+    _fields_ = [
+        ("type", ctypes.c_int),
+        ("serial", ctypes.c_ulong),
+        ("send_event", ctypes.c_int),
+        ("display", ctypes.c_void_p),
+        ("window", ctypes.c_ulong),
+        ("root", ctypes.c_ulong),
+        ("subwindow", ctypes.c_ulong),
+        ("time", ctypes.c_ulong),
+        ("x", ctypes.c_int),
+        ("y", ctypes.c_int),
+        ("x_root", ctypes.c_int),
+        ("y_root", ctypes.c_int),
+        ("state", ctypes.c_uint),
+        ("is_hint", ctypes.c_char),
+        ("same_screen", ctypes.c_int),
+    ]
+
+
+class LinuxXEvent(ctypes.Union):
+    _fields_ = [
+        ("type", ctypes.c_int),
+        ("xkey", LinuxXKeyEvent),
+        ("xbutton", LinuxXButtonEvent),
+        ("xmotion", LinuxXMotionEvent),
+        ("pad", ctypes.c_long * 24),
+    ]
+
+
 class LinuxX11Capture:
+    KEY_PRESS = 2
+    KEY_RELEASE = 3
+    BUTTON_PRESS = 4
+    BUTTON_RELEASE = 5
+    MOTION_NOTIFY = 6
+    KEY_PRESS_MASK = 1 << 0
+    KEY_RELEASE_MASK = 1 << 1
+    BUTTON_PRESS_MASK = 1 << 2
+    BUTTON_RELEASE_MASK = 1 << 3
+    BUTTON1_MASK = 1 << 8
+    POINTER_MOTION_MASK = 1 << 6
     LSB_FIRST = 0
     IS_VIEWABLE = 2
+    CURRENT_TIME = 0
+    REVERT_TO_PARENT = 2
+    BUTTON_LEFT = 1
+    XK_RETURN = 0xFF0D
     Z_PIXMAP = 2
     XWindowAttributes = LinuxXWindowAttributes
     XImage = LinuxXImage
@@ -307,6 +439,34 @@ class LinuxX11Capture:
         self.x11.XGetImage.restype = ctypes.POINTER(self.XImage)
         self.x11.XDestroyImage.argtypes = [ctypes.POINTER(self.XImage)]
         self.x11.XDestroyImage.restype = ctypes.c_int
+        self.x11.XSendEvent.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_ulong,
+            ctypes.c_int,
+            ctypes.c_long,
+            ctypes.POINTER(LinuxXEvent),
+        ]
+        self.x11.XSendEvent.restype = ctypes.c_int
+        self.x11.XFlush.argtypes = [ctypes.c_void_p]
+        self.x11.XFlush.restype = ctypes.c_int
+        self.x11.XKeysymToKeycode.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
+        self.x11.XKeysymToKeycode.restype = ctypes.c_uint
+        self.x11.XRaiseWindow.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
+        self.x11.XRaiseWindow.restype = ctypes.c_int
+        self.x11.XSetInputFocus.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_int, ctypes.c_ulong]
+        self.x11.XSetInputFocus.restype = ctypes.c_int
+        self.x11.XWarpPointer.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_ulong,
+            ctypes.c_ulong,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_uint,
+            ctypes.c_uint,
+            ctypes.c_int,
+            ctypes.c_int,
+        ]
+        self.x11.XWarpPointer.restype = ctypes.c_int
 
     def get_window_pid(self, window):
         actual_type = ctypes.c_ulong()
@@ -413,6 +573,98 @@ class LinuxX11Capture:
 
         return None
 
+    def send_motion_event(self, window, x, y):
+        event = LinuxXEvent()
+        event.xmotion.type = self.MOTION_NOTIFY
+        event.xmotion.send_event = True
+        event.xmotion.display = self.display
+        event.xmotion.window = window
+        event.xmotion.root = self.root
+        event.xmotion.subwindow = 0
+        event.xmotion.time = self.CURRENT_TIME
+        event.xmotion.x = x
+        event.xmotion.y = y
+        event.xmotion.x_root = x
+        event.xmotion.y_root = y
+        event.xmotion.state = 0
+        event.xmotion.is_hint = b"\0"
+        event.xmotion.same_screen = True
+        if not self.x11.XSendEvent(self.display, window, False, self.POINTER_MOTION_MASK, ctypes.byref(event)):
+            raise SmokeFailure("failed to send CSG pointer motion")
+        self.x11.XFlush(self.display)
+
+    def send_button_event(self, window, event_type, x, y):
+        event = LinuxXEvent()
+        event.xbutton.type = event_type
+        event.xbutton.send_event = True
+        event.xbutton.display = self.display
+        event.xbutton.window = window
+        event.xbutton.root = self.root
+        event.xbutton.subwindow = 0
+        event.xbutton.time = self.CURRENT_TIME
+        event.xbutton.x = x
+        event.xbutton.y = y
+        event.xbutton.x_root = x
+        event.xbutton.y_root = y
+        event.xbutton.state = self.BUTTON1_MASK if event_type == self.BUTTON_RELEASE else 0
+        event.xbutton.button = self.BUTTON_LEFT
+        event.xbutton.same_screen = True
+        event_mask = self.BUTTON_PRESS_MASK if event_type == self.BUTTON_PRESS else self.BUTTON_RELEASE_MASK
+        if not self.x11.XSendEvent(self.display, window, False, event_mask, ctypes.byref(event)):
+            raise SmokeFailure("failed to send CSG mouse button event")
+        self.x11.XFlush(self.display)
+
+    def send_key_event(self, window, event_type, keycode):
+        event = LinuxXEvent()
+        event.xkey.type = event_type
+        event.xkey.send_event = True
+        event.xkey.display = self.display
+        event.xkey.window = window
+        event.xkey.root = self.root
+        event.xkey.subwindow = 0
+        event.xkey.time = self.CURRENT_TIME
+        event.xkey.x = 0
+        event.xkey.y = 0
+        event.xkey.x_root = 0
+        event.xkey.y_root = 0
+        event.xkey.state = 0
+        event.xkey.keycode = keycode
+        event.xkey.same_screen = True
+        event_mask = self.KEY_PRESS_MASK if event_type == self.KEY_PRESS else self.KEY_RELEASE_MASK
+        if not self.x11.XSendEvent(self.display, window, False, event_mask, ctypes.byref(event)):
+            raise SmokeFailure("failed to send CSG key event")
+        self.x11.XFlush(self.display)
+
+    def exercise_surface_edit(self, window, relative_x, relative_y):
+        attributes = self.get_attributes(window)
+        if not attributes:
+            raise SmokeFailure(f"window 0x{window:x} attributes are unavailable")
+        if attributes.width <= 0 or attributes.height <= 0:
+            raise SmokeFailure(f"window 0x{window:x} has invalid size {attributes.width}x{attributes.height}")
+
+        click_x = min(max(int(attributes.width * relative_x), 0), attributes.width - 1)
+        click_y = min(max(int(attributes.height * relative_y), 0), attributes.height - 1)
+        keycode = self.x11.XKeysymToKeycode(self.display, self.XK_RETURN)
+        if keycode == 0:
+            raise SmokeFailure("could not resolve Return keycode for CSG smoke")
+
+        self.x11.XRaiseWindow(self.display, window)
+        self.x11.XSetInputFocus(self.display, window, self.REVERT_TO_PARENT, self.CURRENT_TIME)
+        self.x11.XWarpPointer(self.display, 0, window, 0, 0, 0, 0, click_x, click_y)
+        self.x11.XFlush(self.display)
+        time.sleep(0.1)
+
+        self.send_motion_event(window, click_x, click_y)
+        time.sleep(0.05)
+        self.send_button_event(window, self.BUTTON_PRESS, click_x, click_y)
+        time.sleep(0.05)
+        self.send_button_event(window, self.BUTTON_RELEASE, click_x, click_y)
+        time.sleep(0.2)
+
+        self.send_key_event(window, self.KEY_PRESS, keycode)
+        time.sleep(0.05)
+        self.send_key_event(window, self.KEY_RELEASE, keycode)
+
     def capture_window(self, window, output_path):
         self.x11.XSync(self.display, False)
         attributes = self.get_attributes(window)
@@ -507,6 +759,13 @@ class WinBitmapInfo(ctypes.Structure):
 class WindowsCapture:
     SRCCOPY = 0x00CC0020
     DIB_RGB_COLORS = 0
+    MK_LBUTTON = 0x0001
+    VK_RETURN = 0x0D
+    WM_KEYDOWN = 0x0100
+    WM_KEYUP = 0x0101
+    WM_MOUSEMOVE = 0x0200
+    WM_LBUTTONDOWN = 0x0201
+    WM_LBUTTONUP = 0x0202
     RECT = WinRect
     BITMAPINFOHEADER = WinBitmapInfoHeader
     BITMAPINFO = WinBitmapInfo
@@ -528,6 +787,10 @@ class WindowsCapture:
         self.user32.GetWindowThreadProcessId.restype = ctypes.c_ulong
         self.user32.GetWindowRect.argtypes = [ctypes.c_void_p, ctypes.POINTER(self.RECT)]
         self.user32.GetWindowRect.restype = ctypes.c_int
+        self.user32.PostMessageW.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_size_t, ctypes.c_ssize_t]
+        self.user32.PostMessageW.restype = ctypes.c_int
+        self.user32.SetForegroundWindow.argtypes = [ctypes.c_void_p]
+        self.user32.SetForegroundWindow.restype = ctypes.c_int
         self.user32.GetDC.argtypes = [ctypes.c_void_p]
         self.user32.GetDC.restype = ctypes.c_void_p
         self.user32.ReleaseDC.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
@@ -613,6 +876,31 @@ class WindowsCapture:
             time.sleep(0.1)
         return None
 
+    def exercise_surface_edit(self, hwnd, relative_x, relative_y):
+        rect = self._window_rect(hwnd)
+        if not rect:
+            raise SmokeFailure(f"HWND 0x{hwnd:x} rect is unavailable")
+
+        width = rect.right - rect.left
+        height = rect.bottom - rect.top
+        if width <= 0 or height <= 0:
+            raise SmokeFailure(f"HWND 0x{hwnd:x} has invalid size {width}x{height}")
+
+        click_x = min(max(int(width * relative_x), 0), width - 1)
+        click_y = min(max(int(height * relative_y), 0), height - 1)
+        lparam = (click_y << 16) | click_x
+
+        self.user32.SetForegroundWindow(ctypes.c_void_p(hwnd))
+        self.user32.PostMessageW(ctypes.c_void_p(hwnd), self.WM_MOUSEMOVE, 0, lparam)
+        time.sleep(0.1)
+        self.user32.PostMessageW(ctypes.c_void_p(hwnd), self.WM_LBUTTONDOWN, self.MK_LBUTTON, lparam)
+        time.sleep(0.05)
+        self.user32.PostMessageW(ctypes.c_void_p(hwnd), self.WM_LBUTTONUP, 0, lparam)
+        time.sleep(0.2)
+        self.user32.PostMessageW(ctypes.c_void_p(hwnd), self.WM_KEYDOWN, self.VK_RETURN, 0)
+        time.sleep(0.05)
+        self.user32.PostMessageW(ctypes.c_void_p(hwnd), self.WM_KEYUP, self.VK_RETURN, 0)
+
     def capture_window(self, hwnd, output_path):
         rect = self._window_rect(hwnd)
         if not rect:
@@ -685,12 +973,14 @@ def create_capture_backend():
 
 def launch_logserver(args, executable, env):
     if args.no_logserver:
-        return None, None
+        return None, None, None, {}
 
     logserver = Path(args.logserver_executable) if args.logserver_executable else executable_sibling(executable, "logserver")
     if not logserver:
         raise SmokeSkip("logserver executable was not found next to the testbed target")
 
+    log_directory = logserver.resolve().parent
+    log_baseline = snapshot_log_files(log_directory, "logserver_*.log")
     port = args.log_port if args.log_port else choose_free_port()
     process = subprocess.Popen(
         [str(logserver), "-p", str(port)],
@@ -706,7 +996,7 @@ def launch_logserver(args, executable, env):
         terminate_process(process, "logserver")
         raise
 
-    return process, port
+    return process, port, log_directory, log_baseline
 
 
 def launch_testbed(args, executable, env, log_port):
@@ -726,6 +1016,10 @@ def launch_testbed(args, executable, env, log_port):
 
 
 def capture_existing_handle(args, backend):
+    if args.exercise_csg:
+        backend.exercise_surface_edit(args.window_handle, args.csg_click_x, args.csg_click_y)
+        time.sleep(args.csg_settle_seconds)
+
     result = backend.capture_window(args.window_handle, args.output)
     if not result.has_pixel_variation:
         raise SmokeFailure(f"captured window 0x{result.handle:x}, but the image appears flat")
@@ -742,7 +1036,7 @@ def launch_and_capture(args, backend):
     logserver_process = None
     testbed_process = None
     try:
-        logserver_process, log_port = launch_logserver(args, executable, env)
+        logserver_process, log_port, log_directory, log_baseline = launch_logserver(args, executable, env)
         testbed_process = launch_testbed(args, executable, env, log_port)
         handle = backend.wait_for_window(testbed_process.pid, args.timeout, args.window_title)
         if not handle:
@@ -756,6 +1050,21 @@ def launch_and_capture(args, backend):
         if testbed_process.poll() is not None:
             tail = read_process_tail(testbed_process)
             raise SmokeFailure(f"testbed exited before capture (exit {testbed_process.returncode})\n{tail}")
+
+        if args.exercise_csg:
+            backend.exercise_surface_edit(handle, args.csg_click_x, args.csg_click_y)
+            if log_directory:
+                wait_for_log_message(
+                    log_directory,
+                    log_baseline,
+                    "logserver_*.log",
+                    "Surface edit: committed hole rev=",
+                    args.csg_log_timeout,
+                )
+            time.sleep(args.csg_settle_seconds)
+            if testbed_process.poll() is not None:
+                tail = read_process_tail(testbed_process)
+                raise SmokeFailure(f"testbed exited after CSG exercise (exit {testbed_process.returncode})\n{tail}")
 
         result = backend.capture_window(handle, args.output)
         if not result.has_pixel_variation:
@@ -778,6 +1087,11 @@ def parse_args(argv):
     parser.add_argument("--logserver-executable", help="Path to nwb_logserver/logserver. Defaults to a sibling of --executable.")
     parser.add_argument("--no-logserver", action="store_true", help="Do not start a logserver or pass log CLI options.")
     parser.add_argument("--log-port", type=int, default=0, help="Logserver port. Defaults to an unused localhost port.")
+    parser.add_argument("--exercise-csg", action="store_true", help="Click the deformable proxy and press Enter before capture.")
+    parser.add_argument("--csg-click-x", type=float, default=0.5, help="Relative window X coordinate for the CSG smoke click.")
+    parser.add_argument("--csg-click-y", type=float, default=0.24, help="Relative window Y coordinate for the CSG smoke click.")
+    parser.add_argument("--csg-settle-seconds", type=float, default=1.0, help="Seconds to wait after CSG input before capture.")
+    parser.add_argument("--csg-log-timeout", type=float, default=10.0, help="Seconds to wait for the committed CSG log message.")
     parser.add_argument(
         "--software-vulkan",
         choices=("auto", "on", "off"),
@@ -798,6 +1112,14 @@ def parse_args(argv):
         parser.error("--timeout must be positive")
     if args.settle_seconds < 0.0:
         parser.error("--settle-seconds must not be negative")
+    if args.csg_settle_seconds < 0.0:
+        parser.error("--csg-settle-seconds must not be negative")
+    if args.csg_log_timeout <= 0.0:
+        parser.error("--csg-log-timeout must be positive")
+    if args.csg_click_x < 0.0 or args.csg_click_x > 1.0:
+        parser.error("--csg-click-x must be between 0.0 and 1.0")
+    if args.csg_click_y < 0.0 or args.csg_click_y > 1.0:
+        parser.error("--csg-click-y must be between 0.0 and 1.0")
 
     args.working_directory = args.working_directory.resolve()
     args.output = args.output.resolve()

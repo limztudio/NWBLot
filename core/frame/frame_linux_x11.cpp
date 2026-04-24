@@ -385,8 +385,10 @@ static bool ProcessEvent(Frame& frame, const XEvent& event){
         }
 
         const i32 button = TranslateMouseButton(event.xbutton.button);
-        if(button != -1)
+        if(button != -1){
+            frame.input().mousePosUpdate(static_cast<f64>(event.xbutton.x), static_cast<f64>(event.xbutton.y));
             frame.input().mouseButtonUpdate(button, InputAction::Press, TranslateModifiers(event.xbutton.state));
+        }
     }
     break;
 
@@ -398,8 +400,10 @@ static bool ProcessEvent(Frame& frame, const XEvent& event){
             break;
 
         const i32 button = TranslateMouseButton(event.xbutton.button);
-        if(button != -1)
+        if(button != -1){
+            frame.input().mousePosUpdate(static_cast<f64>(event.xbutton.x), static_cast<f64>(event.xbutton.y));
             frame.input().mouseButtonUpdate(button, InputAction::Release, TranslateModifiers(event.xbutton.state));
+        }
     }
     break;
 

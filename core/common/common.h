@@ -34,7 +34,7 @@ public:
     virtual bool initialize() = 0;
     virtual void finalize() = 0;
 };
-class FunctionalInitializerable : public BaseInitializerable{
+class FunctionalInitializerable final : public BaseInitializerable{
 public:
     template<typename INIT, typename FIN>
     FunctionalInitializerable(INIT&& init, FIN&& fin)
@@ -44,8 +44,8 @@ public:
 
 
 public:
-    inline bool initialize()override{ return m_init ? m_init() : true; }
-    inline void finalize()override{ if(m_fin) m_fin(); }
+    inline virtual bool initialize()override{ return m_init ? m_init() : true; }
+    inline virtual void finalize()override{ if(m_fin) m_fin(); }
 
 
 private:

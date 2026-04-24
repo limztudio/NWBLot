@@ -95,7 +95,7 @@ public:
     {}
 
 
-    shaderc_include_result* GetInclude(const char* requestedSource, const shaderc_include_type type, const char* requestingSource, [[maybe_unused]] const size_t includeDepth)override{
+    virtual shaderc_include_result* GetInclude(const char* requestedSource, const shaderc_include_type type, const char* requestingSource, [[maybe_unused]] const size_t includeDepth)override{
         ErrorCode errorCode;
 
         const Path requestingDirectory = Path(requestingSource).parent_path();
@@ -164,7 +164,7 @@ public:
         return releaseResult();
     }
 
-    void ReleaseInclude(shaderc_include_result* data)override{
+    virtual void ReleaseInclude(shaderc_include_result* data)override{
         if(!data)
             return;
 

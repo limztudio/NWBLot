@@ -30,7 +30,7 @@ namespace VulkanDetail{
     VkImageLayout GetVkImageLayout(ResourceStates::Mask state);
     VkFormat ConvertFormat(Format::Enum format);
     VkSampleCountFlagBits GetSampleCountFlagBits(u32 sampleCount);
-    extern VkDeviceAddress GetBufferDeviceAddress(IBuffer* _buffer, u64 offset = 0);
+    extern VkDeviceAddress GetBufferDeviceAddress(IBuffer* bufferResource, u64 offset = 0);
     VkImageType TextureDimensionToImageType(TextureDimension::Enum dimension);
     VkImageViewType TextureDimensionToViewType(TextureDimension::Enum dimension);
     bool IsSupportedSampleCount(u32 sampleCount);
@@ -517,7 +517,7 @@ class Buffer final : public RefCounter<IBuffer>, NoCopy{
     friend class UploadManager;
     friend class ShaderTable;
 
-    friend VkDeviceAddress VulkanDetail::GetBufferDeviceAddress(IBuffer* _buffer, u64 offset);
+    friend VkDeviceAddress VulkanDetail::GetBufferDeviceAddress(IBuffer* bufferResource, u64 offset);
 
 
 public:

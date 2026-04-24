@@ -20,8 +20,8 @@ struct EditorVec3 : public Float4{
     constexpr EditorVec3()noexcept
         : Float4(0.0f, 0.0f, 0.0f)
     {}
-    constexpr EditorVec3(const f32 _x, const f32 _y, const f32 _z)noexcept
-        : Float4(_x, _y, _z)
+    constexpr EditorVec3(const f32 xValue, const f32 yValue, const f32 zValue)noexcept
+        : Float4(xValue, yValue, zValue)
     {}
 };
 static_assert(IsStandardLayout_V<EditorVec3>, "EditorVec3 must stay layout-stable");

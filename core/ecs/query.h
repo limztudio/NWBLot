@@ -63,12 +63,12 @@ struct ViewIterator{
     usize count;
     bool valid;
 
-    ViewIterator(ComponentTuple _pools, usize _anchorPoolIndex, usize _index, usize _count, bool _valid)
-        : pools(Move(_pools))
-        , anchorPoolIndex(_anchorPoolIndex)
-        , index(_index)
-        , count(_count)
-        , valid(_valid)
+    ViewIterator(ComponentTuple poolsValue, usize anchorPoolIndexValue, usize indexValue, usize countValue, bool validValue)
+        : pools(Move(poolsValue))
+        , anchorPoolIndex(anchorPoolIndexValue)
+        , index(indexValue)
+        , count(countValue)
+        , valid(validValue)
     {
         if(valid)
             skipInvalid();

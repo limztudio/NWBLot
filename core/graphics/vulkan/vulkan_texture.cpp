@@ -544,13 +544,13 @@ TextureHandle Device::createTexture(const TextureDesc& d){
     return TextureHandle(texture, TextureHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
 
-MemoryRequirements Device::getTextureMemoryRequirements(ITexture* _texture){
-    if(!_texture){
+MemoryRequirements Device::getTextureMemoryRequirements(ITexture* textureResource){
+    if(!textureResource){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get texture memory requirements: texture is null"));
         return {};
     }
 
-    auto* texture = static_cast<Texture*>(_texture);
+    auto* texture = static_cast<Texture*>(textureResource);
 
     VkMemoryRequirements memRequirements;
     vkGetImageMemoryRequirements(m_context.device, texture->m_image, &memRequirements);
@@ -561,15 +561,15 @@ MemoryRequirements Device::getTextureMemoryRequirements(ITexture* _texture){
     return result;
 }
 
-bool Device::bindTextureMemory(ITexture* _texture, IHeap* heap, u64 offset){
+bool Device::bindTextureMemory(ITexture* textureResource, IHeap* heap, u64 offset){
     VkResult res = VK_SUCCESS;
 
-    if(!_texture){
+    if(!textureResource){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind texture memory: texture is null"));
         return false;
     }
 
-    auto* texture = static_cast<Texture*>(_texture);
+    auto* texture = static_cast<Texture*>(textureResource);
     if(!texture->m_desc.isVirtual){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind texture memory: texture was not created as virtual"));
         return false;
@@ -592,13 +592,13 @@ bool Device::bindTextureMemory(ITexture* _texture, IHeap* heap, u64 offset){
     return true;
 }
 
-TextureHandle Device::createHandleForNativeTexture(ObjectType objectType, Object _texture, const TextureDesc& desc){
+TextureHandle Device::createHandleForNativeTexture(ObjectType objectType, Object nativeTextureHandle, const TextureDesc& desc){
     if(objectType != ObjectTypes::VK_Image){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create texture handle for native texture: object type is not VK_Image"));
         return nullptr;
     }
 
-    auto* nativeImage = static_cast<VkImage>(static_cast<VkImage_T*>(_texture));
+    auto* nativeImage = static_cast<VkImage>(static_cast<VkImage_T*>(nativeTextureHandle));
     if(nativeImage == VK_NULL_HANDLE){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create texture handle for native texture: image handle is null"));
         return nullptr;
@@ -694,10 +694,10 @@ SamplerHandle Device::createSampler(const SamplerDesc& d){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void CommandList::clearTextureFloat(ITexture* _texture, TextureSubresourceSet subresources, const Color& clearColor){
+void CommandList::clearTextureFloat(ITexture* textureResource, TextureSubresourceSet subresources, const Color& clearColor){
     Texture* texture = nullptr;
     VkImageSubresourceRange range{};
-    if(!VulkanDetail::PrepareColorTextureClear(_texture, subresources, NWB_TEXT("color value"), texture, range))
+    if(!VulkanDetail::PrepareColorTextureClear(textureResource, subresources, NWB_TEXT("color value"), texture, range))
         return;
 
     VkClearColorValue clearValue;
@@ -707,11 +707,11 @@ void CommandList::clearTextureFloat(ITexture* _texture, TextureSubresourceSet su
     clearValue.float32[3] = clearColor.a;
 
     vkCmdClearColorImage(m_currentCmdBuf->m_cmdBuf, texture->m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearValue, 1, &range);
-    m_currentCmdBuf->m_referencedResources.push_back(_texture);
+    m_currentCmdBuf->m_referencedResources.push_back(textureResource);
 }
 
-void CommandList::clearDepthStencilTexture(ITexture* _texture, TextureSubresourceSet subresources, bool clearDepth, f32 depth, bool clearStencil, u8 stencil){
-    auto* texture = checked_cast<Texture*>(_texture);
+void CommandList::clearDepthStencilTexture(ITexture* textureResource, TextureSubresourceSet subresources, bool clearDepth, f32 depth, bool clearStencil, u8 stencil){
+    auto* texture = checked_cast<Texture*>(textureResource);
     if(!clearDepth && !clearStencil)
         return;
     if(!texture){
@@ -745,13 +745,13 @@ void CommandList::clearDepthStencilTexture(ITexture* _texture, TextureSubresourc
     const VkImageSubresourceRange range = VulkanDetail::BuildImageSubresourceRange(resolvedSubresources, aspectMask);
 
     vkCmdClearDepthStencilImage(m_currentCmdBuf->m_cmdBuf, texture->m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearValue, 1, &range);
-    m_currentCmdBuf->m_referencedResources.push_back(_texture);
+    m_currentCmdBuf->m_referencedResources.push_back(textureResource);
 }
 
-void CommandList::clearTextureUInt(ITexture* _texture, TextureSubresourceSet subresources, u32 clearColor){
+void CommandList::clearTextureUInt(ITexture* textureResource, TextureSubresourceSet subresources, u32 clearColor){
     Texture* texture = nullptr;
     VkImageSubresourceRange range{};
-    if(!VulkanDetail::PrepareColorTextureClear(_texture, subresources, NWB_TEXT("integer value"), texture, range))
+    if(!VulkanDetail::PrepareColorTextureClear(textureResource, subresources, NWB_TEXT("integer value"), texture, range))
         return;
 
     VkClearColorValue clearValue;
@@ -761,12 +761,12 @@ void CommandList::clearTextureUInt(ITexture* _texture, TextureSubresourceSet sub
     clearValue.uint32[3] = clearColor;
 
     vkCmdClearColorImage(m_currentCmdBuf->m_cmdBuf, texture->m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearValue, 1, &range);
-    m_currentCmdBuf->m_referencedResources.push_back(_texture);
+    m_currentCmdBuf->m_referencedResources.push_back(textureResource);
 }
 
-void CommandList::copyTexture(ITexture* _dest, const TextureSlice& destSlice, ITexture* _src, const TextureSlice& srcSlice){
-    auto* dest = checked_cast<Texture*>(_dest);
-    auto* src = checked_cast<Texture*>(_src);
+void CommandList::copyTexture(ITexture* destResource, const TextureSlice& destSlice, ITexture* srcResource, const TextureSlice& srcSlice){
+    auto* dest = checked_cast<Texture*>(destResource);
+    auto* src = checked_cast<Texture*>(srcResource);
     if(!dest || !src){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture: resource is invalid"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture: resource is invalid"));
@@ -806,8 +806,8 @@ void CommandList::copyTexture(ITexture* _dest, const TextureSlice& destSlice, IT
 
     vkCmdCopyImage(m_currentCmdBuf->m_cmdBuf, src->m_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dest->m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
-    m_currentCmdBuf->m_referencedResources.push_back(_src);
-    m_currentCmdBuf->m_referencedResources.push_back(_dest);
+    m_currentCmdBuf->m_referencedResources.push_back(srcResource);
+    m_currentCmdBuf->m_referencedResources.push_back(destResource);
 }
 
 void CommandList::copyTexture(IStagingTexture* dest, const TextureSlice& destSlice, ITexture* src, const TextureSlice& srcSlice){
@@ -858,8 +858,8 @@ void CommandList::copyTexture(ITexture* dest, const TextureSlice& destSlice, ISt
     m_currentCmdBuf->m_referencedResources.push_back(src);
 }
 
-void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, const void* data, usize rowPitch, usize depthPitch){
-    auto* dest = checked_cast<Texture*>(_dest);
+void CommandList::writeTexture(ITexture* destResource, u32 arraySlice, u32 mipLevel, const void* data, usize rowPitch, usize depthPitch){
+    auto* dest = checked_cast<Texture*>(destResource);
     if(!dest){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write texture: destination texture is null"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to write texture: destination texture is null"));
@@ -999,13 +999,13 @@ void CommandList::writeTexture(ITexture* _dest, u32 arraySlice, u32 mipLevel, co
 
     vkCmdCopyBufferToImage(m_currentCmdBuf->m_cmdBuf, stagingBuffer->m_buffer, dest->m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
-    m_currentCmdBuf->m_referencedResources.push_back(_dest);
+    m_currentCmdBuf->m_referencedResources.push_back(destResource);
     m_currentCmdBuf->m_referencedStagingBuffers.push_back(stagingBuffer);
 }
 
-void CommandList::resolveTexture(ITexture* _dest, const TextureSubresourceSet& dstSubresources, ITexture* _src, const TextureSubresourceSet& srcSubresources){
-    auto* dest = checked_cast<Texture*>(_dest);
-    auto* src = checked_cast<Texture*>(_src);
+void CommandList::resolveTexture(ITexture* destResource, const TextureSubresourceSet& dstSubresources, ITexture* srcResource, const TextureSubresourceSet& srcSubresources){
+    auto* dest = checked_cast<Texture*>(destResource);
+    auto* src = checked_cast<Texture*>(srcResource);
     if(!dest || !src){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to resolve texture: resource is invalid"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to resolve texture: resource is invalid"));
@@ -1086,8 +1086,8 @@ void CommandList::resolveTexture(ITexture* _dest, const TextureSubresourceSet& d
             regions.data());
     }
 
-    m_currentCmdBuf->m_referencedResources.push_back(_src);
-    m_currentCmdBuf->m_referencedResources.push_back(_dest);
+    m_currentCmdBuf->m_referencedResources.push_back(srcResource);
+    m_currentCmdBuf->m_referencedResources.push_back(destResource);
 }
 
 

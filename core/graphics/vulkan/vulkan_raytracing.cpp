@@ -22,11 +22,11 @@ namespace VulkanDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-VkDeviceAddress GetBufferDeviceAddress(IBuffer* _buffer, u64 offset){
-    if(!_buffer)
+VkDeviceAddress GetBufferDeviceAddress(IBuffer* bufferResource, u64 offset){
+    if(!bufferResource)
         return 0;
 
-    auto* buffer = checked_cast<Buffer*>(_buffer);
+    auto* buffer = checked_cast<Buffer*>(bufferResource);
     return buffer->m_deviceAddress + offset;
 }
 
@@ -162,8 +162,8 @@ bool BuildOpacityMicromapUsageCounts(
     return true;
 }
 
-bool ValidateAccelStructBuildInputRange(IBuffer* _buffer, u64 offset, u64 byteSize, const tchar* operation, const tchar* resourceName){
-    auto* buffer = checked_cast<Buffer*>(_buffer);
+bool ValidateAccelStructBuildInputRange(IBuffer* bufferResource, u64 offset, u64 byteSize, const tchar* operation, const tchar* resourceName){
+    auto* buffer = checked_cast<Buffer*>(bufferResource);
     if(!buffer){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {} buffer is invalid"), operation, resourceName);
         return false;
@@ -663,8 +663,8 @@ RayTracingOpacityMicromapHandle Device::createOpacityMicromap(const RayTracingOp
     return RayTracingOpacityMicromapHandle(om, RayTracingOpacityMicromapHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
 
-MemoryRequirements Device::getAccelStructMemoryRequirements(IRayTracingAccelStruct* _as){
-    auto* as = checked_cast<AccelStruct*>(_as);
+MemoryRequirements Device::getAccelStructMemoryRequirements(IRayTracingAccelStruct* accelStructResource){
+    auto* as = checked_cast<AccelStruct*>(accelStructResource);
 
     MemoryRequirements requirements = {};
 
@@ -699,8 +699,8 @@ RayTracingClusterOperationSizeInfo Device::getClusterOperationSizeInfo(const Ray
     return info;
 }
 
-bool Device::bindAccelStructMemory(IRayTracingAccelStruct* _as, IHeap* heap, u64 offset){
-    if(!_as){
+bool Device::bindAccelStructMemory(IRayTracingAccelStruct* accelStructResource, IHeap* heap, u64 offset){
+    if(!accelStructResource){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind acceleration structure memory: acceleration structure is null"));
         return false;
     }
@@ -709,7 +709,7 @@ bool Device::bindAccelStructMemory(IRayTracingAccelStruct* _as, IHeap* heap, u64
         return false;
     }
 
-    auto* as = checked_cast<AccelStruct*>(_as);
+    auto* as = checked_cast<AccelStruct*>(accelStructResource);
 
     if(as->m_buffer){
         if(!bindBufferMemory(as->m_buffer.get(), heap, offset))
@@ -1180,8 +1180,8 @@ bool CommandList::attachAccelStructBuildScratchBuffer(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* _as, const RayTracingGeometryDesc* pGeometries, usize numGeometries, RayTracingAccelStructBuildFlags::Mask buildFlags){
-    if(!_as){
+void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* accelStructResource, const RayTracingGeometryDesc* pGeometries, usize numGeometries, RayTracingAccelStructBuildFlags::Mask buildFlags){
+    if(!accelStructResource){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: acceleration structure is null"));
         return;
     }
@@ -1199,7 +1199,7 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* _as, const
     if(!m_context.extensions.KHR_acceleration_structure)
         return;
 
-    auto* as = checked_cast<AccelStruct*>(_as);
+    auto* as = checked_cast<AccelStruct*>(accelStructResource);
     if(!as || as->m_desc.isTopLevel){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: acceleration structure is not bottom-level"));
         return;
@@ -1308,7 +1308,7 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* _as, const
     if(buildFlags & RayTracingAccelStructBuildFlags::AllowCompaction)
         m_pendingCompactions.push_back(as);
 
-    m_currentCmdBuf->m_referencedResources.push_back(_as);
+    m_currentCmdBuf->m_referencedResources.push_back(accelStructResource);
 }
 
 void CommandList::compactBottomLevelAccelStructs(){
@@ -1419,8 +1419,8 @@ void CommandList::compactBottomLevelAccelStructs(){
     }
 }
 
-void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* _as, const RayTracingInstanceDesc* pInstances, usize numInstances, RayTracingAccelStructBuildFlags::Mask buildFlags){
-    if(!_as){
+void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* accelStructResource, const RayTracingInstanceDesc* pInstances, usize numInstances, RayTracingAccelStructBuildFlags::Mask buildFlags){
+    if(!accelStructResource){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS: acceleration structure is null"));
         return;
     }
@@ -1438,7 +1438,7 @@ void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* _as, const Ra
     if(!m_context.extensions.KHR_acceleration_structure)
         return;
 
-    auto* as = checked_cast<AccelStruct*>(_as);
+    auto* as = checked_cast<AccelStruct*>(accelStructResource);
     if(!as || !as->m_desc.isTopLevel){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS: acceleration structure is not top-level"));
         return;
@@ -1506,22 +1506,22 @@ void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* _as, const Ra
     m_device.unmapBuffer(instanceBuffer.get());
 
     const VkDeviceAddress instanceDataAddress = VulkanDetail::GetBufferDeviceAddress(instanceBuffer.get());
-    if(!buildTopLevelAccelStructFromInstanceData(_as, as, instanceDataAddress, numInstances, buildFlags, NWB_TEXT("build TLAS")))
+    if(!buildTopLevelAccelStructFromInstanceData(accelStructResource, as, instanceDataAddress, numInstances, buildFlags, NWB_TEXT("build TLAS")))
         return;
 
     m_currentCmdBuf->m_referencedStagingBuffers.push_back(Move(instanceBuffer));
 }
 
-void CommandList::buildOpacityMicromap(IRayTracingOpacityMicromap* _omm, const RayTracingOpacityMicromapDesc& ommDesc){
+void CommandList::buildOpacityMicromap(IRayTracingOpacityMicromap* opacityMicromapResource, const RayTracingOpacityMicromapDesc& ommDesc){
     if(!m_context.extensions.EXT_opacity_micromap)
         return;
 
-    if(!_omm){
+    if(!opacityMicromapResource){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build opacity micromap: micromap is null"));
         return;
     }
 
-    auto* omm = checked_cast<OpacityMicromap*>(_omm);
+    auto* omm = checked_cast<OpacityMicromap*>(opacityMicromapResource);
     if(!omm){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build opacity micromap: micromap is invalid"));
         return;

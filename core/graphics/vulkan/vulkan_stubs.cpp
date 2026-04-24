@@ -175,10 +175,10 @@ bool CommandList::buildTopLevelAccelStructFromInstanceData(
     return true;
 }
 
-void CommandList::buildTopLevelAccelStructFromBuffer(IRayTracingAccelStruct* _as, IBuffer* instanceBuffer,
+void CommandList::buildTopLevelAccelStructFromBuffer(IRayTracingAccelStruct* accelStructResource, IBuffer* instanceBuffer,
     u64 instanceBufferOffset, usize numInstances, RayTracingAccelStructBuildFlags::Mask buildFlags)
 {
-    if(!_as){
+    if(!accelStructResource){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS from buffer: acceleration structure is null"));
         return;
     }
@@ -196,7 +196,7 @@ void CommandList::buildTopLevelAccelStructFromBuffer(IRayTracingAccelStruct* _as
     if(!m_context.extensions.KHR_acceleration_structure)
         return;
 
-    auto* as = checked_cast<AccelStruct*>(_as);
+    auto* as = checked_cast<AccelStruct*>(accelStructResource);
     if(!as || !as->m_desc.isTopLevel){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS from buffer: acceleration structure is not top-level"));
         return;
@@ -219,7 +219,7 @@ void CommandList::buildTopLevelAccelStructFromBuffer(IRayTracingAccelStruct* _as
     }
 
     const VkDeviceAddress instanceDataAddress = VulkanDetail::GetBufferDeviceAddress(instanceBuffer, instanceBufferOffset);
-    if(!buildTopLevelAccelStructFromInstanceData(_as, as, instanceDataAddress, numInstances, buildFlags, NWB_TEXT("build TLAS from buffer")))
+    if(!buildTopLevelAccelStructFromInstanceData(accelStructResource, as, instanceDataAddress, numInstances, buildFlags, NWB_TEXT("build TLAS from buffer")))
         return;
 
     m_currentCmdBuf->m_referencedResources.push_back(instanceBuffer);
@@ -488,7 +488,7 @@ const CommandListParameters& CommandList::getDescription(){
 // Texture tiling and sampler feedback stubs
 
 
-void Device::getTextureTiling(ITexture* _texture, u32* numTiles, PackedMipDesc* desc, TileShape* tileShape, u32* subresourceTilingsNum, SubresourceTiling* subresourceTilings){
+void Device::getTextureTiling(ITexture* textureResource, u32* numTiles, PackedMipDesc* desc, TileShape* tileShape, u32* subresourceTilingsNum, SubresourceTiling* subresourceTilings){
     auto clearOutputs = [&](){
         if(numTiles)
             *numTiles = 0;
@@ -534,7 +534,7 @@ void Device::getTextureTiling(ITexture* _texture, u32* numTiles, PackedMipDesc* 
         return true;
     };
 
-    if(!_texture){
+    if(!textureResource){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get texture tiling: texture is null"));
         clearOutputs();
         return;
@@ -545,7 +545,7 @@ void Device::getTextureTiling(ITexture* _texture, u32* numTiles, PackedMipDesc* 
         return;
     }
 
-    auto* texture = checked_cast<Texture*>(_texture);
+    auto* texture = checked_cast<Texture*>(textureResource);
     if(!texture->m_desc.isTiled){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get texture tiling: texture is not tiled"));
         clearOutputs();

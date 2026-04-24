@@ -223,15 +223,15 @@ private:
 
 
 private:
-    static void globalUpdate(T* _this){
+    static void globalUpdate(T* self){
         for(;;){
             auto curTime = TimerNow();
-            if(DurationInSeconds<f32>(curTime, _this->m_lastTime) < UPDATE_INTERVAL)
+            if(DurationInSeconds<f32>(curTime, self->m_lastTime) < UPDATE_INTERVAL)
                 continue;
 
-            _this->m_lastTime = curTime;
+            self->m_lastTime = curTime;
 
-            if(_this->internalUpdate() && _this->m_exit.load(std::memory_order_acquire))
+            if(self->internalUpdate() && self->m_exit.load(std::memory_order_acquire))
                 break;
         }
     }
@@ -264,18 +264,18 @@ private:
 
 
 private:
-    static void globalUpdate(T* _this){
+    static void globalUpdate(T* self){
         for(;;){
-            _this->m_semaphore.acquire();
+            self->m_semaphore.acquire();
 
-            bool updateSucceeded = _this->internalUpdate();
+            bool updateSucceeded = self->internalUpdate();
 
             if(!updateSucceeded){
-                _this->m_exit.store(true, std::memory_order_release);
+                self->m_exit.store(true, std::memory_order_release);
                 break;
             }
 
-            if(_this->m_exit.load(std::memory_order_acquire))
+            if(self->m_exit.load(std::memory_order_acquire))
                 break;
         }
     }

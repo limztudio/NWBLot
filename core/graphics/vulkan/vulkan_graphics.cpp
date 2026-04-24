@@ -369,8 +369,8 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool CommandList::beginDynamicRendering(IFramebuffer* _framebuffer, const RenderPassParameters& params){
-    auto* fb = checked_cast<Framebuffer*>(_framebuffer);
+bool CommandList::beginDynamicRendering(IFramebuffer* framebuffer, const RenderPassParameters& params){
+    auto* fb = checked_cast<Framebuffer*>(framebuffer);
     if(!fb)
         return false;
 

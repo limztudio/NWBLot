@@ -77,7 +77,7 @@ static LRESULT CALLBACK ListProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 }
 
 static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
-    if(auto* _this = g_Frame){
+    if(auto* frame = g_Frame){
         LRESULT lifecycleResult = 0;
         if(HandleWin32FrameLifecycleMessage(
             hwnd,
@@ -89,7 +89,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                     g_Font = nullptr;
                 }
             },
-            [&](const bool isActive){ _this->data<WinFrame>().setActive(isActive); },
+            [&](const bool isActive){ frame->data<WinFrame>().setActive(isActive); },
             lifecycleResult
         ))
             return lifecycleResult;
@@ -124,7 +124,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                 0,
                 hwnd,
                 reinterpret_cast<HMENU>(1),
-                _this->data<WinFrame>().instance(),
+                frame->data<WinFrame>().instance(),
                 nullptr
             );
             if(!g_ListHwnd)

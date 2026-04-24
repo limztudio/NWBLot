@@ -518,13 +518,13 @@ void Device::queueWaitForCommandList(CommandQueue::Enum waitQueue, CommandQueue:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapping* tileMappings, u32 numTileMappings){
+void Queue::updateTextureTileMappings(ITexture* textureResource, const TextureTilesMapping* tileMappings, u32 numTileMappings){
     VkResult res = VK_SUCCESS;
 
-    if(!_texture || !tileMappings || numTileMappings == 0)
+    if(!textureResource || !tileMappings || numTileMappings == 0)
         return;
 
-    auto* texture = checked_cast<Texture*>(_texture);
+    auto* texture = checked_cast<Texture*>(textureResource);
     Alloc::ThreadPool& workerPool = m_context.threadPool;
     const bool useParallelPool = workerPool.isParallelEnabled();
     const usize mappingCount = static_cast<usize>(numTileMappings);

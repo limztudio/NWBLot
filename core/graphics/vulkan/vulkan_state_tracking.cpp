@@ -125,14 +125,14 @@ void CommandList::commitBarriers(){
     m_pendingBufferBarriers.clear();
 }
 
-void CommandList::setTextureState(ITexture* _texture, TextureSubresourceSet subresources, ResourceStates::Mask stateBits){
-    if(!_texture)
+void CommandList::setTextureState(ITexture* textureResource, TextureSubresourceSet subresources, ResourceStates::Mask stateBits){
+    if(!textureResource)
         return;
 
-    if(m_stateTracker->isPermanentTexture(_texture))
+    if(m_stateTracker->isPermanentTexture(textureResource))
         return;
 
-    auto* texture = checked_cast<Texture*>(_texture);
+    auto* texture = checked_cast<Texture*>(textureResource);
     const TextureSubresourceSet resolvedSubresources = subresources.resolve(texture->m_desc, false);
     if(resolvedSubresources.numMipLevels == 0 || resolvedSubresources.numArraySlices == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to set texture state: invalid subresource range"));
@@ -146,7 +146,7 @@ void CommandList::setTextureState(ITexture* _texture, TextureSubresourceSet subr
     bool needsBarrier = false;
     const bool uavBarrierEnabled =
         stateBits == ResourceStates::UnorderedAccess
-        && m_stateTracker->isUavBarrierEnabledForTexture(_texture)
+        && m_stateTracker->isUavBarrierEnabledForTexture(textureResource)
     ;
     const MipLevel mipEnd = resolvedSubresources.baseMipLevel + resolvedSubresources.numMipLevels;
     const ArraySlice arrayEnd = resolvedSubresources.baseArraySlice + resolvedSubresources.numArraySlices;
@@ -154,7 +154,7 @@ void CommandList::setTextureState(ITexture* _texture, TextureSubresourceSet subr
     for(ArraySlice arraySlice = resolvedSubresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
         for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
             ResourceStates::Mask subresourceOldState = ResourceStates::Unknown;
-            if(!m_stateTracker->getTransientTextureState(_texture, arraySlice, mipLevel, subresourceOldState))
+            if(!m_stateTracker->getTransientTextureState(textureResource, arraySlice, mipLevel, subresourceOldState))
                 return;
 
             if(firstSubresource){
@@ -190,7 +190,7 @@ void CommandList::setTextureState(ITexture* _texture, TextureSubresourceSet subr
         for(ArraySlice arraySlice = resolvedSubresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
             for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
                 ResourceStates::Mask subresourceOldState = ResourceStates::Unknown;
-                if(!m_stateTracker->getTransientTextureState(_texture, arraySlice, mipLevel, subresourceOldState))
+                if(!m_stateTracker->getTransientTextureState(textureResource, arraySlice, mipLevel, subresourceOldState))
                     return;
                 if(
                     subresourceOldState == stateBits
@@ -209,7 +209,7 @@ void CommandList::setTextureState(ITexture* _texture, TextureSubresourceSet subr
         }
     }
 
-    m_stateTracker->beginTrackingTransientTexture(_texture, resolvedSubresources, stateBits);
+    m_stateTracker->beginTrackingTransientTexture(textureResource, resolvedSubresources, stateBits);
 
     if(!m_enableAutomaticBarriers)
         return;
@@ -226,22 +226,22 @@ void CommandList::setTextureState(ITexture* _texture, TextureSubresourceSet subr
     m_pendingImageBarriers.resize(firstBarrierIndex);
 }
 
-void CommandList::setBufferState(IBuffer* _buffer, ResourceStates::Mask stateBits){
-    if(!_buffer)
+void CommandList::setBufferState(IBuffer* bufferResource, ResourceStates::Mask stateBits){
+    if(!bufferResource)
         return;
 
-    if(m_stateTracker->isPermanentBuffer(_buffer))
+    if(m_stateTracker->isPermanentBuffer(bufferResource))
         return;
 
     ResourceStates::Mask oldState = ResourceStates::Unknown;
-    if(!m_stateTracker->getTransientBufferState(_buffer, oldState))
+    if(!m_stateTracker->getTransientBufferState(bufferResource, oldState))
         return;
 
-    auto* buffer = checked_cast<Buffer*>(_buffer);
+    auto* buffer = checked_cast<Buffer*>(bufferResource);
     const bool needsUavBarrier =
         oldState == ResourceStates::UnorderedAccess
         && stateBits == ResourceStates::UnorderedAccess
-        && m_stateTracker->isUavBarrierEnabledForBuffer(_buffer)
+        && m_stateTracker->isUavBarrierEnabledForBuffer(bufferResource)
     ;
 
     if(oldState == stateBits && !needsUavBarrier)
@@ -256,7 +256,7 @@ void CommandList::setBufferState(IBuffer* _buffer, ResourceStates::Mask stateBit
     barrier.offset = 0;
     barrier.size = VK_WHOLE_SIZE;
 
-    m_stateTracker->beginTrackingTransientBuffer(_buffer, stateBits);
+    m_stateTracker->beginTrackingTransientBuffer(bufferResource, stateBits);
 
     if(!m_enableAutomaticBarriers){
         m_pendingBufferBarriers.push_back(barrier);
@@ -270,11 +270,11 @@ void CommandList::setBufferState(IBuffer* _buffer, ResourceStates::Mask stateBit
     vkCmdPipelineBarrier2(m_currentCmdBuf->m_cmdBuf, &depInfo);
 }
 
-void CommandList::setAccelStructState(IRayTracingAccelStruct* _as, ResourceStates::Mask stateBits){
-    if(!_as)
+void CommandList::setAccelStructState(IRayTracingAccelStruct* accelStructResource, ResourceStates::Mask stateBits){
+    if(!accelStructResource)
         return;
 
-    auto* as = checked_cast<AccelStruct*>(_as);
+    auto* as = checked_cast<AccelStruct*>(accelStructResource);
 
     if(as->m_buffer){
         setBufferState(as->m_buffer.get(), stateBits);

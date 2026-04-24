@@ -137,14 +137,14 @@ void CommandList::clearState(){
     m_pendingCompactions.clear();
 }
 
-bool CommandList::validateIndirectBuffer(IBuffer* _buffer, u64 offsetBytes, u64 commandSizeBytes, u32 commandCount, const tchar* commandName)const{
-    if(!_buffer){
+bool CommandList::validateIndirectBuffer(IBuffer* bufferResource, u64 offsetBytes, u64 commandSizeBytes, u32 commandCount, const tchar* commandName)const{
+    if(!bufferResource){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: No indirect buffer bound for {}"), commandName);
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: No indirect buffer bound"));
         return false;
     }
 
-    auto* buffer = checked_cast<Buffer*>(_buffer);
+    auto* buffer = checked_cast<Buffer*>(bufferResource);
     if(!buffer->m_desc.isDrawIndirectArgs){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to execute {}: buffer was not created with indirect-argument usage"), commandName);
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to execute indirect command: buffer was not created with indirect-argument usage"));
@@ -200,9 +200,9 @@ bool CommandList::prepareDrawIndirect(
     return true;
 }
 
-void CommandList::copyTextureToBuffer(IBuffer* _dest, u64 destOffsetBytes, u32 destRowPitch, ITexture* _src, const TextureSlice& srcSlice){
-    auto* dest = checked_cast<Buffer*>(_dest);
-    auto* src = checked_cast<Texture*>(_src);
+void CommandList::copyTextureToBuffer(IBuffer* destResource, u64 destOffsetBytes, u32 destRowPitch, ITexture* srcResource, const TextureSlice& srcSlice){
+    auto* dest = checked_cast<Buffer*>(destResource);
+    auto* src = checked_cast<Texture*>(srcResource);
     if(!dest || !src){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to buffer: resource is invalid"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to buffer: resource is invalid"));
@@ -307,8 +307,8 @@ void CommandList::copyTextureToBuffer(IBuffer* _dest, u64 destOffsetBytes, u32 d
 
     vkCmdCopyImageToBuffer(m_currentCmdBuf->m_cmdBuf, src->m_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dest->m_buffer, 1, &region);
 
-    m_currentCmdBuf->m_referencedResources.push_back(_src);
-    m_currentCmdBuf->m_referencedResources.push_back(_dest);
+    m_currentCmdBuf->m_referencedResources.push_back(srcResource);
+    m_currentCmdBuf->m_referencedResources.push_back(destResource);
 }
 
 

@@ -66,32 +66,32 @@ struct BothValuesTag{};
 template<typename T1, typename T2>
 class ValueStorage : public ImplementationTypes<T1, T2>{
 private:
-    typedef ImplementationTypes<T1, T2> types;
+    typedef ImplementationTypes<T1, T2> Types;
 
 
 public:
     ValueStorage(){}
-    ValueStorage(BothValuesTag, typename types::first_param_type x, typename types::second_param_type y) : mFirst(x), mSecond(y){}
-    ValueStorage(FirstValueTag, typename types::first_param_type x) : mFirst(x){}
-    ValueStorage(SecondValueTag, typename types::second_param_type y) : mSecond(y){}
+    ValueStorage(BothValuesTag, typename Types::first_param_type x, typename Types::second_param_type y) : m_first(x), m_second(y){}
+    ValueStorage(FirstValueTag, typename Types::first_param_type x) : m_first(x){}
+    ValueStorage(SecondValueTag, typename Types::second_param_type y) : m_second(y){}
 
 
 public:
-    typename types::first_reference first(){ return mFirst; }
-    typename types::first_const_reference first()const{ return mFirst; }
+    typename Types::first_reference first(){ return m_first; }
+    typename Types::first_const_reference first()const{ return m_first; }
 
-    typename types::second_reference second(){ return mSecond; }
-    typename types::second_const_reference second()const{ return mSecond; }
+    typename Types::second_reference second(){ return m_second; }
+    typename Types::second_const_reference second()const{ return m_second; }
 
     void swap(::CompressedPair<T1, T2>& y){
-        internalSwap(mFirst, y.first());
-        internalSwap(mSecond, y.second());
+        internalSwap(m_first, y.first());
+        internalSwap(m_second, y.second());
     }
 
 
 private:
-    typename types::first_type mFirst;
-    typename types::second_type mSecond;
+    typename Types::first_type m_first;
+    typename Types::second_type m_second;
 };
 
 template<typename T1, typename T2, int version>
@@ -109,124 +109,124 @@ using SelectedImplementation = Implementation<T1, T2,
 template<typename T1, typename T2>
 class Implementation<T1, T2, 0> : public ValueStorage<T1, T2>{
 private:
-    typedef ValueStorage<T1, T2> base;
+    typedef ValueStorage<T1, T2> Base;
 
 
 public:
     Implementation(){}
-    Implementation(typename base::first_param_type x, typename base::second_param_type y) : base(BothValuesTag{}, x, y){}
-    Implementation(typename base::first_param_type x) : base(FirstValueTag{}, x){}
-    Implementation(typename base::second_param_type y) : base(SecondValueTag{}, y){}
+    Implementation(typename Base::first_param_type x, typename Base::second_param_type y) : Base(BothValuesTag{}, x, y){}
+    Implementation(typename Base::first_param_type x) : Base(FirstValueTag{}, x){}
+    Implementation(typename Base::second_param_type y) : Base(SecondValueTag{}, y){}
 };
 template<typename T1, typename T2>
 class Implementation<T1, T2, 1> : public ImplementationTypes<T1, T2>, private T1{
 private:
-    typedef ImplementationTypes<T1, T2> types;
+    typedef ImplementationTypes<T1, T2> Types;
 
 
 public:
     Implementation(){}
-    Implementation(typename types::first_param_type x, typename types::second_param_type y) : T1(x), mSecond(y){}
-    Implementation(typename types::first_param_type x) : T1(x){}
-    Implementation(typename types::second_param_type y) : mSecond(y){}
+    Implementation(typename Types::first_param_type x, typename Types::second_param_type y) : T1(x), m_second(y){}
+    Implementation(typename Types::first_param_type x) : T1(x){}
+    Implementation(typename Types::second_param_type y) : m_second(y){}
 
 
 public:
-    typename types::first_reference first(){ return *this; }
-    typename types::first_const_reference first()const{ return *this; }
+    typename Types::first_reference first(){ return *this; }
+    typename Types::first_const_reference first()const{ return *this; }
 
-    typename types::second_reference second(){ return mSecond; }
-    typename types::second_const_reference second()const{ return mSecond; }
+    typename Types::second_reference second(){ return m_second; }
+    typename Types::second_const_reference second()const{ return m_second; }
 
     void swap(::CompressedPair<T1,T2>& y){
-        internalSwap(mSecond, y.second());
+        internalSwap(m_second, y.second());
     }
 
 
 private:
-    typename types::second_type mSecond;
+    typename Types::second_type m_second;
 };
 template<typename T1, typename T2>
 class Implementation<T1, T2, 2> : public ImplementationTypes<T1, T2>, private T2{
 private:
-    typedef ImplementationTypes<T1, T2> types;
+    typedef ImplementationTypes<T1, T2> Types;
 
 
 public:
     Implementation(){}
-    Implementation(typename types::first_param_type x, typename types::second_param_type y) : T2(y), mFirst(x){}
-    Implementation(typename types::first_param_type x) : mFirst(x){}
-    Implementation(typename types::second_param_type y) : T2(y){}
+    Implementation(typename Types::first_param_type x, typename Types::second_param_type y) : T2(y), m_first(x){}
+    Implementation(typename Types::first_param_type x) : m_first(x){}
+    Implementation(typename Types::second_param_type y) : T2(y){}
 
 
 public:
-    typename types::first_reference first(){ return mFirst; }
-    typename types::first_const_reference first()const{ return mFirst; }
+    typename Types::first_reference first(){ return m_first; }
+    typename Types::first_const_reference first()const{ return m_first; }
 
-    typename types::second_reference second(){ return *this; }
-    typename types::second_const_reference second()const{ return *this; }
+    typename Types::second_reference second(){ return *this; }
+    typename Types::second_const_reference second()const{ return *this; }
 
     void swap(::CompressedPair<T1,T2>& y){
-        internalSwap(mFirst, y.first());
+        internalSwap(m_first, y.first());
     }
 
 
 private:
-    typename types::first_type mFirst;
+    typename Types::first_type m_first;
 };
 template<typename T1, typename T2>
 class Implementation<T1, T2, 3> : public ImplementationTypes<T1, T2>, private T1, private T2{
 private:
-    typedef ImplementationTypes<T1, T2> types;
+    typedef ImplementationTypes<T1, T2> Types;
 
 
 public:
     Implementation(){}
-    Implementation(typename types::first_param_type x, typename types::second_param_type y) : T1(x), T2(y){}
-    Implementation(typename types::first_param_type x) : T1(x){}
-    Implementation(typename types::second_param_type y) : T2(y){}
+    Implementation(typename Types::first_param_type x, typename Types::second_param_type y) : T1(x), T2(y){}
+    Implementation(typename Types::first_param_type x) : T1(x){}
+    Implementation(typename Types::second_param_type y) : T2(y){}
 
 
 public:
-    typename types::first_reference first(){ return *this; }
-    typename types::first_const_reference first()const{ return *this; }
+    typename Types::first_reference first(){ return *this; }
+    typename Types::first_const_reference first()const{ return *this; }
 
-    typename types::second_reference second(){ return *this; }
-    typename types::second_const_reference second()const{ return *this; }
+    typename Types::second_reference second(){ return *this; }
+    typename Types::second_const_reference second()const{ return *this; }
 
     void swap(::CompressedPair<T1, T2>&){}
 };
 template<typename T1, typename T2>
 class Implementation<T1, T2, 4> : public ImplementationTypes<T1, T2>, private T1{
 private:
-    typedef ImplementationTypes<T1, T2> types;
+    typedef ImplementationTypes<T1, T2> Types;
 
 
 public:
     Implementation(){}
-    Implementation(typename types::first_param_type x, typename types::second_param_type) : T1(x){}
-    Implementation(typename types::first_param_type x) : T1(x){}
+    Implementation(typename Types::first_param_type x, typename Types::second_param_type) : T1(x){}
+    Implementation(typename Types::first_param_type x) : T1(x){}
 
 
 public:
-    typename types::first_reference first(){ return *this; }
-    typename types::first_const_reference first()const{ return *this; }
+    typename Types::first_reference first(){ return *this; }
+    typename Types::first_const_reference first()const{ return *this; }
 
-    typename types::second_reference second(){ return *this; }
-    typename types::second_const_reference second()const{ return *this; }
+    typename Types::second_reference second(){ return *this; }
+    typename Types::second_const_reference second()const{ return *this; }
 
     void swap(::CompressedPair<T1, T2>&){}
 };
 template<typename T1, typename T2>
 class Implementation<T1, T2, 5> : public ValueStorage<T1, T2>{
 private:
-    typedef ValueStorage<T1, T2> base;
+    typedef ValueStorage<T1, T2> Base;
 
 
 public:
     Implementation(){}
-    Implementation(typename base::first_param_type x, typename base::second_param_type y) : base(BothValuesTag{}, x, y){}
-    Implementation(typename base::first_param_type x) : base(BothValuesTag{}, x, x){}
+    Implementation(typename Base::first_param_type x, typename Base::second_param_type y) : Base(BothValuesTag{}, x, y){}
+    Implementation(typename Base::first_param_type x) : Base(BothValuesTag{}, x, x){}
 };
 
 
@@ -240,37 +240,36 @@ public:
 
 
 template<typename T1, typename T2>
-class CompressedPair : private CompressedPairDetail::SelectedImplementation<T1, T2>
-{
+class CompressedPair : private CompressedPairDetail::SelectedImplementation<T1, T2>{
 private:
-    typedef CompressedPairDetail::SelectedImplementation<T1, T2> base;
+    typedef CompressedPairDetail::SelectedImplementation<T1, T2> Base;
 
 
 public:
-    typedef typename base::first_type first_type;
-    typedef typename base::second_type second_type;
-    typedef typename base::first_param_type first_param_type;
-    typedef typename base::second_param_type second_param_type;
-    typedef typename base::first_reference first_reference;
-    typedef typename base::second_reference second_reference;
-    typedef typename base::first_const_reference first_const_reference;
-    typedef typename base::second_const_reference second_const_reference;
+    typedef typename Base::first_type first_type;
+    typedef typename Base::second_type second_type;
+    typedef typename Base::first_param_type first_param_type;
+    typedef typename Base::second_param_type second_param_type;
+    typedef typename Base::first_reference first_reference;
+    typedef typename Base::second_reference second_reference;
+    typedef typename Base::first_const_reference first_const_reference;
+    typedef typename Base::second_const_reference second_const_reference;
 
 
 public:
-    CompressedPair() : base(){}
-    CompressedPair(first_param_type x, second_param_type y) : base(x, y){}
-    explicit CompressedPair(first_param_type x) : base(x){}
+    CompressedPair() : Base(){}
+    CompressedPair(first_param_type x, second_param_type y) : Base(x, y){}
+    explicit CompressedPair(first_param_type x) : Base(x){}
 
 
 public:
-    first_reference first(){ return base::first(); }
-    first_const_reference first()const{ return base::first(); }
+    first_reference first(){ return Base::first(); }
+    first_const_reference first()const{ return Base::first(); }
 
-    second_reference second(){ return base::second(); }
-    second_const_reference second()const{ return base::second(); }
+    second_reference second(){ return Base::second(); }
+    second_const_reference second()const{ return Base::second(); }
 
-    void swap(CompressedPair& y){ base::swap(y); }
+    void swap(CompressedPair& y){ Base::swap(y); }
 };
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

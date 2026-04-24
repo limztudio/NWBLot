@@ -1370,12 +1370,12 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-DescriptorTableHandle Device::createDescriptorTable(IBindingLayout* _layout){
+DescriptorTableHandle Device::createDescriptorTable(IBindingLayout* layoutResource){
     VkResult res = VK_SUCCESS;
 
     Alloc::ScratchArena<> scratchArena;
 
-    auto* layout = checked_cast<BindingLayout*>(_layout);
+    auto* layout = checked_cast<BindingLayout*>(layoutResource);
     if(!layout){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor table: binding layout is invalid"));
         return nullptr;
@@ -1826,8 +1826,8 @@ bool Device::writeDescriptorTable(IDescriptorTable* m_descriptorTable, const Bin
 }
 
 
-BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLayout* _layout){
-    auto* layout = checked_cast<BindingLayout*>(_layout);
+BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLayout* layoutResource){
+    auto* layout = checked_cast<BindingLayout*>(layoutResource);
     if(!layout){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create binding set: binding layout is invalid"));
         return nullptr;
@@ -1836,7 +1836,7 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLa
     auto* bindingSet = NewArenaObject<BindingSet>(m_context.objectArena, m_context);
     bindingSet->m_desc = desc;
 
-    DescriptorTableHandle tableHandle = createDescriptorTable(_layout);
+    DescriptorTableHandle tableHandle = createDescriptorTable(layoutResource);
     if(!tableHandle){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor table for binding set"));
         DestroyArenaObject(m_context.objectArena, bindingSet);

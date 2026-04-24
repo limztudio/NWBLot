@@ -434,54 +434,13 @@ void DeformerSystem::update(Core::ECS::World& world, const f32 delta){
 void DeformerSystem::render(Core::IFramebuffer* framebuffer){
     (void)framebuffer;
 
-    Core::Alloc::ScratchArena<> scratchArena;
-    const bool trackLiveHandles = !m_runtimeResources.empty();
-    Vector<
-        Core::ECS::EntityID,
-        Core::Alloc::ScratchAllocator<Core::ECS::EntityID>
-    > candidates{Core::Alloc::ScratchAllocator<Core::ECS::EntityID>(scratchArena)};
-    HashSet<
-        u64,
-        Hasher<u64>,
-        EqualTo<u64>,
-        Core::Alloc::ScratchAllocator<u64>
-    > liveHandles(
-        0,
-        Hasher<u64>(),
-        EqualTo<u64>(),
-        Core::Alloc::ScratchAllocator<u64>(scratchArena)
-    );
-    const usize entityCapacity = m_world.entityCount();
-    candidates.reserve(entityCapacity);
-    if(trackLiveHandles)
-        liveHandles.reserve(entityCapacity);
-
-    m_world.view<DeformableRendererComponent>().each(
-        [&](Core::ECS::EntityID entity, DeformableRendererComponent& renderer){
-            if(!renderer.runtimeMesh.valid())
-                return;
-
-            DeformableRuntimeMeshInstance* instance = m_rendererSystem.findDeformableRuntimeMesh(renderer.runtimeMesh);
-            if(!instance || !instance->valid())
-                return;
-
-            if(trackLiveHandles)
-                liveHandles.insert(renderer.runtimeMesh.value);
-            if(renderer.visible)
-                candidates.push_back(entity);
-        }
-    );
-
-    if(trackLiveHandles){
+    if(!m_runtimeResources.empty()){
         for(auto it = m_runtimeResources.begin(); it != m_runtimeResources.end();){
-            const u64 handle = it->first;
             const RuntimeResources& resources = it.value();
-            const bool live = liveHandles.find(handle) != liveHandles.end();
-            const DeformableRuntimeMeshInstance* instance = live
-                ? m_rendererSystem.findDeformableRuntimeMesh(resources.handle)
-                : nullptr
+            const DeformableRuntimeMeshInstance* instance =
+                m_rendererSystem.findDeformableRuntimeMesh(resources.handle)
             ;
-            if(!live || !instance || instance->editRevision != resources.editRevision){
+            if(!instance || !instance->valid() || instance->editRevision != resources.editRevision){
                 it = m_runtimeResources.erase(it);
                 continue;
             }
@@ -490,39 +449,60 @@ void DeformerSystem::render(Core::IFramebuffer* framebuffer){
         }
     }
 
-    if(candidates.empty())
-        return;
-
     Core::IDevice* device = m_graphics.getDevice();
-    Core::CommandListHandle commandList = device->createCommandList();
-    if(!commandList){
-        NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: failed to create command list"));
-        return;
-    }
-
+    Core::CommandListHandle commandList;
+    bool commandListOpen = false;
+    bool commandListFailed = false;
     bool submittedWork = false;
-    commandList->open();
-    for(const Core::ECS::EntityID entity : candidates){
-        DeformableRendererComponent* renderer = m_world.tryGetComponent<DeformableRendererComponent>(entity);
-        if(!renderer || !renderer->visible || !renderer->runtimeMesh.valid())
-            continue;
 
-        DeformableRuntimeMeshInstance* instance = m_rendererSystem.findDeformableRuntimeMesh(renderer->runtimeMesh);
-        if(!instance || !instance->valid())
-            continue;
+    auto ensureCommandList = [&]() -> bool{
+        if(commandListOpen)
+            return true;
+        if(commandListFailed)
+            return false;
 
-        const DeformableMorphWeightsComponent* morphWeights =
-            m_world.tryGetComponent<DeformableMorphWeightsComponent>(entity)
-        ;
-        const DeformableJointPaletteComponent* jointPalette =
-            m_world.tryGetComponent<DeformableJointPaletteComponent>(entity)
-        ;
-        const DeformableDisplacementComponent* displacement =
-            m_world.tryGetComponent<DeformableDisplacementComponent>(entity)
-        ;
-        if(dispatchRuntimeMesh(*commandList, *instance, morphWeights, jointPalette, displacement))
-            submittedWork = true;
-    }
+        commandList = device->createCommandList();
+        if(!commandList){
+            NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: failed to create command list"));
+            commandListFailed = true;
+            return false;
+        }
+
+        commandList->open();
+        commandListOpen = true;
+        return true;
+    };
+
+    m_world.view<DeformableRendererComponent>().each(
+        [&](Core::ECS::EntityID entity, DeformableRendererComponent& renderer){
+            if(!renderer.visible || !renderer.runtimeMesh.valid())
+                return;
+
+            DeformableRuntimeMeshInstance* instance =
+                m_rendererSystem.findDeformableRuntimeMesh(renderer.runtimeMesh)
+            ;
+            if(!instance || !instance->valid())
+                return;
+            if(!ensureCommandList())
+                return;
+
+            const DeformableMorphWeightsComponent* morphWeights =
+                m_world.tryGetComponent<DeformableMorphWeightsComponent>(entity)
+            ;
+            const DeformableJointPaletteComponent* jointPalette =
+                m_world.tryGetComponent<DeformableJointPaletteComponent>(entity)
+            ;
+            const DeformableDisplacementComponent* displacement =
+                m_world.tryGetComponent<DeformableDisplacementComponent>(entity)
+            ;
+            if(dispatchRuntimeMesh(*commandList, *instance, morphWeights, jointPalette, displacement))
+                submittedWork = true;
+        }
+    );
+
+    if(!commandListOpen)
+        return;
+
     commandList->close();
 
     if(submittedWork){

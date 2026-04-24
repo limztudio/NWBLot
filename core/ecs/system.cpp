@@ -92,15 +92,15 @@ void SystemScheduler::rebuild(){
         ScratchComponentTypeAllocator
     >;
 
-    Vector<u8, Alloc::ScratchAllocator<u8>> assigned(
+    Vector<usize, Alloc::ScratchAllocator<usize>> assignedStage(
         m_allSystems.size(), 0,
-        Alloc::ScratchAllocator<u8>(scratchArena)
+        Alloc::ScratchAllocator<usize>(scratchArena)
     );
     usize numAssigned = 0;
 
     while(numAssigned < m_allSystems.size()){
-        Stage stage{SystemAllocator(m_arena)};
-        stage.reserve(m_allSystems.size() - numAssigned);
+        const usize stageTag = m_stages.size() + 1u;
+        usize stageSize = 0;
 
         ComponentAccessSet stageWrites(
             0,
@@ -116,7 +116,7 @@ void SystemScheduler::rebuild(){
         );
 
         for(usize i = 0; i < m_allSystems.size(); ++i){
-            if(assigned[i])
+            if(assignedStage[i] != 0)
                 continue;
 
             ISystem* sys = m_allSystems[i];
@@ -145,24 +145,30 @@ void SystemScheduler::rebuild(){
                     else
                         stageReads.insert(ca.typeId);
                 }
-                stage.push_back(sys);
-                assigned[i] = 1;
+                assignedStage[i] = stageTag;
+                ++stageSize;
                 ++numAssigned;
             }
         }
 
-        if(stage.empty()){
+        if(stageSize == 0){
             for(usize i = 0; i < m_allSystems.size(); ++i){
-                if(assigned[i])
+                if(assignedStage[i] != 0)
                     continue;
 
-                stage.push_back(m_allSystems[i]);
-                assigned[i] = 1;
+                assignedStage[i] = stageTag;
+                ++stageSize;
                 ++numAssigned;
                 break;
             }
         }
 
+        Stage stage{SystemAllocator(m_arena)};
+        stage.reserve(stageSize);
+        for(usize i = 0; i < m_allSystems.size(); ++i){
+            if(assignedStage[i] == stageTag)
+                stage.push_back(m_allSystems[i]);
+        }
         m_stages.push_back(Move(stage));
     }
 

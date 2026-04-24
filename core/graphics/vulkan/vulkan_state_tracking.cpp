@@ -49,6 +49,16 @@ VkImageMemoryBarrier2 BuildTextureStateBarrier(
     return barrier;
 }
 
+template<typename ContainerT>
+void ReserveAdditionalCapacity(ContainerT& container, usize additionalCount){
+    if(additionalCount <= 1u)
+        return;
+
+    const usize currentSize = container.size();
+    if(additionalCount <= Limit<usize>::s_Max - currentSize)
+        container.reserve(currentSize + additionalCount);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -150,6 +160,7 @@ void CommandList::setTextureState(ITexture* textureResource, TextureSubresourceS
     ;
     const MipLevel mipEnd = resolvedSubresources.baseMipLevel + resolvedSubresources.numMipLevels;
     const ArraySlice arrayEnd = resolvedSubresources.baseArraySlice + resolvedSubresources.numArraySlices;
+    const usize subresourceCount = static_cast<usize>(resolvedSubresources.numMipLevels) * static_cast<usize>(resolvedSubresources.numArraySlices);
 
     for(ArraySlice arraySlice = resolvedSubresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
         for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
@@ -187,6 +198,7 @@ void CommandList::setTextureState(ITexture* textureResource, TextureSubresourceS
         ));
     }
     else{
+        __hidden_vulkan_state_tracking::ReserveAdditionalCapacity(m_pendingImageBarriers, subresourceCount);
         for(ArraySlice arraySlice = resolvedSubresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
             for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
                 ResourceStates::Mask subresourceOldState = ResourceStates::Unknown;
@@ -454,6 +466,9 @@ void StateTracker::beginTrackingTransientTexture(ITexture* texture, TextureSubre
     const TextureSubresourceSet resolvedSubresources = subresources.resolve(desc, false);
     const MipLevel mipEnd = resolvedSubresources.baseMipLevel + resolvedSubresources.numMipLevels;
     const ArraySlice arrayEnd = resolvedSubresources.baseArraySlice + resolvedSubresources.numArraySlices;
+    const usize subresourceCount = static_cast<usize>(resolvedSubresources.numMipLevels) * static_cast<usize>(resolvedSubresources.numArraySlices);
+
+    __hidden_vulkan_state_tracking::ReserveAdditionalCapacity(m_textureStates, subresourceCount);
 
     for(ArraySlice arraySlice = resolvedSubresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
         for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){

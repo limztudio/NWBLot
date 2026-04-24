@@ -623,6 +623,9 @@ bool DescriptorHeapManager::tryEnablePipeline(
             continue;
         if(heapBindings.size() > UINT32_MAX / sizeof(u32))
             return false;
+        if(heapBindings.size() > Limit<usize>::s_Max - outMappings.size())
+            return false;
+        outMappings.reserve(outMappings.size() + heapBindings.size());
 
         const u32 pushDataBytes = static_cast<u32>(heapBindings.size() * sizeof(u32));
         if(outPushDataSize > UINT32_MAX - pushDataBytes)

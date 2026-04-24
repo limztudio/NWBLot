@@ -132,7 +132,8 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
 
         const Name stageName(stageNameHash);
         const Name shaderName(shaderNameHash);
-        const Core::Assets::AssetRef<Shader> shaderAsset(shaderName);
+        Core::Assets::AssetRef<Shader> shaderAsset;
+        shaderAsset.virtualPath = shaderName;
         if(!stageName || !shaderAsset.valid()){
             NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: shader stage entries must not be empty"));
             return false;

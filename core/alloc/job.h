@@ -186,7 +186,7 @@ public:
                 NWB_ASSERT_MSG(completionSignal != nullptr, NWB_TEXT("JobSystem encountered a null completion signal"));
 
                 completedGeneration = completionSignal->completedGeneration.load(MemoryOrder::acquire);
-                if(completedGeneration >= handle.generation)
+                if(completedGeneration == handle.generation)
                     return;
             }
 
@@ -243,14 +243,13 @@ private:
                 ++unresolved;
             }
 
+            m_pendingJobCount.fetch_add(1, MemoryOrder::release);
             node->remainingDependencies = unresolved;
             if(unresolved == 0){
                 node->scheduled = true;
                 shouldSchedule = true;
             }
         }
-
-        m_pendingJobCount.fetch_add(1, MemoryOrder::release);
 
         if(shouldSchedule)
             enqueueExecution(output);
@@ -396,7 +395,8 @@ private:
             completionSignal = node->completionSignal;
             NWB_ASSERT_MSG(completionSignal != nullptr, NWB_TEXT("JobSystem encountered a null completion signal"));
 
-            for(usize i = 0; i < node->dependents.size(); ++i){
+            const usize dependentCount = node->dependents.size();
+            for(usize i = 0; i < dependentCount; ++i){
                 const JobHandle dependentHandle = node->dependents[i];
                 JobNode* dependentNode = tryResolveNodeLocked(dependentHandle);
                 if(!dependentNode)
@@ -415,14 +415,16 @@ private:
                         continue;
                     }
 
+                    if(readyJobs.empty())
+                        readyJobs.reserve(dependentCount - i);
                     readyJobs.push_back(dependentHandle);
                 }
             }
 
+            completionSignal->completedGeneration.store(handle.generation, MemoryOrder::release);
             recycleNodeLocked(handle.index, *node);
         }
 
-        completionSignal->completedGeneration.store(handle.generation, MemoryOrder::release);
         completionSignal->completedGeneration.notify_all();
 
         enqueueExecutionBatch(readyJobs.data(), readyJobs.size());

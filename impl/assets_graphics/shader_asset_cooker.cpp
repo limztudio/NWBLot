@@ -530,7 +530,8 @@ static bool ParseMaterialStageShaders(
 
         const Name stageName = ToName(stageKeyText);
         const Name shaderName = ToName(shaderValue.asString());
-        const Core::Assets::AssetRef<Shader> shaderAsset(shaderName);
+        Core::Assets::AssetRef<Shader> shaderAsset;
+        shaderAsset.virtualPath = shaderName;
         if(!stageName || !shaderAsset.valid()){
             NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': shader stage entries must not be empty"), PathToString<tchar>(nwbFilePath));
             return false;

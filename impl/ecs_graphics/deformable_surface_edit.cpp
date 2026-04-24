@@ -646,8 +646,8 @@ template<typename VertexEdgeMap>
     outRecord.wallVertexCount = binary.wallVertexCount;
     outRecord.normalOffset = binary.normalOffset;
     outRecord.uniformScale = binary.uniformScale;
-    outRecord.geometry = Core::Assets::AssetRef<Geometry>(Name(binary.geometryNameHash));
-    outRecord.material = Core::Assets::AssetRef<Material>(Name(binary.materialNameHash));
+    outRecord.geometry.virtualPath = Name(binary.geometryNameHash);
+    outRecord.material.virtualPath = Name(binary.materialNameHash);
     return ValidAccessoryRecord(outRecord);
 }
 

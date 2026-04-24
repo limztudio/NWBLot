@@ -24,9 +24,6 @@ struct AssetRef{
 
 public:
     constexpr AssetRef() = default;
-    constexpr AssetRef(const Name& value)
-        : virtualPath(value)
-    {}
 
 
 public:
@@ -40,11 +37,6 @@ public:
 
     void reset(){
         virtualPath = NAME_NONE;
-    }
-
-    AssetRef& set(const Name& value){
-        virtualPath = value;
-        return *this;
     }
 
     [[nodiscard]] const Name& name()const{

@@ -1446,8 +1446,8 @@ static void TestSurfaceEditFlowAttachesAndPersistsAccessory(TestContext& context
 
     NWB::Impl::DeformableSurfaceEditState state;
     NWB::Impl::DeformableAccessoryAttachmentRecord accessoryRecord;
-    accessoryRecord.geometry = NWB::Core::Assets::AssetRef<NWB::Impl::Geometry>(mockGeometry);
-    accessoryRecord.material = NWB::Core::Assets::AssetRef<NWB::Impl::Material>(mockMaterial);
+    accessoryRecord.geometry.virtualPath = mockGeometry;
+    accessoryRecord.material.virtualPath = mockMaterial;
     accessoryRecord.editRevision = attachment.editRevision;
     accessoryRecord.firstWallVertex = attachment.firstWallVertex;
     accessoryRecord.wallVertexCount = attachment.wallVertexCount;

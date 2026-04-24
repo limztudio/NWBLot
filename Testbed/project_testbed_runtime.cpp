@@ -461,41 +461,53 @@ bool ProjectTestbed::onStartup(){
     scene.mainCamera = __hidden_project_testbed_runtime::CreateMainCameraEntity(*m_world);
     __hidden_project_testbed_runtime::CreateDefaultDirectionalLightEntity(*m_world);
 
-    const TestbedMaterialRef cubeMaterial(Name("project/materials/mat_test"));
-    const TestbedMaterialRef transparentMaterial(Name("project/materials/mat_transparent"));
-    const TestbedMaterialRef deformableUvMaterial(Name("project/materials/mat_deformable_uv"));
+    TestbedMaterialRef cubeMaterial;
+    cubeMaterial.virtualPath = Name("project/materials/mat_test");
+    TestbedMaterialRef transparentMaterial;
+    transparentMaterial.virtualPath = Name("project/materials/mat_transparent");
+    TestbedMaterialRef deformableUvMaterial;
+    deformableUvMaterial.virtualPath = Name("project/materials/mat_deformable_uv");
+
+    TestbedGeometryRef cubeGeometry;
+    cubeGeometry.virtualPath = Name("project/meshes/cube");
+    TestbedGeometryRef sphereGeometry;
+    sphereGeometry.virtualPath = Name("project/meshes/sphere");
+    TestbedGeometryRef tetrahedronGeometry;
+    tetrahedronGeometry.virtualPath = Name("project/meshes/tetrahedron");
+    TestbedDeformableGeometryRef deformableProxyGeometry;
+    deformableProxyGeometry.virtualPath = Name("project/characters/proxy_deformable");
 
     __hidden_project_testbed_runtime::CreateRendererEntity(
         *m_world,
-        TestbedGeometryRef(Name("project/meshes/cube")),
+        cubeGeometry,
         cubeMaterial,
         Float4(-0.55f, 0.0f, 0.0f),
         0.65f
     );
     __hidden_project_testbed_runtime::CreateRendererEntity(
         *m_world,
-        TestbedGeometryRef(Name("project/meshes/cube")),
+        cubeGeometry,
         cubeMaterial,
         Float4(0.55f, 0.0f, 0.0f),
         0.9f
     );
     __hidden_project_testbed_runtime::CreateRendererEntity(
         *m_world,
-        TestbedGeometryRef(Name("project/meshes/sphere")),
+        sphereGeometry,
         transparentMaterial,
         Float4(1.45f, 0.0f, 0.0f),
         0.75f
     );
     __hidden_project_testbed_runtime::CreateRendererEntity(
         *m_world,
-        TestbedGeometryRef(Name("project/meshes/tetrahedron")),
+        tetrahedronGeometry,
         transparentMaterial,
         Float4(-1.45f, 0.0f, 0.0f),
         0.8f
     );
     m_deformableMorphEntity = __hidden_project_testbed_runtime::CreateDeformableRendererEntity(
         *m_world,
-        TestbedDeformableGeometryRef(Name("project/characters/proxy_deformable")),
+        deformableProxyGeometry,
         deformableUvMaterial,
         Float4(0.0f, 0.85f, 0.0f),
         0.8f
@@ -875,8 +887,10 @@ void ProjectTestbed::attachPendingSurfaceEditAccessory(){
         return;
     }
 
-    const __hidden_project_testbed_runtime::TestbedGeometryRef accessoryGeometry(Name("project/meshes/mock_earring"));
-    const __hidden_project_testbed_runtime::TestbedMaterialRef accessoryMaterial(Name("project/materials/mat_test"));
+    __hidden_project_testbed_runtime::TestbedGeometryRef accessoryGeometry;
+    accessoryGeometry.virtualPath = Name("project/meshes/mock_earring");
+    __hidden_project_testbed_runtime::TestbedMaterialRef accessoryMaterial;
+    accessoryMaterial.virtualPath = Name("project/materials/mat_test");
     NWB::Core::ECSGraphics::DeformableAccessoryAttachmentRecord accessoryRecord;
     accessoryRecord.geometry = accessoryGeometry;
     accessoryRecord.material = accessoryMaterial;

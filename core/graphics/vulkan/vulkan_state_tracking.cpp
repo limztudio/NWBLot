@@ -232,14 +232,14 @@ bool StateTracker::isPermanentTexture(ITexture* texture)const{
     if(!texture)
         return false;
 
-    return m_permanentTextureStates.count(texture) > 0;
+    return m_permanentTextureStates.find(texture) != m_permanentTextureStates.end();
 }
 
 bool StateTracker::isPermanentBuffer(IBuffer* buffer)const{
     if(!buffer)
         return false;
 
-    return m_permanentBufferStates.count(buffer) > 0;
+    return m_permanentBufferStates.find(buffer) != m_permanentBufferStates.end();
 }
 
 ResourceStates::Mask StateTracker::getTextureState(ITexture* texture, ArraySlice arraySlice, MipLevel mipLevel)const{
@@ -289,7 +289,7 @@ void StateTracker::beginTrackingTexture(ITexture* texture, TextureSubresourceSet
     if(!texture)
         return;
 
-    if(m_permanentTextureStates.count(texture) > 0)
+    if(m_permanentTextureStates.find(texture) != m_permanentTextureStates.end())
         return;
 
     m_textureStates.insert_or_assign(texture, state);
@@ -299,7 +299,7 @@ void StateTracker::beginTrackingBuffer(IBuffer* buffer, ResourceStates::Mask sta
     if(!buffer)
         return;
 
-    if(m_permanentBufferStates.count(buffer) > 0)
+    if(m_permanentBufferStates.find(buffer) != m_permanentBufferStates.end())
         return;
 
     m_bufferStates.insert_or_assign(buffer, state);

@@ -125,13 +125,13 @@ void SystemScheduler::rebuild(){
             bool compatible = true;
             for(const auto& ca : acc){
                 if(ca.mode == AccessMode::Write){
-                    if(stageWrites.count(ca.typeId) || stageReads.count(ca.typeId)){
+                    if(stageWrites.find(ca.typeId) != stageWrites.end() || stageReads.find(ca.typeId) != stageReads.end()){
                         compatible = false;
                         break;
                     }
                 }
                 else{
-                    if(stageWrites.count(ca.typeId)){
+                    if(stageWrites.find(ca.typeId) != stageWrites.end()){
                         compatible = false;
                         break;
                     }

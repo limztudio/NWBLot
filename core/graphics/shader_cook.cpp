@@ -353,11 +353,17 @@ static bool ParseDefaultVariant(const Path& nwbFilePath, const Metascript::Value
 
     if(defaultVariantVal->isList()){
         const auto& list = defaultVariantVal->asList();
+        usize defaultVariantSize = list.empty() ? 0u : list.size() - 1u;
         for(usize i = 0; i < list.size(); ++i){
             if(!list[i].isString()){
                 NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': default_variant list elements must be strings"), PathToString<tchar>(nwbFilePath));
                 return false;
             }
+            defaultVariantSize += list[i].asString().size();
+        }
+
+        outDefaultVariant.reserve(defaultVariantSize);
+        for(usize i = 0; i < list.size(); ++i){
             if(i > 0)
                 outDefaultVariant += ';';
             const Metascript::MStringView variantText = list[i].asString();

@@ -157,6 +157,10 @@ inline void AppendUtf8CodePoint(AString& out, u32 codePoint){
                 codePoint = 0x10000u + (((codePoint - 0xD800u) << 10) | (low - 0xDC00u));
                 ++i;
             }
+            else
+                codePoint = static_cast<u32>('?');
+        }else if(codePoint >= 0xD800u && codePoint <= 0xDBFFu){
+            codePoint = static_cast<u32>('?');
         }else if(codePoint >= 0xDC00u && codePoint <= 0xDFFFu){
             codePoint = static_cast<u32>('?');
         }

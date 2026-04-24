@@ -2365,6 +2365,7 @@ void RendererSystem::pruneDeformableGeometryResources(){
     Vector<Name, Core::Alloc::ScratchAllocator<Name>> staleKeys{
         Core::Alloc::ScratchAllocator<Name>(scratchArena)
     };
+    staleKeys.reserve(m_geometryMeshes.size());
 
     for(const auto& [geometryKey, geometry] : m_geometryMeshes){
         if(!geometry.runtimeMesh.valid())

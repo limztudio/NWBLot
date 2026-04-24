@@ -421,6 +421,9 @@ void DeformerSystem::render(Core::IFramebuffer* framebuffer){
         EqualTo<u64>(),
         Core::Alloc::ScratchAllocator<u64>(scratchArena)
     );
+    const usize entityCapacity = m_world.entityCount();
+    candidates.reserve(entityCapacity);
+    liveHandles.reserve(entityCapacity);
 
     m_world.view<DeformableRendererComponent>().each(
         [&](Core::ECS::EntityID entity, DeformableRendererComponent& renderer){
@@ -440,6 +443,7 @@ void DeformerSystem::render(Core::IFramebuffer* framebuffer){
     Vector<u64, Core::Alloc::ScratchAllocator<u64>> staleResources{
         Core::Alloc::ScratchAllocator<u64>(scratchArena)
     };
+    staleResources.reserve(m_runtimeResources.size());
     for(const auto& [handle, resources] : m_runtimeResources){
         const bool live = liveHandles.find(handle) != liveHandles.end();
         const DeformableRuntimeMeshInstance* instance = live

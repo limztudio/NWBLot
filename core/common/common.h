@@ -237,13 +237,48 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace CommonDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename T>
+[[nodiscard]] inline const std::basic_regex<T>& CommandLineAssignmentRegex(){
+    static_assert(
+        IsSame_V<T, char> || IsSame_V<T, wchar>,
+        "Command line parsing supports char and wchar strings"
+    );
+
+    if constexpr(IsSame_V<T, wchar>){
+        static const std::basic_regex<T> s_Regex(
+            L"(\\w+)\\s*=\\s*(?:\"([^\"]*)\"|(\\S+))",
+            std::regex_constants::ECMAScript | std::regex_constants::optimize
+        );
+        return s_Regex;
+    }
+    else{
+        static const std::basic_regex<T> s_Regex(
+            "(\\w+)\\s*=\\s*(?:\"([^\"]*)\"|(\\S+))",
+            std::regex_constants::ECMAScript | std::regex_constants::optimize
+        );
+        return s_Regex;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<typename T>
 inline HashMap<BasicString<T>, BasicString<T>> parseCommandLine(BasicStringView<T> input){
-    std::basic_regex<T> regex(
-        IsSame_V<T, wchar>
-        ? L"(\\w+)\\s*=\\s*(?:\"([^\"]*)\"|(\\S+))"
-        :  "(\\w+)\\s*=\\s*(?:\"([^\"]*)\"|(\\S+))"
-    );
+    const std::basic_regex<T>& regex = CommonDetail::CommandLineAssignmentRegex<T>();
 
     HashMap<BasicString<T>, BasicString<T>> output;
     std::match_results<typename BasicString<T>::const_iterator> match;
@@ -256,11 +291,7 @@ inline HashMap<BasicString<T>, BasicString<T>> parseCommandLine(BasicStringView<
 
         BasicString<T> key = match[1].str();
         BasicString<T> value = match[2].matched ? match[2].str() : match[3].str();
-        auto result = output.find(key);
-        if(result == output.end())
-            output.emplace(Move(key), Move(value));
-        else
-            result.value() = Move(value);
+        output.insert_or_assign(Move(key), Move(value));
         itrSearch = match.suffix().first;
     }
 

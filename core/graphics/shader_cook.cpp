@@ -643,6 +643,9 @@ void ShaderCook::mergeInheritedDefines(ShaderEntry& inOutEntry, const CookVector
 
         const IncludeEntry& includeEntry = found.value();
 
+        if(includeEntry.defineValues.size() <= Limit<usize>::s_Max - inOutEntry.defineValues.size())
+            inOutEntry.defineValues.reserve(inOutEntry.defineValues.size() + includeEntry.defineValues.size());
+
         for(const auto& [defineName, defineEntry] : includeEntry.defineValues){
             if(inOutEntry.defineValues.find(defineName) == inOutEntry.defineValues.end()){
                 inOutEntry.defineValues.insert_or_assign(defineName, DefineEntry{
@@ -654,8 +657,19 @@ void ShaderCook::mergeInheritedDefines(ShaderEntry& inOutEntry, const CookVector
         if(!includeEntry.defaultVariant.empty()){
             if(inOutEntry.defaultVariant.empty())
                 inOutEntry.defaultVariant = includeEntry.defaultVariant;
-            else
-                inOutEntry.defaultVariant = includeEntry.defaultVariant + ";" + inOutEntry.defaultVariant;
+            else{
+                const usize includeVariantSize = includeEntry.defaultVariant.size();
+                const usize currentVariantSize = inOutEntry.defaultVariant.size();
+                AString mergedDefaultVariant;
+                if(includeVariantSize < Limit<usize>::s_Max
+                    && includeVariantSize + 1u <= Limit<usize>::s_Max - currentVariantSize
+                )
+                    mergedDefaultVariant.reserve(includeVariantSize + 1u + currentVariantSize);
+                mergedDefaultVariant += includeEntry.defaultVariant;
+                mergedDefaultVariant += ';';
+                mergedDefaultVariant += inOutEntry.defaultVariant;
+                inOutEntry.defaultVariant = Move(mergedDefaultVariant);
+            }
         }
     }
 }
@@ -671,7 +685,9 @@ bool ShaderCook::gatherShaderDependencies(const Path& sourcePath, const CookVect
 
 bool ShaderCook::expandDefineCombinations(const CookMap<AString, DefineEntry>& defineValues, CookVector<DefineCombo>& outCombinations){
     outCombinations.clear();
-    outCombinations.push_back(DefineCombo(CookAllocator<Pair<const AString, AString>>(m_memoryArena)));
+    DefineCombo initialCombo{CookAllocator<Pair<const AString, AString>>(m_memoryArena)};
+    initialCombo.reserve(defineValues.size());
+    outCombinations.push_back(Move(initialCombo));
 
     for(const auto& entry : sortedDefineEntries(defineValues)){
         const AString& defineName = *entry.key;

@@ -27,35 +27,6 @@ static const SIMDVectorConstU s_SIMDMatrixSelect0001 = { { { s_SELECT_0, s_SELEC
 
 NWB_INLINE bool ScalarNearEqual(f32 value0, f32 value1, f32 epsilon)noexcept{ return Abs(value0 - value1) <= epsilon; }
 
-NWB_INLINE void ScalarSinCos(f32* outSin, f32* outCos, f32 value)noexcept{
-    NWB_ASSERT(outSin != nullptr);
-    NWB_ASSERT(outCos != nullptr);
-
-    f32 quotient = s_1DIV2PI * value;
-    if(value >= 0.0f)
-        quotient = static_cast<f32>(static_cast<i32>(quotient + 0.5f));
-    else
-        quotient = static_cast<f32>(static_cast<i32>(quotient - 0.5f));
-
-    f32 y = value - (s_2PI * quotient);
-    f32 sign{};
-    if(y > s_PIDIV2){
-        y = s_PI - y;
-        sign = -1.0f;
-    }
-    else if(y < -s_PIDIV2){
-        y = -s_PI - y;
-        sign = -1.0f;
-    }
-    else{
-        sign = 1.0f;
-    }
-
-    const f32 y2 = y * y;
-    *outSin = (((((-2.3889859e-08f * y2 + 2.7525562e-06f) * y2 - 0.00019840874f) * y2 + 0.0083333310f) * y2 - 0.16666667f) * y2 + 1.0f) * y;
-    *outCos = sign * (((((-2.6051615e-07f * y2 + 2.4760495e-05f) * y2 - 0.0013888378f) * y2 + 0.041666638f) * y2 - 0.5f) * y2 + 1.0f);
-}
-
 NWB_INLINE SIMDVector SIMDCALL MatrixRowMultiply(SIMDVector row, const SIMDMatrix& matrix)noexcept{
 #if defined(NWB_HAS_SCALAR)
     return SIMDConvertDetail::MakeF32(
@@ -673,7 +644,7 @@ NWB_INLINE SIMDMatrix SIMDCALL MatrixScalingFromVector(SIMDVector scale)noexcept
 NWB_INLINE SIMDMatrix SIMDCALL MatrixRotationX(f32 angle)noexcept{
     f32 sinAngle{};
     f32 cosAngle{};
-    SIMDMatrixDetail::ScalarSinCos(&sinAngle, &cosAngle, angle);
+    SIMDVectorDetail::ScalarSinCos(&sinAngle, &cosAngle, angle);
 
     SIMDMatrix matrix{};
     matrix.v[0] = s_SIMDIdentityR0;
@@ -686,7 +657,7 @@ NWB_INLINE SIMDMatrix SIMDCALL MatrixRotationX(f32 angle)noexcept{
 NWB_INLINE SIMDMatrix SIMDCALL MatrixRotationY(f32 angle)noexcept{
     f32 sinAngle{};
     f32 cosAngle{};
-    SIMDMatrixDetail::ScalarSinCos(&sinAngle, &cosAngle, angle);
+    SIMDVectorDetail::ScalarSinCos(&sinAngle, &cosAngle, angle);
 
     SIMDMatrix matrix{};
     matrix.v[0] = VectorSet(cosAngle, 0.0f, sinAngle, 0.0f);
@@ -699,7 +670,7 @@ NWB_INLINE SIMDMatrix SIMDCALL MatrixRotationY(f32 angle)noexcept{
 NWB_INLINE SIMDMatrix SIMDCALL MatrixRotationZ(f32 angle)noexcept{
     f32 sinAngle{};
     f32 cosAngle{};
-    SIMDMatrixDetail::ScalarSinCos(&sinAngle, &cosAngle, angle);
+    SIMDVectorDetail::ScalarSinCos(&sinAngle, &cosAngle, angle);
 
     SIMDMatrix matrix{};
     matrix.v[0] = VectorSet(cosAngle, -sinAngle, 0.0f, 0.0f);
@@ -755,7 +726,7 @@ NWB_INLINE SIMDMatrix SIMDCALL MatrixRotationRollPitchYaw(f32 pitch, f32 yaw, f3
 NWB_INLINE SIMDMatrix SIMDCALL MatrixRotationNormal(SIMDVector normalAxis, f32 angle)noexcept{
     f32 sinAngle{};
     f32 cosAngle{};
-    SIMDMatrixDetail::ScalarSinCos(&sinAngle, &cosAngle, angle);
+    SIMDVectorDetail::ScalarSinCos(&sinAngle, &cosAngle, angle);
 
 #if defined(NWB_HAS_SCALAR) || defined(NWB_HAS_NEON)
     const SIMDVector a = VectorSet(-sinAngle, cosAngle, 1.0f - cosAngle, 0.0f);
@@ -1040,7 +1011,7 @@ NWB_INLINE SIMDMatrix SIMDCALL MatrixPerspectiveFovLH(f32 fovAngleY, f32 aspectR
 
     f32 sinFov{};
     f32 cosFov{};
-    SIMDMatrixDetail::ScalarSinCos(&sinFov, &cosFov, 0.5f * fovAngleY);
+    SIMDVectorDetail::ScalarSinCos(&sinFov, &cosFov, 0.5f * fovAngleY);
     const f32 height = cosFov / sinFov;
     const f32 width = height / aspectRatio;
     const f32 range = farZ / (farZ - nearZ);
@@ -1060,7 +1031,7 @@ NWB_INLINE SIMDMatrix SIMDCALL MatrixPerspectiveFovRH(f32 fovAngleY, f32 aspectR
 
     f32 sinFov{};
     f32 cosFov{};
-    SIMDMatrixDetail::ScalarSinCos(&sinFov, &cosFov, 0.5f * fovAngleY);
+    SIMDVectorDetail::ScalarSinCos(&sinFov, &cosFov, 0.5f * fovAngleY);
     const f32 height = cosFov / sinFov;
     const f32 width = height / aspectRatio;
     const f32 range = farZ / (nearZ - farZ);

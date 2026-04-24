@@ -5,6 +5,8 @@
 #include <impl/ecs_graphics/deformable_picking.h>
 #include <impl/ecs_graphics/deformable_surface_edit.h>
 
+#include <tests/test_context.h>
+
 #include <core/common/common.h>
 #include <core/scene/transform_component.h>
 
@@ -21,20 +23,7 @@ namespace __hidden_ecs_graphics_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct TestContext{
-    u32 passed = 0;
-    u32 failed = 0;
-
-    void checkTrue(const bool condition, const char* expression, const char* file, const int line){
-        if(condition){
-            ++passed;
-            return;
-        }
-
-        ++failed;
-        NWB_CERR << file << '(' << line << "): check failed: " << expression << '\n';
-    }
-};
+using TestContext = NWB::Tests::TestContext;
 
 
 #define NWB_ECS_GRAPHICS_TEST_CHECK(context, expression) (context).checkTrue((expression), #expression, __FILE__, __LINE__)

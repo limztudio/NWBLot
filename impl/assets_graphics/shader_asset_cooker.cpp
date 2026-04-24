@@ -203,6 +203,25 @@ struct PreparedShaderPlan{
         : preparedEntries(Core::ShaderCook::CookAllocator<PreparedShaderEntry>(arena))
     {}
 };
+
+template<typename EntryT, typename PathHashSetT, typename EntryVectorT>
+static bool AppendUniquePropertyAssetEntry(EntryT& entry, PathHashSetT& seenPathHashes, EntryVectorT& outEntries){
+    if(!entry.virtualPath)
+        return true;
+
+    const NameHash pathHash = entry.virtualPath.hash();
+    if(!seenPathHashes.insert(pathHash).second){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("ShaderAssetCooker: duplicate property asset virtual path '{}'"),
+            StringConvert(entry.virtualPath.c_str())
+        );
+        return false;
+    }
+
+    outEntries.push_back(Move(entry));
+    return true;
+}
+
 using StagedVolumePaths = StagedDirectoryPaths;
 
 static StagedVolumePaths BuildStagedVolumePaths(const Path& outputDirectory, const AStringView volumeName, const AStringView configurationSafeName){
@@ -913,6 +932,23 @@ static bool ParseU16Value(const Path& nwbFilePath, const Core::Metascript::Value
     return true;
 }
 
+static const Core::Metascript::Value* FindRequiredListField(
+    const Path& nwbFilePath,
+    const Core::Metascript::Value& map,
+    const AStringView fieldName)
+{
+    const Core::Metascript::Value* field = FindField(map, fieldName);
+    if(field && field->isList())
+        return field;
+
+    NWB_LOGGER_ERROR(
+        NWB_TEXT("Deformable geometry meta '{}': '{}' must be a list"),
+        PathToString<tchar>(nwbFilePath),
+        StringConvert(fieldName)
+    );
+    return nullptr;
+}
+
 template<usize ComponentCount>
 static bool ParseF32Tuple(
     const Path& nwbFilePath,
@@ -974,15 +1010,9 @@ static bool ParseFloatListField(
 ){
     outValues.clear();
 
-    const Core::Metascript::Value* field = FindField(asset, fieldName);
-    if(!field || !field->isList()){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Deformable geometry meta '{}': '{}' must be a list"),
-            PathToString<tchar>(nwbFilePath),
-            StringConvert(fieldName)
-        );
+    const Core::Metascript::Value* field = FindRequiredListField(nwbFilePath, asset, fieldName);
+    if(!field)
         return false;
-    }
 
     const auto& list = field->asList();
     outValues.reserve(list.size());
@@ -1022,15 +1052,9 @@ static bool ParseU32ListField(
 ){
     outValues.clear();
 
-    const Core::Metascript::Value* field = FindField(map, fieldName);
-    if(!field || !field->isList()){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Deformable geometry meta '{}': '{}' must be a list"),
-            PathToString<tchar>(nwbFilePath),
-            StringConvert(fieldName)
-        );
+    const Core::Metascript::Value* field = FindRequiredListField(nwbFilePath, map, fieldName);
+    if(!field)
         return false;
-    }
 
     const auto& list = field->asList();
     outValues.reserve(list.size());
@@ -1114,11 +1138,9 @@ static bool ParseDeformableIndexField(
 ){
     outIndices.clear();
 
-    const Core::Metascript::Value* field = FindField(asset, "indices");
-    if(!field || !field->isList()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': 'indices' must be a list"), PathToString<tchar>(nwbFilePath));
+    const Core::Metascript::Value* field = FindRequiredListField(nwbFilePath, asset, "indices");
+    if(!field)
         return false;
-    }
     if(!AppendU32Recursive(nwbFilePath, *field, "indices", outIndices))
         return false;
     if(outIndices.empty()){
@@ -2093,17 +2115,8 @@ static bool ParseAssetMetadata(
             if(!ParseMaterialMeta(shaderCook, discoveredNwbFile, doc, materialEntry))
                 return false;
 
-            if(materialEntry.virtualPath){
-                const NameHash materialPathHash = materialEntry.virtualPath.hash();
-                if(!seenPropertyAssetPathHashes.insert(materialPathHash).second){
-                    NWB_LOGGER_ERROR(
-                        NWB_TEXT("ShaderAssetCooker: duplicate property asset virtual path '{}'"),
-                        StringConvert(materialEntry.virtualPath.c_str())
-                    );
-                    return false;
-                }
-                outMetadata.materialEntries.push_back(Move(materialEntry));
-            }
+            if(!AppendUniquePropertyAssetEntry(materialEntry, seenPropertyAssetPathHashes, outMetadata.materialEntries))
+                return false;
             continue;
         }
 
@@ -2112,17 +2125,8 @@ static bool ParseAssetMetadata(
             if(!ParseGeometryMeta(discoveredNwbFile, doc, geometryEntry))
                 return false;
 
-            if(geometryEntry.virtualPath){
-                const NameHash geometryPathHash = geometryEntry.virtualPath.hash();
-                if(!seenPropertyAssetPathHashes.insert(geometryPathHash).second){
-                    NWB_LOGGER_ERROR(
-                        NWB_TEXT("ShaderAssetCooker: duplicate property asset virtual path '{}'"),
-                        StringConvert(geometryEntry.virtualPath.c_str())
-                    );
-                    return false;
-                }
-                outMetadata.geometryEntries.push_back(Move(geometryEntry));
-            }
+            if(!AppendUniquePropertyAssetEntry(geometryEntry, seenPropertyAssetPathHashes, outMetadata.geometryEntries))
+                return false;
             continue;
         }
 
@@ -2131,17 +2135,8 @@ static bool ParseAssetMetadata(
             if(!ParseDeformableGeometryMeta(discoveredNwbFile, doc, geometryEntry))
                 return false;
 
-            if(geometryEntry.virtualPath){
-                const NameHash geometryPathHash = geometryEntry.virtualPath.hash();
-                if(!seenPropertyAssetPathHashes.insert(geometryPathHash).second){
-                    NWB_LOGGER_ERROR(
-                        NWB_TEXT("ShaderAssetCooker: duplicate property asset virtual path '{}'"),
-                        StringConvert(geometryEntry.virtualPath.c_str())
-                    );
-                    return false;
-                }
-                outMetadata.deformableGeometryEntries.push_back(Move(geometryEntry));
-            }
+            if(!AppendUniquePropertyAssetEntry(geometryEntry, seenPropertyAssetPathHashes, outMetadata.deformableGeometryEntries))
+                return false;
             continue;
         }
 

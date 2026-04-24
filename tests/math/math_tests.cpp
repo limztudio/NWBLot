@@ -4,12 +4,12 @@
 
 #include <core/common/common.h>
 
+#include <tests/test_context.h>
+
 #include <global/simdmath.h>
 #include <global/compile.h>
 #include <global/limit.h>
 #include <global/simplemath.h>
-
-#include <iostream>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -21,20 +21,7 @@ namespace __hidden_math_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct TestContext{
-    u32 passed = 0;
-    u32 failed = 0;
-
-    void checkTrue(const bool condition, const char* expression, const char* file, const int line){
-        if(condition){
-            ++passed;
-            return;
-        }
-
-        ++failed;
-        NWB_CERR << file << '(' << line << "): check failed: " << expression << '\n';
-    }
-};
+using TestContext = NWB::Tests::TestContext;
 
 
 #define NWB_MATH_TEST_CHECK(context, expression) (context).checkTrue((expression), #expression, __FILE__, __LINE__)

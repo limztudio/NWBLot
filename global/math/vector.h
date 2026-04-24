@@ -59,6 +59,35 @@ NWB_INLINE f32 RoundToNearest(f32 value)noexcept{
     return integer + 1.0f;
 }
 
+NWB_INLINE void ScalarSinCos(f32* outSin, f32* outCos, f32 value)noexcept{
+    NWB_ASSERT(outSin != nullptr);
+    NWB_ASSERT(outCos != nullptr);
+
+    f32 quotient = s_1DIV2PI * value;
+    if(value >= 0.0f)
+        quotient = static_cast<f32>(static_cast<i32>(quotient + 0.5f));
+    else
+        quotient = static_cast<f32>(static_cast<i32>(quotient - 0.5f));
+
+    f32 y = value - (s_2PI * quotient);
+    f32 sign{};
+    if(y > s_PIDIV2){
+        y = s_PI - y;
+        sign = -1.0f;
+    }
+    else if(y < -s_PIDIV2){
+        y = -s_PI - y;
+        sign = -1.0f;
+    }
+    else{
+        sign = 1.0f;
+    }
+
+    const f32 y2 = y * y;
+    *outSin = (((((-2.3889859e-08f * y2 + 2.7525562e-06f) * y2 - 0.00019840874f) * y2 + 0.0083333310f) * y2 - 0.16666667f) * y2 + 1.0f) * y;
+    *outCos = sign * (((((-2.6051615e-07f * y2 + 2.4760495e-05f) * y2 - 0.0013888378f) * y2 + 0.041666638f) * y2 - 0.5f) * y2 + 1.0f);
+}
+
 NWB_INLINE u32 TruncateBits(f32 value)noexcept{
     union{
         f32 f;

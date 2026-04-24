@@ -12,13 +12,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(__cplusplus)
 #include <core/global.h>
 
+#if defined(__cplusplus)
 #include <cstddef>
 #else
-#include <core/global.h>
-
 #include <core/common/common.h>
 #endif
 

@@ -289,18 +289,18 @@ void DeformableRuntimeMeshCache::update(Core::ECS::World& world){
     if(!trackActiveEntities)
         return;
 
-    Vector<
-        Core::ECS::EntityID,
-        Core::Alloc::ScratchAllocator<Core::ECS::EntityID>
-    > staleEntities{Core::Alloc::ScratchAllocator<Core::ECS::EntityID>(scratchArena)};
-    staleEntities.reserve(m_instances.size());
-    for(const auto& [entity, instance] : m_instances){
-        (void)instance;
-        if(activeEntities.find(entity) == activeEntities.end())
-            staleEntities.push_back(entity);
+    for(auto it = m_instances.begin(); it != m_instances.end();){
+        const Core::ECS::EntityID entity = it->first;
+        if(activeEntities.find(entity) != activeEntities.end()){
+            ++it;
+            continue;
+        }
+
+        const DeformableRuntimeMeshInstance& instance = it.value();
+        m_handleToEntity.erase(instance.handle.value);
+        releaseSource(instance.source.name());
+        it = m_instances.erase(it);
     }
-    for(const Core::ECS::EntityID entity : staleEntities)
-        releaseRuntimeMesh(entity);
 }
 
 RuntimeMeshHandle DeformableRuntimeMeshCache::handleForEntity(const Core::ECS::EntityID entity)const{
@@ -588,7 +588,7 @@ void DeformableRuntimeMeshCache::releaseRuntimeMesh(const Core::ECS::EntityID en
     const DeformableRuntimeMeshInstance& instance = foundInstance.value();
     m_handleToEntity.erase(instance.handle.value);
     releaseSource(instance.source.name());
-    m_instances.erase(entity);
+    m_instances.erase(foundInstance);
 }
 
 void DeformableRuntimeMeshCache::releaseSource(const Name& sourceName){
@@ -600,13 +600,13 @@ void DeformableRuntimeMeshCache::releaseSource(const Name& sourceName){
     if(source.referenceCount > 0u)
         --source.referenceCount;
     if(source.referenceCount == 0u)
-        m_sources.erase(sourceName);
+        m_sources.erase(foundSource);
 }
 
 void DeformableRuntimeMeshCache::eraseUnusedSource(const Name& sourceName){
     const auto foundSource = m_sources.find(sourceName);
     if(foundSource != m_sources.end() && foundSource.value().referenceCount == 0u)
-        m_sources.erase(sourceName);
+        m_sources.erase(foundSource);
 }
 
 Name DeformableRuntimeMeshCache::deriveRuntimeBufferName(const DeformableRuntimeMeshInstance& instance, const AStringView suffix)const{

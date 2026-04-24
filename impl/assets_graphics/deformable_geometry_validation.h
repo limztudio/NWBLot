@@ -266,7 +266,8 @@ struct MorphPayloadFailureInfo{
             return MakeMorphPayloadFailure(MorphPayloadFailure::EmptyMorph, morphIndex);
         if(morph.deltas.size() > static_cast<usize>(Limit<u32>::s_Max))
             return MakeMorphPayloadFailure(MorphPayloadFailure::MorphDeltaCountLimit, morphIndex);
-        if(!seenMorphNames.insert(morph.name.hash()).second)
+        const auto morphNameInsert = seenMorphNames.insert(morph.name.hash());
+        if(!morphNameInsert.second)
             return MakeMorphPayloadFailure(MorphPayloadFailure::DuplicateMorphName, morphIndex);
 
         HashSet<u32, Hasher<u32>, EqualTo<u32>, Core::Alloc::ScratchAllocator<u32>> seenDeltaVertices(
@@ -286,7 +287,8 @@ struct MorphPayloadFailureInfo{
                     deltaIndex,
                     delta.vertexId
                 );
-            if(!seenDeltaVertices.insert(delta.vertexId).second)
+            const auto deltaVertexInsert = seenDeltaVertices.insert(delta.vertexId);
+            if(!deltaVertexInsert.second)
                 return MakeMorphPayloadFailure(
                     MorphPayloadFailure::DuplicateMorphDeltaVertex,
                     morphIndex,

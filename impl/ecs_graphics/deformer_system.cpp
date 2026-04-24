@@ -444,21 +444,21 @@ void DeformerSystem::render(Core::IFramebuffer* framebuffer){
     );
 
     if(trackLiveHandles){
-        Vector<u64, Core::Alloc::ScratchAllocator<u64>> staleResources{
-            Core::Alloc::ScratchAllocator<u64>(scratchArena)
-        };
-        staleResources.reserve(m_runtimeResources.size());
-        for(const auto& [handle, resources] : m_runtimeResources){
+        for(auto it = m_runtimeResources.begin(); it != m_runtimeResources.end();){
+            const u64 handle = it->first;
+            const RuntimeResources& resources = it.value();
             const bool live = liveHandles.find(handle) != liveHandles.end();
             const DeformableRuntimeMeshInstance* instance = live
                 ? m_rendererSystem.findDeformableRuntimeMesh(resources.handle)
                 : nullptr
             ;
-            if(!live || !instance || instance->editRevision != resources.editRevision)
-                staleResources.push_back(handle);
+            if(!live || !instance || instance->editRevision != resources.editRevision){
+                it = m_runtimeResources.erase(it);
+                continue;
+            }
+
+            ++it;
         }
-        for(const u64 handle : staleResources)
-            m_runtimeResources.erase(handle);
     }
 
     if(candidates.empty())
@@ -696,7 +696,7 @@ bool DeformerSystem::dispatchRuntimeMesh(
             return false;
 
         if(foundResources != m_runtimeResources.end())
-            m_runtimeResources.erase(instance.handle.value);
+            m_runtimeResources.erase(foundResources);
         return copyRestToDeformed(commandList, instance);
     }
     if(!ensurePipeline())

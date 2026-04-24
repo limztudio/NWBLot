@@ -2369,23 +2369,21 @@ void RendererSystem::pruneDeformableGeometryResources(){
     if(!m_deformableRuntimeCache || m_geometryMeshes.empty())
         return;
 
-    Core::Alloc::ScratchArena<> scratchArena;
-    Vector<Name, Core::Alloc::ScratchAllocator<Name>> staleKeys{
-        Core::Alloc::ScratchAllocator<Name>(scratchArena)
-    };
-    staleKeys.reserve(m_geometryMeshes.size());
-
-    for(const auto& [geometryKey, geometry] : m_geometryMeshes){
-        if(!geometry.runtimeMesh.valid())
+    for(auto it = m_geometryMeshes.begin(); it != m_geometryMeshes.end();){
+        const GeometryResources& geometry = it.value();
+        if(!geometry.runtimeMesh.valid()){
+            ++it;
             continue;
+        }
 
         const DeformableRuntimeMeshInstance* instance = m_deformableRuntimeCache->findInstance(geometry.runtimeMesh);
-        if(!instance || instance->editRevision != geometry.runtimeEditRevision)
-            staleKeys.push_back(geometryKey);
-    }
+        if(!instance || instance->editRevision != geometry.runtimeEditRevision){
+            it = m_geometryMeshes.erase(it);
+            continue;
+        }
 
-    for(const Name& key : staleKeys)
-        m_geometryMeshes.erase(key);
+        ++it;
+    }
 }
 
 bool RendererSystem::ensureMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset, MaterialSurfaceInfo*& outInfo){
@@ -2753,7 +2751,7 @@ bool RendererSystem::ensureRendererPipeline(
 
     auto removeFailedEntry = [&](){
         if(inserted)
-            m_materialPipelines.erase(pipelineKey);
+            m_materialPipelines.erase(it);
     };
     auto failMaterialPipeline = [&](){
         removeFailedEntry();

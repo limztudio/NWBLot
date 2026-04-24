@@ -6,12 +6,15 @@
 
 
 #include <limits.h>
+#include <stdarg.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <iostream>
 
 #include <global/assert.h>
+#include <global/compile.h>
 
 #if defined(__cplusplus)
 #define tlsf_decl inline
@@ -19,7 +22,19 @@
 #define tlsf_decl static
 #endif
 
-static int (*const tlsf_report)(const char*, ...) = printf;
+static int tlsf_report(const char* format, ...)
+{
+    char buffer[512];
+
+    va_list args;
+    va_start(args, format);
+    const int written = NWB_VSNPRINTF(buffer, sizeof(buffer), format, args);
+    va_end(args);
+
+    buffer[sizeof(buffer) - 1u] = '\0';
+    NWB_CERR << buffer;
+    return written;
+}
 
 /*
 ** Architecture-specific bit manipulation routines.

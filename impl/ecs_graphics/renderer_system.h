@@ -52,8 +52,9 @@ struct InstanceGpuData{
     Float4 rotation = Float4(0.f, 0.f, 0.f, 1.f);
     Float4 translation = Float4(0.f, 0.f, 0.f, 0.f);
     Float4 scale = Float4(1.f, 1.f, 1.f, 0.f);
+    Float4 colorTint = Float4(1.f, 1.f, 1.f, 1.f);
 };
-static_assert(sizeof(InstanceGpuData) == sizeof(f32) * 12u, "InstanceGpuData layout must match the mesh shaders");
+static_assert(sizeof(InstanceGpuData) == sizeof(f32) * 16u, "InstanceGpuData layout must match the mesh shaders");
 static_assert(alignof(InstanceGpuData) >= alignof(Float4), "InstanceGpuData must stay SIMD-aligned");
 
 
@@ -293,7 +294,6 @@ private:
         MaterialPassDrawItemVector& computeDrawItems,
         InstanceGpuDataVector& instanceData
     );
-    [[nodiscard]] usize visibleRendererCount();
     [[nodiscard]] bool ensureInstanceBufferCapacity(usize instanceCount);
     [[nodiscard]] bool ensureMeshViewBuffer(Core::ICommandList& commandList, f32 fallbackAspectRatio);
     [[nodiscard]] bool uploadInstanceBuffer(Core::ICommandList& commandList, const InstanceGpuDataVector& instanceData);

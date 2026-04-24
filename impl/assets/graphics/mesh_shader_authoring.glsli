@@ -39,6 +39,7 @@ struct NwbMeshInstanceData{
     vec4 rotation;
     vec4 translation;
     vec4 scale;
+    vec4 colorTint;
 };
 
 #define NWB_MESH_BUILD_VERTEX_SIGNATURE NwbMeshGeneratedVertex nwbMeshBuildVertex(uint triangleIndex, uint corner, NwbMeshSourceVertex source)
@@ -132,6 +133,11 @@ bool nwbMeshInvocationActive(){
     return nwbMeshGroupThreadID() < nwbMeshActiveTriangleCount();
 }
 
+vec3 nwbMeshSafeNormalize(vec3 value, vec3 fallback){
+    const float lengthSquared = dot(value, value);
+    return lengthSquared > 0.000001 ? (value * inversesqrt(lengthSquared)) : fallback;
+}
+
 mat4 nwbMeshWorldToClip(){
     return g_NwbMeshWorldToClip;
 }
@@ -206,16 +212,30 @@ NwbMeshInstanceData nwbMeshLoadInstance(){
     return nwbMeshInstances[nwbMeshInstanceIndex()];
 }
 
-vec3 nwbMeshTransformPosition(vec3 localPosition){
-    const NwbMeshInstanceData instance = nwbMeshLoadInstance();
+vec4 nwbMeshInstanceColorTint(const NwbMeshInstanceData instance){
+    return instance.colorTint;
+}
+
+vec4 nwbMeshInstanceColorTint(){
+    return nwbMeshInstanceColorTint(nwbMeshLoadInstance());
+}
+
+vec3 nwbMeshTransformPosition(vec3 localPosition, const NwbMeshInstanceData instance){
     return nwbMeshRotateVectorByQuaternion(localPosition * instance.scale.xyz, instance.rotation)
         + instance.translation.xyz
     ;
 }
 
-vec3 nwbMeshTransformDirection(vec3 localDirection){
-    const NwbMeshInstanceData instance = nwbMeshLoadInstance();
+vec3 nwbMeshTransformPosition(vec3 localPosition){
+    return nwbMeshTransformPosition(localPosition, nwbMeshLoadInstance());
+}
+
+vec3 nwbMeshTransformDirection(vec3 localDirection, const NwbMeshInstanceData instance){
     return normalize(nwbMeshRotateVectorByQuaternion(localDirection, instance.rotation));
+}
+
+vec3 nwbMeshTransformDirection(vec3 localDirection){
+    return nwbMeshTransformDirection(localDirection, nwbMeshLoadInstance());
 }
 
 #if NWB_MESH_SHADER_EMULATION_COMPUTE
@@ -304,6 +324,21 @@ NwbMeshGeneratedVertex nwbMeshCulledVertex(){
 }
 #endif
 
+void nwbMeshApplyGeneratedTriangleFrame(inout NwbMeshGeneratedVertex vertices[3]){
+    if(nwbMeshSourceVertexLayout() != NWB_MESH_SOURCE_VERTEX_LAYOUT_POSITION_COLOR)
+        return;
+
+    const vec3 edge0 = vertices[1].worldPosition.xyz - vertices[0].worldPosition.xyz;
+    const vec3 edge1 = vertices[2].worldPosition.xyz - vertices[0].worldPosition.xyz;
+    const vec3 faceNormal = nwbMeshSafeNormalize(cross(edge0, edge1), vertices[0].normal);
+    const vec3 faceTangent = nwbMeshSafeNormalize(edge0, vertices[0].tangent.xyz);
+
+    for(uint corner = 0u; corner < 3u; ++corner){
+        vertices[corner].normal = faceNormal;
+        vertices[corner].tangent = vec4(faceTangent, vertices[corner].tangent.w);
+    }
+}
+
 NWB_MESH_BUILD_VERTEX_SIGNATURE;
 
 void main(){
@@ -326,6 +361,7 @@ void main(){
             nwbMeshLoadSourceVertex(triangleIndex, corner)
         );
     }
+    nwbMeshApplyGeneratedTriangleFrame(generatedVertices);
 
 #if NWB_MESH_SHADER_EMULATION_COMPUTE
     if(nwbMeshTriangleCulled(generatedVertices)){

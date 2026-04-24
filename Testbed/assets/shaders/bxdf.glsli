@@ -101,16 +101,16 @@ vec3 nwbProjectApplyDirectionalDebugShading(vec3 baseColor, vec3 normal, vec4 ta
     const float bitangentLobe = pow(max(abs(dot(bitangentVector, halfVector)), 0.0), 18.0);
     const float backLight = max(dot(-normalVector, lightVector), 0.0);
 
-    const vec3 hemiAmbient = mix(vec3(0.025, 0.03, 0.045), vec3(0.09, 0.12, 0.16), skyAmount);
-    const vec3 diffuse = baseColor * (hemiAmbient + lightRadiance * (0.06 + 0.94 * keyDiffuse));
+    const vec3 hemiAmbient = mix(vec3(0.008, 0.012, 0.02), vec3(0.045, 0.055, 0.075), skyAmount);
+    const vec3 diffuse = baseColor * (hemiAmbient + lightRadiance * (0.02 + 0.98 * keyDiffuse));
     const vec3 specularColor = lightRadiance * mix(vec3(0.78), vec3(1.0, 0.9, 0.68), 0.65) * specular * (0.05 + 0.95 * ndotl);
-    const vec3 rimColor = mix(vec3(0.12, 0.26, 0.52), lightRadiance, 0.25) * rim * (0.12 + 0.88 * ndotl);
+    const vec3 rimColor = mix(vec3(0.12, 0.26, 0.52), lightRadiance, 0.25) * rim * (0.04 + 0.96 * ndotl);
     const vec3 frameCue = 0.12 * (
         vec3(1.0, 0.35, 0.2) * tangentLobe
         + vec3(0.2, 0.7, 1.0) * bitangentLobe
     );
-    const vec3 backLightCue = vec3(0.035, 0.06, 0.12) * backLight;
-    const vec3 shadowColorCue = baseColor * vec3(0.08, 0.12, 0.22) * shadowCue;
+    const vec3 backLightCue = vec3(0.012, 0.02, 0.04) * backLight;
+    const vec3 shadowColorCue = baseColor * vec3(0.025, 0.04, 0.08) * shadowCue;
     const vec3 litColor = diffuse + specularColor + rimColor + frameCue + backLightCue + shadowColorCue;
 
     return litColor / (litColor + vec3(0.65));

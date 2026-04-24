@@ -357,8 +357,12 @@ static usize NextInstanceBufferCapacity(const usize currentCapacity, const usize
     return capacity;
 }
 
-static InstanceGpuData BuildInstanceGpuData(const Core::Scene::TransformComponent* transform){
+static InstanceGpuData BuildInstanceGpuData(
+    const Core::Scene::TransformComponent* transform,
+    const Float4& colorTint)
+{
     InstanceGpuData data;
+    data.colorTint = colorTint;
     if(!transform)
         return data;
 
@@ -795,9 +799,6 @@ void RendererSystem::render(Core::IFramebuffer* framebuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create render command list"));
         return;
     }
-    if(!ensureInstanceBufferCapacity(visibleRendererCount()))
-        return;
-
     commandList->open();
 
     clearDeferredTargets(*commandList, *deferredTargets);
@@ -1671,6 +1672,7 @@ void RendererSystem::gatherMaterialPassDrawItems(
     auto appendDrawForGeometry = [&](
         const Core::ECS::EntityID entity,
         const Core::Assets::AssetRef<Material>& material,
+        const Float4& colorTint,
         GeometryResources& geometry
     ) -> bool{
         if(!geometry.valid())
@@ -1704,7 +1706,7 @@ void RendererSystem::gatherMaterialPassDrawItems(
             }
 
             const u32 instanceIndex = static_cast<u32>(instanceData.size());
-            instanceData.push_back(__hidden_ecs_graphics::BuildInstanceGpuData(transform));
+            instanceData.push_back(__hidden_ecs_graphics::BuildInstanceGpuData(transform, colorTint));
             return instanceIndex;
         };
 
@@ -1747,7 +1749,7 @@ void RendererSystem::gatherMaterialPassDrawItems(
         if(!ensureGeometryLoaded(renderer.geometry, geometry))
             continue;
         if(geometry)
-            appendDrawForGeometry(entity, renderer.material, *geometry);
+            appendDrawForGeometry(entity, renderer.material, renderer.colorTint, *geometry);
     }
 
     auto deformableRendererView = m_world.view<DeformableRendererComponent>();
@@ -1763,23 +1765,8 @@ void RendererSystem::gatherMaterialPassDrawItems(
         if(!ensureDeformableGeometryResources(*instance, geometry))
             continue;
         if(geometry)
-            appendDrawForGeometry(entity, renderer.material, *geometry);
+            appendDrawForGeometry(entity, renderer.material, renderer.colorTint, *geometry);
     }
-}
-
-usize RendererSystem::visibleRendererCount(){
-    usize count = 0;
-    m_world.view<RendererComponent>().each([&](Core::ECS::EntityID entityId, RendererComponent& renderer){
-        (void)entityId;
-        if(renderer.visible)
-            ++count;
-    });
-    m_world.view<DeformableRendererComponent>().each([&](Core::ECS::EntityID entityId, DeformableRendererComponent& renderer){
-        (void)entityId;
-        if(renderer.visible)
-            ++count;
-    });
-    return count;
 }
 
 bool RendererSystem::ensureInstanceBufferCapacity(const usize instanceCount){

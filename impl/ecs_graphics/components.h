@@ -64,6 +64,7 @@ struct RuntimeMeshHandle{
 struct RendererComponent{
     Core::Assets::AssetRef<Geometry> geometry;
     Core::Assets::AssetRef<Material> material;
+    Float4 colorTint = Float4(1.f, 1.f, 1.f, 1.f);
     bool visible = true;
 };
 
@@ -116,6 +117,7 @@ struct DeformableRendererComponent{
     Core::Assets::AssetRef<DeformableGeometry> deformableGeometry;
     Core::Assets::AssetRef<Material> material;
     RuntimeMeshHandle runtimeMesh;
+    Float4 colorTint = Float4(1.f, 1.f, 1.f, 1.f);
     bool visible = true;
 };
 

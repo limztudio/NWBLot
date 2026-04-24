@@ -294,7 +294,8 @@ static void CreateRendererEntity(
     const TestbedGeometryRef& geometry,
     const TestbedMaterialRef& material,
     const Float4& position,
-    const f32 uniformScale
+    const f32 uniformScale,
+    const Float4& colorTint
 ){
     auto entity = world.createEntity();
     auto& transform = entity.addComponent<NWB::Core::Scene::TransformComponent>();
@@ -304,6 +305,7 @@ static void CreateRendererEntity(
     auto& renderer = entity.addComponent<NWB::Core::ECSGraphics::RendererComponent>();
     renderer.geometry = geometry;
     renderer.material = material;
+    renderer.colorTint = colorTint;
 }
 
 [[nodiscard]] static NWB::Core::ECSGraphics::DeformableJointMatrix BuildProxySkinJoint(const f32 angleRadians){
@@ -348,7 +350,8 @@ static void UpdateProxySkinPalette(
     const TestbedDeformableGeometryRef& geometry,
     const TestbedMaterialRef& material,
     const Float4& position,
-    const f32 uniformScale
+    const f32 uniformScale,
+    const Float4& colorTint
 ){
     auto entity = world.createEntity();
     auto& transform = entity.addComponent<NWB::Core::Scene::TransformComponent>();
@@ -358,6 +361,7 @@ static void UpdateProxySkinPalette(
     auto& renderer = entity.addComponent<NWB::Core::ECSGraphics::DeformableRendererComponent>();
     renderer.deformableGeometry = geometry;
     renderer.material = material;
+    renderer.colorTint = colorTint;
 
     auto& morphWeights = entity.addComponent<NWB::Core::ECSGraphics::DeformableMorphWeightsComponent>();
     morphWeights.weights.resize(1u);
@@ -376,7 +380,8 @@ static void UpdateProxySkinPalette(
 [[nodiscard]] static NWB::Core::ECS::EntityID CreateAccessoryRendererEntity(
     NWB::Core::ECS::World& world,
     const TestbedGeometryRef& geometry,
-    const TestbedMaterialRef& material){
+    const TestbedMaterialRef& material,
+    const Float4& colorTint){
     auto entity = world.createEntity();
     auto& transform = entity.addComponent<NWB::Core::Scene::TransformComponent>();
     transform.scale = Float4(s_AccessoryUniformScale, s_AccessoryUniformScale, s_AccessoryUniformScale);
@@ -384,6 +389,7 @@ static void UpdateProxySkinPalette(
     auto& renderer = entity.addComponent<NWB::Core::ECSGraphics::RendererComponent>();
     renderer.geometry = geometry;
     renderer.material = material;
+    renderer.colorTint = colorTint;
     renderer.visible = false;
     entity.addComponent<NWB::Core::ECSGraphics::DeformableAccessoryAttachmentComponent>();
     return entity.id();
@@ -482,35 +488,40 @@ bool ProjectTestbed::onStartup(){
         cubeGeometry,
         cubeMaterial,
         Float4(-0.55f, 0.0f, 0.0f),
-        0.65f
+        0.65f,
+        Float4(1.0f, 0.42f, 0.34f, 1.0f)
     );
     __hidden_project_testbed_runtime::CreateRendererEntity(
         *m_world,
         cubeGeometry,
         cubeMaterial,
         Float4(0.55f, 0.0f, 0.0f),
-        0.9f
+        0.9f,
+        Float4(0.35f, 0.72f, 1.0f, 1.0f)
     );
     __hidden_project_testbed_runtime::CreateRendererEntity(
         *m_world,
         sphereGeometry,
         transparentMaterial,
         Float4(1.45f, 0.0f, 0.0f),
-        0.75f
+        0.75f,
+        Float4(0.35f, 1.0f, 0.64f, 1.0f)
     );
     __hidden_project_testbed_runtime::CreateRendererEntity(
         *m_world,
         tetrahedronGeometry,
         transparentMaterial,
         Float4(-1.45f, 0.0f, 0.0f),
-        0.8f
+        0.8f,
+        Float4(1.0f, 0.82f, 0.28f, 1.0f)
     );
     m_deformableMorphEntity = __hidden_project_testbed_runtime::CreateDeformableRendererEntity(
         *m_world,
         deformableProxyGeometry,
         deformableUvMaterial,
         Float4(0.0f, 0.85f, 0.0f),
-        0.8f
+        0.8f,
+        Float4(0.78f, 0.55f, 1.0f, 1.0f)
     );
 
     NWB_LOGGER_ESSENTIAL_INFO(
@@ -919,7 +930,8 @@ void ProjectTestbed::attachPendingSurfaceEditAccessory(){
         __hidden_project_testbed_runtime::CreateAccessoryRendererEntity(
             *m_world,
             accessoryGeometry,
-            accessoryMaterial
+            accessoryMaterial,
+            Float4(1.0f, 0.85f, 0.25f, 1.0f)
         )
     ;
 

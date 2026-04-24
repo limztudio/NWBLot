@@ -2696,11 +2696,11 @@ struct MeshletState{
 struct RayTracingPipelineShaderDesc{
     ShaderHandle shader;
     BindingLayoutHandle bindingLayout;
-    Name exportName;
+    AString exportName;
 
     RayTracingPipelineShaderDesc& setShader(IShader* value){ shader = value; return *this; }
     RayTracingPipelineShaderDesc& setBindingLayout(IBindingLayout* value){ bindingLayout = value; return *this; }
-    constexpr RayTracingPipelineShaderDesc& setExportName(const Name& value){ exportName = value; return *this; }
+    RayTracingPipelineShaderDesc& setExportName(AStringView value){ exportName = AString(value); return *this; }
 };
 
 struct RayTracingPipelineHitGroupDesc{
@@ -2708,14 +2708,14 @@ struct RayTracingPipelineHitGroupDesc{
     ShaderHandle anyHitShader;
     ShaderHandle intersectionShader;
     BindingLayoutHandle bindingLayout;
-    Name exportName;
+    AString exportName;
     bool isProceduralPrimitive = false;
 
     RayTracingPipelineHitGroupDesc& setClosestHitShader(IShader* value){ closestHitShader = value; return *this; }
     RayTracingPipelineHitGroupDesc& setAnyHitShader(IShader* value){ anyHitShader = value; return *this; }
     RayTracingPipelineHitGroupDesc& setIntersectionShader(IShader* value){ intersectionShader = value; return *this; }
     RayTracingPipelineHitGroupDesc& setBindingLayout(IBindingLayout* value){ bindingLayout = value; return *this; }
-    constexpr RayTracingPipelineHitGroupDesc& setExportName(const Name& value){ exportName = value; return *this; }
+    RayTracingPipelineHitGroupDesc& setExportName(AStringView value){ exportName = AString(value); return *this; }
     constexpr RayTracingPipelineHitGroupDesc& setIsProceduralPrimitive(bool value){ isProceduralPrimitive = value; return *this; }
 };
 
@@ -2746,10 +2746,10 @@ class IRayTracingShaderTable : public IResource{
 
 
 public:
-    virtual void setRayGenerationShader(const Name& exportName, IBindingSet* bindings = nullptr) = 0;
-    virtual u32 addMissShader(const Name& exportName, IBindingSet* bindings = nullptr) = 0;
-    virtual u32 addHitGroup(const Name& exportName, IBindingSet* bindings = nullptr) = 0;
-    virtual u32 addCallableShader(const Name& exportName, IBindingSet* bindings = nullptr) = 0;
+    virtual void setRayGenerationShader(AStringView exportName, IBindingSet* bindings = nullptr) = 0;
+    virtual u32 addMissShader(AStringView exportName, IBindingSet* bindings = nullptr) = 0;
+    virtual u32 addHitGroup(AStringView exportName, IBindingSet* bindings = nullptr) = 0;
+    virtual u32 addCallableShader(AStringView exportName, IBindingSet* bindings = nullptr) = 0;
     virtual void clearMissShaders() = 0;
     virtual void clearHitShaders() = 0;
     virtual void clearCallableShaders() = 0;

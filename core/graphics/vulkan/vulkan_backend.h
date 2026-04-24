@@ -1117,10 +1117,10 @@ public:
 
 
 public:
-    virtual void setRayGenerationShader(const Name& exportName, IBindingSet* bindings = nullptr)override;
-    virtual u32 addMissShader(const Name& exportName, IBindingSet* bindings = nullptr)override;
-    virtual u32 addHitGroup(const Name& exportName, IBindingSet* bindings = nullptr)override;
-    virtual u32 addCallableShader(const Name& exportName, IBindingSet* bindings = nullptr)override;
+    virtual void setRayGenerationShader(AStringView exportName, IBindingSet* bindings = nullptr)override;
+    virtual u32 addMissShader(AStringView exportName, IBindingSet* bindings = nullptr)override;
+    virtual u32 addHitGroup(AStringView exportName, IBindingSet* bindings = nullptr)override;
+    virtual u32 addCallableShader(AStringView exportName, IBindingSet* bindings = nullptr)override;
     virtual void clearMissShaders()override;
     virtual void clearHitShaders()override;
     virtual void clearCallableShaders()override;
@@ -1131,7 +1131,7 @@ public:
 private:
     void allocateSBTBuffer(BufferHandle& outBuffer, u64 sbtSize);
     u32 appendShaderRecord(
-        const Name& exportName,
+        AStringView exportName,
         BufferHandle& buffer,
         u64& offset,
         u32& count,
@@ -1139,7 +1139,7 @@ private:
         const tchar* recordName,
         const tchar* exportKind
     );
-    u32 findGroupIndex(const Name& exportName)const;
+    u32 findGroupIndex(AStringView exportName)const;
 
 
 private:
@@ -1339,6 +1339,31 @@ private:
 // State Tracker
 
 
+struct TextureSubresourceStateKey{
+    ITexture* texture = nullptr;
+    MipLevel mipLevel = 0;
+    ArraySlice arraySlice = 0;
+};
+
+struct TextureSubresourceStateKeyHasher{
+    [[nodiscard]] usize operator()(const TextureSubresourceStateKey& value)const noexcept{
+        usize seed = 0;
+        CoreDetail::HashCombine(seed, value.texture);
+        CoreDetail::HashCombine(seed, value.mipLevel);
+        CoreDetail::HashCombine(seed, value.arraySlice);
+        return seed;
+    }
+};
+
+struct TextureSubresourceStateKeyEqualTo{
+    [[nodiscard]] bool operator()(const TextureSubresourceStateKey& lhs, const TextureSubresourceStateKey& rhs)const noexcept{
+        return lhs.texture == rhs.texture
+            && lhs.mipLevel == rhs.mipLevel
+            && lhs.arraySlice == rhs.arraySlice
+            ;
+    }
+};
+
 class StateTracker final : NoCopy{
     friend class CommandList;
 
@@ -1361,6 +1386,8 @@ public:
     void beginTrackingTexture(ITexture* texture, TextureSubresourceSet subresources, ResourceStates::Mask state);
     void beginTrackingBuffer(IBuffer* buffer, ResourceStates::Mask state);
 
+    [[nodiscard]] bool isUavBarrierEnabledForTexture(ITexture* texture)const;
+    [[nodiscard]] bool isUavBarrierEnabledForBuffer(IBuffer* buffer)const;
     void setEnableUavBarriersForTexture(ITexture* texture, bool enableBarriers);
     void setEnableUavBarriersForBuffer(IBuffer* buffer, bool enableBarriers);
 
@@ -1382,7 +1409,7 @@ private:
 private:
     HashMap<ITexture*, ResourceStates::Mask, Hasher<ITexture*>, EqualTo<ITexture*>, Alloc::CustomAllocator<Pair<const ITexture*, ResourceStates::Mask>>> m_permanentTextureStates;
     HashMap<IBuffer*, ResourceStates::Mask, Hasher<IBuffer*>, EqualTo<IBuffer*>, Alloc::CustomAllocator<Pair<const IBuffer*, ResourceStates::Mask>>> m_permanentBufferStates;
-    HashMap<ITexture*, ResourceStates::Mask, Hasher<ITexture*>, EqualTo<ITexture*>, Alloc::CustomAllocator<Pair<const ITexture*, ResourceStates::Mask>>> m_textureStates;
+    HashMap<TextureSubresourceStateKey, ResourceStates::Mask, TextureSubresourceStateKeyHasher, TextureSubresourceStateKeyEqualTo, Alloc::CustomAllocator<Pair<const TextureSubresourceStateKey, ResourceStates::Mask>>> m_textureStates;
     HashMap<IBuffer*, ResourceStates::Mask, Hasher<IBuffer*>, EqualTo<IBuffer*>, Alloc::CustomAllocator<Pair<const IBuffer*, ResourceStates::Mask>>> m_bufferStates;
     HashMap<ITexture*, bool, Hasher<ITexture*>, EqualTo<ITexture*>, Alloc::CustomAllocator<Pair<const ITexture*, bool>>> m_textureUavBarriers;
     HashMap<IBuffer*, bool, Hasher<IBuffer*>, EqualTo<IBuffer*>, Alloc::CustomAllocator<Pair<const IBuffer*, bool>>> m_bufferUavBarriers;

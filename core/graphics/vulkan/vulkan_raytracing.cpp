@@ -940,7 +940,7 @@ RayTracingShaderTableHandle RayTracingPipeline::createShaderTable(){
     return RayTracingShaderTableHandle(sbt, RayTracingShaderTableHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
 
-u32 ShaderTable::findGroupIndex(const Name& exportName)const{
+u32 ShaderTable::findGroupIndex(const AStringView exportName)const{
     if(!m_pipeline)
         return UINT32_MAX;
 
@@ -959,13 +959,16 @@ u32 ShaderTable::findGroupIndex(const Name& exportName)const{
             continue;
         }
 
-        const Name shaderExportName = shaderDesc.exportName != NAME_NONE ? shaderDesc.exportName : ToName(desc.entryName);
+        const AStringView shaderExportName = !shaderDesc.exportName.empty()
+            ? AStringView(shaderDesc.exportName)
+            : AStringView(desc.entryName)
+            ;
         if(shaderExportName == exportName)
             return groupIndex;
         ++groupIndex;
     }
     for(const auto& hitGroup : m_pipeline->m_desc.hitGroups){
-        if(hitGroup.exportName == exportName)
+        if(AStringView(hitGroup.exportName) == exportName)
             return groupIndex;
         ++groupIndex;
     }
@@ -973,7 +976,7 @@ u32 ShaderTable::findGroupIndex(const Name& exportName)const{
 }
 
 u32 ShaderTable::appendShaderRecord(
-    const Name& exportName,
+    const AStringView exportName,
     BufferHandle& buffer,
     u64& offset,
     u32& count,
@@ -1055,7 +1058,7 @@ void ShaderTable::allocateSBTBuffer(BufferHandle& outBuffer, u64 sbtSize){
     outBuffer = m_device.createBuffer(bufferDesc);
 }
 
-void ShaderTable::setRayGenerationShader(const Name& exportName, IBindingSet* /*bindings*/){
+void ShaderTable::setRayGenerationShader(const AStringView exportName, IBindingSet* /*bindings*/){
     if(!m_pipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to set ray generation shader: shader table has no pipeline"));
         return;
@@ -1096,15 +1099,15 @@ void ShaderTable::setRayGenerationShader(const Name& exportName, IBindingSet* /*
     m_device.unmapBuffer(m_raygenBuffer.get());
 }
 
-u32 ShaderTable::addMissShader(const Name& exportName, IBindingSet* /*bindings*/){
+u32 ShaderTable::addMissShader(const AStringView exportName, IBindingSet* /*bindings*/){
     return appendShaderRecord(exportName, m_missBuffer, m_missOffset, m_missCount, NWB_TEXT("add miss shader"), NWB_TEXT("miss"), NWB_TEXT("Miss shader"));
 }
 
-u32 ShaderTable::addHitGroup(const Name& exportName, IBindingSet* /*bindings*/){
+u32 ShaderTable::addHitGroup(const AStringView exportName, IBindingSet* /*bindings*/){
     return appendShaderRecord(exportName, m_hitBuffer, m_hitOffset, m_hitCount, NWB_TEXT("add hit group"), NWB_TEXT("hit"), NWB_TEXT("Hit group"));
 }
 
-u32 ShaderTable::addCallableShader(const Name& exportName, IBindingSet* /*bindings*/){
+u32 ShaderTable::addCallableShader(const AStringView exportName, IBindingSet* /*bindings*/){
     return appendShaderRecord(exportName, m_callableBuffer, m_callableOffset, m_callableCount, NWB_TEXT("add callable shader"), NWB_TEXT("callable"), NWB_TEXT("Callable shader"));
 }
 

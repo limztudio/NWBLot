@@ -164,7 +164,7 @@ template<typename EdgeMap>
 
 template<typename VertexDegreeMap>
 void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
-    auto [it, inserted] = degrees.emplace(vertex, 0u);
+    auto it = degrees.emplace(vertex, 0u).first;
     ++it.value();
 }
 
@@ -901,9 +901,7 @@ void AccumulateMorphDelta(
 {
     outLookup.reserve(sourceDeltaCount);
     for(usize deltaIndex = 0u; deltaIndex < sourceDeltaCount; ++deltaIndex){
-        const auto [it, inserted] = outLookup.emplace(morph.deltas[deltaIndex].vertexId, deltaIndex);
-        (void)it;
-        if(!inserted)
+        if(!outLookup.emplace(morph.deltas[deltaIndex].vertexId, deltaIndex).second)
             return false;
     }
     return true;

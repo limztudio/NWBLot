@@ -152,7 +152,7 @@ public:
     }
 
     template<typename Func>
-    inline JobHandle submit(Func&& task, std::initializer_list<JobHandle> dependencies){
+    inline JobHandle submit(Func&& task, InitializerList<JobHandle> dependencies){
         return submitWithDependencies(JobFunction(Forward<Func>(task)), dependencies.begin(), dependencies.size());
     }
 
@@ -194,7 +194,7 @@ public:
         }
     }
 
-    inline void wait(std::initializer_list<JobHandle> handles){
+    inline void wait(InitializerList<JobHandle> handles){
         for(const JobHandle handle : handles)
             wait(handle);
     }
@@ -467,7 +467,7 @@ protected:
     }
 
     template<typename Func>
-    inline JobSystem::JobHandle scheduleJob(Func&& task, std::initializer_list<JobSystem::JobHandle> dependencies){
+    inline JobSystem::JobHandle scheduleJob(Func&& task, InitializerList<JobSystem::JobHandle> dependencies){
         return m_jobSystem.submit(Forward<Func>(task), dependencies);
     }
 
@@ -475,7 +475,7 @@ protected:
         m_jobSystem.wait(handle);
     }
 
-    inline void waitJobs(std::initializer_list<JobSystem::JobHandle> handles){
+    inline void waitJobs(InitializerList<JobSystem::JobHandle> handles){
         m_jobSystem.wait(handles);
     }
 

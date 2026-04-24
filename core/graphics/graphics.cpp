@@ -735,7 +735,7 @@ bool Graphics::animateRenderPresent(){
         }
     }
 
-    yield();
+    YieldThread();
 
     if(IDevice* device = getDevice())
         device->runGarbageCollection();

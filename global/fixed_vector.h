@@ -46,7 +46,7 @@ public:
     {
         resize(size);
     }
-    FixedVector(std::initializer_list<T> il)
+    FixedVector(InitializerList<T> il)
         : m_currentSize(0)
     {
         for(const T& i : il)

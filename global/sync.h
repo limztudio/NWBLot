@@ -39,13 +39,13 @@
 
 
 #if defined(NWB_PLATFORM_WINDOWS)
-inline void yield(){ SwitchToThread(); }
+inline void YieldThread(){ SwitchToThread(); }
 #else
-using std::this_thread::yield;
+inline void YieldThread(){ std::this_thread::yield(); }
 #endif
 
 
-inline void machine_pause([[maybe_unused]] i32 delay){
+inline void MachinePause([[maybe_unused]] i32 delay){
 #if defined(__ARM_ARCH_7A__) || defined(__aarch64__)
     while(delay > 0){
         __asm__ __volatile__("isb sy" ::: "memory");
@@ -57,7 +57,7 @@ inline void machine_pause([[maybe_unused]] i32 delay){
         --delay;
     }
 #else /* Generic */
-    yield();
+    YieldThread();
 #endif
 }
 
@@ -103,7 +103,7 @@ public:
         for(i32 i = 0; i < s_SpinCount; ++i){
             if(try_lock())
                 return;
-            machine_pause(1 << i);
+            MachinePause(1 << i);
         }
 
         u32 previousState = m_state.exchange(s_LockedContended, MemoryOrder::acquire);
@@ -146,19 +146,19 @@ private:
     //! Time delay, in units of "pause" instructions.
     /** Should be equal to approximately the number of "pause" instructions
       that take the same time as an context switch. Must be a power of two.*/
-    static constexpr i32 LOOPS_BEFORE_YIELD = 16;
+    static constexpr i32 s_LoopsBeforeYield = 16;
 
 
 public:
     // In many cases, an object of this type is initialized eagerly on hot path,
-    // as in for(atomic_backoff b; ; b.pause()) { /*loop body*/ }
+    // as in for(AtomicBackOff backoff; ; backoff.pause()) { /*loop body*/ }
     // For this reason, the construction cost must be very small!
     AtomicBackOff()
-        : count(1)
+        : m_count(1)
         {}
     // This constructor pauses immediately; do not use on hot paths!
     AtomicBackOff(bool)
-        : count(1)
+        : m_count(1)
         { pause(); }
 
     //! No Copy
@@ -168,23 +168,23 @@ public:
 public:
     //! Pause for a while.
     void pause(){
-        if(count <= LOOPS_BEFORE_YIELD){
-            machine_pause(count);
+        if(m_count <= s_LoopsBeforeYield){
+            MachinePause(m_count);
             // Pause twice as long the next time.
-            count <<= 1;
+            m_count <<= 1;
         }
         else{
             // Pause is so long that we might as well yield CPU to scheduler.
-            yield();
+            YieldThread();
         }
     }
 
     //! Pause for a few times and return false if saturated.
-    bool bounded_pause(){
-        machine_pause(count);
-        if(count < LOOPS_BEFORE_YIELD){
+    bool boundedPause(){
+        MachinePause(m_count);
+        if(m_count < s_LoopsBeforeYield){
             // Pause twice as long the next time.
-            count <<= 1;
+            m_count <<= 1;
             return true;
         }
         else{
@@ -192,11 +192,11 @@ public:
         }
     }
 
-    void reset(){ count = 1; }
+    void reset(){ m_count = 1; }
 
 
 private:
-    i32 count;
+    i32 m_count;
 };
 
 

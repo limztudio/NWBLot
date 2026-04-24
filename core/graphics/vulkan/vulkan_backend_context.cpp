@@ -1285,7 +1285,7 @@ bool BackendContext::createVulkanDevice(){
         ss << "Vulkan GPU debug: selected device"
            << "\n    name: " << physicalDeviceProperties.deviceName
            << "\n    type: " << VulkanDetail::PhysicalDeviceTypeToString(physicalDeviceProperties.deviceType)
-           << "\n    vendor/device id: 0x" << std::hex << physicalDeviceProperties.vendorID << "/0x" << physicalDeviceProperties.deviceID << std::dec
+           << "\n    vendor/device id: 0x" << StreamHex << physicalDeviceProperties.vendorID << "/0x" << physicalDeviceProperties.deviceID << StreamDec
            << "\n    Vulkan API: " << VulkanDetail::VulkanVersionToString(physicalDeviceProperties.apiVersion)
            << "\n    driver version: " << physicalDeviceProperties.driverVersion
            << "\n    device-local memory: " << deviceLocalMemoryMiB << " MiB"

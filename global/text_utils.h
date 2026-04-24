@@ -71,9 +71,23 @@ inline void StripUtf8Bom(AString& inOutText){
 }
 
 
+inline std::ios_base& StreamHex(std::ios_base& stream){ return std::hex(stream); }
+inline std::ios_base& StreamDec(std::ios_base& stream){ return std::dec(stream); }
+
+
 template<typename CharT>
 [[nodiscard]] inline bool ReadTextLine(BasicStringStream<CharT>& stream, BasicString<CharT>& outLine){
     return static_cast<bool>(std::getline(stream, outLine));
+}
+
+
+template<usize N>
+[[nodiscard]] inline AStringView FormatDecimal(const usize value, char (&buffer)[N]){
+    const auto formatResult = std::to_chars(buffer, buffer + N, value);
+    if(formatResult.ec != std::errc())
+        return AStringView();
+
+    return AStringView(buffer, static_cast<usize>(formatResult.ptr - buffer));
 }
 
 

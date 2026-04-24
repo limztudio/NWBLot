@@ -647,11 +647,9 @@ void ShaderCook::mergeInheritedDefines(ShaderEntry& inOutEntry, const CookVector
             inOutEntry.defineValues.reserve(inOutEntry.defineValues.size() + includeEntry.defineValues.size());
 
         for(const auto& [defineName, defineEntry] : includeEntry.defineValues){
-            if(inOutEntry.defineValues.find(defineName) == inOutEntry.defineValues.end()){
-                inOutEntry.defineValues.insert_or_assign(defineName, DefineEntry{
-                    CookVector<AString>(defineEntry.values, CookAllocator<AString>(m_memoryArena))
-                });
-            }
+            auto [defineIt, inserted] = inOutEntry.defineValues.try_emplace(defineName, m_memoryArena);
+            if(inserted)
+                defineIt.value().values.assign(defineEntry.values.begin(), defineEntry.values.end());
         }
 
         if(!includeEntry.defaultVariant.empty()){
@@ -708,7 +706,7 @@ bool ShaderCook::expandDefineCombinations(const CookMap<AString, DefineEntry>& d
         for(const DefineCombo& combo : outCombinations){
             for(const AString& value : values){
                 DefineCombo copy = combo;
-                copy.insert_or_assign(defineName, value);
+                copy.try_emplace(defineName, value);
                 expanded.push_back(Move(copy));
             }
         }

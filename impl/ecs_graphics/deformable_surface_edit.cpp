@@ -8,6 +8,7 @@
 
 #include <core/alloc/scratch.h>
 #include <impl/assets_graphics/deformable_geometry_validation.h>
+#include <global/algorithm.h>
 #include <global/filesystem.h>
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -795,12 +796,7 @@ void CanonicalizeBoundaryLoopStart(EdgeVector& edges){
     if(startEdgeIndex == 0u)
         return;
 
-    EdgeVector rotatedEdges(edges.get_allocator());
-    rotatedEdges.reserve(edges.size());
-    for(usize edgeOffset = 0u; edgeOffset < edges.size(); ++edgeOffset)
-        rotatedEdges.push_back(edges[(startEdgeIndex + edgeOffset) % edges.size()]);
-    for(usize edgeIndex = 0u; edgeIndex < edges.size(); ++edgeIndex)
-        edges[edgeIndex] = rotatedEdges[edgeIndex];
+    Rotate(edges.begin(), edges.begin() + static_cast<isize>(startEdgeIndex), edges.end());
 }
 
 template<typename BoundaryEdgeVector, typename OrderedEdgeVector>

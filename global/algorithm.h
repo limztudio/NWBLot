@@ -28,6 +28,11 @@ constexpr void Sort(RandomIt first, RandomIt last, Compare&& compare){
     std::sort(first, last, Forward<Compare>(compare));
 }
 
+template<typename ForwardIt>
+constexpr ForwardIt Rotate(ForwardIt first, ForwardIt middle, ForwardIt last){
+    return std::rotate(first, middle, last);
+}
+
 template<typename ForwardIt, typename T>
 constexpr ForwardIt LowerBound(ForwardIt first, ForwardIt last, const T& value){
     return std::lower_bound(first, last, value);

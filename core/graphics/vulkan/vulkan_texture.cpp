@@ -952,9 +952,7 @@ void CommandList::writeTexture(ITexture* destResource, u32 arraySlice, u32 mipLe
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to write texture: upload size overflows"));
         return;
     }
-    const u64 dataSize = depth > 1
-        ? static_cast<u64>(effectiveDepthPitch) * (depth - 1) + packedSlicePitch
-        : packedSlicePitch;
+    const u64 dataSize = depth > 1 ? static_cast<u64>(effectiveDepthPitch) * (depth - 1) + packedSlicePitch : packedSlicePitch;
     if(dataSize > static_cast<u64>(Limit<usize>::s_Max)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write texture: upload size exceeds addressable memory"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to write texture: upload size exceeds addressable memory"));

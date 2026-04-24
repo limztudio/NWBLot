@@ -68,14 +68,18 @@ public:
     [[nodiscard]] bool assign(const AStringView text){
         clear();
 
+        const usize textSize = text.size();
         if(text.empty())
             return true;
-        if(text.size() > s_MaxLength || HasEmbeddedNull(text))
+        if(textSize > s_MaxLength)
             return false;
 
-        for(usize i = 0; i < text.size(); ++i)
+        for(usize i = 0; i < textSize; ++i){
+            if(text[i] == '\0')
+                return false;
             m_storage[i] = Canonicalize(text[i]);
-        m_size = static_cast<u8>(text.size());
+        }
+        m_size = static_cast<u8>(textSize);
         m_storage[m_size] = '\0';
         return true;
     }
@@ -92,14 +96,21 @@ public:
     }
 
     [[nodiscard]] bool append(const AStringView text){
+        const usize textSize = text.size();
         if(text.empty())
             return true;
-        if(text.size() > remainingCapacity() || HasEmbeddedNull(text))
+        if(textSize > remainingCapacity())
             return false;
 
-        for(usize i = 0; i < text.size(); ++i)
+        const u8 oldSize = m_size;
+        for(usize i = 0; i < textSize; ++i){
+            if(text[i] == '\0'){
+                m_storage[oldSize] = '\0';
+                return false;
+            }
             m_storage[m_size + i] = Canonicalize(text[i]);
-        m_size = static_cast<u8>(m_size + text.size());
+        }
+        m_size = static_cast<u8>(m_size + textSize);
         m_storage[m_size] = '\0';
         return true;
     }

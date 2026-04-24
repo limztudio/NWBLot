@@ -434,7 +434,8 @@ bool CommandList::beginDynamicRendering(IFramebuffer* framebuffer, const RenderP
         const TextureSubresourceSet resolvedDepthSubresources = fbDesc.depthAttachment.subresources.resolve(depthTex->m_desc, true);
         const TextureDimension::Enum depthViewDimension = resolvedDepthSubresources.numArraySlices == 1
             ? TextureDimension::Texture2D
-            : depthTex->m_desc.dimension;
+            : depthTex->m_desc.dimension
+        ;
         VkImageView depthView = depthTex->getView(fbDesc.depthAttachment.subresources, depthViewDimension, Format::UNKNOWN, true);
         if(depthView == VK_NULL_HANDLE){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to begin dynamic rendering: depth/stencil attachment view is invalid"));

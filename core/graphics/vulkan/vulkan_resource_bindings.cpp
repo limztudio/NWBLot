@@ -1389,7 +1389,8 @@ DescriptorTableHandle Device::createDescriptorTable(IBindingLayout* layoutResour
     table->m_layout = layout;
     const u32 descriptorTableCapacity = layout->m_isBindless
         ? VulkanDetail::NormalizeDescriptorTableCapacity(layout->m_bindlessDesc.maxCapacity)
-        : 1u;
+        : 1u
+    ;
     const bool useVariableDescriptorCount = layout->m_isBindless && !layout->m_bindlessDesc.registerSpaces.empty();
 
     Vector<VkDescriptorPoolSize, Alloc::ScratchAllocator<VkDescriptorPoolSize>> poolSizes{ Alloc::ScratchAllocator<VkDescriptorPoolSize>(scratchArena) };

@@ -49,8 +49,8 @@ static AString CanonicalAssetType(const Metascript::Document& doc){
 
 static constexpr AStringView s_HlslIncludeDirective = "include";
 
-static bool ExtractIncludeName(const AStringView line, AString& outIncludeName){
-    outIncludeName.clear();
+static bool ExtractIncludeName(const AStringView line, AStringView& outIncludeName){
+    outIncludeName = {};
 
     usize cursor = 0;
     while(cursor < line.size() && IsAsciiSpace(line[cursor]))
@@ -78,7 +78,7 @@ static bool ExtractIncludeName(const AStringView line, AString& outIncludeName){
     if(closingQuote == AStringView::npos || closingQuote <= cursor)
         return false;
 
-    outIncludeName = AString(line.substr(cursor, closingQuote - cursor));
+    outIncludeName = line.substr(cursor, closingQuote - cursor);
     return !outIncludeName.empty();
 }
 
@@ -132,8 +132,6 @@ static bool CollectDependencies(const Path& startPath, const ShaderCook::CookVec
     Deque<Path, Alloc::ScratchAllocator<Path>> pending{Alloc::ScratchAllocator<Path>(scratchArena)};
     pending.push_back(startPath);
     AString sourceText;
-    AString line;
-    AString includeName;
     Path includePath;
 
     while(!pending.empty()){
@@ -166,24 +164,32 @@ static bool CollectDependencies(const Path& startPath, const ShaderCook::CookVec
 
         inOutDependencies.push_back(absolutePath);
 
-        AStringStream sourceStream(sourceText);
-        while(ReadTextLine(sourceStream, line)){
-            TrimTrailingCarriageReturn(line);
+        const AStringView sourceView(sourceText.data(), sourceText.size());
+        usize lineBegin = 0;
+        while(lineBegin < sourceView.size()){
+            usize lineEnd = lineBegin;
+            while(lineEnd < sourceView.size() && sourceView[lineEnd] != '\n')
+                ++lineEnd;
 
-            includeName.clear();
-            if(!ExtractIncludeName(line, includeName))
-                continue;
+            AStringView line = sourceView.substr(lineBegin, lineEnd - lineBegin);
+            if(!line.empty() && line.back() == '\r')
+                line.remove_suffix(1);
 
-            if(!ResolveIncludeFile(includeName, absolutePath.parent_path(), includeDirectories, includePath)){
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("Unable to resolve include '{}' from '{}'"),
-                    StringConvert(includeName),
-                    PathToString<tchar>(absolutePath)
-                );
-                return false;
+            AStringView includeName;
+            if(ExtractIncludeName(line, includeName)){
+                if(!ResolveIncludeFile(includeName, absolutePath.parent_path(), includeDirectories, includePath)){
+                    NWB_LOGGER_ERROR(
+                        NWB_TEXT("Unable to resolve include '{}' from '{}'"),
+                        StringConvert(includeName),
+                        PathToString<tchar>(absolutePath)
+                    );
+                    return false;
+                }
+
+                pending.push_back(Move(includePath));
             }
 
-            pending.push_back(Move(includePath));
+            lineBegin = lineEnd + 1;
         }
     }
 

@@ -242,7 +242,8 @@ TextureSlice TextureSlice::resolve(const TextureDesc& desc)const{
     const u32 mipHeight = Max(desc.height >> resolvedMipLevel, static_cast<u32>(1));
     const u32 mipDepth = desc.dimension == TextureDimension::Texture3D
         ? Max(desc.depth >> resolvedMipLevel, static_cast<u32>(1))
-        : static_cast<u32>(1);
+        : static_cast<u32>(1)
+    ;
 
     if(width == static_cast<u32>(-1))
         ret.width = x < mipWidth ? mipWidth - x : 0;

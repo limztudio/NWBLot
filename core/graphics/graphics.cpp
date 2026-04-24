@@ -74,7 +74,8 @@ static bool ComputeTextureUploadByteSize(const Graphics::TextureSetupDesc& desc,
 
     const u64 requiredBytes = depth > 1
         ? effectiveDepthPitch * static_cast<u64>(depth - 1) + packedSlicePitch
-        : packedSlicePitch;
+        : packedSlicePitch
+    ;
     if(requiredBytes > static_cast<u64>(Limit<usize>::s_Max))
         return false;
 

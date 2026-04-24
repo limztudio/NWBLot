@@ -48,9 +48,7 @@ bool IsTextureSliceInBounds(const TextureDesc& desc, const TextureSlice& slice){
 
     const u32 mipWidth = Max<u32>(desc.width >> slice.mipLevel, 1u);
     const u32 mipHeight = Max<u32>(desc.height >> slice.mipLevel, 1u);
-    const u32 mipDepth = desc.dimension == TextureDimension::Texture3D
-        ? Max<u32>(desc.depth >> slice.mipLevel, 1u)
-        : 1u;
+    const u32 mipDepth = desc.dimension == TextureDimension::Texture3D ? Max<u32>(desc.depth >> slice.mipLevel, 1u) : 1u;
 
     const TextureSlice resolved = slice.resolve(desc);
     if(resolved.width == 0 || resolved.height == 0 || resolved.depth == 0)

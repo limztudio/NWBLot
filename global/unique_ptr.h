@@ -37,8 +37,9 @@ protected:
 public:
     void reset(pointer pValue = pointer())noexcept{
         if(pValue != m_pair.first()){
-            if(auto first = Exchange(m_pair.first(), pValue))
-                get_deleter()(first);
+            pointer previousValue = Exchange(m_pair.first(), pValue);
+            if(previousValue)
+                get_deleter()(previousValue);
         }
     }
 

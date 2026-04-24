@@ -65,10 +65,10 @@ public:
     [[nodiscard]] Name store(AStringView str){
         if(str.empty())
             return NAME_NONE;
-        if(HasEmbeddedNull(str))
-            return NAME_NONE;
 
         const Name name(str);
+        if(!name)
+            return NAME_NONE;
         Name existingName = NAME_NONE;
         {
             ScopedLock lock(m_mutex);

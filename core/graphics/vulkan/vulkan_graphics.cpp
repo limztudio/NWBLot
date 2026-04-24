@@ -136,6 +136,7 @@ FramebufferHandle Device::createFramebuffer(const FramebufferDesc& desc){
     if(desc.colorAttachments.size() > kMaxColorAttachments)
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Framebuffer has more than {} color attachments; truncating to {}."), kMaxColorAttachments, kMaxColorAttachments);
 
+    fb->m_resources.reserve(static_cast<usize>(colorAttachmentCount) + (desc.depthAttachment.texture ? 1u : 0u));
     for(u32 i = 0; i < colorAttachmentCount; ++i){
         if(desc.colorAttachments[i].texture){
             fb->m_resources.push_back(desc.colorAttachments[i].texture);

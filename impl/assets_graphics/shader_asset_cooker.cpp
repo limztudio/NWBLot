@@ -647,6 +647,27 @@ static bool ParseMaterialMeta(
     return true;
 }
 
+static bool AccumulateFlattenedValueLeafCount(const Core::Metascript::Value& value, usize& inOutCount){
+    if(value.isList()){
+        for(const Core::Metascript::Value& child : value.asList()){
+            if(!AccumulateFlattenedValueLeafCount(child, inOutCount))
+                return false;
+        }
+        return true;
+    }
+
+    if(inOutCount == Limit<usize>::s_Max)
+        return false;
+
+    ++inOutCount;
+    return true;
+}
+
+static bool CountFlattenedValueLeaves(const Core::Metascript::Value& value, usize& outCount){
+    outCount = 0u;
+    return AccumulateFlattenedValueLeafCount(value, outCount);
+}
+
 static bool ParseGeometryMeta(const DiscoveredNwbFile& discoveredFile, const Core::Metascript::Document& doc, GeometryEntry& outEntry){
     outEntry = {};
 
@@ -803,6 +824,16 @@ static bool ParseGeometryMeta(const DiscoveredNwbFile& discoveredFile, const Cor
         NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': vertex_data must be a list"), PathToString<tchar>(discoveredFile.filePath));
         return false;
     }
+    usize vertexScalarCount = 0u;
+    if(!CountFlattenedValueLeaves(*vertexDataValue, vertexScalarCount)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': vertex_data scalar count overflows"), PathToString<tchar>(discoveredFile.filePath));
+        return false;
+    }
+    if(vertexScalarCount > Limit<usize>::s_Max / sizeof(f32)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': vertex_data byte size overflows"), PathToString<tchar>(discoveredFile.filePath));
+        return false;
+    }
+    outEntry.vertexData.reserve(vertexScalarCount * sizeof(f32));
     if(!appendVertexScalars(appendVertexScalars, *vertexDataValue))
         return false;
     if(outEntry.vertexData.empty()){
@@ -824,6 +855,17 @@ static bool ParseGeometryMeta(const DiscoveredNwbFile& discoveredFile, const Cor
         NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': index_data must be a list"), PathToString<tchar>(discoveredFile.filePath));
         return false;
     }
+    usize indexScalarCount = 0u;
+    if(!CountFlattenedValueLeaves(*indexDataValue, indexScalarCount)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': index_data scalar count overflows"), PathToString<tchar>(discoveredFile.filePath));
+        return false;
+    }
+    const usize indexElementSize = outEntry.use32BitIndices ? sizeof(u32) : sizeof(u16);
+    if(indexScalarCount > Limit<usize>::s_Max / indexElementSize){
+        NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': index_data byte size overflows"), PathToString<tchar>(discoveredFile.filePath));
+        return false;
+    }
+    outEntry.indexData.reserve(indexScalarCount * indexElementSize);
     if(!appendIndices(appendIndices, *indexDataValue))
         return false;
     if(outEntry.indexData.empty()){
@@ -1141,6 +1183,15 @@ static bool ParseDeformableIndexField(
     const Core::Metascript::Value* field = FindRequiredListField(nwbFilePath, asset, "indices");
     if(!field)
         return false;
+    usize indexCount = 0u;
+    if(!CountFlattenedValueLeaves(*field, indexCount)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Deformable geometry meta '{}': 'indices' scalar count overflows"),
+            PathToString<tchar>(nwbFilePath)
+        );
+        return false;
+    }
+    outIndices.reserve(indexCount);
     if(!AppendU32Recursive(nwbFilePath, *field, "indices", outIndices))
         return false;
     if(outIndices.empty()){

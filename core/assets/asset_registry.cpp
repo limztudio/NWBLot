@@ -44,7 +44,7 @@ bool AssetRegistry::registerCodec(UniquePtr<IAssetCodec>&& codec, const bool rep
         return true;
     }
 
-    m_codecs[typeName] = Move(codec);
+    m_codecs.emplace(typeName, Move(codec));
     return true;
 }
 

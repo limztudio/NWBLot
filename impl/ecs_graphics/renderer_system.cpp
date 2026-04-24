@@ -2290,7 +2290,7 @@ bool RendererSystem::ensureGeometryLoaded(const Core::Assets::AssetRef<Geometry>
         return false;
     }
 
-    auto [it, inserted] = m_geometryMeshes.emplace(geometryPath, GeometryResources{});
+    auto [it, inserted] = m_geometryMeshes.try_emplace(geometryPath);
     (void)inserted;
     it.value() = Move(createdGeometry);
 
@@ -2359,7 +2359,7 @@ bool RendererSystem::ensureDeformableGeometryResources(const DeformableRuntimeMe
         return false;
     }
 
-    auto [it, inserted] = m_geometryMeshes.emplace(geometryKey, GeometryResources{});
+    auto [it, inserted] = m_geometryMeshes.try_emplace(geometryKey);
     (void)inserted;
     it.value() = Move(createdGeometry);
 
@@ -2460,7 +2460,7 @@ bool RendererSystem::ensureMaterialSurfaceInfo(const Core::Assets::AssetRef<Mate
     if(createdInfo.alpha < 0.999f)
         createdInfo.transparent = true;
 
-    auto [it, inserted] = m_materialSurfaceInfos.emplace(materialPath, MaterialSurfaceInfo{});
+    auto [it, inserted] = m_materialSurfaceInfos.try_emplace(materialPath);
     (void)inserted;
     it.value() = Move(createdInfo);
     outInfo = &it.value();
@@ -2735,7 +2735,7 @@ bool RendererSystem::ensureRendererPipeline(
     pipelineKey.framebufferInfo = framebuffer->getFramebufferInfo();
     pipelineKey.pass = pass;
 
-    auto [it, inserted] = m_materialPipelines.emplace(pipelineKey, MaterialPipelineResources{});
+    auto [it, inserted] = m_materialPipelines.try_emplace(pipelineKey);
     MaterialPipelineResources& resources = it.value();
     switch(resources.renderPath){
     case RenderPath::MeshShader:

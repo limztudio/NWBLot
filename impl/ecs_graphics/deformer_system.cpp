@@ -868,7 +868,7 @@ bool DeformerSystem::ensureRuntimeResources(
         return false;
     }
 
-    auto [it, inserted] = m_runtimeResources.emplace(instance.handle.value, RuntimeResources{});
+    auto [it, inserted] = m_runtimeResources.try_emplace(instance.handle.value);
     RuntimeResources& resources = it.value();
     const bool rebuild =
         inserted

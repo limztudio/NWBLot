@@ -519,7 +519,7 @@ void AftermathCrashDumpHelper::unRegisterAftermathMarkerTracker(AftermathMarkerT
 }
 
 void AftermathCrashDumpHelper::registerShaderBinaryLookupCallback(void* client, ShaderBinaryLookupCallback lookupCallback){
-    m_shaderBinaryLookupCallbacks[client] = lookupCallback;
+    m_shaderBinaryLookupCallbacks.insert_or_assign(client, lookupCallback);
 }
 
 void AftermathCrashDumpHelper::unRegisterShaderBinaryLookupCallback(void* client){

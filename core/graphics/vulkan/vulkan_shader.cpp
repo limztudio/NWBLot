@@ -507,7 +507,7 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
             return nullptr;
         }
 
-        auto bindingInfoInsert = bindingInfos.emplace(attr.bufferIndex, VertexBindingBuildInfo{});
+        auto bindingInfoInsert = bindingInfos.try_emplace(attr.bufferIndex);
         VertexBindingBuildInfo& bindingInfo = bindingInfoInsert.first.value();
         if(bindingInfoInsert.second)
             bindingInfo.isInstanced = attr.isInstanced;

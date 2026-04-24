@@ -218,14 +218,14 @@ void StateTracker::setPermanentTextureState(ITexture* texture, ResourceStates::M
     if(!texture)
         return;
 
-    m_permanentTextureStates[texture] = state;
+    m_permanentTextureStates.insert_or_assign(texture, state);
 }
 
 void StateTracker::setPermanentBufferState(IBuffer* buffer, ResourceStates::Mask state){
     if(!buffer)
         return;
 
-    m_permanentBufferStates[buffer] = state;
+    m_permanentBufferStates.insert_or_assign(buffer, state);
 }
 
 bool StateTracker::isPermanentTexture(ITexture* texture)const{
@@ -292,7 +292,7 @@ void StateTracker::beginTrackingTexture(ITexture* texture, TextureSubresourceSet
     if(m_permanentTextureStates.count(texture) > 0)
         return;
 
-    m_textureStates[texture] = state;
+    m_textureStates.insert_or_assign(texture, state);
 }
 
 void StateTracker::beginTrackingBuffer(IBuffer* buffer, ResourceStates::Mask state){
@@ -302,21 +302,21 @@ void StateTracker::beginTrackingBuffer(IBuffer* buffer, ResourceStates::Mask sta
     if(m_permanentBufferStates.count(buffer) > 0)
         return;
 
-    m_bufferStates[buffer] = state;
+    m_bufferStates.insert_or_assign(buffer, state);
 }
 
 void StateTracker::setEnableUavBarriersForTexture(ITexture* texture, bool enableBarriers){
     if(!texture)
         return;
 
-    m_textureUavBarriers[texture] = enableBarriers;
+    m_textureUavBarriers.insert_or_assign(texture, enableBarriers);
 }
 
 void StateTracker::setEnableUavBarriersForBuffer(IBuffer* buffer, bool enableBarriers){
     if(!buffer)
         return;
 
-    m_bufferUavBarriers[buffer] = enableBarriers;
+    m_bufferUavBarriers.insert_or_assign(buffer, enableBarriers);
 }
 
 

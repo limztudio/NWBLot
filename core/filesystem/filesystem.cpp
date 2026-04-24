@@ -1077,7 +1077,7 @@ bool VolumeFileSystem::writeFileLocked(const Name& virtualPath, const void* data
         previousRecord = itrFind.value();
     const u64 previousNextFreeOffset = m_nextFreeOffset;
 
-    m_files[virtualPath] = FileRecord{ writeOffset, byteCount };
+    m_files.insert_or_assign(virtualPath, FileRecord{ writeOffset, byteCount });
     m_nextFreeOffset = newFileEnd;
 
     if(!flushMetadataAfterWrite)
@@ -1087,7 +1087,7 @@ bool VolumeFileSystem::writeFileLocked(const Name& virtualPath, const void* data
         return true;
 
     if(existed)
-        m_files[virtualPath] = previousRecord;
+        m_files.insert_or_assign(virtualPath, previousRecord);
     else
         m_files.erase(virtualPath);
     m_nextFreeOffset = previousNextFreeOffset;
@@ -1183,7 +1183,7 @@ bool VolumeFileSystem::removeFile(const Name& virtualPath){
     if(flushMetadataLocked())
         return true;
 
-    m_files[virtualPath] = removedRecord;
+    m_files.insert_or_assign(virtualPath, removedRecord);
     __hidden_filesystem::LogFailure(m_volumeName, "removeFile", "failed to flush metadata after erase");
     return false;
 }
@@ -1306,7 +1306,7 @@ bool VolumeFileSystem::compact(const bool shrinkSegments){
     const u64 previousNextFreeOffset = m_nextFreeOffset;
 
     for(const auto& layout : layouts)
-        m_files[layout.path] = FileRecord{ layout.destinationOffset, layout.size };
+        m_files.insert_or_assign(layout.path, FileRecord{ layout.destinationOffset, layout.size });
     m_nextFreeOffset = compactedWriteOffset;
 
     if(!flushMetadataLocked()){

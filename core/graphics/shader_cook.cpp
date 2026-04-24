@@ -708,7 +708,7 @@ bool ShaderCook::expandDefineCombinations(const CookMap<AString, DefineEntry>& d
         for(const DefineCombo& combo : outCombinations){
             for(const AString& value : values){
                 DefineCombo copy = combo;
-                copy[defineName] = value;
+                copy.insert_or_assign(defineName, value);
                 expanded.push_back(Move(copy));
             }
         }

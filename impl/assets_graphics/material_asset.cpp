@@ -293,14 +293,14 @@ void Material::setShaderForStage(const Name& stageName, const Core::Assets::Asse
     if(!stageName || !shaderAsset.valid())
         return;
 
-    m_stageShaders[stageName] = shaderAsset;
+    m_stageShaders.insert_or_assign(stageName, shaderAsset);
 }
 
 bool Material::setParameter(const CompactString& key, const CompactString& value){
     if(!key)
         return false;
 
-    m_parameters[key] = value;
+    m_parameters.insert_or_assign(key, value);
     return true;
 }
 

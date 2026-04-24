@@ -48,15 +48,17 @@ static constexpr RuntimeMeshDirtyFlags s_GpuUploadHandledDirtyFlags =
 }
 
 [[nodiscard]] bool ValidateRuntimeMeshUploadPayload(const DeformableRuntimeMeshInstance& instance){
-    const TString sourceText = instance.source.name()
-        ? StringConvert(instance.source.name().c_str())
-        : TString(NWB_TEXT("<unnamed>"))
-    ;
+    const auto sourceText = [&instance]() -> TString{
+        return instance.source.name()
+            ? StringConvert(instance.source.name().c_str())
+            : TString(NWB_TEXT("<unnamed>"))
+        ;
+    };
 
     if(instance.restVertices.empty() || instance.indices.empty()){
         NWB_LOGGER_ERROR(
             NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' has incomplete rest/index payload"),
-            sourceText
+            sourceText()
         );
         return false;
     }
@@ -65,14 +67,14 @@ static constexpr RuntimeMeshDirtyFlags s_GpuUploadHandledDirtyFlags =
     ){
         NWB_LOGGER_ERROR(
             NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' exceeds u32 vertex/index count limits"),
-            sourceText
+            sourceText()
         );
         return false;
     }
     if((instance.indices.size() % 3u) != 0u){
         NWB_LOGGER_ERROR(
             NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' index count {} is not a multiple of 3"),
-            sourceText,
+            sourceText(),
             instance.indices.size()
         );
         return false;
@@ -80,7 +82,7 @@ static constexpr RuntimeMeshDirtyFlags s_GpuUploadHandledDirtyFlags =
     if(!ValidDeformableDisplacementDescriptor(instance.displacement)){
         NWB_LOGGER_ERROR(
             NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' has an invalid displacement descriptor"),
-            sourceText
+            sourceText()
         );
         return false;
     }
@@ -89,7 +91,7 @@ static constexpr RuntimeMeshDirtyFlags s_GpuUploadHandledDirtyFlags =
         if(!DeformableValidation::ValidRestVertexFrame(instance.restVertices[vertexIndex])){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' rest vertex {} has invalid data or frame"),
-                sourceText,
+                sourceText(),
                 vertexIndex
             );
             return false;
@@ -100,7 +102,7 @@ static constexpr RuntimeMeshDirtyFlags s_GpuUploadHandledDirtyFlags =
         if(index >= instance.restVertices.size()){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' index {} exceeds {} vertices"),
-                sourceText,
+                sourceText(),
                 index,
                 instance.restVertices.size()
             );
@@ -114,7 +116,7 @@ static constexpr RuntimeMeshDirtyFlags s_GpuUploadHandledDirtyFlags =
         if(a == b || a == c || b == c){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' triangle {} is degenerate"),
-                sourceText,
+                sourceText(),
                 indexBase / 3u
             );
             return false;
@@ -123,7 +125,7 @@ static constexpr RuntimeMeshDirtyFlags s_GpuUploadHandledDirtyFlags =
         if(!DeformableValidation::ValidTriangle(instance.restVertices, a, b, c)){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' triangle {} has zero area"),
-                sourceText,
+                sourceText(),
                 indexBase / 3u
             );
             return false;
@@ -133,7 +135,7 @@ static constexpr RuntimeMeshDirtyFlags s_GpuUploadHandledDirtyFlags =
     if(!instance.skin.empty() && instance.skin.size() != instance.restVertices.size()){
         NWB_LOGGER_ERROR(
             NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' skin count {} does not match vertex count {}"),
-            sourceText,
+            sourceText(),
             instance.skin.size(),
             instance.restVertices.size()
         );
@@ -143,7 +145,7 @@ static constexpr RuntimeMeshDirtyFlags s_GpuUploadHandledDirtyFlags =
         if(!DeformableValidation::ValidSkinInfluence(instance.skin[vertexIndex])){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' skin influence {} is invalid"),
-                sourceText,
+                sourceText(),
                 vertexIndex
             );
             return false;
@@ -153,7 +155,7 @@ static constexpr RuntimeMeshDirtyFlags s_GpuUploadHandledDirtyFlags =
     if(!instance.sourceSamples.empty() && instance.sourceSamples.size() != instance.restVertices.size()){
         NWB_LOGGER_ERROR(
             NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' source sample count {} does not match vertex count {}"),
-            sourceText,
+            sourceText(),
             instance.sourceSamples.size(),
             instance.restVertices.size()
         );
@@ -163,7 +165,7 @@ static constexpr RuntimeMeshDirtyFlags s_GpuUploadHandledDirtyFlags =
         if(!DeformableValidation::ValidSourceSample(instance.sourceSamples[vertexIndex], instance.sourceTriangleCount)){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' source sample {} is invalid"),
-                sourceText,
+                sourceText(),
                 vertexIndex
             );
             return false;
@@ -187,33 +189,33 @@ static constexpr RuntimeMeshDirtyFlags s_GpuUploadHandledDirtyFlags =
         case DeformableValidation::MorphPayloadFailure::MorphCountLimit:
             NWB_LOGGER_ERROR(
                 NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' morph count exceeds u32 limits"),
-                sourceText
+                sourceText()
             );
             break;
         case DeformableValidation::MorphPayloadFailure::EmptyMorph:
             NWB_LOGGER_ERROR(
                 NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' has an unnamed or empty morph"),
-                sourceText
+                sourceText()
             );
             break;
         case DeformableValidation::MorphPayloadFailure::DuplicateMorphName:
             NWB_LOGGER_ERROR(
                 NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' contains duplicate morph '{}'"),
-                sourceText,
+                sourceText(),
                 morphNameText
             );
             break;
         case DeformableValidation::MorphPayloadFailure::MorphDeltaCountLimit:
             NWB_LOGGER_ERROR(
                 NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' morph '{}' delta count exceeds u32 limits"),
-                sourceText,
+                sourceText(),
                 morphNameText
             );
             break;
         case DeformableValidation::MorphPayloadFailure::InvalidMorphDelta:
             NWB_LOGGER_ERROR(
                 NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' morph '{}' delta {} is invalid"),
-                sourceText,
+                sourceText(),
                 morphNameText,
                 morphFailure.deltaIndex
             );
@@ -221,7 +223,7 @@ static constexpr RuntimeMeshDirtyFlags s_GpuUploadHandledDirtyFlags =
         case DeformableValidation::MorphPayloadFailure::DuplicateMorphDeltaVertex:
             NWB_LOGGER_ERROR(
                 NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' morph '{}' has duplicate vertex {}"),
-                sourceText,
+                sourceText(),
                 morphNameText,
                 morphFailure.vertexId
             );

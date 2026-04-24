@@ -22,7 +22,7 @@ template<typename CharT>
 
 
 template<typename CharT>
-[[nodiscard]] inline BasicString<CharT> Trim(const BasicStringView<CharT> text){
+[[nodiscard]] inline BasicStringView<CharT> TrimView(const BasicStringView<CharT> text){
     usize begin = 0;
     while(begin < text.size() && IsAsciiSpace(text[begin]))
         ++begin;
@@ -31,7 +31,19 @@ template<typename CharT>
     while(end > begin && IsAsciiSpace(text[end - 1]))
         --end;
 
-    return BasicString<CharT>(text.substr(begin, end - begin));
+    return text.substr(begin, end - begin);
+}
+template<typename CharT>
+[[nodiscard]] inline BasicStringView<CharT> TrimView(const BasicString<CharT>& text){
+    return TrimView<CharT>(BasicStringView<CharT>{text});
+}
+template<typename CharT>
+BasicStringView<CharT> TrimView(const BasicString<CharT>&&) = delete;
+
+
+template<typename CharT>
+[[nodiscard]] inline BasicString<CharT> Trim(const BasicStringView<CharT> text){
+    return BasicString<CharT>(TrimView(text));
 }
 template<typename CharT>
 [[nodiscard]] inline BasicString<CharT> Trim(const BasicString<CharT>& text){

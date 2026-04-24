@@ -223,7 +223,7 @@ static bool ValidateDefaultVariant(const AStringView contextLabel, const AString
     HashSet<AString, Hasher<AString>, EqualTo<AString>, Alloc::ScratchAllocator<AString>> seenDefines{Alloc::ScratchAllocator<AString>(scratchArena)};
     seenDefines.reserve(defineValues.size());
     usize begin = 0;
-    const auto logInvalidAssignment = [&](const AString& segment){
+    const auto logInvalidAssignment = [&](const AStringView segment){
         NWB_LOGGER_ERROR(
             NWB_TEXT("Meta '{}': default variant '{}' has invalid assignment '{}'"),
             StringConvert(contextLabel),
@@ -236,7 +236,7 @@ static bool ValidateDefaultVariant(const AStringView contextLabel, const AString
         if(segmentEnd == AString::npos)
             segmentEnd = defaultVariant.size();
 
-        const AString segment = Trim(defaultVariant.substr(begin, segmentEnd - begin));
+        const AStringView segment = TrimView(defaultVariant.substr(begin, segmentEnd - begin));
         if(segment.empty()){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("Meta '{}': default variant '{}' has invalid empty segment"),
@@ -247,13 +247,13 @@ static bool ValidateDefaultVariant(const AStringView contextLabel, const AString
         }
 
         const usize equalPos = segment.find('=');
-        if(equalPos == AString::npos || equalPos == 0 || equalPos + 1 >= segment.size()){
+        if(equalPos == AStringView::npos || equalPos == 0 || equalPos + 1 >= segment.size()){
             logInvalidAssignment(segment);
             return false;
         }
 
-        const AString defineName = Trim(AStringView(segment).substr(0, equalPos));
-        const AString defineValue = Trim(AStringView(segment).substr(equalPos + 1));
+        const AString defineName(TrimView(segment.substr(0, equalPos)));
+        const AString defineValue(TrimView(segment.substr(equalPos + 1)));
         if(defineName.empty() || defineValue.empty()){
             logInvalidAssignment(segment);
             return false;
@@ -750,10 +750,11 @@ AString ShaderCook::buildVariantName(const DefineCombo& combo){
 
 bool ShaderCook::canonicalizeVariantSignature(const AStringView variantSignature, AString& outCanonical){
     const AString trimmedSignature = Trim(variantSignature);
+    const AStringView trimmedSignatureView(trimmedSignature.data(), trimmedSignature.size());
     outCanonical.clear();
-    if(trimmedSignature.empty())
+    if(trimmedSignatureView.empty())
         return true;
-    if(trimmedSignature == "default"){
+    if(trimmedSignatureView == "default"){
         outCanonical = "default";
         return true;
     }
@@ -761,21 +762,21 @@ bool ShaderCook::canonicalizeVariantSignature(const AStringView variantSignature
     DefineCombo assignments{CookAllocator<Pair<const AString, AString>>(m_memoryArena)};
 
     usize begin = 0;
-    while(begin < trimmedSignature.size()){
-        usize segmentEnd = trimmedSignature.find(';', begin);
-        if(segmentEnd == AString::npos)
-            segmentEnd = trimmedSignature.size();
+    while(begin < trimmedSignatureView.size()){
+        usize segmentEnd = trimmedSignatureView.find(';', begin);
+        if(segmentEnd == AStringView::npos)
+            segmentEnd = trimmedSignatureView.size();
 
-        const AString segment = Trim(trimmedSignature.substr(begin, segmentEnd - begin));
+        const AStringView segment = TrimView(trimmedSignatureView.substr(begin, segmentEnd - begin));
         if(segment.empty())
             return false;
 
         const usize equalPos = segment.find('=');
-        if(equalPos == AString::npos || equalPos == 0 || equalPos + 1 >= segment.size())
+        if(equalPos == AStringView::npos || equalPos == 0 || equalPos + 1 >= segment.size())
             return false;
 
-        AString defineName = Trim(AStringView(segment).substr(0, equalPos));
-        AString defineValue = Trim(AStringView(segment).substr(equalPos + 1));
+        AString defineName(TrimView(segment.substr(0, equalPos)));
+        AString defineValue(TrimView(segment.substr(equalPos + 1)));
         if(defineName.empty() || defineValue.empty())
             return false;
         if(!assignments.emplace(Move(defineName), Move(defineValue)).second)

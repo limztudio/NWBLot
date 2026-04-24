@@ -1860,7 +1860,9 @@ static bool GetVariantBytecode(
     bool cacheUpToDate = false;
     if(hasCachedBytecode && hasCachedChecksum){
         AString cachedText;
-        cacheUpToDate = ReadTextFile(cachePaths.sourceChecksumPath, cachedText) && (Trim(cachedText) == sourceChecksumHex);
+        cacheUpToDate = ReadTextFile(cachePaths.sourceChecksumPath, cachedText)
+            && TrimView(cachedText) == AStringView(sourceChecksumHex.data(), sourceChecksumHex.size())
+        ;
     }
     if(cacheUpToDate){
         errorCode.clear();

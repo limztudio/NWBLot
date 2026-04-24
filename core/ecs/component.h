@@ -30,8 +30,7 @@ namespace ECSDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename... Ts>
-struct ViewIterator;
+struct ViewTupleAccess;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -74,10 +73,7 @@ public:
 
 template<typename T>
 class ComponentPool : public IComponentPool{
-    template<typename... Ts>
-    friend struct ECSDetail::ViewIterator;
-    template<typename... Ts>
-    friend class View;
+    friend struct ECSDetail::ViewTupleAccess;
 
 
 public:

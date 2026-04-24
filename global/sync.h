@@ -45,7 +45,7 @@ using std::this_thread::yield;
 #endif
 
 
-inline void machine_pause(i32 delay){
+inline void machine_pause([[maybe_unused]] i32 delay){
 #if defined(__ARM_ARCH_7A__) || defined(__aarch64__)
     while(delay > 0){
         __asm__ __volatile__("isb sy" ::: "memory");
@@ -57,7 +57,6 @@ inline void machine_pause(i32 delay){
         --delay;
     }
 #else /* Generic */
-    (void)delay; // suppress without including _template_helpers.h
     yield();
 #endif
 }

@@ -2290,9 +2290,8 @@ bool RendererSystem::ensureGeometryLoaded(const Core::Assets::AssetRef<Geometry>
         return false;
     }
 
-    auto [it, inserted] = m_geometryMeshes.try_emplace(geometryPath);
-    (void)inserted;
-    it.value() = Move(createdGeometry);
+    auto result = m_geometryMeshes.insert_or_assign(geometryPath, Move(createdGeometry));
+    auto it = result.first;
 
     outGeometry = &it.value();
     return outGeometry->valid();
@@ -2359,9 +2358,8 @@ bool RendererSystem::ensureDeformableGeometryResources(const DeformableRuntimeMe
         return false;
     }
 
-    auto [it, inserted] = m_geometryMeshes.try_emplace(geometryKey);
-    (void)inserted;
-    it.value() = Move(createdGeometry);
+    auto result = m_geometryMeshes.insert_or_assign(geometryKey, Move(createdGeometry));
+    auto it = result.first;
 
     outGeometry = &it.value();
     return outGeometry->valid();
@@ -2460,9 +2458,8 @@ bool RendererSystem::ensureMaterialSurfaceInfo(const Core::Assets::AssetRef<Mate
     if(createdInfo.alpha < 0.999f)
         createdInfo.transparent = true;
 
-    auto [it, inserted] = m_materialSurfaceInfos.try_emplace(materialPath);
-    (void)inserted;
-    it.value() = Move(createdInfo);
+    auto result = m_materialSurfaceInfos.insert_or_assign(materialPath, Move(createdInfo));
+    auto it = result.first;
     outInfo = &it.value();
     return outInfo->valid;
 }

@@ -423,9 +423,8 @@ bool DeformableRuntimeMeshCache::ensureRuntimeMesh(Core::ECS::EntityID entity, D
 
     ++source->referenceCount;
     const RuntimeMeshHandle handle = instance.handle;
-    auto [it, inserted] = m_instances.try_emplace(entity);
-    (void)inserted;
-    it.value() = Move(instance);
+    auto result = m_instances.insert_or_assign(entity, Move(instance));
+    auto it = result.first;
     m_handleToEntity.emplace(handle.value, entity);
     component.runtimeMesh = handle;
     return it.value().valid();
@@ -469,9 +468,8 @@ bool DeformableRuntimeMeshCache::ensureSourceLoaded(
     source.sourceName = sourceName;
     source.asset = Move(loadedAsset);
 
-    auto [it, inserted] = m_sources.try_emplace(sourceName);
-    (void)inserted;
-    it.value() = Move(source);
+    auto result = m_sources.insert_or_assign(sourceName, Move(source));
+    auto it = result.first;
     outSource = &it.value();
     return outSource->geometry() != nullptr;
 }

@@ -106,21 +106,40 @@ static void HashCombine(usize& seed, const usize value){
     ;
 }
 
-static bool ResolveMorphWeight(
+using MorphWeightLookup = HashMap<
+    NameHash,
+    f32,
+    Hasher<NameHash>,
+    EqualTo<NameHash>,
+    Core::Alloc::ScratchAllocator<Pair<const NameHash, f32>>
+>;
+
+static bool BuildResolvedMorphWeightLookup(
     const DeformableRuntimeMeshInstance& instance,
     const DeformableMorphWeightsComponent* weights,
-    const Name& morphName,
-    f32& outWeight)
+    MorphWeightLookup& outWeights)
 {
-    if(DeformableRuntime::ResolveMorphWeightSum(weights, morphName, outWeight))
+    Name failedMorph = NAME_NONE;
+    if(DeformableRuntime::BuildMorphWeightSumLookup(instance.morphs, weights, outWeights, failedMorph))
         return true;
 
     NWB_LOGGER_ERROR(
         NWB_TEXT("DeformerSystem: runtime mesh '{}' morph '{}' weight is invalid"),
         instance.handle.value,
-        StringConvert(morphName.c_str())
+        StringConvert(failedMorph.c_str())
     );
     return false;
+}
+
+static f32 ResolvedMorphWeight(const MorphWeightLookup& weights, const Name& morphName){
+    if(!morphName)
+        return 0.0f;
+
+    const auto iterWeight = weights.find(morphName.hash());
+    if(iterWeight == weights.end())
+        return 0.0f;
+
+    return iterWeight.value();
 }
 
 static Float4 ExpandFloat3Delta(const Float3U& value){
@@ -147,18 +166,27 @@ static bool BuildMorphPayload(
         return true;
 
     Core::Alloc::ScratchArena<> scratchArena;
-    Vector<f32, Core::Alloc::ScratchAllocator<f32>> resolvedWeights{
-        Core::Alloc::ScratchAllocator<f32>(scratchArena)
-    };
-    resolvedWeights.reserve(instance.morphs.size());
+    MorphWeightLookup resolvedWeights(
+        0,
+        Hasher<NameHash>(),
+        EqualTo<NameHash>(),
+        Core::Alloc::ScratchAllocator<Pair<const NameHash, f32>>(scratchArena)
+    );
+    if(!BuildResolvedMorphWeightLookup(instance, morphWeights, resolvedWeights))
+        return false;
 
-    usize activeMorphCount = 0u;
+    struct ActiveMorph{
+        const DeformableMorph* morph = nullptr;
+        f32 weight = 0.0f;
+    };
+    Vector<ActiveMorph, Core::Alloc::ScratchAllocator<ActiveMorph>> activeMorphs{
+        Core::Alloc::ScratchAllocator<ActiveMorph>(scratchArena)
+    };
+    activeMorphs.reserve(instance.morphs.size());
+
     usize activeDeltaCount = 0u;
     for(const DeformableMorph& morph : instance.morphs){
-        f32 weight = 0.0f;
-        if(!ResolveMorphWeight(instance, morphWeights, morph.name, weight))
-            return false;
-        resolvedWeights.push_back(weight);
+        const f32 weight = ResolvedMorphWeight(resolvedWeights, morph.name);
         if(!DeformableValidation::ActiveWeight(weight))
             continue;
         if(morph.deltas.empty()){
@@ -180,17 +208,15 @@ static bool BuildMorphPayload(
             return false;
         }
         activeDeltaCount += morph.deltas.size();
-        ++activeMorphCount;
+        activeMorphs.push_back(ActiveMorph{ &morph, weight });
     }
 
-    outRanges.reserve(activeMorphCount);
+    outRanges.reserve(activeMorphs.size());
     outDeltas.reserve(activeDeltaCount);
 
-    for(usize morphIndex = 0u; morphIndex < instance.morphs.size(); ++morphIndex){
-        const DeformableMorph& morph = instance.morphs[morphIndex];
-        const f32 weight = resolvedWeights[morphIndex];
-        if(!DeformableValidation::ActiveWeight(weight))
-            continue;
+    for(const ActiveMorph& activeMorph : activeMorphs){
+        const DeformableMorph& morph = *activeMorph.morph;
+        const f32 weight = activeMorph.weight;
 
         DeformerSystem::DeformerMorphRangeGpu range;
         range.firstDelta = static_cast<u32>(outDeltas.size());

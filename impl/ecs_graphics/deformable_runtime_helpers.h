@@ -45,24 +45,44 @@ namespace DisplacementResolveFailure{
     return weights && !weights->weights.empty();
 }
 
-[[nodiscard]] inline bool ResolveMorphWeightSum(
+template<typename MorphVector, typename MorphWeightLookup>
+[[nodiscard]] inline bool BuildMorphWeightSumLookup(
+    const MorphVector& morphs,
     const DeformableMorphWeightsComponent* weights,
-    const Name& morphName,
-    f32& outWeight)
+    MorphWeightLookup& outWeights,
+    Name& outFailedMorph)
 {
-    outWeight = 0.0f;
-    if(!HasMorphWeights(weights) || !morphName)
+    outWeights.clear();
+    outFailedMorph = NAME_NONE;
+
+    if(!HasMorphWeights(weights))
+        return true;
+
+    outWeights.reserve(morphs.size());
+    for(const DeformableMorph& morph : morphs){
+        if(!morph.name)
+            continue;
+
+        outWeights.emplace(morph.name.hash(), 0.0f);
+    }
+    if(outWeights.empty())
         return true;
 
     for(const DeformableMorphWeight& weight : weights->weights){
-        if(weight.morph != morphName)
+        auto iterWeight = outWeights.find(weight.morph.hash());
+        if(iterWeight == outWeights.end())
             continue;
-        if(!IsFinite(weight.weight))
+        if(!IsFinite(weight.weight)){
+            outFailedMorph = weight.morph;
             return false;
+        }
 
-        outWeight += weight.weight;
-        if(!IsFinite(outWeight))
+        const f32 resolvedWeight = iterWeight.value() + weight.weight;
+        if(!IsFinite(resolvedWeight)){
+            outFailedMorph = weight.morph;
             return false;
+        }
+        iterWeight.value() = resolvedWeight;
     }
     return true;
 }

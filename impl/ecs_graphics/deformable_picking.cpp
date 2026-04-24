@@ -28,6 +28,14 @@ namespace __hidden_deformable_picking{
 
 using namespace DeformableRuntime;
 
+using MorphWeightLookup = HashMap<
+    NameHash,
+    f32,
+    Hasher<NameHash>,
+    EqualTo<NameHash>,
+    Core::Alloc::ScratchAllocator<Pair<const NameHash, f32>>
+>;
+
 [[nodiscard]] Float4 LoadVertexNormal(const DeformableVertexRest& vertex){
     return Float4(vertex.normal.x, vertex.normal.y, vertex.normal.z, 0.0f);
 }
@@ -84,10 +92,24 @@ template<typename VertexVector>
     if(!HasMorphWeights(weights))
         return true;
 
+    Core::Alloc::ScratchArena<> scratchArena;
+    MorphWeightLookup resolvedWeights(
+        0,
+        Hasher<NameHash>(),
+        EqualTo<NameHash>(),
+        Core::Alloc::ScratchAllocator<Pair<const NameHash, f32>>(scratchArena)
+    );
+    Name failedMorph = NAME_NONE;
+    if(!BuildMorphWeightSumLookup(instance.morphs, weights, resolvedWeights, failedMorph))
+        return false;
+
     for(const DeformableMorph& morph : instance.morphs){
         f32 weight = 0.0f;
-        if(!ResolveMorphWeightSum(weights, morph.name, weight))
-            return false;
+        if(morph.name){
+            const auto iterWeight = resolvedWeights.find(morph.name.hash());
+            if(iterWeight != resolvedWeights.end())
+                weight = iterWeight.value();
+        }
         if(!DeformableValidation::ActiveWeight(weight))
             continue;
         if(morph.deltas.empty())

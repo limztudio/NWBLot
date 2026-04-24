@@ -15,12 +15,6 @@ NWB_METASCRIPT_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using namespace MetascriptDetail;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 Value::Value(Alloc::CustomArena& arena)
     : m_arena(arena)
 {}
@@ -84,7 +78,7 @@ Value& Value::operator=(Value&& other)noexcept{
 
 Value Value::operator+(const Value& rhs)const{
     if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer){
-        if(AddI64Overflows(m_data.m_integer, rhs.m_data.m_integer)){
+        if(MetascriptDetail::AddI64Overflows(m_data.m_integer, rhs.m_data.m_integer)){
             NWB_ASSERT_MSG(false, NWB_TEXT("integer overflow"));
             return Value(m_arena);
         }
@@ -135,7 +129,7 @@ Value Value::operator+(const Value& rhs)const{
 
 Value Value::operator-(const Value& rhs)const{
     if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer){
-        if(SubtractI64Overflows(m_data.m_integer, rhs.m_data.m_integer)){
+        if(MetascriptDetail::SubtractI64Overflows(m_data.m_integer, rhs.m_data.m_integer)){
             NWB_ASSERT_MSG(false, NWB_TEXT("integer overflow"));
             return Value(m_arena);
         }
@@ -151,7 +145,7 @@ Value Value::operator-(const Value& rhs)const{
 
 Value Value::operator*(const Value& rhs)const{
     if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer){
-        if(MultiplyI64Overflows(m_data.m_integer, rhs.m_data.m_integer)){
+        if(MetascriptDetail::MultiplyI64Overflows(m_data.m_integer, rhs.m_data.m_integer)){
             NWB_ASSERT_MSG(false, NWB_TEXT("integer overflow"));
             return Value(m_arena);
         }
@@ -171,7 +165,7 @@ Value Value::operator/(const Value& rhs)const{
             NWB_ASSERT_MSG(false, NWB_TEXT("division by zero"));
             return Value(m_arena);
         }
-        if(DivideI64Overflows(m_data.m_integer, rhs.m_data.m_integer)){
+        if(MetascriptDetail::DivideI64Overflows(m_data.m_integer, rhs.m_data.m_integer)){
             NWB_ASSERT_MSG(false, NWB_TEXT("integer overflow"));
             return Value(m_arena);
         }
@@ -192,7 +186,7 @@ Value Value::operator/(const Value& rhs)const{
 
 Value& Value::operator+=(const Value& rhs){
     if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer){
-        if(AddI64Overflows(m_data.m_integer, rhs.m_data.m_integer)){
+        if(MetascriptDetail::AddI64Overflows(m_data.m_integer, rhs.m_data.m_integer)){
             NWB_ASSERT_MSG(false, NWB_TEXT("integer overflow"));
             return *this;
         }
@@ -241,7 +235,7 @@ Value& Value::operator+=(const Value& rhs){
 
 Value& Value::operator-=(const Value& rhs){
     if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer){
-        if(SubtractI64Overflows(m_data.m_integer, rhs.m_data.m_integer)){
+        if(MetascriptDetail::SubtractI64Overflows(m_data.m_integer, rhs.m_data.m_integer)){
             NWB_ASSERT_MSG(false, NWB_TEXT("integer overflow"));
             return *this;
         }
@@ -260,7 +254,7 @@ Value& Value::operator-=(const Value& rhs){
 
 Value& Value::operator*=(const Value& rhs){
     if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer){
-        if(MultiplyI64Overflows(m_data.m_integer, rhs.m_data.m_integer)){
+        if(MetascriptDetail::MultiplyI64Overflows(m_data.m_integer, rhs.m_data.m_integer)){
             NWB_ASSERT_MSG(false, NWB_TEXT("integer overflow"));
             return *this;
         }
@@ -283,7 +277,7 @@ Value& Value::operator/=(const Value& rhs){
             NWB_ASSERT_MSG(false, NWB_TEXT("division by zero"));
             return *this;
         }
-        if(DivideI64Overflows(m_data.m_integer, rhs.m_data.m_integer)){
+        if(MetascriptDetail::DivideI64Overflows(m_data.m_integer, rhs.m_data.m_integer)){
             NWB_ASSERT_MSG(false, NWB_TEXT("integer overflow"));
             return *this;
         }

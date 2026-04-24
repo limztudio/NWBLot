@@ -9,8 +9,6 @@
 #include <global/frame_data.h>
 #include <core/alloc/general.h>
 
-#include <regex>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -244,26 +242,84 @@ namespace CommonDetail{
 
 
 template<typename T>
-[[nodiscard]] inline const std::basic_regex<T>& CommandLineAssignmentRegex(){
-    static_assert(
-        IsSame_V<T, char> || IsSame_V<T, wchar>,
-        "Command line parsing supports char and wchar strings"
-    );
+[[nodiscard]] inline bool CommandLineIsWordChar(const T ch){
+    static_assert(IsSame_V<T, char> || IsSame_V<T, wchar>, "Command line parsing supports char and wchar strings");
+    return (ch >= T('a') && ch <= T('z'))
+        || (ch >= T('A') && ch <= T('Z'))
+        || (ch >= T('0') && ch <= T('9'))
+        || ch == T('_');
+}
 
-    if constexpr(IsSame_V<T, wchar>){
-        static const std::basic_regex<T> s_Regex(
-            L"(\\w+)\\s*=\\s*(?:\"([^\"]*)\"|(\\S+))",
-            std::regex_constants::ECMAScript | std::regex_constants::optimize
-        );
-        return s_Regex;
+template<typename T>
+[[nodiscard]] inline bool CommandLineIsSpace(const T ch){
+    static_assert(IsSame_V<T, char> || IsSame_V<T, wchar>, "Command line parsing supports char and wchar strings");
+    return ch == T(' ')
+        || ch == T('\t')
+        || ch == T('\n')
+        || ch == T('\r')
+        || ch == T('\f')
+        || ch == T('\v');
+}
+
+template<typename T>
+[[nodiscard]] inline bool TryParseCommandLineAssignmentAt(
+    const BasicStringView<T> input,
+    const usize begin,
+    usize& outNext,
+    BasicString<T>& outKey,
+    BasicString<T>& outValue
+){
+    usize cursor = begin;
+    if(cursor >= input.size() || !CommandLineIsWordChar(input[cursor]))
+        return false;
+
+    const usize keyBegin = cursor;
+    do{
+        ++cursor;
+    }
+    while(cursor < input.size() && CommandLineIsWordChar(input[cursor]));
+    const usize keyEnd = cursor;
+
+    while(cursor < input.size() && CommandLineIsSpace(input[cursor]))
+        ++cursor;
+    if(cursor >= input.size() || input[cursor] != T('='))
+        return false;
+    ++cursor;
+
+    while(cursor < input.size() && CommandLineIsSpace(input[cursor]))
+        ++cursor;
+    if(cursor >= input.size())
+        return false;
+
+    usize valueBegin = cursor;
+    usize valueEnd = cursor;
+    if(input[cursor] == T('"')){
+        const usize quotedValueBegin = cursor + 1u;
+        usize quotedValueEnd = quotedValueBegin;
+        while(quotedValueEnd < input.size() && input[quotedValueEnd] != T('"'))
+            ++quotedValueEnd;
+
+        if(quotedValueEnd < input.size()){
+            valueBegin = quotedValueBegin;
+            valueEnd = quotedValueEnd;
+            cursor = quotedValueEnd + 1u;
+        }
+        else{
+            while(cursor < input.size() && !CommandLineIsSpace(input[cursor]))
+                ++cursor;
+            valueEnd = cursor;
+        }
     }
     else{
-        static const std::basic_regex<T> s_Regex(
-            "(\\w+)\\s*=\\s*(?:\"([^\"]*)\"|(\\S+))",
-            std::regex_constants::ECMAScript | std::regex_constants::optimize
-        );
-        return s_Regex;
+        while(cursor < input.size() && !CommandLineIsSpace(input[cursor]))
+            ++cursor;
+        valueEnd = cursor;
     }
+
+    outKey.assign(input.data() + keyBegin, keyEnd - keyBegin);
+    outValue.assign(input.data() + valueBegin, valueEnd - valueBegin);
+    outNext = cursor;
+    return true;
 }
 
 
@@ -278,21 +334,24 @@ template<typename T>
 
 template<typename T>
 inline HashMap<BasicString<T>, BasicString<T>> parseCommandLine(BasicStringView<T> input){
-    const std::basic_regex<T>& regex = CommonDetail::CommandLineAssignmentRegex<T>();
-
     HashMap<BasicString<T>, BasicString<T>> output;
-    std::match_results<typename BasicString<T>::const_iterator> match;
+    usize cursor = 0;
+    while(cursor < input.size()){
+        if(!CommonDetail::CommandLineIsWordChar(input[cursor])){
+            ++cursor;
+            continue;
+        }
 
-    typename BasicString<T>::const_iterator itrSearch(input.cbegin());
-    for(;;){
-        const bool matched = std::regex_search(itrSearch, input.cend(), match, regex);
-        if(!matched)
-            break;
-
-        BasicString<T> key = match[1].str();
-        BasicString<T> value = match[2].matched ? match[2].str() : match[3].str();
-        output.insert_or_assign(Move(key), Move(value));
-        itrSearch = match.suffix().first;
+        usize next = cursor;
+        BasicString<T> key;
+        BasicString<T> value;
+        if(CommonDetail::TryParseCommandLineAssignmentAt(input, cursor, next, key, value)){
+            output.insert_or_assign(Move(key), Move(value));
+            cursor = next;
+        }
+        else{
+            ++cursor;
+        }
     }
 
     return output;

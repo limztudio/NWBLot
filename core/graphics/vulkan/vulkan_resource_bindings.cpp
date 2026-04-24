@@ -1101,6 +1101,12 @@ BindingLayout::BindingLayout(const VulkanContext& context)
     : RefCounter<IBindingLayout>(context.threadPool)
     , m_descriptorSetLayouts(Alloc::CustomAllocator<VkDescriptorSetLayout>(context.objectArena))
     , m_descriptorHeapBindings(Alloc::CustomAllocator<DescriptorHeapBindingMeta>(context.objectArena))
+    , m_descriptorHeapBindingLookup(
+        0,
+        Hasher<u32>(),
+        EqualTo<u32>(),
+        Alloc::CustomAllocator<Pair<const u32, usize>>(context.objectArena)
+    )
     , m_context(context)
 {}
 BindingLayout::~BindingLayout(){
@@ -1253,6 +1259,7 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
 
         if(compatible){
             layout->m_descriptorHeapBindings.reserve(desc.bindings.size());
+            layout->m_descriptorHeapBindingLookup.reserve(desc.bindings.size());
             for(const auto& item : desc.bindings){
                 if(item.type == ResourceType::PushConstants || item.type == ResourceType::None)
                     continue;
@@ -1278,13 +1285,17 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
                 meta.arraySize = item.getArraySize();
                 meta.descriptorSize = descriptorSize;
                 meta.descriptorStride = descriptorStride;
+                const usize metaIndex = layout->m_descriptorHeapBindings.size();
                 layout->m_descriptorHeapBindings.push_back(meta);
+                layout->m_descriptorHeapBindingLookup.insert_or_assign(meta.slot, metaIndex);
             }
         }
 
         layout->m_descriptorHeapCompatible = compatible && !layout->m_descriptorHeapBindings.empty();
-        if(!layout->m_descriptorHeapCompatible)
+        if(!layout->m_descriptorHeapCompatible){
             layout->m_descriptorHeapBindings.clear();
+            layout->m_descriptorHeapBindingLookup.clear();
+        }
     }
 
     return BindingLayoutHandle(layout, BindingLayoutHandle::deleter_type(&m_context.objectArena), AdoptRef);
@@ -1909,17 +1920,6 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLa
     imageInfos.reserve(desc.bindings.size());
     texelBufferViews.reserve(desc.bindings.size());
     asInfos.reserve(desc.bindings.size());
-    HashMap<u32, usize, Hasher<u32>, EqualTo<u32>, Alloc::ScratchAllocator<Pair<const u32, usize>>> descriptorHeapMetaLookup(
-        0,
-        Hasher<u32>(),
-        EqualTo<u32>(),
-        Alloc::ScratchAllocator<Pair<const u32, usize>>(scratchArena)
-    );
-    if(layout->m_descriptorHeapCompatible && m_context.descriptorHeapManager){
-        descriptorHeapMetaLookup.reserve(layout->m_descriptorHeapBindings.size());
-        for(usize i = 0; i < layout->m_descriptorHeapBindings.size(); ++i)
-            descriptorHeapMetaLookup.insert_or_assign(layout->m_descriptorHeapBindings[i].slot, i);
-    }
 
     for(const auto& item : desc.bindings){
         if(!item.resourceHandle)
@@ -2042,8 +2042,8 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLa
         }
 
         if(layout->m_descriptorHeapCompatible && m_context.descriptorHeapManager){
-            const auto metaIt = descriptorHeapMetaLookup.find(item.slot);
-            if(metaIt != descriptorHeapMetaLookup.end()){
+            const auto metaIt = layout->m_descriptorHeapBindingLookup.find(item.slot);
+            if(metaIt != layout->m_descriptorHeapBindingLookup.end()){
                 const usize metaIndex = metaIt->second;
                 const DescriptorHeapBindingMeta& meta = layout->m_descriptorHeapBindings[metaIndex];
                 const DescriptorHeapAllocation& allocation = bindingSet->m_descriptorHeapAllocations[metaIndex];

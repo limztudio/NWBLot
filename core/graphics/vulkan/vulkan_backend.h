@@ -1200,6 +1200,7 @@ private:
     bool m_descriptorHeapCompatible = false;
     u32 m_pushConstantByteSize = 0;
     Vector<DescriptorHeapBindingMeta, Alloc::CustomAllocator<DescriptorHeapBindingMeta>> m_descriptorHeapBindings;
+    HashMap<u32, usize, Hasher<u32>, EqualTo<u32>, Alloc::CustomAllocator<Pair<const u32, usize>>> m_descriptorHeapBindingLookup;
 
     const VulkanContext& m_context;
 };

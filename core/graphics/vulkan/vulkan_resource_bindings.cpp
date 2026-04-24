@@ -851,7 +851,9 @@ DescriptorHeapAllocation DescriptorHeapManager::allocate(const DescriptorHeapKin
             continue;
 
         const u32 allocEnd = alignedOffset + sizeBytes;
-        heap.freeRanges.erase(heap.freeRanges.begin() + static_cast<isize>(i));
+        if(i + 1u != heap.freeRanges.size())
+            heap.freeRanges[i] = heap.freeRanges.back();
+        heap.freeRanges.pop_back();
 
         if(consumedPrefix > 0)
             heap.freeRanges.push_back({ range.offsetBytes, consumedPrefix });

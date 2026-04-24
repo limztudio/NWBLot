@@ -1560,6 +1560,7 @@ bool VolumeFileSystem::loadMetadataLocked(){
     }
 
     FileMap loadedFiles(0, Hasher<Name>(), EqualTo<Name>(), FileMapAllocator(m_arena));
+    loadedFiles.reserve(static_cast<usize>(header.fileCount));
     u64 cursor = 0;
     for(u64 i = 0; i < header.fileCount; ++i){
         if(header.indexBytes - cursor < sizeof(VolumeIndexEntryDisk)){

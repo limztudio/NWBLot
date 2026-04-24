@@ -1169,6 +1169,13 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
 
     Vector<VkDescriptorSetLayoutBinding, Alloc::ScratchAllocator<VkDescriptorSetLayoutBinding>> bindings{ Alloc::ScratchAllocator<VkDescriptorSetLayoutBinding>(scratchArena) };
     bindings.reserve(desc.bindings.size());
+    HashSet<u32, Hasher<u32>, EqualTo<u32>, Alloc::ScratchAllocator<u32>> bindingSlots(
+        0,
+        Hasher<u32>(),
+        EqualTo<u32>(),
+        Alloc::ScratchAllocator<u32>(scratchArena)
+    );
+    bindingSlots.reserve(desc.bindings.size());
 
     for(usize i = 0; i < desc.bindings.size(); ++i){
         const auto& item = desc.bindings[i];
@@ -1196,13 +1203,11 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
             DestroyArenaObject(m_context.objectArena, layout);
             return nullptr;
         }
-        for(usize j = 0; j < i; ++j){
-            const auto& previous = desc.bindings[j];
-            if(previous.type != ResourceType::None && previous.type != ResourceType::PushConstants && previous.slot == item.slot){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor set layout: duplicate binding slot {}"), item.slot);
-                DestroyArenaObject(m_context.objectArena, layout);
-                return nullptr;
-            }
+        const auto slotInsert = bindingSlots.insert(item.slot);
+        if(!slotInsert.second){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor set layout: duplicate binding slot {}"), item.slot);
+            DestroyArenaObject(m_context.objectArena, layout);
+            return nullptr;
         }
         VkDescriptorSetLayoutBinding binding = {};
         binding.binding = item.slot;
@@ -1296,6 +1301,13 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
     bindings.reserve(desc.registerSpaces.size());
     Vector<VkDescriptorBindingFlags, Alloc::ScratchAllocator<VkDescriptorBindingFlags>> bindingFlags{ Alloc::ScratchAllocator<VkDescriptorBindingFlags>(scratchArena) };
     bindingFlags.reserve(desc.registerSpaces.size());
+    HashSet<u32, Hasher<u32>, EqualTo<u32>, Alloc::ScratchAllocator<u32>> registerSpaceSlots(
+        0,
+        Hasher<u32>(),
+        EqualTo<u32>(),
+        Alloc::ScratchAllocator<u32>(scratchArena)
+    );
+    registerSpaceSlots.reserve(desc.registerSpaces.size());
 
     const u32 maxCapacity = VulkanDetail::NormalizeDescriptorTableCapacity(desc.maxCapacity);
     for(usize i = 0; i < desc.registerSpaces.size(); ++i){
@@ -1309,12 +1321,11 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
             DestroyArenaObject(m_context.objectArena, layout);
             return nullptr;
         }
-        for(usize j = 0; j < i; ++j){
-            if(desc.registerSpaces[j].slot == item.slot){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create bindless layout: duplicate register space slot {}"), item.slot);
-                DestroyArenaObject(m_context.objectArena, layout);
-                return nullptr;
-            }
+        const auto slotInsert = registerSpaceSlots.insert(item.slot);
+        if(!slotInsert.second){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create bindless layout: duplicate register space slot {}"), item.slot);
+            DestroyArenaObject(m_context.objectArena, layout);
+            return nullptr;
         }
 
         VkDescriptorSetLayoutBinding binding = {};

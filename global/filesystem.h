@@ -371,12 +371,10 @@ template<typename Container>
     if(textOffset > Limit<usize>::s_Max - textLength)
         return false;
 
-    AppendPOD(outBinary, textLength);
-    if(textLength == 0)
-        return true;
-
     outBinary.resize(textOffset + textLength);
-    NWB_MEMCPY(outBinary.data() + textOffset, textLength, text.data(), textLength);
+    NWB_MEMCPY(outBinary.data() + lengthOffset, sizeof(textLength), &textLength, sizeof(textLength));
+    if(textLength > 0)
+        NWB_MEMCPY(outBinary.data() + textOffset, textLength, text.data(), textLength);
     return true;
 }
 
@@ -397,11 +395,9 @@ template<typename Container>
     if(binary.size() - cursor < textLength)
         return false;
 
-    AString text;
-    text.assign(reinterpret_cast<const char*>(binary.data() + cursor), textLength);
+    outText.assign(reinterpret_cast<const char*>(binary.data() + cursor), textLength);
     cursor += textLength;
 
-    outText = Move(text);
     inOutOffset = cursor;
     return true;
 }
@@ -409,13 +405,19 @@ template<typename Container>
 template<typename Container>
 [[nodiscard]] inline bool ReadString(const Container& binary, usize& inOutOffset, CompactString& outText){
     usize cursor = inOutOffset;
-    AString text;
-    if(!ReadString(binary, cursor, text))
+    u32 textLength = 0;
+    if(!ReadPOD(binary, cursor, textLength))
+        return false;
+
+    if(cursor > binary.size())
+        return false;
+    if(binary.size() - cursor < textLength)
         return false;
 
     CompactString parsedText;
-    if(!parsedText.assign(text))
+    if(!parsedText.assign(AStringView(reinterpret_cast<const char*>(binary.data() + cursor), textLength)))
         return false;
+    cursor += textLength;
 
     outText = parsedText;
     inOutOffset = cursor;

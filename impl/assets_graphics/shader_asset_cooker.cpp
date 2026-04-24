@@ -456,23 +456,23 @@ static bool ParseVariantField(
         return false;
     }
 
-    rawVariant = Trim(rawVariant);
-    if(rawVariant.empty()){
+    const AStringView rawVariantView = TrimView(rawVariant);
+    if(rawVariantView.empty()){
         outVariant = defaultValue;
         return true;
     }
-    if(rawVariant == Core::ShaderArchive::s_DefaultVariant){
+    if(rawVariantView == Core::ShaderArchive::s_DefaultVariant){
         outVariant = Core::ShaderArchive::s_DefaultVariant;
         return true;
     }
 
     AString canonicalVariant;
-    if(!shaderCook.canonicalizeVariantSignature(rawVariant, canonicalVariant)){
+    if(!shaderCook.canonicalizeVariantSignature(rawVariantView, canonicalVariant)){
         NWB_LOGGER_ERROR(
             NWB_TEXT("Material meta '{}': field '{}' has invalid variant signature '{}'"),
             PathToString<tchar>(nwbFilePath),
             StringConvert(fieldName),
-            StringConvert(rawVariant)
+            StringConvert(rawVariantView)
         );
         return false;
     }
@@ -1797,9 +1797,13 @@ static bool ValidateAndNormalizeMaterials(
 }
 
 
-static VariantCachePaths BuildVariantCachePaths(const Path& cacheDirectory, const AStringView configurationSafeName, const Core::ShaderCook::ShaderEntry& entry, const AStringView variantName){
-    const AString shaderSafeName = BuildSafeCacheName(entry.name);
-    const AString stageSafeName = BuildSafeCacheName(entry.archiveStage.view());
+static VariantCachePaths BuildVariantCachePaths(
+    const Path& cacheDirectory,
+    const AStringView configurationSafeName,
+    const AStringView shaderSafeName,
+    const AStringView stageSafeName,
+    const AStringView variantName
+){
     AString bytecodeFileName;
     bytecodeFileName.reserve(shaderSafeName.size() + 2u + stageSafeName.size() + 2u + 16u + 4u);
     bytecodeFileName += shaderSafeName;
@@ -2328,6 +2332,9 @@ static bool AppendPreparedShadersToVolume(
             return false;
         }
 
+        const AString shaderSafeName = BuildSafeCacheName(entry.name);
+        const AString stageSafeName = BuildSafeCacheName(entry.archiveStage.view());
+
         Core::ShaderCook::CookVector<Core::ShaderCook::DefineCombo> defineCombinations{Core::ShaderCook::CookAllocator<Core::ShaderCook::DefineCombo>(cookArena)};
         if(!shaderCook.expandDefineCombinations(entry.defineValues, defineCombinations)){
             NWB_LOGGER_ERROR(
@@ -2351,7 +2358,8 @@ static bool AppendPreparedShadersToVolume(
             const VariantCachePaths cachePaths = BuildVariantCachePaths(
                 cacheDirectory,
                 configurationSafeName,
-                entry,
+                shaderSafeName,
+                stageSafeName,
                 variantName
             );
             if(!GetVariantBytecode(

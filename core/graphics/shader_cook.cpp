@@ -758,15 +758,20 @@ AString ShaderCook::buildVariantName(const DefineCombo& combo){
 }
 
 bool ShaderCook::canonicalizeVariantSignature(const AStringView variantSignature, AString& outCanonical){
-    const AString trimmedSignature = Trim(variantSignature);
-    const AStringView trimmedSignatureView(trimmedSignature.data(), trimmedSignature.size());
-    outCanonical.clear();
-    if(trimmedSignatureView.empty())
+    const AStringView trimmedSignatureView = TrimView(variantSignature);
+    if(trimmedSignatureView.empty()){
+        outCanonical.clear();
         return true;
+    }
     if(trimmedSignatureView == "default"){
         outCanonical = "default";
         return true;
     }
+
+    const auto fail = [&outCanonical](){
+        outCanonical.clear();
+        return false;
+    };
 
     DefineCombo assignments{CookAllocator<Pair<const AString, AString>>(m_memoryArena)};
 
@@ -778,18 +783,18 @@ bool ShaderCook::canonicalizeVariantSignature(const AStringView variantSignature
 
         const AStringView segment = TrimView(trimmedSignatureView.substr(begin, segmentEnd - begin));
         if(segment.empty())
-            return false;
+            return fail();
 
         const usize equalPos = segment.find('=');
         if(equalPos == AStringView::npos || equalPos == 0 || equalPos + 1 >= segment.size())
-            return false;
+            return fail();
 
         AString defineName(TrimView(segment.substr(0, equalPos)));
         AString defineValue(TrimView(segment.substr(equalPos + 1)));
         if(defineName.empty() || defineValue.empty())
-            return false;
+            return fail();
         if(!assignments.emplace(Move(defineName), Move(defineValue)).second)
-            return false;
+            return fail();
 
         begin = segmentEnd + 1;
     }

@@ -39,7 +39,7 @@ static constexpr AStringView s_AssetTypeInclude = "include";
 
 static AString CanonicalAssetType(const Metascript::Document& doc){
     const auto assetType = doc.assetType();
-    return CanonicalizeText(AString(assetType.data(), assetType.size()));
+    return CanonicalizeText(AStringView(assetType.data(), assetType.size()));
 }
 
 
@@ -723,9 +723,15 @@ AString ShaderCook::buildVariantName(const DefineCombo& combo){
     if(combo.empty())
         return "default";
 
+    const auto entries = sortedDefineEntries(combo);
+    usize variantNameSize = entries.size() - 1u;
+    for(const auto& entry : entries)
+        variantNameSize += entry.key->size() + entry.value->size() + 1u;
+
     AString variantName;
+    variantName.reserve(variantNameSize);
     bool first = true;
-    for(const auto& entry : sortedDefineEntries(combo)){
+    for(const auto& entry : entries){
         if(!first)
             variantName += ';';
         first = false;
@@ -764,14 +770,13 @@ bool ShaderCook::canonicalizeVariantSignature(const AStringView variantSignature
         if(equalPos == AString::npos || equalPos == 0 || equalPos + 1 >= segment.size())
             return false;
 
-        const AString defineName = Trim(AStringView(segment).substr(0, equalPos));
-        const AString defineValue = Trim(AStringView(segment).substr(equalPos + 1));
+        AString defineName = Trim(AStringView(segment).substr(0, equalPos));
+        AString defineValue = Trim(AStringView(segment).substr(equalPos + 1));
         if(defineName.empty() || defineValue.empty())
             return false;
-        if(assignments.find(defineName) != assignments.end())
+        if(!assignments.emplace(Move(defineName), Move(defineValue)).second)
             return false;
 
-        assignments.insert_or_assign(defineName, defineValue);
         begin = segmentEnd + 1;
     }
 

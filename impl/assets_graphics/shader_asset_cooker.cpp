@@ -421,6 +421,7 @@ static bool ParseVariantField(
     AString rawVariant;
     if(variantValue->isList()){
         const auto& list = variantValue->asList();
+        usize rawVariantSize = list.empty() ? 0u : list.size() - 1u;
         for(usize i = 0; i < list.size(); ++i){
             if(!list[i].isString()){
                 NWB_LOGGER_ERROR(
@@ -430,6 +431,11 @@ static bool ParseVariantField(
                 );
                 return false;
             }
+            rawVariantSize += list[i].asString().size();
+        }
+
+        rawVariant.reserve(rawVariantSize);
+        for(usize i = 0; i < list.size(); ++i){
             if(i > 0)
                 rawVariant += ';';
             const Core::Metascript::MStringView variantText = list[i].asString();
@@ -831,7 +837,7 @@ static bool ParseFiniteF32Value(
         NWB_LOGGER_ERROR(
             NWB_TEXT("Deformable geometry meta '{}': '{}' must contain only numeric values"),
             PathToString<tchar>(nwbFilePath),
-            StringConvert(AString(label))
+            StringConvert(label)
         );
         return false;
     }
@@ -841,7 +847,7 @@ static bool ParseFiniteF32Value(
         NWB_LOGGER_ERROR(
             NWB_TEXT("Deformable geometry meta '{}': '{}' must contain only finite numeric values"),
             PathToString<tchar>(nwbFilePath),
-            StringConvert(AString(label))
+            StringConvert(label)
         );
         return false;
     }
@@ -849,7 +855,7 @@ static bool ParseFiniteF32Value(
         NWB_LOGGER_ERROR(
             NWB_TEXT("Deformable geometry meta '{}': '{}' contains a value outside the f32 range"),
             PathToString<tchar>(nwbFilePath),
-            StringConvert(AString(label))
+            StringConvert(label)
         );
         return false;
     }
@@ -863,7 +869,7 @@ static bool ParseU32Value(const Path& nwbFilePath, const Core::Metascript::Value
         NWB_LOGGER_ERROR(
             NWB_TEXT("Deformable geometry meta '{}': '{}' must contain only integer values"),
             PathToString<tchar>(nwbFilePath),
-            StringConvert(AString(label))
+            StringConvert(label)
         );
         return false;
     }
@@ -873,7 +879,7 @@ static bool ParseU32Value(const Path& nwbFilePath, const Core::Metascript::Value
         NWB_LOGGER_ERROR(
             NWB_TEXT("Deformable geometry meta '{}': '{}' contains a non-integer or negative value"),
             PathToString<tchar>(nwbFilePath),
-            StringConvert(AString(label))
+            StringConvert(label)
         );
         return false;
     }
@@ -881,7 +887,7 @@ static bool ParseU32Value(const Path& nwbFilePath, const Core::Metascript::Value
         NWB_LOGGER_ERROR(
             NWB_TEXT("Deformable geometry meta '{}': '{}' contains a value that exceeds u32"),
             PathToString<tchar>(nwbFilePath),
-            StringConvert(AString(label))
+            StringConvert(label)
         );
         return false;
     }
@@ -898,7 +904,7 @@ static bool ParseU16Value(const Path& nwbFilePath, const Core::Metascript::Value
         NWB_LOGGER_ERROR(
             NWB_TEXT("Deformable geometry meta '{}': '{}' contains a value that exceeds u16"),
             PathToString<tchar>(nwbFilePath),
-            StringConvert(AString(label))
+            StringConvert(label)
         );
         return false;
     }
@@ -918,7 +924,7 @@ static bool ParseF32Tuple(
         NWB_LOGGER_ERROR(
             NWB_TEXT("Deformable geometry meta '{}': '{}' must be a {}-component list"),
             PathToString<tchar>(nwbFilePath),
-            StringConvert(AString(label)),
+            StringConvert(label),
             ComponentCount
         );
         return false;
@@ -944,7 +950,7 @@ static bool ParseU16Tuple(
         NWB_LOGGER_ERROR(
             NWB_TEXT("Deformable geometry meta '{}': '{}' must be a {}-component integer list"),
             PathToString<tchar>(nwbFilePath),
-            StringConvert(AString(label)),
+            StringConvert(label),
             ComponentCount
         );
         return false;
@@ -973,7 +979,7 @@ static bool ParseFloatListField(
         NWB_LOGGER_ERROR(
             NWB_TEXT("Deformable geometry meta '{}': '{}' must be a list"),
             PathToString<tchar>(nwbFilePath),
-            StringConvert(AString(fieldName))
+            StringConvert(fieldName)
         );
         return false;
     }
@@ -999,7 +1005,7 @@ static bool ParseFloatListField(
         NWB_LOGGER_ERROR(
             NWB_TEXT("Deformable geometry meta '{}': '{}' must not be empty"),
             PathToString<tchar>(nwbFilePath),
-            StringConvert(AString(fieldName))
+            StringConvert(fieldName)
         );
         return false;
     }
@@ -1020,7 +1026,7 @@ static bool ParseU32ListField(
         NWB_LOGGER_ERROR(
             NWB_TEXT("Deformable geometry meta '{}': '{}' must be a list"),
             PathToString<tchar>(nwbFilePath),
-            StringConvert(AString(fieldName))
+            StringConvert(fieldName)
         );
         return false;
     }
@@ -1092,7 +1098,7 @@ static bool ParseDeformableIndexType(
     NWB_LOGGER_ERROR(
         NWB_TEXT("Deformable geometry meta '{}': unsupported index_type '{}'"),
         PathToString<tchar>(nwbFilePath),
-        StringConvert(AString(indexTypeText))
+        StringConvert(indexTypeText)
     );
     return false;
 }
@@ -1283,7 +1289,7 @@ static bool ParseRequiredStringField(
         NWB_LOGGER_ERROR(
             NWB_TEXT("Deformable geometry meta '{}': '{}' must be a string"),
             PathToString<tchar>(nwbFilePath),
-            StringConvert(AString(fieldName))
+            StringConvert(fieldName)
         );
         return false;
     }
@@ -1293,7 +1299,7 @@ static bool ParseRequiredStringField(
         NWB_LOGGER_ERROR(
             NWB_TEXT("Deformable geometry meta '{}': '{}' must not be empty"),
             PathToString<tchar>(nwbFilePath),
-            StringConvert(AString(fieldName))
+            StringConvert(fieldName)
         );
         return false;
     }
@@ -1382,7 +1388,7 @@ static bool ParseMorphs(
             NWB_LOGGER_ERROR(
                 NWB_TEXT("Deformable geometry meta '{}': morph '{}' must be a map"),
                 PathToString<tchar>(nwbFilePath),
-                StringConvert(AString(morphNameView))
+                StringConvert(morphNameView)
             );
             return false;
         }
@@ -1401,7 +1407,7 @@ static bool ParseMorphs(
             NWB_LOGGER_ERROR(
                 NWB_TEXT("Deformable geometry meta '{}': morph '{}' requires 'delta_tangent' list"),
                 PathToString<tchar>(nwbFilePath),
-                StringConvert(AString(morphNameView))
+                StringConvert(morphNameView)
             );
             return false;
         }
@@ -1415,7 +1421,7 @@ static bool ParseMorphs(
             NWB_LOGGER_ERROR(
                 NWB_TEXT("Deformable geometry meta '{}': morph '{}' stream counts must match and must not be empty"),
                 PathToString<tchar>(nwbFilePath),
-                StringConvert(AString(morphNameView))
+                StringConvert(morphNameView)
             );
             return false;
         }
@@ -2057,15 +2063,14 @@ static bool ParseAssetMetadata(
                     return false;
                 }
 
-                const AString key = CanonicalizeText(PathToString(absSource));
-                if(outMetadata.includeMetadata.find(key) != outMetadata.includeMetadata.end()){
+                AString key = CanonicalizeText(PathToString(absSource));
+                if(!outMetadata.includeMetadata.emplace(Move(key), Move(includeEntry)).second){
                     NWB_LOGGER_ERROR(
                         NWB_TEXT("ShaderAssetCooker: duplicate include metadata for source '{}'"),
                         PathToString<tchar>(absSource)
                     );
                     return false;
                 }
-                outMetadata.includeMetadata.insert_or_assign(key, Move(includeEntry));
             }
 
             continue;

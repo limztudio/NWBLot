@@ -1581,12 +1581,10 @@ bool VolumeFileSystem::loadMetadataLocked(){
         }
 
         const Name pathName(entry.hash);
-        if(loadedFiles.find(pathName) != loadedFiles.end()){
+        if(!loadedFiles.emplace(pathName, FileRecord{ entry.offset, entry.size }).second){
             __hidden_filesystem::LogFailure(m_volumeName, "loadMetadata", "duplicate path hash in metadata index");
             return false;
         }
-
-        loadedFiles.emplace(pathName, FileRecord{ entry.offset, entry.size });
     }
 
     if(cursor != header.indexBytes){

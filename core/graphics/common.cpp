@@ -477,9 +477,10 @@ usize AftermathMarkerTracker::pushEvent(const char* name){
     auto eventString = m_eventStack.generic_string<char>();
     usize hash = Hasher<decltype(eventString)>{}(eventString);
 
-    if(m_eventStrings.find(hash) == m_eventStrings.end()){
-        m_eventStrings.erase(m_eventHashes[m_oldestHashIndex]);
-        m_eventStrings.emplace(hash, Move(eventString));
+    if(m_eventStrings.try_emplace(hash, Move(eventString)).second){
+        const usize oldHash = m_eventHashes[m_oldestHashIndex];
+        if(oldHash != hash)
+            m_eventStrings.erase(oldHash);
         m_eventHashes[m_oldestHashIndex] = hash;
         m_oldestHashIndex = (m_oldestHashIndex + 1) % s_MaxAftermathEventStrings;
     }

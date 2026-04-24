@@ -625,7 +625,7 @@ bool DeformableRuntimeMeshCache::computePayloadBytes(
         NWB_LOGGER_ERROR(
             NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' '{}' payload byte size overflows"),
             StringConvert(instance.source.name().c_str()),
-            StringConvert(AString(label))
+            StringConvert(label)
         );
         return false;
     }

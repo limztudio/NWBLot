@@ -185,12 +185,12 @@ public:
                 completionSignal = node->completionSignal;
                 NWB_ASSERT_MSG(completionSignal != nullptr, NWB_TEXT("JobSystem encountered a null completion signal"));
 
-                completedGeneration = completionSignal->completedGeneration.load(std::memory_order_acquire);
+                completedGeneration = completionSignal->completedGeneration.load(MemoryOrder::acquire);
                 if(completedGeneration >= handle.generation)
                     return;
             }
 
-            completionSignal->completedGeneration.wait(completedGeneration, std::memory_order_relaxed);
+            completionSignal->completedGeneration.wait(completedGeneration, MemoryOrder::relaxed);
         }
     }
 
@@ -200,10 +200,10 @@ public:
     }
 
     inline void waitAll(){
-        usize current = m_pendingJobCount.load(std::memory_order_acquire);
+        usize current = m_pendingJobCount.load(MemoryOrder::acquire);
         while(current > 0){
-            m_pendingJobCount.wait(current, std::memory_order_relaxed);
-            current = m_pendingJobCount.load(std::memory_order_acquire);
+            m_pendingJobCount.wait(current, MemoryOrder::relaxed);
+            current = m_pendingJobCount.load(MemoryOrder::acquire);
         }
     }
 
@@ -250,7 +250,7 @@ private:
             }
         }
 
-        m_pendingJobCount.fetch_add(1, std::memory_order_release);
+        m_pendingJobCount.fetch_add(1, MemoryOrder::release);
 
         if(shouldSchedule)
             enqueueExecution(output);
@@ -422,12 +422,12 @@ private:
             recycleNodeLocked(handle.index, *node);
         }
 
-        completionSignal->completedGeneration.store(handle.generation, std::memory_order_release);
+        completionSignal->completedGeneration.store(handle.generation, MemoryOrder::release);
         completionSignal->completedGeneration.notify_all();
 
         enqueueExecutionBatch(readyJobs.data(), readyJobs.size());
 
-        if(m_pendingJobCount.fetch_sub(1, std::memory_order_acq_rel) == 1)
+        if(m_pendingJobCount.fetch_sub(1, MemoryOrder::acq_rel) == 1)
             m_pendingJobCount.notify_all();
 
         return inlineContinuation;

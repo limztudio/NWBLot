@@ -22,7 +22,7 @@ NWB_LOG_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace LoggerDetail{
+namespace __hidden_logger_server{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -32,6 +32,22 @@ struct ConnectionInfo{
     u8* buffer;
     usize size;
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace LoggerDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 Server* g_Logger = nullptr;
 
@@ -103,7 +119,8 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
     };
 
     if(!conCls){
-        auto* info = reinterpret_cast<LoggerDetail::ConnectionInfo*>(Core::Alloc::CoreAlloc(sizeof(LoggerDetail::ConnectionInfo), "ConnectionInfo allocated at Server::requestCallback"));
+        using ConnectionInfo = __hidden_logger_server::ConnectionInfo;
+        auto* info = reinterpret_cast<ConnectionInfo*>(Core::Alloc::CoreAlloc(sizeof(ConnectionInfo), "ConnectionInfo allocated at Server::requestCallback"));
         if(!info){
             thisPtr->enqueue(StringFormat(NWB_TEXT("Failed to allocate on {}"), SERVER_NAME), Type::Fatal);
             return MHD_NO;
@@ -115,7 +132,7 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
         return MHD_YES;
     }
 
-    auto* info = static_cast<LoggerDetail::ConnectionInfo*>(conCls);
+    auto* info = static_cast<__hidden_logger_server::ConnectionInfo*>(conCls);
     auto freeConnectionInfo = [&](){
         Core::Alloc::CoreFree(info->buffer, "ConnectionInfo buffer freed at Server::requestCallback");
         Core::Alloc::CoreFree(info, "ConnectionInfo freed at Server::requestCallback");

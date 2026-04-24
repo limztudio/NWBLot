@@ -176,8 +176,8 @@ static void TestGlslNamedScalarFunctions(TestContext& context){
     ));
 
     const SIMDVector signedZeroTanH = VectorTanH(VectorSet(-0.0f, 0.0f, -0.0f, 0.0f));
-    NWB_MATH_TEST_CHECK(context, std::signbit(VectorGetX(signedZeroTanH)));
-    NWB_MATH_TEST_CHECK(context, !std::signbit(VectorGetY(signedZeroTanH)));
+    NWB_MATH_TEST_CHECK(context, SignBit(VectorGetX(signedZeroTanH)));
+    NWB_MATH_TEST_CHECK(context, !SignBit(VectorGetY(signedZeroTanH)));
 }
 
 static void TestGlslRefractCriticalAngle(TestContext& context){

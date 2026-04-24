@@ -24,7 +24,7 @@ NWB_ALLOC_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace AllocDetail{
+namespace __hidden_alloc{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -163,7 +163,7 @@ struct AffinityMasks : Core::Common::Initializerable{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-usize CachelineSize(){ return AllocDetail::s_CacheSize.m_size; }
+usize CachelineSize(){ return __hidden_alloc::s_CacheSize.m_size; }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -171,8 +171,8 @@ usize CachelineSize(){ return AllocDetail::s_CacheSize.m_size; }
 
 u64 QueryAffinityMask(CoreAffinity::Enum type){
     switch(type){
-    case CoreAffinity::Performance: return AllocDetail::s_AffinityMasks.m_performance;
-    case CoreAffinity::Efficiency: return AllocDetail::s_AffinityMasks.m_efficiency;
+    case CoreAffinity::Performance: return __hidden_alloc::s_AffinityMasks.m_performance;
+    case CoreAffinity::Efficiency: return __hidden_alloc::s_AffinityMasks.m_efficiency;
     default: return 0;
     }
 }

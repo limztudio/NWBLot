@@ -15,6 +15,7 @@
 
 
 using Timer = std::chrono::steady_clock::time_point;
+using LocalTime = std::tm;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -146,7 +147,7 @@ inline Timer s_VeryBegining = TimerNow();
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool GetLocalTime(std::tm& outTime){
+[[nodiscard]] inline bool GetLocalTime(LocalTime& outTime){
     const auto now = std::time(nullptr);
     if(now == static_cast<std::time_t>(-1))
         return false;

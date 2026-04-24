@@ -53,6 +53,13 @@ using StreamSize = std::streamsize;
 
 using Path = std::filesystem::path;
 
+template<typename T>
+using BasicOutputFileStream = std::basic_ofstream<T>;
+using FileOpenMode = std::ios_base::openmode;
+
+inline constexpr FileOpenMode s_FileOpenWrite = std::ios::out;
+inline constexpr FileOpenMode s_FileOpenAppend = std::ios::app;
+
 using DirectoryIterator = std::filesystem::directory_iterator;
 using RecursiveDirectoryIterator = std::filesystem::recursive_directory_iterator;
 

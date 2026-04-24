@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include "atomic.h"
 #include "compressed_pair.h"
 #include "smart_ptr.h"
 
@@ -230,17 +231,17 @@ public:
     explicit RefCounter(Args&&... args) : T(Forward<Args>(args)...){}
 
 public:
-    u32 addReference()noexcept{ return m_referenceCount.fetch_add(1, std::memory_order_relaxed) + 1; }
+    u32 addReference()noexcept{ return m_referenceCount.fetch_add(1, MemoryOrder::relaxed) + 1; }
     u32 release()noexcept{
-        u32 old = m_referenceCount.fetch_sub(1, std::memory_order_release);
+        u32 old = m_referenceCount.fetch_sub(1, MemoryOrder::release);
         if(old == 1){
-            std::atomic_thread_fence(std::memory_order_acquire);
+            AtomicThreadFence(MemoryOrder::acquire);
             return 0;
         }
         return old - 1;
     }
 
-    u32 getReferenceCount()const noexcept{ return m_referenceCount.load(std::memory_order_relaxed); }
+    u32 getReferenceCount()const noexcept{ return m_referenceCount.load(MemoryOrder::relaxed); }
 
 
 private:

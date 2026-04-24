@@ -18,6 +18,8 @@ using MemoryOrder = std::memory_order;
 template<typename T>
 using Atomic = std::atomic<T>;
 
+inline void AtomicThreadFence(const MemoryOrder order)noexcept{ std::atomic_thread_fence(order); }
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -32,17 +34,17 @@ public:
 
 
 public:
-    [[nodiscard]] bool test(const MemoryOrder order = std::memory_order_seq_cst)const noexcept{
+    [[nodiscard]] bool test(const MemoryOrder order = MemoryOrder::seq_cst)const noexcept{
         return m_storage.load(order) != 0;
     }
 
-    bool test_and_set(const MemoryOrder order = std::memory_order_seq_cst)noexcept{
+    bool test_and_set(const MemoryOrder order = MemoryOrder::seq_cst)noexcept{
         return m_storage.exchange(true, order) != 0;
     }
 
-    void clear(const MemoryOrder order = std::memory_order_seq_cst)noexcept{ m_storage.store(false, order); }
+    void clear(const MemoryOrder order = MemoryOrder::seq_cst)noexcept{ m_storage.store(false, order); }
 
-    void wait(const bool expected, const MemoryOrder order = std::memory_order_seq_cst)const noexcept{
+    void wait(const bool expected, const MemoryOrder order = MemoryOrder::seq_cst)const noexcept{
         m_storage.wait(static_cast<decltype(m_storage)::value_type>(expected), order);
     }
 

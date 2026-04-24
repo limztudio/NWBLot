@@ -74,7 +74,7 @@ using MessageQueue = ParallelQueue<MessageType>;
 
 class ProcessedMessageFile{
 public:
-    using StreamType = std::basic_ofstream<tchar>;
+    using StreamType = BasicOutputFileStream<tchar>;
 
 
 public:
@@ -88,7 +88,7 @@ public:
         if(fileNameBase.empty())
             return false;
 
-        std::tm localTime = {};
+        LocalTime localTime = {};
         if(!GetLocalTime(localTime))
             return false;
 
@@ -108,7 +108,7 @@ public:
         );
         m_filePath = executableDirectory / fileName;
 
-        m_stream.open(m_filePath, std::ios::out | std::ios::app);
+        m_stream.open(m_filePath, s_FileOpenWrite | s_FileOpenAppend);
         return m_stream.is_open();
     }
     bool openByExecutableName(){
@@ -171,7 +171,7 @@ protected:
 protected:
     inline bool tryDequeue(MessageType& msg){ return m_msgQueue.try_pop(msg); }
     void stopWorker(){
-        const bool alreadyStopping = m_exit.exchange(true, std::memory_order_acq_rel);
+        const bool alreadyStopping = m_exit.exchange(true, MemoryOrder::acq_rel);
 
         if(!alreadyStopping)
             static_cast<T*>(this)->internalDestroy();
@@ -231,7 +231,7 @@ private:
 
             self->m_lastTime = curTime;
 
-            if(self->internalUpdate() && self->m_exit.load(std::memory_order_acquire))
+            if(self->internalUpdate() && self->m_exit.load(MemoryOrder::acquire))
                 break;
         }
     }
@@ -271,11 +271,11 @@ private:
             bool updateSucceeded = self->internalUpdate();
 
             if(!updateSucceeded){
-                self->m_exit.store(true, std::memory_order_release);
+                self->m_exit.store(true, MemoryOrder::release);
                 break;
             }
 
-            if(self->m_exit.load(std::memory_order_acquire))
+            if(self->m_exit.load(MemoryOrder::acquire))
                 break;
         }
     }

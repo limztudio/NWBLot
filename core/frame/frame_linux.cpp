@@ -42,12 +42,12 @@ static const char* BackendName(Common::LinuxFrameBackend::Enum backend){
 
 #if defined(NWB_WITH_WAYLAND)
 static bool HasEnvValue(const char* name){
-    const char* value = std::getenv(name);
+    const char* value = NWB_GETENV(name);
     return value && value[0] != '\0';
 }
 
 static bool EnvEquals(const char* name, const char* value){
-    const char* current = std::getenv(name);
+    const char* current = NWB_GETENV(name);
     return current && NWB_STRCMP(current, value) == 0;
 }
 #endif
@@ -61,7 +61,7 @@ static void AppendBackend(Common::LinuxFrameBackend::Enum (&outOrder)[2], usize&
 static usize BuildBackendOrder(Common::LinuxFrameBackend::Enum (&outOrder)[2]){
     usize count = 0;
 
-    const char* requestedBackend = std::getenv("NWB_LINUX_BACKEND");
+    const char* requestedBackend = NWB_GETENV("NWB_LINUX_BACKEND");
     if(requestedBackend){
         if(NWB_STRCMP(requestedBackend, "x11") == 0){
             AppendBackend(outOrder, count, Common::LinuxFrameBackend::Enum::X11);

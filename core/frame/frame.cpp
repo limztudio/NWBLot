@@ -16,7 +16,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace FrameDetail{
+namespace __hidden_frame{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -80,19 +80,19 @@ u32 Frame::queryProjectWorkerThreadCount(){
 Frame::Frame(void* inst, u16 width, u16 height)
     : m_graphicsPersistentArena(s_GraphicsPersistentArenaSize)
     , m_graphicsObjectArena(
-        &FrameDetail::GraphicsObjectArenaAlloc,
-        &FrameDetail::GraphicsObjectArenaFree,
-        &FrameDetail::GraphicsObjectArenaAllocAligned,
-        &FrameDetail::GraphicsObjectArenaFreeAligned
+        &__hidden_frame::GraphicsObjectArenaAlloc,
+        &__hidden_frame::GraphicsObjectArenaFree,
+        &__hidden_frame::GraphicsObjectArenaAllocAligned,
+        &__hidden_frame::GraphicsObjectArenaFreeAligned
     )
     , m_graphicsAllocator(m_graphicsPersistentArena, m_graphicsObjectArena)
     , m_graphicsThreadPool(queryGraphicsWorkerThreadCount(), Alloc::CoreAffinity::Any)
     , m_graphicsJobSystem(m_graphicsThreadPool)
     , m_projectObjectArena(
-        &FrameDetail::ProjectObjectArenaAlloc,
-        &FrameDetail::ProjectObjectArenaFree,
-        &FrameDetail::ProjectObjectArenaAllocAligned,
-        &FrameDetail::ProjectObjectArenaFreeAligned
+        &__hidden_frame::ProjectObjectArenaAlloc,
+        &__hidden_frame::ProjectObjectArenaFree,
+        &__hidden_frame::ProjectObjectArenaAllocAligned,
+        &__hidden_frame::ProjectObjectArenaFreeAligned
     )
     , m_projectThreadPool(queryProjectWorkerThreadCount(), Alloc::CoreAffinity::Any)
     , m_projectJobSystem(m_projectThreadPool)

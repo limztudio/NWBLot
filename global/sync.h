@@ -106,10 +106,10 @@ public:
             machine_pause(1 << i);
         }
 
-        u32 previousState = m_state.exchange(s_LockedContended, std::memory_order_acquire);
+        u32 previousState = m_state.exchange(s_LockedContended, MemoryOrder::acquire);
         while(previousState != s_Unlocked){
-            m_state.wait(s_LockedContended, std::memory_order_relaxed);
-            previousState = m_state.exchange(s_LockedContended, std::memory_order_acquire);
+            m_state.wait(s_LockedContended, MemoryOrder::relaxed);
+            previousState = m_state.exchange(s_LockedContended, MemoryOrder::acquire);
         }
     }
 
@@ -118,15 +118,15 @@ public:
         return m_state.compare_exchange_strong(
             expected,
             s_Locked,
-            std::memory_order_acquire,
-            std::memory_order_relaxed
+            MemoryOrder::acquire,
+            MemoryOrder::relaxed
         );
     }
 
     void unlock(){
-        const u32 previous = m_state.fetch_sub(1, std::memory_order_release);
+        const u32 previous = m_state.fetch_sub(1, MemoryOrder::release);
         if(previous != s_Locked){
-            m_state.store(s_Unlocked, std::memory_order_release);
+            m_state.store(s_Unlocked, MemoryOrder::release);
             m_state.notify_one();
         }
     }
@@ -219,7 +219,7 @@ public:
         }
     }
     bool try_lock(){ return (!m_flag.test_and_set()); }
-    void unlock(){ m_flag.clear(std::memory_order_release); }
+    void unlock(){ m_flag.clear(MemoryOrder::release); }
 
 
 private:

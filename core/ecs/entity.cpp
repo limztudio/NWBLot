@@ -14,7 +14,7 @@ NWB_ECS_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace ECSDetail{
+namespace __hidden_entity{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -57,7 +57,7 @@ static Alloc::CustomArena& DefaultECSArena(){
 
 
 EntityManager::EntityManager()
-    : EntityManager(ECSDetail::DefaultECSArena())
+    : EntityManager(__hidden_entity::DefaultECSArena())
 {}
 EntityManager::EntityManager(Alloc::CustomArena& arena)
     : m_generations(GenerationAllocator(arena))

@@ -171,6 +171,12 @@ template<typename T>
 }
 
 template<typename T>
+[[nodiscard]] NWB_INLINE bool SignBit(const T value){
+    using std::signbit;
+    return signbit(value);
+}
+
+template<typename T>
 [[nodiscard]] constexpr bool AddNoOverflow(const T lhs, const T rhs, T& outResult){
     if(lhs > (Limit<T>::s_Max - rhs))
         return false;

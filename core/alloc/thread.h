@@ -245,7 +245,7 @@ public:
             Forward<Func>(task)();
             return;
         }
-        m_pendingCount.fetch_add(1, std::memory_order_release);
+        m_pendingCount.fetch_add(1, MemoryOrder::release);
         {
             ScopedLock lock(m_taskMutex);
             m_tasks.push_back(TaskItem{ TaskFunction(Forward<Func>(task)) });
@@ -260,7 +260,7 @@ public:
 
         NWB_ASSERT_MSG(m_threadCount > 0, NWB_TEXT("enqueueBatch requires at least one worker thread"));
 
-        m_pendingCount.fetch_add(taskCount, std::memory_order_release);
+        m_pendingCount.fetch_add(taskCount, MemoryOrder::release);
         {
             ScopedLock lock(m_taskMutex);
             for(usize i = 0; i < taskCount; ++i)
@@ -324,21 +324,21 @@ public:
 
 private:
     inline void waitPending(){
-        usize current = m_pendingCount.load(std::memory_order_acquire);
+        usize current = m_pendingCount.load(MemoryOrder::acquire);
         while(current > 0){
-            m_pendingCount.wait(current, std::memory_order_relaxed);
-            current = m_pendingCount.load(std::memory_order_acquire);
+            m_pendingCount.wait(current, MemoryOrder::relaxed);
+            current = m_pendingCount.load(MemoryOrder::acquire);
         }
     }
 
     inline bool hasParallelWork()const{
-        ParallelForDesc* pf = m_pfWork.load(std::memory_order_acquire);
-        return pf && pf->nextChunk.load(std::memory_order_relaxed) < pf->numChunks;
+        ParallelForDesc* pf = m_pfWork.load(MemoryOrder::acquire);
+        return pf && pf->nextChunk.load(MemoryOrder::relaxed) < pf->numChunks;
     }
 
     static inline void processParallelFor(ParallelForDesc* pf){
         for(;;){
-            const usize c = pf->nextChunk.fetch_add(1, std::memory_order_relaxed);
+            const usize c = pf->nextChunk.fetch_add(1, MemoryOrder::relaxed);
             if(c >= pf->numChunks)
                 break;
 
@@ -352,7 +352,7 @@ private:
 
     template<typename Func>
     inline void dispatchParallelFor(usize begin, usize, const Func& func, usize numChunks, usize chunkSize, usize remainder){
-        Latch done(static_cast<std::ptrdiff_t>(numChunks));
+        Latch done(static_cast<isize>(numChunks));
         UniqueLock parallelLock(m_pfMutex);
 
         ParallelForDesc desc;
@@ -362,28 +362,28 @@ private:
                 f(i);
         };
         desc.functor = &func;
-        desc.nextChunk.store(0, std::memory_order_relaxed);
+        desc.nextChunk.store(0, MemoryOrder::relaxed);
         desc.numChunks = numChunks;
         desc.begin = begin;
         desc.chunkSize = chunkSize;
         desc.remainder = remainder;
         desc.done = &done;
-        desc.activeWorkers.store(0, std::memory_order_relaxed);
+        desc.activeWorkers.store(0, MemoryOrder::relaxed);
 
-        m_pfWork.store(&desc, std::memory_order_release);
+        m_pfWork.store(&desc, MemoryOrder::release);
         m_taskAvailable.notify_all();
 
         processParallelFor(&desc);
 
         done.wait();
 
-        i32 activeWorkers = desc.activeWorkers.load(std::memory_order_acquire);
+        i32 activeWorkers = desc.activeWorkers.load(MemoryOrder::acquire);
         while(activeWorkers > 0){
-            desc.activeWorkers.wait(activeWorkers, std::memory_order_relaxed);
-            activeWorkers = desc.activeWorkers.load(std::memory_order_acquire);
+            desc.activeWorkers.wait(activeWorkers, MemoryOrder::relaxed);
+            activeWorkers = desc.activeWorkers.load(MemoryOrder::acquire);
         }
 
-        m_pfWork.store(nullptr, std::memory_order_release);
+        m_pfWork.store(nullptr, MemoryOrder::release);
     }
 
     inline void workerLoop(StopToken stopToken, u64 affinityMask){
@@ -411,17 +411,17 @@ private:
             if(hasTask){
                 item.func();
 
-                if(m_pendingCount.fetch_sub(1, std::memory_order_acq_rel) == 1)
+                if(m_pendingCount.fetch_sub(1, MemoryOrder::acq_rel) == 1)
                     m_pendingCount.notify_all();
             }
             else{
-                ParallelForDesc* pf = m_pfWork.load(std::memory_order_acquire);
+                ParallelForDesc* pf = m_pfWork.load(MemoryOrder::acquire);
                 if(!pf)
                     continue;
 
-                pf->activeWorkers.fetch_add(1, std::memory_order_acq_rel);
+                pf->activeWorkers.fetch_add(1, MemoryOrder::acq_rel);
                 processParallelFor(pf);
-                if(pf->activeWorkers.fetch_sub(1, std::memory_order_acq_rel) == 1)
+                if(pf->activeWorkers.fetch_sub(1, MemoryOrder::acq_rel) == 1)
                     pf->activeWorkers.notify_all();
             }
         }

@@ -2701,6 +2701,8 @@ bool ShaderAssetCooker::cookShaderAssets(const ShaderCookEnvironment& environmen
         return false;
 
     __hidden_assets::VirtualPathHashSet seenVirtualPathHashes{Core::ShaderCook::CookAllocator<NameHash>(m_arena)};
+    if(preparedPlan.plannedFileCount <= static_cast<u64>(Limit<usize>::s_Max))
+        seenVirtualPathHashes.reserve(static_cast<usize>(preparedPlan.plannedFileCount));
     const Name& shaderIndexVirtualPath = Core::ShaderArchive::IndexVirtualPathName();
     seenVirtualPathHashes.insert(shaderIndexVirtualPath.hash());
 

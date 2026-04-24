@@ -28,6 +28,33 @@ static constexpr u32 s_MaterialMagic = 0x4D544C33u; // MTL3
 static constexpr u32 s_MaterialVersion = 3u;
 
 
+#if defined(NWB_COOK)
+[[nodiscard]] static bool AddReserveBytes(usize& inOutBytes, const usize additionalBytes){
+    if(additionalBytes > Limit<usize>::s_Max - inOutBytes)
+        return false;
+
+    inOutBytes += additionalBytes;
+    return true;
+}
+
+[[nodiscard]] static bool AddRepeatedReserveBytes(usize& inOutBytes, const usize count, const usize bytesPerItem){
+    if(bytesPerItem != 0u && count > Limit<usize>::s_Max / bytesPerItem)
+        return false;
+
+    return AddReserveBytes(inOutBytes, count * bytesPerItem);
+}
+
+[[nodiscard]] static bool AddStringReserveBytes(usize& inOutBytes, const AStringView text){
+    if(text.size() > Limit<u32>::s_Max)
+        return false;
+
+    return AddReserveBytes(inOutBytes, sizeof(u32))
+        && AddReserveBytes(inOutBytes, text.size())
+    ;
+}
+#endif
+
+
 UniquePtr<Core::Assets::IAssetCodec> CreateMaterialAssetCodec(){
     return MakeUnique<MaterialAssetCodec>();
 }
@@ -212,7 +239,26 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
         return false;
     }
 
+    usize reserveBytes =
+        sizeof(u32) + // magic
+        sizeof(u32)   // version
+    ;
+    bool canReserve = __hidden_assets::AddStringReserveBytes(reserveBytes, AStringView(material.shaderVariant()))
+        && __hidden_assets::AddReserveBytes(reserveBytes, sizeof(u32))
+        && __hidden_assets::AddRepeatedReserveBytes(reserveBytes, material.stageShaders().size(), sizeof(NameHash) * 2u)
+        && __hidden_assets::AddReserveBytes(reserveBytes, sizeof(u32))
+    ;
+    for(const auto& [key, value] : material.parameters()){
+        canReserve = canReserve
+            && __hidden_assets::AddStringReserveBytes(reserveBytes, key.view())
+            && __hidden_assets::AddStringReserveBytes(reserveBytes, value.view())
+        ;
+    }
+
     outBinary.clear();
+    if(canReserve)
+        outBinary.reserve(reserveBytes);
+
     AppendPOD(outBinary, __hidden_assets::s_MaterialMagic);
     AppendPOD(outBinary, __hidden_assets::s_MaterialVersion);
     if(!AppendString(outBinary, AStringView(material.shaderVariant()))){

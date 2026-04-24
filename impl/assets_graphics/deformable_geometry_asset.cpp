@@ -27,6 +27,21 @@ namespace __hidden_assets{
 
 static constexpr u32 s_DeformableGeometryMagic = 0x44474F31u; // DGO1
 static constexpr u32 s_DeformableGeometryVersion = 2u;
+#if defined(NWB_COOK)
+static constexpr usize s_DeformableGeometryHeaderBytes =
+    sizeof(u32) + // magic
+    sizeof(u32) + // version
+    sizeof(u64) + // rest vertex count
+    sizeof(u64) + // index count
+    sizeof(u64) + // skin count
+    sizeof(u64) + // source sample count
+    sizeof(u64)   // morph count
+;
+static constexpr usize s_DeformableMorphHeaderBytes =
+    sizeof(NameHash) +
+    sizeof(u64)
+;
+#endif
 
 
 UniquePtr<Core::Assets::IAssetCodec> CreateDeformableGeometryAssetCodec(){
@@ -46,6 +61,24 @@ template<typename T>
     outBytes = static_cast<usize>(count) * sizeof(T);
     return true;
 }
+
+#if defined(NWB_COOK)
+[[nodiscard]] static bool AddReserveBytes(usize& inOutBytes, const usize additionalBytes){
+    if(additionalBytes > Limit<usize>::s_Max - inOutBytes)
+        return false;
+
+    inOutBytes += additionalBytes;
+    return true;
+}
+
+template<typename T>
+[[nodiscard]] static bool AddVectorReserveBytes(usize& inOutBytes, const Vector<T>& values){
+    if(values.size() > Limit<usize>::s_Max / sizeof(T))
+        return false;
+
+    return AddReserveBytes(inOutBytes, values.size() * sizeof(T));
+}
+#endif
 
 template<typename T>
 [[nodiscard]] bool ReadVectorPayload(
@@ -474,7 +507,26 @@ bool DeformableGeometryAssetCodec::serialize(const Core::Assets::IAsset& asset, 
     if(!geometry.validatePayload())
         return false;
 
+    usize reserveBytes = __hidden_assets::s_DeformableGeometryHeaderBytes;
+    bool canReserve = __hidden_assets::AddVectorReserveBytes(reserveBytes, geometry.restVertices())
+        && __hidden_assets::AddVectorReserveBytes(reserveBytes, geometry.indices())
+        && __hidden_assets::AddVectorReserveBytes(reserveBytes, geometry.skin())
+        && __hidden_assets::AddVectorReserveBytes(reserveBytes, geometry.sourceSamples())
+    ;
+    for(const DeformableMorph& morph : geometry.morphs()){
+        canReserve = canReserve
+            && __hidden_assets::AddReserveBytes(reserveBytes, __hidden_assets::s_DeformableMorphHeaderBytes)
+            && __hidden_assets::AddVectorReserveBytes(reserveBytes, morph.deltas)
+        ;
+    }
+    canReserve = canReserve
+        && __hidden_assets::AddReserveBytes(reserveBytes, sizeof(DeformableDisplacement))
+    ;
+
     outBinary.clear();
+    if(canReserve)
+        outBinary.reserve(reserveBytes);
+
     AppendPOD(outBinary, __hidden_assets::s_DeformableGeometryMagic);
     AppendPOD(outBinary, __hidden_assets::s_DeformableGeometryVersion);
     AppendPOD(outBinary, static_cast<u64>(geometry.restVertices().size()));

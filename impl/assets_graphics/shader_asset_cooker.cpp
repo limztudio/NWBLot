@@ -1300,7 +1300,8 @@ static bool ParseRequiredStringField(
         return false;
     }
 
-    outText = CanonicalizeText(field->copyString());
+    const Core::Metascript::MStringView text = field->asString();
+    outText = CanonicalizeText(AStringView(text.data(), text.size()));
     if(outText.empty()){
         NWB_LOGGER_ERROR(
             NWB_TEXT("Deformable geometry meta '{}': '{}' must not be empty"),

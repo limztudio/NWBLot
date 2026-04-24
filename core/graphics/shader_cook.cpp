@@ -422,9 +422,12 @@ static bool ParseStringField(
     if(!fieldValue)
         return true;
 
-    outValue = fieldValue->copyString();
-    if(canonicalize)
-        outValue = CanonicalizeText(outValue);
+    const Metascript::MStringView text = fieldValue->asString();
+    const AStringView textView(text.data(), text.size());
+    outValue = canonicalize
+        ? CanonicalizeText(textView)
+        : AString(textView)
+    ;
     return true;
 }
 

@@ -481,6 +481,7 @@ bool Device::createPipelineLayoutForBindingLayouts(
     Vector<VkDescriptorSetLayout, Alloc::ScratchAllocator<VkDescriptorSetLayout>> descriptorSetLayouts{
         Alloc::ScratchAllocator<VkDescriptorSetLayout>(scratchArena)
     };
+    descriptorSetLayouts.reserve(bindingLayouts.size());
     u32 pushConstantByteSize = 0;
 
     for(u32 i = 0; i < static_cast<u32>(bindingLayouts.size()); ++i){

@@ -48,6 +48,11 @@ struct EdgeRecord{
     u32 removedCount = 0;
 };
 
+struct BoundaryVertexEdges{
+    usize edgeIndices[2] = { Limit<usize>::s_Max, Limit<usize>::s_Max };
+    u32 count = 0;
+};
+
 struct WallVertexFrame{
     SIMDVector normal = VectorZero();
     SIMDVector tangent = VectorZero();
@@ -167,6 +172,18 @@ template<typename VertexDegreeMap>
 void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
     auto it = degrees.emplace(vertex, 0u).first;
     ++it.value();
+}
+
+template<typename VertexEdgeMap>
+[[nodiscard]] bool RegisterBoundaryVertexEdge(VertexEdgeMap& vertexEdges, const u32 vertex, const usize edgeIndex){
+    auto it = vertexEdges.emplace(vertex, BoundaryVertexEdges{}).first;
+    BoundaryVertexEdges& adjacency = it.value();
+    if(adjacency.count >= LengthOf(adjacency.edgeIndices))
+        return false;
+
+    adjacency.edgeIndices[adjacency.count] = edgeIndex;
+    ++adjacency.count;
+    return true;
 }
 
 [[nodiscard]] bool BuildHoleFrame(
@@ -816,14 +833,42 @@ template<typename BoundaryEdgeVector, typename OrderedEdgeVector>
     };
     visitedEdges.resize(boundaryEdges.size(), 0u);
 
+    using BoundaryVertexEdgeMap = HashMap<
+        u32,
+        BoundaryVertexEdges,
+        Hasher<u32>,
+        EqualTo<u32>,
+        Core::Alloc::ScratchAllocator<Pair<const u32, BoundaryVertexEdges>>
+    >;
+    BoundaryVertexEdgeMap vertexEdges(
+        0,
+        Hasher<u32>(),
+        EqualTo<u32>(),
+        Core::Alloc::ScratchAllocator<Pair<const u32, BoundaryVertexEdges>>(scratchArena)
+    );
+    vertexEdges.reserve(boundaryEdges.size());
+    for(usize edgeIndex = 0u; edgeIndex < boundaryEdges.size(); ++edgeIndex){
+        const EdgeRecord& edge = boundaryEdges[edgeIndex];
+        if(!RegisterBoundaryVertexEdge(vertexEdges, edge.a, edgeIndex)
+            || !RegisterBoundaryVertexEdge(vertexEdges, edge.b, edgeIndex)
+        )
+            return false;
+    }
+
     const u32 startVertex = boundaryEdges[0].a;
     u32 currentVertex = startVertex;
     outOrderedEdges.reserve(boundaryEdges.size());
     while(outOrderedEdges.size() < boundaryEdges.size()){
         usize nextEdgeIndex = Limit<usize>::s_Max;
         EdgeRecord nextEdge;
-        for(usize edgeIndex = 0; edgeIndex < boundaryEdges.size(); ++edgeIndex){
-            if(visitedEdges[edgeIndex] != 0u)
+        const auto foundEdges = vertexEdges.find(currentVertex);
+        if(foundEdges == vertexEdges.end())
+            return false;
+
+        const BoundaryVertexEdges& adjacentEdges = foundEdges.value();
+        for(u32 adjacencyIndex = 0u; adjacencyIndex < adjacentEdges.count; ++adjacencyIndex){
+            const usize edgeIndex = adjacentEdges.edgeIndices[adjacencyIndex];
+            if(edgeIndex >= boundaryEdges.size() || visitedEdges[edgeIndex] != 0u)
                 continue;
 
             const EdgeRecord& edge = boundaryEdges[edgeIndex];

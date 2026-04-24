@@ -1178,161 +1178,6 @@ template<usize sourceCount>
     return DeformableValidation::FiniteVector(LoadFloat(outColor), 0xFu);
 }
 
-[[nodiscard]] SourceSample MakeFallbackSourceSample(const u32 sourceTriangle, const u32 corner){
-    SourceSample sample{};
-    sample.sourceTri = sourceTriangle;
-    sample.bary[corner] = 1.0f;
-    return sample;
-}
-
-template<typename AssignedSampleVector>
-[[nodiscard]] bool AssignFallbackSourceSample(
-    Vector<SourceSample>& sourceSamples,
-    AssignedSampleVector& assignedSamples,
-    const u32 vertex,
-    const SourceSample& sample)
-{
-    if(vertex >= sourceSamples.size() || vertex >= assignedSamples.size())
-        return false;
-
-    if(assignedSamples[vertex] == 0u){
-        sourceSamples[vertex] = sample;
-        assignedSamples[vertex] = 1u;
-        return true;
-    }
-    return MatchingSourceSample(sourceSamples[vertex], sample);
-}
-
-template<typename AssignedSampleVector>
-void FillUnassignedFallbackSourceSamples(
-    Vector<SourceSample>& sourceSamples,
-    AssignedSampleVector& assignedSamples)
-{
-    const SourceSample fallbackSample = MakeFallbackSourceSample(0u, 0u);
-    for(usize vertex = 0; vertex < assignedSamples.size(); ++vertex){
-        if(assignedSamples[vertex] != 0u)
-            continue;
-
-        sourceSamples[vertex] = fallbackSample;
-        assignedSamples[vertex] = 1u;
-    }
-}
-
-[[nodiscard]] bool TriangleHasRecoverableSourceSamples(
-    const DeformableRuntimeMeshInstance& instance,
-    const u32 triangle)
-{
-    const Vector<SourceSample>& sourceSamples = instance.sourceSamples;
-    if(sourceSamples.size() != instance.restVertices.size() || instance.sourceTriangleCount == 0u)
-        return false;
-
-    u32 sourceVertices[3] = {};
-    if(!DeformableRuntime::ValidateTriangleIndex(instance, triangle, sourceVertices))
-        return false;
-
-    const SourceSample& sample0 = sourceSamples[sourceVertices[0]];
-    const SourceSample& sample1 = sourceSamples[sourceVertices[1]];
-    const SourceSample& sample2 = sourceSamples[sourceVertices[2]];
-    return DeformableValidation::ValidSourceSample(sample0, instance.sourceTriangleCount)
-        && DeformableValidation::ValidSourceSample(sample1, instance.sourceTriangleCount)
-        && DeformableValidation::ValidSourceSample(sample2, instance.sourceTriangleCount)
-        && sample0.sourceTri == sample1.sourceTri
-        && sample0.sourceTri == sample2.sourceTri
-    ;
-}
-
-[[nodiscard]] bool CopyMorphDeltasForDuplicateVertex(
-    Vector<DeformableMorph>& morphs,
-    const u32 sourceVertex,
-    const u32 duplicateVertex)
-{
-    for(DeformableMorph& morph : morphs){
-        const usize sourceDeltaCount = morph.deltas.size();
-        for(usize deltaIndex = 0u; deltaIndex < sourceDeltaCount; ++deltaIndex){
-            const DeformableMorphDelta& sourceDelta = morph.deltas[deltaIndex];
-            if(sourceDelta.vertexId != sourceVertex)
-                continue;
-            if(morph.deltas.size() >= static_cast<usize>(Limit<u32>::s_Max))
-                return false;
-
-            DeformableMorphDelta duplicateDelta = sourceDelta;
-            duplicateDelta.vertexId = duplicateVertex;
-            morph.deltas.push_back(duplicateDelta);
-            break;
-        }
-    }
-    return true;
-}
-
-[[nodiscard]] bool AppendFallbackProvenanceVertex(
-    Vector<DeformableVertexRest>& vertices,
-    Vector<SkinInfluence4>& skin,
-    Vector<SourceSample>& sourceSamples,
-    Vector<DeformableMorph>& morphs,
-    const u32 sourceVertex,
-    const SourceSample& sample,
-    u32& outVertex)
-{
-    if(sourceVertex >= vertices.size() || vertices.size() >= static_cast<usize>(Limit<u32>::s_Max))
-        return false;
-    if(!skin.empty() && sourceVertex >= skin.size())
-        return false;
-    if(sourceSamples.size() != vertices.size())
-        return false;
-
-    outVertex = static_cast<u32>(vertices.size());
-    const DeformableVertexRest vertex = vertices[sourceVertex];
-    vertices.push_back(vertex);
-    if(!skin.empty())
-        skin.push_back(skin[sourceVertex]);
-    sourceSamples.push_back(sample);
-    return CopyMorphDeltasForDuplicateVertex(morphs, sourceVertex, outVertex);
-}
-
-template<typename AssignedSampleVector>
-[[nodiscard]] bool AppendKeptTriangleWithFallbackProvenance(
-    const DeformableRuntimeMeshInstance& instance,
-    const u32 sourceTriangleCount,
-    const u32 triangle,
-    Vector<DeformableVertexRest>& vertices,
-    Vector<SkinInfluence4>& skin,
-    Vector<SourceSample>& sourceSamples,
-    Vector<DeformableMorph>& morphs,
-    AssignedSampleVector& assignedSamples,
-    Vector<u32>& outIndices,
-    u32& inOutDuplicateVertexCount)
-{
-    if(triangle >= sourceTriangleCount)
-        return false;
-
-    u32 sourceVertices[3] = {};
-    if(!DeformableRuntime::ValidateTriangleIndex(instance, triangle, sourceVertices))
-        return false;
-
-    for(u32 corner = 0u; corner < 3u; ++corner){
-        const SourceSample sample = MakeFallbackSourceSample(triangle, corner);
-        u32 outputVertex = sourceVertices[corner];
-        if(!AssignFallbackSourceSample(sourceSamples, assignedSamples, outputVertex, sample)){
-            if(!AppendFallbackProvenanceVertex(
-                    vertices,
-                    skin,
-                    sourceSamples,
-                    morphs,
-                    outputVertex,
-                    sample,
-                    outputVertex
-                )
-            )
-                return false;
-            if(inOutDuplicateVertexCount == Limit<u32>::s_Max)
-                return false;
-            ++inOutDuplicateVertexCount;
-        }
-        outIndices.push_back(outputVertex);
-    }
-    return true;
-}
-
 [[nodiscard]] SIMDVector ProjectedEdgeDirection(
     const Vector<DeformableVertexRest>& vertices,
     const HoleFrame& frame,
@@ -1895,25 +1740,8 @@ bool CommitDeformableRestSpaceHole(
     Vector<DeformableMorph> newMorphs = instance.morphs;
     Vector<u32> newIndices;
     u32 newSourceTriangleCount = instance.sourceTriangleCount;
-    const bool synthesizeFallbackSourceSamples = newSourceSamples.empty();
-    const bool canMaterializeCurrentTriangleFallback =
-        instance.editRevision == 0u
-        && newSourceTriangleCount == static_cast<u32>(triangleCount)
-    ;
-    Vector<u8, Core::Alloc::ScratchAllocator<u8>> fallbackAssignedSamples{
-        Core::Alloc::ScratchAllocator<u8>(scratchArena)
-    };
-    if(synthesizeFallbackSourceSamples){
-        newSourceTriangleCount = instance.sourceTriangleCount;
-        if(newSourceTriangleCount == 0u || newSourceTriangleCount != static_cast<u32>(triangleCount))
-            return false;
-
-        newSourceSamples.resize(instance.restVertices.size());
-        fallbackAssignedSamples.resize(instance.restVertices.size(), 0u);
-    }
-    else if(canMaterializeCurrentTriangleFallback){
-        fallbackAssignedSamples.resize(instance.restVertices.size(), 1u);
-    }
+    if(newSourceSamples.empty() || newSourceSamples.size() != instance.restVertices.size() || newSourceTriangleCount == 0u)
+        return false;
 
     usize wallVertexCount = 0u;
     if(params.depth > DeformableRuntime::s_Epsilon){
@@ -1938,16 +1766,10 @@ bool CommitDeformableRestSpaceHole(
     )
         return false;
 
-    const usize fallbackDuplicateVertexCapacity =
-        (synthesizeFallbackSourceSamples || canMaterializeCurrentTriangleFallback) ? keptIndexCount : 0u
-    ;
     usize reservedVertexCount = instance.restVertices.size();
     if(wallVertexCount > Limit<usize>::s_Max - reservedVertexCount)
         return false;
     reservedVertexCount += wallVertexCount;
-    if(fallbackDuplicateVertexCapacity > Limit<usize>::s_Max - reservedVertexCount)
-        return false;
-    reservedVertexCount += fallbackDuplicateVertexCapacity;
     if(reservedVertexCount > static_cast<usize>(Limit<u32>::s_Max))
         return false;
     if(reservedVertexCount != instance.restVertices.size()){
@@ -1965,42 +1787,10 @@ bool CommitDeformableRestSpaceHole(
         if(removeTriangle[triangle] != 0u)
             continue;
 
-        const bool materializeFallbackProvenance =
-            synthesizeFallbackSourceSamples
-            || (canMaterializeCurrentTriangleFallback
-                && !__hidden_deformable_surface_edit::TriangleHasRecoverableSourceSamples(
-                    instance,
-                    static_cast<u32>(triangle)
-                ))
-        ;
-        if(materializeFallbackProvenance){
-            if(!__hidden_deformable_surface_edit::AppendKeptTriangleWithFallbackProvenance(
-                    instance,
-                    newSourceTriangleCount,
-                    static_cast<u32>(triangle),
-                    newRestVertices,
-                    newSkin,
-                    newSourceSamples,
-                    newMorphs,
-                    fallbackAssignedSamples,
-                    newIndices,
-                    addedVertexCount
-                )
-            )
-                return false;
-        }
-        else{
-            const usize indexBase = triangle * 3u;
-            newIndices.push_back(instance.indices[indexBase + 0u]);
-            newIndices.push_back(instance.indices[indexBase + 1u]);
-            newIndices.push_back(instance.indices[indexBase + 2u]);
-        }
-    }
-    if(synthesizeFallbackSourceSamples){
-        __hidden_deformable_surface_edit::FillUnassignedFallbackSourceSamples(
-            newSourceSamples,
-            fallbackAssignedSamples
-        );
+        const usize indexBase = triangle * 3u;
+        newIndices.push_back(instance.indices[indexBase + 0u]);
+        newIndices.push_back(instance.indices[indexBase + 1u]);
+        newIndices.push_back(instance.indices[indexBase + 2u]);
     }
 
     u32 firstWallVertex = Limit<u32>::s_Max;

@@ -75,32 +75,6 @@ void OrthonormalizeVertexFrame(
     ;
 }
 
-[[nodiscard]] bool AssignCurrentTriangleSample(const u32 triangle, const f32 (&bary)[3], SourceSample& outSample){
-    outSample.sourceTri = triangle;
-    return DeformableValidation::NormalizeSourceBarycentric(bary, outSample.bary);
-}
-
-[[nodiscard]] bool AssignStableCurrentTriangleSample(
-    const DeformableRuntimeMeshInstance& instance,
-    const u32 triangle,
-    const usize triangleCount,
-    const f32 (&bary)[3],
-    SourceSample& outSample)
-{
-    if(instance.editRevision != 0u)
-        return false;
-    if(instance.sourceTriangleCount == 0u)
-        return false;
-    if(triangle >= triangleCount)
-        return false;
-    if(triangleCount != static_cast<usize>(instance.sourceTriangleCount))
-        return false;
-    if(triangle >= instance.sourceTriangleCount)
-        return false;
-
-    return AssignCurrentTriangleSample(triangle, bary, outSample);
-}
-
 template<typename VertexVector>
 [[nodiscard]] bool ApplyMorphs(
     const DeformableRuntimeMeshInstance& instance,
@@ -422,16 +396,8 @@ bool ResolveDeformableRestSurfaceSample(
     if(!DeformableRuntime::ValidateTriangleIndex(instance, triangle, vertexIndices))
         return false;
 
-    const usize triangleCount = instance.indices.size() / 3u;
-    if(instance.sourceSamples.empty()){
-        return __hidden_deformable_picking::AssignStableCurrentTriangleSample(
-            instance,
-            triangle,
-            triangleCount,
-            bary,
-            outSample
-        );
-    }
+    if(instance.sourceSamples.empty())
+        return false;
     if(instance.sourceSamples.size() != instance.restVertices.size())
         return false;
     if(instance.sourceTriangleCount == 0u)
@@ -445,15 +411,8 @@ bool ResolveDeformableRestSurfaceSample(
         || !DeformableValidation::ValidSourceSample(sample2, instance.sourceTriangleCount)
     )
         return false;
-    if(sample0.sourceTri != sample1.sourceTri || sample0.sourceTri != sample2.sourceTri){
-        return __hidden_deformable_picking::AssignStableCurrentTriangleSample(
-            instance,
-            triangle,
-            triangleCount,
-            bary,
-            outSample
-        );
-    }
+    if(sample0.sourceTri != sample1.sourceTri || sample0.sourceTri != sample2.sourceTri)
+        return false;
 
     outSample.sourceTri = sample0.sourceTri;
     f32 rawBary[3] = {};

@@ -594,17 +594,6 @@ template<typename VertexEdgeMap>
     ;
 }
 
-[[nodiscard]] bool HasCommittedHoleForAttachment(
-    const Vector<DeformableSurfaceEditRecord>& edits,
-    const DeformableAccessoryAttachmentRecord& accessory)
-{
-    for(const DeformableSurfaceEditRecord& record : edits){
-        if(EditRecordMatchesAccessory(record, accessory))
-            return true;
-    }
-    return false;
-}
-
 [[nodiscard]] bool ValidSurfaceEditState(const DeformableSurfaceEditState& state){
     u32 expectedBaseEditRevision = 0u;
     for(const DeformableSurfaceEditRecord& record : state.edits){
@@ -614,10 +603,15 @@ template<typename VertexEdgeMap>
             return false;
         expectedBaseEditRevision = record.result.editRevision;
     }
+    const DeformableSurfaceEditRecord* latestCommittedEdit = state.edits.empty()
+        ? nullptr
+        : &state.edits.back()
+    ;
     for(const DeformableAccessoryAttachmentRecord& accessory : state.accessories){
         if(!ValidAccessoryRecord(accessory)
             || accessory.editRevision != expectedBaseEditRevision
-            || !HasCommittedHoleForAttachment(state.edits, accessory)
+            || !latestCommittedEdit
+            || !EditRecordMatchesAccessory(*latestCommittedEdit, accessory)
         )
             return false;
     }

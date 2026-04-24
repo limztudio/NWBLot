@@ -156,8 +156,7 @@ struct PreparedShaderKey{
 struct PreparedShaderKeyHasher{
     usize operator()(const PreparedShaderKey& key)const{
         usize seed = Hasher<Name>{}(key.shaderName);
-        const usize stageSeed = Hasher<Name>{}(key.stageName);
-        seed ^= stageSeed + static_cast<usize>(0x9e3779b97f4a7c15ull) + (seed << 6) + (seed >> 2);
+        Core::CoreDetail::HashCombine(seed, key.stageName);
         return seed;
     }
 };

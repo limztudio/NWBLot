@@ -736,12 +736,12 @@ static u32 DispatchGroupCount1D(const u32 itemCount, const u32 groupSize){
 
 usize RendererSystem::MaterialPipelineKeyHasher::operator()(const MaterialPipelineKey& key)const{
     usize seed = Hasher<Name>{}(key.material);
-    seed ^= Hasher<u32>{}(static_cast<u32>(key.pass)) + static_cast<usize>(0x9e3779b97f4a7c15ull) + (seed << 6) + (seed >> 2);
-    seed ^= static_cast<usize>(key.framebufferInfo.depthFormat) + static_cast<usize>(0x9e3779b97f4a7c15ull) + (seed << 6) + (seed >> 2);
-    seed ^= Hasher<u32>{}(key.framebufferInfo.sampleCount) + static_cast<usize>(0x9e3779b97f4a7c15ull) + (seed << 6) + (seed >> 2);
-    seed ^= Hasher<u32>{}(key.framebufferInfo.sampleQuality) + static_cast<usize>(0x9e3779b97f4a7c15ull) + (seed << 6) + (seed >> 2);
+    Core::CoreDetail::HashCombine(seed, static_cast<u32>(key.pass));
+    Core::CoreDetail::HashCombine(seed, key.framebufferInfo.depthFormat);
+    Core::CoreDetail::HashCombine(seed, key.framebufferInfo.sampleCount);
+    Core::CoreDetail::HashCombine(seed, key.framebufferInfo.sampleQuality);
     for(const Core::Format::Enum format : key.framebufferInfo.colorFormats)
-        seed ^= static_cast<usize>(format) + static_cast<usize>(0x9e3779b97f4a7c15ull) + (seed << 6) + (seed >> 2);
+        Core::CoreDetail::HashCombine(seed, format);
 
     return seed;
 }

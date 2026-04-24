@@ -98,14 +98,6 @@ static u32 DispatchGroupCount(const u32 vertexCount){
     ;
 }
 
-static void HashCombine(usize& seed, const usize value){
-    seed ^= value
-        + static_cast<usize>(0x9e3779b97f4a7c15ull)
-        + (seed << 6)
-        + (seed >> 2)
-    ;
-}
-
 using MorphWeightLookup = HashMap<
     NameHash,
     f32,
@@ -224,8 +216,8 @@ static bool BuildMorphPayload(
         range.weight = weight;
         outRanges.push_back(range);
 
-        HashCombine(outSignature, Hasher<Name>{}(morph.name));
-        HashCombine(outSignature, static_cast<usize>(range.deltaCount));
+        Core::CoreDetail::HashCombine(outSignature, morph.name);
+        Core::CoreDetail::HashCombine(outSignature, range.deltaCount);
 
         for(const DeformableMorphDelta& delta : morph.deltas){
             if(!DeformableValidation::ValidMorphDelta(delta, instance.restVertices.size())){

@@ -750,10 +750,7 @@ inline bool operator==(const ShaderLibraryKey& lhs, const ShaderLibraryKey& rhs)
 struct ShaderLibraryKeyHasher{
     usize operator()(const ShaderLibraryKey& value)const noexcept{
         usize seed = Hasher<AString>{}(value.entryName);
-        seed ^= static_cast<usize>(value.shaderType)
-            + static_cast<usize>(0x9e3779b97f4a7c15ull)
-            + (seed << 6)
-            + (seed >> 2);
+        CoreDetail::HashCombine(seed, static_cast<u32>(value.shaderType));
         return seed;
     }
 };

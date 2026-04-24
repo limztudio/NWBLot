@@ -28,10 +28,6 @@ public:
         : virtualPath(value)
     {}
 
-    explicit AssetRef(const CompactString& value){
-        set(value);
-    }
-
 
 public:
     [[nodiscard]] bool valid()const{
@@ -48,16 +44,6 @@ public:
 
     AssetRef& set(const Name& value){
         virtualPath = value;
-        return *this;
-    }
-
-    AssetRef& set(const CompactString& value){
-        if(value.empty()){
-            virtualPath = NAME_NONE;
-            return *this;
-        }
-
-        virtualPath = Name(value.view());
         return *this;
     }
 

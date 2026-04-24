@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "../global.h"
+#include <impl/global.h>
 
 #include <core/graphics/common.h>
 

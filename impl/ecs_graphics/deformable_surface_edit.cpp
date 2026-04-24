@@ -9,7 +9,7 @@
 #include <core/alloc/scratch.h>
 #include <impl/assets_graphics/deformable_geometry_validation.h>
 #include <global/algorithm.h>
-#include <global/filesystem.h>
+#include <global/binary.h>
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

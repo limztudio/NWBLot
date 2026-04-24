@@ -12,7 +12,7 @@
 #include <core/graphics/shader_archive.h>
 #include <impl/assets_graphics/deformable_geometry_validation.h>
 #include <impl/assets_graphics/shader_asset.h>
-#include <impl/assets_graphics/shader_stage_names.h>
+#include <impl/shader_stage_names.h>
 #include <logger/client/logger.h>
 
 

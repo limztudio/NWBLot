@@ -984,11 +984,12 @@ static bool ParseFloatListField(
         return false;
     }
 
-    outValues.reserve(field->asList().size());
-    for(usize i = 0; i < field->asList().size(); ++i){
+    const auto& list = field->asList();
+    outValues.reserve(list.size());
+    for(usize i = 0; i < list.size(); ++i){
         const AString label = StringFormat("{}[{}]", fieldName, i);
         f32 tuple[ComponentCount] = {};
-        if(!ParseF32Tuple(nwbFilePath, field->asList()[i], label, tuple))
+        if(!ParseF32Tuple(nwbFilePath, list[i], label, tuple))
             return false;
 
         ElementT element;
@@ -1031,11 +1032,12 @@ static bool ParseU32ListField(
         return false;
     }
 
-    outValues.reserve(field->asList().size());
-    for(usize i = 0; i < field->asList().size(); ++i){
+    const auto& list = field->asList();
+    outValues.reserve(list.size());
+    for(usize i = 0; i < list.size(); ++i){
         u32 value = 0;
         const AString label = StringFormat("{}[{}]", fieldName, i);
-        if(!ParseU32Value(nwbFilePath, field->asList()[i], label, value))
+        if(!ParseU32Value(nwbFilePath, list[i], label, value))
             return false;
         outValues.push_back(value);
     }
@@ -1054,9 +1056,10 @@ static bool AppendU32Recursive(
     Vector<u32>& outValues
 ){
     if(value.isList()){
-        for(usize i = 0; i < value.asList().size(); ++i){
+        const auto& list = value.asList();
+        for(usize i = 0; i < list.size(); ++i){
             const AString childLabel = StringFormat("{}[{}]", label, i);
-            if(!AppendU32Recursive(nwbFilePath, value.asList()[i], childLabel, outValues))
+            if(!AppendU32Recursive(nwbFilePath, list[i], childLabel, outValues))
                 return false;
         }
         return true;
@@ -1207,7 +1210,9 @@ static bool ParseSkinInfluences(
         );
         return false;
     }
-    if(joints->asList().size() != vertexCount || weights->asList().size() != vertexCount){
+    const auto& jointList = joints->asList();
+    const auto& weightList = weights->asList();
+    if(jointList.size() != vertexCount || weightList.size() != vertexCount){
         NWB_LOGGER_ERROR(
             NWB_TEXT("Deformable geometry meta '{}': skin streams must match vertex count"),
             PathToString<tchar>(nwbFilePath)
@@ -1219,9 +1224,9 @@ static bool ParseSkinInfluences(
     for(usize i = 0; i < vertexCount; ++i){
         const AString jointLabel = StringFormat("skin.joints0[{}]", i);
         const AString weightLabel = StringFormat("skin.weights0[{}]", i);
-        if(!ParseU16Tuple(nwbFilePath, joints->asList()[i], jointLabel, outSkin[i].joint))
+        if(!ParseU16Tuple(nwbFilePath, jointList[i], jointLabel, outSkin[i].joint))
             return false;
-        if(!ParseF32Tuple(nwbFilePath, weights->asList()[i], weightLabel, outSkin[i].weight))
+        if(!ParseF32Tuple(nwbFilePath, weightList[i], weightLabel, outSkin[i].weight))
             return false;
     }
 

@@ -468,6 +468,7 @@ void Value::copyFrom(const Value& other){
     }
     case ValueType::Map:{
         m_data.m_map = allocMap();
+        m_data.m_map->reserve(other.m_data.m_map->size());
         for(const auto& [k, v] : *other.m_data.m_map)
             m_data.m_map->emplace(StringType(k, MAllocator<MChar>(m_arena)), v);
         break;

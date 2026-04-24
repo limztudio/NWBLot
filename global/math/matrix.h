@@ -25,7 +25,7 @@ static const SIMDVectorConstU s_SIMDMatrixSelect0001 = { { { s_SELECT_0, s_SELEC
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE bool ScalarNearEqual(f32 value0, f32 value1, f32 epsilon)noexcept{ return std::fabs(value0 - value1) <= epsilon; }
+NWB_INLINE bool ScalarNearEqual(f32 value0, f32 value1, f32 epsilon)noexcept{ return Abs(value0 - value1) <= epsilon; }
 
 NWB_INLINE void ScalarSinCos(f32* outSin, f32* outCos, f32 value)noexcept{
     NWB_ASSERT(outSin != nullptr);
@@ -564,9 +564,9 @@ NWB_INLINE bool SIMDCALL MatrixDecompose(SIMDVector* outScale, SIMDVector* outRo
             aa,
             bb,
             cc,
-            std::fabs(VectorGetX(basis[a])),
-            std::fabs(VectorGetY(basis[a])),
-            std::fabs(VectorGetZ(basis[a]))
+            Abs(VectorGetX(basis[a])),
+            Abs(VectorGetY(basis[a])),
+            Abs(VectorGetZ(basis[a]))
         );
         basis[b] = Vector3Cross(basis[a], canonicalBasis[cc]);
     }

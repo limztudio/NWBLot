@@ -9,8 +9,7 @@
 #include <core/scene/transform_component.h>
 
 #include <global/compile.h>
-
-#include <limits>
+#include <global/limit.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -564,7 +563,7 @@ static void TestPickingVerticesRejectDegenerateTriangle(TestContext& context){
 static void TestPickingVerticesRejectNonFiniteRestData(TestContext& context){
     {
         NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
-        instance.restVertices[1].position.x = std::numeric_limits<f32>::quiet_NaN();
+        instance.restVertices[1].position.x = Limit<f32>::s_QuietNaN;
 
         Vector<NWB::Impl::DeformableVertexRest> vertices;
         NWB_ECS_GRAPHICS_TEST_CHECK(
@@ -797,7 +796,7 @@ static void TestPickingRejectsUnusedNonAffineJointPalette(TestContext& context){
 static void TestPickingRejectsInvalidSkinWeights(TestContext& context){
     NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
     AssignSingleJointSkin(instance, 0u);
-    instance.skin[0].weight[0] = std::numeric_limits<f32>::quiet_NaN();
+    instance.skin[0].weight[0] = Limit<f32>::s_QuietNaN;
 
     Vector<NWB::Impl::DeformableVertexRest> vertices;
     NWB_ECS_GRAPHICS_TEST_CHECK(
@@ -905,7 +904,7 @@ static void TestPickingRejectsInvalidMorphDelta(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::BuildDeformablePickingVertices(instance, inputs, vertices));
 
     instance.morphs[0].deltas[0].vertexId = 0u;
-    instance.morphs[0].deltas[0].deltaPosition.x = std::numeric_limits<f32>::quiet_NaN();
+    instance.morphs[0].deltas[0].deltaPosition.x = Limit<f32>::s_QuietNaN;
     NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::BuildDeformablePickingVertices(instance, inputs, vertices));
 }
 
@@ -1841,7 +1840,7 @@ static void TestRestSpaceHoleEditRejectsStaleOrMismatchedHit(TestContext& contex
         const usize oldIndexCount = instance.indices.size();
         const u32 oldRevision = instance.editRevision;
         NWB::Impl::DeformableHoleEditParams params = MakeGridHoleEditParams(instance);
-        params.posedHit.position.x = std::numeric_limits<f32>::quiet_NaN();
+        params.posedHit.position.x = Limit<f32>::s_QuietNaN;
 
         NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::CommitDeformableRestSpaceHole(instance, params));
         CheckHoleEditUnchanged(context, instance, oldVertexCount, oldIndexCount, oldRevision);

@@ -19,8 +19,6 @@
 #include <xdg-shell-client-protocol.h>
 
 #include <cerrno>
-#include <chrono>
-#include <cmath>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -651,7 +649,7 @@ static void OnKeyboardKey(void* data, wl_keyboard* keyboard, u32 serial, u32 tim
             context.repeatKeycode = keycode;
             context.repeatKey = translatedKey;
             context.repeatScancode = static_cast<i32>(key);
-            context.nextRepeatTime = TimerNow() + std::chrono::milliseconds(context.repeatDelayMs);
+            context.nextRepeatTime = TimerAddMS(TimerNow(), context.repeatDelayMs);
         }
     }
     else{
@@ -858,7 +856,7 @@ static void ProcessKeyRepeat(WaylandContext& context){
             break;
         }
 
-        context.nextRepeatTime += std::chrono::milliseconds(stepMs);
+        context.nextRepeatTime = TimerAddMS(context.nextRepeatTime, stepMs);
     } while(context.repeatPending && context.nextRepeatTime <= now);
 }
 
@@ -990,7 +988,7 @@ bool RunWaylandFrame(Frame& frame){
         i32 timeoutMs = (!windowVisible || !windowIsInFocus) ? 10 : 0;
         if(context->repeatPending && timeoutMs > 0){
             const f64 secondsUntilRepeat = DurationInSeconds<f64>(context->nextRepeatTime, TimerNow());
-            const i32 repeatTimeoutMs = secondsUntilRepeat <= 0.0 ? 0 : static_cast<i32>(std::ceil(secondsUntilRepeat * 1000.0));
+            const i32 repeatTimeoutMs = secondsUntilRepeat <= 0.0 ? 0 : static_cast<i32>(Ceil(secondsUntilRepeat * 1000.0));
             timeoutMs = timeoutMs < repeatTimeoutMs ? timeoutMs : repeatTimeoutMs;
         }
 

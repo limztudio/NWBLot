@@ -4,8 +4,7 @@
 
 #include "project_testbed.h"
 
-#include <cmath>
-
+#include <global/simplemath.h>
 #include <logger/client/logger.h>
 
 
@@ -112,8 +111,8 @@ static void ResolveFlyCameraAnglesFromTransform(
         EditorVec3{ 0.0f, 0.0f, 1.0f }
     );
     const f32 clampedForwardY = Min(Max(forward.y, -1.0f), 1.0f);
-    const f32 yawRadians = static_cast<f32>(std::atan2(forward.x, forward.z));
-    const f32 pitchRadians = static_cast<f32>(-std::asin(clampedForwardY));
+    const f32 yawRadians = ATan2(forward.x, forward.z);
+    const f32 pitchRadians = -ASin(clampedForwardY);
 
     outYawRadians = IsFinite(yawRadians) ? yawRadians : 0.0f;
     outPitchRadians = IsFinite(pitchRadians)

@@ -45,7 +45,10 @@ public:
 
 public:
     inline virtual bool initialize()override{ return m_init ? m_init() : true; }
-    inline virtual void finalize()override{ if(m_fin) m_fin(); }
+    inline virtual void finalize()override{
+        if(m_fin)
+            m_fin();
+    }
 
 
 private:

@@ -121,7 +121,7 @@ public:
             pointer newp = x.get();
             internalAddRef(newp);
 
-            pointer oldp = std::exchange(m_pair.first(), newp);
+            pointer oldp = Exchange(m_pair.first(), newp);
             internalRelease(oldp);
 
             m_pair.second() = x.get_deleter();
@@ -133,7 +133,7 @@ public:
         pointer newp = u.get();
         internalAddRef(newp);
 
-        pointer oldp = std::exchange(m_pair.first(), newp);
+        pointer oldp = Exchange(m_pair.first(), newp);
         internalRelease(oldp);
 
         m_pair.second() = u.get_deleter();
@@ -165,7 +165,7 @@ public:
         if(pValue != m_pair.first()){
             internalAddRef(pValue);
 
-            pointer oldp = std::exchange(m_pair.first(), pValue);
+            pointer oldp = Exchange(m_pair.first(), pValue);
             ref = internalRelease(oldp);
         }
         return ref;
@@ -173,17 +173,17 @@ public:
     u32 resetAdopt(pointer pValue)noexcept{
         u32 ref = 0;
         if(pValue != m_pair.first()){
-            pointer oldp = std::exchange(m_pair.first(), pValue);
+            pointer oldp = Exchange(m_pair.first(), pValue);
             ref = internalRelease(oldp);
         }
         return ref;
     }
 
     pointer release()noexcept{
-        return std::exchange(m_pair.first(), pointer());
+        return Exchange(m_pair.first(), pointer());
     }
     u32 drop()noexcept{
-        pointer oldp = std::exchange(m_pair.first(), pointer());
+        pointer oldp = Exchange(m_pair.first(), pointer());
         return internalRelease(oldp);
     }
     pointer detach()noexcept{ return release(); }

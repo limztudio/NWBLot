@@ -122,8 +122,10 @@ struct AffinityMasks : Core::Common::Initializerable{
             auto* info = reinterpret_cast<PSYSTEM_CPU_SET_INFORMATION>(ptr);
             if(info->Type == CpuSetInformation){
                 u8 eff = info->CpuSet.EfficiencyClass;
-                if(eff < minEfficiency) minEfficiency = eff;
-                if(eff > maxEfficiency) maxEfficiency = eff;
+                if(eff < minEfficiency)
+                    minEfficiency = eff;
+                if(eff > maxEfficiency)
+                    maxEfficiency = eff;
             }
             ptr += info->Size;
         }

@@ -120,7 +120,7 @@ public:
 
     constexpr void swap(FixedVector& other)noexcept{
         Base::swap(other);
-        std::swap(m_currentSize, other.m_currentSize);
+        Swap(m_currentSize, other.m_currentSize);
     }
 
     constexpr void push_back(const T& value){

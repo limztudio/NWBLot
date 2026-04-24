@@ -5,9 +5,8 @@
 #pragma once
 
 
-#include <cmath>
-
 #include "../assert.h"
+#include "../simplemath.h"
 #include "macro.h"
 #include "constant.h"
 #include "convert.h"
@@ -46,7 +45,7 @@ NWB_INLINE u32 BoundsMaskR(u32 mask, u32 activeMask)noexcept{
 }
 
 NWB_INLINE f32 RoundToNearest(f32 value)noexcept{
-    f32 integer = std::floor(value);
+    f32 integer = Floor(value);
     value -= integer;
     if(value < 0.5f)
         return integer;
@@ -54,7 +53,7 @@ NWB_INLINE f32 RoundToNearest(f32 value)noexcept{
         return integer + 1.0f;
 
     f32 intPart{};
-    (void)std::modf(integer * 0.5f, &intPart);
+    (void)ModF(integer * 0.5f, &intPart);
     if((2.0f * intPart) == integer)
         return integer;
     return integer + 1.0f;
@@ -66,10 +65,10 @@ NWB_INLINE u32 TruncateBits(f32 value)noexcept{
         u32 u;
     } result{};
 
-    if(std::isnan(value)){
+    if(IsNaN(value)){
         result.u = 0x7FC00000u;
     }
-    else if(std::fabs(value) < 8388608.0f){
+    else if(Abs(value) < 8388608.0f){
         result.f = static_cast<f32>(static_cast<i32>(value));
     }
     else{
@@ -1453,10 +1452,10 @@ NWB_INLINE u32 SIMDCALL VectorEqualIntR(SIMDVector v0, SIMDVector v1)noexcept{
 NWB_INLINE SIMDVector SIMDCALL VectorNearEqual(SIMDVector v0, SIMDVector v1, SIMDVector epsilon)noexcept{
 #if defined(NWB_HAS_SCALAR)
     return VectorSetInt(
-        std::fabs(VectorGetX(v0) - VectorGetX(v1)) <= VectorGetX(epsilon) ? 0xFFFFFFFFu : 0u,
-        std::fabs(VectorGetY(v0) - VectorGetY(v1)) <= VectorGetY(epsilon) ? 0xFFFFFFFFu : 0u,
-        std::fabs(VectorGetZ(v0) - VectorGetZ(v1)) <= VectorGetZ(epsilon) ? 0xFFFFFFFFu : 0u,
-        std::fabs(VectorGetW(v0) - VectorGetW(v1)) <= VectorGetW(epsilon) ? 0xFFFFFFFFu : 0u
+        Abs(VectorGetX(v0) - VectorGetX(v1)) <= VectorGetX(epsilon) ? 0xFFFFFFFFu : 0u,
+        Abs(VectorGetY(v0) - VectorGetY(v1)) <= VectorGetY(epsilon) ? 0xFFFFFFFFu : 0u,
+        Abs(VectorGetZ(v0) - VectorGetZ(v1)) <= VectorGetZ(epsilon) ? 0xFFFFFFFFu : 0u,
+        Abs(VectorGetW(v0) - VectorGetW(v1)) <= VectorGetW(epsilon) ? 0xFFFFFFFFu : 0u
     );
 #elif defined(NWB_HAS_NEON)
     return vreinterpretq_f32_u32(vcleq_f32(vabsq_f32(vsubq_f32(v0, v1)), epsilon));
@@ -1778,7 +1777,7 @@ NWB_INLINE SIMDVector SIMDCALL VectorReciprocalEst(SIMDVector value)noexcept{
 
 NWB_INLINE SIMDVector SIMDCALL VectorSqrt(SIMDVector value)noexcept{
 #if defined(NWB_HAS_SCALAR)
-    return VectorSet(std::sqrt(VectorGetX(value)), std::sqrt(VectorGetY(value)), std::sqrt(VectorGetZ(value)), std::sqrt(VectorGetW(value)));
+    return VectorSet(Sqrt(VectorGetX(value)), Sqrt(VectorGetY(value)), Sqrt(VectorGetZ(value)), Sqrt(VectorGetW(value)));
 #elif defined(NWB_HAS_NEON)
     float32x4_t s0 = vrsqrteq_f32(value);
     float32x4_t p0 = vmulq_f32(value, s0);
@@ -1898,7 +1897,7 @@ NWB_INLINE SIMDVector SIMDCALL VectorFloor(SIMDVector value)noexcept{
     return vbslq_f32(mask, result, value);
 #endif
 #else
-    return SIMDConvertDetail::MakeF32(std::floor(value.f[0]), std::floor(value.f[1]), std::floor(value.f[2]), std::floor(value.f[3]));
+    return SIMDConvertDetail::MakeF32(Floor(value.f[0]), Floor(value.f[1]), Floor(value.f[2]), Floor(value.f[3]));
 #endif
 }
 
@@ -1918,7 +1917,7 @@ NWB_INLINE SIMDVector SIMDCALL VectorCeiling(SIMDVector value)noexcept{
     return vbslq_f32(mask, result, value);
 #endif
 #else
-    return SIMDConvertDetail::MakeF32(std::ceil(value.f[0]), std::ceil(value.f[1]), std::ceil(value.f[2]), std::ceil(value.f[3]));
+    return SIMDConvertDetail::MakeF32(Ceil(value.f[0]), Ceil(value.f[1]), Ceil(value.f[2]), Ceil(value.f[3]));
 #endif
 }
 
@@ -2052,7 +2051,7 @@ NWB_INLINE SIMDVector SIMDCALL VectorExp2(SIMDVector value)noexcept{
 
     return vbslq_f32(isNaN, s_SIMDQNaN, result5);
 #else
-    return VectorSet(std::exp2(VectorGetX(value)), std::exp2(VectorGetY(value)), std::exp2(VectorGetZ(value)), std::exp2(VectorGetW(value)));
+    return VectorSet(Exp2(VectorGetX(value)), Exp2(VectorGetY(value)), Exp2(VectorGetZ(value)), Exp2(VectorGetW(value)));
 #endif
 }
 
@@ -2184,7 +2183,7 @@ NWB_INLINE SIMDVector SIMDCALL VectorLog2(SIMDVector value)noexcept{
     result = vbslq_f32(isPositive, result, nonPositive);
     return vbslq_f32(isNaN, s_SIMDQNaN, result);
 #else
-    return VectorSet(std::log2(VectorGetX(value)), std::log2(VectorGetY(value)), std::log2(VectorGetZ(value)), std::log2(VectorGetW(value)));
+    return VectorSet(Log2(VectorGetX(value)), Log2(VectorGetY(value)), Log2(VectorGetZ(value)), Log2(VectorGetW(value)));
 #endif
 }
 
@@ -2192,7 +2191,7 @@ NWB_INLINE SIMDVector SIMDCALL VectorLog10(SIMDVector value)noexcept{
 #if defined(NWB_HAS_SSE4) || defined(NWB_HAS_NEON)
     return VectorMultiply(s_SIMDInvLg10, VectorLog2(value));
 #else
-    return VectorSet(std::log10(VectorGetX(value)), std::log10(VectorGetY(value)), std::log10(VectorGetZ(value)), std::log10(VectorGetW(value)));
+    return VectorSet(Log10(VectorGetX(value)), Log10(VectorGetY(value)), Log10(VectorGetZ(value)), Log10(VectorGetW(value)));
 #endif
 }
 
@@ -2200,7 +2199,7 @@ NWB_INLINE SIMDVector SIMDCALL VectorLogE(SIMDVector value)noexcept{
 #if defined(NWB_HAS_SSE4) || defined(NWB_HAS_NEON)
     return VectorMultiply(s_SIMDInvLgE, VectorLog2(value));
 #else
-    return VectorSet(std::log(VectorGetX(value)), std::log(VectorGetY(value)), std::log(VectorGetZ(value)), std::log(VectorGetW(value)));
+    return VectorSet(Log(VectorGetX(value)), Log(VectorGetY(value)), Log(VectorGetZ(value)), Log(VectorGetW(value)));
 #endif
 }
 
@@ -2208,20 +2207,20 @@ NWB_INLINE SIMDVector SIMDCALL VectorLog(SIMDVector value)noexcept{ return Vecto
 
 NWB_INLINE SIMDVector SIMDCALL VectorPow(SIMDVector v0, SIMDVector v1)noexcept{
 #if defined(NWB_HAS_SCALAR)
-    return VectorSet(std::pow(VectorGetX(v0), VectorGetX(v1)), std::pow(VectorGetY(v0), VectorGetY(v1)), std::pow(VectorGetZ(v0), VectorGetZ(v1)), std::pow(VectorGetW(v0), VectorGetW(v1)));
+    return VectorSet(Pow(VectorGetX(v0), VectorGetX(v1)), Pow(VectorGetY(v0), VectorGetY(v1)), Pow(VectorGetZ(v0), VectorGetZ(v1)), Pow(VectorGetW(v0), VectorGetW(v1)));
 #elif defined(NWB_HAS_NEON)
     return SIMDConvertDetail::MakeF32(
-        std::pow(vgetq_lane_f32(v0, 0), vgetq_lane_f32(v1, 0)),
-        std::pow(vgetq_lane_f32(v0, 1), vgetq_lane_f32(v1, 1)),
-        std::pow(vgetq_lane_f32(v0, 2), vgetq_lane_f32(v1, 2)),
-        std::pow(vgetq_lane_f32(v0, 3), vgetq_lane_f32(v1, 3))
+        Pow(vgetq_lane_f32(v0, 0), vgetq_lane_f32(v1, 0)),
+        Pow(vgetq_lane_f32(v0, 1), vgetq_lane_f32(v1, 1)),
+        Pow(vgetq_lane_f32(v0, 2), vgetq_lane_f32(v1, 2)),
+        Pow(vgetq_lane_f32(v0, 3), vgetq_lane_f32(v1, 3))
     );
 #else
     alignas(16) f32 a[4]{};
     alignas(16) f32 b[4]{};
     _mm_store_ps(a, v0);
     _mm_store_ps(b, v1);
-    return _mm_set_ps(std::pow(a[3], b[3]), std::pow(a[2], b[2]), std::pow(a[1], b[1]), std::pow(a[0], b[0]));
+    return _mm_set_ps(Pow(a[3], b[3]), Pow(a[2], b[2]), Pow(a[1], b[1]), Pow(a[0], b[0]));
 #endif
 }
 

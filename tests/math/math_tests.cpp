@@ -6,10 +6,10 @@
 
 #include <global/simdmath.h>
 #include <global/compile.h>
+#include <global/limit.h>
+#include <global/simplemath.h>
 
-#include <cmath>
 #include <iostream>
-#include <limits>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -44,7 +44,7 @@ struct TestContext{
 
 
 static bool NearlyEqual(const f32 lhs, const f32 rhs, const f32 epsilon = 0.00001f){
-    return std::fabs(lhs - rhs) <= epsilon;
+    return Abs(lhs - rhs) <= epsilon;
 }
 
 static bool NearlyEqual3(SIMDVector value, const f32 x, const f32 y, const f32 z){
@@ -122,51 +122,51 @@ static void TestGlslNamedScalarFunctions(TestContext& context){
     const SIMDVector expResult = VectorExp(expInput);
     NWB_MATH_TEST_CHECK(context, NearlyEqual4(
         expResult,
-        static_cast<f32>(std::exp(1.0f)),
-        static_cast<f32>(std::exp(2.0f)),
-        static_cast<f32>(std::exp(-1.0f)),
-        static_cast<f32>(std::exp(0.5f)),
+        Exp(1.0f),
+        Exp(2.0f),
+        Exp(-1.0f),
+        Exp(0.5f),
         0.0005f
     ));
 
-    const f32 e = static_cast<f32>(std::exp(1.0f));
+    const f32 e = Exp(1.0f);
     const SIMDVector logResult = VectorLog(VectorSet(e, e * e, 1.0f, 0.25f));
     NWB_MATH_TEST_CHECK(context, NearlyEqual4(
         logResult,
         1.0f,
         2.0f,
         0.0f,
-        static_cast<f32>(std::log(0.25f)),
+        Log(0.25f),
         0.0005f
     ));
 
     const SIMDVector hyperbolicInput = VectorSet(0.5f, -0.5f, 1.0f, -1.0f);
     NWB_MATH_TEST_CHECK(context, NearlyEqual4(
         VectorSinH(hyperbolicInput),
-        static_cast<f32>(std::sinh(0.5f)),
-        static_cast<f32>(std::sinh(-0.5f)),
-        static_cast<f32>(std::sinh(1.0f)),
-        static_cast<f32>(std::sinh(-1.0f)),
+        SinH(0.5f),
+        SinH(-0.5f),
+        SinH(1.0f),
+        SinH(-1.0f),
         0.0005f
     ));
     NWB_MATH_TEST_CHECK(context, NearlyEqual4(
         VectorCosH(hyperbolicInput),
-        static_cast<f32>(std::cosh(0.5f)),
-        static_cast<f32>(std::cosh(-0.5f)),
-        static_cast<f32>(std::cosh(1.0f)),
-        static_cast<f32>(std::cosh(-1.0f)),
+        CosH(0.5f),
+        CosH(-0.5f),
+        CosH(1.0f),
+        CosH(-1.0f),
         0.0005f
     ));
     NWB_MATH_TEST_CHECK(context, NearlyEqual4(
         VectorTanH(hyperbolicInput),
-        static_cast<f32>(std::tanh(0.5f)),
-        static_cast<f32>(std::tanh(-0.5f)),
-        static_cast<f32>(std::tanh(1.0f)),
-        static_cast<f32>(std::tanh(-1.0f)),
+        TanH(0.5f),
+        TanH(-0.5f),
+        TanH(1.0f),
+        TanH(-1.0f),
         0.0005f
     ));
 
-    const f32 infinity = std::numeric_limits<f32>::infinity();
+    const f32 infinity = Limit<f32>::s_Infinity;
     NWB_MATH_TEST_CHECK(context, NearlyEqual4(
         VectorTanH(VectorSet(50.0f, -50.0f, infinity, -infinity)),
         1.0f,

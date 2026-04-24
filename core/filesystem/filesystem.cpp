@@ -424,7 +424,12 @@ static StagedVolumePaths BuildStagedVolumePaths(const Path& outputDirectory, con
     AString stageKey = PathToString(outputDirectory);
     stageKey += '|';
     stageKey += volumeName;
-    return BuildStagedDirectoryPaths(outputDirectory, StringFormat("volume_{}", FormatHex64(ComputeFnv64Text(stageKey))));
+
+    AString stageToken;
+    stageToken.reserve(7u + 16u);
+    stageToken += "volume_";
+    AppendHexU64(ComputeFnv64Text(stageKey), stageToken);
+    return BuildStagedDirectoryPaths(outputDirectory, stageToken);
 }
 
 static bool MoveExistingVolumeSegments(const Path& fromDirectory, const Path& toDirectory, const AStringView volumeName, Vector<Path>& outMovedFileNames){

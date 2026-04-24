@@ -206,8 +206,20 @@ struct StagedDirectoryPaths{
     ;
 
     StagedDirectoryPaths output;
-    output.stageDirectory = stageBaseDirectory / StringFormat(".{}_stage", stageToken);
-    output.backupDirectory = stageBaseDirectory / StringFormat(".{}_backup", stageToken);
+
+    AString stageDirectoryName;
+    stageDirectoryName.reserve(stageToken.size() + 7u);
+    stageDirectoryName += '.';
+    stageDirectoryName += stageToken;
+    stageDirectoryName += "_stage";
+    output.stageDirectory = stageBaseDirectory / stageDirectoryName;
+
+    AString backupDirectoryName;
+    backupDirectoryName.reserve(stageToken.size() + 8u);
+    backupDirectoryName += '.';
+    backupDirectoryName += stageToken;
+    backupDirectoryName += "_backup";
+    output.backupDirectory = stageBaseDirectory / backupDirectoryName;
     return output;
 }
 

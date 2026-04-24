@@ -36,7 +36,25 @@ static AString DescribeAvailableCookers(const HashMap<Name, UniquePtr<IAssetCook
 
     Sort(types.begin(), types.end());
 
+    usize outputSize = 0;
+    for(const CompactString& type : types){
+        const usize typeSize = type.view().size();
+        if(typeSize > Limit<usize>::s_Max - outputSize){
+            outputSize = 0;
+            break;
+        }
+        outputSize += typeSize;
+        if(outputSize > Limit<usize>::s_Max - 2u){
+            outputSize = 0;
+            break;
+        }
+        outputSize += 2u;
+    }
+    if(outputSize >= 2u)
+        outputSize -= 2u;
+
     AString output;
+    output.reserve(outputSize);
     for(usize i = 0; i < types.size(); ++i){
         if(i > 0)
             output += ", ";
@@ -87,7 +105,6 @@ bool AssetCookerRegistry::cook(const AssetCookOptions& options)const{
         return false;
     }
 
-    const AString availableCookers = __hidden_assets::DescribeAvailableCookers(m_assetCookers);
     const Name requestedType = options.assetType.empty()
         ? NAME_NONE
         : Name(options.assetType.view())
@@ -107,7 +124,7 @@ bool AssetCookerRegistry::cook(const AssetCookOptions& options)const{
 
         NWB_LOGGER_ERROR(
             NWB_TEXT("Missing --asset-type. Available types: {}"),
-            StringConvert(availableCookers)
+            StringConvert(__hidden_assets::DescribeAvailableCookers(m_assetCookers))
         );
         return false;
     }
@@ -117,7 +134,7 @@ bool AssetCookerRegistry::cook(const AssetCookOptions& options)const{
         NWB_LOGGER_ERROR(
             NWB_TEXT("Unsupported --asset-type '{}'. Available types: {}"),
             StringConvert(options.assetType.c_str()),
-            StringConvert(availableCookers)
+            StringConvert(__hidden_assets::DescribeAvailableCookers(m_assetCookers))
         );
         return false;
     }

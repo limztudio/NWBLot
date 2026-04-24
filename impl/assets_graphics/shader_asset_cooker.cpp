@@ -207,13 +207,14 @@ struct PreparedShaderPlan{
 using StagedVolumePaths = StagedDirectoryPaths;
 
 static StagedVolumePaths BuildStagedVolumePaths(const Path& outputDirectory, const AStringView volumeName, const AStringView configurationSafeName){
-    const AString outputHashHex = FormatHex64(ComputeFnv64Text(PathToString(outputDirectory)));
-    const AString stageToken = StringFormat(
-        "{}_{}_{}",
-        BuildSafeCacheName(CanonicalizeText(volumeName)),
-        configurationSafeName,
-        outputHashHex
-    );
+    const AString volumeSafeName = BuildSafeCacheName(CanonicalizeText(volumeName));
+    AString stageToken;
+    stageToken.reserve(volumeSafeName.size() + 1u + configurationSafeName.size() + 1u + 16u);
+    stageToken += volumeSafeName;
+    stageToken += '_';
+    stageToken += configurationSafeName;
+    stageToken += '_';
+    AppendHexU64(ComputeFnv64Text(PathToString(outputDirectory)), stageToken);
     return BuildStagedDirectoryPaths(outputDirectory, stageToken);
 }
 
@@ -1674,9 +1675,6 @@ static bool NormalizeMaterialVariant(
 ){
     outNormalizedVariant.clear();
 
-    const AString materialPathText(materialEntry.virtualPath.c_str());
-    const AString stageNameText(stageName.c_str());
-    const AString contextLabel = StringFormat("{} [{}]", materialPathText, stageNameText);
     const AStringView requestedVariant = materialEntry.shaderVariant.empty()
         ? Core::ShaderArchive::s_DefaultVariant
         : AStringView(materialEntry.shaderVariant)
@@ -1698,6 +1696,7 @@ static bool NormalizeMaterialVariant(
         return true;
     }
 
+    const AString contextLabel = StringFormat("{} [{}]", materialEntry.virtualPath.c_str(), stageName.c_str());
     if(!shaderCook.validateDefaultVariant(contextLabel, requestedVariant, preparedShaderEntry.entry.defineValues))
         return false;
 
@@ -1800,15 +1799,17 @@ static bool ValidateAndNormalizeMaterials(
 static VariantCachePaths BuildVariantCachePaths(const Path& cacheDirectory, const AStringView configurationSafeName, const Core::ShaderCook::ShaderEntry& entry, const AStringView variantName){
     const AString shaderSafeName = BuildSafeCacheName(entry.name);
     const AString stageSafeName = BuildSafeCacheName(entry.archiveStage.view());
-    const AString variantHashHex = FormatHex64(ComputeFnv64Text(variantName));
+    AString bytecodeFileName;
+    bytecodeFileName.reserve(shaderSafeName.size() + 2u + stageSafeName.size() + 2u + 16u + 4u);
+    bytecodeFileName += shaderSafeName;
+    bytecodeFileName += "__";
+    bytecodeFileName += stageSafeName;
+    bytecodeFileName += "__";
+    AppendHexU64(ComputeFnv64Text(variantName), bytecodeFileName);
+    bytecodeFileName += ".spv";
 
     VariantCachePaths cachePaths;
-    cachePaths.bytecodePath = cacheDirectory / configurationSafeName / StringFormat(
-        "{}__{}__{}.spv",
-        shaderSafeName,
-        stageSafeName,
-        variantHashHex
-    );
+    cachePaths.bytecodePath = cacheDirectory / configurationSafeName / bytecodeFileName;
     cachePaths.sourceChecksumPath = cachePaths.bytecodePath;
     cachePaths.sourceChecksumPath += ".source";
     return cachePaths;

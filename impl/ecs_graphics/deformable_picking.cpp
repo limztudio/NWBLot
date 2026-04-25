@@ -103,6 +103,7 @@ template<typename VertexVector>
     if(!BuildMorphWeightSumLookup(instance.morphs, weights, resolvedWeights, failedMorph))
         return false;
 
+    const usize vertexCount = vertices.size();
     for(const DeformableMorph& morph : instance.morphs){
         f32 weight = 0.0f;
         if(morph.name){
@@ -115,21 +116,22 @@ template<typename VertexVector>
         if(morph.deltas.empty())
             return false;
 
+        const SIMDVector weightVector = VectorReplicate(weight);
         for(const DeformableMorphDelta& delta : morph.deltas){
-            if(!DeformableValidation::ValidMorphDelta(delta, vertices.size()))
+            if(!DeformableValidation::ValidMorphDelta(delta, vertexCount))
                 return false;
 
             DeformableVertexRest& vertex = vertices[delta.vertexId];
             StoreFloat(
-                VectorMultiplyAdd(LoadFloat(delta.deltaPosition), VectorReplicate(weight), LoadFloat(vertex.position)),
+                VectorMultiplyAdd(LoadFloat(delta.deltaPosition), weightVector, LoadFloat(vertex.position)),
                 &vertex.position
             );
             StoreFloat(
-                VectorMultiplyAdd(LoadFloat(delta.deltaNormal), VectorReplicate(weight), LoadFloat(vertex.normal)),
+                VectorMultiplyAdd(LoadFloat(delta.deltaNormal), weightVector, LoadFloat(vertex.normal)),
                 &vertex.normal
             );
             StoreFloat(
-                VectorMultiplyAdd(LoadFloat(delta.deltaTangent), VectorReplicate(weight), LoadFloat(vertex.tangent)),
+                VectorMultiplyAdd(LoadFloat(delta.deltaTangent), weightVector, LoadFloat(vertex.tangent)),
                 &vertex.tangent
             );
         }
@@ -185,6 +187,10 @@ template<typename VertexVector>
     SIMDVector skinnedPosition = VectorZero();
     SIMDVector skinnedNormal = VectorZero();
     SIMDVector skinnedTangent = VectorZero();
+    const SIMDVector basePosition = LoadFloat(vertex.position);
+    const SIMDVector baseNormal = LoadFloat(vertex.normal);
+    const SIMDVector baseTangent = VectorSet(vertex.tangent.x, vertex.tangent.y, vertex.tangent.z, 0.0f);
+    const usize jointCount = jointPalette->joints.size();
     f32 totalWeight = 0.0f;
 
     for(u32 influenceIndex = 0; influenceIndex < 4u; ++influenceIndex){
@@ -192,23 +198,23 @@ template<typename VertexVector>
         const u32 joint = static_cast<u32>(skin.joint[influenceIndex]);
         if(!DeformableValidation::ActiveWeight(weight))
             continue;
-        if(joint >= jointPalette->joints.size() || !IsAffineJointMatrix(jointPalette->joints[joint]))
+        if(joint >= jointCount || !IsAffineJointMatrix(jointPalette->joints[joint]))
             return false;
 
         const DeformableJointMatrix& matrix = jointPalette->joints[joint];
         const SIMDVector weightVector = VectorReplicate(weight);
         skinnedPosition = VectorMultiplyAdd(
-            TransformJointPosition(matrix, LoadFloat(vertex.position)),
+            TransformJointPosition(matrix, basePosition),
             weightVector,
             skinnedPosition
         );
         skinnedNormal = VectorMultiplyAdd(
-            TransformJointDirection(matrix, LoadFloat(vertex.normal)),
+            TransformJointDirection(matrix, baseNormal),
             weightVector,
             skinnedNormal
         );
         skinnedTangent = VectorMultiplyAdd(
-            TransformJointDirection(matrix, VectorSet(vertex.tangent.x, vertex.tangent.y, vertex.tangent.z, 0.0f)),
+            TransformJointDirection(matrix, baseTangent),
             weightVector,
             skinnedTangent
         );
@@ -246,18 +252,19 @@ void ApplyTransform(const Core::Scene::TransformComponent* transform, Deformable
     if(!transform)
         return;
 
+    const SIMDVector rotation = LoadFloat(transform->rotation);
     SIMDVector position = VectorMultiply(LoadFloat(vertex.position), LoadFloat(transform->scale));
-    position = Vector3Rotate(position, LoadFloat(transform->rotation));
+    position = Vector3Rotate(position, rotation);
     StoreFloat(VectorAdd(position, LoadFloat(transform->position)), &vertex.position);
 
-    SIMDVector normalVector = Vector3Rotate(LoadFloat(vertex.normal), LoadFloat(transform->rotation));
+    SIMDVector normalVector = Vector3Rotate(LoadFloat(vertex.normal), rotation);
     normalVector = DeformableRuntime::Normalize(normalVector, VectorSet(0.0f, 0.0f, 1.0f, 0.0f));
     Float4 normal;
     StoreFloat(normalVector, &normal);
     vertex.normal = Float3U(normal.x, normal.y, normal.z);
 
     const SIMDVector tangentVector = DeformableRuntime::Normalize(
-        Vector3Rotate(VectorSet(vertex.tangent.x, vertex.tangent.y, vertex.tangent.z, 0.0f), LoadFloat(transform->rotation)),
+        Vector3Rotate(VectorSet(vertex.tangent.x, vertex.tangent.y, vertex.tangent.z, 0.0f), rotation),
         DeformableRuntime::FallbackTangent(normalVector)
     );
     Float4 tangent;

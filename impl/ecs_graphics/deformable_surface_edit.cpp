@@ -915,16 +915,17 @@ void AccumulateMorphDelta(
     const DeformableMorphDelta& source,
     const f32 weight)
 {
+    const SIMDVector weightVector = VectorReplicate(weight);
     StoreFloat(
-        VectorMultiplyAdd(LoadFloat(source.deltaPosition), VectorReplicate(weight), LoadFloat(target.deltaPosition)),
+        VectorMultiplyAdd(LoadFloat(source.deltaPosition), weightVector, LoadFloat(target.deltaPosition)),
         &target.deltaPosition
     );
     StoreFloat(
-        VectorMultiplyAdd(LoadFloat(source.deltaNormal), VectorReplicate(weight), LoadFloat(target.deltaNormal)),
+        VectorMultiplyAdd(LoadFloat(source.deltaNormal), weightVector, LoadFloat(target.deltaNormal)),
         &target.deltaNormal
     );
     StoreFloat(
-        VectorMultiplyAdd(LoadFloat(source.deltaTangent), VectorReplicate(weight), LoadFloat(target.deltaTangent)),
+        VectorMultiplyAdd(LoadFloat(source.deltaTangent), weightVector, LoadFloat(target.deltaTangent)),
         &target.deltaTangent
     );
 }

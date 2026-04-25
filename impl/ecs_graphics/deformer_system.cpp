@@ -128,6 +128,11 @@ using MorphWeightLookup = HashMap<
     Core::Alloc::ScratchAllocator<Pair<const NameHash, f32>>
 >;
 
+struct ActiveMorphPayload{
+    const DeformableMorph* morph = nullptr;
+    f32 weight = 0.0f;
+};
+
 static bool BuildResolvedMorphWeightLookup(
     const DeformableRuntimeMeshInstance& instance,
     const DeformableMorphWeightsComponent* weights,
@@ -189,8 +194,11 @@ static bool BuildMorphPayload(
     if(!BuildResolvedMorphWeightLookup(instance, morphWeights, resolvedWeights))
         return false;
 
-    usize activeMorphCount = 0u;
     usize activeDeltaCount = 0u;
+    Vector<ActiveMorphPayload, Core::Alloc::ScratchAllocator<ActiveMorphPayload>> activeMorphs{
+        Core::Alloc::ScratchAllocator<ActiveMorphPayload>(scratchArena)
+    };
+    activeMorphs.reserve(instance.morphs.size());
     for(const DeformableMorph& morph : instance.morphs){
         const f32 weight = ResolvedMorphWeight(resolvedWeights, morph.name);
         if(!DeformableValidation::ActiveWeight(weight))
@@ -214,21 +222,19 @@ static bool BuildMorphPayload(
             return false;
         }
         activeDeltaCount += morph.deltas.size();
-        ++activeMorphCount;
+        activeMorphs.push_back(ActiveMorphPayload{ &morph, weight });
     }
 
-    outRanges.reserve(activeMorphCount);
+    outRanges.reserve(activeMorphs.size());
     outDeltas.reserve(activeDeltaCount);
 
-    for(const DeformableMorph& morph : instance.morphs){
-        const f32 weight = ResolvedMorphWeight(resolvedWeights, morph.name);
-        if(!DeformableValidation::ActiveWeight(weight))
-            continue;
+    for(const ActiveMorphPayload& activeMorph : activeMorphs){
+        const DeformableMorph& morph = *activeMorph.morph;
 
         DeformerSystem::DeformerMorphRangeGpu range;
         range.firstDelta = static_cast<u32>(outDeltas.size());
         range.deltaCount = static_cast<u32>(morph.deltas.size());
-        range.weight = weight;
+        range.weight = activeMorph.weight;
         outRanges.push_back(range);
 
         Core::CoreDetail::HashCombine(outSignature, morph.name);

@@ -62,8 +62,10 @@ static constexpr RuntimeMeshDirtyFlags s_GpuUploadHandledDirtyFlags =
         );
         return false;
     }
-    if(instance.restVertices.size() > static_cast<usize>(Limit<u32>::s_Max)
-        || instance.indices.size() > static_cast<usize>(Limit<u32>::s_Max)
+    const usize vertexCount = instance.restVertices.size();
+    const usize indexCount = instance.indices.size();
+    if(vertexCount > static_cast<usize>(Limit<u32>::s_Max)
+        || indexCount > static_cast<usize>(Limit<u32>::s_Max)
     ){
         NWB_LOGGER_ERROR(
             NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' exceeds u32 vertex/index count limits"),
@@ -71,11 +73,11 @@ static constexpr RuntimeMeshDirtyFlags s_GpuUploadHandledDirtyFlags =
         );
         return false;
     }
-    if((instance.indices.size() % 3u) != 0u){
+    if((indexCount % 3u) != 0u){
         NWB_LOGGER_ERROR(
             NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' index count {} is not a multiple of 3"),
             sourceText(),
-            instance.indices.size()
+            indexCount
         );
         return false;
     }
@@ -87,7 +89,7 @@ static constexpr RuntimeMeshDirtyFlags s_GpuUploadHandledDirtyFlags =
         return false;
     }
 
-    for(usize vertexIndex = 0; vertexIndex < instance.restVertices.size(); ++vertexIndex){
+    for(usize vertexIndex = 0; vertexIndex < vertexCount; ++vertexIndex){
         if(!DeformableValidation::ValidRestVertexFrame(instance.restVertices[vertexIndex])){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' rest vertex {} has invalid data or frame"),
@@ -98,21 +100,24 @@ static constexpr RuntimeMeshDirtyFlags s_GpuUploadHandledDirtyFlags =
         }
     }
 
-    for(const u32 index : instance.indices){
-        if(index >= instance.restVertices.size()){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' index {} exceeds {} vertices"),
-                sourceText(),
-                index,
-                instance.restVertices.size()
-            );
+    const auto indexOutOfRange = [&](const u32 index) -> bool {
+        if(static_cast<usize>(index) < vertexCount)
             return false;
-        }
-    }
-    for(usize indexBase = 0; indexBase < instance.indices.size(); indexBase += 3u){
+
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' index {} exceeds {} vertices"),
+            sourceText(),
+            index,
+            vertexCount
+        );
+        return true;
+    };
+    for(usize indexBase = 0; indexBase < indexCount; indexBase += 3u){
         const u32 a = instance.indices[indexBase + 0u];
         const u32 b = instance.indices[indexBase + 1u];
         const u32 c = instance.indices[indexBase + 2u];
+        if(indexOutOfRange(a) || indexOutOfRange(b) || indexOutOfRange(c))
+            return false;
         if(a == b || a == c || b == c){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' triangle {} is degenerate"),
@@ -122,7 +127,11 @@ static constexpr RuntimeMeshDirtyFlags s_GpuUploadHandledDirtyFlags =
             return false;
         }
 
-        if(!DeformableValidation::ValidTriangle(instance.restVertices, a, b, c)){
+        const SIMDVector aPosition = LoadFloat(instance.restVertices[a].position);
+        const SIMDVector ab = VectorSubtract(LoadFloat(instance.restVertices[b].position), aPosition);
+        const SIMDVector ac = VectorSubtract(LoadFloat(instance.restVertices[c].position), aPosition);
+        const f32 areaLengthSquared = VectorGetX(Vector3LengthSq(Vector3Cross(ab, ac)));
+        if(!(areaLengthSquared > DeformableValidation::s_TriangleAreaLengthSquaredEpsilon)){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' triangle {} has zero area"),
                 sourceText(),
@@ -132,12 +141,12 @@ static constexpr RuntimeMeshDirtyFlags s_GpuUploadHandledDirtyFlags =
         }
     }
 
-    if(!instance.skin.empty() && instance.skin.size() != instance.restVertices.size()){
+    if(!instance.skin.empty() && instance.skin.size() != vertexCount){
         NWB_LOGGER_ERROR(
             NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' skin count {} does not match vertex count {}"),
             sourceText(),
             instance.skin.size(),
-            instance.restVertices.size()
+            vertexCount
         );
         return false;
     }
@@ -152,12 +161,12 @@ static constexpr RuntimeMeshDirtyFlags s_GpuUploadHandledDirtyFlags =
         }
     }
 
-    if(!instance.sourceSamples.empty() && instance.sourceSamples.size() != instance.restVertices.size()){
+    if(!instance.sourceSamples.empty() && instance.sourceSamples.size() != vertexCount){
         NWB_LOGGER_ERROR(
             NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' source sample count {} does not match vertex count {}"),
             sourceText(),
             instance.sourceSamples.size(),
-            instance.restVertices.size()
+            vertexCount
         );
         return false;
     }
@@ -173,7 +182,7 @@ static constexpr RuntimeMeshDirtyFlags s_GpuUploadHandledDirtyFlags =
     }
 
     const DeformableValidation::MorphPayloadFailureInfo morphFailure =
-        DeformableValidation::FindMorphPayloadFailure(instance.morphs, instance.restVertices.size())
+        DeformableValidation::FindMorphPayloadFailure(instance.morphs, vertexCount)
     ;
     if(morphFailure.reason != DeformableValidation::MorphPayloadFailure::None){
         const DeformableMorph* morph = morphFailure.morphIndex < instance.morphs.size()

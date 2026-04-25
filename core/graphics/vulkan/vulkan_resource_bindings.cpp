@@ -898,7 +898,49 @@ void DescriptorHeapManager::free(const DescriptorHeapAllocation& allocation){
 
     HeapStorage& heap = allocation.kind == DescriptorHeapKind::Sampler ? m_samplerHeap : m_resourceHeap;
     ScopedLock lock(heap.mutex);
-    heap.freeRanges.push_back({ allocation.offsetBytes, allocation.sizeBytes });
+
+    FreeRange released{ allocation.offsetBytes, allocation.sizeBytes };
+    const auto rangeEnd = [](const FreeRange& range, u32& outEnd) -> bool{
+        if(range.sizeBytes > UINT32_MAX - range.offsetBytes)
+            return false;
+        outEnd = range.offsetBytes + range.sizeBytes;
+        return true;
+    };
+
+    bool merged = true;
+    while(merged){
+        merged = false;
+        for(usize i = 0; i < heap.freeRanges.size(); ++i){
+            FreeRange range = heap.freeRanges[i];
+            u32 releasedEnd = 0;
+            u32 currentEnd = 0;
+            if(!rangeEnd(released, releasedEnd) || !rangeEnd(range, currentEnd))
+                continue;
+
+            if(releasedEnd == range.offsetBytes){
+                if(range.sizeBytes > UINT32_MAX - released.sizeBytes)
+                    continue;
+                released.sizeBytes += range.sizeBytes;
+            }
+            else if(currentEnd == released.offsetBytes){
+                if(released.sizeBytes > UINT32_MAX - range.sizeBytes)
+                    continue;
+                released.offsetBytes = range.offsetBytes;
+                released.sizeBytes += range.sizeBytes;
+            }
+            else{
+                continue;
+            }
+
+            if(i + 1u != heap.freeRanges.size())
+                heap.freeRanges[i] = heap.freeRanges.back();
+            heap.freeRanges.pop_back();
+            merged = true;
+            break;
+        }
+    }
+
+    heap.freeRanges.push_back(released);
 }
 
 bool DescriptorHeapManager::writeDescriptor(const BindingSetItem& item, const DescriptorHeapBindingMeta& meta, const u32 dstOffsetBytes){

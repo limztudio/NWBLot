@@ -491,9 +491,12 @@ bool RaycastDeformableRuntimeMesh(
     f32 closestDistance = ray.maxDistance();
     DeformablePosedHit closestHit;
     for(usize triangleIndex = 0; triangleIndex < triangleCount; ++triangleIndex){
-        u32 vertexIndices[3] = {};
-        if(!DeformableRuntime::ValidateTriangleIndex(instance, static_cast<u32>(triangleIndex), vertexIndices))
-            return false;
+        const usize indexBase = triangleIndex * 3u;
+        const u32 vertexIndices[3] = {
+            instance.indices[indexBase + 0u],
+            instance.indices[indexBase + 1u],
+            instance.indices[indexBase + 2u]
+        };
 
         const SIMDVector aVector = LoadFloat(posedVertices[vertexIndices[0]].position);
         const SIMDVector bVector = LoadFloat(posedVertices[vertexIndices[1]].position);

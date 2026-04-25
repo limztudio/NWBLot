@@ -105,6 +105,19 @@ uint nwbAvboitPackExtinction(float extinction){
     return uint(clamp(ceil(extinction * nwbAvboitExtinctionFixedScale()), 0.0, 65535.0));
 }
 
+bool nwbAvboitAcceptLowDepthFragment(texture2D opaqueDepth, sampler pointSampler, out float outAlpha, out uint outVirtualSlice){
+    outAlpha = nwbAvboitMaterialAlpha();
+    if(outAlpha <= 0.0)
+        return false;
+
+    const float opaqueDepthValue = nwbAvboitOpaqueDepthFromLowFragCoord(opaqueDepth, pointSampler, gl_FragCoord.xy);
+    if(gl_FragCoord.z > opaqueDepthValue)
+        return false;
+
+    outVirtualSlice = nwbAvboitVirtualSliceFromDepth(gl_FragCoord.z);
+    return true;
+}
+
 float nwbAvboitUnpackExtinction(uint packedValue){
     return float(packedValue) / nwbAvboitExtinctionFixedScale();
 }

@@ -201,10 +201,14 @@ NWB_INLINE int32x4_t GetLeadingBit(int32x4_t value)noexcept{
 // column-vector transforms over row-stored matrices
 
 
-NWB_INLINE SIMDMatrix SIMDCALL MatrixTransposeForTransform(const SIMDMatrix& matrix)noexcept{
+#if defined(NWB_HAS_AVX2)
+NWB_INLINE SIMDMatrix SIMDCALL MatrixTransposePackedRows(__m256 t0, __m256 t1)noexcept;
+#endif
+
+NWB_INLINE SIMDMatrix SIMDCALL MatrixTranspose4(SIMDVector r0, SIMDVector r1, SIMDVector r2, SIMDVector r3)noexcept{
 #if defined(NWB_HAS_NEON)
-    const float32x4x2_t p0 = vzipq_f32(matrix.v[0], matrix.v[2]);
-    const float32x4x2_t p1 = vzipq_f32(matrix.v[1], matrix.v[3]);
+    const float32x4x2_t p0 = vzipq_f32(r0, r2);
+    const float32x4x2_t p1 = vzipq_f32(r1, r3);
     const float32x4x2_t t0 = vzipq_f32(p0.val[0], p1.val[0]);
     const float32x4x2_t t1 = vzipq_f32(p0.val[1], p1.val[1]);
 
@@ -215,11 +219,52 @@ NWB_INLINE SIMDMatrix SIMDCALL MatrixTransposeForTransform(const SIMDMatrix& mat
     result.v[3] = t1.val[1];
     return result;
 #elif defined(NWB_HAS_AVX2)
-    __m256 t0 = _mm256_castps128_ps256(matrix.v[0]);
-    t0 = _mm256_insertf128_ps(t0, matrix.v[1], 1);
-    __m256 t1 = _mm256_castps128_ps256(matrix.v[2]);
-    t1 = _mm256_insertf128_ps(t1, matrix.v[3], 1);
+    __m256 t0 = _mm256_castps128_ps256(r0);
+    t0 = _mm256_insertf128_ps(t0, r1, 1);
+    __m256 t1 = _mm256_castps128_ps256(r2);
+    t1 = _mm256_insertf128_ps(t1, r3, 1);
 
+    return MatrixTransposePackedRows(t0, t1);
+#elif defined(NWB_HAS_SSE4)
+    SIMDVector temp0 = _mm_shuffle_ps(r0, r1, _MM_SHUFFLE(1, 0, 1, 0));
+    SIMDVector temp1 = _mm_shuffle_ps(r0, r1, _MM_SHUFFLE(3, 2, 3, 2));
+    SIMDVector temp2 = _mm_shuffle_ps(r2, r3, _MM_SHUFFLE(1, 0, 1, 0));
+    SIMDVector temp3 = _mm_shuffle_ps(r2, r3, _MM_SHUFFLE(3, 2, 3, 2));
+
+    SIMDMatrix result{};
+    result.v[0] = _mm_shuffle_ps(temp0, temp2, _MM_SHUFFLE(2, 0, 2, 0));
+    result.v[1] = _mm_shuffle_ps(temp0, temp2, _MM_SHUFFLE(3, 1, 3, 1));
+    result.v[2] = _mm_shuffle_ps(temp1, temp3, _MM_SHUFFLE(2, 0, 2, 0));
+    result.v[3] = _mm_shuffle_ps(temp1, temp3, _MM_SHUFFLE(3, 1, 3, 1));
+    return result;
+#else
+    SIMDMatrix result{};
+    result.m[0][0] = r0.f[0];
+    result.m[0][1] = r1.f[0];
+    result.m[0][2] = r2.f[0];
+    result.m[0][3] = r3.f[0];
+    result.m[1][0] = r0.f[1];
+    result.m[1][1] = r1.f[1];
+    result.m[1][2] = r2.f[1];
+    result.m[1][3] = r3.f[1];
+    result.m[2][0] = r0.f[2];
+    result.m[2][1] = r1.f[2];
+    result.m[2][2] = r2.f[2];
+    result.m[2][3] = r3.f[2];
+    result.m[3][0] = r0.f[3];
+    result.m[3][1] = r1.f[3];
+    result.m[3][2] = r2.f[3];
+    result.m[3][3] = r3.f[3];
+    return result;
+#endif
+}
+
+NWB_INLINE SIMDMatrix SIMDCALL MatrixTransposeForTransform(const SIMDMatrix& matrix)noexcept{
+    return MatrixTranspose4(matrix.v[0], matrix.v[1], matrix.v[2], matrix.v[3]);
+}
+
+#if defined(NWB_HAS_AVX2)
+NWB_INLINE SIMDMatrix SIMDCALL MatrixTransposePackedRows(__m256 t0, __m256 t1)noexcept{
     __m256 temp0 = _mm256_unpacklo_ps(t0, t1);
     __m256 temp1 = _mm256_unpackhi_ps(t0, t1);
     __m256 temp2 = _mm256_permute2f128_ps(temp0, temp1, 0x20);
@@ -235,39 +280,8 @@ NWB_INLINE SIMDMatrix SIMDCALL MatrixTransposeForTransform(const SIMDMatrix& mat
     result.v[2] = _mm256_castps256_ps128(t1);
     result.v[3] = _mm256_extractf128_ps(t1, 1);
     return result;
-#elif defined(NWB_HAS_SSE4)
-    SIMDVector temp0 = _mm_shuffle_ps(matrix.v[0], matrix.v[1], _MM_SHUFFLE(1, 0, 1, 0));
-    SIMDVector temp1 = _mm_shuffle_ps(matrix.v[0], matrix.v[1], _MM_SHUFFLE(3, 2, 3, 2));
-    SIMDVector temp2 = _mm_shuffle_ps(matrix.v[2], matrix.v[3], _MM_SHUFFLE(1, 0, 1, 0));
-    SIMDVector temp3 = _mm_shuffle_ps(matrix.v[2], matrix.v[3], _MM_SHUFFLE(3, 2, 3, 2));
-
-    SIMDMatrix result{};
-    result.v[0] = _mm_shuffle_ps(temp0, temp2, _MM_SHUFFLE(2, 0, 2, 0));
-    result.v[1] = _mm_shuffle_ps(temp0, temp2, _MM_SHUFFLE(3, 1, 3, 1));
-    result.v[2] = _mm_shuffle_ps(temp1, temp3, _MM_SHUFFLE(2, 0, 2, 0));
-    result.v[3] = _mm_shuffle_ps(temp1, temp3, _MM_SHUFFLE(3, 1, 3, 1));
-    return result;
-#else
-    SIMDMatrix result{};
-    result.m[0][0] = matrix.m[0][0];
-    result.m[0][1] = matrix.m[1][0];
-    result.m[0][2] = matrix.m[2][0];
-    result.m[0][3] = matrix.m[3][0];
-    result.m[1][0] = matrix.m[0][1];
-    result.m[1][1] = matrix.m[1][1];
-    result.m[1][2] = matrix.m[2][1];
-    result.m[1][3] = matrix.m[3][1];
-    result.m[2][0] = matrix.m[0][2];
-    result.m[2][1] = matrix.m[1][2];
-    result.m[2][2] = matrix.m[2][2];
-    result.m[2][3] = matrix.m[3][2];
-    result.m[3][0] = matrix.m[0][3];
-    result.m[3][1] = matrix.m[1][3];
-    result.m[3][2] = matrix.m[2][3];
-    result.m[3][3] = matrix.m[3][3];
-    return result;
-#endif
 }
+#endif
 
 NWB_INLINE SIMDVector SIMDCALL Vector4TransformTransposed(SIMDVector value, const SIMDMatrix& transposedMatrix)noexcept{
 #if defined(NWB_HAS_SCALAR)
@@ -2891,14 +2905,9 @@ NWB_INLINE SIMDVector SIMDCALL Vector2NormalizeEst(SIMDVector value)noexcept{
 #endif
 }
 
-NWB_INLINE SIMDVector SIMDCALL Vector2ClampLengthV(SIMDVector value, SIMDVector lengthMin, SIMDVector lengthMax)noexcept{
-    NWB_ASSERT(VectorGetY(lengthMin) == VectorGetX(lengthMin));
-    NWB_ASSERT(VectorGetY(lengthMax) == VectorGetX(lengthMax));
-    NWB_ASSERT(Vector2GreaterOrEqual(lengthMin, s_SIMDZero));
-    NWB_ASSERT(Vector2GreaterOrEqual(lengthMax, s_SIMDZero));
-    NWB_ASSERT(Vector2GreaterOrEqual(lengthMax, lengthMin));
+namespace SIMDVectorDetail{
 
-    const SIMDVector lengthSq = Vector2LengthSq(value);
+NWB_INLINE SIMDVector SIMDCALL ClampLengthV(SIMDVector value, SIMDVector lengthSq, SIMDVector lengthMin, SIMDVector lengthMax)noexcept{
     const SIMDVector reciprocalLength = VectorReciprocalSqrt(lengthSq);
     const SIMDVector infiniteLength = VectorEqualInt(lengthSq, s_SIMDInfinity);
     const SIMDVector zeroLength = VectorEqual(lengthSq, s_SIMDZero);
@@ -2912,7 +2921,20 @@ NWB_INLINE SIMDVector SIMDCALL Vector2ClampLengthV(SIMDVector value, SIMDVector 
     SIMDVector clampedLength = VectorSelect(length, lengthMax, controlMax);
     clampedLength = VectorSelect(clampedLength, lengthMin, controlMin);
     SIMDVector result = VectorMultiply(normal, clampedLength);
-    return VectorAndInt(VectorSelect(result, value, VectorEqualInt(controlMax, controlMin)), s_SIMDMaskXY);
+    return VectorSelect(result, value, VectorEqualInt(controlMax, controlMin));
+}
+
+}
+
+NWB_INLINE SIMDVector SIMDCALL Vector2ClampLengthV(SIMDVector value, SIMDVector lengthMin, SIMDVector lengthMax)noexcept{
+    NWB_ASSERT(VectorGetY(lengthMin) == VectorGetX(lengthMin));
+    NWB_ASSERT(VectorGetY(lengthMax) == VectorGetX(lengthMax));
+    NWB_ASSERT(Vector2GreaterOrEqual(lengthMin, s_SIMDZero));
+    NWB_ASSERT(Vector2GreaterOrEqual(lengthMax, s_SIMDZero));
+    NWB_ASSERT(Vector2GreaterOrEqual(lengthMax, lengthMin));
+
+    const SIMDVector lengthSq = Vector2LengthSq(value);
+    return VectorAndInt(SIMDVectorDetail::ClampLengthV(value, lengthSq, lengthMin, lengthMax), s_SIMDMaskXY);
 }
 
 NWB_INLINE SIMDVector SIMDCALL Vector2ClampLength(SIMDVector value, f32 lengthMin, f32 lengthMax)noexcept{
@@ -3108,20 +3130,7 @@ NWB_INLINE SIMDVector SIMDCALL Vector3ClampLengthV(SIMDVector value, SIMDVector 
     NWB_ASSERT(Vector3GreaterOrEqual(lengthMax, lengthMin));
 
     const SIMDVector lengthSq = Vector3LengthSq(value);
-    const SIMDVector reciprocalLength = VectorReciprocalSqrt(lengthSq);
-    const SIMDVector infiniteLength = VectorEqualInt(lengthSq, s_SIMDInfinity);
-    const SIMDVector zeroLength = VectorEqual(lengthSq, s_SIMDZero);
-    const SIMDVector select = VectorEqualInt(infiniteLength, zeroLength);
-    SIMDVector normal = VectorMultiply(value, reciprocalLength);
-    SIMDVector length = VectorMultiply(lengthSq, reciprocalLength);
-    length = VectorSelect(lengthSq, length, select);
-    normal = VectorSelect(lengthSq, normal, select);
-    const SIMDVector controlMax = VectorGreater(length, lengthMax);
-    const SIMDVector controlMin = VectorLess(length, lengthMin);
-    SIMDVector clampedLength = VectorSelect(length, lengthMax, controlMax);
-    clampedLength = VectorSelect(clampedLength, lengthMin, controlMin);
-    SIMDVector result = VectorMultiply(normal, clampedLength);
-    return VectorAndInt(VectorSelect(result, value, VectorEqualInt(controlMax, controlMin)), s_SIMDMask3);
+    return VectorAndInt(SIMDVectorDetail::ClampLengthV(value, lengthSq, lengthMin, lengthMax), s_SIMDMask3);
 }
 
 NWB_INLINE SIMDVector SIMDCALL Vector3ClampLength(SIMDVector value, f32 lengthMin, f32 lengthMax)noexcept{
@@ -3316,20 +3325,7 @@ NWB_INLINE SIMDVector SIMDCALL Vector4ClampLengthV(SIMDVector value, SIMDVector 
     NWB_ASSERT(Vector4GreaterOrEqual(lengthMax, lengthMin));
 
     const SIMDVector lengthSq = Vector4LengthSq(value);
-    const SIMDVector reciprocalLength = VectorReciprocalSqrt(lengthSq);
-    const SIMDVector infiniteLength = VectorEqualInt(lengthSq, s_SIMDInfinity);
-    const SIMDVector zeroLength = VectorEqual(lengthSq, s_SIMDZero);
-    const SIMDVector select = VectorEqualInt(infiniteLength, zeroLength);
-    SIMDVector normal = VectorMultiply(value, reciprocalLength);
-    SIMDVector length = VectorMultiply(lengthSq, reciprocalLength);
-    length = VectorSelect(lengthSq, length, select);
-    normal = VectorSelect(lengthSq, normal, select);
-    const SIMDVector controlMax = VectorGreater(length, lengthMax);
-    const SIMDVector controlMin = VectorLess(length, lengthMin);
-    SIMDVector clampedLength = VectorSelect(length, lengthMax, controlMax);
-    clampedLength = VectorSelect(clampedLength, lengthMin, controlMin);
-    SIMDVector result = VectorMultiply(normal, clampedLength);
-    return VectorSelect(result, value, VectorEqualInt(controlMax, controlMin));
+    return SIMDVectorDetail::ClampLengthV(value, lengthSq, lengthMin, lengthMax);
 }
 
 NWB_INLINE SIMDVector SIMDCALL Vector4ClampLength(SIMDVector value, f32 lengthMin, f32 lengthMax)noexcept{

@@ -650,6 +650,66 @@ static bool CookSingleDeformableMeta(
     return cooker.cook(options);
 }
 
+static bool LoadCookedMinimalDeformable(
+    TestContext& context,
+    TestArena& testArena,
+    const Path& outputDirectory,
+    UniquePtr<NWB::Core::Assets::IAsset>& outLoadedAsset)
+{
+    NWB::Core::Filesystem::VolumeSession volumeSession(testArena.arena);
+    const bool loadedVolume = volumeSession.load("graphics", outputDirectory);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedVolume);
+    if(!loadedVolume)
+        return false;
+
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, volumeSession.fileCount() == 2u);
+
+    NWB::Core::Assets::AssetBytes binary;
+    const bool loadedBinary = volumeSession.loadData(Name("project/characters/minimal_deformable"), binary);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedBinary);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !binary.empty());
+    if(!loadedBinary || binary.empty())
+        return false;
+
+    NWB::Impl::DeformableGeometryAssetCodec codec;
+    const bool deserialized = codec.deserialize(Name("project/characters/minimal_deformable"), binary, outLoadedAsset);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, deserialized);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, static_cast<bool>(outLoadedAsset));
+    return deserialized && static_cast<bool>(outLoadedAsset);
+}
+
+static bool CookAndLoadMinimalDeformable(
+    TestContext& context,
+    TestArena& testArena,
+    const AStringView metaText,
+    const AStringView caseName,
+    Path& outRoot,
+    UniquePtr<NWB::Core::Assets::IAsset>& outLoadedAsset)
+{
+    Path outputDirectory;
+    const bool cooked = CookSingleDeformableMeta(
+        metaText,
+        caseName,
+        testArena,
+        outRoot,
+        outputDirectory
+    );
+
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, cooked);
+    if(!cooked){
+        ErrorCode errorCode;
+        static_cast<void>(RemoveAllIfExists(outRoot, errorCode));
+        return false;
+    }
+
+    if(LoadCookedMinimalDeformable(context, testArena, outputDirectory, outLoadedAsset))
+        return true;
+
+    ErrorCode errorCode;
+    static_cast<void>(RemoveAllIfExists(outRoot, errorCode));
+    return false;
+}
+
 
 static NWB::Impl::DeformableVertexRest MakeRestVertex(
     const f32 x,
@@ -960,42 +1020,18 @@ static void TestDeformableGeometryCookerMinimalAsset(TestContext& context){
 
     TestArena testArena;
     Path root;
-    Path outputDirectory;
-    const bool cooked = CookSingleDeformableMeta(
+    UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
+    if(!CookAndLoadMinimalDeformable(
+        context,
+        testArena,
         s_MinimalDeformableMeta,
         "minimal",
-        testArena,
         root,
-        outputDirectory
-    );
-
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, cooked);
-    if(!cooked){
-        ErrorCode errorCode;
-        static_cast<void>(RemoveAllIfExists(root, errorCode));
+        loadedAsset
+    ))
         return;
-    }
 
     {
-        NWB::Core::Filesystem::VolumeSession volumeSession(testArena.arena);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, volumeSession.load("graphics", outputDirectory));
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, volumeSession.fileCount() == 2u);
-
-        NWB::Core::Assets::AssetBytes binary;
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(
-            context,
-            volumeSession.loadData(Name("project/characters/minimal_deformable"), binary)
-        );
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !binary.empty());
-
-        NWB::Impl::DeformableGeometryAssetCodec codec;
-        UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(
-            context,
-            codec.deserialize(Name("project/characters/minimal_deformable"), binary, loadedAsset)
-        );
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, static_cast<bool>(loadedAsset));
-
         const NWB::Impl::DeformableGeometry& loadedGeometry =
             static_cast<const NWB::Impl::DeformableGeometry&>(*loadedAsset)
         ;
@@ -1019,40 +1055,18 @@ static void TestDeformableGeometryCookerU32IndexType(TestContext& context){
 
     TestArena testArena;
     Path root;
-    Path outputDirectory;
-    const bool cooked = CookSingleDeformableMeta(
+    UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
+    if(!CookAndLoadMinimalDeformable(
+        context,
+        testArena,
         s_U32IndexTypeDeformableMeta,
         "u32_index_type",
-        testArena,
         root,
-        outputDirectory
-    );
-
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, cooked);
-    if(!cooked){
-        ErrorCode errorCode;
-        static_cast<void>(RemoveAllIfExists(root, errorCode));
+        loadedAsset
+    ))
         return;
-    }
 
     {
-        NWB::Core::Filesystem::VolumeSession volumeSession(testArena.arena);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, volumeSession.load("graphics", outputDirectory));
-
-        NWB::Core::Assets::AssetBytes binary;
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(
-            context,
-            volumeSession.loadData(Name("project/characters/minimal_deformable"), binary)
-        );
-
-        NWB::Impl::DeformableGeometryAssetCodec codec;
-        UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(
-            context,
-            codec.deserialize(Name("project/characters/minimal_deformable"), binary, loadedAsset)
-        );
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, static_cast<bool>(loadedAsset));
-
         const NWB::Impl::DeformableGeometry& loadedGeometry =
             static_cast<const NWB::Impl::DeformableGeometry&>(*loadedAsset)
         ;
@@ -1072,42 +1086,18 @@ static void TestDeformableGeometryCookerExplicitEmptyOptionalLists(TestContext& 
     TestArena testArena;
     auto expectCookedDefaultOptionals = [&](const AStringView metaText, const AStringView caseName){
         Path root;
-        Path outputDirectory;
-        const bool cooked = CookSingleDeformableMeta(
+        UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
+        if(!CookAndLoadMinimalDeformable(
+            context,
+            testArena,
             metaText,
             caseName,
-            testArena,
             root,
-            outputDirectory
-        );
-
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, cooked);
-        if(!cooked){
-            ErrorCode errorCode;
-            static_cast<void>(RemoveAllIfExists(root, errorCode));
+            loadedAsset
+        ))
             return;
-        }
 
         {
-            NWB::Core::Filesystem::VolumeSession volumeSession(testArena.arena);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, volumeSession.load("graphics", outputDirectory));
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, volumeSession.fileCount() == 2u);
-
-            NWB::Core::Assets::AssetBytes binary;
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(
-                context,
-                volumeSession.loadData(Name("project/characters/minimal_deformable"), binary)
-            );
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !binary.empty());
-
-            NWB::Impl::DeformableGeometryAssetCodec codec;
-            UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(
-                context,
-                codec.deserialize(Name("project/characters/minimal_deformable"), binary, loadedAsset)
-            );
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, static_cast<bool>(loadedAsset));
-
             const NWB::Impl::DeformableGeometry& loadedGeometry =
                 static_cast<const NWB::Impl::DeformableGeometry&>(*loadedAsset)
             ;
@@ -1135,42 +1125,18 @@ static void TestDeformableGeometryCookerFullAsset(TestContext& context){
 
     TestArena testArena;
     Path root;
-    Path outputDirectory;
-    const bool cooked = CookSingleDeformableMeta(
+    UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
+    if(!CookAndLoadMinimalDeformable(
+        context,
+        testArena,
         s_FullDeformableMeta,
         "full_streams",
-        testArena,
         root,
-        outputDirectory
-    );
-
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, cooked);
-    if(!cooked){
-        ErrorCode errorCode;
-        static_cast<void>(RemoveAllIfExists(root, errorCode));
+        loadedAsset
+    ))
         return;
-    }
 
     {
-        NWB::Core::Filesystem::VolumeSession volumeSession(testArena.arena);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, volumeSession.load("graphics", outputDirectory));
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, volumeSession.fileCount() == 2u);
-
-        NWB::Core::Assets::AssetBytes binary;
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(
-            context,
-            volumeSession.loadData(Name("project/characters/minimal_deformable"), binary)
-        );
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !binary.empty());
-
-        NWB::Impl::DeformableGeometryAssetCodec codec;
-        UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(
-            context,
-            codec.deserialize(Name("project/characters/minimal_deformable"), binary, loadedAsset)
-        );
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, static_cast<bool>(loadedAsset));
-
         const NWB::Impl::DeformableGeometry& loadedGeometry =
             static_cast<const NWB::Impl::DeformableGeometry&>(*loadedAsset)
         ;

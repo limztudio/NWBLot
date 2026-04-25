@@ -14,15 +14,11 @@ layout(std430, set = 1, binding = 2) buffer NwbAvboitCoverageBuffer{
 layout(location = 0) in vec4 inColor;
 
 void main(){
-    const float alpha = nwbAvboitMaterialAlpha();
-    if(alpha <= 0.0)
+    float alpha;
+    uint virtualSlice;
+    if(!nwbAvboitAcceptLowDepthFragment(g_OpaqueDepth, g_PointSampler, alpha, virtualSlice))
         discard;
 
-    const float opaqueDepth = nwbAvboitOpaqueDepthFromLowFragCoord(g_OpaqueDepth, g_PointSampler, gl_FragCoord.xy);
-    if(gl_FragCoord.z > opaqueDepth)
-        discard;
-
-    const uint virtualSlice = nwbAvboitVirtualSliceFromDepth(gl_FragCoord.z);
     atomicOr(g_CoverageWords[virtualSlice >> 5u], 1u << (virtualSlice & 31u));
 }
 

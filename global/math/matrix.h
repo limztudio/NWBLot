@@ -69,69 +69,6 @@ NWB_INLINE SIMDVector SIMDCALL MatrixRowMultiply(SIMDVector row, const SIMDMatri
 #endif
 }
 
-NWB_INLINE SIMDMatrix SIMDCALL MatrixTranspose4(SIMDVector r0, SIMDVector r1, SIMDVector r2, SIMDVector r3)noexcept{
-#if defined(NWB_HAS_NEON)
-    const float32x4x2_t p0 = vzipq_f32(r0, r2);
-    const float32x4x2_t p1 = vzipq_f32(r1, r3);
-
-    const float32x4x2_t t0 = vzipq_f32(p0.val[0], p1.val[0]);
-    const float32x4x2_t t1 = vzipq_f32(p0.val[1], p1.val[1]);
-
-    SIMDMatrix result{};
-    result.v[0] = t0.val[0];
-    result.v[1] = t0.val[1];
-    result.v[2] = t1.val[0];
-    result.v[3] = t1.val[1];
-    return result;
-#elif defined(NWB_HAS_AVX2)
-    __m256 t0 = _mm256_castps128_ps256(r0);
-    t0 = _mm256_insertf128_ps(t0, r1, 1);
-    __m256 t1 = _mm256_castps128_ps256(r2);
-    t1 = _mm256_insertf128_ps(t1, r3, 1);
-
-    __m256 temp0 = _mm256_unpacklo_ps(t0, t1);
-    __m256 temp1 = _mm256_unpackhi_ps(t0, t1);
-    __m256 temp2 = _mm256_permute2f128_ps(temp0, temp1, 0x20);
-    __m256 temp3 = _mm256_permute2f128_ps(temp0, temp1, 0x31);
-    temp0 = _mm256_unpacklo_ps(temp2, temp3);
-    temp1 = _mm256_unpackhi_ps(temp2, temp3);
-    t0 = _mm256_permute2f128_ps(temp0, temp1, 0x20);
-    t1 = _mm256_permute2f128_ps(temp0, temp1, 0x31);
-
-    SIMDMatrix result{};
-    result.v[0] = _mm256_castps256_ps128(t0);
-    result.v[1] = _mm256_extractf128_ps(t0, 1);
-    result.v[2] = _mm256_castps256_ps128(t1);
-    result.v[3] = _mm256_extractf128_ps(t1, 1);
-    return result;
-#elif defined(NWB_HAS_SSE4)
-    SIMDVector temp0 = _mm_shuffle_ps(r0, r1, _MM_SHUFFLE(1, 0, 1, 0));
-    SIMDVector temp1 = _mm_shuffle_ps(r0, r1, _MM_SHUFFLE(3, 2, 3, 2));
-    SIMDVector temp2 = _mm_shuffle_ps(r2, r3, _MM_SHUFFLE(1, 0, 1, 0));
-    SIMDVector temp3 = _mm_shuffle_ps(r2, r3, _MM_SHUFFLE(3, 2, 3, 2));
-
-    SIMDMatrix result{};
-    result.v[0] = _mm_shuffle_ps(temp0, temp2, _MM_SHUFFLE(2, 0, 2, 0));
-    result.v[1] = _mm_shuffle_ps(temp0, temp2, _MM_SHUFFLE(3, 1, 3, 1));
-    result.v[2] = _mm_shuffle_ps(temp1, temp3, _MM_SHUFFLE(2, 0, 2, 0));
-    result.v[3] = _mm_shuffle_ps(temp1, temp3, _MM_SHUFFLE(3, 1, 3, 1));
-    return result;
-#else
-    SIMDMatrix p{};
-    p.v[0] = VectorMergeXY(r0, r2);
-    p.v[1] = VectorMergeXY(r1, r3);
-    p.v[2] = VectorMergeZW(r0, r2);
-    p.v[3] = VectorMergeZW(r1, r3);
-
-    SIMDMatrix result{};
-    result.v[0] = VectorMergeXY(p.v[0], p.v[1]);
-    result.v[1] = VectorMergeZW(p.v[0], p.v[1]);
-    result.v[2] = VectorMergeXY(p.v[2], p.v[3]);
-    result.v[3] = VectorMergeZW(p.v[2], p.v[3]);
-    return result;
-#endif
-}
-
 #if defined(NWB_HAS_AVX2) && (defined(__FMA__) || defined(_M_FMA))
 NWB_INLINE SIMDMatrix SIMDCALL MatrixMultiplyFMA(const SIMDMatrix& m0, const SIMDMatrix& m1)noexcept{
     __m256 t0 = _mm256_castps128_ps256(m0.v[0]);
@@ -217,21 +154,7 @@ NWB_INLINE SIMDMatrix SIMDCALL MatrixMultiplyTransposeFMA(const SIMDMatrix& m0, 
     t0 = _mm256_add_ps(c2, c6);
     t1 = _mm256_add_ps(c3, c7);
 
-    __m256 temp0 = _mm256_unpacklo_ps(t0, t1);
-    __m256 temp1 = _mm256_unpackhi_ps(t0, t1);
-    __m256 temp2 = _mm256_permute2f128_ps(temp0, temp1, 0x20);
-    __m256 temp3 = _mm256_permute2f128_ps(temp0, temp1, 0x31);
-    temp0 = _mm256_unpacklo_ps(temp2, temp3);
-    temp1 = _mm256_unpackhi_ps(temp2, temp3);
-    t0 = _mm256_permute2f128_ps(temp0, temp1, 0x20);
-    t1 = _mm256_permute2f128_ps(temp0, temp1, 0x31);
-
-    SIMDMatrix result{};
-    result.v[0] = _mm256_castps256_ps128(t0);
-    result.v[1] = _mm256_extractf128_ps(t0, 1);
-    result.v[2] = _mm256_castps256_ps128(t1);
-    result.v[3] = _mm256_extractf128_ps(t1, 1);
-    return result;
+    return SIMDVectorDetail::MatrixTransposePackedRows(t0, t1);
 }
 #endif
 
@@ -327,7 +250,7 @@ NWB_INLINE bool SIMDCALL MatrixIsIdentity(const SIMDMatrix& matrix)noexcept{
 
 
 NWB_INLINE SIMDMatrix SIMDCALL MatrixTranspose(const SIMDMatrix& matrix)noexcept{
-    return SIMDMatrixDetail::MatrixTranspose4(matrix.v[0], matrix.v[1], matrix.v[2], matrix.v[3]);
+    return SIMDVectorDetail::MatrixTranspose4(matrix.v[0], matrix.v[1], matrix.v[2], matrix.v[3]);
 }
 
 NWB_INLINE SIMDMatrix SIMDCALL MatrixMultiply(const SIMDMatrix& m0, const SIMDMatrix& m1)noexcept{
@@ -351,7 +274,7 @@ NWB_INLINE SIMDMatrix SIMDCALL MatrixMultiplyTranspose(const SIMDMatrix& m0, con
     const SIMDVector r1 = SIMDMatrixDetail::MatrixRowMultiply(m0.v[1], m1);
     const SIMDVector r2 = SIMDMatrixDetail::MatrixRowMultiply(m0.v[2], m1);
     const SIMDVector r3 = SIMDMatrixDetail::MatrixRowMultiply(m0.v[3], m1);
-    return SIMDMatrixDetail::MatrixTranspose4(r0, r1, r2, r3);
+    return SIMDVectorDetail::MatrixTranspose4(r0, r1, r2, r3);
 #endif
 }
 

@@ -834,11 +834,30 @@ bool BackendContext::pickPhysicalDevice(){
     AStringStream errorStream;
     errorStream << "Cannot find a Vulkan device that supports all the required extensions and properties.";
 
-    Vector<VkPhysicalDevice, Alloc::ScratchAllocator<VkPhysicalDevice>> discreteGPUs((Alloc::ScratchAllocator<VkPhysicalDevice>(scratchArena)));
-    Vector<VkPhysicalDevice, Alloc::ScratchAllocator<VkPhysicalDevice>> otherGPUs((Alloc::ScratchAllocator<VkPhysicalDevice>(scratchArena)));
-    const usize deviceCandidateCount = static_cast<usize>(lastDevice - firstDevice + 1);
-    discreteGPUs.reserve(deviceCandidateCount);
-    otherGPUs.reserve(deviceCandidateCount);
+    struct DeviceSelection{
+        VkPhysicalDevice device = VK_NULL_HANDLE;
+        i32 graphicsQueueFamily = -1;
+        i32 computeQueueFamily = -1;
+        i32 transferQueueFamily = -1;
+        i32 presentQueueFamily = -1;
+    };
+    auto captureCurrentSelection = [this](VkPhysicalDevice device){
+        DeviceSelection selection;
+        selection.device = device;
+        selection.graphicsQueueFamily = m_graphicsQueueFamily;
+        selection.computeQueueFamily = m_computeQueueFamily;
+        selection.transferQueueFamily = m_transferQueueFamily;
+        selection.presentQueueFamily = m_presentQueueFamily;
+        return selection;
+    };
+    auto applySelection = [this](const DeviceSelection& selection){
+        m_vulkanPhysicalDevice = selection.device;
+        m_graphicsQueueFamily = selection.graphicsQueueFamily;
+        m_computeQueueFamily = selection.computeQueueFamily;
+        m_transferQueueFamily = selection.transferQueueFamily;
+        m_presentQueueFamily = selection.presentQueueFamily;
+    };
+    DeviceSelection fallbackSelection;
 
     for(i32 deviceIndex = firstDevice; deviceIndex <= lastDevice; ++deviceIndex){
         VkPhysicalDevice dev = devices[deviceIndex];
@@ -959,19 +978,17 @@ bool BackendContext::pickPhysicalDevice(){
         if(!deviceIsGood)
             continue;
 
-        if(prop.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
-            discreteGPUs.push_back(dev);
-        else
-            otherGPUs.push_back(dev);
+        if(prop.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU){
+            applySelection(captureCurrentSelection(dev));
+            return true;
+        }
+
+        if(fallbackSelection.device == VK_NULL_HANDLE)
+            fallbackSelection = captureCurrentSelection(dev);
     }
 
-    if(!discreteGPUs.empty()){
-        m_vulkanPhysicalDevice = discreteGPUs[0];
-        return true;
-    }
-
-    if(!otherGPUs.empty()){
-        m_vulkanPhysicalDevice = otherGPUs[0];
+    if(fallbackSelection.device != VK_NULL_HANDLE){
+        applySelection(fallbackSelection);
         return true;
     }
 

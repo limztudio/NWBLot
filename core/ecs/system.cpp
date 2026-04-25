@@ -86,6 +86,7 @@ void SystemScheduler::rebuild(){
 
     Alloc::ScratchArena<> scratchArena(4096);
     using ScratchComponentTypeAllocator = Alloc::ScratchAllocator<ComponentTypeId>;
+    using ScratchSystemAllocator = Alloc::ScratchAllocator<ISystem*>;
     using ComponentAccessSet = HashSet<
         ComponentTypeId,
         Hasher<ComponentTypeId>,
@@ -93,10 +94,13 @@ void SystemScheduler::rebuild(){
         ScratchComponentTypeAllocator
     >;
 
-    Vector<usize, Alloc::ScratchAllocator<usize>> assignedStage(
+    Vector<u8, Alloc::ScratchAllocator<u8>> assignedSystems(
         systemCount, 0,
-        Alloc::ScratchAllocator<usize>(scratchArena)
+        Alloc::ScratchAllocator<u8>(scratchArena)
     );
+    Vector<ISystem*, ScratchSystemAllocator> stageSystems{ScratchSystemAllocator(scratchArena)};
+    stageSystems.reserve(systemCount);
+
     usize componentAccessReserve = 0;
     for(ISystem* sys : m_allSystems){
         if(sys->m_access.size() > Limit<usize>::s_Max - componentAccessReserve){
@@ -124,14 +128,12 @@ void SystemScheduler::rebuild(){
     usize numAssigned = 0;
 
     while(numAssigned < systemCount){
-        const usize stageTag = m_stages.size() + 1u;
-        usize stageSize = 0;
-
+        stageSystems.clear();
         stageWrites.clear();
         stageReads.clear();
 
         for(usize i = 0; i < systemCount; ++i){
-            if(assignedStage[i] != 0)
+            if(assignedSystems[i] != 0u)
                 continue;
 
             ISystem* sys = m_allSystems[i];
@@ -160,30 +162,28 @@ void SystemScheduler::rebuild(){
                     else
                         stageReads.insert(ca.typeId);
                 }
-                assignedStage[i] = stageTag;
-                ++stageSize;
+                assignedSystems[i] = 1u;
+                stageSystems.push_back(sys);
                 ++numAssigned;
             }
         }
 
-        if(stageSize == 0){
+        if(stageSystems.empty()){
             for(usize i = 0; i < systemCount; ++i){
-                if(assignedStage[i] != 0)
+                if(assignedSystems[i] != 0u)
                     continue;
 
-                assignedStage[i] = stageTag;
-                ++stageSize;
+                assignedSystems[i] = 1u;
+                stageSystems.push_back(m_allSystems[i]);
                 ++numAssigned;
                 break;
             }
         }
 
         Stage stage{SystemAllocator(m_arena)};
-        stage.reserve(stageSize);
-        for(usize i = 0; i < systemCount; ++i){
-            if(assignedStage[i] == stageTag)
-                stage.push_back(m_allSystems[i]);
-        }
+        stage.reserve(stageSystems.size());
+        for(ISystem* sys : stageSystems)
+            stage.push_back(sys);
         m_stages.push_back(Move(stage));
     }
 

@@ -234,14 +234,14 @@ private:
 
         for(auto it = m_handlers.crbegin(); it != m_handlers.crend(); ++it){
             IInputEventHandler* handler = *it;
-            if(isHandlerPendingRemoval(*handler))
+            if(!m_pendingHandlerMutations.empty() && isHandlerPendingRemoval(*handler))
                 continue;
             if(dispatchFunc(*handler))
                 break;
         }
 
         --m_dispatchDepth;
-        if(m_dispatchDepth == 0)
+        if(m_dispatchDepth == 0 && !m_pendingHandlerMutations.empty())
             applyPendingHandlerMutations();
     }
 

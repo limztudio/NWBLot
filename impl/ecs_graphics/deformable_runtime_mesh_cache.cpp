@@ -282,11 +282,9 @@ void DeformableRuntimeMeshCache::update(Core::ECS::World& world){
     }
 
     if(deformableRendererView.candidateCount() == 0u){
-        for(const auto& [_, instance] : m_instances){
-            m_handleToEntity.erase(instance.handle.value);
-            releaseSource(instance.source.name());
-        }
+        m_handleToEntity.clear();
         m_instances.clear();
+        m_sources.clear();
         return;
     }
 

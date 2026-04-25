@@ -5,5 +5,5 @@ asset.shaders = {
     "mesh": "engine/graphics/bxdf_ms",
 };
 asset.parameters = {
-    "color_tint": "float4(0.78, 0.55, 1.0, 1.0)",
+    "base_color": "float4(0.78, 0.35, 1.0, 1.0)",
 };

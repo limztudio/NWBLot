@@ -10,5 +10,5 @@ asset.shader_variant = [
 ];
 asset.parameters = {
     "albedo_texture": "project/textures/cube_albedo",
-    "color_tint": "float4(0.35, 0.72, 1.0, 1.0)",
+    "base_color": "float4(0.12, 0.44, 1.0, 1.0)",
 };

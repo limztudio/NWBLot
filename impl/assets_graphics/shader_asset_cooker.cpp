@@ -1664,8 +1664,8 @@ static bool BuildIncludeDirectories(const Path& repoRoot, const Vector<Path>& as
             return false;
         }
 
-        const AString normalizedIncludeDirectory = CanonicalizeText(PathToString(includeDirectory.lexically_normal()));
-        if(!seenIncludeDirectories.insert(normalizedIncludeDirectory).second)
+        AString normalizedIncludeDirectory = CanonicalizeText(PathToString(includeDirectory.lexically_normal()));
+        if(!seenIncludeDirectories.insert(Move(normalizedIncludeDirectory)).second)
             continue;
 
         outIncludeDirectories.push_back(Move(includeDirectory));

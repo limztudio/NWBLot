@@ -561,10 +561,13 @@ bool BackendContext::createVulkanInstance(){
     }
 
     for(const auto& ext : availableExtensions){
-        const AString name = ext.extensionName;
-        if(m_optionalExtensions.instance.find(name) != m_optionalExtensions.instance.end())
-            m_enabledExtensions.instance.insert(name);
+        AString name = ext.extensionName;
+        const bool enableOptionalExtension =
+            m_optionalExtensions.instance.find(name) != m_optionalExtensions.instance.end()
+        ;
         requiredExtensions.erase(name);
+        if(enableOptionalExtension)
+            m_enabledExtensions.instance.insert(Move(name));
     }
 
     if(!requiredExtensions.empty()){
@@ -600,10 +603,13 @@ bool BackendContext::createVulkanInstance(){
     }
 
     for(const auto& layer : availableLayers){
-        const AString name = layer.layerName;
-        if(m_optionalExtensions.layers.find(name) != m_optionalExtensions.layers.end())
-            m_enabledExtensions.layers.insert(name);
+        AString name = layer.layerName;
+        const bool enableOptionalLayer =
+            m_optionalExtensions.layers.find(name) != m_optionalExtensions.layers.end()
+        ;
         requiredLayers.erase(name);
+        if(enableOptionalLayer)
+            m_enabledExtensions.layers.insert(Move(name));
     }
 
     if(!requiredLayers.empty()){
@@ -1020,19 +1026,28 @@ bool BackendContext::createVulkanDevice(){
     }
 
     for(const auto& ext : deviceExtensions){
-        const AString name = ext.extensionName;
+        AString name = ext.extensionName;
+        bool enableExtension = false;
+        DeviceExtensionFeature::Enum enabledFeature = DeviceExtensionFeature::None;
+
         auto optIt = m_optionalExtensions.device.find(name);
         if(optIt != m_optionalExtensions.device.end()){
             if(name == VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME && m_deviceParams.headlessDevice)
                 continue;
-            m_enabledExtensions.device.emplace(name, optIt.value());
+            enableExtension = true;
+            enabledFeature = optIt.value();
         }
 
-        if(m_deviceParams.enableRayTracingExtensions){
+        if(!enableExtension && m_deviceParams.enableRayTracingExtensions){
             auto rtIt = m_rayTracingExtensions.find(name);
-            if(rtIt != m_rayTracingExtensions.end())
-                m_enabledExtensions.device.emplace(name, rtIt.value());
+            if(rtIt != m_rayTracingExtensions.end()){
+                enableExtension = true;
+                enabledFeature = rtIt.value();
+            }
         }
+
+        if(enableExtension)
+            m_enabledExtensions.device.emplace(Move(name), enabledFeature);
     }
 
     VkPhysicalDeviceProperties physicalDeviceProperties;

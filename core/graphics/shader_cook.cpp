@@ -148,8 +148,8 @@ static bool CollectDependencies(const Path& startPath, const ShaderCook::CookVec
             return false;
         }
 
-        const AString canonicalPathKey = CanonicalizeText(PathToString(absolutePath));
-        if(!inOutVisitedPaths.insert(canonicalPathKey).second)
+        AString canonicalPathKey = CanonicalizeText(PathToString(absolutePath));
+        if(!inOutVisitedPaths.insert(Move(canonicalPathKey)).second)
             continue;
 
         sourceText.clear();
@@ -473,7 +473,7 @@ static bool ParseDefines(const Path& nwbFilePath, const Metascript::Value& asset
     const auto defineAllocator = ShaderCook::CookAllocator<AString>(arena);
     outDefineValues.reserve(definesMap.size());
     for(const auto& [key, val] : definesMap){
-        const AString defineName(key.data(), key.size());
+        AString defineName(key.data(), key.size());
         if(defineName.empty()){
             NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': define names must not be empty"), PathToString<tchar>(nwbFilePath));
             return false;
@@ -505,7 +505,7 @@ static bool ParseDefines(const Path& nwbFilePath, const Metascript::Value& asset
         }
 
         ShaderCook::DefineEntry defineEntry(Move(defineValues));
-        outDefineValues.insert_or_assign(defineName, Move(defineEntry));
+        outDefineValues.insert_or_assign(Move(defineName), Move(defineEntry));
     }
     return true;
 }

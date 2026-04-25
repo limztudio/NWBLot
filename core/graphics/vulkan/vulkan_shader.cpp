@@ -241,7 +241,7 @@ ShaderHandle ShaderLibrary::getShader(const AStringView entryName, ShaderType::M
     VkResult res = VK_SUCCESS;
 
     const AString requestedEntryName(entryName);
-    const ShaderLibraryKey key{ requestedEntryName, shaderType };
+    ShaderLibraryKey key{ requestedEntryName, shaderType };
 
     auto it = m_shaders.find(key);
     if(it != m_shaders.end())
@@ -284,7 +284,7 @@ ShaderHandle ShaderLibrary::getShader(const AStringView entryName, ShaderType::M
     }
 
     m_shaders.emplace(
-        key,
+        Move(key),
         RefCountPtr<Shader, ArenaRefDeleter<Shader>>(shader, ArenaRefDeleter<Shader>(&m_context.objectArena), AdoptRef)
     );
     return ShaderHandle(shader, ShaderHandle::deleter_type(&m_context.objectArena));

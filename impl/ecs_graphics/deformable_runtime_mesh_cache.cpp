@@ -283,10 +283,11 @@ void DeformableRuntimeMeshCache::update(Core::ECS::World& world){
         EqualTo<Core::ECS::EntityID>(),
         Core::Alloc::ScratchAllocator<Core::ECS::EntityID>(scratchArena)
     );
+    auto deformableRendererView = world.view<DeformableRendererComponent>();
     if(trackActiveEntities)
-        activeEntities.reserve(m_instances.size());
+        activeEntities.reserve(Max(m_instances.size(), deformableRendererView.candidateCount()));
 
-    world.view<DeformableRendererComponent>().each(
+    deformableRendererView.each(
         [&](Core::ECS::EntityID entity, DeformableRendererComponent& component){
             if(trackActiveEntities)
                 activeEntities.insert(entity);

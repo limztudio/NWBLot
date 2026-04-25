@@ -76,7 +76,8 @@ void SystemScheduler::clear(){
 
 void SystemScheduler::rebuild(){
     m_stages.clear();
-    m_stages.reserve(m_allSystems.size());
+    const usize systemCount = m_allSystems.size();
+    m_stages.reserve(systemCount);
 
     // Determine parallel stages by analyzing read/write dependencies.
     // Two systems can share a stage if:
@@ -93,12 +94,12 @@ void SystemScheduler::rebuild(){
     >;
 
     Vector<usize, Alloc::ScratchAllocator<usize>> assignedStage(
-        m_allSystems.size(), 0,
+        systemCount, 0,
         Alloc::ScratchAllocator<usize>(scratchArena)
     );
     usize numAssigned = 0;
 
-    while(numAssigned < m_allSystems.size()){
+    while(numAssigned < systemCount){
         const usize stageTag = m_stages.size() + 1u;
         usize stageSize = 0;
 
@@ -114,8 +115,10 @@ void SystemScheduler::rebuild(){
             EqualTo<ComponentTypeId>(),
             ScratchComponentTypeAllocator(scratchArena)
         );
+        stageWrites.reserve(systemCount);
+        stageReads.reserve(systemCount);
 
-        for(usize i = 0; i < m_allSystems.size(); ++i){
+        for(usize i = 0; i < systemCount; ++i){
             if(assignedStage[i] != 0)
                 continue;
 
@@ -152,7 +155,7 @@ void SystemScheduler::rebuild(){
         }
 
         if(stageSize == 0){
-            for(usize i = 0; i < m_allSystems.size(); ++i){
+            for(usize i = 0; i < systemCount; ++i){
                 if(assignedStage[i] != 0)
                     continue;
 
@@ -165,7 +168,7 @@ void SystemScheduler::rebuild(){
 
         Stage stage{SystemAllocator(m_arena)};
         stage.reserve(stageSize);
-        for(usize i = 0; i < m_allSystems.size(); ++i){
+        for(usize i = 0; i < systemCount; ++i){
             if(assignedStage[i] == stageTag)
                 stage.push_back(m_allSystems[i]);
         }

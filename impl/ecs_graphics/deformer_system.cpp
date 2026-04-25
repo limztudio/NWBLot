@@ -91,6 +91,28 @@ static bool ResolveDeformerDisplacement(
     return false;
 }
 
+static bool HasPotentialDeformerWork(
+    const DeformableRuntimeMeshInstance& instance,
+    const DeformableMorphWeightsComponent* morphWeights,
+    const DeformableJointPaletteComponent* jointPalette,
+    const DeformableDisplacementComponent* displacement)
+{
+    if((instance.dirtyFlags & RuntimeMeshDirtyFlag::DeformerInputDirty) != 0u)
+        return true;
+    if(DeformableRuntime::HasMorphWeights(morphWeights))
+        return true;
+    if(!instance.skin.empty() && jointPalette && !jointPalette->joints.empty())
+        return true;
+
+    DeformableDisplacement resolvedDisplacement;
+    if(!ResolveDeformerDisplacement(instance, displacement, resolvedDisplacement))
+        return false;
+
+    return resolvedDisplacement.mode != DeformableDisplacementMode::None
+        && DeformableValidation::ActiveWeight(resolvedDisplacement.amplitude)
+    ;
+}
+
 static u32 DispatchGroupCount(const u32 vertexCount){
     return vertexCount == 0
         ? 0
@@ -167,15 +189,7 @@ static bool BuildMorphPayload(
     if(!BuildResolvedMorphWeightLookup(instance, morphWeights, resolvedWeights))
         return false;
 
-    struct ActiveMorph{
-        const DeformableMorph* morph = nullptr;
-        f32 weight = 0.0f;
-    };
-    Vector<ActiveMorph, Core::Alloc::ScratchAllocator<ActiveMorph>> activeMorphs{
-        Core::Alloc::ScratchAllocator<ActiveMorph>(scratchArena)
-    };
-    activeMorphs.reserve(instance.morphs.size());
-
+    usize activeMorphCount = 0u;
     usize activeDeltaCount = 0u;
     for(const DeformableMorph& morph : instance.morphs){
         const f32 weight = ResolvedMorphWeight(resolvedWeights, morph.name);
@@ -200,15 +214,16 @@ static bool BuildMorphPayload(
             return false;
         }
         activeDeltaCount += morph.deltas.size();
-        activeMorphs.push_back(ActiveMorph{ &morph, weight });
+        ++activeMorphCount;
     }
 
-    outRanges.reserve(activeMorphs.size());
+    outRanges.reserve(activeMorphCount);
     outDeltas.reserve(activeDeltaCount);
 
-    for(const ActiveMorph& activeMorph : activeMorphs){
-        const DeformableMorph& morph = *activeMorph.morph;
-        const f32 weight = activeMorph.weight;
+    for(const DeformableMorph& morph : instance.morphs){
+        const f32 weight = ResolvedMorphWeight(resolvedWeights, morph.name);
+        if(!DeformableValidation::ActiveWeight(weight))
+            continue;
 
         DeformerSystem::DeformerMorphRangeGpu range;
         range.firstDelta = static_cast<u32>(outDeltas.size());
@@ -475,8 +490,6 @@ void DeformerSystem::render(Core::IFramebuffer* framebuffer){
             ;
             if(!instance || !instance->valid())
                 return;
-            if(!ensureCommandList())
-                return;
 
             const DeformableMorphWeightsComponent* morphWeights =
                 m_world.tryGetComponent<DeformableMorphWeightsComponent>(entity)
@@ -487,6 +500,15 @@ void DeformerSystem::render(Core::IFramebuffer* framebuffer){
             const DeformableDisplacementComponent* displacement =
                 m_world.tryGetComponent<DeformableDisplacementComponent>(entity)
             ;
+            if(!__hidden_deformer_system::HasPotentialDeformerWork(
+                *instance,
+                morphWeights,
+                jointPalette,
+                displacement
+            ))
+                return;
+            if(!ensureCommandList())
+                return;
             if(dispatchRuntimeMesh(*commandList, *instance, morphWeights, jointPalette, displacement))
                 submittedWork = true;
         }

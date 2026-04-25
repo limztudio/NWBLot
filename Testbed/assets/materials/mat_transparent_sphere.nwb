@@ -1,0 +1,16 @@
+material asset;
+
+asset.shaders = {
+    "ps": "engine/graphics/bxdf_ps",
+    "mesh": "engine/graphics/bxdf_ms",
+};
+asset.shader_variant = [
+    "NWB_PROJECT_BXDF=1",
+    "NWB_PROJECT_TINT=1",
+];
+asset.parameters = {
+    "albedo_texture": "project/textures/cube_albedo",
+    "alpha": "0.42",
+    "render_mode": "transparent",
+    "color_tint": "float4(0.35, 1.0, 0.64, 1.0)",
+};

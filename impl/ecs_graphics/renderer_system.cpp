@@ -130,6 +130,11 @@ static const Name& InstanceBufferName(){
     return s;
 }
 
+static const Name& MaterialParameterBufferName(){
+    static const Name s("ecs_graphics/material_parameter_data");
+    return s;
+}
+
 static const Name& MeshViewBufferName(){
     static const Name s("ecs_graphics/mesh_view_data");
     return s;
@@ -357,12 +362,221 @@ static usize NextInstanceBufferCapacity(const usize currentCapacity, const usize
     return capacity;
 }
 
+static u32 FloatBits(const f32 value){
+    u32 bits = 0u;
+    NWB_MEMCPY(&bits, sizeof(bits), &value, sizeof(value));
+    return bits;
+}
+
+static bool EqualsAsciiToken(const AStringView text, const AStringView expected){
+    if(text.size() != expected.size())
+        return false;
+
+    for(usize i = 0; i < text.size(); ++i){
+        if(text[i] != expected[i])
+            return false;
+    }
+    return true;
+}
+
+static bool ParseMaterialParameterTypeText(
+    const AStringView typeText,
+    MaterialParameterValueType::Enum& outType,
+    u32& outComponentCount
+){
+    outType = MaterialParameterValueType::None;
+    outComponentCount = 0u;
+
+    auto tryMatch = [&](const AStringView baseName, const AStringView vectorName, const MaterialParameterValueType::Enum type) -> bool{
+        if(EqualsAsciiToken(typeText, baseName)){
+            outType = type;
+            outComponentCount = 1u;
+            return true;
+        }
+
+        const auto parseSuffix = [&](const AStringView prefix) -> bool{
+            if(typeText.size() != prefix.size() + 1u)
+                return false;
+            for(usize i = 0; i < prefix.size(); ++i){
+                if(typeText[i] != prefix[i])
+                    return false;
+            }
+
+            const char suffix = typeText[prefix.size()];
+            if(suffix < '1' || suffix > '4')
+                return false;
+
+            outType = type;
+            outComponentCount = static_cast<u32>(suffix - '0');
+            return true;
+        };
+
+        return parseSuffix(baseName) || (!vectorName.empty() && parseSuffix(vectorName));
+    };
+
+    return tryMatch(AStringView("float"), AStringView("vec"), MaterialParameterValueType::Float)
+        || tryMatch(AStringView("int"), AStringView("ivec"), MaterialParameterValueType::Int)
+        || tryMatch(AStringView("uint"), AStringView("uvec"), MaterialParameterValueType::UInt)
+        || tryMatch(AStringView("bool"), AStringView("bvec"), MaterialParameterValueType::Bool)
+    ;
+}
+
+static bool SplitMaterialParameterCall(const AStringView text, AStringView& outType, AStringView& outArgs){
+    const AStringView trimmed = TrimView(text);
+    usize openParen = Limit<usize>::s_Max;
+    for(usize i = 0; i < trimmed.size(); ++i){
+        if(trimmed[i] == '('){
+            openParen = i;
+            break;
+        }
+    }
+    if(openParen == Limit<usize>::s_Max || trimmed.empty() || trimmed[trimmed.size() - 1u] != ')')
+        return false;
+
+    outType = TrimView(trimmed.substr(0u, openParen));
+    outArgs = TrimView(trimmed.substr(openParen + 1u, trimmed.size() - openParen - 2u));
+    return !outType.empty() && !outArgs.empty();
+}
+
+static bool ReadMaterialParameterToken(const AStringView text, usize& inOutCursor, AStringView& outToken){
+    while(inOutCursor < text.size() && (IsAsciiSpace(text[inOutCursor]) || text[inOutCursor] == ','))
+        ++inOutCursor;
+    if(inOutCursor >= text.size())
+        return false;
+
+    const usize begin = inOutCursor;
+    while(inOutCursor < text.size() && !IsAsciiSpace(text[inOutCursor]) && text[inOutCursor] != ',')
+        ++inOutCursor;
+
+    outToken = TrimView(text.substr(begin, inOutCursor - begin));
+    return !outToken.empty();
+}
+
+static bool SplitMaterialParameterTokens(const AStringView text, AStringView (&outTokens)[4], u32& outTokenCount){
+    outTokenCount = 0u;
+    usize cursor = 0u;
+    AStringView token;
+    while(ReadMaterialParameterToken(text, cursor, token)){
+        if(outTokenCount >= 4u)
+            return false;
+
+        outTokens[outTokenCount] = token;
+        ++outTokenCount;
+    }
+
+    return outTokenCount > 0u;
+}
+
+static bool ParseMaterialBoolToken(const AStringView token, u32& outValue){
+    if(EqualsAsciiToken(token, AStringView("true")) || EqualsAsciiToken(token, AStringView("1"))){
+        outValue = 1u;
+        return true;
+    }
+    if(EqualsAsciiToken(token, AStringView("false")) || EqualsAsciiToken(token, AStringView("0"))){
+        outValue = 0u;
+        return true;
+    }
+
+    return false;
+}
+
+static bool ParseMaterialParameterToken(
+    const AStringView token,
+    const MaterialParameterValueType::Enum type,
+    u32& outValue
+){
+    const char* begin = token.data();
+    const char* end = begin + token.size();
+
+    switch(type){
+    case MaterialParameterValueType::Float:{
+        f64 parsed = 0.0;
+        if(!ParseF64FromChars(begin, end, parsed) || !IsFinite(parsed))
+            return false;
+        if(parsed < static_cast<f64>(Limit<f32>::s_Min) || parsed > static_cast<f64>(Limit<f32>::s_Max))
+            return false;
+
+        outValue = FloatBits(static_cast<f32>(parsed));
+        return true;
+    }
+    case MaterialParameterValueType::Int:{
+        i64 parsed = 0;
+        if(!ParseI64FromChars(begin, end, parsed))
+            return false;
+        if(parsed < static_cast<i64>(Limit<i32>::s_Min) || parsed > static_cast<i64>(Limit<i32>::s_Max))
+            return false;
+
+        outValue = static_cast<u32>(static_cast<i32>(parsed));
+        return true;
+    }
+    case MaterialParameterValueType::UInt:{
+        u64 parsed = 0u;
+        if(!ParseU64FromChars(begin, end, parsed) || parsed > static_cast<u64>(Limit<u32>::s_Max))
+            return false;
+
+        outValue = static_cast<u32>(parsed);
+        return true;
+    }
+    case MaterialParameterValueType::Bool:
+        return ParseMaterialBoolToken(token, outValue);
+    default:
+        return false;
+    }
+}
+
+static bool TryBuildMaterialParameterGpuData(
+    const CompactString& key,
+    const CompactString& value,
+    MaterialParameterGpuData& outParameter
+){
+    outParameter = {};
+    if(!key || !value)
+        return false;
+
+    MaterialParameterValueType::Enum valueType = MaterialParameterValueType::Float;
+    u32 componentCount = 0u;
+    AStringView valueText = TrimView(value.view());
+    AStringView argsText = valueText;
+    AStringView typeText;
+    if(SplitMaterialParameterCall(valueText, typeText, argsText)){
+        if(!ParseMaterialParameterTypeText(typeText, valueType, componentCount))
+            return false;
+    }
+    else if(ParseMaterialBoolToken(valueText, outParameter.data.x)){
+        valueType = MaterialParameterValueType::Bool;
+        componentCount = 1u;
+    }
+
+    AStringView tokens[4];
+    u32 tokenCount = 0u;
+    if(!SplitMaterialParameterTokens(argsText, tokens, tokenCount))
+        return false;
+    if(componentCount != 0u && tokenCount != componentCount)
+        return false;
+    if(componentCount == 0u)
+        componentCount = tokenCount;
+
+    for(u32 i = 0; i < tokenCount; ++i){
+        if(!ParseMaterialParameterToken(tokens[i], valueType, outParameter.data.raw[i]))
+            return false;
+    }
+
+    const u64 keyHash = UpdateFnv64TextCanonical(FNV64_OFFSET_BASIS, key.view());
+    outParameter.meta.x = static_cast<u32>(keyHash & 0xffffffffull);
+    outParameter.meta.y = static_cast<u32>(keyHash >> 32u);
+    outParameter.meta.z = static_cast<u32>(valueType);
+    outParameter.meta.w = componentCount;
+    return true;
+}
+
 static InstanceGpuData BuildInstanceGpuData(
     const Core::Scene::TransformComponent* transform,
-    const Float4& colorTint)
+    const u32 materialParameterOffset,
+    const u32 materialParameterCount)
 {
     InstanceGpuData data;
-    data.colorTint = colorTint;
+    data.materialParameters.x = materialParameterOffset;
+    data.materialParameters.y = materialParameterCount;
     if(!transform)
         return data;
 
@@ -1631,6 +1845,7 @@ void RendererSystem::renderMaterialPass(
     MaterialPassDrawItemVector meshDrawItems{Core::Alloc::ScratchAllocator<MaterialPassDrawItem>(scratchArena)};
     MaterialPassDrawItemVector computeDrawItems{Core::Alloc::ScratchAllocator<MaterialPassDrawItem>(scratchArena)};
     InstanceGpuDataVector instanceData{Core::Alloc::ScratchAllocator<InstanceGpuData>(scratchArena)};
+    MaterialParameterGpuDataVector materialParameters{Core::Alloc::ScratchAllocator<MaterialParameterGpuData>(scratchArena)};
 
     Core::ViewportState viewportState;
     viewportState.addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
@@ -1642,8 +1857,10 @@ void RendererSystem::renderMaterialPass(
     if(!ensureMeshViewBuffer(commandList, meshViewAspectRatio))
         return;
 
-    gatherMaterialPassDrawItems(framebuffer, pass, transparent, meshDrawItems, computeDrawItems, instanceData);
+    gatherMaterialPassDrawItems(framebuffer, pass, transparent, meshDrawItems, computeDrawItems, instanceData, materialParameters);
     if(!uploadInstanceBuffer(commandList, instanceData))
+        return;
+    if(!uploadMaterialParameterBuffer(commandList, materialParameters))
         return;
 
     const MaterialPassDrawContext drawContext{ commandList, framebuffer, pass, passBindingSet, avboitTargets, viewportState };
@@ -1657,7 +1874,8 @@ void RendererSystem::gatherMaterialPassDrawItems(
     const bool transparent,
     MaterialPassDrawItemVector& meshDrawItems,
     MaterialPassDrawItemVector& computeDrawItems,
-    InstanceGpuDataVector& instanceData
+    InstanceGpuDataVector& instanceData,
+    MaterialParameterGpuDataVector& materialParameters
 ){
     if(!framebuffer)
         return;
@@ -1666,13 +1884,13 @@ void RendererSystem::gatherMaterialPassDrawItems(
     meshDrawItems.reserve(rendererCapacity);
     computeDrawItems.reserve(rendererCapacity);
     instanceData.reserve(rendererCapacity);
+    materialParameters.reserve(rendererCapacity);
 
     const Core::FramebufferInfo& framebufferInfo = framebuffer->getFramebufferInfo();
 
     auto appendDrawForGeometry = [&](
         const Core::ECS::EntityID entity,
         const Core::Assets::AssetRef<Material>& material,
-        const Float4& colorTint,
         GeometryResources& geometry
     ) -> bool{
         if(!geometry.valid())
@@ -1704,9 +1922,30 @@ void RendererSystem::gatherMaterialPassDrawItems(
                 NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: renderer instance count exceeds u32 limits"));
                 return Limit<u32>::s_Max;
             }
+            if(materialParameters.size() > static_cast<usize>(Limit<u32>::s_Max)){
+                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material parameter offset exceeds u32 limits"));
+                return Limit<u32>::s_Max;
+            }
+            if(materialInfo->parameters.size() > static_cast<usize>(Limit<u32>::s_Max)){
+                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material parameter count exceeds u32 limits"));
+                return Limit<u32>::s_Max;
+            }
+            if(materialInfo->parameters.size() > static_cast<usize>(Limit<u32>::s_Max) - materialParameters.size()){
+                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: gathered material parameter count exceeds u32 limits"));
+                return Limit<u32>::s_Max;
+            }
 
             const u32 instanceIndex = static_cast<u32>(instanceData.size());
-            instanceData.push_back(__hidden_ecs_graphics::BuildInstanceGpuData(transform, colorTint));
+            const u32 materialParameterOffset = static_cast<u32>(materialParameters.size());
+            const u32 materialParameterCount = static_cast<u32>(materialInfo->parameters.size());
+            for(const MaterialParameterGpuData& parameter : materialInfo->parameters)
+                materialParameters.push_back(parameter);
+
+            instanceData.push_back(__hidden_ecs_graphics::BuildInstanceGpuData(
+                transform,
+                materialParameterOffset,
+                materialParameterCount
+            ));
             return instanceIndex;
         };
 
@@ -1749,7 +1988,7 @@ void RendererSystem::gatherMaterialPassDrawItems(
         if(!ensureGeometryLoaded(renderer.geometry, geometry))
             continue;
         if(geometry)
-            appendDrawForGeometry(entity, renderer.material, renderer.colorTint, *geometry);
+            appendDrawForGeometry(entity, renderer.material, *geometry);
     }
 
     auto deformableRendererView = m_world.view<DeformableRendererComponent>();
@@ -1765,7 +2004,7 @@ void RendererSystem::gatherMaterialPassDrawItems(
         if(!ensureDeformableGeometryResources(*instance, geometry))
             continue;
         if(geometry)
-            appendDrawForGeometry(entity, renderer.material, renderer.colorTint, *geometry);
+            appendDrawForGeometry(entity, renderer.material, *geometry);
     }
 }
 
@@ -1800,6 +2039,40 @@ bool RendererSystem::ensureInstanceBufferCapacity(const usize instanceCount){
 
     m_instanceBuffer = Move(instanceBuffer);
     m_instanceBufferCapacity = capacity;
+    invalidateGeometryBindingSets();
+    return true;
+}
+
+bool RendererSystem::ensureMaterialParameterBufferCapacity(const usize parameterCount){
+    const usize requiredCount = Max<usize>(parameterCount, 1u);
+    if(requiredCount > static_cast<usize>(Limit<u32>::s_Max)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material parameter buffer request exceeds u32 limits"));
+        return false;
+    }
+    if(m_materialParameterBuffer && m_materialParameterBufferCapacity >= requiredCount)
+        return true;
+
+    const usize capacity = __hidden_ecs_graphics::NextInstanceBufferCapacity(m_materialParameterBufferCapacity, requiredCount);
+    if(capacity > Limit<usize>::s_Max / sizeof(MaterialParameterGpuData)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material parameter buffer capacity overflows addressable memory"));
+        return false;
+    }
+
+    Core::BufferDesc materialParameterBufferDesc;
+    materialParameterBufferDesc
+        .setByteSize(static_cast<u64>(capacity * sizeof(MaterialParameterGpuData)))
+        .setStructStride(sizeof(MaterialParameterGpuData))
+        .setDebugName(__hidden_ecs_graphics::MaterialParameterBufferName())
+        .enableAutomaticStateTracking(Core::ResourceStates::Common)
+    ;
+    Core::BufferHandle materialParameterBuffer = m_graphics.createBuffer(materialParameterBufferDesc);
+    if(!materialParameterBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create material parameter buffer"));
+        return false;
+    }
+
+    m_materialParameterBuffer = Move(materialParameterBuffer);
+    m_materialParameterBufferCapacity = capacity;
     invalidateGeometryBindingSets();
     return true;
 }
@@ -1862,6 +2135,28 @@ bool RendererSystem::uploadInstanceBuffer(Core::ICommandList& commandList, const
     return true;
 }
 
+bool RendererSystem::uploadMaterialParameterBuffer(Core::ICommandList& commandList, const MaterialParameterGpuDataVector& materialParameters){
+    const usize uploadCount = Max<usize>(materialParameters.size(), 1u);
+    if(!ensureMaterialParameterBufferCapacity(uploadCount))
+        return false;
+    if(!m_materialParameterBuffer)
+        return false;
+
+    if(uploadCount > Limit<usize>::s_Max / sizeof(MaterialParameterGpuData)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material parameter data upload size overflows"));
+        return false;
+    }
+
+    MaterialParameterGpuData fallbackParameter;
+    const MaterialParameterGpuData* data = materialParameters.empty() ? &fallbackParameter : materialParameters.data();
+    commandList.setBufferState(m_materialParameterBuffer.get(), Core::ResourceStates::CopyDest);
+    commandList.commitBarriers();
+    commandList.writeBuffer(m_materialParameterBuffer.get(), data, uploadCount * sizeof(MaterialParameterGpuData));
+    commandList.setBufferState(m_materialParameterBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.commitBarriers();
+    return true;
+}
+
 void RendererSystem::invalidateGeometryBindingSets(){
     m_emulationViewBindingSet = nullptr;
     for(auto it = m_geometryMeshes.begin(); it != m_geometryMeshes.end(); ++it){
@@ -1897,7 +2192,7 @@ void RendererSystem::renderMeshMaterialPassDrawItems(
     const MaterialPassDrawItemVector& drawItems
 ){
     forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem& drawItem, GeometryResources& geometry, MaterialPipelineResources& pipelineResources){
-        if(!geometry.valid() || !pipelineResources.meshletPipeline || !m_instanceBuffer || !m_meshViewBuffer)
+        if(!geometry.valid() || !pipelineResources.meshletPipeline || !m_instanceBuffer || !m_meshViewBuffer || !m_materialParameterBuffer)
             return;
         if(!ensureMeshBindingSet(geometry))
             return;
@@ -1906,6 +2201,7 @@ void RendererSystem::renderMeshMaterialPassDrawItems(
         context.commandList.setBufferState(geometry.shaderIndexBuffer.get(), Core::ResourceStates::ShaderResource);
         context.commandList.setBufferState(m_instanceBuffer.get(), Core::ResourceStates::ShaderResource);
         context.commandList.setBufferState(m_meshViewBuffer.get(), Core::ResourceStates::ConstantBuffer);
+        context.commandList.setBufferState(m_materialParameterBuffer.get(), Core::ResourceStates::ShaderResource);
 
         Core::MeshletState meshletState;
         meshletState.setPipeline(pipelineResources.meshletPipeline.get());
@@ -1951,7 +2247,7 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
         return;
 
     forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem& drawItem, GeometryResources& geometry, MaterialPipelineResources& pipelineResources){
-        if(!geometry.valid() || !pipelineResources.computePipeline || !pipelineResources.emulationPipeline || !m_instanceBuffer || !m_meshViewBuffer)
+        if(!geometry.valid() || !pipelineResources.computePipeline || !pipelineResources.emulationPipeline || !m_instanceBuffer || !m_meshViewBuffer || !m_materialParameterBuffer)
             return;
         if(!ensureComputeBindingSet(geometry))
             return;
@@ -1962,6 +2258,7 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
         context.commandList.setBufferState(geometry.shaderIndexBuffer.get(), Core::ResourceStates::ShaderResource);
         context.commandList.setBufferState(m_instanceBuffer.get(), Core::ResourceStates::ShaderResource);
         context.commandList.setBufferState(m_meshViewBuffer.get(), Core::ResourceStates::ConstantBuffer);
+        context.commandList.setBufferState(m_materialParameterBuffer.get(), Core::ResourceStates::ShaderResource);
         context.commandList.setBufferState(geometry.emulationVertexBuffer.get(), Core::ResourceStates::UnorderedAccess);
 
         Core::ComputeState computeState;
@@ -2417,6 +2714,13 @@ bool RendererSystem::ensureMaterialSurfaceInfo(const Core::Assets::AssetRef<Mate
     __hidden_ecs_graphics::TryFindShaderForStage(material, Core::ShaderType::Pixel, createdInfo.pixelShader);
     __hidden_ecs_graphics::TryFindShaderForStage(material, Core::ShaderType::Mesh, createdInfo.meshShader);
 
+    createdInfo.parameters.reserve(material.parameters().size());
+    for(const auto& [key, value] : material.parameters()){
+        MaterialParameterGpuData parameter;
+        if(__hidden_ecs_graphics::TryBuildMaterialParameterGpuData(key, value, parameter))
+            createdInfo.parameters.push_back(parameter);
+    }
+
     CompactString alphaText;
     if(__hidden_ecs_graphics::FindMaterialParameter(material, AStringView("alpha"), alphaText)
         || __hidden_ecs_graphics::FindMaterialParameter(material, AStringView("opacity"), alphaText)
@@ -2459,6 +2763,7 @@ bool RendererSystem::ensureMeshShaderResources(){
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(1, 1));
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(3, 1));
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(4, 1));
+    bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(5, 1));
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(__hidden_ecs_graphics::TransparentDrawPushConstants)));
 
     Core::IDevice* device = m_graphics.getDevice();
@@ -2480,6 +2785,7 @@ bool RendererSystem::ensureComputeEmulationResources(){
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(2, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(3, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(4, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(5, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(__hidden_ecs_graphics::ShaderDrivenPushConstants)));
 
         Core::IDevice* device = m_graphics.getDevice();
@@ -2608,12 +2914,19 @@ bool RendererSystem::ensureMeshBindingSet(GeometryResources& geometry){
         );
         return false;
     }
+    if(!m_materialParameterBuffer){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("RendererSystem: mesh binding set requires a material parameter buffer")
+        );
+        return false;
+    }
 
     Core::BindingSetDesc bindingSetDesc;
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(0, geometry.shaderVertexBuffer.get()));
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(1, geometry.shaderIndexBuffer.get()));
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(3, m_instanceBuffer.get()));
     bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(4, m_meshViewBuffer.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(5, m_materialParameterBuffer.get()));
 
     Core::IDevice* device = m_graphics.getDevice();
     geometry.meshBindingSet = device->createBindingSet(bindingSetDesc, m_meshBindingLayout.get());
@@ -2642,6 +2955,12 @@ bool RendererSystem::ensureComputeBindingSet(GeometryResources& geometry){
     if(!m_meshViewBuffer){
         NWB_LOGGER_ERROR(
             NWB_TEXT("RendererSystem: compute binding set requires a mesh view buffer")
+        );
+        return false;
+    }
+    if(!m_materialParameterBuffer){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("RendererSystem: compute binding set requires a material parameter buffer")
         );
         return false;
     }
@@ -2680,6 +2999,7 @@ bool RendererSystem::ensureComputeBindingSet(GeometryResources& geometry){
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(2, geometry.emulationVertexBuffer.get()));
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(3, m_instanceBuffer.get()));
     bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(4, m_meshViewBuffer.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(5, m_materialParameterBuffer.get()));
 
     Core::IDevice* device = m_graphics.getDevice();
     geometry.computeBindingSet = device->createBindingSet(bindingSetDesc, m_computeBindingLayout.get());

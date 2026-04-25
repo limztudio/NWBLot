@@ -294,8 +294,7 @@ static void CreateRendererEntity(
     const TestbedGeometryRef& geometry,
     const TestbedMaterialRef& material,
     const Float4& position,
-    const f32 uniformScale,
-    const Float4& colorTint
+    const f32 uniformScale
 ){
     auto entity = world.createEntity();
     auto& transform = entity.addComponent<NWB::Core::Scene::TransformComponent>();
@@ -305,7 +304,6 @@ static void CreateRendererEntity(
     auto& renderer = entity.addComponent<NWB::Core::ECSGraphics::RendererComponent>();
     renderer.geometry = geometry;
     renderer.material = material;
-    renderer.colorTint = colorTint;
 }
 
 [[nodiscard]] static NWB::Core::ECSGraphics::DeformableJointMatrix BuildProxySkinJoint(const f32 angleRadians){
@@ -350,8 +348,7 @@ static void UpdateProxySkinPalette(
     const TestbedDeformableGeometryRef& geometry,
     const TestbedMaterialRef& material,
     const Float4& position,
-    const f32 uniformScale,
-    const Float4& colorTint
+    const f32 uniformScale
 ){
     auto entity = world.createEntity();
     auto& transform = entity.addComponent<NWB::Core::Scene::TransformComponent>();
@@ -361,7 +358,6 @@ static void UpdateProxySkinPalette(
     auto& renderer = entity.addComponent<NWB::Core::ECSGraphics::DeformableRendererComponent>();
     renderer.deformableGeometry = geometry;
     renderer.material = material;
-    renderer.colorTint = colorTint;
 
     auto& morphWeights = entity.addComponent<NWB::Core::ECSGraphics::DeformableMorphWeightsComponent>();
     morphWeights.weights.resize(1u);
@@ -380,8 +376,7 @@ static void UpdateProxySkinPalette(
 [[nodiscard]] static NWB::Core::ECS::EntityID CreateAccessoryRendererEntity(
     NWB::Core::ECS::World& world,
     const TestbedGeometryRef& geometry,
-    const TestbedMaterialRef& material,
-    const Float4& colorTint){
+    const TestbedMaterialRef& material){
     auto entity = world.createEntity();
     auto& transform = entity.addComponent<NWB::Core::Scene::TransformComponent>();
     transform.scale = Float4(s_AccessoryUniformScale, s_AccessoryUniformScale, s_AccessoryUniformScale);
@@ -389,7 +384,6 @@ static void UpdateProxySkinPalette(
     auto& renderer = entity.addComponent<NWB::Core::ECSGraphics::RendererComponent>();
     renderer.geometry = geometry;
     renderer.material = material;
-    renderer.colorTint = colorTint;
     renderer.visible = false;
     entity.addComponent<NWB::Core::ECSGraphics::DeformableAccessoryAttachmentComponent>();
     return entity.id();
@@ -467,10 +461,14 @@ bool ProjectTestbed::onStartup(){
     scene.mainCamera = __hidden_project_testbed_runtime::CreateMainCameraEntity(*m_world);
     __hidden_project_testbed_runtime::CreateDefaultDirectionalLightEntity(*m_world);
 
-    TestbedMaterialRef cubeMaterial;
-    cubeMaterial.virtualPath = Name("project/materials/mat_test");
-    TestbedMaterialRef transparentMaterial;
-    transparentMaterial.virtualPath = Name("project/materials/mat_transparent");
+    TestbedMaterialRef cubeWarmMaterial;
+    cubeWarmMaterial.virtualPath = Name("project/materials/mat_cube_warm");
+    TestbedMaterialRef cubeCoolMaterial;
+    cubeCoolMaterial.virtualPath = Name("project/materials/mat_cube_cool");
+    TestbedMaterialRef transparentSphereMaterial;
+    transparentSphereMaterial.virtualPath = Name("project/materials/mat_transparent_sphere");
+    TestbedMaterialRef transparentTetrahedronMaterial;
+    transparentTetrahedronMaterial.virtualPath = Name("project/materials/mat_transparent_tetrahedron");
     TestbedMaterialRef deformableUvMaterial;
     deformableUvMaterial.virtualPath = Name("project/materials/mat_deformable_uv");
 
@@ -486,42 +484,37 @@ bool ProjectTestbed::onStartup(){
     __hidden_project_testbed_runtime::CreateRendererEntity(
         *m_world,
         cubeGeometry,
-        cubeMaterial,
+        cubeWarmMaterial,
         Float4(-0.55f, 0.0f, 0.0f),
-        0.65f,
-        Float4(1.0f, 0.42f, 0.34f, 1.0f)
+        0.65f
     );
     __hidden_project_testbed_runtime::CreateRendererEntity(
         *m_world,
         cubeGeometry,
-        cubeMaterial,
+        cubeCoolMaterial,
         Float4(0.55f, 0.0f, 0.0f),
-        0.9f,
-        Float4(0.35f, 0.72f, 1.0f, 1.0f)
+        0.9f
     );
     __hidden_project_testbed_runtime::CreateRendererEntity(
         *m_world,
         sphereGeometry,
-        transparentMaterial,
+        transparentSphereMaterial,
         Float4(1.45f, 0.0f, 0.0f),
-        0.75f,
-        Float4(0.35f, 1.0f, 0.64f, 1.0f)
+        0.75f
     );
     __hidden_project_testbed_runtime::CreateRendererEntity(
         *m_world,
         tetrahedronGeometry,
-        transparentMaterial,
+        transparentTetrahedronMaterial,
         Float4(-1.45f, 0.0f, 0.0f),
-        0.8f,
-        Float4(1.0f, 0.82f, 0.28f, 1.0f)
+        0.8f
     );
     m_deformableMorphEntity = __hidden_project_testbed_runtime::CreateDeformableRendererEntity(
         *m_world,
         deformableProxyGeometry,
         deformableUvMaterial,
         Float4(0.0f, 0.85f, 0.0f),
-        0.8f,
-        Float4(0.78f, 0.55f, 1.0f, 1.0f)
+        0.8f
     );
 
     NWB_LOGGER_ESSENTIAL_INFO(
@@ -901,7 +894,7 @@ void ProjectTestbed::attachPendingSurfaceEditAccessory(){
     __hidden_project_testbed_runtime::TestbedGeometryRef accessoryGeometry;
     accessoryGeometry.virtualPath = Name("project/meshes/mock_earring");
     __hidden_project_testbed_runtime::TestbedMaterialRef accessoryMaterial;
-    accessoryMaterial.virtualPath = Name("project/materials/mat_test");
+    accessoryMaterial.virtualPath = Name("project/materials/mat_accessory_gold");
     NWB::Core::ECSGraphics::DeformableAccessoryAttachmentRecord accessoryRecord;
     accessoryRecord.geometry = accessoryGeometry;
     accessoryRecord.material = accessoryMaterial;
@@ -930,8 +923,7 @@ void ProjectTestbed::attachPendingSurfaceEditAccessory(){
         __hidden_project_testbed_runtime::CreateAccessoryRendererEntity(
             *m_world,
             accessoryGeometry,
-            accessoryMaterial,
-            Float4(1.0f, 0.85f, 0.25f, 1.0f)
+            accessoryMaterial
         )
     ;
 

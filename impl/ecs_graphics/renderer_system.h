@@ -52,10 +52,31 @@ struct InstanceGpuData{
     Float4 rotation = Float4(0.f, 0.f, 0.f, 1.f);
     Float4 translation = Float4(0.f, 0.f, 0.f, 0.f);
     Float4 scale = Float4(1.f, 1.f, 1.f, 0.f);
-    Float4 colorTint = Float4(1.f, 1.f, 1.f, 1.f);
+    UInt4 materialParameters = {};
 };
 static_assert(sizeof(InstanceGpuData) == sizeof(f32) * 16u, "InstanceGpuData layout must match the mesh shaders");
 static_assert(alignof(InstanceGpuData) >= alignof(Float4), "InstanceGpuData must stay SIMD-aligned");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace MaterialParameterValueType{
+    enum Enum : u32{
+        None = 0,
+        Float = 1,
+        Int = 2,
+        UInt = 3,
+        Bool = 4,
+    };
+};
+
+struct MaterialParameterGpuData{
+    UInt4 meta = {};
+    UInt4 data = {};
+};
+static_assert(sizeof(MaterialParameterGpuData) == sizeof(u32) * 8u, "MaterialParameterGpuData layout must match the mesh shaders");
+static_assert(alignof(MaterialParameterGpuData) >= alignof(UInt4), "MaterialParameterGpuData must stay SIMD-aligned");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -104,6 +125,7 @@ private:
         AString shaderVariant;
         Core::Assets::AssetRef<Shader> pixelShader;
         Core::Assets::AssetRef<Shader> meshShader;
+        Vector<MaterialParameterGpuData> parameters;
         f32 alpha = 1.f;
         bool transparent = false;
         bool valid = false;
@@ -133,6 +155,10 @@ private:
     using InstanceGpuDataVector = Vector<
         InstanceGpuData,
         Core::Alloc::ScratchAllocator<InstanceGpuData>
+    >;
+    using MaterialParameterGpuDataVector = Vector<
+        MaterialParameterGpuData,
+        Core::Alloc::ScratchAllocator<MaterialParameterGpuData>
     >;
 
 public:
@@ -292,11 +318,14 @@ private:
         bool transparent,
         MaterialPassDrawItemVector& meshDrawItems,
         MaterialPassDrawItemVector& computeDrawItems,
-        InstanceGpuDataVector& instanceData
+        InstanceGpuDataVector& instanceData,
+        MaterialParameterGpuDataVector& materialParameters
     );
     [[nodiscard]] bool ensureInstanceBufferCapacity(usize instanceCount);
+    [[nodiscard]] bool ensureMaterialParameterBufferCapacity(usize parameterCount);
     [[nodiscard]] bool ensureMeshViewBuffer(Core::ICommandList& commandList, f32 fallbackAspectRatio);
     [[nodiscard]] bool uploadInstanceBuffer(Core::ICommandList& commandList, const InstanceGpuDataVector& instanceData);
+    [[nodiscard]] bool uploadMaterialParameterBuffer(Core::ICommandList& commandList, const MaterialParameterGpuDataVector& materialParameters);
     [[nodiscard]] bool ensureEmulationViewResources();
     void invalidateGeometryBindingSets();
     [[nodiscard]] bool findMaterialPassDrawItemResources(
@@ -360,6 +389,7 @@ private:
     Core::BindingLayoutHandle m_avboitAccumulateBindingLayout;
     Core::SamplerHandle m_deferredSampler;
     Core::BufferHandle m_instanceBuffer;
+    Core::BufferHandle m_materialParameterBuffer;
     Core::BufferHandle m_meshViewBuffer;
     Core::BindingSetHandle m_emulationViewBindingSet;
     Core::ShaderHandle m_emulationVertexShader;
@@ -377,6 +407,7 @@ private:
     DeferredFrameTargets m_deferredTargets;
     UniquePtr<DeformableRuntimeMeshCache> m_deformableRuntimeCache;
     usize m_instanceBufferCapacity = 0;
+    usize m_materialParameterBufferCapacity = 0;
 };
 
 

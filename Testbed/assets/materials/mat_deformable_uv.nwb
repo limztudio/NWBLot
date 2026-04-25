@@ -4,3 +4,6 @@ asset.shaders = {
     "ps": "project/shaders/uv_debug_ps",
     "mesh": "engine/graphics/bxdf_ms",
 };
+asset.parameters = {
+    "color_tint": "float4(0.78, 0.55, 1.0, 1.0)",
+};

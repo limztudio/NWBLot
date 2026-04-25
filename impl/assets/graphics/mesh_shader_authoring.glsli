@@ -39,7 +39,12 @@ struct NwbMeshInstanceData{
     vec4 rotation;
     vec4 translation;
     vec4 scale;
-    vec4 colorTint;
+    uvec4 materialParameters;
+};
+
+struct NwbMaterialParameterData{
+    uvec4 meta;
+    uvec4 data;
 };
 
 #define NWB_MESH_BUILD_VERTEX_SIGNATURE NwbMeshGeneratedVertex nwbMeshBuildVertex(uint triangleIndex, uint corner, NwbMeshSourceVertex source)
@@ -62,6 +67,10 @@ layout(std430, binding = 1) readonly buffer NwbMeshSourceIndicesBuffer{
 
 layout(std430, binding = 3) readonly buffer NwbMeshInstancesBuffer{
     NwbMeshInstanceData nwbMeshInstances[];
+};
+
+layout(std430, binding = 5) readonly buffer NwbMaterialParametersBuffer{
+    NwbMaterialParameterData nwbMaterialParameters[];
 };
 
 layout(push_constant) uniform NwbMeshPushConstants{
@@ -212,12 +221,54 @@ NwbMeshInstanceData nwbMeshLoadInstance(){
     return nwbMeshInstances[nwbMeshInstanceIndex()];
 }
 
-vec4 nwbMeshInstanceColorTint(const NwbMeshInstanceData instance){
-    return instance.colorTint;
+const uint NWB_MATERIAL_PARAMETER_TYPE_FLOAT = 1u;
+const uint NWB_MATERIAL_PARAMETER_TYPE_INT = 2u;
+const uint NWB_MATERIAL_PARAMETER_TYPE_UINT = 3u;
+const uint NWB_MATERIAL_PARAMETER_TYPE_BOOL = 4u;
+
+uint nwbMaterialParameterOffset(const NwbMeshInstanceData instance){
+    return instance.materialParameters.x;
 }
 
-vec4 nwbMeshInstanceColorTint(){
-    return nwbMeshInstanceColorTint(nwbMeshLoadInstance());
+uint nwbMaterialParameterCount(const NwbMeshInstanceData instance){
+    return instance.materialParameters.y;
+}
+
+bool nwbMaterialParameterKeyMatches(const NwbMaterialParameterData parameter, const uvec2 key){
+    return all(equal(parameter.meta.xy, key));
+}
+
+bool nwbMaterialFindParameter(
+    const NwbMeshInstanceData instance,
+    const uvec2 key,
+    const uint valueType,
+    out NwbMaterialParameterData outParameter)
+{
+    const uint offset = nwbMaterialParameterOffset(instance);
+    const uint count = nwbMaterialParameterCount(instance);
+    for(uint i = 0u; i < count; ++i){
+        const NwbMaterialParameterData parameter = nwbMaterialParameters[offset + i];
+        if(parameter.meta.z == valueType && nwbMaterialParameterKeyMatches(parameter, key)){
+            outParameter = parameter;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+vec4 nwbMaterialFindFloat4(const NwbMeshInstanceData instance, const uvec2 key, const vec4 fallbackValue){
+    NwbMaterialParameterData parameter;
+    if(!nwbMaterialFindParameter(instance, key, NWB_MATERIAL_PARAMETER_TYPE_FLOAT, parameter))
+        return fallbackValue;
+
+    const vec4 value = uintBitsToFloat(parameter.data);
+    const uint componentCount = min(parameter.meta.w, 4u);
+    vec4 result = fallbackValue;
+    for(uint i = 0u; i < componentCount; ++i)
+        result[i] = value[i];
+
+    return result;
 }
 
 vec3 nwbMeshTransformPosition(vec3 localPosition, const NwbMeshInstanceData instance){

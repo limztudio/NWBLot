@@ -515,8 +515,16 @@ static void mapping_insert(size_t size, int* fli, int* sli){
     }
     else{
         fl = tlsf_fls_sizet(size);
-        sl = static_cast<int>(size >> (fl - SL_INDEX_COUNT_LOG2)) ^ (1 << SL_INDEX_COUNT_LOG2);
-        fl -= (FL_INDEX_SHIFT - 1);
+        if(fl < FL_INDEX_SHIFT){
+            tlsf_assert(false && "large block first-level index is out of range");
+            fl = 0;
+            sl = 0;
+        }
+        else{
+            const int shift = fl - SL_INDEX_COUNT_LOG2;
+            sl = static_cast<int>(size >> shift) ^ (1 << SL_INDEX_COUNT_LOG2);
+            fl -= (FL_INDEX_SHIFT - 1);
+        }
     }
     *fli = fl;
     *sli = sl;
@@ -525,7 +533,9 @@ static void mapping_insert(size_t size, int* fli, int* sli){
 /* This version rounds up to the next block size (for allocations) */
 static void mapping_search(size_t size, int* fli, int* sli){
     if(size >= SMALL_BLOCK_SIZE){
-        const size_t round = (1 << (tlsf_fls_sizet(size) - SL_INDEX_COUNT_LOG2)) - 1;
+        const int shift = tlsf_fls_sizet(size) - SL_INDEX_COUNT_LOG2;
+        tlsf_assert(shift >= 0 && "large block search shift must be non-negative");
+        const size_t round = (static_cast<size_t>(1) << tlsf_max(shift, 0)) - 1;
         size += round;
     }
     mapping_insert(size, fli, sli);
@@ -534,6 +544,8 @@ static void mapping_search(size_t size, int* fli, int* sli){
 static block_header_t* search_suitable_block(control_t* control, int* fli, int* sli){
     int fl = *fli;
     int sl = *sli;
+    if(fl < 0 || fl >= FL_INDEX_COUNT || sl < 0 || sl >= SL_INDEX_COUNT)
+        return 0;
 
     /*
     ** First, search for a block in the list associated with the given
@@ -562,6 +574,11 @@ static block_header_t* search_suitable_block(control_t* control, int* fli, int* 
 
 /* Remove a free block from the free list.*/
 static void remove_free_block(control_t* control, block_header_t* block, int fl, int sl){
+    if(fl < 0 || fl >= FL_INDEX_COUNT || sl < 0 || sl >= SL_INDEX_COUNT){
+        tlsf_assert(false && "free-list index out of range");
+        return;
+    }
+
     block_header_t* prev = block->prev_free;
     block_header_t* next = block->next_free;
     tlsf_assert(prev && "prev_free field can not be null");
@@ -731,7 +748,7 @@ static block_header_t* block_locate_free(control_t* control, size_t size){
         ** So, we protect against that here, since this is the only callsite of mapping_search.
         ** Note that we don't need to check sl, since it comes from a modulo operation that guarantees it's always in range.
         */
-        if(fl < FL_INDEX_COUNT){
+        if(fl >= 0 && fl < FL_INDEX_COUNT){
             block = search_suitable_block(control, &fl, &sl);
         }
     }

@@ -925,7 +925,6 @@ bool BackendContext::pickPhysicalDevice(){
                 res = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(dev, m_windowSurface, &surfaceCaps);
                 if(res != VK_SUCCESS){
                     errorStream << "\n  - failed to query surface capabilities";
-                    deviceIsGood = false;
                     continue;
                 }
 
@@ -933,14 +932,12 @@ bool BackendContext::pickPhysicalDevice(){
                 res = vkGetPhysicalDeviceSurfaceFormatsKHR(dev, m_windowSurface, &fmtCount, nullptr);
                 if(res != VK_SUCCESS){
                     errorStream << "\n  - failed to query surface format count";
-                    deviceIsGood = false;
                     continue;
                 }
                 Vector<VkSurfaceFormatKHR, Alloc::ScratchAllocator<VkSurfaceFormatKHR>> surfaceFmts(fmtCount, Alloc::ScratchAllocator<VkSurfaceFormatKHR>(scratchArena));
                 res = vkGetPhysicalDeviceSurfaceFormatsKHR(dev, m_windowSurface, &fmtCount, surfaceFmts.data());
                 if(res != VK_SUCCESS){
                     errorStream << "\n  - failed to query surface formats";
-                    deviceIsGood = false;
                     continue;
                 }
 
@@ -1037,9 +1034,6 @@ bool BackendContext::createVulkanDevice(){
                 m_enabledExtensions.device.emplace(name, rtIt.value());
         }
     }
-
-    if(!m_deviceParams.headlessDevice)
-        m_enabledExtensions.device.emplace(VK_KHR_SWAPCHAIN_EXTENSION_NAME, DeviceExtensionFeature::None);
 
     VkPhysicalDeviceProperties physicalDeviceProperties;
     vkGetPhysicalDeviceProperties(m_vulkanPhysicalDevice, &physicalDeviceProperties);
@@ -1698,6 +1692,8 @@ bool BackendContext::createDevice(){
         m_optionalExtensions.device.emplace(VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME, DeviceExtensionFeature::None);
 
     m_swapChainState.backBufferFormat = VulkanDetail::GetBackBufferFormat(m_deviceParams);
+    if(!m_deviceParams.headlessDevice)
+        m_enabledExtensions.device.emplace(VK_KHR_SWAPCHAIN_EXTENSION_NAME, DeviceExtensionFeature::None);
     if(!m_deviceParams.headlessDevice){
         if(!createWindowSurface())
             return false;

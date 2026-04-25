@@ -234,7 +234,7 @@ private:
 
         for(auto it = m_handlers.crbegin(); it != m_handlers.crend(); ++it){
             IInputEventHandler* handler = *it;
-            if(!m_pendingHandlerMutations.empty() && isHandlerPendingRemoval(*handler))
+            if(m_pendingHandlerRemovalCount > 0 && isHandlerPendingRemoval(*handler))
                 continue;
             if(dispatchFunc(*handler))
                 break;
@@ -253,6 +253,7 @@ private:
 private:
     List<IInputEventHandler*> m_handlers;
     Vector<HandlerMutation> m_pendingHandlerMutations;
+    usize m_pendingHandlerRemovalCount = 0;
     u32 m_dispatchDepth = 0;
     f32 m_mousePositionScaleX = 1.f;
     f32 m_mousePositionScaleY = 1.f;

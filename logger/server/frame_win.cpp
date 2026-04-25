@@ -48,17 +48,17 @@ public:
 
 
 // in windows, the frame is a singleton
-static Frame* g_Frame = nullptr;
-static HFONT g_Font = nullptr;
-static HWND g_ListHwnd = nullptr;
-static Deque<Pair<BasicString<tchar>, Log::Type::Enum>> g_Messages;
+static Frame* s_Frame = nullptr;
+static HFONT s_Font = nullptr;
+static HWND s_ListHwnd = nullptr;
+static Deque<Pair<BasicString<tchar>, Log::Type::Enum>> s_Messages;
 
-static Futex g_ListMutex;
+static Futex s_ListMutex;
 
-static WNDPROC g_OrigListProc = nullptr;
+static WNDPROC s_OrigListProc = nullptr;
 
 static bool IsMessageIndexValid(UINT itemID){
-    return static_cast<usize>(itemID) < g_Messages.size();
+    return static_cast<usize>(itemID) < s_Messages.size();
 }
 
 static LRESULT CALLBACK ListProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
@@ -66,20 +66,20 @@ static LRESULT CALLBACK ListProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
         SendMessage(GetParent(hwnd), uMsg, wParam, lParam);
         return 0;
     }
-    return CallWindowProc(g_OrigListProc, hwnd, uMsg, wParam, lParam);
+    return CallWindowProc(s_OrigListProc, hwnd, uMsg, wParam, lParam);
 }
 
 static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
-    if(auto* frame = g_Frame){
+    if(auto* frame = s_Frame){
         LRESULT lifecycleResult = 0;
         if(HandleWin32FrameLifecycleMessage(
             hwnd,
             uMsg,
             wParam,
             [](){
-                if(g_Font){
-                    DeleteObject(g_Font);
-                    g_Font = nullptr;
+                if(s_Font){
+                    DeleteObject(s_Font);
+                    s_Font = nullptr;
                 }
             },
             [&](const bool isActive){ frame->data<WinFrame>().setActive(isActive); },
@@ -90,7 +90,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         switch(uMsg){
         case WM_CREATE:
         {
-            g_Font = CreateFont(
+            s_Font = CreateFont(
                 10,
                 0,
                 0, 0,
@@ -106,7 +106,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                 NWB_TEXT("Terminal")
             );
 
-            g_ListHwnd = CreateWindowEx(
+            s_ListHwnd = CreateWindowEx(
                 0,
                 NWB_TEXT("LISTBOX"),
                 nullptr,
@@ -120,11 +120,11 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                 frame->data<WinFrame>().instance(),
                 nullptr
             );
-            if(!g_ListHwnd)
+            if(!s_ListHwnd)
                 PostQuitMessage(0);
             else{
-                SendMessage(g_ListHwnd, WM_SETFONT, reinterpret_cast<WPARAM>(g_Font), TRUE);
-                g_OrigListProc = reinterpret_cast<WNDPROC>(SetWindowLongPtr(g_ListHwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(ListProc)));
+                SendMessage(s_ListHwnd, WM_SETFONT, reinterpret_cast<WPARAM>(s_Font), TRUE);
+                s_OrigListProc = reinterpret_cast<WNDPROC>(SetWindowLongPtr(s_ListHwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(ListProc)));
             }
         }
         return 0;
@@ -133,18 +133,18 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         {
             RECT clientRect;
             GetClientRect(hwnd, &clientRect);
-            MoveWindow(g_ListHwnd, clientRect.left, clientRect.top, clientRect.right - clientRect.left, clientRect.bottom - clientRect.top, TRUE);
+            MoveWindow(s_ListHwnd, clientRect.left, clientRect.top, clientRect.right - clientRect.left, clientRect.bottom - clientRect.top, TRUE);
         }
         return 0;
 
         case WM_EXITSIZEMOVE:
         {
-            SendMessage(g_ListHwnd, WM_SETREDRAW, FALSE, 0);
-            SendMessage(g_ListHwnd, LB_RESETCONTENT, 0, 0);
-            for(auto& str : g_Messages)
-                SendMessage(g_ListHwnd, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(str.first().c_str()));
-            SendMessage(g_ListHwnd, WM_SETREDRAW, TRUE, 0);
-            InvalidateRect(g_ListHwnd, nullptr, TRUE);
+            SendMessage(s_ListHwnd, WM_SETREDRAW, FALSE, 0);
+            SendMessage(s_ListHwnd, LB_RESETCONTENT, 0, 0);
+            for(auto& str : s_Messages)
+                SendMessage(s_ListHwnd, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(str.first().c_str()));
+            SendMessage(s_ListHwnd, WM_SETREDRAW, TRUE, 0);
+            InvalidateRect(s_ListHwnd, nullptr, TRUE);
         }
         return 0;
 
@@ -152,15 +152,15 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         {
             auto* mis = reinterpret_cast<LPMEASUREITEMSTRUCT>(lParam);
             if(IsMessageIndexValid(mis->itemID)){
-                const auto& curStr = g_Messages[static_cast<usize>(mis->itemID)];
+                const auto& curStr = s_Messages[static_cast<usize>(mis->itemID)];
 
                 RECT rect;
                 GetClientRect(hwnd, &rect);
                 rect.right -= rect.left;
                 rect.left = rect.top = rect.bottom = 0;
 
-                HDC hdc = GetDC(g_ListHwnd);
-                auto* hFont = reinterpret_cast<HFONT>(SendMessage(g_ListHwnd, WM_GETFONT, 0, 0));
+                HDC hdc = GetDC(s_ListHwnd);
+                auto* hFont = reinterpret_cast<HFONT>(SendMessage(s_ListHwnd, WM_GETFONT, 0, 0));
                 auto* hOldFont = reinterpret_cast<HFONT>(SelectObject(hdc, hFont));
 
                 DrawText(hdc, curStr.first().c_str(), -1, &rect, DT_WORDBREAK | DT_LEFT | DT_CALCRECT);
@@ -168,7 +168,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                 mis->itemHeight = rect.bottom - rect.top;
 
                 SelectObject(hdc, hOldFont);
-                ReleaseDC(g_ListHwnd, hdc);
+                ReleaseDC(s_ListHwnd, hdc);
             }
         }
         return TRUE;
@@ -176,10 +176,10 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         case WM_KEYDOWN:
         {
             if(wParam == 'C' && (GetKeyState(VK_CONTROL) & 0x8000)){
-                ScopedLock lock(g_ListMutex);
-                if(!g_Messages.empty()){
+                ScopedLock lock(s_ListMutex);
+                if(!s_Messages.empty()){
                     BasicString<tchar> combined;
-                    for(const auto& msg : g_Messages){
+                    for(const auto& msg : s_Messages){
                         combined += msg.first();
                         combined += NWB_TEXT("\r\n");
                     }
@@ -216,7 +216,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         {
             auto* dis = reinterpret_cast<LPDRAWITEMSTRUCT>(lParam);
             if(IsMessageIndexValid(dis->itemID)){
-                const auto& curData = g_Messages[static_cast<usize>(dis->itemID)];
+                const auto& curData = s_Messages[static_cast<usize>(dis->itemID)];
 
                 HDC hdc = dis->hDC;
                 RECT rect = dis->rcItem;
@@ -313,15 +313,15 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 
 
 Frame::Frame(void* inst){
-    FrameDetail::g_Frame = this;
+    FrameDetail::s_Frame = this;
 
     data<FrameDetail::WinFrame>().setInstance(reinterpret_cast<HINSTANCE>(inst));
 }
 Frame::~Frame(){
     cleanup();
 
-    FrameDetail::g_Messages.clear();
-    FrameDetail::g_Frame = nullptr;
+    FrameDetail::s_Messages.clear();
+    FrameDetail::s_Frame = nullptr;
 }
 
 bool Frame::init(){
@@ -395,14 +395,14 @@ bool Frame::mainLoop(){
 }
 
 void Frame::print(BasicStringView<tchar> str, Log::Type::Enum type){
-    ScopedLock lock(FrameDetail::g_ListMutex);
+    ScopedLock lock(FrameDetail::s_ListMutex);
 
-    FrameDetail::g_Messages.emplace_back(BasicString<tchar>(str), type);
-    SendMessage(FrameDetail::g_ListHwnd, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(FrameDetail::g_Messages[FrameDetail::g_Messages.size() - 1].first().c_str()));
+    FrameDetail::s_Messages.emplace_back(BasicString<tchar>(str), type);
+    SendMessage(FrameDetail::s_ListHwnd, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(FrameDetail::s_Messages[FrameDetail::s_Messages.size() - 1].first().c_str()));
 
-    auto numItem = SendMessage(FrameDetail::g_ListHwnd, LB_GETCOUNT, 0, 0);
+    auto numItem = SendMessage(FrameDetail::s_ListHwnd, LB_GETCOUNT, 0, 0);
     if(numItem > 0)
-        SendMessage(FrameDetail::g_ListHwnd, LB_SETCURSEL, numItem - 1, 0);
+        SendMessage(FrameDetail::s_ListHwnd, LB_SETCURSEL, numItem - 1, 0);
 }
 
 

@@ -38,7 +38,7 @@ namespace FrameDetail{
 
 
 // in windows, the frame is a singleton
-static Frame* g_Frame = nullptr;
+static Frame* s_Frame = nullptr;
 
 
 static bool IsExtendedKey(LPARAM lParam){
@@ -275,7 +275,7 @@ static void DispatchCharInput(Frame& frame, WPARAM wParam){
 }
 
 static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
-    if(auto* frame = g_Frame){
+    if(auto* frame = s_Frame){
         LRESULT lifecycleResult = 0;
         if(HandleWin32FrameLifecycleMessage(
             hwnd,
@@ -522,12 +522,12 @@ bool Frame::mainLoop(){
 }
 
 void Frame::setupPlatform(void* inst){
-    FrameDetail::g_Frame = this;
+    FrameDetail::s_Frame = this;
     data<Common::WinFrame>().setActive(false);
     data<Common::WinFrame>().setInstance(reinterpret_cast<HINSTANCE>(inst));
 }
 void Frame::cleanupPlatform(){
-    FrameDetail::g_Frame = nullptr;
+    FrameDetail::s_Frame = nullptr;
 }
 
 

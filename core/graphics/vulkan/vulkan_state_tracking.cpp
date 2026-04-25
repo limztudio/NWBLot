@@ -187,37 +187,50 @@ void CommandList::setTextureState(ITexture* textureResource, TextureSubresourceS
     if(!needsBarrier)
         return;
 
-    const usize firstBarrierIndex = m_pendingImageBarriers.size();
     if(uniformOldState){
-        m_pendingImageBarriers.push_back(__hidden_vulkan_state_tracking::BuildTextureStateBarrier(
+        const VkImageMemoryBarrier2 barrier = __hidden_vulkan_state_tracking::BuildTextureStateBarrier(
             texture->m_image,
             texture->m_desc.format,
             resolvedSubresources,
             oldState,
             stateBits
-        ));
-    }
-    else{
-        __hidden_vulkan_state_tracking::ReserveAdditionalCapacity(m_pendingImageBarriers, subresourceCount);
-        for(ArraySlice arraySlice = resolvedSubresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
-            for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
-                ResourceStates::Mask subresourceOldState = ResourceStates::Unknown;
-                if(!m_stateTracker->getTransientTextureState(textureResource, arraySlice, mipLevel, subresourceOldState))
-                    return;
-                if(
-                    subresourceOldState == stateBits
-                    && (subresourceOldState != ResourceStates::UnorderedAccess || !uavBarrierEnabled)
-                )
-                    continue;
+        );
 
-                m_pendingImageBarriers.push_back(__hidden_vulkan_state_tracking::BuildTextureStateBarrier(
-                    texture->m_image,
-                    texture->m_desc.format,
-                    TextureSubresourceSet(mipLevel, 1u, arraySlice, 1u),
-                    subresourceOldState,
-                    stateBits
-                ));
-            }
+        m_stateTracker->beginTrackingTransientTexture(textureResource, resolvedSubresources, stateBits);
+
+        if(!m_enableAutomaticBarriers){
+            m_pendingImageBarriers.push_back(barrier);
+            return;
+        }
+
+        VkDependencyInfo depInfo = VulkanDetail::MakeVkStruct<VkDependencyInfo>(VK_STRUCTURE_TYPE_DEPENDENCY_INFO);
+        depInfo.imageMemoryBarrierCount = 1;
+        depInfo.pImageMemoryBarriers = &barrier;
+
+        vkCmdPipelineBarrier2(m_currentCmdBuf->m_cmdBuf, &depInfo);
+        return;
+    }
+
+    const usize firstBarrierIndex = m_pendingImageBarriers.size();
+    __hidden_vulkan_state_tracking::ReserveAdditionalCapacity(m_pendingImageBarriers, subresourceCount);
+    for(ArraySlice arraySlice = resolvedSubresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
+        for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
+            ResourceStates::Mask subresourceOldState = ResourceStates::Unknown;
+            if(!m_stateTracker->getTransientTextureState(textureResource, arraySlice, mipLevel, subresourceOldState))
+                return;
+            if(
+                subresourceOldState == stateBits
+                && (subresourceOldState != ResourceStates::UnorderedAccess || !uavBarrierEnabled)
+            )
+                continue;
+
+            m_pendingImageBarriers.push_back(__hidden_vulkan_state_tracking::BuildTextureStateBarrier(
+                texture->m_image,
+                texture->m_desc.format,
+                TextureSubresourceSet(mipLevel, 1u, arraySlice, 1u),
+                subresourceOldState,
+                stateBits
+            ));
         }
     }
 

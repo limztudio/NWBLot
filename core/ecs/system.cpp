@@ -97,26 +97,38 @@ void SystemScheduler::rebuild(){
         systemCount, 0,
         Alloc::ScratchAllocator<usize>(scratchArena)
     );
+    usize componentAccessReserve = 0;
+    for(ISystem* sys : m_allSystems){
+        if(sys->m_access.size() > Limit<usize>::s_Max - componentAccessReserve){
+            componentAccessReserve = systemCount;
+            break;
+        }
+        componentAccessReserve += sys->m_access.size();
+    }
+
+    ComponentAccessSet stageWrites(
+        0,
+        Hasher<ComponentTypeId>(),
+        EqualTo<ComponentTypeId>(),
+        ScratchComponentTypeAllocator(scratchArena)
+    );
+    ComponentAccessSet stageReads(
+        0,
+        Hasher<ComponentTypeId>(),
+        EqualTo<ComponentTypeId>(),
+        ScratchComponentTypeAllocator(scratchArena)
+    );
+    stageWrites.reserve(componentAccessReserve);
+    stageReads.reserve(componentAccessReserve);
+
     usize numAssigned = 0;
 
     while(numAssigned < systemCount){
         const usize stageTag = m_stages.size() + 1u;
         usize stageSize = 0;
 
-        ComponentAccessSet stageWrites(
-            0,
-            Hasher<ComponentTypeId>(),
-            EqualTo<ComponentTypeId>(),
-            ScratchComponentTypeAllocator(scratchArena)
-        );
-        ComponentAccessSet stageReads(
-            0,
-            Hasher<ComponentTypeId>(),
-            EqualTo<ComponentTypeId>(),
-            ScratchComponentTypeAllocator(scratchArena)
-        );
-        stageWrites.reserve(systemCount);
-        stageReads.reserve(systemCount);
+        stageWrites.clear();
+        stageReads.clear();
 
         for(usize i = 0; i < systemCount; ++i){
             if(assignedStage[i] != 0)

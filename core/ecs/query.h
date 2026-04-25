@@ -170,6 +170,10 @@ public:
         return IteratorType(m_pools, m_anchorPoolIndex, m_count, m_count, m_valid);
     }
 
+    [[nodiscard]] usize candidateCount()const noexcept{
+        return m_valid ? m_count : 0u;
+    }
+
 
 public:
     template<typename Func>

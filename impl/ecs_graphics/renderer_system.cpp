@@ -107,6 +107,11 @@ struct MeshViewBasis{
     Float4 positionDepthBias = Float4(0.f, 0.f, 0.f, 0.f);
 };
 
+struct MaterialParameterBlock{
+    u32 offset = 0;
+    u32 count = 0;
+};
+
 static_assert(sizeof(ShaderDrivenPushConstants) == 48, "ShaderDrivenPushConstants layout must stay stable");
 static_assert(sizeof(AvboitPushConstants) == 48, "AvboitPushConstants layout must stay stable");
 static_assert(sizeof(TransparentDrawPushConstants) == 96, "TransparentDrawPushConstants layout must stay stable");
@@ -1880,13 +1885,63 @@ void RendererSystem::gatherMaterialPassDrawItems(
     if(!framebuffer)
         return;
 
-    const usize rendererCapacity = m_world.entityCount();
+    auto rendererView = m_world.view<RendererComponent>();
+    auto deformableRendererView = m_world.view<DeformableRendererComponent>();
+    const usize rendererCapacity = rendererView.candidateCount() + deformableRendererView.candidateCount();
     meshDrawItems.reserve(rendererCapacity);
     computeDrawItems.reserve(rendererCapacity);
     instanceData.reserve(rendererCapacity);
     materialParameters.reserve(rendererCapacity);
 
+    using MaterialParameterBlockPair = Pair<Name, __hidden_ecs_graphics::MaterialParameterBlock>;
+    using MaterialParameterBlockMap = HashMap<
+        Name,
+        __hidden_ecs_graphics::MaterialParameterBlock,
+        Hasher<Name>,
+        EqualTo<Name>,
+        Core::Alloc::ScratchAllocator<MaterialParameterBlockPair>
+    >;
+    MaterialParameterBlockMap materialParameterBlocks(
+        0,
+        Hasher<Name>(),
+        EqualTo<Name>(),
+        Core::Alloc::ScratchAllocator<MaterialParameterBlockPair>(materialParameters.get_allocator())
+    );
+    materialParameterBlocks.reserve(rendererCapacity);
+
     const Core::FramebufferInfo& framebufferInfo = framebuffer->getFramebufferInfo();
+
+    auto ensureMaterialParameterBlock = [&](
+        const MaterialSurfaceInfo& materialInfo,
+        __hidden_ecs_graphics::MaterialParameterBlock& outBlock
+    ) -> bool{
+        const auto foundBlock = materialParameterBlocks.find(materialInfo.materialName);
+        if(foundBlock != materialParameterBlocks.end()){
+            outBlock = foundBlock.value();
+            return true;
+        }
+
+        if(materialParameters.size() > static_cast<usize>(Limit<u32>::s_Max)){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material parameter offset exceeds u32 limits"));
+            return false;
+        }
+        if(materialInfo.parameters.size() > static_cast<usize>(Limit<u32>::s_Max)){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material parameter count exceeds u32 limits"));
+            return false;
+        }
+        if(materialInfo.parameters.size() > static_cast<usize>(Limit<u32>::s_Max) - materialParameters.size()){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: gathered material parameter count exceeds u32 limits"));
+            return false;
+        }
+
+        outBlock.offset = static_cast<u32>(materialParameters.size());
+        outBlock.count = static_cast<u32>(materialInfo.parameters.size());
+        for(const MaterialParameterGpuData& parameter : materialInfo.parameters)
+            materialParameters.push_back(parameter);
+
+        materialParameterBlocks.emplace(materialInfo.materialName, outBlock);
+        return true;
+    };
 
     auto appendDrawForGeometry = [&](
         const Core::ECS::EntityID entity,
@@ -1922,29 +1977,16 @@ void RendererSystem::gatherMaterialPassDrawItems(
                 NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: renderer instance count exceeds u32 limits"));
                 return Limit<u32>::s_Max;
             }
-            if(materialParameters.size() > static_cast<usize>(Limit<u32>::s_Max)){
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material parameter offset exceeds u32 limits"));
+
+            __hidden_ecs_graphics::MaterialParameterBlock parameterBlock;
+            if(!ensureMaterialParameterBlock(*materialInfo, parameterBlock))
                 return Limit<u32>::s_Max;
-            }
-            if(materialInfo->parameters.size() > static_cast<usize>(Limit<u32>::s_Max)){
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material parameter count exceeds u32 limits"));
-                return Limit<u32>::s_Max;
-            }
-            if(materialInfo->parameters.size() > static_cast<usize>(Limit<u32>::s_Max) - materialParameters.size()){
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: gathered material parameter count exceeds u32 limits"));
-                return Limit<u32>::s_Max;
-            }
 
             const u32 instanceIndex = static_cast<u32>(instanceData.size());
-            const u32 materialParameterOffset = static_cast<u32>(materialParameters.size());
-            const u32 materialParameterCount = static_cast<u32>(materialInfo->parameters.size());
-            for(const MaterialParameterGpuData& parameter : materialInfo->parameters)
-                materialParameters.push_back(parameter);
-
             instanceData.push_back(__hidden_ecs_graphics::BuildInstanceGpuData(
                 transform,
-                materialParameterOffset,
-                materialParameterCount
+                parameterBlock.offset,
+                parameterBlock.count
             ));
             return instanceIndex;
         };
@@ -1979,7 +2021,6 @@ void RendererSystem::gatherMaterialPassDrawItems(
         }
     };
 
-    auto rendererView = m_world.view<RendererComponent>();
     for(auto&& [entity, renderer] : rendererView){
         if(!renderer.visible)
             continue;
@@ -1991,7 +2032,6 @@ void RendererSystem::gatherMaterialPassDrawItems(
             appendDrawForGeometry(entity, renderer.material, *geometry);
     }
 
-    auto deformableRendererView = m_world.view<DeformableRendererComponent>();
     for(auto&& [entity, renderer] : deformableRendererView){
         if(!renderer.visible || !renderer.runtimeMesh.valid())
             continue;

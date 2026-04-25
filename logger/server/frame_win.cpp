@@ -337,7 +337,8 @@ bool Frame::init(){
         wc.lpfnWndProc = FrameDetail::WinProc;
         wc.hInstance = data<FrameDetail::WinFrame>().instance();
         wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
-        wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW);
+        // WNDCLASSEX encodes system color brushes as COLOR_* + 1.
+        wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
         wc.lpszClassName = ClassName;
     }
     if(!RegisterClassEx(&wc))

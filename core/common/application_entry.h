@@ -5,10 +5,13 @@
 #pragma once
 
 
-#include "platform.h"
-#include "type.h"
+#include "common.h"
 
-#include <core/common/common.h>
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_COMMON_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -25,7 +28,7 @@ using AnsiEntryPointFn = int(*)(isize, char**, void*);
 
 template<typename EntryPoint, typename CharT>
 [[nodiscard]] inline int InvokeEntryPoint(EntryPoint entryPoint, const isize argc, CharT** argv, void* instance){
-    NWB::Core::Common::InitializerGuard commonInitializerGuard;
+    InitializerGuard commonInitializerGuard;
     if(!commonInitializerGuard.initialize())
         return -1;
 
@@ -42,11 +45,23 @@ template<typename EntryPoint, typename CharT>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+NWB_COMMON_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #if defined(NWB_PLATFORM_WINDOWS)
 #include <stdlib.h>
 #include <windows.h>
 #if defined(NWB_UNICODE)
 #include <shellapi.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_COMMON_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -82,7 +97,7 @@ private:
 
 template<typename EntryPoint>
 [[nodiscard]] inline int InvokeWindowsUnicodeEntryPoint(EntryPoint entryPoint, HINSTANCE hInstance){
-    NWB::Core::Common::InitializerGuard commonInitializerGuard;
+    InitializerGuard commonInitializerGuard;
     if(!commonInitializerGuard.initialize())
         return -1;
 
@@ -95,7 +110,7 @@ template<typename EntryPoint>
 
 template<typename EntryPoint>
 [[nodiscard]] inline int InvokeWindowsUnicodeConsoleEntryPoint(EntryPoint entryPoint){
-    NWB::Core::Common::InitializerGuard commonInitializerGuard;
+    InitializerGuard commonInitializerGuard;
     if(!commonInitializerGuard.initialize())
         return -1;
 
@@ -116,15 +131,21 @@ template<typename EntryPoint>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+NWB_COMMON_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #define NWB_DEFINE_APPLICATION_ENTRY_POINT(entryPoint) \
     int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nCmdShow){ \
         static_cast<void>(hPrevInstance); \
         static_cast<void>(lpCmdLine); \
         static_cast<void>(nCmdShow); \
-        return ApplicationEntryDetail::InvokeWindowsUnicodeEntryPoint(static_cast<ApplicationEntryDetail::UnicodeEntryPointFn>(entryPoint), hInstance); \
+        return ::NWB::Core::Common::ApplicationEntryDetail::InvokeWindowsUnicodeEntryPoint(static_cast<::NWB::Core::Common::ApplicationEntryDetail::UnicodeEntryPointFn>(entryPoint), hInstance); \
     } \
     int main(int, char**){ \
-        return ApplicationEntryDetail::InvokeWindowsUnicodeConsoleEntryPoint(static_cast<ApplicationEntryDetail::UnicodeEntryPointFn>(entryPoint)); \
+        return ::NWB::Core::Common::ApplicationEntryDetail::InvokeWindowsUnicodeConsoleEntryPoint(static_cast<::NWB::Core::Common::ApplicationEntryDetail::UnicodeEntryPointFn>(entryPoint)); \
     }
 #else
 #define NWB_DEFINE_APPLICATION_ENTRY_POINT(entryPoint) \
@@ -132,16 +153,16 @@ template<typename EntryPoint>
         static_cast<void>(hPrevInstance); \
         static_cast<void>(lpCmdLine); \
         static_cast<void>(nCmdShow); \
-        return ApplicationEntryDetail::InvokeEntryPoint(static_cast<ApplicationEntryDetail::AnsiEntryPointFn>(entryPoint), static_cast<isize>(__argc), __argv, hInstance); \
+        return ::NWB::Core::Common::ApplicationEntryDetail::InvokeEntryPoint(static_cast<::NWB::Core::Common::ApplicationEntryDetail::AnsiEntryPointFn>(entryPoint), static_cast<isize>(__argc), __argv, hInstance); \
     } \
     int main(int argc, char** argv){ \
-        return ApplicationEntryDetail::InvokeEntryPoint(static_cast<ApplicationEntryDetail::AnsiEntryPointFn>(entryPoint), static_cast<isize>(argc), argv, GetModuleHandleA(nullptr)); \
+        return ::NWB::Core::Common::ApplicationEntryDetail::InvokeEntryPoint(static_cast<::NWB::Core::Common::ApplicationEntryDetail::AnsiEntryPointFn>(entryPoint), static_cast<isize>(argc), argv, GetModuleHandleA(nullptr)); \
     }
 #endif
 #elif defined(NWB_PLATFORM_LINUX)
 #define NWB_DEFINE_APPLICATION_ENTRY_POINT(entryPoint) \
     int main(int argc, char** argv){ \
-        return ApplicationEntryDetail::InvokeEntryPoint(static_cast<int(*)(isize, char**, void*)>(entryPoint), static_cast<isize>(argc), argv, nullptr); \
+        return ::NWB::Core::Common::ApplicationEntryDetail::InvokeEntryPoint(static_cast<::NWB::Core::Common::ApplicationEntryDetail::AnsiEntryPointFn>(entryPoint), static_cast<isize>(argc), argv, nullptr); \
     }
 #endif
 

@@ -14,7 +14,7 @@
 #include "geometry_asset.h"
 #include "material_asset.h"
 #include "shader_asset.h"
-#include <impl/shader_stage_names.h>
+#include <impl/assets_graphics/shader_stage_names.h>
 
 #include <core/graphics/shader_archive.h>
 #include <core/graphics/shader_cook.h>

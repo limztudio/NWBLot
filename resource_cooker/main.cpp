@@ -78,7 +78,7 @@ static int EntryPoint(const isize argc, wchar** argv, void*){
 }
 #endif
 
-#include <global/application_entry.h>
+#include <core/common/application_entry.h>
 
 NWB_DEFINE_APPLICATION_ENTRY_POINT(EntryPoint)
 

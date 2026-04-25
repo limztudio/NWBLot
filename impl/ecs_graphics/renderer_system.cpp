@@ -1874,11 +1874,6 @@ void RendererSystem::renderMaterialPass(
     if(pass != MaterialPipelinePass::Opaque && (!passBindingSet || !avboitTargets || !avboitTargets->valid()))
         return;
 
-    if(passBindingSet){
-        commandList.setResourceStatesForBindingSet(passBindingSet);
-        commandList.commitBarriers();
-    }
-
     Core::Alloc::ScratchArena<> scratchArena;
     MaterialPassDrawItemVector meshDrawItems{Core::Alloc::ScratchAllocator<MaterialPassDrawItem>(scratchArena)};
     MaterialPassDrawItemVector computeDrawItems{Core::Alloc::ScratchAllocator<MaterialPassDrawItem>(scratchArena)};
@@ -1896,10 +1891,18 @@ void RendererSystem::renderMaterialPass(
         return;
 
     gatherMaterialPassDrawItems(framebuffer, pass, transparent, meshDrawItems, computeDrawItems, instanceData, materialParameters);
+    if(meshDrawItems.empty() && computeDrawItems.empty())
+        return;
+
     if(!uploadInstanceBuffer(commandList, instanceData))
         return;
     if(!uploadMaterialParameterBuffer(commandList, materialParameters))
         return;
+
+    if(passBindingSet){
+        commandList.setResourceStatesForBindingSet(passBindingSet);
+        commandList.commitBarriers();
+    }
 
     const MaterialPassDrawContext drawContext{ commandList, framebuffer, pass, passBindingSet, avboitTargets, viewportState };
     renderMeshMaterialPassDrawItems(drawContext, meshDrawItems);
@@ -2322,6 +2325,8 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
     const MaterialPassDrawContext& context,
     const MaterialPassDrawItemVector& drawItems
 ){
+    if(drawItems.empty())
+        return;
     if(!m_meshViewBuffer || !ensureEmulationViewResources() || !m_emulationViewBindingSet)
         return;
 

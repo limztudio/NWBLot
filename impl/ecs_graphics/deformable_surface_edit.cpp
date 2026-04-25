@@ -1761,17 +1761,14 @@ bool CommitDeformableRestSpaceHole(
     if(!__hidden_deformable_surface_edit::BuildOrderedBoundaryLoop(boundaryEdges, instance, frame, orderedBoundaryEdges))
         return false;
 
-    Vector<DeformableVertexRest> newRestVertices = instance.restVertices;
-    Vector<SkinInfluence4> newSkin = instance.skin;
-    Vector<SourceSample> newSourceSamples = instance.sourceSamples;
-    Vector<DeformableMorph> newMorphs = instance.morphs;
     Vector<u32> newIndices;
     u32 newSourceTriangleCount = instance.sourceTriangleCount;
-    if(newSourceSamples.empty() || newSourceSamples.size() != instance.restVertices.size() || newSourceTriangleCount == 0u)
+    if(instance.sourceSamples.empty() || instance.sourceSamples.size() != instance.restVertices.size() || newSourceTriangleCount == 0u)
         return false;
 
+    const bool addWall = params.depth > DeformableRuntime::s_Epsilon;
     usize wallVertexCount = 0u;
-    if(params.depth > DeformableRuntime::s_Epsilon){
+    if(addWall){
         if(orderedBoundaryEdges.size() > Limit<usize>::s_Max / 6u)
             return false;
 
@@ -1783,7 +1780,7 @@ bool CommitDeformableRestSpaceHole(
     }
 
     const usize removedIndexCount = static_cast<usize>(removedTriangleCount) * 3u;
-    const usize wallIndexCount = params.depth > DeformableRuntime::s_Epsilon
+    const usize wallIndexCount = addWall
         ? orderedBoundaryEdges.size() * 6u
         : 0u
     ;
@@ -1799,7 +1796,16 @@ bool CommitDeformableRestSpaceHole(
     reservedVertexCount += wallVertexCount;
     if(reservedVertexCount > static_cast<usize>(Limit<u32>::s_Max))
         return false;
-    if(reservedVertexCount != instance.restVertices.size()){
+
+    Vector<DeformableVertexRest> newRestVertices;
+    Vector<SkinInfluence4> newSkin;
+    Vector<SourceSample> newSourceSamples;
+    Vector<DeformableMorph> newMorphs;
+    if(addWall){
+        newRestVertices = instance.restVertices;
+        newSkin = instance.skin;
+        newSourceSamples = instance.sourceSamples;
+        newMorphs = instance.morphs;
         newRestVertices.reserve(reservedVertexCount);
         if(!newSkin.empty())
             newSkin.reserve(reservedVertexCount);
@@ -1822,7 +1828,7 @@ bool CommitDeformableRestSpaceHole(
 
     u32 firstWallVertex = Limit<u32>::s_Max;
     u32 addedWallVertexCount = 0u;
-    if(params.depth > DeformableRuntime::s_Epsilon){
+    if(addWall){
         const usize boundaryVertexCount = orderedBoundaryEdges.size();
         firstWallVertex = static_cast<u32>(newRestVertices.size());
         addedWallVertexCount = static_cast<u32>(boundaryVertexCount);
@@ -1959,22 +1965,24 @@ bool CommitDeformableRestSpaceHole(
     }
 
     if(!DeformableValidation::ValidRuntimePayloadArrays(
-            newRestVertices,
+            addWall ? newRestVertices : instance.restVertices,
             newIndices,
             newSourceTriangleCount,
-            newSkin,
-            newSourceSamples,
-            newMorphs
+            addWall ? newSkin : instance.skin,
+            addWall ? newSourceSamples : instance.sourceSamples,
+            addWall ? newMorphs : instance.morphs
         )
     )
         return false;
 
-    instance.restVertices = Move(newRestVertices);
+    if(addWall){
+        instance.restVertices = Move(newRestVertices);
+        instance.skin = Move(newSkin);
+        instance.sourceSamples = Move(newSourceSamples);
+        instance.morphs = Move(newMorphs);
+    }
     instance.indices = Move(newIndices);
     instance.sourceTriangleCount = newSourceTriangleCount;
-    instance.skin = Move(newSkin);
-    instance.sourceSamples = Move(newSourceSamples);
-    instance.morphs = Move(newMorphs);
     ++instance.editRevision;
     instance.dirtyFlags = static_cast<RuntimeMeshDirtyFlags>(instance.dirtyFlags | RuntimeMeshDirtyFlag::All);
 

@@ -682,7 +682,7 @@ void ProjectTestbed::updateSurfaceEditAccessories(){
             NWB::Core::Scene::TransformComponent& transform,
             NWB::Core::ECSGraphics::RendererComponent& renderer)
         {
-            (void)entity;
+            static_cast<void>(entity);
             const auto* instance = renderSystem.findDeformableRuntimeMesh(attachment.runtimeMesh);
             if(!instance){
                 renderer.visible = false;
@@ -968,8 +968,8 @@ void ProjectTestbed::logSurfaceEditControls()const{
 }
 
 bool ProjectTestbed::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods){
-    (void)scancode;
-    (void)mods;
+    static_cast<void>(scancode);
+    static_cast<void>(mods);
 
     if(action == NWB::Core::InputAction::Press || action == NWB::Core::InputAction::Repeat)
         setKeyState(key, true);
@@ -1051,7 +1051,7 @@ bool ProjectTestbed::mousePosUpdate(const f64 xpos, const f64 ypos){
 }
 
 bool ProjectTestbed::mouseButtonUpdate(const i32 button, const i32 action, const i32 mods){
-    (void)mods;
+    static_cast<void>(mods);
 
     if(button == NWB::Core::MouseButton::Left){
         if(action == NWB::Core::InputAction::Press)

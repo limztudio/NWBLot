@@ -202,7 +202,7 @@ bool Frame::mainLoop(){
 }
 
 void Frame::setupPlatform(void* inst){
-    (void)inst;
+    static_cast<void>(inst);
 
     auto& frameData = data<Common::LinuxFrame>();
     frameData.setActive(false);

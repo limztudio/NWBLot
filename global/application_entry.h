@@ -118,9 +118,9 @@ template<typename EntryPoint>
 
 #define NWB_DEFINE_APPLICATION_ENTRY_POINT(entryPoint) \
     int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nCmdShow){ \
-        (void)hPrevInstance; \
-        (void)lpCmdLine; \
-        (void)nCmdShow; \
+        static_cast<void>(hPrevInstance); \
+        static_cast<void>(lpCmdLine); \
+        static_cast<void>(nCmdShow); \
         return ApplicationEntryDetail::InvokeWindowsUnicodeEntryPoint(static_cast<ApplicationEntryDetail::UnicodeEntryPointFn>(entryPoint), hInstance); \
     } \
     int main(int, char**){ \
@@ -129,9 +129,9 @@ template<typename EntryPoint>
 #else
 #define NWB_DEFINE_APPLICATION_ENTRY_POINT(entryPoint) \
     int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nCmdShow){ \
-        (void)hPrevInstance; \
-        (void)lpCmdLine; \
-        (void)nCmdShow; \
+        static_cast<void>(hPrevInstance); \
+        static_cast<void>(lpCmdLine); \
+        static_cast<void>(nCmdShow); \
         return ApplicationEntryDetail::InvokeEntryPoint(static_cast<ApplicationEntryDetail::AnsiEntryPointFn>(entryPoint), static_cast<isize>(__argc), __argv, hInstance); \
     } \
     int main(int argc, char** argv){ \

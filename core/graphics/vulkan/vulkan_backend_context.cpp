@@ -264,9 +264,9 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL VulkanDebugCallback(
     void* userData
 )
 {
-    (void)flags;
-    (void)objType;
-    (void)obj;
+    static_cast<void>(flags);
+    static_cast<void>(objType);
+    static_cast<void>(obj);
 
     const auto* backend = static_cast<const BackendContext*>(userData);
     if(backend && backend->isValidationMessageLocationIgnored(static_cast<usize>(location)))

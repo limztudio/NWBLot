@@ -294,7 +294,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         {
             bool ret = false;
             if(auto hdc = BeginPaint(hwnd, &ps)){
-                (void)hdc;
+                static_cast<void>(hdc);
                 ret = frame->render();
                 EndPaint(hwnd, &ps);
             }

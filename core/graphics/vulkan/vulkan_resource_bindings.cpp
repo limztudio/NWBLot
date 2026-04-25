@@ -1585,7 +1585,7 @@ void Device::resizeDescriptorTable(IDescriptorTable* m_descriptorTable, u32 newS
         for(const auto& item : table->m_layout->m_bindlessDesc.registerSpaces){
             if(!VulkanDetail::AddDescriptorPoolSize(poolSizes, VulkanDetail::ConvertDescriptorType(item.type), newSize)){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to resize descriptor table: descriptor pool size overflows"));
-                (void)keepContents;
+                static_cast<void>(keepContents);
                 return;
             }
         }
@@ -1609,7 +1609,7 @@ void Device::resizeDescriptorTable(IDescriptorTable* m_descriptorTable, u32 newS
         res = vkCreateDescriptorPool(m_context.device, &poolInfo, m_context.allocationCallbacks, &newPool);
         if(res != VK_SUCCESS){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create bindless descriptor pool for resize: {}"), ResultToString(res));
-            (void)keepContents;
+            static_cast<void>(keepContents);
             return;
         }
 
@@ -1631,11 +1631,11 @@ void Device::resizeDescriptorTable(IDescriptorTable* m_descriptorTable, u32 newS
         if(res != VK_SUCCESS){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate bindless descriptor set during resize: {}"), ResultToString(res));
             vkDestroyDescriptorPool(m_context.device, newPool, m_context.allocationCallbacks);
-            (void)keepContents;
+            static_cast<void>(keepContents);
             return;
         }
 
-        (void)commitResize(newPool, newDescriptorSets, newSize);
+        static_cast<void>(commitResize(newPool, newDescriptorSets, newSize));
         return;
     }
 
@@ -1688,7 +1688,7 @@ void Device::resizeDescriptorTable(IDescriptorTable* m_descriptorTable, u32 newS
         }
     }
 
-    (void)commitResize(newPool, newDescriptorSets, newSize);
+    static_cast<void>(commitResize(newPool, newDescriptorSets, newSize));
 }
 
 bool Device::writeDescriptorTable(IDescriptorTable* m_descriptorTable, const BindingSetItem& item){

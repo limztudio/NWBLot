@@ -374,13 +374,13 @@ static void OnRegistryGlobal(void* data, wl_registry* registry, u32 name, const 
 }
 
 static void OnRegistryGlobalRemove(void* data, wl_registry* registry, u32 name){
-    (void)data;
-    (void)registry;
-    (void)name;
+    static_cast<void>(data);
+    static_cast<void>(registry);
+    static_cast<void>(name);
 }
 
 static void OnWmBasePing(void* data, xdg_wm_base* wmBase, u32 serial){
-    (void)data;
+    static_cast<void>(data);
     xdg_wm_base_pong(wmBase, serial);
 }
 
@@ -396,7 +396,7 @@ static void OnXdgSurfaceConfigure(void* data, xdg_surface* xdgSurface, u32 seria
 }
 
 static void OnToplevelConfigure(void* data, xdg_toplevel* toplevel, i32 width, i32 height, wl_array* states){
-    (void)toplevel;
+    static_cast<void>(toplevel);
 
     auto& context = *static_cast<WaylandContext*>(data);
     auto& frameData = context.frame->data<Common::LinuxFrame>();
@@ -422,7 +422,7 @@ static void OnToplevelConfigure(void* data, xdg_toplevel* toplevel, i32 width, i
 }
 
 static void OnToplevelClose(void* data, xdg_toplevel* toplevel){
-    (void)toplevel;
+    static_cast<void>(toplevel);
 
     auto& context = *static_cast<WaylandContext*>(data);
     context.shouldClose = true;
@@ -432,56 +432,56 @@ static void OnToplevelClose(void* data, xdg_toplevel* toplevel){
 
 #if defined(XDG_TOPLEVEL_CONFIGURE_BOUNDS_SINCE_VERSION)
 static void OnToplevelConfigureBounds(void* data, xdg_toplevel* toplevel, i32 width, i32 height){
-    (void)data;
-    (void)toplevel;
-    (void)width;
-    (void)height;
+    static_cast<void>(data);
+    static_cast<void>(toplevel);
+    static_cast<void>(width);
+    static_cast<void>(height);
 }
 #endif
 
 #if defined(XDG_TOPLEVEL_WM_CAPABILITIES_SINCE_VERSION)
 static void OnToplevelWmCapabilities(void* data, xdg_toplevel* toplevel, wl_array* capabilities){
-    (void)data;
-    (void)toplevel;
-    (void)capabilities;
+    static_cast<void>(data);
+    static_cast<void>(toplevel);
+    static_cast<void>(capabilities);
 }
 #endif
 
 static void OnSeatCapabilities(void* data, wl_seat* seat, u32 capabilities);
 static void OnSeatName(void* data, wl_seat* seat, const char* name){
-    (void)data;
-    (void)seat;
-    (void)name;
+    static_cast<void>(data);
+    static_cast<void>(seat);
+    static_cast<void>(name);
 }
 
 static void OnPointerEnter(void* data, wl_pointer* pointer, u32 serial, wl_surface* surface, wl_fixed_t sx, wl_fixed_t sy){
-    (void)pointer;
-    (void)serial;
-    (void)surface;
+    static_cast<void>(pointer);
+    static_cast<void>(serial);
+    static_cast<void>(surface);
 
     auto& context = *static_cast<WaylandContext*>(data);
     context.frame->input().mousePosUpdate(wl_fixed_to_double(sx), wl_fixed_to_double(sy));
 }
 
 static void OnPointerLeave(void* data, wl_pointer* pointer, u32 serial, wl_surface* surface){
-    (void)data;
-    (void)pointer;
-    (void)serial;
-    (void)surface;
+    static_cast<void>(data);
+    static_cast<void>(pointer);
+    static_cast<void>(serial);
+    static_cast<void>(surface);
 }
 
 static void OnPointerMotion(void* data, wl_pointer* pointer, u32 time, wl_fixed_t sx, wl_fixed_t sy){
-    (void)pointer;
-    (void)time;
+    static_cast<void>(pointer);
+    static_cast<void>(time);
 
     auto& context = *static_cast<WaylandContext*>(data);
     context.frame->input().mousePosUpdate(wl_fixed_to_double(sx), wl_fixed_to_double(sy));
 }
 
 static void OnPointerButton(void* data, wl_pointer* pointer, u32 serial, u32 time, u32 button, u32 state){
-    (void)pointer;
-    (void)serial;
-    (void)time;
+    static_cast<void>(pointer);
+    static_cast<void>(serial);
+    static_cast<void>(time);
 
     auto& context = *static_cast<WaylandContext*>(data);
     const i32 translatedButton = TranslatePointerButton(button);
@@ -495,8 +495,8 @@ static void OnPointerButton(void* data, wl_pointer* pointer, u32 serial, u32 tim
 }
 
 static void OnPointerAxis(void* data, wl_pointer* pointer, u32 time, u32 axis, wl_fixed_t value){
-    (void)pointer;
-    (void)time;
+    static_cast<void>(pointer);
+    static_cast<void>(time);
 
     auto& context = *static_cast<WaylandContext*>(data);
     context.scrollPending = true;
@@ -512,25 +512,25 @@ static void OnPointerAxis(void* data, wl_pointer* pointer, u32 time, u32 axis, w
 }
 
 static void OnPointerFrame(void* data, wl_pointer* pointer){
-    (void)pointer;
+    static_cast<void>(pointer);
     DispatchScroll(*static_cast<WaylandContext*>(data));
 }
 
 static void OnPointerAxisSource(void* data, wl_pointer* pointer, u32 axisSource){
-    (void)data;
-    (void)pointer;
-    (void)axisSource;
+    static_cast<void>(data);
+    static_cast<void>(pointer);
+    static_cast<void>(axisSource);
 }
 
 static void OnPointerAxisStop(void* data, wl_pointer* pointer, u32 time, u32 axis){
-    (void)data;
-    (void)pointer;
-    (void)time;
-    (void)axis;
+    static_cast<void>(data);
+    static_cast<void>(pointer);
+    static_cast<void>(time);
+    static_cast<void>(axis);
 }
 
 static void OnPointerAxisDiscrete(void* data, wl_pointer* pointer, u32 axis, i32 discrete){
-    (void)pointer;
+    static_cast<void>(pointer);
 
     auto& context = *static_cast<WaylandContext*>(data);
     context.scrollPending = true;
@@ -543,24 +543,24 @@ static void OnPointerAxisDiscrete(void* data, wl_pointer* pointer, u32 axis, i32
 
 #if defined(WL_POINTER_AXIS_VALUE120_SINCE_VERSION)
 static void OnPointerAxisValue120(void* data, wl_pointer* pointer, u32 axis, i32 value120){
-    (void)data;
-    (void)pointer;
-    (void)axis;
-    (void)value120;
+    static_cast<void>(data);
+    static_cast<void>(pointer);
+    static_cast<void>(axis);
+    static_cast<void>(value120);
 }
 #endif
 
 #if defined(WL_POINTER_AXIS_RELATIVE_DIRECTION_SINCE_VERSION)
 static void OnPointerAxisRelativeDirection(void* data, wl_pointer* pointer, u32 axis, u32 direction){
-    (void)data;
-    (void)pointer;
-    (void)axis;
-    (void)direction;
+    static_cast<void>(data);
+    static_cast<void>(pointer);
+    static_cast<void>(axis);
+    static_cast<void>(direction);
 }
 #endif
 
 static void OnKeyboardKeymap(void* data, wl_keyboard* keyboard, u32 format, i32 fd, u32 size){
-    (void)keyboard;
+    static_cast<void>(keyboard);
 
     auto& context = *static_cast<WaylandContext*>(data);
 
@@ -602,19 +602,19 @@ static void OnKeyboardKeymap(void* data, wl_keyboard* keyboard, u32 format, i32 
 }
 
 static void OnKeyboardEnter(void* data, wl_keyboard* keyboard, u32 serial, wl_surface* surface, wl_array* keys){
-    (void)keyboard;
-    (void)serial;
-    (void)surface;
-    (void)keys;
+    static_cast<void>(keyboard);
+    static_cast<void>(serial);
+    static_cast<void>(surface);
+    static_cast<void>(keys);
 
     auto& context = *static_cast<WaylandContext*>(data);
     context.frame->data<Common::LinuxFrame>().setActive(true);
 }
 
 static void OnKeyboardLeave(void* data, wl_keyboard* keyboard, u32 serial, wl_surface* surface){
-    (void)keyboard;
-    (void)serial;
-    (void)surface;
+    static_cast<void>(keyboard);
+    static_cast<void>(serial);
+    static_cast<void>(surface);
 
     auto& context = *static_cast<WaylandContext*>(data);
     context.frame->data<Common::LinuxFrame>().setActive(false);
@@ -622,9 +622,9 @@ static void OnKeyboardLeave(void* data, wl_keyboard* keyboard, u32 serial, wl_su
 }
 
 static void OnKeyboardKey(void* data, wl_keyboard* keyboard, u32 serial, u32 time, u32 key, u32 state){
-    (void)keyboard;
-    (void)serial;
-    (void)time;
+    static_cast<void>(keyboard);
+    static_cast<void>(serial);
+    static_cast<void>(time);
 
     auto& context = *static_cast<WaylandContext*>(data);
     if(!context.xkbState)
@@ -664,8 +664,8 @@ static void OnKeyboardKey(void* data, wl_keyboard* keyboard, u32 serial, u32 tim
 }
 
 static void OnKeyboardModifiers(void* data, wl_keyboard* keyboard, u32 serial, u32 depressed, u32 latched, u32 locked, u32 group){
-    (void)keyboard;
-    (void)serial;
+    static_cast<void>(keyboard);
+    static_cast<void>(serial);
 
     auto& context = *static_cast<WaylandContext*>(data);
     if(context.xkbState)
@@ -673,7 +673,7 @@ static void OnKeyboardModifiers(void* data, wl_keyboard* keyboard, u32 serial, u
 }
 
 static void OnKeyboardRepeatInfo(void* data, wl_keyboard* keyboard, i32 rate, i32 delay){
-    (void)keyboard;
+    static_cast<void>(keyboard);
 
     auto& context = *static_cast<WaylandContext*>(data);
     context.repeatRate = rate;

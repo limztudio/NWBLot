@@ -185,7 +185,7 @@ private:
             ScopedLock lock(m_channelsMutex);
             channels.reserve(m_channels.size());
             for(auto& [typeId, channel] : m_channels){
-                (void)typeId;
+                static_cast<void>(typeId);
                 channels.push_back(channel.get());
             }
         }

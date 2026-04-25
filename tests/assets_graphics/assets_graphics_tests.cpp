@@ -869,7 +869,7 @@ static void TestDeformableGeometryCodecRejectsOldBinaryVersion(TestContext& cont
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 1u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("unsupported version 1")));
 #else
-    (void)context;
+    static_cast<void>(context);
 #endif
 }
 
@@ -893,7 +893,7 @@ static void TestDeformableGeometryCodecRejectsMalformedCounts(TestContext& conte
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 1u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("payload counts exceed u32 limits")));
 #else
-    (void)context;
+    static_cast<void>(context);
 #endif
 }
 
@@ -950,7 +950,7 @@ static void TestDeformableGeometryCodecRejectsMalformedDependentCounts(TestConte
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("source sample count must be empty or match vertex count")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("morph delta count exceeds u32 limits")));
 #else
-    (void)context;
+    static_cast<void>(context);
 #endif
 }
 
@@ -972,7 +972,7 @@ static void TestDeformableGeometryCookerMinimalAsset(TestContext& context){
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, cooked);
     if(!cooked){
         ErrorCode errorCode;
-        (void)RemoveAllIfExists(root, errorCode);
+        static_cast<void>(RemoveAllIfExists(root, errorCode));
         return;
     }
 
@@ -1009,7 +1009,7 @@ static void TestDeformableGeometryCookerMinimalAsset(TestContext& context){
     }
 
     ErrorCode errorCode;
-    (void)RemoveAllIfExists(root, errorCode);
+    static_cast<void>(RemoveAllIfExists(root, errorCode));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 0u);
 }
 
@@ -1031,7 +1031,7 @@ static void TestDeformableGeometryCookerU32IndexType(TestContext& context){
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, cooked);
     if(!cooked){
         ErrorCode errorCode;
-        (void)RemoveAllIfExists(root, errorCode);
+        static_cast<void>(RemoveAllIfExists(root, errorCode));
         return;
     }
 
@@ -1061,7 +1061,7 @@ static void TestDeformableGeometryCookerU32IndexType(TestContext& context){
     }
 
     ErrorCode errorCode;
-    (void)RemoveAllIfExists(root, errorCode);
+    static_cast<void>(RemoveAllIfExists(root, errorCode));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 0u);
 }
 
@@ -1084,7 +1084,7 @@ static void TestDeformableGeometryCookerExplicitEmptyOptionalLists(TestContext& 
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, cooked);
         if(!cooked){
             ErrorCode errorCode;
-            (void)RemoveAllIfExists(root, errorCode);
+            static_cast<void>(RemoveAllIfExists(root, errorCode));
             return;
         }
 
@@ -1121,7 +1121,7 @@ static void TestDeformableGeometryCookerExplicitEmptyOptionalLists(TestContext& 
         }
 
         ErrorCode errorCode;
-        (void)RemoveAllIfExists(root, errorCode);
+        static_cast<void>(RemoveAllIfExists(root, errorCode));
     };
 
     expectCookedDefaultOptionals(s_EmptyListOptionalDeformableMeta, "empty_optional_lists");
@@ -1147,7 +1147,7 @@ static void TestDeformableGeometryCookerFullAsset(TestContext& context){
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, cooked);
     if(!cooked){
         ErrorCode errorCode;
-        (void)RemoveAllIfExists(root, errorCode);
+        static_cast<void>(RemoveAllIfExists(root, errorCode));
         return;
     }
 
@@ -1196,7 +1196,7 @@ static void TestDeformableGeometryCookerFullAsset(TestContext& context){
     }
 
     ErrorCode errorCode;
-    (void)RemoveAllIfExists(root, errorCode);
+    static_cast<void>(RemoveAllIfExists(root, errorCode));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 0u);
 }
 
@@ -1218,7 +1218,7 @@ static void TestDeformableGeometryCookerValidationFailures(TestContext& context)
         ));
 
         ErrorCode errorCode;
-        (void)RemoveAllIfExists(root, errorCode);
+        static_cast<void>(RemoveAllIfExists(root, errorCode));
     };
 
     expectCookFailure(s_MismatchedDeformableMeta, "mismatched_streams");
@@ -1238,7 +1238,7 @@ static void TestDeformableGeometryCookerValidationFailures(TestContext& context)
     );
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("morph 'lift' requires 'delta_tangent' list")));
 #else
-    (void)context;
+    static_cast<void>(context);
 #endif
 }
 
@@ -1404,7 +1404,7 @@ static void TestDeformableGeometryValidationFailures(TestContext& context){
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("triangle 0 is degenerate")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("triangle 0 has zero area")));
 #else
-    (void)context;
+    static_cast<void>(context);
 #endif
 }
 
@@ -1440,8 +1440,8 @@ static void TestFormatBlockDimensions(TestContext& context){
 
 
 static int EntryPoint(const isize argc, tchar** argv, void*){
-    (void)argc;
-    (void)argv;
+    static_cast<void>(argc);
+    static_cast<void>(argv);
 
     NWB::Core::Common::InitializerGuard commonInitializerGuard;
     if(!commonInitializerGuard.initialize()){

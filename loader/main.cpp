@@ -151,8 +151,8 @@ void AddDebugCommandLineOptions(CLI::App& app, LoaderOptions& options){
 #if defined(NWB_DEBUG)
     app.add_flag("--gpudbg", options.enableGpuDebug, "Enable Vulkan validation layer");
 #else
-    (void)app;
-    (void)options;
+    static_cast<void>(app);
+    static_cast<void>(options);
 #endif
 }
 
@@ -166,8 +166,8 @@ bool ApplyGraphicsOptions(NWB::Core::Graphics& graphics, const LoaderOptions& op
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: GPU debug validation enabled"));
     }
 #else
-    (void)graphics;
-    (void)options;
+    static_cast<void>(graphics);
+    static_cast<void>(options);
 #endif
 
     return true;

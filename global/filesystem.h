@@ -166,7 +166,7 @@ struct StagedDirectoryPaths{
 }
 
 [[nodiscard]] inline bool EnsureDirectories(const Path& path, ErrorCode& outError)noexcept{
-    (void)CreateDirectories(path, outError);
+    static_cast<void>(CreateDirectories(path, outError));
     return !outError;
 }
 
@@ -193,7 +193,7 @@ struct StagedDirectoryPaths{
         return !outError;
 
     outError.clear();
-    (void)RemoveAll(path, outError);
+    static_cast<void>(RemoveAll(path, outError));
     return !outError;
 }
 

@@ -195,7 +195,7 @@ void SetCurrentThreadAffinity(u64 mask){
     if(mask != 0)
         SetThreadAffinityMask(GetCurrentThread(), static_cast<DWORD_PTR>(mask));
 #else
-    (void)mask;
+    static_cast<void>(mask);
 #endif
 }
 

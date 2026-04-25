@@ -116,7 +116,7 @@ Queue::~Queue(){
         waitInfo.pValues = &m_lastSubmittedID;
 
         res = vkWaitSemaphores(m_context.device, &waitInfo, UINT64_MAX);
-        (void)res;
+        static_cast<void>(res);
     }
 
     m_commandBuffersInFlight.clear();

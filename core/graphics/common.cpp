@@ -18,7 +18,7 @@ NWB_CORE_BEGIN
 
 
 void* GraphicsAllocator::allocatePersistentSystemMemory(void* userData, usize size, usize alignment, SystemMemoryAllocationScope::Enum scope){
-    (void)scope;
+    static_cast<void>(scope);
     if(!userData)
         return nullptr;
 
@@ -27,7 +27,7 @@ void* GraphicsAllocator::allocatePersistentSystemMemory(void* userData, usize si
 }
 
 void* GraphicsAllocator::reallocatePersistentSystemMemory(void* userData, void* original, usize size, usize alignment, SystemMemoryAllocationScope::Enum scope){
-    (void)scope;
+    static_cast<void>(scope);
     if(!userData)
         return nullptr;
 

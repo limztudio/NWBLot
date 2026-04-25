@@ -811,7 +811,7 @@ static MeshViewState ResolveMeshViewState(Core::ECS::World& world, const f32 fal
     const auto lightView = world.view<Core::Scene::TransformComponent, Core::Scene::LightComponent>();
     for(auto it = lightView.begin(); it != lightView.end(); ++it){
         auto&& [entity, transform, light] = *it;
-        (void)entity;
+        static_cast<void>(entity);
         if(TryApplyDirectionalLightMeshViewState(state, transform, light))
             break;
     }
@@ -894,17 +894,24 @@ static bool ParseAlphaValue(const AStringView text, f32& outAlpha){
     return true;
 }
 
-static bool FindMaterialParameter(const Material& material, const AStringView keyText, CompactString& outValue){
-    CompactString key;
-    if(!key.assign(keyText))
-        return false;
+static u32 MaterialAlphaParameterPriority(const CompactString& key){
+    if(EqualsAsciiToken(key.view(), "alpha"))
+        return 0u;
+    if(EqualsAsciiToken(key.view(), "opacity"))
+        return 1u;
 
-    const auto found = material.parameters().find(key);
-    if(found == material.parameters().end())
-        return false;
+    return Limit<u32>::s_Max;
+}
 
-    outValue = found.value();
-    return true;
+static u32 MaterialModeParameterPriority(const CompactString& key){
+    if(EqualsAsciiToken(key.view(), "render_mode"))
+        return 0u;
+    if(EqualsAsciiToken(key.view(), "alpha_mode"))
+        return 1u;
+    if(EqualsAsciiToken(key.view(), "transparency"))
+        return 2u;
+
+    return Limit<u32>::s_Max;
 }
 
 static AvboitPushConstants BuildAvboitPushConstants(const RendererSystem::AvboitFrameTargets& targets, const f32 alpha){
@@ -998,7 +1005,7 @@ RendererSystem::~RendererSystem()
 
 
 void RendererSystem::update(Core::ECS::World& world, f32 delta){
-    (void)delta;
+    static_cast<void>(delta);
     updateDeformableRuntimeMeshes(world);
 }
 
@@ -1054,9 +1061,9 @@ void RendererSystem::backBufferResizing(){
 }
 
 void RendererSystem::backBufferResized(u32 width, u32 height, u32 sampleCount){
-    (void)width;
-    (void)height;
-    (void)sampleCount;
+    static_cast<void>(width);
+    static_cast<void>(height);
+    static_cast<void>(sampleCount);
 
     m_materialPipelines.clear();
     m_deferredCompositePipeline.reset();
@@ -1967,16 +1974,16 @@ void RendererSystem::gatherMaterialPassDrawItems(
         if(!materialInfo || !materialInfo->valid || materialInfo->transparent != transparent)
             return false;
 
+        MaterialPipelineKey pipelineKey;
+        pipelineKey.material = materialInfo->materialName;
+        pipelineKey.framebufferInfo = framebufferInfo;
+        pipelineKey.pass = pass;
+
         MaterialPipelineResources* pipelineResources = nullptr;
-        if(!ensureRendererPipeline(material, framebuffer, pass, pipelineResources))
+        if(!ensureRendererPipeline(*materialInfo, pipelineKey, framebuffer, pipelineResources))
             return false;
         if(!pipelineResources)
             return false;
-
-        MaterialPipelineKey pipelineKey;
-        pipelineKey.material = material.name();
-        pipelineKey.framebufferInfo = framebufferInfo;
-        pipelineKey.pass = pass;
 
         auto appendInstance = [&]() -> u32{
             if(instanceData.size() >= static_cast<usize>(Limit<u32>::s_Max)){
@@ -2760,19 +2767,33 @@ bool RendererSystem::ensureMaterialSurfaceInfo(const Core::Assets::AssetRef<Mate
     __hidden_ecs_graphics::TryFindShaderForStage(material, Core::ShaderType::Pixel, createdInfo.pixelShader);
     __hidden_ecs_graphics::TryFindShaderForStage(material, Core::ShaderType::Mesh, createdInfo.meshShader);
 
+    CompactString alphaText;
+    u32 alphaPriority = Limit<u32>::s_Max;
+    CompactString modeText;
+    u32 modePriority = Limit<u32>::s_Max;
+
     createdInfo.parameters.reserve(material.parameters().size());
     for(const auto& [key, value] : material.parameters()){
+        const u32 candidateAlphaPriority = __hidden_ecs_graphics::MaterialAlphaParameterPriority(key);
+        if(candidateAlphaPriority < alphaPriority){
+            alphaText = value;
+            alphaPriority = candidateAlphaPriority;
+        }
+
+        const u32 candidateModePriority = __hidden_ecs_graphics::MaterialModeParameterPriority(key);
+        if(candidateModePriority < modePriority){
+            modeText = value;
+            modePriority = candidateModePriority;
+        }
+
         MaterialParameterGpuData parameter;
         if(__hidden_ecs_graphics::TryBuildMaterialParameterGpuData(key, value, parameter))
             createdInfo.parameters.push_back(parameter);
     }
 
-    CompactString alphaText;
-    if(__hidden_ecs_graphics::FindMaterialParameter(material, AStringView("alpha"), alphaText)
-        || __hidden_ecs_graphics::FindMaterialParameter(material, AStringView("opacity"), alphaText)
-    ){
+    if(alphaPriority != Limit<u32>::s_Max){
         f32 parsedAlpha = 1.f;
-        if(__hidden_ecs_graphics::ParseAlphaValue(AStringView(alphaText.c_str()), parsedAlpha))
+        if(__hidden_ecs_graphics::ParseAlphaValue(alphaText.view(), parsedAlpha))
             createdInfo.alpha = parsedAlpha;
         else{
             NWB_LOGGER_WARNING(
@@ -2783,12 +2804,8 @@ bool RendererSystem::ensureMaterialSurfaceInfo(const Core::Assets::AssetRef<Mate
         }
     }
 
-    CompactString modeText;
-    if(__hidden_ecs_graphics::FindMaterialParameter(material, AStringView("render_mode"), modeText)
-        || __hidden_ecs_graphics::FindMaterialParameter(material, AStringView("alpha_mode"), modeText)
-        || __hidden_ecs_graphics::FindMaterialParameter(material, AStringView("transparency"), modeText)
-    ){
-        createdInfo.transparent = __hidden_ecs_graphics::IsTransparentText(AStringView(modeText.c_str()));
+    if(modePriority != Limit<u32>::s_Max){
+        createdInfo.transparent = __hidden_ecs_graphics::IsTransparentText(modeText.view());
     }
     if(createdInfo.alpha < 0.999f)
         createdInfo.transparent = true;
@@ -3062,9 +3079,9 @@ bool RendererSystem::ensureComputeBindingSet(GeometryResources& geometry){
 
 
 bool RendererSystem::ensureRendererPipeline(
-    const Core::Assets::AssetRef<Material>& materialAsset,
+    const MaterialSurfaceInfo& materialInfo,
+    const MaterialPipelineKey& pipelineKey,
     Core::IFramebuffer* framebuffer,
-    const MaterialPipelinePass::Enum pass,
     MaterialPipelineResources*& outResources)
 {
     outResources = nullptr;
@@ -3072,16 +3089,12 @@ bool RendererSystem::ensureRendererPipeline(
     if(!framebuffer)
         return false;
 
-    const Name materialKey = materialAsset.name();
-    if(!materialKey){
+    const Name& materialKey = materialInfo.materialName;
+    const MaterialPipelinePass::Enum pass = pipelineKey.pass;
+    if(!materialInfo.valid || !materialKey){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: renderer material is empty"));
         return false;
     }
-
-    MaterialPipelineKey pipelineKey;
-    pipelineKey.material = materialKey;
-    pipelineKey.framebufferInfo = framebuffer->getFramebufferInfo();
-    pipelineKey.pass = pass;
 
     auto [it, inserted] = m_materialPipelines.try_emplace(pipelineKey);
     MaterialPipelineResources& resources = it.value();
@@ -3111,21 +3124,13 @@ bool RendererSystem::ensureRendererPipeline(
         return false;
     };
 
-    MaterialSurfaceInfo* materialInfo = nullptr;
-    if(!ensureMaterialSurfaceInfo(materialAsset, materialInfo)){
-        return failMaterialPipeline();
-    }
-    if(!materialInfo || !materialInfo->valid){
-        return failMaterialPipeline();
-    }
-
-    const AStringView shaderVariant = materialInfo->shaderVariant.empty()
+    const AStringView shaderVariant = materialInfo.shaderVariant.empty()
         ? AStringView(Core::ShaderArchive::s_DefaultVariant)
-        : AStringView(materialInfo->shaderVariant)
+        : AStringView(materialInfo.shaderVariant)
     ;
 
-    const bool hasPixelShader = materialInfo->pixelShader.valid();
-    const bool hasMeshShader = materialInfo->meshShader.valid();
+    const bool hasPixelShader = materialInfo.pixelShader.valid();
+    const bool hasMeshShader = materialInfo.meshShader.valid();
     Core::ShaderHandle passPixelShader;
 
     switch(pass){
@@ -3163,10 +3168,10 @@ bool RendererSystem::ensureRendererPipeline(
             return false;
         if(!ensureMeshShaderResources())
             return false;
-        if(!ensureShaderLoaded(resources.meshShader, materialInfo->meshShader.name(), shaderVariant, Core::ShaderType::Mesh, "ECSGraphics_RendererMesh"))
+        if(!ensureShaderLoaded(resources.meshShader, materialInfo.meshShader.name(), shaderVariant, Core::ShaderType::Mesh, "ECSGraphics_RendererMesh"))
             return false;
         if(pass == MaterialPipelinePass::Opaque){
-            if(!ensureShaderLoaded(resources.pixelShader, materialInfo->pixelShader.name(), shaderVariant, Core::ShaderType::Pixel, "ECSGraphics_RendererPS"))
+            if(!ensureShaderLoaded(resources.pixelShader, materialInfo.pixelShader.name(), shaderVariant, Core::ShaderType::Pixel, "ECSGraphics_RendererPS"))
                 return false;
         }
         else{
@@ -3216,7 +3221,7 @@ bool RendererSystem::ensureRendererPipeline(
         const Name& meshComputeArchiveStageName = ShaderStageNames::MeshComputeArchiveStageName();
         if(!ensureShaderLoaded(
             resources.computeShader,
-            materialInfo->meshShader.name(),
+            materialInfo.meshShader.name(),
             shaderVariant,
             Core::ShaderType::Compute,
             "ECSGraphics_RendererCS",
@@ -3225,7 +3230,7 @@ bool RendererSystem::ensureRendererPipeline(
             return false;
         }
         if(pass == MaterialPipelinePass::Opaque){
-            if(!ensureShaderLoaded(resources.pixelShader, materialInfo->pixelShader.name(), shaderVariant, Core::ShaderType::Pixel, "ECSGraphics_RendererPS"))
+            if(!ensureShaderLoaded(resources.pixelShader, materialInfo.pixelShader.name(), shaderVariant, Core::ShaderType::Pixel, "ECSGraphics_RendererPS"))
                 return false;
         }
         else{
@@ -3337,7 +3342,7 @@ bool RendererSystem::hasTransparentRenderers(){
 
     auto rendererView = m_world.view<RendererComponent>();
     for(auto&& [entity, renderer] : rendererView){
-        (void)entity;
+        static_cast<void>(entity);
         if(!renderer.visible)
             continue;
 
@@ -3347,7 +3352,7 @@ bool RendererSystem::hasTransparentRenderers(){
 
     auto deformableRendererView = m_world.view<DeformableRendererComponent>();
     for(auto&& [entity, renderer] : deformableRendererView){
-        (void)entity;
+        static_cast<void>(entity);
         if(!renderer.visible)
             continue;
 

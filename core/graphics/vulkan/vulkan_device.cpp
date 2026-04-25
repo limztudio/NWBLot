@@ -378,7 +378,7 @@ Device::Device(const DeviceDesc& desc)
     }
 
     Vector<u8> pipelineCacheInitialData;
-    (void)loadPipelineCacheData(pipelineCacheInitialData);
+    static_cast<void>(loadPipelineCacheData(pipelineCacheInitialData));
 
     VkPipelineCacheCreateInfo cacheInfo = VulkanDetail::MakeVkStruct<VkPipelineCacheCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO);
     if(!pipelineCacheInitialData.empty()){

@@ -353,7 +353,7 @@ void* Device::mapStagingTexture(IStagingTexture* tex, const TextureSlice& slice,
 void Device::unmapStagingTexture(IStagingTexture* tex){
     // Memory is persistently mapped; no-op.
     // Unmapping is handled in StagingTexture destructor.
-    (void)tex;
+    static_cast<void>(tex);
 }
 
 

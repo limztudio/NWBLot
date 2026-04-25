@@ -162,7 +162,7 @@ public:
 protected:
     template<typename... ARGS>
     inline bool internalInit(ARGS&&... args){
-        ((void)args, ...);
+        (static_cast<void>(args), ...);
         return true;
     }
     inline void internalDestroy(){}

@@ -82,7 +82,7 @@ void World::clear(){
 
 void World::destroyEntityComponents(EntityID entityId){
     for(auto& [typeId, pool] : m_pools){
-        (void)typeId;
+        static_cast<void>(typeId);
         pool->remove(entityId);
     }
 }

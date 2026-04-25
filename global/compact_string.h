@@ -37,7 +37,7 @@ public:
     {
         const bool assigned = assign(text);
         NWB_ASSERT_MSG(assigned, NWB_TEXT("CompactString initialization exceeded capacity"));
-        (void)assigned;
+        static_cast<void>(assigned);
     }
     explicit CompactString(const AStringView text)
         : m_storage{}
@@ -45,7 +45,7 @@ public:
     {
         const bool assigned = assign(text);
         NWB_ASSERT_MSG(assigned, NWB_TEXT("CompactString initialization exceeded capacity"));
-        (void)assigned;
+        static_cast<void>(assigned);
     }
     explicit CompactString(const AString& text)
         : m_storage{}
@@ -53,7 +53,7 @@ public:
     {
         const bool assigned = assign(text);
         NWB_ASSERT_MSG(assigned, NWB_TEXT("CompactString initialization exceeded capacity"));
-        (void)assigned;
+        static_cast<void>(assigned);
     }
 
 
@@ -197,35 +197,35 @@ public:
     CompactString& operator+=(const char* text){
         const bool appended = append(text);
         NWB_ASSERT_MSG(appended, NWB_TEXT("CompactString append exceeded capacity"));
-        (void)appended;
+        static_cast<void>(appended);
         return *this;
     }
 
     CompactString& operator+=(const AStringView text){
         const bool appended = append(text);
         NWB_ASSERT_MSG(appended, NWB_TEXT("CompactString append exceeded capacity"));
-        (void)appended;
+        static_cast<void>(appended);
         return *this;
     }
 
     CompactString& operator+=(const AString& text){
         const bool appended = append(text);
         NWB_ASSERT_MSG(appended, NWB_TEXT("CompactString append exceeded capacity"));
-        (void)appended;
+        static_cast<void>(appended);
         return *this;
     }
 
     CompactString& operator+=(const CompactString& text){
         const bool appended = append(text);
         NWB_ASSERT_MSG(appended, NWB_TEXT("CompactString append exceeded capacity"));
-        (void)appended;
+        static_cast<void>(appended);
         return *this;
     }
 
     CompactString& operator+=(const char ch){
         const bool appended = pushBack(ch);
         NWB_ASSERT_MSG(appended, NWB_TEXT("CompactString append exceeded capacity"));
-        (void)appended;
+        static_cast<void>(appended);
         return *this;
     }
 

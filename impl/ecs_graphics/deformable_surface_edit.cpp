@@ -1749,7 +1749,7 @@ bool CommitDeformableRestSpaceHole(
     );
     boundaryDegrees.reserve(removedTriangleCount * 3u);
     for(const auto& [edgeKey, edge] : edges){
-        (void)edgeKey;
+        static_cast<void>(edgeKey);
         if(edge.removedCount == 0u)
             continue;
         if(edge.removedCount > edge.fullCount || edge.fullCount > 2u)
@@ -1765,7 +1765,7 @@ bool CommitDeformableRestSpaceHole(
     if(boundaryEdges.empty())
         return false;
     for(const auto& [vertex, degree] : boundaryDegrees){
-        (void)vertex;
+        static_cast<void>(vertex);
         if(degree != 2u)
             return false;
     }

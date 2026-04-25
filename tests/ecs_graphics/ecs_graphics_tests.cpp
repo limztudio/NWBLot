@@ -260,12 +260,12 @@ static NWB::Impl::DeformableHoleEditParams MakeHoleEditParams(
     params.posedHit.setPosition(BarycentricPosition(a, b, c, params.posedHit.bary));
     params.posedHit.setNormal(Float3U(0.0f, 0.0f, 1.0f));
     params.posedHit.setDistance(1.0f);
-    (void)NWB::Impl::ResolveDeformableRestSurfaceSample(
+    static_cast<void>(NWB::Impl::ResolveDeformableRestSurfaceSample(
         instance,
         triangle,
         params.posedHit.bary,
         params.posedHit.restSample
-    );
+    ));
     params.radius = radius;
     params.ellipseRatio = 1.0f;
     params.depth = depth;
@@ -1852,8 +1852,8 @@ static void TestRestSpaceHoleEditRejectsStaleOrMismatchedHit(TestContext& contex
 
 
 static int EntryPoint(const isize argc, tchar** argv, void*){
-    (void)argc;
-    (void)argv;
+    static_cast<void>(argc);
+    static_cast<void>(argv);
 
     NWB::Core::Common::InitializerGuard commonInitializerGuard;
     if(!commonInitializerGuard.initialize()){

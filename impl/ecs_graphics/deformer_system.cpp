@@ -419,12 +419,12 @@ DeformerSystem::~DeformerSystem()
 {}
 
 void DeformerSystem::update(Core::ECS::World& world, const f32 delta){
-    (void)world;
-    (void)delta;
+    static_cast<void>(world);
+    static_cast<void>(delta);
 }
 
 void DeformerSystem::render(Core::IFramebuffer* framebuffer){
-    (void)framebuffer;
+    static_cast<void>(framebuffer);
 
     if(!m_runtimeResources.empty()){
         for(auto it = m_runtimeResources.begin(); it != m_runtimeResources.end();){

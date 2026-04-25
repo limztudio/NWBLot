@@ -57,8 +57,8 @@ Server* g_Logger = nullptr;
 
 
 MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const char* url, const char* method, const char* version, const char* upload_data, size_t* upload_data_size, void** con_cls){
-    (void)url;
-    (void)version;
+    static_cast<void>(url);
+    static_cast<void>(version);
 
     if(!cls || !connection || !method || !upload_data_size || !con_cls)
         return MHD_NO;

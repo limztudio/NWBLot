@@ -151,7 +151,7 @@ bool ValidateTextureShape(const TextureDesc& desc, const tchar* operationName){
 }
 
 bool ValidateTextureViewShape(const TextureDesc& desc, const TextureDimension::Enum dimension, const TextureSubresourceSet& subresources){
-    (void)desc;
+    static_cast<void>(desc);
 
     if(dimension == TextureDimension::TextureCube && subresources.numArraySlices != 6){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create image view: cube views must include exactly 6 array layers"));

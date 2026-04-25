@@ -25,37 +25,37 @@ NWB_ALLOC_BEGIN
 
 
 void* CoreAlloc(usize size, const char* log){
-    (void)log;
+    static_cast<void>(log);
     void* cur = scalable_malloc(size);
     return cur;
 }
 void* CoreRealloc(void* p, usize size, const char* log){
-    (void)log;
+    static_cast<void>(log);
     void* cur = scalable_realloc(p, size);
     return cur;
 }
 void* CoreAllocAligned(usize size, usize align, const char* log){
-    (void)log;
+    static_cast<void>(log);
     void* cur = scalable_aligned_malloc(size, align);
     return cur;
 }
 
 void CoreFree(void* ptr, const char* log)noexcept{
-    (void)log;
+    static_cast<void>(log);
     scalable_free(ptr);
 }
 void CoreFreeSize(void* ptr, usize size, const char* log)noexcept{
-    (void)size;
-    (void)log;
+    static_cast<void>(size);
+    static_cast<void>(log);
     scalable_free(ptr);
 }
 void CoreFreeAligned(void* ptr, const char* log)noexcept{
-    (void)log;
+    static_cast<void>(log);
     scalable_aligned_free(ptr);
 }
 void CoreFreeSizeAligned(void* ptr, usize size, const char* log)noexcept{
-    (void)size;
-    (void)log;
+    static_cast<void>(size);
+    static_cast<void>(log);
     scalable_aligned_free(ptr);
 }
 

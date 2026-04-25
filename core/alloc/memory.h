@@ -53,7 +53,7 @@ public:
     inline void* reallocate(void* p, usize align, usize size){
         size = Alignment(align, size);
 
-        (void)align;
+        static_cast<void>(align);
         return tlsf_realloc(m_handle, p, size);
     }
     template<typename T>
@@ -62,8 +62,8 @@ public:
     }
 
     inline void deallocate(void* p, usize align, usize size){
-        (void)align;
-        (void)size;
+        static_cast<void>(align);
+        static_cast<void>(size);
         tlsf_free(m_handle, p);
     }
     template<typename T>

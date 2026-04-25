@@ -1936,6 +1936,7 @@ void RendererSystem::gatherMaterialPassDrawItems(
 
         outBlock.offset = static_cast<u32>(materialParameters.size());
         outBlock.count = static_cast<u32>(materialInfo.parameters.size());
+        materialParameters.reserve(materialParameters.size() + materialInfo.parameters.size());
         for(const MaterialParameterGpuData& parameter : materialInfo.parameters)
             materialParameters.push_back(parameter);
 

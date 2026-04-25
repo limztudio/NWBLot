@@ -118,31 +118,21 @@ bool Geometry::validatePayload()const{
         return false;
     }
 
-    usize cursor = 0;
     u64 maxIndexValue = 0;
-    while(cursor < m_indexData.size()){
-        if(m_use32BitIndices){
+    const u8* indexBytes = m_indexData.data();
+    if(m_use32BitIndices){
+        for(usize i = 0; i < indexCount; ++i){
             u32 indexValue = 0;
-            if(!ReadPOD(m_indexData, cursor, indexValue)){
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("Geometry::validatePayload failed: geometry '{}' contains malformed u32 index data"),
-                    geometryPathText
-                );
-                return false;
-            }
+            NWB_MEMCPY(&indexValue, sizeof(indexValue), indexBytes + i * sizeof(indexValue), sizeof(indexValue));
             maxIndexValue = Max(maxIndexValue, static_cast<u64>(indexValue));
-            continue;
         }
-
-        u16 indexValue = 0;
-        if(!ReadPOD(m_indexData, cursor, indexValue)){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Geometry::validatePayload failed: geometry '{}' contains malformed u16 index data"),
-                geometryPathText
-            );
-            return false;
+    }
+    else{
+        for(usize i = 0; i < indexCount; ++i){
+            u16 indexValue = 0;
+            NWB_MEMCPY(&indexValue, sizeof(indexValue), indexBytes + i * sizeof(indexValue), sizeof(indexValue));
+            maxIndexValue = Max(maxIndexValue, static_cast<u64>(indexValue));
         }
-        maxIndexValue = Max(maxIndexValue, static_cast<u64>(indexValue));
     }
 
     if(maxIndexValue >= static_cast<u64>(vertexCount)){

@@ -227,8 +227,15 @@ bool VulkanShaderCompiler::compileVariant(const ShaderCompilerRequest& request, 
     }
     options.SetSourceLanguage(sourceLanguage);
 
-    for(u32 i = 0; i < request.defineCount; ++i)
-        options.AddMacroDefinition(AString(request.defines[i].name), AString(request.defines[i].value));
+    for(u32 i = 0; i < request.defineCount; ++i){
+        const ShaderMacroDefinition& define = request.defines[i];
+        options.AddMacroDefinition(
+            define.name.data(),
+            define.name.size(),
+            define.value.data(),
+            define.value.size()
+        );
+    }
 
     options.SetIncluder(MakeStdUnique<__hidden_vulkan_shader::ShaderFileIncluder>(request.includeDirectories));
 

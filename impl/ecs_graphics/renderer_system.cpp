@@ -645,6 +645,9 @@ static void StoreDirectionalLightDirection(Float4& outDirection, const Float4& f
 static void ApplyDefaultDirectionalLightMeshViewState(MeshViewState& state, const MeshViewBasis& basis){
     StoreDirectionalLightDirection(state.directionalLightDirection, basis.forward);
     state.directionalLightColorIntensity = Float4(1.0f, 1.0f, 1.0f, 1.0f);
+}
+
+static void ApplyDefaultCameraPositionMeshViewState(MeshViewState& state, const MeshViewBasis& basis){
     state.cameraPosition = Float4(
         basis.positionDepthBias.x,
         basis.positionDepthBias.y,
@@ -777,15 +780,16 @@ static f32 FramebufferAspectRatio(const Core::IFramebuffer& framebuffer){
     return ExtentAspectRatio(framebufferInfo.width, framebufferInfo.height);
 }
 
-static MeshViewState BuildDefaultMeshViewState(const f32 fallbackAspectRatio){
-    MeshViewState state;
+static void ApplyDefaultCameraMeshViewState(
+    MeshViewState& state,
+    const MeshViewBasis& basis,
+    const f32 fallbackAspectRatio
+){
     Core::Scene::CameraComponent camera;
     Float4 projectionParams;
     BuildCameraProjectionParams(camera, fallbackAspectRatio, projectionParams);
-    const MeshViewBasis defaultBasis = BuildDefaultMeshViewBasis();
-    StoreWorldToClipMatrix(state.worldToClip, defaultBasis, projectionParams);
-    ApplyDefaultDirectionalLightMeshViewState(state, defaultBasis);
-    return state;
+    StoreWorldToClipMatrix(state.worldToClip, basis, projectionParams);
+    ApplyDefaultCameraPositionMeshViewState(state, basis);
 }
 
 static void ApplyCameraMeshViewState(
@@ -798,23 +802,45 @@ static void ApplyCameraMeshViewState(
 }
 
 static MeshViewState ResolveMeshViewState(Core::ECS::World& world, const f32 fallbackAspectRatio){
-    MeshViewState state = BuildDefaultMeshViewState(fallbackAspectRatio);
+    MeshViewState state;
+    MeshViewBasis defaultBasis;
+    bool defaultBasisResolved = false;
+    auto resolveDefaultBasis = [&]() -> const MeshViewBasis&{
+        if(!defaultBasisResolved){
+            defaultBasis = BuildDefaultMeshViewBasis();
+            defaultBasisResolved = true;
+        }
+        return defaultBasis;
+    };
 
     const Core::Scene::SceneCameraView cameraView = Core::Scene::ResolveSceneCameraView(world, fallbackAspectRatio);
-    if(cameraView.valid())
+    if(cameraView.valid()){
         __hidden_ecs_graphics::ApplyCameraMeshViewState(
             state,
             *cameraView.transform,
             cameraView.projectionData
         );
+    }
+    else{
+        __hidden_ecs_graphics::ApplyDefaultCameraMeshViewState(
+            state,
+            resolveDefaultBasis(),
+            fallbackAspectRatio
+        );
+    }
 
+    bool directionalLightApplied = false;
     const auto lightView = world.view<Core::Scene::TransformComponent, Core::Scene::LightComponent>();
     for(auto it = lightView.begin(); it != lightView.end(); ++it){
         auto&& [entity, transform, light] = *it;
         static_cast<void>(entity);
-        if(TryApplyDirectionalLightMeshViewState(state, transform, light))
+        if(TryApplyDirectionalLightMeshViewState(state, transform, light)){
+            directionalLightApplied = true;
             break;
+        }
     }
+    if(!directionalLightApplied)
+        __hidden_ecs_graphics::ApplyDefaultDirectionalLightMeshViewState(state, resolveDefaultBasis());
 
     return state;
 }

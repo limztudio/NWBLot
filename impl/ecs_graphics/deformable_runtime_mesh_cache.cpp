@@ -270,8 +270,18 @@ DeformableRuntimeMeshCache::DeformableRuntimeMeshCache(Core::Graphics& graphics,
 
 
 void DeformableRuntimeMeshCache::update(Core::ECS::World& world){
+    auto deformableRendererView = world.view<DeformableRendererComponent>();
+    if(m_instances.empty()){
+        deformableRendererView.each(
+            [&](Core::ECS::EntityID entity, DeformableRendererComponent& component){
+                if(!ensureRuntimeMesh(entity, component))
+                    component.runtimeMesh.reset();
+            }
+        );
+        return;
+    }
+
     Core::Alloc::ScratchArena<> scratchArena;
-    const bool trackActiveEntities = !m_instances.empty();
     HashSet<
         Core::ECS::EntityID,
         Hasher<Core::ECS::EntityID>,
@@ -283,21 +293,15 @@ void DeformableRuntimeMeshCache::update(Core::ECS::World& world){
         EqualTo<Core::ECS::EntityID>(),
         Core::Alloc::ScratchAllocator<Core::ECS::EntityID>(scratchArena)
     );
-    auto deformableRendererView = world.view<DeformableRendererComponent>();
-    if(trackActiveEntities)
-        activeEntities.reserve(Max(m_instances.size(), deformableRendererView.candidateCount()));
+    activeEntities.reserve(Max(m_instances.size(), deformableRendererView.candidateCount()));
 
     deformableRendererView.each(
         [&](Core::ECS::EntityID entity, DeformableRendererComponent& component){
-            if(trackActiveEntities)
-                activeEntities.insert(entity);
+            activeEntities.insert(entity);
             if(!ensureRuntimeMesh(entity, component))
                 component.runtimeMesh.reset();
         }
     );
-
-    if(!trackActiveEntities)
-        return;
 
     for(auto it = m_instances.begin(); it != m_instances.end();){
         const Core::ECS::EntityID entity = it->first;

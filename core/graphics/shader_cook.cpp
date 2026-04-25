@@ -721,6 +721,7 @@ bool ShaderCook::expandDefineCombinations(const CookMap<AString, DefineEntry>& d
         for(const DefineCombo& combo : outCombinations){
             for(const AString& value : values){
                 DefineCombo copy = combo;
+                copy.reserve(defineValues.size());
                 copy.try_emplace(defineName, value);
                 expanded.push_back(Move(copy));
             }
@@ -735,6 +736,16 @@ bool ShaderCook::expandDefineCombinations(const CookMap<AString, DefineEntry>& d
 AString ShaderCook::buildVariantName(const DefineCombo& combo){
     if(combo.empty())
         return "default";
+
+    if(combo.size() == 1u){
+        const auto& [defineName, defineValue] = *combo.begin();
+        AString variantName;
+        variantName.reserve(defineName.size() + defineValue.size() + 1u);
+        variantName += defineName;
+        variantName += '=';
+        variantName += defineValue;
+        return variantName;
+    }
 
     const auto entries = sortedDefineEntries(combo);
     usize variantNameSize = entries.size() - 1u;
@@ -882,9 +893,17 @@ bool ShaderCook::computeSourceChecksum(const ShaderEntry& entry, const AStringVi
     appendChecksumLine(entry.targetProfile.view());
     appendChecksumLine(AStringView(entry.entryPoint));
     appendChecksumLine(variantSignature);
-    for(const auto& entryDefine : sortedDefineEntries(entry.implicitDefines)){
-        appendChecksumLine(*entryDefine.key);
-        appendChecksumLine(*entryDefine.value);
+    if(entry.implicitDefines.size() <= 1u){
+        for(const auto& [defineName, defineValue] : entry.implicitDefines){
+            appendChecksumLine(defineName);
+            appendChecksumLine(defineValue);
+        }
+    }
+    else{
+        for(const auto& entryDefine : sortedDefineEntries(entry.implicitDefines)){
+            appendChecksumLine(*entryDefine.key);
+            appendChecksumLine(*entryDefine.value);
+        }
     }
     outChecksum = UpdateFnv64(outChecksum, reinterpret_cast<const u8*>(&dependencyChecksum), sizeof(dependencyChecksum));
     return true;

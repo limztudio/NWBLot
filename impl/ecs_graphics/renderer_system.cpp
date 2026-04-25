@@ -357,7 +357,7 @@ static u32 ComputeDispatchGroupCount(const u32 triangleCount){
     ;
 }
 
-static usize NextInstanceBufferCapacity(const usize currentCapacity, const usize requiredCapacity){
+static usize NextGrowingCapacity(const usize currentCapacity, const usize requiredCapacity){
     usize capacity = Max<usize>(currentCapacity, 1u);
     while(capacity < requiredCapacity){
         if(capacity > (Limit<usize>::s_Max / 2u))
@@ -1936,7 +1936,12 @@ void RendererSystem::gatherMaterialPassDrawItems(
 
         outBlock.offset = static_cast<u32>(materialParameters.size());
         outBlock.count = static_cast<u32>(materialInfo.parameters.size());
-        materialParameters.reserve(materialParameters.size() + materialInfo.parameters.size());
+        const usize requiredParameterCapacity = materialParameters.size() + materialInfo.parameters.size();
+        if(requiredParameterCapacity > materialParameters.capacity())
+            materialParameters.reserve(__hidden_ecs_graphics::NextGrowingCapacity(
+                materialParameters.capacity(),
+                requiredParameterCapacity
+            ));
         for(const MaterialParameterGpuData& parameter : materialInfo.parameters)
             materialParameters.push_back(parameter);
 
@@ -2059,7 +2064,7 @@ bool RendererSystem::ensureInstanceBufferCapacity(const usize instanceCount){
     if(m_instanceBuffer && m_instanceBufferCapacity >= instanceCount)
         return true;
 
-    const usize capacity = __hidden_ecs_graphics::NextInstanceBufferCapacity(m_instanceBufferCapacity, instanceCount);
+    const usize capacity = __hidden_ecs_graphics::NextGrowingCapacity(m_instanceBufferCapacity, instanceCount);
     if(capacity > Limit<usize>::s_Max / sizeof(InstanceGpuData)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: instance buffer capacity overflows addressable memory"));
         return false;
@@ -2093,7 +2098,7 @@ bool RendererSystem::ensureMaterialParameterBufferCapacity(const usize parameter
     if(m_materialParameterBuffer && m_materialParameterBufferCapacity >= requiredCount)
         return true;
 
-    const usize capacity = __hidden_ecs_graphics::NextInstanceBufferCapacity(m_materialParameterBufferCapacity, requiredCount);
+    const usize capacity = __hidden_ecs_graphics::NextGrowingCapacity(m_materialParameterBufferCapacity, requiredCount);
     if(capacity > Limit<usize>::s_Max / sizeof(MaterialParameterGpuData)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material parameter buffer capacity overflows addressable memory"));
         return false;

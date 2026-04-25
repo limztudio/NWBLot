@@ -55,8 +55,27 @@ void ReserveAdditionalCapacity(ContainerT& container, usize additionalCount){
         return;
 
     const usize currentSize = container.size();
-    if(additionalCount <= Limit<usize>::s_Max - currentSize)
-        container.reserve(currentSize + additionalCount);
+    if(additionalCount > Limit<usize>::s_Max - currentSize)
+        return;
+
+    const usize requiredCapacity = currentSize + additionalCount;
+    if constexpr(requires{ container.capacity(); }){
+        if(requiredCapacity <= container.capacity())
+            return;
+
+        usize nextCapacity = Max<usize>(container.capacity(), 1u);
+        while(nextCapacity < requiredCapacity){
+            if(nextCapacity > Limit<usize>::s_Max / 2u){
+                nextCapacity = requiredCapacity;
+                break;
+            }
+            nextCapacity *= 2u;
+        }
+        container.reserve(nextCapacity);
+    }
+    else{
+        container.reserve(requiredCapacity);
+    }
 }
 
 

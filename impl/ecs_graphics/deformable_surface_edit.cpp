@@ -1674,24 +1674,6 @@ bool CommitDeformableRestSpaceHole(
     };
     removeTriangle.resize(triangleCount, 0u);
 
-    u32 removedTriangleCount = 0;
-    for(usize triangle = 0; triangle < triangleCount; ++triangle){
-        u32 indices[3] = {};
-        if(!DeformableRuntime::ValidateTriangleIndex(instance, static_cast<u32>(triangle), indices))
-            return false;
-
-        const bool selectedTriangle = triangle == static_cast<usize>(params.posedHit.triangle);
-        if(selectedTriangle
-            || __hidden_deformable_surface_edit::TriangleInsideFootprint(instance, frame, radiusX, radiusY, indices)
-        ){
-            removeTriangle[triangle] = 1u;
-            ++removedTriangleCount;
-        }
-    }
-
-    if(removedTriangleCount == 0u || removedTriangleCount >= triangleCount)
-        return false;
-
     using EdgeRecord = __hidden_deformable_surface_edit::EdgeRecord;
     using EdgeRecordVector = Vector<EdgeRecord, Core::Alloc::ScratchAllocator<EdgeRecord>>;
     using EdgeRecordMap = HashMap<
@@ -1716,6 +1698,8 @@ bool CommitDeformableRestSpaceHole(
         Core::Alloc::ScratchAllocator<Pair<const u64, EdgeRecord>>(scratchArena)
     );
     edges.reserve(instance.indices.size());
+
+    u32 removedTriangleCount = 0;
     for(usize triangle = 0; triangle < triangleCount; ++triangle){
         u32 indices[3] = {};
         if(!DeformableRuntime::ValidateTriangleIndex(instance, static_cast<u32>(triangle), indices))
@@ -1724,21 +1708,24 @@ bool CommitDeformableRestSpaceHole(
         __hidden_deformable_surface_edit::RegisterFullEdge(edges, indices[0], indices[1]);
         __hidden_deformable_surface_edit::RegisterFullEdge(edges, indices[1], indices[2]);
         __hidden_deformable_surface_edit::RegisterFullEdge(edges, indices[2], indices[0]);
-    }
-    for(usize triangle = 0; triangle < triangleCount; ++triangle){
-        if(removeTriangle[triangle] == 0u)
-            continue;
 
-        u32 indices[3] = {};
-        if(!DeformableRuntime::ValidateTriangleIndex(instance, static_cast<u32>(triangle), indices))
-            return false;
+        const bool selectedTriangle = triangle == static_cast<usize>(params.posedHit.triangle);
+        if(selectedTriangle
+            || __hidden_deformable_surface_edit::TriangleInsideFootprint(instance, frame, radiusX, radiusY, indices)
+        ){
+            removeTriangle[triangle] = 1u;
+            ++removedTriangleCount;
 
-        if(!__hidden_deformable_surface_edit::RegisterRemovedEdge(edges, indices[0], indices[1])
-            || !__hidden_deformable_surface_edit::RegisterRemovedEdge(edges, indices[1], indices[2])
-            || !__hidden_deformable_surface_edit::RegisterRemovedEdge(edges, indices[2], indices[0])
-        )
-            return false;
+            if(!__hidden_deformable_surface_edit::RegisterRemovedEdge(edges, indices[0], indices[1])
+                || !__hidden_deformable_surface_edit::RegisterRemovedEdge(edges, indices[1], indices[2])
+                || !__hidden_deformable_surface_edit::RegisterRemovedEdge(edges, indices[2], indices[0])
+            )
+                return false;
+        }
     }
+
+    if(removedTriangleCount == 0u || removedTriangleCount >= triangleCount)
+        return false;
 
     EdgeRecordVector boundaryEdges{Core::Alloc::ScratchAllocator<EdgeRecord>(scratchArena)};
     boundaryEdges.reserve(removedTriangleCount * 3u);

@@ -10,7 +10,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "deformable_gltf_importer.h"
 #include "deformable_geometry_asset.h"
 #include "geometry_asset.h"
 #include "material_asset.h"
@@ -135,25 +134,13 @@ struct GeometryEntry{
     Vector<u8> vertexData;
     Vector<u8> indexData;
 };
-namespace DeformableGeometrySourceKind{
-    enum Enum : u8{
-        Inline,
-        Gltf,
-    };
-};
-struct DeformableGeometrySource{
-    DeformableGeometrySourceKind::Enum kind = DeformableGeometrySourceKind::Inline;
-    Path sourcePath;
-    u32 meshIndex = 0;
-    u32 primitiveIndex = 0;
-};
 struct DeformableGeometryEntry{
     Name virtualPath = NAME_NONE;
-    DeformableGeometrySource source;
     Vector<DeformableVertexRest> restVertices;
     Vector<u32> indices;
     Vector<SkinInfluence4> skin;
     Vector<SourceSample> sourceSamples;
+    Vector<DeformableEditMaskFlags> editMaskPerTriangle;
     DeformableDisplacement displacement;
     Vector<DeformableMorph> morphs;
     bool use32BitIndices = true;
@@ -1377,6 +1364,56 @@ static bool ParseSourceSamples(
     return true;
 }
 
+static bool ParseEditMasks(
+    const Path& nwbFilePath,
+    const Core::Metascript::Value& asset,
+    const usize triangleCount,
+    Vector<DeformableEditMaskFlags>& outEditMaskPerTriangle)
+{
+    outEditMaskPerTriangle.clear();
+
+    const Core::Metascript::Value* editMasks = FindField(asset, "edit_masks");
+    if(!editMasks)
+        return true;
+    if(IsExplicitEmptyOptionalField(*editMasks))
+        return true;
+
+    Vector<u32> parsedFlags;
+    if(!ParseU32ListField(nwbFilePath, asset, "edit_masks", parsedFlags))
+        return false;
+    if(parsedFlags.size() != triangleCount){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Deformable geometry meta '{}': edit mask count must match triangle count"),
+            PathToString<tchar>(nwbFilePath)
+        );
+        return false;
+    }
+
+    outEditMaskPerTriangle.reserve(parsedFlags.size());
+    for(usize i = 0; i < parsedFlags.size(); ++i){
+        if(parsedFlags[i] > Limit<DeformableEditMaskFlags>::s_Max){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Deformable geometry meta '{}': edit_masks[{}] exceeds u8"),
+                PathToString<tchar>(nwbFilePath),
+                i
+            );
+            return false;
+        }
+
+        const DeformableEditMaskFlags flags = static_cast<DeformableEditMaskFlags>(parsedFlags[i]);
+        if(!ValidDeformableEditMaskFlags(flags)){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Deformable geometry meta '{}': edit_masks[{}] is invalid"),
+                PathToString<tchar>(nwbFilePath),
+                i
+            );
+            return false;
+        }
+        outEditMaskPerTriangle.push_back(flags);
+    }
+    return true;
+}
+
 static bool ParseRequiredStringField(
     const Path& nwbFilePath,
     const Core::Metascript::Value& map,
@@ -1397,37 +1434,6 @@ static bool ParseRequiredStringField(
 
     const Core::Metascript::MStringView text = field->asString();
     outText = CanonicalizeText(AStringView(text.data(), text.size()));
-    if(outText.empty()){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Deformable geometry meta '{}': '{}' must not be empty"),
-            PathToString<tchar>(nwbFilePath),
-            StringConvert(fieldName)
-        );
-        return false;
-    }
-    return true;
-}
-
-static bool ParseRequiredRawStringField(
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& map,
-    const AStringView fieldName,
-    AString& outText)
-{
-    outText.clear();
-
-    const Core::Metascript::Value* field = FindField(map, fieldName);
-    if(!field || !field->isString()){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Deformable geometry meta '{}': '{}' must be a string"),
-            PathToString<tchar>(nwbFilePath),
-            StringConvert(fieldName)
-        );
-        return false;
-    }
-
-    const Core::Metascript::MStringView text = field->asString();
-    outText.assign(text.data(), text.size());
     if(outText.empty()){
         NWB_LOGGER_ERROR(
             NWB_TEXT("Deformable geometry meta '{}': '{}' must not be empty"),
@@ -1468,19 +1474,6 @@ static bool ParseOptionalFloat2Field(
 
     outValue = Float2U(tuple[0], tuple[1]);
     return true;
-}
-
-static bool ParseOptionalU32Field(
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& map,
-    const AStringView fieldName,
-    u32& inOutValue)
-{
-    const Core::Metascript::Value* field = FindField(map, fieldName);
-    if(!field)
-        return true;
-
-    return ParseU32Value(nwbFilePath, *field, fieldName, inOutValue);
 }
 
 static bool ParseDisplacement(
@@ -1649,89 +1642,22 @@ static bool ParseMorphs(
     return true;
 }
 
-static bool ResolveDeformableGeometrySourcePath(
+static bool RejectDeformableGeometrySourceField(
     const DiscoveredNwbFile& discoveredFile,
-    const Vector<Path>& assetRoots,
-    const AStringView sourcePathText,
-    Path& outSourcePath)
+    const Core::Metascript::Value& asset)
 {
-    outSourcePath.clear();
-
-    if(Core::Assets::HasReservedAssetVirtualRoot(sourcePathText)){
-        if(Core::Assets::ResolveVirtualAssetPath(assetRoots, sourcePathText, outSourcePath))
-            return true;
-
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Deformable geometry meta '{}': failed to resolve source virtual path '{}'"),
-            PathToString<tchar>(discoveredFile.filePath),
-            StringConvert(sourcePathText)
-        );
-        return false;
-    }
-
-    ErrorCode errorCode;
-    if(!ResolveAbsolutePath(discoveredFile.filePath.parent_path(), sourcePathText, outSourcePath, errorCode)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Deformable geometry meta '{}': failed to resolve source path '{}': {}"),
-            PathToString<tchar>(discoveredFile.filePath),
-            StringConvert(sourcePathText),
-            StringConvert(errorCode ? errorCode.message() : AString("invalid path"))
-        );
-        return false;
-    }
-    return true;
-}
-
-static bool ParseDeformableGeometrySource(
-    const DiscoveredNwbFile& discoveredFile,
-    const Vector<Path>& assetRoots,
-    const Core::Metascript::Value& asset,
-    DeformableGeometrySource& outSource,
-    bool& outHasSource)
-{
-    outSource = DeformableGeometrySource{};
-    outHasSource = false;
-
-    const Core::Metascript::Value* source = FindField(asset, "source");
-    if(!source)
+    if(!FindField(asset, "source"))
         return true;
-    outHasSource = true;
-    if(!source->isMap()){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Deformable geometry meta '{}': 'source' must be a map"),
-            PathToString<tchar>(discoveredFile.filePath)
-        );
-        return false;
-    }
 
-    AString format;
-    AString sourcePathText;
-    if(!ParseRequiredStringField(discoveredFile.filePath, *source, "format", format)
-        || !ParseRequiredRawStringField(discoveredFile.filePath, *source, "path", sourcePathText)
-    )
-        return false;
-    if(format != "gltf" && format != "glb"){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Deformable geometry meta '{}': source format '{}' is not supported"),
-            PathToString<tchar>(discoveredFile.filePath),
-            StringConvert(format)
-        );
-        return false;
-    }
-
-    outSource.kind = DeformableGeometrySourceKind::Gltf;
-    if(!ParseOptionalU32Field(discoveredFile.filePath, *source, "mesh", outSource.meshIndex)
-        || !ParseOptionalU32Field(discoveredFile.filePath, *source, "primitive", outSource.primitiveIndex)
-        || !ResolveDeformableGeometrySourcePath(discoveredFile, assetRoots, sourcePathText, outSource.sourcePath)
-    )
-        return false;
-
-    return true;
+    NWB_LOGGER_ERROR(
+        NWB_TEXT("Deformable geometry meta '{}': external 'source' imports are not supported; use an offline converter to emit native .nwb streams"),
+        PathToString<tchar>(discoveredFile.filePath)
+    );
+    return false;
 }
 
 static bool ParseDeformableGeometryMeta(
     const DiscoveredNwbFile& discoveredFile,
-    const Vector<Path>& assetRoots,
     const Core::Metascript::Document& doc,
     DeformableGeometryEntry& outEntry
 ){
@@ -1756,14 +1682,8 @@ static bool ParseDeformableGeometryMeta(
     ))
         return false;
 
-    bool hasSource = false;
-    if(!ParseDeformableGeometrySource(discoveredFile, assetRoots, asset, outEntry.source, hasSource))
+    if(!RejectDeformableGeometrySourceField(discoveredFile, asset))
         return false;
-    if(hasSource){
-        if(!ParseDisplacement(discoveredFile.filePath, asset, outEntry.displacement))
-            return false;
-        return true;
-    }
 
     Vector<Float3U> positions;
     Vector<Float3U> normals;
@@ -1793,6 +1713,8 @@ static bool ParseDeformableGeometryMeta(
     if(!ParseSkinInfluences(discoveredFile.filePath, asset, outEntry.restVertices.size(), outEntry.skin))
         return false;
     if(!ParseSourceSamples(discoveredFile.filePath, asset, outEntry.restVertices.size(), outEntry.sourceSamples))
+        return false;
+    if(!ParseEditMasks(discoveredFile.filePath, asset, outEntry.indices.size() / 3u, outEntry.editMaskPerTriangle))
         return false;
     if(!ParseDisplacement(discoveredFile.filePath, asset, outEntry.displacement))
         return false;
@@ -1855,25 +1777,13 @@ static bool ParseDeformableDisplacementTextureMeta(
 }
 
 static bool BuildDeformableGeometryAsset(DeformableGeometryEntry& geometryEntry, DeformableGeometry& outGeometry){
-    if(geometryEntry.source.kind == DeformableGeometrySourceKind::Gltf){
-        DeformableGltfImportOptions importOptions;
-        importOptions.sourcePath = geometryEntry.source.sourcePath;
-        importOptions.virtualPath = geometryEntry.virtualPath;
-        importOptions.meshIndex = geometryEntry.source.meshIndex;
-        importOptions.primitiveIndex = geometryEntry.source.primitiveIndex;
-        if(!ImportDeformableGeometryFromGltf(importOptions, outGeometry))
-            return false;
-        if(geometryEntry.displacement.mode != DeformableDisplacementMode::None)
-            outGeometry.setDisplacement(geometryEntry.displacement);
-        return outGeometry.validatePayload();
-    }
-
     outGeometry = DeformableGeometry(geometryEntry.virtualPath);
 
     outGeometry.setRestVertices(Move(geometryEntry.restVertices));
     outGeometry.setIndices(Move(geometryEntry.indices));
     outGeometry.setSkin(Move(geometryEntry.skin));
     outGeometry.setSourceSamples(Move(geometryEntry.sourceSamples));
+    outGeometry.setEditMaskPerTriangle(Move(geometryEntry.editMaskPerTriangle));
     outGeometry.setDisplacement(geometryEntry.displacement);
     outGeometry.setMorphs(Move(geometryEntry.morphs));
     return outGeometry.validatePayload();
@@ -2343,7 +2253,6 @@ static bool ParseAssetMetadata(
     Core::ShaderCook::CookArena& cookArena,
     Core::ShaderCook& shaderCook,
     const Vector<DiscoveredNwbFile>& nwbFiles,
-    const Vector<Path>& assetRoots,
     ParsedAssetMetadata& outMetadata
 ){
     outMetadata.includeMetadata.reserve(nwbFiles.size());
@@ -2468,7 +2377,7 @@ static bool ParseAssetMetadata(
 
         if(assetType == DeformableGeometry::AssetTypeName()){
             DeformableGeometryEntry geometryEntry;
-            if(!ParseDeformableGeometryMeta(discoveredNwbFile, assetRoots, doc, geometryEntry))
+            if(!ParseDeformableGeometryMeta(discoveredNwbFile, doc, geometryEntry))
                 return false;
 
             if(!AppendUniquePropertyAssetEntry(geometryEntry, seenPropertyAssetPathHashes, outMetadata.deformableGeometryEntries))
@@ -3007,7 +2916,7 @@ bool ShaderAssetCooker::cookShaderAssets(const ShaderCookEnvironment& environmen
         return false;
 
     __hidden_assets::ParsedAssetMetadata parsedMetadata(m_arena);
-    if(!__hidden_assets::ParseAssetMetadata(m_arena, shaderCook, nwbFiles, resolvedPaths.assetRoots, parsedMetadata))
+    if(!__hidden_assets::ParseAssetMetadata(m_arena, shaderCook, nwbFiles, parsedMetadata))
         return false;
 
     AString normalizedConfiguration = CanonicalizeText(environment.configuration.view());

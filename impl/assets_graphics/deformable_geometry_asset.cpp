@@ -26,7 +26,7 @@ namespace __hidden_assets{
 
 
 static constexpr u32 s_DeformableGeometryMagic = 0x44474F31u; // DGO1
-static constexpr u32 s_DeformableGeometryVersion = 3u;
+static constexpr u32 s_DeformableGeometryVersion = 4u;
 static constexpr u32 s_DeformableDisplacementTextureMagic = 0x44445431u; // DDT1
 static constexpr u32 s_DeformableDisplacementTextureVersion = 1u;
 #if defined(NWB_COOK)
@@ -37,6 +37,7 @@ static constexpr usize s_DeformableGeometryHeaderBytes =
     sizeof(u64) + // index count
     sizeof(u64) + // skin count
     sizeof(u64) + // source sample count
+    sizeof(u64) + // edit mask count
     sizeof(u64)   // morph count
 ;
 static constexpr usize s_DeformableMorphHeaderBytes =
@@ -436,6 +437,26 @@ bool DeformableGeometry::validatePayload()const{
         }
     }
 
+    if(!m_editMaskPerTriangle.empty() && m_editMaskPerTriangle.size() != triangleCount){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("DeformableGeometry::validatePayload failed: '{}' edit mask count {} does not match triangle count {}"),
+            geometryPathText(),
+            m_editMaskPerTriangle.size(),
+            triangleCount
+        );
+        return false;
+    }
+    for(usize i = 0; i < m_editMaskPerTriangle.size(); ++i){
+        if(!ValidDeformableEditMaskFlags(m_editMaskPerTriangle[i])){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' edit mask {} is invalid"),
+                geometryPathText(),
+                i
+            );
+            return false;
+        }
+    }
+
     if(!ValidDeformableDisplacementDescriptor(m_displacement)){
         NWB_LOGGER_ERROR(
             NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' displacement descriptor is invalid"),
@@ -470,6 +491,7 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
     m_indices.clear();
     m_skin.clear();
     m_sourceSamples.clear();
+    m_editMaskPerTriangle.clear();
     m_displacement = DeformableDisplacement{};
     m_morphs.clear();
 
@@ -480,6 +502,7 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
     u64 indexCount = 0;
     u64 skinCount = 0;
     u64 sourceSampleCount = 0;
+    u64 editMaskCount = 0;
     u64 morphCount = 0;
     if(!ReadPOD(binary, cursor, magic)
         || !ReadPOD(binary, cursor, version)
@@ -487,6 +510,7 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
         || !ReadPOD(binary, cursor, indexCount)
         || !ReadPOD(binary, cursor, skinCount)
         || !ReadPOD(binary, cursor, sourceSampleCount)
+        || !ReadPOD(binary, cursor, editMaskCount)
         || !ReadPOD(binary, cursor, morphCount)
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: malformed header"));
@@ -505,6 +529,7 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
         || indexCount > static_cast<u64>(Limit<u32>::s_Max)
         || skinCount > static_cast<u64>(Limit<u32>::s_Max)
         || sourceSampleCount > static_cast<u64>(Limit<u32>::s_Max)
+        || editMaskCount > static_cast<u64>(Limit<u32>::s_Max)
         || morphCount > static_cast<u64>(Limit<u32>::s_Max)
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: payload counts exceed u32 limits"));
@@ -528,6 +553,13 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
         );
         return false;
     }
+    const u64 triangleCount = indexCount / 3u;
+    if(editMaskCount != 0u && editMaskCount != triangleCount){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("DeformableGeometry::loadBinary failed: edit mask count must be empty or match triangle count")
+        );
+        return false;
+    }
 
     if(!__hidden_assets::ReadVectorPayload(binary, cursor, vertexCount, m_restVertices, NWB_TEXT("rest vertices")))
         return false;
@@ -536,6 +568,8 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
     if(!__hidden_assets::ReadVectorPayload(binary, cursor, skinCount, m_skin, NWB_TEXT("skin")))
         return false;
     if(!__hidden_assets::ReadVectorPayload(binary, cursor, sourceSampleCount, m_sourceSamples, NWB_TEXT("source samples")))
+        return false;
+    if(!__hidden_assets::ReadVectorPayload(binary, cursor, editMaskCount, m_editMaskPerTriangle, NWB_TEXT("edit masks")))
         return false;
 
     if(morphCount > static_cast<u64>(Limit<usize>::s_Max)){
@@ -639,6 +673,7 @@ bool DeformableGeometryAssetCodec::serialize(const Core::Assets::IAsset& asset, 
         && __hidden_assets::AddVectorReserveBytes(reserveBytes, geometry.indices())
         && __hidden_assets::AddVectorReserveBytes(reserveBytes, geometry.skin())
         && __hidden_assets::AddVectorReserveBytes(reserveBytes, geometry.sourceSamples())
+        && __hidden_assets::AddVectorReserveBytes(reserveBytes, geometry.editMaskPerTriangle())
     ;
     for(const DeformableMorph& morph : geometry.morphs()){
         canReserve = canReserve
@@ -660,6 +695,7 @@ bool DeformableGeometryAssetCodec::serialize(const Core::Assets::IAsset& asset, 
     AppendPOD(outBinary, static_cast<u64>(geometry.indices().size()));
     AppendPOD(outBinary, static_cast<u64>(geometry.skin().size()));
     AppendPOD(outBinary, static_cast<u64>(geometry.sourceSamples().size()));
+    AppendPOD(outBinary, static_cast<u64>(geometry.editMaskPerTriangle().size()));
     AppendPOD(outBinary, static_cast<u64>(geometry.morphs().size()));
 
     if(!__hidden_assets::AppendVectorPayload(outBinary, geometry.restVertices(), NWB_TEXT("rest vertices")))
@@ -669,6 +705,8 @@ bool DeformableGeometryAssetCodec::serialize(const Core::Assets::IAsset& asset, 
     if(!__hidden_assets::AppendVectorPayload(outBinary, geometry.skin(), NWB_TEXT("skin")))
         return false;
     if(!__hidden_assets::AppendVectorPayload(outBinary, geometry.sourceSamples(), NWB_TEXT("source samples")))
+        return false;
+    if(!__hidden_assets::AppendVectorPayload(outBinary, geometry.editMaskPerTriangle(), NWB_TEXT("edit masks")))
         return false;
 
     for(const DeformableMorph& morph : geometry.morphs()){

@@ -67,6 +67,20 @@ static constexpr AStringView s_AccessoryMaterialPath = "project/materials/mat_ac
     return Min(Max(depth, 0.04f), 0.45f);
 }
 
+[[nodiscard]] static const tchar* SurfaceEditPermissionText(
+    const NWB::Core::ECSGraphics::DeformableSurfaceEditPermission::Enum permission)
+{
+    switch(permission){
+    case NWB::Core::ECSGraphics::DeformableSurfaceEditPermission::Restricted:
+        return NWB_TEXT("restricted");
+    case NWB::Core::ECSGraphics::DeformableSurfaceEditPermission::Forbidden:
+        return NWB_TEXT("forbidden");
+    case NWB::Core::ECSGraphics::DeformableSurfaceEditPermission::Allowed:
+    default:
+        return NWB_TEXT("allowed");
+    }
+}
+
 [[nodiscard]] static bool ResolveKeyIndex(const i32 key, usize& outIndex){
     if(key < 0 || key > NWB::Core::Key::Menu)
         return false;
@@ -541,7 +555,7 @@ bool ProjectTestbed::onStartup(){
 
     NWB_LOGGER_ESSENTIAL_INFO(
         NWB_TEXT("ProjectTestbed: startup scene created ({})"),
-        NWB_TEXT("directional light, shared primitives, animated proxy, imported glTF deformable")
+        NWB_TEXT("directional light, shared primitives, animated proxy, mock native .nwb deformable")
     );
     logSurfaceEditControls();
     registerInputHandler();
@@ -765,11 +779,12 @@ bool ProjectTestbed::refreshSurfaceEditPreview(){
     }
 
     NWB_LOGGER_ESSENTIAL_INFO(
-        NWB_TEXT("Surface edit: preview radius={} ellipse={} depth={} rev={}"),
+        NWB_TEXT("Surface edit: preview radius={} ellipse={} depth={} rev={} permission={}"),
         m_surfaceEditPreview.radius,
         m_surfaceEditPreview.ellipseRatio,
         m_surfaceEditPreview.depth,
-        m_surfaceEditPreview.editRevision
+        m_surfaceEditPreview.editRevision,
+        __hidden_project_testbed_runtime::SurfaceEditPermissionText(m_surfaceEditPreview.editPermission)
     );
     return true;
 }
@@ -833,13 +848,15 @@ void ProjectTestbed::previewSurfaceEditAtCursor(){
     m_surfaceEditSession = session;
     m_surfaceEditPreviewParams = params;
     m_surfaceEditPreview = preview;
+    m_surfaceEditDebugRuntimeMesh = session.runtimeMesh;
     m_surfaceEditPreviewActive = true;
     NWB_LOGGER_ESSENTIAL_INFO(
-        NWB_TEXT("Surface edit: selected preview radius={} ellipse={} depth={} rev={}, press Enter to commit"),
+        NWB_TEXT("Surface edit: selected preview radius={} ellipse={} depth={} rev={} permission={}, press Enter to commit"),
         m_surfaceEditPreview.radius,
         m_surfaceEditPreview.ellipseRatio,
         m_surfaceEditPreview.depth,
-        m_surfaceEditPreview.editRevision
+        m_surfaceEditPreview.editRevision,
+        __hidden_project_testbed_runtime::SurfaceEditPermissionText(m_surfaceEditPreview.editPermission)
     );
 }
 
@@ -874,12 +891,21 @@ void ProjectTestbed::commitSurfaceEditPreview(){
             &record
         )
     ){
+        const NWB::Core::ECSGraphics::DeformableSurfaceEditPermission::Enum permission =
+            m_surfaceEditPreview.editPermission
+        ;
         clearSurfaceEditPreview();
-        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: commit failed for the selected deformable surface"));
+        if(permission == NWB::Core::ECSGraphics::DeformableSurfaceEditPermission::Forbidden){
+            NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: commit refused by the deformable edit mask"));
+        }
+        else{
+            NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: commit failed for the selected deformable surface"));
+        }
         return;
     }
 
     m_pendingSurfaceEditRuntimeMesh = m_surfaceEditSession.runtimeMesh;
+    m_surfaceEditDebugRuntimeMesh = m_surfaceEditSession.runtimeMesh;
     m_pendingSurfaceEditResult = result;
     m_pendingSurfaceEditRecord = record;
     m_pendingSurfaceEditAccessory = true;
@@ -996,11 +1022,56 @@ void ProjectTestbed::cancelSurfaceEditPreview(){
 
 void ProjectTestbed::logSurfaceEditControls()const{
     NWB_LOGGER_ESSENTIAL_INFO(
-        NWB_TEXT("Surface edit: left click preview, [/] radius={}, comma/period ellipse={}, -/= depth={}, Enter commit, Esc cancel"),
+        NWB_TEXT("Surface edit: left click preview, [/] radius={}, comma/period ellipse={}, -/= depth={}, Enter commit, F2 debug, Esc cancel"),
         m_surfaceEditRadius,
         m_surfaceEditEllipseRatio,
         m_surfaceEditDepth
     );
+}
+
+void ProjectTestbed::toggleSurfaceEditDebug(){
+    m_surfaceEditDebugEnabled = !m_surfaceEditDebugEnabled;
+    NWB_LOGGER_ESSENTIAL_INFO(
+        NWB_TEXT("Surface edit debug: {}"),
+        m_surfaceEditDebugEnabled ? NWB_TEXT("enabled") : NWB_TEXT("disabled")
+    );
+    if(m_surfaceEditDebugEnabled)
+        logSurfaceEditDebugSnapshot();
+}
+
+void ProjectTestbed::logSurfaceEditDebugSnapshot(){
+    if(!m_surfaceEditDebugEnabled)
+        return;
+
+    const NWB::Core::ECSGraphics::RuntimeMeshHandle runtimeMesh = m_surfaceEditPreviewActive
+        ? m_surfaceEditSession.runtimeMesh
+        : m_surfaceEditDebugRuntimeMesh
+    ;
+    const auto* instance = rendererSystem().findDeformableRuntimeMesh(runtimeMesh);
+    if(!instance){
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit debug: no active runtime mesh"));
+        return;
+    }
+
+    NWB::Core::ECSGraphics::DeformableSurfaceEditDebugSnapshot snapshot;
+    if(!NWB::Core::ECSGraphics::BuildDeformableSurfaceEditDebugSnapshot(
+            *instance,
+            m_surfaceEditPreviewActive ? &m_surfaceEditSession : nullptr,
+            m_surfaceEditPreviewActive ? &m_surfaceEditPreview : nullptr,
+            &m_surfaceEditState,
+            snapshot
+        )
+    ){
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit debug: failed to build snapshot"));
+        return;
+    }
+
+    AString dump;
+    if(!NWB::Core::ECSGraphics::BuildDeformableSurfaceEditDebugDump(snapshot, dump)){
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit debug: failed to format snapshot"));
+        return;
+    }
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("{}"), StringConvert(dump));
 }
 
 bool ProjectTestbed::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods){
@@ -1037,6 +1108,9 @@ bool ProjectTestbed::keyboardUpdate(const i32 key, const i32 scancode, const i32
         }
         else if(key == NWB::Core::Key::Enter || key == NWB::Core::Key::KeypadEnter){
             commitSurfaceEditPreview();
+        }
+        else if(key == NWB::Core::Key::F2){
+            toggleSurfaceEditDebug();
         }
         else if(key == NWB::Core::Key::Escape){
             cancelSurfaceEditPreview();

@@ -456,6 +456,7 @@ template<typename VertexVector>
             instance.sourceTriangleCount,
             instance.skin,
             instance.sourceSamples,
+            instance.editMaskPerTriangle,
             instance.morphs
         )
     )
@@ -606,6 +607,25 @@ bool ResolveDeformableRestSurfaceSample(
     return ResolveDeformableRestSurfaceSample(instance, triangle, unpackedBary, outSample);
 }
 
+DeformableEditMaskFlags ResolveDeformableTriangleEditMask(
+    const DeformableRuntimeMeshInstance& instance,
+    const u32 triangle)
+{
+    const usize triangleCount = instance.indices.size() / 3u;
+    if(static_cast<usize>(triangle) >= triangleCount)
+        return DeformableEditMaskFlag::Forbidden;
+    if(instance.editMaskPerTriangle.empty())
+        return s_DeformableEditMaskDefault;
+    if(instance.editMaskPerTriangle.size() != triangleCount)
+        return DeformableEditMaskFlag::Forbidden;
+
+    const DeformableEditMaskFlags flags = instance.editMaskPerTriangle[triangle];
+    return ValidDeformableEditMaskFlags(flags)
+        ? flags
+        : static_cast<DeformableEditMaskFlags>(DeformableEditMaskFlag::Forbidden)
+    ;
+}
+
 bool RaycastDeformableRuntimeMesh(
     const DeformableRuntimeMeshInstance& instance,
     const DeformablePickingInputs& inputs,
@@ -686,6 +706,7 @@ bool RaycastDeformableRuntimeMesh(
         closestHit.setDistance(distance);
         closestHit.position = Float4(position.x, position.y, position.z, 1.0f);
         closestHit.normal = Float4(normal.x, normal.y, normal.z, 0.0f);
+        closestHit.editMaskFlags = ResolveDeformableTriangleEditMask(instance, closestHit.triangle);
         closestHit.restSample = restSample;
         foundHit = true;
     }

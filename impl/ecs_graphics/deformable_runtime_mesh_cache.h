@@ -48,6 +48,7 @@ struct DeformableRuntimeMeshInstance{
     u32 sourceTriangleCount = 0;
     Vector<SkinInfluence4> skin;
     Vector<SourceSample> sourceSamples;
+    Vector<DeformableEditMaskFlags> editMaskPerTriangle;
     DeformableDisplacement displacement;
     Vector<DeformableMorph> morphs;
     Core::BufferHandle restVertexBuffer;

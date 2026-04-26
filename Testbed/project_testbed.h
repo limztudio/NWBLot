@@ -38,6 +38,8 @@ private:
     void commitSurfaceEditPreview();
     void attachPendingSurfaceEditAccessory();
     void cancelSurfaceEditPreview();
+    void toggleSurfaceEditDebug();
+    void logSurfaceEditDebugSnapshot();
     void logSurfaceEditControls()const;
 
 
@@ -69,6 +71,7 @@ private:
     NWB::Core::ECSGraphics::DeformableHoleEditParams m_surfaceEditPreviewParams;
     NWB::Core::ECSGraphics::DeformableHolePreview m_surfaceEditPreview;
     NWB::Core::ECSGraphics::RuntimeMeshHandle m_pendingSurfaceEditRuntimeMesh;
+    NWB::Core::ECSGraphics::RuntimeMeshHandle m_surfaceEditDebugRuntimeMesh;
     NWB::Core::ECSGraphics::DeformableHoleEditResult m_pendingSurfaceEditResult;
     NWB::Core::ECSGraphics::DeformableSurfaceEditRecord m_pendingSurfaceEditRecord;
     f32 m_deformableMorphTime = 0.0f;
@@ -89,6 +92,7 @@ private:
     bool m_cursorPositionValid = false;
     bool m_surfaceEditPreviewActive = false;
     bool m_pendingSurfaceEditAccessory = false;
+    bool m_surfaceEditDebugEnabled = false;
 };
 
 

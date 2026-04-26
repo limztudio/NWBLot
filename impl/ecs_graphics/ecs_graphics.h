@@ -6,6 +6,7 @@
 
 
 #include "components.h"
+#include "deformable_debug_draw.h"
 #include "deformable_picking.h"
 #include "deformable_surface_edit.h"
 #include "deformer_system.h"
@@ -45,10 +46,12 @@ using DeformableSurfaceEditRecord = NWB::Impl::DeformableSurfaceEditRecord;
 using DeformableSurfaceEditState = NWB::Impl::DeformableSurfaceEditState;
 using DeformableSurfaceEditReplayContext = NWB::Impl::DeformableSurfaceEditReplayContext;
 using DeformableSurfaceEditReplayResult = NWB::Impl::DeformableSurfaceEditReplayResult;
+using DeformableSurfaceEditUndoResult = NWB::Impl::DeformableSurfaceEditUndoResult;
 using DeformableAccessoryAttachmentComponent = NWB::Impl::DeformableAccessoryAttachmentComponent;
 using DeformableAccessoryAttachmentRecord = NWB::Impl::DeformableAccessoryAttachmentRecord;
 using DeformableRuntimeMeshCache = NWB::Impl::DeformableRuntimeMeshCache;
 using DeformableRuntimeMeshInstance = NWB::Impl::DeformableRuntimeMeshInstance;
+using DeformableSurfaceEditDebugSnapshot = NWB::Impl::DeformableSurfaceEditDebugSnapshot;
 using DeformerSystem = NWB::Impl::DeformerSystem;
 using RendererComponent = NWB::Impl::RendererComponent;
 using RendererSystem = NWB::Impl::RendererSystem;
@@ -58,13 +61,17 @@ using NWB::Impl::AttachAccessory;
 using NWB::Impl::ApplySurfaceEditState;
 using NWB::Impl::BeginSurfaceEdit;
 using NWB::Impl::BuildSurfaceEditStateDebugDump;
+using NWB::Impl::BuildDeformableSurfaceEditDebugDump;
+using NWB::Impl::BuildDeformableSurfaceEditDebugSnapshot;
 using NWB::Impl::CommitHole;
 using NWB::Impl::DeserializeSurfaceEditState;
 using NWB::Impl::PreviewHole;
 using NWB::Impl::RaycastVisibleDeformableRenderers;
 using NWB::Impl::ResolveAccessoryAttachmentTransform;
 using NWB::Impl::SerializeSurfaceEditState;
+using NWB::Impl::UndoLastSurfaceEdit;
 namespace DeformableSurfaceEditRecordType = NWB::Impl::DeformableSurfaceEditRecordType;
+namespace DeformableSurfaceEditPermission = NWB::Impl::DeformableSurfaceEditPermission;
 namespace RuntimeMeshDirtyFlag = NWB::Impl::RuntimeMeshDirtyFlag;
 
 

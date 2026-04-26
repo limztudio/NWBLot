@@ -45,6 +45,39 @@ struct SourceSample{
 static_assert(IsStandardLayout_V<SourceSample>, "SourceSample must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<SourceSample>, "SourceSample must stay binary-serializable");
 
+namespace DeformableEditMaskFlag{
+    enum Enum : u8{
+        Editable = 1u << 0u,
+        Restricted = 1u << 1u,
+        Forbidden = 1u << 2u,
+        RequiresRepair = 1u << 3u,
+    };
+};
+using DeformableEditMaskFlags = u8;
+
+static constexpr DeformableEditMaskFlags s_DeformableEditMaskDefault = DeformableEditMaskFlag::Editable;
+static constexpr DeformableEditMaskFlags s_DeformableEditMaskKnownFlags =
+    DeformableEditMaskFlag::Editable
+    | DeformableEditMaskFlag::Restricted
+    | DeformableEditMaskFlag::Forbidden
+    | DeformableEditMaskFlag::RequiresRepair
+;
+
+[[nodiscard]] inline bool ValidDeformableEditMaskFlags(const DeformableEditMaskFlags flags){
+    if(flags == 0u || (flags & ~s_DeformableEditMaskKnownFlags) != 0u)
+        return false;
+
+    return (flags & (DeformableEditMaskFlag::Editable | DeformableEditMaskFlag::Forbidden))
+        != (DeformableEditMaskFlag::Editable | DeformableEditMaskFlag::Forbidden)
+    ;
+}
+
+[[nodiscard]] inline bool DeformableEditMaskAllowsCommit(const DeformableEditMaskFlags flags){
+    return ValidDeformableEditMaskFlags(flags)
+        && (flags & DeformableEditMaskFlag::Forbidden) == 0u
+    ;
+}
+
 namespace DeformableDisplacementMode{
     enum Enum : u32{
         None = 0,
@@ -165,6 +198,7 @@ public:
     void setIndices(Vector<u32>&& indices){ m_indices = Move(indices); }
     void setSkin(Vector<SkinInfluence4>&& skin){ m_skin = Move(skin); }
     void setSourceSamples(Vector<SourceSample>&& sourceSamples){ m_sourceSamples = Move(sourceSamples); }
+    void setEditMaskPerTriangle(Vector<DeformableEditMaskFlags>&& editMaskPerTriangle){ m_editMaskPerTriangle = Move(editMaskPerTriangle); }
     void setDisplacement(const DeformableDisplacement& displacement){ m_displacement = displacement; }
     void setMorphs(Vector<DeformableMorph>&& morphs){ m_morphs = Move(morphs); }
 
@@ -172,6 +206,7 @@ public:
     [[nodiscard]] const Vector<u32>& indices()const{ return m_indices; }
     [[nodiscard]] const Vector<SkinInfluence4>& skin()const{ return m_skin; }
     [[nodiscard]] const Vector<SourceSample>& sourceSamples()const{ return m_sourceSamples; }
+    [[nodiscard]] const Vector<DeformableEditMaskFlags>& editMaskPerTriangle()const{ return m_editMaskPerTriangle; }
     [[nodiscard]] const DeformableDisplacement& displacement()const{ return m_displacement; }
     [[nodiscard]] const Vector<DeformableMorph>& morphs()const{ return m_morphs; }
 
@@ -181,6 +216,7 @@ private:
     Vector<u32> m_indices;
     Vector<SkinInfluence4> m_skin;
     Vector<SourceSample> m_sourceSamples;
+    Vector<DeformableEditMaskFlags> m_editMaskPerTriangle;
     DeformableDisplacement m_displacement;
     Vector<DeformableMorph> m_morphs;
 };

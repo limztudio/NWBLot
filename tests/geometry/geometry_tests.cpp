@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <core/geometry/mesh_topology.h>
 #include <core/geometry/tangent_frame_rebuild.h>
 
 #include <tests/test_context.h>
@@ -22,6 +23,7 @@ namespace __hidden_geometry_tests{
 
 
 using TestContext = NWB::Tests::TestContext;
+using MeshTopologyEdge = NWB::Core::Geometry::MeshTopologyEdge;
 using TangentFrameRebuildVertex = NWB::Core::Geometry::TangentFrameRebuildVertex;
 
 
@@ -129,6 +131,138 @@ static void TestRejectsDegenerateTriangle(TestContext& context){
     NWB_GEOMETRY_TEST_CHECK(context, !NWB::Core::Geometry::RebuildTangentFrames(vertices, indices));
 }
 
+static MeshTopologyEdge MakeEdge(const u32 a, const u32 b){
+    MeshTopologyEdge edge;
+    edge.a = a;
+    edge.b = b;
+    edge.fullCount = 2u;
+    edge.removedCount = 1u;
+    return edge;
+}
+
+static void TestOrdersBoundaryLoopCounterClockwise(TestContext& context){
+    Vector<Float3U> positions;
+    positions.push_back(Float3U(-1.0f, -1.0f, 0.0f));
+    positions.push_back(Float3U(1.0f, -1.0f, 0.0f));
+    positions.push_back(Float3U(1.0f, 1.0f, 0.0f));
+    positions.push_back(Float3U(-1.0f, 1.0f, 0.0f));
+
+    Vector<MeshTopologyEdge> boundaryEdges;
+    boundaryEdges.push_back(MakeEdge(2u, 3u));
+    boundaryEdges.push_back(MakeEdge(1u, 0u));
+    boundaryEdges.push_back(MakeEdge(3u, 0u));
+    boundaryEdges.push_back(MakeEdge(1u, 2u));
+
+    NWB::Core::Geometry::MeshTopologyBoundaryLoopFrame frame;
+    frame.center = Float3U(0.0f, 0.0f, 0.0f);
+    frame.tangent = Float3U(1.0f, 0.0f, 0.0f);
+    frame.bitangent = Float3U(0.0f, 1.0f, 0.0f);
+
+    Vector<MeshTopologyEdge> orderedEdges;
+    NWB_GEOMETRY_TEST_CHECK(
+        context,
+        NWB::Core::Geometry::BuildOrderedBoundaryLoop(boundaryEdges, positions, frame, orderedEdges)
+    );
+    NWB_GEOMETRY_TEST_CHECK(context, orderedEdges.size() == 4u);
+    NWB_GEOMETRY_TEST_CHECK(context, orderedEdges[0].a == 0u && orderedEdges[0].b == 1u);
+    NWB_GEOMETRY_TEST_CHECK(context, orderedEdges[1].a == 1u && orderedEdges[1].b == 2u);
+    NWB_GEOMETRY_TEST_CHECK(context, orderedEdges[2].a == 2u && orderedEdges[2].b == 3u);
+    NWB_GEOMETRY_TEST_CHECK(context, orderedEdges[3].a == 3u && orderedEdges[3].b == 0u);
+}
+
+static void TestRejectsBranchedBoundaryLoop(TestContext& context){
+    Vector<Float3U> positions;
+    positions.push_back(Float3U(0.0f, 0.0f, 0.0f));
+    positions.push_back(Float3U(1.0f, 0.0f, 0.0f));
+    positions.push_back(Float3U(0.0f, 1.0f, 0.0f));
+    positions.push_back(Float3U(-1.0f, 0.0f, 0.0f));
+
+    Vector<MeshTopologyEdge> boundaryEdges;
+    boundaryEdges.push_back(MakeEdge(0u, 1u));
+    boundaryEdges.push_back(MakeEdge(1u, 2u));
+    boundaryEdges.push_back(MakeEdge(2u, 0u));
+    boundaryEdges.push_back(MakeEdge(0u, 3u));
+
+    NWB::Core::Geometry::MeshTopologyBoundaryLoopFrame frame;
+    frame.center = Float3U(0.0f, 0.0f, 0.0f);
+    frame.tangent = Float3U(1.0f, 0.0f, 0.0f);
+    frame.bitangent = Float3U(0.0f, 1.0f, 0.0f);
+
+    Vector<MeshTopologyEdge> orderedEdges;
+    NWB_GEOMETRY_TEST_CHECK(
+        context,
+        !NWB::Core::Geometry::BuildOrderedBoundaryLoop(boundaryEdges, positions, frame, orderedEdges)
+    );
+}
+
+static void TestAppendsWallTrianglePairs(TestContext& context){
+    Vector<MeshTopologyEdge> orderedEdges;
+    orderedEdges.push_back(MakeEdge(0u, 1u));
+    orderedEdges.push_back(MakeEdge(1u, 2u));
+    orderedEdges.push_back(MakeEdge(2u, 0u));
+
+    Vector<u32> innerVertices;
+    innerVertices.push_back(3u);
+    innerVertices.push_back(4u);
+    innerVertices.push_back(5u);
+
+    Vector<u32> indices;
+    u32 addedTriangleCount = 0u;
+    NWB_GEOMETRY_TEST_CHECK(
+        context,
+        NWB::Core::Geometry::AppendWallTrianglePairs(
+            orderedEdges,
+            innerVertices,
+            indices,
+            &addedTriangleCount
+        )
+    );
+    NWB_GEOMETRY_TEST_CHECK(context, addedTriangleCount == 6u);
+    NWB_GEOMETRY_TEST_CHECK(context, indices.size() == 18u);
+    NWB_GEOMETRY_TEST_CHECK(context, indices[0] == 0u && indices[1] == 1u && indices[2] == 4u);
+    NWB_GEOMETRY_TEST_CHECK(context, indices[3] == 0u && indices[4] == 4u && indices[5] == 3u);
+    NWB_GEOMETRY_TEST_CHECK(context, indices[12] == 2u && indices[13] == 0u && indices[14] == 3u);
+    NWB_GEOMETRY_TEST_CHECK(context, indices[15] == 2u && indices[16] == 3u && indices[17] == 5u);
+}
+
+static void TestRejectsMalformedWallTrianglePairs(TestContext& context){
+    Vector<MeshTopologyEdge> orderedEdges;
+    orderedEdges.push_back(MakeEdge(0u, 1u));
+    orderedEdges.push_back(MakeEdge(2u, 0u));
+    orderedEdges.push_back(MakeEdge(1u, 2u));
+
+    Vector<u32> innerVertices;
+    innerVertices.push_back(3u);
+    innerVertices.push_back(4u);
+    innerVertices.push_back(5u);
+
+    Vector<u32> indices;
+    NWB_GEOMETRY_TEST_CHECK(
+        context,
+        !NWB::Core::Geometry::AppendWallTrianglePairs(
+            orderedEdges,
+            innerVertices,
+            indices
+        )
+    );
+    NWB_GEOMETRY_TEST_CHECK(context, indices.empty());
+
+    orderedEdges.clear();
+    orderedEdges.push_back(MakeEdge(0u, 1u));
+    orderedEdges.push_back(MakeEdge(1u, 2u));
+    orderedEdges.push_back(MakeEdge(2u, 0u));
+    innerVertices[1u] = 1u;
+    NWB_GEOMETRY_TEST_CHECK(
+        context,
+        !NWB::Core::Geometry::AppendWallTrianglePairs(
+            orderedEdges,
+            innerVertices,
+            indices
+        )
+    );
+    NWB_GEOMETRY_TEST_CHECK(context, indices.empty());
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -153,6 +287,10 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
     __hidden_geometry_tests::TestRebuildsFlatQuadFrame(context);
     __hidden_geometry_tests::TestDegenerateUvsUseStableTangentFallback(context);
     __hidden_geometry_tests::TestRejectsDegenerateTriangle(context);
+    __hidden_geometry_tests::TestOrdersBoundaryLoopCounterClockwise(context);
+    __hidden_geometry_tests::TestRejectsBranchedBoundaryLoop(context);
+    __hidden_geometry_tests::TestAppendsWallTrianglePairs(context);
+    __hidden_geometry_tests::TestRejectsMalformedWallTrianglePairs(context);
     if(context.failed != 0u){
         NWB_CERR << "geometry tests failed: " << context.failed << " failed, " << context.passed << " passed\n";
         return -1;

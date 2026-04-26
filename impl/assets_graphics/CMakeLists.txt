@@ -18,12 +18,10 @@ target_link_libraries(nwb_assets_graphics PUBLIC nwb_assets nwb_graphics)
 if(TARGET nwb_graphics_cook)
     nwb_declare_static_library(nwb_assets_graphics_cook)
     target_sources(nwb_assets_graphics_cook PRIVATE
-        "${CMAKE_CURRENT_LIST_DIR}/deformable_gltf_importer.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/deformable_geometry_asset.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/geometry_asset.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/material_asset.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/shader_asset_cooker.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/deformable_gltf_importer.h"
         "${CMAKE_CURRENT_LIST_DIR}/deformable_geometry_asset.h"
         "${CMAKE_CURRENT_LIST_DIR}/deformable_geometry_validation.h"
         "${CMAKE_CURRENT_LIST_DIR}/geometry_asset.h"

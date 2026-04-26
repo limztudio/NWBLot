@@ -180,6 +180,26 @@ static constexpr RuntimeMeshDirtyFlags s_GpuUploadHandledDirtyFlags =
             return false;
         }
     }
+    const usize triangleCount = indexCount / 3u;
+    if(!instance.editMaskPerTriangle.empty() && instance.editMaskPerTriangle.size() != triangleCount){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' edit mask count {} does not match triangle count {}"),
+            sourceText(),
+            instance.editMaskPerTriangle.size(),
+            triangleCount
+        );
+        return false;
+    }
+    for(usize triangleIndex = 0; triangleIndex < instance.editMaskPerTriangle.size(); ++triangleIndex){
+        if(!ValidDeformableEditMaskFlags(instance.editMaskPerTriangle[triangleIndex])){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' edit mask {} is invalid"),
+                sourceText(),
+                triangleIndex
+            );
+            return false;
+        }
+    }
 
     const DeformableValidation::MorphPayloadFailureInfo morphFailure =
         DeformableValidation::FindMorphPayloadFailure(instance.morphs, vertexCount)
@@ -374,6 +394,7 @@ bool DeformableRuntimeMeshCache::ensureRuntimeMesh(Core::ECS::EntityID entity, D
     instance.sourceTriangleCount = static_cast<u32>(geometry->indices().size() / 3u);
     instance.skin = geometry->skin();
     instance.sourceSamples = geometry->sourceSamples();
+    instance.editMaskPerTriangle = geometry->editMaskPerTriangle();
     instance.displacement = geometry->displacement();
     instance.morphs = geometry->morphs();
     instance.dirtyFlags = RuntimeMeshDirtyFlag::All;

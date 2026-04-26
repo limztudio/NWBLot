@@ -428,6 +428,19 @@ inline void LogMorphPayloadFailure(
     return FindMorphPayloadFailure(morphs, vertexCount).reason == MorphPayloadFailure::None;
 }
 
+[[nodiscard]] inline bool ValidEditMaskPayload(const Vector<DeformableEditMaskFlags>& editMaskPerTriangle, const usize triangleCount){
+    if(editMaskPerTriangle.empty())
+        return true;
+    if(editMaskPerTriangle.size() != triangleCount)
+        return false;
+
+    for(const DeformableEditMaskFlags flags : editMaskPerTriangle){
+        if(!ValidDeformableEditMaskFlags(flags))
+            return false;
+    }
+    return true;
+}
+
 [[nodiscard]] inline bool ValidTriangle(
     const Vector<DeformableVertexRest>& restVertices,
     const u32 a,
@@ -452,6 +465,7 @@ inline void LogMorphPayloadFailure(
     const u32 sourceTriangleCount,
     const Vector<SkinInfluence4>& skin,
     const Vector<SourceSample>& sourceSamples,
+    const Vector<DeformableEditMaskFlags>& editMaskPerTriangle,
     const Vector<DeformableMorph>& morphs)
 {
     if(restVertices.empty() || indices.empty())
@@ -466,6 +480,8 @@ inline void LogMorphPayloadFailure(
     if(!sourceSamples.empty() && sourceSamples.size() != restVertices.size())
         return false;
     if(!sourceSamples.empty() && sourceTriangleCount == 0u)
+        return false;
+    if(!ValidEditMaskPayload(editMaskPerTriangle, indices.size() / 3u))
         return false;
 
     for(const DeformableVertexRest& vertex : restVertices){

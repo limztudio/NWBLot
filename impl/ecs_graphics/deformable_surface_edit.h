@@ -48,6 +48,14 @@ struct DeformableSurfaceEditSession{
     bool previewed = false;
 };
 
+namespace DeformableSurfaceEditPermission{
+    enum Enum : u32{
+        Allowed = 0u,
+        Restricted = 1u,
+        Forbidden = 2u,
+    };
+};
+
 struct alignas(Float4) DeformableHolePreview{
     Float4 center = Float4(0.0f, 0.0f, 0.0f, 1.0f);
     Float4 normal = Float4(0.0f, 0.0f, 1.0f, 0.0f);
@@ -57,6 +65,8 @@ struct alignas(Float4) DeformableHolePreview{
     f32 ellipseRatio = 1.0f;
     f32 depth = 0.0f;
     u32 editRevision = 0;
+    DeformableEditMaskFlags editMaskFlags = s_DeformableEditMaskDefault;
+    DeformableSurfaceEditPermission::Enum editPermission = DeformableSurfaceEditPermission::Allowed;
     bool valid = false;
 };
 static_assert(IsStandardLayout_V<DeformableHolePreview>, "DeformableHolePreview must stay layout-stable");
@@ -112,6 +122,12 @@ struct DeformableSurfaceEditReplayResult{
     u32 restoredAccessoryCount = 0;
     u32 finalEditRevision = 0;
     bool topologyChanged = false;
+};
+
+struct DeformableSurfaceEditUndoResult{
+    DeformableSurfaceEditId undoneEditId = 0;
+    u32 removedAccessoryCount = 0;
+    DeformableSurfaceEditReplayResult replay;
 };
 
 struct DeformableSurfaceEditReplayContext{
@@ -172,6 +188,12 @@ struct DeformableSurfaceEditReplayContext{
     const DeformableSurfaceEditState& state,
     const DeformableSurfaceEditReplayContext& context,
     DeformableSurfaceEditReplayResult* outResult = nullptr
+);
+[[nodiscard]] bool UndoLastSurfaceEdit(
+    DeformableRuntimeMeshInstance& instance,
+    const DeformableRuntimeMeshInstance& cleanBaseInstance,
+    DeformableSurfaceEditState& state,
+    DeformableSurfaceEditUndoResult* outResult = nullptr
 );
 [[nodiscard]] bool CommitDeformableRestSpaceHole(
     DeformableRuntimeMeshInstance& instance,

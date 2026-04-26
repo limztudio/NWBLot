@@ -243,7 +243,7 @@ asset.skin = {};
 asset.morphs = {};
 )";
 
-static constexpr AStringView s_FullDeformableMeta = R"(deformable_geometry asset;
+static constexpr AStringView s_NativeCharacterMockDeformableMeta = R"(deformable_geometry asset;
 
 asset.index_type = "u16";
 
@@ -286,6 +286,8 @@ asset.indices = [
     [0, 1, 2],
     [0, 2, 3],
 ];
+
+asset.edit_masks = [1, 2];
 
 asset.source_samples = {
     "source_tri": [0, 0, 0, 1],
@@ -584,6 +586,49 @@ asset.morphs = {
     },
 };
 )";
+
+static constexpr AStringView s_SourceImportDeformableMeta = R"(deformable_geometry asset;
+
+asset.source = {
+    "format": "external",
+    "path": "mesh.bin",
+};
+)";
+
+static constexpr AStringView s_MismatchedEditMaskDeformableMeta = R"(deformable_geometry asset;
+
+asset.index_type = "u16";
+
+asset.positions = [
+    [-0.5, -0.5, 0.0],
+    [ 0.5, -0.5, 0.0],
+    [ 0.0,  0.5, 0.0],
+];
+
+asset.normals = [
+    [0.0, 0.0, 1.0],
+    [0.0, 0.0, 1.0],
+    [0.0, 0.0, 1.0],
+];
+
+asset.tangents = [
+    [1.0, 0.0, 0.0, 1.0],
+    [1.0, 0.0, 0.0, 1.0],
+    [1.0, 0.0, 0.0, 1.0],
+];
+
+asset.uv0 = [
+    [0.0, 0.0],
+    [1.0, 0.0],
+    [0.5, 1.0],
+];
+
+asset.indices = [
+    [0, 1, 2],
+];
+
+asset.edit_masks = [1, 1];
+)";
 #endif
 
 
@@ -609,14 +654,6 @@ static bool WriteTextFile(const Path& filePath, const AStringView text){
 
     file.write(text.data(), static_cast<GlobalFilesystemDetail::StreamSize>(text.size()));
     return static_cast<bool>(file);
-}
-
-static bool WriteBinaryFileEnsured(const Path& filePath, const Vector<u8>& bytes){
-    ErrorCode errorCode;
-    if(!EnsureDirectories(filePath.parent_path(), errorCode))
-        return false;
-
-    return WriteBinaryFile(filePath, bytes);
 }
 
 static const char* AssetsGraphicsTestConfigurationName(){
@@ -719,253 +756,6 @@ static bool CookAndLoadMinimalDeformable(
     return false;
 }
 
-struct SimpleGltfBufferLayout{
-    u32 positionOffset = 0;
-    u32 uvOffset = 0;
-    u32 jointOffset = 0;
-    u32 weightOffset = 0;
-    u32 indexOffset = 0;
-    u32 morphPositionOffset = 0;
-    u32 byteLength = 0;
-};
-
-static void PadBinaryToAlignment(Vector<u8>& bytes, const usize alignment){
-    while((bytes.size() % alignment) != 0u)
-        bytes.push_back(0u);
-}
-
-static u32 BeginAlignedBinaryRange(Vector<u8>& bytes, const usize alignment){
-    PadBinaryToAlignment(bytes, alignment);
-    return static_cast<u32>(bytes.size());
-}
-
-static void AppendF32(Vector<u8>& bytes, const f32 value){
-    AppendPOD(bytes, value);
-}
-
-static void AppendU16(Vector<u8>& bytes, const u16 value){
-    AppendPOD(bytes, value);
-}
-
-static void AppendU32(Vector<u8>& bytes, const u32 value){
-    AppendPOD(bytes, value);
-}
-
-static void AppendVec2(Vector<u8>& bytes, const f32 x, const f32 y){
-    AppendF32(bytes, x);
-    AppendF32(bytes, y);
-}
-
-static void AppendVec3(Vector<u8>& bytes, const f32 x, const f32 y, const f32 z){
-    AppendF32(bytes, x);
-    AppendF32(bytes, y);
-    AppendF32(bytes, z);
-}
-
-static void AppendVec4(Vector<u8>& bytes, const f32 x, const f32 y, const f32 z, const f32 w){
-    AppendF32(bytes, x);
-    AppendF32(bytes, y);
-    AppendF32(bytes, z);
-    AppendF32(bytes, w);
-}
-
-static void AppendU16x4(Vector<u8>& bytes, const u16 x, const u16 y, const u16 z, const u16 w){
-    AppendU16(bytes, x);
-    AppendU16(bytes, y);
-    AppendU16(bytes, z);
-    AppendU16(bytes, w);
-}
-
-static Vector<u8> BuildSimpleSkinnedMorphedGltfBuffer(SimpleGltfBufferLayout& outLayout){
-    Vector<u8> bytes;
-
-    outLayout.positionOffset = BeginAlignedBinaryRange(bytes, 4u);
-    AppendVec3(bytes, -0.5f, -0.5f, 0.0f);
-    AppendVec3(bytes, 0.5f, -0.5f, 0.0f);
-    AppendVec3(bytes, 0.5f, 0.5f, 0.0f);
-    AppendVec3(bytes, -0.5f, 0.5f, 0.0f);
-
-    outLayout.uvOffset = BeginAlignedBinaryRange(bytes, 4u);
-    AppendVec2(bytes, 0.0f, 0.0f);
-    AppendVec2(bytes, 1.0f, 0.0f);
-    AppendVec2(bytes, 1.0f, 1.0f);
-    AppendVec2(bytes, 0.0f, 1.0f);
-
-    outLayout.jointOffset = BeginAlignedBinaryRange(bytes, 4u);
-    AppendU16x4(bytes, 0u, 0u, 0u, 0u);
-    AppendU16x4(bytes, 0u, 1u, 0u, 0u);
-    AppendU16x4(bytes, 1u, 0u, 0u, 0u);
-    AppendU16x4(bytes, 1u, 0u, 0u, 0u);
-
-    outLayout.weightOffset = BeginAlignedBinaryRange(bytes, 4u);
-    AppendVec4(bytes, 1.0f, 0.0f, 0.0f, 0.0f);
-    AppendVec4(bytes, 0.5f, 0.5f, 0.0f, 0.0f);
-    AppendVec4(bytes, 0.5f, 0.0f, 0.0f, 0.0f);
-    AppendVec4(bytes, 1.0f, 0.0f, 0.0f, 0.0f);
-
-    outLayout.indexOffset = BeginAlignedBinaryRange(bytes, 4u);
-    AppendU16(bytes, 0u);
-    AppendU16(bytes, 1u);
-    AppendU16(bytes, 2u);
-    AppendU16(bytes, 0u);
-    AppendU16(bytes, 2u);
-    AppendU16(bytes, 3u);
-
-    outLayout.morphPositionOffset = BeginAlignedBinaryRange(bytes, 4u);
-    AppendVec3(bytes, 0.0f, 0.0f, 0.0f);
-    AppendVec3(bytes, 0.0f, 0.0f, 0.0f);
-    AppendVec3(bytes, 0.0f, 0.0f, 0.25f);
-    AppendVec3(bytes, 0.0f, 0.0f, 0.5f);
-
-    outLayout.byteLength = static_cast<u32>(bytes.size());
-    return bytes;
-}
-
-static AString BuildSimpleSkinnedMorphedGltfText(const SimpleGltfBufferLayout& layout, const bool externalBuffer){
-    AStringStream stream;
-    stream
-        << "{\n"
-        << "  \"asset\": { \"version\": \"2.0\" },\n"
-        << "  \"buffers\": [ { "
-    ;
-    if(externalBuffer)
-        stream << "\"uri\": \"minimal_deformable.bin\", ";
-    stream
-        << "\"byteLength\": " << layout.byteLength << " } ],\n"
-        << "  \"bufferViews\": [\n"
-        << "    { \"buffer\": 0, \"byteOffset\": " << layout.positionOffset << ", \"byteLength\": 48 },\n"
-        << "    { \"buffer\": 0, \"byteOffset\": " << layout.uvOffset << ", \"byteLength\": 32 },\n"
-        << "    { \"buffer\": 0, \"byteOffset\": " << layout.jointOffset << ", \"byteLength\": 32 },\n"
-        << "    { \"buffer\": 0, \"byteOffset\": " << layout.weightOffset << ", \"byteLength\": 64 },\n"
-        << "    { \"buffer\": 0, \"byteOffset\": " << layout.indexOffset << ", \"byteLength\": 12 },\n"
-        << "    { \"buffer\": 0, \"byteOffset\": " << layout.morphPositionOffset << ", \"byteLength\": 48 }\n"
-        << "  ],\n"
-        << "  \"accessors\": [\n"
-        << "    { \"bufferView\": 0, \"componentType\": 5126, \"count\": 4, \"type\": \"VEC3\" },\n"
-        << "    { \"bufferView\": 1, \"componentType\": 5126, \"count\": 4, \"type\": \"VEC2\" },\n"
-        << "    { \"bufferView\": 2, \"componentType\": 5123, \"count\": 4, \"type\": \"VEC4\" },\n"
-        << "    { \"bufferView\": 3, \"componentType\": 5126, \"count\": 4, \"type\": \"VEC4\" },\n"
-        << "    { \"bufferView\": 4, \"componentType\": 5123, \"count\": 6, \"type\": \"SCALAR\" },\n"
-        << "    { \"bufferView\": 5, \"componentType\": 5126, \"count\": 4, \"type\": \"VEC3\" }\n"
-        << "  ],\n"
-        << "  \"meshes\": [\n"
-        << "    {\n"
-        << "      \"extras\": { \"targetNames\": [ \"lift\" ] },\n"
-        << "      \"primitives\": [\n"
-        << "        {\n"
-        << "          \"attributes\": { \"POSITION\": 0, \"TEXCOORD_0\": 1, \"JOINTS_0\": 2, \"WEIGHTS_0\": 3 },\n"
-        << "          \"indices\": 4,\n"
-        << "          \"targets\": [ { \"POSITION\": 5 } ]\n"
-        << "        }\n"
-        << "      ]\n"
-        << "    }\n"
-        << "  ]\n"
-        << "}\n"
-    ;
-    return stream.str();
-}
-
-static Vector<u8> BuildSimpleSkinnedMorphedGlb(const AString& jsonText, const Vector<u8>& binaryChunk){
-    static constexpr u32 s_GlbMagic = 0x46546C67u;
-    static constexpr u32 s_GlbVersion = 2u;
-    static constexpr u32 s_GlbJsonChunkType = 0x4E4F534Au;
-    static constexpr u32 s_GlbBinChunkType = 0x004E4942u;
-
-    AString paddedJson = jsonText;
-    while((paddedJson.size() % 4u) != 0u)
-        paddedJson.push_back(' ');
-
-    Vector<u8> paddedBinary = binaryChunk;
-    PadBinaryToAlignment(paddedBinary, 4u);
-
-    const u32 totalLength = static_cast<u32>(
-        12u
-        + 8u
-        + paddedJson.size()
-        + 8u
-        + paddedBinary.size()
-    );
-
-    Vector<u8> glb;
-    glb.reserve(totalLength);
-    AppendU32(glb, s_GlbMagic);
-    AppendU32(glb, s_GlbVersion);
-    AppendU32(glb, totalLength);
-    AppendU32(glb, static_cast<u32>(paddedJson.size()));
-    AppendU32(glb, s_GlbJsonChunkType);
-    glb.insert(glb.end(), paddedJson.begin(), paddedJson.end());
-    AppendU32(glb, static_cast<u32>(paddedBinary.size()));
-    AppendU32(glb, s_GlbBinChunkType);
-    glb.insert(glb.end(), paddedBinary.begin(), paddedBinary.end());
-    return glb;
-}
-
-static AString BuildGltfImportDeformableMeta(const AStringView format, const AStringView path){
-    AStringStream stream;
-    stream
-        << "deformable_geometry asset;\n\n"
-        << "asset.source = {\n"
-        << "    \"format\": \"" << format << "\",\n"
-        << "    \"path\": \"" << path << "\",\n"
-        << "};\n"
-    ;
-    return stream.str();
-}
-
-static bool CookAndLoadGltfDeformable(
-    TestContext& context,
-    TestArena& testArena,
-    const bool useGlb,
-    Path& outRoot,
-    UniquePtr<NWB::Core::Assets::IAsset>& outLoadedAsset)
-{
-    outRoot = Path("__build_obj")
-        / "nwb_assets_graphics_tests"
-        / AssetsGraphicsTestConfigurationName()
-        / (useGlb ? "glb_import" : "gltf_import")
-    ;
-    const Path outputDirectory = outRoot / "cooked";
-
-    if(!PrepareCleanDirectory(outRoot))
-        return false;
-
-    const Path assetRoot = outRoot / "assets";
-    const Path characterDirectory = assetRoot / "characters";
-
-    SimpleGltfBufferLayout layout;
-    Vector<u8> gltfBuffer = BuildSimpleSkinnedMorphedGltfBuffer(layout);
-
-    const AString sourceFormat = useGlb ? AString("glb") : AString("gltf");
-    const AString sourcePath = useGlb ? AString("minimal_deformable.glb") : AString("minimal_deformable.gltf");
-    if(!WriteTextFile(characterDirectory / "minimal_deformable.nwb", BuildGltfImportDeformableMeta(sourceFormat, sourcePath)))
-        return false;
-    if(useGlb){
-        const AString glbJson = BuildSimpleSkinnedMorphedGltfText(layout, false);
-        if(!WriteBinaryFileEnsured(characterDirectory / "minimal_deformable.glb", BuildSimpleSkinnedMorphedGlb(glbJson, gltfBuffer)))
-            return false;
-    }
-    else{
-        if(!WriteBinaryFileEnsured(characterDirectory / "minimal_deformable.bin", gltfBuffer))
-            return false;
-        const AString gltfJson = BuildSimpleSkinnedMorphedGltfText(layout, true);
-        if(!WriteTextFile(characterDirectory / "minimal_deformable.gltf", gltfJson))
-            return false;
-    }
-
-    NWB::Core::Assets::AssetCookOptions options;
-    options.repoRoot = ".";
-    options.assetRoots.push_back(PathToString(assetRoot));
-    options.outputDirectory = PathToString(outputDirectory);
-    options.cacheDirectory = PathToString(outRoot / "cache");
-    if(!options.configuration.assign("tests") || !options.assetType.assign("shader"))
-        return false;
-
-    NWB::Impl::ShaderAssetCooker cooker(testArena.arena);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, cooker.cook(options));
-    return LoadCookedMinimalDeformable(context, testArena, outputDirectory, outLoadedAsset);
-}
-
-
 static NWB::Impl::DeformableVertexRest MakeRestVertex(
     const f32 x,
     const f32 y,
@@ -1029,11 +819,12 @@ static usize DeformableHeaderCountOffset(const usize countIndex){
 
 static usize DeformableMorphDeltaCountOffset(const NWB::Impl::DeformableGeometry& geometry){
     return (sizeof(u32) * 2u)
-        + (sizeof(u64) * 5u)
+        + (sizeof(u64) * 6u)
         + (geometry.restVertices().size() * sizeof(NWB::Impl::DeformableVertexRest))
         + (geometry.indices().size() * sizeof(u32))
         + (geometry.skin().size() * sizeof(NWB::Impl::SkinInfluence4))
         + (geometry.sourceSamples().size() * sizeof(NWB::Impl::SourceSample))
+        + (geometry.editMaskPerTriangle().size() * sizeof(NWB::Impl::DeformableEditMaskFlags))
         + sizeof(NameHash)
     ;
 }
@@ -1067,6 +858,10 @@ static NWB::Impl::DeformableGeometry BuildValidDeformableGeometry(){
     sourceSamples.push_back(MakeSourceSample(0u, 0.f, 0.f, 1.f));
     sourceSamples.push_back(MakeSourceSample(1u, 0.f, 0.f, 1.f));
 
+    Vector<NWB::Impl::DeformableEditMaskFlags> editMasks;
+    editMasks.push_back(NWB::Impl::DeformableEditMaskFlag::Editable);
+    editMasks.push_back(NWB::Impl::DeformableEditMaskFlag::Restricted);
+
     Vector<NWB::Impl::DeformableMorph> morphs;
     morphs.resize(1u);
     morphs[0].name = Name("lift");
@@ -1081,6 +876,7 @@ static NWB::Impl::DeformableGeometry BuildValidDeformableGeometry(){
     geometry.setIndices(Move(indices));
     geometry.setSkin(Move(skin));
     geometry.setSourceSamples(Move(sourceSamples));
+    geometry.setEditMaskPerTriangle(Move(editMasks));
     geometry.setDisplacement(displacement);
     geometry.setMorphs(Move(morphs));
     return geometry;
@@ -1165,6 +961,11 @@ static void TestDeformableGeometryCodecRoundTrip(TestContext& context){
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.indices().size() == 6u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skin().size() == 4u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.sourceSamples().size() == 4u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.editMaskPerTriangle().size() == 2u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(
+        context,
+        loadedGeometry.editMaskPerTriangle()[1] == NWB::Impl::DeformableEditMaskFlag::Restricted
+    );
     NWB_ASSETS_GRAPHICS_TEST_CHECK(
         context,
         loadedGeometry.displacement().mode == NWB::Impl::DeformableDisplacementMode::ScalarUvRamp
@@ -1272,7 +1073,7 @@ static void TestDeformableGeometryCodecRejectsMalformedCounts(TestContext& conte
     NWB::Core::Assets::AssetBytes binary;
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, codec.serialize(geometry, binary));
 
-    const usize morphCountOffset = DeformableHeaderCountOffset(4u);
+    const usize morphCountOffset = DeformableHeaderCountOffset(5u);
     const u64 invalidMorphCount = static_cast<u64>(Limit<u32>::s_Max) + 1ull;
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, OverwriteU64(binary, morphCountOffset, invalidMorphCount));
 
@@ -1448,7 +1249,7 @@ static void TestDeformableGeometryCookerExplicitEmptyOptionalLists(TestContext& 
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 0u);
 }
 
-static void TestDeformableGeometryCookerFullAsset(TestContext& context){
+static void TestDeformableGeometryCookerNativeCharacterMock(TestContext& context){
     CapturingLogger logger;
     NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
 
@@ -1458,8 +1259,8 @@ static void TestDeformableGeometryCookerFullAsset(TestContext& context){
     if(!CookAndLoadMinimalDeformable(
         context,
         testArena,
-        s_FullDeformableMeta,
-        "full_streams",
+        s_NativeCharacterMockDeformableMeta,
+        "native_character_mock",
         root,
         loadedAsset
     ))
@@ -1478,6 +1279,11 @@ static void TestDeformableGeometryCookerFullAsset(TestContext& context){
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.sourceSamples().size() == 4u);
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.sourceSamples()[3].sourceTri == 1u);
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.sourceSamples()[3].bary[2] == 1.f);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.editMaskPerTriangle().size() == 2u);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(
+            context,
+            loadedGeometry.editMaskPerTriangle()[1] == NWB::Impl::DeformableEditMaskFlag::Restricted
+        );
         NWB_ASSETS_GRAPHICS_TEST_CHECK(
             context,
             loadedGeometry.displacement().mode == NWB::Impl::DeformableDisplacementMode::ScalarUvRamp
@@ -1488,73 +1294,6 @@ static void TestDeformableGeometryCookerFullAsset(TestContext& context){
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs()[0].deltas.size() == 2u);
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs()[0].deltas[1].vertexId == 2u);
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs()[0].deltas[1].deltaPosition.z == 0.5f);
-    }
-
-    ErrorCode errorCode;
-    static_cast<void>(RemoveAllIfExists(root, errorCode));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 0u);
-}
-
-static void TestDeformableGeometryCookerGltfImport(TestContext& context){
-    CapturingLogger logger;
-    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
-
-    TestArena testArena;
-    Path root;
-    UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-    if(!CookAndLoadGltfDeformable(context, testArena, false, root, loadedAsset))
-        return;
-
-    {
-        const NWB::Impl::DeformableGeometry& loadedGeometry =
-            static_cast<const NWB::Impl::DeformableGeometry&>(*loadedAsset)
-        ;
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.restVertices().size() == 4u);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.indices().size() == 6u);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.restVertices()[0].normal.z > 0.99f);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.restVertices()[0].tangent.x > 0.99f);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.restVertices()[0].color0.w == 1.0f);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skin().size() == 4u);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skin()[1].joint[1] == 1u);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skin()[1].weight[0] == 0.5f);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skin()[2].weight[0] == 1.0f);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.sourceSamples().size() == 4u);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.sourceSamples()[3].sourceTri == 1u);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.sourceSamples()[3].bary[2] == 1.0f);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs().size() == 1u);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs()[0].name == Name("lift"));
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs()[0].deltas.size() == 2u);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs()[0].deltas[0].vertexId == 2u);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs()[0].deltas[0].deltaPosition.z == 0.25f);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs()[0].deltas[1].vertexId == 3u);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs()[0].deltas[1].deltaPosition.z == 0.5f);
-    }
-
-    ErrorCode errorCode;
-    static_cast<void>(RemoveAllIfExists(root, errorCode));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 0u);
-}
-
-static void TestDeformableGeometryCookerGlbImport(TestContext& context){
-    CapturingLogger logger;
-    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
-
-    TestArena testArena;
-    Path root;
-    UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-    if(!CookAndLoadGltfDeformable(context, testArena, true, root, loadedAsset))
-        return;
-
-    {
-        const NWB::Impl::DeformableGeometry& loadedGeometry =
-            static_cast<const NWB::Impl::DeformableGeometry&>(*loadedAsset)
-        ;
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.restVertices().size() == 4u);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.indices().size() == 6u);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skin().size() == 4u);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.sourceSamples().size() == 4u);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs().size() == 1u);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs()[0].deltas.size() == 2u);
     }
 
     ErrorCode errorCode;
@@ -1589,7 +1328,9 @@ static void TestDeformableGeometryCookerValidationFailures(TestContext& context)
     expectCookFailure(s_MismatchedSourceSamplesDeformableMeta, "mismatched_source_samples");
     expectCookFailure(s_MismatchedMorphDeformableMeta, "mismatched_morph");
     expectCookFailure(s_MissingMorphTangentDeformableMeta, "missing_morph_tangent");
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() >= 6u);
+    expectCookFailure(s_SourceImportDeformableMeta, "source_import");
+    expectCookFailure(s_MismatchedEditMaskDeformableMeta, "mismatched_edit_mask");
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() >= 8u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("rest vertex stream counts must match")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("'index_type' must be 'u16' or 'u32'")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("skin streams must match vertex count")));
@@ -1599,6 +1340,8 @@ static void TestDeformableGeometryCookerValidationFailures(TestContext& context)
         logger.sawErrorContaining(NWB_TEXT("morph 'lift' stream counts must match and must not be empty"))
     );
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("morph 'lift' requires 'delta_tangent' list")));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("offline converter to emit native .nwb streams")));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("edit mask count must match triangle count")));
 #else
     static_cast<void>(context);
 #endif
@@ -1731,6 +1474,16 @@ static void TestDeformableGeometryValidationFailures(TestContext& context){
 
     {
         NWB::Impl::DeformableGeometry geometry = BuildValidDeformableGeometry();
+        Vector<NWB::Impl::DeformableEditMaskFlags> editMasks = geometry.editMaskPerTriangle();
+        editMasks[0] = static_cast<NWB::Impl::DeformableEditMaskFlags>(
+            NWB::Impl::DeformableEditMaskFlag::Editable | NWB::Impl::DeformableEditMaskFlag::Forbidden
+        );
+        geometry.setEditMaskPerTriangle(Move(editMasks));
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !geometry.validatePayload());
+    }
+
+    {
+        NWB::Impl::DeformableGeometry geometry = BuildValidDeformableGeometry();
         NWB::Impl::DeformableDisplacement displacement = geometry.displacement();
         displacement.mode = 99u;
         geometry.setDisplacement(displacement);
@@ -1742,6 +1495,17 @@ static void TestDeformableGeometryValidationFailures(TestContext& context){
         NWB::Impl::DeformableDisplacement displacement;
         displacement.amplitude = 0.25f;
         geometry.setDisplacement(displacement);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !geometry.validatePayload());
+    }
+
+    {
+        NWB::Impl::DeformableGeometry geometry = BuildValidDeformableGeometry();
+        Vector<NWB::Impl::DeformableMorph> morphs = geometry.morphs();
+        NWB::Impl::DeformableMorph duplicateMorph;
+        duplicateMorph.name = morphs[0].name;
+        duplicateMorph.deltas.push_back(MakeMorphDelta(3u, 0.125f));
+        morphs.push_back(Move(duplicateMorph));
+        geometry.setMorphs(Move(morphs));
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !geometry.validatePayload());
     }
 
@@ -1760,11 +1524,13 @@ static void TestDeformableGeometryValidationFailures(TestContext& context){
         geometry.setMorphs(Move(morphs));
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !geometry.validatePayload());
     }
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 19u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 21u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("degenerate normal/tangent frame")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("invalid normal/tangent frame")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("triangle 0 is degenerate")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("triangle 0 has zero area")));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("contains duplicate morph")));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("edit mask 0 is invalid")));
 #else
     static_cast<void>(context);
 #endif
@@ -1822,9 +1588,7 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
     __hidden_assets_graphics_tests::TestDeformableGeometryCookerMinimalAsset(context);
     __hidden_assets_graphics_tests::TestDeformableGeometryCookerU32IndexType(context);
     __hidden_assets_graphics_tests::TestDeformableGeometryCookerExplicitEmptyOptionalLists(context);
-    __hidden_assets_graphics_tests::TestDeformableGeometryCookerFullAsset(context);
-    __hidden_assets_graphics_tests::TestDeformableGeometryCookerGltfImport(context);
-    __hidden_assets_graphics_tests::TestDeformableGeometryCookerGlbImport(context);
+    __hidden_assets_graphics_tests::TestDeformableGeometryCookerNativeCharacterMock(context);
     __hidden_assets_graphics_tests::TestDeformableGeometryCookerValidationFailures(context);
     __hidden_assets_graphics_tests::TestDeformableGeometryValidationFailures(context);
     __hidden_assets_graphics_tests::TestFormatBlockDimensions(context);

@@ -110,6 +110,7 @@ struct alignas(Float4) DeformablePosedHit{
     DeformableHitBarycentric bary;
     Float4 position = Float4(0.0f, 0.0f, 0.0f, 1.0f);
     Float4 normal = Float4(0.0f, 0.0f, 1.0f, 0.0f);
+    DeformableEditMaskFlags editMaskFlags = s_DeformableEditMaskDefault;
     SourceSample restSample;
 
     [[nodiscard]] f32 distance()const{ return bary.distance(); }
@@ -164,6 +165,10 @@ static_assert(
     u32 triangle,
     const DeformableHitBarycentric& bary,
     SourceSample& outSample
+);
+[[nodiscard]] DeformableEditMaskFlags ResolveDeformableTriangleEditMask(
+    const DeformableRuntimeMeshInstance& instance,
+    u32 triangle
 );
 [[nodiscard]] bool RaycastDeformableRuntimeMesh(
     const DeformableRuntimeMeshInstance& instance,

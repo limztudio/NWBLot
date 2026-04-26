@@ -2517,14 +2517,20 @@ namespace __hidden_deformable_surface_edit{
 [[nodiscard]] bool BuildUndoSurfaceEditState(
     const DeformableSurfaceEditState& state,
     DeformableSurfaceEditState& outUndoState,
-    DeformableSurfaceEditUndoResult& outResult)
+    DeformableSurfaceEditUndoResult& outResult,
+    DeformableSurfaceEditRedoEntry* outRedoEntry)
 {
     outUndoState = DeformableSurfaceEditState{};
     outResult = DeformableSurfaceEditUndoResult{};
+    if(outRedoEntry)
+        *outRedoEntry = DeformableSurfaceEditRedoEntry{};
     if(!ValidSurfaceEditState(state) || state.edits.empty())
         return false;
 
     const DeformableSurfaceEditId undoneEditId = state.edits.back().editId;
+    if(outRedoEntry)
+        outRedoEntry->edit = state.edits.back();
+
     outUndoState.edits.reserve(state.edits.size() - 1u);
     for(usize editIndex = 0u; editIndex + 1u < state.edits.size(); ++editIndex)
         outUndoState.edits.push_back(state.edits[editIndex]);
@@ -2533,6 +2539,8 @@ namespace __hidden_deformable_surface_edit{
     for(const DeformableAccessoryAttachmentRecord& accessory : state.accessories){
         if(accessory.anchorEditId == undoneEditId){
             ++outResult.removedAccessoryCount;
+            if(outRedoEntry)
+                outRedoEntry->accessories.push_back(accessory);
             continue;
         }
         outUndoState.accessories.push_back(accessory);
@@ -2540,6 +2548,49 @@ namespace __hidden_deformable_surface_edit{
 
     outResult.undoneEditId = undoneEditId;
     return ValidSurfaceEditState(outUndoState);
+}
+
+[[nodiscard]] u32 SurfaceEditStateFinalRevision(const DeformableSurfaceEditState& state){
+    return state.edits.empty()
+        ? 0u
+        : state.edits.back().result.editRevision
+    ;
+}
+
+[[nodiscard]] bool BuildRedoSurfaceEditState(
+    const DeformableSurfaceEditState& state,
+    const DeformableSurfaceEditRedoEntry& redoEntry,
+    DeformableSurfaceEditState& outRedoState,
+    DeformableSurfaceEditRedoResult& outResult)
+{
+    outRedoState = DeformableSurfaceEditState{};
+    outResult = DeformableSurfaceEditRedoResult{};
+    if(!ValidSurfaceEditState(state)
+        || !ValidEditRecord(redoEntry.edit)
+        || redoEntry.edit.hole.baseEditRevision != SurfaceEditStateFinalRevision(state)
+        || redoEntry.accessories.size() > static_cast<usize>(Limit<u32>::s_Max)
+    )
+        return false;
+
+    for(const DeformableAccessoryAttachmentRecord& accessory : redoEntry.accessories){
+        if(accessory.anchorEditId != redoEntry.edit.editId || !ValidAccessoryRecord(accessory))
+            return false;
+    }
+
+    outRedoState.edits.reserve(state.edits.size() + 1u);
+    for(const DeformableSurfaceEditRecord& record : state.edits)
+        outRedoState.edits.push_back(record);
+    outRedoState.edits.push_back(redoEntry.edit);
+
+    outRedoState.accessories.reserve(state.accessories.size() + redoEntry.accessories.size());
+    for(const DeformableAccessoryAttachmentRecord& accessory : state.accessories)
+        outRedoState.accessories.push_back(accessory);
+    for(const DeformableAccessoryAttachmentRecord& accessory : redoEntry.accessories)
+        outRedoState.accessories.push_back(accessory);
+
+    outResult.redoneEditId = redoEntry.edit.editId;
+    outResult.restoredAccessoryCount = static_cast<u32>(redoEntry.accessories.size());
+    return ValidSurfaceEditState(outRedoState);
 }
 
 [[nodiscard]] bool ReplaySurfaceEditRecordsWithoutEdit(
@@ -3187,14 +3238,22 @@ bool UndoLastSurfaceEdit(
     DeformableRuntimeMeshInstance& instance,
     const DeformableRuntimeMeshInstance& cleanBaseInstance,
     DeformableSurfaceEditState& state,
-    DeformableSurfaceEditUndoResult* outResult)
+    DeformableSurfaceEditUndoResult* outResult,
+    DeformableSurfaceEditHistory* history)
 {
     if(outResult)
         *outResult = DeformableSurfaceEditUndoResult{};
 
     DeformableSurfaceEditState undoState;
     DeformableSurfaceEditUndoResult result;
-    if(!__hidden_deformable_surface_edit::BuildUndoSurfaceEditState(state, undoState, result))
+    DeformableSurfaceEditRedoEntry redoEntry;
+    if(!__hidden_deformable_surface_edit::BuildUndoSurfaceEditState(
+            state,
+            undoState,
+            result,
+            history ? &redoEntry : nullptr
+        )
+    )
         return false;
 
     DeformableRuntimeMeshInstance replayInstance;
@@ -3207,6 +3266,51 @@ bool UndoLastSurfaceEdit(
 
     state = Move(undoState);
     instance = Move(replayInstance);
+    if(history)
+        history->redoStack.push_back(Move(redoEntry));
+    if(outResult)
+        *outResult = result;
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool RedoLastSurfaceEdit(
+    DeformableRuntimeMeshInstance& instance,
+    const DeformableRuntimeMeshInstance& cleanBaseInstance,
+    DeformableSurfaceEditState& state,
+    DeformableSurfaceEditHistory& history,
+    DeformableSurfaceEditRedoResult* outResult)
+{
+    if(outResult)
+        *outResult = DeformableSurfaceEditRedoResult{};
+    if(history.redoStack.empty())
+        return false;
+
+    DeformableSurfaceEditState redoState;
+    DeformableSurfaceEditRedoResult result;
+    if(!__hidden_deformable_surface_edit::BuildRedoSurfaceEditState(
+            state,
+            history.redoStack.back(),
+            redoState,
+            result
+        )
+    )
+        return false;
+
+    DeformableRuntimeMeshInstance replayInstance;
+    if(!__hidden_deformable_surface_edit::PrepareCleanReplayInstance(instance, cleanBaseInstance, replayInstance))
+        return false;
+    if(!__hidden_deformable_surface_edit::ReplaySurfaceEditRecords(replayInstance, redoState, result.replay))
+        return false;
+    if(!__hidden_deformable_surface_edit::ValidateReplayAccessoryAnchors(replayInstance, redoState))
+        return false;
+
+    state = Move(redoState);
+    instance = Move(replayInstance);
+    history.redoStack.pop_back();
     if(outResult)
         *outResult = result;
     return true;

@@ -132,6 +132,21 @@ struct DeformableSurfaceEditUndoResult{
     DeformableSurfaceEditReplayResult replay;
 };
 
+struct DeformableSurfaceEditRedoEntry{
+    DeformableSurfaceEditRecord edit;
+    Vector<DeformableAccessoryAttachmentRecord> accessories;
+};
+
+struct DeformableSurfaceEditHistory{
+    Vector<DeformableSurfaceEditRedoEntry> redoStack;
+};
+
+struct DeformableSurfaceEditRedoResult{
+    DeformableSurfaceEditId redoneEditId = 0;
+    u32 restoredAccessoryCount = 0;
+    DeformableSurfaceEditReplayResult replay;
+};
+
 struct DeformableSurfaceEditHealResult{
     DeformableSurfaceEditId healedEditId = 0;
     u32 removedAccessoryCount = 0;
@@ -247,7 +262,15 @@ struct DeformableSurfaceEditReplayContext{
     DeformableRuntimeMeshInstance& instance,
     const DeformableRuntimeMeshInstance& cleanBaseInstance,
     DeformableSurfaceEditState& state,
-    DeformableSurfaceEditUndoResult* outResult = nullptr
+    DeformableSurfaceEditUndoResult* outResult = nullptr,
+    DeformableSurfaceEditHistory* history = nullptr
+);
+[[nodiscard]] bool RedoLastSurfaceEdit(
+    DeformableRuntimeMeshInstance& instance,
+    const DeformableRuntimeMeshInstance& cleanBaseInstance,
+    DeformableSurfaceEditState& state,
+    DeformableSurfaceEditHistory& history,
+    DeformableSurfaceEditRedoResult* outResult = nullptr
 );
 [[nodiscard]] bool HealSurfaceEdit(
     DeformableRuntimeMeshInstance& instance,

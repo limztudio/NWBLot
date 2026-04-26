@@ -2632,6 +2632,144 @@ static void TestSurfaceEditUndoLastReplaysFromCleanBase(TestContext& context){
     CheckHoleEditUnchanged(context, unchangedInstance, oldVertexCount, oldIndexCount, 0u);
 }
 
+static void TestSurfaceEditRedoLastReplaysFromCleanBase(TestContext& context){
+    NWB::Impl::DeformableRuntimeMeshInstance cleanBase = MakeGridHoleInstance(6u, 4u);
+    cleanBase.editRevision = 0u;
+
+    NWB::Impl::DeformableRuntimeMeshInstance editedInstance = cleanBase;
+    NWB::Impl::DeformableSurfaceEditState state;
+
+    NWB::Impl::DeformableHoleEditResult firstHoleResult;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        CommitRecordedHole(editedInstance, 12u, 0.48f, 0.25f, state, &firstHoleResult)
+    );
+    const NWB::Impl::DeformableSurfaceEditId firstEditId = state.edits[0].editId;
+
+    NWB::Impl::DeformableAccessoryAttachmentComponent firstAttachment;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Impl::AttachAccessory(editedInstance, firstHoleResult, 0.08f, 0.12f, firstAttachment)
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        AppendAccessoryRecord(
+            state,
+            firstAttachment,
+            firstEditId,
+            s_MockAccessoryGeometryPath,
+            s_MockAccessoryMaterialPath
+        )
+    );
+
+    NWB::Impl::DeformableHoleEditResult secondHoleResult;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        CommitRecordedHole(editedInstance, 14u, 0.48f, 0.25f, state, &secondHoleResult)
+    );
+    const NWB::Impl::DeformableSurfaceEditId secondEditId = state.edits[1].editId;
+
+    NWB::Impl::DeformableAccessoryAttachmentComponent secondAttachment;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Impl::AttachAccessory(editedInstance, secondHoleResult, 0.16f, 0.18f, secondAttachment)
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        AppendAccessoryRecord(
+            state,
+            secondAttachment,
+            secondEditId,
+            s_MockAccessoryGeometryPath,
+            s_MockAccessoryMaterialPath
+        )
+    );
+    NWB::Core::Scene::TransformComponent expectedSecondTransform;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Impl::ResolveAccessoryAttachmentTransform(
+            editedInstance,
+            NWB::Impl::DeformablePickingInputs{},
+            secondAttachment,
+            expectedSecondTransform
+        )
+    );
+    const usize fullVertexCount = editedInstance.restVertices.size();
+    const usize fullIndexCount = editedInstance.indices.size();
+
+    NWB::Impl::DeformableSurfaceEditHistory history;
+    NWB::Impl::DeformableSurfaceEditUndoResult undoResult;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Impl::UndoLastSurfaceEdit(editedInstance, cleanBase, state, &undoResult, &history)
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, undoResult.undoneEditId == secondEditId);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, history.redoStack.size() == 1u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, history.redoStack[0].edit.editId == secondEditId);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, history.redoStack[0].accessories.size() == 1u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, state.edits.size() == 1u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, state.accessories.size() == 1u);
+
+    NWB::Impl::DeformableSurfaceEditRedoResult redoResult;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Impl::RedoLastSurfaceEdit(editedInstance, cleanBase, state, history, &redoResult)
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, redoResult.redoneEditId == secondEditId);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, redoResult.restoredAccessoryCount == 1u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, redoResult.replay.appliedEditCount == 2u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, redoResult.replay.finalEditRevision == 2u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, redoResult.replay.topologyChanged);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, history.redoStack.empty());
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, state.edits.size() == 2u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, state.edits[0].editId == firstEditId);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, state.edits[1].editId == secondEditId);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, state.accessories.size() == 2u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, state.accessories[1].anchorEditId == secondEditId);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, state.accessories[1].firstWallVertex == state.edits[1].result.firstWallVertex);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, state.accessories[1].wallVertexCount == state.edits[1].result.wallVertexCount);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, editedInstance.restVertices.size() == fullVertexCount);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, editedInstance.indices.size() == fullIndexCount);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, editedInstance.editRevision == 2u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        (editedInstance.dirtyFlags & NWB::Impl::RuntimeMeshDirtyFlag::GpuUploadDirty) != 0u
+    );
+
+    SimulateRuntimeMeshUpload(editedInstance);
+    NWB::Impl::DeformableAccessoryAttachmentComponent restoredAttachment;
+    restoredAttachment.targetEntity = editedInstance.entity;
+    restoredAttachment.runtimeMesh = editedInstance.handle;
+    restoredAttachment.anchorEditId = state.accessories[1].anchorEditId;
+    restoredAttachment.firstWallVertex = state.accessories[1].firstWallVertex;
+    restoredAttachment.wallVertexCount = state.accessories[1].wallVertexCount;
+    restoredAttachment.setNormalOffset(state.accessories[1].normalOffset);
+    restoredAttachment.setUniformScale(state.accessories[1].uniformScale);
+
+    NWB::Core::Scene::TransformComponent resolvedTransform;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Impl::ResolveAccessoryAttachmentTransform(
+            editedInstance,
+            NWB::Impl::DeformablePickingInputs{},
+            restoredAttachment,
+            resolvedTransform
+        )
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(resolvedTransform.position.x, expectedSecondTransform.position.x));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(resolvedTransform.position.y, expectedSecondTransform.position.y));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(resolvedTransform.position.z, expectedSecondTransform.position.z));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(resolvedTransform.scale.x, expectedSecondTransform.scale.x));
+
+    const usize oldVertexCount = editedInstance.restVertices.size();
+    const usize oldIndexCount = editedInstance.indices.size();
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        !NWB::Impl::RedoLastSurfaceEdit(editedInstance, cleanBase, state, history)
+    );
+    CheckHoleEditUnchanged(context, editedInstance, oldVertexCount, oldIndexCount, 2u);
+}
+
 static void TestSurfaceEditHealReplaysSurvivingEdits(TestContext& context){
     NWB::Impl::DeformableRuntimeMeshInstance cleanBase = MakeGridHoleInstance(6u, 4u);
     cleanBase.editRevision = 0u;
@@ -3650,6 +3788,7 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
     __hidden_ecs_graphics_tests::TestSurfaceEditStateReplayRestoresMultipleAccessories(context);
     __hidden_ecs_graphics_tests::TestSurfaceEditStateReplayTwoHoles(context);
     __hidden_ecs_graphics_tests::TestSurfaceEditUndoLastReplaysFromCleanBase(context);
+    __hidden_ecs_graphics_tests::TestSurfaceEditRedoLastReplaysFromCleanBase(context);
     __hidden_ecs_graphics_tests::TestSurfaceEditHealReplaysSurvivingEdits(context);
     __hidden_ecs_graphics_tests::TestSurfaceEditResizeReplaysFromCleanBase(context);
     __hidden_ecs_graphics_tests::TestSurfaceEditMoveReplaysFromCleanBase(context);

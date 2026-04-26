@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "shader_asset_cooker.h"
+#include "graphics_asset_cooker.h"
 
 #if defined(NWB_COOK)
 
@@ -45,15 +45,15 @@ namespace __hidden_assets{
 
 
 static constexpr AStringView s_VolumeName = "graphics";
-static constexpr AStringView s_CookerLogPrefix = "ShaderAssetCooker";
+static constexpr AStringView s_CookerLogPrefix = "GraphicsAssetCooker";
 static constexpr u64 s_DefaultSegmentSize = 16ull * 1024ull * 1024ull;
 static constexpr u64 s_DefaultMetadataSize = 512ull * 1024ull;
 
 
-UniquePtr<Core::Assets::IAssetCooker> CreateShaderAssetCooker(Core::Alloc::CustomArena& arena){
-    return MakeUnique<ShaderAssetCooker>(arena);
+UniquePtr<Core::Assets::IAssetCooker> CreateGraphicsAssetCooker(Core::Alloc::CustomArena& arena){
+    return MakeUnique<GraphicsAssetCooker>(arena);
 }
-Core::Assets::AssetCookerAutoRegistrar s_ShaderAssetCookerAutoRegistrar(&CreateShaderAssetCooker);
+Core::Assets::AssetCookerAutoRegistrar s_GraphicsAssetCookerAutoRegistrar(&CreateGraphicsAssetCooker);
 
 static const Name& IncludeAssetTypeName(){
     static const Name s_Name("include");
@@ -221,7 +221,7 @@ static bool AppendUniquePropertyAssetEntry(EntryT& entry, PathHashSetT& seenPath
     const NameHash pathHash = entry.virtualPath.hash();
     if(!seenPathHashes.insert(pathHash).second){
         NWB_LOGGER_ERROR(
-            NWB_TEXT("ShaderAssetCooker: duplicate property asset virtual path '{}'"),
+            NWB_TEXT("GraphicsAssetCooker: duplicate property asset virtual path '{}'"),
             StringConvert(entry.virtualPath.c_str())
         );
         return false;
@@ -245,17 +245,17 @@ static StagedVolumePaths BuildStagedVolumePaths(const Path& outputDirectory, con
     return BuildStagedDirectoryPaths(outputDirectory, stageToken);
 }
 
-static bool ResolveCookPaths(const ShaderCookEnvironment& environment, ResolvedCookPaths& outPaths){
+static bool ResolveCookPaths(const GraphicsCookEnvironment& environment, ResolvedCookPaths& outPaths){
     ErrorCode errorCode;
 
     outPaths = {};
 
     if(environment.assetRoots.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("ShaderAssetCooker: no asset roots specified"));
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: no asset roots specified"));
         return false;
     }
     if(environment.outputDirectory.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("ShaderAssetCooker: output directory is empty"));
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: output directory is empty"));
         return false;
     }
 
@@ -263,7 +263,7 @@ static bool ResolveCookPaths(const ShaderCookEnvironment& environment, ResolvedC
     outPaths.repoRoot = AbsolutePath(outPaths.repoRoot, errorCode).lexically_normal();
     if(errorCode){
         NWB_LOGGER_ERROR(
-            NWB_TEXT("ShaderAssetCooker: failed to resolve repo root: {}"),
+            NWB_TEXT("GraphicsAssetCooker: failed to resolve repo root: {}"),
             StringConvert(errorCode.message())
         );
         return false;
@@ -276,14 +276,14 @@ static bool ResolveCookPaths(const ShaderCookEnvironment& environment, ResolvedC
         if(!ResolveAbsolutePath(outPaths.repoRoot, PathToString(assetRoot), resolvedAssetRoot, errorCode)){
             if(errorCode){
                 NWB_LOGGER_ERROR(
-                    NWB_TEXT("ShaderAssetCooker: failed to resolve asset root '{}': {}"),
+                    NWB_TEXT("GraphicsAssetCooker: failed to resolve asset root '{}': {}"),
                     PathToString<tchar>(assetRoot),
                     StringConvert(errorCode.message())
                 );
             }
             else{
                 NWB_LOGGER_ERROR(
-                    NWB_TEXT("ShaderAssetCooker: asset root is empty or invalid: '{}'"),
+                    NWB_TEXT("GraphicsAssetCooker: asset root is empty or invalid: '{}'"),
                     PathToString<tchar>(assetRoot)
                 );
             }
@@ -296,14 +296,14 @@ static bool ResolveCookPaths(const ShaderCookEnvironment& environment, ResolvedC
     if(!ResolveAbsolutePath(outPaths.repoRoot, PathToString(environment.outputDirectory), outPaths.outputDirectory, errorCode)){
         if(errorCode){
             NWB_LOGGER_ERROR(
-                NWB_TEXT("ShaderAssetCooker: failed to resolve output directory '{}': {}"),
+                NWB_TEXT("GraphicsAssetCooker: failed to resolve output directory '{}': {}"),
                 PathToString<tchar>(environment.outputDirectory),
                 StringConvert(errorCode.message())
             );
         }
         else{
             NWB_LOGGER_ERROR(
-                NWB_TEXT("ShaderAssetCooker: output directory is empty or invalid: '{}'"),
+                NWB_TEXT("GraphicsAssetCooker: output directory is empty or invalid: '{}'"),
                 PathToString<tchar>(environment.outputDirectory)
             );
         }
@@ -319,14 +319,14 @@ static bool ResolveCookPaths(const ShaderCookEnvironment& environment, ResolvedC
     if(!ResolveAbsolutePath(outPaths.repoRoot, PathToString(requestedCacheDirectory), outPaths.cacheDirectory, errorCode)){
         if(errorCode){
             NWB_LOGGER_ERROR(
-                NWB_TEXT("ShaderAssetCooker: failed to resolve cache directory '{}': {}"),
+                NWB_TEXT("GraphicsAssetCooker: failed to resolve cache directory '{}': {}"),
                 PathToString<tchar>(requestedCacheDirectory),
                 StringConvert(errorCode.message())
             );
         }
         else{
             NWB_LOGGER_ERROR(
-                NWB_TEXT("ShaderAssetCooker: cache directory is empty or invalid: '{}'"),
+                NWB_TEXT("GraphicsAssetCooker: cache directory is empty or invalid: '{}'"),
                 PathToString<tchar>(requestedCacheDirectory)
             );
         }
@@ -335,7 +335,7 @@ static bool ResolveCookPaths(const ShaderCookEnvironment& environment, ResolvedC
 
     if(!EnsureDirectories(outPaths.cacheDirectory, errorCode)){
         NWB_LOGGER_ERROR(
-            NWB_TEXT("ShaderAssetCooker: failed to create cache directory '{}': {}"),
+            NWB_TEXT("GraphicsAssetCooker: failed to create cache directory '{}': {}"),
             PathToString<tchar>(outPaths.cacheDirectory),
             StringConvert(errorCode.message())
         );
@@ -367,7 +367,7 @@ static bool DiscoverNwbFiles(const Vector<Path>& assetRoots, Vector<DiscoveredNw
         if(!IsDirectory(assetRoot, errorCode)){
             if(errorCode){
                 NWB_LOGGER_ERROR(
-                    NWB_TEXT("ShaderAssetCooker: failed to query asset root '{}': {}"),
+                    NWB_TEXT("GraphicsAssetCooker: failed to query asset root '{}': {}"),
                     PathToString<tchar>(assetRoot),
                     StringConvert(errorCode.message())
                 );
@@ -375,7 +375,7 @@ static bool DiscoverNwbFiles(const Vector<Path>& assetRoots, Vector<DiscoveredNw
             }
 
             NWB_LOGGER_ERROR(
-                NWB_TEXT("ShaderAssetCooker: asset root is not a directory: '{}'"),
+                NWB_TEXT("GraphicsAssetCooker: asset root is not a directory: '{}'"),
                 PathToString<tchar>(assetRoot)
             );
             return false;
@@ -384,7 +384,7 @@ static bool DiscoverNwbFiles(const Vector<Path>& assetRoots, Vector<DiscoveredNw
         for(const auto& dirEntry : RecursiveDirectoryIterator(assetRoot, errorCode)){
             if(errorCode){
                 NWB_LOGGER_ERROR(
-                    NWB_TEXT("ShaderAssetCooker: error scanning asset root '{}': {}"),
+                    NWB_TEXT("GraphicsAssetCooker: error scanning asset root '{}': {}"),
                     PathToString<tchar>(assetRoot),
                     StringConvert(errorCode.message())
                 );
@@ -395,7 +395,7 @@ static bool DiscoverNwbFiles(const Vector<Path>& assetRoots, Vector<DiscoveredNw
             const bool isRegularFile = dirEntry.is_regular_file(errorCode);
             if(errorCode){
                 NWB_LOGGER_ERROR(
-                    NWB_TEXT("ShaderAssetCooker: failed to inspect '{}' while scanning '{}': {}"),
+                    NWB_TEXT("GraphicsAssetCooker: failed to inspect '{}' while scanning '{}': {}"),
                     PathToString<tchar>(dirEntry.path()),
                     PathToString<tchar>(assetRoot),
                     StringConvert(errorCode.message())
@@ -1936,7 +1936,7 @@ static bool BuildIncludeDirectories(const Path& repoRoot, const Vector<Path>& as
         if(!Core::Assets::ResolveVirtualAssetPath(assetRoots, includeRoot, includeDirectory)){
             if(Core::Assets::HasReservedAssetVirtualRoot(includeRoot)){
                 NWB_LOGGER_ERROR(
-                    NWB_TEXT("ShaderAssetCooker: failed to resolve virtual include root '{}' for entry '{}'"),
+                    NWB_TEXT("GraphicsAssetCooker: failed to resolve virtual include root '{}' for entry '{}'"),
                     StringConvert(includeRoot),
                     StringConvert(entry.name)
                 );
@@ -1947,7 +1947,7 @@ static bool BuildIncludeDirectories(const Path& repoRoot, const Vector<Path>& as
             if(!ResolveAbsolutePath(repoRoot, includeRoot, includeDirectory, errorCode)){
                 if(errorCode){
                     NWB_LOGGER_ERROR(
-                        NWB_TEXT("ShaderAssetCooker: failed to resolve include root '{}' for entry '{}': {}"),
+                        NWB_TEXT("GraphicsAssetCooker: failed to resolve include root '{}' for entry '{}': {}"),
                         StringConvert(includeRoot),
                         StringConvert(entry.name),
                         StringConvert(errorCode.message())
@@ -1955,7 +1955,7 @@ static bool BuildIncludeDirectories(const Path& repoRoot, const Vector<Path>& as
                 }
                 else{
                     NWB_LOGGER_ERROR(
-                        NWB_TEXT("ShaderAssetCooker: include root '{}' is empty or invalid for entry '{}'"),
+                        NWB_TEXT("GraphicsAssetCooker: include root '{}' is empty or invalid for entry '{}'"),
                         StringConvert(includeRoot),
                         StringConvert(entry.name)
                     );
@@ -1968,7 +1968,7 @@ static bool BuildIncludeDirectories(const Path& repoRoot, const Vector<Path>& as
         const bool isDirectory = IsDirectory(includeDirectory, errorCode);
         if(errorCode){
             NWB_LOGGER_ERROR(
-                NWB_TEXT("ShaderAssetCooker: failed to query include root '{}' for entry '{}': {}"),
+                NWB_TEXT("GraphicsAssetCooker: failed to query include root '{}' for entry '{}': {}"),
                 PathToString<tchar>(includeDirectory),
                 StringConvert(entry.name),
                 StringConvert(errorCode.message())
@@ -1977,7 +1977,7 @@ static bool BuildIncludeDirectories(const Path& repoRoot, const Vector<Path>& as
         }
         if(!isDirectory){
             NWB_LOGGER_ERROR(
-                NWB_TEXT("ShaderAssetCooker: include root is not a directory for entry '{}': '{}'"),
+                NWB_TEXT("GraphicsAssetCooker: include root is not a directory for entry '{}': '{}'"),
                 StringConvert(entry.name),
                 PathToString<tchar>(includeDirectory)
             );
@@ -2001,7 +2001,7 @@ static bool CountShaderVariants(const Core::ShaderCook::ShaderEntry& entry, u64&
         const u64 valueCount = static_cast<u64>(defineEntry.values.size());
         if(valueCount == 0){
             NWB_LOGGER_ERROR(
-                NWB_TEXT("ShaderAssetCooker: entry '{}' has define '{}' with no values"),
+                NWB_TEXT("GraphicsAssetCooker: entry '{}' has define '{}' with no values"),
                 StringConvert(entry.name),
                 StringConvert(defineName)
             );
@@ -2009,7 +2009,7 @@ static bool CountShaderVariants(const Core::ShaderCook::ShaderEntry& entry, u64&
         }
         if(outVariantCount > Limit<u64>::s_Max / valueCount){
             NWB_LOGGER_ERROR(
-                NWB_TEXT("ShaderAssetCooker: variant count overflow for entry '{}'"),
+                NWB_TEXT("GraphicsAssetCooker: variant count overflow for entry '{}'"),
                 StringConvert(entry.name)
             );
             return false;
@@ -2045,14 +2045,14 @@ static bool ConfigureVolumeSizing(const u64 plannedFileCount, Core::Filesystem::
     outConfig.volumeName = s_VolumeName;
     outConfig.metadataSize = EstimateRequiredMetadataBytes(plannedFileCount);
     if(outConfig.metadataSize == Limit<u64>::s_Max){
-        NWB_LOGGER_ERROR(NWB_TEXT("ShaderAssetCooker: metadata size overflow while planning volume"));
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: metadata size overflow while planning volume"));
         return false;
     }
 
     outConfig.segmentSize = s_DefaultSegmentSize;
     while(outConfig.segmentSize <= outConfig.metadataSize){
         if(outConfig.segmentSize > Limit<u64>::s_Max / 2ull){
-            NWB_LOGGER_ERROR(NWB_TEXT("ShaderAssetCooker: segment size overflow while planning volume"));
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: segment size overflow while planning volume"));
             return false;
         }
         outConfig.segmentSize *= 2ull;
@@ -2135,7 +2135,7 @@ static bool ValidateAndNormalizeMaterials(
         };
         if(!preparedShaderLookup.emplace(shaderKey, &preparedEntry).second){
             NWB_LOGGER_ERROR(
-                NWB_TEXT("ShaderAssetCooker: duplicate prepared shader key '{}' stage '{}'"),
+                NWB_TEXT("GraphicsAssetCooker: duplicate prepared shader key '{}' stage '{}'"),
                 StringConvert(preparedEntry.entry.name),
                 StringConvert(preparedEntry.entry.archiveStage.c_str())
             );
@@ -2236,7 +2236,7 @@ static bool GetVariantBytecode(
     const bool hasCachedBytecode = FileExists(cachePaths.bytecodePath, errorCode);
     if(errorCode){
         NWB_LOGGER_ERROR(
-            NWB_TEXT("ShaderAssetCooker: failed to query bytecode cache '{}' for entry '{}': {}"),
+            NWB_TEXT("GraphicsAssetCooker: failed to query bytecode cache '{}' for entry '{}': {}"),
             PathToString<tchar>(cachePaths.bytecodePath),
             StringConvert(entry.name),
             StringConvert(errorCode.message())
@@ -2248,7 +2248,7 @@ static bool GetVariantBytecode(
     const bool hasCachedChecksum = FileExists(cachePaths.sourceChecksumPath, errorCode);
     if(errorCode){
         NWB_LOGGER_ERROR(
-            NWB_TEXT("ShaderAssetCooker: failed to query checksum cache '{}' for entry '{}': {}"),
+            NWB_TEXT("GraphicsAssetCooker: failed to query checksum cache '{}' for entry '{}': {}"),
             PathToString<tchar>(cachePaths.sourceChecksumPath),
             StringConvert(entry.name),
             StringConvert(errorCode.message())
@@ -2284,7 +2284,7 @@ static bool GetVariantBytecode(
     );
     if(defineCombo.size() > Limit<usize>::s_Max - entry.implicitDefines.size()){
         NWB_LOGGER_ERROR(
-            NWB_TEXT("ShaderAssetCooker: define count overflow for entry '{}'"),
+            NWB_TEXT("GraphicsAssetCooker: define count overflow for entry '{}'"),
             StringConvert(entry.name)
         );
         return false;
@@ -2305,7 +2305,7 @@ static bool GetVariantBytecode(
         compileDefines.push_back(Core::ShaderMacroDefinition{ AStringView(defineName), AStringView(value) });
     if(compileDefines.size() > static_cast<usize>(Limit<u32>::s_Max)){
         NWB_LOGGER_ERROR(
-            NWB_TEXT("ShaderAssetCooker: entry '{}' has too many merged defines for shader compilation"),
+            NWB_TEXT("GraphicsAssetCooker: entry '{}' has too many merged defines for shader compilation"),
             StringConvert(entry.name)
         );
         return false;
@@ -2329,7 +2329,7 @@ static bool GetVariantBytecode(
     errorCode.clear();
     if(!EnsureDirectories(cachePaths.bytecodePath.parent_path(), errorCode)){
         NWB_LOGGER_ERROR(
-            NWB_TEXT("ShaderAssetCooker: failed to create cache directory '{}': {}"),
+            NWB_TEXT("GraphicsAssetCooker: failed to create cache directory '{}': {}"),
             PathToString<tchar>(cachePaths.bytecodePath.parent_path()),
             StringConvert(errorCode.message())
         );
@@ -2358,7 +2358,7 @@ static bool GetVariantBytecode(
 
 static bool AddPlannedFileCount(const u64 additionalFileCount, u64& inOutPlannedFileCount){
     if(inOutPlannedFileCount > Limit<u64>::s_Max - additionalFileCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("ShaderAssetCooker: planned file count overflow"));
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: planned file count overflow"));
         return false;
     }
 
@@ -2369,7 +2369,7 @@ static bool AddPlannedFileCount(const u64 additionalFileCount, u64& inOutPlanned
 static bool ReserveShaderIndexRecords(const u64 plannedFileCount, Vector<Core::ShaderArchive::Record>& outShaderIndexRecords){
     const u64 shaderRecordCount = plannedFileCount > 0 ? plannedFileCount - 1 : 0;
     if(shaderRecordCount > static_cast<u64>(Limit<usize>::s_Max)){
-        NWB_LOGGER_ERROR(NWB_TEXT("ShaderAssetCooker: shader record count exceeds container capacity"));
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: shader record count exceeds container capacity"));
         return false;
     }
 
@@ -2439,7 +2439,7 @@ static bool ParseAssetMetadata(
             };
             if(!seenShaderIdentityKeys.insert(shaderIdentityKey).second){
                 NWB_LOGGER_ERROR(
-                    NWB_TEXT("ShaderAssetCooker: duplicate shader identity '{}' for stage '{}' from meta '{}'"),
+                    NWB_TEXT("GraphicsAssetCooker: duplicate shader identity '{}' for stage '{}' from meta '{}'"),
                     StringConvert(shaderEntry.name),
                     StringConvert(shaderEntry.archiveStage.c_str()),
                     PathToString<tchar>(nwbFile)
@@ -2462,7 +2462,7 @@ static bool ParseAssetMetadata(
                 const Path absSource = AbsolutePath(Path(includeEntry.source), errorCode).lexically_normal();
                 if(errorCode){
                     NWB_LOGGER_ERROR(
-                        NWB_TEXT("ShaderAssetCooker: failed to resolve include metadata source '{}' from '{}': {}"),
+                        NWB_TEXT("GraphicsAssetCooker: failed to resolve include metadata source '{}' from '{}': {}"),
                         StringConvert(includeEntry.source),
                         PathToString<tchar>(nwbFile),
                         StringConvert(errorCode.message())
@@ -2473,7 +2473,7 @@ static bool ParseAssetMetadata(
                 AString key = CanonicalizeText(PathToString(absSource));
                 if(!outMetadata.includeMetadata.emplace(Move(key), Move(includeEntry)).second){
                     NWB_LOGGER_ERROR(
-                        NWB_TEXT("ShaderAssetCooker: duplicate include metadata for source '{}'"),
+                        NWB_TEXT("GraphicsAssetCooker: duplicate include metadata for source '{}'"),
                         PathToString<tchar>(absSource)
                     );
                     return false;
@@ -2528,7 +2528,7 @@ static bool ParseAssetMetadata(
         }
 
         NWB_LOGGER_ERROR(
-            NWB_TEXT("ShaderAssetCooker: unsupported asset type '{}' in meta '{}'"),
+            NWB_TEXT("GraphicsAssetCooker: unsupported asset type '{}' in meta '{}'"),
             StringConvert(rawAssetTypeText),
             PathToString<tchar>(nwbFile)
         );
@@ -2538,7 +2538,7 @@ static bool ParseAssetMetadata(
     if(outMetadata.shaderEntries.empty()){
         if(!outMetadata.materialEntries.empty()){
             NWB_LOGGER_ERROR(
-                NWB_TEXT("ShaderAssetCooker: material assets require at least one shader entry")
+                NWB_TEXT("GraphicsAssetCooker: material assets require at least one shader entry")
             );
             return false;
         }
@@ -2549,7 +2549,7 @@ static bool ParseAssetMetadata(
         if(!outMetadata.deformableDisplacementTextureEntries.empty())
             return true;
 
-        NWB_LOGGER_ERROR(NWB_TEXT("ShaderAssetCooker: no shader entries found in asset roots"));
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: no graphics asset metadata found in asset roots"));
         return false;
     }
 
@@ -2569,7 +2569,7 @@ static bool PrepareShaderEntriesForCook(
 
     outPreparedPlan.preparedEntries.clear();
     if(inOutShaderEntries.size() > Limit<usize>::s_Max / 2u){
-        NWB_LOGGER_ERROR(NWB_TEXT("ShaderAssetCooker: prepared shader entry reserve count overflows"));
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: prepared shader entry reserve count overflows"));
         return false;
     }
     outPreparedPlan.preparedEntries.reserve(inOutShaderEntries.size() * 2u);
@@ -2649,7 +2649,7 @@ static bool PrepareShaderEntriesForCook(
             return false;
         if(!shaderCook.canonicalizeVariantSignature(preparedEntry.entry.defaultVariant, preparedEntry.entry.defaultVariant)){
             NWB_LOGGER_ERROR(
-                NWB_TEXT("ShaderAssetCooker: failed to canonicalize merged default_variant for '{}'"),
+                NWB_TEXT("GraphicsAssetCooker: failed to canonicalize merged default_variant for '{}'"),
                 StringConvert(preparedEntry.entry.name)
             );
             return false;
@@ -2670,7 +2670,7 @@ static bool PrepareShaderEntriesForCook(
         PreparedShaderEntry meshComputeShadowEntry(cookArena);
         if(!BuildMeshComputeShadowEntry(outPreparedPlan.preparedEntries.back().entry, meshComputeShadowEntry.entry)){
             NWB_LOGGER_ERROR(
-                NWB_TEXT("ShaderAssetCooker: failed to build mesh-compute shadow entry for '{}'"),
+                NWB_TEXT("GraphicsAssetCooker: failed to build mesh-compute shadow entry for '{}'"),
                 StringConvert(outPreparedPlan.preparedEntries.back().entry.name)
             );
             return false;
@@ -2723,7 +2723,7 @@ static bool AppendPreparedShadersToVolume(
         Core::ShaderCook::CookVector<Core::ShaderCook::DefineCombo> defineCombinations{Core::ShaderCook::CookAllocator<Core::ShaderCook::DefineCombo>(cookArena)};
         if(!shaderCook.expandDefineCombinations(entry.defineValues, defineCombinations)){
             NWB_LOGGER_ERROR(
-                NWB_TEXT("ShaderAssetCooker: variant combination count exceeds runtime limits for entry '{}'"),
+                NWB_TEXT("GraphicsAssetCooker: variant combination count exceeds runtime limits for entry '{}'"),
                 StringConvert(entry.name)
             );
             return false;
@@ -2817,7 +2817,7 @@ static bool AppendMaterialAssetsToVolume(
         const NameHash materialVirtualPathHash = materialEntry.virtualPath.hash();
         if(!inOutSeenVirtualPathHashes.insert(materialVirtualPathHash).second){
             NWB_LOGGER_ERROR(
-                NWB_TEXT("ShaderAssetCooker: duplicate material virtual path '{}'"),
+                NWB_TEXT("GraphicsAssetCooker: duplicate material virtual path '{}'"),
                 StringConvert(materialEntry.virtualPath.c_str())
             );
             return false;
@@ -2830,7 +2830,7 @@ static bool AppendMaterialAssetsToVolume(
         for(const auto& [paramName, paramValue] : materialEntry.parameters){
             if(!cookedMaterial.setParameter(paramName, paramValue)){
                 NWB_LOGGER_ERROR(
-                    NWB_TEXT("ShaderAssetCooker: invalid material parameter '{}' for '{}'"),
+                    NWB_TEXT("GraphicsAssetCooker: invalid material parameter '{}' for '{}'"),
                     StringConvert(paramName.c_str()),
                     StringConvert(materialEntry.virtualPath.c_str())
                 );
@@ -2840,7 +2840,7 @@ static bool AppendMaterialAssetsToVolume(
 
         if(!materialCodec.serialize(cookedMaterial, materialBinary)){
             NWB_LOGGER_ERROR(
-                NWB_TEXT("ShaderAssetCooker: failed to serialize material '{}'"),
+                NWB_TEXT("GraphicsAssetCooker: failed to serialize material '{}'"),
                 StringConvert(materialEntry.virtualPath.c_str())
             );
             return false;
@@ -2848,7 +2848,7 @@ static bool AppendMaterialAssetsToVolume(
 
         if(!volumeSession.pushDataDeferred(materialEntry.virtualPath, materialBinary)){
             NWB_LOGGER_ERROR(
-                NWB_TEXT("ShaderAssetCooker: failed to push material '{}'"),
+                NWB_TEXT("GraphicsAssetCooker: failed to push material '{}'"),
                 StringConvert(materialEntry.virtualPath.c_str())
             );
             return false;
@@ -2870,7 +2870,7 @@ static bool AppendGeometryAssetsToVolume(
         const NameHash geometryVirtualPathHash = geometryEntry.virtualPath.hash();
         if(!inOutSeenVirtualPathHashes.insert(geometryVirtualPathHash).second){
             NWB_LOGGER_ERROR(
-                NWB_TEXT("ShaderAssetCooker: duplicate geometry virtual path '{}'"),
+                NWB_TEXT("GraphicsAssetCooker: duplicate geometry virtual path '{}'"),
                 StringConvert(geometryEntry.virtualPath.c_str())
             );
             return false;
@@ -2879,7 +2879,7 @@ static bool AppendGeometryAssetsToVolume(
         Geometry cookedGeometry;
         if(!BuildGeometryAsset(geometryEntry, cookedGeometry)){
             NWB_LOGGER_ERROR(
-                NWB_TEXT("ShaderAssetCooker: failed to build geometry '{}'"),
+                NWB_TEXT("GraphicsAssetCooker: failed to build geometry '{}'"),
                 StringConvert(geometryEntry.virtualPath.c_str())
             );
             return false;
@@ -2887,7 +2887,7 @@ static bool AppendGeometryAssetsToVolume(
 
         if(!geometryCodec.serialize(cookedGeometry, geometryBinary)){
             NWB_LOGGER_ERROR(
-                NWB_TEXT("ShaderAssetCooker: failed to serialize geometry '{}'"),
+                NWB_TEXT("GraphicsAssetCooker: failed to serialize geometry '{}'"),
                 StringConvert(geometryEntry.virtualPath.c_str())
             );
             return false;
@@ -2895,7 +2895,7 @@ static bool AppendGeometryAssetsToVolume(
 
         if(!volumeSession.pushDataDeferred(geometryEntry.virtualPath, geometryBinary)){
             NWB_LOGGER_ERROR(
-                NWB_TEXT("ShaderAssetCooker: failed to push geometry '{}'"),
+                NWB_TEXT("GraphicsAssetCooker: failed to push geometry '{}'"),
                 StringConvert(geometryEntry.virtualPath.c_str())
             );
             return false;
@@ -2917,7 +2917,7 @@ static bool AppendDeformableGeometryAssetsToVolume(
         const NameHash geometryVirtualPathHash = geometryEntry.virtualPath.hash();
         if(!inOutSeenVirtualPathHashes.insert(geometryVirtualPathHash).second){
             NWB_LOGGER_ERROR(
-                NWB_TEXT("ShaderAssetCooker: duplicate deformable geometry virtual path '{}'"),
+                NWB_TEXT("GraphicsAssetCooker: duplicate deformable geometry virtual path '{}'"),
                 StringConvert(geometryEntry.virtualPath.c_str())
             );
             return false;
@@ -2926,7 +2926,7 @@ static bool AppendDeformableGeometryAssetsToVolume(
         DeformableGeometry cookedGeometry;
         if(!BuildDeformableGeometryAsset(geometryEntry, cookedGeometry)){
             NWB_LOGGER_ERROR(
-                NWB_TEXT("ShaderAssetCooker: failed to build deformable geometry '{}'"),
+                NWB_TEXT("GraphicsAssetCooker: failed to build deformable geometry '{}'"),
                 StringConvert(geometryEntry.virtualPath.c_str())
             );
             return false;
@@ -2934,7 +2934,7 @@ static bool AppendDeformableGeometryAssetsToVolume(
 
         if(!geometryCodec.serialize(cookedGeometry, geometryBinary)){
             NWB_LOGGER_ERROR(
-                NWB_TEXT("ShaderAssetCooker: failed to serialize deformable geometry '{}'"),
+                NWB_TEXT("GraphicsAssetCooker: failed to serialize deformable geometry '{}'"),
                 StringConvert(geometryEntry.virtualPath.c_str())
             );
             return false;
@@ -2942,7 +2942,7 @@ static bool AppendDeformableGeometryAssetsToVolume(
 
         if(!volumeSession.pushDataDeferred(geometryEntry.virtualPath, geometryBinary)){
             NWB_LOGGER_ERROR(
-                NWB_TEXT("ShaderAssetCooker: failed to push deformable geometry '{}'"),
+                NWB_TEXT("GraphicsAssetCooker: failed to push deformable geometry '{}'"),
                 StringConvert(geometryEntry.virtualPath.c_str())
             );
             return false;
@@ -2964,7 +2964,7 @@ static bool AppendDeformableDisplacementTexturesToVolume(
         const NameHash textureVirtualPathHash = textureEntry.virtualPath.hash();
         if(!inOutSeenVirtualPathHashes.insert(textureVirtualPathHash).second){
             NWB_LOGGER_ERROR(
-                NWB_TEXT("ShaderAssetCooker: duplicate deformable displacement texture virtual path '{}'"),
+                NWB_TEXT("GraphicsAssetCooker: duplicate deformable displacement texture virtual path '{}'"),
                 StringConvert(textureEntry.virtualPath.c_str())
             );
             return false;
@@ -2976,7 +2976,7 @@ static bool AppendDeformableDisplacementTexturesToVolume(
 
         if(!textureCodec.serialize(texture, textureBinary)){
             NWB_LOGGER_ERROR(
-                NWB_TEXT("ShaderAssetCooker: failed to serialize deformable displacement texture '{}'"),
+                NWB_TEXT("GraphicsAssetCooker: failed to serialize deformable displacement texture '{}'"),
                 StringConvert(textureEntry.virtualPath.c_str())
             );
             return false;
@@ -2984,7 +2984,7 @@ static bool AppendDeformableDisplacementTexturesToVolume(
 
         if(!volumeSession.pushDataDeferred(textureEntry.virtualPath, textureBinary)){
             NWB_LOGGER_ERROR(
-                NWB_TEXT("ShaderAssetCooker: failed to push deformable displacement texture '{}'"),
+                NWB_TEXT("GraphicsAssetCooker: failed to push deformable displacement texture '{}'"),
                 StringConvert(textureEntry.virtualPath.c_str())
             );
             return false;
@@ -3004,8 +3004,8 @@ static bool AppendDeformableDisplacementTexturesToVolume(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ShaderAssetCooker::cook(const Core::Assets::AssetCookOptions& options){
-    ShaderCookEnvironment environment;
+bool GraphicsAssetCooker::cook(const Core::Assets::AssetCookOptions& options){
+    GraphicsCookEnvironment environment;
     environment.configuration = options.configuration;
     environment.repoRoot = options.repoRoot.empty() ? Path(".") : Path(options.repoRoot.c_str());
     environment.assetRoots.reserve(options.assetRoots.size());
@@ -3014,8 +3014,8 @@ bool ShaderAssetCooker::cook(const Core::Assets::AssetCookOptions& options){
     environment.outputDirectory = Path(options.outputDirectory.c_str());
     environment.cacheDirectory = options.cacheDirectory.empty() ? Path() : Path(options.cacheDirectory.c_str());
 
-    ShaderCookResult result;
-    if(!cookShaderAssets(environment, result))
+    GraphicsCookResult result;
+    if(!cookGraphicsAssets(environment, result))
         return false;
 
     NWB_LOGGER_ESSENTIAL_INFO(
@@ -3031,7 +3031,7 @@ bool ShaderAssetCooker::cook(const Core::Assets::AssetCookOptions& options){
 }
 
 
-bool ShaderAssetCooker::cookShaderAssets(const ShaderCookEnvironment& environment, ShaderCookResult& outResult){
+bool GraphicsAssetCooker::cookGraphicsAssets(const GraphicsCookEnvironment& environment, GraphicsCookResult& outResult){
     outResult = {};
 
     Core::ShaderCook shaderCook(m_arena);
@@ -3113,7 +3113,7 @@ bool ShaderAssetCooker::cookShaderAssets(const ShaderCookEnvironment& environmen
     {
         Core::Filesystem::VolumeSession volumeSession(m_arena);
         if(!volumeSession.create(stagedVolumePaths.stageDirectory, volumeConfig)){
-            NWB_LOGGER_ERROR(NWB_TEXT("ShaderAssetCooker: failed to create staged volume session"));
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to create staged volume session"));
             return false;
         }
 
@@ -3132,11 +3132,11 @@ bool ShaderAssetCooker::cookShaderAssets(const ShaderCookEnvironment& environmen
 
         Vector<u8> indexBinary;
         if(!Core::ShaderArchive::serializeIndex(shaderIndexRecords, indexBinary)){
-            NWB_LOGGER_ERROR(NWB_TEXT("ShaderAssetCooker: failed to serialize shader index"));
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to serialize shader index"));
             return false;
         }
         if(!volumeSession.pushDataDeferred(shaderIndexVirtualPath, indexBinary)){
-            NWB_LOGGER_ERROR(NWB_TEXT("ShaderAssetCooker: failed to push shader index"));
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to push shader index"));
             return false;
         }
 
@@ -3158,7 +3158,7 @@ bool ShaderAssetCooker::cookShaderAssets(const ShaderCookEnvironment& environmen
             return false;
 
         if(!volumeSession.flush()){
-            NWB_LOGGER_ERROR(NWB_TEXT("ShaderAssetCooker: failed to flush staged volume metadata"));
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to flush staged volume metadata"));
             return false;
         }
 
@@ -3171,7 +3171,7 @@ bool ShaderAssetCooker::cookShaderAssets(const ShaderCookEnvironment& environmen
     stageDirectoryCleanup.dismiss();
 
     if(!outResult.volumeName.assign(__hidden_assets::s_VolumeName)){
-        NWB_LOGGER_ERROR(NWB_TEXT("ShaderAssetCooker: volume name exceeds CompactString capacity"));
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: volume name exceeds CompactString capacity"));
         return false;
     }
     outResult.fileCount = stagedFileCount;

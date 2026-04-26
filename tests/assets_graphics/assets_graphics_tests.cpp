@@ -4,7 +4,7 @@
 
 #include <impl/assets_graphics/deformable_geometry_asset.h>
 #include <impl/assets_graphics/geometry_asset.h>
-#include <impl/assets_graphics/shader_asset_cooker.h>
+#include <impl/assets_graphics/graphics_asset_cooker.h>
 
 #include <tests/test_context.h>
 
@@ -779,10 +779,10 @@ static bool CookSingleDeformableMeta(
     options.assetRoots.push_back(PathToString(assetRoot));
     options.outputDirectory = PathToString(outOutputDirectory);
     options.cacheDirectory = PathToString(outRoot / "cache");
-    if(!options.configuration.assign("tests") || !options.assetType.assign("shader"))
+    if(!options.configuration.assign("tests") || !options.assetType.assign("graphics"))
         return false;
 
-    NWB::Impl::ShaderAssetCooker cooker(testArena.arena);
+    NWB::Impl::GraphicsAssetCooker cooker(testArena.arena);
     return cooker.cook(options);
 }
 
@@ -809,10 +809,10 @@ static bool CookSingleGeometryMeta(
     options.assetRoots.push_back(PathToString(assetRoot));
     options.outputDirectory = PathToString(outOutputDirectory);
     options.cacheDirectory = PathToString(outRoot / "cache");
-    if(!options.configuration.assign("tests") || !options.assetType.assign("shader"))
+    if(!options.configuration.assign("tests") || !options.assetType.assign("graphics"))
         return false;
 
-    NWB::Impl::ShaderAssetCooker cooker(testArena.arena);
+    NWB::Impl::GraphicsAssetCooker cooker(testArena.arena);
     return cooker.cook(options);
 }
 

@@ -29,7 +29,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct ShaderCookEnvironment{
+struct GraphicsCookEnvironment{
     CompactString configuration;
     Path repoRoot;
     Vector<Path> assetRoots;
@@ -37,24 +37,24 @@ struct ShaderCookEnvironment{
     Path cacheDirectory;
 };
 
-struct ShaderCookResult{
+struct GraphicsCookResult{
     CompactString volumeName;
     u64 fileCount = 0;
     u64 segmentCount = 0;
 };
 
 
-class ShaderAssetCooker final : public Core::Assets::IAssetCooker{
+class GraphicsAssetCooker final : public Core::Assets::IAssetCooker{
 public:
-    explicit ShaderAssetCooker(Core::Alloc::CustomArena& arena)
-        : IAssetCooker(arena, CompactString("shader"))
+    explicit GraphicsAssetCooker(Core::Alloc::CustomArena& arena)
+        : IAssetCooker(arena, CompactString("graphics"))
     {}
 
     virtual bool cook(const Core::Assets::AssetCookOptions& options)override;
 
 
 private:
-    bool cookShaderAssets(const ShaderCookEnvironment& environment, ShaderCookResult& outResult);
+    bool cookGraphicsAssets(const GraphicsCookEnvironment& environment, GraphicsCookResult& outResult);
 };
 
 

@@ -30,15 +30,14 @@ class Shader;
 
 class DeformerSystem final : public Core::ECS::ISystem, public Core::IRenderPass{
 public:
-    struct alignas(Float4) DeformerMorphRangeGpu{
+    struct alignas(Float4) DeformerVertexMorphRangeGpu{
         u32 firstDelta = 0;
         u32 deltaCount = 0;
-        f32 weight = 0.0f;
-        u32 padding = 0;
+        u32 padding0 = 0;
+        u32 padding1 = 0;
     };
 
-    struct alignas(Float4) DeformerMorphDeltaGpu{
-        u32 vertex[4] = {};
+    struct alignas(Float4) DeformerBlendedMorphDeltaGpu{
         Float4 deltaPosition = Float4(0.0f, 0.0f, 0.0f, 0.0f);
         Float4 deltaNormal = Float4(0.0f, 0.0f, 0.0f, 0.0f);
         Float4 deltaTangent = Float4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -55,7 +54,7 @@ private:
         RuntimeMeshHandle handle;
         u32 editRevision = 0;
         u32 vertexCount = 0;
-        u32 morphCount = 0;
+        u32 morphRangeCount = 0;
         u32 deltaCount = 0;
         u32 skinCount = 0;
         u32 jointCount = 0;
@@ -70,8 +69,8 @@ private:
     };
 
     struct RuntimePayloadViews{
-        const DeformerMorphRangeGpu* morphRanges = nullptr;
-        const DeformerMorphDeltaGpu* morphDeltas = nullptr;
+        const DeformerVertexMorphRangeGpu* morphRanges = nullptr;
+        const DeformerBlendedMorphDeltaGpu* morphDeltas = nullptr;
         const DeformerSkinInfluenceGpu* skinInfluences = nullptr;
         const DeformableJointMatrix* jointPalette = nullptr;
         usize morphRangeCount = 0;

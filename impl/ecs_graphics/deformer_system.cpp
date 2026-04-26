@@ -4,6 +4,7 @@
 
 #include "deformer_system.h"
 
+#include "deformer_morph_payload.h"
 #include "deformable_runtime_helpers.h"
 #include "renderer_system.h"
 
@@ -36,7 +37,7 @@ static constexpr u32 s_DeformableVertexScalarStride = sizeof(DeformableVertexRes
 
 struct DeformerPushConstants{
     u32 vertexCount = 0;
-    u32 morphCount = 0;
+    u32 morphRangeCount = 0;
     u32 restScalarStride = 0;
     u32 deformedScalarStride = 0;
     u32 skinCount = 0;
@@ -126,148 +127,6 @@ static u32 DispatchGroupCount(const u32 vertexCount){
         ? 0
         : ((vertexCount - 1u) / s_DeformerGroupSize) + 1u
     ;
-}
-
-using MorphWeightLookup = HashMap<
-    NameHash,
-    f32,
-    Hasher<NameHash>,
-    EqualTo<NameHash>,
-    Core::Alloc::ScratchAllocator<Pair<const NameHash, f32>>
->;
-
-struct ActiveMorphPayload{
-    const DeformableMorph* morph = nullptr;
-    f32 weight = 0.0f;
-};
-
-static bool BuildResolvedMorphWeightLookup(
-    const DeformableRuntimeMeshInstance& instance,
-    const DeformableMorphWeightsComponent* weights,
-    MorphWeightLookup& outWeights)
-{
-    Name failedMorph = NAME_NONE;
-    if(DeformableRuntime::BuildMorphWeightSumLookup(instance.morphs, weights, outWeights, failedMorph))
-        return true;
-
-    NWB_LOGGER_ERROR(
-        NWB_TEXT("DeformerSystem: runtime mesh '{}' morph '{}' weight is invalid"),
-        instance.handle.value,
-        StringConvert(failedMorph.c_str())
-    );
-    return false;
-}
-
-static f32 ResolvedMorphWeight(const MorphWeightLookup& weights, const Name& morphName){
-    if(!morphName)
-        return 0.0f;
-
-    const auto iterWeight = weights.find(morphName.hash());
-    if(iterWeight == weights.end())
-        return 0.0f;
-
-    return iterWeight.value();
-}
-
-static Float4 ExpandFloat3Delta(const Float3U& value){
-    return Float4(value.x, value.y, value.z, 0.0f);
-}
-
-static Float4 ExpandFloat4Delta(const Float4U& value){
-    return Float4(value.x, value.y, value.z, value.w);
-}
-
-template<typename MorphRangeVector, typename MorphDeltaVector>
-static bool BuildMorphPayload(
-    const DeformableRuntimeMeshInstance& instance,
-    const DeformableMorphWeightsComponent* morphWeights,
-    MorphRangeVector& outRanges,
-    MorphDeltaVector& outDeltas,
-    usize& outSignature)
-{
-    outRanges.clear();
-    outDeltas.clear();
-    outSignature = 0;
-
-    if(!DeformableRuntime::HasMorphWeights(morphWeights))
-        return true;
-
-    Core::Alloc::ScratchArena<> scratchArena;
-    MorphWeightLookup resolvedWeights(
-        0,
-        Hasher<NameHash>(),
-        EqualTo<NameHash>(),
-        Core::Alloc::ScratchAllocator<Pair<const NameHash, f32>>(scratchArena)
-    );
-    if(!BuildResolvedMorphWeightLookup(instance, morphWeights, resolvedWeights))
-        return false;
-
-    usize activeDeltaCount = 0u;
-    Vector<ActiveMorphPayload, Core::Alloc::ScratchAllocator<ActiveMorphPayload>> activeMorphs{
-        Core::Alloc::ScratchAllocator<ActiveMorphPayload>(scratchArena)
-    };
-    activeMorphs.reserve(instance.morphs.size());
-    for(const DeformableMorph& morph : instance.morphs){
-        const f32 weight = ResolvedMorphWeight(resolvedWeights, morph.name);
-        if(!DeformableValidation::ActiveWeight(weight))
-            continue;
-        if(morph.deltas.empty()){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("DeformerSystem: active morph '{}' on runtime mesh '{}' has no deltas"),
-                StringConvert(morph.name.c_str()),
-                instance.handle.value
-            );
-            return false;
-        }
-        if(morph.deltas.size() > static_cast<usize>(Limit<u32>::s_Max)
-            || activeDeltaCount > static_cast<usize>(Limit<u32>::s_Max) - morph.deltas.size()
-        ){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("DeformerSystem: morph '{}' on runtime mesh '{}' exceeds u32 delta limits"),
-                StringConvert(morph.name.c_str()),
-                instance.handle.value
-            );
-            return false;
-        }
-        activeDeltaCount += morph.deltas.size();
-        activeMorphs.push_back(ActiveMorphPayload{ &morph, weight });
-    }
-
-    outRanges.reserve(activeMorphs.size());
-    outDeltas.reserve(activeDeltaCount);
-
-    for(const ActiveMorphPayload& activeMorph : activeMorphs){
-        const DeformableMorph& morph = *activeMorph.morph;
-
-        DeformerSystem::DeformerMorphRangeGpu range;
-        range.firstDelta = static_cast<u32>(outDeltas.size());
-        range.deltaCount = static_cast<u32>(morph.deltas.size());
-        range.weight = activeMorph.weight;
-        outRanges.push_back(range);
-
-        Core::CoreDetail::HashCombine(outSignature, morph.name);
-        Core::CoreDetail::HashCombine(outSignature, range.deltaCount);
-
-        for(const DeformableMorphDelta& delta : morph.deltas){
-            if(!DeformableValidation::ValidMorphDelta(delta, instance.restVertices.size())){
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("DeformerSystem: morph '{}' on runtime mesh '{}' contains an invalid delta"),
-                    StringConvert(morph.name.c_str()),
-                    instance.handle.value
-                );
-                return false;
-            }
-
-            DeformerSystem::DeformerMorphDeltaGpu gpuDelta;
-            gpuDelta.vertex[0] = delta.vertexId;
-            gpuDelta.deltaPosition = ExpandFloat3Delta(delta.deltaPosition);
-            gpuDelta.deltaNormal = ExpandFloat3Delta(delta.deltaNormal);
-            gpuDelta.deltaTangent = ExpandFloat4Delta(delta.deltaTangent);
-            outDeltas.push_back(gpuDelta);
-        }
-    }
-
-    return true;
 }
 
 template<typename SkinInfluenceVector, typename JointPaletteVector>
@@ -440,20 +299,20 @@ static Core::BufferHandle SetupStructuredBuffer(
 
 
 static_assert(
-    sizeof(DeformerSystem::DeformerMorphRangeGpu) == sizeof(f32) * 4u,
-    "Deformer morph range GPU layout drifted"
+    sizeof(DeformerSystem::DeformerVertexMorphRangeGpu) == sizeof(f32) * 4u,
+    "Deformer vertex morph range GPU layout drifted"
 );
 static_assert(
-    alignof(DeformerSystem::DeformerMorphRangeGpu) >= alignof(Float4),
-    "Deformer morph range GPU layout must stay SIMD-aligned"
+    alignof(DeformerSystem::DeformerVertexMorphRangeGpu) >= alignof(Float4),
+    "Deformer vertex morph range GPU layout must stay SIMD-aligned"
 );
 static_assert(
-    sizeof(DeformerSystem::DeformerMorphDeltaGpu) == sizeof(f32) * 16u,
-    "Deformer morph delta GPU layout drifted"
+    sizeof(DeformerSystem::DeformerBlendedMorphDeltaGpu) == sizeof(f32) * 12u,
+    "Deformer blended morph delta GPU layout drifted"
 );
 static_assert(
-    alignof(DeformerSystem::DeformerMorphDeltaGpu) >= alignof(Float4),
-    "Deformer morph delta GPU layout must stay SIMD-aligned"
+    alignof(DeformerSystem::DeformerBlendedMorphDeltaGpu) >= alignof(Float4),
+    "Deformer blended morph delta GPU layout must stay SIMD-aligned"
 );
 static_assert(
     sizeof(DeformerSystem::DeformerSkinInfluenceGpu) == sizeof(f32) * 8u,
@@ -743,14 +602,14 @@ bool DeformerSystem::dispatchRuntimeMesh(
     }
 
     Core::Alloc::ScratchArena<> scratchArena;
-    Vector<DeformerMorphRangeGpu, Core::Alloc::ScratchAllocator<DeformerMorphRangeGpu>> morphRanges{
-        Core::Alloc::ScratchAllocator<DeformerMorphRangeGpu>(scratchArena)
+    Vector<DeformerVertexMorphRangeGpu, Core::Alloc::ScratchAllocator<DeformerVertexMorphRangeGpu>> morphRanges{
+        Core::Alloc::ScratchAllocator<DeformerVertexMorphRangeGpu>(scratchArena)
     };
-    Vector<DeformerMorphDeltaGpu, Core::Alloc::ScratchAllocator<DeformerMorphDeltaGpu>> morphDeltas{
-        Core::Alloc::ScratchAllocator<DeformerMorphDeltaGpu>(scratchArena)
+    Vector<DeformerBlendedMorphDeltaGpu, Core::Alloc::ScratchAllocator<DeformerBlendedMorphDeltaGpu>> morphDeltas{
+        Core::Alloc::ScratchAllocator<DeformerBlendedMorphDeltaGpu>(scratchArena)
     };
     usize morphSignature = 0;
-    if(!__hidden_deformer_system::BuildMorphPayload(instance, morphWeights, morphRanges, morphDeltas, morphSignature))
+    if(!DeformerMorphPayload::BuildBlendedMorphPayload(instance, morphWeights, morphRanges, morphDeltas, morphSignature))
         return false;
 
     Vector<DeformerSkinInfluenceGpu, Core::Alloc::ScratchAllocator<DeformerSkinInfluenceGpu>> skinInfluences{
@@ -817,17 +676,26 @@ bool DeformerSystem::dispatchRuntimeMesh(
         return false;
 
     usize rangeBytes = 0;
+    usize deltaBytes = 0;
     usize jointPaletteBytes = 0;
     if(hasActiveMorphs){
         if(!__hidden_deformer_system::BufferPayloadBytes(
             morphRanges.size(),
-            sizeof(DeformerMorphRangeGpu),
+            sizeof(DeformerVertexMorphRangeGpu),
             rangeBytes,
             NWB_TEXT("morph range")
         ))
             return false;
+        if(!__hidden_deformer_system::BufferPayloadBytes(
+            morphDeltas.size(),
+            sizeof(DeformerBlendedMorphDeltaGpu),
+            deltaBytes,
+            NWB_TEXT("morph delta")
+        ))
+            return false;
 
         commandList.setBufferState(resources->morphRangeBuffer.get(), Core::ResourceStates::CopyDest);
+        commandList.setBufferState(resources->morphDeltaBuffer.get(), Core::ResourceStates::CopyDest);
     }
     if(hasActiveSkin){
         if(!__hidden_deformer_system::BufferPayloadBytes(
@@ -842,8 +710,10 @@ bool DeformerSystem::dispatchRuntimeMesh(
     }
     if(hasActiveMorphs || hasActiveSkin){
         commandList.commitBarriers();
-        if(hasActiveMorphs)
+        if(hasActiveMorphs){
             commandList.writeBuffer(resources->morphRangeBuffer.get(), morphRanges.data(), rangeBytes);
+            commandList.writeBuffer(resources->morphDeltaBuffer.get(), morphDeltas.data(), deltaBytes);
+        }
         if(hasActiveSkin)
             commandList.writeBuffer(resources->jointPaletteBuffer.get(), jointMatrices.data(), jointPaletteBytes);
     }
@@ -864,7 +734,7 @@ bool DeformerSystem::dispatchRuntimeMesh(
 
     __hidden_deformer_system::DeformerPushConstants pushConstants;
     pushConstants.vertexCount = static_cast<u32>(instance.restVertices.size());
-    pushConstants.morphCount = static_cast<u32>(morphRanges.size());
+    pushConstants.morphRangeCount = static_cast<u32>(morphRanges.size());
     pushConstants.restScalarStride = __hidden_deformer_system::s_DeformableVertexScalarStride;
     pushConstants.deformedScalarStride = __hidden_deformer_system::s_DeformableVertexScalarStride;
     pushConstants.skinCount = static_cast<u32>(skinInfluences.size());
@@ -939,6 +809,15 @@ bool DeformerSystem::ensureRuntimeResources(
     const bool hasActiveSkin = payloadViews.hasActiveSkin();
     if(!hasActiveMorphs && !hasActiveSkin && !hasDisplacement)
         return false;
+    if(hasActiveMorphs && payloadViews.morphRangeCount != instance.restVertices.size()){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("DeformerSystem: runtime mesh '{}' has {} morph ranges for {} vertices"),
+            instance.handle.value,
+            payloadViews.morphRangeCount,
+            instance.restVertices.size()
+        );
+        return false;
+    }
     const bool hasTextureDisplacement = hasDisplacement
         && __hidden_deformer_system::DisplacementModeUsesTexture(displacement.mode)
     ;
@@ -974,7 +853,7 @@ bool DeformerSystem::ensureRuntimeResources(
         inserted
         || resources.editRevision != instance.editRevision
         || resources.vertexCount != static_cast<u32>(instance.restVertices.size())
-        || resources.morphCount != static_cast<u32>(payloadViews.morphRangeCount)
+        || resources.morphRangeCount != static_cast<u32>(payloadViews.morphRangeCount)
         || resources.deltaCount != static_cast<u32>(payloadViews.morphDeltaCount)
         || resources.skinCount != static_cast<u32>(payloadViews.skinInfluenceCount)
         || resources.jointCount != static_cast<u32>(payloadViews.jointPaletteCount)
@@ -1022,7 +901,7 @@ bool DeformerSystem::ensureRuntimeResources(
     rebuilt.handle = instance.handle;
     rebuilt.editRevision = instance.editRevision;
     rebuilt.vertexCount = static_cast<u32>(instance.restVertices.size());
-    rebuilt.morphCount = static_cast<u32>(payloadViews.morphRangeCount);
+    rebuilt.morphRangeCount = static_cast<u32>(payloadViews.morphRangeCount);
     rebuilt.deltaCount = static_cast<u32>(payloadViews.morphDeltaCount);
     rebuilt.skinCount = static_cast<u32>(payloadViews.skinInfluenceCount);
     rebuilt.jointCount = static_cast<u32>(payloadViews.jointPaletteCount);
@@ -1155,8 +1034,8 @@ bool DeformerSystem::ensureDefaultDeformerBuffers(){
     )
         return true;
 
-    const DeformerMorphRangeGpu defaultRange{};
-    const DeformerMorphDeltaGpu defaultDelta{};
+    const DeformerVertexMorphRangeGpu defaultRange{};
+    const DeformerBlendedMorphDeltaGpu defaultDelta{};
     const DeformerSkinInfluenceGpu defaultSkin{};
     const DeformableJointMatrix defaultJoint{};
 

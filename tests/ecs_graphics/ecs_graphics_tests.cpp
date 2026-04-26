@@ -4,6 +4,7 @@
 
 #include <impl/ecs_graphics/deformable_picking.h>
 #include <impl/ecs_graphics/deformable_surface_edit.h>
+#include <impl/ecs_graphics/deformer_morph_payload.h>
 
 #include <tests/test_context.h>
 
@@ -1306,6 +1307,90 @@ static void TestPickingRepairsOverflowedMorphFrame(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertices[0].tangent.y, 0.0f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertices[0].tangent.z, 0.0f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertices[0].tangent.w, 1.0f));
+}
+
+static void TestDeformerMorphPayloadPreblendsDuplicateWeightsAndMorphs(TestContext& context){
+    NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
+
+    NWB::Impl::DeformableMorph raiseMorph;
+    raiseMorph.name = Name("raise");
+    NWB::Impl::DeformableMorphDelta raiseDelta{};
+    raiseDelta.vertexId = 1u;
+    raiseDelta.deltaPosition = Float3U(2.0f, 0.0f, 0.0f);
+    raiseDelta.deltaNormal = Float3U(0.0f, 0.0f, 1.0f);
+    raiseDelta.deltaTangent = Float4U(0.0f, 0.5f, 0.0f, 0.0f);
+    raiseMorph.deltas.push_back(raiseDelta);
+    instance.morphs.push_back(raiseMorph);
+
+    NWB::Impl::DeformableMorph liftMorph;
+    liftMorph.name = Name("lift");
+    NWB::Impl::DeformableMorphDelta liftDelta{};
+    liftDelta.vertexId = 1u;
+    liftDelta.deltaPosition = Float3U(-1.0f, 0.0f, 3.0f);
+    liftDelta.deltaNormal = Float3U(0.25f, 0.0f, 0.0f);
+    liftMorph.deltas.push_back(liftDelta);
+    instance.morphs.push_back(liftMorph);
+
+    NWB::Impl::DeformableMorphWeightsComponent weights;
+    weights.weights.push_back(NWB::Impl::DeformableMorphWeight{ Name("raise"), 0.25f });
+    weights.weights.push_back(NWB::Impl::DeformableMorphWeight{ Name("raise"), 0.5f });
+    weights.weights.push_back(NWB::Impl::DeformableMorphWeight{ Name("lift"), 0.5f });
+
+    Vector<NWB::Impl::DeformerSystem::DeformerVertexMorphRangeGpu> ranges;
+    Vector<NWB::Impl::DeformerSystem::DeformerBlendedMorphDeltaGpu> deltas;
+    usize signature = 0u;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Impl::DeformerMorphPayload::BuildBlendedMorphPayload(instance, &weights, ranges, deltas, signature)
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, ranges.size() == instance.restVertices.size());
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, deltas.size() == 1u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, ranges[0u].deltaCount == 0u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, ranges[1u].firstDelta == 0u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, ranges[1u].deltaCount == 1u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, ranges[2u].deltaCount == 0u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(deltas[0u].deltaPosition.x, 1.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(deltas[0u].deltaPosition.z, 1.5f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(deltas[0u].deltaNormal.x, 0.125f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(deltas[0u].deltaNormal.z, 0.75f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(deltas[0u].deltaTangent.y, 0.375f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, signature != 0u);
+}
+
+static void TestDeformerMorphPayloadBuildsSparseVertexRanges(TestContext& context){
+    NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
+
+    NWB::Impl::DeformableMorph morph;
+    morph.name = Name("sparse");
+    NWB::Impl::DeformableMorphDelta firstDelta{};
+    firstDelta.vertexId = 0u;
+    firstDelta.deltaPosition = Float3U(0.0f, 0.0f, 1.0f);
+    morph.deltas.push_back(firstDelta);
+    NWB::Impl::DeformableMorphDelta secondDelta{};
+    secondDelta.vertexId = 2u;
+    secondDelta.deltaPosition = Float3U(0.0f, 2.0f, 0.0f);
+    morph.deltas.push_back(secondDelta);
+    instance.morphs.push_back(morph);
+
+    NWB::Impl::DeformableMorphWeightsComponent weights;
+    weights.weights.push_back(NWB::Impl::DeformableMorphWeight{ Name("sparse"), 1.0f });
+
+    Vector<NWB::Impl::DeformerSystem::DeformerVertexMorphRangeGpu> ranges;
+    Vector<NWB::Impl::DeformerSystem::DeformerBlendedMorphDeltaGpu> deltas;
+    usize signature = 0u;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Impl::DeformerMorphPayload::BuildBlendedMorphPayload(instance, &weights, ranges, deltas, signature)
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, ranges.size() == instance.restVertices.size());
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, deltas.size() == 2u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, ranges[0u].firstDelta == 0u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, ranges[0u].deltaCount == 1u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, ranges[1u].deltaCount == 0u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, ranges[2u].firstDelta == 1u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, ranges[2u].deltaCount == 1u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(deltas[ranges[0u].firstDelta].deltaPosition.z, 1.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(deltas[ranges[2u].firstDelta].deltaPosition.y, 2.0f));
 }
 
 static void TestRestSpaceHoleEditCreatesPerInstancePatch(TestContext& context){
@@ -2615,6 +2700,8 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
     __hidden_ecs_graphics_tests::TestPickingRejectsActiveEmptyMorph(context);
     __hidden_ecs_graphics_tests::TestPickingRejectsNonFiniteEvaluatedVertices(context);
     __hidden_ecs_graphics_tests::TestPickingRepairsOverflowedMorphFrame(context);
+    __hidden_ecs_graphics_tests::TestDeformerMorphPayloadPreblendsDuplicateWeightsAndMorphs(context);
+    __hidden_ecs_graphics_tests::TestDeformerMorphPayloadBuildsSparseVertexRanges(context);
     __hidden_ecs_graphics_tests::TestRestSpaceHoleEditCreatesPerInstancePatch(context);
     __hidden_ecs_graphics_tests::TestRestSpaceHoleEditTransfersAndInpaintsWallAttributes(context);
     __hidden_ecs_graphics_tests::TestRestSpaceHoleEditWallTrianglesKeepRecoverableProvenance(context);

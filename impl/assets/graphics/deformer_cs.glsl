@@ -5,15 +5,14 @@
 
 layout(local_size_x = 64) in;
 
-struct NwbDeformerMorphRange{
+struct NwbDeformerVertexMorphRange{
     uint firstDelta;
     uint deltaCount;
-    float weight;
-    uint padding;
+    uint padding0;
+    uint padding1;
 };
 
-struct NwbDeformerMorphDelta{
-    uvec4 vertex;
+struct NwbDeformerBlendedMorphDelta{
     vec4 deltaPosition;
     vec4 deltaNormal;
     vec4 deltaTangent;
@@ -40,11 +39,11 @@ layout(std430, binding = 1) buffer NwbDeformerDeformedVerticesBuffer{
 };
 
 layout(std430, binding = 2) readonly buffer NwbDeformerMorphRangesBuffer{
-    NwbDeformerMorphRange nwbDeformerMorphRanges[];
+    NwbDeformerVertexMorphRange nwbDeformerMorphRanges[];
 };
 
 layout(std430, binding = 3) readonly buffer NwbDeformerMorphDeltasBuffer{
-    NwbDeformerMorphDelta nwbDeformerMorphDeltas[];
+    NwbDeformerBlendedMorphDelta nwbDeformerMorphDeltas[];
 };
 
 layout(std430, binding = 4) readonly buffer NwbDeformerSkinInfluencesBuffer{
@@ -69,7 +68,7 @@ uint nwbDeformerVertexCount(){
     return g_NwbDeformerPushConstants.payload0.x;
 }
 
-uint nwbDeformerMorphCount(){
+uint nwbDeformerMorphRangeCount(){
     return g_NwbDeformerPushConstants.payload0.y;
 }
 
@@ -310,16 +309,13 @@ void main(){
     const vec3 restNormal = normal;
     const vec4 restTangent = tangent;
 
-    for(uint morphIndex = 0u; morphIndex < nwbDeformerMorphCount(); ++morphIndex){
-        const NwbDeformerMorphRange morph = nwbDeformerMorphRanges[morphIndex];
+    if(nwbDeformerMorphRangeCount() == nwbDeformerVertexCount()){
+        const NwbDeformerVertexMorphRange morph = nwbDeformerMorphRanges[vertexId];
         for(uint deltaIndex = 0u; deltaIndex < morph.deltaCount; ++deltaIndex){
-            const NwbDeformerMorphDelta delta = nwbDeformerMorphDeltas[morph.firstDelta + deltaIndex];
-            if(delta.vertex.x != vertexId)
-                continue;
-
-            position += morph.weight * delta.deltaPosition.xyz;
-            normal += morph.weight * delta.deltaNormal.xyz;
-            tangent += morph.weight * delta.deltaTangent;
+            const NwbDeformerBlendedMorphDelta delta = nwbDeformerMorphDeltas[morph.firstDelta + deltaIndex];
+            position += delta.deltaPosition.xyz;
+            normal += delta.deltaNormal.xyz;
+            tangent += delta.deltaTangent;
         }
     }
 

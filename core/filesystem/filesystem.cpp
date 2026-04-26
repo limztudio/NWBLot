@@ -2109,14 +2109,6 @@ bool VolumeSession::loadData(const AStringView virtualPath, Vector<u8>& outData)
         return false;
     }
 
-    if(!m_volumeFileSystem.fileExists(virtualPathName)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("VolumeSession::loadData failed: file '{}' was not found"),
-            StringConvert(virtualPath)
-        );
-        return false;
-    }
-
     if(m_volumeFileSystem.readFile(virtualPathName, outData))
         return true;
 
@@ -2136,14 +2128,6 @@ bool VolumeSession::loadData(const Name& virtualPath, Vector<u8>& outData)const{
     }
     if(!virtualPath){
         NWB_LOGGER_ERROR(NWB_TEXT("VolumeSession::loadData failed: virtual path is empty"));
-        return false;
-    }
-
-    if(!m_volumeFileSystem.fileExists(virtualPath)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("VolumeSession::loadData failed: file '{}' was not found"),
-            StringConvert(virtualPath.c_str())
-        );
         return false;
     }
 

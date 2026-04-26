@@ -1557,6 +1557,10 @@ static bool ParseMorphs(
     }
 
     outMorphs.reserve(morphs->asMap().size());
+    Vector<u32> vertexIds;
+    Vector<Float3U> deltaPositions;
+    Vector<Float3U> deltaNormals;
+    Vector<Float4U> deltaTangents;
     for(const auto& [morphName, morphValue] : morphs->asMap()){
         const AStringView morphNameView(morphName.data(), morphName.size());
         const Name morphNameId = ToName(morphNameView);
@@ -1576,10 +1580,6 @@ static bool ParseMorphs(
             return false;
         }
 
-        Vector<u32> vertexIds;
-        Vector<Float3U> deltaPositions;
-        Vector<Float3U> deltaNormals;
-        Vector<Float4U> deltaTangents;
         if(!ParseU32ListField(nwbFilePath, morphValue, "vertex_ids", vertexIds))
             return false;
         if(!ParseFloatListField<Float3U, 3u>(nwbFilePath, morphValue, "delta_position", deltaPositions))

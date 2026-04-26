@@ -197,6 +197,7 @@ public:
     void setRestVertices(Vector<DeformableVertexRest>&& vertices){ m_restVertices = Move(vertices); }
     void setIndices(Vector<u32>&& indices){ m_indices = Move(indices); }
     void setSkin(Vector<SkinInfluence4>&& skin){ m_skin = Move(skin); }
+    void setSkeletonJointCount(u32 jointCount){ m_skeletonJointCount = jointCount; }
     void setSourceSamples(Vector<SourceSample>&& sourceSamples){ m_sourceSamples = Move(sourceSamples); }
     void setEditMaskPerTriangle(Vector<DeformableEditMaskFlags>&& editMaskPerTriangle){ m_editMaskPerTriangle = Move(editMaskPerTriangle); }
     void setDisplacement(const DeformableDisplacement& displacement){ m_displacement = displacement; }
@@ -205,6 +206,7 @@ public:
     [[nodiscard]] const Vector<DeformableVertexRest>& restVertices()const{ return m_restVertices; }
     [[nodiscard]] const Vector<u32>& indices()const{ return m_indices; }
     [[nodiscard]] const Vector<SkinInfluence4>& skin()const{ return m_skin; }
+    [[nodiscard]] u32 skeletonJointCount()const{ return m_skeletonJointCount; }
     [[nodiscard]] const Vector<SourceSample>& sourceSamples()const{ return m_sourceSamples; }
     [[nodiscard]] const Vector<DeformableEditMaskFlags>& editMaskPerTriangle()const{ return m_editMaskPerTriangle; }
     [[nodiscard]] const DeformableDisplacement& displacement()const{ return m_displacement; }
@@ -215,6 +217,7 @@ private:
     Vector<DeformableVertexRest> m_restVertices;
     Vector<u32> m_indices;
     Vector<SkinInfluence4> m_skin;
+    u32 m_skeletonJointCount = 0;
     Vector<SourceSample> m_sourceSamples;
     Vector<DeformableEditMaskFlags> m_editMaskPerTriangle;
     DeformableDisplacement m_displacement;

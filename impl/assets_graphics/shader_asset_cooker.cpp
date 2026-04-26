@@ -139,6 +139,7 @@ struct DeformableGeometryEntry{
     Vector<DeformableVertexRest> restVertices;
     Vector<u32> indices;
     Vector<SkinInfluence4> skin;
+    u32 skeletonJointCount = 0;
     Vector<SourceSample> sourceSamples;
     Vector<DeformableEditMaskFlags> editMaskPerTriangle;
     DeformableDisplacement displacement;
@@ -1316,6 +1317,20 @@ static bool ParseSkinInfluences(
     return true;
 }
 
+static bool ParseSkeletonJointCount(
+    const Path& nwbFilePath,
+    const Core::Metascript::Value& asset,
+    u32& outJointCount)
+{
+    outJointCount = 0u;
+
+    const Core::Metascript::Value* jointCount = FindField(asset, "skeleton_joint_count");
+    if(!jointCount)
+        return true;
+
+    return ParseU32Value(nwbFilePath, *jointCount, "skeleton_joint_count", outJointCount);
+}
+
 static bool ParseSourceSamples(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
@@ -1712,6 +1727,8 @@ static bool ParseDeformableGeometryMeta(
         return false;
     if(!ParseSkinInfluences(discoveredFile.filePath, asset, outEntry.restVertices.size(), outEntry.skin))
         return false;
+    if(!ParseSkeletonJointCount(discoveredFile.filePath, asset, outEntry.skeletonJointCount))
+        return false;
     if(!ParseSourceSamples(discoveredFile.filePath, asset, outEntry.restVertices.size(), outEntry.sourceSamples))
         return false;
     if(!ParseEditMasks(discoveredFile.filePath, asset, outEntry.indices.size() / 3u, outEntry.editMaskPerTriangle))
@@ -1782,6 +1799,7 @@ static bool BuildDeformableGeometryAsset(DeformableGeometryEntry& geometryEntry,
     outGeometry.setRestVertices(Move(geometryEntry.restVertices));
     outGeometry.setIndices(Move(geometryEntry.indices));
     outGeometry.setSkin(Move(geometryEntry.skin));
+    outGeometry.setSkeletonJointCount(geometryEntry.skeletonJointCount);
     outGeometry.setSourceSamples(Move(geometryEntry.sourceSamples));
     outGeometry.setEditMaskPerTriangle(Move(geometryEntry.editMaskPerTriangle));
     outGeometry.setDisplacement(geometryEntry.displacement);

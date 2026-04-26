@@ -299,6 +299,8 @@ asset.source_samples = {
     ],
 };
 
+asset.skeleton_joint_count = 2;
+
 asset.skin = {
     "joints0": [
         [0, 0, 0, 0],
@@ -819,7 +821,7 @@ static usize DeformableHeaderCountOffset(const usize countIndex){
 
 static usize DeformableMorphDeltaCountOffset(const NWB::Impl::DeformableGeometry& geometry){
     return (sizeof(u32) * 2u)
-        + (sizeof(u64) * 6u)
+        + (sizeof(u64) * 7u)
         + (geometry.restVertices().size() * sizeof(NWB::Impl::DeformableVertexRest))
         + (geometry.indices().size() * sizeof(u32))
         + (geometry.skin().size() * sizeof(NWB::Impl::SkinInfluence4))
@@ -875,6 +877,7 @@ static NWB::Impl::DeformableGeometry BuildValidDeformableGeometry(){
     geometry.setRestVertices(Move(vertices));
     geometry.setIndices(Move(indices));
     geometry.setSkin(Move(skin));
+    geometry.setSkeletonJointCount(1u);
     geometry.setSourceSamples(Move(sourceSamples));
     geometry.setEditMaskPerTriangle(Move(editMasks));
     geometry.setDisplacement(displacement);
@@ -960,6 +963,7 @@ static void TestDeformableGeometryCodecRoundTrip(TestContext& context){
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.restVertices().size() == 4u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.indices().size() == 6u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skin().size() == 4u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skeletonJointCount() == 1u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.sourceSamples().size() == 4u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.editMaskPerTriangle().size() == 2u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(
@@ -1073,7 +1077,7 @@ static void TestDeformableGeometryCodecRejectsMalformedCounts(TestContext& conte
     NWB::Core::Assets::AssetBytes binary;
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, codec.serialize(geometry, binary));
 
-    const usize morphCountOffset = DeformableHeaderCountOffset(5u);
+    const usize morphCountOffset = DeformableHeaderCountOffset(6u);
     const u64 invalidMorphCount = static_cast<u64>(Limit<u32>::s_Max) + 1ull;
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, OverwriteU64(binary, morphCountOffset, invalidMorphCount));
 
@@ -1114,7 +1118,7 @@ static void TestDeformableGeometryCodecRejectsMalformedDependentCounts(TestConte
         NWB::Core::Assets::AssetBytes malformed = binary;
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, OverwriteU64(
             malformed,
-            DeformableHeaderCountOffset(3u),
+            DeformableHeaderCountOffset(4u),
             static_cast<u64>(geometry.restVertices().size() - 1u)
         ));
 
@@ -1274,6 +1278,7 @@ static void TestDeformableGeometryCookerNativeCharacterMock(TestContext& context
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.indices().size() == 6u);
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.restVertices()[3].color0.w == 0.5f);
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skin().size() == 4u);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skeletonJointCount() == 2u);
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skin()[1].joint[1] == 1u);
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skin()[1].weight[0] == 0.75f);
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.sourceSamples().size() == 4u);
@@ -1418,6 +1423,20 @@ static void TestDeformableGeometryValidationFailures(TestContext& context){
 
     {
         NWB::Impl::DeformableGeometry geometry = BuildValidDeformableGeometry();
+        geometry.setSkeletonJointCount(0u);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !geometry.validatePayload());
+    }
+
+    {
+        NWB::Impl::DeformableGeometry geometry = BuildValidDeformableGeometry();
+        Vector<NWB::Impl::SkinInfluence4> skin = geometry.skin();
+        skin[0].joint[0] = 1u;
+        geometry.setSkin(Move(skin));
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !geometry.validatePayload());
+    }
+
+    {
+        NWB::Impl::DeformableGeometry geometry = BuildValidDeformableGeometry();
         Vector<u32> indices = geometry.indices();
         indices.pop_back();
         geometry.setIndices(Move(indices));
@@ -1524,13 +1543,15 @@ static void TestDeformableGeometryValidationFailures(TestContext& context){
         geometry.setMorphs(Move(morphs));
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !geometry.validatePayload());
     }
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 21u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 23u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("degenerate normal/tangent frame")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("invalid normal/tangent frame")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("triangle 0 is degenerate")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("triangle 0 has zero area")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("contains duplicate morph")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("edit mask 0 is invalid")));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("no skeleton joint count")));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("exceeds skeleton joint count")));
 #else
     static_cast<void>(context);
 #endif

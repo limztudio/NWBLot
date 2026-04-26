@@ -54,6 +54,8 @@ asset.source_samples = {
     ],
 };
 
+asset.skeleton_joint_count = 2;
+
 asset.skin = {
     "joints0": [
         [0, 0, 0, 0],

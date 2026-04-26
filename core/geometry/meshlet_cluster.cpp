@@ -212,10 +212,8 @@ struct TriangleVertices{
         return false;
 
     outMeshlets.push_back(cluster);
-    for(const u32 vertex : pending.vertices)
-        outVertexIndices.push_back(vertex);
-    for(const u32 index : pending.indices)
-        outLocalIndices.push_back(index);
+    outVertexIndices.insert(outVertexIndices.end(), pending.vertices.begin(), pending.vertices.end());
+    outLocalIndices.insert(outLocalIndices.end(), pending.indices.begin(), pending.indices.end());
 
     pending.vertices.clear();
     pending.indices.clear();
@@ -260,6 +258,10 @@ bool BuildMeshlets(
     Vector<u32> localIndices;
 
     const usize triangleCount = indices.size() / 3u;
+    const usize meshletCountReserve = (triangleCount + static_cast<usize>(config.maxTriangles) - 1u) / config.maxTriangles;
+    meshlets.reserve(meshletCountReserve);
+    vertexIndices.reserve(indices.size());
+    localIndices.reserve(indices.size());
     for(usize triangleIndex = 0u; triangleIndex < triangleCount; ++triangleIndex){
         const usize indexBase = triangleIndex * 3u;
         TriangleVertices triangle;

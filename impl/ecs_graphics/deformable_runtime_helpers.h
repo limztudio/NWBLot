@@ -202,7 +202,7 @@ inline void OrthonormalizeFrame(SIMDVector& normal, SIMDVector& tangent, const S
     return IsFinite(determinant) && Abs(determinant) > s_Epsilon;
 }
 
-[[nodiscard]] inline bool TryTransformJointNormalDirection(const SIMDMatrix& matrix, const SIMDVector directionVector, SIMDVector& outDirection){
+[[nodiscard]] inline bool TryBuildJointNormalMatrix(const SIMDMatrix& matrix, SIMDMatrix& outNormalMatrix){
     const SIMDVector column0 = VectorSetW(matrix.v[0], 0.0f);
     const SIMDVector column1 = VectorSetW(matrix.v[1], 0.0f);
     const SIMDVector column2 = VectorSetW(matrix.v[2], 0.0f);
@@ -211,13 +211,24 @@ inline void OrthonormalizeFrame(SIMDVector& normal, SIMDVector& tangent, const S
         return false;
 
     const SIMDVector inverseDeterminant = VectorReplicate(1.0f / determinant);
-    const SIMDVector normalColumn0 = VectorMultiply(Vector3Cross(column1, column2), inverseDeterminant);
-    const SIMDVector normalColumn1 = VectorMultiply(Vector3Cross(column2, column0), inverseDeterminant);
-    const SIMDVector normalColumn2 = VectorMultiply(Vector3Cross(column0, column1), inverseDeterminant);
+    outNormalMatrix.v[0] = VectorSetW(VectorMultiply(Vector3Cross(column1, column2), inverseDeterminant), 0.0f);
+    outNormalMatrix.v[1] = VectorSetW(VectorMultiply(Vector3Cross(column2, column0), inverseDeterminant), 0.0f);
+    outNormalMatrix.v[2] = VectorSetW(VectorMultiply(Vector3Cross(column0, column1), inverseDeterminant), 0.0f);
+    outNormalMatrix.v[3] = VectorZero();
+    return DeformableValidation::FiniteVector(outNormalMatrix.v[0], 0x7u)
+        && DeformableValidation::FiniteVector(outNormalMatrix.v[1], 0x7u)
+        && DeformableValidation::FiniteVector(outNormalMatrix.v[2], 0x7u)
+    ;
+}
 
-    SIMDVector result = VectorMultiply(VectorSplatX(directionVector), normalColumn0);
-    result = VectorMultiplyAdd(VectorSplatY(directionVector), normalColumn1, result);
-    result = VectorMultiplyAdd(VectorSplatZ(directionVector), normalColumn2, result);
+[[nodiscard]] inline bool TryTransformJointNormalDirection(const SIMDMatrix& matrix, const SIMDVector directionVector, SIMDVector& outDirection){
+    SIMDMatrix normalMatrix;
+    if(!TryBuildJointNormalMatrix(matrix, normalMatrix))
+        return false;
+
+    SIMDVector result = VectorMultiply(VectorSplatX(directionVector), normalMatrix.v[0]);
+    result = VectorMultiplyAdd(VectorSplatY(directionVector), normalMatrix.v[1], result);
+    result = VectorMultiplyAdd(VectorSplatZ(directionVector), normalMatrix.v[2], result);
     outDirection = VectorSetW(result, 0.0f);
     return DeformableValidation::FiniteVector(outDirection, 0x7u);
 }

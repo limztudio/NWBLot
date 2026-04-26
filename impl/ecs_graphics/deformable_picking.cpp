@@ -36,6 +36,11 @@ using MorphWeightLookup = HashMap<
     Core::Alloc::ScratchAllocator<Pair<const NameHash, f32>>
 >;
 
+struct PreparedJointPaletteEntry{
+    SIMDMatrix transform;
+    SIMDMatrix normalTransform;
+};
+
 [[nodiscard]] Float4 LoadVertexNormal(const DeformableVertexRest& vertex){
     return Float4(vertex.normal.x, vertex.normal.y, vertex.normal.z, 0.0f);
 }
@@ -153,27 +158,38 @@ template<typename VertexVector>
     return result;
 }
 
-[[nodiscard]] bool ValidateJointPalette(
+template<typename PreparedJointPaletteVector>
+[[nodiscard]] bool BuildPreparedJointPalette(
     const DeformableRuntimeMeshInstance& instance,
-    const DeformableJointPaletteComponent* jointPalette)
+    const DeformableJointPaletteComponent* jointPalette,
+    PreparedJointPaletteVector& outJointPalette)
 {
+    outJointPalette.clear();
     if(instance.skin.empty() || !jointPalette || jointPalette->joints.empty())
         return true;
 
+    outJointPalette.reserve(jointPalette->joints.size());
     for(const DeformableJointMatrix& joint : jointPalette->joints){
-        if(!IsInvertibleAffineJointMatrix(LoadJointMatrix(joint)))
+        PreparedJointPaletteEntry entry;
+        entry.transform = LoadJointMatrix(joint);
+        if(!IsInvertibleAffineJointMatrix(entry.transform)
+            || !TryBuildJointNormalMatrix(entry.transform, entry.normalTransform)
+        )
             return false;
+
+        outJointPalette.push_back(entry);
     }
     return true;
 }
 
+template<typename PreparedJointPaletteVector>
 [[nodiscard]] bool ApplySkin(
     const DeformableRuntimeMeshInstance& instance,
-    const DeformableJointPaletteComponent* jointPalette,
+    const PreparedJointPaletteVector& jointPalette,
     const u32 vertexId,
     DeformableVertexRest& vertex)
 {
-    if(!jointPalette || jointPalette->joints.empty())
+    if(jointPalette.empty())
         return true;
     if(instance.skin.empty())
         return true;
@@ -190,7 +206,7 @@ template<typename VertexVector>
     const SIMDVector basePosition = LoadFloat(vertex.position);
     const SIMDVector baseNormal = LoadFloat(vertex.normal);
     const SIMDVector baseTangent = VectorSet(vertex.tangent.x, vertex.tangent.y, vertex.tangent.z, 0.0f);
-    const usize jointCount = jointPalette->joints.size();
+    const usize jointCount = jointPalette.size();
     f32 totalWeight = 0.0f;
 
     for(u32 influenceIndex = 0; influenceIndex < 4u; ++influenceIndex){
@@ -201,16 +217,14 @@ template<typename VertexVector>
         if(joint >= jointCount)
             return false;
 
-        const SIMDMatrix matrix = LoadJointMatrix(jointPalette->joints[joint]);
-        if(!IsAffineJointMatrix(matrix))
-            return false;
+        const PreparedJointPaletteEntry& jointEntry = jointPalette[joint];
 
         const SIMDVector weightVector = VectorReplicate(weight);
-        SIMDVector transformedNormal;
-        if(!TryTransformJointNormalDirection(matrix, baseNormal, transformedNormal))
+        const SIMDVector transformedNormal = TransformJointDirection(jointEntry.normalTransform, baseNormal);
+        if(!DeformableValidation::FiniteVector(transformedNormal, 0x7u))
             return false;
         skinnedPosition = VectorMultiplyAdd(
-            TransformJointPosition(matrix, basePosition),
+            TransformJointPosition(jointEntry.transform, basePosition),
             weightVector,
             skinnedPosition
         );
@@ -220,7 +234,7 @@ template<typename VertexVector>
             skinnedNormal
         );
         skinnedTangent = VectorMultiplyAdd(
-            TransformJointDirection(matrix, baseTangent),
+            TransformJointDirection(jointEntry.transform, baseTangent),
             weightVector,
             skinnedTangent
         );
@@ -546,7 +560,13 @@ template<typename VertexVector>
         )
     )
         return false;
-    if(!__hidden_deformable_picking::ValidateJointPalette(instance, inputs.jointPalette))
+
+    Core::Alloc::ScratchArena<> scratchArena;
+    Vector<
+        __hidden_deformable_picking::PreparedJointPaletteEntry,
+        Core::Alloc::ScratchAllocator<__hidden_deformable_picking::PreparedJointPaletteEntry>
+    > jointPalette{ Core::Alloc::ScratchAllocator<__hidden_deformable_picking::PreparedJointPaletteEntry>(scratchArena) };
+    if(!__hidden_deformable_picking::BuildPreparedJointPalette(instance, inputs.jointPalette, jointPalette))
         return false;
 
     outVertices.reserve(instance.restVertices.size());
@@ -566,7 +586,7 @@ template<typename VertexVector>
 
         if(!__hidden_deformable_picking::ApplySkin(
             instance,
-            inputs.jointPalette,
+            jointPalette,
             static_cast<u32>(vertexIndex),
             vertex
         ))

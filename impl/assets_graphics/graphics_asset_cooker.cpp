@@ -996,12 +996,10 @@ static bool ParseGeometryMeta(const DiscoveredNwbFile& discoveredFile, const Cor
     return ParseGeometryIndices(discoveredFile.filePath, asset, outEntry.use32BitIndices, outEntry.indices);
 }
 
-static bool BuildGeometryAsset(const GeometryEntry& geometryEntry, Geometry& outGeometry){
+static bool BuildGeometryAsset(GeometryEntry& geometryEntry, Geometry& outGeometry){
     outGeometry = Geometry(geometryEntry.virtualPath);
-    Vector<GeometryVertex> vertices = geometryEntry.vertices;
-    Vector<u32> indices = geometryEntry.indices;
-    outGeometry.setVertices(Move(vertices));
-    outGeometry.setIndices(Move(indices));
+    outGeometry.setVertices(Move(geometryEntry.vertices));
+    outGeometry.setIndices(Move(geometryEntry.indices));
     return outGeometry.validatePayload();
 }
 
@@ -2388,6 +2386,7 @@ static bool ParseAssetMetadata(
     outMetadata.materialEntries.reserve(nwbFiles.size());
     outMetadata.geometryEntries.reserve(nwbFiles.size());
     outMetadata.deformableGeometryEntries.reserve(nwbFiles.size());
+    outMetadata.deformableDisplacementTextureEntries.reserve(nwbFiles.size());
 
     HashSet<
         PreparedShaderKey,
@@ -2859,14 +2858,14 @@ static bool AppendMaterialAssetsToVolume(
 }
 
 static bool AppendGeometryAssetsToVolume(
-    const Vector<GeometryEntry>& geometryEntries,
+    Vector<GeometryEntry>& geometryEntries,
     Core::Filesystem::VolumeSession& volumeSession,
     VirtualPathHashSet& inOutSeenVirtualPathHashes
 ){
     GeometryAssetCodec geometryCodec;
     Vector<u8> geometryBinary;
 
-    for(const GeometryEntry& geometryEntry : geometryEntries){
+    for(GeometryEntry& geometryEntry : geometryEntries){
         const NameHash geometryVirtualPathHash = geometryEntry.virtualPath.hash();
         if(!inOutSeenVirtualPathHashes.insert(geometryVirtualPathHash).second){
             NWB_LOGGER_ERROR(

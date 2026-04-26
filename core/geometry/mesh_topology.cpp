@@ -562,6 +562,7 @@ bool AppendWallTrianglePairs(
             return false;
     }
 
+    outIndices.reserve(outIndices.size() + boundaryVertexCount * 6u);
     for(usize edgeIndex = 0u; edgeIndex < boundaryVertexCount; ++edgeIndex){
         const usize nextEdgeIndex = (edgeIndex + 1u) % boundaryVertexCount;
         const u32 rimA = orderedBoundaryEdges[edgeIndex].a;

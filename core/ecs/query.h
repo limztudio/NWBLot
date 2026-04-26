@@ -34,6 +34,37 @@ inline constexpr auto ForwardAsTuple(Ts&&... values){
     return Tuple<Ts&&...>(Forward<Ts>(values)...);
 }
 
+struct ViewTupleAccess{
+    template<usize I = 0, typename... Ts>
+    static EntityID entityAt(const Tuple<ComponentPool<Ts>*...>& pools, usize anchorPoolIndex, usize denseIndex){
+        static_assert(sizeof...(Ts) > 0, "View requires at least one component type");
+        if(anchorPoolIndex == I)
+            return Get<I>(pools)->m_dense[denseIndex];
+
+        if constexpr(I + 1u < sizeof...(Ts))
+            return entityAt<I + 1u>(pools, anchorPoolIndex, denseIndex);
+        return ENTITY_ID_INVALID;
+    }
+
+    template<usize I, typename... Ts>
+    static bool hasComponent(const Tuple<ComponentPool<Ts>*...>& pools, usize anchorPoolIndex, EntityID entityId){
+        if(I == anchorPoolIndex)
+            return true;
+
+        auto* pool = Get<I>(pools);
+        return pool != nullptr && pool->has(entityId);
+    }
+
+    template<usize I, typename... Ts>
+    static auto& componentAt(const Tuple<ComponentPool<Ts>*...>& pools, usize anchorPoolIndex, usize denseIndex, EntityID entityId){
+        auto* pool = Get<I>(pools);
+        if(I == anchorPoolIndex)
+            return pool->m_components[denseIndex];
+
+        return pool->get(entityId);
+    }
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -49,12 +80,12 @@ struct ViewIterator{
     usize count;
     bool valid;
 
-    ViewIterator(ComponentTuple _pools, usize _anchorPoolIndex, usize _index, usize _count, bool _valid)
-        : pools(Move(_pools))
-        , anchorPoolIndex(_anchorPoolIndex)
-        , index(_index)
-        , count(_count)
-        , valid(_valid)
+    ViewIterator(ComponentTuple poolsValue, usize anchorPoolIndexValue, usize indexValue, usize countValue, bool validValue)
+        : pools(Move(poolsValue))
+        , anchorPoolIndex(anchorPoolIndexValue)
+        , index(indexValue)
+        , count(countValue)
+        , valid(validValue)
     {
         if(valid)
             skipInvalid();
@@ -76,26 +107,20 @@ struct ViewIterator{
     }
     template<usize... Is>
     bool allHaveImpl(EntityID entityId, IndexSequence<Is...>)const{
-        return ((Get<Is>(pools) != nullptr && Get<Is>(pools)->has(entityId)) && ...);
+        return (ViewTupleAccess::hasComponent<Is>(pools, anchorPoolIndex, entityId) && ...);
     }
 
     EntityID entityAt(usize denseIndex)const{
-        return entityAtImpl(denseIndex, IndexSequenceFor<Ts...>{});
-    }
-    template<usize... Is>
-    EntityID entityAtImpl(usize denseIndex, IndexSequence<Is...>)const{
-        EntityID result = ENTITY_ID_INVALID;
-        (void)((anchorPoolIndex == Is ? (result = Get<Is>(pools)->m_dense[denseIndex], true) : false) || ...);
-        return result;
+        return ViewTupleAccess::entityAt(pools, anchorPoolIndex, denseIndex);
     }
 
     ValueTuple operator*()const{
         EntityID entityId = entityAt(index);
-        return deref(entityId, IndexSequenceFor<Ts...>{});
+        return deref(entityId, index, IndexSequenceFor<Ts...>{});
     }
     template<usize... Is>
-    ValueTuple deref(EntityID entityId, IndexSequence<Is...>)const{
-        return ForwardAsTuple(entityId, Get<Is>(pools)->get(entityId)...);
+    ValueTuple deref(EntityID entityId, usize denseIndex, IndexSequence<Is...>)const{
+        return ForwardAsTuple(entityId, ViewTupleAccess::componentAt<Is>(pools, anchorPoolIndex, denseIndex, entityId)...);
     }
 
     ViewIterator& operator++(){
@@ -145,6 +170,10 @@ public:
         return IteratorType(m_pools, m_anchorPoolIndex, m_count, m_count, m_valid);
     }
 
+    [[nodiscard]] usize candidateCount()const noexcept{
+        return m_valid ? m_count : 0u;
+    }
+
 
 public:
     template<typename Func>
@@ -155,7 +184,7 @@ public:
         for(usize i = 0; i < m_count; ++i){
             EntityID entityId = entityAt(i);
             if(entityId.valid() && allHave(entityId))
-                applyFunc(func, entityId, ECSDetail::IndexSequenceFor<Ts...>{});
+                applyFunc(func, entityId, i, ECSDetail::IndexSequenceFor<Ts...>{});
         }
     }
 
@@ -168,7 +197,7 @@ public:
             [this, &func](usize i){
                 EntityID entityId = entityAt(i);
                 if(entityId.valid() && allHave(entityId))
-                    applyFunc(func, entityId, ECSDetail::IndexSequenceFor<Ts...>{});
+                    applyFunc(func, entityId, i, ECSDetail::IndexSequenceFor<Ts...>{});
             }
         );
     }
@@ -207,14 +236,7 @@ private:
     }
 
     EntityID entityAt(usize denseIndex)const{
-        return entityAtImpl(denseIndex, ECSDetail::IndexSequenceFor<Ts...>{});
-    }
-
-    template<usize... Is>
-    EntityID entityAtImpl(usize denseIndex, ECSDetail::IndexSequence<Is...>)const{
-        EntityID result = ENTITY_ID_INVALID;
-        (void)((m_anchorPoolIndex == Is ? (result = Get<Is>(m_pools)->m_dense[denseIndex], true) : false) || ...);
-        return result;
+        return ECSDetail::ViewTupleAccess::entityAt(m_pools, m_anchorPoolIndex, denseIndex);
     }
 
     bool allHave(EntityID entityId)const{
@@ -223,12 +245,12 @@ private:
 
     template<usize... Is>
     bool allHaveImpl(EntityID entityId, ECSDetail::IndexSequence<Is...>)const{
-        return ((Get<Is>(m_pools) != nullptr && Get<Is>(m_pools)->has(entityId)) && ...);
+        return (ECSDetail::ViewTupleAccess::hasComponent<Is>(m_pools, m_anchorPoolIndex, entityId) && ...);
     }
 
     template<typename Func, usize... Is>
-    void applyFunc(Func& func, EntityID entityId, ECSDetail::IndexSequence<Is...>)const{
-        func(entityId, Get<Is>(m_pools)->get(entityId)...);
+    void applyFunc(Func& func, EntityID entityId, usize denseIndex, ECSDetail::IndexSequence<Is...>)const{
+        func(entityId, ECSDetail::ViewTupleAccess::componentAt<Is>(m_pools, m_anchorPoolIndex, denseIndex, entityId)...);
     }
 
 

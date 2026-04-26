@@ -90,7 +90,7 @@ u64 AssetManager::enqueueLoad(const Name& assetType, const Name& virtualPath){
         request.result.state = AssetLoadState::Pending;
         request.assetType = assetType;
         request.virtualPath = virtualPath;
-        m_requests[requestId] = Move(request);
+        m_requests.emplace(requestId, Move(request));
 
         asyncExecutor = m_asyncExecutor;
     }
@@ -175,13 +175,13 @@ u64 AssetManager::completedRequestCount()const{
 
 
 u64 AssetManager::allocateRequestId(){
-    u64 requestId = m_nextRequestId.load(std::memory_order_relaxed);
+    u64 requestId = m_nextRequestId.load(MemoryOrder::relaxed);
     for(;;){
         if(requestId == 0)
             return 0;
 
         const u64 nextRequestId = requestId + 1;
-        if(m_nextRequestId.compare_exchange_weak(requestId, nextRequestId, std::memory_order_relaxed, std::memory_order_relaxed))
+        if(m_nextRequestId.compare_exchange_weak(requestId, nextRequestId, MemoryOrder::relaxed, MemoryOrder::relaxed))
             return requestId;
     }
 }
@@ -196,8 +196,7 @@ void AssetManager::dispatchAsync(const u64 requestId){
     if(asyncExecutor == nullptr)
         return;
 
-    const NotNull<IAssetAsyncExecutor*> requiredExecutor(asyncExecutor);
-    requiredExecutor->enqueue([this, requestId](){
+    asyncExecutor->enqueue([this, requestId](){
         processRequest(requestId);
     });
 }

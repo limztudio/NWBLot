@@ -17,6 +17,77 @@ NWB_VULKAN_BEGIN
 // Resource state transitions and barriers
 
 
+namespace __hidden_vulkan_state_tracking{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+VkImageMemoryBarrier2 BuildTextureStateBarrier(
+    const VkImage image,
+    const Format::Enum format,
+    const TextureSubresourceSet& subresources,
+    const ResourceStates::Mask oldState,
+    const ResourceStates::Mask stateBits)
+{
+    VkImageMemoryBarrier2 barrier = VulkanDetail::MakeVkStruct<VkImageMemoryBarrier2>(VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2);
+    barrier.srcStageMask = VulkanDetail::GetVkPipelineStageFlags(oldState != ResourceStates::Unknown ? oldState : ResourceStates::Common);
+    barrier.srcAccessMask = VulkanDetail::GetVkAccessFlags(oldState != ResourceStates::Unknown ? oldState : ResourceStates::Common);
+    barrier.dstStageMask = VulkanDetail::GetVkPipelineStageFlags(stateBits);
+    barrier.dstAccessMask = VulkanDetail::GetVkAccessFlags(stateBits);
+    barrier.oldLayout = oldState != ResourceStates::Unknown ? VulkanDetail::GetVkImageLayout(oldState) : VK_IMAGE_LAYOUT_UNDEFINED;
+    barrier.newLayout = VulkanDetail::GetVkImageLayout(stateBits);
+    barrier.image = image;
+
+    const FormatInfo& formatInfo = GetFormatInfo(format);
+    barrier.subresourceRange.aspectMask = VulkanDetail::GetImageAspectMask(formatInfo);
+    barrier.subresourceRange.baseMipLevel = subresources.baseMipLevel;
+    barrier.subresourceRange.levelCount = subresources.numMipLevels;
+    barrier.subresourceRange.baseArrayLayer = subresources.baseArraySlice;
+    barrier.subresourceRange.layerCount = subresources.numArraySlices;
+
+    return barrier;
+}
+
+template<typename ContainerT>
+void ReserveAdditionalCapacity(ContainerT& container, usize additionalCount){
+    if(additionalCount <= 1u)
+        return;
+
+    const usize currentSize = container.size();
+    if(additionalCount > Limit<usize>::s_Max - currentSize)
+        return;
+
+    const usize requiredCapacity = currentSize + additionalCount;
+    if constexpr(requires{ container.capacity(); }){
+        if(requiredCapacity <= container.capacity())
+            return;
+
+        usize nextCapacity = Max<usize>(container.capacity(), 1u);
+        while(nextCapacity < requiredCapacity){
+            if(nextCapacity > Limit<usize>::s_Max / 2u){
+                nextCapacity = requiredCapacity;
+                break;
+            }
+            nextCapacity *= 2u;
+        }
+        container.reserve(nextCapacity);
+    }
+    else{
+        container.reserve(requiredCapacity);
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void CommandList::setResourceStatesForBindingSet(IBindingSet* bindingSet){
     if(!bindingSet || !m_enableAutomaticBarriers)
         return;
@@ -83,14 +154,14 @@ void CommandList::commitBarriers(){
     m_pendingBufferBarriers.clear();
 }
 
-void CommandList::setTextureState(ITexture* _texture, TextureSubresourceSet subresources, ResourceStates::Mask stateBits){
-    if(!_texture)
+void CommandList::setTextureState(ITexture* textureResource, TextureSubresourceSet subresources, ResourceStates::Mask stateBits){
+    if(!textureResource)
         return;
 
-    if(m_stateTracker->isPermanentTexture(_texture))
+    if(m_stateTracker->isPermanentTexture(textureResource))
         return;
 
-    auto* texture = checked_cast<Texture*>(_texture);
+    auto* texture = checked_cast<Texture*>(textureResource);
     const TextureSubresourceSet resolvedSubresources = subresources.resolve(texture->m_desc, false);
     if(resolvedSubresources.numMipLevels == 0 || resolvedSubresources.numArraySlices == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to set texture state: invalid subresource range"));
@@ -98,51 +169,126 @@ void CommandList::setTextureState(ITexture* _texture, TextureSubresourceSet subr
         return;
     }
 
-    ResourceStates::Mask oldState = m_stateTracker->getTextureState(_texture, resolvedSubresources.baseArraySlice, resolvedSubresources.baseMipLevel);
-    if(oldState == stateBits)
+    ResourceStates::Mask oldState = ResourceStates::Unknown;
+    bool firstSubresource = true;
+    bool uniformOldState = true;
+    bool needsBarrier = false;
+    const bool uavBarrierEnabled =
+        stateBits == ResourceStates::UnorderedAccess
+        && m_stateTracker->isUavBarrierEnabledForTexture(textureResource)
+    ;
+    const MipLevel mipEnd = resolvedSubresources.baseMipLevel + resolvedSubresources.numMipLevels;
+    const ArraySlice arrayEnd = resolvedSubresources.baseArraySlice + resolvedSubresources.numArraySlices;
+    const usize subresourceCount = static_cast<usize>(resolvedSubresources.numMipLevels) * static_cast<usize>(resolvedSubresources.numArraySlices);
+
+    for(ArraySlice arraySlice = resolvedSubresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
+        for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
+            ResourceStates::Mask subresourceOldState = ResourceStates::Unknown;
+            if(!m_stateTracker->getTransientTextureState(textureResource, arraySlice, mipLevel, subresourceOldState))
+                return;
+
+            if(firstSubresource){
+                oldState = subresourceOldState;
+                firstSubresource = false;
+            }
+            else if(subresourceOldState != oldState){
+                uniformOldState = false;
+            }
+
+            if(
+                subresourceOldState != stateBits
+                || (subresourceOldState == ResourceStates::UnorderedAccess && uavBarrierEnabled)
+            )
+                needsBarrier = true;
+        }
+    }
+
+    if(!needsBarrier)
         return;
 
-    VkImageMemoryBarrier2 barrier = VulkanDetail::MakeVkStruct<VkImageMemoryBarrier2>(VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2);
-    barrier.srcStageMask = VulkanDetail::GetVkPipelineStageFlags(oldState != ResourceStates::Unknown ? oldState : ResourceStates::Common);
-    barrier.srcAccessMask = VulkanDetail::GetVkAccessFlags(oldState != ResourceStates::Unknown ? oldState : ResourceStates::Common);
-    barrier.dstStageMask = VulkanDetail::GetVkPipelineStageFlags(stateBits);
-    barrier.dstAccessMask = VulkanDetail::GetVkAccessFlags(stateBits);
-    barrier.oldLayout = oldState != ResourceStates::Unknown ? VulkanDetail::GetVkImageLayout(oldState) : VK_IMAGE_LAYOUT_UNDEFINED;
-    barrier.newLayout = VulkanDetail::GetVkImageLayout(stateBits);
-    barrier.image = texture->m_image;
+    if(uniformOldState){
+        const VkImageMemoryBarrier2 barrier = __hidden_vulkan_state_tracking::BuildTextureStateBarrier(
+            texture->m_image,
+            texture->m_desc.format,
+            resolvedSubresources,
+            oldState,
+            stateBits
+        );
 
-    const FormatInfo& formatInfo = GetFormatInfo(texture->m_desc.format);
-    barrier.subresourceRange.aspectMask = VulkanDetail::GetImageAspectMask(formatInfo);
-    barrier.subresourceRange.baseMipLevel = resolvedSubresources.baseMipLevel;
-    barrier.subresourceRange.levelCount = resolvedSubresources.numMipLevels;
-    barrier.subresourceRange.baseArrayLayer = resolvedSubresources.baseArraySlice;
-    barrier.subresourceRange.layerCount = resolvedSubresources.numArraySlices;
+        m_stateTracker->beginTrackingTransientTexture(textureResource, resolvedSubresources, stateBits);
 
-    m_stateTracker->beginTrackingTexture(_texture, resolvedSubresources, stateBits);
+        if(!m_enableAutomaticBarriers){
+            m_pendingImageBarriers.push_back(barrier);
+            return;
+        }
 
-    if(!m_enableAutomaticBarriers){
-        m_pendingImageBarriers.push_back(barrier);
+        VkDependencyInfo depInfo = VulkanDetail::MakeVkStruct<VkDependencyInfo>(VK_STRUCTURE_TYPE_DEPENDENCY_INFO);
+        depInfo.imageMemoryBarrierCount = 1;
+        depInfo.pImageMemoryBarriers = &barrier;
+
+        vkCmdPipelineBarrier2(m_currentCmdBuf->m_cmdBuf, &depInfo);
         return;
     }
 
+    const usize firstBarrierIndex = m_pendingImageBarriers.size();
+    __hidden_vulkan_state_tracking::ReserveAdditionalCapacity(m_pendingImageBarriers, subresourceCount);
+    for(ArraySlice arraySlice = resolvedSubresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
+        for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
+            ResourceStates::Mask subresourceOldState = ResourceStates::Unknown;
+            if(!m_stateTracker->getTransientTextureState(textureResource, arraySlice, mipLevel, subresourceOldState))
+                return;
+            if(
+                subresourceOldState == stateBits
+                && (subresourceOldState != ResourceStates::UnorderedAccess || !uavBarrierEnabled)
+            )
+                continue;
+
+            m_pendingImageBarriers.push_back(__hidden_vulkan_state_tracking::BuildTextureStateBarrier(
+                texture->m_image,
+                texture->m_desc.format,
+                TextureSubresourceSet(mipLevel, 1u, arraySlice, 1u),
+                subresourceOldState,
+                stateBits
+            ));
+        }
+    }
+
+    m_stateTracker->beginTrackingTransientTexture(textureResource, resolvedSubresources, stateBits);
+
+    if(!m_enableAutomaticBarriers)
+        return;
+
+    const usize newBarrierCount = m_pendingImageBarriers.size() - firstBarrierIndex;
+    if(newBarrierCount == 0)
+        return;
+
     VkDependencyInfo depInfo = VulkanDetail::MakeVkStruct<VkDependencyInfo>(VK_STRUCTURE_TYPE_DEPENDENCY_INFO);
-    depInfo.imageMemoryBarrierCount = 1;
-    depInfo.pImageMemoryBarriers = &barrier;
+    depInfo.imageMemoryBarrierCount = static_cast<u32>(newBarrierCount);
+    depInfo.pImageMemoryBarriers = m_pendingImageBarriers.data() + firstBarrierIndex;
 
     vkCmdPipelineBarrier2(m_currentCmdBuf->m_cmdBuf, &depInfo);
+    m_pendingImageBarriers.resize(firstBarrierIndex);
 }
 
-void CommandList::setBufferState(IBuffer* _buffer, ResourceStates::Mask stateBits){
-    if(!_buffer)
+void CommandList::setBufferState(IBuffer* bufferResource, ResourceStates::Mask stateBits){
+    if(!bufferResource)
         return;
 
-    if(m_stateTracker->isPermanentBuffer(_buffer))
+    if(m_stateTracker->isPermanentBuffer(bufferResource))
         return;
 
-    auto* buffer = checked_cast<Buffer*>(_buffer);
+    ResourceStates::Mask oldState = ResourceStates::Unknown;
+    if(!m_stateTracker->getTransientBufferState(bufferResource, oldState))
+        return;
 
-    ResourceStates::Mask oldState = m_stateTracker->getBufferState(_buffer);
-    if(oldState == stateBits)
+    auto* buffer = checked_cast<Buffer*>(bufferResource);
+    const bool needsUavBarrier =
+        oldState == ResourceStates::UnorderedAccess
+        && stateBits == ResourceStates::UnorderedAccess
+        && m_stateTracker->isUavBarrierEnabledForBuffer(bufferResource)
+    ;
+
+    if(oldState == stateBits && !needsUavBarrier)
         return;
 
     VkBufferMemoryBarrier2 barrier = VulkanDetail::MakeVkStruct<VkBufferMemoryBarrier2>(VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2);
@@ -154,7 +300,7 @@ void CommandList::setBufferState(IBuffer* _buffer, ResourceStates::Mask stateBit
     barrier.offset = 0;
     barrier.size = VK_WHOLE_SIZE;
 
-    m_stateTracker->beginTrackingBuffer(_buffer, stateBits);
+    m_stateTracker->beginTrackingTransientBuffer(bufferResource, stateBits);
 
     if(!m_enableAutomaticBarriers){
         m_pendingBufferBarriers.push_back(barrier);
@@ -168,11 +314,11 @@ void CommandList::setBufferState(IBuffer* _buffer, ResourceStates::Mask stateBit
     vkCmdPipelineBarrier2(m_currentCmdBuf->m_cmdBuf, &depInfo);
 }
 
-void CommandList::setAccelStructState(IRayTracingAccelStruct* _as, ResourceStates::Mask stateBits){
-    if(!_as)
+void CommandList::setAccelStructState(IRayTracingAccelStruct* accelStructResource, ResourceStates::Mask stateBits){
+    if(!accelStructResource)
         return;
 
-    auto* as = checked_cast<AccelStruct*>(_as);
+    auto* as = checked_cast<AccelStruct*>(accelStructResource);
 
     if(as->m_buffer){
         setBufferState(as->m_buffer.get(), stateBits);
@@ -180,10 +326,12 @@ void CommandList::setAccelStructState(IRayTracingAccelStruct* _as, ResourceState
 }
 
 void CommandList::setPermanentTextureState(ITexture* texture, ResourceStates::Mask stateBits){
+    setTextureState(texture, s_AllSubresources, stateBits);
     m_stateTracker->setPermanentTextureState(texture, stateBits);
 }
 
 void CommandList::setPermanentBufferState(IBuffer* buffer, ResourceStates::Mask stateBits){
+    setBufferState(buffer, stateBits);
     m_stateTracker->setPermanentBufferState(buffer, stateBits);
 }
 
@@ -194,7 +342,7 @@ void CommandList::setPermanentBufferState(IBuffer* buffer, ResourceStates::Mask 
 StateTracker::StateTracker(const VulkanContext& context)
     : m_permanentTextureStates(0, Hasher<ITexture*>(), EqualTo<ITexture*>(), Alloc::CustomAllocator<Pair<const ITexture*, ResourceStates::Mask>>(context.objectArena))
     , m_permanentBufferStates(0, Hasher<IBuffer*>(), EqualTo<IBuffer*>(), Alloc::CustomAllocator<Pair<const IBuffer*, ResourceStates::Mask>>(context.objectArena))
-    , m_textureStates(0, Hasher<ITexture*>(), EqualTo<ITexture*>(), Alloc::CustomAllocator<Pair<const ITexture*, ResourceStates::Mask>>(context.objectArena))
+    , m_textureStates(0, TextureSubresourceStateKeyHasher(), TextureSubresourceStateKeyEqualTo(), Alloc::CustomAllocator<Pair<const TextureSubresourceStateKey, ResourceStates::Mask>>(context.objectArena))
     , m_bufferStates(0, Hasher<IBuffer*>(), EqualTo<IBuffer*>(), Alloc::CustomAllocator<Pair<const IBuffer*, ResourceStates::Mask>>(context.objectArena))
     , m_textureUavBarriers(0, Hasher<ITexture*>(), EqualTo<ITexture*>(), Alloc::CustomAllocator<Pair<const ITexture*, bool>>(context.objectArena))
     , m_bufferUavBarriers(0, Hasher<IBuffer*>(), EqualTo<IBuffer*>(), Alloc::CustomAllocator<Pair<const IBuffer*, bool>>(context.objectArena))
@@ -218,34 +366,31 @@ void StateTracker::setPermanentTextureState(ITexture* texture, ResourceStates::M
     if(!texture)
         return;
 
-    m_permanentTextureStates[texture] = state;
+    m_permanentTextureStates.insert_or_assign(texture, state);
 }
 
 void StateTracker::setPermanentBufferState(IBuffer* buffer, ResourceStates::Mask state){
     if(!buffer)
         return;
 
-    m_permanentBufferStates[buffer] = state;
+    m_permanentBufferStates.insert_or_assign(buffer, state);
 }
 
 bool StateTracker::isPermanentTexture(ITexture* texture)const{
     if(!texture)
         return false;
 
-    return m_permanentTextureStates.count(texture) > 0;
+    return m_permanentTextureStates.find(texture) != m_permanentTextureStates.end();
 }
 
 bool StateTracker::isPermanentBuffer(IBuffer* buffer)const{
     if(!buffer)
         return false;
 
-    return m_permanentBufferStates.count(buffer) > 0;
+    return m_permanentBufferStates.find(buffer) != m_permanentBufferStates.end();
 }
 
 ResourceStates::Mask StateTracker::getTextureState(ITexture* texture, ArraySlice arraySlice, MipLevel mipLevel)const{
-    (void)arraySlice;
-    (void)mipLevel;
-
     if(!texture)
         return ResourceStates::Unknown;
 
@@ -253,15 +398,8 @@ ResourceStates::Mask StateTracker::getTextureState(ITexture* texture, ArraySlice
     if(permIt != m_permanentTextureStates.end())
         return permIt.value();
 
-    auto it = m_textureStates.find(texture);
-    if(it != m_textureStates.end())
-        return it.value();
-
-    const TextureDesc& desc = texture->getDescription();
-    if(desc.keepInitialState)
-        return desc.initialState;
-
-    return ResourceStates::Unknown;
+    ResourceStates::Mask state = ResourceStates::Unknown;
+    return getTransientTextureState(texture, arraySlice, mipLevel, state) ? state : ResourceStates::Unknown;
 }
 
 ResourceStates::Mask StateTracker::getBufferState(IBuffer* buffer)const{
@@ -272,51 +410,122 @@ ResourceStates::Mask StateTracker::getBufferState(IBuffer* buffer)const{
     if(permIt != m_permanentBufferStates.end())
         return permIt.value();
 
+    ResourceStates::Mask state = ResourceStates::Unknown;
+    return getTransientBufferState(buffer, state) ? state : ResourceStates::Unknown;
+}
+
+bool StateTracker::getTransientTextureState(ITexture* texture, ArraySlice arraySlice, MipLevel mipLevel, ResourceStates::Mask& outState)const{
+    outState = ResourceStates::Unknown;
+    if(!texture)
+        return false;
+
+    const TextureDesc& desc = texture->getDescription();
+    if(mipLevel >= desc.mipLevels || arraySlice >= desc.arraySize)
+        return false;
+
+    const TextureSubresourceStateKey key{ texture, mipLevel, arraySlice };
+    auto it = m_textureStates.find(key);
+    if(it != m_textureStates.end()){
+        outState = it.value();
+        return true;
+    }
+
+    if(desc.keepInitialState)
+        outState = desc.initialState;
+
+    return true;
+}
+
+bool StateTracker::getTransientBufferState(IBuffer* buffer, ResourceStates::Mask& outState)const{
+    outState = ResourceStates::Unknown;
+    if(!buffer)
+        return false;
+
     auto it = m_bufferStates.find(buffer);
-    if(it != m_bufferStates.end())
-        return it.value();
+    if(it != m_bufferStates.end()){
+        outState = it.value();
+        return true;
+    }
 
     const BufferDesc& desc = buffer->getDescription();
     if(desc.keepInitialState)
-        return desc.initialState;
+        outState = desc.initialState;
 
-    return ResourceStates::Unknown;
+    return true;
 }
 
 void StateTracker::beginTrackingTexture(ITexture* texture, TextureSubresourceSet subresources, ResourceStates::Mask state){
-    (void)subresources;
-
     if(!texture)
         return;
 
-    if(m_permanentTextureStates.count(texture) > 0)
+    if(m_permanentTextureStates.find(texture) != m_permanentTextureStates.end())
         return;
 
-    m_textureStates[texture] = state;
+    beginTrackingTransientTexture(texture, subresources, state);
 }
 
 void StateTracker::beginTrackingBuffer(IBuffer* buffer, ResourceStates::Mask state){
     if(!buffer)
         return;
 
-    if(m_permanentBufferStates.count(buffer) > 0)
+    if(m_permanentBufferStates.find(buffer) != m_permanentBufferStates.end())
         return;
 
-    m_bufferStates[buffer] = state;
+    beginTrackingTransientBuffer(buffer, state);
+}
+
+bool StateTracker::isUavBarrierEnabledForTexture(ITexture* texture)const{
+    if(!texture)
+        return false;
+
+    const auto found = m_textureUavBarriers.find(texture);
+    return found == m_textureUavBarriers.end() || found.value();
+}
+
+bool StateTracker::isUavBarrierEnabledForBuffer(IBuffer* buffer)const{
+    if(!buffer)
+        return false;
+
+    const auto found = m_bufferUavBarriers.find(buffer);
+    return found == m_bufferUavBarriers.end() || found.value();
+}
+
+void StateTracker::beginTrackingTransientTexture(ITexture* texture, TextureSubresourceSet subresources, ResourceStates::Mask state){
+    if(!texture)
+        return;
+
+    const TextureDesc& desc = texture->getDescription();
+    const TextureSubresourceSet resolvedSubresources = subresources.resolve(desc, false);
+    const MipLevel mipEnd = resolvedSubresources.baseMipLevel + resolvedSubresources.numMipLevels;
+    const ArraySlice arrayEnd = resolvedSubresources.baseArraySlice + resolvedSubresources.numArraySlices;
+    const usize subresourceCount = static_cast<usize>(resolvedSubresources.numMipLevels) * static_cast<usize>(resolvedSubresources.numArraySlices);
+
+    __hidden_vulkan_state_tracking::ReserveAdditionalCapacity(m_textureStates, subresourceCount);
+
+    for(ArraySlice arraySlice = resolvedSubresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
+        for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
+            const TextureSubresourceStateKey key{ texture, mipLevel, arraySlice };
+            m_textureStates.insert_or_assign(key, state);
+        }
+    }
+}
+
+void StateTracker::beginTrackingTransientBuffer(IBuffer* buffer, ResourceStates::Mask state){
+    m_bufferStates.insert_or_assign(buffer, state);
 }
 
 void StateTracker::setEnableUavBarriersForTexture(ITexture* texture, bool enableBarriers){
     if(!texture)
         return;
 
-    m_textureUavBarriers[texture] = enableBarriers;
+    m_textureUavBarriers.insert_or_assign(texture, enableBarriers);
 }
 
 void StateTracker::setEnableUavBarriersForBuffer(IBuffer* buffer, bool enableBarriers){
     if(!buffer)
         return;
 
-    m_bufferUavBarriers[buffer] = enableBarriers;
+    m_bufferUavBarriers.insert_or_assign(buffer, enableBarriers);
 }
 
 

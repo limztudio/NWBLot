@@ -103,7 +103,7 @@ u64 UpdateFnv64NameLane(u64 hash, const NameHash& nameHash, const u32 lane){
 template <typename RecordVector>
 const ShaderArchive::Record* FindRecord(const RecordVector& records, const Name& shaderName, const AStringView variantName, const Name& stageName){
     const auto it = LowerBound(records.begin(), records.end(), nullptr,
-        [&shaderName, &variantName, &stageName](const ShaderArchive::Record& record, std::nullptr_t){
+        [&shaderName, &variantName, &stageName](const ShaderArchive::Record& record, decltype(nullptr)){
             const NameHash& recordShader = record.shaderName.hash();
             const NameHash& targetShader = shaderName.hash();
             if(recordShader != targetShader)

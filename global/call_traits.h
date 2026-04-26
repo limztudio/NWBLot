@@ -14,17 +14,17 @@ namespace CallTraitsDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename T, bool small_>
+template<typename T, bool small>
 struct Implementation1{ typedef const T& param_type; };
 template<typename T>
 struct Implementation1<T, true>{ typedef const T param_type; };
 
-template<typename T, bool isp, bool b1>
+template<typename T, bool isPointer, bool isArithmetic>
 struct Implementation0{ typedef const T& param_type; };
-template<typename T, bool isp>
-struct Implementation0<T, isp, true>{ typedef typename Implementation1<T, sizeof(T) <= sizeof(void*)>::param_type param_type; };
-template<typename T, bool b1>
-struct Implementation0<T, true, b1>{ typedef T const param_type; };
+template<typename T, bool isPointer>
+struct Implementation0<T, isPointer, true>{ typedef typename Implementation1<T, sizeof(T) <= sizeof(void*)>::param_type param_type; };
+template<typename T, bool isArithmetic>
+struct Implementation0<T, true, isArithmetic>{ typedef T const param_type; };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

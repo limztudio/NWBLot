@@ -30,7 +30,7 @@ namespace VulkanDetail{
     VkImageLayout GetVkImageLayout(ResourceStates::Mask state);
     VkFormat ConvertFormat(Format::Enum format);
     VkSampleCountFlagBits GetSampleCountFlagBits(u32 sampleCount);
-    extern VkDeviceAddress GetBufferDeviceAddress(IBuffer* _buffer, u64 offset = 0);
+    extern VkDeviceAddress GetBufferDeviceAddress(IBuffer* bufferResource, u64 offset = 0);
     VkImageType TextureDimensionToImageType(TextureDimension::Enum dimension);
     VkImageViewType TextureDimensionToViewType(TextureDimension::Enum dimension);
     bool IsSupportedSampleCount(u32 sampleCount);
@@ -517,7 +517,7 @@ class Buffer final : public RefCounter<IBuffer>, NoCopy{
     friend class UploadManager;
     friend class ShaderTable;
 
-    friend VkDeviceAddress VulkanDetail::GetBufferDeviceAddress(IBuffer* _buffer, u64 offset);
+    friend VkDeviceAddress VulkanDetail::GetBufferDeviceAddress(IBuffer* bufferResource, u64 offset);
 
 
 public:
@@ -737,7 +737,7 @@ private:
 
 
 struct ShaderLibraryKey{
-    Name entryName = NAME_NONE;
+    AString entryName;
     ShaderType::Mask shaderType = ShaderType::None;
 };
 
@@ -749,11 +749,8 @@ inline bool operator==(const ShaderLibraryKey& lhs, const ShaderLibraryKey& rhs)
 
 struct ShaderLibraryKeyHasher{
     usize operator()(const ShaderLibraryKey& value)const noexcept{
-        usize seed = std::hash<Name>{}(value.entryName);
-        seed ^= static_cast<usize>(value.shaderType)
-            + static_cast<usize>(0x9e3779b97f4a7c15ull)
-            + (seed << 6)
-            + (seed >> 2);
+        usize seed = Hasher<AString>{}(value.entryName);
+        CoreDetail::HashCombine(seed, static_cast<u32>(value.shaderType));
         return seed;
     }
 };
@@ -770,7 +767,7 @@ public:
 
 public:
     virtual void getBytecode(const void** ppBytecode, usize* pSize)const override;
-    virtual ShaderHandle getShader(const Name& entryName, ShaderType::Mask shaderType)override;
+    virtual ShaderHandle getShader(AStringView entryName, ShaderType::Mask shaderType)override;
 
 
 private:
@@ -1117,10 +1114,10 @@ public:
 
 
 public:
-    virtual void setRayGenerationShader(const Name& exportName, IBindingSet* bindings = nullptr)override;
-    virtual u32 addMissShader(const Name& exportName, IBindingSet* bindings = nullptr)override;
-    virtual u32 addHitGroup(const Name& exportName, IBindingSet* bindings = nullptr)override;
-    virtual u32 addCallableShader(const Name& exportName, IBindingSet* bindings = nullptr)override;
+    virtual void setRayGenerationShader(AStringView exportName, IBindingSet* bindings = nullptr)override;
+    virtual u32 addMissShader(AStringView exportName, IBindingSet* bindings = nullptr)override;
+    virtual u32 addHitGroup(AStringView exportName, IBindingSet* bindings = nullptr)override;
+    virtual u32 addCallableShader(AStringView exportName, IBindingSet* bindings = nullptr)override;
     virtual void clearMissShaders()override;
     virtual void clearHitShaders()override;
     virtual void clearCallableShaders()override;
@@ -1131,7 +1128,7 @@ public:
 private:
     void allocateSBTBuffer(BufferHandle& outBuffer, u64 sbtSize);
     u32 appendShaderRecord(
-        const Name& exportName,
+        AStringView exportName,
         BufferHandle& buffer,
         u64& offset,
         u32& count,
@@ -1139,7 +1136,7 @@ private:
         const tchar* recordName,
         const tchar* exportKind
     );
-    u32 findGroupIndex(const Name& exportName)const;
+    u32 findGroupIndex(AStringView exportName)const;
 
 
 private:
@@ -1200,6 +1197,7 @@ private:
     bool m_descriptorHeapCompatible = false;
     u32 m_pushConstantByteSize = 0;
     Vector<DescriptorHeapBindingMeta, Alloc::CustomAllocator<DescriptorHeapBindingMeta>> m_descriptorHeapBindings;
+    HashMap<u32, usize, Hasher<u32>, EqualTo<u32>, Alloc::CustomAllocator<Pair<const u32, usize>>> m_descriptorHeapBindingLookup;
 
     const VulkanContext& m_context;
 };
@@ -1339,6 +1337,31 @@ private:
 // State Tracker
 
 
+struct TextureSubresourceStateKey{
+    ITexture* texture = nullptr;
+    MipLevel mipLevel = 0;
+    ArraySlice arraySlice = 0;
+};
+
+struct TextureSubresourceStateKeyHasher{
+    [[nodiscard]] usize operator()(const TextureSubresourceStateKey& value)const noexcept{
+        usize seed = 0;
+        CoreDetail::HashCombine(seed, value.texture);
+        CoreDetail::HashCombine(seed, value.mipLevel);
+        CoreDetail::HashCombine(seed, value.arraySlice);
+        return seed;
+    }
+};
+
+struct TextureSubresourceStateKeyEqualTo{
+    [[nodiscard]] bool operator()(const TextureSubresourceStateKey& lhs, const TextureSubresourceStateKey& rhs)const noexcept{
+        return lhs.texture == rhs.texture
+            && lhs.mipLevel == rhs.mipLevel
+            && lhs.arraySlice == rhs.arraySlice
+            ;
+    }
+};
+
 class StateTracker final : NoCopy{
     friend class CommandList;
 
@@ -1361,8 +1384,18 @@ public:
     void beginTrackingTexture(ITexture* texture, TextureSubresourceSet subresources, ResourceStates::Mask state);
     void beginTrackingBuffer(IBuffer* buffer, ResourceStates::Mask state);
 
+    [[nodiscard]] bool isUavBarrierEnabledForTexture(ITexture* texture)const;
+    [[nodiscard]] bool isUavBarrierEnabledForBuffer(IBuffer* buffer)const;
     void setEnableUavBarriersForTexture(ITexture* texture, bool enableBarriers);
     void setEnableUavBarriersForBuffer(IBuffer* buffer, bool enableBarriers);
+
+
+private:
+    [[nodiscard]] bool getTransientTextureState(ITexture* texture, ArraySlice arraySlice, MipLevel mipLevel, ResourceStates::Mask& outState)const;
+    [[nodiscard]] bool getTransientBufferState(IBuffer* buffer, ResourceStates::Mask& outState)const;
+
+    void beginTrackingTransientTexture(ITexture* texture, TextureSubresourceSet subresources, ResourceStates::Mask state);
+    void beginTrackingTransientBuffer(IBuffer* buffer, ResourceStates::Mask state);
 
 
 private:
@@ -1374,7 +1407,7 @@ private:
 private:
     HashMap<ITexture*, ResourceStates::Mask, Hasher<ITexture*>, EqualTo<ITexture*>, Alloc::CustomAllocator<Pair<const ITexture*, ResourceStates::Mask>>> m_permanentTextureStates;
     HashMap<IBuffer*, ResourceStates::Mask, Hasher<IBuffer*>, EqualTo<IBuffer*>, Alloc::CustomAllocator<Pair<const IBuffer*, ResourceStates::Mask>>> m_permanentBufferStates;
-    HashMap<ITexture*, ResourceStates::Mask, Hasher<ITexture*>, EqualTo<ITexture*>, Alloc::CustomAllocator<Pair<const ITexture*, ResourceStates::Mask>>> m_textureStates;
+    HashMap<TextureSubresourceStateKey, ResourceStates::Mask, TextureSubresourceStateKeyHasher, TextureSubresourceStateKeyEqualTo, Alloc::CustomAllocator<Pair<const TextureSubresourceStateKey, ResourceStates::Mask>>> m_textureStates;
     HashMap<IBuffer*, ResourceStates::Mask, Hasher<IBuffer*>, EqualTo<IBuffer*>, Alloc::CustomAllocator<Pair<const IBuffer*, ResourceStates::Mask>>> m_bufferStates;
     HashMap<ITexture*, bool, Hasher<ITexture*>, EqualTo<ITexture*>, Alloc::CustomAllocator<Pair<const ITexture*, bool>>> m_textureUavBarriers;
     HashMap<IBuffer*, bool, Hasher<IBuffer*>, EqualTo<IBuffer*>, Alloc::CustomAllocator<Pair<const IBuffer*, bool>>> m_bufferUavBarriers;

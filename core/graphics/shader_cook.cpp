@@ -2,13 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "shader_cook.h"
+
 #if defined(NWB_COOK)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-#include "shader_cook.h"
 
 #include "vulkan/vulkan_shader_compiler.h"
 
@@ -39,7 +39,7 @@ static constexpr AStringView s_AssetTypeInclude = "include";
 
 static AString CanonicalAssetType(const Metascript::Document& doc){
     const auto assetType = doc.assetType();
-    return CanonicalizeText(AString(assetType.data(), assetType.size()));
+    return CanonicalizeText(AStringView(assetType.data(), assetType.size()));
 }
 
 
@@ -49,8 +49,8 @@ static AString CanonicalAssetType(const Metascript::Document& doc){
 
 static constexpr AStringView s_HlslIncludeDirective = "include";
 
-static bool ExtractIncludeName(const AStringView line, AString& outIncludeName){
-    outIncludeName.clear();
+static bool ExtractIncludeName(const AStringView line, AStringView& outIncludeName){
+    outIncludeName = {};
 
     usize cursor = 0;
     while(cursor < line.size() && IsAsciiSpace(line[cursor]))
@@ -78,7 +78,7 @@ static bool ExtractIncludeName(const AStringView line, AString& outIncludeName){
     if(closingQuote == AStringView::npos || closingQuote <= cursor)
         return false;
 
-    outIncludeName = AString(line.substr(cursor, closingQuote - cursor));
+    outIncludeName = line.substr(cursor, closingQuote - cursor);
     return !outIncludeName.empty();
 }
 
@@ -132,8 +132,6 @@ static bool CollectDependencies(const Path& startPath, const ShaderCook::CookVec
     Deque<Path, Alloc::ScratchAllocator<Path>> pending{Alloc::ScratchAllocator<Path>(scratchArena)};
     pending.push_back(startPath);
     AString sourceText;
-    AString line;
-    AString includeName;
     Path includePath;
 
     while(!pending.empty()){
@@ -150,8 +148,8 @@ static bool CollectDependencies(const Path& startPath, const ShaderCook::CookVec
             return false;
         }
 
-        const AString canonicalPathKey = CanonicalizeText(PathToString(absolutePath));
-        if(!inOutVisitedPaths.insert(canonicalPathKey).second)
+        AString canonicalPathKey = CanonicalizeText(PathToString(absolutePath));
+        if(!inOutVisitedPaths.insert(Move(canonicalPathKey)).second)
             continue;
 
         sourceText.clear();
@@ -166,24 +164,32 @@ static bool CollectDependencies(const Path& startPath, const ShaderCook::CookVec
 
         inOutDependencies.push_back(absolutePath);
 
-        AStringStream sourceStream(sourceText);
-        while(ReadTextLine(sourceStream, line)){
-            TrimTrailingCarriageReturn(line);
+        const AStringView sourceView(sourceText.data(), sourceText.size());
+        usize lineBegin = 0;
+        while(lineBegin < sourceView.size()){
+            usize lineEnd = lineBegin;
+            while(lineEnd < sourceView.size() && sourceView[lineEnd] != '\n')
+                ++lineEnd;
 
-            includeName.clear();
-            if(!ExtractIncludeName(line, includeName))
-                continue;
+            AStringView line = sourceView.substr(lineBegin, lineEnd - lineBegin);
+            if(!line.empty() && line.back() == '\r')
+                line.remove_suffix(1);
 
-            if(!ResolveIncludeFile(includeName, absolutePath.parent_path(), includeDirectories, includePath)){
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("Unable to resolve include '{}' from '{}'"),
-                    StringConvert(includeName),
-                    PathToString<tchar>(absolutePath)
-                );
-                return false;
+            AStringView includeName;
+            if(ExtractIncludeName(line, includeName)){
+                if(!ResolveIncludeFile(includeName, absolutePath.parent_path(), includeDirectories, includePath)){
+                    NWB_LOGGER_ERROR(
+                        NWB_TEXT("Unable to resolve include '{}' from '{}'"),
+                        StringConvert(includeName),
+                        PathToString<tchar>(absolutePath)
+                    );
+                    return false;
+                }
+
+                pending.push_back(Move(includePath));
             }
 
-            pending.push_back(Move(includePath));
+            lineBegin = lineEnd + 1;
         }
     }
 
@@ -221,8 +227,9 @@ static bool ValidateDefaultVariant(const AStringView contextLabel, const AString
     }
 
     HashSet<AString, Hasher<AString>, EqualTo<AString>, Alloc::ScratchAllocator<AString>> seenDefines{Alloc::ScratchAllocator<AString>(scratchArena)};
+    seenDefines.reserve(defineValues.size());
     usize begin = 0;
-    const auto logInvalidAssignment = [&](const AString& segment){
+    const auto logInvalidAssignment = [&](const AStringView segment){
         NWB_LOGGER_ERROR(
             NWB_TEXT("Meta '{}': default variant '{}' has invalid assignment '{}'"),
             StringConvert(contextLabel),
@@ -235,7 +242,7 @@ static bool ValidateDefaultVariant(const AStringView contextLabel, const AString
         if(segmentEnd == AString::npos)
             segmentEnd = defaultVariant.size();
 
-        const AString segment = Trim(defaultVariant.substr(begin, segmentEnd - begin));
+        const AStringView segment = TrimView(defaultVariant.substr(begin, segmentEnd - begin));
         if(segment.empty()){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("Meta '{}': default variant '{}' has invalid empty segment"),
@@ -246,13 +253,13 @@ static bool ValidateDefaultVariant(const AStringView contextLabel, const AString
         }
 
         const usize equalPos = segment.find('=');
-        if(equalPos == AString::npos || equalPos == 0 || equalPos + 1 >= segment.size()){
+        if(equalPos == AStringView::npos || equalPos == 0 || equalPos + 1 >= segment.size()){
             logInvalidAssignment(segment);
             return false;
         }
 
-        const AString defineName = Trim(AStringView(segment).substr(0, equalPos));
-        const AString defineValue = Trim(AStringView(segment).substr(equalPos + 1));
+        const AString defineName(TrimView(segment.substr(0, equalPos)));
+        const AString defineValue(TrimView(segment.substr(equalPos + 1)));
         if(defineName.empty() || defineValue.empty()){
             logInvalidAssignment(segment);
             return false;
@@ -352,18 +359,26 @@ static bool ParseDefaultVariant(const Path& nwbFilePath, const Metascript::Value
 
     if(defaultVariantVal->isList()){
         const auto& list = defaultVariantVal->asList();
+        usize defaultVariantSize = list.empty() ? 0u : list.size() - 1u;
         for(usize i = 0; i < list.size(); ++i){
             if(!list[i].isString()){
                 NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': default_variant list elements must be strings"), PathToString<tchar>(nwbFilePath));
                 return false;
             }
+            defaultVariantSize += list[i].asString().size();
+        }
+
+        outDefaultVariant.reserve(defaultVariantSize);
+        for(usize i = 0; i < list.size(); ++i){
             if(i > 0)
                 outDefaultVariant += ';';
-            outDefaultVariant += list[i].copyString();
+            const Metascript::MStringView variantText = list[i].asString();
+            outDefaultVariant.append(variantText.data(), variantText.size());
         }
     }
     else if(defaultVariantVal->isString()){
-        outDefaultVariant = defaultVariantVal->copyString();
+        const Metascript::MStringView variantText = defaultVariantVal->asString();
+        outDefaultVariant.assign(variantText.data(), variantText.size());
     }
     else{
         NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': default_variant must be a string or list of strings"), PathToString<tchar>(nwbFilePath));
@@ -407,9 +422,12 @@ static bool ParseStringField(
     if(!fieldValue)
         return true;
 
-    outValue = fieldValue->copyString();
-    if(canonicalize)
-        outValue = CanonicalizeText(outValue);
+    const Metascript::MStringView text = fieldValue->asString();
+    const AStringView textView(text.data(), text.size());
+    outValue = canonicalize
+        ? CanonicalizeText(textView)
+        : AString(textView)
+    ;
     return true;
 }
 
@@ -455,7 +473,7 @@ static bool ParseDefines(const Path& nwbFilePath, const Metascript::Value& asset
     const auto defineAllocator = ShaderCook::CookAllocator<AString>(arena);
     outDefineValues.reserve(definesMap.size());
     for(const auto& [key, val] : definesMap){
-        const AString defineName(key.data(), key.size());
+        AString defineName(key.data(), key.size());
         if(defineName.empty()){
             NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': define names must not be empty"), PathToString<tchar>(nwbFilePath));
             return false;
@@ -487,7 +505,7 @@ static bool ParseDefines(const Path& nwbFilePath, const Metascript::Value& asset
         }
 
         ShaderCook::DefineEntry defineEntry(Move(defineValues));
-        outDefineValues.insert_or_assign(defineName, Move(defineEntry));
+        outDefineValues.insert_or_assign(Move(defineName), Move(defineEntry));
     }
     return true;
 }
@@ -505,7 +523,7 @@ static bool ParseDefines(const Path& nwbFilePath, const Metascript::Value& asset
 ShaderCook::ShaderCook(CookArena& memoryArena)
     : m_memoryArena(memoryArena)
 {
-    m_compiler.reset(new Vulkan::VulkanShaderCompiler(m_memoryArena));
+    m_compiler = MakeUnique<Vulkan::VulkanShaderCompiler>(m_memoryArena);
 }
 
 
@@ -640,19 +658,31 @@ void ShaderCook::mergeInheritedDefines(ShaderEntry& inOutEntry, const CookVector
 
         const IncludeEntry& includeEntry = found.value();
 
+        if(includeEntry.defineValues.size() <= Limit<usize>::s_Max - inOutEntry.defineValues.size())
+            inOutEntry.defineValues.reserve(inOutEntry.defineValues.size() + includeEntry.defineValues.size());
+
         for(const auto& [defineName, defineEntry] : includeEntry.defineValues){
-            if(inOutEntry.defineValues.find(defineName) == inOutEntry.defineValues.end()){
-                inOutEntry.defineValues.insert_or_assign(defineName, DefineEntry{
-                    CookVector<AString>(defineEntry.values, CookAllocator<AString>(m_memoryArena))
-                });
-            }
+            auto [defineIt, inserted] = inOutEntry.defineValues.try_emplace(defineName, m_memoryArena);
+            if(inserted)
+                defineIt.value().values.assign(defineEntry.values.begin(), defineEntry.values.end());
         }
 
         if(!includeEntry.defaultVariant.empty()){
             if(inOutEntry.defaultVariant.empty())
                 inOutEntry.defaultVariant = includeEntry.defaultVariant;
-            else
-                inOutEntry.defaultVariant = includeEntry.defaultVariant + ";" + inOutEntry.defaultVariant;
+            else{
+                const usize includeVariantSize = includeEntry.defaultVariant.size();
+                const usize currentVariantSize = inOutEntry.defaultVariant.size();
+                AString mergedDefaultVariant;
+                if(includeVariantSize < Limit<usize>::s_Max
+                    && includeVariantSize + 1u <= Limit<usize>::s_Max - currentVariantSize
+                )
+                    mergedDefaultVariant.reserve(includeVariantSize + 1u + currentVariantSize);
+                mergedDefaultVariant += includeEntry.defaultVariant;
+                mergedDefaultVariant += ';';
+                mergedDefaultVariant += inOutEntry.defaultVariant;
+                inOutEntry.defaultVariant = Move(mergedDefaultVariant);
+            }
         }
     }
 }
@@ -668,7 +698,9 @@ bool ShaderCook::gatherShaderDependencies(const Path& sourcePath, const CookVect
 
 bool ShaderCook::expandDefineCombinations(const CookMap<AString, DefineEntry>& defineValues, CookVector<DefineCombo>& outCombinations){
     outCombinations.clear();
-    outCombinations.push_back(DefineCombo(CookAllocator<Pair<const AString, AString>>(m_memoryArena)));
+    DefineCombo initialCombo{CookAllocator<Pair<const AString, AString>>(m_memoryArena)};
+    initialCombo.reserve(defineValues.size());
+    outCombinations.push_back(Move(initialCombo));
 
     for(const auto& entry : sortedDefineEntries(defineValues)){
         const AString& defineName = *entry.key;
@@ -689,7 +721,8 @@ bool ShaderCook::expandDefineCombinations(const CookMap<AString, DefineEntry>& d
         for(const DefineCombo& combo : outCombinations){
             for(const AString& value : values){
                 DefineCombo copy = combo;
-                copy[defineName] = value;
+                copy.reserve(defineValues.size());
+                copy.try_emplace(defineName, value);
                 expanded.push_back(Move(copy));
             }
         }
@@ -704,9 +737,25 @@ AString ShaderCook::buildVariantName(const DefineCombo& combo){
     if(combo.empty())
         return "default";
 
+    if(combo.size() == 1u){
+        const auto& [defineName, defineValue] = *combo.begin();
+        AString variantName;
+        variantName.reserve(defineName.size() + defineValue.size() + 1u);
+        variantName += defineName;
+        variantName += '=';
+        variantName += defineValue;
+        return variantName;
+    }
+
+    const auto entries = sortedDefineEntries(combo);
+    usize variantNameSize = entries.size() - 1u;
+    for(const auto& entry : entries)
+        variantNameSize += entry.key->size() + entry.value->size() + 1u;
+
     AString variantName;
+    variantName.reserve(variantNameSize);
     bool first = true;
-    for(const auto& entry : sortedDefineEntries(combo)){
+    for(const auto& entry : entries){
         if(!first)
             variantName += ';';
         first = false;
@@ -720,39 +769,44 @@ AString ShaderCook::buildVariantName(const DefineCombo& combo){
 }
 
 bool ShaderCook::canonicalizeVariantSignature(const AStringView variantSignature, AString& outCanonical){
-    const AString trimmedSignature = Trim(variantSignature);
-    outCanonical.clear();
-    if(trimmedSignature.empty())
+    const AStringView trimmedSignatureView = TrimView(variantSignature);
+    if(trimmedSignatureView.empty()){
+        outCanonical.clear();
         return true;
-    if(trimmedSignature == "default"){
+    }
+    if(trimmedSignatureView == "default"){
         outCanonical = "default";
         return true;
     }
 
+    const auto fail = [&outCanonical](){
+        outCanonical.clear();
+        return false;
+    };
+
     DefineCombo assignments{CookAllocator<Pair<const AString, AString>>(m_memoryArena)};
 
     usize begin = 0;
-    while(begin < trimmedSignature.size()){
-        usize segmentEnd = trimmedSignature.find(';', begin);
-        if(segmentEnd == AString::npos)
-            segmentEnd = trimmedSignature.size();
+    while(begin < trimmedSignatureView.size()){
+        usize segmentEnd = trimmedSignatureView.find(';', begin);
+        if(segmentEnd == AStringView::npos)
+            segmentEnd = trimmedSignatureView.size();
 
-        const AString segment = Trim(trimmedSignature.substr(begin, segmentEnd - begin));
+        const AStringView segment = TrimView(trimmedSignatureView.substr(begin, segmentEnd - begin));
         if(segment.empty())
-            return false;
+            return fail();
 
         const usize equalPos = segment.find('=');
-        if(equalPos == AString::npos || equalPos == 0 || equalPos + 1 >= segment.size())
-            return false;
+        if(equalPos == AStringView::npos || equalPos == 0 || equalPos + 1 >= segment.size())
+            return fail();
 
-        const AString defineName = Trim(AStringView(segment).substr(0, equalPos));
-        const AString defineValue = Trim(AStringView(segment).substr(equalPos + 1));
+        AString defineName(TrimView(segment.substr(0, equalPos)));
+        AString defineValue(TrimView(segment.substr(equalPos + 1)));
         if(defineName.empty() || defineValue.empty())
-            return false;
-        if(assignments.find(defineName) != assignments.end())
-            return false;
+            return fail();
+        if(!assignments.emplace(Move(defineName), Move(defineValue)).second)
+            return fail();
 
-        assignments.insert_or_assign(defineName, defineValue);
         begin = segmentEnd + 1;
     }
 
@@ -839,9 +893,17 @@ bool ShaderCook::computeSourceChecksum(const ShaderEntry& entry, const AStringVi
     appendChecksumLine(entry.targetProfile.view());
     appendChecksumLine(AStringView(entry.entryPoint));
     appendChecksumLine(variantSignature);
-    for(const auto& entryDefine : sortedDefineEntries(entry.implicitDefines)){
-        appendChecksumLine(*entryDefine.key);
-        appendChecksumLine(*entryDefine.value);
+    if(entry.implicitDefines.size() <= 1u){
+        for(const auto& [defineName, defineValue] : entry.implicitDefines){
+            appendChecksumLine(defineName);
+            appendChecksumLine(defineValue);
+        }
+    }
+    else{
+        for(const auto& entryDefine : sortedDefineEntries(entry.implicitDefines)){
+            appendChecksumLine(*entryDefine.key);
+            appendChecksumLine(*entryDefine.value);
+        }
     }
     outChecksum = UpdateFnv64(outChecksum, reinterpret_cast<const u8*>(&dependencyChecksum), sizeof(dependencyChecksum));
     return true;

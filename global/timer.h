@@ -15,6 +15,7 @@
 
 
 using Timer = std::chrono::steady_clock::time_point;
+using LocalTime = std::tm;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -23,8 +24,8 @@ using Timer = std::chrono::steady_clock::time_point;
 // assume that the resolution is miliseconds
 class TimerDelta{
 public:
-    TimerDelta()noexcept : value(0){}
-    TimerDelta(i64 v)noexcept : value(v){}
+    TimerDelta()noexcept : m_value(0){}
+    TimerDelta(i64 v)noexcept : m_value(v){}
     TimerDelta(const TimerDelta&)noexcept = default;
     TimerDelta(TimerDelta&&)noexcept = default;
 
@@ -34,11 +35,11 @@ public:
     TimerDelta& operator=(TimerDelta&&)noexcept = default;
 
 public:
-    operator i64()const noexcept{ return value; }
+    operator i64()const noexcept{ return m_value; }
 
 
 private:
-    i64 value;
+    i64 m_value;
 };
 
 
@@ -120,6 +121,10 @@ struct formatter<TimerDelta, wchar>{
 
 inline Timer TimerNow()noexcept{ return std::chrono::steady_clock::now(); }
 
+[[nodiscard]] inline Timer TimerAddMS(const Timer& timer, i64 milliseconds)noexcept{
+    return timer + std::chrono::milliseconds(milliseconds);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -142,7 +147,7 @@ inline Timer s_VeryBegining = TimerNow();
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool GetLocalTime(std::tm& outTime){
+[[nodiscard]] inline bool GetLocalTime(LocalTime& outTime){
     const auto now = std::time(nullptr);
     if(now == static_cast<std::time_t>(-1))
         return false;

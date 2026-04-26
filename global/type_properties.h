@@ -108,6 +108,14 @@ constexpr T&& Forward(RemoveReference_T<T>&& v)noexcept{
 template<typename T>
 constexpr RemoveReference_T<T>&& Move(T&& v)noexcept{ return static_cast<RemoveReference_T<T>&&>(v); }
 
+template<typename T>
+constexpr void Swap(T& lhs, T& rhs)noexcept(noexcept(std::swap(lhs, rhs))){ std::swap(lhs, rhs); }
+
+template<typename T, typename U = T>
+constexpr T Exchange(T& object, U&& value)noexcept(noexcept(std::exchange(object, Forward<U>(value)))){
+    return std::exchange(object, Forward<U>(value));
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

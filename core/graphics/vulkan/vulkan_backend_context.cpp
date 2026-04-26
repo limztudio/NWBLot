@@ -264,9 +264,9 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL VulkanDebugCallback(
     void* userData
 )
 {
-    (void)flags;
-    (void)objType;
-    (void)obj;
+    static_cast<void>(flags);
+    static_cast<void>(objType);
+    static_cast<void>(obj);
 
     const auto* backend = static_cast<const BackendContext*>(userData);
     if(backend && backend->isValidationMessageLocationIgnored(static_cast<usize>(location)))
@@ -482,15 +482,15 @@ void BackendContext::initDefaultExtensions(){
     for(const auto* name : s_EnabledInstanceExts)
         m_enabledExtensions.instance.insert(name);
     for(const auto& e : s_EnabledDeviceExts)
-        m_enabledExtensions.device.insert({ e.name, e.feature });
+        m_enabledExtensions.device.emplace(e.name, e.feature);
 
     for(const auto* name : s_OptionalInstanceExts)
         m_optionalExtensions.instance.insert(name);
     for(const auto& e : s_OptionalDeviceExts)
-        m_optionalExtensions.device.insert({ e.name, e.feature });
+        m_optionalExtensions.device.emplace(e.name, e.feature);
 
     for(const auto& e : s_RayTracingExts)
-        m_rayTracingExtensions.insert({ e.name, e.feature });
+        m_rayTracingExtensions.emplace(e.name, e.feature);
 }
 
 bool BackendContext::createVulkanInstance(){
@@ -561,10 +561,13 @@ bool BackendContext::createVulkanInstance(){
     }
 
     for(const auto& ext : availableExtensions){
-        const AString name = ext.extensionName;
-        if(m_optionalExtensions.instance.find(name) != m_optionalExtensions.instance.end())
-            m_enabledExtensions.instance.insert(name);
+        AString name = ext.extensionName;
+        const bool enableOptionalExtension =
+            m_optionalExtensions.instance.find(name) != m_optionalExtensions.instance.end()
+        ;
         requiredExtensions.erase(name);
+        if(enableOptionalExtension)
+            m_enabledExtensions.instance.insert(Move(name));
     }
 
     if(!requiredExtensions.empty()){
@@ -600,10 +603,13 @@ bool BackendContext::createVulkanInstance(){
     }
 
     for(const auto& layer : availableLayers){
-        const AString name = layer.layerName;
-        if(m_optionalExtensions.layers.find(name) != m_optionalExtensions.layers.end())
-            m_enabledExtensions.layers.insert(name);
+        AString name = layer.layerName;
+        const bool enableOptionalLayer =
+            m_optionalExtensions.layers.find(name) != m_optionalExtensions.layers.end()
+        ;
         requiredLayers.erase(name);
+        if(enableOptionalLayer)
+            m_enabledExtensions.layers.insert(Move(name));
     }
 
     if(!requiredLayers.empty()){
@@ -834,8 +840,30 @@ bool BackendContext::pickPhysicalDevice(){
     AStringStream errorStream;
     errorStream << "Cannot find a Vulkan device that supports all the required extensions and properties.";
 
-    Vector<VkPhysicalDevice, Alloc::ScratchAllocator<VkPhysicalDevice>> discreteGPUs((Alloc::ScratchAllocator<VkPhysicalDevice>(scratchArena)));
-    Vector<VkPhysicalDevice, Alloc::ScratchAllocator<VkPhysicalDevice>> otherGPUs((Alloc::ScratchAllocator<VkPhysicalDevice>(scratchArena)));
+    struct DeviceSelection{
+        VkPhysicalDevice device = VK_NULL_HANDLE;
+        i32 graphicsQueueFamily = -1;
+        i32 computeQueueFamily = -1;
+        i32 transferQueueFamily = -1;
+        i32 presentQueueFamily = -1;
+    };
+    auto captureCurrentSelection = [this](VkPhysicalDevice device){
+        DeviceSelection selection;
+        selection.device = device;
+        selection.graphicsQueueFamily = m_graphicsQueueFamily;
+        selection.computeQueueFamily = m_computeQueueFamily;
+        selection.transferQueueFamily = m_transferQueueFamily;
+        selection.presentQueueFamily = m_presentQueueFamily;
+        return selection;
+    };
+    auto applySelection = [this](const DeviceSelection& selection){
+        m_vulkanPhysicalDevice = selection.device;
+        m_graphicsQueueFamily = selection.graphicsQueueFamily;
+        m_computeQueueFamily = selection.computeQueueFamily;
+        m_transferQueueFamily = selection.transferQueueFamily;
+        m_presentQueueFamily = selection.presentQueueFamily;
+    };
+    DeviceSelection fallbackSelection;
 
     for(i32 deviceIndex = firstDevice; deviceIndex <= lastDevice; ++deviceIndex){
         VkPhysicalDevice dev = devices[deviceIndex];
@@ -845,6 +873,7 @@ bool BackendContext::pickPhysicalDevice(){
         errorStream << "\n" << prop.deviceName << ":";
 
         HashSet<AString, Hasher<AString>, EqualTo<AString>, Alloc::ScratchAllocator<AString>> requiredExtensions(0, Hasher<AString>(), EqualTo<AString>(), Alloc::ScratchAllocator<AString>(scratchArena));
+        requiredExtensions.reserve(m_enabledExtensions.device.size());
         for(const auto& [name, _] : m_enabledExtensions.device)
             requiredExtensions.insert(name);
         uint32_t extCount = 0;
@@ -902,7 +931,6 @@ bool BackendContext::pickPhysicalDevice(){
                 res = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(dev, m_windowSurface, &surfaceCaps);
                 if(res != VK_SUCCESS){
                     errorStream << "\n  - failed to query surface capabilities";
-                    deviceIsGood = false;
                     continue;
                 }
 
@@ -910,14 +938,12 @@ bool BackendContext::pickPhysicalDevice(){
                 res = vkGetPhysicalDeviceSurfaceFormatsKHR(dev, m_windowSurface, &fmtCount, nullptr);
                 if(res != VK_SUCCESS){
                     errorStream << "\n  - failed to query surface format count";
-                    deviceIsGood = false;
                     continue;
                 }
                 Vector<VkSurfaceFormatKHR, Alloc::ScratchAllocator<VkSurfaceFormatKHR>> surfaceFmts(fmtCount, Alloc::ScratchAllocator<VkSurfaceFormatKHR>(scratchArena));
                 res = vkGetPhysicalDeviceSurfaceFormatsKHR(dev, m_windowSurface, &fmtCount, surfaceFmts.data());
                 if(res != VK_SUCCESS){
                     errorStream << "\n  - failed to query surface formats";
-                    deviceIsGood = false;
                     continue;
                 }
 
@@ -955,19 +981,17 @@ bool BackendContext::pickPhysicalDevice(){
         if(!deviceIsGood)
             continue;
 
-        if(prop.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
-            discreteGPUs.push_back(dev);
-        else
-            otherGPUs.push_back(dev);
+        if(prop.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU){
+            applySelection(captureCurrentSelection(dev));
+            return true;
+        }
+
+        if(fallbackSelection.device == VK_NULL_HANDLE)
+            fallbackSelection = captureCurrentSelection(dev);
     }
 
-    if(!discreteGPUs.empty()){
-        m_vulkanPhysicalDevice = discreteGPUs[0];
-        return true;
-    }
-
-    if(!otherGPUs.empty()){
-        m_vulkanPhysicalDevice = otherGPUs[0];
+    if(fallbackSelection.device != VK_NULL_HANDLE){
+        applySelection(fallbackSelection);
         return true;
     }
 
@@ -1002,23 +1026,29 @@ bool BackendContext::createVulkanDevice(){
     }
 
     for(const auto& ext : deviceExtensions){
-        const AString name = ext.extensionName;
+        AString name = ext.extensionName;
+        bool enableExtension = false;
+        DeviceExtensionFeature::Enum enabledFeature = DeviceExtensionFeature::None;
+
         auto optIt = m_optionalExtensions.device.find(name);
         if(optIt != m_optionalExtensions.device.end()){
             if(name == VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME && m_deviceParams.headlessDevice)
                 continue;
-            m_enabledExtensions.device.insert({ name, optIt.value() });
+            enableExtension = true;
+            enabledFeature = optIt.value();
         }
 
-        if(m_deviceParams.enableRayTracingExtensions){
+        if(!enableExtension && m_deviceParams.enableRayTracingExtensions){
             auto rtIt = m_rayTracingExtensions.find(name);
-            if(rtIt != m_rayTracingExtensions.end())
-                m_enabledExtensions.device.insert({ name, rtIt.value() });
+            if(rtIt != m_rayTracingExtensions.end()){
+                enableExtension = true;
+                enabledFeature = rtIt.value();
+            }
         }
-    }
 
-    if(!m_deviceParams.headlessDevice)
-        m_enabledExtensions.device.insert({ VK_KHR_SWAPCHAIN_EXTENSION_NAME, DeviceExtensionFeature::None });
+        if(enableExtension)
+            m_enabledExtensions.device.emplace(Move(name), enabledFeature);
+    }
 
     VkPhysicalDeviceProperties physicalDeviceProperties;
     vkGetPhysicalDeviceProperties(m_vulkanPhysicalDevice, &physicalDeviceProperties);
@@ -1164,6 +1194,7 @@ bool BackendContext::createVulkanDevice(){
     VulkanDetail::FinalizeOptionalDeviceFeatureEnablement(requestedOptionalFeatures, supportedOptionalFeatures);
 
     HashSet<i32, Hasher<i32>, EqualTo<i32>, Alloc::ScratchAllocator<i32>> uniqueQueueFamilies(0, Hasher<i32>(), EqualTo<i32>(), Alloc::ScratchAllocator<i32>(scratchArena));
+    uniqueQueueFamilies.reserve(4u);
     uniqueQueueFamilies.insert(m_graphicsQueueFamily);
 
     if(!m_deviceParams.headlessDevice)
@@ -1280,7 +1311,7 @@ bool BackendContext::createVulkanDevice(){
         ss << "Vulkan GPU debug: selected device"
            << "\n    name: " << physicalDeviceProperties.deviceName
            << "\n    type: " << VulkanDetail::PhysicalDeviceTypeToString(physicalDeviceProperties.deviceType)
-           << "\n    vendor/device id: 0x" << std::hex << physicalDeviceProperties.vendorID << "/0x" << physicalDeviceProperties.deviceID << std::dec
+           << "\n    vendor/device id: 0x" << StreamHex << physicalDeviceProperties.vendorID << "/0x" << physicalDeviceProperties.deviceID << StreamDec
            << "\n    Vulkan API: " << VulkanDetail::VulkanVersionToString(physicalDeviceProperties.apiVersion)
            << "\n    driver version: " << physicalDeviceProperties.driverVersion
            << "\n    device-local memory: " << deviceLocalMemoryMiB << " MiB"
@@ -1514,6 +1545,7 @@ bool BackendContext::createVulkanSwapChain(){
     }
 
     HashSet<uint32_t, Hasher<uint32_t>, EqualTo<uint32_t>, Alloc::ScratchAllocator<uint32_t>> uniqueQueues(0, Hasher<uint32_t>(), EqualTo<uint32_t>(), Alloc::ScratchAllocator<uint32_t>(scratchArena));
+    uniqueQueues.reserve(2u);
     uniqueQueues.insert(static_cast<uint32_t>(m_graphicsQueueFamily));
     uniqueQueues.insert(static_cast<uint32_t>(m_presentQueueFamily));
 
@@ -1596,7 +1628,9 @@ bool BackendContext::createVulkanSwapChain(){
         return false;
     }
 
-    for(auto* image : images){
+    m_swapChainImages.reserve(imageCount);
+    for(uint32_t imageIndex = 0; imageIndex < imageCount; ++imageIndex){
+        const VkImage image = images[imageIndex];
         SwapChainImage sci;
         sci.image = image;
 
@@ -1666,13 +1700,15 @@ bool BackendContext::createDevice(){
     }
 
     for(const auto& name : m_deviceParams.requiredVulkanDeviceExtensions)
-        m_enabledExtensions.device.insert({ name, DeviceExtensionFeature::None });
+        m_enabledExtensions.device.emplace(name, DeviceExtensionFeature::None);
     for(const auto& name : m_deviceParams.optionalVulkanDeviceExtensions)
-        m_optionalExtensions.device.insert({ name, DeviceExtensionFeature::None });
+        m_optionalExtensions.device.emplace(name, DeviceExtensionFeature::None);
     if(m_deviceParams.enableAftermath)
-        m_optionalExtensions.device.insert({ VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME, DeviceExtensionFeature::None });
+        m_optionalExtensions.device.emplace(VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME, DeviceExtensionFeature::None);
 
     m_swapChainState.backBufferFormat = VulkanDetail::GetBackBufferFormat(m_deviceParams);
+    if(!m_deviceParams.headlessDevice)
+        m_enabledExtensions.device.emplace(VK_KHR_SWAPCHAIN_EXTENSION_NAME, DeviceExtensionFeature::None);
     if(!m_deviceParams.headlessDevice){
         if(!createWindowSurface())
             return false;

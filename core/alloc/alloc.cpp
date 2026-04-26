@@ -24,14 +24,16 @@ NWB_ALLOC_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace AllocDetail{
+namespace __hidden_alloc{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 struct CacheSize : Core::Common::Initializerable{
-    bool initialize()override{
+    usize m_size = 64;
+
+    virtual bool initialize()override{
 #if defined(_WIN32)
         DWORD bufferSize = 0;
         GetLogicalProcessorInformation(nullptr, &bufferSize);
@@ -45,38 +47,36 @@ struct CacheSize : Core::Common::Initializerable{
                     continue;
 
                 const auto cur = static_cast<usize>(info[i].Cache.LineSize);
-                if(size < cur)
-                    size = cur;
+                if(m_size < cur)
+                    m_size = cur;
             }
         }
 #elif defined(_SC_LEVEL1_DCACHE_LINESIZE)
-        const long lineSizes[] = {
-            sysconf(_SC_LEVEL1_DCACHE_LINESIZE),
+        const isize lineSizes[] = {
+            static_cast<isize>(sysconf(_SC_LEVEL1_DCACHE_LINESIZE)),
 #if defined(_SC_LEVEL2_DCACHE_LINESIZE)
-            sysconf(_SC_LEVEL2_DCACHE_LINESIZE),
+            static_cast<isize>(sysconf(_SC_LEVEL2_DCACHE_LINESIZE)),
 #else
-            static_cast<long>(-1),
+            static_cast<isize>(-1),
 #endif
 #if defined(_SC_LEVEL3_DCACHE_LINESIZE)
-            sysconf(_SC_LEVEL3_DCACHE_LINESIZE),
+            static_cast<isize>(sysconf(_SC_LEVEL3_DCACHE_LINESIZE)),
 #else
-            static_cast<long>(-1),
+            static_cast<isize>(-1),
 #endif
         };
-        for(auto lineSize : lineSizes){
+        for(const isize lineSize : lineSizes){
             if(lineSize <= 0)
                 continue;
 
             const auto cur = static_cast<usize>(lineSize);
-            if(size < cur)
-                size = cur;
+            if(m_size < cur)
+                m_size = cur;
         }
 #endif
         return true;
     }
-    void finalize()override{}
-
-    usize size = 64;
+    virtual void finalize()override{}
 } static s_CacheSize;
 
 
@@ -84,14 +84,17 @@ struct CacheSize : Core::Common::Initializerable{
 
 
 struct AffinityMasks : Core::Common::Initializerable{
-    bool initialize()override{
+    u64 m_performance = 0;
+    u64 m_efficiency = 0;
+
+    virtual bool initialize()override{
 #if defined(NWB_PLATFORM_WINDOWS)
-        queryMask(performance, CoreAffinity::Performance);
-        queryMask(efficiency, CoreAffinity::Efficiency);
+        queryMask(m_performance, CoreAffinity::Performance);
+        queryMask(m_efficiency, CoreAffinity::Efficiency);
 #endif
         return true;
     }
-    void finalize()override{}
+    virtual void finalize()override{}
 
 #if defined(NWB_PLATFORM_WINDOWS)
     void queryMask(u64& outMask, CoreAffinity::Enum type){
@@ -119,8 +122,10 @@ struct AffinityMasks : Core::Common::Initializerable{
             auto* info = reinterpret_cast<PSYSTEM_CPU_SET_INFORMATION>(ptr);
             if(info->Type == CpuSetInformation){
                 u8 eff = info->CpuSet.EfficiencyClass;
-                if(eff < minEfficiency) minEfficiency = eff;
-                if(eff > maxEfficiency) maxEfficiency = eff;
+                if(eff < minEfficiency)
+                    minEfficiency = eff;
+                if(eff > maxEfficiency)
+                    maxEfficiency = eff;
             }
             ptr += info->Size;
         }
@@ -146,8 +151,6 @@ struct AffinityMasks : Core::Common::Initializerable{
     }
 #endif
 
-    u64 performance = 0;
-    u64 efficiency = 0;
 } static s_AffinityMasks;
 
 
@@ -160,7 +163,7 @@ struct AffinityMasks : Core::Common::Initializerable{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-usize CachelineSize(){ return AllocDetail::s_CacheSize.size; }
+usize CachelineSize(){ return __hidden_alloc::s_CacheSize.m_size; }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -168,8 +171,8 @@ usize CachelineSize(){ return AllocDetail::s_CacheSize.size; }
 
 u64 QueryAffinityMask(CoreAffinity::Enum type){
     switch(type){
-    case CoreAffinity::Performance: return AllocDetail::s_AffinityMasks.performance;
-    case CoreAffinity::Efficiency: return AllocDetail::s_AffinityMasks.efficiency;
+    case CoreAffinity::Performance: return __hidden_alloc::s_AffinityMasks.m_performance;
+    case CoreAffinity::Efficiency: return __hidden_alloc::s_AffinityMasks.m_efficiency;
     default: return 0;
     }
 }
@@ -192,7 +195,7 @@ void SetCurrentThreadAffinity(u64 mask){
     if(mask != 0)
         SetThreadAffinityMask(GetCurrentThread(), static_cast<DWORD_PTR>(mask));
 #else
-    (void)mask;
+    static_cast<void>(mask);
 #endif
 }
 

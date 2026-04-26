@@ -48,7 +48,11 @@ static u64 ComputePipelineCacheIdentityHash(const VkPhysicalDeviceProperties& pr
 }
 
 static AString MakePipelineCacheVolumeName(const VkPhysicalDeviceProperties& properties){
-    return StringFormat("runtime_cache_{}", FormatHex64(ComputePipelineCacheIdentityHash(properties)));
+    AString volumeName;
+    volumeName.reserve(14u + 16u);
+    volumeName += "runtime_cache_";
+    AppendHexU64(ComputePipelineCacheIdentityHash(properties), volumeName);
+    return volumeName;
 }
 
 static bool RuntimeCacheVolumeExists(const Path& directory, const AStringView volumeName){
@@ -374,7 +378,7 @@ Device::Device(const DeviceDesc& desc)
     }
 
     Vector<u8> pipelineCacheInitialData;
-    (void)loadPipelineCacheData(pipelineCacheInitialData);
+    static_cast<void>(loadPipelineCacheData(pipelineCacheInitialData));
 
     VkPipelineCacheCreateInfo cacheInfo = VulkanDetail::MakeVkStruct<VkPipelineCacheCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO);
     if(!pipelineCacheInitialData.empty()){

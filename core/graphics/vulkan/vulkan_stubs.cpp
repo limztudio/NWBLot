@@ -18,22 +18,22 @@ NWB_VULKAN_BEGIN
 
 
 void CommandList::clearSamplerFeedbackTexture(ISamplerFeedbackTexture* texture){
-    (void)texture;
+    static_cast<void>(texture);
     NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear sampler feedback texture: sampler feedback is not supported by this backend"));
     NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Sampler feedback is not supported by this backend"));
 }
 
 void CommandList::decodeSamplerFeedbackTexture(IBuffer* buffer, ISamplerFeedbackTexture* texture, Format::Enum format){
-    (void)buffer;
-    (void)texture;
-    (void)format;
+    static_cast<void>(buffer);
+    static_cast<void>(texture);
+    static_cast<void>(format);
     NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to decode sampler feedback texture: sampler feedback is not supported by this backend"));
     NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Sampler feedback is not supported by this backend"));
 }
 
 void CommandList::setSamplerFeedbackTextureState(ISamplerFeedbackTexture* texture, ResourceStates::Mask stateBits){
-    (void)texture;
-    (void)stateBits;
+    static_cast<void>(texture);
+    static_cast<void>(stateBits);
     NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to set sampler feedback texture state: sampler feedback is not supported by this backend"));
     NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Sampler feedback is not supported by this backend"));
 }
@@ -175,10 +175,10 @@ bool CommandList::buildTopLevelAccelStructFromInstanceData(
     return true;
 }
 
-void CommandList::buildTopLevelAccelStructFromBuffer(IRayTracingAccelStruct* _as, IBuffer* instanceBuffer,
+void CommandList::buildTopLevelAccelStructFromBuffer(IRayTracingAccelStruct* accelStructResource, IBuffer* instanceBuffer,
     u64 instanceBufferOffset, usize numInstances, RayTracingAccelStructBuildFlags::Mask buildFlags)
 {
-    if(!_as){
+    if(!accelStructResource){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS from buffer: acceleration structure is null"));
         return;
     }
@@ -196,7 +196,7 @@ void CommandList::buildTopLevelAccelStructFromBuffer(IRayTracingAccelStruct* _as
     if(!m_context.extensions.KHR_acceleration_structure)
         return;
 
-    auto* as = checked_cast<AccelStruct*>(_as);
+    auto* as = checked_cast<AccelStruct*>(accelStructResource);
     if(!as || !as->m_desc.isTopLevel){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS from buffer: acceleration structure is not top-level"));
         return;
@@ -219,7 +219,7 @@ void CommandList::buildTopLevelAccelStructFromBuffer(IRayTracingAccelStruct* _as
     }
 
     const VkDeviceAddress instanceDataAddress = VulkanDetail::GetBufferDeviceAddress(instanceBuffer, instanceBufferOffset);
-    if(!buildTopLevelAccelStructFromInstanceData(_as, as, instanceDataAddress, numInstances, buildFlags, NWB_TEXT("build TLAS from buffer")))
+    if(!buildTopLevelAccelStructFromInstanceData(accelStructResource, as, instanceDataAddress, numInstances, buildFlags, NWB_TEXT("build TLAS from buffer")))
         return;
 
     m_currentCmdBuf->m_referencedResources.push_back(instanceBuffer);
@@ -488,7 +488,7 @@ const CommandListParameters& CommandList::getDescription(){
 // Texture tiling and sampler feedback stubs
 
 
-void Device::getTextureTiling(ITexture* _texture, u32* numTiles, PackedMipDesc* desc, TileShape* tileShape, u32* subresourceTilingsNum, SubresourceTiling* subresourceTilings){
+void Device::getTextureTiling(ITexture* textureResource, u32* numTiles, PackedMipDesc* desc, TileShape* tileShape, u32* subresourceTilingsNum, SubresourceTiling* subresourceTilings){
     auto clearOutputs = [&](){
         if(numTiles)
             *numTiles = 0;
@@ -534,7 +534,7 @@ void Device::getTextureTiling(ITexture* _texture, u32* numTiles, PackedMipDesc* 
         return true;
     };
 
-    if(!_texture){
+    if(!textureResource){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get texture tiling: texture is null"));
         clearOutputs();
         return;
@@ -545,7 +545,7 @@ void Device::getTextureTiling(ITexture* _texture, u32* numTiles, PackedMipDesc* 
         return;
     }
 
-    auto* texture = checked_cast<Texture*>(_texture);
+    auto* texture = checked_cast<Texture*>(textureResource);
     if(!texture->m_desc.isTiled){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get texture tiling: texture is not tiled"));
         clearOutputs();
@@ -714,17 +714,17 @@ void Device::updateTextureTileMappings(ITexture* texture, const TextureTilesMapp
 }
 
 SamplerFeedbackTextureHandle Device::createSamplerFeedbackTexture(ITexture* pairedTexture, const SamplerFeedbackTextureDesc& desc){
-    (void)pairedTexture;
-    (void)desc;
+    static_cast<void>(pairedTexture);
+    static_cast<void>(desc);
     NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create sampler feedback texture: sampler feedback is not supported by this backend"));
     NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Sampler feedback is not supported by this backend"));
     return nullptr;
 }
 
 SamplerFeedbackTextureHandle Device::createSamplerFeedbackForNativeTexture(ObjectType objectType, Object texture, ITexture* pairedTexture){
-    (void)objectType;
-    (void)texture;
-    (void)pairedTexture;
+    static_cast<void>(objectType);
+    static_cast<void>(texture);
+    static_cast<void>(pairedTexture);
     NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create sampler feedback texture for native texture: sampler feedback is not supported by this backend"));
     NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Sampler feedback is not supported by this backend"));
     return nullptr;

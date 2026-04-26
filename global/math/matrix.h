@@ -25,36 +25,7 @@ static const SIMDVectorConstU s_SIMDMatrixSelect0001 = { { { s_SELECT_0, s_SELEC
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE bool ScalarNearEqual(f32 value0, f32 value1, f32 epsilon)noexcept{ return std::fabs(value0 - value1) <= epsilon; }
-
-NWB_INLINE void ScalarSinCos(f32* outSin, f32* outCos, f32 value)noexcept{
-    NWB_ASSERT(outSin != nullptr);
-    NWB_ASSERT(outCos != nullptr);
-
-    f32 quotient = s_1DIV2PI * value;
-    if(value >= 0.0f)
-        quotient = static_cast<f32>(static_cast<i32>(quotient + 0.5f));
-    else
-        quotient = static_cast<f32>(static_cast<i32>(quotient - 0.5f));
-
-    f32 y = value - (s_2PI * quotient);
-    f32 sign{};
-    if(y > s_PIDIV2){
-        y = s_PI - y;
-        sign = -1.0f;
-    }
-    else if(y < -s_PIDIV2){
-        y = -s_PI - y;
-        sign = -1.0f;
-    }
-    else{
-        sign = 1.0f;
-    }
-
-    const f32 y2 = y * y;
-    *outSin = (((((-2.3889859e-08f * y2 + 2.7525562e-06f) * y2 - 0.00019840874f) * y2 + 0.0083333310f) * y2 - 0.16666667f) * y2 + 1.0f) * y;
-    *outCos = sign * (((((-2.6051615e-07f * y2 + 2.4760495e-05f) * y2 - 0.0013888378f) * y2 + 0.041666638f) * y2 - 0.5f) * y2 + 1.0f);
-}
+NWB_INLINE bool ScalarNearEqual(f32 value0, f32 value1, f32 epsilon)noexcept{ return Abs(value0 - value1) <= epsilon; }
 
 NWB_INLINE SIMDVector SIMDCALL MatrixRowMultiply(SIMDVector row, const SIMDMatrix& matrix)noexcept{
 #if defined(NWB_HAS_SCALAR)
@@ -95,69 +66,6 @@ NWB_INLINE SIMDVector SIMDCALL MatrixRowMultiply(SIMDVector row, const SIMDMatri
     x = _mm_add_ps(x, z);
     y = _mm_add_ps(y, w);
     return _mm_add_ps(x, y);
-#endif
-}
-
-NWB_INLINE SIMDMatrix SIMDCALL MatrixTranspose4(SIMDVector r0, SIMDVector r1, SIMDVector r2, SIMDVector r3)noexcept{
-#if defined(NWB_HAS_NEON)
-    const float32x4x2_t p0 = vzipq_f32(r0, r2);
-    const float32x4x2_t p1 = vzipq_f32(r1, r3);
-
-    const float32x4x2_t t0 = vzipq_f32(p0.val[0], p1.val[0]);
-    const float32x4x2_t t1 = vzipq_f32(p0.val[1], p1.val[1]);
-
-    SIMDMatrix result{};
-    result.v[0] = t0.val[0];
-    result.v[1] = t0.val[1];
-    result.v[2] = t1.val[0];
-    result.v[3] = t1.val[1];
-    return result;
-#elif defined(NWB_HAS_AVX2)
-    __m256 t0 = _mm256_castps128_ps256(r0);
-    t0 = _mm256_insertf128_ps(t0, r1, 1);
-    __m256 t1 = _mm256_castps128_ps256(r2);
-    t1 = _mm256_insertf128_ps(t1, r3, 1);
-
-    __m256 temp0 = _mm256_unpacklo_ps(t0, t1);
-    __m256 temp1 = _mm256_unpackhi_ps(t0, t1);
-    __m256 temp2 = _mm256_permute2f128_ps(temp0, temp1, 0x20);
-    __m256 temp3 = _mm256_permute2f128_ps(temp0, temp1, 0x31);
-    temp0 = _mm256_unpacklo_ps(temp2, temp3);
-    temp1 = _mm256_unpackhi_ps(temp2, temp3);
-    t0 = _mm256_permute2f128_ps(temp0, temp1, 0x20);
-    t1 = _mm256_permute2f128_ps(temp0, temp1, 0x31);
-
-    SIMDMatrix result{};
-    result.v[0] = _mm256_castps256_ps128(t0);
-    result.v[1] = _mm256_extractf128_ps(t0, 1);
-    result.v[2] = _mm256_castps256_ps128(t1);
-    result.v[3] = _mm256_extractf128_ps(t1, 1);
-    return result;
-#elif defined(NWB_HAS_SSE4)
-    SIMDVector temp0 = _mm_shuffle_ps(r0, r1, _MM_SHUFFLE(1, 0, 1, 0));
-    SIMDVector temp1 = _mm_shuffle_ps(r0, r1, _MM_SHUFFLE(3, 2, 3, 2));
-    SIMDVector temp2 = _mm_shuffle_ps(r2, r3, _MM_SHUFFLE(1, 0, 1, 0));
-    SIMDVector temp3 = _mm_shuffle_ps(r2, r3, _MM_SHUFFLE(3, 2, 3, 2));
-
-    SIMDMatrix result{};
-    result.v[0] = _mm_shuffle_ps(temp0, temp2, _MM_SHUFFLE(2, 0, 2, 0));
-    result.v[1] = _mm_shuffle_ps(temp0, temp2, _MM_SHUFFLE(3, 1, 3, 1));
-    result.v[2] = _mm_shuffle_ps(temp1, temp3, _MM_SHUFFLE(2, 0, 2, 0));
-    result.v[3] = _mm_shuffle_ps(temp1, temp3, _MM_SHUFFLE(3, 1, 3, 1));
-    return result;
-#else
-    SIMDMatrix p{};
-    p.v[0] = VectorMergeXY(r0, r2);
-    p.v[1] = VectorMergeXY(r1, r3);
-    p.v[2] = VectorMergeZW(r0, r2);
-    p.v[3] = VectorMergeZW(r1, r3);
-
-    SIMDMatrix result{};
-    result.v[0] = VectorMergeXY(p.v[0], p.v[1]);
-    result.v[1] = VectorMergeZW(p.v[0], p.v[1]);
-    result.v[2] = VectorMergeXY(p.v[2], p.v[3]);
-    result.v[3] = VectorMergeZW(p.v[2], p.v[3]);
-    return result;
 #endif
 }
 
@@ -246,21 +154,7 @@ NWB_INLINE SIMDMatrix SIMDCALL MatrixMultiplyTransposeFMA(const SIMDMatrix& m0, 
     t0 = _mm256_add_ps(c2, c6);
     t1 = _mm256_add_ps(c3, c7);
 
-    __m256 temp0 = _mm256_unpacklo_ps(t0, t1);
-    __m256 temp1 = _mm256_unpackhi_ps(t0, t1);
-    __m256 temp2 = _mm256_permute2f128_ps(temp0, temp1, 0x20);
-    __m256 temp3 = _mm256_permute2f128_ps(temp0, temp1, 0x31);
-    temp0 = _mm256_unpacklo_ps(temp2, temp3);
-    temp1 = _mm256_unpackhi_ps(temp2, temp3);
-    t0 = _mm256_permute2f128_ps(temp0, temp1, 0x20);
-    t1 = _mm256_permute2f128_ps(temp0, temp1, 0x31);
-
-    SIMDMatrix result{};
-    result.v[0] = _mm256_castps256_ps128(t0);
-    result.v[1] = _mm256_extractf128_ps(t0, 1);
-    result.v[2] = _mm256_castps256_ps128(t1);
-    result.v[3] = _mm256_extractf128_ps(t1, 1);
-    return result;
+    return SIMDVectorDetail::MatrixTransposePackedRows(t0, t1);
 }
 #endif
 
@@ -356,7 +250,7 @@ NWB_INLINE bool SIMDCALL MatrixIsIdentity(const SIMDMatrix& matrix)noexcept{
 
 
 NWB_INLINE SIMDMatrix SIMDCALL MatrixTranspose(const SIMDMatrix& matrix)noexcept{
-    return SIMDMatrixDetail::MatrixTranspose4(matrix.v[0], matrix.v[1], matrix.v[2], matrix.v[3]);
+    return SIMDVectorDetail::MatrixTranspose4(matrix.v[0], matrix.v[1], matrix.v[2], matrix.v[3]);
 }
 
 NWB_INLINE SIMDMatrix SIMDCALL MatrixMultiply(const SIMDMatrix& m0, const SIMDMatrix& m1)noexcept{
@@ -380,7 +274,7 @@ NWB_INLINE SIMDMatrix SIMDCALL MatrixMultiplyTranspose(const SIMDMatrix& m0, con
     const SIMDVector r1 = SIMDMatrixDetail::MatrixRowMultiply(m0.v[1], m1);
     const SIMDVector r2 = SIMDMatrixDetail::MatrixRowMultiply(m0.v[2], m1);
     const SIMDVector r3 = SIMDMatrixDetail::MatrixRowMultiply(m0.v[3], m1);
-    return SIMDMatrixDetail::MatrixTranspose4(r0, r1, r2, r3);
+    return SIMDVectorDetail::MatrixTranspose4(r0, r1, r2, r3);
 #endif
 }
 
@@ -564,9 +458,9 @@ NWB_INLINE bool SIMDCALL MatrixDecompose(SIMDVector* outScale, SIMDVector* outRo
             aa,
             bb,
             cc,
-            std::fabs(VectorGetX(basis[a])),
-            std::fabs(VectorGetY(basis[a])),
-            std::fabs(VectorGetZ(basis[a]))
+            Abs(VectorGetX(basis[a])),
+            Abs(VectorGetY(basis[a])),
+            Abs(VectorGetZ(basis[a]))
         );
         basis[b] = Vector3Cross(basis[a], canonicalBasis[cc]);
     }
@@ -673,7 +567,7 @@ NWB_INLINE SIMDMatrix SIMDCALL MatrixScalingFromVector(SIMDVector scale)noexcept
 NWB_INLINE SIMDMatrix SIMDCALL MatrixRotationX(f32 angle)noexcept{
     f32 sinAngle{};
     f32 cosAngle{};
-    SIMDMatrixDetail::ScalarSinCos(&sinAngle, &cosAngle, angle);
+    SIMDVectorDetail::ScalarSinCos(&sinAngle, &cosAngle, angle);
 
     SIMDMatrix matrix{};
     matrix.v[0] = s_SIMDIdentityR0;
@@ -686,7 +580,7 @@ NWB_INLINE SIMDMatrix SIMDCALL MatrixRotationX(f32 angle)noexcept{
 NWB_INLINE SIMDMatrix SIMDCALL MatrixRotationY(f32 angle)noexcept{
     f32 sinAngle{};
     f32 cosAngle{};
-    SIMDMatrixDetail::ScalarSinCos(&sinAngle, &cosAngle, angle);
+    SIMDVectorDetail::ScalarSinCos(&sinAngle, &cosAngle, angle);
 
     SIMDMatrix matrix{};
     matrix.v[0] = VectorSet(cosAngle, 0.0f, sinAngle, 0.0f);
@@ -699,7 +593,7 @@ NWB_INLINE SIMDMatrix SIMDCALL MatrixRotationY(f32 angle)noexcept{
 NWB_INLINE SIMDMatrix SIMDCALL MatrixRotationZ(f32 angle)noexcept{
     f32 sinAngle{};
     f32 cosAngle{};
-    SIMDMatrixDetail::ScalarSinCos(&sinAngle, &cosAngle, angle);
+    SIMDVectorDetail::ScalarSinCos(&sinAngle, &cosAngle, angle);
 
     SIMDMatrix matrix{};
     matrix.v[0] = VectorSet(cosAngle, -sinAngle, 0.0f, 0.0f);
@@ -755,7 +649,7 @@ NWB_INLINE SIMDMatrix SIMDCALL MatrixRotationRollPitchYaw(f32 pitch, f32 yaw, f3
 NWB_INLINE SIMDMatrix SIMDCALL MatrixRotationNormal(SIMDVector normalAxis, f32 angle)noexcept{
     f32 sinAngle{};
     f32 cosAngle{};
-    SIMDMatrixDetail::ScalarSinCos(&sinAngle, &cosAngle, angle);
+    SIMDVectorDetail::ScalarSinCos(&sinAngle, &cosAngle, angle);
 
 #if defined(NWB_HAS_SCALAR) || defined(NWB_HAS_NEON)
     const SIMDVector a = VectorSet(-sinAngle, cosAngle, 1.0f - cosAngle, 0.0f);
@@ -1040,7 +934,7 @@ NWB_INLINE SIMDMatrix SIMDCALL MatrixPerspectiveFovLH(f32 fovAngleY, f32 aspectR
 
     f32 sinFov{};
     f32 cosFov{};
-    SIMDMatrixDetail::ScalarSinCos(&sinFov, &cosFov, 0.5f * fovAngleY);
+    SIMDVectorDetail::ScalarSinCos(&sinFov, &cosFov, 0.5f * fovAngleY);
     const f32 height = cosFov / sinFov;
     const f32 width = height / aspectRatio;
     const f32 range = farZ / (farZ - nearZ);
@@ -1060,7 +954,7 @@ NWB_INLINE SIMDMatrix SIMDCALL MatrixPerspectiveFovRH(f32 fovAngleY, f32 aspectR
 
     f32 sinFov{};
     f32 cosFov{};
-    SIMDMatrixDetail::ScalarSinCos(&sinFov, &cosFov, 0.5f * fovAngleY);
+    SIMDVectorDetail::ScalarSinCos(&sinFov, &cosFov, 0.5f * fovAngleY);
     const f32 height = cosFov / sinFov;
     const f32 width = height / aspectRatio;
     const f32 range = farZ / (nearZ - farZ);

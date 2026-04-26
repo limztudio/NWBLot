@@ -136,6 +136,7 @@ FramebufferHandle Device::createFramebuffer(const FramebufferDesc& desc){
     if(desc.colorAttachments.size() > kMaxColorAttachments)
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Framebuffer has more than {} color attachments; truncating to {}."), kMaxColorAttachments, kMaxColorAttachments);
 
+    fb->m_resources.reserve(static_cast<usize>(colorAttachmentCount) + (desc.depthAttachment.texture ? 1u : 0u));
     for(u32 i = 0; i < colorAttachmentCount; ++i){
         if(desc.colorAttachments[i].texture){
             fb->m_resources.push_back(desc.colorAttachments[i].texture);
@@ -369,8 +370,8 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool CommandList::beginDynamicRendering(IFramebuffer* _framebuffer, const RenderPassParameters& params){
-    auto* fb = checked_cast<Framebuffer*>(_framebuffer);
+bool CommandList::beginDynamicRendering(IFramebuffer* framebuffer, const RenderPassParameters& params){
+    auto* fb = checked_cast<Framebuffer*>(framebuffer);
     if(!fb)
         return false;
 
@@ -434,7 +435,8 @@ bool CommandList::beginDynamicRendering(IFramebuffer* _framebuffer, const Render
         const TextureSubresourceSet resolvedDepthSubresources = fbDesc.depthAttachment.subresources.resolve(depthTex->m_desc, true);
         const TextureDimension::Enum depthViewDimension = resolvedDepthSubresources.numArraySlices == 1
             ? TextureDimension::Texture2D
-            : depthTex->m_desc.dimension;
+            : depthTex->m_desc.dimension
+        ;
         VkImageView depthView = depthTex->getView(fbDesc.depthAttachment.subresources, depthViewDimension, Format::UNKNOWN, true);
         if(depthView == VK_NULL_HANDLE){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to begin dynamic rendering: depth/stencil attachment view is invalid"));

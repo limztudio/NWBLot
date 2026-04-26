@@ -9,8 +9,6 @@
 #include <global/frame_data.h>
 #include <core/alloc/general.h>
 
-#include <regex>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -36,7 +34,7 @@ public:
     virtual bool initialize() = 0;
     virtual void finalize() = 0;
 };
-class FunctionalInitializerable : public BaseInitializerable{
+class FunctionalInitializerable final : public BaseInitializerable{
 public:
     template<typename INIT, typename FIN>
     FunctionalInitializerable(INIT&& init, FIN&& fin)
@@ -46,8 +44,11 @@ public:
 
 
 public:
-    inline bool initialize()override{ return m_init ? m_init() : true; }
-    inline void finalize()override{ if(m_fin) m_fin(); }
+    inline virtual bool initialize()override{ return m_init ? m_init() : true; }
+    inline virtual void finalize()override{
+        if(m_fin)
+            m_fin();
+    }
 
 
 private:
@@ -75,39 +76,74 @@ public:
 
 
 private:
+    struct InitializerItem{
+        CommonDetail::BaseInitializerable* item = nullptr;
+        UniquePtr<CommonDetail::BaseInitializerable> ownedItem;
+
+        explicit InitializerItem(CommonDetail::BaseInitializerable* value)
+            : item(value)
+        {}
+        template<typename T>
+        explicit InitializerItem(UniquePtr<T>&& value)
+            : item(value.get())
+            , ownedItem(Move(value))
+        {}
+    };
+
+
+private:
     Initializer()
         : m_cursor(m_items.before_begin())
     {}
-    ~Initializer(){
-        for(auto& cur : m_items){
-            if(cur.second())
-                delete cur.first();
-        }
-    }
 
 
 public:
     inline bool initialize(){
         for(auto& cur : m_items){
-            if(!cur.first()->initialize())
+            if(!cur.item->initialize())
                 return false;
         }
         return true;
     }
     inline void finalize(){
         for(auto& cur : m_items)
-            cur.first()->finalize();
+            cur.item->finalize();
+    }
+    [[nodiscard]] inline bool acquire(){
+        if(m_activeCount > 0u){
+            ++m_activeCount;
+            return true;
+        }
+
+        if(!initialize())
+            return false;
+
+        m_activeCount = 1u;
+        return true;
+    }
+    inline void release(){
+        NWB_ASSERT(m_activeCount > 0u);
+        if(m_activeCount == 0u)
+            return;
+
+        --m_activeCount;
+        if(m_activeCount == 0u)
+            finalize();
     }
 
 public:
-    inline void enqueue(Initializerable* item){ m_cursor = m_items.emplace_after(m_cursor, item, false); }
+    inline void enqueue(Initializerable* item){ m_cursor = m_items.emplace_after(m_cursor, item); }
     template<typename INITIALIZE, typename FINALIZE>
-    inline void enqueue(INITIALIZE&& initialize, FINALIZE&& finalize){ m_cursor = m_items.emplace_after(m_cursor, new CommonDetail::FunctionalInitializerable(Forward<INITIALIZE>(initialize), Forward<FINALIZE>(finalize)), true); }
+    inline void enqueue(INITIALIZE&& initialize, FINALIZE&& finalize){
+        auto item = MakeUnique<CommonDetail::FunctionalInitializerable>(Forward<INITIALIZE>(initialize), Forward<FINALIZE>(finalize));
+        m_cursor = m_items.emplace_after(m_cursor, Move(item));
+    }
 
 
 private:
-    ForwardList<Pair<CommonDetail::BaseInitializerable*, bool>> m_items;
+    ForwardList<InitializerItem> m_items;
     decltype(m_items)::iterator m_cursor;
+    usize m_activeCount = 0;
 };
 
 class InitializerGuard : NoCopy{
@@ -120,7 +156,7 @@ public:
         if(m_active)
             return true;
 
-        if(!Initializer::instance().initialize())
+        if(!Initializer::instance().acquire())
             return false;
 
         m_active = true;
@@ -130,7 +166,7 @@ public:
         if(!m_active)
             return;
 
-        Initializer::instance().finalize();
+        Initializer::instance().release();
         m_active = false;
     }
 
@@ -159,14 +195,14 @@ public:
 #include <windows.h>
 class WinFrame : public FrameData{
 public:
-    inline bool& isActive(){ return reinterpret_cast<bool&>(m_data.u8[4]); }
-    inline const bool& isActive()const{ return reinterpret_cast<const bool&>(m_data.u8[4]); }
+    inline bool isActive()const{ return m_data.u8[4] != 0; }
+    inline void setActive(bool value){ m_data.u8[4] = value ? 1u : 0u; }
 
-    inline HINSTANCE& instance(){ return reinterpret_cast<HINSTANCE&>(m_data.ptr[1]); }
-    inline const HINSTANCE& instance()const{ return reinterpret_cast<const HINSTANCE&>(m_data.ptr[1]); }
+    inline HINSTANCE instance()const{ return static_cast<HINSTANCE>(m_data.ptr[1]); }
+    inline void setInstance(HINSTANCE value){ m_data.ptr[1] = value; }
 
-    inline HWND& hwnd(){ return reinterpret_cast<HWND&>(m_data.ptr[2]); }
-    inline const HWND& hwnd()const{ return reinterpret_cast<const HWND&>(m_data.ptr[2]); }
+    inline HWND hwnd()const{ return static_cast<HWND>(m_data.ptr[2]); }
+    inline void setHwnd(HWND value){ m_data.ptr[2] = value; }
 };
 #elif defined(NWB_PLATFORM_LINUX)
 namespace LinuxFrameBackend{
@@ -178,23 +214,23 @@ namespace LinuxFrameBackend{
 };
 class LinuxFrame : public FrameData{
 public:
-    inline bool& isActive(){ return reinterpret_cast<bool&>(m_data.u8[4]); }
-    inline const bool& isActive()const{ return reinterpret_cast<const bool&>(m_data.u8[4]); }
+    inline bool isActive()const{ return m_data.u8[4] != 0; }
+    inline void setActive(bool value){ m_data.u8[4] = value ? 1u : 0u; }
 
-    inline LinuxFrameBackend::Enum& backend(){ return reinterpret_cast<LinuxFrameBackend::Enum&>(m_data.u8[5]); }
-    inline const LinuxFrameBackend::Enum& backend()const{ return reinterpret_cast<const LinuxFrameBackend::Enum&>(m_data.u8[5]); }
+    inline LinuxFrameBackend::Enum backend()const{ return static_cast<LinuxFrameBackend::Enum>(m_data.u8[5]); }
+    inline void setBackend(LinuxFrameBackend::Enum value){ m_data.u8[5] = static_cast<u8>(value); }
 
-    inline void*& nativeDisplay(){ return reinterpret_cast<void*&>(m_data.ptr[1]); }
-    inline void* const& nativeDisplay()const{ return reinterpret_cast<void* const&>(m_data.ptr[1]); }
+    inline void*& nativeDisplay(){ return m_data.ptr[1]; }
+    inline void* const& nativeDisplay()const{ return m_data.ptr[1]; }
 
-    inline u64& nativeWindowHandle(){ return reinterpret_cast<u64&>(m_data.u64[2]); }
-    inline const u64& nativeWindowHandle()const{ return reinterpret_cast<const u64&>(m_data.u64[2]); }
+    inline u64& nativeWindowHandle(){ return m_data.u64[2]; }
+    inline const u64& nativeWindowHandle()const{ return m_data.u64[2]; }
 
-    inline void*& nativeState(){ return reinterpret_cast<void*&>(m_data.ptr[3]); }
-    inline void* const& nativeState()const{ return reinterpret_cast<void* const&>(m_data.ptr[3]); }
+    inline void*& nativeState(){ return m_data.ptr[3]; }
+    inline void* const& nativeState()const{ return m_data.ptr[3]; }
 
-    inline u64& nativeAuxValue(){ return reinterpret_cast<u64&>(m_data.u64[3]); }
-    inline const u64& nativeAuxValue()const{ return reinterpret_cast<const u64&>(m_data.u64[3]); }
+    inline u64& nativeAuxValue(){ return m_data.u64[3]; }
+    inline const u64& nativeAuxValue()const{ return m_data.u64[3]; }
 };
 #endif
 
@@ -202,21 +238,123 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace CommonDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename T>
+[[nodiscard]] inline bool CommandLineIsWordChar(const T ch){
+    static_assert(IsSame_V<T, char> || IsSame_V<T, wchar>, "Command line parsing supports char and wchar strings");
+    return (ch >= T('a') && ch <= T('z'))
+        || (ch >= T('A') && ch <= T('Z'))
+        || (ch >= T('0') && ch <= T('9'))
+        || ch == T('_');
+}
+
+template<typename T>
+[[nodiscard]] inline bool CommandLineIsSpace(const T ch){
+    static_assert(IsSame_V<T, char> || IsSame_V<T, wchar>, "Command line parsing supports char and wchar strings");
+    return ch == T(' ')
+        || ch == T('\t')
+        || ch == T('\n')
+        || ch == T('\r')
+        || ch == T('\f')
+        || ch == T('\v');
+}
+
+template<typename T>
+[[nodiscard]] inline bool TryParseCommandLineAssignmentAt(
+    const BasicStringView<T> input,
+    const usize begin,
+    usize& outNext,
+    BasicString<T>& outKey,
+    BasicString<T>& outValue
+){
+    usize cursor = begin;
+    if(cursor >= input.size() || !CommandLineIsWordChar(input[cursor]))
+        return false;
+
+    const usize keyBegin = cursor;
+    do{
+        ++cursor;
+    }
+    while(cursor < input.size() && CommandLineIsWordChar(input[cursor]));
+    const usize keyEnd = cursor;
+
+    while(cursor < input.size() && CommandLineIsSpace(input[cursor]))
+        ++cursor;
+    if(cursor >= input.size() || input[cursor] != T('='))
+        return false;
+    ++cursor;
+
+    while(cursor < input.size() && CommandLineIsSpace(input[cursor]))
+        ++cursor;
+    if(cursor >= input.size())
+        return false;
+
+    usize valueBegin = cursor;
+    usize valueEnd = cursor;
+    if(input[cursor] == T('"')){
+        const usize quotedValueBegin = cursor + 1u;
+        usize quotedValueEnd = quotedValueBegin;
+        while(quotedValueEnd < input.size() && input[quotedValueEnd] != T('"'))
+            ++quotedValueEnd;
+
+        if(quotedValueEnd < input.size()){
+            valueBegin = quotedValueBegin;
+            valueEnd = quotedValueEnd;
+            cursor = quotedValueEnd + 1u;
+        }
+        else{
+            while(cursor < input.size() && !CommandLineIsSpace(input[cursor]))
+                ++cursor;
+            valueEnd = cursor;
+        }
+    }
+    else{
+        while(cursor < input.size() && !CommandLineIsSpace(input[cursor]))
+            ++cursor;
+        valueEnd = cursor;
+    }
+
+    outKey.assign(input.data() + keyBegin, keyEnd - keyBegin);
+    outValue.assign(input.data() + valueBegin, valueEnd - valueBegin);
+    outNext = cursor;
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<typename T>
 inline HashMap<BasicString<T>, BasicString<T>> parseCommandLine(BasicStringView<T> input){
-    std::basic_regex<T> regex(
-        IsSame_V<T, wchar>
-        ? L"(\\w+)\\s*=\\s*(?:\"([^\"]*)\"|(\\S+))"
-        :  "(\\w+)\\s*=\\s*(?:\"([^\"]*)\"|(\\S+))"
-    );
-
     HashMap<BasicString<T>, BasicString<T>> output;
-    std::match_results<typename BasicString<T>::const_iterator> match;
+    usize cursor = 0;
+    while(cursor < input.size()){
+        if(!CommonDetail::CommandLineIsWordChar(input[cursor])){
+            ++cursor;
+            continue;
+        }
 
-    typename BasicString<T>::const_iterator itrSearch(input.cbegin());
-    while(std::regex_search(itrSearch, input.cend(), match, regex)){
-        output[match[1].str()] = match[2].matched ? match[2].str() : match[3].str();
-        itrSearch = match.suffix().first;
+        usize next = cursor;
+        BasicString<T> key;
+        BasicString<T> value;
+        if(CommonDetail::TryParseCommandLineAssignmentAt(input, cursor, next, key, value)){
+            output.insert_or_assign(Move(key), Move(value));
+            cursor = next;
+        }
+        else{
+            ++cursor;
+        }
     }
 
     return output;

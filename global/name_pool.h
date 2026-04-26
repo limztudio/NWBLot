@@ -16,6 +16,38 @@ class NamePool : NoCopy{
 private:
     using NameIndexMap = HashMap<NameHash, usize>;
 
+    [[nodiscard]] bool resolveExistingNameLocked(const Name& name, const AStringView text, Name& outName)const{
+        outName = NAME_NONE;
+
+        const auto itr = m_nameIndex.find(name.hash());
+        if(itr == m_nameIndex.end())
+            return false;
+
+        const usize index = itr.value();
+        if(index >= m_strings.size())
+            return true;
+
+        const AString& canonical = m_strings[index];
+        if(canonical.size() == text.size()){
+            bool matches = true;
+            for(usize i = 0; i < text.size(); ++i){
+                if(canonical[i] == Canonicalize(text[i]))
+                    continue;
+
+                matches = false;
+                break;
+            }
+
+            if(matches){
+                outName = name;
+                return true;
+            }
+        }
+
+        NWB_ASSERT_MSG(false, "Name hash collision detected in NamePool::store");
+        return true;
+    }
+
 
 public:
     static NamePool& instance(){
@@ -33,29 +65,26 @@ public:
     [[nodiscard]] Name store(AStringView str){
         if(str.empty())
             return NAME_NONE;
-        if(HasEmbeddedNull(str))
-            return NAME_NONE;
 
-        const AString canonical = CanonicalizeText(str);
         const Name name(str);
-
-        ScopedLock lock(m_mutex);
-
-        const auto itr = m_nameIndex.find(name.hash());
-        if(itr != m_nameIndex.end()){
-            const usize index = itr.value();
-            if(index >= m_strings.size())
-                return NAME_NONE;
-            if(m_strings[index] == canonical)
-                return name;
-
-            NWB_ASSERT_MSG(false, "Name hash collision detected in NamePool::store");
+        if(!name)
             return NAME_NONE;
+        Name existingName = NAME_NONE;
+        {
+            ScopedLock lock(m_mutex);
+            if(resolveExistingNameLocked(name, str, existingName))
+                return existingName;
         }
 
+        AString canonical = CanonicalizeText(str);
+        ScopedLock lock(m_mutex);
+
+        if(resolveExistingNameLocked(name, str, existingName))
+            return existingName;
+
         const usize newIndex = m_strings.size();
-        m_strings.push_back(canonical);
-        m_nameIndex.insert({ name.hash(), newIndex });
+        m_strings.push_back(Move(canonical));
+        m_nameIndex.emplace(name.hash(), newIndex);
         return name;
     }
     [[nodiscard]] Name store(const char* str){

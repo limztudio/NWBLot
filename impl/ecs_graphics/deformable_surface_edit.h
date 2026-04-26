@@ -32,7 +32,9 @@ struct DeformableHoleEditResult{
     u32 addedVertexCount = 0;
     u32 addedTriangleCount = 0;
     u32 editRevision = 0;
+    // First newly-added inner wall-loop vertex; rim vertices are shared with the edited mesh boundary.
     u32 firstWallVertex = Limit<u32>::s_Max;
+    // Number of newly-added inner wall-loop vertices.
     u32 wallVertexCount = 0;
 };
 

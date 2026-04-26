@@ -14,7 +14,6 @@
 #endif
 
 #include "basic_string.h"
-#include "compact_string.h"
 #include "generic.h"
 #include "limit.h"
 #include "type.h"
@@ -52,6 +51,13 @@ using StreamSize = std::streamsize;
 
 
 using Path = std::filesystem::path;
+
+template<typename T>
+using BasicOutputFileStream = std::basic_ofstream<T>;
+using FileOpenMode = std::ios_base::openmode;
+
+inline constexpr FileOpenMode s_FileOpenWrite = std::ios::out;
+inline constexpr FileOpenMode s_FileOpenAppend = std::ios::app;
 
 using DirectoryIterator = std::filesystem::directory_iterator;
 using RecursiveDirectoryIterator = std::filesystem::recursive_directory_iterator;
@@ -160,7 +166,7 @@ struct StagedDirectoryPaths{
 }
 
 [[nodiscard]] inline bool EnsureDirectories(const Path& path, ErrorCode& outError)noexcept{
-    (void)CreateDirectories(path, outError);
+    static_cast<void>(CreateDirectories(path, outError));
     return !outError;
 }
 
@@ -187,7 +193,7 @@ struct StagedDirectoryPaths{
         return !outError;
 
     outError.clear();
-    (void)RemoveAll(path, outError);
+    static_cast<void>(RemoveAll(path, outError));
     return !outError;
 }
 
@@ -206,8 +212,20 @@ struct StagedDirectoryPaths{
     ;
 
     StagedDirectoryPaths output;
-    output.stageDirectory = stageBaseDirectory / StringFormat(".{}_stage", stageToken);
-    output.backupDirectory = stageBaseDirectory / StringFormat(".{}_backup", stageToken);
+
+    AString stageDirectoryName;
+    stageDirectoryName.reserve(stageToken.size() + 7u);
+    stageDirectoryName += '.';
+    stageDirectoryName += stageToken;
+    stageDirectoryName += "_stage";
+    output.stageDirectory = stageBaseDirectory / stageDirectoryName;
+
+    AString backupDirectoryName;
+    backupDirectoryName.reserve(stageToken.size() + 8u);
+    backupDirectoryName += '.';
+    backupDirectoryName += stageToken;
+    backupDirectoryName += "_backup";
+    output.backupDirectory = stageBaseDirectory / backupDirectoryName;
     return output;
 }
 
@@ -313,94 +331,6 @@ template<typename Container>
         );
     }
     return stream.good();
-}
-
-
-template<typename Container, typename PodType>
-inline void AppendPOD(Container& outBinary, const PodType& value){
-    const usize beginOffset = outBinary.size();
-    if(beginOffset > Limit<usize>::s_Max - sizeof(PodType))
-        throw RuntimeException("AppendPOD size overflow");
-
-    outBinary.resize(beginOffset + sizeof(PodType));
-    NWB_MEMCPY(outBinary.data() + beginOffset, sizeof(PodType), &value, sizeof(PodType));
-}
-
-template<typename Container, typename PodType>
-[[nodiscard]] inline bool ReadPOD(const Container& binary, usize& inOutOffset, PodType& outValue){
-    if(inOutOffset > binary.size())
-        return false;
-    if(binary.size() - inOutOffset < sizeof(PodType))
-        return false;
-
-    NWB_MEMCPY(&outValue, sizeof(PodType), binary.data() + inOutOffset, sizeof(PodType));
-    inOutOffset += sizeof(PodType);
-    return true;
-}
-
-template<typename Container>
-[[nodiscard]] inline bool AppendString(Container& outBinary, const AStringView text){
-    if(text.size() > Limit<u32>::s_Max)
-        return false;
-
-    const usize lengthOffset = outBinary.size();
-    if(lengthOffset > Limit<usize>::s_Max - sizeof(u32))
-        return false;
-
-    const u32 textLength = static_cast<u32>(text.size());
-    const usize textOffset = lengthOffset + sizeof(u32);
-    if(textOffset > Limit<usize>::s_Max - textLength)
-        return false;
-
-    AppendPOD(outBinary, textLength);
-    if(textLength == 0)
-        return true;
-
-    outBinary.resize(textOffset + textLength);
-    NWB_MEMCPY(outBinary.data() + textOffset, textLength, text.data(), textLength);
-    return true;
-}
-
-template<typename Container>
-[[nodiscard]] inline bool AppendString(Container& outBinary, const CompactString& text){
-    return AppendString(outBinary, text.view());
-}
-
-template<typename Container>
-[[nodiscard]] inline bool ReadString(const Container& binary, usize& inOutOffset, AString& outText){
-    usize cursor = inOutOffset;
-    u32 textLength = 0;
-    if(!ReadPOD(binary, cursor, textLength))
-        return false;
-
-    if(cursor > binary.size())
-        return false;
-    if(binary.size() - cursor < textLength)
-        return false;
-
-    AString text;
-    text.assign(reinterpret_cast<const char*>(binary.data() + cursor), textLength);
-    cursor += textLength;
-
-    outText = Move(text);
-    inOutOffset = cursor;
-    return true;
-}
-
-template<typename Container>
-[[nodiscard]] inline bool ReadString(const Container& binary, usize& inOutOffset, CompactString& outText){
-    usize cursor = inOutOffset;
-    AString text;
-    if(!ReadString(binary, cursor, text))
-        return false;
-
-    CompactString parsedText;
-    if(!parsedText.assign(text))
-        return false;
-
-    outText = parsedText;
-    inOutOffset = cursor;
-    return true;
 }
 
 

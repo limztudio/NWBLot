@@ -37,7 +37,7 @@ public:
     {
         const bool assigned = assign(text);
         NWB_ASSERT_MSG(assigned, NWB_TEXT("CompactString initialization exceeded capacity"));
-        (void)assigned;
+        static_cast<void>(assigned);
     }
     explicit CompactString(const AStringView text)
         : m_storage{}
@@ -45,7 +45,7 @@ public:
     {
         const bool assigned = assign(text);
         NWB_ASSERT_MSG(assigned, NWB_TEXT("CompactString initialization exceeded capacity"));
-        (void)assigned;
+        static_cast<void>(assigned);
     }
     explicit CompactString(const AString& text)
         : m_storage{}
@@ -53,7 +53,7 @@ public:
     {
         const bool assigned = assign(text);
         NWB_ASSERT_MSG(assigned, NWB_TEXT("CompactString initialization exceeded capacity"));
-        (void)assigned;
+        static_cast<void>(assigned);
     }
 
 
@@ -68,14 +68,18 @@ public:
     [[nodiscard]] bool assign(const AStringView text){
         clear();
 
+        const usize textSize = text.size();
         if(text.empty())
             return true;
-        if(text.size() > s_MaxLength || HasEmbeddedNull(text))
+        if(textSize > s_MaxLength)
             return false;
 
-        for(usize i = 0; i < text.size(); ++i)
+        for(usize i = 0; i < textSize; ++i){
+            if(text[i] == '\0')
+                return false;
             m_storage[i] = Canonicalize(text[i]);
-        m_size = static_cast<u8>(text.size());
+        }
+        m_size = static_cast<u8>(textSize);
         m_storage[m_size] = '\0';
         return true;
     }
@@ -92,14 +96,21 @@ public:
     }
 
     [[nodiscard]] bool append(const AStringView text){
+        const usize textSize = text.size();
         if(text.empty())
             return true;
-        if(text.size() > remainingCapacity() || HasEmbeddedNull(text))
+        if(textSize > remainingCapacity())
             return false;
 
-        for(usize i = 0; i < text.size(); ++i)
+        const u8 oldSize = m_size;
+        for(usize i = 0; i < textSize; ++i){
+            if(text[i] == '\0'){
+                m_storage[oldSize] = '\0';
+                return false;
+            }
             m_storage[m_size + i] = Canonicalize(text[i]);
-        m_size = static_cast<u8>(m_size + text.size());
+        }
+        m_size = static_cast<u8>(m_size + textSize);
         m_storage[m_size] = '\0';
         return true;
     }
@@ -186,35 +197,35 @@ public:
     CompactString& operator+=(const char* text){
         const bool appended = append(text);
         NWB_ASSERT_MSG(appended, NWB_TEXT("CompactString append exceeded capacity"));
-        (void)appended;
+        static_cast<void>(appended);
         return *this;
     }
 
     CompactString& operator+=(const AStringView text){
         const bool appended = append(text);
         NWB_ASSERT_MSG(appended, NWB_TEXT("CompactString append exceeded capacity"));
-        (void)appended;
+        static_cast<void>(appended);
         return *this;
     }
 
     CompactString& operator+=(const AString& text){
         const bool appended = append(text);
         NWB_ASSERT_MSG(appended, NWB_TEXT("CompactString append exceeded capacity"));
-        (void)appended;
+        static_cast<void>(appended);
         return *this;
     }
 
     CompactString& operator+=(const CompactString& text){
         const bool appended = append(text);
         NWB_ASSERT_MSG(appended, NWB_TEXT("CompactString append exceeded capacity"));
-        (void)appended;
+        static_cast<void>(appended);
         return *this;
     }
 
     CompactString& operator+=(const char ch){
         const bool appended = pushBack(ch);
         NWB_ASSERT_MSG(appended, NWB_TEXT("CompactString append exceeded capacity"));
-        (void)appended;
+        static_cast<void>(appended);
         return *this;
     }
 

@@ -67,7 +67,7 @@ namespace __hidden_scene{
     const auto sceneView = world.view<SceneComponent>();
     for(auto it = sceneView.begin(); it != sceneView.end(); ++it){
         auto&& [entity, scene] = *it;
-        (void)entity;
+        static_cast<void>(entity);
         return scene.mainCamera;
     }
 

@@ -27,6 +27,21 @@ namespace __hidden_assets{
 
 static constexpr u32 s_DeformableGeometryMagic = 0x44474F31u; // DGO1
 static constexpr u32 s_DeformableGeometryVersion = 2u;
+#if defined(NWB_COOK)
+static constexpr usize s_DeformableGeometryHeaderBytes =
+    sizeof(u32) + // magic
+    sizeof(u32) + // version
+    sizeof(u64) + // rest vertex count
+    sizeof(u64) + // index count
+    sizeof(u64) + // skin count
+    sizeof(u64) + // source sample count
+    sizeof(u64)   // morph count
+;
+static constexpr usize s_DeformableMorphHeaderBytes =
+    sizeof(NameHash) +
+    sizeof(u64)
+;
+#endif
 
 
 UniquePtr<Core::Assets::IAssetCodec> CreateDeformableGeometryAssetCodec(){
@@ -46,6 +61,24 @@ template<typename T>
     outBytes = static_cast<usize>(count) * sizeof(T);
     return true;
 }
+
+#if defined(NWB_COOK)
+[[nodiscard]] static bool AddReserveBytes(usize& inOutBytes, const usize additionalBytes){
+    if(additionalBytes > Limit<usize>::s_Max - inOutBytes)
+        return false;
+
+    inOutBytes += additionalBytes;
+    return true;
+}
+
+template<typename T>
+[[nodiscard]] static bool AddVectorReserveBytes(usize& inOutBytes, const Vector<T>& values){
+    if(values.size() > Limit<usize>::s_Max / sizeof(T))
+        return false;
+
+    return AddReserveBytes(inOutBytes, values.size() * sizeof(T));
+}
+#endif
 
 template<typename T>
 [[nodiscard]] bool ReadVectorPayload(
@@ -105,15 +138,17 @@ template<typename T>
 
 
 bool DeformableGeometry::validatePayload()const{
-    const TString geometryPathText = virtualPath()
-        ? StringConvert(virtualPath().c_str())
-        : TString(NWB_TEXT("<unnamed>"))
-    ;
+    const auto geometryPathText = [this]() -> TString{
+        return virtualPath()
+            ? StringConvert(virtualPath().c_str())
+            : TString(NWB_TEXT("<unnamed>"))
+        ;
+    };
 
     if(m_restVertices.empty() || m_indices.empty()){
         NWB_LOGGER_ERROR(
             NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' has incomplete rest/index payload"),
-            geometryPathText
+            geometryPathText()
         );
         return false;
     }
@@ -122,14 +157,14 @@ bool DeformableGeometry::validatePayload()const{
     ){
         NWB_LOGGER_ERROR(
             NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' exceeds u32 vertex/index count limits"),
-            geometryPathText
+            geometryPathText()
         );
         return false;
     }
     if((m_indices.size() % 3u) != 0u){
         NWB_LOGGER_ERROR(
             NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' index count {} is not a multiple of 3"),
-            geometryPathText,
+            geometryPathText(),
             m_indices.size()
         );
         return false;
@@ -140,7 +175,7 @@ bool DeformableGeometry::validatePayload()const{
         if(!DeformableValidation::ValidRestVertex(vertex)){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' rest vertex {} contains non-finite data"),
-                geometryPathText,
+                geometryPathText(),
                 i
             );
             return false;
@@ -148,7 +183,7 @@ bool DeformableGeometry::validatePayload()const{
         if(!DeformableValidation::ValidRestVertexFrameBasis(vertex)){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' rest vertex {} has a degenerate normal/tangent frame"),
-                geometryPathText,
+                geometryPathText(),
                 i
             );
             return false;
@@ -156,7 +191,7 @@ bool DeformableGeometry::validatePayload()const{
         if(!DeformableValidation::ValidRestVertexFrame(vertex)){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' rest vertex {} has an invalid normal/tangent frame"),
-                geometryPathText,
+                geometryPathText(),
                 i
             );
             return false;
@@ -167,7 +202,7 @@ bool DeformableGeometry::validatePayload()const{
         if(index >= m_restVertices.size()){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("DeformableGeometry::validatePayload failed: '{}' index {} exceeds {} vertices"),
-                geometryPathText,
+                geometryPathText(),
                 index,
                 m_restVertices.size()
             );
@@ -181,7 +216,7 @@ bool DeformableGeometry::validatePayload()const{
         if(a == b || a == c || b == c){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' triangle {} is degenerate"),
-                geometryPathText,
+                geometryPathText(),
                 indexBase / 3u
             );
             return false;
@@ -190,7 +225,7 @@ bool DeformableGeometry::validatePayload()const{
         if(!DeformableValidation::ValidTriangle(m_restVertices, a, b, c)){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' triangle {} has zero area"),
-                geometryPathText,
+                geometryPathText(),
                 indexBase / 3u
             );
             return false;
@@ -200,7 +235,7 @@ bool DeformableGeometry::validatePayload()const{
     if(!m_skin.empty() && m_skin.size() != m_restVertices.size()){
         NWB_LOGGER_ERROR(
             NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' skin count {} does not match vertex count {}"),
-            geometryPathText,
+            geometryPathText(),
             m_skin.size(),
             m_restVertices.size()
         );
@@ -210,7 +245,7 @@ bool DeformableGeometry::validatePayload()const{
         if(!DeformableValidation::ValidSkinInfluence(m_skin[i])){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("DeformableGeometry::validatePayload failed: '{}' skin weights for vertex {} are invalid"),
-                geometryPathText,
+                geometryPathText(),
                 i
             );
             return false;
@@ -221,7 +256,7 @@ bool DeformableGeometry::validatePayload()const{
     if(!m_sourceSamples.empty() && m_sourceSamples.size() != m_restVertices.size()){
         NWB_LOGGER_ERROR(
             NWB_TEXT("DeformableGeometry::validatePayload failed: '{}' source samples {} do not match vertices {}"),
-            geometryPathText,
+            geometryPathText(),
             m_sourceSamples.size(),
             m_restVertices.size()
         );
@@ -232,7 +267,7 @@ bool DeformableGeometry::validatePayload()const{
         if(!DeformableValidation::ValidSourceSample(sample, static_cast<u32>(triangleCount))){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' source sample {} is invalid"),
-                geometryPathText,
+                geometryPathText(),
                 i
             );
             return false;
@@ -242,7 +277,7 @@ bool DeformableGeometry::validatePayload()const{
     if(!ValidDeformableDisplacementDescriptor(m_displacement)){
         NWB_LOGGER_ERROR(
             NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' displacement descriptor is invalid"),
-            geometryPathText
+            geometryPathText()
         );
         return false;
     }
@@ -251,62 +286,12 @@ bool DeformableGeometry::validatePayload()const{
         DeformableValidation::FindMorphPayloadFailure(m_morphs, m_restVertices.size())
     ;
     if(morphFailure.reason != DeformableValidation::MorphPayloadFailure::None){
-        const DeformableMorph* morph = morphFailure.morphIndex < m_morphs.size()
-            ? &m_morphs[morphFailure.morphIndex]
-            : nullptr
-        ;
-        const TString morphNameText = (morph && morph->name)
-            ? StringConvert(morph->name.c_str())
-            : TString(NWB_TEXT("<unnamed>"))
-        ;
-
-        switch(morphFailure.reason){
-        case DeformableValidation::MorphPayloadFailure::MorphCountLimit:
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' morph count exceeds u32 limits"),
-                geometryPathText
-            );
-            break;
-        case DeformableValidation::MorphPayloadFailure::EmptyMorph:
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' morph {} is unnamed or empty"),
-                geometryPathText,
-                morphFailure.morphIndex
-            );
-            break;
-        case DeformableValidation::MorphPayloadFailure::DuplicateMorphName:
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' contains duplicate morph '{}'"),
-                geometryPathText,
-                morphNameText
-            );
-            break;
-        case DeformableValidation::MorphPayloadFailure::MorphDeltaCountLimit:
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' morph '{}' delta count exceeds u32 limits"),
-                geometryPathText,
-                morphNameText
-            );
-            break;
-        case DeformableValidation::MorphPayloadFailure::InvalidMorphDelta:
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' morph '{}' delta {} is invalid"),
-                geometryPathText,
-                morphNameText,
-                morphFailure.deltaIndex
-            );
-            break;
-        case DeformableValidation::MorphPayloadFailure::DuplicateMorphDeltaVertex:
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' morph '{}' has duplicate vertex {}"),
-                geometryPathText,
-                morphNameText,
-                morphFailure.vertexId
-            );
-            break;
-        case DeformableValidation::MorphPayloadFailure::None:
-            break;
-        }
+        DeformableValidation::LogMorphPayloadFailure(
+            DeformableValidation::MorphPayloadFailureLogDomain::GeometryAsset,
+            geometryPathText(),
+            m_morphs,
+            morphFailure
+        );
         return false;
     }
 
@@ -472,7 +457,26 @@ bool DeformableGeometryAssetCodec::serialize(const Core::Assets::IAsset& asset, 
     if(!geometry.validatePayload())
         return false;
 
+    usize reserveBytes = __hidden_assets::s_DeformableGeometryHeaderBytes;
+    bool canReserve = __hidden_assets::AddVectorReserveBytes(reserveBytes, geometry.restVertices())
+        && __hidden_assets::AddVectorReserveBytes(reserveBytes, geometry.indices())
+        && __hidden_assets::AddVectorReserveBytes(reserveBytes, geometry.skin())
+        && __hidden_assets::AddVectorReserveBytes(reserveBytes, geometry.sourceSamples())
+    ;
+    for(const DeformableMorph& morph : geometry.morphs()){
+        canReserve = canReserve
+            && __hidden_assets::AddReserveBytes(reserveBytes, __hidden_assets::s_DeformableMorphHeaderBytes)
+            && __hidden_assets::AddVectorReserveBytes(reserveBytes, morph.deltas)
+        ;
+    }
+    canReserve = canReserve
+        && __hidden_assets::AddReserveBytes(reserveBytes, sizeof(DeformableDisplacement))
+    ;
+
     outBinary.clear();
+    if(canReserve)
+        outBinary.reserve(reserveBytes);
+
     AppendPOD(outBinary, __hidden_assets::s_DeformableGeometryMagic);
     AppendPOD(outBinary, __hidden_assets::s_DeformableGeometryVersion);
     AppendPOD(outBinary, static_cast<u64>(geometry.restVertices().size()));

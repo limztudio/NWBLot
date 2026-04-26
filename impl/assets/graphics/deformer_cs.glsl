@@ -104,8 +104,8 @@ bool nwbDeformerFiniteVec4(const vec4 value){
     return !any(isnan(value)) && !any(isinf(value));
 }
 
-void nwbDeformerCopyRestPayload(const uint vertexId, const uint restBase, const uint deformedBase){
-    for(uint i = 0u; i < nwbDeformerRestScalarStride(); ++i)
+void nwbDeformerCopyRestPayload(const uint restBase, const uint deformedBase, const uint restScalarStride){
+    for(uint i = 0u; i < restScalarStride; ++i)
         nwbDeformerDeformedVertexScalars[deformedBase + i] = nwbDeformerRestVertexScalars[restBase + i];
 }
 
@@ -177,7 +177,8 @@ void nwbDeformerOrthonormalizeFrame(inout vec3 normal, inout vec4 tangent, const
 }
 
 void nwbDeformerApplySkin(const uint vertexId, inout vec3 position, inout vec3 normal, inout vec4 tangent){
-    if(nwbDeformerSkinCount() != nwbDeformerVertexCount() || nwbDeformerJointCount() == 0u)
+    const uint jointCount = nwbDeformerJointCount();
+    if(nwbDeformerSkinCount() != nwbDeformerVertexCount() || jointCount == 0u)
         return;
 
     const NwbDeformerSkinInfluence skin = nwbDeformerSkinInfluences[vertexId];
@@ -189,13 +190,14 @@ void nwbDeformerApplySkin(const uint vertexId, inout vec3 position, inout vec3 n
     for(uint influenceIndex = 0u; influenceIndex < 4u; ++influenceIndex){
         const float weight = skin.weight[influenceIndex];
         const uint jointId = skin.joint[influenceIndex];
-        if(abs(weight) <= 0.000001 || jointId >= nwbDeformerJointCount())
+        if(abs(weight) <= 0.000001 || jointId >= jointCount)
             continue;
 
         const mat4 jointMatrix = nwbDeformerLoadJointMatrix(jointId);
+        const mat3 jointMatrix3 = mat3(jointMatrix);
         skinnedPosition += weight * (jointMatrix * vec4(position, 1.0)).xyz;
-        skinnedNormal += weight * (mat3(jointMatrix) * normal);
-        skinnedTangent += weight * (mat3(jointMatrix) * tangent.xyz);
+        skinnedNormal += weight * (jointMatrix3 * normal);
+        skinnedTangent += weight * (jointMatrix3 * tangent.xyz);
         totalWeight += weight;
     }
 
@@ -224,8 +226,10 @@ void main(){
     if(vertexId >= nwbDeformerVertexCount())
         return;
 
-    const uint restBase = vertexId * nwbDeformerRestScalarStride();
-    const uint deformedBase = vertexId * nwbDeformerDeformedScalarStride();
+    const uint restScalarStride = nwbDeformerRestScalarStride();
+    const uint deformedScalarStride = nwbDeformerDeformedScalarStride();
+    const uint restBase = vertexId * restScalarStride;
+    const uint deformedBase = vertexId * deformedScalarStride;
 
     vec3 position = vec3(
         nwbDeformerRestVertexScalars[restBase + 0u],
@@ -288,7 +292,7 @@ void main(){
     if(!nwbDeformerFiniteVec3(position))
         position = preDisplacementPosition;
 
-    nwbDeformerCopyRestPayload(vertexId, restBase, deformedBase);
+    nwbDeformerCopyRestPayload(restBase, deformedBase, restScalarStride);
     nwbDeformerDeformedVertexScalars[deformedBase + 0u] = position.x;
     nwbDeformerDeformedVertexScalars[deformedBase + 1u] = position.y;
     nwbDeformerDeformedVertexScalars[deformedBase + 2u] = position.z;

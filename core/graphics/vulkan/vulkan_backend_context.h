@@ -74,35 +74,35 @@ public:
 
 
 public:
-    [[nodiscard]] IDevice* getDevice()const override;
-    [[nodiscard]] GraphicsAPI::Enum getGraphicsAPI()const override{ return GraphicsAPI::VULKAN; }
-    [[nodiscard]] const tchar* getRendererString()const override;
-    [[nodiscard]] void* queryInterface(GraphicsBackendInterfaceID interfaceID)override;
-    [[nodiscard]] const void* queryInterface(GraphicsBackendInterfaceID interfaceID)const override;
+    [[nodiscard]] virtual IDevice* getDevice()const override;
+    [[nodiscard]] virtual GraphicsAPI::Enum getGraphicsAPI()const override{ return GraphicsAPI::VULKAN; }
+    [[nodiscard]] virtual const tchar* getRendererString()const override;
+    [[nodiscard]] virtual void* queryInterface(GraphicsBackendInterfaceID interfaceID)override;
+    [[nodiscard]] virtual const void* queryInterface(GraphicsBackendInterfaceID interfaceID)const override;
 
-    bool enumerateAdapters(Vector<AdapterInfo>& outAdapters)override;
+    virtual bool enumerateAdapters(Vector<AdapterInfo>& outAdapters)override;
     [[nodiscard]] bool isValidationMessageLocationIgnored(usize location)const;
 
-    bool isInstanceExtensionEnabled(const char* extensionName)const override;
-    bool isDeviceExtensionEnabled(const char* extensionName)const override;
-    bool isLayerEnabled(const char* layerName)const override;
-    void getEnabledInstanceExtensions(Vector<AString>& extensions)const override;
-    void getEnabledDeviceExtensions(Vector<AString>& extensions)const override;
-    void getEnabledLayers(Vector<AString>& layers)const override;
+    virtual bool isInstanceExtensionEnabled(const char* extensionName)const override;
+    virtual bool isDeviceExtensionEnabled(const char* extensionName)const override;
+    virtual bool isLayerEnabled(const char* layerName)const override;
+    virtual void getEnabledInstanceExtensions(Vector<AString>& extensions)const override;
+    virtual void getEnabledDeviceExtensions(Vector<AString>& extensions)const override;
+    virtual void getEnabledLayers(Vector<AString>& layers)const override;
 
-    ITexture* getCurrentBackBuffer()override;
-    ITexture* getBackBuffer(u32 index)override;
-    u32 getCurrentBackBufferIndex()override;
-    u32 getBackBufferCount()override;
+    virtual ITexture* getCurrentBackBuffer()override;
+    virtual ITexture* getBackBuffer(u32 index)override;
+    virtual u32 getCurrentBackBufferIndex()override;
+    virtual u32 getBackBufferCount()override;
 
-    void setPlatformFrameParam(const Common::FrameParam& frameParam)override{ m_platformFrameParam = frameParam; }
-    bool createInstance()override;
-    bool createDevice()override;
-    bool createSwapChain()override;
-    void destroy()override;
-    void resizeSwapChain()override;
-    bool beginFrame(const BackBufferResizeCallbacks& callbacks)override;
-    bool present()override;
+    virtual void setPlatformFrameParam(const Common::FrameParam& frameParam)override{ m_platformFrameParam = frameParam; }
+    virtual bool createInstance()override;
+    virtual bool createDevice()override;
+    virtual bool createSwapChain()override;
+    virtual void destroy()override;
+    virtual void resizeSwapChain()override;
+    virtual bool beginFrame(const BackBufferResizeCallbacks& callbacks)override;
+    virtual bool present()override;
 
 private:
     void initDefaultExtensions();

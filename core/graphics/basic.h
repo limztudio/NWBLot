@@ -96,7 +96,7 @@ public:
     virtual u32 addReference()noexcept = 0;
     virtual u32 release()noexcept = 0;
 
-    virtual Object getNativeHandle(ObjectType type){ (void)type; return nullptr; }
+    virtual Object getNativeHandle(ObjectType type){ static_cast<void>(type); return nullptr; }
 };
 
 

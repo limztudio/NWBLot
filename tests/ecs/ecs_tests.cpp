@@ -5,6 +5,8 @@
 #include <core/ecs/ecs.h>
 #include <core/common/common.h>
 
+#include <tests/test_context.h>
+
 #include <global/compile.h>
 
 
@@ -17,20 +19,7 @@ namespace __hidden_ecs_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct TestContext{
-    u32 passed = 0;
-    u32 failed = 0;
-
-    void checkTrue(const bool condition, const char* expression, const char* file, const int line){
-        if(condition){
-            ++passed;
-            return;
-        }
-
-        ++failed;
-        NWB_CERR << file << '(' << line << "): check failed: " << expression << '\n';
-    }
-};
+using TestContext = NWB::Tests::TestContext;
 
 
 #define NWB_ECS_TEST_CHECK(context, expression) (context).checkTrue((expression), #expression, __FILE__, __LINE__)
@@ -280,8 +269,8 @@ static void TestSystemTick(TestContext& context){
 
 
 static int EntryPoint(const isize argc, tchar** argv, void*){
-    (void)argc;
-    (void)argv;
+    static_cast<void>(argc);
+    static_cast<void>(argv);
 
     NWB::Core::Common::InitializerGuard commonInitializerGuard;
     if(!commonInitializerGuard.initialize()){
@@ -306,7 +295,7 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
 }
 
 
-#include <global/application_entry.h>
+#include <core/common/application_entry.h>
 
 NWB_DEFINE_APPLICATION_ENTRY_POINT(EntryPoint)
 

@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <global/global.h>
+#include "frame.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -17,7 +17,6 @@
 #include <windows.h>
 #include <global/win32_message_loop.h>
 
-#include "frame.h"
 #include "frame_input_helpers.h"
 
 #include <logger/client/logger.h>
@@ -39,7 +38,7 @@ namespace FrameDetail{
 
 
 // in windows, the frame is a singleton
-static Frame* g_Frame = nullptr;
+static Frame* s_Frame = nullptr;
 
 
 static bool IsExtendedKey(LPARAM lParam){
@@ -276,14 +275,14 @@ static void DispatchCharInput(Frame& frame, WPARAM wParam){
 }
 
 static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
-    if(auto* _this = g_Frame){
+    if(auto* frame = s_Frame){
         LRESULT lifecycleResult = 0;
         if(HandleWin32FrameLifecycleMessage(
             hwnd,
             uMsg,
             wParam,
             [](){},
-            [&](const bool isActive){ _this->data<Common::WinFrame>().isActive() = isActive; },
+            [&](const bool isActive){ frame->data<Common::WinFrame>().setActive(isActive); },
             lifecycleResult
         ))
             return lifecycleResult;
@@ -295,8 +294,8 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         {
             bool ret = false;
             if(auto hdc = BeginPaint(hwnd, &ps)){
-                (void)hdc;
-                ret = _this->render();
+                static_cast<void>(hdc);
+                ret = frame->render();
                 EndPaint(hwnd, &ps);
             }
             if(!ret)
@@ -310,7 +309,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                 ? InputAction::Repeat
                 : InputAction::Press
             ;
-            DispatchKeyEvent(*_this, wParam, lParam, action);
+            DispatchKeyEvent(*frame, wParam, lParam, action);
         }
         return 0;
 
@@ -320,31 +319,31 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                 ? InputAction::Repeat
                 : InputAction::Press
             ;
-            DispatchKeyEvent(*_this, wParam, lParam, action);
+            DispatchKeyEvent(*frame, wParam, lParam, action);
         }
         return DefWindowProc(hwnd, uMsg, wParam, lParam);
 
         case WM_KEYUP:
         {
-            DispatchKeyEvent(*_this, wParam, lParam, InputAction::Release);
+            DispatchKeyEvent(*frame, wParam, lParam, InputAction::Release);
         }
         return 0;
 
         case WM_SYSKEYUP:
         {
-            DispatchKeyEvent(*_this, wParam, lParam, InputAction::Release);
+            DispatchKeyEvent(*frame, wParam, lParam, InputAction::Release);
         }
         return DefWindowProc(hwnd, uMsg, wParam, lParam);
 
         case WM_CHAR:
         {
-            DispatchCharInput(*_this, wParam);
+            DispatchCharInput(*frame, wParam);
         }
         return 0;
 
         case WM_SYSCHAR:
         {
-            DispatchCharInput(*_this, wParam);
+            DispatchCharInput(*frame, wParam);
         }
         return DefWindowProc(hwnd, uMsg, wParam, lParam);
 
@@ -352,13 +351,13 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         {
             if(wParam == UNICODE_NOCHAR)
                 return TRUE;
-            DispatchUnicodeInput(*_this, static_cast<u32>(wParam));
+            DispatchUnicodeInput(*frame, static_cast<u32>(wParam));
         }
         return 0;
 
         case WM_MOUSEMOVE:
         {
-            DispatchMousePosition(*_this, lParam);
+            DispatchMousePosition(*frame, lParam);
         }
         return 0;
 
@@ -367,8 +366,8 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         case WM_MBUTTONDOWN:
         case WM_XBUTTONDOWN:
         {
-            DispatchMousePosition(*_this, lParam);
-            _this->input().mouseButtonUpdate(TranslateMouseButton(uMsg, wParam), InputAction::Press, TranslateModifiers());
+            DispatchMousePosition(*frame, lParam);
+            frame->input().mouseButtonUpdate(TranslateMouseButton(uMsg, wParam), InputAction::Press, TranslateModifiers());
             CaptureMouse(hwnd);
         }
         return (uMsg == WM_XBUTTONDOWN) ? TRUE : 0;
@@ -378,23 +377,23 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         case WM_MBUTTONUP:
         case WM_XBUTTONUP:
         {
-            DispatchMousePosition(*_this, lParam);
-            _this->input().mouseButtonUpdate(TranslateMouseButton(uMsg, wParam), InputAction::Release, TranslateModifiers());
+            DispatchMousePosition(*frame, lParam);
+            frame->input().mouseButtonUpdate(TranslateMouseButton(uMsg, wParam), InputAction::Release, TranslateModifiers());
             ReleaseMouseIfNoButtonIsDown(hwnd);
         }
         return (uMsg == WM_XBUTTONUP) ? TRUE : 0;
 
         case WM_MOUSEWHEEL:
         {
-            DispatchScreenMousePosition(hwnd, *_this, lParam);
-            _this->input().mouseScrollUpdate(0.0, static_cast<f64>(GET_WHEEL_DELTA_WPARAM(wParam)) / static_cast<f64>(WHEEL_DELTA));
+            DispatchScreenMousePosition(hwnd, *frame, lParam);
+            frame->input().mouseScrollUpdate(0.0, static_cast<f64>(GET_WHEEL_DELTA_WPARAM(wParam)) / static_cast<f64>(WHEEL_DELTA));
         }
         return 0;
 
         case WM_MOUSEHWHEEL:
         {
-            DispatchScreenMousePosition(hwnd, *_this, lParam);
-            _this->input().mouseScrollUpdate(static_cast<f64>(GET_WHEEL_DELTA_WPARAM(wParam)) / static_cast<f64>(WHEEL_DELTA), 0.0);
+            DispatchScreenMousePosition(hwnd, *frame, lParam);
+            frame->input().mouseScrollUpdate(static_cast<f64>(GET_WHEEL_DELTA_WPARAM(wParam)) / static_cast<f64>(WHEEL_DELTA), 0.0);
         }
         return 0;
         }
@@ -425,7 +424,8 @@ bool Frame::init(){
         wc.lpfnWndProc = FrameDetail::WinProc;
         wc.hInstance = data<Common::WinFrame>().instance();
         wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
-        wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW);
+        // WNDCLASSEX encodes system color brushes as COLOR_* + 1.
+        wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
         wc.lpszClassName = ClassName;
     }
     if(!RegisterClassEx(&wc)){
@@ -435,7 +435,7 @@ bool Frame::init(){
 
     RECT rc = { 0, 0, static_cast<i32>(data<Common::WinFrame>().width()), static_cast<i32>(data<Common::WinFrame>().height()) };
 
-    data<Common::WinFrame>().hwnd() = CreateWindowEx(
+    HWND hwnd = CreateWindowEx(
         StyleEx,
         wc.lpszClassName,
         AppName,
@@ -449,6 +449,7 @@ bool Frame::init(){
         wc.hInstance,
         nullptr
     );
+    data<Common::WinFrame>().setHwnd(hwnd);
     if(!data<Common::WinFrame>().hwnd()){
         NWB_LOGGER_FATAL(NWB_TEXT("Frame window creation failed"));
         return false;
@@ -456,7 +457,7 @@ bool Frame::init(){
 
     {
         if(!AdjustWindowRectEx(&rc, Style, FALSE, StyleEx)){
-            data<Common::WinFrame>().hwnd() = nullptr;
+            data<Common::WinFrame>().setHwnd(nullptr);
             NWB_LOGGER_FATAL(NWB_TEXT("Frame window adjustment failed"));
             return false;
         }
@@ -467,7 +468,7 @@ bool Frame::init(){
         const auto y = (GetSystemMetrics(SM_CYSCREEN) - actualHeight) >> 1;
 
         if(!MoveWindow(data<Common::WinFrame>().hwnd(), x, y, actualWidth, actualHeight, false)){
-            data<Common::WinFrame>().hwnd() = nullptr;
+            data<Common::WinFrame>().setHwnd(nullptr);
             NWB_LOGGER_FATAL(NWB_TEXT("Frame window moving failed"));
             return false;
         }
@@ -521,12 +522,12 @@ bool Frame::mainLoop(){
 }
 
 void Frame::setupPlatform(void* inst){
-    FrameDetail::g_Frame = this;
-    data<Common::WinFrame>().isActive() = false;
-    data<Common::WinFrame>().instance() = reinterpret_cast<HINSTANCE>(inst);
+    FrameDetail::s_Frame = this;
+    data<Common::WinFrame>().setActive(false);
+    data<Common::WinFrame>().setInstance(reinterpret_cast<HINSTANCE>(inst));
 }
 void Frame::cleanupPlatform(){
-    FrameDetail::g_Frame = nullptr;
+    FrameDetail::s_Frame = nullptr;
 }
 
 

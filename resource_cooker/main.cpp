@@ -57,7 +57,7 @@ static int EntryPoint(const isize argc, wchar** argv, void*){
         Vector<char*> utf8Argv;
         const usize argCount = argc > 0 ? static_cast<usize>(argc) : 0;
         utf8Args.reserve(argCount);
-        utf8Argv.reserve(argCount);
+        utf8Argv.reserve(argCount + 1u);
 
         for(usize i = 0; i < argCount; ++i){
             if(argv == nullptr || argv[i] == nullptr){
@@ -69,7 +69,8 @@ static int EntryPoint(const isize argc, wchar** argv, void*){
             utf8Argv.push_back(utf8Args.back().data());
         }
 
-        return RunResourceCooker(static_cast<int>(utf8Argv.size()), utf8Argv.data());
+        utf8Argv.push_back(nullptr);
+        return RunResourceCooker(static_cast<int>(argCount), utf8Argv.data());
     }
     catch(...){
         return -1;
@@ -77,7 +78,7 @@ static int EntryPoint(const isize argc, wchar** argv, void*){
 }
 #endif
 
-#include <global/application_entry.h>
+#include <core/common/application_entry.h>
 
 NWB_DEFINE_APPLICATION_ENTRY_POINT(EntryPoint)
 

@@ -18,45 +18,59 @@ using MemoryOrder = std::memory_order;
 template<typename T>
 using Atomic = std::atomic<T>;
 
+inline void AtomicThreadFence(const MemoryOrder order)noexcept{ std::atomic_thread_fence(order); }
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 struct AtomicFlag{
+private:
+    Atomic<i32> m_storage = {};
+
+
 public:
     constexpr AtomicFlag()noexcept = default;
 
 
 public:
-    [[nodiscard]] bool test(const MemoryOrder _Order = std::memory_order_seq_cst)const noexcept{ return _Storage.load(_Order) != 0; }
+    [[nodiscard]] bool test(const MemoryOrder order = MemoryOrder::seq_cst)const noexcept{
+        return m_storage.load(order) != 0;
+    }
 
-    bool test_and_set(const MemoryOrder _Order = std::memory_order_seq_cst)noexcept{ return _Storage.exchange(true, _Order) != 0; }
+    bool test_and_set(const MemoryOrder order = MemoryOrder::seq_cst)noexcept{
+        return m_storage.exchange(true, order) != 0;
+    }
 
-    void clear(const MemoryOrder _Order = std::memory_order_seq_cst)noexcept{ _Storage.store(false, _Order); }
+    void clear(const MemoryOrder order = MemoryOrder::seq_cst)noexcept{ m_storage.store(false, order); }
 
-    void wait(const bool _Expected, const MemoryOrder _Order = std::memory_order_seq_cst)const noexcept{ _Storage.wait(static_cast<decltype(_Storage)::value_type>(_Expected), _Order); }
+    void wait(const bool expected, const MemoryOrder order = MemoryOrder::seq_cst)const noexcept{
+        m_storage.wait(static_cast<decltype(m_storage)::value_type>(expected), order);
+    }
 
-    void notify_one()noexcept{ _Storage.notify_one(); }
+    void notify_one()noexcept{ m_storage.notify_one(); }
 
-    void notify_all()noexcept{ _Storage.notify_all(); }
-
-
-public:
-    Atomic<i32> _Storage;
+    void notify_all()noexcept{ m_storage.notify_all(); }
 };
 
-[[nodiscard]] inline bool atomic_flag_test(const AtomicFlag* const _Flag)noexcept{ return _Flag->test(); }
-[[nodiscard]] inline bool atomic_flag_test_explicit(const AtomicFlag* const _Flag, const MemoryOrder _Order)noexcept{ return _Flag->test(_Order); }
+[[nodiscard]] inline bool atomic_flag_test(const AtomicFlag* const flag)noexcept{ return flag->test(); }
+[[nodiscard]] inline bool atomic_flag_test_explicit(const AtomicFlag* const flag, const MemoryOrder order)noexcept{
+    return flag->test(order);
+}
 
-inline bool atomic_flag_test_and_set(AtomicFlag* const _Flag)noexcept{ return _Flag->test_and_set(); }
-inline bool atomic_flag_test_and_set_explicit(AtomicFlag* const _Flag, const MemoryOrder _Order)noexcept{ return _Flag->test_and_set(_Order); }
-inline void atomic_flag_clear(AtomicFlag* const _Flag)noexcept{ _Flag->clear(); }
-inline void atomic_flag_clear_explicit(AtomicFlag* const _Flag, const MemoryOrder _Order)noexcept{ _Flag->clear(_Order); }
+inline bool atomic_flag_test_and_set(AtomicFlag* const flag)noexcept{ return flag->test_and_set(); }
+inline bool atomic_flag_test_and_set_explicit(AtomicFlag* const flag, const MemoryOrder order)noexcept{
+    return flag->test_and_set(order);
+}
+inline void atomic_flag_clear(AtomicFlag* const flag)noexcept{ flag->clear(); }
+inline void atomic_flag_clear_explicit(AtomicFlag* const flag, const MemoryOrder order)noexcept{ flag->clear(order); }
 
-inline void atomic_flag_wait(const AtomicFlag* const _Flag, const bool _Expected)noexcept{ return _Flag->wait(_Expected); }
-inline void atomic_flag_wait_explicit(const AtomicFlag* const _Flag, const bool _Expected, const MemoryOrder _Order)noexcept{ return _Flag->wait(_Expected, _Order); }
-inline void atomic_flag_notify_one(AtomicFlag* const _Flag)noexcept{ return _Flag->notify_one(); }
-inline void atomic_flag_notify_all(AtomicFlag* const _Flag)noexcept{ return _Flag->notify_all(); }
+inline void atomic_flag_wait(const AtomicFlag* const flag, const bool expected)noexcept{ flag->wait(expected); }
+inline void atomic_flag_wait_explicit(const AtomicFlag* const flag, const bool expected, const MemoryOrder order)noexcept{
+    flag->wait(expected, order);
+}
+inline void atomic_flag_notify_one(AtomicFlag* const flag)noexcept{ flag->notify_one(); }
+inline void atomic_flag_notify_all(AtomicFlag* const flag)noexcept{ flag->notify_all(); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -85,7 +85,7 @@ public:
     }
 
     inline void deallocate(void* p, usize align, usize size){
-        (void)size;
+        static_cast<void>(size);
 
         return (align <= 1) ? m_free.get()(p) : m_freeAligned.get()(p);
     }

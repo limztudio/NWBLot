@@ -97,36 +97,36 @@ struct DefaultDeleter<T[]>{
 
 template<typename T, typename POOL>
 struct ArenaDeleter{
+    POOL* m_pool = nullptr;
+
     constexpr ArenaDeleter()noexcept = default;
-    constexpr ArenaDeleter(POOL& pool)noexcept : mPool(&pool){}
+    constexpr ArenaDeleter(POOL& pool)noexcept : m_pool(&pool){}
     template<typename U>
     ArenaDeleter(const ArenaDeleter<U, POOL>& other, typename EnableIf<IsConvertible<U*, T*>::value>::type* = 0)noexcept
-        : mPool(other.mPool){}
+        : m_pool(other.m_pool){}
 
     void operator()(T* p)const noexcept{
         static_assert(IsCompleteType_V<T>, "Attempting to call the destructor of an incomplete type");
         p->~T();
-        mPool->template deallocate<T>(p, 1);
+        m_pool->template deallocate<T>(p, 1);
     }
-
-    POOL* mPool = nullptr;
 };
 template<typename T, typename POOL>
 struct ArenaDeleter<T[], POOL>{
+    POOL* m_pool = nullptr;
+    usize m_size = 0;
+
     constexpr ArenaDeleter()noexcept = default;
-    constexpr ArenaDeleter(POOL& pool, usize size)noexcept : mPool(&pool), mSize(size){}
+    constexpr ArenaDeleter(POOL& pool, usize size)noexcept : m_pool(&pool), m_size(size){}
     template<typename U>
     ArenaDeleter(const ArenaDeleter<U[], POOL>& other, typename EnableIf<SmartPtrDetail::IsArrayCvConvertible<U*, T*>::value>::type* = 0)noexcept
-        : mPool(other.mPool), mSize(other.mSize){}
+        : m_pool(other.m_pool), m_size(other.m_size){}
 
     void operator()(T* p)const noexcept{
-        for(usize i = 0; i < mSize; ++i)
+        for(usize i = 0; i < m_size; ++i)
             p[i].~T();
-        mPool->template deallocate<T>(p, mSize);
+        m_pool->template deallocate<T>(p, m_size);
     }
-
-    POOL* mPool = nullptr;
-    usize mSize = 0;
 };
 
 template<typename T>
@@ -142,17 +142,17 @@ struct EmptyDeleter{
 };
 template<typename T>
 struct EmptyDeleter<T[]>{
+    usize m_size = 0;
+
     constexpr EmptyDeleter()noexcept = default;
-    constexpr EmptyDeleter(usize size)noexcept : mSize(size){}
+    constexpr EmptyDeleter(usize size)noexcept : m_size(size){}
     template<typename U>
     EmptyDeleter(const EmptyDeleter<U[]>&, typename EnableIf<SmartPtrDetail::IsArrayCvConvertible<U*, T*>::value>::type* = 0)noexcept{}
 
     void operator()(T* p)const noexcept{
-        for(usize i = 0; i < mSize; ++i)
+        for(usize i = 0; i < m_size; ++i)
             p[i].~T();
     }
-
-    usize mSize = 0;
 };
 
 template<typename T>
@@ -169,14 +169,14 @@ template<typename T>
 struct BlankDeleter<T[]>{
     constexpr BlankDeleter()noexcept = default;
     constexpr BlankDeleter(usize size)noexcept{
-        (void)size;
+        static_cast<void>(size);
     }
     template<typename U>
     BlankDeleter(const BlankDeleter<U[]>&, typename EnableIf<SmartPtrDetail::IsArrayCvConvertible<U*, T*>::value>::type* = 0)noexcept{}
 
     void operator()(T* p)const noexcept{
         static_assert(IsCompleteType_V<T>, "Attempting to call the destructor of an incomplete type");
-        (void)p;
+        static_cast<void>(p);
     }
 };
 

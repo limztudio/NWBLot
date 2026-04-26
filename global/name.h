@@ -54,25 +54,56 @@ struct NameHash{
 static_assert(sizeof(NameHash) == 64, "NameHash size must stay stable");
 
 
+namespace NameDetail{
+
+
+inline constexpr void InitializeNameHash(NameHash& hash){
+    for(u32 i = 0; i < s_HashLaneCount; ++i)
+        hash.qwords[i] = LANE_SEEDS[i];
+}
+
+template<typename CharT>
+inline constexpr void UpdateCanonicalNameHashLanes(NameHash& hash, const CharT ch){
+    const u64 byte = static_cast<u64>(static_cast<u8>(Canonicalize(ch)));
+    for(u32 i = 0; i < s_HashLaneCount; ++i){
+        hash.qwords[i] ^= byte;
+        hash.qwords[i] *= FNV64_PRIME;
+    }
+}
+
+template<typename CharT>
+[[nodiscard]] inline bool UpdateCanonicalNameHashText(NameHash& hash, const BasicStringView<CharT> text){
+    for(const CharT ch : text){
+        if(ch == CharT{})
+            return false;
+        UpdateCanonicalNameHashLanes(hash, ch);
+    }
+
+    return true;
+}
+
+
+};
+
+
 template<typename CharT>
 inline constexpr NameHash ComputeNameHash(const CharT* str){
     if(str == nullptr)
         return {};
 
     NameHash hash = {};
-    for(u32 i = 0; i < NameDetail::s_HashLaneCount; ++i)
-        hash.qwords[i] = FNV1a64(str, NameDetail::LANE_SEEDS[i]);
+    NameDetail::InitializeNameHash(hash);
+    for(; *str != CharT{}; ++str)
+        NameDetail::UpdateCanonicalNameHashLanes(hash, *str);
     return hash;
 }
 
 template<typename CharT>
 inline NameHash ComputeNameHash(const BasicStringView<CharT> text){
-    if(HasEmbeddedNull(text))
-        return {};
-
     NameHash hash = {};
-    for(u32 i = 0; i < NameDetail::s_HashLaneCount; ++i)
-        hash.qwords[i] = UpdateFnv64TextCanonical(NameDetail::LANE_SEEDS[i], text);
+    NameDetail::InitializeNameHash(hash);
+    if(!NameDetail::UpdateCanonicalNameHashText(hash, text))
+        return {};
     return hash;
 }
 
@@ -140,11 +171,15 @@ inline void HashToDebugString(const NameHash& hash, CharT* dst, const usize dstS
 
     CharT* writeCursor = dst;
     for(u32 i = 0; i < s_HashLaneCount; ++i){
-        if(i > 0)
-            *writeCursor++ = static_cast<CharT>('_');
+        if(i > 0){
+            *writeCursor = static_cast<CharT>('_');
+            ++writeCursor;
+        }
         const u64 value = hash.qwords[i];
-        for(i32 bitShift = 60; bitShift >= 0; bitShift -= 4)
-            *writeCursor++ = static_cast<CharT>(s_Hex[(value >> bitShift) & 0xF]);
+        for(i32 bitShift = 60; bitShift >= 0; bitShift -= 4){
+            *writeCursor = static_cast<CharT>(s_Hex[(value >> bitShift) & 0xF]);
+            ++writeCursor;
+        }
     }
     *writeCursor = CharT{};
 }
@@ -155,18 +190,18 @@ inline void CopyDebugName(const BasicStringView<CharT> text, char* dst, const us
     if(dstSize == 0)
         return;
 
-    if(HasEmbeddedNull(text)){
-        dst[0] = '\0';
-        return;
-    }
-
     const usize copyMax = dstSize - 1;
-    const usize copyCount = text.size() < copyMax
-        ? text.size()
-        : copyMax
-    ;
-    for(usize i = 0; i < copyCount; ++i)
-        dst[i] = static_cast<char>(Canonicalize(text[i]));
+    usize copyCount = 0;
+    for(usize i = 0; i < text.size(); ++i){
+        if(text[i] == CharT{}){
+            dst[0] = '\0';
+            return;
+        }
+        if(copyCount < copyMax){
+            dst[copyCount] = static_cast<char>(Canonicalize(text[i]));
+            ++copyCount;
+        }
+    }
     dst[copyCount] = '\0';
 }
 #endif
@@ -338,7 +373,7 @@ inline u64 UpdateFnv64U64(u64 hash, const u64 value){
 
 template<typename CharT>
 [[nodiscard]] inline Name DeriveName(const Name& baseName, const BasicStringView<CharT> suffix){
-    if(!baseName || suffix.empty() || HasEmbeddedNull(suffix))
+    if(!baseName || suffix.empty())
         return NAME_NONE;
 
     NameHash derivedHash = {};
@@ -350,9 +385,10 @@ template<typename CharT>
             sizeof(s_DerivePrefix) - 1
         );
         laneHash = NameDetail::UpdateFnv64U64(laneHash, baseName.hash().qwords[lane]);
-        laneHash = UpdateFnv64TextCanonical(laneHash, suffix);
         derivedHash.qwords[lane] = laneHash;
     }
+    if(!NameDetail::UpdateCanonicalNameHashText(derivedHash, suffix))
+        return NAME_NONE;
 
     return Name(derivedHash);
 }

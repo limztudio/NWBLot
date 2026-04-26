@@ -18,7 +18,7 @@ NWB_CORE_BEGIN
 
 
 void* GraphicsAllocator::allocatePersistentSystemMemory(void* userData, usize size, usize alignment, SystemMemoryAllocationScope::Enum scope){
-    (void)scope;
+    static_cast<void>(scope);
     if(!userData)
         return nullptr;
 
@@ -27,7 +27,7 @@ void* GraphicsAllocator::allocatePersistentSystemMemory(void* userData, usize si
 }
 
 void* GraphicsAllocator::reallocatePersistentSystemMemory(void* userData, void* original, usize size, usize alignment, SystemMemoryAllocationScope::Enum scope){
-    (void)scope;
+    static_cast<void>(scope);
     if(!userData)
         return nullptr;
 
@@ -187,6 +187,51 @@ const FormatInfo& GetFormatInfo(Format::Enum format)noexcept{
     return s_FormatInfo[static_cast<u32>(format)];
 }
 
+u32 GetFormatBlockWidth(const FormatInfo& formatInfo)noexcept{
+    return formatInfo.blockSize;
+}
+
+u32 GetFormatBlockHeight(const FormatInfo& formatInfo)noexcept{
+    switch(formatInfo.format){
+    case Format::ASTC_5x4_UNORM:
+    case Format::ASTC_5x4_UNORM_SRGB:
+    case Format::ASTC_5x4_FLOAT:
+        return 4u;
+
+    case Format::ASTC_6x5_UNORM:
+    case Format::ASTC_6x5_UNORM_SRGB:
+    case Format::ASTC_6x5_FLOAT:
+    case Format::ASTC_8x5_UNORM:
+    case Format::ASTC_8x5_UNORM_SRGB:
+    case Format::ASTC_8x5_FLOAT:
+    case Format::ASTC_10x5_UNORM:
+    case Format::ASTC_10x5_UNORM_SRGB:
+    case Format::ASTC_10x5_FLOAT:
+        return 5u;
+
+    case Format::ASTC_8x6_UNORM:
+    case Format::ASTC_8x6_UNORM_SRGB:
+    case Format::ASTC_8x6_FLOAT:
+    case Format::ASTC_10x6_UNORM:
+    case Format::ASTC_10x6_UNORM_SRGB:
+    case Format::ASTC_10x6_FLOAT:
+        return 6u;
+
+    case Format::ASTC_10x8_UNORM:
+    case Format::ASTC_10x8_UNORM_SRGB:
+    case Format::ASTC_10x8_FLOAT:
+        return 8u;
+
+    case Format::ASTC_12x10_UNORM:
+    case Format::ASTC_12x10_UNORM_SRGB:
+    case Format::ASTC_12x10_FLOAT:
+        return 10u;
+
+    default:
+        return formatInfo.blockSize;
+    }
+}
+
 
 TextureSlice TextureSlice::resolve(const TextureDesc& desc)const{
     TextureSlice ret(*this);
@@ -197,7 +242,8 @@ TextureSlice TextureSlice::resolve(const TextureDesc& desc)const{
     const u32 mipHeight = Max(desc.height >> resolvedMipLevel, static_cast<u32>(1));
     const u32 mipDepth = desc.dimension == TextureDimension::Texture3D
         ? Max(desc.depth >> resolvedMipLevel, static_cast<u32>(1))
-        : static_cast<u32>(1);
+        : static_cast<u32>(1)
+    ;
 
     if(width == static_cast<u32>(-1))
         ret.width = x < mipWidth ? mipWidth - x : 0;
@@ -432,9 +478,10 @@ usize AftermathMarkerTracker::pushEvent(const char* name){
     auto eventString = m_eventStack.generic_string<char>();
     usize hash = Hasher<decltype(eventString)>{}(eventString);
 
-    if(m_eventStrings.find(hash) == m_eventStrings.end()){
-        m_eventStrings.erase(m_eventHashes[m_oldestHashIndex]);
-        m_eventStrings[hash] = eventString;
+    if(m_eventStrings.try_emplace(hash, Move(eventString)).second){
+        const usize oldHash = m_eventHashes[m_oldestHashIndex];
+        if(oldHash != hash)
+            m_eventStrings.erase(oldHash);
         m_eventHashes[m_oldestHashIndex] = hash;
         m_oldestHashIndex = (m_oldestHashIndex + 1) % s_MaxAftermathEventStrings;
     }
@@ -474,7 +521,7 @@ void AftermathCrashDumpHelper::unRegisterAftermathMarkerTracker(AftermathMarkerT
 }
 
 void AftermathCrashDumpHelper::registerShaderBinaryLookupCallback(void* client, ShaderBinaryLookupCallback lookupCallback){
-    m_shaderBinaryLookupCallbacks[client] = lookupCallback;
+    m_shaderBinaryLookupCallbacks.insert_or_assign(client, lookupCallback);
 }
 
 void AftermathCrashDumpHelper::unRegisterShaderBinaryLookupCallback(void* client){

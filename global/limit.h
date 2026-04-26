@@ -17,6 +17,8 @@ template<typename T>
 struct Limit{
     static inline constexpr T s_Min = (std::numeric_limits<T>::lowest)();
     static inline constexpr T s_Max = (std::numeric_limits<T>::max)();
+    static inline constexpr T s_Infinity = (std::numeric_limits<T>::infinity)();
+    static inline constexpr T s_QuietNaN = (std::numeric_limits<T>::quiet_NaN)();
 };
 
 

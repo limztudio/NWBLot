@@ -135,7 +135,7 @@ namespace AssetPathsDetail{
     if(!outVirtualRoot.assign(virtualRootText)){
         NWB_LOGGER_ERROR(
             NWB_TEXT("Assets: asset virtual root '{}' exceeds CompactString capacity"),
-            StringConvert(AString(virtualRootText))
+            StringConvert(virtualRootText)
         );
         return false;
     }

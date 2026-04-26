@@ -21,16 +21,18 @@ layout(std430, binding = 2) readonly buffer NwbAvboitControlBuffer{
 
 void main(){
     const uint lowPixelIndex = gl_GlobalInvocationID.x;
-    const uint lowPixelCount = nwbAvboitLowWidth() * nwbAvboitLowHeight();
+    const uint lowWidth = nwbAvboitLowWidth();
+    const uint lowHeight = nwbAvboitLowHeight();
+    const uint lowPixelCount = lowWidth * lowHeight;
     if(lowPixelIndex >= lowPixelCount)
         return;
 
-    const uvec2 lowPixel = uvec2(lowPixelIndex % nwbAvboitLowWidth(), lowPixelIndex / nwbAvboitLowWidth());
-    const uint activePhysicalSlices = clamp(g_Control[0], 1u, nwbAvboitPhysicalSliceCount());
+    const uint physicalSliceCount = nwbAvboitPhysicalSliceCount();
+    const uint activePhysicalSlices = clamp(g_Control[0], 1u, physicalSliceCount);
     float accumulatedExtinction = 0.0;
 
-    for(uint physicalSlice = 0u; physicalSlice < nwbAvboitPhysicalSliceCount(); ++physicalSlice){
-        const uint volumeIndex = nwbAvboitVolumeIndex(lowPixel, physicalSlice);
+    for(uint physicalSlice = 0u; physicalSlice < physicalSliceCount; ++physicalSlice){
+        const uint volumeIndex = physicalSlice * lowPixelCount + lowPixelIndex;
         const float transmittance = exp(-min(accumulatedExtinction, 16.0));
         g_Transmittance[volumeIndex] = uint(clamp(round(transmittance * 65535.0), 0.0, 65535.0));
 

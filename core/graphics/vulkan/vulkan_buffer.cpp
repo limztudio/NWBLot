@@ -255,15 +255,15 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
     return BufferHandle(buffer, BufferHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
 
-void* Device::mapBuffer(IBuffer* _buffer, CpuAccessMode::Enum){
+void* Device::mapBuffer(IBuffer* bufferResource, CpuAccessMode::Enum){
     VkResult res = VK_SUCCESS;
 
-    if(!_buffer){
+    if(!bufferResource){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map buffer: buffer is null"));
         return nullptr;
     }
 
-    auto* buffer = static_cast<Buffer*>(_buffer);
+    auto* buffer = static_cast<Buffer*>(bufferResource);
     if(buffer->m_memory == VK_NULL_HANDLE){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map buffer: buffer has no bound memory"));
         return nullptr;
@@ -307,11 +307,11 @@ void* Device::mapBuffer(IBuffer* _buffer, CpuAccessMode::Enum){
     return data;
 }
 
-void Device::unmapBuffer(IBuffer* _buffer){
-    if(!_buffer)
+void Device::unmapBuffer(IBuffer* bufferResource){
+    if(!bufferResource)
         return;
 
-    auto* buffer = static_cast<Buffer*>(_buffer);
+    auto* buffer = static_cast<Buffer*>(bufferResource);
 
     if(buffer->m_mappedMemory && !buffer->m_desc.isVolatile && buffer->m_desc.cpuAccess == CpuAccessMode::None){
         vkUnmapMemory(m_context.device, buffer->m_memory);
@@ -319,13 +319,13 @@ void Device::unmapBuffer(IBuffer* _buffer){
     }
 }
 
-MemoryRequirements Device::getBufferMemoryRequirements(IBuffer* _buffer){
-    if(!_buffer){
+MemoryRequirements Device::getBufferMemoryRequirements(IBuffer* bufferResource){
+    if(!bufferResource){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get buffer memory requirements: buffer is null"));
         return {};
     }
 
-    auto* buffer = static_cast<Buffer*>(_buffer);
+    auto* buffer = static_cast<Buffer*>(bufferResource);
 
     VkMemoryRequirements memRequirements;
     vkGetBufferMemoryRequirements(m_context.device, buffer->m_buffer, &memRequirements);
@@ -378,15 +378,15 @@ bool Device::validateHeapMemoryBinding(
     return true;
 }
 
-bool Device::bindBufferMemory(IBuffer* _buffer, IHeap* heap, u64 offset){
+bool Device::bindBufferMemory(IBuffer* bufferResource, IHeap* heap, u64 offset){
     VkResult res = VK_SUCCESS;
 
-    if(!_buffer){
+    if(!bufferResource){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind buffer memory: buffer is null"));
         return false;
     }
 
-    auto* buffer = static_cast<Buffer*>(_buffer);
+    auto* buffer = static_cast<Buffer*>(bufferResource);
     if(!buffer->m_desc.isVirtual){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind buffer memory: buffer was not created as virtual"));
         return false;
@@ -416,13 +416,13 @@ bool Device::bindBufferMemory(IBuffer* _buffer, IHeap* heap, u64 offset){
     return true;
 }
 
-BufferHandle Device::createHandleForNativeBuffer(ObjectType objectType, Object _buffer, const BufferDesc& desc){
+BufferHandle Device::createHandleForNativeBuffer(ObjectType objectType, Object nativeBufferHandle, const BufferDesc& desc){
     if(objectType != ObjectTypes::VK_Buffer){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer handle for native buffer: object type is not VK_Buffer"));
         return nullptr;
     }
 
-    auto* nativeBuffer = static_cast<VkBuffer_T*>(_buffer);
+    auto* nativeBuffer = static_cast<VkBuffer_T*>(nativeBufferHandle);
     if(nativeBuffer == VK_NULL_HANDLE){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer handle for native buffer: buffer handle is null"));
         return nullptr;
@@ -469,11 +469,11 @@ bool CommandList::prepareUploadStaging(const void* data, const usize dataSize, c
     return true;
 }
 
-void CommandList::writeBuffer(IBuffer* _buffer, const void* data, usize dataSize, u64 destOffsetBytes){
-    if(!_buffer || !data || dataSize == 0)
+void CommandList::writeBuffer(IBuffer* bufferResource, const void* data, usize dataSize, u64 destOffsetBytes){
+    if(!bufferResource || !data || dataSize == 0)
         return;
 
-    auto* buffer = checked_cast<Buffer*>(_buffer);
+    auto* buffer = checked_cast<Buffer*>(bufferResource);
     const BufferDesc& desc = buffer->getDescription();
     if(!VulkanDetail::IsBufferRangeInBounds(desc, destOffsetBytes, static_cast<u64>(dataSize))){
         NWB_LOGGER_ERROR(
@@ -498,12 +498,12 @@ void CommandList::writeBuffer(IBuffer* _buffer, const void* data, usize dataSize
 
     vkCmdCopyBuffer(m_currentCmdBuf->m_cmdBuf, stagingBuffer->m_buffer, buffer->m_buffer, 1, &region);
 
-    m_currentCmdBuf->m_referencedResources.push_back(_buffer);
+    m_currentCmdBuf->m_referencedResources.push_back(bufferResource);
     m_currentCmdBuf->m_referencedStagingBuffers.push_back(stagingBuffer);
 }
 
-void CommandList::clearBufferUInt(IBuffer* _buffer, u32 clearValue){
-    auto* buffer = checked_cast<Buffer*>(_buffer);
+void CommandList::clearBufferUInt(IBuffer* bufferResource, u32 clearValue){
+    auto* buffer = checked_cast<Buffer*>(bufferResource);
     if(!buffer){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear buffer: buffer is null"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear buffer: buffer is null"));
@@ -516,15 +516,15 @@ void CommandList::clearBufferUInt(IBuffer* _buffer, u32 clearValue){
     }
 
     vkCmdFillBuffer(m_currentCmdBuf->m_cmdBuf, buffer->m_buffer, 0, VK_WHOLE_SIZE, clearValue);
-    m_currentCmdBuf->m_referencedResources.push_back(_buffer);
+    m_currentCmdBuf->m_referencedResources.push_back(bufferResource);
 }
 
-void CommandList::copyBuffer(IBuffer* _dest, u64 destOffsetBytes, IBuffer* _src, u64 srcOffsetBytes, u64 dataSizeBytes){
-    if(!_dest || !_src || dataSizeBytes == 0)
+void CommandList::copyBuffer(IBuffer* destResource, u64 destOffsetBytes, IBuffer* srcResource, u64 srcOffsetBytes, u64 dataSizeBytes){
+    if(!destResource || !srcResource || dataSizeBytes == 0)
         return;
 
-    auto* dest = checked_cast<Buffer*>(_dest);
-    auto* src = checked_cast<Buffer*>(_src);
+    auto* dest = checked_cast<Buffer*>(destResource);
+    auto* src = checked_cast<Buffer*>(srcResource);
     const BufferDesc& destDesc = dest->getDescription();
     const BufferDesc& srcDesc = src->getDescription();
 
@@ -563,8 +563,8 @@ void CommandList::copyBuffer(IBuffer* _dest, u64 destOffsetBytes, IBuffer* _src,
 
     vkCmdCopyBuffer(m_currentCmdBuf->m_cmdBuf, src->m_buffer, dest->m_buffer, 1, &region);
 
-    m_currentCmdBuf->m_referencedResources.push_back(_src);
-    m_currentCmdBuf->m_referencedResources.push_back(_dest);
+    m_currentCmdBuf->m_referencedResources.push_back(srcResource);
+    m_currentCmdBuf->m_referencedResources.push_back(destResource);
 }
 
 

@@ -12,6 +12,7 @@
 #include <core/graphics/shader_archive.h>
 #include <impl/assets_graphics/deformable_geometry_validation.h>
 #include <impl/assets_graphics/shader_asset.h>
+#include <impl/assets_graphics/shader_stage_names.h>
 #include <logger/client/logger.h>
 
 
@@ -48,13 +49,6 @@ static_assert(sizeof(DeformerPushConstants) == 32, "Deformer push constants layo
 static const Name& DeformerComputeShaderName(){
     static const Name s("engine/graphics/deformer_cs");
     return s;
-}
-
-static const Name& StageNameFromShaderType(const Core::ShaderType::Mask shaderType){
-    switch(shaderType){
-        case Core::ShaderType::Compute: { static const Name s("cs"); return s; }
-        default: return NAME_NONE;
-    }
 }
 
 static bool ResolveDeformerDisplacement(
@@ -97,6 +91,28 @@ static bool ResolveDeformerDisplacement(
     return false;
 }
 
+static bool HasPotentialDeformerWork(
+    const DeformableRuntimeMeshInstance& instance,
+    const DeformableMorphWeightsComponent* morphWeights,
+    const DeformableJointPaletteComponent* jointPalette,
+    const DeformableDisplacementComponent* displacement)
+{
+    if((instance.dirtyFlags & RuntimeMeshDirtyFlag::DeformerInputDirty) != 0u)
+        return true;
+    if(DeformableRuntime::HasMorphWeights(morphWeights))
+        return true;
+    if(!instance.skin.empty() && jointPalette && !jointPalette->joints.empty())
+        return true;
+
+    DeformableDisplacement resolvedDisplacement;
+    if(!ResolveDeformerDisplacement(instance, displacement, resolvedDisplacement))
+        return false;
+
+    return resolvedDisplacement.mode != DeformableDisplacementMode::None
+        && DeformableValidation::ActiveWeight(resolvedDisplacement.amplitude)
+    ;
+}
+
 static u32 DispatchGroupCount(const u32 vertexCount){
     return vertexCount == 0
         ? 0
@@ -104,29 +120,45 @@ static u32 DispatchGroupCount(const u32 vertexCount){
     ;
 }
 
-static void HashCombine(usize& seed, const usize value){
-    seed ^= value
-        + static_cast<usize>(0x9e3779b97f4a7c15ull)
-        + (seed << 6)
-        + (seed >> 2)
-    ;
-}
+using MorphWeightLookup = HashMap<
+    NameHash,
+    f32,
+    Hasher<NameHash>,
+    EqualTo<NameHash>,
+    Core::Alloc::ScratchAllocator<Pair<const NameHash, f32>>
+>;
 
-static bool ResolveMorphWeight(
+struct ActiveMorphPayload{
+    const DeformableMorph* morph = nullptr;
+    f32 weight = 0.0f;
+};
+
+static bool BuildResolvedMorphWeightLookup(
     const DeformableRuntimeMeshInstance& instance,
     const DeformableMorphWeightsComponent* weights,
-    const Name& morphName,
-    f32& outWeight)
+    MorphWeightLookup& outWeights)
 {
-    if(DeformableRuntime::ResolveMorphWeightSum(weights, morphName, outWeight))
+    Name failedMorph = NAME_NONE;
+    if(DeformableRuntime::BuildMorphWeightSumLookup(instance.morphs, weights, outWeights, failedMorph))
         return true;
 
     NWB_LOGGER_ERROR(
         NWB_TEXT("DeformerSystem: runtime mesh '{}' morph '{}' weight is invalid"),
         instance.handle.value,
-        StringConvert(morphName.c_str())
+        StringConvert(failedMorph.c_str())
     );
     return false;
+}
+
+static f32 ResolvedMorphWeight(const MorphWeightLookup& weights, const Name& morphName){
+    if(!morphName)
+        return 0.0f;
+
+    const auto iterWeight = weights.find(morphName.hash());
+    if(iterWeight == weights.end())
+        return 0.0f;
+
+    return iterWeight.value();
 }
 
 static Float4 ExpandFloat3Delta(const Float3U& value){
@@ -149,19 +181,26 @@ static bool BuildMorphPayload(
     outDeltas.clear();
     outSignature = 0;
 
-    Core::Alloc::ScratchArena<> scratchArena;
-    Vector<f32, Core::Alloc::ScratchAllocator<f32>> resolvedWeights{
-        Core::Alloc::ScratchAllocator<f32>(scratchArena)
-    };
-    resolvedWeights.reserve(instance.morphs.size());
+    if(!DeformableRuntime::HasMorphWeights(morphWeights))
+        return true;
 
-    usize activeMorphCount = 0u;
+    Core::Alloc::ScratchArena<> scratchArena;
+    MorphWeightLookup resolvedWeights(
+        0,
+        Hasher<NameHash>(),
+        EqualTo<NameHash>(),
+        Core::Alloc::ScratchAllocator<Pair<const NameHash, f32>>(scratchArena)
+    );
+    if(!BuildResolvedMorphWeightLookup(instance, morphWeights, resolvedWeights))
+        return false;
+
     usize activeDeltaCount = 0u;
+    Vector<ActiveMorphPayload, Core::Alloc::ScratchAllocator<ActiveMorphPayload>> activeMorphs{
+        Core::Alloc::ScratchAllocator<ActiveMorphPayload>(scratchArena)
+    };
+    activeMorphs.reserve(instance.morphs.size());
     for(const DeformableMorph& morph : instance.morphs){
-        f32 weight = 0.0f;
-        if(!ResolveMorphWeight(instance, morphWeights, morph.name, weight))
-            return false;
-        resolvedWeights.push_back(weight);
+        const f32 weight = ResolvedMorphWeight(resolvedWeights, morph.name);
         if(!DeformableValidation::ActiveWeight(weight))
             continue;
         if(morph.deltas.empty()){
@@ -183,26 +222,23 @@ static bool BuildMorphPayload(
             return false;
         }
         activeDeltaCount += morph.deltas.size();
-        ++activeMorphCount;
+        activeMorphs.push_back(ActiveMorphPayload{ &morph, weight });
     }
 
-    outRanges.reserve(activeMorphCount);
+    outRanges.reserve(activeMorphs.size());
     outDeltas.reserve(activeDeltaCount);
 
-    for(usize morphIndex = 0u; morphIndex < instance.morphs.size(); ++morphIndex){
-        const DeformableMorph& morph = instance.morphs[morphIndex];
-        const f32 weight = resolvedWeights[morphIndex];
-        if(!DeformableValidation::ActiveWeight(weight))
-            continue;
+    for(const ActiveMorphPayload& activeMorph : activeMorphs){
+        const DeformableMorph& morph = *activeMorph.morph;
 
         DeformerSystem::DeformerMorphRangeGpu range;
         range.firstDelta = static_cast<u32>(outDeltas.size());
         range.deltaCount = static_cast<u32>(morph.deltas.size());
-        range.weight = weight;
+        range.weight = activeMorph.weight;
         outRanges.push_back(range);
 
-        HashCombine(outSignature, Hasher<Name>{}(morph.name));
-        HashCombine(outSignature, static_cast<usize>(range.deltaCount));
+        Core::CoreDetail::HashCombine(outSignature, morph.name);
+        Core::CoreDetail::HashCombine(outSignature, range.deltaCount);
 
         for(const DeformableMorphDelta& delta : morph.deltas){
             if(!DeformableValidation::ValidMorphDelta(delta, instance.restVertices.size())){
@@ -404,93 +440,89 @@ DeformerSystem::~DeformerSystem()
 {}
 
 void DeformerSystem::update(Core::ECS::World& world, const f32 delta){
-    (void)world;
-    (void)delta;
+    static_cast<void>(world);
+    static_cast<void>(delta);
 }
 
 void DeformerSystem::render(Core::IFramebuffer* framebuffer){
-    (void)framebuffer;
+    static_cast<void>(framebuffer);
 
-    Core::Alloc::ScratchArena<> scratchArena;
-    Vector<
-        Core::ECS::EntityID,
-        Core::Alloc::ScratchAllocator<Core::ECS::EntityID>
-    > candidates{Core::Alloc::ScratchAllocator<Core::ECS::EntityID>(scratchArena)};
-    HashSet<
-        u64,
-        Hasher<u64>,
-        EqualTo<u64>,
-        Core::Alloc::ScratchAllocator<u64>
-    > liveHandles(
-        0,
-        Hasher<u64>(),
-        EqualTo<u64>(),
-        Core::Alloc::ScratchAllocator<u64>(scratchArena)
-    );
+    if(!m_runtimeResources.empty()){
+        for(auto it = m_runtimeResources.begin(); it != m_runtimeResources.end();){
+            const RuntimeResources& resources = it.value();
+            const DeformableRuntimeMeshInstance* instance =
+                m_rendererSystem.findDeformableRuntimeMesh(resources.handle)
+            ;
+            if(!instance || !instance->valid() || instance->editRevision != resources.editRevision){
+                it = m_runtimeResources.erase(it);
+                continue;
+            }
+
+            ++it;
+        }
+    }
+
+    Core::IDevice* device = m_graphics.getDevice();
+    Core::CommandListHandle commandList;
+    bool commandListOpen = false;
+    bool commandListFailed = false;
+    bool submittedWork = false;
+
+    auto ensureCommandList = [&]() -> bool{
+        if(commandListOpen)
+            return true;
+        if(commandListFailed)
+            return false;
+
+        commandList = device->createCommandList();
+        if(!commandList){
+            NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: failed to create command list"));
+            commandListFailed = true;
+            return false;
+        }
+
+        commandList->open();
+        commandListOpen = true;
+        return true;
+    };
 
     m_world.view<DeformableRendererComponent>().each(
         [&](Core::ECS::EntityID entity, DeformableRendererComponent& renderer){
-            if(!renderer.runtimeMesh.valid())
+            if(!renderer.visible || !renderer.runtimeMesh.valid())
                 return;
 
-            DeformableRuntimeMeshInstance* instance = m_rendererSystem.findDeformableRuntimeMesh(renderer.runtimeMesh);
+            DeformableRuntimeMeshInstance* instance =
+                m_rendererSystem.findDeformableRuntimeMesh(renderer.runtimeMesh)
+            ;
             if(!instance || !instance->valid())
                 return;
 
-            liveHandles.insert(renderer.runtimeMesh.value);
-            if(renderer.visible)
-                candidates.push_back(entity);
+            const DeformableMorphWeightsComponent* morphWeights =
+                m_world.tryGetComponent<DeformableMorphWeightsComponent>(entity)
+            ;
+            const DeformableJointPaletteComponent* jointPalette =
+                m_world.tryGetComponent<DeformableJointPaletteComponent>(entity)
+            ;
+            const DeformableDisplacementComponent* displacement =
+                m_world.tryGetComponent<DeformableDisplacementComponent>(entity)
+            ;
+            if(!__hidden_deformer_system::HasPotentialDeformerWork(
+                *instance,
+                morphWeights,
+                jointPalette,
+                displacement
+            ))
+                return;
+            if(!ensureCommandList())
+                return;
+            if(dispatchRuntimeMesh(*commandList, *instance, morphWeights, jointPalette, displacement))
+                submittedWork = true;
         }
     );
 
-    Vector<u64, Core::Alloc::ScratchAllocator<u64>> staleResources{
-        Core::Alloc::ScratchAllocator<u64>(scratchArena)
-    };
-    for(const auto& [handle, resources] : m_runtimeResources){
-        const bool live = liveHandles.find(handle) != liveHandles.end();
-        const DeformableRuntimeMeshInstance* instance = live
-            ? m_rendererSystem.findDeformableRuntimeMesh(resources.handle)
-            : nullptr
-        ;
-        if(!live || !instance || instance->editRevision != resources.editRevision)
-            staleResources.push_back(handle);
-    }
-    for(const u64 handle : staleResources)
-        m_runtimeResources.erase(handle);
-
-    if(candidates.empty())
+    if(!commandListOpen)
         return;
 
-    Core::IDevice* device = m_graphics.getDevice();
-    Core::CommandListHandle commandList = device->createCommandList();
-    if(!commandList){
-        NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: failed to create command list"));
-        return;
-    }
-
-    bool submittedWork = false;
-    commandList->open();
-    for(const Core::ECS::EntityID entity : candidates){
-        DeformableRendererComponent* renderer = m_world.tryGetComponent<DeformableRendererComponent>(entity);
-        if(!renderer || !renderer->visible || !renderer->runtimeMesh.valid())
-            continue;
-
-        DeformableRuntimeMeshInstance* instance = m_rendererSystem.findDeformableRuntimeMesh(renderer->runtimeMesh);
-        if(!instance || !instance->valid())
-            continue;
-
-        const DeformableMorphWeightsComponent* morphWeights =
-            m_world.tryGetComponent<DeformableMorphWeightsComponent>(entity)
-        ;
-        const DeformableJointPaletteComponent* jointPalette =
-            m_world.tryGetComponent<DeformableJointPaletteComponent>(entity)
-        ;
-        const DeformableDisplacementComponent* displacement =
-            m_world.tryGetComponent<DeformableDisplacementComponent>(entity)
-        ;
-        if(dispatchRuntimeMesh(*commandList, *instance, morphWeights, jointPalette, displacement))
-            submittedWork = true;
-    }
     commandList->close();
 
     if(submittedWork){
@@ -563,7 +595,7 @@ bool DeformerSystem::ensureShaderLoaded(
         return false;
     }
 
-    const Name& stageName = __hidden_deformer_system::StageNameFromShaderType(shaderType);
+    const Name& stageName = ShaderStageNames::ArchiveStageNameFromShaderType(shaderType);
     if(!stageName){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: unsupported shader stage {}"), static_cast<u32>(shaderType));
         return false;
@@ -693,7 +725,7 @@ bool DeformerSystem::dispatchRuntimeMesh(
             return false;
 
         if(foundResources != m_runtimeResources.end())
-            m_runtimeResources.erase(instance.handle.value);
+            m_runtimeResources.erase(foundResources);
         return copyRestToDeformed(commandList, instance);
     }
     if(!ensurePipeline())
@@ -870,7 +902,7 @@ bool DeformerSystem::ensureRuntimeResources(
         return false;
     }
 
-    auto [it, inserted] = m_runtimeResources.emplace(instance.handle.value, RuntimeResources{});
+    auto [it, inserted] = m_runtimeResources.try_emplace(instance.handle.value);
     RuntimeResources& resources = it.value();
     const bool rebuild =
         inserted

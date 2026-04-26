@@ -81,7 +81,7 @@ public:
     }
 
     virtual bool onUpdate(f32 delta){
-        (void)delta;
+        static_cast<void>(delta);
         return true;
     }
 };

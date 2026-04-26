@@ -35,28 +35,27 @@ static bool AssignCompactString(const AStringView source, const char* label, Com
     return false;
 }
 
-static bool AssignString(const AStringView source, AString& outValue, AString& outError){
+static bool AssignString(AString& source, AString& outValue, AString& outError){
     if(HasEmbeddedNull(source)){
         outError = "path-like command line values must not contain embedded nulls";
         outValue.clear();
         return false;
     }
 
-    outValue.assign(source.data(), source.size());
+    outValue = Move(source);
     return true;
 }
 
-static bool AssignStrings(const Vector<AString>& source, Vector<AString>& outValues, AString& outError){
+static bool AssignStrings(Vector<AString>& source, Vector<AString>& outValues, AString& outError){
     outValues.clear();
-    outValues.reserve(source.size());
     for(const AString& value : source){
         if(HasEmbeddedNull(value)){
             outError = "path-like command line values must not contain embedded nulls";
             outValues.clear();
             return false;
         }
-        outValues.push_back(value);
     }
+    outValues = Move(source);
     return true;
 }
 

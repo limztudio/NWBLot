@@ -33,12 +33,12 @@ struct alignas(16) Float4{
         : x(0.0f), y(0.0f), z(0.0f), w(0.0f)
     {
     }
-    constexpr Float4(const f32 _x, const f32 _y, const f32 _z)noexcept
-        : x(_x), y(_y), z(_z), w(0.0f)
+    constexpr Float4(const f32 xValue, const f32 yValue, const f32 zValue)noexcept
+        : x(xValue), y(yValue), z(zValue), w(0.0f)
     {
     }
-    constexpr Float4(const f32 _x, const f32 _y, const f32 _z, const f32 _w)noexcept
-        : x(_x), y(_y), z(_z), w(_w)
+    constexpr Float4(const f32 xValue, const f32 yValue, const f32 zValue, const f32 wValue)noexcept
+        : x(xValue), y(yValue), z(zValue), w(wValue)
     {
     }
     explicit constexpr Float4(const f32* pArray)noexcept
@@ -132,8 +132,8 @@ struct Float2U{
         : x(0.0f), y(0.0f)
     {
     }
-    constexpr Float2U(const f32 _x, const f32 _y)noexcept
-        : x(_x), y(_y)
+    constexpr Float2U(const f32 xValue, const f32 yValue)noexcept
+        : x(xValue), y(yValue)
     {
     }
     explicit constexpr Float2U(const f32* pArray)noexcept
@@ -161,8 +161,8 @@ struct Float3U{
         : x(0.0f), y(0.0f), z(0.0f)
     {
     }
-    constexpr Float3U(const f32 _x, const f32 _y, const f32 _z)noexcept
-        : x(_x), y(_y), z(_z)
+    constexpr Float3U(const f32 xValue, const f32 yValue, const f32 zValue)noexcept
+        : x(xValue), y(yValue), z(zValue)
     {
     }
     explicit constexpr Float3U(const f32* pArray)noexcept
@@ -192,8 +192,8 @@ struct Float4U{
         : x(0.0f), y(0.0f), z(0.0f), w(0.0f)
     {
     }
-    constexpr Float4U(const f32 _x, const f32 _y, const f32 _z, const f32 _w)noexcept
-        : x(_x), y(_y), z(_z), w(_w)
+    constexpr Float4U(const f32 xValue, const f32 yValue, const f32 zValue, const f32 wValue)noexcept
+        : x(xValue), y(yValue), z(zValue), w(wValue)
     {
     }
     explicit constexpr Float4U(const f32* pArray)noexcept

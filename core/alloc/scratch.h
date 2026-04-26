@@ -149,7 +149,7 @@ public:
     }
 
     inline void deallocate(void* p, usize align, usize size){
-        (void)p;
+        static_cast<void>(p);
 
         NWB_ASSERT_MSG(align != 0, NWB_TEXT("ScratchArena alignment must be non-zero"));
         NWB_ASSERT_MSG(align <= maxAlignSize, NWB_TEXT("ScratchArena alignment exceeds maxAlignSize"));
@@ -237,8 +237,8 @@ public:
 public:
     constexpr void deallocate(T* const buffer, const usize count)noexcept{
         NWB_ASSERT_MSG((buffer != nullptr || count == 0), NWB_TEXT("null pointer cannot point to a block of non-zero size"));
-        (void)buffer;
-        (void)count;
+        static_cast<void>(buffer);
+        static_cast<void>(count);
     }
 
     constexpr NWB_ALLOCATOR_PREFIX T* allocate(const usize count) NWB_ALLOCATOR_SUFFIX{
@@ -308,8 +308,8 @@ public:
 
     constexpr void deallocate(T* const buffer, const usize count)noexcept{
         NWB_ASSERT_MSG((buffer != nullptr || count == 0), NWB_TEXT("null pointer cannot point to a block of non-zero size"));
-        (void)buffer;
-        (void)count;
+        static_cast<void>(buffer);
+        static_cast<void>(count);
     }
 
     constexpr NWB_ALLOCATOR_PREFIX T* allocate(const usize count) NWB_ALLOCATOR_SUFFIX{

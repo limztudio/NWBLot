@@ -25,6 +25,16 @@ namespace __hidden_assets{
 
 static constexpr u32 s_GeometryMagic = 0x47454F31u; // GEO1
 static constexpr u32 s_GeometryVersion = 1u;
+#if defined(NWB_COOK)
+static constexpr usize s_GeometryHeaderBytes =
+    sizeof(u32) + // magic
+    sizeof(u32) + // version
+    sizeof(u32) + // vertex stride
+    sizeof(u8) +  // index-format flag
+    sizeof(u64) + // vertex byte count
+    sizeof(u64)   // index byte count
+;
+#endif
 
 
 UniquePtr<Core::Assets::IAssetCodec> CreateGeometryAssetCodec(){
@@ -108,31 +118,21 @@ bool Geometry::validatePayload()const{
         return false;
     }
 
-    usize cursor = 0;
     u64 maxIndexValue = 0;
-    while(cursor < m_indexData.size()){
-        if(m_use32BitIndices){
+    const u8* indexBytes = m_indexData.data();
+    if(m_use32BitIndices){
+        for(usize i = 0; i < indexCount; ++i){
             u32 indexValue = 0;
-            if(!ReadPOD(m_indexData, cursor, indexValue)){
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("Geometry::validatePayload failed: geometry '{}' contains malformed u32 index data"),
-                    geometryPathText
-                );
-                return false;
-            }
+            NWB_MEMCPY(&indexValue, sizeof(indexValue), indexBytes + i * sizeof(indexValue), sizeof(indexValue));
             maxIndexValue = Max(maxIndexValue, static_cast<u64>(indexValue));
-            continue;
         }
-
-        u16 indexValue = 0;
-        if(!ReadPOD(m_indexData, cursor, indexValue)){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Geometry::validatePayload failed: geometry '{}' contains malformed u16 index data"),
-                geometryPathText
-            );
-            return false;
+    }
+    else{
+        for(usize i = 0; i < indexCount; ++i){
+            u16 indexValue = 0;
+            NWB_MEMCPY(&indexValue, sizeof(indexValue), indexBytes + i * sizeof(indexValue), sizeof(indexValue));
+            maxIndexValue = Max(maxIndexValue, static_cast<u64>(indexValue));
         }
-        maxIndexValue = Max(maxIndexValue, static_cast<u64>(indexValue));
     }
 
     if(maxIndexValue >= static_cast<u64>(vertexCount)){
@@ -263,28 +263,37 @@ bool GeometryAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
     if(!geometry.validatePayload())
         return false;
 
+    const usize vertexBytes = geometry.vertexData().size();
+    const usize indexBytes = geometry.indexData().size();
+
     outBinary.clear();
+    if(vertexBytes <= Limit<usize>::s_Max - __hidden_assets::s_GeometryHeaderBytes){
+        const usize headerAndVertexBytes = __hidden_assets::s_GeometryHeaderBytes + vertexBytes;
+        if(indexBytes <= Limit<usize>::s_Max - headerAndVertexBytes)
+            outBinary.reserve(headerAndVertexBytes + indexBytes);
+    }
+
     AppendPOD(outBinary, __hidden_assets::s_GeometryMagic);
     AppendPOD(outBinary, __hidden_assets::s_GeometryVersion);
     AppendPOD(outBinary, geometry.vertexStride());
     AppendPOD(outBinary, static_cast<u8>(geometry.use32BitIndices() ? 1u : 0u));
-    AppendPOD(outBinary, static_cast<u64>(geometry.vertexData().size()));
-    AppendPOD(outBinary, static_cast<u64>(geometry.indexData().size()));
+    AppendPOD(outBinary, static_cast<u64>(vertexBytes));
+    AppendPOD(outBinary, static_cast<u64>(indexBytes));
     const usize vertexBegin = outBinary.size();
-    if(geometry.vertexData().size() > Limit<usize>::s_Max - vertexBegin){
+    if(vertexBytes > Limit<usize>::s_Max - vertexBegin){
         NWB_LOGGER_ERROR(NWB_TEXT("GeometryAssetCodec::serialize failed: vertex payload size overflows output binary"));
         return false;
     }
-    outBinary.resize(vertexBegin + geometry.vertexData().size());
-    NWB_MEMCPY(outBinary.data() + vertexBegin, geometry.vertexData().size(), geometry.vertexData().data(), geometry.vertexData().size());
+    outBinary.resize(vertexBegin + vertexBytes);
+    NWB_MEMCPY(outBinary.data() + vertexBegin, vertexBytes, geometry.vertexData().data(), vertexBytes);
 
     const usize indexBegin = outBinary.size();
-    if(geometry.indexData().size() > Limit<usize>::s_Max - indexBegin){
+    if(indexBytes > Limit<usize>::s_Max - indexBegin){
         NWB_LOGGER_ERROR(NWB_TEXT("GeometryAssetCodec::serialize failed: index payload size overflows output binary"));
         return false;
     }
-    outBinary.resize(indexBegin + geometry.indexData().size());
-    NWB_MEMCPY(outBinary.data() + indexBegin, geometry.indexData().size(), geometry.indexData().data(), geometry.indexData().size());
+    outBinary.resize(indexBegin + indexBytes);
+    NWB_MEMCPY(outBinary.data() + indexBegin, indexBytes, geometry.indexData().data(), indexBytes);
     return true;
 }
 

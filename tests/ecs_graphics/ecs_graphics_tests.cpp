@@ -5,12 +5,13 @@
 #include <impl/ecs_graphics/deformable_picking.h>
 #include <impl/ecs_graphics/deformable_surface_edit.h>
 
+#include <tests/test_context.h>
+
 #include <core/common/common.h>
 #include <core/scene/transform_component.h>
 
 #include <global/compile.h>
-
-#include <limits>
+#include <global/limit.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -22,20 +23,7 @@ namespace __hidden_ecs_graphics_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct TestContext{
-    u32 passed = 0;
-    u32 failed = 0;
-
-    void checkTrue(const bool condition, const char* expression, const char* file, const int line){
-        if(condition){
-            ++passed;
-            return;
-        }
-
-        ++failed;
-        NWB_CERR << file << '(' << line << "): check failed: " << expression << '\n';
-    }
-};
+using TestContext = NWB::Tests::TestContext;
 
 
 #define NWB_ECS_GRAPHICS_TEST_CHECK(context, expression) (context).checkTrue((expression), #expression, __FILE__, __LINE__)
@@ -272,12 +260,12 @@ static NWB::Impl::DeformableHoleEditParams MakeHoleEditParams(
     params.posedHit.setPosition(BarycentricPosition(a, b, c, params.posedHit.bary));
     params.posedHit.setNormal(Float3U(0.0f, 0.0f, 1.0f));
     params.posedHit.setDistance(1.0f);
-    (void)NWB::Impl::ResolveDeformableRestSurfaceSample(
+    static_cast<void>(NWB::Impl::ResolveDeformableRestSurfaceSample(
         instance,
         triangle,
         params.posedHit.bary,
         params.posedHit.restSample
-    );
+    ));
     params.radius = radius;
     params.ellipseRatio = 1.0f;
     params.depth = depth;
@@ -339,23 +327,6 @@ static void CheckAddedTrianglesResolveToSample(
     }
 }
 
-static void CheckAllTrianglesResolve(TestContext& context, const NWB::Impl::DeformableRuntimeMeshInstance& instance){
-    const f32 bary[3] = { 1.0f / 3.0f, 1.0f / 3.0f, 1.0f / 3.0f };
-    const usize triangleCount = instance.indices.size() / 3u;
-    for(usize triangle = 0u; triangle < triangleCount; ++triangle){
-        NWB::Impl::SourceSample sample;
-        NWB_ECS_GRAPHICS_TEST_CHECK(
-            context,
-            NWB::Impl::ResolveDeformableRestSurfaceSample(
-                instance,
-                static_cast<u32>(triangle),
-                bary,
-                sample
-            )
-        );
-    }
-}
-
 static void AssignFirstUseTriangleSourceSamples(NWB::Impl::DeformableRuntimeMeshInstance& instance){
     const usize triangleCount = instance.indices.size() / 3u;
     instance.sourceTriangleCount = static_cast<u32>(triangleCount);
@@ -394,8 +365,12 @@ static void TestRestSampleInterpolation(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(sample.bary[2], 0.5f));
 }
 
-static void TestMixedProvenanceFallsBackToRestTriangle(TestContext& context){
+static void TestMixedProvenanceRejectsAmbiguousRestTriangle(TestContext& context){
     const NWB::Impl::DeformableRuntimeMeshInstance instance = MakeQuadMixedProvenanceInstance();
+    const f32 bary[3] = { 0.25f, 0.25f, 0.5f };
+
+    NWB::Impl::SourceSample sample;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::ResolveDeformableRestSurfaceSample(instance, 1u, bary, sample));
 
     NWB::Impl::DeformablePickingRay ray;
     ray.setOrigin(Float3U(-0.5f, 0.5f, 1.0f));
@@ -404,13 +379,8 @@ static void TestMixedProvenanceFallsBackToRestTriangle(TestContext& context){
     NWB::Impl::DeformablePosedHit hit;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        NWB::Impl::RaycastDeformableRuntimeMesh(instance, NWB::Impl::DeformablePickingInputs{}, ray, hit)
+        !NWB::Impl::RaycastDeformableRuntimeMesh(instance, NWB::Impl::DeformablePickingInputs{}, ray, hit)
     );
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, hit.triangle == 1u);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, hit.restSample.sourceTri == 1u);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(hit.restSample.bary[0], 0.25f));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(hit.restSample.bary[1], 0.25f));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(hit.restSample.bary[2], 0.5f));
 }
 
 static void TestMixedProvenanceRejectsRuntimeTriangleOutsideSourceRange(TestContext& context){
@@ -431,7 +401,7 @@ static void TestMixedProvenanceRejectsRuntimeTriangleOutsideSourceRange(TestCont
     );
 }
 
-static void TestMixedProvenanceRejectsCurrentTriangleFallbackAfterTopologyChange(TestContext& context){
+static void TestMixedProvenanceRejectsAfterTopologyChange(TestContext& context){
     NWB::Impl::DeformableRuntimeMeshInstance instance = MakeQuadMixedProvenanceInstance();
     instance.editRevision = 1u;
 
@@ -440,7 +410,7 @@ static void TestMixedProvenanceRejectsCurrentTriangleFallbackAfterTopologyChange
     NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::ResolveDeformableRestSurfaceSample(instance, 1u, bary, sample));
 }
 
-static void TestMissingProvenanceRejectsCurrentTriangleFallbackAfterTopologyChange(TestContext& context){
+static void TestMissingProvenanceRejectsAfterTopologyChange(TestContext& context){
     NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
     instance.sourceTriangleCount = static_cast<u32>(instance.indices.size() / 3u);
     instance.sourceSamples.clear();
@@ -451,7 +421,7 @@ static void TestMissingProvenanceRejectsCurrentTriangleFallbackAfterTopologyChan
     NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::ResolveDeformableRestSurfaceSample(instance, 0u, bary, sample));
 }
 
-static void TestMissingProvenanceRejectsCurrentTriangleFallbackWhenSourceCountDiffers(TestContext& context){
+static void TestMissingProvenanceRejectsWhenSourceCountDiffers(TestContext& context){
     NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
     instance.sourceTriangleCount = static_cast<u32>((instance.indices.size() / 3u) + 1u);
     instance.sourceSamples.clear();
@@ -462,7 +432,7 @@ static void TestMissingProvenanceRejectsCurrentTriangleFallbackWhenSourceCountDi
     NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::ResolveDeformableRestSurfaceSample(instance, 0u, bary, sample));
 }
 
-static void TestMissingProvenanceRejectsCurrentTriangleFallbackWithoutSourceCount(TestContext& context){
+static void TestMissingProvenanceRejectsWithoutSourceCount(TestContext& context){
     NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
     instance.sourceTriangleCount = 0u;
     instance.sourceSamples.clear();
@@ -473,7 +443,7 @@ static void TestMissingProvenanceRejectsCurrentTriangleFallbackWithoutSourceCoun
     NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::ResolveDeformableRestSurfaceSample(instance, 0u, bary, sample));
 }
 
-static void TestMixedProvenanceRejectsCurrentTriangleFallbackWhenEditedTriangleCountDiffers(TestContext& context){
+static void TestMixedProvenanceRejectsWhenEditedTriangleCountDiffers(TestContext& context){
     NWB::Impl::DeformableRuntimeMeshInstance instance = MakeQuadMixedProvenanceInstance();
     instance.restVertices.push_back(MakeVertex(-2.0f, -1.0f, 0.0f));
     instance.restVertices.push_back(MakeVertex(-1.5f, -1.0f, 0.0f));
@@ -564,7 +534,7 @@ static void TestPickingVerticesRejectDegenerateTriangle(TestContext& context){
 static void TestPickingVerticesRejectNonFiniteRestData(TestContext& context){
     {
         NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
-        instance.restVertices[1].position.x = std::numeric_limits<f32>::quiet_NaN();
+        instance.restVertices[1].position.x = Limit<f32>::s_QuietNaN;
 
         Vector<NWB::Impl::DeformableVertexRest> vertices;
         NWB_ECS_GRAPHICS_TEST_CHECK(
@@ -797,7 +767,7 @@ static void TestPickingRejectsUnusedNonAffineJointPalette(TestContext& context){
 static void TestPickingRejectsInvalidSkinWeights(TestContext& context){
     NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
     AssignSingleJointSkin(instance, 0u);
-    instance.skin[0].weight[0] = std::numeric_limits<f32>::quiet_NaN();
+    instance.skin[0].weight[0] = Limit<f32>::s_QuietNaN;
 
     Vector<NWB::Impl::DeformableVertexRest> vertices;
     NWB_ECS_GRAPHICS_TEST_CHECK(
@@ -905,7 +875,7 @@ static void TestPickingRejectsInvalidMorphDelta(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::BuildDeformablePickingVertices(instance, inputs, vertices));
 
     instance.morphs[0].deltas[0].vertexId = 0u;
-    instance.morphs[0].deltas[0].deltaPosition.x = std::numeric_limits<f32>::quiet_NaN();
+    instance.morphs[0].deltas[0].deltaPosition.x = Limit<f32>::s_QuietNaN;
     NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::BuildDeformablePickingVertices(instance, inputs, vertices));
 }
 
@@ -1006,7 +976,7 @@ static void TestRestSpaceHoleEditCreatesPerInstancePatch(TestContext& context){
     NWB::Impl::DeformableHoleEditResult result;
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::CommitDeformableRestSpaceHole(instance, params, &result));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, result.removedTriangleCount == 2u);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, result.addedVertexCount == 8u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, result.addedVertexCount == 4u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, result.addedTriangleCount == 8u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, result.editRevision == 4u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.editRevision == 4u);
@@ -1014,7 +984,7 @@ static void TestRestSpaceHoleEditCreatesPerInstancePatch(TestContext& context){
         context,
         (instance.dirtyFlags & NWB::Impl::RuntimeMeshDirtyFlag::All) == NWB::Impl::RuntimeMeshDirtyFlag::All
     );
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.restVertices.size() == oldVertexCount + 8u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.restVertices.size() == oldVertexCount + 4u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.indices.size() == oldIndexCount - 6u + 24u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.skin.size() == instance.restVertices.size());
     NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.sourceSamples.size() == instance.restVertices.size());
@@ -1022,21 +992,14 @@ static void TestRestSpaceHoleEditCreatesPerInstancePatch(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.morphs[0].deltas.size() > 1u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(instance.restVertices[oldVertexCount + 0u].position.x, -0.5f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(instance.restVertices[oldVertexCount + 0u].position.y, -0.5f));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(instance.restVertices[oldVertexCount + 1u].position.x, -0.5f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(instance.restVertices[oldVertexCount + 0u].position.z, -0.25f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(instance.restVertices[oldVertexCount + 1u].position.x, 0.5f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(instance.restVertices[oldVertexCount + 1u].position.y, -0.5f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(instance.restVertices[oldVertexCount + 1u].position.z, -0.25f));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(instance.restVertices[oldVertexCount + 2u].position.x, 0.5f));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(instance.restVertices[oldVertexCount + 2u].position.y, -0.5f));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(instance.restVertices[oldVertexCount + 3u].position.x, 0.5f));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(instance.restVertices[oldVertexCount + 3u].position.y, -0.5f));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(instance.restVertices[oldVertexCount + 3u].position.z, -0.25f));
 
-    u32 rimVertexCount = 0u;
     u32 innerVertexCount = 0u;
     for(usize vertexIndex = oldVertexCount; vertexIndex < instance.restVertices.size(); ++vertexIndex){
         const NWB::Impl::DeformableVertexRest& vertex = instance.restVertices[vertexIndex];
-        if(NearlyEqual(vertex.position.z, 0.0f))
-            ++rimVertexCount;
         if(NearlyEqual(vertex.position.z, -0.25f))
             ++innerVertexCount;
 
@@ -1053,20 +1016,41 @@ static void TestRestSpaceHoleEditCreatesPerInstancePatch(TestContext& context){
         );
         NWB_ECS_GRAPHICS_TEST_CHECK(context, inwardDot > 0.0f);
     }
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, rimVertexCount == 4u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, innerVertexCount == 4u);
     for(const u32 index : instance.indices)
         NWB_ECS_GRAPHICS_TEST_CHECK(context, index < instance.restVertices.size());
+
+    const usize wallIndexBase = instance.indices.size() - (static_cast<usize>(result.addedTriangleCount) * 3u);
+    for(usize edgeIndex = 0u; edgeIndex < static_cast<usize>(result.wallVertexCount); ++edgeIndex){
+        const usize nextEdgeIndex = (edgeIndex + 1u) % static_cast<usize>(result.wallVertexCount);
+        const usize indexBase = wallIndexBase + (edgeIndex * 6u);
+        const u32 innerA = result.firstWallVertex + static_cast<u32>(edgeIndex);
+        const u32 innerB = result.firstWallVertex + static_cast<u32>(nextEdgeIndex);
+        const u32 rimA = instance.indices[indexBase + 0u];
+        const u32 rimB = instance.indices[indexBase + 1u];
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, rimA < oldVertexCount);
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, rimB < oldVertexCount);
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.indices[indexBase + 2u] == innerB);
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.indices[indexBase + 3u] == rimA);
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.indices[indexBase + 4u] == innerB);
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.indices[indexBase + 5u] == innerA);
+
+        const NWB::Impl::DeformableVertexRest& rimVertex = instance.restVertices[rimA];
+        const NWB::Impl::DeformableVertexRest& innerVertex = instance.restVertices[innerA];
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(rimVertex.position.x, innerVertex.position.x));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(rimVertex.position.y, innerVertex.position.y));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(rimVertex.position.z, innerVertex.position.z + params.depth));
+    }
 
     f32 rimDeltaZ = 0.0f;
     f32 innerDeltaZ = 0.0f;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        MorphDeltaPositionZForVertex(instance.morphs[0], static_cast<u32>(oldVertexCount + 0u), rimDeltaZ)
+        MorphDeltaPositionZForVertex(instance.morphs[0], 5u, rimDeltaZ)
     );
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        MorphDeltaPositionZForVertex(instance.morphs[0], static_cast<u32>(oldVertexCount + 1u), innerDeltaZ)
+        MorphDeltaPositionZForVertex(instance.morphs[0], static_cast<u32>(oldVertexCount + 0u), innerDeltaZ)
     );
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(rimDeltaZ, 0.2f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(innerDeltaZ, 0.1f));
@@ -1094,10 +1078,10 @@ static void TestRestSpaceHoleEditTransfersAndInpaintsWallAttributes(TestContext&
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::CommitDeformableRestSpaceHole(instance, params, &result));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, result.addedVertexCount != 0u);
 
-    const NWB::Impl::SkinInfluence4& rimSkin0 = instance.skin[oldVertexCount + 0u];
-    const NWB::Impl::SkinInfluence4& innerSkin0 = instance.skin[oldVertexCount + 1u];
-    const NWB::Impl::SkinInfluence4& rimSkin1 = instance.skin[oldVertexCount + 2u];
-    const NWB::Impl::SkinInfluence4& innerSkin1 = instance.skin[oldVertexCount + 3u];
+    const NWB::Impl::SkinInfluence4& rimSkin0 = instance.skin[5u];
+    const NWB::Impl::SkinInfluence4& innerSkin0 = instance.skin[oldVertexCount + 0u];
+    const NWB::Impl::SkinInfluence4& rimSkin1 = instance.skin[6u];
+    const NWB::Impl::SkinInfluence4& innerSkin1 = instance.skin[oldVertexCount + 1u];
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(SkinWeightForJoint(rimSkin0, joint0), 1.0f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(SkinWeightForJoint(innerSkin0, joint3), 0.25f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(SkinWeightForJoint(innerSkin0, joint0), 0.5f));
@@ -1106,8 +1090,8 @@ static void TestRestSpaceHoleEditTransfersAndInpaintsWallAttributes(TestContext&
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(SkinWeightForJoint(innerSkin1, joint0), 0.25f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(SkinWeightForJoint(innerSkin1, joint1), 0.5f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(SkinWeightForJoint(innerSkin1, joint2), 0.25f));
-    const Float4U& rimColor0 = instance.restVertices[oldVertexCount + 0u].color0;
-    const Float4U& innerColor0 = instance.restVertices[oldVertexCount + 1u].color0;
+    const Float4U& rimColor0 = instance.restVertices[5u].color0;
+    const Float4U& innerColor0 = instance.restVertices[oldVertexCount + 0u].color0;
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(rimColor0.x, 1.0f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(rimColor0.y, 0.0f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(rimColor0.z, 0.0f));
@@ -1218,7 +1202,7 @@ static void TestSurfaceEditFlowAttachesAndPersistsAccessory(TestContext& context
         (instance.dirtyFlags & NWB::Impl::RuntimeMeshDirtyFlag::GpuUploadDirty) != 0u
     );
     NWB_ECS_GRAPHICS_TEST_CHECK(context, result.firstWallVertex == oldVertexCount);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, result.wallVertexCount == 8u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, result.wallVertexCount == 4u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, record.hole.baseEditRevision == params.posedHit.editRevision);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, record.hole.restSample.sourceTri == params.posedHit.restSample.sourceTri);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(record.hole.restPosition.x, params.posedHit.position.x));
@@ -1462,8 +1446,8 @@ static void TestSurfaceEditFlowAttachesAndPersistsAccessory(TestContext& context
 
     NWB::Impl::DeformableSurfaceEditState state;
     NWB::Impl::DeformableAccessoryAttachmentRecord accessoryRecord;
-    accessoryRecord.geometry = NWB::Core::Assets::AssetRef<NWB::Impl::Geometry>(mockGeometry);
-    accessoryRecord.material = NWB::Core::Assets::AssetRef<NWB::Impl::Material>(mockMaterial);
+    accessoryRecord.geometry.virtualPath = mockGeometry;
+    accessoryRecord.material.virtualPath = mockMaterial;
     accessoryRecord.editRevision = attachment.editRevision;
     accessoryRecord.firstWallVertex = attachment.firstWallVertex;
     accessoryRecord.wallVertexCount = attachment.wallVertexCount;
@@ -1553,32 +1537,23 @@ static void TestSurfaceEditFlowAttachesAndPersistsAccessory(TestContext& context
     NWB_ECS_GRAPHICS_TEST_CHECK(context, loadedState.accessories.empty());
 }
 
-static void TestRestSpaceHoleEditSynthesizesProvenanceWhenSourceSamplesAreEmpty(TestContext& context){
+static void TestRestSpaceHoleEditRejectsMissingProvenance(TestContext& context){
     NWB::Impl::DeformableRuntimeMeshInstance instance = MakeGridHoleInstance();
     instance.sourceTriangleCount = static_cast<u32>(instance.indices.size() / 3u);
     instance.sourceSamples.clear();
     instance.editRevision = 0u;
+    const usize oldVertexCount = instance.restVertices.size();
     const usize oldIndexCount = instance.indices.size();
+    const u32 oldRevision = instance.editRevision;
 
     const NWB::Impl::DeformableHoleEditParams params = MakeGridHoleEditParams(instance);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, params.posedHit.restSample.sourceTri == params.posedHit.triangle);
 
     NWB::Impl::DeformableHoleEditResult result;
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::CommitDeformableRestSpaceHole(instance, params, &result));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.sourceSamples.size() == instance.restVertices.size());
-    CheckAllTrianglesResolve(context, instance);
-
-    const usize keptTriangleCount = (oldIndexCount - (static_cast<usize>(result.removedTriangleCount) * 3u)) / 3u;
-    CheckAddedTrianglesResolveToSample(
-        context,
-        instance,
-        keptTriangleCount,
-        result.addedTriangleCount,
-        params.posedHit.restSample
-    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::CommitDeformableRestSpaceHole(instance, params, &result));
+    CheckHoleEditUnchanged(context, instance, oldVertexCount, oldIndexCount, oldRevision);
 }
 
-static void TestRestSpaceHoleEditRejectsProvenanceSynthesisWithoutSourceTriangleCount(TestContext& context){
+static void TestRestSpaceHoleEditRejectsMissingProvenanceWithoutSourceTriangleCount(TestContext& context){
     NWB::Impl::DeformableRuntimeMeshInstance instance = MakeGridHoleInstance();
     instance.sourceTriangleCount = 0u;
     instance.sourceSamples.clear();
@@ -1594,27 +1569,19 @@ static void TestRestSpaceHoleEditRejectsProvenanceSynthesisWithoutSourceTriangle
     CheckHoleEditUnchanged(context, instance, oldVertexCount, oldIndexCount, oldRevision);
 }
 
-static void TestRestSpaceHoleEditMaterializesMixedFallbackProvenance(TestContext& context){
+static void TestRestSpaceHoleEditRejectsMixedProvenance(TestContext& context){
     NWB::Impl::DeformableRuntimeMeshInstance instance = MakeGridHoleInstance();
     AssignFirstUseTriangleSourceSamples(instance);
     instance.editRevision = 0u;
+    const usize oldVertexCount = instance.restVertices.size();
     const usize oldIndexCount = instance.indices.size();
+    const u32 oldRevision = instance.editRevision;
 
     const NWB::Impl::DeformableHoleEditParams params = MakeGridHoleEditParams(instance);
 
     NWB::Impl::DeformableHoleEditResult result;
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::CommitDeformableRestSpaceHole(instance, params, &result));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.sourceSamples.size() == instance.restVertices.size());
-    CheckAllTrianglesResolve(context, instance);
-
-    const usize keptTriangleCount = (oldIndexCount - (static_cast<usize>(result.removedTriangleCount) * 3u)) / 3u;
-    CheckAddedTrianglesResolveToSample(
-        context,
-        instance,
-        keptTriangleCount,
-        result.addedTriangleCount,
-        params.posedHit.restSample
-    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::CommitDeformableRestSpaceHole(instance, params, &result));
+    CheckHoleEditUnchanged(context, instance, oldVertexCount, oldIndexCount, oldRevision);
 }
 
 static void TestRestSpaceHoleEditRejectsOpenBoundaryPatch(TestContext& context){
@@ -1841,7 +1808,7 @@ static void TestRestSpaceHoleEditRejectsStaleOrMismatchedHit(TestContext& contex
         const usize oldIndexCount = instance.indices.size();
         const u32 oldRevision = instance.editRevision;
         NWB::Impl::DeformableHoleEditParams params = MakeGridHoleEditParams(instance);
-        params.posedHit.position.x = std::numeric_limits<f32>::quiet_NaN();
+        params.posedHit.position.x = Limit<f32>::s_QuietNaN;
 
         NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::CommitDeformableRestSpaceHole(instance, params));
         CheckHoleEditUnchanged(context, instance, oldVertexCount, oldIndexCount, oldRevision);
@@ -1885,8 +1852,8 @@ static void TestRestSpaceHoleEditRejectsStaleOrMismatchedHit(TestContext& contex
 
 
 static int EntryPoint(const isize argc, tchar** argv, void*){
-    (void)argc;
-    (void)argv;
+    static_cast<void>(argc);
+    static_cast<void>(argv);
 
     NWB::Core::Common::InitializerGuard commonInitializerGuard;
     if(!commonInitializerGuard.initialize()){
@@ -1896,13 +1863,13 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
 
     __hidden_ecs_graphics_tests::TestContext context;
     __hidden_ecs_graphics_tests::TestRestSampleInterpolation(context);
-    __hidden_ecs_graphics_tests::TestMixedProvenanceFallsBackToRestTriangle(context);
+    __hidden_ecs_graphics_tests::TestMixedProvenanceRejectsAmbiguousRestTriangle(context);
     __hidden_ecs_graphics_tests::TestMixedProvenanceRejectsRuntimeTriangleOutsideSourceRange(context);
-    __hidden_ecs_graphics_tests::TestMixedProvenanceRejectsCurrentTriangleFallbackAfterTopologyChange(context);
-    __hidden_ecs_graphics_tests::TestMissingProvenanceRejectsCurrentTriangleFallbackAfterTopologyChange(context);
-    __hidden_ecs_graphics_tests::TestMissingProvenanceRejectsCurrentTriangleFallbackWhenSourceCountDiffers(context);
-    __hidden_ecs_graphics_tests::TestMissingProvenanceRejectsCurrentTriangleFallbackWithoutSourceCount(context);
-    __hidden_ecs_graphics_tests::TestMixedProvenanceRejectsCurrentTriangleFallbackWhenEditedTriangleCountDiffers(context);
+    __hidden_ecs_graphics_tests::TestMixedProvenanceRejectsAfterTopologyChange(context);
+    __hidden_ecs_graphics_tests::TestMissingProvenanceRejectsAfterTopologyChange(context);
+    __hidden_ecs_graphics_tests::TestMissingProvenanceRejectsWhenSourceCountDiffers(context);
+    __hidden_ecs_graphics_tests::TestMissingProvenanceRejectsWithoutSourceCount(context);
+    __hidden_ecs_graphics_tests::TestMixedProvenanceRejectsWhenEditedTriangleCountDiffers(context);
     __hidden_ecs_graphics_tests::TestRestSampleRejectsMalformedIndexPayload(context);
     __hidden_ecs_graphics_tests::TestRestSampleRejectsOutOfRangeProvenance(context);
     __hidden_ecs_graphics_tests::TestRestSampleCanonicalizesEdgeTolerance(context);
@@ -1928,9 +1895,9 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
     __hidden_ecs_graphics_tests::TestRestSpaceHoleEditTransfersAndInpaintsWallAttributes(context);
     __hidden_ecs_graphics_tests::TestRestSpaceHoleEditWallTrianglesKeepRecoverableProvenance(context);
     __hidden_ecs_graphics_tests::TestSurfaceEditFlowAttachesAndPersistsAccessory(context);
-    __hidden_ecs_graphics_tests::TestRestSpaceHoleEditSynthesizesProvenanceWhenSourceSamplesAreEmpty(context);
-    __hidden_ecs_graphics_tests::TestRestSpaceHoleEditRejectsProvenanceSynthesisWithoutSourceTriangleCount(context);
-    __hidden_ecs_graphics_tests::TestRestSpaceHoleEditMaterializesMixedFallbackProvenance(context);
+    __hidden_ecs_graphics_tests::TestRestSpaceHoleEditRejectsMissingProvenance(context);
+    __hidden_ecs_graphics_tests::TestRestSpaceHoleEditRejectsMissingProvenanceWithoutSourceTriangleCount(context);
+    __hidden_ecs_graphics_tests::TestRestSpaceHoleEditRejectsMixedProvenance(context);
     __hidden_ecs_graphics_tests::TestRestSpaceHoleEditRejectsOpenBoundaryPatch(context);
     __hidden_ecs_graphics_tests::TestRestSpaceHoleEditRejectsDegenerateHitFrame(context);
     __hidden_ecs_graphics_tests::TestRestSpaceHoleEditRejectsNonFiniteWallVertices(context);
@@ -1948,7 +1915,7 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
 }
 
 
-#include <global/application_entry.h>
+#include <core/common/application_entry.h>
 
 NWB_DEFINE_APPLICATION_ENTRY_POINT(EntryPoint)
 

@@ -28,6 +28,33 @@ static constexpr u32 s_MaterialMagic = 0x4D544C33u; // MTL3
 static constexpr u32 s_MaterialVersion = 3u;
 
 
+#if defined(NWB_COOK)
+[[nodiscard]] static bool AddReserveBytes(usize& inOutBytes, const usize additionalBytes){
+    if(additionalBytes > Limit<usize>::s_Max - inOutBytes)
+        return false;
+
+    inOutBytes += additionalBytes;
+    return true;
+}
+
+[[nodiscard]] static bool AddRepeatedReserveBytes(usize& inOutBytes, const usize count, const usize bytesPerItem){
+    if(bytesPerItem != 0u && count > Limit<usize>::s_Max / bytesPerItem)
+        return false;
+
+    return AddReserveBytes(inOutBytes, count * bytesPerItem);
+}
+
+[[nodiscard]] static bool AddStringReserveBytes(usize& inOutBytes, const AStringView text){
+    if(text.size() > Limit<u32>::s_Max)
+        return false;
+
+    return AddReserveBytes(inOutBytes, sizeof(u32))
+        && AddReserveBytes(inOutBytes, text.size())
+    ;
+}
+#endif
+
+
 UniquePtr<Core::Assets::IAssetCodec> CreateMaterialAssetCodec(){
     return MakeUnique<MaterialAssetCodec>();
 }
@@ -105,13 +132,14 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
 
         const Name stageName(stageNameHash);
         const Name shaderName(shaderNameHash);
-        const Core::Assets::AssetRef<Shader> shaderAsset(shaderName);
+        Core::Assets::AssetRef<Shader> shaderAsset;
+        shaderAsset.virtualPath = shaderName;
         if(!stageName || !shaderAsset.valid()){
             NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: shader stage entries must not be empty"));
             return false;
         }
 
-        if(!m_stageShaders.insert({ stageName, shaderAsset }).second){
+        if(!m_stageShaders.emplace(stageName, shaderAsset).second){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("Material::loadBinary failed: duplicate shader stage '{}'"),
                 StringConvert(stageName.c_str())
@@ -144,7 +172,7 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
             return false;
         }
 
-        if(!m_parameters.insert({ key, value }).second){
+        if(!m_parameters.emplace(key, value).second){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("Material::loadBinary failed: duplicate parameter key '{}'"),
                 StringConvert(key.c_str())
@@ -212,7 +240,26 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
         return false;
     }
 
+    usize reserveBytes =
+        sizeof(u32) + // magic
+        sizeof(u32)   // version
+    ;
+    bool canReserve = __hidden_assets::AddStringReserveBytes(reserveBytes, AStringView(material.shaderVariant()))
+        && __hidden_assets::AddReserveBytes(reserveBytes, sizeof(u32))
+        && __hidden_assets::AddRepeatedReserveBytes(reserveBytes, material.stageShaders().size(), sizeof(NameHash) * 2u)
+        && __hidden_assets::AddReserveBytes(reserveBytes, sizeof(u32))
+    ;
+    for(const auto& [key, value] : material.parameters()){
+        canReserve = canReserve
+            && __hidden_assets::AddStringReserveBytes(reserveBytes, key.view())
+            && __hidden_assets::AddStringReserveBytes(reserveBytes, value.view())
+        ;
+    }
+
     outBinary.clear();
+    if(canReserve)
+        outBinary.reserve(reserveBytes);
+
     AppendPOD(outBinary, __hidden_assets::s_MaterialMagic);
     AppendPOD(outBinary, __hidden_assets::s_MaterialVersion);
     if(!AppendString(outBinary, AStringView(material.shaderVariant()))){
@@ -293,14 +340,14 @@ void Material::setShaderForStage(const Name& stageName, const Core::Assets::Asse
     if(!stageName || !shaderAsset.valid())
         return;
 
-    m_stageShaders[stageName] = shaderAsset;
+    m_stageShaders.insert_or_assign(stageName, shaderAsset);
 }
 
 bool Material::setParameter(const CompactString& key, const CompactString& value){
     if(!key)
         return false;
 
-    m_parameters[key] = value;
+    m_parameters.insert_or_assign(key, value);
     return true;
 }
 

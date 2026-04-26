@@ -137,14 +137,14 @@ void CommandList::clearState(){
     m_pendingCompactions.clear();
 }
 
-bool CommandList::validateIndirectBuffer(IBuffer* _buffer, u64 offsetBytes, u64 commandSizeBytes, u32 commandCount, const tchar* commandName)const{
-    if(!_buffer){
+bool CommandList::validateIndirectBuffer(IBuffer* bufferResource, u64 offsetBytes, u64 commandSizeBytes, u32 commandCount, const tchar* commandName)const{
+    if(!bufferResource){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: No indirect buffer bound for {}"), commandName);
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: No indirect buffer bound"));
         return false;
     }
 
-    auto* buffer = checked_cast<Buffer*>(_buffer);
+    auto* buffer = checked_cast<Buffer*>(bufferResource);
     if(!buffer->m_desc.isDrawIndirectArgs){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to execute {}: buffer was not created with indirect-argument usage"), commandName);
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to execute indirect command: buffer was not created with indirect-argument usage"));
@@ -200,9 +200,9 @@ bool CommandList::prepareDrawIndirect(
     return true;
 }
 
-void CommandList::copyTextureToBuffer(IBuffer* _dest, u64 destOffsetBytes, u32 destRowPitch, ITexture* _src, const TextureSlice& srcSlice){
-    auto* dest = checked_cast<Buffer*>(_dest);
-    auto* src = checked_cast<Texture*>(_src);
+void CommandList::copyTextureToBuffer(IBuffer* destResource, u64 destOffsetBytes, u32 destRowPitch, ITexture* srcResource, const TextureSlice& srcSlice){
+    auto* dest = checked_cast<Buffer*>(destResource);
+    auto* src = checked_cast<Texture*>(srcResource);
     if(!dest || !src){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to buffer: resource is invalid"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to buffer: resource is invalid"));
@@ -228,14 +228,16 @@ void CommandList::copyTextureToBuffer(IBuffer* _dest, u64 destOffsetBytes, u32 d
         return;
     }
 
-    if(formatInfo.blockSize == 0 || formatInfo.bytesPerBlock == 0){
+    const u32 formatBlockWidth = GetFormatBlockWidth(formatInfo);
+    const u32 formatBlockHeight = GetFormatBlockHeight(formatInfo);
+    if(formatBlockWidth == 0 || formatBlockHeight == 0 || formatInfo.bytesPerBlock == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to buffer: invalid row pitch"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to buffer: invalid row pitch"));
         return;
     }
 
-    const u64 blocksX = Max<u64>((static_cast<u64>(resolvedSrc.width) + formatInfo.blockSize - 1u) / formatInfo.blockSize, 1ull);
-    const u64 blocksY = Max<u64>((static_cast<u64>(resolvedSrc.height) + formatInfo.blockSize - 1u) / formatInfo.blockSize, 1ull);
+    const u64 blocksX = Max<u64>((static_cast<u64>(resolvedSrc.width) + formatBlockWidth - 1u) / formatBlockWidth, 1ull);
+    const u64 blocksY = Max<u64>((static_cast<u64>(resolvedSrc.height) + formatBlockHeight - 1u) / formatBlockHeight, 1ull);
     if(blocksX > Limit<u64>::s_Max / formatInfo.bytesPerBlock){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to buffer: natural row pitch overflows"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to buffer: natural row pitch overflows"));
@@ -251,7 +253,7 @@ void CommandList::copyTextureToBuffer(IBuffer* _dest, u64 destOffsetBytes, u32 d
 
     u64 bufferRowLength = 0;
     if(destRowPitch > 0){
-        bufferRowLength = (static_cast<u64>(destRowPitch) / formatInfo.bytesPerBlock) * formatInfo.blockSize;
+        bufferRowLength = (static_cast<u64>(destRowPitch) / formatInfo.bytesPerBlock) * formatBlockWidth;
         if(bufferRowLength > UINT32_MAX){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to buffer: row pitch exceeds Vulkan buffer image copy limits"));
             NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to buffer: row pitch exceeds Vulkan buffer image copy limits"));
@@ -305,8 +307,8 @@ void CommandList::copyTextureToBuffer(IBuffer* _dest, u64 destOffsetBytes, u32 d
 
     vkCmdCopyImageToBuffer(m_currentCmdBuf->m_cmdBuf, src->m_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dest->m_buffer, 1, &region);
 
-    m_currentCmdBuf->m_referencedResources.push_back(_src);
-    m_currentCmdBuf->m_referencedResources.push_back(_dest);
+    m_currentCmdBuf->m_referencedResources.push_back(srcResource);
+    m_currentCmdBuf->m_referencedResources.push_back(destResource);
 }
 
 

@@ -334,11 +334,11 @@ static bool ProcessEvent(Frame& frame, const XEvent& event){
         return false;
 
     case FocusIn:
-        frameData.isActive() = true;
+        frameData.setActive(true);
         break;
 
     case FocusOut:
-        frameData.isActive() = false;
+        frameData.setActive(false);
         ResetKeyStates();
         break;
 
@@ -385,8 +385,10 @@ static bool ProcessEvent(Frame& frame, const XEvent& event){
         }
 
         const i32 button = TranslateMouseButton(event.xbutton.button);
-        if(button != -1)
+        if(button != -1){
+            frame.input().mousePosUpdate(static_cast<f64>(event.xbutton.x), static_cast<f64>(event.xbutton.y));
             frame.input().mouseButtonUpdate(button, InputAction::Press, TranslateModifiers(event.xbutton.state));
+        }
     }
     break;
 
@@ -398,8 +400,10 @@ static bool ProcessEvent(Frame& frame, const XEvent& event){
             break;
 
         const i32 button = TranslateMouseButton(event.xbutton.button);
-        if(button != -1)
+        if(button != -1){
+            frame.input().mousePosUpdate(static_cast<f64>(event.xbutton.x), static_cast<f64>(event.xbutton.y));
             frame.input().mouseButtonUpdate(button, InputAction::Release, TranslateModifiers(event.xbutton.state));
+        }
     }
     break;
 
@@ -440,7 +444,7 @@ static bool QueryWindowState(Frame& frame, u32& width, u32& height, bool& window
 }
 
 static void ResetFrameData(Common::LinuxFrame& frameData){
-    frameData.isActive() = false;
+    frameData.setActive(false);
     SetX11Display(frameData, nullptr);
     SetX11Window(frameData, 0);
     SetDeleteWindowMessage(frameData, None);

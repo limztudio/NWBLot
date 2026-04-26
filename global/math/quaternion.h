@@ -14,46 +14,14 @@
 namespace SIMDQuaternionDetail{
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_INLINE void ScalarSinCos(f32* outSin, f32* outCos, f32 value)noexcept{
-    NWB_ASSERT(outSin != nullptr);
-    NWB_ASSERT(outCos != nullptr);
-
-    f32 quotient = s_1DIV2PI * value;
-    if(value >= 0.0f)
-        quotient = static_cast<f32>(static_cast<i32>(quotient + 0.5f));
-    else
-        quotient = static_cast<f32>(static_cast<i32>(quotient - 0.5f));
-
-    f32 y = value - (s_2PI * quotient);
-    f32 sign{};
-    if(y > s_PIDIV2){
-        y = s_PI - y;
-        sign = -1.0f;
-    }
-    else if(y < -s_PIDIV2){
-        y = -s_PI - y;
-        sign = -1.0f;
-    }
-    else{
-        sign = 1.0f;
-    }
-
-    const f32 y2 = y * y;
-    *outSin = (((((-2.3889859e-08f * y2 + 2.7525562e-06f) * y2 - 0.00019840874f) * y2 + 0.0083333310f) * y2 - 0.16666667f) * y2 + 1.0f) * y;
-    *outCos = sign * (((((-2.6051615e-07f * y2 + 2.4760495e-05f) * y2 - 0.0013888378f) * y2 + 0.041666638f) * y2 - 0.5f) * y2 + 1.0f);
-}
-
 NWB_INLINE f32 ScalarACos(f32 value)noexcept{
     const bool nonnegative = (value >= 0.0f);
-    const f32 x = std::fabs(value);
+    const f32 x = Abs(value);
     f32 omx = 1.0f - x;
     if(omx < 0.0f)
         omx = 0.0f;
 
-    const f32 root = std::sqrt(omx);
+    const f32 root = Sqrt(omx);
     f32 result = ((((((-0.0012624911f * x + 0.0066700901f) * x - 0.0170881256f) * x + 0.0308918810f) * x - 0.0501743046f) * x + 0.0889789874f) * x - 0.2145988016f) * x + 1.5707963050f;
     result *= root;
     return nonnegative ? result : (s_PI - result);
@@ -392,7 +360,7 @@ NWB_INLINE SIMDVector SIMDCALL QuaternionRotationNormal(SIMDVector normalAxis, f
     SIMDVector n = VectorSelect(s_SIMDOne, normalAxis, s_SIMDSelect1110);
     f32 sinAngle{};
     f32 cosAngle{};
-    SIMDQuaternionDetail::ScalarSinCos(&sinAngle, &cosAngle, 0.5f * angle);
+    SIMDVectorDetail::ScalarSinCos(&sinAngle, &cosAngle, 0.5f * angle);
     const SIMDVector scale = VectorSet(sinAngle, sinAngle, sinAngle, cosAngle);
     return VectorMultiply(n, scale);
 #else
@@ -420,16 +388,16 @@ NWB_INLINE SIMDVector SIMDCALL QuaternionRotationAxis(SIMDVector axis, f32 angle
 NWB_INLINE SIMDVector SIMDCALL QuaternionRotationRollPitchYawFromVector(SIMDVector angles)noexcept{
 #if defined(NWB_HAS_SCALAR)
     const f32 halfPitch = 0.5f * angles.f[0];
-    const f32 cp = static_cast<f32>(std::cos(halfPitch));
-    const f32 sp = static_cast<f32>(std::sin(halfPitch));
+    const f32 cp = Cos(halfPitch);
+    const f32 sp = Sin(halfPitch);
 
     const f32 halfYaw = 0.5f * angles.f[1];
-    const f32 cy = static_cast<f32>(std::cos(halfYaw));
-    const f32 sy = static_cast<f32>(std::sin(halfYaw));
+    const f32 cy = Cos(halfYaw);
+    const f32 sy = Sin(halfYaw);
 
     const f32 halfRoll = 0.5f * angles.f[2];
-    const f32 cr = static_cast<f32>(std::cos(halfRoll));
-    const f32 sr = static_cast<f32>(std::sin(halfRoll));
+    const f32 cr = Cos(halfRoll);
+    const f32 sr = Sin(halfRoll);
 
     return SIMDConvertDetail::MakeF32(
         (cr * sp * cy) + (sr * cp * sy),
@@ -476,7 +444,7 @@ NWB_INLINE SIMDVector SIMDCALL QuaternionRotationMatrix(const SIMDMatrix& matrix
         const f32 omr22 = 1.0f - r22;
         if(dif10 <= 0.0f){
             const f32 fourXSqr = omr22 - dif10;
-            const f32 inv4x = 0.5f / std::sqrt(fourXSqr);
+            const f32 inv4x = 0.5f / Sqrt(fourXSqr);
             x = fourXSqr * inv4x;
             y = (matrix.m[0][1] + matrix.m[1][0]) * inv4x;
             z = (matrix.m[0][2] + matrix.m[2][0]) * inv4x;
@@ -484,7 +452,7 @@ NWB_INLINE SIMDVector SIMDCALL QuaternionRotationMatrix(const SIMDMatrix& matrix
         }
         else{
             const f32 fourYSqr = omr22 + dif10;
-            const f32 inv4y = 0.5f / std::sqrt(fourYSqr);
+            const f32 inv4y = 0.5f / Sqrt(fourYSqr);
             x = (matrix.m[0][1] + matrix.m[1][0]) * inv4y;
             y = fourYSqr * inv4y;
             z = (matrix.m[1][2] + matrix.m[2][1]) * inv4y;
@@ -496,7 +464,7 @@ NWB_INLINE SIMDVector SIMDCALL QuaternionRotationMatrix(const SIMDMatrix& matrix
         const f32 opr22 = 1.0f + r22;
         if(sum10 <= 0.0f){
             const f32 fourZSqr = opr22 - sum10;
-            const f32 inv4z = 0.5f / std::sqrt(fourZSqr);
+            const f32 inv4z = 0.5f / Sqrt(fourZSqr);
             x = (matrix.m[0][2] + matrix.m[2][0]) * inv4z;
             y = (matrix.m[1][2] + matrix.m[2][1]) * inv4z;
             z = fourZSqr * inv4z;
@@ -504,7 +472,7 @@ NWB_INLINE SIMDVector SIMDCALL QuaternionRotationMatrix(const SIMDMatrix& matrix
         }
         else{
             const f32 fourWSqr = opr22 + sum10;
-            const f32 inv4w = 0.5f / std::sqrt(fourWSqr);
+            const f32 inv4w = 0.5f / Sqrt(fourWSqr);
             x = (matrix.m[2][1] - matrix.m[1][2]) * inv4w;
             y = (matrix.m[0][2] - matrix.m[2][0]) * inv4w;
             z = (matrix.m[1][0] - matrix.m[0][1]) * inv4w;

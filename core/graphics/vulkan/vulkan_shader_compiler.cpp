@@ -2,13 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "vulkan_shader_compiler.h"
+
 #if defined(NWB_COOK)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-#include "vulkan_shader_compiler.h"
 
 #include <shaderc/shaderc.hpp>
 
@@ -95,7 +95,7 @@ public:
     {}
 
 
-    shaderc_include_result* GetInclude(const char* requestedSource, const shaderc_include_type type, const char* requestingSource, [[maybe_unused]] const size_t includeDepth)override{
+    virtual shaderc_include_result* GetInclude(const char* requestedSource, const shaderc_include_type type, const char* requestingSource, [[maybe_unused]] const size_t includeDepth)override{
         ErrorCode errorCode;
 
         const Path requestingDirectory = Path(requestingSource).parent_path();
@@ -126,8 +126,14 @@ public:
             }
         }
 
-        auto* result = new shaderc_include_result{};
-        auto* payload = new IncludePayload{};
+        auto result = MakeUnique<shaderc_include_result>();
+        auto payload = MakeUnique<IncludePayload>();
+
+        const auto releaseResult = [&]() -> shaderc_include_result*{
+            result->user_data = payload.get();
+            payload.release();
+            return result.release();
+        };
 
         const auto makeErrorResult = [&](AString message) -> shaderc_include_result*{
             payload->content = Move(message);
@@ -135,8 +141,7 @@ public:
             result->source_name_length = 0;
             result->content = payload->content.c_str();
             result->content_length = payload->content.size();
-            result->user_data = payload;
-            return result;
+            return releaseResult();
         };
 
         if(!lookupError.empty())
@@ -156,16 +161,15 @@ public:
         result->source_name_length = payload->sourceName.size();
         result->content = payload->content.c_str();
         result->content_length = payload->content.size();
-        result->user_data = payload;
-        return result;
+        return releaseResult();
     }
 
-    void ReleaseInclude(shaderc_include_result* data)override{
+    virtual void ReleaseInclude(shaderc_include_result* data)override{
         if(!data)
             return;
 
-        delete static_cast<IncludePayload*>(data->user_data);
-        delete data;
+        [[maybe_unused]] UniquePtr<IncludePayload> payload(static_cast<IncludePayload*>(data->user_data));
+        [[maybe_unused]] UniquePtr<shaderc_include_result> result(data);
     }
 
 
@@ -223,10 +227,17 @@ bool VulkanShaderCompiler::compileVariant(const ShaderCompilerRequest& request, 
     }
     options.SetSourceLanguage(sourceLanguage);
 
-    for(u32 i = 0; i < request.defineCount; ++i)
-        options.AddMacroDefinition(AString(request.defines[i].name), AString(request.defines[i].value));
+    for(u32 i = 0; i < request.defineCount; ++i){
+        const ShaderMacroDefinition& define = request.defines[i];
+        options.AddMacroDefinition(
+            define.name.data(),
+            define.name.size(),
+            define.value.data(),
+            define.value.size()
+        );
+    }
 
-    options.SetIncluder(std::make_unique<__hidden_vulkan_shader::ShaderFileIncluder>(request.includeDirectories));
+    options.SetIncluder(MakeStdUnique<__hidden_vulkan_shader::ShaderFileIncluder>(request.includeDirectories));
 
     shaderc::Compiler compiler;
     const AString inputFileName = PathToString(request.sourcePath);

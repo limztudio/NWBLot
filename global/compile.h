@@ -154,6 +154,7 @@
 #define NWB_WCOUT ::std::wcout
 #define NWB_CERR ::std::cerr
 #define NWB_WCERR ::std::wcerr
+#define NWB_GETENV(name) ::std::getenv(name)
 #define NWB_STRLEN(src) strlen(src)
 #define NWB_WSTRLEN(src) wcslen(src)
 #define NWB_MEMCMP(lhs, rhs, size) memcmp(lhs, rhs, size)
@@ -173,6 +174,8 @@
 #define NWB_WSTRCAT(dest, destSize, src) wcscat_s(dest, destSize, src)
 #define NWB_SPRINTF(format, formatSize, ...) sprintf_s(format, formatSize, __VA_ARGS__)
 #define NWB_WSPRINTF(format, formatSize, ...) swprintf_s(format, formatSize, __VA_ARGS__)
+#define NWB_VSNPRINTF(dest, destSize, format, args) vsnprintf_s(dest, destSize, _TRUNCATE, format, args)
+#define NWB_VWSNPRINTF(dest, destSize, format, args) vswprintf_s(dest, destSize, format, args)
 #define NWB_STRERROR(dest, destSize, errorNum) strerror_s(dest, destSize, errorNum)
 #else
 #define NWB_STRNLEN(src, count) strnlen(src, count)
@@ -187,6 +190,8 @@
 #define NWB_WSTRCAT(dest, destSize, src) wcscat(dest, src)
 #define NWB_SPRINTF(format, formatSize, ...) sprintf(format, __VA_ARGS__)
 #define NWB_WSPRINTF(format, formatSize, ...) swprintf(format, __VA_ARGS__)
+#define NWB_VSNPRINTF(dest, destSize, format, args) vsnprintf(dest, destSize, format, args)
+#define NWB_VWSNPRINTF(dest, destSize, format, args) vswprintf(dest, destSize, format, args)
 #define NWB_STRERROR(dest, destSize, errorNum) (((destSize) == 0) ? -1 : (NWB_STRNCPY(dest, destSize, strerror(errorNum), (destSize) - 1), (dest)[(destSize) - 1] = '\0', 0))
 #endif
 
@@ -201,6 +206,7 @@
 #define NWB_TSTRNCPY(dest, destSize, src, count) NWB_WSTRNCPY(dest, destSize, src, count)
 #define NWB_TSTRCAT(dest, destSize, src) NWB_WSTRCAT(dest, destSize, src)
 #define NWB_TSPRINTF(format, formatSize, ...) NWB_WSPRINTF(format, formatSize, __VA_ARGS__)
+#define NWB_TVSNPRINTF(dest, destSize, format, args) NWB_VWSNPRINTF(dest, destSize, format, args)
 #else
 #define NWB_TCOUT NWB_COUT
 #define NWB_TCERR NWB_CERR
@@ -212,6 +218,7 @@
 #define NWB_TSTRNCPY(dest, destSize, src, count) NWB_STRNCPY(dest, destSize, src, count)
 #define NWB_TSTRCAT(dest, destSize, src) NWB_STRCAT(dest, destSize, src)
 #define NWB_TSPRINTF(format, formatSize, ...) NWB_SPRINTF(format, formatSize, __VA_ARGS__)
+#define NWB_TVSNPRINTF(dest, destSize, format, args) NWB_VSNPRINTF(dest, destSize, format, args)
 #endif
 
 

@@ -14,39 +14,42 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename T, u32 _max_elements>
-class FixedVector : private std::array<T, _max_elements>{
+template<typename T, u32 maxElements>
+class FixedVector : private std::array<T, maxElements>{
 public:
-    typedef std::array<T, _max_elements> base;
-    enum { max_elements = _max_elements };
+    using Base = std::array<T, maxElements>;
 
 public:
-    using typename base::value_type;
-    using typename base::size_type;
-    using typename base::difference_type;
-    using typename base::reference;
-    using typename base::const_reference;
-    using typename base::pointer;
-    using typename base::const_pointer;
-    using typename base::iterator;
-    using typename base::const_iterator;
+    using typename Base::value_type;
+    using typename Base::size_type;
+    using typename Base::difference_type;
+    using typename Base::reference;
+    using typename Base::const_reference;
+    using typename Base::pointer;
+    using typename Base::const_pointer;
+    using typename Base::iterator;
+    using typename Base::const_iterator;
+
+
+public:
+    static constexpr u32 s_MaxElements = maxElements;
 
 
 public:
     FixedVector()
-        : base()
-        , current_size(0)
+        : Base()
+        , m_currentSize(0)
     {}
     FixedVector(usize size)
-        : base()
-        , current_size(0)
+        : Base()
+        , m_currentSize(0)
     {
         resize(size);
     }
-    FixedVector(std::initializer_list<T> il)
-        : current_size(0)
+    FixedVector(InitializerList<T> il)
+        : m_currentSize(0)
     {
-        for(auto i : il)
+        for(const T& i : il)
             push_back(i);
     }
 
@@ -61,19 +64,19 @@ public:
     }
 
     constexpr reference at(size_type pos){
-        NWB_ASSERT(pos < current_size);
-        if(pos >= current_size)
+        NWB_ASSERT(pos < m_currentSize);
+        if(pos >= m_currentSize)
             throw RuntimeException("FixedVector index out of range");
 
-        return base::operator[](pos);
+        return Base::operator[](pos);
     }
 
     constexpr const_reference at(size_type pos)const{
-        NWB_ASSERT(pos < current_size);
-        if(pos >= current_size)
+        NWB_ASSERT(pos < m_currentSize);
+        if(pos >= m_currentSize)
             throw RuntimeException("FixedVector index out of range");
 
-        return base::operator[](pos);
+        return Base::operator[](pos);
     }
 
 public:
@@ -82,97 +85,97 @@ public:
 
 public:
     constexpr reference back(){
-        NWB_ASSERT(current_size > 0);
-        if(current_size == 0)
+        NWB_ASSERT(m_currentSize > 0);
+        if(m_currentSize == 0)
             throw RuntimeException("FixedVector back on empty vector");
 
-        return base::operator[](current_size - 1);
+        return Base::operator[](m_currentSize - 1);
     }
     constexpr const_reference back()const{
-        NWB_ASSERT(current_size > 0);
-        if(current_size == 0)
+        NWB_ASSERT(m_currentSize > 0);
+        if(m_currentSize == 0)
             throw RuntimeException("FixedVector back on empty vector");
 
-        return base::operator[](current_size - 1);
+        return Base::operator[](m_currentSize - 1);
     }
 
 public:
-    using base::data;
-    using base::begin;
-    using base::cbegin;
+    using Base::data;
+    using Base::begin;
+    using Base::cbegin;
 
 public:
-    constexpr iterator end()noexcept{ return iterator(begin()) + current_size; }
+    constexpr iterator end()noexcept{ return iterator(begin()) + m_currentSize; }
     constexpr const_iterator end()const noexcept{ return cend(); }
-    constexpr const_iterator cend()const noexcept{ return const_iterator(cbegin()) + current_size; }
+    constexpr const_iterator cend()const noexcept{ return const_iterator(cbegin()) + m_currentSize; }
 
-    constexpr bool empty()const noexcept{ return current_size == 0; }
-    constexpr size_type size()const noexcept{ return current_size; }
-    constexpr size_type max_size()const noexcept{ return max_elements; }
+    constexpr bool empty()const noexcept{ return m_currentSize == 0; }
+    constexpr size_type size()const noexcept{ return m_currentSize; }
+    constexpr size_type max_size()const noexcept{ return s_MaxElements; }
 
     constexpr void fill(const T& value)noexcept{
-        base::fill(value);
-        current_size = max_elements;
+        Base::fill(value);
+        m_currentSize = s_MaxElements;
     }
 
     constexpr void swap(FixedVector& other)noexcept{
-        base::swap(other);
-        std::swap(current_size, other.current_size);
+        Base::swap(other);
+        Swap(m_currentSize, other.m_currentSize);
     }
 
     constexpr void push_back(const T& value){
-        NWB_ASSERT(current_size < max_elements);
-        if(current_size >= max_elements)
+        NWB_ASSERT(m_currentSize < s_MaxElements);
+        if(m_currentSize >= s_MaxElements)
             throw RuntimeException("FixedVector capacity exceeded");
 
-        *(data() + current_size) = value;
-        ++current_size;
+        *(data() + m_currentSize) = value;
+        ++m_currentSize;
     }
 
     constexpr void push_back(T&& value){
-        NWB_ASSERT(current_size < max_elements);
-        if(current_size >= max_elements)
+        NWB_ASSERT(m_currentSize < s_MaxElements);
+        if(m_currentSize >= s_MaxElements)
             throw RuntimeException("FixedVector capacity exceeded");
 
-        *(data() + current_size) = Move(value);
-        ++current_size;
+        *(data() + m_currentSize) = Move(value);
+        ++m_currentSize;
     }
 
     constexpr void pop_back(){
-        NWB_ASSERT(current_size > 0);
-        if(current_size == 0)
+        NWB_ASSERT(m_currentSize > 0);
+        if(m_currentSize == 0)
             throw RuntimeException("FixedVector pop_back on empty vector");
 
-        --current_size;
+        --m_currentSize;
     }
 
     constexpr void resize(size_type new_size){
-        NWB_ASSERT(new_size <= max_elements);
-        if(new_size > max_elements)
+        NWB_ASSERT(new_size <= s_MaxElements);
+        if(new_size > s_MaxElements)
             throw RuntimeException("FixedVector size exceeds capacity");
 
-        const size_type lo = current_size < new_size ? current_size : new_size;
-        const size_type hi = current_size < new_size ? new_size : current_size;
+        const size_type lo = m_currentSize < new_size ? m_currentSize : new_size;
+        const size_type hi = m_currentSize < new_size ? new_size : m_currentSize;
         for(size_type i = lo; i < hi; ++i)
             *(data() + i) = T{};
 
-        current_size = new_size;
+        m_currentSize = new_size;
     }
 
     template<typename... Args>
     constexpr reference emplace_back(Args&&... args){
-        NWB_ASSERT(current_size < max_elements);
-        if(current_size >= max_elements)
+        NWB_ASSERT(m_currentSize < s_MaxElements);
+        if(m_currentSize >= s_MaxElements)
             throw RuntimeException("FixedVector capacity exceeded");
 
-        T* slot = data() + current_size;
+        T* slot = data() + m_currentSize;
         *slot = T(Forward<Args>(args)...);
-        ++current_size;
+        ++m_currentSize;
         return *slot;
     }
 
 private:
-    size_type current_size = 0;
+    size_type m_currentSize = 0;
 };
 
 

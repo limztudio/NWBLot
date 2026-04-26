@@ -116,7 +116,7 @@ Queue::~Queue(){
         waitInfo.pValues = &m_lastSubmittedID;
 
         res = vkWaitSemaphores(m_context.device, &waitInfo, UINT64_MAX);
-        (void)res;
+        static_cast<void>(res);
     }
 
     m_commandBuffersInFlight.clear();
@@ -249,25 +249,27 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd, bool* outSubmitted){
     }
 
     Vector<TrackedCommandBufferPtr, Alloc::ScratchAllocator<TrackedCommandBufferPtr>> trackedBuffers{ Alloc::ScratchAllocator<TrackedCommandBufferPtr>(scratchArena) };
-    Vector<VkCommandBuffer, Alloc::ScratchAllocator<VkCommandBuffer>> cmdBufs{ Alloc::ScratchAllocator<VkCommandBuffer>(scratchArena) };
+    Vector<VkCommandBufferSubmitInfo, Alloc::ScratchAllocator<VkCommandBufferSubmitInfo>> cmdBufInfos{ Alloc::ScratchAllocator<VkCommandBufferSubmitInfo>(scratchArena) };
 
     if(hasCommands){
         trackedBuffers.reserve(numCmd);
-        cmdBufs.reserve(numCmd);
+        cmdBufInfos.reserve(numCmd);
 
         for(usize i = 0; i < numCmd; ++i){
             auto* cmdList = checked_cast<CommandList*>(ppCmd[i]);
             if(!cmdList || !cmdList->m_currentCmdBuf)
                 continue;
 
-            cmdBufs.push_back(cmdList->m_currentCmdBuf->m_cmdBuf);
+            VkCommandBufferSubmitInfo cmdBufInfo = VulkanDetail::MakeVkStruct<VkCommandBufferSubmitInfo>(VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO);
+            cmdBufInfo.commandBuffer = cmdList->m_currentCmdBuf->m_cmdBuf;
+            cmdBufInfos.push_back(cmdBufInfo);
 
             cmdList->m_currentCmdBuf->m_submissionID = m_lastSubmittedID + 1;
             trackedBuffers.push_back(Move(cmdList->m_currentCmdBuf));
         }
     }
 
-    if(cmdBufs.empty() && !hasPendingSemaphores)
+    if(cmdBufInfos.empty() && !hasPendingSemaphores)
         return m_lastSubmittedID;
 
     const auto clearTrackedSignalFence = [](TrackedCommandBuffer& tracked){
@@ -321,15 +323,6 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd, bool* outSubmitted){
         signalInfo.value = m_signalSemaphoreValues[i];
         signalInfo.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
         signalInfos.push_back(signalInfo);
-    }
-
-    Vector<VkCommandBufferSubmitInfo, Alloc::ScratchAllocator<VkCommandBufferSubmitInfo>> cmdBufInfos{ Alloc::ScratchAllocator<VkCommandBufferSubmitInfo>(scratchArena) };
-    cmdBufInfos.reserve(cmdBufs.size());
-
-    for(VkCommandBuffer cmdBuf : cmdBufs){
-        VkCommandBufferSubmitInfo cmdBufInfo = VulkanDetail::MakeVkStruct<VkCommandBufferSubmitInfo>(VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO);
-        cmdBufInfo.commandBuffer = cmdBuf;
-        cmdBufInfos.push_back(cmdBufInfo);
     }
 
     VkFence submitFence = VK_NULL_HANDLE;
@@ -518,13 +511,13 @@ void Device::queueWaitForCommandList(CommandQueue::Enum waitQueue, CommandQueue:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapping* tileMappings, u32 numTileMappings){
+void Queue::updateTextureTileMappings(ITexture* textureResource, const TextureTilesMapping* tileMappings, u32 numTileMappings){
     VkResult res = VK_SUCCESS;
 
-    if(!_texture || !tileMappings || numTileMappings == 0)
+    if(!textureResource || !tileMappings || numTileMappings == 0)
         return;
 
-    auto* texture = checked_cast<Texture*>(_texture);
+    auto* texture = checked_cast<Texture*>(textureResource);
     Alloc::ThreadPool& workerPool = m_context.threadPool;
     const bool useParallelPool = workerPool.isParallelEnabled();
     const usize mappingCount = static_cast<usize>(numTileMappings);
@@ -669,7 +662,8 @@ void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapp
                 bind.size = region.tilesNum * texture->m_tileByteSize;
                 bind.memory = deviceMemory;
                 bind.memoryOffset = deviceMemory ? mapping.byteOffsets[j] : 0;
-                sparseMemoryBinds[opaqueWrite++] = bind;
+                sparseMemoryBinds[opaqueWrite] = bind;
+                ++opaqueWrite;
             }
             else{
                 VkSparseImageMemoryBind bind = {};
@@ -684,7 +678,8 @@ void Queue::updateTextureTileMappings(ITexture* _texture, const TextureTilesMapp
                 bind.extent.depth = region.depth * tileDepth;
                 bind.memory = deviceMemory;
                 bind.memoryOffset = deviceMemory ? mapping.byteOffsets[j] : 0;
-                sparseImageMemoryBinds[imageWrite++] = bind;
+                sparseImageMemoryBinds[imageWrite] = bind;
+                ++imageWrite;
             }
         }
     };

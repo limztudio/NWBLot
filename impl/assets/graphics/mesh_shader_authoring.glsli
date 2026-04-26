@@ -39,9 +39,21 @@ struct NwbMeshInstanceData{
     vec4 rotation;
     vec4 translation;
     vec4 scale;
+    uvec4 materialParameters;
 };
 
-#define NWB_MESH_BUILD_VERTEX_SIGNATURE NwbMeshGeneratedVertex nwbMeshBuildVertex(uint triangleIndex, uint corner, NwbMeshSourceVertex source)
+struct NwbMaterialParameterData{
+    uvec4 meta;
+    uvec4 data;
+};
+
+#define NWB_MESH_BUILD_VERTEX_SIGNATURE \
+    NwbMeshGeneratedVertex nwbMeshBuildVertex( \
+        uint triangleIndex, \
+        uint corner, \
+        NwbMeshSourceVertex source, \
+        const NwbMeshInstanceData instance \
+    )
 
 const uint NWB_MESH_SOURCE_VERTEX_SCALAR_STRIDE = 6u;
 const uint NWB_MESH_SOURCE_VERTEX_LAYOUT_POSITION_COLOR = 0u;
@@ -61,6 +73,10 @@ layout(std430, binding = 1) readonly buffer NwbMeshSourceIndicesBuffer{
 
 layout(std430, binding = 3) readonly buffer NwbMeshInstancesBuffer{
     NwbMeshInstanceData nwbMeshInstances[];
+};
+
+layout(std430, binding = 5) readonly buffer NwbMaterialParametersBuffer{
+    NwbMaterialParameterData nwbMaterialParameters[];
 };
 
 layout(push_constant) uniform NwbMeshPushConstants{
@@ -130,6 +146,11 @@ uint nwbMeshActiveTriangleCount(){
 
 bool nwbMeshInvocationActive(){
     return nwbMeshGroupThreadID() < nwbMeshActiveTriangleCount();
+}
+
+vec3 nwbMeshSafeNormalize(vec3 value, vec3 fallback){
+    const float lengthSquared = dot(value, value);
+    return lengthSquared > 0.000001 ? (value * inversesqrt(lengthSquared)) : fallback;
 }
 
 mat4 nwbMeshWorldToClip(){
@@ -206,16 +227,72 @@ NwbMeshInstanceData nwbMeshLoadInstance(){
     return nwbMeshInstances[nwbMeshInstanceIndex()];
 }
 
-vec3 nwbMeshTransformPosition(vec3 localPosition){
-    const NwbMeshInstanceData instance = nwbMeshLoadInstance();
+const uint NWB_MATERIAL_PARAMETER_TYPE_FLOAT = 1u;
+const uint NWB_MATERIAL_PARAMETER_TYPE_INT = 2u;
+const uint NWB_MATERIAL_PARAMETER_TYPE_UINT = 3u;
+const uint NWB_MATERIAL_PARAMETER_TYPE_BOOL = 4u;
+
+uint nwbMaterialParameterOffset(const NwbMeshInstanceData instance){
+    return instance.materialParameters.x;
+}
+
+uint nwbMaterialParameterCount(const NwbMeshInstanceData instance){
+    return instance.materialParameters.y;
+}
+
+bool nwbMaterialParameterKeyMatches(const NwbMaterialParameterData parameter, const uvec2 key){
+    return all(equal(parameter.meta.xy, key));
+}
+
+bool nwbMaterialFindParameter(
+    const NwbMeshInstanceData instance,
+    const uvec2 key,
+    const uint valueType,
+    out NwbMaterialParameterData outParameter)
+{
+    const uint offset = nwbMaterialParameterOffset(instance);
+    const uint count = nwbMaterialParameterCount(instance);
+    for(uint i = 0u; i < count; ++i){
+        const NwbMaterialParameterData parameter = nwbMaterialParameters[offset + i];
+        if(parameter.meta.z == valueType && nwbMaterialParameterKeyMatches(parameter, key)){
+            outParameter = parameter;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+vec4 nwbMaterialFindFloat4(const NwbMeshInstanceData instance, const uvec2 key, const vec4 fallbackValue){
+    NwbMaterialParameterData parameter;
+    if(!nwbMaterialFindParameter(instance, key, NWB_MATERIAL_PARAMETER_TYPE_FLOAT, parameter))
+        return fallbackValue;
+
+    const vec4 value = uintBitsToFloat(parameter.data);
+    const uint componentCount = min(parameter.meta.w, 4u);
+    vec4 result = fallbackValue;
+    for(uint i = 0u; i < componentCount; ++i)
+        result[i] = value[i];
+
+    return result;
+}
+
+vec3 nwbMeshTransformPosition(vec3 localPosition, const NwbMeshInstanceData instance){
     return nwbMeshRotateVectorByQuaternion(localPosition * instance.scale.xyz, instance.rotation)
         + instance.translation.xyz
     ;
 }
 
-vec3 nwbMeshTransformDirection(vec3 localDirection){
-    const NwbMeshInstanceData instance = nwbMeshLoadInstance();
+vec3 nwbMeshTransformPosition(vec3 localPosition){
+    return nwbMeshTransformPosition(localPosition, nwbMeshLoadInstance());
+}
+
+vec3 nwbMeshTransformDirection(vec3 localDirection, const NwbMeshInstanceData instance){
     return normalize(nwbMeshRotateVectorByQuaternion(localDirection, instance.rotation));
+}
+
+vec3 nwbMeshTransformDirection(vec3 localDirection){
+    return nwbMeshTransformDirection(localDirection, nwbMeshLoadInstance());
 }
 
 #if NWB_MESH_SHADER_EMULATION_COMPUTE
@@ -304,6 +381,21 @@ NwbMeshGeneratedVertex nwbMeshCulledVertex(){
 }
 #endif
 
+void nwbMeshApplyGeneratedTriangleFrame(inout NwbMeshGeneratedVertex vertices[3]){
+    if(nwbMeshSourceVertexLayout() != NWB_MESH_SOURCE_VERTEX_LAYOUT_POSITION_COLOR)
+        return;
+
+    const vec3 edge0 = vertices[1].worldPosition.xyz - vertices[0].worldPosition.xyz;
+    const vec3 edge1 = vertices[2].worldPosition.xyz - vertices[0].worldPosition.xyz;
+    const vec3 faceNormal = nwbMeshSafeNormalize(cross(edge0, edge1), vertices[0].normal);
+    const vec3 faceTangent = nwbMeshSafeNormalize(edge0, vertices[0].tangent.xyz);
+
+    for(uint corner = 0u; corner < 3u; ++corner){
+        vertices[corner].normal = faceNormal;
+        vertices[corner].tangent = vec4(faceTangent, vertices[corner].tangent.w);
+    }
+}
+
 NWB_MESH_BUILD_VERTEX_SIGNATURE;
 
 void main(){
@@ -318,14 +410,17 @@ void main(){
     const uint triangleIndex = nwbMeshTriangleIndex();
     const uint vertexBase = nwbMeshGroupThreadID() * 3u;
 
+    const NwbMeshInstanceData instance = nwbMeshLoadInstance();
     NwbMeshGeneratedVertex generatedVertices[3];
     for(uint corner = 0u; corner < 3u; ++corner){
         generatedVertices[corner] = nwbMeshBuildVertex(
             triangleIndex,
             corner,
-            nwbMeshLoadSourceVertex(triangleIndex, corner)
+            nwbMeshLoadSourceVertex(triangleIndex, corner),
+            instance
         );
     }
+    nwbMeshApplyGeneratedTriangleFrame(generatedVertices);
 
 #if NWB_MESH_SHADER_EMULATION_COMPUTE
     if(nwbMeshTriangleCulled(generatedVertices)){

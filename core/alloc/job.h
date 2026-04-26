@@ -152,7 +152,7 @@ public:
     }
 
     template<typename Func>
-    inline JobHandle submit(Func&& task, std::initializer_list<JobHandle> dependencies){
+    inline JobHandle submit(Func&& task, InitializerList<JobHandle> dependencies){
         return submitWithDependencies(JobFunction(Forward<Func>(task)), dependencies.begin(), dependencies.size());
     }
 
@@ -185,25 +185,25 @@ public:
                 completionSignal = node->completionSignal;
                 NWB_ASSERT_MSG(completionSignal != nullptr, NWB_TEXT("JobSystem encountered a null completion signal"));
 
-                completedGeneration = completionSignal->completedGeneration.load(std::memory_order_acquire);
-                if(completedGeneration >= handle.generation)
+                completedGeneration = completionSignal->completedGeneration.load(MemoryOrder::acquire);
+                if(completedGeneration == handle.generation)
                     return;
             }
 
-            completionSignal->completedGeneration.wait(completedGeneration, std::memory_order_relaxed);
+            completionSignal->completedGeneration.wait(completedGeneration, MemoryOrder::relaxed);
         }
     }
 
-    inline void wait(std::initializer_list<JobHandle> handles){
+    inline void wait(InitializerList<JobHandle> handles){
         for(const JobHandle handle : handles)
             wait(handle);
     }
 
     inline void waitAll(){
-        usize current = m_pendingJobCount.load(std::memory_order_acquire);
+        usize current = m_pendingJobCount.load(MemoryOrder::acquire);
         while(current > 0){
-            m_pendingJobCount.wait(current, std::memory_order_relaxed);
-            current = m_pendingJobCount.load(std::memory_order_acquire);
+            m_pendingJobCount.wait(current, MemoryOrder::relaxed);
+            current = m_pendingJobCount.load(MemoryOrder::acquire);
         }
     }
 
@@ -243,14 +243,13 @@ private:
                 ++unresolved;
             }
 
+            m_pendingJobCount.fetch_add(1, MemoryOrder::release);
             node->remainingDependencies = unresolved;
             if(unresolved == 0){
                 node->scheduled = true;
                 shouldSchedule = true;
             }
         }
-
-        m_pendingJobCount.fetch_add(1, std::memory_order_release);
 
         if(shouldSchedule)
             enqueueExecution(output);
@@ -396,7 +395,8 @@ private:
             completionSignal = node->completionSignal;
             NWB_ASSERT_MSG(completionSignal != nullptr, NWB_TEXT("JobSystem encountered a null completion signal"));
 
-            for(usize i = 0; i < node->dependents.size(); ++i){
+            const usize dependentCount = node->dependents.size();
+            for(usize i = 0; i < dependentCount; ++i){
                 const JobHandle dependentHandle = node->dependents[i];
                 JobNode* dependentNode = tryResolveNodeLocked(dependentHandle);
                 if(!dependentNode)
@@ -415,19 +415,21 @@ private:
                         continue;
                     }
 
+                    if(readyJobs.empty())
+                        readyJobs.reserve(dependentCount - i);
                     readyJobs.push_back(dependentHandle);
                 }
             }
 
+            completionSignal->completedGeneration.store(handle.generation, MemoryOrder::release);
             recycleNodeLocked(handle.index, *node);
         }
 
-        completionSignal->completedGeneration.store(handle.generation, std::memory_order_release);
         completionSignal->completedGeneration.notify_all();
 
         enqueueExecutionBatch(readyJobs.data(), readyJobs.size());
 
-        if(m_pendingJobCount.fetch_sub(1, std::memory_order_acq_rel) == 1)
+        if(m_pendingJobCount.fetch_sub(1, MemoryOrder::acq_rel) == 1)
             m_pendingJobCount.notify_all();
 
         return inlineContinuation;
@@ -467,7 +469,7 @@ protected:
     }
 
     template<typename Func>
-    inline JobSystem::JobHandle scheduleJob(Func&& task, std::initializer_list<JobSystem::JobHandle> dependencies){
+    inline JobSystem::JobHandle scheduleJob(Func&& task, InitializerList<JobSystem::JobHandle> dependencies){
         return m_jobSystem.submit(Forward<Func>(task), dependencies);
     }
 
@@ -475,7 +477,7 @@ protected:
         m_jobSystem.wait(handle);
     }
 
-    inline void waitJobs(std::initializer_list<JobSystem::JobHandle> handles){
+    inline void waitJobs(InitializerList<JobSystem::JobHandle> handles){
         m_jobSystem.wait(handles);
     }
 

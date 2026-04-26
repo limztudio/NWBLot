@@ -8,6 +8,7 @@
 #include <exception>
 #include <cstddef>
 #include <cstdint>
+#include <initializer_list>
 #include <stdexcept>
 #include <system_error>
 #include <type_traits>
@@ -72,6 +73,10 @@ using RuntimeException = std::runtime_error;
 
 
 using ErrorCode = std::error_code;
+
+
+template<typename T>
+using InitializerList = std::initializer_list<T>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

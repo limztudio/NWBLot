@@ -8,7 +8,8 @@
 
 #include <core/alloc/scratch.h>
 #include <impl/assets_graphics/deformable_geometry_validation.h>
-#include <global/filesystem.h>
+#include <global/algorithm.h>
+#include <global/binary.h>
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -27,11 +28,10 @@ namespace __hidden_deformable_surface_edit{
 
 using namespace DeformableRuntime;
 
-static constexpr f32 s_WallRimTransferWeights[1] = { 1.0f };
 static constexpr f32 s_WallInnerInpaintWeights[3] = { 0.25f, 0.5f, 0.25f };
 static constexpr u32 s_SurfaceEditStateMagic = 0x53454631u; // SEF1
-static constexpr u32 s_SurfaceEditStateVersion = 2u;
-static constexpr u32 s_MinWallLoopVertexCount = 6u;
+static constexpr u32 s_SurfaceEditStateVersion = 3u;
+static constexpr u32 s_MinWallLoopVertexCount = 3u;
 
 struct HoleFrame{
     SIMDVector center = VectorZero();
@@ -45,6 +45,11 @@ struct EdgeRecord{
     u32 b = 0;
     u32 fullCount = 0;
     u32 removedCount = 0;
+};
+
+struct BoundaryVertexEdges{
+    usize edgeIndices[2] = { Limit<usize>::s_Max, Limit<usize>::s_Max };
+    u32 count = 0;
 };
 
 struct WallVertexFrame{
@@ -164,8 +169,20 @@ template<typename EdgeMap>
 
 template<typename VertexDegreeMap>
 void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
-    auto [it, inserted] = degrees.emplace(vertex, 0u);
+    auto it = degrees.emplace(vertex, 0u).first;
     ++it.value();
+}
+
+template<typename VertexEdgeMap>
+[[nodiscard]] bool RegisterBoundaryVertexEdge(VertexEdgeMap& vertexEdges, const u32 vertex, const usize edgeIndex){
+    auto it = vertexEdges.emplace(vertex, BoundaryVertexEdges{}).first;
+    BoundaryVertexEdges& adjacency = it.value();
+    if(adjacency.count >= LengthOf(adjacency.edgeIndices))
+        return false;
+
+    adjacency.edgeIndices[adjacency.count] = edgeIndex;
+    ++adjacency.count;
+    return true;
 }
 
 [[nodiscard]] bool BuildHoleFrame(
@@ -405,7 +422,6 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
 [[nodiscard]] bool ValidWallVertexSpan(const u32 firstVertex, const u32 vertexCount){
     return firstVertex != Limit<u32>::s_Max
         && vertexCount >= s_MinWallLoopVertexCount
-        && (vertexCount % 2u) == 0u
         && vertexCount <= Limit<u32>::s_Max - firstVertex
     ;
 }
@@ -426,7 +442,9 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
         return !requireWall && result.addedTriangleCount == 0u;
     if(result.wallVertexCount > result.addedVertexCount)
         return false;
-    if(result.addedTriangleCount != result.wallVertexCount)
+    if(result.wallVertexCount > Limit<u32>::s_Max / 2u)
+        return false;
+    if(result.addedTriangleCount != result.wallVertexCount * 2u)
         return false;
     return true;
 }
@@ -435,18 +453,19 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
     const DeformableRuntimeMeshInstance& instance,
     const usize indexBase,
     const usize firstWallVertex,
-    const usize wallPairCount)
+    const usize wallVertexCount)
 {
-    for(usize pairIndex = 0u; pairIndex < wallPairCount; ++pairIndex){
-        const usize nextPairIndex = (pairIndex + 1u) % wallPairCount;
-        const u32 rimA = static_cast<u32>(firstWallVertex + (pairIndex * 2u));
-        const u32 innerA = rimA + 1u;
-        const u32 rimB = static_cast<u32>(firstWallVertex + (nextPairIndex * 2u));
-        const u32 innerB = rimB + 1u;
+    for(usize pairIndex = 0u; pairIndex < wallVertexCount; ++pairIndex){
+        const usize nextPairIndex = (pairIndex + 1u) % wallVertexCount;
+        const u32 innerA = static_cast<u32>(firstWallVertex + pairIndex);
+        const u32 innerB = static_cast<u32>(firstWallVertex + nextPairIndex);
         const usize pairIndexBase = indexBase + (pairIndex * 6u);
+        const u32 rimA = instance.indices[pairIndexBase + 0u];
+        const u32 rimB = instance.indices[pairIndexBase + 1u];
 
-        if(instance.indices[pairIndexBase + 0u] != rimA
-            || instance.indices[pairIndexBase + 1u] != rimB
+        if(rimA >= firstWallVertex
+            || rimB >= firstWallVertex
+            || rimA == rimB
             || instance.indices[pairIndexBase + 2u] != innerB
             || instance.indices[pairIndexBase + 3u] != rimA
             || instance.indices[pairIndexBase + 4u] != innerB
@@ -472,16 +491,15 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
     )
         return false;
 
-    if(wallVertexCount > Limit<usize>::s_Max / 3u)
+    if(wallVertexCount > Limit<usize>::s_Max / 6u)
         return false;
 
-    const usize wallIndexCount = wallVertexCount * 3u;
+    const usize wallIndexCount = wallVertexCount * 6u;
     if(wallIndexCount > instance.indices.size())
         return false;
 
-    const usize wallPairCount = wallVertexCount / 2u;
     const usize indexBase = instance.indices.size() - wallIndexCount;
-    return RuntimeMeshWallTrianglePairsMatchAt(instance, indexBase, firstWallVertex, wallPairCount);
+    return RuntimeMeshWallTrianglePairsMatchAt(instance, indexBase, firstWallVertex, wallVertexCount);
 }
 
 [[nodiscard]] bool RuntimeMeshHasWallTrianglePairs(
@@ -576,17 +594,6 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
     ;
 }
 
-[[nodiscard]] bool HasCommittedHoleForAttachment(
-    const Vector<DeformableSurfaceEditRecord>& edits,
-    const DeformableAccessoryAttachmentRecord& accessory)
-{
-    for(const DeformableSurfaceEditRecord& record : edits){
-        if(EditRecordMatchesAccessory(record, accessory))
-            return true;
-    }
-    return false;
-}
-
 [[nodiscard]] bool ValidSurfaceEditState(const DeformableSurfaceEditState& state){
     u32 expectedBaseEditRevision = 0u;
     for(const DeformableSurfaceEditRecord& record : state.edits){
@@ -596,10 +603,15 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
             return false;
         expectedBaseEditRevision = record.result.editRevision;
     }
+    const DeformableSurfaceEditRecord* latestCommittedEdit = state.edits.empty()
+        ? nullptr
+        : &state.edits.back()
+    ;
     for(const DeformableAccessoryAttachmentRecord& accessory : state.accessories){
         if(!ValidAccessoryRecord(accessory)
             || accessory.editRevision != expectedBaseEditRevision
-            || !HasCommittedHoleForAttachment(state.edits, accessory)
+            || !latestCommittedEdit
+            || !EditRecordMatchesAccessory(*latestCommittedEdit, accessory)
         )
             return false;
     }
@@ -634,8 +646,8 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
     outRecord.wallVertexCount = binary.wallVertexCount;
     outRecord.normalOffset = binary.normalOffset;
     outRecord.uniformScale = binary.uniformScale;
-    outRecord.geometry = Core::Assets::AssetRef<Geometry>(Name(binary.geometryNameHash));
-    outRecord.material = Core::Assets::AssetRef<Material>(Name(binary.materialNameHash));
+    outRecord.geometry.virtualPath = Name(binary.geometryNameHash);
+    outRecord.material.virtualPath = Name(binary.materialNameHash);
     return ValidAccessoryRecord(outRecord);
 }
 
@@ -795,12 +807,7 @@ void CanonicalizeBoundaryLoopStart(EdgeVector& edges){
     if(startEdgeIndex == 0u)
         return;
 
-    EdgeVector rotatedEdges(edges.get_allocator());
-    rotatedEdges.reserve(edges.size());
-    for(usize edgeOffset = 0u; edgeOffset < edges.size(); ++edgeOffset)
-        rotatedEdges.push_back(edges[(startEdgeIndex + edgeOffset) % edges.size()]);
-    for(usize edgeIndex = 0u; edgeIndex < edges.size(); ++edgeIndex)
-        edges[edgeIndex] = rotatedEdges[edgeIndex];
+    Rotate(edges.begin(), edges.begin() + static_cast<isize>(startEdgeIndex), edges.end());
 }
 
 template<typename BoundaryEdgeVector, typename OrderedEdgeVector>
@@ -820,14 +827,42 @@ template<typename BoundaryEdgeVector, typename OrderedEdgeVector>
     };
     visitedEdges.resize(boundaryEdges.size(), 0u);
 
+    using BoundaryVertexEdgeMap = HashMap<
+        u32,
+        BoundaryVertexEdges,
+        Hasher<u32>,
+        EqualTo<u32>,
+        Core::Alloc::ScratchAllocator<Pair<const u32, BoundaryVertexEdges>>
+    >;
+    BoundaryVertexEdgeMap vertexEdges(
+        0,
+        Hasher<u32>(),
+        EqualTo<u32>(),
+        Core::Alloc::ScratchAllocator<Pair<const u32, BoundaryVertexEdges>>(scratchArena)
+    );
+    vertexEdges.reserve(boundaryEdges.size());
+    for(usize edgeIndex = 0u; edgeIndex < boundaryEdges.size(); ++edgeIndex){
+        const EdgeRecord& edge = boundaryEdges[edgeIndex];
+        if(!RegisterBoundaryVertexEdge(vertexEdges, edge.a, edgeIndex)
+            || !RegisterBoundaryVertexEdge(vertexEdges, edge.b, edgeIndex)
+        )
+            return false;
+    }
+
     const u32 startVertex = boundaryEdges[0].a;
     u32 currentVertex = startVertex;
     outOrderedEdges.reserve(boundaryEdges.size());
     while(outOrderedEdges.size() < boundaryEdges.size()){
         usize nextEdgeIndex = Limit<usize>::s_Max;
         EdgeRecord nextEdge;
-        for(usize edgeIndex = 0; edgeIndex < boundaryEdges.size(); ++edgeIndex){
-            if(visitedEdges[edgeIndex] != 0u)
+        const auto foundEdges = vertexEdges.find(currentVertex);
+        if(foundEdges == vertexEdges.end())
+            return false;
+
+        const BoundaryVertexEdges& adjacentEdges = foundEdges.value();
+        for(u32 adjacencyIndex = 0u; adjacencyIndex < adjacentEdges.count; ++adjacencyIndex){
+            const usize edgeIndex = adjacentEdges.edgeIndices[adjacencyIndex];
+            if(edgeIndex >= boundaryEdges.size() || visitedEdges[edgeIndex] != 0u)
                 continue;
 
             const EdgeRecord& edge = boundaryEdges[edgeIndex];
@@ -880,16 +915,17 @@ void AccumulateMorphDelta(
     const DeformableMorphDelta& source,
     const f32 weight)
 {
+    const SIMDVector weightVector = VectorReplicate(weight);
     StoreFloat(
-        VectorMultiplyAdd(LoadFloat(source.deltaPosition), VectorReplicate(weight), LoadFloat(target.deltaPosition)),
+        VectorMultiplyAdd(LoadFloat(source.deltaPosition), weightVector, LoadFloat(target.deltaPosition)),
         &target.deltaPosition
     );
     StoreFloat(
-        VectorMultiplyAdd(LoadFloat(source.deltaNormal), VectorReplicate(weight), LoadFloat(target.deltaNormal)),
+        VectorMultiplyAdd(LoadFloat(source.deltaNormal), weightVector, LoadFloat(target.deltaNormal)),
         &target.deltaNormal
     );
     StoreFloat(
-        VectorMultiplyAdd(LoadFloat(source.deltaTangent), VectorReplicate(weight), LoadFloat(target.deltaTangent)),
+        VectorMultiplyAdd(LoadFloat(source.deltaTangent), weightVector, LoadFloat(target.deltaTangent)),
         &target.deltaTangent
     );
 }
@@ -901,9 +937,7 @@ void AccumulateMorphDelta(
 {
     outLookup.reserve(sourceDeltaCount);
     for(usize deltaIndex = 0u; deltaIndex < sourceDeltaCount; ++deltaIndex){
-        const auto [it, inserted] = outLookup.emplace(morph.deltas[deltaIndex].vertexId, deltaIndex);
-        (void)it;
-        if(!inserted)
+        if(!outLookup.emplace(morph.deltas[deltaIndex].vertexId, deltaIndex).second)
             return false;
     }
     return true;
@@ -967,17 +1001,14 @@ template<typename EdgeVector, typename VertexVector>
 [[nodiscard]] bool TransferWallMorphDeltas(
     Vector<DeformableMorph>& morphs,
     const EdgeVector& orderedBoundaryEdges,
-    const VertexVector& rimVertices,
     const VertexVector& innerVertices)
 {
-    if(rimVertices.size() != innerVertices.size() || orderedBoundaryEdges.size() != rimVertices.size())
+    if(orderedBoundaryEdges.size() != innerVertices.size())
         return false;
-    if(rimVertices.empty())
+    if(innerVertices.empty())
         return true;
-    if(rimVertices.size() > Limit<usize>::s_Max / 2u)
-        return false;
 
-    const usize maxAddedDeltaCount = rimVertices.size() * 2u;
+    const usize maxAddedDeltaCount = innerVertices.size();
     Core::Alloc::ScratchArena<> scratchArena;
     for(DeformableMorph& morph : morphs){
         const usize sourceDeltaCount = morph.deltas.size();
@@ -985,6 +1016,8 @@ template<typename EdgeVector, typename VertexVector>
             || maxAddedDeltaCount > static_cast<usize>(Limit<u32>::s_Max) - morph.deltas.size()
         )
             return false;
+        if(sourceDeltaCount == 0u)
+            continue;
 
         MorphDeltaLookup lookup(
             0,
@@ -999,7 +1032,6 @@ template<typename EdgeVector, typename VertexVector>
         for(usize edgeIndex = 0u; edgeIndex < orderedBoundaryEdges.size(); ++edgeIndex){
             const usize previousEdgeIndex = edgeIndex == 0u ? orderedBoundaryEdges.size() - 1u : edgeIndex - 1u;
             const EdgeRecord& edge = orderedBoundaryEdges[edgeIndex];
-            const u32 rimSourceVertex[1] = { edge.a };
             const u32 innerSourceVertices[3] = {
                 orderedBoundaryEdges[previousEdgeIndex].a,
                 edge.a,
@@ -1007,14 +1039,6 @@ template<typename EdgeVector, typename VertexVector>
             };
 
             if(!AppendBlendedMorphDelta(
-                    morph.deltas,
-                    morph,
-                    lookup,
-                    rimSourceVertex,
-                    s_WallRimTransferWeights,
-                    rimVertices[edgeIndex]
-                )
-                || !AppendBlendedMorphDelta(
                     morph.deltas,
                     morph,
                     lookup,
@@ -1182,161 +1206,6 @@ template<usize sourceCount>
 
     StoreFloat(VectorScale(color, 1.0f / weightSum), &outColor);
     return DeformableValidation::FiniteVector(LoadFloat(outColor), 0xFu);
-}
-
-[[nodiscard]] SourceSample MakeFallbackSourceSample(const u32 sourceTriangle, const u32 corner){
-    SourceSample sample{};
-    sample.sourceTri = sourceTriangle;
-    sample.bary[corner] = 1.0f;
-    return sample;
-}
-
-template<typename AssignedSampleVector>
-[[nodiscard]] bool AssignFallbackSourceSample(
-    Vector<SourceSample>& sourceSamples,
-    AssignedSampleVector& assignedSamples,
-    const u32 vertex,
-    const SourceSample& sample)
-{
-    if(vertex >= sourceSamples.size() || vertex >= assignedSamples.size())
-        return false;
-
-    if(assignedSamples[vertex] == 0u){
-        sourceSamples[vertex] = sample;
-        assignedSamples[vertex] = 1u;
-        return true;
-    }
-    return MatchingSourceSample(sourceSamples[vertex], sample);
-}
-
-template<typename AssignedSampleVector>
-void FillUnassignedFallbackSourceSamples(
-    Vector<SourceSample>& sourceSamples,
-    AssignedSampleVector& assignedSamples)
-{
-    const SourceSample fallbackSample = MakeFallbackSourceSample(0u, 0u);
-    for(usize vertex = 0; vertex < assignedSamples.size(); ++vertex){
-        if(assignedSamples[vertex] != 0u)
-            continue;
-
-        sourceSamples[vertex] = fallbackSample;
-        assignedSamples[vertex] = 1u;
-    }
-}
-
-[[nodiscard]] bool TriangleHasRecoverableSourceSamples(
-    const DeformableRuntimeMeshInstance& instance,
-    const u32 triangle)
-{
-    const Vector<SourceSample>& sourceSamples = instance.sourceSamples;
-    if(sourceSamples.size() != instance.restVertices.size() || instance.sourceTriangleCount == 0u)
-        return false;
-
-    u32 sourceVertices[3] = {};
-    if(!DeformableRuntime::ValidateTriangleIndex(instance, triangle, sourceVertices))
-        return false;
-
-    const SourceSample& sample0 = sourceSamples[sourceVertices[0]];
-    const SourceSample& sample1 = sourceSamples[sourceVertices[1]];
-    const SourceSample& sample2 = sourceSamples[sourceVertices[2]];
-    return DeformableValidation::ValidSourceSample(sample0, instance.sourceTriangleCount)
-        && DeformableValidation::ValidSourceSample(sample1, instance.sourceTriangleCount)
-        && DeformableValidation::ValidSourceSample(sample2, instance.sourceTriangleCount)
-        && sample0.sourceTri == sample1.sourceTri
-        && sample0.sourceTri == sample2.sourceTri
-    ;
-}
-
-[[nodiscard]] bool CopyMorphDeltasForDuplicateVertex(
-    Vector<DeformableMorph>& morphs,
-    const u32 sourceVertex,
-    const u32 duplicateVertex)
-{
-    for(DeformableMorph& morph : morphs){
-        const usize sourceDeltaCount = morph.deltas.size();
-        for(usize deltaIndex = 0u; deltaIndex < sourceDeltaCount; ++deltaIndex){
-            const DeformableMorphDelta& sourceDelta = morph.deltas[deltaIndex];
-            if(sourceDelta.vertexId != sourceVertex)
-                continue;
-            if(morph.deltas.size() >= static_cast<usize>(Limit<u32>::s_Max))
-                return false;
-
-            DeformableMorphDelta duplicateDelta = sourceDelta;
-            duplicateDelta.vertexId = duplicateVertex;
-            morph.deltas.push_back(duplicateDelta);
-            break;
-        }
-    }
-    return true;
-}
-
-[[nodiscard]] bool AppendFallbackProvenanceVertex(
-    Vector<DeformableVertexRest>& vertices,
-    Vector<SkinInfluence4>& skin,
-    Vector<SourceSample>& sourceSamples,
-    Vector<DeformableMorph>& morphs,
-    const u32 sourceVertex,
-    const SourceSample& sample,
-    u32& outVertex)
-{
-    if(sourceVertex >= vertices.size() || vertices.size() >= static_cast<usize>(Limit<u32>::s_Max))
-        return false;
-    if(!skin.empty() && sourceVertex >= skin.size())
-        return false;
-    if(sourceSamples.size() != vertices.size())
-        return false;
-
-    outVertex = static_cast<u32>(vertices.size());
-    const DeformableVertexRest vertex = vertices[sourceVertex];
-    vertices.push_back(vertex);
-    if(!skin.empty())
-        skin.push_back(skin[sourceVertex]);
-    sourceSamples.push_back(sample);
-    return CopyMorphDeltasForDuplicateVertex(morphs, sourceVertex, outVertex);
-}
-
-template<typename AssignedSampleVector>
-[[nodiscard]] bool AppendKeptTriangleWithFallbackProvenance(
-    const DeformableRuntimeMeshInstance& instance,
-    const u32 sourceTriangleCount,
-    const u32 triangle,
-    Vector<DeformableVertexRest>& vertices,
-    Vector<SkinInfluence4>& skin,
-    Vector<SourceSample>& sourceSamples,
-    Vector<DeformableMorph>& morphs,
-    AssignedSampleVector& assignedSamples,
-    Vector<u32>& outIndices,
-    u32& inOutDuplicateVertexCount)
-{
-    if(triangle >= sourceTriangleCount)
-        return false;
-
-    u32 sourceVertices[3] = {};
-    if(!DeformableRuntime::ValidateTriangleIndex(instance, triangle, sourceVertices))
-        return false;
-
-    for(u32 corner = 0u; corner < 3u; ++corner){
-        const SourceSample sample = MakeFallbackSourceSample(triangle, corner);
-        u32 outputVertex = sourceVertices[corner];
-        if(!AssignFallbackSourceSample(sourceSamples, assignedSamples, outputVertex, sample)){
-            if(!AppendFallbackProvenanceVertex(
-                    vertices,
-                    skin,
-                    sourceSamples,
-                    morphs,
-                    outputVertex,
-                    sample,
-                    outputVertex
-                )
-            )
-                return false;
-            if(inOutDuplicateVertexCount == Limit<u32>::s_Max)
-                return false;
-            ++inOutDuplicateVertexCount;
-        }
-        outIndices.push_back(outputVertex);
-    }
-    return true;
 }
 
 [[nodiscard]] SIMDVector ProjectedEdgeDirection(
@@ -1618,14 +1487,24 @@ bool ResolveAccessoryAttachmentTransform(
     const usize wallVertexCount = static_cast<usize>(attachment.wallVertexCount);
     if(firstWallVertex >= posedVertices.size() || wallVertexCount > posedVertices.size() - firstWallVertex)
         return false;
+    if(wallVertexCount > Limit<usize>::s_Max / 6u)
+        return false;
+
+    const usize wallIndexCount = wallVertexCount * 6u;
+    if(wallIndexCount > instance.indices.size())
+        return false;
 
     SIMDVector rimCenter = VectorZero();
     SIMDVector innerCenter = VectorZero();
     SIMDVector firstRimPosition = VectorZero();
-    const usize wallPairCount = wallVertexCount / 2u;
-    for(usize pairIndex = 0u; pairIndex < wallPairCount; ++pairIndex){
-        const usize rimVertexIndex = firstWallVertex + (pairIndex * 2u);
-        const usize innerVertexIndex = rimVertexIndex + 1u;
+    const usize wallIndexBase = instance.indices.size() - wallIndexCount;
+    for(usize pairIndex = 0u; pairIndex < wallVertexCount; ++pairIndex){
+        const usize pairIndexBase = wallIndexBase + (pairIndex * 6u);
+        const usize rimVertexIndex = static_cast<usize>(instance.indices[pairIndexBase + 0u]);
+        const usize innerVertexIndex = firstWallVertex + pairIndex;
+        if(rimVertexIndex >= posedVertices.size() || innerVertexIndex >= posedVertices.size())
+            return false;
+
         const SIMDVector rimPosition = LoadFloat(posedVertices[rimVertexIndex].position);
         if(pairIndex == 0u)
             firstRimPosition = rimPosition;
@@ -1633,9 +1512,9 @@ bool ResolveAccessoryAttachmentTransform(
         innerCenter = VectorAdd(innerCenter, LoadFloat(posedVertices[innerVertexIndex].position));
     }
 
-    const f32 invWallPairCount = 1.0f / static_cast<f32>(wallPairCount);
-    rimCenter = VectorScale(rimCenter, invWallPairCount);
-    innerCenter = VectorScale(innerCenter, invWallPairCount);
+    const f32 invWallVertexCount = 1.0f / static_cast<f32>(wallVertexCount);
+    rimCenter = VectorScale(rimCenter, invWallVertexCount);
+    innerCenter = VectorScale(innerCenter, invWallVertexCount);
     SIMDVector normal = DeformableRuntime::Normalize(
         VectorSubtract(rimCenter, innerCenter),
         VectorSet(0.0f, 0.0f, 1.0f, 0.0f)
@@ -1795,24 +1674,6 @@ bool CommitDeformableRestSpaceHole(
     };
     removeTriangle.resize(triangleCount, 0u);
 
-    u32 removedTriangleCount = 0;
-    for(usize triangle = 0; triangle < triangleCount; ++triangle){
-        u32 indices[3] = {};
-        if(!DeformableRuntime::ValidateTriangleIndex(instance, static_cast<u32>(triangle), indices))
-            return false;
-
-        const bool selectedTriangle = triangle == static_cast<usize>(params.posedHit.triangle);
-        if(selectedTriangle
-            || __hidden_deformable_surface_edit::TriangleInsideFootprint(instance, frame, radiusX, radiusY, indices)
-        ){
-            removeTriangle[triangle] = 1u;
-            ++removedTriangleCount;
-        }
-    }
-
-    if(removedTriangleCount == 0u || removedTriangleCount >= triangleCount)
-        return false;
-
     using EdgeRecord = __hidden_deformable_surface_edit::EdgeRecord;
     using EdgeRecordVector = Vector<EdgeRecord, Core::Alloc::ScratchAllocator<EdgeRecord>>;
     using EdgeRecordMap = HashMap<
@@ -1837,6 +1698,8 @@ bool CommitDeformableRestSpaceHole(
         Core::Alloc::ScratchAllocator<Pair<const u64, EdgeRecord>>(scratchArena)
     );
     edges.reserve(instance.indices.size());
+
+    u32 removedTriangleCount = 0;
     for(usize triangle = 0; triangle < triangleCount; ++triangle){
         u32 indices[3] = {};
         if(!DeformableRuntime::ValidateTriangleIndex(instance, static_cast<u32>(triangle), indices))
@@ -1845,21 +1708,24 @@ bool CommitDeformableRestSpaceHole(
         __hidden_deformable_surface_edit::RegisterFullEdge(edges, indices[0], indices[1]);
         __hidden_deformable_surface_edit::RegisterFullEdge(edges, indices[1], indices[2]);
         __hidden_deformable_surface_edit::RegisterFullEdge(edges, indices[2], indices[0]);
-    }
-    for(usize triangle = 0; triangle < triangleCount; ++triangle){
-        if(removeTriangle[triangle] == 0u)
-            continue;
 
-        u32 indices[3] = {};
-        if(!DeformableRuntime::ValidateTriangleIndex(instance, static_cast<u32>(triangle), indices))
-            return false;
+        const bool selectedTriangle = triangle == static_cast<usize>(params.posedHit.triangle);
+        if(selectedTriangle
+            || __hidden_deformable_surface_edit::TriangleInsideFootprint(instance, frame, radiusX, radiusY, indices)
+        ){
+            removeTriangle[triangle] = 1u;
+            ++removedTriangleCount;
 
-        if(!__hidden_deformable_surface_edit::RegisterRemovedEdge(edges, indices[0], indices[1])
-            || !__hidden_deformable_surface_edit::RegisterRemovedEdge(edges, indices[1], indices[2])
-            || !__hidden_deformable_surface_edit::RegisterRemovedEdge(edges, indices[2], indices[0])
-        )
-            return false;
+            if(!__hidden_deformable_surface_edit::RegisterRemovedEdge(edges, indices[0], indices[1])
+                || !__hidden_deformable_surface_edit::RegisterRemovedEdge(edges, indices[1], indices[2])
+                || !__hidden_deformable_surface_edit::RegisterRemovedEdge(edges, indices[2], indices[0])
+            )
+                return false;
+        }
     }
+
+    if(removedTriangleCount == 0u || removedTriangleCount >= triangleCount)
+        return false;
 
     EdgeRecordVector boundaryEdges{Core::Alloc::ScratchAllocator<EdgeRecord>(scratchArena)};
     boundaryEdges.reserve(removedTriangleCount * 3u);
@@ -1871,7 +1737,7 @@ bool CommitDeformableRestSpaceHole(
     );
     boundaryDegrees.reserve(removedTriangleCount * 3u);
     for(const auto& [edgeKey, edge] : edges){
-        (void)edgeKey;
+        static_cast<void>(edgeKey);
         if(edge.removedCount == 0u)
             continue;
         if(edge.removedCount > edge.fullCount || edge.fullCount > 2u)
@@ -1887,7 +1753,7 @@ bool CommitDeformableRestSpaceHole(
     if(boundaryEdges.empty())
         return false;
     for(const auto& [vertex, degree] : boundaryDegrees){
-        (void)vertex;
+        static_cast<void>(vertex);
         if(degree != 2u)
             return false;
     }
@@ -1895,38 +1761,18 @@ bool CommitDeformableRestSpaceHole(
     if(!__hidden_deformable_surface_edit::BuildOrderedBoundaryLoop(boundaryEdges, instance, frame, orderedBoundaryEdges))
         return false;
 
-    Vector<DeformableVertexRest> newRestVertices = instance.restVertices;
-    Vector<SkinInfluence4> newSkin = instance.skin;
-    Vector<SourceSample> newSourceSamples = instance.sourceSamples;
-    Vector<DeformableMorph> newMorphs = instance.morphs;
     Vector<u32> newIndices;
     u32 newSourceTriangleCount = instance.sourceTriangleCount;
-    const bool synthesizeFallbackSourceSamples = newSourceSamples.empty();
-    const bool canMaterializeCurrentTriangleFallback =
-        instance.editRevision == 0u
-        && newSourceTriangleCount == static_cast<u32>(triangleCount)
-    ;
-    Vector<u8, Core::Alloc::ScratchAllocator<u8>> fallbackAssignedSamples{
-        Core::Alloc::ScratchAllocator<u8>(scratchArena)
-    };
-    if(synthesizeFallbackSourceSamples){
-        newSourceTriangleCount = instance.sourceTriangleCount;
-        if(newSourceTriangleCount == 0u || newSourceTriangleCount != static_cast<u32>(triangleCount))
-            return false;
+    if(instance.sourceSamples.empty() || instance.sourceSamples.size() != instance.restVertices.size() || newSourceTriangleCount == 0u)
+        return false;
 
-        newSourceSamples.resize(instance.restVertices.size());
-        fallbackAssignedSamples.resize(instance.restVertices.size(), 0u);
-    }
-    else if(canMaterializeCurrentTriangleFallback){
-        fallbackAssignedSamples.resize(instance.restVertices.size(), 1u);
-    }
-
+    const bool addWall = params.depth > DeformableRuntime::s_Epsilon;
     usize wallVertexCount = 0u;
-    if(params.depth > DeformableRuntime::s_Epsilon){
+    if(addWall){
         if(orderedBoundaryEdges.size() > Limit<usize>::s_Max / 6u)
             return false;
 
-        wallVertexCount = orderedBoundaryEdges.size() * 2u;
+        wallVertexCount = orderedBoundaryEdges.size();
         if(wallVertexCount > Limit<usize>::s_Max - instance.restVertices.size())
             return false;
         if(instance.restVertices.size() + wallVertexCount > static_cast<usize>(Limit<u32>::s_Max))
@@ -1934,7 +1780,7 @@ bool CommitDeformableRestSpaceHole(
     }
 
     const usize removedIndexCount = static_cast<usize>(removedTriangleCount) * 3u;
-    const usize wallIndexCount = params.depth > DeformableRuntime::s_Epsilon
+    const usize wallIndexCount = addWall
         ? orderedBoundaryEdges.size() * 6u
         : 0u
     ;
@@ -1944,19 +1790,22 @@ bool CommitDeformableRestSpaceHole(
     )
         return false;
 
-    const usize fallbackDuplicateVertexCapacity =
-        (synthesizeFallbackSourceSamples || canMaterializeCurrentTriangleFallback) ? keptIndexCount : 0u
-    ;
     usize reservedVertexCount = instance.restVertices.size();
     if(wallVertexCount > Limit<usize>::s_Max - reservedVertexCount)
         return false;
     reservedVertexCount += wallVertexCount;
-    if(fallbackDuplicateVertexCapacity > Limit<usize>::s_Max - reservedVertexCount)
-        return false;
-    reservedVertexCount += fallbackDuplicateVertexCapacity;
     if(reservedVertexCount > static_cast<usize>(Limit<u32>::s_Max))
         return false;
-    if(reservedVertexCount != instance.restVertices.size()){
+
+    Vector<DeformableVertexRest> newRestVertices;
+    Vector<SkinInfluence4> newSkin;
+    Vector<SourceSample> newSourceSamples;
+    Vector<DeformableMorph> newMorphs;
+    if(addWall){
+        newRestVertices = instance.restVertices;
+        newSkin = instance.skin;
+        newSourceSamples = instance.sourceSamples;
+        newMorphs = instance.morphs;
         newRestVertices.reserve(reservedVertexCount);
         if(!newSkin.empty())
             newSkin.reserve(reservedVertexCount);
@@ -1971,50 +1820,18 @@ bool CommitDeformableRestSpaceHole(
         if(removeTriangle[triangle] != 0u)
             continue;
 
-        const bool materializeFallbackProvenance =
-            synthesizeFallbackSourceSamples
-            || (canMaterializeCurrentTriangleFallback
-                && !__hidden_deformable_surface_edit::TriangleHasRecoverableSourceSamples(
-                    instance,
-                    static_cast<u32>(triangle)
-                ))
-        ;
-        if(materializeFallbackProvenance){
-            if(!__hidden_deformable_surface_edit::AppendKeptTriangleWithFallbackProvenance(
-                    instance,
-                    newSourceTriangleCount,
-                    static_cast<u32>(triangle),
-                    newRestVertices,
-                    newSkin,
-                    newSourceSamples,
-                    newMorphs,
-                    fallbackAssignedSamples,
-                    newIndices,
-                    addedVertexCount
-                )
-            )
-                return false;
-        }
-        else{
-            const usize indexBase = triangle * 3u;
-            newIndices.push_back(instance.indices[indexBase + 0u]);
-            newIndices.push_back(instance.indices[indexBase + 1u]);
-            newIndices.push_back(instance.indices[indexBase + 2u]);
-        }
-    }
-    if(synthesizeFallbackSourceSamples){
-        __hidden_deformable_surface_edit::FillUnassignedFallbackSourceSamples(
-            newSourceSamples,
-            fallbackAssignedSamples
-        );
+        const usize indexBase = triangle * 3u;
+        newIndices.push_back(instance.indices[indexBase + 0u]);
+        newIndices.push_back(instance.indices[indexBase + 1u]);
+        newIndices.push_back(instance.indices[indexBase + 2u]);
     }
 
     u32 firstWallVertex = Limit<u32>::s_Max;
     u32 addedWallVertexCount = 0u;
-    if(params.depth > DeformableRuntime::s_Epsilon){
+    if(addWall){
         const usize boundaryVertexCount = orderedBoundaryEdges.size();
         firstWallVertex = static_cast<u32>(newRestVertices.size());
-        addedWallVertexCount = static_cast<u32>(boundaryVertexCount * 2u);
+        addedWallVertexCount = static_cast<u32>(boundaryVertexCount);
         const SIMDVector frameNormal = frame.normal;
         Vector<f32, Core::Alloc::ScratchAllocator<f32>> boundaryU{
             Core::Alloc::ScratchAllocator<f32>(scratchArena)
@@ -2041,13 +1858,9 @@ bool CommitDeformableRestSpaceHole(
         if(boundaryLength <= DeformableRuntime::s_Epsilon)
             return false;
 
-        Vector<u32, Core::Alloc::ScratchAllocator<u32>> rimVertices{
-            Core::Alloc::ScratchAllocator<u32>(scratchArena)
-        };
         Vector<u32, Core::Alloc::ScratchAllocator<u32>> innerVertices{
             Core::Alloc::ScratchAllocator<u32>(scratchArena)
         };
-        rimVertices.resize(boundaryVertexCount, 0u);
         innerVertices.resize(boundaryVertexCount, 0u);
 
         for(usize edgeIndex = 0; edgeIndex < boundaryVertexCount; ++edgeIndex){
@@ -2072,22 +1885,16 @@ bool CommitDeformableRestSpaceHole(
                 rimPosition
             );
             const f32 uvU = boundaryU[edgeIndex] / boundaryLength;
+            if(!newSourceSamples.empty())
+                newSourceSamples[edge.a] = wallSourceSample;
 
-            const u32 rimAttributeVertex[1] = { edge.a };
             const u32 innerAttributeVertices[3] = {
                 orderedBoundaryEdges[previousEdgeIndex].a,
                 edge.a,
                 edge.b,
             };
-            Float4U rimColor;
             Float4U innerColor;
             if(!__hidden_deformable_surface_edit::BuildBlendedVertexColor(
-                    newRestVertices,
-                    rimAttributeVertex,
-                    __hidden_deformable_surface_edit::s_WallRimTransferWeights,
-                    rimColor
-                )
-                || !__hidden_deformable_surface_edit::BuildBlendedVertexColor(
                     newRestVertices,
                     innerAttributeVertices,
                     __hidden_deformable_surface_edit::s_WallInnerInpaintWeights,
@@ -2096,18 +1903,10 @@ bool CommitDeformableRestSpaceHole(
             )
                 return false;
 
-            SkinInfluence4 rimSkin;
             SkinInfluence4 innerSkin;
-            const SkinInfluence4* rimSkinPtr = nullptr;
             const SkinInfluence4* innerSkinPtr = nullptr;
             if(!newSkin.empty()){
                 if(!__hidden_deformable_surface_edit::BuildBlendedSkinInfluence(
-                        newSkin,
-                        rimAttributeVertex,
-                        __hidden_deformable_surface_edit::s_WallRimTransferWeights,
-                        rimSkin
-                    )
-                    || !__hidden_deformable_surface_edit::BuildBlendedSkinInfluence(
                         newSkin,
                         innerAttributeVertices,
                         __hidden_deformable_surface_edit::s_WallInnerInpaintWeights,
@@ -2116,26 +1915,10 @@ bool CommitDeformableRestSpaceHole(
                 )
                     return false;
 
-                rimSkinPtr = &rimSkin;
                 innerSkinPtr = &innerSkin;
             }
 
             if(!__hidden_deformable_surface_edit::AppendWallVertex(
-                    newRestVertices,
-                    newSkin,
-                    newSourceSamples,
-                    edge.a,
-                    rimSkinPtr,
-                    wallSourceSample,
-                    rimColor,
-                    rimPosition,
-                    vertexFrame.normal,
-                    vertexFrame.tangent,
-                    uvU,
-                    0.0f,
-                    rimVertices[edgeIndex]
-                )
-                || !__hidden_deformable_surface_edit::AppendWallVertex(
                     newRestVertices,
                     newSkin,
                     newSourceSamples,
@@ -2153,13 +1936,12 @@ bool CommitDeformableRestSpaceHole(
             )
                 return false;
 
-            addedVertexCount += 2u;
+            addedVertexCount += 1u;
         }
 
         if(!__hidden_deformable_surface_edit::TransferWallMorphDeltas(
                 newMorphs,
                 orderedBoundaryEdges,
-                rimVertices,
                 innerVertices
             )
         )
@@ -2167,8 +1949,8 @@ bool CommitDeformableRestSpaceHole(
 
         for(usize edgeIndex = 0; edgeIndex < boundaryVertexCount; ++edgeIndex){
             const usize nextEdgeIndex = (edgeIndex + 1u) % boundaryVertexCount;
-            const u32 rimA = rimVertices[edgeIndex];
-            const u32 rimB = rimVertices[nextEdgeIndex];
+            const u32 rimA = orderedBoundaryEdges[edgeIndex].a;
+            const u32 rimB = orderedBoundaryEdges[nextEdgeIndex].a;
             const u32 innerB = innerVertices[nextEdgeIndex];
             const u32 innerA = innerVertices[edgeIndex];
 
@@ -2183,22 +1965,24 @@ bool CommitDeformableRestSpaceHole(
     }
 
     if(!DeformableValidation::ValidRuntimePayloadArrays(
-            newRestVertices,
+            addWall ? newRestVertices : instance.restVertices,
             newIndices,
             newSourceTriangleCount,
-            newSkin,
-            newSourceSamples,
-            newMorphs
+            addWall ? newSkin : instance.skin,
+            addWall ? newSourceSamples : instance.sourceSamples,
+            addWall ? newMorphs : instance.morphs
         )
     )
         return false;
 
-    instance.restVertices = Move(newRestVertices);
+    if(addWall){
+        instance.restVertices = Move(newRestVertices);
+        instance.skin = Move(newSkin);
+        instance.sourceSamples = Move(newSourceSamples);
+        instance.morphs = Move(newMorphs);
+    }
     instance.indices = Move(newIndices);
     instance.sourceTriangleCount = newSourceTriangleCount;
-    instance.skin = Move(newSkin);
-    instance.sourceSamples = Move(newSourceSamples);
-    instance.morphs = Move(newMorphs);
     ++instance.editRevision;
     instance.dirtyFlags = static_cast<RuntimeMeshDirtyFlags>(instance.dirtyFlags | RuntimeMeshDirtyFlag::All);
 

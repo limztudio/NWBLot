@@ -76,6 +76,8 @@ void SystemScheduler::clear(){
 
 void SystemScheduler::rebuild(){
     m_stages.clear();
+    const usize systemCount = m_allSystems.size();
+    m_stages.reserve(systemCount);
 
     // Determine parallel stages by analyzing read/write dependencies.
     // Two systems can share a stage if:
@@ -83,38 +85,49 @@ void SystemScheduler::rebuild(){
     //  - One does not write a component that the other reads
 
     Alloc::ScratchArena<> scratchArena(4096);
-    using ScratchComponentTypeAllocator = Alloc::ScratchAllocator<ComponentTypeId>;
-    using ComponentAccessSet = HashSet<
+    using ScratchComponentAccessPair = Pair<const ComponentTypeId, AccessMode::Enum>;
+    using ScratchComponentAccessAllocator = Alloc::ScratchAllocator<ScratchComponentAccessPair>;
+    using ScratchSystemAllocator = Alloc::ScratchAllocator<ISystem*>;
+    using ComponentAccessMap = HashMap<
         ComponentTypeId,
+        AccessMode::Enum,
         Hasher<ComponentTypeId>,
         EqualTo<ComponentTypeId>,
-        ScratchComponentTypeAllocator
+        ScratchComponentAccessAllocator
     >;
 
-    Vector<u8, Alloc::ScratchAllocator<u8>> assigned(
-        m_allSystems.size(), 0,
+    Vector<u8, Alloc::ScratchAllocator<u8>> assignedSystems(
+        systemCount, 0,
         Alloc::ScratchAllocator<u8>(scratchArena)
     );
+    Vector<ISystem*, ScratchSystemAllocator> stageSystems{ScratchSystemAllocator(scratchArena)};
+    stageSystems.reserve(systemCount);
+
+    usize componentAccessReserve = 0;
+    for(ISystem* sys : m_allSystems){
+        if(sys->m_access.size() > Limit<usize>::s_Max - componentAccessReserve){
+            componentAccessReserve = systemCount;
+            break;
+        }
+        componentAccessReserve += sys->m_access.size();
+    }
+
+    ComponentAccessMap stageAccess(
+        0,
+        Hasher<ComponentTypeId>(),
+        EqualTo<ComponentTypeId>(),
+        ScratchComponentAccessAllocator(scratchArena)
+    );
+    stageAccess.reserve(componentAccessReserve);
+
     usize numAssigned = 0;
 
-    while(numAssigned < m_allSystems.size()){
-        Stage stage{SystemAllocator(m_arena)};
+    while(numAssigned < systemCount){
+        stageSystems.clear();
+        stageAccess.clear();
 
-        ComponentAccessSet stageWrites(
-            0,
-            Hasher<ComponentTypeId>(),
-            EqualTo<ComponentTypeId>(),
-            ScratchComponentTypeAllocator(scratchArena)
-        );
-        ComponentAccessSet stageReads(
-            0,
-            Hasher<ComponentTypeId>(),
-            EqualTo<ComponentTypeId>(),
-            ScratchComponentTypeAllocator(scratchArena)
-        );
-
-        for(usize i = 0; i < m_allSystems.size(); ++i){
-            if(assigned[i])
+        for(usize i = 0; i < systemCount; ++i){
+            if(assignedSystems[i] != 0u)
                 continue;
 
             ISystem* sys = m_allSystems[i];
@@ -122,45 +135,41 @@ void SystemScheduler::rebuild(){
 
             bool compatible = true;
             for(const auto& ca : acc){
-                if(ca.mode == AccessMode::Write){
-                    if(stageWrites.count(ca.typeId) || stageReads.count(ca.typeId)){
-                        compatible = false;
-                        break;
-                    }
-                }
-                else{
-                    if(stageWrites.count(ca.typeId)){
-                        compatible = false;
-                        break;
-                    }
+                const auto foundAccess = stageAccess.find(ca.typeId);
+                if(foundAccess == stageAccess.end())
+                    continue;
+
+                if(ca.mode == AccessMode::Write || foundAccess.value() == AccessMode::Write){
+                    compatible = false;
+                    break;
                 }
             }
 
             if(compatible){
-                for(const auto& ca : acc){
-                    if(ca.mode == AccessMode::Write)
-                        stageWrites.insert(ca.typeId);
-                    else
-                        stageReads.insert(ca.typeId);
-                }
-                stage.push_back(sys);
-                assigned[i] = 1;
+                for(const auto& ca : acc)
+                    stageAccess.try_emplace(ca.typeId, ca.mode);
+                assignedSystems[i] = 1u;
+                stageSystems.push_back(sys);
                 ++numAssigned;
             }
         }
 
-        if(stage.empty()){
-            for(usize i = 0; i < m_allSystems.size(); ++i){
-                if(assigned[i])
+        if(stageSystems.empty()){
+            for(usize i = 0; i < systemCount; ++i){
+                if(assignedSystems[i] != 0u)
                     continue;
 
-                stage.push_back(m_allSystems[i]);
-                assigned[i] = 1;
+                assignedSystems[i] = 1u;
+                stageSystems.push_back(m_allSystems[i]);
                 ++numAssigned;
                 break;
             }
         }
 
+        Stage stage{SystemAllocator(m_arena)};
+        stage.reserve(stageSystems.size());
+        for(ISystem* sys : stageSystems)
+            stage.push_back(sys);
         m_stages.push_back(Move(stage));
     }
 

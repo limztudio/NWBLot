@@ -44,7 +44,7 @@ bool AssetRegistry::registerCodec(UniquePtr<IAssetCodec>&& codec, const bool rep
         return true;
     }
 
-    m_codecs[typeName] = Move(codec);
+    m_codecs.emplace(typeName, Move(codec));
     return true;
 }
 
@@ -85,8 +85,8 @@ bool AssetRegistry::deserializeAssetByName(
         return false;
     }
 
-    const NotNull<const IAssetCodec*> codec(found.value().get());
-    return codec->deserialize(virtualPath, binary, outAsset);
+    const IAssetCodec& codec = *found.value();
+    return codec.deserialize(virtualPath, binary, outAsset);
 }
 
 

@@ -28,39 +28,40 @@ public:
 
 
 protected:
-    constexpr Storage()noexcept : mPair(pointer()){}
-    explicit Storage(pointer pValue)noexcept : mPair(pValue){}
+    constexpr Storage()noexcept : m_pair(pointer()){}
+    explicit Storage(pointer pValue)noexcept : m_pair(pValue){}
     template<typename DeleterArg>
-    Storage(pointer pValue, DeleterArg&& deleter)noexcept : mPair(pValue, Forward<DeleterArg>(deleter)){}
+    Storage(pointer pValue, DeleterArg&& deleter)noexcept : m_pair(pValue, Forward<DeleterArg>(deleter)){}
 
 
 public:
     void reset(pointer pValue = pointer())noexcept{
-        if(pValue != mPair.first()){
-            if(auto first = std::exchange(mPair.first(), pValue))
-                get_deleter()(first);
+        if(pValue != m_pair.first()){
+            pointer previousValue = Exchange(m_pair.first(), pValue);
+            if(previousValue)
+                get_deleter()(previousValue);
         }
     }
 
     pointer release()noexcept{
-        pointer const pTemp = mPair.first();
-        mPair.first() = pointer();
+        pointer const pTemp = m_pair.first();
+        m_pair.first() = pointer();
         return pTemp;
     }
     pointer detach()noexcept{ return release(); }
 
-    pointer get()const noexcept{ return mPair.first(); }
+    pointer get()const noexcept{ return m_pair.first(); }
 
-    deleter_type& get_deleter()noexcept{ return mPair.second(); }
-    const deleter_type& get_deleter()const noexcept{ return mPair.second(); }
+    deleter_type& get_deleter()noexcept{ return m_pair.second(); }
+    const deleter_type& get_deleter()const noexcept{ return m_pair.second(); }
 
 
 protected:
-    void swapStorage(Storage& x)noexcept{ mPair.swap(x.mPair); }
+    void swapStorage(Storage& x)noexcept{ m_pair.swap(x.m_pair); }
 
 
 private:
-    CompressedPair<pointer, deleter_type> mPair;
+    CompressedPair<pointer, deleter_type> m_pair;
 };
 
 
@@ -284,6 +285,22 @@ inline typename EnableIf<IsUnboundedArray<T>::value, UniquePtr<T>>::type MakeUni
 template<typename T, typename... Args>
 typename EnableIf<IsBoundedArray<T>::value>::type
 MakeUnique(Args&&...) = delete;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename T, typename... Args>
+inline typename EnableIf<!IsArray<T>::value, std::unique_ptr<T>>::type MakeStdUnique(Args&&... args){
+    return std::make_unique<T>(Forward<Args>(args)...);
+}
+template<typename T>
+inline typename EnableIf<IsUnboundedArray<T>::value, std::unique_ptr<T>>::type MakeStdUnique(usize n){
+    return std::make_unique<T>(n);
+}
+template<typename T, typename... Args>
+typename EnableIf<IsBoundedArray<T>::value>::type
+MakeStdUnique(Args&&...) = delete;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

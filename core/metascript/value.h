@@ -102,7 +102,8 @@ public:
         for(const auto& elem : list){
             if(!elem.isString())
                 return false;
-            outList.push_back(elem.copyString());
+            const MStringView text = elem.asString();
+            outList.emplace_back(text.data(), text.size());
         }
         return true;
     }

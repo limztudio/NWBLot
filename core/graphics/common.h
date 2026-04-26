@@ -164,7 +164,7 @@ struct Color{
 
     constexpr Color()noexcept : r(0), g(0), b(0), a(0) {}
     constexpr Color(f32 c)noexcept : r(c), g(c), b(c), a(c) {}
-    constexpr Color(f32 _r, f32 _g, f32 _b, f32 _a)noexcept : r(_r), g(_g), b(_b), a(_a) {}
+    constexpr Color(f32 red, f32 green, f32 blue, f32 alpha)noexcept : r(red), g(green), b(blue), a(alpha) {}
 };
 inline bool operator==(const Color& lhs, const Color& rhs)noexcept{
     return
@@ -184,7 +184,14 @@ struct Viewport{
 
     constexpr Viewport()noexcept : minX(0), maxX(0), minY(0), maxY(0), minZ(0), maxZ(0) {}
     constexpr Viewport(f32 width, f32 height)noexcept : minX(0), maxX(width), minY(0), maxY(height), minZ(0), maxZ(1) {}
-    constexpr Viewport(f32 _minX, f32 _maxX, f32 _minY, f32 _maxY, f32 _minZ, f32 _maxZ)noexcept : minX(_minX), maxX(_maxX), minY(_minY), maxY(_maxY), minZ(_minZ), maxZ(_maxZ) {}
+    constexpr Viewport(f32 minXValue, f32 maxXValue, f32 minYValue, f32 maxYValue, f32 minZValue, f32 maxZValue)noexcept
+        : minX(minXValue)
+        , maxX(maxXValue)
+        , minY(minYValue)
+        , maxY(maxYValue)
+        , minZ(minZValue)
+        , maxZ(maxZValue)
+    {}
 
     [[nodiscard]] constexpr f32 width()const noexcept{ return maxX - minX; }
     [[nodiscard]] constexpr f32 height()const noexcept{ return maxY - minY; }
@@ -205,7 +212,12 @@ struct Rect{
 
     constexpr Rect()noexcept : minX(0), maxX(0), minY(0), maxY(0) {}
     constexpr Rect(i32 width, i32 height)noexcept : minX(0), maxX(width), minY(0), maxY(height) {}
-    constexpr Rect(i32 _minX, i32 _maxX, i32 _minY, i32 _maxY)noexcept : minX(_minX), maxX(_maxX), minY(_minY), maxY(_maxY) {}
+    constexpr Rect(i32 minXValue, i32 maxXValue, i32 minYValue, i32 maxYValue)noexcept
+        : minX(minXValue)
+        , maxX(maxXValue)
+        , minY(minYValue)
+        , maxY(maxYValue)
+    {}
     explicit Rect(const Viewport& viewport)noexcept : minX(static_cast<i32>(Floor(viewport.minX))), maxX(static_cast<i32>(Ceil(viewport.maxX))), minY(static_cast<i32>(Floor(viewport.minY))), maxY(static_cast<i32>(Ceil(viewport.maxY))) {}
 
     [[nodiscard]] constexpr i32 width()const noexcept{ return maxX - minX; }
@@ -379,6 +391,8 @@ struct FormatInfo{
 };
 
 const FormatInfo& GetFormatInfo(Format::Enum format)noexcept;
+[[nodiscard]] u32 GetFormatBlockWidth(const FormatInfo& formatInfo)noexcept;
+[[nodiscard]] u32 GetFormatBlockHeight(const FormatInfo& formatInfo)noexcept;
 
 namespace FormatSupport{
     enum Mask : u32{
@@ -614,11 +628,16 @@ struct TextureSubresourceSet{
     [[nodiscard]] bool isEntireTexture(const TextureDesc& desc)const;
 
     constexpr TextureSubresourceSet() = default;
-    constexpr TextureSubresourceSet(MipLevel _baseMipLevel, MipLevel _numMipLevels, ArraySlice _baseArraySlice, ArraySlice _numArraySlices)
-    : baseMipLevel(_baseMipLevel)
-    , numMipLevels(_numMipLevels)
-    , baseArraySlice(_baseArraySlice)
-    , numArraySlices(_numArraySlices)
+    constexpr TextureSubresourceSet(
+        MipLevel baseMipLevelValue,
+        MipLevel numMipLevelsValue,
+        ArraySlice baseArraySliceValue,
+        ArraySlice numArraySlicesValue
+    )
+        : baseMipLevel(baseMipLevelValue)
+        , numMipLevels(numMipLevelsValue)
+        , baseArraySlice(baseArraySliceValue)
+        , numArraySlices(numArraySlicesValue)
     {}
 
     constexpr TextureSubresourceSet& setBaseMipLevel(MipLevel value){ baseMipLevel = value; return *this; }
@@ -822,9 +841,9 @@ struct BufferDesc{
     constexpr BufferDesc& setKeepInitialState(bool value){ keepInitialState = value; return *this; }
     constexpr BufferDesc& setCpuAccess(CpuAccessMode::Enum value){ cpuAccess = value; return *this; }
 
-    // Equivalent to .setInitialState(_initialState).setKeepInitialState(true)
-    constexpr BufferDesc& enableAutomaticStateTracking(ResourceStates::Mask _initialState){
-        initialState = _initialState;
+    // Equivalent to .setInitialState(initialStateValue).setKeepInitialState(true)
+    constexpr BufferDesc& enableAutomaticStateTracking(ResourceStates::Mask initialStateValue){
+        initialState = initialStateValue;
         keepInitialState = true;
         return *this;
     }
@@ -835,9 +854,9 @@ struct BufferRange{
     u64 byteSize = 0;
 
     BufferRange() = default;
-    constexpr BufferRange(u64 _byteOffset, u64 _byteSize)
-        : byteOffset(_byteOffset)
-        , byteSize(_byteSize)
+    constexpr BufferRange(u64 byteOffsetValue, u64 byteSizeValue)
+        : byteOffset(byteOffsetValue)
+        , byteSize(byteSizeValue)
     {}
 
     [[nodiscard]] BufferRange resolve(const BufferDesc& desc)const;
@@ -924,7 +943,7 @@ struct CustomSemantic{
 struct ShaderDesc{
     ShaderType::Mask shaderType = ShaderType::None;
     Name debugName;
-    Name entryName = "main";
+    AString entryName = "main";
 
     i32 hlslExtensionsUAV = -1;
 
@@ -937,7 +956,7 @@ struct ShaderDesc{
 
     constexpr ShaderDesc& setShaderType(ShaderType::Mask value){ shaderType = value; return *this; }
     constexpr ShaderDesc& setDebugName(const Name& value){ debugName = value; return *this; }
-    constexpr ShaderDesc& setEntryName(const Name& value){ entryName = value; return *this; }
+    ShaderDesc& setEntryName(const AStringView value){ entryName = AString(value); return *this; }
     constexpr ShaderDesc& setHlslExtensionsUAV(i32 value){ hlslExtensionsUAV = value; return *this; }
     constexpr ShaderDesc& setUseSpecificShaderExt(bool value){ useSpecificShaderExt = value; return *this; }
     constexpr ShaderDesc& setCustomSemantics(u32 count, CustomSemantic* data){ numCustomSemantics = count; pCustomSemantics = data; return *this; }
@@ -995,7 +1014,7 @@ class IShaderLibrary : public IResource{
 
 public:
     virtual void getBytecode(const void** ppBytecode, usize* pSize)const = 0;
-    virtual ShaderHandle getShader(const Name& entryName, ShaderType::Mask shaderType) = 0;
+    virtual ShaderHandle getShader(AStringView entryName, ShaderType::Mask shaderType) = 0;
 };
 typedef RefCountPtr<IShaderLibrary, ArenaRefDeleter<IShaderLibrary>> ShaderLibraryHandle;
 
@@ -2694,11 +2713,11 @@ struct MeshletState{
 struct RayTracingPipelineShaderDesc{
     ShaderHandle shader;
     BindingLayoutHandle bindingLayout;
-    Name exportName;
+    AString exportName;
 
     RayTracingPipelineShaderDesc& setShader(IShader* value){ shader = value; return *this; }
     RayTracingPipelineShaderDesc& setBindingLayout(IBindingLayout* value){ bindingLayout = value; return *this; }
-    constexpr RayTracingPipelineShaderDesc& setExportName(const Name& value){ exportName = value; return *this; }
+    RayTracingPipelineShaderDesc& setExportName(AStringView value){ exportName = AString(value); return *this; }
 };
 
 struct RayTracingPipelineHitGroupDesc{
@@ -2706,14 +2725,14 @@ struct RayTracingPipelineHitGroupDesc{
     ShaderHandle anyHitShader;
     ShaderHandle intersectionShader;
     BindingLayoutHandle bindingLayout;
-    Name exportName;
+    AString exportName;
     bool isProceduralPrimitive = false;
 
     RayTracingPipelineHitGroupDesc& setClosestHitShader(IShader* value){ closestHitShader = value; return *this; }
     RayTracingPipelineHitGroupDesc& setAnyHitShader(IShader* value){ anyHitShader = value; return *this; }
     RayTracingPipelineHitGroupDesc& setIntersectionShader(IShader* value){ intersectionShader = value; return *this; }
     RayTracingPipelineHitGroupDesc& setBindingLayout(IBindingLayout* value){ bindingLayout = value; return *this; }
-    constexpr RayTracingPipelineHitGroupDesc& setExportName(const Name& value){ exportName = value; return *this; }
+    RayTracingPipelineHitGroupDesc& setExportName(AStringView value){ exportName = AString(value); return *this; }
     constexpr RayTracingPipelineHitGroupDesc& setIsProceduralPrimitive(bool value){ isProceduralPrimitive = value; return *this; }
 };
 
@@ -2744,10 +2763,10 @@ class IRayTracingShaderTable : public IResource{
 
 
 public:
-    virtual void setRayGenerationShader(const Name& exportName, IBindingSet* bindings = nullptr) = 0;
-    virtual u32 addMissShader(const Name& exportName, IBindingSet* bindings = nullptr) = 0;
-    virtual u32 addHitGroup(const Name& exportName, IBindingSet* bindings = nullptr) = 0;
-    virtual u32 addCallableShader(const Name& exportName, IBindingSet* bindings = nullptr) = 0;
+    virtual void setRayGenerationShader(AStringView exportName, IBindingSet* bindings = nullptr) = 0;
+    virtual u32 addMissShader(AStringView exportName, IBindingSet* bindings = nullptr) = 0;
+    virtual u32 addHitGroup(AStringView exportName, IBindingSet* bindings = nullptr) = 0;
+    virtual u32 addCallableShader(AStringView exportName, IBindingSet* bindings = nullptr) = 0;
     virtual void clearMissShaders() = 0;
     virtual void clearHitShaders() = 0;
     virtual void clearCallableShaders() = 0;
@@ -3744,8 +3763,8 @@ namespace std{
 template<typename T>
 struct hash<RefCountPtr<T>>{
     size_t operator()(RefCountPtr<T> const& s)const noexcept{
-        hash<T*> _hash;
-        return _hash(s.Get());
+        hash<T*> pointerHash;
+        return pointerHash(s.Get());
     }
 };
 

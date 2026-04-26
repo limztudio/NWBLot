@@ -116,7 +116,7 @@ bool Client::internalInit(NotNull<const char*> url){
 }
 bool Client::internalUpdate(){
     if(!m_hasPendingPayload){
-        if(!m_msgCount.load(std::memory_order_relaxed))
+        if(!m_msgCount.load(MemoryOrder::relaxed))
             return true;
 
         MessageType msg;
@@ -136,11 +136,11 @@ bool Client::internalUpdate(){
     }
 
     auto scheduleRetry = [this](){
-        if(this->m_exit.load(std::memory_order_acquire))
+        if(this->m_exit.load(MemoryOrder::acquire))
             return;
 
         SleepMS(100);
-        if(this->m_exit.load(std::memory_order_acquire))
+        if(this->m_exit.load(MemoryOrder::acquire))
             return;
 
         this->m_semaphore.release();

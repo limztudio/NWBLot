@@ -28,6 +28,14 @@ namespace __hidden_deformable_picking{
 
 using namespace DeformableRuntime;
 
+using MorphWeightLookup = HashMap<
+    NameHash,
+    f32,
+    Hasher<NameHash>,
+    EqualTo<NameHash>,
+    Core::Alloc::ScratchAllocator<Pair<const NameHash, f32>>
+>;
+
 [[nodiscard]] Float4 LoadVertexNormal(const DeformableVertexRest& vertex){
     return Float4(vertex.normal.x, vertex.normal.y, vertex.normal.z, 0.0f);
 }
@@ -75,62 +83,55 @@ void OrthonormalizeVertexFrame(
     ;
 }
 
-[[nodiscard]] bool AssignCurrentTriangleSample(const u32 triangle, const f32 (&bary)[3], SourceSample& outSample){
-    outSample.sourceTri = triangle;
-    return DeformableValidation::NormalizeSourceBarycentric(bary, outSample.bary);
-}
-
-[[nodiscard]] bool AssignStableCurrentTriangleSample(
-    const DeformableRuntimeMeshInstance& instance,
-    const u32 triangle,
-    const usize triangleCount,
-    const f32 (&bary)[3],
-    SourceSample& outSample)
-{
-    if(instance.editRevision != 0u)
-        return false;
-    if(instance.sourceTriangleCount == 0u)
-        return false;
-    if(triangle >= triangleCount)
-        return false;
-    if(triangleCount != static_cast<usize>(instance.sourceTriangleCount))
-        return false;
-    if(triangle >= instance.sourceTriangleCount)
-        return false;
-
-    return AssignCurrentTriangleSample(triangle, bary, outSample);
-}
-
 template<typename VertexVector>
 [[nodiscard]] bool ApplyMorphs(
     const DeformableRuntimeMeshInstance& instance,
     const DeformableMorphWeightsComponent* weights,
     VertexVector& vertices)
 {
+    if(!HasMorphWeights(weights))
+        return true;
+
+    Core::Alloc::ScratchArena<> scratchArena;
+    MorphWeightLookup resolvedWeights(
+        0,
+        Hasher<NameHash>(),
+        EqualTo<NameHash>(),
+        Core::Alloc::ScratchAllocator<Pair<const NameHash, f32>>(scratchArena)
+    );
+    Name failedMorph = NAME_NONE;
+    if(!BuildMorphWeightSumLookup(instance.morphs, weights, resolvedWeights, failedMorph))
+        return false;
+
+    const usize vertexCount = vertices.size();
     for(const DeformableMorph& morph : instance.morphs){
         f32 weight = 0.0f;
-        if(!ResolveMorphWeightSum(weights, morph.name, weight))
-            return false;
+        if(morph.name){
+            const auto iterWeight = resolvedWeights.find(morph.name.hash());
+            if(iterWeight != resolvedWeights.end())
+                weight = iterWeight.value();
+        }
         if(!DeformableValidation::ActiveWeight(weight))
             continue;
         if(morph.deltas.empty())
             return false;
 
+        const SIMDVector weightVector = VectorReplicate(weight);
         for(const DeformableMorphDelta& delta : morph.deltas){
-            if(!DeformableValidation::ValidMorphDelta(delta, vertices.size()))
+            if(!DeformableValidation::ValidMorphDelta(delta, vertexCount))
                 return false;
 
             DeformableVertexRest& vertex = vertices[delta.vertexId];
             StoreFloat(
-                VectorMultiplyAdd(LoadFloat(delta.deltaPosition), VectorReplicate(weight), LoadFloat(vertex.position)),
+                VectorMultiplyAdd(LoadFloat(delta.deltaPosition), weightVector, LoadFloat(vertex.position)),
                 &vertex.position
             );
             StoreFloat(
-                VectorMultiplyAdd(LoadFloat(delta.deltaNormal), VectorReplicate(weight), LoadFloat(vertex.normal)),
+                VectorMultiplyAdd(LoadFloat(delta.deltaNormal), weightVector, LoadFloat(vertex.normal)),
                 &vertex.normal
             );
             StoreFloat(
-                VectorMultiplyAdd(LoadFloat(delta.deltaTangent), VectorReplicate(weight), LoadFloat(vertex.tangent)),
+                VectorMultiplyAdd(LoadFloat(delta.deltaTangent), weightVector, LoadFloat(vertex.tangent)),
                 &vertex.tangent
             );
         }
@@ -186,6 +187,10 @@ template<typename VertexVector>
     SIMDVector skinnedPosition = VectorZero();
     SIMDVector skinnedNormal = VectorZero();
     SIMDVector skinnedTangent = VectorZero();
+    const SIMDVector basePosition = LoadFloat(vertex.position);
+    const SIMDVector baseNormal = LoadFloat(vertex.normal);
+    const SIMDVector baseTangent = VectorSet(vertex.tangent.x, vertex.tangent.y, vertex.tangent.z, 0.0f);
+    const usize jointCount = jointPalette->joints.size();
     f32 totalWeight = 0.0f;
 
     for(u32 influenceIndex = 0; influenceIndex < 4u; ++influenceIndex){
@@ -193,23 +198,23 @@ template<typename VertexVector>
         const u32 joint = static_cast<u32>(skin.joint[influenceIndex]);
         if(!DeformableValidation::ActiveWeight(weight))
             continue;
-        if(joint >= jointPalette->joints.size() || !IsAffineJointMatrix(jointPalette->joints[joint]))
+        if(joint >= jointCount || !IsAffineJointMatrix(jointPalette->joints[joint]))
             return false;
 
         const DeformableJointMatrix& matrix = jointPalette->joints[joint];
         const SIMDVector weightVector = VectorReplicate(weight);
         skinnedPosition = VectorMultiplyAdd(
-            TransformJointPosition(matrix, LoadFloat(vertex.position)),
+            TransformJointPosition(matrix, basePosition),
             weightVector,
             skinnedPosition
         );
         skinnedNormal = VectorMultiplyAdd(
-            TransformJointDirection(matrix, LoadFloat(vertex.normal)),
+            TransformJointDirection(matrix, baseNormal),
             weightVector,
             skinnedNormal
         );
         skinnedTangent = VectorMultiplyAdd(
-            TransformJointDirection(matrix, VectorSet(vertex.tangent.x, vertex.tangent.y, vertex.tangent.z, 0.0f)),
+            TransformJointDirection(matrix, baseTangent),
             weightVector,
             skinnedTangent
         );
@@ -247,18 +252,19 @@ void ApplyTransform(const Core::Scene::TransformComponent* transform, Deformable
     if(!transform)
         return;
 
+    const SIMDVector rotation = LoadFloat(transform->rotation);
     SIMDVector position = VectorMultiply(LoadFloat(vertex.position), LoadFloat(transform->scale));
-    position = Vector3Rotate(position, LoadFloat(transform->rotation));
+    position = Vector3Rotate(position, rotation);
     StoreFloat(VectorAdd(position, LoadFloat(transform->position)), &vertex.position);
 
-    SIMDVector normalVector = Vector3Rotate(LoadFloat(vertex.normal), LoadFloat(transform->rotation));
+    SIMDVector normalVector = Vector3Rotate(LoadFloat(vertex.normal), rotation);
     normalVector = DeformableRuntime::Normalize(normalVector, VectorSet(0.0f, 0.0f, 1.0f, 0.0f));
     Float4 normal;
     StoreFloat(normalVector, &normal);
     vertex.normal = Float3U(normal.x, normal.y, normal.z);
 
     const SIMDVector tangentVector = DeformableRuntime::Normalize(
-        Vector3Rotate(VectorSet(vertex.tangent.x, vertex.tangent.y, vertex.tangent.z, 0.0f), LoadFloat(transform->rotation)),
+        Vector3Rotate(VectorSet(vertex.tangent.x, vertex.tangent.y, vertex.tangent.z, 0.0f), rotation),
         DeformableRuntime::FallbackTangent(normalVector)
     );
     Float4 tangent;
@@ -422,16 +428,8 @@ bool ResolveDeformableRestSurfaceSample(
     if(!DeformableRuntime::ValidateTriangleIndex(instance, triangle, vertexIndices))
         return false;
 
-    const usize triangleCount = instance.indices.size() / 3u;
-    if(instance.sourceSamples.empty()){
-        return __hidden_deformable_picking::AssignStableCurrentTriangleSample(
-            instance,
-            triangle,
-            triangleCount,
-            bary,
-            outSample
-        );
-    }
+    if(instance.sourceSamples.empty())
+        return false;
     if(instance.sourceSamples.size() != instance.restVertices.size())
         return false;
     if(instance.sourceTriangleCount == 0u)
@@ -445,15 +443,8 @@ bool ResolveDeformableRestSurfaceSample(
         || !DeformableValidation::ValidSourceSample(sample2, instance.sourceTriangleCount)
     )
         return false;
-    if(sample0.sourceTri != sample1.sourceTri || sample0.sourceTri != sample2.sourceTri){
-        return __hidden_deformable_picking::AssignStableCurrentTriangleSample(
-            instance,
-            triangle,
-            triangleCount,
-            bary,
-            outSample
-        );
-    }
+    if(sample0.sourceTri != sample1.sourceTri || sample0.sourceTri != sample2.sourceTri)
+        return false;
 
     outSample.sourceTri = sample0.sourceTri;
     f32 rawBary[3] = {};
@@ -507,9 +498,12 @@ bool RaycastDeformableRuntimeMesh(
     f32 closestDistance = ray.maxDistance();
     DeformablePosedHit closestHit;
     for(usize triangleIndex = 0; triangleIndex < triangleCount; ++triangleIndex){
-        u32 vertexIndices[3] = {};
-        if(!DeformableRuntime::ValidateTriangleIndex(instance, static_cast<u32>(triangleIndex), vertexIndices))
-            return false;
+        const usize indexBase = triangleIndex * 3u;
+        const u32 vertexIndices[3] = {
+            instance.indices[indexBase + 0u],
+            instance.indices[indexBase + 1u],
+            instance.indices[indexBase + 2u]
+        };
 
         const SIMDVector aVector = LoadFloat(posedVertices[vertexIndices[0]].position);
         const SIMDVector bVector = LoadFloat(posedVertices[vertexIndices[1]].position);

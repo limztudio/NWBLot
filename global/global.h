@@ -16,6 +16,7 @@
 #include "containers.h"
 #include "text_utils.h"
 #include "compact_string.h"
+#include "binary.h"
 #include "hash_utils.h"
 #include "unique_ptr.h"
 #include "refcount_ptr.h"

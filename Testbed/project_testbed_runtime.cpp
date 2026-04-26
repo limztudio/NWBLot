@@ -4,8 +4,7 @@
 
 #include "project_testbed.h"
 
-#include <cmath>
-
+#include <global/simplemath.h>
 #include <logger/client/logger.h>
 
 
@@ -20,8 +19,8 @@ struct EditorVec3 : public Float4{
     constexpr EditorVec3()noexcept
         : Float4(0.0f, 0.0f, 0.0f)
     {}
-    constexpr EditorVec3(const f32 _x, const f32 _y, const f32 _z)noexcept
-        : Float4(_x, _y, _z)
+    constexpr EditorVec3(const f32 xValue, const f32 yValue, const f32 zValue)noexcept
+        : Float4(xValue, yValue, zValue)
     {}
 };
 static_assert(IsStandardLayout_V<EditorVec3>, "EditorVec3 must stay layout-stable");
@@ -112,8 +111,8 @@ static void ResolveFlyCameraAnglesFromTransform(
         EditorVec3{ 0.0f, 0.0f, 1.0f }
     );
     const f32 clampedForwardY = Min(Max(forward.y, -1.0f), 1.0f);
-    const f32 yawRadians = static_cast<f32>(std::atan2(forward.x, forward.z));
-    const f32 pitchRadians = static_cast<f32>(-std::asin(clampedForwardY));
+    const f32 yawRadians = ATan2(forward.x, forward.z);
+    const f32 pitchRadians = -ASin(clampedForwardY);
 
     outYawRadians = IsFinite(yawRadians) ? yawRadians : 0.0f;
     outPitchRadians = IsFinite(pitchRadians)
@@ -462,41 +461,57 @@ bool ProjectTestbed::onStartup(){
     scene.mainCamera = __hidden_project_testbed_runtime::CreateMainCameraEntity(*m_world);
     __hidden_project_testbed_runtime::CreateDefaultDirectionalLightEntity(*m_world);
 
-    const TestbedMaterialRef cubeMaterial(Name("project/materials/mat_test"));
-    const TestbedMaterialRef transparentMaterial(Name("project/materials/mat_transparent"));
-    const TestbedMaterialRef deformableUvMaterial(Name("project/materials/mat_deformable_uv"));
+    TestbedMaterialRef cubeWarmMaterial;
+    cubeWarmMaterial.virtualPath = Name("project/materials/mat_cube_warm");
+    TestbedMaterialRef cubeCoolMaterial;
+    cubeCoolMaterial.virtualPath = Name("project/materials/mat_cube_cool");
+    TestbedMaterialRef transparentSphereMaterial;
+    transparentSphereMaterial.virtualPath = Name("project/materials/mat_transparent_sphere");
+    TestbedMaterialRef transparentTetrahedronMaterial;
+    transparentTetrahedronMaterial.virtualPath = Name("project/materials/mat_transparent_tetrahedron");
+    TestbedMaterialRef deformableUvMaterial;
+    deformableUvMaterial.virtualPath = Name("project/materials/mat_deformable_uv");
+
+    TestbedGeometryRef cubeGeometry;
+    cubeGeometry.virtualPath = Name("project/meshes/cube");
+    TestbedGeometryRef sphereGeometry;
+    sphereGeometry.virtualPath = Name("project/meshes/sphere");
+    TestbedGeometryRef tetrahedronGeometry;
+    tetrahedronGeometry.virtualPath = Name("project/meshes/tetrahedron");
+    TestbedDeformableGeometryRef deformableProxyGeometry;
+    deformableProxyGeometry.virtualPath = Name("project/characters/proxy_deformable");
 
     __hidden_project_testbed_runtime::CreateRendererEntity(
         *m_world,
-        TestbedGeometryRef(Name("project/meshes/cube")),
-        cubeMaterial,
+        cubeGeometry,
+        cubeWarmMaterial,
         Float4(-0.55f, 0.0f, 0.0f),
         0.65f
     );
     __hidden_project_testbed_runtime::CreateRendererEntity(
         *m_world,
-        TestbedGeometryRef(Name("project/meshes/cube")),
-        cubeMaterial,
+        cubeGeometry,
+        cubeCoolMaterial,
         Float4(0.55f, 0.0f, 0.0f),
         0.9f
     );
     __hidden_project_testbed_runtime::CreateRendererEntity(
         *m_world,
-        TestbedGeometryRef(Name("project/meshes/sphere")),
-        transparentMaterial,
+        sphereGeometry,
+        transparentSphereMaterial,
         Float4(1.45f, 0.0f, 0.0f),
         0.75f
     );
     __hidden_project_testbed_runtime::CreateRendererEntity(
         *m_world,
-        TestbedGeometryRef(Name("project/meshes/tetrahedron")),
-        transparentMaterial,
+        tetrahedronGeometry,
+        transparentTetrahedronMaterial,
         Float4(-1.45f, 0.0f, 0.0f),
         0.8f
     );
     m_deformableMorphEntity = __hidden_project_testbed_runtime::CreateDeformableRendererEntity(
         *m_world,
-        TestbedDeformableGeometryRef(Name("project/characters/proxy_deformable")),
+        deformableProxyGeometry,
         deformableUvMaterial,
         Float4(0.0f, 0.85f, 0.0f),
         0.8f
@@ -667,7 +682,7 @@ void ProjectTestbed::updateSurfaceEditAccessories(){
             NWB::Core::Scene::TransformComponent& transform,
             NWB::Core::ECSGraphics::RendererComponent& renderer)
         {
-            (void)entity;
+            static_cast<void>(entity);
             const auto* instance = renderSystem.findDeformableRuntimeMesh(attachment.runtimeMesh);
             if(!instance){
                 renderer.visible = false;
@@ -876,8 +891,10 @@ void ProjectTestbed::attachPendingSurfaceEditAccessory(){
         return;
     }
 
-    const __hidden_project_testbed_runtime::TestbedGeometryRef accessoryGeometry(Name("project/meshes/mock_earring"));
-    const __hidden_project_testbed_runtime::TestbedMaterialRef accessoryMaterial(Name("project/materials/mat_test"));
+    __hidden_project_testbed_runtime::TestbedGeometryRef accessoryGeometry;
+    accessoryGeometry.virtualPath = Name("project/meshes/mock_earring");
+    __hidden_project_testbed_runtime::TestbedMaterialRef accessoryMaterial;
+    accessoryMaterial.virtualPath = Name("project/materials/mat_accessory_gold");
     NWB::Core::ECSGraphics::DeformableAccessoryAttachmentRecord accessoryRecord;
     accessoryRecord.geometry = accessoryGeometry;
     accessoryRecord.material = accessoryMaterial;
@@ -951,8 +968,8 @@ void ProjectTestbed::logSurfaceEditControls()const{
 }
 
 bool ProjectTestbed::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods){
-    (void)scancode;
-    (void)mods;
+    static_cast<void>(scancode);
+    static_cast<void>(mods);
 
     if(action == NWB::Core::InputAction::Press || action == NWB::Core::InputAction::Repeat)
         setKeyState(key, true);
@@ -1034,7 +1051,7 @@ bool ProjectTestbed::mousePosUpdate(const f64 xpos, const f64 ypos){
 }
 
 bool ProjectTestbed::mouseButtonUpdate(const i32 button, const i32 action, const i32 mods){
-    (void)mods;
+    static_cast<void>(mods);
 
     if(button == NWB::Core::MouseButton::Left){
         if(action == NWB::Core::InputAction::Press)

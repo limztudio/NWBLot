@@ -61,19 +61,19 @@ protected:
 protected:
     inline void enqueue(MessageType&& data){
         this->m_msgQueue.emplace(Move(data));
-        m_msgCount.fetch_add(1, std::memory_order_relaxed);
+        m_msgCount.fetch_add(1, MemoryOrder::relaxed);
         this->m_semaphore.release();
     }
     inline void enqueue(const MessageType& data){
         this->m_msgQueue.emplace(data);
-        m_msgCount.fetch_add(1, std::memory_order_relaxed);
+        m_msgCount.fetch_add(1, MemoryOrder::relaxed);
         this->m_semaphore.release();
     }
 
     inline bool try_dequeue(MessageType& msg){
         auto ret = this->tryDequeue(msg);
         if(ret)
-            m_msgCount.fetch_sub(1, std::memory_order_relaxed);
+            m_msgCount.fetch_sub(1, MemoryOrder::relaxed);
         return ret;
     }
 

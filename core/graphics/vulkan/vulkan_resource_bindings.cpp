@@ -481,6 +481,7 @@ bool Device::createPipelineLayoutForBindingLayouts(
     Vector<VkDescriptorSetLayout, Alloc::ScratchAllocator<VkDescriptorSetLayout>> descriptorSetLayouts{
         Alloc::ScratchAllocator<VkDescriptorSetLayout>(scratchArena)
     };
+    descriptorSetLayouts.reserve(bindingLayouts.size());
     u32 pushConstantByteSize = 0;
 
     for(u32 i = 0; i < static_cast<u32>(bindingLayouts.size()); ++i){
@@ -623,6 +624,9 @@ bool DescriptorHeapManager::tryEnablePipeline(
             continue;
         if(heapBindings.size() > UINT32_MAX / sizeof(u32))
             return false;
+        if(heapBindings.size() > Limit<usize>::s_Max - outMappings.size())
+            return false;
+        outMappings.reserve(outMappings.size() + heapBindings.size());
 
         const u32 pushDataBytes = static_cast<u32>(heapBindings.size() * sizeof(u32));
         if(outPushDataSize > UINT32_MAX - pushDataBytes)
@@ -851,7 +855,9 @@ DescriptorHeapAllocation DescriptorHeapManager::allocate(const DescriptorHeapKin
             continue;
 
         const u32 allocEnd = alignedOffset + sizeBytes;
-        heap.freeRanges.erase(heap.freeRanges.begin() + static_cast<isize>(i));
+        if(i + 1u != heap.freeRanges.size())
+            heap.freeRanges[i] = heap.freeRanges.back();
+        heap.freeRanges.pop_back();
 
         if(consumedPrefix > 0)
             heap.freeRanges.push_back({ range.offsetBytes, consumedPrefix });
@@ -892,7 +898,49 @@ void DescriptorHeapManager::free(const DescriptorHeapAllocation& allocation){
 
     HeapStorage& heap = allocation.kind == DescriptorHeapKind::Sampler ? m_samplerHeap : m_resourceHeap;
     ScopedLock lock(heap.mutex);
-    heap.freeRanges.push_back({ allocation.offsetBytes, allocation.sizeBytes });
+
+    FreeRange released{ allocation.offsetBytes, allocation.sizeBytes };
+    const auto rangeEnd = [](const FreeRange& range, u32& outEnd) -> bool{
+        if(range.sizeBytes > UINT32_MAX - range.offsetBytes)
+            return false;
+        outEnd = range.offsetBytes + range.sizeBytes;
+        return true;
+    };
+
+    bool merged = true;
+    while(merged){
+        merged = false;
+        for(usize i = 0; i < heap.freeRanges.size(); ++i){
+            FreeRange range = heap.freeRanges[i];
+            u32 releasedEnd = 0;
+            u32 currentEnd = 0;
+            if(!rangeEnd(released, releasedEnd) || !rangeEnd(range, currentEnd))
+                continue;
+
+            if(releasedEnd == range.offsetBytes){
+                if(range.sizeBytes > UINT32_MAX - released.sizeBytes)
+                    continue;
+                released.sizeBytes += range.sizeBytes;
+            }
+            else if(currentEnd == released.offsetBytes){
+                if(released.sizeBytes > UINT32_MAX - range.sizeBytes)
+                    continue;
+                released.offsetBytes = range.offsetBytes;
+                released.sizeBytes += range.sizeBytes;
+            }
+            else{
+                continue;
+            }
+
+            if(i + 1u != heap.freeRanges.size())
+                heap.freeRanges[i] = heap.freeRanges.back();
+            heap.freeRanges.pop_back();
+            merged = true;
+            break;
+        }
+    }
+
+    heap.freeRanges.push_back(released);
 }
 
 bool DescriptorHeapManager::writeDescriptor(const BindingSetItem& item, const DescriptorHeapBindingMeta& meta, const u32 dstOffsetBytes){
@@ -1099,6 +1147,12 @@ BindingLayout::BindingLayout(const VulkanContext& context)
     : RefCounter<IBindingLayout>(context.threadPool)
     , m_descriptorSetLayouts(Alloc::CustomAllocator<VkDescriptorSetLayout>(context.objectArena))
     , m_descriptorHeapBindings(Alloc::CustomAllocator<DescriptorHeapBindingMeta>(context.objectArena))
+    , m_descriptorHeapBindingLookup(
+        0,
+        Hasher<u32>(),
+        EqualTo<u32>(),
+        Alloc::CustomAllocator<Pair<const u32, usize>>(context.objectArena)
+    )
     , m_context(context)
 {}
 BindingLayout::~BindingLayout(){
@@ -1169,6 +1223,13 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
 
     Vector<VkDescriptorSetLayoutBinding, Alloc::ScratchAllocator<VkDescriptorSetLayoutBinding>> bindings{ Alloc::ScratchAllocator<VkDescriptorSetLayoutBinding>(scratchArena) };
     bindings.reserve(desc.bindings.size());
+    HashSet<u32, Hasher<u32>, EqualTo<u32>, Alloc::ScratchAllocator<u32>> bindingSlots(
+        0,
+        Hasher<u32>(),
+        EqualTo<u32>(),
+        Alloc::ScratchAllocator<u32>(scratchArena)
+    );
+    bindingSlots.reserve(desc.bindings.size());
 
     for(usize i = 0; i < desc.bindings.size(); ++i){
         const auto& item = desc.bindings[i];
@@ -1196,13 +1257,11 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
             DestroyArenaObject(m_context.objectArena, layout);
             return nullptr;
         }
-        for(usize j = 0; j < i; ++j){
-            const auto& previous = desc.bindings[j];
-            if(previous.type != ResourceType::None && previous.type != ResourceType::PushConstants && previous.slot == item.slot){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor set layout: duplicate binding slot {}"), item.slot);
-                DestroyArenaObject(m_context.objectArena, layout);
-                return nullptr;
-            }
+        const auto slotInsert = bindingSlots.insert(item.slot);
+        if(!slotInsert.second){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor set layout: duplicate binding slot {}"), item.slot);
+            DestroyArenaObject(m_context.objectArena, layout);
+            return nullptr;
         }
         VkDescriptorSetLayoutBinding binding = {};
         binding.binding = item.slot;
@@ -1246,6 +1305,7 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
 
         if(compatible){
             layout->m_descriptorHeapBindings.reserve(desc.bindings.size());
+            layout->m_descriptorHeapBindingLookup.reserve(desc.bindings.size());
             for(const auto& item : desc.bindings){
                 if(item.type == ResourceType::PushConstants || item.type == ResourceType::None)
                     continue;
@@ -1271,13 +1331,17 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
                 meta.arraySize = item.getArraySize();
                 meta.descriptorSize = descriptorSize;
                 meta.descriptorStride = descriptorStride;
+                const usize metaIndex = layout->m_descriptorHeapBindings.size();
                 layout->m_descriptorHeapBindings.push_back(meta);
+                layout->m_descriptorHeapBindingLookup.insert_or_assign(meta.slot, metaIndex);
             }
         }
 
         layout->m_descriptorHeapCompatible = compatible && !layout->m_descriptorHeapBindings.empty();
-        if(!layout->m_descriptorHeapCompatible)
+        if(!layout->m_descriptorHeapCompatible){
             layout->m_descriptorHeapBindings.clear();
+            layout->m_descriptorHeapBindingLookup.clear();
+        }
     }
 
     return BindingLayoutHandle(layout, BindingLayoutHandle::deleter_type(&m_context.objectArena), AdoptRef);
@@ -1296,6 +1360,13 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
     bindings.reserve(desc.registerSpaces.size());
     Vector<VkDescriptorBindingFlags, Alloc::ScratchAllocator<VkDescriptorBindingFlags>> bindingFlags{ Alloc::ScratchAllocator<VkDescriptorBindingFlags>(scratchArena) };
     bindingFlags.reserve(desc.registerSpaces.size());
+    HashSet<u32, Hasher<u32>, EqualTo<u32>, Alloc::ScratchAllocator<u32>> registerSpaceSlots(
+        0,
+        Hasher<u32>(),
+        EqualTo<u32>(),
+        Alloc::ScratchAllocator<u32>(scratchArena)
+    );
+    registerSpaceSlots.reserve(desc.registerSpaces.size());
 
     const u32 maxCapacity = VulkanDetail::NormalizeDescriptorTableCapacity(desc.maxCapacity);
     for(usize i = 0; i < desc.registerSpaces.size(); ++i){
@@ -1309,12 +1380,11 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
             DestroyArenaObject(m_context.objectArena, layout);
             return nullptr;
         }
-        for(usize j = 0; j < i; ++j){
-            if(desc.registerSpaces[j].slot == item.slot){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create bindless layout: duplicate register space slot {}"), item.slot);
-                DestroyArenaObject(m_context.objectArena, layout);
-                return nullptr;
-            }
+        const auto slotInsert = registerSpaceSlots.insert(item.slot);
+        if(!slotInsert.second){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create bindless layout: duplicate register space slot {}"), item.slot);
+            DestroyArenaObject(m_context.objectArena, layout);
+            return nullptr;
         }
 
         VkDescriptorSetLayoutBinding binding = {};
@@ -1370,12 +1440,12 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-DescriptorTableHandle Device::createDescriptorTable(IBindingLayout* _layout){
+DescriptorTableHandle Device::createDescriptorTable(IBindingLayout* layoutResource){
     VkResult res = VK_SUCCESS;
 
     Alloc::ScratchArena<> scratchArena;
 
-    auto* layout = checked_cast<BindingLayout*>(_layout);
+    auto* layout = checked_cast<BindingLayout*>(layoutResource);
     if(!layout){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor table: binding layout is invalid"));
         return nullptr;
@@ -1389,7 +1459,8 @@ DescriptorTableHandle Device::createDescriptorTable(IBindingLayout* _layout){
     table->m_layout = layout;
     const u32 descriptorTableCapacity = layout->m_isBindless
         ? VulkanDetail::NormalizeDescriptorTableCapacity(layout->m_bindlessDesc.maxCapacity)
-        : 1u;
+        : 1u
+    ;
     const bool useVariableDescriptorCount = layout->m_isBindless && !layout->m_bindlessDesc.registerSpaces.empty();
 
     Vector<VkDescriptorPoolSize, Alloc::ScratchAllocator<VkDescriptorPoolSize>> poolSizes{ Alloc::ScratchAllocator<VkDescriptorPoolSize>(scratchArena) };
@@ -1556,7 +1627,7 @@ void Device::resizeDescriptorTable(IDescriptorTable* m_descriptorTable, u32 newS
         for(const auto& item : table->m_layout->m_bindlessDesc.registerSpaces){
             if(!VulkanDetail::AddDescriptorPoolSize(poolSizes, VulkanDetail::ConvertDescriptorType(item.type), newSize)){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to resize descriptor table: descriptor pool size overflows"));
-                (void)keepContents;
+                static_cast<void>(keepContents);
                 return;
             }
         }
@@ -1580,7 +1651,7 @@ void Device::resizeDescriptorTable(IDescriptorTable* m_descriptorTable, u32 newS
         res = vkCreateDescriptorPool(m_context.device, &poolInfo, m_context.allocationCallbacks, &newPool);
         if(res != VK_SUCCESS){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create bindless descriptor pool for resize: {}"), ResultToString(res));
-            (void)keepContents;
+            static_cast<void>(keepContents);
             return;
         }
 
@@ -1602,11 +1673,11 @@ void Device::resizeDescriptorTable(IDescriptorTable* m_descriptorTable, u32 newS
         if(res != VK_SUCCESS){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate bindless descriptor set during resize: {}"), ResultToString(res));
             vkDestroyDescriptorPool(m_context.device, newPool, m_context.allocationCallbacks);
-            (void)keepContents;
+            static_cast<void>(keepContents);
             return;
         }
 
-        (void)commitResize(newPool, newDescriptorSets, newSize);
+        static_cast<void>(commitResize(newPool, newDescriptorSets, newSize));
         return;
     }
 
@@ -1659,7 +1730,7 @@ void Device::resizeDescriptorTable(IDescriptorTable* m_descriptorTable, u32 newS
         }
     }
 
-    (void)commitResize(newPool, newDescriptorSets, newSize);
+    static_cast<void>(commitResize(newPool, newDescriptorSets, newSize));
 }
 
 bool Device::writeDescriptorTable(IDescriptorTable* m_descriptorTable, const BindingSetItem& item){
@@ -1826,8 +1897,8 @@ bool Device::writeDescriptorTable(IDescriptorTable* m_descriptorTable, const Bin
 }
 
 
-BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLayout* _layout){
-    auto* layout = checked_cast<BindingLayout*>(_layout);
+BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLayout* layoutResource){
+    auto* layout = checked_cast<BindingLayout*>(layoutResource);
     if(!layout){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create binding set: binding layout is invalid"));
         return nullptr;
@@ -1836,7 +1907,7 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLa
     auto* bindingSet = NewArenaObject<BindingSet>(m_context.objectArena, m_context);
     bindingSet->m_desc = desc;
 
-    DescriptorTableHandle tableHandle = createDescriptorTable(_layout);
+    DescriptorTableHandle tableHandle = createDescriptorTable(layoutResource);
     if(!tableHandle){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor table for binding set"));
         DestroyArenaObject(m_context.objectArena, bindingSet);
@@ -1895,17 +1966,6 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLa
     imageInfos.reserve(desc.bindings.size());
     texelBufferViews.reserve(desc.bindings.size());
     asInfos.reserve(desc.bindings.size());
-    HashMap<u32, usize, Hasher<u32>, EqualTo<u32>, Alloc::ScratchAllocator<Pair<const u32, usize>>> descriptorHeapMetaLookup(
-        0,
-        Hasher<u32>(),
-        EqualTo<u32>(),
-        Alloc::ScratchAllocator<Pair<const u32, usize>>(scratchArena)
-    );
-    if(layout->m_descriptorHeapCompatible && m_context.descriptorHeapManager){
-        descriptorHeapMetaLookup.reserve(layout->m_descriptorHeapBindings.size());
-        for(usize i = 0; i < layout->m_descriptorHeapBindings.size(); ++i)
-            descriptorHeapMetaLookup[layout->m_descriptorHeapBindings[i].slot] = i;
-    }
 
     for(const auto& item : desc.bindings){
         if(!item.resourceHandle)
@@ -2028,8 +2088,8 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLa
         }
 
         if(layout->m_descriptorHeapCompatible && m_context.descriptorHeapManager){
-            const auto metaIt = descriptorHeapMetaLookup.find(item.slot);
-            if(metaIt != descriptorHeapMetaLookup.end()){
+            const auto metaIt = layout->m_descriptorHeapBindingLookup.find(item.slot);
+            if(metaIt != layout->m_descriptorHeapBindingLookup.end()){
                 const usize metaIndex = metaIt->second;
                 const DescriptorHeapBindingMeta& meta = layout->m_descriptorHeapBindings[metaIndex];
                 const DescriptorHeapAllocation& allocation = bindingSet->m_descriptorHeapAllocations[metaIndex];

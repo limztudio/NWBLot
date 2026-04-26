@@ -24,7 +24,6 @@ namespace EntryPointLookupResult{
         Found,
         NotFound,
         InvalidSpirv,
-        Ambiguous,
     };
 };
 
@@ -93,13 +92,13 @@ inline ShaderType::Mask ConvertExecutionModel(const u32 executionModel){
 inline EntryPointLookupResult::Enum ResolveEntryPointName(
     const u32* words,
     const usize wordCount,
-    const Name& entryName,
+    const AStringView entryName,
     const ShaderType::Mask shaderType,
     AString& outEntryPointName)
 {
     outEntryPointName.clear();
 
-    if(!entryName || shaderType == ShaderType::None)
+    if(entryName.empty() || shaderType == ShaderType::None)
         return EntryPointLookupResult::NotFound;
 
     if(!words || wordCount < s_SpirvHeaderWords)
@@ -136,11 +135,9 @@ inline EntryPointLookupResult::Enum ResolveEntryPointName(
                     return EntryPointLookupResult::InvalidSpirv;
 
                 const AStringView candidateEntryPoint(entryPointBytes, entryPointLength);
-                if(ToName(candidateEntryPoint) == entryName){
-                    if(outEntryPointName.empty())
-                        outEntryPointName.assign(candidateEntryPoint.data(), candidateEntryPoint.size());
-                    else if(outEntryPointName != candidateEntryPoint)
-                        return EntryPointLookupResult::Ambiguous;
+                if(candidateEntryPoint == entryName){
+                    outEntryPointName.assign(candidateEntryPoint.data(), candidateEntryPoint.size());
+                    return EntryPointLookupResult::Found;
                 }
             }
         }
@@ -148,16 +145,13 @@ inline EntryPointLookupResult::Enum ResolveEntryPointName(
         instructionIndex = nextInstructionIndex;
     }
 
-    return outEntryPointName.empty()
-        ? EntryPointLookupResult::NotFound
-        : EntryPointLookupResult::Found
-    ;
+    return EntryPointLookupResult::NotFound;
 }
 
 inline bool ResolveShaderEntryPoint(
     const u32* words,
     const usize wordCount,
-    const Name& entryName,
+    const AStringView entryName,
     const ShaderType::Mask shaderType,
     const char* errorContext,
     AString& outEntryPointName)
@@ -170,7 +164,7 @@ inline bool ResolveShaderEntryPoint(
     case EntryPointLookupResult::NotFound:
         NWB_LOGGER_ERROR(
             NWB_TEXT("Vulkan: Shader entry point '{}' (stage=0x{:x}) was not found in SPIR-V for {}"),
-            StringConvert(entryName.c_str()),
+            StringConvert(entryName),
             static_cast<u32>(shaderType),
             StringConvert(errorContext)
         );
@@ -179,20 +173,12 @@ inline bool ResolveShaderEntryPoint(
     case EntryPointLookupResult::InvalidSpirv:
         NWB_LOGGER_ERROR(
             NWB_TEXT("Vulkan: Invalid SPIR-V while resolving shader entry point '{}' (stage=0x{:x}) for {}"),
-            StringConvert(entryName.c_str()),
+            StringConvert(entryName),
             static_cast<u32>(shaderType),
             StringConvert(errorContext)
         );
         return false;
 
-    case EntryPointLookupResult::Ambiguous:
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Vulkan: Ambiguous case-sensitive SPIR-V entry point match for '{}' (stage=0x{:x}) in {}"),
-            StringConvert(entryName.c_str()),
-            static_cast<u32>(shaderType),
-            StringConvert(errorContext)
-        );
-        return false;
     }
 
     return false;
@@ -251,10 +237,11 @@ void ShaderLibrary::getBytecode(const void** ppBytecode, usize* pSize)const{
     *pSize = m_bytecode.size();
 }
 
-ShaderHandle ShaderLibrary::getShader(const Name& entryName, ShaderType::Mask shaderType){
+ShaderHandle ShaderLibrary::getShader(const AStringView entryName, ShaderType::Mask shaderType){
     VkResult res = VK_SUCCESS;
 
-    const ShaderLibraryKey key{ entryName, shaderType };
+    const AString requestedEntryName(entryName);
+    ShaderLibraryKey key{ requestedEntryName, shaderType };
 
     auto it = m_shaders.find(key);
     if(it != m_shaders.end())
@@ -262,11 +249,11 @@ ShaderHandle ShaderLibrary::getShader(const Name& entryName, ShaderType::Mask sh
 
     Shader* shader = NewArenaObject<Shader>(m_context.objectArena, m_context);
     shader->m_desc.shaderType = shaderType;
-    shader->m_desc.entryName = entryName;
+    shader->m_desc.entryName = requestedEntryName;
     shader->m_bytecode = m_bytecode;
 
     if(shader->m_bytecode.empty() || (shader->m_bytecode.size() & 3) != 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Invalid shader library bytecode payload for entry '{}'"), StringConvert(entryName.c_str()));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Invalid shader library bytecode payload for entry '{}'"), StringConvert(requestedEntryName));
         DestroyArenaObject(m_context.objectArena, shader);
         return nullptr;
     }
@@ -274,12 +261,12 @@ ShaderHandle ShaderLibrary::getShader(const Name& entryName, ShaderType::Mask sh
     Alloc::ScratchArena<> scratchArena;
     __hidden_vulkan_shader::SpirvWordVector spirvWords{ Alloc::ScratchAllocator<u32>(scratchArena) };
     if(!__hidden_vulkan_shader::CopySpirvWords(shader->m_bytecode.data(), shader->m_bytecode.size(), spirvWords)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Invalid shader library bytecode payload for entry '{}'"), StringConvert(entryName.c_str()));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Invalid shader library bytecode payload for entry '{}'"), StringConvert(requestedEntryName));
         DestroyArenaObject(m_context.objectArena, shader);
         return nullptr;
     }
 
-    if(!__hidden_vulkan_shader::ResolveShaderEntryPoint(spirvWords.data(), spirvWords.size(), entryName, shaderType, "shader library", shader->m_entryPointName)){
+    if(!__hidden_vulkan_shader::ResolveShaderEntryPoint(spirvWords.data(), spirvWords.size(), AStringView(requestedEntryName), shaderType, "shader library", shader->m_entryPointName)){
         DestroyArenaObject(m_context.objectArena, shader);
         return nullptr;
     }
@@ -296,7 +283,10 @@ ShaderHandle ShaderLibrary::getShader(const Name& entryName, ShaderType::Mask sh
         return nullptr;
     }
 
-    m_shaders[key] = RefCountPtr<Shader, ArenaRefDeleter<Shader>>(shader, ArenaRefDeleter<Shader>(&m_context.objectArena), AdoptRef);
+    m_shaders.emplace(
+        Move(key),
+        RefCountPtr<Shader, ArenaRefDeleter<Shader>>(shader, ArenaRefDeleter<Shader>(&m_context.objectArena), AdoptRef)
+    );
     return ShaderHandle(shader, ShaderHandle::deleter_type(&m_context.objectArena));
 }
 
@@ -467,6 +457,7 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
         EqualTo<u32>(),
         Alloc::ScratchAllocator<Pair<const u32, VertexBindingBuildInfo>>(scratchArena)
     );
+    bindingInfos.reserve(attributeCount);
 
     for(u32 i = 0; i < attributeCount; ++i){
         const VertexAttributeDesc& attr = d[i];
@@ -516,15 +507,10 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
             return nullptr;
         }
 
-        auto bindingInfoIt = bindingInfos.find(attr.bufferIndex);
-        if(bindingInfoIt == bindingInfos.end()){
-            VertexBindingBuildInfo info{};
-            info.isInstanced = attr.isInstanced;
-            bindingInfos[attr.bufferIndex] = info;
-            bindingInfoIt = bindingInfos.find(attr.bufferIndex);
-        }
-
-        VertexBindingBuildInfo& bindingInfo = bindingInfoIt.value();
+        auto bindingInfoInsert = bindingInfos.try_emplace(attr.bufferIndex);
+        VertexBindingBuildInfo& bindingInfo = bindingInfoInsert.first.value();
+        if(bindingInfoInsert.second)
+            bindingInfo.isInstanced = attr.isInstanced;
         if(bindingInfo.isInstanced != attr.isInstanced){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("Vulkan: Failed to create input layout: buffer binding {} mixes vertex and instance input rates"),
@@ -579,6 +565,7 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
     if(attributeCount > 0)
         layout->m_attributes.assign(d, d + attributeCount);
 
+    layout->m_bindings.reserve(bindingInfos.size());
     for(const auto& [bufferIndex, bindingInfo] : bindingInfos){
         VkVertexInputBindingDescription binding{};
         binding.binding = bufferIndex;

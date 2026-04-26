@@ -168,28 +168,38 @@ inline void OrthonormalizeFrame(SIMDVector& normal, SIMDVector& tangent, const S
     );
 }
 
-[[nodiscard]] inline bool IsAffineJointMatrix(const DeformableJointMatrix& matrix){
-    const SIMDVector column0 = LoadFloat(matrix.column0);
-    const SIMDVector column1 = LoadFloat(matrix.column1);
-    const SIMDVector column2 = LoadFloat(matrix.column2);
-    const SIMDVector column3 = LoadFloat(matrix.column3);
-    const SIMDVector affineW = VectorSet(matrix.column0.w, matrix.column1.w, matrix.column2.w, matrix.column3.w);
-    return DeformableValidation::FiniteVector(column0, 0xFu)
-        && DeformableValidation::FiniteVector(column1, 0xFu)
-        && DeformableValidation::FiniteVector(column2, 0xFu)
-        && DeformableValidation::FiniteVector(column3, 0xFu)
+[[nodiscard]] inline SIMDMatrix LoadJointMatrix(const DeformableJointMatrix& matrix){
+    SIMDMatrix result{};
+    result.v[0] = LoadFloat(matrix.column0);
+    result.v[1] = LoadFloat(matrix.column1);
+    result.v[2] = LoadFloat(matrix.column2);
+    result.v[3] = LoadFloat(matrix.column3);
+    return result;
+}
+
+[[nodiscard]] inline bool IsAffineJointMatrix(const SIMDMatrix& matrix){
+    const SIMDVector affineW = VectorSet(
+        VectorGetW(matrix.v[0]),
+        VectorGetW(matrix.v[1]),
+        VectorGetW(matrix.v[2]),
+        VectorGetW(matrix.v[3])
+    );
+    return DeformableValidation::FiniteVector(matrix.v[0], 0xFu)
+        && DeformableValidation::FiniteVector(matrix.v[1], 0xFu)
+        && DeformableValidation::FiniteVector(matrix.v[2], 0xFu)
+        && DeformableValidation::FiniteVector(matrix.v[3], 0xFu)
         && Vector4NearEqual(affineW, s_SIMDIdentityR3, VectorReplicate(DeformableValidation::s_Epsilon))
     ;
 }
 
-[[nodiscard]] inline f32 JointLinearDeterminant(const DeformableJointMatrix& matrix){
-    const SIMDVector column0 = VectorSetW(LoadFloat(matrix.column0), 0.0f);
-    const SIMDVector column1 = VectorSetW(LoadFloat(matrix.column1), 0.0f);
-    const SIMDVector column2 = VectorSetW(LoadFloat(matrix.column2), 0.0f);
+[[nodiscard]] inline f32 JointLinearDeterminant(const SIMDMatrix& matrix){
+    const SIMDVector column0 = VectorSetW(matrix.v[0], 0.0f);
+    const SIMDVector column1 = VectorSetW(matrix.v[1], 0.0f);
+    const SIMDVector column2 = VectorSetW(matrix.v[2], 0.0f);
     return VectorGetX(Vector3Dot(column0, Vector3Cross(column1, column2)));
 }
 
-[[nodiscard]] inline bool IsInvertibleAffineJointMatrix(const DeformableJointMatrix& matrix){
+[[nodiscard]] inline bool IsInvertibleAffineJointMatrix(const SIMDMatrix& matrix){
     if(!IsAffineJointMatrix(matrix))
         return false;
 
@@ -198,13 +208,13 @@ inline void OrthonormalizeFrame(SIMDVector& normal, SIMDVector& tangent, const S
 }
 
 [[nodiscard]] inline bool TryTransformJointNormalDirection(
-    const DeformableJointMatrix& matrix,
+    const SIMDMatrix& matrix,
     const SIMDVector directionVector,
     SIMDVector& outDirection)
 {
-    const SIMDVector column0 = VectorSetW(LoadFloat(matrix.column0), 0.0f);
-    const SIMDVector column1 = VectorSetW(LoadFloat(matrix.column1), 0.0f);
-    const SIMDVector column2 = VectorSetW(LoadFloat(matrix.column2), 0.0f);
+    const SIMDVector column0 = VectorSetW(matrix.v[0], 0.0f);
+    const SIMDVector column1 = VectorSetW(matrix.v[1], 0.0f);
+    const SIMDVector column2 = VectorSetW(matrix.v[2], 0.0f);
     const f32 determinant = VectorGetX(Vector3Dot(column0, Vector3Cross(column1, column2)));
     if(!IsFinite(determinant) || Abs(determinant) <= s_Epsilon)
         return false;

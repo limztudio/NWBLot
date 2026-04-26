@@ -139,17 +139,17 @@ template<typename VertexVector>
     return true;
 }
 
-[[nodiscard]] SIMDVector TransformJointPosition(const DeformableJointMatrix& matrix, const SIMDVector positionVector){
-    SIMDVector result = VectorMultiply(VectorSplatX(positionVector), LoadFloat(matrix.column0));
-    result = VectorMultiplyAdd(VectorSplatY(positionVector), LoadFloat(matrix.column1), result);
-    result = VectorMultiplyAdd(VectorSplatZ(positionVector), LoadFloat(matrix.column2), result);
-    return VectorAdd(result, LoadFloat(matrix.column3));
+[[nodiscard]] SIMDVector TransformJointPosition(const SIMDMatrix& matrix, const SIMDVector positionVector){
+    SIMDVector result = VectorMultiply(VectorSplatX(positionVector), matrix.v[0]);
+    result = VectorMultiplyAdd(VectorSplatY(positionVector), matrix.v[1], result);
+    result = VectorMultiplyAdd(VectorSplatZ(positionVector), matrix.v[2], result);
+    return VectorAdd(result, matrix.v[3]);
 }
 
-[[nodiscard]] SIMDVector TransformJointDirection(const DeformableJointMatrix& matrix, const SIMDVector directionVector){
-    SIMDVector result = VectorMultiply(VectorSplatX(directionVector), LoadFloat(matrix.column0));
-    result = VectorMultiplyAdd(VectorSplatY(directionVector), LoadFloat(matrix.column1), result);
-    result = VectorMultiplyAdd(VectorSplatZ(directionVector), LoadFloat(matrix.column2), result);
+[[nodiscard]] SIMDVector TransformJointDirection(const SIMDMatrix& matrix, const SIMDVector directionVector){
+    SIMDVector result = VectorMultiply(VectorSplatX(directionVector), matrix.v[0]);
+    result = VectorMultiplyAdd(VectorSplatY(directionVector), matrix.v[1], result);
+    result = VectorMultiplyAdd(VectorSplatZ(directionVector), matrix.v[2], result);
     return result;
 }
 
@@ -161,7 +161,7 @@ template<typename VertexVector>
         return true;
 
     for(const DeformableJointMatrix& joint : jointPalette->joints){
-        if(!IsInvertibleAffineJointMatrix(joint))
+        if(!IsInvertibleAffineJointMatrix(LoadJointMatrix(joint)))
             return false;
     }
     return true;
@@ -198,10 +198,13 @@ template<typename VertexVector>
         const u32 joint = static_cast<u32>(skin.joint[influenceIndex]);
         if(!DeformableValidation::ActiveWeight(weight))
             continue;
-        if(joint >= jointCount || !IsAffineJointMatrix(jointPalette->joints[joint]))
+        if(joint >= jointCount)
             return false;
 
-        const DeformableJointMatrix& matrix = jointPalette->joints[joint];
+        const SIMDMatrix matrix = LoadJointMatrix(jointPalette->joints[joint]);
+        if(!IsAffineJointMatrix(matrix))
+            return false;
+
         const SIMDVector weightVector = VectorReplicate(weight);
         SIMDVector transformedNormal;
         if(!TryTransformJointNormalDirection(matrix, baseNormal, transformedNormal))

@@ -159,7 +159,8 @@ static bool BuildSkinPayload(
     }
 
     for(usize jointIndex = 0; jointIndex < jointPalette->joints.size(); ++jointIndex){
-        if(!DeformableRuntime::IsInvertibleAffineJointMatrix(jointPalette->joints[jointIndex])){
+        const SIMDMatrix jointMatrix = DeformableRuntime::LoadJointMatrix(jointPalette->joints[jointIndex]);
+        if(!DeformableRuntime::IsInvertibleAffineJointMatrix(jointMatrix)){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("DeformerSystem: runtime mesh '{}' joint palette entry {} is not a finite invertible affine matrix"),
                 instance.handle.value,

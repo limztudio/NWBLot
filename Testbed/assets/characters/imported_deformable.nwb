@@ -1,0 +1,6 @@
+deformable_geometry asset;
+
+asset.source = {
+    "format": "gltf",
+    "path": "imported_deformable.gltf",
+};

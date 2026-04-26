@@ -482,6 +482,8 @@ bool ProjectTestbed::onStartup(){
     tetrahedronGeometry.virtualPath = Name("project/meshes/tetrahedron");
     TestbedDeformableGeometryRef deformableProxyGeometry;
     deformableProxyGeometry.virtualPath = Name("project/characters/proxy_deformable");
+    TestbedDeformableGeometryRef importedDeformableGeometry;
+    importedDeformableGeometry.virtualPath = Name("project/characters/imported_deformable");
 
     __hidden_project_testbed_runtime::CreateRendererEntity(
         *m_world,
@@ -518,10 +520,28 @@ bool ProjectTestbed::onStartup(){
         Float4(0.0f, 0.85f, 0.0f),
         0.8f
     );
+    const NWB::Core::ECS::EntityID importedDeformableEntity = __hidden_project_testbed_runtime::CreateDeformableRendererEntity(
+        *m_world,
+        importedDeformableGeometry,
+        deformableUvMaterial,
+        Float4(0.0f, -0.85f, 0.0f),
+        0.7f
+    );
+    if(auto* morphWeights =
+        m_world->tryGetComponent<NWB::Core::ECSGraphics::DeformableMorphWeightsComponent>(importedDeformableEntity)
+    ){
+        if(!morphWeights->weights.empty())
+            morphWeights->weights[0].weight = 0.65f;
+    }
+    if(auto* jointPalette =
+        m_world->tryGetComponent<NWB::Core::ECSGraphics::DeformableJointPaletteComponent>(importedDeformableEntity)
+    ){
+        __hidden_project_testbed_runtime::UpdateProxySkinPalette(*jointPalette, 1.0f);
+    }
 
     NWB_LOGGER_ESSENTIAL_INFO(
         NWB_TEXT("ProjectTestbed: startup scene created ({})"),
-        NWB_TEXT("directional light, two shared cube instances, transparent sphere/tetrahedron, animated deformable proxy")
+        NWB_TEXT("directional light, shared primitives, animated proxy, imported glTF deformable")
     );
     logSurfaceEditControls();
     registerInputHandler();

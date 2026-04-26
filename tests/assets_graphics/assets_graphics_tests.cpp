@@ -11,6 +11,7 @@
 #include <core/filesystem/filesystem.h>
 #include <core/graphics/common.h>
 
+#include <global/binary.h>
 #include <global/compile.h>
 
 #include <logger/client/logger.h>
@@ -610,6 +611,14 @@ static bool WriteTextFile(const Path& filePath, const AStringView text){
     return static_cast<bool>(file);
 }
 
+static bool WriteBinaryFileEnsured(const Path& filePath, const Vector<u8>& bytes){
+    ErrorCode errorCode;
+    if(!EnsureDirectories(filePath.parent_path(), errorCode))
+        return false;
+
+    return WriteBinaryFile(filePath, bytes);
+}
+
 static const char* AssetsGraphicsTestConfigurationName(){
 #if defined(NWB_DEBUG)
     return "dbg";
@@ -708,6 +717,252 @@ static bool CookAndLoadMinimalDeformable(
     ErrorCode errorCode;
     static_cast<void>(RemoveAllIfExists(outRoot, errorCode));
     return false;
+}
+
+struct SimpleGltfBufferLayout{
+    u32 positionOffset = 0;
+    u32 uvOffset = 0;
+    u32 jointOffset = 0;
+    u32 weightOffset = 0;
+    u32 indexOffset = 0;
+    u32 morphPositionOffset = 0;
+    u32 byteLength = 0;
+};
+
+static void PadBinaryToAlignment(Vector<u8>& bytes, const usize alignment){
+    while((bytes.size() % alignment) != 0u)
+        bytes.push_back(0u);
+}
+
+static u32 BeginAlignedBinaryRange(Vector<u8>& bytes, const usize alignment){
+    PadBinaryToAlignment(bytes, alignment);
+    return static_cast<u32>(bytes.size());
+}
+
+static void AppendF32(Vector<u8>& bytes, const f32 value){
+    AppendPOD(bytes, value);
+}
+
+static void AppendU16(Vector<u8>& bytes, const u16 value){
+    AppendPOD(bytes, value);
+}
+
+static void AppendU32(Vector<u8>& bytes, const u32 value){
+    AppendPOD(bytes, value);
+}
+
+static void AppendVec2(Vector<u8>& bytes, const f32 x, const f32 y){
+    AppendF32(bytes, x);
+    AppendF32(bytes, y);
+}
+
+static void AppendVec3(Vector<u8>& bytes, const f32 x, const f32 y, const f32 z){
+    AppendF32(bytes, x);
+    AppendF32(bytes, y);
+    AppendF32(bytes, z);
+}
+
+static void AppendVec4(Vector<u8>& bytes, const f32 x, const f32 y, const f32 z, const f32 w){
+    AppendF32(bytes, x);
+    AppendF32(bytes, y);
+    AppendF32(bytes, z);
+    AppendF32(bytes, w);
+}
+
+static void AppendU16x4(Vector<u8>& bytes, const u16 x, const u16 y, const u16 z, const u16 w){
+    AppendU16(bytes, x);
+    AppendU16(bytes, y);
+    AppendU16(bytes, z);
+    AppendU16(bytes, w);
+}
+
+static Vector<u8> BuildSimpleSkinnedMorphedGltfBuffer(SimpleGltfBufferLayout& outLayout){
+    Vector<u8> bytes;
+
+    outLayout.positionOffset = BeginAlignedBinaryRange(bytes, 4u);
+    AppendVec3(bytes, -0.5f, -0.5f, 0.0f);
+    AppendVec3(bytes, 0.5f, -0.5f, 0.0f);
+    AppendVec3(bytes, 0.5f, 0.5f, 0.0f);
+    AppendVec3(bytes, -0.5f, 0.5f, 0.0f);
+
+    outLayout.uvOffset = BeginAlignedBinaryRange(bytes, 4u);
+    AppendVec2(bytes, 0.0f, 0.0f);
+    AppendVec2(bytes, 1.0f, 0.0f);
+    AppendVec2(bytes, 1.0f, 1.0f);
+    AppendVec2(bytes, 0.0f, 1.0f);
+
+    outLayout.jointOffset = BeginAlignedBinaryRange(bytes, 4u);
+    AppendU16x4(bytes, 0u, 0u, 0u, 0u);
+    AppendU16x4(bytes, 0u, 1u, 0u, 0u);
+    AppendU16x4(bytes, 1u, 0u, 0u, 0u);
+    AppendU16x4(bytes, 1u, 0u, 0u, 0u);
+
+    outLayout.weightOffset = BeginAlignedBinaryRange(bytes, 4u);
+    AppendVec4(bytes, 1.0f, 0.0f, 0.0f, 0.0f);
+    AppendVec4(bytes, 0.5f, 0.5f, 0.0f, 0.0f);
+    AppendVec4(bytes, 0.5f, 0.0f, 0.0f, 0.0f);
+    AppendVec4(bytes, 1.0f, 0.0f, 0.0f, 0.0f);
+
+    outLayout.indexOffset = BeginAlignedBinaryRange(bytes, 4u);
+    AppendU16(bytes, 0u);
+    AppendU16(bytes, 1u);
+    AppendU16(bytes, 2u);
+    AppendU16(bytes, 0u);
+    AppendU16(bytes, 2u);
+    AppendU16(bytes, 3u);
+
+    outLayout.morphPositionOffset = BeginAlignedBinaryRange(bytes, 4u);
+    AppendVec3(bytes, 0.0f, 0.0f, 0.0f);
+    AppendVec3(bytes, 0.0f, 0.0f, 0.0f);
+    AppendVec3(bytes, 0.0f, 0.0f, 0.25f);
+    AppendVec3(bytes, 0.0f, 0.0f, 0.5f);
+
+    outLayout.byteLength = static_cast<u32>(bytes.size());
+    return bytes;
+}
+
+static AString BuildSimpleSkinnedMorphedGltfText(const SimpleGltfBufferLayout& layout, const bool externalBuffer){
+    AStringStream stream;
+    stream
+        << "{\n"
+        << "  \"asset\": { \"version\": \"2.0\" },\n"
+        << "  \"buffers\": [ { "
+    ;
+    if(externalBuffer)
+        stream << "\"uri\": \"minimal_deformable.bin\", ";
+    stream
+        << "\"byteLength\": " << layout.byteLength << " } ],\n"
+        << "  \"bufferViews\": [\n"
+        << "    { \"buffer\": 0, \"byteOffset\": " << layout.positionOffset << ", \"byteLength\": 48 },\n"
+        << "    { \"buffer\": 0, \"byteOffset\": " << layout.uvOffset << ", \"byteLength\": 32 },\n"
+        << "    { \"buffer\": 0, \"byteOffset\": " << layout.jointOffset << ", \"byteLength\": 32 },\n"
+        << "    { \"buffer\": 0, \"byteOffset\": " << layout.weightOffset << ", \"byteLength\": 64 },\n"
+        << "    { \"buffer\": 0, \"byteOffset\": " << layout.indexOffset << ", \"byteLength\": 12 },\n"
+        << "    { \"buffer\": 0, \"byteOffset\": " << layout.morphPositionOffset << ", \"byteLength\": 48 }\n"
+        << "  ],\n"
+        << "  \"accessors\": [\n"
+        << "    { \"bufferView\": 0, \"componentType\": 5126, \"count\": 4, \"type\": \"VEC3\" },\n"
+        << "    { \"bufferView\": 1, \"componentType\": 5126, \"count\": 4, \"type\": \"VEC2\" },\n"
+        << "    { \"bufferView\": 2, \"componentType\": 5123, \"count\": 4, \"type\": \"VEC4\" },\n"
+        << "    { \"bufferView\": 3, \"componentType\": 5126, \"count\": 4, \"type\": \"VEC4\" },\n"
+        << "    { \"bufferView\": 4, \"componentType\": 5123, \"count\": 6, \"type\": \"SCALAR\" },\n"
+        << "    { \"bufferView\": 5, \"componentType\": 5126, \"count\": 4, \"type\": \"VEC3\" }\n"
+        << "  ],\n"
+        << "  \"meshes\": [\n"
+        << "    {\n"
+        << "      \"extras\": { \"targetNames\": [ \"lift\" ] },\n"
+        << "      \"primitives\": [\n"
+        << "        {\n"
+        << "          \"attributes\": { \"POSITION\": 0, \"TEXCOORD_0\": 1, \"JOINTS_0\": 2, \"WEIGHTS_0\": 3 },\n"
+        << "          \"indices\": 4,\n"
+        << "          \"targets\": [ { \"POSITION\": 5 } ]\n"
+        << "        }\n"
+        << "      ]\n"
+        << "    }\n"
+        << "  ]\n"
+        << "}\n"
+    ;
+    return stream.str();
+}
+
+static Vector<u8> BuildSimpleSkinnedMorphedGlb(const AString& jsonText, const Vector<u8>& binaryChunk){
+    static constexpr u32 s_GlbMagic = 0x46546C67u;
+    static constexpr u32 s_GlbVersion = 2u;
+    static constexpr u32 s_GlbJsonChunkType = 0x4E4F534Au;
+    static constexpr u32 s_GlbBinChunkType = 0x004E4942u;
+
+    AString paddedJson = jsonText;
+    while((paddedJson.size() % 4u) != 0u)
+        paddedJson.push_back(' ');
+
+    Vector<u8> paddedBinary = binaryChunk;
+    PadBinaryToAlignment(paddedBinary, 4u);
+
+    const u32 totalLength = static_cast<u32>(
+        12u
+        + 8u
+        + paddedJson.size()
+        + 8u
+        + paddedBinary.size()
+    );
+
+    Vector<u8> glb;
+    glb.reserve(totalLength);
+    AppendU32(glb, s_GlbMagic);
+    AppendU32(glb, s_GlbVersion);
+    AppendU32(glb, totalLength);
+    AppendU32(glb, static_cast<u32>(paddedJson.size()));
+    AppendU32(glb, s_GlbJsonChunkType);
+    glb.insert(glb.end(), paddedJson.begin(), paddedJson.end());
+    AppendU32(glb, static_cast<u32>(paddedBinary.size()));
+    AppendU32(glb, s_GlbBinChunkType);
+    glb.insert(glb.end(), paddedBinary.begin(), paddedBinary.end());
+    return glb;
+}
+
+static AString BuildGltfImportDeformableMeta(const AStringView format, const AStringView path){
+    AStringStream stream;
+    stream
+        << "deformable_geometry asset;\n\n"
+        << "asset.source = {\n"
+        << "    \"format\": \"" << format << "\",\n"
+        << "    \"path\": \"" << path << "\",\n"
+        << "};\n"
+    ;
+    return stream.str();
+}
+
+static bool CookAndLoadGltfDeformable(
+    TestContext& context,
+    TestArena& testArena,
+    const bool useGlb,
+    Path& outRoot,
+    UniquePtr<NWB::Core::Assets::IAsset>& outLoadedAsset)
+{
+    outRoot = Path("__build_obj")
+        / "nwb_assets_graphics_tests"
+        / AssetsGraphicsTestConfigurationName()
+        / (useGlb ? "glb_import" : "gltf_import")
+    ;
+    const Path outputDirectory = outRoot / "cooked";
+
+    if(!PrepareCleanDirectory(outRoot))
+        return false;
+
+    const Path assetRoot = outRoot / "assets";
+    const Path characterDirectory = assetRoot / "characters";
+
+    SimpleGltfBufferLayout layout;
+    Vector<u8> gltfBuffer = BuildSimpleSkinnedMorphedGltfBuffer(layout);
+
+    const AString sourceFormat = useGlb ? AString("glb") : AString("gltf");
+    const AString sourcePath = useGlb ? AString("minimal_deformable.glb") : AString("minimal_deformable.gltf");
+    if(!WriteTextFile(characterDirectory / "minimal_deformable.nwb", BuildGltfImportDeformableMeta(sourceFormat, sourcePath)))
+        return false;
+    if(useGlb){
+        const AString glbJson = BuildSimpleSkinnedMorphedGltfText(layout, false);
+        if(!WriteBinaryFileEnsured(characterDirectory / "minimal_deformable.glb", BuildSimpleSkinnedMorphedGlb(glbJson, gltfBuffer)))
+            return false;
+    }
+    else{
+        if(!WriteBinaryFileEnsured(characterDirectory / "minimal_deformable.bin", gltfBuffer))
+            return false;
+        const AString gltfJson = BuildSimpleSkinnedMorphedGltfText(layout, true);
+        if(!WriteTextFile(characterDirectory / "minimal_deformable.gltf", gltfJson))
+            return false;
+    }
+
+    NWB::Core::Assets::AssetCookOptions options;
+    options.repoRoot = ".";
+    options.assetRoots.push_back(PathToString(assetRoot));
+    options.outputDirectory = PathToString(outputDirectory);
+    options.cacheDirectory = PathToString(outRoot / "cache");
+    if(!options.configuration.assign("tests") || !options.assetType.assign("shader"))
+        return false;
+
+    NWB::Impl::ShaderAssetCooker cooker(testArena.arena);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, cooker.cook(options));
+    return LoadCookedMinimalDeformable(context, testArena, outputDirectory, outLoadedAsset);
 }
 
 
@@ -1240,6 +1495,73 @@ static void TestDeformableGeometryCookerFullAsset(TestContext& context){
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 0u);
 }
 
+static void TestDeformableGeometryCookerGltfImport(TestContext& context){
+    CapturingLogger logger;
+    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
+
+    TestArena testArena;
+    Path root;
+    UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
+    if(!CookAndLoadGltfDeformable(context, testArena, false, root, loadedAsset))
+        return;
+
+    {
+        const NWB::Impl::DeformableGeometry& loadedGeometry =
+            static_cast<const NWB::Impl::DeformableGeometry&>(*loadedAsset)
+        ;
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.restVertices().size() == 4u);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.indices().size() == 6u);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.restVertices()[0].normal.z > 0.99f);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.restVertices()[0].tangent.x > 0.99f);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.restVertices()[0].color0.w == 1.0f);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skin().size() == 4u);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skin()[1].joint[1] == 1u);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skin()[1].weight[0] == 0.5f);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skin()[2].weight[0] == 1.0f);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.sourceSamples().size() == 4u);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.sourceSamples()[3].sourceTri == 1u);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.sourceSamples()[3].bary[2] == 1.0f);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs().size() == 1u);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs()[0].name == Name("lift"));
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs()[0].deltas.size() == 2u);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs()[0].deltas[0].vertexId == 2u);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs()[0].deltas[0].deltaPosition.z == 0.25f);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs()[0].deltas[1].vertexId == 3u);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs()[0].deltas[1].deltaPosition.z == 0.5f);
+    }
+
+    ErrorCode errorCode;
+    static_cast<void>(RemoveAllIfExists(root, errorCode));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 0u);
+}
+
+static void TestDeformableGeometryCookerGlbImport(TestContext& context){
+    CapturingLogger logger;
+    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
+
+    TestArena testArena;
+    Path root;
+    UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
+    if(!CookAndLoadGltfDeformable(context, testArena, true, root, loadedAsset))
+        return;
+
+    {
+        const NWB::Impl::DeformableGeometry& loadedGeometry =
+            static_cast<const NWB::Impl::DeformableGeometry&>(*loadedAsset)
+        ;
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.restVertices().size() == 4u);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.indices().size() == 6u);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skin().size() == 4u);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.sourceSamples().size() == 4u);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs().size() == 1u);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs()[0].deltas.size() == 2u);
+    }
+
+    ErrorCode errorCode;
+    static_cast<void>(RemoveAllIfExists(root, errorCode));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 0u);
+}
+
 static void TestDeformableGeometryCookerValidationFailures(TestContext& context){
 #if defined(NWB_FINAL)
     CapturingLogger logger;
@@ -1501,6 +1823,8 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
     __hidden_assets_graphics_tests::TestDeformableGeometryCookerU32IndexType(context);
     __hidden_assets_graphics_tests::TestDeformableGeometryCookerExplicitEmptyOptionalLists(context);
     __hidden_assets_graphics_tests::TestDeformableGeometryCookerFullAsset(context);
+    __hidden_assets_graphics_tests::TestDeformableGeometryCookerGltfImport(context);
+    __hidden_assets_graphics_tests::TestDeformableGeometryCookerGlbImport(context);
     __hidden_assets_graphics_tests::TestDeformableGeometryCookerValidationFailures(context);
     __hidden_assets_graphics_tests::TestDeformableGeometryValidationFailures(context);
     __hidden_assets_graphics_tests::TestFormatBlockDimensions(context);

@@ -800,6 +800,24 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
     ;
 }
 
+[[nodiscard]] bool ReplayResultShapeMatchesStoredRecord(
+    const DeformableHoleEditResult& result,
+    const DeformableSurfaceEditRecord& record)
+{
+    return result.removedTriangleCount == record.result.removedTriangleCount
+        && result.addedVertexCount == record.result.addedVertexCount
+        && result.addedTriangleCount == record.result.addedTriangleCount
+        && result.wallVertexCount == record.result.wallVertexCount
+    ;
+}
+
+[[nodiscard]] bool HoleResultChangesTopology(const DeformableHoleEditResult& result){
+    return result.removedTriangleCount != 0u
+        || result.addedTriangleCount != 0u
+        || result.addedVertexCount != 0u
+    ;
+}
+
 [[nodiscard]] bool ValidateReplayAccessories(
     const DeformableRuntimeMeshInstance& instance,
     const DeformableSurfaceEditState& state,
@@ -2366,11 +2384,7 @@ namespace __hidden_deformable_surface_edit{
             return false;
 
         ++result.appliedEditCount;
-        result.topologyChanged = result.topologyChanged
-            || replayResult.removedTriangleCount != 0u
-            || replayResult.addedTriangleCount != 0u
-            || replayResult.addedVertexCount != 0u
-        ;
+        result.topologyChanged = result.topologyChanged || HoleResultChangesTopology(replayResult);
     }
     result.finalEditRevision = replayInstance.editRevision;
     return true;
@@ -2402,6 +2416,95 @@ namespace __hidden_deformable_surface_edit{
 
     outResult.undoneEditId = undoneEditId;
     return ValidSurfaceEditState(outUndoState);
+}
+
+[[nodiscard]] bool ReplaySurfaceEditRecordsWithoutEdit(
+    DeformableRuntimeMeshInstance& replayInstance,
+    const DeformableSurfaceEditState& state,
+    const DeformableSurfaceEditId editId,
+    DeformableSurfaceEditState& outHealedState,
+    DeformableSurfaceEditHealResult& outResult)
+{
+    outHealedState = DeformableSurfaceEditState{};
+    outResult = DeformableSurfaceEditHealResult{};
+    if(!ValidSurfaceEditState(state) || !ValidSurfaceEditId(editId))
+        return false;
+
+    const DeformableSurfaceEditRecord* healedEdit = FindEditRecordById(state, editId);
+    if(!healedEdit)
+        return false;
+
+    outResult.healedEditId = editId;
+    outResult.replay.topologyChanged = HoleResultChangesTopology(healedEdit->result);
+    outHealedState.edits.reserve(state.edits.size() - 1u);
+    for(const DeformableSurfaceEditRecord& record : state.edits){
+        if(record.editId == editId)
+            continue;
+        if(replayInstance.editRevision == Limit<u32>::s_Max)
+            return false;
+
+        DeformableSurfaceEditRecord replayRecord = record;
+        replayRecord.hole.baseEditRevision = replayInstance.editRevision;
+        replayRecord.result.editRevision = replayInstance.editRevision + 1u;
+
+        bool replayedRecord = false;
+        DeformableHoleEditResult replayResult;
+        const usize triangleCount = replayInstance.indices.size() / 3u;
+        for(usize triangle = 0u; triangle < triangleCount; ++triangle){
+            DeformableHoleEditParams params;
+            if(!BuildReplayHoleParams(replayInstance, replayRecord, triangle, params))
+                continue;
+
+            DeformableRuntimeMeshInstance candidateInstance = replayInstance;
+            DeformableHoleEditResult candidateResult;
+            if(!CommitDeformableRestSpaceHoleImpl(
+                    candidateInstance,
+                    params,
+                    false,
+                    &candidateResult
+                )
+                || !ReplayResultShapeMatchesStoredRecord(candidateResult, record)
+                || !RuntimeMeshHasWallTrianglePairs(candidateInstance, candidateResult)
+            )
+                continue;
+
+            replayInstance = Move(candidateInstance);
+            replayResult = candidateResult;
+            replayRecord.result = candidateResult;
+            replayedRecord = true;
+            break;
+        }
+        if(!replayedRecord)
+            return false;
+
+        outHealedState.edits.push_back(replayRecord);
+        ++outResult.replay.appliedEditCount;
+        outResult.replay.topologyChanged = outResult.replay.topologyChanged
+            || HoleResultChangesTopology(replayResult)
+        ;
+    }
+
+    outHealedState.accessories.reserve(state.accessories.size());
+    for(const DeformableAccessoryAttachmentRecord& accessory : state.accessories){
+        if(accessory.anchorEditId == editId){
+            ++outResult.removedAccessoryCount;
+            continue;
+        }
+
+        const DeformableSurfaceEditRecord* anchorEdit =
+            FindEditRecordById(outHealedState, accessory.anchorEditId)
+        ;
+        if(!anchorEdit)
+            return false;
+
+        DeformableAccessoryAttachmentRecord replayAccessory = accessory;
+        replayAccessory.firstWallVertex = anchorEdit->result.firstWallVertex;
+        replayAccessory.wallVertexCount = anchorEdit->result.wallVertexCount;
+        outHealedState.accessories.push_back(replayAccessory);
+    }
+
+    outResult.replay.finalEditRevision = replayInstance.editRevision;
+    return ValidSurfaceEditState(outHealedState);
 }
 
 [[nodiscard]] bool PrepareCleanReplayInstance(
@@ -2513,6 +2616,45 @@ bool UndoLastSurfaceEdit(
         return false;
 
     state = Move(undoState);
+    instance = Move(replayInstance);
+    if(outResult)
+        *outResult = result;
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool HealSurfaceEdit(
+    DeformableRuntimeMeshInstance& instance,
+    const DeformableRuntimeMeshInstance& cleanBaseInstance,
+    DeformableSurfaceEditState& state,
+    const DeformableSurfaceEditId editId,
+    DeformableSurfaceEditHealResult* outResult)
+{
+    if(outResult)
+        *outResult = DeformableSurfaceEditHealResult{};
+
+    DeformableRuntimeMeshInstance replayInstance;
+    if(!__hidden_deformable_surface_edit::PrepareCleanReplayInstance(instance, cleanBaseInstance, replayInstance))
+        return false;
+
+    DeformableSurfaceEditState healedState;
+    DeformableSurfaceEditHealResult result;
+    if(!__hidden_deformable_surface_edit::ReplaySurfaceEditRecordsWithoutEdit(
+            replayInstance,
+            state,
+            editId,
+            healedState,
+            result
+        )
+    )
+        return false;
+    if(!__hidden_deformable_surface_edit::ValidateReplayAccessoryAnchors(replayInstance, healedState))
+        return false;
+
+    state = Move(healedState);
     instance = Move(replayInstance);
     if(outResult)
         *outResult = result;

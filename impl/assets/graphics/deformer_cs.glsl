@@ -247,12 +247,62 @@ void nwbDeformerApplySkin(const uint vertexId, inout vec3 position, inout vec3 n
     tangent.xyz = skinnedTangent;
 }
 
-vec4 nwbDeformerSampleDisplacementTexture(const vec2 uv0){
-    const vec2 uv = (uv0 * nwbDeformerDisplacementUvScale()) + nwbDeformerDisplacementUvOffset();
-    return texture(sampler2D(g_NwbDeformerDisplacementTexture, g_NwbDeformerDisplacementSampler), clamp(uv, vec2(0.0), vec2(1.0)));
+vec2 nwbDeformerDisplacementTextureCoord(const vec2 uv0){
+    return clamp(
+        (uv0 * nwbDeformerDisplacementUvScale()) + nwbDeformerDisplacementUvOffset(),
+        vec2(0.0),
+        vec2(1.0)
+    );
 }
 
-void nwbDeformerApplyDisplacement(inout vec3 position, const vec3 normal, const vec4 tangent, const vec2 uv0){
+vec4 nwbDeformerSampleDisplacementTextureCoord(const vec2 uv){
+    return texture(
+        sampler2D(g_NwbDeformerDisplacementTexture, g_NwbDeformerDisplacementSampler),
+        clamp(uv, vec2(0.0), vec2(1.0))
+    );
+}
+
+vec4 nwbDeformerSampleDisplacementTexture(const vec2 uv0){
+    return nwbDeformerSampleDisplacementTextureCoord(nwbDeformerDisplacementTextureCoord(uv0));
+}
+
+float nwbDeformerDisplacementTextureCoordStep(const int size){
+    return size > 1 ? 1.0 / float(size - 1) : 1.0;
+}
+
+void nwbDeformerApplyScalarTextureNormal(inout vec3 normal, inout vec4 tangent, const vec2 uv0){
+    const ivec2 textureExtent = textureSize(
+        sampler2D(g_NwbDeformerDisplacementTexture, g_NwbDeformerDisplacementSampler),
+        0
+    );
+    if(textureExtent.x <= 1 && textureExtent.y <= 1)
+        return;
+
+    const vec2 uv = nwbDeformerDisplacementTextureCoord(uv0);
+    const float du = nwbDeformerDisplacementTextureCoordStep(textureExtent.x);
+    const float dv = nwbDeformerDisplacementTextureCoordStep(textureExtent.y);
+    const float amplitude = nwbDeformerDisplacementAmplitude();
+    const float heightU =
+        nwbDeformerSampleDisplacementTextureCoord(uv + vec2(du, 0.0)).x
+        - nwbDeformerSampleDisplacementTextureCoord(uv - vec2(du, 0.0)).x
+    ;
+    const float heightV =
+        nwbDeformerSampleDisplacementTextureCoord(uv + vec2(0.0, dv)).x
+        - nwbDeformerSampleDisplacementTextureCoord(uv - vec2(0.0, dv)).x
+    ;
+    const vec3 bitangent = nwbDeformerSafeNormalize(
+        cross(normal, tangent.xyz),
+        vec3(0.0, 1.0, 0.0)
+    ) * nwbDeformerTangentHandedness(tangent.w, 1.0);
+    const vec3 adjustedNormal = normal
+        - tangent.xyz * (heightU * amplitude * 0.5)
+        - bitangent * (heightV * amplitude * 0.5)
+    ;
+    normal = nwbDeformerSafeNormalize(adjustedNormal, normal);
+    tangent.xyz = nwbDeformerResolveFrameTangent(normal, tangent.xyz, tangent.xyz);
+}
+
+void nwbDeformerApplyDisplacement(inout vec3 position, inout vec3 normal, inout vec4 tangent, const vec2 uv0){
     const uint noneMode = 0u;
     const uint scalarUvRampMode = 1u;
     const uint scalarTextureMode = 2u;
@@ -274,6 +324,7 @@ void nwbDeformerApplyDisplacement(inout vec3 position, const vec3 normal, const 
     const vec4 sampleValue = nwbDeformerSampleDisplacementTexture(uv0);
     if(displacementMode == scalarTextureMode){
         position += normal * ((sampleValue.x + nwbDeformerDisplacementBias()) * amplitude);
+        nwbDeformerApplyScalarTextureNormal(normal, tangent, uv0);
         return;
     }
 
@@ -361,9 +412,16 @@ void main(){
         tangent = preSkinTangent;
     nwbDeformerOrthonormalizeFrame(normal, tangent, preSkinNormal, preSkinTangent);
     const vec3 preDisplacementPosition = position;
+    const vec3 preDisplacementNormal = normal;
+    const vec4 preDisplacementTangent = tangent;
     nwbDeformerApplyDisplacement(position, normal, tangent, uv0);
     if(!nwbDeformerFiniteVec3(position))
         position = preDisplacementPosition;
+    if(!nwbDeformerFiniteVec3(normal))
+        normal = preDisplacementNormal;
+    if(!nwbDeformerFiniteVec4(tangent))
+        tangent = preDisplacementTangent;
+    nwbDeformerOrthonormalizeFrame(normal, tangent, preDisplacementNormal, preDisplacementTangent);
 
     nwbDeformerCopyRestPayload(restBase, deformedBase, restScalarStride);
     nwbDeformerDeformedVertexScalars[deformedBase + 0u] = position.x;

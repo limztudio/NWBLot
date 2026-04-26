@@ -292,17 +292,79 @@ template<typename VertexVector>
     return static_cast<u32>(Min(rounded, static_cast<f32>(size - 1u)));
 }
 
+[[nodiscard]] f32 DisplacementTextureCoordStep(const u32 size){
+    return size > 1u ? 1.0f / static_cast<f32>(size - 1u) : 1.0f;
+}
+
+[[nodiscard]] Float2U DisplacementTextureCoord(
+    const DeformableDisplacement& displacement,
+    const Float2U& uv)
+{
+    return Float2U(
+        Saturate((uv.x * displacement.uvScale.x) + displacement.uvOffset.x),
+        Saturate((uv.y * displacement.uvScale.y) + displacement.uvOffset.y)
+    );
+}
+
+[[nodiscard]] Float4U SampleDisplacementTextureCoord(
+    const DeformableDisplacementTexture& texture,
+    const Float2U& uv)
+{
+    const u32 x = SampleCoordinate(uv.x, texture.width());
+    const u32 y = SampleCoordinate(uv.y, texture.height());
+    const usize texelIndex = static_cast<usize>(y) * static_cast<usize>(texture.width()) + static_cast<usize>(x);
+    return texture.texels()[texelIndex];
+}
+
 [[nodiscard]] Float4U SampleDisplacementTexture(
     const DeformableDisplacement& displacement,
     const DeformableDisplacementTexture& texture,
     const Float2U& uv)
 {
-    const f32 u = (uv.x * displacement.uvScale.x) + displacement.uvOffset.x;
-    const f32 v = (uv.y * displacement.uvScale.y) + displacement.uvOffset.y;
-    const u32 x = SampleCoordinate(u, texture.width());
-    const u32 y = SampleCoordinate(v, texture.height());
-    const usize texelIndex = static_cast<usize>(y) * static_cast<usize>(texture.width()) + static_cast<usize>(x);
-    return texture.texels()[texelIndex];
+    return SampleDisplacementTextureCoord(texture, DisplacementTextureCoord(displacement, uv));
+}
+
+void ApplyScalarTextureNormal(
+    const DeformableDisplacement& displacement,
+    const DeformableDisplacementTexture& texture,
+    DeformableVertexRest& vertex)
+{
+    if(texture.width() <= 1u && texture.height() <= 1u)
+        return;
+
+    const Float2U uv = DisplacementTextureCoord(displacement, vertex.uv0);
+    const f32 du = DisplacementTextureCoordStep(texture.width());
+    const f32 dv = DisplacementTextureCoordStep(texture.height());
+    const Float4U right = SampleDisplacementTextureCoord(texture, Float2U(Saturate(uv.x + du), uv.y));
+    const Float4U left = SampleDisplacementTextureCoord(texture, Float2U(Saturate(uv.x - du), uv.y));
+    const Float4U up = SampleDisplacementTextureCoord(texture, Float2U(uv.x, Saturate(uv.y + dv)));
+    const Float4U down = SampleDisplacementTextureCoord(texture, Float2U(uv.x, Saturate(uv.y - dv)));
+    const f32 heightU = (right.x - left.x) * displacement.amplitude * 0.5f;
+    const f32 heightV = (up.x - down.x) * displacement.amplitude * 0.5f;
+    if(!IsFinite(heightU) || !IsFinite(heightV))
+        return;
+
+    SIMDVector normal = LoadFloat(vertex.normal);
+    SIMDVector tangent = VectorSet(vertex.tangent.x, vertex.tangent.y, vertex.tangent.z, 0.0f);
+    const SIMDVector bitangent = VectorMultiply(
+        ResolveFrameBitangent(normal, tangent, VectorSet(0.0f, 1.0f, 0.0f, 0.0f)),
+        VectorReplicate(TangentHandedness(vertex.tangent.w, 1.0f))
+    );
+    normal = Normalize(
+        VectorSubtract(
+            VectorSubtract(normal, VectorScale(tangent, heightU)),
+            VectorScale(bitangent, heightV)
+        ),
+        normal
+    );
+    tangent = ResolveFrameTangent(normal, tangent, tangent);
+    StoreFloat(normal, &vertex.normal);
+
+    Float4 tangentStorage;
+    StoreFloat(tangent, &tangentStorage);
+    vertex.tangent.x = tangentStorage.x;
+    vertex.tangent.y = tangentStorage.y;
+    vertex.tangent.z = tangentStorage.z;
 }
 
 void ApplyDisplacement(
@@ -345,6 +407,8 @@ void ApplyDisplacement(
             VectorMultiplyAdd(LoadFloat(vertex.normal), VectorReplicate(scalarOffset), LoadFloat(vertex.position)),
             &vertex.position
         );
+        if(displacement.mode == DeformableDisplacementMode::ScalarTexture && texture)
+            ApplyScalarTextureNormal(displacement, *texture, vertex);
         return;
     }
 
@@ -506,7 +570,10 @@ template<typename VertexVector>
             return false;
         __hidden_deformable_picking::OrthonormalizeVertexFrame(vertex, preSkinNormal, preSkinTangent);
 
+        const Float4 preDisplacementNormal = __hidden_deformable_picking::LoadVertexNormal(vertex);
+        const Float4 preDisplacementTangent = __hidden_deformable_picking::LoadVertexTangent(vertex);
         __hidden_deformable_picking::ApplyDisplacement(displacement, displacementTexture, vertex);
+        __hidden_deformable_picking::OrthonormalizeVertexFrame(vertex, preDisplacementNormal, preDisplacementTangent);
         __hidden_deformable_picking::ApplyTransform(inputs.transform, vertex);
         if(!DeformableValidation::ValidRestVertexFrame(vertex))
             return false;

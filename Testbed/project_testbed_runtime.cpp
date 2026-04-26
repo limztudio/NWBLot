@@ -209,7 +209,7 @@ static void ApplyFlyCameraInput(
     if(!IsFinite(yawRadians))
         yawRadians = 0.0f;
     pitchRadians = ClampPitch(
-        pitchRadians - safeMouseDeltaY * s_FlyCameraMouseSensitivityRadiansPerPixel,
+        pitchRadians + safeMouseDeltaY * s_FlyCameraMouseSensitivityRadiansPerPixel,
         s_FlyCameraPitchLimitRadians
     );
 

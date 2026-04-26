@@ -15,7 +15,7 @@ layout(location = 0) out vec4 outColor;
 void main(){
     const vec3 baseColor = clamp(nwbProjectBxdfPixel(inColor.rgb), vec3(0.0), vec3(1.0));
     outColor = vec4(
-        clamp(nwbProjectApplyDirectionalDebugShading(baseColor, inNormal, inTangent, inWorldPosition), vec3(0.0), vec3(1.0)),
+        clamp(nwbProjectApplyDirectionalShading(baseColor, inNormal, inTangent, inWorldPosition), vec3(0.0), vec3(1.0)),
         inColor.a
     );
 }

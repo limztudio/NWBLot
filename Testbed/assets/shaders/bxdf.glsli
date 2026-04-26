@@ -75,7 +75,7 @@ vec3 nwbProjectDirectionalLightRadiance(){
     ;
 }
 
-vec3 nwbProjectApplyDirectionalDebugShading(vec3 baseColor, vec3 normal, vec4 tangent, vec3 worldPosition){
+vec3 nwbProjectApplyDirectionalShading(vec3 baseColor, vec3 normal, vec4 tangent, vec3 worldPosition){
     const vec3 normalVector = nwbProjectSafeNormalize(normal, vec3(0.0, 0.0, 1.0));
     const vec3 tangentVector = nwbProjectOrthonormalTangent(tangent.xyz, normalVector);
     const float tangentSign = tangent.w < 0.0 ? -1.0 : 1.0;

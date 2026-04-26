@@ -67,7 +67,8 @@ struct DeformableRuntimeMeshInstance{
             && (dirtyFlags & RuntimeMeshDirtyFlag::GpuUploadDirty) == 0u
             && restVertexBuffer != nullptr
             && indexBuffer != nullptr
-            && deformedVertexBuffer != nullptr;
+            && deformedVertexBuffer != nullptr
+        ;
     }
 };
 

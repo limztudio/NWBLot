@@ -67,6 +67,7 @@ Updated: 2026-04-13
   - `    execute();`
 - Prefer single-line function calls, e.g. `foobar(a, b, c, d);`.
 - Split function arguments only when the line would exceed the long separator width (`////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////`) or when argument count is too high.
+- Prefer single-line function signatures/definitions when the parameter list is still readable. For signatures, treat the long-separator width as a soft readability cue, not a hard split point; do not split a short signature just because it is modestly long.
 - When splitting calls, place the closing `)` on a new line:
   - `foobar(`
   - `    a,`
@@ -138,6 +139,16 @@ Updated: 2026-04-13
   - `return cond`
   - `    ? valueA`
   - `    : valueB;`
+- For standalone multiline `return` expressions, place the trailing `;` on its own line after the final expression term:
+  - Correct:
+  - `return aaa`
+  - `    && bbb`
+  - `    && ccc`
+  - `;`
+  - Wrong:
+  - `return aaa`
+  - `    && bbb`
+  - `    && ccc;`
 - When a multiline ternary expression is used inside a parenthesized call or constructor, keep the closing `);` together on the same line:
   - Correct:
   - `std::basic_regex<T> regex(`

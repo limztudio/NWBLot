@@ -44,11 +44,7 @@ struct BlendedMorphDeltaAccumulator{
 };
 
 
-[[nodiscard]] inline bool BuildResolvedMorphWeightLookup(
-    const DeformableRuntimeMeshInstance& instance,
-    const DeformableMorphWeightsComponent* weights,
-    MorphWeightLookup& outWeights)
-{
+[[nodiscard]] inline bool BuildResolvedMorphWeightLookup(const DeformableRuntimeMeshInstance& instance, const DeformableMorphWeightsComponent* weights, MorphWeightLookup& outWeights){
     Name failedMorph = NAME_NONE;
     if(DeformableRuntime::BuildMorphWeightSumLookup(instance.morphs, weights, outWeights, failedMorph))
         return true;

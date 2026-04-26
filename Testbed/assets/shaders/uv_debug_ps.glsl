@@ -23,7 +23,7 @@ vec3 nwbProjectUvDebug(const vec2 uv0){
 void main(){
     const vec3 baseColor = clamp(nwbProjectUvDebug(inUv0) * inColor.rgb, vec3(0.0), vec3(1.0));
     outColor = vec4(
-        clamp(nwbProjectApplyDirectionalDebugShading(baseColor, inNormal, inTangent, inWorldPosition), vec3(0.0), vec3(1.0)),
+        clamp(nwbProjectApplyDirectionalShading(baseColor, inNormal, inTangent, inWorldPosition), vec3(0.0), vec3(1.0)),
         inColor.a
     );
 }

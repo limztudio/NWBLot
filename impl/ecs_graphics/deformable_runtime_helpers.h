@@ -46,12 +46,7 @@ namespace DisplacementResolveFailure{
 }
 
 template<typename MorphVector, typename MorphWeightLookup>
-[[nodiscard]] inline bool BuildMorphWeightSumLookup(
-    const MorphVector& morphs,
-    const DeformableMorphWeightsComponent* weights,
-    MorphWeightLookup& outWeights,
-    Name& outFailedMorph)
-{
+[[nodiscard]] inline bool BuildMorphWeightSumLookup(const MorphVector& morphs, const DeformableMorphWeightsComponent* weights, MorphWeightLookup& outWeights, Name& outFailedMorph){
     outWeights.clear();
     outFailedMorph = NAME_NONE;
 
@@ -207,11 +202,7 @@ inline void OrthonormalizeFrame(SIMDVector& normal, SIMDVector& tangent, const S
     return IsFinite(determinant) && Abs(determinant) > s_Epsilon;
 }
 
-[[nodiscard]] inline bool TryTransformJointNormalDirection(
-    const SIMDMatrix& matrix,
-    const SIMDVector directionVector,
-    SIMDVector& outDirection)
-{
+[[nodiscard]] inline bool TryTransformJointNormalDirection(const SIMDMatrix& matrix, const SIMDVector directionVector, SIMDVector& outDirection){
     const SIMDVector column0 = VectorSetW(matrix.v[0], 0.0f);
     const SIMDVector column1 = VectorSetW(matrix.v[1], 0.0f);
     const SIMDVector column2 = VectorSetW(matrix.v[2], 0.0f);
@@ -231,11 +222,7 @@ inline void OrthonormalizeFrame(SIMDVector& normal, SIMDVector& tangent, const S
     return DeformableValidation::FiniteVector(outDirection, 0x7u);
 }
 
-[[nodiscard]] inline bool ValidateTriangleIndex(
-    const DeformableRuntimeMeshInstance& instance,
-    const u32 triangle,
-    u32 (&outIndices)[3])
-{
+[[nodiscard]] inline bool ValidateTriangleIndex(const DeformableRuntimeMeshInstance& instance, const u32 triangle, u32 (&outIndices)[3]){
     const usize indexBase = static_cast<usize>(triangle) * 3u;
     if(indexBase > instance.indices.size() || instance.indices.size() - indexBase < 3u)
         return false;
@@ -249,12 +236,7 @@ inline void OrthonormalizeFrame(SIMDVector& normal, SIMDVector& tangent, const S
     ;
 }
 
-[[nodiscard]] inline bool ResolveEffectiveDisplacement(
-    const DeformableDisplacement& sourceDisplacement,
-    const DeformableDisplacementComponent* component,
-    DeformableDisplacement& outDisplacement,
-    DisplacementResolveFailure::Enum& outFailure)
-{
+[[nodiscard]] inline bool ResolveEffectiveDisplacement(const DeformableDisplacement& sourceDisplacement, const DeformableDisplacementComponent* component, DeformableDisplacement& outDisplacement, DisplacementResolveFailure::Enum& outFailure){
     outDisplacement = sourceDisplacement;
     outFailure = DisplacementResolveFailure::None;
 
@@ -285,11 +267,7 @@ inline void OrthonormalizeFrame(SIMDVector& normal, SIMDVector& tangent, const S
     return true;
 }
 
-[[nodiscard]] inline bool ResolveEffectiveDisplacement(
-    const DeformableDisplacement& sourceDisplacement,
-    const DeformableDisplacementComponent* component,
-    DeformableDisplacement& outDisplacement)
-{
+[[nodiscard]] inline bool ResolveEffectiveDisplacement(const DeformableDisplacement& sourceDisplacement, const DeformableDisplacementComponent* component, DeformableDisplacement& outDisplacement){
     DisplacementResolveFailure::Enum failure = DisplacementResolveFailure::None;
     return ResolveEffectiveDisplacement(sourceDisplacement, component, outDisplacement, failure);
 }

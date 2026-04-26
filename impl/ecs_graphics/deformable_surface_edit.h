@@ -147,6 +147,17 @@ struct DeformableSurfaceEditResizeResult{
     DeformableSurfaceEditReplayResult replay;
 };
 
+struct DeformableSurfaceEditMoveResult{
+    DeformableSurfaceEditId movedEditId = 0;
+    SourceSample oldRestSample;
+    SourceSample newRestSample;
+    Float3U oldRestPosition = Float3U(0.0f, 0.0f, 0.0f);
+    Float3U newRestPosition = Float3U(0.0f, 0.0f, 0.0f);
+    Float3U oldRestNormal = Float3U(0.0f, 0.0f, 1.0f);
+    Float3U newRestNormal = Float3U(0.0f, 0.0f, 1.0f);
+    DeformableSurfaceEditReplayResult replay;
+};
+
 struct DeformableSurfaceEditReplayContext{
     Core::Assets::AssetManager* assetManager = nullptr;
     Core::ECS::World* world = nullptr;
@@ -228,6 +239,14 @@ struct DeformableSurfaceEditReplayContext{
     f32 ellipseRatio,
     f32 depth,
     DeformableSurfaceEditResizeResult* outResult = nullptr
+);
+[[nodiscard]] bool MoveSurfaceEdit(
+    DeformableRuntimeMeshInstance& instance,
+    const DeformableRuntimeMeshInstance& cleanBaseInstance,
+    DeformableSurfaceEditState& state,
+    DeformableSurfaceEditId editId,
+    const DeformablePosedHit& targetHit,
+    DeformableSurfaceEditMoveResult* outResult = nullptr
 );
 [[nodiscard]] bool CommitDeformableRestSpaceHole(
     DeformableRuntimeMeshInstance& instance,

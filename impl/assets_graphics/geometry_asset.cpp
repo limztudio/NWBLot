@@ -24,15 +24,13 @@ namespace __hidden_assets{
 
 
 static constexpr u32 s_GeometryMagic = 0x47454F31u; // GEO1
-static constexpr u32 s_GeometryVersion = 1u;
+static constexpr u32 s_GeometryVersion = 2u;
 #if defined(NWB_COOK)
 static constexpr usize s_GeometryHeaderBytes =
     sizeof(u32) + // magic
     sizeof(u32) + // version
-    sizeof(u32) + // vertex stride
-    sizeof(u8) +  // index-format flag
-    sizeof(u64) + // vertex byte count
-    sizeof(u64)   // index byte count
+    sizeof(u64) + // vertex count
+    sizeof(u64)   // index count
 ;
 #endif
 
@@ -41,6 +39,70 @@ UniquePtr<Core::Assets::IAssetCodec> CreateGeometryAssetCodec(){
     return MakeUnique<GeometryAssetCodec>();
 }
 Core::Assets::AssetCodecAutoRegistrar s_GeometryAssetCodecAutoRegistrar(&CreateGeometryAssetCodec);
+
+
+template<typename ValueT>
+bool ReadVectorPayload(
+    const Core::Assets::AssetBytes& binary,
+    usize& inOutCursor,
+    const u64 count,
+    Vector<ValueT>& outValues,
+    const tchar* label
+){
+    outValues.clear();
+    if(count > static_cast<u64>(Limit<usize>::s_Max / sizeof(ValueT))){
+        NWB_LOGGER_ERROR(NWB_TEXT("Geometry::loadBinary failed: '{}' payload byte size overflows"), label);
+        return false;
+    }
+
+    const usize typedCount = static_cast<usize>(count);
+    const usize byteCount = typedCount * sizeof(ValueT);
+    if(inOutCursor > binary.size() || byteCount > binary.size() - inOutCursor){
+        NWB_LOGGER_ERROR(NWB_TEXT("Geometry::loadBinary failed: malformed '{}' payload"), label);
+        return false;
+    }
+
+    outValues.resize(typedCount);
+    if(byteCount > 0u)
+        NWB_MEMCPY(outValues.data(), byteCount, binary.data() + inOutCursor, byteCount);
+    inOutCursor += byteCount;
+    return true;
+}
+
+#if defined(NWB_COOK)
+template<typename ValueT>
+bool AppendVectorPayload(Core::Assets::AssetBytes& outBinary, const Vector<ValueT>& values, const tchar* label){
+    if(values.size() > Limit<usize>::s_Max / sizeof(ValueT)){
+        NWB_LOGGER_ERROR(NWB_TEXT("GeometryAssetCodec::serialize failed: '{}' payload byte size overflows"), label);
+        return false;
+    }
+
+    const usize byteCount = values.size() * sizeof(ValueT);
+    if(byteCount > Limit<usize>::s_Max - outBinary.size()){
+        NWB_LOGGER_ERROR(NWB_TEXT("GeometryAssetCodec::serialize failed: '{}' payload overflows output binary"), label);
+        return false;
+    }
+
+    const usize payloadBegin = outBinary.size();
+    outBinary.resize(payloadBegin + byteCount);
+    if(byteCount > 0u)
+        NWB_MEMCPY(outBinary.data() + payloadBegin, byteCount, values.data(), byteCount);
+    return true;
+}
+
+template<typename ValueT>
+bool AddVectorReserveBytes(usize& inOutReserveBytes, const Vector<ValueT>& values){
+    if(values.size() > Limit<usize>::s_Max / sizeof(ValueT))
+        return false;
+
+    const usize byteCount = values.size() * sizeof(ValueT);
+    if(byteCount > Limit<usize>::s_Max - inOutReserveBytes)
+        return false;
+
+    inOutReserveBytes += byteCount;
+    return true;
+}
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -52,26 +114,13 @@ Core::Assets::AssetCodecAutoRegistrar s_GeometryAssetCodecAutoRegistrar(&CreateG
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void Geometry::setVertexData(const void* data, const usize bytes){
-    m_vertexData.resize(bytes);
-    if(data && bytes > 0)
-        NWB_MEMCPY(m_vertexData.data(), bytes, data, bytes);
-}
-
-void Geometry::setIndexData(const void* data, const usize bytes, const bool use32BitIndices){
-    m_use32BitIndices = use32BitIndices;
-    m_indexData.resize(bytes);
-    if(data && bytes > 0)
-        NWB_MEMCPY(m_indexData.data(), bytes, data, bytes);
-}
-
 bool Geometry::validatePayload()const{
     const TString geometryPathText = virtualPath()
         ? StringConvert(virtualPath().c_str())
         : TString(NWB_TEXT("<unnamed>"))
     ;
 
-    if(m_vertexStride == 0 || m_vertexData.empty() || m_indexData.empty()){
+    if(m_vertices.empty() || m_indices.empty()){
         NWB_LOGGER_ERROR(
             NWB_TEXT("Geometry::validatePayload failed: geometry '{}' has incomplete payload"),
             geometryPathText
@@ -79,70 +128,70 @@ bool Geometry::validatePayload()const{
         return false;
     }
 
-    if((m_vertexData.size() % m_vertexStride) != 0){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Geometry::validatePayload failed: geometry '{}' vertex payload size {} is not aligned to stride {}"),
-            geometryPathText,
-            m_vertexData.size(),
-            m_vertexStride
-        );
-        return false;
-    }
-
-    const usize indexStride = m_use32BitIndices ? sizeof(u32) : sizeof(u16);
-    if((m_indexData.size() % indexStride) != 0){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Geometry::validatePayload failed: geometry '{}' index payload size {} is not aligned to {}-byte indices"),
-            geometryPathText,
-            m_indexData.size(),
-            indexStride
-        );
-        return false;
-    }
-
-    const usize vertexCount = m_vertexData.size() / m_vertexStride;
-    const usize indexCount = m_indexData.size() / indexStride;
-    if(vertexCount > static_cast<usize>(Limit<u32>::s_Max) || indexCount > static_cast<usize>(Limit<u32>::s_Max)){
+    if(m_vertices.size() > static_cast<usize>(Limit<u32>::s_Max) || m_indices.size() > static_cast<usize>(Limit<u32>::s_Max)){
         NWB_LOGGER_ERROR(
             NWB_TEXT("Geometry::validatePayload failed: geometry '{}' exceeds u32 vertex/index count limits"),
             geometryPathText
         );
         return false;
     }
-    if((indexCount % 3u) != 0u){
+    if((m_indices.size() % 3u) != 0u){
         NWB_LOGGER_ERROR(
             NWB_TEXT("Geometry::validatePayload failed: geometry '{}' index count {} is not a multiple of 3 for triangle-list rendering"),
             geometryPathText,
-            indexCount
+            m_indices.size()
         );
         return false;
     }
 
-    u64 maxIndexValue = 0;
-    const u8* indexBytes = m_indexData.data();
-    if(m_use32BitIndices){
-        for(usize i = 0; i < indexCount; ++i){
-            u32 indexValue = 0;
-            NWB_MEMCPY(&indexValue, sizeof(indexValue), indexBytes + i * sizeof(indexValue), sizeof(indexValue));
-            maxIndexValue = Max(maxIndexValue, static_cast<u64>(indexValue));
+    for(usize i = 0; i < m_vertices.size(); ++i){
+        const GeometryVertex& vertex = m_vertices[i];
+        const bool finite =
+            IsFinite(vertex.position.x)
+            && IsFinite(vertex.position.y)
+            && IsFinite(vertex.position.z)
+            && IsFinite(vertex.normal.x)
+            && IsFinite(vertex.normal.y)
+            && IsFinite(vertex.normal.z)
+            && IsFinite(vertex.color0.x)
+            && IsFinite(vertex.color0.y)
+            && IsFinite(vertex.color0.z)
+            && IsFinite(vertex.color0.w)
+        ;
+        if(!finite){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Geometry::validatePayload failed: geometry '{}' vertex {} contains non-finite data"),
+                geometryPathText,
+                i
+            );
+            return false;
         }
-    }
-    else{
-        for(usize i = 0; i < indexCount; ++i){
-            u16 indexValue = 0;
-            NWB_MEMCPY(&indexValue, sizeof(indexValue), indexBytes + i * sizeof(indexValue), sizeof(indexValue));
-            maxIndexValue = Max(maxIndexValue, static_cast<u64>(indexValue));
+
+        const f32 normalLengthSquared =
+            (vertex.normal.x * vertex.normal.x)
+            + (vertex.normal.y * vertex.normal.y)
+            + (vertex.normal.z * vertex.normal.z)
+        ;
+        if(!IsFinite(normalLengthSquared) || Abs(normalLengthSquared - 1.0f) > 0.001f){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Geometry::validatePayload failed: geometry '{}' vertex {} has an invalid normal"),
+                geometryPathText,
+                i
+            );
+            return false;
         }
     }
 
-    if(maxIndexValue >= static_cast<u64>(vertexCount)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Geometry::validatePayload failed: geometry '{}' references vertex index {} but only has {} vertices"),
-            geometryPathText,
-            maxIndexValue,
-            vertexCount
-        );
-        return false;
+    for(const u32 indexValue : m_indices){
+        if(indexValue >= m_vertices.size()){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Geometry::validatePayload failed: geometry '{}' references vertex index {} but only has {} vertices"),
+                geometryPathText,
+                indexValue,
+                m_vertices.size()
+            );
+            return false;
+        }
     }
 
     return true;
@@ -155,24 +204,18 @@ bool Geometry::loadBinary(const Core::Assets::AssetBytes& binary){
         return false;
     }
 
-    m_vertexStride = 0;
-    m_use32BitIndices = false;
-    m_vertexData.clear();
-    m_indexData.clear();
+    m_vertices.clear();
+    m_indices.clear();
 
     usize cursor = 0;
     u32 magic = 0;
     u32 version = 0;
-    u32 vertexStride = 0;
-    u8 use32BitIndices = 0;
-    u64 vertexBytes = 0;
-    u64 indexBytes = 0;
+    u64 vertexCount = 0;
+    u64 indexCount = 0;
     if(!ReadPOD(binary, cursor, magic)
         || !ReadPOD(binary, cursor, version)
-        || !ReadPOD(binary, cursor, vertexStride)
-        || !ReadPOD(binary, cursor, use32BitIndices)
-        || !ReadPOD(binary, cursor, vertexBytes)
-        || !ReadPOD(binary, cursor, indexBytes)
+        || !ReadPOD(binary, cursor, vertexCount)
+        || !ReadPOD(binary, cursor, indexCount)
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("Geometry::loadBinary failed: malformed header"));
         return false;
@@ -186,40 +229,23 @@ bool Geometry::loadBinary(const Core::Assets::AssetBytes& binary){
         NWB_LOGGER_ERROR(NWB_TEXT("Geometry::loadBinary failed: unsupported version {}"), version);
         return false;
     }
-    if(vertexStride == 0 || vertexBytes == 0 || indexBytes == 0){
+    if(vertexCount == 0u || indexCount == 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("Geometry::loadBinary failed: geometry payload is empty"));
         return false;
     }
-    if(use32BitIndices > 1){
-        NWB_LOGGER_ERROR(NWB_TEXT("Geometry::loadBinary failed: invalid index-format flag"));
+    if(vertexCount > static_cast<u64>(Limit<u32>::s_Max) || indexCount > static_cast<u64>(Limit<u32>::s_Max)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Geometry::loadBinary failed: payload counts exceed u32 limits"));
         return false;
     }
-    if(vertexBytes > static_cast<u64>(Limit<usize>::s_Max) || indexBytes > static_cast<u64>(Limit<usize>::s_Max)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Geometry::loadBinary failed: geometry payload exceeds addressable size"));
-        return false;
-    }
-    const usize vertexByteCount = static_cast<usize>(vertexBytes);
-    const usize indexByteCount = static_cast<usize>(indexBytes);
-    if(cursor > binary.size() || vertexByteCount > binary.size() - cursor){
-        NWB_LOGGER_ERROR(NWB_TEXT("Geometry::loadBinary failed: malformed vertex payload"));
-        return false;
-    }
-    const usize indexBegin = cursor + vertexByteCount;
-    if(indexByteCount > binary.size() - indexBegin){
-        NWB_LOGGER_ERROR(NWB_TEXT("Geometry::loadBinary failed: malformed index payload"));
+    if((indexCount % 3u) != 0u){
+        NWB_LOGGER_ERROR(NWB_TEXT("Geometry::loadBinary failed: index count is not a multiple of 3"));
         return false;
     }
 
-    m_vertexStride = vertexStride;
-    m_use32BitIndices = (use32BitIndices != 0);
-
-    m_vertexData.resize(vertexByteCount);
-    NWB_MEMCPY(m_vertexData.data(), m_vertexData.size(), binary.data() + cursor, m_vertexData.size());
-    cursor += m_vertexData.size();
-
-    m_indexData.resize(indexByteCount);
-    NWB_MEMCPY(m_indexData.data(), m_indexData.size(), binary.data() + cursor, m_indexData.size());
-    cursor += m_indexData.size();
+    if(!__hidden_assets::ReadVectorPayload(binary, cursor, vertexCount, m_vertices, NWB_TEXT("vertices")))
+        return false;
+    if(!__hidden_assets::ReadVectorPayload(binary, cursor, indexCount, m_indices, NWB_TEXT("indices")))
+        return false;
 
     if(cursor != binary.size()){
         NWB_LOGGER_ERROR(NWB_TEXT("Geometry::loadBinary failed: trailing bytes detected"));
@@ -263,38 +289,23 @@ bool GeometryAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
     if(!geometry.validatePayload())
         return false;
 
-    const usize vertexBytes = geometry.vertexData().size();
-    const usize indexBytes = geometry.indexData().size();
+    usize reserveBytes = __hidden_assets::s_GeometryHeaderBytes;
+    const bool canReserve = __hidden_assets::AddVectorReserveBytes(reserveBytes, geometry.vertices())
+        && __hidden_assets::AddVectorReserveBytes(reserveBytes, geometry.indices())
+    ;
 
     outBinary.clear();
-    if(vertexBytes <= Limit<usize>::s_Max - __hidden_assets::s_GeometryHeaderBytes){
-        const usize headerAndVertexBytes = __hidden_assets::s_GeometryHeaderBytes + vertexBytes;
-        if(indexBytes <= Limit<usize>::s_Max - headerAndVertexBytes)
-            outBinary.reserve(headerAndVertexBytes + indexBytes);
-    }
+    if(canReserve)
+        outBinary.reserve(reserveBytes);
 
     AppendPOD(outBinary, __hidden_assets::s_GeometryMagic);
     AppendPOD(outBinary, __hidden_assets::s_GeometryVersion);
-    AppendPOD(outBinary, geometry.vertexStride());
-    AppendPOD(outBinary, static_cast<u8>(geometry.use32BitIndices() ? 1u : 0u));
-    AppendPOD(outBinary, static_cast<u64>(vertexBytes));
-    AppendPOD(outBinary, static_cast<u64>(indexBytes));
-    const usize vertexBegin = outBinary.size();
-    if(vertexBytes > Limit<usize>::s_Max - vertexBegin){
-        NWB_LOGGER_ERROR(NWB_TEXT("GeometryAssetCodec::serialize failed: vertex payload size overflows output binary"));
+    AppendPOD(outBinary, static_cast<u64>(geometry.vertices().size()));
+    AppendPOD(outBinary, static_cast<u64>(geometry.indices().size()));
+    if(!__hidden_assets::AppendVectorPayload(outBinary, geometry.vertices(), NWB_TEXT("vertices")))
         return false;
-    }
-    outBinary.resize(vertexBegin + vertexBytes);
-    NWB_MEMCPY(outBinary.data() + vertexBegin, vertexBytes, geometry.vertexData().data(), vertexBytes);
 
-    const usize indexBegin = outBinary.size();
-    if(indexBytes > Limit<usize>::s_Max - indexBegin){
-        NWB_LOGGER_ERROR(NWB_TEXT("GeometryAssetCodec::serialize failed: index payload size overflows output binary"));
-        return false;
-    }
-    outBinary.resize(indexBegin + indexBytes);
-    NWB_MEMCPY(outBinary.data() + indexBegin, indexBytes, geometry.indexData().data(), indexBytes);
-    return true;
+    return __hidden_assets::AppendVectorPayload(outBinary, geometry.indices(), NWB_TEXT("indices"));
 }
 
 

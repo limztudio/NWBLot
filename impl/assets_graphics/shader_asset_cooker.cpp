@@ -129,10 +129,9 @@ struct VariantCachePaths{
 };
 struct GeometryEntry{
     Name virtualPath = NAME_NONE;
-    u32 vertexStride = 0;
+    Vector<GeometryVertex> vertices;
+    Vector<u32> indices;
     bool use32BitIndices = false;
-    Vector<u8> vertexData;
-    Vector<u8> indexData;
 };
 struct DeformableGeometryEntry{
     Name virtualPath = NAME_NONE;
@@ -679,6 +678,287 @@ static bool CountFlattenedValueLeaves(const Core::Metascript::Value& value, usiz
     return AccumulateFlattenedValueLeafCount(value, outCount);
 }
 
+static bool ParseGeometryFiniteF32(
+    const Path& nwbFilePath,
+    const Core::Metascript::Value& value,
+    const AStringView label,
+    f32& outValue
+){
+    if(!value.isNumeric()){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Geometry meta '{}': '{}' must contain only numeric values"),
+            PathToString<tchar>(nwbFilePath),
+            StringConvert(label)
+        );
+        return false;
+    }
+
+    const f64 numericValue = value.toDouble();
+    if(!IsFinite(numericValue)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Geometry meta '{}': '{}' must contain only finite numeric values"),
+            PathToString<tchar>(nwbFilePath),
+            StringConvert(label)
+        );
+        return false;
+    }
+    if(numericValue < static_cast<f64>(Limit<f32>::s_Min) || numericValue > static_cast<f64>(Limit<f32>::s_Max)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Geometry meta '{}': '{}' contains a value outside the f32 range"),
+            PathToString<tchar>(nwbFilePath),
+            StringConvert(label)
+        );
+        return false;
+    }
+
+    outValue = static_cast<f32>(numericValue);
+    return true;
+}
+
+template<usize ComponentCount>
+static bool ParseGeometryF32Tuple(
+    const Path& nwbFilePath,
+    const Core::Metascript::Value& value,
+    const AStringView label,
+    f32 (&outValues)[ComponentCount]
+){
+    if(!value.isList() || value.asList().size() != ComponentCount){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Geometry meta '{}': '{}' must be a {}-component list"),
+            PathToString<tchar>(nwbFilePath),
+            StringConvert(label),
+            ComponentCount
+        );
+        return false;
+    }
+
+    const auto& list = value.asList();
+    for(usize i = 0; i < ComponentCount; ++i){
+        const AString componentLabel = StringFormat("{}[{}]", label, i);
+        if(!ParseGeometryFiniteF32(nwbFilePath, list[i], componentLabel, outValues[i]))
+            return false;
+    }
+    return true;
+}
+
+template<typename ElementT, usize ComponentCount>
+static bool ParseGeometryFloatListField(
+    const Path& nwbFilePath,
+    const Core::Metascript::Value& asset,
+    const AStringView fieldName,
+    Vector<ElementT>& outValues
+){
+    outValues.clear();
+
+    const Core::Metascript::Value* field = asset.findField(Core::Metascript::MStringView(fieldName.data(), fieldName.size()));
+    if(!field || !field->isList()){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Geometry meta '{}': '{}' must be a list"),
+            PathToString<tchar>(nwbFilePath),
+            StringConvert(fieldName)
+        );
+        return false;
+    }
+
+    const auto& list = field->asList();
+    outValues.reserve(list.size());
+    for(usize i = 0; i < list.size(); ++i){
+        const AString label = StringFormat("{}[{}]", fieldName, i);
+        f32 tuple[ComponentCount] = {};
+        if(!ParseGeometryF32Tuple(nwbFilePath, list[i], label, tuple))
+            return false;
+
+        ElementT element;
+        element.x = tuple[0];
+        element.y = tuple[1];
+        if constexpr(ComponentCount >= 3u)
+            element.z = tuple[2];
+        if constexpr(ComponentCount >= 4u)
+            element.w = tuple[3];
+        outValues.push_back(element);
+    }
+
+    if(outValues.empty()){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Geometry meta '{}': '{}' must not be empty"),
+            PathToString<tchar>(nwbFilePath),
+            StringConvert(fieldName)
+        );
+        return false;
+    }
+
+    return true;
+}
+
+static void BuildDefaultGeometryColors(const usize vertexCount, Vector<Float4U>& outColors){
+    outColors.resize(vertexCount);
+    for(Float4U& color : outColors)
+        color = Float4U(1.f, 1.f, 1.f, 1.f);
+}
+
+static bool BuildGeometryVertices(
+    const Path& nwbFilePath,
+    const Vector<Float3U>& positions,
+    const Vector<Float3U>& normals,
+    const Vector<Float4U>& colors,
+    Vector<GeometryVertex>& outVertices
+){
+    if(positions.size() != normals.size() || positions.size() != colors.size()){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Geometry meta '{}': vertex stream counts must match"),
+            PathToString<tchar>(nwbFilePath)
+        );
+        return false;
+    }
+
+    outVertices.resize(positions.size());
+    for(usize i = 0; i < positions.size(); ++i){
+        outVertices[i].position = positions[i];
+        outVertices[i].normal = normals[i];
+        outVertices[i].color0 = colors[i];
+    }
+    return true;
+}
+
+static bool ParseGeometryIndexType(
+    const Path& nwbFilePath,
+    const Core::Metascript::Value& asset,
+    bool& outUse32BitIndices
+){
+    outUse32BitIndices = true;
+
+    const auto* indexTypeValue = asset.findField("index_type");
+    if(!indexTypeValue || !indexTypeValue->isString()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': index_type must be a string ('u16' or 'u32')"), PathToString<tchar>(nwbFilePath));
+        return false;
+    }
+
+    CompactString indexType;
+    const AStringView indexTypeText(indexTypeValue->asString().data(), indexTypeValue->asString().size());
+    if(!indexType.assign(indexTypeText)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Geometry meta '{}': index_type exceeds CompactString capacity"),
+            PathToString<tchar>(nwbFilePath)
+        );
+        return false;
+    }
+    if(indexType.view() == "u16"){
+        outUse32BitIndices = false;
+        return true;
+    }
+    if(indexType.view() == "u32"){
+        outUse32BitIndices = true;
+        return true;
+    }
+
+    NWB_LOGGER_ERROR(
+        NWB_TEXT("Geometry meta '{}': unsupported index_type '{}'"),
+        PathToString<tchar>(nwbFilePath),
+        StringConvert(indexType.view())
+    );
+    return false;
+}
+
+static bool AppendGeometryIndexRecursive(
+    const Path& nwbFilePath,
+    const Core::Metascript::Value& value,
+    const AStringView label,
+    const bool use32BitIndices,
+    Vector<u32>& outIndices
+){
+    if(value.isList()){
+        const auto& list = value.asList();
+        for(usize i = 0; i < list.size(); ++i){
+            const AString childLabel = StringFormat("{}[{}]", label, i);
+            if(!AppendGeometryIndexRecursive(nwbFilePath, list[i], childLabel, use32BitIndices, outIndices))
+                return false;
+        }
+        return true;
+    }
+
+    if(!value.isNumeric()){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Geometry meta '{}': '{}' must contain only integer values"),
+            PathToString<tchar>(nwbFilePath),
+            StringConvert(label)
+        );
+        return false;
+    }
+
+    const f64 numericValue = value.toDouble();
+    if(!IsFinite(numericValue) || numericValue < 0.0 || numericValue != Floor(numericValue)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Geometry meta '{}': '{}' contains a non-integer or negative value"),
+            PathToString<tchar>(nwbFilePath),
+            StringConvert(label)
+        );
+        return false;
+    }
+    if(numericValue > static_cast<f64>(Limit<u32>::s_Max)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Geometry meta '{}': '{}' contains a value that exceeds u32"),
+            PathToString<tchar>(nwbFilePath),
+            StringConvert(label)
+        );
+        return false;
+    }
+    if(!use32BitIndices && numericValue > static_cast<f64>(Limit<u16>::s_Max)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Geometry meta '{}': '{}' contains a value that exceeds u16 index_type"),
+            PathToString<tchar>(nwbFilePath),
+            StringConvert(label)
+        );
+        return false;
+    }
+
+    outIndices.push_back(static_cast<u32>(numericValue));
+    return true;
+}
+
+static bool ParseGeometryIndices(
+    const Path& nwbFilePath,
+    const Core::Metascript::Value& asset,
+    const bool use32BitIndices,
+    Vector<u32>& outIndices
+){
+    outIndices.clear();
+
+    const auto* indicesValue = asset.findField("indices");
+    if(!indicesValue || !indicesValue->isList()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': 'indices' must be a list"), PathToString<tchar>(nwbFilePath));
+        return false;
+    }
+    usize indexCount = 0u;
+    if(!CountFlattenedValueLeaves(*indicesValue, indexCount)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': 'indices' scalar count overflows"), PathToString<tchar>(nwbFilePath));
+        return false;
+    }
+
+    outIndices.reserve(indexCount);
+    if(!AppendGeometryIndexRecursive(nwbFilePath, *indicesValue, "indices", use32BitIndices, outIndices))
+        return false;
+    if(outIndices.empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': 'indices' must not be empty"), PathToString<tchar>(nwbFilePath));
+        return false;
+    }
+    return true;
+}
+
+static bool RejectLegacyGeometryFields(const DiscoveredNwbFile& discoveredFile, const Core::Metascript::Value& asset){
+    if(!asset.findField("primitive")
+        && !asset.findField("vertex_stride")
+        && !asset.findField("vertex_data")
+        && !asset.findField("index_data")
+    )
+        return true;
+
+    NWB_LOGGER_ERROR(
+        NWB_TEXT("Geometry meta '{}': legacy geometry fields are no longer supported; define positions, normals, optional colors, index_type, and indices"),
+        PathToString<tchar>(discoveredFile.filePath)
+    );
+    return false;
+}
+
 static bool ParseGeometryMeta(const DiscoveredNwbFile& discoveredFile, const Core::Metascript::Document& doc, GeometryEntry& outEntry){
     outEntry = {};
 
@@ -692,206 +972,36 @@ static bool ParseGeometryMeta(const DiscoveredNwbFile& discoveredFile, const Cor
         return false;
     if(!Core::Assets::BuildDerivedAssetVirtualPath(discoveredFile.assetRoot, discoveredFile.virtualRoot, discoveredFile.filePath, outEntry.virtualPath))
         return false;
+    if(!RejectLegacyGeometryFields(discoveredFile, asset))
+        return false;
 
-    if(asset.findField("primitive")){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Geometry meta '{}': field 'primitive' is no longer supported; define vertex_stride, vertex_data, index_type, and index_data in metadata"),
-            PathToString<tchar>(discoveredFile.filePath)
-        );
+    Vector<Float3U> positions;
+    Vector<Float3U> normals;
+    Vector<Float4U> colors;
+    if(!ParseGeometryIndexType(discoveredFile.filePath, asset, outEntry.use32BitIndices))
         return false;
-    }
-
-    const auto* vertexStrideValue = asset.findField("vertex_stride");
-    if(!vertexStrideValue || !vertexStrideValue->isInteger()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': vertex_stride must be an integer"), PathToString<tchar>(discoveredFile.filePath));
+    if(!ParseGeometryFloatListField<Float3U, 3u>(discoveredFile.filePath, asset, "positions", positions))
         return false;
-    }
-    const i64 vertexStrideValueInt = vertexStrideValue->asInteger();
-    if(vertexStrideValueInt <= 0 || static_cast<u64>(vertexStrideValueInt) > static_cast<u64>(Limit<u32>::s_Max)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': vertex_stride is out of range"), PathToString<tchar>(discoveredFile.filePath));
+    if(!ParseGeometryFloatListField<Float3U, 3u>(discoveredFile.filePath, asset, "normals", normals))
         return false;
-    }
-    if((vertexStrideValueInt % static_cast<i64>(sizeof(f32))) != 0){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Geometry meta '{}': vertex_stride must be a multiple of {} because vertex_data is encoded as f32 scalars"),
-            PathToString<tchar>(discoveredFile.filePath),
-            sizeof(f32)
-        );
-        return false;
-    }
-    outEntry.vertexStride = static_cast<u32>(vertexStrideValueInt);
-
-    const auto* indexTypeValue = asset.findField("index_type");
-    if(!indexTypeValue || !indexTypeValue->isString()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': index_type must be a string ('u16' or 'u32')"), PathToString<tchar>(discoveredFile.filePath));
-        return false;
-    }
-
-    CompactString indexType;
-    const AStringView indexTypeText(indexTypeValue->asString().data(), indexTypeValue->asString().size());
-    if(!indexType.assign(indexTypeText)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Geometry meta '{}': index_type exceeds CompactString capacity"),
-            PathToString<tchar>(discoveredFile.filePath)
-        );
-        return false;
-    }
-    if(indexType.view() == "u16")
-        outEntry.use32BitIndices = false;
-    else if(indexType.view() == "u32")
-        outEntry.use32BitIndices = true;
-    else{
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Geometry meta '{}': unsupported index_type '{}'"),
-            PathToString<tchar>(discoveredFile.filePath),
-            StringConvert(indexType.view())
-        );
-        return false;
-    }
-
-    auto appendVertexScalars = [&](const auto& self, const Core::Metascript::Value& value) -> bool{
-        if(value.isList()){
-            for(const Core::Metascript::Value& child : value.asList()){
-                if(!self(self, child))
-                    return false;
-            }
-            return true;
-        }
-
-        if(!value.isNumeric()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': vertex_data must contain only numeric values"), PathToString<tchar>(discoveredFile.filePath));
+    const Core::Metascript::Value* colorsField = asset.findField("colors");
+    if(colorsField){
+        if(!ParseGeometryFloatListField<Float4U, 4u>(discoveredFile.filePath, asset, "colors", colors))
             return false;
-        }
+    }else
+        BuildDefaultGeometryColors(positions.size(), colors);
 
-        const f64 numericValue = value.toDouble();
-        if(!IsFinite(numericValue)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': vertex_data must contain only finite numeric values"), PathToString<tchar>(discoveredFile.filePath));
-            return false;
-        }
-        if(numericValue < static_cast<f64>(Limit<f32>::s_Min) || numericValue > static_cast<f64>(Limit<f32>::s_Max)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': vertex_data contains a value outside the f32 range"), PathToString<tchar>(discoveredFile.filePath));
-            return false;
-        }
-        if(outEntry.vertexData.size() > Limit<usize>::s_Max - sizeof(f32)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': vertex_data byte size overflows"), PathToString<tchar>(discoveredFile.filePath));
-            return false;
-        }
-
-        AppendPOD(outEntry.vertexData, static_cast<f32>(numericValue));
-        return true;
-    };
-
-    auto appendIndices = [&](const auto& self, const Core::Metascript::Value& value) -> bool{
-        if(value.isList()){
-            for(const Core::Metascript::Value& child : value.asList()){
-                if(!self(self, child))
-                    return false;
-            }
-            return true;
-        }
-
-        if(!value.isNumeric()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': index_data must contain only integer values"), PathToString<tchar>(discoveredFile.filePath));
-            return false;
-        }
-
-        const f64 numericValue = value.toDouble();
-        if(!IsFinite(numericValue)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': index_data must contain only finite integers"), PathToString<tchar>(discoveredFile.filePath));
-            return false;
-        }
-        if(numericValue < 0.0 || numericValue != Floor(numericValue)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': index_data values must be non-negative integers"), PathToString<tchar>(discoveredFile.filePath));
-            return false;
-        }
-
-        if(outEntry.use32BitIndices){
-            if(numericValue > static_cast<f64>(Limit<u32>::s_Max)){
-                NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': index_data contains a value that exceeds u32"), PathToString<tchar>(discoveredFile.filePath));
-                return false;
-            }
-            if(outEntry.indexData.size() > Limit<usize>::s_Max - sizeof(u32)){
-                NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': index_data byte size overflows"), PathToString<tchar>(discoveredFile.filePath));
-                return false;
-            }
-            AppendPOD(outEntry.indexData, static_cast<u32>(numericValue));
-            return true;
-        }
-
-        if(numericValue > static_cast<f64>(Limit<u16>::s_Max)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': index_data contains a value that exceeds u16"), PathToString<tchar>(discoveredFile.filePath));
-            return false;
-        }
-        if(outEntry.indexData.size() > Limit<usize>::s_Max - sizeof(u16)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': index_data byte size overflows"), PathToString<tchar>(discoveredFile.filePath));
-            return false;
-        }
-        AppendPOD(outEntry.indexData, static_cast<u16>(numericValue));
-        return true;
-    };
-
-    const auto* vertexDataValue = asset.findField("vertex_data");
-    if(!vertexDataValue || !vertexDataValue->isList()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': vertex_data must be a list"), PathToString<tchar>(discoveredFile.filePath));
+    if(!BuildGeometryVertices(discoveredFile.filePath, positions, normals, colors, outEntry.vertices))
         return false;
-    }
-    usize vertexScalarCount = 0u;
-    if(!CountFlattenedValueLeaves(*vertexDataValue, vertexScalarCount)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': vertex_data scalar count overflows"), PathToString<tchar>(discoveredFile.filePath));
-        return false;
-    }
-    if(vertexScalarCount > Limit<usize>::s_Max / sizeof(f32)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': vertex_data byte size overflows"), PathToString<tchar>(discoveredFile.filePath));
-        return false;
-    }
-    outEntry.vertexData.reserve(vertexScalarCount * sizeof(f32));
-    if(!appendVertexScalars(appendVertexScalars, *vertexDataValue))
-        return false;
-    if(outEntry.vertexData.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': vertex_data must not be empty"), PathToString<tchar>(discoveredFile.filePath));
-        return false;
-    }
-    if((outEntry.vertexData.size() % outEntry.vertexStride) != 0){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Geometry meta '{}': vertex_data byte count {} is not a multiple of vertex_stride {}"),
-            PathToString<tchar>(discoveredFile.filePath),
-            outEntry.vertexData.size(),
-            outEntry.vertexStride
-        );
-        return false;
-    }
-
-    const auto* indexDataValue = asset.findField("index_data");
-    if(!indexDataValue || !indexDataValue->isList()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': index_data must be a list"), PathToString<tchar>(discoveredFile.filePath));
-        return false;
-    }
-    usize indexScalarCount = 0u;
-    if(!CountFlattenedValueLeaves(*indexDataValue, indexScalarCount)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': index_data scalar count overflows"), PathToString<tchar>(discoveredFile.filePath));
-        return false;
-    }
-    const usize indexElementSize = outEntry.use32BitIndices ? sizeof(u32) : sizeof(u16);
-    if(indexScalarCount > Limit<usize>::s_Max / indexElementSize){
-        NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': index_data byte size overflows"), PathToString<tchar>(discoveredFile.filePath));
-        return false;
-    }
-    outEntry.indexData.reserve(indexScalarCount * indexElementSize);
-    if(!appendIndices(appendIndices, *indexDataValue))
-        return false;
-    if(outEntry.indexData.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': index_data must not be empty"), PathToString<tchar>(discoveredFile.filePath));
-        return false;
-    }
-
-    return true;
+    return ParseGeometryIndices(discoveredFile.filePath, asset, outEntry.use32BitIndices, outEntry.indices);
 }
 
 static bool BuildGeometryAsset(const GeometryEntry& geometryEntry, Geometry& outGeometry){
     outGeometry = Geometry(geometryEntry.virtualPath);
-    outGeometry.setVertexLayout(geometryEntry.vertexStride);
-    outGeometry.setVertexData(geometryEntry.vertexData.data(), geometryEntry.vertexData.size());
-    outGeometry.setIndexData(geometryEntry.indexData.data(), geometryEntry.indexData.size(), geometryEntry.use32BitIndices);
+    Vector<GeometryVertex> vertices = geometryEntry.vertices;
+    Vector<u32> indices = geometryEntry.indices;
+    outGeometry.setVertices(Move(vertices));
+    outGeometry.setIndices(Move(indices));
     return outGeometry.validatePayload();
 }
 
@@ -2426,12 +2536,14 @@ static bool ParseAssetMetadata(
     }
 
     if(outMetadata.shaderEntries.empty()){
-        if(!outMetadata.materialEntries.empty() || !outMetadata.geometryEntries.empty()){
+        if(!outMetadata.materialEntries.empty()){
             NWB_LOGGER_ERROR(
-                NWB_TEXT("ShaderAssetCooker: material and static geometry assets require at least one shader entry")
+                NWB_TEXT("ShaderAssetCooker: material assets require at least one shader entry")
             );
             return false;
         }
+        if(!outMetadata.geometryEntries.empty())
+            return true;
         if(!outMetadata.deformableGeometryEntries.empty())
             return true;
         if(!outMetadata.deformableDisplacementTextureEntries.empty())

@@ -55,14 +55,14 @@ struct NwbMaterialParameterData{
         const NwbMeshInstanceData instance \
     )
 
-const uint NWB_MESH_SOURCE_VERTEX_SCALAR_STRIDE = 6u;
-const uint NWB_MESH_SOURCE_VERTEX_LAYOUT_POSITION_COLOR = 0u;
+const uint NWB_MESH_SOURCE_VERTEX_SCALAR_STRIDE = 10u;
+const uint NWB_MESH_SOURCE_VERTEX_LAYOUT_GEOMETRY_VERTEX = 0u;
 const uint NWB_MESH_SOURCE_VERTEX_LAYOUT_DEFORMABLE_VERTEX = 1u;
 const uint NWB_MESH_DEFORMABLE_VERTEX_SCALAR_STRIDE = 16u;
 
 layout(local_size_x = NWB_MESH_SHADER_GROUP_SIZE_X) in;
 
-// Geometry vertices are uploaded as tightly packed position+color floats (24 bytes), so decode them manually.
+// Geometry vertices are uploaded as tightly packed typed scalar streams, so decode them manually.
 layout(std430, binding = 0) readonly buffer NwbMeshSourceVerticesBuffer{
     float nwbMeshSourceVertexScalars[];
 };
@@ -205,14 +205,18 @@ NwbMeshSourceVertex nwbMeshLoadSourceVertex(const uint triangleIndex, const uint
         );
     }
     else{
-        sourceVertex.normal = vec3(0.0, 0.0, 1.0);
+        sourceVertex.normal = vec3(
+            nwbMeshSourceVertexScalars[scalarBase + 3u],
+            nwbMeshSourceVertexScalars[scalarBase + 4u],
+            nwbMeshSourceVertexScalars[scalarBase + 5u]
+        );
         sourceVertex.tangent = vec4(1.0, 0.0, 0.0, 1.0);
         sourceVertex.uv0 = vec2(0.0);
         sourceVertex.color = vec4(
-            nwbMeshSourceVertexScalars[scalarBase + 3u],
-            nwbMeshSourceVertexScalars[scalarBase + 4u],
-            nwbMeshSourceVertexScalars[scalarBase + 5u],
-            1.0
+            nwbMeshSourceVertexScalars[scalarBase + 6u],
+            nwbMeshSourceVertexScalars[scalarBase + 7u],
+            nwbMeshSourceVertexScalars[scalarBase + 8u],
+            nwbMeshSourceVertexScalars[scalarBase + 9u]
         );
     }
     return sourceVertex;
@@ -382,18 +386,7 @@ NwbMeshGeneratedVertex nwbMeshCulledVertex(){
 #endif
 
 void nwbMeshApplyGeneratedTriangleFrame(inout NwbMeshGeneratedVertex vertices[3]){
-    if(nwbMeshSourceVertexLayout() != NWB_MESH_SOURCE_VERTEX_LAYOUT_POSITION_COLOR)
-        return;
-
-    const vec3 edge0 = vertices[1].worldPosition.xyz - vertices[0].worldPosition.xyz;
-    const vec3 edge1 = vertices[2].worldPosition.xyz - vertices[0].worldPosition.xyz;
-    const vec3 faceNormal = nwbMeshSafeNormalize(cross(edge0, edge1), vertices[0].normal);
-    const vec3 faceTangent = nwbMeshSafeNormalize(edge0, vertices[0].tangent.xyz);
-
-    for(uint corner = 0u; corner < 3u; ++corner){
-        vertices[corner].normal = faceNormal;
-        vertices[corner].tangent = vec4(faceTangent, vertices[corner].tangent.w);
-    }
+    return;
 }
 
 NWB_MESH_BUILD_VERTEX_SIGNATURE;

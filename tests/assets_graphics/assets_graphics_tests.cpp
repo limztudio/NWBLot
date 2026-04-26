@@ -3,6 +3,7 @@
 
 
 #include <impl/assets_graphics/deformable_geometry_asset.h>
+#include <impl/assets_graphics/geometry_asset.h>
 #include <impl/assets_graphics/shader_asset_cooker.h>
 
 #include <tests/test_context.h>
@@ -92,6 +93,93 @@ private:
     u32 m_errorCount = 0;
     Vector<TString> m_errors;
 };
+
+
+static constexpr AStringView s_MinimalGeometryMeta = R"(geometry asset;
+
+asset.index_type = "u16";
+
+asset.positions = [
+    [-0.5, -0.5, 0.0],
+    [ 0.5, -0.5, 0.0],
+    [ 0.0,  0.5, 0.0],
+];
+
+asset.normals = [
+    [0.0, 0.0, 1.0],
+    [0.0, 0.0, 1.0],
+    [0.0, 0.0, 1.0],
+];
+
+asset.colors = [
+    [1.0, 0.0, 0.0, 1.0],
+    [0.0, 1.0, 0.0, 1.0],
+    [0.0, 0.0, 1.0, 1.0],
+];
+
+asset.indices = [
+    [0, 1, 2],
+];
+)";
+
+static constexpr AStringView s_DefaultColorGeometryMeta = R"(geometry asset;
+
+asset.index_type = "u16";
+
+asset.positions = [
+    [-0.5, -0.5, 0.0],
+    [ 0.5, -0.5, 0.0],
+    [ 0.0,  0.5, 0.0],
+];
+
+asset.normals = [
+    [0.0, 0.0, 1.0],
+    [0.0, 0.0, 1.0],
+    [0.0, 0.0, 1.0],
+];
+
+asset.indices = [
+    [0, 1, 2],
+];
+)";
+
+#if defined(NWB_FINAL)
+static constexpr AStringView s_LegacyGeometryMeta = R"(geometry asset;
+
+asset.vertex_stride = 24;
+asset.index_type = "u16";
+
+asset.vertex_data = [
+    [-0.5, -0.5, 0.0, 1.0, 0.0, 0.0],
+    [ 0.5, -0.5, 0.0, 0.0, 1.0, 0.0],
+    [ 0.0,  0.5, 0.0, 0.0, 0.0, 1.0],
+];
+
+asset.index_data = [
+    [0, 1, 2],
+];
+)";
+
+static constexpr AStringView s_MismatchedGeometryMeta = R"(geometry asset;
+
+asset.index_type = "u16";
+
+asset.positions = [
+    [-0.5, -0.5, 0.0],
+    [ 0.5, -0.5, 0.0],
+    [ 0.0,  0.5, 0.0],
+];
+
+asset.normals = [
+    [0.0, 0.0, 1.0],
+    [0.0, 0.0, 1.0],
+];
+
+asset.indices = [
+    [0, 1, 2],
+];
+)";
+#endif
 
 
 static constexpr AStringView s_MinimalDeformableMeta = R"(deformable_geometry asset;
@@ -698,6 +786,36 @@ static bool CookSingleDeformableMeta(
     return cooker.cook(options);
 }
 
+static bool CookSingleGeometryMeta(
+    const AStringView metaText,
+    const AStringView caseName,
+    TestArena& testArena,
+    Path& outRoot,
+    Path& outOutputDirectory
+){
+    outRoot = Path("__build_obj") / "nwb_assets_graphics_tests" / AssetsGraphicsTestConfigurationName() / AString(caseName);
+    outOutputDirectory = outRoot / "cooked";
+
+    if(!PrepareCleanDirectory(outRoot))
+        return false;
+
+    const Path assetRoot = outRoot / "assets";
+    const Path metaPath = assetRoot / "meshes" / "minimal_geometry.nwb";
+    if(!WriteTextFile(metaPath, metaText))
+        return false;
+
+    NWB::Core::Assets::AssetCookOptions options;
+    options.repoRoot = ".";
+    options.assetRoots.push_back(PathToString(assetRoot));
+    options.outputDirectory = PathToString(outOutputDirectory);
+    options.cacheDirectory = PathToString(outRoot / "cache");
+    if(!options.configuration.assign("tests") || !options.assetType.assign("shader"))
+        return false;
+
+    NWB::Impl::ShaderAssetCooker cooker(testArena.arena);
+    return cooker.cook(options);
+}
+
 static bool LoadCookedMinimalDeformable(
     TestContext& context,
     TestArena& testArena,
@@ -721,6 +839,34 @@ static bool LoadCookedMinimalDeformable(
 
     NWB::Impl::DeformableGeometryAssetCodec codec;
     const bool deserialized = codec.deserialize(Name("project/characters/minimal_deformable"), binary, outLoadedAsset);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, deserialized);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, static_cast<bool>(outLoadedAsset));
+    return deserialized && static_cast<bool>(outLoadedAsset);
+}
+
+static bool LoadCookedMinimalGeometry(
+    TestContext& context,
+    TestArena& testArena,
+    const Path& outputDirectory,
+    UniquePtr<NWB::Core::Assets::IAsset>& outLoadedAsset)
+{
+    NWB::Core::Filesystem::VolumeSession volumeSession(testArena.arena);
+    const bool loadedVolume = volumeSession.load("graphics", outputDirectory);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedVolume);
+    if(!loadedVolume)
+        return false;
+
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, volumeSession.fileCount() == 2u);
+
+    NWB::Core::Assets::AssetBytes binary;
+    const bool loadedBinary = volumeSession.loadData(Name("project/meshes/minimal_geometry"), binary);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedBinary);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !binary.empty());
+    if(!loadedBinary || binary.empty())
+        return false;
+
+    NWB::Impl::GeometryAssetCodec codec;
+    const bool deserialized = codec.deserialize(Name("project/meshes/minimal_geometry"), binary, outLoadedAsset);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, deserialized);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, static_cast<bool>(outLoadedAsset));
     return deserialized && static_cast<bool>(outLoadedAsset);
@@ -751,6 +897,38 @@ static bool CookAndLoadMinimalDeformable(
     }
 
     if(LoadCookedMinimalDeformable(context, testArena, outputDirectory, outLoadedAsset))
+        return true;
+
+    ErrorCode errorCode;
+    static_cast<void>(RemoveAllIfExists(outRoot, errorCode));
+    return false;
+}
+
+static bool CookAndLoadMinimalGeometry(
+    TestContext& context,
+    TestArena& testArena,
+    const AStringView metaText,
+    const AStringView caseName,
+    Path& outRoot,
+    UniquePtr<NWB::Core::Assets::IAsset>& outLoadedAsset
+){
+    Path outputDirectory;
+    const bool cooked = CookSingleGeometryMeta(
+        metaText,
+        caseName,
+        testArena,
+        outRoot,
+        outputDirectory
+    );
+
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, cooked);
+    if(!cooked){
+        ErrorCode errorCode;
+        static_cast<void>(RemoveAllIfExists(outRoot, errorCode));
+        return false;
+    }
+
+    if(LoadCookedMinimalGeometry(context, testArena, outputDirectory, outLoadedAsset))
         return true;
 
     ErrorCode errorCode;
@@ -914,6 +1092,90 @@ static NWB::Impl::DeformableGeometry BuildMinimalDeformableGeometry(){
     geometry.setRestVertices(Move(vertices));
     geometry.setIndices(Move(indices));
     return geometry;
+}
+
+static NWB::Impl::Geometry BuildMinimalGeometry(){
+    NWB::Impl::Geometry geometry(Name("tests/meshes/minimal_geometry"));
+
+    Vector<NWB::Impl::GeometryVertex> vertices;
+    {
+        NWB::Impl::GeometryVertex vertex;
+        vertex.position = Float3U(-0.5f, -0.5f, 0.f);
+        vertex.normal = Float3U(0.f, 0.f, 1.f);
+        vertex.color0 = Float4U(1.f, 0.f, 0.f, 1.f);
+        vertices.push_back(vertex);
+    }
+    {
+        NWB::Impl::GeometryVertex vertex;
+        vertex.position = Float3U(0.5f, -0.5f, 0.f);
+        vertex.normal = Float3U(0.f, 0.f, 1.f);
+        vertex.color0 = Float4U(0.f, 1.f, 0.f, 1.f);
+        vertices.push_back(vertex);
+    }
+    {
+        NWB::Impl::GeometryVertex vertex;
+        vertex.position = Float3U(0.f, 0.5f, 0.f);
+        vertex.normal = Float3U(0.f, 0.f, 1.f);
+        vertex.color0 = Float4U(0.f, 0.f, 1.f, 1.f);
+        vertices.push_back(vertex);
+    }
+
+    Vector<u32> indices;
+    indices.push_back(0u);
+    indices.push_back(1u);
+    indices.push_back(2u);
+
+    geometry.setVertices(Move(vertices));
+    geometry.setIndices(Move(indices));
+    return geometry;
+}
+
+static void TestGeometryCodecRoundTrip(TestContext& context){
+    NWB::Impl::Geometry geometry = BuildMinimalGeometry();
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, geometry.validatePayload());
+
+    NWB::Impl::GeometryAssetCodec codec;
+    NWB::Core::Assets::AssetBytes binary;
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, codec.serialize(geometry, binary));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !binary.empty());
+
+    UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, codec.deserialize(geometry.virtualPath(), binary, loadedAsset));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, static_cast<bool>(loadedAsset));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedAsset->assetType() == NWB::Impl::Geometry::AssetTypeName());
+
+    const NWB::Impl::Geometry& loadedGeometry =
+        static_cast<const NWB::Impl::Geometry&>(*loadedAsset)
+    ;
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.vertices().size() == 3u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.indices().size() == 3u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.vertices()[1].position.x == 0.5f);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.vertices()[1].normal.z == 1.f);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.vertices()[1].color0.y == 1.f);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.indices()[2] == 2u);
+}
+
+static void TestGeometryCodecRejectsOldBinaryVersion(TestContext& context){
+#if defined(NWB_FINAL)
+    CapturingLogger logger;
+    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
+
+    NWB::Impl::Geometry geometry = BuildMinimalGeometry();
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, geometry.validatePayload());
+
+    NWB::Impl::GeometryAssetCodec codec;
+    NWB::Core::Assets::AssetBytes binary;
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, codec.serialize(geometry, binary));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, OverwriteU32(binary, sizeof(u32), 1u));
+
+    UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !codec.deserialize(geometry.virtualPath(), binary, loadedAsset));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !loadedAsset);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 1u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("unsupported version 1")));
+#else
+    static_cast<void>(context);
+#endif
 }
 
 static void TestDeformableDisplacementTextureCodecRoundTrip(TestContext& context){
@@ -1143,6 +1405,101 @@ static void TestDeformableGeometryCodecRejectsMalformedDependentCounts(TestConte
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("skin count must be empty or match vertex count")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("source sample count must be empty or match vertex count")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("morph delta count exceeds u32 limits")));
+#else
+    static_cast<void>(context);
+#endif
+}
+
+static void TestGeometryCookerTypedStreams(TestContext& context){
+    CapturingLogger logger;
+    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
+
+    TestArena testArena;
+    Path root;
+    UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
+    if(!CookAndLoadMinimalGeometry(
+        context,
+        testArena,
+        s_MinimalGeometryMeta,
+        "minimal_geometry",
+        root,
+        loadedAsset
+    ))
+        return;
+
+    {
+        const NWB::Impl::Geometry& loadedGeometry =
+            static_cast<const NWB::Impl::Geometry&>(*loadedAsset)
+        ;
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.vertices().size() == 3u);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.indices().size() == 3u);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.vertices()[0].position.x == -0.5f);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.vertices()[0].normal.z == 1.f);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.vertices()[2].color0.z == 1.f);
+    }
+
+    ErrorCode errorCode;
+    static_cast<void>(RemoveAllIfExists(root, errorCode));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 0u);
+}
+
+static void TestGeometryCookerDefaultColors(TestContext& context){
+    CapturingLogger logger;
+    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
+
+    TestArena testArena;
+    Path root;
+    UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
+    if(!CookAndLoadMinimalGeometry(
+        context,
+        testArena,
+        s_DefaultColorGeometryMeta,
+        "default_color_geometry",
+        root,
+        loadedAsset
+    ))
+        return;
+
+    {
+        const NWB::Impl::Geometry& loadedGeometry =
+            static_cast<const NWB::Impl::Geometry&>(*loadedAsset)
+        ;
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.vertices().size() == 3u);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.vertices()[0].color0.x == 1.f);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.vertices()[0].color0.w == 1.f);
+    }
+
+    ErrorCode errorCode;
+    static_cast<void>(RemoveAllIfExists(root, errorCode));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 0u);
+}
+
+static void TestGeometryCookerValidationFailures(TestContext& context){
+#if defined(NWB_FINAL)
+    CapturingLogger logger;
+    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
+
+    TestArena testArena;
+    auto expectCookFailure = [&](const AStringView metaText, const AStringView caseName){
+        Path root;
+        Path outputDirectory;
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !CookSingleGeometryMeta(
+            metaText,
+            caseName,
+            testArena,
+            root,
+            outputDirectory
+        ));
+
+        ErrorCode errorCode;
+        static_cast<void>(RemoveAllIfExists(root, errorCode));
+    };
+
+    expectCookFailure(s_LegacyGeometryMeta, "legacy_geometry");
+    expectCookFailure(s_MismatchedGeometryMeta, "mismatched_geometry_streams");
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() >= 2u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("legacy geometry fields are no longer supported")));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("vertex stream counts must match")));
 #else
     static_cast<void>(context);
 #endif
@@ -1600,12 +1957,17 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
 
     __hidden_assets_graphics_tests::TestContext context;
     __hidden_assets_graphics_tests::TestDeformableDisplacementTextureCodecRoundTrip(context);
+    __hidden_assets_graphics_tests::TestGeometryCodecRoundTrip(context);
+    __hidden_assets_graphics_tests::TestGeometryCodecRejectsOldBinaryVersion(context);
     __hidden_assets_graphics_tests::TestDeformableGeometryCodecRoundTrip(context);
     __hidden_assets_graphics_tests::TestDeformableGeometryCodecRoundTripsTextureDisplacement(context);
     __hidden_assets_graphics_tests::TestMinimalDeformableGeometryCodecRoundTrip(context);
     __hidden_assets_graphics_tests::TestDeformableGeometryCodecRejectsOldBinaryVersion(context);
     __hidden_assets_graphics_tests::TestDeformableGeometryCodecRejectsMalformedCounts(context);
     __hidden_assets_graphics_tests::TestDeformableGeometryCodecRejectsMalformedDependentCounts(context);
+    __hidden_assets_graphics_tests::TestGeometryCookerTypedStreams(context);
+    __hidden_assets_graphics_tests::TestGeometryCookerDefaultColors(context);
+    __hidden_assets_graphics_tests::TestGeometryCookerValidationFailures(context);
     __hidden_assets_graphics_tests::TestDeformableGeometryCookerMinimalAsset(context);
     __hidden_assets_graphics_tests::TestDeformableGeometryCookerU32IndexType(context);
     __hidden_assets_graphics_tests::TestDeformableGeometryCookerExplicitEmptyOptionalLists(context);

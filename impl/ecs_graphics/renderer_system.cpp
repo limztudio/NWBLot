@@ -30,8 +30,8 @@ namespace __hidden_ecs_graphics{
 
 
 static constexpr Core::Color s_ClearColor = Core::Color(0.07f, 0.09f, 0.13f, 1.f);
-static constexpr u32 s_PositionColorVertexStride = sizeof(f32) * 6u;
-static constexpr u32 s_MeshSourceLayoutPositionColor = 0u;
+static constexpr u32 s_StaticGeometryVertexStride = sizeof(GeometryVertex);
+static constexpr u32 s_MeshSourceLayoutGeometryVertex = 0u;
 static constexpr u32 s_MeshSourceLayoutDeformableVertex = 1u;
 static constexpr u32 s_EmulatedVertexStride = sizeof(f32) * 24u;
 static constexpr u32 s_TrianglesPerWorkgroup = 32u;
@@ -2536,29 +2536,12 @@ bool RendererSystem::ensureGeometryLoaded(const Core::Assets::AssetRef<Geometry>
     }
 
     const Geometry& geometry = static_cast<const Geometry&>(*loadedAsset);
-    if(geometry.vertexStride() != __hidden_ecs_graphics::s_PositionColorVertexStride){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("RendererSystem: geometry '{}' has unsupported vertex stride {}"),
-            StringConvert(geometryPath.c_str()),
-            geometry.vertexStride()
-        );
-        return false;
-    }
 
     GeometryResources createdGeometry;
     createdGeometry.geometryName = geometryPath;
-    createdGeometry.sourceVertexLayout = __hidden_ecs_graphics::s_MeshSourceLayoutPositionColor;
+    createdGeometry.sourceVertexLayout = __hidden_ecs_graphics::s_MeshSourceLayoutGeometryVertex;
 
-    const usize indexStride = geometry.use32BitIndices() ? sizeof(u32) : sizeof(u16);
-    if(geometry.indexData().size() == 0 || (geometry.indexData().size() % indexStride) != 0u){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("RendererSystem: geometry '{}' has malformed index payload"),
-            StringConvert(geometryPath.c_str())
-        );
-        return false;
-    }
-
-    const usize indexCount = geometry.indexData().size() / indexStride;
+    const usize indexCount = geometry.indices().size();
     if(indexCount > static_cast<usize>(Limit<u32>::s_Max)){
         NWB_LOGGER_ERROR(
             NWB_TEXT("RendererSystem: geometry '{}' index count exceeds u32 limits"),
@@ -2599,12 +2582,12 @@ bool RendererSystem::ensureGeometryLoaded(const Core::Assets::AssetRef<Geometry>
 
     Core::Graphics::BufferSetupDesc shaderVertexSetup;
     shaderVertexSetup.bufferDesc
-        .setByteSize(static_cast<u64>(geometry.vertexData().size()))
-        .setStructStride(geometry.vertexStride())
+        .setByteSize(static_cast<u64>(geometry.vertices().size() * sizeof(GeometryVertex)))
+        .setStructStride(__hidden_ecs_graphics::s_StaticGeometryVertexStride)
         .setDebugName(shaderVertexBufferName)
     ;
-    shaderVertexSetup.data = geometry.vertexData().data();
-    shaderVertexSetup.dataSize = geometry.vertexData().size();
+    shaderVertexSetup.data = geometry.vertices().data();
+    shaderVertexSetup.dataSize = geometry.vertices().size() * sizeof(GeometryVertex);
     createdGeometry.shaderVertexBuffer = m_graphics.setupBuffer(shaderVertexSetup);
     if(!createdGeometry.shaderVertexBuffer){
         NWB_LOGGER_ERROR(
@@ -2624,31 +2607,14 @@ bool RendererSystem::ensureGeometryLoaded(const Core::Assets::AssetRef<Geometry>
     }
     const usize expandedIndexBytes = expandedIndexCount * sizeof(u32);
 
-    const void* shaderIndexData = geometry.indexData().data();
-    usize shaderIndexDataSize = geometry.indexData().size();
-
-    Core::Alloc::ScratchArena<> scratchArena;
-    Vector<u32, Core::Alloc::ScratchAllocator<u32>> expandedIndices{Core::Alloc::ScratchAllocator<u32>(scratchArena)};
-    if(!geometry.use32BitIndices()){
-        expandedIndices.resize(expandedIndexCount);
-        const u8* indexBytes = geometry.indexData().data();
-        for(u32 i = 0; i < createdGeometry.indexCount; ++i){
-            u16 indexValue = 0;
-            NWB_MEMCPY(&indexValue, sizeof(indexValue), indexBytes + static_cast<usize>(i) * sizeof(indexValue), sizeof(indexValue));
-            expandedIndices[i] = static_cast<u32>(indexValue);
-        }
-        shaderIndexData = expandedIndices.data();
-        shaderIndexDataSize = expandedIndexBytes;
-    }
-
     Core::Graphics::BufferSetupDesc shaderIndexSetup;
     shaderIndexSetup.bufferDesc
         .setByteSize(static_cast<u64>(expandedIndexBytes))
         .setStructStride(sizeof(u32))
         .setDebugName(shaderIndexBufferName)
     ;
-    shaderIndexSetup.data = shaderIndexData;
-    shaderIndexSetup.dataSize = shaderIndexDataSize;
+    shaderIndexSetup.data = geometry.indices().data();
+    shaderIndexSetup.dataSize = expandedIndexBytes;
     createdGeometry.shaderIndexBuffer = m_graphics.setupBuffer(shaderIndexSetup);
     if(!createdGeometry.shaderIndexBuffer){
         NWB_LOGGER_ERROR(

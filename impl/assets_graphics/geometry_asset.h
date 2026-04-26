@@ -19,6 +19,19 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct GeometryVertex{
+    Float3U position;
+    Float3U normal;
+    Float4U color0;
+};
+static_assert(IsStandardLayout_V<GeometryVertex>, "GeometryVertex must stay binary-serializable");
+static_assert(IsTriviallyCopyable_V<GeometryVertex>, "GeometryVertex must stay binary-serializable");
+static_assert(sizeof(GeometryVertex) == sizeof(f32) * 10u, "GeometryVertex GPU/source layout drifted");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class Geometry final : public Core::Assets::TypedAsset<Geometry>{
 public:
     NWB_DEFINE_ASSET_TYPE("geometry")
@@ -36,21 +49,16 @@ public:
     [[nodiscard]] bool validatePayload()const;
 
 public:
-    void setVertexLayout(u32 vertexStride){ m_vertexStride = vertexStride; }
-    void setVertexData(const void* data, usize bytes);
-    void setIndexData(const void* data, usize bytes, bool use32BitIndices);
+    void setVertices(Vector<GeometryVertex>&& vertices){ m_vertices = Move(vertices); }
+    void setIndices(Vector<u32>&& indices){ m_indices = Move(indices); }
 
-    [[nodiscard]] u32 vertexStride()const{ return m_vertexStride; }
-    [[nodiscard]] bool use32BitIndices()const{ return m_use32BitIndices; }
-    [[nodiscard]] const Vector<u8>& vertexData()const{ return m_vertexData; }
-    [[nodiscard]] const Vector<u8>& indexData()const{ return m_indexData; }
+    [[nodiscard]] const Vector<GeometryVertex>& vertices()const{ return m_vertices; }
+    [[nodiscard]] const Vector<u32>& indices()const{ return m_indices; }
 
 
 private:
-    u32 m_vertexStride = 0;
-    bool m_use32BitIndices = false;
-    Vector<u8> m_vertexData;
-    Vector<u8> m_indexData;
+    Vector<GeometryVertex> m_vertices;
+    Vector<u32> m_indices;
 };
 
 

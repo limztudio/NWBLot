@@ -36,6 +36,16 @@ struct DeformableSurfaceEditDebugSnapshot{
     u32 vertexCount = 0;
     u32 triangleCount = 0;
     u32 sourceTriangleCount = 0;
+    u32 invalidFrameCount = 0;
+    u32 skinnedVertexCount = 0;
+    u32 maxSkinInfluenceCount = 0;
+    u32 morphCount = 0;
+    u32 morphDeltaCount = 0;
+    f32 maxMorphPositionDelta = 0.0f;
+    u32 displacementMode = DeformableDisplacementMode::None;
+    f32 displacementAmplitude = 0.0f;
+    f32 displacementBias = 0.0f;
+    bool displacementTextureBound = false;
     u32 editableTriangleCount = 0;
     u32 restrictedTriangleCount = 0;
     u32 forbiddenTriangleCount = 0;

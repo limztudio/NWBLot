@@ -1949,6 +1949,20 @@ static void TestSurfaceEditPreviewIsReadOnlyAndCommitMutatesTopology(TestContext
 
 static void TestSurfaceEditDebugSnapshotCapturesPreviewAndWallVertices(TestContext& context){
     NWB::Impl::DeformableRuntimeMeshInstance instance = MakeGridHoleInstance();
+    instance.skin[0u] = MakeTwoJointSkin(0u, 0.75f, 1u, 0.25f);
+    {
+        NWB::Impl::DeformableMorph morph;
+        morph.name = Name("debug_lift");
+        NWB::Impl::DeformableMorphDelta delta{};
+        delta.vertexId = 5u;
+        delta.deltaPosition = Float3U(0.0f, 0.0f, 0.25f);
+        morph.deltas.push_back(delta);
+        instance.morphs.push_back(morph);
+    }
+    instance.displacement.mode = NWB::Impl::DeformableDisplacementMode::ScalarTexture;
+    instance.displacement.texture.virtualPath = Name("project/textures/debug_displacement");
+    instance.displacement.amplitude = 0.2f;
+    instance.displacement.bias = -0.05f;
     const NWB::Impl::DeformableHoleEditParams params = MakeGridHoleEditParams(instance);
 
     NWB::Impl::DeformableSurfaceEditSession session;
@@ -1970,6 +1984,19 @@ static void TestSurfaceEditDebugSnapshotCapturesPreviewAndWallVertices(TestConte
     NWB_ECS_GRAPHICS_TEST_CHECK(context, previewSnapshot.previewValid);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, previewSnapshot.previewTriangle == params.posedHit.triangle);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, previewSnapshot.editableTriangleCount == instance.indices.size() / 3u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, previewSnapshot.invalidFrameCount == 0u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, previewSnapshot.skinnedVertexCount == instance.restVertices.size());
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, previewSnapshot.maxSkinInfluenceCount == 2u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, previewSnapshot.morphCount == 1u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, previewSnapshot.morphDeltaCount == 1u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(previewSnapshot.maxMorphPositionDelta, 0.25f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        previewSnapshot.displacementMode == NWB::Impl::DeformableDisplacementMode::ScalarTexture
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(previewSnapshot.displacementAmplitude, 0.2f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(previewSnapshot.displacementBias, -0.05f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, previewSnapshot.displacementTextureBound);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, previewSnapshot.lines.size() == 3u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, previewSnapshot.points.size() == 1u);
 
@@ -1999,6 +2026,12 @@ static void TestSurfaceEditDebugSnapshotCapturesPreviewAndWallVertices(TestConte
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::BuildDeformableSurfaceEditDebugDump(stateSnapshot, dump));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, dump.find("deformable_debug_snapshot") != AString::npos);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, dump.find("wall_vertices=4") != AString::npos);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, dump.find("invalid_frames=0") != AString::npos);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, dump.find("skin_vertices=20") != AString::npos);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, dump.find("max_skin_influences=2") != AString::npos);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, dump.find("morphs=1") != AString::npos);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, dump.find("displacement_mode=2") != AString::npos);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, dump.find("displacement_texture=yes") != AString::npos);
 }
 
 static void TestSurfaceEditFlowAttachesAndPersistsAccessory(TestContext& context){

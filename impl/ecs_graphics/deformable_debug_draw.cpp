@@ -50,6 +50,30 @@ static constexpr Float3U s_ColorInvalid = Float3U(1.0f, 0.0f, 1.0f);
     return IsFinite(point.x) && IsFinite(point.y) && IsFinite(point.z);
 }
 
+[[nodiscard]] u32 SaturateUsizeToU32(const usize value){
+    return value > static_cast<usize>(Limit<u32>::s_Max)
+        ? Limit<u32>::s_Max
+        : static_cast<u32>(value)
+    ;
+}
+
+[[nodiscard]] f32 Length3(const Float3U& value){
+    const f32 lengthSquared = VectorGetX(Vector3LengthSq(LoadFloat(value)));
+    return IsFinite(lengthSquared)
+        ? Sqrt(Max(0.0f, lengthSquared))
+        : 0.0f
+    ;
+}
+
+[[nodiscard]] u32 ActiveSkinInfluenceCount(const SkinInfluence4& skin){
+    u32 count = 0u;
+    for(u32 influence = 0u; influence < 4u; ++influence){
+        if(Abs(skin.weight[influence]) > DeformableValidation::s_Epsilon)
+            ++count;
+    }
+    return count;
+}
+
 void AppendLine(
     DeformableSurfaceEditDebugSnapshot& snapshot,
     const Float3U& begin,
@@ -230,6 +254,42 @@ void CountEditMasks(
     }
 }
 
+void AppendPayloadDiagnostics(
+    const DeformableRuntimeMeshInstance& instance,
+    DeformableSurfaceEditDebugSnapshot& snapshot)
+{
+    for(const DeformableVertexRest& vertex : instance.restVertices){
+        if(!DeformableValidation::ValidRestVertexFrame(vertex))
+            ++snapshot.invalidFrameCount;
+    }
+
+    for(const SkinInfluence4& skin : instance.skin){
+        const u32 activeInfluenceCount = ActiveSkinInfluenceCount(skin);
+        if(activeInfluenceCount != 0u)
+            ++snapshot.skinnedVertexCount;
+        snapshot.maxSkinInfluenceCount = Max(snapshot.maxSkinInfluenceCount, activeInfluenceCount);
+    }
+
+    snapshot.morphCount = SaturateUsizeToU32(instance.morphs.size());
+    for(const DeformableMorph& morph : instance.morphs){
+        const usize remainingDeltaCapacity =
+            static_cast<usize>(Limit<u32>::s_Max) - static_cast<usize>(snapshot.morphDeltaCount)
+        ;
+        snapshot.morphDeltaCount += SaturateUsizeToU32(Min(morph.deltas.size(), remainingDeltaCapacity));
+        for(const DeformableMorphDelta& delta : morph.deltas){
+            snapshot.maxMorphPositionDelta = Max(
+                snapshot.maxMorphPositionDelta,
+                Length3(delta.deltaPosition)
+            );
+        }
+    }
+
+    snapshot.displacementMode = instance.displacement.mode;
+    snapshot.displacementAmplitude = instance.displacement.amplitude;
+    snapshot.displacementBias = instance.displacement.bias;
+    snapshot.displacementTextureBound = instance.displacement.texture.valid();
+}
+
 [[nodiscard]] const char* PermissionText(const DeformableSurfaceEditPermission::Enum permission){
     switch(permission){
     case DeformableSurfaceEditPermission::Restricted:
@@ -276,6 +336,7 @@ bool BuildDeformableSurfaceEditDebugSnapshot(
     outSnapshot.triangleCount = static_cast<u32>(instance.indices.size() / 3u);
     outSnapshot.sourceTriangleCount = instance.sourceTriangleCount;
 
+    AppendPayloadDiagnostics(instance, outSnapshot);
     CountEditMasks(instance, outSnapshot);
     AppendInvalidTriangleDebug(instance, outSnapshot);
     AppendPreviewDebug(session, preview, outSnapshot);
@@ -290,13 +351,23 @@ bool BuildDeformableSurfaceEditDebugDump(
     using namespace __hidden_deformable_debug_draw;
 
     outDump = StringFormat(
-        "deformable_debug_snapshot entity={} runtime_mesh={} revision={} vertices={} triangles={} source_triangles={} masks(editable={} restricted={} forbidden={}) invalid_triangles={} wall_vertices={} accessory_anchors={} preview={} lines={} points={}\n",
+        "deformable_debug_snapshot entity={} runtime_mesh={} revision={} vertices={} triangles={} source_triangles={} invalid_frames={} skin_vertices={} max_skin_influences={} morphs={} morph_deltas={} max_morph_position_delta={} displacement_mode={} displacement_amplitude={} displacement_bias={} displacement_texture={} masks(editable={} restricted={} forbidden={}) invalid_triangles={} wall_vertices={} accessory_anchors={} preview={} lines={} points={}\n",
         snapshot.entity.id,
         snapshot.runtimeMesh.value,
         snapshot.editRevision,
         snapshot.vertexCount,
         snapshot.triangleCount,
         snapshot.sourceTriangleCount,
+        snapshot.invalidFrameCount,
+        snapshot.skinnedVertexCount,
+        snapshot.maxSkinInfluenceCount,
+        snapshot.morphCount,
+        snapshot.morphDeltaCount,
+        snapshot.maxMorphPositionDelta,
+        snapshot.displacementMode,
+        snapshot.displacementAmplitude,
+        snapshot.displacementBias,
+        snapshot.displacementTextureBound ? "yes" : "no",
         snapshot.editableTriangleCount,
         snapshot.restrictedTriangleCount,
         snapshot.forbiddenTriangleCount,
@@ -309,7 +380,7 @@ bool BuildDeformableSurfaceEditDebugDump(
     );
     if(snapshot.previewValid){
         outDump += StringFormat(
-            "preview triangle={} source_triangle={} bary=({}, {}, {}) radius={} depth={} permission={} center=({}, {}, {}) normal=({}, {}, {})\n",
+            "preview triangle={} source_triangle={} bary=({}, {}, {}) radius={} depth={} permission={} center=({}, {}, {}) normal=({}, {}, {}) tangent=({}, {}, {}) bitangent=({}, {}, {})\n",
             snapshot.previewTriangle,
             snapshot.previewSourceTriangle,
             snapshot.previewBarycentric[0],
@@ -323,7 +394,13 @@ bool BuildDeformableSurfaceEditDebugDump(
             snapshot.previewCenter.z,
             snapshot.previewNormal.x,
             snapshot.previewNormal.y,
-            snapshot.previewNormal.z
+            snapshot.previewNormal.z,
+            snapshot.previewTangent.x,
+            snapshot.previewTangent.y,
+            snapshot.previewTangent.z,
+            snapshot.previewBitangent.x,
+            snapshot.previewBitangent.y,
+            snapshot.previewBitangent.z
         );
     }
     return true;

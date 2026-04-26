@@ -341,6 +341,8 @@ template<typename T>
 inline HashMap<BasicString<T>, BasicString<T>> parseCommandLine(BasicStringView<T> input){
     HashMap<BasicString<T>, BasicString<T>> output;
     usize cursor = 0;
+    BasicString<T> key;
+    BasicString<T> value;
     while(cursor < input.size()){
         if(!CommonDetail::CommandLineIsWordChar(input[cursor])){
             ++cursor;
@@ -348,8 +350,6 @@ inline HashMap<BasicString<T>, BasicString<T>> parseCommandLine(BasicStringView<
         }
 
         usize next = cursor;
-        BasicString<T> key;
-        BasicString<T> value;
         if(CommonDetail::TryParseCommandLineAssignmentAt(input, cursor, next, key, value)){
             output.insert_or_assign(Move(key), Move(value));
             cursor = next;

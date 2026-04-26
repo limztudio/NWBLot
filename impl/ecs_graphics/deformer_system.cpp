@@ -158,10 +158,12 @@ static bool BuildSkinPayload(
         return false;
     }
 
-    outSkinInfluences.resize(instance.skin.size());
-    outJointPalette.resize(jointPalette->joints.size());
+    const usize skinCount = instance.skin.size();
+    const usize jointCount = jointPalette->joints.size();
+    outSkinInfluences.reserve(skinCount);
+    outJointPalette.reserve(jointCount);
 
-    for(usize jointIndex = 0; jointIndex < jointPalette->joints.size(); ++jointIndex){
+    for(usize jointIndex = 0; jointIndex < jointCount; ++jointIndex){
         const DeformableJointMatrix& joint = jointPalette->joints[jointIndex];
         const SIMDMatrix jointMatrix = DeformableRuntime::LoadJointMatrix(joint);
         if(!DeformableRuntime::IsInvertibleAffineJointMatrix(jointMatrix)){
@@ -172,10 +174,10 @@ static bool BuildSkinPayload(
             );
             return false;
         }
-        outJointPalette[jointIndex] = joint;
+        outJointPalette.push_back(joint);
     }
 
-    for(usize vertexIndex = 0; vertexIndex < instance.skin.size(); ++vertexIndex){
+    for(usize vertexIndex = 0; vertexIndex < skinCount; ++vertexIndex){
         const SkinInfluence4& sourceSkin = instance.skin[vertexIndex];
         if(!DeformableValidation::ValidSkinInfluence(sourceSkin)){
             NWB_LOGGER_ERROR(
@@ -186,17 +188,17 @@ static bool BuildSkinPayload(
             return false;
         }
 
-        DeformerSystem::DeformerSkinInfluenceGpu& gpuSkin = outSkinInfluences[vertexIndex];
+        DeformerSystem::DeformerSkinInfluenceGpu gpuSkin;
         for(u32 influenceIndex = 0; influenceIndex < 4u; ++influenceIndex){
             const u32 joint = static_cast<u32>(sourceSkin.joint[influenceIndex]);
             const f32 weight = sourceSkin.weight[influenceIndex];
-            if(DeformableValidation::ActiveWeight(weight) && joint >= jointPalette->joints.size()){
+            if(DeformableValidation::ActiveWeight(weight) && joint >= jointCount){
                 NWB_LOGGER_ERROR(
                     NWB_TEXT("DeformerSystem: runtime mesh '{}' vertex {} references joint {} outside palette size {}"),
                     instance.handle.value,
                     vertexIndex,
                     joint,
-                    jointPalette->joints.size()
+                    jointCount
                 );
                 return false;
             }
@@ -208,6 +210,7 @@ static bool BuildSkinPayload(
             sourceSkin.weight[2],
             sourceSkin.weight[3]
         );
+        outSkinInfluences.push_back(gpuSkin);
     }
 
     return true;

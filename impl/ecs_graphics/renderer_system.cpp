@@ -587,8 +587,8 @@ static InstanceGpuData BuildInstanceGpuData(
     return data;
 }
 
-static f32 Float3Dot(const Float4& lhs, const Float4& rhs){
-    return VectorGetX(Vector3Dot(LoadFloat(lhs), LoadFloat(rhs)));
+static f32 Float3Dot(const SIMDVector lhs, const SIMDVector rhs){
+    return VectorGetX(Vector3Dot(lhs, rhs));
 }
 
 static void StoreRotatedBasisVector(Float4& outVector, const Float4& localVector, SIMDVector rotation){
@@ -704,9 +704,8 @@ static void StoreProjectedViewColumn(
     const f32 viewY,
     const f32 viewZ,
     const f32 viewW,
-    const Float4& projectionParams
+    const SIMDVector projection
 ){
-    const SIMDVector projection = LoadFloat(projectionParams);
     SIMDVector column = VectorMultiply(VectorSet(viewX, viewY, viewZ, viewZ), projection);
     column = VectorMultiplyAdd(VectorSet(0.0f, 0.0f, viewW, 0.0f), VectorSplatW(projection), column);
     column = VectorSetW(column, viewZ);
@@ -714,9 +713,14 @@ static void StoreProjectedViewColumn(
 }
 
 static void StoreWorldToClipMatrix(Float4 (&outWorldToClip)[4], const MeshViewBasis& basis, const Float4& projectionParams){
-    const f32 translationX = -Float3Dot(basis.positionDepthBias, basis.right);
-    const f32 translationY = -Float3Dot(basis.positionDepthBias, basis.up);
-    const f32 translationZ = -Float3Dot(basis.positionDepthBias, basis.forward) + basis.positionDepthBias.w;
+    const SIMDVector positionDepthBias = LoadFloat(basis.positionDepthBias);
+    const SIMDVector right = LoadFloat(basis.right);
+    const SIMDVector up = LoadFloat(basis.up);
+    const SIMDVector forward = LoadFloat(basis.forward);
+    const SIMDVector projection = LoadFloat(projectionParams);
+    const f32 translationX = -Float3Dot(positionDepthBias, right);
+    const f32 translationY = -Float3Dot(positionDepthBias, up);
+    const f32 translationZ = -Float3Dot(positionDepthBias, forward) + basis.positionDepthBias.w;
 
     StoreProjectedViewColumn(
         outWorldToClip,
@@ -725,7 +729,7 @@ static void StoreWorldToClipMatrix(Float4 (&outWorldToClip)[4], const MeshViewBa
         basis.up.x,
         basis.forward.x,
         0.0f,
-        projectionParams
+        projection
     );
     StoreProjectedViewColumn(
         outWorldToClip,
@@ -734,7 +738,7 @@ static void StoreWorldToClipMatrix(Float4 (&outWorldToClip)[4], const MeshViewBa
         basis.up.y,
         basis.forward.y,
         0.0f,
-        projectionParams
+        projection
     );
     StoreProjectedViewColumn(
         outWorldToClip,
@@ -743,7 +747,7 @@ static void StoreWorldToClipMatrix(Float4 (&outWorldToClip)[4], const MeshViewBa
         basis.up.z,
         basis.forward.z,
         0.0f,
-        projectionParams
+        projection
     );
     StoreProjectedViewColumn(
         outWorldToClip,
@@ -752,7 +756,7 @@ static void StoreWorldToClipMatrix(Float4 (&outWorldToClip)[4], const MeshViewBa
         translationY,
         translationZ,
         1.0f,
-        projectionParams
+        projection
     );
 }
 

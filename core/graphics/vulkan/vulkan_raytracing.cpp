@@ -137,7 +137,7 @@ bool BuildOpacityMicromapUsageCounts(
     const tchar* operation)
 {
     outUsageCounts.clear();
-    outUsageCounts.resize(counts.size());
+    outUsageCounts.reserve(counts.size());
 
     for(usize i = 0; i < counts.size(); ++i){
         const RayTracingOpacityMicromapUsageCount& count = counts[i];
@@ -153,10 +153,11 @@ bool BuildOpacityMicromapUsageCounts(
             return false;
         }
 
-        VkMicromapUsageEXT& usageCount = outUsageCounts[i];
+        VkMicromapUsageEXT usageCount = {};
         usageCount.count = count.count;
         usageCount.subdivisionLevel = count.subdivisionLevel;
         usageCount.format = static_cast<u32>(format);
+        outUsageCounts.push_back(usageCount);
     }
 
     return true;
@@ -536,14 +537,18 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
         Alloc::ScratchArena<> scratchArena(s_RayTracingScratchArenaBytes);
         Vector<VkAccelerationStructureGeometryKHR, Alloc::ScratchAllocator<VkAccelerationStructureGeometryKHR>> geometries{ Alloc::ScratchAllocator<VkAccelerationStructureGeometryKHR>(scratchArena) };
         Vector<uint32_t, Alloc::ScratchAllocator<uint32_t>> primitiveCounts{ Alloc::ScratchAllocator<uint32_t>(scratchArena) };
-        geometries.resize(desc.bottomLevelGeometries.size());
-        primitiveCounts.resize(desc.bottomLevelGeometries.size());
+        geometries.reserve(desc.bottomLevelGeometries.size());
+        primitiveCounts.reserve(desc.bottomLevelGeometries.size());
 
         for(usize i = 0; i < desc.bottomLevelGeometries.size(); ++i){
-            if(!VulkanDetail::FillBlasGeometryForSizeQuery(desc.bottomLevelGeometries[i], geometries[i], primitiveCounts[i], NWB_TEXT("create BLAS"), false)){
+            VkAccelerationStructureGeometryKHR geometry = {};
+            u32 primitiveCount = 0;
+            if(!VulkanDetail::FillBlasGeometryForSizeQuery(desc.bottomLevelGeometries[i], geometry, primitiveCount, NWB_TEXT("create BLAS"), false)){
                 DestroyArenaObject(m_context.objectArena, as);
                 return nullptr;
             }
+            geometries.push_back(geometry);
+            primitiveCounts.push_back(primitiveCount);
         }
 
         VkAccelerationStructureBuildGeometryInfoKHR buildInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildGeometryInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR);

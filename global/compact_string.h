@@ -187,8 +187,7 @@ public:
             : count
         ;
 
-        for(usize i = 0; i < copiedCount; ++i)
-            result.m_storage[i] = m_storage[pos + i];
+        NWB_MEMCPY(result.m_storage, copiedCount, m_storage + pos, copiedCount);
         result.m_size = static_cast<u8>(copiedCount);
         result.m_storage[result.m_size] = '\0';
         return result;

@@ -682,6 +682,20 @@ static const Core::Metascript::Value* FindField(const Core::Metascript::Value& m
     return map.findField(Core::Metascript::MStringView(fieldName.data(), fieldName.size()));
 }
 
+static AString MakeIndexedLabel(const AStringView baseLabel, const usize index){
+    char indexBuffer[32] = {};
+    const AStringView indexText = FormatDecimal(index, indexBuffer);
+    NWB_ASSERT(!indexText.empty());
+
+    AString label;
+    label.reserve(baseLabel.size() + indexText.size() + 2u);
+    label.append(baseLabel.data(), baseLabel.size());
+    label += '[';
+    label.append(indexText.data(), indexText.size());
+    label += ']';
+    return label;
+}
+
 static constexpr const tchar* s_GeometryMetaKind = NWB_TEXT("Geometry");
 static constexpr const tchar* s_DeformableGeometryMetaKind = NWB_TEXT("Deformable geometry");
 
@@ -766,7 +780,7 @@ static bool ParseMetadataF32Tuple(
 
     const auto& list = value.asList();
     for(usize i = 0; i < ComponentCount; ++i){
-        const AString componentLabel = StringFormat("{}[{}]", label, i);
+        const AString componentLabel = MakeIndexedLabel(label, i);
         if(!ParseMetadataFiniteF32Value(nwbFilePath, list[i], metaKind, componentLabel, outValues[i]))
             return false;
     }
@@ -790,7 +804,7 @@ static bool ParseMetadataFloatListField(
     const auto& list = field->asList();
     outValues.reserve(list.size());
     for(usize i = 0; i < list.size(); ++i){
-        const AString label = StringFormat("{}[{}]", fieldName, i);
+        const AString label = MakeIndexedLabel(fieldName, i);
         f32 tuple[ComponentCount] = {};
         if(!ParseMetadataF32Tuple(nwbFilePath, list[i], metaKind, label, tuple))
             return false;
@@ -907,7 +921,7 @@ static bool AppendMetadataIndexRecursive(
     if(value.isList()){
         const auto& list = value.asList();
         for(usize i = 0; i < list.size(); ++i){
-            const AString childLabel = StringFormat("{}[{}]", label, i);
+            const AString childLabel = MakeIndexedLabel(label, i);
             if(!AppendMetadataIndexRecursive(nwbFilePath, list[i], metaKind, childLabel, use32BitIndices, outIndices))
                 return false;
         }
@@ -969,9 +983,7 @@ static bool ParseMetadataIndexField(
 }
 
 static void BuildDefaultColors(const usize vertexCount, Vector<Float4U>& outColors){
-    outColors.resize(vertexCount);
-    for(Float4U& color : outColors)
-        color = Float4U(1.f, 1.f, 1.f, 1.f);
+    outColors.assign(vertexCount, Float4U(1.f, 1.f, 1.f, 1.f));
 }
 
 static bool BuildGeometryVertices(
@@ -1124,7 +1136,7 @@ static bool ParseU16Tuple(
 
     const auto& list = value.asList();
     for(usize i = 0; i < ComponentCount; ++i){
-        const AString componentLabel = StringFormat("{}[{}]", label, i);
+        const AString componentLabel = MakeIndexedLabel(label, i);
         if(!ParseU16Value(nwbFilePath, list[i], componentLabel, outValues[i]))
             return false;
     }
@@ -1157,7 +1169,7 @@ static bool ParseU32ListField(
     outValues.reserve(list.size());
     for(usize i = 0; i < list.size(); ++i){
         u32 value = 0;
-        const AString label = StringFormat("{}[{}]", fieldName, i);
+        const AString label = MakeIndexedLabel(fieldName, i);
         if(!ParseU32Value(nwbFilePath, list[i], label, value))
             return false;
         outValues.push_back(value);
@@ -1261,8 +1273,8 @@ static bool ParseSkinInfluences(
 
     outSkin.resize(vertexCount);
     for(usize i = 0; i < vertexCount; ++i){
-        const AString jointLabel = StringFormat("skin.joints0[{}]", i);
-        const AString weightLabel = StringFormat("skin.weights0[{}]", i);
+        const AString jointLabel = MakeIndexedLabel("skin.joints0", i);
+        const AString weightLabel = MakeIndexedLabel("skin.weights0", i);
         if(!ParseU16Tuple(nwbFilePath, jointList[i], jointLabel, outSkin[i].joint))
             return false;
         if(!ParseF32Tuple(nwbFilePath, weightList[i], weightLabel, outSkin[i].weight))

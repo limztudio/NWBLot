@@ -206,14 +206,17 @@ inline void OrthonormalizeFrame(SIMDVector& normal, SIMDVector& tangent, const S
     const SIMDVector column0 = VectorSetW(matrix.v[0], 0.0f);
     const SIMDVector column1 = VectorSetW(matrix.v[1], 0.0f);
     const SIMDVector column2 = VectorSetW(matrix.v[2], 0.0f);
-    const f32 determinant = VectorGetX(Vector3Dot(column0, Vector3Cross(column1, column2)));
+    const SIMDVector cross12 = Vector3Cross(column1, column2);
+    const SIMDVector cross20 = Vector3Cross(column2, column0);
+    const SIMDVector cross01 = Vector3Cross(column0, column1);
+    const f32 determinant = VectorGetX(Vector3Dot(column0, cross12));
     if(!IsFinite(determinant) || Abs(determinant) <= s_Epsilon)
         return false;
 
     const SIMDVector inverseDeterminant = VectorReplicate(1.0f / determinant);
-    outNormalMatrix.v[0] = VectorSetW(VectorMultiply(Vector3Cross(column1, column2), inverseDeterminant), 0.0f);
-    outNormalMatrix.v[1] = VectorSetW(VectorMultiply(Vector3Cross(column2, column0), inverseDeterminant), 0.0f);
-    outNormalMatrix.v[2] = VectorSetW(VectorMultiply(Vector3Cross(column0, column1), inverseDeterminant), 0.0f);
+    outNormalMatrix.v[0] = VectorSetW(VectorMultiply(cross12, inverseDeterminant), 0.0f);
+    outNormalMatrix.v[1] = VectorSetW(VectorMultiply(cross20, inverseDeterminant), 0.0f);
+    outNormalMatrix.v[2] = VectorSetW(VectorMultiply(cross01, inverseDeterminant), 0.0f);
     outNormalMatrix.v[3] = VectorZero();
     return DeformableValidation::FiniteVector(outNormalMatrix.v[0], 0x7u)
         && DeformableValidation::FiniteVector(outNormalMatrix.v[1], 0x7u)

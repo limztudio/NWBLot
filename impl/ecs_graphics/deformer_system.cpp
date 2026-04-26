@@ -158,8 +158,8 @@ static bool BuildSkinPayload(
         return false;
     }
 
-    outSkinInfluences.reserve(instance.skin.size());
-    outJointPalette.reserve(jointPalette->joints.size());
+    outSkinInfluences.resize(instance.skin.size());
+    outJointPalette.resize(jointPalette->joints.size());
 
     for(usize jointIndex = 0; jointIndex < jointPalette->joints.size(); ++jointIndex){
         const DeformableJointMatrix& joint = jointPalette->joints[jointIndex];
@@ -172,7 +172,7 @@ static bool BuildSkinPayload(
             );
             return false;
         }
-        outJointPalette.push_back(joint);
+        outJointPalette[jointIndex] = joint;
     }
 
     for(usize vertexIndex = 0; vertexIndex < instance.skin.size(); ++vertexIndex){
@@ -186,7 +186,7 @@ static bool BuildSkinPayload(
             return false;
         }
 
-        DeformerSystem::DeformerSkinInfluenceGpu gpuSkin;
+        DeformerSystem::DeformerSkinInfluenceGpu& gpuSkin = outSkinInfluences[vertexIndex];
         for(u32 influenceIndex = 0; influenceIndex < 4u; ++influenceIndex){
             const u32 joint = static_cast<u32>(sourceSkin.joint[influenceIndex]);
             const f32 weight = sourceSkin.weight[influenceIndex];
@@ -208,7 +208,6 @@ static bool BuildSkinPayload(
             sourceSkin.weight[2],
             sourceSkin.weight[3]
         );
-        outSkinInfluences.push_back(gpuSkin);
     }
 
     return true;

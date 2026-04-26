@@ -121,10 +121,12 @@ inline void AppendHexU64(const u64 value, BasicString<CharT>& outText){
         static_cast<CharT>('8'), static_cast<CharT>('9'), static_cast<CharT>('a'), static_cast<CharT>('b'),
         static_cast<CharT>('c'), static_cast<CharT>('d'), static_cast<CharT>('e'), static_cast<CharT>('f')
     };
+    const usize outputOffset = outText.size();
+    outText.resize(outputOffset + 16u);
     for(u32 nibbleIndex = 0; nibbleIndex < 16; ++nibbleIndex){
         const u32 shift = (15 - nibbleIndex) * 4;
         const usize nibble = static_cast<usize>((value >> shift) & 0xF);
-        outText.push_back(s_HexDigits[nibble]);
+        outText[outputOffset + nibbleIndex] = s_HexDigits[nibble];
     }
 }
 

@@ -51,8 +51,7 @@ template<typename FactoryT>
 void CopyQueuedFactories(const Vector<FactoryT>& queuedFactories, ScratchFactoryVector<FactoryT>& outFactories){
     outFactories.clear();
     outFactories.reserve(queuedFactories.size());
-    for(const FactoryT factory : queuedFactories)
-        outFactories.push_back(factory);
+    outFactories.assign(queuedFactories.begin(), queuedFactories.end());
 }
 
 template<typename FactoryVector, typename CreateProduct, typename RegisterProduct, typename LogNullProduct, typename LogRegisterFailure>

@@ -82,22 +82,20 @@ struct BlendedMorphDeltaAccumulator{
     ;
 }
 
+inline void AccumulateWeightedVector(Float4& target, const SIMDVector source, const SIMDVector weight){
+    StoreFloat(VectorMultiplyAdd(source, weight, LoadFloat(target)), &target);
+}
+
 inline void AccumulateWeightedMorphDelta(
     BlendedMorphDeltaAccumulator& target,
     const DeformableMorphDelta& source,
     const f32 weight)
 {
     target.active = true;
-    target.deltaPosition.x += source.deltaPosition.x * weight;
-    target.deltaPosition.y += source.deltaPosition.y * weight;
-    target.deltaPosition.z += source.deltaPosition.z * weight;
-    target.deltaNormal.x += source.deltaNormal.x * weight;
-    target.deltaNormal.y += source.deltaNormal.y * weight;
-    target.deltaNormal.z += source.deltaNormal.z * weight;
-    target.deltaTangent.x += source.deltaTangent.x * weight;
-    target.deltaTangent.y += source.deltaTangent.y * weight;
-    target.deltaTangent.z += source.deltaTangent.z * weight;
-    target.deltaTangent.w += source.deltaTangent.w * weight;
+    const SIMDVector weightVector = VectorReplicate(weight);
+    AccumulateWeightedVector(target.deltaPosition, LoadFloat(source.deltaPosition), weightVector);
+    AccumulateWeightedVector(target.deltaNormal, LoadFloat(source.deltaNormal), weightVector);
+    AccumulateWeightedVector(target.deltaTangent, LoadFloat(source.deltaTangent), weightVector);
 }
 
 template<typename MorphRangeVector, typename MorphDeltaVector>

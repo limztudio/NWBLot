@@ -26,7 +26,9 @@ namespace __hidden_assets{
 
 
 static constexpr u32 s_DeformableGeometryMagic = 0x44474F31u; // DGO1
-static constexpr u32 s_DeformableGeometryVersion = 2u;
+static constexpr u32 s_DeformableGeometryVersion = 3u;
+static constexpr u32 s_DeformableDisplacementTextureMagic = 0x44445431u; // DDT1
+static constexpr u32 s_DeformableDisplacementTextureVersion = 1u;
 #if defined(NWB_COOK)
 static constexpr usize s_DeformableGeometryHeaderBytes =
     sizeof(u32) + // magic
@@ -43,11 +45,53 @@ static constexpr usize s_DeformableMorphHeaderBytes =
 ;
 #endif
 
+struct DeformableDisplacementBinaryV3{
+    NameHash textureNameHash = {};
+    u32 mode = DeformableDisplacementMode::None;
+    f32 amplitude = 0.0f;
+    f32 bias = 0.0f;
+    Float2U uvScale = Float2U(1.0f, 1.0f);
+    Float2U uvOffset = Float2U(0.0f, 0.0f);
+};
+static_assert(IsStandardLayout_V<DeformableDisplacementBinaryV3>, "DeformableDisplacementBinaryV3 must stay binary-serializable");
+static_assert(IsTriviallyCopyable_V<DeformableDisplacementBinaryV3>, "DeformableDisplacementBinaryV3 must stay binary-serializable");
+
+[[nodiscard]] DeformableDisplacementBinaryV3 BuildDisplacementBinary(const DeformableDisplacement& displacement){
+    DeformableDisplacementBinaryV3 binary;
+    binary.textureNameHash = displacement.texture.name().hash();
+    binary.mode = displacement.mode;
+    binary.amplitude = displacement.amplitude;
+    binary.bias = displacement.bias;
+    binary.uvScale = displacement.uvScale;
+    binary.uvOffset = displacement.uvOffset;
+    return binary;
+}
+
+[[nodiscard]] DeformableDisplacement BuildDisplacement(const DeformableDisplacementBinaryV3& binary){
+    DeformableDisplacement displacement;
+    displacement.texture.virtualPath = Name(binary.textureNameHash);
+    displacement.mode = binary.mode;
+    displacement.amplitude = binary.amplitude;
+    displacement.bias = binary.bias;
+    displacement.uvScale = binary.uvScale;
+    displacement.uvOffset = binary.uvOffset;
+    if(!displacement.texture.name())
+        displacement.texture.reset();
+    return displacement;
+}
+
 
 UniquePtr<Core::Assets::IAssetCodec> CreateDeformableGeometryAssetCodec(){
     return MakeUnique<DeformableGeometryAssetCodec>();
 }
 Core::Assets::AssetCodecAutoRegistrar s_DeformableGeometryAssetCodecAutoRegistrar(&CreateDeformableGeometryAssetCodec);
+
+UniquePtr<Core::Assets::IAssetCodec> CreateDeformableDisplacementTextureAssetCodec(){
+    return MakeUnique<DeformableDisplacementTextureAssetCodec>();
+}
+Core::Assets::AssetCodecAutoRegistrar s_DeformableDisplacementTextureAssetCodecAutoRegistrar(
+    &CreateDeformableDisplacementTextureAssetCodec
+);
 
 
 template<typename T>
@@ -132,6 +176,124 @@ template<typename T>
 
 
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void DeformableDisplacementTexture::setSize(const u32 width, const u32 height){
+    m_width = width;
+    m_height = height;
+}
+
+bool DeformableDisplacementTexture::validatePayload()const{
+    const auto texturePathText = [this]() -> TString{
+        return virtualPath()
+            ? StringConvert(virtualPath().c_str())
+            : TString(NWB_TEXT("<unnamed>"))
+        ;
+    };
+
+    if(!virtualPath()){
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableDisplacementTexture::validatePayload failed: virtual path is empty"));
+        return false;
+    }
+    if(m_width == 0u || m_height == 0u){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("DeformableDisplacementTexture::validatePayload failed: texture '{}' dimensions are empty"),
+            texturePathText()
+        );
+        return false;
+    }
+    if(m_width > Limit<u32>::s_Max / m_height){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("DeformableDisplacementTexture::validatePayload failed: texture '{}' dimensions overflow"),
+            texturePathText()
+        );
+        return false;
+    }
+
+    const usize requiredTexelCount = static_cast<usize>(m_width) * static_cast<usize>(m_height);
+    if(m_texels.size() != requiredTexelCount){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("DeformableDisplacementTexture::validatePayload failed: texture '{}' texel count {} does not match dimensions {}x{}"),
+            texturePathText(),
+            m_texels.size(),
+            m_width,
+            m_height
+        );
+        return false;
+    }
+
+    for(usize i = 0; i < m_texels.size(); ++i){
+        const Float4U& texel = m_texels[i];
+        if(!IsFinite(texel.x) || !IsFinite(texel.y) || !IsFinite(texel.z) || !IsFinite(texel.w)){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("DeformableDisplacementTexture::validatePayload failed: texture '{}' texel {} is not finite"),
+                texturePathText(),
+                i
+            );
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool DeformableDisplacementTexture::loadBinary(const Core::Assets::AssetBytes& binary){
+    if(!virtualPath()){
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableDisplacementTexture::loadBinary failed: virtual path is empty"));
+        return false;
+    }
+
+    m_width = 0u;
+    m_height = 0u;
+    m_texels.clear();
+
+    usize cursor = 0u;
+    u32 magic = 0u;
+    u32 version = 0u;
+    u32 width = 0u;
+    u32 height = 0u;
+    u64 texelCount = 0u;
+    if(!ReadPOD(binary, cursor, magic)
+        || !ReadPOD(binary, cursor, version)
+        || !ReadPOD(binary, cursor, width)
+        || !ReadPOD(binary, cursor, height)
+        || !ReadPOD(binary, cursor, texelCount)
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableDisplacementTexture::loadBinary failed: malformed header"));
+        return false;
+    }
+
+    if(magic != __hidden_assets::s_DeformableDisplacementTextureMagic){
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableDisplacementTexture::loadBinary failed: invalid magic"));
+        return false;
+    }
+    if(version != __hidden_assets::s_DeformableDisplacementTextureVersion){
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableDisplacementTexture::loadBinary failed: unsupported version {}"), version);
+        return false;
+    }
+    if(width == 0u || height == 0u || width > Limit<u32>::s_Max / height){
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableDisplacementTexture::loadBinary failed: invalid dimensions"));
+        return false;
+    }
+    if(texelCount != static_cast<u64>(width) * static_cast<u64>(height)){
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableDisplacementTexture::loadBinary failed: texel count does not match dimensions"));
+        return false;
+    }
+
+    m_width = width;
+    m_height = height;
+    if(!__hidden_assets::ReadVectorPayload(binary, cursor, texelCount, m_texels, NWB_TEXT("texels")))
+        return false;
+    if(cursor != binary.size()){
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableDisplacementTexture::loadBinary failed: trailing bytes detected"));
+        return false;
+    }
+
+    return validatePayload();
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -407,10 +569,12 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
             return false;
         m_morphs.push_back(Move(morph));
     }
-    if(!ReadPOD(binary, cursor, m_displacement)){
+    __hidden_assets::DeformableDisplacementBinaryV3 displacementBinary;
+    if(!ReadPOD(binary, cursor, displacementBinary)){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: malformed displacement descriptor"));
         return false;
     }
+    m_displacement = __hidden_assets::BuildDisplacement(displacementBinary);
 
     if(cursor != binary.size()){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: trailing bytes detected"));
@@ -426,6 +590,19 @@ bool DeformableGeometryAssetCodec::deserialize(
     UniquePtr<Core::Assets::IAsset>& outAsset
 )const{
     auto asset = MakeUnique<DeformableGeometry>(virtualPath);
+    if(!asset->loadBinary(binary))
+        return false;
+
+    outAsset = Move(asset);
+    return true;
+}
+
+bool DeformableDisplacementTextureAssetCodec::deserialize(
+    const Name& virtualPath,
+    const Core::Assets::AssetBytes& binary,
+    UniquePtr<Core::Assets::IAsset>& outAsset
+)const{
+    auto asset = MakeUnique<DeformableDisplacementTexture>(virtualPath);
     if(!asset->loadBinary(binary))
         return false;
 
@@ -470,7 +647,7 @@ bool DeformableGeometryAssetCodec::serialize(const Core::Assets::IAsset& asset, 
         ;
     }
     canReserve = canReserve
-        && __hidden_assets::AddReserveBytes(reserveBytes, sizeof(DeformableDisplacement))
+        && __hidden_assets::AddReserveBytes(reserveBytes, sizeof(__hidden_assets::DeformableDisplacementBinaryV3))
     ;
 
     outBinary.clear();
@@ -500,9 +677,42 @@ bool DeformableGeometryAssetCodec::serialize(const Core::Assets::IAsset& asset, 
         if(!__hidden_assets::AppendVectorPayload(outBinary, morph.deltas, NWB_TEXT("morph deltas")))
             return false;
     }
-    AppendPOD(outBinary, geometry.displacement());
+    AppendPOD(outBinary, __hidden_assets::BuildDisplacementBinary(geometry.displacement()));
 
     return true;
+}
+
+bool DeformableDisplacementTextureAssetCodec::serialize(
+    const Core::Assets::IAsset& asset,
+    Core::Assets::AssetBytes& outBinary)const
+{
+    if(asset.assetType() != assetType()){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("DeformableDisplacementTextureAssetCodec::serialize failed: invalid asset type '{}', expected '{}'"),
+            StringConvert(asset.assetType().c_str()),
+            StringConvert(DeformableDisplacementTexture::s_AssetTypeText)
+        );
+        return false;
+    }
+
+    const DeformableDisplacementTexture& texture = static_cast<const DeformableDisplacementTexture&>(asset);
+    if(!texture.validatePayload())
+        return false;
+
+    usize reserveBytes = sizeof(u32) + sizeof(u32) + sizeof(u32) + sizeof(u32) + sizeof(u64);
+    if(!__hidden_assets::AddVectorReserveBytes(reserveBytes, texture.texels())){
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableDisplacementTextureAssetCodec::serialize failed: payload size overflows"));
+        return false;
+    }
+
+    outBinary.clear();
+    outBinary.reserve(reserveBytes);
+    AppendPOD(outBinary, __hidden_assets::s_DeformableDisplacementTextureMagic);
+    AppendPOD(outBinary, __hidden_assets::s_DeformableDisplacementTextureVersion);
+    AppendPOD(outBinary, texture.width());
+    AppendPOD(outBinary, texture.height());
+    AppendPOD(outBinary, static_cast<u64>(texture.texels().size()));
+    return __hidden_assets::AppendVectorPayload(outBinary, texture.texels(), NWB_TEXT("texels"));
 }
 
 

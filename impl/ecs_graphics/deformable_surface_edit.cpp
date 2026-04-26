@@ -7,7 +7,12 @@
 #include "deformable_runtime_helpers.h"
 
 #include <core/alloc/scratch.h>
+#include <core/assets/asset_manager.h>
+#include <core/ecs/entity.h>
+#include <core/ecs/world.h>
 #include <impl/assets_graphics/deformable_geometry_validation.h>
+#include <impl/assets_graphics/geometry_asset.h>
+#include <impl/assets_graphics/material_asset.h>
 #include <global/algorithm.h>
 #include <global/binary.h>
 
@@ -30,7 +35,8 @@ using namespace DeformableRuntime;
 
 static constexpr f32 s_WallInnerInpaintWeights[3] = { 0.25f, 0.5f, 0.25f };
 static constexpr u32 s_SurfaceEditStateMagic = 0x53454631u; // SEF1
-static constexpr u32 s_SurfaceEditStateVersion = 3u;
+static constexpr u32 s_SurfaceEditStateVersionV4 = 4u;
+static constexpr u32 s_SurfaceEditStateVersion = s_SurfaceEditStateVersionV4;
 static constexpr u32 s_MinWallLoopVertexCount = 3u;
 
 struct HoleFrame{
@@ -77,31 +83,32 @@ void ResolveTangentBitangentVectors(
     outBitangentVector = DeformableRuntime::ResolveFrameBitangent(normalVector, outTangentVector, s_SIMDIdentityR1);
 }
 
-struct SurfaceEditStateHeader{
+struct SurfaceEditStateHeaderV4{
     u32 magic = s_SurfaceEditStateMagic;
-    u32 version = s_SurfaceEditStateVersion;
+    u32 version = s_SurfaceEditStateVersionV4;
     u64 editCount = 0;
     u64 accessoryCount = 0;
+    u64 stringTableByteCount = 0;
 };
-static_assert(IsStandardLayout_V<SurfaceEditStateHeader>, "SurfaceEditStateHeader must stay binary-serializable");
-static_assert(IsTriviallyCopyable_V<SurfaceEditStateHeader>, "SurfaceEditStateHeader must stay binary-serializable");
+static_assert(IsStandardLayout_V<SurfaceEditStateHeaderV4>, "SurfaceEditStateHeaderV4 must stay binary-serializable");
+static_assert(IsTriviallyCopyable_V<SurfaceEditStateHeaderV4>, "SurfaceEditStateHeaderV4 must stay binary-serializable");
 
-struct SurfaceEditAccessoryRecordBinary{
-    u32 editRevision = 0;
+struct SurfaceEditAccessoryRecordBinaryV4{
+    DeformableSurfaceEditId anchorEditId = 0;
     u32 firstWallVertex = Limit<u32>::s_Max;
     u32 wallVertexCount = 0;
     f32 normalOffset = 0.0f;
     f32 uniformScale = 1.0f;
-    NameHash geometryNameHash = {};
-    NameHash materialNameHash = {};
+    u32 geometryPathOffset = Limit<u32>::s_Max;
+    u32 materialPathOffset = Limit<u32>::s_Max;
 };
 static_assert(
-    IsStandardLayout_V<SurfaceEditAccessoryRecordBinary>,
-    "SurfaceEditAccessoryRecordBinary must stay binary-serializable"
+    IsStandardLayout_V<SurfaceEditAccessoryRecordBinaryV4>,
+    "SurfaceEditAccessoryRecordBinaryV4 must stay binary-serializable"
 );
 static_assert(
-    IsTriviallyCopyable_V<SurfaceEditAccessoryRecordBinary>,
-    "SurfaceEditAccessoryRecordBinary must stay binary-serializable"
+    IsTriviallyCopyable_V<SurfaceEditAccessoryRecordBinaryV4>,
+    "SurfaceEditAccessoryRecordBinaryV4 must stay binary-serializable"
 );
 
 using MorphDeltaLookup = HashMap<
@@ -433,6 +440,10 @@ template<typename VertexEdgeMap>
     return ValidWallVertexSpan(firstVertex, vertexCount);
 }
 
+[[nodiscard]] bool ValidSurfaceEditId(const DeformableSurfaceEditId editId){
+    return editId != 0u && editId != Limit<DeformableSurfaceEditId>::s_Max;
+}
+
 [[nodiscard]] bool ValidHoleEditResult(const DeformableHoleEditResult& result, const bool requireWall){
     if(result.editRevision == 0u || result.removedTriangleCount == 0u)
         return false;
@@ -479,8 +490,11 @@ template<typename VertexEdgeMap>
 [[nodiscard]] bool RuntimeMeshHasWallTrianglePairs(
     const DeformableRuntimeMeshInstance& instance,
     const u32 firstWallVertexValue,
-    const u32 wallVertexCountValue)
+    const u32 wallVertexCountValue,
+    usize* outIndexBase = nullptr)
 {
+    if(outIndexBase)
+        *outIndexBase = Limit<usize>::s_Max;
     if(!ValidWallVertexSpan(firstWallVertexValue, wallVertexCountValue))
         return false;
 
@@ -498,8 +512,15 @@ template<typename VertexEdgeMap>
     if(wallIndexCount > instance.indices.size())
         return false;
 
-    const usize indexBase = instance.indices.size() - wallIndexCount;
-    return RuntimeMeshWallTrianglePairsMatchAt(instance, indexBase, firstWallVertex, wallVertexCount);
+    for(usize indexBase = 0u; indexBase <= instance.indices.size() - wallIndexCount; indexBase += 3u){
+        if(!RuntimeMeshWallTrianglePairsMatchAt(instance, indexBase, firstWallVertex, wallVertexCount))
+            continue;
+
+        if(outIndexBase)
+            *outIndexBase = indexBase;
+        return true;
+    }
+    return false;
 }
 
 [[nodiscard]] bool RuntimeMeshHasWallTrianglePairs(
@@ -531,6 +552,8 @@ template<typename VertexEdgeMap>
 }
 
 [[nodiscard]] bool ValidEditRecord(const DeformableSurfaceEditRecord& record){
+    if(!ValidSurfaceEditId(record.editId))
+        return false;
     if(record.type != DeformableSurfaceEditRecordType::Hole)
         return false;
     if(!ValidHoleRecord(record.hole))
@@ -543,13 +566,13 @@ template<typename VertexEdgeMap>
 }
 
 [[nodiscard]] bool ValidAccessoryAttachmentValues(
-    const u32 editRevision,
+    const DeformableSurfaceEditId anchorEditId,
     const u32 firstWallVertex,
     const u32 wallVertexCount,
     const f32 normalOffset,
     const f32 uniformScale)
 {
-    return editRevision != 0u
+    return ValidSurfaceEditId(anchorEditId)
         && ValidWallVertexSpan(firstWallVertex, wallVertexCount)
         && IsFinite(normalOffset)
         && normalOffset >= 0.0f
@@ -562,7 +585,7 @@ template<typename VertexEdgeMap>
     return attachment.targetEntity.valid()
         && attachment.runtimeMesh.valid()
         && ValidAccessoryAttachmentValues(
-            attachment.editRevision,
+            attachment.anchorEditId,
             attachment.firstWallVertex,
             attachment.wallVertexCount,
             attachment.normalOffset(),
@@ -573,7 +596,7 @@ template<typename VertexEdgeMap>
 
 [[nodiscard]] bool ValidAccessoryRecord(const DeformableAccessoryAttachmentRecord& record){
     return ValidAccessoryAttachmentValues(
-            record.editRevision,
+            record.anchorEditId,
             record.firstWallVertex,
             record.wallVertexCount,
             record.normalOffset,
@@ -581,6 +604,16 @@ template<typename VertexEdgeMap>
         )
         && record.geometry.valid()
         && record.material.valid()
+        && (record.geometryVirtualPathText.empty() || Name(record.geometryVirtualPathText.view()) == record.geometry.name())
+        && (record.materialVirtualPathText.empty() || Name(record.materialVirtualPathText.view()) == record.material.name())
+    ;
+}
+
+[[nodiscard]] bool AccessoryRecordHasStableAssetPaths(const DeformableAccessoryAttachmentRecord& record){
+    return !record.geometryVirtualPathText.empty()
+        && !record.materialVirtualPathText.empty()
+        && Name(record.geometryVirtualPathText.view()) == record.geometry.name()
+        && Name(record.materialVirtualPathText.view()) == record.material.name()
     ;
 }
 
@@ -588,88 +621,383 @@ template<typename VertexEdgeMap>
     const DeformableSurfaceEditRecord& record,
     const DeformableAccessoryAttachmentRecord& accessory)
 {
-    return record.result.editRevision == accessory.editRevision
+    return record.editId == accessory.anchorEditId
+        && record.type == DeformableSurfaceEditRecordType::Hole
         && record.result.firstWallVertex == accessory.firstWallVertex
         && record.result.wallVertexCount == accessory.wallVertexCount
     ;
 }
 
+[[nodiscard]] const DeformableSurfaceEditRecord* FindEditRecordById(
+    const DeformableSurfaceEditState& state,
+    const DeformableSurfaceEditId editId)
+{
+    if(!ValidSurfaceEditId(editId))
+        return nullptr;
+
+    for(const DeformableSurfaceEditRecord& record : state.edits){
+        if(record.editId == editId)
+            return &record;
+    }
+    return nullptr;
+}
+
 [[nodiscard]] bool ValidSurfaceEditState(const DeformableSurfaceEditState& state){
     u32 expectedBaseEditRevision = 0u;
-    for(const DeformableSurfaceEditRecord& record : state.edits){
+    for(usize editIndex = 0u; editIndex < state.edits.size(); ++editIndex){
+        const DeformableSurfaceEditRecord& record = state.edits[editIndex];
         if(!ValidEditRecord(record))
             return false;
+        for(usize previousEditIndex = 0u; previousEditIndex < editIndex; ++previousEditIndex){
+            if(state.edits[previousEditIndex].editId == record.editId)
+                return false;
+        }
         if(record.hole.baseEditRevision != expectedBaseEditRevision)
             return false;
         expectedBaseEditRevision = record.result.editRevision;
     }
-    const DeformableSurfaceEditRecord* latestCommittedEdit = state.edits.empty()
-        ? nullptr
-        : &state.edits.back()
-    ;
     for(const DeformableAccessoryAttachmentRecord& accessory : state.accessories){
+        const DeformableSurfaceEditRecord* anchorEdit = FindEditRecordById(state, accessory.anchorEditId);
         if(!ValidAccessoryRecord(accessory)
-            || accessory.editRevision != expectedBaseEditRevision
-            || !latestCommittedEdit
-            || !EditRecordMatchesAccessory(*latestCommittedEdit, accessory)
+            || !anchorEdit
+            || !EditRecordMatchesAccessory(*anchorEdit, accessory)
         )
             return false;
     }
     return true;
 }
 
-[[nodiscard]] bool BuildAccessoryBinaryRecord(
-    const DeformableAccessoryAttachmentRecord& record,
-    SurfaceEditAccessoryRecordBinary& outRecord)
+[[nodiscard]] bool ReplayContextTargetsInstance(
+    const DeformableRuntimeMeshInstance& instance,
+    const DeformableSurfaceEditReplayContext& context)
 {
-    outRecord = SurfaceEditAccessoryRecordBinary{};
-    if(!ValidAccessoryRecord(record))
+    return !context.targetEntity.valid() || context.targetEntity == instance.entity;
+}
+
+[[nodiscard]] bool ComputeTriangleBarycentric(
+    const DeformableRuntimeMeshInstance& instance,
+    const u32 (&indices)[3],
+    const SIMDVector point,
+    f32 (&outBary)[3])
+{
+    const SIMDVector a = LoadFloat(instance.restVertices[indices[0]].position);
+    const SIMDVector b = LoadFloat(instance.restVertices[indices[1]].position);
+    const SIMDVector c = LoadFloat(instance.restVertices[indices[2]].position);
+    const SIMDVector v0 = VectorSubtract(b, a);
+    const SIMDVector v1 = VectorSubtract(c, a);
+    const SIMDVector v2 = VectorSubtract(point, a);
+
+    const f32 d00 = VectorGetX(Vector3Dot(v0, v0));
+    const f32 d01 = VectorGetX(Vector3Dot(v0, v1));
+    const f32 d11 = VectorGetX(Vector3Dot(v1, v1));
+    const f32 d20 = VectorGetX(Vector3Dot(v2, v0));
+    const f32 d21 = VectorGetX(Vector3Dot(v2, v1));
+    const f32 denominator = (d00 * d11) - (d01 * d01);
+    if(!IsFinite(denominator) || Abs(denominator) <= DeformableValidation::s_TriangleAreaLengthSquaredEpsilon)
         return false;
 
-    outRecord.editRevision = record.editRevision;
+    const f32 invDenominator = 1.0f / denominator;
+    const f32 bary1 = ((d11 * d20) - (d01 * d21)) * invDenominator;
+    const f32 bary2 = ((d00 * d21) - (d01 * d20)) * invDenominator;
+    const f32 bary0 = 1.0f - bary1 - bary2;
+    const f32 bary[3] = { bary0, bary1, bary2 };
+    if(!DeformableValidation::NormalizeSourceBarycentric(bary, outBary))
+        return false;
+
+    const SIMDVector reconstructed = BarycentricPoint(instance, indices, outBary);
+    const SIMDVector delta = VectorSubtract(reconstructed, point);
+    const f32 distanceSquared = VectorGetX(Vector3LengthSq(delta));
+    return IsFinite(distanceSquared) && distanceSquared <= 0.000001f;
+}
+
+[[nodiscard]] bool TriangleNormalMatchesStoredNormal(
+    const DeformableRuntimeMeshInstance& instance,
+    const u32 (&indices)[3],
+    const Float3U& storedNormal)
+{
+    const SIMDVector a = LoadFloat(instance.restVertices[indices[0]].position);
+    const SIMDVector b = LoadFloat(instance.restVertices[indices[1]].position);
+    const SIMDVector c = LoadFloat(instance.restVertices[indices[2]].position);
+    const SIMDVector rawNormal = Vector3Cross(VectorSubtract(b, a), VectorSubtract(c, a));
+    if(VectorGetX(Vector3LengthSq(rawNormal)) <= s_FrameEpsilon)
+        return false;
+
+    const SIMDVector triangleNormal = DeformableRuntime::Normalize(rawNormal, s_SIMDIdentityR2);
+    const SIMDVector recordNormal = LoadFloat(storedNormal);
+    if(!FiniteVec3(triangleNormal) || !FiniteVec3(recordNormal))
+        return false;
+
+    return VectorGetX(Vector3Dot(triangleNormal, recordNormal)) >= 0.9f;
+}
+
+[[nodiscard]] bool BuildReplayHoleParams(
+    const DeformableRuntimeMeshInstance& instance,
+    const DeformableSurfaceEditRecord& record,
+    const usize triangle,
+    DeformableHoleEditParams& outParams)
+{
+    outParams = DeformableHoleEditParams{};
+    if(record.type != DeformableSurfaceEditRecordType::Hole
+        || record.hole.baseEditRevision != instance.editRevision
+        || !ValidHoleRecord(record.hole)
+    )
+        return false;
+
+    const SIMDVector restPosition = LoadFloat(record.hole.restPosition);
+    if(!FiniteVec3(restPosition))
+        return false;
+
+    u32 triangleIndices[3] = {};
+    if(!DeformableRuntime::ValidateTriangleIndex(instance, static_cast<u32>(triangle), triangleIndices))
+        return false;
+    if(!TriangleNormalMatchesStoredNormal(instance, triangleIndices, record.hole.restNormal))
+        return false;
+
+    f32 bary[3] = {};
+    if(!ComputeTriangleBarycentric(instance, triangleIndices, restPosition, bary))
+        return false;
+
+    SourceSample sample{};
+    if(!ResolveDeformableRestSurfaceSample(instance, static_cast<u32>(triangle), bary, sample)
+        || !MatchingSourceSample(sample, record.hole.restSample)
+    )
+        return false;
+
+    outParams.posedHit.entity = instance.entity;
+    outParams.posedHit.runtimeMesh = instance.handle;
+    outParams.posedHit.editRevision = instance.editRevision;
+    outParams.posedHit.triangle = static_cast<u32>(triangle);
+    outParams.posedHit.bary[0] = bary[0];
+    outParams.posedHit.bary[1] = bary[1];
+    outParams.posedHit.bary[2] = bary[2];
+    outParams.posedHit.setPosition(record.hole.restPosition);
+    outParams.posedHit.setNormal(record.hole.restNormal);
+    outParams.posedHit.setDistance(0.0f);
+    outParams.posedHit.restSample = record.hole.restSample;
+    outParams.radius = record.hole.radius;
+    outParams.ellipseRatio = record.hole.ellipseRatio;
+    outParams.depth = record.hole.depth;
+    return ValidateParams(instance, outParams);
+}
+
+[[nodiscard]] bool ReplayResultMatchesStoredRecord(
+    const DeformableHoleEditResult& result,
+    const DeformableSurfaceEditRecord& record)
+{
+    return result.removedTriangleCount == record.result.removedTriangleCount
+        && result.addedVertexCount == record.result.addedVertexCount
+        && result.addedTriangleCount == record.result.addedTriangleCount
+        && result.editRevision == record.result.editRevision
+        && result.firstWallVertex == record.result.firstWallVertex
+        && result.wallVertexCount == record.result.wallVertexCount
+    ;
+}
+
+[[nodiscard]] bool ValidateReplayAccessories(
+    const DeformableRuntimeMeshInstance& instance,
+    const DeformableSurfaceEditState& state,
+    const DeformableSurfaceEditReplayContext& context)
+{
+    if(state.accessories.empty())
+        return ReplayContextTargetsInstance(instance, context);
+    if(!context.world || !context.targetEntity.valid() || context.targetEntity != instance.entity)
+        return false;
+
+    for(const DeformableAccessoryAttachmentRecord& accessory : state.accessories){
+        const DeformableSurfaceEditRecord* anchorEdit = FindEditRecordById(state, accessory.anchorEditId);
+        if(!ValidAccessoryRecord(accessory)
+            || !anchorEdit
+            || !EditRecordMatchesAccessory(*anchorEdit, accessory)
+            || !RuntimeMeshHasWallTrianglePairs(instance, accessory.firstWallVertex, accessory.wallVertexCount)
+        )
+            return false;
+    }
+    return true;
+}
+
+void RestoreReplayAccessories(
+    DeformableRuntimeMeshInstance& instance,
+    const DeformableSurfaceEditState& state,
+    const DeformableSurfaceEditReplayContext& context,
+    u32& outRestoredAccessoryCount)
+{
+    outRestoredAccessoryCount = 0u;
+    if(state.accessories.empty() || !context.world)
+        return;
+
+    for(const DeformableAccessoryAttachmentRecord& accessory : state.accessories){
+        auto entity = context.world->createEntity();
+        auto& transform = entity.addComponent<Core::Scene::TransformComponent>();
+        transform.scale = Float4(accessory.uniformScale, accessory.uniformScale, accessory.uniformScale);
+
+        auto& renderer = entity.addComponent<RendererComponent>();
+        renderer.geometry = accessory.geometry;
+        renderer.material = accessory.material;
+        renderer.visible = false;
+
+        auto& attachment = entity.addComponent<DeformableAccessoryAttachmentComponent>();
+        attachment.targetEntity = instance.entity;
+        attachment.runtimeMesh = instance.handle;
+        attachment.anchorEditId = accessory.anchorEditId;
+        attachment.firstWallVertex = accessory.firstWallVertex;
+        attachment.wallVertexCount = accessory.wallVertexCount;
+        attachment.setNormalOffset(accessory.normalOffset);
+        attachment.setUniformScale(accessory.uniformScale);
+        ++outRestoredAccessoryCount;
+    }
+}
+
+[[nodiscard]] bool ValidateReplayAccessoryAssets(
+    const DeformableSurfaceEditState& state,
+    const DeformableSurfaceEditReplayContext& context)
+{
+    if(state.accessories.empty() || !context.assetManager)
+        return true;
+
+    for(const DeformableAccessoryAttachmentRecord& accessory : state.accessories){
+        UniquePtr<Core::Assets::IAsset> geometryAsset;
+        if(!context.assetManager->loadSync(Geometry::AssetTypeName(), accessory.geometry.name(), geometryAsset)
+            || !geometryAsset
+            || geometryAsset->assetType() != Geometry::AssetTypeName()
+        )
+            return false;
+
+        UniquePtr<Core::Assets::IAsset> materialAsset;
+        if(!context.assetManager->loadSync(Material::AssetTypeName(), accessory.material.name(), materialAsset)
+            || !materialAsset
+            || materialAsset->assetType() != Material::AssetTypeName()
+        )
+            return false;
+    }
+    return true;
+}
+
+[[nodiscard]] bool AppendStringTablePath(
+    Core::Assets::AssetBytes& stringTable,
+    const CompactString& pathText,
+    u32& outOffset)
+{
+    outOffset = Limit<u32>::s_Max;
+    if(pathText.empty() || stringTable.size() >= Limit<u32>::s_Max)
+        return false;
+
+    const usize beginOffset = stringTable.size();
+    const usize byteCount = pathText.size() + 1u;
+    if(beginOffset > Limit<usize>::s_Max - byteCount)
+        return false;
+    if(byteCount > static_cast<usize>(Limit<u32>::s_Max) - beginOffset)
+        return false;
+
+    outOffset = static_cast<u32>(beginOffset);
+    stringTable.resize(beginOffset + byteCount);
+    NWB_MEMCPY(stringTable.data() + beginOffset, pathText.size(), pathText.data(), pathText.size());
+    stringTable[beginOffset + pathText.size()] = 0u;
+    return true;
+}
+
+[[nodiscard]] bool ReadStringTablePath(
+    const Core::Assets::AssetBytes& binary,
+    const usize stringTableOffset,
+    const usize stringTableByteCount,
+    const u32 pathOffset,
+    CompactString& outPath)
+{
+    outPath.clear();
+    if(pathOffset == Limit<u32>::s_Max || static_cast<usize>(pathOffset) >= stringTableByteCount)
+        return false;
+
+    const usize absoluteOffset = stringTableOffset + static_cast<usize>(pathOffset);
+    const usize remainingBytes = stringTableByteCount - static_cast<usize>(pathOffset);
+    usize textLength = 0u;
+    while(textLength < remainingBytes && binary[absoluteOffset + textLength] != 0u)
+        ++textLength;
+
+    if(textLength == 0u || textLength >= remainingBytes)
+        return false;
+
+    return outPath.assign(AStringView(reinterpret_cast<const char*>(binary.data() + absoluteOffset), textLength));
+}
+
+[[nodiscard]] bool BuildAccessoryBinaryRecordV4(
+    const DeformableAccessoryAttachmentRecord& record,
+    SurfaceEditAccessoryRecordBinaryV4& outRecord,
+    Core::Assets::AssetBytes& stringTable)
+{
+    outRecord = SurfaceEditAccessoryRecordBinaryV4{};
+    if(!ValidAccessoryRecord(record) || !AccessoryRecordHasStableAssetPaths(record))
+        return false;
+
+    outRecord.anchorEditId = record.anchorEditId;
     outRecord.firstWallVertex = record.firstWallVertex;
     outRecord.wallVertexCount = record.wallVertexCount;
     outRecord.normalOffset = record.normalOffset;
     outRecord.uniformScale = record.uniformScale;
-    outRecord.geometryNameHash = record.geometry.name().hash();
-    outRecord.materialNameHash = record.material.name().hash();
-    return true;
+    return AppendStringTablePath(stringTable, record.geometryVirtualPathText, outRecord.geometryPathOffset)
+        && AppendStringTablePath(stringTable, record.materialVirtualPathText, outRecord.materialPathOffset)
+    ;
 }
 
-[[nodiscard]] bool BuildAccessoryRecord(
-    const SurfaceEditAccessoryRecordBinary& binary,
+[[nodiscard]] bool BuildAccessoryRecordV4(
+    const SurfaceEditAccessoryRecordBinaryV4& binary,
+    const Core::Assets::AssetBytes& rawBinary,
+    const usize stringTableOffset,
+    const usize stringTableByteCount,
     DeformableAccessoryAttachmentRecord& outRecord)
 {
     outRecord = DeformableAccessoryAttachmentRecord{};
-    outRecord.editRevision = binary.editRevision;
+    outRecord.anchorEditId = binary.anchorEditId;
     outRecord.firstWallVertex = binary.firstWallVertex;
     outRecord.wallVertexCount = binary.wallVertexCount;
     outRecord.normalOffset = binary.normalOffset;
     outRecord.uniformScale = binary.uniformScale;
-    outRecord.geometry.virtualPath = Name(binary.geometryNameHash);
-    outRecord.material.virtualPath = Name(binary.materialNameHash);
-    return ValidAccessoryRecord(outRecord);
+    if(!ReadStringTablePath(
+            rawBinary,
+            stringTableOffset,
+            stringTableByteCount,
+            binary.geometryPathOffset,
+            outRecord.geometryVirtualPathText
+        )
+        || !ReadStringTablePath(
+            rawBinary,
+            stringTableOffset,
+            stringTableByteCount,
+            binary.materialPathOffset,
+            outRecord.materialVirtualPathText
+        )
+    )
+        return false;
+
+    outRecord.geometry.virtualPath = Name(outRecord.geometryVirtualPathText.view());
+    outRecord.material.virtualPath = Name(outRecord.materialVirtualPathText.view());
+    return ValidAccessoryRecord(outRecord) && AccessoryRecordHasStableAssetPaths(outRecord);
 }
 
-[[nodiscard]] bool ComputeSurfaceEditStateBinarySize(
+[[nodiscard]] bool ComputeSurfaceEditStateBinarySizeV4(
     const u64 editCount,
     const u64 accessoryCount,
+    const u64 stringTableByteCount,
     usize& outSize)
 {
-    outSize = sizeof(SurfaceEditStateHeader);
+    outSize = sizeof(SurfaceEditStateHeaderV4);
     if(editCount > static_cast<u64>(Limit<usize>::s_Max / sizeof(DeformableSurfaceEditRecord)))
         return false;
-    if(accessoryCount > static_cast<u64>(Limit<usize>::s_Max / sizeof(SurfaceEditAccessoryRecordBinary)))
+    if(accessoryCount > static_cast<u64>(Limit<usize>::s_Max / sizeof(SurfaceEditAccessoryRecordBinaryV4)))
+        return false;
+    if(stringTableByteCount > static_cast<u64>(Limit<u32>::s_Max))
         return false;
 
     const usize editBytes = static_cast<usize>(editCount) * sizeof(DeformableSurfaceEditRecord);
-    const usize accessoryBytes = static_cast<usize>(accessoryCount) * sizeof(SurfaceEditAccessoryRecordBinary);
+    const usize accessoryBytes = static_cast<usize>(accessoryCount) * sizeof(SurfaceEditAccessoryRecordBinaryV4);
+    const usize stringTableBytes = static_cast<usize>(stringTableByteCount);
     if(editBytes > Limit<usize>::s_Max - outSize)
         return false;
     outSize += editBytes;
     if(accessoryBytes > Limit<usize>::s_Max - outSize)
         return false;
     outSize += accessoryBytes;
+    if(stringTableBytes > Limit<usize>::s_Max - outSize)
+        return false;
+    outSize += stringTableBytes;
     return true;
 }
 
@@ -1413,6 +1741,7 @@ bool CommitHole(
     if(outResult)
         *outResult = result;
     if(outRecord){
+        outRecord->editId = result.editRevision;
         outRecord->type = DeformableSurfaceEditRecordType::Hole;
         outRecord->hole.restSample = params.posedHit.restSample;
         StoreFloat(recordFrame.center, &outRecord->hole.restPosition);
@@ -1435,7 +1764,7 @@ bool AttachAccessory(
 {
     outAttachment = DeformableAccessoryAttachmentComponent{};
     if(!__hidden_deformable_surface_edit::ValidateUploadedRuntimePayload(instance)
-        || holeResult.editRevision != instance.editRevision
+        || holeResult.editRevision > instance.editRevision
         || !__hidden_deformable_surface_edit::ValidAccessoryAttachmentValues(
             holeResult.editRevision,
             holeResult.firstWallVertex,
@@ -1449,7 +1778,7 @@ bool AttachAccessory(
 
     outAttachment.targetEntity = instance.entity;
     outAttachment.runtimeMesh = instance.handle;
-    outAttachment.editRevision = holeResult.editRevision;
+    outAttachment.anchorEditId = holeResult.editRevision;
     outAttachment.firstWallVertex = holeResult.firstWallVertex;
     outAttachment.wallVertexCount = holeResult.wallVertexCount;
     outAttachment.setNormalOffset(normalOffset);
@@ -1466,13 +1795,7 @@ bool ResolveAccessoryAttachmentTransform(
     if(!__hidden_deformable_surface_edit::ValidAccessoryAttachment(attachment)
         || attachment.targetEntity != instance.entity
         || attachment.runtimeMesh != instance.handle
-        || attachment.editRevision != instance.editRevision
         || !__hidden_deformable_surface_edit::ValidateUploadedRuntimePayload(instance)
-        || !__hidden_deformable_surface_edit::RuntimeMeshHasWallTrianglePairs(
-            instance,
-            attachment.firstWallVertex,
-            attachment.wallVertexCount
-        )
     )
         return false;
 
@@ -1490,14 +1813,19 @@ bool ResolveAccessoryAttachmentTransform(
     if(wallVertexCount > Limit<usize>::s_Max / 6u)
         return false;
 
-    const usize wallIndexCount = wallVertexCount * 6u;
-    if(wallIndexCount > instance.indices.size())
+    usize wallIndexBase = Limit<usize>::s_Max;
+    if(!__hidden_deformable_surface_edit::RuntimeMeshHasWallTrianglePairs(
+            instance,
+            attachment.firstWallVertex,
+            attachment.wallVertexCount,
+            &wallIndexBase
+        )
+    )
         return false;
 
     SIMDVector rimCenter = VectorZero();
     SIMDVector innerCenter = VectorZero();
     SIMDVector firstRimPosition = VectorZero();
-    const usize wallIndexBase = instance.indices.size() - wallIndexCount;
     for(usize pairIndex = 0u; pairIndex < wallVertexCount; ++pairIndex){
         const usize pairIndexBase = wallIndexBase + (pairIndex * 6u);
         const usize rimVertexIndex = static_cast<usize>(instance.indices[pairIndexBase + 0u]);
@@ -1554,33 +1882,42 @@ bool SerializeSurfaceEditState(
     Core::Assets::AssetBytes& outBinary)
 {
     outBinary.clear();
+    if(!__hidden_deformable_surface_edit::ValidSurfaceEditState(state))
+        return false;
+
+    Vector<__hidden_deformable_surface_edit::SurfaceEditAccessoryRecordBinaryV4> accessoryRecords;
+    accessoryRecords.reserve(state.accessories.size());
+    Core::Assets::AssetBytes stringTable;
+    for(const DeformableAccessoryAttachmentRecord& accessory : state.accessories){
+        __hidden_deformable_surface_edit::SurfaceEditAccessoryRecordBinaryV4 binaryRecord;
+        if(!__hidden_deformable_surface_edit::BuildAccessoryBinaryRecordV4(accessory, binaryRecord, stringTable)){
+            outBinary.clear();
+            return false;
+        }
+        accessoryRecords.push_back(binaryRecord);
+    }
+
     usize binarySize = 0u;
-    if(!__hidden_deformable_surface_edit::ComputeSurfaceEditStateBinarySize(
+    if(!__hidden_deformable_surface_edit::ComputeSurfaceEditStateBinarySizeV4(
             static_cast<u64>(state.edits.size()),
             static_cast<u64>(state.accessories.size()),
+            static_cast<u64>(stringTable.size()),
             binarySize
         )
     )
         return false;
 
-    if(!__hidden_deformable_surface_edit::ValidSurfaceEditState(state))
-        return false;
-
     outBinary.reserve(binarySize);
-    __hidden_deformable_surface_edit::SurfaceEditStateHeader header;
+    __hidden_deformable_surface_edit::SurfaceEditStateHeaderV4 header;
     header.editCount = static_cast<u64>(state.edits.size());
     header.accessoryCount = static_cast<u64>(state.accessories.size());
+    header.stringTableByteCount = static_cast<u64>(stringTable.size());
     AppendPOD(outBinary, header);
     for(const DeformableSurfaceEditRecord& record : state.edits)
         AppendPOD(outBinary, record);
-    for(const DeformableAccessoryAttachmentRecord& accessory : state.accessories){
-        __hidden_deformable_surface_edit::SurfaceEditAccessoryRecordBinary binaryRecord;
-        if(!__hidden_deformable_surface_edit::BuildAccessoryBinaryRecord(accessory, binaryRecord)){
-            outBinary.clear();
-            return false;
-        }
+    for(const __hidden_deformable_surface_edit::SurfaceEditAccessoryRecordBinaryV4& binaryRecord : accessoryRecords)
         AppendPOD(outBinary, binaryRecord);
-    }
+    outBinary.insert(outBinary.end(), stringTable.begin(), stringTable.end());
     return outBinary.size() == binarySize;
 }
 
@@ -1590,24 +1927,34 @@ bool DeserializeSurfaceEditState(
 {
     outState = DeformableSurfaceEditState{};
     usize cursor = 0;
-    __hidden_deformable_surface_edit::SurfaceEditStateHeader header;
-    if(!ReadPOD(binary, cursor, header)
-        || header.magic != __hidden_deformable_surface_edit::s_SurfaceEditStateMagic
-        || header.version != __hidden_deformable_surface_edit::s_SurfaceEditStateVersion
+    u32 magic = 0u;
+    u32 version = 0u;
+    if(!ReadPOD(binary, cursor, magic)
+        || !ReadPOD(binary, cursor, version)
+        || magic != __hidden_deformable_surface_edit::s_SurfaceEditStateMagic
     )
         return false;
 
+    u64 editCount = 0u;
+    u64 accessoryCount = 0u;
+    u64 stringTableByteCount = 0u;
     usize expectedSize = 0u;
-    if(!__hidden_deformable_surface_edit::ComputeSurfaceEditStateBinarySize(
-            header.editCount,
-            header.accessoryCount,
+    if(version != __hidden_deformable_surface_edit::s_SurfaceEditStateVersion)
+        return false;
+    if(!ReadPOD(binary, cursor, editCount)
+        || !ReadPOD(binary, cursor, accessoryCount)
+        || !ReadPOD(binary, cursor, stringTableByteCount)
+        || !__hidden_deformable_surface_edit::ComputeSurfaceEditStateBinarySizeV4(
+            editCount,
+            accessoryCount,
+            stringTableByteCount,
             expectedSize
         )
         || expectedSize != binary.size()
     )
         return false;
 
-    outState.edits.resize(static_cast<usize>(header.editCount));
+    outState.edits.resize(static_cast<usize>(editCount));
     for(DeformableSurfaceEditRecord& record : outState.edits){
         if(!ReadPOD(binary, cursor, record) || !__hidden_deformable_surface_edit::ValidEditRecord(record)){
             outState = DeformableSurfaceEditState{};
@@ -1615,16 +1962,31 @@ bool DeserializeSurfaceEditState(
         }
     }
 
-    outState.accessories.resize(static_cast<usize>(header.accessoryCount));
-    for(DeformableAccessoryAttachmentRecord& accessory : outState.accessories){
-        __hidden_deformable_surface_edit::SurfaceEditAccessoryRecordBinary binaryRecord;
-        if(!ReadPOD(binary, cursor, binaryRecord)
-            || !__hidden_deformable_surface_edit::BuildAccessoryRecord(binaryRecord, accessory)
+    outState.accessories.resize(static_cast<usize>(accessoryCount));
+    Vector<__hidden_deformable_surface_edit::SurfaceEditAccessoryRecordBinaryV4> accessoryRecords;
+    accessoryRecords.resize(static_cast<usize>(accessoryCount));
+    for(__hidden_deformable_surface_edit::SurfaceEditAccessoryRecordBinaryV4& binaryRecord : accessoryRecords){
+        if(!ReadPOD(binary, cursor, binaryRecord)){
+            outState = DeformableSurfaceEditState{};
+            return false;
+        }
+    }
+
+    const usize stringTableOffset = cursor;
+    for(usize i = 0u; i < outState.accessories.size(); ++i){
+        if(!__hidden_deformable_surface_edit::BuildAccessoryRecordV4(
+                accessoryRecords[i],
+                binary,
+                stringTableOffset,
+                static_cast<usize>(stringTableByteCount),
+                outState.accessories[i]
+            )
         ){
             outState = DeformableSurfaceEditState{};
             return false;
         }
     }
+    cursor += static_cast<usize>(stringTableByteCount);
 
     if(cursor != binary.size()){
         outState = DeformableSurfaceEditState{};
@@ -1637,16 +1999,80 @@ bool DeserializeSurfaceEditState(
     return true;
 }
 
-bool CommitDeformableRestSpaceHole(
+bool BuildSurfaceEditStateDebugDump(
+    const DeformableSurfaceEditState& state,
+    AString& outDump)
+{
+    outDump.clear();
+    if(!__hidden_deformable_surface_edit::ValidSurfaceEditState(state))
+        return false;
+
+    outDump = StringFormat(
+        "surface_edit_state version={} edits={} accessories={}\n",
+        __hidden_deformable_surface_edit::s_SurfaceEditStateVersion,
+        state.edits.size(),
+        state.accessories.size()
+    );
+    for(usize i = 0u; i < state.edits.size(); ++i){
+        const DeformableSurfaceEditRecord& record = state.edits[i];
+        outDump += StringFormat(
+            "edit[{}] id={} type=hole base_revision={} result_revision={} radius={} ellipse={} depth={} removed_triangles={} added_vertices={} added_triangles={}\n",
+            i,
+            record.editId,
+            record.hole.baseEditRevision,
+            record.result.editRevision,
+            record.hole.radius,
+            record.hole.ellipseRatio,
+            record.hole.depth,
+            record.result.removedTriangleCount,
+            record.result.addedVertexCount,
+            record.result.addedTriangleCount
+        );
+    }
+    for(usize i = 0u; i < state.accessories.size(); ++i){
+        const DeformableAccessoryAttachmentRecord& accessory = state.accessories[i];
+        const char* geometryPath = accessory.geometryVirtualPathText.empty()
+            ? accessory.geometry.name().c_str()
+            : accessory.geometryVirtualPathText.c_str()
+        ;
+        const char* materialPath = accessory.materialVirtualPathText.empty()
+            ? accessory.material.name().c_str()
+            : accessory.materialVirtualPathText.c_str()
+        ;
+        outDump += StringFormat(
+            "accessory[{}] geometry={} material={} anchor_edit_id={} first_wall_vertex={} wall_vertex_count={} normal_offset={} uniform_scale={}\n",
+            i,
+            geometryPath,
+            materialPath,
+            accessory.anchorEditId,
+            accessory.firstWallVertex,
+            accessory.wallVertexCount,
+            accessory.normalOffset,
+            accessory.uniformScale
+        );
+    }
+    return true;
+}
+
+namespace __hidden_deformable_surface_edit{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] bool CommitDeformableRestSpaceHoleImpl(
     DeformableRuntimeMeshInstance& instance,
     const DeformableHoleEditParams& params,
+    const bool requireUploadedRuntimePayload,
     DeformableHoleEditResult* outResult)
 {
     if(outResult)
         *outResult = DeformableHoleEditResult{};
-    if(!__hidden_deformable_surface_edit::ValidateUploadedRuntimePayload(instance)
-        || !__hidden_deformable_surface_edit::ValidateParams(instance, params)
-    )
+    const bool validPayload = requireUploadedRuntimePayload
+        ? ValidateUploadedRuntimePayload(instance)
+        : ValidateRuntimePayload(instance)
+    ;
+    if(!validPayload || !ValidateParams(instance, params))
         return false;
 
     const usize triangleCount = instance.indices.size() / 3u;
@@ -1658,8 +2084,8 @@ bool CommitDeformableRestSpaceHole(
     if(!DeformableValidation::NormalizeSourceBarycentric(params.posedHit.bary.values, hitBary))
         return false;
 
-    __hidden_deformable_surface_edit::HoleFrame frame;
-    if(!__hidden_deformable_surface_edit::BuildHoleFrame(instance, hitTriangleIndices, hitBary, frame))
+    HoleFrame frame;
+    if(!BuildHoleFrame(instance, hitTriangleIndices, hitBary, frame))
         return false;
 
     SourceSample wallSourceSample{};
@@ -1674,7 +2100,6 @@ bool CommitDeformableRestSpaceHole(
     };
     removeTriangle.resize(triangleCount, 0u);
 
-    using EdgeRecord = __hidden_deformable_surface_edit::EdgeRecord;
     using EdgeRecordVector = Vector<EdgeRecord, Core::Alloc::ScratchAllocator<EdgeRecord>>;
     using EdgeRecordMap = HashMap<
         u64,
@@ -1705,20 +2130,20 @@ bool CommitDeformableRestSpaceHole(
         if(!DeformableRuntime::ValidateTriangleIndex(instance, static_cast<u32>(triangle), indices))
             return false;
 
-        __hidden_deformable_surface_edit::RegisterFullEdge(edges, indices[0], indices[1]);
-        __hidden_deformable_surface_edit::RegisterFullEdge(edges, indices[1], indices[2]);
-        __hidden_deformable_surface_edit::RegisterFullEdge(edges, indices[2], indices[0]);
+        RegisterFullEdge(edges, indices[0], indices[1]);
+        RegisterFullEdge(edges, indices[1], indices[2]);
+        RegisterFullEdge(edges, indices[2], indices[0]);
 
         const bool selectedTriangle = triangle == static_cast<usize>(params.posedHit.triangle);
         if(selectedTriangle
-            || __hidden_deformable_surface_edit::TriangleInsideFootprint(instance, frame, radiusX, radiusY, indices)
+            || TriangleInsideFootprint(instance, frame, radiusX, radiusY, indices)
         ){
             removeTriangle[triangle] = 1u;
             ++removedTriangleCount;
 
-            if(!__hidden_deformable_surface_edit::RegisterRemovedEdge(edges, indices[0], indices[1])
-                || !__hidden_deformable_surface_edit::RegisterRemovedEdge(edges, indices[1], indices[2])
-                || !__hidden_deformable_surface_edit::RegisterRemovedEdge(edges, indices[2], indices[0])
+            if(!RegisterRemovedEdge(edges, indices[0], indices[1])
+                || !RegisterRemovedEdge(edges, indices[1], indices[2])
+                || !RegisterRemovedEdge(edges, indices[2], indices[0])
             )
                 return false;
         }
@@ -1746,8 +2171,8 @@ bool CommitDeformableRestSpaceHole(
             if(edge.fullCount != 2u)
                 return false;
             boundaryEdges.push_back(edge);
-            __hidden_deformable_surface_edit::IncrementVertexDegree(boundaryDegrees, edge.a);
-            __hidden_deformable_surface_edit::IncrementVertexDegree(boundaryDegrees, edge.b);
+            IncrementVertexDegree(boundaryDegrees, edge.a);
+            IncrementVertexDegree(boundaryDegrees, edge.b);
         }
     }
     if(boundaryEdges.empty())
@@ -1758,7 +2183,7 @@ bool CommitDeformableRestSpaceHole(
             return false;
     }
     EdgeRecordVector orderedBoundaryEdges{Core::Alloc::ScratchAllocator<EdgeRecord>(scratchArena)};
-    if(!__hidden_deformable_surface_edit::BuildOrderedBoundaryLoop(boundaryEdges, instance, frame, orderedBoundaryEdges))
+    if(!BuildOrderedBoundaryLoop(boundaryEdges, instance, frame, orderedBoundaryEdges))
         return false;
 
     Vector<u32> newIndices;
@@ -1842,7 +2267,7 @@ bool CommitDeformableRestSpaceHole(
         for(usize edgeIndex = 0; edgeIndex < boundaryVertexCount; ++edgeIndex){
             boundaryU[edgeIndex] = boundaryLength;
 
-            const __hidden_deformable_surface_edit::EdgeRecord& edge = orderedBoundaryEdges[edgeIndex];
+            const EdgeRecord& edge = orderedBoundaryEdges[edgeIndex];
             const SIMDVector edgeDelta = DeformableRuntime::ProjectOntoFramePlane(
                 VectorSubtract(LoadFloat(newRestVertices[edge.b].position), LoadFloat(newRestVertices[edge.a].position)),
                 frameNormal
@@ -1865,10 +2290,10 @@ bool CommitDeformableRestSpaceHole(
 
         for(usize edgeIndex = 0; edgeIndex < boundaryVertexCount; ++edgeIndex){
             const usize previousEdgeIndex = edgeIndex == 0u ? boundaryVertexCount - 1u : edgeIndex - 1u;
-            const __hidden_deformable_surface_edit::EdgeRecord& edge = orderedBoundaryEdges[edgeIndex];
+            const EdgeRecord& edge = orderedBoundaryEdges[edgeIndex];
 
-            __hidden_deformable_surface_edit::WallVertexFrame vertexFrame;
-            if(!__hidden_deformable_surface_edit::BuildWallVertexFrame(
+            WallVertexFrame vertexFrame;
+            if(!BuildWallVertexFrame(
                     newRestVertices,
                     frame,
                     orderedBoundaryEdges[previousEdgeIndex],
@@ -1894,10 +2319,10 @@ bool CommitDeformableRestSpaceHole(
                 edge.b,
             };
             Float4U innerColor;
-            if(!__hidden_deformable_surface_edit::BuildBlendedVertexColor(
+            if(!BuildBlendedVertexColor(
                     newRestVertices,
                     innerAttributeVertices,
-                    __hidden_deformable_surface_edit::s_WallInnerInpaintWeights,
+                    s_WallInnerInpaintWeights,
                     innerColor
                 )
             )
@@ -1906,10 +2331,10 @@ bool CommitDeformableRestSpaceHole(
             SkinInfluence4 innerSkin;
             const SkinInfluence4* innerSkinPtr = nullptr;
             if(!newSkin.empty()){
-                if(!__hidden_deformable_surface_edit::BuildBlendedSkinInfluence(
+                if(!BuildBlendedSkinInfluence(
                         newSkin,
                         innerAttributeVertices,
-                        __hidden_deformable_surface_edit::s_WallInnerInpaintWeights,
+                        s_WallInnerInpaintWeights,
                         innerSkin
                     )
                 )
@@ -1918,7 +2343,7 @@ bool CommitDeformableRestSpaceHole(
                 innerSkinPtr = &innerSkin;
             }
 
-            if(!__hidden_deformable_surface_edit::AppendWallVertex(
+            if(!AppendWallVertex(
                     newRestVertices,
                     newSkin,
                     newSourceSamples,
@@ -1939,7 +2364,7 @@ bool CommitDeformableRestSpaceHole(
             addedVertexCount += 1u;
         }
 
-        if(!__hidden_deformable_surface_edit::TransferWallMorphDeltas(
+        if(!TransferWallMorphDeltas(
                 newMorphs,
                 orderedBoundaryEdges,
                 innerVertices
@@ -1994,6 +2419,102 @@ bool CommitDeformableRestSpaceHole(
         outResult->firstWallVertex = firstWallVertex;
         outResult->wallVertexCount = addedWallVertexCount;
     }
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool CommitDeformableRestSpaceHole(
+    DeformableRuntimeMeshInstance& instance,
+    const DeformableHoleEditParams& params,
+    DeformableHoleEditResult* outResult)
+{
+    return __hidden_deformable_surface_edit::CommitDeformableRestSpaceHoleImpl(instance, params, true, outResult);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool ApplySurfaceEditState(
+    DeformableRuntimeMeshInstance& instance,
+    const DeformableSurfaceEditState& state,
+    const DeformableSurfaceEditReplayContext& context,
+    DeformableSurfaceEditReplayResult* outResult)
+{
+    if(outResult)
+        *outResult = DeformableSurfaceEditReplayResult{};
+
+    if(!__hidden_deformable_surface_edit::ValidSurfaceEditState(state)
+        || !__hidden_deformable_surface_edit::ValidateRuntimePayload(instance)
+        || instance.editRevision != 0u
+        || !__hidden_deformable_surface_edit::ReplayContextTargetsInstance(instance, context)
+    )
+        return false;
+
+    DeformableRuntimeMeshInstance replayInstance = instance;
+    DeformableSurfaceEditReplayResult result;
+    for(const DeformableSurfaceEditRecord& record : state.edits){
+        bool replayedRecord = false;
+        DeformableHoleEditResult replayResult;
+        const usize triangleCount = replayInstance.indices.size() / 3u;
+        for(usize triangle = 0u; triangle < triangleCount; ++triangle){
+            DeformableHoleEditParams params;
+            if(!__hidden_deformable_surface_edit::BuildReplayHoleParams(replayInstance, record, triangle, params))
+                continue;
+
+            DeformableRuntimeMeshInstance candidateInstance = replayInstance;
+            DeformableHoleEditResult candidateResult;
+            if(!__hidden_deformable_surface_edit::CommitDeformableRestSpaceHoleImpl(
+                    candidateInstance,
+                    params,
+                    false,
+                    &candidateResult
+                )
+                || !__hidden_deformable_surface_edit::ReplayResultMatchesStoredRecord(candidateResult, record)
+                || !__hidden_deformable_surface_edit::RuntimeMeshHasWallTrianglePairs(candidateInstance, candidateResult)
+            )
+                continue;
+
+            replayInstance = Move(candidateInstance);
+            replayResult = candidateResult;
+            replayedRecord = true;
+            break;
+        }
+        if(!replayedRecord)
+            return false;
+
+        ++result.appliedEditCount;
+        result.topologyChanged = result.topologyChanged
+            || replayResult.removedTriangleCount != 0u
+            || replayResult.addedTriangleCount != 0u
+            || replayResult.addedVertexCount != 0u
+        ;
+    }
+    result.finalEditRevision = replayInstance.editRevision;
+
+    if(!__hidden_deformable_surface_edit::ValidateReplayAccessories(replayInstance, state, context))
+        return false;
+    if(!__hidden_deformable_surface_edit::ValidateReplayAccessoryAssets(state, context))
+        return false;
+
+    instance = Move(replayInstance);
+    __hidden_deformable_surface_edit::RestoreReplayAccessories(
+        instance,
+        state,
+        context,
+        result.restoredAccessoryCount
+    );
+    if(outResult)
+        *outResult = result;
     return true;
 }
 

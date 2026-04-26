@@ -41,10 +41,18 @@ struct DeformerPushConstants{
     u32 deformedScalarStride = 0;
     u32 skinCount = 0;
     u32 jointCount = 0;
-    f32 displacementAmplitude = 0.0f;
     u32 displacementMode = DeformableDisplacementMode::None;
+    u32 padding0 = 0;
+    f32 displacementAmplitude = 0.0f;
+    f32 displacementBias = 0.0f;
+    f32 displacementUvScaleX = 1.0f;
+    f32 displacementUvScaleY = 1.0f;
+    f32 displacementUvOffsetX = 0.0f;
+    f32 displacementUvOffsetY = 0.0f;
+    u32 padding1 = 0;
+    u32 padding2 = 0;
 };
-static_assert(sizeof(DeformerPushConstants) == 32, "Deformer push constants layout must stay shader-compatible");
+static_assert(sizeof(DeformerPushConstants) == 64, "Deformer push constants layout must stay shader-compatible");
 
 static const Name& DeformerComputeShaderName(){
     static const Name s("engine/graphics/deformer_cs");
@@ -378,6 +386,49 @@ static Core::BufferHandle SetupStructuredBuffer(
     return graphics.setupBuffer(setup);
 }
 
+[[nodiscard]] bool DisplacementModeUsesTexture(const u32 mode){
+    return mode == DeformableDisplacementMode::ScalarTexture
+        || mode == DeformableDisplacementMode::VectorTangentTexture
+        || mode == DeformableDisplacementMode::VectorObjectTexture
+    ;
+}
+
+[[nodiscard]] Core::TextureHandle SetupDisplacementTexture(
+    Core::Graphics& graphics,
+    const Name& debugName,
+    const u32 width,
+    const u32 height,
+    const Float4U* texels,
+    const usize texelCount)
+{
+    if(width == 0u || height == 0u || !texels || texelCount == 0u)
+        return {};
+    usize uploadBytes = 0u;
+    if(!BufferPayloadBytes(texelCount, sizeof(Float4U), uploadBytes, NWB_TEXT("displacement texture")))
+        return {};
+
+    const usize rowPitch = static_cast<usize>(width) * sizeof(Float4U);
+    if(height > Limit<usize>::s_Max / rowPitch)
+        return {};
+
+    Core::Graphics::TextureSetupDesc setup;
+    setup.textureDesc
+        .setWidth(width)
+        .setHeight(height)
+        .setDepth(1u)
+        .setArraySize(1u)
+        .setMipLevels(1u)
+        .setFormat(Core::Format::RGBA32_FLOAT)
+        .setDimension(Core::TextureDimension::Texture2D)
+        .setName(debugName)
+    ;
+    setup.data = texels;
+    setup.uploadDataSize = uploadBytes;
+    setup.rowPitch = rowPitch;
+    setup.depthPitch = rowPitch * static_cast<usize>(height);
+    return graphics.setupTexture(setup);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -543,6 +594,8 @@ bool DeformerSystem::ensurePipeline(){
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(3, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(4, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(5, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(6, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Sampler(7, 1));
         bindingLayoutDesc.addItem(
             Core::BindingLayoutItem::PushConstants(
                 0,
@@ -747,6 +800,7 @@ bool DeformerSystem::dispatchRuntimeMesh(
     if(!ensureRuntimeResources(
         instance,
         payloadViews,
+        resolvedDisplacement,
         hasDisplacement,
         morphSignature,
         resources
@@ -758,6 +812,7 @@ bool DeformerSystem::dispatchRuntimeMesh(
         || !resources->morphDeltaBuffer
         || !resources->skinBuffer
         || !resources->jointPaletteBuffer
+        || !resources->displacementTexture
     )
         return false;
 
@@ -799,6 +854,7 @@ bool DeformerSystem::dispatchRuntimeMesh(
     commandList.setBufferState(resources->morphDeltaBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.setBufferState(resources->skinBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.setBufferState(resources->jointPaletteBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.setTextureState(resources->displacementTexture.get(), Core::s_AllSubresources, Core::ResourceStates::ShaderResource);
     commandList.commitBarriers();
 
     Core::ComputeState computeState;
@@ -815,6 +871,11 @@ bool DeformerSystem::dispatchRuntimeMesh(
     pushConstants.jointCount = static_cast<u32>(jointMatrices.size());
     pushConstants.displacementAmplitude = hasDisplacement ? resolvedDisplacement.amplitude : 0.0f;
     pushConstants.displacementMode = hasDisplacement ? resolvedDisplacement.mode : DeformableDisplacementMode::None;
+    pushConstants.displacementBias = hasDisplacement ? resolvedDisplacement.bias : 0.0f;
+    pushConstants.displacementUvScaleX = hasDisplacement ? resolvedDisplacement.uvScale.x : 1.0f;
+    pushConstants.displacementUvScaleY = hasDisplacement ? resolvedDisplacement.uvScale.y : 1.0f;
+    pushConstants.displacementUvOffsetX = hasDisplacement ? resolvedDisplacement.uvOffset.x : 0.0f;
+    pushConstants.displacementUvOffsetY = hasDisplacement ? resolvedDisplacement.uvOffset.y : 0.0f;
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
     commandList.dispatch(__hidden_deformer_system::DispatchGroupCount(pushConstants.vertexCount), 1, 1);
 
@@ -853,6 +914,7 @@ bool DeformerSystem::copyRestToDeformed(Core::ICommandList& commandList, Deforma
 bool DeformerSystem::ensureRuntimeResources(
     DeformableRuntimeMeshInstance& instance,
     const RuntimePayloadViews& payloadViews,
+    const DeformableDisplacement& displacement,
     const bool hasDisplacement,
     const usize morphSignature,
     RuntimeResources*& outResources)
@@ -877,6 +939,10 @@ bool DeformerSystem::ensureRuntimeResources(
     const bool hasActiveSkin = payloadViews.hasActiveSkin();
     if(!hasActiveMorphs && !hasActiveSkin && !hasDisplacement)
         return false;
+    const bool hasTextureDisplacement = hasDisplacement
+        && __hidden_deformer_system::DisplacementModeUsesTexture(displacement.mode)
+    ;
+    const Name displacementTextureName = hasTextureDisplacement ? displacement.texture.name() : NAME_NONE;
 
     if((hasActiveMorphs && (!payloadViews.morphRanges || !payloadViews.morphDeltas))
         || (hasActiveSkin && (!payloadViews.skinInfluences || !payloadViews.jointPalette))
@@ -887,7 +953,7 @@ bool DeformerSystem::ensureRuntimeResources(
         );
         return false;
     }
-    if(!ensureDefaultDeformerBuffers())
+    if(!ensureDefaultDeformerBuffers() || !ensureDefaultDisplacementResources())
         return false;
 
     if(payloadViews.morphRangeCount > static_cast<usize>(Limit<u32>::s_Max)
@@ -913,10 +979,12 @@ bool DeformerSystem::ensureRuntimeResources(
         || resources.skinCount != static_cast<u32>(payloadViews.skinInfluenceCount)
         || resources.jointCount != static_cast<u32>(payloadViews.jointPaletteCount)
         || resources.morphSignature != morphSignature
+        || resources.displacementTextureName != displacementTextureName
         || !resources.morphRangeBuffer
         || !resources.morphDeltaBuffer
         || !resources.skinBuffer
         || !resources.jointPaletteBuffer
+        || !resources.displacementTexture
         || !resources.bindingSet
     ;
     if(!rebuild){
@@ -959,6 +1027,7 @@ bool DeformerSystem::ensureRuntimeResources(
     rebuilt.skinCount = static_cast<u32>(payloadViews.skinInfluenceCount);
     rebuilt.jointCount = static_cast<u32>(payloadViews.jointPaletteCount);
     rebuilt.morphSignature = morphSignature;
+    rebuilt.displacementTextureName = displacementTextureName;
 
     rebuilt.morphRangeBuffer = hasActiveMorphs
         ? __hidden_deformer_system::SetupStructuredBuffer(
@@ -1032,6 +1101,27 @@ bool DeformerSystem::ensureRuntimeResources(
         return false;
     }
 
+    if(hasTextureDisplacement){
+        if(!ensureDisplacementTexture(displacement, rebuilt.displacementTexture)){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("DeformerSystem: failed to load displacement texture '{}' for runtime mesh '{}'"),
+                StringConvert(displacement.texture.name().c_str()),
+                instance.handle.value
+            );
+            return false;
+        }
+    }
+    else{
+        rebuilt.displacementTexture = m_defaultDisplacementTexture;
+    }
+    if(!rebuilt.displacementTexture){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("DeformerSystem: failed to resolve displacement texture resource for runtime mesh '{}'"),
+            instance.handle.value
+        );
+        return false;
+    }
+
     Core::BindingSetDesc bindingSetDesc;
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(0, instance.restVertexBuffer.get()));
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(1, instance.deformedVertexBuffer.get()));
@@ -1039,6 +1129,8 @@ bool DeformerSystem::ensureRuntimeResources(
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(3, rebuilt.morphDeltaBuffer.get()));
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(4, rebuilt.skinBuffer.get()));
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(5, rebuilt.jointPaletteBuffer.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(6, rebuilt.displacementTexture.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::Sampler(7, m_displacementSampler.get()));
 
     Core::IDevice* device = m_graphics.getDevice();
     rebuilt.bindingSet = device->createBindingSet(bindingSetDesc, m_bindingLayout.get());
@@ -1125,6 +1217,86 @@ bool DeformerSystem::ensureDefaultDeformerBuffers(){
     }
 
     return true;
+}
+
+bool DeformerSystem::ensureDefaultDisplacementResources(){
+    Core::IDevice* device = m_graphics.getDevice();
+
+    if(!m_displacementSampler){
+        Core::SamplerDesc samplerDesc;
+        samplerDesc
+            .setAllFilters(false)
+            .setAllAddressModes(Core::SamplerAddressMode::Clamp)
+        ;
+        m_displacementSampler = device->createSampler(samplerDesc);
+        if(!m_displacementSampler){
+            NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: failed to create displacement sampler"));
+            return false;
+        }
+    }
+
+    if(!m_defaultDisplacementTexture){
+        const Float4U defaultTexel(0.0f, 0.0f, 0.0f, 0.0f);
+        m_defaultDisplacementTexture = __hidden_deformer_system::SetupDisplacementTexture(
+            m_graphics,
+            Name("engine/graphics/deformer_default_displacement_texture"),
+            1u,
+            1u,
+            &defaultTexel,
+            1u
+        );
+        if(!m_defaultDisplacementTexture){
+            NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: failed to create default displacement texture"));
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool DeformerSystem::ensureDisplacementTexture(
+    const DeformableDisplacement& displacement,
+    Core::TextureHandle& outTexture)
+{
+    outTexture = nullptr;
+    if(!__hidden_deformer_system::DisplacementModeUsesTexture(displacement.mode)){
+        outTexture = m_defaultDisplacementTexture;
+        return static_cast<bool>(outTexture);
+    }
+    if(!displacement.texture.valid()){
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: displacement texture asset ref is empty"));
+        return false;
+    }
+
+    UniquePtr<Core::Assets::IAsset> loadedAsset;
+    if(!m_assetManager.loadSync(DeformableDisplacementTexture::AssetTypeName(), displacement.texture.name(), loadedAsset)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("DeformerSystem: failed to load displacement texture asset '{}'"),
+            StringConvert(displacement.texture.name().c_str())
+        );
+        return false;
+    }
+    if(!loadedAsset || loadedAsset->assetType() != DeformableDisplacementTexture::AssetTypeName()){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("DeformerSystem: asset '{}' is not a deformable displacement texture"),
+            StringConvert(displacement.texture.name().c_str())
+        );
+        return false;
+    }
+
+    const DeformableDisplacementTexture& textureAsset = static_cast<const DeformableDisplacementTexture&>(*loadedAsset);
+    if(!textureAsset.validatePayload())
+        return false;
+
+    outTexture = __hidden_deformer_system::SetupDisplacementTexture(
+        m_graphics,
+        textureAsset.virtualPath(),
+        textureAsset.width(),
+        textureAsset.height(),
+        textureAsset.texels().data(),
+        textureAsset.texels().size()
+    );
+    return static_cast<bool>(outTexture);
 }
 
 

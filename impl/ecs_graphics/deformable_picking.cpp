@@ -234,16 +234,143 @@ template<typename VertexVector>
     return true;
 }
 
-void ApplyDisplacement(const DeformableDisplacement& displacement, DeformableVertexRest& vertex){
-    if(displacement.mode != DeformableDisplacementMode::ScalarUvRamp)
+[[nodiscard]] bool DisplacementModeUsesTexture(const u32 mode){
+    return mode == DeformableDisplacementMode::ScalarTexture
+        || mode == DeformableDisplacementMode::VectorTangentTexture
+        || mode == DeformableDisplacementMode::VectorObjectTexture
+    ;
+}
+
+[[nodiscard]] bool ValidateDisplacementTexture(
+    const DeformableDisplacement& displacement,
+    const DeformableDisplacementTexture* texture)
+{
+    if(!DisplacementModeUsesTexture(displacement.mode))
+        return true;
+    return texture
+        && texture->virtualPath() == displacement.texture.name()
+        && texture->validatePayload()
+    ;
+}
+
+[[nodiscard]] bool ResolvePickingDisplacementTexture(
+    const DeformableDisplacement& displacement,
+    Core::Assets::AssetManager* assetManager,
+    const DeformableDisplacementTexture* inputTexture,
+    UniquePtr<Core::Assets::IAsset>& outLoadedAsset,
+    const DeformableDisplacementTexture*& outTexture)
+{
+    outLoadedAsset.reset();
+    outTexture = inputTexture;
+    if(!DisplacementModeUsesTexture(displacement.mode))
+        return true;
+    if(ValidateDisplacementTexture(displacement, outTexture))
+        return true;
+    if(!assetManager)
+        return false;
+
+    UniquePtr<Core::Assets::IAsset> loadedAsset;
+    if(!assetManager->loadSync(DeformableDisplacementTexture::AssetTypeName(), displacement.texture.name(), loadedAsset))
+        return false;
+    if(!loadedAsset || loadedAsset->assetType() != DeformableDisplacementTexture::AssetTypeName())
+        return false;
+
+    outLoadedAsset = Move(loadedAsset);
+    outTexture = static_cast<const DeformableDisplacementTexture*>(outLoadedAsset.get());
+    return ValidateDisplacementTexture(displacement, outTexture);
+}
+
+[[nodiscard]] u32 SampleCoordinate(const f32 value, const u32 size){
+    if(size <= 1u)
+        return 0u;
+
+    const f32 scaled = Saturate(value) * static_cast<f32>(size - 1u);
+    const f32 rounded = Floor(scaled + 0.5f);
+    return static_cast<u32>(Min(rounded, static_cast<f32>(size - 1u)));
+}
+
+[[nodiscard]] Float4U SampleDisplacementTexture(
+    const DeformableDisplacement& displacement,
+    const DeformableDisplacementTexture& texture,
+    const Float2U& uv)
+{
+    const f32 u = (uv.x * displacement.uvScale.x) + displacement.uvOffset.x;
+    const f32 v = (uv.y * displacement.uvScale.y) + displacement.uvOffset.y;
+    const u32 x = SampleCoordinate(u, texture.width());
+    const u32 y = SampleCoordinate(v, texture.height());
+    const usize texelIndex = static_cast<usize>(y) * static_cast<usize>(texture.width()) + static_cast<usize>(x);
+    return texture.texels()[texelIndex];
+}
+
+void ApplyDisplacement(
+    const DeformableDisplacement& displacement,
+    const DeformableDisplacementTexture* texture,
+    DeformableVertexRest& vertex)
+{
+    if(displacement.mode == DeformableDisplacementMode::None)
         return;
 
-    const f32 offset = Saturate(vertex.uv0.x) * displacement.amplitude;
-    if(!DeformableValidation::ActiveWeight(offset))
+    f32 scalarOffset = 0.0f;
+    SIMDVector vectorOffset = VectorZero();
+    if(displacement.mode == DeformableDisplacementMode::ScalarUvRamp){
+        scalarOffset = Saturate(vertex.uv0.x) * displacement.amplitude;
+    }
+    else{
+        if(!texture)
+            return;
+
+        const Float4U sample = SampleDisplacementTexture(displacement, *texture, vertex.uv0);
+        if(displacement.mode == DeformableDisplacementMode::ScalarTexture){
+            scalarOffset = (sample.x + displacement.bias) * displacement.amplitude;
+        }
+        else{
+            const SIMDVector sampleVector = VectorAdd(
+                VectorSet(sample.x, sample.y, sample.z, 0.0f),
+                VectorReplicate(displacement.bias)
+            );
+            vectorOffset = VectorMultiply(sampleVector, VectorReplicate(displacement.amplitude));
+        }
+    }
+
+    if(displacement.mode == DeformableDisplacementMode::ScalarUvRamp
+        || displacement.mode == DeformableDisplacementMode::ScalarTexture
+    ){
+        if(!DeformableValidation::ActiveWeight(scalarOffset))
+            return;
+
+        StoreFloat(
+            VectorMultiplyAdd(LoadFloat(vertex.normal), VectorReplicate(scalarOffset), LoadFloat(vertex.position)),
+            &vertex.position
+        );
         return;
+    }
+
+    if(!DeformableValidation::FiniteVector(vectorOffset, 0x7u)
+        || !DeformableValidation::ActiveWeight(VectorGetX(Vector3LengthSq(vectorOffset)))
+    )
+        return;
+
+    SIMDVector worldOffset = vectorOffset;
+    if(displacement.mode == DeformableDisplacementMode::VectorTangentTexture){
+        const SIMDVector normal = LoadFloat(vertex.normal);
+        const SIMDVector tangent = LoadFloat(vertex.tangent);
+        const SIMDVector bitangent = VectorMultiply(
+            ResolveFrameBitangent(normal, tangent, VectorSet(0.0f, 1.0f, 0.0f, 0.0f)),
+            VectorReplicate(TangentHandedness(vertex.tangent.w, 1.0f))
+        );
+        worldOffset = VectorMultiplyAdd(
+            normal,
+            VectorReplicate(VectorGetZ(vectorOffset)),
+            VectorMultiplyAdd(
+                bitangent,
+                VectorReplicate(VectorGetY(vectorOffset)),
+                VectorMultiply(tangent, VectorReplicate(VectorGetX(vectorOffset)))
+            )
+        );
+    }
 
     StoreFloat(
-        VectorMultiplyAdd(LoadFloat(vertex.normal), VectorReplicate(offset), LoadFloat(vertex.position)),
+        VectorAdd(LoadFloat(vertex.position), worldOffset),
         &vertex.position
     );
 }
@@ -337,6 +464,17 @@ template<typename VertexVector>
     DeformableDisplacement displacement;
     if(!DeformableRuntime::ResolveEffectiveDisplacement(instance.displacement, inputs.displacement, displacement))
         return false;
+    UniquePtr<Core::Assets::IAsset> loadedDisplacementTextureAsset;
+    const DeformableDisplacementTexture* displacementTexture = nullptr;
+    if(!__hidden_deformable_picking::ResolvePickingDisplacementTexture(
+            displacement,
+            inputs.assetManager,
+            inputs.displacementTexture,
+            loadedDisplacementTextureAsset,
+            displacementTexture
+        )
+    )
+        return false;
     if(!__hidden_deformable_picking::ValidateJointPalette(instance, inputs.jointPalette))
         return false;
 
@@ -364,7 +502,7 @@ template<typename VertexVector>
             return false;
         __hidden_deformable_picking::OrthonormalizeVertexFrame(vertex, preSkinNormal, preSkinTangent);
 
-        __hidden_deformable_picking::ApplyDisplacement(displacement, vertex);
+        __hidden_deformable_picking::ApplyDisplacement(displacement, displacementTexture, vertex);
         __hidden_deformable_picking::ApplyTransform(inputs.transform, vertex);
         if(!DeformableValidation::ValidRestVertexFrame(vertex))
             return false;
@@ -563,7 +701,8 @@ bool RaycastVisibleDeformableRenderers(
     Core::ECS::World& world,
     const RendererSystem& rendererSystem,
     const DeformablePickingRay& ray,
-    DeformablePosedHit& outHit)
+    DeformablePosedHit& outHit,
+    Core::Assets::AssetManager* assetManager)
 {
     outHit = DeformablePosedHit{};
     bool foundHit = false;
@@ -585,6 +724,7 @@ bool RaycastVisibleDeformableRenderers(
                 return;
 
             DeformablePickingInputs inputs;
+            inputs.assetManager = assetManager;
             inputs.morphWeights = world.tryGetComponent<DeformableMorphWeightsComponent>(entity);
             inputs.jointPalette = world.tryGetComponent<DeformableJointPaletteComponent>(entity);
             inputs.displacement = world.tryGetComponent<DeformableDisplacementComponent>(entity);

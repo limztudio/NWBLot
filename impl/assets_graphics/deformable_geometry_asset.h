@@ -8,6 +8,7 @@
 #include "../global.h"
 
 #include <core/assets/asset.h>
+#include <core/assets/asset_ref.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -48,26 +49,80 @@ namespace DeformableDisplacementMode{
     enum Enum : u32{
         None = 0,
         ScalarUvRamp = 1,
+        ScalarTexture = 2,
+        VectorTangentTexture = 3,
+        VectorObjectTexture = 4,
+        PoseDrivenScalar = 5,
+        PoseDrivenVector = 6,
     };
 };
 
+class DeformableDisplacementTexture final : public Core::Assets::TypedAsset<DeformableDisplacementTexture>{
+public:
+    NWB_DEFINE_ASSET_TYPE("deformable_displacement_texture")
+
+
+public:
+    DeformableDisplacementTexture() = default;
+    explicit DeformableDisplacementTexture(const Name& virtualPath)
+        : Core::Assets::TypedAsset<DeformableDisplacementTexture>(virtualPath)
+    {}
+
+
+public:
+    bool loadBinary(const Core::Assets::AssetBytes& binary);
+    [[nodiscard]] bool validatePayload()const;
+
+public:
+    void setSize(u32 width, u32 height);
+    void setTexels(Vector<Float4U>&& texels){ m_texels = Move(texels); }
+
+    [[nodiscard]] u32 width()const{ return m_width; }
+    [[nodiscard]] u32 height()const{ return m_height; }
+    [[nodiscard]] const Vector<Float4U>& texels()const{ return m_texels; }
+
+
+private:
+    u32 m_width = 0;
+    u32 m_height = 0;
+    Vector<Float4U> m_texels;
+};
+
 struct DeformableDisplacement{
+    Core::Assets::AssetRef<DeformableDisplacementTexture> texture;
     u32 mode = DeformableDisplacementMode::None;
     f32 amplitude = 0.0f;
-    u32 padding0 = 0;
-    u32 padding1 = 0;
+    f32 bias = 0.0f;
+    Float2U uvScale = Float2U(1.0f, 1.0f);
+    Float2U uvOffset = Float2U(0.0f, 0.0f);
 };
-static_assert(IsStandardLayout_V<DeformableDisplacement>, "DeformableDisplacement must stay binary-serializable");
-static_assert(IsTriviallyCopyable_V<DeformableDisplacement>, "DeformableDisplacement must stay binary-serializable");
-static_assert(sizeof(DeformableDisplacement) == sizeof(f32) * 4u, "DeformableDisplacement binary layout drifted");
+static_assert(IsStandardLayout_V<DeformableDisplacement>, "DeformableDisplacement must stay layout-stable");
+static_assert(IsTriviallyCopyable_V<DeformableDisplacement>, "DeformableDisplacement must stay cheap to copy");
 
 [[nodiscard]] inline bool ValidDeformableDisplacementDescriptor(const DeformableDisplacement& displacement){
-    if(displacement.padding0 != 0u || displacement.padding1 != 0u)
+    if(!IsFinite(displacement.amplitude)
+        || !IsFinite(displacement.bias)
+        || !IsFinite(displacement.uvScale.x)
+        || !IsFinite(displacement.uvScale.y)
+        || !IsFinite(displacement.uvOffset.x)
+        || !IsFinite(displacement.uvOffset.y)
+    )
         return false;
-    if(displacement.mode == DeformableDisplacementMode::None)
-        return IsFinite(displacement.amplitude) && displacement.amplitude == 0.0f;
+
+    if(displacement.mode == DeformableDisplacementMode::None){
+        return displacement.amplitude == 0.0f
+            && displacement.bias == 0.0f
+            && !displacement.texture.valid()
+        ;
+    }
     if(displacement.mode == DeformableDisplacementMode::ScalarUvRamp)
-        return IsFinite(displacement.amplitude);
+        return !displacement.texture.valid() && displacement.bias == 0.0f;
+    if(displacement.mode == DeformableDisplacementMode::ScalarTexture
+        || displacement.mode == DeformableDisplacementMode::VectorTangentTexture
+        || displacement.mode == DeformableDisplacementMode::VectorObjectTexture
+    )
+        return displacement.texture.valid();
+
     return false;
 }
 
@@ -137,6 +192,21 @@ private:
 class DeformableGeometryAssetCodec final : public Core::Assets::TypedAssetCodec<DeformableGeometry>{
 public:
     DeformableGeometryAssetCodec() = default;
+
+public:
+    virtual bool deserialize(
+        const Name& virtualPath,
+        const Core::Assets::AssetBytes& binary,
+        UniquePtr<Core::Assets::IAsset>& outAsset
+    )const override;
+#if defined(NWB_COOK)
+    virtual bool serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const override;
+#endif
+};
+
+class DeformableDisplacementTextureAssetCodec final : public Core::Assets::TypedAssetCodec<DeformableDisplacementTexture>{
+public:
+    DeformableDisplacementTextureAssetCodec() = default;
 
 public:
     virtual bool deserialize(

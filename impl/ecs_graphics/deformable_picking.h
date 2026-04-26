@@ -66,9 +66,11 @@ static_assert(sizeof(DeformablePickingRay) == sizeof(Float4) * 2u, "DeformablePi
 static_assert(alignof(DeformablePickingRay) >= alignof(Float4), "DeformablePickingRay must stay SIMD-aligned");
 
 struct DeformablePickingInputs{
+    Core::Assets::AssetManager* assetManager = nullptr;
     const DeformableMorphWeightsComponent* morphWeights = nullptr;
     const DeformableJointPaletteComponent* jointPalette = nullptr;
     const DeformableDisplacementComponent* displacement = nullptr;
+    const DeformableDisplacementTexture* displacementTexture = nullptr;
     const Core::Scene::TransformComponent* transform = nullptr;
 };
 
@@ -173,7 +175,8 @@ static_assert(
     Core::ECS::World& world,
     const RendererSystem& rendererSystem,
     const DeformablePickingRay& ray,
-    DeformablePosedHit& outHit
+    DeformablePosedHit& outHit,
+    Core::Assets::AssetManager* assetManager = nullptr
 );
 
 

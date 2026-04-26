@@ -144,6 +144,12 @@ struct DeformableGeometryEntry{
     Vector<DeformableMorph> morphs;
     bool use32BitIndices = true;
 };
+struct DeformableDisplacementTextureEntry{
+    Name virtualPath = NAME_NONE;
+    u32 width = 0;
+    u32 height = 0;
+    Vector<Float4U> texels;
+};
 struct MaterialEntry{
     Name virtualPath = NAME_NONE;
     AString shaderVariant = Core::ShaderArchive::s_DefaultVariant;
@@ -188,6 +194,7 @@ struct ParsedAssetMetadata{
     ShaderEntryVector shaderEntries;
     Vector<GeometryEntry> geometryEntries;
     Vector<DeformableGeometryEntry> deformableGeometryEntries;
+    Vector<DeformableDisplacementTextureEntry> deformableDisplacementTextureEntries;
     Vector<MaterialEntry> materialEntries;
 
     explicit ParsedAssetMetadata(Core::ShaderCook::CookArena& arena)
@@ -1387,6 +1394,37 @@ static bool ParseRequiredStringField(
     return true;
 }
 
+static bool ParseOptionalFiniteF32Field(
+    const Path& nwbFilePath,
+    const Core::Metascript::Value& map,
+    const AStringView fieldName,
+    f32& outValue)
+{
+    const Core::Metascript::Value* field = FindField(map, fieldName);
+    if(!field)
+        return true;
+
+    return ParseFiniteF32Value(nwbFilePath, *field, fieldName, outValue);
+}
+
+static bool ParseOptionalFloat2Field(
+    const Path& nwbFilePath,
+    const Core::Metascript::Value& map,
+    const AStringView fieldName,
+    Float2U& outValue)
+{
+    const Core::Metascript::Value* field = FindField(map, fieldName);
+    if(!field)
+        return true;
+
+    f32 tuple[2] = {};
+    if(!ParseF32Tuple(nwbFilePath, *field, fieldName, tuple))
+        return false;
+
+    outValue = Float2U(tuple[0], tuple[1]);
+    return true;
+}
+
 static bool ParseDisplacement(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
@@ -1424,16 +1462,47 @@ static bool ParseDisplacement(
     if(!amplitude || !ParseFiniteF32Value(nwbFilePath, *amplitude, "displacement.amplitude", outDisplacement.amplitude))
         return false;
 
-    if(space != "tangent" || mode != "scalar" || field != "uv_ramp"){
+    if(!ParseOptionalFiniteF32Field(nwbFilePath, *displacement, "bias", outDisplacement.bias)
+        || !ParseOptionalFloat2Field(nwbFilePath, *displacement, "uv_scale", outDisplacement.uvScale)
+        || !ParseOptionalFloat2Field(nwbFilePath, *displacement, "uv_offset", outDisplacement.uvOffset)
+    )
+        return false;
+
+    if(space == "tangent" && mode == "scalar" && field == "uv_ramp"){
+        outDisplacement.mode = DeformableDisplacementMode::ScalarUvRamp;
+        return ValidDeformableDisplacementDescriptor(outDisplacement);
+    }
+
+    if(field != "texture"){
         NWB_LOGGER_ERROR(
-            NWB_TEXT("Deformable geometry meta '{}': displacement supports only space='tangent', mode='scalar', field='uv_ramp'"),
+            NWB_TEXT("Deformable geometry meta '{}': displacement field must be 'uv_ramp' or 'texture'"),
             PathToString<tchar>(nwbFilePath)
         );
         return false;
     }
 
-    outDisplacement.mode = DeformableDisplacementMode::ScalarUvRamp;
-    return true;
+    AString texturePath;
+    if(!ParseRequiredStringField(nwbFilePath, *displacement, "texture", texturePath))
+        return false;
+
+    outDisplacement.texture.virtualPath = ToName(texturePath);
+    if(space == "tangent" && mode == "scalar")
+        outDisplacement.mode = DeformableDisplacementMode::ScalarTexture;
+    else if(space == "tangent" && mode == "vector")
+        outDisplacement.mode = DeformableDisplacementMode::VectorTangentTexture;
+    else if(space == "object" && mode == "vector")
+        outDisplacement.mode = DeformableDisplacementMode::VectorObjectTexture;
+    else{
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Deformable geometry meta '{}': unsupported displacement texture space='{}' mode='{}'"),
+            PathToString<tchar>(nwbFilePath),
+            StringConvert(space),
+            StringConvert(mode)
+        );
+        return false;
+    }
+
+    return ValidDeformableDisplacementDescriptor(outDisplacement);
 }
 
 static bool ParseMorphs(
@@ -1581,6 +1650,58 @@ static bool ParseDeformableGeometryMeta(
         return false;
     if(!ParseMorphs(discoveredFile.filePath, asset, outEntry.morphs))
         return false;
+
+    return true;
+}
+
+static bool ParseDeformableDisplacementTextureMeta(
+    const DiscoveredNwbFile& discoveredFile,
+    const Core::Metascript::Document& doc,
+    DeformableDisplacementTextureEntry& outEntry
+){
+    outEntry = {};
+
+    const Core::Metascript::Value& asset = doc.asset();
+    if(!asset.isMap()){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Deformable displacement texture meta '{}': asset is not a map"),
+            PathToString<tchar>(discoveredFile.filePath)
+        );
+        return false;
+    }
+
+    if(!Core::Assets::RejectVirtualPathOverrideField(discoveredFile.filePath, asset, "DeformableDisplacementTexture"))
+        return false;
+    if(!Core::Assets::BuildDerivedAssetVirtualPath(
+        discoveredFile.assetRoot,
+        discoveredFile.virtualRoot,
+        discoveredFile.filePath,
+        outEntry.virtualPath
+    ))
+        return false;
+
+    const Core::Metascript::Value* width = FindField(asset, "width");
+    const Core::Metascript::Value* height = FindField(asset, "height");
+    if(!width || !ParseU32Value(discoveredFile.filePath, *width, "width", outEntry.width))
+        return false;
+    if(!height || !ParseU32Value(discoveredFile.filePath, *height, "height", outEntry.height))
+        return false;
+    if(!ParseFloatListField<Float4U, 4u>(discoveredFile.filePath, asset, "texels", outEntry.texels))
+        return false;
+    if(outEntry.width == 0u || outEntry.height == 0u || outEntry.width > Limit<u32>::s_Max / outEntry.height){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Deformable displacement texture meta '{}': dimensions are invalid"),
+            PathToString<tchar>(discoveredFile.filePath)
+        );
+        return false;
+    }
+    if(outEntry.texels.size() != static_cast<usize>(outEntry.width) * static_cast<usize>(outEntry.height)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Deformable displacement texture meta '{}': texel count must match width * height"),
+            PathToString<tchar>(discoveredFile.filePath)
+        );
+        return false;
+    }
 
     return true;
 }
@@ -2193,6 +2314,20 @@ static bool ParseAssetMetadata(
             continue;
         }
 
+        if(assetType == DeformableDisplacementTexture::AssetTypeName()){
+            DeformableDisplacementTextureEntry textureEntry;
+            if(!ParseDeformableDisplacementTextureMeta(discoveredNwbFile, doc, textureEntry))
+                return false;
+
+            if(!AppendUniquePropertyAssetEntry(
+                textureEntry,
+                seenPropertyAssetPathHashes,
+                outMetadata.deformableDisplacementTextureEntries
+            ))
+                return false;
+            continue;
+        }
+
         NWB_LOGGER_ERROR(
             NWB_TEXT("ShaderAssetCooker: unsupported asset type '{}' in meta '{}'"),
             StringConvert(rawAssetTypeText),
@@ -2209,6 +2344,8 @@ static bool ParseAssetMetadata(
             return false;
         }
         if(!outMetadata.deformableGeometryEntries.empty())
+            return true;
+        if(!outMetadata.deformableDisplacementTextureEntries.empty())
             return true;
 
         NWB_LOGGER_ERROR(NWB_TEXT("ShaderAssetCooker: no shader entries found in asset roots"));
@@ -2614,6 +2751,48 @@ static bool AppendDeformableGeometryAssetsToVolume(
     return true;
 }
 
+static bool AppendDeformableDisplacementTexturesToVolume(
+    Vector<DeformableDisplacementTextureEntry>& textureEntries,
+    Core::Filesystem::VolumeSession& volumeSession,
+    VirtualPathHashSet& inOutSeenVirtualPathHashes
+){
+    DeformableDisplacementTextureAssetCodec textureCodec;
+    Vector<u8> textureBinary;
+
+    for(DeformableDisplacementTextureEntry& textureEntry : textureEntries){
+        const NameHash textureVirtualPathHash = textureEntry.virtualPath.hash();
+        if(!inOutSeenVirtualPathHashes.insert(textureVirtualPathHash).second){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("ShaderAssetCooker: duplicate deformable displacement texture virtual path '{}'"),
+                StringConvert(textureEntry.virtualPath.c_str())
+            );
+            return false;
+        }
+
+        DeformableDisplacementTexture texture(textureEntry.virtualPath);
+        texture.setSize(textureEntry.width, textureEntry.height);
+        texture.setTexels(Move(textureEntry.texels));
+
+        if(!textureCodec.serialize(texture, textureBinary)){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("ShaderAssetCooker: failed to serialize deformable displacement texture '{}'"),
+                StringConvert(textureEntry.virtualPath.c_str())
+            );
+            return false;
+        }
+
+        if(!volumeSession.pushDataDeferred(textureEntry.virtualPath, textureBinary)){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("ShaderAssetCooker: failed to push deformable displacement texture '{}'"),
+                StringConvert(textureEntry.virtualPath.c_str())
+            );
+            return false;
+        }
+    }
+
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -2694,6 +2873,11 @@ bool ShaderAssetCooker::cookShaderAssets(const ShaderCookEnvironment& environmen
         preparedPlan.plannedFileCount
     ))
         return false;
+    if(!__hidden_assets::AddPlannedFileCount(
+        static_cast<u64>(parsedMetadata.deformableDisplacementTextureEntries.size()),
+        preparedPlan.plannedFileCount
+    ))
+        return false;
 
     if(!__hidden_assets::ValidateAndNormalizeMaterials(shaderCook, preparedPlan.preparedEntries, parsedMetadata.materialEntries))
         return false;
@@ -2761,6 +2945,12 @@ bool ShaderAssetCooker::cookShaderAssets(const ShaderCookEnvironment& environmen
             return false;
         if(!__hidden_assets::AppendDeformableGeometryAssetsToVolume(
             parsedMetadata.deformableGeometryEntries,
+            volumeSession,
+            seenVirtualPathHashes
+        ))
+            return false;
+        if(!__hidden_assets::AppendDeformableDisplacementTexturesToVolume(
+            parsedMetadata.deformableDisplacementTextureEntries,
             volumeSession,
             seenVirtualPathHashes
         ))

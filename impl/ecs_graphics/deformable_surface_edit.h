@@ -82,6 +82,7 @@ namespace DeformableSurfaceEditRecordType{
 };
 
 struct DeformableSurfaceEditRecord{
+    DeformableSurfaceEditId editId = 0;
     DeformableSurfaceEditRecordType::Enum type = DeformableSurfaceEditRecordType::Hole;
     DeformableSurfaceHoleEditRecord hole;
     DeformableHoleEditResult result;
@@ -92,7 +93,9 @@ static_assert(IsTriviallyCopyable_V<DeformableSurfaceEditRecord>, "DeformableSur
 struct DeformableAccessoryAttachmentRecord{
     Core::Assets::AssetRef<Geometry> geometry;
     Core::Assets::AssetRef<Material> material;
-    u32 editRevision = 0;
+    CompactString geometryVirtualPathText;
+    CompactString materialVirtualPathText;
+    DeformableSurfaceEditId anchorEditId = 0;
     u32 firstWallVertex = Limit<u32>::s_Max;
     u32 wallVertexCount = 0;
     f32 normalOffset = 0.0f;
@@ -102,6 +105,19 @@ struct DeformableAccessoryAttachmentRecord{
 struct DeformableSurfaceEditState{
     Vector<DeformableSurfaceEditRecord> edits;
     Vector<DeformableAccessoryAttachmentRecord> accessories;
+};
+
+struct DeformableSurfaceEditReplayResult{
+    u32 appliedEditCount = 0;
+    u32 restoredAccessoryCount = 0;
+    u32 finalEditRevision = 0;
+    bool topologyChanged = false;
+};
+
+struct DeformableSurfaceEditReplayContext{
+    Core::Assets::AssetManager* assetManager = nullptr;
+    Core::ECS::World* world = nullptr;
+    Core::ECS::EntityID targetEntity = Core::ECS::ENTITY_ID_INVALID;
 };
 
 
@@ -146,6 +162,16 @@ struct DeformableSurfaceEditState{
 [[nodiscard]] bool DeserializeSurfaceEditState(
     const Core::Assets::AssetBytes& binary,
     DeformableSurfaceEditState& outState
+);
+[[nodiscard]] bool BuildSurfaceEditStateDebugDump(
+    const DeformableSurfaceEditState& state,
+    AString& outDump
+);
+[[nodiscard]] bool ApplySurfaceEditState(
+    DeformableRuntimeMeshInstance& instance,
+    const DeformableSurfaceEditState& state,
+    const DeformableSurfaceEditReplayContext& context,
+    DeformableSurfaceEditReplayResult* outResult = nullptr
 );
 [[nodiscard]] bool CommitDeformableRestSpaceHole(
     DeformableRuntimeMeshInstance& instance,

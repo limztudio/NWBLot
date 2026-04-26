@@ -831,6 +831,19 @@ static NWB::Impl::DeformableGeometry BuildValidDeformableGeometry(){
     return geometry;
 }
 
+static NWB::Impl::DeformableDisplacementTexture BuildValidDisplacementTexture(){
+    NWB::Impl::DeformableDisplacementTexture texture(Name("tests/textures/displacement_height"));
+    texture.setSize(2u, 2u);
+
+    Vector<Float4U> texels;
+    texels.push_back(Float4U(0.0f, 0.0f, 0.0f, 0.0f));
+    texels.push_back(Float4U(0.25f, 0.0f, 0.0f, 0.0f));
+    texels.push_back(Float4U(0.5f, 0.0f, 0.0f, 0.0f));
+    texels.push_back(Float4U(1.0f, 0.0f, 0.0f, 0.0f));
+    texture.setTexels(Move(texels));
+    return texture;
+}
+
 static NWB::Impl::DeformableGeometry BuildMinimalDeformableGeometry(){
     NWB::Impl::DeformableGeometry geometry(Name("tests/characters/minimal_deformable"));
 
@@ -847,6 +860,32 @@ static NWB::Impl::DeformableGeometry BuildMinimalDeformableGeometry(){
     geometry.setRestVertices(Move(vertices));
     geometry.setIndices(Move(indices));
     return geometry;
+}
+
+static void TestDeformableDisplacementTextureCodecRoundTrip(TestContext& context){
+    NWB::Impl::DeformableDisplacementTexture texture = BuildValidDisplacementTexture();
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, texture.validatePayload());
+
+    NWB::Impl::DeformableDisplacementTextureAssetCodec codec;
+    NWB::Core::Assets::AssetBytes binary;
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, codec.serialize(texture, binary));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !binary.empty());
+
+    UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, codec.deserialize(texture.virtualPath(), binary, loadedAsset));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, static_cast<bool>(loadedAsset));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(
+        context,
+        loadedAsset->assetType() == NWB::Impl::DeformableDisplacementTexture::AssetTypeName()
+    );
+
+    const NWB::Impl::DeformableDisplacementTexture& loadedTexture =
+        static_cast<const NWB::Impl::DeformableDisplacementTexture&>(*loadedAsset)
+    ;
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedTexture.width() == 2u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedTexture.height() == 2u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedTexture.texels().size() == 4u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedTexture.texels()[3].x == 1.0f);
 }
 
 static void TestDeformableGeometryCodecRoundTrip(TestContext& context){
@@ -881,6 +920,41 @@ static void TestDeformableGeometryCodecRoundTrip(TestContext& context){
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs()[0].deltas.size() == 2u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs()[0].deltas[1].vertexId == 2u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs()[0].deltas[1].deltaPosition.z == 0.5f);
+}
+
+static void TestDeformableGeometryCodecRoundTripsTextureDisplacement(TestContext& context){
+    NWB::Impl::DeformableGeometry geometry = BuildValidDeformableGeometry();
+    NWB::Impl::DeformableDisplacement displacement;
+    displacement.mode = NWB::Impl::DeformableDisplacementMode::ScalarTexture;
+    displacement.texture.virtualPath = Name("tests/textures/displacement_height");
+    displacement.amplitude = 0.5f;
+    displacement.bias = -0.25f;
+    displacement.uvScale = Float2U(2.0f, 3.0f);
+    displacement.uvOffset = Float2U(0.25f, 0.5f);
+    geometry.setDisplacement(displacement);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, geometry.validatePayload());
+
+    NWB::Impl::DeformableGeometryAssetCodec codec;
+    NWB::Core::Assets::AssetBytes binary;
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, codec.serialize(geometry, binary));
+
+    UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, codec.deserialize(geometry.virtualPath(), binary, loadedAsset));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, static_cast<bool>(loadedAsset));
+
+    const NWB::Impl::DeformableGeometry& loadedGeometry =
+        static_cast<const NWB::Impl::DeformableGeometry&>(*loadedAsset)
+    ;
+    const NWB::Impl::DeformableDisplacement& loadedDisplacement = loadedGeometry.displacement();
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(
+        context,
+        loadedDisplacement.mode == NWB::Impl::DeformableDisplacementMode::ScalarTexture
+    );
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedDisplacement.texture.name() == Name("tests/textures/displacement_height"));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedDisplacement.amplitude == 0.5f);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedDisplacement.bias == -0.25f);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedDisplacement.uvScale.x == 2.0f);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedDisplacement.uvOffset.y == 0.5f);
 }
 
 static void TestMinimalDeformableGeometryCodecRoundTrip(TestContext& context){
@@ -1416,7 +1490,9 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
     }
 
     __hidden_assets_graphics_tests::TestContext context;
+    __hidden_assets_graphics_tests::TestDeformableDisplacementTextureCodecRoundTrip(context);
     __hidden_assets_graphics_tests::TestDeformableGeometryCodecRoundTrip(context);
+    __hidden_assets_graphics_tests::TestDeformableGeometryCodecRoundTripsTextureDisplacement(context);
     __hidden_assets_graphics_tests::TestMinimalDeformableGeometryCodecRoundTrip(context);
     __hidden_assets_graphics_tests::TestDeformableGeometryCodecRejectsOldBinaryVersion(context);
     __hidden_assets_graphics_tests::TestDeformableGeometryCodecRejectsMalformedCounts(context);

@@ -61,6 +61,12 @@ struct RuntimeMeshHandle{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+using DeformableSurfaceEditId = u32;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 struct RendererComponent{
     Core::Assets::AssetRef<Geometry> geometry;
     Core::Assets::AssetRef<Material> material;
@@ -126,7 +132,7 @@ struct DeformableRendererComponent{
 struct alignas(Float4) DeformableAccessoryAttachmentComponent{
     Core::ECS::EntityID targetEntity = Core::ECS::ENTITY_ID_INVALID;
     RuntimeMeshHandle runtimeMesh;
-    u32 editRevision = 0;
+    DeformableSurfaceEditId anchorEditId = 0;
     u32 firstWallVertex = Limit<u32>::s_Max;
     u32 wallVertexCount = 0;
     // x = normal offset, y = uniform scale.

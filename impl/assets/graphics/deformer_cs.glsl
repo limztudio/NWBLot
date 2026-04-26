@@ -55,9 +55,14 @@ layout(std430, binding = 5) readonly buffer NwbDeformerJointPaletteBuffer{
     NwbDeformerJointMatrix nwbDeformerJointPalette[];
 };
 
+layout(binding = 6) uniform texture2D g_NwbDeformerDisplacementTexture;
+layout(binding = 7) uniform sampler g_NwbDeformerDisplacementSampler;
+
 layout(push_constant) uniform NwbDeformerPushConstants{
     uvec4 payload0;
     uvec4 payload1;
+    vec4 payload2;
+    vec4 payload3;
 } g_NwbDeformerPushConstants;
 
 uint nwbDeformerVertexCount(){
@@ -84,12 +89,24 @@ uint nwbDeformerJointCount(){
     return g_NwbDeformerPushConstants.payload1.y;
 }
 
-float nwbDeformerDisplacementAmplitude(){
-    return uintBitsToFloat(g_NwbDeformerPushConstants.payload1.z);
+uint nwbDeformerDisplacementMode(){
+    return g_NwbDeformerPushConstants.payload1.z;
 }
 
-uint nwbDeformerDisplacementMode(){
-    return g_NwbDeformerPushConstants.payload1.w;
+float nwbDeformerDisplacementAmplitude(){
+    return g_NwbDeformerPushConstants.payload2.x;
+}
+
+float nwbDeformerDisplacementBias(){
+    return g_NwbDeformerPushConstants.payload2.y;
+}
+
+vec2 nwbDeformerDisplacementUvScale(){
+    return g_NwbDeformerPushConstants.payload2.zw;
+}
+
+vec2 nwbDeformerDisplacementUvOffset(){
+    return g_NwbDeformerPushConstants.payload3.xy;
 }
 
 bool nwbDeformerFiniteFloat(const float value){
@@ -209,16 +226,54 @@ void nwbDeformerApplySkin(const uint vertexId, inout vec3 position, inout vec3 n
     tangent.xyz = skinnedTangent;
 }
 
-void nwbDeformerApplyDisplacement(inout vec3 position, const vec3 normal, const vec2 uv0){
+vec4 nwbDeformerSampleDisplacementTexture(const vec2 uv0){
+    const vec2 uv = (uv0 * nwbDeformerDisplacementUvScale()) + nwbDeformerDisplacementUvOffset();
+    return texture(sampler2D(g_NwbDeformerDisplacementTexture, g_NwbDeformerDisplacementSampler), clamp(uv, vec2(0.0), vec2(1.0)));
+}
+
+void nwbDeformerApplyDisplacement(inout vec3 position, const vec3 normal, const vec4 tangent, const vec2 uv0){
+    const uint noneMode = 0u;
     const uint scalarUvRampMode = 1u;
-    if(nwbDeformerDisplacementMode() != scalarUvRampMode)
+    const uint scalarTextureMode = 2u;
+    const uint vectorTangentTextureMode = 3u;
+    const uint vectorObjectTextureMode = 4u;
+    const uint displacementMode = nwbDeformerDisplacementMode();
+    if(displacementMode == noneMode)
         return;
 
     const float amplitude = nwbDeformerDisplacementAmplitude();
     if(abs(amplitude) <= 0.000001)
         return;
 
-    position += normal * (clamp(uv0.x, 0.0, 1.0) * amplitude);
+    if(displacementMode == scalarUvRampMode){
+        position += normal * (clamp(uv0.x, 0.0, 1.0) * amplitude);
+        return;
+    }
+
+    const vec4 sampleValue = nwbDeformerSampleDisplacementTexture(uv0);
+    if(displacementMode == scalarTextureMode){
+        position += normal * ((sampleValue.x + nwbDeformerDisplacementBias()) * amplitude);
+        return;
+    }
+
+    vec3 vectorOffset = (sampleValue.xyz + vec3(nwbDeformerDisplacementBias())) * amplitude;
+    if(!nwbDeformerFiniteVec3(vectorOffset))
+        return;
+
+    if(displacementMode == vectorTangentTextureMode){
+        const vec3 bitangent = nwbDeformerSafeNormalize(
+            cross(normal, tangent.xyz),
+            vec3(0.0, 1.0, 0.0)
+        ) * nwbDeformerTangentHandedness(tangent.w, 1.0);
+        vectorOffset = tangent.xyz * vectorOffset.x
+            + bitangent * vectorOffset.y
+            + normal * vectorOffset.z
+        ;
+    }
+    else if(displacementMode != vectorObjectTextureMode)
+        return;
+
+    position += vectorOffset;
 }
 
 void main(){
@@ -288,7 +343,7 @@ void main(){
         tangent = preSkinTangent;
     nwbDeformerOrthonormalizeFrame(normal, tangent, preSkinNormal, preSkinTangent);
     const vec3 preDisplacementPosition = position;
-    nwbDeformerApplyDisplacement(position, normal, uv0);
+    nwbDeformerApplyDisplacement(position, normal, tangent, uv0);
     if(!nwbDeformerFiniteVec3(position))
         position = preDisplacementPosition;
 

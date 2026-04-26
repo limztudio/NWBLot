@@ -60,10 +60,12 @@ private:
         u32 skinCount = 0;
         u32 jointCount = 0;
         usize morphSignature = 0;
+        Name displacementTextureName = NAME_NONE;
         Core::BufferHandle morphRangeBuffer;
         Core::BufferHandle morphDeltaBuffer;
         Core::BufferHandle skinBuffer;
         Core::BufferHandle jointPaletteBuffer;
+        Core::TextureHandle displacementTexture;
         Core::BindingSetHandle bindingSet;
     };
 
@@ -124,11 +126,17 @@ private:
     [[nodiscard]] bool ensureRuntimeResources(
         DeformableRuntimeMeshInstance& instance,
         const RuntimePayloadViews& payloadViews,
+        const DeformableDisplacement& displacement,
         bool hasDisplacement,
         usize morphSignature,
         RuntimeResources*& outResources
     );
     [[nodiscard]] bool ensureDefaultDeformerBuffers();
+    [[nodiscard]] bool ensureDefaultDisplacementResources();
+    [[nodiscard]] bool ensureDisplacementTexture(
+        const DeformableDisplacement& displacement,
+        Core::TextureHandle& outTexture
+    );
 
 
 private:
@@ -146,6 +154,8 @@ private:
     Core::BufferHandle m_defaultMorphDeltaBuffer;
     Core::BufferHandle m_defaultSkinBuffer;
     Core::BufferHandle m_defaultJointPaletteBuffer;
+    Core::TextureHandle m_defaultDisplacementTexture;
+    Core::SamplerHandle m_displacementSampler;
 };
 
 

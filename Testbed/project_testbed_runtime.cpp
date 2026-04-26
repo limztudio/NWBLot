@@ -42,6 +42,8 @@ static constexpr f32 s_DeformableSkinPivotY = -0.5f;
 static constexpr f32 s_DeformableSkinMaxAngle = 0.45f;
 static constexpr f32 s_AccessoryNormalOffset = 0.08f;
 static constexpr f32 s_AccessoryUniformScale = 0.16f;
+static constexpr AStringView s_AccessoryGeometryPath = "project/meshes/mock_earring";
+static constexpr AStringView s_AccessoryMaterialPath = "project/materials/mat_accessory_gold";
 
 
 [[nodiscard]] static f32 KeyAxis(const bool negative, const bool positive){
@@ -691,6 +693,7 @@ void ProjectTestbed::updateSurfaceEditAccessories(){
 
             NWB::Core::ECSGraphics::DeformablePickingInputs inputs;
             __hidden_project_testbed_runtime::ResolvePickingInputs(*m_world, attachment.targetEntity, inputs);
+            inputs.assetManager = &m_context.assetManager;
             renderer.visible = NWB::Core::ECSGraphics::ResolveAccessoryAttachmentTransform(
                 *instance,
                 inputs,
@@ -774,7 +777,14 @@ void ProjectTestbed::previewSurfaceEditAtCursor(){
     }
 
     NWB::Core::ECSGraphics::DeformablePosedHit hit;
-    if(!NWB::Core::ECSGraphics::RaycastVisibleDeformableRenderers(*m_world, renderSystem, ray, hit)){
+    if(!NWB::Core::ECSGraphics::RaycastVisibleDeformableRenderers(
+            *m_world,
+            renderSystem,
+            ray,
+            hit,
+            &m_context.assetManager
+        )
+    ){
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit: no deformable surface under cursor"));
         return;
     }
@@ -892,13 +902,20 @@ void ProjectTestbed::attachPendingSurfaceEditAccessory(){
     }
 
     __hidden_project_testbed_runtime::TestbedGeometryRef accessoryGeometry;
-    accessoryGeometry.virtualPath = Name("project/meshes/mock_earring");
+    accessoryGeometry.virtualPath = Name(__hidden_project_testbed_runtime::s_AccessoryGeometryPath);
     __hidden_project_testbed_runtime::TestbedMaterialRef accessoryMaterial;
-    accessoryMaterial.virtualPath = Name("project/materials/mat_accessory_gold");
+    accessoryMaterial.virtualPath = Name(__hidden_project_testbed_runtime::s_AccessoryMaterialPath);
     NWB::Core::ECSGraphics::DeformableAccessoryAttachmentRecord accessoryRecord;
     accessoryRecord.geometry = accessoryGeometry;
     accessoryRecord.material = accessoryMaterial;
-    accessoryRecord.editRevision = attachment.editRevision;
+    if(!accessoryRecord.geometryVirtualPathText.assign(__hidden_project_testbed_runtime::s_AccessoryGeometryPath)
+        || !accessoryRecord.materialVirtualPathText.assign(__hidden_project_testbed_runtime::s_AccessoryMaterialPath)
+    ){
+        clearPendingSurfaceEditAccessory();
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: accessory virtual paths are too long to persist"));
+        return;
+    }
+    accessoryRecord.anchorEditId = m_pendingSurfaceEditRecord.editId;
     accessoryRecord.firstWallVertex = attachment.firstWallVertex;
     accessoryRecord.wallVertexCount = attachment.wallVertexCount;
     accessoryRecord.normalOffset = attachment.normalOffset();
@@ -906,7 +923,6 @@ void ProjectTestbed::attachPendingSurfaceEditAccessory(){
 
     NWB::Core::ECSGraphics::DeformableSurfaceEditState candidateState = m_surfaceEditState;
     candidateState.edits.push_back(m_pendingSurfaceEditRecord);
-    candidateState.accessories.clear();
     candidateState.accessories.push_back(accessoryRecord);
 
     NWB::Core::Assets::AssetBytes serializedState;

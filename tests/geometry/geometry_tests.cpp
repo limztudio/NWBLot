@@ -25,6 +25,7 @@ namespace __hidden_geometry_tests{
 
 using TestContext = NWB::Tests::TestContext;
 using MeshletBuildConfig = NWB::Core::Geometry::MeshletBuildConfig;
+using MeshletBounds = NWB::Core::Geometry::MeshletBounds;
 using MeshletCluster = NWB::Core::Geometry::MeshletCluster;
 using MeshTopologyEdge = NWB::Core::Geometry::MeshTopologyEdge;
 using TangentFrameRebuildVertex = NWB::Core::Geometry::TangentFrameRebuildVertex;
@@ -314,6 +315,79 @@ static void TestBuildsSingleQuadMeshlet(TestContext& context){
     NWB_GEOMETRY_TEST_CHECK(context, NearlyEqual3(meshlet.bounds.maximum, 1.0f, 1.0f, 0.0f));
     NWB_GEOMETRY_TEST_CHECK(context, NearlyEqual3(meshlet.bounds.center, 0.0f, 0.0f, 0.0f));
     NWB_GEOMETRY_TEST_CHECK(context, NearlyEqual(meshlet.bounds.radius, Sqrt(2.0f)));
+
+    Vector<f32> noVertexExpansion;
+    MeshletBounds recomputedBounds;
+    NWB_GEOMETRY_TEST_CHECK(
+        context,
+        NWB::Core::Geometry::ComputeMeshletDeformationBounds(
+            positions,
+            vertexIndices,
+            meshlet,
+            noVertexExpansion,
+            0.0f,
+            recomputedBounds
+        )
+    );
+    NWB_GEOMETRY_TEST_CHECK(context, NearlyEqual3(recomputedBounds.minimum, -1.0f, -1.0f, 0.0f));
+    NWB_GEOMETRY_TEST_CHECK(context, NearlyEqual3(recomputedBounds.maximum, 1.0f, 1.0f, 0.0f));
+    NWB_GEOMETRY_TEST_CHECK(context, NearlyEqual3(recomputedBounds.center, 0.0f, 0.0f, 0.0f));
+    NWB_GEOMETRY_TEST_CHECK(context, NearlyEqual(recomputedBounds.radius, Sqrt(2.0f)));
+}
+
+static void TestComputesMeshletDeformationBounds(TestContext& context){
+    Vector<Float3U> positions;
+    positions.push_back(Float3U(-1.0f, -1.0f, 0.0f));
+    positions.push_back(Float3U(1.0f, -1.0f, 0.0f));
+    positions.push_back(Float3U(1.0f, 1.0f, 0.0f));
+    positions.push_back(Float3U(-1.0f, 1.0f, 0.0f));
+
+    Vector<u32> vertexIndices;
+    vertexIndices.push_back(0u);
+    vertexIndices.push_back(1u);
+    vertexIndices.push_back(2u);
+    vertexIndices.push_back(3u);
+
+    MeshletCluster meshlet;
+    meshlet.firstVertex = 0u;
+    meshlet.vertexCount = 4u;
+
+    Vector<f32> noVertexExpansion;
+    MeshletBounds bounds;
+    NWB_GEOMETRY_TEST_CHECK(
+        context,
+        NWB::Core::Geometry::ComputeMeshletDeformationBounds(
+            positions,
+            vertexIndices,
+            meshlet,
+            noVertexExpansion,
+            0.25f,
+            bounds
+        )
+    );
+    NWB_GEOMETRY_TEST_CHECK(context, NearlyEqual3(bounds.minimum, -1.25f, -1.25f, -0.25f));
+    NWB_GEOMETRY_TEST_CHECK(context, NearlyEqual3(bounds.maximum, 1.25f, 1.25f, 0.25f));
+    NWB_GEOMETRY_TEST_CHECK(context, NearlyEqual3(bounds.center, 0.0f, 0.0f, 0.0f));
+    NWB_GEOMETRY_TEST_CHECK(context, NearlyEqual(bounds.radius, Sqrt(2.0f) + 0.25f));
+
+    Vector<f32> vertexExpansion;
+    vertexExpansion.resize(positions.size(), 0.0f);
+    vertexExpansion[2u] = 0.5f;
+    NWB_GEOMETRY_TEST_CHECK(
+        context,
+        NWB::Core::Geometry::ComputeMeshletDeformationBounds(
+            positions,
+            vertexIndices,
+            meshlet,
+            vertexExpansion,
+            0.0f,
+            bounds
+        )
+    );
+    NWB_GEOMETRY_TEST_CHECK(context, NearlyEqual3(bounds.minimum, -1.0f, -1.0f, -0.5f));
+    NWB_GEOMETRY_TEST_CHECK(context, NearlyEqual3(bounds.maximum, 1.5f, 1.5f, 0.5f));
+    NWB_GEOMETRY_TEST_CHECK(context, NearlyEqual3(bounds.center, 0.25f, 0.25f, 0.0f));
+    NWB_GEOMETRY_TEST_CHECK(context, bounds.radius >= Sqrt(2.0f));
 }
 
 static void TestMeshletBuilderSplitsByLimits(TestContext& context){
@@ -409,6 +483,77 @@ static void TestMeshletBuilderRejectsInvalidInput(TestContext& context){
     );
 }
 
+static void TestRejectsInvalidMeshletDeformationBounds(TestContext& context){
+    Vector<Float3U> positions;
+    positions.push_back(Float3U(0.0f, 0.0f, 0.0f));
+    positions.push_back(Float3U(1.0f, 0.0f, 0.0f));
+    positions.push_back(Float3U(0.0f, 1.0f, 0.0f));
+
+    Vector<u32> vertexIndices;
+    vertexIndices.push_back(0u);
+    vertexIndices.push_back(1u);
+    vertexIndices.push_back(2u);
+
+    MeshletCluster meshlet;
+    meshlet.firstVertex = 0u;
+    meshlet.vertexCount = 3u;
+
+    Vector<f32> expansion;
+    MeshletBounds bounds;
+    NWB_GEOMETRY_TEST_CHECK(
+        context,
+        !NWB::Core::Geometry::ComputeMeshletDeformationBounds(
+            positions,
+            vertexIndices,
+            meshlet,
+            expansion,
+            -0.01f,
+            bounds
+        )
+    );
+
+    expansion.resize(positions.size() - 1u, 0.0f);
+    NWB_GEOMETRY_TEST_CHECK(
+        context,
+        !NWB::Core::Geometry::ComputeMeshletDeformationBounds(
+            positions,
+            vertexIndices,
+            meshlet,
+            expansion,
+            0.0f,
+            bounds
+        )
+    );
+
+    expansion.resize(positions.size(), 0.0f);
+    expansion[1u] = Limit<f32>::s_QuietNaN;
+    NWB_GEOMETRY_TEST_CHECK(
+        context,
+        !NWB::Core::Geometry::ComputeMeshletDeformationBounds(
+            positions,
+            vertexIndices,
+            meshlet,
+            expansion,
+            0.0f,
+            bounds
+        )
+    );
+
+    expansion[1u] = 0.0f;
+    vertexIndices[2u] = 3u;
+    NWB_GEOMETRY_TEST_CHECK(
+        context,
+        !NWB::Core::Geometry::ComputeMeshletDeformationBounds(
+            positions,
+            vertexIndices,
+            meshlet,
+            expansion,
+            0.0f,
+            bounds
+        )
+    );
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -438,8 +583,10 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
     __hidden_geometry_tests::TestAppendsWallTrianglePairs(context);
     __hidden_geometry_tests::TestRejectsMalformedWallTrianglePairs(context);
     __hidden_geometry_tests::TestBuildsSingleQuadMeshlet(context);
+    __hidden_geometry_tests::TestComputesMeshletDeformationBounds(context);
     __hidden_geometry_tests::TestMeshletBuilderSplitsByLimits(context);
     __hidden_geometry_tests::TestMeshletBuilderRejectsInvalidInput(context);
+    __hidden_geometry_tests::TestRejectsInvalidMeshletDeformationBounds(context);
     if(context.failed != 0u){
         NWB_CERR << "geometry tests failed: " << context.failed << " failed, " << context.passed << " passed\n";
         return -1;

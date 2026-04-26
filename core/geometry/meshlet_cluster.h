@@ -56,6 +56,15 @@ static_assert(IsTriviallyCopyable_V<MeshletCluster>, "MeshletCluster must stay c
     Vector<u32>& outLocalIndices
 );
 
+[[nodiscard]] bool ComputeMeshletDeformationBounds(
+    const Vector<Float3U>& positions,
+    const Vector<u32>& meshletVertexIndices,
+    const MeshletCluster& meshlet,
+    const Vector<f32>& vertexExpansionRadii,
+    f32 uniformExpansionRadius,
+    MeshletBounds& outBounds
+);
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

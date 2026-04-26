@@ -190,8 +190,7 @@ void CanonicalizeBoundaryLoopStart(Vector<MeshTopologyEdge, EdgeAllocator>& edge
     const Vector<Float3U>& positions,
     const MeshTopologyBoundaryLoopFrame& frame,
     const SIMDVector frameNormal,
-    const MeshTopologyEdge& edge)
-{
+    const MeshTopologyEdge& edge){
     return FrameResolveTangent(
         frameNormal,
         VectorSubtract(LoadFloat(positions[edge.b]), LoadFloat(positions[edge.a])),
@@ -316,8 +315,7 @@ bool BuildBoundaryEdgesFromRemovedTriangles(
     const Vector<u32>& indices,
     const Vector<u8>& removedTriangles,
     Vector<MeshTopologyEdge>& outBoundaryEdges,
-    u32* outRemovedTriangleCount)
-{
+    u32* outRemovedTriangleCount){
     using namespace __hidden_geometry_mesh_topology;
 
     if(outRemovedTriangleCount)
@@ -426,8 +424,7 @@ bool BuildBoundaryLoopVertexFrame(
     const MeshTopologyBoundaryLoopFrame& frame,
     const MeshTopologyEdge& previousEdge,
     const MeshTopologyEdge& currentEdge,
-    MeshTopologyLoopVertexFrame& outFrame)
-{
+    MeshTopologyLoopVertexFrame& outFrame){
     using namespace __hidden_geometry_mesh_topology;
 
     outFrame = MeshTopologyLoopVertexFrame{};

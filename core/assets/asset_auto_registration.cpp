@@ -60,8 +60,7 @@ void RegisterFactoryProducts(
     CreateProduct&& createProduct,
     RegisterProduct&& registerProduct,
     LogNullProduct&& logNullProduct,
-    LogRegisterFailure&& logRegisterFailure)
-{
+    LogRegisterFailure&& logRegisterFailure){
     for(const auto factory : factories){
         if(factory == nullptr)
             continue;

@@ -98,11 +98,7 @@ template<typename VertexAllocator>
     return missingVertexCount;
 }
 
-[[nodiscard]] bool TriangleFitsMeshlet(
-    const PendingMeshlet& meshlet,
-    const TriangleVertices& triangle,
-    const MeshletBuildConfig& config)
-{
+[[nodiscard]] bool TriangleFitsMeshlet(const PendingMeshlet& meshlet, const TriangleVertices& triangle, const MeshletBuildConfig& config){
     const usize triangleCount = meshlet.indices.size() / 3u;
     if(triangleCount >= config.maxTriangles)
         return false;
@@ -175,12 +171,7 @@ template<typename VertexAllocator>
     return IsFinite(radius) && radius >= 0.0f;
 }
 
-[[nodiscard]] bool ResolveVertexExpansionRadius(
-    const Vector<f32>& vertexExpansionRadii,
-    const u32 vertex,
-    const f32 uniformExpansionRadius,
-    f32& outRadius)
-{
+[[nodiscard]] bool ResolveVertexExpansionRadius(const Vector<f32>& vertexExpansionRadii, const u32 vertex, const f32 uniformExpansionRadius, f32& outRadius){
     outRadius = uniformExpansionRadius;
     if(!vertexExpansionRadii.empty()){
         if(vertex >= vertexExpansionRadii.size() || !ValidExpansionRadius(vertexExpansionRadii[vertex]))
@@ -196,8 +187,7 @@ template<typename MeshletAllocator, typename VertexIndexAllocator, typename Loca
     PendingMeshlet& pending,
     Vector<MeshletCluster, MeshletAllocator>& outMeshlets,
     Vector<u32, VertexIndexAllocator>& outVertexIndices,
-    Vector<u32, LocalIndexAllocator>& outLocalIndices)
-{
+    Vector<u32, LocalIndexAllocator>& outLocalIndices){
     if(pending.vertices.empty())
         return true;
     if(pending.indices.empty()
@@ -242,8 +232,7 @@ bool BuildMeshlets(
     const MeshletBuildConfig& config,
     Vector<MeshletCluster>& outMeshlets,
     Vector<u32>& outVertexIndices,
-    Vector<u32>& outLocalIndices)
-{
+    Vector<u32>& outLocalIndices){
     using namespace __hidden_geometry_meshlet_cluster;
 
     outMeshlets.clear();
@@ -309,8 +298,7 @@ bool ComputeMeshletDeformationBounds(
     const MeshletCluster& meshlet,
     const Vector<f32>& vertexExpansionRadii,
     const f32 uniformExpansionRadius,
-    MeshletBounds& outBounds)
-{
+    MeshletBounds& outBounds){
     using namespace __hidden_geometry_meshlet_cluster;
 
     outBounds = MeshletBounds{};

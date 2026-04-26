@@ -73,11 +73,7 @@ public:
 public:
     void setAsyncExecutor(IAssetAsyncExecutor* asyncExecutor);
 
-    bool loadSync(
-        const Name& assetType,
-        const Name& virtualPath,
-        UniquePtr<IAsset>& outAsset
-    )const;
+    bool loadSync(const Name& assetType, const Name& virtualPath, UniquePtr<IAsset>& outAsset)const;
 
     [[nodiscard]] u64 enqueueLoad(const Name& assetType, const Name& virtualPath);
     void processPending();

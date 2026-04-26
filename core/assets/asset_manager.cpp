@@ -31,11 +31,7 @@ void AssetManager::setAsyncExecutor(IAssetAsyncExecutor* asyncExecutor){
 }
 
 
-bool AssetManager::loadSync(
-    const Name& assetType,
-    const Name& virtualPath,
-    UniquePtr<IAsset>& outAsset
-)const{
+bool AssetManager::loadSync(const Name& assetType, const Name& virtualPath, UniquePtr<IAsset>& outAsset)const{
     outAsset.reset();
 
     if(!assetType){

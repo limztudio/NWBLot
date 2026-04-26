@@ -1664,6 +1664,54 @@ static void TestRestSpaceHoleEditWallTrianglesKeepRecoverableProvenance(TestCont
     );
 }
 
+static void TestSurfaceEditMutatesOnlyTargetRuntimeInstance(TestContext& context){
+    NWB::Impl::DeformableRuntimeMeshInstance cleanSource = MakeGridHoleInstance();
+    cleanSource.editRevision = 0u;
+    cleanSource.source.virtualPath = Name("tests/deformable/shared_source");
+
+    NWB::Impl::DeformableRuntimeMeshInstance firstInstance = cleanSource;
+    firstInstance.entity = NWB::Core::ECS::EntityID(31u, 0u);
+    firstInstance.handle.value = 631u;
+
+    NWB::Impl::DeformableRuntimeMeshInstance secondInstance = cleanSource;
+    secondInstance.entity = NWB::Core::ECS::EntityID(32u, 0u);
+    secondInstance.handle.value = 632u;
+
+    const usize secondOldVertexCount = secondInstance.restVertices.size();
+    const usize secondOldIndexCount = secondInstance.indices.size();
+    const u32 secondOldRevision = secondInstance.editRevision;
+    const NWB::Impl::RuntimeMeshHandle secondOldHandle = secondInstance.handle;
+
+    NWB::Impl::DeformableSurfaceEditState firstState;
+    NWB::Impl::DeformableHoleEditResult firstResult;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        CommitRecordedHole(firstInstance, 8u, 0.48f, 0.25f, firstState, &firstResult)
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, firstResult.editRevision == 1u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, firstState.edits.size() == 1u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, firstInstance.editRevision == 1u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, firstInstance.restVertices.size() > secondOldVertexCount);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, firstInstance.indices.size() > secondOldIndexCount);
+
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, firstInstance.source == secondInstance.source);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, secondInstance.handle == secondOldHandle);
+    CheckHoleEditUnchanged(context, secondInstance, secondOldVertexCount, secondOldIndexCount, secondOldRevision);
+
+    NWB::Impl::DeformableSurfaceEditState secondState;
+    NWB::Impl::DeformableHoleEditResult secondResult;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        CommitRecordedHole(secondInstance, 8u, 0.48f, 0.25f, secondState, &secondResult)
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, secondResult.editRevision == 1u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, secondState.edits.size() == 1u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, secondInstance.editRevision == 1u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, secondInstance.handle == secondOldHandle);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, secondInstance.restVertices.size() == firstInstance.restVertices.size());
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, secondInstance.indices.size() == firstInstance.indices.size());
+}
+
 static void TestSurfaceEditMasksPreviewAndCommit(TestContext& context){
     auto assignEditableMasks = [](NWB::Impl::DeformableRuntimeMeshInstance& instance){
         const usize triangleCount = instance.indices.size() / 3u;
@@ -3779,6 +3827,7 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
     __hidden_ecs_graphics_tests::TestRestSpaceHoleEditCreatesPerInstancePatch(context);
     __hidden_ecs_graphics_tests::TestRestSpaceHoleEditTransfersAndInpaintsWallAttributes(context);
     __hidden_ecs_graphics_tests::TestRestSpaceHoleEditWallTrianglesKeepRecoverableProvenance(context);
+    __hidden_ecs_graphics_tests::TestSurfaceEditMutatesOnlyTargetRuntimeInstance(context);
     __hidden_ecs_graphics_tests::TestSurfaceEditMasksPreviewAndCommit(context);
     __hidden_ecs_graphics_tests::TestSurfaceEditPreviewIsReadOnlyAndCommitMutatesTopology(context);
     __hidden_ecs_graphics_tests::TestSurfaceEditDebugSnapshotCapturesPreviewAndWallVertices(context);

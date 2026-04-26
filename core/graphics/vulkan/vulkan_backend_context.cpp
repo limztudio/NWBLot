@@ -209,16 +209,19 @@ static bool SupportsRequestedOptionalDeviceFeature(const OptionalDeviceFeatureSe
             && SupportsRequestedValue(requested.rayTracingPipeline.rayTracingPipelineShaderGroupHandleCaptureReplay, supported.rayTracingPipeline.rayTracingPipelineShaderGroupHandleCaptureReplay)
             && SupportsRequestedValue(requested.rayTracingPipeline.rayTracingPipelineShaderGroupHandleCaptureReplayMixed, supported.rayTracingPipeline.rayTracingPipelineShaderGroupHandleCaptureReplayMixed)
             && SupportsRequestedValue(requested.rayTracingPipeline.rayTracingPipelineTraceRaysIndirect, supported.rayTracingPipeline.rayTracingPipelineTraceRaysIndirect)
-            && SupportsRequestedValue(requested.rayTracingPipeline.rayTraversalPrimitiveCulling, supported.rayTracingPipeline.rayTraversalPrimitiveCulling);
+            && SupportsRequestedValue(requested.rayTracingPipeline.rayTraversalPrimitiveCulling, supported.rayTracingPipeline.rayTraversalPrimitiveCulling)
+        ;
     case DeviceExtensionFeature::RayQuery:
         return SupportsRequestedValue(requested.rayQuery.rayQuery, supported.rayQuery.rayQuery);
     case DeviceExtensionFeature::MeshShader:
         return SupportsRequestedValue(requested.meshShader.taskShader, supported.meshShader.taskShader)
-            && SupportsRequestedValue(requested.meshShader.meshShader, supported.meshShader.meshShader);
+            && SupportsRequestedValue(requested.meshShader.meshShader, supported.meshShader.meshShader)
+        ;
     case DeviceExtensionFeature::FragmentShadingRate:
         return SupportsRequestedValue(requested.fragmentShadingRate.pipelineFragmentShadingRate, supported.fragmentShadingRate.pipelineFragmentShadingRate)
             && SupportsRequestedValue(requested.fragmentShadingRate.primitiveFragmentShadingRate, supported.fragmentShadingRate.primitiveFragmentShadingRate)
-            && SupportsRequestedValue(requested.fragmentShadingRate.attachmentFragmentShadingRate, supported.fragmentShadingRate.attachmentFragmentShadingRate);
+            && SupportsRequestedValue(requested.fragmentShadingRate.attachmentFragmentShadingRate, supported.fragmentShadingRate.attachmentFragmentShadingRate)
+        ;
     case DeviceExtensionFeature::MutableDescriptorType:
         return SupportsRequestedValue(requested.mutableDescriptorType.mutableDescriptorType, supported.mutableDescriptorType.mutableDescriptorType);
     case DeviceExtensionFeature::DescriptorHeap:

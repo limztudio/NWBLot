@@ -152,7 +152,8 @@ struct StagedDirectoryPaths{
 
 [[nodiscard]] inline bool IsMissingPathError(const ErrorCode& error)noexcept{
     return error == std::errc::no_such_file_or_directory
-        || error == std::errc::not_a_directory;
+        || error == std::errc::not_a_directory
+    ;
 }
 
 

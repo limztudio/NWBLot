@@ -74,12 +74,7 @@ static constexpr Float3U s_ColorInvalid = Float3U(1.0f, 0.0f, 1.0f);
     return count;
 }
 
-void AppendLine(
-    DeformableSurfaceEditDebugSnapshot& snapshot,
-    const Float3U& begin,
-    const Float3U& end,
-    const Float3U& color)
-{
+void AppendLine(DeformableSurfaceEditDebugSnapshot& snapshot, const Float3U& begin, const Float3U& end, const Float3U& color){
     if(!FinitePoint(begin) || !FinitePoint(end))
         return;
 
@@ -90,12 +85,7 @@ void AppendLine(
     snapshot.lines.push_back(line);
 }
 
-void AppendPoint(
-    DeformableSurfaceEditDebugSnapshot& snapshot,
-    const Float3U& position,
-    const Float3U& color,
-    const u32 id)
-{
+void AppendPoint(DeformableSurfaceEditDebugSnapshot& snapshot, const Float3U& position, const Float3U& color, const u32 id){
     if(!FinitePoint(position))
         return;
 
@@ -192,12 +182,7 @@ void AppendEditStateDebug(
     }
 }
 
-[[nodiscard]] Float3U TriangleCenter(
-    const DeformableRuntimeMeshInstance& instance,
-    const u32 a,
-    const u32 b,
-    const u32 c)
-{
+[[nodiscard]] Float3U TriangleCenter(const DeformableRuntimeMeshInstance& instance, const u32 a, const u32 b, const u32 c){
     if(a >= instance.restVertices.size()
         || b >= instance.restVertices.size()
         || c >= instance.restVertices.size()
@@ -214,10 +199,7 @@ void AppendEditStateDebug(
     );
 }
 
-void AppendInvalidTriangleDebug(
-    const DeformableRuntimeMeshInstance& instance,
-    DeformableSurfaceEditDebugSnapshot& snapshot)
-{
+void AppendInvalidTriangleDebug(const DeformableRuntimeMeshInstance& instance, DeformableSurfaceEditDebugSnapshot& snapshot){
     const usize triangleCount = instance.indices.size() / 3u;
     for(usize triangle = 0u; triangle < triangleCount; ++triangle){
         const usize indexBase = triangle * 3u;
@@ -232,10 +214,7 @@ void AppendInvalidTriangleDebug(
     }
 }
 
-void CountEditMasks(
-    const DeformableRuntimeMeshInstance& instance,
-    DeformableSurfaceEditDebugSnapshot& snapshot)
-{
+void CountEditMasks(const DeformableRuntimeMeshInstance& instance, DeformableSurfaceEditDebugSnapshot& snapshot){
     const usize triangleCount = instance.indices.size() / 3u;
     for(usize triangle = 0u; triangle < triangleCount; ++triangle){
         const DeformableEditMaskFlags flags =
@@ -254,10 +233,7 @@ void CountEditMasks(
     }
 }
 
-void AppendPayloadDiagnostics(
-    const DeformableRuntimeMeshInstance& instance,
-    DeformableSurfaceEditDebugSnapshot& snapshot)
-{
+void AppendPayloadDiagnostics(const DeformableRuntimeMeshInstance& instance, DeformableSurfaceEditDebugSnapshot& snapshot){
     for(const DeformableVertexRest& vertex : instance.restVertices){
         if(!DeformableValidation::ValidRestVertexFrame(vertex))
             ++snapshot.invalidFrameCount;
@@ -344,10 +320,7 @@ bool BuildDeformableSurfaceEditDebugSnapshot(
     return true;
 }
 
-bool BuildDeformableSurfaceEditDebugDump(
-    const DeformableSurfaceEditDebugSnapshot& snapshot,
-    AString& outDump)
-{
+bool BuildDeformableSurfaceEditDebugDump(const DeformableSurfaceEditDebugSnapshot& snapshot, AString& outDump){
     using namespace __hidden_deformable_debug_draw;
 
     outDump = StringFormat(

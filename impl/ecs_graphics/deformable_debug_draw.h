@@ -78,10 +78,7 @@ struct DeformableSurfaceEditDebugSnapshot{
     const DeformableSurfaceEditState* state,
     DeformableSurfaceEditDebugSnapshot& outSnapshot
 );
-[[nodiscard]] bool BuildDeformableSurfaceEditDebugDump(
-    const DeformableSurfaceEditDebugSnapshot& snapshot,
-    AString& outDump
-);
+[[nodiscard]] bool BuildDeformableSurfaceEditDebugDump(const DeformableSurfaceEditDebugSnapshot& snapshot, AString& outDump);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

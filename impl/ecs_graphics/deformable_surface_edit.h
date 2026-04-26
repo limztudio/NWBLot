@@ -240,18 +240,9 @@ struct DeformableSurfaceEditReplayContext{
     const DeformableAccessoryAttachmentComponent& attachment,
     Core::Scene::TransformComponent& outTransform
 );
-[[nodiscard]] bool SerializeSurfaceEditState(
-    const DeformableSurfaceEditState& state,
-    Core::Assets::AssetBytes& outBinary
-);
-[[nodiscard]] bool DeserializeSurfaceEditState(
-    const Core::Assets::AssetBytes& binary,
-    DeformableSurfaceEditState& outState
-);
-[[nodiscard]] bool BuildSurfaceEditStateDebugDump(
-    const DeformableSurfaceEditState& state,
-    AString& outDump
-);
+[[nodiscard]] bool SerializeSurfaceEditState(const DeformableSurfaceEditState& state, Core::Assets::AssetBytes& outBinary);
+[[nodiscard]] bool DeserializeSurfaceEditState(const Core::Assets::AssetBytes& binary, DeformableSurfaceEditState& outState);
+[[nodiscard]] bool BuildSurfaceEditStateDebugDump(const DeformableSurfaceEditState& state, AString& outDump);
 [[nodiscard]] bool ApplySurfaceEditState(
     DeformableRuntimeMeshInstance& instance,
     const DeformableSurfaceEditState& state,

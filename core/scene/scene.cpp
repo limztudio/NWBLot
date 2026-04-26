@@ -38,7 +38,8 @@ namespace __hidden_scene{
         && SceneFloat3Finite(transform.scale)
         && IsFinite(rotationLengthSquared)
         && rotationLengthSquared >= 1.0f - s_CameraRotationUnitLengthSquaredTolerance
-        && rotationLengthSquared <= 1.0f + s_CameraRotationUnitLengthSquaredTolerance;
+        && rotationLengthSquared <= 1.0f + s_CameraRotationUnitLengthSquaredTolerance
+    ;
 }
 
 [[nodiscard]] bool TryBuildSceneCameraView(

@@ -227,12 +227,7 @@ static NWB::Impl::SkinInfluence4 MakeSingleJointSkin(const u16 joint){
     return skin;
 }
 
-static NWB::Impl::SkinInfluence4 MakeTwoJointSkin(
-    const u16 joint0,
-    const f32 weight0,
-    const u16 joint1,
-    const f32 weight1)
-{
+static NWB::Impl::SkinInfluence4 MakeTwoJointSkin(const u16 joint0, const f32 weight0, const u16 joint1, const f32 weight1){
     NWB::Impl::SkinInfluence4 skin{};
     skin.joint[0] = joint0;
     skin.weight[0] = weight0;
@@ -260,11 +255,7 @@ static f32 SkinWeightSum(const NWB::Impl::SkinInfluence4& skin){
     return skin.weight[0] + skin.weight[1] + skin.weight[2] + skin.weight[3];
 }
 
-static bool MorphDeltaPositionZForVertex(
-    const NWB::Impl::DeformableMorph& morph,
-    const u32 vertexId,
-    f32& outDeltaZ)
-{
+static bool MorphDeltaPositionZForVertex(const NWB::Impl::DeformableMorph& morph, const u32 vertexId, f32& outDeltaZ){
     for(const NWB::Impl::DeformableMorphDelta& delta : morph.deltas){
         if(delta.vertexId != vertexId)
             continue;
@@ -478,9 +469,7 @@ static NWB::Impl::DeformableHoleEditParams MakeHoleEditParams(
     return MakeHoleEditParams(instance, triangle, 0.25f, 0.25f, 0.5f, radius, depth);
 }
 
-static NWB::Impl::DeformableHoleEditParams MakeGridHoleEditParams(
-    const NWB::Impl::DeformableRuntimeMeshInstance& instance)
-{
+static NWB::Impl::DeformableHoleEditParams MakeGridHoleEditParams(const NWB::Impl::DeformableRuntimeMeshInstance& instance){
     return MakeHoleEditParams(instance, 8u, 0.48f, 0.25f);
 }
 
@@ -579,10 +568,7 @@ static void CheckAddedTrianglesResolveToSample(
     }
 }
 
-static void CheckRuntimeMeshPayloadValid(
-    TestContext& context,
-    const NWB::Impl::DeformableRuntimeMeshInstance& instance)
-{
+static void CheckRuntimeMeshPayloadValid(TestContext& context, const NWB::Impl::DeformableRuntimeMeshInstance& instance){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, !instance.restVertices.empty());
     NWB_ECS_GRAPHICS_TEST_CHECK(context, !instance.indices.empty());
     NWB_ECS_GRAPHICS_TEST_CHECK(context, (instance.indices.size() % 3u) == 0u);

@@ -47,10 +47,7 @@ struct TriangleVertices{
     ;
 }
 
-[[nodiscard]] bool ValidTriangle(
-    const Vector<Float3U>& positions,
-    const TriangleVertices& triangle)
-{
+[[nodiscard]] bool ValidTriangle(const Vector<Float3U>& positions, const TriangleVertices& triangle){
     if(triangle.values[0] >= positions.size()
         || triangle.values[1] >= positions.size()
         || triangle.values[2] >= positions.size()
@@ -118,11 +115,7 @@ struct TriangleVertices{
     return true;
 }
 
-[[nodiscard]] bool ComputeMeshletBounds(
-    const Vector<Float3U>& positions,
-    const Vector<u32>& vertices,
-    MeshletBounds& outBounds)
-{
+[[nodiscard]] bool ComputeMeshletBounds(const Vector<Float3U>& positions, const Vector<u32>& vertices, MeshletBounds& outBounds){
     if(vertices.empty())
         return false;
 
@@ -271,11 +264,13 @@ bool BuildMeshlets(
 
         if(!ValidTriangle(positions, triangle))
             return false;
-        if(!TriangleFitsMeshlet(pending, triangle, config)){
+        bool triangleFits = TriangleFitsMeshlet(pending, triangle, config);
+        if(!triangleFits){
             if(!FlushMeshlet(positions, pending, meshlets, vertexIndices, localIndices))
                 return false;
+            triangleFits = TriangleFitsMeshlet(pending, triangle, config);
         }
-        if(!TriangleFitsMeshlet(pending, triangle, config) || !AppendTriangle(pending, triangle))
+        if(!triangleFits || !AppendTriangle(pending, triangle))
             return false;
     }
 

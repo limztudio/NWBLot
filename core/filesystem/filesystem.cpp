@@ -138,7 +138,8 @@ static bool CanRepresentU64(const u64 value){
 static bool IsAsciiAlphaNumeric(const char ch){
     return (ch >= '0' && ch <= '9')
         || (ch >= 'A' && ch <= 'Z')
-        || (ch >= 'a' && ch <= 'z');
+        || (ch >= 'a' && ch <= 'z')
+    ;
 }
 
 static bool ValidVolumeName(AStringView name){

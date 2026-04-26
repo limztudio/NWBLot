@@ -48,7 +48,8 @@ struct SceneCameraView{
         return entity.valid()
             && transform != nullptr
             && camera != nullptr
-            && CameraProjectionDataValid(projectionData);
+            && CameraProjectionDataValid(projectionData)
+        ;
     }
 };
 

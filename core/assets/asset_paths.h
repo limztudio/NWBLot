@@ -186,7 +186,8 @@ namespace AssetPathsDetail{
         return false;
 
     return virtualRoot.view() == s_EngineVirtualRoot
-        || virtualRoot.view() == s_ProjectVirtualRoot;
+        || virtualRoot.view() == s_ProjectVirtualRoot
+    ;
 }
 
 [[nodiscard]] inline bool ResolveVirtualAssetPath(const Vector<Path>& assetRoots, const AStringView virtualPath, Path& outResolvedPath){

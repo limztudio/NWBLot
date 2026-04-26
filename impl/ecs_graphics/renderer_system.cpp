@@ -485,11 +485,7 @@ static bool ParseMaterialBoolToken(const AStringView token, u32& outValue){
     return false;
 }
 
-static bool ParseMaterialParameterToken(
-    const AStringView token,
-    const MaterialParameterValueType::Enum type,
-    u32& outValue
-){
+static bool ParseMaterialParameterToken(const AStringView token, const MaterialParameterValueType::Enum type, u32& outValue){
     const char* begin = token.data();
     const char* end = begin + token.size();
 
@@ -595,11 +591,7 @@ static f32 Float3Dot(const Float4& lhs, const Float4& rhs){
     return VectorGetX(Vector3Dot(LoadFloat(lhs), LoadFloat(rhs)));
 }
 
-static void StoreRotatedBasisVector(
-    Float4& outVector,
-    const Float4& localVector,
-    SIMDVector rotation
-){
+static void StoreRotatedBasisVector(Float4& outVector, const Float4& localVector, SIMDVector rotation){
     StoreFloat(Vector3Rotate(LoadFloat(localVector), rotation), &outVector);
 }
 
@@ -721,11 +713,7 @@ static void StoreProjectedViewColumn(
     StoreFloat(column, &outWorldToClip[columnIndex]);
 }
 
-static void StoreWorldToClipMatrix(
-    Float4 (&outWorldToClip)[4],
-    const MeshViewBasis& basis,
-    const Float4& projectionParams
-){
+static void StoreWorldToClipMatrix(Float4 (&outWorldToClip)[4], const MeshViewBasis& basis, const Float4& projectionParams){
     const f32 translationX = -Float3Dot(basis.positionDepthBias, basis.right);
     const f32 translationY = -Float3Dot(basis.positionDepthBias, basis.up);
     const f32 translationZ = -Float3Dot(basis.positionDepthBias, basis.forward) + basis.positionDepthBias.w;
@@ -780,11 +768,7 @@ static f32 FramebufferAspectRatio(const Core::IFramebuffer& framebuffer){
     return ExtentAspectRatio(framebufferInfo.width, framebufferInfo.height);
 }
 
-static void ApplyDefaultCameraMeshViewState(
-    MeshViewState& state,
-    const MeshViewBasis& basis,
-    const f32 fallbackAspectRatio
-){
+static void ApplyDefaultCameraMeshViewState(MeshViewState& state, const MeshViewBasis& basis, const f32 fallbackAspectRatio){
     Core::Scene::CameraComponent camera;
     Float4 projectionParams;
     BuildCameraProjectionParams(camera, fallbackAspectRatio, projectionParams);
@@ -1978,8 +1962,7 @@ void RendererSystem::gatherMaterialPassDrawItems(
                 materialParameters.capacity(),
                 requiredParameterCapacity
             ));
-        for(const MaterialParameterGpuData& parameter : materialInfo.parameters)
-            materialParameters.push_back(parameter);
+        materialParameters.insert(materialParameters.end(), materialInfo.parameters.begin(), materialInfo.parameters.end());
 
         materialParameterBlocks.emplace(materialInfo.materialName, outBlock);
         return true;

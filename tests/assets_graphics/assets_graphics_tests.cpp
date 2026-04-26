@@ -936,12 +936,7 @@ static bool CookAndLoadMinimalGeometry(
     return false;
 }
 
-static NWB::Impl::DeformableVertexRest MakeRestVertex(
-    const f32 x,
-    const f32 y,
-    const f32 u,
-    const f32 v
-){
+static NWB::Impl::DeformableVertexRest MakeRestVertex(const f32 x, const f32 y, const f32 u, const f32 v){
     NWB::Impl::DeformableVertexRest vertex;
     vertex.position = Float3U(x, y, 0.f);
     vertex.normal = Float3U(0.f, 0.f, 1.f);

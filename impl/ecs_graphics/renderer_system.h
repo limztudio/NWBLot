@@ -116,7 +116,8 @@ private:
                 && shaderIndexBuffer != nullptr
                 && indexCount > 0
                 && triangleCount > 0
-                && dispatchGroupCount > 0;
+                && dispatchGroupCount > 0
+            ;
         }
     };
 
@@ -212,7 +213,8 @@ public:
                 && depthWarpBindingSet != nullptr
                 && extinctionBindingSet != nullptr
                 && integrateBindingSet != nullptr
-                && accumulateBindingSet != nullptr;
+                && accumulateBindingSet != nullptr
+            ;
         }
     };
 
@@ -246,7 +248,8 @@ private:
                 && depth != nullptr
                 && framebuffer != nullptr
                 && compositeBindingSet != nullptr
-                && avboit.valid();
+                && avboit.valid()
+            ;
         }
     };
 
@@ -344,14 +347,8 @@ private:
             handler(drawItem, *geometry, *pipelineResources);
         }
     }
-    void renderMeshMaterialPassDrawItems(
-        const MaterialPassDrawContext& context,
-        const MaterialPassDrawItemVector& drawItems
-    );
-    void renderComputeMaterialPassDrawItems(
-        const MaterialPassDrawContext& context,
-        const MaterialPassDrawItemVector& drawItems
-    );
+    void renderMeshMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems);
+    void renderComputeMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems);
     void renderAvboitPasses(Core::ICommandList& commandList, DeferredFrameTargets& targets);
     void dispatchAvboitDepthWarp(Core::ICommandList& commandList, AvboitFrameTargets& targets);
     void dispatchAvboitIntegration(Core::ICommandList& commandList, AvboitFrameTargets& targets);

@@ -132,10 +132,7 @@ private:
     );
     [[nodiscard]] bool ensureDefaultDeformerBuffers();
     [[nodiscard]] bool ensureDefaultDisplacementResources();
-    [[nodiscard]] bool ensureDisplacementTexture(
-        const DeformableDisplacement& displacement,
-        Core::TextureHandle& outTexture
-    );
+    [[nodiscard]] bool ensureDisplacementTexture(const DeformableDisplacement& displacement, Core::TextureHandle& outTexture);
 
 
 private:

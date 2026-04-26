@@ -99,7 +99,8 @@ static_assert(
     return IsFinite(camera.nearPlane())
         && IsFinite(camera.farPlane())
         && camera.nearPlane() > 0.0f
-        && camera.nearPlane() < camera.farPlane();
+        && camera.nearPlane() < camera.farPlane()
+    ;
 }
 
 [[nodiscard]] inline f32 ResolveCameraAspectRatio(const CameraComponent& camera, const f32 fallbackAspectRatio){
@@ -119,7 +120,8 @@ static_assert(
         && projectionData.aspectRatio > 0.0f
         && projectionData.tanHalfVerticalFov > 0.0f
         && Vector3Greater(projectionParams, VectorZero())
-        && VectorGetW(projectionParams) < 0.0f;
+        && VectorGetW(projectionParams) < 0.0f
+    ;
 }
 
 [[nodiscard]] inline bool TryBuildCameraProjectionData(

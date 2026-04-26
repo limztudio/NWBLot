@@ -1182,11 +1182,7 @@ static bool IsExplicitEmptyOptionalField(const Core::Metascript::Value& value){
     return (value.isList() && value.asList().empty()) || (value.isMap() && value.asMap().empty());
 }
 
-static bool ParseDeformableIndexType(
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    bool& outUse32BitIndices
-){
+static bool ParseDeformableIndexType(const Path& nwbFilePath, const Core::Metascript::Value& asset, bool& outUse32BitIndices){
     return ParseMetadataIndexType(nwbFilePath, asset, s_DeformableGeometryMetaKind, outUse32BitIndices);
 }
 
@@ -1284,11 +1280,7 @@ static bool ParseSkinInfluences(
     return true;
 }
 
-static bool ParseSkeletonJointCount(
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    u32& outJointCount)
-{
+static bool ParseSkeletonJointCount(const Path& nwbFilePath, const Core::Metascript::Value& asset, u32& outJointCount){
     outJointCount = 0u;
 
     const Core::Metascript::Value* jointCount = FindField(asset, "skeleton_joint_count");
@@ -1538,11 +1530,7 @@ static bool ParseDisplacement(
     return ValidDeformableDisplacementDescriptor(outDisplacement);
 }
 
-static bool ParseMorphs(
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    Vector<DeformableMorph>& outMorphs
-){
+static bool ParseMorphs(const Path& nwbFilePath, const Core::Metascript::Value& asset, Vector<DeformableMorph>& outMorphs){
     outMorphs.clear();
 
     const Core::Metascript::Value* morphs = FindField(asset, "morphs");
@@ -1624,10 +1612,7 @@ static bool ParseMorphs(
     return true;
 }
 
-static bool RejectDeformableGeometrySourceField(
-    const DiscoveredNwbFile& discoveredFile,
-    const Core::Metascript::Value& asset)
-{
+static bool RejectDeformableGeometrySourceField(const DiscoveredNwbFile& discoveredFile, const Core::Metascript::Value& asset){
     if(!FindField(asset, "source"))
         return true;
 

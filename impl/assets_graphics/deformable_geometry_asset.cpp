@@ -150,11 +150,7 @@ template<typename T>
 }
 
 template<typename T>
-[[nodiscard]] bool AppendVectorPayload(
-    Core::Assets::AssetBytes& outBinary,
-    const Vector<T>& values,
-    const tchar* label
-){
+[[nodiscard]] bool AppendVectorPayload(Core::Assets::AssetBytes& outBinary, const Vector<T>& values, const tchar* label){
     if(values.size() > Limit<usize>::s_Max / sizeof(T)){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometryAssetCodec::serialize failed: '{}' payload byte size overflows"), label);
         return false;

@@ -56,13 +56,7 @@ static bool NearlyEqual4(const Float4U& value, const f32 x, const f32 y, const f
     ;
 }
 
-static TangentFrameRebuildVertex MakeVertex(
-    const f32 x,
-    const f32 y,
-    const f32 z,
-    const f32 u,
-    const f32 v)
-{
+static TangentFrameRebuildVertex MakeVertex(const f32 x, const f32 y, const f32 z, const f32 u, const f32 v){
     TangentFrameRebuildVertex vertex;
     vertex.position = Float3U(x, y, z);
     vertex.uv0 = Float2U(u, v);

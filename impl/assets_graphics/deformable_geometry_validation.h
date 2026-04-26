@@ -441,12 +441,7 @@ inline void LogMorphPayloadFailure(
     return true;
 }
 
-[[nodiscard]] inline bool ValidTriangle(
-    const Vector<DeformableVertexRest>& restVertices,
-    const u32 a,
-    const u32 b,
-    const u32 c)
-{
+[[nodiscard]] inline bool ValidTriangle(const Vector<DeformableVertexRest>& restVertices, const u32 a, const u32 b, const u32 c){
     if(a >= restVertices.size() || b >= restVertices.size() || c >= restVertices.size())
         return false;
     if(a == b || a == c || b == c)

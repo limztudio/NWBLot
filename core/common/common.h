@@ -250,7 +250,8 @@ template<typename T>
     return (ch >= T('a') && ch <= T('z'))
         || (ch >= T('A') && ch <= T('Z'))
         || (ch >= T('0') && ch <= T('9'))
-        || ch == T('_');
+        || ch == T('_')
+    ;
 }
 
 template<typename T>
@@ -261,7 +262,8 @@ template<typename T>
         || ch == T('\n')
         || ch == T('\r')
         || ch == T('\f')
-        || ch == T('\v');
+        || ch == T('\v')
+    ;
 }
 
 template<typename T>

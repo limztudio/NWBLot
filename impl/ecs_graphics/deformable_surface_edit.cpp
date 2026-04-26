@@ -251,10 +251,7 @@ using MorphDeltaLookup = HashMap<
     ;
 }
 
-[[nodiscard]] bool ValidateHitRestSample(
-    const DeformableRuntimeMeshInstance& instance,
-    const DeformablePosedHit& hit)
-{
+[[nodiscard]] bool ValidateHitRestSample(const DeformableRuntimeMeshInstance& instance, const DeformablePosedHit& hit){
     SourceSample resolvedSample{};
     if(!ResolveDeformableRestSurfaceSample(instance, hit.triangle, hit.bary, resolvedSample))
         return false;
@@ -274,10 +271,7 @@ using MorphDeltaLookup = HashMap<
     ;
 }
 
-[[nodiscard]] bool ValidateHitIdentity(
-    const DeformableRuntimeMeshInstance& instance,
-    const DeformablePosedHit& hit)
-{
+[[nodiscard]] bool ValidateHitIdentity(const DeformableRuntimeMeshInstance& instance, const DeformablePosedHit& hit){
     if(!DeformableValidation::ValidLooseBarycentric(hit.bary.values))
         return false;
     if(!ValidatePosedHitFrame(hit))
@@ -895,11 +889,7 @@ void RestoreReplayAccessories(
     return true;
 }
 
-[[nodiscard]] bool AppendStringTablePath(
-    Core::Assets::AssetBytes& stringTable,
-    const CompactString& pathText,
-    u32& outOffset)
-{
+[[nodiscard]] bool AppendStringTablePath(Core::Assets::AssetBytes& stringTable, const CompactString& pathText, u32& outOffset){
     outOffset = Limit<u32>::s_Max;
     if(pathText.empty() || stringTable.size() >= Limit<u32>::s_Max)
         return false;
@@ -1102,11 +1092,7 @@ void RestoreReplayAccessories(
     ;
 }
 
-void AccumulateMorphDelta(
-    DeformableMorphDelta& target,
-    const DeformableMorphDelta& source,
-    const f32 weight)
-{
+void AccumulateMorphDelta(DeformableMorphDelta& target, const DeformableMorphDelta& source, const f32 weight){
     const SIMDVector weightVector = VectorReplicate(weight);
     StoreFloat(
         VectorMultiplyAdd(LoadFloat(source.deltaPosition), weightVector, LoadFloat(target.deltaPosition)),
@@ -1245,12 +1231,7 @@ template<typename EdgeVector, typename VertexVector>
     return true;
 }
 
-[[nodiscard]] bool AccumulateSkinWeight(
-    SkinWeightSample (&samples)[12],
-    u32& sampleCount,
-    const u16 joint,
-    const f32 weight)
-{
+[[nodiscard]] bool AccumulateSkinWeight(SkinWeightSample (&samples)[12], u32& sampleCount, const u16 joint, const f32 weight){
     if(!IsFinite(weight) || weight < 0.0f)
         return false;
     if(!DeformableValidation::ActiveWeight(weight))
@@ -1443,10 +1424,7 @@ template<usize sourceCount>
     return true;
 }
 
-[[nodiscard]] bool RebuildRuntimeMeshTangentFrames(
-    Vector<DeformableVertexRest>& vertices,
-    const Vector<u32>& indices)
-{
+[[nodiscard]] bool RebuildRuntimeMeshTangentFrames(Vector<DeformableVertexRest>& vertices, const Vector<u32>& indices){
     Vector<Core::Geometry::TangentFrameRebuildVertex> rebuildVertices;
     rebuildVertices.reserve(vertices.size());
     for(const DeformableVertexRest& vertex : vertices){
@@ -1746,10 +1724,7 @@ bool ResolveAccessoryAttachmentTransform(
     return true;
 }
 
-bool SerializeSurfaceEditState(
-    const DeformableSurfaceEditState& state,
-    Core::Assets::AssetBytes& outBinary)
-{
+bool SerializeSurfaceEditState(const DeformableSurfaceEditState& state, Core::Assets::AssetBytes& outBinary){
     outBinary.clear();
     if(!__hidden_deformable_surface_edit::ValidSurfaceEditState(state))
         return false;
@@ -1790,10 +1765,7 @@ bool SerializeSurfaceEditState(
     return outBinary.size() == binarySize;
 }
 
-bool DeserializeSurfaceEditState(
-    const Core::Assets::AssetBytes& binary,
-    DeformableSurfaceEditState& outState)
-{
+bool DeserializeSurfaceEditState(const Core::Assets::AssetBytes& binary, DeformableSurfaceEditState& outState){
     outState = DeformableSurfaceEditState{};
     usize cursor = 0;
     u32 magic = 0u;
@@ -1868,10 +1840,7 @@ bool DeserializeSurfaceEditState(
     return true;
 }
 
-bool BuildSurfaceEditStateDebugDump(
-    const DeformableSurfaceEditState& state,
-    AString& outDump)
-{
+bool BuildSurfaceEditStateDebugDump(const DeformableSurfaceEditState& state, AString& outDump){
     outDump.clear();
     if(!__hidden_deformable_surface_edit::ValidSurfaceEditState(state))
         return false;
@@ -2378,8 +2347,7 @@ namespace __hidden_deformable_surface_edit{
         outRedoEntry->edit = state.edits.back();
 
     outUndoState.edits.reserve(state.edits.size() - 1u);
-    for(usize editIndex = 0u; editIndex + 1u < state.edits.size(); ++editIndex)
-        outUndoState.edits.push_back(state.edits[editIndex]);
+    outUndoState.edits.insert(outUndoState.edits.end(), state.edits.begin(), state.edits.end() - 1u);
 
     outUndoState.accessories.reserve(state.accessories.size());
     for(const DeformableAccessoryAttachmentRecord& accessory : state.accessories){
@@ -2424,15 +2392,12 @@ namespace __hidden_deformable_surface_edit{
     }
 
     outRedoState.edits.reserve(state.edits.size() + 1u);
-    for(const DeformableSurfaceEditRecord& record : state.edits)
-        outRedoState.edits.push_back(record);
+    outRedoState.edits.insert(outRedoState.edits.end(), state.edits.begin(), state.edits.end());
     outRedoState.edits.push_back(redoEntry.edit);
 
     outRedoState.accessories.reserve(state.accessories.size() + redoEntry.accessories.size());
-    for(const DeformableAccessoryAttachmentRecord& accessory : state.accessories)
-        outRedoState.accessories.push_back(accessory);
-    for(const DeformableAccessoryAttachmentRecord& accessory : redoEntry.accessories)
-        outRedoState.accessories.push_back(accessory);
+    outRedoState.accessories.insert(outRedoState.accessories.end(), state.accessories.begin(), state.accessories.end());
+    outRedoState.accessories.insert(outRedoState.accessories.end(), redoEntry.accessories.begin(), redoEntry.accessories.end());
 
     outResult.redoneEditId = redoEntry.edit.editId;
     outResult.restoredAccessoryCount = static_cast<u32>(redoEntry.accessories.size());

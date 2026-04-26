@@ -168,8 +168,7 @@ void SystemScheduler::rebuild(){
 
         Stage stage{SystemAllocator(m_arena)};
         stage.reserve(stageSystems.size());
-        for(ISystem* sys : stageSystems)
-            stage.push_back(sys);
+        stage.insert(stage.end(), stageSystems.begin(), stageSystems.end());
         m_stages.push_back(Move(stage));
     }
 

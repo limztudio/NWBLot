@@ -23,9 +23,7 @@ static int RunResourceCooker(const int argc, char** argv){
     return ret;
 }
 
-[[nodiscard]] static bool InitializeResourceCookerCommon(
-    NWB::Core::Common::InitializerGuard& commonInitializerGuard
-){
+[[nodiscard]] static bool InitializeResourceCookerCommon(NWB::Core::Common::InitializerGuard& commonInitializerGuard){
     if(commonInitializerGuard.initialize())
         return true;
 

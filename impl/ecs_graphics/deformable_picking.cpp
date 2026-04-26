@@ -313,20 +313,14 @@ template<typename PreparedJointPaletteVector>
     return size > 1u ? 1.0f / static_cast<f32>(size - 1u) : 1.0f;
 }
 
-[[nodiscard]] Float2U DisplacementTextureCoord(
-    const DeformableDisplacement& displacement,
-    const Float2U& uv)
-{
+[[nodiscard]] Float2U DisplacementTextureCoord(const DeformableDisplacement& displacement, const Float2U& uv){
     return Float2U(
         Saturate((uv.x * displacement.uvScale.x) + displacement.uvOffset.x),
         Saturate((uv.y * displacement.uvScale.y) + displacement.uvOffset.y)
     );
 }
 
-[[nodiscard]] Float4U SampleDisplacementTextureCoord(
-    const DeformableDisplacementTexture& texture,
-    const Float2U& uv)
-{
+[[nodiscard]] Float4U SampleDisplacementTextureCoord(const DeformableDisplacementTexture& texture, const Float2U& uv){
     const u32 x = SampleCoordinate(uv.x, texture.width());
     const u32 y = SampleCoordinate(uv.y, texture.height());
     const usize texelIndex = static_cast<usize>(y) * static_cast<usize>(texture.width()) + static_cast<usize>(x);
@@ -700,10 +694,7 @@ bool ResolveDeformableRestSurfaceSample(
     return ResolveDeformableRestSurfaceSample(instance, triangle, unpackedBary, outSample);
 }
 
-DeformableEditMaskFlags ResolveDeformableTriangleEditMask(
-    const DeformableRuntimeMeshInstance& instance,
-    const u32 triangle)
-{
+DeformableEditMaskFlags ResolveDeformableTriangleEditMask(const DeformableRuntimeMeshInstance& instance, const u32 triangle){
     const usize triangleCount = instance.indices.size() / 3u;
     if(static_cast<usize>(triangle) >= triangleCount)
         return DeformableEditMaskFlag::Forbidden;

@@ -116,10 +116,8 @@ Value Value::operator+(const Value& rhs)const{
             return Value(m_arena);
         }
         dst.reserve(m_data.m_list->size() + rhs.m_data.m_list->size());
-        for(const auto& elem : *m_data.m_list)
-            dst.push_back(elem);
-        for(const auto& elem : *rhs.m_data.m_list)
-            dst.push_back(elem);
+        dst.insert(dst.end(), m_data.m_list->begin(), m_data.m_list->end());
+        dst.insert(dst.end(), rhs.m_data.m_list->begin(), rhs.m_data.m_list->end());
         return v;
     }
 
@@ -216,8 +214,7 @@ Value& Value::operator+=(const Value& rhs){
                 return *this;
             }
             m_data.m_list->reserve(m_data.m_list->size() + rhs.m_data.m_list->size());
-            for(const auto& elem : *rhs.m_data.m_list)
-                m_data.m_list->push_back(elem);
+            m_data.m_list->insert(m_data.m_list->end(), rhs.m_data.m_list->begin(), rhs.m_data.m_list->end());
         }
         else{
             if(m_data.m_list->size() == Limit<usize>::s_Max){

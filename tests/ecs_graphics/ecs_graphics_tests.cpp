@@ -2006,6 +2006,23 @@ static void TestSurfaceEditDebugSnapshotCapturesPreviewAndWallVertices(TestConte
 
     NWB::Impl::DeformableSurfaceEditState state;
     state.edits.push_back(record);
+    SimulateRuntimeMeshUpload(instance);
+    NWB::Impl::DeformableAccessoryAttachmentComponent attachment;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Impl::AttachAccessory(instance, result, 0.08f, 0.12f, attachment)
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        AppendAccessoryRecord(
+            state,
+            attachment,
+            record.editId,
+            s_MockAccessoryGeometryPath,
+            s_MockAccessoryMaterialPath
+        )
+    );
+
     NWB::Impl::DeformableSurfaceEditDebugSnapshot stateSnapshot;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
@@ -2019,13 +2036,17 @@ static void TestSurfaceEditDebugSnapshotCapturesPreviewAndWallVertices(TestConte
     );
     NWB_ECS_GRAPHICS_TEST_CHECK(context, !stateSnapshot.previewValid);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, stateSnapshot.wallVertexCount == result.wallVertexCount);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, stateSnapshot.lines.size() == result.wallVertexCount);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, stateSnapshot.points.size() == result.wallVertexCount);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, stateSnapshot.accessoryAnchorCount == result.wallVertexCount);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, stateSnapshot.lines.size() == result.wallVertexCount * 2u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, stateSnapshot.points.size() == result.wallVertexCount * 2u);
 
     AString dump;
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::BuildDeformableSurfaceEditDebugDump(stateSnapshot, dump));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, dump.find("deformable_debug_snapshot") != AString::npos);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, dump.find("wall_vertices=4") != AString::npos);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, dump.find("accessory_anchors=4") != AString::npos);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, dump.find("lines=8") != AString::npos);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, dump.find("points=8") != AString::npos);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, dump.find("invalid_frames=0") != AString::npos);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, dump.find("skin_vertices=20") != AString::npos);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, dump.find("max_skin_influences=2") != AString::npos);

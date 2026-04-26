@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <core/geometry/meshlet_cluster.h>
 #include <core/geometry/mesh_topology.h>
 #include <core/geometry/tangent_frame_rebuild.h>
 
@@ -23,6 +24,8 @@ namespace __hidden_geometry_tests{
 
 
 using TestContext = NWB::Tests::TestContext;
+using MeshletBuildConfig = NWB::Core::Geometry::MeshletBuildConfig;
+using MeshletCluster = NWB::Core::Geometry::MeshletCluster;
 using MeshTopologyEdge = NWB::Core::Geometry::MeshTopologyEdge;
 using TangentFrameRebuildVertex = NWB::Core::Geometry::TangentFrameRebuildVertex;
 
@@ -263,6 +266,149 @@ static void TestRejectsMalformedWallTrianglePairs(TestContext& context){
     NWB_GEOMETRY_TEST_CHECK(context, indices.empty());
 }
 
+static void TestBuildsSingleQuadMeshlet(TestContext& context){
+    Vector<Float3U> positions;
+    positions.push_back(Float3U(-1.0f, -1.0f, 0.0f));
+    positions.push_back(Float3U(1.0f, -1.0f, 0.0f));
+    positions.push_back(Float3U(1.0f, 1.0f, 0.0f));
+    positions.push_back(Float3U(-1.0f, 1.0f, 0.0f));
+
+    Vector<u32> indices;
+    indices.push_back(0u);
+    indices.push_back(1u);
+    indices.push_back(2u);
+    indices.push_back(0u);
+    indices.push_back(2u);
+    indices.push_back(3u);
+
+    Vector<MeshletCluster> meshlets;
+    Vector<u32> vertexIndices;
+    Vector<u32> localIndices;
+    MeshletBuildConfig config;
+    config.maxVertices = 4u;
+    config.maxTriangles = 2u;
+    NWB_GEOMETRY_TEST_CHECK(
+        context,
+        NWB::Core::Geometry::BuildMeshlets(positions, indices, config, meshlets, vertexIndices, localIndices)
+    );
+    NWB_GEOMETRY_TEST_CHECK(context, meshlets.size() == 1u);
+    NWB_GEOMETRY_TEST_CHECK(context, vertexIndices.size() == 4u);
+    NWB_GEOMETRY_TEST_CHECK(context, localIndices.size() == 6u);
+    NWB_GEOMETRY_TEST_CHECK(context, vertexIndices[0] == 0u);
+    NWB_GEOMETRY_TEST_CHECK(context, vertexIndices[1] == 1u);
+    NWB_GEOMETRY_TEST_CHECK(context, vertexIndices[2] == 2u);
+    NWB_GEOMETRY_TEST_CHECK(context, vertexIndices[3] == 3u);
+    NWB_GEOMETRY_TEST_CHECK(context, localIndices[0] == 0u);
+    NWB_GEOMETRY_TEST_CHECK(context, localIndices[1] == 1u);
+    NWB_GEOMETRY_TEST_CHECK(context, localIndices[2] == 2u);
+    NWB_GEOMETRY_TEST_CHECK(context, localIndices[3] == 0u);
+    NWB_GEOMETRY_TEST_CHECK(context, localIndices[4] == 2u);
+    NWB_GEOMETRY_TEST_CHECK(context, localIndices[5] == 3u);
+
+    const MeshletCluster& meshlet = meshlets[0];
+    NWB_GEOMETRY_TEST_CHECK(context, meshlet.firstVertex == 0u);
+    NWB_GEOMETRY_TEST_CHECK(context, meshlet.vertexCount == 4u);
+    NWB_GEOMETRY_TEST_CHECK(context, meshlet.firstIndex == 0u);
+    NWB_GEOMETRY_TEST_CHECK(context, meshlet.indexCount == 6u);
+    NWB_GEOMETRY_TEST_CHECK(context, NearlyEqual3(meshlet.bounds.minimum, -1.0f, -1.0f, 0.0f));
+    NWB_GEOMETRY_TEST_CHECK(context, NearlyEqual3(meshlet.bounds.maximum, 1.0f, 1.0f, 0.0f));
+    NWB_GEOMETRY_TEST_CHECK(context, NearlyEqual3(meshlet.bounds.center, 0.0f, 0.0f, 0.0f));
+    NWB_GEOMETRY_TEST_CHECK(context, NearlyEqual(meshlet.bounds.radius, Sqrt(2.0f)));
+}
+
+static void TestMeshletBuilderSplitsByLimits(TestContext& context){
+    Vector<Float3U> positions;
+    positions.push_back(Float3U(0.0f, 0.0f, 0.0f));
+    positions.push_back(Float3U(1.0f, 0.0f, 0.0f));
+    positions.push_back(Float3U(0.0f, 1.0f, 0.0f));
+    positions.push_back(Float3U(2.0f, 0.0f, 0.0f));
+    positions.push_back(Float3U(3.0f, 0.0f, 0.0f));
+    positions.push_back(Float3U(2.0f, 1.0f, 0.0f));
+
+    Vector<u32> indices;
+    indices.push_back(0u);
+    indices.push_back(1u);
+    indices.push_back(2u);
+    indices.push_back(3u);
+    indices.push_back(4u);
+    indices.push_back(5u);
+
+    Vector<MeshletCluster> meshlets;
+    Vector<u32> vertexIndices;
+    Vector<u32> localIndices;
+    MeshletBuildConfig config;
+    config.maxVertices = 3u;
+    config.maxTriangles = 2u;
+    NWB_GEOMETRY_TEST_CHECK(
+        context,
+        NWB::Core::Geometry::BuildMeshlets(positions, indices, config, meshlets, vertexIndices, localIndices)
+    );
+    NWB_GEOMETRY_TEST_CHECK(context, meshlets.size() == 2u);
+    NWB_GEOMETRY_TEST_CHECK(context, meshlets[0].firstVertex == 0u);
+    NWB_GEOMETRY_TEST_CHECK(context, meshlets[0].vertexCount == 3u);
+    NWB_GEOMETRY_TEST_CHECK(context, meshlets[0].firstIndex == 0u);
+    NWB_GEOMETRY_TEST_CHECK(context, meshlets[0].indexCount == 3u);
+    NWB_GEOMETRY_TEST_CHECK(context, meshlets[1].firstVertex == 3u);
+    NWB_GEOMETRY_TEST_CHECK(context, meshlets[1].vertexCount == 3u);
+    NWB_GEOMETRY_TEST_CHECK(context, meshlets[1].firstIndex == 3u);
+    NWB_GEOMETRY_TEST_CHECK(context, meshlets[1].indexCount == 3u);
+
+    config.maxVertices = 6u;
+    config.maxTriangles = 1u;
+    NWB_GEOMETRY_TEST_CHECK(
+        context,
+        NWB::Core::Geometry::BuildMeshlets(positions, indices, config, meshlets, vertexIndices, localIndices)
+    );
+    NWB_GEOMETRY_TEST_CHECK(context, meshlets.size() == 2u);
+    NWB_GEOMETRY_TEST_CHECK(context, meshlets[0].vertexCount == 3u);
+    NWB_GEOMETRY_TEST_CHECK(context, meshlets[1].vertexCount == 3u);
+}
+
+static void TestMeshletBuilderRejectsInvalidInput(TestContext& context){
+    Vector<Float3U> positions;
+    positions.push_back(Float3U(0.0f, 0.0f, 0.0f));
+    positions.push_back(Float3U(1.0f, 0.0f, 0.0f));
+    positions.push_back(Float3U(0.0f, 1.0f, 0.0f));
+
+    Vector<u32> indices;
+    indices.push_back(0u);
+    indices.push_back(1u);
+    indices.push_back(3u);
+
+    Vector<MeshletCluster> meshlets;
+    Vector<u32> vertexIndices;
+    Vector<u32> localIndices;
+    MeshletBuildConfig config;
+    NWB_GEOMETRY_TEST_CHECK(
+        context,
+        !NWB::Core::Geometry::BuildMeshlets(positions, indices, config, meshlets, vertexIndices, localIndices)
+    );
+    NWB_GEOMETRY_TEST_CHECK(context, meshlets.empty());
+    NWB_GEOMETRY_TEST_CHECK(context, vertexIndices.empty());
+    NWB_GEOMETRY_TEST_CHECK(context, localIndices.empty());
+
+    indices[2] = 1u;
+    NWB_GEOMETRY_TEST_CHECK(
+        context,
+        !NWB::Core::Geometry::BuildMeshlets(positions, indices, config, meshlets, vertexIndices, localIndices)
+    );
+
+    indices[1] = 1u;
+    indices[2] = 2u;
+    positions[2].x = Limit<f32>::s_QuietNaN;
+    NWB_GEOMETRY_TEST_CHECK(
+        context,
+        !NWB::Core::Geometry::BuildMeshlets(positions, indices, config, meshlets, vertexIndices, localIndices)
+    );
+
+    positions[2] = Float3U(0.0f, 1.0f, 0.0f);
+    config.maxVertices = 2u;
+    NWB_GEOMETRY_TEST_CHECK(
+        context,
+        !NWB::Core::Geometry::BuildMeshlets(positions, indices, config, meshlets, vertexIndices, localIndices)
+    );
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -291,6 +437,9 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
     __hidden_geometry_tests::TestRejectsBranchedBoundaryLoop(context);
     __hidden_geometry_tests::TestAppendsWallTrianglePairs(context);
     __hidden_geometry_tests::TestRejectsMalformedWallTrianglePairs(context);
+    __hidden_geometry_tests::TestBuildsSingleQuadMeshlet(context);
+    __hidden_geometry_tests::TestMeshletBuilderSplitsByLimits(context);
+    __hidden_geometry_tests::TestMeshletBuilderRejectsInvalidInput(context);
     if(context.failed != 0u){
         NWB_CERR << "geometry tests failed: " << context.failed << " failed, " << context.passed << " passed\n";
         return -1;

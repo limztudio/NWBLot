@@ -10,6 +10,7 @@
 #include <core/assets/asset_manager.h>
 #include <core/ecs/entity.h>
 #include <core/ecs/world.h>
+#include <core/geometry/frame_math.h>
 #include <core/geometry/mesh_topology.h>
 #include <core/geometry/tangent_frame_rebuild.h>
 #include <impl/assets_graphics/deformable_geometry_validation.h>
@@ -65,8 +66,8 @@ void ResolveTangentBitangentVectors(
     SIMDVector& outTangentVector,
     SIMDVector& outBitangentVector)
 {
-    outTangentVector = DeformableRuntime::ResolveFrameTangent(normalVector, tangentVector, fallbackTangent);
-    outBitangentVector = DeformableRuntime::ResolveFrameBitangent(normalVector, outTangentVector, s_SIMDIdentityR1);
+    outTangentVector = Core::Geometry::FrameResolveTangent(normalVector, tangentVector, fallbackTangent);
+    outBitangentVector = Core::Geometry::FrameResolveBitangent(normalVector, outTangentVector, s_SIMDIdentityR1);
 }
 
 struct SurfaceEditStateHeaderV4{
@@ -141,11 +142,11 @@ using MorphDeltaLookup = HashMap<
     const SIMDVector edge1 = VectorSubtract(c, a);
 
     const SIMDVector rawNormal = Vector3Cross(edge0, edge1);
-    if(VectorGetX(Vector3LengthSq(rawNormal)) <= s_FrameEpsilon)
+    if(VectorGetX(Vector3LengthSq(rawNormal)) <= Core::Geometry::s_FrameDirectionEpsilon)
         return false;
 
     outFrame.center = BarycentricPoint(instance, triangleIndices, bary);
-    outFrame.normal = DeformableRuntime::Normalize(rawNormal, VectorSet(0.0f, 0.0f, 1.0f, 0.0f));
+    outFrame.normal = Core::Geometry::FrameNormalizeDirection(rawNormal, VectorSet(0.0f, 0.0f, 1.0f, 0.0f));
 
     const DeformableVertexRest& vertex0 = instance.restVertices[triangleIndices[0]];
     const DeformableVertexRest& vertex1 = instance.restVertices[triangleIndices[1]];
@@ -162,9 +163,9 @@ using MorphDeltaLookup = HashMap<
         tangentVector
     );
     ResolveTangentBitangentVectors(outFrame.normal, tangentVector, edge0, outFrame.tangent, outFrame.bitangent);
-    return VectorGetX(Vector3LengthSq(outFrame.normal)) > s_FrameEpsilon
-        && VectorGetX(Vector3LengthSq(outFrame.tangent)) > s_FrameEpsilon
-        && VectorGetX(Vector3LengthSq(outFrame.bitangent)) > s_FrameEpsilon
+    return VectorGetX(Vector3LengthSq(outFrame.normal)) > Core::Geometry::s_FrameDirectionEpsilon
+        && VectorGetX(Vector3LengthSq(outFrame.tangent)) > Core::Geometry::s_FrameDirectionEpsilon
+        && VectorGetX(Vector3LengthSq(outFrame.bitangent)) > Core::Geometry::s_FrameDirectionEpsilon
         && Abs(VectorGetX(Vector3Dot(outFrame.normal, outFrame.tangent))) <= 0.001f
     ;
 }
@@ -695,10 +696,10 @@ using MorphDeltaLookup = HashMap<
     const SIMDVector b = LoadFloat(instance.restVertices[indices[1]].position);
     const SIMDVector c = LoadFloat(instance.restVertices[indices[2]].position);
     const SIMDVector rawNormal = Vector3Cross(VectorSubtract(b, a), VectorSubtract(c, a));
-    if(VectorGetX(Vector3LengthSq(rawNormal)) <= s_FrameEpsilon)
+    if(VectorGetX(Vector3LengthSq(rawNormal)) <= Core::Geometry::s_FrameDirectionEpsilon)
         return false;
 
-    const SIMDVector triangleNormal = DeformableRuntime::Normalize(rawNormal, s_SIMDIdentityR2);
+    const SIMDVector triangleNormal = Core::Geometry::FrameNormalizeDirection(rawNormal, s_SIMDIdentityR2);
     const SIMDVector recordNormal = LoadFloat(storedNormal);
     if(!FiniteVec3(triangleNormal) || !FiniteVec3(recordNormal))
         return false;
@@ -1018,7 +1019,7 @@ void RestoreReplayAccessories(
     if(!DeformableValidation::FiniteVector(rawNormalVector, 0x7u))
         return s_SIMDIdentityR3;
 
-    const SIMDVector normalVector = DeformableRuntime::Normalize(rawNormalVector, s_SIMDIdentityR2);
+    const SIMDVector normalVector = Core::Geometry::FrameNormalizeDirection(rawNormalVector, s_SIMDIdentityR2);
     if(!DeformableValidation::FiniteVector(normalVector, 0x7u))
         return s_SIMDIdentityR3;
 
@@ -1035,7 +1036,7 @@ void RestoreReplayAccessories(
 
     const SIMDVector axis = VectorMultiply(VectorSwizzle<1, 0, 2, 3>(normalVector), VectorSet(-1.0f, 1.0f, 0.0f, 0.0f));
     const f32 scale = VectorGetX(VectorSqrt(VectorReplicate((1.0f + dot) * 2.0f)));
-    if(!IsFinite(scale) || scale <= s_FrameEpsilon)
+    if(!IsFinite(scale) || scale <= Core::Geometry::s_FrameDirectionEpsilon)
         return s_SIMDIdentityR3;
 
     SIMDVector rotationVector = VectorScale(axis, 1.0f / scale);
@@ -1047,7 +1048,7 @@ void RestoreReplayAccessories(
     const SIMDVector fallbackNormalVector)
 {
     const f32 lengthSquared = VectorGetX(QuaternionLengthSq(rotationVector));
-    if(!IsFinite(lengthSquared) || lengthSquared <= s_FrameEpsilon)
+    if(!IsFinite(lengthSquared) || lengthSquared <= Core::Geometry::s_FrameDirectionEpsilon)
         return RotationFromPositiveZToNormalVector(fallbackNormalVector);
 
     return QuaternionNormalize(rotationVector);
@@ -1057,11 +1058,11 @@ void RestoreReplayAccessories(
     if(!DeformableValidation::FiniteVector(rawNormalVector, 0x7u))
         return s_SIMDIdentityR3;
 
-    const SIMDVector normalVector = DeformableRuntime::Normalize(rawNormalVector, s_SIMDIdentityR2);
+    const SIMDVector normalVector = Core::Geometry::FrameNormalizeDirection(rawNormalVector, s_SIMDIdentityR2);
     if(!DeformableValidation::FiniteVector(normalVector, 0x7u))
         return s_SIMDIdentityR3;
 
-    const SIMDVector fallbackTangent = DeformableRuntime::FallbackTangent(normalVector);
+    const SIMDVector fallbackTangent = Core::Geometry::FrameFallbackTangent(normalVector);
     SIMDVector tangentVector{};
     SIMDVector bitangentVector{};
     ResolveTangentBitangentVectors(
@@ -1408,7 +1409,7 @@ template<usize sourceCount>
     DeformableVertexRest wallVertex = vertices[sourceVertex];
     StoreFloat(position, &wallVertex.position);
     StoreFloat(normal, &wallVertex.normal);
-    StoreFloat(VectorSetW(tangent, DeformableRuntime::TangentHandedness(VectorGetW(tangent), 1.0f)), &wallVertex.tangent);
+    StoreFloat(VectorSetW(tangent, Core::Geometry::FrameTangentHandedness(VectorGetW(tangent), 1.0f)), &wallVertex.tangent);
     wallVertex.uv0 = Float2U(uvU, uvV);
     wallVertex.color0 = wallColor;
     if(!DeformableValidation::ValidRestVertexFrame(wallVertex))
@@ -1685,12 +1686,12 @@ bool ResolveAccessoryAttachmentTransform(
     const f32 invWallVertexCount = 1.0f / static_cast<f32>(wallVertexCount);
     rimCenter = VectorScale(rimCenter, invWallVertexCount);
     innerCenter = VectorScale(innerCenter, invWallVertexCount);
-    SIMDVector normal = DeformableRuntime::Normalize(
+    SIMDVector normal = Core::Geometry::FrameNormalizeDirection(
         VectorSubtract(rimCenter, innerCenter),
         VectorSet(0.0f, 0.0f, 1.0f, 0.0f)
     );
     if(!__hidden_deformable_surface_edit::FiniteVec3(normal)
-        || VectorGetX(Vector3LengthSq(normal)) <= DeformableRuntime::s_FrameEpsilon
+        || VectorGetX(Vector3LengthSq(normal)) <= Core::Geometry::s_FrameDirectionEpsilon
     )
         return false;
 
@@ -1702,10 +1703,10 @@ bool ResolveAccessoryAttachmentTransform(
     if(!__hidden_deformable_surface_edit::FiniteVec3(accessoryPosition))
         return false;
 
-    const SIMDVector tangent = DeformableRuntime::ResolveFrameTangent(
+    const SIMDVector tangent = Core::Geometry::FrameResolveTangent(
         normal,
         VectorSubtract(firstRimPosition, rimCenter),
-        DeformableRuntime::FallbackTangent(normal)
+        Core::Geometry::FrameFallbackTangent(normal)
     );
 
     StoreFloat(VectorSetW(accessoryPosition, 0.0f), &outTransform.position);
@@ -2097,7 +2098,7 @@ namespace __hidden_deformable_surface_edit{
             boundaryU[edgeIndex] = boundaryLength;
 
             const EdgeRecord& edge = orderedBoundaryEdges[edgeIndex];
-            const SIMDVector edgeDelta = DeformableRuntime::ProjectOntoFramePlane(
+            const SIMDVector edgeDelta = Core::Geometry::FrameProjectOntoPlane(
                 VectorSubtract(LoadFloat(newRestVertices[edge.b].position), LoadFloat(newRestVertices[edge.a].position)),
                 frameNormal
             );

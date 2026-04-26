@@ -47,6 +47,68 @@ static constexpr RuntimeMeshDirtyFlags s_GpuUploadHandledDirtyFlags =
     return expanded;
 }
 
+void LogRuntimeMorphPayloadFailure(
+    const TString& sourceText,
+    const Vector<DeformableMorph>& morphs,
+    const DeformableValidation::MorphPayloadFailureInfo& failure)
+{
+    const DeformableMorph* morph = failure.morphIndex < morphs.size()
+        ? &morphs[failure.morphIndex]
+        : nullptr
+    ;
+    const TString morphNameText = (morph && morph->name)
+        ? StringConvert(morph->name.c_str())
+        : TString(NWB_TEXT("<unnamed>"))
+    ;
+
+    switch(failure.reason){
+    case DeformableValidation::MorphPayloadFailure::MorphCountLimit:
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' morph count exceeds u32 limits"),
+            sourceText
+        );
+        break;
+    case DeformableValidation::MorphPayloadFailure::EmptyMorph:
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' has an unnamed or empty morph"),
+            sourceText
+        );
+        break;
+    case DeformableValidation::MorphPayloadFailure::DuplicateMorphName:
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' contains duplicate morph '{}'"),
+            sourceText,
+            morphNameText
+        );
+        break;
+    case DeformableValidation::MorphPayloadFailure::MorphDeltaCountLimit:
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' morph '{}' delta count exceeds u32 limits"),
+            sourceText,
+            morphNameText
+        );
+        break;
+    case DeformableValidation::MorphPayloadFailure::InvalidMorphDelta:
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' morph '{}' delta {} is invalid"),
+            sourceText,
+            morphNameText,
+            failure.deltaIndex
+        );
+        break;
+    case DeformableValidation::MorphPayloadFailure::DuplicateMorphDeltaVertex:
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' morph '{}' has duplicate vertex {}"),
+            sourceText,
+            morphNameText,
+            failure.vertexId
+        );
+        break;
+    case DeformableValidation::MorphPayloadFailure::None:
+        break;
+    }
+}
+
 [[nodiscard]] bool ValidateRuntimeMeshUploadPayload(const DeformableRuntimeMeshInstance& instance){
     const auto sourceText = [&instance]() -> TString{
         return instance.source.name()
@@ -205,12 +267,7 @@ static constexpr RuntimeMeshDirtyFlags s_GpuUploadHandledDirtyFlags =
         DeformableValidation::FindMorphPayloadFailure(instance.morphs, vertexCount)
     ;
     if(morphFailure.reason != DeformableValidation::MorphPayloadFailure::None){
-        DeformableValidation::LogMorphPayloadFailure(
-            DeformableValidation::MorphPayloadFailureLogDomain::RuntimeMesh,
-            sourceText(),
-            instance.morphs,
-            morphFailure
-        );
+        LogRuntimeMorphPayloadFailure(sourceText(), instance.morphs, morphFailure);
         return false;
     }
 

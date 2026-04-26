@@ -7,6 +7,7 @@
 
 #include "deformable_runtime_mesh_cache.h"
 
+#include <core/geometry/frame_math.h>
 #include <impl/assets_graphics/deformable_geometry_validation.h>
 
 
@@ -26,7 +27,6 @@ namespace DeformableRuntime{
 
 
 static constexpr f32 s_Epsilon = 0.000001f;
-static constexpr f32 s_FrameEpsilon = 0.00000001f;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -80,87 +80,6 @@ template<typename MorphVector, typename MorphWeightLookup>
         iterWeight.value() = resolvedWeight;
     }
     return true;
-}
-
-[[nodiscard]] inline SIMDVector Normalize(SIMDVector value, SIMDVector fallback){
-    if(!DeformableValidation::FiniteVector(value, 0x7u))
-        return fallback;
-
-    const SIMDVector lengthSquaredVector = Vector3LengthSq(value);
-    const f32 lengthSquared = VectorGetX(lengthSquaredVector);
-    if(!IsFinite(lengthSquared) || lengthSquared <= s_FrameEpsilon)
-        return fallback;
-
-    return VectorMultiply(value, VectorReciprocalSqrt(lengthSquaredVector));
-}
-
-[[nodiscard]] inline bool ValidFrameDirection(SIMDVector value){
-    return DeformableValidation::FiniteVector(value, 0x7u)
-        && VectorGetX(Vector3LengthSq(value)) > s_FrameEpsilon
-    ;
-}
-
-[[nodiscard]] inline SIMDVector ProjectOntoFramePlane(SIMDVector value, SIMDVector normal){
-    return VectorMultiplyAdd(
-        normal,
-        VectorReplicate(-VectorGetX(Vector3Dot(value, normal))),
-        value
-    );
-}
-
-[[nodiscard]] inline SIMDVector FallbackTangent(SIMDVector normal){
-    const SIMDVector axis = Abs(VectorGetZ(normal)) < 0.999f
-        ? VectorSet(0.0f, 0.0f, 1.0f, 0.0f)
-        : VectorSet(0.0f, 1.0f, 0.0f, 0.0f)
-    ;
-    return Normalize(Vector3Cross(axis, normal), VectorSet(1.0f, 0.0f, 0.0f, 0.0f));
-}
-
-[[nodiscard]] inline f32 TangentHandedness(const f32 handedness, const f32 fallbackHandedness){
-    if(Abs(handedness) > s_Epsilon)
-        return handedness < 0.0f ? -1.0f : 1.0f;
-    return fallbackHandedness < 0.0f ? -1.0f : 1.0f;
-}
-
-[[nodiscard]] inline SIMDVector ResolveFrameTangent(SIMDVector normal, SIMDVector tangent, SIMDVector fallbackTangent){
-    const SIMDVector safeFallbackTangent = FallbackTangent(normal);
-
-    SIMDVector projectedTangent = DeformableValidation::FiniteVector(tangent, 0x7u)
-        ? ProjectOntoFramePlane(tangent, normal)
-        : safeFallbackTangent
-    ;
-    if(!ValidFrameDirection(projectedTangent)){
-        projectedTangent = DeformableValidation::FiniteVector(fallbackTangent, 0x7u)
-            ? ProjectOntoFramePlane(fallbackTangent, normal)
-            : safeFallbackTangent
-        ;
-    }
-    if(!ValidFrameDirection(projectedTangent))
-        return safeFallbackTangent;
-
-    return Normalize(projectedTangent, safeFallbackTangent);
-}
-
-[[nodiscard]] inline SIMDVector ResolveFrameBitangent(SIMDVector normal, SIMDVector tangent, SIMDVector fallbackBitangent){
-    const SIMDVector safeFallbackBitangent = Normalize(
-        DeformableValidation::FiniteVector(fallbackBitangent, 0x7u)
-            ? ProjectOntoFramePlane(fallbackBitangent, normal)
-            : Vector3Cross(normal, FallbackTangent(normal)),
-        VectorSet(0.0f, 1.0f, 0.0f, 0.0f)
-    );
-
-    SIMDVector bitangent = Vector3Cross(normal, tangent);
-    if(!ValidFrameDirection(bitangent))
-        bitangent = safeFallbackBitangent;
-    return Normalize(bitangent, safeFallbackBitangent);
-}
-
-inline void OrthonormalizeFrame(SIMDVector& normal, SIMDVector& tangent, const SIMDVector fallbackNormal, const SIMDVector fallbackTangent){
-    normal = Normalize(normal, Normalize(fallbackNormal, VectorSet(0.0f, 0.0f, 1.0f, 0.0f)));
-    tangent = VectorSetW(
-        ResolveFrameTangent(normal, tangent, fallbackTangent),
-        TangentHandedness(VectorGetW(tangent), VectorGetW(fallbackTangent))
-    );
 }
 
 [[nodiscard]] inline SIMDMatrix LoadJointMatrix(const DeformableJointMatrix& matrix){

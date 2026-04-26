@@ -8,7 +8,6 @@
 #include "deformable_geometry_asset.h"
 
 #include <core/alloc/scratch.h>
-#include <logger/client/logger.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -52,24 +51,11 @@ namespace MorphPayloadFailure{
     };
 };
 
-namespace MorphPayloadFailureLogDomain{
-    enum Enum : u8{
-        GeometryAsset,
-        RuntimeMesh,
-    };
-};
-
 struct MorphPayloadFailureInfo{
     MorphPayloadFailure::Enum reason = MorphPayloadFailure::None;
     usize morphIndex = 0;
     usize deltaIndex = 0;
     u32 vertexId = 0;
-};
-
-struct MorphPayloadFailureLogContext{
-    const tchar* prefix = nullptr;
-    const tchar* sourceKind = nullptr;
-    bool emptyMorphUsesIndex = false;
 };
 
 
@@ -88,116 +74,6 @@ struct MorphPayloadFailureLogContext{
     info.deltaIndex = deltaIndex;
     info.vertexId = vertexId;
     return info;
-}
-
-[[nodiscard]] inline const MorphPayloadFailureLogContext& MorphPayloadFailureLogContextFor(
-    const MorphPayloadFailureLogDomain::Enum domain)
-{
-    static constexpr MorphPayloadFailureLogContext s_GeometryAsset = {
-        NWB_TEXT("DeformableGeometry::validatePayload failed"),
-        NWB_TEXT("geometry"),
-        true
-    };
-    static constexpr MorphPayloadFailureLogContext s_RuntimeMesh = {
-        NWB_TEXT("DeformableRuntimeMeshCache"),
-        NWB_TEXT("runtime mesh"),
-        false
-    };
-
-    switch(domain){
-    case MorphPayloadFailureLogDomain::GeometryAsset:
-        return s_GeometryAsset;
-    case MorphPayloadFailureLogDomain::RuntimeMesh:
-    default:
-        return s_RuntimeMesh;
-    }
-}
-
-inline void LogMorphPayloadFailure(
-    const MorphPayloadFailureLogDomain::Enum domain,
-    const TString& sourceText,
-    const Vector<DeformableMorph>& morphs,
-    const MorphPayloadFailureInfo& failure)
-{
-    const DeformableMorph* morph = failure.morphIndex < morphs.size()
-        ? &morphs[failure.morphIndex]
-        : nullptr
-    ;
-    const TString morphNameText = (morph && morph->name)
-        ? StringConvert(morph->name.c_str())
-        : TString(NWB_TEXT("<unnamed>"))
-    ;
-    const MorphPayloadFailureLogContext& logContext = MorphPayloadFailureLogContextFor(domain);
-
-    switch(failure.reason){
-    case MorphPayloadFailure::MorphCountLimit:
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("{}: {} '{}' morph count exceeds u32 limits"),
-            logContext.prefix,
-            logContext.sourceKind,
-            sourceText
-        );
-        break;
-    case MorphPayloadFailure::EmptyMorph:
-        if(logContext.emptyMorphUsesIndex){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("{}: {} '{}' morph {} is unnamed or empty"),
-                logContext.prefix,
-                logContext.sourceKind,
-                sourceText,
-                failure.morphIndex
-            );
-        }
-        else{
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("{}: {} '{}' has an unnamed or empty morph"),
-                logContext.prefix,
-                logContext.sourceKind,
-                sourceText
-            );
-        }
-        break;
-    case MorphPayloadFailure::DuplicateMorphName:
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("{}: {} '{}' contains duplicate morph '{}'"),
-            logContext.prefix,
-            logContext.sourceKind,
-            sourceText,
-            morphNameText
-        );
-        break;
-    case MorphPayloadFailure::MorphDeltaCountLimit:
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("{}: {} '{}' morph '{}' delta count exceeds u32 limits"),
-            logContext.prefix,
-            logContext.sourceKind,
-            sourceText,
-            morphNameText
-        );
-        break;
-    case MorphPayloadFailure::InvalidMorphDelta:
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("{}: {} '{}' morph '{}' delta {} is invalid"),
-            logContext.prefix,
-            logContext.sourceKind,
-            sourceText,
-            morphNameText,
-            failure.deltaIndex
-        );
-        break;
-    case MorphPayloadFailure::DuplicateMorphDeltaVertex:
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("{}: {} '{}' morph '{}' has duplicate vertex {}"),
-            logContext.prefix,
-            logContext.sourceKind,
-            sourceText,
-            morphNameText,
-            failure.vertexId
-        );
-        break;
-    case MorphPayloadFailure::None:
-        break;
-    }
 }
 
 [[nodiscard]] inline bool ActiveWeight(const f32 value){

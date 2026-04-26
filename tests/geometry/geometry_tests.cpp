@@ -5,6 +5,7 @@
 #include <core/geometry/meshlet_cluster.h>
 #include <core/geometry/mesh_topology.h>
 #include <core/geometry/tangent_frame_rebuild.h>
+#include <core/geometry/frame_math.h>
 
 #include <tests/test_context.h>
 
@@ -54,6 +55,38 @@ static bool NearlyEqual4(const Float4U& value, const f32 x, const f32 y, const f
         && NearlyEqual(value.z, z)
         && NearlyEqual(value.w, w)
     ;
+}
+
+static void TestResolvesCoreFrameMath(TestContext& context){
+    SIMDVector normal = VectorSet(0.0f, 0.0f, 5.0f, 0.0f);
+    SIMDVector tangent = VectorSet(2.0f, 1.0f, 0.0f, -0.25f);
+    NWB::Core::Geometry::FrameOrthonormalize(
+        normal,
+        tangent,
+        VectorSet(0.0f, 0.0f, 1.0f, 0.0f),
+        VectorSet(1.0f, 0.0f, 0.0f, -1.0f)
+    );
+
+    const SIMDVector bitangent = NWB::Core::Geometry::FrameResolveBitangent(
+        normal,
+        tangent,
+        VectorSet(0.0f, 1.0f, 0.0f, 0.0f)
+    );
+    Float4U normalValue;
+    Float4U tangentValue;
+    Float4U bitangentValue;
+    StoreFloat(normal, &normalValue);
+    StoreFloat(tangent, &tangentValue);
+    StoreFloat(bitangent, &bitangentValue);
+
+    NWB_GEOMETRY_TEST_CHECK(context, NearlyEqual4(normalValue, 0.0f, 0.0f, 1.0f, 0.0f));
+    NWB_GEOMETRY_TEST_CHECK(context, NearlyEqual(VectorGetX(Vector3LengthSq(tangent)), 1.0f));
+    NWB_GEOMETRY_TEST_CHECK(context, NearlyEqual(VectorGetX(Vector3LengthSq(bitangent)), 1.0f));
+    NWB_GEOMETRY_TEST_CHECK(context, NearlyEqual(VectorGetX(Vector3Dot(normal, tangent)), 0.0f));
+    NWB_GEOMETRY_TEST_CHECK(context, NearlyEqual(VectorGetX(Vector3Dot(normal, bitangent)), 0.0f));
+    NWB_GEOMETRY_TEST_CHECK(context, NearlyEqual(VectorGetX(Vector3Dot(tangent, bitangent)), 0.0f));
+    NWB_GEOMETRY_TEST_CHECK(context, NearlyEqual(tangentValue.w, -1.0f));
+    NWB_GEOMETRY_TEST_CHECK(context, NearlyEqual(bitangentValue.w, 0.0f));
 }
 
 static TangentFrameRebuildVertex MakeVertex(const f32 x, const f32 y, const f32 z, const f32 u, const f32 v){
@@ -722,6 +755,7 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
     }
 
     __hidden_geometry_tests::TestContext context;
+    __hidden_geometry_tests::TestResolvesCoreFrameMath(context);
     __hidden_geometry_tests::TestRebuildsFlatQuadFrame(context);
     __hidden_geometry_tests::TestDegenerateUvsUseStableTangentFallback(context);
     __hidden_geometry_tests::TestRejectsDegenerateTriangle(context);

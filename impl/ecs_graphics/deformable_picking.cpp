@@ -9,6 +9,7 @@
 
 #include <core/alloc/scratch.h>
 #include <core/ecs/world.h>
+#include <core/geometry/frame_math.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -63,7 +64,7 @@ void OrthonormalizeVertexFrame(
 {
     SIMDVector normal = LoadVertexNormal(vertex);
     SIMDVector tangent = LoadVertexTangent(vertex);
-    DeformableRuntime::OrthonormalizeFrame(normal, tangent, fallbackNormal, fallbackTangent);
+    Core::Geometry::FrameOrthonormalize(normal, tangent, fallbackNormal, fallbackTangent);
     StoreVertexFrame(normal, tangent, vertex);
 
     if(outNormal)
@@ -350,17 +351,17 @@ void ApplyScalarTextureNormal(
     SIMDVector normal = LoadFloat(vertex.normal);
     SIMDVector tangent = VectorSetW(LoadFloat(vertex.tangent), 0.0f);
     const SIMDVector bitangent = VectorMultiply(
-        ResolveFrameBitangent(normal, tangent, VectorSet(0.0f, 1.0f, 0.0f, 0.0f)),
-        VectorReplicate(TangentHandedness(vertex.tangent.w, 1.0f))
+        Core::Geometry::FrameResolveBitangent(normal, tangent, VectorSet(0.0f, 1.0f, 0.0f, 0.0f)),
+        VectorReplicate(Core::Geometry::FrameTangentHandedness(vertex.tangent.w, 1.0f))
     );
-    normal = Normalize(
+    normal = Core::Geometry::FrameNormalizeDirection(
         VectorSubtract(
             VectorSubtract(normal, VectorScale(tangent, heightU)),
             VectorScale(bitangent, heightV)
         ),
         normal
     );
-    tangent = ResolveFrameTangent(normal, tangent, tangent);
+    tangent = Core::Geometry::FrameResolveTangent(normal, tangent, tangent);
     StoreFloat(normal, &vertex.normal);
     StoreFloat(VectorSetW(tangent, vertex.tangent.w), &vertex.tangent);
 }
@@ -420,8 +421,8 @@ void ApplyDisplacement(
         const SIMDVector normal = LoadFloat(vertex.normal);
         const SIMDVector tangent = VectorSetW(LoadFloat(vertex.tangent), 0.0f);
         const SIMDVector bitangent = VectorMultiply(
-            ResolveFrameBitangent(normal, tangent, VectorSet(0.0f, 1.0f, 0.0f, 0.0f)),
-            VectorReplicate(TangentHandedness(vertex.tangent.w, 1.0f))
+            Core::Geometry::FrameResolveBitangent(normal, tangent, VectorSet(0.0f, 1.0f, 0.0f, 0.0f)),
+            VectorReplicate(Core::Geometry::FrameTangentHandedness(vertex.tangent.w, 1.0f))
         );
         worldOffset = VectorMultiplyAdd(
             normal,
@@ -450,12 +451,12 @@ void ApplyTransform(const Core::Scene::TransformComponent* transform, Deformable
     StoreFloat(VectorAdd(position, LoadFloat(transform->position)), &vertex.position);
 
     SIMDVector normalVector = Vector3Rotate(LoadFloat(vertex.normal), rotation);
-    normalVector = DeformableRuntime::Normalize(normalVector, VectorSet(0.0f, 0.0f, 1.0f, 0.0f));
+    normalVector = Core::Geometry::FrameNormalizeDirection(normalVector, VectorSet(0.0f, 0.0f, 1.0f, 0.0f));
     StoreFloat(normalVector, &vertex.normal);
 
-    const SIMDVector tangentVector = DeformableRuntime::Normalize(
+    const SIMDVector tangentVector = Core::Geometry::FrameNormalizeDirection(
         Vector3Rotate(VectorSetW(LoadFloat(vertex.tangent), 0.0f), rotation),
-        DeformableRuntime::FallbackTangent(normalVector)
+        Core::Geometry::FrameFallbackTangent(normalVector)
     );
     StoreFloat(VectorSetW(tangentVector, vertex.tangent.w), &vertex.tangent);
 }
@@ -704,8 +705,8 @@ bool RaycastDeformableRuntimeMesh(
         return false;
 
     const SIMDVector rayOriginVector = LoadFloat(ray.originMinDistance);
-    const SIMDVector rayDirectionVector = DeformableRuntime::Normalize(LoadFloat(ray.directionMaxDistance), VectorZero());
-    if(!DeformableRuntime::ValidFrameDirection(rayDirectionVector))
+    const SIMDVector rayDirectionVector = Core::Geometry::FrameNormalizeDirection(LoadFloat(ray.directionMaxDistance), VectorZero());
+    if(!Core::Geometry::FrameValidDirection(rayDirectionVector))
         return false;
 
     Core::Alloc::ScratchArena<> scratchArena;
@@ -749,7 +750,7 @@ bool RaycastDeformableRuntimeMesh(
 
         const SIMDVector edge0 = VectorSubtract(bVector, aVector);
         const SIMDVector edge1 = VectorSubtract(cVector, aVector);
-        const SIMDVector normal = DeformableRuntime::Normalize(Vector3Cross(edge0, edge1), VectorSet(0.0f, 0.0f, 1.0f, 0.0f));
+        const SIMDVector normal = Core::Geometry::FrameNormalizeDirection(Vector3Cross(edge0, edge1), VectorSet(0.0f, 0.0f, 1.0f, 0.0f));
         const SIMDVector position = VectorMultiplyAdd(rayDirectionVector, VectorReplicate(distance), rayOriginVector);
 
         closestDistance = distance;

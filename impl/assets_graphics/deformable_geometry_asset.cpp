@@ -169,6 +169,69 @@ template<typename T>
     return true;
 }
 
+void LogGeometryMorphPayloadFailure(
+    const TString& geometryPathText,
+    const Vector<DeformableMorph>& morphs,
+    const DeformableValidation::MorphPayloadFailureInfo& failure)
+{
+    const DeformableMorph* morph = failure.morphIndex < morphs.size()
+        ? &morphs[failure.morphIndex]
+        : nullptr
+    ;
+    const TString morphNameText = (morph && morph->name)
+        ? StringConvert(morph->name.c_str())
+        : TString(NWB_TEXT("<unnamed>"))
+    ;
+
+    switch(failure.reason){
+    case DeformableValidation::MorphPayloadFailure::MorphCountLimit:
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' morph count exceeds u32 limits"),
+            geometryPathText
+        );
+        break;
+    case DeformableValidation::MorphPayloadFailure::EmptyMorph:
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' morph {} is unnamed or empty"),
+            geometryPathText,
+            failure.morphIndex
+        );
+        break;
+    case DeformableValidation::MorphPayloadFailure::DuplicateMorphName:
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' contains duplicate morph '{}'"),
+            geometryPathText,
+            morphNameText
+        );
+        break;
+    case DeformableValidation::MorphPayloadFailure::MorphDeltaCountLimit:
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' morph '{}' delta count exceeds u32 limits"),
+            geometryPathText,
+            morphNameText
+        );
+        break;
+    case DeformableValidation::MorphPayloadFailure::InvalidMorphDelta:
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' morph '{}' delta {} is invalid"),
+            geometryPathText,
+            morphNameText,
+            failure.deltaIndex
+        );
+        break;
+    case DeformableValidation::MorphPayloadFailure::DuplicateMorphDeltaVertex:
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' morph '{}' has duplicate vertex {}"),
+            geometryPathText,
+            morphNameText,
+            failure.vertexId
+        );
+        break;
+    case DeformableValidation::MorphPayloadFailure::None:
+        break;
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -494,12 +557,7 @@ bool DeformableGeometry::validatePayload()const{
         DeformableValidation::FindMorphPayloadFailure(m_morphs, m_restVertices.size())
     ;
     if(morphFailure.reason != DeformableValidation::MorphPayloadFailure::None){
-        DeformableValidation::LogMorphPayloadFailure(
-            DeformableValidation::MorphPayloadFailureLogDomain::GeometryAsset,
-            geometryPathText(),
-            m_morphs,
-            morphFailure
-        );
+        __hidden_deformable_geometry_asset::LogGeometryMorphPayloadFailure(geometryPathText(), m_morphs, morphFailure);
         return false;
     }
 

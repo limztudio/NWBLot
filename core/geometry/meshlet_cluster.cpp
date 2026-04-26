@@ -189,12 +189,13 @@ template<typename VertexAllocator>
     return ValidExpansionRadius(outRadius);
 }
 
+template<typename MeshletAllocator, typename VertexIndexAllocator, typename LocalIndexAllocator>
 [[nodiscard]] bool FlushMeshlet(
     const Vector<Float3U>& positions,
     PendingMeshlet& pending,
-    Vector<MeshletCluster>& outMeshlets,
-    Vector<u32>& outVertexIndices,
-    Vector<u32>& outLocalIndices)
+    Vector<MeshletCluster, MeshletAllocator>& outMeshlets,
+    Vector<u32, VertexIndexAllocator>& outVertexIndices,
+    Vector<u32, LocalIndexAllocator>& outLocalIndices)
 {
     if(pending.vertices.empty())
         return true;
@@ -258,9 +259,15 @@ bool BuildMeshlets(
     PendingMeshlet pending(scratchArena);
     pending.vertices.reserve(config.maxVertices);
     pending.indices.reserve(config.maxTriangles * 3u);
-    Vector<MeshletCluster> meshlets;
-    Vector<u32> vertexIndices;
-    Vector<u32> localIndices;
+    Vector<MeshletCluster, Core::Alloc::ScratchAllocator<MeshletCluster>> meshlets{
+        Core::Alloc::ScratchAllocator<MeshletCluster>(scratchArena)
+    };
+    Vector<u32, Core::Alloc::ScratchAllocator<u32>> vertexIndices{
+        Core::Alloc::ScratchAllocator<u32>(scratchArena)
+    };
+    Vector<u32, Core::Alloc::ScratchAllocator<u32>> localIndices{
+        Core::Alloc::ScratchAllocator<u32>(scratchArena)
+    };
 
     const usize triangleCount = indices.size() / 3u;
     const usize meshletCountReserve = (triangleCount + static_cast<usize>(config.maxTriangles) - 1u) / config.maxTriangles;
@@ -289,9 +296,9 @@ bool BuildMeshlets(
     if(!FlushMeshlet(positions, pending, meshlets, vertexIndices, localIndices) || meshlets.empty())
         return false;
 
-    outMeshlets = Move(meshlets);
-    outVertexIndices = Move(vertexIndices);
-    outLocalIndices = Move(localIndices);
+    outMeshlets.assign(meshlets.begin(), meshlets.end());
+    outVertexIndices.assign(vertexIndices.begin(), vertexIndices.end());
+    outLocalIndices.assign(localIndices.begin(), localIndices.end());
     return true;
 }
 

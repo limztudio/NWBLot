@@ -1723,7 +1723,11 @@ bool SerializeSurfaceEditState(const DeformableSurfaceEditState& state, Core::As
     if(!__hidden_deformable_surface_edit::ValidSurfaceEditState(state))
         return false;
 
-    Vector<__hidden_deformable_surface_edit::SurfaceEditAccessoryRecordBinaryV4> accessoryRecords;
+    using AccessoryRecord = __hidden_deformable_surface_edit::SurfaceEditAccessoryRecordBinaryV4;
+    Core::Alloc::ScratchArena<> scratchArena;
+    Vector<AccessoryRecord, Core::Alloc::ScratchAllocator<AccessoryRecord>> accessoryRecords{
+        Core::Alloc::ScratchAllocator<AccessoryRecord>(scratchArena)
+    };
     accessoryRecords.reserve(state.accessories.size());
     Core::Assets::AssetBytes stringTable;
     for(const DeformableAccessoryAttachmentRecord& accessory : state.accessories){
@@ -1798,7 +1802,11 @@ bool DeserializeSurfaceEditState(const Core::Assets::AssetBytes& binary, Deforma
     }
 
     outState.accessories.resize(static_cast<usize>(accessoryCount));
-    Vector<__hidden_deformable_surface_edit::SurfaceEditAccessoryRecordBinaryV4> accessoryRecords;
+    using AccessoryRecord = __hidden_deformable_surface_edit::SurfaceEditAccessoryRecordBinaryV4;
+    Core::Alloc::ScratchArena<> scratchArena;
+    Vector<AccessoryRecord, Core::Alloc::ScratchAllocator<AccessoryRecord>> accessoryRecords{
+        Core::Alloc::ScratchAllocator<AccessoryRecord>(scratchArena)
+    };
     accessoryRecords.resize(static_cast<usize>(accessoryCount));
     for(__hidden_deformable_surface_edit::SurfaceEditAccessoryRecordBinaryV4& binaryRecord : accessoryRecords){
         if(!ReadPOD(binary, cursor, binaryRecord)){
@@ -2104,7 +2112,9 @@ namespace __hidden_deformable_surface_edit{
         if(boundaryLength <= DeformableRuntime::s_Epsilon)
             return false;
 
-        Vector<u32> wallVertices;
+        Vector<u32, Core::Alloc::ScratchAllocator<u32>> wallVertices{
+            Core::Alloc::ScratchAllocator<u32>(scratchArena)
+        };
         wallVertices.resize(totalWallVertexCount, 0u);
 
         for(usize ringIndex = 0u; ringIndex < wallBandCount; ++ringIndex){

@@ -173,8 +173,9 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
     ++it.value();
 }
 
+template<typename EdgeAllocator>
 [[nodiscard]] f32 ProjectedSignedLoopArea(
-    const Vector<MeshTopologyEdge>& orderedEdges,
+    const Vector<MeshTopologyEdge, EdgeAllocator>& orderedEdges,
     const Vector<Float3U>& positions,
     const MeshTopologyBoundaryLoopFrame& frame
 ){
@@ -194,7 +195,8 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
     return signedArea * 0.5f;
 }
 
-void ReverseBoundaryLoop(Vector<MeshTopologyEdge>& edges){
+template<typename EdgeAllocator>
+void ReverseBoundaryLoop(Vector<MeshTopologyEdge, EdgeAllocator>& edges){
     if(edges.empty())
         return;
 
@@ -221,7 +223,8 @@ void ReverseBoundaryLoop(Vector<MeshTopologyEdge>& edges){
     }
 }
 
-void CanonicalizeBoundaryLoopStart(Vector<MeshTopologyEdge>& edges){
+template<typename EdgeAllocator>
+void CanonicalizeBoundaryLoopStart(Vector<MeshTopologyEdge, EdgeAllocator>& edges){
     if(edges.empty())
         return;
 
@@ -315,7 +318,9 @@ bool BuildOrderedBoundaryLoop(
 
     const u32 startVertex = boundaryEdges[0].a;
     u32 currentVertex = startVertex;
-    Vector<MeshTopologyEdge> orderedEdges;
+    Vector<MeshTopologyEdge, Core::Alloc::ScratchAllocator<MeshTopologyEdge>> orderedEdges{
+        Core::Alloc::ScratchAllocator<MeshTopologyEdge>(scratchArena)
+    };
     orderedEdges.reserve(boundaryEdges.size());
     while(orderedEdges.size() < boundaryEdges.size()){
         usize nextEdgeIndex = Limit<usize>::s_Max;
@@ -364,7 +369,7 @@ bool BuildOrderedBoundaryLoop(
     if(signedArea < 0.0f)
         ReverseBoundaryLoop(orderedEdges);
     CanonicalizeBoundaryLoopStart(orderedEdges);
-    outOrderedEdges = Move(orderedEdges);
+    outOrderedEdges.assign(orderedEdges.begin(), orderedEdges.end());
     return true;
 }
 
@@ -437,7 +442,9 @@ bool BuildBoundaryEdgesFromRemovedTriangles(
     if(removedTriangleCount == 0u || removedTriangleCount >= triangleCount)
         return false;
 
-    Vector<MeshTopologyEdge> boundaryEdges;
+    Vector<MeshTopologyEdge, Core::Alloc::ScratchAllocator<MeshTopologyEdge>> boundaryEdges{
+        Core::Alloc::ScratchAllocator<MeshTopologyEdge>(scratchArena)
+    };
     boundaryEdges.reserve(static_cast<usize>(removedTriangleCount) * 3u);
     VertexDegreeMap boundaryDegrees(
         0,
@@ -469,7 +476,7 @@ bool BuildBoundaryEdgesFromRemovedTriangles(
             return false;
     }
 
-    outBoundaryEdges = Move(boundaryEdges);
+    outBoundaryEdges.assign(boundaryEdges.begin(), boundaryEdges.end());
     if(outRemovedTriangleCount)
         *outRemovedTriangleCount = removedTriangleCount;
     return true;

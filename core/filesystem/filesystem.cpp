@@ -420,7 +420,8 @@ static void BuildArenaFreeAligned(void* ptr){ NWB::Core::Alloc::CoreFreeAligned(
 
 using StagedVolumePaths = StagedDirectoryPaths;
 
-static bool RestoreVolumeSegments(const Path& fromDirectory, const Path& toDirectory, const Vector<Path>& fileNames);
+template<typename FileNameVector>
+static bool RestoreVolumeSegments(const Path& fromDirectory, const Path& toDirectory, const FileNameVector& fileNames);
 
 static StagedVolumePaths BuildStagedVolumePaths(const Path& outputDirectory, const AStringView volumeName){
     AString stageKey = PathToString(outputDirectory);
@@ -434,7 +435,8 @@ static StagedVolumePaths BuildStagedVolumePaths(const Path& outputDirectory, con
     return BuildStagedDirectoryPaths(outputDirectory, stageToken);
 }
 
-static bool MoveExistingVolumeSegments(const Path& fromDirectory, const Path& toDirectory, const AStringView volumeName, Vector<Path>& outMovedFileNames){
+template<typename FileNameVector>
+static bool MoveExistingVolumeSegments(const Path& fromDirectory, const Path& toDirectory, const AStringView volumeName, FileNameVector& outMovedFileNames){
     ErrorCode errorCode;
 
     outMovedFileNames.clear();
@@ -545,7 +547,8 @@ static bool MoveExistingVolumeSegments(const Path& fromDirectory, const Path& to
     return true;
 }
 
-static bool RestoreVolumeSegments(const Path& fromDirectory, const Path& toDirectory, const Vector<Path>& fileNames){
+template<typename FileNameVector>
+static bool RestoreVolumeSegments(const Path& fromDirectory, const Path& toDirectory, const FileNameVector& fileNames){
     ErrorCode errorCode;
 
     if(fileNames.empty())
@@ -630,7 +633,10 @@ static void RemovePromotedVolumeSegmentsBestEffort(const Path& outputDirectory, 
 }
 
 static bool PromoteStagedVolume(const StagedVolumePaths& stagedPaths, const Path& outputDirectory, const AStringView volumeName, const usize segmentCount){
-    Vector<Path> movedBackupFiles;
+    Core::Alloc::ScratchArena<> scratchArena;
+    Vector<Path, Core::Alloc::ScratchAllocator<Path>> movedBackupFiles{
+        Core::Alloc::ScratchAllocator<Path>(scratchArena)
+    };
     if(!MoveExistingVolumeSegments(outputDirectory, stagedPaths.backupDirectory, volumeName, movedBackupFiles))
         return false;
 

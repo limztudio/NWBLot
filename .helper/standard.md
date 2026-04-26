@@ -24,7 +24,7 @@ Updated: 2026-04-13
   - Keep their public math entry points in global scope.
   - Use narrow raw namespaces there only when they are part of the math API shape (for example `SH`).
 - Put private/internal helpers in `namespace __hidden_<module>{ ... }`.
-  - The `<module>` suffix should match the file or logical module name (e.g., `__hidden_shader_cook`, `__hidden_vulkan_shader`, `__hidden_assets`).
+  - The `<module>` suffix should match the file or logical module name (e.g., `__hidden_shader_cook`, `__hidden_vulkan_shader`, `__hidden_asset_cooker`).
   - `__hidden_*` namespaces are for translation-unit-local implementation details that should not be called by outside code.
   - They live inside the file's `.cpp`, not in headers.
   - Never expose `__hidden_*` symbols in public headers or use them across translation units.

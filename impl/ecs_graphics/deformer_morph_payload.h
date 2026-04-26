@@ -68,22 +68,17 @@ struct BlendedMorphDeltaAccumulator{
     return iterWeight.value();
 }
 
-[[nodiscard]] inline bool ActiveDeltaValue(const f32 value){
-    return !IsFinite(value) || DeformableValidation::ActiveWeight(value);
+[[nodiscard]] inline bool ActiveDeltaVector(const SIMDVector value, const u32 activeMask){
+    const SIMDVector invalid = VectorOrInt(VectorIsNaN(value), VectorIsInfinite(value));
+    const SIMDVector active = VectorGreater(VectorAbs(value), VectorReplicate(DeformableValidation::s_Epsilon));
+    return (VectorMoveMask(VectorOrInt(invalid, active)) & activeMask) != 0u;
 }
 
 [[nodiscard]] inline bool ActiveBlendedMorphDelta(const BlendedMorphDeltaAccumulator& delta){
     return delta.active
-        && (ActiveDeltaValue(delta.deltaPosition.x)
-            || ActiveDeltaValue(delta.deltaPosition.y)
-            || ActiveDeltaValue(delta.deltaPosition.z)
-            || ActiveDeltaValue(delta.deltaNormal.x)
-            || ActiveDeltaValue(delta.deltaNormal.y)
-            || ActiveDeltaValue(delta.deltaNormal.z)
-            || ActiveDeltaValue(delta.deltaTangent.x)
-            || ActiveDeltaValue(delta.deltaTangent.y)
-            || ActiveDeltaValue(delta.deltaTangent.z)
-            || ActiveDeltaValue(delta.deltaTangent.w))
+        && (ActiveDeltaVector(LoadFloat(delta.deltaPosition), 0x7u)
+            || ActiveDeltaVector(LoadFloat(delta.deltaNormal), 0x7u)
+            || ActiveDeltaVector(LoadFloat(delta.deltaTangent), 0xFu))
     ;
 }
 

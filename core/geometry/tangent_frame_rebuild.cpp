@@ -27,6 +27,24 @@ static constexpr f32 s_FrameEpsilon = 0.00000001f;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct alignas(Float4) TangentFrameAccumulator{
+    Float4 normal;
+    Float4 tangent;
+    Float4 bitangent;
+};
+static_assert(
+    alignof(TangentFrameAccumulator) >= alignof(Float4),
+    "TangentFrameAccumulator must keep SIMD accumulator lanes aligned"
+);
+static_assert(
+    (sizeof(TangentFrameAccumulator) % alignof(TangentFrameAccumulator)) == 0,
+    "TangentFrameAccumulator array stride must keep every element SIMD-aligned"
+);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] bool FiniteVector(SIMDVector value, const u32 activeMask){
     const SIMDVector invalid = VectorOrInt(VectorIsNaN(value), VectorIsInfinite(value));
     return (VectorMoveMask(invalid) & activeMask) == 0u;
@@ -97,10 +115,8 @@ static constexpr f32 s_FrameEpsilon = 0.00000001f;
     ;
 }
 
-void AccumulateVector(Vector<Float4U>& accumulators, const u32 index, SIMDVector value){
-    Float4U accumulated;
-    StoreFloat(VectorAdd(LoadFloat(accumulators[index]), value), &accumulated);
-    accumulators[index] = accumulated;
+void AccumulateVector(Float4& accumulator, const SIMDVector value){
+    StoreFloat(VectorAdd(LoadFloat(accumulator), value), &accumulator);
 }
 
 [[nodiscard]] bool AccumulateTriangleTangentFrame(
@@ -163,12 +179,14 @@ bool RebuildTangentFrames(
             return false;
     }
 
-    Vector<Float4U> normalAccumulators;
-    Vector<Float4U> tangentAccumulators;
-    Vector<Float4U> bitangentAccumulators;
-    normalAccumulators.resize(vertices.size(), Float4U(0.0f, 0.0f, 0.0f, 0.0f));
-    tangentAccumulators.resize(vertices.size(), Float4U(0.0f, 0.0f, 0.0f, 0.0f));
-    bitangentAccumulators.resize(vertices.size(), Float4U(0.0f, 0.0f, 0.0f, 0.0f));
+    Vector<TangentFrameAccumulator> accumulators(
+        vertices.size(),
+        TangentFrameAccumulator{
+            Float4(0.0f, 0.0f, 0.0f, 0.0f),
+            Float4(0.0f, 0.0f, 0.0f, 0.0f),
+            Float4(0.0f, 0.0f, 0.0f, 0.0f),
+        }
+    );
 
     TangentFrameRebuildResult result;
     const usize triangleCount = indices.size() / 3u;
@@ -192,19 +210,19 @@ bool RebuildTangentFrames(
         if(!ValidDirection(faceNormal))
             return false;
 
-        AccumulateVector(normalAccumulators, i0, faceNormal);
-        AccumulateVector(normalAccumulators, i1, faceNormal);
-        AccumulateVector(normalAccumulators, i2, faceNormal);
+        AccumulateVector(accumulators[i0].normal, faceNormal);
+        AccumulateVector(accumulators[i1].normal, faceNormal);
+        AccumulateVector(accumulators[i2].normal, faceNormal);
 
         SIMDVector tangent = VectorZero();
         SIMDVector bitangent = VectorZero();
         if(AccumulateTriangleTangentFrame(vertex0, vertex1, vertex2, edge01, edge02, tangent, bitangent)){
-            AccumulateVector(tangentAccumulators, i0, tangent);
-            AccumulateVector(tangentAccumulators, i1, tangent);
-            AccumulateVector(tangentAccumulators, i2, tangent);
-            AccumulateVector(bitangentAccumulators, i0, bitangent);
-            AccumulateVector(bitangentAccumulators, i1, bitangent);
-            AccumulateVector(bitangentAccumulators, i2, bitangent);
+            AccumulateVector(accumulators[i0].tangent, tangent);
+            AccumulateVector(accumulators[i1].tangent, tangent);
+            AccumulateVector(accumulators[i2].tangent, tangent);
+            AccumulateVector(accumulators[i0].bitangent, bitangent);
+            AccumulateVector(accumulators[i1].bitangent, bitangent);
+            AccumulateVector(accumulators[i2].bitangent, bitangent);
         }
         else{
             ++result.degenerateUvTriangleCount;
@@ -213,13 +231,14 @@ bool RebuildTangentFrames(
 
     for(usize vertexIndex = 0u; vertexIndex < vertices.size(); ++vertexIndex){
         TangentFrameRebuildVertex& vertex = vertices[vertexIndex];
+        const TangentFrameAccumulator& accumulator = accumulators[vertexIndex];
         const SIMDVector previousNormal = Normalize(LoadFloat(vertex.normal), VectorSet(0.0f, 0.0f, 1.0f, 0.0f));
-        const SIMDVector normal = Normalize(LoadFloat(normalAccumulators[vertexIndex]), previousNormal);
+        const SIMDVector normal = Normalize(LoadFloat(accumulator.normal), previousNormal);
         if(!ValidDirection(normal))
             return false;
 
         const SIMDVector previousTangent = VectorSet(vertex.tangent.x, vertex.tangent.y, vertex.tangent.z, 0.0f);
-        SIMDVector tangentSource = LoadFloat(tangentAccumulators[vertexIndex]);
+        SIMDVector tangentSource = LoadFloat(accumulator.tangent);
         if(!ValidDirection(tangentSource)){
             tangentSource = previousTangent;
             ++result.fallbackTangentVertexCount;
@@ -230,7 +249,7 @@ bool RebuildTangentFrames(
             return false;
 
         f32 handedness = ResolveTangentHandedness(vertex.tangent.w);
-        const SIMDVector bitangent = LoadFloat(bitangentAccumulators[vertexIndex]);
+        const SIMDVector bitangent = LoadFloat(accumulator.bitangent);
         if(ValidDirection(bitangent)){
             const f32 bitangentSign = VectorGetX(Vector3Dot(Vector3Cross(normal, tangent), bitangent));
             if(IsFinite(bitangentSign) && Abs(bitangentSign) > s_Epsilon)

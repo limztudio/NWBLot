@@ -565,6 +565,74 @@ static void CheckAddedTrianglesResolveToSample(
     }
 }
 
+static void CheckRuntimeMeshPayloadValid(
+    TestContext& context,
+    const NWB::Impl::DeformableRuntimeMeshInstance& instance)
+{
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !instance.restVertices.empty());
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !instance.indices.empty());
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, (instance.indices.size() % 3u) == 0u);
+    if(instance.restVertices.empty() || instance.indices.empty() || (instance.indices.size() % 3u) != 0u)
+        return;
+
+    for(const NWB::Impl::DeformableVertexRest& vertex : instance.restVertices){
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, FiniteFloat3(vertex.position));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, FiniteFloat3(vertex.normal));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, FiniteFloat4(vertex.tangent));
+    }
+
+    for(const u32 index : instance.indices)
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, index < instance.restVertices.size());
+
+    const f32 bary[3] = { 1.0f / 3.0f, 1.0f / 3.0f, 1.0f / 3.0f };
+    const usize triangleCount = instance.indices.size() / 3u;
+    for(usize triangle = 0u; triangle < triangleCount; ++triangle){
+        const usize indexBase = triangle * 3u;
+        const u32 i0 = instance.indices[indexBase + 0u];
+        const u32 i1 = instance.indices[indexBase + 1u];
+        const u32 i2 = instance.indices[indexBase + 2u];
+        if(i0 >= instance.restVertices.size() || i1 >= instance.restVertices.size() || i2 >= instance.restVertices.size())
+            continue;
+
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, i0 != i1);
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, i0 != i2);
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, i1 != i2);
+
+        const SIMDVector p0 = LoadFloat(instance.restVertices[i0].position);
+        const SIMDVector p1 = LoadFloat(instance.restVertices[i1].position);
+        const SIMDVector p2 = LoadFloat(instance.restVertices[i2].position);
+        const SIMDVector areaVector = Vector3Cross(VectorSubtract(p1, p0), VectorSubtract(p2, p0));
+        const f32 areaLengthSquared = VectorGetX(Vector3LengthSq(areaVector));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, IsFinite(areaLengthSquared));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, areaLengthSquared > 0.00000001f);
+
+        if(!instance.sourceSamples.empty()){
+            NWB::Impl::SourceSample sample;
+            const bool resolvedSample = NWB::Impl::ResolveDeformableRestSurfaceSample(
+                instance,
+                static_cast<u32>(triangle),
+                bary,
+                sample
+            );
+            NWB_ECS_GRAPHICS_TEST_CHECK(context, resolvedSample);
+            if(!resolvedSample)
+                continue;
+
+            NWB_ECS_GRAPHICS_TEST_CHECK(context, sample.sourceTri < instance.sourceTriangleCount);
+            NWB_ECS_GRAPHICS_TEST_CHECK(context, IsFinite(sample.bary[0]));
+            NWB_ECS_GRAPHICS_TEST_CHECK(context, IsFinite(sample.bary[1]));
+            NWB_ECS_GRAPHICS_TEST_CHECK(context, IsFinite(sample.bary[2]));
+            NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(sample.bary[0] + sample.bary[1] + sample.bary[2], 1.0f));
+        }
+    }
+
+    if(!instance.skin.empty()){
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.skin.size() == instance.restVertices.size());
+        for(const NWB::Impl::SkinInfluence4& skin : instance.skin)
+            NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(SkinWeightSum(skin), 1.0f));
+    }
+}
+
 static void AssignFirstUseTriangleSourceSamples(NWB::Impl::DeformableRuntimeMeshInstance& instance){
     const usize triangleCount = instance.indices.size() / 3u;
     instance.sourceTriangleCount = static_cast<u32>(triangleCount);
@@ -3405,6 +3473,113 @@ static void TestSurfaceEditLoopCutReplaysFromCleanBase(TestContext& context){
     CheckHoleEditUnchanged(context, unchangedInstance, oldVertexCount, oldIndexCount, 1u);
 }
 
+static void TestSurfaceEditRepeatedOperationsKeepMeshPayloadValid(TestContext& context){
+    NWB::Impl::DeformableRuntimeMeshInstance cleanBase = MakeGridHoleInstance(6u, 4u);
+    cleanBase.editRevision = 0u;
+
+    NWB::Impl::DeformableRuntimeMeshInstance editedInstance = cleanBase;
+    NWB::Impl::DeformableSurfaceEditState state;
+
+    NWB::Impl::DeformableHoleEditResult holeResult;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        CommitRecordedHole(editedInstance, 12u, 0.38f, 0.25f, state, &holeResult)
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, state.edits.size() == 1u);
+    const NWB::Impl::DeformableSurfaceEditId editId = state.edits[0].editId;
+    CheckRuntimeMeshPayloadValid(context, editedInstance);
+
+    NWB::Impl::DeformableSurfaceEditResizeResult resizeResult;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Impl::ResizeSurfaceEdit(
+            editedInstance,
+            cleanBase,
+            state,
+            editId,
+            0.48f,
+            1.0f,
+            0.30f,
+            &resizeResult
+        )
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, resizeResult.replay.appliedEditCount == 1u);
+    CheckRuntimeMeshPayloadValid(context, editedInstance);
+    SimulateRuntimeMeshUpload(editedInstance);
+
+    const NWB::Impl::DeformableHoleEditParams moveParams =
+        MakeHoleEditParams(editedInstance, 14u, 0.25f, 0.25f, 0.5f, 0.48f, 0.30f)
+    ;
+    NWB::Impl::DeformableSurfaceEditMoveResult moveResult;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Impl::MoveSurfaceEdit(
+            editedInstance,
+            cleanBase,
+            state,
+            editId,
+            moveParams.posedHit,
+            &moveResult
+        )
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, moveResult.replay.appliedEditCount == 1u);
+    CheckRuntimeMeshPayloadValid(context, editedInstance);
+    SimulateRuntimeMeshUpload(editedInstance);
+
+    const NWB::Impl::DeformableHoleEditParams patchParams =
+        MakeHoleEditParams(editedInstance, 12u, 0.25f, 0.25f, 0.5f, 0.42f, 0.22f)
+    ;
+    NWB::Impl::DeformableSurfaceEditPatchResult patchResult;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Impl::PatchSurfaceEdit(
+            editedInstance,
+            cleanBase,
+            state,
+            editId,
+            patchParams.posedHit,
+            0.42f,
+            1.0f,
+            0.22f,
+            &patchResult
+        )
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, patchResult.replay.appliedEditCount == 1u);
+    CheckRuntimeMeshPayloadValid(context, editedInstance);
+    SimulateRuntimeMeshUpload(editedInstance);
+
+    NWB::Impl::DeformableSurfaceEditLoopCutResult loopCutResult;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Impl::AddSurfaceEditLoopCut(
+            editedInstance,
+            cleanBase,
+            state,
+            editId,
+            &loopCutResult
+        )
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, loopCutResult.replay.appliedEditCount == 1u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, state.edits[0].hole.wallLoopCutCount == 1u);
+    CheckRuntimeMeshPayloadValid(context, editedInstance);
+
+    NWB::Impl::DeformableRuntimeMeshInstance replayInstance = cleanBase;
+    NWB::Impl::DeformableSurfaceEditReplayResult replayResult;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Impl::ApplySurfaceEditState(
+            replayInstance,
+            state,
+            NWB::Impl::DeformableSurfaceEditReplayContext{},
+            &replayResult
+        )
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, replayResult.appliedEditCount == 1u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, replayInstance.restVertices.size() == editedInstance.restVertices.size());
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, replayInstance.indices.size() == editedInstance.indices.size());
+    CheckRuntimeMeshPayloadValid(context, replayInstance);
+}
+
 static void TestSurfaceEditStateReplayTriesLaterMatchingCandidate(TestContext& context){
     NWB::Impl::DeformableRuntimeMeshInstance editedInstance = MakeGridHoleInstance();
     editedInstance.editRevision = 0u;
@@ -3843,6 +4018,7 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
     __hidden_ecs_graphics_tests::TestSurfaceEditMoveReplaysFromCleanBase(context);
     __hidden_ecs_graphics_tests::TestSurfaceEditPatchReplaysFromCleanBase(context);
     __hidden_ecs_graphics_tests::TestSurfaceEditLoopCutReplaysFromCleanBase(context);
+    __hidden_ecs_graphics_tests::TestSurfaceEditRepeatedOperationsKeepMeshPayloadValid(context);
     __hidden_ecs_graphics_tests::TestSurfaceEditStateReplayTriesLaterMatchingCandidate(context);
     __hidden_ecs_graphics_tests::TestSurfaceEditStateReplayRejectsWrongSourceMesh(context);
     __hidden_ecs_graphics_tests::TestRestSpaceHoleEditRejectsMissingProvenance(context);

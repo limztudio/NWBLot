@@ -3580,6 +3580,177 @@ static void TestSurfaceEditRepeatedOperationsKeepMeshPayloadValid(TestContext& c
     CheckRuntimeMeshPayloadValid(context, replayInstance);
 }
 
+static void TestSurfaceEditReplayKeepsMorphSkinDisplacementUsable(TestContext& context){
+    NWB::Impl::DeformableRuntimeMeshInstance cleanBase = MakeGridHoleInstance(6u, 4u);
+    cleanBase.editRevision = 0u;
+    cleanBase.displacement.mode = NWB::Impl::DeformableDisplacementMode::ScalarTexture;
+    cleanBase.displacement.texture.virtualPath = Name("tests/textures/replayed_deformable_displacement");
+    cleanBase.displacement.amplitude = 0.1f;
+
+    for(NWB::Impl::DeformableVertexRest& vertex : cleanBase.restVertices)
+        vertex.uv0 = Float2U((vertex.position.x + 2.5f) / 5.0f, 0.0f);
+
+    NWB::Impl::DeformableMorph liftMorph;
+    liftMorph.name = Name("replay_lift");
+    liftMorph.deltas.reserve(cleanBase.restVertices.size());
+    for(u32 vertexId = 0u; vertexId < static_cast<u32>(cleanBase.restVertices.size()); ++vertexId){
+        NWB::Impl::DeformableMorphDelta delta{};
+        delta.vertexId = vertexId;
+        delta.deltaPosition = Float3U(0.0f, 0.0f, 0.08f);
+        liftMorph.deltas.push_back(delta);
+    }
+    cleanBase.morphs.push_back(liftMorph);
+
+    NWB::Impl::DeformableRuntimeMeshInstance editedInstance = cleanBase;
+    NWB::Impl::DeformableSurfaceEditState state;
+
+    NWB::Impl::DeformableHoleEditResult firstHoleResult;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        CommitRecordedHole(editedInstance, 12u, 0.48f, 0.25f, state, &firstHoleResult)
+    );
+    NWB::Impl::DeformableAccessoryAttachmentComponent firstAttachment;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Impl::AttachAccessory(editedInstance, firstHoleResult, 0.08f, 0.12f, firstAttachment)
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        AppendAccessoryRecord(
+            state,
+            firstAttachment,
+            state.edits[0].editId,
+            s_MockAccessoryGeometryPath,
+            s_MockAccessoryMaterialPath
+        )
+    );
+
+    NWB::Impl::DeformableHoleEditResult secondHoleResult;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        CommitRecordedHole(editedInstance, 14u, 0.48f, 0.25f, state, &secondHoleResult)
+    );
+    NWB::Impl::DeformableAccessoryAttachmentComponent secondAttachment;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Impl::AttachAccessory(editedInstance, secondHoleResult, 0.16f, 0.18f, secondAttachment)
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        AppendAccessoryRecord(
+            state,
+            secondAttachment,
+            state.edits[1].editId,
+            s_MockAccessoryGeometryPath,
+            s_MockAccessoryMaterialPath
+        )
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, state.edits.size() == 2u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, state.accessories.size() == 2u);
+
+    NWB::Core::Assets::AssetBytes binary;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::SerializeSurfaceEditState(state, binary));
+    NWB::Impl::DeformableSurfaceEditState loadedState;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::DeserializeSurfaceEditState(binary, loadedState));
+
+    TestAssetManager testAssets;
+    testAssets.binarySource.addAvailablePath(s_MockAccessoryGeometryPath);
+    testAssets.binarySource.addAvailablePath(s_MockAccessoryMaterialPath);
+
+    TestWorld testWorld;
+    auto targetEntity = testWorld.world.createEntity();
+    NWB::Impl::DeformableRuntimeMeshInstance replayInstance = cleanBase;
+    replayInstance.entity = targetEntity.id();
+    replayInstance.handle.value = 744u;
+
+    NWB::Impl::DeformableSurfaceEditReplayContext replayContext;
+    replayContext.assetManager = &testAssets.manager;
+    replayContext.world = &testWorld.world;
+    replayContext.targetEntity = replayInstance.entity;
+
+    NWB::Impl::DeformableSurfaceEditReplayResult replayResult;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Impl::ApplySurfaceEditState(replayInstance, loadedState, replayContext, &replayResult)
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, replayResult.appliedEditCount == 2u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, replayResult.restoredAccessoryCount == 2u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, replayInstance.editRevision == 2u);
+    CheckRuntimeMeshPayloadValid(context, replayInstance);
+
+    SimulateRuntimeMeshUpload(replayInstance);
+    NWB::Impl::DeformableDisplacementTexture texture = MakeTestDisplacementTexture(
+        "tests/textures/replayed_deformable_displacement",
+        Float4U(0.0f, 0.0f, 0.0f, 0.0f),
+        Float4U(0.5f, 0.0f, 0.0f, 0.0f),
+        Float4U(1.0f, 0.0f, 0.0f, 0.0f)
+    );
+    NWB::Impl::DeformablePickingInputs accessoryInputs;
+    accessoryInputs.displacementTexture = &texture;
+
+    u32 restoredAccessoryCount = 0u;
+    testWorld.world.view<NWB::Impl::DeformableAccessoryAttachmentComponent>().each(
+        [&](NWB::Core::ECS::EntityID, NWB::Impl::DeformableAccessoryAttachmentComponent& restored){
+            ++restoredAccessoryCount;
+            NWB::Core::Scene::TransformComponent resolvedTransform;
+            NWB_ECS_GRAPHICS_TEST_CHECK(
+                context,
+                NWB::Impl::ResolveAccessoryAttachmentTransform(
+                    replayInstance,
+                    accessoryInputs,
+                    restored,
+                    resolvedTransform
+                )
+            );
+            NWB_ECS_GRAPHICS_TEST_CHECK(context, resolvedTransform.scale.x > 0.0f);
+        }
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, restoredAccessoryCount == 2u);
+
+    NWB::Impl::DeformableMorphWeightsComponent weights;
+    weights.weights.push_back(NWB::Impl::DeformableMorphWeight{ Name("replay_lift"), 0.5f });
+
+    NWB::Impl::DeformableJointPaletteComponent joints;
+    joints.joints.resize(1u);
+    joints.joints[0].column3 = Float4(0.25f, -0.125f, 0.2f, 1.0f);
+
+    NWB::Impl::DeformablePickingInputs inputs;
+    inputs.morphWeights = &weights;
+    inputs.jointPalette = &joints;
+    inputs.displacementTexture = &texture;
+
+    NWB::Impl::DeformableDisplacementComponent disabledDisplacement;
+    disabledDisplacement.enabled = false;
+    NWB::Impl::DeformablePickingInputs controlInputs = inputs;
+    controlInputs.displacement = &disabledDisplacement;
+
+    Vector<NWB::Impl::DeformableVertexRest> controlVertices;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Impl::BuildDeformablePickingVertices(replayInstance, controlInputs, controlVertices)
+    );
+    Vector<NWB::Impl::DeformableVertexRest> posedVertices;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Impl::BuildDeformablePickingVertices(replayInstance, inputs, posedVertices)
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, controlVertices.size() == replayInstance.restVertices.size());
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, posedVertices.size() == replayInstance.restVertices.size());
+    if(controlVertices.size() != replayInstance.restVertices.size() || posedVertices.size() != replayInstance.restVertices.size())
+        return;
+
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(controlVertices[0].position.x, replayInstance.restVertices[0].position.x + 0.25f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(controlVertices[0].position.y, replayInstance.restVertices[0].position.y - 0.125f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(controlVertices[0].position.z, replayInstance.restVertices[0].position.z + 0.24f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, posedVertices[5u].position.z > controlVertices[5u].position.z + 0.05f);
+
+    for(const NWB::Impl::DeformableVertexRest& vertex : posedVertices){
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, FiniteFloat3(vertex.position));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, FiniteFloat3(vertex.normal));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, FiniteFloat4(vertex.tangent));
+    }
+}
+
 static void TestSurfaceEditStateReplayTriesLaterMatchingCandidate(TestContext& context){
     NWB::Impl::DeformableRuntimeMeshInstance editedInstance = MakeGridHoleInstance();
     editedInstance.editRevision = 0u;
@@ -4019,6 +4190,7 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
     __hidden_ecs_graphics_tests::TestSurfaceEditPatchReplaysFromCleanBase(context);
     __hidden_ecs_graphics_tests::TestSurfaceEditLoopCutReplaysFromCleanBase(context);
     __hidden_ecs_graphics_tests::TestSurfaceEditRepeatedOperationsKeepMeshPayloadValid(context);
+    __hidden_ecs_graphics_tests::TestSurfaceEditReplayKeepsMorphSkinDisplacementUsable(context);
     __hidden_ecs_graphics_tests::TestSurfaceEditStateReplayTriesLaterMatchingCandidate(context);
     __hidden_ecs_graphics_tests::TestSurfaceEditStateReplayRejectsWrongSourceMesh(context);
     __hidden_ecs_graphics_tests::TestRestSpaceHoleEditRejectsMissingProvenance(context);

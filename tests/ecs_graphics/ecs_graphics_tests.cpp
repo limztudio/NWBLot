@@ -227,6 +227,20 @@ static NWB::Impl::SkinInfluence4 MakeSingleJointSkin(const u16 joint){
     return skin;
 }
 
+static NWB::Impl::SkinInfluence4 MakeTwoJointSkin(
+    const u16 joint0,
+    const f32 weight0,
+    const u16 joint1,
+    const f32 weight1)
+{
+    NWB::Impl::SkinInfluence4 skin{};
+    skin.joint[0] = joint0;
+    skin.weight[0] = weight0;
+    skin.joint[1] = joint1;
+    skin.weight[1] = weight1;
+    return skin;
+}
+
 static void AssignSingleJointSkin(NWB::Impl::DeformableRuntimeMeshInstance& instance, const u16 joint){
     instance.skin.resize(instance.restVertices.size());
     for(NWB::Impl::SkinInfluence4& skin : instance.skin)
@@ -1017,6 +1031,58 @@ static void TestPickingSkinUsesNormalMatrixForNonUniformScale(TestContext& conte
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertices[0].tangent.y, -s_InvSqrt5));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertices[0].tangent.z, 0.0f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertices[0].tangent.w, 1.0f));
+}
+
+static void TestPickingSkinBlendsTwoJoints(TestContext& context){
+    NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
+    instance.skin.resize(instance.restVertices.size());
+    for(NWB::Impl::SkinInfluence4& skin : instance.skin)
+        skin = MakeTwoJointSkin(0u, 0.25f, 1u, 0.75f);
+
+    NWB::Impl::DeformableJointPaletteComponent joints;
+    joints.joints.resize(2u);
+    joints.joints[0].column0 = Float4(1.0f, 0.0f, 0.0f, 0.0f);
+    joints.joints[0].column1 = Float4(0.0f, 1.0f, 0.0f, 0.0f);
+    joints.joints[0].column2 = Float4(0.0f, 0.0f, 1.0f, 0.0f);
+    joints.joints[0].column3 = Float4(2.0f, 0.0f, 0.0f, 1.0f);
+    joints.joints[1].column0 = Float4(1.0f, 0.0f, 0.0f, 0.0f);
+    joints.joints[1].column1 = Float4(0.0f, 1.0f, 0.0f, 0.0f);
+    joints.joints[1].column2 = Float4(0.0f, 0.0f, 1.0f, 0.0f);
+    joints.joints[1].column3 = Float4(0.0f, 4.0f, 0.0f, 1.0f);
+
+    NWB::Impl::DeformablePickingInputs inputs;
+    inputs.jointPalette = &joints;
+
+    Vector<NWB::Impl::DeformableVertexRest> vertices;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::BuildDeformablePickingVertices(instance, inputs, vertices));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, vertices.size() == instance.restVertices.size());
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertices[0].position.x, -0.5f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertices[0].position.y, 2.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertices[1].position.x, 1.5f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertices[1].position.y, 2.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertices[2].position.x, 0.5f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertices[2].position.y, 4.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertices[0].normal.z, 1.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertices[0].tangent.x, 1.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertices[0].tangent.w, 1.0f));
+}
+
+static void TestPickingRejectsSkinJointOutsidePalette(TestContext& context){
+    NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
+    AssignSingleJointSkin(instance, 1u);
+
+    NWB::Impl::DeformableJointPaletteComponent joints;
+    joints.joints.resize(1u);
+    joints.joints[0].column0 = Float4(1.0f, 0.0f, 0.0f, 0.0f);
+    joints.joints[0].column1 = Float4(0.0f, 1.0f, 0.0f, 0.0f);
+    joints.joints[0].column2 = Float4(0.0f, 0.0f, 1.0f, 0.0f);
+    joints.joints[0].column3 = Float4(0.0f, 0.0f, 0.0f, 1.0f);
+
+    NWB::Impl::DeformablePickingInputs inputs;
+    inputs.jointPalette = &joints;
+
+    Vector<NWB::Impl::DeformableVertexRest> vertices;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::BuildDeformablePickingVertices(instance, inputs, vertices));
 }
 
 static void TestPickingUsesEntityTransform(TestContext& context){
@@ -4152,6 +4218,8 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
     __hidden_ecs_graphics_tests::TestRaycastRejectsUploadDirtyRuntimeMesh(context);
     __hidden_ecs_graphics_tests::TestPoseStableRestHitRecovery(context);
     __hidden_ecs_graphics_tests::TestPickingSkinUsesNormalMatrixForNonUniformScale(context);
+    __hidden_ecs_graphics_tests::TestPickingSkinBlendsTwoJoints(context);
+    __hidden_ecs_graphics_tests::TestPickingRejectsSkinJointOutsidePalette(context);
     __hidden_ecs_graphics_tests::TestPickingUsesEntityTransform(context);
     __hidden_ecs_graphics_tests::TestPickingIgnoresJointPaletteForUnskinnedMesh(context);
     __hidden_ecs_graphics_tests::TestPickingRejectsNonAffineJointPalette(context);

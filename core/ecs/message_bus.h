@@ -35,7 +35,8 @@ inline MessageTypeId MessageType(){
 class MessageBus : NoCopy{
 private:
     class IMessageChannel;
-    using ChannelMapAllocator = Alloc::CustomAllocator<Pair<const MessageTypeId, UniquePtr<IMessageChannel>>>;
+    using MessageChannelPtr = CustomUniquePtr<IMessageChannel>;
+    using ChannelMapAllocator = Alloc::CustomAllocator<Pair<const MessageTypeId, MessageChannelPtr>>;
 
 
 private:
@@ -52,27 +53,29 @@ private:
     template<typename T>
     class MessageChannel final : public IMessageChannel{
     private:
-        using PendingAllocator = Alloc::CustomCacheAlignedAllocator<UniquePtr<T>>;
+        using MessagePtr = CustomUniquePtr<T>;
+        using PendingAllocator = Alloc::CustomCacheAlignedAllocator<MessagePtr>;
 
 
     public:
         explicit MessageChannel(Alloc::CustomArena& arena)
-            : m_pending(PendingAllocator(arena))
+            : m_arena(arena)
+            , m_pending(PendingAllocator(arena))
             , m_readBuffer(Alloc::CustomAllocator<T>(arena))
         {}
 
     public:
         void post(const T& message){
-            m_pending.push(MakeUnique<T>(message));
+            m_pending.push(MakeCustomUnique<T>(m_arena, message));
         }
 
         void post(T&& message){
-            m_pending.push(MakeUnique<T>(Move(message)));
+            m_pending.push(MakeCustomUnique<T>(m_arena, Move(message)));
         }
 
         template<typename... Args>
         void emplace(Args&&... args){
-            m_pending.push(MakeUnique<T>(Forward<Args>(args)...));
+            m_pending.push(MakeCustomUnique<T>(m_arena, Forward<Args>(args)...));
         }
 
         template<typename Func>
@@ -88,7 +91,7 @@ private:
         virtual void swapBuffers()override{
             m_readBuffer.clear();
 
-            UniquePtr<T> message;
+            MessagePtr message;
             bool hasMessage = m_pending.try_pop(message);
             while(hasMessage){
                 m_readBuffer.push_back(Move(*message));
@@ -99,7 +102,7 @@ private:
         virtual void clear()override{
             m_readBuffer.clear();
 
-            UniquePtr<T> message;
+            MessagePtr message;
             bool hasMessage = m_pending.try_pop(message);
             while(hasMessage){
                 hasMessage = m_pending.try_pop(message);
@@ -108,13 +111,14 @@ private:
 
 
     private:
-        ParallelQueue<UniquePtr<T>, PendingAllocator> m_pending;
+        Alloc::CustomArena& m_arena;
+        ParallelQueue<MessagePtr, PendingAllocator> m_pending;
         Vector<T, Alloc::CustomAllocator<T>> m_readBuffer;
     };
 
     using ChannelMap = HashMap<
         MessageTypeId,
-        UniquePtr<IMessageChannel>,
+        MessageChannelPtr,
         Hasher<MessageTypeId>,
         EqualTo<MessageTypeId>,
         ChannelMapAllocator
@@ -204,7 +208,7 @@ private:
         if(itr != m_channels.end())
             return static_cast<MessageChannel<T>*>(itr.value().get());
 
-        auto channel = MakeUnique<MessageChannel<T>>(m_arena);
+        auto channel = MakeCustomUnique<MessageChannel<T>>(m_arena, m_arena);
         auto* raw = channel.get();
         m_channels.emplace(typeId, Move(channel));
         return raw;

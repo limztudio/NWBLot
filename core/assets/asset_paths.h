@@ -190,7 +190,8 @@ namespace AssetPathsDetail{
     ;
 }
 
-[[nodiscard]] inline bool ResolveVirtualAssetPath(const Vector<Path>& assetRoots, const AStringView virtualPath, Path& outResolvedPath){
+template<typename AssetRootVector>
+[[nodiscard]] inline bool ResolveVirtualAssetPath(const AssetRootVector& assetRoots, const AStringView virtualPath, Path& outResolvedPath){
     outResolvedPath.clear();
 
     const Path virtualPathPath(virtualPath);

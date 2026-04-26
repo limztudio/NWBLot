@@ -41,7 +41,7 @@ int ResourceCookerMain(int argc, char** argv){
             __hidden_resource_cooker::ResourceCookFreeAligned
         );
 
-        NWB::Core::Assets::AssetCookerRegistry assetCookerRegistry;
+        NWB::Core::Assets::AssetCookerRegistry assetCookerRegistry(cookArena);
         NWB::Core::Assets::RegisterAutoCollectedAssetCookers(assetCookerRegistry, cookArena);
 
         CookOptions options;

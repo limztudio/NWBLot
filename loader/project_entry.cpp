@@ -34,6 +34,7 @@ bool CreateInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Core::E
     }
 
     auto& rendererSystem = world->addSystem<Core::ECSGraphics::RendererSystem>(
+        context.objectArena,
         *world,
         context.graphics,
         context.assetManager,
@@ -44,6 +45,7 @@ bool CreateInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Core::E
         return false;
     }
     auto& deformerSystem = world->addSystem<Core::ECSGraphics::DeformerSystem>(
+        context.objectArena,
         *world,
         context.graphics,
         context.assetManager,

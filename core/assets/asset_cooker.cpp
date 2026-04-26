@@ -24,7 +24,8 @@ namespace __hidden_asset_cooker{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static AString DescribeAvailableCookers(const HashMap<Name, UniquePtr<IAssetCooker>, Hasher<Name>, EqualTo<Name>>& cookers){
+template<typename CookerMap>
+static AString DescribeAvailableCookers(const CookerMap& cookers){
     if(cookers.empty())
         return "(none)";
 
@@ -72,6 +73,11 @@ static AString DescribeAvailableCookers(const HashMap<Name, UniquePtr<IAssetCook
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+AssetCookerRegistry::AssetCookerRegistry(Alloc::CustomArena& arena)
+    : m_assetCookers(0, Hasher<Name>(), EqualTo<Name>(), CookerMapAllocator(arena))
+{}
 
 
 bool AssetCookerRegistry::registerCooker(UniquePtr<IAssetCooker>&& cooker){

@@ -260,6 +260,7 @@ public:
 
 public:
     RendererSystem(
+        Core::Alloc::CustomArena& arena,
         Core::ECS::World& world,
         Core::Graphics& graphics,
         Core::Assets::AssetManager& assetManager,
@@ -365,15 +366,20 @@ private:
 
 
 private:
+    using GeometryResourcesMapAllocator = Core::Alloc::CustomAllocator<Pair<const Name, GeometryResources>>;
+    using MaterialSurfaceInfoMapAllocator = Core::Alloc::CustomAllocator<Pair<const Name, MaterialSurfaceInfo>>;
+    using MaterialPipelineMapAllocator = Core::Alloc::CustomAllocator<Pair<const MaterialPipelineKey, MaterialPipelineResources>>;
+    using LoggedMaterialPathMapAllocator = Core::Alloc::CustomAllocator<Pair<const Name, RenderPath::Enum>>;
+
     Core::ECS::World& m_world;
     Core::Graphics& m_graphics;
     Core::Assets::AssetManager& m_assetManager;
     ShaderPathResolveCallback m_shaderPathResolver;
 
-    HashMap<Name, GeometryResources, Hasher<Name>, EqualTo<Name>> m_geometryMeshes;
-    HashMap<Name, MaterialSurfaceInfo, Hasher<Name>, EqualTo<Name>> m_materialSurfaceInfos;
-    HashMap<MaterialPipelineKey, MaterialPipelineResources, MaterialPipelineKeyHasher, MaterialPipelineKeyEqualTo> m_materialPipelines;
-    HashMap<Name, RenderPath::Enum, Hasher<Name>, EqualTo<Name>> m_loggedMaterialPaths;
+    HashMap<Name, GeometryResources, Hasher<Name>, EqualTo<Name>, GeometryResourcesMapAllocator> m_geometryMeshes;
+    HashMap<Name, MaterialSurfaceInfo, Hasher<Name>, EqualTo<Name>, MaterialSurfaceInfoMapAllocator> m_materialSurfaceInfos;
+    HashMap<MaterialPipelineKey, MaterialPipelineResources, MaterialPipelineKeyHasher, MaterialPipelineKeyEqualTo, MaterialPipelineMapAllocator> m_materialPipelines;
+    HashMap<Name, RenderPath::Enum, Hasher<Name>, EqualTo<Name>, LoggedMaterialPathMapAllocator> m_loggedMaterialPaths;
     Core::BindingLayoutHandle m_meshBindingLayout;
     Core::BindingLayoutHandle m_computeBindingLayout;
     Core::BindingLayoutHandle m_emulationViewBindingLayout;
@@ -402,7 +408,7 @@ private:
     Core::ComputePipelineHandle m_avboitDepthWarpPipeline;
     Core::ComputePipelineHandle m_avboitIntegratePipeline;
     DeferredFrameTargets m_deferredTargets;
-    UniquePtr<DeformableRuntimeMeshCache> m_deformableRuntimeCache;
+    Core::CustomUniquePtr<DeformableRuntimeMeshCache> m_deformableRuntimeCache;
     usize m_instanceBufferCapacity = 0;
     usize m_materialParameterBufferCapacity = 0;
 };

@@ -29,10 +29,12 @@ class World : NoCopy, public Alloc::ITaskScheduler{
 
 
 private:
-    using PoolMapAllocator = Alloc::CustomAllocator<Pair<const ComponentTypeId, UniquePtr<IComponentPool>>>;
+    using ComponentPoolPtr = CustomUniquePtr<IComponentPool>;
+    using SystemPtr = CustomUniquePtr<ISystem>;
+    using PoolMapAllocator = Alloc::CustomAllocator<Pair<const ComponentTypeId, ComponentPoolPtr>>;
     using PoolMap = HashMap<
         ComponentTypeId,
-        UniquePtr<IComponentPool>,
+        ComponentPoolPtr,
         Hasher<ComponentTypeId>,
         EqualTo<ComponentTypeId>,
         PoolMapAllocator
@@ -40,7 +42,7 @@ private:
 
     struct SystemEntry{
         SystemTypeId typeId;
-        UniquePtr<ISystem> system;
+        SystemPtr system;
     };
 
     using SystemVectorAllocator = Alloc::CustomAllocator<SystemEntry>;
@@ -82,7 +84,7 @@ public:
     T& addSystem(Args&&... args){
         static_assert(IsBaseOf_V<ISystem, T>, "addSystem requires T to derive from ISystem");
 
-        auto ptr = MakeUnique<T>(Forward<Args>(args)...);
+        auto ptr = MakeCustomUnique<T>(m_arena, Forward<Args>(args)...);
         T& ref = *ptr;
         m_scheduler.addSystem(ref);
         m_systems.push_back(SystemEntry{ SystemType<T>(), Move(ptr) });
@@ -203,7 +205,7 @@ private:
         if(itr != m_pools.end())
             return static_cast<ComponentPool<T>*>(itr.value().get());
 
-        auto pool = MakeUnique<ComponentPool<T>>(m_arena);
+        auto pool = MakeCustomUnique<ComponentPool<T>>(m_arena, m_arena);
         auto* raw = pool.get();
         m_pools.emplace(typeId, Move(pool));
         return raw;

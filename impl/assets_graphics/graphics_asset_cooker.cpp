@@ -112,8 +112,12 @@ static AString NormalizeVariantName(const Core::ShaderCook::ShaderEntry& entry, 
 
 
 struct ResolvedCookPaths{
+    explicit ResolvedCookPaths(Core::ShaderCook::CookArena& arena)
+        : assetRoots(Core::ShaderCook::CookAllocator<Path>(arena))
+    {}
+
     Path repoRoot;
-    Vector<Path> assetRoots;
+    Core::ShaderCook::CookVector<Path> assetRoots;
     Path outputDirectory;
     Path cacheDirectory;
 };
@@ -152,10 +156,25 @@ struct DeformableDisplacementTextureEntry{
     Vector<Float4U> texels;
 };
 struct MaterialEntry{
+    using StageShaderMap = Core::ShaderCook::CookMap<Name, Core::Assets::AssetRef<Shader>>;
+    using ParameterMap = Core::ShaderCook::CookMap<CompactString, CompactString>;
+
+    explicit MaterialEntry(Core::ShaderCook::CookArena& arena)
+        : stageShaders(Core::ShaderCook::CookAllocator<Pair<const Name, Core::Assets::AssetRef<Shader>>>(arena))
+        , parameters(Core::ShaderCook::CookAllocator<Pair<const CompactString, CompactString>>(arena))
+    {}
+
+    void reset(){
+        virtualPath = NAME_NONE;
+        shaderVariant = Core::ShaderArchive::s_DefaultVariant;
+        stageShaders.clear();
+        parameters.clear();
+    }
+
     Name virtualPath = NAME_NONE;
     AString shaderVariant = Core::ShaderArchive::s_DefaultVariant;
-    HashMap<Name, Core::Assets::AssetRef<Shader>> stageShaders;
-    HashMap<CompactString, CompactString> parameters;
+    StageShaderMap stageShaders;
+    ParameterMap parameters;
 };
 struct PreparedShaderKey{
     Name shaderName = NAME_NONE;
@@ -189,18 +208,29 @@ using IncludeMetadataMap = Core::ShaderCook::CookMap<AString, Core::ShaderCook::
 using ShaderEntryVector = Core::ShaderCook::CookVector<Core::ShaderCook::ShaderEntry>;
 using PreparedShaderVector = Vector<PreparedShaderEntry, Core::ShaderCook::CookAllocator<PreparedShaderEntry>>;
 using VirtualPathHashSet = Core::ShaderCook::CookHashSet<NameHash>;
+template<typename T>
+using ScratchVector = Vector<T, Core::Alloc::ScratchAllocator<T>>;
+using DiscoveredNwbFileVector = Core::ShaderCook::CookVector<DiscoveredNwbFile>;
+using GeometryEntryVector = Core::ShaderCook::CookVector<GeometryEntry>;
+using DeformableGeometryEntryVector = Core::ShaderCook::CookVector<DeformableGeometryEntry>;
+using DeformableDisplacementTextureEntryVector = Core::ShaderCook::CookVector<DeformableDisplacementTextureEntry>;
+using MaterialEntryVector = Core::ShaderCook::CookVector<MaterialEntry>;
 
 struct ParsedAssetMetadata{
     IncludeMetadataMap includeMetadata;
     ShaderEntryVector shaderEntries;
-    Vector<GeometryEntry> geometryEntries;
-    Vector<DeformableGeometryEntry> deformableGeometryEntries;
-    Vector<DeformableDisplacementTextureEntry> deformableDisplacementTextureEntries;
-    Vector<MaterialEntry> materialEntries;
+    GeometryEntryVector geometryEntries;
+    DeformableGeometryEntryVector deformableGeometryEntries;
+    DeformableDisplacementTextureEntryVector deformableDisplacementTextureEntries;
+    MaterialEntryVector materialEntries;
 
     explicit ParsedAssetMetadata(Core::ShaderCook::CookArena& arena)
         : includeMetadata(Core::ShaderCook::CookAllocator<Pair<const AString, Core::ShaderCook::IncludeEntry>>(arena))
         , shaderEntries(Core::ShaderCook::CookAllocator<Core::ShaderCook::ShaderEntry>(arena))
+        , geometryEntries(Core::ShaderCook::CookAllocator<GeometryEntry>(arena))
+        , deformableGeometryEntries(Core::ShaderCook::CookAllocator<DeformableGeometryEntry>(arena))
+        , deformableDisplacementTextureEntries(Core::ShaderCook::CookAllocator<DeformableDisplacementTextureEntry>(arena))
+        , materialEntries(Core::ShaderCook::CookAllocator<MaterialEntry>(arena))
     {}
 };
 
@@ -248,7 +278,10 @@ static StagedVolumePaths BuildStagedVolumePaths(const Path& outputDirectory, con
 static bool ResolveCookPaths(const GraphicsCookEnvironment& environment, ResolvedCookPaths& outPaths){
     ErrorCode errorCode;
 
-    outPaths = {};
+    outPaths.repoRoot.clear();
+    outPaths.assetRoots.clear();
+    outPaths.outputDirectory.clear();
+    outPaths.cacheDirectory.clear();
 
     if(environment.assetRoots.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: no asset roots specified"));
@@ -346,7 +379,7 @@ static bool ResolveCookPaths(const GraphicsCookEnvironment& environment, Resolve
 }
 
 
-static bool DiscoverNwbFiles(const Vector<Path>& assetRoots, Vector<DiscoveredNwbFile>& outNwbFiles){
+static bool DiscoverNwbFiles(const Core::ShaderCook::CookVector<Path>& assetRoots, DiscoveredNwbFileVector& outNwbFiles){
     Core::Alloc::ScratchArena<> scratchArena;
     ErrorCode errorCode;
     HashSet<AString, Hasher<AString>, EqualTo<AString>, Core::Alloc::ScratchAllocator<AString>> seenNwbPaths(
@@ -511,7 +544,7 @@ static bool ParseVariantField(
 static bool ParseMaterialStageShaders(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
-    HashMap<Name, Core::Assets::AssetRef<Shader>>& outStageShaders
+    MaterialEntry::StageShaderMap& outStageShaders
 ){
     outStageShaders.clear();
 
@@ -575,7 +608,7 @@ static bool ParseMaterialStageShaders(
 static bool ParseMaterialParameters(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
-    HashMap<CompactString, CompactString>& outParameters
+    MaterialEntry::ParameterMap& outParameters
 ){
     outParameters.clear();
 
@@ -634,7 +667,7 @@ static bool ParseMaterialMeta(
     const Core::Metascript::Document& doc,
     MaterialEntry& outEntry
 ){
-    outEntry = {};
+    outEntry.reset();
 
     const Core::Metascript::Value& asset = doc.asset();
     if(!asset.isMap()){
@@ -787,13 +820,13 @@ static bool ParseMetadataF32Tuple(
     return true;
 }
 
-template<typename ElementT, usize ComponentCount>
+template<typename ElementT, usize ComponentCount, typename ElementVectorT>
 static bool ParseMetadataFloatListField(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     const tchar* metaKind,
     const AStringView fieldName,
-    Vector<ElementT>& outValues
+    ElementVectorT& outValues
 ){
     outValues.clear();
 
@@ -910,13 +943,14 @@ static bool ParseMetadataIndexType(
     return false;
 }
 
+template<typename IndexVectorT>
 static bool AppendMetadataIndexRecursive(
     const Path& nwbFilePath,
     const Core::Metascript::Value& value,
     const tchar* metaKind,
     const AStringView label,
     const bool use32BitIndices,
-    Vector<u32>& outIndices
+    IndexVectorT& outIndices
 ){
     if(value.isList()){
         const auto& list = value.asList();
@@ -945,12 +979,13 @@ static bool AppendMetadataIndexRecursive(
     return true;
 }
 
+template<typename IndexVectorT>
 static bool ParseMetadataIndexField(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     const tchar* metaKind,
     const bool use32BitIndices,
-    Vector<u32>& outIndices
+    IndexVectorT& outIndices
 ){
     outIndices.clear();
 
@@ -982,15 +1017,17 @@ static bool ParseMetadataIndexField(
     return true;
 }
 
-static void BuildDefaultColors(const usize vertexCount, Vector<Float4U>& outColors){
+template<typename ColorVectorT>
+static void BuildDefaultColors(const usize vertexCount, ColorVectorT& outColors){
     outColors.assign(vertexCount, Float4U(1.f, 1.f, 1.f, 1.f));
 }
 
+template<typename PositionVectorT, typename NormalVectorT, typename ColorVectorT>
 static bool BuildGeometryVertices(
     const Path& nwbFilePath,
-    const Vector<Float3U>& positions,
-    const Vector<Float3U>& normals,
-    const Vector<Float4U>& colors,
+    const PositionVectorT& positions,
+    const NormalVectorT& normals,
+    const ColorVectorT& colors,
     Vector<GeometryVertex>& outVertices
 ){
     if(positions.size() != normals.size() || positions.size() != colors.size()){
@@ -1044,9 +1081,10 @@ static bool ParseGeometryMeta(const DiscoveredNwbFile& discoveredFile, const Cor
     if(!RejectUnsupportedGeometryFields(discoveredFile, asset))
         return false;
 
-    Vector<Float3U> positions;
-    Vector<Float3U> normals;
-    Vector<Float4U> colors;
+    Core::Alloc::ScratchArena<> scratchArena;
+    ScratchVector<Float3U> positions{Core::Alloc::ScratchAllocator<Float3U>(scratchArena)};
+    ScratchVector<Float3U> normals{Core::Alloc::ScratchAllocator<Float3U>(scratchArena)};
+    ScratchVector<Float4U> colors{Core::Alloc::ScratchAllocator<Float4U>(scratchArena)};
     if(!ParseMetadataIndexType(discoveredFile.filePath, asset, s_GeometryMetaKind, outEntry.use32BitIndices))
         return false;
     if(!ParseMetadataFloatListField<Float3U, 3u>(discoveredFile.filePath, asset, s_GeometryMetaKind, "positions", positions))
@@ -1146,21 +1184,22 @@ static bool ParseU16Tuple(
     return true;
 }
 
-template<typename ElementT, usize ComponentCount>
+template<typename ElementT, usize ComponentCount, typename ElementVectorT>
 static bool ParseFloatListField(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     const AStringView fieldName,
-    Vector<ElementT>& outValues
+    ElementVectorT& outValues
 ){
     return ParseMetadataFloatListField<ElementT, ComponentCount>(nwbFilePath, asset, s_DeformableGeometryMetaKind, fieldName, outValues);
 }
 
+template<typename ValueVectorT>
 static bool ParseU32ListField(
     const Path& nwbFilePath,
     const Core::Metascript::Value& map,
     const AStringView fieldName,
-    Vector<u32>& outValues
+    ValueVectorT& outValues
 ){
     outValues.clear();
 
@@ -1198,13 +1237,14 @@ static bool ParseDeformableIndexField(
     return ParseMetadataIndexField(nwbFilePath, asset, s_DeformableGeometryMetaKind, use32BitIndices, outIndices);
 }
 
+template<typename PositionVectorT, typename NormalVectorT, typename TangentVectorT, typename UvVectorT, typename ColorVectorT>
 static bool BuildDeformableRestVertices(
     const Path& nwbFilePath,
-    const Vector<Float3U>& positions,
-    const Vector<Float3U>& normals,
-    const Vector<Float4U>& tangents,
-    const Vector<Float2U>& uv0,
-    const Vector<Float4U>& colors,
+    const PositionVectorT& positions,
+    const NormalVectorT& normals,
+    const TangentVectorT& tangents,
+    const UvVectorT& uv0,
+    const ColorVectorT& colors,
     Vector<DeformableVertexRest>& outVertices
 ){
     if(positions.size() != normals.size()
@@ -1322,8 +1362,9 @@ static bool ParseSourceSamples(
     if(sourceSamples->asMap().empty())
         return true;
 
-    Vector<u32> sourceTri;
-    Vector<Float3U> bary;
+    Core::Alloc::ScratchArena<> scratchArena;
+    ScratchVector<u32> sourceTri{Core::Alloc::ScratchAllocator<u32>(scratchArena)};
+    ScratchVector<Float3U> bary{Core::Alloc::ScratchAllocator<Float3U>(scratchArena)};
     if(!ParseU32ListField(nwbFilePath, *sourceSamples, "source_tri", sourceTri))
         return false;
     if(!ParseFloatListField<Float3U, 3u>(nwbFilePath, *sourceSamples, "bary", bary))
@@ -1363,7 +1404,8 @@ static bool ParseEditMasks(
     if(IsExplicitEmptyOptionalField(*editMasks))
         return true;
 
-    Vector<u32> parsedFlags;
+    Core::Alloc::ScratchArena<> scratchArena;
+    ScratchVector<u32> parsedFlags{Core::Alloc::ScratchAllocator<u32>(scratchArena)};
     if(!ParseU32ListField(nwbFilePath, asset, "edit_masks", parsedFlags))
         return false;
     if(parsedFlags.size() != triangleCount){
@@ -1556,10 +1598,11 @@ static bool ParseMorphs(const Path& nwbFilePath, const Core::Metascript::Value& 
     }
 
     outMorphs.reserve(morphs->asMap().size());
-    Vector<u32> vertexIds;
-    Vector<Float3U> deltaPositions;
-    Vector<Float3U> deltaNormals;
-    Vector<Float4U> deltaTangents;
+    Core::Alloc::ScratchArena<> scratchArena;
+    ScratchVector<u32> vertexIds{Core::Alloc::ScratchAllocator<u32>(scratchArena)};
+    ScratchVector<Float3U> deltaPositions{Core::Alloc::ScratchAllocator<Float3U>(scratchArena)};
+    ScratchVector<Float3U> deltaNormals{Core::Alloc::ScratchAllocator<Float3U>(scratchArena)};
+    ScratchVector<Float4U> deltaTangents{Core::Alloc::ScratchAllocator<Float4U>(scratchArena)};
     for(const auto& [morphName, morphValue] : morphs->asMap()){
         const AStringView morphNameView(morphName.data(), morphName.size());
         const Name morphNameId = ToName(morphNameView);
@@ -1665,11 +1708,12 @@ static bool ParseDeformableGeometryMeta(
     if(!RejectDeformableGeometrySourceField(discoveredFile, asset))
         return false;
 
-    Vector<Float3U> positions;
-    Vector<Float3U> normals;
-    Vector<Float4U> tangents;
-    Vector<Float2U> uv0;
-    Vector<Float4U> colors;
+    Core::Alloc::ScratchArena<> scratchArena;
+    ScratchVector<Float3U> positions{Core::Alloc::ScratchAllocator<Float3U>(scratchArena)};
+    ScratchVector<Float3U> normals{Core::Alloc::ScratchAllocator<Float3U>(scratchArena)};
+    ScratchVector<Float4U> tangents{Core::Alloc::ScratchAllocator<Float4U>(scratchArena)};
+    ScratchVector<Float2U> uv0{Core::Alloc::ScratchAllocator<Float2U>(scratchArena)};
+    ScratchVector<Float4U> colors{Core::Alloc::ScratchAllocator<Float4U>(scratchArena)};
     if(!ParseDeformableIndexType(discoveredFile.filePath, asset, outEntry.use32BitIndices))
         return false;
     if(!ParseFloatListField<Float3U, 3u>(discoveredFile.filePath, asset, "positions", positions))
@@ -1772,7 +1816,8 @@ static bool BuildDeformableGeometryAsset(DeformableGeometryEntry& geometryEntry,
     return outGeometry.validatePayload();
 }
 
-static bool BuildIncludeDirectories(const Path& repoRoot, const Vector<Path>& assetRoots, const Core::ShaderCook::ShaderEntry& entry, Core::ShaderCook::CookVector<Path>& outIncludeDirectories){
+template<typename AssetRootVector>
+static bool BuildIncludeDirectories(const Path& repoRoot, const AssetRootVector& assetRoots, const Core::ShaderCook::ShaderEntry& entry, Core::ShaderCook::CookVector<Path>& outIncludeDirectories){
     Core::Alloc::ScratchArena<> scratchArena;
     ErrorCode errorCode;
     HashSet<AString, Hasher<AString>, EqualTo<AString>, Core::Alloc::ScratchAllocator<AString>> seenIncludeDirectories(
@@ -1967,7 +2012,7 @@ static bool NormalizeMaterialVariant(
 static bool ValidateAndNormalizeMaterials(
     Core::ShaderCook& shaderCook,
     const Vector<PreparedShaderEntry, Core::ShaderCook::CookAllocator<PreparedShaderEntry>>& preparedEntries,
-    Vector<MaterialEntry>& inOutMaterialEntries
+    MaterialEntryVector& inOutMaterialEntries
 ){
     Core::Alloc::ScratchArena<> scratchArena;
     HashMap<
@@ -2235,7 +2280,7 @@ static bool ReserveShaderIndexRecords(const u64 plannedFileCount, Vector<Core::S
 static bool ParseAssetMetadata(
     Core::ShaderCook::CookArena& cookArena,
     Core::ShaderCook& shaderCook,
-    const Vector<DiscoveredNwbFile>& nwbFiles,
+    const DiscoveredNwbFileVector& nwbFiles,
     ParsedAssetMetadata& outMetadata
 ){
     outMetadata.includeMetadata.reserve(nwbFiles.size());
@@ -2340,7 +2385,7 @@ static bool ParseAssetMetadata(
         }
 
         if(assetType == Material::AssetTypeName()){
-            MaterialEntry materialEntry;
+            MaterialEntry materialEntry(cookArena);
             if(!ParseMaterialMeta(shaderCook, discoveredNwbFile, doc, materialEntry))
                 return false;
 
@@ -2662,7 +2707,7 @@ static bool AppendPreparedShadersToVolume(
 }
 
 static bool AppendMaterialAssetsToVolume(
-    const Vector<MaterialEntry>& materialEntries,
+    const MaterialEntryVector& materialEntries,
     Core::Filesystem::VolumeSession& volumeSession,
     VirtualPathHashSet& inOutSeenVirtualPathHashes
 ){
@@ -2715,7 +2760,7 @@ static bool AppendMaterialAssetsToVolume(
 }
 
 static bool AppendGeometryAssetsToVolume(
-    Vector<GeometryEntry>& geometryEntries,
+    GeometryEntryVector& geometryEntries,
     Core::Filesystem::VolumeSession& volumeSession,
     VirtualPathHashSet& inOutSeenVirtualPathHashes
 ){
@@ -2762,7 +2807,7 @@ static bool AppendGeometryAssetsToVolume(
 }
 
 static bool AppendDeformableGeometryAssetsToVolume(
-    Vector<DeformableGeometryEntry>& geometryEntries,
+    DeformableGeometryEntryVector& geometryEntries,
     Core::Filesystem::VolumeSession& volumeSession,
     VirtualPathHashSet& inOutSeenVirtualPathHashes
 ){
@@ -2809,7 +2854,7 @@ static bool AppendDeformableGeometryAssetsToVolume(
 }
 
 static bool AppendDeformableDisplacementTexturesToVolume(
-    Vector<DeformableDisplacementTextureEntry>& textureEntries,
+    DeformableDisplacementTextureEntryVector& textureEntries,
     Core::Filesystem::VolumeSession& volumeSession,
     VirtualPathHashSet& inOutSeenVirtualPathHashes
 ){
@@ -2861,7 +2906,7 @@ static bool AppendDeformableDisplacementTexturesToVolume(
 
 
 bool GraphicsAssetCooker::cook(const Core::Assets::AssetCookOptions& options){
-    GraphicsCookEnvironment environment;
+    GraphicsCookEnvironment environment(m_arena);
     environment.configuration = options.configuration;
     environment.repoRoot = options.repoRoot.empty() ? Path(".") : Path(options.repoRoot.c_str());
     environment.assetRoots.reserve(options.assetRoots.size());
@@ -2892,12 +2937,14 @@ bool GraphicsAssetCooker::cookGraphicsAssets(const GraphicsCookEnvironment& envi
 
     Core::ShaderCook shaderCook(m_arena);
 
-    __hidden_graphics_asset_cooker::ResolvedCookPaths resolvedPaths;
+    __hidden_graphics_asset_cooker::ResolvedCookPaths resolvedPaths(m_arena);
     if(!__hidden_graphics_asset_cooker::ResolveCookPaths(environment, resolvedPaths))
         return false;
 
     // discover .nwb files from asset roots
-    Vector<__hidden_graphics_asset_cooker::DiscoveredNwbFile> nwbFiles;
+    __hidden_graphics_asset_cooker::DiscoveredNwbFileVector nwbFiles{
+        Core::ShaderCook::CookAllocator<__hidden_graphics_asset_cooker::DiscoveredNwbFile>(m_arena)
+    };
     if(!__hidden_graphics_asset_cooker::DiscoverNwbFiles(resolvedPaths.assetRoots, nwbFiles))
         return false;
 

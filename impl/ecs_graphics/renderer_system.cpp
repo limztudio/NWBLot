@@ -995,6 +995,7 @@ bool RendererSystem::MaterialPipelineKeyEqualTo::operator()(const MaterialPipeli
 
 
 RendererSystem::RendererSystem(
+    Core::Alloc::CustomArena& arena,
     Core::ECS::World& world,
     Core::Graphics& graphics,
     Core::Assets::AssetManager& assetManager,
@@ -1005,7 +1006,11 @@ RendererSystem::RendererSystem(
     , m_graphics(graphics)
     , m_assetManager(assetManager)
     , m_shaderPathResolver(Move(shaderPathResolver))
-    , m_deformableRuntimeCache(MakeUnique<DeformableRuntimeMeshCache>(graphics, assetManager))
+    , m_geometryMeshes(0, Hasher<Name>(), EqualTo<Name>(), GeometryResourcesMapAllocator(arena))
+    , m_materialSurfaceInfos(0, Hasher<Name>(), EqualTo<Name>(), MaterialSurfaceInfoMapAllocator(arena))
+    , m_materialPipelines(0, MaterialPipelineKeyHasher(), MaterialPipelineKeyEqualTo(), MaterialPipelineMapAllocator(arena))
+    , m_loggedMaterialPaths(0, Hasher<Name>(), EqualTo<Name>(), LoggedMaterialPathMapAllocator(arena))
+    , m_deformableRuntimeCache(Core::MakeCustomUnique<DeformableRuntimeMeshCache>(arena, arena, graphics, assetManager))
 {
     readAccess<Core::Scene::SceneComponent>();
     readAccess<Core::Scene::TransformComponent>();

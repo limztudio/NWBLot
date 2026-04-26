@@ -179,14 +179,18 @@ private:
     SwapChainRuntimeState m_swapChainState;
 
 private:
-    UniquePtr<IGraphicsBackend> m_backend;
+    using BackendPtr = CustomUniquePtr<IGraphicsBackend>;
+    using RenderPassListAllocator = Alloc::CustomAllocator<IRenderPass*>;
+    using SwapChainFramebufferVectorAllocator = Alloc::CustomAllocator<FramebufferHandle>;
+
+    BackendPtr m_backend;
 
     bool m_skipRenderOnFirstFrame = false;
     bool m_hasPresentedFrame = false;
     bool m_windowVisible = false;
     bool m_windowIsInFocus = true;
 
-    List<IRenderPass*> m_renderPasses;
+    List<IRenderPass*, RenderPassListAllocator> m_renderPasses;
     Timer m_previousFrameTimestamp = {};
     f32 m_dpiScaleFactorX = 1.f;
     f32 m_dpiScaleFactorY = 1.f;
@@ -202,7 +206,7 @@ private:
 
     u32 m_frameIndex = 0;
 
-    Vector<FramebufferHandle> m_swapChainFramebuffers;
+    Vector<FramebufferHandle, SwapChainFramebufferVectorAllocator> m_swapChainFramebuffers;
 
     BasicString<tchar> m_windowTitle;
 };

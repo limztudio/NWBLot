@@ -333,6 +333,7 @@ static_assert(
 
 
 DeformerSystem::DeformerSystem(
+    Core::Alloc::CustomArena& arena,
     Core::ECS::World& world,
     Core::Graphics& graphics,
     Core::Assets::AssetManager& assetManager,
@@ -344,6 +345,7 @@ DeformerSystem::DeformerSystem(
     , m_assetManager(assetManager)
     , m_rendererSystem(rendererSystem)
     , m_shaderPathResolver(Move(shaderPathResolver))
+    , m_runtimeResources(0, Hasher<u64>(), EqualTo<u64>(), RuntimeResourceMapAllocator(arena))
 {
     readAccess<DeformableRendererComponent>();
     readAccess<DeformableMorphWeightsComponent>();

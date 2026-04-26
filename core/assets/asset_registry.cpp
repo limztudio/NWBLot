@@ -16,6 +16,11 @@ NWB_ASSETS_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+AssetRegistry::AssetRegistry(Alloc::CustomArena& arena)
+    : m_codecs(0, Hasher<Name>(), EqualTo<Name>(), CodecMapAllocator(arena))
+{}
+
+
 bool AssetRegistry::registerCodec(UniquePtr<IAssetCodec>&& codec, const bool replaceExisting){
     if(!codec){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetRegistry: rejected null codec registration"));

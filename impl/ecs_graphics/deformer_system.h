@@ -91,6 +91,7 @@ public:
 
 public:
     DeformerSystem(
+        Core::Alloc::CustomArena& arena,
         Core::ECS::World& world,
         Core::Graphics& graphics,
         Core::Assets::AssetManager& assetManager,
@@ -136,13 +137,15 @@ private:
 
 
 private:
+    using RuntimeResourceMapAllocator = Core::Alloc::CustomAllocator<Pair<const u64, RuntimeResources>>;
+
     Core::ECS::World& m_world;
     Core::Graphics& m_graphics;
     Core::Assets::AssetManager& m_assetManager;
     RendererSystem& m_rendererSystem;
     ShaderPathResolveCallback m_shaderPathResolver;
 
-    HashMap<u64, RuntimeResources, Hasher<u64>, EqualTo<u64>> m_runtimeResources;
+    HashMap<u64, RuntimeResources, Hasher<u64>, EqualTo<u64>, RuntimeResourceMapAllocator> m_runtimeResources;
     Core::BindingLayoutHandle m_bindingLayout;
     Core::ShaderHandle m_computeShader;
     Core::ComputePipelineHandle m_computePipeline;

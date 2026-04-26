@@ -150,7 +150,7 @@ private:
     CookArena& m_memoryArena;
 
 private:
-    UniquePtr<IShaderCompiler> m_compiler;
+    CustomUniquePtr<IShaderCompiler> m_compiler;
 };
 
 

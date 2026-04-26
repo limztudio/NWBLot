@@ -291,14 +291,14 @@ static bool CopyInstanceParameters(DeviceCreationParameters& dst, const Instance
     return true;
 }
 
-static UniquePtr<IGraphicsBackend> CreateDefaultBackend(
+static CustomUniquePtr<IGraphicsBackend> CreateDefaultBackend(
     const DeviceCreationParameters& deviceParams,
     SwapChainRuntimeState& swapChainState,
     GraphicsAllocator& allocator,
     Alloc::ThreadPool& threadPool
 )
 {
-    return MakeUnique<Vulkan::BackendContext>(deviceParams, swapChainState, allocator, threadPool);
+    return MakeCustomUnique<Vulkan::BackendContext>(allocator.getObjectArena(), deviceParams, swapChainState, allocator, threadPool);
 }
 
 static const Vulkan::IBackendQueries* GetVulkanBackendQueries(const IGraphicsBackend* backend){
@@ -330,6 +330,8 @@ Graphics::Graphics(GraphicsAllocator& allocator, Alloc::ThreadPool& threadPool, 
     , m_threadPool(threadPool)
     , m_jobSystem(jobSystem)
     , m_input(input)
+    , m_renderPasses(RenderPassListAllocator(m_allocator.getObjectArena()))
+    , m_swapChainFramebuffers(SwapChainFramebufferVectorAllocator(m_allocator.getObjectArena()))
 {
     m_swapChainState.backBufferFormat = m_deviceCreationParams.swapChainFormat;
     syncInputMousePositionScale();

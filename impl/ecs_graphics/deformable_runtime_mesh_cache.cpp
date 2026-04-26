@@ -234,9 +234,12 @@ const DeformableGeometry* DeformableRuntimeMeshCache::DeformableGeometrySource::
 }
 
 
-DeformableRuntimeMeshCache::DeformableRuntimeMeshCache(Core::Graphics& graphics, Core::Assets::AssetManager& assetManager)
+DeformableRuntimeMeshCache::DeformableRuntimeMeshCache(Core::Alloc::CustomArena& arena, Core::Graphics& graphics, Core::Assets::AssetManager& assetManager)
     : m_graphics(graphics)
     , m_assetManager(assetManager)
+    , m_sources(0, Hasher<Name>(), EqualTo<Name>(), SourceMapAllocator(arena))
+    , m_instances(0, Hasher<Core::ECS::EntityID>(), EqualTo<Core::ECS::EntityID>(), InstanceMapAllocator(arena))
+    , m_handleToEntity(0, Hasher<u64>(), EqualTo<u64>(), HandleMapAllocator(arena))
 {}
 
 

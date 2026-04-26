@@ -129,12 +129,15 @@ private:
 };
 
 struct TestAssetManager{
+    NWB::Core::Alloc::CustomArena arena;
     NWB::Core::Assets::AssetRegistry registry;
     TestAssetBinarySource binarySource;
     NWB::Core::Assets::AssetManager manager;
 
     TestAssetManager()
-        : manager(registry, binarySource)
+        : arena(&ECSTestAlloc, &ECSTestFree, &ECSTestAllocAligned, &ECSTestFreeAligned)
+        , registry(arena)
+        , manager(arena, registry, binarySource)
     {
         const bool registeredGeometry =
             registry.registerCodec(MakeUnique<TestAssetCodec<NWB::Impl::Geometry>>());

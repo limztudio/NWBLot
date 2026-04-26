@@ -62,11 +62,12 @@ private:
         Name virtualPath = NAME_NONE;
     };
 
-    using RequestMap = HashMap<u64, RequestRecord>;
+    using RequestMapAllocator = Alloc::CustomAllocator<Pair<const u64, RequestRecord>>;
+    using RequestMap = HashMap<u64, RequestRecord, Hasher<u64>, EqualTo<u64>, RequestMapAllocator>;
 
 
 public:
-    explicit AssetManager(const AssetRegistry& registry, const IAssetBinarySource& binarySource);
+    explicit AssetManager(Alloc::CustomArena& arena, const AssetRegistry& registry, const IAssetBinarySource& binarySource);
 
 
 public:

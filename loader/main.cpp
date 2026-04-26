@@ -215,10 +215,10 @@ static int MainLogic(const __hidden_loader::LoaderOptions& options, void* inst){
 
             __hidden_loader::VolumeAssetBinarySource assetBinarySource(graphicsVolume);
 
-            NWB::Core::Assets::AssetRegistry assetRegistry;
+            NWB::Core::Assets::AssetRegistry assetRegistry(frame.projectObjectArena());
             NWB::Core::Assets::RegisterAutoCollectedAssetCodecs(assetRegistry);
 
-            NWB::Core::Assets::AssetManager assetManager(assetRegistry, assetBinarySource);
+            NWB::Core::Assets::AssetManager assetManager(frame.projectObjectArena(), assetRegistry, assetBinarySource);
 
             Vector<NWB::Core::ShaderArchive::Record> shaderArchiveRecords;
             if(!__hidden_loader::LoadShaderArchiveRecords(assetBinarySource, shaderArchiveRecords)){

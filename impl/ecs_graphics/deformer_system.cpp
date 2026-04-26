@@ -158,8 +158,12 @@ static bool BuildSkinPayload(
         return false;
     }
 
+    outSkinInfluences.reserve(instance.skin.size());
+    outJointPalette.reserve(jointPalette->joints.size());
+
     for(usize jointIndex = 0; jointIndex < jointPalette->joints.size(); ++jointIndex){
-        const SIMDMatrix jointMatrix = DeformableRuntime::LoadJointMatrix(jointPalette->joints[jointIndex]);
+        const DeformableJointMatrix& joint = jointPalette->joints[jointIndex];
+        const SIMDMatrix jointMatrix = DeformableRuntime::LoadJointMatrix(joint);
         if(!DeformableRuntime::IsInvertibleAffineJointMatrix(jointMatrix)){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("DeformerSystem: runtime mesh '{}' joint palette entry {} is not a finite invertible affine matrix"),
@@ -168,10 +172,9 @@ static bool BuildSkinPayload(
             );
             return false;
         }
+        outJointPalette.push_back(joint);
     }
 
-    outSkinInfluences.reserve(instance.skin.size());
-    outJointPalette.reserve(jointPalette->joints.size());
     for(usize vertexIndex = 0; vertexIndex < instance.skin.size(); ++vertexIndex){
         const SkinInfluence4& sourceSkin = instance.skin[vertexIndex];
         if(!DeformableValidation::ValidSkinInfluence(sourceSkin)){
@@ -208,7 +211,6 @@ static bool BuildSkinPayload(
         outSkinInfluences.push_back(gpuSkin);
     }
 
-    outJointPalette.assign(jointPalette->joints.begin(), jointPalette->joints.end());
     return true;
 }
 

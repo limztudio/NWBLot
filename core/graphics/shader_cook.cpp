@@ -702,12 +702,30 @@ bool ShaderCook::expandDefineCombinations(const CookMap<AString, DefineEntry>& d
     initialCombo.reserve(defineValues.size());
     outCombinations.push_back(Move(initialCombo));
 
+    auto cloneComboWithEntry = [&](const DefineCombo& source, const AString& defineName, const AString& defineValue){
+        DefineCombo copy{CookAllocator<Pair<const AString, AString>>(m_memoryArena)};
+        copy.reserve(defineValues.size());
+        for(const auto& [sourceName, sourceValue] : source)
+            copy.try_emplace(sourceName, sourceValue);
+        copy.try_emplace(defineName, defineValue);
+        return copy;
+    };
+
     for(const auto& entry : sortedDefineEntries(defineValues)){
         const AString& defineName = *entry.key;
         const CookVector<AString>& values = entry.value->values;
         if(values.empty()){
             outCombinations.clear();
             return true;
+        }
+
+        if(values.size() == 1u){
+            const AString& value = values.front();
+            for(DefineCombo& combo : outCombinations){
+                combo.reserve(defineValues.size());
+                combo.try_emplace(defineName, value);
+            }
+            continue;
         }
 
         if(outCombinations.size() > Limit<usize>::s_Max / values.size()){
@@ -720,10 +738,7 @@ bool ShaderCook::expandDefineCombinations(const CookMap<AString, DefineEntry>& d
 
         for(const DefineCombo& combo : outCombinations){
             for(const AString& value : values){
-                DefineCombo copy = combo;
-                copy.reserve(defineValues.size());
-                copy.try_emplace(defineName, value);
-                expanded.push_back(Move(copy));
+                expanded.push_back(cloneComboWithEntry(combo, defineName, value));
             }
         }
 

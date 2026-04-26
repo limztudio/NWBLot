@@ -2267,15 +2267,28 @@ NWB_INLINE SIMDVector SIMDCALL VectorPow(SIMDVector v0, SIMDVector v1)noexcept{
 #endif
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorSin(SIMDVector value)noexcept{
+namespace SIMDVectorDetail{
+
+NWB_INLINE SIMDVector SIMDCALL VectorTrigCanonicalAngle(SIMDVector value, SIMDVector& outCosSignSelect)noexcept{
     SIMDVector x = VectorModAngles(value);
 
-    SIMDVector sign = VectorAndInt(x, s_SIMDNegativeZero);
-    SIMDVector c = VectorOrInt(s_SIMDPi, sign);
-    SIMDVector absX = VectorAbs(x);
-    SIMDVector rflX = VectorSubtract(c, x);
-    SIMDVector comp = VectorLessOrEqual(absX, s_SIMDHalfPi);
-    x = VectorSelect(rflX, x, comp);
+    const SIMDVector sign = VectorAndInt(x, s_SIMDNegativeZero);
+    const SIMDVector c = VectorOrInt(s_SIMDPi, sign);
+    const SIMDVector absX = VectorAbs(x);
+    const SIMDVector rflX = VectorSubtract(c, x);
+    outCosSignSelect = VectorLessOrEqual(absX, s_SIMDHalfPi);
+    return VectorSelect(rflX, x, outCosSignSelect);
+}
+
+NWB_INLINE SIMDVector SIMDCALL VectorTrigCosSign(SIMDVector cosSignSelect)noexcept{
+    return VectorSelect(s_SIMDNegativeOne, s_SIMDOne, cosSignSelect);
+}
+
+};
+
+NWB_INLINE SIMDVector SIMDCALL VectorSin(SIMDVector value)noexcept{
+    SIMDVector cosSignSelect;
+    SIMDVector x = SIMDVectorDetail::VectorTrigCanonicalAngle(value, cosSignSelect);
 
     SIMDVector x2 = VectorMultiply(x, x);
     SIMDVector result = VectorMultiplyAdd(VectorSplatX(s_SIMDSinCoefficients1), x2, VectorSplatW(s_SIMDSinCoefficients0));
@@ -2287,15 +2300,9 @@ NWB_INLINE SIMDVector SIMDCALL VectorSin(SIMDVector value)noexcept{
 }
 
 NWB_INLINE SIMDVector SIMDCALL VectorCos(SIMDVector value)noexcept{
-    SIMDVector x = VectorModAngles(value);
-
-    SIMDVector sign = VectorAndInt(x, s_SIMDNegativeZero);
-    SIMDVector c = VectorOrInt(s_SIMDPi, sign);
-    SIMDVector absX = VectorAbs(x);
-    SIMDVector rflX = VectorSubtract(c, x);
-    SIMDVector comp = VectorLessOrEqual(absX, s_SIMDHalfPi);
-    x = VectorSelect(rflX, x, comp);
-    sign = VectorSelect(s_SIMDNegativeOne, s_SIMDOne, comp);
+    SIMDVector cosSignSelect;
+    SIMDVector x = SIMDVectorDetail::VectorTrigCanonicalAngle(value, cosSignSelect);
+    const SIMDVector sign = SIMDVectorDetail::VectorTrigCosSign(cosSignSelect);
 
     SIMDVector x2 = VectorMultiply(x, x);
     SIMDVector result = VectorMultiplyAdd(VectorSplatX(s_SIMDCosCoefficients1), x2, VectorSplatW(s_SIMDCosCoefficients0));
@@ -2310,15 +2317,9 @@ NWB_INLINE void SIMDCALL VectorSinCos(SIMDVector* outSin, SIMDVector* outCos, SI
     NWB_ASSERT(outSin != nullptr);
     NWB_ASSERT(outCos != nullptr);
 
-    SIMDVector x = VectorModAngles(value);
-
-    SIMDVector sign = VectorAndInt(x, s_SIMDNegativeZero);
-    SIMDVector c = VectorOrInt(s_SIMDPi, sign);
-    SIMDVector absX = VectorAbs(x);
-    SIMDVector rflX = VectorSubtract(c, x);
-    SIMDVector comp = VectorLessOrEqual(absX, s_SIMDHalfPi);
-    x = VectorSelect(rflX, x, comp);
-    sign = VectorSelect(s_SIMDNegativeOne, s_SIMDOne, comp);
+    SIMDVector cosSignSelect;
+    SIMDVector x = SIMDVectorDetail::VectorTrigCanonicalAngle(value, cosSignSelect);
+    const SIMDVector sign = SIMDVectorDetail::VectorTrigCosSign(cosSignSelect);
 
     SIMDVector x2 = VectorMultiply(x, x);
 
@@ -2423,39 +2424,69 @@ NWB_INLINE SIMDVector SIMDCALL VectorTanH(SIMDVector value)noexcept{
     return VectorOrInt(magnitude, sign);
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorASin(SIMDVector value)noexcept{
-    SIMDVector nonnegative = VectorGreaterOrEqual(value, s_SIMDZero);
+namespace SIMDVectorDetail{
+
+NWB_INLINE SIMDVector SIMDCALL VectorArcCoefficientApproximation(SIMDVector value)noexcept{
     SIMDVector x = VectorAbs(value);
     SIMDVector root = VectorSqrt(VectorMax(s_SIMDZero, VectorSubtract(s_SIMDOne, x)));
 
-    SIMDVector t0 = VectorMultiplyAdd(VectorSplatW(s_SIMDArcCoefficients1), x, VectorSplatZ(s_SIMDArcCoefficients1));
-    t0 = VectorMultiplyAdd(t0, x, VectorSplatY(s_SIMDArcCoefficients1));
-    t0 = VectorMultiplyAdd(t0, x, VectorSplatX(s_SIMDArcCoefficients1));
-    t0 = VectorMultiplyAdd(t0, x, VectorSplatW(s_SIMDArcCoefficients0));
-    t0 = VectorMultiplyAdd(t0, x, VectorSplatZ(s_SIMDArcCoefficients0));
-    t0 = VectorMultiplyAdd(t0, x, VectorSplatY(s_SIMDArcCoefficients0));
-    t0 = VectorMultiplyAdd(t0, x, VectorSplatX(s_SIMDArcCoefficients0));
-    t0 = VectorMultiply(t0, root);
+    SIMDVector result = VectorMultiplyAdd(VectorSplatW(s_SIMDArcCoefficients1), x, VectorSplatZ(s_SIMDArcCoefficients1));
+    result = VectorMultiplyAdd(result, x, VectorSplatY(s_SIMDArcCoefficients1));
+    result = VectorMultiplyAdd(result, x, VectorSplatX(s_SIMDArcCoefficients1));
+    result = VectorMultiplyAdd(result, x, VectorSplatW(s_SIMDArcCoefficients0));
+    result = VectorMultiplyAdd(result, x, VectorSplatZ(s_SIMDArcCoefficients0));
+    result = VectorMultiplyAdd(result, x, VectorSplatY(s_SIMDArcCoefficients0));
+    result = VectorMultiplyAdd(result, x, VectorSplatX(s_SIMDArcCoefficients0));
+    return VectorMultiply(result, root);
+}
 
+NWB_INLINE SIMDVector SIMDCALL VectorATan2SelectResult(SIMDVector y, SIMDVector x, SIMDVector atanResult, SIMDVector constants)noexcept{
+    const SIMDVector zero = VectorZero();
+    SIMDVector atanResultValid = VectorTrueInt();
+
+    SIMDVector pi = VectorSplatX(constants);
+    SIMDVector piOverTwo = VectorSplatY(constants);
+    SIMDVector piOverFour = VectorSplatZ(constants);
+    SIMDVector threePiOverFour = VectorSplatW(constants);
+
+    SIMDVector yEqualsZero = VectorEqual(y, zero);
+    SIMDVector xEqualsZero = VectorEqual(x, zero);
+    SIMDVector xIsPositive = VectorEqualInt(VectorAndInt(x, s_SIMDNegativeZero), zero);
+    SIMDVector yEqualsInfinity = VectorIsInfinite(y);
+    SIMDVector xEqualsInfinity = VectorIsInfinite(x);
+
+    SIMDVector ySign = VectorAndInt(y, s_SIMDNegativeZero);
+    pi = VectorOrInt(pi, ySign);
+    piOverTwo = VectorOrInt(piOverTwo, ySign);
+    piOverFour = VectorOrInt(piOverFour, ySign);
+    threePiOverFour = VectorOrInt(threePiOverFour, ySign);
+
+    SIMDVector r1 = VectorSelect(pi, ySign, xIsPositive);
+    SIMDVector r2 = VectorSelect(atanResultValid, piOverTwo, xEqualsZero);
+    SIMDVector r3 = VectorSelect(r2, r1, yEqualsZero);
+    SIMDVector r4 = VectorSelect(threePiOverFour, piOverFour, xIsPositive);
+    SIMDVector r5 = VectorSelect(piOverTwo, r4, xEqualsInfinity);
+    SIMDVector result = VectorSelect(r3, r5, yEqualsInfinity);
+    atanResultValid = VectorEqualInt(result, atanResultValid);
+
+    r1 = VectorSelect(pi, s_SIMDNegativeZero, xIsPositive);
+    r2 = VectorAdd(atanResult, r1);
+    return VectorSelect(result, r2, atanResultValid);
+}
+
+};
+
+NWB_INLINE SIMDVector SIMDCALL VectorASin(SIMDVector value)noexcept{
+    const SIMDVector nonnegative = VectorGreaterOrEqual(value, s_SIMDZero);
+    SIMDVector t0 = SIMDVectorDetail::VectorArcCoefficientApproximation(value);
     SIMDVector t1 = VectorSubtract(s_SIMDPi, t0);
     t0 = VectorSelect(t1, t0, nonnegative);
     return VectorSubtract(s_SIMDHalfPi, t0);
 }
 
 NWB_INLINE SIMDVector SIMDCALL VectorACos(SIMDVector value)noexcept{
-    SIMDVector nonnegative = VectorGreaterOrEqual(value, s_SIMDZero);
-    SIMDVector x = VectorAbs(value);
-    SIMDVector root = VectorSqrt(VectorMax(s_SIMDZero, VectorSubtract(s_SIMDOne, x)));
-
-    SIMDVector t0 = VectorMultiplyAdd(VectorSplatW(s_SIMDArcCoefficients1), x, VectorSplatZ(s_SIMDArcCoefficients1));
-    t0 = VectorMultiplyAdd(t0, x, VectorSplatY(s_SIMDArcCoefficients1));
-    t0 = VectorMultiplyAdd(t0, x, VectorSplatX(s_SIMDArcCoefficients1));
-    t0 = VectorMultiplyAdd(t0, x, VectorSplatW(s_SIMDArcCoefficients0));
-    t0 = VectorMultiplyAdd(t0, x, VectorSplatZ(s_SIMDArcCoefficients0));
-    t0 = VectorMultiplyAdd(t0, x, VectorSplatY(s_SIMDArcCoefficients0));
-    t0 = VectorMultiplyAdd(t0, x, VectorSplatX(s_SIMDArcCoefficients0));
-    t0 = VectorMultiply(t0, root);
-
+    const SIMDVector nonnegative = VectorGreaterOrEqual(value, s_SIMDZero);
+    const SIMDVector t0 = SIMDVectorDetail::VectorArcCoefficientApproximation(value);
     SIMDVector t1 = VectorSubtract(s_SIMDPi, t0);
     return VectorSelect(t1, t0, nonnegative);
 }
@@ -2487,52 +2518,13 @@ NWB_INLINE SIMDVector SIMDCALL VectorATan(SIMDVector value)noexcept{
 
 NWB_INLINE SIMDVector SIMDCALL VectorATan2(SIMDVector y, SIMDVector x)noexcept{
     const SIMDVector constants = VectorSet(s_PI, s_PIDIV2, s_PIDIV4, s_PI * 0.75f);
-
-    const SIMDVector zero = VectorZero();
-    SIMDVector atanResultValid = VectorTrueInt();
-
-    SIMDVector pi = VectorSplatX(constants);
-    SIMDVector piOverTwo = VectorSplatY(constants);
-    SIMDVector piOverFour = VectorSplatZ(constants);
-    SIMDVector threePiOverFour = VectorSplatW(constants);
-
-    SIMDVector yEqualsZero = VectorEqual(y, zero);
-    SIMDVector xEqualsZero = VectorEqual(x, zero);
-    SIMDVector xIsPositive = VectorEqualInt(VectorAndInt(x, s_SIMDNegativeZero), zero);
-    SIMDVector yEqualsInfinity = VectorIsInfinite(y);
-    SIMDVector xEqualsInfinity = VectorIsInfinite(x);
-
-    SIMDVector ySign = VectorAndInt(y, s_SIMDNegativeZero);
-    pi = VectorOrInt(pi, ySign);
-    piOverTwo = VectorOrInt(piOverTwo, ySign);
-    piOverFour = VectorOrInt(piOverFour, ySign);
-    threePiOverFour = VectorOrInt(threePiOverFour, ySign);
-
-    SIMDVector r1 = VectorSelect(pi, ySign, xIsPositive);
-    SIMDVector r2 = VectorSelect(atanResultValid, piOverTwo, xEqualsZero);
-    SIMDVector r3 = VectorSelect(r2, r1, yEqualsZero);
-    SIMDVector r4 = VectorSelect(threePiOverFour, piOverFour, xIsPositive);
-    SIMDVector r5 = VectorSelect(piOverTwo, r4, xEqualsInfinity);
-    SIMDVector result = VectorSelect(r3, r5, yEqualsInfinity);
-    atanResultValid = VectorEqualInt(result, atanResultValid);
-
     SIMDVector v = VectorDivide(y, x);
-    SIMDVector r0 = VectorATan(v);
-
-    r1 = VectorSelect(pi, s_SIMDNegativeZero, xIsPositive);
-    r2 = VectorAdd(r0, r1);
-    return VectorSelect(result, r2, atanResultValid);
+    return SIMDVectorDetail::VectorATan2SelectResult(y, x, VectorATan(v), constants);
 }
 
 NWB_INLINE SIMDVector SIMDCALL VectorSinEst(SIMDVector value)noexcept{
-    SIMDVector x = VectorModAngles(value);
-
-    SIMDVector sign = VectorAndInt(x, s_SIMDNegativeZero);
-    SIMDVector c = VectorOrInt(s_SIMDPi, sign);
-    SIMDVector absX = VectorAbs(x);
-    SIMDVector rflX = VectorSubtract(c, x);
-    SIMDVector comp = VectorLessOrEqual(absX, s_SIMDHalfPi);
-    x = VectorSelect(rflX, x, comp);
+    SIMDVector cosSignSelect;
+    SIMDVector x = SIMDVectorDetail::VectorTrigCanonicalAngle(value, cosSignSelect);
 
     SIMDVector x2 = VectorMultiply(x, x);
     SIMDVector result = VectorMultiplyAdd(VectorSplatW(s_SIMDSinCoefficients1), x2, VectorSplatZ(s_SIMDSinCoefficients1));
@@ -2542,15 +2534,9 @@ NWB_INLINE SIMDVector SIMDCALL VectorSinEst(SIMDVector value)noexcept{
 }
 
 NWB_INLINE SIMDVector SIMDCALL VectorCosEst(SIMDVector value)noexcept{
-    SIMDVector x = VectorModAngles(value);
-
-    SIMDVector sign = VectorAndInt(x, s_SIMDNegativeZero);
-    SIMDVector c = VectorOrInt(s_SIMDPi, sign);
-    SIMDVector absX = VectorAbs(x);
-    SIMDVector rflX = VectorSubtract(c, x);
-    SIMDVector comp = VectorLessOrEqual(absX, s_SIMDHalfPi);
-    x = VectorSelect(rflX, x, comp);
-    sign = VectorSelect(s_SIMDNegativeOne, s_SIMDOne, comp);
+    SIMDVector cosSignSelect;
+    SIMDVector x = SIMDVectorDetail::VectorTrigCanonicalAngle(value, cosSignSelect);
+    const SIMDVector sign = SIMDVectorDetail::VectorTrigCosSign(cosSignSelect);
 
     SIMDVector x2 = VectorMultiply(x, x);
     SIMDVector result = VectorMultiplyAdd(VectorSplatW(s_SIMDCosCoefficients1), x2, VectorSplatZ(s_SIMDCosCoefficients1));
@@ -2563,15 +2549,9 @@ NWB_INLINE void SIMDCALL VectorSinCosEst(SIMDVector* outSin, SIMDVector* outCos,
     NWB_ASSERT(outSin != nullptr);
     NWB_ASSERT(outCos != nullptr);
 
-    SIMDVector x = VectorModAngles(value);
-
-    SIMDVector sign = VectorAndInt(x, s_SIMDNegativeZero);
-    SIMDVector c = VectorOrInt(s_SIMDPi, sign);
-    SIMDVector absX = VectorAbs(x);
-    SIMDVector rflX = VectorSubtract(c, x);
-    SIMDVector comp = VectorLessOrEqual(absX, s_SIMDHalfPi);
-    x = VectorSelect(rflX, x, comp);
-    sign = VectorSelect(s_SIMDNegativeOne, s_SIMDOne, comp);
+    SIMDVector cosSignSelect;
+    SIMDVector x = SIMDVectorDetail::VectorTrigCanonicalAngle(value, cosSignSelect);
+    const SIMDVector sign = SIMDVectorDetail::VectorTrigCosSign(cosSignSelect);
 
     SIMDVector x2 = VectorMultiply(x, x);
 
@@ -2657,41 +2637,8 @@ NWB_INLINE SIMDVector SIMDCALL VectorATanEst(SIMDVector value)noexcept{
 
 NWB_INLINE SIMDVector SIMDCALL VectorATan2Est(SIMDVector y, SIMDVector x)noexcept{
     const SIMDVector constants = VectorSet(s_PI, s_PIDIV2, s_PIDIV4, 2.3561944905f);
-
-    const SIMDVector zero = VectorZero();
-    SIMDVector atanResultValid = VectorTrueInt();
-
-    SIMDVector pi = VectorSplatX(constants);
-    SIMDVector piOverTwo = VectorSplatY(constants);
-    SIMDVector piOverFour = VectorSplatZ(constants);
-    SIMDVector threePiOverFour = VectorSplatW(constants);
-
-    SIMDVector yEqualsZero = VectorEqual(y, zero);
-    SIMDVector xEqualsZero = VectorEqual(x, zero);
-    SIMDVector xIsPositive = VectorEqualInt(VectorAndInt(x, s_SIMDNegativeZero), zero);
-    SIMDVector yEqualsInfinity = VectorIsInfinite(y);
-    SIMDVector xEqualsInfinity = VectorIsInfinite(x);
-
-    SIMDVector ySign = VectorAndInt(y, s_SIMDNegativeZero);
-    pi = VectorOrInt(pi, ySign);
-    piOverTwo = VectorOrInt(piOverTwo, ySign);
-    piOverFour = VectorOrInt(piOverFour, ySign);
-    threePiOverFour = VectorOrInt(threePiOverFour, ySign);
-
-    SIMDVector r1 = VectorSelect(pi, ySign, xIsPositive);
-    SIMDVector r2 = VectorSelect(atanResultValid, piOverTwo, xEqualsZero);
-    SIMDVector r3 = VectorSelect(r2, r1, yEqualsZero);
-    SIMDVector r4 = VectorSelect(threePiOverFour, piOverFour, xIsPositive);
-    SIMDVector r5 = VectorSelect(piOverTwo, r4, xEqualsInfinity);
-    SIMDVector result = VectorSelect(r3, r5, yEqualsInfinity);
-    atanResultValid = VectorEqualInt(result, atanResultValid);
-
     SIMDVector v = VectorMultiply(y, VectorReciprocalEst(x));
-    SIMDVector r0 = VectorATanEst(v);
-
-    r1 = VectorSelect(pi, s_SIMDNegativeZero, xIsPositive);
-    r2 = VectorAdd(r0, r1);
-    return VectorSelect(result, r2, atanResultValid);
+    return SIMDVectorDetail::VectorATan2SelectResult(y, x, VectorATanEst(v), constants);
 }
 
 

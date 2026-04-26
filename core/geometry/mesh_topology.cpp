@@ -4,6 +4,8 @@
 
 #include "mesh_topology.h"
 
+#include "frame_math.h"
+
 #include <core/alloc/scratch.h>
 
 #include <global/algorithm.h>
@@ -24,8 +26,6 @@ namespace __hidden_geometry_mesh_topology{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr f32 s_FrameEpsilon = 0.00000001f;
-
 struct BoundaryVertexEdges{
     usize edgeIndices[2] = { Limit<usize>::s_Max, Limit<usize>::s_Max };
     u32 count = 0;
@@ -34,67 +34,6 @@ struct BoundaryVertexEdges{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[[nodiscard]] bool FiniteVector(const SIMDVector value, const u32 activeMask){
-    const SIMDVector invalid = VectorOrInt(VectorIsNaN(value), VectorIsInfinite(value));
-    return (VectorMoveMask(invalid) & activeMask) == 0u;
-}
-
-[[nodiscard]] bool ValidDirection(const SIMDVector value){
-    return FiniteVector(value, 0x7u)
-        && VectorGetX(Vector3LengthSq(value)) > s_FrameEpsilon
-    ;
-}
-
-[[nodiscard]] SIMDVector Normalize(const SIMDVector value, const SIMDVector fallback){
-    if(!FiniteVector(value, 0x7u))
-        return fallback;
-
-    const f32 lengthSquared = VectorGetX(Vector3LengthSq(value));
-    if(!IsFinite(lengthSquared) || lengthSquared <= s_FrameEpsilon)
-        return fallback;
-
-    return VectorMultiply(value, VectorReciprocalSqrt(VectorReplicate(lengthSquared)));
-}
-
-[[nodiscard]] SIMDVector ProjectOntoFramePlane(const SIMDVector value, const SIMDVector normal){
-    return VectorMultiplyAdd(
-        normal,
-        VectorReplicate(-VectorGetX(Vector3Dot(value, normal))),
-        value
-    );
-}
-
-[[nodiscard]] SIMDVector FallbackTangent(const SIMDVector normal){
-    const SIMDVector axis = Abs(VectorGetZ(normal)) < 0.999f
-        ? VectorSet(0.0f, 0.0f, 1.0f, 0.0f)
-        : VectorSet(0.0f, 1.0f, 0.0f, 0.0f)
-    ;
-    return Normalize(Vector3Cross(axis, normal), VectorSet(1.0f, 0.0f, 0.0f, 0.0f));
-}
-
-[[nodiscard]] SIMDVector ResolveFrameTangent(
-    const SIMDVector normal,
-    const SIMDVector tangent,
-    const SIMDVector fallbackTangent)
-{
-    const SIMDVector safeFallbackTangent = FallbackTangent(normal);
-
-    SIMDVector projectedTangent = FiniteVector(tangent, 0x7u)
-        ? ProjectOntoFramePlane(tangent, normal)
-        : safeFallbackTangent
-    ;
-    if(!ValidDirection(projectedTangent)){
-        projectedTangent = FiniteVector(fallbackTangent, 0x7u)
-            ? ProjectOntoFramePlane(fallbackTangent, normal)
-            : safeFallbackTangent
-        ;
-    }
-    if(!ValidDirection(projectedTangent))
-        return safeFallbackTangent;
-
-    return Normalize(projectedTangent, safeFallbackTangent);
-}
 
 [[nodiscard]] bool RegisterBoundaryVertexEdge(
     HashMap<
@@ -121,9 +60,9 @@ struct BoundaryVertexEdges{
     const SIMDVector center = LoadFloat(frame.center);
     const SIMDVector tangent = LoadFloat(frame.tangent);
     const SIMDVector bitangent = LoadFloat(frame.bitangent);
-    return FiniteVector(center, 0x7u)
-        && ValidDirection(tangent)
-        && ValidDirection(bitangent)
+    return FrameFiniteVector(center, 0x7u)
+        && FrameValidDirection(tangent)
+        && FrameValidDirection(bitangent)
         && Abs(VectorGetX(Vector3Dot(tangent, bitangent))) <= 0.001f
     ;
 }
@@ -242,9 +181,9 @@ void CanonicalizeBoundaryLoopStart(Vector<MeshTopologyEdge, EdgeAllocator>& edge
 }
 
 [[nodiscard]] SIMDVector LoopFrameNormal(const MeshTopologyBoundaryLoopFrame& frame){
-    const SIMDVector tangent = Normalize(LoadFloat(frame.tangent), VectorSet(1.0f, 0.0f, 0.0f, 0.0f));
-    const SIMDVector bitangent = Normalize(LoadFloat(frame.bitangent), VectorSet(0.0f, 1.0f, 0.0f, 0.0f));
-    return Normalize(Vector3Cross(tangent, bitangent), VectorSet(0.0f, 0.0f, 1.0f, 0.0f));
+    const SIMDVector tangent = FrameNormalizeDirection(LoadFloat(frame.tangent), VectorSet(1.0f, 0.0f, 0.0f, 0.0f));
+    const SIMDVector bitangent = FrameNormalizeDirection(LoadFloat(frame.bitangent), VectorSet(0.0f, 1.0f, 0.0f, 0.0f));
+    return FrameNormalizeDirection(Vector3Cross(tangent, bitangent), VectorSet(0.0f, 0.0f, 1.0f, 0.0f));
 }
 
 [[nodiscard]] SIMDVector ProjectedEdgeDirection(
@@ -253,7 +192,7 @@ void CanonicalizeBoundaryLoopStart(Vector<MeshTopologyEdge, EdgeAllocator>& edge
     const SIMDVector frameNormal,
     const MeshTopologyEdge& edge)
 {
-    return ResolveFrameTangent(
+    return FrameResolveTangent(
         frameNormal,
         VectorSubtract(LoadFloat(positions[edge.b]), LoadFloat(positions[edge.a])),
         LoadFloat(frame.tangent)
@@ -364,7 +303,7 @@ bool BuildOrderedBoundaryLoop(
         return false;
 
     const f32 signedArea = ProjectedSignedLoopArea(orderedEdges, positions, frame);
-    if(!IsFinite(signedArea) || Abs(signedArea) <= s_FrameEpsilon)
+    if(!IsFinite(signedArea) || Abs(signedArea) <= s_FrameDirectionEpsilon)
         return false;
     if(signedArea < 0.0f)
         ReverseBoundaryLoop(orderedEdges);
@@ -501,39 +440,39 @@ bool BuildBoundaryLoopVertexFrame(
         return false;
 
     const SIMDVector frameNormal = LoopFrameNormal(frame);
-    if(!ValidDirection(frameNormal))
+    if(!FrameValidDirection(frameNormal))
         return false;
 
     const SIMDVector previousDirection = ProjectedEdgeDirection(positions, frame, frameNormal, previousEdge);
     const SIMDVector currentDirection = ProjectedEdgeDirection(positions, frame, frameNormal, currentEdge);
-    if(!ValidDirection(previousDirection) || !ValidDirection(currentDirection))
+    if(!FrameValidDirection(previousDirection) || !FrameValidDirection(currentDirection))
         return false;
 
-    const SIMDVector previousInwardVector = Normalize(
+    const SIMDVector previousInwardVector = FrameNormalizeDirection(
         Vector3Cross(frameNormal, previousDirection),
         LoadFloat(frame.bitangent)
     );
-    const SIMDVector currentInwardVector = Normalize(
+    const SIMDVector currentInwardVector = FrameNormalizeDirection(
         Vector3Cross(frameNormal, currentDirection),
         previousInwardVector
     );
-    SIMDVector normalVector = Normalize(
+    SIMDVector normalVector = FrameNormalizeDirection(
         VectorAdd(previousInwardVector, currentInwardVector),
         currentInwardVector
     );
-    if(!ValidDirection(normalVector))
+    if(!FrameValidDirection(normalVector))
         return false;
 
     const SIMDVector centerOffset = VectorSubtract(LoadFloat(frame.center), LoadFloat(positions[currentEdge.a]));
     if(VectorGetX(Vector3Dot(normalVector, centerOffset)) < 0.0f)
         normalVector = VectorScale(normalVector, -1.0f);
 
-    const SIMDVector tangentVector = ResolveFrameTangent(
+    const SIMDVector tangentVector = FrameResolveTangent(
         normalVector,
         Vector3Cross(frameNormal, normalVector),
         currentDirection
     );
-    if(!ValidDirection(tangentVector) || Abs(VectorGetX(Vector3Dot(normalVector, tangentVector))) > 0.001f)
+    if(!FrameValidDirection(tangentVector) || Abs(VectorGetX(Vector3Dot(normalVector, tangentVector))) > 0.001f)
         return false;
 
     StoreFloat(normalVector, &outFrame.normal);

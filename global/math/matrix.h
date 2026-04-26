@@ -70,7 +70,12 @@ NWB_INLINE SIMDVector SIMDCALL MatrixRowMultiply(SIMDVector row, const SIMDMatri
 }
 
 #if defined(NWB_HAS_AVX2) && (defined(__FMA__) || defined(_M_FMA))
-NWB_INLINE SIMDMatrix SIMDCALL MatrixMultiplyFMA(const SIMDMatrix& m0, const SIMDMatrix& m1)noexcept{
+NWB_INLINE void SIMDCALL MatrixMultiplyPackedRowsFMA(
+    const SIMDMatrix& m0,
+    const SIMDMatrix& m1,
+    __m256& outRows01,
+    __m256& outRows23)noexcept
+{
     __m256 t0 = _mm256_castps128_ps256(m0.v[0]);
     t0 = _mm256_insertf128_ps(t0, m0.v[1], 1);
     __m256 t1 = _mm256_castps128_ps256(m0.v[2]);
@@ -107,54 +112,27 @@ NWB_INLINE SIMDMatrix SIMDCALL MatrixMultiplyFMA(const SIMDMatrix& m0, const SIM
 
     t0 = _mm256_add_ps(c2, c6);
     t1 = _mm256_add_ps(c3, c7);
+    outRows01 = t0;
+    outRows23 = t1;
+}
 
+NWB_INLINE SIMDMatrix SIMDCALL MatrixMultiplyFMA(const SIMDMatrix& m0, const SIMDMatrix& m1)noexcept{
+    __m256 rows01{};
+    __m256 rows23{};
+    MatrixMultiplyPackedRowsFMA(m0, m1, rows01, rows23);
     SIMDMatrix result{};
-    result.v[0] = _mm256_castps256_ps128(t0);
-    result.v[1] = _mm256_extractf128_ps(t0, 1);
-    result.v[2] = _mm256_castps256_ps128(t1);
-    result.v[3] = _mm256_extractf128_ps(t1, 1);
+    result.v[0] = _mm256_castps256_ps128(rows01);
+    result.v[1] = _mm256_extractf128_ps(rows01, 1);
+    result.v[2] = _mm256_castps256_ps128(rows23);
+    result.v[3] = _mm256_extractf128_ps(rows23, 1);
     return result;
 }
 
 NWB_INLINE SIMDMatrix SIMDCALL MatrixMultiplyTransposeFMA(const SIMDMatrix& m0, const SIMDMatrix& m1)noexcept{
-    __m256 t0 = _mm256_castps128_ps256(m0.v[0]);
-    t0 = _mm256_insertf128_ps(t0, m0.v[1], 1);
-    __m256 t1 = _mm256_castps128_ps256(m0.v[2]);
-    t1 = _mm256_insertf128_ps(t1, m0.v[3], 1);
-
-    __m256 u0 = _mm256_castps128_ps256(m1.v[0]);
-    u0 = _mm256_insertf128_ps(u0, m1.v[1], 1);
-    __m256 u1 = _mm256_castps128_ps256(m1.v[2]);
-    u1 = _mm256_insertf128_ps(u1, m1.v[3], 1);
-
-    __m256 a0 = _mm256_shuffle_ps(t0, t0, _MM_SHUFFLE(0, 0, 0, 0));
-    __m256 a1 = _mm256_shuffle_ps(t1, t1, _MM_SHUFFLE(0, 0, 0, 0));
-    __m256 b0 = _mm256_permute2f128_ps(u0, u0, 0x00);
-    __m256 c0 = _mm256_mul_ps(a0, b0);
-    __m256 c1 = _mm256_mul_ps(a1, b0);
-
-    a0 = _mm256_shuffle_ps(t0, t0, _MM_SHUFFLE(1, 1, 1, 1));
-    a1 = _mm256_shuffle_ps(t1, t1, _MM_SHUFFLE(1, 1, 1, 1));
-    b0 = _mm256_permute2f128_ps(u0, u0, 0x11);
-    __m256 c2 = _mm256_fmadd_ps(a0, b0, c0);
-    __m256 c3 = _mm256_fmadd_ps(a1, b0, c1);
-
-    a0 = _mm256_shuffle_ps(t0, t0, _MM_SHUFFLE(2, 2, 2, 2));
-    a1 = _mm256_shuffle_ps(t1, t1, _MM_SHUFFLE(2, 2, 2, 2));
-    __m256 b1 = _mm256_permute2f128_ps(u1, u1, 0x00);
-    __m256 c4 = _mm256_mul_ps(a0, b1);
-    __m256 c5 = _mm256_mul_ps(a1, b1);
-
-    a0 = _mm256_shuffle_ps(t0, t0, _MM_SHUFFLE(3, 3, 3, 3));
-    a1 = _mm256_shuffle_ps(t1, t1, _MM_SHUFFLE(3, 3, 3, 3));
-    b1 = _mm256_permute2f128_ps(u1, u1, 0x11);
-    __m256 c6 = _mm256_fmadd_ps(a0, b1, c4);
-    __m256 c7 = _mm256_fmadd_ps(a1, b1, c5);
-
-    t0 = _mm256_add_ps(c2, c6);
-    t1 = _mm256_add_ps(c3, c7);
-
-    return SIMDVectorDetail::MatrixTransposePackedRows(t0, t1);
+    __m256 rows01{};
+    __m256 rows23{};
+    MatrixMultiplyPackedRowsFMA(m0, m1, rows01, rows23);
+    return SIMDVectorDetail::MatrixTransposePackedRows(rows01, rows23);
 }
 #endif
 
@@ -926,7 +904,17 @@ NWB_INLINE SIMDMatrix SIMDCALL MatrixPerspectiveRH(f32 viewWidth, f32 viewHeight
     );
 }
 
-NWB_INLINE SIMDMatrix SIMDCALL MatrixPerspectiveFovLH(f32 fovAngleY, f32 aspectRatio, f32 nearZ, f32 farZ)noexcept{
+namespace SIMDMatrixDetail{
+
+NWB_INLINE SIMDMatrix SIMDCALL MatrixPerspectiveFovImpl(
+    const f32 fovAngleY,
+    const f32 aspectRatio,
+    const f32 nearZ,
+    const f32 farZ,
+    const f32 rangeDenominator,
+    const f32 rangeNearScale,
+    const f32 forwardZ)noexcept
+{
     NWB_ASSERT(nearZ > 0.0f && farZ > 0.0f);
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(fovAngleY, 0.0f, 0.00002f));
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(aspectRatio, 0.0f, 0.00001f));
@@ -937,33 +925,23 @@ NWB_INLINE SIMDMatrix SIMDCALL MatrixPerspectiveFovLH(f32 fovAngleY, f32 aspectR
     SIMDVectorDetail::ScalarSinCos(&sinFov, &cosFov, 0.5f * fovAngleY);
     const f32 height = cosFov / sinFov;
     const f32 width = height / aspectRatio;
-    const f32 range = farZ / (farZ - nearZ);
+    const f32 range = farZ / rangeDenominator;
     return MatrixSet(
         width, 0.0f, 0.0f, 0.0f,
         0.0f, height, 0.0f, 0.0f,
-        0.0f, 0.0f, range, -range * nearZ,
-        0.0f, 0.0f, 1.0f, 0.0f
+        0.0f, 0.0f, range, rangeNearScale * range * nearZ,
+        0.0f, 0.0f, forwardZ, 0.0f
     );
 }
 
-NWB_INLINE SIMDMatrix SIMDCALL MatrixPerspectiveFovRH(f32 fovAngleY, f32 aspectRatio, f32 nearZ, f32 farZ)noexcept{
-    NWB_ASSERT(nearZ > 0.0f && farZ > 0.0f);
-    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(fovAngleY, 0.0f, 0.00002f));
-    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(aspectRatio, 0.0f, 0.00001f));
-    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(farZ, nearZ, 0.00001f));
+};
 
-    f32 sinFov{};
-    f32 cosFov{};
-    SIMDVectorDetail::ScalarSinCos(&sinFov, &cosFov, 0.5f * fovAngleY);
-    const f32 height = cosFov / sinFov;
-    const f32 width = height / aspectRatio;
-    const f32 range = farZ / (nearZ - farZ);
-    return MatrixSet(
-        width, 0.0f, 0.0f, 0.0f,
-        0.0f, height, 0.0f, 0.0f,
-        0.0f, 0.0f, range, range * nearZ,
-        0.0f, 0.0f, -1.0f, 0.0f
-    );
+NWB_INLINE SIMDMatrix SIMDCALL MatrixPerspectiveFovLH(f32 fovAngleY, f32 aspectRatio, f32 nearZ, f32 farZ)noexcept{
+    return SIMDMatrixDetail::MatrixPerspectiveFovImpl(fovAngleY, aspectRatio, nearZ, farZ, farZ - nearZ, -1.0f, 1.0f);
+}
+
+NWB_INLINE SIMDMatrix SIMDCALL MatrixPerspectiveFovRH(f32 fovAngleY, f32 aspectRatio, f32 nearZ, f32 farZ)noexcept{
+    return SIMDMatrixDetail::MatrixPerspectiveFovImpl(fovAngleY, aspectRatio, nearZ, farZ, nearZ - farZ, 1.0f, -1.0f);
 }
 
 NWB_INLINE SIMDMatrix SIMDCALL MatrixPerspectiveOffCenterLH(f32 viewLeft, f32 viewRight, f32 viewBottom, f32 viewTop, f32 nearZ, f32 farZ)noexcept{

@@ -299,8 +299,7 @@ inline void LogMorphPayloadFailure(
     return ValidBarycentric(bary, -s_Epsilon);
 }
 
-[[nodiscard]] inline bool NormalizeSourceBarycentric(const f32 (&bary)[3], f32 (&outBary)[3]){
-    const SIMDVector baryVector = VectorSet(bary[0], bary[1], bary[2], 0.0f);
+[[nodiscard]] inline bool NormalizeSourceBarycentricVector(const SIMDVector baryVector, f32 (&outBary)[3]){
     if(!ValidBarycentric(baryVector, -s_Epsilon))
         return false;
 
@@ -319,24 +318,12 @@ inline void LogMorphPayloadFailure(
     return true;
 }
 
+[[nodiscard]] inline bool NormalizeSourceBarycentric(const f32 (&bary)[3], f32 (&outBary)[3]){
+    return NormalizeSourceBarycentricVector(VectorSet(bary[0], bary[1], bary[2], 0.0f), outBary);
+}
+
 [[nodiscard]] inline bool NormalizeSourceBarycentric(const Float4& bary, f32 (&outBary)[3]){
-    const SIMDVector baryVector = LoadFloat(bary);
-    if(!ValidBarycentric(baryVector, -s_Epsilon))
-        return false;
-
-    const SIMDVector clampedBary = VectorClamp(baryVector, VectorZero(), s_SIMDOne);
-    const f32 barySum = VectorGetX(Vector3Dot(clampedBary, s_SIMDOne));
-    if(!IsFinite(barySum) || barySum <= s_Epsilon)
-        return false;
-
-    const SIMDVector normalizedBary = VectorScale(clampedBary, 1.0f / barySum);
-    if(!ValidBarycentric(normalizedBary, 0.0f))
-        return false;
-
-    outBary[0] = VectorGetX(normalizedBary);
-    outBary[1] = VectorGetY(normalizedBary);
-    outBary[2] = VectorGetZ(normalizedBary);
-    return true;
+    return NormalizeSourceBarycentricVector(LoadFloat(bary), outBary);
 }
 
 [[nodiscard]] inline bool ValidSourceSample(const SourceSample& sample, const u32 sourceTriangleCount){

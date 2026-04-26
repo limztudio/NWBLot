@@ -4,6 +4,8 @@
 
 #include "tangent_frame_rebuild.h"
 
+#include "frame_math.h"
+
 #include <core/alloc/scratch.h>
 
 
@@ -23,7 +25,6 @@ namespace __hidden_geometry_tangent_frame_rebuild{
 
 
 static constexpr f32 s_Epsilon = 0.000001f;
-static constexpr f32 s_FrameEpsilon = 0.00000001f;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -47,64 +48,6 @@ static_assert(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool FiniteVector(SIMDVector value, const u32 activeMask){
-    const SIMDVector invalid = VectorOrInt(VectorIsNaN(value), VectorIsInfinite(value));
-    return (VectorMoveMask(invalid) & activeMask) == 0u;
-}
-
-[[nodiscard]] bool ValidDirection(SIMDVector value){
-    return FiniteVector(value, 0x7u)
-        && VectorGetX(Vector3LengthSq(value)) > s_FrameEpsilon
-    ;
-}
-
-[[nodiscard]] SIMDVector Normalize(SIMDVector value, SIMDVector fallback){
-    if(!FiniteVector(value, 0x7u))
-        return fallback;
-
-    const SIMDVector lengthSquaredVector = Vector3LengthSq(value);
-    const f32 lengthSquared = VectorGetX(lengthSquaredVector);
-    if(!IsFinite(lengthSquared) || lengthSquared <= s_FrameEpsilon)
-        return fallback;
-
-    return VectorMultiply(value, VectorReciprocalSqrt(lengthSquaredVector));
-}
-
-[[nodiscard]] SIMDVector ProjectOntoFramePlane(SIMDVector value, SIMDVector normal){
-    return VectorMultiplyAdd(
-        normal,
-        VectorReplicate(-VectorGetX(Vector3Dot(value, normal))),
-        value
-    );
-}
-
-[[nodiscard]] SIMDVector FallbackTangent(SIMDVector normal){
-    const SIMDVector axis = Abs(VectorGetZ(normal)) < 0.999f
-        ? VectorSet(0.0f, 0.0f, 1.0f, 0.0f)
-        : VectorSet(0.0f, 1.0f, 0.0f, 0.0f)
-    ;
-    return Normalize(Vector3Cross(axis, normal), VectorSet(1.0f, 0.0f, 0.0f, 0.0f));
-}
-
-[[nodiscard]] SIMDVector ResolveFrameTangent(SIMDVector normal, SIMDVector tangent, SIMDVector fallbackTangent){
-    const SIMDVector safeFallbackTangent = FallbackTangent(normal);
-
-    SIMDVector projectedTangent = FiniteVector(tangent, 0x7u)
-        ? ProjectOntoFramePlane(tangent, normal)
-        : safeFallbackTangent
-    ;
-    if(!ValidDirection(projectedTangent)){
-        projectedTangent = FiniteVector(fallbackTangent, 0x7u)
-            ? ProjectOntoFramePlane(fallbackTangent, normal)
-            : safeFallbackTangent
-        ;
-    }
-    if(!ValidDirection(projectedTangent))
-        return safeFallbackTangent;
-
-    return Normalize(projectedTangent, safeFallbackTangent);
-}
-
 [[nodiscard]] f32 ResolveTangentHandedness(const f32 handedness){
     if(IsFinite(handedness) && Abs(handedness) > s_Epsilon)
         return handedness < 0.0f ? -1.0f : 1.0f;
@@ -112,8 +55,8 @@ static_assert(
 }
 
 [[nodiscard]] bool ValidInputVertex(const TangentFrameRebuildVertex& vertex){
-    return FiniteVector(LoadFloat(vertex.position), 0x7u)
-        && FiniteVector(LoadFloat(vertex.uv0), 0x3u)
+    return FrameFiniteVector(LoadFloat(vertex.position), 0x7u)
+        && FrameFiniteVector(LoadFloat(vertex.uv0), 0x3u)
     ;
 }
 
@@ -147,7 +90,7 @@ void AccumulateVector(Float4& accumulator, const SIMDVector value){
         VectorSubtract(VectorScale(edge02, du1), VectorScale(edge01, du2)),
         inverseDeterminant
     );
-    return ValidDirection(outTangent) && ValidDirection(outBitangent);
+    return FrameValidDirection(outTangent) && FrameValidDirection(outBitangent);
 }
 
 
@@ -211,7 +154,7 @@ bool RebuildTangentFrames(
         const SIMDVector edge01 = VectorSubtract(LoadFloat(vertex1.position), p0);
         const SIMDVector edge02 = VectorSubtract(LoadFloat(vertex2.position), p0);
         const SIMDVector faceNormal = Vector3Cross(edge01, edge02);
-        if(!ValidDirection(faceNormal))
+        if(!FrameValidDirection(faceNormal))
             return false;
 
         AccumulateVector(accumulators[i0].normal, faceNormal);
@@ -236,25 +179,25 @@ bool RebuildTangentFrames(
     for(usize vertexIndex = 0u; vertexIndex < vertices.size(); ++vertexIndex){
         TangentFrameRebuildVertex& vertex = vertices[vertexIndex];
         const TangentFrameAccumulator& accumulator = accumulators[vertexIndex];
-        const SIMDVector previousNormal = Normalize(LoadFloat(vertex.normal), VectorSet(0.0f, 0.0f, 1.0f, 0.0f));
-        const SIMDVector normal = Normalize(LoadFloat(accumulator.normal), previousNormal);
-        if(!ValidDirection(normal))
+        const SIMDVector previousNormal = FrameNormalizeDirection(LoadFloat(vertex.normal), VectorSet(0.0f, 0.0f, 1.0f, 0.0f));
+        const SIMDVector normal = FrameNormalizeDirection(LoadFloat(accumulator.normal), previousNormal);
+        if(!FrameValidDirection(normal))
             return false;
 
         const SIMDVector previousTangent = VectorSetW(LoadFloat(vertex.tangent), 0.0f);
         SIMDVector tangentSource = LoadFloat(accumulator.tangent);
-        if(!ValidDirection(tangentSource)){
+        if(!FrameValidDirection(tangentSource)){
             tangentSource = previousTangent;
             ++result.fallbackTangentVertexCount;
         }
 
-        const SIMDVector tangent = ResolveFrameTangent(normal, tangentSource, previousTangent);
-        if(!ValidDirection(tangent) || Abs(VectorGetX(Vector3Dot(normal, tangent))) > 0.001f)
+        const SIMDVector tangent = FrameResolveTangent(normal, tangentSource, previousTangent);
+        if(!FrameValidDirection(tangent) || Abs(VectorGetX(Vector3Dot(normal, tangent))) > 0.001f)
             return false;
 
         f32 handedness = ResolveTangentHandedness(vertex.tangent.w);
         const SIMDVector bitangent = LoadFloat(accumulator.bitangent);
-        if(ValidDirection(bitangent)){
+        if(FrameValidDirection(bitangent)){
             const f32 bitangentSign = VectorGetX(Vector3Dot(Vector3Cross(normal, tangent), bitangent));
             if(IsFinite(bitangentSign) && Abs(bitangentSign) > s_Epsilon)
                 handedness = bitangentSign < 0.0f ? -1.0f : 1.0f;

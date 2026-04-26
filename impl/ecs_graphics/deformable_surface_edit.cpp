@@ -2289,6 +2289,103 @@ namespace __hidden_deformable_surface_edit{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace ReplayResultValidation{
+enum Enum : u8{
+    None,
+    Shape,
+    Exact
+};
+};
+
+[[nodiscard]] bool ReplayResultMatchesValidation(
+    const DeformableHoleEditResult& result,
+    const DeformableSurfaceEditRecord& storedRecord,
+    const ReplayResultValidation::Enum validation)
+{
+    switch(validation){
+    case ReplayResultValidation::None:
+        return true;
+    case ReplayResultValidation::Shape:
+        return ReplayResultShapeMatchesStoredRecord(result, storedRecord);
+    case ReplayResultValidation::Exact:
+        return ReplayResultMatchesStoredRecord(result, storedRecord);
+    }
+    return false;
+}
+
+[[nodiscard]] bool ReplaySurfaceEditRecord(
+    DeformableRuntimeMeshInstance& replayInstance,
+    const DeformableSurfaceEditRecord& storedRecord,
+    DeformableSurfaceEditRecord& replayRecord,
+    const ReplayResultValidation::Enum validation,
+    DeformableHoleEditResult& outReplayResult)
+{
+    outReplayResult = DeformableHoleEditResult{};
+
+    const usize triangleCount = replayInstance.indices.size() / 3u;
+    for(usize triangle = 0u; triangle < triangleCount; ++triangle){
+        DeformableHoleEditParams params;
+        if(!BuildReplayHoleParams(replayInstance, replayRecord, triangle, params))
+            continue;
+
+        DeformableRuntimeMeshInstance candidateInstance = replayInstance;
+        DeformableHoleEditResult candidateResult;
+        if(!CommitDeformableRestSpaceHoleImpl(
+                candidateInstance,
+                params,
+                false,
+                replayRecord.hole.wallLoopCutCount,
+                &candidateResult
+            )
+            || !RuntimeMeshHasWallTrianglePairs(candidateInstance, candidateResult)
+            || !ReplayResultMatchesValidation(candidateResult, storedRecord, validation)
+        )
+            continue;
+
+        replayInstance = Move(candidateInstance);
+        outReplayResult = candidateResult;
+        replayRecord.result = candidateResult;
+        return true;
+    }
+    return false;
+}
+
+void AccumulateSurfaceEditReplayResult(
+    DeformableSurfaceEditReplayResult& replay,
+    const DeformableHoleEditResult& replayResult)
+{
+    ++replay.appliedEditCount;
+    replay.topologyChanged = replay.topologyChanged || HoleResultChangesTopology(replayResult);
+}
+
+[[nodiscard]] bool RebuildReplayAccessories(
+    const DeformableSurfaceEditState& sourceState,
+    const DeformableSurfaceEditId removedAnchorEditId,
+    DeformableSurfaceEditState& replayState,
+    u32* outRemovedAccessoryCount)
+{
+    replayState.accessories.reserve(sourceState.accessories.size());
+    for(const DeformableAccessoryAttachmentRecord& accessory : sourceState.accessories){
+        if(outRemovedAccessoryCount && accessory.anchorEditId == removedAnchorEditId){
+            ++(*outRemovedAccessoryCount);
+            continue;
+        }
+
+        const DeformableSurfaceEditRecord* anchorEdit = FindEditRecordById(replayState, accessory.anchorEditId);
+        if(!anchorEdit)
+            return false;
+
+        DeformableAccessoryAttachmentRecord replayAccessory = accessory;
+        replayAccessory.firstWallVertex = anchorEdit->result.firstWallVertex;
+        replayAccessory.wallVertexCount = anchorEdit->result.wallVertexCount;
+        replayState.accessories.push_back(replayAccessory);
+    }
+    return true;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] bool ReplaySurfaceEditRecords(
     DeformableRuntimeMeshInstance& replayInstance,
     const DeformableSurfaceEditState& state,
@@ -2296,38 +2393,18 @@ namespace __hidden_deformable_surface_edit{
 {
     result = DeformableSurfaceEditReplayResult{};
     for(const DeformableSurfaceEditRecord& record : state.edits){
-        bool replayedRecord = false;
+        DeformableSurfaceEditRecord replayRecord = record;
         DeformableHoleEditResult replayResult;
-        const usize triangleCount = replayInstance.indices.size() / 3u;
-        for(usize triangle = 0u; triangle < triangleCount; ++triangle){
-            DeformableHoleEditParams params;
-            if(!BuildReplayHoleParams(replayInstance, record, triangle, params))
-                continue;
-
-            DeformableRuntimeMeshInstance candidateInstance = replayInstance;
-            DeformableHoleEditResult candidateResult;
-            if(!CommitDeformableRestSpaceHoleImpl(
-                    candidateInstance,
-                    params,
-                    false,
-                    record.hole.wallLoopCutCount,
-                    &candidateResult
-                )
-                || !ReplayResultMatchesStoredRecord(candidateResult, record)
-                || !RuntimeMeshHasWallTrianglePairs(candidateInstance, candidateResult)
-            )
-                continue;
-
-            replayInstance = Move(candidateInstance);
-            replayResult = candidateResult;
-            replayedRecord = true;
-            break;
-        }
-        if(!replayedRecord)
+        if(!ReplaySurfaceEditRecord(
+            replayInstance,
+            record,
+            replayRecord,
+            ReplayResultValidation::Exact,
+            replayResult
+        ))
             return false;
 
-        ++result.appliedEditCount;
-        result.topologyChanged = result.topologyChanged || HoleResultChangesTopology(replayResult);
+        AccumulateSurfaceEditReplayResult(result, replayResult);
     }
     result.finalEditRevision = replayInstance.editRevision;
     return true;
@@ -2437,62 +2514,22 @@ namespace __hidden_deformable_surface_edit{
         replayRecord.hole.baseEditRevision = replayInstance.editRevision;
         replayRecord.result.editRevision = replayInstance.editRevision + 1u;
 
-        bool replayedRecord = false;
         DeformableHoleEditResult replayResult;
-        const usize triangleCount = replayInstance.indices.size() / 3u;
-        for(usize triangle = 0u; triangle < triangleCount; ++triangle){
-            DeformableHoleEditParams params;
-            if(!BuildReplayHoleParams(replayInstance, replayRecord, triangle, params))
-                continue;
-
-            DeformableRuntimeMeshInstance candidateInstance = replayInstance;
-            DeformableHoleEditResult candidateResult;
-            if(!CommitDeformableRestSpaceHoleImpl(
-                    candidateInstance,
-                    params,
-                    false,
-                    replayRecord.hole.wallLoopCutCount,
-                    &candidateResult
-                )
-                || !ReplayResultShapeMatchesStoredRecord(candidateResult, record)
-                || !RuntimeMeshHasWallTrianglePairs(candidateInstance, candidateResult)
-            )
-                continue;
-
-            replayInstance = Move(candidateInstance);
-            replayResult = candidateResult;
-            replayRecord.result = candidateResult;
-            replayedRecord = true;
-            break;
-        }
-        if(!replayedRecord)
+        if(!ReplaySurfaceEditRecord(
+            replayInstance,
+            record,
+            replayRecord,
+            ReplayResultValidation::Shape,
+            replayResult
+        ))
             return false;
 
         outHealedState.edits.push_back(replayRecord);
-        ++outResult.replay.appliedEditCount;
-        outResult.replay.topologyChanged = outResult.replay.topologyChanged
-            || HoleResultChangesTopology(replayResult)
-        ;
+        AccumulateSurfaceEditReplayResult(outResult.replay, replayResult);
     }
 
-    outHealedState.accessories.reserve(state.accessories.size());
-    for(const DeformableAccessoryAttachmentRecord& accessory : state.accessories){
-        if(accessory.anchorEditId == editId){
-            ++outResult.removedAccessoryCount;
-            continue;
-        }
-
-        const DeformableSurfaceEditRecord* anchorEdit =
-            FindEditRecordById(outHealedState, accessory.anchorEditId)
-        ;
-        if(!anchorEdit)
-            return false;
-
-        DeformableAccessoryAttachmentRecord replayAccessory = accessory;
-        replayAccessory.firstWallVertex = anchorEdit->result.firstWallVertex;
-        replayAccessory.wallVertexCount = anchorEdit->result.wallVertexCount;
-        outHealedState.accessories.push_back(replayAccessory);
-    }
+    if(!RebuildReplayAccessories(state, editId, outHealedState, &outResult.removedAccessoryCount))
+        return false;
 
     outResult.replay.finalEditRevision = replayInstance.editRevision;
     return ValidSurfaceEditState(outHealedState);
@@ -2548,67 +2585,22 @@ namespace __hidden_deformable_surface_edit{
             replayDependsOnResizedEdit = true;
         }
 
-        bool replayedRecord = false;
         DeformableHoleEditResult replayResult;
-        const usize triangleCount = replayInstance.indices.size() / 3u;
-        for(usize triangle = 0u; triangle < triangleCount; ++triangle){
-            DeformableHoleEditParams params;
-            if(!BuildReplayHoleParams(replayInstance, replayRecord, triangle, params))
-                continue;
-
-            DeformableRuntimeMeshInstance candidateInstance = replayInstance;
-            DeformableHoleEditResult candidateResult;
-            if(!CommitDeformableRestSpaceHoleImpl(
-                    candidateInstance,
-                    params,
-                    false,
-                    replayRecord.hole.wallLoopCutCount,
-                    &candidateResult
-                )
-                || !RuntimeMeshHasWallTrianglePairs(candidateInstance, candidateResult)
-            )
-                continue;
-
-            if(!resizeThisRecord){
-                const bool resultMatchesExpected = replayDependsOnResizedEdit
-                    ? ReplayResultShapeMatchesStoredRecord(candidateResult, record)
-                    : ReplayResultMatchesStoredRecord(candidateResult, record)
-                ;
-                if(!resultMatchesExpected)
-                    continue;
-            }
-
-            replayInstance = Move(candidateInstance);
-            replayResult = candidateResult;
-            replayRecord.result = candidateResult;
-            replayedRecord = true;
-            break;
-        }
-        if(!replayedRecord)
+        const ReplayResultValidation::Enum validation = resizeThisRecord
+            ? ReplayResultValidation::None
+            : replayDependsOnResizedEdit ? ReplayResultValidation::Shape : ReplayResultValidation::Exact
+        ;
+        if(!ReplaySurfaceEditRecord(replayInstance, record, replayRecord, validation, replayResult))
             return false;
 
         outResizedState.edits.push_back(replayRecord);
-        ++outResult.replay.appliedEditCount;
-        outResult.replay.topologyChanged = outResult.replay.topologyChanged
-            || HoleResultChangesTopology(replayResult)
-        ;
+        AccumulateSurfaceEditReplayResult(outResult.replay, replayResult);
     }
     if(!resizedEditFound)
         return false;
 
-    outResizedState.accessories.reserve(state.accessories.size());
-    for(const DeformableAccessoryAttachmentRecord& accessory : state.accessories){
-        const DeformableSurfaceEditRecord* anchorEdit =
-            FindEditRecordById(outResizedState, accessory.anchorEditId)
-        ;
-        if(!anchorEdit)
-            return false;
-
-        DeformableAccessoryAttachmentRecord replayAccessory = accessory;
-        replayAccessory.firstWallVertex = anchorEdit->result.firstWallVertex;
-        replayAccessory.wallVertexCount = anchorEdit->result.wallVertexCount;
-        outResizedState.accessories.push_back(replayAccessory);
-    }
+    if(!RebuildReplayAccessories(state, 0u, outResizedState, nullptr))
+        return false;
 
     outResult.replay.finalEditRevision = replayInstance.editRevision;
     return ValidSurfaceEditState(outResizedState);
@@ -2662,67 +2654,22 @@ namespace __hidden_deformable_surface_edit{
             replayDependsOnMovedEdit = true;
         }
 
-        bool replayedRecord = false;
         DeformableHoleEditResult replayResult;
-        const usize triangleCount = replayInstance.indices.size() / 3u;
-        for(usize triangle = 0u; triangle < triangleCount; ++triangle){
-            DeformableHoleEditParams params;
-            if(!BuildReplayHoleParams(replayInstance, replayRecord, triangle, params))
-                continue;
-
-            DeformableRuntimeMeshInstance candidateInstance = replayInstance;
-            DeformableHoleEditResult candidateResult;
-            if(!CommitDeformableRestSpaceHoleImpl(
-                    candidateInstance,
-                    params,
-                    false,
-                    replayRecord.hole.wallLoopCutCount,
-                    &candidateResult
-                )
-                || !RuntimeMeshHasWallTrianglePairs(candidateInstance, candidateResult)
-            )
-                continue;
-
-            if(!moveThisRecord){
-                const bool resultMatchesExpected = replayDependsOnMovedEdit
-                    ? ReplayResultShapeMatchesStoredRecord(candidateResult, record)
-                    : ReplayResultMatchesStoredRecord(candidateResult, record)
-                ;
-                if(!resultMatchesExpected)
-                    continue;
-            }
-
-            replayInstance = Move(candidateInstance);
-            replayResult = candidateResult;
-            replayRecord.result = candidateResult;
-            replayedRecord = true;
-            break;
-        }
-        if(!replayedRecord)
+        const ReplayResultValidation::Enum validation = moveThisRecord
+            ? ReplayResultValidation::None
+            : replayDependsOnMovedEdit ? ReplayResultValidation::Shape : ReplayResultValidation::Exact
+        ;
+        if(!ReplaySurfaceEditRecord(replayInstance, record, replayRecord, validation, replayResult))
             return false;
 
         outMovedState.edits.push_back(replayRecord);
-        ++outResult.replay.appliedEditCount;
-        outResult.replay.topologyChanged = outResult.replay.topologyChanged
-            || HoleResultChangesTopology(replayResult)
-        ;
+        AccumulateSurfaceEditReplayResult(outResult.replay, replayResult);
     }
     if(!movedEditFound)
         return false;
 
-    outMovedState.accessories.reserve(state.accessories.size());
-    for(const DeformableAccessoryAttachmentRecord& accessory : state.accessories){
-        const DeformableSurfaceEditRecord* anchorEdit =
-            FindEditRecordById(outMovedState, accessory.anchorEditId)
-        ;
-        if(!anchorEdit)
-            return false;
-
-        DeformableAccessoryAttachmentRecord replayAccessory = accessory;
-        replayAccessory.firstWallVertex = anchorEdit->result.firstWallVertex;
-        replayAccessory.wallVertexCount = anchorEdit->result.wallVertexCount;
-        outMovedState.accessories.push_back(replayAccessory);
-    }
+    if(!RebuildReplayAccessories(state, 0u, outMovedState, nullptr))
+        return false;
 
     outResult.replay.finalEditRevision = replayInstance.editRevision;
     return ValidSurfaceEditState(outMovedState);
@@ -2789,67 +2736,22 @@ namespace __hidden_deformable_surface_edit{
             replayDependsOnPatchedEdit = true;
         }
 
-        bool replayedRecord = false;
         DeformableHoleEditResult replayResult;
-        const usize triangleCount = replayInstance.indices.size() / 3u;
-        for(usize triangle = 0u; triangle < triangleCount; ++triangle){
-            DeformableHoleEditParams params;
-            if(!BuildReplayHoleParams(replayInstance, replayRecord, triangle, params))
-                continue;
-
-            DeformableRuntimeMeshInstance candidateInstance = replayInstance;
-            DeformableHoleEditResult candidateResult;
-            if(!CommitDeformableRestSpaceHoleImpl(
-                    candidateInstance,
-                    params,
-                    false,
-                    replayRecord.hole.wallLoopCutCount,
-                    &candidateResult
-                )
-                || !RuntimeMeshHasWallTrianglePairs(candidateInstance, candidateResult)
-            )
-                continue;
-
-            if(!patchThisRecord){
-                const bool resultMatchesExpected = replayDependsOnPatchedEdit
-                    ? ReplayResultShapeMatchesStoredRecord(candidateResult, record)
-                    : ReplayResultMatchesStoredRecord(candidateResult, record)
-                ;
-                if(!resultMatchesExpected)
-                    continue;
-            }
-
-            replayInstance = Move(candidateInstance);
-            replayResult = candidateResult;
-            replayRecord.result = candidateResult;
-            replayedRecord = true;
-            break;
-        }
-        if(!replayedRecord)
+        const ReplayResultValidation::Enum validation = patchThisRecord
+            ? ReplayResultValidation::None
+            : replayDependsOnPatchedEdit ? ReplayResultValidation::Shape : ReplayResultValidation::Exact
+        ;
+        if(!ReplaySurfaceEditRecord(replayInstance, record, replayRecord, validation, replayResult))
             return false;
 
         outPatchedState.edits.push_back(replayRecord);
-        ++outResult.replay.appliedEditCount;
-        outResult.replay.topologyChanged = outResult.replay.topologyChanged
-            || HoleResultChangesTopology(replayResult)
-        ;
+        AccumulateSurfaceEditReplayResult(outResult.replay, replayResult);
     }
     if(!patchedEditFound)
         return false;
 
-    outPatchedState.accessories.reserve(state.accessories.size());
-    for(const DeformableAccessoryAttachmentRecord& accessory : state.accessories){
-        const DeformableSurfaceEditRecord* anchorEdit =
-            FindEditRecordById(outPatchedState, accessory.anchorEditId)
-        ;
-        if(!anchorEdit)
-            return false;
-
-        DeformableAccessoryAttachmentRecord replayAccessory = accessory;
-        replayAccessory.firstWallVertex = anchorEdit->result.firstWallVertex;
-        replayAccessory.wallVertexCount = anchorEdit->result.wallVertexCount;
-        outPatchedState.accessories.push_back(replayAccessory);
-    }
+    if(!RebuildReplayAccessories(state, 0u, outPatchedState, nullptr))
+        return false;
 
     outResult.replay.finalEditRevision = replayInstance.editRevision;
     return ValidSurfaceEditState(outPatchedState);
@@ -2897,67 +2799,22 @@ namespace __hidden_deformable_surface_edit{
             replayDependsOnLoopCutEdit = true;
         }
 
-        bool replayedRecord = false;
         DeformableHoleEditResult replayResult;
-        const usize triangleCount = replayInstance.indices.size() / 3u;
-        for(usize triangle = 0u; triangle < triangleCount; ++triangle){
-            DeformableHoleEditParams params;
-            if(!BuildReplayHoleParams(replayInstance, replayRecord, triangle, params))
-                continue;
-
-            DeformableRuntimeMeshInstance candidateInstance = replayInstance;
-            DeformableHoleEditResult candidateResult;
-            if(!CommitDeformableRestSpaceHoleImpl(
-                    candidateInstance,
-                    params,
-                    false,
-                    replayRecord.hole.wallLoopCutCount,
-                    &candidateResult
-                )
-                || !RuntimeMeshHasWallTrianglePairs(candidateInstance, candidateResult)
-            )
-                continue;
-
-            if(!loopCutThisRecord){
-                const bool resultMatchesExpected = replayDependsOnLoopCutEdit
-                    ? ReplayResultShapeMatchesStoredRecord(candidateResult, record)
-                    : ReplayResultMatchesStoredRecord(candidateResult, record)
-                ;
-                if(!resultMatchesExpected)
-                    continue;
-            }
-
-            replayInstance = Move(candidateInstance);
-            replayResult = candidateResult;
-            replayRecord.result = candidateResult;
-            replayedRecord = true;
-            break;
-        }
-        if(!replayedRecord)
+        const ReplayResultValidation::Enum validation = loopCutThisRecord
+            ? ReplayResultValidation::None
+            : replayDependsOnLoopCutEdit ? ReplayResultValidation::Shape : ReplayResultValidation::Exact
+        ;
+        if(!ReplaySurfaceEditRecord(replayInstance, record, replayRecord, validation, replayResult))
             return false;
 
         outLoopCutState.edits.push_back(replayRecord);
-        ++outResult.replay.appliedEditCount;
-        outResult.replay.topologyChanged = outResult.replay.topologyChanged
-            || HoleResultChangesTopology(replayResult)
-        ;
+        AccumulateSurfaceEditReplayResult(outResult.replay, replayResult);
     }
     if(!loopCutEditFound)
         return false;
 
-    outLoopCutState.accessories.reserve(state.accessories.size());
-    for(const DeformableAccessoryAttachmentRecord& accessory : state.accessories){
-        const DeformableSurfaceEditRecord* anchorEdit =
-            FindEditRecordById(outLoopCutState, accessory.anchorEditId)
-        ;
-        if(!anchorEdit)
-            return false;
-
-        DeformableAccessoryAttachmentRecord replayAccessory = accessory;
-        replayAccessory.firstWallVertex = anchorEdit->result.firstWallVertex;
-        replayAccessory.wallVertexCount = anchorEdit->result.wallVertexCount;
-        outLoopCutState.accessories.push_back(replayAccessory);
-    }
+    if(!RebuildReplayAccessories(state, 0u, outLoopCutState, nullptr))
+        return false;
 
     outResult.replay.finalEditRevision = replayInstance.editRevision;
     return ValidSurfaceEditState(outLoopCutState);

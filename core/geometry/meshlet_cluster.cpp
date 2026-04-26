@@ -130,42 +130,43 @@ template<typename VertexAllocator>
     if(vertices.empty())
         return false;
 
-    const Float3U& firstPosition = positions[vertices[0]];
-    Float3U minimum = firstPosition;
-    Float3U maximum = firstPosition;
-    for(const u32 vertex : vertices){
+    const u32 firstVertex = vertices[0];
+    if(firstVertex >= positions.size())
+        return false;
+
+    SIMDVector minimum = LoadFloat(positions[firstVertex]);
+    if(!FiniteVector(minimum, 0x7u))
+        return false;
+
+    SIMDVector maximum = minimum;
+    for(usize index = 1u; index < vertices.size(); ++index){
+        const u32 vertex = vertices[index];
         if(vertex >= positions.size())
             return false;
 
-        const Float3U& position = positions[vertex];
-        if(!FiniteVector(LoadFloat(position), 0x7u))
+        const SIMDVector position = LoadFloat(positions[vertex]);
+        if(!FiniteVector(position, 0x7u))
             return false;
 
-        minimum.x = Min(minimum.x, position.x);
-        minimum.y = Min(minimum.y, position.y);
-        minimum.z = Min(minimum.z, position.z);
-        maximum.x = Max(maximum.x, position.x);
-        maximum.y = Max(maximum.y, position.y);
-        maximum.z = Max(maximum.z, position.z);
+        minimum = VectorMin(minimum, position);
+        maximum = VectorMax(maximum, position);
     }
 
-    const Float3U center(
-        (minimum.x + maximum.x) * 0.5f,
-        (minimum.y + maximum.y) * 0.5f,
-        (minimum.z + maximum.z) * 0.5f
-    );
+    const SIMDVector center = VectorScale(VectorAdd(minimum, maximum), 0.5f);
+    if(!FiniteVector(center, 0x7u))
+        return false;
+
     f32 radiusSquared = 0.0f;
-    const SIMDVector centerVector = LoadFloat(center);
     for(const u32 vertex : vertices){
-        const SIMDVector offset = VectorSubtract(LoadFloat(positions[vertex]), centerVector);
+        const SIMDVector offset = VectorSubtract(LoadFloat(positions[vertex]), center);
         radiusSquared = Max(radiusSquared, VectorGetX(Vector3LengthSq(offset)));
     }
     if(!IsFinite(radiusSquared))
         return false;
 
-    outBounds.minimum = minimum;
-    outBounds.maximum = maximum;
-    outBounds.center = center;
+    StoreFloat(minimum, &outBounds.minimum);
+    StoreFloat(maximum, &outBounds.maximum);
+    StoreFloat(center, &outBounds.center);
     outBounds.radius = Sqrt(radiusSquared);
     return IsFinite(outBounds.radius);
 }
@@ -323,31 +324,27 @@ bool ComputeMeshletDeformationBounds(
     )
         return false;
 
-    Float3U minimum;
-    Float3U maximum;
+    const bool hasVertexExpansion = !vertexExpansionRadii.empty();
+    SIMDVector minimum = VectorZero();
+    SIMDVector maximum = VectorZero();
     bool initialized = false;
     for(u32 index = 0u; index < meshlet.vertexCount; ++index){
         const u32 vertex = meshletVertexIndices[meshlet.firstVertex + index];
         if(vertex >= positions.size())
             return false;
 
-        const Float3U& position = positions[vertex];
-        if(!FiniteVector(LoadFloat(position), 0x7u))
+        const SIMDVector position = LoadFloat(positions[vertex]);
+        if(!FiniteVector(position, 0x7u))
             return false;
 
         f32 radius = 0.0f;
         if(!ResolveVertexExpansionRadius(vertexExpansionRadii, vertex, uniformExpansionRadius, radius))
             return false;
 
-        const Float3U expandedMinimum(position.x - radius, position.y - radius, position.z - radius);
-        const Float3U expandedMaximum(position.x + radius, position.y + radius, position.z + radius);
-        if(!IsFinite(expandedMinimum.x)
-            || !IsFinite(expandedMinimum.y)
-            || !IsFinite(expandedMinimum.z)
-            || !IsFinite(expandedMaximum.x)
-            || !IsFinite(expandedMaximum.y)
-            || !IsFinite(expandedMaximum.z)
-        )
+        const SIMDVector radiusVector = VectorReplicate(radius);
+        const SIMDVector expandedMinimum = VectorSubtract(position, radiusVector);
+        const SIMDVector expandedMaximum = VectorAdd(position, radiusVector);
+        if(!FiniteVector(expandedMinimum, 0x7u) || !FiniteVector(expandedMaximum, 0x7u))
             return false;
 
         if(!initialized){
@@ -356,35 +353,26 @@ bool ComputeMeshletDeformationBounds(
             initialized = true;
         }
         else{
-            minimum.x = Min(minimum.x, expandedMinimum.x);
-            minimum.y = Min(minimum.y, expandedMinimum.y);
-            minimum.z = Min(minimum.z, expandedMinimum.z);
-            maximum.x = Max(maximum.x, expandedMaximum.x);
-            maximum.y = Max(maximum.y, expandedMaximum.y);
-            maximum.z = Max(maximum.z, expandedMaximum.z);
+            minimum = VectorMin(minimum, expandedMinimum);
+            maximum = VectorMax(maximum, expandedMaximum);
         }
     }
 
     if(!initialized)
         return false;
 
-    const Float3U center(
-        (minimum.x + maximum.x) * 0.5f,
-        (minimum.y + maximum.y) * 0.5f,
-        (minimum.z + maximum.z) * 0.5f
-    );
-    if(!FiniteVector(LoadFloat(center), 0x7u))
+    const SIMDVector center = VectorScale(VectorAdd(minimum, maximum), 0.5f);
+    if(!FiniteVector(center, 0x7u))
         return false;
 
     f32 radius = 0.0f;
-    const SIMDVector centerVector = LoadFloat(center);
     for(u32 index = 0u; index < meshlet.vertexCount; ++index){
         const u32 vertex = meshletVertexIndices[meshlet.firstVertex + index];
-        f32 expansionRadius = 0.0f;
-        if(!ResolveVertexExpansionRadius(vertexExpansionRadii, vertex, uniformExpansionRadius, expansionRadius))
-            return false;
+        f32 expansionRadius = uniformExpansionRadius;
+        if(hasVertexExpansion)
+            expansionRadius += vertexExpansionRadii[vertex];
 
-        const SIMDVector offset = VectorSubtract(LoadFloat(positions[vertex]), centerVector);
+        const SIMDVector offset = VectorSubtract(LoadFloat(positions[vertex]), center);
         const f32 offsetLengthSquared = VectorGetX(Vector3LengthSq(offset));
         if(!IsFinite(offsetLengthSquared))
             return false;
@@ -394,9 +382,9 @@ bool ComputeMeshletDeformationBounds(
         radius = Max(radius, vertexRadius);
     }
 
-    outBounds.minimum = minimum;
-    outBounds.maximum = maximum;
-    outBounds.center = center;
+    StoreFloat(minimum, &outBounds.minimum);
+    StoreFloat(maximum, &outBounds.maximum);
+    StoreFloat(center, &outBounds.center);
     outBounds.radius = radius;
     return IsFinite(outBounds.radius);
 }

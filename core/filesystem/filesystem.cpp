@@ -8,6 +8,7 @@
 
 #include <logger/client/logger.h>
 #include <core/alloc/core.h>
+#include <core/alloc/scratch.h>
 
 #include <cerrno>
 
@@ -1251,7 +1252,10 @@ bool VolumeFileSystem::compact(const bool shrinkSegments){
         u64 size = 0;
     };
 
-    Vector<FileLayout> layouts;
+    Core::Alloc::ScratchArena<> scratchArena;
+    Vector<FileLayout, Core::Alloc::ScratchAllocator<FileLayout>> layouts{
+        Core::Alloc::ScratchAllocator<FileLayout>(scratchArena)
+    };
     layouts.reserve(m_files.size());
 
     for(const auto& [path, record] : m_files){
@@ -1554,7 +1558,12 @@ bool VolumeFileSystem::loadMetadataLocked(){
         return false;
     }
 
-    Vector<u8> indexData(static_cast<usize>(header.indexBytes), 0);
+    Core::Alloc::ScratchArena<> scratchArena;
+    Vector<u8, Core::Alloc::ScratchAllocator<u8>> indexData(
+        static_cast<usize>(header.indexBytes),
+        0,
+        Core::Alloc::ScratchAllocator<u8>(scratchArena)
+    );
     if(header.indexBytes > 0 && !readBytesLocked(static_cast<u64>(sizeof(header)), indexData.data(), header.indexBytes)){
         __hidden_filesystem::LogFailure(m_volumeName, "loadMetadata", "failed to read metadata index");
         return false;
@@ -1633,13 +1642,18 @@ bool VolumeFileSystem::flushMetadataLocked(){
     header.fileCount = static_cast<u64>(m_files.size());
     header.nextFreeOffset = m_nextFreeOffset;
 
-    Vector<Name> sortedPaths;
+    Core::Alloc::ScratchArena<> scratchArena;
+    Vector<Name, Core::Alloc::ScratchAllocator<Name>> sortedPaths{
+        Core::Alloc::ScratchAllocator<Name>(scratchArena)
+    };
     sortedPaths.reserve(m_files.size());
     for(const auto& [path, _] : m_files)
         sortedPaths.push_back(path);
     Sort(sortedPaths.begin(), sortedPaths.end(), __hidden_filesystem::LessName);
 
-    Vector<u8> indexBytes;
+    Vector<u8, Core::Alloc::ScratchAllocator<u8>> indexBytes{
+        Core::Alloc::ScratchAllocator<u8>(scratchArena)
+    };
     if(header.fileCount > Limit<u64>::s_Max / static_cast<u64>(sizeof(VolumeIndexEntryDisk))){
         __hidden_filesystem::LogFailure(m_volumeName, "flushMetadata", "file count overflows index size");
         return false;
@@ -1688,7 +1702,11 @@ bool VolumeFileSystem::flushMetadataLocked(){
         return false;
     }
 
-    Vector<u8> metadataBuffer(static_cast<usize>(m_metadataBytes), 0);
+    Vector<u8, Core::Alloc::ScratchAllocator<u8>> metadataBuffer(
+        static_cast<usize>(m_metadataBytes),
+        0,
+        Core::Alloc::ScratchAllocator<u8>(scratchArena)
+    );
     NWB_MEMCPY(metadataBuffer.data(), metadataBuffer.size(), &header, sizeof(header));
     if(!indexBytes.empty())
         NWB_MEMCPY(metadataBuffer.data() + sizeof(header), metadataBuffer.size() - sizeof(header), indexBytes.data(), indexBytes.size());
@@ -1839,7 +1857,12 @@ bool VolumeFileSystem::moveBytesLocked(const u64 destinationOffset, const u64 so
         return false;
     }
 
-    Vector<u8> moveBuffer(static_cast<usize>(moveChunkBytes), 0);
+    Core::Alloc::ScratchArena<> scratchArena;
+    Vector<u8, Core::Alloc::ScratchAllocator<u8>> moveBuffer(
+        static_cast<usize>(moveChunkBytes),
+        0,
+        Core::Alloc::ScratchAllocator<u8>(scratchArena)
+    );
 
     if(destinationOffset < sourceOffset){
         u64 movedBytes = 0;

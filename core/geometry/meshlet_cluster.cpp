@@ -4,6 +4,8 @@
 
 #include "meshlet_cluster.h"
 
+#include <core/alloc/scratch.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -23,8 +25,15 @@ namespace __hidden_geometry_meshlet_cluster{
 static constexpr f32 s_TriangleAreaEpsilon = 0.000000000001f;
 
 struct PendingMeshlet{
-    Vector<u32> vertices;
-    Vector<u32> indices;
+    using ScratchIndexVector = Vector<u32, Core::Alloc::ScratchAllocator<u32>>;
+
+    explicit PendingMeshlet(Core::Alloc::ScratchArena<>& scratchArena)
+        : vertices(Core::Alloc::ScratchAllocator<u32>(scratchArena))
+        , indices(Core::Alloc::ScratchAllocator<u32>(scratchArena))
+    {}
+
+    ScratchIndexVector vertices;
+    ScratchIndexVector indices;
 };
 
 struct TriangleVertices{
@@ -68,7 +77,8 @@ struct TriangleVertices{
     return IsFinite(areaLengthSquared) && areaLengthSquared > s_TriangleAreaEpsilon;
 }
 
-[[nodiscard]] bool FindLocalVertex(const Vector<u32>& vertices, const u32 vertex, u32& outLocalIndex){
+template<typename VertexAllocator>
+[[nodiscard]] bool FindLocalVertex(const Vector<u32, VertexAllocator>& vertices, const u32 vertex, u32& outLocalIndex){
     for(usize index = 0u; index < vertices.size(); ++index){
         if(vertices[index] == vertex){
             outLocalIndex = static_cast<u32>(index);
@@ -115,7 +125,8 @@ struct TriangleVertices{
     return true;
 }
 
-[[nodiscard]] bool ComputeMeshletBounds(const Vector<Float3U>& positions, const Vector<u32>& vertices, MeshletBounds& outBounds){
+template<typename VertexAllocator>
+[[nodiscard]] bool ComputeMeshletBounds(const Vector<Float3U>& positions, const Vector<u32, VertexAllocator>& vertices, MeshletBounds& outBounds){
     if(vertices.empty())
         return false;
 
@@ -243,7 +254,8 @@ bool BuildMeshlets(
     )
         return false;
 
-    PendingMeshlet pending;
+    Core::Alloc::ScratchArena<> scratchArena;
+    PendingMeshlet pending(scratchArena);
     pending.vertices.reserve(config.maxVertices);
     pending.indices.reserve(config.maxTriangles * 3u);
     Vector<MeshletCluster> meshlets;

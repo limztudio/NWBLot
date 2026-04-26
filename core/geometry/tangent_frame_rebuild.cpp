@@ -4,6 +4,8 @@
 
 #include "tangent_frame_rebuild.h"
 
+#include <core/alloc/scratch.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -179,13 +181,15 @@ bool RebuildTangentFrames(
             return false;
     }
 
-    Vector<TangentFrameAccumulator> accumulators(
+    Core::Alloc::ScratchArena<> scratchArena;
+    Vector<TangentFrameAccumulator, Core::Alloc::ScratchAllocator<TangentFrameAccumulator>> accumulators(
         vertices.size(),
         TangentFrameAccumulator{
             Float4(0.0f, 0.0f, 0.0f, 0.0f),
             Float4(0.0f, 0.0f, 0.0f, 0.0f),
             Float4(0.0f, 0.0f, 0.0f, 0.0f),
-        }
+        },
+        Core::Alloc::ScratchAllocator<TangentFrameAccumulator>(scratchArena)
     );
 
     TangentFrameRebuildResult result;

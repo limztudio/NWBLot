@@ -198,6 +198,9 @@ Updated: 2026-04-13
 - Prefer project wrapper/alias types over raw `std::` names (e.g., `Vector` instead of `std::vector`, traits aliases like `IsSame`).
 - Before introducing a new direct `std::` usage, check `global/global.h` and related global headers for an existing wrapper/alias.
 - If missing and broadly useful, add a project-level alias/wrapper rather than repeating direct `std::` usage across modules.
+- For function-local containers that are only temporary working storage and do not escape the function, prefer `Core::Alloc::ScratchArena` with `Core::Alloc::ScratchAllocator` over the default heap allocator.
+  - Keep default/custom owning allocators for containers that are returned, moved into persistent asset/component/runtime state, stored as members, or passed to APIs that intentionally own the result.
+  - When using scratch-backed containers, reserve or size them so normal execution does not depend on interleaved reallocations.
 - For generic core std types used across modules (e.g., `std::max_align_t`), add/use a `global/type.h` alias (`MaxAlign`) instead of direct `std::` usage in module code.
 - When wrapping `std::` functions that return a meaningful value *and* accept an error-code out parameter (e.g., `std::filesystem::exists(path, ec)`), the wrapper must preserve the original return value; do not collapse it into the error code.
   - The return value carries the answer (e.g., "does the file exist?"), the `ErrorCode&` carries the failure reason (e.g., permission denied). These are two different pieces of information — "file does not exist" is a valid `false` result, not an error.

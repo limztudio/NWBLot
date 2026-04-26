@@ -4,6 +4,7 @@
 
 #include "resource_cooker.h"
 
+#include <core/alloc/scratch.h>
 #include <core/common/common.h>
 #include <logger/client/logger.h>
 
@@ -51,9 +52,14 @@ static int EntryPoint(const isize argc, wchar** argv, void*){
         if(!InitializeResourceCookerCommon(commonInitializerGuard))
             return -1;
 
-        Vector<AString> utf8Args;
-        Vector<char*> utf8Argv;
         const usize argCount = argc > 0 ? static_cast<usize>(argc) : 0;
+        NWB::Core::Alloc::ScratchArena<> scratchArena;
+        Vector<AString, NWB::Core::Alloc::ScratchAllocator<AString>> utf8Args{
+            NWB::Core::Alloc::ScratchAllocator<AString>(scratchArena)
+        };
+        Vector<char*, NWB::Core::Alloc::ScratchAllocator<char*>> utf8Argv{
+            NWB::Core::Alloc::ScratchAllocator<char*>(scratchArena)
+        };
         utf8Args.reserve(argCount);
         utf8Argv.reserve(argCount + 1u);
 

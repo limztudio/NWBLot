@@ -50,6 +50,7 @@ using DeformableSurfaceEditUndoResult = NWB::Impl::DeformableSurfaceEditUndoResu
 using DeformableSurfaceEditHealResult = NWB::Impl::DeformableSurfaceEditHealResult;
 using DeformableSurfaceEditResizeResult = NWB::Impl::DeformableSurfaceEditResizeResult;
 using DeformableSurfaceEditMoveResult = NWB::Impl::DeformableSurfaceEditMoveResult;
+using DeformableSurfaceEditPatchResult = NWB::Impl::DeformableSurfaceEditPatchResult;
 using DeformableAccessoryAttachmentComponent = NWB::Impl::DeformableAccessoryAttachmentComponent;
 using DeformableAccessoryAttachmentRecord = NWB::Impl::DeformableAccessoryAttachmentRecord;
 using DeformableRuntimeMeshCache = NWB::Impl::DeformableRuntimeMeshCache;
@@ -70,6 +71,7 @@ using NWB::Impl::CommitHole;
 using NWB::Impl::DeserializeSurfaceEditState;
 using NWB::Impl::HealSurfaceEdit;
 using NWB::Impl::MoveSurfaceEdit;
+using NWB::Impl::PatchSurfaceEdit;
 using NWB::Impl::PreviewHole;
 using NWB::Impl::RaycastVisibleDeformableRenderers;
 using NWB::Impl::ResizeSurfaceEdit;

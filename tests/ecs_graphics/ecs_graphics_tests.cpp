@@ -2959,6 +2959,125 @@ static void TestSurfaceEditMoveReplaysFromCleanBase(TestContext& context){
     CheckHoleEditUnchanged(context, unchangedInstance, oldVertexCount, oldIndexCount, 1u);
 }
 
+static void TestSurfaceEditPatchReplaysFromCleanBase(TestContext& context){
+    NWB::Impl::DeformableRuntimeMeshInstance cleanBase = MakeGridHoleInstance(6u, 4u);
+    cleanBase.editRevision = 0u;
+
+    NWB::Impl::DeformableRuntimeMeshInstance editedInstance = cleanBase;
+    NWB::Impl::DeformableSurfaceEditState state;
+
+    NWB::Impl::DeformableHoleEditResult holeResult;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        CommitRecordedHole(editedInstance, 12u, 0.38f, 0.25f, state, &holeResult)
+    );
+    const NWB::Impl::DeformableSurfaceEditId editId = state.edits[0].editId;
+    const Float3U oldRestPosition = state.edits[0].hole.restPosition;
+    const f32 oldRadius = state.edits[0].hole.radius;
+    const f32 oldDepth = state.edits[0].hole.depth;
+
+    NWB::Impl::DeformableAccessoryAttachmentComponent attachment;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Impl::AttachAccessory(editedInstance, holeResult, 0.12f, 0.15f, attachment)
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        AppendAccessoryRecord(
+            state,
+            attachment,
+            editId,
+            s_MockAccessoryGeometryPath,
+            s_MockAccessoryMaterialPath
+        )
+    );
+
+    const NWB::Impl::DeformableHoleEditParams patchParams =
+        MakeHoleEditParams(editedInstance, 14u, 0.25f, 0.25f, 0.5f, 0.48f, 0.31f)
+    ;
+    const Float3U targetRestPosition = RestHitPosition(editedInstance, patchParams);
+
+    NWB::Impl::DeformableSurfaceEditPatchResult patchResult;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Impl::PatchSurfaceEdit(
+            editedInstance,
+            cleanBase,
+            state,
+            editId,
+            patchParams.posedHit,
+            0.48f,
+            1.0f,
+            0.31f,
+            &patchResult
+        )
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, patchResult.patchedEditId == editId);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(patchResult.oldRestPosition.x, oldRestPosition.x));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(patchResult.oldRestPosition.y, oldRestPosition.y));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(patchResult.newRestPosition.x, targetRestPosition.x));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(patchResult.newRestPosition.y, targetRestPosition.y));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !NearlyEqual(patchResult.newRestPosition.x, oldRestPosition.x));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(patchResult.oldRadius, oldRadius));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(patchResult.oldDepth, oldDepth));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(patchResult.newRadius, 0.48f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(patchResult.newDepth, 0.31f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, patchResult.replay.appliedEditCount == 1u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, patchResult.replay.finalEditRevision == 1u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, patchResult.replay.topologyChanged);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, state.edits.size() == 1u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, state.edits[0].editId == editId);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(state.edits[0].hole.restPosition.x, targetRestPosition.x));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(state.edits[0].hole.restPosition.y, targetRestPosition.y));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(state.edits[0].hole.radius, 0.48f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(state.edits[0].hole.depth, 0.31f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, state.accessories.size() == 1u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, state.accessories[0].anchorEditId == editId);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, state.accessories[0].firstWallVertex == state.edits[0].result.firstWallVertex);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, state.accessories[0].wallVertexCount == state.edits[0].result.wallVertexCount);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, editedInstance.editRevision == 1u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        (editedInstance.dirtyFlags & NWB::Impl::RuntimeMeshDirtyFlag::GpuUploadDirty) != 0u
+    );
+
+    SimulateRuntimeMeshUpload(editedInstance);
+    NWB::Impl::DeformableAccessoryAttachmentComponent restoredAttachment;
+    restoredAttachment.targetEntity = editedInstance.entity;
+    restoredAttachment.runtimeMesh = editedInstance.handle;
+    restoredAttachment.anchorEditId = state.accessories[0].anchorEditId;
+    restoredAttachment.firstWallVertex = state.accessories[0].firstWallVertex;
+    restoredAttachment.wallVertexCount = state.accessories[0].wallVertexCount;
+    restoredAttachment.setNormalOffset(state.accessories[0].normalOffset);
+    restoredAttachment.setUniformScale(state.accessories[0].uniformScale);
+
+    NWB::Core::Scene::TransformComponent resolvedTransform;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Impl::ResolveAccessoryAttachmentTransform(
+            editedInstance,
+            NWB::Impl::DeformablePickingInputs{},
+            restoredAttachment,
+            resolvedTransform
+        )
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(resolvedTransform.position.z, 0.12f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(resolvedTransform.scale.x, 0.15f));
+
+    NWB::Impl::DeformableRuntimeMeshInstance unchangedInstance = editedInstance;
+    NWB::Impl::DeformableSurfaceEditState unchangedState = state;
+    NWB::Impl::DeformablePosedHit badHit = patchParams.posedHit;
+    badHit.editRevision = 99u;
+    const usize oldVertexCount = unchangedInstance.restVertices.size();
+    const usize oldIndexCount = unchangedInstance.indices.size();
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        !NWB::Impl::PatchSurfaceEdit(unchangedInstance, cleanBase, unchangedState, editId, badHit, 0.48f, 1.0f, 0.31f)
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(unchangedState.edits[0].hole.restPosition.x, targetRestPosition.x));
+    CheckHoleEditUnchanged(context, unchangedInstance, oldVertexCount, oldIndexCount, 1u);
+}
+
 static void TestSurfaceEditStateReplayTriesLaterMatchingCandidate(TestContext& context){
     NWB::Impl::DeformableRuntimeMeshInstance editedInstance = MakeGridHoleInstance();
     editedInstance.editRevision = 0u;
@@ -3393,6 +3512,7 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
     __hidden_ecs_graphics_tests::TestSurfaceEditHealReplaysSurvivingEdits(context);
     __hidden_ecs_graphics_tests::TestSurfaceEditResizeReplaysFromCleanBase(context);
     __hidden_ecs_graphics_tests::TestSurfaceEditMoveReplaysFromCleanBase(context);
+    __hidden_ecs_graphics_tests::TestSurfaceEditPatchReplaysFromCleanBase(context);
     __hidden_ecs_graphics_tests::TestSurfaceEditStateReplayTriesLaterMatchingCandidate(context);
     __hidden_ecs_graphics_tests::TestSurfaceEditStateReplayRejectsWrongSourceMesh(context);
     __hidden_ecs_graphics_tests::TestRestSpaceHoleEditRejectsMissingProvenance(context);

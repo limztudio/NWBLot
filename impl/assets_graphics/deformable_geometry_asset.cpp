@@ -47,7 +47,7 @@ static constexpr usize s_DeformableMorphHeaderBytes =
 ;
 #endif
 
-struct DeformableDisplacementBinaryV3{
+struct DeformableDisplacementBinary{
     NameHash textureNameHash = {};
     u32 mode = DeformableDisplacementMode::None;
     f32 amplitude = 0.0f;
@@ -55,11 +55,11 @@ struct DeformableDisplacementBinaryV3{
     Float2U uvScale = Float2U(1.0f, 1.0f);
     Float2U uvOffset = Float2U(0.0f, 0.0f);
 };
-static_assert(IsStandardLayout_V<DeformableDisplacementBinaryV3>, "DeformableDisplacementBinaryV3 must stay binary-serializable");
-static_assert(IsTriviallyCopyable_V<DeformableDisplacementBinaryV3>, "DeformableDisplacementBinaryV3 must stay binary-serializable");
+static_assert(IsStandardLayout_V<DeformableDisplacementBinary>, "DeformableDisplacementBinary must stay binary-serializable");
+static_assert(IsTriviallyCopyable_V<DeformableDisplacementBinary>, "DeformableDisplacementBinary must stay binary-serializable");
 
-[[nodiscard]] DeformableDisplacementBinaryV3 BuildDisplacementBinary(const DeformableDisplacement& displacement){
-    DeformableDisplacementBinaryV3 binary;
+[[nodiscard]] DeformableDisplacementBinary BuildDisplacementBinary(const DeformableDisplacement& displacement){
+    DeformableDisplacementBinary binary;
     binary.textureNameHash = displacement.texture.name().hash();
     binary.mode = displacement.mode;
     binary.amplitude = displacement.amplitude;
@@ -69,7 +69,7 @@ static_assert(IsTriviallyCopyable_V<DeformableDisplacementBinaryV3>, "Deformable
     return binary;
 }
 
-[[nodiscard]] DeformableDisplacement BuildDisplacement(const DeformableDisplacementBinaryV3& binary){
+[[nodiscard]] DeformableDisplacement BuildDisplacement(const DeformableDisplacementBinary& binary){
     DeformableDisplacement displacement;
     displacement.texture.virtualPath = Name(binary.textureNameHash);
     displacement.mode = binary.mode;
@@ -641,7 +641,7 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
             return false;
         m_morphs.push_back(Move(morph));
     }
-    __hidden_deformable_geometry_asset::DeformableDisplacementBinaryV3 displacementBinary;
+    __hidden_deformable_geometry_asset::DeformableDisplacementBinary displacementBinary;
     if(!ReadPOD(binary, cursor, displacementBinary)){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: malformed displacement descriptor"));
         return false;
@@ -720,7 +720,7 @@ bool DeformableGeometryAssetCodec::serialize(const Core::Assets::IAsset& asset, 
         ;
     }
     canReserve = canReserve
-        && __hidden_deformable_geometry_asset::AddReserveBytes(reserveBytes, sizeof(__hidden_deformable_geometry_asset::DeformableDisplacementBinaryV3))
+        && __hidden_deformable_geometry_asset::AddReserveBytes(reserveBytes, sizeof(__hidden_deformable_geometry_asset::DeformableDisplacementBinary))
     ;
 
     outBinary.clear();

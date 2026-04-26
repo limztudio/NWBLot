@@ -248,7 +248,7 @@ Updated: 2026-04-13
     - Use raw pointer members only for truly optional relationships.
   - For `NotNull<T*>`, do not add redundant null checks before dereference; treat it as non-null by contract.
   - Avoid nullable-pointer APIs followed by immediate non-null assertions; model required inputs as references instead.
-- For scoped mutex locking, prefer `ScopedLock lock(m_mutex);` (or `ScopedLock lock(otherMutex);`) instead of `Mutex::scoped_lock ...` when possible.
+- For scoped mutex locking, prefer `ScopedLock lock(m_mutex);` (or `ScopedLock lock(otherMutex);`) instead of lock-type-specific scoped-lock forms when possible.
 
 ## 7. Ownership and memory patterns
 - Prefer engine ownership types (`UniquePtr`, `RefCountPtr`, `CustomUniquePtr`) over raw owning pointers.
@@ -327,7 +327,6 @@ Updated: 2026-04-13
 
 ## 14. Mutex Selection Guide (`global/sync.h`)
 - Default choice: use `Futex` for non-recursive mutual exclusion in engine/runtime code.
-- Keep `Mutex` (`tbb::mutex`) mainly for legacy compatibility and interop with code that is already standardized on TBB mutex types.
 - Use `ScopedLock`/`LockGuard` for simple scope-based locking; use `UniqueLock` only when lock state must be manually controlled (unlock/relock, condition wait patterns).
 
 ### 14.1 Quick decision order
@@ -345,9 +344,6 @@ Updated: 2026-04-13
   - Best for general-purpose engine locks.
   - Good when contention may happen and threads should park instead of hot-spinning.
   - Preferred default for `m_mutex` fields in systems code.
-- `Mutex` (`tbb::mutex`):
-  - Use for compatibility with existing TBB-oriented code paths or when changing the lock type would add migration risk without measurable gain.
-  - Do not pick it by default for new code.
 - `SpinMutex`:
   - Use only for tiny critical sections (few instructions, metadata/state flips).
   - Do not hold across calls that may block, allocate heavily, or trigger OS waits.

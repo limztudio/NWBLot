@@ -144,7 +144,7 @@ asset.indices = [
 )";
 
 #if defined(NWB_FINAL)
-static constexpr AStringView s_LegacyGeometryMeta = R"(geometry asset;
+static constexpr AStringView s_UnsupportedGeometryFieldsMeta = R"(geometry asset;
 
 asset.vertex_stride = 24;
 asset.index_type = "u16";
@@ -1495,10 +1495,10 @@ static void TestGeometryCookerValidationFailures(TestContext& context){
         static_cast<void>(RemoveAllIfExists(root, errorCode));
     };
 
-    expectCookFailure(s_LegacyGeometryMeta, "legacy_geometry");
+    expectCookFailure(s_UnsupportedGeometryFieldsMeta, "unsupported_geometry_fields");
     expectCookFailure(s_MismatchedGeometryMeta, "mismatched_geometry_streams");
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() >= 2u);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("legacy geometry fields are no longer supported")));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("unsupported geometry fields are present")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("vertex stream counts must match")));
 #else
     static_cast<void>(context);

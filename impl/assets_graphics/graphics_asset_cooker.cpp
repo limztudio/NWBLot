@@ -944,7 +944,7 @@ static bool ParseGeometryIndices(
     return true;
 }
 
-static bool RejectLegacyGeometryFields(const DiscoveredNwbFile& discoveredFile, const Core::Metascript::Value& asset){
+static bool RejectUnsupportedGeometryFields(const DiscoveredNwbFile& discoveredFile, const Core::Metascript::Value& asset){
     if(!asset.findField("primitive")
         && !asset.findField("vertex_stride")
         && !asset.findField("vertex_data")
@@ -953,7 +953,7 @@ static bool RejectLegacyGeometryFields(const DiscoveredNwbFile& discoveredFile, 
         return true;
 
     NWB_LOGGER_ERROR(
-        NWB_TEXT("Geometry meta '{}': legacy geometry fields are no longer supported; define positions, normals, optional colors, index_type, and indices"),
+        NWB_TEXT("Geometry meta '{}': unsupported geometry fields are present; define positions, normals, optional colors, index_type, and indices"),
         PathToString<tchar>(discoveredFile.filePath)
     );
     return false;
@@ -972,7 +972,7 @@ static bool ParseGeometryMeta(const DiscoveredNwbFile& discoveredFile, const Cor
         return false;
     if(!Core::Assets::BuildDerivedAssetVirtualPath(discoveredFile.assetRoot, discoveredFile.virtualRoot, discoveredFile.filePath, outEntry.virtualPath))
         return false;
-    if(!RejectLegacyGeometryFields(discoveredFile, asset))
+    if(!RejectUnsupportedGeometryFields(discoveredFile, asset))
         return false;
 
     Vector<Float3U> positions;

@@ -24,7 +24,7 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_vulkan_shader{
+namespace __hidden_vulkan_shader_compiler{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -212,7 +212,7 @@ bool VulkanShaderCompiler::compileVariant(const ShaderCompilerRequest& request, 
     }
     StripUtf8Bom(sourceText);
 
-    const shaderc_shader_kind shaderKind = __hidden_vulkan_shader::MapStageToShaderKind(request.stage);
+    const shaderc_shader_kind shaderKind = __hidden_vulkan_shader_compiler::MapStageToShaderKind(request.stage);
     if(shaderKind == shaderc_glsl_infer_from_source){
         NWB_LOGGER_ERROR(NWB_TEXT("Unknown shader stage '{}' in entry '{}'"), StringConvert(request.stage), StringConvert(request.shaderName));
         return false;
@@ -221,7 +221,7 @@ bool VulkanShaderCompiler::compileVariant(const ShaderCompilerRequest& request, 
     shaderc::CompileOptions options;
     options.SetTargetEnvironment(shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_2);
     shaderc_source_language sourceLanguage = shaderc_source_language_glsl;
-    if(!__hidden_vulkan_shader::TryMapCompilerToSourceLanguage(request.compiler, sourceLanguage)){
+    if(!__hidden_vulkan_shader_compiler::TryMapCompilerToSourceLanguage(request.compiler, sourceLanguage)){
         NWB_LOGGER_ERROR(NWB_TEXT("Unknown shader compiler '{}' in entry '{}'"), StringConvert(request.compiler), StringConvert(request.shaderName));
         return false;
     }
@@ -237,7 +237,7 @@ bool VulkanShaderCompiler::compileVariant(const ShaderCompilerRequest& request, 
         );
     }
 
-    options.SetIncluder(MakeStdUnique<__hidden_vulkan_shader::ShaderFileIncluder>(request.includeDirectories));
+    options.SetIncluder(MakeStdUnique<__hidden_vulkan_shader_compiler::ShaderFileIncluder>(request.includeDirectories));
 
     shaderc::Compiler compiler;
     const AString inputFileName = PathToString(request.sourcePath);

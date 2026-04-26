@@ -17,7 +17,7 @@ NWB_ASSETS_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_assets{
+namespace __hidden_asset_auto_registration{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -92,9 +92,9 @@ bool AssetCodecAutoRegistrar::initialize(){
     if(m_factory == nullptr)
         return true;
 
-    auto& autoFactoryQueue = __hidden_assets::QueryAutoFactoryQueue();
+    auto& autoFactoryQueue = __hidden_asset_auto_registration::QueryAutoFactoryQueue();
     ScopedLock lock(autoFactoryQueue.mutex);
-    if(!__hidden_assets::ContainsFactory(autoFactoryQueue.codecFactories, m_factory))
+    if(!__hidden_asset_auto_registration::ContainsFactory(autoFactoryQueue.codecFactories, m_factory))
         autoFactoryQueue.codecFactories.push_back(m_factory);
 
     return true;
@@ -104,9 +104,9 @@ bool AssetCookerAutoRegistrar::initialize(){
     if(m_factory == nullptr)
         return true;
 
-    auto& autoFactoryQueue = __hidden_assets::QueryAutoFactoryQueue();
+    auto& autoFactoryQueue = __hidden_asset_auto_registration::QueryAutoFactoryQueue();
     ScopedLock lock(autoFactoryQueue.mutex);
-    if(!__hidden_assets::ContainsFactory(autoFactoryQueue.cookerFactories, m_factory))
+    if(!__hidden_asset_auto_registration::ContainsFactory(autoFactoryQueue.cookerFactories, m_factory))
         autoFactoryQueue.cookerFactories.push_back(m_factory);
 
     return true;
@@ -115,14 +115,14 @@ bool AssetCookerAutoRegistrar::initialize(){
 
 void RegisterAutoCollectedAssetCodecs(AssetRegistry& outRegistry){
     Alloc::ScratchArena<> scratchArena;
-    __hidden_assets::ScratchFactoryVector<AssetCodecFactory> codecFactories{Alloc::ScratchAllocator<AssetCodecFactory>(scratchArena)};
+    __hidden_asset_auto_registration::ScratchFactoryVector<AssetCodecFactory> codecFactories{Alloc::ScratchAllocator<AssetCodecFactory>(scratchArena)};
     {
-        auto& autoFactoryQueue = __hidden_assets::QueryAutoFactoryQueue();
+        auto& autoFactoryQueue = __hidden_asset_auto_registration::QueryAutoFactoryQueue();
         ScopedLock lock(autoFactoryQueue.mutex);
-        __hidden_assets::CopyQueuedFactories(autoFactoryQueue.codecFactories, codecFactories);
+        __hidden_asset_auto_registration::CopyQueuedFactories(autoFactoryQueue.codecFactories, codecFactories);
     }
 
-    __hidden_assets::RegisterFactoryProducts(
+    __hidden_asset_auto_registration::RegisterFactoryProducts(
         codecFactories,
         [](const AssetCodecFactory factory){ return factory(); },
         [&](UniquePtr<IAssetCodec> codec){ return outRegistry.registerCodec(Move(codec)); },
@@ -133,14 +133,14 @@ void RegisterAutoCollectedAssetCodecs(AssetRegistry& outRegistry){
 
 void RegisterAutoCollectedAssetCookers(AssetCookerRegistry& outRegistry, Alloc::CustomArena& arena){
     Alloc::ScratchArena<> scratchArena;
-    __hidden_assets::ScratchFactoryVector<AssetCookerFactory> cookerFactories{Alloc::ScratchAllocator<AssetCookerFactory>(scratchArena)};
+    __hidden_asset_auto_registration::ScratchFactoryVector<AssetCookerFactory> cookerFactories{Alloc::ScratchAllocator<AssetCookerFactory>(scratchArena)};
     {
-        auto& autoFactoryQueue = __hidden_assets::QueryAutoFactoryQueue();
+        auto& autoFactoryQueue = __hidden_asset_auto_registration::QueryAutoFactoryQueue();
         ScopedLock lock(autoFactoryQueue.mutex);
-        __hidden_assets::CopyQueuedFactories(autoFactoryQueue.cookerFactories, cookerFactories);
+        __hidden_asset_auto_registration::CopyQueuedFactories(autoFactoryQueue.cookerFactories, cookerFactories);
     }
 
-    __hidden_assets::RegisterFactoryProducts(
+    __hidden_asset_auto_registration::RegisterFactoryProducts(
         cookerFactories,
         [&](const AssetCookerFactory factory){ return factory(arena); },
         [&](UniquePtr<IAssetCooker> cooker){ return outRegistry.registerCooker(Move(cooker)); },

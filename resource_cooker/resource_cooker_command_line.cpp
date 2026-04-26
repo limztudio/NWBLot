@@ -12,7 +12,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_resource_cooker{
+namespace __hidden_resource_cooker_command_line{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -69,7 +69,7 @@ static bool AssignStrings(Vector<AString>& source, Vector<AString>& outValues, A
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void ConfigureCommandLineOptions(CLI::App& outApp, __hidden_resource_cooker::ParsedCookOptions& outOptions){
+static void ConfigureCommandLineOptions(CLI::App& outApp, __hidden_resource_cooker_command_line::ParsedCookOptions& outOptions){
     outApp.add_option("--repo-root", outOptions.repoRoot, "Repository root path")
         ->required();
     outApp.add_option("--asset-root", outOptions.assetRoots, "Asset root directories to scan for .nwb files")
@@ -98,7 +98,7 @@ CommandLineParseResult::Enum ParseCommandLine(const int argc, char** argv, CookO
         }
     }
 
-    __hidden_resource_cooker::ParsedCookOptions parsedOptions;
+    __hidden_resource_cooker_command_line::ParsedCookOptions parsedOptions;
 
     CLI::App app{ "resource_cooker" };
     app.set_help_flag("-h,--help", "Show help");
@@ -115,17 +115,17 @@ CommandLineParseResult::Enum ParseCommandLine(const int argc, char** argv, CookO
         return CommandLineParseResult::Error;
     }
 
-    if(!__hidden_resource_cooker::AssignString(parsedOptions.repoRoot, outOptions.repoRoot, outError))
+    if(!__hidden_resource_cooker_command_line::AssignString(parsedOptions.repoRoot, outOptions.repoRoot, outError))
         return CommandLineParseResult::Error;
-    if(!__hidden_resource_cooker::AssignStrings(parsedOptions.assetRoots, outOptions.assetRoots, outError))
+    if(!__hidden_resource_cooker_command_line::AssignStrings(parsedOptions.assetRoots, outOptions.assetRoots, outError))
         return CommandLineParseResult::Error;
-    if(!__hidden_resource_cooker::AssignString(parsedOptions.outputDirectory, outOptions.outputDirectory, outError))
+    if(!__hidden_resource_cooker_command_line::AssignString(parsedOptions.outputDirectory, outOptions.outputDirectory, outError))
         return CommandLineParseResult::Error;
-    if(!__hidden_resource_cooker::AssignString(parsedOptions.cacheDirectory, outOptions.cacheDirectory, outError))
+    if(!__hidden_resource_cooker_command_line::AssignString(parsedOptions.cacheDirectory, outOptions.cacheDirectory, outError))
         return CommandLineParseResult::Error;
-    if(!__hidden_resource_cooker::AssignCompactString(parsedOptions.configuration, "--configuration", outOptions.configuration, outError))
+    if(!__hidden_resource_cooker_command_line::AssignCompactString(parsedOptions.configuration, "--configuration", outOptions.configuration, outError))
         return CommandLineParseResult::Error;
-    if(!__hidden_resource_cooker::AssignCompactString(parsedOptions.assetType, "--asset-type", outOptions.assetType, outError))
+    if(!__hidden_resource_cooker_command_line::AssignCompactString(parsedOptions.assetType, "--asset-type", outOptions.assetType, outError))
         return CommandLineParseResult::Error;
 
     return CommandLineParseResult::Success;
@@ -133,7 +133,7 @@ CommandLineParseResult::Enum ParseCommandLine(const int argc, char** argv, CookO
 
 
 void PrintUsage(){
-    __hidden_resource_cooker::ParsedCookOptions options;
+    __hidden_resource_cooker_command_line::ParsedCookOptions options;
     CLI::App app{ "resource_cooker" };
     app.set_help_flag("-h,--help", "Show help");
     ConfigureCommandLineOptions(app, options);

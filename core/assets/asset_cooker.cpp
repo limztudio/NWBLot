@@ -18,7 +18,7 @@ NWB_ASSETS_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_assets{
+namespace __hidden_asset_cooker{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -124,7 +124,7 @@ bool AssetCookerRegistry::cook(const AssetCookOptions& options)const{
 
         NWB_LOGGER_ERROR(
             NWB_TEXT("Missing --asset-type. Available types: {}"),
-            StringConvert(__hidden_assets::DescribeAvailableCookers(m_assetCookers))
+            StringConvert(__hidden_asset_cooker::DescribeAvailableCookers(m_assetCookers))
         );
         return false;
     }
@@ -134,7 +134,7 @@ bool AssetCookerRegistry::cook(const AssetCookOptions& options)const{
         NWB_LOGGER_ERROR(
             NWB_TEXT("Unsupported --asset-type '{}'. Available types: {}"),
             StringConvert(options.assetType.c_str()),
-            StringConvert(__hidden_assets::DescribeAvailableCookers(m_assetCookers))
+            StringConvert(__hidden_asset_cooker::DescribeAvailableCookers(m_assetCookers))
         );
         return false;
     }

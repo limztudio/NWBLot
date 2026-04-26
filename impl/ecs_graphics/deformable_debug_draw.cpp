@@ -34,20 +34,16 @@ static constexpr Float3U s_ColorInvalid = Float3U(1.0f, 0.0f, 1.0f);
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Float3U ToFloat3(const Float4& value){
-    return Float3U(value.x, value.y, value.z);
+[[nodiscard]] SIMDVector LoadPoint3(const Float4& value){
+    return VectorSetW(LoadFloat(value), 0.0f);
 }
 
-[[nodiscard]] Float3U ScaleAdd(const Float3U& begin, const Float3U& direction, const f32 scale){
-    return Float3U(
-        begin.x + direction.x * scale,
-        begin.y + direction.y * scale,
-        begin.z + direction.z * scale
-    );
+[[nodiscard]] SIMDVector ScaleAdd(const SIMDVector begin, const SIMDVector direction, const f32 scale){
+    return VectorMultiplyAdd(direction, VectorReplicate(scale), begin);
 }
 
-[[nodiscard]] bool FinitePoint(const Float3U& point){
-    return IsFinite(point.x) && IsFinite(point.y) && IsFinite(point.z);
+[[nodiscard]] bool FinitePoint(const SIMDVector point){
+    return DeformableValidation::FiniteVector(point, 0x7u);
 }
 
 [[nodiscard]] u32 SaturateUsizeToU32(const usize value){
@@ -57,8 +53,8 @@ static constexpr Float3U s_ColorInvalid = Float3U(1.0f, 0.0f, 1.0f);
     ;
 }
 
-[[nodiscard]] f32 Length3(const Float3U& value){
-    const f32 lengthSquared = VectorGetX(Vector3LengthSq(LoadFloat(value)));
+[[nodiscard]] f32 Length3(const SIMDVector value){
+    const f32 lengthSquared = VectorGetX(Vector3LengthSq(value));
     return IsFinite(lengthSquared)
         ? Sqrt(Max(0.0f, lengthSquared))
         : 0.0f
@@ -74,23 +70,23 @@ static constexpr Float3U s_ColorInvalid = Float3U(1.0f, 0.0f, 1.0f);
     return count;
 }
 
-void AppendLine(DeformableSurfaceEditDebugSnapshot& snapshot, const Float3U& begin, const Float3U& end, const Float3U& color){
+void AppendLine(DeformableSurfaceEditDebugSnapshot& snapshot, const SIMDVector begin, const SIMDVector end, const Float3U& color){
     if(!FinitePoint(begin) || !FinitePoint(end))
         return;
 
     DeformableDebugLine line;
-    line.begin = begin;
-    line.end = end;
+    StoreFloat(begin, &line.begin);
+    StoreFloat(end, &line.end);
     line.color = color;
     snapshot.lines.push_back(line);
 }
 
-void AppendPoint(DeformableSurfaceEditDebugSnapshot& snapshot, const Float3U& position, const Float3U& color, const u32 id){
+void AppendPoint(DeformableSurfaceEditDebugSnapshot& snapshot, const SIMDVector position, const Float3U& color, const u32 id){
     if(!FinitePoint(position))
         return;
 
     DeformableDebugPoint point;
-    point.position = position;
+    StoreFloat(position, &point.position);
     point.color = color;
     point.id = id;
     snapshot.points.push_back(point);
@@ -108,10 +104,14 @@ void AppendPreviewDebug(
     snapshot.previewTriangle = session->hit.triangle;
     snapshot.previewSourceTriangle = session->hit.restSample.sourceTri;
     snapshot.previewPermission = preview->editPermission;
-    snapshot.previewCenter = ToFloat3(preview->center);
-    snapshot.previewNormal = ToFloat3(preview->normal);
-    snapshot.previewTangent = ToFloat3(preview->tangent);
-    snapshot.previewBitangent = ToFloat3(preview->bitangent);
+    const SIMDVector previewCenter = LoadPoint3(preview->center);
+    const SIMDVector previewNormal = LoadPoint3(preview->normal);
+    const SIMDVector previewTangent = LoadPoint3(preview->tangent);
+    const SIMDVector previewBitangent = LoadPoint3(preview->bitangent);
+    StoreFloat(previewCenter, &snapshot.previewCenter);
+    StoreFloat(previewNormal, &snapshot.previewNormal);
+    StoreFloat(previewTangent, &snapshot.previewTangent);
+    StoreFloat(previewBitangent, &snapshot.previewBitangent);
     snapshot.previewBarycentric[0] = session->hit.bary[0];
     snapshot.previewBarycentric[1] = session->hit.bary[1];
     snapshot.previewBarycentric[2] = session->hit.bary[2];
@@ -120,10 +120,10 @@ void AppendPreviewDebug(
 
     const f32 radius = Max(preview->radius, 0.02f);
     const f32 normalLength = Max(preview->depth, radius * 0.5f);
-    AppendPoint(snapshot, ToFloat3(session->hit.position), s_ColorHit, session->hit.triangle);
-    AppendLine(snapshot, snapshot.previewCenter, ScaleAdd(snapshot.previewCenter, snapshot.previewTangent, radius), s_ColorTangent);
-    AppendLine(snapshot, snapshot.previewCenter, ScaleAdd(snapshot.previewCenter, snapshot.previewBitangent, radius), s_ColorBitangent);
-    AppendLine(snapshot, snapshot.previewCenter, ScaleAdd(snapshot.previewCenter, snapshot.previewNormal, normalLength), s_ColorNormal);
+    AppendPoint(snapshot, LoadPoint3(session->hit.position), s_ColorHit, session->hit.triangle);
+    AppendLine(snapshot, previewCenter, ScaleAdd(previewCenter, previewTangent, radius), s_ColorTangent);
+    AppendLine(snapshot, previewCenter, ScaleAdd(previewCenter, previewBitangent, radius), s_ColorBitangent);
+    AppendLine(snapshot, previewCenter, ScaleAdd(previewCenter, previewNormal, normalLength), s_ColorNormal);
 }
 
 void AppendWallLoopDebug(
@@ -146,9 +146,10 @@ void AppendWallLoopDebug(
     for(usize i = 0u; i < count; ++i){
         const usize next = (i + 1u) % count;
         const u32 vertexId = static_cast<u32>(first + i);
-        const Float3U& position = instance.restVertices[first + i].position;
+        const SIMDVector position = LoadFloat(instance.restVertices[first + i].position);
+        const SIMDVector nextPosition = LoadFloat(instance.restVertices[first + next].position);
         AppendPoint(snapshot, position, color, vertexId);
-        AppendLine(snapshot, position, instance.restVertices[first + next].position, color);
+        AppendLine(snapshot, position, nextPosition, color);
     }
 }
 
@@ -182,20 +183,19 @@ void AppendEditStateDebug(
     }
 }
 
-[[nodiscard]] Float3U TriangleCenter(const DeformableRuntimeMeshInstance& instance, const u32 a, const u32 b, const u32 c){
+[[nodiscard]] SIMDVector TriangleCenter(const DeformableRuntimeMeshInstance& instance, const u32 a, const u32 b, const u32 c){
     if(a >= instance.restVertices.size()
         || b >= instance.restVertices.size()
         || c >= instance.restVertices.size()
     )
-        return Float3U(0.0f, 0.0f, 0.0f);
+        return VectorZero();
 
-    const Float3U& pa = instance.restVertices[a].position;
-    const Float3U& pb = instance.restVertices[b].position;
-    const Float3U& pc = instance.restVertices[c].position;
-    return Float3U(
-        (pa.x + pb.x + pc.x) / 3.0f,
-        (pa.y + pb.y + pc.y) / 3.0f,
-        (pa.z + pb.z + pc.z) / 3.0f
+    return VectorScale(
+        VectorAdd(
+            VectorAdd(LoadFloat(instance.restVertices[a].position), LoadFloat(instance.restVertices[b].position)),
+            LoadFloat(instance.restVertices[c].position)
+        ),
+        1.0f / 3.0f
     );
 }
 
@@ -255,7 +255,7 @@ void AppendPayloadDiagnostics(const DeformableRuntimeMeshInstance& instance, Def
         for(const DeformableMorphDelta& delta : morph.deltas){
             snapshot.maxMorphPositionDelta = Max(
                 snapshot.maxMorphPositionDelta,
-                Length3(delta.deltaPosition)
+                Length3(LoadFloat(delta.deltaPosition))
             );
         }
     }

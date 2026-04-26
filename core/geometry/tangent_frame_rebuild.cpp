@@ -237,7 +237,7 @@ bool RebuildTangentFrames(
         if(!ValidDirection(normal))
             return false;
 
-        const SIMDVector previousTangent = VectorSet(vertex.tangent.x, vertex.tangent.y, vertex.tangent.z, 0.0f);
+        const SIMDVector previousTangent = VectorSetW(LoadFloat(vertex.tangent), 0.0f);
         SIMDVector tangentSource = LoadFloat(accumulator.tangent);
         if(!ValidDirection(tangentSource)){
             tangentSource = previousTangent;

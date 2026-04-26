@@ -630,8 +630,7 @@ static void StoreDirectionalLightDirection(Float4& outDirection, const Float4& f
         return;
     }
 
-    StoreFloat(Vector3Normalize(lightDirection), &outDirection);
-    outDirection.w = 0.0f;
+    StoreFloat(VectorSetW(Vector3Normalize(lightDirection), 0.0f), &outDirection);
 }
 
 static void ApplyDefaultDirectionalLightMeshViewState(MeshViewState& state, const MeshViewBasis& basis){
@@ -786,7 +785,7 @@ static void ApplyCameraMeshViewState(
     const Core::Scene::CameraProjectionData& projectionData
 ){
     StoreWorldToClipMatrix(state.worldToClip, BuildTransformMeshViewBasis(transform), projectionData.projectionParams);
-    state.cameraPosition = Float4(transform.position.x, transform.position.y, transform.position.z, 1.0f);
+    StoreFloat(VectorSetW(LoadFloat(transform.position), 1.0f), &state.cameraPosition);
 }
 
 static MeshViewState ResolveMeshViewState(Core::ECS::World& world, const f32 fallbackAspectRatio){

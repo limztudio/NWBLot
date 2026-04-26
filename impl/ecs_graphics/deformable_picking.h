@@ -35,26 +35,26 @@ struct alignas(Float4) DeformablePickingRay{
     Float4 directionMaxDistance = Float4(0.0f, 0.0f, 1.0f, Limit<f32>::s_Max);
 
     [[nodiscard]] Float3U origin()const{
-        return Float3U(originMinDistance.x, originMinDistance.y, originMinDistance.z);
+        Float3U result;
+        StoreFloat(LoadFloat(originMinDistance), &result);
+        return result;
     }
 
     [[nodiscard]] Float3U direction()const{
-        return Float3U(directionMaxDistance.x, directionMaxDistance.y, directionMaxDistance.z);
+        Float3U result;
+        StoreFloat(LoadFloat(directionMaxDistance), &result);
+        return result;
     }
 
     [[nodiscard]] f32 minDistance()const{ return originMinDistance.w; }
     [[nodiscard]] f32 maxDistance()const{ return directionMaxDistance.w; }
 
     void setOrigin(const Float3U& value){
-        originMinDistance.x = value.x;
-        originMinDistance.y = value.y;
-        originMinDistance.z = value.z;
+        StoreFloat(VectorSetW(LoadFloat(value), originMinDistance.w), &originMinDistance);
     }
 
     void setDirection(const Float3U& value){
-        directionMaxDistance.x = value.x;
-        directionMaxDistance.y = value.y;
-        directionMaxDistance.z = value.z;
+        StoreFloat(VectorSetW(LoadFloat(value), directionMaxDistance.w), &directionMaxDistance);
     }
 
     void setMinDistance(const f32 value){ originMinDistance.w = value; }
@@ -117,11 +117,11 @@ struct alignas(Float4) DeformablePosedHit{
     void setDistance(const f32 value){ bary.setDistance(value); }
 
     void setPosition(const Float3U& value){
-        position = Float4(value.x, value.y, value.z, 1.0f);
+        StoreFloat(VectorSetW(LoadFloat(value), 1.0f), &position);
     }
 
     void setNormal(const Float3U& value){
-        normal = Float4(value.x, value.y, value.z, 0.0f);
+        StoreFloat(VectorSetW(LoadFloat(value), 0.0f), &normal);
     }
 };
 static_assert(IsStandardLayout_V<DeformablePosedHit>, "DeformablePosedHit must stay layout-stable");

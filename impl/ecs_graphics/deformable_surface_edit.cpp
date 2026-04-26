@@ -150,14 +150,14 @@ using MorphDeltaLookup = HashMap<
     const DeformableVertexRest& vertex0 = instance.restVertices[triangleIndices[0]];
     const DeformableVertexRest& vertex1 = instance.restVertices[triangleIndices[1]];
     const DeformableVertexRest& vertex2 = instance.restVertices[triangleIndices[2]];
-    SIMDVector tangentVector = VectorScale(VectorSet(vertex0.tangent.x, vertex0.tangent.y, vertex0.tangent.z, 0.0f), bary[0]);
+    SIMDVector tangentVector = VectorScale(VectorSetW(LoadFloat(vertex0.tangent), 0.0f), bary[0]);
     tangentVector = VectorMultiplyAdd(
-        VectorSet(vertex1.tangent.x, vertex1.tangent.y, vertex1.tangent.z, 0.0f),
+        VectorSetW(LoadFloat(vertex1.tangent), 0.0f),
         VectorReplicate(bary[1]),
         tangentVector
     );
     tangentVector = VectorMultiplyAdd(
-        VectorSet(vertex2.tangent.x, vertex2.tangent.y, vertex2.tangent.z, 0.0f),
+        VectorSetW(LoadFloat(vertex2.tangent), 0.0f),
         VectorReplicate(bary[2]),
         tangentVector
     );
@@ -1408,8 +1408,7 @@ template<usize sourceCount>
     DeformableVertexRest wallVertex = vertices[sourceVertex];
     StoreFloat(position, &wallVertex.position);
     StoreFloat(normal, &wallVertex.normal);
-    StoreFloat(tangent, &wallVertex.tangent);
-    wallVertex.tangent.w = DeformableRuntime::TangentHandedness(wallVertex.tangent.w, 1.0f);
+    StoreFloat(VectorSetW(tangent, DeformableRuntime::TangentHandedness(VectorGetW(tangent), 1.0f)), &wallVertex.tangent);
     wallVertex.uv0 = Float2U(uvU, uvV);
     wallVertex.color0 = wallColor;
     if(!DeformableValidation::ValidRestVertexFrame(wallVertex))
@@ -1513,14 +1512,10 @@ bool PreviewHole(
     if(!__hidden_deformable_surface_edit::BuildPreviewFrame(instance, params, frame))
         return false;
 
-    StoreFloat(frame.center, &outPreview.center);
-    StoreFloat(frame.normal, &outPreview.normal);
-    StoreFloat(frame.tangent, &outPreview.tangent);
-    StoreFloat(frame.bitangent, &outPreview.bitangent);
-    outPreview.center.w = 1.0f;
-    outPreview.normal.w = 0.0f;
-    outPreview.tangent.w = 0.0f;
-    outPreview.bitangent.w = 0.0f;
+    StoreFloat(VectorSetW(frame.center, 1.0f), &outPreview.center);
+    StoreFloat(VectorSetW(frame.normal, 0.0f), &outPreview.normal);
+    StoreFloat(VectorSetW(frame.tangent, 0.0f), &outPreview.tangent);
+    StoreFloat(VectorSetW(frame.bitangent, 0.0f), &outPreview.bitangent);
     outPreview.radius = params.radius;
     outPreview.ellipseRatio = params.ellipseRatio;
     outPreview.depth = params.depth;
@@ -1713,8 +1708,7 @@ bool ResolveAccessoryAttachmentTransform(
         DeformableRuntime::FallbackTangent(normal)
     );
 
-    StoreFloat(accessoryPosition, &outTransform.position);
-    outTransform.position.w = 0.0f;
+    StoreFloat(VectorSetW(accessoryPosition, 0.0f), &outTransform.position);
     StoreFloat(
         __hidden_deformable_surface_edit::RotationFromFrame(tangent, normal),
         &outTransform.rotation

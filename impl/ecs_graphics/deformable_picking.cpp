@@ -41,33 +41,29 @@ struct PreparedJointPaletteEntry{
     SIMDMatrix normalTransform;
 };
 
-[[nodiscard]] Float4 LoadVertexNormal(const DeformableVertexRest& vertex){
-    return Float4(vertex.normal.x, vertex.normal.y, vertex.normal.z, 0.0f);
+[[nodiscard]] SIMDVector LoadVertexNormal(const DeformableVertexRest& vertex){
+    return LoadFloat(vertex.normal);
 }
 
-[[nodiscard]] Float4 LoadVertexTangent(const DeformableVertexRest& vertex){
-    return Float4(vertex.tangent.x, vertex.tangent.y, vertex.tangent.z, vertex.tangent.w);
+[[nodiscard]] SIMDVector LoadVertexTangent(const DeformableVertexRest& vertex){
+    return LoadFloat(vertex.tangent);
 }
 
-void StoreVertexFrame(const Float4& normal, const Float4& tangent, DeformableVertexRest& vertex){
-    vertex.normal = Float3U(normal.x, normal.y, normal.z);
-    vertex.tangent = Float4U(tangent.x, tangent.y, tangent.z, tangent.w);
+void StoreVertexFrame(const SIMDVector normal, const SIMDVector tangent, DeformableVertexRest& vertex){
+    StoreFloat(normal, &vertex.normal);
+    StoreFloat(tangent, &vertex.tangent);
 }
 
 void OrthonormalizeVertexFrame(
     DeformableVertexRest& vertex,
-    const Float4& fallbackNormal,
-    const Float4& fallbackTangent,
-    Float4* outNormal = nullptr,
-    Float4* outTangent = nullptr)
+    const SIMDVector fallbackNormal,
+    const SIMDVector fallbackTangent,
+    SIMDVector* outNormal = nullptr,
+    SIMDVector* outTangent = nullptr)
 {
-    Float4 normal = LoadVertexNormal(vertex);
-    Float4 tangent = LoadVertexTangent(vertex);
-    SIMDVector normalVector = LoadFloat(normal);
-    SIMDVector tangentVector = LoadFloat(tangent);
-    DeformableRuntime::OrthonormalizeFrame(normalVector, tangentVector, LoadFloat(fallbackNormal), LoadFloat(fallbackTangent));
-    StoreFloat(normalVector, &normal);
-    StoreFloat(tangentVector, &tangent);
+    SIMDVector normal = LoadVertexNormal(vertex);
+    SIMDVector tangent = LoadVertexTangent(vertex);
+    DeformableRuntime::OrthonormalizeFrame(normal, tangent, fallbackNormal, fallbackTangent);
     StoreVertexFrame(normal, tangent, vertex);
 
     if(outNormal)
@@ -205,7 +201,7 @@ template<typename PreparedJointPaletteVector>
     SIMDVector skinnedTangent = VectorZero();
     const SIMDVector basePosition = LoadFloat(vertex.position);
     const SIMDVector baseNormal = LoadFloat(vertex.normal);
-    const SIMDVector baseTangent = VectorSet(vertex.tangent.x, vertex.tangent.y, vertex.tangent.z, 0.0f);
+    const SIMDVector baseTangent = VectorSetW(LoadFloat(vertex.tangent), 0.0f);
     const usize jointCount = jointPalette.size();
     f32 totalWeight = 0.0f;
 
@@ -246,11 +242,7 @@ template<typename PreparedJointPaletteVector>
 
     StoreFloat(skinnedPosition, &vertex.position);
     StoreFloat(skinnedNormal, &vertex.normal);
-    Float4 skinnedTangentStorage;
-    StoreFloat(skinnedTangent, &skinnedTangentStorage);
-    vertex.tangent.x = skinnedTangentStorage.x;
-    vertex.tangent.y = skinnedTangentStorage.y;
-    vertex.tangent.z = skinnedTangentStorage.z;
+    StoreFloat(VectorSetW(skinnedTangent, vertex.tangent.w), &vertex.tangent);
     return true;
 }
 
@@ -356,7 +348,7 @@ void ApplyScalarTextureNormal(
         return;
 
     SIMDVector normal = LoadFloat(vertex.normal);
-    SIMDVector tangent = VectorSet(vertex.tangent.x, vertex.tangent.y, vertex.tangent.z, 0.0f);
+    SIMDVector tangent = VectorSetW(LoadFloat(vertex.tangent), 0.0f);
     const SIMDVector bitangent = VectorMultiply(
         ResolveFrameBitangent(normal, tangent, VectorSet(0.0f, 1.0f, 0.0f, 0.0f)),
         VectorReplicate(TangentHandedness(vertex.tangent.w, 1.0f))
@@ -370,12 +362,7 @@ void ApplyScalarTextureNormal(
     );
     tangent = ResolveFrameTangent(normal, tangent, tangent);
     StoreFloat(normal, &vertex.normal);
-
-    Float4 tangentStorage;
-    StoreFloat(tangent, &tangentStorage);
-    vertex.tangent.x = tangentStorage.x;
-    vertex.tangent.y = tangentStorage.y;
-    vertex.tangent.z = tangentStorage.z;
+    StoreFloat(VectorSetW(tangent, vertex.tangent.w), &vertex.tangent);
 }
 
 void ApplyDisplacement(
@@ -401,7 +388,7 @@ void ApplyDisplacement(
         }
         else{
             const SIMDVector sampleVector = VectorAdd(
-                VectorSet(sample.x, sample.y, sample.z, 0.0f),
+                VectorSetW(LoadFloat(sample), 0.0f),
                 VectorReplicate(displacement.bias)
             );
             vectorOffset = VectorMultiply(sampleVector, VectorReplicate(displacement.amplitude));
@@ -431,7 +418,7 @@ void ApplyDisplacement(
     SIMDVector worldOffset = vectorOffset;
     if(displacement.mode == DeformableDisplacementMode::VectorTangentTexture){
         const SIMDVector normal = LoadFloat(vertex.normal);
-        const SIMDVector tangent = LoadFloat(vertex.tangent);
+        const SIMDVector tangent = VectorSetW(LoadFloat(vertex.tangent), 0.0f);
         const SIMDVector bitangent = VectorMultiply(
             ResolveFrameBitangent(normal, tangent, VectorSet(0.0f, 1.0f, 0.0f, 0.0f)),
             VectorReplicate(TangentHandedness(vertex.tangent.w, 1.0f))
@@ -464,19 +451,13 @@ void ApplyTransform(const Core::Scene::TransformComponent* transform, Deformable
 
     SIMDVector normalVector = Vector3Rotate(LoadFloat(vertex.normal), rotation);
     normalVector = DeformableRuntime::Normalize(normalVector, VectorSet(0.0f, 0.0f, 1.0f, 0.0f));
-    Float4 normal;
-    StoreFloat(normalVector, &normal);
-    vertex.normal = Float3U(normal.x, normal.y, normal.z);
+    StoreFloat(normalVector, &vertex.normal);
 
     const SIMDVector tangentVector = DeformableRuntime::Normalize(
-        Vector3Rotate(VectorSet(vertex.tangent.x, vertex.tangent.y, vertex.tangent.z, 0.0f), rotation),
+        Vector3Rotate(VectorSetW(LoadFloat(vertex.tangent), 0.0f), rotation),
         DeformableRuntime::FallbackTangent(normalVector)
     );
-    Float4 tangent;
-    StoreFloat(tangentVector, &tangent);
-    vertex.tangent.x = tangent.x;
-    vertex.tangent.y = tangent.y;
-    vertex.tangent.z = tangent.z;
+    StoreFloat(VectorSetW(tangentVector, vertex.tangent.w), &vertex.tangent);
 }
 
 [[nodiscard]] bool IntersectTriangle(
@@ -571,11 +552,11 @@ template<typename VertexVector>
 
     for(usize vertexIndex = 0; vertexIndex < outVertices.size(); ++vertexIndex){
         DeformableVertexRest& vertex = outVertices[vertexIndex];
-        const Float4 restNormal = __hidden_deformable_picking::LoadVertexNormal(vertex);
-        const Float4 restTangent = __hidden_deformable_picking::LoadVertexTangent(vertex);
+        const SIMDVector restNormal = __hidden_deformable_picking::LoadVertexNormal(vertex);
+        const SIMDVector restTangent = __hidden_deformable_picking::LoadVertexTangent(vertex);
 
-        Float4 preSkinNormal;
-        Float4 preSkinTangent;
+        SIMDVector preSkinNormal;
+        SIMDVector preSkinTangent;
         __hidden_deformable_picking::OrthonormalizeVertexFrame(vertex, restNormal, restTangent, &preSkinNormal, &preSkinTangent);
 
         if(!__hidden_deformable_picking::ApplySkin(
@@ -587,8 +568,8 @@ template<typename VertexVector>
             return false;
         __hidden_deformable_picking::OrthonormalizeVertexFrame(vertex, preSkinNormal, preSkinTangent);
 
-        const Float4 preDisplacementNormal = __hidden_deformable_picking::LoadVertexNormal(vertex);
-        const Float4 preDisplacementTangent = __hidden_deformable_picking::LoadVertexTangent(vertex);
+        const SIMDVector preDisplacementNormal = __hidden_deformable_picking::LoadVertexNormal(vertex);
+        const SIMDVector preDisplacementTangent = __hidden_deformable_picking::LoadVertexTangent(vertex);
         __hidden_deformable_picking::ApplyDisplacement(displacement, displacementTexture, vertex);
         __hidden_deformable_picking::OrthonormalizeVertexFrame(vertex, preDisplacementNormal, preDisplacementTangent);
         __hidden_deformable_picking::ApplyTransform(inputs.transform, vertex);
@@ -768,16 +749,8 @@ bool RaycastDeformableRuntimeMesh(
 
         const SIMDVector edge0 = VectorSubtract(bVector, aVector);
         const SIMDVector edge1 = VectorSubtract(cVector, aVector);
-        Float4 normal;
-        StoreFloat(
-            DeformableRuntime::Normalize(Vector3Cross(edge0, edge1), VectorSet(0.0f, 0.0f, 1.0f, 0.0f)),
-            &normal
-        );
-        Float4 position;
-        StoreFloat(
-            VectorMultiplyAdd(rayDirectionVector, VectorReplicate(distance), rayOriginVector),
-            &position
-        );
+        const SIMDVector normal = DeformableRuntime::Normalize(Vector3Cross(edge0, edge1), VectorSet(0.0f, 0.0f, 1.0f, 0.0f));
+        const SIMDVector position = VectorMultiplyAdd(rayDirectionVector, VectorReplicate(distance), rayOriginVector);
 
         closestDistance = distance;
         closestHit.entity = instance.entity;
@@ -788,8 +761,8 @@ bool RaycastDeformableRuntimeMesh(
         closestHit.bary[1] = hitBary[1];
         closestHit.bary[2] = hitBary[2];
         closestHit.setDistance(distance);
-        closestHit.position = Float4(position.x, position.y, position.z, 1.0f);
-        closestHit.normal = Float4(normal.x, normal.y, normal.z, 0.0f);
+        StoreFloat(VectorSetW(position, 1.0f), &closestHit.position);
+        StoreFloat(VectorSetW(normal, 0.0f), &closestHit.normal);
         closestHit.editMaskFlags = ResolveDeformableTriangleEditMask(instance, closestHit.triangle);
         closestHit.restSample = restSample;
         foundHit = true;

@@ -17,7 +17,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_assets{
+namespace __hidden_geometry_asset{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -221,11 +221,11 @@ bool Geometry::loadBinary(const Core::Assets::AssetBytes& binary){
         return false;
     }
 
-    if(magic != __hidden_assets::s_GeometryMagic){
+    if(magic != __hidden_geometry_asset::s_GeometryMagic){
         NWB_LOGGER_ERROR(NWB_TEXT("Geometry::loadBinary failed: invalid magic"));
         return false;
     }
-    if(version != __hidden_assets::s_GeometryVersion){
+    if(version != __hidden_geometry_asset::s_GeometryVersion){
         NWB_LOGGER_ERROR(NWB_TEXT("Geometry::loadBinary failed: unsupported version {}"), version);
         return false;
     }
@@ -242,9 +242,9 @@ bool Geometry::loadBinary(const Core::Assets::AssetBytes& binary){
         return false;
     }
 
-    if(!__hidden_assets::ReadVectorPayload(binary, cursor, vertexCount, m_vertices, NWB_TEXT("vertices")))
+    if(!__hidden_geometry_asset::ReadVectorPayload(binary, cursor, vertexCount, m_vertices, NWB_TEXT("vertices")))
         return false;
-    if(!__hidden_assets::ReadVectorPayload(binary, cursor, indexCount, m_indices, NWB_TEXT("indices")))
+    if(!__hidden_geometry_asset::ReadVectorPayload(binary, cursor, indexCount, m_indices, NWB_TEXT("indices")))
         return false;
 
     if(cursor != binary.size()){
@@ -289,23 +289,23 @@ bool GeometryAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
     if(!geometry.validatePayload())
         return false;
 
-    usize reserveBytes = __hidden_assets::s_GeometryHeaderBytes;
-    const bool canReserve = __hidden_assets::AddVectorReserveBytes(reserveBytes, geometry.vertices())
-        && __hidden_assets::AddVectorReserveBytes(reserveBytes, geometry.indices())
+    usize reserveBytes = __hidden_geometry_asset::s_GeometryHeaderBytes;
+    const bool canReserve = __hidden_geometry_asset::AddVectorReserveBytes(reserveBytes, geometry.vertices())
+        && __hidden_geometry_asset::AddVectorReserveBytes(reserveBytes, geometry.indices())
     ;
 
     outBinary.clear();
     if(canReserve)
         outBinary.reserve(reserveBytes);
 
-    AppendPOD(outBinary, __hidden_assets::s_GeometryMagic);
-    AppendPOD(outBinary, __hidden_assets::s_GeometryVersion);
+    AppendPOD(outBinary, __hidden_geometry_asset::s_GeometryMagic);
+    AppendPOD(outBinary, __hidden_geometry_asset::s_GeometryVersion);
     AppendPOD(outBinary, static_cast<u64>(geometry.vertices().size()));
     AppendPOD(outBinary, static_cast<u64>(geometry.indices().size()));
-    if(!__hidden_assets::AppendVectorPayload(outBinary, geometry.vertices(), NWB_TEXT("vertices")))
+    if(!__hidden_geometry_asset::AppendVectorPayload(outBinary, geometry.vertices(), NWB_TEXT("vertices")))
         return false;
 
-    return __hidden_assets::AppendVectorPayload(outBinary, geometry.indices(), NWB_TEXT("indices"));
+    return __hidden_geometry_asset::AppendVectorPayload(outBinary, geometry.indices(), NWB_TEXT("indices"));
 }
 
 

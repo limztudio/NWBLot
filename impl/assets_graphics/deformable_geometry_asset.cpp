@@ -19,7 +19,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_assets{
+namespace __hidden_deformable_geometry_asset{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -268,11 +268,11 @@ bool DeformableDisplacementTexture::loadBinary(const Core::Assets::AssetBytes& b
         return false;
     }
 
-    if(magic != __hidden_assets::s_DeformableDisplacementTextureMagic){
+    if(magic != __hidden_deformable_geometry_asset::s_DeformableDisplacementTextureMagic){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableDisplacementTexture::loadBinary failed: invalid magic"));
         return false;
     }
-    if(version != __hidden_assets::s_DeformableDisplacementTextureVersion){
+    if(version != __hidden_deformable_geometry_asset::s_DeformableDisplacementTextureVersion){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableDisplacementTexture::loadBinary failed: unsupported version {}"), version);
         return false;
     }
@@ -287,7 +287,7 @@ bool DeformableDisplacementTexture::loadBinary(const Core::Assets::AssetBytes& b
 
     m_width = width;
     m_height = height;
-    if(!__hidden_assets::ReadVectorPayload(binary, cursor, texelCount, m_texels, NWB_TEXT("texels")))
+    if(!__hidden_deformable_geometry_asset::ReadVectorPayload(binary, cursor, texelCount, m_texels, NWB_TEXT("texels")))
         return false;
     if(cursor != binary.size()){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableDisplacementTexture::loadBinary failed: trailing bytes detected"));
@@ -549,11 +549,11 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
         return false;
     }
 
-    if(magic != __hidden_assets::s_DeformableGeometryMagic){
+    if(magic != __hidden_deformable_geometry_asset::s_DeformableGeometryMagic){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: invalid magic"));
         return false;
     }
-    if(version != __hidden_assets::s_DeformableGeometryVersion){
+    if(version != __hidden_deformable_geometry_asset::s_DeformableGeometryVersion){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: unsupported version {}"), version);
         return false;
     }
@@ -598,16 +598,16 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
         return false;
     }
 
-    if(!__hidden_assets::ReadVectorPayload(binary, cursor, vertexCount, m_restVertices, NWB_TEXT("rest vertices")))
+    if(!__hidden_deformable_geometry_asset::ReadVectorPayload(binary, cursor, vertexCount, m_restVertices, NWB_TEXT("rest vertices")))
         return false;
-    if(!__hidden_assets::ReadVectorPayload(binary, cursor, indexCount, m_indices, NWB_TEXT("indices")))
+    if(!__hidden_deformable_geometry_asset::ReadVectorPayload(binary, cursor, indexCount, m_indices, NWB_TEXT("indices")))
         return false;
-    if(!__hidden_assets::ReadVectorPayload(binary, cursor, skinCount, m_skin, NWB_TEXT("skin")))
+    if(!__hidden_deformable_geometry_asset::ReadVectorPayload(binary, cursor, skinCount, m_skin, NWB_TEXT("skin")))
         return false;
     m_skeletonJointCount = static_cast<u32>(skeletonJointCount);
-    if(!__hidden_assets::ReadVectorPayload(binary, cursor, sourceSampleCount, m_sourceSamples, NWB_TEXT("source samples")))
+    if(!__hidden_deformable_geometry_asset::ReadVectorPayload(binary, cursor, sourceSampleCount, m_sourceSamples, NWB_TEXT("source samples")))
         return false;
-    if(!__hidden_assets::ReadVectorPayload(binary, cursor, editMaskCount, m_editMaskPerTriangle, NWB_TEXT("edit masks")))
+    if(!__hidden_deformable_geometry_asset::ReadVectorPayload(binary, cursor, editMaskCount, m_editMaskPerTriangle, NWB_TEXT("edit masks")))
         return false;
 
     if(morphCount > static_cast<u64>(Limit<usize>::s_Max)){
@@ -637,16 +637,16 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
 
         DeformableMorph morph;
         morph.name = Name(morphNameHash);
-        if(!__hidden_assets::ReadVectorPayload(binary, cursor, deltaCount, morph.deltas, NWB_TEXT("morph deltas")))
+        if(!__hidden_deformable_geometry_asset::ReadVectorPayload(binary, cursor, deltaCount, morph.deltas, NWB_TEXT("morph deltas")))
             return false;
         m_morphs.push_back(Move(morph));
     }
-    __hidden_assets::DeformableDisplacementBinaryV3 displacementBinary;
+    __hidden_deformable_geometry_asset::DeformableDisplacementBinaryV3 displacementBinary;
     if(!ReadPOD(binary, cursor, displacementBinary)){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: malformed displacement descriptor"));
         return false;
     }
-    m_displacement = __hidden_assets::BuildDisplacement(displacementBinary);
+    m_displacement = __hidden_deformable_geometry_asset::BuildDisplacement(displacementBinary);
 
     if(cursor != binary.size()){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: trailing bytes detected"));
@@ -706,29 +706,29 @@ bool DeformableGeometryAssetCodec::serialize(const Core::Assets::IAsset& asset, 
     if(!geometry.validatePayload())
         return false;
 
-    usize reserveBytes = __hidden_assets::s_DeformableGeometryHeaderBytes;
-    bool canReserve = __hidden_assets::AddVectorReserveBytes(reserveBytes, geometry.restVertices())
-        && __hidden_assets::AddVectorReserveBytes(reserveBytes, geometry.indices())
-        && __hidden_assets::AddVectorReserveBytes(reserveBytes, geometry.skin())
-        && __hidden_assets::AddVectorReserveBytes(reserveBytes, geometry.sourceSamples())
-        && __hidden_assets::AddVectorReserveBytes(reserveBytes, geometry.editMaskPerTriangle())
+    usize reserveBytes = __hidden_deformable_geometry_asset::s_DeformableGeometryHeaderBytes;
+    bool canReserve = __hidden_deformable_geometry_asset::AddVectorReserveBytes(reserveBytes, geometry.restVertices())
+        && __hidden_deformable_geometry_asset::AddVectorReserveBytes(reserveBytes, geometry.indices())
+        && __hidden_deformable_geometry_asset::AddVectorReserveBytes(reserveBytes, geometry.skin())
+        && __hidden_deformable_geometry_asset::AddVectorReserveBytes(reserveBytes, geometry.sourceSamples())
+        && __hidden_deformable_geometry_asset::AddVectorReserveBytes(reserveBytes, geometry.editMaskPerTriangle())
     ;
     for(const DeformableMorph& morph : geometry.morphs()){
         canReserve = canReserve
-            && __hidden_assets::AddReserveBytes(reserveBytes, __hidden_assets::s_DeformableMorphHeaderBytes)
-            && __hidden_assets::AddVectorReserveBytes(reserveBytes, morph.deltas)
+            && __hidden_deformable_geometry_asset::AddReserveBytes(reserveBytes, __hidden_deformable_geometry_asset::s_DeformableMorphHeaderBytes)
+            && __hidden_deformable_geometry_asset::AddVectorReserveBytes(reserveBytes, morph.deltas)
         ;
     }
     canReserve = canReserve
-        && __hidden_assets::AddReserveBytes(reserveBytes, sizeof(__hidden_assets::DeformableDisplacementBinaryV3))
+        && __hidden_deformable_geometry_asset::AddReserveBytes(reserveBytes, sizeof(__hidden_deformable_geometry_asset::DeformableDisplacementBinaryV3))
     ;
 
     outBinary.clear();
     if(canReserve)
         outBinary.reserve(reserveBytes);
 
-    AppendPOD(outBinary, __hidden_assets::s_DeformableGeometryMagic);
-    AppendPOD(outBinary, __hidden_assets::s_DeformableGeometryVersion);
+    AppendPOD(outBinary, __hidden_deformable_geometry_asset::s_DeformableGeometryMagic);
+    AppendPOD(outBinary, __hidden_deformable_geometry_asset::s_DeformableGeometryVersion);
     AppendPOD(outBinary, static_cast<u64>(geometry.restVertices().size()));
     AppendPOD(outBinary, static_cast<u64>(geometry.indices().size()));
     AppendPOD(outBinary, static_cast<u64>(geometry.skin().size()));
@@ -737,24 +737,24 @@ bool DeformableGeometryAssetCodec::serialize(const Core::Assets::IAsset& asset, 
     AppendPOD(outBinary, static_cast<u64>(geometry.editMaskPerTriangle().size()));
     AppendPOD(outBinary, static_cast<u64>(geometry.morphs().size()));
 
-    if(!__hidden_assets::AppendVectorPayload(outBinary, geometry.restVertices(), NWB_TEXT("rest vertices")))
+    if(!__hidden_deformable_geometry_asset::AppendVectorPayload(outBinary, geometry.restVertices(), NWB_TEXT("rest vertices")))
         return false;
-    if(!__hidden_assets::AppendVectorPayload(outBinary, geometry.indices(), NWB_TEXT("indices")))
+    if(!__hidden_deformable_geometry_asset::AppendVectorPayload(outBinary, geometry.indices(), NWB_TEXT("indices")))
         return false;
-    if(!__hidden_assets::AppendVectorPayload(outBinary, geometry.skin(), NWB_TEXT("skin")))
+    if(!__hidden_deformable_geometry_asset::AppendVectorPayload(outBinary, geometry.skin(), NWB_TEXT("skin")))
         return false;
-    if(!__hidden_assets::AppendVectorPayload(outBinary, geometry.sourceSamples(), NWB_TEXT("source samples")))
+    if(!__hidden_deformable_geometry_asset::AppendVectorPayload(outBinary, geometry.sourceSamples(), NWB_TEXT("source samples")))
         return false;
-    if(!__hidden_assets::AppendVectorPayload(outBinary, geometry.editMaskPerTriangle(), NWB_TEXT("edit masks")))
+    if(!__hidden_deformable_geometry_asset::AppendVectorPayload(outBinary, geometry.editMaskPerTriangle(), NWB_TEXT("edit masks")))
         return false;
 
     for(const DeformableMorph& morph : geometry.morphs()){
         AppendPOD(outBinary, morph.name.hash());
         AppendPOD(outBinary, static_cast<u64>(morph.deltas.size()));
-        if(!__hidden_assets::AppendVectorPayload(outBinary, morph.deltas, NWB_TEXT("morph deltas")))
+        if(!__hidden_deformable_geometry_asset::AppendVectorPayload(outBinary, morph.deltas, NWB_TEXT("morph deltas")))
             return false;
     }
-    AppendPOD(outBinary, __hidden_assets::BuildDisplacementBinary(geometry.displacement()));
+    AppendPOD(outBinary, __hidden_deformable_geometry_asset::BuildDisplacementBinary(geometry.displacement()));
 
     return true;
 }
@@ -777,19 +777,19 @@ bool DeformableDisplacementTextureAssetCodec::serialize(
         return false;
 
     usize reserveBytes = sizeof(u32) + sizeof(u32) + sizeof(u32) + sizeof(u32) + sizeof(u64);
-    if(!__hidden_assets::AddVectorReserveBytes(reserveBytes, texture.texels())){
+    if(!__hidden_deformable_geometry_asset::AddVectorReserveBytes(reserveBytes, texture.texels())){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableDisplacementTextureAssetCodec::serialize failed: payload size overflows"));
         return false;
     }
 
     outBinary.clear();
     outBinary.reserve(reserveBytes);
-    AppendPOD(outBinary, __hidden_assets::s_DeformableDisplacementTextureMagic);
-    AppendPOD(outBinary, __hidden_assets::s_DeformableDisplacementTextureVersion);
+    AppendPOD(outBinary, __hidden_deformable_geometry_asset::s_DeformableDisplacementTextureMagic);
+    AppendPOD(outBinary, __hidden_deformable_geometry_asset::s_DeformableDisplacementTextureVersion);
     AppendPOD(outBinary, texture.width());
     AppendPOD(outBinary, texture.height());
     AppendPOD(outBinary, static_cast<u64>(texture.texels().size()));
-    return __hidden_assets::AppendVectorPayload(outBinary, texture.texels(), NWB_TEXT("texels"));
+    return __hidden_deformable_geometry_asset::AppendVectorPayload(outBinary, texture.texels(), NWB_TEXT("texels"));
 }
 
 

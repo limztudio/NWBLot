@@ -18,7 +18,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_assets{
+namespace __hidden_material_asset{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -86,7 +86,7 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: missing magic"));
         return false;
     }
-    if(magic != __hidden_assets::s_MaterialMagic){
+    if(magic != __hidden_material_asset::s_MaterialMagic){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: invalid magic"));
         return false;
     }
@@ -96,7 +96,7 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: missing version"));
         return false;
     }
-    if(version != __hidden_assets::s_MaterialVersion){
+    if(version != __hidden_material_asset::s_MaterialVersion){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: unsupported version {}"), version);
         return false;
     }
@@ -244,15 +244,15 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
         sizeof(u32) + // magic
         sizeof(u32)   // version
     ;
-    bool canReserve = __hidden_assets::AddStringReserveBytes(reserveBytes, AStringView(material.shaderVariant()))
-        && __hidden_assets::AddReserveBytes(reserveBytes, sizeof(u32))
-        && __hidden_assets::AddRepeatedReserveBytes(reserveBytes, material.stageShaders().size(), sizeof(NameHash) * 2u)
-        && __hidden_assets::AddReserveBytes(reserveBytes, sizeof(u32))
+    bool canReserve = __hidden_material_asset::AddStringReserveBytes(reserveBytes, AStringView(material.shaderVariant()))
+        && __hidden_material_asset::AddReserveBytes(reserveBytes, sizeof(u32))
+        && __hidden_material_asset::AddRepeatedReserveBytes(reserveBytes, material.stageShaders().size(), sizeof(NameHash) * 2u)
+        && __hidden_material_asset::AddReserveBytes(reserveBytes, sizeof(u32))
     ;
     for(const auto& [key, value] : material.parameters()){
         canReserve = canReserve
-            && __hidden_assets::AddStringReserveBytes(reserveBytes, key.view())
-            && __hidden_assets::AddStringReserveBytes(reserveBytes, value.view())
+            && __hidden_material_asset::AddStringReserveBytes(reserveBytes, key.view())
+            && __hidden_material_asset::AddStringReserveBytes(reserveBytes, value.view())
         ;
     }
 
@@ -260,8 +260,8 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
     if(canReserve)
         outBinary.reserve(reserveBytes);
 
-    AppendPOD(outBinary, __hidden_assets::s_MaterialMagic);
-    AppendPOD(outBinary, __hidden_assets::s_MaterialVersion);
+    AppendPOD(outBinary, __hidden_material_asset::s_MaterialMagic);
+    AppendPOD(outBinary, __hidden_material_asset::s_MaterialVersion);
     if(!AppendString(outBinary, AStringView(material.shaderVariant()))){
         NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: shader variant is too long"));
         return false;

@@ -38,7 +38,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_assets{
+namespace __hidden_graphics_asset_cooker{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -3036,17 +3036,17 @@ bool GraphicsAssetCooker::cookGraphicsAssets(const GraphicsCookEnvironment& envi
 
     Core::ShaderCook shaderCook(m_arena);
 
-    __hidden_assets::ResolvedCookPaths resolvedPaths;
-    if(!__hidden_assets::ResolveCookPaths(environment, resolvedPaths))
+    __hidden_graphics_asset_cooker::ResolvedCookPaths resolvedPaths;
+    if(!__hidden_graphics_asset_cooker::ResolveCookPaths(environment, resolvedPaths))
         return false;
 
     // discover .nwb files from asset roots
-    Vector<__hidden_assets::DiscoveredNwbFile> nwbFiles;
-    if(!__hidden_assets::DiscoverNwbFiles(resolvedPaths.assetRoots, nwbFiles))
+    Vector<__hidden_graphics_asset_cooker::DiscoveredNwbFile> nwbFiles;
+    if(!__hidden_graphics_asset_cooker::DiscoverNwbFiles(resolvedPaths.assetRoots, nwbFiles))
         return false;
 
-    __hidden_assets::ParsedAssetMetadata parsedMetadata(m_arena);
-    if(!__hidden_assets::ParseAssetMetadata(m_arena, shaderCook, nwbFiles, parsedMetadata))
+    __hidden_graphics_asset_cooker::ParsedAssetMetadata parsedMetadata(m_arena);
+    if(!__hidden_graphics_asset_cooker::ParseAssetMetadata(m_arena, shaderCook, nwbFiles, parsedMetadata))
         return false;
 
     AString normalizedConfiguration = CanonicalizeText(environment.configuration.view());
@@ -3054,8 +3054,8 @@ bool GraphicsAssetCooker::cookGraphicsAssets(const GraphicsCookEnvironment& envi
         normalizedConfiguration = "default";
     const AString configurationSafeName = BuildSafeCacheName(normalizedConfiguration);
 
-    __hidden_assets::PreparedShaderPlan preparedPlan(m_arena);
-    if(!__hidden_assets::PrepareShaderEntriesForCook(
+    __hidden_graphics_asset_cooker::PreparedShaderPlan preparedPlan(m_arena);
+    if(!__hidden_graphics_asset_cooker::PrepareShaderEntriesForCook(
         m_arena,
         shaderCook,
         resolvedPaths,
@@ -3065,47 +3065,47 @@ bool GraphicsAssetCooker::cookGraphicsAssets(const GraphicsCookEnvironment& envi
     )){
         return false;
     }
-    if(!__hidden_assets::AddPlannedFileCount(static_cast<u64>(parsedMetadata.materialEntries.size()), preparedPlan.plannedFileCount))
+    if(!__hidden_graphics_asset_cooker::AddPlannedFileCount(static_cast<u64>(parsedMetadata.materialEntries.size()), preparedPlan.plannedFileCount))
         return false;
-    if(!__hidden_assets::AddPlannedFileCount(static_cast<u64>(parsedMetadata.geometryEntries.size()), preparedPlan.plannedFileCount))
+    if(!__hidden_graphics_asset_cooker::AddPlannedFileCount(static_cast<u64>(parsedMetadata.geometryEntries.size()), preparedPlan.plannedFileCount))
         return false;
-    if(!__hidden_assets::AddPlannedFileCount(
+    if(!__hidden_graphics_asset_cooker::AddPlannedFileCount(
         static_cast<u64>(parsedMetadata.deformableGeometryEntries.size()),
         preparedPlan.plannedFileCount
     ))
         return false;
-    if(!__hidden_assets::AddPlannedFileCount(
+    if(!__hidden_graphics_asset_cooker::AddPlannedFileCount(
         static_cast<u64>(parsedMetadata.deformableDisplacementTextureEntries.size()),
         preparedPlan.plannedFileCount
     ))
         return false;
 
-    if(!__hidden_assets::ValidateAndNormalizeMaterials(shaderCook, preparedPlan.preparedEntries, parsedMetadata.materialEntries))
+    if(!__hidden_graphics_asset_cooker::ValidateAndNormalizeMaterials(shaderCook, preparedPlan.preparedEntries, parsedMetadata.materialEntries))
         return false;
 
     Vector<Core::ShaderArchive::Record> shaderIndexRecords;
-    if(!__hidden_assets::ReserveShaderIndexRecords(preparedPlan.plannedFileCount, shaderIndexRecords))
+    if(!__hidden_graphics_asset_cooker::ReserveShaderIndexRecords(preparedPlan.plannedFileCount, shaderIndexRecords))
         return false;
 
-    __hidden_assets::VirtualPathHashSet seenVirtualPathHashes{Core::ShaderCook::CookAllocator<NameHash>(m_arena)};
+    __hidden_graphics_asset_cooker::VirtualPathHashSet seenVirtualPathHashes{Core::ShaderCook::CookAllocator<NameHash>(m_arena)};
     if(preparedPlan.plannedFileCount <= static_cast<u64>(Limit<usize>::s_Max))
         seenVirtualPathHashes.reserve(static_cast<usize>(preparedPlan.plannedFileCount));
     const Name& shaderIndexVirtualPath = Core::ShaderArchive::IndexVirtualPathName();
     seenVirtualPathHashes.insert(shaderIndexVirtualPath.hash());
 
     Core::Filesystem::VolumeBuildConfig volumeConfig;
-    if(!__hidden_assets::ConfigureVolumeSizing(preparedPlan.plannedFileCount, volumeConfig))
+    if(!__hidden_graphics_asset_cooker::ConfigureVolumeSizing(preparedPlan.plannedFileCount, volumeConfig))
         return false;
 
-    const __hidden_assets::StagedVolumePaths stagedVolumePaths = __hidden_assets::BuildStagedVolumePaths(
+    const __hidden_graphics_asset_cooker::StagedVolumePaths stagedVolumePaths = __hidden_graphics_asset_cooker::BuildStagedVolumePaths(
         resolvedPaths.outputDirectory,
         volumeConfig.volumeName,
         configurationSafeName
     );
-    if(!Core::Filesystem::EnsureEmptyStagedDirectory(stagedVolumePaths.stageDirectory, __hidden_assets::s_CookerLogPrefix, "stage directory"))
+    if(!Core::Filesystem::EnsureEmptyStagedDirectory(stagedVolumePaths.stageDirectory, __hidden_graphics_asset_cooker::s_CookerLogPrefix, "stage directory"))
         return false;
-    Core::Filesystem::StagedDirectoryCleanupGuard stageDirectoryCleanup(stagedVolumePaths.stageDirectory, __hidden_assets::s_CookerLogPrefix);
-    if(!Core::Filesystem::RemoveStagedDirectoryIfPresent(stagedVolumePaths.backupDirectory, __hidden_assets::s_CookerLogPrefix, "backup directory"))
+    Core::Filesystem::StagedDirectoryCleanupGuard stageDirectoryCleanup(stagedVolumePaths.stageDirectory, __hidden_graphics_asset_cooker::s_CookerLogPrefix);
+    if(!Core::Filesystem::RemoveStagedDirectoryIfPresent(stagedVolumePaths.backupDirectory, __hidden_graphics_asset_cooker::s_CookerLogPrefix, "backup directory"))
         return false;
 
     u64 stagedFileCount = 0;
@@ -3117,7 +3117,7 @@ bool GraphicsAssetCooker::cookGraphicsAssets(const GraphicsCookEnvironment& envi
             return false;
         }
 
-        if(!__hidden_assets::AppendPreparedShadersToVolume(
+        if(!__hidden_graphics_asset_cooker::AppendPreparedShadersToVolume(
             m_arena,
             shaderCook,
             resolvedPaths.cacheDirectory,
@@ -3140,17 +3140,17 @@ bool GraphicsAssetCooker::cookGraphicsAssets(const GraphicsCookEnvironment& envi
             return false;
         }
 
-        if(!__hidden_assets::AppendMaterialAssetsToVolume(parsedMetadata.materialEntries, volumeSession, seenVirtualPathHashes))
+        if(!__hidden_graphics_asset_cooker::AppendMaterialAssetsToVolume(parsedMetadata.materialEntries, volumeSession, seenVirtualPathHashes))
             return false;
-        if(!__hidden_assets::AppendGeometryAssetsToVolume(parsedMetadata.geometryEntries, volumeSession, seenVirtualPathHashes))
+        if(!__hidden_graphics_asset_cooker::AppendGeometryAssetsToVolume(parsedMetadata.geometryEntries, volumeSession, seenVirtualPathHashes))
             return false;
-        if(!__hidden_assets::AppendDeformableGeometryAssetsToVolume(
+        if(!__hidden_graphics_asset_cooker::AppendDeformableGeometryAssetsToVolume(
             parsedMetadata.deformableGeometryEntries,
             volumeSession,
             seenVirtualPathHashes
         ))
             return false;
-        if(!__hidden_assets::AppendDeformableDisplacementTexturesToVolume(
+        if(!__hidden_graphics_asset_cooker::AppendDeformableDisplacementTexturesToVolume(
             parsedMetadata.deformableDisplacementTextureEntries,
             volumeSession,
             seenVirtualPathHashes
@@ -3170,7 +3170,7 @@ bool GraphicsAssetCooker::cookGraphicsAssets(const GraphicsCookEnvironment& envi
         return false;
     stageDirectoryCleanup.dismiss();
 
-    if(!outResult.volumeName.assign(__hidden_assets::s_VolumeName)){
+    if(!outResult.volumeName.assign(__hidden_graphics_asset_cooker::s_VolumeName)){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: volume name exceeds CompactString capacity"));
         return false;
     }

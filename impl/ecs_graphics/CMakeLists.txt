@@ -16,3 +16,4 @@ target_sources(nwb_ecs_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/renderer_system.h"
 )
 target_link_libraries(nwb_ecs_graphics PUBLIC nwb_ecs nwb_scene nwb_graphics nwb_assets_graphics)
+target_link_libraries(nwb_ecs_graphics PRIVATE nwb_geometry)

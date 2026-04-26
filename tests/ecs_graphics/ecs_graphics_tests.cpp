@@ -1480,6 +1480,19 @@ static void TestRestSpaceHoleEditCreatesPerInstancePatch(TestContext& context){
         NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(rimVertex.position.z, innerVertex.position.z + params.depth));
     }
 
+    const NWB::Impl::DeformableVertexRest& rebuiltRimVertex = instance.restVertices[5u];
+    const f32 rebuiltRimNormalPlanarLengthSq =
+        (rebuiltRimVertex.normal.x * rebuiltRimVertex.normal.x)
+        + (rebuiltRimVertex.normal.y * rebuiltRimVertex.normal.y)
+    ;
+    const f32 rebuiltRimFrameDot = VectorGetX(
+        Vector3Dot(LoadFloat(rebuiltRimVertex.normal), LoadFloat(rebuiltRimVertex.tangent))
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, rebuiltRimNormalPlanarLengthSq > 0.000001f);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, rebuiltRimVertex.normal.z > 0.0f && rebuiltRimVertex.normal.z < 1.0f);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, Abs(rebuiltRimFrameDot) <= 0.001f);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, Abs(Abs(rebuiltRimVertex.tangent.w) - 1.0f) <= 0.001f);
+
     f32 rimDeltaZ = 0.0f;
     f32 innerDeltaZ = 0.0f;
     NWB_ECS_GRAPHICS_TEST_CHECK(

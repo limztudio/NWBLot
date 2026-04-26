@@ -10,6 +10,7 @@
 #include <core/assets/asset_manager.h>
 #include <core/ecs/entity.h>
 #include <core/ecs/world.h>
+#include <core/geometry/tangent_frame_rebuild.h>
 #include <impl/assets_graphics/deformable_geometry_validation.h>
 #include <impl/assets_graphics/geometry_asset.h>
 #include <impl/assets_graphics/material_asset.h>
@@ -1632,6 +1633,34 @@ template<usize sourceCount>
     return true;
 }
 
+[[nodiscard]] bool RebuildRuntimeMeshTangentFrames(
+    Vector<DeformableVertexRest>& vertices,
+    const Vector<u32>& indices)
+{
+    Vector<Core::Geometry::TangentFrameRebuildVertex> rebuildVertices;
+    rebuildVertices.reserve(vertices.size());
+    for(const DeformableVertexRest& vertex : vertices){
+        Core::Geometry::TangentFrameRebuildVertex rebuildVertex;
+        rebuildVertex.position = vertex.position;
+        rebuildVertex.uv0 = vertex.uv0;
+        rebuildVertex.normal = vertex.normal;
+        rebuildVertex.tangent = vertex.tangent;
+        rebuildVertices.push_back(rebuildVertex);
+    }
+
+    if(!Core::Geometry::RebuildTangentFrames(rebuildVertices, indices))
+        return false;
+
+    for(usize vertexIndex = 0u; vertexIndex < vertices.size(); ++vertexIndex){
+        DeformableVertexRest& vertex = vertices[vertexIndex];
+        vertex.normal = rebuildVertices[vertexIndex].normal;
+        vertex.tangent = rebuildVertices[vertexIndex].tangent;
+        if(!DeformableValidation::ValidRestVertexFrame(vertex))
+            return false;
+    }
+    return true;
+}
+
 [[nodiscard]] bool TriangleInsideFootprint(
     const DeformableRuntimeMeshInstance& instance,
     const HoleFrame& frame,
@@ -2222,16 +2251,15 @@ namespace __hidden_deformable_surface_edit{
     if(reservedVertexCount > static_cast<usize>(Limit<u32>::s_Max))
         return false;
 
-    Vector<DeformableVertexRest> newRestVertices;
+    Vector<DeformableVertexRest> newRestVertices = instance.restVertices;
     Vector<SkinInfluence4> newSkin;
     Vector<SourceSample> newSourceSamples;
     Vector<DeformableMorph> newMorphs;
+    newRestVertices.reserve(reservedVertexCount);
     if(addWall){
-        newRestVertices = instance.restVertices;
         newSkin = instance.skin;
         newSourceSamples = instance.sourceSamples;
         newMorphs = instance.morphs;
-        newRestVertices.reserve(reservedVertexCount);
         if(!newSkin.empty())
             newSkin.reserve(reservedVertexCount);
         if(!newSourceSamples.empty())
@@ -2389,8 +2417,11 @@ namespace __hidden_deformable_surface_edit{
         }
     }
 
+    if(!RebuildRuntimeMeshTangentFrames(newRestVertices, newIndices))
+        return false;
+
     if(!DeformableValidation::ValidRuntimePayloadArrays(
-            addWall ? newRestVertices : instance.restVertices,
+            newRestVertices,
             newIndices,
             newSourceTriangleCount,
             addWall ? newSkin : instance.skin,
@@ -2400,8 +2431,8 @@ namespace __hidden_deformable_surface_edit{
     )
         return false;
 
+    instance.restVertices = Move(newRestVertices);
     if(addWall){
-        instance.restVertices = Move(newRestVertices);
         instance.skin = Move(newSkin);
         instance.sourceSamples = Move(newSourceSamples);
         instance.morphs = Move(newMorphs);

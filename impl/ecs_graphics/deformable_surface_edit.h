@@ -36,6 +36,7 @@ struct DeformableHoleEditResult{
     u32 firstWallVertex = Limit<u32>::s_Max;
     // Number of newly-added inner wall-loop vertices.
     u32 wallVertexCount = 0;
+    u32 wallLoopCutCount = 0;
 };
 
 struct DeformableSurfaceEditSession{
@@ -81,6 +82,7 @@ struct DeformableSurfaceHoleEditRecord{
     f32 radius = 0.0f;
     f32 ellipseRatio = 1.0f;
     f32 depth = 0.0f;
+    u32 wallLoopCutCount = 0;
 };
 static_assert(IsStandardLayout_V<DeformableSurfaceHoleEditRecord>, "DeformableSurfaceHoleEditRecord must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<DeformableSurfaceHoleEditRecord>, "DeformableSurfaceHoleEditRecord must stay binary-serializable");
@@ -172,6 +174,13 @@ struct DeformableSurfaceEditPatchResult{
     f32 newRadius = 0.0f;
     f32 newEllipseRatio = 1.0f;
     f32 newDepth = 0.0f;
+    DeformableSurfaceEditReplayResult replay;
+};
+
+struct DeformableSurfaceEditLoopCutResult{
+    DeformableSurfaceEditId loopCutEditId = 0;
+    u32 oldLoopCutCount = 0;
+    u32 newLoopCutCount = 0;
     DeformableSurfaceEditReplayResult replay;
 };
 
@@ -275,6 +284,13 @@ struct DeformableSurfaceEditReplayContext{
     f32 ellipseRatio,
     f32 depth,
     DeformableSurfaceEditPatchResult* outResult = nullptr
+);
+[[nodiscard]] bool AddSurfaceEditLoopCut(
+    DeformableRuntimeMeshInstance& instance,
+    const DeformableRuntimeMeshInstance& cleanBaseInstance,
+    DeformableSurfaceEditState& state,
+    DeformableSurfaceEditId editId,
+    DeformableSurfaceEditLoopCutResult* outResult = nullptr
 );
 [[nodiscard]] bool CommitDeformableRestSpaceHole(
     DeformableRuntimeMeshInstance& instance,

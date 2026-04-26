@@ -40,6 +40,7 @@ static constexpr u32 s_SurfaceEditStateMagic = 0x53454631u; // SEF1
 static constexpr u32 s_SurfaceEditStateVersionV4 = 4u;
 static constexpr u32 s_SurfaceEditStateVersion = s_SurfaceEditStateVersionV4;
 static constexpr u32 s_MinWallLoopVertexCount = 3u;
+static constexpr u32 s_MaxWallLoopCutCount = 8u;
 
 struct HoleFrame{
     SIMDVector center = VectorZero();
@@ -430,6 +431,10 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
     return ValidWallVertexSpan(firstVertex, vertexCount);
 }
 
+[[nodiscard]] bool ValidWallLoopCutCount(const u32 count){
+    return count <= s_MaxWallLoopCutCount;
+}
+
 [[nodiscard]] bool ValidSurfaceEditId(const DeformableSurfaceEditId editId){
     return editId != 0u && editId != Limit<DeformableSurfaceEditId>::s_Max;
 }
@@ -437,15 +442,25 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
 [[nodiscard]] bool ValidHoleEditResult(const DeformableHoleEditResult& result, const bool requireWall){
     if(result.editRevision == 0u || result.removedTriangleCount == 0u)
         return false;
+    if(!ValidWallLoopCutCount(result.wallLoopCutCount))
+        return false;
     if(!ValidOptionalWallVertexSpan(result.firstWallVertex, result.wallVertexCount))
         return false;
     if(result.wallVertexCount == 0u)
-        return !requireWall && result.addedTriangleCount == 0u;
-    if(result.wallVertexCount > result.addedVertexCount)
+        return !requireWall
+            && result.addedVertexCount == 0u
+            && result.addedTriangleCount == 0u
+            && result.wallLoopCutCount == 0u
+        ;
+    const u32 wallBandCount = result.wallLoopCutCount + 1u;
+    if(result.wallVertexCount > Limit<u32>::s_Max / wallBandCount)
         return false;
-    if(result.wallVertexCount > Limit<u32>::s_Max / 2u)
+    const u32 expectedAddedVertexCount = result.wallVertexCount * wallBandCount;
+    if(result.addedVertexCount != expectedAddedVertexCount)
         return false;
-    if(result.addedTriangleCount != result.wallVertexCount * 2u)
+    if(result.wallVertexCount > Limit<u32>::s_Max / (2u * wallBandCount))
+        return false;
+    if(result.addedTriangleCount != result.wallVertexCount * 2u * wallBandCount)
         return false;
     return true;
 }
@@ -534,6 +549,8 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
 
 [[nodiscard]] bool ValidHoleRecord(const DeformableSurfaceHoleEditRecord& record){
     return ValidateHoleShapeValues(record.radius, record.ellipseRatio, record.depth)
+        && ValidWallLoopCutCount(record.wallLoopCutCount)
+        && (record.wallLoopCutCount == 0u || record.depth > s_Epsilon)
         && record.baseEditRevision != Limit<u32>::s_Max
         && record.restSample.sourceTri != Limit<u32>::s_Max
         && DeformableValidation::ValidSourceBarycentric(record.restSample.bary)
@@ -549,6 +566,8 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
     if(!ValidHoleRecord(record.hole))
         return false;
     if(record.result.editRevision != record.hole.baseEditRevision + 1u)
+        return false;
+    if(record.result.wallLoopCutCount != record.hole.wallLoopCutCount)
         return false;
     if(!ValidHoleEditResult(record.result, true))
         return false;
@@ -826,6 +845,7 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
         && result.editRevision == record.result.editRevision
         && result.firstWallVertex == record.result.firstWallVertex
         && result.wallVertexCount == record.result.wallVertexCount
+        && result.wallLoopCutCount == record.result.wallLoopCutCount
     ;
 }
 
@@ -837,6 +857,7 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
         && result.addedVertexCount == record.result.addedVertexCount
         && result.addedTriangleCount == record.result.addedTriangleCount
         && result.wallVertexCount == record.result.wallVertexCount
+        && result.wallLoopCutCount == record.result.wallLoopCutCount
     ;
 }
 
@@ -1666,6 +1687,7 @@ bool CommitHole(
         outRecord->hole.radius = params.radius;
         outRecord->hole.ellipseRatio = params.ellipseRatio;
         outRecord->hole.depth = params.depth;
+        outRecord->hole.wallLoopCutCount = result.wallLoopCutCount;
         outRecord->result = result;
     }
     return true;
@@ -1739,13 +1761,40 @@ bool ResolveAccessoryAttachmentTransform(
     )
         return false;
 
+    usize outerWallIndexBase = wallIndexBase;
+    usize tracedFirstWallVertex = firstWallVertex;
+    while(tracedFirstWallVertex >= wallVertexCount){
+        const usize candidateFirstWallVertex = tracedFirstWallVertex - wallVertexCount;
+        if(candidateFirstWallVertex > static_cast<usize>(Limit<u32>::s_Max))
+            break;
+
+        usize candidateWallIndexBase = Limit<usize>::s_Max;
+        if(!__hidden_deformable_surface_edit::RuntimeMeshHasWallTrianglePairs(
+                instance,
+                static_cast<u32>(candidateFirstWallVertex),
+                attachment.wallVertexCount,
+                &candidateWallIndexBase
+            )
+        )
+            break;
+
+        tracedFirstWallVertex = candidateFirstWallVertex;
+        outerWallIndexBase = candidateWallIndexBase;
+    }
+
     SIMDVector rimCenter = VectorZero();
     SIMDVector innerCenter = VectorZero();
     SIMDVector firstRimPosition = VectorZero();
     for(usize pairIndex = 0u; pairIndex < wallVertexCount; ++pairIndex){
-        const usize pairIndexBase = wallIndexBase + (pairIndex * 6u);
-        const usize rimVertexIndex = static_cast<usize>(instance.indices[pairIndexBase + 0u]);
+        const usize outerPairIndexBase = outerWallIndexBase + (pairIndex * 6u);
+        const usize innerPairIndexBase = wallIndexBase + (pairIndex * 6u);
         const usize innerVertexIndex = firstWallVertex + pairIndex;
+        if(outerPairIndexBase + 5u >= instance.indices.size()
+            || innerPairIndexBase + 5u >= instance.indices.size()
+        )
+            return false;
+
+        const usize rimVertexIndex = static_cast<usize>(instance.indices[outerPairIndexBase + 0u]);
         if(rimVertexIndex >= posedVertices.size() || innerVertexIndex >= posedVertices.size())
             return false;
 
@@ -1932,7 +1981,7 @@ bool BuildSurfaceEditStateDebugDump(
     for(usize i = 0u; i < state.edits.size(); ++i){
         const DeformableSurfaceEditRecord& record = state.edits[i];
         outDump += StringFormat(
-            "edit[{}] id={} type=hole base_revision={} result_revision={} radius={} ellipse={} depth={} removed_triangles={} added_vertices={} added_triangles={}\n",
+            "edit[{}] id={} type=hole base_revision={} result_revision={} radius={} ellipse={} depth={} loop_cuts={} removed_triangles={} added_vertices={} added_triangles={}\n",
             i,
             record.editId,
             record.hole.baseEditRevision,
@@ -1940,6 +1989,7 @@ bool BuildSurfaceEditStateDebugDump(
             record.hole.radius,
             record.hole.ellipseRatio,
             record.hole.depth,
+            record.hole.wallLoopCutCount,
             record.result.removedTriangleCount,
             record.result.addedVertexCount,
             record.result.addedTriangleCount
@@ -1980,6 +2030,7 @@ namespace __hidden_deformable_surface_edit{
     DeformableRuntimeMeshInstance& instance,
     const DeformableHoleEditParams& params,
     const bool requireUploadedRuntimePayload,
+    const u32 wallLoopCutCount,
     DeformableHoleEditResult* outResult)
 {
     if(outResult)
@@ -1988,7 +2039,11 @@ namespace __hidden_deformable_surface_edit{
         ? ValidateUploadedRuntimePayload(instance)
         : ValidateRuntimePayload(instance)
     ;
-    if(!validPayload || !ValidateParams(instance, params))
+    if(!validPayload
+        || !ValidateParams(instance, params)
+        || !ValidWallLoopCutCount(wallLoopCutCount)
+        || (wallLoopCutCount != 0u && params.depth <= DeformableRuntime::s_Epsilon)
+    )
         return false;
 
     const usize triangleCount = instance.indices.size() / 3u;
@@ -2134,21 +2189,29 @@ namespace __hidden_deformable_surface_edit{
         return false;
 
     const bool addWall = params.depth > DeformableRuntime::s_Epsilon;
+    const usize wallBandCount = addWall ? static_cast<usize>(wallLoopCutCount) + 1u : 0u;
     usize wallVertexCount = 0u;
+    usize totalWallVertexCount = 0u;
     if(addWall){
-        if(orderedBoundaryEdges.size() > Limit<usize>::s_Max / 6u)
+        if(wallBandCount == 0u
+            || wallBandCount > Limit<usize>::s_Max / 6u
+            || orderedBoundaryEdges.size() > Limit<usize>::s_Max / (6u * wallBandCount)
+        )
             return false;
 
         wallVertexCount = orderedBoundaryEdges.size();
-        if(wallVertexCount > Limit<usize>::s_Max - instance.restVertices.size())
+        if(wallVertexCount > Limit<usize>::s_Max / wallBandCount)
             return false;
-        if(instance.restVertices.size() + wallVertexCount > static_cast<usize>(Limit<u32>::s_Max))
+        totalWallVertexCount = wallVertexCount * wallBandCount;
+        if(totalWallVertexCount > Limit<usize>::s_Max - instance.restVertices.size())
+            return false;
+        if(instance.restVertices.size() + totalWallVertexCount > static_cast<usize>(Limit<u32>::s_Max))
             return false;
     }
 
     const usize removedIndexCount = static_cast<usize>(removedTriangleCount) * 3u;
     const usize wallIndexCount = addWall
-        ? orderedBoundaryEdges.size() * 6u
+        ? wallVertexCount * 6u * wallBandCount
         : 0u
     ;
     const usize keptIndexCount = instance.indices.size() - removedIndexCount;
@@ -2158,9 +2221,9 @@ namespace __hidden_deformable_surface_edit{
         return false;
 
     usize reservedVertexCount = instance.restVertices.size();
-    if(wallVertexCount > Limit<usize>::s_Max - reservedVertexCount)
+    if(totalWallVertexCount > Limit<usize>::s_Max - reservedVertexCount)
         return false;
-    reservedVertexCount += wallVertexCount;
+    reservedVertexCount += totalWallVertexCount;
     if(reservedVertexCount > static_cast<usize>(Limit<u32>::s_Max))
         return false;
 
@@ -2202,7 +2265,9 @@ namespace __hidden_deformable_surface_edit{
     u32 addedWallVertexCount = 0u;
     if(addWall){
         const usize boundaryVertexCount = orderedBoundaryEdges.size();
-        firstWallVertex = static_cast<u32>(newRestVertices.size());
+        firstWallVertex = static_cast<u32>(
+            newRestVertices.size() + ((wallBandCount - 1u) * boundaryVertexCount)
+        );
         addedWallVertexCount = static_cast<u32>(boundaryVertexCount);
         const SIMDVector frameNormal = frame.normal;
         Vector<f32, Core::Alloc::ScratchAllocator<f32>> boundaryU{
@@ -2230,107 +2295,135 @@ namespace __hidden_deformable_surface_edit{
         if(boundaryLength <= DeformableRuntime::s_Epsilon)
             return false;
 
-        Vector<u32> innerVertices;
-        innerVertices.resize(boundaryVertexCount, 0u);
+        Vector<u32> wallVertices;
+        wallVertices.resize(totalWallVertexCount, 0u);
 
-        for(usize edgeIndex = 0; edgeIndex < boundaryVertexCount; ++edgeIndex){
-            const usize previousEdgeIndex = edgeIndex == 0u ? boundaryVertexCount - 1u : edgeIndex - 1u;
-            const EdgeRecord& edge = orderedBoundaryEdges[edgeIndex];
+        for(usize ringIndex = 0u; ringIndex < wallBandCount; ++ringIndex){
+            const f32 wallV = static_cast<f32>(ringIndex + 1u) / static_cast<f32>(wallBandCount);
+            const usize wallVertexBase = ringIndex * boundaryVertexCount;
 
-            WallVertexFrame vertexFrame;
-            if(!BuildWallVertexFrame(
-                    newRestVertices,
-                    frame,
-                    orderedBoundaryEdges[previousEdgeIndex],
-                    edge,
-                    vertexFrame
-                )
-            )
-                return false;
+            for(usize edgeIndex = 0; edgeIndex < boundaryVertexCount; ++edgeIndex){
+                const usize previousEdgeIndex = edgeIndex == 0u ? boundaryVertexCount - 1u : edgeIndex - 1u;
+                const EdgeRecord& edge = orderedBoundaryEdges[edgeIndex];
 
-            const SIMDVector rimPosition = LoadFloat(newRestVertices[edge.a].position);
-            const SIMDVector innerPosition = VectorMultiplyAdd(
-                frame.normal,
-                VectorReplicate(-params.depth),
-                rimPosition
-            );
-            const f32 uvU = boundaryU[edgeIndex] / boundaryLength;
-            if(!newSourceSamples.empty())
-                newSourceSamples[edge.a] = wallSourceSample;
-
-            const u32 innerAttributeVertices[3] = {
-                orderedBoundaryEdges[previousEdgeIndex].a,
-                edge.a,
-                edge.b,
-            };
-            Float4U innerColor;
-            if(!BuildBlendedVertexColor(
-                    newRestVertices,
-                    innerAttributeVertices,
-                    s_WallInnerInpaintWeights,
-                    innerColor
-                )
-            )
-                return false;
-
-            SkinInfluence4 innerSkin;
-            const SkinInfluence4* innerSkinPtr = nullptr;
-            if(!newSkin.empty()){
-                if(!BuildBlendedSkinInfluence(
-                        newSkin,
-                        innerAttributeVertices,
-                        s_WallInnerInpaintWeights,
-                        innerSkin
+                WallVertexFrame vertexFrame;
+                if(!BuildWallVertexFrame(
+                        newRestVertices,
+                        frame,
+                        orderedBoundaryEdges[previousEdgeIndex],
+                        edge,
+                        vertexFrame
                     )
                 )
                     return false;
 
-                innerSkinPtr = &innerSkin;
-            }
+                const SIMDVector rimPosition = LoadFloat(newRestVertices[edge.a].position);
+                const SIMDVector innerPosition = VectorMultiplyAdd(
+                    frame.normal,
+                    VectorReplicate(-params.depth * wallV),
+                    rimPosition
+                );
+                const f32 uvU = boundaryU[edgeIndex] / boundaryLength;
+                if(!newSourceSamples.empty())
+                    newSourceSamples[edge.a] = wallSourceSample;
 
-            if(!AppendWallVertex(
-                    newRestVertices,
-                    newSkin,
-                    newSourceSamples,
+                const u32 innerAttributeVertices[3] = {
+                    orderedBoundaryEdges[previousEdgeIndex].a,
                     edge.a,
-                    innerSkinPtr,
-                    wallSourceSample,
-                    innerColor,
-                    innerPosition,
-                    vertexFrame.normal,
-                    vertexFrame.tangent,
-                    uvU,
-                    1.0f,
-                    innerVertices[edgeIndex]
+                    edge.b,
+                };
+                Float4U innerColor;
+                if(!BuildBlendedVertexColor(
+                        newRestVertices,
+                        innerAttributeVertices,
+                        s_WallInnerInpaintWeights,
+                        innerColor
+                    )
+                )
+                    return false;
+
+                SkinInfluence4 innerSkin;
+                const SkinInfluence4* innerSkinPtr = nullptr;
+                if(!newSkin.empty()){
+                    if(!BuildBlendedSkinInfluence(
+                            newSkin,
+                            innerAttributeVertices,
+                            s_WallInnerInpaintWeights,
+                            innerSkin
+                        )
+                    )
+                        return false;
+
+                    innerSkinPtr = &innerSkin;
+                }
+
+                if(!AppendWallVertex(
+                        newRestVertices,
+                        newSkin,
+                        newSourceSamples,
+                        edge.a,
+                        innerSkinPtr,
+                        wallSourceSample,
+                        innerColor,
+                        innerPosition,
+                        vertexFrame.normal,
+                        vertexFrame.tangent,
+                        uvU,
+                        wallV,
+                        wallVertices[wallVertexBase + edgeIndex]
+                    )
+                )
+                    return false;
+
+                addedVertexCount += 1u;
+            }
+        }
+
+        EdgeRecordVector bandOuterEdges = orderedBoundaryEdges;
+        for(usize ringIndex = 0u; ringIndex < wallBandCount; ++ringIndex){
+            const usize wallVertexBase = ringIndex * boundaryVertexCount;
+            Vector<u32> ringVertices;
+            ringVertices.reserve(boundaryVertexCount);
+            for(usize edgeIndex = 0u; edgeIndex < boundaryVertexCount; ++edgeIndex)
+                ringVertices.push_back(wallVertices[wallVertexBase + edgeIndex]);
+
+            if(!TransferWallMorphDeltas(
+                    newMorphs,
+                    orderedBoundaryEdges,
+                    ringVertices
                 )
             )
                 return false;
 
-            addedVertexCount += 1u;
-        }
-
-        if(!TransferWallMorphDeltas(
-                newMorphs,
-                orderedBoundaryEdges,
-                innerVertices
+            u32 wallAddedTriangleCount = 0u;
+            if(!Core::Geometry::AppendWallTrianglePairs(
+                    bandOuterEdges,
+                    ringVertices,
+                    newIndices,
+                    &wallAddedTriangleCount
+                )
             )
-        )
-            return false;
+                return false;
+            if(hasEditMaskPerTriangle){
+                for(u32 triangleOffset = 0u; triangleOffset < wallAddedTriangleCount; ++triangleOffset)
+                    newEditMaskPerTriangle.push_back(removedEditMaskFlags);
+            }
+            addedTriangleCount += wallAddedTriangleCount;
 
-        u32 wallAddedTriangleCount = 0u;
-        if(!Core::Geometry::AppendWallTrianglePairs(
-                orderedBoundaryEdges,
-                innerVertices,
-                newIndices,
-                &wallAddedTriangleCount
-            )
-        )
-            return false;
-        if(hasEditMaskPerTriangle){
-            for(u32 triangleOffset = 0u; triangleOffset < wallAddedTriangleCount; ++triangleOffset)
-                newEditMaskPerTriangle.push_back(removedEditMaskFlags);
+            if(ringIndex + 1u < wallBandCount){
+                bandOuterEdges.clear();
+                bandOuterEdges.reserve(boundaryVertexCount);
+                for(usize edgeIndex = 0u; edgeIndex < boundaryVertexCount; ++edgeIndex){
+                    const usize nextEdgeIndex = (edgeIndex + 1u) % boundaryVertexCount;
+                    EdgeRecord edge;
+                    edge.a = wallVertices[wallVertexBase + edgeIndex];
+                    edge.b = wallVertices[wallVertexBase + nextEdgeIndex];
+                    edge.fullCount = 2u;
+                    edge.removedCount = 1u;
+                    bandOuterEdges.push_back(edge);
+                }
+            }
         }
-        addedTriangleCount += wallAddedTriangleCount;
     }
 
     if(!RebuildRuntimeMeshTangentFrames(newRestVertices, newIndices))
@@ -2368,6 +2461,7 @@ namespace __hidden_deformable_surface_edit{
         outResult->editRevision = instance.editRevision;
         outResult->firstWallVertex = firstWallVertex;
         outResult->wallVertexCount = addedWallVertexCount;
+        outResult->wallLoopCutCount = wallLoopCutCount;
     }
     return true;
 }
@@ -2397,6 +2491,7 @@ namespace __hidden_deformable_surface_edit{
                     candidateInstance,
                     params,
                     false,
+                    record.hole.wallLoopCutCount,
                     &candidateResult
                 )
                 || !ReplayResultMatchesStoredRecord(candidateResult, record)
@@ -2490,6 +2585,7 @@ namespace __hidden_deformable_surface_edit{
                     candidateInstance,
                     params,
                     false,
+                    replayRecord.hole.wallLoopCutCount,
                     &candidateResult
                 )
                 || !ReplayResultShapeMatchesStoredRecord(candidateResult, record)
@@ -2600,6 +2696,7 @@ namespace __hidden_deformable_surface_edit{
                     candidateInstance,
                     params,
                     false,
+                    replayRecord.hole.wallLoopCutCount,
                     &candidateResult
                 )
                 || !RuntimeMeshHasWallTrianglePairs(candidateInstance, candidateResult)
@@ -2713,6 +2810,7 @@ namespace __hidden_deformable_surface_edit{
                     candidateInstance,
                     params,
                     false,
+                    replayRecord.hole.wallLoopCutCount,
                     &candidateResult
                 )
                 || !RuntimeMeshHasWallTrianglePairs(candidateInstance, candidateResult)
@@ -2839,6 +2937,7 @@ namespace __hidden_deformable_surface_edit{
                     candidateInstance,
                     params,
                     false,
+                    replayRecord.hole.wallLoopCutCount,
                     &candidateResult
                 )
                 || !RuntimeMeshHasWallTrianglePairs(candidateInstance, candidateResult)
@@ -2890,6 +2989,114 @@ namespace __hidden_deformable_surface_edit{
     return ValidSurfaceEditState(outPatchedState);
 }
 
+[[nodiscard]] bool ReplaySurfaceEditRecordsWithAddedLoopCut(
+    DeformableRuntimeMeshInstance& replayInstance,
+    const DeformableSurfaceEditState& state,
+    const DeformableSurfaceEditId editId,
+    DeformableSurfaceEditState& outLoopCutState,
+    DeformableSurfaceEditLoopCutResult& outResult)
+{
+    outLoopCutState = DeformableSurfaceEditState{};
+    outResult = DeformableSurfaceEditLoopCutResult{};
+    if(!ValidSurfaceEditState(state) || !ValidSurfaceEditId(editId))
+        return false;
+
+    const DeformableSurfaceEditRecord* loopCutEdit = FindEditRecordById(state, editId);
+    if(!loopCutEdit
+        || loopCutEdit->type != DeformableSurfaceEditRecordType::Hole
+        || loopCutEdit->hole.depth <= DeformableRuntime::s_Epsilon
+        || loopCutEdit->hole.wallLoopCutCount >= s_MaxWallLoopCutCount
+    )
+        return false;
+
+    outResult.loopCutEditId = editId;
+    outResult.oldLoopCutCount = loopCutEdit->hole.wallLoopCutCount;
+    outResult.newLoopCutCount = loopCutEdit->hole.wallLoopCutCount + 1u;
+
+    bool loopCutEditFound = false;
+    bool replayDependsOnLoopCutEdit = false;
+    outLoopCutState.edits.reserve(state.edits.size());
+    for(const DeformableSurfaceEditRecord& record : state.edits){
+        if(replayInstance.editRevision == Limit<u32>::s_Max)
+            return false;
+
+        DeformableSurfaceEditRecord replayRecord = record;
+        replayRecord.hole.baseEditRevision = replayInstance.editRevision;
+        replayRecord.result.editRevision = replayInstance.editRevision + 1u;
+
+        const bool loopCutThisRecord = record.editId == editId;
+        if(loopCutThisRecord){
+            ++replayRecord.hole.wallLoopCutCount;
+            loopCutEditFound = true;
+            replayDependsOnLoopCutEdit = true;
+        }
+
+        bool replayedRecord = false;
+        DeformableHoleEditResult replayResult;
+        const usize triangleCount = replayInstance.indices.size() / 3u;
+        for(usize triangle = 0u; triangle < triangleCount; ++triangle){
+            DeformableHoleEditParams params;
+            if(!BuildReplayHoleParams(replayInstance, replayRecord, triangle, params))
+                continue;
+
+            DeformableRuntimeMeshInstance candidateInstance = replayInstance;
+            DeformableHoleEditResult candidateResult;
+            if(!CommitDeformableRestSpaceHoleImpl(
+                    candidateInstance,
+                    params,
+                    false,
+                    replayRecord.hole.wallLoopCutCount,
+                    &candidateResult
+                )
+                || !RuntimeMeshHasWallTrianglePairs(candidateInstance, candidateResult)
+            )
+                continue;
+
+            if(!loopCutThisRecord){
+                const bool resultMatchesExpected = replayDependsOnLoopCutEdit
+                    ? ReplayResultShapeMatchesStoredRecord(candidateResult, record)
+                    : ReplayResultMatchesStoredRecord(candidateResult, record)
+                ;
+                if(!resultMatchesExpected)
+                    continue;
+            }
+
+            replayInstance = Move(candidateInstance);
+            replayResult = candidateResult;
+            replayRecord.result = candidateResult;
+            replayedRecord = true;
+            break;
+        }
+        if(!replayedRecord)
+            return false;
+
+        outLoopCutState.edits.push_back(replayRecord);
+        ++outResult.replay.appliedEditCount;
+        outResult.replay.topologyChanged = outResult.replay.topologyChanged
+            || HoleResultChangesTopology(replayResult)
+        ;
+    }
+    if(!loopCutEditFound)
+        return false;
+
+    outLoopCutState.accessories.reserve(state.accessories.size());
+    for(const DeformableAccessoryAttachmentRecord& accessory : state.accessories){
+        const DeformableSurfaceEditRecord* anchorEdit =
+            FindEditRecordById(outLoopCutState, accessory.anchorEditId)
+        ;
+        if(!anchorEdit)
+            return false;
+
+        DeformableAccessoryAttachmentRecord replayAccessory = accessory;
+        replayAccessory.firstWallVertex = anchorEdit->result.firstWallVertex;
+        replayAccessory.wallVertexCount = anchorEdit->result.wallVertexCount;
+        outLoopCutState.accessories.push_back(replayAccessory);
+    }
+
+    outResult.replay.finalEditRevision = replayInstance.editRevision;
+    return ValidSurfaceEditState(outLoopCutState);
+}
+
 [[nodiscard]] bool PrepareCleanReplayInstance(
     const DeformableRuntimeMeshInstance& instance,
     const DeformableRuntimeMeshInstance& cleanBaseInstance,
@@ -2927,7 +3134,7 @@ bool CommitDeformableRestSpaceHole(
     const DeformableHoleEditParams& params,
     DeformableHoleEditResult* outResult)
 {
-    return __hidden_deformable_surface_edit::CommitDeformableRestSpaceHoleImpl(instance, params, true, outResult);
+    return __hidden_deformable_surface_edit::CommitDeformableRestSpaceHoleImpl(instance, params, true, 0u, outResult);
 }
 
 
@@ -3179,6 +3386,45 @@ bool PatchSurfaceEdit(
         return false;
 
     state = Move(patchedState);
+    instance = Move(replayInstance);
+    if(outResult)
+        *outResult = result;
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool AddSurfaceEditLoopCut(
+    DeformableRuntimeMeshInstance& instance,
+    const DeformableRuntimeMeshInstance& cleanBaseInstance,
+    DeformableSurfaceEditState& state,
+    const DeformableSurfaceEditId editId,
+    DeformableSurfaceEditLoopCutResult* outResult)
+{
+    if(outResult)
+        *outResult = DeformableSurfaceEditLoopCutResult{};
+
+    DeformableRuntimeMeshInstance replayInstance;
+    if(!__hidden_deformable_surface_edit::PrepareCleanReplayInstance(instance, cleanBaseInstance, replayInstance))
+        return false;
+
+    DeformableSurfaceEditState loopCutState;
+    DeformableSurfaceEditLoopCutResult result;
+    if(!__hidden_deformable_surface_edit::ReplaySurfaceEditRecordsWithAddedLoopCut(
+            replayInstance,
+            state,
+            editId,
+            loopCutState,
+            result
+        )
+    )
+        return false;
+    if(!__hidden_deformable_surface_edit::ValidateReplayAccessoryAnchors(replayInstance, loopCutState))
+        return false;
+
+    state = Move(loopCutState);
     instance = Move(replayInstance);
     if(outResult)
         *outResult = result;

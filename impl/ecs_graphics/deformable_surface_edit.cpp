@@ -128,44 +128,6 @@ using MorphDeltaLookup = HashMap<
     return VectorScale(centroid, 1.0f / 3.0f);
 }
 
-[[nodiscard]] u64 MakeEdgeKey(const u32 a, const u32 b){
-    const u32 lo = a < b ? a : b;
-    const u32 hi = a < b ? b : a;
-    return (static_cast<u64>(lo) << 32u) | static_cast<u64>(hi);
-}
-
-template<typename EdgeMap>
-void RegisterFullEdge(EdgeMap& edges, const u32 a, const u32 b){
-    auto [it, inserted] = edges.emplace(MakeEdgeKey(a, b), EdgeRecord{});
-    EdgeRecord& record = it.value();
-    if(inserted){
-        record.a = a;
-        record.b = b;
-    }
-    ++record.fullCount;
-}
-
-template<typename EdgeMap>
-[[nodiscard]] bool RegisterRemovedEdge(EdgeMap& edges, const u32 a, const u32 b){
-    const auto found = edges.find(MakeEdgeKey(a, b));
-    if(found == edges.end())
-        return false;
-
-    EdgeRecord& record = found.value();
-    if(record.removedCount == 0u){
-        record.a = a;
-        record.b = b;
-    }
-    ++record.removedCount;
-    return true;
-}
-
-template<typename VertexDegreeMap>
-void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
-    auto it = degrees.emplace(vertex, 0u).first;
-    ++it.value();
-}
-
 [[nodiscard]] bool BuildHoleFrame(
     const DeformableRuntimeMeshInstance& instance,
     const u32 (&triangleIndices)[3],
@@ -2008,45 +1970,14 @@ namespace __hidden_deformable_surface_edit{
     const f32 radiusX = params.radius;
     const f32 radiusY = params.radius * params.ellipseRatio;
     Core::Alloc::ScratchArena<> scratchArena;
-    Vector<u8, Core::Alloc::ScratchAllocator<u8>> removeTriangle{
-        Core::Alloc::ScratchAllocator<u8>(scratchArena)
-    };
+    Vector<u8> removeTriangle;
     removeTriangle.resize(triangleCount, 0u);
     DeformableEditMaskFlags removedEditMaskFlags = 0u;
 
-    using EdgeRecordVector = Vector<EdgeRecord>;
-    using EdgeRecordMap = HashMap<
-        u64,
-        EdgeRecord,
-        Hasher<u64>,
-        EqualTo<u64>,
-        Core::Alloc::ScratchAllocator<Pair<const u64, EdgeRecord>>
-    >;
-    using VertexDegreeMap = HashMap<
-        u32,
-        u32,
-        Hasher<u32>,
-        EqualTo<u32>,
-        Core::Alloc::ScratchAllocator<Pair<const u32, u32>>
-    >;
-
-    EdgeRecordMap edges(
-        0,
-        Hasher<u64>(),
-        EqualTo<u64>(),
-        Core::Alloc::ScratchAllocator<Pair<const u64, EdgeRecord>>(scratchArena)
-    );
-    edges.reserve(instance.indices.size());
-
-    u32 removedTriangleCount = 0;
     for(usize triangle = 0; triangle < triangleCount; ++triangle){
         u32 indices[3] = {};
         if(!DeformableRuntime::ValidateTriangleIndex(instance, static_cast<u32>(triangle), indices))
             return false;
-
-        RegisterFullEdge(edges, indices[0], indices[1]);
-        RegisterFullEdge(edges, indices[1], indices[2]);
-        RegisterFullEdge(edges, indices[2], indices[0]);
 
         const bool selectedTriangle = triangle == static_cast<usize>(params.posedHit.triangle);
         if(selectedTriangle
@@ -2060,51 +1991,24 @@ namespace __hidden_deformable_surface_edit{
 
             removedEditMaskFlags = static_cast<DeformableEditMaskFlags>(removedEditMaskFlags | editMaskFlags);
             removeTriangle[triangle] = 1u;
-            ++removedTriangleCount;
-
-            if(!RegisterRemovedEdge(edges, indices[0], indices[1])
-                || !RegisterRemovedEdge(edges, indices[1], indices[2])
-                || !RegisterRemovedEdge(edges, indices[2], indices[0])
-            )
-                return false;
         }
     }
 
-    if(removedTriangleCount == 0u || removedTriangleCount >= triangleCount)
-        return false;
     if(removedEditMaskFlags == 0u)
         removedEditMaskFlags = s_DeformableEditMaskDefault;
 
+    using EdgeRecordVector = Vector<EdgeRecord>;
     EdgeRecordVector boundaryEdges;
-    boundaryEdges.reserve(removedTriangleCount * 3u);
-    VertexDegreeMap boundaryDegrees(
-        0,
-        Hasher<u32>(),
-        EqualTo<u32>(),
-        Core::Alloc::ScratchAllocator<Pair<const u32, u32>>(scratchArena)
-    );
-    boundaryDegrees.reserve(removedTriangleCount * 3u);
-    for(const auto& [edgeKey, edge] : edges){
-        static_cast<void>(edgeKey);
-        if(edge.removedCount == 0u)
-            continue;
-        if(edge.removedCount > edge.fullCount || edge.fullCount > 2u)
-            return false;
-        if(edge.removedCount == 1u){
-            if(edge.fullCount != 2u)
-                return false;
-            boundaryEdges.push_back(edge);
-            IncrementVertexDegree(boundaryDegrees, edge.a);
-            IncrementVertexDegree(boundaryDegrees, edge.b);
-        }
-    }
-    if(boundaryEdges.empty())
+    u32 removedTriangleCount = 0u;
+    if(!Core::Geometry::BuildBoundaryEdgesFromRemovedTriangles(
+            instance.indices,
+            removeTriangle,
+            boundaryEdges,
+            &removedTriangleCount
+        )
+    )
         return false;
-    for(const auto& [vertex, degree] : boundaryDegrees){
-        static_cast<void>(vertex);
-        if(degree != 2u)
-            return false;
-    }
+
     Vector<Float3U> restPositions;
     restPositions.reserve(instance.restVertices.size());
     for(const DeformableVertexRest& vertex : instance.restVertices)

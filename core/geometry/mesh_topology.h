@@ -52,6 +52,13 @@ static_assert(IsTriviallyCopyable_V<MeshTopologyLoopVertexFrame>, "MeshTopologyL
     Vector<MeshTopologyEdge>& outOrderedEdges
 );
 
+[[nodiscard]] bool BuildBoundaryEdgesFromRemovedTriangles(
+    const Vector<u32>& indices,
+    const Vector<u8>& removedTriangles,
+    Vector<MeshTopologyEdge>& outBoundaryEdges,
+    u32* outRemovedTriangleCount = nullptr
+);
+
 [[nodiscard]] bool BuildBoundaryLoopVertexFrame(
     const Vector<Float3U>& positions,
     const MeshTopologyBoundaryLoopFrame& frame,

@@ -199,6 +199,117 @@ static void TestRejectsBranchedBoundaryLoop(TestContext& context){
     );
 }
 
+static bool ContainsUndirectedEdge(const Vector<MeshTopologyEdge>& edges, const u32 a, const u32 b){
+    for(const MeshTopologyEdge& edge : edges){
+        if((edge.a == a && edge.b == b) || (edge.a == b && edge.b == a))
+            return true;
+    }
+    return false;
+}
+
+static Vector<u32> MakeTetrahedronIndices(){
+    Vector<u32> indices;
+    indices.push_back(0u);
+    indices.push_back(1u);
+    indices.push_back(2u);
+    indices.push_back(0u);
+    indices.push_back(3u);
+    indices.push_back(1u);
+    indices.push_back(1u);
+    indices.push_back(3u);
+    indices.push_back(2u);
+    indices.push_back(2u);
+    indices.push_back(3u);
+    indices.push_back(0u);
+    return indices;
+}
+
+static void TestBuildsBoundaryEdgesFromRemovedTriangles(TestContext& context){
+    Vector<u32> indices = MakeTetrahedronIndices();
+    Vector<u8> removedTriangles;
+    removedTriangles.resize(4u, 0u);
+    removedTriangles[0u] = 1u;
+
+    Vector<MeshTopologyEdge> boundaryEdges;
+    u32 removedTriangleCount = 0u;
+    NWB_GEOMETRY_TEST_CHECK(
+        context,
+        NWB::Core::Geometry::BuildBoundaryEdgesFromRemovedTriangles(
+            indices,
+            removedTriangles,
+            boundaryEdges,
+            &removedTriangleCount
+        )
+    );
+    NWB_GEOMETRY_TEST_CHECK(context, removedTriangleCount == 1u);
+    NWB_GEOMETRY_TEST_CHECK(context, boundaryEdges.size() == 3u);
+    NWB_GEOMETRY_TEST_CHECK(context, ContainsUndirectedEdge(boundaryEdges, 0u, 1u));
+    NWB_GEOMETRY_TEST_CHECK(context, ContainsUndirectedEdge(boundaryEdges, 1u, 2u));
+    NWB_GEOMETRY_TEST_CHECK(context, ContainsUndirectedEdge(boundaryEdges, 2u, 0u));
+    for(const MeshTopologyEdge& edge : boundaryEdges){
+        NWB_GEOMETRY_TEST_CHECK(context, edge.fullCount == 2u);
+        NWB_GEOMETRY_TEST_CHECK(context, edge.removedCount == 1u);
+    }
+}
+
+static void TestRejectsMalformedRemovedTriangleBoundaries(TestContext& context){
+    Vector<u32> indices;
+    indices.push_back(0u);
+    indices.push_back(1u);
+    indices.push_back(2u);
+    indices.push_back(0u);
+    indices.push_back(2u);
+    indices.push_back(3u);
+
+    Vector<u8> removedTriangles;
+    removedTriangles.resize(2u, 0u);
+    removedTriangles[0u] = 1u;
+
+    Vector<MeshTopologyEdge> boundaryEdges;
+    u32 removedTriangleCount = 7u;
+    NWB_GEOMETRY_TEST_CHECK(
+        context,
+        !NWB::Core::Geometry::BuildBoundaryEdgesFromRemovedTriangles(
+            indices,
+            removedTriangles,
+            boundaryEdges,
+            &removedTriangleCount
+        )
+    );
+    NWB_GEOMETRY_TEST_CHECK(context, boundaryEdges.empty());
+    NWB_GEOMETRY_TEST_CHECK(context, removedTriangleCount == 0u);
+
+    indices = MakeTetrahedronIndices();
+    removedTriangles.clear();
+    removedTriangles.resize(4u, 1u);
+    removedTriangleCount = 7u;
+    NWB_GEOMETRY_TEST_CHECK(
+        context,
+        !NWB::Core::Geometry::BuildBoundaryEdgesFromRemovedTriangles(
+            indices,
+            removedTriangles,
+            boundaryEdges,
+            &removedTriangleCount
+        )
+    );
+    NWB_GEOMETRY_TEST_CHECK(context, boundaryEdges.empty());
+    NWB_GEOMETRY_TEST_CHECK(context, removedTriangleCount == 0u);
+
+    removedTriangles.resize(3u, 0u);
+    NWB_GEOMETRY_TEST_CHECK(
+        context,
+        !NWB::Core::Geometry::BuildBoundaryEdgesFromRemovedTriangles(indices, removedTriangles, boundaryEdges)
+    );
+
+    removedTriangles.resize(4u, 0u);
+    removedTriangles[0u] = 1u;
+    indices[2u] = indices[1u];
+    NWB_GEOMETRY_TEST_CHECK(
+        context,
+        !NWB::Core::Geometry::BuildBoundaryEdgesFromRemovedTriangles(indices, removedTriangles, boundaryEdges)
+    );
+}
+
 static void TestAppendsWallTrianglePairs(TestContext& context){
     Vector<MeshTopologyEdge> orderedEdges;
     orderedEdges.push_back(MakeEdge(0u, 1u));
@@ -622,6 +733,8 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
     __hidden_geometry_tests::TestRejectsDegenerateTriangle(context);
     __hidden_geometry_tests::TestOrdersBoundaryLoopCounterClockwise(context);
     __hidden_geometry_tests::TestRejectsBranchedBoundaryLoop(context);
+    __hidden_geometry_tests::TestBuildsBoundaryEdgesFromRemovedTriangles(context);
+    __hidden_geometry_tests::TestRejectsMalformedRemovedTriangleBoundaries(context);
     __hidden_geometry_tests::TestAppendsWallTrianglePairs(context);
     __hidden_geometry_tests::TestRejectsMalformedWallTrianglePairs(context);
     __hidden_geometry_tests::TestBuildsBoundaryLoopVertexFrame(context);

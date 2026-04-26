@@ -24,9 +24,58 @@ namespace __hidden_logger_server{
 
 
 struct ConnectionInfo{
-    u8* buffer;
-    usize size;
+    ConnectionInfo() = default;
+    ConnectionInfo(ConnectionInfo&&) = delete;
+    ConnectionInfo(const ConnectionInfo&) = delete;
+    ConnectionInfo& operator=(ConnectionInfo&&) = delete;
+    ConnectionInfo& operator=(const ConnectionInfo&) = delete;
+    ~ConnectionInfo(){
+        Core::Alloc::CoreFree(buffer, "ConnectionInfo buffer freed at Server::requestCallback");
+    }
+
+    [[nodiscard]] bool append(NotNull<const char*> uploadData, const usize appendSize){
+        if(size > Limit<usize>::s_Max - appendSize)
+            return false;
+
+        auto* newBuffer = reinterpret_cast<u8*>(Core::Alloc::CoreRealloc(
+            buffer,
+            size + appendSize,
+            "ConnectionInfo buffer reallocated at Server::requestCallback"
+        ));
+        if(!newBuffer)
+            return false;
+
+        buffer = newBuffer;
+        NWB_MEMCPY(buffer + size, appendSize, uploadData.get(), appendSize);
+        size += appendSize;
+        return true;
+    }
+
+    u8* buffer = nullptr;
+    usize size = 0u;
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] static ConnectionInfo* CreateConnectionInfo(){
+    void* memory = Core::Alloc::CoreAlloc(sizeof(ConnectionInfo), "ConnectionInfo allocated at Server::requestCallback");
+    if(!memory)
+        return nullptr;
+
+    return new(memory) ConnectionInfo();
+}
+
+static void DestroyConnectionInfo(ConnectionInfo*& info, void*& conCls)noexcept{
+    if(info){
+        info->~ConnectionInfo();
+        Core::Alloc::CoreFree(info, "ConnectionInfo freed at Server::requestCallback");
+    }
+
+    info = nullptr;
+    conCls = nullptr;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -114,52 +163,39 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
     };
 
     if(!conCls){
-        using ConnectionInfo = __hidden_logger_server::ConnectionInfo;
-        auto* info = reinterpret_cast<ConnectionInfo*>(Core::Alloc::CoreAlloc(sizeof(ConnectionInfo), "ConnectionInfo allocated at Server::requestCallback"));
+        auto* info = __hidden_logger_server::CreateConnectionInfo();
         if(!info){
             thisPtr->enqueue(StringFormat(NWB_TEXT("Failed to allocate on {}"), SERVER_NAME), Type::Fatal);
             return MHD_NO;
         }
-        info->buffer = nullptr;
-        info->size = 0;
 
         conCls = info;
         return MHD_YES;
     }
 
     auto* info = static_cast<__hidden_logger_server::ConnectionInfo*>(conCls);
-    auto freeConnectionInfo = [&](){
-        Core::Alloc::CoreFree(info->buffer, "ConnectionInfo buffer freed at Server::requestCallback");
-        Core::Alloc::CoreFree(info, "ConnectionInfo freed at Server::requestCallback");
-        info = nullptr;
-        conCls = nullptr;
-    };
 
     if(uploadDataSize){
         if(!upload_data){
             thisPtr->enqueue(StringFormat(NWB_TEXT("Received a malformed upload chunk on {}"), SERVER_NAME), Type::Error);
-            freeConnectionInfo();
+            __hidden_logger_server::DestroyConnectionInfo(info, conCls);
             return MHD_NO;
         }
 
         const auto uploadDataPtr = MakeNotNull(upload_data);
         if(uploadDataSize > static_cast<size_t>(Limit<usize>::s_Max) || info->size > Limit<usize>::s_Max - static_cast<usize>(uploadDataSize)){
             thisPtr->enqueue(StringFormat(NWB_TEXT("Received an oversized message on {}"), SERVER_NAME), Type::Error);
-            freeConnectionInfo();
+            __hidden_logger_server::DestroyConnectionInfo(info, conCls);
             return MHD_NO;
         }
 
         const usize appendSize = static_cast<usize>(uploadDataSize);
-        auto* newBuffer = reinterpret_cast<u8*>(Core::Alloc::CoreRealloc(info->buffer, info->size + appendSize, "ConnectionInfo buffer reallocated at Server::requestCallback"));
-        if(!newBuffer){
+        if(!info->append(uploadDataPtr, appendSize)){
             thisPtr->enqueue(StringFormat(NWB_TEXT("Failed to reallocate a buffer on {}"), SERVER_NAME), Type::Fatal);
-            freeConnectionInfo();
+            __hidden_logger_server::DestroyConnectionInfo(info, conCls);
             return MHD_NO;
         }
 
-        info->buffer = newBuffer;
-        NWB_MEMCPY(info->buffer + info->size, appendSize, uploadDataPtr.get(), appendSize);
-        info->size += appendSize;
         uploadDataSize = 0;
         return MHD_YES;
     }
@@ -170,14 +206,14 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
         auto* response = MHD_create_response_from_buffer(0, nullStr, MHD_RESPMEM_PERSISTENT);
         if(!response){
             thisPtr->enqueue(StringFormat(NWB_TEXT("Failed to create a response on {}"), SERVER_NAME), Type::Fatal);
-            freeConnectionInfo();
+            __hidden_logger_server::DestroyConnectionInfo(info, conCls);
             return MHD_NO;
         }
 
         const auto ret = MHD_queue_response(connection, MHD_HTTP_OK, response);
         MHD_destroy_response(response);
 
-        freeConnectionInfo();
+        __hidden_logger_server::DestroyConnectionInfo(info, conCls);
 
         return ret;
     }

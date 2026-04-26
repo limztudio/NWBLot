@@ -192,6 +192,24 @@ void nwbDeformerOrthonormalizeFrame(inout vec3 normal, inout vec4 tangent, const
     tangent.w = nwbDeformerTangentHandedness(tangent.w, fallbackTangent.w);
 }
 
+bool nwbDeformerTransformJointNormal(const mat3 jointMatrix, const vec3 normal, out vec3 transformedNormal){
+    const vec3 column0 = jointMatrix[0];
+    const vec3 column1 = jointMatrix[1];
+    const vec3 column2 = jointMatrix[2];
+    const float determinant = dot(column0, cross(column1, column2));
+    if(!nwbDeformerFiniteFloat(determinant) || abs(determinant) <= 0.000001)
+        return false;
+
+    const float inverseDeterminant = 1.0 / determinant;
+    const mat3 normalMatrix = mat3(
+        cross(column1, column2) * inverseDeterminant,
+        cross(column2, column0) * inverseDeterminant,
+        cross(column0, column1) * inverseDeterminant
+    );
+    transformedNormal = normalMatrix * normal;
+    return nwbDeformerFiniteVec3(transformedNormal);
+}
+
 void nwbDeformerApplySkin(const uint vertexId, inout vec3 position, inout vec3 normal, inout vec4 tangent){
     const uint jointCount = nwbDeformerJointCount();
     if(nwbDeformerSkinCount() != nwbDeformerVertexCount() || jointCount == 0u)
@@ -211,8 +229,12 @@ void nwbDeformerApplySkin(const uint vertexId, inout vec3 position, inout vec3 n
 
         const mat4 jointMatrix = nwbDeformerLoadJointMatrix(jointId);
         const mat3 jointMatrix3 = mat3(jointMatrix);
+        vec3 transformedNormal = vec3(0.0);
+        if(!nwbDeformerTransformJointNormal(jointMatrix3, normal, transformedNormal))
+            continue;
+
         skinnedPosition += weight * (jointMatrix * vec4(position, 1.0)).xyz;
-        skinnedNormal += weight * (jointMatrix3 * normal);
+        skinnedNormal += weight * transformedNormal;
         skinnedTangent += weight * (jointMatrix3 * tangent.xyz);
         totalWeight += weight;
     }

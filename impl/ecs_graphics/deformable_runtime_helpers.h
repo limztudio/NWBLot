@@ -182,6 +182,45 @@ inline void OrthonormalizeFrame(SIMDVector& normal, SIMDVector& tangent, const S
     ;
 }
 
+[[nodiscard]] inline f32 JointLinearDeterminant(const DeformableJointMatrix& matrix){
+    const SIMDVector column0 = VectorSetW(LoadFloat(matrix.column0), 0.0f);
+    const SIMDVector column1 = VectorSetW(LoadFloat(matrix.column1), 0.0f);
+    const SIMDVector column2 = VectorSetW(LoadFloat(matrix.column2), 0.0f);
+    return VectorGetX(Vector3Dot(column0, Vector3Cross(column1, column2)));
+}
+
+[[nodiscard]] inline bool IsInvertibleAffineJointMatrix(const DeformableJointMatrix& matrix){
+    if(!IsAffineJointMatrix(matrix))
+        return false;
+
+    const f32 determinant = JointLinearDeterminant(matrix);
+    return IsFinite(determinant) && Abs(determinant) > s_Epsilon;
+}
+
+[[nodiscard]] inline bool TryTransformJointNormalDirection(
+    const DeformableJointMatrix& matrix,
+    const SIMDVector directionVector,
+    SIMDVector& outDirection)
+{
+    const SIMDVector column0 = VectorSetW(LoadFloat(matrix.column0), 0.0f);
+    const SIMDVector column1 = VectorSetW(LoadFloat(matrix.column1), 0.0f);
+    const SIMDVector column2 = VectorSetW(LoadFloat(matrix.column2), 0.0f);
+    const f32 determinant = VectorGetX(Vector3Dot(column0, Vector3Cross(column1, column2)));
+    if(!IsFinite(determinant) || Abs(determinant) <= s_Epsilon)
+        return false;
+
+    const SIMDVector inverseDeterminant = VectorReplicate(1.0f / determinant);
+    const SIMDVector normalColumn0 = VectorMultiply(Vector3Cross(column1, column2), inverseDeterminant);
+    const SIMDVector normalColumn1 = VectorMultiply(Vector3Cross(column2, column0), inverseDeterminant);
+    const SIMDVector normalColumn2 = VectorMultiply(Vector3Cross(column0, column1), inverseDeterminant);
+
+    SIMDVector result = VectorMultiply(VectorSplatX(directionVector), normalColumn0);
+    result = VectorMultiplyAdd(VectorSplatY(directionVector), normalColumn1, result);
+    result = VectorMultiplyAdd(VectorSplatZ(directionVector), normalColumn2, result);
+    outDirection = VectorSetW(result, 0.0f);
+    return DeformableValidation::FiniteVector(outDirection, 0x7u);
+}
+
 [[nodiscard]] inline bool ValidateTriangleIndex(
     const DeformableRuntimeMeshInstance& instance,
     const u32 triangle,

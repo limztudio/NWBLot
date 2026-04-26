@@ -161,7 +161,7 @@ template<typename VertexVector>
         return true;
 
     for(const DeformableJointMatrix& joint : jointPalette->joints){
-        if(!IsAffineJointMatrix(joint))
+        if(!IsInvertibleAffineJointMatrix(joint))
             return false;
     }
     return true;
@@ -203,13 +203,16 @@ template<typename VertexVector>
 
         const DeformableJointMatrix& matrix = jointPalette->joints[joint];
         const SIMDVector weightVector = VectorReplicate(weight);
+        SIMDVector transformedNormal;
+        if(!TryTransformJointNormalDirection(matrix, baseNormal, transformedNormal))
+            return false;
         skinnedPosition = VectorMultiplyAdd(
             TransformJointPosition(matrix, basePosition),
             weightVector,
             skinnedPosition
         );
         skinnedNormal = VectorMultiplyAdd(
-            TransformJointDirection(matrix, baseNormal),
+            transformedNormal,
             weightVector,
             skinnedNormal
         );

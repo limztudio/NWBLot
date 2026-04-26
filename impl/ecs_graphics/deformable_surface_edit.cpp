@@ -49,11 +49,6 @@ struct HoleFrame{
     SIMDVector bitangent = VectorZero();
 };
 
-struct WallVertexFrame{
-    SIMDVector normal = VectorZero();
-    SIMDVector tangent = VectorZero();
-};
-
 struct SkinWeightSample{
     u16 joint = 0;
     f32 weight = 0.0f;
@@ -1443,59 +1438,6 @@ template<usize sourceCount>
     return DeformableValidation::FiniteVector(LoadFloat(outColor), 0xFu);
 }
 
-[[nodiscard]] SIMDVector ProjectedEdgeDirection(
-    const Vector<DeformableVertexRest>& vertices,
-    const HoleFrame& frame,
-    const EdgeRecord& edge)
-{
-    return DeformableRuntime::ResolveFrameTangent(
-        frame.normal,
-        VectorSubtract(LoadFloat(vertices[edge.b].position), LoadFloat(vertices[edge.a].position)),
-        frame.tangent
-    );
-}
-
-[[nodiscard]] bool BuildWallVertexFrame(
-    const Vector<DeformableVertexRest>& vertices,
-    const HoleFrame& frame,
-    const EdgeRecord& previousEdge,
-    const EdgeRecord& currentEdge,
-    WallVertexFrame& outFrame)
-{
-    const SIMDVector frameNormal = frame.normal;
-    const SIMDVector previousDirection = ProjectedEdgeDirection(vertices, frame, previousEdge);
-    const SIMDVector currentDirection = ProjectedEdgeDirection(vertices, frame, currentEdge);
-    const SIMDVector previousInwardVector = DeformableRuntime::Normalize(
-        Vector3Cross(frameNormal, previousDirection),
-        frame.bitangent
-    );
-    const SIMDVector currentInwardVector = DeformableRuntime::Normalize(
-        Vector3Cross(frameNormal, currentDirection),
-        previousInwardVector
-    );
-    SIMDVector normalVector = DeformableRuntime::Normalize(
-        VectorAdd(previousInwardVector, currentInwardVector),
-        currentInwardVector
-    );
-
-    const SIMDVector centerOffset = VectorSubtract(frame.center, LoadFloat(vertices[currentEdge.a].position));
-    if(VectorGetX(Vector3Dot(normalVector, centerOffset)) < 0.0f)
-        normalVector = VectorScale(normalVector, -1.0f);
-
-    const SIMDVector tangentVector = DeformableRuntime::ResolveFrameTangent(
-        normalVector,
-        Vector3Cross(frameNormal, normalVector),
-        currentDirection
-    );
-
-    outFrame.normal = normalVector;
-    outFrame.tangent = tangentVector;
-    return VectorGetX(Vector3LengthSq(outFrame.normal)) > s_FrameEpsilon
-        && VectorGetX(Vector3LengthSq(outFrame.tangent)) > s_FrameEpsilon
-        && Abs(VectorGetX(Vector3Dot(outFrame.normal, outFrame.tangent))) <= 0.001f
-    ;
-}
-
 [[nodiscard]] bool AppendWallVertex(
     Vector<DeformableVertexRest>& vertices,
     Vector<SkinInfluence4>& skin,
@@ -2306,10 +2248,10 @@ namespace __hidden_deformable_surface_edit{
                 const usize previousEdgeIndex = edgeIndex == 0u ? boundaryVertexCount - 1u : edgeIndex - 1u;
                 const EdgeRecord& edge = orderedBoundaryEdges[edgeIndex];
 
-                WallVertexFrame vertexFrame;
-                if(!BuildWallVertexFrame(
-                        newRestVertices,
-                        frame,
+                Core::Geometry::MeshTopologyLoopVertexFrame vertexFrame;
+                if(!Core::Geometry::BuildBoundaryLoopVertexFrame(
+                        restPositions,
+                        topologyFrame,
                         orderedBoundaryEdges[previousEdgeIndex],
                         edge,
                         vertexFrame
@@ -2366,8 +2308,8 @@ namespace __hidden_deformable_surface_edit{
                         wallSourceSample,
                         innerColor,
                         innerPosition,
-                        vertexFrame.normal,
-                        vertexFrame.tangent,
+                        LoadFloat(vertexFrame.normal),
+                        LoadFloat(vertexFrame.tangent),
                         uvU,
                         wallV,
                         wallVertices[wallVertexBase + edgeIndex]

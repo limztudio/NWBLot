@@ -267,6 +267,48 @@ static void TestRejectsMalformedWallTrianglePairs(TestContext& context){
     NWB_GEOMETRY_TEST_CHECK(context, indices.empty());
 }
 
+static void TestBuildsBoundaryLoopVertexFrame(TestContext& context){
+    Vector<Float3U> positions;
+    positions.push_back(Float3U(-1.0f, -1.0f, 0.0f));
+    positions.push_back(Float3U(1.0f, -1.0f, 0.0f));
+    positions.push_back(Float3U(1.0f, 1.0f, 0.0f));
+    positions.push_back(Float3U(-1.0f, 1.0f, 0.0f));
+
+    NWB::Core::Geometry::MeshTopologyBoundaryLoopFrame loopFrame;
+    loopFrame.center = Float3U(0.0f, 0.0f, 0.0f);
+    loopFrame.tangent = Float3U(1.0f, 0.0f, 0.0f);
+    loopFrame.bitangent = Float3U(0.0f, 1.0f, 0.0f);
+
+    NWB::Core::Geometry::MeshTopologyLoopVertexFrame vertexFrame;
+    NWB_GEOMETRY_TEST_CHECK(
+        context,
+        NWB::Core::Geometry::BuildBoundaryLoopVertexFrame(
+            positions,
+            loopFrame,
+            MakeEdge(3u, 0u),
+            MakeEdge(0u, 1u),
+            vertexFrame
+        )
+    );
+    NWB_GEOMETRY_TEST_CHECK(context, NearlyEqual(vertexFrame.normal.x, 0.7071067f));
+    NWB_GEOMETRY_TEST_CHECK(context, NearlyEqual(vertexFrame.normal.y, 0.7071067f));
+    NWB_GEOMETRY_TEST_CHECK(context, NearlyEqual(vertexFrame.normal.z, 0.0f));
+    NWB_GEOMETRY_TEST_CHECK(context, NearlyEqual(vertexFrame.tangent.x, -0.7071067f));
+    NWB_GEOMETRY_TEST_CHECK(context, NearlyEqual(vertexFrame.tangent.y, 0.7071067f));
+    NWB_GEOMETRY_TEST_CHECK(context, NearlyEqual(vertexFrame.tangent.z, 0.0f));
+
+    NWB_GEOMETRY_TEST_CHECK(
+        context,
+        !NWB::Core::Geometry::BuildBoundaryLoopVertexFrame(
+            positions,
+            loopFrame,
+            MakeEdge(2u, 3u),
+            MakeEdge(0u, 1u),
+            vertexFrame
+        )
+    );
+}
+
 static void TestBuildsSingleQuadMeshlet(TestContext& context){
     Vector<Float3U> positions;
     positions.push_back(Float3U(-1.0f, -1.0f, 0.0f));
@@ -582,6 +624,7 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
     __hidden_geometry_tests::TestRejectsBranchedBoundaryLoop(context);
     __hidden_geometry_tests::TestAppendsWallTrianglePairs(context);
     __hidden_geometry_tests::TestRejectsMalformedWallTrianglePairs(context);
+    __hidden_geometry_tests::TestBuildsBoundaryLoopVertexFrame(context);
     __hidden_geometry_tests::TestBuildsSingleQuadMeshlet(context);
     __hidden_geometry_tests::TestComputesMeshletDeformationBounds(context);
     __hidden_geometry_tests::TestMeshletBuilderSplitsByLimits(context);

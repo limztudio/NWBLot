@@ -46,6 +46,56 @@ struct BoundaryVertexEdges{
     ;
 }
 
+[[nodiscard]] SIMDVector Normalize(const SIMDVector value, const SIMDVector fallback){
+    if(!FiniteVector(value, 0x7u))
+        return fallback;
+
+    const f32 lengthSquared = VectorGetX(Vector3LengthSq(value));
+    if(!IsFinite(lengthSquared) || lengthSquared <= s_FrameEpsilon)
+        return fallback;
+
+    return VectorMultiply(value, VectorReciprocalSqrt(VectorReplicate(lengthSquared)));
+}
+
+[[nodiscard]] SIMDVector ProjectOntoFramePlane(const SIMDVector value, const SIMDVector normal){
+    return VectorMultiplyAdd(
+        normal,
+        VectorReplicate(-VectorGetX(Vector3Dot(value, normal))),
+        value
+    );
+}
+
+[[nodiscard]] SIMDVector FallbackTangent(const SIMDVector normal){
+    const SIMDVector axis = Abs(VectorGetZ(normal)) < 0.999f
+        ? VectorSet(0.0f, 0.0f, 1.0f, 0.0f)
+        : VectorSet(0.0f, 1.0f, 0.0f, 0.0f)
+    ;
+    return Normalize(Vector3Cross(axis, normal), VectorSet(1.0f, 0.0f, 0.0f, 0.0f));
+}
+
+[[nodiscard]] SIMDVector ResolveFrameTangent(
+    const SIMDVector normal,
+    const SIMDVector tangent,
+    const SIMDVector fallbackTangent)
+{
+    const SIMDVector safeFallbackTangent = FallbackTangent(normal);
+
+    SIMDVector projectedTangent = FiniteVector(tangent, 0x7u)
+        ? ProjectOntoFramePlane(tangent, normal)
+        : safeFallbackTangent
+    ;
+    if(!ValidDirection(projectedTangent)){
+        projectedTangent = FiniteVector(fallbackTangent, 0x7u)
+            ? ProjectOntoFramePlane(fallbackTangent, normal)
+            : safeFallbackTangent
+        ;
+    }
+    if(!ValidDirection(projectedTangent))
+        return safeFallbackTangent;
+
+    return Normalize(projectedTangent, safeFallbackTangent);
+}
+
 [[nodiscard]] bool RegisterBoundaryVertexEdge(
     HashMap<
         u32,
@@ -148,6 +198,25 @@ void CanonicalizeBoundaryLoopStart(Vector<MeshTopologyEdge>& edges){
         return;
 
     Rotate(edges.begin(), edges.begin() + static_cast<isize>(startEdgeIndex), edges.end());
+}
+
+[[nodiscard]] SIMDVector LoopFrameNormal(const MeshTopologyBoundaryLoopFrame& frame){
+    const SIMDVector tangent = Normalize(LoadFloat(frame.tangent), VectorSet(1.0f, 0.0f, 0.0f, 0.0f));
+    const SIMDVector bitangent = Normalize(LoadFloat(frame.bitangent), VectorSet(0.0f, 1.0f, 0.0f, 0.0f));
+    return Normalize(Vector3Cross(tangent, bitangent), VectorSet(0.0f, 0.0f, 1.0f, 0.0f));
+}
+
+[[nodiscard]] SIMDVector ProjectedEdgeDirection(
+    const Vector<Float3U>& positions,
+    const MeshTopologyBoundaryLoopFrame& frame,
+    const SIMDVector frameNormal,
+    const MeshTopologyEdge& edge)
+{
+    return ResolveFrameTangent(
+        frameNormal,
+        VectorSubtract(LoadFloat(positions[edge.b]), LoadFloat(positions[edge.a])),
+        LoadFloat(frame.tangent)
+    );
 }
 
 
@@ -258,6 +327,65 @@ bool BuildOrderedBoundaryLoop(
         ReverseBoundaryLoop(orderedEdges);
     CanonicalizeBoundaryLoopStart(orderedEdges);
     outOrderedEdges = Move(orderedEdges);
+    return true;
+}
+
+bool BuildBoundaryLoopVertexFrame(
+    const Vector<Float3U>& positions,
+    const MeshTopologyBoundaryLoopFrame& frame,
+    const MeshTopologyEdge& previousEdge,
+    const MeshTopologyEdge& currentEdge,
+    MeshTopologyLoopVertexFrame& outFrame)
+{
+    using namespace __hidden_geometry_mesh_topology;
+
+    outFrame = MeshTopologyLoopVertexFrame{};
+    if(positions.empty()
+        || !ValidLoopFrame(frame)
+        || !ValidEdge(previousEdge, positions.size())
+        || !ValidEdge(currentEdge, positions.size())
+        || previousEdge.b != currentEdge.a
+    )
+        return false;
+
+    const SIMDVector frameNormal = LoopFrameNormal(frame);
+    if(!ValidDirection(frameNormal))
+        return false;
+
+    const SIMDVector previousDirection = ProjectedEdgeDirection(positions, frame, frameNormal, previousEdge);
+    const SIMDVector currentDirection = ProjectedEdgeDirection(positions, frame, frameNormal, currentEdge);
+    if(!ValidDirection(previousDirection) || !ValidDirection(currentDirection))
+        return false;
+
+    const SIMDVector previousInwardVector = Normalize(
+        Vector3Cross(frameNormal, previousDirection),
+        LoadFloat(frame.bitangent)
+    );
+    const SIMDVector currentInwardVector = Normalize(
+        Vector3Cross(frameNormal, currentDirection),
+        previousInwardVector
+    );
+    SIMDVector normalVector = Normalize(
+        VectorAdd(previousInwardVector, currentInwardVector),
+        currentInwardVector
+    );
+    if(!ValidDirection(normalVector))
+        return false;
+
+    const SIMDVector centerOffset = VectorSubtract(LoadFloat(frame.center), LoadFloat(positions[currentEdge.a]));
+    if(VectorGetX(Vector3Dot(normalVector, centerOffset)) < 0.0f)
+        normalVector = VectorScale(normalVector, -1.0f);
+
+    const SIMDVector tangentVector = ResolveFrameTangent(
+        normalVector,
+        Vector3Cross(frameNormal, normalVector),
+        currentDirection
+    );
+    if(!ValidDirection(tangentVector) || Abs(VectorGetX(Vector3Dot(normalVector, tangentVector))) > 0.001f)
+        return false;
+
+    StoreFloat(normalVector, &outFrame.normal);
+    StoreFloat(tangentVector, &outFrame.tangent);
     return true;
 }
 

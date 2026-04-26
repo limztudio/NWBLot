@@ -34,6 +34,13 @@ struct MeshTopologyBoundaryLoopFrame{
 static_assert(IsStandardLayout_V<MeshTopologyBoundaryLoopFrame>, "MeshTopologyBoundaryLoopFrame must stay layout-stable");
 static_assert(IsTriviallyCopyable_V<MeshTopologyBoundaryLoopFrame>, "MeshTopologyBoundaryLoopFrame must stay cheap to copy");
 
+struct MeshTopologyLoopVertexFrame{
+    Float3U normal;
+    Float3U tangent;
+};
+static_assert(IsStandardLayout_V<MeshTopologyLoopVertexFrame>, "MeshTopologyLoopVertexFrame must stay layout-stable");
+static_assert(IsTriviallyCopyable_V<MeshTopologyLoopVertexFrame>, "MeshTopologyLoopVertexFrame must stay cheap to copy");
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -43,6 +50,14 @@ static_assert(IsTriviallyCopyable_V<MeshTopologyBoundaryLoopFrame>, "MeshTopolog
     const Vector<Float3U>& positions,
     const MeshTopologyBoundaryLoopFrame& frame,
     Vector<MeshTopologyEdge>& outOrderedEdges
+);
+
+[[nodiscard]] bool BuildBoundaryLoopVertexFrame(
+    const Vector<Float3U>& positions,
+    const MeshTopologyBoundaryLoopFrame& frame,
+    const MeshTopologyEdge& previousEdge,
+    const MeshTopologyEdge& currentEdge,
+    MeshTopologyLoopVertexFrame& outFrame
 );
 
 [[nodiscard]] bool AppendWallTrianglePairs(

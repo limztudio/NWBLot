@@ -2507,6 +2507,121 @@ namespace __hidden_deformable_surface_edit{
     return ValidSurfaceEditState(outHealedState);
 }
 
+[[nodiscard]] bool ReplaySurfaceEditRecordsWithResizedHole(
+    DeformableRuntimeMeshInstance& replayInstance,
+    const DeformableSurfaceEditState& state,
+    const DeformableSurfaceEditId editId,
+    const f32 radius,
+    const f32 ellipseRatio,
+    const f32 depth,
+    DeformableSurfaceEditState& outResizedState,
+    DeformableSurfaceEditResizeResult& outResult)
+{
+    outResizedState = DeformableSurfaceEditState{};
+    outResult = DeformableSurfaceEditResizeResult{};
+    if(!ValidSurfaceEditState(state)
+        || !ValidSurfaceEditId(editId)
+        || !ValidateHoleShapeValues(radius, ellipseRatio, depth)
+    )
+        return false;
+
+    const DeformableSurfaceEditRecord* resizedEdit = FindEditRecordById(state, editId);
+    if(!resizedEdit || resizedEdit->type != DeformableSurfaceEditRecordType::Hole)
+        return false;
+
+    outResult.resizedEditId = editId;
+    outResult.oldRadius = resizedEdit->hole.radius;
+    outResult.oldEllipseRatio = resizedEdit->hole.ellipseRatio;
+    outResult.oldDepth = resizedEdit->hole.depth;
+    outResult.newRadius = radius;
+    outResult.newEllipseRatio = ellipseRatio;
+    outResult.newDepth = depth;
+
+    bool resizedEditFound = false;
+    bool replayDependsOnResizedEdit = false;
+    outResizedState.edits.reserve(state.edits.size());
+    for(const DeformableSurfaceEditRecord& record : state.edits){
+        if(replayInstance.editRevision == Limit<u32>::s_Max)
+            return false;
+
+        DeformableSurfaceEditRecord replayRecord = record;
+        replayRecord.hole.baseEditRevision = replayInstance.editRevision;
+        replayRecord.result.editRevision = replayInstance.editRevision + 1u;
+
+        const bool resizeThisRecord = record.editId == editId;
+        if(resizeThisRecord){
+            replayRecord.hole.radius = radius;
+            replayRecord.hole.ellipseRatio = ellipseRatio;
+            replayRecord.hole.depth = depth;
+            resizedEditFound = true;
+            replayDependsOnResizedEdit = true;
+        }
+
+        bool replayedRecord = false;
+        DeformableHoleEditResult replayResult;
+        const usize triangleCount = replayInstance.indices.size() / 3u;
+        for(usize triangle = 0u; triangle < triangleCount; ++triangle){
+            DeformableHoleEditParams params;
+            if(!BuildReplayHoleParams(replayInstance, replayRecord, triangle, params))
+                continue;
+
+            DeformableRuntimeMeshInstance candidateInstance = replayInstance;
+            DeformableHoleEditResult candidateResult;
+            if(!CommitDeformableRestSpaceHoleImpl(
+                    candidateInstance,
+                    params,
+                    false,
+                    &candidateResult
+                )
+                || !RuntimeMeshHasWallTrianglePairs(candidateInstance, candidateResult)
+            )
+                continue;
+
+            if(!resizeThisRecord){
+                const bool resultMatchesExpected = replayDependsOnResizedEdit
+                    ? ReplayResultShapeMatchesStoredRecord(candidateResult, record)
+                    : ReplayResultMatchesStoredRecord(candidateResult, record)
+                ;
+                if(!resultMatchesExpected)
+                    continue;
+            }
+
+            replayInstance = Move(candidateInstance);
+            replayResult = candidateResult;
+            replayRecord.result = candidateResult;
+            replayedRecord = true;
+            break;
+        }
+        if(!replayedRecord)
+            return false;
+
+        outResizedState.edits.push_back(replayRecord);
+        ++outResult.replay.appliedEditCount;
+        outResult.replay.topologyChanged = outResult.replay.topologyChanged
+            || HoleResultChangesTopology(replayResult)
+        ;
+    }
+    if(!resizedEditFound)
+        return false;
+
+    outResizedState.accessories.reserve(state.accessories.size());
+    for(const DeformableAccessoryAttachmentRecord& accessory : state.accessories){
+        const DeformableSurfaceEditRecord* anchorEdit =
+            FindEditRecordById(outResizedState, accessory.anchorEditId)
+        ;
+        if(!anchorEdit)
+            return false;
+
+        DeformableAccessoryAttachmentRecord replayAccessory = accessory;
+        replayAccessory.firstWallVertex = anchorEdit->result.firstWallVertex;
+        replayAccessory.wallVertexCount = anchorEdit->result.wallVertexCount;
+        outResizedState.accessories.push_back(replayAccessory);
+    }
+
+    outResult.replay.finalEditRevision = replayInstance.editRevision;
+    return ValidSurfaceEditState(outResizedState);
+}
+
 [[nodiscard]] bool PrepareCleanReplayInstance(
     const DeformableRuntimeMeshInstance& instance,
     const DeformableRuntimeMeshInstance& cleanBaseInstance,
@@ -2655,6 +2770,51 @@ bool HealSurfaceEdit(
         return false;
 
     state = Move(healedState);
+    instance = Move(replayInstance);
+    if(outResult)
+        *outResult = result;
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool ResizeSurfaceEdit(
+    DeformableRuntimeMeshInstance& instance,
+    const DeformableRuntimeMeshInstance& cleanBaseInstance,
+    DeformableSurfaceEditState& state,
+    const DeformableSurfaceEditId editId,
+    const f32 radius,
+    const f32 ellipseRatio,
+    const f32 depth,
+    DeformableSurfaceEditResizeResult* outResult)
+{
+    if(outResult)
+        *outResult = DeformableSurfaceEditResizeResult{};
+
+    DeformableRuntimeMeshInstance replayInstance;
+    if(!__hidden_deformable_surface_edit::PrepareCleanReplayInstance(instance, cleanBaseInstance, replayInstance))
+        return false;
+
+    DeformableSurfaceEditState resizedState;
+    DeformableSurfaceEditResizeResult result;
+    if(!__hidden_deformable_surface_edit::ReplaySurfaceEditRecordsWithResizedHole(
+            replayInstance,
+            state,
+            editId,
+            radius,
+            ellipseRatio,
+            depth,
+            resizedState,
+            result
+        )
+    )
+        return false;
+    if(!__hidden_deformable_surface_edit::ValidateReplayAccessoryAnchors(replayInstance, resizedState))
+        return false;
+
+    state = Move(resizedState);
     instance = Move(replayInstance);
     if(outResult)
         *outResult = result;

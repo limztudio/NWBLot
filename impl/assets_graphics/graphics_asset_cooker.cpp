@@ -1470,22 +1470,22 @@ static bool ParseInverseBindMatrices(
         f32 column[4] = {};
         AString label = MakeIndexedLabel("inverse_bind_matrices", matrixIndex);
         AString columnLabel = MakeIndexedLabel(label, 0u);
-        if(!ParseMetadataF32Tuple(nwbFilePath, columns[0u], "Deformable geometry", columnLabel, column))
+        if(!ParseMetadataF32Tuple(nwbFilePath, columns[0u], s_DeformableGeometryMetaKind, columnLabel, column))
             return false;
         matrix.rows[0] = Float4(column[0u], column[1u], column[2u], column[3u]);
 
         columnLabel = MakeIndexedLabel(label, 1u);
-        if(!ParseMetadataF32Tuple(nwbFilePath, columns[1u], "Deformable geometry", columnLabel, column))
+        if(!ParseMetadataF32Tuple(nwbFilePath, columns[1u], s_DeformableGeometryMetaKind, columnLabel, column))
             return false;
         matrix.rows[1] = Float4(column[0u], column[1u], column[2u], column[3u]);
 
         columnLabel = MakeIndexedLabel(label, 2u);
-        if(!ParseMetadataF32Tuple(nwbFilePath, columns[2u], "Deformable geometry", columnLabel, column))
+        if(!ParseMetadataF32Tuple(nwbFilePath, columns[2u], s_DeformableGeometryMetaKind, columnLabel, column))
             return false;
         matrix.rows[2] = Float4(column[0u], column[1u], column[2u], column[3u]);
 
         columnLabel = MakeIndexedLabel(label, 3u);
-        if(!ParseMetadataF32Tuple(nwbFilePath, columns[3u], "Deformable geometry", columnLabel, column))
+        if(!ParseMetadataF32Tuple(nwbFilePath, columns[3u], s_DeformableGeometryMetaKind, columnLabel, column))
             return false;
         matrix.rows[3] = Float4(column[0u], column[1u], column[2u], column[3u]);
 

@@ -402,6 +402,27 @@ static NWB::Impl::DeformableJointMatrix MakeZHalfTurnJointMatrix(){
     return joint;
 }
 
+static NWB::Impl::DeformableJointMatrix MakeXHalfTurnJointMatrix(){
+    NWB::Impl::DeformableJointMatrix joint;
+    joint.column1 = Float4(0.0f, -1.0f, 0.0f, 0.0f);
+    joint.column2 = Float4(0.0f, 0.0f, -1.0f, 0.0f);
+    return joint;
+}
+
+static NWB::Impl::DeformableJointMatrix MakeYHalfTurnJointMatrix(){
+    NWB::Impl::DeformableJointMatrix joint;
+    joint.column0 = Float4(-1.0f, 0.0f, 0.0f, 0.0f);
+    joint.column2 = Float4(0.0f, 0.0f, -1.0f, 0.0f);
+    return joint;
+}
+
+static NWB::Impl::DeformableJointMatrix MakeZQuarterTurnJointMatrix(){
+    NWB::Impl::DeformableJointMatrix joint;
+    joint.column0 = Float4(0.0f, 1.0f, 0.0f, 0.0f);
+    joint.column1 = Float4(-1.0f, 0.0f, 0.0f, 0.0f);
+    return joint;
+}
+
 static NWB::Impl::DeformableJointMatrix MakeNonUniformScaleJointMatrix(){
     NWB::Impl::DeformableJointMatrix joint;
     joint.column0 = Float4(2.0f, 0.0f, 0.0f, 0.0f);
@@ -2260,6 +2281,47 @@ static void TestDeformerMorphPayloadBuildsSparseVertexRanges(TestContext& contex
 
 static NWB::Impl::DeformableJointMatrix MakeIdentityJointMatrix(){
     return MakeTranslationJointMatrix(0.0f, 0.0f, 0.0f);
+}
+
+static void CheckJointRotationQuaternion(
+    TestContext& context,
+    const NWB::Impl::DeformableJointMatrix& joint,
+    const f32 x,
+    const f32 y,
+    const f32 z,
+    const f32 w)
+{
+    SIMDVector quaternion = QuaternionIdentity();
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Impl::DeformableRuntime::TryBuildJointRotationQuaternion(
+            NWB::Impl::DeformableRuntime::LoadJointMatrix(joint),
+            quaternion
+        )
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(VectorGetX(quaternion), x));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(VectorGetY(quaternion), y));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(VectorGetZ(quaternion), z));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(VectorGetW(quaternion), w));
+}
+
+static void TestJointRotationQuaternionBuildsColumnVectorRotations(TestContext& context){
+    constexpr f32 s_HalfSqrtTwo = 0.70710678118f;
+
+    CheckJointRotationQuaternion(context, MakeIdentityJointMatrix(), 0.0f, 0.0f, 0.0f, 1.0f);
+    CheckJointRotationQuaternion(context, MakeZQuarterTurnJointMatrix(), 0.0f, 0.0f, s_HalfSqrtTwo, s_HalfSqrtTwo);
+    CheckJointRotationQuaternion(context, MakeXHalfTurnJointMatrix(), 1.0f, 0.0f, 0.0f, 0.0f);
+    CheckJointRotationQuaternion(context, MakeYHalfTurnJointMatrix(), 0.0f, 1.0f, 0.0f, 0.0f);
+    CheckJointRotationQuaternion(context, MakeZHalfTurnJointMatrix(), 0.0f, 0.0f, 1.0f, 0.0f);
+
+    SIMDVector quaternion = QuaternionIdentity();
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        !NWB::Impl::DeformableRuntime::TryBuildJointRotationQuaternion(
+            NWB::Impl::DeformableRuntime::LoadJointMatrix(MakeNonUniformScaleJointMatrix()),
+            quaternion
+        )
+    );
 }
 
 static NWB::Impl::DeformableSkeletonPoseComponent MakeTwoJointSkeletonPose(
@@ -5851,6 +5913,7 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
     __hidden_ecs_graphics_tests::TestPickingSkinAppliesInverseBindMatrix(context);
     __hidden_ecs_graphics_tests::TestPickingSkinUsesNormalMatrixForNonUniformScale(context);
     __hidden_ecs_graphics_tests::TestPickingSkinBlendsTwoJoints(context);
+    __hidden_ecs_graphics_tests::TestJointRotationQuaternionBuildsColumnVectorRotations(context);
     __hidden_ecs_graphics_tests::TestPickingDualQuaternionSkinPreservesTwist(context);
     __hidden_ecs_graphics_tests::TestPickingDualQuaternionSkinRejectsScaledPalette(context);
     __hidden_ecs_graphics_tests::TestPickingRejectsSkinJointOutsidePalette(context);

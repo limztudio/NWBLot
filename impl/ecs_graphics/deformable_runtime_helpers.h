@@ -287,67 +287,7 @@ template<typename JointMatrixVector>
     if(!IsRigidJointMatrix(matrix))
         return false;
 
-    const f32 m00 = VectorGetX(matrix.v[0]);
-    const f32 m10 = VectorGetY(matrix.v[0]);
-    const f32 m20 = VectorGetZ(matrix.v[0]);
-    const f32 m01 = VectorGetX(matrix.v[1]);
-    const f32 m11 = VectorGetY(matrix.v[1]);
-    const f32 m21 = VectorGetZ(matrix.v[1]);
-    const f32 m02 = VectorGetX(matrix.v[2]);
-    const f32 m12 = VectorGetY(matrix.v[2]);
-    const f32 m22 = VectorGetZ(matrix.v[2]);
-
-    f32 x = 0.0f;
-    f32 y = 0.0f;
-    f32 z = 0.0f;
-    f32 w = 1.0f;
-    const f32 trace = m00 + m11 + m22;
-    if(trace > 0.0f){
-        const f32 s = Sqrt(trace + 1.0f) * 2.0f;
-        if(!IsFinite(s) || s <= s_Epsilon)
-            return false;
-
-        x = (m21 - m12) / s;
-        y = (m02 - m20) / s;
-        z = (m10 - m01) / s;
-        w = 0.25f * s;
-    }
-    else if(m00 > m11 && m00 > m22){
-        const f32 s = Sqrt(1.0f + m00 - m11 - m22) * 2.0f;
-        if(!IsFinite(s) || s <= s_Epsilon)
-            return false;
-
-        x = 0.25f * s;
-        y = (m01 + m10) / s;
-        z = (m02 + m20) / s;
-        w = (m21 - m12) / s;
-    }
-    else if(m11 > m22){
-        const f32 s = Sqrt(1.0f + m11 - m00 - m22) * 2.0f;
-        if(!IsFinite(s) || s <= s_Epsilon)
-            return false;
-
-        x = (m01 + m10) / s;
-        y = 0.25f * s;
-        z = (m12 + m21) / s;
-        w = (m02 - m20) / s;
-    }
-    else{
-        const f32 s = Sqrt(1.0f + m22 - m00 - m11) * 2.0f;
-        if(!IsFinite(s) || s <= s_Epsilon)
-            return false;
-
-        x = (m02 + m20) / s;
-        y = (m12 + m21) / s;
-        z = 0.25f * s;
-        w = (m10 - m01) / s;
-    }
-
-    const SIMDVector quaternion = VectorSet(x, y, z, w);
-    if(QuaternionIsNaN(quaternion) || QuaternionIsInfinite(quaternion))
-        return false;
-
-    outQuaternion = QuaternionNormalize(quaternion);
+    outQuaternion = QuaternionRotationMatrix(MatrixTranspose(matrix));
     return !QuaternionIsNaN(outQuaternion) && !QuaternionIsInfinite(outQuaternion);
 }
 

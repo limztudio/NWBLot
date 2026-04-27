@@ -65,6 +65,14 @@ static bool NearlyEqual4(const Float4U& value, const f32 x, const f32 y, const f
     ;
 }
 
+static bool NearlyEqualBounds(const MeshletBounds& lhs, const MeshletBounds& rhs){
+    return NearlyEqual3(lhs.minimum, rhs.minimum.x, rhs.minimum.y, rhs.minimum.z)
+        && NearlyEqual3(lhs.maximum, rhs.maximum.x, rhs.maximum.y, rhs.maximum.z)
+        && NearlyEqual3(lhs.center, rhs.center.x, rhs.center.y, rhs.center.z)
+        && NearlyEqual(lhs.radius, rhs.radius)
+    ;
+}
+
 static void TestResolvesCoreFrameMath(TestContext& context){
     SIMDVector normal = VectorSet(0.0f, 0.0f, 5.0f, 0.0f);
     SIMDVector tangent = VectorSet(2.0f, 1.0f, 0.0f, -0.25f);
@@ -987,6 +995,94 @@ static void TestMeshletBuilderSplitsByLimits(TestContext& context){
     NWB_GEOMETRY_TEST_CHECK(context, meshlets[1].vertexCount == 3u);
 }
 
+static void TestMeshletBuilderRebuildsDeterministically(TestContext& context){
+    Vector<Float3U> positions;
+    positions.push_back(Float3U(0.0f, 0.0f, 0.0f));
+    positions.push_back(Float3U(1.0f, 0.0f, 0.0f));
+    positions.push_back(Float3U(0.0f, 1.0f, 0.0f));
+    positions.push_back(Float3U(1.0f, 1.0f, 0.0f));
+    positions.push_back(Float3U(2.0f, 1.0f, 0.0f));
+
+    Vector<u32> indices;
+    indices.push_back(0u);
+    indices.push_back(1u);
+    indices.push_back(2u);
+    indices.push_back(1u);
+    indices.push_back(3u);
+    indices.push_back(2u);
+    indices.push_back(1u);
+    indices.push_back(4u);
+    indices.push_back(3u);
+
+    MeshletBuildConfig config;
+    config.maxVertices = 4u;
+    config.maxTriangles = 2u;
+
+    Vector<MeshletCluster> firstMeshlets;
+    Vector<u32> firstVertexIndices;
+    Vector<u32> firstLocalIndices;
+    NWB_GEOMETRY_TEST_CHECK(
+        context,
+        NWB::Core::Geometry::BuildMeshlets(
+            positions,
+            indices,
+            config,
+            firstMeshlets,
+            firstVertexIndices,
+            firstLocalIndices
+        )
+    );
+
+    Vector<MeshletCluster> secondMeshlets;
+    Vector<u32> secondVertexIndices;
+    Vector<u32> secondLocalIndices;
+    secondMeshlets.push_back(MeshletCluster{});
+    secondVertexIndices.push_back(99u);
+    secondLocalIndices.push_back(99u);
+    NWB_GEOMETRY_TEST_CHECK(
+        context,
+        NWB::Core::Geometry::BuildMeshlets(
+            positions,
+            indices,
+            config,
+            secondMeshlets,
+            secondVertexIndices,
+            secondLocalIndices
+        )
+    );
+
+    NWB_GEOMETRY_TEST_CHECK(context, secondMeshlets.size() == firstMeshlets.size());
+    NWB_GEOMETRY_TEST_CHECK(context, secondVertexIndices.size() == firstVertexIndices.size());
+    NWB_GEOMETRY_TEST_CHECK(context, secondLocalIndices.size() == firstLocalIndices.size());
+    for(usize i = 0u; i < firstMeshlets.size(); ++i){
+        NWB_GEOMETRY_TEST_CHECK(context, secondMeshlets[i].firstVertex == firstMeshlets[i].firstVertex);
+        NWB_GEOMETRY_TEST_CHECK(context, secondMeshlets[i].vertexCount == firstMeshlets[i].vertexCount);
+        NWB_GEOMETRY_TEST_CHECK(context, secondMeshlets[i].firstIndex == firstMeshlets[i].firstIndex);
+        NWB_GEOMETRY_TEST_CHECK(context, secondMeshlets[i].indexCount == firstMeshlets[i].indexCount);
+        NWB_GEOMETRY_TEST_CHECK(context, NearlyEqualBounds(secondMeshlets[i].bounds, firstMeshlets[i].bounds));
+    }
+    for(usize i = 0u; i < firstVertexIndices.size(); ++i)
+        NWB_GEOMETRY_TEST_CHECK(context, secondVertexIndices[i] == firstVertexIndices[i]);
+    for(usize i = 0u; i < firstLocalIndices.size(); ++i)
+        NWB_GEOMETRY_TEST_CHECK(context, secondLocalIndices[i] == firstLocalIndices[i]);
+
+    positions[4u].x = Limit<f32>::s_QuietNaN;
+    NWB_GEOMETRY_TEST_CHECK(
+        context,
+        !NWB::Core::Geometry::BuildMeshlets(
+            positions,
+            indices,
+            config,
+            secondMeshlets,
+            secondVertexIndices,
+            secondLocalIndices
+        )
+    );
+    NWB_GEOMETRY_TEST_CHECK(context, secondMeshlets.empty());
+    NWB_GEOMETRY_TEST_CHECK(context, secondVertexIndices.empty());
+    NWB_GEOMETRY_TEST_CHECK(context, secondLocalIndices.empty());
+}
+
 static void TestMeshletBuilderRejectsInvalidInput(TestContext& context){
     Vector<Float3U> positions;
     positions.push_back(Float3U(0.0f, 0.0f, 0.0f));
@@ -1151,6 +1247,7 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
     __hidden_geometry_tests::TestBuildsSingleQuadMeshlet(context);
     __hidden_geometry_tests::TestComputesMeshletDeformationBounds(context);
     __hidden_geometry_tests::TestMeshletBuilderSplitsByLimits(context);
+    __hidden_geometry_tests::TestMeshletBuilderRebuildsDeterministically(context);
     __hidden_geometry_tests::TestMeshletBuilderRejectsInvalidInput(context);
     __hidden_geometry_tests::TestRejectsInvalidMeshletDeformationBounds(context);
     if(context.failed != 0u){

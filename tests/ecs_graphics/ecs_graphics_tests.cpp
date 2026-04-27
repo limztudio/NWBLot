@@ -131,6 +131,23 @@ public:
     }
 };
 
+class TestWrongTypeGeometryAssetCodec final : public NWB::Core::Assets::IAssetCodec{
+public:
+    TestWrongTypeGeometryAssetCodec()
+        : NWB::Core::Assets::IAssetCodec(NWB::Impl::Geometry::AssetTypeName())
+    {}
+
+    virtual bool deserialize(
+        const Name& virtualPath,
+        const NWB::Core::Assets::AssetBytes& binary,
+        UniquePtr<NWB::Core::Assets::IAsset>& outAsset
+    )const override{
+        static_cast<void>(binary);
+        outAsset = MakeUnique<NWB::Impl::Material>(virtualPath);
+        return true;
+    }
+};
+
 class TestAssetBinarySource final : public NWB::Core::Assets::IAssetBinarySource{
 public:
     void addAvailablePath(const AStringView virtualPath){
@@ -3367,6 +3384,71 @@ static void TestSurfaceEditStateReplayRestoresAccessory(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(resolvedTransform.scale.x, 0.12f));
 }
 
+static void TestSurfaceEditStateReplayRejectsInvalidAccessoryAsset(TestContext& context){
+    NWB::Impl::DeformableRuntimeMeshInstance editedInstance = MakeGridHoleInstance();
+    editedInstance.editRevision = 0u;
+    NWB::Impl::DeformableSurfaceEditState state;
+    NWB::Impl::DeformableHoleEditResult holeResult;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, CommitRecordedHole(editedInstance, 8u, 0.48f, 0.25f, state, &holeResult));
+
+    NWB::Impl::DeformableAccessoryAttachmentComponent attachment;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::AttachAccessory(editedInstance, holeResult, 0.08f, 0.12f, attachment));
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        AppendAccessoryRecord(
+            state,
+            attachment,
+            state.edits.back().editId,
+            s_MockAccessoryGeometryPath,
+            s_MockAccessoryMaterialPath
+        )
+    );
+
+    NWB::Core::Assets::AssetBytes binary;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::SerializeSurfaceEditState(state, binary));
+    NWB::Impl::DeformableSurfaceEditState loadedState;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::DeserializeSurfaceEditState(binary, loadedState));
+
+    TestAssetManager testAssets;
+    testAssets.binarySource.addAvailablePath(s_MockAccessoryGeometryPath);
+    testAssets.binarySource.addAvailablePath(s_MockAccessoryMaterialPath);
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        testAssets.registry.registerCodec(MakeUnique<TestWrongTypeGeometryAssetCodec>(), true)
+    );
+    TestWorld testWorld;
+    auto targetEntity = testWorld.world.createEntity();
+    NWB::Impl::DeformableRuntimeMeshInstance replayInstance = MakeGridHoleInstance();
+    replayInstance.entity = targetEntity.id();
+    replayInstance.editRevision = 0u;
+    replayInstance.handle.value = 246u;
+
+    const usize oldVertexCount = replayInstance.restVertices.size();
+    const usize oldIndexCount = replayInstance.indices.size();
+
+    NWB::Impl::DeformableSurfaceEditReplayContext replayContext;
+    replayContext.assetManager = &testAssets.manager;
+    replayContext.world = &testWorld.world;
+    replayContext.targetEntity = replayInstance.entity;
+
+    NWB::Impl::DeformableSurfaceEditReplayResult replayResult;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        !NWB::Impl::ApplySurfaceEditState(replayInstance, loadedState, replayContext, &replayResult)
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, replayResult.appliedEditCount == 0u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, replayResult.restoredAccessoryCount == 0u);
+    CheckHoleEditUnchanged(context, replayInstance, oldVertexCount, oldIndexCount, 0u);
+
+    u32 accessoryCount = 0u;
+    testWorld.world.view<NWB::Impl::DeformableAccessoryAttachmentComponent>().each(
+        [&](NWB::Core::ECS::EntityID, NWB::Impl::DeformableAccessoryAttachmentComponent&){
+            ++accessoryCount;
+        }
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, accessoryCount == 0u);
+}
+
 static void TestSurfaceEditStateReplayRestoresMultipleAccessories(TestContext& context){
     NWB::Impl::DeformableRuntimeMeshInstance editedInstance = MakeGridHoleInstance(6u, 4u);
     editedInstance.editRevision = 0u;
@@ -5272,6 +5354,7 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
     __hidden_ecs_graphics_tests::TestSurfaceEditFlowAttachesAndPersistsAccessory(context);
     __hidden_ecs_graphics_tests::TestSurfaceEditStateReplayOneHole(context);
     __hidden_ecs_graphics_tests::TestSurfaceEditStateReplayRestoresAccessory(context);
+    __hidden_ecs_graphics_tests::TestSurfaceEditStateReplayRejectsInvalidAccessoryAsset(context);
     __hidden_ecs_graphics_tests::TestSurfaceEditStateReplayRestoresMultipleAccessories(context);
     __hidden_ecs_graphics_tests::TestMinimalMilestoneReplayPreservesAnimatedPayload(context);
     __hidden_ecs_graphics_tests::TestSurfaceEditStateReplayTwoHoles(context);

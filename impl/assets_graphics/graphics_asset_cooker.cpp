@@ -1466,13 +1466,16 @@ static bool ParseSourceSamples(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     const usize vertexCount,
-    Vector<SourceSample>& outSourceSamples
+    Vector<SourceSample>& outSourceSamples,
+    bool& outSourceSamplesProvided
 ){
     outSourceSamples.clear();
+    outSourceSamplesProvided = false;
 
     const Core::Metascript::Value* sourceSamples = FindField(asset, "source_samples");
     if(!sourceSamples)
         return true;
+    outSourceSamplesProvided = true;
     if(!sourceSamples->isMap()){
         if(IsExplicitEmptyOptionalField(*sourceSamples))
             return true;
@@ -1511,6 +1514,74 @@ static bool ParseSourceSamples(
         sample.bary[2] = bary[i].z;
         outSourceSamples.push_back(sample);
     }
+    return true;
+}
+
+static bool GenerateIdentitySourceSamples(
+    const Path& nwbFilePath,
+    const Vector<u32>& indices,
+    const usize vertexCount,
+    Vector<SourceSample>& outSourceSamples)
+{
+    outSourceSamples.clear();
+    if(vertexCount == 0u || vertexCount > static_cast<usize>(Limit<u32>::s_Max)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Deformable geometry meta '{}': cannot generate source samples for invalid vertex count"),
+            PathToString<tchar>(nwbFilePath)
+        );
+        return false;
+    }
+    if(indices.empty() || (indices.size() % 3u) != 0u || (indices.size() / 3u) > static_cast<usize>(Limit<u32>::s_Max)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Deformable geometry meta '{}': cannot generate source samples for invalid indices"),
+            PathToString<tchar>(nwbFilePath)
+        );
+        return false;
+    }
+
+    Core::Alloc::ScratchArena<> scratchArena;
+    Vector<u8, Core::Alloc::ScratchAllocator<u8>> assigned{
+        Core::Alloc::ScratchAllocator<u8>(scratchArena)
+    };
+    assigned.resize(vertexCount, 0u);
+    outSourceSamples.resize(vertexCount);
+
+    for(usize triangleIndex = 0u; triangleIndex < indices.size() / 3u; ++triangleIndex){
+        const usize indexBase = triangleIndex * 3u;
+        for(u32 cornerIndex = 0u; cornerIndex < 3u; ++cornerIndex){
+            const u32 vertexIndex = indices[indexBase + cornerIndex];
+            if(vertexIndex >= vertexCount){
+                NWB_LOGGER_ERROR(
+                    NWB_TEXT("Deformable geometry meta '{}': source sample generation found vertex index {} outside vertex count {}"),
+                    PathToString<tchar>(nwbFilePath),
+                    vertexIndex,
+                    vertexCount
+                );
+                return false;
+            }
+            if(assigned[vertexIndex] != 0u)
+                continue;
+
+            SourceSample sample;
+            sample.sourceTri = static_cast<u32>(triangleIndex);
+            sample.bary[cornerIndex] = 1.0f;
+            outSourceSamples[vertexIndex] = sample;
+            assigned[vertexIndex] = 1u;
+        }
+    }
+
+    for(usize vertexIndex = 0u; vertexIndex < assigned.size(); ++vertexIndex){
+        if(assigned[vertexIndex] != 0u)
+            continue;
+
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Deformable geometry meta '{}': cannot generate source sample for unreferenced vertex {}"),
+            PathToString<tchar>(nwbFilePath),
+            vertexIndex
+        );
+        return false;
+    }
+
     return true;
 }
 
@@ -1881,7 +1952,24 @@ static bool ParseDeformableGeometryMeta(
         return false;
     if(!ParseInverseBindMatrices(discoveredFile.filePath, asset, outEntry.skeletonJointCount, outEntry.inverseBindMatrices))
         return false;
-    if(!ParseSourceSamples(discoveredFile.filePath, asset, outEntry.restVertices.size(), outEntry.sourceSamples))
+    bool sourceSamplesProvided = false;
+    if(!ParseSourceSamples(
+            discoveredFile.filePath,
+            asset,
+            outEntry.restVertices.size(),
+            outEntry.sourceSamples,
+            sourceSamplesProvided
+        )
+    )
+        return false;
+    if(!sourceSamplesProvided
+        && !GenerateIdentitySourceSamples(
+            discoveredFile.filePath,
+            outEntry.indices,
+            outEntry.restVertices.size(),
+            outEntry.sourceSamples
+        )
+    )
         return false;
     if(!ParseEditMasks(discoveredFile.filePath, asset, outEntry.indices.size() / 3u, outEntry.editMaskPerTriangle))
         return false;

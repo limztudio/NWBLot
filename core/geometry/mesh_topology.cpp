@@ -250,16 +250,18 @@ bool BuildOrderedBoundaryLoopImpl(
 
     const u32 startVertex = boundaryEdges[0].a;
     u32 currentVertex = startVertex;
-    Vector<MeshTopologyEdge, Core::Alloc::ScratchAllocator<MeshTopologyEdge>> orderedEdges{
-        Core::Alloc::ScratchAllocator<MeshTopologyEdge>(scratchArena)
+    auto fail = [&outOrderedEdges](){
+        outOrderedEdges.clear();
+        return false;
     };
-    orderedEdges.reserve(boundaryEdges.size());
-    while(orderedEdges.size() < boundaryEdges.size()){
+
+    outOrderedEdges.reserve(boundaryEdges.size());
+    while(outOrderedEdges.size() < boundaryEdges.size()){
         usize nextEdgeIndex = Limit<usize>::s_Max;
         MeshTopologyEdge nextEdge;
         const auto foundEdges = vertexEdges.find(currentVertex);
         if(foundEdges == vertexEdges.end())
-            return false;
+            return fail();
 
         const BoundaryVertexEdges& adjacentEdges = foundEdges.value();
         for(u32 adjacencyIndex = 0u; adjacencyIndex < adjacentEdges.count; ++adjacencyIndex){
@@ -283,25 +285,24 @@ bool BuildOrderedBoundaryLoopImpl(
         }
 
         if(nextEdgeIndex == Limit<usize>::s_Max)
-            return false;
+            return fail();
 
         visitedEdges[nextEdgeIndex] = 1u;
-        orderedEdges.push_back(nextEdge);
+        outOrderedEdges.push_back(nextEdge);
         currentVertex = nextEdge.b;
-        if(currentVertex == startVertex && orderedEdges.size() != boundaryEdges.size())
-            return false;
+        if(currentVertex == startVertex && outOrderedEdges.size() != boundaryEdges.size())
+            return fail();
     }
 
     if(currentVertex != startVertex)
-        return false;
+        return fail();
 
-    const f32 signedArea = ProjectedSignedLoopArea(orderedEdges, positions, frame);
+    const f32 signedArea = ProjectedSignedLoopArea(outOrderedEdges, positions, frame);
     if(!IsFinite(signedArea) || Abs(signedArea) <= s_FrameDirectionEpsilon)
-        return false;
+        return fail();
     if(signedArea < 0.0f)
-        ReverseBoundaryLoop(orderedEdges);
-    CanonicalizeBoundaryLoopStart(orderedEdges);
-    outOrderedEdges.assign(orderedEdges.begin(), orderedEdges.end());
+        ReverseBoundaryLoop(outOrderedEdges);
+    CanonicalizeBoundaryLoopStart(outOrderedEdges);
     return true;
 }
 
@@ -372,10 +373,12 @@ bool BuildBoundaryEdgesFromRemovedTrianglesImpl(
     if(removedTriangleCount == 0u || removedTriangleCount >= triangleCount)
         return false;
 
-    Vector<MeshTopologyEdge, Core::Alloc::ScratchAllocator<MeshTopologyEdge>> boundaryEdges{
-        Core::Alloc::ScratchAllocator<MeshTopologyEdge>(scratchArena)
+    auto fail = [&outBoundaryEdges](){
+        outBoundaryEdges.clear();
+        return false;
     };
-    boundaryEdges.reserve(static_cast<usize>(removedTriangleCount) * 3u);
+
+    outBoundaryEdges.reserve(static_cast<usize>(removedTriangleCount) * 3u);
     VertexDegreeMap boundaryDegrees(
         0,
         Hasher<u32>(),
@@ -389,24 +392,23 @@ bool BuildBoundaryEdgesFromRemovedTrianglesImpl(
         if(edge.removedCount == 0u)
             continue;
         if(edge.removedCount > edge.fullCount || edge.fullCount > 2u)
-            return false;
+            return fail();
         if(edge.removedCount == 1u){
             if(edge.fullCount != 2u)
-                return false;
-            boundaryEdges.push_back(edge);
+                return fail();
+            outBoundaryEdges.push_back(edge);
             IncrementVertexDegree(boundaryDegrees, edge.a);
             IncrementVertexDegree(boundaryDegrees, edge.b);
         }
     }
-    if(boundaryEdges.empty())
-        return false;
+    if(outBoundaryEdges.empty())
+        return fail();
     for(const auto& [vertex, degree] : boundaryDegrees){
         static_cast<void>(vertex);
         if(degree != 2u)
-            return false;
+            return fail();
     }
 
-    outBoundaryEdges.assign(boundaryEdges.begin(), boundaryEdges.end());
     if(outRemovedTriangleCount)
         *outRemovedTriangleCount = removedTriangleCount;
     return true;

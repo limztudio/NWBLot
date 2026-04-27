@@ -264,21 +264,18 @@ bool BuildMeshlets(
     PendingMeshlet pending(scratchArena);
     pending.vertices.reserve(config.maxVertices);
     pending.indices.reserve(config.maxTriangles * 3u);
-    Vector<MeshletCluster, Core::Alloc::ScratchAllocator<MeshletCluster>> meshlets{
-        Core::Alloc::ScratchAllocator<MeshletCluster>(scratchArena)
-    };
-    Vector<u32, Core::Alloc::ScratchAllocator<u32>> vertexIndices{
-        Core::Alloc::ScratchAllocator<u32>(scratchArena)
-    };
-    Vector<u32, Core::Alloc::ScratchAllocator<u32>> localIndices{
-        Core::Alloc::ScratchAllocator<u32>(scratchArena)
+    auto fail = [&outMeshlets, &outVertexIndices, &outLocalIndices](){
+        outMeshlets.clear();
+        outVertexIndices.clear();
+        outLocalIndices.clear();
+        return false;
     };
 
     const usize triangleCount = indices.size() / 3u;
     const usize meshletCountReserve = (triangleCount + static_cast<usize>(config.maxTriangles) - 1u) / config.maxTriangles;
-    meshlets.reserve(meshletCountReserve);
-    vertexIndices.reserve(indices.size());
-    localIndices.reserve(indices.size());
+    outMeshlets.reserve(meshletCountReserve);
+    outVertexIndices.reserve(indices.size());
+    outLocalIndices.reserve(indices.size());
     for(usize triangleIndex = 0u; triangleIndex < triangleCount; ++triangleIndex){
         const usize indexBase = triangleIndex * 3u;
         TriangleVertices triangle;
@@ -287,25 +284,22 @@ bool BuildMeshlets(
         triangle.values[2] = indices[indexBase + 2u];
 
         if(!ValidTriangle(positions, triangle))
-            return false;
+            return fail();
         TriangleLocalIndices triangleLocalIndices = ResolveTriangleLocalIndices(pending, triangle);
         bool triangleFits = TriangleFitsMeshlet(pending, triangleLocalIndices, config);
         if(!triangleFits){
-            if(!FlushMeshlet(positions, pending, meshlets, vertexIndices, localIndices))
-                return false;
+            if(!FlushMeshlet(positions, pending, outMeshlets, outVertexIndices, outLocalIndices))
+                return fail();
             triangleLocalIndices = ResolveTriangleLocalIndices(pending, triangle);
             triangleFits = TriangleFitsMeshlet(pending, triangleLocalIndices, config);
         }
         if(!triangleFits || !AppendTriangle(pending, triangle, triangleLocalIndices))
-            return false;
+            return fail();
     }
 
-    if(!FlushMeshlet(positions, pending, meshlets, vertexIndices, localIndices) || meshlets.empty())
-        return false;
+    if(!FlushMeshlet(positions, pending, outMeshlets, outVertexIndices, outLocalIndices) || outMeshlets.empty())
+        return fail();
 
-    outMeshlets.assign(meshlets.begin(), meshlets.end());
-    outVertexIndices.assign(vertexIndices.begin(), vertexIndices.end());
-    outLocalIndices.assign(localIndices.begin(), localIndices.end());
     return true;
 }
 

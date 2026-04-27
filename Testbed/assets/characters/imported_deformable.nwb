@@ -44,16 +44,6 @@ asset.indices = [
 
 asset.edit_masks = [1, 2];
 
-asset.source_samples = {
-    "source_tri": [0, 0, 0, 1],
-    "bary": [
-        [1.0, 0.0, 0.0],
-        [0.0, 1.0, 0.0],
-        [0.0, 0.0, 1.0],
-        [0.0, 0.0, 1.0],
-    ],
-};
-
 asset.skeleton_joint_count = 2;
 
 asset.inverse_bind_matrices = [

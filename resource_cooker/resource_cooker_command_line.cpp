@@ -71,11 +71,14 @@ static bool AssignStrings(Vector<AString>& source, Vector<AString>& outValues, A
 
 static void ConfigureCommandLineOptions(CLI::App& outApp, __hidden_resource_cooker_command_line::ParsedCookOptions& outOptions){
     outApp.add_option("--repo-root", outOptions.repoRoot, "Repository root path")
-        ->required();
+        ->required()
+    ;
     outApp.add_option("--asset-root", outOptions.assetRoots, "Asset root directories to scan for .nwb files")
-        ->required();
+        ->required()
+    ;
     outApp.add_option("--output-directory", outOptions.outputDirectory, "Output volume directory path")
-        ->required();
+        ->required()
+    ;
     outApp.add_option("--cache-directory", outOptions.cacheDirectory, "Asset cache root directory path");
     outApp.add_option("--configuration", outOptions.configuration, "Build configuration label");
     outApp.add_option("--asset-type", outOptions.assetType, "Asset cooker type (graphics, ...)");

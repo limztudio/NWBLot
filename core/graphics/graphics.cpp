@@ -312,7 +312,8 @@ constexpr bool IsFp16CoopVecFormat(const CooperativeVectorMatMulFormatCombo& com
     return combo.inputType == CooperativeVectorDataType::Float16 &&
            combo.inputInterpretation == CooperativeVectorDataType::Float16 &&
            combo.matrixInterpretation == CooperativeVectorDataType::Float16 &&
-           combo.outputType == CooperativeVectorDataType::Float16;
+           combo.outputType == CooperativeVectorDataType::Float16
+    ;
 }
 
 

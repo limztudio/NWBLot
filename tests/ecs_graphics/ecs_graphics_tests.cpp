@@ -241,6 +241,28 @@ static bool NearlyEqual(const f32 lhs, const f32 rhs, const f32 epsilon = 0.0000
     return difference <= epsilon;
 }
 
+static u32 CountDebugLineKind(
+    const NWB::Impl::DeformableSurfaceEditDebugSnapshot& snapshot,
+    const NWB::Impl::DeformableDebugPrimitiveKind::Enum kind){
+    u32 count = 0u;
+    for(const NWB::Impl::DeformableDebugLine& line : snapshot.lines){
+        if(line.kind == kind)
+            ++count;
+    }
+    return count;
+}
+
+static u32 CountDebugPointKind(
+    const NWB::Impl::DeformableSurfaceEditDebugSnapshot& snapshot,
+    const NWB::Impl::DeformableDebugPrimitiveKind::Enum kind){
+    u32 count = 0u;
+    for(const NWB::Impl::DeformableDebugPoint& point : snapshot.points){
+        if(point.kind == kind)
+            ++count;
+    }
+    return count;
+}
+
 static bool FiniteFloat3(const Float3U& value){
     return IsFinite(value.x)
         && IsFinite(value.y)
@@ -2614,6 +2636,10 @@ static void TestSurfaceEditMasksPreviewAndCommit(TestContext& context){
         NWB_ECS_GRAPHICS_TEST_CHECK(context, restrictedMaskSnapshot.repairMaskPointCount == 0u);
         NWB_ECS_GRAPHICS_TEST_CHECK(context, restrictedMaskSnapshot.forbiddenMaskPointCount == 0u);
         NWB_ECS_GRAPHICS_TEST_CHECK(context, restrictedMaskSnapshot.points.size() == 2u);
+        NWB_ECS_GRAPHICS_TEST_CHECK(
+            context,
+            CountDebugPointKind(restrictedMaskSnapshot, NWB::Impl::DeformableDebugPrimitiveKind::RestrictedMask) == 1u
+        );
         AString restrictedMaskDump;
         NWB_ECS_GRAPHICS_TEST_CHECK(
             context,
@@ -2672,6 +2698,10 @@ static void TestSurfaceEditMasksPreviewAndCommit(TestContext& context){
         NWB_ECS_GRAPHICS_TEST_CHECK(context, forbiddenMaskSnapshot.repairMaskPointCount == 0u);
         NWB_ECS_GRAPHICS_TEST_CHECK(context, forbiddenMaskSnapshot.forbiddenMaskPointCount == 1u);
         NWB_ECS_GRAPHICS_TEST_CHECK(context, forbiddenMaskSnapshot.points.size() == 2u);
+        NWB_ECS_GRAPHICS_TEST_CHECK(
+            context,
+            CountDebugPointKind(forbiddenMaskSnapshot, NWB::Impl::DeformableDebugPrimitiveKind::ForbiddenMask) == 1u
+        );
         NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::CommitHole(instance, session, maskedParams));
         CheckHoleEditUnchanged(context, instance, oldVertexCount, oldIndexCount, oldRevision);
     }
@@ -2707,6 +2737,10 @@ static void TestSurfaceEditMasksPreviewAndCommit(TestContext& context){
         NWB_ECS_GRAPHICS_TEST_CHECK(context, repairMaskSnapshot.repairMaskPointCount == 1u);
         NWB_ECS_GRAPHICS_TEST_CHECK(context, repairMaskSnapshot.forbiddenMaskPointCount == 0u);
         NWB_ECS_GRAPHICS_TEST_CHECK(context, repairMaskSnapshot.points.size() == 2u);
+        NWB_ECS_GRAPHICS_TEST_CHECK(
+            context,
+            CountDebugPointKind(repairMaskSnapshot, NWB::Impl::DeformableDebugPrimitiveKind::RepairMask) == 1u
+        );
     }
 }
 
@@ -2818,6 +2852,32 @@ static void TestSurfaceEditDebugSnapshotCapturesPreviewAndWallVertices(TestConte
             == 3u + previewSnapshot.skinWeightLineCount + previewSnapshot.morphDeltaLineCount
     );
     NWB_ECS_GRAPHICS_TEST_CHECK(context, previewSnapshot.points.size() == 1u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        CountDebugLineKind(previewSnapshot, NWB::Impl::DeformableDebugPrimitiveKind::SkinWeight)
+            == previewSnapshot.skinWeightLineCount
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        CountDebugLineKind(previewSnapshot, NWB::Impl::DeformableDebugPrimitiveKind::MorphDelta)
+            == previewSnapshot.morphDeltaLineCount
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        CountDebugLineKind(previewSnapshot, NWB::Impl::DeformableDebugPrimitiveKind::Normal) == 1u
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        CountDebugLineKind(previewSnapshot, NWB::Impl::DeformableDebugPrimitiveKind::Tangent) == 1u
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        CountDebugLineKind(previewSnapshot, NWB::Impl::DeformableDebugPrimitiveKind::Bitangent) == 1u
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        CountDebugPointKind(previewSnapshot, NWB::Impl::DeformableDebugPrimitiveKind::Hit) == 1u
+    );
 
     {
         NWB::Impl::DeformableRuntimeMeshInstance rampInstance = MakeTriangleInstance();
@@ -2838,6 +2898,10 @@ static void TestSurfaceEditDebugSnapshotCapturesPreviewAndWallVertices(TestConte
         NWB_ECS_GRAPHICS_TEST_CHECK(context, rampSnapshot.displacementMagnitudeLineCount == 2u);
         NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(rampSnapshot.maxDisplacementMagnitude, 0.2f));
         NWB_ECS_GRAPHICS_TEST_CHECK(context, rampSnapshot.lines.size() == 2u);
+        NWB_ECS_GRAPHICS_TEST_CHECK(
+            context,
+            CountDebugLineKind(rampSnapshot, NWB::Impl::DeformableDebugPrimitiveKind::DisplacementMagnitude) == 2u
+        );
     }
     {
         NWB::Impl::DeformableRuntimeMeshInstance textureInstance = MakeTriangleInstance();
@@ -2867,6 +2931,10 @@ static void TestSurfaceEditDebugSnapshotCapturesPreviewAndWallVertices(TestConte
         NWB_ECS_GRAPHICS_TEST_CHECK(context, textureSnapshot.displacementMagnitudeLineCount == 3u);
         NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(textureSnapshot.maxDisplacementMagnitude, 2.0f));
         NWB_ECS_GRAPHICS_TEST_CHECK(context, textureSnapshot.lines.size() == 3u);
+        NWB_ECS_GRAPHICS_TEST_CHECK(
+            context,
+            CountDebugLineKind(textureSnapshot, NWB::Impl::DeformableDebugPrimitiveKind::DisplacementMagnitude) == 3u
+        );
         NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(textureSnapshot.lines[1u].end.z, 1.0f));
     }
     {
@@ -2898,6 +2966,10 @@ static void TestSurfaceEditDebugSnapshotCapturesPreviewAndWallVertices(TestConte
         NWB_ECS_GRAPHICS_TEST_CHECK(context, textureSnapshot.displacementMagnitudeLineCount == 3u);
         NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(textureSnapshot.maxDisplacementMagnitude, Sqrt(1.3125f)));
         NWB_ECS_GRAPHICS_TEST_CHECK(context, textureSnapshot.lines.size() == 3u);
+        NWB_ECS_GRAPHICS_TEST_CHECK(
+            context,
+            CountDebugLineKind(textureSnapshot, NWB::Impl::DeformableDebugPrimitiveKind::DisplacementMagnitude) == 3u
+        );
         NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(textureSnapshot.lines[0u].end.x, -0.5f));
         NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(textureSnapshot.lines[0u].end.y, -1.25f));
         NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(textureSnapshot.lines[0u].end.z, 1.0f));
@@ -2954,6 +3026,34 @@ static void TestSurfaceEditDebugSnapshotCapturesPreviewAndWallVertices(TestConte
                 + stateSnapshot.displacementMagnitudeLineCount
     );
     NWB_ECS_GRAPHICS_TEST_CHECK(context, stateSnapshot.points.size() == result.wallVertexCount * 2u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        CountDebugLineKind(stateSnapshot, NWB::Impl::DeformableDebugPrimitiveKind::Wall) == result.wallVertexCount
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        CountDebugLineKind(stateSnapshot, NWB::Impl::DeformableDebugPrimitiveKind::Accessory)
+            == result.wallVertexCount
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        CountDebugLineKind(stateSnapshot, NWB::Impl::DeformableDebugPrimitiveKind::Normal)
+            == stateSnapshot.wallNormalBasisLineCount
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        CountDebugLineKind(stateSnapshot, NWB::Impl::DeformableDebugPrimitiveKind::Tangent)
+            == stateSnapshot.wallTangentBasisLineCount
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        CountDebugPointKind(stateSnapshot, NWB::Impl::DeformableDebugPrimitiveKind::Wall) == result.wallVertexCount
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        CountDebugPointKind(stateSnapshot, NWB::Impl::DeformableDebugPrimitiveKind::Accessory)
+            == result.wallVertexCount
+    );
 
     AString dump;
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::BuildDeformableSurfaceEditDebugDump(stateSnapshot, dump));

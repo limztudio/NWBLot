@@ -17,16 +17,37 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace DeformableDebugPrimitiveKind{
+    enum Enum : u8{
+        Unknown = 0,
+        Hit = 1,
+        Normal = 2,
+        Tangent = 3,
+        Bitangent = 4,
+        Wall = 5,
+        Accessory = 6,
+        Invalid = 7,
+        RestrictedMask = 8,
+        RepairMask = 9,
+        ForbiddenMask = 10,
+        SkinWeight = 11,
+        MorphDelta = 12,
+        DisplacementMagnitude = 13,
+    };
+};
+
 struct DeformableDebugLine{
     Float3U begin = Float3U(0.0f, 0.0f, 0.0f);
     Float3U end = Float3U(0.0f, 0.0f, 0.0f);
     Float3U color = Float3U(1.0f, 1.0f, 1.0f);
+    DeformableDebugPrimitiveKind::Enum kind = DeformableDebugPrimitiveKind::Unknown;
 };
 
 struct DeformableDebugPoint{
     Float3U position = Float3U(0.0f, 0.0f, 0.0f);
     Float3U color = Float3U(1.0f, 1.0f, 1.0f);
     u32 id = Limit<u32>::s_Max;
+    DeformableDebugPrimitiveKind::Enum kind = DeformableDebugPrimitiveKind::Unknown;
 };
 
 struct DeformableSurfaceEditDebugSnapshot{

@@ -327,7 +327,12 @@ void ResetSnapshotPreservingOutputStorage(DeformableSurfaceEditDebugSnapshot& sn
     return Length3(LoadFloat(delta.deltaPosition)) > DeformableValidation::s_Epsilon;
 }
 
-void AppendLine(DeformableSurfaceEditDebugSnapshot& snapshot, const SIMDVector begin, const SIMDVector end, const Float3U& color){
+void AppendLine(
+    DeformableSurfaceEditDebugSnapshot& snapshot,
+    const SIMDVector begin,
+    const SIMDVector end,
+    const Float3U& color,
+    const DeformableDebugPrimitiveKind::Enum kind){
     if(!FinitePoint(begin) || !FinitePoint(end))
         return;
 
@@ -335,10 +340,16 @@ void AppendLine(DeformableSurfaceEditDebugSnapshot& snapshot, const SIMDVector b
     StoreFloat(begin, &line.begin);
     StoreFloat(end, &line.end);
     line.color = color;
+    line.kind = kind;
     snapshot.lines.push_back(line);
 }
 
-void AppendPoint(DeformableSurfaceEditDebugSnapshot& snapshot, const SIMDVector position, const Float3U& color, const u32 id){
+void AppendPoint(
+    DeformableSurfaceEditDebugSnapshot& snapshot,
+    const SIMDVector position,
+    const Float3U& color,
+    const u32 id,
+    const DeformableDebugPrimitiveKind::Enum kind){
     if(!FinitePoint(position))
         return;
 
@@ -346,6 +357,7 @@ void AppendPoint(DeformableSurfaceEditDebugSnapshot& snapshot, const SIMDVector 
     StoreFloat(position, &point.position);
     point.color = color;
     point.id = id;
+    point.kind = kind;
     snapshot.points.push_back(point);
 }
 
@@ -359,8 +371,20 @@ void AppendWallVertexBasisDebug(
 
     const SIMDVector normal = VectorSetW(LoadFloat(vertex.normal), 0.0f);
     const SIMDVector tangent = VectorSetW(LoadFloat(vertex.tangent), 0.0f);
-    AppendLine(snapshot, position, ScaleAdd(position, normal, s_WallBasisLineLength), s_ColorNormal);
-    AppendLine(snapshot, position, ScaleAdd(position, tangent, s_WallBasisLineLength), s_ColorTangent);
+    AppendLine(
+        snapshot,
+        position,
+        ScaleAdd(position, normal, s_WallBasisLineLength),
+        s_ColorNormal,
+        DeformableDebugPrimitiveKind::Normal
+    );
+    AppendLine(
+        snapshot,
+        position,
+        ScaleAdd(position, tangent, s_WallBasisLineLength),
+        s_ColorTangent,
+        DeformableDebugPrimitiveKind::Tangent
+    );
     ++snapshot.wallNormalBasisLineCount;
     ++snapshot.wallTangentBasisLineCount;
 }
@@ -384,7 +408,13 @@ void AppendSkinWeightDebug(const DeformableRuntimeMeshInstance& instance, Deform
 
         const SIMDVector position = LoadFloat(vertex.position);
         const SIMDVector normal = VectorSetW(LoadFloat(vertex.normal), 0.0f);
-        AppendLine(snapshot, position, ScaleAdd(position, normal, weight * s_SkinWeightLineLength), s_ColorSkin);
+        AppendLine(
+            snapshot,
+            position,
+            ScaleAdd(position, normal, weight * s_SkinWeightLineLength),
+            s_ColorSkin,
+            DeformableDebugPrimitiveKind::SkinWeight
+        );
         ++snapshot.skinWeightLineCount;
     }
 }
@@ -404,7 +434,8 @@ void AppendMorphDeltaDebug(const DeformableRuntimeMeshInstance& instance, Deform
                 snapshot,
                 position,
                 VectorMultiplyAdd(deltaPosition, VectorReplicate(s_MorphDeltaLineScale), position),
-                s_ColorMorph
+                s_ColorMorph,
+                DeformableDebugPrimitiveKind::MorphDelta
             );
             ++snapshot.morphDeltaLineCount;
         }
@@ -442,7 +473,8 @@ void AppendDisplacementMagnitudeDebug(
             snapshot,
             position,
             VectorMultiplyAdd(displacementOffset, VectorReplicate(s_DisplacementLineScale), position),
-            s_ColorDisplacement
+            s_ColorDisplacement,
+            DeformableDebugPrimitiveKind::DisplacementMagnitude
         );
         ++snapshot.displacementMagnitudeLineCount;
     }
@@ -479,10 +511,28 @@ void AppendPreviewDebug(
 
     const f32 radius = Max(preview->radius, 0.02f);
     const f32 normalLength = Max(preview->depth, radius * 0.5f);
-    AppendPoint(snapshot, posedHitPoint, s_ColorHit, session->hit.triangle);
-    AppendLine(snapshot, previewCenter, ScaleAdd(previewCenter, previewTangent, radius), s_ColorTangent);
-    AppendLine(snapshot, previewCenter, ScaleAdd(previewCenter, previewBitangent, radius), s_ColorBitangent);
-    AppendLine(snapshot, previewCenter, ScaleAdd(previewCenter, previewNormal, normalLength), s_ColorNormal);
+    AppendPoint(snapshot, posedHitPoint, s_ColorHit, session->hit.triangle, DeformableDebugPrimitiveKind::Hit);
+    AppendLine(
+        snapshot,
+        previewCenter,
+        ScaleAdd(previewCenter, previewTangent, radius),
+        s_ColorTangent,
+        DeformableDebugPrimitiveKind::Tangent
+    );
+    AppendLine(
+        snapshot,
+        previewCenter,
+        ScaleAdd(previewCenter, previewBitangent, radius),
+        s_ColorBitangent,
+        DeformableDebugPrimitiveKind::Bitangent
+    );
+    AppendLine(
+        snapshot,
+        previewCenter,
+        ScaleAdd(previewCenter, previewNormal, normalLength),
+        s_ColorNormal,
+        DeformableDebugPrimitiveKind::Normal
+    );
 }
 
 void AppendWallLoopDebug(
@@ -490,9 +540,9 @@ void AppendWallLoopDebug(
     const u32 firstWallVertex,
     const u32 wallVertexCount,
     const Float3U& color,
+    const DeformableDebugPrimitiveKind::Enum kind,
     u32& inOutMarkerCount,
-    DeformableSurfaceEditDebugSnapshot& snapshot)
-{
+    DeformableSurfaceEditDebugSnapshot& snapshot){
     if(firstWallVertex == Limit<u32>::s_Max || wallVertexCount < 3u)
         return;
 
@@ -508,8 +558,8 @@ void AppendWallLoopDebug(
         const DeformableVertexRest& vertex = instance.restVertices[first + i];
         const SIMDVector position = LoadFloat(vertex.position);
         const SIMDVector nextPosition = LoadFloat(instance.restVertices[first + next].position);
-        AppendPoint(snapshot, position, color, vertexId);
-        AppendLine(snapshot, position, nextPosition, color);
+        AppendPoint(snapshot, position, color, vertexId, kind);
+        AppendLine(snapshot, position, nextPosition, color, kind);
         AppendWallVertexBasisDebug(vertex, position, snapshot);
     }
 }
@@ -533,6 +583,7 @@ void AppendEditStateDebug(
             edit.result.firstWallVertex,
             edit.result.wallVertexCount,
             s_ColorWall,
+            DeformableDebugPrimitiveKind::Wall,
             snapshot.wallVertexCount,
             snapshot
         );
@@ -543,6 +594,7 @@ void AppendEditStateDebug(
             accessory.firstWallVertex,
             accessory.wallVertexCount,
             s_ColorAccessory,
+            DeformableDebugPrimitiveKind::Accessory,
             snapshot.accessoryAnchorCount,
             snapshot
         );
@@ -576,7 +628,13 @@ void AppendInvalidTriangleDebug(const DeformableRuntimeMeshInstance& instance, D
             continue;
 
         ++snapshot.invalidTriangleCount;
-        AppendPoint(snapshot, TriangleCenter(instance, a, b, c), s_ColorInvalid, static_cast<u32>(triangle));
+        AppendPoint(
+            snapshot,
+            TriangleCenter(instance, a, b, c),
+            s_ColorInvalid,
+            static_cast<u32>(triangle),
+            DeformableDebugPrimitiveKind::Invalid
+        );
     }
 }
 
@@ -595,15 +653,33 @@ void AppendEditMaskMarker(
     const u32 c = instance.indices[indexBase + 2u];
     const u32 markerId = static_cast<u32>(triangle);
     if((flags & DeformableEditMaskFlag::Forbidden) != 0u){
-        AppendPoint(snapshot, TriangleCenter(instance, a, b, c), s_ColorForbiddenMask, markerId);
+        AppendPoint(
+            snapshot,
+            TriangleCenter(instance, a, b, c),
+            s_ColorForbiddenMask,
+            markerId,
+            DeformableDebugPrimitiveKind::ForbiddenMask
+        );
         ++snapshot.forbiddenMaskPointCount;
     }
     else if((flags & DeformableEditMaskFlag::RequiresRepair) != 0u){
-        AppendPoint(snapshot, TriangleCenter(instance, a, b, c), s_ColorRepairMask, markerId);
+        AppendPoint(
+            snapshot,
+            TriangleCenter(instance, a, b, c),
+            s_ColorRepairMask,
+            markerId,
+            DeformableDebugPrimitiveKind::RepairMask
+        );
         ++snapshot.repairMaskPointCount;
     }
     else if((flags & DeformableEditMaskFlag::Restricted) != 0u){
-        AppendPoint(snapshot, TriangleCenter(instance, a, b, c), s_ColorRestrictedMask, markerId);
+        AppendPoint(
+            snapshot,
+            TriangleCenter(instance, a, b, c),
+            s_ColorRestrictedMask,
+            markerId,
+            DeformableDebugPrimitiveKind::RestrictedMask
+        );
         ++snapshot.restrictedMaskPointCount;
     }
 }

@@ -138,17 +138,18 @@ template<typename CharT = char, typename PathT>
 template<typename CharT>
 [[nodiscard]] inline BasicString<CharT> BuildSafeCacheName(const BasicStringView<CharT> text){
     BasicString<CharT> output;
-    output.reserve(text.size());
+    output.resize(text.size());
 
-    for(const CharT ch : text){
+    for(usize i = 0; i < text.size(); ++i){
+        const CharT ch = text[i];
         const bool alphaNum = (ch >= CharT('a') && ch <= CharT('z'))
             || (ch >= CharT('0') && ch <= CharT('9'));
         const bool safePunctuation = ch == CharT('.') || ch == CharT('_') || ch == CharT('-');
 
         if(alphaNum || safePunctuation)
-            output.push_back(ch);
+            output[i] = ch;
         else
-            output.push_back(CharT('_'));
+            output[i] = CharT('_');
     }
 
     return output;
@@ -188,9 +189,9 @@ inline constexpr void CopyCanonical(DstCharT* dst, const usize dstSize, const Sr
 template<typename CharT>
 [[nodiscard]] inline BasicString<CharT> CanonicalizeText(const BasicStringView<CharT> text){
     BasicString<CharT> output;
-    output.reserve(text.size());
-    for(const CharT ch : text)
-        output.push_back(Canonicalize(ch));
+    output.resize(text.size());
+    for(usize i = 0; i < text.size(); ++i)
+        output[i] = Canonicalize(text[i]);
 
     return output;
 }

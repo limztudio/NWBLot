@@ -1307,14 +1307,14 @@ static bool GenerateMissingDeformableFrames(
         return true;
 
     Vector<Core::Geometry::TangentFrameRebuildVertex> rebuildVertices;
-    rebuildVertices.reserve(vertices.size());
-    for(const DeformableVertexRest& vertex : vertices){
-        Core::Geometry::TangentFrameRebuildVertex rebuildVertex;
+    rebuildVertices.resize(vertices.size());
+    for(usize vertexIndex = 0u; vertexIndex < vertices.size(); ++vertexIndex){
+        const DeformableVertexRest& vertex = vertices[vertexIndex];
+        Core::Geometry::TangentFrameRebuildVertex& rebuildVertex = rebuildVertices[vertexIndex];
         rebuildVertex.position = vertex.position;
         rebuildVertex.uv0 = vertex.uv0;
         rebuildVertex.normal = vertex.normal;
         rebuildVertex.tangent = vertex.tangent;
-        rebuildVertices.push_back(rebuildVertex);
     }
 
     Core::Geometry::TangentFrameRebuildResult rebuildResult;

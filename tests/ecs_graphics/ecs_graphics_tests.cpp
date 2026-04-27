@@ -2168,6 +2168,27 @@ static void TestDeformerSkinPayloadValidatesSkeletonAndPalette(TestContext& cont
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(jointMatrices[0u].column3.x, 0.75f));
     joints.joints[0u] = MakeIdentityJointMatrix();
 
+    NWB::Impl::DeformableRuntimeMeshInstance dualQuaternionInstance = MakeTriangleInstance();
+    AssignSingleJointSkin(dualQuaternionInstance, 0u);
+    dualQuaternionInstance.handle.value = instance.handle.value;
+    joints.skinningMode = NWB::Impl::DeformableSkinningMode::DualQuaternion;
+    joints.joints[0u] = MakeTranslationJointMatrix(2.0f, 4.0f, 6.0f);
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Impl::DeformerSkinPayload::BuildSkinPayload(dualQuaternionInstance, &joints, skinInfluences, jointMatrices)
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, jointMatrices.size() == 1u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(jointMatrices[0u].column0.x, 0.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(jointMatrices[0u].column0.y, 0.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(jointMatrices[0u].column0.z, 0.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(jointMatrices[0u].column0.w, 1.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(jointMatrices[0u].column1.x, 1.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(jointMatrices[0u].column1.y, 2.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(jointMatrices[0u].column1.z, 3.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(jointMatrices[0u].column1.w, 0.0f));
+    joints.skinningMode = NWB::Impl::DeformableSkinningMode::LinearBlend;
+    joints.joints[0u] = MakeIdentityJointMatrix();
+
 #if defined(NWB_FINAL)
     CapturingLogger logger;
     NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);

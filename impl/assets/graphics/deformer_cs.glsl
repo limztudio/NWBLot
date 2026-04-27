@@ -228,86 +228,6 @@ vec3 nwbDeformerRotateVectorByQuaternion(const vec3 value, const vec4 rotation){
     return value + (rotation.w * twiceCross) + cross(rotation.xyz, twiceCross);
 }
 
-bool nwbDeformerJointRotationQuaternion(const mat3 matrix, out vec4 rotation){
-    const float m00 = matrix[0].x;
-    const float m10 = matrix[0].y;
-    const float m20 = matrix[0].z;
-    const float m01 = matrix[1].x;
-    const float m11 = matrix[1].y;
-    const float m21 = matrix[1].z;
-    const float m02 = matrix[2].x;
-    const float m12 = matrix[2].y;
-    const float m22 = matrix[2].z;
-
-    const float trace = m00 + m11 + m22;
-    if(trace > 0.0){
-        const float s = sqrt(trace + 1.0) * 2.0;
-        if(!nwbDeformerFiniteFloat(s) || s <= 0.000001)
-            return false;
-
-        rotation = vec4(
-            (m21 - m12) / s,
-            (m02 - m20) / s,
-            (m10 - m01) / s,
-            0.25 * s
-        );
-    }
-    else if(m00 > m11 && m00 > m22){
-        const float s = sqrt(1.0 + m00 - m11 - m22) * 2.0;
-        if(!nwbDeformerFiniteFloat(s) || s <= 0.000001)
-            return false;
-
-        rotation = vec4(
-            0.25 * s,
-            (m01 + m10) / s,
-            (m02 + m20) / s,
-            (m21 - m12) / s
-        );
-    }
-    else if(m11 > m22){
-        const float s = sqrt(1.0 + m11 - m00 - m22) * 2.0;
-        if(!nwbDeformerFiniteFloat(s) || s <= 0.000001)
-            return false;
-
-        rotation = vec4(
-            (m01 + m10) / s,
-            0.25 * s,
-            (m12 + m21) / s,
-            (m02 - m20) / s
-        );
-    }
-    else{
-        const float s = sqrt(1.0 + m22 - m00 - m11) * 2.0;
-        if(!nwbDeformerFiniteFloat(s) || s <= 0.000001)
-            return false;
-
-        rotation = vec4(
-            (m02 + m20) / s,
-            (m12 + m21) / s,
-            0.25 * s,
-            (m10 - m01) / s
-        );
-    }
-
-    if(!nwbDeformerFiniteVec4(rotation))
-        return false;
-
-    const float lengthSquared = dot(rotation, rotation);
-    if(!nwbDeformerFiniteFloat(lengthSquared) || lengthSquared <= 0.000001)
-        return false;
-
-    rotation *= inversesqrt(lengthSquared);
-    return nwbDeformerFiniteVec4(rotation);
-}
-
-bool nwbDeformerBuildJointDualQuaternion(const mat4 jointMatrix, out vec4 real, out vec4 dual){
-    if(!nwbDeformerJointRotationQuaternion(mat3(jointMatrix), real))
-        return false;
-
-    dual = 0.5 * nwbDeformerQuaternionMultiply(vec4(jointMatrix[3].xyz, 0.0), real);
-    return nwbDeformerFiniteVec4(dual);
-}
-
 bool nwbDeformerNormalizeDualQuaternion(inout vec4 real, inout vec4 dual){
     const float lengthSquared = dot(real, real);
     if(!nwbDeformerFiniteFloat(lengthSquared) || lengthSquared <= 0.000001)
@@ -385,9 +305,10 @@ bool nwbDeformerApplyDualQuaternionSkin(const uint vertexId, inout vec3 position
         if(abs(weight) <= 0.000001 || jointId >= jointCount)
             continue;
 
-        vec4 real = vec4(0.0);
-        vec4 dual = vec4(0.0);
-        if(!nwbDeformerBuildJointDualQuaternion(nwbDeformerLoadJointMatrix(jointId), real, dual))
+        const NwbDeformerJointMatrix jointPayload = nwbDeformerJointPalette[jointId];
+        vec4 real = jointPayload.column0;
+        vec4 dual = jointPayload.column1;
+        if(!nwbDeformerFiniteVec4(real) || !nwbDeformerFiniteVec4(dual))
             return false;
 
         if(!hasReference){

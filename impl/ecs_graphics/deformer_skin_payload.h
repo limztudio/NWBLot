@@ -87,7 +87,7 @@ template<typename SkinInfluenceVector, typename JointPaletteVector>
 
     const usize skinCount = instance.skin.size();
     const usize jointCount = jointPalette->joints.size();
-    const bool requiresRigidJoints = jointPalette->skinningMode == DeformableSkinningMode::DualQuaternion;
+    const bool useDualQuaternionPayload = jointPalette->skinningMode == DeformableSkinningMode::DualQuaternion;
     outSkinInfluences.reserve(skinCount);
     outJointPalette.reserve(jointCount);
 
@@ -107,7 +107,7 @@ template<typename SkinInfluenceVector, typename JointPaletteVector>
             );
             return false;
         }
-        if(requiresRigidJoints && !DeformableRuntime::IsRigidJointMatrix(jointMatrix)){
+        if(useDualQuaternionPayload && !DeformableRuntime::IsRigidJointMatrix(jointMatrix)){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("DeformerSystem: runtime mesh '{}' joint palette entry {} is not rigid for dual-quaternion skinning"),
                 instance.handle.value,
@@ -115,7 +115,22 @@ template<typename SkinInfluenceVector, typename JointPaletteVector>
             );
             return false;
         }
-        outJointPalette.push_back(DeformableRuntime::StoreJointMatrix(jointMatrix));
+        if(useDualQuaternionPayload){
+            SIMDVector real = QuaternionIdentity();
+            SIMDVector dual = VectorZero();
+            if(!DeformableRuntime::TryBuildJointDualQuaternion(jointMatrix, real, dual)){
+                NWB_LOGGER_ERROR(
+                    NWB_TEXT("DeformerSystem: runtime mesh '{}' joint palette entry {} failed dual-quaternion payload build"),
+                    instance.handle.value,
+                    jointIndex
+                );
+                return false;
+            }
+            outJointPalette.push_back(DeformableRuntime::StoreJointDualQuaternionPayload(real, dual));
+        }
+        else{
+            outJointPalette.push_back(DeformableRuntime::StoreJointMatrix(jointMatrix));
+        }
     }
 
     for(usize vertexIndex = 0; vertexIndex < skinCount; ++vertexIndex){

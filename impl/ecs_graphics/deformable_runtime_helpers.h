@@ -318,6 +318,16 @@ template<typename MorphVector, typename MorphWeightLookup>
     return DeformableValidation::FiniteVector(outDual, 0xFu);
 }
 
+[[nodiscard]] inline DeformableJointMatrix StoreJointDualQuaternionPayload(
+    const SIMDVector real,
+    const SIMDVector dual)
+{
+    DeformableJointMatrix result{};
+    StoreFloat(real, &result.column0);
+    StoreFloat(dual, &result.column1);
+    return result;
+}
+
 [[nodiscard]] inline bool NormalizeBlendedDualQuaternion(SIMDVector& real, SIMDVector& dual){
     const f32 lengthSquared = VectorGetX(QuaternionLengthSq(real));
     if(!IsFinite(lengthSquared) || lengthSquared <= s_Epsilon)

@@ -16,6 +16,8 @@
 
 #include "common.h"
 
+#include <core/alloc/scratch.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -133,11 +135,16 @@ private:
         const typename MapT::key_type* key;
         const typename MapT::mapped_type* value;
     };
+    template<typename MapT>
+    using ScratchDefineEntryVector = Vector<
+        DefineEntryPtr<MapT>,
+        Alloc::ScratchAllocator<DefineEntryPtr<MapT>>
+    >;
 
     template<typename MapT>
-    CookVector<DefineEntryPtr<MapT>> sortedDefineEntries(const MapT& map){
+    ScratchDefineEntryVector<MapT> sortedDefineEntries(const MapT& map, Alloc::ScratchArena<>& scratchArena){
         using EntryPtr = DefineEntryPtr<MapT>;
-        CookVector<EntryPtr> entries{CookAllocator<EntryPtr>(m_memoryArena)};
+        ScratchDefineEntryVector<MapT> entries{Alloc::ScratchAllocator<EntryPtr>(scratchArena)};
         entries.reserve(map.size());
         for(const auto& [name, value] : map)
             entries.push_back(EntryPtr{ &name, &value });

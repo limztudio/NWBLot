@@ -697,6 +697,8 @@ bool ShaderCook::gatherShaderDependencies(const Path& sourcePath, const CookVect
 }
 
 bool ShaderCook::expandDefineCombinations(const CookMap<AString, DefineEntry>& defineValues, CookVector<DefineCombo>& outCombinations){
+    Alloc::ScratchArena<> scratchArena;
+
     outCombinations.clear();
     DefineCombo initialCombo{CookAllocator<Pair<const AString, AString>>(m_memoryArena)};
     initialCombo.reserve(defineValues.size());
@@ -711,7 +713,7 @@ bool ShaderCook::expandDefineCombinations(const CookMap<AString, DefineEntry>& d
         return copy;
     };
 
-    for(const auto& entry : sortedDefineEntries(defineValues)){
+    for(const auto& entry : sortedDefineEntries(defineValues, scratchArena)){
         const AString& defineName = *entry.key;
         const CookVector<AString>& values = entry.value->values;
         if(values.empty()){
@@ -762,7 +764,8 @@ AString ShaderCook::buildVariantName(const DefineCombo& combo){
         return variantName;
     }
 
-    const auto entries = sortedDefineEntries(combo);
+    Alloc::ScratchArena<> scratchArena;
+    const auto entries = sortedDefineEntries(combo, scratchArena);
     usize variantNameSize = entries.size() - 1u;
     for(const auto& entry : entries)
         variantNameSize += entry.key->size() + entry.value->size() + 1u;
@@ -799,7 +802,27 @@ bool ShaderCook::canonicalizeVariantSignature(const AStringView variantSignature
         return false;
     };
 
-    DefineCombo assignments{CookAllocator<Pair<const AString, AString>>(m_memoryArena)};
+    Alloc::ScratchArena<> scratchArena;
+    using ScratchDefineComboPair = Pair<const AString, AString>;
+    using ScratchDefineCombo = HashMap<
+        AString,
+        AString,
+        Hasher<AString>,
+        EqualTo<AString>,
+        Alloc::ScratchAllocator<ScratchDefineComboPair>
+    >;
+    ScratchDefineCombo assignments(
+        0,
+        Hasher<AString>(),
+        EqualTo<AString>(),
+        Alloc::ScratchAllocator<ScratchDefineComboPair>(scratchArena)
+    );
+    usize assignmentReserve = 1u;
+    for(const char ch : trimmedSignatureView){
+        if(ch == ';')
+            ++assignmentReserve;
+    }
+    assignments.reserve(assignmentReserve);
 
     usize begin = 0;
     while(begin < trimmedSignatureView.size()){
@@ -825,7 +848,34 @@ bool ShaderCook::canonicalizeVariantSignature(const AStringView variantSignature
         begin = segmentEnd + 1;
     }
 
-    outCanonical = buildVariantName(assignments);
+    if(assignments.size() == 1u){
+        const auto& [defineName, defineValue] = *assignments.begin();
+        outCanonical.clear();
+        outCanonical.reserve(defineName.size() + defineValue.size() + 1u);
+        outCanonical += defineName;
+        outCanonical += '=';
+        outCanonical += defineValue;
+        return true;
+    }
+
+    const auto entries = sortedDefineEntries(assignments, scratchArena);
+    usize variantNameSize = entries.size() - 1u;
+    for(const auto& entry : entries)
+        variantNameSize += entry.key->size() + entry.value->size() + 1u;
+
+    outCanonical.clear();
+    outCanonical.reserve(variantNameSize);
+    bool first = true;
+    for(const auto& entry : entries){
+        if(!first)
+            outCanonical += ';';
+        first = false;
+
+        outCanonical += *entry.key;
+        outCanonical += '=';
+        outCanonical += *entry.value;
+    }
+
     return true;
 }
 
@@ -915,7 +965,8 @@ bool ShaderCook::computeSourceChecksum(const ShaderEntry& entry, const AStringVi
         }
     }
     else{
-        for(const auto& entryDefine : sortedDefineEntries(entry.implicitDefines)){
+        Alloc::ScratchArena<> scratchArena;
+        for(const auto& entryDefine : sortedDefineEntries(entry.implicitDefines, scratchArena)){
             appendChecksumLine(*entryDefine.key);
             appendChecksumLine(*entryDefine.value);
         }

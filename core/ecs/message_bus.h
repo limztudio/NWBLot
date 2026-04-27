@@ -136,25 +136,29 @@ public:
 public:
     template<typename T>
     void post(const T& message){
-        auto* channel = getOrCreateChannel<T>();
+        using MessageT = Decay_T<T>;
+        auto* channel = getOrCreateChannel<MessageT>();
         channel->post(message);
     }
 
     template<typename T>
     void post(T&& message){
-        auto* channel = getOrCreateChannel<T>();
-        channel->post(Move(message));
+        using MessageT = Decay_T<T>;
+        auto* channel = getOrCreateChannel<MessageT>();
+        channel->post(Forward<T>(message));
     }
 
     template<typename T, typename... Args>
     void emplace(Args&&... args){
-        auto* channel = getOrCreateChannel<T>();
+        using MessageT = Decay_T<T>;
+        auto* channel = getOrCreateChannel<MessageT>();
         channel->emplace(Forward<Args>(args)...);
     }
 
     template<typename T, typename Func>
     void consume(Func&& func)const{
-        const auto* channel = getChannel<T>();
+        using MessageT = Decay_T<T>;
+        const auto* channel = getChannel<MessageT>();
         if(!channel)
             return;
         channel->consume(Forward<Func>(func));
@@ -162,7 +166,8 @@ public:
 
     template<typename T>
     usize messageCount()const{
-        const auto* channel = getChannel<T>();
+        using MessageT = Decay_T<T>;
+        const auto* channel = getChannel<MessageT>();
         if(!channel)
             return 0;
         return channel->size();

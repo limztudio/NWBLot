@@ -109,27 +109,32 @@ public:
 public:
     template<typename T>
     void postMessage(const T& message){
-        m_messageBus.post<T>(message);
+        using MessageT = Decay_T<T>;
+        m_messageBus.post<MessageT>(message);
     }
 
     template<typename T>
     void postMessage(T&& message){
-        m_messageBus.post<T>(Move(message));
+        using MessageT = Decay_T<T>;
+        m_messageBus.post<MessageT>(Forward<T>(message));
     }
 
     template<typename T, typename... Args>
     void emplaceMessage(Args&&... args){
-        m_messageBus.emplace<T>(Forward<Args>(args)...);
+        using MessageT = Decay_T<T>;
+        m_messageBus.emplace<MessageT>(Forward<Args>(args)...);
     }
 
     template<typename T, typename Func>
     void consumeMessages(Func&& func)const{
-        m_messageBus.consume<T>(Forward<Func>(func));
+        using MessageT = Decay_T<T>;
+        m_messageBus.consume<MessageT>(Forward<Func>(func));
     }
 
     template<typename T>
     usize messageCount()const{
-        return m_messageBus.messageCount<T>();
+        using MessageT = Decay_T<T>;
+        return m_messageBus.messageCount<MessageT>();
     }
 
     void swapMessageBuffers(){ m_messageBus.swapBuffers(); }

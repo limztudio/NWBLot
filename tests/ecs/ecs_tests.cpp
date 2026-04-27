@@ -212,22 +212,24 @@ static void TestComponentLifetime(TestContext& context){
 static void TestMessageBus(TestContext& context){
     TestWorld testWorld;
 
-    testWorld.world.postMessage(TickMessage{ 7u });
+    TickMessage lvalueMessage{ 7u };
+    testWorld.world.postMessage(lvalueMessage);
+    testWorld.world.postMessage(TickMessage{ 11u });
     NWB_ECS_TEST_CHECK(context, testWorld.world.messageCount<TickMessage>() == 0);
 
     testWorld.world.swapMessageBuffers();
-    NWB_ECS_TEST_CHECK(context, testWorld.world.messageCount<TickMessage>() == 1);
+    NWB_ECS_TEST_CHECK(context, testWorld.world.messageCount<TickMessage>() == 2);
 
     u32 consumedCount = 0;
-    u32 consumedValue = 0;
+    u32 consumedValueSum = 0;
     testWorld.world.consumeMessages<TickMessage>(
-        [&consumedCount, &consumedValue](const TickMessage& message){
+        [&consumedCount, &consumedValueSum](const TickMessage& message){
             ++consumedCount;
-            consumedValue = message.value;
+            consumedValueSum += message.value;
         }
     );
-    NWB_ECS_TEST_CHECK(context, consumedCount == 1);
-    NWB_ECS_TEST_CHECK(context, consumedValue == 7u);
+    NWB_ECS_TEST_CHECK(context, consumedCount == 2);
+    NWB_ECS_TEST_CHECK(context, consumedValueSum == 18u);
 
     testWorld.world.clearMessages();
     NWB_ECS_TEST_CHECK(context, testWorld.world.messageCount<TickMessage>() == 0);

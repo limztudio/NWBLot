@@ -212,12 +212,42 @@ void LogRuntimeMorphPayloadFailure(
         );
         return false;
     }
+    if(!instance.skin.empty() && instance.skeletonJointCount == 0u){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' has skin but no skeleton joint count"),
+            sourceText()
+        );
+        return false;
+    }
+    if(instance.skeletonJointCount > static_cast<u32>(Limit<u16>::s_Max) + 1u){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' skeleton joint count {} exceeds skin stream limits"),
+            sourceText(),
+            instance.skeletonJointCount
+        );
+        return false;
+    }
     for(usize vertexIndex = 0; vertexIndex < instance.skin.size(); ++vertexIndex){
         if(!DeformableValidation::ValidSkinInfluence(instance.skin[vertexIndex])){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' skin influence {} is invalid"),
                 sourceText(),
                 vertexIndex
+            );
+            return false;
+        }
+        u32 failedJoint = 0u;
+        if(!DeformableValidation::SkinInfluenceFitsSkeleton(
+            instance.skin[vertexIndex],
+            instance.skeletonJointCount,
+            failedJoint
+        )){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' skin joint {} for vertex {} exceeds skeleton joint count {}"),
+                sourceText(),
+                failedJoint,
+                vertexIndex,
+                instance.skeletonJointCount
             );
             return false;
         }
@@ -452,6 +482,7 @@ bool DeformableRuntimeMeshCache::ensureRuntimeMesh(Core::ECS::EntityID entity, D
     instance.restVertices = geometry->restVertices();
     instance.indices = geometry->indices();
     instance.sourceTriangleCount = static_cast<u32>(geometry->indices().size() / 3u);
+    instance.skeletonJointCount = geometry->skeletonJointCount();
     instance.skin = geometry->skin();
     instance.sourceSamples = geometry->sourceSamples();
     instance.editMaskPerTriangle = geometry->editMaskPerTriangle();

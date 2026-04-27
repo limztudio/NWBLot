@@ -302,6 +302,79 @@ void nwbDeformerApplyScalarTextureNormal(inout vec3 normal, inout vec4 tangent, 
     tangent.xyz = nwbDeformerResolveFrameTangent(normal, tangent.xyz, tangent.xyz);
 }
 
+vec3 nwbDeformerVectorTextureOffsetToWorld(const vec3 sampleValue, const uint mode, const vec3 normal, const vec4 tangent){
+    const uint vectorTangentTextureMode = 3u;
+    vec3 vectorOffset = (sampleValue + vec3(nwbDeformerDisplacementBias())) * nwbDeformerDisplacementAmplitude();
+    if(mode != vectorTangentTextureMode)
+        return vectorOffset;
+
+    const vec3 bitangent = nwbDeformerSafeNormalize(
+        cross(normal, tangent.xyz),
+        vec3(0.0, 1.0, 0.0)
+    ) * nwbDeformerTangentHandedness(tangent.w, 1.0);
+    return tangent.xyz * vectorOffset.x
+        + bitangent * vectorOffset.y
+        + normal * vectorOffset.z
+    ;
+}
+
+void nwbDeformerApplyVectorTextureNormal(inout vec3 normal, inout vec4 tangent, const vec2 uv0, const uint mode){
+    const ivec2 textureExtent = textureSize(
+        sampler2D(g_NwbDeformerDisplacementTexture, g_NwbDeformerDisplacementSampler),
+        0
+    );
+    if(textureExtent.x <= 1 && textureExtent.y <= 1)
+        return;
+
+    const vec2 uv = nwbDeformerDisplacementTextureCoord(uv0);
+    const float du = nwbDeformerDisplacementTextureCoordStep(textureExtent.x);
+    const float dv = nwbDeformerDisplacementTextureCoordStep(textureExtent.y);
+    const vec3 right = nwbDeformerVectorTextureOffsetToWorld(
+        nwbDeformerSampleDisplacementTextureCoord(uv + vec2(du, 0.0)).xyz,
+        mode,
+        normal,
+        tangent
+    );
+    const vec3 left = nwbDeformerVectorTextureOffsetToWorld(
+        nwbDeformerSampleDisplacementTextureCoord(uv - vec2(du, 0.0)).xyz,
+        mode,
+        normal,
+        tangent
+    );
+    const vec3 up = nwbDeformerVectorTextureOffsetToWorld(
+        nwbDeformerSampleDisplacementTextureCoord(uv + vec2(0.0, dv)).xyz,
+        mode,
+        normal,
+        tangent
+    );
+    const vec3 down = nwbDeformerVectorTextureOffsetToWorld(
+        nwbDeformerSampleDisplacementTextureCoord(uv - vec2(0.0, dv)).xyz,
+        mode,
+        normal,
+        tangent
+    );
+    if(!nwbDeformerFiniteVec3(right)
+        || !nwbDeformerFiniteVec3(left)
+        || !nwbDeformerFiniteVec3(up)
+        || !nwbDeformerFiniteVec3(down)
+    )
+        return;
+
+    const vec3 derivativeU = (right - left) * 0.5;
+    const vec3 derivativeV = (up - down) * 0.5;
+    const float handedness = nwbDeformerTangentHandedness(tangent.w, 1.0);
+    const vec3 bitangent = nwbDeformerSafeNormalize(
+        cross(normal, tangent.xyz),
+        vec3(0.0, 1.0, 0.0)
+    ) * handedness;
+    const vec3 displacedTangent = tangent.xyz + derivativeU;
+    const vec3 displacedBitangent = bitangent + derivativeV;
+    const vec3 adjustedNormal = cross(displacedTangent, displacedBitangent) * handedness;
+    normal = nwbDeformerSafeNormalize(adjustedNormal, normal);
+    tangent.xyz = nwbDeformerResolveFrameTangent(normal, displacedTangent, tangent.xyz);
+    tangent.w = handedness;
+}
+
 void nwbDeformerApplyDisplacement(inout vec3 position, inout vec3 normal, inout vec4 tangent, const vec2 uv0){
     const uint noneMode = 0u;
     const uint scalarUvRampMode = 1u;
@@ -328,23 +401,14 @@ void nwbDeformerApplyDisplacement(inout vec3 position, inout vec3 normal, inout 
         return;
     }
 
-    vec3 vectorOffset = (sampleValue.xyz + vec3(nwbDeformerDisplacementBias())) * amplitude;
+    vec3 vectorOffset = nwbDeformerVectorTextureOffsetToWorld(sampleValue.xyz, displacementMode, normal, tangent);
     if(!nwbDeformerFiniteVec3(vectorOffset))
         return;
 
-    if(displacementMode == vectorTangentTextureMode){
-        const vec3 bitangent = nwbDeformerSafeNormalize(
-            cross(normal, tangent.xyz),
-            vec3(0.0, 1.0, 0.0)
-        ) * nwbDeformerTangentHandedness(tangent.w, 1.0);
-        vectorOffset = tangent.xyz * vectorOffset.x
-            + bitangent * vectorOffset.y
-            + normal * vectorOffset.z
-        ;
-    }
-    else if(displacementMode != vectorObjectTextureMode)
+    if(displacementMode != vectorTangentTextureMode && displacementMode != vectorObjectTextureMode)
         return;
 
+    nwbDeformerApplyVectorTextureNormal(normal, tangent, uv0, displacementMode);
     position += vectorOffset;
 }
 

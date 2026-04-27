@@ -218,6 +218,22 @@ struct MorphPayloadFailureInfo{
     return Abs(weightSum - 1.0f) <= s_SkinWeightSumEpsilon;
 }
 
+[[nodiscard]] inline bool SkinInfluenceFitsSkeleton(const SkinInfluence4& skin, const u32 skeletonJointCount, u32& outJoint){
+    outJoint = 0u;
+    if(skeletonJointCount == 0u)
+        return true;
+
+    for(u32 influenceIndex = 0; influenceIndex < 4u; ++influenceIndex){
+        const u32 joint = static_cast<u32>(skin.joint[influenceIndex]);
+        if(joint < skeletonJointCount)
+            continue;
+
+        outJoint = joint;
+        return false;
+    }
+    return true;
+}
+
 [[nodiscard]] inline bool ValidMorphDelta(const DeformableMorphDelta& delta, const usize vertexCount){
     const SIMDVector deltaPosition = LoadFloat(delta.deltaPosition);
     const SIMDVector deltaNormal = LoadFloat(delta.deltaNormal);
@@ -321,6 +337,7 @@ struct MorphPayloadFailureInfo{
     const Vector<DeformableVertexRest>& restVertices,
     const Vector<u32>& indices,
     const u32 sourceTriangleCount,
+    const u32 skeletonJointCount,
     const Vector<SkinInfluence4>& skin,
     const Vector<SourceSample>& sourceSamples,
     const Vector<DeformableEditMaskFlags>& editMaskPerTriangle,
@@ -334,6 +351,10 @@ struct MorphPayloadFailureInfo{
     )
         return false;
     if(!skin.empty() && skin.size() != restVertices.size())
+        return false;
+    if(!skin.empty() && skeletonJointCount == 0u)
+        return false;
+    if(skeletonJointCount > static_cast<u32>(Limit<u16>::s_Max) + 1u)
         return false;
     if(!sourceSamples.empty() && sourceSamples.size() != restVertices.size())
         return false;
@@ -358,6 +379,9 @@ struct MorphPayloadFailureInfo{
     }
     for(const SkinInfluence4& influence : skin){
         if(!ValidSkinInfluence(influence))
+            return false;
+        u32 failedJoint = 0u;
+        if(!SkinInfluenceFitsSkeleton(influence, skeletonJointCount, failedJoint))
             return false;
     }
     for(const SourceSample& sample : sourceSamples){

@@ -196,6 +196,9 @@ template<typename PreparedJointPaletteVector>
     const SkinInfluence4& skin = instance.skin[vertexId];
     if(!DeformableValidation::ValidSkinInfluence(skin))
         return false;
+    u32 failedJoint = 0u;
+    if(!DeformableValidation::SkinInfluenceFitsSkeleton(skin, instance.skeletonJointCount, failedJoint))
+        return false;
 
     SIMDVector skinnedPosition = VectorZero();
     SIMDVector skinnedNormal = VectorZero();
@@ -328,6 +331,37 @@ template<typename PreparedJointPaletteVector>
     return SampleDisplacementTextureCoord(texture, DisplacementTextureCoord(displacement, uv));
 }
 
+[[nodiscard]] SIMDVector VectorTextureOffsetToWorld(
+    const DeformableDisplacement& displacement,
+    const u32 mode,
+    const Float4U& sample,
+    const SIMDVector normal,
+    const SIMDVector tangentWithHandedness)
+{
+    SIMDVector vectorOffset = VectorMultiply(
+        VectorAdd(VectorSetW(LoadFloat(sample), 0.0f), VectorReplicate(displacement.bias)),
+        VectorReplicate(displacement.amplitude)
+    );
+    if(mode != DeformableDisplacementMode::VectorTangentTexture)
+        return vectorOffset;
+
+    const SIMDVector tangent = VectorSetW(tangentWithHandedness, 0.0f);
+    const SIMDVector bitangent = VectorMultiply(
+        Core::Geometry::FrameResolveBitangent(normal, tangent, VectorSet(0.0f, 1.0f, 0.0f, 0.0f)),
+        VectorReplicate(Core::Geometry::FrameTangentHandedness(VectorGetW(tangentWithHandedness), 1.0f))
+    );
+    vectorOffset = VectorMultiplyAdd(
+        normal,
+        VectorReplicate(VectorGetZ(vectorOffset)),
+        VectorMultiplyAdd(
+            bitangent,
+            VectorReplicate(VectorGetY(vectorOffset)),
+            VectorMultiply(tangent, VectorReplicate(VectorGetX(vectorOffset)))
+        )
+    );
+    return vectorOffset;
+}
+
 void ApplyScalarTextureNormal(
     const DeformableDisplacement& displacement,
     const DeformableDisplacementTexture& texture,
@@ -366,6 +400,74 @@ void ApplyScalarTextureNormal(
     StoreFloat(VectorSetW(tangent, vertex.tangent.w), &vertex.tangent);
 }
 
+void ApplyVectorTextureNormal(
+    const DeformableDisplacement& displacement,
+    const DeformableDisplacementTexture& texture,
+    DeformableVertexRest& vertex)
+{
+    if(texture.width() <= 1u && texture.height() <= 1u)
+        return;
+
+    const Float2U uv = DisplacementTextureCoord(displacement, vertex.uv0);
+    const f32 du = DisplacementTextureCoordStep(texture.width());
+    const f32 dv = DisplacementTextureCoordStep(texture.height());
+    const SIMDVector normal = LoadFloat(vertex.normal);
+    const SIMDVector tangentWithHandedness = LoadFloat(vertex.tangent);
+    const SIMDVector tangent = VectorSetW(tangentWithHandedness, 0.0f);
+    const SIMDVector right = VectorTextureOffsetToWorld(
+        displacement,
+        displacement.mode,
+        SampleDisplacementTextureCoord(texture, Float2U(Saturate(uv.x + du), uv.y)),
+        normal,
+        tangentWithHandedness
+    );
+    const SIMDVector left = VectorTextureOffsetToWorld(
+        displacement,
+        displacement.mode,
+        SampleDisplacementTextureCoord(texture, Float2U(Saturate(uv.x - du), uv.y)),
+        normal,
+        tangentWithHandedness
+    );
+    const SIMDVector up = VectorTextureOffsetToWorld(
+        displacement,
+        displacement.mode,
+        SampleDisplacementTextureCoord(texture, Float2U(uv.x, Saturate(uv.y + dv))),
+        normal,
+        tangentWithHandedness
+    );
+    const SIMDVector down = VectorTextureOffsetToWorld(
+        displacement,
+        displacement.mode,
+        SampleDisplacementTextureCoord(texture, Float2U(uv.x, Saturate(uv.y - dv))),
+        normal,
+        tangentWithHandedness
+    );
+    if(!DeformableValidation::FiniteVector(right, 0x7u)
+        || !DeformableValidation::FiniteVector(left, 0x7u)
+        || !DeformableValidation::FiniteVector(up, 0x7u)
+        || !DeformableValidation::FiniteVector(down, 0x7u)
+    )
+        return;
+
+    const SIMDVector derivativeU = VectorScale(VectorSubtract(right, left), 0.5f);
+    const SIMDVector derivativeV = VectorScale(VectorSubtract(up, down), 0.5f);
+    const f32 handedness = Core::Geometry::FrameTangentHandedness(vertex.tangent.w, 1.0f);
+    const SIMDVector bitangent = VectorMultiply(
+        Core::Geometry::FrameResolveBitangent(normal, tangent, VectorSet(0.0f, 1.0f, 0.0f, 0.0f)),
+        VectorReplicate(handedness)
+    );
+    const SIMDVector displacedTangent = VectorAdd(tangent, derivativeU);
+    const SIMDVector displacedBitangent = VectorAdd(bitangent, derivativeV);
+    SIMDVector adjustedNormal = VectorScale(
+        Vector3Cross(displacedTangent, displacedBitangent),
+        handedness
+    );
+    adjustedNormal = Core::Geometry::FrameNormalizeDirection(adjustedNormal, normal);
+    const SIMDVector adjustedTangent = Core::Geometry::FrameResolveTangent(adjustedNormal, displacedTangent, tangent);
+    StoreFloat(adjustedNormal, &vertex.normal);
+    StoreFloat(VectorSetW(adjustedTangent, handedness), &vertex.tangent);
+}
+
 void ApplyDisplacement(
     const DeformableDisplacement& displacement,
     const DeformableDisplacementTexture* texture,
@@ -399,21 +501,20 @@ void ApplyDisplacement(
     if(displacement.mode == DeformableDisplacementMode::ScalarUvRamp
         || displacement.mode == DeformableDisplacementMode::ScalarTexture
     ){
+        const SIMDVector displacementNormal = LoadFloat(vertex.normal);
+        if(displacement.mode == DeformableDisplacementMode::ScalarTexture && texture)
+            ApplyScalarTextureNormal(displacement, *texture, vertex);
         if(!DeformableValidation::ActiveWeight(scalarOffset))
             return;
 
         StoreFloat(
-            VectorMultiplyAdd(LoadFloat(vertex.normal), VectorReplicate(scalarOffset), LoadFloat(vertex.position)),
+            VectorMultiplyAdd(displacementNormal, VectorReplicate(scalarOffset), LoadFloat(vertex.position)),
             &vertex.position
         );
-        if(displacement.mode == DeformableDisplacementMode::ScalarTexture && texture)
-            ApplyScalarTextureNormal(displacement, *texture, vertex);
         return;
     }
 
-    if(!DeformableValidation::FiniteVector(vectorOffset, 0x7u)
-        || !DeformableValidation::ActiveWeight(VectorGetX(Vector3LengthSq(vectorOffset)))
-    )
+    if(!DeformableValidation::FiniteVector(vectorOffset, 0x7u))
         return;
 
     SIMDVector worldOffset = vectorOffset;
@@ -434,6 +535,12 @@ void ApplyDisplacement(
             )
         );
     }
+    if(!DeformableValidation::FiniteVector(worldOffset, 0x7u))
+        return;
+    if(texture)
+        ApplyVectorTextureNormal(displacement, *texture, vertex);
+    if(!DeformableValidation::ActiveWeight(VectorGetX(Vector3LengthSq(worldOffset))))
+        return;
 
     StoreFloat(
         VectorAdd(LoadFloat(vertex.position), worldOffset),
@@ -514,6 +621,7 @@ template<typename VertexVector>
             instance.restVertices,
             instance.indices,
             instance.sourceTriangleCount,
+            instance.skeletonJointCount,
             instance.skin,
             instance.sourceSamples,
             instance.editMaskPerTriangle,

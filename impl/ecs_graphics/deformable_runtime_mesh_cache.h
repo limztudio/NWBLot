@@ -46,6 +46,7 @@ struct DeformableRuntimeMeshInstance{
     Vector<DeformableVertexRest> restVertices;
     Vector<u32> indices;
     u32 sourceTriangleCount = 0;
+    u32 skeletonJointCount = 0;
     Vector<SkinInfluence4> skin;
     Vector<SourceSample> sourceSamples;
     Vector<DeformableEditMaskFlags> editMaskPerTriangle;

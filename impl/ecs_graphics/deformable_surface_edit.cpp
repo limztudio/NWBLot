@@ -10,8 +10,10 @@
 #include <core/assets/asset_manager.h>
 #include <core/ecs/entity.h>
 #include <core/ecs/world.h>
+#include <core/geometry/attribute_transfer.h>
 #include <core/geometry/frame_math.h>
 #include <core/geometry/mesh_topology.h>
+#include <core/geometry/surface_patch_edit.h>
 #include <core/geometry/tangent_frame_rebuild.h>
 #include <impl/assets_graphics/deformable_geometry_validation.h>
 #include <impl/assets_graphics/geometry_asset.h>
@@ -48,11 +50,6 @@ struct HoleFrame{
     SIMDVector normal = VectorZero();
     SIMDVector tangent = VectorZero();
     SIMDVector bitangent = VectorZero();
-};
-
-struct SkinWeightSample{
-    u16 joint = 0;
-    f32 weight = 0.0f;
 };
 
 [[nodiscard]] bool FiniteVec3(const SIMDVector value){
@@ -179,6 +176,7 @@ using MorphDeltaLookup = HashMap<
         instance.restVertices,
         instance.indices,
         instance.sourceTriangleCount,
+        instance.skeletonJointCount,
         instance.skin,
         instance.sourceSamples,
         instance.editMaskPerTriangle,
@@ -1085,30 +1083,6 @@ void RestoreReplayAccessories(
     );
 }
 
-[[nodiscard]] bool ActiveMorphDelta(const DeformableMorphDelta& delta){
-    const SIMDVector epsilon = VectorReplicate(DeformableValidation::s_Epsilon);
-    return !Vector3LessOrEqual(VectorAbs(LoadFloat(delta.deltaPosition)), epsilon)
-        || !Vector3LessOrEqual(VectorAbs(LoadFloat(delta.deltaNormal)), epsilon)
-        || !Vector4LessOrEqual(VectorAbs(LoadFloat(delta.deltaTangent)), epsilon)
-    ;
-}
-
-void AccumulateMorphDelta(DeformableMorphDelta& target, const DeformableMorphDelta& source, const f32 weight){
-    const SIMDVector weightVector = VectorReplicate(weight);
-    StoreFloat(
-        VectorMultiplyAdd(LoadFloat(source.deltaPosition), weightVector, LoadFloat(target.deltaPosition)),
-        &target.deltaPosition
-    );
-    StoreFloat(
-        VectorMultiplyAdd(LoadFloat(source.deltaNormal), weightVector, LoadFloat(target.deltaNormal)),
-        &target.deltaNormal
-    );
-    StoreFloat(
-        VectorMultiplyAdd(LoadFloat(source.deltaTangent), weightVector, LoadFloat(target.deltaTangent)),
-        &target.deltaTangent
-    );
-}
-
 [[nodiscard]] bool BuildMorphDeltaLookup(
     const DeformableMorph& morph,
     const usize sourceDeltaCount,
@@ -1137,6 +1111,24 @@ void AccumulateMorphDelta(DeformableMorphDelta& target, const DeformableMorphDel
     return &morph.deltas[deltaIndex];
 }
 
+[[nodiscard]] Core::Geometry::AttributeTransferMorphDelta ToAttributeTransferMorphDelta(const DeformableMorphDelta& source){
+    Core::Geometry::AttributeTransferMorphDelta delta;
+    delta.vertexId = source.vertexId;
+    delta.deltaPosition = source.deltaPosition;
+    delta.deltaNormal = source.deltaNormal;
+    delta.deltaTangent = source.deltaTangent;
+    return delta;
+}
+
+[[nodiscard]] DeformableMorphDelta ToDeformableMorphDelta(const Core::Geometry::AttributeTransferMorphDelta& source){
+    DeformableMorphDelta delta;
+    delta.vertexId = source.vertexId;
+    delta.deltaPosition = source.deltaPosition;
+    delta.deltaNormal = source.deltaNormal;
+    delta.deltaTangent = source.deltaTangent;
+    return delta;
+}
+
 template<usize sourceCount>
 [[nodiscard]] bool AppendBlendedMorphDelta(
     Vector<DeformableMorphDelta>& outDeltas,
@@ -1147,9 +1139,9 @@ template<usize sourceCount>
     const u32 outputVertex)
 {
     static_assert(sourceCount > 0u, "morph transfer requires source samples");
-    DeformableMorphDelta blendedDelta{};
-    blendedDelta.vertexId = outputVertex;
-    bool hasDelta = false;
+    Core::Geometry::AttributeTransferMorphDelta sourceDeltas[sourceCount] = {};
+    Core::Geometry::AttributeTransferMorphBlendSource sources[sourceCount] = {};
+    usize activeSourceCount = 0u;
     for(usize sourceIndex = 0u; sourceIndex < sourceCount; ++sourceIndex){
         const f32 weight = sourceWeights[sourceIndex];
         if(!IsFinite(weight) || weight < 0.0f)
@@ -1165,14 +1157,23 @@ template<usize sourceCount>
         if(!sourceDelta)
             continue;
 
-        AccumulateMorphDelta(blendedDelta, *sourceDelta, weight);
-        hasDelta = true;
+        sourceDeltas[activeSourceCount] = ToAttributeTransferMorphDelta(*sourceDelta);
+        sources[activeSourceCount].delta = &sourceDeltas[activeSourceCount];
+        sources[activeSourceCount].weight = weight;
+        ++activeSourceCount;
     }
 
-    if(!hasDelta || !ActiveMorphDelta(blendedDelta))
+    if(activeSourceCount == 0u)
         return true;
 
-    outDeltas.push_back(blendedDelta);
+    Core::Geometry::AttributeTransferMorphDelta blendedDelta;
+    bool hasBlendedDelta = false;
+    if(!Core::Geometry::BlendMorphDelta(sources, activeSourceCount, outputVertex, blendedDelta, hasBlendedDelta))
+        return false;
+    if(!hasBlendedDelta)
+        return true;
+
+    outDeltas.push_back(ToDeformableMorphDelta(blendedDelta));
     return true;
 }
 
@@ -1232,49 +1233,22 @@ template<typename EdgeVector, typename VertexVector>
     return true;
 }
 
-[[nodiscard]] bool AccumulateSkinWeight(SkinWeightSample (&samples)[12], u32& sampleCount, const u16 joint, const f32 weight){
-    if(!IsFinite(weight) || weight < 0.0f)
-        return false;
-    if(!DeformableValidation::ActiveWeight(weight))
-        return true;
-
-    for(u32 sampleIndex = 0u; sampleIndex < sampleCount; ++sampleIndex){
-        SkinWeightSample& sample = samples[sampleIndex];
-        if(sample.joint != joint)
-            continue;
-
-        sample.weight += weight;
-        return IsFinite(sample.weight);
+[[nodiscard]] Core::Geometry::AttributeTransferSkinInfluence4 ToAttributeTransferSkinInfluence(const SkinInfluence4& source){
+    Core::Geometry::AttributeTransferSkinInfluence4 influence;
+    for(u32 influenceIndex = 0u; influenceIndex < 4u; ++influenceIndex){
+        influence.joint[influenceIndex] = source.joint[influenceIndex];
+        influence.weight[influenceIndex] = source.weight[influenceIndex];
     }
-
-    if(sampleCount >= 12u)
-        return false;
-
-    samples[sampleCount].joint = joint;
-    samples[sampleCount].weight = weight;
-    ++sampleCount;
-    return true;
+    return influence;
 }
 
-[[nodiscard]] bool ExtractStrongestSkinWeight(
-    SkinWeightSample (&samples)[12],
-    const u32 sampleCount,
-    SkinWeightSample& outSample)
-{
-    u32 bestIndex = Limit<u32>::s_Max;
-    for(u32 sampleIndex = 0u; sampleIndex < sampleCount; ++sampleIndex){
-        const SkinWeightSample& sample = samples[sampleIndex];
-        if(!DeformableValidation::ActiveWeight(sample.weight))
-            continue;
-        if(bestIndex == Limit<u32>::s_Max || sample.weight > samples[bestIndex].weight)
-            bestIndex = sampleIndex;
+[[nodiscard]] SkinInfluence4 ToDeformableSkinInfluence(const Core::Geometry::AttributeTransferSkinInfluence4& source){
+    SkinInfluence4 influence;
+    for(u32 influenceIndex = 0u; influenceIndex < 4u; ++influenceIndex){
+        influence.joint[influenceIndex] = source.joint[influenceIndex];
+        influence.weight[influenceIndex] = source.weight[influenceIndex];
     }
-    if(bestIndex == Limit<u32>::s_Max)
-        return false;
-
-    outSample = samples[bestIndex];
-    samples[bestIndex].weight = 0.0f;
-    return true;
+    return influence;
 }
 
 template<usize sourceCount>
@@ -1289,8 +1263,8 @@ template<usize sourceCount>
     if(skin.empty())
         return false;
 
-    SkinWeightSample samples[12] = {};
-    u32 sampleCount = 0u;
+    Core::Geometry::AttributeTransferSkinBlendSource sources[sourceCount] = {};
+    usize activeSourceCount = 0u;
     for(usize sourceIndex = 0u; sourceIndex < sourceCount; ++sourceIndex){
         const f32 sourceWeight = sourceWeights[sourceIndex];
         if(!IsFinite(sourceWeight) || sourceWeight < 0.0f)
@@ -1306,38 +1280,16 @@ template<usize sourceCount>
         if(!DeformableValidation::ValidSkinInfluence(sourceSkin))
             return false;
 
-        for(u32 influenceIndex = 0u; influenceIndex < 4u; ++influenceIndex){
-            if(!AccumulateSkinWeight(
-                    samples,
-                    sampleCount,
-                    sourceSkin.joint[influenceIndex],
-                    sourceSkin.weight[influenceIndex] * sourceWeight
-                )
-            )
-                return false;
-        }
+        sources[activeSourceCount].influence = ToAttributeTransferSkinInfluence(sourceSkin);
+        sources[activeSourceCount].weight = sourceWeight;
+        ++activeSourceCount;
     }
 
-    f32 selectedWeightSum = 0.0f;
-    for(u32 influenceIndex = 0u; influenceIndex < 4u; ++influenceIndex){
-        SkinWeightSample selectedSample{};
-        if(!ExtractStrongestSkinWeight(samples, sampleCount, selectedSample))
-            break;
-
-        outSkin.joint[influenceIndex] = selectedSample.joint;
-        outSkin.weight[influenceIndex] = selectedSample.weight;
-        selectedWeightSum += selectedSample.weight;
-        if(!IsFinite(selectedWeightSum))
-            return false;
-    }
-
-    if(!DeformableValidation::ActiveWeight(selectedWeightSum))
+    Core::Geometry::AttributeTransferSkinInfluence4 blendedSkin;
+    if(!Core::Geometry::BlendSkinInfluence4(sources, activeSourceCount, blendedSkin))
         return false;
 
-    const f32 invSelectedWeightSum = 1.0f / selectedWeightSum;
-    for(u32 influenceIndex = 0u; influenceIndex < 4u; ++influenceIndex)
-        outSkin.weight[influenceIndex] *= invSelectedWeightSum;
-
+    outSkin = ToDeformableSkinInfluence(blendedSkin);
     return DeformableValidation::ValidSkinInfluence(outSkin);
 }
 
@@ -1351,8 +1303,8 @@ template<usize sourceCount>
     static_assert(sourceCount > 0u, "color transfer requires source samples");
     outColor = Float4U(0.0f, 0.0f, 0.0f, 0.0f);
 
-    SIMDVector color = VectorZero();
-    f32 weightSum = 0.0f;
+    Core::Geometry::AttributeTransferFloat4BlendSource sources[sourceCount] = {};
+    usize activeSourceCount = 0u;
     for(usize sourceIndex = 0u; sourceIndex < sourceCount; ++sourceIndex){
         const f32 sourceWeight = sourceWeights[sourceIndex];
         if(!IsFinite(sourceWeight) || sourceWeight < 0.0f)
@@ -1365,21 +1317,12 @@ template<usize sourceCount>
             return false;
 
         const Float4U& sourceColor = vertices[vertex].color0;
-        const SIMDVector sourceColorVector = LoadFloat(sourceColor);
-        if(!DeformableValidation::FiniteVector(sourceColorVector, 0xFu))
-            return false;
-
-        color = VectorMultiplyAdd(sourceColorVector, VectorReplicate(sourceWeight), color);
-        weightSum += sourceWeight;
-        if(!DeformableValidation::FiniteVector(color, 0xFu) || !IsFinite(weightSum))
-            return false;
+        sources[activeSourceCount].value = sourceColor;
+        sources[activeSourceCount].weight = sourceWeight;
+        ++activeSourceCount;
     }
 
-    if(!DeformableValidation::ActiveWeight(weightSum))
-        return false;
-
-    StoreFloat(VectorScale(color, 1.0f / weightSum), &outColor);
-    return DeformableValidation::FiniteVector(LoadFloat(outColor), 0xFu);
+    return Core::Geometry::BlendFloat4(sources, activeSourceCount, outColor);
 }
 
 [[nodiscard]] bool AppendWallVertex(
@@ -2087,30 +2030,24 @@ namespace __hidden_deformable_surface_edit{
             newRestVertices.size() + ((wallBandCount - 1u) * boundaryVertexCount)
         );
         addedWallVertexCount = static_cast<u32>(boundaryVertexCount);
-        const SIMDVector frameNormal = frame.normal;
-        Vector<f32, Core::Alloc::ScratchAllocator<f32>> boundaryU{
-            Core::Alloc::ScratchAllocator<f32>(scratchArena)
+
+        Vector<Core::Geometry::SurfacePatchWallVertex, Core::Alloc::ScratchAllocator<Core::Geometry::SurfacePatchWallVertex>> wallVertexPlan{
+            Core::Alloc::ScratchAllocator<Core::Geometry::SurfacePatchWallVertex>(scratchArena)
         };
-        boundaryU.resize(boundaryVertexCount, 0.0f);
-
-        f32 boundaryLength = 0.0f;
-        for(usize edgeIndex = 0; edgeIndex < boundaryVertexCount; ++edgeIndex){
-            boundaryU[edgeIndex] = boundaryLength;
-
-            const EdgeRecord& edge = orderedBoundaryEdges[edgeIndex];
-            const SIMDVector edgeDelta = Core::Geometry::FrameProjectOntoPlane(
-                VectorSubtract(LoadFloat(newRestVertices[edge.b].position), LoadFloat(newRestVertices[edge.a].position)),
-                frameNormal
-            );
-            const f32 edgeLength = VectorGetX(Vector3Length(edgeDelta));
-            if(!IsFinite(edgeLength) || edgeLength <= DeformableRuntime::s_Epsilon)
-                return false;
-            boundaryLength += edgeLength;
-            if(!IsFinite(boundaryLength))
-                return false;
-        }
-
-        if(boundaryLength <= DeformableRuntime::s_Epsilon)
+        wallVertexPlan.resize(totalWallVertexCount);
+        Float3U frameNormal;
+        StoreFloat(frame.normal, &frameNormal);
+        if(!Core::Geometry::BuildSurfacePatchWallVertices(
+                orderedBoundaryEdges,
+                restPositions,
+                topologyFrame,
+                frameNormal,
+                params.depth,
+                wallBandCount,
+                wallVertexPlan.data(),
+                wallVertexPlan.size()
+            )
+        )
             return false;
 
         Vector<u32, Core::Alloc::ScratchAllocator<u32>> wallVertices{
@@ -2119,43 +2056,17 @@ namespace __hidden_deformable_surface_edit{
         wallVertices.resize(totalWallVertexCount, 0u);
 
         for(usize ringIndex = 0u; ringIndex < wallBandCount; ++ringIndex){
-            const f32 wallV = static_cast<f32>(ringIndex + 1u) / static_cast<f32>(wallBandCount);
             const usize wallVertexBase = ringIndex * boundaryVertexCount;
 
             for(usize edgeIndex = 0; edgeIndex < boundaryVertexCount; ++edgeIndex){
-                const usize previousEdgeIndex = edgeIndex == 0u ? boundaryVertexCount - 1u : edgeIndex - 1u;
-                const EdgeRecord& edge = orderedBoundaryEdges[edgeIndex];
-
-                Core::Geometry::MeshTopologyLoopVertexFrame vertexFrame;
-                if(!Core::Geometry::BuildBoundaryLoopVertexFrame(
-                        restPositions,
-                        topologyFrame,
-                        orderedBoundaryEdges[previousEdgeIndex],
-                        edge,
-                        vertexFrame
-                    )
-                )
-                    return false;
-
-                const SIMDVector rimPosition = LoadFloat(newRestVertices[edge.a].position);
-                const SIMDVector innerPosition = VectorMultiplyAdd(
-                    frame.normal,
-                    VectorReplicate(-params.depth * wallV),
-                    rimPosition
-                );
-                const f32 uvU = boundaryU[edgeIndex] / boundaryLength;
+                const Core::Geometry::SurfacePatchWallVertex& plannedVertex = wallVertexPlan[wallVertexBase + edgeIndex];
                 if(!newSourceSamples.empty())
-                    newSourceSamples[edge.a] = wallSourceSample;
+                    newSourceSamples[plannedVertex.sourceVertex] = wallSourceSample;
 
-                const u32 innerAttributeVertices[3] = {
-                    orderedBoundaryEdges[previousEdgeIndex].a,
-                    edge.a,
-                    edge.b,
-                };
                 Float4U innerColor;
                 if(!BuildBlendedVertexColor(
                         newRestVertices,
-                        innerAttributeVertices,
+                        plannedVertex.attributeVertices,
                         s_WallInnerInpaintWeights,
                         innerColor
                     )
@@ -2167,7 +2078,7 @@ namespace __hidden_deformable_surface_edit{
                 if(!newSkin.empty()){
                     if(!BuildBlendedSkinInfluence(
                             newSkin,
-                            innerAttributeVertices,
+                            plannedVertex.attributeVertices,
                             s_WallInnerInpaintWeights,
                             innerSkin
                         )
@@ -2181,15 +2092,15 @@ namespace __hidden_deformable_surface_edit{
                         newRestVertices,
                         newSkin,
                         newSourceSamples,
-                        edge.a,
+                        plannedVertex.sourceVertex,
                         innerSkinPtr,
                         wallSourceSample,
                         innerColor,
-                        innerPosition,
-                        LoadFloat(vertexFrame.normal),
-                        LoadFloat(vertexFrame.tangent),
-                        uvU,
-                        wallV,
+                        LoadFloat(plannedVertex.position),
+                        LoadFloat(plannedVertex.normal),
+                        LoadFloat(plannedVertex.tangent),
+                        plannedVertex.uv0.x,
+                        plannedVertex.uv0.y,
                         wallVertices[wallVertexBase + edgeIndex]
                     )
                 )
@@ -2231,17 +2142,13 @@ namespace __hidden_deformable_surface_edit{
             addedTriangleCount += wallAddedTriangleCount;
 
             if(ringIndex + 1u < wallBandCount){
-                bandOuterEdges.clear();
-                bandOuterEdges.reserve(boundaryVertexCount);
-                for(usize edgeIndex = 0u; edgeIndex < boundaryVertexCount; ++edgeIndex){
-                    const usize nextEdgeIndex = (edgeIndex + 1u) % boundaryVertexCount;
-                    EdgeRecord edge;
-                    edge.a = wallVertices[wallVertexBase + edgeIndex];
-                    edge.b = wallVertices[wallVertexBase + nextEdgeIndex];
-                    edge.fullCount = 2u;
-                    edge.removedCount = 1u;
-                    bandOuterEdges.push_back(edge);
-                }
+                if(!Core::Geometry::BuildSurfacePatchRingEdges(
+                        wallVertices.data() + wallVertexBase,
+                        boundaryVertexCount,
+                        bandOuterEdges
+                    )
+                )
+                    return false;
             }
         }
     }
@@ -2253,6 +2160,7 @@ namespace __hidden_deformable_surface_edit{
             newRestVertices,
             newIndices,
             newSourceTriangleCount,
+            instance.skeletonJointCount,
             addWall ? newSkin : instance.skin,
             addWall ? newSourceSamples : instance.sourceSamples,
             hasEditMaskPerTriangle ? newEditMaskPerTriangle : instance.editMaskPerTriangle,

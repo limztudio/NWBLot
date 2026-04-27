@@ -164,6 +164,7 @@ template<typename MorphRangeVector, typename MorphDeltaVector>
         ++activeMorphCount;
         activeInputDeltaCount += morph.deltas.size();
         Core::CoreDetail::HashCombine(outSignature, morph.name);
+        Core::CoreDetail::HashCombine(outSignature, weight);
         Core::CoreDetail::HashCombine(outSignature, static_cast<u32>(morph.deltas.size()));
 
         for(const DeformableMorphDelta& delta : morph.deltas){

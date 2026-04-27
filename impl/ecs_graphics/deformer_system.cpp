@@ -192,6 +192,16 @@ static bool BuildSkinPayload(
         for(u32 influenceIndex = 0; influenceIndex < 4u; ++influenceIndex){
             const u32 joint = static_cast<u32>(sourceSkin.joint[influenceIndex]);
             const f32 weight = sourceSkin.weight[influenceIndex];
+            if(instance.skeletonJointCount != 0u && joint >= instance.skeletonJointCount){
+                NWB_LOGGER_ERROR(
+                    NWB_TEXT("DeformerSystem: runtime mesh '{}' vertex {} references joint {} outside skeleton joint count {}"),
+                    instance.handle.value,
+                    vertexIndex,
+                    joint,
+                    instance.skeletonJointCount
+                );
+                return false;
+            }
             if(DeformableValidation::ActiveWeight(weight) && joint >= jointCount){
                 NWB_LOGGER_ERROR(
                     NWB_TEXT("DeformerSystem: runtime mesh '{}' vertex {} references joint {} outside palette size {}"),

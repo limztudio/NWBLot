@@ -650,27 +650,28 @@ static void ApplyDefaultCameraPositionMeshViewState(MeshViewState& state, const 
 static bool TryApplyDirectionalLightMeshViewState(
     MeshViewState& state,
     const Core::Scene::TransformComponent& transform,
-    const Core::Scene::LightComponent& light)
-{
+    const Core::Scene::LightComponent& light){
     if(light.type != Core::Scene::LightType::Directional)
         return false;
 
     const SIMDVector rotation = LoadFloat(transform.rotation);
     const f32 rotationLengthSquared = VectorGetX(QuaternionLengthSq(rotation));
-    if(QuaternionIsNaN(rotation)
+    if(
+        QuaternionIsNaN(rotation)
         || QuaternionIsInfinite(rotation)
         || !IsFinite(rotationLengthSquared)
-        || rotationLengthSquared <= 0.0001f)
-    {
+        || rotationLengthSquared <= 0.0001f
+    ){
         return false;
     }
 
     const SIMDVector lightColorIntensity = LoadFloat(light.colorIntensity);
-    if(Vector3IsNaN(lightColorIntensity)
+    if(
+        Vector3IsNaN(lightColorIntensity)
         || Vector3IsInfinite(lightColorIntensity)
         || !IsFinite(light.intensity())
-        || light.intensity() <= 0.0f)
-    {
+        || light.intensity() <= 0.0f
+    ){
         return false;
     }
 
@@ -1156,7 +1157,8 @@ bool RendererSystem::ensureDeferredFrameTargets(Core::IFramebuffer* presentation
         return false;
     }
 
-    if(m_deferredTargets.valid()
+    if(
+        m_deferredTargets.valid()
         && m_deferredTargets.width == presentationInfo.width
         && m_deferredTargets.height == presentationInfo.height
         && m_deferredTargets.albedoFormat == albedoFormat
@@ -1527,22 +1529,26 @@ bool RendererSystem::ensureDeferredCompositeResources(){
     if(!__hidden_ecs_graphics::EnsurePointClampSampler(*device, m_deferredSampler, NWB_TEXT("RendererSystem: failed to create deferred composite sampler")))
         return false;
 
-    if(!ensureShaderLoaded(
+    if(
+        !ensureShaderLoaded(
         m_deferredCompositeVertexShader,
         __hidden_ecs_graphics::DeferredCompositeVertexShaderName(),
         Core::ShaderArchive::s_DefaultVariant,
         Core::ShaderType::Vertex,
         "ECSGraphics_DeferredCompositeVS"
-    ))
+        )
+    )
         return false;
 
-    if(!ensureShaderLoaded(
+    if(
+        !ensureShaderLoaded(
         m_deferredCompositePixelShader,
         __hidden_ecs_graphics::DeferredCompositePixelShaderName(),
         Core::ShaderArchive::s_DefaultVariant,
         Core::ShaderType::Pixel,
         "ECSGraphics_DeferredCompositePS"
-    ))
+        )
+    )
         return false;
 
     return true;
@@ -1671,49 +1677,59 @@ bool RendererSystem::ensureAvboitResources(){
         }
     }
 
-    if(!ensureShaderLoaded(
+    if(
+        !ensureShaderLoaded(
         m_avboitOccupancyPixelShader,
         __hidden_ecs_graphics::AvboitOccupancyPixelShaderName(),
         Core::ShaderArchive::s_DefaultVariant,
         Core::ShaderType::Pixel,
         "ECSGraphics_AvboitOccupancyPS"
-    ))
+        )
+    )
         return false;
 
-    if(!ensureShaderLoaded(
+    if(
+        !ensureShaderLoaded(
         m_avboitDepthWarpComputeShader,
         __hidden_ecs_graphics::AvboitDepthWarpComputeShaderName(),
         Core::ShaderArchive::s_DefaultVariant,
         Core::ShaderType::Compute,
         "ECSGraphics_AvboitDepthWarpCS"
-    ))
+        )
+    )
         return false;
 
-    if(!ensureShaderLoaded(
+    if(
+        !ensureShaderLoaded(
         m_avboitExtinctionPixelShader,
         __hidden_ecs_graphics::AvboitExtinctionPixelShaderName(),
         Core::ShaderArchive::s_DefaultVariant,
         Core::ShaderType::Pixel,
         "ECSGraphics_AvboitExtinctionPS"
-    ))
+        )
+    )
         return false;
 
-    if(!ensureShaderLoaded(
+    if(
+        !ensureShaderLoaded(
         m_avboitIntegrateComputeShader,
         __hidden_ecs_graphics::AvboitIntegrateComputeShaderName(),
         Core::ShaderArchive::s_DefaultVariant,
         Core::ShaderType::Compute,
         "ECSGraphics_AvboitIntegrateCS"
-    ))
+        )
+    )
         return false;
 
-    if(!ensureShaderLoaded(
+    if(
+        !ensureShaderLoaded(
         m_avboitAccumulatePixelShader,
         __hidden_ecs_graphics::AvboitAccumulatePixelShaderName(),
         Core::ShaderArchive::s_DefaultVariant,
         Core::ShaderType::Pixel,
         "ECSGraphics_AvboitAccumulatePS"
-    ))
+        )
+    )
         return false;
 
     return true;
@@ -2627,7 +2643,8 @@ bool RendererSystem::ensureDeformableGeometryResources(const DeformableRuntimeMe
 
     if(!instance.valid())
         return false;
-    if(instance.restVertices.size() > static_cast<usize>(Limit<u32>::s_Max)
+    if(
+        instance.restVertices.size() > static_cast<usize>(Limit<u32>::s_Max)
         || instance.indices.size() > static_cast<usize>(Limit<u32>::s_Max)
     ){
         NWB_LOGGER_ERROR(
@@ -2848,13 +2865,15 @@ bool RendererSystem::ensureComputeEmulationResources(){
     }
 
     if(!m_emulationVertexShader){
-        if(!ensureShaderLoaded(
+        if(
+            !ensureShaderLoaded(
             m_emulationVertexShader,
             __hidden_ecs_graphics::MeshEmulationVertexShaderName(),
             Core::ShaderArchive::s_DefaultVariant,
             Core::ShaderType::Vertex,
             "ECSGraphics_MeshEmulationVS"
-        ))
+            )
+        )
             return false;
     }
 
@@ -3207,14 +3226,16 @@ bool RendererSystem::ensureRendererPipeline(
         if(!ensureComputeEmulationResources())
             return false;
         const Name& meshComputeArchiveStageName = ShaderStageNames::MeshComputeArchiveStageName();
-        if(!ensureShaderLoaded(
+        if(
+            !ensureShaderLoaded(
             resources.computeShader,
             materialInfo.meshShader.name(),
             shaderVariant,
             Core::ShaderType::Compute,
             "ECSGraphics_RendererCS",
             &meshComputeArchiveStageName
-        )){
+            )
+        ){
             return false;
         }
         if(pass == MaterialPipelinePass::Opaque){
@@ -3395,8 +3416,7 @@ bool RendererSystem::ensureShaderLoaded(
     const Core::ShaderType::Mask shaderType,
     const Name& debugName,
     const Name* archiveStageName
-)
-{
+){
     if(outShader)
         return true;
     if(!shaderName){

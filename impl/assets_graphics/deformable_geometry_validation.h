@@ -120,7 +120,8 @@ struct MorphPayloadFailureInfo{
     const SIMDVector tangent = LoadRestVertexTangent(vertex);
     const SIMDVector uv0 = LoadRestVertexUv0(vertex);
     const SIMDVector color0 = LoadRestVertexColor0(vertex);
-    if(!FiniteVector(position, 0x7u)
+    if(
+        !FiniteVector(position, 0x7u)
         || !FiniteVector(normal, 0x7u)
         || !FiniteVector(tangent, 0xFu)
         || !FiniteVector(uv0, 0x3u)
@@ -132,7 +133,8 @@ struct MorphPayloadFailureInfo{
     const f32 tangentLengthSquared = VectorGetX(Vector3LengthSq(tangent));
     const f32 tangentHandedness = Abs(VectorGetW(tangent));
     const f32 frameCrossLengthSquared = VectorGetX(Vector3LengthSq(Vector3Cross(normal, tangent)));
-    if(normalLengthSquared <= s_RestFrameLengthSquaredEpsilon
+    if(
+        normalLengthSquared <= s_RestFrameLengthSquaredEpsilon
         || tangentLengthSquared <= s_RestFrameLengthSquaredEpsilon
         || tangentHandedness <= s_TangentHandednessEpsilon
         || Abs(tangentHandedness - 1.0f) > s_TangentHandednessUnitEpsilon
@@ -293,7 +295,8 @@ struct MorphPayloadFailureInfo{
         VectorGetW(column2),
         VectorGetW(column3)
     );
-    if(!FiniteVector(column0, 0xFu)
+    if(
+        !FiniteVector(column0, 0xFu)
         || !FiniteVector(column1, 0xFu)
         || !FiniteVector(column2, 0xFu)
         || !FiniteVector(column3, 0xFu)
@@ -436,7 +439,8 @@ struct MorphPayloadFailureInfo{
 {
     if(restVertices.empty() || indices.empty())
         return false;
-    if(restVertices.size() > static_cast<usize>(Limit<u32>::s_Max)
+    if(
+        restVertices.size() > static_cast<usize>(Limit<u32>::s_Max)
         || indices.size() > static_cast<usize>(Limit<u32>::s_Max)
         || (indices.size() % 3u) != 0u
     )
@@ -461,7 +465,8 @@ struct MorphPayloadFailureInfo{
             return false;
     }
     for(usize indexBase = 0; indexBase < indices.size(); indexBase += 3u){
-        if(!ValidTriangle(
+        if(
+            !ValidTriangle(
                 restVertices,
                 indices[indexBase + 0u],
                 indices[indexBase + 1u],

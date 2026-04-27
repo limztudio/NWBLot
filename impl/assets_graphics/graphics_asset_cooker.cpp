@@ -1054,7 +1054,8 @@ static bool BuildGeometryVertices(
 }
 
 static bool RejectUnsupportedGeometryFields(const DiscoveredNwbFile& discoveredFile, const Core::Metascript::Value& asset){
-    if(!asset.findField("primitive")
+    if(
+        !asset.findField("primitive")
         && !asset.findField("vertex_stride")
         && !asset.findField("vertex_data")
         && !asset.findField("index_data")
@@ -1269,7 +1270,8 @@ static bool BuildDeformableRestVertices(
     const ColorVectorT& colors,
     Vector<DeformableVertexRest>& outVertices
 ){
-    if(positions.size() != normals.size()
+    if(
+        positions.size() != normals.size()
         || positions.size() != tangents.size()
         || positions.size() != uv0.size()
         || positions.size() != colors.size()
@@ -1777,7 +1779,8 @@ static bool ParseDisplacement(
     if(!amplitude || !ParseFiniteF32Value(nwbFilePath, *amplitude, "displacement.amplitude", outDisplacement.amplitude))
         return false;
 
-    if(!ParseOptionalFiniteF32Field(nwbFilePath, *displacement, "bias", outDisplacement.bias)
+    if(
+        !ParseOptionalFiniteF32Field(nwbFilePath, *displacement, "bias", outDisplacement.bias)
         || !ParseOptionalFloat2Field(nwbFilePath, *displacement, "uv_scale", outDisplacement.uvScale)
         || !ParseOptionalFloat2Field(nwbFilePath, *displacement, "uv_offset", outDisplacement.uvOffset)
     )
@@ -1882,7 +1885,8 @@ static bool ParseMorphs(const Path& nwbFilePath, const Core::Metascript::Value& 
         }
         if(!ParseFloatListField<Float4U, 4u>(nwbFilePath, morphValue, "delta_tangent", deltaTangents))
             return false;
-        if(vertexIds.empty()
+        if(
+            vertexIds.empty()
             || vertexIds.size() != deltaPositions.size()
             || vertexIds.size() != deltaNormals.size()
             || vertexIds.size() != deltaTangents.size()
@@ -1949,12 +1953,14 @@ static bool ParseDeformableGeometryMeta(
 
     if(!Core::Assets::RejectVirtualPathOverrideField(discoveredFile.filePath, asset, "DeformableGeometry"))
         return false;
-    if(!Core::Assets::BuildDerivedAssetVirtualPath(
+    if(
+        !Core::Assets::BuildDerivedAssetVirtualPath(
         discoveredFile.assetRoot,
         discoveredFile.virtualRoot,
         discoveredFile.filePath,
         outEntry.virtualPath
-    ))
+        )
+    )
         return false;
 
     if(!RejectDeformableGeometrySourceField(discoveredFile, asset))
@@ -1972,7 +1978,8 @@ static bool ParseDeformableGeometryMeta(
         return false;
     bool normalsProvided = false;
     bool tangentsProvided = false;
-    if(!ParseOptionalFloatListField<Float3U, 3u>(
+    if(
+        !ParseOptionalFloatListField<Float3U, 3u>(
             discoveredFile.filePath,
             asset,
             "normals",
@@ -1981,7 +1988,8 @@ static bool ParseDeformableGeometryMeta(
         )
     )
         return false;
-    if(!ParseOptionalFloatListField<Float4U, 4u>(
+    if(
+        !ParseOptionalFloatListField<Float4U, 4u>(
             discoveredFile.filePath,
             asset,
             "tangents",
@@ -2006,7 +2014,8 @@ static bool ParseDeformableGeometryMeta(
         BuildDefaultColors(positions.size(), colors);
     if(!BuildDeformableRestVertices(discoveredFile.filePath, positions, normals, tangents, uv0, colors, outEntry.restVertices))
         return false;
-    if(!GenerateMissingDeformableFrames(
+    if(
+        !GenerateMissingDeformableFrames(
             discoveredFile.filePath,
             normalsProvided,
             tangentsProvided,
@@ -2022,7 +2031,8 @@ static bool ParseDeformableGeometryMeta(
     if(!ParseInverseBindMatrices(discoveredFile.filePath, asset, outEntry.skeletonJointCount, outEntry.inverseBindMatrices))
         return false;
     bool sourceSamplesProvided = false;
-    if(!ParseSourceSamples(
+    if(
+        !ParseSourceSamples(
             discoveredFile.filePath,
             asset,
             outEntry.restVertices.size(),
@@ -2031,18 +2041,20 @@ static bool ParseDeformableGeometryMeta(
         )
     )
         return false;
-    if(!sourceSamplesProvided
+    if(
+        !sourceSamplesProvided
         && !GenerateIdentitySourceSamples(
-            discoveredFile.filePath,
-            outEntry.indices,
-            outEntry.restVertices.size(),
-            outEntry.sourceSamples
-        )
+                discoveredFile.filePath,
+                outEntry.indices,
+                outEntry.restVertices.size(),
+                outEntry.sourceSamples
+            )
     )
         return false;
     if(!ParseEditMasks(discoveredFile.filePath, asset, outEntry.indices.size() / 3u, outEntry.editMaskPerTriangle))
         return false;
-    if(!ParseDisplacement(
+    if(
+        !ParseDisplacement(
             discoveredFile.filePath,
             asset,
             outEntry.displacement,
@@ -2074,12 +2086,14 @@ static bool ParseDeformableDisplacementTextureMeta(
 
     if(!Core::Assets::RejectVirtualPathOverrideField(discoveredFile.filePath, asset, "DeformableDisplacementTexture"))
         return false;
-    if(!Core::Assets::BuildDerivedAssetVirtualPath(
+    if(
+        !Core::Assets::BuildDerivedAssetVirtualPath(
         discoveredFile.assetRoot,
         discoveredFile.virtualRoot,
         discoveredFile.filePath,
         outEntry.virtualPath
-    ))
+        )
+    )
         return false;
 
     const Core::Metascript::Value* width = FindField(asset, "width");
@@ -2433,8 +2447,7 @@ static bool GetVariantBytecode(
     const AStringView sourceChecksumHex,
     Core::ShaderCook& shaderCook,
     Vector<u8>& outBytecode
-)
-{
+){
     ErrorCode errorCode;
     Core::Alloc::ScratchArena<> scratchArena;
 
@@ -2633,12 +2646,14 @@ static bool ParseAssetMetadata(
             if(!shaderCook.parseShaderMeta(nwbFile, doc, shaderEntry))
                 return false;
 
-            if(!Core::Assets::BuildDerivedAssetVirtualPath(
+            if(
+                !Core::Assets::BuildDerivedAssetVirtualPath(
                 discoveredNwbFile.assetRoot,
                 discoveredNwbFile.virtualRoot.view(),
                 Path(shaderEntry.source),
                 shaderEntry.name
-            )){
+                )
+            ){
                 return false;
             }
 
@@ -2727,11 +2742,13 @@ static bool ParseAssetMetadata(
             if(!ParseDeformableDisplacementTextureMeta(discoveredNwbFile, doc, textureEntry))
                 return false;
 
-            if(!AppendUniquePropertyAssetEntry(
+            if(
+                !AppendUniquePropertyAssetEntry(
                 textureEntry,
                 seenPropertyAssetPathHashes,
                 outMetadata.deformableDisplacementTextureEntries
-            ))
+                )
+            )
                 return false;
             continue;
         }
@@ -2772,8 +2789,7 @@ static bool PrepareShaderEntriesForCook(
     const IncludeMetadataMap& includeMetadata,
     ShaderEntryVector& inOutShaderEntries,
     PreparedShaderPlan& outPreparedPlan
-)
-{
+){
     ErrorCode errorCode;
 
     outPreparedPlan.preparedEntries.clear();
@@ -2956,7 +2972,8 @@ static bool AppendPreparedShadersToVolume(
                 stageSafeName,
                 variantName
             );
-            if(!GetVariantBytecode(
+            if(
+                !GetVariantBytecode(
                 entry,
                 variantName,
                 defineCombo,
@@ -2966,7 +2983,8 @@ static bool AppendPreparedShadersToVolume(
                 sourceChecksumHex,
                 shaderCook,
                 cookedBytecode
-            )){
+                )
+            ){
                 return false;
             }
 
@@ -3266,29 +3284,35 @@ bool GraphicsAssetCooker::cookGraphicsAssets(const GraphicsCookEnvironment& envi
     const AString configurationSafeName = BuildSafeCacheName(normalizedConfiguration);
 
     __hidden_graphics_asset_cooker::PreparedShaderPlan preparedPlan(m_arena);
-    if(!__hidden_graphics_asset_cooker::PrepareShaderEntriesForCook(
+    if(
+        !__hidden_graphics_asset_cooker::PrepareShaderEntriesForCook(
         m_arena,
         shaderCook,
         resolvedPaths,
         parsedMetadata.includeMetadata,
         parsedMetadata.shaderEntries,
         preparedPlan
-    )){
+        )
+    ){
         return false;
     }
     if(!__hidden_graphics_asset_cooker::AddPlannedFileCount(static_cast<u64>(parsedMetadata.materialEntries.size()), preparedPlan.plannedFileCount))
         return false;
     if(!__hidden_graphics_asset_cooker::AddPlannedFileCount(static_cast<u64>(parsedMetadata.geometryEntries.size()), preparedPlan.plannedFileCount))
         return false;
-    if(!__hidden_graphics_asset_cooker::AddPlannedFileCount(
+    if(
+        !__hidden_graphics_asset_cooker::AddPlannedFileCount(
         static_cast<u64>(parsedMetadata.deformableGeometryEntries.size()),
         preparedPlan.plannedFileCount
-    ))
+        )
+    )
         return false;
-    if(!__hidden_graphics_asset_cooker::AddPlannedFileCount(
+    if(
+        !__hidden_graphics_asset_cooker::AddPlannedFileCount(
         static_cast<u64>(parsedMetadata.deformableDisplacementTextureEntries.size()),
         preparedPlan.plannedFileCount
-    ))
+        )
+    )
         return false;
 
     if(!__hidden_graphics_asset_cooker::ValidateAndNormalizeMaterials(shaderCook, preparedPlan.preparedEntries, parsedMetadata.materialEntries))
@@ -3328,7 +3352,8 @@ bool GraphicsAssetCooker::cookGraphicsAssets(const GraphicsCookEnvironment& envi
             return false;
         }
 
-        if(!__hidden_graphics_asset_cooker::AppendPreparedShadersToVolume(
+        if(
+            !__hidden_graphics_asset_cooker::AppendPreparedShadersToVolume(
             m_arena,
             shaderCook,
             resolvedPaths.cacheDirectory,
@@ -3337,7 +3362,8 @@ bool GraphicsAssetCooker::cookGraphicsAssets(const GraphicsCookEnvironment& envi
             volumeSession,
             seenVirtualPathHashes,
             shaderIndexRecords
-        )){
+            )
+        ){
             return false;
         }
 
@@ -3355,17 +3381,21 @@ bool GraphicsAssetCooker::cookGraphicsAssets(const GraphicsCookEnvironment& envi
             return false;
         if(!__hidden_graphics_asset_cooker::AppendGeometryAssetsToVolume(parsedMetadata.geometryEntries, volumeSession, seenVirtualPathHashes))
             return false;
-        if(!__hidden_graphics_asset_cooker::AppendDeformableGeometryAssetsToVolume(
+        if(
+            !__hidden_graphics_asset_cooker::AppendDeformableGeometryAssetsToVolume(
             parsedMetadata.deformableGeometryEntries,
             volumeSession,
             seenVirtualPathHashes
-        ))
+            )
+        )
             return false;
-        if(!__hidden_graphics_asset_cooker::AppendDeformableDisplacementTexturesToVolume(
+        if(
+            !__hidden_graphics_asset_cooker::AppendDeformableDisplacementTexturesToVolume(
             parsedMetadata.deformableDisplacementTextureEntries,
             volumeSession,
             seenVirtualPathHashes
-        ))
+            )
+        )
             return false;
 
         if(!volumeSession.flush()){

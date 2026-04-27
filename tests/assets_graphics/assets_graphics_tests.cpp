@@ -59,8 +59,7 @@ struct TestArena{
             &AssetsGraphicsTestFree,
             &AssetsGraphicsTestAllocAligned,
             &AssetsGraphicsTestFreeAligned
-        )
-    {}
+        ){}
 };
 
 
@@ -1554,14 +1553,16 @@ static void TestGeometryCookerTypedStreams(TestContext& context){
     TestArena testArena;
     Path root;
     UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-    if(!CookAndLoadMinimalGeometry(
+    if(
+        !CookAndLoadMinimalGeometry(
         context,
         testArena,
         s_MinimalGeometryMeta,
         "minimal_geometry",
         root,
         loadedAsset
-    ))
+        )
+    )
         return;
 
     {
@@ -1587,14 +1588,16 @@ static void TestGeometryCookerDefaultColors(TestContext& context){
     TestArena testArena;
     Path root;
     UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-    if(!CookAndLoadMinimalGeometry(
+    if(
+        !CookAndLoadMinimalGeometry(
         context,
         testArena,
         s_DefaultColorGeometryMeta,
         "default_color_geometry",
         root,
         loadedAsset
-    ))
+        )
+    )
         return;
 
     {
@@ -1649,14 +1652,16 @@ static void TestDeformableGeometryCookerMinimalAsset(TestContext& context){
     TestArena testArena;
     Path root;
     UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-    if(!CookAndLoadMinimalDeformable(
+    if(
+        !CookAndLoadMinimalDeformable(
         context,
         testArena,
         s_MinimalDeformableMeta,
         "minimal",
         root,
         loadedAsset
-    ))
+        )
+    )
         return;
 
     {
@@ -1684,14 +1689,16 @@ static void TestDeformableGeometryCookerGeneratesMissingFrames(TestContext& cont
     TestArena testArena;
     Path root;
     UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-    if(!CookAndLoadMinimalDeformable(
+    if(
+        !CookAndLoadMinimalDeformable(
         context,
         testArena,
         s_GeneratedFrameDeformableMeta,
         "generated_frames",
         root,
         loadedAsset
-    ))
+        )
+    )
         return;
 
     {
@@ -1724,14 +1731,16 @@ static void TestDeformableGeometryCookerU32IndexType(TestContext& context){
     TestArena testArena;
     Path root;
     UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-    if(!CookAndLoadMinimalDeformable(
+    if(
+        !CookAndLoadMinimalDeformable(
         context,
         testArena,
         s_U32IndexTypeDeformableMeta,
         "u32_index_type",
         root,
         loadedAsset
-    ))
+        )
+    )
         return;
 
     {
@@ -1760,14 +1769,16 @@ static void TestDeformableGeometryCookerExplicitEmptyOptionalLists(TestContext& 
     auto expectCookedDefaultOptionals = [&](const AStringView metaText, const AStringView caseName){
         Path root;
         UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-        if(!CookAndLoadMinimalDeformable(
+        if(
+            !CookAndLoadMinimalDeformable(
             context,
             testArena,
             metaText,
             caseName,
             root,
             loadedAsset
-        ))
+            )
+        )
             return;
 
         {
@@ -1799,14 +1810,16 @@ static void TestDeformableGeometryCookerNativeCharacterMock(TestContext& context
     TestArena testArena;
     Path root;
     UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-    if(!CookAndLoadMinimalDeformable(
+    if(
+        !CookAndLoadMinimalDeformable(
         context,
         testArena,
         s_NativeCharacterMockDeformableMeta,
         "native_character_mock",
         root,
         loadedAsset
-    ))
+        )
+    )
         return;
 
     {
@@ -1854,14 +1867,16 @@ static void TestDeformableGeometryCookerNormalizesSkinWeights(TestContext& conte
     TestArena testArena;
     Path root;
     UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-    if(!CookAndLoadMinimalDeformable(
+    if(
+        !CookAndLoadMinimalDeformable(
         context,
         testArena,
         s_NonnormalizedSkinDeformableMeta,
         "nonnormalized_skin",
         root,
         loadedAsset
-    ))
+        )
+    )
         return;
 
     {
@@ -1898,14 +1913,16 @@ static void TestDeformableGeometryCookerTextureDisplacementModes(TestContext& co
 
         Path root;
         UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-        if(!CookAndLoadMinimalDeformable(
+        if(
+            !CookAndLoadMinimalDeformable(
             context,
             testArena,
             AStringView(meta.data(), meta.size()),
             caseName,
             root,
             loadedAsset
-        ))
+            )
+        )
             return;
 
         {

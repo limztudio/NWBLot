@@ -475,13 +475,15 @@ bool Device::loadPipelineCacheData(Vector<u8>& outData){
         return false;
 
     Filesystem::VolumeFileSystem volume(m_context.objectArena);
-    if(!VulkanDetail::MountPipelineCacheVolume(
+    if(
+        !VulkanDetail::MountPipelineCacheVolume(
         m_pipelineCacheDirectory,
         m_pipelineCacheVolumeName,
         false,
         Filesystem::VolumeUsage::RuntimeReadOnly,
         volume
-    )){
+        )
+    ){
         NWB_LOGGER_WARNING(
             NWB_TEXT("Vulkan: Failed to mount pipeline cache runtime volume '{}' from '{}'."),
             StringConvert(m_pipelineCacheVolumeName),
@@ -534,13 +536,15 @@ void Device::savePipelineCacheData(){
     }
 
     Filesystem::VolumeFileSystem volume(m_context.objectArena);
-    if(!VulkanDetail::MountPipelineCacheVolume(
+    if(
+        !VulkanDetail::MountPipelineCacheVolume(
         m_pipelineCacheDirectory,
         m_pipelineCacheVolumeName,
         true,
         Filesystem::VolumeUsage::RuntimeReadWrite,
         volume
-    )){
+        )
+    ){
         NWB_LOGGER_WARNING(
             NWB_TEXT("Vulkan: Failed to mount pipeline cache runtime volume '{}' for write at '{}'."),
             StringConvert(m_pipelineCacheVolumeName),
@@ -553,13 +557,15 @@ void Device::savePipelineCacheData(){
             );
             return;
         }
-        if(!VulkanDetail::MountPipelineCacheVolume(
+        if(
+            !VulkanDetail::MountPipelineCacheVolume(
             m_pipelineCacheDirectory,
             m_pipelineCacheVolumeName,
             true,
             Filesystem::VolumeUsage::RuntimeReadWrite,
             volume
-        )){
+            )
+        ){
             NWB_LOGGER_WARNING(
                 NWB_TEXT("Vulkan: Failed to recreate pipeline cache runtime volume '{}'."),
                 StringConvert(m_pipelineCacheVolumeName)

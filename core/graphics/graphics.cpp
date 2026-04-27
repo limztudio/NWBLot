@@ -296,8 +296,7 @@ static CustomUniquePtr<IGraphicsBackend> CreateDefaultBackend(
     SwapChainRuntimeState& swapChainState,
     GraphicsAllocator& allocator,
     Alloc::ThreadPool& threadPool
-)
-{
+){
     return MakeCustomUnique<Vulkan::BackendContext>(allocator.getObjectArena(), deviceParams, swapChainState, allocator, threadPool);
 }
 

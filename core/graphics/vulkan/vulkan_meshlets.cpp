@@ -76,14 +76,16 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     if(desc.PS)
         appendPipelineShaderStage(desc.PS.get(), VK_SHADER_STAGE_FRAGMENT_BIT, specInfos, shaderStages);
 
-    if(!configurePipelineBindings(
+    if(
+        !configurePipelineBindings(
         desc.bindingLayouts,
         NWB_TEXT("meshlet pipeline"),
         shaderStages,
         descriptorHeapScratch,
         *pso,
         scratchArena
-    )){
+        )
+    ){
         DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
@@ -105,12 +107,14 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     viewportState.scissorCount = 1;
 
     VkPipelineMultisampleStateCreateInfo multisampling;
-    if(!VulkanDetail::ConfigurePipelineMultisampleState(
+    if(
+        !VulkanDetail::ConfigurePipelineMultisampleState(
         fbinfo.sampleCount,
         desc.renderState.blendState.alphaToCoverageEnable,
         multisampling,
         NWB_TEXT("meshlet pipeline")
-    )){
+        )
+    ){
         DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }

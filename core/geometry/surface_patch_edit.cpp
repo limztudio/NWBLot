@@ -56,7 +56,8 @@ bool BuildSurfacePatchLoopDistancesWithNormalImpl(
     f32& outLoopLength)
 {
     outLoopLength = 0.0f;
-    if(!outLoopDistances
+    if(
+        !outLoopDistances
         || orderedBoundaryEdges.size() < 3u
         || orderedBoundaryEdges.size() != loopDistanceCount
         || positions.empty()
@@ -154,7 +155,8 @@ bool BuildSurfacePatchWallVerticesImpl(
     SurfacePatchWallVertex* outVertices,
     const usize outVertexCount)
 {
-    if(orderedBoundaryEdges.size() < 3u
+    if(
+        orderedBoundaryEdges.size() < 3u
         || positions.empty()
         || !IsFinite(depth)
         || depth <= s_FrameDirectionEpsilon
@@ -170,7 +172,8 @@ bool BuildSurfacePatchWallVerticesImpl(
 
     const usize boundaryVertexCount = orderedBoundaryEdges.size();
     const usize totalWallVertexCount = boundaryVertexCount * wallBandCount;
-    if(totalWallVertexCount > static_cast<usize>(Limit<u32>::s_Max)
+    if(
+        totalWallVertexCount > static_cast<usize>(Limit<u32>::s_Max)
         || outVertexCount != totalWallVertexCount
     )
         return false;
@@ -182,7 +185,8 @@ bool BuildSurfacePatchWallVerticesImpl(
     loopDistances.resize(boundaryVertexCount, 0.0f);
 
     f32 loopLength = 0.0f;
-    if(!BuildSurfacePatchLoopDistancesWithNormalImpl(
+    if(
+        !BuildSurfacePatchLoopDistancesWithNormalImpl(
             orderedBoundaryEdges,
             positions,
             normal,
@@ -203,7 +207,8 @@ bool BuildSurfacePatchWallVerticesImpl(
                 return false;
 
             MeshTopologyLoopVertexFrame vertexFrame;
-            if(!BuildBoundaryLoopVertexFrame(
+            if(
+                !BuildBoundaryLoopVertexFrame(
                     positions,
                     frame,
                     orderedBoundaryEdges[previousEdgeIndex],

@@ -265,8 +265,7 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL VulkanDebugCallback(
     const char* layerPrefix,
     const char* msg,
     void* userData
-)
-{
+){
     static_cast<void>(flags);
     static_cast<void>(objType);
     static_cast<void>(obj);
@@ -754,18 +753,20 @@ bool BackendContext::findQueueFamilies(VkPhysicalDevice physicalDevice){
         }
 
         if(m_computeQueueFamily == -1){
-            if(queueFamily.queueCount > 0 &&
-                (queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT) &&
-                !(queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
+            if(
+                queueFamily.queueCount > 0
+                && (queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT)
+                && !(queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
             )
                 m_computeQueueFamily = i;
         }
 
         if(m_transferQueueFamily == -1){
-            if(queueFamily.queueCount > 0 &&
-                (queueFamily.queueFlags & VK_QUEUE_TRANSFER_BIT) &&
-                !(queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT) &&
-                !(queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
+            if(
+                queueFamily.queueCount > 0
+                && (queueFamily.queueFlags & VK_QUEUE_TRANSFER_BIT)
+                && !(queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT)
+                && !(queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
             )
                 m_transferQueueFamily = i;
         }
@@ -950,17 +951,19 @@ bool BackendContext::pickPhysicalDevice(){
                     continue;
                 }
 
-                if(surfaceCaps.minImageCount > m_deviceParams.swapChainBufferCount ||
-                    (surfaceCaps.maxImageCount < m_deviceParams.swapChainBufferCount && surfaceCaps.maxImageCount > 0)
+                if(
+                    surfaceCaps.minImageCount > m_deviceParams.swapChainBufferCount
+                    || (surfaceCaps.maxImageCount < m_deviceParams.swapChainBufferCount && surfaceCaps.maxImageCount > 0)
                 ){
                     errorStream << "\n  - cannot support the requested swap chain image count";
                     deviceIsGood = false;
                 }
 
-                if(surfaceCaps.minImageExtent.width > requestedExtent.width ||
-                    surfaceCaps.minImageExtent.height > requestedExtent.height ||
-                    surfaceCaps.maxImageExtent.width < requestedExtent.width ||
-                    surfaceCaps.maxImageExtent.height < requestedExtent.height
+                if(
+                    surfaceCaps.minImageExtent.width > requestedExtent.width
+                    || surfaceCaps.minImageExtent.height > requestedExtent.height
+                    || surfaceCaps.maxImageExtent.width < requestedExtent.width
+                    || surfaceCaps.maxImageExtent.height < requestedExtent.height
                 ){
                     errorStream << "\n  - cannot support the requested swap chain size";
                     deviceIsGood = false;

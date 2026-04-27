@@ -214,7 +214,8 @@ bool Geometry::loadBinary(const Core::Assets::AssetBytes& binary){
     u32 version = 0;
     u64 vertexCount = 0;
     u64 indexCount = 0;
-    if(!ReadPOD(binary, cursor, magic)
+    if(
+        !ReadPOD(binary, cursor, magic)
         || !ReadPOD(binary, cursor, version)
         || !ReadPOD(binary, cursor, vertexCount)
         || !ReadPOD(binary, cursor, indexCount)

@@ -577,7 +577,8 @@ void Device::getTextureTiling(ITexture* textureResource, u32* numTiles, PackedMi
         if(desc){
             desc->numStandardMips = numStandardMips;
             desc->numPackedMips = texture->m_desc.mipLevels - numStandardMips;
-            if(!checkedTileCount(sparseReqs[0].imageMipTailOffset, texture->m_tileByteSize, desc->startTileIndexInOverallResource)
+            if(
+                !checkedTileCount(sparseReqs[0].imageMipTailOffset, texture->m_tileByteSize, desc->startTileIndexInOverallResource)
                 || !checkedTileCount(sparseReqs[0].imageMipTailSize, texture->m_tileByteSize, desc->numTilesForPackedMips)
             ){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get texture tiling: packed mip tile range exceeds u32 limits"));
@@ -638,7 +639,8 @@ void Device::getTextureTiling(ITexture* textureResource, u32* numTiles, PackedMi
 
         for(u32 i = 0; i < *subresourceTilingsNum; ++i){
             if(i < numStandardMips){
-                if(!ceilDivU32(width, tileWidth, subresourceTilings[i].widthInTiles)
+                if(
+                    !ceilDivU32(width, tileWidth, subresourceTilings[i].widthInTiles)
                     || !ceilDivU32(height, tileHeight, subresourceTilings[i].heightInTiles)
                     || !ceilDivU32(depth, tileDepth, subresourceTilings[i].depthInTiles)
                 ){
@@ -659,13 +661,15 @@ void Device::getTextureTiling(ITexture* textureResource, u32* numTiles, PackedMi
             height = Max(height / 2, tileHeight);
             depth = Max(depth / 2, tileDepth);
 
-            if(!addTileCount(
+            if(
+                !addTileCount(
                 startTileIndex,
                 subresourceTilings[i].widthInTiles,
                 subresourceTilings[i].heightInTiles,
                 subresourceTilings[i].depthInTiles,
                 startTileIndex
-            )){
+                )
+            ){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get texture tiling: sparse image tile count exceeds u32 limits"));
                 clearOutputs();
                 return;

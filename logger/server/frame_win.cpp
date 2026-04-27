@@ -72,7 +72,8 @@ static LRESULT CALLBACK ListProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
     if(auto* frame = s_Frame){
         LRESULT lifecycleResult = 0;
-        if(HandleWin32FrameLifecycleMessage(
+        if(
+            HandleWin32FrameLifecycleMessage(
             hwnd,
             uMsg,
             wParam,
@@ -84,7 +85,8 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
             },
             [&](const bool isActive){ frame->data<WinFrame>().setActive(isActive); },
             lifecycleResult
-        ))
+            )
+        )
             return lifecycleResult;
 
         switch(uMsg){

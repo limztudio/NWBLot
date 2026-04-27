@@ -170,7 +170,8 @@ template<typename SourceJointVector, typename PreparedJointPaletteVector>
     const bool requiresDualQuaternion = skinningMode == DeformableSkinningMode::DualQuaternion;
     for(usize jointIndex = 0u; jointIndex < sourceJoints.size(); ++jointIndex){
         PreparedJointPaletteEntry entry;
-        if(!DeformableRuntime::ResolveSkinningJointMatrix(
+        if(
+            !DeformableRuntime::ResolveSkinningJointMatrix(
                 instance,
                 static_cast<u32>(jointIndex),
                 sourceJoints[jointIndex],
@@ -179,12 +180,13 @@ template<typename SourceJointVector, typename PreparedJointPaletteVector>
             || !TryBuildJointNormalMatrix(entry.transform, entry.normalTransform)
         )
             return false;
-        if(requiresDualQuaternion
+        if(
+            requiresDualQuaternion
             && !TryBuildJointDualQuaternion(
-                entry.transform,
-                entry.dualQuaternionReal,
-                entry.dualQuaternionDual
-            )
+                    entry.transform,
+                    entry.dualQuaternionReal,
+                    entry.dualQuaternionDual
+                )
         )
             return false;
 
@@ -441,7 +443,8 @@ void ApplyVectorTextureNormal(
         normal,
         tangentWithHandedness
     );
-    if(!DeformableValidation::FiniteVector(right, 0x7u)
+    if(
+        !DeformableValidation::FiniteVector(right, 0x7u)
         || !DeformableValidation::FiniteVector(left, 0x7u)
         || !DeformableValidation::FiniteVector(up, 0x7u)
         || !DeformableValidation::FiniteVector(down, 0x7u)
@@ -499,7 +502,8 @@ void ApplyDisplacement(
         }
     }
 
-    if(displacement.mode == DeformableDisplacementMode::ScalarUvRamp
+    if(
+        displacement.mode == DeformableDisplacementMode::ScalarUvRamp
         || displacement.mode == DeformableDisplacementMode::ScalarTexture
     ){
         const SIMDVector displacementNormal = LoadRestVertexNormal(vertex);
@@ -601,7 +605,8 @@ template<typename VertexVector>
         return false;
     UniquePtr<Core::Assets::IAsset> loadedDisplacementTextureAsset;
     const DeformableDisplacementTexture* displacementTexture = nullptr;
-    if(!__hidden_deformable_picking::ResolvePickingDisplacementTexture(
+    if(
+        !__hidden_deformable_picking::ResolvePickingDisplacementTexture(
             displacement,
             inputs.assetManager,
             inputs.displacementTexture,
@@ -626,12 +631,14 @@ template<typename VertexVector>
         };
         if(!DeformableRuntime::BuildJointPaletteFromSkeletonPose(*inputs.skeletonPose, poseJoints, skinningMode))
             return false;
-        if(!__hidden_deformable_picking::BuildPreparedJointPaletteFromJointMatrices(
+        if(
+            !__hidden_deformable_picking::BuildPreparedJointPaletteFromJointMatrices(
             instance,
             poseJoints,
             skinningMode,
             jointPalette
-        ))
+            )
+        )
             return false;
     }
     else{
@@ -654,13 +661,15 @@ template<typename VertexVector>
         SIMDVector preSkinTangent;
         __hidden_deformable_picking::OrthonormalizeVertexFrame(vertex, restNormal, restTangent, &preSkinNormal, &preSkinTangent);
 
-        if(!__hidden_deformable_picking::ApplySkin(
+        if(
+            !__hidden_deformable_picking::ApplySkin(
             instance,
             jointPalette,
             skinningMode,
             static_cast<u32>(vertexIndex),
             vertex
-        ))
+            )
+        )
             return false;
         __hidden_deformable_picking::OrthonormalizeVertexFrame(vertex, preSkinNormal, preSkinTangent);
 
@@ -737,7 +746,8 @@ bool ResolveDeformableRestSurfaceSample(
     const SourceSample& sample0 = instance.sourceSamples[vertexIndices[0]];
     const SourceSample& sample1 = instance.sourceSamples[vertexIndices[1]];
     const SourceSample& sample2 = instance.sourceSamples[vertexIndices[2]];
-    if(!DeformableValidation::ValidSourceSample(sample0, instance.sourceTriangleCount)
+    if(
+        !DeformableValidation::ValidSourceSample(sample0, instance.sourceTriangleCount)
         || !DeformableValidation::ValidSourceSample(sample1, instance.sourceTriangleCount)
         || !DeformableValidation::ValidSourceSample(sample2, instance.sourceTriangleCount)
     )

@@ -95,7 +95,8 @@ static constexpr AStringView s_AccessoryMaterialPath = "project/materials/mat_ac
     if(!NWB::Impl::DeformableDisplacementModeUsesTexture(displacement.mode) || !displacement.texture.valid())
         return nullptr;
 
-    if(!assetManager.loadSync(
+    if(
+        !assetManager.loadSync(
             NWB::Impl::DeformableDisplacementTexture::AssetTypeName(),
             displacement.texture.name(),
             outLoadedAsset
@@ -575,14 +576,16 @@ bool ProjectTestbed::onStartup(){
         Float4(0.0f, -0.85f, 0.0f),
         0.7f
     );
-    if(auto* morphWeights =
-        m_world->tryGetComponent<NWB::Core::ECSGraphics::DeformableMorphWeightsComponent>(importedDeformableEntity)
+    if(
+        auto* morphWeights =
+            m_world->tryGetComponent<NWB::Core::ECSGraphics::DeformableMorphWeightsComponent>(importedDeformableEntity)
     ){
         if(!morphWeights->weights.empty())
             morphWeights->weights[0].weight = 0.65f;
     }
-    if(auto* skeletonPose =
-        m_world->tryGetComponent<NWB::Core::ECSGraphics::DeformableSkeletonPoseComponent>(importedDeformableEntity)
+    if(
+        auto* skeletonPose =
+            m_world->tryGetComponent<NWB::Core::ECSGraphics::DeformableSkeletonPoseComponent>(importedDeformableEntity)
     ){
         __hidden_project_testbed_runtime::UpdateProxySkeletonPose(*skeletonPose, 1.0f);
     }
@@ -808,7 +811,8 @@ bool ProjectTestbed::refreshSurfaceEditPreview(){
     m_surfaceEditPreviewParams.radius = m_surfaceEditRadius;
     m_surfaceEditPreviewParams.ellipseRatio = m_surfaceEditEllipseRatio;
     m_surfaceEditPreviewParams.depth = m_surfaceEditDepth;
-    if(!NWB::Core::ECSGraphics::PreviewHole(
+    if(
+        !NWB::Core::ECSGraphics::PreviewHole(
             *instance,
             m_surfaceEditSession,
             m_surfaceEditPreviewParams,
@@ -854,7 +858,8 @@ void ProjectTestbed::previewSurfaceEditAtCursor(){
     }
 
     NWB::Core::ECSGraphics::DeformablePosedHit hit;
-    if(!NWB::Core::ECSGraphics::RaycastVisibleDeformableRenderers(
+    if(
+        !NWB::Core::ECSGraphics::RaycastVisibleDeformableRenderers(
             *m_world,
             renderSystem,
             ray,
@@ -880,7 +885,8 @@ void ProjectTestbed::previewSurfaceEditAtCursor(){
 
     NWB::Core::ECSGraphics::DeformableSurfaceEditSession session;
     NWB::Core::ECSGraphics::DeformableHolePreview preview;
-    if(!NWB::Core::ECSGraphics::BeginSurfaceEdit(*instance, hit, session)
+    if(
+        !NWB::Core::ECSGraphics::BeginSurfaceEdit(*instance, hit, session)
         || !NWB::Core::ECSGraphics::PreviewHole(*instance, session, params, preview)
     ){
         NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: preview failed for the selected deformable surface"));
@@ -925,7 +931,8 @@ void ProjectTestbed::commitSurfaceEditPreview(){
     m_surfaceEditPreviewParams.depth = m_surfaceEditDepth;
     NWB::Core::ECSGraphics::DeformableHoleEditResult result;
     NWB::Core::ECSGraphics::DeformableSurfaceEditRecord record;
-    if(!NWB::Core::ECSGraphics::CommitHole(
+    if(
+        !NWB::Core::ECSGraphics::CommitHole(
             *instance,
             m_surfaceEditSession,
             m_surfaceEditPreviewParams,
@@ -973,7 +980,8 @@ void ProjectTestbed::attachPendingSurfaceEditAccessory(){
     }
 
     NWB::Core::ECSGraphics::DeformableAccessoryAttachmentComponent attachment;
-    if(!NWB::Core::ECSGraphics::AttachAccessory(
+    if(
+        !NWB::Core::ECSGraphics::AttachAccessory(
             *instance,
             m_pendingSurfaceEditResult,
             __hidden_project_testbed_runtime::s_AccessoryNormalOffset,
@@ -996,7 +1004,8 @@ void ProjectTestbed::attachPendingSurfaceEditAccessory(){
     NWB::Core::ECSGraphics::DeformableAccessoryAttachmentRecord accessoryRecord;
     accessoryRecord.geometry = accessoryGeometry;
     accessoryRecord.material = accessoryMaterial;
-    if(!accessoryRecord.geometryVirtualPathText.assign(__hidden_project_testbed_runtime::s_AccessoryGeometryPath)
+    if(
+        !accessoryRecord.geometryVirtualPathText.assign(__hidden_project_testbed_runtime::s_AccessoryGeometryPath)
         || !accessoryRecord.materialVirtualPathText.assign(__hidden_project_testbed_runtime::s_AccessoryMaterialPath)
     ){
         clearPendingSurfaceEditAccessory();
@@ -1016,7 +1025,8 @@ void ProjectTestbed::attachPendingSurfaceEditAccessory(){
 
     NWB::Core::Assets::AssetBytes serializedState;
     NWB::Core::ECSGraphics::DeformableSurfaceEditState loadedState;
-    if(!NWB::Core::ECSGraphics::SerializeSurfaceEditState(candidateState, serializedState)
+    if(
+        !NWB::Core::ECSGraphics::SerializeSurfaceEditState(candidateState, serializedState)
         || !NWB::Core::ECSGraphics::DeserializeSurfaceEditState(serializedState, loadedState)
     ){
         clearPendingSurfaceEditAccessory();
@@ -1080,7 +1090,8 @@ void ProjectTestbed::queueSurfaceEditReplay(){
 
     NWB::Core::Assets::AssetBytes serializedState;
     NWB::Core::ECSGraphics::DeformableSurfaceEditState loadedState;
-    if(!NWB::Core::ECSGraphics::SerializeSurfaceEditState(m_surfaceEditState, serializedState)
+    if(
+        !NWB::Core::ECSGraphics::SerializeSurfaceEditState(m_surfaceEditState, serializedState)
         || !NWB::Core::ECSGraphics::DeserializeSurfaceEditState(serializedState, loadedState)
     ){
         NWB_LOGGER_WARNING(NWB_TEXT("Surface edit replay: save/load validation failed"));
@@ -1093,8 +1104,9 @@ void ProjectTestbed::queueSurfaceEditReplay(){
         replayPosition = oldTransform->position;
         replayScale = oldTransform->scale.x;
     }
-    if(auto* oldRenderer =
-        m_world->tryGetComponent<NWB::Core::ECSGraphics::DeformableRendererComponent>(m_deformableMorphEntity)
+    if(
+        auto* oldRenderer =
+            m_world->tryGetComponent<NWB::Core::ECSGraphics::DeformableRendererComponent>(m_deformableMorphEntity)
     )
         oldRenderer->visible = false;
 
@@ -1140,7 +1152,8 @@ void ProjectTestbed::applyPendingSurfaceEditReplay(){
     replayContext.targetEntity = m_deformableMorphEntity;
 
     NWB::Core::ECSGraphics::DeformableSurfaceEditReplayResult replayResult;
-    if(!NWB::Core::ECSGraphics::ApplySurfaceEditState(
+    if(
+        !NWB::Core::ECSGraphics::ApplySurfaceEditState(
             *instance,
             m_surfaceEditState,
             replayContext,
@@ -1172,7 +1185,8 @@ bool ProjectTestbed::buildSurfaceEditCleanBase(
         return false;
 
     UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-    if(!m_context.assetManager.loadSync(
+    if(
+        !m_context.assetManager.loadSync(
             NWB::Impl::DeformableGeometry::AssetTypeName(),
             sourceName,
             loadedAsset
@@ -1312,7 +1326,8 @@ bool ProjectTestbed::pickSurfaceEditMutationTarget(
         return false;
     }
 
-    if(!NWB::Core::ECSGraphics::RaycastVisibleDeformableRenderers(
+    if(
+        !NWB::Core::ECSGraphics::RaycastVisibleDeformableRenderers(
             *m_world,
             *editContext.rendererSystem,
             ray,
@@ -1341,7 +1356,8 @@ void ProjectTestbed::undoSurfaceEdit(){
         return;
 
     NWB::Core::ECSGraphics::DeformableSurfaceEditUndoResult undoResult;
-    if(!NWB::Core::ECSGraphics::UndoLastSurfaceEdit(
+    if(
+        !NWB::Core::ECSGraphics::UndoLastSurfaceEdit(
             *editContext.instance,
             editContext.cleanBase,
             m_surfaceEditState,
@@ -1375,7 +1391,8 @@ void ProjectTestbed::redoSurfaceEdit(){
         return;
 
     NWB::Core::ECSGraphics::DeformableSurfaceEditRedoResult redoResult;
-    if(!NWB::Core::ECSGraphics::RedoLastSurfaceEdit(
+    if(
+        !NWB::Core::ECSGraphics::RedoLastSurfaceEdit(
             *editContext.instance,
             editContext.cleanBase,
             m_surfaceEditState,
@@ -1412,7 +1429,8 @@ void ProjectTestbed::healLatestSurfaceEdit(){
         m_surfaceEditState.edits.back().editId
     ;
     NWB::Core::ECSGraphics::DeformableSurfaceEditHealResult healResult;
-    if(!NWB::Core::ECSGraphics::HealSurfaceEdit(
+    if(
+        !NWB::Core::ECSGraphics::HealSurfaceEdit(
             *editContext.instance,
             editContext.cleanBase,
             m_surfaceEditState,
@@ -1449,7 +1467,8 @@ void ProjectTestbed::resizeLatestSurfaceEdit(){
         m_surfaceEditState.edits.back().editId
     ;
     NWB::Core::ECSGraphics::DeformableSurfaceEditResizeResult resizeResult;
-    if(!NWB::Core::ECSGraphics::ResizeSurfaceEdit(
+    if(
+        !NWB::Core::ECSGraphics::ResizeSurfaceEdit(
             *editContext.instance,
             editContext.cleanBase,
             m_surfaceEditState,
@@ -1497,7 +1516,8 @@ void ProjectTestbed::moveLatestSurfaceEdit(){
         m_surfaceEditState.edits.back().editId
     ;
     NWB::Core::ECSGraphics::DeformableSurfaceEditMoveResult moveResult;
-    if(!NWB::Core::ECSGraphics::MoveSurfaceEdit(
+    if(
+        !NWB::Core::ECSGraphics::MoveSurfaceEdit(
             *editContext.instance,
             editContext.cleanBase,
             m_surfaceEditState,
@@ -1543,7 +1563,8 @@ void ProjectTestbed::patchLatestSurfaceEdit(){
         m_surfaceEditState.edits.back().editId
     ;
     NWB::Core::ECSGraphics::DeformableSurfaceEditPatchResult patchResult;
-    if(!NWB::Core::ECSGraphics::PatchSurfaceEdit(
+    if(
+        !NWB::Core::ECSGraphics::PatchSurfaceEdit(
             *editContext.instance,
             editContext.cleanBase,
             m_surfaceEditState,
@@ -1594,7 +1615,8 @@ void ProjectTestbed::addLoopCutToLatestSurfaceEdit(){
         m_surfaceEditState.edits.back().editId
     ;
     NWB::Core::ECSGraphics::DeformableSurfaceEditLoopCutResult loopCutResult;
-    if(!NWB::Core::ECSGraphics::AddSurfaceEditLoopCut(
+    if(
+        !NWB::Core::ECSGraphics::AddSurfaceEditLoopCut(
             *editContext.instance,
             editContext.cleanBase,
             m_surfaceEditState,
@@ -1659,7 +1681,8 @@ void ProjectTestbed::logSurfaceEditDebugSnapshot(){
             debugDisplacementTextureAsset
         )
     ;
-    if(!NWB::Core::ECSGraphics::BuildDeformableSurfaceEditDebugSnapshot(
+    if(
+        !NWB::Core::ECSGraphics::BuildDeformableSurfaceEditDebugSnapshot(
             *instance,
             m_surfaceEditPreviewActive ? &m_surfaceEditSession : nullptr,
             m_surfaceEditPreviewActive ? &m_surfaceEditPreview : nullptr,
@@ -1777,7 +1800,8 @@ bool ProjectTestbed::mousePosUpdate(const f64 xpos, const f64 ypos){
     const f32 deltaY = static_cast<f32>(ypos - m_lastMouseY);
     const f32 pendingDeltaX = m_pendingMouseDeltaX + deltaX;
     const f32 pendingDeltaY = m_pendingMouseDeltaY + deltaY;
-    if(IsFinite(deltaX)
+    if(
+        IsFinite(deltaX)
         && IsFinite(deltaY)
         && IsFinite(pendingDeltaX)
         && IsFinite(pendingDeltaY)

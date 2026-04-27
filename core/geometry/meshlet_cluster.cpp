@@ -62,7 +62,8 @@ struct TriangleLocalIndices{
 }
 
 [[nodiscard]] bool ValidTriangle(const Vector<Float3U>& positions, const TriangleVertices& triangle){
-    if(triangle.values[0] >= positions.size()
+    if(
+        triangle.values[0] >= positions.size()
         || triangle.values[1] >= positions.size()
         || triangle.values[2] >= positions.size()
         || triangle.values[0] == triangle.values[1]
@@ -205,7 +206,8 @@ template<typename MeshletAllocator, typename VertexIndexAllocator, typename Loca
     Vector<u32, LocalIndexAllocator>& outLocalIndices){
     if(pending.vertices.empty())
         return true;
-    if(pending.indices.empty()
+    if(
+        pending.indices.empty()
         || (pending.indices.size() % 3u) != 0u
         || pending.vertices.size() > static_cast<usize>(Limit<u32>::s_Max)
         || pending.indices.size() > static_cast<usize>(Limit<u32>::s_Max)
@@ -253,7 +255,8 @@ bool BuildMeshlets(
     outMeshlets.clear();
     outVertexIndices.clear();
     outLocalIndices.clear();
-    if(positions.empty()
+    if(
+        positions.empty()
         || indices.empty()
         || (indices.size() % 3u) != 0u
         || !ValidConfig(config)
@@ -313,7 +316,8 @@ bool ComputeMeshletDeformationBounds(
     using namespace __hidden_geometry_meshlet_cluster;
 
     outBounds = MeshletBounds{};
-    if(positions.empty()
+    if(
+        positions.empty()
         || meshletVertexIndices.empty()
         || meshlet.vertexCount == 0u
         || meshlet.firstVertex > meshletVertexIndices.size()

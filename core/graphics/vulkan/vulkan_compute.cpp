@@ -73,14 +73,16 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
     shaderStages.push_back(shaderStage);
     PipelineDescriptorHeapScratch descriptorHeapScratch{ scratchArena };
 
-    if(!configurePipelineBindings(
+    if(
+        !configurePipelineBindings(
         desc.bindingLayouts,
         NWB_TEXT("compute pipeline"),
         shaderStages,
         descriptorHeapScratch,
         *pso,
         scratchArena
-    )){
+        )
+    ){
         DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }

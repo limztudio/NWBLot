@@ -170,7 +170,8 @@ template<typename JointMatrixVector>
         return false;
 
     const usize jointCount = pose.localJoints.size();
-    if(jointCount == 0u
+    if(
+        jointCount == 0u
         || pose.parentJoints.size() != jointCount
         || jointCount > static_cast<usize>(Limit<u32>::s_Max)
     )

@@ -641,7 +641,8 @@ static void OnKeyboardKey(void* data, wl_keyboard* keyboard, u32 serial, u32 tim
         context.frame->input().keyboardUpdate(translatedKey, static_cast<i32>(key), InputAction::Press, mods);
         DispatchTextInput(context.frame->input(), context, keycode, mods);
 
-        if(context.repeatRate > 0
+        if(
+            context.repeatRate > 0
             && context.xkbKeymap
             && xkb_keymap_key_repeats(context.xkbKeymap, keycode) > 0
         ){

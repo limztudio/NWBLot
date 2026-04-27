@@ -395,9 +395,11 @@ private:
 
             {
                 UniqueLock taskLock(m_taskMutex);
-                if(!m_taskAvailable.wait(taskLock, stopToken, [this](){
-                    return hasParallelWork() || !m_tasks.empty();
-                }))
+                if(
+                    !m_taskAvailable.wait(taskLock, stopToken, [this](){
+                        return hasParallelWork() || !m_tasks.empty();
+                    })
+                )
                     break;
 
                 const bool parallelWorkAvailable = hasParallelWork();

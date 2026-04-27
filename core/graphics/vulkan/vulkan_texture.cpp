@@ -814,7 +814,8 @@ void CommandList::copyTexture(IStagingTexture* dest, const TextureSlice& destSli
     StagingTexture* staging = nullptr;
     Texture* texture = nullptr;
     VkBufferImageCopy region{};
-    if(!VulkanDetail::PrepareStagingTextureCopy(
+    if(
+        !VulkanDetail::PrepareStagingTextureCopy(
         dest,
         destSlice,
         src,
@@ -824,7 +825,8 @@ void CommandList::copyTexture(IStagingTexture* dest, const TextureSlice& destSli
         staging,
         texture,
         region
-    )){
+        )
+    ){
         return;
     }
 
@@ -838,7 +840,8 @@ void CommandList::copyTexture(ITexture* dest, const TextureSlice& destSlice, ISt
     StagingTexture* staging = nullptr;
     Texture* texture = nullptr;
     VkBufferImageCopy region{};
-    if(!VulkanDetail::PrepareStagingTextureCopy(
+    if(
+        !VulkanDetail::PrepareStagingTextureCopy(
         src,
         srcSlice,
         dest,
@@ -848,7 +851,8 @@ void CommandList::copyTexture(ITexture* dest, const TextureSlice& destSlice, ISt
         staging,
         texture,
         region
-    )){
+        )
+    ){
         return;
     }
 

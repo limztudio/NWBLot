@@ -236,7 +236,8 @@ bool BuildOrderedBoundaryLoopImpl(
     vertexEdges.reserve(boundaryEdges.size());
     for(usize edgeIndex = 0u; edgeIndex < boundaryEdges.size(); ++edgeIndex){
         const MeshTopologyEdge& edge = boundaryEdges[edgeIndex];
-        if(!ValidEdge(edge, positions.size())
+        if(
+            !ValidEdge(edge, positions.size())
             || !RegisterBoundaryVertexEdge(vertexEdges, edge.a, edgeIndex)
             || !RegisterBoundaryVertexEdge(vertexEdges, edge.b, edgeIndex)
         )
@@ -316,7 +317,8 @@ bool BuildBoundaryEdgesFromRemovedTrianglesImpl(
         *outRemovedTriangleCount = 0u;
     outBoundaryEdges.clear();
 
-    if(indices.empty()
+    if(
+        indices.empty()
         || (indices.size() % 3u) != 0u
         || indices.size() / 3u != removedTriangles.size()
     )
@@ -364,7 +366,8 @@ bool BuildBoundaryEdgesFromRemovedTrianglesImpl(
             continue;
 
         ++removedTriangleCount;
-        if(!RegisterRemovedEdge(edges, a, b)
+        if(
+            !RegisterRemovedEdge(edges, a, b)
             || !RegisterRemovedEdge(edges, b, c)
             || !RegisterRemovedEdge(edges, c, a)
         )
@@ -422,7 +425,8 @@ bool BuildBoundaryLoopVertexFrameImpl(
     const MeshTopologyEdge& currentEdge,
     MeshTopologyLoopVertexFrame& outFrame){
     outFrame = MeshTopologyLoopVertexFrame{};
-    if(positions.empty()
+    if(
+        positions.empty()
         || !ValidLoopFrame(frame)
         || !ValidEdge(previousEdge, positions.size())
         || !ValidEdge(currentEdge, positions.size())
@@ -480,7 +484,8 @@ bool AppendWallTrianglePairsImpl(
 ){
     if(outAddedTriangleCount)
         *outAddedTriangleCount = 0u;
-    if(orderedBoundaryEdges.size() < 3u
+    if(
+        orderedBoundaryEdges.size() < 3u
         || orderedBoundaryEdges.size() != innerVertices.size()
         || orderedBoundaryEdges.size() > static_cast<usize>(Limit<u32>::s_Max / 2u)
         || orderedBoundaryEdges.size() > static_cast<usize>(Limit<usize>::s_Max / 6u)
@@ -493,7 +498,8 @@ bool AppendWallTrianglePairsImpl(
         const usize nextEdgeIndex = (edgeIndex + 1u) % boundaryVertexCount;
         if(orderedBoundaryEdges[edgeIndex].b != orderedBoundaryEdges[nextEdgeIndex].a)
             return false;
-        if(innerVertices[edgeIndex] == orderedBoundaryEdges[edgeIndex].a
+        if(
+            innerVertices[edgeIndex] == orderedBoundaryEdges[edgeIndex].a
             || innerVertices[edgeIndex] == orderedBoundaryEdges[edgeIndex].b
             || innerVertices[edgeIndex] == innerVertices[nextEdgeIndex]
         )

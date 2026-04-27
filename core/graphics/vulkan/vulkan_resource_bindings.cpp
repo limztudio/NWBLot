@@ -513,14 +513,16 @@ bool Device::createPipelineLayoutForBindingLayouts(
             descriptorSetLayouts.push_back(descriptorSetLayout);
     }
 
-    if(!VulkanDetail::CreatePipelineLayout(
+    if(
+        !VulkanDetail::CreatePipelineLayout(
         m_context,
         descriptorSetLayouts.data(),
         static_cast<u32>(descriptorSetLayouts.size()),
         pushConstantByteSize,
         outPipelineLayout,
         operationName
-    )){
+        )
+    ){
         return false;
     }
 
@@ -601,8 +603,7 @@ bool DescriptorHeapManager::tryEnablePipeline(
     VkPipelineCreateFlags2CreateInfo& outFlags2,
     Vector<VkDescriptorSetAndBindingMappingEXT, Alloc::ScratchAllocator<VkDescriptorSetAndBindingMappingEXT>>& outMappings,
     Vector<VkShaderDescriptorSetAndBindingMappingInfoEXT, Alloc::ScratchAllocator<VkShaderDescriptorSetAndBindingMappingInfoEXT>>& outStageMappings
-)
-{
+){
     outPushRanges.resize(0);
     outPushDataSize = 0;
     outMappings.clear();
@@ -703,8 +704,7 @@ bool DescriptorHeapManager::tryEnablePipeline(
     FixedVector<DescriptorHeapPushRange, s_MaxBindingLayouts>& outPushRanges,
     u32& outPushDataSize,
     PipelineDescriptorHeapScratch& scratch
-)
-{
+){
     return tryEnablePipeline(
         context,
         bindingLayouts,
@@ -741,7 +741,8 @@ bool DescriptorHeapManager::initialize(){
     constexpr u32 s_TargetResourceHeapBytes = 32u * 1024u * 1024u;
     constexpr u32 s_TargetSamplerHeapBytes = 2u * 1024u * 1024u;
 
-    if(props.minResourceHeapReservedRange > UINT32_MAX || props.minSamplerHeapReservedRange > UINT32_MAX
+    if(
+        props.minResourceHeapReservedRange > UINT32_MAX || props.minSamplerHeapReservedRange > UINT32_MAX
         || props.resourceHeapAlignment > UINT32_MAX || props.samplerHeapAlignment > UINT32_MAX
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor heap properties exceed supported 32-bit heap offsets."));
@@ -757,7 +758,8 @@ bool DescriptorHeapManager::initialize(){
 
     u32 resourceRequestedBytes = 0;
     u32 samplerRequestedBytes = 0;
-    if(resourceReservedBytes > UINT32_MAX - s_TargetResourceHeapBytes
+    if(
+        resourceReservedBytes > UINT32_MAX - s_TargetResourceHeapBytes
         || samplerReservedBytes > UINT32_MAX - s_TargetSamplerHeapBytes
         || !VulkanDetail::AlignUpU32Checked(resourceReservedBytes + s_TargetResourceHeapBytes, resourceAlignment, resourceRequestedBytes)
         || !VulkanDetail::AlignUpU32Checked(samplerReservedBytes + s_TargetSamplerHeapBytes, samplerAlignment, samplerRequestedBytes)
@@ -1302,14 +1304,16 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
     layout->m_descriptorSetLayouts.push_back(setLayout);
 
     const bool hasPushConstants = pushConstantByteSize > 0;
-    if(!VulkanDetail::CreatePipelineLayout(
+    if(
+        !VulkanDetail::CreatePipelineLayout(
         m_context,
         layout->m_descriptorSetLayouts.data(),
         static_cast<u32>(layout->m_descriptorSetLayouts.size()),
         pushConstantByteSize,
         layout->m_pipelineLayout,
         NWB_TEXT("create binding layout")
-    )){
+        )
+    ){
         DestroyArenaObject(m_context.objectArena, layout);
         return nullptr;
     }
@@ -1435,14 +1439,16 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
     }
     layout->m_descriptorSetLayouts.push_back(setLayout);
 
-    if(!VulkanDetail::CreatePipelineLayout(
+    if(
+        !VulkanDetail::CreatePipelineLayout(
         m_context,
         layout->m_descriptorSetLayouts.data(),
         static_cast<u32>(layout->m_descriptorSetLayouts.size()),
         0,
         layout->m_pipelineLayout,
         NWB_TEXT("create bindless layout")
-    )){
+        )
+    ){
         DestroyArenaObject(m_context.objectArena, layout);
         return nullptr;
     }

@@ -120,7 +120,8 @@ void LogRuntimeMorphPayloadFailure(
     }
     const usize vertexCount = instance.restVertices.size();
     const usize indexCount = instance.indices.size();
-    if(vertexCount > static_cast<usize>(Limit<u32>::s_Max)
+    if(
+        vertexCount > static_cast<usize>(Limit<u32>::s_Max)
         || indexCount > static_cast<usize>(Limit<u32>::s_Max)
     ){
         NWB_LOGGER_ERROR(
@@ -238,11 +239,13 @@ void LogRuntimeMorphPayloadFailure(
             return false;
         }
         u32 failedJoint = 0u;
-        if(!DeformableValidation::SkinInfluenceFitsSkeleton(
+        if(
+            !DeformableValidation::SkinInfluenceFitsSkeleton(
             instance.skin[vertexIndex],
             instance.skeletonJointCount,
             failedJoint
-        )){
+            )
+        ){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' skin joint {} for vertex {} exceeds skeleton joint count {}"),
                 sourceText(),
@@ -559,21 +562,25 @@ bool DeformableRuntimeMeshCache::uploadRuntimeMeshBuffers(DeformableRuntimeMeshI
 
     usize restVertexBytes = 0;
     usize indexBytes = 0;
-    if(!computePayloadBytes(
+    if(
+        !computePayloadBytes(
         instance,
         instance.restVertices.size(),
         sizeof(DeformableVertexRest),
         restVertexBytes,
         "rest vertices"
-    ))
+        )
+    )
         return false;
-    if(!computePayloadBytes(
+    if(
+        !computePayloadBytes(
         instance,
         instance.indices.size(),
         sizeof(u32),
         indexBytes,
         "indices"
-    ))
+        )
+    )
         return false;
 
     const Name restVertexBufferName = deriveRuntimeBufferName(instance, AStringView("rest_vb"));

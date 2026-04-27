@@ -126,7 +126,8 @@ static constexpr f32 s_DisplacementLineScale = 1.0f;
         if(!AddReserveCount(lineCount, morph.deltas.size()))
             return false;
     }
-    if(DisplacementDebugMayEmitLines(instance.displacement, displacementTexture)
+    if(
+        DisplacementDebugMayEmitLines(instance.displacement, displacementTexture)
         && !AddReserveCount(lineCount, instance.restVertices.size())
     )
         return false;
@@ -138,7 +139,8 @@ static constexpr f32 s_DisplacementLineScale = 1.0f;
 
     if(state){
         for(const DeformableSurfaceEditRecord& edit : state->edits){
-            if(!AddWallLoopReserveCount(
+            if(
+                !AddWallLoopReserveCount(
                     instance,
                     edit.result.firstWallVertex,
                     edit.result.wallVertexCount,
@@ -149,7 +151,8 @@ static constexpr f32 s_DisplacementLineScale = 1.0f;
                 return false;
         }
         for(const DeformableAccessoryAttachmentRecord& accessory : state->accessories){
-            if(!AddWallLoopReserveCount(
+            if(
+                !AddWallLoopReserveCount(
                     instance,
                     accessory.firstWallVertex,
                     accessory.wallVertexCount,
@@ -233,7 +236,8 @@ void ResetSnapshotPreservingOutputStorage(DeformableSurfaceEditDebugSnapshot& sn
         return DeformableValidation::FiniteVector(outOffset, 0x7u);
     }
 
-    if(displacement.mode == DeformableDisplacementMode::VectorTangentTexture
+    if(
+        displacement.mode == DeformableDisplacementMode::VectorTangentTexture
         || displacement.mode == DeformableDisplacementMode::VectorObjectTexture
     ){
         outOffset = VectorTextureOffsetToRestFrame(displacement, vertex, sample);
@@ -385,7 +389,8 @@ void AppendDisplacementMagnitudeDebug(
 {
     if(instance.displacement.mode == DeformableDisplacementMode::None)
         return;
-    if(!ValidDeformableDisplacementDescriptor(instance.displacement)
+    if(
+        !ValidDeformableDisplacementDescriptor(instance.displacement)
         || !IsFinite(instance.displacement.amplitude)
         || !IsFinite(instance.displacement.bias)
     )
@@ -538,7 +543,8 @@ void AppendEditStateDebug(
 }
 
 [[nodiscard]] SIMDVector TriangleCenter(const DeformableRuntimeMeshInstance& instance, const u32 a, const u32 b, const u32 c){
-    if(a >= instance.restVertices.size()
+    if(
+        a >= instance.restVertices.size()
         || b >= instance.restVertices.size()
         || c >= instance.restVertices.size()
     )
@@ -734,7 +740,8 @@ bool BuildDeformableSurfaceEditDebugSnapshot(
     ResetSnapshotPreservingOutputStorage(outSnapshot);
     if(instance.indices.empty() || (instance.indices.size() % 3u) != 0u)
         return false;
-    if(instance.restVertices.size() > static_cast<usize>(Limit<u32>::s_Max)
+    if(
+        instance.restVertices.size() > static_cast<usize>(Limit<u32>::s_Max)
         || instance.indices.size() / 3u > static_cast<usize>(Limit<u32>::s_Max)
     )
         return false;

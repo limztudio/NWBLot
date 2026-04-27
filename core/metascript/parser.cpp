@@ -154,7 +154,8 @@ private:
         const TokenType::Enum assignOp = m_current.type;
         const u32 assignLine = m_current.line;
         const u32 assignColumn = m_current.column;
-        if(assignOp != TokenType::Equal
+        if(
+            assignOp != TokenType::Equal
             && assignOp != TokenType::PlusEqual
             && assignOp != TokenType::MinusEqual
             && assignOp != TokenType::StarEqual
@@ -735,7 +736,8 @@ private:
     void errorExpected(MStringView expected){
         const auto desc = tokenDescription();
         ScratchString msg{Alloc::ScratchAllocator<MChar>(m_scratchArena)};
-        if(expected.size() <= Limit<usize>::s_Max - 8u
+        if(
+            expected.size() <= Limit<usize>::s_Max - 8u
             && desc.size() <= Limit<usize>::s_Max - expected.size() - 8u
         )
             msg.reserve(expected.size() + 8u + desc.size());

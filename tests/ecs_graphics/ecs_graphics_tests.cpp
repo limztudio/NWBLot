@@ -702,7 +702,8 @@ static bool CommitRecordedHole(
     NWB::Impl::DeformableHolePreview preview;
     NWB::Impl::DeformableHoleEditResult result;
     NWB::Impl::DeformableSurfaceEditRecord record;
-    if(!NWB::Impl::BeginSurfaceEdit(instance, params.posedHit, session)
+    if(
+        !NWB::Impl::BeginSurfaceEdit(instance, params.posedHit, session)
         || !NWB::Impl::PreviewHole(instance, session, params, preview)
         || !NWB::Impl::CommitHole(instance, session, params, &result, &record)
     )
@@ -4288,7 +4289,8 @@ static void TestMinimalMilestoneReplayPreservesAnimatedPayload(TestContext& cont
         const Float3U& posed = posedVertices[vertexIndex].position;
         const Float3U& rest = replayInstance.restVertices[vertexIndex].position;
         NWB_ECS_GRAPHICS_TEST_CHECK(context, FiniteFloat3(posed));
-        if(Abs(posed.x - rest.x) > 0.0001f
+        if(
+            Abs(posed.x - rest.x) > 0.0001f
             || Abs(posed.y - rest.y) > 0.0001f
             || Abs(posed.z - rest.z) > 0.0001f
         )

@@ -76,7 +76,8 @@ template<typename SourceJointVector, typename SkinInfluenceVector, typename Join
         );
         return false;
     }
-    if(instance.skin.size() > static_cast<usize>(Limit<u32>::s_Max)
+    if(
+        instance.skin.size() > static_cast<usize>(Limit<u32>::s_Max)
         || sourceJoints.size() > static_cast<usize>(Limit<u32>::s_Max)
     ){
         NWB_LOGGER_ERROR(
@@ -94,7 +95,8 @@ template<typename SourceJointVector, typename SkinInfluenceVector, typename Join
 
     for(usize jointIndex = 0; jointIndex < jointCount; ++jointIndex){
         SIMDMatrix jointMatrix;
-        if(!DeformableRuntime::ResolveSkinningJointMatrix(
+        if(
+            !DeformableRuntime::ResolveSkinningJointMatrix(
                 instance,
                 static_cast<u32>(jointIndex),
                 sourceJoints[jointIndex],
@@ -146,7 +148,8 @@ template<typename SourceJointVector, typename SkinInfluenceVector, typename Join
         }
 
         u32 failedSkeletonJoint = 0u;
-        if(!DeformableValidation::SkinInfluenceFitsSkeleton(
+        if(
+            !DeformableValidation::SkinInfluenceFitsSkeleton(
                 sourceSkin,
                 instance.skeletonJointCount,
                 failedSkeletonJoint

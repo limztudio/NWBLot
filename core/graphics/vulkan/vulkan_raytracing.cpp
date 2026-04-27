@@ -865,14 +865,16 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
         return nullptr;
     }
 
-    if(!configurePipelineBindings(
+    if(
+        !configurePipelineBindings(
         desc.globalBindingLayouts,
         NWB_TEXT("ray tracing pipeline"),
         stages,
         descriptorHeapScratch,
         *pso,
         scratchArena
-    )){
+        )
+    ){
         DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
@@ -1673,7 +1675,8 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
 
     const u64 widthHeight = static_cast<u64>(args.width) * args.height;
     const u64 invocationCount = widthHeight * args.depth;
-    if((args.height != 0 && widthHeight / args.height != args.width)
+    if(
+        (args.height != 0 && widthHeight / args.height != args.width)
         || (args.depth != 0 && invocationCount / args.depth != widthHeight)
         || invocationCount > m_context.rayTracingPipelineProperties.maxRayDispatchInvocationCount
     ){

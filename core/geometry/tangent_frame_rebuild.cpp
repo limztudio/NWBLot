@@ -112,7 +112,8 @@ bool RebuildTangentFrames(
 
     if(outResult)
         *outResult = TangentFrameRebuildResult{};
-    if(!vertices
+    if(
+        !vertices
         || !indices
         || vertexCount == 0u
         || indexCount == 0u

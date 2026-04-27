@@ -233,14 +233,16 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
         return nullptr;
     }
 
-    if(!configurePipelineBindings(
+    if(
+        !configurePipelineBindings(
         desc.bindingLayouts,
         NWB_TEXT("graphics pipeline"),
         shaderStages,
         descriptorHeapScratch,
         *pso,
         scratchArena
-    )){
+        )
+    ){
         DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
@@ -285,12 +287,14 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
 
     // Step 6: Multisample state
     VkPipelineMultisampleStateCreateInfo multisampling;
-    if(!VulkanDetail::ConfigurePipelineMultisampleState(
+    if(
+        !VulkanDetail::ConfigurePipelineMultisampleState(
         fbinfo.sampleCount,
         desc.renderState.blendState.alphaToCoverageEnable,
         multisampling,
         NWB_TEXT("graphics pipeline")
-    )){
+        )
+    ){
         DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }

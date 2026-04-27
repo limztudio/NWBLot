@@ -360,7 +360,8 @@ static bool ProcessEvent(Frame& frame, const XEvent& event){
         if(!s_DetectableAutoRepeat && XEventsQueued(GetX11Display(frameData), QueuedAfterReading) > 0){
             XEvent nextEvent = {};
             XPeekEvent(GetX11Display(frameData), &nextEvent);
-            if(nextEvent.type == KeyPress
+            if(
+                nextEvent.type == KeyPress
                 && nextEvent.xkey.keycode == event.xkey.keycode
                 && nextEvent.xkey.time == event.xkey.time
             )

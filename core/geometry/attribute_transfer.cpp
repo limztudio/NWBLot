@@ -169,7 +169,8 @@ bool BlendSkinInfluence4(
             return false;
 
         for(u32 influenceIndex = 0u; influenceIndex < 4u; ++influenceIndex){
-            if(!AccumulateSkinWeight(
+            if(
+                !AccumulateSkinWeight(
                     samples,
                     sampleCount,
                     source.influence.joint[influenceIndex],

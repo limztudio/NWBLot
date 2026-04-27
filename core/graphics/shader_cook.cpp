@@ -436,8 +436,7 @@ static bool ParseCompactStringField(
     const Metascript::Value& asset,
     const AStringView fieldName,
     CompactString& outValue
-)
-{
+){
     const Metascript::Value* fieldValue = nullptr;
     if(!FindOptionalStringField(nwbFilePath, asset, fieldName, fieldValue))
         return false;
@@ -674,7 +673,8 @@ void ShaderCook::mergeInheritedDefines(ShaderEntry& inOutEntry, const CookVector
                 const usize includeVariantSize = includeEntry.defaultVariant.size();
                 const usize currentVariantSize = inOutEntry.defaultVariant.size();
                 AString mergedDefaultVariant;
-                if(includeVariantSize < Limit<usize>::s_Max
+                if(
+                    includeVariantSize < Limit<usize>::s_Max
                     && includeVariantSize + 1u <= Limit<usize>::s_Max - currentVariantSize
                 )
                     mergedDefaultVariant.reserve(includeVariantSize + 1u + currentVariantSize);

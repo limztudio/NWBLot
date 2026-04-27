@@ -107,10 +107,12 @@ struct AffinityMasks : Core::Common::Initializerable{
         Vector<u8, ScratchAllocator<u8>> buffer(
             bufferSize, ScratchAllocator<u8>(scratchArena)
         );
-        if(!GetSystemCpuSetInformation(
+        if(
+            !GetSystemCpuSetInformation(
             reinterpret_cast<PSYSTEM_CPU_SET_INFORMATION>(buffer.data()),
             bufferSize, &bufferSize, GetCurrentProcess(), 0
-        ))
+            )
+        )
             return;
 
         u8 minEfficiency = 255;

@@ -112,7 +112,8 @@ static bool HasPotentialDeformerWork(
         return true;
     if(DeformableRuntime::HasMorphWeights(morphWeights))
         return true;
-    if(!instance.skin.empty()
+    if(
+        !instance.skin.empty()
         && ((jointPalette && !jointPalette->joints.empty()) || DeformableRuntime::HasSkeletonPose(skeletonPose))
     )
         return true;
@@ -337,13 +338,15 @@ void DeformerSystem::render(Core::IFramebuffer* framebuffer){
             const DeformableDisplacementComponent* displacement =
                 m_world.tryGetComponent<DeformableDisplacementComponent>(entity)
             ;
-            if(!__hidden_deformer_system::HasPotentialDeformerWork(
+            if(
+                !__hidden_deformer_system::HasPotentialDeformerWork(
                 *instance,
                 morphWeights,
                 jointPalette,
                 skeletonPose,
                 displacement
-            ))
+                )
+            )
                 return;
             if(!ensureCommandList())
                 return;
@@ -391,13 +394,15 @@ bool DeformerSystem::ensurePipeline(){
         }
     }
 
-    if(!ensureShaderLoaded(
+    if(
+        !ensureShaderLoaded(
         m_computeShader,
         __hidden_deformer_system::DeformerComputeShaderName(),
         Core::ShaderArchive::s_DefaultVariant,
         Core::ShaderType::Compute,
         Name("ECSGraphics_DeformerCS")
-    ))
+        )
+    )
         return false;
 
     if(m_computePipeline)
@@ -553,13 +558,15 @@ bool DeformerSystem::dispatchRuntimeMesh(
             );
             return false;
         }
-        if(!DeformerSkinPayload::BuildSkinPayloadFromJointMatrices(
+        if(
+            !DeformerSkinPayload::BuildSkinPayloadFromJointMatrices(
             instance,
             poseJoints,
             resolvedSkinningMode,
             skinInfluences,
             jointMatrices
-        ))
+            )
+        )
             return false;
     }
     else{
@@ -603,7 +610,8 @@ bool DeformerSystem::dispatchRuntimeMesh(
 
     RuntimeResources* resources = nullptr;
     bool resourcesRebuilt = false;
-    if(!ensureRuntimeResources(
+    if(
+        !ensureRuntimeResources(
         instance,
         payloadViews,
         resolvedDisplacement,
@@ -611,9 +619,11 @@ bool DeformerSystem::dispatchRuntimeMesh(
         morphSignature,
         resources,
         resourcesRebuilt
-    ))
+        )
+    )
         return false;
-    if(!resources
+    if(
+        !resources
         || !resources->bindingSet
         || !resources->morphRangeBuffer
         || !resources->morphDeltaBuffer
@@ -625,12 +635,14 @@ bool DeformerSystem::dispatchRuntimeMesh(
 
     usize jointPaletteBytes = 0;
     if(hasActiveSkin && !resourcesRebuilt){
-        if(!__hidden_deformer_system::BufferPayloadBytes(
+        if(
+            !__hidden_deformer_system::BufferPayloadBytes(
             jointMatrices.size(),
             sizeof(DeformableJointMatrix),
             jointPaletteBytes,
             NWB_TEXT("joint palette")
-        ))
+            )
+        )
             return false;
 
         commandList.setBufferState(resources->jointPaletteBuffer.get(), Core::ResourceStates::CopyDest);
@@ -686,12 +698,14 @@ bool DeformerSystem::dispatchRuntimeMesh(
 
 bool DeformerSystem::copyRestToDeformed(Core::ICommandList& commandList, DeformableRuntimeMeshInstance& instance){
     usize copyBytes = 0;
-    if(!__hidden_deformer_system::BufferPayloadBytes(
+    if(
+        !__hidden_deformer_system::BufferPayloadBytes(
         instance.restVertices.size(),
         sizeof(DeformableVertexRest),
         copyBytes,
         NWB_TEXT("rest vertex")
-    ))
+        )
+    )
         return false;
 
     commandList.setBufferState(instance.restVertexBuffer.get(), Core::ResourceStates::CopySource);
@@ -751,7 +765,8 @@ bool DeformerSystem::ensureRuntimeResources(
     ;
     const Name displacementTextureName = hasTextureDisplacement ? displacement.texture.name() : NAME_NONE;
 
-    if((hasActiveMorphs && (!payloadViews.morphRanges || !payloadViews.morphDeltas))
+    if(
+        (hasActiveMorphs && (!payloadViews.morphRanges || !payloadViews.morphDeltas))
         || (hasActiveSkin && (!payloadViews.skinInfluences || !payloadViews.jointPalette))
     ){
         NWB_LOGGER_ERROR(
@@ -763,7 +778,8 @@ bool DeformerSystem::ensureRuntimeResources(
     if(!ensureDefaultDeformerBuffers() || !ensureDefaultDisplacementResources())
         return false;
 
-    if(payloadViews.morphRangeCount > static_cast<usize>(Limit<u32>::s_Max)
+    if(
+        payloadViews.morphRangeCount > static_cast<usize>(Limit<u32>::s_Max)
         || payloadViews.morphDeltaCount > static_cast<usize>(Limit<u32>::s_Max)
         || payloadViews.skinInfluenceCount > static_cast<usize>(Limit<u32>::s_Max)
         || payloadViews.jointPaletteCount > static_cast<usize>(Limit<u32>::s_Max)
@@ -815,7 +831,8 @@ bool DeformerSystem::ensureRuntimeResources(
         instance.source.name(),
         StringFormat(":runtime_{}_revision_{}_deformer_joints", instance.handle.value, instance.editRevision)
     );
-    if((hasActiveMorphs && (!rangeBufferName || !deltaBufferName))
+    if(
+        (hasActiveMorphs && (!rangeBufferName || !deltaBufferName))
         || (hasActiveSkin && (!skinBufferName || !jointPaletteBufferName))
     ){
         NWB_LOGGER_ERROR(
@@ -956,7 +973,8 @@ bool DeformerSystem::ensureRuntimeResources(
 }
 
 bool DeformerSystem::ensureDefaultDeformerBuffers(){
-    if(m_defaultMorphRangeBuffer
+    if(
+        m_defaultMorphRangeBuffer
         && m_defaultMorphDeltaBuffer
         && m_defaultSkinBuffer
         && m_defaultJointPaletteBuffer

@@ -150,7 +150,8 @@ template<typename MorphRangeVector, typename MorphDeltaVector>
             );
             return false;
         }
-        if(morph.deltas.size() > static_cast<usize>(Limit<u32>::s_Max)
+        if(
+            morph.deltas.size() > static_cast<usize>(Limit<u32>::s_Max)
             || activeInputDeltaCount > static_cast<usize>(Limit<u32>::s_Max) - morph.deltas.size()
         ){
             NWB_LOGGER_ERROR(

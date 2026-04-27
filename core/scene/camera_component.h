@@ -74,7 +74,8 @@ static_assert(
     constexpr f32 s_CameraFovCosEpsilon = 0.000001f;
 
     outTanHalfFov = 0.0f;
-    if(!IsFinite(verticalFovRadians)
+    if(
+        !IsFinite(verticalFovRadians)
         || verticalFovRadians <= 0.0f
         || verticalFovRadians >= s_PI
     )
@@ -85,7 +86,8 @@ static_assert(
     VectorSinCos(&sinHalfFovVector, &cosHalfFovVector, VectorReplicate(verticalFovRadians * 0.5f));
     const f32 sinHalfFov = VectorGetX(sinHalfFovVector);
     const f32 cosHalfFov = VectorGetX(cosHalfFovVector);
-    if(!IsFinite(sinHalfFov)
+    if(
+        !IsFinite(sinHalfFov)
         || !IsFinite(cosHalfFov)
         || (cosHalfFov > -s_CameraFovCosEpsilon && cosHalfFov < s_CameraFovCosEpsilon)
     )
@@ -132,7 +134,8 @@ static_assert(
     outProjectionData = CameraProjectionData{};
 
     f32 tanHalfFov = 0.0f;
-    if(!TryComputeCameraTanHalfVerticalFov(camera.verticalFovRadians(), tanHalfFov)
+    if(
+        !TryComputeCameraTanHalfVerticalFov(camera.verticalFovRadians(), tanHalfFov)
         || !CameraClipRangeValid(camera)
     )
         return false;

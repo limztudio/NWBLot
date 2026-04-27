@@ -384,16 +384,19 @@ static void CreateRendererEntity(
     return joint;
 }
 
-static void UpdateProxySkinPalette(
-    NWB::Core::ECSGraphics::DeformableJointPaletteComponent& jointPalette,
+static void UpdateProxySkeletonPose(
+    NWB::Core::ECSGraphics::DeformableSkeletonPoseComponent& skeletonPose,
     const f32 timeSeconds
 ){
     const f32 safeTimeSeconds = IsFinite(timeSeconds) ? timeSeconds : 0.0f;
 
-    jointPalette.joints.resize(2u);
-    jointPalette.joints[0] = NWB::Core::ECSGraphics::DeformableJointMatrix{};
+    skeletonPose.parentJoints.resize(2u);
+    skeletonPose.parentJoints[0] = NWB::Core::ECSGraphics::s_DeformableSkeletonRootParent;
+    skeletonPose.parentJoints[1] = 0u;
+    skeletonPose.localJoints.resize(2u);
+    skeletonPose.localJoints[0] = NWB::Core::ECSGraphics::DeformableJointMatrix{};
     const f32 skinAngle = VectorGetX(VectorSin(VectorReplicate(safeTimeSeconds * 0.9f)));
-    jointPalette.joints[1] = BuildProxySkinJoint(s_DeformableSkinMaxAngle * skinAngle);
+    skeletonPose.localJoints[1] = BuildProxySkinJoint(s_DeformableSkinMaxAngle * skinAngle);
 }
 
 [[nodiscard]] static NWB::Core::ECS::EntityID CreateDeformableRendererEntity(
@@ -417,8 +420,8 @@ static void UpdateProxySkinPalette(
     morphWeights.weights[0].morph = Name("lift");
     morphWeights.weights[0].weight = 0.0f;
 
-    auto& jointPalette = entity.addComponent<NWB::Core::ECSGraphics::DeformableJointPaletteComponent>();
-    UpdateProxySkinPalette(jointPalette, 0.0f);
+    auto& skeletonPose = entity.addComponent<NWB::Core::ECSGraphics::DeformableSkeletonPoseComponent>();
+    UpdateProxySkeletonPose(skeletonPose, 0.0f);
 
     auto& displacement = entity.addComponent<NWB::Core::ECSGraphics::DeformableDisplacementComponent>();
     displacement.amplitudeScale = 1.0f;
@@ -449,6 +452,7 @@ static void ResolvePickingInputs(
     outInputs = NWB::Core::ECSGraphics::DeformablePickingInputs{};
     outInputs.morphWeights = world.tryGetComponent<NWB::Core::ECSGraphics::DeformableMorphWeightsComponent>(entity);
     outInputs.jointPalette = world.tryGetComponent<NWB::Core::ECSGraphics::DeformableJointPaletteComponent>(entity);
+    outInputs.skeletonPose = world.tryGetComponent<NWB::Core::ECSGraphics::DeformableSkeletonPoseComponent>(entity);
     outInputs.displacement = world.tryGetComponent<NWB::Core::ECSGraphics::DeformableDisplacementComponent>(entity);
     outInputs.transform = world.tryGetComponent<NWB::Core::Scene::TransformComponent>(entity);
 }
@@ -584,10 +588,10 @@ bool ProjectTestbed::onStartup(){
         if(!morphWeights->weights.empty())
             morphWeights->weights[0].weight = 0.65f;
     }
-    if(auto* jointPalette =
-        m_world->tryGetComponent<NWB::Core::ECSGraphics::DeformableJointPaletteComponent>(importedDeformableEntity)
+    if(auto* skeletonPose =
+        m_world->tryGetComponent<NWB::Core::ECSGraphics::DeformableSkeletonPoseComponent>(importedDeformableEntity)
     ){
-        __hidden_project_testbed_runtime::UpdateProxySkinPalette(*jointPalette, 1.0f);
+        __hidden_project_testbed_runtime::UpdateProxySkeletonPose(*skeletonPose, 1.0f);
     }
 
     NWB_LOGGER_ESSENTIAL_INFO(
@@ -715,11 +719,11 @@ void ProjectTestbed::updateDeformableMorph(const f32 delta){
         morphWeights->weights[0].weight = IsFinite(morphWeight) ? morphWeight : 0.5f;
     }
 
-    auto* jointPalette =
-        m_world->tryGetComponent<NWB::Core::ECSGraphics::DeformableJointPaletteComponent>(m_deformableMorphEntity)
+    auto* skeletonPose =
+        m_world->tryGetComponent<NWB::Core::ECSGraphics::DeformableSkeletonPoseComponent>(m_deformableMorphEntity)
     ;
-    if(jointPalette)
-        __hidden_project_testbed_runtime::UpdateProxySkinPalette(*jointPalette, m_deformableMorphTime);
+    if(skeletonPose)
+        __hidden_project_testbed_runtime::UpdateProxySkeletonPose(*skeletonPose, m_deformableMorphTime);
 
     auto* displacement =
         m_world->tryGetComponent<NWB::Core::ECSGraphics::DeformableDisplacementComponent>(m_deformableMorphEntity)

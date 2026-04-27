@@ -69,6 +69,7 @@ struct DeformablePickingInputs{
     Core::Assets::AssetManager* assetManager = nullptr;
     const DeformableMorphWeightsComponent* morphWeights = nullptr;
     const DeformableJointPaletteComponent* jointPalette = nullptr;
+    const DeformableSkeletonPoseComponent* skeletonPose = nullptr;
     const DeformableDisplacementComponent* displacement = nullptr;
     const DeformableDisplacementTexture* displacementTexture = nullptr;
     const Core::Scene::TransformComponent* transform = nullptr;

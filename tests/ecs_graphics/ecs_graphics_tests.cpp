@@ -2139,6 +2139,84 @@ static NWB::Impl::DeformableJointMatrix MakeIdentityJointMatrix(){
     return MakeTranslationJointMatrix(0.0f, 0.0f, 0.0f);
 }
 
+static NWB::Impl::DeformableSkeletonPoseComponent MakeTwoJointSkeletonPose(
+    const NWB::Impl::DeformableJointMatrix& rootJoint,
+    const NWB::Impl::DeformableJointMatrix& childJoint)
+{
+    NWB::Impl::DeformableSkeletonPoseComponent pose;
+    pose.parentJoints.push_back(NWB::Impl::s_DeformableSkeletonRootParent);
+    pose.parentJoints.push_back(0u);
+    pose.localJoints.push_back(rootJoint);
+    pose.localJoints.push_back(childJoint);
+    return pose;
+}
+
+static void TestSkeletonPoseBuildsHierarchicalPalette(TestContext& context){
+    NWB::Impl::DeformableSkeletonPoseComponent pose = MakeTwoJointSkeletonPose(
+        MakeTranslationJointMatrix(1.0f, 0.0f, 0.0f),
+        MakeTranslationJointMatrix(0.0f, 2.0f, 0.0f)
+    );
+
+    Vector<NWB::Impl::DeformableJointMatrix> resolvedJoints;
+    u32 skinningMode = NWB::Impl::DeformableSkinningMode::DualQuaternion;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Impl::DeformableRuntime::BuildJointPaletteFromSkeletonPose(pose, resolvedJoints, skinningMode)
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, skinningMode == NWB::Impl::DeformableSkinningMode::LinearBlend);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, resolvedJoints.size() == 2u);
+    if(resolvedJoints.size() == 2u){
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(resolvedJoints[0u].column3.x, 1.0f));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(resolvedJoints[0u].column3.y, 0.0f));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(resolvedJoints[1u].column3.x, 1.0f));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(resolvedJoints[1u].column3.y, 2.0f));
+    }
+
+    pose.skinningMode = NWB::Impl::DeformableSkinningMode::DualQuaternion;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Impl::DeformableRuntime::BuildJointPaletteFromSkeletonPose(pose, resolvedJoints, skinningMode)
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, skinningMode == NWB::Impl::DeformableSkinningMode::DualQuaternion);
+
+    pose.parentJoints[1u] = 1u;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        !NWB::Impl::DeformableRuntime::BuildJointPaletteFromSkeletonPose(pose, resolvedJoints, skinningMode)
+    );
+    pose.parentJoints[1u] = 0u;
+    pose.parentJoints.pop_back();
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        !NWB::Impl::DeformableRuntime::BuildJointPaletteFromSkeletonPose(pose, resolvedJoints, skinningMode)
+    );
+}
+
+static void TestPickingSkeletonPoseAppliesHierarchicalPalette(TestContext& context){
+    NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
+    AssignSingleJointSkin(instance, 1u);
+    instance.skeletonJointCount = 2u;
+
+    NWB::Impl::DeformableSkeletonPoseComponent pose = MakeTwoJointSkeletonPose(
+        MakeTranslationJointMatrix(1.0f, 0.0f, 0.0f),
+        MakeTranslationJointMatrix(0.0f, 2.0f, 0.0f)
+    );
+
+    NWB::Impl::DeformablePickingInputs inputs;
+    inputs.skeletonPose = &pose;
+
+    Vector<NWB::Impl::DeformableVertexRest> vertices;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::BuildDeformablePickingVertices(instance, inputs, vertices));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, vertices.size() == instance.restVertices.size());
+    if(vertices.size() != instance.restVertices.size())
+        return;
+
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertices[0u].position.x, 0.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertices[0u].position.y, 1.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertices[1u].position.x, 2.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertices[1u].position.y, 1.0f));
+}
+
 static void TestDeformerSkinPayloadValidatesSkeletonAndPalette(TestContext& context){
     NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
     AssignSingleJointSkin(instance, 0u);
@@ -5467,6 +5545,8 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
     __hidden_ecs_graphics_tests::TestDeformerMorphPayloadSignatureChangesWithWeights(context);
     __hidden_ecs_graphics_tests::TestDeformerMorphPayloadSignatureChangesWithEditRevision(context);
     __hidden_ecs_graphics_tests::TestDeformerMorphPayloadBuildsSparseVertexRanges(context);
+    __hidden_ecs_graphics_tests::TestSkeletonPoseBuildsHierarchicalPalette(context);
+    __hidden_ecs_graphics_tests::TestPickingSkeletonPoseAppliesHierarchicalPalette(context);
     __hidden_ecs_graphics_tests::TestDeformerSkinPayloadValidatesSkeletonAndPalette(context);
     __hidden_ecs_graphics_tests::TestRestSpaceHoleEditCreatesPerInstancePatch(context);
     __hidden_ecs_graphics_tests::TestRestSpaceHoleEditTransfersAndInpaintsWallAttributes(context);

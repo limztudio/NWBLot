@@ -157,26 +157,27 @@ template<typename VertexVector>
     return result;
 }
 
-template<typename PreparedJointPaletteVector>
-[[nodiscard]] bool BuildPreparedJointPalette(
+template<typename SourceJointVector, typename PreparedJointPaletteVector>
+[[nodiscard]] bool BuildPreparedJointPaletteFromJointMatrices(
     const DeformableRuntimeMeshInstance& instance,
-    const DeformableJointPaletteComponent* jointPalette,
+    const SourceJointVector& sourceJoints,
+    const u32 skinningMode,
     PreparedJointPaletteVector& outJointPalette)
 {
     outJointPalette.clear();
-    if(instance.skin.empty() || !jointPalette || jointPalette->joints.empty())
+    if(instance.skin.empty() || sourceJoints.empty())
         return true;
-    if(!ValidDeformableSkinningMode(jointPalette->skinningMode))
+    if(!ValidDeformableSkinningMode(skinningMode))
         return false;
 
-    outJointPalette.reserve(jointPalette->joints.size());
-    const bool requiresDualQuaternion = jointPalette->skinningMode == DeformableSkinningMode::DualQuaternion;
-    for(usize jointIndex = 0u; jointIndex < jointPalette->joints.size(); ++jointIndex){
+    outJointPalette.reserve(sourceJoints.size());
+    const bool requiresDualQuaternion = skinningMode == DeformableSkinningMode::DualQuaternion;
+    for(usize jointIndex = 0u; jointIndex < sourceJoints.size(); ++jointIndex){
         PreparedJointPaletteEntry entry;
         if(!DeformableRuntime::ResolveSkinningJointMatrix(
                 instance,
                 static_cast<u32>(jointIndex),
-                jointPalette->joints[jointIndex],
+                sourceJoints[jointIndex],
                 entry.transform
             )
             || !TryBuildJointNormalMatrix(entry.transform, entry.normalTransform)
@@ -194,6 +195,24 @@ template<typename PreparedJointPaletteVector>
         outJointPalette.push_back(entry);
     }
     return true;
+}
+
+template<typename PreparedJointPaletteVector>
+[[nodiscard]] bool BuildPreparedJointPalette(
+    const DeformableRuntimeMeshInstance& instance,
+    const DeformableJointPaletteComponent* jointPalette,
+    PreparedJointPaletteVector& outJointPalette)
+{
+    outJointPalette.clear();
+    if(!jointPalette)
+        return true;
+
+    return BuildPreparedJointPaletteFromJointMatrices(
+        instance,
+        jointPalette->joints,
+        jointPalette->skinningMode,
+        outJointPalette
+    );
 }
 
 template<typename PreparedJointPaletteVector>
@@ -720,8 +739,28 @@ template<typename VertexVector>
         __hidden_deformable_picking::PreparedJointPaletteEntry,
         Core::Alloc::ScratchAllocator<__hidden_deformable_picking::PreparedJointPaletteEntry>
     > jointPalette{ Core::Alloc::ScratchAllocator<__hidden_deformable_picking::PreparedJointPaletteEntry>(scratchArena) };
-    if(!__hidden_deformable_picking::BuildPreparedJointPalette(instance, inputs.jointPalette, jointPalette))
-        return false;
+    u32 skinningMode = inputs.jointPalette
+        ? inputs.jointPalette->skinningMode
+        : DeformableSkinningMode::LinearBlend
+    ;
+    if(DeformableRuntime::HasSkeletonPose(inputs.skeletonPose)){
+        Vector<DeformableJointMatrix, Core::Alloc::ScratchAllocator<DeformableJointMatrix>> poseJoints{
+            Core::Alloc::ScratchAllocator<DeformableJointMatrix>(scratchArena)
+        };
+        if(!DeformableRuntime::BuildJointPaletteFromSkeletonPose(*inputs.skeletonPose, poseJoints, skinningMode))
+            return false;
+        if(!__hidden_deformable_picking::BuildPreparedJointPaletteFromJointMatrices(
+            instance,
+            poseJoints,
+            skinningMode,
+            jointPalette
+        ))
+            return false;
+    }
+    else{
+        if(!__hidden_deformable_picking::BuildPreparedJointPalette(instance, inputs.jointPalette, jointPalette))
+            return false;
+    }
 
     outVertices.reserve(instance.restVertices.size());
     outVertices.assign(instance.restVertices.begin(), instance.restVertices.end());
@@ -741,7 +780,7 @@ template<typename VertexVector>
         if(!__hidden_deformable_picking::ApplySkin(
             instance,
             jointPalette,
-            inputs.jointPalette ? inputs.jointPalette->skinningMode : DeformableSkinningMode::LinearBlend,
+            skinningMode,
             static_cast<u32>(vertexIndex),
             vertex
         ))
@@ -985,6 +1024,7 @@ bool RaycastVisibleDeformableRenderers(
             inputs.assetManager = assetManager;
             inputs.morphWeights = world.tryGetComponent<DeformableMorphWeightsComponent>(entity);
             inputs.jointPalette = world.tryGetComponent<DeformableJointPaletteComponent>(entity);
+            inputs.skeletonPose = world.tryGetComponent<DeformableSkeletonPoseComponent>(entity);
             inputs.displacement = world.tryGetComponent<DeformableDisplacementComponent>(entity);
             inputs.transform = world.tryGetComponent<Core::Scene::TransformComponent>(entity);
 

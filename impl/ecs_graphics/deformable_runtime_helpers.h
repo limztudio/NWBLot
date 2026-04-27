@@ -46,6 +46,10 @@ namespace DisplacementResolveFailure{
     return weights && !weights->weights.empty();
 }
 
+[[nodiscard]] inline bool HasSkeletonPose(const DeformableSkeletonPoseComponent* pose){
+    return pose && (!pose->localJoints.empty() || !pose->parentJoints.empty());
+}
+
 template<typename MorphVector, typename MorphWeightLookup>
 [[nodiscard]] inline bool BuildMorphWeightSumLookup(const MorphVector& morphs, const DeformableMorphWeightsComponent* weights, MorphWeightLookup& outWeights, Name& outFailedMorph){
     outWeights.clear();
@@ -167,6 +171,50 @@ template<typename MorphVector, typename MorphWeightLookup>
 
     outMatrix = MultiplyJointMatrices(outMatrix, inverseBind);
     return IsInvertibleAffineJointMatrix(outMatrix);
+}
+
+template<typename JointMatrixVector>
+[[nodiscard]] inline bool BuildJointPaletteFromSkeletonPose(
+    const DeformableSkeletonPoseComponent& pose,
+    JointMatrixVector& outJointPalette,
+    u32& outSkinningMode)
+{
+    outJointPalette.clear();
+    outSkinningMode = DeformableSkinningMode::LinearBlend;
+
+    if(!HasSkeletonPose(&pose))
+        return true;
+    if(!ValidDeformableSkinningMode(pose.skinningMode))
+        return false;
+
+    const usize jointCount = pose.localJoints.size();
+    if(jointCount == 0u
+        || pose.parentJoints.size() != jointCount
+        || jointCount > static_cast<usize>(Limit<u32>::s_Max)
+    )
+        return false;
+
+    outJointPalette.reserve(jointCount);
+    for(usize jointIndex = 0u; jointIndex < jointCount; ++jointIndex){
+        const u32 parentJoint = pose.parentJoints[jointIndex];
+        SIMDMatrix jointMatrix = LoadJointMatrix(pose.localJoints[jointIndex]);
+        if(!IsInvertibleAffineJointMatrix(jointMatrix))
+            return false;
+
+        if(parentJoint != s_DeformableSkeletonRootParent){
+            if(parentJoint >= jointIndex)
+                return false;
+
+            jointMatrix = MultiplyJointMatrices(LoadJointMatrix(outJointPalette[parentJoint]), jointMatrix);
+            if(!IsInvertibleAffineJointMatrix(jointMatrix))
+                return false;
+        }
+
+        outJointPalette.push_back(StoreJointMatrix(jointMatrix));
+    }
+
+    outSkinningMode = pose.skinningMode;
+    return true;
 }
 
 [[nodiscard]] inline bool TryBuildJointNormalMatrix(const SIMDMatrix& matrix, SIMDMatrix& outNormalMatrix){

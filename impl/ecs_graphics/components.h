@@ -117,6 +117,18 @@ struct DeformableJointPaletteComponent{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr u32 s_DeformableSkeletonRootParent = Limit<u32>::s_Max;
+
+struct DeformableSkeletonPoseComponent{
+    Vector<u32> parentJoints;
+    Vector<DeformableJointMatrix> localJoints;
+    u32 skinningMode = DeformableSkinningMode::LinearBlend;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 struct DeformableDisplacementComponent{
     f32 amplitudeScale = 1.0f;
     bool enabled = true;

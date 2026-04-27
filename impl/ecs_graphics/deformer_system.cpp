@@ -105,13 +105,16 @@ static bool HasPotentialDeformerWork(
     const DeformableRuntimeMeshInstance& instance,
     const DeformableMorphWeightsComponent* morphWeights,
     const DeformableJointPaletteComponent* jointPalette,
+    const DeformableSkeletonPoseComponent* skeletonPose,
     const DeformableDisplacementComponent* displacement)
 {
     if((instance.dirtyFlags & RuntimeMeshDirtyFlag::DeformerInputDirty) != 0u)
         return true;
     if(DeformableRuntime::HasMorphWeights(morphWeights))
         return true;
-    if(!instance.skin.empty() && jointPalette && !jointPalette->joints.empty())
+    if(!instance.skin.empty()
+        && ((jointPalette && !jointPalette->joints.empty()) || DeformableRuntime::HasSkeletonPose(skeletonPose))
+    )
         return true;
 
     DeformableDisplacement resolvedDisplacement;
@@ -264,6 +267,7 @@ DeformerSystem::DeformerSystem(
     readAccess<DeformableRendererComponent>();
     readAccess<DeformableMorphWeightsComponent>();
     readAccess<DeformableJointPaletteComponent>();
+    readAccess<DeformableSkeletonPoseComponent>();
     readAccess<DeformableDisplacementComponent>();
 }
 
@@ -334,6 +338,9 @@ void DeformerSystem::render(Core::IFramebuffer* framebuffer){
             const DeformableJointPaletteComponent* jointPalette =
                 m_world.tryGetComponent<DeformableJointPaletteComponent>(entity)
             ;
+            const DeformableSkeletonPoseComponent* skeletonPose =
+                m_world.tryGetComponent<DeformableSkeletonPoseComponent>(entity)
+            ;
             const DeformableDisplacementComponent* displacement =
                 m_world.tryGetComponent<DeformableDisplacementComponent>(entity)
             ;
@@ -341,12 +348,13 @@ void DeformerSystem::render(Core::IFramebuffer* framebuffer){
                 *instance,
                 morphWeights,
                 jointPalette,
+                skeletonPose,
                 displacement
             ))
                 return;
             if(!ensureCommandList())
                 return;
-            if(dispatchRuntimeMesh(*commandList, *instance, morphWeights, jointPalette, displacement))
+            if(dispatchRuntimeMesh(*commandList, *instance, morphWeights, jointPalette, skeletonPose, displacement))
                 submittedWork = true;
         }
     );
@@ -512,6 +520,7 @@ bool DeformerSystem::dispatchRuntimeMesh(
     DeformableRuntimeMeshInstance& instance,
     const DeformableMorphWeightsComponent* morphWeights,
     const DeformableJointPaletteComponent* jointPalette,
+    const DeformableSkeletonPoseComponent* skeletonPose,
     const DeformableDisplacementComponent* displacement)
 {
     if(instance.restVertices.size() > static_cast<usize>(Limit<u32>::s_Max)){
@@ -539,8 +548,31 @@ bool DeformerSystem::dispatchRuntimeMesh(
     Vector<DeformableJointMatrix, Core::Alloc::ScratchAllocator<DeformableJointMatrix>> jointMatrices{
         Core::Alloc::ScratchAllocator<DeformableJointMatrix>(scratchArena)
     };
-    if(!DeformerSkinPayload::BuildSkinPayload(instance, jointPalette, skinInfluences, jointMatrices))
-        return false;
+    u32 resolvedSkinningMode = jointPalette ? jointPalette->skinningMode : DeformableSkinningMode::LinearBlend;
+    if(DeformableRuntime::HasSkeletonPose(skeletonPose)){
+        Vector<DeformableJointMatrix, Core::Alloc::ScratchAllocator<DeformableJointMatrix>> poseJoints{
+            Core::Alloc::ScratchAllocator<DeformableJointMatrix>(scratchArena)
+        };
+        if(!DeformableRuntime::BuildJointPaletteFromSkeletonPose(*skeletonPose, poseJoints, resolvedSkinningMode)){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("DeformerSystem: runtime mesh '{}' skeleton pose is invalid"),
+                instance.handle.value
+            );
+            return false;
+        }
+        if(!DeformerSkinPayload::BuildSkinPayloadFromJointMatrices(
+            instance,
+            poseJoints,
+            resolvedSkinningMode,
+            skinInfluences,
+            jointMatrices
+        ))
+            return false;
+    }
+    else{
+        if(!DeformerSkinPayload::BuildSkinPayload(instance, jointPalette, skinInfluences, jointMatrices))
+            return false;
+    }
 
     DeformableDisplacement resolvedDisplacement;
     if(!__hidden_deformer_system::ResolveDeformerDisplacement(instance, displacement, resolvedDisplacement))
@@ -636,8 +668,8 @@ bool DeformerSystem::dispatchRuntimeMesh(
     pushConstants.deformedScalarStride = __hidden_deformer_system::s_DeformableVertexScalarStride;
     pushConstants.skinCount = static_cast<u32>(skinInfluences.size());
     pushConstants.jointCount = static_cast<u32>(jointMatrices.size());
-    pushConstants.skinningMode = hasActiveSkin && jointPalette
-        ? jointPalette->skinningMode
+    pushConstants.skinningMode = hasActiveSkin
+        ? resolvedSkinningMode
         : DeformableSkinningMode::LinearBlend
     ;
     pushConstants.displacementAmplitude = hasDisplacement ? resolvedDisplacement.amplitude : 0.0f;

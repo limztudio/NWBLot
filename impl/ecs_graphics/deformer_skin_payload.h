@@ -26,23 +26,24 @@ namespace DeformerSkinPayload{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename SkinInfluenceVector, typename JointPaletteVector>
-[[nodiscard]] bool BuildSkinPayload(
+template<typename SourceJointVector, typename SkinInfluenceVector, typename JointPaletteVector>
+[[nodiscard]] bool BuildSkinPayloadFromJointMatrices(
     const DeformableRuntimeMeshInstance& instance,
-    const DeformableJointPaletteComponent* jointPalette,
+    const SourceJointVector& sourceJoints,
+    const u32 skinningMode,
     SkinInfluenceVector& outSkinInfluences,
     JointPaletteVector& outJointPalette)
 {
     outSkinInfluences.clear();
     outJointPalette.clear();
 
-    if(instance.skin.empty() || !jointPalette || jointPalette->joints.empty())
+    if(instance.skin.empty() || sourceJoints.empty())
         return true;
-    if(!ValidDeformableSkinningMode(jointPalette->skinningMode)){
+    if(!ValidDeformableSkinningMode(skinningMode)){
         NWB_LOGGER_ERROR(
             NWB_TEXT("DeformerSystem: runtime mesh '{}' skinning mode {} is invalid"),
             instance.handle.value,
-            jointPalette->skinningMode
+            skinningMode
         );
         return false;
     }
@@ -76,7 +77,7 @@ template<typename SkinInfluenceVector, typename JointPaletteVector>
         return false;
     }
     if(instance.skin.size() > static_cast<usize>(Limit<u32>::s_Max)
-        || jointPalette->joints.size() > static_cast<usize>(Limit<u32>::s_Max)
+        || sourceJoints.size() > static_cast<usize>(Limit<u32>::s_Max)
     ){
         NWB_LOGGER_ERROR(
             NWB_TEXT("DeformerSystem: runtime mesh '{}' skin payload exceeds u32 limits"),
@@ -86,8 +87,8 @@ template<typename SkinInfluenceVector, typename JointPaletteVector>
     }
 
     const usize skinCount = instance.skin.size();
-    const usize jointCount = jointPalette->joints.size();
-    const bool useDualQuaternionPayload = jointPalette->skinningMode == DeformableSkinningMode::DualQuaternion;
+    const usize jointCount = sourceJoints.size();
+    const bool useDualQuaternionPayload = skinningMode == DeformableSkinningMode::DualQuaternion;
     outSkinInfluences.reserve(skinCount);
     outJointPalette.reserve(jointCount);
 
@@ -96,7 +97,7 @@ template<typename SkinInfluenceVector, typename JointPaletteVector>
         if(!DeformableRuntime::ResolveSkinningJointMatrix(
                 instance,
                 static_cast<u32>(jointIndex),
-                jointPalette->joints[jointIndex],
+                sourceJoints[jointIndex],
                 jointMatrix
             )
         ){
@@ -187,6 +188,28 @@ template<typename SkinInfluenceVector, typename JointPaletteVector>
     }
 
     return true;
+}
+
+template<typename SkinInfluenceVector, typename JointPaletteVector>
+[[nodiscard]] bool BuildSkinPayload(
+    const DeformableRuntimeMeshInstance& instance,
+    const DeformableJointPaletteComponent* jointPalette,
+    SkinInfluenceVector& outSkinInfluences,
+    JointPaletteVector& outJointPalette)
+{
+    outSkinInfluences.clear();
+    outJointPalette.clear();
+
+    if(!jointPalette)
+        return true;
+
+    return BuildSkinPayloadFromJointMatrices(
+        instance,
+        jointPalette->joints,
+        jointPalette->skinningMode,
+        outSkinInfluences,
+        outJointPalette
+    );
 }
 
 

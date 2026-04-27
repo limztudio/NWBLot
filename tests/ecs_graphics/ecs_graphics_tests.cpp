@@ -390,42 +390,42 @@ static NWB::Impl::DeformableVertexRest MakeVertex(const f32 x, const f32 y, cons
 }
 
 static NWB::Impl::DeformableJointMatrix MakeTranslationJointMatrix(const f32 x, const f32 y, const f32 z){
-    NWB::Impl::DeformableJointMatrix joint;
-    joint.column3 = Float4(x, y, z, 1.0f);
+    NWB::Impl::DeformableJointMatrix joint = NWB::Impl::MakeIdentityDeformableJointMatrix();
+    joint.rows[3] = Float4(x, y, z, 1.0f);
     return joint;
 }
 
 static NWB::Impl::DeformableJointMatrix MakeZHalfTurnJointMatrix(){
-    NWB::Impl::DeformableJointMatrix joint;
-    joint.column0 = Float4(-1.0f, 0.0f, 0.0f, 0.0f);
-    joint.column1 = Float4(0.0f, -1.0f, 0.0f, 0.0f);
+    NWB::Impl::DeformableJointMatrix joint = NWB::Impl::MakeIdentityDeformableJointMatrix();
+    joint.rows[0] = Float4(-1.0f, 0.0f, 0.0f, 0.0f);
+    joint.rows[1] = Float4(0.0f, -1.0f, 0.0f, 0.0f);
     return joint;
 }
 
 static NWB::Impl::DeformableJointMatrix MakeXHalfTurnJointMatrix(){
-    NWB::Impl::DeformableJointMatrix joint;
-    joint.column1 = Float4(0.0f, -1.0f, 0.0f, 0.0f);
-    joint.column2 = Float4(0.0f, 0.0f, -1.0f, 0.0f);
+    NWB::Impl::DeformableJointMatrix joint = NWB::Impl::MakeIdentityDeformableJointMatrix();
+    joint.rows[1] = Float4(0.0f, -1.0f, 0.0f, 0.0f);
+    joint.rows[2] = Float4(0.0f, 0.0f, -1.0f, 0.0f);
     return joint;
 }
 
 static NWB::Impl::DeformableJointMatrix MakeYHalfTurnJointMatrix(){
-    NWB::Impl::DeformableJointMatrix joint;
-    joint.column0 = Float4(-1.0f, 0.0f, 0.0f, 0.0f);
-    joint.column2 = Float4(0.0f, 0.0f, -1.0f, 0.0f);
+    NWB::Impl::DeformableJointMatrix joint = NWB::Impl::MakeIdentityDeformableJointMatrix();
+    joint.rows[0] = Float4(-1.0f, 0.0f, 0.0f, 0.0f);
+    joint.rows[2] = Float4(0.0f, 0.0f, -1.0f, 0.0f);
     return joint;
 }
 
 static NWB::Impl::DeformableJointMatrix MakeZQuarterTurnJointMatrix(){
-    NWB::Impl::DeformableJointMatrix joint;
-    joint.column0 = Float4(0.0f, 1.0f, 0.0f, 0.0f);
-    joint.column1 = Float4(-1.0f, 0.0f, 0.0f, 0.0f);
+    NWB::Impl::DeformableJointMatrix joint = NWB::Impl::MakeIdentityDeformableJointMatrix();
+    joint.rows[0] = Float4(0.0f, 1.0f, 0.0f, 0.0f);
+    joint.rows[1] = Float4(-1.0f, 0.0f, 0.0f, 0.0f);
     return joint;
 }
 
 static NWB::Impl::DeformableJointMatrix MakeNonUniformScaleJointMatrix(){
-    NWB::Impl::DeformableJointMatrix joint;
-    joint.column0 = Float4(2.0f, 0.0f, 0.0f, 0.0f);
+    NWB::Impl::DeformableJointMatrix joint = NWB::Impl::MakeIdentityDeformableJointMatrix();
+    joint.rows[0] = Float4(2.0f, 0.0f, 0.0f, 0.0f);
     return joint;
 }
 
@@ -1203,11 +1203,11 @@ static void TestPoseStableRestHitRecovery(TestContext& context){
     AssignSingleJointSkin(instance, 0u);
 
     NWB::Impl::DeformableJointPaletteComponent joints;
-    joints.joints.resize(1u);
-    joints.joints[0].column0 = Float4(1.0f, 0.0f, 0.0f, 0.0f);
-    joints.joints[0].column1 = Float4(0.0f, 1.0f, 0.0f, 0.0f);
-    joints.joints[0].column2 = Float4(0.0f, 0.0f, 1.0f, 0.0f);
-    joints.joints[0].column3 = Float4(2.0f, 0.0f, 0.0f, 1.0f);
+    joints.joints.resize(1u, NWB::Impl::MakeIdentityDeformableJointMatrix());
+    joints.joints[0].rows[0] = Float4(1.0f, 0.0f, 0.0f, 0.0f);
+    joints.joints[0].rows[1] = Float4(0.0f, 1.0f, 0.0f, 0.0f);
+    joints.joints[0].rows[2] = Float4(0.0f, 0.0f, 1.0f, 0.0f);
+    joints.joints[0].rows[3] = Float4(2.0f, 0.0f, 0.0f, 1.0f);
 
     NWB::Impl::DeformablePickingInputs inputs;
     inputs.jointPalette = &joints;
@@ -1223,10 +1223,10 @@ static void TestPoseStableRestHitRecovery(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(hit.restSample.bary[1], 0.25f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(hit.restSample.bary[2], 0.5f));
 
-    joints.joints[0].column0 = Float4(0.0f, 1.0f, 0.0f, 0.0f);
-    joints.joints[0].column1 = Float4(-1.0f, 0.0f, 0.0f, 0.0f);
-    joints.joints[0].column2 = Float4(0.0f, 0.0f, 1.0f, 0.0f);
-    joints.joints[0].column3 = Float4(1.25f, -0.5f, 0.0f, 1.0f);
+    joints.joints[0].rows[0] = Float4(0.0f, 1.0f, 0.0f, 0.0f);
+    joints.joints[0].rows[1] = Float4(-1.0f, 0.0f, 0.0f, 0.0f);
+    joints.joints[0].rows[2] = Float4(0.0f, 0.0f, 1.0f, 0.0f);
+    joints.joints[0].rows[3] = Float4(1.25f, -0.5f, 0.0f, 1.0f);
 
     ray.setOrigin(Float3U(1.25f, -0.4f, 1.0f));
 
@@ -1273,11 +1273,11 @@ static void TestPickingSkinUsesNormalMatrixForNonUniformScale(TestContext& conte
     }
 
     NWB::Impl::DeformableJointPaletteComponent joints;
-    joints.joints.resize(1u);
-    joints.joints[0].column0 = Float4(2.0f, 0.0f, 0.0f, 0.0f);
-    joints.joints[0].column1 = Float4(0.0f, 1.0f, 0.0f, 0.0f);
-    joints.joints[0].column2 = Float4(0.0f, 0.0f, 1.0f, 0.0f);
-    joints.joints[0].column3 = Float4(0.0f, 0.0f, 0.0f, 1.0f);
+    joints.joints.resize(1u, NWB::Impl::MakeIdentityDeformableJointMatrix());
+    joints.joints[0].rows[0] = Float4(2.0f, 0.0f, 0.0f, 0.0f);
+    joints.joints[0].rows[1] = Float4(0.0f, 1.0f, 0.0f, 0.0f);
+    joints.joints[0].rows[2] = Float4(0.0f, 0.0f, 1.0f, 0.0f);
+    joints.joints[0].rows[3] = Float4(0.0f, 0.0f, 0.0f, 1.0f);
 
     NWB::Impl::DeformablePickingInputs inputs;
     inputs.jointPalette = &joints;
@@ -1306,15 +1306,15 @@ static void TestPickingSkinBlendsTwoJoints(TestContext& context){
         skin = MakeTwoJointSkin(0u, 0.25f, 1u, 0.75f);
 
     NWB::Impl::DeformableJointPaletteComponent joints;
-    joints.joints.resize(2u);
-    joints.joints[0].column0 = Float4(1.0f, 0.0f, 0.0f, 0.0f);
-    joints.joints[0].column1 = Float4(0.0f, 1.0f, 0.0f, 0.0f);
-    joints.joints[0].column2 = Float4(0.0f, 0.0f, 1.0f, 0.0f);
-    joints.joints[0].column3 = Float4(2.0f, 0.0f, 0.0f, 1.0f);
-    joints.joints[1].column0 = Float4(1.0f, 0.0f, 0.0f, 0.0f);
-    joints.joints[1].column1 = Float4(0.0f, 1.0f, 0.0f, 0.0f);
-    joints.joints[1].column2 = Float4(0.0f, 0.0f, 1.0f, 0.0f);
-    joints.joints[1].column3 = Float4(0.0f, 4.0f, 0.0f, 1.0f);
+    joints.joints.resize(2u, NWB::Impl::MakeIdentityDeformableJointMatrix());
+    joints.joints[0].rows[0] = Float4(1.0f, 0.0f, 0.0f, 0.0f);
+    joints.joints[0].rows[1] = Float4(0.0f, 1.0f, 0.0f, 0.0f);
+    joints.joints[0].rows[2] = Float4(0.0f, 0.0f, 1.0f, 0.0f);
+    joints.joints[0].rows[3] = Float4(2.0f, 0.0f, 0.0f, 1.0f);
+    joints.joints[1].rows[0] = Float4(1.0f, 0.0f, 0.0f, 0.0f);
+    joints.joints[1].rows[1] = Float4(0.0f, 1.0f, 0.0f, 0.0f);
+    joints.joints[1].rows[2] = Float4(0.0f, 0.0f, 1.0f, 0.0f);
+    joints.joints[1].rows[3] = Float4(0.0f, 4.0f, 0.0f, 1.0f);
 
     NWB::Impl::DeformablePickingInputs inputs;
     inputs.jointPalette = &joints;
@@ -1391,11 +1391,11 @@ static void TestPickingRejectsSkinJointOutsidePalette(TestContext& context){
     AssignSingleJointSkin(instance, 1u);
 
     NWB::Impl::DeformableJointPaletteComponent joints;
-    joints.joints.resize(1u);
-    joints.joints[0].column0 = Float4(1.0f, 0.0f, 0.0f, 0.0f);
-    joints.joints[0].column1 = Float4(0.0f, 1.0f, 0.0f, 0.0f);
-    joints.joints[0].column2 = Float4(0.0f, 0.0f, 1.0f, 0.0f);
-    joints.joints[0].column3 = Float4(0.0f, 0.0f, 0.0f, 1.0f);
+    joints.joints.resize(1u, NWB::Impl::MakeIdentityDeformableJointMatrix());
+    joints.joints[0].rows[0] = Float4(1.0f, 0.0f, 0.0f, 0.0f);
+    joints.joints[0].rows[1] = Float4(0.0f, 1.0f, 0.0f, 0.0f);
+    joints.joints[0].rows[2] = Float4(0.0f, 0.0f, 1.0f, 0.0f);
+    joints.joints[0].rows[3] = Float4(0.0f, 0.0f, 0.0f, 1.0f);
 
     NWB::Impl::DeformablePickingInputs inputs;
     inputs.jointPalette = &joints;
@@ -1410,11 +1410,11 @@ static void TestPickingRejectsSkinJointOutsideSkeleton(TestContext& context){
     instance.skeletonJointCount = 1u;
 
     NWB::Impl::DeformableJointPaletteComponent joints;
-    joints.joints.resize(2u);
-    joints.joints[0].column0 = Float4(1.0f, 0.0f, 0.0f, 0.0f);
-    joints.joints[0].column1 = Float4(0.0f, 1.0f, 0.0f, 0.0f);
-    joints.joints[0].column2 = Float4(0.0f, 0.0f, 1.0f, 0.0f);
-    joints.joints[0].column3 = Float4(0.0f, 0.0f, 0.0f, 1.0f);
+    joints.joints.resize(2u, NWB::Impl::MakeIdentityDeformableJointMatrix());
+    joints.joints[0].rows[0] = Float4(1.0f, 0.0f, 0.0f, 0.0f);
+    joints.joints[0].rows[1] = Float4(0.0f, 1.0f, 0.0f, 0.0f);
+    joints.joints[0].rows[2] = Float4(0.0f, 0.0f, 1.0f, 0.0f);
+    joints.joints[0].rows[3] = Float4(0.0f, 0.0f, 0.0f, 1.0f);
     joints.joints[1] = joints.joints[0];
 
     NWB::Impl::DeformablePickingInputs inputs;
@@ -1451,8 +1451,8 @@ static void TestPickingIgnoresJointPaletteForUnskinnedMesh(TestContext& context)
     const NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
 
     NWB::Impl::DeformableJointPaletteComponent joints;
-    joints.joints.resize(1u);
-    joints.joints[0].column0 = Float4(1.0f, 0.0f, 0.0f, 0.25f);
+    joints.joints.resize(1u, NWB::Impl::MakeIdentityDeformableJointMatrix());
+    joints.joints[0].rows[0] = Float4(1.0f, 0.0f, 0.0f, 0.25f);
 
     NWB::Impl::DeformablePickingInputs inputs;
     inputs.jointPalette = &joints;
@@ -1473,11 +1473,11 @@ static void TestPickingRejectsNonAffineJointPalette(TestContext& context){
     AssignSingleJointSkin(instance, 0u);
 
     NWB::Impl::DeformableJointPaletteComponent joints;
-    joints.joints.resize(1u);
-    joints.joints[0].column0 = Float4(1.0f, 0.0f, 0.0f, 0.25f);
-    joints.joints[0].column1 = Float4(0.0f, 1.0f, 0.0f, 0.0f);
-    joints.joints[0].column2 = Float4(0.0f, 0.0f, 1.0f, 0.0f);
-    joints.joints[0].column3 = Float4(0.0f, 0.0f, 0.0f, 1.0f);
+    joints.joints.resize(1u, NWB::Impl::MakeIdentityDeformableJointMatrix());
+    joints.joints[0].rows[0] = Float4(1.0f, 0.0f, 0.0f, 0.25f);
+    joints.joints[0].rows[1] = Float4(0.0f, 1.0f, 0.0f, 0.0f);
+    joints.joints[0].rows[2] = Float4(0.0f, 0.0f, 1.0f, 0.0f);
+    joints.joints[0].rows[3] = Float4(0.0f, 0.0f, 0.0f, 1.0f);
 
     NWB::Impl::DeformablePickingInputs inputs;
     inputs.jointPalette = &joints;
@@ -1495,11 +1495,11 @@ static void TestPickingRejectsSingularJointPalette(TestContext& context){
     AssignSingleJointSkin(instance, 0u);
 
     NWB::Impl::DeformableJointPaletteComponent joints;
-    joints.joints.resize(1u);
-    joints.joints[0].column0 = Float4(1.0f, 0.0f, 0.0f, 0.0f);
-    joints.joints[0].column1 = Float4(0.0f, 0.0f, 0.0f, 0.0f);
-    joints.joints[0].column2 = Float4(0.0f, 0.0f, 1.0f, 0.0f);
-    joints.joints[0].column3 = Float4(0.0f, 0.0f, 0.0f, 1.0f);
+    joints.joints.resize(1u, NWB::Impl::MakeIdentityDeformableJointMatrix());
+    joints.joints[0].rows[0] = Float4(1.0f, 0.0f, 0.0f, 0.0f);
+    joints.joints[0].rows[1] = Float4(0.0f, 0.0f, 0.0f, 0.0f);
+    joints.joints[0].rows[2] = Float4(0.0f, 0.0f, 1.0f, 0.0f);
+    joints.joints[0].rows[3] = Float4(0.0f, 0.0f, 0.0f, 1.0f);
 
     NWB::Impl::DeformablePickingInputs inputs;
     inputs.jointPalette = &joints;
@@ -1513,10 +1513,10 @@ static void TestPickingRejectsUnusedNonAffineJointPalette(TestContext& context){
     AssignSingleJointSkin(instance, 0u);
 
     NWB::Impl::DeformableJointPaletteComponent joints;
-    joints.joints.resize(2u);
-    joints.joints[0] = NWB::Impl::DeformableJointMatrix{};
-    joints.joints[1] = NWB::Impl::DeformableJointMatrix{};
-    joints.joints[1].column1 = Float4(0.0f, 1.0f, 0.0f, 0.25f);
+    joints.joints.resize(2u, NWB::Impl::MakeIdentityDeformableJointMatrix());
+    joints.joints[0] = NWB::Impl::MakeIdentityDeformableJointMatrix();
+    joints.joints[1] = NWB::Impl::MakeIdentityDeformableJointMatrix();
+    joints.joints[1].rows[1] = Float4(0.0f, 1.0f, 0.0f, 0.25f);
 
     NWB::Impl::DeformablePickingInputs inputs;
     inputs.jointPalette = &joints;
@@ -1541,7 +1541,7 @@ static void TestPickingRejectsInvalidSkinWeights(TestContext& context){
     );
 
     NWB::Impl::DeformableJointPaletteComponent joints;
-    joints.joints.resize(1u);
+    joints.joints.resize(1u, NWB::Impl::MakeIdentityDeformableJointMatrix());
 
     NWB::Impl::DeformablePickingInputs inputs;
     inputs.jointPalette = &joints;
@@ -2351,10 +2351,10 @@ static void TestSkeletonPoseBuildsHierarchicalPalette(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, skinningMode == NWB::Impl::DeformableSkinningMode::LinearBlend);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, resolvedJoints.size() == 2u);
     if(resolvedJoints.size() == 2u){
-        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(resolvedJoints[0u].column3.x, 1.0f));
-        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(resolvedJoints[0u].column3.y, 0.0f));
-        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(resolvedJoints[1u].column3.x, 1.0f));
-        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(resolvedJoints[1u].column3.y, 2.0f));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(resolvedJoints[0u].rows[3].x, 1.0f));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(resolvedJoints[0u].rows[3].y, 0.0f));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(resolvedJoints[1u].rows[3].x, 1.0f));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(resolvedJoints[1u].rows[3].y, 2.0f));
     }
 
     pose.skinningMode = NWB::Impl::DeformableSkinningMode::DualQuaternion;
@@ -2428,7 +2428,7 @@ static void TestDeformerSkinPayloadValidatesSkeletonAndPalette(TestContext& cont
         NWB::Impl::DeformerSkinPayload::BuildSkinPayload(instance, &joints, skinInfluences, jointMatrices)
     );
     NWB_ECS_GRAPHICS_TEST_CHECK(context, jointMatrices.size() == 1u);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(jointMatrices[0u].column3.x, 0.75f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(jointMatrices[0u].rows[3].x, 0.75f));
     joints.joints[0u] = MakeIdentityJointMatrix();
 
     NWB::Impl::DeformableRuntimeMeshInstance dualQuaternionInstance = MakeTriangleInstance();
@@ -2441,14 +2441,14 @@ static void TestDeformerSkinPayloadValidatesSkeletonAndPalette(TestContext& cont
         NWB::Impl::DeformerSkinPayload::BuildSkinPayload(dualQuaternionInstance, &joints, skinInfluences, jointMatrices)
     );
     NWB_ECS_GRAPHICS_TEST_CHECK(context, jointMatrices.size() == 1u);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(jointMatrices[0u].column0.x, 0.0f));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(jointMatrices[0u].column0.y, 0.0f));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(jointMatrices[0u].column0.z, 0.0f));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(jointMatrices[0u].column0.w, 1.0f));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(jointMatrices[0u].column1.x, 1.0f));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(jointMatrices[0u].column1.y, 2.0f));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(jointMatrices[0u].column1.z, 3.0f));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(jointMatrices[0u].column1.w, 0.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(jointMatrices[0u].rows[0].x, 0.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(jointMatrices[0u].rows[0].y, 0.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(jointMatrices[0u].rows[0].z, 0.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(jointMatrices[0u].rows[0].w, 1.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(jointMatrices[0u].rows[1].x, 1.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(jointMatrices[0u].rows[1].y, 2.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(jointMatrices[0u].rows[1].z, 3.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(jointMatrices[0u].rows[1].w, 0.0f));
     joints.skinningMode = NWB::Impl::DeformableSkinningMode::LinearBlend;
     joints.joints[0u] = MakeIdentityJointMatrix();
 
@@ -2477,7 +2477,7 @@ static void TestDeformerSkinPayloadValidatesSkeletonAndPalette(TestContext& cont
     outsidePalette.skin[0u] = MakeSingleJointSkin(1u);
     outsidePalette.skeletonJointCount = 2u;
     outsidePalette.inverseBindMatrices.clear();
-    joints.joints.resize(1u);
+    joints.joints.resize(1u, NWB::Impl::MakeIdentityDeformableJointMatrix());
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
         !NWB::Impl::DeformerSkinPayload::BuildSkinPayload(outsidePalette, &joints, skinInfluences, jointMatrices)
@@ -2485,14 +2485,14 @@ static void TestDeformerSkinPayloadValidatesSkeletonAndPalette(TestContext& cont
 
     NWB::Impl::DeformableRuntimeMeshInstance nonAffineJoint = instance;
     joints.joints[0u] = MakeIdentityJointMatrix();
-    joints.joints[0u].column3.w = 0.0f;
+    joints.joints[0u].rows[3].w = 0.0f;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
         !NWB::Impl::DeformerSkinPayload::BuildSkinPayload(nonAffineJoint, &joints, skinInfluences, jointMatrices)
     );
 
     NWB::Impl::DeformableRuntimeMeshInstance invalidInverseBind = instance;
-    invalidInverseBind.inverseBindMatrices[0u].column3.w = 0.0f;
+    invalidInverseBind.inverseBindMatrices[0u].rows[3].w = 0.0f;
     joints.joints[0u] = MakeIdentityJointMatrix();
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
@@ -3572,8 +3572,9 @@ static void TestSurfaceEditFlowAttachesAndPersistsAccessory(TestContext& context
     );
 
     NWB::Impl::DeformableJointPaletteComponent joints;
-    joints.joints.resize(1u);
-    joints.joints[0].column3 = Float4(2.0f, 0.0f, 0.0f, 1.0f);
+    joints.joints.resize(1u, NWB::Impl::MakeIdentityDeformableJointMatrix());
+    joints.joints[0] = MakeIdentityJointMatrix();
+    joints.joints[0].rows[3] = Float4(2.0f, 0.0f, 0.0f, 1.0f);
 
     NWB::Impl::DeformablePickingInputs translatedInputs;
     translatedInputs.jointPalette = &joints;
@@ -4295,13 +4296,13 @@ static void TestMinimalMilestoneReplayPreservesAnimatedPayload(TestContext& cont
     NWB_ECS_GRAPHICS_TEST_CHECK(context, morphSignature != 0u);
 
     NWB::Impl::DeformableJointPaletteComponent joints;
-    joints.joints.resize(2u);
-    joints.joints[0u].column0 = Float4(1.0f, 0.0f, 0.0f, 0.0f);
-    joints.joints[0u].column1 = Float4(0.0f, 1.0f, 0.0f, 0.0f);
-    joints.joints[0u].column2 = Float4(0.0f, 0.0f, 1.0f, 0.0f);
-    joints.joints[0u].column3 = Float4(0.0f, 0.0f, 0.0f, 1.0f);
+    joints.joints.resize(2u, NWB::Impl::MakeIdentityDeformableJointMatrix());
+    joints.joints[0u].rows[0] = Float4(1.0f, 0.0f, 0.0f, 0.0f);
+    joints.joints[0u].rows[1] = Float4(0.0f, 1.0f, 0.0f, 0.0f);
+    joints.joints[0u].rows[2] = Float4(0.0f, 0.0f, 1.0f, 0.0f);
+    joints.joints[0u].rows[3] = Float4(0.0f, 0.0f, 0.0f, 1.0f);
     joints.joints[1u] = joints.joints[0u];
-    joints.joints[1u].column3 = Float4(0.0f, 0.25f, 0.0f, 1.0f);
+    joints.joints[1u].rows[3] = Float4(0.0f, 0.25f, 0.0f, 1.0f);
 
     NWB::Impl::DeformableDisplacementTexture displacementTexture = MakeTestDisplacementTexture(
         "tests/textures/minimal_milestone_vector_displacement",
@@ -5444,8 +5445,9 @@ static void TestSurfaceEditReplayKeepsMorphSkinDisplacementUsable(TestContext& c
     weights.weights.push_back(NWB::Impl::DeformableMorphWeight{ Name("replay_lift"), 0.5f });
 
     NWB::Impl::DeformableJointPaletteComponent joints;
-    joints.joints.resize(1u);
-    joints.joints[0].column3 = Float4(0.25f, -0.125f, 0.2f, 1.0f);
+    joints.joints.resize(1u, NWB::Impl::MakeIdentityDeformableJointMatrix());
+    joints.joints[0] = MakeIdentityJointMatrix();
+    joints.joints[0].rows[3] = Float4(0.25f, -0.125f, 0.2f, 1.0f);
 
     NWB::Impl::DeformablePickingInputs inputs;
     inputs.morphWeights = &weights;

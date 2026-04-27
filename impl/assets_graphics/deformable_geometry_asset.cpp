@@ -196,6 +196,15 @@ template<typename T>
 #endif
 
 template<typename T>
+static void ResizeVectorPayload(Vector<T>& outValues, const usize count){
+    outValues.resize(count);
+}
+
+static void ResizeVectorPayload(Vector<DeformableJointMatrix>& outValues, const usize count){
+    outValues.resize(count, DeformableJointMatrix{});
+}
+
+template<typename T>
 [[nodiscard]] bool ReadVectorPayload(
     const Core::Assets::AssetBytes& binary,
     usize& inOutCursor,
@@ -211,7 +220,7 @@ template<typename T>
         return false;
     }
 
-    outValues.resize(static_cast<usize>(count));
+    ResizeVectorPayload(outValues, static_cast<usize>(count));
     if(payloadBytes > 0)
         NWB_MEMCPY(outValues.data(), payloadBytes, binary.data() + inOutCursor, payloadBytes);
     inOutCursor += payloadBytes;

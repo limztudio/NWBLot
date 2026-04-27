@@ -38,16 +38,21 @@ struct SkinInfluence4{
 static_assert(IsStandardLayout_V<SkinInfluence4>, "SkinInfluence4 must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<SkinInfluence4>, "SkinInfluence4 must stay binary-serializable");
 
-struct DeformableJointMatrix{
-    Float4 column0 = Float4(1.0f, 0.0f, 0.0f, 0.0f);
-    Float4 column1 = Float4(0.0f, 1.0f, 0.0f, 0.0f);
-    Float4 column2 = Float4(0.0f, 0.0f, 1.0f, 0.0f);
-    Float4 column3 = Float4(0.0f, 0.0f, 0.0f, 1.0f);
-};
+// Stored vectors are deformer columns; Float44 provides the aligned 4x4 payload layout.
+using DeformableJointMatrix = Float44;
 static_assert(IsStandardLayout_V<DeformableJointMatrix>, "DeformableJointMatrix must stay GPU-uploadable");
 static_assert(IsTriviallyCopyable_V<DeformableJointMatrix>, "DeformableJointMatrix must stay GPU-uploadable");
 static_assert(sizeof(DeformableJointMatrix) == sizeof(f32) * 16u, "DeformableJointMatrix GPU layout drifted");
 static_assert(alignof(DeformableJointMatrix) >= alignof(Float4), "DeformableJointMatrix must stay SIMD-aligned");
+
+[[nodiscard]] inline DeformableJointMatrix MakeIdentityDeformableJointMatrix(){
+    DeformableJointMatrix matrix{};
+    matrix.rows[0] = Float4(1.0f, 0.0f, 0.0f, 0.0f);
+    matrix.rows[1] = Float4(0.0f, 1.0f, 0.0f, 0.0f);
+    matrix.rows[2] = Float4(0.0f, 0.0f, 1.0f, 0.0f);
+    matrix.rows[3] = Float4(0.0f, 0.0f, 0.0f, 1.0f);
+    return matrix;
+}
 
 struct SourceSample{
     u32 sourceTri = 0;

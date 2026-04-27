@@ -371,11 +371,11 @@ static void CreateRendererEntity(
         cosAngle = 1.0f;
     }
 
-    NWB::Core::ECSGraphics::DeformableJointMatrix joint;
-    joint.column0 = Float4(1.0f, 0.0f, 0.0f, 0.0f);
-    joint.column1 = Float4(0.0f, cosAngle, sinAngle, 0.0f);
-    joint.column2 = Float4(0.0f, -sinAngle, cosAngle, 0.0f);
-    joint.column3 = Float4(
+    NWB::Core::ECSGraphics::DeformableJointMatrix joint{};
+    joint.rows[0] = Float4(1.0f, 0.0f, 0.0f, 0.0f);
+    joint.rows[1] = Float4(0.0f, cosAngle, sinAngle, 0.0f);
+    joint.rows[2] = Float4(0.0f, -sinAngle, cosAngle, 0.0f);
+    joint.rows[3] = Float4(
         0.0f,
         s_DeformableSkinPivotY * (1.0f - cosAngle),
         -s_DeformableSkinPivotY * sinAngle,
@@ -393,8 +393,7 @@ static void UpdateProxySkeletonPose(
     skeletonPose.parentJoints.resize(2u);
     skeletonPose.parentJoints[0] = NWB::Core::ECSGraphics::s_DeformableSkeletonRootParent;
     skeletonPose.parentJoints[1] = 0u;
-    skeletonPose.localJoints.resize(2u);
-    skeletonPose.localJoints[0] = NWB::Core::ECSGraphics::DeformableJointMatrix{};
+    skeletonPose.localJoints.resize(2u, NWB::Core::ECSGraphics::MakeIdentityDeformableJointMatrix());
     const f32 skinAngle = VectorGetX(VectorSin(VectorReplicate(safeTimeSeconds * 0.9f)));
     skeletonPose.localJoints[1] = BuildProxySkinJoint(s_DeformableSkinMaxAngle * skinAngle);
 }

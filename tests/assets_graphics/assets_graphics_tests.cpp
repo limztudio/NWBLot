@@ -1107,8 +1107,8 @@ static NWB::Impl::SkinInfluence4 MakeRootSkin(){
 }
 
 static NWB::Impl::DeformableJointMatrix MakeJointMatrix(const f32 tx, const f32 ty, const f32 tz){
-    NWB::Impl::DeformableJointMatrix matrix;
-    matrix.column3 = Float4(tx, ty, tz, 1.0f);
+    NWB::Impl::DeformableJointMatrix matrix = NWB::Impl::MakeIdentityDeformableJointMatrix();
+    matrix.rows[3] = Float4(tx, ty, tz, 1.0f);
     return matrix;
 }
 
@@ -1387,7 +1387,7 @@ static void TestDeformableGeometryCodecRoundTrip(TestContext& context){
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skin().size() == 4u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skeletonJointCount() == 1u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.inverseBindMatrices().size() == 1u);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.inverseBindMatrices()[0u].column3.x == -0.25f);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.inverseBindMatrices()[0u].rows[3].x == -0.25f);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.sourceSamples().size() == 4u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.editMaskPerTriangle().size() == 2u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(
@@ -1850,7 +1850,7 @@ static void TestDeformableGeometryCookerNativeCharacterMock(TestContext& context
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skin().size() == 4u);
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skeletonJointCount() == 2u);
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.inverseBindMatrices().size() == 2u);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.inverseBindMatrices()[1u].column3.x == -0.25f);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.inverseBindMatrices()[1u].rows[3].x == -0.25f);
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skin()[1].joint[1] == 1u);
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skin()[1].weight[0] == 0.75f);
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.sourceSamples().size() == 4u);
@@ -2117,7 +2117,7 @@ static void TestDeformableGeometryValidationFailures(TestContext& context){
     {
         NWB::Impl::DeformableGeometry geometry = BuildValidDeformableGeometry();
         Vector<NWB::Impl::DeformableJointMatrix> inverseBindMatrices = geometry.inverseBindMatrices();
-        inverseBindMatrices[0u].column3.w = 0.0f;
+        inverseBindMatrices[0u].rows[3].w = 0.0f;
         geometry.setInverseBindMatrices(Move(inverseBindMatrices));
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !geometry.validatePayload());
     }

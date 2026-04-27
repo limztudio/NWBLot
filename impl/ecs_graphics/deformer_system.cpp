@@ -973,7 +973,7 @@ bool DeformerSystem::ensureDefaultDeformerBuffers(){
     const DeformerVertexMorphRangeGpu defaultRange{};
     const DeformerBlendedMorphDeltaGpu defaultDelta{};
     const DeformerSkinInfluenceGpu defaultSkin{};
-    const DeformableJointMatrix defaultJoint{};
+    const DeformableJointMatrix defaultJoint = MakeIdentityDeformableJointMatrix();
 
     if(!m_defaultMorphRangeBuffer){
         m_defaultMorphRangeBuffer = __hidden_deformer_system::SetupStructuredBuffer(

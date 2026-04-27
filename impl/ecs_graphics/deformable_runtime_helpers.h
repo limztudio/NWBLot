@@ -88,20 +88,12 @@ template<typename MorphVector, typename MorphWeightLookup>
 }
 
 [[nodiscard]] inline SIMDMatrix LoadJointMatrix(const DeformableJointMatrix& matrix){
-    SIMDMatrix result{};
-    result.v[0] = LoadFloat(matrix.column0);
-    result.v[1] = LoadFloat(matrix.column1);
-    result.v[2] = LoadFloat(matrix.column2);
-    result.v[3] = LoadFloat(matrix.column3);
-    return result;
+    return LoadFloat(matrix);
 }
 
 [[nodiscard]] inline DeformableJointMatrix StoreJointMatrix(const SIMDMatrix& matrix){
-    DeformableJointMatrix result;
-    StoreFloat(matrix.v[0], &result.column0);
-    StoreFloat(matrix.v[1], &result.column1);
-    StoreFloat(matrix.v[2], &result.column2);
-    StoreFloat(matrix.v[3], &result.column3);
+    DeformableJointMatrix result{};
+    StoreFloat(matrix, &result);
     return result;
 }
 
@@ -311,8 +303,8 @@ template<typename JointMatrixVector>
     const SIMDVector dual)
 {
     DeformableJointMatrix result{};
-    StoreFloat(real, &result.column0);
-    StoreFloat(dual, &result.column1);
+    StoreFloat(real, &result.rows[0]);
+    StoreFloat(dual, &result.rows[1]);
     return result;
 }
 

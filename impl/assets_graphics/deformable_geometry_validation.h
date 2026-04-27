@@ -282,10 +282,11 @@ struct MorphPayloadFailureInfo{
 }
 
 [[nodiscard]] inline bool ValidAffineJointMatrix(const DeformableJointMatrix& matrix){
-    const SIMDVector column0 = LoadFloat(matrix.column0);
-    const SIMDVector column1 = LoadFloat(matrix.column1);
-    const SIMDVector column2 = LoadFloat(matrix.column2);
-    const SIMDVector column3 = LoadFloat(matrix.column3);
+    const SIMDMatrix simdMatrix = LoadFloat(matrix);
+    const SIMDVector column0 = simdMatrix.v[0];
+    const SIMDVector column1 = simdMatrix.v[1];
+    const SIMDVector column2 = simdMatrix.v[2];
+    const SIMDVector column3 = simdMatrix.v[3];
     const SIMDVector affineW = VectorSet(
         VectorGetW(column0),
         VectorGetW(column1),

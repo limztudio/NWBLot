@@ -1465,29 +1465,29 @@ static bool ParseInverseBindMatrices(
             return false;
         }
 
-        DeformableJointMatrix matrix;
+        DeformableJointMatrix matrix{};
         const auto& columns = matrixValue.asList();
         f32 column[4] = {};
         AString label = MakeIndexedLabel("inverse_bind_matrices", matrixIndex);
         AString columnLabel = MakeIndexedLabel(label, 0u);
         if(!ParseMetadataF32Tuple(nwbFilePath, columns[0u], "Deformable geometry", columnLabel, column))
             return false;
-        matrix.column0 = Float4(column[0u], column[1u], column[2u], column[3u]);
+        matrix.rows[0] = Float4(column[0u], column[1u], column[2u], column[3u]);
 
         columnLabel = MakeIndexedLabel(label, 1u);
         if(!ParseMetadataF32Tuple(nwbFilePath, columns[1u], "Deformable geometry", columnLabel, column))
             return false;
-        matrix.column1 = Float4(column[0u], column[1u], column[2u], column[3u]);
+        matrix.rows[1] = Float4(column[0u], column[1u], column[2u], column[3u]);
 
         columnLabel = MakeIndexedLabel(label, 2u);
         if(!ParseMetadataF32Tuple(nwbFilePath, columns[2u], "Deformable geometry", columnLabel, column))
             return false;
-        matrix.column2 = Float4(column[0u], column[1u], column[2u], column[3u]);
+        matrix.rows[2] = Float4(column[0u], column[1u], column[2u], column[3u]);
 
         columnLabel = MakeIndexedLabel(label, 3u);
         if(!ParseMetadataF32Tuple(nwbFilePath, columns[3u], "Deformable geometry", columnLabel, column))
             return false;
-        matrix.column3 = Float4(column[0u], column[1u], column[2u], column[3u]);
+        matrix.rows[3] = Float4(column[0u], column[1u], column[2u], column[3u]);
 
         if(!DeformableValidation::ValidAffineJointMatrix(matrix)){
             NWB_LOGGER_ERROR(

@@ -32,7 +32,7 @@ public:
 
 
 inline constexpr tchar CLIENT_NAME[] = NWB_TEXT("Client");
-class Client : public IClient, public BaseUpdateIfQueued<Client, CLIENT_NAME>{
+class Client final : public IClient, public BaseUpdateIfQueued<Client, CLIENT_NAME>{
     template<typename, const tchar*> friend class Base;
     template<typename, const tchar*> friend class BaseUpdateIfQueued;
 
@@ -92,7 +92,7 @@ private:
 
 
 inline constexpr tchar CLIENT_STANDALONE_NAME[] = NWB_TEXT("ClientStandalone");
-class ClientStandalone : public IClient, public BaseUpdateIfQueued<ClientStandalone, CLIENT_STANDALONE_NAME>{
+class ClientStandalone final : public IClient, public BaseUpdateIfQueued<ClientStandalone, CLIENT_STANDALONE_NAME>{
     template<typename, const tchar*> friend class Base;
     template<typename, const tchar*> friend class BaseUpdateIfQueued;
 

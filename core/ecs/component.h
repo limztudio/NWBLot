@@ -72,7 +72,7 @@ public:
 
 
 template<typename T>
-class ComponentPool : public IComponentPool{
+class ComponentPool final : public IComponentPool{
     friend struct ECSDetail::ViewTupleAccess;
 
 

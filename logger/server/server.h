@@ -20,7 +20,7 @@ NWB_LOG_BEGIN
 
 
 inline constexpr tchar SERVER_NAME[] = NWB_TEXT("Server");
-class Server : public BaseUpdateOrdinary<Server, 0.1f, SERVER_NAME>{
+class Server final : public BaseUpdateOrdinary<Server, 0.1f, SERVER_NAME>{
     template<typename, const tchar*> friend class Base;
     template<typename, f32, const tchar*> friend class BaseUpdateOrdinary;
 

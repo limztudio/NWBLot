@@ -21,6 +21,7 @@
 #include <core/graphics/shader_cook.h>
 
 #include <core/filesystem/filesystem.h>
+#include <core/geometry/tangent_frame_rebuild.h>
 #include <core/metascript/parser.h>
 #include <core/alloc/core.h>
 #include <core/alloc/scratch.h>
@@ -1227,6 +1228,25 @@ static bool IsExplicitEmptyOptionalField(const Core::Metascript::Value& value){
     return (value.isList() && value.asList().empty()) || (value.isMap() && value.asMap().empty());
 }
 
+template<typename ElementT, usize ComponentCount, typename ElementVectorT>
+static bool ParseOptionalFloatListField(
+    const Path& nwbFilePath,
+    const Core::Metascript::Value& asset,
+    const AStringView fieldName,
+    ElementVectorT& outValues,
+    bool& outProvided)
+{
+    outValues.clear();
+    outProvided = false;
+
+    const Core::Metascript::Value* field = FindField(asset, fieldName);
+    if(!field || IsExplicitEmptyOptionalField(*field))
+        return true;
+
+    outProvided = true;
+    return ParseFloatListField<ElementT, ComponentCount>(nwbFilePath, asset, fieldName, outValues);
+}
+
 static bool ParseDeformableIndexType(const Path& nwbFilePath, const Core::Metascript::Value& asset, bool& outUse32BitIndices){
     return ParseMetadataIndexType(nwbFilePath, asset, s_DeformableGeometryMetaKind, outUse32BitIndices);
 }
@@ -1272,6 +1292,43 @@ static bool BuildDeformableRestVertices(
         vertex.uv0 = uv0[i];
         vertex.color0 = colors[i];
         outVertices.push_back(vertex);
+    }
+    return true;
+}
+
+static bool GenerateMissingDeformableFrames(
+    const Path& nwbFilePath,
+    const bool normalsProvided,
+    const bool tangentsProvided,
+    Vector<DeformableVertexRest>& vertices,
+    const Vector<u32>& indices)
+{
+    if(normalsProvided && tangentsProvided)
+        return true;
+
+    Vector<Core::Geometry::TangentFrameRebuildVertex> rebuildVertices;
+    rebuildVertices.reserve(vertices.size());
+    for(const DeformableVertexRest& vertex : vertices){
+        Core::Geometry::TangentFrameRebuildVertex rebuildVertex;
+        rebuildVertex.position = vertex.position;
+        rebuildVertex.uv0 = vertex.uv0;
+        rebuildVertex.normal = vertex.normal;
+        rebuildVertex.tangent = vertex.tangent;
+        rebuildVertices.push_back(rebuildVertex);
+    }
+
+    Core::Geometry::TangentFrameRebuildResult rebuildResult;
+    if(!Core::Geometry::RebuildTangentFrames(rebuildVertices, indices, &rebuildResult)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Deformable geometry meta '{}': failed to generate missing normal/tangent frames"),
+            PathToString<tchar>(nwbFilePath)
+        );
+        return false;
+    }
+
+    for(usize vertexIndex = 0u; vertexIndex < vertices.size(); ++vertexIndex){
+        vertices[vertexIndex].normal = rebuildVertices[vertexIndex].normal;
+        vertices[vertexIndex].tangent = rebuildVertices[vertexIndex].tangent;
     }
     return true;
 }
@@ -1930,12 +1987,34 @@ static bool ParseDeformableGeometryMeta(
         return false;
     if(!ParseFloatListField<Float3U, 3u>(discoveredFile.filePath, asset, "positions", positions))
         return false;
-    if(!ParseFloatListField<Float3U, 3u>(discoveredFile.filePath, asset, "normals", normals))
+    bool normalsProvided = false;
+    bool tangentsProvided = false;
+    if(!ParseOptionalFloatListField<Float3U, 3u>(
+            discoveredFile.filePath,
+            asset,
+            "normals",
+            normals,
+            normalsProvided
+        )
+    )
         return false;
-    if(!ParseFloatListField<Float4U, 4u>(discoveredFile.filePath, asset, "tangents", tangents))
+    if(!ParseOptionalFloatListField<Float4U, 4u>(
+            discoveredFile.filePath,
+            asset,
+            "tangents",
+            tangents,
+            tangentsProvided
+        )
+    )
         return false;
     if(!ParseFloatListField<Float2U, 2u>(discoveredFile.filePath, asset, "uv0", uv0))
         return false;
+    if(!ParseDeformableIndexField(discoveredFile.filePath, asset, outEntry.use32BitIndices, outEntry.indices))
+        return false;
+    if(!normalsProvided)
+        normals.assign(positions.size(), Float3U(0.0f, 0.0f, 1.0f));
+    if(!tangentsProvided)
+        tangents.assign(positions.size(), Float4U(1.0f, 0.0f, 0.0f, 1.0f));
     const Core::Metascript::Value* colorsField = FindField(asset, "colors");
     if(colorsField && !IsExplicitEmptyOptionalField(*colorsField)){
         if(!ParseFloatListField<Float4U, 4u>(discoveredFile.filePath, asset, "colors", colors))
@@ -1944,7 +2023,14 @@ static bool ParseDeformableGeometryMeta(
         BuildDefaultColors(positions.size(), colors);
     if(!BuildDeformableRestVertices(discoveredFile.filePath, positions, normals, tangents, uv0, colors, outEntry.restVertices))
         return false;
-    if(!ParseDeformableIndexField(discoveredFile.filePath, asset, outEntry.use32BitIndices, outEntry.indices))
+    if(!GenerateMissingDeformableFrames(
+            discoveredFile.filePath,
+            normalsProvided,
+            tangentsProvided,
+            outEntry.restVertices,
+            outEntry.indices
+        )
+    )
         return false;
     if(!ParseSkinInfluences(discoveredFile.filePath, asset, outEntry.restVertices.size(), outEntry.skin))
         return false;

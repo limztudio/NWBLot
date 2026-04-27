@@ -219,6 +219,30 @@ asset.skin = {};
 asset.morphs = {};
 )";
 
+static constexpr AStringView s_GeneratedFrameDeformableMeta = R"(deformable_geometry asset;
+
+asset.index_type = "u16";
+
+asset.positions = [
+    [-0.5, -0.5, 0.0],
+    [ 0.5, -0.5, 0.0],
+    [ 0.0,  0.5, 0.0],
+];
+
+asset.uv0 = [
+    [0.0, 0.0],
+    [1.0, 0.0],
+    [0.5, 1.0],
+];
+
+asset.indices = [
+    [0, 1, 2],
+];
+
+asset.skin = {};
+asset.morphs = {};
+)";
+
 static constexpr AStringView s_U32IndexTypeDeformableMeta = R"(deformable_geometry asset;
 
 asset.index_type = "u32";
@@ -1684,6 +1708,46 @@ static void TestDeformableGeometryCookerMinimalAsset(TestContext& context){
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 0u);
 }
 
+static void TestDeformableGeometryCookerGeneratesMissingFrames(TestContext& context){
+    CapturingLogger logger;
+    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
+
+    TestArena testArena;
+    Path root;
+    UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
+    if(!CookAndLoadMinimalDeformable(
+        context,
+        testArena,
+        s_GeneratedFrameDeformableMeta,
+        "generated_frames",
+        root,
+        loadedAsset
+    ))
+        return;
+
+    {
+        const NWB::Impl::DeformableGeometry& loadedGeometry =
+            static_cast<const NWB::Impl::DeformableGeometry&>(*loadedAsset)
+        ;
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.restVertices().size() == 3u);
+        for(const NWB::Impl::DeformableVertexRest& vertex : loadedGeometry.restVertices()){
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, vertex.normal.x == 0.0f);
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, vertex.normal.y == 0.0f);
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, vertex.normal.z == 1.0f);
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, vertex.tangent.x == 1.0f);
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, vertex.tangent.y == 0.0f);
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, vertex.tangent.z == 0.0f);
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, vertex.tangent.w == 1.0f);
+        }
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.sourceSamples().size() == 3u);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.sourceSamples()[2u].bary[2u] == 1.0f);
+    }
+
+    ErrorCode errorCode;
+    static_cast<void>(RemoveAllIfExists(root, errorCode));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 0u);
+}
+
 static void TestDeformableGeometryCookerU32IndexType(TestContext& context){
     CapturingLogger logger;
     NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
@@ -2244,6 +2308,7 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
     __hidden_assets_graphics_tests::TestGeometryCookerDefaultColors(context);
     __hidden_assets_graphics_tests::TestGeometryCookerValidationFailures(context);
     __hidden_assets_graphics_tests::TestDeformableGeometryCookerMinimalAsset(context);
+    __hidden_assets_graphics_tests::TestDeformableGeometryCookerGeneratesMissingFrames(context);
     __hidden_assets_graphics_tests::TestDeformableGeometryCookerU32IndexType(context);
     __hidden_assets_graphics_tests::TestDeformableGeometryCookerExplicitEmptyOptionalLists(context);
     __hidden_assets_graphics_tests::TestDeformableGeometryCookerNativeCharacterMock(context);

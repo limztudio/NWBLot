@@ -28,6 +28,7 @@ namespace __hidden_assets_graphics_tests{
 
 
 using TestContext = NWB::Tests::TestContext;
+using CapturingLogger = NWB::Tests::CapturingLogger;
 
 
 #define NWB_ASSETS_GRAPHICS_TEST_CHECK(context, expression) (context).checkTrue((expression), #expression, __FILE__, __LINE__)
@@ -60,38 +61,6 @@ struct TestArena{
             &AssetsGraphicsTestFreeAligned
         )
     {}
-};
-
-
-class CapturingLogger final : public NWB::Log::IClient{
-public:
-    virtual void enqueue(TString&& str, NWB::Log::Type::Enum type = NWB::Log::Type::Info)override{
-        record(str, type);
-    }
-    virtual void enqueue(const TString& str, NWB::Log::Type::Enum type = NWB::Log::Type::Info)override{
-        record(str, type);
-    }
-
-    [[nodiscard]] u32 errorCount()const{ return m_errorCount; }
-    [[nodiscard]] bool sawErrorContaining(const tchar* text)const{
-        for(const TString& error : m_errors){
-            if(error.find(text) != TString::npos)
-                return true;
-        }
-        return false;
-    }
-
-private:
-    void record(const TString& str, const NWB::Log::Type::Enum type){
-        if(type == NWB::Log::Type::Error){
-            ++m_errorCount;
-            m_errors.push_back(str);
-        }
-    }
-
-private:
-    u32 m_errorCount = 0;
-    Vector<TString> m_errors;
 };
 
 

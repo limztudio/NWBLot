@@ -46,17 +46,7 @@ static void SceneTestFreeAligned(void* ptr){
 }
 
 
-struct TestWorld{
-    NWB::Core::Alloc::CustomArena arena;
-    NWB::Core::Alloc::ThreadPool threadPool;
-    NWB::Core::ECS::World world;
-
-    TestWorld()
-        : arena(&SceneTestAlloc, &SceneTestFree, &SceneTestAllocAligned, &SceneTestFreeAligned)
-        , threadPool(0)
-        , world(arena, threadPool)
-    {}
-};
+using TestWorld = NWB::Tests::EcsTestWorld<&SceneTestAlloc, &SceneTestFree, &SceneTestAllocAligned, &SceneTestFreeAligned>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

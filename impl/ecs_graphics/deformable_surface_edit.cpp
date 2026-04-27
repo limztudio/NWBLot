@@ -238,17 +238,7 @@ using MorphDeltaLookup = HashMap<
         return false;
     if(!ValidDeformableDisplacementDescriptor(instance.displacement))
         return false;
-    return DeformableValidation::ValidRuntimePayloadArrays(
-        instance.restVertices,
-        instance.indices,
-        instance.sourceTriangleCount,
-        instance.skeletonJointCount,
-        instance.skin,
-        instance.inverseBindMatrices,
-        instance.sourceSamples,
-        instance.editMaskPerTriangle,
-        instance.morphs
-    );
+    return ValidRuntimeMeshPayloadArrays(instance);
 }
 
 [[nodiscard]] DeformableSurfaceEditPermission::Enum ResolveSurfaceEditPermission(const DeformableEditMaskFlags flags){

@@ -33,41 +33,10 @@ namespace __hidden_ecs_graphics_tests{
 
 
 using TestContext = NWB::Tests::TestContext;
+using CapturingLogger = NWB::Tests::CapturingLogger;
 
 
 #define NWB_ECS_GRAPHICS_TEST_CHECK(context, expression) (context).checkTrue((expression), #expression, __FILE__, __LINE__)
-
-
-class CapturingLogger final : public NWB::Log::IClient{
-public:
-    virtual void enqueue(TString&& str, NWB::Log::Type::Enum type = NWB::Log::Type::Info)override{
-        record(str, type);
-    }
-    virtual void enqueue(const TString& str, NWB::Log::Type::Enum type = NWB::Log::Type::Info)override{
-        record(str, type);
-    }
-
-    [[nodiscard]] u32 errorCount()const{ return m_errorCount; }
-    [[nodiscard]] bool sawErrorContaining(const tchar* text)const{
-        for(const TString& error : m_errors){
-            if(error.find(text) != TString::npos)
-                return true;
-        }
-        return false;
-    }
-
-private:
-    void record(const TString& str, const NWB::Log::Type::Enum type){
-        if(type == NWB::Log::Type::Error){
-            ++m_errorCount;
-            m_errors.push_back(str);
-        }
-    }
-
-private:
-    u32 m_errorCount = 0;
-    Vector<TString> m_errors;
-};
 
 
 static constexpr AStringView s_MockAccessoryGeometryPath = "project/meshes/mock_earring";
@@ -144,17 +113,7 @@ static void ECSTestFreeAligned(void* ptr){
     NWB::Core::Alloc::CoreFreeAligned(ptr, "NWB::Tests::ECSGraphics::FreeAligned");
 }
 
-struct TestWorld{
-    NWB::Core::Alloc::CustomArena arena;
-    NWB::Core::Alloc::ThreadPool threadPool;
-    NWB::Core::ECS::World world;
-
-    TestWorld()
-        : arena(&ECSTestAlloc, &ECSTestFree, &ECSTestAllocAligned, &ECSTestFreeAligned)
-        , threadPool(0)
-        , world(arena, threadPool)
-    {}
-};
+using TestWorld = NWB::Tests::EcsTestWorld<&ECSTestAlloc, &ECSTestFree, &ECSTestAllocAligned, &ECSTestFreeAligned>;
 
 template<typename AssetT>
 class TestAssetCodec final : public NWB::Core::Assets::TypedAssetCodec<AssetT>{

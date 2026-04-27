@@ -336,6 +336,20 @@ template<typename JointMatrixVector>
     return Vector3Rotate(direction, real);
 }
 
+[[nodiscard]] inline bool ValidRuntimeMeshPayloadArrays(const DeformableRuntimeMeshInstance& instance){
+    return DeformableValidation::ValidRuntimePayloadArrays(
+        instance.restVertices,
+        instance.indices,
+        instance.sourceTriangleCount,
+        instance.skeletonJointCount,
+        instance.skin,
+        instance.inverseBindMatrices,
+        instance.sourceSamples,
+        instance.editMaskPerTriangle,
+        instance.morphs
+    );
+}
+
 [[nodiscard]] inline bool ValidateTriangleIndex(const DeformableRuntimeMeshInstance& instance, const u32 triangle, u32 (&outIndices)[3]){
     const usize indexBase = static_cast<usize>(triangle) * 3u;
     if(indexBase > instance.indices.size() || instance.indices.size() - indexBase < 3u)

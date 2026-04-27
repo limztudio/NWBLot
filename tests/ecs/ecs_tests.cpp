@@ -50,17 +50,7 @@ static void ECSTestFreeAligned(void* ptr){
 }
 
 
-struct TestWorld{
-    NWB::Core::Alloc::CustomArena arena;
-    NWB::Core::Alloc::ThreadPool threadPool;
-    NWB::Core::ECS::World world;
-
-    TestWorld()
-        : arena(&ECSTestAlloc, &ECSTestFree, &ECSTestAllocAligned, &ECSTestFreeAligned)
-        , threadPool(0)
-        , world(arena, threadPool)
-    {}
-};
+using TestWorld = NWB::Tests::EcsTestWorld<&ECSTestAlloc, &ECSTestFree, &ECSTestAllocAligned, &ECSTestFreeAligned>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

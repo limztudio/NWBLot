@@ -476,7 +476,7 @@ void ApplyDisplacement(
         return;
 
     f32 scalarOffset = 0.0f;
-    SIMDVector vectorOffset = VectorZero();
+    SIMDVector worldOffset = VectorZero();
     if(displacement.mode == DeformableDisplacementMode::ScalarUvRamp){
         scalarOffset = Saturate(vertex.uv0.x) * displacement.amplitude;
     }
@@ -489,11 +489,13 @@ void ApplyDisplacement(
             scalarOffset = (sample.x + displacement.bias) * displacement.amplitude;
         }
         else{
-            const SIMDVector sampleVector = VectorAdd(
-                VectorSetW(LoadFloat(sample), 0.0f),
-                VectorReplicate(displacement.bias)
+            worldOffset = VectorTextureOffsetToFrame(
+                displacement,
+                displacement.mode,
+                sample,
+                LoadRestVertexNormal(vertex),
+                LoadRestVertexTangent(vertex)
             );
-            vectorOffset = VectorMultiply(sampleVector, VectorReplicate(displacement.amplitude));
         }
     }
 
@@ -513,27 +515,6 @@ void ApplyDisplacement(
         return;
     }
 
-    if(!DeformableValidation::FiniteVector(vectorOffset, 0x7u))
-        return;
-
-    SIMDVector worldOffset = vectorOffset;
-    if(displacement.mode == DeformableDisplacementMode::VectorTangentTexture){
-        const SIMDVector normal = LoadRestVertexNormal(vertex);
-        const SIMDVector tangent = VectorSetW(LoadRestVertexTangent(vertex), 0.0f);
-        const SIMDVector bitangent = VectorMultiply(
-            Core::Geometry::FrameResolveBitangent(normal, tangent, VectorSet(0.0f, 1.0f, 0.0f, 0.0f)),
-            VectorReplicate(Core::Geometry::FrameTangentHandedness(vertex.tangent.w, 1.0f))
-        );
-        worldOffset = VectorMultiplyAdd(
-            normal,
-            VectorReplicate(VectorGetZ(vectorOffset)),
-            VectorMultiplyAdd(
-                bitangent,
-                VectorReplicate(VectorGetY(vectorOffset)),
-                VectorMultiply(tangent, VectorReplicate(VectorGetX(vectorOffset)))
-            )
-        );
-    }
     if(!DeformableValidation::FiniteVector(worldOffset, 0x7u))
         return;
     if(texture)
@@ -612,18 +593,7 @@ void ApplyTransform(const Core::Scene::TransformComponent* transform, Deformable
 template<typename VertexVector>
 [[nodiscard]] bool BuildPickingVertices(const DeformableRuntimeMeshInstance& instance, const DeformablePickingInputs& inputs, VertexVector& outVertices){
     outVertices.clear();
-    if(!DeformableValidation::ValidRuntimePayloadArrays(
-            instance.restVertices,
-            instance.indices,
-            instance.sourceTriangleCount,
-            instance.skeletonJointCount,
-            instance.skin,
-            instance.inverseBindMatrices,
-            instance.sourceSamples,
-            instance.editMaskPerTriangle,
-            instance.morphs
-        )
-    )
+    if(!ValidRuntimeMeshPayloadArrays(instance))
         return false;
 
     DeformableDisplacement displacement;

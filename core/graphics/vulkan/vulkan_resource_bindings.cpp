@@ -481,8 +481,8 @@ bool Device::createPipelineLayoutForBindingLayouts(
     Vector<VkDescriptorSetLayout, Alloc::ScratchAllocator<VkDescriptorSetLayout>> descriptorSetLayouts{
         Alloc::ScratchAllocator<VkDescriptorSetLayout>(scratchArena)
     };
-    descriptorSetLayouts.reserve(bindingLayouts.size());
     u32 pushConstantByteSize = 0;
+    usize descriptorSetLayoutCount = 0;
 
     for(u32 i = 0; i < static_cast<u32>(bindingLayouts.size()); ++i){
         auto* layout = checked_cast<BindingLayout*>(bindingLayouts[i].get());
@@ -495,6 +495,20 @@ bool Device::createPipelineLayoutForBindingLayouts(
             pushConstantByteSize,
             VulkanDetail::GetPushConstantByteSize(layout->getBindingLayoutDesc())
         );
+        if(layout->m_descriptorSetLayouts.size() > static_cast<usize>(Limit<u32>::s_Max) - descriptorSetLayoutCount){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Vulkan: Failed to create {}: descriptor set layout count exceeds u32 limits"),
+                operationName
+            );
+            return false;
+        }
+        descriptorSetLayoutCount += layout->m_descriptorSetLayouts.size();
+    }
+
+    descriptorSetLayouts.reserve(descriptorSetLayoutCount);
+    for(const auto& bindingLayout : bindingLayouts){
+        auto* layout = checked_cast<BindingLayout*>(bindingLayout.get());
+        NWB_ASSERT(layout != nullptr);
         for(const auto& descriptorSetLayout : layout->m_descriptorSetLayouts)
             descriptorSetLayouts.push_back(descriptorSetLayout);
     }

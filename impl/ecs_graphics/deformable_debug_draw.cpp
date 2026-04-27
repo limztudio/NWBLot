@@ -4,7 +4,7 @@
 
 #include "deformable_debug_draw.h"
 
-#include "deformable_runtime_helpers.h"
+#include "deformable_displacement_runtime.h"
 
 #include <core/geometry/frame_math.h>
 

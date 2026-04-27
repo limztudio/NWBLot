@@ -9,7 +9,7 @@
 
 #include <core/assets/asset_manager.h>
 #include <core/graphics/graphics.h>
-#include <impl/assets_graphics/deformable_geometry_asset.h>
+#include <impl/assets_graphics/deformable_geometry_types.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

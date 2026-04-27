@@ -5,6 +5,7 @@
 #include "project_testbed.h"
 
 #include <global/simplemath.h>
+#include <impl/assets_graphics/deformable_geometry_asset.h>
 #include <logger/client/logger.h>
 
 

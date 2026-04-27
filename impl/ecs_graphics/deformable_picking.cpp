@@ -4,7 +4,7 @@
 
 #include "deformable_picking.h"
 
-#include "deformable_runtime_helpers.h"
+#include "deformable_displacement_runtime.h"
 #include "renderer_system.h"
 
 #include <core/alloc/scratch.h>

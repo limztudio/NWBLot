@@ -9,7 +9,7 @@
 
 #include <core/assets/asset_ref.h>
 #include <core/ecs/entity_id.h>
-#include <impl/assets_graphics/deformable_geometry_asset.h>
+#include <impl/assets_graphics/deformable_geometry_types.h>
 
 #include <cstddef>
 

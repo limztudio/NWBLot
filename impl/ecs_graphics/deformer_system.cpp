@@ -6,7 +6,7 @@
 
 #include "deformer_morph_payload.h"
 #include "deformer_skin_payload.h"
-#include "deformable_runtime_helpers.h"
+#include "deformable_displacement_runtime.h"
 #include "renderer_system.h"
 
 #include <core/alloc/scratch.h>

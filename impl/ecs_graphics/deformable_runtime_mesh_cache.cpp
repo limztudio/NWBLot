@@ -6,6 +6,7 @@
 
 #include <core/alloc/scratch.h>
 #include <core/ecs/world.h>
+#include <impl/assets_graphics/deformable_geometry_asset.h>
 #include <impl/assets_graphics/deformable_geometry_validation.h>
 #include <logger/client/logger.h>
 

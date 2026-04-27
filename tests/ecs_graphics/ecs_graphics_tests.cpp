@@ -14,6 +14,7 @@
 #include <core/common/common.h>
 #include <core/ecs/ecs.h>
 #include <core/scene/transform_component.h>
+#include <impl/assets_graphics/deformable_geometry_asset.h>
 #include <impl/assets_graphics/geometry_asset.h>
 #include <impl/assets_graphics/material_asset.h>
 #include <logger/client/logger.h>

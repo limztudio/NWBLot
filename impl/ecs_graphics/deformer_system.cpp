@@ -167,13 +167,6 @@ static Core::BufferHandle SetupStructuredBuffer(
     return graphics.setupBuffer(setup);
 }
 
-[[nodiscard]] bool DisplacementModeUsesTexture(const u32 mode){
-    return mode == DeformableDisplacementMode::ScalarTexture
-        || mode == DeformableDisplacementMode::VectorTangentTexture
-        || mode == DeformableDisplacementMode::VectorObjectTexture
-    ;
-}
-
 [[nodiscard]] Core::TextureHandle SetupDisplacementTexture(
     Core::Graphics& graphics,
     const Name& debugName,
@@ -754,7 +747,7 @@ bool DeformerSystem::ensureRuntimeResources(
         return false;
     }
     const bool hasTextureDisplacement = hasDisplacement
-        && __hidden_deformer_system::DisplacementModeUsesTexture(displacement.mode)
+        && DeformableDisplacementModeUsesTexture(displacement.mode)
     ;
     const Name displacementTextureName = hasTextureDisplacement ? displacement.texture.name() : NAME_NONE;
 
@@ -1074,7 +1067,7 @@ bool DeformerSystem::ensureDisplacementTexture(
     Core::TextureHandle& outTexture)
 {
     outTexture = nullptr;
-    if(!__hidden_deformer_system::DisplacementModeUsesTexture(displacement.mode)){
+    if(!DeformableDisplacementModeUsesTexture(displacement.mode)){
         outTexture = m_defaultDisplacementTexture;
         return static_cast<bool>(outTexture);
     }

@@ -350,18 +350,11 @@ template<typename JointMatrixVector>
     ;
 }
 
-[[nodiscard]] inline bool DisplacementModeUsesTexture(const u32 mode){
-    return mode == DeformableDisplacementMode::ScalarTexture
-        || mode == DeformableDisplacementMode::VectorTangentTexture
-        || mode == DeformableDisplacementMode::VectorObjectTexture
-    ;
-}
-
 [[nodiscard]] inline bool ValidateDisplacementTexture(
     const DeformableDisplacement& displacement,
     const DeformableDisplacementTexture* texture)
 {
-    if(!DisplacementModeUsesTexture(displacement.mode))
+    if(!DeformableDisplacementModeUsesTexture(displacement.mode))
         return true;
 
     return texture

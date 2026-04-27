@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "deformable_geometry_asset.h"
+#include "deformable_geometry_types.h"
 
 #include <core/alloc/scratch.h>
 #include <core/geometry/tangent_frame_rebuild.h>

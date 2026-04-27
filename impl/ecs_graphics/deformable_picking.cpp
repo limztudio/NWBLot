@@ -347,7 +347,7 @@ template<typename PreparedJointPaletteVector>
 {
     outLoadedAsset.reset();
     outTexture = inputTexture;
-    if(!DisplacementModeUsesTexture(displacement.mode))
+    if(!DeformableDisplacementModeUsesTexture(displacement.mode))
         return true;
     if(ValidateDisplacementTexture(displacement, outTexture))
         return true;

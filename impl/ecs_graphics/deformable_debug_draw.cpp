@@ -81,7 +81,7 @@ static constexpr f32 s_DisplacementLineScale = 1.0f;
 {
     if(displacement.mode == DeformableDisplacementMode::ScalarUvRamp)
         return true;
-    if(!DeformableRuntime::DisplacementModeUsesTexture(displacement.mode))
+    if(!DeformableDisplacementModeUsesTexture(displacement.mode))
         return false;
 
     return DeformableRuntime::ValidateDisplacementTexture(displacement, texture);

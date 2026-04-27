@@ -84,13 +84,6 @@ static constexpr AStringView s_AccessoryMaterialPath = "project/materials/mat_ac
     }
 }
 
-[[nodiscard]] static bool DeformableDisplacementModeUsesTexture(const u32 mode){
-    return mode == NWB::Impl::DeformableDisplacementMode::ScalarTexture
-        || mode == NWB::Impl::DeformableDisplacementMode::VectorTangentTexture
-        || mode == NWB::Impl::DeformableDisplacementMode::VectorObjectTexture
-    ;
-}
-
 [[nodiscard]] static const NWB::Impl::DeformableDisplacementTexture* ResolveSurfaceEditDebugDisplacementTexture(
     const NWB::Core::ECSGraphics::DeformableRuntimeMeshInstance& instance,
     NWB::Core::Assets::AssetManager& assetManager,
@@ -98,7 +91,7 @@ static constexpr AStringView s_AccessoryMaterialPath = "project/materials/mat_ac
 {
     outLoadedAsset.reset();
     const NWB::Impl::DeformableDisplacement& displacement = instance.displacement;
-    if(!DeformableDisplacementModeUsesTexture(displacement.mode) || !displacement.texture.valid())
+    if(!NWB::Impl::DeformableDisplacementModeUsesTexture(displacement.mode) || !displacement.texture.valid())
         return nullptr;
 
     if(!assetManager.loadSync(

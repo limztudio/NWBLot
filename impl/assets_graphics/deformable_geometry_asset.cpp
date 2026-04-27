@@ -66,13 +66,6 @@ struct DeformableDisplacementBinary{
 static_assert(IsStandardLayout_V<DeformableDisplacementBinary>, "DeformableDisplacementBinary must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<DeformableDisplacementBinary>, "DeformableDisplacementBinary must stay binary-serializable");
 
-[[nodiscard]] bool DisplacementModeUsesTexture(const u32 mode){
-    return mode == DeformableDisplacementMode::ScalarTexture
-        || mode == DeformableDisplacementMode::VectorTangentTexture
-        || mode == DeformableDisplacementMode::VectorObjectTexture
-    ;
-}
-
 [[nodiscard]] bool StableTextMatchesName(const CompactString& text, const Name& name){
     return !text.empty() && Name(text.view()) == name;
 }
@@ -126,7 +119,7 @@ static_assert(IsTriviallyCopyable_V<DeformableDisplacementBinary>, "DeformableDi
     DeformableDisplacementBinary& outBinary)
 {
     outBinary = DeformableDisplacementBinary{};
-    if(DisplacementModeUsesTexture(displacement.mode)){
+    if(DeformableDisplacementModeUsesTexture(displacement.mode)){
         if(!StableTextMatchesName(texturePathText, displacement.texture.name()))
             return false;
         if(!AppendStringTableText(stringTable, texturePathText.view(), outBinary.texturePathOffset))
@@ -845,7 +838,7 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
         m_morphs[morphIndex].name = Name(morphNameText.view());
         m_morphs[morphIndex].nameText = Move(morphNameText);
     }
-    if(__hidden_deformable_geometry_asset::DisplacementModeUsesTexture(displacementBinary.mode)){
+    if(DeformableDisplacementModeUsesTexture(displacementBinary.mode)){
         CompactString texturePathText;
         if(!__hidden_deformable_geometry_asset::ReadStringTableText(
                 binary,

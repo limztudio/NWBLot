@@ -17,7 +17,7 @@ layout(std430, set = 1, binding = 4) buffer NwbAvboitExtinctionBuffer{
     uint g_Extinction[];
 };
 
-layout(location = 0) in vec4 inColor;
+layout(location = 0) in mediump vec4 inColor;
 
 void main(){
     float alpha;

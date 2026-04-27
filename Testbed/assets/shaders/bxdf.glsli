@@ -22,7 +22,7 @@ layout(std140, binding = 4) uniform NwbMeshViewBuffer{
 };
 #endif
 
-vec3 nwbProjectApplyBxdf(vec3 color){
+mediump vec3 nwbProjectApplyBxdf(mediump vec3 color){
 #if NWB_PROJECT_BXDF == 0
     return color;
 #elif NWB_PROJECT_BXDF == 1
@@ -32,7 +32,7 @@ vec3 nwbProjectApplyBxdf(vec3 color){
 #endif
 }
 
-vec3 nwbProjectApplyTint(vec3 color){
+mediump vec3 nwbProjectApplyTint(mediump vec3 color){
 #if NWB_PROJECT_TINT == 1
     return color * vec3(1.0, 0.92, 0.85);
 #else
@@ -40,11 +40,11 @@ vec3 nwbProjectApplyTint(vec3 color){
 #endif
 }
 
-vec3 nwbProjectBxdfVertex(vec3 color){
+mediump vec3 nwbProjectBxdfVertex(mediump vec3 color){
     return clamp(nwbProjectApplyTint(nwbProjectApplyBxdf(color)), vec3(0.0), vec3(1.0));
 }
 
-vec3 nwbProjectBxdfPixel(vec3 color){
+mediump vec3 nwbProjectBxdfPixel(mediump vec3 color){
     return color;
 }
 
@@ -75,8 +75,8 @@ vec3 nwbProjectDirectionalLightRadiance(){
     ;
 }
 
-vec3 nwbProjectApplyDirectionalShading(vec3 baseColor, vec3 normal, vec4 tangent, vec3 worldPosition){
-    const vec3 normalVector = nwbProjectSafeNormalize(normal, vec3(0.0, 0.0, 1.0));
+mediump vec3 nwbProjectApplyDirectionalShading(mediump vec3 baseColor, mediump vec3 normal, vec4 tangent, vec3 worldPosition){
+    const mediump vec3 normalVector = nwbProjectSafeNormalize(normal, vec3(0.0, 0.0, 1.0));
     const vec3 tangentVector = nwbProjectOrthonormalTangent(tangent.xyz, normalVector);
     const float tangentSign = tangent.w < 0.0 ? -1.0 : 1.0;
     const vec3 bitangentVector = nwbProjectSafeNormalize(
@@ -87,31 +87,31 @@ vec3 nwbProjectApplyDirectionalShading(vec3 baseColor, vec3 normal, vec4 tangent
     const vec3 lightVector = nwbProjectDirectionalLightVector();
     const vec3 viewVector = nwbProjectSafeNormalize(g_NwbMeshCameraPosition.xyz - worldPosition, lightVector);
     const vec3 halfVector = nwbProjectSafeNormalize(lightVector + viewVector, lightVector);
-    const vec3 lightRadiance = nwbProjectDirectionalLightRadiance();
+    const mediump vec3 lightRadiance = nwbProjectDirectionalLightRadiance();
 
-    const float ndotlRaw = dot(normalVector, lightVector);
-    const float ndotl = max(ndotlRaw, 0.0);
-    const float ndotv = max(dot(normalVector, viewVector), 0.0);
-    const float skyAmount = normalVector.z * 0.5 + 0.5;
-    const float rim = pow(1.0 - ndotv, 3.0);
-    const float keyDiffuse = ndotl * ndotl;
-    const float shadowCue = 1.0 - smoothstep(-0.1, 0.55, ndotlRaw);
-    const float specular = pow(max(dot(normalVector, halfVector), 0.0), 64.0);
-    const float tangentLobe = pow(max(abs(dot(tangentVector, halfVector)), 0.0), 18.0);
-    const float bitangentLobe = pow(max(abs(dot(bitangentVector, halfVector)), 0.0), 18.0);
-    const float backLight = max(dot(-normalVector, lightVector), 0.0);
+    const mediump float ndotlRaw = dot(normalVector, lightVector);
+    const mediump float ndotl = max(ndotlRaw, 0.0);
+    const mediump float ndotv = max(dot(normalVector, viewVector), 0.0);
+    const mediump float skyAmount = normalVector.z * 0.5 + 0.5;
+    const mediump float rim = pow(1.0 - ndotv, 3.0);
+    const mediump float keyDiffuse = ndotl * ndotl;
+    const mediump float shadowCue = 1.0 - smoothstep(-0.1, 0.55, ndotlRaw);
+    const mediump float specular = pow(max(dot(normalVector, halfVector), 0.0), 64.0);
+    const mediump float tangentLobe = pow(max(abs(dot(tangentVector, halfVector)), 0.0), 18.0);
+    const mediump float bitangentLobe = pow(max(abs(dot(bitangentVector, halfVector)), 0.0), 18.0);
+    const mediump float backLight = max(dot(-normalVector, lightVector), 0.0);
 
-    const vec3 hemiAmbient = mix(vec3(0.008, 0.012, 0.02), vec3(0.045, 0.055, 0.075), skyAmount);
-    const vec3 diffuse = baseColor * (hemiAmbient + lightRadiance * (0.02 + 0.98 * keyDiffuse));
-    const vec3 specularColor = lightRadiance * mix(vec3(0.78), vec3(1.0, 0.9, 0.68), 0.65) * specular * (0.05 + 0.95 * ndotl);
-    const vec3 rimColor = mix(vec3(0.12, 0.26, 0.52), lightRadiance, 0.25) * rim * (0.04 + 0.96 * ndotl);
-    const vec3 frameCue = 0.12 * (
+    const mediump vec3 hemiAmbient = mix(vec3(0.008, 0.012, 0.02), vec3(0.045, 0.055, 0.075), skyAmount);
+    const mediump vec3 diffuse = baseColor * (hemiAmbient + lightRadiance * (0.02 + 0.98 * keyDiffuse));
+    const mediump vec3 specularColor = lightRadiance * mix(vec3(0.78), vec3(1.0, 0.9, 0.68), 0.65) * specular * (0.05 + 0.95 * ndotl);
+    const mediump vec3 rimColor = mix(vec3(0.12, 0.26, 0.52), lightRadiance, 0.25) * rim * (0.04 + 0.96 * ndotl);
+    const mediump vec3 frameCue = 0.12 * (
         vec3(1.0, 0.35, 0.2) * tangentLobe
         + vec3(0.2, 0.7, 1.0) * bitangentLobe
     );
-    const vec3 backLightCue = vec3(0.012, 0.02, 0.04) * backLight;
-    const vec3 shadowColorCue = baseColor * vec3(0.025, 0.04, 0.08) * shadowCue;
-    const vec3 litColor = diffuse + specularColor + rimColor + frameCue + backLightCue + shadowColorCue;
+    const mediump vec3 backLightCue = vec3(0.012, 0.02, 0.04) * backLight;
+    const mediump vec3 shadowColorCue = baseColor * vec3(0.025, 0.04, 0.08) * shadowCue;
+    const mediump vec3 litColor = diffuse + specularColor + rimColor + frameCue + backLightCue + shadowColorCue;
 
     return litColor / (litColor + vec3(0.65));
 }

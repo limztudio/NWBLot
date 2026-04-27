@@ -15,7 +15,7 @@ layout(std430, set = 1, binding = 2) readonly buffer NwbAvboitControlBuffer{
     uint g_Control[];
 };
 
-layout(location = 0) in vec4 inColor;
+layout(location = 0) in mediump vec4 inColor;
 layout(location = 0) out vec4 outAccumColor;
 layout(location = 1) out vec4 outAccumExtinction;
 

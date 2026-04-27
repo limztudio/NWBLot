@@ -4,14 +4,14 @@
 #version 460
 
 layout(location = 0) in vec4 inPosition;
-layout(location = 1) in vec3 inNormal;
+layout(location = 1) in mediump vec3 inNormal;
 layout(location = 2) in vec4 inTangent;
 layout(location = 3) in vec2 inUv0;
-layout(location = 4) in vec4 inColor;
+layout(location = 4) in mediump vec4 inColor;
 layout(location = 5) in vec4 inWorldPosition;
 
-layout(location = 0) out vec4 outColor;
-layout(location = 1) out vec3 outNormal;
+layout(location = 0) out mediump vec4 outColor;
+layout(location = 1) out mediump vec3 outNormal;
 layout(location = 2) out vec4 outTangent;
 layout(location = 3) out vec2 outUv0;
 layout(location = 4) out vec3 outWorldPosition;

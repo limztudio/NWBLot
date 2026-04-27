@@ -1296,6 +1296,43 @@ void ProjectTestbed::finishSurfaceEditMutation(
         NWB_LOGGER_WARNING(NWB_TEXT("Surface edit {}: failed to restore accessory entities"), action);
 }
 
+bool ProjectTestbed::pickSurfaceEditMutationTarget(
+    const tchar* action,
+    const SurfaceEditMutationContext& editContext,
+    NWB::Core::ECSGraphics::DeformablePosedHit& outTargetHit)
+{
+    outTargetHit = NWB::Core::ECSGraphics::DeformablePosedHit{};
+
+    NWB::Core::ECSGraphics::DeformablePickingRay ray;
+    const NWB::ProjectFrameClientSize clientSize = NWB::QueryProjectFrameClientSize();
+    const bool clientSizeValid = clientSize.width != 0u && clientSize.height != 0u;
+    const f64 fallbackCursorX = static_cast<f64>(clientSizeValid ? clientSize.width : 1u) * 0.5;
+    const f64 fallbackCursorY = static_cast<f64>(clientSizeValid ? clientSize.height : 1u) * 0.5;
+    const f64 cursorX = clientSizeValid && m_cursorPositionValid ? m_cursorX : fallbackCursorX;
+    const f64 cursorY = clientSizeValid && m_cursorPositionValid ? m_cursorY : fallbackCursorY;
+    if(!__hidden_project_testbed_runtime::BuildEditorPickRay(*m_world, cursorX, cursorY, ray)){
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit {}: could not build editor pick ray"), action);
+        return false;
+    }
+
+    if(!NWB::Core::ECSGraphics::RaycastVisibleDeformableRenderers(
+            *m_world,
+            *editContext.rendererSystem,
+            ray,
+            outTargetHit,
+            &m_context.assetManager
+        )
+    ){
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit {}: no deformable surface under cursor"), action);
+        return false;
+    }
+    if(outTargetHit.runtimeMesh != editContext.runtimeMesh){
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit {}: cursor hit is not on the active edited mesh"), action);
+        return false;
+    }
+    return true;
+}
+
 void ProjectTestbed::undoSurfaceEdit(){
     if(m_surfaceEditState.edits.empty()){
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit undo: no saved edits"));
@@ -1454,36 +1491,10 @@ void ProjectTestbed::moveLatestSurfaceEdit(){
     SurfaceEditMutationContext editContext;
     if(!prepareSurfaceEditMutation(NWB_TEXT("move"), editContext))
         return;
-    auto& renderSystem = *editContext.rendererSystem;
-
-    NWB::Core::ECSGraphics::DeformablePickingRay ray;
-    const NWB::ProjectFrameClientSize clientSize = NWB::QueryProjectFrameClientSize();
-    const bool clientSizeValid = clientSize.width != 0u && clientSize.height != 0u;
-    const f64 fallbackCursorX = static_cast<f64>(clientSizeValid ? clientSize.width : 1u) * 0.5;
-    const f64 fallbackCursorY = static_cast<f64>(clientSizeValid ? clientSize.height : 1u) * 0.5;
-    const f64 cursorX = clientSizeValid && m_cursorPositionValid ? m_cursorX : fallbackCursorX;
-    const f64 cursorY = clientSizeValid && m_cursorPositionValid ? m_cursorY : fallbackCursorY;
-    if(!__hidden_project_testbed_runtime::BuildEditorPickRay(*m_world, cursorX, cursorY, ray)){
-        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit move: could not build editor pick ray"));
-        return;
-    }
 
     NWB::Core::ECSGraphics::DeformablePosedHit targetHit;
-    if(!NWB::Core::ECSGraphics::RaycastVisibleDeformableRenderers(
-            *m_world,
-            renderSystem,
-            ray,
-            targetHit,
-            &m_context.assetManager
-        )
-    ){
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit move: no deformable surface under cursor"));
+    if(!pickSurfaceEditMutationTarget(NWB_TEXT("move"), editContext, targetHit))
         return;
-    }
-    if(targetHit.runtimeMesh != editContext.runtimeMesh){
-        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit move: cursor hit is not on the active edited mesh"));
-        return;
-    }
 
     const NWB::Core::ECSGraphics::DeformableSurfaceEditId editId =
         m_surfaceEditState.edits.back().editId
@@ -1526,36 +1537,10 @@ void ProjectTestbed::patchLatestSurfaceEdit(){
     SurfaceEditMutationContext editContext;
     if(!prepareSurfaceEditMutation(NWB_TEXT("patch"), editContext))
         return;
-    auto& renderSystem = *editContext.rendererSystem;
-
-    NWB::Core::ECSGraphics::DeformablePickingRay ray;
-    const NWB::ProjectFrameClientSize clientSize = NWB::QueryProjectFrameClientSize();
-    const bool clientSizeValid = clientSize.width != 0u && clientSize.height != 0u;
-    const f64 fallbackCursorX = static_cast<f64>(clientSizeValid ? clientSize.width : 1u) * 0.5;
-    const f64 fallbackCursorY = static_cast<f64>(clientSizeValid ? clientSize.height : 1u) * 0.5;
-    const f64 cursorX = clientSizeValid && m_cursorPositionValid ? m_cursorX : fallbackCursorX;
-    const f64 cursorY = clientSizeValid && m_cursorPositionValid ? m_cursorY : fallbackCursorY;
-    if(!__hidden_project_testbed_runtime::BuildEditorPickRay(*m_world, cursorX, cursorY, ray)){
-        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit patch: could not build editor pick ray"));
-        return;
-    }
 
     NWB::Core::ECSGraphics::DeformablePosedHit targetHit;
-    if(!NWB::Core::ECSGraphics::RaycastVisibleDeformableRenderers(
-            *m_world,
-            renderSystem,
-            ray,
-            targetHit,
-            &m_context.assetManager
-        )
-    ){
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit patch: no deformable surface under cursor"));
+    if(!pickSurfaceEditMutationTarget(NWB_TEXT("patch"), editContext, targetHit))
         return;
-    }
-    if(targetHit.runtimeMesh != editContext.runtimeMesh){
-        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit patch: cursor hit is not on the active edited mesh"));
-        return;
-    }
 
     const NWB::Core::ECSGraphics::DeformableSurfaceEditId editId =
         m_surfaceEditState.edits.back().editId

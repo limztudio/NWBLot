@@ -66,6 +66,11 @@ private:
         NWB::Core::ECSGraphics::RuntimeMeshHandle runtimeMesh,
         bool clearRedo
     );
+    [[nodiscard]] bool pickSurfaceEditMutationTarget(
+        const tchar* action,
+        const SurfaceEditMutationContext& editContext,
+        NWB::Core::ECSGraphics::DeformablePosedHit& outTargetHit
+    );
     void toggleSurfaceEditDebug();
     void logSurfaceEditDebugSnapshot();
     void logSurfaceEditControls()const;

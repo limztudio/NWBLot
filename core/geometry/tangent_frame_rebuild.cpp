@@ -102,26 +102,33 @@ void AccumulateVector(Float4& accumulator, const SIMDVector value){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RebuildTangentFrames(Vector<TangentFrameRebuildVertex>& vertices, const Vector<u32>& indices, TangentFrameRebuildResult* outResult){
+bool RebuildTangentFrames(
+    TangentFrameRebuildVertex* vertices,
+    const usize vertexCount,
+    const u32* indices,
+    const usize indexCount,
+    TangentFrameRebuildResult* outResult){
     using namespace __hidden_geometry_tangent_frame_rebuild;
 
     if(outResult)
         *outResult = TangentFrameRebuildResult{};
-    if(vertices.empty()
-        || indices.empty()
-        || (indices.size() % 3u) != 0u
-        || vertices.size() > static_cast<usize>(Limit<u32>::s_Max)
+    if(!vertices
+        || !indices
+        || vertexCount == 0u
+        || indexCount == 0u
+        || (indexCount % 3u) != 0u
+        || vertexCount > static_cast<usize>(Limit<u32>::s_Max)
     )
         return false;
 
-    for(const TangentFrameRebuildVertex& vertex : vertices){
-        if(!ValidInputVertex(vertex))
+    for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
+        if(!ValidInputVertex(vertices[vertexIndex]))
             return false;
     }
 
     Core::Alloc::ScratchArena<> scratchArena;
     Vector<TangentFrameAccumulator, Core::Alloc::ScratchAllocator<TangentFrameAccumulator>> accumulators(
-        vertices.size(),
+        vertexCount,
         TangentFrameAccumulator{
             Float4(0.0f, 0.0f, 0.0f, 0.0f),
             Float4(0.0f, 0.0f, 0.0f, 0.0f),
@@ -131,13 +138,13 @@ bool RebuildTangentFrames(Vector<TangentFrameRebuildVertex>& vertices, const Vec
     );
 
     TangentFrameRebuildResult result;
-    const usize triangleCount = indices.size() / 3u;
+    const usize triangleCount = indexCount / 3u;
     for(usize triangle = 0u; triangle < triangleCount; ++triangle){
         const usize indexBase = triangle * 3u;
         const u32 i0 = indices[indexBase + 0u];
         const u32 i1 = indices[indexBase + 1u];
         const u32 i2 = indices[indexBase + 2u];
-        if(i0 >= vertices.size() || i1 >= vertices.size() || i2 >= vertices.size())
+        if(i0 >= vertexCount || i1 >= vertexCount || i2 >= vertexCount)
             return false;
         if(i0 == i1 || i0 == i2 || i1 == i2)
             return false;
@@ -171,7 +178,7 @@ bool RebuildTangentFrames(Vector<TangentFrameRebuildVertex>& vertices, const Vec
         }
     }
 
-    for(usize vertexIndex = 0u; vertexIndex < vertices.size(); ++vertexIndex){
+    for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
         TangentFrameRebuildVertex& vertex = vertices[vertexIndex];
         const TangentFrameAccumulator& accumulator = accumulators[vertexIndex];
         const SIMDVector previousNormal = FrameNormalizeDirection(LoadFloat(vertex.normal), VectorSet(0.0f, 0.0f, 1.0f, 0.0f));

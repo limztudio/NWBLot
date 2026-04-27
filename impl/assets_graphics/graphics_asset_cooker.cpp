@@ -1306,11 +1306,14 @@ static bool GenerateMissingDeformableFrames(
     if(normalsProvided && tangentsProvided)
         return true;
 
-    Vector<Core::Geometry::TangentFrameRebuildVertex> rebuildVertices;
+    Core::Alloc::ScratchArena<> scratchArena;
+    using RebuildVertex = Core::Geometry::TangentFrameRebuildVertex;
+    using RebuildAllocator = Core::Alloc::ScratchAllocator<RebuildVertex>;
+    Vector<RebuildVertex, RebuildAllocator> rebuildVertices{ RebuildAllocator(scratchArena) };
     rebuildVertices.resize(vertices.size());
     for(usize vertexIndex = 0u; vertexIndex < vertices.size(); ++vertexIndex){
         const DeformableVertexRest& vertex = vertices[vertexIndex];
-        Core::Geometry::TangentFrameRebuildVertex& rebuildVertex = rebuildVertices[vertexIndex];
+        RebuildVertex& rebuildVertex = rebuildVertices[vertexIndex];
         rebuildVertex.position = vertex.position;
         rebuildVertex.uv0 = vertex.uv0;
         rebuildVertex.normal = vertex.normal;

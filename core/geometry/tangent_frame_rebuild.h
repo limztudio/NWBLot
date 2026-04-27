@@ -38,7 +38,21 @@ static_assert(IsTriviallyCopyable_V<TangentFrameRebuildResult>, "TangentFrameReb
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool RebuildTangentFrames(Vector<TangentFrameRebuildVertex>& vertices, const Vector<u32>& indices, TangentFrameRebuildResult* outResult = nullptr);
+[[nodiscard]] bool RebuildTangentFrames(
+    TangentFrameRebuildVertex* vertices,
+    usize vertexCount,
+    const u32* indices,
+    usize indexCount,
+    TangentFrameRebuildResult* outResult = nullptr
+);
+
+template<typename VertexAllocator, typename IndexAllocator>
+[[nodiscard]] bool RebuildTangentFrames(
+    Vector<TangentFrameRebuildVertex, VertexAllocator>& vertices,
+    const Vector<u32, IndexAllocator>& indices,
+    TangentFrameRebuildResult* outResult = nullptr){
+    return RebuildTangentFrames(vertices.data(), vertices.size(), indices.data(), indices.size(), outResult);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

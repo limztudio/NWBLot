@@ -1143,6 +1143,18 @@ bool BackendContext::createVulkanDevice(){
         m_enabledExtensions.device.erase(name);
     }
 
+    {
+        const AString samplerFilterMinmaxExtensionName = VK_EXT_SAMPLER_FILTER_MINMAX_EXTENSION_NAME;
+        const auto samplerFilterMinmaxIt = m_enabledExtensions.device.find(samplerFilterMinmaxExtensionName);
+        if(samplerFilterMinmaxIt != m_enabledExtensions.device.end() && supportedVulkan12Features.samplerFilterMinmax != VK_TRUE){
+            NWB_LOGGER_INFO(
+                NWB_TEXT("Vulkan: Disabling device extension '{}' because samplerFilterMinmax is not supported."),
+                StringConvert(samplerFilterMinmaxExtensionName)
+            );
+            m_enabledExtensions.device.erase(samplerFilterMinmaxExtensionName);
+        }
+    }
+
     const bool synchronization2Enabled = apiSupportsVulkan13 || isDeviceExtensionEnabled(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME);
     const bool maintenance4Enabled = apiSupportsVulkan13 || isDeviceExtensionEnabled(VK_KHR_MAINTENANCE_4_EXTENSION_NAME);
     const bool dynamicRenderingEnabled = apiSupportsVulkan13 || isDeviceExtensionEnabled(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
@@ -1258,6 +1270,7 @@ bool BackendContext::createVulkanDevice(){
     coreDeviceFeatures.fillModeNonSolid = supportedCoreFeatures.fillModeNonSolid;
     coreDeviceFeatures.fragmentStoresAndAtomics = supportedCoreFeatures.fragmentStoresAndAtomics;
     coreDeviceFeatures.dualSrcBlend = supportedCoreFeatures.dualSrcBlend;
+    coreDeviceFeatures.independentBlend = supportedCoreFeatures.independentBlend;
     coreDeviceFeatures.vertexPipelineStoresAndAtomics = supportedCoreFeatures.vertexPipelineStoresAndAtomics;
     coreDeviceFeatures.shaderInt64 = supportedCoreFeatures.shaderInt64;
     coreDeviceFeatures.shaderStorageImageWriteWithoutFormat = supportedCoreFeatures.shaderStorageImageWriteWithoutFormat;
@@ -1277,6 +1290,8 @@ bool BackendContext::createVulkanDevice(){
     vulkan12features.bufferDeviceAddress = bufferDeviceAddressFeatures.bufferDeviceAddress;
     vulkan12features.shaderSubgroupExtendedTypes = supportedVulkan12Features.shaderSubgroupExtendedTypes;
     vulkan12features.scalarBlockLayout = supportedVulkan12Features.scalarBlockLayout;
+    if(isDeviceExtensionEnabled(VK_EXT_SAMPLER_FILTER_MINMAX_EXTENSION_NAME))
+        vulkan12features.samplerFilterMinmax = supportedVulkan12Features.samplerFilterMinmax;
     vulkan12features.pNext = &vulkan11features;
 
     auto extVec = VulkanDetail::StringMapKeysToVector(m_enabledExtensions.device, scratchArena);
@@ -1656,6 +1671,7 @@ bool BackendContext::createVulkanSwapChain(){
             m_swapChain = VK_NULL_HANDLE;
             return false;
         }
+        checked_cast<Texture*>(sci.rhiHandle.get())->m_keepInitialStateKnown = false;
         m_swapChainImages.push_back(sci);
     }
 

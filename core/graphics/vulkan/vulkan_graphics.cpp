@@ -449,9 +449,13 @@ bool CommandList::beginDynamicRendering(IFramebuffer* framebuffer, const RenderP
         }
 
         const FormatInfo& formatInfo = GetFormatInfo(depthTex->m_desc.format);
+        const VkImageLayout depthStencilLayout = fbDesc.depthAttachment.isReadOnly
+            ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL
+            : VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+        ;
         if(formatInfo.hasDepth){
             depthAttachment.imageView = depthView;
-            depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+            depthAttachment.imageLayout = depthStencilLayout;
             depthAttachment.loadOp = params.clearDepthTarget ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
             depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
             depthAttachment.clearValue.depthStencil.depth = params.depthClearValue;
@@ -459,7 +463,7 @@ bool CommandList::beginDynamicRendering(IFramebuffer* framebuffer, const RenderP
         }
         if(formatInfo.hasStencil){
             stencilAttachment.imageView = depthView;
-            stencilAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+            stencilAttachment.imageLayout = depthStencilLayout;
             stencilAttachment.loadOp = params.clearStencilTarget ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
             stencilAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
             stencilAttachment.clearValue.depthStencil.stencil = params.stencilClearValue;

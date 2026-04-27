@@ -513,6 +513,7 @@ private:
 class Buffer final : public RefCounter<IBuffer>, NoCopy{
     friend class Device;
     friend class CommandList;
+    friend class StateTracker;
     friend class VulkanAllocator;
     friend class UploadManager;
     friend class ShaderTable;
@@ -603,8 +604,10 @@ struct TextureViewKeyHasher{
 
 
 class Texture final : public RefCounter<ITexture>, NoCopy{
+    friend class BackendContext;
     friend class Device;
     friend class CommandList;
+    friend class StateTracker;
     friend class VulkanAllocator;
     friend class Queue;
 
@@ -632,6 +635,7 @@ private:
     HashMap<TextureViewKey, VkImageView, TextureViewKeyHasher, EqualTo<TextureViewKey>, Alloc::CustomAllocator<Pair<const TextureViewKey, VkImageView>>> m_views;
 
     bool m_managed = true; // if true, owns the VkImage and memory
+    bool m_keepInitialStateKnown = false;
     u64 m_tileByteSize = 0; // for sparse/tiled resources
 
     const VulkanContext& m_context;
@@ -1383,6 +1387,9 @@ public:
 
     void beginTrackingTexture(ITexture* texture, TextureSubresourceSet subresources, ResourceStates::Mask state);
     void beginTrackingBuffer(IBuffer* buffer, ResourceStates::Mask state);
+    void appendKeepInitialStateBarriers(
+        Vector<VkImageMemoryBarrier2, Alloc::CustomAllocator<VkImageMemoryBarrier2>>& imageBarriers,
+        Vector<VkBufferMemoryBarrier2, Alloc::CustomAllocator<VkBufferMemoryBarrier2>>& bufferBarriers);
 
     [[nodiscard]] bool isUavBarrierEnabledForTexture(ITexture* texture)const;
     [[nodiscard]] bool isUavBarrierEnabledForBuffer(IBuffer* buffer)const;
@@ -1545,6 +1552,7 @@ private:
     void endDynamicRendering();
     bool ensureGraphicsRenderPass(IFramebuffer* framebuffer);
     void endActiveRenderPass();
+    void executePipelineBarrier(const VkDependencyInfo& depInfo);
     bool validateIndirectBuffer(IBuffer* buffer, u64 offsetBytes, u64 commandSizeBytes, u32 commandCount, const tchar* commandName)const;
     bool prepareDrawIndirect(u32 offsetBytes, u32 drawCount, u64 commandSizeBytes, const tchar* operationLabel, const tchar* commandName, bool requireIndexBuffer, Buffer*& outIndirectBuffer)const;
     bool prepareUploadStaging(const void* data, usize dataSize, const tchar* operationName, Buffer*& outStagingBuffer, u64& outStagingOffset);

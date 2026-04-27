@@ -646,6 +646,7 @@ TextureHandle Device::createHandleForNativeTexture(ObjectType objectType, Object
     texture->m_desc = desc;
     texture->m_image = nativeImage;
     texture->m_managed = false;
+    texture->m_keepInitialStateKnown = desc.keepInitialState;
 
     texture->m_imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     texture->m_imageInfo.imageType = VulkanDetail::TextureDimensionToImageType(desc.dimension);
@@ -987,7 +988,7 @@ void CommandList::writeTexture(ITexture* destResource, u32 arraySlice, u32 mipLe
     VkDependencyInfo depInfo = VulkanDetail::MakeVkStruct<VkDependencyInfo>(VK_STRUCTURE_TYPE_DEPENDENCY_INFO);
     depInfo.imageMemoryBarrierCount = 1;
     depInfo.pImageMemoryBarriers = &barrier;
-    vkCmdPipelineBarrier2(m_currentCmdBuf->m_cmdBuf, &depInfo);
+    executePipelineBarrier(depInfo);
 
     VkBufferImageCopy region{};
     region.bufferOffset = stagingOffset;

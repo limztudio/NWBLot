@@ -138,6 +138,26 @@ void CommandList::setEnableAutomaticBarriers(bool enable){
     m_enableAutomaticBarriers = enable;
 }
 
+void CommandList::executePipelineBarrier(const VkDependencyInfo& depInfo){
+    IFramebuffer* resumeFramebuffer = nullptr;
+    if(m_renderPassActive){
+        resumeFramebuffer = m_renderPassFramebuffer;
+        endDynamicRendering();
+        m_renderPassActive = false;
+        m_renderPassFramebuffer = nullptr;
+    }
+
+    vkCmdPipelineBarrier2(m_currentCmdBuf->m_cmdBuf, &depInfo);
+
+    if(resumeFramebuffer){
+        RenderPassParameters params = {};
+        if(beginDynamicRendering(resumeFramebuffer, params)){
+            m_renderPassActive = true;
+            m_renderPassFramebuffer = resumeFramebuffer;
+        }
+    }
+}
+
 void CommandList::commitBarriers(){
     if(m_pendingImageBarriers.empty() && m_pendingBufferBarriers.empty())
         return;
@@ -148,7 +168,7 @@ void CommandList::commitBarriers(){
     depInfo.bufferMemoryBarrierCount = static_cast<u32>(m_pendingBufferBarriers.size());
     depInfo.pBufferMemoryBarriers = m_pendingBufferBarriers.data();
 
-    vkCmdPipelineBarrier2(m_currentCmdBuf->m_cmdBuf, &depInfo);
+    executePipelineBarrier(depInfo);
 
     m_pendingImageBarriers.clear();
     m_pendingBufferBarriers.clear();
@@ -226,7 +246,7 @@ void CommandList::setTextureState(ITexture* textureResource, TextureSubresourceS
         depInfo.imageMemoryBarrierCount = 1;
         depInfo.pImageMemoryBarriers = &barrier;
 
-        vkCmdPipelineBarrier2(m_currentCmdBuf->m_cmdBuf, &depInfo);
+        executePipelineBarrier(depInfo);
         return;
     }
 
@@ -266,7 +286,7 @@ void CommandList::setTextureState(ITexture* textureResource, TextureSubresourceS
     depInfo.imageMemoryBarrierCount = static_cast<u32>(newBarrierCount);
     depInfo.pImageMemoryBarriers = m_pendingImageBarriers.data() + firstBarrierIndex;
 
-    vkCmdPipelineBarrier2(m_currentCmdBuf->m_cmdBuf, &depInfo);
+    executePipelineBarrier(depInfo);
     m_pendingImageBarriers.resize(firstBarrierIndex);
 }
 
@@ -311,7 +331,7 @@ void CommandList::setBufferState(IBuffer* bufferResource, ResourceStates::Mask s
     depInfo.bufferMemoryBarrierCount = 1;
     depInfo.pBufferMemoryBarriers = &barrier;
 
-    vkCmdPipelineBarrier2(m_currentCmdBuf->m_cmdBuf, &depInfo);
+    executePipelineBarrier(depInfo);
 }
 
 void CommandList::setAccelStructState(IRayTracingAccelStruct* accelStructResource, ResourceStates::Mask stateBits){
@@ -430,7 +450,7 @@ bool StateTracker::getTransientTextureState(ITexture* texture, ArraySlice arrayS
         return true;
     }
 
-    if(desc.keepInitialState)
+    if(desc.keepInitialState && checked_cast<Texture*>(texture)->m_keepInitialStateKnown)
         outState = desc.initialState;
 
     return true;
@@ -472,6 +492,62 @@ void StateTracker::beginTrackingBuffer(IBuffer* buffer, ResourceStates::Mask sta
         return;
 
     beginTrackingTransientBuffer(buffer, state);
+}
+
+void StateTracker::appendKeepInitialStateBarriers(
+    Vector<VkImageMemoryBarrier2, Alloc::CustomAllocator<VkImageMemoryBarrier2>>& imageBarriers,
+    Vector<VkBufferMemoryBarrier2, Alloc::CustomAllocator<VkBufferMemoryBarrier2>>& bufferBarriers
+)
+{
+    for(auto it = m_textureStates.begin(); it != m_textureStates.end(); ++it){
+        const TextureSubresourceStateKey& key = it->first;
+        if(!key.texture)
+            continue;
+
+        const TextureDesc& desc = key.texture->getDescription();
+        const ResourceStates::Mask currentState = it.value();
+        if(!desc.keepInitialState)
+            continue;
+
+        auto* texture = checked_cast<Texture*>(key.texture);
+        if(currentState == desc.initialState){
+            texture->m_keepInitialStateKnown = true;
+            continue;
+        }
+
+        imageBarriers.push_back(__hidden_vulkan_state_tracking::BuildTextureStateBarrier(
+            texture->m_image,
+            texture->m_desc.format,
+            TextureSubresourceSet(key.mipLevel, 1u, key.arraySlice, 1u),
+            currentState,
+            desc.initialState
+        ));
+        it.value() = desc.initialState;
+        texture->m_keepInitialStateKnown = true;
+    }
+
+    for(auto it = m_bufferStates.begin(); it != m_bufferStates.end(); ++it){
+        IBuffer* bufferResource = it->first;
+        if(!bufferResource)
+            continue;
+
+        const BufferDesc& desc = bufferResource->getDescription();
+        const ResourceStates::Mask currentState = it.value();
+        if(!desc.keepInitialState || currentState == desc.initialState)
+            continue;
+
+        auto* buffer = checked_cast<Buffer*>(bufferResource);
+        VkBufferMemoryBarrier2 barrier = VulkanDetail::MakeVkStruct<VkBufferMemoryBarrier2>(VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2);
+        barrier.srcStageMask = VulkanDetail::GetVkPipelineStageFlags(currentState != ResourceStates::Unknown ? currentState : ResourceStates::Common);
+        barrier.srcAccessMask = VulkanDetail::GetVkAccessFlags(currentState != ResourceStates::Unknown ? currentState : ResourceStates::Common);
+        barrier.dstStageMask = VulkanDetail::GetVkPipelineStageFlags(desc.initialState);
+        barrier.dstAccessMask = VulkanDetail::GetVkAccessFlags(desc.initialState);
+        barrier.buffer = buffer->m_buffer;
+        barrier.offset = 0;
+        barrier.size = VK_WHOLE_SIZE;
+        bufferBarriers.push_back(barrier);
+        it.value() = desc.initialState;
+    }
 }
 
 bool StateTracker::isUavBarrierEnabledForTexture(ITexture* texture)const{

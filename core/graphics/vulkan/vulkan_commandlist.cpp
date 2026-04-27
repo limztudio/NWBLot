@@ -104,6 +104,7 @@ void CommandList::close(){
     }
 
     endActiveRenderPass();
+    m_stateTracker->appendKeepInitialStateBarriers(m_pendingImageBarriers, m_pendingBufferBarriers);
     commitBarriers();
 
     res = vkEndCommandBuffer(m_currentCmdBuf->m_cmdBuf);

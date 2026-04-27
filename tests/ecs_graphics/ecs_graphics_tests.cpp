@@ -1517,6 +1517,135 @@ static void TestPickingVectorTextureDisplacementUpdatesNormal(TestContext& conte
     checkMode(NWB::Impl::DeformableDisplacementMode::VectorObjectTexture, "tests/textures/vector_object_normal");
 }
 
+static void TestDeformerCpuReferenceEvaluationModes(TestContext& context){
+    const auto expectPosition = [&](
+        const Vector<NWB::Impl::DeformableVertexRest>& vertices,
+        const u32 vertexIndex,
+        const f32 x,
+        const f32 y,
+        const f32 z){
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, vertexIndex < vertices.size());
+        if(vertexIndex >= vertices.size())
+            return;
+
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertices[vertexIndex].position.x, x));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertices[vertexIndex].position.y, y));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertices[vertexIndex].position.z, z));
+    };
+    const auto addRaiseMorph = [](NWB::Impl::DeformableRuntimeMeshInstance& instance){
+        NWB::Impl::DeformableMorph morph;
+        morph.name = Name("raise");
+        NWB::Impl::DeformableMorphDelta delta{};
+        delta.vertexId = 0u;
+        delta.deltaPosition = Float3U(0.0f, 0.0f, 1.0f);
+        morph.deltas.push_back(delta);
+        instance.morphs.push_back(morph);
+    };
+    const auto makeScalarTexture = [](){
+        return MakeTestDisplacementTexture(
+            "tests/textures/cpu_reference_scalar_displacement",
+            Float4U(0.25f, 0.0f, 0.0f, 0.0f),
+            Float4U(0.5f, 0.0f, 0.0f, 0.0f),
+            Float4U(1.0f, 0.0f, 0.0f, 0.0f)
+        );
+    };
+
+    {
+        NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
+        Vector<NWB::Impl::DeformableVertexRest> vertices;
+        NWB_ECS_GRAPHICS_TEST_CHECK(
+            context,
+            NWB::Impl::BuildDeformablePickingVertices(instance, NWB::Impl::DeformablePickingInputs{}, vertices)
+        );
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, vertices.size() == 3u);
+        expectPosition(vertices, 0u, -1.0f, -1.0f, 0.0f);
+        expectPosition(vertices, 1u, 1.0f, -1.0f, 0.0f);
+        expectPosition(vertices, 2u, 0.0f, 1.0f, 0.0f);
+    }
+
+    {
+        NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
+        addRaiseMorph(instance);
+
+        NWB::Impl::DeformableMorphWeightsComponent weights;
+        weights.weights.push_back(NWB::Impl::DeformableMorphWeight{ Name("raise"), 0.5f });
+
+        NWB::Impl::DeformablePickingInputs inputs;
+        inputs.morphWeights = &weights;
+
+        Vector<NWB::Impl::DeformableVertexRest> vertices;
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::BuildDeformablePickingVertices(instance, inputs, vertices));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, vertices.size() == 3u);
+        expectPosition(vertices, 0u, -1.0f, -1.0f, 0.5f);
+        expectPosition(vertices, 1u, 1.0f, -1.0f, 0.0f);
+        expectPosition(vertices, 2u, 0.0f, 1.0f, 0.0f);
+    }
+
+    {
+        NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
+        AssignSingleJointSkin(instance, 0u);
+
+        NWB::Impl::DeformableJointPaletteComponent joints;
+        joints.joints.push_back(MakeTranslationJointMatrix(2.0f, 0.25f, 0.0f));
+
+        NWB::Impl::DeformablePickingInputs inputs;
+        inputs.jointPalette = &joints;
+
+        Vector<NWB::Impl::DeformableVertexRest> vertices;
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::BuildDeformablePickingVertices(instance, inputs, vertices));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, vertices.size() == 3u);
+        expectPosition(vertices, 0u, 1.0f, -0.75f, 0.0f);
+        expectPosition(vertices, 1u, 3.0f, -0.75f, 0.0f);
+        expectPosition(vertices, 2u, 2.0f, 1.25f, 0.0f);
+    }
+
+    {
+        NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
+        instance.displacement.mode = NWB::Impl::DeformableDisplacementMode::ScalarTexture;
+        instance.displacement.texture.virtualPath = Name("tests/textures/cpu_reference_scalar_displacement");
+        instance.displacement.amplitude = 2.0f;
+
+        NWB::Impl::DeformableDisplacementTexture texture = makeScalarTexture();
+        NWB::Impl::DeformablePickingInputs inputs;
+        inputs.displacementTexture = &texture;
+
+        Vector<NWB::Impl::DeformableVertexRest> vertices;
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::BuildDeformablePickingVertices(instance, inputs, vertices));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, vertices.size() == 3u);
+        expectPosition(vertices, 0u, -1.0f, -1.0f, 0.5f);
+        expectPosition(vertices, 1u, 1.0f, -1.0f, 1.0f);
+        expectPosition(vertices, 2u, 0.0f, 1.0f, 2.0f);
+    }
+
+    {
+        NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
+        AssignSingleJointSkin(instance, 0u);
+        addRaiseMorph(instance);
+        instance.displacement.mode = NWB::Impl::DeformableDisplacementMode::ScalarTexture;
+        instance.displacement.texture.virtualPath = Name("tests/textures/cpu_reference_scalar_displacement");
+        instance.displacement.amplitude = 2.0f;
+
+        NWB::Impl::DeformableMorphWeightsComponent weights;
+        weights.weights.push_back(NWB::Impl::DeformableMorphWeight{ Name("raise"), 0.5f });
+
+        NWB::Impl::DeformableJointPaletteComponent joints;
+        joints.joints.push_back(MakeTranslationJointMatrix(2.0f, 0.25f, 0.0f));
+
+        NWB::Impl::DeformableDisplacementTexture texture = makeScalarTexture();
+        NWB::Impl::DeformablePickingInputs inputs;
+        inputs.morphWeights = &weights;
+        inputs.jointPalette = &joints;
+        inputs.displacementTexture = &texture;
+
+        Vector<NWB::Impl::DeformableVertexRest> vertices;
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::BuildDeformablePickingVertices(instance, inputs, vertices));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, vertices.size() == 3u);
+        expectPosition(vertices, 0u, 1.0f, -0.75f, 1.0f);
+        expectPosition(vertices, 1u, 3.0f, -0.75f, 1.0f);
+        expectPosition(vertices, 2u, 2.0f, 1.25f, 2.0f);
+    }
+}
+
 static void TestPickingVerticesLoadTextureDisplacementFromAssetManager(TestContext& context){
     NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
     instance.displacement.mode = NWB::Impl::DeformableDisplacementMode::ScalarTexture;
@@ -5120,6 +5249,7 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
     __hidden_ecs_graphics_tests::TestPickingVerticesIncludeTextureDisplacement(context);
     __hidden_ecs_graphics_tests::TestPickingScalarTextureDisplacementUpdatesNormal(context);
     __hidden_ecs_graphics_tests::TestPickingVectorTextureDisplacementUpdatesNormal(context);
+    __hidden_ecs_graphics_tests::TestDeformerCpuReferenceEvaluationModes(context);
     __hidden_ecs_graphics_tests::TestPickingVerticesLoadTextureDisplacementFromAssetManager(context);
     __hidden_ecs_graphics_tests::TestPickingTextureDisplacementCanBeDisabled(context);
     __hidden_ecs_graphics_tests::TestPickingRejectsInvalidDisplacementDescriptor(context);

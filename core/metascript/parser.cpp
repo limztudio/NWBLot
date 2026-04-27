@@ -728,6 +728,10 @@ private:
     void errorExpected(MStringView expected){
         const auto desc = tokenDescription();
         MString msg{MAllocator<MChar>(m_arena)};
+        if(expected.size() <= Limit<usize>::s_Max - 8u
+            && desc.size() <= Limit<usize>::s_Max - expected.size() - 8u
+        )
+            msg.reserve(expected.size() + 8u + desc.size());
         msg.append(expected.data(), expected.size());
         msg.append(", found ", 8);
         msg.append(desc.data(), desc.size());

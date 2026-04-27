@@ -178,7 +178,21 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
             if(wParam == 'C' && (GetKeyState(VK_CONTROL) & 0x8000)){
                 ScopedLock lock(s_ListMutex);
                 if(!s_Messages.empty()){
+                    usize combinedSize = 0u;
+                    for(const auto& msg : s_Messages){
+                        const usize messageSize = msg.first().size();
+                        if(messageSize > Limit<usize>::s_Max - combinedSize)
+                            return 0;
+                        combinedSize += messageSize;
+                        if(combinedSize > Limit<usize>::s_Max - 2u)
+                            return 0;
+                        combinedSize += 2u;
+                    }
+                    if(combinedSize > (Limit<usize>::s_Max / sizeof(tchar)) - 1u)
+                        return 0;
+
                     BasicString<tchar> combined;
+                    combined.reserve(combinedSize);
                     for(const auto& msg : s_Messages){
                         combined += msg.first();
                         combined += NWB_TEXT("\r\n");

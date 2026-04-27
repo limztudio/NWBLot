@@ -1898,6 +1898,16 @@ bool BuildSurfaceEditStateDebugDump(const DeformableSurfaceEditState& state, ASt
         state.edits.size(),
         state.accessories.size()
     );
+    constexpr usize s_EditDebugLineReserve = 384u;
+    constexpr usize s_AccessoryDebugLineReserve = 192u;
+    usize debugDumpReserve = outDump.size();
+    if(state.edits.size() <= (Limit<usize>::s_Max - debugDumpReserve) / s_EditDebugLineReserve){
+        debugDumpReserve += state.edits.size() * s_EditDebugLineReserve;
+        if(state.accessories.size() <= (Limit<usize>::s_Max - debugDumpReserve) / s_AccessoryDebugLineReserve){
+            debugDumpReserve += state.accessories.size() * s_AccessoryDebugLineReserve;
+            outDump.reserve(debugDumpReserve);
+        }
+    }
     for(usize i = 0u; i < state.edits.size(); ++i){
         const DeformableSurfaceEditRecord& record = state.edits[i];
         outDump += StringFormat(

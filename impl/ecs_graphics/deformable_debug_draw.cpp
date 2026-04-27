@@ -795,6 +795,8 @@ bool BuildDeformableSurfaceEditDebugDump(const DeformableSurfaceEditDebugSnapsho
         snapshot.points.size()
     );
     if(snapshot.previewValid){
+        if(outDump.size() <= Limit<usize>::s_Max - 384u)
+            outDump.reserve(outDump.size() + 384u);
         outDump += StringFormat(
             "preview triangle={} source_triangle={} bary=({}, {}, {}) radius={} depth={} "
             "permission={} center=({}, {}, {}) rest_hit=({}, {}, {}) posed_hit=({}, {}, {}) "

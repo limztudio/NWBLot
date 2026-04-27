@@ -47,16 +47,25 @@ public:
     }
 
     [[nodiscard]] u32 errorCount()const{ return m_errorCount; }
+    [[nodiscard]] bool sawErrorContaining(const tchar* text)const{
+        for(const TString& error : m_errors){
+            if(error.find(text) != TString::npos)
+                return true;
+        }
+        return false;
+    }
 
 private:
     void record(const TString& str, const NWB::Log::Type::Enum type){
-        static_cast<void>(str);
-        if(type == NWB::Log::Type::Error)
+        if(type == NWB::Log::Type::Error){
             ++m_errorCount;
+            m_errors.push_back(str);
+        }
     }
 
 private:
     u32 m_errorCount = 0;
+    Vector<TString> m_errors;
 };
 
 
@@ -2109,7 +2118,6 @@ static void TestDeformerSkinPayloadValidatesSkeletonAndPalette(TestContext& cont
     NWB::Impl::DeformableRuntimeMeshInstance outsideSkeleton = instance;
     outsideSkeleton.skin[0u] = MakeSingleJointSkin(1u);
     outsideSkeleton.skeletonJointCount = 1u;
-    joints.joints.push_back(MakeIdentityJointMatrix());
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
         !NWB::Impl::DeformerSkinPayload::BuildSkinPayload(outsideSkeleton, &joints, skinInfluences, jointMatrices)
@@ -2141,6 +2149,14 @@ static void TestDeformerSkinPayloadValidatesSkeletonAndPalette(TestContext& cont
         !NWB::Impl::DeformerSkinPayload::BuildSkinPayload(invalidInverseBind, &joints, skinInfluences, jointMatrices)
     );
     NWB_ECS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 5u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("has skin but no skeleton joint count")));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("outside skeleton joint count")));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("outside palette size")));
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        logger.sawErrorContaining(NWB_TEXT("joint palette entry 0 is not a finite invertible affine matrix"))
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("inverse bind matrices are invalid")));
 #endif
 }
 

@@ -1107,6 +1107,7 @@ void RestoreReplayAccessories(
     const usize sourceDeltaCount,
     MorphDeltaLookup& outLookup)
 {
+    outLookup.clear();
     outLookup.reserve(sourceDeltaCount);
     for(usize deltaIndex = 0u; deltaIndex < sourceDeltaCount; ++deltaIndex){
         if(!outLookup.emplace(morph.deltas[deltaIndex].vertexId, deltaIndex).second)
@@ -1209,6 +1210,12 @@ template<typename EdgeVector, typename VertexVector>
 
     const usize maxAddedDeltaCount = innerVertices.size();
     Core::Alloc::ScratchArena<> scratchArena;
+    MorphDeltaLookup lookup(
+        0,
+        Hasher<u32>(),
+        EqualTo<u32>(),
+        Core::Alloc::ScratchAllocator<Pair<const u32, usize>>(scratchArena)
+    );
     for(DeformableMorph& morph : morphs){
         const usize sourceDeltaCount = morph.deltas.size();
         if(morph.deltas.size() > static_cast<usize>(Limit<u32>::s_Max)
@@ -1218,12 +1225,6 @@ template<typename EdgeVector, typename VertexVector>
         if(sourceDeltaCount == 0u)
             continue;
 
-        MorphDeltaLookup lookup(
-            0,
-            Hasher<u32>(),
-            EqualTo<u32>(),
-            Core::Alloc::ScratchAllocator<Pair<const u32, usize>>(scratchArena)
-        );
         if(!BuildMorphDeltaLookup(morph, sourceDeltaCount, lookup))
             return false;
 
@@ -2112,23 +2113,26 @@ namespace __hidden_deformable_surface_edit{
     if(reservedVertexCount > static_cast<usize>(Limit<u32>::s_Max))
         return false;
 
-    Vector<DeformableVertexRest> newRestVertices = instance.restVertices;
+    Vector<DeformableVertexRest> newRestVertices;
     Vector<SkinInfluence4> newSkin;
     Vector<SourceSample> newSourceSamples;
     Vector<DeformableEditMaskFlags> newEditMaskPerTriangle;
     Vector<DeformableMorph> newMorphs;
     newRestVertices.reserve(reservedVertexCount);
+    newRestVertices.assign(instance.restVertices.begin(), instance.restVertices.end());
     const bool hasEditMaskPerTriangle = !instance.editMaskPerTriangle.empty();
     if(hasEditMaskPerTriangle)
         newEditMaskPerTriangle.reserve((keptIndexCount + wallIndexCount) / 3u);
     if(addWall){
-        newSkin = instance.skin;
-        newSourceSamples = instance.sourceSamples;
-        newMorphs = instance.morphs;
-        if(!newSkin.empty())
+        if(!instance.skin.empty()){
             newSkin.reserve(reservedVertexCount);
-        if(!newSourceSamples.empty())
+            newSkin.assign(instance.skin.begin(), instance.skin.end());
+        }
+        if(!instance.sourceSamples.empty()){
             newSourceSamples.reserve(reservedVertexCount);
+            newSourceSamples.assign(instance.sourceSamples.begin(), instance.sourceSamples.end());
+        }
+        newMorphs = instance.morphs;
     }
 
     newIndices.reserve(keptIndexCount + wallIndexCount);

@@ -42,15 +42,41 @@ static_assert(IsTriviallyCopyable_V<SurfacePatchWallVertex>, "SurfacePatchWallVe
     f32& outLoopLength
 );
 
+[[nodiscard]] bool BuildSurfacePatchLoopDistances(
+    const Vector<MeshTopologyEdge, Core::Alloc::ScratchAllocator<MeshTopologyEdge>>& orderedBoundaryEdges,
+    const Vector<Float3U, Core::Alloc::ScratchAllocator<Float3U>>& positions,
+    const Float3U& frameNormal,
+    f32* outLoopDistances,
+    usize loopDistanceCount,
+    f32& outLoopLength
+);
+
 [[nodiscard]] bool BuildSurfacePatchRingEdges(
     const u32* ringVertices,
     usize ringVertexCount,
     Vector<MeshTopologyEdge>& outEdges
 );
 
+[[nodiscard]] bool BuildSurfacePatchRingEdges(
+    const u32* ringVertices,
+    usize ringVertexCount,
+    Vector<MeshTopologyEdge, Core::Alloc::ScratchAllocator<MeshTopologyEdge>>& outEdges
+);
+
 [[nodiscard]] bool BuildSurfacePatchWallVertices(
     const Vector<MeshTopologyEdge>& orderedBoundaryEdges,
     const Vector<Float3U>& positions,
+    const MeshTopologyBoundaryLoopFrame& frame,
+    const Float3U& frameNormal,
+    f32 depth,
+    usize wallBandCount,
+    SurfacePatchWallVertex* outVertices,
+    usize outVertexCount
+);
+
+[[nodiscard]] bool BuildSurfacePatchWallVertices(
+    const Vector<MeshTopologyEdge, Core::Alloc::ScratchAllocator<MeshTopologyEdge>>& orderedBoundaryEdges,
+    const Vector<Float3U, Core::Alloc::ScratchAllocator<Float3U>>& positions,
     const MeshTopologyBoundaryLoopFrame& frame,
     const Float3U& frameNormal,
     f32 depth,

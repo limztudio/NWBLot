@@ -112,10 +112,10 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
     ++it.value();
 }
 
-template<typename EdgeAllocator>
+template<typename EdgeAllocator, typename PositionAllocator>
 [[nodiscard]] f32 ProjectedSignedLoopArea(
     const Vector<MeshTopologyEdge, EdgeAllocator>& orderedEdges,
-    const Vector<Float3U>& positions,
+    const Vector<Float3U, PositionAllocator>& positions,
     const MeshTopologyBoundaryLoopFrame& frame
 ){
     const SIMDVector center = LoadFloat(frame.center);
@@ -186,8 +186,9 @@ void CanonicalizeBoundaryLoopStart(Vector<MeshTopologyEdge, EdgeAllocator>& edge
     return FrameNormalizeDirection(Vector3Cross(tangent, bitangent), VectorSet(0.0f, 0.0f, 1.0f, 0.0f));
 }
 
+template<typename PositionAllocator>
 [[nodiscard]] SIMDVector ProjectedEdgeDirection(
-    const Vector<Float3U>& positions,
+    const Vector<Float3U, PositionAllocator>& positions,
     const MeshTopologyBoundaryLoopFrame& frame,
     const SIMDVector frameNormal,
     const MeshTopologyEdge& edge){
@@ -202,20 +203,13 @@ void CanonicalizeBoundaryLoopStart(Vector<MeshTopologyEdge, EdgeAllocator>& edge
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-bool BuildOrderedBoundaryLoop(
-    const Vector<MeshTopologyEdge>& boundaryEdges,
-    const Vector<Float3U>& positions,
+template<typename EdgeAllocator, typename PositionAllocator, typename OrderedEdgeAllocator>
+bool BuildOrderedBoundaryLoopImpl(
+    const Vector<MeshTopologyEdge, EdgeAllocator>& boundaryEdges,
+    const Vector<Float3U, PositionAllocator>& positions,
     const MeshTopologyBoundaryLoopFrame& frame,
-    Vector<MeshTopologyEdge>& outOrderedEdges
+    Vector<MeshTopologyEdge, OrderedEdgeAllocator>& outOrderedEdges
 ){
-    using namespace __hidden_geometry_mesh_topology;
-
     outOrderedEdges.clear();
     if(boundaryEdges.empty() || positions.empty() || !ValidLoopFrame(frame))
         return false;
@@ -311,13 +305,12 @@ bool BuildOrderedBoundaryLoop(
     return true;
 }
 
-bool BuildBoundaryEdgesFromRemovedTriangles(
-    const Vector<u32>& indices,
-    const Vector<u8>& removedTriangles,
-    Vector<MeshTopologyEdge>& outBoundaryEdges,
+template<typename IndexAllocator, typename RemovedTriangleAllocator, typename EdgeAllocator>
+bool BuildBoundaryEdgesFromRemovedTrianglesImpl(
+    const Vector<u32, IndexAllocator>& indices,
+    const Vector<u8, RemovedTriangleAllocator>& removedTriangles,
+    Vector<MeshTopologyEdge, EdgeAllocator>& outBoundaryEdges,
     u32* outRemovedTriangleCount){
-    using namespace __hidden_geometry_mesh_topology;
-
     if(outRemovedTriangleCount)
         *outRemovedTriangleCount = 0u;
     outBoundaryEdges.clear();
@@ -419,14 +412,13 @@ bool BuildBoundaryEdgesFromRemovedTriangles(
     return true;
 }
 
-bool BuildBoundaryLoopVertexFrame(
-    const Vector<Float3U>& positions,
+template<typename PositionAllocator>
+bool BuildBoundaryLoopVertexFrameImpl(
+    const Vector<Float3U, PositionAllocator>& positions,
     const MeshTopologyBoundaryLoopFrame& frame,
     const MeshTopologyEdge& previousEdge,
     const MeshTopologyEdge& currentEdge,
     MeshTopologyLoopVertexFrame& outFrame){
-    using namespace __hidden_geometry_mesh_topology;
-
     outFrame = MeshTopologyLoopVertexFrame{};
     if(positions.empty()
         || !ValidLoopFrame(frame)
@@ -477,10 +469,11 @@ bool BuildBoundaryLoopVertexFrame(
     return true;
 }
 
-bool AppendWallTrianglePairs(
-    const Vector<MeshTopologyEdge>& orderedBoundaryEdges,
-    const Vector<u32>& innerVertices,
-    Vector<u32>& outIndices,
+template<typename EdgeAllocator, typename InnerVertexAllocator, typename IndexAllocator>
+bool AppendWallTrianglePairsImpl(
+    const Vector<MeshTopologyEdge, EdgeAllocator>& orderedBoundaryEdges,
+    const Vector<u32, InnerVertexAllocator>& innerVertices,
+    Vector<u32, IndexAllocator>& outIndices,
     u32* outAddedTriangleCount
 ){
     if(outAddedTriangleCount)
@@ -524,6 +517,90 @@ bool AppendWallTrianglePairs(
     if(outAddedTriangleCount)
         *outAddedTriangleCount = static_cast<u32>(boundaryVertexCount * 2u);
     return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}; // namespace __hidden_geometry_mesh_topology
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool BuildOrderedBoundaryLoop(
+    const Vector<MeshTopologyEdge>& boundaryEdges,
+    const Vector<Float3U>& positions,
+    const MeshTopologyBoundaryLoopFrame& frame,
+    Vector<MeshTopologyEdge>& outOrderedEdges
+){
+    return __hidden_geometry_mesh_topology::BuildOrderedBoundaryLoopImpl(boundaryEdges, positions, frame, outOrderedEdges);
+}
+
+bool BuildOrderedBoundaryLoop(
+    const Vector<MeshTopologyEdge, Core::Alloc::ScratchAllocator<MeshTopologyEdge>>& boundaryEdges,
+    const Vector<Float3U, Core::Alloc::ScratchAllocator<Float3U>>& positions,
+    const MeshTopologyBoundaryLoopFrame& frame,
+    Vector<MeshTopologyEdge, Core::Alloc::ScratchAllocator<MeshTopologyEdge>>& outOrderedEdges
+){
+    return __hidden_geometry_mesh_topology::BuildOrderedBoundaryLoopImpl(boundaryEdges, positions, frame, outOrderedEdges);
+}
+
+bool BuildBoundaryEdgesFromRemovedTriangles(
+    const Vector<u32>& indices,
+    const Vector<u8>& removedTriangles,
+    Vector<MeshTopologyEdge>& outBoundaryEdges,
+    u32* outRemovedTriangleCount
+){
+    return __hidden_geometry_mesh_topology::BuildBoundaryEdgesFromRemovedTrianglesImpl(indices, removedTriangles, outBoundaryEdges, outRemovedTriangleCount);
+}
+
+bool BuildBoundaryEdgesFromRemovedTriangles(
+    const Vector<u32>& indices,
+    const Vector<u8, Core::Alloc::ScratchAllocator<u8>>& removedTriangles,
+    Vector<MeshTopologyEdge, Core::Alloc::ScratchAllocator<MeshTopologyEdge>>& outBoundaryEdges,
+    u32* outRemovedTriangleCount
+){
+    return __hidden_geometry_mesh_topology::BuildBoundaryEdgesFromRemovedTrianglesImpl(indices, removedTriangles, outBoundaryEdges, outRemovedTriangleCount);
+}
+
+bool BuildBoundaryLoopVertexFrame(
+    const Vector<Float3U>& positions,
+    const MeshTopologyBoundaryLoopFrame& frame,
+    const MeshTopologyEdge& previousEdge,
+    const MeshTopologyEdge& currentEdge,
+    MeshTopologyLoopVertexFrame& outFrame
+){
+    return __hidden_geometry_mesh_topology::BuildBoundaryLoopVertexFrameImpl(positions, frame, previousEdge, currentEdge, outFrame);
+}
+
+bool BuildBoundaryLoopVertexFrame(
+    const Vector<Float3U, Core::Alloc::ScratchAllocator<Float3U>>& positions,
+    const MeshTopologyBoundaryLoopFrame& frame,
+    const MeshTopologyEdge& previousEdge,
+    const MeshTopologyEdge& currentEdge,
+    MeshTopologyLoopVertexFrame& outFrame
+){
+    return __hidden_geometry_mesh_topology::BuildBoundaryLoopVertexFrameImpl(positions, frame, previousEdge, currentEdge, outFrame);
+}
+
+bool AppendWallTrianglePairs(
+    const Vector<MeshTopologyEdge>& orderedBoundaryEdges,
+    const Vector<u32>& innerVertices,
+    Vector<u32>& outIndices,
+    u32* outAddedTriangleCount
+){
+    return __hidden_geometry_mesh_topology::AppendWallTrianglePairsImpl(orderedBoundaryEdges, innerVertices, outIndices, outAddedTriangleCount);
+}
+
+bool AppendWallTrianglePairs(
+    const Vector<MeshTopologyEdge, Core::Alloc::ScratchAllocator<MeshTopologyEdge>>& orderedBoundaryEdges,
+    const Vector<u32, Core::Alloc::ScratchAllocator<u32>>& innerVertices,
+    Vector<u32>& outIndices,
+    u32* outAddedTriangleCount
+){
+    return __hidden_geometry_mesh_topology::AppendWallTrianglePairsImpl(orderedBoundaryEdges, innerVertices, outIndices, outAddedTriangleCount);
 }
 
 

@@ -7,6 +7,8 @@
 
 #include "global.h"
 
+#include <core/alloc/scratch.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -52,10 +54,24 @@ static_assert(IsTriviallyCopyable_V<MeshTopologyLoopVertexFrame>, "MeshTopologyL
     Vector<MeshTopologyEdge>& outOrderedEdges
 );
 
+[[nodiscard]] bool BuildOrderedBoundaryLoop(
+    const Vector<MeshTopologyEdge, Core::Alloc::ScratchAllocator<MeshTopologyEdge>>& boundaryEdges,
+    const Vector<Float3U, Core::Alloc::ScratchAllocator<Float3U>>& positions,
+    const MeshTopologyBoundaryLoopFrame& frame,
+    Vector<MeshTopologyEdge, Core::Alloc::ScratchAllocator<MeshTopologyEdge>>& outOrderedEdges
+);
+
 [[nodiscard]] bool BuildBoundaryEdgesFromRemovedTriangles(
     const Vector<u32>& indices,
     const Vector<u8>& removedTriangles,
     Vector<MeshTopologyEdge>& outBoundaryEdges,
+    u32* outRemovedTriangleCount = nullptr
+);
+
+[[nodiscard]] bool BuildBoundaryEdgesFromRemovedTriangles(
+    const Vector<u32>& indices,
+    const Vector<u8, Core::Alloc::ScratchAllocator<u8>>& removedTriangles,
+    Vector<MeshTopologyEdge, Core::Alloc::ScratchAllocator<MeshTopologyEdge>>& outBoundaryEdges,
     u32* outRemovedTriangleCount = nullptr
 );
 
@@ -67,9 +83,24 @@ static_assert(IsTriviallyCopyable_V<MeshTopologyLoopVertexFrame>, "MeshTopologyL
     MeshTopologyLoopVertexFrame& outFrame
 );
 
+[[nodiscard]] bool BuildBoundaryLoopVertexFrame(
+    const Vector<Float3U, Core::Alloc::ScratchAllocator<Float3U>>& positions,
+    const MeshTopologyBoundaryLoopFrame& frame,
+    const MeshTopologyEdge& previousEdge,
+    const MeshTopologyEdge& currentEdge,
+    MeshTopologyLoopVertexFrame& outFrame
+);
+
 [[nodiscard]] bool AppendWallTrianglePairs(
     const Vector<MeshTopologyEdge>& orderedBoundaryEdges,
     const Vector<u32>& innerVertices,
+    Vector<u32>& outIndices,
+    u32* outAddedTriangleCount = nullptr
+);
+
+[[nodiscard]] bool AppendWallTrianglePairs(
+    const Vector<MeshTopologyEdge, Core::Alloc::ScratchAllocator<MeshTopologyEdge>>& orderedBoundaryEdges,
+    const Vector<u32, Core::Alloc::ScratchAllocator<u32>>& innerVertices,
     Vector<u32>& outIndices,
     u32* outAddedTriangleCount = nullptr
 );

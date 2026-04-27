@@ -2187,7 +2187,9 @@ namespace __hidden_deformable_surface_edit{
     const f32 radiusX = params.radius;
     const f32 radiusY = params.radius * params.ellipseRatio;
     Core::Alloc::ScratchArena<> scratchArena;
-    Vector<u8> removeTriangle;
+    Vector<u8, Core::Alloc::ScratchAllocator<u8>> removeTriangle{
+        Core::Alloc::ScratchAllocator<u8>(scratchArena)
+    };
     removeTriangle.resize(triangleCount, 0u);
     DeformableEditMaskFlags removedEditMaskFlags = 0u;
 
@@ -2214,8 +2216,10 @@ namespace __hidden_deformable_surface_edit{
     if(removedEditMaskFlags == 0u)
         removedEditMaskFlags = s_DeformableEditMaskDefault;
 
-    using EdgeRecordVector = Vector<EdgeRecord>;
-    EdgeRecordVector boundaryEdges;
+    using EdgeRecordVector = Vector<EdgeRecord, Core::Alloc::ScratchAllocator<EdgeRecord>>;
+    EdgeRecordVector boundaryEdges{
+        Core::Alloc::ScratchAllocator<EdgeRecord>(scratchArena)
+    };
     u32 removedTriangleCount = 0u;
     if(!Core::Geometry::BuildBoundaryEdgesFromRemovedTriangles(
             instance.indices,
@@ -2226,7 +2230,9 @@ namespace __hidden_deformable_surface_edit{
     )
         return false;
 
-    Vector<Float3U> restPositions;
+    Vector<Float3U, Core::Alloc::ScratchAllocator<Float3U>> restPositions{
+        Core::Alloc::ScratchAllocator<Float3U>(scratchArena)
+    };
     restPositions.reserve(instance.restVertices.size());
     for(const DeformableVertexRest& vertex : instance.restVertices)
         restPositions.push_back(vertex.position);
@@ -2236,7 +2242,9 @@ namespace __hidden_deformable_surface_edit{
     StoreFloat(frame.tangent, &topologyFrame.tangent);
     StoreFloat(frame.bitangent, &topologyFrame.bitangent);
 
-    EdgeRecordVector orderedBoundaryEdges;
+    EdgeRecordVector orderedBoundaryEdges{
+        Core::Alloc::ScratchAllocator<EdgeRecord>(scratchArena)
+    };
     if(!Core::Geometry::BuildOrderedBoundaryLoop(
             boundaryEdges,
             restPositions,
@@ -2416,7 +2424,9 @@ namespace __hidden_deformable_surface_edit{
         }
 
         EdgeRecordVector bandOuterEdges = orderedBoundaryEdges;
-        Vector<u32> ringVertices;
+        Vector<u32, Core::Alloc::ScratchAllocator<u32>> ringVertices{
+            Core::Alloc::ScratchAllocator<u32>(scratchArena)
+        };
         ringVertices.reserve(boundaryVertexCount);
         for(usize ringIndex = 0u; ringIndex < wallBandCount; ++ringIndex){
             const usize wallVertexBase = ringIndex * boundaryVertexCount;

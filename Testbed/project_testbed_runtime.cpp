@@ -1446,9 +1446,101 @@ void ProjectTestbed::resizeLatestSurfaceEdit(){
     );
 }
 
+void ProjectTestbed::moveLatestSurfaceEdit(){
+    if(m_pendingSurfaceEditReplay || m_pendingSurfaceEditAccessory){
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit move: waiting for pending replay/accessory work"));
+        return;
+    }
+    if(m_surfaceEditState.edits.empty()){
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit move: no saved edits"));
+        return;
+    }
+
+    auto& renderSystem = rendererSystem();
+    const NWB::Core::ECSGraphics::RuntimeMeshHandle runtimeMesh =
+        renderSystem.deformableRuntimeMeshHandle(m_deformableMorphEntity)
+    ;
+    auto* instance = renderSystem.findDeformableRuntimeMesh(runtimeMesh);
+    if(!runtimeMesh.valid() || !instance){
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit move: active runtime mesh is unavailable"));
+        return;
+    }
+
+    NWB::Core::ECSGraphics::DeformableRuntimeMeshInstance cleanBase;
+    if(!buildSurfaceEditCleanBase(*instance, cleanBase)){
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit move: failed to load clean source mesh"));
+        return;
+    }
+
+    NWB::Core::ECSGraphics::DeformablePickingRay ray;
+    const NWB::ProjectFrameClientSize clientSize = NWB::QueryProjectFrameClientSize();
+    const bool clientSizeValid = clientSize.width != 0u && clientSize.height != 0u;
+    const f64 fallbackCursorX = static_cast<f64>(clientSizeValid ? clientSize.width : 1u) * 0.5;
+    const f64 fallbackCursorY = static_cast<f64>(clientSizeValid ? clientSize.height : 1u) * 0.5;
+    const f64 cursorX = clientSizeValid && m_cursorPositionValid ? m_cursorX : fallbackCursorX;
+    const f64 cursorY = clientSizeValid && m_cursorPositionValid ? m_cursorY : fallbackCursorY;
+    if(!__hidden_project_testbed_runtime::BuildEditorPickRay(*m_world, cursorX, cursorY, ray)){
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit move: could not build editor pick ray"));
+        return;
+    }
+
+    NWB::Core::ECSGraphics::DeformablePosedHit targetHit;
+    if(!NWB::Core::ECSGraphics::RaycastVisibleDeformableRenderers(
+            *m_world,
+            renderSystem,
+            ray,
+            targetHit,
+            &m_context.assetManager
+        )
+    ){
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit move: no deformable surface under cursor"));
+        return;
+    }
+    if(targetHit.runtimeMesh != runtimeMesh){
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit move: cursor hit is not on the active edited mesh"));
+        return;
+    }
+
+    const NWB::Core::ECSGraphics::DeformableSurfaceEditId editId =
+        m_surfaceEditState.edits.back().editId
+    ;
+    NWB::Core::ECSGraphics::DeformableSurfaceEditMoveResult moveResult;
+    if(!NWB::Core::ECSGraphics::MoveSurfaceEdit(
+            *instance,
+            cleanBase,
+            m_surfaceEditState,
+            editId,
+            targetHit,
+            &moveResult
+        )
+    ){
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit move: failed to replay moved edit {}"), editId);
+        return;
+    }
+
+    clearSurfaceEditPreview();
+    clearPendingSurfaceEditAccessory();
+    m_surfaceEditHistory.redoStack.clear();
+    m_surfaceEditDebugRuntimeMesh = runtimeMesh;
+    if(!restoreSurfaceEditAccessoryEntities())
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit move: failed to restore accessory entities"));
+
+    NWB_LOGGER_ESSENTIAL_INFO(
+        NWB_TEXT("Surface edit move: edit={} position ({},{},{}) -> ({},{},{}) revision={}"),
+        moveResult.movedEditId,
+        moveResult.oldRestPosition.x,
+        moveResult.oldRestPosition.y,
+        moveResult.oldRestPosition.z,
+        moveResult.newRestPosition.x,
+        moveResult.newRestPosition.y,
+        moveResult.newRestPosition.z,
+        moveResult.replay.finalEditRevision
+    );
+}
+
 void ProjectTestbed::logSurfaceEditControls()const{
     NWB_LOGGER_ESSENTIAL_INFO(
-        NWB_TEXT("Surface edit: left click preview, [/] radius={}, comma/period ellipse={}, -/= depth={}, Enter commit, F2 debug, F3 replay, F4 undo, F5 redo, F6 heal latest, F7 resize latest, Esc cancel"),
+        NWB_TEXT("Surface edit: left click preview, [/] radius={}, comma/period ellipse={}, -/= depth={}, Enter commit, F2 debug, F3 replay, F4 undo, F5 redo, F6 heal latest, F7 resize latest, F8 move latest, Esc cancel"),
         m_surfaceEditRadius,
         m_surfaceEditEllipseRatio,
         m_surfaceEditDepth
@@ -1552,6 +1644,9 @@ bool ProjectTestbed::keyboardUpdate(const i32 key, const i32 scancode, const i32
         }
         else if(key == NWB::Core::Key::F7){
             resizeLatestSurfaceEdit();
+        }
+        else if(key == NWB::Core::Key::F8){
+            moveLatestSurfaceEdit();
         }
         else if(key == NWB::Core::Key::Escape){
             cancelSurfaceEditPreview();

@@ -4,6 +4,8 @@
 
 #include "deformable_debug_draw.h"
 
+#include <core/geometry/frame_math.h>
+
 #include <impl/assets_graphics/deformable_geometry_validation.h>
 
 
@@ -71,6 +73,38 @@ static constexpr f32 s_DisplacementLineScale = 1.0f;
     return true;
 }
 
+[[nodiscard]] bool DisplacementModeUsesTexture(const u32 mode){
+    return mode == DeformableDisplacementMode::ScalarTexture
+        || mode == DeformableDisplacementMode::VectorTangentTexture
+        || mode == DeformableDisplacementMode::VectorObjectTexture
+    ;
+}
+
+[[nodiscard]] bool ValidateDebugDisplacementTexture(
+    const DeformableDisplacement& displacement,
+    const DeformableDisplacementTexture* texture)
+{
+    if(!DisplacementModeUsesTexture(displacement.mode))
+        return true;
+
+    return texture
+        && texture->virtualPath() == displacement.texture.name()
+        && texture->validatePayload()
+    ;
+}
+
+[[nodiscard]] bool DisplacementDebugMayEmitLines(
+    const DeformableDisplacement& displacement,
+    const DeformableDisplacementTexture* texture)
+{
+    if(displacement.mode == DeformableDisplacementMode::ScalarUvRamp)
+        return true;
+    if(!DisplacementModeUsesTexture(displacement.mode))
+        return false;
+
+    return ValidateDebugDisplacementTexture(displacement, texture);
+}
+
 [[nodiscard]] bool AddWallLoopReserveCount(
     const DeformableRuntimeMeshInstance& instance,
     const u32 firstWallVertex,
@@ -98,6 +132,7 @@ static constexpr f32 s_DisplacementLineScale = 1.0f;
     const DeformableSurfaceEditSession* session,
     const DeformableHolePreview* preview,
     const DeformableSurfaceEditState* state,
+    const DeformableDisplacementTexture* displacementTexture,
     DeformableSurfaceEditDebugSnapshot& snapshot)
 {
     usize lineCount = 0u;
@@ -109,7 +144,7 @@ static constexpr f32 s_DisplacementLineScale = 1.0f;
         if(!AddReserveCount(lineCount, morph.deltas.size()))
             return false;
     }
-    if(instance.displacement.mode == DeformableDisplacementMode::ScalarUvRamp
+    if(DisplacementDebugMayEmitLines(instance.displacement, displacementTexture)
         && !AddReserveCount(lineCount, instance.restVertices.size())
     )
         return false;
@@ -166,6 +201,110 @@ void ResetSnapshotPreservingOutputStorage(DeformableSurfaceEditDebugSnapshot& sn
         ? Sqrt(Max(0.0f, lengthSquared))
         : 0.0f
     ;
+}
+
+[[nodiscard]] u32 SampleCoordinate(const f32 value, const u32 size){
+    if(size <= 1u)
+        return 0u;
+
+    const f32 scaled = Saturate(value) * static_cast<f32>(size - 1u);
+    const f32 rounded = Floor(scaled + 0.5f);
+    return static_cast<u32>(Min(rounded, static_cast<f32>(size - 1u)));
+}
+
+[[nodiscard]] Float2U DisplacementTextureCoord(const DeformableDisplacement& displacement, const Float2U& uv){
+    return Float2U(
+        Saturate((uv.x * displacement.uvScale.x) + displacement.uvOffset.x),
+        Saturate((uv.y * displacement.uvScale.y) + displacement.uvOffset.y)
+    );
+}
+
+[[nodiscard]] Float4U SampleDisplacementTextureCoord(const DeformableDisplacementTexture& texture, const Float2U& uv){
+    const u32 x = SampleCoordinate(uv.x, texture.width());
+    const u32 y = SampleCoordinate(uv.y, texture.height());
+    const usize texelIndex = static_cast<usize>(y) * static_cast<usize>(texture.width()) + static_cast<usize>(x);
+    return texture.texels()[texelIndex];
+}
+
+[[nodiscard]] Float4U SampleDisplacementTexture(
+    const DeformableDisplacement& displacement,
+    const DeformableDisplacementTexture& texture,
+    const Float2U& uv)
+{
+    return SampleDisplacementTextureCoord(texture, DisplacementTextureCoord(displacement, uv));
+}
+
+[[nodiscard]] SIMDVector VectorTextureOffsetToRestFrame(
+    const DeformableDisplacement& displacement,
+    const DeformableVertexRest& vertex,
+    const Float4U& sample)
+{
+    SIMDVector vectorOffset = VectorMultiply(
+        VectorAdd(VectorSetW(LoadFloat(sample), 0.0f), VectorReplicate(displacement.bias)),
+        VectorReplicate(displacement.amplitude)
+    );
+    if(displacement.mode != DeformableDisplacementMode::VectorTangentTexture)
+        return vectorOffset;
+
+    const SIMDVector normal = VectorSetW(LoadFloat(vertex.normal), 0.0f);
+    const SIMDVector tangentWithHandedness = LoadFloat(vertex.tangent);
+    const SIMDVector tangent = VectorSetW(tangentWithHandedness, 0.0f);
+    const SIMDVector bitangent = VectorMultiply(
+        Core::Geometry::FrameResolveBitangent(normal, tangent, VectorSet(0.0f, 1.0f, 0.0f, 0.0f)),
+        VectorReplicate(Core::Geometry::FrameTangentHandedness(VectorGetW(tangentWithHandedness), 1.0f))
+    );
+    vectorOffset = VectorMultiplyAdd(
+        normal,
+        VectorReplicate(VectorGetZ(vectorOffset)),
+        VectorMultiplyAdd(
+            bitangent,
+            VectorReplicate(VectorGetY(vectorOffset)),
+            VectorMultiply(tangent, VectorReplicate(VectorGetX(vectorOffset)))
+        )
+    );
+    return vectorOffset;
+}
+
+[[nodiscard]] bool ResolveDisplacementDebugOffset(
+    const DeformableDisplacement& displacement,
+    const DeformableDisplacementTexture* texture,
+    const DeformableVertexRest& vertex,
+    SIMDVector& outOffset)
+{
+    outOffset = VectorZero();
+    if(displacement.mode == DeformableDisplacementMode::None)
+        return false;
+
+    if(displacement.mode == DeformableDisplacementMode::ScalarUvRamp){
+        const f32 scalarOffset = (Saturate(vertex.uv0.x) * displacement.amplitude) + displacement.bias;
+        if(!IsFinite(scalarOffset))
+            return false;
+
+        outOffset = VectorScale(VectorSetW(LoadFloat(vertex.normal), 0.0f), scalarOffset);
+        return DeformableValidation::FiniteVector(outOffset, 0x7u);
+    }
+
+    if(!ValidateDebugDisplacementTexture(displacement, texture))
+        return false;
+
+    const Float4U sample = SampleDisplacementTexture(displacement, *texture, vertex.uv0);
+    if(displacement.mode == DeformableDisplacementMode::ScalarTexture){
+        const f32 scalarOffset = (sample.x + displacement.bias) * displacement.amplitude;
+        if(!IsFinite(scalarOffset))
+            return false;
+
+        outOffset = VectorScale(VectorSetW(LoadFloat(vertex.normal), 0.0f), scalarOffset);
+        return DeformableValidation::FiniteVector(outOffset, 0x7u);
+    }
+
+    if(displacement.mode == DeformableDisplacementMode::VectorTangentTexture
+        || displacement.mode == DeformableDisplacementMode::VectorObjectTexture
+    ){
+        outOffset = VectorTextureOffsetToRestFrame(displacement, vertex, sample);
+        return DeformableValidation::FiniteVector(outOffset, 0x7u);
+    }
+
+    return false;
 }
 
 [[nodiscard]] u32 ActiveSkinInfluenceCount(const SkinInfluence4& skin){
@@ -274,33 +413,35 @@ void AppendMorphDeltaDebug(const DeformableRuntimeMeshInstance& instance, Deform
 
 void AppendDisplacementMagnitudeDebug(
     const DeformableRuntimeMeshInstance& instance,
+    const DeformableDisplacementTexture* displacementTexture,
     DeformableSurfaceEditDebugSnapshot& snapshot)
 {
-    if(instance.displacement.mode != DeformableDisplacementMode::ScalarUvRamp)
+    if(instance.displacement.mode == DeformableDisplacementMode::None)
         return;
-    if(!IsFinite(instance.displacement.amplitude) || !IsFinite(instance.displacement.bias))
+    if(!ValidDeformableDisplacementDescriptor(instance.displacement)
+        || !IsFinite(instance.displacement.amplitude)
+        || !IsFinite(instance.displacement.bias)
+    )
         return;
 
     for(const DeformableVertexRest& vertex : instance.restVertices){
         if(!DeformableValidation::ValidRestVertexFrame(vertex))
             continue;
 
-        const f32 scalarOffset = (Max(0.0f, Min(1.0f, vertex.uv0.x)) * instance.displacement.amplitude)
-            + instance.displacement.bias
-        ;
-        if(!IsFinite(scalarOffset))
+        SIMDVector displacementOffset = VectorZero();
+        if(!ResolveDisplacementDebugOffset(instance.displacement, displacementTexture, vertex, displacementOffset))
             continue;
 
-        snapshot.maxDisplacementMagnitude = Max(snapshot.maxDisplacementMagnitude, Abs(scalarOffset));
-        if(!DeformableValidation::ActiveWeight(scalarOffset))
+        const f32 displacementMagnitude = Length3(displacementOffset);
+        snapshot.maxDisplacementMagnitude = Max(snapshot.maxDisplacementMagnitude, displacementMagnitude);
+        if(!DeformableValidation::ActiveWeight(displacementMagnitude))
             continue;
 
         const SIMDVector position = LoadFloat(vertex.position);
-        const SIMDVector normal = VectorSetW(LoadFloat(vertex.normal), 0.0f);
         AppendLine(
             snapshot,
             position,
-            ScaleAdd(position, normal, scalarOffset * s_DisplacementLineScale),
+            VectorMultiplyAdd(displacementOffset, VectorReplicate(s_DisplacementLineScale), position),
             s_ColorDisplacement
         );
         ++snapshot.displacementMagnitudeLineCount;
@@ -487,7 +628,11 @@ void CountEditMasks(const DeformableRuntimeMeshInstance& instance, DeformableSur
     }
 }
 
-void AppendPayloadDiagnostics(const DeformableRuntimeMeshInstance& instance, DeformableSurfaceEditDebugSnapshot& snapshot){
+void AppendPayloadDiagnostics(
+    const DeformableRuntimeMeshInstance& instance,
+    const DeformableDisplacementTexture* displacementTexture,
+    DeformableSurfaceEditDebugSnapshot& snapshot)
+{
     for(const DeformableVertexRest& vertex : instance.restVertices){
         if(!DeformableValidation::ValidRestVertexFrame(vertex))
             ++snapshot.invalidFrameCount;
@@ -522,7 +667,7 @@ void AppendPayloadDiagnostics(const DeformableRuntimeMeshInstance& instance, Def
     snapshot.displacementTextureBound = instance.displacement.texture.valid();
     AppendSkinWeightDebug(instance, snapshot);
     AppendMorphDeltaDebug(instance, snapshot);
-    AppendDisplacementMagnitudeDebug(instance, snapshot);
+    AppendDisplacementMagnitudeDebug(instance, displacementTexture, snapshot);
 }
 
 [[nodiscard]] const char* PermissionText(const DeformableSurfaceEditPermission::Enum permission){
@@ -554,6 +699,24 @@ bool BuildDeformableSurfaceEditDebugSnapshot(
     const DeformableSurfaceEditState* state,
     DeformableSurfaceEditDebugSnapshot& outSnapshot)
 {
+    return BuildDeformableSurfaceEditDebugSnapshot(
+        instance,
+        session,
+        preview,
+        state,
+        nullptr,
+        outSnapshot
+    );
+}
+
+bool BuildDeformableSurfaceEditDebugSnapshot(
+    const DeformableRuntimeMeshInstance& instance,
+    const DeformableSurfaceEditSession* session,
+    const DeformableHolePreview* preview,
+    const DeformableSurfaceEditState* state,
+    const DeformableDisplacementTexture* displacementTexture,
+    DeformableSurfaceEditDebugSnapshot& outSnapshot)
+{
     using namespace __hidden_deformable_debug_draw;
 
     ResetSnapshotPreservingOutputStorage(outSnapshot);
@@ -571,10 +734,10 @@ bool BuildDeformableSurfaceEditDebugSnapshot(
     outSnapshot.triangleCount = static_cast<u32>(instance.indices.size() / 3u);
     outSnapshot.sourceTriangleCount = instance.sourceTriangleCount;
 
-    if(!ReserveSnapshotOutputs(instance, session, preview, state, outSnapshot))
+    if(!ReserveSnapshotOutputs(instance, session, preview, state, displacementTexture, outSnapshot))
         return false;
 
-    AppendPayloadDiagnostics(instance, outSnapshot);
+    AppendPayloadDiagnostics(instance, displacementTexture, outSnapshot);
     CountEditMasks(instance, outSnapshot);
     AppendInvalidTriangleDebug(instance, outSnapshot);
     AppendPreviewDebug(session, preview, outSnapshot);

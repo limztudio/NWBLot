@@ -2298,6 +2298,69 @@ static void TestSurfaceEditDebugSnapshotCapturesPreviewAndWallVertices(TestConte
         NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(rampSnapshot.maxDisplacementMagnitude, 0.2f));
         NWB_ECS_GRAPHICS_TEST_CHECK(context, rampSnapshot.lines.size() == 2u);
     }
+    {
+        NWB::Impl::DeformableRuntimeMeshInstance textureInstance = MakeTriangleInstance();
+        textureInstance.displacement.mode = NWB::Impl::DeformableDisplacementMode::ScalarTexture;
+        textureInstance.displacement.texture.virtualPath = Name("tests/textures/debug_scalar_displacement");
+        textureInstance.displacement.amplitude = 2.0f;
+
+        NWB::Impl::DeformableDisplacementTexture texture = MakeTestDisplacementTexture(
+            "tests/textures/debug_scalar_displacement",
+            Float4U(0.25f, 0.0f, 0.0f, 0.0f),
+            Float4U(0.5f, 0.0f, 0.0f, 0.0f),
+            Float4U(1.0f, 0.0f, 0.0f, 0.0f)
+        );
+
+        NWB::Impl::DeformableSurfaceEditDebugSnapshot textureSnapshot;
+        NWB_ECS_GRAPHICS_TEST_CHECK(
+            context,
+            NWB::Impl::BuildDeformableSurfaceEditDebugSnapshot(
+                textureInstance,
+                nullptr,
+                nullptr,
+                nullptr,
+                &texture,
+                textureSnapshot
+            )
+        );
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, textureSnapshot.displacementMagnitudeLineCount == 3u);
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(textureSnapshot.maxDisplacementMagnitude, 2.0f));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, textureSnapshot.lines.size() == 3u);
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(textureSnapshot.lines[1u].end.z, 1.0f));
+    }
+    {
+        NWB::Impl::DeformableRuntimeMeshInstance textureInstance = MakeTriangleInstance();
+        textureInstance.displacement.mode = NWB::Impl::DeformableDisplacementMode::VectorObjectTexture;
+        textureInstance.displacement.texture.virtualPath = Name("tests/textures/debug_vector_displacement");
+        textureInstance.displacement.amplitude = 2.0f;
+
+        const Float4U vectorSample(0.25f, -0.125f, 0.5f, 0.0f);
+        NWB::Impl::DeformableDisplacementTexture texture = MakeTestDisplacementTexture(
+            "tests/textures/debug_vector_displacement",
+            vectorSample,
+            vectorSample,
+            vectorSample
+        );
+
+        NWB::Impl::DeformableSurfaceEditDebugSnapshot textureSnapshot;
+        NWB_ECS_GRAPHICS_TEST_CHECK(
+            context,
+            NWB::Impl::BuildDeformableSurfaceEditDebugSnapshot(
+                textureInstance,
+                nullptr,
+                nullptr,
+                nullptr,
+                &texture,
+                textureSnapshot
+            )
+        );
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, textureSnapshot.displacementMagnitudeLineCount == 3u);
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(textureSnapshot.maxDisplacementMagnitude, Sqrt(1.3125f)));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, textureSnapshot.lines.size() == 3u);
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(textureSnapshot.lines[0u].end.x, -0.5f));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(textureSnapshot.lines[0u].end.y, -1.25f));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(textureSnapshot.lines[0u].end.z, 1.0f));
+    }
 
     NWB::Impl::DeformableHoleEditResult result;
     NWB::Impl::DeformableSurfaceEditRecord record;

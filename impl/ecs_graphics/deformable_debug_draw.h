@@ -91,6 +91,14 @@ struct DeformableSurfaceEditDebugSnapshot{
     const DeformableSurfaceEditState* state,
     DeformableSurfaceEditDebugSnapshot& outSnapshot
 );
+[[nodiscard]] bool BuildDeformableSurfaceEditDebugSnapshot(
+    const DeformableRuntimeMeshInstance& instance,
+    const DeformableSurfaceEditSession* session,
+    const DeformableHolePreview* preview,
+    const DeformableSurfaceEditState* state,
+    const DeformableDisplacementTexture* displacementTexture,
+    DeformableSurfaceEditDebugSnapshot& outSnapshot
+);
 [[nodiscard]] bool BuildDeformableSurfaceEditDebugDump(const DeformableSurfaceEditDebugSnapshot& snapshot, AString& outDump);
 
 

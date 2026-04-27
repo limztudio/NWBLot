@@ -84,6 +84,40 @@ static constexpr AStringView s_AccessoryMaterialPath = "project/materials/mat_ac
     }
 }
 
+[[nodiscard]] static bool DeformableDisplacementModeUsesTexture(const u32 mode){
+    return mode == NWB::Impl::DeformableDisplacementMode::ScalarTexture
+        || mode == NWB::Impl::DeformableDisplacementMode::VectorTangentTexture
+        || mode == NWB::Impl::DeformableDisplacementMode::VectorObjectTexture
+    ;
+}
+
+[[nodiscard]] static const NWB::Impl::DeformableDisplacementTexture* ResolveSurfaceEditDebugDisplacementTexture(
+    const NWB::Core::ECSGraphics::DeformableRuntimeMeshInstance& instance,
+    NWB::Core::Assets::AssetManager& assetManager,
+    UniquePtr<NWB::Core::Assets::IAsset>& outLoadedAsset)
+{
+    outLoadedAsset.reset();
+    const NWB::Impl::DeformableDisplacement& displacement = instance.displacement;
+    if(!DeformableDisplacementModeUsesTexture(displacement.mode) || !displacement.texture.valid())
+        return nullptr;
+
+    if(!assetManager.loadSync(
+            NWB::Impl::DeformableDisplacementTexture::AssetTypeName(),
+            displacement.texture.name(),
+            outLoadedAsset
+        )
+        || !outLoadedAsset
+        || outLoadedAsset->assetType() != NWB::Impl::DeformableDisplacementTexture::AssetTypeName()
+    )
+        return nullptr;
+
+    const auto* texture = static_cast<const NWB::Impl::DeformableDisplacementTexture*>(outLoadedAsset.get());
+    return texture->virtualPath() == displacement.texture.name() && texture->validatePayload()
+        ? texture
+        : nullptr
+    ;
+}
+
 [[nodiscard]] static bool ResolveKeyIndex(const i32 key, usize& outIndex){
     if(key < 0 || key > NWB::Core::Key::Menu)
         return false;
@@ -1730,11 +1764,20 @@ void ProjectTestbed::logSurfaceEditDebugSnapshot(){
     }
 
     NWB::Core::ECSGraphics::DeformableSurfaceEditDebugSnapshot snapshot;
+    UniquePtr<NWB::Core::Assets::IAsset> debugDisplacementTextureAsset;
+    const auto* debugDisplacementTexture =
+        __hidden_project_testbed_runtime::ResolveSurfaceEditDebugDisplacementTexture(
+            *instance,
+            m_context.assetManager,
+            debugDisplacementTextureAsset
+        )
+    ;
     if(!NWB::Core::ECSGraphics::BuildDeformableSurfaceEditDebugSnapshot(
             *instance,
             m_surfaceEditPreviewActive ? &m_surfaceEditSession : nullptr,
             m_surfaceEditPreviewActive ? &m_surfaceEditPreview : nullptr,
             &m_surfaceEditState,
+            debugDisplacementTexture,
             snapshot
         )
     ){

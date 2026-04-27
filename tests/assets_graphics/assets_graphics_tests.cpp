@@ -643,6 +643,43 @@ asset.source_samples = {
 };
 )";
 
+static constexpr AStringView s_UnreferencedVertexGeneratedSourceSampleDeformableMeta = R"(deformable_geometry asset;
+
+asset.index_type = "u16";
+
+asset.positions = [
+    [-0.5, -0.5, 0.0],
+    [ 0.5, -0.5, 0.0],
+    [ 0.0,  0.5, 0.0],
+    [ 2.0,  2.0, 0.0],
+];
+
+asset.normals = [
+    [0.0, 0.0, 1.0],
+    [0.0, 0.0, 1.0],
+    [0.0, 0.0, 1.0],
+    [0.0, 0.0, 1.0],
+];
+
+asset.tangents = [
+    [1.0, 0.0, 0.0, 1.0],
+    [1.0, 0.0, 0.0, 1.0],
+    [1.0, 0.0, 0.0, 1.0],
+    [1.0, 0.0, 0.0, 1.0],
+];
+
+asset.uv0 = [
+    [0.0, 0.0],
+    [1.0, 0.0],
+    [0.5, 1.0],
+    [1.0, 1.0],
+];
+
+asset.indices = [
+    [0, 1, 2],
+];
+)";
+
 static constexpr AStringView s_MismatchedMorphDeformableMeta = R"(deformable_geometry asset;
 
 asset.index_type = "u16";
@@ -1907,15 +1944,17 @@ static void TestDeformableGeometryCookerValidationFailures(TestContext& context)
     expectCookFailure(s_MissingIndexTypeDeformableMeta, "missing_index_type");
     expectCookFailure(s_MismatchedSkinDeformableMeta, "mismatched_skin");
     expectCookFailure(s_MismatchedSourceSamplesDeformableMeta, "mismatched_source_samples");
+    expectCookFailure(s_UnreferencedVertexGeneratedSourceSampleDeformableMeta, "unreferenced_source_sample_generation");
     expectCookFailure(s_MismatchedMorphDeformableMeta, "mismatched_morph");
     expectCookFailure(s_MissingMorphTangentDeformableMeta, "missing_morph_tangent");
     expectCookFailure(s_SourceImportDeformableMeta, "source_import");
     expectCookFailure(s_MismatchedEditMaskDeformableMeta, "mismatched_edit_mask");
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() >= 8u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() >= 9u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("rest vertex stream counts must match")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("'index_type' must be 'u16' or 'u32'")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("skin streams must match vertex count")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("source samples must match vertex count")));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("cannot generate source sample for unreferenced vertex")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(
         context,
         logger.sawErrorContaining(NWB_TEXT("morph 'lift' stream counts must match and must not be empty"))

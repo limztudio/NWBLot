@@ -445,6 +445,54 @@ asset.morphs = {
 };
 )";
 
+static constexpr AStringView s_NonnormalizedSkinDeformableMeta = R"(deformable_geometry asset;
+
+asset.index_type = "u16";
+
+asset.positions = [
+    [-0.5, -0.5, 0.0],
+    [ 0.5, -0.5, 0.0],
+    [ 0.0,  0.5, 0.0],
+];
+
+asset.normals = [
+    [0.0, 0.0, 1.0],
+    [0.0, 0.0, 1.0],
+    [0.0, 0.0, 1.0],
+];
+
+asset.tangents = [
+    [1.0, 0.0, 0.0, 1.0],
+    [1.0, 0.0, 0.0, 1.0],
+    [1.0, 0.0, 0.0, 1.0],
+];
+
+asset.uv0 = [
+    [0.0, 0.0],
+    [1.0, 0.0],
+    [0.5, 1.0],
+];
+
+asset.indices = [
+    [0, 1, 2],
+];
+
+asset.skeleton_joint_count = 2;
+
+asset.skin = {
+    "joints0": [
+        [0, 0, 0, 0],
+        [0, 1, 0, 0],
+        [0, 1, 0, 0],
+    ],
+    "weights0": [
+        [2.0, 0.0, 0.0, 0.0],
+        [3.0, 1.0, 0.0, 0.0],
+        [0.0, 4.0, 0.0, 0.0],
+    ],
+};
+)";
+
 #if defined(NWB_FINAL)
 static constexpr AStringView s_MismatchedDeformableMeta = R"(deformable_geometry asset;
 
@@ -1724,6 +1772,41 @@ static void TestDeformableGeometryCookerNativeCharacterMock(TestContext& context
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 0u);
 }
 
+static void TestDeformableGeometryCookerNormalizesSkinWeights(TestContext& context){
+    CapturingLogger logger;
+    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
+
+    TestArena testArena;
+    Path root;
+    UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
+    if(!CookAndLoadMinimalDeformable(
+        context,
+        testArena,
+        s_NonnormalizedSkinDeformableMeta,
+        "nonnormalized_skin",
+        root,
+        loadedAsset
+    ))
+        return;
+
+    {
+        const NWB::Impl::DeformableGeometry& loadedGeometry =
+            static_cast<const NWB::Impl::DeformableGeometry&>(*loadedAsset)
+        ;
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skin().size() == 3u);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skeletonJointCount() == 2u);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skin()[0u].weight[0] == 1.0f);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skin()[1u].weight[0] == 0.75f);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skin()[1u].weight[1] == 0.25f);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skin()[2u].weight[0] == 0.0f);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skin()[2u].weight[1] == 1.0f);
+    }
+
+    ErrorCode errorCode;
+    static_cast<void>(RemoveAllIfExists(root, errorCode));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 0u);
+}
+
 static void TestDeformableGeometryCookerTextureDisplacementModes(TestContext& context){
     CapturingLogger logger;
     NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
@@ -2120,6 +2203,7 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
     __hidden_assets_graphics_tests::TestDeformableGeometryCookerU32IndexType(context);
     __hidden_assets_graphics_tests::TestDeformableGeometryCookerExplicitEmptyOptionalLists(context);
     __hidden_assets_graphics_tests::TestDeformableGeometryCookerNativeCharacterMock(context);
+    __hidden_assets_graphics_tests::TestDeformableGeometryCookerNormalizesSkinWeights(context);
     __hidden_assets_graphics_tests::TestDeformableGeometryCookerTextureDisplacementModes(context);
     __hidden_assets_graphics_tests::TestDeformableGeometryCookerValidationFailures(context);
     __hidden_assets_graphics_tests::TestDeformableGeometryValidationFailures(context);

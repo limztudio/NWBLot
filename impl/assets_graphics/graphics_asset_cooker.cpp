@@ -1276,6 +1276,49 @@ static bool BuildDeformableRestVertices(
     return true;
 }
 
+static bool NormalizeSkinInfluenceWeights(
+    const Path& nwbFilePath,
+    const AStringView label,
+    SkinInfluence4& influence
+){
+    f32 weightSum = 0.0f;
+    for(u32 influenceIndex = 0u; influenceIndex < 4u; ++influenceIndex){
+        const f32 weight = influence.weight[influenceIndex];
+        if(!IsFinite(weight) || weight < 0.0f){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Deformable geometry meta '{}': '{}' weights must be finite and non-negative"),
+                PathToString<tchar>(nwbFilePath),
+                StringConvert(label)
+            );
+            return false;
+        }
+        weightSum += weight;
+    }
+
+    if(!IsFinite(weightSum) || weightSum <= DeformableValidation::s_Epsilon){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Deformable geometry meta '{}': '{}' weights must contain a positive total"),
+            PathToString<tchar>(nwbFilePath),
+            StringConvert(label)
+        );
+        return false;
+    }
+
+    const f32 inverseWeightSum = 1.0f / weightSum;
+    for(f32& weight : influence.weight)
+        weight *= inverseWeightSum;
+
+    if(!DeformableValidation::ValidSkinInfluence(influence)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Deformable geometry meta '{}': '{}' weights failed normalization"),
+            PathToString<tchar>(nwbFilePath),
+            StringConvert(label)
+        );
+        return false;
+    }
+    return true;
+}
+
 static bool ParseSkinInfluences(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
@@ -1324,6 +1367,8 @@ static bool ParseSkinInfluences(
         if(!ParseU16Tuple(nwbFilePath, jointList[i], jointLabel, influence.joint))
             return false;
         if(!ParseF32Tuple(nwbFilePath, weightList[i], weightLabel, influence.weight))
+            return false;
+        if(!NormalizeSkinInfluenceWeights(nwbFilePath, weightLabel, influence))
             return false;
         outSkin.push_back(influence);
     }

@@ -6,6 +6,7 @@
 #include <impl/ecs_graphics/deformable_picking.h>
 #include <impl/ecs_graphics/deformable_surface_edit.h>
 #include <impl/ecs_graphics/deformer_morph_payload.h>
+#include <impl/ecs_graphics/deformer_skin_payload.h>
 
 #include <tests/test_context.h>
 
@@ -15,6 +16,7 @@
 #include <core/scene/transform_component.h>
 #include <impl/assets_graphics/geometry_asset.h>
 #include <impl/assets_graphics/material_asset.h>
+#include <logger/client/logger.h>
 
 #include <global/compile.h>
 #include <global/limit.h>
@@ -33,6 +35,29 @@ using TestContext = NWB::Tests::TestContext;
 
 
 #define NWB_ECS_GRAPHICS_TEST_CHECK(context, expression) (context).checkTrue((expression), #expression, __FILE__, __LINE__)
+
+
+class CapturingLogger final : public NWB::Log::IClient{
+public:
+    virtual void enqueue(TString&& str, NWB::Log::Type::Enum type = NWB::Log::Type::Info)override{
+        record(str, type);
+    }
+    virtual void enqueue(const TString& str, NWB::Log::Type::Enum type = NWB::Log::Type::Info)override{
+        record(str, type);
+    }
+
+    [[nodiscard]] u32 errorCount()const{ return m_errorCount; }
+
+private:
+    void record(const TString& str, const NWB::Log::Type::Enum type){
+        static_cast<void>(str);
+        if(type == NWB::Log::Type::Error)
+            ++m_errorCount;
+    }
+
+private:
+    u32 m_errorCount = 0;
+};
 
 
 static constexpr AStringView s_MockAccessoryGeometryPath = "project/meshes/mock_earring";
@@ -1852,6 +1877,76 @@ static void TestDeformerMorphPayloadBuildsSparseVertexRanges(TestContext& contex
     NWB_ECS_GRAPHICS_TEST_CHECK(context, ranges[2u].deltaCount == 1u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(deltas[ranges[0u].firstDelta].deltaPosition.z, 1.0f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(deltas[ranges[2u].firstDelta].deltaPosition.y, 2.0f));
+}
+
+static NWB::Impl::DeformableJointMatrix MakeIdentityJointMatrix(){
+    NWB::Impl::DeformableJointMatrix joint;
+    joint.column0 = Float4(1.0f, 0.0f, 0.0f, 0.0f);
+    joint.column1 = Float4(0.0f, 1.0f, 0.0f, 0.0f);
+    joint.column2 = Float4(0.0f, 0.0f, 1.0f, 0.0f);
+    joint.column3 = Float4(0.0f, 0.0f, 0.0f, 1.0f);
+    return joint;
+}
+
+static void TestDeformerSkinPayloadValidatesSkeletonAndPalette(TestContext& context){
+    NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
+    AssignSingleJointSkin(instance, 0u);
+    instance.handle.value = 517u;
+
+    NWB::Impl::DeformableJointPaletteComponent joints;
+    joints.joints.push_back(MakeIdentityJointMatrix());
+
+    Vector<NWB::Impl::DeformerSystem::DeformerSkinInfluenceGpu> skinInfluences;
+    Vector<NWB::Impl::DeformableJointMatrix> jointMatrices;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Impl::DeformerSkinPayload::BuildSkinPayload(instance, &joints, skinInfluences, jointMatrices)
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, skinInfluences.size() == instance.restVertices.size());
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, jointMatrices.size() == 1u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, skinInfluences[0u].joint[0u] == 0u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(skinInfluences[0u].weight.x, 1.0f));
+
+#if defined(NWB_FINAL)
+    CapturingLogger logger;
+    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
+
+    NWB::Impl::DeformableRuntimeMeshInstance missingSkeleton = instance;
+    missingSkeleton.skeletonJointCount = 0u;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        !NWB::Impl::DeformerSkinPayload::BuildSkinPayload(missingSkeleton, &joints, skinInfluences, jointMatrices)
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, skinInfluences.empty());
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, jointMatrices.empty());
+
+    NWB::Impl::DeformableRuntimeMeshInstance outsideSkeleton = instance;
+    outsideSkeleton.skin[0u] = MakeSingleJointSkin(1u);
+    outsideSkeleton.skeletonJointCount = 1u;
+    joints.joints.push_back(MakeIdentityJointMatrix());
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        !NWB::Impl::DeformerSkinPayload::BuildSkinPayload(outsideSkeleton, &joints, skinInfluences, jointMatrices)
+    );
+
+    NWB::Impl::DeformableRuntimeMeshInstance outsidePalette = instance;
+    outsidePalette.skin[0u] = MakeSingleJointSkin(1u);
+    outsidePalette.skeletonJointCount = 2u;
+    joints.joints.resize(1u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        !NWB::Impl::DeformerSkinPayload::BuildSkinPayload(outsidePalette, &joints, skinInfluences, jointMatrices)
+    );
+
+    NWB::Impl::DeformableRuntimeMeshInstance nonAffineJoint = instance;
+    joints.joints[0u] = MakeIdentityJointMatrix();
+    joints.joints[0u].column3.w = 0.0f;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        !NWB::Impl::DeformerSkinPayload::BuildSkinPayload(nonAffineJoint, &joints, skinInfluences, jointMatrices)
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 4u);
+#endif
 }
 
 static void TestRestSpaceHoleEditCreatesPerInstancePatch(TestContext& context){
@@ -4927,6 +5022,7 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
     __hidden_ecs_graphics_tests::TestDeformerMorphPayloadSignatureChangesWithWeights(context);
     __hidden_ecs_graphics_tests::TestDeformerMorphPayloadSignatureChangesWithEditRevision(context);
     __hidden_ecs_graphics_tests::TestDeformerMorphPayloadBuildsSparseVertexRanges(context);
+    __hidden_ecs_graphics_tests::TestDeformerSkinPayloadValidatesSkeletonAndPalette(context);
     __hidden_ecs_graphics_tests::TestRestSpaceHoleEditCreatesPerInstancePatch(context);
     __hidden_ecs_graphics_tests::TestRestSpaceHoleEditTransfersAndInpaintsWallAttributes(context);
     __hidden_ecs_graphics_tests::TestRestSpaceHoleEditWallTrianglesKeepRecoverableProvenance(context);

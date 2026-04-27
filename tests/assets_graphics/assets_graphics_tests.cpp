@@ -746,6 +746,35 @@ static bool WriteTextFile(const Path& filePath, const AStringView text){
     return static_cast<bool>(file);
 }
 
+static AString BuildTextureDisplacementDeformableMeta(
+    const AStringView space,
+    const AStringView mode,
+    const AStringView texturePath
+){
+    AString meta(s_MinimalDeformableMeta.data(), s_MinimalDeformableMeta.size());
+    const auto append = [&](const AStringView text){ meta.append(text.data(), text.size()); };
+    append(R"(
+
+asset.displacement = {
+    "space": ")");
+    append(space);
+    append(R"(",
+    "mode": ")");
+    append(mode);
+    append(R"(",
+    "field": "texture",
+    "texture": ")");
+    append(texturePath);
+    append(R"(",
+    "amplitude": 0.5,
+    "bias": -0.25,
+    "uv_scale": [2.0, 3.0],
+    "uv_offset": [0.25, 0.5],
+};
+)");
+    return meta;
+}
+
 static const char* AssetsGraphicsTestConfigurationName(){
 #if defined(NWB_DEBUG)
     return "dbg";
@@ -1277,6 +1306,7 @@ static void TestDeformableGeometryCodecRoundTripsTextureDisplacement(TestContext
     };
 
     checkRoundTrip(NWB::Impl::DeformableDisplacementMode::ScalarTexture, "tests/textures/displacement_height");
+    checkRoundTrip(NWB::Impl::DeformableDisplacementMode::VectorTangentTexture, "tests/textures/displacement_tangent");
     checkRoundTrip(NWB::Impl::DeformableDisplacementMode::VectorObjectTexture, "tests/textures/displacement_object");
 }
 
@@ -1664,6 +1694,76 @@ static void TestDeformableGeometryCookerNativeCharacterMock(TestContext& context
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 0u);
 }
 
+static void TestDeformableGeometryCookerTextureDisplacementModes(TestContext& context){
+    CapturingLogger logger;
+    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
+
+    TestArena testArena;
+    auto checkCookedDisplacement = [&](
+        const AStringView caseName,
+        const AStringView space,
+        const AStringView mode,
+        const AStringView texturePath,
+        const u32 expectedMode
+    ){
+        const AString meta = BuildTextureDisplacementDeformableMeta(space, mode, texturePath);
+
+        Path root;
+        UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
+        if(!CookAndLoadMinimalDeformable(
+            context,
+            testArena,
+            AStringView(meta.data(), meta.size()),
+            caseName,
+            root,
+            loadedAsset
+        ))
+            return;
+
+        {
+            const NWB::Impl::DeformableGeometry& loadedGeometry =
+                static_cast<const NWB::Impl::DeformableGeometry&>(*loadedAsset)
+            ;
+            const NWB::Impl::DeformableDisplacement& displacement = loadedGeometry.displacement();
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, displacement.mode == expectedMode);
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, displacement.texture.name() == Name(texturePath));
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.displacementTextureVirtualPathText().view() == texturePath);
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, displacement.amplitude == 0.5f);
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, displacement.bias == -0.25f);
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, displacement.uvScale.x == 2.0f);
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, displacement.uvScale.y == 3.0f);
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, displacement.uvOffset.x == 0.25f);
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, displacement.uvOffset.y == 0.5f);
+        }
+
+        ErrorCode errorCode;
+        static_cast<void>(RemoveAllIfExists(root, errorCode));
+    };
+
+    checkCookedDisplacement(
+        "cooked_scalar_texture_displacement",
+        "tangent",
+        "scalar",
+        "tests/textures/cooked_scalar_height",
+        NWB::Impl::DeformableDisplacementMode::ScalarTexture
+    );
+    checkCookedDisplacement(
+        "cooked_vector_tangent_displacement",
+        "tangent",
+        "vector",
+        "tests/textures/cooked_vector_tangent",
+        NWB::Impl::DeformableDisplacementMode::VectorTangentTexture
+    );
+    checkCookedDisplacement(
+        "cooked_vector_object_displacement",
+        "object",
+        "vector",
+        "tests/textures/cooked_vector_object",
+        NWB::Impl::DeformableDisplacementMode::VectorObjectTexture
+    );
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 0u);
+}
+
 static void TestDeformableGeometryCookerValidationFailures(TestContext& context){
 #if defined(NWB_FINAL)
     CapturingLogger logger;
@@ -1973,6 +2073,7 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
     __hidden_assets_graphics_tests::TestDeformableGeometryCookerU32IndexType(context);
     __hidden_assets_graphics_tests::TestDeformableGeometryCookerExplicitEmptyOptionalLists(context);
     __hidden_assets_graphics_tests::TestDeformableGeometryCookerNativeCharacterMock(context);
+    __hidden_assets_graphics_tests::TestDeformableGeometryCookerTextureDisplacementModes(context);
     __hidden_assets_graphics_tests::TestDeformableGeometryCookerValidationFailures(context);
     __hidden_assets_graphics_tests::TestDeformableGeometryValidationFailures(context);
     __hidden_assets_graphics_tests::TestFormatBlockDimensions(context);

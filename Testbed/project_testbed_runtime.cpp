@@ -1010,6 +1010,7 @@ void ProjectTestbed::attachPendingSurfaceEditAccessory(){
     }
     *attachmentComponent = attachment;
     m_surfaceEditState = Move(loadedState);
+    m_surfaceEditHistory.redoStack.clear();
 
     NWB_LOGGER_ESSENTIAL_INFO(
         NWB_TEXT("Surface edit: committed hole rev={} radius={} ellipse={} depth={} accessory={} persisted={} bytes"),
@@ -1077,6 +1078,7 @@ void ProjectTestbed::queueSurfaceEditReplay(){
         replayScale
     );
     m_surfaceEditState = Move(loadedState);
+    m_surfaceEditHistory.redoStack.clear();
     m_pendingSurfaceEditReplay = true;
     clearSurfaceEditPreview();
     clearPendingSurfaceEditAccessory();
@@ -1128,9 +1130,204 @@ void ProjectTestbed::applyPendingSurfaceEditReplay(){
     );
 }
 
+bool ProjectTestbed::buildSurfaceEditCleanBase(
+    const NWB::Core::ECSGraphics::DeformableRuntimeMeshInstance& instance,
+    NWB::Core::ECSGraphics::DeformableRuntimeMeshInstance& outCleanBase)const
+{
+    outCleanBase = NWB::Core::ECSGraphics::DeformableRuntimeMeshInstance{};
+    const Name sourceName = instance.source.name();
+    if(!sourceName)
+        return false;
+
+    UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
+    if(!m_context.assetManager.loadSync(
+            NWB::Impl::DeformableGeometry::AssetTypeName(),
+            sourceName,
+            loadedAsset
+        )
+        || !loadedAsset
+        || loadedAsset->assetType() != NWB::Impl::DeformableGeometry::AssetTypeName()
+    )
+        return false;
+
+    const auto& geometry = static_cast<const NWB::Impl::DeformableGeometry&>(*loadedAsset);
+    outCleanBase.entity = instance.entity;
+    outCleanBase.handle = instance.handle;
+    outCleanBase.source = instance.source;
+    outCleanBase.restVertices = geometry.restVertices();
+    outCleanBase.indices = geometry.indices();
+    outCleanBase.sourceTriangleCount = static_cast<u32>(geometry.indices().size() / 3u);
+    outCleanBase.skeletonJointCount = geometry.skeletonJointCount();
+    outCleanBase.skin = geometry.skin();
+    outCleanBase.sourceSamples = geometry.sourceSamples();
+    outCleanBase.editMaskPerTriangle = geometry.editMaskPerTriangle();
+    outCleanBase.displacement = geometry.displacement();
+    outCleanBase.morphs = geometry.morphs();
+    outCleanBase.editRevision = 0u;
+    outCleanBase.dirtyFlags = NWB::Core::ECSGraphics::RuntimeMeshDirtyFlag::All;
+    return true;
+}
+
+void ProjectTestbed::hideSurfaceEditAccessoriesForTarget(const NWB::Core::ECS::EntityID targetEntity){
+    auto accessoryView = m_world->view<
+        NWB::Core::ECSGraphics::RendererComponent,
+        NWB::Core::ECSGraphics::DeformableAccessoryAttachmentComponent
+    >();
+    for(auto&& [entity, renderer, attachment] : accessoryView){
+        static_cast<void>(entity);
+        if(attachment.targetEntity == targetEntity){
+            renderer.visible = false;
+            attachment.targetEntity = NWB::Core::ECS::ENTITY_ID_INVALID;
+            attachment.runtimeMesh.reset();
+        }
+    }
+}
+
+bool ProjectTestbed::restoreSurfaceEditAccessoryEntities(){
+    const NWB::Core::ECSGraphics::RuntimeMeshHandle runtimeMesh =
+        rendererSystem().deformableRuntimeMeshHandle(m_deformableMorphEntity)
+    ;
+    if(!runtimeMesh.valid())
+        return false;
+
+    hideSurfaceEditAccessoriesForTarget(m_deformableMorphEntity);
+    for(const auto& accessory : m_surfaceEditState.accessories){
+        if(!accessory.geometry.valid() || !accessory.material.valid())
+            return false;
+
+        const NWB::Core::ECS::EntityID accessoryEntity =
+            __hidden_project_testbed_runtime::CreateAccessoryRendererEntity(
+                *m_world,
+                accessory.geometry,
+                accessory.material
+            )
+        ;
+        auto* attachment =
+            m_world->tryGetComponent<NWB::Core::ECSGraphics::DeformableAccessoryAttachmentComponent>(accessoryEntity)
+        ;
+        if(!attachment)
+            return false;
+
+        attachment->targetEntity = m_deformableMorphEntity;
+        attachment->runtimeMesh = runtimeMesh;
+        attachment->anchorEditId = accessory.anchorEditId;
+        attachment->firstWallVertex = accessory.firstWallVertex;
+        attachment->wallVertexCount = accessory.wallVertexCount;
+        attachment->setNormalOffset(accessory.normalOffset);
+        attachment->setUniformScale(accessory.uniformScale);
+    }
+    return true;
+}
+
+void ProjectTestbed::undoSurfaceEdit(){
+    if(m_pendingSurfaceEditReplay || m_pendingSurfaceEditAccessory){
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit undo: waiting for pending replay/accessory work"));
+        return;
+    }
+    if(m_surfaceEditState.edits.empty()){
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit undo: no saved edits"));
+        return;
+    }
+
+    const NWB::Core::ECSGraphics::RuntimeMeshHandle runtimeMesh =
+        rendererSystem().deformableRuntimeMeshHandle(m_deformableMorphEntity)
+    ;
+    auto* instance = rendererSystem().findDeformableRuntimeMesh(runtimeMesh);
+    if(!runtimeMesh.valid() || !instance){
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit undo: active runtime mesh is unavailable"));
+        return;
+    }
+
+    NWB::Core::ECSGraphics::DeformableRuntimeMeshInstance cleanBase;
+    if(!buildSurfaceEditCleanBase(*instance, cleanBase)){
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit undo: failed to load clean source mesh"));
+        return;
+    }
+
+    NWB::Core::ECSGraphics::DeformableSurfaceEditUndoResult undoResult;
+    if(!NWB::Core::ECSGraphics::UndoLastSurfaceEdit(
+            *instance,
+            cleanBase,
+            m_surfaceEditState,
+            &undoResult,
+            &m_surfaceEditHistory
+        )
+    ){
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit undo: failed to replay state without the latest edit"));
+        return;
+    }
+
+    clearSurfaceEditPreview();
+    clearPendingSurfaceEditAccessory();
+    m_surfaceEditDebugRuntimeMesh = runtimeMesh;
+    if(!restoreSurfaceEditAccessoryEntities())
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit undo: failed to restore accessory entities"));
+
+    NWB_LOGGER_ESSENTIAL_INFO(
+        NWB_TEXT("Surface edit undo: edit={} removed_accessories={} remaining_edits={} revision={}"),
+        undoResult.undoneEditId,
+        undoResult.removedAccessoryCount,
+        m_surfaceEditState.edits.size(),
+        undoResult.replay.finalEditRevision
+    );
+}
+
+void ProjectTestbed::redoSurfaceEdit(){
+    if(m_pendingSurfaceEditReplay || m_pendingSurfaceEditAccessory){
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit redo: waiting for pending replay/accessory work"));
+        return;
+    }
+    if(m_surfaceEditHistory.redoStack.empty()){
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit redo: no edit history"));
+        return;
+    }
+
+    const NWB::Core::ECSGraphics::RuntimeMeshHandle runtimeMesh =
+        rendererSystem().deformableRuntimeMeshHandle(m_deformableMorphEntity)
+    ;
+    auto* instance = rendererSystem().findDeformableRuntimeMesh(runtimeMesh);
+    if(!runtimeMesh.valid() || !instance){
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit redo: active runtime mesh is unavailable"));
+        return;
+    }
+
+    NWB::Core::ECSGraphics::DeformableRuntimeMeshInstance cleanBase;
+    if(!buildSurfaceEditCleanBase(*instance, cleanBase)){
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit redo: failed to load clean source mesh"));
+        return;
+    }
+
+    NWB::Core::ECSGraphics::DeformableSurfaceEditRedoResult redoResult;
+    if(!NWB::Core::ECSGraphics::RedoLastSurfaceEdit(
+            *instance,
+            cleanBase,
+            m_surfaceEditState,
+            m_surfaceEditHistory,
+            &redoResult
+        )
+    ){
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit redo: failed to replay redo state"));
+        return;
+    }
+
+    clearSurfaceEditPreview();
+    clearPendingSurfaceEditAccessory();
+    m_surfaceEditDebugRuntimeMesh = runtimeMesh;
+    if(!restoreSurfaceEditAccessoryEntities())
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit redo: failed to restore accessory entities"));
+
+    NWB_LOGGER_ESSENTIAL_INFO(
+        NWB_TEXT("Surface edit redo: edit={} restored_accessories={} edits={} revision={}"),
+        redoResult.redoneEditId,
+        redoResult.restoredAccessoryCount,
+        m_surfaceEditState.edits.size(),
+        redoResult.replay.finalEditRevision
+    );
+}
+
 void ProjectTestbed::logSurfaceEditControls()const{
     NWB_LOGGER_ESSENTIAL_INFO(
-        NWB_TEXT("Surface edit: left click preview, [/] radius={}, comma/period ellipse={}, -/= depth={}, Enter commit, F2 debug, F3 replay, Esc cancel"),
+        NWB_TEXT("Surface edit: left click preview, [/] radius={}, comma/period ellipse={}, -/= depth={}, Enter commit, F2 debug, F3 replay, F4 undo, F5 redo, Esc cancel"),
         m_surfaceEditRadius,
         m_surfaceEditEllipseRatio,
         m_surfaceEditDepth
@@ -1222,6 +1419,12 @@ bool ProjectTestbed::keyboardUpdate(const i32 key, const i32 scancode, const i32
         }
         else if(key == NWB::Core::Key::F3){
             queueSurfaceEditReplay();
+        }
+        else if(key == NWB::Core::Key::F4){
+            undoSurfaceEdit();
+        }
+        else if(key == NWB::Core::Key::F5){
+            redoSurfaceEdit();
         }
         else if(key == NWB::Core::Key::Escape){
             cancelSurfaceEditPreview();

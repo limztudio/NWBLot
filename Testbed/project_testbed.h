@@ -40,6 +40,14 @@ private:
     void cancelSurfaceEditPreview();
     void queueSurfaceEditReplay();
     void applyPendingSurfaceEditReplay();
+    void undoSurfaceEdit();
+    void redoSurfaceEdit();
+    [[nodiscard]] bool buildSurfaceEditCleanBase(
+        const NWB::Core::ECSGraphics::DeformableRuntimeMeshInstance& instance,
+        NWB::Core::ECSGraphics::DeformableRuntimeMeshInstance& outCleanBase
+    )const;
+    void hideSurfaceEditAccessoriesForTarget(NWB::Core::ECS::EntityID targetEntity);
+    [[nodiscard]] bool restoreSurfaceEditAccessoryEntities();
     void toggleSurfaceEditDebug();
     void logSurfaceEditDebugSnapshot();
     void logSurfaceEditControls()const;
@@ -69,6 +77,7 @@ private:
     NotNullUniquePtr<NWB::Core::ECS::World> m_world;
     NWB::Core::ECS::EntityID m_deformableMorphEntity = NWB::Core::ECS::ENTITY_ID_INVALID;
     NWB::Core::ECSGraphics::DeformableSurfaceEditState m_surfaceEditState;
+    NWB::Core::ECSGraphics::DeformableSurfaceEditHistory m_surfaceEditHistory;
     NWB::Core::ECSGraphics::DeformableSurfaceEditSession m_surfaceEditSession;
     NWB::Core::ECSGraphics::DeformableHoleEditParams m_surfaceEditPreviewParams;
     NWB::Core::ECSGraphics::DeformableHolePreview m_surfaceEditPreview;

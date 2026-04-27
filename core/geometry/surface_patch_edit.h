@@ -85,6 +85,17 @@ static_assert(IsTriviallyCopyable_V<SurfacePatchWallVertex>, "SurfacePatchWallVe
     usize outVertexCount
 );
 
+[[nodiscard]] bool BuildSurfacePatchWallVertices(
+    const Vector<MeshTopologyEdge, Core::Alloc::ScratchAllocator<MeshTopologyEdge>>& orderedBoundaryEdges,
+    const Vector<Float3U, Core::Alloc::ScratchAllocator<Float3U>>& positions,
+    const MeshTopologyBoundaryLoopFrame& frame,
+    SIMDVector frameNormal,
+    f32 depth,
+    usize wallBandCount,
+    SurfacePatchWallVertex* outVertices,
+    usize outVertexCount
+);
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

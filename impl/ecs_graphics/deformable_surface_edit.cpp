@@ -2320,13 +2320,11 @@ namespace __hidden_deformable_surface_edit{
             Core::Alloc::ScratchAllocator<Core::Geometry::SurfacePatchWallVertex>(scratchArena)
         };
         wallVertexPlan.resize(totalWallVertexCount);
-        Float3U frameNormal;
-        StoreFloat(frame.normal, &frameNormal);
         if(!Core::Geometry::BuildSurfacePatchWallVertices(
                 orderedBoundaryEdges,
                 restPositions,
                 topologyFrame,
-                frameNormal,
+                frame.normal,
                 params.depth,
                 wallBandCount,
                 wallVertexPlan.data(),

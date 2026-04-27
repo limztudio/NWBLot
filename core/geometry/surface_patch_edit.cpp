@@ -31,15 +31,26 @@ namespace __hidden_geometry_surface_patch_edit{
     ;
 }
 
+[[nodiscard]] bool NormalizeFrameNormal(const SIMDVector inputNormal, SIMDVector& outNormal){
+    if(!FrameValidDirection(inputNormal))
+        return false;
+
+    outNormal = FrameNormalizeDirection(
+        inputNormal,
+        VectorSet(0.0f, 0.0f, 1.0f, 0.0f)
+    );
+    return FrameValidDirection(outNormal);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 template<typename EdgeAllocator, typename PositionAllocator>
-bool BuildSurfacePatchLoopDistancesImpl(
+bool BuildSurfacePatchLoopDistancesWithNormalImpl(
     const Vector<MeshTopologyEdge, EdgeAllocator>& orderedBoundaryEdges,
     const Vector<Float3U, PositionAllocator>& positions,
-    const Float3U& frameNormal,
+    const SIMDVector normal,
     f32* outLoopDistances,
     const usize loopDistanceCount,
     f32& outLoopLength)
@@ -52,14 +63,6 @@ bool BuildSurfacePatchLoopDistancesImpl(
     )
         return false;
 
-    const SIMDVector inputNormal = LoadFloat(frameNormal);
-    if(!FrameValidDirection(inputNormal))
-        return false;
-
-    const SIMDVector normal = FrameNormalizeDirection(
-        inputNormal,
-        VectorSet(0.0f, 0.0f, 1.0f, 0.0f)
-    );
     if(!FrameValidDirection(normal))
         return false;
 
@@ -85,6 +88,30 @@ bool BuildSurfacePatchLoopDistancesImpl(
     }
 
     return outLoopLength > s_FrameDirectionEpsilon;
+}
+
+template<typename EdgeAllocator, typename PositionAllocator>
+bool BuildSurfacePatchLoopDistancesImpl(
+    const Vector<MeshTopologyEdge, EdgeAllocator>& orderedBoundaryEdges,
+    const Vector<Float3U, PositionAllocator>& positions,
+    const Float3U& frameNormal,
+    f32* outLoopDistances,
+    const usize loopDistanceCount,
+    f32& outLoopLength)
+{
+    outLoopLength = 0.0f;
+    SIMDVector normal;
+    if(!NormalizeFrameNormal(LoadFloat(frameNormal), normal))
+        return false;
+
+    return BuildSurfacePatchLoopDistancesWithNormalImpl(
+        orderedBoundaryEdges,
+        positions,
+        normal,
+        outLoopDistances,
+        loopDistanceCount,
+        outLoopLength
+    );
 }
 
 template<typename EdgeAllocator>
@@ -121,7 +148,7 @@ bool BuildSurfacePatchWallVerticesImpl(
     const Vector<MeshTopologyEdge, EdgeAllocator>& orderedBoundaryEdges,
     const Vector<Float3U, PositionAllocator>& positions,
     const MeshTopologyBoundaryLoopFrame& frame,
-    const Float3U& frameNormal,
+    const SIMDVector frameNormal,
     const f32 depth,
     const usize wallBandCount,
     SurfacePatchWallVertex* outVertices,
@@ -137,15 +164,8 @@ bool BuildSurfacePatchWallVerticesImpl(
     )
         return false;
 
-    const SIMDVector inputNormal = LoadFloat(frameNormal);
-    if(!FrameValidDirection(inputNormal))
-        return false;
-
-    const SIMDVector normal = FrameNormalizeDirection(
-        inputNormal,
-        VectorSet(0.0f, 0.0f, 1.0f, 0.0f)
-    );
-    if(!FrameValidDirection(normal))
+    SIMDVector normal;
+    if(!NormalizeFrameNormal(frameNormal, normal))
         return false;
 
     const usize boundaryVertexCount = orderedBoundaryEdges.size();
@@ -162,10 +182,10 @@ bool BuildSurfacePatchWallVerticesImpl(
     loopDistances.resize(boundaryVertexCount, 0.0f);
 
     f32 loopLength = 0.0f;
-    if(!BuildSurfacePatchLoopDistancesImpl(
+    if(!BuildSurfacePatchLoopDistancesWithNormalImpl(
             orderedBoundaryEdges,
             positions,
-            frameNormal,
+            normal,
             loopDistances.data(),
             loopDistances.size(),
             loopLength
@@ -292,7 +312,7 @@ bool BuildSurfacePatchWallVertices(
         orderedBoundaryEdges,
         positions,
         frame,
-        frameNormal,
+        LoadFloat(frameNormal),
         depth,
         wallBandCount,
         outVertices,
@@ -305,6 +325,28 @@ bool BuildSurfacePatchWallVertices(
     const Vector<Float3U, Core::Alloc::ScratchAllocator<Float3U>>& positions,
     const MeshTopologyBoundaryLoopFrame& frame,
     const Float3U& frameNormal,
+    const f32 depth,
+    const usize wallBandCount,
+    SurfacePatchWallVertex* outVertices,
+    const usize outVertexCount
+){
+    return __hidden_geometry_surface_patch_edit::BuildSurfacePatchWallVerticesImpl(
+        orderedBoundaryEdges,
+        positions,
+        frame,
+        LoadFloat(frameNormal),
+        depth,
+        wallBandCount,
+        outVertices,
+        outVertexCount
+    );
+}
+
+bool BuildSurfacePatchWallVertices(
+    const Vector<MeshTopologyEdge, Core::Alloc::ScratchAllocator<MeshTopologyEdge>>& orderedBoundaryEdges,
+    const Vector<Float3U, Core::Alloc::ScratchAllocator<Float3U>>& positions,
+    const MeshTopologyBoundaryLoopFrame& frame,
+    const SIMDVector frameNormal,
     const f32 depth,
     const usize wallBandCount,
     SurfacePatchWallVertex* outVertices,

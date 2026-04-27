@@ -8,6 +8,7 @@
 
 #include <core/alloc/scratch.h>
 #include <core/assets/asset_auto_registration.h>
+#include <global/binary.h>
 #include <logger/client/logger.h>
 
 
@@ -70,48 +71,6 @@ static_assert(IsTriviallyCopyable_V<DeformableDisplacementBinary>, "DeformableDi
     return !text.empty() && Name(text.view()) == name;
 }
 
-[[nodiscard]] bool AppendStringTableText(Core::Assets::AssetBytes& stringTable, const AStringView text, u32& outOffset){
-    outOffset = Limit<u32>::s_Max;
-    if(text.empty() || stringTable.size() >= Limit<u32>::s_Max)
-        return false;
-
-    const usize beginOffset = stringTable.size();
-    const usize byteCount = text.size() + 1u;
-    if(beginOffset > Limit<usize>::s_Max - byteCount)
-        return false;
-    if(byteCount > static_cast<usize>(Limit<u32>::s_Max) - beginOffset)
-        return false;
-
-    outOffset = static_cast<u32>(beginOffset);
-    stringTable.resize(beginOffset + byteCount);
-    NWB_MEMCPY(stringTable.data() + beginOffset, text.size(), text.data(), text.size());
-    stringTable[beginOffset + text.size()] = 0u;
-    return true;
-}
-
-[[nodiscard]] bool ReadStringTableText(
-    const Core::Assets::AssetBytes& binary,
-    const usize stringTableOffset,
-    const usize stringTableByteCount,
-    const u32 textOffset,
-    CompactString& outText)
-{
-    outText.clear();
-    if(textOffset == Limit<u32>::s_Max || static_cast<usize>(textOffset) >= stringTableByteCount)
-        return false;
-
-    const usize absoluteOffset = stringTableOffset + static_cast<usize>(textOffset);
-    const usize remainingBytes = stringTableByteCount - static_cast<usize>(textOffset);
-    usize textLength = 0u;
-    while(textLength < remainingBytes && binary[absoluteOffset + textLength] != 0u)
-        ++textLength;
-
-    if(textLength == 0u || textLength >= remainingBytes)
-        return false;
-
-    return outText.assign(AStringView(reinterpret_cast<const char*>(binary.data() + absoluteOffset), textLength));
-}
-
 [[nodiscard]] bool BuildDisplacementBinary(
     const DeformableDisplacement& displacement,
     const CompactString& texturePathText,
@@ -122,7 +81,7 @@ static_assert(IsTriviallyCopyable_V<DeformableDisplacementBinary>, "DeformableDi
     if(DeformableDisplacementModeUsesTexture(displacement.mode)){
         if(!StableTextMatchesName(texturePathText, displacement.texture.name()))
             return false;
-        if(!AppendStringTableText(stringTable, texturePathText.view(), outBinary.texturePathOffset))
+        if(!::AppendStringTableText(stringTable, texturePathText.view(), outBinary.texturePathOffset))
             return false;
     }
 
@@ -824,7 +783,7 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
     cursor += static_cast<usize>(stringTableByteCount);
     for(usize morphIndex = 0; morphIndex < m_morphs.size(); ++morphIndex){
         CompactString morphNameText;
-        if(!__hidden_deformable_geometry_asset::ReadStringTableText(
+        if(!::ReadStringTableText(
                 binary,
                 stringTableOffset,
                 static_cast<usize>(stringTableByteCount),
@@ -840,7 +799,7 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
     }
     if(DeformableDisplacementModeUsesTexture(displacementBinary.mode)){
         CompactString texturePathText;
-        if(!__hidden_deformable_geometry_asset::ReadStringTableText(
+        if(!::ReadStringTableText(
                 binary,
                 stringTableOffset,
                 static_cast<usize>(stringTableByteCount),
@@ -972,7 +931,7 @@ bool DeformableGeometryAssetCodec::serialize(const Core::Assets::IAsset& asset, 
         __hidden_deformable_geometry_asset::DeformableMorphHeaderBinary morphHeader;
         morphHeader.deltaCount = static_cast<u64>(morph.deltas.size());
         if(!__hidden_deformable_geometry_asset::StableTextMatchesName(morph.nameText, morph.name)
-            || !__hidden_deformable_geometry_asset::AppendStringTableText(
+            || !::AppendStringTableText(
                 stringTable,
                 morph.nameText.view(),
                 morphHeader.nameOffset

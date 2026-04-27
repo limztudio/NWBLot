@@ -103,6 +103,67 @@ template<typename Container>
     return true;
 }
 
+template<typename Container>
+[[nodiscard]] inline bool AppendStringTableText(Container& outStringTable, const AStringView text, u32& outOffset){
+    outOffset = Limit<u32>::s_Max;
+    if(text.empty() || outStringTable.size() >= Limit<u32>::s_Max)
+        return false;
+    if(text.size() > Limit<usize>::s_Max - 1u)
+        return false;
+
+    const usize beginOffset = outStringTable.size();
+    const usize byteCount = text.size() + 1u;
+    if(beginOffset > Limit<usize>::s_Max - byteCount)
+        return false;
+    if(byteCount > static_cast<usize>(Limit<u32>::s_Max) - beginOffset)
+        return false;
+
+    outOffset = static_cast<u32>(beginOffset);
+    outStringTable.resize(beginOffset + byteCount);
+    NWB_MEMCPY(outStringTable.data() + beginOffset, text.size(), text.data(), text.size());
+    outStringTable[beginOffset + text.size()] = 0u;
+    return true;
+}
+
+template<typename Container>
+[[nodiscard]] inline bool AppendStringTableText(Container& outStringTable, const CompactString& text, u32& outOffset){
+    return AppendStringTableText(outStringTable, text.view(), outOffset);
+}
+
+template<typename Container>
+[[nodiscard]] inline bool ReadStringTableText(
+    const Container& binary,
+    const usize stringTableOffset,
+    const usize stringTableByteCount,
+    const u32 textOffset,
+    CompactString& outText
+){
+    outText.clear();
+    if(textOffset == Limit<u32>::s_Max || static_cast<usize>(textOffset) >= stringTableByteCount)
+        return false;
+    if(stringTableOffset > binary.size())
+        return false;
+    if(stringTableByteCount > binary.size() - stringTableOffset)
+        return false;
+
+    const usize relativeOffset = static_cast<usize>(textOffset);
+    const usize absoluteOffset = stringTableOffset + relativeOffset;
+    const usize remainingBytes = stringTableByteCount - relativeOffset;
+    usize textLength = 0u;
+    while(textLength < remainingBytes && binary[absoluteOffset + textLength] != 0u)
+        ++textLength;
+
+    if(textLength == 0u || textLength >= remainingBytes)
+        return false;
+
+    CompactString parsedText;
+    if(!parsedText.assign(AStringView(reinterpret_cast<const char*>(binary.data() + absoluteOffset), textLength)))
+        return false;
+
+    outText = parsedText;
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

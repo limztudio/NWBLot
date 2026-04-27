@@ -970,48 +970,6 @@ void RestoreReplayAccessories(
     return true;
 }
 
-[[nodiscard]] bool AppendStringTablePath(Core::Assets::AssetBytes& stringTable, const CompactString& pathText, u32& outOffset){
-    outOffset = Limit<u32>::s_Max;
-    if(pathText.empty() || stringTable.size() >= Limit<u32>::s_Max)
-        return false;
-
-    const usize beginOffset = stringTable.size();
-    const usize byteCount = pathText.size() + 1u;
-    if(beginOffset > Limit<usize>::s_Max - byteCount)
-        return false;
-    if(byteCount > static_cast<usize>(Limit<u32>::s_Max) - beginOffset)
-        return false;
-
-    outOffset = static_cast<u32>(beginOffset);
-    stringTable.resize(beginOffset + byteCount);
-    NWB_MEMCPY(stringTable.data() + beginOffset, pathText.size(), pathText.data(), pathText.size());
-    stringTable[beginOffset + pathText.size()] = 0u;
-    return true;
-}
-
-[[nodiscard]] bool ReadStringTablePath(
-    const Core::Assets::AssetBytes& binary,
-    const usize stringTableOffset,
-    const usize stringTableByteCount,
-    const u32 pathOffset,
-    CompactString& outPath)
-{
-    outPath.clear();
-    if(pathOffset == Limit<u32>::s_Max || static_cast<usize>(pathOffset) >= stringTableByteCount)
-        return false;
-
-    const usize absoluteOffset = stringTableOffset + static_cast<usize>(pathOffset);
-    const usize remainingBytes = stringTableByteCount - static_cast<usize>(pathOffset);
-    usize textLength = 0u;
-    while(textLength < remainingBytes && binary[absoluteOffset + textLength] != 0u)
-        ++textLength;
-
-    if(textLength == 0u || textLength >= remainingBytes)
-        return false;
-
-    return outPath.assign(AStringView(reinterpret_cast<const char*>(binary.data() + absoluteOffset), textLength));
-}
-
 [[nodiscard]] bool BuildAccessoryBinaryRecordV4(
     const DeformableAccessoryAttachmentRecord& record,
     SurfaceEditAccessoryRecordBinaryV4& outRecord,
@@ -1027,8 +985,8 @@ void RestoreReplayAccessories(
     outRecord.normalOffset = record.normalOffset;
     outRecord.uniformScale = record.uniformScale;
     outRecord.wallLoopParameter = record.wallLoopParameter;
-    return AppendStringTablePath(stringTable, record.geometryVirtualPathText, outRecord.geometryPathOffset)
-        && AppendStringTablePath(stringTable, record.materialVirtualPathText, outRecord.materialPathOffset)
+    return ::AppendStringTableText(stringTable, record.geometryVirtualPathText, outRecord.geometryPathOffset)
+        && ::AppendStringTableText(stringTable, record.materialVirtualPathText, outRecord.materialPathOffset)
     ;
 }
 
@@ -1046,14 +1004,14 @@ void RestoreReplayAccessories(
     outRecord.normalOffset = binary.normalOffset;
     outRecord.uniformScale = binary.uniformScale;
     outRecord.wallLoopParameter = binary.wallLoopParameter;
-    if(!ReadStringTablePath(
+    if(!::ReadStringTableText(
             rawBinary,
             stringTableOffset,
             stringTableByteCount,
             binary.geometryPathOffset,
             outRecord.geometryVirtualPathText
         )
-        || !ReadStringTablePath(
+        || !::ReadStringTableText(
             rawBinary,
             stringTableOffset,
             stringTableByteCount,

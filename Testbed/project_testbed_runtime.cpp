@@ -1325,9 +1325,66 @@ void ProjectTestbed::redoSurfaceEdit(){
     );
 }
 
+void ProjectTestbed::healLatestSurfaceEdit(){
+    if(m_pendingSurfaceEditReplay || m_pendingSurfaceEditAccessory){
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit heal: waiting for pending replay/accessory work"));
+        return;
+    }
+    if(m_surfaceEditState.edits.empty()){
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit heal: no saved edits"));
+        return;
+    }
+
+    const NWB::Core::ECSGraphics::RuntimeMeshHandle runtimeMesh =
+        rendererSystem().deformableRuntimeMeshHandle(m_deformableMorphEntity)
+    ;
+    auto* instance = rendererSystem().findDeformableRuntimeMesh(runtimeMesh);
+    if(!runtimeMesh.valid() || !instance){
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit heal: active runtime mesh is unavailable"));
+        return;
+    }
+
+    NWB::Core::ECSGraphics::DeformableRuntimeMeshInstance cleanBase;
+    if(!buildSurfaceEditCleanBase(*instance, cleanBase)){
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit heal: failed to load clean source mesh"));
+        return;
+    }
+
+    const NWB::Core::ECSGraphics::DeformableSurfaceEditId editId =
+        m_surfaceEditState.edits.back().editId
+    ;
+    NWB::Core::ECSGraphics::DeformableSurfaceEditHealResult healResult;
+    if(!NWB::Core::ECSGraphics::HealSurfaceEdit(
+            *instance,
+            cleanBase,
+            m_surfaceEditState,
+            editId,
+            &healResult
+        )
+    ){
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit heal: failed to replay state without edit {}"), editId);
+        return;
+    }
+
+    clearSurfaceEditPreview();
+    clearPendingSurfaceEditAccessory();
+    m_surfaceEditHistory.redoStack.clear();
+    m_surfaceEditDebugRuntimeMesh = runtimeMesh;
+    if(!restoreSurfaceEditAccessoryEntities())
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit heal: failed to restore accessory entities"));
+
+    NWB_LOGGER_ESSENTIAL_INFO(
+        NWB_TEXT("Surface edit heal: edit={} removed_accessories={} remaining_edits={} revision={}"),
+        healResult.healedEditId,
+        healResult.removedAccessoryCount,
+        m_surfaceEditState.edits.size(),
+        healResult.replay.finalEditRevision
+    );
+}
+
 void ProjectTestbed::logSurfaceEditControls()const{
     NWB_LOGGER_ESSENTIAL_INFO(
-        NWB_TEXT("Surface edit: left click preview, [/] radius={}, comma/period ellipse={}, -/= depth={}, Enter commit, F2 debug, F3 replay, F4 undo, F5 redo, Esc cancel"),
+        NWB_TEXT("Surface edit: left click preview, [/] radius={}, comma/period ellipse={}, -/= depth={}, Enter commit, F2 debug, F3 replay, F4 undo, F5 redo, F6 heal latest, Esc cancel"),
         m_surfaceEditRadius,
         m_surfaceEditEllipseRatio,
         m_surfaceEditDepth
@@ -1425,6 +1482,9 @@ bool ProjectTestbed::keyboardUpdate(const i32 key, const i32 scancode, const i32
         }
         else if(key == NWB::Core::Key::F5){
             redoSurfaceEdit();
+        }
+        else if(key == NWB::Core::Key::F6){
+            healLatestSurfaceEdit();
         }
         else if(key == NWB::Core::Key::Escape){
             cancelSurfaceEditPreview();

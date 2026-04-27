@@ -42,6 +42,7 @@ private:
     void applyPendingSurfaceEditReplay();
     void undoSurfaceEdit();
     void redoSurfaceEdit();
+    void healLatestSurfaceEdit();
     [[nodiscard]] bool buildSurfaceEditCleanBase(
         const NWB::Core::ECSGraphics::DeformableRuntimeMeshInstance& instance,
         NWB::Core::ECSGraphics::DeformableRuntimeMeshInstance& outCleanBase

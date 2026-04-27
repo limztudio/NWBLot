@@ -316,8 +316,8 @@ using MorphDeltaLookup = HashMap<
 }
 
 [[nodiscard]] bool ValidatePosedHitFrame(const DeformablePosedHit& hit){
-    const SIMDVector position = LoadFloat(hit.position);
-    const SIMDVector normal = LoadFloat(hit.normal);
+    const SIMDVector position = hit.positionVector();
+    const SIMDVector normal = hit.normalVector();
     const f32 normalLengthSquared = VectorGetX(Vector3LengthSq(normal));
     return IsFinite(hit.distance())
         && hit.distance() >= 0.0f

@@ -34,27 +34,43 @@ struct alignas(Float4) DeformablePickingRay{
     // xyz = direction, w = maximum hit distance.
     Float4 directionMaxDistance = Float4(0.0f, 0.0f, 1.0f, Limit<f32>::s_Max);
 
+    [[nodiscard]] SIMDVector originVector()const{
+        return LoadFloat(originMinDistance);
+    }
+
+    [[nodiscard]] SIMDVector directionVector()const{
+        return LoadFloat(directionMaxDistance);
+    }
+
     [[nodiscard]] Float3U origin()const{
         Float3U result;
-        StoreFloat(LoadFloat(originMinDistance), &result);
+        StoreFloat(originVector(), &result);
         return result;
     }
 
     [[nodiscard]] Float3U direction()const{
         Float3U result;
-        StoreFloat(LoadFloat(directionMaxDistance), &result);
+        StoreFloat(directionVector(), &result);
         return result;
     }
 
     [[nodiscard]] f32 minDistance()const{ return originMinDistance.w; }
     [[nodiscard]] f32 maxDistance()const{ return directionMaxDistance.w; }
 
+    void setOrigin(const SIMDVector value){
+        StoreFloat(VectorSetW(value, originMinDistance.w), &originMinDistance);
+    }
+
+    void setDirection(const SIMDVector value){
+        StoreFloat(VectorSetW(value, directionMaxDistance.w), &directionMaxDistance);
+    }
+
     void setOrigin(const Float3U& value){
-        StoreFloat(VectorSetW(LoadFloat(value), originMinDistance.w), &originMinDistance);
+        setOrigin(LoadFloat(value));
     }
 
     void setDirection(const Float3U& value){
-        StoreFloat(VectorSetW(LoadFloat(value), directionMaxDistance.w), &directionMaxDistance);
+        setDirection(LoadFloat(value));
     }
 
     void setMinDistance(const f32 value){ originMinDistance.w = value; }
@@ -117,12 +133,28 @@ struct alignas(Float4) DeformablePosedHit{
     [[nodiscard]] f32 distance()const{ return bary.distance(); }
     void setDistance(const f32 value){ bary.setDistance(value); }
 
+    [[nodiscard]] SIMDVector positionVector()const{
+        return LoadFloat(position);
+    }
+
+    [[nodiscard]] SIMDVector normalVector()const{
+        return LoadFloat(normal);
+    }
+
+    void setPosition(const SIMDVector value){
+        StoreFloat(VectorSetW(value, 1.0f), &position);
+    }
+
+    void setNormal(const SIMDVector value){
+        StoreFloat(VectorSetW(value, 0.0f), &normal);
+    }
+
     void setPosition(const Float3U& value){
-        StoreFloat(VectorSetW(LoadFloat(value), 1.0f), &position);
+        setPosition(LoadFloat(value));
     }
 
     void setNormal(const Float3U& value){
-        StoreFloat(VectorSetW(LoadFloat(value), 0.0f), &normal);
+        setNormal(LoadFloat(value));
     }
 };
 static_assert(IsStandardLayout_V<DeformablePosedHit>, "DeformablePosedHit must stay layout-stable");

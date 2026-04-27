@@ -78,8 +78,8 @@ void OrthonormalizeVertexFrame(
 [[nodiscard]] bool IsFiniteRay(const DeformablePickingRay& ray){
     const f32 minDistance = ray.minDistance();
     const f32 maxDistance = ray.maxDistance();
-    return DeformableValidation::FiniteVector(LoadFloat(ray.originMinDistance), 0x7u)
-        && DeformableValidation::FiniteVector(LoadFloat(ray.directionMaxDistance), 0x7u)
+    return DeformableValidation::FiniteVector(ray.originVector(), 0x7u)
+        && DeformableValidation::FiniteVector(ray.directionVector(), 0x7u)
         && IsFinite(minDistance)
         && IsFinite(maxDistance)
         && minDistance >= 0.0f
@@ -805,8 +805,8 @@ bool RaycastDeformableRuntimeMesh(
     if((instance.dirtyFlags & RuntimeMeshDirtyFlag::GpuUploadDirty) != 0u)
         return false;
 
-    const SIMDVector rayOriginVector = LoadFloat(ray.originMinDistance);
-    const SIMDVector rayDirectionVector = Core::Geometry::FrameNormalizeDirection(LoadFloat(ray.directionMaxDistance), VectorZero());
+    const SIMDVector rayOriginVector = ray.originVector();
+    const SIMDVector rayDirectionVector = Core::Geometry::FrameNormalizeDirection(ray.directionVector(), VectorZero());
     if(!Core::Geometry::FrameValidDirection(rayDirectionVector))
         return false;
 
@@ -863,8 +863,8 @@ bool RaycastDeformableRuntimeMesh(
         closestHit.bary[1] = hitBary[1];
         closestHit.bary[2] = hitBary[2];
         closestHit.setDistance(distance);
-        StoreFloat(VectorSetW(position, 1.0f), &closestHit.position);
-        StoreFloat(VectorSetW(normal, 0.0f), &closestHit.normal);
+        closestHit.setPosition(position);
+        closestHit.setNormal(normal);
         closestHit.editMaskFlags = ResolveDeformableTriangleEditMask(instance, closestHit.triangle);
         closestHit.restSample = restSample;
         foundHit = true;

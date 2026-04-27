@@ -5,6 +5,8 @@
 #include "parser.h"
 #include "integer_overflow.h"
 
+#include <core/alloc/scratch.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -61,6 +63,7 @@ public:
     Parser(MStringView source, Alloc::CustomArena& arena, MVector<ParseError>& errors, MStringMap<Value>& variables)
         : m_lexer(source)
         , m_arena(arena)
+        , m_scratchArena(4096)
         , m_errors(errors)
         , m_variables(variables)
     {
@@ -91,6 +94,10 @@ public:
 
 
 private:
+    using ScratchPath = Vector<MStringView, Alloc::ScratchAllocator<MStringView>>;
+    using ScratchString = BasicString<MChar, Alloc::ScratchAllocator<MChar>>;
+
+
     bool parseDeclaration(MString& outAssetType, MString& outAssetVariable){
         if(m_current.type != TokenType::Identifier){
             errorExpected("expected asset type name");
@@ -130,7 +137,7 @@ private:
             return false;
         }
 
-        MVector<MStringView> path{MAllocator<MStringView>(m_arena)};
+        ScratchPath path{Alloc::ScratchAllocator<MStringView>(m_scratchArena)};
         path.reserve(4);
         path.push_back(firstName);
 
@@ -303,7 +310,7 @@ private:
             const auto name = m_current.text;
             advance();
 
-            MVector<MStringView> path{MAllocator<MStringView>(m_arena)};
+            ScratchPath path{Alloc::ScratchAllocator<MStringView>(m_scratchArena)};
             path.reserve(4);
             path.push_back(name);
 
@@ -486,7 +493,7 @@ private:
     }
 
 
-    Value* resolveTarget(const MVector<MStringView>& path, const bool allowCreateRoot, const u32 errorLine, const u32 errorColumn){
+    Value* resolveTarget(const ScratchPath& path, const bool allowCreateRoot, const u32 errorLine, const u32 errorColumn){
         NWB_ASSERT(!path.empty());
 
         const auto rootName = path[0];
@@ -522,7 +529,7 @@ private:
         return current;
     }
 
-    Value resolveRead(const MVector<MStringView>& path){
+    Value resolveRead(const ScratchPath& path){
         NWB_ASSERT(!path.empty());
 
         if(path[0] != m_declaredAssetVariable){
@@ -727,7 +734,7 @@ private:
 
     void errorExpected(MStringView expected){
         const auto desc = tokenDescription();
-        MString msg{MAllocator<MChar>(m_arena)};
+        ScratchString msg{Alloc::ScratchAllocator<MChar>(m_scratchArena)};
         if(expected.size() <= Limit<usize>::s_Max - 8u
             && desc.size() <= Limit<usize>::s_Max - expected.size() - 8u
         )
@@ -783,6 +790,7 @@ private:
 private:
     Lexer m_lexer;
     Alloc::CustomArena& m_arena;
+    Alloc::ScratchArena<> m_scratchArena;
     MVector<ParseError>& m_errors;
     MStringMap<Value>& m_variables;
     MStringView m_declaredAssetVariable;
@@ -829,7 +837,9 @@ bool Document::parse(IMetaReader& reader){
     try{
         constexpr usize chunkSize = 4096;
 
-        MString buffer{MAllocator<MChar>(m_arena)};
+        Alloc::ScratchArena<> scratchArena(chunkSize);
+        BasicString<MChar, Alloc::ScratchAllocator<MChar>> buffer{Alloc::ScratchAllocator<MChar>(scratchArena)};
+        buffer.reserve(chunkSize);
         MChar chunk[chunkSize];
 
         for(;;){

@@ -7,7 +7,6 @@
 
 #include <filesystem>
 #include <fstream>
-#include <sstream>
 
 #if defined(NWB_PLATFORM_WINDOWS)
 #include <windows.h>
@@ -31,7 +30,6 @@ namespace GlobalFilesystemDetail{
 using InputFileStream = std::ifstream;
 using OutputFileStream = std::ofstream;
 using FileStream = std::fstream;
-using StringOutputStream = std::ostringstream;
 using StreamOffset = std::streamoff;
 using StreamSize = std::streamsize;
 
@@ -259,14 +257,31 @@ struct StagedDirectoryPaths{
 
 
 [[nodiscard]] inline bool ReadTextFile(const Path& path, AString& outText){
+    outText.clear();
+
+    ErrorCode errorCode;
+    const u64 fileSize = FileSize(path, errorCode);
+    if(errorCode)
+        return false;
+
+    if(fileSize > static_cast<u64>(Limit<usize>::s_Max))
+        return false;
+    if(!GlobalFilesystemDetail::CanRepresentStreamSize(fileSize))
+        return false;
+
     GlobalFilesystemDetail::InputFileStream stream(path, GlobalFilesystemDetail::InputFileStream::binary);
     if(!stream.is_open())
         return false;
 
-    GlobalFilesystemDetail::StringOutputStream ss;
-    ss << stream.rdbuf();
-    outText = ss.str();
-    return stream.good() || stream.eof();
+    outText.resize(static_cast<usize>(fileSize));
+    if(fileSize == 0)
+        return true;
+
+    stream.read(outText.data(), static_cast<GlobalFilesystemDetail::StreamSize>(fileSize));
+    if(stream.good())
+        return true;
+
+    return stream.eof() && stream.gcount() == static_cast<GlobalFilesystemDetail::StreamSize>(fileSize);
 }
 
 [[nodiscard]] inline bool WriteTextFile(const Path& path, const AStringView content){

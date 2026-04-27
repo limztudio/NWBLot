@@ -66,6 +66,7 @@ using RendererSystem = NWB::Impl::RendererSystem;
 using RuntimeMeshDirtyFlags = NWB::Impl::RuntimeMeshDirtyFlags;
 using RuntimeMeshHandle = NWB::Impl::RuntimeMeshHandle;
 using NWB::Impl::AttachAccessory;
+using NWB::Impl::AttachAccessoryAtWallLoopParameter;
 using NWB::Impl::ApplySurfaceEditState;
 using NWB::Impl::BeginSurfaceEdit;
 using NWB::Impl::BuildSurfaceEditStateDebugDump;

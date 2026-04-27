@@ -205,6 +205,7 @@ static bool AppendAccessoryRecord(
     record.wallVertexCount = attachment.wallVertexCount;
     record.normalOffset = attachment.normalOffset();
     record.uniformScale = attachment.uniformScale();
+    record.wallLoopParameter = attachment.wallLoopParameter();
     state.accessories.push_back(record);
     return true;
 }
@@ -2866,6 +2867,51 @@ static void TestSurfaceEditFlowAttachesAndPersistsAccessory(TestContext& context
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(baseTransform.scale.y, 0.12f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(baseTransform.scale.z, 0.12f));
 
+    NWB::Impl::DeformableAccessoryAttachmentComponent localAttachment;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Impl::AttachAccessoryAtWallLoopParameter(
+            instance,
+            result,
+            0.25f,
+            0.08f,
+            0.12f,
+            localAttachment
+        )
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(localAttachment.wallLoopParameter(), 0.25f));
+
+    NWB::Core::Scene::TransformComponent localTransform;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Impl::ResolveAccessoryAttachmentTransform(
+            instance,
+            NWB::Impl::DeformablePickingInputs{},
+            localAttachment,
+            localTransform
+        )
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(localTransform.position.z, 0.08f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(localTransform.scale.x, 0.12f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        !NearlyEqual(localTransform.position.x, baseTransform.position.x)
+            || !NearlyEqual(localTransform.position.y, baseTransform.position.y)
+    );
+
+    NWB::Impl::DeformableAccessoryAttachmentComponent invalidLoopAttachment;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        !NWB::Impl::AttachAccessoryAtWallLoopParameter(
+            instance,
+            result,
+            1.0f,
+            0.08f,
+            0.12f,
+            invalidLoopAttachment
+        )
+    );
+
     NWB::Impl::DeformableRuntimeMeshInstance strayWallTriangleInstance = instance;
     strayWallTriangleInstance.indices.push_back(0u);
     strayWallTriangleInstance.indices.push_back(1u);
@@ -2946,10 +2992,11 @@ static void TestSurfaceEditFlowAttachesAndPersistsAccessory(TestContext& context
         SetAccessoryRecordAssetPaths(accessoryRecord, s_MockAccessoryGeometryPath, s_MockAccessoryMaterialPath)
     );
     accessoryRecord.anchorEditId = record.editId;
-    accessoryRecord.firstWallVertex = attachment.firstWallVertex;
-    accessoryRecord.wallVertexCount = attachment.wallVertexCount;
-    accessoryRecord.normalOffset = attachment.normalOffset();
-    accessoryRecord.uniformScale = attachment.uniformScale();
+    accessoryRecord.firstWallVertex = localAttachment.firstWallVertex;
+    accessoryRecord.wallVertexCount = localAttachment.wallVertexCount;
+    accessoryRecord.normalOffset = localAttachment.normalOffset();
+    accessoryRecord.uniformScale = localAttachment.uniformScale();
+    accessoryRecord.wallLoopParameter = localAttachment.wallLoopParameter();
     state.edits.push_back(record);
     state.accessories.push_back(accessoryRecord);
 
@@ -2964,12 +3011,13 @@ static void TestSurfaceEditFlowAttachesAndPersistsAccessory(TestContext& context
     NWB_ECS_GRAPHICS_TEST_CHECK(context, loadedState.edits[0].result.wallVertexCount == result.wallVertexCount);
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        loadedState.accessories[0].firstWallVertex == attachment.firstWallVertex
+        loadedState.accessories[0].firstWallVertex == localAttachment.firstWallVertex
     );
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        loadedState.accessories[0].wallVertexCount == attachment.wallVertexCount
+        loadedState.accessories[0].wallVertexCount == localAttachment.wallVertexCount
     );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(loadedState.accessories[0].wallLoopParameter, 0.25f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, loadedState.accessories[0].geometry.name() == mockGeometry);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, loadedState.accessories[0].material.name() == mockMaterial);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, loadedState.accessories[0].geometryVirtualPathText.view() == s_MockAccessoryGeometryPath);
@@ -2982,6 +3030,7 @@ static void TestSurfaceEditFlowAttachesAndPersistsAccessory(TestContext& context
     NWB_ECS_GRAPHICS_TEST_CHECK(context, stateDump.find("source_tri=") != AString::npos);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, stateDump.find("rest_position=(") != AString::npos);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, stateDump.find("wall_span=(") != AString::npos);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, stateDump.find("wall_loop=0.25") != AString::npos);
 
     NWB::Impl::DeformableSurfaceEditState malformedState = state;
     malformedState.edits[0].result.wallVertexCount = 7u;
@@ -2989,6 +3038,10 @@ static void TestSurfaceEditFlowAttachesAndPersistsAccessory(TestContext& context
 
     malformedState = state;
     malformedState.accessories[0].normalOffset = -0.01f;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::SerializeSurfaceEditState(malformedState, binary));
+
+    malformedState = state;
+    malformedState.accessories[0].wallLoopParameter = 1.0f;
     NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::SerializeSurfaceEditState(malformedState, binary));
 
     malformedState = state;
@@ -3122,6 +3175,7 @@ static void TestSurfaceEditStateReplayRestoresAccessory(TestContext& context){
     accessoryRecord.wallVertexCount = attachment.wallVertexCount;
     accessoryRecord.normalOffset = attachment.normalOffset();
     accessoryRecord.uniformScale = attachment.uniformScale();
+    accessoryRecord.wallLoopParameter = attachment.wallLoopParameter();
     state.accessories.push_back(accessoryRecord);
 
     NWB::Core::Assets::AssetBytes binary;
@@ -3729,6 +3783,7 @@ static void TestSurfaceEditRedoLastReplaysFromCleanBase(TestContext& context){
     restoredAttachment.wallVertexCount = state.accessories[1].wallVertexCount;
     restoredAttachment.setNormalOffset(state.accessories[1].normalOffset);
     restoredAttachment.setUniformScale(state.accessories[1].uniformScale);
+    restoredAttachment.setWallLoopParameter(state.accessories[1].wallLoopParameter);
 
     NWB::Core::Scene::TransformComponent resolvedTransform;
     NWB_ECS_GRAPHICS_TEST_CHECK(
@@ -3841,6 +3896,7 @@ static void TestSurfaceEditHealReplaysSurvivingEdits(TestContext& context){
     restoredAttachment.wallVertexCount = state.accessories[0].wallVertexCount;
     restoredAttachment.setNormalOffset(state.accessories[0].normalOffset);
     restoredAttachment.setUniformScale(state.accessories[0].uniformScale);
+    restoredAttachment.setWallLoopParameter(state.accessories[0].wallLoopParameter);
 
     NWB::Core::Scene::TransformComponent resolvedTransform;
     NWB_ECS_GRAPHICS_TEST_CHECK(
@@ -3942,6 +3998,7 @@ static void TestSurfaceEditResizeReplaysFromCleanBase(TestContext& context){
     restoredAttachment.wallVertexCount = state.accessories[0].wallVertexCount;
     restoredAttachment.setNormalOffset(state.accessories[0].normalOffset);
     restoredAttachment.setUniformScale(state.accessories[0].uniformScale);
+    restoredAttachment.setWallLoopParameter(state.accessories[0].wallLoopParameter);
 
     NWB::Core::Scene::TransformComponent resolvedTransform;
     NWB_ECS_GRAPHICS_TEST_CHECK(
@@ -4053,6 +4110,7 @@ static void TestSurfaceEditMoveReplaysFromCleanBase(TestContext& context){
     restoredAttachment.wallVertexCount = state.accessories[0].wallVertexCount;
     restoredAttachment.setNormalOffset(state.accessories[0].normalOffset);
     restoredAttachment.setUniformScale(state.accessories[0].uniformScale);
+    restoredAttachment.setWallLoopParameter(state.accessories[0].wallLoopParameter);
 
     NWB::Core::Scene::TransformComponent resolvedTransform;
     NWB_ECS_GRAPHICS_TEST_CHECK(
@@ -4172,6 +4230,7 @@ static void TestSurfaceEditPatchReplaysFromCleanBase(TestContext& context){
     restoredAttachment.wallVertexCount = state.accessories[0].wallVertexCount;
     restoredAttachment.setNormalOffset(state.accessories[0].normalOffset);
     restoredAttachment.setUniformScale(state.accessories[0].uniformScale);
+    restoredAttachment.setWallLoopParameter(state.accessories[0].wallLoopParameter);
 
     NWB::Core::Scene::TransformComponent resolvedTransform;
     NWB_ECS_GRAPHICS_TEST_CHECK(
@@ -4283,6 +4342,7 @@ static void TestSurfaceEditLoopCutReplaysFromCleanBase(TestContext& context){
     restoredAttachment.wallVertexCount = state.accessories[0].wallVertexCount;
     restoredAttachment.setNormalOffset(state.accessories[0].normalOffset);
     restoredAttachment.setUniformScale(state.accessories[0].uniformScale);
+    restoredAttachment.setWallLoopParameter(state.accessories[0].wallLoopParameter);
 
     NWB::Core::Scene::TransformComponent resolvedTransform;
     NWB_ECS_GRAPHICS_TEST_CHECK(

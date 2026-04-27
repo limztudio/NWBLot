@@ -83,6 +83,7 @@ struct SurfaceEditAccessoryRecordBinaryV4{
     u32 wallVertexCount = 0;
     f32 normalOffset = 0.0f;
     f32 uniformScale = 1.0f;
+    f32 wallLoopParameter = s_DeformableAccessoryCenteredWallLoopParameter;
     u32 geometryPathOffset = Limit<u32>::s_Max;
     u32 materialPathOffset = Limit<u32>::s_Max;
 };
@@ -390,6 +391,16 @@ using MorphDeltaLookup = HashMap<
     return editId != 0u && editId != Limit<DeformableSurfaceEditId>::s_Max;
 }
 
+[[nodiscard]] bool AccessoryUsesWallLoopParameter(const f32 parameter){
+    return parameter != s_DeformableAccessoryCenteredWallLoopParameter;
+}
+
+[[nodiscard]] bool ValidAccessoryWallLoopParameter(const f32 parameter){
+    return parameter == s_DeformableAccessoryCenteredWallLoopParameter
+        || (IsFinite(parameter) && parameter >= 0.0f && parameter < 1.0f)
+    ;
+}
+
 [[nodiscard]] bool ValidHoleEditResult(const DeformableHoleEditResult& result, const bool requireWall){
     if(result.editRevision == 0u || result.removedTriangleCount == 0u)
         return false;
@@ -530,7 +541,8 @@ using MorphDeltaLookup = HashMap<
     const u32 firstWallVertex,
     const u32 wallVertexCount,
     const f32 normalOffset,
-    const f32 uniformScale)
+    const f32 uniformScale,
+    const f32 wallLoopParameter)
 {
     return ValidSurfaceEditId(anchorEditId)
         && ValidWallVertexSpan(firstWallVertex, wallVertexCount)
@@ -538,6 +550,7 @@ using MorphDeltaLookup = HashMap<
         && normalOffset >= 0.0f
         && IsFinite(uniformScale)
         && uniformScale > 0.0f
+        && ValidAccessoryWallLoopParameter(wallLoopParameter)
     ;
 }
 
@@ -549,7 +562,8 @@ using MorphDeltaLookup = HashMap<
             attachment.firstWallVertex,
             attachment.wallVertexCount,
             attachment.normalOffset(),
-            attachment.uniformScale()
+            attachment.uniformScale(),
+            attachment.wallLoopParameter()
         )
     ;
 }
@@ -560,7 +574,8 @@ using MorphDeltaLookup = HashMap<
             record.firstWallVertex,
             record.wallVertexCount,
             record.normalOffset,
-            record.uniformScale
+            record.uniformScale,
+            record.wallLoopParameter
         )
         && record.geometry.valid()
         && record.material.valid()
@@ -860,6 +875,7 @@ void RestoreReplayAccessories(
         attachment.wallVertexCount = accessory.wallVertexCount;
         attachment.setNormalOffset(accessory.normalOffset);
         attachment.setUniformScale(accessory.uniformScale);
+        attachment.setWallLoopParameter(accessory.wallLoopParameter);
         ++outRestoredAccessoryCount;
     }
 }
@@ -945,6 +961,7 @@ void RestoreReplayAccessories(
     outRecord.wallVertexCount = record.wallVertexCount;
     outRecord.normalOffset = record.normalOffset;
     outRecord.uniformScale = record.uniformScale;
+    outRecord.wallLoopParameter = record.wallLoopParameter;
     return AppendStringTablePath(stringTable, record.geometryVirtualPathText, outRecord.geometryPathOffset)
         && AppendStringTablePath(stringTable, record.materialVirtualPathText, outRecord.materialPathOffset)
     ;
@@ -963,6 +980,7 @@ void RestoreReplayAccessories(
     outRecord.wallVertexCount = binary.wallVertexCount;
     outRecord.normalOffset = binary.normalOffset;
     outRecord.uniformScale = binary.uniformScale;
+    outRecord.wallLoopParameter = binary.wallLoopParameter;
     if(!ReadStringTablePath(
             rawBinary,
             stringTableOffset,
@@ -1522,6 +1540,24 @@ bool AttachAccessory(
     const f32 uniformScale,
     DeformableAccessoryAttachmentComponent& outAttachment)
 {
+    return AttachAccessoryAtWallLoopParameter(
+        instance,
+        holeResult,
+        s_DeformableAccessoryCenteredWallLoopParameter,
+        normalOffset,
+        uniformScale,
+        outAttachment
+    );
+}
+
+bool AttachAccessoryAtWallLoopParameter(
+    const DeformableRuntimeMeshInstance& instance,
+    const DeformableHoleEditResult& holeResult,
+    const f32 wallLoopParameter,
+    const f32 normalOffset,
+    const f32 uniformScale,
+    DeformableAccessoryAttachmentComponent& outAttachment)
+{
     outAttachment = DeformableAccessoryAttachmentComponent{};
     if(!__hidden_deformable_surface_edit::ValidateUploadedRuntimePayload(instance)
         || holeResult.editRevision > instance.editRevision
@@ -1530,7 +1566,8 @@ bool AttachAccessory(
             holeResult.firstWallVertex,
             holeResult.wallVertexCount,
             normalOffset,
-            uniformScale
+            uniformScale,
+            wallLoopParameter
         )
         || !__hidden_deformable_surface_edit::RuntimeMeshHasWallTrianglePairs(instance, holeResult)
     )
@@ -1543,6 +1580,7 @@ bool AttachAccessory(
     outAttachment.wallVertexCount = holeResult.wallVertexCount;
     outAttachment.setNormalOffset(normalOffset);
     outAttachment.setUniformScale(uniformScale);
+    outAttachment.setWallLoopParameter(wallLoopParameter);
     return true;
 }
 
@@ -1602,6 +1640,68 @@ bool ResolveAccessoryAttachmentTransform(
 
         tracedFirstWallVertex = candidateFirstWallVertex;
         outerWallIndexBase = candidateWallIndexBase;
+    }
+
+    if(__hidden_deformable_surface_edit::AccessoryUsesWallLoopParameter(attachment.wallLoopParameter())){
+        const f32 scaledLoopParameter = attachment.wallLoopParameter() * static_cast<f32>(wallVertexCount);
+        usize pairIndex = static_cast<usize>(Floor(scaledLoopParameter));
+        if(pairIndex >= wallVertexCount)
+            pairIndex = wallVertexCount - 1u;
+        const usize nextPairIndex = (pairIndex + 1u) % wallVertexCount;
+        const f32 pairAlpha = scaledLoopParameter - static_cast<f32>(pairIndex);
+        const usize outerPairIndexBase = outerWallIndexBase + (pairIndex * 6u);
+        if(outerPairIndexBase + 1u >= instance.indices.size())
+            return false;
+
+        const usize rimAIndex = static_cast<usize>(instance.indices[outerPairIndexBase + 0u]);
+        const usize rimBIndex = static_cast<usize>(instance.indices[outerPairIndexBase + 1u]);
+        const usize innerAIndex = firstWallVertex + pairIndex;
+        const usize innerBIndex = firstWallVertex + nextPairIndex;
+        if(rimAIndex >= posedVertices.size()
+            || rimBIndex >= posedVertices.size()
+            || innerAIndex >= posedVertices.size()
+            || innerBIndex >= posedVertices.size()
+        )
+            return false;
+
+        const SIMDVector rimA = LoadFloat(posedVertices[rimAIndex].position);
+        const SIMDVector rimB = LoadFloat(posedVertices[rimBIndex].position);
+        const SIMDVector innerA = LoadFloat(posedVertices[innerAIndex].position);
+        const SIMDVector innerB = LoadFloat(posedVertices[innerBIndex].position);
+        const SIMDVector alpha = VectorReplicate(pairAlpha);
+        const SIMDVector rimPosition = VectorMultiplyAdd(VectorSubtract(rimB, rimA), alpha, rimA);
+        const SIMDVector innerPosition = VectorMultiplyAdd(VectorSubtract(innerB, innerA), alpha, innerA);
+        SIMDVector normal = Core::Geometry::FrameNormalizeDirection(
+            VectorSubtract(rimPosition, innerPosition),
+            VectorSet(0.0f, 0.0f, 1.0f, 0.0f)
+        );
+        if(!__hidden_deformable_surface_edit::FiniteVec3(normal)
+            || VectorGetX(Vector3LengthSq(normal)) <= Core::Geometry::s_FrameDirectionEpsilon
+        )
+            return false;
+
+        const SIMDVector accessoryPosition = VectorMultiplyAdd(
+            normal,
+            VectorReplicate(attachment.normalOffset()),
+            rimPosition
+        );
+        if(!__hidden_deformable_surface_edit::FiniteVec3(accessoryPosition))
+            return false;
+
+        const SIMDVector tangent = Core::Geometry::FrameResolveTangent(
+            normal,
+            VectorSubtract(rimB, rimA),
+            Core::Geometry::FrameFallbackTangent(normal)
+        );
+
+        StoreFloat(VectorSetW(accessoryPosition, 0.0f), &outTransform.position);
+        StoreFloat(
+            __hidden_deformable_surface_edit::RotationFromFrame(tangent, normal),
+            &outTransform.rotation
+        );
+        const f32 uniformScale = attachment.uniformScale();
+        outTransform.scale = Float4(uniformScale, uniformScale, uniformScale);
+        return true;
     }
 
     SIMDVector rimCenter = VectorZero();
@@ -1838,7 +1938,7 @@ bool BuildSurfaceEditStateDebugDump(const DeformableSurfaceEditState& state, ASt
             : accessory.materialVirtualPathText.c_str()
         ;
         outDump += StringFormat(
-            "accessory[{}] geometry={} material={} anchor_edit_id={} first_wall_vertex={} wall_vertex_count={} normal_offset={} uniform_scale={}\n",
+            "accessory[{}] geometry={} material={} anchor_edit_id={} first_wall_vertex={} wall_vertex_count={} normal_offset={} uniform_scale={} wall_loop={}\n",
             i,
             geometryPath,
             materialPath,
@@ -1846,7 +1946,8 @@ bool BuildSurfaceEditStateDebugDump(const DeformableSurfaceEditState& state, ASt
             accessory.firstWallVertex,
             accessory.wallVertexCount,
             accessory.normalOffset,
-            accessory.uniformScale
+            accessory.uniformScale,
+            accessory.wallLoopParameter
         );
     }
     return true;

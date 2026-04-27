@@ -112,6 +112,7 @@ struct DeformableAccessoryAttachmentRecord{
     u32 wallVertexCount = 0;
     f32 normalOffset = 0.0f;
     f32 uniformScale = 1.0f;
+    f32 wallLoopParameter = s_DeformableAccessoryCenteredWallLoopParameter;
 };
 
 struct DeformableSurfaceEditState{
@@ -230,6 +231,14 @@ struct DeformableSurfaceEditReplayContext{
 [[nodiscard]] bool AttachAccessory(
     const DeformableRuntimeMeshInstance& instance,
     const DeformableHoleEditResult& holeResult,
+    f32 normalOffset,
+    f32 uniformScale,
+    DeformableAccessoryAttachmentComponent& outAttachment
+);
+[[nodiscard]] bool AttachAccessoryAtWallLoopParameter(
+    const DeformableRuntimeMeshInstance& instance,
+    const DeformableHoleEditResult& holeResult,
+    f32 wallLoopParameter,
     f32 normalOffset,
     f32 uniformScale,
     DeformableAccessoryAttachmentComponent& outAttachment

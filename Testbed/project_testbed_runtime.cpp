@@ -1011,6 +1011,7 @@ void ProjectTestbed::attachPendingSurfaceEditAccessory(){
     accessoryRecord.wallVertexCount = attachment.wallVertexCount;
     accessoryRecord.normalOffset = attachment.normalOffset();
     accessoryRecord.uniformScale = attachment.uniformScale();
+    accessoryRecord.wallLoopParameter = attachment.wallLoopParameter();
 
     NWB::Core::ECSGraphics::DeformableSurfaceEditState candidateState = m_surfaceEditState;
     candidateState.edits.push_back(m_pendingSurfaceEditRecord);
@@ -1250,6 +1251,7 @@ bool ProjectTestbed::restoreSurfaceEditAccessoryEntities(){
         attachment->wallVertexCount = accessory.wallVertexCount;
         attachment->setNormalOffset(accessory.normalOffset);
         attachment->setUniformScale(accessory.uniformScale);
+        attachment->setWallLoopParameter(accessory.wallLoopParameter);
     }
     return true;
 }

@@ -63,6 +63,7 @@ struct RuntimeMeshHandle{
 
 
 using DeformableSurfaceEditId = u32;
+inline constexpr f32 s_DeformableAccessoryCenteredWallLoopParameter = -1.0f;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -125,14 +126,16 @@ struct alignas(Float4) DeformableAccessoryAttachmentComponent{
     DeformableSurfaceEditId anchorEditId = 0;
     u32 firstWallVertex = Limit<u32>::s_Max;
     u32 wallVertexCount = 0;
-    // x = normal offset, y = uniform scale.
-    Float4 placement = Float4(0.0f, 1.0f, 0.0f, 0.0f);
+    // x = normal offset, y = uniform scale, z = wall-loop parameter or centered sentinel.
+    Float4 placement = Float4(0.0f, 1.0f, s_DeformableAccessoryCenteredWallLoopParameter, 0.0f);
 
     [[nodiscard]] f32 normalOffset()const{ return placement.x; }
     [[nodiscard]] f32 uniformScale()const{ return placement.y; }
+    [[nodiscard]] f32 wallLoopParameter()const{ return placement.z; }
 
     void setNormalOffset(const f32 value){ placement.x = value; }
     void setUniformScale(const f32 value){ placement.y = value; }
+    void setWallLoopParameter(const f32 value){ placement.z = value; }
 };
 static_assert(
     IsStandardLayout_V<DeformableAccessoryAttachmentComponent>,

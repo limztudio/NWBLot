@@ -38,6 +38,8 @@ private:
     void commitSurfaceEditPreview();
     void attachPendingSurfaceEditAccessory();
     void cancelSurfaceEditPreview();
+    void queueSurfaceEditReplay();
+    void applyPendingSurfaceEditReplay();
     void toggleSurfaceEditDebug();
     void logSurfaceEditDebugSnapshot();
     void logSurfaceEditControls()const;
@@ -92,6 +94,7 @@ private:
     bool m_cursorPositionValid = false;
     bool m_surfaceEditPreviewActive = false;
     bool m_pendingSurfaceEditAccessory = false;
+    bool m_pendingSurfaceEditReplay = false;
     bool m_surfaceEditDebugEnabled = false;
 };
 

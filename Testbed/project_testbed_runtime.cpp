@@ -42,6 +42,9 @@ static constexpr f32 s_DeformableSkinPivotY = -0.5f;
 static constexpr f32 s_DeformableSkinMaxAngle = 0.45f;
 static constexpr f32 s_AccessoryNormalOffset = 0.08f;
 static constexpr f32 s_AccessoryUniformScale = 0.16f;
+static constexpr AStringView s_DeformableProxyPath = "project/characters/proxy_deformable";
+static constexpr AStringView s_DeformableImportedPath = "project/characters/imported_deformable";
+static constexpr AStringView s_DeformableMaterialPath = "project/materials/mat_deformable_uv";
 static constexpr AStringView s_AccessoryGeometryPath = "project/meshes/mock_earring";
 static constexpr AStringView s_AccessoryMaterialPath = "project/materials/mat_accessory_gold";
 
@@ -486,7 +489,7 @@ bool ProjectTestbed::onStartup(){
     TestbedMaterialRef transparentTetrahedronMaterial;
     transparentTetrahedronMaterial.virtualPath = Name("project/materials/mat_transparent_tetrahedron");
     TestbedMaterialRef deformableUvMaterial;
-    deformableUvMaterial.virtualPath = Name("project/materials/mat_deformable_uv");
+    deformableUvMaterial.virtualPath = Name(__hidden_project_testbed_runtime::s_DeformableMaterialPath);
 
     TestbedGeometryRef cubeGeometry;
     cubeGeometry.virtualPath = Name("project/meshes/cube");
@@ -495,9 +498,9 @@ bool ProjectTestbed::onStartup(){
     TestbedGeometryRef tetrahedronGeometry;
     tetrahedronGeometry.virtualPath = Name("project/meshes/tetrahedron");
     TestbedDeformableGeometryRef deformableProxyGeometry;
-    deformableProxyGeometry.virtualPath = Name("project/characters/proxy_deformable");
+    deformableProxyGeometry.virtualPath = Name(__hidden_project_testbed_runtime::s_DeformableProxyPath);
     TestbedDeformableGeometryRef importedDeformableGeometry;
-    importedDeformableGeometry.virtualPath = Name("project/characters/imported_deformable");
+    importedDeformableGeometry.virtualPath = Name(__hidden_project_testbed_runtime::s_DeformableImportedPath);
 
     __hidden_project_testbed_runtime::CreateRendererEntity(
         *m_world,
@@ -577,6 +580,7 @@ bool ProjectTestbed::onUpdate(f32 delta){
     updateMainCamera(safeDelta);
     updateDeformableMorph(safeDelta);
     m_world->tick(safeDelta);
+    applyPendingSurfaceEditReplay();
     attachPendingSurfaceEditAccessory();
     updateSurfaceEditAccessories();
 
@@ -721,6 +725,13 @@ void ProjectTestbed::updateSurfaceEditAccessories(){
             static_cast<void>(entity);
             const auto* instance = renderSystem.findDeformableRuntimeMesh(attachment.runtimeMesh);
             if(!instance){
+                renderer.visible = false;
+                return;
+            }
+            const auto* targetRenderer =
+                m_world->tryGetComponent<NWB::Core::ECSGraphics::DeformableRendererComponent>(attachment.targetEntity)
+            ;
+            if(!targetRenderer || !targetRenderer->visible){
                 renderer.visible = false;
                 return;
             }
@@ -1020,9 +1031,106 @@ void ProjectTestbed::cancelSurfaceEditPreview(){
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit: preview cancelled"));
 }
 
+void ProjectTestbed::queueSurfaceEditReplay(){
+    if(m_pendingSurfaceEditReplay){
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit replay: already waiting for a clean runtime mesh"));
+        return;
+    }
+    if(m_pendingSurfaceEditAccessory){
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit replay: awaiting committed accessory before replay"));
+        return;
+    }
+    if(m_surfaceEditState.edits.empty()){
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit replay: no saved edits to replay"));
+        return;
+    }
+
+    NWB::Core::Assets::AssetBytes serializedState;
+    NWB::Core::ECSGraphics::DeformableSurfaceEditState loadedState;
+    if(!NWB::Core::ECSGraphics::SerializeSurfaceEditState(m_surfaceEditState, serializedState)
+        || !NWB::Core::ECSGraphics::DeserializeSurfaceEditState(serializedState, loadedState)
+    ){
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit replay: save/load validation failed"));
+        return;
+    }
+
+    Float4 replayPosition(0.0f, 0.85f, 0.0f);
+    f32 replayScale = 0.8f;
+    if(const auto* oldTransform = m_world->tryGetComponent<NWB::Core::Scene::TransformComponent>(m_deformableMorphEntity)){
+        replayPosition = oldTransform->position;
+        replayScale = oldTransform->scale.x;
+    }
+    if(auto* oldRenderer =
+        m_world->tryGetComponent<NWB::Core::ECSGraphics::DeformableRendererComponent>(m_deformableMorphEntity)
+    )
+        oldRenderer->visible = false;
+
+    __hidden_project_testbed_runtime::TestbedDeformableGeometryRef deformableProxyGeometry;
+    deformableProxyGeometry.virtualPath = Name(__hidden_project_testbed_runtime::s_DeformableProxyPath);
+    __hidden_project_testbed_runtime::TestbedMaterialRef deformableUvMaterial;
+    deformableUvMaterial.virtualPath = Name(__hidden_project_testbed_runtime::s_DeformableMaterialPath);
+    m_deformableMorphEntity = __hidden_project_testbed_runtime::CreateDeformableRendererEntity(
+        *m_world,
+        deformableProxyGeometry,
+        deformableUvMaterial,
+        replayPosition,
+        replayScale
+    );
+    m_surfaceEditState = Move(loadedState);
+    m_pendingSurfaceEditReplay = true;
+    clearSurfaceEditPreview();
+    clearPendingSurfaceEditAccessory();
+    m_surfaceEditDebugRuntimeMesh.reset();
+    NWB_LOGGER_ESSENTIAL_INFO(
+        NWB_TEXT("Surface edit replay: queued {} edits and {} accessories ({} bytes)"),
+        m_surfaceEditState.edits.size(),
+        m_surfaceEditState.accessories.size(),
+        serializedState.size()
+    );
+}
+
+void ProjectTestbed::applyPendingSurfaceEditReplay(){
+    if(!m_pendingSurfaceEditReplay)
+        return;
+
+    const NWB::Core::ECSGraphics::RuntimeMeshHandle runtimeMesh =
+        rendererSystem().deformableRuntimeMeshHandle(m_deformableMorphEntity)
+    ;
+    auto* instance = rendererSystem().findDeformableRuntimeMesh(runtimeMesh);
+    if(!runtimeMesh.valid() || !instance)
+        return;
+
+    NWB::Core::ECSGraphics::DeformableSurfaceEditReplayContext replayContext;
+    replayContext.assetManager = &m_context.assetManager;
+    replayContext.world = m_world.get();
+    replayContext.targetEntity = m_deformableMorphEntity;
+
+    NWB::Core::ECSGraphics::DeformableSurfaceEditReplayResult replayResult;
+    if(!NWB::Core::ECSGraphics::ApplySurfaceEditState(
+            *instance,
+            m_surfaceEditState,
+            replayContext,
+            &replayResult
+        )
+    ){
+        m_pendingSurfaceEditReplay = false;
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit replay: failed to apply saved state to clean runtime mesh"));
+        return;
+    }
+
+    m_surfaceEditDebugRuntimeMesh = runtimeMesh;
+    m_pendingSurfaceEditReplay = false;
+    NWB_LOGGER_ESSENTIAL_INFO(
+        NWB_TEXT("Surface edit replay: applied {} edits, restored {} accessories, revision={}"),
+        replayResult.appliedEditCount,
+        replayResult.restoredAccessoryCount,
+        replayResult.finalEditRevision
+    );
+}
+
 void ProjectTestbed::logSurfaceEditControls()const{
     NWB_LOGGER_ESSENTIAL_INFO(
-        NWB_TEXT("Surface edit: left click preview, [/] radius={}, comma/period ellipse={}, -/= depth={}, Enter commit, F2 debug, Esc cancel"),
+        NWB_TEXT("Surface edit: left click preview, [/] radius={}, comma/period ellipse={}, -/= depth={}, Enter commit, F2 debug, F3 replay, Esc cancel"),
         m_surfaceEditRadius,
         m_surfaceEditEllipseRatio,
         m_surfaceEditDepth
@@ -1111,6 +1219,9 @@ bool ProjectTestbed::keyboardUpdate(const i32 key, const i32 scancode, const i32
         }
         else if(key == NWB::Core::Key::F2){
             toggleSurfaceEditDebug();
+        }
+        else if(key == NWB::Core::Key::F3){
+            queueSurfaceEditReplay();
         }
         else if(key == NWB::Core::Key::Escape){
             cancelSurfaceEditPreview();

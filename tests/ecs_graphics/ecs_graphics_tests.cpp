@@ -1767,6 +1767,57 @@ static void TestDeformerMorphPayloadSignatureChangesWithWeights(TestContext& con
     NWB_ECS_GRAPHICS_TEST_CHECK(context, lightSignature != heavySignature);
 }
 
+static void TestDeformerMorphPayloadSignatureChangesWithEditRevision(TestContext& context){
+    NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
+
+    NWB::Impl::DeformableMorph morph;
+    morph.name = Name("raise");
+    NWB::Impl::DeformableMorphDelta delta{};
+    delta.vertexId = 1u;
+    delta.deltaPosition = Float3U(2.0f, 0.0f, 0.0f);
+    morph.deltas.push_back(delta);
+    instance.morphs.push_back(morph);
+
+    NWB::Impl::DeformableMorphWeightsComponent weight;
+    weight.weights.push_back(NWB::Impl::DeformableMorphWeight{ Name("raise"), 0.5f });
+
+    Vector<NWB::Impl::DeformerSystem::DeformerVertexMorphRangeGpu> baseRanges;
+    Vector<NWB::Impl::DeformerSystem::DeformerBlendedMorphDeltaGpu> baseDeltas;
+    usize baseSignature = 0u;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Impl::DeformerMorphPayload::BuildBlendedMorphPayload(
+            instance,
+            &weight,
+            baseRanges,
+            baseDeltas,
+            baseSignature
+        )
+    );
+
+    instance.editRevision += 1u;
+
+    Vector<NWB::Impl::DeformerSystem::DeformerVertexMorphRangeGpu> editedRanges;
+    Vector<NWB::Impl::DeformerSystem::DeformerBlendedMorphDeltaGpu> editedDeltas;
+    usize editedSignature = 0u;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Impl::DeformerMorphPayload::BuildBlendedMorphPayload(
+            instance,
+            &weight,
+            editedRanges,
+            editedDeltas,
+            editedSignature
+        )
+    );
+
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, baseDeltas.size() == editedDeltas.size());
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, baseRanges.size() == editedRanges.size());
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, baseSignature != 0u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, editedSignature != 0u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, baseSignature != editedSignature);
+}
+
 static void TestDeformerMorphPayloadBuildsSparseVertexRanges(TestContext& context){
     NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
 
@@ -4874,6 +4925,7 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
     __hidden_ecs_graphics_tests::TestPickingRepairsOverflowedMorphFrame(context);
     __hidden_ecs_graphics_tests::TestDeformerMorphPayloadPreblendsDuplicateWeightsAndMorphs(context);
     __hidden_ecs_graphics_tests::TestDeformerMorphPayloadSignatureChangesWithWeights(context);
+    __hidden_ecs_graphics_tests::TestDeformerMorphPayloadSignatureChangesWithEditRevision(context);
     __hidden_ecs_graphics_tests::TestDeformerMorphPayloadBuildsSparseVertexRanges(context);
     __hidden_ecs_graphics_tests::TestRestSpaceHoleEditCreatesPerInstancePatch(context);
     __hidden_ecs_graphics_tests::TestRestSpaceHoleEditTransfersAndInpaintsWallAttributes(context);

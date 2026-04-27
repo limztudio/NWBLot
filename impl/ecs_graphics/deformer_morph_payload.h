@@ -208,6 +208,7 @@ template<typename MorphRangeVector, typename MorphDeltaVector>
     if(outDeltas.empty())
         outRanges.clear();
 
+    Core::CoreDetail::HashCombine(outSignature, instance.editRevision);
     Core::CoreDetail::HashCombine(outSignature, activeMorphCount);
     Core::CoreDetail::HashCombine(outSignature, static_cast<u32>(outDeltas.size()));
     return true;

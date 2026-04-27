@@ -88,11 +88,7 @@ void OrthonormalizeVertexFrame(
 }
 
 template<typename VertexVector>
-[[nodiscard]] bool ApplyMorphs(
-    const DeformableRuntimeMeshInstance& instance,
-    const DeformableMorphWeightsComponent* weights,
-    VertexVector& vertices)
-{
+[[nodiscard]] bool ApplyMorphs(const DeformableRuntimeMeshInstance& instance, const DeformableMorphWeightsComponent* weights, VertexVector& vertices){
     if(!HasMorphWeights(weights))
         return true;
 
@@ -614,11 +610,7 @@ void ApplyTransform(const Core::Scene::TransformComponent* transform, Deformable
 
 
 template<typename VertexVector>
-[[nodiscard]] bool BuildPickingVertices(
-    const DeformableRuntimeMeshInstance& instance,
-    const DeformablePickingInputs& inputs,
-    VertexVector& outVertices)
-{
+[[nodiscard]] bool BuildPickingVertices(const DeformableRuntimeMeshInstance& instance, const DeformablePickingInputs& inputs, VertexVector& outVertices){
     outVertices.clear();
     if(!DeformableValidation::ValidRuntimePayloadArrays(
             instance.restVertices,
@@ -715,11 +707,7 @@ template<typename VertexVector>
 }
 
 template<typename VertexVector>
-[[nodiscard]] bool BuildPickingVerticesIfReady(
-    const DeformableRuntimeMeshInstance& instance,
-    const DeformablePickingInputs& inputs,
-    VertexVector& outVertices)
-{
+[[nodiscard]] bool BuildPickingVerticesIfReady(const DeformableRuntimeMeshInstance& instance, const DeformablePickingInputs& inputs, VertexVector& outVertices){
     outVertices.clear();
     if((instance.dirtyFlags & RuntimeMeshDirtyFlag::GpuUploadDirty) != 0u)
         return false;

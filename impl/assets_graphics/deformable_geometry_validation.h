@@ -234,6 +234,48 @@ struct MorphPayloadFailureInfo{
     return true;
 }
 
+[[nodiscard]] inline bool ValidAffineJointMatrix(const DeformableJointMatrix& matrix){
+    const SIMDVector column0 = LoadFloat(matrix.column0);
+    const SIMDVector column1 = LoadFloat(matrix.column1);
+    const SIMDVector column2 = LoadFloat(matrix.column2);
+    const SIMDVector column3 = LoadFloat(matrix.column3);
+    const SIMDVector affineW = VectorSet(
+        VectorGetW(column0),
+        VectorGetW(column1),
+        VectorGetW(column2),
+        VectorGetW(column3)
+    );
+    if(!FiniteVector(column0, 0xFu)
+        || !FiniteVector(column1, 0xFu)
+        || !FiniteVector(column2, 0xFu)
+        || !FiniteVector(column3, 0xFu)
+        || !Vector4NearEqual(affineW, s_SIMDIdentityR3, VectorReplicate(s_Epsilon))
+    )
+        return false;
+
+    const f32 determinant = VectorGetX(Vector3Dot(
+        VectorSetW(column0, 0.0f),
+        Vector3Cross(VectorSetW(column1, 0.0f), VectorSetW(column2, 0.0f))
+    ));
+    return IsFinite(determinant) && Abs(determinant) > s_Epsilon;
+}
+
+[[nodiscard]] inline bool ValidInverseBindMatrices(
+    const Vector<DeformableJointMatrix>& inverseBindMatrices,
+    const u32 skeletonJointCount)
+{
+    if(inverseBindMatrices.empty())
+        return true;
+    if(skeletonJointCount == 0u || inverseBindMatrices.size() != skeletonJointCount)
+        return false;
+
+    for(const DeformableJointMatrix& matrix : inverseBindMatrices){
+        if(!ValidAffineJointMatrix(matrix))
+            return false;
+    }
+    return true;
+}
+
 [[nodiscard]] inline bool ValidMorphDelta(const DeformableMorphDelta& delta, const usize vertexCount){
     const SIMDVector deltaPosition = LoadFloat(delta.deltaPosition);
     const SIMDVector deltaNormal = LoadFloat(delta.deltaNormal);
@@ -339,6 +381,7 @@ struct MorphPayloadFailureInfo{
     const u32 sourceTriangleCount,
     const u32 skeletonJointCount,
     const Vector<SkinInfluence4>& skin,
+    const Vector<DeformableJointMatrix>& inverseBindMatrices,
     const Vector<SourceSample>& sourceSamples,
     const Vector<DeformableEditMaskFlags>& editMaskPerTriangle,
     const Vector<DeformableMorph>& morphs)
@@ -355,6 +398,8 @@ struct MorphPayloadFailureInfo{
     if(!skin.empty() && skeletonJointCount == 0u)
         return false;
     if(skeletonJointCount > static_cast<u32>(Limit<u16>::s_Max) + 1u)
+        return false;
+    if(!ValidInverseBindMatrices(inverseBindMatrices, skeletonJointCount))
         return false;
     if(!sourceSamples.empty() && sourceSamples.size() != restVertices.size())
         return false;

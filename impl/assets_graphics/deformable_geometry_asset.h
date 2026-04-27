@@ -38,6 +38,17 @@ struct SkinInfluence4{
 static_assert(IsStandardLayout_V<SkinInfluence4>, "SkinInfluence4 must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<SkinInfluence4>, "SkinInfluence4 must stay binary-serializable");
 
+struct DeformableJointMatrix{
+    Float4 column0 = Float4(1.0f, 0.0f, 0.0f, 0.0f);
+    Float4 column1 = Float4(0.0f, 1.0f, 0.0f, 0.0f);
+    Float4 column2 = Float4(0.0f, 0.0f, 1.0f, 0.0f);
+    Float4 column3 = Float4(0.0f, 0.0f, 0.0f, 1.0f);
+};
+static_assert(IsStandardLayout_V<DeformableJointMatrix>, "DeformableJointMatrix must stay GPU-uploadable");
+static_assert(IsTriviallyCopyable_V<DeformableJointMatrix>, "DeformableJointMatrix must stay GPU-uploadable");
+static_assert(sizeof(DeformableJointMatrix) == sizeof(f32) * 16u, "DeformableJointMatrix GPU layout drifted");
+static_assert(alignof(DeformableJointMatrix) >= alignof(Float4), "DeformableJointMatrix must stay SIMD-aligned");
+
 struct SourceSample{
     u32 sourceTri = 0;
     f32 bary[3] = {};
@@ -199,6 +210,7 @@ public:
     void setIndices(Vector<u32>&& indices){ m_indices = Move(indices); }
     void setSkin(Vector<SkinInfluence4>&& skin){ m_skin = Move(skin); }
     void setSkeletonJointCount(u32 jointCount){ m_skeletonJointCount = jointCount; }
+    void setInverseBindMatrices(Vector<DeformableJointMatrix>&& inverseBindMatrices){ m_inverseBindMatrices = Move(inverseBindMatrices); }
     void setSourceSamples(Vector<SourceSample>&& sourceSamples){ m_sourceSamples = Move(sourceSamples); }
     void setEditMaskPerTriangle(Vector<DeformableEditMaskFlags>&& editMaskPerTriangle){ m_editMaskPerTriangle = Move(editMaskPerTriangle); }
     void setDisplacement(const DeformableDisplacement& displacement){ m_displacement = displacement; }
@@ -210,6 +222,7 @@ public:
     [[nodiscard]] const Vector<u32>& indices()const{ return m_indices; }
     [[nodiscard]] const Vector<SkinInfluence4>& skin()const{ return m_skin; }
     [[nodiscard]] u32 skeletonJointCount()const{ return m_skeletonJointCount; }
+    [[nodiscard]] const Vector<DeformableJointMatrix>& inverseBindMatrices()const{ return m_inverseBindMatrices; }
     [[nodiscard]] const Vector<SourceSample>& sourceSamples()const{ return m_sourceSamples; }
     [[nodiscard]] const Vector<DeformableEditMaskFlags>& editMaskPerTriangle()const{ return m_editMaskPerTriangle; }
     [[nodiscard]] const DeformableDisplacement& displacement()const{ return m_displacement; }
@@ -222,6 +235,7 @@ private:
     Vector<u32> m_indices;
     Vector<SkinInfluence4> m_skin;
     u32 m_skeletonJointCount = 0;
+    Vector<DeformableJointMatrix> m_inverseBindMatrices;
     Vector<SourceSample> m_sourceSamples;
     Vector<DeformableEditMaskFlags> m_editMaskPerTriangle;
     DeformableDisplacement m_displacement;

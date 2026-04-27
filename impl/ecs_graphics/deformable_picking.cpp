@@ -166,10 +166,14 @@ template<typename PreparedJointPaletteVector>
         return true;
 
     outJointPalette.reserve(jointPalette->joints.size());
-    for(const DeformableJointMatrix& joint : jointPalette->joints){
+    for(usize jointIndex = 0u; jointIndex < jointPalette->joints.size(); ++jointIndex){
         PreparedJointPaletteEntry entry;
-        entry.transform = LoadJointMatrix(joint);
-        if(!IsInvertibleAffineJointMatrix(entry.transform)
+        if(!DeformableRuntime::ResolveSkinningJointMatrix(
+                instance,
+                static_cast<u32>(jointIndex),
+                jointPalette->joints[jointIndex],
+                entry.transform
+            )
             || !TryBuildJointNormalMatrix(entry.transform, entry.normalTransform)
         )
             return false;
@@ -623,6 +627,7 @@ template<typename VertexVector>
             instance.sourceTriangleCount,
             instance.skeletonJointCount,
             instance.skin,
+            instance.inverseBindMatrices,
             instance.sourceSamples,
             instance.editMaskPerTriangle,
             instance.morphs

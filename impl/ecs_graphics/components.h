@@ -9,6 +9,7 @@
 
 #include <core/assets/asset_ref.h>
 #include <core/ecs/entity_id.h>
+#include <impl/assets_graphics/deformable_geometry_asset.h>
 
 #include <cstddef>
 
@@ -89,17 +90,6 @@ struct DeformableMorphWeightsComponent{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-struct DeformableJointMatrix{
-    Float4 column0 = Float4(1.0f, 0.0f, 0.0f, 0.0f);
-    Float4 column1 = Float4(0.0f, 1.0f, 0.0f, 0.0f);
-    Float4 column2 = Float4(0.0f, 0.0f, 1.0f, 0.0f);
-    Float4 column3 = Float4(0.0f, 0.0f, 0.0f, 1.0f);
-};
-static_assert(IsStandardLayout_V<DeformableJointMatrix>, "DeformableJointMatrix must stay GPU-uploadable");
-static_assert(IsTriviallyCopyable_V<DeformableJointMatrix>, "DeformableJointMatrix must stay GPU-uploadable");
-static_assert(sizeof(DeformableJointMatrix) == sizeof(f32) * 16u, "DeformableJointMatrix GPU layout drifted");
-static_assert(alignof(DeformableJointMatrix) >= alignof(Float4), "DeformableJointMatrix must stay SIMD-aligned");
 
 struct DeformableJointPaletteComponent{
     Vector<DeformableJointMatrix> joints;

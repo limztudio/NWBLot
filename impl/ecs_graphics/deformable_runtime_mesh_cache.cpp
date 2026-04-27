@@ -227,6 +227,13 @@ void LogRuntimeMorphPayloadFailure(
         );
         return false;
     }
+    if(!DeformableValidation::ValidInverseBindMatrices(instance.inverseBindMatrices, instance.skeletonJointCount)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' inverse bind matrices are invalid"),
+            sourceText()
+        );
+        return false;
+    }
     for(usize vertexIndex = 0; vertexIndex < instance.skin.size(); ++vertexIndex){
         if(!DeformableValidation::ValidSkinInfluence(instance.skin[vertexIndex])){
             NWB_LOGGER_ERROR(
@@ -484,6 +491,7 @@ bool DeformableRuntimeMeshCache::ensureRuntimeMesh(Core::ECS::EntityID entity, D
     instance.sourceTriangleCount = static_cast<u32>(geometry->indices().size() / 3u);
     instance.skeletonJointCount = geometry->skeletonJointCount();
     instance.skin = geometry->skin();
+    instance.inverseBindMatrices = geometry->inverseBindMatrices();
     instance.sourceSamples = geometry->sourceSamples();
     instance.editMaskPerTriangle = geometry->editMaskPerTriangle();
     instance.displacement = geometry->displacement();

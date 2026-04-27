@@ -1193,6 +1193,7 @@ bool ProjectTestbed::buildSurfaceEditCleanBase(
     outCleanBase.sourceTriangleCount = static_cast<u32>(geometry.indices().size() / 3u);
     outCleanBase.skeletonJointCount = geometry.skeletonJointCount();
     outCleanBase.skin = geometry.skin();
+    outCleanBase.inverseBindMatrices = geometry.inverseBindMatrices();
     outCleanBase.sourceSamples = geometry.sourceSamples();
     outCleanBase.editMaskPerTriangle = geometry.editMaskPerTriangle();
     outCleanBase.displacement = geometry.displacement();

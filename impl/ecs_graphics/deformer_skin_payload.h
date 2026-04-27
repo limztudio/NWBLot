@@ -60,6 +60,13 @@ template<typename SkinInfluenceVector, typename JointPaletteVector>
         );
         return false;
     }
+    if(!DeformableValidation::ValidInverseBindMatrices(instance.inverseBindMatrices, instance.skeletonJointCount)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("DeformerSystem: runtime mesh '{}' inverse bind matrices are invalid"),
+            instance.handle.value
+        );
+        return false;
+    }
     if(instance.skin.size() > static_cast<usize>(Limit<u32>::s_Max)
         || jointPalette->joints.size() > static_cast<usize>(Limit<u32>::s_Max)
     ){
@@ -76,9 +83,14 @@ template<typename SkinInfluenceVector, typename JointPaletteVector>
     outJointPalette.reserve(jointCount);
 
     for(usize jointIndex = 0; jointIndex < jointCount; ++jointIndex){
-        const DeformableJointMatrix& joint = jointPalette->joints[jointIndex];
-        const SIMDMatrix jointMatrix = DeformableRuntime::LoadJointMatrix(joint);
-        if(!DeformableRuntime::IsInvertibleAffineJointMatrix(jointMatrix)){
+        SIMDMatrix jointMatrix;
+        if(!DeformableRuntime::ResolveSkinningJointMatrix(
+                instance,
+                static_cast<u32>(jointIndex),
+                jointPalette->joints[jointIndex],
+                jointMatrix
+            )
+        ){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("DeformerSystem: runtime mesh '{}' joint palette entry {} is not a finite invertible affine matrix"),
                 instance.handle.value,
@@ -86,7 +98,7 @@ template<typename SkinInfluenceVector, typename JointPaletteVector>
             );
             return false;
         }
-        outJointPalette.push_back(joint);
+        outJointPalette.push_back(DeformableRuntime::StoreJointMatrix(jointMatrix));
     }
 
     for(usize vertexIndex = 0; vertexIndex < skinCount; ++vertexIndex){

@@ -48,6 +48,7 @@ struct DeformableRuntimeMeshInstance{
     u32 sourceTriangleCount = 0;
     u32 skeletonJointCount = 0;
     Vector<SkinInfluence4> skin;
+    Vector<DeformableJointMatrix> inverseBindMatrices;
     Vector<SourceSample> sourceSamples;
     Vector<DeformableEditMaskFlags> editMaskPerTriangle;
     DeformableDisplacement displacement;

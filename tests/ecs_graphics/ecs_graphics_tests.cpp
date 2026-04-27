@@ -239,6 +239,12 @@ static NWB::Impl::DeformableVertexRest MakeVertex(const f32 x, const f32 y, cons
     return vertex;
 }
 
+static NWB::Impl::DeformableJointMatrix MakeTranslationJointMatrix(const f32 x, const f32 y, const f32 z){
+    NWB::Impl::DeformableJointMatrix joint;
+    joint.column3 = Float4(x, y, z, 1.0f);
+    return joint;
+}
+
 static NWB::Impl::SourceSample MakeSourceSample(const u32 sourceTri, const f32 a, const f32 b, const f32 c){
     NWB::Impl::SourceSample sample;
     sample.sourceTri = sourceTri;
@@ -686,6 +692,13 @@ static void CheckRuntimeMeshPayloadValid(TestContext& context, const NWB::Impl::
     if(!instance.skin.empty()){
         NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.skin.size() == instance.restVertices.size());
         NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.skeletonJointCount != 0u);
+        NWB_ECS_GRAPHICS_TEST_CHECK(
+            context,
+            NWB::Impl::DeformableValidation::ValidInverseBindMatrices(
+                instance.inverseBindMatrices,
+                instance.skeletonJointCount
+            )
+        );
         for(const NWB::Impl::SkinInfluence4& skin : instance.skin){
             NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(SkinWeightSum(skin), 1.0f));
             for(u32 influenceIndex = 0u; influenceIndex < 4u; ++influenceIndex)
@@ -1042,6 +1055,27 @@ static void TestPoseStableRestHitRecovery(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(rotatedHit.restSample.bary[0], 0.2f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(rotatedHit.restSample.bary[1], 0.3f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(rotatedHit.restSample.bary[2], 0.5f));
+}
+
+static void TestPickingSkinAppliesInverseBindMatrix(TestContext& context){
+    NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
+    AssignSingleJointSkin(instance, 0u);
+    instance.inverseBindMatrices.push_back(MakeTranslationJointMatrix(-0.25f, 0.0f, 0.0f));
+
+    NWB::Impl::DeformableJointPaletteComponent joints;
+    joints.joints.push_back(MakeTranslationJointMatrix(1.0f, 0.0f, 0.0f));
+
+    NWB::Impl::DeformablePickingInputs inputs;
+    inputs.jointPalette = &joints;
+
+    Vector<NWB::Impl::DeformableVertexRest> vertices;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::BuildDeformablePickingVertices(instance, inputs, vertices));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, vertices.size() == instance.restVertices.size());
+    if(vertices.size() != instance.restVertices.size())
+        return;
+
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertices[0u].position.x, -0.25f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertices[1u].position.x, 1.75f));
 }
 
 static void TestPickingSkinUsesNormalMatrixForNonUniformScale(TestContext& context){
@@ -1880,12 +1914,7 @@ static void TestDeformerMorphPayloadBuildsSparseVertexRanges(TestContext& contex
 }
 
 static NWB::Impl::DeformableJointMatrix MakeIdentityJointMatrix(){
-    NWB::Impl::DeformableJointMatrix joint;
-    joint.column0 = Float4(1.0f, 0.0f, 0.0f, 0.0f);
-    joint.column1 = Float4(0.0f, 1.0f, 0.0f, 0.0f);
-    joint.column2 = Float4(0.0f, 0.0f, 1.0f, 0.0f);
-    joint.column3 = Float4(0.0f, 0.0f, 0.0f, 1.0f);
-    return joint;
+    return MakeTranslationJointMatrix(0.0f, 0.0f, 0.0f);
 }
 
 static void TestDeformerSkinPayloadValidatesSkeletonAndPalette(TestContext& context){
@@ -1906,6 +1935,16 @@ static void TestDeformerSkinPayloadValidatesSkeletonAndPalette(TestContext& cont
     NWB_ECS_GRAPHICS_TEST_CHECK(context, jointMatrices.size() == 1u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, skinInfluences[0u].joint[0u] == 0u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(skinInfluences[0u].weight.x, 1.0f));
+
+    instance.inverseBindMatrices.push_back(MakeTranslationJointMatrix(-0.25f, 0.0f, 0.0f));
+    joints.joints[0u] = MakeTranslationJointMatrix(1.0f, 0.0f, 0.0f);
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Impl::DeformerSkinPayload::BuildSkinPayload(instance, &joints, skinInfluences, jointMatrices)
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, jointMatrices.size() == 1u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(jointMatrices[0u].column3.x, 0.75f));
+    joints.joints[0u] = MakeIdentityJointMatrix();
 
 #if defined(NWB_FINAL)
     CapturingLogger logger;
@@ -1932,6 +1971,7 @@ static void TestDeformerSkinPayloadValidatesSkeletonAndPalette(TestContext& cont
     NWB::Impl::DeformableRuntimeMeshInstance outsidePalette = instance;
     outsidePalette.skin[0u] = MakeSingleJointSkin(1u);
     outsidePalette.skeletonJointCount = 2u;
+    outsidePalette.inverseBindMatrices.clear();
     joints.joints.resize(1u);
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
@@ -1945,7 +1985,15 @@ static void TestDeformerSkinPayloadValidatesSkeletonAndPalette(TestContext& cont
         context,
         !NWB::Impl::DeformerSkinPayload::BuildSkinPayload(nonAffineJoint, &joints, skinInfluences, jointMatrices)
     );
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 4u);
+
+    NWB::Impl::DeformableRuntimeMeshInstance invalidInverseBind = instance;
+    invalidInverseBind.inverseBindMatrices[0u].column3.w = 0.0f;
+    joints.joints[0u] = MakeIdentityJointMatrix();
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        !NWB::Impl::DeformerSkinPayload::BuildSkinPayload(invalidInverseBind, &joints, skinInfluences, jointMatrices)
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 5u);
 #endif
 }
 
@@ -4997,6 +5045,7 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
     __hidden_ecs_graphics_tests::TestRaycastRejectsNegativeMinDistance(context);
     __hidden_ecs_graphics_tests::TestRaycastRejectsUploadDirtyRuntimeMesh(context);
     __hidden_ecs_graphics_tests::TestPoseStableRestHitRecovery(context);
+    __hidden_ecs_graphics_tests::TestPickingSkinAppliesInverseBindMatrix(context);
     __hidden_ecs_graphics_tests::TestPickingSkinUsesNormalMatrixForNonUniformScale(context);
     __hidden_ecs_graphics_tests::TestPickingSkinBlendsTwoJoints(context);
     __hidden_ecs_graphics_tests::TestPickingRejectsSkinJointOutsidePalette(context);

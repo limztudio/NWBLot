@@ -11,6 +11,7 @@
 
 
 #include "deformable_geometry_asset.h"
+#include "deformable_geometry_validation.h"
 #include "geometry_asset.h"
 #include "material_asset.h"
 #include "shader_asset.h"
@@ -143,6 +144,7 @@ struct DeformableGeometryEntry{
     Vector<u32> indices;
     Vector<SkinInfluence4> skin;
     u32 skeletonJointCount = 0;
+    Vector<DeformableJointMatrix> inverseBindMatrices;
     Vector<SourceSample> sourceSamples;
     Vector<DeformableEditMaskFlags> editMaskPerTriangle;
     DeformableDisplacement displacement;
@@ -1339,6 +1341,82 @@ static bool ParseSkeletonJointCount(const Path& nwbFilePath, const Core::Metascr
     return ParseU32Value(nwbFilePath, *jointCount, "skeleton_joint_count", outJointCount);
 }
 
+static bool ParseInverseBindMatrices(
+    const Path& nwbFilePath,
+    const Core::Metascript::Value& asset,
+    const u32 skeletonJointCount,
+    Vector<DeformableJointMatrix>& outMatrices)
+{
+    outMatrices.clear();
+
+    const Core::Metascript::Value* matrices = FindField(asset, "inverse_bind_matrices");
+    if(!matrices || IsExplicitEmptyOptionalField(*matrices))
+        return true;
+    if(!matrices->isList()){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Deformable geometry meta '{}': 'inverse_bind_matrices' must be a list"),
+            PathToString<tchar>(nwbFilePath)
+        );
+        return false;
+    }
+    if(skeletonJointCount == 0u || matrices->asList().size() != skeletonJointCount){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Deformable geometry meta '{}': inverse bind matrix count must match skeleton_joint_count"),
+            PathToString<tchar>(nwbFilePath)
+        );
+        return false;
+    }
+
+    const auto& matrixList = matrices->asList();
+    outMatrices.reserve(matrixList.size());
+    for(usize matrixIndex = 0u; matrixIndex < matrixList.size(); ++matrixIndex){
+        const Core::Metascript::Value& matrixValue = matrixList[matrixIndex];
+        if(!matrixValue.isList() || matrixValue.asList().size() != 4u){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Deformable geometry meta '{}': inverse_bind_matrices[{}] must contain four columns"),
+                PathToString<tchar>(nwbFilePath),
+                matrixIndex
+            );
+            return false;
+        }
+
+        DeformableJointMatrix matrix;
+        const auto& columns = matrixValue.asList();
+        f32 column[4] = {};
+        AString label = MakeIndexedLabel("inverse_bind_matrices", matrixIndex);
+        AString columnLabel = MakeIndexedLabel(label, 0u);
+        if(!ParseMetadataF32Tuple(nwbFilePath, columns[0u], "Deformable geometry", columnLabel, column))
+            return false;
+        matrix.column0 = Float4(column[0u], column[1u], column[2u], column[3u]);
+
+        columnLabel = MakeIndexedLabel(label, 1u);
+        if(!ParseMetadataF32Tuple(nwbFilePath, columns[1u], "Deformable geometry", columnLabel, column))
+            return false;
+        matrix.column1 = Float4(column[0u], column[1u], column[2u], column[3u]);
+
+        columnLabel = MakeIndexedLabel(label, 2u);
+        if(!ParseMetadataF32Tuple(nwbFilePath, columns[2u], "Deformable geometry", columnLabel, column))
+            return false;
+        matrix.column2 = Float4(column[0u], column[1u], column[2u], column[3u]);
+
+        columnLabel = MakeIndexedLabel(label, 3u);
+        if(!ParseMetadataF32Tuple(nwbFilePath, columns[3u], "Deformable geometry", columnLabel, column))
+            return false;
+        matrix.column3 = Float4(column[0u], column[1u], column[2u], column[3u]);
+
+        if(!DeformableValidation::ValidAffineJointMatrix(matrix)){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Deformable geometry meta '{}': inverse_bind_matrices[{}] is not a finite invertible affine matrix"),
+                PathToString<tchar>(nwbFilePath),
+                matrixIndex
+            );
+            return false;
+        }
+        outMatrices.push_back(matrix);
+    }
+    return true;
+}
+
 static bool ParseSourceSamples(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
@@ -1756,6 +1834,8 @@ static bool ParseDeformableGeometryMeta(
         return false;
     if(!ParseSkeletonJointCount(discoveredFile.filePath, asset, outEntry.skeletonJointCount))
         return false;
+    if(!ParseInverseBindMatrices(discoveredFile.filePath, asset, outEntry.skeletonJointCount, outEntry.inverseBindMatrices))
+        return false;
     if(!ParseSourceSamples(discoveredFile.filePath, asset, outEntry.restVertices.size(), outEntry.sourceSamples))
         return false;
     if(!ParseEditMasks(discoveredFile.filePath, asset, outEntry.indices.size() / 3u, outEntry.editMaskPerTriangle))
@@ -1833,6 +1913,7 @@ static bool BuildDeformableGeometryAsset(DeformableGeometryEntry& geometryEntry,
     outGeometry.setIndices(Move(geometryEntry.indices));
     outGeometry.setSkin(Move(geometryEntry.skin));
     outGeometry.setSkeletonJointCount(geometryEntry.skeletonJointCount);
+    outGeometry.setInverseBindMatrices(Move(geometryEntry.inverseBindMatrices));
     outGeometry.setSourceSamples(Move(geometryEntry.sourceSamples));
     outGeometry.setEditMaskPerTriangle(Move(geometryEntry.editMaskPerTriangle));
     outGeometry.setDisplacement(geometryEntry.displacement);

@@ -91,6 +91,31 @@ template<typename MorphVector, typename MorphWeightLookup>
     return result;
 }
 
+[[nodiscard]] inline DeformableJointMatrix StoreJointMatrix(const SIMDMatrix& matrix){
+    DeformableJointMatrix result;
+    StoreFloat(matrix.v[0], &result.column0);
+    StoreFloat(matrix.v[1], &result.column1);
+    StoreFloat(matrix.v[2], &result.column2);
+    StoreFloat(matrix.v[3], &result.column3);
+    return result;
+}
+
+[[nodiscard]] inline SIMDVector TransformJointColumn(const SIMDMatrix& matrix, const SIMDVector column){
+    SIMDVector result = VectorMultiply(VectorSplatX(column), matrix.v[0]);
+    result = VectorMultiplyAdd(VectorSplatY(column), matrix.v[1], result);
+    result = VectorMultiplyAdd(VectorSplatZ(column), matrix.v[2], result);
+    return VectorMultiplyAdd(VectorSplatW(column), matrix.v[3], result);
+}
+
+[[nodiscard]] inline SIMDMatrix MultiplyJointMatrices(const SIMDMatrix& lhs, const SIMDMatrix& rhs){
+    SIMDMatrix result{};
+    result.v[0] = TransformJointColumn(lhs, rhs.v[0]);
+    result.v[1] = TransformJointColumn(lhs, rhs.v[1]);
+    result.v[2] = TransformJointColumn(lhs, rhs.v[2]);
+    result.v[3] = TransformJointColumn(lhs, rhs.v[3]);
+    return result;
+}
+
 [[nodiscard]] inline bool IsAffineJointMatrix(const SIMDMatrix& matrix){
     const SIMDVector affineW = VectorSet(
         VectorGetW(matrix.v[0]),
@@ -119,6 +144,28 @@ template<typename MorphVector, typename MorphWeightLookup>
 
     const f32 determinant = JointLinearDeterminant(matrix);
     return IsFinite(determinant) && Abs(determinant) > s_Epsilon;
+}
+
+[[nodiscard]] inline bool ResolveSkinningJointMatrix(
+    const DeformableRuntimeMeshInstance& instance,
+    const u32 jointIndex,
+    const DeformableJointMatrix& poseJoint,
+    SIMDMatrix& outMatrix)
+{
+    outMatrix = LoadJointMatrix(poseJoint);
+    if(!IsInvertibleAffineJointMatrix(outMatrix))
+        return false;
+    if(instance.inverseBindMatrices.empty())
+        return true;
+    if(jointIndex >= instance.inverseBindMatrices.size())
+        return false;
+
+    const SIMDMatrix inverseBind = LoadJointMatrix(instance.inverseBindMatrices[jointIndex]);
+    if(!IsInvertibleAffineJointMatrix(inverseBind))
+        return false;
+
+    outMatrix = MultiplyJointMatrices(outMatrix, inverseBind);
+    return IsInvertibleAffineJointMatrix(outMatrix);
 }
 
 [[nodiscard]] inline bool TryBuildJointNormalMatrix(const SIMDMatrix& matrix, SIMDMatrix& outNormalMatrix){

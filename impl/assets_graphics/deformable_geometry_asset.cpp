@@ -27,7 +27,7 @@ namespace __hidden_deformable_geometry_asset{
 
 
 static constexpr u32 s_DeformableGeometryMagic = 0x44474F31u; // DGO1
-static constexpr u32 s_DeformableGeometryVersion = 6u;
+static constexpr u32 s_DeformableGeometryVersion = 7u;
 static constexpr u32 s_DeformableDisplacementTextureMagic = 0x44445431u; // DDT1
 static constexpr u32 s_DeformableDisplacementTextureVersion = 1u;
 #if defined(NWB_COOK)
@@ -38,6 +38,7 @@ static constexpr usize s_DeformableGeometryHeaderBytes =
     sizeof(u64) + // index count
     sizeof(u64) + // skin count
     sizeof(u64) + // skeleton joint count
+    sizeof(u64) + // inverse bind matrix count
     sizeof(u64) + // source sample count
     sizeof(u64) + // edit mask count
     sizeof(u64) + // morph count
@@ -547,6 +548,13 @@ bool DeformableGeometry::validatePayload()const{
         );
         return false;
     }
+    if(!DeformableValidation::ValidInverseBindMatrices(m_inverseBindMatrices, m_skeletonJointCount)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' inverse bind matrices must be empty or match a valid skeleton"),
+            geometryPathText()
+        );
+        return false;
+    }
     for(usize i = 0; i < m_skin.size(); ++i){
         if(!DeformableValidation::ValidSkinInfluence(m_skin[i])){
             NWB_LOGGER_ERROR(
@@ -663,6 +671,7 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
     m_indices.clear();
     m_skin.clear();
     m_skeletonJointCount = 0u;
+    m_inverseBindMatrices.clear();
     m_sourceSamples.clear();
     m_editMaskPerTriangle.clear();
     m_displacement = DeformableDisplacement{};
@@ -676,6 +685,7 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
     u64 indexCount = 0;
     u64 skinCount = 0;
     u64 skeletonJointCount = 0;
+    u64 inverseBindMatrixCount = 0;
     u64 sourceSampleCount = 0;
     u64 editMaskCount = 0;
     u64 morphCount = 0;
@@ -686,6 +696,7 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
         || !ReadPOD(binary, cursor, indexCount)
         || !ReadPOD(binary, cursor, skinCount)
         || !ReadPOD(binary, cursor, skeletonJointCount)
+        || !ReadPOD(binary, cursor, inverseBindMatrixCount)
         || !ReadPOD(binary, cursor, sourceSampleCount)
         || !ReadPOD(binary, cursor, editMaskCount)
         || !ReadPOD(binary, cursor, morphCount)
@@ -707,6 +718,7 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
         || indexCount > static_cast<u64>(Limit<u32>::s_Max)
         || skinCount > static_cast<u64>(Limit<u32>::s_Max)
         || skeletonJointCount > static_cast<u64>(Limit<u32>::s_Max)
+        || inverseBindMatrixCount > static_cast<u64>(Limit<u32>::s_Max)
         || sourceSampleCount > static_cast<u64>(Limit<u32>::s_Max)
         || editMaskCount > static_cast<u64>(Limit<u32>::s_Max)
         || morphCount > static_cast<u64>(Limit<u32>::s_Max)
@@ -731,6 +743,12 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: skeleton joint count is required when skin is present"));
         return false;
     }
+    if(inverseBindMatrixCount != 0u && inverseBindMatrixCount != skeletonJointCount){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("DeformableGeometry::loadBinary failed: inverse bind matrix count must be empty or match skeleton joint count")
+        );
+        return false;
+    }
     if(sourceSampleCount != 0u && sourceSampleCount != vertexCount){
         NWB_LOGGER_ERROR(
             NWB_TEXT("DeformableGeometry::loadBinary failed: source sample count must be empty or match vertex count")
@@ -752,6 +770,8 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
     if(!__hidden_deformable_geometry_asset::ReadVectorPayload(binary, cursor, skinCount, m_skin, NWB_TEXT("skin")))
         return false;
     m_skeletonJointCount = static_cast<u32>(skeletonJointCount);
+    if(!__hidden_deformable_geometry_asset::ReadVectorPayload(binary, cursor, inverseBindMatrixCount, m_inverseBindMatrices, NWB_TEXT("inverse bind matrices")))
+        return false;
     if(!__hidden_deformable_geometry_asset::ReadVectorPayload(binary, cursor, sourceSampleCount, m_sourceSamples, NWB_TEXT("source samples")))
         return false;
     if(!__hidden_deformable_geometry_asset::ReadVectorPayload(binary, cursor, editMaskCount, m_editMaskPerTriangle, NWB_TEXT("edit masks")))
@@ -905,6 +925,7 @@ bool DeformableGeometryAssetCodec::serialize(const Core::Assets::IAsset& asset, 
     bool canReserve = __hidden_deformable_geometry_asset::AddVectorReserveBytes(reserveBytes, geometry.restVertices())
         && __hidden_deformable_geometry_asset::AddVectorReserveBytes(reserveBytes, geometry.indices())
         && __hidden_deformable_geometry_asset::AddVectorReserveBytes(reserveBytes, geometry.skin())
+        && __hidden_deformable_geometry_asset::AddVectorReserveBytes(reserveBytes, geometry.inverseBindMatrices())
         && __hidden_deformable_geometry_asset::AddVectorReserveBytes(reserveBytes, geometry.sourceSamples())
         && __hidden_deformable_geometry_asset::AddVectorReserveBytes(reserveBytes, geometry.editMaskPerTriangle())
     ;
@@ -932,6 +953,7 @@ bool DeformableGeometryAssetCodec::serialize(const Core::Assets::IAsset& asset, 
     AppendPOD(outBinary, static_cast<u64>(geometry.indices().size()));
     AppendPOD(outBinary, static_cast<u64>(geometry.skin().size()));
     AppendPOD(outBinary, static_cast<u64>(geometry.skeletonJointCount()));
+    AppendPOD(outBinary, static_cast<u64>(geometry.inverseBindMatrices().size()));
     AppendPOD(outBinary, static_cast<u64>(geometry.sourceSamples().size()));
     AppendPOD(outBinary, static_cast<u64>(geometry.editMaskPerTriangle().size()));
     AppendPOD(outBinary, static_cast<u64>(geometry.morphs().size()));
@@ -943,6 +965,8 @@ bool DeformableGeometryAssetCodec::serialize(const Core::Assets::IAsset& asset, 
     if(!__hidden_deformable_geometry_asset::AppendVectorPayload(outBinary, geometry.indices(), NWB_TEXT("indices")))
         return false;
     if(!__hidden_deformable_geometry_asset::AppendVectorPayload(outBinary, geometry.skin(), NWB_TEXT("skin")))
+        return false;
+    if(!__hidden_deformable_geometry_asset::AppendVectorPayload(outBinary, geometry.inverseBindMatrices(), NWB_TEXT("inverse bind matrices")))
         return false;
     if(!__hidden_deformable_geometry_asset::AppendVectorPayload(outBinary, geometry.sourceSamples(), NWB_TEXT("source samples")))
         return false;

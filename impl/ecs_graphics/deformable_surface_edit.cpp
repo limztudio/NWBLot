@@ -178,6 +178,7 @@ using MorphDeltaLookup = HashMap<
         instance.sourceTriangleCount,
         instance.skeletonJointCount,
         instance.skin,
+        instance.inverseBindMatrices,
         instance.sourceSamples,
         instance.editMaskPerTriangle,
         instance.morphs
@@ -2175,6 +2176,7 @@ namespace __hidden_deformable_surface_edit{
             newSourceTriangleCount,
             instance.skeletonJointCount,
             addWall ? newSkin : instance.skin,
+            instance.inverseBindMatrices,
             addWall ? newSourceSamples : instance.sourceSamples,
             hasEditMaskPerTriangle ? newEditMaskPerTriangle : instance.editMaskPerTriangle,
             addWall ? newMorphs : instance.morphs

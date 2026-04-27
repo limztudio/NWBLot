@@ -88,6 +88,10 @@ private:
         [[nodiscard]] const DeformableGeometry* geometry()const;
     };
 
+    using SourceMapAllocator = Core::Alloc::CustomAllocator<Pair<const Name, DeformableGeometrySource>>;
+    using InstanceMapAllocator = Core::Alloc::CustomAllocator<Pair<const Core::ECS::EntityID, DeformableRuntimeMeshInstance>>;
+    using HandleMapAllocator = Core::Alloc::CustomAllocator<Pair<const u64, Core::ECS::EntityID>>;
+
 
 public:
     DeformableRuntimeMeshCache(Core::Alloc::CustomArena& arena, Core::Graphics& graphics, Core::Assets::AssetManager& assetManager);
@@ -127,9 +131,7 @@ private:
 private:
     Core::Graphics& m_graphics;
     Core::Assets::AssetManager& m_assetManager;
-    using SourceMapAllocator = Core::Alloc::CustomAllocator<Pair<const Name, DeformableGeometrySource>>;
-    using InstanceMapAllocator = Core::Alloc::CustomAllocator<Pair<const Core::ECS::EntityID, DeformableRuntimeMeshInstance>>;
-    using HandleMapAllocator = Core::Alloc::CustomAllocator<Pair<const u64, Core::ECS::EntityID>>;
+
     HashMap<Name, DeformableGeometrySource, Hasher<Name>, EqualTo<Name>, SourceMapAllocator> m_sources;
     HashMap<Core::ECS::EntityID, DeformableRuntimeMeshInstance, Hasher<Core::ECS::EntityID>, EqualTo<Core::ECS::EntityID>, InstanceMapAllocator> m_instances;
     HashMap<u64, Core::ECS::EntityID, Hasher<u64>, EqualTo<u64>, HandleMapAllocator> m_handleToEntity;

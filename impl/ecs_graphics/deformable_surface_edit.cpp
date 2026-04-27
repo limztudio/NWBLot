@@ -178,16 +178,16 @@ using MorphDeltaLookup = HashMap<
     const u32 (&indices)[3],
     const f32 (&bary)[3])
 {
-    SIMDVector position = VectorScale(LoadFloat(instance.restVertices[indices[0]].position), bary[0]);
-    position = VectorMultiplyAdd(LoadFloat(instance.restVertices[indices[1]].position), VectorReplicate(bary[1]), position);
-    position = VectorMultiplyAdd(LoadFloat(instance.restVertices[indices[2]].position), VectorReplicate(bary[2]), position);
+    SIMDVector position = VectorScale(LoadRestVertexPosition(instance.restVertices[indices[0]]), bary[0]);
+    position = VectorMultiplyAdd(LoadRestVertexPosition(instance.restVertices[indices[1]]), VectorReplicate(bary[1]), position);
+    position = VectorMultiplyAdd(LoadRestVertexPosition(instance.restVertices[indices[2]]), VectorReplicate(bary[2]), position);
     return position;
 }
 
 [[nodiscard]] SIMDVector TriangleCentroid(const DeformableRuntimeMeshInstance& instance, const u32 (&indices)[3]){
     SIMDVector centroid = VectorAdd(
-        VectorAdd(LoadFloat(instance.restVertices[indices[0]].position), LoadFloat(instance.restVertices[indices[1]].position)),
-        LoadFloat(instance.restVertices[indices[2]].position)
+        VectorAdd(LoadRestVertexPosition(instance.restVertices[indices[0]]), LoadRestVertexPosition(instance.restVertices[indices[1]])),
+        LoadRestVertexPosition(instance.restVertices[indices[2]])
     );
     return VectorScale(centroid, 1.0f / 3.0f);
 }
@@ -198,9 +198,9 @@ using MorphDeltaLookup = HashMap<
     const f32 (&bary)[3],
     HoleFrame& outFrame)
 {
-    const SIMDVector a = LoadFloat(instance.restVertices[triangleIndices[0]].position);
-    const SIMDVector b = LoadFloat(instance.restVertices[triangleIndices[1]].position);
-    const SIMDVector c = LoadFloat(instance.restVertices[triangleIndices[2]].position);
+    const SIMDVector a = LoadRestVertexPosition(instance.restVertices[triangleIndices[0]]);
+    const SIMDVector b = LoadRestVertexPosition(instance.restVertices[triangleIndices[1]]);
+    const SIMDVector c = LoadRestVertexPosition(instance.restVertices[triangleIndices[2]]);
     const SIMDVector edge0 = VectorSubtract(b, a);
     const SIMDVector edge1 = VectorSubtract(c, a);
 
@@ -214,14 +214,14 @@ using MorphDeltaLookup = HashMap<
     const DeformableVertexRest& vertex0 = instance.restVertices[triangleIndices[0]];
     const DeformableVertexRest& vertex1 = instance.restVertices[triangleIndices[1]];
     const DeformableVertexRest& vertex2 = instance.restVertices[triangleIndices[2]];
-    SIMDVector tangentVector = VectorScale(VectorSetW(LoadFloat(vertex0.tangent), 0.0f), bary[0]);
+    SIMDVector tangentVector = VectorScale(VectorSetW(LoadRestVertexTangent(vertex0), 0.0f), bary[0]);
     tangentVector = VectorMultiplyAdd(
-        VectorSetW(LoadFloat(vertex1.tangent), 0.0f),
+        VectorSetW(LoadRestVertexTangent(vertex1), 0.0f),
         VectorReplicate(bary[1]),
         tangentVector
     );
     tangentVector = VectorMultiplyAdd(
-        VectorSetW(LoadFloat(vertex2.tangent), 0.0f),
+        VectorSetW(LoadRestVertexTangent(vertex2), 0.0f),
         VectorReplicate(bary[2]),
         tangentVector
     );
@@ -736,9 +736,9 @@ using MorphDeltaLookup = HashMap<
     const SIMDVector point,
     f32 (&outBary)[3])
 {
-    const SIMDVector a = LoadFloat(instance.restVertices[indices[0]].position);
-    const SIMDVector b = LoadFloat(instance.restVertices[indices[1]].position);
-    const SIMDVector c = LoadFloat(instance.restVertices[indices[2]].position);
+    const SIMDVector a = LoadRestVertexPosition(instance.restVertices[indices[0]]);
+    const SIMDVector b = LoadRestVertexPosition(instance.restVertices[indices[1]]);
+    const SIMDVector c = LoadRestVertexPosition(instance.restVertices[indices[2]]);
     const SIMDVector v0 = VectorSubtract(b, a);
     const SIMDVector v1 = VectorSubtract(c, a);
     const SIMDVector v2 = VectorSubtract(point, a);
@@ -771,9 +771,9 @@ using MorphDeltaLookup = HashMap<
     const u32 (&indices)[3],
     const Float3U& storedNormal)
 {
-    const SIMDVector a = LoadFloat(instance.restVertices[indices[0]].position);
-    const SIMDVector b = LoadFloat(instance.restVertices[indices[1]].position);
-    const SIMDVector c = LoadFloat(instance.restVertices[indices[2]].position);
+    const SIMDVector a = LoadRestVertexPosition(instance.restVertices[indices[0]]);
+    const SIMDVector b = LoadRestVertexPosition(instance.restVertices[indices[1]]);
+    const SIMDVector c = LoadRestVertexPosition(instance.restVertices[indices[2]]);
     const SIMDVector rawNormal = Vector3Cross(VectorSubtract(b, a), VectorSubtract(c, a));
     if(VectorGetX(Vector3LengthSq(rawNormal)) <= Core::Geometry::s_FrameDirectionEpsilon)
         return false;
@@ -1812,10 +1812,10 @@ bool ResolveAccessoryAttachmentTransform(
         )
             return false;
 
-        const SIMDVector rimA = LoadFloat(posedVertices[rimAIndex].position);
-        const SIMDVector rimB = LoadFloat(posedVertices[rimBIndex].position);
-        const SIMDVector innerA = LoadFloat(posedVertices[innerAIndex].position);
-        const SIMDVector innerB = LoadFloat(posedVertices[innerBIndex].position);
+        const SIMDVector rimA = LoadRestVertexPosition(posedVertices[rimAIndex]);
+        const SIMDVector rimB = LoadRestVertexPosition(posedVertices[rimBIndex]);
+        const SIMDVector innerA = LoadRestVertexPosition(posedVertices[innerAIndex]);
+        const SIMDVector innerB = LoadRestVertexPosition(posedVertices[innerBIndex]);
         const SIMDVector alpha = VectorReplicate(pairAlpha);
         const SIMDVector rimPosition = VectorMultiplyAdd(VectorSubtract(rimB, rimA), alpha, rimA);
         const SIMDVector innerPosition = VectorMultiplyAdd(VectorSubtract(innerB, innerA), alpha, innerA);
@@ -1868,11 +1868,11 @@ bool ResolveAccessoryAttachmentTransform(
         if(rimVertexIndex >= posedVertices.size() || innerVertexIndex >= posedVertices.size())
             return false;
 
-        const SIMDVector rimPosition = LoadFloat(posedVertices[rimVertexIndex].position);
+        const SIMDVector rimPosition = LoadRestVertexPosition(posedVertices[rimVertexIndex]);
         if(pairIndex == 0u)
             firstRimPosition = rimPosition;
         rimCenter = VectorAdd(rimCenter, rimPosition);
-        innerCenter = VectorAdd(innerCenter, LoadFloat(posedVertices[innerVertexIndex].position));
+        innerCenter = VectorAdd(innerCenter, LoadRestVertexPosition(posedVertices[innerVertexIndex]));
     }
 
     const f32 invWallVertexCount = 1.0f / static_cast<f32>(wallVertexCount);

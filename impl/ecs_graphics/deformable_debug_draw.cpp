@@ -190,8 +190,8 @@ void ResetSnapshotPreservingOutputStorage(DeformableSurfaceEditDebugSnapshot& sn
     const DeformableVertexRest& vertex,
     const Float4U& sample)
 {
-    const SIMDVector normal = VectorSetW(LoadFloat(vertex.normal), 0.0f);
-    const SIMDVector tangentWithHandedness = LoadFloat(vertex.tangent);
+    const SIMDVector normal = VectorSetW(LoadRestVertexNormal(vertex), 0.0f);
+    const SIMDVector tangentWithHandedness = LoadRestVertexTangent(vertex);
     return DeformableRuntime::VectorTextureOffsetToFrame(
         displacement,
         displacement.mode,
@@ -216,7 +216,7 @@ void ResetSnapshotPreservingOutputStorage(DeformableSurfaceEditDebugSnapshot& sn
         if(!IsFinite(scalarOffset))
             return false;
 
-        outOffset = VectorScale(VectorSetW(LoadFloat(vertex.normal), 0.0f), scalarOffset);
+        outOffset = VectorScale(VectorSetW(LoadRestVertexNormal(vertex), 0.0f), scalarOffset);
         return DeformableValidation::FiniteVector(outOffset, 0x7u);
     }
 
@@ -229,7 +229,7 @@ void ResetSnapshotPreservingOutputStorage(DeformableSurfaceEditDebugSnapshot& sn
         if(!IsFinite(scalarOffset))
             return false;
 
-        outOffset = VectorScale(VectorSetW(LoadFloat(vertex.normal), 0.0f), scalarOffset);
+        outOffset = VectorScale(VectorSetW(LoadRestVertexNormal(vertex), 0.0f), scalarOffset);
         return DeformableValidation::FiniteVector(outOffset, 0x7u);
     }
 
@@ -305,8 +305,8 @@ void AppendWallVertexBasisDebug(
     if(!DeformableValidation::ValidRestVertexFrame(vertex))
         return;
 
-    const SIMDVector normal = VectorSetW(LoadFloat(vertex.normal), 0.0f);
-    const SIMDVector tangent = VectorSetW(LoadFloat(vertex.tangent), 0.0f);
+    const SIMDVector normal = VectorSetW(LoadRestVertexNormal(vertex), 0.0f);
+    const SIMDVector tangent = VectorSetW(LoadRestVertexTangent(vertex), 0.0f);
     AppendLine(
         snapshot,
         position,
@@ -342,8 +342,8 @@ void AppendSkinWeightDebug(const DeformableRuntimeMeshInstance& instance, Deform
         if(!DeformableValidation::ValidRestVertexFrame(vertex))
             continue;
 
-        const SIMDVector position = LoadFloat(vertex.position);
-        const SIMDVector normal = VectorSetW(LoadFloat(vertex.normal), 0.0f);
+        const SIMDVector position = LoadRestVertexPosition(vertex);
+        const SIMDVector normal = VectorSetW(LoadRestVertexNormal(vertex), 0.0f);
         AppendLine(
             snapshot,
             position,
@@ -361,7 +361,7 @@ void AppendMorphDeltaDebug(const DeformableRuntimeMeshInstance& instance, Deform
             if(delta.vertexId >= instance.restVertices.size() || !ActivePositionDelta(delta))
                 continue;
 
-            const SIMDVector position = LoadFloat(instance.restVertices[delta.vertexId].position);
+            const SIMDVector position = LoadRestVertexPosition(instance.restVertices[delta.vertexId]);
             const SIMDVector deltaPosition = VectorSetW(LoadFloat(delta.deltaPosition), 0.0f);
             if(!FinitePoint(position) || !DeformableValidation::FiniteVector(deltaPosition, 0x7u))
                 continue;
@@ -404,7 +404,7 @@ void AppendDisplacementMagnitudeDebug(
         if(!DeformableValidation::ActiveWeight(displacementMagnitude))
             continue;
 
-        const SIMDVector position = LoadFloat(vertex.position);
+        const SIMDVector position = LoadRestVertexPosition(vertex);
         AppendLine(
             snapshot,
             position,
@@ -492,8 +492,8 @@ void AppendWallLoopDebug(
         const usize next = (i + 1u) % count;
         const u32 vertexId = static_cast<u32>(first + i);
         const DeformableVertexRest& vertex = instance.restVertices[first + i];
-        const SIMDVector position = LoadFloat(vertex.position);
-        const SIMDVector nextPosition = LoadFloat(instance.restVertices[first + next].position);
+        const SIMDVector position = LoadRestVertexPosition(vertex);
+        const SIMDVector nextPosition = LoadRestVertexPosition(instance.restVertices[first + next]);
         AppendPoint(snapshot, position, color, vertexId, kind);
         AppendLine(snapshot, position, nextPosition, color, kind);
         AppendWallVertexBasisDebug(vertex, position, snapshot);
@@ -546,8 +546,8 @@ void AppendEditStateDebug(
 
     return VectorScale(
         VectorAdd(
-            VectorAdd(LoadFloat(instance.restVertices[a].position), LoadFloat(instance.restVertices[b].position)),
-            LoadFloat(instance.restVertices[c].position)
+            VectorAdd(LoadRestVertexPosition(instance.restVertices[a]), LoadRestVertexPosition(instance.restVertices[b])),
+            LoadRestVertexPosition(instance.restVertices[c])
         ),
         1.0f / 3.0f
     );

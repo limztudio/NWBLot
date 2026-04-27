@@ -101,11 +101,11 @@ struct MorphPayloadFailureInfo{
 }
 
 [[nodiscard]] inline bool ValidRestVertex(const DeformableVertexRest& vertex){
-    const SIMDVector position = LoadFloat(vertex.position);
-    const SIMDVector normal = LoadFloat(vertex.normal);
-    const SIMDVector tangent = LoadFloat(vertex.tangent);
-    const SIMDVector uv0 = LoadFloat(vertex.uv0);
-    const SIMDVector color0 = LoadFloat(vertex.color0);
+    const SIMDVector position = LoadRestVertexPosition(vertex);
+    const SIMDVector normal = LoadRestVertexNormal(vertex);
+    const SIMDVector tangent = LoadRestVertexTangent(vertex);
+    const SIMDVector uv0 = LoadRestVertexUv0(vertex);
+    const SIMDVector color0 = LoadRestVertexColor0(vertex);
     return FiniteVector(position, 0x7u)
         && FiniteVector(normal, 0x7u)
         && FiniteVector(tangent, 0xFu)
@@ -115,11 +115,11 @@ struct MorphPayloadFailureInfo{
 }
 
 [[nodiscard]] inline bool ValidRestVertexFrameImpl(const DeformableVertexRest& vertex, const bool requireUnitFrame){
-    const SIMDVector position = LoadFloat(vertex.position);
-    const SIMDVector normal = LoadFloat(vertex.normal);
-    const SIMDVector tangent = LoadFloat(vertex.tangent);
-    const SIMDVector uv0 = LoadFloat(vertex.uv0);
-    const SIMDVector color0 = LoadFloat(vertex.color0);
+    const SIMDVector position = LoadRestVertexPosition(vertex);
+    const SIMDVector normal = LoadRestVertexNormal(vertex);
+    const SIMDVector tangent = LoadRestVertexTangent(vertex);
+    const SIMDVector uv0 = LoadRestVertexUv0(vertex);
+    const SIMDVector color0 = LoadRestVertexColor0(vertex);
     if(!FiniteVector(position, 0x7u)
         || !FiniteVector(normal, 0x7u)
         || !FiniteVector(tangent, 0xFu)
@@ -416,9 +416,9 @@ struct MorphPayloadFailureInfo{
     if(a == b || a == c || b == c)
         return false;
 
-    const SIMDVector aPosition = LoadFloat(restVertices[a].position);
-    const SIMDVector ab = VectorSubtract(LoadFloat(restVertices[b].position), aPosition);
-    const SIMDVector ac = VectorSubtract(LoadFloat(restVertices[c].position), aPosition);
+    const SIMDVector aPosition = LoadRestVertexPosition(restVertices[a]);
+    const SIMDVector ab = VectorSubtract(LoadRestVertexPosition(restVertices[b]), aPosition);
+    const SIMDVector ac = VectorSubtract(LoadRestVertexPosition(restVertices[c]), aPosition);
     const f32 areaLengthSquared = VectorGetX(Vector3LengthSq(Vector3Cross(ab, ac)));
     return areaLengthSquared > s_TriangleAreaLengthSquaredEpsilon;
 }

@@ -45,11 +45,11 @@ struct PreparedJointPaletteEntry{
 };
 
 [[nodiscard]] SIMDVector LoadVertexNormal(const DeformableVertexRest& vertex){
-    return LoadFloat(vertex.normal);
+    return LoadRestVertexNormal(vertex);
 }
 
 [[nodiscard]] SIMDVector LoadVertexTangent(const DeformableVertexRest& vertex){
-    return LoadFloat(vertex.tangent);
+    return LoadRestVertexTangent(vertex);
 }
 
 void StoreVertexFrame(const SIMDVector normal, const SIMDVector tangent, DeformableVertexRest& vertex){
@@ -127,15 +127,15 @@ template<typename VertexVector>
 
             DeformableVertexRest& vertex = vertices[delta.vertexId];
             StoreFloat(
-                VectorMultiplyAdd(LoadFloat(delta.deltaPosition), weightVector, LoadFloat(vertex.position)),
+                VectorMultiplyAdd(LoadFloat(delta.deltaPosition), weightVector, LoadRestVertexPosition(vertex)),
                 &vertex.position
             );
             StoreFloat(
-                VectorMultiplyAdd(LoadFloat(delta.deltaNormal), weightVector, LoadFloat(vertex.normal)),
+                VectorMultiplyAdd(LoadFloat(delta.deltaNormal), weightVector, LoadRestVertexNormal(vertex)),
                 &vertex.normal
             );
             StoreFloat(
-                VectorMultiplyAdd(LoadFloat(delta.deltaTangent), weightVector, LoadFloat(vertex.tangent)),
+                VectorMultiplyAdd(LoadFloat(delta.deltaTangent), weightVector, LoadRestVertexTangent(vertex)),
                 &vertex.tangent
             );
         }
@@ -277,9 +277,9 @@ template<typename PreparedJointPaletteVector>
         if(!NormalizeBlendedDualQuaternion(blendedReal, blendedDual))
             return false;
 
-        const SIMDVector basePosition = LoadFloat(vertex.position);
-        const SIMDVector baseNormal = LoadFloat(vertex.normal);
-        const SIMDVector baseTangent = VectorSetW(LoadFloat(vertex.tangent), 0.0f);
+        const SIMDVector basePosition = LoadRestVertexPosition(vertex);
+        const SIMDVector baseNormal = LoadRestVertexNormal(vertex);
+        const SIMDVector baseTangent = VectorSetW(LoadRestVertexTangent(vertex), 0.0f);
         StoreFloat(TransformDualQuaternionPosition(blendedReal, blendedDual, basePosition), &vertex.position);
         StoreFloat(TransformDualQuaternionDirection(blendedReal, baseNormal), &vertex.normal);
         StoreFloat(
@@ -292,9 +292,9 @@ template<typename PreparedJointPaletteVector>
     SIMDVector skinnedPosition = VectorZero();
     SIMDVector skinnedNormal = VectorZero();
     SIMDVector skinnedTangent = VectorZero();
-    const SIMDVector basePosition = LoadFloat(vertex.position);
-    const SIMDVector baseNormal = LoadFloat(vertex.normal);
-    const SIMDVector baseTangent = VectorSetW(LoadFloat(vertex.tangent), 0.0f);
+    const SIMDVector basePosition = LoadRestVertexPosition(vertex);
+    const SIMDVector baseNormal = LoadRestVertexNormal(vertex);
+    const SIMDVector baseTangent = VectorSetW(LoadRestVertexTangent(vertex), 0.0f);
     f32 totalWeight = 0.0f;
 
     for(u32 influenceIndex = 0; influenceIndex < 4u; ++influenceIndex){
@@ -385,8 +385,8 @@ void ApplyScalarTextureNormal(
     if(!IsFinite(heightU) || !IsFinite(heightV))
         return;
 
-    SIMDVector normal = LoadFloat(vertex.normal);
-    SIMDVector tangent = VectorSetW(LoadFloat(vertex.tangent), 0.0f);
+    SIMDVector normal = LoadRestVertexNormal(vertex);
+    SIMDVector tangent = VectorSetW(LoadRestVertexTangent(vertex), 0.0f);
     const SIMDVector bitangent = VectorMultiply(
         Core::Geometry::FrameResolveBitangent(normal, tangent, VectorSet(0.0f, 1.0f, 0.0f, 0.0f)),
         VectorReplicate(Core::Geometry::FrameTangentHandedness(vertex.tangent.w, 1.0f))
@@ -414,8 +414,8 @@ void ApplyVectorTextureNormal(
     const Float2U uv = DisplacementTextureCoord(displacement, vertex.uv0);
     const f32 du = DisplacementTextureCoordStep(texture.width());
     const f32 dv = DisplacementTextureCoordStep(texture.height());
-    const SIMDVector normal = LoadFloat(vertex.normal);
-    const SIMDVector tangentWithHandedness = LoadFloat(vertex.tangent);
+    const SIMDVector normal = LoadRestVertexNormal(vertex);
+    const SIMDVector tangentWithHandedness = LoadRestVertexTangent(vertex);
     const SIMDVector tangent = VectorSetW(tangentWithHandedness, 0.0f);
     const SIMDVector right = VectorTextureOffsetToFrame(
         displacement,
@@ -504,14 +504,14 @@ void ApplyDisplacement(
     if(displacement.mode == DeformableDisplacementMode::ScalarUvRamp
         || displacement.mode == DeformableDisplacementMode::ScalarTexture
     ){
-        const SIMDVector displacementNormal = LoadFloat(vertex.normal);
+        const SIMDVector displacementNormal = LoadRestVertexNormal(vertex);
         if(displacement.mode == DeformableDisplacementMode::ScalarTexture && texture)
             ApplyScalarTextureNormal(displacement, *texture, vertex);
         if(!DeformableValidation::ActiveWeight(scalarOffset))
             return;
 
         StoreFloat(
-            VectorMultiplyAdd(displacementNormal, VectorReplicate(scalarOffset), LoadFloat(vertex.position)),
+            VectorMultiplyAdd(displacementNormal, VectorReplicate(scalarOffset), LoadRestVertexPosition(vertex)),
             &vertex.position
         );
         return;
@@ -522,8 +522,8 @@ void ApplyDisplacement(
 
     SIMDVector worldOffset = vectorOffset;
     if(displacement.mode == DeformableDisplacementMode::VectorTangentTexture){
-        const SIMDVector normal = LoadFloat(vertex.normal);
-        const SIMDVector tangent = VectorSetW(LoadFloat(vertex.tangent), 0.0f);
+        const SIMDVector normal = LoadRestVertexNormal(vertex);
+        const SIMDVector tangent = VectorSetW(LoadRestVertexTangent(vertex), 0.0f);
         const SIMDVector bitangent = VectorMultiply(
             Core::Geometry::FrameResolveBitangent(normal, tangent, VectorSet(0.0f, 1.0f, 0.0f, 0.0f)),
             VectorReplicate(Core::Geometry::FrameTangentHandedness(vertex.tangent.w, 1.0f))
@@ -546,7 +546,7 @@ void ApplyDisplacement(
         return;
 
     StoreFloat(
-        VectorAdd(LoadFloat(vertex.position), worldOffset),
+        VectorAdd(LoadRestVertexPosition(vertex), worldOffset),
         &vertex.position
     );
 }
@@ -556,16 +556,16 @@ void ApplyTransform(const Core::Scene::TransformComponent* transform, Deformable
         return;
 
     const SIMDVector rotation = LoadFloat(transform->rotation);
-    SIMDVector position = VectorMultiply(LoadFloat(vertex.position), LoadFloat(transform->scale));
+    SIMDVector position = VectorMultiply(LoadRestVertexPosition(vertex), LoadFloat(transform->scale));
     position = Vector3Rotate(position, rotation);
     StoreFloat(VectorAdd(position, LoadFloat(transform->position)), &vertex.position);
 
-    SIMDVector normalVector = Vector3Rotate(LoadFloat(vertex.normal), rotation);
+    SIMDVector normalVector = Vector3Rotate(LoadRestVertexNormal(vertex), rotation);
     normalVector = Core::Geometry::FrameNormalizeDirection(normalVector, VectorSet(0.0f, 0.0f, 1.0f, 0.0f));
     StoreFloat(normalVector, &vertex.normal);
 
     const SIMDVector tangentVector = Core::Geometry::FrameNormalizeDirection(
-        Vector3Rotate(VectorSetW(LoadFloat(vertex.tangent), 0.0f), rotation),
+        Vector3Rotate(VectorSetW(LoadRestVertexTangent(vertex), 0.0f), rotation),
         Core::Geometry::FrameFallbackTangent(normalVector)
     );
     StoreFloat(VectorSetW(tangentVector, vertex.tangent.w), &vertex.tangent);
@@ -862,9 +862,9 @@ bool RaycastDeformableRuntimeMesh(
             instance.indices[indexBase + 2u]
         };
 
-        const SIMDVector aVector = LoadFloat(posedVertices[vertexIndices[0]].position);
-        const SIMDVector bVector = LoadFloat(posedVertices[vertexIndices[1]].position);
-        const SIMDVector cVector = LoadFloat(posedVertices[vertexIndices[2]].position);
+        const SIMDVector aVector = LoadRestVertexPosition(posedVertices[vertexIndices[0]]);
+        const SIMDVector bVector = LoadRestVertexPosition(posedVertices[vertexIndices[1]]);
+        const SIMDVector cVector = LoadRestVertexPosition(posedVertices[vertexIndices[2]]);
 
         f32 distance = 0.0f;
         f32 bary[3] = {};

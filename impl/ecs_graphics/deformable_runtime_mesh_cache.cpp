@@ -182,9 +182,9 @@ void LogRuntimeMorphPayloadFailure(
             return false;
         }
 
-        const SIMDVector aPosition = LoadFloat(instance.restVertices[a].position);
-        const SIMDVector ab = VectorSubtract(LoadFloat(instance.restVertices[b].position), aPosition);
-        const SIMDVector ac = VectorSubtract(LoadFloat(instance.restVertices[c].position), aPosition);
+        const SIMDVector aPosition = LoadRestVertexPosition(instance.restVertices[a]);
+        const SIMDVector ab = VectorSubtract(LoadRestVertexPosition(instance.restVertices[b]), aPosition);
+        const SIMDVector ac = VectorSubtract(LoadRestVertexPosition(instance.restVertices[c]), aPosition);
         const f32 areaLengthSquared = VectorGetX(Vector3LengthSq(Vector3Cross(ab, ac)));
         if(!(areaLengthSquared > DeformableValidation::s_TriangleAreaLengthSquaredEpsilon)){
             NWB_LOGGER_ERROR(

@@ -20,7 +20,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct DeformableVertexRest{
+struct alignas(16) DeformableVertexRest{
     Float3U position;
     Float3U normal;
     Float4U tangent;
@@ -30,6 +30,56 @@ struct DeformableVertexRest{
 static_assert(IsStandardLayout_V<DeformableVertexRest>, "DeformableVertexRest must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<DeformableVertexRest>, "DeformableVertexRest must stay binary-serializable");
 static_assert(sizeof(DeformableVertexRest) == sizeof(f32) * 16u, "DeformableVertexRest GPU/source layout drifted");
+static_assert(alignof(DeformableVertexRest) >= alignof(Float4), "DeformableVertexRest must stay SIMD-aligned");
+static_assert(offsetof(DeformableVertexRest, position) == sizeof(f32) * 0u, "DeformableVertexRest position layout drifted");
+static_assert(offsetof(DeformableVertexRest, normal) == sizeof(f32) * 3u, "DeformableVertexRest normal layout drifted");
+static_assert(offsetof(DeformableVertexRest, tangent) == sizeof(f32) * 6u, "DeformableVertexRest tangent layout drifted");
+static_assert(offsetof(DeformableVertexRest, uv0) == sizeof(f32) * 10u, "DeformableVertexRest uv0 layout drifted");
+static_assert(offsetof(DeformableVertexRest, color0) == sizeof(f32) * 12u, "DeformableVertexRest color0 layout drifted");
+
+[[nodiscard]] inline SIMDVector LoadRestVertexLane(const DeformableVertexRest& vertex, const usize lane)noexcept{
+    NWB_ASSERT(lane < 4u);
+    const f32* values = vertex.position.raw + (lane * 4u);
+#if defined(NWB_HAS_SCALAR)
+    return VectorSet(values[0], values[1], values[2], values[3]);
+#elif defined(NWB_HAS_NEON)
+#if defined(_MSC_VER) && !defined(__clang__) && !defined(_ARM64_DISTINCT_NEON_TYPES)
+    return vld1q_f32_ex(values, 128);
+#else
+    return vld1q_f32(values);
+#endif
+#elif defined(NWB_HAS_SSE4)
+    return _mm_load_ps(values);
+#endif
+}
+
+[[nodiscard]] inline SIMDVector LoadRestVertexPosition(const DeformableVertexRest& vertex)noexcept{
+    return VectorSetW(LoadRestVertexLane(vertex, 0u), 0.0f);
+}
+
+[[nodiscard]] inline SIMDVector LoadRestVertexNormal(const DeformableVertexRest& vertex)noexcept{
+    const SIMDVector lane0 = LoadRestVertexLane(vertex, 0u);
+    const SIMDVector lane1 = LoadRestVertexLane(vertex, 1u);
+    return VectorSetW(VectorPermute<3, 4, 5, 6>(lane0, lane1), 0.0f);
+}
+
+[[nodiscard]] inline SIMDVector LoadRestVertexTangent(const DeformableVertexRest& vertex)noexcept{
+    const SIMDVector lane1 = LoadRestVertexLane(vertex, 1u);
+    const SIMDVector lane2 = LoadRestVertexLane(vertex, 2u);
+    return VectorPermute<2, 3, 4, 5>(lane1, lane2);
+}
+
+[[nodiscard]] inline SIMDVector LoadRestVertexUv0(const DeformableVertexRest& vertex)noexcept{
+    const SIMDVector uv0 = VectorPermute<2, 3, 2, 3>(
+        LoadRestVertexLane(vertex, 2u),
+        LoadRestVertexLane(vertex, 2u)
+    );
+    return VectorSetW(VectorSetZ(uv0, 0.0f), 0.0f);
+}
+
+[[nodiscard]] inline SIMDVector LoadRestVertexColor0(const DeformableVertexRest& vertex)noexcept{
+    return LoadRestVertexLane(vertex, 3u);
+}
 
 struct SkinInfluence4{
     u16 joint[4] = {};

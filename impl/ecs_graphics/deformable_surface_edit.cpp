@@ -2560,6 +2560,53 @@ void AccumulateSurfaceEditReplayResult(
     return ValidSurfaceEditState(outHealedState);
 }
 
+template<typename MutateRecordFunc>
+[[nodiscard]] bool ReplaySurfaceEditRecordsWithMutatedHole(
+    DeformableRuntimeMeshInstance& replayInstance,
+    const DeformableSurfaceEditState& state,
+    DeformableSurfaceEditState& outMutatedState,
+    DeformableSurfaceEditReplayResult& outReplayResult,
+    MutateRecordFunc&& mutateRecord)
+{
+    bool mutatedEditFound = false;
+    bool replayDependsOnMutatedEdit = false;
+    outMutatedState.edits.reserve(state.edits.size());
+    for(const DeformableSurfaceEditRecord& record : state.edits){
+        if(replayInstance.editRevision == Limit<u32>::s_Max)
+            return false;
+
+        DeformableSurfaceEditRecord replayRecord = record;
+        replayRecord.hole.baseEditRevision = replayInstance.editRevision;
+        replayRecord.result.editRevision = replayInstance.editRevision + 1u;
+
+        bool mutateThisRecord = false;
+        mutateRecord(record, replayRecord, mutateThisRecord);
+        if(mutateThisRecord){
+            mutatedEditFound = true;
+            replayDependsOnMutatedEdit = true;
+        }
+
+        DeformableHoleEditResult replayResult;
+        const ReplayResultValidation::Enum validation = mutateThisRecord
+            ? ReplayResultValidation::None
+            : replayDependsOnMutatedEdit ? ReplayResultValidation::Shape : ReplayResultValidation::Exact
+        ;
+        if(!ReplaySurfaceEditRecord(replayInstance, record, replayRecord, validation, replayResult))
+            return false;
+
+        outMutatedState.edits.push_back(replayRecord);
+        AccumulateSurfaceEditReplayResult(outReplayResult, replayResult);
+    }
+    if(!mutatedEditFound)
+        return false;
+
+    if(!RebuildReplayAccessories(state, 0u, outMutatedState, nullptr))
+        return false;
+
+    outReplayResult.finalEditRevision = replayInstance.editRevision;
+    return ValidSurfaceEditState(outMutatedState);
+}
+
 [[nodiscard]] bool ReplaySurfaceEditRecordsWithResizedHole(
     DeformableRuntimeMeshInstance& replayInstance,
     const DeformableSurfaceEditState& state,
@@ -2590,45 +2637,21 @@ void AccumulateSurfaceEditReplayResult(
     outResult.newEllipseRatio = ellipseRatio;
     outResult.newDepth = depth;
 
-    bool resizedEditFound = false;
-    bool replayDependsOnResizedEdit = false;
-    outResizedState.edits.reserve(state.edits.size());
-    for(const DeformableSurfaceEditRecord& record : state.edits){
-        if(replayInstance.editRevision == Limit<u32>::s_Max)
-            return false;
+    return ReplaySurfaceEditRecordsWithMutatedHole(
+        replayInstance,
+        state,
+        outResizedState,
+        outResult.replay,
+        [&](const DeformableSurfaceEditRecord& record, DeformableSurfaceEditRecord& replayRecord, bool& outMutateThisRecord){
+            outMutateThisRecord = record.editId == editId;
+            if(!outMutateThisRecord)
+                return;
 
-        DeformableSurfaceEditRecord replayRecord = record;
-        replayRecord.hole.baseEditRevision = replayInstance.editRevision;
-        replayRecord.result.editRevision = replayInstance.editRevision + 1u;
-
-        const bool resizeThisRecord = record.editId == editId;
-        if(resizeThisRecord){
             replayRecord.hole.radius = radius;
             replayRecord.hole.ellipseRatio = ellipseRatio;
             replayRecord.hole.depth = depth;
-            resizedEditFound = true;
-            replayDependsOnResizedEdit = true;
         }
-
-        DeformableHoleEditResult replayResult;
-        const ReplayResultValidation::Enum validation = resizeThisRecord
-            ? ReplayResultValidation::None
-            : replayDependsOnResizedEdit ? ReplayResultValidation::Shape : ReplayResultValidation::Exact
-        ;
-        if(!ReplaySurfaceEditRecord(replayInstance, record, replayRecord, validation, replayResult))
-            return false;
-
-        outResizedState.edits.push_back(replayRecord);
-        AccumulateSurfaceEditReplayResult(outResult.replay, replayResult);
-    }
-    if(!resizedEditFound)
-        return false;
-
-    if(!RebuildReplayAccessories(state, 0u, outResizedState, nullptr))
-        return false;
-
-    outResult.replay.finalEditRevision = replayInstance.editRevision;
-    return ValidSurfaceEditState(outResizedState);
+    );
 }
 
 [[nodiscard]] bool ReplaySurfaceEditRecordsWithMovedHole(
@@ -2659,45 +2682,21 @@ void AccumulateSurfaceEditReplayResult(
     outResult.oldRestNormal = movedEdit->hole.restNormal;
     outResult.newRestNormal = moveTarget.restNormal;
 
-    bool movedEditFound = false;
-    bool replayDependsOnMovedEdit = false;
-    outMovedState.edits.reserve(state.edits.size());
-    for(const DeformableSurfaceEditRecord& record : state.edits){
-        if(replayInstance.editRevision == Limit<u32>::s_Max)
-            return false;
+    return ReplaySurfaceEditRecordsWithMutatedHole(
+        replayInstance,
+        state,
+        outMovedState,
+        outResult.replay,
+        [&](const DeformableSurfaceEditRecord& record, DeformableSurfaceEditRecord& replayRecord, bool& outMutateThisRecord){
+            outMutateThisRecord = record.editId == editId;
+            if(!outMutateThisRecord)
+                return;
 
-        DeformableSurfaceEditRecord replayRecord = record;
-        replayRecord.hole.baseEditRevision = replayInstance.editRevision;
-        replayRecord.result.editRevision = replayInstance.editRevision + 1u;
-
-        const bool moveThisRecord = record.editId == editId;
-        if(moveThisRecord){
             replayRecord.hole.restSample = moveTarget.restSample;
             replayRecord.hole.restPosition = moveTarget.restPosition;
             replayRecord.hole.restNormal = moveTarget.restNormal;
-            movedEditFound = true;
-            replayDependsOnMovedEdit = true;
         }
-
-        DeformableHoleEditResult replayResult;
-        const ReplayResultValidation::Enum validation = moveThisRecord
-            ? ReplayResultValidation::None
-            : replayDependsOnMovedEdit ? ReplayResultValidation::Shape : ReplayResultValidation::Exact
-        ;
-        if(!ReplaySurfaceEditRecord(replayInstance, record, replayRecord, validation, replayResult))
-            return false;
-
-        outMovedState.edits.push_back(replayRecord);
-        AccumulateSurfaceEditReplayResult(outResult.replay, replayResult);
-    }
-    if(!movedEditFound)
-        return false;
-
-    if(!RebuildReplayAccessories(state, 0u, outMovedState, nullptr))
-        return false;
-
-    outResult.replay.finalEditRevision = replayInstance.editRevision;
-    return ValidSurfaceEditState(outMovedState);
+    );
 }
 
 [[nodiscard]] bool ReplaySurfaceEditRecordsWithPatchedHole(
@@ -2738,48 +2737,24 @@ void AccumulateSurfaceEditReplayResult(
     outResult.newEllipseRatio = ellipseRatio;
     outResult.newDepth = depth;
 
-    bool patchedEditFound = false;
-    bool replayDependsOnPatchedEdit = false;
-    outPatchedState.edits.reserve(state.edits.size());
-    for(const DeformableSurfaceEditRecord& record : state.edits){
-        if(replayInstance.editRevision == Limit<u32>::s_Max)
-            return false;
+    return ReplaySurfaceEditRecordsWithMutatedHole(
+        replayInstance,
+        state,
+        outPatchedState,
+        outResult.replay,
+        [&](const DeformableSurfaceEditRecord& record, DeformableSurfaceEditRecord& replayRecord, bool& outMutateThisRecord){
+            outMutateThisRecord = record.editId == editId;
+            if(!outMutateThisRecord)
+                return;
 
-        DeformableSurfaceEditRecord replayRecord = record;
-        replayRecord.hole.baseEditRevision = replayInstance.editRevision;
-        replayRecord.result.editRevision = replayInstance.editRevision + 1u;
-
-        const bool patchThisRecord = record.editId == editId;
-        if(patchThisRecord){
             replayRecord.hole.restSample = patchTarget.restSample;
             replayRecord.hole.restPosition = patchTarget.restPosition;
             replayRecord.hole.restNormal = patchTarget.restNormal;
             replayRecord.hole.radius = radius;
             replayRecord.hole.ellipseRatio = ellipseRatio;
             replayRecord.hole.depth = depth;
-            patchedEditFound = true;
-            replayDependsOnPatchedEdit = true;
         }
-
-        DeformableHoleEditResult replayResult;
-        const ReplayResultValidation::Enum validation = patchThisRecord
-            ? ReplayResultValidation::None
-            : replayDependsOnPatchedEdit ? ReplayResultValidation::Shape : ReplayResultValidation::Exact
-        ;
-        if(!ReplaySurfaceEditRecord(replayInstance, record, replayRecord, validation, replayResult))
-            return false;
-
-        outPatchedState.edits.push_back(replayRecord);
-        AccumulateSurfaceEditReplayResult(outResult.replay, replayResult);
-    }
-    if(!patchedEditFound)
-        return false;
-
-    if(!RebuildReplayAccessories(state, 0u, outPatchedState, nullptr))
-        return false;
-
-    outResult.replay.finalEditRevision = replayInstance.editRevision;
-    return ValidSurfaceEditState(outPatchedState);
+    );
 }
 
 [[nodiscard]] bool ReplaySurfaceEditRecordsWithAddedLoopCut(
@@ -2806,43 +2781,19 @@ void AccumulateSurfaceEditReplayResult(
     outResult.oldLoopCutCount = loopCutEdit->hole.wallLoopCutCount;
     outResult.newLoopCutCount = loopCutEdit->hole.wallLoopCutCount + 1u;
 
-    bool loopCutEditFound = false;
-    bool replayDependsOnLoopCutEdit = false;
-    outLoopCutState.edits.reserve(state.edits.size());
-    for(const DeformableSurfaceEditRecord& record : state.edits){
-        if(replayInstance.editRevision == Limit<u32>::s_Max)
-            return false;
+    return ReplaySurfaceEditRecordsWithMutatedHole(
+        replayInstance,
+        state,
+        outLoopCutState,
+        outResult.replay,
+        [&](const DeformableSurfaceEditRecord& record, DeformableSurfaceEditRecord& replayRecord, bool& outMutateThisRecord){
+            outMutateThisRecord = record.editId == editId;
+            if(!outMutateThisRecord)
+                return;
 
-        DeformableSurfaceEditRecord replayRecord = record;
-        replayRecord.hole.baseEditRevision = replayInstance.editRevision;
-        replayRecord.result.editRevision = replayInstance.editRevision + 1u;
-
-        const bool loopCutThisRecord = record.editId == editId;
-        if(loopCutThisRecord){
             ++replayRecord.hole.wallLoopCutCount;
-            loopCutEditFound = true;
-            replayDependsOnLoopCutEdit = true;
         }
-
-        DeformableHoleEditResult replayResult;
-        const ReplayResultValidation::Enum validation = loopCutThisRecord
-            ? ReplayResultValidation::None
-            : replayDependsOnLoopCutEdit ? ReplayResultValidation::Shape : ReplayResultValidation::Exact
-        ;
-        if(!ReplaySurfaceEditRecord(replayInstance, record, replayRecord, validation, replayResult))
-            return false;
-
-        outLoopCutState.edits.push_back(replayRecord);
-        AccumulateSurfaceEditReplayResult(outResult.replay, replayResult);
-    }
-    if(!loopCutEditFound)
-        return false;
-
-    if(!RebuildReplayAccessories(state, 0u, outLoopCutState, nullptr))
-        return false;
-
-    outResult.replay.finalEditRevision = replayInstance.editRevision;
-    return ValidSurfaceEditState(outLoopCutState);
+    );
 }
 
 [[nodiscard]] bool PrepareCleanReplayInstance(

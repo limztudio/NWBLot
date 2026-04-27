@@ -170,6 +170,7 @@ static_assert(IsTriviallyCopyable_V<DeformableMorphDelta>, "DeformableMorphDelta
 
 struct DeformableMorph{
     Name name = NAME_NONE;
+    CompactString nameText;
     Vector<DeformableMorphDelta> deltas;
 };
 
@@ -201,6 +202,8 @@ public:
     void setSourceSamples(Vector<SourceSample>&& sourceSamples){ m_sourceSamples = Move(sourceSamples); }
     void setEditMaskPerTriangle(Vector<DeformableEditMaskFlags>&& editMaskPerTriangle){ m_editMaskPerTriangle = Move(editMaskPerTriangle); }
     void setDisplacement(const DeformableDisplacement& displacement){ m_displacement = displacement; }
+    [[nodiscard]] bool setDisplacementTextureVirtualPathText(AStringView text){ return m_displacementTextureVirtualPathText.assign(text); }
+    void setDisplacementTextureVirtualPathText(CompactString&& text){ m_displacementTextureVirtualPathText = Move(text); }
     void setMorphs(Vector<DeformableMorph>&& morphs){ m_morphs = Move(morphs); }
 
     [[nodiscard]] const Vector<DeformableVertexRest>& restVertices()const{ return m_restVertices; }
@@ -210,6 +213,7 @@ public:
     [[nodiscard]] const Vector<SourceSample>& sourceSamples()const{ return m_sourceSamples; }
     [[nodiscard]] const Vector<DeformableEditMaskFlags>& editMaskPerTriangle()const{ return m_editMaskPerTriangle; }
     [[nodiscard]] const DeformableDisplacement& displacement()const{ return m_displacement; }
+    [[nodiscard]] const CompactString& displacementTextureVirtualPathText()const{ return m_displacementTextureVirtualPathText; }
     [[nodiscard]] const Vector<DeformableMorph>& morphs()const{ return m_morphs; }
 
 
@@ -221,6 +225,7 @@ private:
     Vector<SourceSample> m_sourceSamples;
     Vector<DeformableEditMaskFlags> m_editMaskPerTriangle;
     DeformableDisplacement m_displacement;
+    CompactString m_displacementTextureVirtualPathText;
     Vector<DeformableMorph> m_morphs;
 };
 

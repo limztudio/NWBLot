@@ -994,13 +994,13 @@ static usize DeformableHeaderCountOffset(const usize countIndex){
 
 static usize DeformableMorphDeltaCountOffset(const NWB::Impl::DeformableGeometry& geometry){
     return (sizeof(u32) * 2u)
-        + (sizeof(u64) * 7u)
+        + (sizeof(u64) * 8u)
         + (geometry.restVertices().size() * sizeof(NWB::Impl::DeformableVertexRest))
         + (geometry.indices().size() * sizeof(u32))
         + (geometry.skin().size() * sizeof(NWB::Impl::SkinInfluence4))
         + (geometry.sourceSamples().size() * sizeof(NWB::Impl::SourceSample))
         + (geometry.editMaskPerTriangle().size() * sizeof(NWB::Impl::DeformableEditMaskFlags))
-        + sizeof(NameHash)
+        + (sizeof(u32) * 2u)
     ;
 }
 #endif
@@ -1040,6 +1040,7 @@ static NWB::Impl::DeformableGeometry BuildValidDeformableGeometry(){
     Vector<NWB::Impl::DeformableMorph> morphs;
     morphs.resize(1u);
     morphs[0].name = Name("lift");
+    morphs[0].nameText = CompactString("lift");
     morphs[0].deltas.push_back(MakeMorphDelta(1u, 0.25f));
     morphs[0].deltas.push_back(MakeMorphDelta(2u, 0.5f));
 
@@ -1234,22 +1235,24 @@ static void TestDeformableGeometryCodecRoundTrip(TestContext& context){
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.displacement().amplitude == 0.125f);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs().size() == 1u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs()[0].name == Name("lift"));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs()[0].nameText.view() == AStringView("lift"));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs()[0].deltas.size() == 2u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs()[0].deltas[1].vertexId == 2u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs()[0].deltas[1].deltaPosition.z == 0.5f);
 }
 
 static void TestDeformableGeometryCodecRoundTripsTextureDisplacement(TestContext& context){
-    auto checkRoundTrip = [&](const u32 mode, const Name& texturePath){
+    auto checkRoundTrip = [&](const u32 mode, const AStringView texturePathText){
         NWB::Impl::DeformableGeometry geometry = BuildValidDeformableGeometry();
         NWB::Impl::DeformableDisplacement displacement;
         displacement.mode = mode;
-        displacement.texture.virtualPath = texturePath;
+        displacement.texture.virtualPath = Name(texturePathText);
         displacement.amplitude = 0.5f;
         displacement.bias = -0.25f;
         displacement.uvScale = Float2U(2.0f, 3.0f);
         displacement.uvOffset = Float2U(0.25f, 0.5f);
         geometry.setDisplacement(displacement);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, geometry.setDisplacementTextureVirtualPathText(texturePathText));
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, geometry.validatePayload());
 
         NWB::Impl::DeformableGeometryAssetCodec codec;
@@ -1265,15 +1268,16 @@ static void TestDeformableGeometryCodecRoundTripsTextureDisplacement(TestContext
         ;
         const NWB::Impl::DeformableDisplacement& loadedDisplacement = loadedGeometry.displacement();
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedDisplacement.mode == mode);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedDisplacement.texture.name() == texturePath);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedDisplacement.texture.name() == Name(texturePathText));
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.displacementTextureVirtualPathText().view() == texturePathText);
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedDisplacement.amplitude == 0.5f);
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedDisplacement.bias == -0.25f);
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedDisplacement.uvScale.x == 2.0f);
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedDisplacement.uvOffset.y == 0.5f);
     };
 
-    checkRoundTrip(NWB::Impl::DeformableDisplacementMode::ScalarTexture, Name("tests/textures/displacement_height"));
-    checkRoundTrip(NWB::Impl::DeformableDisplacementMode::VectorObjectTexture, Name("tests/textures/displacement_object"));
+    checkRoundTrip(NWB::Impl::DeformableDisplacementMode::ScalarTexture, "tests/textures/displacement_height");
+    checkRoundTrip(NWB::Impl::DeformableDisplacementMode::VectorObjectTexture, "tests/textures/displacement_object");
 }
 
 static void TestMinimalDeformableGeometryCodecRoundTrip(TestContext& context){

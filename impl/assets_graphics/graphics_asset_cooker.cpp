@@ -146,6 +146,7 @@ struct DeformableGeometryEntry{
     Vector<SourceSample> sourceSamples;
     Vector<DeformableEditMaskFlags> editMaskPerTriangle;
     DeformableDisplacement displacement;
+    CompactString displacementTextureVirtualPathText;
     Vector<DeformableMorph> morphs;
     bool use32BitIndices = true;
 };
@@ -1506,9 +1507,11 @@ static bool ParseOptionalFloat2Field(
 static bool ParseDisplacement(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
-    DeformableDisplacement& outDisplacement)
+    DeformableDisplacement& outDisplacement,
+    CompactString& outTexturePathText)
 {
     outDisplacement = DeformableDisplacement{};
+    outTexturePathText.clear();
 
     const Core::Metascript::Value* displacement = FindField(asset, "displacement");
     if(!displacement)
@@ -1564,6 +1567,13 @@ static bool ParseDisplacement(
         return false;
 
     outDisplacement.texture.virtualPath = ToName(texturePath);
+    if(!outTexturePathText.assign(texturePath)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Deformable geometry meta '{}': displacement texture path exceeds CompactString capacity"),
+            PathToString<tchar>(nwbFilePath)
+        );
+        return false;
+    }
     if(space == "tangent" && mode == "scalar")
         outDisplacement.mode = DeformableDisplacementMode::ScalarTexture;
     else if(space == "tangent" && mode == "vector")
@@ -1653,6 +1663,14 @@ static bool ParseMorphs(const Path& nwbFilePath, const Core::Metascript::Value& 
 
         DeformableMorph morph;
         morph.name = morphNameId;
+        if(!morph.nameText.assign(morphNameView)){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Deformable geometry meta '{}': morph '{}' exceeds CompactString capacity"),
+                PathToString<tchar>(nwbFilePath),
+                StringConvert(morphNameView)
+            );
+            return false;
+        }
         morph.deltas.reserve(vertexIds.size());
         for(usize i = 0; i < vertexIds.size(); ++i){
             DeformableMorphDelta delta;
@@ -1742,7 +1760,13 @@ static bool ParseDeformableGeometryMeta(
         return false;
     if(!ParseEditMasks(discoveredFile.filePath, asset, outEntry.indices.size() / 3u, outEntry.editMaskPerTriangle))
         return false;
-    if(!ParseDisplacement(discoveredFile.filePath, asset, outEntry.displacement))
+    if(!ParseDisplacement(
+            discoveredFile.filePath,
+            asset,
+            outEntry.displacement,
+            outEntry.displacementTextureVirtualPathText
+        )
+    )
         return false;
     if(!ParseMorphs(discoveredFile.filePath, asset, outEntry.morphs))
         return false;
@@ -1812,6 +1836,7 @@ static bool BuildDeformableGeometryAsset(DeformableGeometryEntry& geometryEntry,
     outGeometry.setSourceSamples(Move(geometryEntry.sourceSamples));
     outGeometry.setEditMaskPerTriangle(Move(geometryEntry.editMaskPerTriangle));
     outGeometry.setDisplacement(geometryEntry.displacement);
+    outGeometry.setDisplacementTextureVirtualPathText(Move(geometryEntry.displacementTextureVirtualPathText));
     outGeometry.setMorphs(Move(geometryEntry.morphs));
     return outGeometry.validatePayload();
 }

@@ -6,6 +6,7 @@
 
 #include "deformable_geometry_validation.h"
 
+#include <core/alloc/scratch.h>
 #include <core/assets/asset_auto_registration.h>
 #include <logger/client/logger.h>
 
@@ -26,7 +27,7 @@ namespace __hidden_deformable_geometry_asset{
 
 
 static constexpr u32 s_DeformableGeometryMagic = 0x44474F31u; // DGO1
-static constexpr u32 s_DeformableGeometryVersion = 5u;
+static constexpr u32 s_DeformableGeometryVersion = 6u;
 static constexpr u32 s_DeformableDisplacementTextureMagic = 0x44445431u; // DDT1
 static constexpr u32 s_DeformableDisplacementTextureVersion = 1u;
 #if defined(NWB_COOK)
@@ -39,16 +40,22 @@ static constexpr usize s_DeformableGeometryHeaderBytes =
     sizeof(u64) + // skeleton joint count
     sizeof(u64) + // source sample count
     sizeof(u64) + // edit mask count
-    sizeof(u64)   // morph count
-;
-static constexpr usize s_DeformableMorphHeaderBytes =
-    sizeof(NameHash) +
-    sizeof(u64)
+    sizeof(u64) + // morph count
+    sizeof(u64)   // string table byte count
 ;
 #endif
 
+struct DeformableMorphHeaderBinary{
+    u32 nameOffset = Limit<u32>::s_Max;
+    u32 reserved = 0;
+    u64 deltaCount = 0;
+};
+static_assert(IsStandardLayout_V<DeformableMorphHeaderBinary>, "DeformableMorphHeaderBinary must stay binary-serializable");
+static_assert(IsTriviallyCopyable_V<DeformableMorphHeaderBinary>, "DeformableMorphHeaderBinary must stay binary-serializable");
+
 struct DeformableDisplacementBinary{
-    NameHash textureNameHash = {};
+    u32 texturePathOffset = Limit<u32>::s_Max;
+    u32 reserved = 0;
     u32 mode = DeformableDisplacementMode::None;
     f32 amplitude = 0.0f;
     f32 bias = 0.0f;
@@ -58,27 +65,88 @@ struct DeformableDisplacementBinary{
 static_assert(IsStandardLayout_V<DeformableDisplacementBinary>, "DeformableDisplacementBinary must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<DeformableDisplacementBinary>, "DeformableDisplacementBinary must stay binary-serializable");
 
-[[nodiscard]] DeformableDisplacementBinary BuildDisplacementBinary(const DeformableDisplacement& displacement){
-    DeformableDisplacementBinary binary;
-    binary.textureNameHash = displacement.texture.name().hash();
-    binary.mode = displacement.mode;
-    binary.amplitude = displacement.amplitude;
-    binary.bias = displacement.bias;
-    binary.uvScale = displacement.uvScale;
-    binary.uvOffset = displacement.uvOffset;
-    return binary;
+[[nodiscard]] bool DisplacementModeUsesTexture(const u32 mode){
+    return mode == DeformableDisplacementMode::ScalarTexture
+        || mode == DeformableDisplacementMode::VectorTangentTexture
+        || mode == DeformableDisplacementMode::VectorObjectTexture
+    ;
+}
+
+[[nodiscard]] bool StableTextMatchesName(const CompactString& text, const Name& name){
+    return !text.empty() && Name(text.view()) == name;
+}
+
+[[nodiscard]] bool AppendStringTableText(Core::Assets::AssetBytes& stringTable, const AStringView text, u32& outOffset){
+    outOffset = Limit<u32>::s_Max;
+    if(text.empty() || stringTable.size() >= Limit<u32>::s_Max)
+        return false;
+
+    const usize beginOffset = stringTable.size();
+    const usize byteCount = text.size() + 1u;
+    if(beginOffset > Limit<usize>::s_Max - byteCount)
+        return false;
+    if(byteCount > static_cast<usize>(Limit<u32>::s_Max) - beginOffset)
+        return false;
+
+    outOffset = static_cast<u32>(beginOffset);
+    stringTable.resize(beginOffset + byteCount);
+    NWB_MEMCPY(stringTable.data() + beginOffset, text.size(), text.data(), text.size());
+    stringTable[beginOffset + text.size()] = 0u;
+    return true;
+}
+
+[[nodiscard]] bool ReadStringTableText(
+    const Core::Assets::AssetBytes& binary,
+    const usize stringTableOffset,
+    const usize stringTableByteCount,
+    const u32 textOffset,
+    CompactString& outText)
+{
+    outText.clear();
+    if(textOffset == Limit<u32>::s_Max || static_cast<usize>(textOffset) >= stringTableByteCount)
+        return false;
+
+    const usize absoluteOffset = stringTableOffset + static_cast<usize>(textOffset);
+    const usize remainingBytes = stringTableByteCount - static_cast<usize>(textOffset);
+    usize textLength = 0u;
+    while(textLength < remainingBytes && binary[absoluteOffset + textLength] != 0u)
+        ++textLength;
+
+    if(textLength == 0u || textLength >= remainingBytes)
+        return false;
+
+    return outText.assign(AStringView(reinterpret_cast<const char*>(binary.data() + absoluteOffset), textLength));
+}
+
+[[nodiscard]] bool BuildDisplacementBinary(
+    const DeformableDisplacement& displacement,
+    const CompactString& texturePathText,
+    Core::Assets::AssetBytes& stringTable,
+    DeformableDisplacementBinary& outBinary)
+{
+    outBinary = DeformableDisplacementBinary{};
+    if(DisplacementModeUsesTexture(displacement.mode)){
+        if(!StableTextMatchesName(texturePathText, displacement.texture.name()))
+            return false;
+        if(!AppendStringTableText(stringTable, texturePathText.view(), outBinary.texturePathOffset))
+            return false;
+    }
+
+    outBinary.mode = displacement.mode;
+    outBinary.amplitude = displacement.amplitude;
+    outBinary.bias = displacement.bias;
+    outBinary.uvScale = displacement.uvScale;
+    outBinary.uvOffset = displacement.uvOffset;
+    return true;
 }
 
 [[nodiscard]] DeformableDisplacement BuildDisplacement(const DeformableDisplacementBinary& binary){
     DeformableDisplacement displacement;
-    displacement.texture.virtualPath = Name(binary.textureNameHash);
     displacement.mode = binary.mode;
     displacement.amplitude = binary.amplitude;
     displacement.bias = binary.bias;
     displacement.uvScale = binary.uvScale;
     displacement.uvOffset = binary.uvOffset;
-    if(!displacement.texture.name())
-        displacement.texture.reset();
     return displacement;
 }
 
@@ -552,6 +620,18 @@ bool DeformableGeometry::validatePayload()const{
         );
         return false;
     }
+    if(!m_displacementTextureVirtualPathText.empty()
+        && !__hidden_deformable_geometry_asset::StableTextMatchesName(
+            m_displacementTextureVirtualPathText,
+            m_displacement.texture.name()
+        )
+    ){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' displacement texture path text does not match asset ref"),
+            geometryPathText()
+        );
+        return false;
+    }
 
     const DeformableValidation::MorphPayloadFailureInfo morphFailure =
         DeformableValidation::FindMorphPayloadFailure(m_morphs, m_restVertices.size())
@@ -559,6 +639,15 @@ bool DeformableGeometry::validatePayload()const{
     if(morphFailure.reason != DeformableValidation::MorphPayloadFailure::None){
         __hidden_deformable_geometry_asset::LogGeometryMorphPayloadFailure(geometryPathText(), m_morphs, morphFailure);
         return false;
+    }
+    for(const DeformableMorph& morph : m_morphs){
+        if(!morph.nameText.empty() && !__hidden_deformable_geometry_asset::StableTextMatchesName(morph.nameText, morph.name)){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' morph name text does not match morph name"),
+                geometryPathText()
+            );
+            return false;
+        }
     }
 
     return true;
@@ -577,6 +666,7 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
     m_sourceSamples.clear();
     m_editMaskPerTriangle.clear();
     m_displacement = DeformableDisplacement{};
+    m_displacementTextureVirtualPathText.clear();
     m_morphs.clear();
 
     usize cursor = 0;
@@ -589,6 +679,7 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
     u64 sourceSampleCount = 0;
     u64 editMaskCount = 0;
     u64 morphCount = 0;
+    u64 stringTableByteCount = 0;
     if(!ReadPOD(binary, cursor, magic)
         || !ReadPOD(binary, cursor, version)
         || !ReadPOD(binary, cursor, vertexCount)
@@ -598,6 +689,7 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
         || !ReadPOD(binary, cursor, sourceSampleCount)
         || !ReadPOD(binary, cursor, editMaskCount)
         || !ReadPOD(binary, cursor, morphCount)
+        || !ReadPOD(binary, cursor, stringTableByteCount)
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: malformed header"));
         return false;
@@ -618,6 +710,7 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
         || sourceSampleCount > static_cast<u64>(Limit<u32>::s_Max)
         || editMaskCount > static_cast<u64>(Limit<u32>::s_Max)
         || morphCount > static_cast<u64>(Limit<u32>::s_Max)
+        || stringTableByteCount > static_cast<u64>(Limit<u32>::s_Max)
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: payload counts exceed u32 limits"));
         return false;
@@ -669,30 +762,34 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
         return false;
     }
     if(morphCount > 0u){
-        constexpr usize minMorphHeaderBytes = sizeof(NameHash) + sizeof(u64);
+        constexpr usize minMorphHeaderBytes = sizeof(__hidden_deformable_geometry_asset::DeformableMorphHeaderBinary);
         const usize remainingBytes = cursor <= binary.size() ? binary.size() - cursor : 0u;
         if(morphCount > static_cast<u64>(remainingBytes / minMorphHeaderBytes)){
             NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: malformed morph table"));
             return false;
         }
     }
+    Core::Alloc::ScratchArena<> scratchArena;
+    Vector<u32, Core::Alloc::ScratchAllocator<u32>> morphNameOffsets{
+        Core::Alloc::ScratchAllocator<u32>(scratchArena)
+    };
+    morphNameOffsets.reserve(static_cast<usize>(morphCount));
     m_morphs.reserve(static_cast<usize>(morphCount));
     for(u64 morphIndex = 0; morphIndex < morphCount; ++morphIndex){
-        NameHash morphNameHash = {};
-        u64 deltaCount = 0;
-        if(!ReadPOD(binary, cursor, morphNameHash) || !ReadPOD(binary, cursor, deltaCount)){
+        __hidden_deformable_geometry_asset::DeformableMorphHeaderBinary morphHeader;
+        if(!ReadPOD(binary, cursor, morphHeader)){
             NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: malformed morph header"));
             return false;
         }
-        if(deltaCount > static_cast<u64>(Limit<u32>::s_Max)){
+        if(morphHeader.deltaCount > static_cast<u64>(Limit<u32>::s_Max)){
             NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: morph delta count exceeds u32 limits"));
             return false;
         }
 
         DeformableMorph morph;
-        morph.name = Name(morphNameHash);
-        if(!__hidden_deformable_geometry_asset::ReadVectorPayload(binary, cursor, deltaCount, morph.deltas, NWB_TEXT("morph deltas")))
+        if(!__hidden_deformable_geometry_asset::ReadVectorPayload(binary, cursor, morphHeader.deltaCount, morph.deltas, NWB_TEXT("morph deltas")))
             return false;
+        morphNameOffsets.push_back(morphHeader.nameOffset);
         m_morphs.push_back(Move(morph));
     }
     __hidden_deformable_geometry_asset::DeformableDisplacementBinary displacementBinary;
@@ -701,6 +798,50 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
         return false;
     }
     m_displacement = __hidden_deformable_geometry_asset::BuildDisplacement(displacementBinary);
+
+    if(cursor > binary.size()
+        || static_cast<usize>(stringTableByteCount) > binary.size() - cursor
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: malformed string table"));
+        return false;
+    }
+    const usize stringTableOffset = cursor;
+    cursor += static_cast<usize>(stringTableByteCount);
+    for(usize morphIndex = 0; morphIndex < m_morphs.size(); ++morphIndex){
+        CompactString morphNameText;
+        if(!__hidden_deformable_geometry_asset::ReadStringTableText(
+                binary,
+                stringTableOffset,
+                static_cast<usize>(stringTableByteCount),
+                morphNameOffsets[morphIndex],
+                morphNameText
+            )
+        ){
+            NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: malformed morph name string"));
+            return false;
+        }
+        m_morphs[morphIndex].name = Name(morphNameText.view());
+        m_morphs[morphIndex].nameText = Move(morphNameText);
+    }
+    if(__hidden_deformable_geometry_asset::DisplacementModeUsesTexture(displacementBinary.mode)){
+        CompactString texturePathText;
+        if(!__hidden_deformable_geometry_asset::ReadStringTableText(
+                binary,
+                stringTableOffset,
+                static_cast<usize>(stringTableByteCount),
+                displacementBinary.texturePathOffset,
+                texturePathText
+            )
+        ){
+            NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: malformed displacement texture path string"));
+            return false;
+        }
+        m_displacement.texture.virtualPath = Name(texturePathText.view());
+        m_displacementTextureVirtualPathText = Move(texturePathText);
+    }else if(displacementBinary.texturePathOffset != Limit<u32>::s_Max){
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: unexpected displacement texture path"));
+        return false;
+    }
 
     if(cursor != binary.size()){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: trailing bytes detected"));
@@ -769,7 +910,10 @@ bool DeformableGeometryAssetCodec::serialize(const Core::Assets::IAsset& asset, 
     ;
     for(const DeformableMorph& morph : geometry.morphs()){
         canReserve = canReserve
-            && __hidden_deformable_geometry_asset::AddReserveBytes(reserveBytes, __hidden_deformable_geometry_asset::s_DeformableMorphHeaderBytes)
+            && __hidden_deformable_geometry_asset::AddReserveBytes(
+                reserveBytes,
+                sizeof(__hidden_deformable_geometry_asset::DeformableMorphHeaderBinary)
+            )
             && __hidden_deformable_geometry_asset::AddVectorReserveBytes(reserveBytes, morph.deltas)
         ;
     }
@@ -780,6 +924,7 @@ bool DeformableGeometryAssetCodec::serialize(const Core::Assets::IAsset& asset, 
     outBinary.clear();
     if(canReserve)
         outBinary.reserve(reserveBytes);
+    Core::Assets::AssetBytes stringTable;
 
     AppendPOD(outBinary, __hidden_deformable_geometry_asset::s_DeformableGeometryMagic);
     AppendPOD(outBinary, __hidden_deformable_geometry_asset::s_DeformableGeometryVersion);
@@ -790,6 +935,8 @@ bool DeformableGeometryAssetCodec::serialize(const Core::Assets::IAsset& asset, 
     AppendPOD(outBinary, static_cast<u64>(geometry.sourceSamples().size()));
     AppendPOD(outBinary, static_cast<u64>(geometry.editMaskPerTriangle().size()));
     AppendPOD(outBinary, static_cast<u64>(geometry.morphs().size()));
+    const usize stringTableByteCountOffset = outBinary.size();
+    AppendPOD(outBinary, static_cast<u64>(0u));
 
     if(!__hidden_deformable_geometry_asset::AppendVectorPayload(outBinary, geometry.restVertices(), NWB_TEXT("rest vertices")))
         return false;
@@ -803,12 +950,49 @@ bool DeformableGeometryAssetCodec::serialize(const Core::Assets::IAsset& asset, 
         return false;
 
     for(const DeformableMorph& morph : geometry.morphs()){
-        AppendPOD(outBinary, morph.name.hash());
-        AppendPOD(outBinary, static_cast<u64>(morph.deltas.size()));
+        __hidden_deformable_geometry_asset::DeformableMorphHeaderBinary morphHeader;
+        morphHeader.deltaCount = static_cast<u64>(morph.deltas.size());
+        if(!__hidden_deformable_geometry_asset::StableTextMatchesName(morph.nameText, morph.name)
+            || !__hidden_deformable_geometry_asset::AppendStringTableText(
+                stringTable,
+                morph.nameText.view(),
+                morphHeader.nameOffset
+            )
+        ){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("DeformableGeometryAssetCodec::serialize failed: morph '{}' is missing stable name text"),
+                StringConvert(morph.name.c_str())
+            );
+            return false;
+        }
+        AppendPOD(outBinary, morphHeader);
         if(!__hidden_deformable_geometry_asset::AppendVectorPayload(outBinary, morph.deltas, NWB_TEXT("morph deltas")))
             return false;
     }
-    AppendPOD(outBinary, __hidden_deformable_geometry_asset::BuildDisplacementBinary(geometry.displacement()));
+    __hidden_deformable_geometry_asset::DeformableDisplacementBinary displacementBinary;
+    if(!__hidden_deformable_geometry_asset::BuildDisplacementBinary(
+            geometry.displacement(),
+            geometry.displacementTextureVirtualPathText(),
+            stringTable,
+            displacementBinary
+        )
+    ){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("DeformableGeometryAssetCodec::serialize failed: displacement texture is missing stable virtual path text")
+        );
+        return false;
+    }
+    AppendPOD(outBinary, displacementBinary);
+
+    const u64 stringTableByteCount = static_cast<u64>(stringTable.size());
+    NWB_MEMCPY(
+        outBinary.data() + stringTableByteCountOffset,
+        sizeof(stringTableByteCount),
+        &stringTableByteCount,
+        sizeof(stringTableByteCount)
+    );
+    if(!__hidden_deformable_geometry_asset::AppendVectorPayload(outBinary, stringTable, NWB_TEXT("string table")))
+        return false;
 
     return true;
 }

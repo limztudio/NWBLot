@@ -673,13 +673,15 @@ bool DeformerSystem::dispatchRuntimeMesh(
     payloadViews.jointPaletteCount = jointMatrices.size();
 
     RuntimeResources* resources = nullptr;
+    bool resourcesRebuilt = false;
     if(!ensureRuntimeResources(
         instance,
         payloadViews,
         resolvedDisplacement,
         hasDisplacement,
         morphSignature,
-        resources
+        resources,
+        resourcesRebuilt
     ))
         return false;
     if(!resources
@@ -692,29 +694,8 @@ bool DeformerSystem::dispatchRuntimeMesh(
     )
         return false;
 
-    usize rangeBytes = 0;
-    usize deltaBytes = 0;
     usize jointPaletteBytes = 0;
-    if(hasActiveMorphs){
-        if(!__hidden_deformer_system::BufferPayloadBytes(
-            morphRanges.size(),
-            sizeof(DeformerVertexMorphRangeGpu),
-            rangeBytes,
-            NWB_TEXT("morph range")
-        ))
-            return false;
-        if(!__hidden_deformer_system::BufferPayloadBytes(
-            morphDeltas.size(),
-            sizeof(DeformerBlendedMorphDeltaGpu),
-            deltaBytes,
-            NWB_TEXT("morph delta")
-        ))
-            return false;
-
-        commandList.setBufferState(resources->morphRangeBuffer.get(), Core::ResourceStates::CopyDest);
-        commandList.setBufferState(resources->morphDeltaBuffer.get(), Core::ResourceStates::CopyDest);
-    }
-    if(hasActiveSkin){
+    if(hasActiveSkin && !resourcesRebuilt){
         if(!__hidden_deformer_system::BufferPayloadBytes(
             jointMatrices.size(),
             sizeof(DeformableJointMatrix),
@@ -725,14 +706,9 @@ bool DeformerSystem::dispatchRuntimeMesh(
 
         commandList.setBufferState(resources->jointPaletteBuffer.get(), Core::ResourceStates::CopyDest);
     }
-    if(hasActiveMorphs || hasActiveSkin){
+    if(hasActiveSkin && !resourcesRebuilt){
         commandList.commitBarriers();
-        if(hasActiveMorphs){
-            commandList.writeBuffer(resources->morphRangeBuffer.get(), morphRanges.data(), rangeBytes);
-            commandList.writeBuffer(resources->morphDeltaBuffer.get(), morphDeltas.data(), deltaBytes);
-        }
-        if(hasActiveSkin)
-            commandList.writeBuffer(resources->jointPaletteBuffer.get(), jointMatrices.data(), jointPaletteBytes);
+        commandList.writeBuffer(resources->jointPaletteBuffer.get(), jointMatrices.data(), jointPaletteBytes);
     }
 
     commandList.setBufferState(instance.restVertexBuffer.get(), Core::ResourceStates::ShaderResource);
@@ -804,9 +780,11 @@ bool DeformerSystem::ensureRuntimeResources(
     const DeformableDisplacement& displacement,
     const bool hasDisplacement,
     const usize morphSignature,
-    RuntimeResources*& outResources)
+    RuntimeResources*& outResources,
+    bool& outResourcesRebuilt)
 {
     outResources = nullptr;
+    outResourcesRebuilt = false;
     if((payloadViews.morphRangeCount == 0u) != (payloadViews.morphDeltaCount == 0u)){
         NWB_LOGGER_ERROR(
             NWB_TEXT("DeformerSystem: runtime mesh '{}' has mismatched morph range/delta payloads"),
@@ -1040,6 +1018,7 @@ bool DeformerSystem::ensureRuntimeResources(
 
     resources = Move(rebuilt);
     outResources = &resources;
+    outResourcesRebuilt = true;
     return true;
 }
 

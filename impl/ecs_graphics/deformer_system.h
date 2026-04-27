@@ -129,7 +129,8 @@ private:
         const DeformableDisplacement& displacement,
         bool hasDisplacement,
         usize morphSignature,
-        RuntimeResources*& outResources
+        RuntimeResources*& outResources,
+        bool& outResourcesRebuilt
     );
     [[nodiscard]] bool ensureDefaultDeformerBuffers();
     [[nodiscard]] bool ensureDefaultDisplacementResources();

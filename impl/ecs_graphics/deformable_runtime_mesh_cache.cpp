@@ -512,10 +512,7 @@ bool DeformableRuntimeMeshCache::ensureRuntimeMesh(Core::ECS::EntityID entity, D
     return it.value().valid();
 }
 
-bool DeformableRuntimeMeshCache::ensureSourceLoaded(
-    const Core::Assets::AssetRef<DeformableGeometry>& sourceAsset,
-    DeformableGeometrySource*& outSource)
-{
+bool DeformableRuntimeMeshCache::ensureSourceLoaded(const Core::Assets::AssetRef<DeformableGeometry>& sourceAsset, DeformableGeometrySource*& outSource){
     outSource = nullptr;
 
     const Name sourceName = sourceAsset.name();
@@ -702,8 +699,8 @@ bool DeformableRuntimeMeshCache::computePayloadBytes(
     const usize count,
     const usize stride,
     usize& outBytes,
-    const char* label)const
-{
+    const char* label
+)const{
     outBytes = 0;
     if(stride == 0u || count > Limit<usize>::s_Max / stride){
         NWB_LOGGER_ERROR(

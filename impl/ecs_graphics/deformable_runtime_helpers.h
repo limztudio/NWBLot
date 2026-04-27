@@ -274,11 +274,7 @@ template<typename JointMatrixVector>
     return !QuaternionIsNaN(outQuaternion) && !QuaternionIsInfinite(outQuaternion);
 }
 
-[[nodiscard]] inline bool TryBuildJointDualQuaternion(
-    const SIMDMatrix& matrix,
-    SIMDVector& outReal,
-    SIMDVector& outDual)
-{
+[[nodiscard]] inline bool TryBuildJointDualQuaternion(const SIMDMatrix& matrix, SIMDVector& outReal, SIMDVector& outDual){
     outReal = QuaternionIdentity();
     outDual = VectorZero();
     if(!TryBuildJointRotationQuaternion(matrix, outReal))
@@ -289,10 +285,7 @@ template<typename JointMatrixVector>
     return DeformableValidation::FiniteVector(outDual, 0xFu);
 }
 
-[[nodiscard]] inline DeformableJointMatrix StoreJointDualQuaternionPayload(
-    const SIMDVector real,
-    const SIMDVector dual)
-{
+[[nodiscard]] inline DeformableJointMatrix StoreJointDualQuaternionPayload(const SIMDVector real, const SIMDVector dual){
     DeformableJointMatrix result{};
     StoreFloat(real, &result.rows[0]);
     StoreFloat(dual, &result.rows[1]);
@@ -313,11 +306,7 @@ template<typename JointMatrixVector>
     ;
 }
 
-[[nodiscard]] inline SIMDVector TransformDualQuaternionPosition(
-    const SIMDVector real,
-    const SIMDVector dual,
-    const SIMDVector position)
-{
+[[nodiscard]] inline SIMDVector TransformDualQuaternionPosition(const SIMDVector real, const SIMDVector dual, const SIMDVector position){
     const SIMDVector rotatedPosition = Vector3Rotate(position, real);
     const SIMDVector translation = VectorScale(QuaternionMultiply(dual, QuaternionConjugate(real)), 2.0f);
     return VectorAdd(rotatedPosition, translation);

@@ -3499,6 +3499,62 @@ static void TestSurfaceEditStateReplayOneHole(TestContext& context){
     );
 }
 
+static void TestSurfaceEditStateReplayEmptyStateIsNoOp(TestContext& context){
+    NWB::Impl::DeformableSurfaceEditState state;
+    NWB::Core::Assets::AssetBytes binary;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::SerializeSurfaceEditState(state, binary));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !binary.empty());
+
+    NWB::Impl::DeformableSurfaceEditState loadedState;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::DeserializeSurfaceEditState(binary, loadedState));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, loadedState.edits.empty());
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, loadedState.accessories.empty());
+
+    NWB::Impl::DeformableRuntimeMeshInstance replayInstance = MakeGridHoleInstance();
+    replayInstance.editRevision = 0u;
+    replayInstance.handle.value = 114u;
+    const usize oldVertexCount = replayInstance.restVertices.size();
+    const usize oldIndexCount = replayInstance.indices.size();
+
+    NWB::Impl::DeformableSurfaceEditReplayResult replayResult;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Impl::ApplySurfaceEditState(
+            replayInstance,
+            loadedState,
+            NWB::Impl::DeformableSurfaceEditReplayContext{},
+            &replayResult
+        )
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, replayResult.appliedEditCount == 0u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, replayResult.restoredAccessoryCount == 0u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, replayResult.finalEditRevision == 0u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !replayResult.topologyChanged);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, replayInstance.handle.value == 114u);
+    CheckHoleEditUnchanged(context, replayInstance, oldVertexCount, oldIndexCount, 0u);
+}
+
+static void TestSurfaceEditStateReplayRejectsMismatchedTargetEntity(TestContext& context){
+    NWB::Impl::DeformableSurfaceEditState state;
+    NWB::Impl::DeformableRuntimeMeshInstance replayInstance = MakeGridHoleInstance();
+    replayInstance.entity = NWB::Core::ECS::EntityID(8u, 0u);
+    replayInstance.editRevision = 0u;
+    replayInstance.handle.value = 116u;
+    const usize oldVertexCount = replayInstance.restVertices.size();
+    const usize oldIndexCount = replayInstance.indices.size();
+
+    NWB::Impl::DeformableSurfaceEditReplayContext replayContext;
+    replayContext.targetEntity = NWB::Core::ECS::EntityID(9u, 0u);
+    NWB::Impl::DeformableSurfaceEditReplayResult replayResult;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        !NWB::Impl::ApplySurfaceEditState(replayInstance, state, replayContext, &replayResult)
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, replayResult.appliedEditCount == 0u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, replayResult.restoredAccessoryCount == 0u);
+    CheckHoleEditUnchanged(context, replayInstance, oldVertexCount, oldIndexCount, 0u);
+}
+
 static void TestSurfaceEditStateReplayRestoresAccessory(TestContext& context){
     NWB::Impl::DeformableRuntimeMeshInstance editedInstance = MakeGridHoleInstance();
     editedInstance.editRevision = 0u;
@@ -5556,6 +5612,8 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
     __hidden_ecs_graphics_tests::TestSurfaceEditPreviewIsReadOnlyAndCommitMutatesTopology(context);
     __hidden_ecs_graphics_tests::TestSurfaceEditDebugSnapshotCapturesPreviewAndWallVertices(context);
     __hidden_ecs_graphics_tests::TestSurfaceEditFlowAttachesAndPersistsAccessory(context);
+    __hidden_ecs_graphics_tests::TestSurfaceEditStateReplayEmptyStateIsNoOp(context);
+    __hidden_ecs_graphics_tests::TestSurfaceEditStateReplayRejectsMismatchedTargetEntity(context);
     __hidden_ecs_graphics_tests::TestSurfaceEditStateReplayOneHole(context);
     __hidden_ecs_graphics_tests::TestSurfaceEditStateReplayRestoresAccessory(context);
     __hidden_ecs_graphics_tests::TestSurfaceEditStateReplayRejectsInvalidAccessoryAsset(context);

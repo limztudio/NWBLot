@@ -112,7 +112,6 @@ static bool ValidatePipelineCacheData(const Vector<u8>& cacheData, const VkPhysi
 static bool RetrievePipelineCacheData(VkDevice device, VkPipelineCache pipelineCache, Vector<u8>& outData){
     outData.clear();
 
-    Vector<u8> cacheData;
     for(usize attempt = 0; attempt < s_PipelineCacheDataMaxAttempts; ++attempt){
         size_t cacheSize = 0;
         VkResult res = vkGetPipelineCacheData(device, pipelineCache, &cacheSize, nullptr);
@@ -131,26 +130,28 @@ static bool RetrievePipelineCacheData(VkDevice device, VkPipelineCache pipelineC
             return false;
         }
 
-        cacheData.resize(static_cast<usize>(cacheSize));
+        outData.resize(static_cast<usize>(cacheSize));
         size_t retrievedSize = cacheSize;
-        res = vkGetPipelineCacheData(device, pipelineCache, &retrievedSize, cacheData.data());
+        res = vkGetPipelineCacheData(device, pipelineCache, &retrievedSize, outData.data());
         if(res == VK_SUCCESS){
             if(retrievedSize > cacheSize || retrievedSize > static_cast<size_t>(Limit<usize>::s_Max)){
+                outData.clear();
                 NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Driver returned an invalid pipeline cache data size while serializing."));
                 return false;
             }
 
-            cacheData.resize(static_cast<usize>(retrievedSize));
-            outData = Move(cacheData);
+            outData.resize(static_cast<usize>(retrievedSize));
             return true;
         }
         if(res == VK_INCOMPLETE)
             continue;
 
+        outData.clear();
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to retrieve pipeline cache data. {}"), ResultToString(res));
         return false;
     }
 
+    outData.clear();
     NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Pipeline cache data kept changing while serializing."));
     return false;
 }

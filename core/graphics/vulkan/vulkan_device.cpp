@@ -112,6 +112,7 @@ static bool ValidatePipelineCacheData(const Vector<u8>& cacheData, const VkPhysi
 static bool RetrievePipelineCacheData(VkDevice device, VkPipelineCache pipelineCache, Vector<u8>& outData){
     outData.clear();
 
+    Vector<u8> cacheData;
     for(usize attempt = 0; attempt < s_PipelineCacheDataMaxAttempts; ++attempt){
         size_t cacheSize = 0;
         VkResult res = vkGetPipelineCacheData(device, pipelineCache, &cacheSize, nullptr);
@@ -130,7 +131,7 @@ static bool RetrievePipelineCacheData(VkDevice device, VkPipelineCache pipelineC
             return false;
         }
 
-        Vector<u8> cacheData(static_cast<usize>(cacheSize), 0);
+        cacheData.resize(static_cast<usize>(cacheSize));
         size_t retrievedSize = cacheSize;
         res = vkGetPipelineCacheData(device, pipelineCache, &retrievedSize, cacheData.data());
         if(res == VK_SUCCESS){

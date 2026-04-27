@@ -40,6 +40,7 @@ using EdgeRecord = Core::Geometry::MeshTopologyEdge;
 
 static constexpr f32 s_WallInnerInpaintWeights[3] = { 0.25f, 0.5f, 0.25f };
 static constexpr u32 s_SurfaceEditStateMagic = 0x53454631u; // SEF1
+static constexpr u32 s_SurfaceEditStateVersionV3 = 3u;
 static constexpr u32 s_SurfaceEditStateVersionV4 = 4u;
 static constexpr u32 s_SurfaceEditStateVersion = s_SurfaceEditStateVersionV4;
 static constexpr u32 s_MinWallLoopVertexCount = 3u;
@@ -76,6 +77,70 @@ struct SurfaceEditStateHeaderV4{
 };
 static_assert(IsStandardLayout_V<SurfaceEditStateHeaderV4>, "SurfaceEditStateHeaderV4 must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<SurfaceEditStateHeaderV4>, "SurfaceEditStateHeaderV4 must stay binary-serializable");
+
+struct SurfaceEditStateHeaderV3{
+    u32 magic = s_SurfaceEditStateMagic;
+    u32 version = s_SurfaceEditStateVersionV3;
+    u64 editCount = 0;
+    u64 accessoryCount = 0;
+};
+static_assert(IsStandardLayout_V<SurfaceEditStateHeaderV3>, "SurfaceEditStateHeaderV3 must stay binary-serializable");
+static_assert(IsTriviallyCopyable_V<SurfaceEditStateHeaderV3>, "SurfaceEditStateHeaderV3 must stay binary-serializable");
+
+struct DeformableHoleEditResultV3{
+    u32 removedTriangleCount = 0;
+    u32 addedVertexCount = 0;
+    u32 addedTriangleCount = 0;
+    u32 editRevision = 0;
+    u32 firstWallVertex = Limit<u32>::s_Max;
+    u32 wallVertexCount = 0;
+};
+static_assert(IsStandardLayout_V<DeformableHoleEditResultV3>, "DeformableHoleEditResultV3 must stay binary-serializable");
+static_assert(IsTriviallyCopyable_V<DeformableHoleEditResultV3>, "DeformableHoleEditResultV3 must stay binary-serializable");
+
+struct DeformableSurfaceHoleEditRecordV3{
+    SourceSample restSample;
+    Float3U restPosition = Float3U(0.0f, 0.0f, 0.0f);
+    Float3U restNormal = Float3U(0.0f, 0.0f, 1.0f);
+    u32 baseEditRevision = 0;
+    f32 radius = 0.0f;
+    f32 ellipseRatio = 1.0f;
+    f32 depth = 0.0f;
+};
+static_assert(
+    IsStandardLayout_V<DeformableSurfaceHoleEditRecordV3>,
+    "DeformableSurfaceHoleEditRecordV3 must stay binary-serializable"
+);
+static_assert(
+    IsTriviallyCopyable_V<DeformableSurfaceHoleEditRecordV3>,
+    "DeformableSurfaceHoleEditRecordV3 must stay binary-serializable"
+);
+
+struct DeformableSurfaceEditRecordV3{
+    DeformableSurfaceEditRecordType::Enum type = DeformableSurfaceEditRecordType::Hole;
+    DeformableSurfaceHoleEditRecordV3 hole;
+    DeformableHoleEditResultV3 result;
+};
+static_assert(IsStandardLayout_V<DeformableSurfaceEditRecordV3>, "DeformableSurfaceEditRecordV3 must stay binary-serializable");
+static_assert(IsTriviallyCopyable_V<DeformableSurfaceEditRecordV3>, "DeformableSurfaceEditRecordV3 must stay binary-serializable");
+
+struct SurfaceEditAccessoryRecordBinaryV3{
+    u32 editRevision = 0;
+    u32 firstWallVertex = Limit<u32>::s_Max;
+    u32 wallVertexCount = 0;
+    f32 normalOffset = 0.0f;
+    f32 uniformScale = 1.0f;
+    NameHash geometryNameHash = {};
+    NameHash materialNameHash = {};
+};
+static_assert(
+    IsStandardLayout_V<SurfaceEditAccessoryRecordBinaryV3>,
+    "SurfaceEditAccessoryRecordBinaryV3 must stay binary-serializable"
+);
+static_assert(
+    IsTriviallyCopyable_V<SurfaceEditAccessoryRecordBinaryV3>,
+    "SurfaceEditAccessoryRecordBinaryV3 must stay binary-serializable"
+);
 
 struct SurfaceEditAccessoryRecordBinaryV4{
     DeformableSurfaceEditId anchorEditId = 0;
@@ -1003,6 +1068,69 @@ void RestoreReplayAccessories(
     return ValidAccessoryRecord(outRecord) && AccessoryRecordHasStableAssetPaths(outRecord);
 }
 
+[[nodiscard]] bool BuildEditRecordV3(
+    const DeformableSurfaceEditRecordV3& binary,
+    DeformableSurfaceEditRecord& outRecord)
+{
+    outRecord = DeformableSurfaceEditRecord{};
+    outRecord.editId = binary.result.editRevision;
+    outRecord.type = binary.type;
+    outRecord.hole.restSample = binary.hole.restSample;
+    outRecord.hole.restPosition = binary.hole.restPosition;
+    outRecord.hole.restNormal = binary.hole.restNormal;
+    outRecord.hole.baseEditRevision = binary.hole.baseEditRevision;
+    outRecord.hole.radius = binary.hole.radius;
+    outRecord.hole.ellipseRatio = binary.hole.ellipseRatio;
+    outRecord.hole.depth = binary.hole.depth;
+    outRecord.hole.wallLoopCutCount = 0u;
+    outRecord.result.removedTriangleCount = binary.result.removedTriangleCount;
+    outRecord.result.addedVertexCount = binary.result.addedVertexCount;
+    outRecord.result.addedTriangleCount = binary.result.addedTriangleCount;
+    outRecord.result.editRevision = binary.result.editRevision;
+    outRecord.result.firstWallVertex = binary.result.firstWallVertex;
+    outRecord.result.wallVertexCount = binary.result.wallVertexCount;
+    outRecord.result.wallLoopCutCount = 0u;
+    return ValidEditRecord(outRecord);
+}
+
+[[nodiscard]] bool BuildAccessoryRecordV3(
+    const SurfaceEditAccessoryRecordBinaryV3& binary,
+    DeformableAccessoryAttachmentRecord& outRecord)
+{
+    outRecord = DeformableAccessoryAttachmentRecord{};
+    outRecord.geometry.virtualPath = Name(binary.geometryNameHash);
+    outRecord.material.virtualPath = Name(binary.materialNameHash);
+    outRecord.anchorEditId = binary.editRevision;
+    outRecord.firstWallVertex = binary.firstWallVertex;
+    outRecord.wallVertexCount = binary.wallVertexCount;
+    outRecord.normalOffset = binary.normalOffset;
+    outRecord.uniformScale = binary.uniformScale;
+    outRecord.wallLoopParameter = s_DeformableAccessoryCenteredWallLoopParameter;
+    return ValidAccessoryRecord(outRecord);
+}
+
+[[nodiscard]] bool ComputeSurfaceEditStateBinarySizeV3(
+    const u64 editCount,
+    const u64 accessoryCount,
+    usize& outSize)
+{
+    outSize = sizeof(SurfaceEditStateHeaderV3);
+    if(editCount > static_cast<u64>(Limit<usize>::s_Max / sizeof(DeformableSurfaceEditRecordV3)))
+        return false;
+    if(accessoryCount > static_cast<u64>(Limit<usize>::s_Max / sizeof(SurfaceEditAccessoryRecordBinaryV3)))
+        return false;
+
+    const usize editBytes = static_cast<usize>(editCount) * sizeof(DeformableSurfaceEditRecordV3);
+    const usize accessoryBytes = static_cast<usize>(accessoryCount) * sizeof(SurfaceEditAccessoryRecordBinaryV3);
+    if(editBytes > Limit<usize>::s_Max - outSize)
+        return false;
+    outSize += editBytes;
+    if(accessoryBytes > Limit<usize>::s_Max - outSize)
+        return false;
+    outSize += accessoryBytes;
+    return true;
+}
+
 [[nodiscard]] bool ComputeSurfaceEditStateBinarySizeV4(
     const u64 editCount,
     const u64 accessoryCount,
@@ -1029,6 +1157,50 @@ void RestoreReplayAccessories(
     if(stringTableBytes > Limit<usize>::s_Max - outSize)
         return false;
     outSize += stringTableBytes;
+    return true;
+}
+
+[[nodiscard]] bool DeserializeSurfaceEditStateV3(
+    const Core::Assets::AssetBytes& binary,
+    usize cursor,
+    DeformableSurfaceEditState& outState)
+{
+    u64 editCount = 0u;
+    u64 accessoryCount = 0u;
+    usize expectedSize = 0u;
+    if(!ReadPOD(binary, cursor, editCount)
+        || !ReadPOD(binary, cursor, accessoryCount)
+        || !ComputeSurfaceEditStateBinarySizeV3(editCount, accessoryCount, expectedSize)
+        || expectedSize != binary.size()
+    )
+        return false;
+
+    outState.edits.resize(static_cast<usize>(editCount));
+    for(DeformableSurfaceEditRecord& record : outState.edits){
+        DeformableSurfaceEditRecordV3 binaryRecord;
+        if(!ReadPOD(binary, cursor, binaryRecord) || !BuildEditRecordV3(binaryRecord, record)){
+            outState = DeformableSurfaceEditState{};
+            return false;
+        }
+    }
+
+    outState.accessories.resize(static_cast<usize>(accessoryCount));
+    for(DeformableAccessoryAttachmentRecord& accessory : outState.accessories){
+        SurfaceEditAccessoryRecordBinaryV3 binaryRecord;
+        if(!ReadPOD(binary, cursor, binaryRecord) || !BuildAccessoryRecordV3(binaryRecord, accessory)){
+            outState = DeformableSurfaceEditState{};
+            return false;
+        }
+    }
+
+    if(cursor != binary.size()){
+        outState = DeformableSurfaceEditState{};
+        return false;
+    }
+    if(!ValidSurfaceEditState(outState)){
+        outState = DeformableSurfaceEditState{};
+        return false;
+    }
     return true;
 }
 
@@ -1827,6 +1999,8 @@ bool DeserializeSurfaceEditState(const Core::Assets::AssetBytes& binary, Deforma
     u64 accessoryCount = 0u;
     u64 stringTableByteCount = 0u;
     usize expectedSize = 0u;
+    if(version == __hidden_deformable_surface_edit::s_SurfaceEditStateVersionV3)
+        return __hidden_deformable_surface_edit::DeserializeSurfaceEditStateV3(binary, cursor, outState);
     if(version != __hidden_deformable_surface_edit::s_SurfaceEditStateVersion)
         return false;
     if(!ReadPOD(binary, cursor, editCount)

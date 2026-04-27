@@ -30,17 +30,17 @@ static int MainLogic(u16 logPort, void* inst){
         try{
             NWB::Log::Frame frame(inst);
             if(!frame.init()){
-                logger.enqueue(StringFormat(NWB_TEXT("Log server frame initialization failed")), NWB::Log::Type::Fatal);
+                logger.enqueue(NWB_TEXT("Log server frame initialization failed"), NWB::Log::Type::Fatal);
                 return -1;
             }
 
             if(!frame.showFrame()){
-                logger.enqueue(StringFormat(NWB_TEXT("Log server frame show failed")), NWB::Log::Type::Error);
+                logger.enqueue(NWB_TEXT("Log server frame show failed"), NWB::Log::Type::Error);
                 return -1;
             }
 
             if(!frame.mainLoop()){
-                logger.enqueue(StringFormat(NWB_TEXT("Log server main loop failed")), NWB::Log::Type::Error);
+                logger.enqueue(NWB_TEXT("Log server main loop failed"), NWB::Log::Type::Error);
                 return -1;
             }
         }

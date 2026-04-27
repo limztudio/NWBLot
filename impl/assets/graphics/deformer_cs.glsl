@@ -92,6 +92,10 @@ uint nwbDeformerDisplacementMode(){
     return g_NwbDeformerPushConstants.payload1.z;
 }
 
+uint nwbDeformerSkinningMode(){
+    return g_NwbDeformerPushConstants.payload1.w;
+}
+
 float nwbDeformerDisplacementAmplitude(){
     return g_NwbDeformerPushConstants.payload2.x;
 }
@@ -210,10 +214,125 @@ bool nwbDeformerTransformJointNormal(const mat3 jointMatrix, const vec3 normal, 
     return nwbDeformerFiniteVec3(transformedNormal);
 }
 
-void nwbDeformerApplySkin(const uint vertexId, inout vec3 position, inout vec3 normal, inout vec4 tangent){
+vec4 nwbDeformerQuaternionMultiply(const vec4 lhs, const vec4 rhs){
+    return vec4(
+        (lhs.w * rhs.x) + (lhs.x * rhs.w) + (lhs.y * rhs.z) - (lhs.z * rhs.y),
+        (lhs.w * rhs.y) - (lhs.x * rhs.z) + (lhs.y * rhs.w) + (lhs.z * rhs.x),
+        (lhs.w * rhs.z) + (lhs.x * rhs.y) - (lhs.y * rhs.x) + (lhs.z * rhs.w),
+        (lhs.w * rhs.w) - dot(lhs.xyz, rhs.xyz)
+    );
+}
+
+vec3 nwbDeformerRotateVectorByQuaternion(const vec3 value, const vec4 rotation){
+    const vec3 twiceCross = 2.0 * cross(rotation.xyz, value);
+    return value + (rotation.w * twiceCross) + cross(rotation.xyz, twiceCross);
+}
+
+bool nwbDeformerJointRotationQuaternion(const mat3 matrix, out vec4 rotation){
+    const float m00 = matrix[0].x;
+    const float m10 = matrix[0].y;
+    const float m20 = matrix[0].z;
+    const float m01 = matrix[1].x;
+    const float m11 = matrix[1].y;
+    const float m21 = matrix[1].z;
+    const float m02 = matrix[2].x;
+    const float m12 = matrix[2].y;
+    const float m22 = matrix[2].z;
+
+    const float trace = m00 + m11 + m22;
+    if(trace > 0.0){
+        const float s = sqrt(trace + 1.0) * 2.0;
+        if(!nwbDeformerFiniteFloat(s) || s <= 0.000001)
+            return false;
+
+        rotation = vec4(
+            (m21 - m12) / s,
+            (m02 - m20) / s,
+            (m10 - m01) / s,
+            0.25 * s
+        );
+    }
+    else if(m00 > m11 && m00 > m22){
+        const float s = sqrt(1.0 + m00 - m11 - m22) * 2.0;
+        if(!nwbDeformerFiniteFloat(s) || s <= 0.000001)
+            return false;
+
+        rotation = vec4(
+            0.25 * s,
+            (m01 + m10) / s,
+            (m02 + m20) / s,
+            (m21 - m12) / s
+        );
+    }
+    else if(m11 > m22){
+        const float s = sqrt(1.0 + m11 - m00 - m22) * 2.0;
+        if(!nwbDeformerFiniteFloat(s) || s <= 0.000001)
+            return false;
+
+        rotation = vec4(
+            (m01 + m10) / s,
+            0.25 * s,
+            (m12 + m21) / s,
+            (m02 - m20) / s
+        );
+    }
+    else{
+        const float s = sqrt(1.0 + m22 - m00 - m11) * 2.0;
+        if(!nwbDeformerFiniteFloat(s) || s <= 0.000001)
+            return false;
+
+        rotation = vec4(
+            (m02 + m20) / s,
+            (m12 + m21) / s,
+            0.25 * s,
+            (m10 - m01) / s
+        );
+    }
+
+    if(!nwbDeformerFiniteVec4(rotation))
+        return false;
+
+    const float lengthSquared = dot(rotation, rotation);
+    if(!nwbDeformerFiniteFloat(lengthSquared) || lengthSquared <= 0.000001)
+        return false;
+
+    rotation *= inversesqrt(lengthSquared);
+    return nwbDeformerFiniteVec4(rotation);
+}
+
+bool nwbDeformerBuildJointDualQuaternion(const mat4 jointMatrix, out vec4 real, out vec4 dual){
+    if(!nwbDeformerJointRotationQuaternion(mat3(jointMatrix), real))
+        return false;
+
+    dual = 0.5 * nwbDeformerQuaternionMultiply(vec4(jointMatrix[3].xyz, 0.0), real);
+    return nwbDeformerFiniteVec4(dual);
+}
+
+bool nwbDeformerNormalizeDualQuaternion(inout vec4 real, inout vec4 dual){
+    const float lengthSquared = dot(real, real);
+    if(!nwbDeformerFiniteFloat(lengthSquared) || lengthSquared <= 0.000001)
+        return false;
+
+    const float invLength = inversesqrt(lengthSquared);
+    real *= invLength;
+    dual *= invLength;
+    dual -= real * dot(real, dual);
+    return nwbDeformerFiniteVec4(real) && nwbDeformerFiniteVec4(dual);
+}
+
+vec3 nwbDeformerTransformDualQuaternionPosition(const vec4 real, const vec4 dual, const vec3 position){
+    const vec3 rotatedPosition = nwbDeformerRotateVectorByQuaternion(position, real);
+    const vec3 translation = 2.0 * nwbDeformerQuaternionMultiply(
+        dual,
+        vec4(-real.xyz, real.w)
+    ).xyz;
+    return rotatedPosition + translation;
+}
+
+bool nwbDeformerApplyLinearSkin(const uint vertexId, inout vec3 position, inout vec3 normal, inout vec4 tangent){
     const uint jointCount = nwbDeformerJointCount();
     if(nwbDeformerSkinCount() != nwbDeformerVertexCount() || jointCount == 0u)
-        return;
+        return true;
 
     const NwbDeformerSkinInfluence skin = nwbDeformerSkinInfluences[vertexId];
     vec3 skinnedPosition = vec3(0.0);
@@ -240,11 +359,70 @@ void nwbDeformerApplySkin(const uint vertexId, inout vec3 position, inout vec3 n
     }
 
     if(abs(totalWeight) <= 0.000001)
-        return;
+        return true;
 
     position = skinnedPosition;
     normal = skinnedNormal;
     tangent.xyz = skinnedTangent;
+    return true;
+}
+
+bool nwbDeformerApplyDualQuaternionSkin(const uint vertexId, inout vec3 position, inout vec3 normal, inout vec4 tangent){
+    const uint jointCount = nwbDeformerJointCount();
+    if(nwbDeformerSkinCount() != nwbDeformerVertexCount() || jointCount == 0u)
+        return true;
+
+    const NwbDeformerSkinInfluence skin = nwbDeformerSkinInfluences[vertexId];
+    vec4 blendedReal = vec4(0.0);
+    vec4 blendedDual = vec4(0.0);
+    vec4 referenceReal = vec4(0.0);
+    bool hasReference = false;
+    float totalWeight = 0.0;
+
+    for(uint influenceIndex = 0u; influenceIndex < 4u; ++influenceIndex){
+        const float weight = skin.weight[influenceIndex];
+        const uint jointId = skin.joint[influenceIndex];
+        if(abs(weight) <= 0.000001 || jointId >= jointCount)
+            continue;
+
+        vec4 real = vec4(0.0);
+        vec4 dual = vec4(0.0);
+        if(!nwbDeformerBuildJointDualQuaternion(nwbDeformerLoadJointMatrix(jointId), real, dual))
+            return false;
+
+        if(!hasReference){
+            referenceReal = real;
+            hasReference = true;
+        }
+        else if(dot(referenceReal, real) < 0.0){
+            real = -real;
+            dual = -dual;
+        }
+
+        blendedReal += real * weight;
+        blendedDual += dual * weight;
+        totalWeight += weight;
+    }
+
+    if(abs(totalWeight) <= 0.000001)
+        return true;
+    if(!nwbDeformerNormalizeDualQuaternion(blendedReal, blendedDual))
+        return false;
+
+    position = nwbDeformerTransformDualQuaternionPosition(blendedReal, blendedDual, position);
+    normal = nwbDeformerRotateVectorByQuaternion(normal, blendedReal);
+    tangent.xyz = nwbDeformerRotateVectorByQuaternion(tangent.xyz, blendedReal);
+    return true;
+}
+
+void nwbDeformerApplySkin(const uint vertexId, inout vec3 position, inout vec3 normal, inout vec4 tangent){
+    const uint dualQuaternionSkinningMode = 1u;
+    const bool skinApplied = nwbDeformerSkinningMode() == dualQuaternionSkinningMode
+        ? nwbDeformerApplyDualQuaternionSkin(vertexId, position, normal, tangent)
+        : nwbDeformerApplyLinearSkin(vertexId, position, normal, tangent)
+    ;
+    if(!skinApplied)
+        return;
 }
 
 vec2 nwbDeformerDisplacementTextureCoord(const vec2 uv0){

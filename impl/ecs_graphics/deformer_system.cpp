@@ -44,7 +44,7 @@ struct DeformerPushConstants{
     u32 skinCount = 0;
     u32 jointCount = 0;
     u32 displacementMode = DeformableDisplacementMode::None;
-    u32 padding0 = 0;
+    u32 skinningMode = DeformableSkinningMode::LinearBlend;
     f32 displacementAmplitude = 0.0f;
     f32 displacementBias = 0.0f;
     f32 displacementUvScaleX = 1.0f;
@@ -636,6 +636,10 @@ bool DeformerSystem::dispatchRuntimeMesh(
     pushConstants.deformedScalarStride = __hidden_deformer_system::s_DeformableVertexScalarStride;
     pushConstants.skinCount = static_cast<u32>(skinInfluences.size());
     pushConstants.jointCount = static_cast<u32>(jointMatrices.size());
+    pushConstants.skinningMode = hasActiveSkin && jointPalette
+        ? jointPalette->skinningMode
+        : DeformableSkinningMode::LinearBlend
+    ;
     pushConstants.displacementAmplitude = hasDisplacement ? resolvedDisplacement.amplitude : 0.0f;
     pushConstants.displacementMode = hasDisplacement ? resolvedDisplacement.mode : DeformableDisplacementMode::None;
     pushConstants.displacementBias = hasDisplacement ? resolvedDisplacement.bias : 0.0f;

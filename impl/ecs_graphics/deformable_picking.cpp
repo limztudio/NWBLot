@@ -40,6 +40,8 @@ using MorphWeightLookup = HashMap<
 struct PreparedJointPaletteEntry{
     SIMDMatrix transform;
     SIMDMatrix normalTransform;
+    SIMDVector dualQuaternionReal = QuaternionIdentity();
+    SIMDVector dualQuaternionDual = VectorZero();
 };
 
 [[nodiscard]] SIMDVector LoadVertexNormal(const DeformableVertexRest& vertex){
@@ -164,8 +166,11 @@ template<typename PreparedJointPaletteVector>
     outJointPalette.clear();
     if(instance.skin.empty() || !jointPalette || jointPalette->joints.empty())
         return true;
+    if(!ValidDeformableSkinningMode(jointPalette->skinningMode))
+        return false;
 
     outJointPalette.reserve(jointPalette->joints.size());
+    const bool requiresDualQuaternion = jointPalette->skinningMode == DeformableSkinningMode::DualQuaternion;
     for(usize jointIndex = 0u; jointIndex < jointPalette->joints.size(); ++jointIndex){
         PreparedJointPaletteEntry entry;
         if(!DeformableRuntime::ResolveSkinningJointMatrix(
@@ -175,6 +180,14 @@ template<typename PreparedJointPaletteVector>
                 entry.transform
             )
             || !TryBuildJointNormalMatrix(entry.transform, entry.normalTransform)
+        )
+            return false;
+        if(requiresDualQuaternion
+            && !TryBuildJointDualQuaternion(
+                entry.transform,
+                entry.dualQuaternionReal,
+                entry.dualQuaternionDual
+            )
         )
             return false;
 
@@ -187,6 +200,7 @@ template<typename PreparedJointPaletteVector>
 [[nodiscard]] bool ApplySkin(
     const DeformableRuntimeMeshInstance& instance,
     const PreparedJointPaletteVector& jointPalette,
+    const u32 skinningMode,
     const u32 vertexId,
     DeformableVertexRest& vertex)
 {
@@ -204,13 +218,64 @@ template<typename PreparedJointPaletteVector>
     if(!DeformableValidation::SkinInfluenceFitsSkeleton(skin, instance.skeletonJointCount, failedJoint))
         return false;
 
+    const usize jointCount = jointPalette.size();
+    const bool useDualQuaternion = skinningMode == DeformableSkinningMode::DualQuaternion;
+    if(useDualQuaternion){
+        SIMDVector blendedReal = VectorZero();
+        SIMDVector blendedDual = VectorZero();
+        SIMDVector referenceReal = QuaternionIdentity();
+        bool hasReference = false;
+        f32 totalDualQuaternionWeight = 0.0f;
+
+        for(u32 influenceIndex = 0; influenceIndex < 4u; ++influenceIndex){
+            const f32 weight = skin.weight[influenceIndex];
+            const u32 joint = static_cast<u32>(skin.joint[influenceIndex]);
+            if(!DeformableValidation::ActiveWeight(weight))
+                continue;
+            if(joint >= jointCount)
+                return false;
+
+            const PreparedJointPaletteEntry& jointEntry = jointPalette[joint];
+            SIMDVector real = jointEntry.dualQuaternionReal;
+            SIMDVector dual = jointEntry.dualQuaternionDual;
+            if(!hasReference){
+                referenceReal = real;
+                hasReference = true;
+            }
+            else if(VectorGetX(QuaternionDot(referenceReal, real)) < 0.0f){
+                real = VectorNegate(real);
+                dual = VectorNegate(dual);
+            }
+
+            const SIMDVector weightVector = VectorReplicate(weight);
+            blendedReal = VectorMultiplyAdd(real, weightVector, blendedReal);
+            blendedDual = VectorMultiplyAdd(dual, weightVector, blendedDual);
+            totalDualQuaternionWeight += weight;
+        }
+
+        if(!DeformableValidation::ActiveWeight(totalDualQuaternionWeight))
+            return true;
+        if(!NormalizeBlendedDualQuaternion(blendedReal, blendedDual))
+            return false;
+
+        const SIMDVector basePosition = LoadFloat(vertex.position);
+        const SIMDVector baseNormal = LoadFloat(vertex.normal);
+        const SIMDVector baseTangent = VectorSetW(LoadFloat(vertex.tangent), 0.0f);
+        StoreFloat(TransformDualQuaternionPosition(blendedReal, blendedDual, basePosition), &vertex.position);
+        StoreFloat(TransformDualQuaternionDirection(blendedReal, baseNormal), &vertex.normal);
+        StoreFloat(
+            VectorSetW(TransformDualQuaternionDirection(blendedReal, baseTangent), vertex.tangent.w),
+            &vertex.tangent
+        );
+        return true;
+    }
+
     SIMDVector skinnedPosition = VectorZero();
     SIMDVector skinnedNormal = VectorZero();
     SIMDVector skinnedTangent = VectorZero();
     const SIMDVector basePosition = LoadFloat(vertex.position);
     const SIMDVector baseNormal = LoadFloat(vertex.normal);
     const SIMDVector baseTangent = VectorSetW(LoadFloat(vertex.tangent), 0.0f);
-    const usize jointCount = jointPalette.size();
     f32 totalWeight = 0.0f;
 
     for(u32 influenceIndex = 0; influenceIndex < 4u; ++influenceIndex){
@@ -676,6 +741,7 @@ template<typename VertexVector>
         if(!__hidden_deformable_picking::ApplySkin(
             instance,
             jointPalette,
+            inputs.jointPalette ? inputs.jointPalette->skinningMode : DeformableSkinningMode::LinearBlend,
             static_cast<u32>(vertexIndex),
             vertex
         ))

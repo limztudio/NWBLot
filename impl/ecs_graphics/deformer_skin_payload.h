@@ -38,6 +38,14 @@ template<typename SkinInfluenceVector, typename JointPaletteVector>
 
     if(instance.skin.empty() || !jointPalette || jointPalette->joints.empty())
         return true;
+    if(!ValidDeformableSkinningMode(jointPalette->skinningMode)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("DeformerSystem: runtime mesh '{}' skinning mode {} is invalid"),
+            instance.handle.value,
+            jointPalette->skinningMode
+        );
+        return false;
+    }
     if(instance.skin.size() != instance.restVertices.size()){
         NWB_LOGGER_ERROR(
             NWB_TEXT("DeformerSystem: runtime mesh '{}' skin count does not match vertex count"),
@@ -79,6 +87,7 @@ template<typename SkinInfluenceVector, typename JointPaletteVector>
 
     const usize skinCount = instance.skin.size();
     const usize jointCount = jointPalette->joints.size();
+    const bool requiresRigidJoints = jointPalette->skinningMode == DeformableSkinningMode::DualQuaternion;
     outSkinInfluences.reserve(skinCount);
     outJointPalette.reserve(jointCount);
 
@@ -93,6 +102,14 @@ template<typename SkinInfluenceVector, typename JointPaletteVector>
         ){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("DeformerSystem: runtime mesh '{}' joint palette entry {} is not a finite invertible affine matrix"),
+                instance.handle.value,
+                jointIndex
+            );
+            return false;
+        }
+        if(requiresRigidJoints && !DeformableRuntime::IsRigidJointMatrix(jointMatrix)){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("DeformerSystem: runtime mesh '{}' joint palette entry {} is not rigid for dual-quaternion skinning"),
                 instance.handle.value,
                 jointIndex
             );

@@ -92,8 +92,25 @@ struct DeformableMorphWeightsComponent{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace DeformableSkinningMode{
+    enum Enum : u32{
+        LinearBlend = 0,
+        DualQuaternion = 1,
+    };
+};
+
+[[nodiscard]] inline bool ValidDeformableSkinningMode(const u32 mode){
+    return mode == DeformableSkinningMode::LinearBlend
+        || mode == DeformableSkinningMode::DualQuaternion
+    ;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 struct DeformableJointPaletteComponent{
     Vector<DeformableJointMatrix> joints;
+    u32 skinningMode = DeformableSkinningMode::LinearBlend;
 };
 
 

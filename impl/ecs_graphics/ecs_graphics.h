@@ -30,6 +30,7 @@ namespace ECSGraphics{
 
 using DeformableRendererComponent = NWB::Impl::DeformableRendererComponent;
 using DeformableJointMatrix = NWB::Impl::DeformableJointMatrix;
+namespace DeformableSkinningMode = NWB::Impl::DeformableSkinningMode;
 using DeformableJointPaletteComponent = NWB::Impl::DeformableJointPaletteComponent;
 using DeformableDisplacementComponent = NWB::Impl::DeformableDisplacementComponent;
 using DeformableMorphWeight = NWB::Impl::DeformableMorphWeight;

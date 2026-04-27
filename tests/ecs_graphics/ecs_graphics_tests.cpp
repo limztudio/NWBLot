@@ -272,6 +272,19 @@ static NWB::Impl::DeformableJointMatrix MakeTranslationJointMatrix(const f32 x, 
     return joint;
 }
 
+static NWB::Impl::DeformableJointMatrix MakeZHalfTurnJointMatrix(){
+    NWB::Impl::DeformableJointMatrix joint;
+    joint.column0 = Float4(-1.0f, 0.0f, 0.0f, 0.0f);
+    joint.column1 = Float4(0.0f, -1.0f, 0.0f, 0.0f);
+    return joint;
+}
+
+static NWB::Impl::DeformableJointMatrix MakeNonUniformScaleJointMatrix(){
+    NWB::Impl::DeformableJointMatrix joint;
+    joint.column0 = Float4(2.0f, 0.0f, 0.0f, 0.0f);
+    return joint;
+}
+
 static NWB::Impl::SourceSample MakeSourceSample(const u32 sourceTri, const f32 a, const f32 b, const f32 c){
     NWB::Impl::SourceSample sample;
     sample.sourceTri = sourceTri;
@@ -1174,6 +1187,59 @@ static void TestPickingSkinBlendsTwoJoints(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertices[0].normal.z, 1.0f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertices[0].tangent.x, 1.0f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertices[0].tangent.w, 1.0f));
+}
+
+static void TestPickingDualQuaternionSkinPreservesTwist(TestContext& context){
+    NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
+    instance.skeletonJointCount = 2u;
+    instance.skin.resize(instance.restVertices.size());
+    for(NWB::Impl::SkinInfluence4& skin : instance.skin)
+        skin = MakeTwoJointSkin(0u, 0.5f, 1u, 0.5f);
+
+    NWB::Impl::DeformableJointPaletteComponent joints;
+    joints.joints.push_back(MakeTranslationJointMatrix(0.0f, 0.0f, 0.0f));
+    joints.joints.push_back(MakeZHalfTurnJointMatrix());
+
+    NWB::Impl::DeformablePickingInputs inputs;
+    inputs.jointPalette = &joints;
+
+    Vector<NWB::Impl::DeformableVertexRest> linearVertices;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::BuildDeformablePickingVertices(instance, inputs, linearVertices));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, linearVertices.size() == instance.restVertices.size());
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(linearVertices[0u].position.x, 0.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(linearVertices[0u].position.y, 0.0f));
+
+    joints.skinningMode = NWB::Impl::DeformableSkinningMode::DualQuaternion;
+
+    Vector<NWB::Impl::DeformableVertexRest> dualQuaternionVertices;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Impl::BuildDeformablePickingVertices(instance, inputs, dualQuaternionVertices)
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, dualQuaternionVertices.size() == instance.restVertices.size());
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(dualQuaternionVertices[0u].position.x, 1.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(dualQuaternionVertices[0u].position.y, -1.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(dualQuaternionVertices[1u].position.x, 1.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(dualQuaternionVertices[1u].position.y, 1.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(dualQuaternionVertices[0u].normal.z, 1.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(dualQuaternionVertices[0u].tangent.x, 0.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(dualQuaternionVertices[0u].tangent.y, 1.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(dualQuaternionVertices[0u].tangent.w, 1.0f));
+}
+
+static void TestPickingDualQuaternionSkinRejectsScaledPalette(TestContext& context){
+    NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
+    AssignSingleJointSkin(instance, 0u);
+
+    NWB::Impl::DeformableJointPaletteComponent joints;
+    joints.skinningMode = NWB::Impl::DeformableSkinningMode::DualQuaternion;
+    joints.joints.push_back(MakeNonUniformScaleJointMatrix());
+
+    NWB::Impl::DeformablePickingInputs inputs;
+    inputs.jointPalette = &joints;
+
+    Vector<NWB::Impl::DeformableVertexRest> vertices;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::BuildDeformablePickingVertices(instance, inputs, vertices));
 }
 
 static void TestPickingRejectsSkinJointOutsidePalette(TestContext& context){
@@ -2148,7 +2214,22 @@ static void TestDeformerSkinPayloadValidatesSkeletonAndPalette(TestContext& cont
         context,
         !NWB::Impl::DeformerSkinPayload::BuildSkinPayload(invalidInverseBind, &joints, skinInfluences, jointMatrices)
     );
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 5u);
+
+    NWB::Impl::DeformableRuntimeMeshInstance scaledDualQuaternionJoint = instance;
+    scaledDualQuaternionJoint.inverseBindMatrices.clear();
+    joints.skinningMode = NWB::Impl::DeformableSkinningMode::DualQuaternion;
+    joints.joints[0u] = MakeNonUniformScaleJointMatrix();
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        !NWB::Impl::DeformerSkinPayload::BuildSkinPayload(
+            scaledDualQuaternionJoint,
+            &joints,
+            skinInfluences,
+            jointMatrices
+        )
+    );
+
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 6u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("has skin but no skeleton joint count")));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("outside skeleton joint count")));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("outside palette size")));
@@ -2157,6 +2238,10 @@ static void TestDeformerSkinPayloadValidatesSkeletonAndPalette(TestContext& cont
         logger.sawErrorContaining(NWB_TEXT("joint palette entry 0 is not a finite invertible affine matrix"))
     );
     NWB_ECS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("inverse bind matrices are invalid")));
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        logger.sawErrorContaining(NWB_TEXT("not rigid for dual-quaternion skinning"))
+    );
 #endif
 }
 
@@ -5335,6 +5420,8 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
     __hidden_ecs_graphics_tests::TestPickingSkinAppliesInverseBindMatrix(context);
     __hidden_ecs_graphics_tests::TestPickingSkinUsesNormalMatrixForNonUniformScale(context);
     __hidden_ecs_graphics_tests::TestPickingSkinBlendsTwoJoints(context);
+    __hidden_ecs_graphics_tests::TestPickingDualQuaternionSkinPreservesTwist(context);
+    __hidden_ecs_graphics_tests::TestPickingDualQuaternionSkinRejectsScaledPalette(context);
     __hidden_ecs_graphics_tests::TestPickingRejectsSkinJointOutsidePalette(context);
     __hidden_ecs_graphics_tests::TestPickingRejectsSkinJointOutsideSkeleton(context);
     __hidden_ecs_graphics_tests::TestPickingUsesEntityTransform(context);

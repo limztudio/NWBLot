@@ -1800,15 +1800,27 @@ bool BuildSurfaceEditStateDebugDump(const DeformableSurfaceEditState& state, ASt
     for(usize i = 0u; i < state.edits.size(); ++i){
         const DeformableSurfaceEditRecord& record = state.edits[i];
         outDump += StringFormat(
-            "edit[{}] id={} type=hole base_revision={} result_revision={} radius={} ellipse={} depth={} loop_cuts={} removed_triangles={} added_vertices={} added_triangles={}\n",
+            "edit[{}] id={} type=hole base_revision={} result_revision={} source_tri={} bary=({},{},{}) rest_position=({},{},{}) rest_normal=({},{},{}) radius={} ellipse={} depth={} loop_cuts={} wall_span=({},{}) removed_triangles={} added_vertices={} added_triangles={}\n",
             i,
             record.editId,
             record.hole.baseEditRevision,
             record.result.editRevision,
+            record.hole.restSample.sourceTri,
+            record.hole.restSample.bary[0],
+            record.hole.restSample.bary[1],
+            record.hole.restSample.bary[2],
+            record.hole.restPosition.x,
+            record.hole.restPosition.y,
+            record.hole.restPosition.z,
+            record.hole.restNormal.x,
+            record.hole.restNormal.y,
+            record.hole.restNormal.z,
             record.hole.radius,
             record.hole.ellipseRatio,
             record.hole.depth,
             record.hole.wallLoopCutCount,
+            record.result.firstWallVertex,
+            record.result.wallVertexCount,
             record.result.removedTriangleCount,
             record.result.addedVertexCount,
             record.result.addedTriangleCount

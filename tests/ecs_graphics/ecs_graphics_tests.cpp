@@ -2722,6 +2722,9 @@ static void TestSurfaceEditFlowAttachesAndPersistsAccessory(TestContext& context
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::BuildSurfaceEditStateDebugDump(loadedState, stateDump));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, stateDump.find("project/meshes/mock_earring") != AString::npos);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, stateDump.find("project/materials/mat_test") != AString::npos);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, stateDump.find("source_tri=") != AString::npos);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, stateDump.find("rest_position=(") != AString::npos);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, stateDump.find("wall_span=(") != AString::npos);
 
     NWB::Impl::DeformableSurfaceEditState malformedState = state;
     malformedState.edits[0].result.wallVertexCount = 7u;

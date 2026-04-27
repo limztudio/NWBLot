@@ -1639,9 +1639,66 @@ void ProjectTestbed::patchLatestSurfaceEdit(){
     );
 }
 
+void ProjectTestbed::addLoopCutToLatestSurfaceEdit(){
+    if(m_pendingSurfaceEditReplay || m_pendingSurfaceEditAccessory){
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit loop cut: waiting for pending replay/accessory work"));
+        return;
+    }
+    if(m_surfaceEditState.edits.empty()){
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit loop cut: no saved edits"));
+        return;
+    }
+
+    const NWB::Core::ECSGraphics::RuntimeMeshHandle runtimeMesh =
+        rendererSystem().deformableRuntimeMeshHandle(m_deformableMorphEntity)
+    ;
+    auto* instance = rendererSystem().findDeformableRuntimeMesh(runtimeMesh);
+    if(!runtimeMesh.valid() || !instance){
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit loop cut: active runtime mesh is unavailable"));
+        return;
+    }
+
+    NWB::Core::ECSGraphics::DeformableRuntimeMeshInstance cleanBase;
+    if(!buildSurfaceEditCleanBase(*instance, cleanBase)){
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit loop cut: failed to load clean source mesh"));
+        return;
+    }
+
+    const NWB::Core::ECSGraphics::DeformableSurfaceEditId editId =
+        m_surfaceEditState.edits.back().editId
+    ;
+    NWB::Core::ECSGraphics::DeformableSurfaceEditLoopCutResult loopCutResult;
+    if(!NWB::Core::ECSGraphics::AddSurfaceEditLoopCut(
+            *instance,
+            cleanBase,
+            m_surfaceEditState,
+            editId,
+            &loopCutResult
+        )
+    ){
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit loop cut: failed to replay loop cut edit {}"), editId);
+        return;
+    }
+
+    clearSurfaceEditPreview();
+    clearPendingSurfaceEditAccessory();
+    m_surfaceEditHistory.redoStack.clear();
+    m_surfaceEditDebugRuntimeMesh = runtimeMesh;
+    if(!restoreSurfaceEditAccessoryEntities())
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit loop cut: failed to restore accessory entities"));
+
+    NWB_LOGGER_ESSENTIAL_INFO(
+        NWB_TEXT("Surface edit loop cut: edit={} wall_loop_cuts {}->{} revision={}"),
+        loopCutResult.loopCutEditId,
+        loopCutResult.oldLoopCutCount,
+        loopCutResult.newLoopCutCount,
+        loopCutResult.replay.finalEditRevision
+    );
+}
+
 void ProjectTestbed::logSurfaceEditControls()const{
     NWB_LOGGER_ESSENTIAL_INFO(
-        NWB_TEXT("Surface edit: left click preview, [/] radius={}, comma/period ellipse={}, -/= depth={}, Enter commit, F2 debug, F3 replay, F4 undo, F5 redo, F6 heal latest, F7 resize latest, F8 move latest, F9 patch latest, Esc cancel"),
+        NWB_TEXT("Surface edit: left click preview, [/] radius={}, comma/period ellipse={}, -/= depth={}, Enter commit, F2 debug, F3 replay, F4 undo, F5 redo, F6 heal latest, F7 resize latest, F8 move latest, F9 patch latest, F10 loop cut latest, Esc cancel"),
         m_surfaceEditRadius,
         m_surfaceEditEllipseRatio,
         m_surfaceEditDepth
@@ -1751,6 +1808,9 @@ bool ProjectTestbed::keyboardUpdate(const i32 key, const i32 scancode, const i32
         }
         else if(key == NWB::Core::Key::F9){
             patchLatestSurfaceEdit();
+        }
+        else if(key == NWB::Core::Key::F10){
+            addLoopCutToLatestSurfaceEdit();
         }
         else if(key == NWB::Core::Key::Escape){
             cancelSurfaceEditPreview();

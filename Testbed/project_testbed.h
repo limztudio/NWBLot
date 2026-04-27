@@ -46,6 +46,7 @@ private:
     void resizeLatestSurfaceEdit();
     void moveLatestSurfaceEdit();
     void patchLatestSurfaceEdit();
+    void addLoopCutToLatestSurfaceEdit();
     [[nodiscard]] bool buildSurfaceEditCleanBase(
         const NWB::Core::ECSGraphics::DeformableRuntimeMeshInstance& instance,
         NWB::Core::ECSGraphics::DeformableRuntimeMeshInstance& outCleanBase

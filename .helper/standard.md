@@ -1,7 +1,7 @@
 # NWBLot Inferred Code Standard
 
 Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_parties/`).  
-Updated: 2026-04-13
+Updated: 2026-04-27
 
 ## 1. File and module structure
 - Use lowercase `snake_case` filenames for C++ source and headers.
@@ -73,16 +73,28 @@ Updated: 2026-04-13
   - `    a,`
   - `    b,`
   - `);`
-- When a multiline call or expression is used directly inside a control-statement condition, put the outer closing parenthesis/parentheses on their own line:
+- When a control-statement condition spans multiple lines, put `if(`, `for(`, or `while(` on its own line and start the first condition term on the next indented line. Put the outer closing parenthesis/parentheses on their own line:
   - Correct:
-  - `if(!foobar(`
-  - `    aaa`
-  - `))`
+  - `if(`
+  - `    !foobar(`
+  - `        aaa`
+  - `    )`
+  - `)`
   - Correct:
   - `if(`
   - `    xx`
   - `    && yy`
   - `)`
+  - Correct:
+  - `if(`
+  - `    !IsFinite(displacement.amplitude)`
+  - `    || !IsFinite(displacement.bias)`
+  - `    || !IsFinite(displacement.uvScale.x)`
+  - `)`
+  - Wrong:
+  - `if(!foobar(`
+  - `    aaa`
+  - `))`
   - Wrong:
   - `if(!foobar(`
   - `    aaa))`
@@ -97,24 +109,28 @@ Updated: 2026-04-13
   - `    && yy`
   - `){`
   - Correct:
-  - `if(!foobar(`
-  - `    aaa`
-  - `)){`
+  - `if(`
+  - `    !foobar(`
+  - `        aaa`
+  - `    )`
+  - `){`
   - Wrong:
   - `if(`
   - `    xx`
   - `    && yy`
   - `)`
   - `{`
-- Exception: when the final argument of a multiline condition call is an inline lambda, keep the call/control closing parentheses on the lambda closing-brace line:
+- Exception: when the final argument of a multiline condition call is an inline lambda, keep the call closing parenthesis on the lambda closing-brace line, but still keep the control-statement opener and closer on their own lines:
   - Correct:
-  - `if(!foobar(`
-  - `    aaa,`
-  - `    [](){`
-  - `        return bbb;`
-  - `    }))`
-  - For a braced `if` body, append the opening brace to that same line:
-  - `    })){`
+  - `if(`
+  - `    !foobar(`
+  - `        aaa,`
+  - `        [](){`
+  - `            return bbb;`
+  - `        })`
+  - `)`
+  - For a braced `if` body, append the opening brace to the control closing line:
+  - `){`
   - Wrong:
   - `if(!foobar(`
   - `    aaa,`

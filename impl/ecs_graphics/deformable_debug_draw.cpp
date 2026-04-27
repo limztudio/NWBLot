@@ -4,6 +4,8 @@
 
 #include "deformable_debug_draw.h"
 
+#include "deformable_runtime_helpers.h"
+
 #include <core/geometry/frame_math.h>
 
 #include <impl/assets_graphics/deformable_geometry_validation.h>
@@ -73,36 +75,16 @@ static constexpr f32 s_DisplacementLineScale = 1.0f;
     return true;
 }
 
-[[nodiscard]] bool DisplacementModeUsesTexture(const u32 mode){
-    return mode == DeformableDisplacementMode::ScalarTexture
-        || mode == DeformableDisplacementMode::VectorTangentTexture
-        || mode == DeformableDisplacementMode::VectorObjectTexture
-    ;
-}
-
-[[nodiscard]] bool ValidateDebugDisplacementTexture(
-    const DeformableDisplacement& displacement,
-    const DeformableDisplacementTexture* texture)
-{
-    if(!DisplacementModeUsesTexture(displacement.mode))
-        return true;
-
-    return texture
-        && texture->virtualPath() == displacement.texture.name()
-        && texture->validatePayload()
-    ;
-}
-
 [[nodiscard]] bool DisplacementDebugMayEmitLines(
     const DeformableDisplacement& displacement,
     const DeformableDisplacementTexture* texture)
 {
     if(displacement.mode == DeformableDisplacementMode::ScalarUvRamp)
         return true;
-    if(!DisplacementModeUsesTexture(displacement.mode))
+    if(!DeformableRuntime::DisplacementModeUsesTexture(displacement.mode))
         return false;
 
-    return ValidateDebugDisplacementTexture(displacement, texture);
+    return DeformableRuntime::ValidateDisplacementTexture(displacement, texture);
 }
 
 [[nodiscard]] bool AddWallLoopReserveCount(
@@ -203,66 +185,20 @@ void ResetSnapshotPreservingOutputStorage(DeformableSurfaceEditDebugSnapshot& sn
     ;
 }
 
-[[nodiscard]] u32 SampleCoordinate(const f32 value, const u32 size){
-    if(size <= 1u)
-        return 0u;
-
-    const f32 scaled = Saturate(value) * static_cast<f32>(size - 1u);
-    const f32 rounded = Floor(scaled + 0.5f);
-    return static_cast<u32>(Min(rounded, static_cast<f32>(size - 1u)));
-}
-
-[[nodiscard]] Float2U DisplacementTextureCoord(const DeformableDisplacement& displacement, const Float2U& uv){
-    return Float2U(
-        Saturate((uv.x * displacement.uvScale.x) + displacement.uvOffset.x),
-        Saturate((uv.y * displacement.uvScale.y) + displacement.uvOffset.y)
-    );
-}
-
-[[nodiscard]] Float4U SampleDisplacementTextureCoord(const DeformableDisplacementTexture& texture, const Float2U& uv){
-    const u32 x = SampleCoordinate(uv.x, texture.width());
-    const u32 y = SampleCoordinate(uv.y, texture.height());
-    const usize texelIndex = static_cast<usize>(y) * static_cast<usize>(texture.width()) + static_cast<usize>(x);
-    return texture.texels()[texelIndex];
-}
-
-[[nodiscard]] Float4U SampleDisplacementTexture(
-    const DeformableDisplacement& displacement,
-    const DeformableDisplacementTexture& texture,
-    const Float2U& uv)
-{
-    return SampleDisplacementTextureCoord(texture, DisplacementTextureCoord(displacement, uv));
-}
-
 [[nodiscard]] SIMDVector VectorTextureOffsetToRestFrame(
     const DeformableDisplacement& displacement,
     const DeformableVertexRest& vertex,
     const Float4U& sample)
 {
-    SIMDVector vectorOffset = VectorMultiply(
-        VectorAdd(VectorSetW(LoadFloat(sample), 0.0f), VectorReplicate(displacement.bias)),
-        VectorReplicate(displacement.amplitude)
-    );
-    if(displacement.mode != DeformableDisplacementMode::VectorTangentTexture)
-        return vectorOffset;
-
     const SIMDVector normal = VectorSetW(LoadFloat(vertex.normal), 0.0f);
     const SIMDVector tangentWithHandedness = LoadFloat(vertex.tangent);
-    const SIMDVector tangent = VectorSetW(tangentWithHandedness, 0.0f);
-    const SIMDVector bitangent = VectorMultiply(
-        Core::Geometry::FrameResolveBitangent(normal, tangent, VectorSet(0.0f, 1.0f, 0.0f, 0.0f)),
-        VectorReplicate(Core::Geometry::FrameTangentHandedness(VectorGetW(tangentWithHandedness), 1.0f))
-    );
-    vectorOffset = VectorMultiplyAdd(
+    return DeformableRuntime::VectorTextureOffsetToFrame(
+        displacement,
+        displacement.mode,
+        sample,
         normal,
-        VectorReplicate(VectorGetZ(vectorOffset)),
-        VectorMultiplyAdd(
-            bitangent,
-            VectorReplicate(VectorGetY(vectorOffset)),
-            VectorMultiply(tangent, VectorReplicate(VectorGetX(vectorOffset)))
-        )
+        tangentWithHandedness
     );
-    return vectorOffset;
 }
 
 [[nodiscard]] bool ResolveDisplacementDebugOffset(
@@ -284,10 +220,10 @@ void ResetSnapshotPreservingOutputStorage(DeformableSurfaceEditDebugSnapshot& sn
         return DeformableValidation::FiniteVector(outOffset, 0x7u);
     }
 
-    if(!ValidateDebugDisplacementTexture(displacement, texture))
+    if(!DeformableRuntime::ValidateDisplacementTexture(displacement, texture))
         return false;
 
-    const Float4U sample = SampleDisplacementTexture(displacement, *texture, vertex.uv0);
+    const Float4U sample = DeformableRuntime::SampleDisplacementTexture(displacement, *texture, vertex.uv0);
     if(displacement.mode == DeformableDisplacementMode::ScalarTexture){
         const f32 scalarOffset = (sample.x + displacement.bias) * displacement.amplitude;
         if(!IsFinite(scalarOffset))

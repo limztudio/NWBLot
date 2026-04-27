@@ -243,14 +243,7 @@ void LogGeometryMorphPayloadFailure(
     const Vector<DeformableMorph>& morphs,
     const DeformableValidation::MorphPayloadFailureInfo& failure)
 {
-    const DeformableMorph* morph = failure.morphIndex < morphs.size()
-        ? &morphs[failure.morphIndex]
-        : nullptr
-    ;
-    const TString morphNameText = (morph && morph->name)
-        ? StringConvert(morph->name.c_str())
-        : TString(NWB_TEXT("<unnamed>"))
-    ;
+    const TString morphNameText = DeformableValidation::MorphPayloadFailureMorphNameText(morphs, failure);
 
     switch(failure.reason){
     case DeformableValidation::MorphPayloadFailure::MorphCountLimit:

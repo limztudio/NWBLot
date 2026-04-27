@@ -1559,34 +1559,6 @@ template<usize sourceCount>
     return true;
 }
 
-[[nodiscard]] bool RebuildRuntimeMeshTangentFrames(Vector<DeformableVertexRest>& vertices, const Vector<u32>& indices){
-    Core::Alloc::ScratchArena<> scratchArena;
-    using RebuildVertex = Core::Geometry::TangentFrameRebuildVertex;
-    using RebuildAllocator = Core::Alloc::ScratchAllocator<RebuildVertex>;
-    Vector<RebuildVertex, RebuildAllocator> rebuildVertices{ RebuildAllocator(scratchArena) };
-    rebuildVertices.resize(vertices.size());
-    for(usize vertexIndex = 0u; vertexIndex < vertices.size(); ++vertexIndex){
-        const DeformableVertexRest& vertex = vertices[vertexIndex];
-        RebuildVertex& rebuildVertex = rebuildVertices[vertexIndex];
-        rebuildVertex.position = vertex.position;
-        rebuildVertex.uv0 = vertex.uv0;
-        rebuildVertex.normal = vertex.normal;
-        rebuildVertex.tangent = vertex.tangent;
-    }
-
-    if(!Core::Geometry::RebuildTangentFrames(rebuildVertices, indices))
-        return false;
-
-    for(usize vertexIndex = 0u; vertexIndex < vertices.size(); ++vertexIndex){
-        DeformableVertexRest& vertex = vertices[vertexIndex];
-        vertex.normal = rebuildVertices[vertexIndex].normal;
-        vertex.tangent = rebuildVertices[vertexIndex].tangent;
-        if(!DeformableValidation::ValidRestVertexFrame(vertex))
-            return false;
-    }
-    return true;
-}
-
 [[nodiscard]] bool TriangleInsideFootprint(
     const DeformableRuntimeMeshInstance& instance,
     const HoleFrame& frame,
@@ -2469,7 +2441,7 @@ namespace __hidden_deformable_surface_edit{
         }
     }
 
-    if(!RebuildRuntimeMeshTangentFrames(newRestVertices, newIndices))
+    if(!DeformableValidation::RebuildRestVertexTangentFrames(newRestVertices, newIndices))
         return false;
 
     if(!DeformableValidation::ValidRuntimePayloadArrays(

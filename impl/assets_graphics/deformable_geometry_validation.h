@@ -8,6 +8,7 @@
 #include "deformable_geometry_asset.h"
 
 #include <core/alloc/scratch.h>
+#include <core/geometry/tangent_frame_rebuild.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -76,6 +77,20 @@ struct MorphPayloadFailureInfo{
     return info;
 }
 
+[[nodiscard]] inline TString MorphPayloadFailureMorphNameText(
+    const Vector<DeformableMorph>& morphs,
+    const MorphPayloadFailureInfo& failure)
+{
+    const DeformableMorph* morph = failure.morphIndex < morphs.size()
+        ? &morphs[failure.morphIndex]
+        : nullptr
+    ;
+    return (morph && morph->name)
+        ? StringConvert(morph->name.c_str())
+        : TString(NWB_TEXT("<unnamed>"))
+    ;
+}
+
 [[nodiscard]] inline bool ActiveWeight(const f32 value){
     return value > s_Epsilon || value < -s_Epsilon;
 }
@@ -141,6 +156,38 @@ struct MorphPayloadFailureInfo{
 
 [[nodiscard]] inline bool ValidRestVertexFrame(const DeformableVertexRest& vertex){
     return ValidRestVertexFrameImpl(vertex, true);
+}
+
+[[nodiscard]] inline bool RebuildRestVertexTangentFrames(
+    Vector<DeformableVertexRest>& vertices,
+    const Vector<u32>& indices,
+    Core::Geometry::TangentFrameRebuildResult* outResult = nullptr)
+{
+    Core::Alloc::ScratchArena<> scratchArena;
+    using RebuildVertex = Core::Geometry::TangentFrameRebuildVertex;
+    using RebuildAllocator = Core::Alloc::ScratchAllocator<RebuildVertex>;
+    Vector<RebuildVertex, RebuildAllocator> rebuildVertices{ RebuildAllocator(scratchArena) };
+    rebuildVertices.resize(vertices.size());
+    for(usize vertexIndex = 0u; vertexIndex < vertices.size(); ++vertexIndex){
+        const DeformableVertexRest& vertex = vertices[vertexIndex];
+        RebuildVertex& rebuildVertex = rebuildVertices[vertexIndex];
+        rebuildVertex.position = vertex.position;
+        rebuildVertex.uv0 = vertex.uv0;
+        rebuildVertex.normal = vertex.normal;
+        rebuildVertex.tangent = vertex.tangent;
+    }
+
+    if(!Core::Geometry::RebuildTangentFrames(rebuildVertices, indices, outResult))
+        return false;
+
+    for(usize vertexIndex = 0u; vertexIndex < vertices.size(); ++vertexIndex){
+        DeformableVertexRest& vertex = vertices[vertexIndex];
+        vertex.normal = rebuildVertices[vertexIndex].normal;
+        vertex.tangent = rebuildVertices[vertexIndex].tangent;
+        if(!ValidRestVertexFrame(vertex))
+            return false;
+    }
+    return true;
 }
 
 [[nodiscard]] inline bool ValidBarycentric(SIMDVector baryVector, const f32 minimumBarycentric){

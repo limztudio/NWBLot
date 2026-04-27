@@ -21,7 +21,6 @@
 #include <core/graphics/shader_cook.h>
 
 #include <core/filesystem/filesystem.h>
-#include <core/geometry/tangent_frame_rebuild.h>
 #include <core/metascript/parser.h>
 #include <core/alloc/core.h>
 #include <core/alloc/scratch.h>
@@ -1306,32 +1305,13 @@ static bool GenerateMissingDeformableFrames(
     if(normalsProvided && tangentsProvided)
         return true;
 
-    Core::Alloc::ScratchArena<> scratchArena;
-    using RebuildVertex = Core::Geometry::TangentFrameRebuildVertex;
-    using RebuildAllocator = Core::Alloc::ScratchAllocator<RebuildVertex>;
-    Vector<RebuildVertex, RebuildAllocator> rebuildVertices{ RebuildAllocator(scratchArena) };
-    rebuildVertices.resize(vertices.size());
-    for(usize vertexIndex = 0u; vertexIndex < vertices.size(); ++vertexIndex){
-        const DeformableVertexRest& vertex = vertices[vertexIndex];
-        RebuildVertex& rebuildVertex = rebuildVertices[vertexIndex];
-        rebuildVertex.position = vertex.position;
-        rebuildVertex.uv0 = vertex.uv0;
-        rebuildVertex.normal = vertex.normal;
-        rebuildVertex.tangent = vertex.tangent;
-    }
-
     Core::Geometry::TangentFrameRebuildResult rebuildResult;
-    if(!Core::Geometry::RebuildTangentFrames(rebuildVertices, indices, &rebuildResult)){
+    if(!DeformableValidation::RebuildRestVertexTangentFrames(vertices, indices, &rebuildResult)){
         NWB_LOGGER_ERROR(
             NWB_TEXT("Deformable geometry meta '{}': failed to generate missing normal/tangent frames"),
             PathToString<tchar>(nwbFilePath)
         );
         return false;
-    }
-
-    for(usize vertexIndex = 0u; vertexIndex < vertices.size(); ++vertexIndex){
-        vertices[vertexIndex].normal = rebuildVertices[vertexIndex].normal;
-        vertices[vertexIndex].tangent = rebuildVertices[vertexIndex].tangent;
     }
     return true;
 }

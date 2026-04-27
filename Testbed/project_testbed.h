@@ -22,6 +22,13 @@ private:
     static void verifyRendererSystemOrDie(NWB::Core::ECS::World& world);
 
 private:
+    struct SurfaceEditMutationContext{
+        NWB::Core::ECSGraphics::RendererSystem* rendererSystem = nullptr;
+        NWB::Core::ECSGraphics::RuntimeMeshHandle runtimeMesh;
+        NWB::Core::ECSGraphics::DeformableRuntimeMeshInstance* instance = nullptr;
+        NWB::Core::ECSGraphics::DeformableRuntimeMeshInstance cleanBase;
+    };
+
     NWB::Core::ECSGraphics::RendererSystem& rendererSystem();
     void registerInputHandler();
     void unregisterInputHandler();
@@ -53,6 +60,12 @@ private:
     )const;
     void hideSurfaceEditAccessoriesForTarget(NWB::Core::ECS::EntityID targetEntity);
     [[nodiscard]] bool restoreSurfaceEditAccessoryEntities();
+    [[nodiscard]] bool prepareSurfaceEditMutation(const tchar* action, SurfaceEditMutationContext& outContext);
+    void finishSurfaceEditMutation(
+        const tchar* action,
+        NWB::Core::ECSGraphics::RuntimeMeshHandle runtimeMesh,
+        bool clearRedo
+    );
     void toggleSurfaceEditDebug();
     void logSurfaceEditDebugSnapshot();
     void logSurfaceEditControls()const;

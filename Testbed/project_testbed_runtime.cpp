@@ -1256,35 +1256,60 @@ bool ProjectTestbed::restoreSurfaceEditAccessoryEntities(){
     return true;
 }
 
-void ProjectTestbed::undoSurfaceEdit(){
+bool ProjectTestbed::prepareSurfaceEditMutation(
+    const tchar* action,
+    SurfaceEditMutationContext& outContext)
+{
+    outContext = SurfaceEditMutationContext{};
     if(m_pendingSurfaceEditReplay || m_pendingSurfaceEditAccessory){
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit undo: waiting for pending replay/accessory work"));
-        return;
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit {}: waiting for pending replay/accessory work"), action);
+        return false;
     }
+
+    auto& renderSystem = rendererSystem();
+    outContext.rendererSystem = &renderSystem;
+    outContext.runtimeMesh = renderSystem.deformableRuntimeMeshHandle(m_deformableMorphEntity);
+    outContext.instance = renderSystem.findDeformableRuntimeMesh(outContext.runtimeMesh);
+    if(!outContext.runtimeMesh.valid() || !outContext.instance){
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit {}: active runtime mesh is unavailable"), action);
+        return false;
+    }
+
+    if(!buildSurfaceEditCleanBase(*outContext.instance, outContext.cleanBase)){
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit {}: failed to load clean source mesh"), action);
+        return false;
+    }
+    return true;
+}
+
+void ProjectTestbed::finishSurfaceEditMutation(
+    const tchar* action,
+    const NWB::Core::ECSGraphics::RuntimeMeshHandle runtimeMesh,
+    const bool clearRedo)
+{
+    clearSurfaceEditPreview();
+    clearPendingSurfaceEditAccessory();
+    if(clearRedo)
+        m_surfaceEditHistory.redoStack.clear();
+    m_surfaceEditDebugRuntimeMesh = runtimeMesh;
+    if(!restoreSurfaceEditAccessoryEntities())
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit {}: failed to restore accessory entities"), action);
+}
+
+void ProjectTestbed::undoSurfaceEdit(){
     if(m_surfaceEditState.edits.empty()){
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit undo: no saved edits"));
         return;
     }
 
-    const NWB::Core::ECSGraphics::RuntimeMeshHandle runtimeMesh =
-        rendererSystem().deformableRuntimeMeshHandle(m_deformableMorphEntity)
-    ;
-    auto* instance = rendererSystem().findDeformableRuntimeMesh(runtimeMesh);
-    if(!runtimeMesh.valid() || !instance){
-        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit undo: active runtime mesh is unavailable"));
+    SurfaceEditMutationContext editContext;
+    if(!prepareSurfaceEditMutation(NWB_TEXT("undo"), editContext))
         return;
-    }
-
-    NWB::Core::ECSGraphics::DeformableRuntimeMeshInstance cleanBase;
-    if(!buildSurfaceEditCleanBase(*instance, cleanBase)){
-        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit undo: failed to load clean source mesh"));
-        return;
-    }
 
     NWB::Core::ECSGraphics::DeformableSurfaceEditUndoResult undoResult;
     if(!NWB::Core::ECSGraphics::UndoLastSurfaceEdit(
-            *instance,
-            cleanBase,
+            *editContext.instance,
+            editContext.cleanBase,
             m_surfaceEditState,
             &undoResult,
             &m_surfaceEditHistory
@@ -1294,11 +1319,7 @@ void ProjectTestbed::undoSurfaceEdit(){
         return;
     }
 
-    clearSurfaceEditPreview();
-    clearPendingSurfaceEditAccessory();
-    m_surfaceEditDebugRuntimeMesh = runtimeMesh;
-    if(!restoreSurfaceEditAccessoryEntities())
-        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit undo: failed to restore accessory entities"));
+    finishSurfaceEditMutation(NWB_TEXT("undo"), editContext.runtimeMesh, false);
 
     NWB_LOGGER_ESSENTIAL_INFO(
         NWB_TEXT("Surface edit undo: edit={} removed_accessories={} remaining_edits={} revision={}"),
@@ -1310,34 +1331,19 @@ void ProjectTestbed::undoSurfaceEdit(){
 }
 
 void ProjectTestbed::redoSurfaceEdit(){
-    if(m_pendingSurfaceEditReplay || m_pendingSurfaceEditAccessory){
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit redo: waiting for pending replay/accessory work"));
-        return;
-    }
     if(m_surfaceEditHistory.redoStack.empty()){
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit redo: no edit history"));
         return;
     }
 
-    const NWB::Core::ECSGraphics::RuntimeMeshHandle runtimeMesh =
-        rendererSystem().deformableRuntimeMeshHandle(m_deformableMorphEntity)
-    ;
-    auto* instance = rendererSystem().findDeformableRuntimeMesh(runtimeMesh);
-    if(!runtimeMesh.valid() || !instance){
-        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit redo: active runtime mesh is unavailable"));
+    SurfaceEditMutationContext editContext;
+    if(!prepareSurfaceEditMutation(NWB_TEXT("redo"), editContext))
         return;
-    }
-
-    NWB::Core::ECSGraphics::DeformableRuntimeMeshInstance cleanBase;
-    if(!buildSurfaceEditCleanBase(*instance, cleanBase)){
-        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit redo: failed to load clean source mesh"));
-        return;
-    }
 
     NWB::Core::ECSGraphics::DeformableSurfaceEditRedoResult redoResult;
     if(!NWB::Core::ECSGraphics::RedoLastSurfaceEdit(
-            *instance,
-            cleanBase,
+            *editContext.instance,
+            editContext.cleanBase,
             m_surfaceEditState,
             m_surfaceEditHistory,
             &redoResult
@@ -1347,11 +1353,7 @@ void ProjectTestbed::redoSurfaceEdit(){
         return;
     }
 
-    clearSurfaceEditPreview();
-    clearPendingSurfaceEditAccessory();
-    m_surfaceEditDebugRuntimeMesh = runtimeMesh;
-    if(!restoreSurfaceEditAccessoryEntities())
-        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit redo: failed to restore accessory entities"));
+    finishSurfaceEditMutation(NWB_TEXT("redo"), editContext.runtimeMesh, false);
 
     NWB_LOGGER_ESSENTIAL_INFO(
         NWB_TEXT("Surface edit redo: edit={} restored_accessories={} edits={} revision={}"),
@@ -1363,37 +1365,22 @@ void ProjectTestbed::redoSurfaceEdit(){
 }
 
 void ProjectTestbed::healLatestSurfaceEdit(){
-    if(m_pendingSurfaceEditReplay || m_pendingSurfaceEditAccessory){
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit heal: waiting for pending replay/accessory work"));
-        return;
-    }
     if(m_surfaceEditState.edits.empty()){
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit heal: no saved edits"));
         return;
     }
 
-    const NWB::Core::ECSGraphics::RuntimeMeshHandle runtimeMesh =
-        rendererSystem().deformableRuntimeMeshHandle(m_deformableMorphEntity)
-    ;
-    auto* instance = rendererSystem().findDeformableRuntimeMesh(runtimeMesh);
-    if(!runtimeMesh.valid() || !instance){
-        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit heal: active runtime mesh is unavailable"));
+    SurfaceEditMutationContext editContext;
+    if(!prepareSurfaceEditMutation(NWB_TEXT("heal"), editContext))
         return;
-    }
-
-    NWB::Core::ECSGraphics::DeformableRuntimeMeshInstance cleanBase;
-    if(!buildSurfaceEditCleanBase(*instance, cleanBase)){
-        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit heal: failed to load clean source mesh"));
-        return;
-    }
 
     const NWB::Core::ECSGraphics::DeformableSurfaceEditId editId =
         m_surfaceEditState.edits.back().editId
     ;
     NWB::Core::ECSGraphics::DeformableSurfaceEditHealResult healResult;
     if(!NWB::Core::ECSGraphics::HealSurfaceEdit(
-            *instance,
-            cleanBase,
+            *editContext.instance,
+            editContext.cleanBase,
             m_surfaceEditState,
             editId,
             &healResult
@@ -1403,12 +1390,7 @@ void ProjectTestbed::healLatestSurfaceEdit(){
         return;
     }
 
-    clearSurfaceEditPreview();
-    clearPendingSurfaceEditAccessory();
-    m_surfaceEditHistory.redoStack.clear();
-    m_surfaceEditDebugRuntimeMesh = runtimeMesh;
-    if(!restoreSurfaceEditAccessoryEntities())
-        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit heal: failed to restore accessory entities"));
+    finishSurfaceEditMutation(NWB_TEXT("heal"), editContext.runtimeMesh, true);
 
     NWB_LOGGER_ESSENTIAL_INFO(
         NWB_TEXT("Surface edit heal: edit={} removed_accessories={} remaining_edits={} revision={}"),
@@ -1420,37 +1402,22 @@ void ProjectTestbed::healLatestSurfaceEdit(){
 }
 
 void ProjectTestbed::resizeLatestSurfaceEdit(){
-    if(m_pendingSurfaceEditReplay || m_pendingSurfaceEditAccessory){
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit resize: waiting for pending replay/accessory work"));
-        return;
-    }
     if(m_surfaceEditState.edits.empty()){
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit resize: no saved edits"));
         return;
     }
 
-    const NWB::Core::ECSGraphics::RuntimeMeshHandle runtimeMesh =
-        rendererSystem().deformableRuntimeMeshHandle(m_deformableMorphEntity)
-    ;
-    auto* instance = rendererSystem().findDeformableRuntimeMesh(runtimeMesh);
-    if(!runtimeMesh.valid() || !instance){
-        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit resize: active runtime mesh is unavailable"));
+    SurfaceEditMutationContext editContext;
+    if(!prepareSurfaceEditMutation(NWB_TEXT("resize"), editContext))
         return;
-    }
-
-    NWB::Core::ECSGraphics::DeformableRuntimeMeshInstance cleanBase;
-    if(!buildSurfaceEditCleanBase(*instance, cleanBase)){
-        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit resize: failed to load clean source mesh"));
-        return;
-    }
 
     const NWB::Core::ECSGraphics::DeformableSurfaceEditId editId =
         m_surfaceEditState.edits.back().editId
     ;
     NWB::Core::ECSGraphics::DeformableSurfaceEditResizeResult resizeResult;
     if(!NWB::Core::ECSGraphics::ResizeSurfaceEdit(
-            *instance,
-            cleanBase,
+            *editContext.instance,
+            editContext.cleanBase,
             m_surfaceEditState,
             editId,
             m_surfaceEditRadius,
@@ -1463,12 +1430,7 @@ void ProjectTestbed::resizeLatestSurfaceEdit(){
         return;
     }
 
-    clearSurfaceEditPreview();
-    clearPendingSurfaceEditAccessory();
-    m_surfaceEditHistory.redoStack.clear();
-    m_surfaceEditDebugRuntimeMesh = runtimeMesh;
-    if(!restoreSurfaceEditAccessoryEntities())
-        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit resize: failed to restore accessory entities"));
+    finishSurfaceEditMutation(NWB_TEXT("resize"), editContext.runtimeMesh, true);
 
     NWB_LOGGER_ESSENTIAL_INFO(
         NWB_TEXT("Surface edit resize: edit={} radius {}->{} ellipse {}->{} depth {}->{} revision={}"),
@@ -1484,30 +1446,15 @@ void ProjectTestbed::resizeLatestSurfaceEdit(){
 }
 
 void ProjectTestbed::moveLatestSurfaceEdit(){
-    if(m_pendingSurfaceEditReplay || m_pendingSurfaceEditAccessory){
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit move: waiting for pending replay/accessory work"));
-        return;
-    }
     if(m_surfaceEditState.edits.empty()){
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit move: no saved edits"));
         return;
     }
 
-    auto& renderSystem = rendererSystem();
-    const NWB::Core::ECSGraphics::RuntimeMeshHandle runtimeMesh =
-        renderSystem.deformableRuntimeMeshHandle(m_deformableMorphEntity)
-    ;
-    auto* instance = renderSystem.findDeformableRuntimeMesh(runtimeMesh);
-    if(!runtimeMesh.valid() || !instance){
-        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit move: active runtime mesh is unavailable"));
+    SurfaceEditMutationContext editContext;
+    if(!prepareSurfaceEditMutation(NWB_TEXT("move"), editContext))
         return;
-    }
-
-    NWB::Core::ECSGraphics::DeformableRuntimeMeshInstance cleanBase;
-    if(!buildSurfaceEditCleanBase(*instance, cleanBase)){
-        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit move: failed to load clean source mesh"));
-        return;
-    }
+    auto& renderSystem = *editContext.rendererSystem;
 
     NWB::Core::ECSGraphics::DeformablePickingRay ray;
     const NWB::ProjectFrameClientSize clientSize = NWB::QueryProjectFrameClientSize();
@@ -1533,7 +1480,7 @@ void ProjectTestbed::moveLatestSurfaceEdit(){
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit move: no deformable surface under cursor"));
         return;
     }
-    if(targetHit.runtimeMesh != runtimeMesh){
+    if(targetHit.runtimeMesh != editContext.runtimeMesh){
         NWB_LOGGER_WARNING(NWB_TEXT("Surface edit move: cursor hit is not on the active edited mesh"));
         return;
     }
@@ -1543,8 +1490,8 @@ void ProjectTestbed::moveLatestSurfaceEdit(){
     ;
     NWB::Core::ECSGraphics::DeformableSurfaceEditMoveResult moveResult;
     if(!NWB::Core::ECSGraphics::MoveSurfaceEdit(
-            *instance,
-            cleanBase,
+            *editContext.instance,
+            editContext.cleanBase,
             m_surfaceEditState,
             editId,
             targetHit,
@@ -1555,12 +1502,7 @@ void ProjectTestbed::moveLatestSurfaceEdit(){
         return;
     }
 
-    clearSurfaceEditPreview();
-    clearPendingSurfaceEditAccessory();
-    m_surfaceEditHistory.redoStack.clear();
-    m_surfaceEditDebugRuntimeMesh = runtimeMesh;
-    if(!restoreSurfaceEditAccessoryEntities())
-        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit move: failed to restore accessory entities"));
+    finishSurfaceEditMutation(NWB_TEXT("move"), editContext.runtimeMesh, true);
 
     NWB_LOGGER_ESSENTIAL_INFO(
         NWB_TEXT("Surface edit move: edit={} position ({},{},{}) -> ({},{},{}) revision={}"),
@@ -1576,30 +1518,15 @@ void ProjectTestbed::moveLatestSurfaceEdit(){
 }
 
 void ProjectTestbed::patchLatestSurfaceEdit(){
-    if(m_pendingSurfaceEditReplay || m_pendingSurfaceEditAccessory){
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit patch: waiting for pending replay/accessory work"));
-        return;
-    }
     if(m_surfaceEditState.edits.empty()){
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit patch: no saved edits"));
         return;
     }
 
-    auto& renderSystem = rendererSystem();
-    const NWB::Core::ECSGraphics::RuntimeMeshHandle runtimeMesh =
-        renderSystem.deformableRuntimeMeshHandle(m_deformableMorphEntity)
-    ;
-    auto* instance = renderSystem.findDeformableRuntimeMesh(runtimeMesh);
-    if(!runtimeMesh.valid() || !instance){
-        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit patch: active runtime mesh is unavailable"));
+    SurfaceEditMutationContext editContext;
+    if(!prepareSurfaceEditMutation(NWB_TEXT("patch"), editContext))
         return;
-    }
-
-    NWB::Core::ECSGraphics::DeformableRuntimeMeshInstance cleanBase;
-    if(!buildSurfaceEditCleanBase(*instance, cleanBase)){
-        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit patch: failed to load clean source mesh"));
-        return;
-    }
+    auto& renderSystem = *editContext.rendererSystem;
 
     NWB::Core::ECSGraphics::DeformablePickingRay ray;
     const NWB::ProjectFrameClientSize clientSize = NWB::QueryProjectFrameClientSize();
@@ -1625,7 +1552,7 @@ void ProjectTestbed::patchLatestSurfaceEdit(){
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit patch: no deformable surface under cursor"));
         return;
     }
-    if(targetHit.runtimeMesh != runtimeMesh){
+    if(targetHit.runtimeMesh != editContext.runtimeMesh){
         NWB_LOGGER_WARNING(NWB_TEXT("Surface edit patch: cursor hit is not on the active edited mesh"));
         return;
     }
@@ -1635,8 +1562,8 @@ void ProjectTestbed::patchLatestSurfaceEdit(){
     ;
     NWB::Core::ECSGraphics::DeformableSurfaceEditPatchResult patchResult;
     if(!NWB::Core::ECSGraphics::PatchSurfaceEdit(
-            *instance,
-            cleanBase,
+            *editContext.instance,
+            editContext.cleanBase,
             m_surfaceEditState,
             editId,
             targetHit,
@@ -1650,12 +1577,7 @@ void ProjectTestbed::patchLatestSurfaceEdit(){
         return;
     }
 
-    clearSurfaceEditPreview();
-    clearPendingSurfaceEditAccessory();
-    m_surfaceEditHistory.redoStack.clear();
-    m_surfaceEditDebugRuntimeMesh = runtimeMesh;
-    if(!restoreSurfaceEditAccessoryEntities())
-        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit patch: failed to restore accessory entities"));
+    finishSurfaceEditMutation(NWB_TEXT("patch"), editContext.runtimeMesh, true);
 
     NWB_LOGGER_ESSENTIAL_INFO(
         NWB_TEXT("Surface edit patch: edit={} position ({},{},{}) -> ({},{},{}) radius {}->{} ellipse {}->{} depth {}->{} revision={}"),
@@ -1677,37 +1599,22 @@ void ProjectTestbed::patchLatestSurfaceEdit(){
 }
 
 void ProjectTestbed::addLoopCutToLatestSurfaceEdit(){
-    if(m_pendingSurfaceEditReplay || m_pendingSurfaceEditAccessory){
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit loop cut: waiting for pending replay/accessory work"));
-        return;
-    }
     if(m_surfaceEditState.edits.empty()){
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit loop cut: no saved edits"));
         return;
     }
 
-    const NWB::Core::ECSGraphics::RuntimeMeshHandle runtimeMesh =
-        rendererSystem().deformableRuntimeMeshHandle(m_deformableMorphEntity)
-    ;
-    auto* instance = rendererSystem().findDeformableRuntimeMesh(runtimeMesh);
-    if(!runtimeMesh.valid() || !instance){
-        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit loop cut: active runtime mesh is unavailable"));
+    SurfaceEditMutationContext editContext;
+    if(!prepareSurfaceEditMutation(NWB_TEXT("loop cut"), editContext))
         return;
-    }
-
-    NWB::Core::ECSGraphics::DeformableRuntimeMeshInstance cleanBase;
-    if(!buildSurfaceEditCleanBase(*instance, cleanBase)){
-        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit loop cut: failed to load clean source mesh"));
-        return;
-    }
 
     const NWB::Core::ECSGraphics::DeformableSurfaceEditId editId =
         m_surfaceEditState.edits.back().editId
     ;
     NWB::Core::ECSGraphics::DeformableSurfaceEditLoopCutResult loopCutResult;
     if(!NWB::Core::ECSGraphics::AddSurfaceEditLoopCut(
-            *instance,
-            cleanBase,
+            *editContext.instance,
+            editContext.cleanBase,
             m_surfaceEditState,
             editId,
             &loopCutResult
@@ -1717,12 +1624,7 @@ void ProjectTestbed::addLoopCutToLatestSurfaceEdit(){
         return;
     }
 
-    clearSurfaceEditPreview();
-    clearPendingSurfaceEditAccessory();
-    m_surfaceEditHistory.redoStack.clear();
-    m_surfaceEditDebugRuntimeMesh = runtimeMesh;
-    if(!restoreSurfaceEditAccessoryEntities())
-        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit loop cut: failed to restore accessory entities"));
+    finishSurfaceEditMutation(NWB_TEXT("loop cut"), editContext.runtimeMesh, true);
 
     NWB_LOGGER_ESSENTIAL_INFO(
         NWB_TEXT("Surface edit loop cut: edit={} wall_loop_cuts {}->{} revision={}"),

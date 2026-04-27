@@ -63,6 +63,103 @@ static constexpr f32 s_DisplacementLineScale = 1.0f;
     ;
 }
 
+[[nodiscard]] bool AddReserveCount(usize& inOutCount, const usize value){
+    if(value > Limit<usize>::s_Max - inOutCount)
+        return false;
+
+    inOutCount += value;
+    return true;
+}
+
+[[nodiscard]] bool AddWallLoopReserveCount(
+    const DeformableRuntimeMeshInstance& instance,
+    const u32 firstWallVertex,
+    const u32 wallVertexCount,
+    usize& inOutLineCount,
+    usize& inOutPointCount)
+{
+    if(firstWallVertex == Limit<u32>::s_Max || wallVertexCount < 3u)
+        return true;
+
+    const usize first = static_cast<usize>(firstWallVertex);
+    const usize count = static_cast<usize>(wallVertexCount);
+    if(first > instance.restVertices.size() || count > instance.restVertices.size() - first)
+        return true;
+    if(count > Limit<usize>::s_Max / 3u)
+        return false;
+
+    return AddReserveCount(inOutLineCount, count * 3u)
+        && AddReserveCount(inOutPointCount, count)
+    ;
+}
+
+[[nodiscard]] bool ReserveSnapshotOutputs(
+    const DeformableRuntimeMeshInstance& instance,
+    const DeformableSurfaceEditSession* session,
+    const DeformableHolePreview* preview,
+    const DeformableSurfaceEditState* state,
+    DeformableSurfaceEditDebugSnapshot& snapshot)
+{
+    usize lineCount = 0u;
+    usize pointCount = 0u;
+
+    if(!AddReserveCount(lineCount, instance.skin.size()))
+        return false;
+    for(const DeformableMorph& morph : instance.morphs){
+        if(!AddReserveCount(lineCount, morph.deltas.size()))
+            return false;
+    }
+    if(instance.displacement.mode == DeformableDisplacementMode::ScalarUvRamp
+        && !AddReserveCount(lineCount, instance.restVertices.size())
+    )
+        return false;
+
+    if(session && preview && preview->valid){
+        if(!AddReserveCount(lineCount, 3u) || !AddReserveCount(pointCount, 1u))
+            return false;
+    }
+
+    if(state){
+        for(const DeformableSurfaceEditRecord& edit : state->edits){
+            if(!AddWallLoopReserveCount(
+                    instance,
+                    edit.result.firstWallVertex,
+                    edit.result.wallVertexCount,
+                    lineCount,
+                    pointCount
+                )
+            )
+                return false;
+        }
+        for(const DeformableAccessoryAttachmentRecord& accessory : state->accessories){
+            if(!AddWallLoopReserveCount(
+                    instance,
+                    accessory.firstWallVertex,
+                    accessory.wallVertexCount,
+                    lineCount,
+                    pointCount
+                )
+            )
+                return false;
+        }
+    }
+
+    snapshot.lines.reserve(lineCount);
+    snapshot.points.reserve(pointCount);
+    return true;
+}
+
+void ResetSnapshotPreservingOutputStorage(DeformableSurfaceEditDebugSnapshot& snapshot){
+    Vector<DeformableDebugLine> lines = Move(snapshot.lines);
+    Vector<DeformableDebugPoint> points = Move(snapshot.points);
+    lines.clear();
+    points.clear();
+
+    snapshot = DeformableSurfaceEditDebugSnapshot{};
+    snapshot.lines = Move(lines);
+    snapshot.points = Move(points);
+}
+
 [[nodiscard]] f32 Length3(const SIMDVector value){
     const f32 lengthSquared = VectorGetX(Vector3LengthSq(value));
     return IsFinite(lengthSquared)
@@ -459,7 +556,7 @@ bool BuildDeformableSurfaceEditDebugSnapshot(
 {
     using namespace __hidden_deformable_debug_draw;
 
-    outSnapshot = DeformableSurfaceEditDebugSnapshot{};
+    ResetSnapshotPreservingOutputStorage(outSnapshot);
     if(instance.indices.empty() || (instance.indices.size() % 3u) != 0u)
         return false;
     if(instance.restVertices.size() > static_cast<usize>(Limit<u32>::s_Max)
@@ -473,6 +570,9 @@ bool BuildDeformableSurfaceEditDebugSnapshot(
     outSnapshot.vertexCount = static_cast<u32>(instance.restVertices.size());
     outSnapshot.triangleCount = static_cast<u32>(instance.indices.size() / 3u);
     outSnapshot.sourceTriangleCount = instance.sourceTriangleCount;
+
+    if(!ReserveSnapshotOutputs(instance, session, preview, state, outSnapshot))
+        return false;
 
     AppendPayloadDiagnostics(instance, outSnapshot);
     CountEditMasks(instance, outSnapshot);

@@ -2111,10 +2111,11 @@ namespace __hidden_deformable_surface_edit{
         }
 
         EdgeRecordVector bandOuterEdges = orderedBoundaryEdges;
+        Vector<u32> ringVertices;
+        ringVertices.reserve(boundaryVertexCount);
         for(usize ringIndex = 0u; ringIndex < wallBandCount; ++ringIndex){
             const usize wallVertexBase = ringIndex * boundaryVertexCount;
-            Vector<u32> ringVertices;
-            ringVertices.reserve(boundaryVertexCount);
+            ringVertices.clear();
             for(usize edgeIndex = 0u; edgeIndex < boundaryVertexCount; ++edgeIndex)
                 ringVertices.push_back(wallVertices[wallVertexBase + edgeIndex]);
 

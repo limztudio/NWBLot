@@ -40,6 +40,11 @@ struct TriangleVertices{
     u32 values[3] = { 0u, 0u, 0u };
 };
 
+struct TriangleLocalIndices{
+    u32 values[3] = { Limit<u32>::s_Max, Limit<u32>::s_Max, Limit<u32>::s_Max };
+    u32 missingVertexCount = 0u;
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -88,33 +93,43 @@ template<typename VertexAllocator>
     return false;
 }
 
-[[nodiscard]] u32 CountMissingVertices(const PendingMeshlet& meshlet, const TriangleVertices& triangle){
-    u32 missingVertexCount = 0u;
-    for(const u32 vertex : triangle.values){
+[[nodiscard]] TriangleLocalIndices ResolveTriangleLocalIndices(
+    const PendingMeshlet& meshlet,
+    const TriangleVertices& triangle){
+    TriangleLocalIndices output;
+    for(u32 corner = 0u; corner < 3u; ++corner){
+        const u32 vertex = triangle.values[corner];
         u32 localIndex = 0u;
-        if(!FindLocalVertex(meshlet.vertices, vertex, localIndex))
-            ++missingVertexCount;
+        if(FindLocalVertex(meshlet.vertices, vertex, localIndex))
+            output.values[corner] = localIndex;
+        else
+            ++output.missingVertexCount;
     }
-    return missingVertexCount;
+    return output;
 }
 
-[[nodiscard]] bool TriangleFitsMeshlet(const PendingMeshlet& meshlet, const TriangleVertices& triangle, const MeshletBuildConfig& config){
+[[nodiscard]] bool TriangleFitsMeshlet(
+    const PendingMeshlet& meshlet,
+    const TriangleLocalIndices& localIndices,
+    const MeshletBuildConfig& config){
     const usize triangleCount = meshlet.indices.size() / 3u;
     if(triangleCount >= config.maxTriangles)
         return false;
 
-    const u32 missingVertexCount = CountMissingVertices(meshlet, triangle);
-    return meshlet.vertices.size() + missingVertexCount <= config.maxVertices;
+    return meshlet.vertices.size() + localIndices.missingVertexCount <= config.maxVertices;
 }
 
-[[nodiscard]] bool AppendTriangle(PendingMeshlet& meshlet, const TriangleVertices& triangle){
-    for(const u32 vertex : triangle.values){
-        u32 localIndex = 0u;
-        if(!FindLocalVertex(meshlet.vertices, vertex, localIndex)){
+[[nodiscard]] bool AppendTriangle(
+    PendingMeshlet& meshlet,
+    const TriangleVertices& triangle,
+    const TriangleLocalIndices& localIndices){
+    for(u32 corner = 0u; corner < 3u; ++corner){
+        u32 localIndex = localIndices.values[corner];
+        if(localIndex == Limit<u32>::s_Max){
             if(meshlet.vertices.size() >= static_cast<usize>(Limit<u32>::s_Max))
                 return false;
             localIndex = static_cast<u32>(meshlet.vertices.size());
-            meshlet.vertices.push_back(vertex);
+            meshlet.vertices.push_back(triangle.values[corner]);
         }
         meshlet.indices.push_back(localIndex);
     }
@@ -273,13 +288,15 @@ bool BuildMeshlets(
 
         if(!ValidTriangle(positions, triangle))
             return false;
-        bool triangleFits = TriangleFitsMeshlet(pending, triangle, config);
+        TriangleLocalIndices triangleLocalIndices = ResolveTriangleLocalIndices(pending, triangle);
+        bool triangleFits = TriangleFitsMeshlet(pending, triangleLocalIndices, config);
         if(!triangleFits){
             if(!FlushMeshlet(positions, pending, meshlets, vertexIndices, localIndices))
                 return false;
-            triangleFits = TriangleFitsMeshlet(pending, triangle, config);
+            triangleLocalIndices = ResolveTriangleLocalIndices(pending, triangle);
+            triangleFits = TriangleFitsMeshlet(pending, triangleLocalIndices, config);
         }
-        if(!triangleFits || !AppendTriangle(pending, triangle))
+        if(!triangleFits || !AppendTriangle(pending, triangle, triangleLocalIndices))
             return false;
     }
 

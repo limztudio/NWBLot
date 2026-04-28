@@ -1101,7 +1101,8 @@ static bool ParseGeometryMeta(const DiscoveredNwbFile& discoveredFile, const Cor
     if(colorsField){
         if(!ParseMetadataFloatListField<Float4U, 4u>(discoveredFile.filePath, asset, s_GeometryMetaKind, "colors", colors))
             return false;
-    }else
+    }
+    else
         BuildDefaultColors(positions.size(), colors);
 
     if(!BuildGeometryVertices(discoveredFile.filePath, positions, normals, colors, outEntry.vertices))
@@ -2013,7 +2014,8 @@ static bool ParseDeformableGeometryMeta(
     if(colorsField && !IsExplicitEmptyOptionalField(*colorsField)){
         if(!ParseFloatListField<Float4U, 4u>(discoveredFile.filePath, asset, "colors", colors))
             return false;
-    }else
+    }
+    else
         BuildDefaultColors(positions.size(), colors);
     if(!BuildDeformableRestVertices(discoveredFile.filePath, positions, normals, tangents, uv0, colors, outEntry.restVertices))
         return false;

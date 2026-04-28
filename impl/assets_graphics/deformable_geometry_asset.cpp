@@ -820,7 +820,8 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
         }
         m_displacement.texture.virtualPath = Name(texturePathText.view());
         m_displacementTextureVirtualPathText = Move(texturePathText);
-    }else if(displacementBinary.texturePathOffset != Limit<u32>::s_Max){
+    }
+    else if(displacementBinary.texturePathOffset != Limit<u32>::s_Max){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: unexpected displacement texture path"));
         return false;
     }

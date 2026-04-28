@@ -4,6 +4,7 @@
 #version 460
 
 #include "avboit_common.glsli"
+#include "bxdf.glsli"
 
 layout(std430, set = 1, binding = 0) readonly buffer NwbAvboitDepthWarpBuffer{
     uint g_DepthWarp[];
@@ -16,6 +17,9 @@ layout(std430, set = 1, binding = 2) readonly buffer NwbAvboitControlBuffer{
 };
 
 layout(location = 0) in mediump vec4 inColor;
+layout(location = 1) in mediump vec3 inNormal;
+layout(location = 2) in vec4 inTangent;
+layout(location = 4) in vec3 inWorldPosition;
 layout(location = 0) out vec4 outAccumColor;
 layout(location = 1) out vec4 outAccumExtinction;
 
@@ -40,7 +44,14 @@ void main(){
     ;
     const float weightedAlpha = alpha * transmittance;
 
-    outAccumColor = vec4(clamp(inColor.rgb, vec3(0.0), vec3(1.0)) * weightedAlpha, weightedAlpha);
+    const mediump vec3 baseColor = clamp(nwbProjectBxdfPixel(inColor.rgb), vec3(0.0), vec3(1.0));
+    const mediump vec3 shadedColor = clamp(
+        nwbProjectApplyDirectionalShading(baseColor, inNormal, inTangent, inWorldPosition),
+        vec3(0.0),
+        vec3(1.0)
+    );
+
+    outAccumColor = vec4(shadedColor * weightedAlpha, weightedAlpha);
     outAccumExtinction = vec4(nwbAvboitExtinctionFromAlpha(alpha), 0.0, 0.0, 0.0);
 }
 

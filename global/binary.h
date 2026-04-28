@@ -20,8 +20,10 @@ inline void AppendPOD(Container& outBinary, const PodType& value){
     if(beginOffset > Limit<usize>::s_Max - sizeof(PodType))
         throw RuntimeException("AppendPOD size overflow");
 
-    outBinary.resize(beginOffset + sizeof(PodType));
-    NWB_MEMCPY(outBinary.data() + beginOffset, sizeof(PodType), &value, sizeof(PodType));
+    using ByteType = typename Container::value_type;
+    static_assert(sizeof(ByteType) == 1u, "AppendPOD requires a byte-sized output container");
+    const ByteType* bytes = reinterpret_cast<const ByteType*>(&value);
+    outBinary.insert(outBinary.end(), bytes, bytes + sizeof(PodType));
 }
 
 template<typename Container, typename PodType>
@@ -50,10 +52,15 @@ template<typename Container>
     if(textOffset > Limit<usize>::s_Max - textLength)
         return false;
 
-    outBinary.resize(textOffset + textLength);
-    NWB_MEMCPY(outBinary.data() + lengthOffset, sizeof(textLength), &textLength, sizeof(textLength));
-    if(textLength > 0)
-        NWB_MEMCPY(outBinary.data() + textOffset, textLength, text.data(), textLength);
+    using ByteType = typename Container::value_type;
+    static_assert(sizeof(ByteType) == 1u, "AppendString requires a byte-sized output container");
+    outBinary.reserve(textOffset + textLength);
+    const ByteType* lengthBytes = reinterpret_cast<const ByteType*>(&textLength);
+    outBinary.insert(outBinary.end(), lengthBytes, lengthBytes + sizeof(textLength));
+    if(textLength > 0){
+        const ByteType* textBytes = reinterpret_cast<const ByteType*>(text.data());
+        outBinary.insert(outBinary.end(), textBytes, textBytes + textLength);
+    }
     return true;
 }
 
@@ -119,9 +126,12 @@ template<typename Container>
         return false;
 
     outOffset = static_cast<u32>(beginOffset);
-    outStringTable.resize(beginOffset + byteCount);
-    NWB_MEMCPY(outStringTable.data() + beginOffset, text.size(), text.data(), text.size());
-    outStringTable[beginOffset + text.size()] = 0u;
+    using ByteType = typename Container::value_type;
+    static_assert(sizeof(ByteType) == 1u, "AppendStringTableText requires a byte-sized output container");
+    outStringTable.reserve(beginOffset + byteCount);
+    const ByteType* textBytes = reinterpret_cast<const ByteType*>(text.data());
+    outStringTable.insert(outStringTable.end(), textBytes, textBytes + text.size());
+    outStringTable.push_back(ByteType{});
     return true;
 }
 

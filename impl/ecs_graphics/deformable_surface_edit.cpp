@@ -1372,6 +1372,13 @@ struct TriangleCandidateEdge{
     bool paired = false;
 };
 
+struct EdgeAdjacencyEntry{
+    u32 edgeIndex = Limit<u32>::s_Max;
+    u32 next = Limit<u32>::s_Max;
+};
+static_assert(IsStandardLayout_V<EdgeAdjacencyEntry>, "EdgeAdjacencyEntry must stay layout-stable");
+static_assert(IsTriviallyCopyable_V<EdgeAdjacencyEntry>, "EdgeAdjacencyEntry must stay cheap to copy");
+
 [[nodiscard]] bool EdgeTouchesRemovedVertex(
     const EdgeRecord& edge,
     const Vector<u8, Core::Alloc::ScratchAllocator<u8>>& removedVertices)
@@ -1380,10 +1387,6 @@ struct TriangleCandidateEdge{
         && edge.b < removedVertices.size()
         && (removedVertices[edge.a] != 0u || removedVertices[edge.b] != 0u)
     ;
-}
-
-[[nodiscard]] bool EdgesShareVertex(const EdgeRecord& a, const EdgeRecord& b){
-    return a.a == b.a || a.a == b.b || a.b == b.a || a.b == b.b;
 }
 
 [[nodiscard]] bool EdgeLooksLikeExistingCsgWallBoundary(
@@ -1441,6 +1444,14 @@ struct TriangleCandidateEdge{
     if(indices.size() / 3u != triangleCount || triangleCount > static_cast<usize>(Limit<u32>::s_Max))
         return false;
 
+    usize candidateCount = 0u;
+    for(const u8 flag : candidateTriangle){
+        if(flag != 0u)
+            ++candidateCount;
+    }
+    if(candidateCount > Limit<usize>::s_Max / 3u)
+        return false;
+
     neighbors.assign(triangleCount * 3u, Limit<u32>::s_Max);
     neighborCounts.assign(triangleCount, 0u);
 
@@ -1457,7 +1468,7 @@ struct TriangleCandidateEdge{
         EqualTo<u64>(),
         Core::Alloc::ScratchAllocator<Pair<const u64, TriangleCandidateEdge>>(scratchArena)
     );
-    candidateEdges.reserve(triangleCount * 3u);
+    candidateEdges.reserve(candidateCount * 3u);
 
     for(usize triangle = 0u; triangle < triangleCount; ++triangle){
         if(candidateTriangle[triangle] == 0u)
@@ -1512,6 +1523,12 @@ struct TriangleCandidateEdge{
     if(hitTriangle >= candidateTriangle.size() || candidateTriangle[hitTriangle] == 0u)
         return false;
 
+    usize candidateCount = 0u;
+    for(const u8 flag : candidateTriangle){
+        if(flag != 0u)
+            ++candidateCount;
+    }
+
     Vector<u32, Core::Alloc::ScratchAllocator<u32>> neighbors{
         Core::Alloc::ScratchAllocator<u32>(scratchArena)
     };
@@ -1524,7 +1541,7 @@ struct TriangleCandidateEdge{
     Vector<u32, Core::Alloc::ScratchAllocator<u32>> pendingTriangles{
         Core::Alloc::ScratchAllocator<u32>(scratchArena)
     };
-    pendingTriangles.reserve(candidateTriangle.size());
+    pendingTriangles.reserve(candidateCount);
     removeTriangle[hitTriangle] = 1u;
     pendingTriangles.push_back(hitTriangle);
 
@@ -1655,6 +1672,48 @@ struct TriangleCandidateEdge{
     }
     if(finalBoundaryEdges.empty())
         return fail();
+    if(finalBoundaryEdges.size() > static_cast<usize>(Limit<u32>::s_Max) / 2u)
+        return fail();
+
+    using EdgeFirstMap = HashMap<
+        u32,
+        u32,
+        Hasher<u32>,
+        EqualTo<u32>,
+        Core::Alloc::ScratchAllocator<Pair<const u32, u32>>
+    >;
+    EdgeFirstMap firstEdgeByVertex(
+        0,
+        Hasher<u32>(),
+        EqualTo<u32>(),
+        Core::Alloc::ScratchAllocator<Pair<const u32, u32>>(scratchArena)
+    );
+    firstEdgeByVertex.reserve(finalBoundaryEdges.size() * 2u);
+
+    Vector<EdgeAdjacencyEntry, Core::Alloc::ScratchAllocator<EdgeAdjacencyEntry>> edgeAdjacency{
+        Core::Alloc::ScratchAllocator<EdgeAdjacencyEntry>(scratchArena)
+    };
+    edgeAdjacency.reserve(finalBoundaryEdges.size() * 2u);
+
+    auto appendEdgeAdjacency = [&](
+        const u32 vertex,
+        const u32 edgeIndex
+    ) -> bool{
+        if(vertex >= vertexCount || edgeAdjacency.size() >= static_cast<usize>(Limit<u32>::s_Max))
+            return false;
+
+        auto [firstIt, inserted] = firstEdgeByVertex.emplace(vertex, Limit<u32>::s_Max);
+        const u32 previousFirst = inserted ? Limit<u32>::s_Max : firstIt.value();
+        firstIt.value() = static_cast<u32>(edgeAdjacency.size());
+        edgeAdjacency.push_back(EdgeAdjacencyEntry{ edgeIndex, previousFirst });
+        return true;
+    };
+    for(usize edgeIndex = 0u; edgeIndex < finalBoundaryEdges.size(); ++edgeIndex){
+        const EdgeRecord& edge = finalBoundaryEdges[edgeIndex];
+        const u32 edgeIndex32 = static_cast<u32>(edgeIndex);
+        if(!appendEdgeAdjacency(edge.a, edgeIndex32) || !appendEdgeAdjacency(edge.b, edgeIndex32))
+            return fail();
+    }
 
     Vector<u8, Core::Alloc::ScratchAllocator<u8>> visitedEdges{
         Core::Alloc::ScratchAllocator<u8>(scratchArena)
@@ -1692,16 +1751,27 @@ struct TriangleCandidateEdge{
             foundExistingCsgWallBoundary = foundExistingCsgWallBoundary
                 || EdgeLooksLikeExistingCsgWallBoundary(currentEdge, restVertices, frameNormal)
             ;
-            for(usize candidateEdgeIndex = 0u; candidateEdgeIndex < finalBoundaryEdges.size(); ++candidateEdgeIndex){
-                if(visitedEdges[candidateEdgeIndex] != 0u)
-                    continue;
+            const u32 edgeVertices[2] = { currentEdge.a, currentEdge.b };
+            for(const u32 vertex : edgeVertices){
+                const auto foundFirst = firstEdgeByVertex.find(vertex);
+                if(foundFirst == firstEdgeByVertex.end())
+                    return fail();
 
-                const EdgeRecord& candidateEdge = finalBoundaryEdges[candidateEdgeIndex];
-                if(!EdgesShareVertex(currentEdge, candidateEdge))
-                    continue;
+                for(u32 adjacencyIndex = foundFirst.value(); adjacencyIndex != Limit<u32>::s_Max;){
+                    if(adjacencyIndex >= edgeAdjacency.size())
+                        return fail();
 
-                visitedEdges[candidateEdgeIndex] = 1u;
-                pendingEdges.push_back(candidateEdgeIndex);
+                    const EdgeAdjacencyEntry& adjacency = edgeAdjacency[adjacencyIndex];
+                    adjacencyIndex = adjacency.next;
+                    if(
+                        adjacency.edgeIndex >= finalBoundaryEdges.size()
+                        || visitedEdges[adjacency.edgeIndex] != 0u
+                    )
+                        continue;
+
+                    visitedEdges[adjacency.edgeIndex] = 1u;
+                    pendingEdges.push_back(adjacency.edgeIndex);
+                }
             }
         }
     }

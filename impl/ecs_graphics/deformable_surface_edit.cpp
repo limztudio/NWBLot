@@ -1673,6 +1673,7 @@ static_assert(IsTriviallyCopyable_V<EdgeAdjacencyEntry>, "EdgeAdjacencyEntry mus
         return fail();
     if(finalBoundaryEdges.size() > static_cast<usize>(Limit<u32>::s_Max) / 2u)
         return fail();
+    outBoundaryEdges.reserve(finalBoundaryEdges.size());
 
     using EdgeFirstMap = HashMap<
         u32,
@@ -2458,6 +2459,14 @@ namespace __hidden_deformable_surface_edit{
 
     const f32 radiusX = params.radius;
     const f32 radiusY = params.radius * params.ellipseRatio;
+    const bool hasEditMaskPerTriangle = !instance.editMaskPerTriangle.empty();
+    auto resolveValidatedEditMask = [&instance, hasEditMaskPerTriangle](const usize triangle){
+        return hasEditMaskPerTriangle
+            ? instance.editMaskPerTriangle[triangle]
+            : s_DeformableEditMaskDefault
+        ;
+    };
+
     Core::Alloc::ScratchArena<> scratchArena;
     Vector<u8, Core::Alloc::ScratchAllocator<u8>> candidateTriangle{
         Core::Alloc::ScratchAllocator<u8>(scratchArena)
@@ -2468,9 +2477,12 @@ namespace __hidden_deformable_surface_edit{
     };
     removeTriangle.resize(triangleCount, 0u);
     for(usize triangle = 0; triangle < triangleCount; ++triangle){
-        u32 indices[3] = {};
-        if(!DeformableRuntime::ValidateTriangleIndex(instance, static_cast<u32>(triangle), indices))
-            return false;
+        const usize indexBase = triangle * 3u;
+        const u32 indices[3] = {
+            instance.indices[indexBase + 0u],
+            instance.indices[indexBase + 1u],
+            instance.indices[indexBase + 2u],
+        };
 
         const bool selectedTriangle = triangle == static_cast<usize>(params.posedHit.triangle);
         if(
@@ -2498,9 +2510,7 @@ namespace __hidden_deformable_surface_edit{
         if(removeTriangle[triangle] == 0u)
             continue;
 
-        const DeformableEditMaskFlags editMaskFlags =
-            ResolveDeformableTriangleEditMask(instance, static_cast<u32>(triangle))
-        ;
+        const DeformableEditMaskFlags editMaskFlags = resolveValidatedEditMask(triangle);
         if(!DeformableEditMaskAllowsCommit(editMaskFlags))
             return false;
 
@@ -2636,7 +2646,6 @@ namespace __hidden_deformable_surface_edit{
     Vector<DeformableMorph> newMorphs;
     newRestVertices.reserve(reservedVertexCount);
     newRestVertices.assign(instance.restVertices.begin(), instance.restVertices.end());
-    const bool hasEditMaskPerTriangle = !instance.editMaskPerTriangle.empty();
     if(hasEditMaskPerTriangle)
         newEditMaskPerTriangle.reserve((keptIndexCount + wallIndexCount) / 3u);
     if(addWall){
@@ -2663,7 +2672,7 @@ namespace __hidden_deformable_surface_edit{
         newIndices.push_back(instance.indices[indexBase + 1u]);
         newIndices.push_back(instance.indices[indexBase + 2u]);
         if(hasEditMaskPerTriangle)
-            newEditMaskPerTriangle.push_back(ResolveDeformableTriangleEditMask(instance, static_cast<u32>(triangle)));
+            newEditMaskPerTriangle.push_back(resolveValidatedEditMask(triangle));
     }
 
     u32 firstWallVertex = Limit<u32>::s_Max;

@@ -72,7 +72,6 @@ private:
 
 
 public:
-    EntityManager();
     explicit EntityManager(Alloc::CustomArena& arena);
     ~EntityManager();
 

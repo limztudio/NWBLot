@@ -14,51 +14,6 @@ NWB_ECS_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_entity{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static void* ECSArenaAlloc(usize size){
-    return Alloc::CoreAlloc(size, "NWB::Core::ECS::EntityManager::ECSArenaAlloc");
-}
-
-static void ECSArenaFree(void* ptr){
-    Alloc::CoreFree(ptr, "NWB::Core::ECS::EntityManager::ECSArenaFree");
-}
-
-static void* ECSArenaAllocAligned(usize size, usize align){
-    return Alloc::CoreAllocAligned(size, align, "NWB::Core::ECS::EntityManager::ECSArenaAllocAligned");
-}
-
-static void ECSArenaFreeAligned(void* ptr){
-    Alloc::CoreFreeAligned(ptr, "NWB::Core::ECS::EntityManager::ECSArenaFreeAligned");
-}
-
-static Alloc::CustomArena& DefaultECSArena(){
-    static Alloc::CustomArena s_Arena(
-        &ECSArenaAlloc,
-        &ECSArenaFree,
-        &ECSArenaAllocAligned,
-        &ECSArenaFreeAligned
-    );
-    return s_Arena;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-EntityManager::EntityManager()
-    : EntityManager(__hidden_entity::DefaultECSArena())
-{}
 EntityManager::EntityManager(Alloc::CustomArena& arena)
     : m_generations(GenerationAllocator(arena))
     , m_freeIndices(FreeIndexAllocator(arena))

@@ -41,8 +41,7 @@ using EdgeRecord = Core::Geometry::MeshTopologyEdge;
 
 static constexpr f32 s_WallInnerInpaintWeights[3] = { 0.25f, 0.5f, 0.25f };
 static constexpr u32 s_SurfaceEditStateMagic = 0x53454631u; // SEF1
-static constexpr u32 s_SurfaceEditStateVersionV4 = 4u;
-static constexpr u32 s_SurfaceEditStateVersion = s_SurfaceEditStateVersionV4;
+static constexpr u32 s_SurfaceEditStateVersion = 4u;
 static constexpr u32 s_MinWallLoopVertexCount = 3u;
 static constexpr u32 s_MaxWallLoopCutCount = 8u;
 
@@ -68,17 +67,17 @@ void ResolveTangentBitangentVectors(
     outBitangentVector = Core::Geometry::FrameResolveBitangent(normalVector, outTangentVector, s_SIMDIdentityR1);
 }
 
-struct SurfaceEditStateHeaderV4{
+struct SurfaceEditStateHeaderBinary{
     u32 magic = s_SurfaceEditStateMagic;
-    u32 version = s_SurfaceEditStateVersionV4;
+    u32 version = s_SurfaceEditStateVersion;
     u64 editCount = 0;
     u64 accessoryCount = 0;
     u64 stringTableByteCount = 0;
 };
-static_assert(IsStandardLayout_V<SurfaceEditStateHeaderV4>, "SurfaceEditStateHeaderV4 must stay binary-serializable");
-static_assert(IsTriviallyCopyable_V<SurfaceEditStateHeaderV4>, "SurfaceEditStateHeaderV4 must stay binary-serializable");
+static_assert(IsStandardLayout_V<SurfaceEditStateHeaderBinary>, "SurfaceEditStateHeaderBinary must stay binary-serializable");
+static_assert(IsTriviallyCopyable_V<SurfaceEditStateHeaderBinary>, "SurfaceEditStateHeaderBinary must stay binary-serializable");
 
-struct SurfaceEditAccessoryRecordBinaryV4{
+struct SurfaceEditAccessoryRecordBinary{
     DeformableSurfaceEditId anchorEditId = 0;
     u32 firstWallVertex = Limit<u32>::s_Max;
     u32 wallVertexCount = 0;
@@ -89,12 +88,12 @@ struct SurfaceEditAccessoryRecordBinaryV4{
     u32 materialPathOffset = Limit<u32>::s_Max;
 };
 static_assert(
-    IsStandardLayout_V<SurfaceEditAccessoryRecordBinaryV4>,
-    "SurfaceEditAccessoryRecordBinaryV4 must stay binary-serializable"
+    IsStandardLayout_V<SurfaceEditAccessoryRecordBinary>,
+    "SurfaceEditAccessoryRecordBinary must stay binary-serializable"
 );
 static_assert(
-    IsTriviallyCopyable_V<SurfaceEditAccessoryRecordBinaryV4>,
-    "SurfaceEditAccessoryRecordBinaryV4 must stay binary-serializable"
+    IsTriviallyCopyable_V<SurfaceEditAccessoryRecordBinary>,
+    "SurfaceEditAccessoryRecordBinary must stay binary-serializable"
 );
 
 using MorphDeltaLookup = HashMap<
@@ -904,12 +903,12 @@ void RestoreReplayAccessories(
     return true;
 }
 
-[[nodiscard]] bool BuildAccessoryBinaryRecordV4(
+[[nodiscard]] bool BuildAccessoryBinaryRecord(
     const DeformableAccessoryAttachmentRecord& record,
-    SurfaceEditAccessoryRecordBinaryV4& outRecord,
+    SurfaceEditAccessoryRecordBinary& outRecord,
     Core::Assets::AssetBytes& stringTable)
 {
-    outRecord = SurfaceEditAccessoryRecordBinaryV4{};
+    outRecord = SurfaceEditAccessoryRecordBinary{};
     if(!ValidAccessoryRecord(record) || !AccessoryRecordHasStableAssetPaths(record))
         return false;
 
@@ -924,8 +923,8 @@ void RestoreReplayAccessories(
     ;
 }
 
-[[nodiscard]] bool BuildAccessoryRecordV4(
-    const SurfaceEditAccessoryRecordBinaryV4& binary,
+[[nodiscard]] bool BuildAccessoryRecord(
+    const SurfaceEditAccessoryRecordBinary& binary,
     const Core::Assets::AssetBytes& rawBinary,
     const usize stringTableOffset,
     const usize stringTableByteCount,
@@ -961,22 +960,22 @@ void RestoreReplayAccessories(
     return ValidAccessoryRecord(outRecord) && AccessoryRecordHasStableAssetPaths(outRecord);
 }
 
-[[nodiscard]] bool ComputeSurfaceEditStateBinarySizeV4(
+[[nodiscard]] bool ComputeSurfaceEditStateBinarySize(
     const u64 editCount,
     const u64 accessoryCount,
     const u64 stringTableByteCount,
     usize& outSize)
 {
-    outSize = sizeof(SurfaceEditStateHeaderV4);
+    outSize = sizeof(SurfaceEditStateHeaderBinary);
     if(editCount > static_cast<u64>(Limit<usize>::s_Max / sizeof(DeformableSurfaceEditRecord)))
         return false;
-    if(accessoryCount > static_cast<u64>(Limit<usize>::s_Max / sizeof(SurfaceEditAccessoryRecordBinaryV4)))
+    if(accessoryCount > static_cast<u64>(Limit<usize>::s_Max / sizeof(SurfaceEditAccessoryRecordBinary)))
         return false;
     if(stringTableByteCount > static_cast<u64>(Limit<u32>::s_Max))
         return false;
 
     const usize editBytes = static_cast<usize>(editCount) * sizeof(DeformableSurfaceEditRecord);
-    const usize accessoryBytes = static_cast<usize>(accessoryCount) * sizeof(SurfaceEditAccessoryRecordBinaryV4);
+    const usize accessoryBytes = static_cast<usize>(accessoryCount) * sizeof(SurfaceEditAccessoryRecordBinary);
     const usize stringTableBytes = static_cast<usize>(stringTableByteCount);
     if(editBytes > Limit<usize>::s_Max - outSize)
         return false;
@@ -2202,7 +2201,7 @@ bool SerializeSurfaceEditState(const DeformableSurfaceEditState& state, Core::As
     if(!__hidden_deformable_surface_edit::ValidSurfaceEditState(state))
         return false;
 
-    using AccessoryRecord = __hidden_deformable_surface_edit::SurfaceEditAccessoryRecordBinaryV4;
+    using AccessoryRecord = __hidden_deformable_surface_edit::SurfaceEditAccessoryRecordBinary;
     Core::Alloc::ScratchArena<> scratchArena;
     Vector<AccessoryRecord, Core::Alloc::ScratchAllocator<AccessoryRecord>> accessoryRecords{
         Core::Alloc::ScratchAllocator<AccessoryRecord>(scratchArena)
@@ -2210,8 +2209,8 @@ bool SerializeSurfaceEditState(const DeformableSurfaceEditState& state, Core::As
     accessoryRecords.reserve(state.accessories.size());
     Core::Assets::AssetBytes stringTable;
     for(const DeformableAccessoryAttachmentRecord& accessory : state.accessories){
-        __hidden_deformable_surface_edit::SurfaceEditAccessoryRecordBinaryV4 binaryRecord;
-        if(!__hidden_deformable_surface_edit::BuildAccessoryBinaryRecordV4(accessory, binaryRecord, stringTable)){
+        __hidden_deformable_surface_edit::SurfaceEditAccessoryRecordBinary binaryRecord;
+        if(!__hidden_deformable_surface_edit::BuildAccessoryBinaryRecord(accessory, binaryRecord, stringTable)){
             outBinary.clear();
             return false;
         }
@@ -2220,7 +2219,7 @@ bool SerializeSurfaceEditState(const DeformableSurfaceEditState& state, Core::As
 
     usize binarySize = 0u;
     if(
-        !__hidden_deformable_surface_edit::ComputeSurfaceEditStateBinarySizeV4(
+        !__hidden_deformable_surface_edit::ComputeSurfaceEditStateBinarySize(
             static_cast<u64>(state.edits.size()),
             static_cast<u64>(state.accessories.size()),
             static_cast<u64>(stringTable.size()),
@@ -2230,14 +2229,14 @@ bool SerializeSurfaceEditState(const DeformableSurfaceEditState& state, Core::As
         return false;
 
     outBinary.reserve(binarySize);
-    __hidden_deformable_surface_edit::SurfaceEditStateHeaderV4 header;
+    __hidden_deformable_surface_edit::SurfaceEditStateHeaderBinary header;
     header.editCount = static_cast<u64>(state.edits.size());
     header.accessoryCount = static_cast<u64>(state.accessories.size());
     header.stringTableByteCount = static_cast<u64>(stringTable.size());
     AppendPOD(outBinary, header);
     for(const DeformableSurfaceEditRecord& record : state.edits)
         AppendPOD(outBinary, record);
-    for(const __hidden_deformable_surface_edit::SurfaceEditAccessoryRecordBinaryV4& binaryRecord : accessoryRecords)
+    for(const __hidden_deformable_surface_edit::SurfaceEditAccessoryRecordBinary& binaryRecord : accessoryRecords)
         AppendPOD(outBinary, binaryRecord);
     outBinary.insert(outBinary.end(), stringTable.begin(), stringTable.end());
     return outBinary.size() == binarySize;
@@ -2265,7 +2264,7 @@ bool DeserializeSurfaceEditState(const Core::Assets::AssetBytes& binary, Deforma
         !ReadPOD(binary, cursor, editCount)
         || !ReadPOD(binary, cursor, accessoryCount)
         || !ReadPOD(binary, cursor, stringTableByteCount)
-        || !__hidden_deformable_surface_edit::ComputeSurfaceEditStateBinarySizeV4(
+        || !__hidden_deformable_surface_edit::ComputeSurfaceEditStateBinarySize(
                 editCount,
                 accessoryCount,
                 stringTableByteCount,
@@ -2284,13 +2283,13 @@ bool DeserializeSurfaceEditState(const Core::Assets::AssetBytes& binary, Deforma
     }
 
     outState.accessories.resize(static_cast<usize>(accessoryCount));
-    using AccessoryRecord = __hidden_deformable_surface_edit::SurfaceEditAccessoryRecordBinaryV4;
+    using AccessoryRecord = __hidden_deformable_surface_edit::SurfaceEditAccessoryRecordBinary;
     Core::Alloc::ScratchArena<> scratchArena;
     Vector<AccessoryRecord, Core::Alloc::ScratchAllocator<AccessoryRecord>> accessoryRecords{
         Core::Alloc::ScratchAllocator<AccessoryRecord>(scratchArena)
     };
     accessoryRecords.resize(static_cast<usize>(accessoryCount));
-    for(__hidden_deformable_surface_edit::SurfaceEditAccessoryRecordBinaryV4& binaryRecord : accessoryRecords){
+    for(__hidden_deformable_surface_edit::SurfaceEditAccessoryRecordBinary& binaryRecord : accessoryRecords){
         if(!ReadPOD(binary, cursor, binaryRecord)){
             outState = DeformableSurfaceEditState{};
             return false;
@@ -2300,7 +2299,7 @@ bool DeserializeSurfaceEditState(const Core::Assets::AssetBytes& binary, Deforma
     const usize stringTableOffset = cursor;
     for(usize i = 0u; i < outState.accessories.size(); ++i){
         if(
-            !__hidden_deformable_surface_edit::BuildAccessoryRecordV4(
+            !__hidden_deformable_surface_edit::BuildAccessoryRecord(
                 accessoryRecords[i],
                 binary,
                 stringTableOffset,

@@ -15,6 +15,7 @@ target_sources(nwb_ecs_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/deformer_system.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/deformer_system.h"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_system.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/shader_asset_loader.h"
     "${CMAKE_CURRENT_LIST_DIR}/components.h"
     "${CMAKE_CURRENT_LIST_DIR}/ecs_graphics.h"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_system.h"

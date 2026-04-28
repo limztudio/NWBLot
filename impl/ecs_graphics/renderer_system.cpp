@@ -4,6 +4,8 @@
 
 #include "renderer_system.h"
 
+#include "shader_asset_loader.h"
+
 #include <core/ecs/world.h>
 #include <core/scene/scene.h>
 #include <core/graphics/shader_archive.h>
@@ -3417,104 +3419,18 @@ bool RendererSystem::ensureShaderLoaded(
     const Name& debugName,
     const Name* archiveStageName
 ){
-    if(outShader)
-        return true;
-    if(!shaderName){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: shader name is empty"));
-        return false;
-    }
-
-    const Name& stageName = archiveStageName
-        ? *archiveStageName
-        : ShaderStageNames::ArchiveStageNameFromShaderType(shaderType)
-    ;
-    if(!stageName){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: unsupported shader stage {}"), static_cast<u32>(shaderType));
-        return false;
-    }
-
-    const AStringView resolvedVariantName = variantName.empty()
-        ? AStringView(Core::ShaderArchive::s_DefaultVariant)
-        : variantName
-    ;
-    if(!m_shaderPathResolver){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: shader path resolver is null"));
-        return false;
-    }
-
-    Name shaderVirtualPath = NAME_NONE;
-    if(!m_shaderPathResolver(shaderName, resolvedVariantName, stageName, shaderVirtualPath)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("RendererSystem: failed to resolve shader '{}' variant '{}' stage '{}'"),
-            StringConvert(shaderName.c_str()),
-            StringConvert(resolvedVariantName),
-            StringConvert(stageName.c_str())
-        );
-        return false;
-    }
-    if(!shaderVirtualPath){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("RendererSystem: shader resolver returned an empty path for shader '{}' variant '{}' stage '{}'"),
-            StringConvert(shaderName.c_str()),
-            StringConvert(resolvedVariantName),
-            StringConvert(stageName.c_str())
-        );
-        return false;
-    }
-
-    UniquePtr<Core::Assets::IAsset> loadedAsset;
-    if(!m_assetManager.loadSync(Shader::AssetTypeName(), shaderVirtualPath, loadedAsset)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("RendererSystem: failed to load shader '{}'"),
-            StringConvert(shaderVirtualPath.c_str())
-        );
-        return false;
-    }
-    if(!loadedAsset){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("RendererSystem: shader asset '{}' is null"),
-            StringConvert(shaderVirtualPath.c_str())
-        );
-        return false;
-    }
-    if(loadedAsset->assetType() != Shader::AssetTypeName()){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("RendererSystem: asset '{}' is not a shader"),
-            StringConvert(shaderVirtualPath.c_str())
-        );
-        return false;
-    }
-
-    const Shader& shaderAsset = static_cast<const Shader&>(*loadedAsset);
-    const Vector<u8>& shaderBinary = shaderAsset.bytecode();
-    if(shaderBinary.empty() || (shaderBinary.size() & 3u) != 0u){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("RendererSystem: shader '{}' has invalid bytecode"),
-            StringConvert(shaderVirtualPath.c_str())
-        );
-        return false;
-    }
-
-    Core::ShaderDesc shaderDesc;
-    shaderDesc.setShaderType(shaderType);
-    shaderDesc.setDebugName(debugName);
-
-    Core::IDevice* device = m_graphics.getDevice();
-    outShader = device->createShader(
-        shaderDesc,
-        shaderBinary.data(),
-        shaderBinary.size()
+    return ShaderAssetLoader::EnsureLoaded(
+        outShader,
+        shaderName,
+        variantName,
+        shaderType,
+        debugName,
+        m_graphics,
+        m_assetManager,
+        m_shaderPathResolver,
+        NWB_TEXT("RendererSystem"),
+        archiveStageName
     );
-    if(!outShader){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("RendererSystem: failed to create shader '{}' from asset '{}'"),
-            StringConvert(debugName.c_str()),
-            StringConvert(shaderVirtualPath.c_str())
-        );
-        return false;
-    }
-
-    return true;
 }
 
 

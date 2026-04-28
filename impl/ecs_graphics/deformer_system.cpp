@@ -8,13 +8,12 @@
 #include "deformer_skin_payload.h"
 #include "deformable_displacement_runtime.h"
 #include "renderer_system.h"
+#include "shader_asset_loader.h"
 
 #include <core/alloc/scratch.h>
 #include <core/ecs/world.h>
 #include <core/graphics/shader_archive.h>
 #include <impl/assets_graphics/deformable_geometry_validation.h>
-#include <impl/assets_graphics/shader_asset.h>
-#include <impl/assets_graphics/shader_stage_names.h>
 #include <logger/client/logger.h>
 
 
@@ -427,90 +426,17 @@ bool DeformerSystem::ensureShaderLoaded(
     const Core::ShaderType::Mask shaderType,
     const Name& debugName)
 {
-    if(outShader)
-        return true;
-    if(!shaderName){
-        NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: shader name is empty"));
-        return false;
-    }
-
-    const Name& stageName = ShaderStageNames::ArchiveStageNameFromShaderType(shaderType);
-    if(!stageName){
-        NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: unsupported shader stage {}"), static_cast<u32>(shaderType));
-        return false;
-    }
-
-    const AStringView resolvedVariantName = variantName.empty()
-        ? AStringView(Core::ShaderArchive::s_DefaultVariant)
-        : variantName
-    ;
-    if(!m_shaderPathResolver){
-        NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: shader path resolver is null"));
-        return false;
-    }
-
-    Name shaderVirtualPath = NAME_NONE;
-    if(!m_shaderPathResolver(shaderName, resolvedVariantName, stageName, shaderVirtualPath)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformerSystem: failed to resolve shader '{}' variant '{}' stage '{}'"),
-            StringConvert(shaderName.c_str()),
-            StringConvert(resolvedVariantName),
-            StringConvert(stageName.c_str())
-        );
-        return false;
-    }
-    if(!shaderVirtualPath){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformerSystem: shader resolver returned an empty path for shader '{}' variant '{}' stage '{}'"),
-            StringConvert(shaderName.c_str()),
-            StringConvert(resolvedVariantName),
-            StringConvert(stageName.c_str())
-        );
-        return false;
-    }
-
-    UniquePtr<Core::Assets::IAsset> loadedAsset;
-    if(!m_assetManager.loadSync(Shader::AssetTypeName(), shaderVirtualPath, loadedAsset)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformerSystem: failed to load shader '{}'"),
-            StringConvert(shaderVirtualPath.c_str())
-        );
-        return false;
-    }
-    if(!loadedAsset || loadedAsset->assetType() != Shader::AssetTypeName()){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformerSystem: asset '{}' is not a shader"),
-            StringConvert(shaderVirtualPath.c_str())
-        );
-        return false;
-    }
-
-    const Shader& shaderAsset = static_cast<const Shader&>(*loadedAsset);
-    const Vector<u8>& shaderBinary = shaderAsset.bytecode();
-    if(shaderBinary.empty() || (shaderBinary.size() & 3u) != 0u){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformerSystem: shader '{}' has invalid bytecode"),
-            StringConvert(shaderVirtualPath.c_str())
-        );
-        return false;
-    }
-
-    Core::ShaderDesc shaderDesc;
-    shaderDesc.setShaderType(shaderType);
-    shaderDesc.setDebugName(debugName);
-
-    Core::IDevice* device = m_graphics.getDevice();
-    outShader = device->createShader(shaderDesc, shaderBinary.data(), shaderBinary.size());
-    if(!outShader){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformerSystem: failed to create shader '{}' from asset '{}'"),
-            StringConvert(debugName.c_str()),
-            StringConvert(shaderVirtualPath.c_str())
-        );
-        return false;
-    }
-
-    return true;
+    return ShaderAssetLoader::EnsureLoaded(
+        outShader,
+        shaderName,
+        variantName,
+        shaderType,
+        debugName,
+        m_graphics,
+        m_assetManager,
+        m_shaderPathResolver,
+        NWB_TEXT("DeformerSystem")
+    );
 }
 
 bool DeformerSystem::dispatchRuntimeMesh(

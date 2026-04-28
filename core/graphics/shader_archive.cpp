@@ -101,12 +101,21 @@ u64 UpdateFnv64NameLane(u64 hash, const NameHash& nameHash, const u32 lane){
 }
 
 
-template <typename RecordVector>
-const ShaderArchive::Record* FindRecord(const RecordVector& records, const Name& shaderName, const AStringView variantName, const Name& stageName){
-    const auto it = LowerBound(records.begin(), records.end(), nullptr,
-        [&shaderName, &variantName, &stageName](const ShaderArchive::Record& record, decltype(nullptr)){
+template<typename RecordVector>
+const ShaderArchive::Record* FindRecord(
+    const RecordVector& records,
+    const Name& shaderName,
+    const AStringView variantName,
+    const Name& stageName
+){
+    const NameHash& targetShader = shaderName.hash();
+    const NameHash& targetStage = stageName.hash();
+    const auto it = LowerBound(
+        records.begin(),
+        records.end(),
+        nullptr,
+        [&targetShader, &variantName, &targetStage](const ShaderArchive::Record& record, decltype(nullptr)){
             const NameHash& recordShader = record.shaderName.hash();
-            const NameHash& targetShader = shaderName.hash();
             if(recordShader != targetShader)
                 return LessNameHash(recordShader, targetShader);
 
@@ -114,12 +123,16 @@ const ShaderArchive::Record* FindRecord(const RecordVector& records, const Name&
             if(recordVariant != variantName)
                 return recordVariant < variantName;
 
-            return LessNameHash(record.stage.hash(), stageName.hash());
+            return LessNameHash(record.stage.hash(), targetStage);
         }
     );
     if(it == records.end())
         return nullptr;
-    if(it->shaderName != shaderName || AStringView(it->variantName) != variantName || it->stage != stageName)
+    if(
+        it->shaderName.hash() != targetShader
+        || AStringView(it->variantName) != variantName
+        || it->stage.hash() != targetStage
+    )
         return nullptr;
     return &*it;
 }

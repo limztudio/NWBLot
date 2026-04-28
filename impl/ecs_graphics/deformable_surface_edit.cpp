@@ -609,22 +609,60 @@ using MorphDeltaLookup = HashMap<
     return nullptr;
 }
 
-[[nodiscard]] bool ValidSurfaceEditState(const DeformableSurfaceEditState& state){
+using SurfaceEditRecordLookupPair = Pair<DeformableSurfaceEditId, const DeformableSurfaceEditRecord*>;
+using SurfaceEditRecordLookup = HashMap<
+    DeformableSurfaceEditId,
+    const DeformableSurfaceEditRecord*,
+    Hasher<DeformableSurfaceEditId>,
+    EqualTo<DeformableSurfaceEditId>,
+    Core::Alloc::ScratchAllocator<SurfaceEditRecordLookupPair>
+>;
+
+[[nodiscard]] const DeformableSurfaceEditRecord* FindEditRecordById(
+    const SurfaceEditRecordLookup& records,
+    const DeformableSurfaceEditId editId)
+{
+    if(!ValidSurfaceEditId(editId))
+        return nullptr;
+
+    const auto it = records.find(editId);
+    return it == records.end() ? nullptr : it.value();
+}
+
+[[nodiscard]] bool BuildSurfaceEditRecordLookup(
+    const DeformableSurfaceEditState& state,
+    SurfaceEditRecordLookup& outRecords)
+{
+    outRecords.clear();
+    outRecords.reserve(state.edits.size());
+
     u32 expectedBaseEditRevision = 0u;
-    for(usize editIndex = 0u; editIndex < state.edits.size(); ++editIndex){
-        const DeformableSurfaceEditRecord& record = state.edits[editIndex];
+    for(const DeformableSurfaceEditRecord& record : state.edits){
         if(!ValidEditRecord(record))
             return false;
-        for(usize previousEditIndex = 0u; previousEditIndex < editIndex; ++previousEditIndex){
-            if(state.edits[previousEditIndex].editId == record.editId)
-                return false;
-        }
+        if(!outRecords.emplace(record.editId, &record).second)
+            return false;
         if(record.hole.baseEditRevision != expectedBaseEditRevision)
             return false;
+
         expectedBaseEditRevision = record.result.editRevision;
     }
+    return true;
+}
+
+[[nodiscard]] bool ValidSurfaceEditState(const DeformableSurfaceEditState& state){
+    Core::Alloc::ScratchArena<> scratchArena;
+    SurfaceEditRecordLookup editRecords(
+        0,
+        Hasher<DeformableSurfaceEditId>(),
+        EqualTo<DeformableSurfaceEditId>(),
+        Core::Alloc::ScratchAllocator<SurfaceEditRecordLookupPair>(scratchArena)
+    );
+    if(!BuildSurfaceEditRecordLookup(state, editRecords))
+        return false;
+
     for(const DeformableAccessoryAttachmentRecord& accessory : state.accessories){
-        const DeformableSurfaceEditRecord* anchorEdit = FindEditRecordById(state, accessory.anchorEditId);
+        const DeformableSurfaceEditRecord* anchorEdit = FindEditRecordById(editRecords, accessory.anchorEditId);
         if(
             !ValidAccessoryRecord(accessory)
             || !anchorEdit
@@ -639,8 +677,18 @@ using MorphDeltaLookup = HashMap<
     const DeformableRuntimeMeshInstance& instance,
     const DeformableSurfaceEditState& state)
 {
+    Core::Alloc::ScratchArena<> scratchArena;
+    SurfaceEditRecordLookup editRecords(
+        0,
+        Hasher<DeformableSurfaceEditId>(),
+        EqualTo<DeformableSurfaceEditId>(),
+        Core::Alloc::ScratchAllocator<SurfaceEditRecordLookupPair>(scratchArena)
+    );
+    if(!BuildSurfaceEditRecordLookup(state, editRecords))
+        return false;
+
     for(const DeformableAccessoryAttachmentRecord& accessory : state.accessories){
-        const DeformableSurfaceEditRecord* anchorEdit = FindEditRecordById(state, accessory.anchorEditId);
+        const DeformableSurfaceEditRecord* anchorEdit = FindEditRecordById(editRecords, accessory.anchorEditId);
         if(
             !ValidAccessoryRecord(accessory)
             || !anchorEdit
